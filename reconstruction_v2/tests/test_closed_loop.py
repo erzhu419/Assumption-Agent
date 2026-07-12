@@ -33,7 +33,10 @@ from assumption_agent.models import (
     SplitName,
     TaskInput,
 )
-from assumption_agent.proposer import StructuredHypothesisProposer
+from assumption_agent.proposer import (
+    REPAIR_BRANCH_ID_POLICY_VERSION,
+    StructuredHypothesisProposer,
+)
 from assumption_agent.runtime import LaneRegistry, PolicyRuntime
 from assumption_agent.splits import SplitAccessGuard, SplitManifest
 from assumption_agent.validation import (
@@ -156,13 +159,24 @@ def test_failed_hypothesis_is_repaired_and_recursively_revalidated() -> None:
     assert len(tree.nodes) == 2
     assert tree.nodes[0].passed is False
     assert tree.accepted_program is not None
-    assert tree.accepted_program.id == "hyp-repaired"
+    assert tree.accepted_program.id.startswith("repair_")
+    assert tree.accepted_program.id != "hyp-repaired"
     assert tree.accepted_program.parent_id == root.id
     assert tree.accepted_program.lineage == (root.id,)
     assert root.expected_effect.metric == "task_success"
     assert tree.accepted_program.expected_effect.metric == "task_success"
     assert all(not _contains_forbidden_answer_key(request) for request in model.requests)
-    assert any(row["event"] == "hypothesis_repair_proposed" for row in sink.events)
+    repair_event = next(
+        row for row in sink.events if row["event"] == "hypothesis_repair_proposed"
+    )
+    assert (
+        repair_event["payload"]["branch_id_policy"]
+        == REPAIR_BRANCH_ID_POLICY_VERSION
+    )
+    assert repair_event["payload"]["child_id"] == (
+        f"repair_{repair_event['payload']['branch_identity_hash']}"
+    )
+    assert repair_event["payload"]["model_supplied_child_id_used"] is False
 
 
 def test_repair_model_failure_rejects_only_that_candidate_branch() -> None:
@@ -195,6 +209,264 @@ def test_repair_model_failure_rejects_only_that_candidate_branch() -> None:
         and row["payload"]["candidate_local_failure"] is True
         for row in sink.events
     )
+
+
+def test_same_model_repair_id_is_parent_scoped_deterministic_and_archive_safe() -> None:
+    sink = MemoryEventSink()
+    residuals = _residuals()
+    shared_repair = _program_dict(
+        hypothesis_id="challenger-epoch-completion-gate-v1-repair"
+    )
+    model = QueueProposalModel(
+        [
+            {"hypothesis": shared_repair},
+            {"hypothesis": shared_repair},
+        ]
+    )
+    proposer = StructuredHypothesisProposer(model, event_sink=sink)
+    runtime = _runtime(sink)
+    runner = CounterfactualRunner(
+        runtime=runtime,
+        evaluator=TruthEvaluator(),
+        event_sink=sink,
+    )
+    archive = PolicyArchive(event_sink=sink)
+    validation_tasks = tuple(_task(f"validation-{index}") for index in range(2))
+    manifest = SplitManifest(
+        benchmark="synthetic_repair_id_test",
+        protocol="instance_holdout",
+        seed="unit",
+        train_ids=("train-0", "train-1"),
+        validation_ids=tuple(task.id for task in validation_tasks),
+        test_ids=("sealed-test-0",),
+        family_by_id={
+            "train-0": "relation",
+            "train-1": "relation",
+            **{task.id: "relation" for task in validation_tasks},
+            "sealed-test-0": "relation",
+        },
+    )
+    root_a = HypothesisProgram.from_dict(
+        _program_dict(
+            hypothesis_id="repair-root-a",
+            lane="missing_lane",
+            priority=10,
+        )
+    )
+    root_b = HypothesisProgram.from_dict(
+        _program_dict(
+            hypothesis_id="repair-root-b",
+            lane="missing_lane",
+            priority=11,
+        )
+    )
+    kernel = EvolutionKernel(
+        proposer=proposer,
+        validator=_validator(proposer, sink),
+        counterfactual_runner=runner,
+        promotion_gate=PromotionGate(_promotion_spec(), event_sink=sink),
+        archive=archive,
+        split_guard=SplitAccessGuard(manifest, event_sink=sink),
+        event_sink=sink,
+    )
+
+    result = kernel.evolve_once(
+        residuals=residuals,
+        validation_tasks=validation_tasks,
+        validation_context=_validation_context(residuals),
+        proposal_candidates=(root_a, root_b),
+        trace_id="same-model-repair-id",
+    )
+
+    repair_events = [
+        row for row in sink.events if row["event"] == "hypothesis_repair_proposed"
+    ]
+    child_ids = {row["payload"]["child_id"] for row in repair_events}
+    assert len(repair_events) == 2
+    assert len(child_ids) == 2
+    assert child_ids <= set(archive.hypotheses)
+    assert {
+        archive.hypotheses[child_id].parent_id for child_id in child_ids
+    } == {root_a.id, root_b.id}
+    assert all(
+        row["payload"]["branch_id_policy"] == REPAIR_BRANCH_ID_POLICY_VERSION
+        and row["payload"]["child_id"]
+        == f"repair_{row['payload']['branch_identity_hash']}"
+        and row["payload"]["model_supplied_child_id_used"] is False
+        for row in repair_events
+    )
+    assert result.static_accepted_candidate_count == 2
+
+    replay_proposer = StructuredHypothesisProposer(
+        QueueProposalModel([{"hypothesis": shared_repair}])
+    )
+    replay_tree = _validator(replay_proposer, MemoryEventSink()).validate(
+        root_a,
+        _validation_context(residuals),
+        trace_id="same-parent-repair-replay",
+    )
+    assert replay_tree.accepted_program is not None
+    assert replay_tree.accepted_program.id == next(
+        child_id
+        for child_id in child_ids
+        if archive.hypotheses[child_id].parent_id == root_a.id
+    )
+
+
+def test_same_model_id_across_recursive_depths_preserves_branch_lineage() -> None:
+    sink = MemoryEventSink()
+    residuals = _residuals()
+    shared_model_id = "challenger-epoch-completion-gate-v1-repair"
+    depth_one = _program_dict(
+        hypothesis_id=shared_model_id,
+        lane="missing_lane",
+        priority=11,
+    )
+    depth_two = _program_dict(
+        hypothesis_id=shared_model_id,
+        lane="relation_solver",
+        priority=12,
+    )
+    proposer = StructuredHypothesisProposer(
+        QueueProposalModel(
+            [
+                {"hypothesis": depth_one},
+                {"hypothesis": depth_two},
+            ]
+        ),
+        event_sink=sink,
+    )
+    root = HypothesisProgram.from_dict(
+        _program_dict(
+            hypothesis_id="recursive-repair-root",
+            lane="missing_lane",
+            priority=10,
+        )
+    )
+
+    tree = _validator(proposer, sink).validate(
+        root,
+        _validation_context(residuals),
+        trace_id="same-model-id-recursive-depths",
+    )
+
+    assert len(tree.nodes) == 3
+    first_child = tree.nodes[1].program
+    second_child = tree.nodes[2].program
+    assert first_child.id != second_child.id
+    assert tree.nodes[0].child_id == first_child.id
+    assert tree.nodes[1].child_id == second_child.id
+    assert tree.nodes[2].child_id is None
+    assert first_child.parent_id == root.id
+    assert first_child.lineage == (root.id,)
+    assert second_child.parent_id == first_child.id
+    assert second_child.lineage == (root.id, first_child.id)
+    assert tree.accepted_program == second_child
+
+    archive = PolicyArchive()
+    for node in tree.nodes:
+        archive.register_hypothesis(node.program)
+    assert set(archive.hypotheses) == {root.id, first_child.id, second_child.id}
+
+
+def test_repair_branch_id_uses_canonical_defaults_and_ignores_unknown_keys() -> None:
+    residuals = _residuals()
+    parent = HypothesisProgram.from_dict(
+        _program_dict(hypothesis_id="canonical-repair-parent")
+    )
+    explicit = _program_dict(hypothesis_id="model-repair-id")
+    omitted = dict(explicit)
+    omitted_verifier = dict(explicit["verifier"])
+    omitted_verifier.pop("repair_on_failure")
+    omitted_verifier.pop("max_repair_depth")
+    omitted_verifier["unknown_verifier_key"] = "ignored"
+    omitted["verifier"] = omitted_verifier
+    omitted.pop("fallback")
+    omitted.pop("status")
+    omitted["unknown_top_level_key"] = {"ignored": True}
+
+    explicit_child = _revise_once(parent, explicit, residuals=residuals)
+    omitted_child = _revise_once(parent, omitted, residuals=residuals)
+
+    assert explicit_child.id == omitted_child.id
+    assert explicit_child.to_dict() == omitted_child.to_dict()
+
+
+def test_repair_branch_id_ignores_model_supplied_identifier() -> None:
+    residuals = _residuals()
+    parent = HypothesisProgram.from_dict(
+        _program_dict(hypothesis_id="model-id-independent-parent")
+    )
+    first = _program_dict(hypothesis_id="model-label-a")
+    second = _program_dict(hypothesis_id="model-label-b")
+
+    first_child = _revise_once(parent, first, residuals=residuals)
+    second_child = _revise_once(parent, second, residuals=residuals)
+
+    assert first_child.id == second_child.id
+    assert first_child.to_dict() == second_child.to_dict()
+
+
+def test_repair_child_status_is_harness_owned_candidate() -> None:
+    residuals = _residuals()
+    parent = HypothesisProgram.from_dict(
+        _program_dict(hypothesis_id="status-owned-parent")
+    )
+    rejected = _program_dict(
+        hypothesis_id="status-owned-model-label",
+        status="rejected",
+    )
+    promoted = _program_dict(
+        hypothesis_id="status-owned-model-label",
+        status="promoted",
+    )
+    omitted = _program_dict(hypothesis_id="status-owned-model-label")
+    omitted.pop("status")
+
+    children = (
+        _revise_once(parent, rejected, residuals=residuals),
+        _revise_once(parent, promoted, residuals=residuals),
+        _revise_once(parent, omitted, residuals=residuals),
+    )
+
+    assert {child.id for child in children} == {children[0].id}
+    assert {child.status for child in children} == {HypothesisStatus.CANDIDATE}
+    assert all(child.to_dict() == children[0].to_dict() for child in children[1:])
+
+
+def test_repair_branch_id_is_stable_across_parent_status_changes() -> None:
+    residuals = _residuals()
+    candidate_parent = HypothesisProgram.from_dict(
+        _program_dict(hypothesis_id="status-stable-parent")
+    )
+    rejected_parent = replace(candidate_parent, status=HypothesisStatus.REJECTED)
+    repair = _program_dict(hypothesis_id="status-stable-model-label")
+
+    candidate_child = _revise_once(
+        candidate_parent,
+        repair,
+        residuals=residuals,
+    )
+    rejected_child = _revise_once(
+        rejected_parent,
+        repair,
+        residuals=residuals,
+    )
+
+    assert candidate_child.id == rejected_child.id
+    assert candidate_child.to_dict() == rejected_child.to_dict()
+
+
+def test_archive_still_rejects_same_hypothesis_id_with_different_content() -> None:
+    archive = PolicyArchive()
+    original = HypothesisProgram.from_dict(_program_dict(hypothesis_id="fixed-id"))
+    collision = HypothesisProgram.from_dict(
+        _program_dict(hypothesis_id="fixed-id", priority=11)
+    )
+    archive.register_hypothesis(original)
+
+    with pytest.raises(ValueError, match="hypothesis ID collision: fixed-id"):
+        archive.register_hypothesis(collision)
 
 
 def test_root_proposal_replay_requires_the_exact_request_state() -> None:
@@ -650,6 +922,24 @@ def _validator(proposer: StructuredHypothesisProposer, sink: MemoryEventSink) ->
         ],
         proposer=proposer,
         event_sink=sink,
+    )
+
+
+def _revise_once(
+    parent: HypothesisProgram,
+    response: Mapping[str, Any],
+    *,
+    residuals: tuple[ResidualExample, ...],
+) -> HypothesisProgram:
+    proposer = StructuredHypothesisProposer(
+        QueueProposalModel([{"hypothesis": dict(response)}])
+    )
+    return proposer.revise(
+        parent,
+        failed_checks=({"check": "runtime_action", "passed": False},),
+        residuals=residuals,
+        depth=1,
+        trace_id="canonical-repair-id-test",
     )
 
 

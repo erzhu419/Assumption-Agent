@@ -5,10 +5,17 @@ from dataclasses import replace
 from typing import Any, Mapping, Protocol, Sequence
 
 from .events import Event, EventSink, NullEventSink
-from .models import HypothesisProgram, ResidualExample, SplitName, stable_hash
+from .models import (
+    HypothesisProgram,
+    HypothesisStatus,
+    ResidualExample,
+    SplitName,
+    stable_hash,
+)
 
 
 ROOT_PROPOSAL_REPLAY_POLICY_VERSION = "request_identical_root_proposal_replay_v1"
+REPAIR_BRANCH_ID_POLICY_VERSION = "parent_content_scoped_repair_id_v1"
 
 
 class ProposalModel(Protocol):
@@ -208,12 +215,31 @@ class StructuredHypothesisProposer:
         normalized["parent_id"] = parent.id
         normalized["lineage"] = [*parent.lineage, parent.id]
         normalized["created_from_transition_ids"] = list(parent.created_from_transition_ids)
-        normalized.setdefault(
-            "id",
-            f"hyp_{stable_hash({'parent': parent.id, 'response': row, 'depth': depth})[:16]}",
+        model_supplied_id = str(normalized.get("id") or "").strip()
+        normalized["status"] = HypothesisStatus.CANDIDATE.value
+        normalized["id"] = "repair_identity_placeholder"
+        canonical_child = HypothesisProgram.from_dict(normalized)
+        canonical_child = replace(
+            canonical_child,
+            parent_id=parent.id,
+            lineage=(*parent.lineage, parent.id),
         )
-        child = HypothesisProgram.from_dict(normalized)
-        child = replace(child, parent_id=parent.id, lineage=(*parent.lineage, parent.id))
+        canonical_child_content = canonical_child.to_dict()
+        canonical_child_content.pop("id")
+        parent_content = parent.to_dict()
+        parent_content.pop("id")
+        parent_content.pop("status")
+        parent_content_hash = stable_hash(parent_content)
+        branch_identity_hash = stable_hash(
+            {
+                "policy": REPAIR_BRANCH_ID_POLICY_VERSION,
+                "parent_id": parent.id,
+                "parent_content_hash": parent_content_hash,
+                "repair_depth": depth,
+                "canonical_program_without_id": canonical_child_content,
+            }
+        )
+        child = replace(canonical_child, id=f"repair_{branch_identity_hash}")
         self.event_sink.emit(
             Event(
                 event="hypothesis_repair_proposed",
@@ -226,6 +252,15 @@ class StructuredHypothesisProposer:
                     "repair_depth": depth,
                     "failed_check_count": len(failed_checks),
                     "validation_issues": child.validate(),
+                    "branch_id_policy": REPAIR_BRANCH_ID_POLICY_VERSION,
+                    "branch_identity_hash": branch_identity_hash,
+                    "parent_content_hash": parent_content_hash,
+                    "model_supplied_child_id_hash": (
+                        stable_hash({"id": model_supplied_id})
+                        if model_supplied_id
+                        else None
+                    ),
+                    "model_supplied_child_id_used": False,
                 },
             )
         )

@@ -3,7 +3,7 @@
 > - 初版日期：2026-07-11
 > - 本次复核：2026-07-11
 > - 代码审计基线 revision：`6224bb5a279f50fbcf1f8b36d19cb4ce6cc6c882`
-> - 本次实现复核：receipt/runtime provenance 修复提交 `e43670f6`、`18ff3417`；v3.3 execution-policy 提交 `e0b1a33b`；v3.4 model-only/action-budget 主提交 `e491b0af`，runtime-path 修复 `995e6446`，Ruoli 503 分类修复 `ba0f36cf`，host-readable audit artifact 修复 `1df3092a` / `ad66d5a2`；v3.4 max2 v5 canary 已通过、fresh development 因四并发 429 fail closed；active v3.5 仅把所有在线 phase 的 worker 从 4 版本化为 1
+> - 本次实现复核：receipt/runtime provenance 修复提交 `e43670f6`、`18ff3417`；v3.3 execution-policy 提交 `e0b1a33b`；v3.4 model-only/action-budget 主提交 `e491b0af`，runtime-path 修复 `995e6446`，Ruoli 503 分类修复 `ba0f36cf`，host-readable audit artifact 修复 `1df3092a` / `ad66d5a2`；v3.4 max2 v5 canary 已通过、fresh development 因四并发 429 fail closed；v3.5 将所有在线 phase 版本化为 1 worker，首轮 38/38 valid train 后暴露并修复 repair ID collision
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -69,14 +69,17 @@
 > 17 条在本地跳过。没有 cap、action、tool 或 verifier violation，但 all-valid-before-proposal
 > 正确阻止 proposal/validation/report/archive。由此可知 API/单次 route 可用，尚未满足的是冻结
 > 四并发的持续容量。active v3.5 因而只把五个在线 phase 的 worker 从 4 改为 1，其余合同
-> 不变；不拼接 17 条旧样本、不补评分 gate、不启用 online evaluator、不执行 sealed。**
+> 不变。首轮 serial run 取得 38/38 valid train、9 success、0 provider/cap/tool/action/verifier
+> invalid，随后在静态递归验证中因两个不同 repair payload 复用同一 model-declared ID 而
+> fail closed；没有 validation-split trial、promotion、report/archive 或 sealed。修复改由父分支、
+> depth 与规范化内容派生确定性 repair ID，并保留 archive 冲突硬拒绝；旧 38 条不能跨进程复用。**
 
 ### 1.2 结论分层
 
 | 命题 | 当前状态 | 证据层级 |
 |---|---|---|
 | legacy HLE 是高维手写控制面，学习 policy 没有闭环 | 支持 | 代码审计 + 历史 artifacts |
-| v2 的 proposal -> repair -> off/on -> gate -> archive 接口已连通 | 支持 | 186/186 离线测试 + 小型 live probes |
+| v2 的 proposal -> repair -> off/on -> gate -> archive 接口已连通 | 支持 | 193/193 离线测试 + 小型 live probes |
 | v2 的内部 runtime action 能改变 lane plan | 支持 | 代码 + 单元测试 |
 | v2 主 SkillLearn 路径执行了每个 typed action/verifier/fallback 的强语义 | **不支持，且协议已停止这样声称** | 只接受四类显式 prompt/self-check lowering；其余 fail closed |
 | promotion threshold 完全由冻结 protocol 所有 | 支持 | protocol-bound spec + 宽松 candidate 对抗测试 |
@@ -343,7 +346,7 @@ evidence。固定 cohort 越被反复用于决策，越不能承担 sealed claim
 
 ### 7.2 当前证据到哪一层
 
-**[TEST]** 当前 `reconstruction_v2` 离线 suite 为 **186/186 通过**。这证明 schema、
+**[TEST]** 当前 `reconstruction_v2` 离线 suite 为 **193/193 通过**。这证明 schema、
 wiring、guard、replay、failure handling 和若干 invariant；不证明真实 benchmark
 improvement。新增覆盖包括 protocol threshold ownership、candidate 宽松阈值攻击、
 backend action lowering、真实/声明 fallback 分离、offline-ready split 不重抽样，以及
@@ -578,6 +581,22 @@ recursive/no-recursive report/archive 与 sealed event 均为 0。失败运行�
 不能跨进程拼接。切换 online evaluator 对 model inference 429 没有帮助；下一次运行前需要解决
 冻结四并发与 provider 持续容量的矛盾，而不是继续增加评分 gate。
 
+v3.5 随后只把五个在线 phase 的 `parallel_workers` 从 4 改为 1。新 clean lock 与 fresh
+86/86 prewarm 均通过；serial train 在约 99 分钟内完成 38/38 valid、9 success，38/38
+action/tool/offline-verifier audit 有效，0 provider/circuit、0 cap，最大 finalized traffic
+60.28 MB。一次 root proposal 在同 request hash 的 `RemoteDisconnected` 后重试成功并返回
+3 个候选；两个静态通过，第三个进入两层 repair。depth 1/2 repair 的 model-declared ID 相同，
+但 payload hash 分别不同，archive 因而正确 fail closed。碰撞发生在 validation-split trial 前，
+所以仍无 paired counterfactual、promotion、recursive/no-recursive report/archive 或 sealed event。
+
+根因不是 archive gate，而是 repair 把模型字符串当成全局主键。修复后的
+`parent_content_scoped_repair_id_v1` 忽略模型 ID/status，使用 parent ID、去除可变 status 的规范化
+parent-content hash、repair depth 与去掉 ID 的 canonical candidate child 派生 `repair_<sha256>`；
+repair 一律由 harness 以 `candidate` 身份进入既有生命周期，事件记录 policy/hash 与被弃 model ID 的 hash。
+同 parent/content replay 保持确定，跨 root 和跨 depth 不再 alias；archive 对真正的同 ID 异内容
+仍抛错。离线回归覆盖 sibling roots、此次 depth-1/depth-2 复现和 archive 阴性对照。旧进程已死，
+JSONL 不是 checkpoint，38 条 observation 不能拼入修复后运行；必须新 lock/prewarm/root。
+
 ### 7.3 当前 infrastructure/protocol 状态
 
 全 inventory 的
@@ -757,7 +776,7 @@ dependency-cache-only 尚未强制；但当前
 [`docker_egress.py`](../assumption_agent/benchmarks/docker_egress.py) 和 protocol manifest 已
 实现 provider-only hard egress、offline package mode 与 network fuse。本次已同步主
 README、benchmark protocol、offline-verifier matrix 和 status 摘要；本轮又把 receipt
-runtime provenance、v3.5 serial execution-policy binding 与 test 状态更新为 186/186。历史段落仍
+runtime provenance、v3.5 serial execution-policy / repair-branch identity binding 与 test 状态更新为 193/193。历史段落仍
 保留为 diagnostic ledger，不能当作当前协议。
 
 这种文档漂移本身会破坏 protocol review；重新跑论文实验前必须同步。
@@ -775,8 +794,10 @@ runtime provenance、v3.5 serial execution-policy binding 与 test 状态更新�
 | 完成（零模型） | 定位 model-only execution boundary | 根因为 Codex 0.144.1 丢弃 `tools.web_search=false`；canonical 顶层 disabled 的 loopback 为 7 tools / 0 web，旧键阳性对照为 8 tools / 1 hosted web；未调用模型、未评分 |
 | 完成（实现与离线注入） | 执行 action budget | `codex_action_start_v1` 在第 N 个 `item.started` 终止 PGID，并按 task/TID 清除 dedicated-container 基线后的 live task；异常退出、malformed、N+1、`setsid`、zombie leader/live worker、残留 descendant 与 evidence tamper 均 fail closed；所有 arms 统一 action-step cost，不再混合 token/step |
 | 完成（机制） | v3.4 clean runtime canary | lock/prewarm、PATH、host-readable receipt 均已验证；max2 v5 为 2-step valid truncation，本地 verifier 有效，0 remote tool，全部 agent task 已退出 |
-| 完成（协议版本化） | v3.5 serial execution policy | 五个在线 phase 的 `parallel_workers` 全部由 4 改为 1；其余 model/subset/budget/offline evaluator/retry/circuit/search/promotion/sealed 合同不变；186/186 离线测试通过 |
-| P1（外部容量） | v3.5 clean lock、fresh prewarm 与完整 development | v3.4 四并发 run 得到 17 valid、4 个 429 与 17 个 circuit skip，均不得拼接。v3.5 新 invocation 仍须 38/38 all-valid 才解锁 proposal/paired validation，并最终产出 recursive/no-recursive report/archive、0 invalid、sealed evaluation=false |
+| 完成（协议版本化） | v3.5 serial execution policy | 五个在线 phase 的 `parallel_workers` 全部由 4 改为 1；其余 model/subset/budget/offline evaluator/retry/circuit/search/promotion/sealed 合同不变 |
+| 完成（容量验证） | v3.5 pre-fix serial train | clean lock/prewarm，38/38 valid、9 success、0 provider/cap/action/tool/verifier invalid；约 99 分钟；旧 rows 不跨进程复用 |
+| 完成（确定性修复） | repair branch identity | parent ID + status-independent parent hash + depth + canonical candidate content 派生 ID；模型 ID/status 不控制主键或生命周期；真实 depth-2 collision 与 archive fail-closed 对照通过；193/193 离线测试 |
+| P1（生命周期） | 修复后 fresh-root development | 新 lock/prewarm；同一 invocation 38/38 all-valid 后必须实际完成 proposal/paired validation，并产出 recursive/no-recursive report/archive、0 invalid、sealed evaluation=false |
 | P1 | 递归因果归因 | 两臂共享 train evidence 和 roots，唯一差异是 repair；behavior-identical 时 effect 报 N/A，不重采样 |
 | P1 | contrastive trigger learning | train successes 进入 anti-trigger/precision；candidate selection 不只最大化 failure support；报告 activation precision、harm、abstention |
 | P1 | prospective family-out routing | trigger 不依赖已知 family 或预编译 item ID，只使用冻结、无 gold、运行时可得语义特征 |
@@ -828,14 +849,15 @@ runtime provenance、v3.5 serial execution-policy binding 与 test 状态更新�
 20. 已执行并 fail-closed：四并发 development 的 38 个 outcome 为 17 valid（3 success）、4 个
     `provider_rate_limit`、17 个 circuit skip；0 cap/action/tool/verifier violation，未进入 proposal，
     四份 report/archive 未生成，sealed 未触碰，17 条 valid 不得跨 run 拼接；
-21. 已完成 v3.5 最小版本化：五个在线 phase 的 worker 统一从 4 改为 1，其他实验合同不变，
-    strict only-delta 与 lock-policy 离线测试已加入，full suite 为 186/186；旧 v3.4 lock/prewarm/
-    observation 均不复用；
-22. 下一步在 clean commit 上生成 v3.5 新 lock 与 fresh cache-only prewarm，然后直接从零 serial
-    develop，不再增加 canary/gate。若 38/38 all-valid 才进入 proposal 和 paired validation；若串行
-    仍 429，停在 provider 总量配额；若没有 promotion，直接转 contrastive trigger learning，
-    不先扩 family-out、multi-clade 或 evaluator mutation。有 retained validation gain 后再做
-    family-out，最后才增加多 clade 与 evaluator mutation。
+21. 已完成 v3.5 最小版本化与容量验证：五个在线 phase 的 worker 统一从 4 改为 1；新 lock/
+    prewarm 后 serial train 为 38/38 valid、9 success、0 provider/cap/action/tool/verifier invalid；
+22. 已执行并 fail-closed：proposal 返回 3 roots，第三个的 depth-1/depth-2 repair 复用同一模型 ID
+    但 payload 不同，archive 在 paired validation 前抛 collision；四份 report/archive 未生成，
+    sealed 未触碰，38 条 train 不得跨进程拼接；
+23. 已完成最小修复与 193/193 离线回归：repair ID 改由 parent content/depth/canonical candidate
+    content 确定性派生，model ID/status 不控制主键或 lifecycle，archive 冲突保护不放松；下一步在新 root 建 clean lock/fresh prewarm 并从零
+    serial develop，不新增 canary/gate。若没有 promotion，直接转 contrastive trigger learning；
+    有 retained validation gain 后再做 family-out，最后才增加 multi-clade/evaluator mutation。
 
 这比立刻扩展 archive 或继续补 HLE source span 更能降低研究风险。
 
@@ -965,13 +987,13 @@ fresh development 也已真实启动，但冻结四并发在 17 条有效离线�
 17 个 slot 被 circuit 本地跳过。API credential 和 bounded inference 可用，持续四并发容量不可用；
 online evaluator 无法修复该问题。
 
-下一份 claim-bearing run 仍必须在同一 invocation 内取得 38/38 all-valid train，才能解锁
-proposal、paired validation 与 promotion；recursive/no-recursive 两份 report/archive 是该生命周期
-的末端产物。之后才有资格做 family-out、sealed test、多 clade 和 evaluator co-evolution。
-本次结果不支持再次抬 cap，也不支持把失败 run 的 17 条 valid observation 拼入下一次运行；
-并发调整现已作为显式 v3.5 execution-policy revision 落地：所有在线 phase 统一为 1 worker，
-其余合同不变；它不能复用 v3.4 的任何 observation，也不能伪装成重试或新 gate。最诚实的
-论文级表述是：
+v3.5 已证明单 worker 可在同一 invocation 内取得 38/38 all-valid train，排除了本 batch 的
+provider/cap/action/tool/verifier 阻塞；但它在 paired validation 前因 repair identity collision
+中止，因此仍没有 performance evidence。identity 修复是确定性主键构造，不是新评分 gate，
+archive 的冲突硬拒绝没有放松。下一份 fresh-root run 仍必须重新取得 38/38 all-valid，并真正
+完成 proposal、paired validation、promotion decision 和 recursive/no-recursive report/archive；
+之后才有资格做 family-out、sealed test、多 clade 和 evaluator co-evolution。v3.4 的 17 条和
+pre-fix v3.5 的 38 条都不能拼接。最诚实的论文级表述是：
 
 > **显式 HypothesisProgram 是一个有希望、可能更易归因的 self-evolution 搜索表示；
 > v2 已证明协议所有权、离线 evaluator 和学习环 wiring 可运行，但尚未证明它在冻结、
@@ -1034,7 +1056,8 @@ proposal、paired validation 与 promotion；recursive/no-recursive 两份 repor
   [`max2 v3 classified provider blocker`](../artifacts/paper_primary_v3_4_offline86_ruoli_gpt54mini/diagnostics/max2_offer_letter_canary_v3.json)；
   [`max2 v4 host-permission diagnostic`](../artifacts/paper_primary_v3_4_offline86_ruoli_gpt54mini/diagnostics/max2_offer_letter_canary_v4.json)；
   [`max2 v5 passing action-budget canary`](../artifacts/paper_primary_v3_4_offline86_ruoli_gpt54mini/diagnostics/max2_offer_letter_canary_v5.json)；
-  [`v3.4 four-worker provider-capacity failure`](../artifacts/paper_primary_v3_4_offline86_ruoli_gpt54mini/development_recursive.events.jsonl)
+  [`v3.4 four-worker provider-capacity failure`](../artifacts/paper_primary_v3_4_offline86_ruoli_gpt54mini/development_recursive.events.jsonl)；
+  [`v3.5 38/38 train then repair-ID collision`](../artifacts/paper_primary_v3_5_offline86_ruoli_gpt54mini/development_recursive.events.jsonl)
 
 ## 附录 B：复杂度统计口径
 
