@@ -53,6 +53,9 @@ V35_PROTOCOL = (
 V36_PROTOCOL = (
     ROOT / "manifests" / "skilllearn_paper_protocol_v3_6_ruoli_gpt54mini.json"
 )
+V37_PROTOCOL = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_7_ruoli_gpt54mini.json"
+)
 MANIFEST_HASH = stable_hash({"manifest": "paper-test"})
 
 
@@ -256,6 +259,33 @@ def test_v36_protocol_changes_only_contrastive_evidence_contract() -> None:
     assert v36 == v35
 
 
+def test_v37_protocol_changes_only_online_parallelism() -> None:
+    protocol = PaperProtocol.read(V37_PROTOCOL)
+
+    assert protocol.validate_structure() == []
+    assert protocol.payload["protocol_version"] == "3.7.0"
+    assert protocol.codex_agent_execution_policy == MODEL_ONLY_ACTION_BUDGET_POLICY
+    assert {
+        name: phase["parallel_workers"]
+        for name, phase in protocol.payload["phases"].items()
+    } == {
+        "smoke": 6,
+        "development": 6,
+        "family_out_development": 6,
+        "sealed_test": 6,
+        "family_out_transfer": 6,
+    }
+
+    v36 = copy.deepcopy(PaperProtocol.read(V36_PROTOCOL).payload)
+    v37 = copy.deepcopy(protocol.payload)
+    for payload in (v36, v37):
+        payload.pop("protocol_id")
+        payload.pop("protocol_version")
+    for phase in v37["phases"].values():
+        phase["parallel_workers"] = 1
+    assert v37 == v36
+
+
 @pytest.mark.parametrize(
     "protocol_path",
     (V31_PROTOCOL, PROTOCOL, V33_PROTOCOL, V34_PROTOCOL, V35_PROTOCOL),
@@ -287,11 +317,13 @@ def test_v31_through_v35_keep_historical_candidate_selection(
         ),
     ),
 )
-def test_v36_protocol_rejects_contrastive_contract_drift(
+@pytest.mark.parametrize("protocol_path", (V36_PROTOCOL, V37_PROTOCOL))
+def test_contrastive_protocol_rejects_contract_drift(
+    protocol_path: Path,
     field_name: str,
     expected_issue: str,
 ) -> None:
-    protocol = PaperProtocol.read(V36_PROTOCOL)
+    protocol = PaperProtocol.read(protocol_path)
     payload = copy.deepcopy(protocol.payload)
     payload["execution"][field_name] = "drifted"
 
@@ -475,7 +507,7 @@ def test_execution_lock_binds_tracked_offline_readiness_receipt(
 
 @pytest.mark.parametrize(
     "protocol_path",
-    (V33_PROTOCOL, V34_PROTOCOL, V35_PROTOCOL, V36_PROTOCOL),
+    (V33_PROTOCOL, V34_PROTOCOL, V35_PROTOCOL, V36_PROTOCOL, V37_PROTOCOL),
 )
 def test_versioned_execution_lock_binds_resolved_agent_policy(
     monkeypatch: pytest.MonkeyPatch,

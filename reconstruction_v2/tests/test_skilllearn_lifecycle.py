@@ -323,11 +323,19 @@ class ConcurrentFakeBackend(FakeSkillLearnBackend):
         self._lock = threading.Lock()
         self.active = 0
         self.maximum_active = 0
+        self.active_by_item: dict[str, int] = {}
+        self.maximum_active_by_item: dict[str, int] = {}
 
     def run(self, request, *, skill_source_dir, trace_id):
         with self._lock:
             self.active += 1
             self.maximum_active = max(self.maximum_active, self.active)
+            item_id = request.item_id
+            self.active_by_item[item_id] = self.active_by_item.get(item_id, 0) + 1
+            self.maximum_active_by_item[item_id] = max(
+                self.maximum_active_by_item.get(item_id, 0),
+                self.active_by_item[item_id],
+            )
         try:
             time.sleep(0.02)
             return super().run(
@@ -338,6 +346,7 @@ class ConcurrentFakeBackend(FakeSkillLearnBackend):
         finally:
             with self._lock:
                 self.active -= 1
+                self.active_by_item[item_id] -= 1
 
 
 def test_network_budget_parser_and_monitor_kill_over_limit() -> None:
@@ -3081,14 +3090,9 @@ def test_training_parallelism_preserves_manifest_order(tmp_path: Path) -> None:
     harness, _, _, _, _, _ = _harness(
         tmp_path,
         backend_override=backend,
-        parallel_workers=2,
+        parallel_workers=6,
     )
-    train_ids = (
-        "organize-messy-files-1",
-        "organize-messy-files-2",
-        "offer-letter-generator-1",
-        "offer-letter-generator-2",
-    )
+    train_ids = tuple(harness.manifest.train_ids[:6])
 
     observations = harness.collect_training_observations(
         train_item_ids=train_ids,
@@ -3096,7 +3100,35 @@ def test_training_parallelism_preserves_manifest_order(tmp_path: Path) -> None:
     )
 
     assert tuple(row.request.item_id for row in observations) == train_ids
-    assert backend.maximum_active == 2
+    assert backend.maximum_active == 6
+
+
+def test_counterfactual_parallelism_is_cross_item_and_pair_sequential(
+    tmp_path: Path,
+) -> None:
+    backend = ConcurrentFakeBackend()
+    harness, _, _, _, _, _ = _harness(
+        tmp_path,
+        backend_override=backend,
+        parallel_workers=6,
+    )
+    validation_ids = tuple(harness.manifest.validation_ids[:6])
+    program = HypothesisProgram.from_dict(_program_dict())
+
+    pairs = harness.counterfactual_runner.run(
+        harness.tasks(validation_ids),
+        program=program,
+        split=SplitName.VALIDATION,
+        trace_id="parallel-counterfactual",
+    )
+
+    assert tuple(pair.task_id for pair in pairs) == validation_ids
+    assert backend.maximum_active == 6
+    assert all(
+        backend.maximum_active_by_item[item_id] == 1
+        for item_id in validation_ids
+    )
+    assert len(backend.calls) == 12
 
 
 def _harness(

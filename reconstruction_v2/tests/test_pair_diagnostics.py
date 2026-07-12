@@ -133,7 +133,10 @@ def test_pair_diagnostics_exclude_mismatched_activated_pair(
     assert summary.activation_precision is None
 
 
-def test_freeze_v3_6_rejects_tampered_pair_diagnostic() -> None:
+@pytest.mark.parametrize("protocol_version", ("3.6.0", "3.7.0"))
+def test_freeze_contrastive_protocol_rejects_tampered_pair_diagnostic(
+    protocol_version: str,
+) -> None:
     summary = summarize_pairs(
         [
             _pair(
@@ -159,11 +162,14 @@ def test_freeze_v3_6_rejects_tampered_pair_diagnostic() -> None:
         paper_freeze._pair_summary_from_mapping(
             summary,
             confidence=0.9,
-            protocol_version="3.6.0",
+            protocol_version=protocol_version,
         )
 
 
-def test_freeze_v3_6_rejects_tampered_activated_gain_count() -> None:
+@pytest.mark.parametrize("protocol_version", ("3.6.0", "3.7.0"))
+def test_freeze_contrastive_protocol_rejects_tampered_activated_gain_count(
+    protocol_version: str,
+) -> None:
     summary = summarize_pairs(
         [
             _pair(
@@ -184,7 +190,7 @@ def test_freeze_v3_6_rejects_tampered_activated_gain_count() -> None:
         paper_freeze._pair_summary_from_mapping(
             summary,
             confidence=0.9,
-            protocol_version="3.6.0",
+            protocol_version=protocol_version,
         )
 
 

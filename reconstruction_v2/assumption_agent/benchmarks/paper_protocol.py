@@ -98,7 +98,10 @@ TRIAL_NETWORK_BYTE_LIMIT_BY_PROTOCOL_VERSION = {
     "3.4.0": 64 * 1024 * 1024,
     "3.5.0": 64 * 1024 * 1024,
     "3.6.0": 64 * 1024 * 1024,
+    "3.7.0": 64 * 1024 * 1024,
 }
+
+CONTRASTIVE_PROTOCOL_VERSIONS = frozenset({"3.6.0", "3.7.0"})
 
 CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION = (
     "train_contrastive_precision_then_support_v1"
@@ -237,14 +240,14 @@ class PaperProtocol:
                 issues.append("agent_runtime_version_mismatch")
             expected_candidate_selection = (
                 CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION
-                if protocol_version == "3.6.0"
+                if protocol_version in CONTRASTIVE_PROTOCOL_VERSIONS
                 else TRAIN_ONLY_CANDIDATE_SELECTION_VERSION
             )
             if execution.get("proposal_candidate_selection") != (
                 expected_candidate_selection
             ):
                 issues.append("proposal_candidate_selection_mismatch")
-            if protocol_version == "3.6.0":
+            if protocol_version in CONTRASTIVE_PROTOCOL_VERSIONS:
                 if execution.get("contrastive_training_evidence_policy") != (
                     CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
                 ):

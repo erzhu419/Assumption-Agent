@@ -14,6 +14,7 @@ from .paper_controls import ControlSource, control_config_hash, source_tree_hash
 from .codex_execution_policy import LEGACY_CODEX_AGENT_EXECUTION_POLICY
 from .paper_protocol import (
     COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION,
+    CONTRASTIVE_PROTOCOL_VERSIONS,
     CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
     PaperProtocol,
     _code_fingerprint,
@@ -787,7 +788,7 @@ def _validate_generation_training_evidence(
     *,
     protocol_version: str,
 ) -> None:
-    if protocol_version != "3.6.0":
+    if protocol_version not in CONTRASTIVE_PROTOCOL_VERSIONS:
         return
     if generation.get("contrastive_training_evidence_policy") != (
         CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
@@ -934,7 +935,7 @@ def _pair_summary_from_mapping(
     confidence: float,
     protocol_version: str,
 ) -> PairSummary:
-    if protocol_version == "3.6.0":
+    if protocol_version in CONTRASTIVE_PROTOCOL_VERSIONS:
         expected_keys = _PROMOTION_SUMMARY_V3_6_KEYS
         count_keys = (
             _PROMOTION_SUMMARY_LEGACY_COUNT_KEYS
@@ -997,7 +998,7 @@ def _pair_summary_from_mapping(
         raise ValueError("development promotion summary mean effect is inconsistent")
 
     summary_counts = dict(counts)
-    if protocol_version != "3.6.0":
+    if protocol_version not in CONTRASTIVE_PROTOCOL_VERSIONS:
         summary_counts.update(
             {
                 "valid_activation_count": 0,
@@ -1025,7 +1026,7 @@ def _pair_summary_from_mapping(
             )
         ):
             raise ValueError("development promotion summary derived value is inconsistent")
-    if protocol_version == "3.6.0":
+    if protocol_version in CONTRASTIVE_PROTOCOL_VERSIONS:
         _validate_pair_diagnostics(
             payload,
             counts=counts,
