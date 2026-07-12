@@ -967,7 +967,12 @@ runtime provenance、v3.5 serial execution-policy / repair identity / response-c
     `provider_model_unavailable`，既有 circuit 跳过其余 20。无 valid bundle/proposal/report/archive/
     sealed。v3.9 采用旧快版真正的两级并发结构：6 个题级 worker 共用 1 个进程级在线 agent
     semaphore，slot 只包围 `docker exec ... codex exec`；docker run、准备、离线 verifier 不取 slot。
-    slot policy/count 进入 protocol/lock/plan/fairness/freeze，异常 finally 释放；不新增评分 gate。
+    slot policy/count 进入 protocol/lock/plan/fairness/freeze，异常 finally 释放；不新增评分 gate；
+32. 已完成 `8d862e8f` 与 289/289 离线回归，v3.9 clean lock 和 86/86 prewarm 均通过。
+    随后两个 fresh root 都在第 0 条 benchmark trial 前停止：health probe 的两次 transport retry
+    均为 HTTP 503，`skilllearn_trial_started=0`。其后 10 次低频恢复探针仍失败。当前唯一 blocker
+    是 Ruoli route availability；不再版本化 worker、gate、retry 或 evaluator。恢复后从新 clean root
+    启动，不复用任何 v3.7-v3.9 失败行，sealed/test 仍未访问。
 
 这比立刻扩展 archive 或继续补 HLE source span 更能降低研究风险。
 
@@ -1108,8 +1113,9 @@ run 只能保留为 L1 机械闭环与 contrastive-learning 动机，不能作�
 archive 冲突硬拒绝、promotion contract 和 evaluator 均未改变。v3.6 live 已从零完成 38/38
 contrastive train 并进入真实 paired validation，但串行执行只完成 2/16 pairs 后主动终止，因而
 没有完整 development claim。v3.7 的固定六路被首批 6/6 429 否决，v3.8 的固定两路又在
-16 valid 后被 2 个同时 503 否决。下一份运行必须使用 v3.9 fresh lock/root，以 6 个题级
-pipeline 配 1 个共享在线 agent slot
+16 valid 后被 2 个同时 503 否决。v3.9 的两级并发实现、289/289 测试、lock/prewarm 已完成，
+但两个 fresh root 均在第 0 条 trial 前被 health-probe HTTP 503 阻断。下一份运行仍应使用 v3.9
+fresh lock/root，以 6 个题级 pipeline 配 1 个共享在线 agent slot；前提是同一路由恢复，
 从零完成同一协议；有 retained validation gain 和真实 incumbent
 后才有资格做 family-out、sealed test、多 clade 与 evaluator co-evolution。v3.4 与 pre-v3.6 rows
 以及被中断的 v3.6 rows 都不能跨协议拼接。最诚实的论文级表述是：
