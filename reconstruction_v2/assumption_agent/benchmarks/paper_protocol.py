@@ -99,9 +99,10 @@ TRIAL_NETWORK_BYTE_LIMIT_BY_PROTOCOL_VERSION = {
     "3.5.0": 64 * 1024 * 1024,
     "3.6.0": 64 * 1024 * 1024,
     "3.7.0": 64 * 1024 * 1024,
+    "3.8.0": 64 * 1024 * 1024,
 }
 
-CONTRASTIVE_PROTOCOL_VERSIONS = frozenset({"3.6.0", "3.7.0"})
+CONTRASTIVE_PROTOCOL_VERSIONS = frozenset({"3.6.0", "3.7.0", "3.8.0"})
 
 CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION = (
     "train_contrastive_precision_then_support_v1"

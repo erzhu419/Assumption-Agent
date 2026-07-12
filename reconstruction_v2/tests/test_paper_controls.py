@@ -51,6 +51,9 @@ V36_PROTOCOL_PATH = (
 V37_PROTOCOL_PATH = (
     ROOT / "manifests" / "skilllearn_paper_protocol_v3_7_ruoli_gpt54mini.json"
 )
+V38_PROTOCOL_PATH = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_8_ruoli_gpt54mini.json"
+)
 MANIFEST_PATH = (
     ROOT / "manifests" / "skilllearnbench_instance_holdout_offline_ready_v1.json"
 )
@@ -683,7 +686,9 @@ def test_execution_report_preserves_legacy_promotion_summary_schema(
         )
 
 
-@pytest.mark.parametrize("protocol_path", (V36_PROTOCOL_PATH, V37_PROTOCOL_PATH))
+@pytest.mark.parametrize(
+    "protocol_path", (V36_PROTOCOL_PATH, V37_PROTOCOL_PATH, V38_PROTOCOL_PATH)
+)
 def test_freeze_accepts_clean_contrastive_report(protocol_path: Path) -> None:
     protocol = PaperProtocol.read(protocol_path)
     manifest = SplitManifest.read(MANIFEST_PATH)
@@ -718,7 +723,9 @@ def test_freeze_accepts_clean_contrastive_report(protocol_path: Path) -> None:
         ),
     ),
 )
-@pytest.mark.parametrize("protocol_path", (V36_PROTOCOL_PATH, V37_PROTOCOL_PATH))
+@pytest.mark.parametrize(
+    "protocol_path", (V36_PROTOCOL_PATH, V37_PROTOCOL_PATH, V38_PROTOCOL_PATH)
+)
 def test_freeze_rejects_contrastive_generation_evidence_drift(
     protocol_path: Path,
     field: str,
@@ -1309,7 +1316,7 @@ def _development_report(
             evaluator_epoch=evaluator_epoch,
         ),
     }
-    if protocol.payload["protocol_version"] in {"3.6.0", "3.7.0"}:
+    if protocol.payload["protocol_version"] in {"3.6.0", "3.7.0", "3.8.0"}:
         train_count = int(phase["train_count"])
         generation.update(
             {
@@ -1482,7 +1489,7 @@ def _promotion_decision(
         "harm_rate": 0.0,
         "activation_rate": 1.0,
     }
-    if protocol.payload["protocol_version"] in {"3.6.0", "3.7.0"}:
+    if protocol.payload["protocol_version"] in {"3.6.0", "3.7.0", "3.8.0"}:
         summary.update(
             {
                 "valid_activation_count": 10,

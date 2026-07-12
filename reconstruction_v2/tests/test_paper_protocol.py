@@ -56,6 +56,9 @@ V36_PROTOCOL = (
 V37_PROTOCOL = (
     ROOT / "manifests" / "skilllearn_paper_protocol_v3_7_ruoli_gpt54mini.json"
 )
+V38_PROTOCOL = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_8_ruoli_gpt54mini.json"
+)
 MANIFEST_HASH = stable_hash({"manifest": "paper-test"})
 
 
@@ -286,6 +289,33 @@ def test_v37_protocol_changes_only_online_parallelism() -> None:
     assert v37 == v36
 
 
+def test_v38_protocol_changes_only_supported_online_parallelism() -> None:
+    protocol = PaperProtocol.read(V38_PROTOCOL)
+
+    assert protocol.validate_structure() == []
+    assert protocol.payload["protocol_version"] == "3.8.0"
+    assert protocol.codex_agent_execution_policy == MODEL_ONLY_ACTION_BUDGET_POLICY
+    assert {
+        name: phase["parallel_workers"]
+        for name, phase in protocol.payload["phases"].items()
+    } == {
+        "smoke": 2,
+        "development": 2,
+        "family_out_development": 2,
+        "sealed_test": 2,
+        "family_out_transfer": 2,
+    }
+
+    v37 = copy.deepcopy(PaperProtocol.read(V37_PROTOCOL).payload)
+    v38 = copy.deepcopy(protocol.payload)
+    for payload in (v37, v38):
+        payload.pop("protocol_id")
+        payload.pop("protocol_version")
+    for phase in v38["phases"].values():
+        phase["parallel_workers"] = 6
+    assert v38 == v37
+
+
 @pytest.mark.parametrize(
     "protocol_path",
     (V31_PROTOCOL, PROTOCOL, V33_PROTOCOL, V34_PROTOCOL, V35_PROTOCOL),
@@ -317,7 +347,9 @@ def test_v31_through_v35_keep_historical_candidate_selection(
         ),
     ),
 )
-@pytest.mark.parametrize("protocol_path", (V36_PROTOCOL, V37_PROTOCOL))
+@pytest.mark.parametrize(
+    "protocol_path", (V36_PROTOCOL, V37_PROTOCOL, V38_PROTOCOL)
+)
 def test_contrastive_protocol_rejects_contract_drift(
     protocol_path: Path,
     field_name: str,
@@ -507,7 +539,14 @@ def test_execution_lock_binds_tracked_offline_readiness_receipt(
 
 @pytest.mark.parametrize(
     "protocol_path",
-    (V33_PROTOCOL, V34_PROTOCOL, V35_PROTOCOL, V36_PROTOCOL, V37_PROTOCOL),
+    (
+        V33_PROTOCOL,
+        V34_PROTOCOL,
+        V35_PROTOCOL,
+        V36_PROTOCOL,
+        V37_PROTOCOL,
+        V38_PROTOCOL,
+    ),
 )
 def test_versioned_execution_lock_binds_resolved_agent_policy(
     monkeypatch: pytest.MonkeyPatch,
