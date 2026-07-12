@@ -18,7 +18,7 @@ from assumption_agent.benchmarks.paper_controls import (
     validate_freeze_receipt,
 )
 from assumption_agent.benchmarks import paper_controls as paper_controls_module
-from assumption_agent.benchmarks import paper_freeze
+from assumption_agent.benchmarks import paper_freeze, skilllearn_experiment
 from assumption_agent.benchmarks.paper_protocol import PaperProtocol
 from assumption_agent.benchmarks.paper_report import PaperTrialRecord
 from assumption_agent.benchmarks.skilllearn_compiler import (
@@ -48,6 +48,7 @@ PROTOCOL_PATH = (
 MANIFEST_PATH = (
     ROOT / "manifests" / "skilllearnbench_instance_holdout_offline_ready_v1.json"
 )
+PERFORMANCE_CLAIM_BLOCKER = "proposal_model_failure_evidence_present"
 
 
 class FakePaperBackend:
@@ -469,6 +470,163 @@ def test_freeze_compiles_content_bound_validation_and_test_controls(
         )
 
 
+def test_execution_report_binds_proposal_failure_claim_fields(
+    tmp_path: Path,
+) -> None:
+    class Generation:
+        def to_dict(self) -> dict[str, object]:
+            return {"proposal_model_failure_count": 1}
+
+    class Archive:
+        def to_dict(self) -> dict[str, object]:
+            return {"archive_hash": "archive-hash"}
+
+    class Guard:
+        test_accessed = False
+
+    report = skilllearn_experiment._execution_report(
+        plan={},
+        preflight={},
+        generations=(Generation(),),
+        stop_reason="proposal_model_failure",
+        archive=Archive(),
+        archive_path=tmp_path / "archive.json",
+        guard=Guard(),
+    )
+
+    assert report["proposal_model_failure_count"] == 1
+    assert report["proposal_model_failures_present"] is True
+    assert report["performance_claim_eligible"] is False
+    assert report["performance_claim_blockers"] == [
+        PERFORMANCE_CLAIM_BLOCKER
+    ]
+
+
+def test_freeze_rejects_honest_proposal_model_failure_report() -> None:
+    protocol = PaperProtocol.read(PROTOCOL_PATH)
+    manifest = SplitManifest.read(MANIFEST_PATH)
+    report = _development_report(
+        protocol,
+        manifest,
+        archive_hash="unused",
+        recursive=True,
+        hypothesis_id="recursive-policy",
+    )
+    failed_generation = {
+        "promoted": False,
+        "recursive_depth": 0,
+        "accepted_hypothesis_id": None,
+        "evaluated_candidate_treatment_hash": None,
+        "promotion_decision": None,
+        "proposal_model_failure_count": 1,
+    }
+    report["generation"] = dict(failed_generation)
+    report["generations"] = [failed_generation]
+    report["proposal_model_failure_count"] = 1
+    report["proposal_model_failures_present"] = True
+    report["performance_claim_eligible"] = False
+    report["performance_claim_blockers"] = [PERFORMANCE_CLAIM_BLOCKER]
+
+    with pytest.raises(
+        ValueError,
+        match="development report contains proposal model failures",
+    ):
+        paper_freeze._validate_development_report(
+            report,
+            protocol=protocol,
+            manifest=manifest,
+            recursive_validation_enabled=True,
+        )
+
+
+def test_freeze_rejects_generation_failure_hidden_by_top_level_zero() -> None:
+    protocol = PaperProtocol.read(PROTOCOL_PATH)
+    manifest = SplitManifest.read(MANIFEST_PATH)
+    report = _development_report(
+        protocol,
+        manifest,
+        archive_hash="unused",
+        recursive=True,
+        hypothesis_id="recursive-policy",
+    )
+    report["generations"][0]["proposal_model_failure_count"] = 1
+
+    with pytest.raises(
+        ValueError,
+        match="development proposal model failure count mismatch",
+    ):
+        paper_freeze._validate_development_report(
+            report,
+            protocol=protocol,
+            manifest=manifest,
+            recursive_validation_enabled=True,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "expected_error"),
+    (
+        (
+            "proposal_model_failures_present",
+            True,
+            "development proposal model failure presence mismatch",
+        ),
+        (
+            "performance_claim_eligible",
+            False,
+            "development performance claim eligibility mismatch",
+        ),
+        (
+            "performance_claim_blockers",
+            [PERFORMANCE_CLAIM_BLOCKER],
+            "development performance claim blockers mismatch",
+        ),
+    ),
+)
+def test_freeze_rejects_tampered_performance_claim_binding(
+    field: str,
+    value: object,
+    expected_error: str,
+) -> None:
+    protocol = PaperProtocol.read(PROTOCOL_PATH)
+    manifest = SplitManifest.read(MANIFEST_PATH)
+    report = _development_report(
+        protocol,
+        manifest,
+        archive_hash="unused",
+        recursive=True,
+        hypothesis_id="recursive-policy",
+    )
+    report[field] = value
+
+    with pytest.raises(ValueError, match=expected_error):
+        paper_freeze._validate_development_report(
+            report,
+            protocol=protocol,
+            manifest=manifest,
+            recursive_validation_enabled=True,
+        )
+
+
+def test_freeze_accepts_clean_performance_claim_binding() -> None:
+    protocol = PaperProtocol.read(PROTOCOL_PATH)
+    manifest = SplitManifest.read(MANIFEST_PATH)
+    report = _development_report(
+        protocol,
+        manifest,
+        archive_hash="unused",
+        recursive=True,
+        hypothesis_id="recursive-policy",
+    )
+
+    paper_freeze._validate_development_report(
+        report,
+        protocol=protocol,
+        manifest=manifest,
+        recursive_validation_enabled=True,
+    )
+
+
 def test_freeze_rejects_promotion_contract_drift(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -859,6 +1017,7 @@ def _development_report(
     generation = {
         "promoted": True,
         "recursive_depth": 0,
+        "proposal_model_failure_count": 0,
         "accepted_hypothesis_id": hypothesis_id,
         "evaluated_candidate_treatment_hash": (
             skilllearn_program_treatment_hash(program)
@@ -957,6 +1116,10 @@ def _development_report(
         "generation": dict(generation),
         "generations": [generation],
         "generation_count": 1,
+        "proposal_model_failure_count": 0,
+        "proposal_model_failures_present": False,
+        "performance_claim_eligible": True,
+        "performance_claim_blockers": [],
         "archive_hash": archive_hash,
     }
 

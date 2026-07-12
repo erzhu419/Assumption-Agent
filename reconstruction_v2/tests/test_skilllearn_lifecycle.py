@@ -1185,6 +1185,46 @@ def test_root_proposal_failure_preserves_a_terminal_generation_report(
     )
 
 
+def test_malformed_root_response_preserves_typed_terminal_generation(
+    tmp_path: Path,
+) -> None:
+    harness, backend, model, _, guard, sink = _harness(tmp_path)
+    model.responses[:] = [{}]
+
+    result = harness.run_generation(
+        train_item_ids=(
+            "organize-messy-files-1",
+            "offer-letter-generator-1",
+        ),
+        validation_item_ids=(
+            "organize-messy-files-5",
+            "offer-letter-generator-5",
+        ),
+        trace_id="malformed-root-terminal",
+    )
+
+    assert result.evolution is None
+    assert result.reason == "proposal_model_failed"
+    assert result.to_dict()["proposal_model_failure_count"] == 1
+    assert len(model.requests) == 1
+    assert len(backend.calls) == 2
+    assert guard.test_accessed is False
+    rejected = next(
+        row
+        for row in sink.events
+        if row["event"] == "hypothesis_proposal_response_rejected"
+    )
+    terminal = next(
+        row
+        for row in sink.events
+        if row["event"] == "skilllearn_generation_stopped_after_proposal_model_failure"
+    )
+    assert rejected["payload"]["candidate_local_failure"] is False
+    assert terminal["payload"]["failure_phase"] == "response_envelope"
+    assert terminal["payload"]["response_hash"] == rejected["payload"]["response_hash"]
+    assert terminal["payload"]["performance_claim_eligible"] is False
+
+
 def test_repair_model_failure_blocks_generation_promotion(
     tmp_path: Path,
 ) -> None:
@@ -1222,6 +1262,69 @@ def test_repair_model_failure_blocks_generation_promotion(
     assert any(
         row["event"] == "evolution_generation_blocked_by_repair_model_failure"
         and row["payload"]["counterfactual_validation_executed"] is False
+        for row in sink.events
+    )
+
+
+def test_malformed_repair_is_local_but_blocks_multi_root_generation(
+    tmp_path: Path,
+) -> None:
+    bad = _program_dict()
+    bad["id"] = "hyp-needs-malformed-repair"
+    bad["action_graph"][0]["operation"] = "enable_lane"
+    bad["action_graph"][0]["target"] = "missing_lane"
+    good = _program_dict()
+    good["id"] = "hyp-valid-sibling"
+    harness, backend, model, archive, guard, sink = _harness(
+        tmp_path,
+        proposal_rows=[bad, good],
+    )
+    model.responses.append({"hypotheses": [good]})
+
+    result = harness.run_generation(
+        train_item_ids=(
+            "organize-messy-files-1",
+            "offer-letter-generator-1",
+        ),
+        validation_item_ids=(
+            "organize-messy-files-5",
+            "offer-letter-generator-5",
+        ),
+        trace_id="malformed-repair-multi-root",
+    )
+
+    assert result.evolution is not None
+    assert result.reason == "proposal_model_failed"
+    assert result.evolution.repair_model_failure_count == 1
+    assert result.evolution.static_accepted_candidate_count == 1
+    assert result.evolution.static_validation_node_count == 2
+    assert result.evolution.promotion_decision is None
+    assert len(model.requests) == 2
+    assert len(backend.calls) == 2
+    assert archive.hypotheses["hyp-needs-malformed-repair"].status is HypothesisStatus.REJECTED
+    assert archive.hypotheses["hyp-valid-sibling"].status is HypothesisStatus.SHADOW
+    assert archive.incumbent_id is None
+    assert guard.test_accessed is False
+    assert not any(
+        row["event"] == "counterfactual_pair_completed" for row in sink.events
+    )
+    rejected = next(
+        row
+        for row in sink.events
+        if row["event"] == "hypothesis_proposal_response_rejected"
+    )
+    abandoned = next(
+        row
+        for row in sink.events
+        if row["event"] == "hypothesis_repair_abandoned_after_model_failure"
+    )
+    assert rejected["payload"]["candidate_local_failure"] is True
+    assert abandoned["payload"]["failure_phase"] == "response_envelope"
+    assert abandoned["payload"]["response_hash"] == rejected["payload"]["response_hash"]
+    assert any(
+        row["event"] == "evolution_generation_blocked_by_repair_model_failure"
+        and row["payload"]["counterfactual_validation_executed"] is False
+        and row["payload"]["archive_promotion_allowed"] is False
         for row in sink.events
     )
 

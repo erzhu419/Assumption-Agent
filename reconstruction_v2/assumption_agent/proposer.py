@@ -33,11 +33,17 @@ class HypothesisProposalCallError(RuntimeError):
         request_kind: str,
         request_hash: str,
         error_type: str,
+        failure_phase: str = "model_call",
+        response_hash: str | None = None,
     ) -> None:
-        super().__init__(f"{request_kind} model call failed ({error_type})")
+        super().__init__(
+            f"{request_kind} failed during {failure_phase} ({error_type})"
+        )
         self.request_kind = request_kind
         self.request_hash = request_hash
         self.error_type = error_type
+        self.failure_phase = failure_phase
+        self.response_hash = response_hash
 
 
 class StructuredHypothesisProposer:
@@ -110,14 +116,36 @@ class StructuredHypothesisProposer:
             )
             return programs
         response = self._complete(payload, trace_id=trace_id)
-        rows = response.get("hypotheses", [])
-        if not isinstance(rows, list):
-            raise ValueError("proposal model must return a hypotheses list")
-        programs: list[HypothesisProgram] = []
+        if not isinstance(response, Mapping):
+            raise self._response_contract_error(
+                payload=payload,
+                response=response,
+                expected_field="hypotheses",
+                failure_phase="response_envelope",
+                trace_id=trace_id,
+            )
+        rows = response.get("hypotheses")
+        if not isinstance(rows, list) or not rows:
+            raise self._response_contract_error(
+                payload=payload,
+                response=response,
+                expected_field="hypotheses",
+                failure_phase="response_envelope",
+                trace_id=trace_id,
+            )
+        staged_programs: list[tuple[int, HypothesisProgram]] = []
         transition_ids = tuple(sorted(residual.transition_id for residual in residuals))
         for index, row in enumerate(rows[:max_hypotheses]):
             if not isinstance(row, Mapping):
-                continue
+                raise self._response_contract_error(
+                    payload=payload,
+                    response=response,
+                    expected_field="hypotheses",
+                    failure_phase="response_envelope",
+                    trace_id=trace_id,
+                    consumed_row_index=index,
+                    consumed_row=row,
+                )
             normalized = dict(row)
             _normalize_expected_effect_metric(normalized, primary_metric)
             normalized["evaluator_epoch"] = evaluator_epoch
@@ -126,8 +154,30 @@ class StructuredHypothesisProposer:
                 "id",
                 f"hyp_{stable_hash({'response': row, 'evaluator_epoch': evaluator_epoch, 'index': index})[:16]}",
             )
-            program = HypothesisProgram.from_dict(normalized)
-            programs.append(program)
+            try:
+                program = HypothesisProgram.from_dict(normalized)
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise self._response_contract_error(
+                    payload=payload,
+                    response=response,
+                    expected_field="hypotheses",
+                    failure_phase="response_program_parse",
+                    trace_id=trace_id,
+                    consumed_row_index=index,
+                    consumed_row=row,
+                    parse_error=exc,
+                ) from exc
+            staged_programs.append((index, program))
+        if not staged_programs:
+            raise self._response_contract_error(
+                payload=payload,
+                response=response,
+                expected_field="hypotheses",
+                failure_phase="response_envelope",
+                trace_id=trace_id,
+            )
+        programs = [program for _, program in staged_programs]
+        for index, program in staged_programs:
             self.event_sink.emit(
                 Event(
                     event="hypothesis_proposed",
@@ -143,8 +193,6 @@ class StructuredHypothesisProposer:
                     },
                 )
             )
-        if not programs:
-            raise ValueError("proposal model returned no hypothesis programs")
         result = tuple(programs)
         program_set_hash = stable_hash(
             {"program_hashes": [program.payload_hash for program in result]}
@@ -203,9 +251,23 @@ class StructuredHypothesisProposer:
         }
         self._emit_model_event("hypothesis_repair_requested", trace_id, payload)
         response = self._complete(payload, trace_id=trace_id)
+        if not isinstance(response, Mapping):
+            raise self._response_contract_error(
+                payload=payload,
+                response=response,
+                expected_field="hypothesis",
+                failure_phase="response_envelope",
+                trace_id=trace_id,
+            )
         row = response.get("hypothesis")
         if not isinstance(row, Mapping):
-            raise ValueError("repair model must return one hypothesis object")
+            raise self._response_contract_error(
+                payload=payload,
+                response=response,
+                expected_field="hypothesis",
+                failure_phase="response_envelope",
+                trace_id=trace_id,
+            )
         normalized = dict(row)
         _normalize_expected_effect_metric(
             normalized,
@@ -218,7 +280,18 @@ class StructuredHypothesisProposer:
         model_supplied_id = str(normalized.get("id") or "").strip()
         normalized["status"] = HypothesisStatus.CANDIDATE.value
         normalized["id"] = "repair_identity_placeholder"
-        canonical_child = HypothesisProgram.from_dict(normalized)
+        try:
+            canonical_child = HypothesisProgram.from_dict(normalized)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise self._response_contract_error(
+                payload=payload,
+                response=response,
+                expected_field="hypothesis",
+                failure_phase="response_program_parse",
+                trace_id=trace_id,
+                consumed_row=row,
+                parse_error=exc,
+            ) from exc
         canonical_child = replace(
             canonical_child,
             parent_id=parent.id,
@@ -314,7 +387,90 @@ class StructuredHypothesisProposer:
                 request_kind=request_kind,
                 request_hash=request_hash,
                 error_type=type(exc).__name__,
+                failure_phase="model_call",
             ) from exc
+
+    def _response_contract_error(
+        self,
+        *,
+        payload: Mapping[str, Any],
+        response: Any,
+        expected_field: str,
+        failure_phase: str,
+        trace_id: str,
+        consumed_row_index: int | None = None,
+        consumed_row: Any = None,
+        parse_error: Exception | None = None,
+    ) -> HypothesisProposalCallError:
+        request_kind = str(payload.get("request_kind") or "hypothesis_proposal")
+        request_hash = stable_hash(payload)
+        response_hash = stable_hash(response)
+        response_is_mapping = isinstance(response, Mapping)
+        top_level_keys = (
+            sorted(str(key) for key in response)
+            if response_is_mapping
+            else []
+        )
+        expected_field_present = (
+            response_is_mapping and expected_field in response
+        )
+        expected_value = (
+            response.get(expected_field) if expected_field_present else None
+        )
+        consumed_row_present = consumed_row_index is not None or consumed_row is not None
+        self.event_sink.emit(
+            Event(
+                event="hypothesis_proposal_response_rejected",
+                stage="proposal.response_contract",
+                trace_id=trace_id,
+                payload={
+                    "request_kind": request_kind,
+                    "request_hash": request_hash,
+                    "response_hash": response_hash,
+                    "failure_phase": failure_phase,
+                    "error_type": "MalformedProposalResponse",
+                    "candidate_local_failure": (
+                        request_kind == "repair_hypothesis_program"
+                    ),
+                    "expected_field": expected_field,
+                    "top_level_type": type(response).__name__,
+                    "top_level_key_count": len(top_level_keys),
+                    "top_level_key_set_hash": stable_hash(
+                        {"keys": top_level_keys}
+                    ),
+                    "expected_field_present": expected_field_present,
+                    "expected_field_type": (
+                        type(expected_value).__name__
+                        if expected_field_present
+                        else None
+                    ),
+                    "expected_field_item_count": (
+                        len(expected_value)
+                        if isinstance(expected_value, (list, tuple))
+                        else None
+                    ),
+                    "consumed_row_present": consumed_row_present,
+                    "consumed_row_index": consumed_row_index,
+                    "consumed_row_type": (
+                        type(consumed_row).__name__
+                        if consumed_row_present
+                        else None
+                    ),
+                    "parse_error_type": (
+                        type(parse_error).__name__ if parse_error else None
+                    ),
+                    "raw_error_persisted": False,
+                    "raw_content_persisted": False,
+                },
+            )
+        )
+        return HypothesisProposalCallError(
+            request_kind=request_kind,
+            request_hash=request_hash,
+            error_type="MalformedProposalResponse",
+            failure_phase=failure_phase,
+            response_hash=response_hash,
+        )
 
 
 def _normalize_expected_effect_metric(

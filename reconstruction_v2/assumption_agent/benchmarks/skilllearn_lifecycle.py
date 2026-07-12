@@ -3410,6 +3410,8 @@ class SkillLearnEvolutionHarness:
                     "policy": PROPOSAL_FAILURE_ISOLATION_POLICY_VERSION,
                     "request_kind": error.request_kind,
                     "request_hash": error.request_hash,
+                    "response_hash": error.response_hash,
+                    "failure_phase": error.failure_phase,
                     "error_type": error.error_type,
                     "generation_terminal": True,
                     "report_preserved": True,

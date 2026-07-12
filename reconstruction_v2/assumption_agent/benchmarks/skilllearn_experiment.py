@@ -81,6 +81,11 @@ from .offline_verifier import OFFLINE_VERIFIER_POLICY_VERSION
 from .skilllearnbench import SkillLearnBenchAdapter
 
 
+_PROPOSAL_MODEL_FAILURE_CLAIM_BLOCKER = (
+    "proposal_model_failure_evidence_present"
+)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Plan or execute one guarded SkillLearnBench self-evolution generation."
@@ -773,20 +778,32 @@ def _execution_report(
 ) -> dict[str, Any]:
     if not generations:
         raise ValueError("execution report requires at least one generation")
-    proposal_model_failure_count = sum(
-        int(row.to_dict()["proposal_model_failure_count"])
-        for row in generations
-    )
+    generation_rows = [row.to_dict() for row in generations]
+    proposal_model_failure_count = 0
+    for row in generation_rows:
+        value = row.get("proposal_model_failure_count")
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError(
+                "generation proposal model failure count is malformed"
+            )
+        proposal_model_failure_count += value
+    performance_claim_eligible = proposal_model_failure_count == 0
     return {
         "mode": "execute",
         "plan": dict(plan),
         "preflight": dict(preflight),
-        "generation": generations[-1].to_dict(),
-        "generations": [row.to_dict() for row in generations],
-        "generation_count": len(generations),
+        "generation": dict(generation_rows[-1]),
+        "generations": generation_rows,
+        "generation_count": len(generation_rows),
         "evolution_stop_reason": stop_reason,
         "proposal_model_failure_count": proposal_model_failure_count,
         "proposal_model_failures_present": bool(proposal_model_failure_count),
+        "performance_claim_eligible": performance_claim_eligible,
+        "performance_claim_blockers": (
+            []
+            if performance_claim_eligible
+            else [_PROPOSAL_MODEL_FAILURE_CLAIM_BLOCKER]
+        ),
         "archive_hash": archive.to_dict()["archive_hash"],
         "archive_path_hash": _path_hash(archive_path),
         "executed": True,

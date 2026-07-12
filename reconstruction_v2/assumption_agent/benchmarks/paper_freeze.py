@@ -26,6 +26,9 @@ from .skilllearnbench import SkillLearnBenchAdapter
 
 
 _PROMOTION_DECISION_POLICY = "evaluator_owned_paired_validation_v2"
+_PROPOSAL_MODEL_FAILURE_CLAIM_BLOCKER = (
+    "proposal_model_failure_evidence_present"
+)
 _PROMOTION_THRESHOLD_KEYS = frozenset(
     {
         "minimum_effect_lower_bound",
@@ -558,6 +561,7 @@ def _validate_development_report(
         raise ValueError("development generation count mismatch")
     if len(generations) > int(protocol.payload["evolution"]["max_generations"]):
         raise ValueError("development exceeded the frozen generation budget")
+    _validate_performance_claim_binding(report, generations)
     promotion_spec = protocol.promotion_gate_spec
     for row in generations:
         if not isinstance(row, Mapping):
@@ -573,6 +577,68 @@ def _validate_development_report(
         if isinstance(row, Mapping)
     ):
         raise ValueError("no-recursive control unexpectedly used recursive repair")
+
+
+def _validate_performance_claim_binding(
+    report: Mapping[str, Any],
+    generations: Sequence[Any],
+) -> None:
+    proposal_model_failure_count = 0
+    for row in generations:
+        if not isinstance(row, Mapping):
+            raise ValueError("development generation row is malformed")
+        value = row.get("proposal_model_failure_count")
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError(
+                "development generation proposal model failure count is malformed"
+            )
+        proposal_model_failure_count += value
+
+    reported_count = report.get("proposal_model_failure_count")
+    if (
+        isinstance(reported_count, bool)
+        or not isinstance(reported_count, int)
+        or reported_count < 0
+    ):
+        raise ValueError(
+            "development proposal model failure count is malformed"
+        )
+    if reported_count != proposal_model_failure_count:
+        raise ValueError("development proposal model failure count mismatch")
+
+    expected_present = proposal_model_failure_count > 0
+    reported_present = report.get("proposal_model_failures_present")
+    if not isinstance(reported_present, bool):
+        raise ValueError(
+            "development proposal model failure presence is malformed"
+        )
+    if reported_present is not expected_present:
+        raise ValueError("development proposal model failure presence mismatch")
+
+    expected_claim_eligible = not expected_present
+    reported_claim_eligible = report.get("performance_claim_eligible")
+    if not isinstance(reported_claim_eligible, bool):
+        raise ValueError("development performance claim eligibility is malformed")
+    if reported_claim_eligible is not expected_claim_eligible:
+        raise ValueError("development performance claim eligibility mismatch")
+
+    expected_blockers = (
+        []
+        if expected_claim_eligible
+        else [_PROPOSAL_MODEL_FAILURE_CLAIM_BLOCKER]
+    )
+    reported_blockers = report.get("performance_claim_blockers")
+    if not isinstance(reported_blockers, list) or any(
+        not isinstance(blocker, str) for blocker in reported_blockers
+    ):
+        raise ValueError("development performance claim blockers are malformed")
+    if reported_blockers != expected_blockers:
+        raise ValueError("development performance claim blockers mismatch")
+
+    if proposal_model_failure_count > 0:
+        raise ValueError("development report contains proposal model failures")
+    if reported_claim_eligible is not True:
+        raise ValueError("development report is not eligible for performance claims")
 
 
 def _validate_generation_promotion_decision(

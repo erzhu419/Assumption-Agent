@@ -625,6 +625,8 @@ class RecursiveValidationEngine:
                         "repair_depth": depth + 1,
                         "request_kind": exc.request_kind,
                         "request_hash": exc.request_hash,
+                        "response_hash": exc.response_hash,
+                        "failure_phase": exc.failure_phase,
                         "error_type": exc.error_type,
                         "candidate_local_failure": True,
                         "raw_error_persisted": False,

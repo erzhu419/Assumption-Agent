@@ -32,8 +32,10 @@ from assumption_agent.models import (
     ResidualExample,
     SplitName,
     TaskInput,
+    stable_hash,
 )
 from assumption_agent.proposer import (
+    HypothesisProposalCallError,
     REPAIR_BRANCH_ID_POLICY_VERSION,
     StructuredHypothesisProposer,
 )
@@ -211,6 +213,233 @@ def test_repair_model_failure_rejects_only_that_candidate_branch() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("case", "expected_phase"),
+    [
+        ("top_level_list", "response_envelope"),
+        ("missing_field", "response_envelope"),
+        ("nonlist_field", "response_envelope"),
+        ("empty_list", "response_envelope"),
+        ("nonmapping_row", "response_envelope"),
+        ("parse_error", "response_program_parse"),
+    ],
+)
+def test_malformed_root_response_contract_is_typed_and_sanitized(
+    case: str,
+    expected_phase: str,
+) -> None:
+    invalid_program = _program_dict(hypothesis_id="invalid-root-response")
+    invalid_program["kind"] = "not-a-hypothesis-kind"
+    responses: dict[str, Any] = {
+        "top_level_list": [],
+        "missing_field": {},
+        "nonlist_field": {"hypotheses": {}},
+        "empty_list": {"hypotheses": []},
+        "nonmapping_row": {"hypotheses": ["not-an-object"]},
+        "parse_error": {"hypotheses": [invalid_program]},
+    }
+    response = responses[case]
+    sink = MemoryEventSink()
+    model = QueueProposalModel([response])
+    proposer = StructuredHypothesisProposer(model, event_sink=sink)
+
+    with pytest.raises(HypothesisProposalCallError) as caught:
+        proposer.propose(
+            _residuals(),
+            evaluator_epoch="epoch-0",
+            max_hypotheses=2,
+            trace_id=f"malformed-root-{case}",
+        )
+
+    error = caught.value
+    assert error.request_kind == "propose_hypothesis_programs"
+    assert error.failure_phase == expected_phase
+    assert error.response_hash == stable_hash(response)
+    rejected = next(
+        row
+        for row in sink.events
+        if row["event"] == "hypothesis_proposal_response_rejected"
+    )
+    assert rejected["payload"]["request_hash"] == error.request_hash
+    assert rejected["payload"]["response_hash"] == error.response_hash
+    assert rejected["payload"]["candidate_local_failure"] is False
+    assert rejected["payload"]["raw_content_persisted"] is False
+    assert "top_level_key_set_hash" in rejected["payload"]
+    assert not any(row["event"] == "hypothesis_proposed" for row in sink.events)
+    assert not any(
+        row["event"] == "root_proposal_evidence_recorded" for row in sink.events
+    )
+
+
+def test_mixed_root_response_is_atomic_and_not_replayed_after_rejection() -> None:
+    sink = MemoryEventSink()
+    valid = _program_dict(hypothesis_id="atomic-valid-root")
+    malformed = _program_dict(hypothesis_id="atomic-malformed-root")
+    malformed["kind"] = "not-a-hypothesis-kind"
+    model = QueueProposalModel(
+        [
+            {"hypotheses": [valid, malformed]},
+            {"hypotheses": [valid]},
+        ]
+    )
+    proposer = StructuredHypothesisProposer(model, event_sink=sink)
+    residuals = _residuals()
+
+    with pytest.raises(HypothesisProposalCallError) as caught:
+        proposer.propose(
+            residuals,
+            evaluator_epoch="epoch-0",
+            max_hypotheses=2,
+            trace_id="atomic-root-rejected",
+        )
+
+    assert caught.value.failure_phase == "response_program_parse"
+    assert len(model.requests) == 1
+    assert not any(row["event"] == "hypothesis_proposed" for row in sink.events)
+    assert not any(
+        row["event"] == "root_proposal_evidence_recorded" for row in sink.events
+    )
+
+    accepted = proposer.propose(
+        residuals,
+        evaluator_epoch="epoch-0",
+        max_hypotheses=2,
+        trace_id="atomic-root-retry",
+    )
+    replayed = proposer.propose(
+        residuals,
+        evaluator_epoch="epoch-0",
+        max_hypotheses=2,
+        trace_id="atomic-root-replay",
+    )
+
+    assert accepted == replayed
+    assert len(model.requests) == 2
+    assert sum(row["event"] == "hypothesis_proposed" for row in sink.events) == 1
+    assert sum(
+        row["event"] == "root_proposal_evidence_recorded" for row in sink.events
+    ) == 1
+    assert sum(
+        row["event"] == "root_proposal_evidence_replayed" for row in sink.events
+    ) == 1
+
+
+@pytest.mark.parametrize(
+    ("case", "expected_phase"),
+    [
+        ("missing_field", "response_envelope"),
+        ("null_field", "response_envelope"),
+        ("list_field", "response_envelope"),
+        ("root_style", "response_envelope"),
+        ("parse_error", "response_program_parse"),
+    ],
+)
+def test_malformed_repair_response_contract_is_typed_and_local(
+    case: str,
+    expected_phase: str,
+) -> None:
+    invalid_program = _program_dict(hypothesis_id="invalid-repair-response")
+    invalid_program["kind"] = "not-a-hypothesis-kind"
+    responses = {
+        "missing_field": {},
+        "null_field": {"hypothesis": None},
+        "list_field": {"hypothesis": []},
+        "root_style": {"hypotheses": [_program_dict()]},
+        "parse_error": {"hypothesis": invalid_program},
+    }
+    response = responses[case]
+    sink = MemoryEventSink()
+    proposer = StructuredHypothesisProposer(
+        QueueProposalModel([response]),
+        event_sink=sink,
+    )
+    parent = HypothesisProgram.from_dict(
+        _program_dict(hypothesis_id="malformed-repair-parent")
+    )
+
+    with pytest.raises(HypothesisProposalCallError) as caught:
+        proposer.revise(
+            parent,
+            failed_checks=({"check": "runtime_action", "passed": False},),
+            residuals=_residuals(),
+            depth=1,
+            trace_id=f"malformed-repair-{case}",
+        )
+
+    error = caught.value
+    assert error.request_kind == "repair_hypothesis_program"
+    assert error.failure_phase == expected_phase
+    assert error.response_hash == stable_hash(response)
+    rejected = next(
+        row
+        for row in sink.events
+        if row["event"] == "hypothesis_proposal_response_rejected"
+    )
+    assert rejected["payload"]["candidate_local_failure"] is True
+    assert rejected["payload"]["response_hash"] == error.response_hash
+    assert not any(
+        row["event"] == "hypothesis_repair_proposed" for row in sink.events
+    )
+
+
+def test_malformed_repair_response_is_isolated_by_recursive_validator() -> None:
+    sink = MemoryEventSink()
+    root = HypothesisProgram.from_dict(
+        _program_dict(
+            hypothesis_id="malformed-repair-validator-root",
+            lane="missing_lane",
+        )
+    )
+    malformed_response = {"hypotheses": [_program_dict()]}
+    proposer = StructuredHypothesisProposer(
+        QueueProposalModel([malformed_response]),
+        event_sink=sink,
+    )
+
+    tree = _validator(proposer, sink).validate(
+        root,
+        _validation_context(_residuals()),
+        trace_id="malformed-repair-validator",
+    )
+
+    assert tree.accepted_program is None
+    assert tree.repair_model_failure_count == 1
+    assert tree.nodes[0].terminal_reason == "repair_model_failed"
+    rejected = next(
+        row
+        for row in sink.events
+        if row["event"] == "hypothesis_proposal_response_rejected"
+    )
+    abandoned = next(
+        row
+        for row in sink.events
+        if row["event"] == "hypothesis_repair_abandoned_after_model_failure"
+    )
+    assert abandoned["payload"]["failure_phase"] == "response_envelope"
+    assert abandoned["payload"]["response_hash"] == rejected["payload"]["response_hash"]
+
+
+def test_recursive_validator_does_not_swallow_untyped_harness_errors() -> None:
+    class BrokenHarnessProposer:
+        def revise(self, *args, **kwargs):
+            raise ValueError("harness invariant failed")
+
+    sink = MemoryEventSink()
+    root = HypothesisProgram.from_dict(
+        _program_dict(
+            hypothesis_id="untyped-error-root",
+            lane="missing_lane",
+        )
+    )
+
+    with pytest.raises(ValueError, match="harness invariant failed"):
+        _validator(BrokenHarnessProposer(), sink).validate(
+            root,
+            _validation_context(_residuals()),
+            trace_id="untyped-harness-error",
+        )
+
+
 def test_same_model_repair_id_is_parent_scoped_deterministic_and_archive_safe() -> None:
     sink = MemoryEventSink()
     residuals = _residuals()
@@ -367,6 +596,10 @@ def test_same_model_id_across_recursive_depths_preserves_branch_lineage() -> Non
     for node in tree.nodes:
         archive.register_hypothesis(node.program)
     assert set(archive.hypotheses) == {root.id, first_child.id, second_child.id}
+    assert not any(
+        row["event"] == "hypothesis_proposal_response_rejected"
+        for row in sink.events
+    )
 
 
 def test_repair_branch_id_uses_canonical_defaults_and_ignores_unknown_keys() -> None:
