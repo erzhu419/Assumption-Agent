@@ -188,9 +188,15 @@ class PolicyArchive:
         successes: int,
         total: int,
         item_ids: tuple[str, ...],
+        valid: bool = True,
+        invalidation_reason: str = "",
     ) -> ScoreRecord:
         if archive_node_id not in self.nodes:
             raise KeyError(f"unknown archive node: {archive_node_id}")
+        if valid and invalidation_reason:
+            raise ValueError("valid score record cannot have an invalidation reason")
+        if not valid and not invalidation_reason:
+            raise ValueError("invalid score record requires an invalidation reason")
         record_id = f"score_{stable_hash({'node': archive_node_id, 'split': split, 'epoch': evaluator_epoch_id, 'metric': metric, 'items': item_ids})[:16]}"
         record = ScoreRecord(
             id=record_id,
@@ -201,6 +207,8 @@ class PolicyArchive:
             successes=successes,
             total=total,
             item_set_hash=stable_hash({"item_ids": sorted(item_ids)}),
+            valid=valid,
+            invalidation_reason=invalidation_reason,
         )
         self.score_records[record.id] = record
         return record

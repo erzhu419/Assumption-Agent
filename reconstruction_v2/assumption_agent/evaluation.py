@@ -121,6 +121,10 @@ class PairSummary:
     harm_count: int
     tie_count: int
     activation_count: int
+    valid_activation_count: int
+    activated_gain_count: int
+    activated_harm_count: int
+    abstention_count: int
     selection_change_count: int
     baseline_preserved_count: int
     invalid_pair_count: int
@@ -140,13 +144,41 @@ class PairSummary:
     def activation_rate(self) -> float:
         return self.activation_count / self.pair_count if self.pair_count else 0.0
 
+    @property
+    def activation_precision(self) -> float | None:
+        if not self.valid_activation_count:
+            return None
+        return self.activated_gain_count / self.valid_activation_count
+
+    @property
+    def activation_precision_defined(self) -> bool:
+        return self.valid_activation_count > 0
+
+    @property
+    def activated_harm_rate(self) -> float | None:
+        if not self.valid_activation_count:
+            return None
+        return self.activated_harm_count / self.valid_activation_count
+
+    @property
+    def activated_harm_rate_defined(self) -> bool:
+        return self.valid_activation_count > 0
+
+    @property
+    def abstention_rate(self) -> float:
+        return self.abstention_count / self.pair_count if self.pair_count else 0.0
+
     def effect_lower_bound(self, confidence: float) -> float:
         if not 0.5 < confidence < 1.0:
             raise ValueError("confidence must be between 0.5 and 1.0")
         z_score = statistics.NormalDist().inv_cdf(confidence)
         return self.mean_effect - z_score * self.effect_standard_error
 
-    def to_dict(self, *, confidence: float = 0.9) -> dict[str, float | int]:
+    def to_dict(
+        self,
+        *,
+        confidence: float = 0.9,
+    ) -> dict[str, float | int | bool | None]:
         return {
             "pair_count": self.pair_count,
             "baseline_success_count": self.baseline_success_count,
@@ -155,6 +187,10 @@ class PairSummary:
             "harm_count": self.harm_count,
             "tie_count": self.tie_count,
             "activation_count": self.activation_count,
+            "valid_activation_count": self.valid_activation_count,
+            "activated_gain_count": self.activated_gain_count,
+            "activated_harm_count": self.activated_harm_count,
+            "abstention_count": self.abstention_count,
             "selection_change_count": self.selection_change_count,
             "baseline_preserved_count": self.baseline_preserved_count,
             "invalid_pair_count": self.invalid_pair_count,
@@ -168,10 +204,45 @@ class PairSummary:
             "effect_lower_bound": self.effect_lower_bound(confidence),
             "harm_rate": self.harm_rate,
             "activation_rate": self.activation_rate,
+            "activation_precision": self.activation_precision,
+            "activation_precision_defined": self.activation_precision_defined,
+            "activated_harm_rate": self.activated_harm_rate,
+            "activated_harm_rate_defined": self.activated_harm_rate_defined,
+            "abstention_rate": self.abstention_rate,
         }
 
 
+def counterfactual_pair_provider_mismatch(pair: CounterfactualPair) -> bool:
+    baseline = pair.baseline.selected_result.metadata.get("provider_fingerprint")
+    candidate = pair.candidate.selected_result.metadata.get("provider_fingerprint")
+    return (baseline is not None or candidate is not None) and baseline != candidate
+
+
+def counterfactual_pair_budget_mismatch(pair: CounterfactualPair) -> bool:
+    baseline = pair.baseline.selected_result.metadata.get("fairness_fingerprint")
+    candidate = pair.candidate.selected_result.metadata.get("fairness_fingerprint")
+    return (baseline is not None or candidate is not None) and baseline != candidate
+
+
+def counterfactual_pair_evaluation_valid(pair: CounterfactualPair) -> bool:
+    return min(
+        pair.baseline_outcome.metrics.get("evaluation_valid", 1.0),
+        pair.candidate_outcome.metrics.get("evaluation_valid", 1.0),
+    ) >= 1.0
+
+
+def counterfactual_pair_evidence_valid(pair: CounterfactualPair) -> bool:
+    return (
+        counterfactual_pair_evaluation_valid(pair)
+        and not counterfactual_pair_provider_mismatch(pair)
+        and not counterfactual_pair_budget_mismatch(pair)
+    )
+
+
 def summarize_pairs(pairs: Sequence[CounterfactualPair]) -> PairSummary:
+    pair_invalidity = [
+        not counterfactual_pair_evaluation_valid(pair) for pair in pairs
+    ]
     differences = [
         float(pair.candidate_outcome.success) - float(pair.baseline_outcome.success)
         for pair in pairs
@@ -184,6 +255,13 @@ def summarize_pairs(pairs: Sequence[CounterfactualPair]) -> PairSummary:
         cost_ratio = candidate_mean_cost / baseline_mean_cost
     else:
         cost_ratio = 1.0 if candidate_mean_cost == 0 else math.inf
+    activation_count = sum(pair.candidate.action_activated for pair in pairs)
+    valid_activated_pairs = [
+        pair
+        for pair in pairs
+        if pair.candidate.action_activated
+        and counterfactual_pair_evidence_valid(pair)
+    ]
     return PairSummary(
         pair_count=len(pairs),
         baseline_success_count=sum(pair.baseline_outcome.success for pair in pairs),
@@ -191,34 +269,29 @@ def summarize_pairs(pairs: Sequence[CounterfactualPair]) -> PairSummary:
         gain_count=sum(not pair.baseline_outcome.success and pair.candidate_outcome.success for pair in pairs),
         harm_count=sum(pair.baseline_outcome.success and not pair.candidate_outcome.success for pair in pairs),
         tie_count=sum(pair.baseline_outcome.success == pair.candidate_outcome.success for pair in pairs),
-        activation_count=sum(pair.candidate.action_activated for pair in pairs),
+        activation_count=activation_count,
+        valid_activation_count=len(valid_activated_pairs),
+        activated_gain_count=sum(
+            not pair.baseline_outcome.success and pair.candidate_outcome.success
+            for pair in valid_activated_pairs
+        ),
+        activated_harm_count=sum(
+            pair.baseline_outcome.success and not pair.candidate_outcome.success
+            for pair in valid_activated_pairs
+        ),
+        abstention_count=len(pairs) - activation_count,
         selection_change_count=sum(
             stable_hash({"answer": pair.baseline.selected_result.answer})
             != stable_hash({"answer": pair.candidate.selected_result.answer})
             for pair in pairs
         ),
         baseline_preserved_count=sum(pair.candidate.baseline_preserved for pair in pairs),
-        invalid_pair_count=sum(
-            min(
-                pair.baseline_outcome.metrics.get("evaluation_valid", 1.0),
-                pair.candidate_outcome.metrics.get("evaluation_valid", 1.0),
-            )
-            < 1.0
-            for pair in pairs
-        ),
+        invalid_pair_count=sum(pair_invalidity),
         provider_mismatch_count=sum(
-            pair.baseline.selected_result.metadata.get("provider_fingerprint")
-            != pair.candidate.selected_result.metadata.get("provider_fingerprint")
-            for pair in pairs
-            if pair.baseline.selected_result.metadata.get("provider_fingerprint") is not None
-            or pair.candidate.selected_result.metadata.get("provider_fingerprint") is not None
+            counterfactual_pair_provider_mismatch(pair) for pair in pairs
         ),
         budget_mismatch_count=sum(
-            pair.baseline.selected_result.metadata.get("fairness_fingerprint")
-            != pair.candidate.selected_result.metadata.get("fairness_fingerprint")
-            for pair in pairs
-            if pair.baseline.selected_result.metadata.get("fairness_fingerprint") is not None
-            or pair.candidate.selected_result.metadata.get("fairness_fingerprint") is not None
+            counterfactual_pair_budget_mismatch(pair) for pair in pairs
         ),
         baseline_mean_cost=round(baseline_mean_cost, 6),
         candidate_mean_cost=round(candidate_mean_cost, 6),

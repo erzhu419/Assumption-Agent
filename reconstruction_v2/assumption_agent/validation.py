@@ -48,6 +48,7 @@ class ValidationContext:
     )
     action_semantics: str = "typed_runtime_action_v1"
     external_evidence_is_hidden: bool = False
+    contrastive_training_evidence_policy: str | None = None
 
 
 def backend_action_contract_issues(
@@ -266,11 +267,23 @@ class TrainingSupportCheck:
 
     def evaluate(self, program: HypothesisProgram, context: ValidationContext) -> CheckResult:
         train_rows = [row for row in context.residuals if row.split is SplitName.TRAIN]
-        matching = [row for row in train_rows if program.matches(row.features)]
+        failure_rows = [row for row in train_rows if not row.baseline_success]
+        success_controls = [row for row in train_rows if row.baseline_success]
+        matching = [row for row in failure_rows if program.matches(row.features)]
         anti_matching = [
             row
-            for row in train_rows
+            for row in failure_rows
             if not program.anti_trigger.is_empty and program.anti_trigger.matches(row.features)
+        ]
+        success_false_positive_activation = [
+            row for row in success_controls if program.matches(row.features)
+        ]
+        success_anti_trigger_protection = [
+            row
+            for row in success_controls
+            if program.trigger.matches(row.features)
+            and not program.anti_trigger.is_empty
+            and program.anti_trigger.matches(row.features)
         ]
         passed = len(matching) >= self.min_support and len(matching) > len(anti_matching)
         return CheckResult(
@@ -278,9 +291,19 @@ class TrainingSupportCheck:
             passed=passed,
             reason="sufficient_training_trigger_support" if passed else "insufficient_or_antiscope_support",
             evidence={
-                "training_residual_count": len(train_rows),
+                "training_residual_count": len(failure_rows),
+                "success_control_count": len(success_controls),
+                "training_example_count": len(train_rows),
                 "trigger_support_count": len(matching),
                 "anti_trigger_support_count": len(anti_matching),
+                "failure_activation_count": len(matching),
+                "success_false_positive_activation_count": len(
+                    success_false_positive_activation
+                ),
+                "success_anti_trigger_protection_count": len(
+                    success_anti_trigger_protection
+                ),
+                "failure_anti_trigger_block_count": len(anti_matching),
                 "minimum_support": self.min_support,
             },
         )
@@ -610,6 +633,23 @@ class RecursiveValidationEngine:
                         ),
                     },
                     "evaluator_hypotheses_require_separate_epoch_challenger": True,
+                    **(
+                        {
+                            "training_evidence_contract": {
+                                "policy": context.contrastive_training_evidence_policy,
+                                "label_field": "baseline_success",
+                                "failure_label": False,
+                                "success_control_label": True,
+                                "success_control_role": (
+                                    "anti_trigger_negative_control"
+                                ),
+                                "context_may_be_used_for_trigger": False,
+                                "context_may_shape_actions": True,
+                            }
+                        }
+                        if context.contrastive_training_evidence_policy
+                        else {}
+                    ),
                 },
                 trace_id=trace_id,
             )

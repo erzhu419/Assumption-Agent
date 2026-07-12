@@ -85,7 +85,15 @@ class StructuredHypothesisProposer:
                 "hypotheses": [_program_schema(capability_payload)]
             },
             "capabilities": capability_payload,
-            "residuals": [_residual_payload(residual) for residual in residuals],
+            "residuals": [
+                _residual_payload(
+                    residual,
+                    labeled=bool(
+                        capability_payload.get("training_evidence_contract")
+                    ),
+                )
+                for residual in residuals
+            ],
             "max_hypotheses": max_hypotheses,
         }
         self._emit_model_event("hypothesis_proposal_requested", trace_id, payload)
@@ -246,7 +254,15 @@ class StructuredHypothesisProposer:
             "capabilities": capability_payload,
             "parent": parent.to_dict(),
             "failed_checks": [dict(row) for row in failed_checks],
-            "residuals": [_residual_payload(residual) for residual in residuals],
+            "residuals": [
+                _residual_payload(
+                    residual,
+                    labeled=bool(
+                        capability_payload.get("training_evidence_contract")
+                    ),
+                )
+                for residual in residuals
+            ],
             "repair_depth": depth,
         }
         self._emit_model_event("hypothesis_repair_requested", trace_id, payload)
@@ -487,8 +503,12 @@ def _normalize_expected_effect_metric(
     payload["expected_effect"] = normalized_effect
 
 
-def _residual_payload(residual: ResidualExample) -> dict[str, Any]:
-    return {
+def _residual_payload(
+    residual: ResidualExample,
+    *,
+    labeled: bool = False,
+) -> dict[str, Any]:
+    payload = {
         "transition_id": residual.transition_id,
         "task_id_hash": stable_hash({"task_id": residual.task_id}),
         "family": residual.family,
@@ -498,6 +518,11 @@ def _residual_payload(residual: ResidualExample) -> dict[str, Any]:
         "baseline_success": residual.baseline_success,
         "context": dict(residual.context),
     }
+    if labeled:
+        payload["evidence_label"] = (
+            "success_control" if residual.baseline_success else "failure"
+        )
+    return payload
 
 
 def _proposal_constraints(
@@ -520,7 +545,7 @@ def _proposal_constraints(
         if isinstance(action_contract, Mapping)
         else False
     )
-    return {
+    constraints = {
         "allowed_kinds": ["task", "policy", "evaluator"],
         "fallback_must_equal": "preserve_baseline",
         "trigger_must_use_structured_features": True,
@@ -560,6 +585,23 @@ def _proposal_constraints(
             else []
         ),
     }
+    training_evidence_contract = (capabilities or {}).get(
+        "training_evidence_contract"
+    )
+    if isinstance(training_evidence_contract, Mapping):
+        constraints.update(
+            {
+                "training_rows_are_explicitly_labeled": True,
+                "training_row_label_field": "baseline_success",
+                "success_rows_are_anti_trigger_negative_controls": True,
+                "success_rows_must_not_increase_failure_trigger_support": True,
+                "success_control_context_must_be_empty": True,
+                "training_evidence_policy": str(
+                    training_evidence_contract.get("policy") or ""
+                ),
+            }
+        )
+    return constraints
 
 
 def _program_schema(

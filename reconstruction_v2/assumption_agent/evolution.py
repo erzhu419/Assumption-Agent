@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Sequence
+from fractions import Fraction
+from typing import Any, Sequence
 
 from .archive import ArchiveNode, PolicyArchive
-from .evaluation import CounterfactualRunner, PairSummary, PromotionDecision, PromotionGate
+from .evaluation import (
+    CounterfactualRunner,
+    PairSummary,
+    PromotionDecision,
+    PromotionGate,
+    counterfactual_pair_evidence_valid,
+)
 from .events import Event, EventSink, NullEventSink
 from .models import (
     CounterfactualPair,
@@ -21,6 +28,12 @@ from .validation import RecursiveValidationEngine, ValidationContext, Validation
 
 
 TRAIN_ONLY_CANDIDATE_SELECTION_VERSION = "train_static_support_then_complexity_v1"
+CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION = (
+    "train_contrastive_precision_then_support_v1"
+)
+CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION = (
+    "valid_train_failures_and_success_controls_v1"
+)
 COUNTERFACTUAL_REPLAY_POLICY_VERSION = (
     "behavior_identical_validation_replay_v1"
 )
@@ -50,7 +63,58 @@ class _StaticCandidateAudit:
     root: HypothesisProgram
     tree: ValidationTree
     accepted: HypothesisProgram | None
-    training_score: tuple[int, int, int, int, str]
+    training_score: tuple[Any, ...]
+    training_metrics: "_TrainingCandidateMetrics"
+
+
+@dataclass(frozen=True)
+class _TrainingCandidateMetrics:
+    failure_count: int
+    success_control_count: int
+    failure_activation_count: int
+    success_false_positive_activation_count: int
+    success_anti_trigger_protection_count: int
+    failure_anti_trigger_block_count: int
+    predicate_count: int
+    action_count: int
+
+    @property
+    def activation_count(self) -> int:
+        return (
+            self.failure_activation_count
+            + self.success_false_positive_activation_count
+        )
+
+    @property
+    def precision(self) -> Fraction:
+        if not self.activation_count:
+            return Fraction(0, 1)
+        return Fraction(self.failure_activation_count, self.activation_count)
+
+    def to_dict(self) -> dict[str, Any]:
+        example_count = self.failure_count + self.success_control_count
+        abstention_count = example_count - self.activation_count
+        return {
+            "failure_count": self.failure_count,
+            "success_control_count": self.success_control_count,
+            "example_count": example_count,
+            "failure_activation_count": self.failure_activation_count,
+            "success_false_positive_activation_count": (
+                self.success_false_positive_activation_count
+            ),
+            "success_anti_trigger_protection_count": (
+                self.success_anti_trigger_protection_count
+            ),
+            "failure_anti_trigger_block_count": (
+                self.failure_anti_trigger_block_count
+            ),
+            "activation_precision_numerator": self.failure_activation_count,
+            "activation_precision_denominator": self.activation_count,
+            "train_abstention_proxy_numerator": abstention_count,
+            "train_abstention_proxy_denominator": example_count,
+            "predicate_count": self.predicate_count,
+            "action_count": self.action_count,
+        }
 
 
 @dataclass(frozen=True)
@@ -212,8 +276,36 @@ class EvolutionKernel:
         archive: PolicyArchive,
         split_guard: SplitAccessGuard,
         proposal_candidates_per_generation: int = 3,
+        candidate_selection_policy: str = TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
+        contrastive_training_evidence_policy: str | None = None,
         event_sink: EventSink | None = None,
     ) -> None:
+        if candidate_selection_policy not in {
+            TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
+            CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
+        }:
+            raise ValueError(
+                f"unsupported candidate selection policy: {candidate_selection_policy}"
+            )
+        if contrastive_training_evidence_policy not in {
+            None,
+            CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
+        }:
+            raise ValueError(
+                "unsupported contrastive training evidence policy: "
+                f"{contrastive_training_evidence_policy}"
+            )
+        contrastive_enabled = (
+            contrastive_training_evidence_policy
+            == CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
+        )
+        if contrastive_enabled != (
+            candidate_selection_policy
+            == CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION
+        ):
+            raise ValueError(
+                "contrastive evidence and candidate selection policies must be paired"
+            )
         self.proposer = proposer
         self.validator = validator
         self.counterfactual_runner = counterfactual_runner
@@ -223,6 +315,10 @@ class EvolutionKernel:
         if proposal_candidates_per_generation <= 0:
             raise ValueError("proposal candidate count must be positive")
         self.proposal_candidates_per_generation = proposal_candidates_per_generation
+        self.candidate_selection_policy = candidate_selection_policy
+        self.contrastive_training_evidence_policy = (
+            contrastive_training_evidence_policy
+        )
         self.event_sink = event_sink or NullEventSink()
         self._promotion_feedback: list[dict[str, object]] = []
 
@@ -238,6 +334,13 @@ class EvolutionKernel:
     ) -> EvolutionRunResult:
         if validation_context.evaluator_epoch != self.counterfactual_runner.evaluator.epoch:
             raise ValueError("validation context and counterfactual evaluator epoch differ")
+        if (
+            validation_context.contrastive_training_evidence_policy
+            != self.contrastive_training_evidence_policy
+        ):
+            raise ValueError(
+                "validation context contrastive training evidence policy mismatch"
+            )
         for task in validation_tasks:
             self.split_guard.authorize(task.id, AccessPhase.PROMOTION)
         proposals = tuple(
@@ -327,6 +430,11 @@ class EvolutionKernel:
                     training_score=_training_candidate_score(
                         accepted,
                         validation_context.residuals,
+                        selection_policy=self.candidate_selection_policy,
+                    ),
+                    training_metrics=_training_candidate_metrics(
+                        accepted,
+                        validation_context.residuals,
                     ),
                 )
             )
@@ -366,13 +474,28 @@ class EvolutionKernel:
                             "accepted_hash": (
                                 audit.accepted.payload_hash if audit.accepted else None
                             ),
-                            "training_score": list(audit.training_score[:-1]),
+                            "training_score": (
+                                list(audit.training_score[:-1])
+                                if self.candidate_selection_policy
+                                == TRAIN_ONLY_CANDIDATE_SELECTION_VERSION
+                                else audit.training_metrics.to_dict()
+                            ),
+                            "contrastive_training_metrics": (
+                                audit.training_metrics.to_dict()
+                                if self.candidate_selection_policy
+                                == CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION
+                                else None
+                            ),
                             "selected": bool(eligible and audit is eligible[0]),
                         }
                         for audit in audits
                     ],
                     "selection_uses_validation_outcomes": False,
-                    "selection_policy": TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
+                    "selection_uses_validation": False,
+                    "selection_policy": self.candidate_selection_policy,
+                    "contrastive_training_evidence_policy": (
+                        self.contrastive_training_evidence_policy
+                    ),
                 },
             )
         )
@@ -493,6 +616,13 @@ class EvolutionKernel:
             }
         )
         summary = decision.summary
+        invalid_counterfactual_evidence = any(
+            (
+                summary.invalid_pair_count,
+                summary.provider_mismatch_count,
+                summary.budget_mismatch_count,
+            )
+        )
         self.archive.record_score(
             archive_node_id=candidate_node.id,
             split=SplitName.VALIDATION.value,
@@ -501,6 +631,12 @@ class EvolutionKernel:
             successes=summary.candidate_success_count,
             total=summary.pair_count,
             item_ids=tuple(pair.task_id for pair in pairs),
+            valid=not invalid_counterfactual_evidence,
+            invalidation_reason=(
+                ""
+                if not invalid_counterfactual_evidence
+                else "invalid_counterfactual_evidence"
+            ),
         )
         candidate_node = self.archive.apply_promotion(
             candidate_node_id=candidate_node.id,
@@ -569,6 +705,23 @@ class EvolutionKernel:
                 "prior_hypotheses": self._prior_hypothesis_context(),
                 "prior_promotion_feedback": list(self._promotion_feedback),
                 "novel_hypothesis_required": True,
+                **(
+                    {
+                        "training_evidence_contract": {
+                            "policy": self.contrastive_training_evidence_policy,
+                            "label_field": "baseline_success",
+                            "failure_label": False,
+                            "success_control_label": True,
+                            "success_control_role": (
+                                "anti_trigger_negative_control"
+                            ),
+                            "context_may_be_used_for_trigger": False,
+                            "context_may_shape_actions": True,
+                        }
+                    }
+                    if self.contrastive_training_evidence_policy
+                    else {}
+                ),
             },
             trace_id=trace_id,
         )
@@ -788,6 +941,24 @@ def _counterfactual_pair_set_hash(
                 "candidate_observation_hash": row.candidate.selected_result.metadata.get(
                     "observation_hash"
                 ),
+                "baseline_evaluation_valid": row.baseline_outcome.metrics.get(
+                    "evaluation_valid", 1.0
+                ),
+                "candidate_evaluation_valid": row.candidate_outcome.metrics.get(
+                    "evaluation_valid", 1.0
+                ),
+                "baseline_provider_fingerprint": row.baseline.selected_result.metadata.get(
+                    "provider_fingerprint"
+                ),
+                "candidate_provider_fingerprint": row.candidate.selected_result.metadata.get(
+                    "provider_fingerprint"
+                ),
+                "baseline_fairness_fingerprint": row.baseline.selected_result.metadata.get(
+                    "fairness_fingerprint"
+                ),
+                "candidate_fairness_fingerprint": row.candidate.selected_result.metadata.get(
+                    "fairness_fingerprint"
+                ),
             }
             for row in pairs
         ]
@@ -795,23 +966,79 @@ def _counterfactual_pair_set_hash(
 
 
 def _counterfactual_pair_valid(pair: CounterfactualPair) -> bool:
-    return bool(pair.baseline_outcome.metrics.get("evaluation_valid", 1.0)) and bool(
-        pair.candidate_outcome.metrics.get("evaluation_valid", 1.0)
-    )
+    return counterfactual_pair_evidence_valid(pair)
 
 
 def _training_candidate_score(
     program: HypothesisProgram | None,
     residuals: Sequence[ResidualExample],
-) -> tuple[int, int, int, int, str]:
+    *,
+    selection_policy: str = TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
+) -> tuple[Any, ...]:
+    if selection_policy not in {
+        TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
+        CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
+    }:
+        raise ValueError(f"unsupported candidate selection policy: {selection_policy}")
     if program is None:
         return (0, 10**9, 10**9, 10**9, "f" * 64)
+    metrics = _training_candidate_metrics(program, residuals)
+    legacy_score = (
+        -metrics.failure_activation_count,
+        metrics.failure_anti_trigger_block_count,
+        metrics.predicate_count,
+        metrics.action_count,
+        program.payload_hash,
+    )
+    if (
+        selection_policy == TRAIN_ONLY_CANDIDATE_SELECTION_VERSION
+        or metrics.success_control_count == 0
+    ):
+        return legacy_score
+    return (
+        -metrics.precision,
+        metrics.success_false_positive_activation_count,
+        -metrics.failure_activation_count,
+        metrics.predicate_count,
+        metrics.action_count,
+        program.payload_hash,
+    )
+
+
+def _training_candidate_metrics(
+    program: HypothesisProgram | None,
+    residuals: Sequence[ResidualExample],
+) -> _TrainingCandidateMetrics:
     train_rows = [row for row in residuals if row.split is SplitName.TRAIN]
-    support = sum(program.matches(row.features) for row in train_rows)
-    anti_support = sum(
+    failure_rows = [row for row in train_rows if not row.baseline_success]
+    success_controls = [row for row in train_rows if row.baseline_success]
+    if program is None:
+        return _TrainingCandidateMetrics(
+            failure_count=len(failure_rows),
+            success_control_count=len(success_controls),
+            failure_activation_count=0,
+            success_false_positive_activation_count=0,
+            success_anti_trigger_protection_count=0,
+            failure_anti_trigger_block_count=0,
+            predicate_count=0,
+            action_count=0,
+        )
+    failure_activation_count = sum(
+        program.matches(row.features) for row in failure_rows
+    )
+    success_false_positive_activation_count = sum(
+        program.matches(row.features) for row in success_controls
+    )
+    success_anti_trigger_protection_count = sum(
+        program.trigger.matches(row.features)
+        and not program.anti_trigger.is_empty
+        and program.anti_trigger.matches(row.features)
+        for row in success_controls
+    )
+    failure_anti_trigger_block_count = sum(
         not program.anti_trigger.is_empty
         and program.anti_trigger.matches(row.features)
-        for row in train_rows
+        for row in failure_rows
     )
     predicate_count = sum(
         len(group)
@@ -824,10 +1051,17 @@ def _training_candidate_score(
             program.anti_trigger.none_of,
         )
     )
-    return (
-        -support,
-        anti_support,
-        predicate_count,
-        len(program.action_graph),
-        program.payload_hash,
+    return _TrainingCandidateMetrics(
+        failure_count=len(failure_rows),
+        success_control_count=len(success_controls),
+        failure_activation_count=failure_activation_count,
+        success_false_positive_activation_count=(
+            success_false_positive_activation_count
+        ),
+        success_anti_trigger_protection_count=(
+            success_anti_trigger_protection_count
+        ),
+        failure_anti_trigger_block_count=failure_anti_trigger_block_count,
+        predicate_count=predicate_count,
+        action_count=len(program.action_graph),
     )

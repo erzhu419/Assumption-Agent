@@ -31,9 +31,14 @@ from assumption_agent.evaluation import (
     PromotionGate,
     PromotionGateSpec,
 )
-from assumption_agent.evolution import CounterfactualEvidenceReplayCache
+from assumption_agent.evolution import (
+    CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
+    TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
+    CounterfactualEvidenceReplayCache,
+)
 from assumption_agent.events import MemoryEventSink
 from assumption_agent.benchmarks.skilllearn_lifecycle import (
+    CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
     SkillLearnPrebuiltImage,
     SkillLearnSubprocessBackend,
     _ContainerNetworkBudgetMonitor,
@@ -59,11 +64,22 @@ from assumption_agent.benchmarks.offline_verifier import (
     WEIGHTED_GDP_VERIFIER_PROFILE,
     OfflineVerifierRuntime,
 )
-from assumption_agent.benchmarks.skilllearn_experiment import _run_paired_arms
+from assumption_agent.benchmarks.skilllearn_experiment import (
+    _advance_arm,
+    _run_paired_arms,
+)
+from assumption_agent.benchmarks.paper_protocol import (
+    COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION,
+)
 from assumption_agent.benchmarks.skilllearn_compiler import (
     skilllearn_program_treatment_hash,
 )
-from assumption_agent.models import HypothesisProgram, HypothesisStatus, SplitName
+from assumption_agent.models import (
+    HypothesisProgram,
+    HypothesisStatus,
+    ResidualExample,
+    SplitName,
+)
 from assumption_agent.proposer import StructuredHypothesisProposer
 from assumption_agent.splits import (
     SplitAccessGuard,
@@ -78,6 +94,7 @@ from assumption_agent.validation import (
     SchemaCheck,
     TrainingSupportCheck,
     TriggerVocabularyCheck,
+    ValidationContext,
 )
 
 
@@ -174,6 +191,40 @@ class AlwaysFailSkillLearnBackend(FakeSkillLearnBackend):
             score=0.0,
             metrics=metrics,
         )
+
+
+class SelectiveTrainingSuccessBackend(FakeSkillLearnBackend):
+    def __init__(self, successful_training_items: set[str]) -> None:
+        super().__init__()
+        self.successful_training_items = set(successful_training_items)
+
+    def run(self, request, *, skill_source_dir, trace_id):
+        observation = super().run(
+            request,
+            skill_source_dir=skill_source_dir,
+            trace_id=trace_id,
+        )
+        if (
+            request.split is SplitName.TRAIN
+            and request.variant is TrialVariant.POLICY_OFF
+            and request.item_id in self.successful_training_items
+        ):
+            metrics = dict(observation.metrics)
+            metrics.update(
+                {
+                    "task_success": 1.0,
+                    "trajectory_key_point_recall": 1.0,
+                    "evaluation_valid": 1.0,
+                }
+            )
+            return replace(
+                observation,
+                success=True,
+                score=1.0,
+                metrics=metrics,
+                error_type=None,
+            )
+        return observation
 
 
 class RecordingSubprocess:
@@ -1330,7 +1381,7 @@ def test_malformed_repair_is_local_but_blocks_multi_root_generation(
 
 
 def test_invalid_external_pair_blocks_promotion(tmp_path: Path) -> None:
-    harness, _, _, _, _, _ = _harness(
+    harness, _, _, archive, _, _ = _harness(
         tmp_path,
         invalid_candidate_item="offer-letter-generator-5",
     )
@@ -1348,6 +1399,58 @@ def test_invalid_external_pair_blocks_promotion(tmp_path: Path) -> None:
     assert result.evolution is not None
     assert result.evolution.promoted is False
     assert "invalid_counterfactual_pairs" in result.evolution.promotion_decision.blockers
+    score = next(iter(archive.score_records.values()))
+    assert score.valid is False
+    assert score.invalidation_reason == "invalid_counterfactual_evidence"
+    assert _advance_arm(
+        result,
+        consecutive_non_promotions=1,
+        maximum=2,
+        counterfactual_invalid_evidence_policy=(
+            COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION
+        ),
+    ) == (False, 1, "invalid_counterfactual_evidence")
+
+
+@pytest.mark.parametrize(
+    "mismatch_field",
+    ("provider_mismatch_count", "budget_mismatch_count"),
+)
+def test_counterfactual_mismatch_stops_arm_without_increment(
+    mismatch_field: str,
+) -> None:
+    summary = {
+        "invalid_pair_count": 0,
+        "provider_mismatch_count": 0,
+        "budget_mismatch_count": 0,
+    }
+    summary[mismatch_field] = 1
+
+    class Generation:
+        reason = "promotion_gate_rejected"
+        evolution = None
+
+        def to_dict(self) -> dict[str, object]:
+            return {
+                "proposal_model_failure_count": 0,
+                "promotion_summary": summary,
+                "promotion_decision": {"summary": summary},
+            }
+
+    assert _advance_arm(
+        Generation(),
+        consecutive_non_promotions=1,
+        maximum=2,
+        counterfactual_invalid_evidence_policy=(
+            COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION
+        ),
+    ) == (False, 1, "invalid_counterfactual_evidence")
+
+    assert _advance_arm(
+        Generation(),
+        consecutive_non_promotions=0,
+        maximum=2,
+    ) == (True, 1, "max_generations_reached")
 
 
 def test_invalid_counterfactual_bundle_does_not_enter_replay_cache(
@@ -1383,6 +1486,64 @@ def test_invalid_counterfactual_bundle_does_not_enter_replay_cache(
     assert second[0].candidate_outcome.metrics["evaluation_valid"] == 0.0
     assert len(backend.calls) == 3
     assert sum(call[1] == "policy_off" for call in backend.calls) == 1
+    assert not any(
+        row["event"] == "counterfactual_evidence_replayed"
+        for row in sink.events
+    )
+    assert sum(
+        row["event"] == "counterfactual_evidence_not_recorded_invalid"
+        for row in sink.events
+    ) == 2
+
+
+@pytest.mark.parametrize(
+    "fingerprint_field",
+    ("provider_fingerprint", "fairness_fingerprint"),
+)
+def test_mismatched_counterfactual_bundle_does_not_enter_replay_cache(
+    tmp_path: Path,
+    fingerprint_field: str,
+) -> None:
+    target = "offer-letter-generator-5"
+    harness, backend, _, _, _, sink = _harness(tmp_path)
+    delegate = harness.counterfactual_runner
+
+    class MismatchRunner:
+        runtime = delegate.runtime
+        evaluator = delegate.evaluator
+
+        def run(self, *args, **kwargs):
+            pairs = delegate.run(*args, **kwargs)
+            mismatched = []
+            for pair in pairs:
+                metadata = dict(pair.candidate.selected_result.metadata)
+                metadata[fingerprint_field] = "mismatch"
+                candidate = replace(
+                    pair.candidate,
+                    selected_result=replace(
+                        pair.candidate.selected_result,
+                        metadata=metadata,
+                    ),
+                )
+                mismatched.append(replace(pair, candidate=candidate))
+            return tuple(mismatched)
+
+    cache = CounterfactualEvidenceReplayCache(event_sink=sink)
+    program = HypothesisProgram.from_dict(_program_dict())
+    tasks = harness.tasks((target,))
+    runner = MismatchRunner()
+
+    for trace_id in ("mismatch-cache-source", "mismatch-cache-target"):
+        cache.run_or_replay(
+            runner=runner,
+            tasks=tasks,
+            program=program,
+            baseline_programs=(),
+            split=SplitName.VALIDATION,
+            trace_id=trace_id,
+        )
+
+    assert len(backend.calls) == 3
     assert not any(
         row["event"] == "counterfactual_evidence_replayed"
         for row in sink.events
@@ -1641,6 +1802,394 @@ def test_paired_ablation_replays_later_root_when_arm_state_is_identical(
         row["event"] == "counterfactual_evidence_replayed"
         for row in recursive_sink.events
     ) == 2
+
+
+def test_contrastive_miner_labels_valid_failures_and_success_controls(
+    tmp_path: Path,
+) -> None:
+    successful = {
+        "anthropic-poster-design-2",
+        "anthropic-poster-design-5",
+    }
+    train_ids = (
+        "organize-messy-files-1",
+        "organize-messy-files-2",
+        *sorted(successful),
+    )
+    contrastive, _, _, _, _, sink = _harness(
+        tmp_path / "contrastive",
+        backend_override=SelectiveTrainingSuccessBackend(successful),
+        candidate_selection_policy=(
+            CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION
+        ),
+        contrastive_training_evidence_policy=(
+            CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
+        ),
+    )
+
+    observations = contrastive.collect_training_observations(
+        train_item_ids=train_ids,
+        trace_id="contrastive-mixed-observations",
+    )
+    examples = contrastive.residual_miner.mine(
+        observations,
+        trace_id="contrastive-mixed-residuals",
+    )
+
+    failures = [row for row in examples if not row.baseline_success]
+    controls = [row for row in examples if row.baseline_success]
+    assert len(failures) == 2
+    assert len(controls) == 2
+    assert all(row.context for row in failures)
+    assert all(
+        row.failure_type == "baseline_success_control"
+        and row.evaluator_feedback == ()
+        and row.context == {}
+        for row in controls
+    )
+    mined = next(
+        row
+        for row in sink.events
+        if row["event"] == "skilllearn_training_residuals_mined"
+    )
+    assert mined["payload"]["residual_count"] == 2
+    assert mined["payload"]["success_control_count"] == 2
+    assert mined["payload"]["example_count"] == 4
+
+    legacy, _, _, _, _, _ = _harness(
+        tmp_path / "legacy",
+        backend_override=SelectiveTrainingSuccessBackend(successful),
+    )
+    legacy_observations = legacy.collect_training_observations(
+        train_item_ids=train_ids,
+        trace_id="legacy-mixed-observations",
+    )
+    legacy_residuals = legacy.residual_miner.mine(legacy_observations)
+    assert len(legacy_residuals) == 2
+    assert all(not row.baseline_success for row in legacy_residuals)
+    assert legacy.candidate_selection_policy == (
+        TRAIN_ONLY_CANDIDATE_SELECTION_VERSION
+    )
+    assert legacy.contrastive_training_evidence_policy is None
+
+
+def test_contrastive_all_success_stops_both_arms_before_proposal(
+    tmp_path: Path,
+) -> None:
+    train_ids = (
+        "organize-messy-files-1",
+        "organize-messy-files-2",
+        "offer-letter-generator-1",
+        "offer-letter-generator-2",
+    )
+    policy_args = {
+        "candidate_selection_policy": (
+            CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION
+        ),
+        "contrastive_training_evidence_policy": (
+            CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
+        ),
+    }
+    recursive, _, recursive_model, _, _, sink = _harness(
+        tmp_path / "recursive",
+        backend_override=SelectiveTrainingSuccessBackend(set(train_ids)),
+        **policy_args,
+    )
+    no_recursive, _, no_recursive_model, _, _, _ = _harness(
+        tmp_path / "no-recursive",
+        **policy_args,
+    )
+    no_recursive.validator.proposer = None
+
+    paired = _run_paired_arms(
+        recursive_harness=recursive,
+        no_recursive_harness=no_recursive,
+        train_ids=train_ids,
+        validation_ids=(
+            "organize-messy-files-5",
+            "offer-letter-generator-5",
+        ),
+        manifest_hash=recursive.manifest.manifest_hash,
+        max_generations=1,
+        max_consecutive_non_promotions=1,
+    )
+
+    for key in ("recursive_generations", "no_recursive_generations"):
+        generation = paired[key][0]
+        assert generation.reason == "no_valid_failed_training_rows"
+        assert generation.evolution is None
+        assert generation.to_dict()["training_residual_count"] == 0
+        assert generation.to_dict()["success_control_count"] == 4
+        assert generation.to_dict()["example_count"] == 4
+    assert recursive_model.requests == []
+    assert no_recursive_model.requests == []
+    checkpoint = next(
+        row
+        for row in sink.events
+        if row["event"] == "skilllearn_paired_ablation_checkpoint_frozen"
+    )
+    assert checkpoint["payload"]["labeled_transition_ids"] == sorted(
+        row.transition_id for row in paired["recursive_generations"][0].residuals
+    )
+    assert checkpoint["payload"]["residual_count"] == 0
+    assert checkpoint["payload"]["success_control_count"] == 4
+
+
+def test_contrastive_selection_prefers_zero_false_positives_over_more_support(
+    tmp_path: Path,
+) -> None:
+    success_ids = {
+        "anthropic-poster-design-2",
+        "anthropic-poster-design-5",
+    }
+    broad = _program_dict()
+    broad["id"] = "broad-four-failures-two-false-positives"
+    precise = _program_dict()
+    precise["id"] = "precise-two-failures-zero-false-positives"
+    precise["trigger"] = {
+        "all_of": [
+            {
+                "key": "family",
+                "op": "eq",
+                "value": "organize-messy-files",
+            }
+        ],
+        "any_of": [],
+        "none_of": [],
+    }
+    harness, _, _, _, _, sink = _harness(
+        tmp_path,
+        backend_override=SelectiveTrainingSuccessBackend(success_ids),
+        proposal_rows=[broad, precise],
+        candidate_selection_policy=(
+            CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION
+        ),
+        contrastive_training_evidence_policy=(
+            CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
+        ),
+    )
+    harness.validator.proposer = None
+
+    result = harness.run_generation(
+        train_item_ids=(
+            "organize-messy-files-1",
+            "organize-messy-files-2",
+            "offer-letter-generator-1",
+            "offer-letter-generator-2",
+            *sorted(success_ids),
+        ),
+        validation_item_ids=(
+            "organize-messy-files-5",
+            "offer-letter-generator-5",
+        ),
+        trace_id="contrastive-precision-selection",
+    )
+
+    assert result.evolution is not None
+    assert result.evolution.root_hypothesis_id == precise["id"]
+    selection = next(
+        row
+        for row in sink.events
+        if row["event"] == "hypothesis_training_candidate_selection_completed"
+    )["payload"]
+    by_root = {row["root_id"]: row for row in selection["candidates"]}
+    precise_metrics = by_root[precise["id"]]["contrastive_training_metrics"]
+    broad_metrics = by_root[broad["id"]]["contrastive_training_metrics"]
+    assert (precise_metrics["activation_precision_numerator"], precise_metrics["activation_precision_denominator"]) == (2, 2)
+    assert (broad_metrics["activation_precision_numerator"], broad_metrics["activation_precision_denominator"]) == (4, 6)
+    assert precise_metrics["success_false_positive_activation_count"] == 0
+    assert broad_metrics["success_false_positive_activation_count"] == 2
+    assert selection["selection_policy"] == (
+        CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION
+    )
+    assert selection["selection_uses_validation"] is False
+    assert selection["selection_uses_validation_outcomes"] is False
+
+
+def test_training_support_reports_success_anti_trigger_protection_without_new_gate() -> None:
+    residuals = (
+        ResidualExample(
+            transition_id="failure-1",
+            task_id="organize-messy-files-1",
+            family="organize-messy-files",
+            split=SplitName.TRAIN,
+            features={"benchmark": "skilllearnbench", "family": "organize-messy-files"},
+            failure_type="trajectory_keypoints_missing",
+            evaluator_feedback=("missing",),
+            baseline_success=False,
+        ),
+        ResidualExample(
+            transition_id="failure-2",
+            task_id="organize-messy-files-2",
+            family="organize-messy-files",
+            split=SplitName.TRAIN,
+            features={"benchmark": "skilllearnbench", "family": "organize-messy-files"},
+            failure_type="trajectory_keypoints_missing",
+            evaluator_feedback=("missing",),
+            baseline_success=False,
+        ),
+        ResidualExample(
+            transition_id="success-1",
+            task_id="offer-letter-generator-1",
+            family="offer-letter-generator",
+            split=SplitName.TRAIN,
+            features={"benchmark": "skilllearnbench", "family": "offer-letter-generator"},
+            failure_type="baseline_success_control",
+            evaluator_feedback=(),
+            baseline_success=True,
+            context={},
+        ),
+    )
+    program_payload = _program_dict()
+    program_payload["anti_trigger"] = {
+        "all_of": [
+            {"key": "family", "op": "eq", "value": "offer-letter-generator"}
+        ],
+        "any_of": [],
+        "none_of": [],
+    }
+    program = HypothesisProgram.from_dict(program_payload)
+    context = ValidationContext(
+        evaluator_epoch=program.evaluator_epoch,
+        residuals=residuals,
+        available_lanes=frozenset({"baseline", "candidate"}),
+        baseline_lane="baseline",
+        contrastive_training_evidence_policy=(
+            CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
+        ),
+    )
+
+    result = TrainingSupportCheck(min_support=2).evaluate(program, context)
+
+    assert result.passed is True
+    assert result.evidence["failure_activation_count"] == 2
+    assert result.evidence["success_false_positive_activation_count"] == 0
+    assert result.evidence["success_anti_trigger_protection_count"] == 1
+    assert result.evidence["failure_anti_trigger_block_count"] == 0
+
+
+def test_root_repair_and_replay_bind_labeled_success_controls() -> None:
+    residuals = (
+        ResidualExample(
+            transition_id="failure-transition",
+            task_id="organize-messy-files-1",
+            family="organize-messy-files",
+            split=SplitName.TRAIN,
+            features={"benchmark": "skilllearnbench", "family": "organize-messy-files"},
+            failure_type="trajectory_keypoints_missing",
+            evaluator_feedback=("missing",),
+            baseline_success=False,
+            context={"task_instruction": "organize files"},
+        ),
+        ResidualExample(
+            transition_id="success-transition",
+            task_id="offer-letter-generator-1",
+            family="offer-letter-generator",
+            split=SplitName.TRAIN,
+            features={"benchmark": "skilllearnbench", "family": "offer-letter-generator"},
+            failure_type="baseline_success_control",
+            evaluator_feedback=(),
+            baseline_success=True,
+            context={},
+        ),
+    )
+    contract = {
+        "policy": CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
+        "label_field": "baseline_success",
+        "failure_label": False,
+        "success_control_label": True,
+        "success_control_role": "anti_trigger_negative_control",
+        "context_may_be_used_for_trigger": False,
+        "context_may_shape_actions": True,
+    }
+    capabilities = {
+        "primary_metric": "task_success",
+        "training_evidence_contract": contract,
+    }
+    sink = MemoryEventSink()
+    model = QueueProposalModel(
+        [
+            {"hypotheses": [_program_dict()]},
+            {"hypotheses": [_program_dict()]},
+        ]
+    )
+    proposer = StructuredHypothesisProposer(model, event_sink=sink)
+
+    first = proposer.propose(
+        residuals,
+        evaluator_epoch="skilllearn-eval-epoch-0",
+        capabilities=capabilities,
+        trace_id="contrastive-root-source",
+    )
+    replay = proposer.propose(
+        residuals,
+        evaluator_epoch="skilllearn-eval-epoch-0",
+        capabilities=capabilities,
+        trace_id="contrastive-root-replay",
+    )
+    changed_controls = (
+        residuals[0],
+        replace(
+            residuals[1],
+            features={**residuals[1].features, "difficulty": "easy"},
+        ),
+    )
+    proposer.propose(
+        changed_controls,
+        evaluator_epoch="skilllearn-eval-epoch-0",
+        capabilities=capabilities,
+        trace_id="contrastive-root-changed-control",
+    )
+
+    assert replay == first
+    assert len(model.requests) == 2
+    root_request = model.requests[0]
+    assert [row["evidence_label"] for row in root_request["residuals"]] == [
+        "failure",
+        "success_control",
+    ]
+    assert root_request["residuals"][1]["context"] == {}
+    assert root_request["constraints"][
+        "success_rows_are_anti_trigger_negative_controls"
+    ] is True
+    assert root_request["constraints"][
+        "residual_context_may_shape_actions_but_must_not_be_used_in_trigger_or_anti_trigger"
+    ] is True
+    assert any(
+        row["event"] == "root_proposal_evidence_replayed"
+        and row["payload"]["new_proposal_model_executions"] == 0
+        for row in sink.events
+    )
+
+    repair_model = QueueProposalModel([{"hypothesis": _program_dict()}])
+    repair_proposer = StructuredHypothesisProposer(repair_model)
+    repair_proposer.revise(
+        first[0],
+        failed_checks=({"check": "training_support", "passed": False},),
+        residuals=residuals,
+        depth=1,
+        capabilities=capabilities,
+        trace_id="contrastive-repair",
+    )
+    repair_request = repair_model.requests[0]
+    assert [row["evidence_label"] for row in repair_request["residuals"]] == [
+        "failure",
+        "success_control",
+    ]
+    assert repair_request["capabilities"]["training_evidence_contract"] == contract
+    assert repair_request["constraints"][
+        "success_rows_must_not_increase_failure_trigger_support"
+    ] is True
+
+
+def test_contrastive_policy_versions_are_strictly_paired(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="must be paired"):
+        _harness(
+            tmp_path,
+            candidate_selection_policy=(
+                CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION
+            ),
+        )
 
 
 def test_train_only_candidate_selection_checks_all_roots_and_trigger_vocabulary(
@@ -2559,6 +3108,8 @@ def _harness(
     parallel_workers: int = 1,
     invalid_trial_max_attempts: int = 1,
     proposal_rows: list[dict[str, Any]] | None = None,
+    candidate_selection_policy: str = TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
+    contrastive_training_evidence_policy: str | None = None,
 ):
     sink = MemoryEventSink()
     adapter = SkillLearnBenchAdapter(BENCH_ROOT)
@@ -2614,6 +3165,10 @@ def _harness(
         archive=archive,
         evaluator_epoch="skilllearn-eval-epoch-0",
         output_root=tmp_path / "compiled",
+        candidate_selection_policy=candidate_selection_policy,
+        contrastive_training_evidence_policy=(
+            contrastive_training_evidence_policy
+        ),
         parallel_workers=parallel_workers,
         invalid_trial_max_attempts=invalid_trial_max_attempts,
         event_sink=sink,

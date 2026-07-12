@@ -97,7 +97,18 @@ TRIAL_NETWORK_BYTE_LIMIT_BY_PROTOCOL_VERSION = {
     "3.3.0": 64 * 1024 * 1024,
     "3.4.0": 64 * 1024 * 1024,
     "3.5.0": 64 * 1024 * 1024,
+    "3.6.0": 64 * 1024 * 1024,
 }
+
+CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION = (
+    "train_contrastive_precision_then_support_v1"
+)
+CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION = (
+    "valid_train_failures_and_success_controls_v1"
+)
+COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION = (
+    "generation_terminal_non_claim_v1"
+)
 
 
 @dataclass(frozen=True)
@@ -143,6 +154,7 @@ class PaperProtocol:
 
     def validate_structure(self) -> list[str]:
         issues: list[str] = []
+        protocol_version = str(self.payload.get("protocol_version") or "")
         major = _protocol_major(self.payload.get("protocol_version"))
         if not self.id:
             issues.append("protocol_id_missing")
@@ -223,11 +235,31 @@ class PaperProtocol:
                 issues.append("agent_runtime_package_mismatch")
             if execution.get("agent_runtime_version") != SHARED_CODEX_CLI_VERSION:
                 issues.append("agent_runtime_version_mismatch")
-            if (
-                execution.get("proposal_candidate_selection")
-                != TRAIN_ONLY_CANDIDATE_SELECTION_VERSION
+            expected_candidate_selection = (
+                CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION
+                if protocol_version == "3.6.0"
+                else TRAIN_ONLY_CANDIDATE_SELECTION_VERSION
+            )
+            if execution.get("proposal_candidate_selection") != (
+                expected_candidate_selection
             ):
                 issues.append("proposal_candidate_selection_mismatch")
+            if protocol_version == "3.6.0":
+                if execution.get("contrastive_training_evidence_policy") != (
+                    CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
+                ):
+                    issues.append("contrastive_training_evidence_policy_mismatch")
+                if execution.get("counterfactual_invalid_evidence_policy") != (
+                    COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION
+                ):
+                    issues.append("counterfactual_invalid_evidence_policy_mismatch")
+            else:
+                for field in (
+                    "contrastive_training_evidence_policy",
+                    "counterfactual_invalid_evidence_policy",
+                ):
+                    if field in execution:
+                        issues.append(f"{field}_unexpected")
             if execution.get("runtime_candidate_kinds") != ["task", "policy"]:
                 issues.append("runtime_candidate_kinds_mismatch")
             if (

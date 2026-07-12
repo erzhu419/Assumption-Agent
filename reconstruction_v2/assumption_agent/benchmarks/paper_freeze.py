@@ -13,6 +13,8 @@ from ..splits import SplitManifest
 from .paper_controls import ControlSource, control_config_hash, source_tree_hash
 from .codex_execution_policy import LEGACY_CODEX_AGENT_EXECUTION_POLICY
 from .paper_protocol import (
+    COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION,
+    CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
     PaperProtocol,
     _code_fingerprint,
     _git_state,
@@ -28,6 +30,9 @@ from .skilllearnbench import SkillLearnBenchAdapter
 _PROMOTION_DECISION_POLICY = "evaluator_owned_paired_validation_v2"
 _PROPOSAL_MODEL_FAILURE_CLAIM_BLOCKER = (
     "proposal_model_failure_evidence_present"
+)
+_INVALID_COUNTERFACTUAL_EVIDENCE_CLAIM_BLOCKER = (
+    "invalid_counterfactual_evidence_present"
 )
 _PROMOTION_THRESHOLD_KEYS = frozenset(
     {
@@ -50,7 +55,7 @@ _PROMOTION_DECISION_KEYS = frozenset(
         "policy",
     }
 )
-_PROMOTION_SUMMARY_KEYS = frozenset(
+_PROMOTION_SUMMARY_LEGACY_KEYS = frozenset(
     {
         "pair_count",
         "baseline_success_count",
@@ -74,7 +79,7 @@ _PROMOTION_SUMMARY_KEYS = frozenset(
         "activation_rate",
     }
 )
-_PROMOTION_SUMMARY_COUNT_KEYS = frozenset(
+_PROMOTION_SUMMARY_LEGACY_COUNT_KEYS = frozenset(
     {
         "pair_count",
         "baseline_success_count",
@@ -89,6 +94,31 @@ _PROMOTION_SUMMARY_COUNT_KEYS = frozenset(
         "provider_mismatch_count",
         "budget_mismatch_count",
     }
+)
+_PROMOTION_SUMMARY_DIAGNOSTIC_COUNT_KEYS = frozenset(
+    {
+        "valid_activation_count",
+        "activated_gain_count",
+        "activated_harm_count",
+        "abstention_count",
+    }
+)
+_PROMOTION_SUMMARY_DIAGNOSTIC_DERIVED_KEYS = frozenset(
+    {
+        "activation_precision",
+        "activation_precision_defined",
+        "activated_harm_rate",
+        "activated_harm_rate_defined",
+        "abstention_rate",
+    }
+)
+_PROMOTION_SUMMARY_V3_6_KEYS = (
+    _PROMOTION_SUMMARY_LEGACY_KEYS
+    | _PROMOTION_SUMMARY_DIAGNOSTIC_COUNT_KEYS
+    | _PROMOTION_SUMMARY_DIAGNOSTIC_DERIVED_KEYS
+)
+_LEGACY_PROMOTION_SUMMARY_PROTOCOL_VERSIONS = frozenset(
+    {"3.1.0", "3.2.0", "3.3.0", "3.4.0", "3.5.0"}
 )
 _PROMOTION_SUMMARY_BASE_FLOAT_KEYS = frozenset(
     {
@@ -517,6 +547,9 @@ def _validate_development_report(
     if timeout_policy:
         expected["trial_timeout_policy"] = timeout_policy
     for field in (
+        "proposal_candidate_selection",
+        "contrastive_training_evidence_policy",
+        "counterfactual_invalid_evidence_policy",
         "provider_failure_policy",
         "provider_route_policy",
         "counterfactual_replay_policy",
@@ -561,15 +594,29 @@ def _validate_development_report(
         raise ValueError("development generation count mismatch")
     if len(generations) > int(protocol.payload["evolution"]["max_generations"]):
         raise ValueError("development exceeded the frozen generation budget")
-    _validate_performance_claim_binding(report, generations)
+    _validate_performance_claim_binding(
+        report,
+        generations,
+        strict_counterfactual_binding=(
+            protocol.payload["execution"].get(
+                "counterfactual_invalid_evidence_policy"
+            )
+            == COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION
+        ),
+    )
     promotion_spec = protocol.promotion_gate_spec
     for row in generations:
         if not isinstance(row, Mapping):
             raise ValueError("development generation row is malformed")
+        _validate_generation_training_evidence(
+            row,
+            protocol_version=str(protocol.payload.get("protocol_version") or ""),
+        )
         _validate_generation_promotion_decision(
             row,
             promotion_spec=promotion_spec,
             expected_evaluator_epoch=f"skilllearn-eval-{manifest.manifest_hash[:12]}",
+            protocol_version=str(protocol.payload.get("protocol_version") or ""),
         )
     if not recursive_validation_enabled and any(
         int(row.get("recursive_depth") or 0) != 0
@@ -582,8 +629,13 @@ def _validate_development_report(
 def _validate_performance_claim_binding(
     report: Mapping[str, Any],
     generations: Sequence[Any],
+    *,
+    strict_counterfactual_binding: bool = False,
 ) -> None:
     proposal_model_failure_count = 0
+    invalid_counterfactual_pair_count = 0
+    counterfactual_provider_mismatch_count = 0
+    counterfactual_budget_mismatch_count = 0
     for row in generations:
         if not isinstance(row, Mapping):
             raise ValueError("development generation row is malformed")
@@ -593,6 +645,12 @@ def _validate_performance_claim_binding(
                 "development generation proposal model failure count is malformed"
             )
         proposal_model_failure_count += value
+        invalid_count, provider_count, budget_count = (
+            _generation_counterfactual_evidence_counts(row)
+        )
+        invalid_counterfactual_pair_count += invalid_count
+        counterfactual_provider_mismatch_count += provider_count
+        counterfactual_budget_mismatch_count += budget_count
 
     reported_count = report.get("proposal_model_failure_count")
     if (
@@ -615,18 +673,64 @@ def _validate_performance_claim_binding(
     if reported_present is not expected_present:
         raise ValueError("development proposal model failure presence mismatch")
 
-    expected_claim_eligible = not expected_present
+    if strict_counterfactual_binding:
+        _validate_reported_nonnegative_count(
+            report,
+            field="invalid_counterfactual_pair_count",
+            expected=invalid_counterfactual_pair_count,
+            label="invalid counterfactual pair",
+        )
+        reported_invalid_present = report.get(
+            "invalid_counterfactual_pairs_present"
+        )
+        if not isinstance(reported_invalid_present, bool):
+            raise ValueError(
+                "development invalid counterfactual pair presence is malformed"
+            )
+        if reported_invalid_present is not bool(invalid_counterfactual_pair_count):
+            raise ValueError(
+                "development invalid counterfactual pair presence mismatch"
+            )
+        _validate_reported_nonnegative_count(
+            report,
+            field="counterfactual_provider_mismatch_count",
+            expected=counterfactual_provider_mismatch_count,
+            label="counterfactual provider mismatch",
+        )
+        _validate_reported_nonnegative_count(
+            report,
+            field="counterfactual_budget_mismatch_count",
+            expected=counterfactual_budget_mismatch_count,
+            label="counterfactual budget mismatch",
+        )
+
+    invalid_counterfactual_evidence_present = any(
+        (
+            invalid_counterfactual_pair_count,
+            counterfactual_provider_mismatch_count,
+            counterfactual_budget_mismatch_count,
+        )
+    )
+    expected_claim_eligible = not expected_present and (
+        not invalid_counterfactual_evidence_present
+        or not strict_counterfactual_binding
+    )
     reported_claim_eligible = report.get("performance_claim_eligible")
     if not isinstance(reported_claim_eligible, bool):
         raise ValueError("development performance claim eligibility is malformed")
     if reported_claim_eligible is not expected_claim_eligible:
         raise ValueError("development performance claim eligibility mismatch")
 
-    expected_blockers = (
-        []
-        if expected_claim_eligible
-        else [_PROPOSAL_MODEL_FAILURE_CLAIM_BLOCKER]
-    )
+    expected_blockers: list[str] = []
+    if expected_present:
+        expected_blockers.append(_PROPOSAL_MODEL_FAILURE_CLAIM_BLOCKER)
+    if (
+        strict_counterfactual_binding
+        and invalid_counterfactual_evidence_present
+    ):
+        expected_blockers.append(
+            _INVALID_COUNTERFACTUAL_EVIDENCE_CLAIM_BLOCKER
+        )
     reported_blockers = report.get("performance_claim_blockers")
     if not isinstance(reported_blockers, list) or any(
         not isinstance(blocker, str) for blocker in reported_blockers
@@ -637,8 +741,100 @@ def _validate_performance_claim_binding(
 
     if proposal_model_failure_count > 0:
         raise ValueError("development report contains proposal model failures")
+    if invalid_counterfactual_evidence_present:
+        raise ValueError(
+            "development report contains invalid counterfactual evidence"
+        )
     if reported_claim_eligible is not True:
         raise ValueError("development report is not eligible for performance claims")
+
+
+def _generation_counterfactual_evidence_counts(
+    generation: Mapping[str, Any],
+) -> tuple[int, int, int]:
+    decision = generation.get("promotion_decision")
+    reported_summary = generation.get("promotion_summary")
+    if decision is None:
+        if reported_summary is not None:
+            raise ValueError(
+                "development generation promotion summary has no decision"
+            )
+        return 0, 0, 0
+    if not isinstance(decision, Mapping):
+        raise ValueError("development promotion decision is malformed")
+    summary = decision.get("summary")
+    if not isinstance(summary, Mapping):
+        raise ValueError("development promotion summary is malformed")
+    if reported_summary is not None and reported_summary != summary:
+        raise ValueError("development generation promotion summary mismatch")
+    counts: list[int] = []
+    for field in (
+        "invalid_pair_count",
+        "provider_mismatch_count",
+        "budget_mismatch_count",
+    ):
+        value = summary.get(field)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError(
+                f"development promotion summary {field} is malformed"
+            )
+        counts.append(value)
+    return counts[0], counts[1], counts[2]
+
+
+def _validate_generation_training_evidence(
+    generation: Mapping[str, Any],
+    *,
+    protocol_version: str,
+) -> None:
+    if protocol_version != "3.6.0":
+        return
+    if generation.get("contrastive_training_evidence_policy") != (
+        CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
+    ):
+        raise ValueError(
+            "development generation contrastive evidence policy mismatch"
+        )
+    counts: dict[str, int] = {}
+    for field in (
+        "train_observation_count",
+        "valid_train_observation_count",
+        "training_residual_count",
+        "success_control_count",
+        "example_count",
+    ):
+        value = generation.get(field)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError(
+                "development generation contrastive evidence count is malformed"
+            )
+        counts[field] = value
+    if counts["valid_train_observation_count"] != counts["train_observation_count"]:
+        raise ValueError(
+            "development generation contains invalid training evidence"
+        )
+    if (
+        counts["training_residual_count"] + counts["success_control_count"]
+        != counts["example_count"]
+        or counts["example_count"] != counts["valid_train_observation_count"]
+    ):
+        raise ValueError(
+            "development generation contrastive evidence counts are inconsistent"
+        )
+
+
+def _validate_reported_nonnegative_count(
+    report: Mapping[str, Any],
+    *,
+    field: str,
+    expected: int,
+    label: str,
+) -> None:
+    reported = report.get(field)
+    if isinstance(reported, bool) or not isinstance(reported, int) or reported < 0:
+        raise ValueError(f"development {label} count is malformed")
+    if reported != expected:
+        raise ValueError(f"development {label} count mismatch")
 
 
 def _validate_generation_promotion_decision(
@@ -646,6 +842,7 @@ def _validate_generation_promotion_decision(
     *,
     promotion_spec: PromotionGateSpec,
     expected_evaluator_epoch: str,
+    protocol_version: str,
 ) -> None:
     promoted = row.get("promoted")
     if not isinstance(promoted, bool):
@@ -692,6 +889,7 @@ def _validate_generation_promotion_decision(
     summary = _pair_summary_from_mapping(
         decision.get("summary"),
         confidence=promotion_spec.confidence,
+        protocol_version=protocol_version,
     )
     effect_lower_bound = decision.get("effect_lower_bound")
     expected_lower_bound = summary.effect_lower_bound(promotion_spec.confidence)
@@ -734,11 +932,23 @@ def _pair_summary_from_mapping(
     payload: Any,
     *,
     confidence: float,
+    protocol_version: str,
 ) -> PairSummary:
-    if not isinstance(payload, Mapping) or set(payload) != _PROMOTION_SUMMARY_KEYS:
+    if protocol_version == "3.6.0":
+        expected_keys = _PROMOTION_SUMMARY_V3_6_KEYS
+        count_keys = (
+            _PROMOTION_SUMMARY_LEGACY_COUNT_KEYS
+            | _PROMOTION_SUMMARY_DIAGNOSTIC_COUNT_KEYS
+        )
+    elif protocol_version in _LEGACY_PROMOTION_SUMMARY_PROTOCOL_VERSIONS:
+        expected_keys = _PROMOTION_SUMMARY_LEGACY_KEYS
+        count_keys = _PROMOTION_SUMMARY_LEGACY_COUNT_KEYS
+    else:
+        raise ValueError("development promotion summary protocol version unsupported")
+    if not isinstance(payload, Mapping) or set(payload) != expected_keys:
         raise ValueError("development promotion summary schema mismatch")
     counts: dict[str, int] = {}
-    for key in _PROMOTION_SUMMARY_COUNT_KEYS:
+    for key in count_keys:
         value = payload[key]
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:
             raise ValueError("development promotion summary count is malformed")
@@ -786,8 +996,18 @@ def _pair_summary_from_mapping(
     ):
         raise ValueError("development promotion summary mean effect is inconsistent")
 
+    summary_counts = dict(counts)
+    if protocol_version != "3.6.0":
+        summary_counts.update(
+            {
+                "valid_activation_count": 0,
+                "activated_gain_count": 0,
+                "activated_harm_count": 0,
+                "abstention_count": pair_count - counts["activation_count"],
+            }
+        )
     summary = PairSummary(
-        **counts,
+        **summary_counts,
         **numeric,
     )
     expected_derived = summary.to_dict(confidence=confidence)
@@ -805,7 +1025,107 @@ def _pair_summary_from_mapping(
             )
         ):
             raise ValueError("development promotion summary derived value is inconsistent")
+    if protocol_version == "3.6.0":
+        _validate_pair_diagnostics(
+            payload,
+            counts=counts,
+            expected_derived=expected_derived,
+        )
     return summary
+
+
+def _validate_pair_diagnostics(
+    payload: Mapping[str, Any],
+    *,
+    counts: Mapping[str, int],
+    expected_derived: Mapping[str, float | int | bool | None],
+) -> None:
+    pair_count = counts["pair_count"]
+    activation_count = counts["activation_count"]
+    invalid_pair_count = counts["invalid_pair_count"]
+    provider_mismatch_count = counts["provider_mismatch_count"]
+    budget_mismatch_count = counts["budget_mismatch_count"]
+    valid_activation_count = counts["valid_activation_count"]
+    activated_gain_count = counts["activated_gain_count"]
+    activated_harm_count = counts["activated_harm_count"]
+    invalid_union_max = min(
+        pair_count,
+        invalid_pair_count + provider_mismatch_count + budget_mismatch_count,
+    )
+    invalid_union_min = max(
+        invalid_pair_count,
+        provider_mismatch_count,
+        budget_mismatch_count,
+    )
+    if not (
+        max(0, activation_count - invalid_union_max)
+        <= valid_activation_count
+        <= min(activation_count, pair_count - invalid_union_min)
+    ):
+        raise ValueError(
+            "development promotion summary valid activations are inconsistent"
+        )
+    if not (
+        max(0, counts["gain_count"] - invalid_union_max)
+        <= activated_gain_count
+        <= min(counts["gain_count"], valid_activation_count)
+    ) or not (
+        max(0, counts["harm_count"] - invalid_union_max)
+        <= activated_harm_count
+        <= min(counts["harm_count"], valid_activation_count)
+    ) or (
+        counts["gain_count"]
+        - activated_gain_count
+        + counts["harm_count"]
+        - activated_harm_count
+        > invalid_union_max
+    ) or (
+        activated_gain_count + activated_harm_count > valid_activation_count
+    ):
+        raise ValueError(
+            "development promotion summary activated outcomes are inconsistent"
+        )
+    if counts["abstention_count"] != pair_count - activation_count:
+        raise ValueError(
+            "development promotion summary abstentions are inconsistent"
+        )
+
+    expected_defined = valid_activation_count > 0
+    for key in (
+        "activation_precision_defined",
+        "activated_harm_rate_defined",
+    ):
+        if payload[key] is not expected_defined:
+            raise ValueError(
+                "development promotion summary diagnostic definition is inconsistent"
+            )
+    for key in (
+        "activation_precision",
+        "activated_harm_rate",
+        "abstention_rate",
+    ):
+        value = payload[key]
+        expected = expected_derived[key]
+        if expected is None:
+            if value is not None:
+                raise ValueError(
+                    "development promotion summary diagnostic value is inconsistent"
+                )
+            continue
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            or not math.isclose(
+                float(value),
+                float(expected),
+                rel_tol=1e-12,
+                abs_tol=1e-12,
+            )
+        ):
+            raise ValueError(
+                "development promotion summary diagnostic value is inconsistent"
+            )
 
 
 def _promotion_threshold_mapping(

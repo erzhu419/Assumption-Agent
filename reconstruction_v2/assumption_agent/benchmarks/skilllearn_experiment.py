@@ -10,6 +10,7 @@ from ..evaluation import PromotionGate
 from ..events import Event, JsonlEventSink
 from ..evolution import (
     COUNTERFACTUAL_REPLAY_POLICY_VERSION,
+    CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
     TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
     CounterfactualEvidenceReplayCache,
 )
@@ -38,6 +39,7 @@ from ..validation import (
 from .preflight import build_preflight
 from .prewarm import validate_development_prewarm_receipt
 from .paper_protocol import (
+    COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION,
     PaperProtocol,
     validate_protocol_lock_for_execution,
 )
@@ -54,6 +56,7 @@ from .docker_egress import (
 )
 from .skilllearn_lifecycle import (
     BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
+    CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
     MODEL_ONLY_TOOL_POLICY_VERSION,
     OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION,
     PREBUILT_IMAGE_POLICY_VERSION,
@@ -83,6 +86,22 @@ from .skilllearnbench import SkillLearnBenchAdapter
 
 _PROPOSAL_MODEL_FAILURE_CLAIM_BLOCKER = (
     "proposal_model_failure_evidence_present"
+)
+_INVALID_COUNTERFACTUAL_EVIDENCE_CLAIM_BLOCKER = (
+    "invalid_counterfactual_evidence_present"
+)
+_PROMOTION_SUMMARY_DIAGNOSTIC_KEYS = frozenset(
+    {
+        "valid_activation_count",
+        "activated_gain_count",
+        "activated_harm_count",
+        "abstention_count",
+        "activation_precision",
+        "activation_precision_defined",
+        "activated_harm_rate",
+        "activated_harm_rate_defined",
+        "abstention_rate",
+    }
 )
 
 
@@ -126,6 +145,48 @@ def main() -> None:
     trial_provider_mode = str(paper_protocol.payload["trial_provider_mode"])
     max_steps = int(paper_protocol.payload["max_steps"])
     minimum_trigger_support = int(evolution_contract["minimum_trigger_support"])
+    candidate_selection_policy = str(
+        execution_contract["proposal_candidate_selection"]
+    )
+    contrastive_training_evidence_policy = execution_contract.get(
+        "contrastive_training_evidence_policy"
+    )
+    if contrastive_training_evidence_policy is not None:
+        contrastive_training_evidence_policy = str(
+            contrastive_training_evidence_policy
+        )
+    if candidate_selection_policy not in {
+        TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
+        CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
+    }:
+        raise ValueError("unsupported protocol candidate selection policy")
+    if contrastive_training_evidence_policy not in {
+        None,
+        CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
+    }:
+        raise ValueError("unsupported protocol contrastive training evidence policy")
+    if (
+        contrastive_training_evidence_policy
+        == CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
+    ) != (
+        candidate_selection_policy
+        == CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION
+    ):
+        raise ValueError(
+            "protocol contrastive evidence and candidate selection policies must be paired"
+        )
+    counterfactual_invalid_evidence_policy = execution_contract.get(
+        "counterfactual_invalid_evidence_policy"
+    )
+    if counterfactual_invalid_evidence_policy is not None:
+        counterfactual_invalid_evidence_policy = str(
+            counterfactual_invalid_evidence_policy
+        )
+    if counterfactual_invalid_evidence_policy not in {
+        None,
+        COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION,
+    }:
+        raise ValueError("unsupported counterfactual invalid evidence policy")
     invalid_trial_max_attempts = int(
         execution_contract["invalid_trial_max_attempts"]
     )
@@ -287,7 +348,13 @@ def main() -> None:
         "development_prewarm_version": execution_contract["development_prewarm"],
         "prewarm_passed": prewarm_receipt_hash is not None,
         "prewarm_receipt_hash": prewarm_receipt_hash,
-        "proposal_candidate_selection": TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
+        "proposal_candidate_selection": candidate_selection_policy,
+        "contrastive_training_evidence_policy": (
+            contrastive_training_evidence_policy
+        ),
+        "counterfactual_invalid_evidence_policy": (
+            counterfactual_invalid_evidence_policy
+        ),
         "runtime_candidate_kinds": ["task", "policy"],
         "evaluator_hypothesis_mode": (
             "separate_epoch_challenger_not_in_primary_runtime"
@@ -421,6 +488,10 @@ def main() -> None:
         evaluator_epoch=f"skilllearn-eval-{manifest.manifest_hash[:12]}",
         output_root=args.work_dir / "compiled_skills",
         proposal_candidates_per_generation=proposal_candidates_per_generation,
+        candidate_selection_policy=candidate_selection_policy,
+        contrastive_training_evidence_policy=(
+            contrastive_training_evidence_policy
+        ),
         parallel_workers=parallel_workers,
         invalid_trial_max_attempts=invalid_trial_max_attempts,
         invalid_trial_retry_backoff_seconds=invalid_trial_retry_backoff_seconds,
@@ -457,6 +528,10 @@ def main() -> None:
             evaluator_epoch=f"skilllearn-eval-{manifest.manifest_hash[:12]}",
             output_root=args.work_dir / "compiled_skills_no_recursive",
             proposal_candidates_per_generation=proposal_candidates_per_generation,
+            candidate_selection_policy=candidate_selection_policy,
+            contrastive_training_evidence_policy=(
+                contrastive_training_evidence_policy
+            ),
             parallel_workers=parallel_workers,
             invalid_trial_max_attempts=invalid_trial_max_attempts,
             invalid_trial_retry_backoff_seconds=invalid_trial_retry_backoff_seconds,
@@ -471,6 +546,9 @@ def main() -> None:
             manifest_hash=manifest.manifest_hash,
             max_generations=max_generations,
             max_consecutive_non_promotions=max_consecutive_non_promotions,
+            counterfactual_invalid_evidence_policy=(
+                counterfactual_invalid_evidence_policy
+            ),
         )
         plan["shared_first_generation_checkpoint_hash"] = paired["checkpoint_hash"]
         no_recursive_plan = {
@@ -521,6 +599,9 @@ def main() -> None:
         manifest_hash=manifest.manifest_hash,
         max_generations=max_generations,
         max_consecutive_non_promotions=max_consecutive_non_promotions,
+        counterfactual_invalid_evidence_policy=(
+            counterfactual_invalid_evidence_policy
+        ),
     )
     archive.write(archive_path)
     report = _execution_report(
@@ -544,6 +625,7 @@ def _run_single_arm(
     manifest_hash: str,
     max_generations: int,
     max_consecutive_non_promotions: int,
+    counterfactual_invalid_evidence_policy: str | None = None,
 ) -> tuple[list[SkillLearnGenerationResult], str]:
     generations: list[SkillLearnGenerationResult] = []
     training_replay_cache = TrainingEvidenceReplayCache(
@@ -567,6 +649,9 @@ def _run_single_arm(
             generation,
             consecutive_non_promotions=consecutive,
             maximum=max_consecutive_non_promotions,
+            counterfactual_invalid_evidence_policy=(
+                counterfactual_invalid_evidence_policy
+            ),
         )
         if not active:
             stop_reason = reason
@@ -583,7 +668,15 @@ def _run_paired_arms(
     manifest_hash: str,
     max_generations: int,
     max_consecutive_non_promotions: int,
+    counterfactual_invalid_evidence_policy: str | None = None,
 ) -> dict[str, Any]:
+    if (
+        recursive_harness.candidate_selection_policy
+        != no_recursive_harness.candidate_selection_policy
+        or recursive_harness.contrastive_training_evidence_policy
+        != no_recursive_harness.contrastive_training_evidence_policy
+    ):
+        raise ValueError("paired arms must share training evidence and selection policies")
     shared_trace = f"skilllearn-paired-{manifest_hash[:12]}-g1"
     replay_cache = CounterfactualEvidenceReplayCache(
         event_sink=recursive_harness.event_sink
@@ -607,42 +700,69 @@ def _run_paired_arms(
                 residuals,
                 trace_id=f"{shared_trace}:shared-root",
             )
-            if residuals
+            if any(not row.baseline_success for row in residuals)
             else ()
         )
     except HypothesisProposalCallError as exc:
         proposal_error = exc
         proposals = ()
-    checkpoint_hash = stable_hash(
-        {
-            "observation_hashes": [row.observation_hash for row in observations],
-            "transition_ids": sorted(row.transition_id for row in residuals),
-            "proposal_hashes": [row.payload_hash for row in proposals],
-            "manifest_hash": manifest_hash,
-        }
-    )
+    labeled_transition_ids = sorted(row.transition_id for row in residuals)
+    checkpoint_descriptor: dict[str, Any] = {
+        "observation_hashes": [row.observation_hash for row in observations],
+        "transition_ids": labeled_transition_ids,
+        "proposal_hashes": [row.payload_hash for row in proposals],
+        "manifest_hash": manifest_hash,
+    }
+    if recursive_harness.contrastive_training_evidence_policy:
+        checkpoint_descriptor.update(
+            {
+                "labeled_transition_ids": labeled_transition_ids,
+                "contrastive_training_evidence_policy": (
+                    recursive_harness.contrastive_training_evidence_policy
+                ),
+                "candidate_selection_policy": (
+                    recursive_harness.candidate_selection_policy
+                ),
+            }
+        )
+    checkpoint_hash = stable_hash(checkpoint_descriptor)
+    failure_count = sum(not row.baseline_success for row in residuals)
+    success_control_count = sum(row.baseline_success for row in residuals)
+    checkpoint_payload: dict[str, Any] = {
+        "checkpoint_hash": checkpoint_hash,
+        "observation_count": len(observations),
+        "residual_count": failure_count,
+        "success_control_count": success_control_count,
+        "example_count": len(residuals),
+        "proposal_count": len(proposals),
+        "observation_set_hash": stable_hash(
+            {"hashes": sorted(row.observation_hash for row in observations)}
+        ),
+        "transition_set_hash": stable_hash({"ids": labeled_transition_ids}),
+        "proposal_set_hash": stable_hash(
+            {"hashes": sorted(row.payload_hash for row in proposals)}
+        ),
+        "test_content_accessed": False,
+        "raw_content_persisted": False,
+    }
+    if recursive_harness.contrastive_training_evidence_policy:
+        checkpoint_payload.update(
+            {
+                "labeled_transition_ids": labeled_transition_ids,
+                "contrastive_training_evidence_policy": (
+                    recursive_harness.contrastive_training_evidence_policy
+                ),
+                "candidate_selection_policy": (
+                    recursive_harness.candidate_selection_policy
+                ),
+            }
+        )
     recursive_harness.event_sink.emit(
         Event(
             event="skilllearn_paired_ablation_checkpoint_frozen",
             stage="benchmark.skilllearn.paired_ablation",
             trace_id=shared_trace,
-            payload={
-                "checkpoint_hash": checkpoint_hash,
-                "observation_count": len(observations),
-                "residual_count": len(residuals),
-                "proposal_count": len(proposals),
-                "observation_set_hash": stable_hash(
-                    {"hashes": sorted(row.observation_hash for row in observations)}
-                ),
-                "transition_set_hash": stable_hash(
-                    {"ids": sorted(row.transition_id for row in residuals)}
-                ),
-                "proposal_set_hash": stable_hash(
-                    {"hashes": sorted(row.payload_hash for row in proposals)}
-                ),
-                "test_content_accessed": False,
-                "raw_content_persisted": False,
-            },
+            payload=checkpoint_payload,
         )
     )
     if proposal_error is not None:
@@ -689,11 +809,17 @@ def _run_paired_arms(
         recursive_generations[0],
         consecutive_non_promotions=0,
         maximum=max_consecutive_non_promotions,
+        counterfactual_invalid_evidence_policy=(
+            counterfactual_invalid_evidence_policy
+        ),
     )
     no_recursive_active, no_recursive_consecutive, no_recursive_stop = _advance_arm(
         no_recursive_generations[0],
         consecutive_non_promotions=0,
         maximum=max_consecutive_non_promotions,
+        counterfactual_invalid_evidence_policy=(
+            counterfactual_invalid_evidence_policy
+        ),
     )
     for generation_index in range(2, max_generations + 1):
         if recursive_active:
@@ -711,6 +837,9 @@ def _run_paired_arms(
                 generation,
                 consecutive_non_promotions=recursive_consecutive,
                 maximum=max_consecutive_non_promotions,
+                counterfactual_invalid_evidence_policy=(
+                    counterfactual_invalid_evidence_policy
+                ),
             )
         if no_recursive_active:
             generation = no_recursive_harness.run_generation(
@@ -727,6 +856,9 @@ def _run_paired_arms(
                 generation,
                 consecutive_non_promotions=no_recursive_consecutive,
                 maximum=max_consecutive_non_promotions,
+                counterfactual_invalid_evidence_policy=(
+                    counterfactual_invalid_evidence_policy
+                ),
             )
         if not recursive_active and not no_recursive_active:
             break
@@ -748,9 +880,21 @@ def _advance_arm(
     *,
     consecutive_non_promotions: int,
     maximum: int,
+    counterfactual_invalid_evidence_policy: str | None = None,
 ) -> tuple[bool, int, str]:
-    if generation.to_dict()["proposal_model_failure_count"]:
+    generation_row = generation.to_dict()
+    if generation_row["proposal_model_failure_count"]:
         return False, consecutive_non_promotions, "proposal_model_failure"
+    if (
+        counterfactual_invalid_evidence_policy
+        == COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION
+        and any(_generation_counterfactual_evidence_counts(generation_row))
+    ):
+        return (
+            False,
+            consecutive_non_promotions,
+            "invalid_counterfactual_evidence",
+        )
     if generation.reason in {
         "no_valid_failed_training_rows",
         "duplicate_hypothesis_behavior",
@@ -778,8 +922,18 @@ def _execution_report(
 ) -> dict[str, Any]:
     if not generations:
         raise ValueError("execution report requires at least one generation")
+    strict_counterfactual_claim_binding = (
+        plan.get("counterfactual_invalid_evidence_policy")
+        == COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION
+    )
     generation_rows = [row.to_dict() for row in generations]
+    if not strict_counterfactual_claim_binding:
+        for row in generation_rows:
+            _strip_promotion_summary_diagnostics(row)
     proposal_model_failure_count = 0
+    invalid_counterfactual_pair_count = 0
+    counterfactual_provider_mismatch_count = 0
+    counterfactual_budget_mismatch_count = 0
     for row in generation_rows:
         value = row.get("proposal_model_failure_count")
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:
@@ -787,8 +941,36 @@ def _execution_report(
                 "generation proposal model failure count is malformed"
             )
         proposal_model_failure_count += value
-    performance_claim_eligible = proposal_model_failure_count == 0
-    return {
+        invalid_count, provider_count, budget_count = (
+            _generation_counterfactual_evidence_counts(row)
+        )
+        invalid_counterfactual_pair_count += invalid_count
+        counterfactual_provider_mismatch_count += provider_count
+        counterfactual_budget_mismatch_count += budget_count
+    invalid_counterfactual_evidence_present = any(
+        (
+            invalid_counterfactual_pair_count,
+            counterfactual_provider_mismatch_count,
+            counterfactual_budget_mismatch_count,
+        )
+    )
+    performance_claim_eligible = proposal_model_failure_count == 0 and (
+        not invalid_counterfactual_evidence_present
+        or not strict_counterfactual_claim_binding
+    )
+    performance_claim_blockers: list[str] = []
+    if proposal_model_failure_count:
+        performance_claim_blockers.append(
+            _PROPOSAL_MODEL_FAILURE_CLAIM_BLOCKER
+        )
+    if (
+        strict_counterfactual_claim_binding
+        and invalid_counterfactual_evidence_present
+    ):
+        performance_claim_blockers.append(
+            _INVALID_COUNTERFACTUAL_EVIDENCE_CLAIM_BLOCKER
+        )
+    report = {
         "mode": "execute",
         "plan": dict(plan),
         "preflight": dict(preflight),
@@ -799,17 +981,79 @@ def _execution_report(
         "proposal_model_failure_count": proposal_model_failure_count,
         "proposal_model_failures_present": bool(proposal_model_failure_count),
         "performance_claim_eligible": performance_claim_eligible,
-        "performance_claim_blockers": (
-            []
-            if performance_claim_eligible
-            else [_PROPOSAL_MODEL_FAILURE_CLAIM_BLOCKER]
-        ),
+        "performance_claim_blockers": performance_claim_blockers,
         "archive_hash": archive.to_dict()["archive_hash"],
         "archive_path_hash": _path_hash(archive_path),
         "executed": True,
         "test_content_accessed": guard.test_accessed,
         "secret_value_persisted": False,
     }
+    if strict_counterfactual_claim_binding:
+        report.update(
+            {
+                "invalid_counterfactual_pair_count": (
+                    invalid_counterfactual_pair_count
+                ),
+                "invalid_counterfactual_pairs_present": bool(
+                    invalid_counterfactual_pair_count
+                ),
+                "counterfactual_provider_mismatch_count": (
+                    counterfactual_provider_mismatch_count
+                ),
+                "counterfactual_budget_mismatch_count": (
+                    counterfactual_budget_mismatch_count
+                ),
+            }
+        )
+    return report
+
+
+def _strip_promotion_summary_diagnostics(generation: Mapping[str, Any]) -> None:
+    summaries: list[Mapping[str, Any]] = []
+    reported_summary = generation.get("promotion_summary")
+    if isinstance(reported_summary, Mapping):
+        summaries.append(reported_summary)
+    decision = generation.get("promotion_decision")
+    if isinstance(decision, Mapping):
+        decision_summary = decision.get("summary")
+        if isinstance(decision_summary, Mapping):
+            summaries.append(decision_summary)
+    for summary in summaries:
+        if not isinstance(summary, dict):
+            raise ValueError("generation promotion summary must be mutable")
+        for key in _PROMOTION_SUMMARY_DIAGNOSTIC_KEYS:
+            summary.pop(key, None)
+
+
+def _generation_counterfactual_evidence_counts(
+    generation: Mapping[str, Any],
+) -> tuple[int, int, int]:
+    reported_summary = generation.get("promotion_summary")
+    decision = generation.get("promotion_decision")
+    if decision is None:
+        if reported_summary is not None:
+            raise ValueError("generation promotion summary has no decision")
+        return 0, 0, 0
+    if not isinstance(decision, Mapping):
+        raise ValueError("generation promotion decision is malformed")
+    summary = decision.get("summary")
+    if not isinstance(summary, Mapping):
+        raise ValueError("generation promotion summary is malformed")
+    if reported_summary is not None and reported_summary != summary:
+        raise ValueError("generation promotion summary mismatch")
+    counts: list[int] = []
+    for field in (
+        "invalid_pair_count",
+        "provider_mismatch_count",
+        "budget_mismatch_count",
+    ):
+        value = summary.get(field)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError(
+                f"generation promotion summary {field} is malformed"
+            )
+        counts.append(value)
+    return counts[0], counts[1], counts[2]
 
 
 def _experiment_phase_name(

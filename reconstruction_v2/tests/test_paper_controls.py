@@ -45,10 +45,16 @@ BENCH_ROOT = (
 PROTOCOL_PATH = (
     ROOT / "manifests" / "skilllearn_paper_protocol_v3_2_ruoli_gpt54mini.json"
 )
+V36_PROTOCOL_PATH = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_6_ruoli_gpt54mini.json"
+)
 MANIFEST_PATH = (
     ROOT / "manifests" / "skilllearnbench_instance_holdout_offline_ready_v1.json"
 )
 PERFORMANCE_CLAIM_BLOCKER = "proposal_model_failure_evidence_present"
+INVALID_COUNTERFACTUAL_CLAIM_BLOCKER = (
+    "invalid_counterfactual_evidence_present"
+)
 
 
 class FakePaperBackend:
@@ -485,7 +491,11 @@ def test_execution_report_binds_proposal_failure_claim_fields(
         test_accessed = False
 
     report = skilllearn_experiment._execution_report(
-        plan={},
+        plan={
+            "counterfactual_invalid_evidence_policy": (
+                "generation_terminal_non_claim_v1"
+            )
+        },
         preflight={},
         generations=(Generation(),),
         stop_reason="proposal_model_failure",
@@ -496,6 +506,10 @@ def test_execution_report_binds_proposal_failure_claim_fields(
 
     assert report["proposal_model_failure_count"] == 1
     assert report["proposal_model_failures_present"] is True
+    assert report["invalid_counterfactual_pair_count"] == 0
+    assert report["invalid_counterfactual_pairs_present"] is False
+    assert report["counterfactual_provider_mismatch_count"] == 0
+    assert report["counterfactual_budget_mismatch_count"] == 0
     assert report["performance_claim_eligible"] is False
     assert report["performance_claim_blockers"] == [
         PERFORMANCE_CLAIM_BLOCKER
@@ -524,6 +538,10 @@ def test_freeze_rejects_honest_proposal_model_failure_report() -> None:
     report["generations"] = [failed_generation]
     report["proposal_model_failure_count"] = 1
     report["proposal_model_failures_present"] = True
+    report["invalid_counterfactual_pair_count"] = 0
+    report["invalid_counterfactual_pairs_present"] = False
+    report["counterfactual_provider_mismatch_count"] = 0
+    report["counterfactual_budget_mismatch_count"] = 0
     report["performance_claim_eligible"] = False
     report["performance_claim_blockers"] = [PERFORMANCE_CLAIM_BLOCKER]
 
@@ -554,6 +572,260 @@ def test_freeze_rejects_generation_failure_hidden_by_top_level_zero() -> None:
     with pytest.raises(
         ValueError,
         match="development proposal model failure count mismatch",
+    ):
+        paper_freeze._validate_development_report(
+            report,
+            protocol=protocol,
+            manifest=manifest,
+            recursive_validation_enabled=True,
+        )
+
+
+def test_execution_report_binds_invalid_counterfactual_claim_fields(
+    tmp_path: Path,
+) -> None:
+    summary = {
+        "invalid_pair_count": 1,
+        "provider_mismatch_count": 0,
+        "budget_mismatch_count": 0,
+    }
+
+    class Generation:
+        def to_dict(self) -> dict[str, object]:
+            return {
+                "proposal_model_failure_count": 0,
+                "promotion_summary": summary,
+                "promotion_decision": {"summary": summary},
+            }
+
+    class Archive:
+        def to_dict(self) -> dict[str, object]:
+            return {"archive_hash": "archive-hash"}
+
+    class Guard:
+        test_accessed = False
+
+    report = skilllearn_experiment._execution_report(
+        plan={
+            "counterfactual_invalid_evidence_policy": (
+                "generation_terminal_non_claim_v1"
+            )
+        },
+        preflight={},
+        generations=(Generation(),),
+        stop_reason="invalid_counterfactual_evidence",
+        archive=Archive(),
+        archive_path=tmp_path / "archive.json",
+        guard=Guard(),
+    )
+
+    assert report["invalid_counterfactual_pair_count"] == 1
+    assert report["invalid_counterfactual_pairs_present"] is True
+    assert report["performance_claim_eligible"] is False
+    assert report["performance_claim_blockers"] == [
+        INVALID_COUNTERFACTUAL_CLAIM_BLOCKER
+    ]
+
+
+def test_execution_report_preserves_legacy_promotion_summary_schema(
+    tmp_path: Path,
+) -> None:
+    summary = {
+        "invalid_pair_count": 0,
+        "provider_mismatch_count": 0,
+        "budget_mismatch_count": 0,
+        "valid_activation_count": 1,
+        "activated_gain_count": 1,
+        "activated_harm_count": 0,
+        "abstention_count": 0,
+        "activation_precision": 1.0,
+        "activation_precision_defined": True,
+        "activated_harm_rate": 0.0,
+        "activated_harm_rate_defined": True,
+        "abstention_rate": 0.0,
+    }
+
+    class Generation:
+        def to_dict(self) -> dict[str, object]:
+            return {
+                "proposal_model_failure_count": 0,
+                "promotion_summary": dict(summary),
+                "promotion_decision": {"summary": dict(summary)},
+            }
+
+    class Archive:
+        def to_dict(self) -> dict[str, object]:
+            return {"archive_hash": "archive-hash"}
+
+    class Guard:
+        test_accessed = False
+
+    report = skilllearn_experiment._execution_report(
+        plan={},
+        preflight={},
+        generations=(Generation(),),
+        stop_reason="consecutive_non_promotion_limit",
+        archive=Archive(),
+        archive_path=tmp_path / "archive.json",
+        guard=Guard(),
+    )
+
+    for container in (
+        report["generation"]["promotion_summary"],
+        report["generation"]["promotion_decision"]["summary"],
+    ):
+        assert not (
+            set(container)
+            & skilllearn_experiment._PROMOTION_SUMMARY_DIAGNOSTIC_KEYS
+        )
+
+
+def test_freeze_accepts_clean_v3_6_report() -> None:
+    protocol = PaperProtocol.read(V36_PROTOCOL_PATH)
+    manifest = SplitManifest.read(MANIFEST_PATH)
+    report = _development_report(
+        protocol,
+        manifest,
+        archive_hash="unused",
+        recursive=True,
+        hypothesis_id="recursive-policy",
+    )
+
+    paper_freeze._validate_development_report(
+        report,
+        protocol=protocol,
+        manifest=manifest,
+        recursive_validation_enabled=True,
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "expected_error"),
+    (
+        (
+            "contrastive_training_evidence_policy",
+            None,
+            "development generation contrastive evidence policy mismatch",
+        ),
+        (
+            "success_control_count",
+            0,
+            "development generation contrastive evidence counts are inconsistent",
+        ),
+    ),
+)
+def test_freeze_rejects_v3_6_generation_evidence_drift(
+    field: str,
+    value: object,
+    expected_error: str,
+) -> None:
+    protocol = PaperProtocol.read(V36_PROTOCOL_PATH)
+    manifest = SplitManifest.read(MANIFEST_PATH)
+    report = _development_report(
+        protocol,
+        manifest,
+        archive_hash="unused",
+        recursive=True,
+        hypothesis_id="recursive-policy",
+    )
+    report["generations"][0][field] = value
+    report["generation"] = dict(report["generations"][0])
+
+    with pytest.raises(ValueError, match=expected_error):
+        paper_freeze._validate_development_report(
+            report,
+            protocol=protocol,
+            manifest=manifest,
+            recursive_validation_enabled=True,
+        )
+
+
+def test_freeze_rejects_honest_invalid_counterfactual_report() -> None:
+    protocol = PaperProtocol.read(V36_PROTOCOL_PATH)
+    manifest = SplitManifest.read(MANIFEST_PATH)
+    report = _development_report(
+        protocol,
+        manifest,
+        archive_hash="unused",
+        recursive=True,
+        hypothesis_id="recursive-policy",
+    )
+    generation = report["generations"][0]
+    decision = generation["promotion_decision"]
+    decision["summary"]["invalid_pair_count"] = 1
+    decision["allowed"] = False
+    decision["blockers"] = ["invalid_counterfactual_pairs"]
+    generation["promotion_summary"] = dict(decision["summary"])
+    generation["promoted"] = False
+    report["generation"] = dict(generation)
+    report["invalid_counterfactual_pair_count"] = 1
+    report["invalid_counterfactual_pairs_present"] = True
+    report["performance_claim_eligible"] = False
+    report["performance_claim_blockers"] = [
+        INVALID_COUNTERFACTUAL_CLAIM_BLOCKER
+    ]
+
+    with pytest.raises(
+        ValueError,
+        match="development report contains invalid counterfactual evidence",
+    ):
+        paper_freeze._validate_development_report(
+            report,
+            protocol=protocol,
+            manifest=manifest,
+            recursive_validation_enabled=True,
+        )
+
+
+def test_freeze_rejects_invalid_counterfactual_evidence_in_legacy_report() -> None:
+    protocol = PaperProtocol.read(PROTOCOL_PATH)
+    manifest = SplitManifest.read(MANIFEST_PATH)
+    report = _development_report(
+        protocol,
+        manifest,
+        archive_hash="unused",
+        recursive=True,
+        hypothesis_id="recursive-policy",
+    )
+    generation = report["generations"][0]
+    decision = generation["promotion_decision"]
+    decision["summary"]["invalid_pair_count"] = 1
+    decision["allowed"] = False
+    decision["blockers"] = ["invalid_counterfactual_pairs"]
+    generation["promotion_summary"] = dict(decision["summary"])
+    generation["promoted"] = False
+    report["generation"] = dict(generation)
+
+    with pytest.raises(
+        ValueError,
+        match="development report contains invalid counterfactual evidence",
+    ):
+        paper_freeze._validate_development_report(
+            report,
+            protocol=protocol,
+            manifest=manifest,
+            recursive_validation_enabled=True,
+        )
+
+
+def test_freeze_rejects_generation_invalid_count_hidden_at_top_level() -> None:
+    protocol = PaperProtocol.read(V36_PROTOCOL_PATH)
+    manifest = SplitManifest.read(MANIFEST_PATH)
+    report = _development_report(
+        protocol,
+        manifest,
+        archive_hash="unused",
+        recursive=True,
+        hypothesis_id="recursive-policy",
+    )
+    report["generations"][0]["promotion_decision"]["summary"][
+        "invalid_pair_count"
+    ] = 1
+    report["generations"][0]["promotion_summary"]["invalid_pair_count"] = 1
+
+    with pytest.raises(
+        ValueError,
+        match="development invalid counterfactual pair count mismatch",
     ):
         paper_freeze._validate_development_report(
             report,
@@ -762,6 +1034,9 @@ def test_freeze_recomputes_blockers_from_promotion_summary() -> None:
             "harm_rate": 1.0,
             "activation_rate": 1.0,
         }
+    )
+    report["generations"][0]["promotion_summary"] = dict(
+        decision["summary"]
     )
     decision["effect_lower_bound"] = -1.0
 
@@ -1028,6 +1303,23 @@ def _development_report(
             evaluator_epoch=evaluator_epoch,
         ),
     }
+    if protocol.payload["protocol_version"] == "3.6.0":
+        train_count = int(phase["train_count"])
+        generation.update(
+            {
+                "train_observation_count": train_count,
+                "valid_train_observation_count": train_count,
+                "training_residual_count": 1,
+                "success_control_count": train_count - 1,
+                "example_count": train_count,
+                "contrastive_training_evidence_policy": protocol.payload[
+                    "execution"
+                ]["contrastive_training_evidence_policy"],
+            }
+        )
+    generation["promotion_summary"] = dict(
+        generation["promotion_decision"]["summary"]
+    )
     return {
         "mode": "execute",
         "executed": True,
@@ -1050,6 +1342,19 @@ def _development_report(
             "minimum_trigger_support": protocol.payload["evolution"][
                 "minimum_trigger_support"
             ],
+            **(
+                {
+                    "codex_agent_execution_policy": (
+                        protocol.codex_agent_execution_policy.to_dict()
+                    ),
+                    "codex_agent_execution_policy_hash": (
+                        protocol.codex_agent_execution_policy.policy_hash
+                    ),
+                }
+                if protocol.payload["protocol_version"]
+                not in {"3.1.0", "3.2.0"}
+                else {}
+            ),
             "runner_agent_registry_isolation": protocol.payload["execution"][
                 "runner_agent_registry_isolation"
             ],
@@ -1093,7 +1398,16 @@ def _development_report(
                     "skill_routing",
                     "skill_action_lowering",
                     "skill_fallback_semantics",
+                    "proposal_candidate_selection",
                 )
+            },
+            **{
+                field: protocol.payload["execution"][field]
+                for field in (
+                    "contrastive_training_evidence_policy",
+                    "counterfactual_invalid_evidence_policy",
+                )
+                if field in protocol.payload["execution"]
             },
             "training_evidence_policy": protocol.payload["execution"][
                 "training_evidence_policy"
@@ -1118,6 +1432,10 @@ def _development_report(
         "generation_count": 1,
         "proposal_model_failure_count": 0,
         "proposal_model_failures_present": False,
+        "invalid_counterfactual_pair_count": 0,
+        "invalid_counterfactual_pairs_present": False,
+        "counterfactual_provider_mismatch_count": 0,
+        "counterfactual_budget_mismatch_count": 0,
         "performance_claim_eligible": True,
         "performance_claim_blockers": [],
         "archive_hash": archive_hash,
@@ -1158,6 +1476,20 @@ def _promotion_decision(
         "harm_rate": 0.0,
         "activation_rate": 1.0,
     }
+    if protocol.payload["protocol_version"] == "3.6.0":
+        summary.update(
+            {
+                "valid_activation_count": 10,
+                "activated_gain_count": 10,
+                "activated_harm_count": 0,
+                "abstention_count": 0,
+                "activation_precision": 1.0,
+                "activation_precision_defined": True,
+                "activated_harm_rate": 0.0,
+                "activated_harm_rate_defined": True,
+                "abstention_rate": 0.0,
+            }
+        )
     return {
         "allowed": True,
         "blockers": [],

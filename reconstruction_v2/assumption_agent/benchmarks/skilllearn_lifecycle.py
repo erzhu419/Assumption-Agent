@@ -28,9 +28,11 @@ from ..archive import PolicyArchive
 from ..evaluation import PromotionGate
 from ..events import Event, EventSink, NullEventSink
 from ..evolution import (
+    CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
     CounterfactualEvidenceReplayCache,
     EvolutionKernel,
     EvolutionRunResult,
+    TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
 )
 from ..models import (
     CounterfactualPair,
@@ -107,6 +109,9 @@ RUNNER_AGENT_REGISTRY_ISOLATION_VERSION = "runner_local_agent_registry_v1"
 TRIAL_TIMEOUT_POLICY_VERSION = "no_fixed_trial_wall_or_container_timeout_v2"
 PROVIDER_FAILURE_POLICY_VERSION = "codex_jsonl_terminal_error_circuit_v1"
 TRAINING_EVIDENCE_POLICY_VERSION = "all_valid_before_proposal_v1"
+CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION = (
+    "valid_train_failures_and_success_controls_v1"
+)
 TRAINING_EVIDENCE_REPLAY_POLICY_VERSION = (
     "behavior_identical_training_replay_v1"
 )
@@ -2413,11 +2418,23 @@ class SkillLearnResidualMiner:
         adapter: SkillLearnBenchAdapter,
         manifest: SplitManifest,
         guard: SplitAccessGuard,
+        contrastive_training_evidence_policy: str | None = None,
         event_sink: EventSink | None = None,
     ) -> None:
+        if contrastive_training_evidence_policy not in {
+            None,
+            CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
+        }:
+            raise ValueError(
+                "unsupported contrastive training evidence policy: "
+                f"{contrastive_training_evidence_policy}"
+            )
         self.adapter = adapter
         self.manifest = manifest
         self.guard = guard
+        self.contrastive_training_evidence_policy = (
+            contrastive_training_evidence_policy
+        )
         self.event_sink = event_sink or NullEventSink()
         self.items = {item.id: item for item in adapter.discover()}
 
@@ -2437,15 +2454,32 @@ class SkillLearnResidualMiner:
             if not observation.valid:
                 skipped_infrastructure += 1
                 continue
-            if observation.success:
+            if (
+                observation.success
+                and self.contrastive_training_evidence_policy is None
+            ):
                 continue
             item = self.items[request.item_id]
-            instruction = self.adapter.load_instruction(
-                request.item_id,
-                phase=AccessPhase.PROPOSAL,
-                guard=self.guard,
-            ).strip()
-            failure_type, feedback = _classify_training_failure(observation)
+            if observation.success:
+                failure_type = "baseline_success_control"
+                feedback: tuple[str, ...] = ()
+                context: Mapping[str, Any] = {}
+            else:
+                instruction = self.adapter.load_instruction(
+                    request.item_id,
+                    phase=AccessPhase.PROPOSAL,
+                    guard=self.guard,
+                ).strip()
+                failure_type, feedback = _classify_training_failure(observation)
+                context = {
+                    "task_instruction": instruction,
+                    "observed_metrics": dict(sorted(observation.metrics.items())),
+                    "execution_signals": {
+                        "total_tokens": observation.total_tokens,
+                        "steps": observation.steps,
+                        "duration_seconds": observation.duration_seconds,
+                    },
+                }
             residual = ResidualExample(
                 transition_id=f"transition_{stable_hash({'request': request.request_hash, 'outcome': observation.observation_hash})[:18]}",
                 task_id=request.item_id,
@@ -2454,21 +2488,15 @@ class SkillLearnResidualMiner:
                 features={**dict(item.features), "family": item.family},
                 failure_type=failure_type,
                 evaluator_feedback=feedback,
-                baseline_success=False,
-                context={
-                    "task_instruction": instruction,
-                    "observed_metrics": dict(sorted(observation.metrics.items())),
-                    "execution_signals": {
-                        "total_tokens": observation.total_tokens,
-                        "steps": observation.steps,
-                        "duration_seconds": observation.duration_seconds,
-                    },
-                },
+                baseline_success=observation.success,
+                context=context,
             )
             issues = residual.validate()
             if issues:
                 raise PermissionError(f"training residual failed isolation checks: {issues}")
             residuals.append(residual)
+        failure_rows = tuple(row for row in residuals if not row.baseline_success)
+        success_controls = tuple(row for row in residuals if row.baseline_success)
         self.event_sink.emit(
             Event(
                 event="skilllearn_training_residuals_mined",
@@ -2476,7 +2504,12 @@ class SkillLearnResidualMiner:
                 trace_id=trace_id,
                 payload={
                     "observation_count": len(observations),
-                    "residual_count": len(residuals),
+                    "residual_count": len(failure_rows),
+                    "success_control_count": len(success_controls),
+                    "example_count": len(residuals),
+                    "contrastive_training_evidence_policy": (
+                        self.contrastive_training_evidence_policy
+                    ),
                     "infrastructure_rows_skipped": skipped_infrastructure,
                     "transition_set_hash": stable_hash(
                         {"transition_ids": sorted(row.transition_id for row in residuals)}
@@ -2489,6 +2522,7 @@ class SkillLearnResidualMiner:
                             "task_id_hash": stable_hash({"task_id": row.task_id}),
                             "family_hash": stable_hash({"family": row.family}),
                             "failure_type": row.failure_type,
+                            "baseline_success": row.baseline_success,
                             "feature_hash": stable_hash(dict(row.features)),
                             "context_hash": stable_hash(dict(row.context)),
                         }
@@ -3057,13 +3091,21 @@ class SkillLearnGenerationResult:
     reason: str
     baseline_hypothesis_ids: tuple[str, ...] = ()
     proposal_model_failure_count: int = 0
+    contrastive_training_evidence_policy: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         decision = self.evolution.promotion_decision if self.evolution else None
+        failure_count = sum(not row.baseline_success for row in self.residuals)
+        success_control_count = sum(row.baseline_success for row in self.residuals)
         return {
             "train_observation_count": len(self.train_observations),
             "valid_train_observation_count": sum(row.valid for row in self.train_observations),
-            "training_residual_count": len(self.residuals),
+            "training_residual_count": failure_count,
+            "success_control_count": success_control_count,
+            "example_count": len(self.residuals),
+            "contrastive_training_evidence_policy": (
+                self.contrastive_training_evidence_policy
+            ),
             "baseline_hypothesis_ids": list(self.baseline_hypothesis_ids),
             "evolution_trace_id": self.evolution.trace_id if self.evolution else None,
             "promoted": bool(self.evolution and self.evolution.promoted),
@@ -3137,6 +3179,8 @@ class SkillLearnEvolutionHarness:
         evaluator_epoch: str,
         output_root: str | Path,
         proposal_candidates_per_generation: int = 3,
+        candidate_selection_policy: str = TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
+        contrastive_training_evidence_policy: str | None = None,
         parallel_workers: int = 1,
         invalid_trial_max_attempts: int = 1,
         invalid_trial_retry_backoff_seconds: float = 0.0,
@@ -3151,6 +3195,31 @@ class SkillLearnEvolutionHarness:
             raise ValueError("invalid trial retry backoff cannot be negative")
         if invalid_trial_retry_workers <= 0:
             raise ValueError("invalid trial retry worker count must be positive")
+        if contrastive_training_evidence_policy not in {
+            None,
+            CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
+        }:
+            raise ValueError(
+                "unsupported contrastive training evidence policy: "
+                f"{contrastive_training_evidence_policy}"
+            )
+        if candidate_selection_policy not in {
+            TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
+            CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
+        }:
+            raise ValueError(
+                f"unsupported candidate selection policy: {candidate_selection_policy}"
+            )
+        if (
+            contrastive_training_evidence_policy
+            == CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
+        ) != (
+            candidate_selection_policy
+            == CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION
+        ):
+            raise ValueError(
+                "contrastive evidence and candidate selection policies must be paired"
+            )
         self.adapter = adapter
         self.manifest = manifest
         self.guard = guard
@@ -3166,6 +3235,10 @@ class SkillLearnEvolutionHarness:
         self.invalid_trial_retry_backoff_seconds = (
             invalid_trial_retry_backoff_seconds
         )
+        self.candidate_selection_policy = candidate_selection_policy
+        self.contrastive_training_evidence_policy = (
+            contrastive_training_evidence_policy
+        )
         self._invalid_retry_semaphore = threading.Semaphore(
             invalid_trial_retry_workers
         )
@@ -3175,6 +3248,9 @@ class SkillLearnEvolutionHarness:
             adapter=adapter,
             manifest=manifest,
             guard=guard,
+            contrastive_training_evidence_policy=(
+                contrastive_training_evidence_policy
+            ),
             event_sink=self.event_sink,
         )
         self.compiler = SkillLearnProgramCompiler(event_sink=self.event_sink)
@@ -3202,6 +3278,10 @@ class SkillLearnEvolutionHarness:
             archive=archive,
             split_guard=guard,
             proposal_candidates_per_generation=proposal_candidates_per_generation,
+            candidate_selection_policy=candidate_selection_policy,
+            contrastive_training_evidence_policy=(
+                contrastive_training_evidence_policy
+            ),
             event_sink=self.event_sink,
         )
 
@@ -3348,19 +3428,62 @@ class SkillLearnEvolutionHarness:
             )
         if any(row.task_id not in observation_ids or row.split is not SplitName.TRAIN for row in residuals):
             raise PermissionError("shared residual is outside the training observation checkpoint")
+        if self.contrastive_training_evidence_policy:
+            observation_by_id = {
+                row.request.item_id: row for row in observations
+            }
+            residual_by_id = {row.task_id: row for row in residuals}
+            if (
+                len(observation_by_id) != len(observations)
+                or len(residual_by_id) != len(residuals)
+                or set(residual_by_id) != set(observation_by_id)
+            ):
+                raise PermissionError(
+                    "contrastive shared evidence must bind every valid training observation"
+                )
+            for item_id, observation in observation_by_id.items():
+                example = residual_by_id[item_id]
+                expected_transition_id = (
+                    "transition_"
+                    + stable_hash(
+                        {
+                            "request": observation.request.request_hash,
+                            "outcome": observation.observation_hash,
+                        }
+                    )[:18]
+                )
+                if example.transition_id != expected_transition_id:
+                    raise PermissionError(
+                        "contrastive shared evidence transition identity mismatch"
+                    )
+                if example.baseline_success != observation.success:
+                    raise PermissionError(
+                        "contrastive shared evidence label does not match training outcome"
+                    )
+                if example.baseline_success and (
+                    example.failure_type != "baseline_success_control"
+                    or example.evaluator_feedback
+                    or example.context
+                ):
+                    raise PermissionError(
+                        "contrastive success control violates the no-context contract"
+                    )
         for row in residuals:
             issues = row.validate()
             if issues:
                 raise PermissionError(f"shared residual failed isolation checks: {issues}")
             self.guard.authorize(row.task_id, AccessPhase.PROPOSAL)
         incumbent_programs = self.incumbent_programs()
-        if not residuals:
+        if not any(not row.baseline_success for row in residuals):
             result = SkillLearnGenerationResult(
                 train_observations=observations,
-                residuals=(),
+                residuals=residuals,
                 evolution=None,
                 reason="no_valid_failed_training_rows",
                 baseline_hypothesis_ids=tuple(row.id for row in incumbent_programs),
+                contrastive_training_evidence_policy=(
+                    self.contrastive_training_evidence_policy
+                ),
             )
             self._emit_generation_result(result, trace_id)
             return result
@@ -3388,6 +3511,9 @@ class SkillLearnEvolutionHarness:
             evolution=evolution,
             reason=evolution.reason,
             baseline_hypothesis_ids=tuple(row.id for row in incumbent_programs),
+            contrastive_training_evidence_policy=(
+                self.contrastive_training_evidence_policy
+            ),
         )
         self._emit_generation_result(result, trace_id)
         return result
@@ -3428,6 +3554,9 @@ class SkillLearnEvolutionHarness:
             reason="proposal_model_failed",
             baseline_hypothesis_ids=tuple(row.id for row in incumbent_programs),
             proposal_model_failure_count=1,
+            contrastive_training_evidence_policy=(
+                self.contrastive_training_evidence_policy
+            ),
         )
         self._emit_generation_result(result, trace_id)
         return result
@@ -3459,6 +3588,9 @@ class SkillLearnEvolutionHarness:
             allowed_action_operations=SKILLLEARN_ALLOWED_ACTION_OPERATIONS,
             action_semantics=SKILL_ACTION_LOWERING_VERSION,
             external_evidence_is_hidden=True,
+            contrastive_training_evidence_policy=(
+                self.contrastive_training_evidence_policy
+            ),
             trigger_feature_catalog=build_runtime_feature_catalog(
                 [
                     {

@@ -12,6 +12,9 @@ from assumption_agent.benchmarks.docker_egress import (
     TRIAL_NETWORK_BUDGET_POLICY_VERSION,
 )
 from assumption_agent.benchmarks.paper_protocol import (
+    CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
+    CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
+    COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION,
     PaperProtocol,
     validate_protocol_lock_for_execution,
 )
@@ -46,6 +49,9 @@ V34_PROTOCOL = (
 )
 V35_PROTOCOL = (
     ROOT / "manifests" / "skilllearn_paper_protocol_v3_5_ruoli_gpt54mini.json"
+)
+V36_PROTOCOL = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_6_ruoli_gpt54mini.json"
 )
 MANIFEST_HASH = stable_hash({"manifest": "paper-test"})
 
@@ -215,6 +221,106 @@ def test_v35_protocol_changes_only_online_parallelism() -> None:
     assert v35 == v34
 
 
+def test_v36_protocol_changes_only_contrastive_evidence_contract() -> None:
+    protocol = PaperProtocol.read(V36_PROTOCOL)
+
+    assert protocol.validate_structure() == []
+    assert protocol.payload["protocol_version"] == "3.6.0"
+    assert protocol.codex_agent_execution_policy == MODEL_ONLY_ACTION_BUDGET_POLICY
+    assert protocol.payload["execution"]["trial_network_byte_limit"] == (
+        64 * 1024 * 1024
+    )
+    assert protocol.payload["execution"]["development_prewarm"] == (
+        "all_manifest_images_and_offline_verifiers_v4"
+    )
+    assert protocol.payload["execution"]["proposal_candidate_selection"] == (
+        CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION
+    )
+    assert protocol.payload["execution"][
+        "contrastive_training_evidence_policy"
+    ] == CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
+    assert protocol.payload["execution"][
+        "counterfactual_invalid_evidence_policy"
+    ] == COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION
+
+    v35 = copy.deepcopy(PaperProtocol.read(V35_PROTOCOL).payload)
+    v36 = copy.deepcopy(protocol.payload)
+    for payload in (v35, v36):
+        payload.pop("protocol_id")
+        payload.pop("protocol_version")
+    v36["execution"]["proposal_candidate_selection"] = v35["execution"][
+        "proposal_candidate_selection"
+    ]
+    v36["execution"].pop("contrastive_training_evidence_policy")
+    v36["execution"].pop("counterfactual_invalid_evidence_policy")
+    assert v36 == v35
+
+
+@pytest.mark.parametrize(
+    "protocol_path",
+    (V31_PROTOCOL, PROTOCOL, V33_PROTOCOL, V34_PROTOCOL, V35_PROTOCOL),
+)
+def test_v31_through_v35_keep_historical_candidate_selection(
+    protocol_path: Path,
+) -> None:
+    protocol = PaperProtocol.read(protocol_path)
+
+    assert protocol.payload["execution"]["proposal_candidate_selection"] == (
+        "train_static_support_then_complexity_v1"
+    )
+
+
+@pytest.mark.parametrize(
+    ("field_name", "expected_issue"),
+    (
+        (
+            "proposal_candidate_selection",
+            "proposal_candidate_selection_mismatch",
+        ),
+        (
+            "contrastive_training_evidence_policy",
+            "contrastive_training_evidence_policy_mismatch",
+        ),
+        (
+            "counterfactual_invalid_evidence_policy",
+            "counterfactual_invalid_evidence_policy_mismatch",
+        ),
+    ),
+)
+def test_v36_protocol_rejects_contrastive_contract_drift(
+    field_name: str,
+    expected_issue: str,
+) -> None:
+    protocol = PaperProtocol.read(V36_PROTOCOL)
+    payload = copy.deepcopy(protocol.payload)
+    payload["execution"][field_name] = "drifted"
+
+    assert expected_issue in PaperProtocol(
+        protocol.path,
+        payload,
+    ).validate_structure()
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    (
+        "contrastive_training_evidence_policy",
+        "counterfactual_invalid_evidence_policy",
+    ),
+)
+def test_v31_through_v35_reject_v36_only_contract_fields(
+    field_name: str,
+) -> None:
+    protocol = PaperProtocol.read(V35_PROTOCOL)
+    payload = copy.deepcopy(protocol.payload)
+    payload["execution"][field_name] = "hybrid-policy"
+
+    assert f"{field_name}_unexpected" in PaperProtocol(
+        protocol.path,
+        payload,
+    ).validate_structure()
+
+
 @pytest.mark.parametrize(
     "field_name",
     tuple(MODEL_ONLY_ACTION_BUDGET_POLICY.to_dict()),
@@ -367,7 +473,10 @@ def test_execution_lock_binds_tracked_offline_readiness_receipt(
         validate_protocol_lock_for_execution(protocol, lock, manifest, ROOT)
 
 
-@pytest.mark.parametrize("protocol_path", (V33_PROTOCOL, V34_PROTOCOL, V35_PROTOCOL))
+@pytest.mark.parametrize(
+    "protocol_path",
+    (V33_PROTOCOL, V34_PROTOCOL, V35_PROTOCOL, V36_PROTOCOL),
+)
 def test_versioned_execution_lock_binds_resolved_agent_policy(
     monkeypatch: pytest.MonkeyPatch,
     protocol_path: Path,
