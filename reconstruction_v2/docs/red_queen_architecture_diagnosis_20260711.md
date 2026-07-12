@@ -1,9 +1,9 @@
 # Assumption Agent × Red Queen Gödel Machine：架构诊断与 Reconstruction V2 复核
 
 > - 初版日期：2026-07-11
-> - 本次复核：2026-07-11
+> - 本次复核：2026-07-12
 > - 代码审计基线 revision：`6224bb5a279f50fbcf1f8b36d19cb4ce6cc6c882`
-> - 本次实现复核：receipt/runtime provenance 修复提交 `e43670f6`、`18ff3417`；v3.3 execution-policy 提交 `e0b1a33b`；v3.4 model-only/action-budget 主提交 `e491b0af`，runtime-path 修复 `995e6446`，Ruoli 503 分类修复 `ba0f36cf`，host-readable audit artifact 修复 `1df3092a` / `ad66d5a2`；v3.4 max2 v5 canary 已通过、fresh development 因四并发 429 fail closed；v3.5 将所有在线 phase 版本化为 1 worker，首轮 38/38 valid train 后暴露并修复 repair ID collision
+> - 本次实现复核：receipt/runtime provenance 修复提交 `e43670f6`、`18ff3417`；v3.3 execution-policy 提交 `e0b1a33b`；v3.4 model-only/action-budget 主提交 `e491b0af`，runtime-path 修复 `995e6446`，Ruoli 503 分类修复 `ba0f36cf`，host-readable audit artifact 修复 `1df3092a` / `ad66d5a2`；v3.4 max2 v5 canary 已通过、fresh development 因四并发 429 fail closed；v3.5 将所有在线 phase 版本化为 1 worker，repair identity 修复 `96d53a5d`，malformed proposal/claim binding 修复 `d70562de`
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -72,20 +72,25 @@
 > 不变。首轮 serial run 取得 38/38 valid train、9 success、0 provider/cap/tool/action/verifier
 > invalid，随后在静态递归验证中因两个不同 repair payload 复用同一 model-declared ID 而
 > fail closed；没有 validation-split trial、promotion、report/archive 或 sealed。修复改由父分支、
-> depth 与规范化内容派生确定性 repair ID，并保留 archive 冲突硬拒绝；旧 38 条不能跨进程复用。**
+> depth 与规范化内容派生确定性 repair ID，并保留 archive 冲突硬拒绝。修复后 fresh root 再次
+> 得到 38/38 valid、9 success、0 provider/cap/action/tool/verifier invalid；root proposal 返回
+> 3 个候选，但第一个 repair 的 transport/JSON 成功后没有 mapping-valued `hypothesis`，裸
+> `ValueError` 穿透旧异常边界，仍在 validation trial 前退出。现已把 malformed root/repair
+> envelope 与 canonical parse 纳入既有 typed failure isolation，并让 report/freeze 从 generation
+> rows 绑定非 claim 状态；没有新增评分 gate、响应 retry 或在线 evaluator。两次 38 条都不能跨进程复用。**
 
 ### 1.2 结论分层
 
 | 命题 | 当前状态 | 证据层级 |
 |---|---|---|
 | legacy HLE 是高维手写控制面，学习 policy 没有闭环 | 支持 | 代码审计 + 历史 artifacts |
-| v2 的 proposal -> repair -> off/on -> gate -> archive 接口已连通 | 支持 | 193/193 离线测试 + 小型 live probes |
+| v2 的 proposal -> repair -> off/on -> gate -> archive 接口已连通 | 支持 | 216/216 离线测试 + 小型 live probes |
 | v2 的内部 runtime action 能改变 lane plan | 支持 | 代码 + 单元测试 |
 | v2 主 SkillLearn 路径执行了每个 typed action/verifier/fallback 的强语义 | **不支持，且协议已停止这样声称** | 只接受四类显式 prompt/self-check lowering；其余 fail closed |
 | promotion threshold 完全由冻结 protocol 所有 | 支持 | protocol-bound spec + 宽松 candidate 对抗测试 |
-| 86-item offline-ready runtime 已预验 | 支持 | readiness/preflight `blockers=[]`；v3.4 v4 cache-only prewarm 86/86、model 未执行、sealed scoring=false |
+| 86-item offline-ready runtime 已预验 | 支持 | readiness/preflight `blockers=[]`；v3.4 与两份 v3.5 v4 cache-only prewarm 均 86/86、model 未执行、sealed scoring=false |
 | v2 已产生可保留的 promoted incumbent | **不支持** | available mixed-protocol artifact scan 中 23 份 archive 均 `incumbent_id=null`，22 份 report 无 promotion |
-| v2 稳定优于 raw 或 budget-matched raw | **不支持** | v3.4 full development 为 17 valid / 21 provider-capacity invalid；没有 proposal、paired validation 或 main result |
+| v2 稳定优于 raw 或 budget-matched raw | **不支持** | 两份 v3.5 均 38/38 valid train，但分别在 repair identity / response contract 处于 paired validation 前中止；没有 main result |
 | v2 已实现 Red Queen 式多 clade 搜索和 evaluator co-evolution | **不支持** | 目前是单 incumbent；evaluator 路径未接主实验 |
 
 ### 1.3 潜力判断
@@ -346,7 +351,7 @@ evidence。固定 cohort 越被反复用于决策，越不能承担 sealed claim
 
 ### 7.2 当前证据到哪一层
 
-**[TEST]** 当前 `reconstruction_v2` 离线 suite 为 **193/193 通过**。这证明 schema、
+**[TEST]** 当前 `reconstruction_v2` 离线 suite 为 **216/216 通过**。这证明 schema、
 wiring、guard、replay、failure handling 和若干 invariant；不证明真实 benchmark
 improvement。新增覆盖包括 protocol threshold ownership、candidate 宽松阈值攻击、
 backend action lowering、真实/声明 fallback 分离、offline-ready split 不重抽样，以及
@@ -597,6 +602,27 @@ repair 一律由 harness 以 `candidate` 身份进入既有生命周期，事件
 仍抛错。离线回归覆盖 sibling roots、此次 depth-1/depth-2 复现和 archive 阴性对照。旧进程已死，
 JSONL 不是 checkpoint，38 条 observation 不能拼入修复后运行；必须新 lock/prewarm/root。
 
+repair identity 修复后的 fresh root `repairid01` 绑定提交 `96d53a5d`，新 lock 与 86/86
+cache-only prewarm 通过。38 个 serial train 再次全部 valid，其中 9 success；trial duration
+合计 5,188.542 秒、最长 574.710 秒，38/38 action/tool/offline-verifier audit 有效，38/38
+network monitor finalized、0 超限，最大 22.82 MB。训练后形成 29 residual，root proposal
+transport 成功并返回 3 个程序，paired checkpoint 冻结。recursive arm 只验证了第一个 root：
+`training_support=false` 且 `runtime_action=false`。repair request 的 HTTP、JSON-object parse 和
+provider selection 均成功，但 parsed response 没有 mapping-valued `hypothesis`；事件只保存
+response hash，raw response 未落盘，因此不能进一步声称具体错误 envelope。旧 proposer 在
+`_complete()` 返回后抛裸 `ValueError`，validator 只捕获 typed `HypothesisProposalCallError`，
+进程遂在 `hypothesis_repair_proposed` 前 exit 1。16 个 validation ID 仅被 authorize，实际
+counterfactual、promotion、archive、generation complete、report/archive 与 sealed event 均为 0。
+
+提交 `d70562de` 在模型响应语义边界做最小修复。root 的所有 consumed rows 先原子化
+canonical parse，成功后才 emit/replay；repair 的 envelope/canonical parse failure 进入同一 typed
+candidate-local 通道。事件只写 request/response/key-set hash、字段 presence/type/count 与 phase，
+不写 raw。validator 不捕获任意 `ValueError`，所以 archive collision/harness invariant 仍 fail loud。
+一个 malformed repair 只终止该 branch，其余 root 继续 static audit，但整代不执行 held-out
+validation 或 promotion；malformed root 为两臂保留 terminal non-claim report。report 的
+failure count/presence/claim/blockers 从 generation rows 派生，paper freeze 再独立重算，诚实
+failure 或 top-level 篡改都被拒绝。该修复落实既有 failure policy，没有改变评分阈值或搜索预算。
+
 ### 7.3 当前 infrastructure/protocol 状态
 
 全 inventory 的
@@ -776,7 +802,7 @@ dependency-cache-only 尚未强制；但当前
 [`docker_egress.py`](../assumption_agent/benchmarks/docker_egress.py) 和 protocol manifest 已
 实现 provider-only hard egress、offline package mode 与 network fuse。本次已同步主
 README、benchmark protocol、offline-verifier matrix 和 status 摘要；本轮又把 receipt
-runtime provenance、v3.5 serial execution-policy / repair-branch identity binding 与 test 状态更新为 193/193。历史段落仍
+runtime provenance、v3.5 serial execution-policy / repair identity / response-contract binding 与 test 状态更新为 216/216。历史段落仍
 保留为 diagnostic ledger，不能当作当前协议。
 
 这种文档漂移本身会破坏 protocol review；重新跑论文实验前必须同步。
@@ -796,8 +822,10 @@ runtime provenance、v3.5 serial execution-policy / repair-branch identity bindi
 | 完成（机制） | v3.4 clean runtime canary | lock/prewarm、PATH、host-readable receipt 均已验证；max2 v5 为 2-step valid truncation，本地 verifier 有效，0 remote tool，全部 agent task 已退出 |
 | 完成（协议版本化） | v3.5 serial execution policy | 五个在线 phase 的 `parallel_workers` 全部由 4 改为 1；其余 model/subset/budget/offline evaluator/retry/circuit/search/promotion/sealed 合同不变 |
 | 完成（容量验证） | v3.5 pre-fix serial train | clean lock/prewarm，38/38 valid、9 success、0 provider/cap/action/tool/verifier invalid；约 99 分钟；旧 rows 不跨进程复用 |
-| 完成（确定性修复） | repair branch identity | parent ID + status-independent parent hash + depth + canonical candidate content 派生 ID；模型 ID/status 不控制主键或生命周期；真实 depth-2 collision 与 archive fail-closed 对照通过；193/193 离线测试 |
-| P1（生命周期） | 修复后 fresh-root development | 新 lock/prewarm；同一 invocation 38/38 all-valid 后必须实际完成 proposal/paired validation，并产出 recursive/no-recursive report/archive、0 invalid、sealed evaluation=false |
+| 完成（确定性修复） | repair branch identity | parent ID + status-independent parent hash + depth + canonical candidate content 派生 ID；模型 ID/status 不控制主键或生命周期；真实 depth-2 collision 与 archive fail-closed 对照通过 |
+| 完成（异常边界） | malformed proposal isolation + claim binding | post-transport envelope/parse failure typed 化；root 原子 replay、repair branch-local、整代 validation/promotion blocked；report/freeze 防失败 claim 篡改；216/216 离线测试 |
+| 完成（第二次容量验证） | v3.5 repairid01 serial train | 38/38 valid、9 success、0 provider/cap/action/tool/verifier invalid；5,188.542 trial-seconds；repair malformed response 在 validation 前暴露，旧 rows 不复用 |
+| P1（生命周期） | response-fix fresh-root development | 新 lock/prewarm；同一 invocation 38/38 all-valid 后必须实际完成 proposal/paired validation，并产出 recursive/no-recursive report/archive、0 invalid、sealed evaluation=false |
 | P1 | 递归因果归因 | 两臂共享 train evidence 和 roots，唯一差异是 repair；behavior-identical 时 effect 报 N/A，不重采样 |
 | P1 | contrastive trigger learning | train successes 进入 anti-trigger/precision；candidate selection 不只最大化 failure support；报告 activation precision、harm、abstention |
 | P1 | prospective family-out routing | trigger 不依赖已知 family 或预编译 item ID，只使用冻结、无 gold、运行时可得语义特征 |
@@ -854,10 +882,16 @@ runtime provenance、v3.5 serial execution-policy / repair-branch identity bindi
 22. 已执行并 fail-closed：proposal 返回 3 roots，第三个的 depth-1/depth-2 repair 复用同一模型 ID
     但 payload 不同，archive 在 paired validation 前抛 collision；四份 report/archive 未生成，
     sealed 未触碰，38 条 train 不得跨进程拼接；
-23. 已完成最小修复与 193/193 离线回归：repair ID 改由 parent content/depth/canonical candidate
-    content 确定性派生，model ID/status 不控制主键或 lifecycle，archive 冲突保护不放松；下一步在新 root 建 clean lock/fresh prewarm 并从零
-    serial develop，不新增 canary/gate。若没有 promotion，直接转 contrastive trigger learning；
-    有 retained validation gain 后再做 family-out，最后才增加 multi-clade/evaluator mutation。
+23. 已完成 repair identity 最小修复：repair ID 改由 parent content/depth/canonical candidate
+    content 确定性派生，model ID/status 不控制主键或 lifecycle，archive 冲突保护不放松；
+24. 已执行第二个 fresh root：38/38 valid、9 success、0 provider/cap/action/tool/verifier invalid，
+    proposal 返回 3 roots；第一个 repair transport 成功但 response envelope malformed，裸 ValueError
+    在 validation 前终止；report/archive/sealed 仍为 0，38 条 train 不跨进程复用；
+25. 已完成 `d70562de` 与 216/216 离线回归：malformed root/repair 进入既有 typed failure isolation，
+    root replay 原子、repair branch-local、整代不 validation/promotion；report/freeze 强制 non-claim。
+    下一步在新 root 建 clean lock/fresh prewarm 并从零 serial develop，不新增 canary/评分 gate。
+    若完整运行没有 promotion，直接转 contrastive trigger learning；有 retained validation gain 后再做
+    family-out，最后才增加 multi-clade/evaluator mutation。
 
 这比立刻扩展 archive 或继续补 HLE source span 更能降低研究风险。
 
@@ -987,10 +1021,12 @@ fresh development 也已真实启动，但冻结四并发在 17 条有效离线�
 17 个 slot 被 circuit 本地跳过。API credential 和 bounded inference 可用，持续四并发容量不可用；
 online evaluator 无法修复该问题。
 
-v3.5 已证明单 worker 可在同一 invocation 内取得 38/38 all-valid train，排除了本 batch 的
-provider/cap/action/tool/verifier 阻塞；但它在 paired validation 前因 repair identity collision
-中止，因此仍没有 performance evidence。identity 修复是确定性主键构造，不是新评分 gate，
-archive 的冲突硬拒绝没有放松。下一份 fresh-root run 仍必须重新取得 38/38 all-valid，并真正
+v3.5 已两次证明单 worker 可在同一 invocation 内取得 38/38 all-valid train，排除了这些 batch 的
+provider/cap/action/tool/verifier 阻塞；但两次都在 paired validation 前中止：第一次是 repair identity
+collision，第二次是成功 transport 后的 malformed repair envelope 穿透旧 typed boundary，因此仍没有
+performance evidence。identity 与 response-contract 修复都不是新评分 gate；archive 冲突硬拒绝、
+promotion contract 和 evaluator 均未放松，失败 report 现在也不能通过 freeze。下一份 fresh-root run
+仍必须重新取得 38/38 all-valid，并真正
 完成 proposal、paired validation、promotion decision 和 recursive/no-recursive report/archive；
 之后才有资格做 family-out、sealed test、多 clade 和 evaluator co-evolution。v3.4 的 17 条和
 pre-fix v3.5 的 38 条都不能拼接。最诚实的论文级表述是：
@@ -1057,7 +1093,8 @@ pre-fix v3.5 的 38 条都不能拼接。最诚实的论文级表述是：
   [`max2 v4 host-permission diagnostic`](../artifacts/paper_primary_v3_4_offline86_ruoli_gpt54mini/diagnostics/max2_offer_letter_canary_v4.json)；
   [`max2 v5 passing action-budget canary`](../artifacts/paper_primary_v3_4_offline86_ruoli_gpt54mini/diagnostics/max2_offer_letter_canary_v5.json)；
   [`v3.4 four-worker provider-capacity failure`](../artifacts/paper_primary_v3_4_offline86_ruoli_gpt54mini/development_recursive.events.jsonl)；
-  [`v3.5 38/38 train then repair-ID collision`](../artifacts/paper_primary_v3_5_offline86_ruoli_gpt54mini/development_recursive.events.jsonl)
+  [`v3.5 38/38 train then repair-ID collision`](../artifacts/paper_primary_v3_5_offline86_ruoli_gpt54mini/development_recursive.events.jsonl)；
+  [`v3.5 repairid01 38/38 train then malformed repair envelope`](../artifacts/paper_primary_v3_5_offline86_ruoli_gpt54mini_repairid01/development_recursive.events.jsonl)
 
 ## 附录 B：复杂度统计口径
 
