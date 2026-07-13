@@ -13,10 +13,13 @@ from assumption_agent.benchmarks.docker_egress import (
 )
 from assumption_agent.benchmarks.paper_protocol import (
     ACTIONABLE_CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
+    CANDIDATE_BUNDLE_POLICY_VERSION,
+    COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
     CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
     CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
     COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION,
     PaperProtocol,
+    PROGRAM_SET_COUNTERFACTUAL_REPLAY_POLICY_VERSION,
     validate_protocol_lock_for_execution,
 )
 from assumption_agent.benchmarks.codex_execution_policy import (
@@ -86,6 +89,9 @@ V311_PROTOCOL = (
 )
 V312_PROTOCOL = (
     ROOT / "manifests" / "skilllearn_paper_protocol_v3_12_ruoli_gpt54mini.json"
+)
+V313_PROTOCOL = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_13_ruoli_gpt54mini.json"
 )
 MANIFEST_HASH = stable_hash({"manifest": "paper-test"})
 
@@ -451,6 +457,92 @@ def test_v312_changes_only_repair_request_scope() -> None:
     assert v312 == v311
 
 
+def test_v313_changes_only_complementary_bundle_evaluation() -> None:
+    protocol = PaperProtocol.read(V313_PROTOCOL)
+
+    assert protocol.validate_structure() == []
+    assert protocol.payload["protocol_version"] == "3.13.0"
+    execution = protocol.payload["execution"]
+    assert execution["proposal_candidate_selection"] == (
+        COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION
+    )
+    assert execution["candidate_bundle_policy"] == CANDIDATE_BUNDLE_POLICY_VERSION
+    assert execution["counterfactual_replay_policy"] == (
+        PROGRAM_SET_COUNTERFACTUAL_REPLAY_POLICY_VERSION
+    )
+    assert protocol.payload["promotion"] == PaperProtocol.read(V312_PROTOCOL).payload[
+        "promotion"
+    ]
+
+    v312 = copy.deepcopy(PaperProtocol.read(V312_PROTOCOL).payload)
+    v313 = copy.deepcopy(protocol.payload)
+    for payload in (v312, v313):
+        payload.pop("protocol_id")
+        payload.pop("protocol_version")
+    v313["execution"]["proposal_candidate_selection"] = v312["execution"][
+        "proposal_candidate_selection"
+    ]
+    v313["execution"]["counterfactual_replay_policy"] = v312["execution"][
+        "counterfactual_replay_policy"
+    ]
+    v313["execution"].pop("candidate_bundle_policy")
+    assert v313 == v312
+
+
+@pytest.mark.parametrize(
+    ("field_name", "mutation", "expected_issue"),
+    (
+        (
+            "proposal_candidate_selection",
+            "drifted",
+            "proposal_candidate_selection_mismatch",
+        ),
+        (
+            "candidate_bundle_policy",
+            "drifted",
+            "candidate_bundle_policy_mismatch",
+        ),
+        (
+            "candidate_bundle_policy",
+            None,
+            "candidate_bundle_policy_mismatch",
+        ),
+        (
+            "counterfactual_replay_policy",
+            "drifted",
+            "counterfactual_replay_policy_mismatch",
+        ),
+    ),
+)
+def test_v313_rejects_bundle_contract_drift(
+    field_name: str,
+    mutation: str | None,
+    expected_issue: str,
+) -> None:
+    protocol = PaperProtocol.read(V313_PROTOCOL)
+    payload = copy.deepcopy(protocol.payload)
+    if mutation is None:
+        payload["execution"].pop(field_name)
+    else:
+        payload["execution"][field_name] = mutation
+
+    assert expected_issue in PaperProtocol(
+        protocol.path,
+        payload,
+    ).validate_structure()
+
+
+def test_v312_rejects_v313_only_candidate_bundle_policy() -> None:
+    protocol = PaperProtocol.read(V312_PROTOCOL)
+    payload = copy.deepcopy(protocol.payload)
+    payload["execution"]["candidate_bundle_policy"] = CANDIDATE_BUNDLE_POLICY_VERSION
+
+    assert "candidate_bundle_policy_unexpected" in PaperProtocol(
+        protocol.path,
+        payload,
+    ).validate_structure()
+
+
 @pytest.mark.parametrize("mutation", ("missing", "drifted"))
 def test_v312_rejects_repair_request_scope_drift(mutation: str) -> None:
     protocol = PaperProtocol.read(V312_PROTOCOL)
@@ -620,6 +712,7 @@ def test_v31_through_v35_keep_historical_candidate_selection(
         V310_PROTOCOL,
         V311_PROTOCOL,
         V312_PROTOCOL,
+        V313_PROTOCOL,
     ),
 )
 def test_contrastive_protocol_rejects_contract_drift(
@@ -841,6 +934,7 @@ def test_execution_lock_binds_tracked_offline_readiness_receipt(
         V310_PROTOCOL,
         V311_PROTOCOL,
         V312_PROTOCOL,
+        V313_PROTOCOL,
     ),
 )
 def test_versioned_execution_lock_binds_resolved_agent_policy(

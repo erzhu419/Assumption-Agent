@@ -9,7 +9,6 @@ from ..archive import PolicyArchive
 from ..evaluation import PromotionGate
 from ..events import Event, JsonlEventSink
 from ..evolution import (
-    COUNTERFACTUAL_REPLAY_POLICY_VERSION,
     CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
     PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
     TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
@@ -43,8 +42,12 @@ from ..validation import (
 from .preflight import build_preflight
 from .prewarm import validate_development_prewarm_receipt
 from .paper_protocol import (
+    CANDIDATE_BUNDLE_POLICY_VERSION,
+    COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+    COUNTERFACTUAL_REPLAY_POLICY_VERSION,
     COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION,
     PaperProtocol,
+    PROGRAM_SET_COUNTERFACTUAL_REPLAY_POLICY_VERSION,
     validate_protocol_lock_for_execution,
 )
 from .skilllearn_compiler import (
@@ -154,6 +157,12 @@ def main() -> None:
     candidate_selection_policy = str(
         execution_contract["proposal_candidate_selection"]
     )
+    candidate_bundle_policy = execution_contract.get("candidate_bundle_policy")
+    if candidate_bundle_policy is not None:
+        candidate_bundle_policy = str(candidate_bundle_policy)
+    counterfactual_replay_policy = str(
+        execution_contract["counterfactual_replay_policy"]
+    )
     contrastive_training_evidence_policy = execution_contract.get(
         "contrastive_training_evidence_policy"
     )
@@ -189,8 +198,23 @@ def main() -> None:
         TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
         CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
         PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
+        COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
     }:
         raise ValueError("unsupported protocol candidate selection policy")
+    if (
+        candidate_selection_policy
+        == COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION
+    ) != (candidate_bundle_policy == CANDIDATE_BUNDLE_POLICY_VERSION):
+        raise ValueError(
+            "bundle candidate selection and candidate bundle policies must be paired"
+        )
+    expected_counterfactual_replay_policy = (
+        PROGRAM_SET_COUNTERFACTUAL_REPLAY_POLICY_VERSION
+        if candidate_bundle_policy is not None
+        else COUNTERFACTUAL_REPLAY_POLICY_VERSION
+    )
+    if counterfactual_replay_policy != expected_counterfactual_replay_policy:
+        raise ValueError("unsupported protocol counterfactual replay policy")
     if contrastive_training_evidence_policy not in {
         None,
         *CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSIONS,
@@ -203,15 +227,16 @@ def main() -> None:
         candidate_selection_policy in {
             CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
             PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
+            COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
         }
     ):
         raise ValueError(
             "protocol contrastive evidence and candidate selection policies must be paired"
         )
-    diversity_enabled = (
-        candidate_selection_policy
-        == PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION
-    )
+    diversity_enabled = candidate_selection_policy in {
+        PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
+        COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+    }
     if diversity_enabled != (
         proposal_diversity_policy
         in {
@@ -365,6 +390,11 @@ def main() -> None:
             if repair_request_scope_policy is not None
             else {}
         ),
+        **(
+            {"candidate_bundle_policy": candidate_bundle_policy}
+            if candidate_bundle_policy is not None
+            else {}
+        ),
         "agent_id": agent_id,
         "model": model,
         "trial_provider_mode": trial_provider_mode,
@@ -385,7 +415,7 @@ def main() -> None:
         "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
         "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
         "provider_route_policy": PROVIDER_ROUTE_POLICY_VERSION,
-        "counterfactual_replay_policy": COUNTERFACTUAL_REPLAY_POLICY_VERSION,
+        "counterfactual_replay_policy": counterfactual_replay_policy,
         "baseline_arm_evidence_replay_policy": (
             BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
         ),
@@ -580,6 +610,7 @@ def main() -> None:
         output_root=args.work_dir / "compiled_skills",
         proposal_candidates_per_generation=proposal_candidates_per_generation,
         candidate_selection_policy=candidate_selection_policy,
+        candidate_bundle_policy=candidate_bundle_policy,
         contrastive_training_evidence_policy=(
             contrastive_training_evidence_policy
         ),
@@ -621,6 +652,7 @@ def main() -> None:
             output_root=args.work_dir / "compiled_skills_no_recursive",
             proposal_candidates_per_generation=proposal_candidates_per_generation,
             candidate_selection_policy=candidate_selection_policy,
+            candidate_bundle_policy=candidate_bundle_policy,
             contrastive_training_evidence_policy=(
                 contrastive_training_evidence_policy
             ),
@@ -766,6 +798,8 @@ def _run_paired_arms(
     if (
         recursive_harness.candidate_selection_policy
         != no_recursive_harness.candidate_selection_policy
+        or recursive_harness.candidate_bundle_policy
+        != no_recursive_harness.candidate_bundle_policy
         or recursive_harness.contrastive_training_evidence_policy
         != no_recursive_harness.contrastive_training_evidence_policy
     ):
@@ -816,6 +850,15 @@ def _run_paired_arms(
                 "candidate_selection_policy": (
                     recursive_harness.candidate_selection_policy
                 ),
+                **(
+                    {
+                        "candidate_bundle_policy": (
+                            recursive_harness.candidate_bundle_policy
+                        )
+                    }
+                    if recursive_harness.candidate_bundle_policy is not None
+                    else {}
+                ),
             }
         )
     checkpoint_hash = stable_hash(checkpoint_descriptor)
@@ -847,6 +890,15 @@ def _run_paired_arms(
                 ),
                 "candidate_selection_policy": (
                     recursive_harness.candidate_selection_policy
+                ),
+                **(
+                    {
+                        "candidate_bundle_policy": (
+                            recursive_harness.candidate_bundle_policy
+                        )
+                    }
+                    if recursive_harness.candidate_bundle_policy is not None
+                    else {}
                 ),
             }
         )

@@ -13,6 +13,7 @@ from ..splits import SplitManifest
 from .paper_controls import ControlSource, control_config_hash, source_tree_hash
 from .codex_execution_policy import LEGACY_CODEX_AGENT_EXECUTION_POLICY
 from .paper_protocol import (
+    CANDIDATE_BUNDLE_PROTOCOL_VERSIONS,
     COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION,
     CONTRASTIVE_PROTOCOL_VERSIONS,
     PaperProtocol,
@@ -22,6 +23,7 @@ from .paper_protocol import (
 )
 from .skilllearn_compiler import (
     SkillLearnProgramCompiler,
+    skilllearn_program_set_treatment_hash,
     skilllearn_program_treatment_hash,
 )
 from .skilllearnbench import SkillLearnBenchAdapter
@@ -197,12 +199,14 @@ def freeze_paper_workspace(
         expected_evaluator_epoch=evaluator_epoch,
         expected_report=recursive_report,
         promotion_spec=protocol.promotion_gate_spec,
+        protocol_version=str(protocol.payload["protocol_version"]),
     )
     no_recursive_archive = read_frozen_archive(
         no_recursive_archive_path,
         expected_evaluator_epoch=evaluator_epoch,
         expected_report=no_recursive_report,
         promotion_spec=protocol.promotion_gate_spec,
+        protocol_version=str(protocol.payload["protocol_version"]),
     )
     require_promoted_recursive_candidate(recursive_archive)
     controls_root = Path(controls_output_root).resolve()
@@ -288,6 +292,7 @@ def read_frozen_archive(
     expected_evaluator_epoch: str,
     expected_report: Mapping[str, Any],
     promotion_spec: PromotionGateSpec,
+    protocol_version: str = "",
 ) -> FrozenArchive:
     source = Path(path)
     payload = _read_mapping(source, "policy archive")
@@ -373,6 +378,12 @@ def read_frozen_archive(
     for row in generation_rows:
         decision = row.get("promotion_decision")
         accepted_id = str(row.get("accepted_hypothesis_id") or "")
+        bundle_protocol = protocol_version in CANDIDATE_BUNDLE_PROTOCOL_VERSIONS
+        selected_ids = _selected_candidate_ids(
+            row,
+            protocol_version=protocol_version,
+            decision_present=decision is not None,
+        )
         if decision is None:
             if accepted_id:
                 raise ValueError(
@@ -381,26 +392,56 @@ def read_frozen_archive(
             continue
         if not isinstance(decision, Mapping) or not accepted_id:
             raise ValueError("development promotion decision identity is malformed")
-        program = hypotheses.get(accepted_id)
-        if program is None:
-            raise ValueError("development decision references an unknown hypothesis")
-        if program.expected_effect.metric != promotion_spec.metric:
+        if bundle_protocol:
+            programs = tuple(
+                hypotheses.get(hypothesis_id) for hypothesis_id in selected_ids
+            )
+            if any(program is None for program in programs):
+                raise ValueError("development decision references an unknown hypothesis")
+            selected_programs = tuple(
+                program for program in programs if program is not None
+            )
+        else:
+            program = hypotheses.get(accepted_id)
+            if program is None:
+                raise ValueError("development decision references an unknown hypothesis")
+            selected_programs = (program,)
+        if any(
+            program.expected_effect.metric != promotion_spec.metric
+            for program in selected_programs
+        ):
             raise ValueError("archive candidate metric is not protocol-owned")
         expected_candidate = {
-            "minimum_effect_lower_bound": program.expected_effect.minimum_delta,
-            "maximum_harm_rate": program.expected_effect.maximum_harm_rate,
-            "maximum_cost_ratio": program.expected_effect.maximum_cost_ratio,
+            "minimum_effect_lower_bound": max(
+                program.expected_effect.minimum_delta
+                for program in selected_programs
+            ),
+            "maximum_harm_rate": min(
+                program.expected_effect.maximum_harm_rate
+                for program in selected_programs
+            ),
+            "maximum_cost_ratio": min(
+                program.expected_effect.maximum_cost_ratio
+                for program in selected_programs
+            ),
         }
-        if decision.get("candidate_metric") != program.expected_effect.metric:
+        if decision.get("candidate_metric") != promotion_spec.metric:
             raise ValueError("archive candidate metric and decision differ")
         if decision.get("candidate_thresholds") != expected_candidate:
             raise ValueError("archive candidate thresholds and decision differ")
-        if decision.get("effective_thresholds") != promotion_spec.effective_thresholds(
-            program
-        ):
+        expected_effective = (
+            promotion_spec.effective_thresholds_from_candidate(expected_candidate)
+            if bundle_protocol
+            else promotion_spec.effective_thresholds(selected_programs[0])
+        )
+        if decision.get("effective_thresholds") != expected_effective:
             raise ValueError("archive effective thresholds and decision differ")
         try:
-            archive_treatment_hash = skilllearn_program_treatment_hash(program)
+            archive_treatment_hash = (
+                skilllearn_program_set_treatment_hash(selected_programs)
+                if bundle_protocol
+                else skilllearn_program_treatment_hash(selected_programs[0])
+            )
         except ValueError as exc:
             raise ValueError("archive candidate treatment cannot be lowered") from exc
         if row.get("evaluated_candidate_treatment_hash") != archive_treatment_hash:
@@ -410,10 +451,50 @@ def read_frozen_archive(
         expected_status = (
             HypothesisStatus.PROMOTED
             if decision.get("allowed") is True
-            else HypothesisStatus.REJECTED
+            else (
+                HypothesisStatus.SHADOW
+                if bundle_protocol
+                else HypothesisStatus.REJECTED
+            )
         )
-        if program.status is not expected_status:
+        if any(
+            program.status is not expected_status for program in selected_programs
+        ):
             raise ValueError("archive candidate status and promotion decision differ")
+        if bundle_protocol:
+            baseline_ids = _canonical_hypothesis_ids(
+                row.get("baseline_hypothesis_ids"),
+                label="development baseline hypothesis IDs",
+            )
+            if set(baseline_ids) & set(selected_ids):
+                raise ValueError("development baseline and selected hypotheses overlap")
+            if any(
+                hypothesis_id not in hypotheses for hypothesis_id in baseline_ids
+            ):
+                raise ValueError("development baseline references an unknown hypothesis")
+            node_hash = _lowercase_sha256(
+                row.get("archive_node_hash"),
+                label="development archive node hash",
+            )
+            matching_nodes = [
+                node
+                for node in nodes_payload.values()
+                if isinstance(node, Mapping)
+                and stable_hash(dict(node)) == node_hash
+            ]
+            if len(matching_nodes) != 1:
+                raise ValueError("development archive node hash is not unique in archive")
+            candidate_node = matching_nodes[0]
+            expected_active_ids = sorted((*baseline_ids, *selected_ids))
+            if candidate_node.get("active_hypothesis_ids") != expected_active_ids:
+                raise ValueError("archive candidate node active hypothesis set mismatch")
+            expected_node_statuses = (
+                {"incumbent", "superseded"}
+                if decision.get("allowed") is True
+                else {"rejected"}
+            )
+            if candidate_node.get("status") not in expected_node_statuses:
+                raise ValueError("archive candidate node status and decision differ")
     any_promoted = any(bool(row.get("promoted")) for row in generation_rows)
     if any_promoted != bool(active_programs):
         raise ValueError("development promotion history and archive incumbent differ")
@@ -557,6 +638,7 @@ def _validate_development_report(
         expected["trial_timeout_policy"] = timeout_policy
     for field in (
         "proposal_candidate_selection",
+        "candidate_bundle_policy",
         "proposal_diversity_policy",
         "proposal_response_max_tokens",
         "repair_request_scope_policy",
@@ -869,6 +951,11 @@ def _validate_generation_promotion_decision(
     accepted_id = str(row.get("accepted_hypothesis_id") or "")
     decision = row.get("promotion_decision")
     treatment_hash = row.get("evaluated_candidate_treatment_hash")
+    _selected_candidate_ids(
+        row,
+        protocol_version=protocol_version,
+        decision_present=decision is not None,
+    )
     if decision is None:
         if promoted or accepted_id or treatment_hash is not None:
             raise ValueError("accepted or promoted generation has no promotion decision")
@@ -945,6 +1032,53 @@ def _validate_generation_promotion_decision(
         raise ValueError("development promotion summary blockers mismatch")
     if allowed is not (not expected_blockers):
         raise ValueError("development promotion summary decision mismatch")
+
+
+def _selected_candidate_ids(
+    row: Mapping[str, Any],
+    *,
+    protocol_version: str,
+    decision_present: bool,
+) -> tuple[str, ...]:
+    accepted_id = str(row.get("accepted_hypothesis_id") or "")
+    if protocol_version not in CANDIDATE_BUNDLE_PROTOCOL_VERSIONS:
+        return (accepted_id,) if decision_present and accepted_id else ()
+    selected_ids = _canonical_hypothesis_ids(
+        row.get("selected_candidate_hypothesis_ids"),
+        label="development selected candidate hypothesis IDs",
+    )
+    if decision_present:
+        if not selected_ids:
+            raise ValueError("development promotion decision has no selected candidates")
+        if accepted_id != selected_ids[0]:
+            raise ValueError(
+                "development accepted hypothesis is not the canonical selected candidate"
+            )
+    elif selected_ids:
+        raise ValueError("development generation without decision selected candidates")
+    return selected_ids
+
+
+def _canonical_hypothesis_ids(payload: Any, *, label: str) -> tuple[str, ...]:
+    if not isinstance(payload, list) or any(
+        not isinstance(value, str) or not value for value in payload
+    ):
+        raise ValueError(f"{label} are malformed")
+    canonical = tuple(payload)
+    if canonical != tuple(sorted(set(canonical))):
+        raise ValueError(f"{label} must be sorted and unique")
+    return canonical
+
+
+def _lowercase_sha256(payload: Any, *, label: str) -> str:
+    if (
+        not isinstance(payload, str)
+        or len(payload) != 64
+        or payload != payload.lower()
+        or any(character not in "0123456789abcdef" for character in payload)
+    ):
+        raise ValueError(f"{label} is malformed")
+    return payload
 
 
 def _pair_summary_from_mapping(

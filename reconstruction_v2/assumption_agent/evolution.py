@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from fractions import Fraction
+from itertools import combinations
 from math import ceil
 from typing import Any, Sequence
 
@@ -39,6 +40,12 @@ CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION = (
 PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION = (
     "train_contrastive_instance_family_coverage_then_precision_v1"
 )
+COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION = (
+    "train_contrastive_complementary_family_bundle_precision_first_v1"
+)
+CANDIDATE_BUNDLE_POLICY_VERSION = (
+    "train_only_union_program_set_single_paired_validation_conservative_thresholds_v1"
+)
 CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION = (
     "valid_train_failures_and_success_controls_v1"
 )
@@ -53,6 +60,9 @@ CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSIONS = frozenset(
 )
 COUNTERFACTUAL_REPLAY_POLICY_VERSION = (
     "behavior_identical_validation_replay_v1"
+)
+PROGRAM_SET_COUNTERFACTUAL_REPLAY_POLICY_VERSION = (
+    "behavior_identical_validation_program_set_replay_v2"
 )
 
 
@@ -73,6 +83,7 @@ class EvolutionRunResult:
     repaired_candidate_count: int = 0
     repair_model_failure_count: int = 0
     evaluated_candidate_behavior_hash: str | None = None
+    selected_candidate_hypothesis_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -158,6 +169,77 @@ class _TrainingCandidateMetrics:
 
 
 @dataclass(frozen=True)
+class _TrainingCandidateBundleMetrics:
+    failure_count: int
+    success_control_count: int
+    failure_activation_count: int
+    failure_activation_family_count: int
+    train_family_count: int
+    success_false_positive_activation_count: int
+    overlap_count: int
+    bundle_size: int
+    complexity: int
+
+    @property
+    def activation_count(self) -> int:
+        return (
+            self.failure_activation_count
+            + self.success_false_positive_activation_count
+        )
+
+    @property
+    def precision(self) -> Fraction:
+        if not self.activation_count:
+            return Fraction(0, 1)
+        return Fraction(self.failure_activation_count, self.activation_count)
+
+    def to_dict(self, *, family_coverage_target: int) -> dict[str, Any]:
+        family_deficit = max(
+            family_coverage_target - self.failure_activation_family_count,
+            0,
+        )
+        return {
+            "failure_count": self.failure_count,
+            "success_control_count": self.success_control_count,
+            "failure_activation_count": self.failure_activation_count,
+            "failure_activation_family_count": (
+                self.failure_activation_family_count
+            ),
+            "train_family_count": self.train_family_count,
+            "success_false_positive_activation_count": (
+                self.success_false_positive_activation_count
+            ),
+            "activation_precision_numerator": self.failure_activation_count,
+            "activation_precision_denominator": self.activation_count,
+            "failure_activation_family_target": family_coverage_target,
+            "failure_activation_family_deficit": family_deficit,
+            "failure_activation_family_target_met": family_deficit == 0,
+            "overlap_count": self.overlap_count,
+            "bundle_size": self.bundle_size,
+            "failure_support": self.failure_activation_count,
+            "complexity": self.complexity,
+        }
+
+
+@dataclass(frozen=True)
+class _TrainingCandidateBundleAudit:
+    members: tuple[_StaticCandidateAudit, ...]
+    metrics: _TrainingCandidateBundleMetrics
+    canonical_set_hash: str
+    ranking_score: tuple[Any, ...]
+
+    @property
+    def accepted_hypothesis_ids(self) -> tuple[str, ...]:
+        return tuple(
+            sorted(
+                audit.accepted.id
+                for audit in self.members
+                if audit.accepted is not None
+            )
+        )
+
+
+@dataclass(frozen=True)
 class _CounterfactualEvidenceRecord:
     pairs: tuple[CounterfactualPair, ...]
     source_trace_id: str
@@ -181,18 +263,88 @@ class CounterfactualEvidenceReplayCache:
         split: SplitName,
         trace_id: str,
     ) -> tuple[CounterfactualPair, ...]:
+        return self._run_or_replay_programs(
+            runner=runner,
+            tasks=tasks,
+            programs=(program,),
+            baseline_programs=baseline_programs,
+            split=split,
+            trace_id=trace_id,
+            program_set=False,
+        )
+
+    def run_or_replay_bundle(
+        self,
+        *,
+        runner: CounterfactualRunner,
+        tasks: Sequence[TaskInput],
+        programs: Sequence[HypothesisProgram],
+        baseline_programs: Sequence[HypothesisProgram],
+        split: SplitName,
+        trace_id: str,
+    ) -> tuple[CounterfactualPair, ...]:
+        return self._run_or_replay_programs(
+            runner=runner,
+            tasks=tasks,
+            programs=programs,
+            baseline_programs=baseline_programs,
+            split=split,
+            trace_id=trace_id,
+            program_set=True,
+        )
+
+    def _run_or_replay_programs(
+        self,
+        *,
+        runner: CounterfactualRunner,
+        tasks: Sequence[TaskInput],
+        programs: Sequence[HypothesisProgram],
+        baseline_programs: Sequence[HypothesisProgram],
+        split: SplitName,
+        trace_id: str,
+        program_set: bool,
+    ) -> tuple[CounterfactualPair, ...]:
         if split is not SplitName.VALIDATION:
             raise PermissionError(
                 "counterfactual replay is restricted to unsealed validation evidence"
             )
+        canonical_programs = tuple(sorted(programs, key=lambda row: row.id))
+        if not canonical_programs:
+            raise ValueError("counterfactual replay bundle cannot be empty")
+        if len({row.id for row in canonical_programs}) != len(canonical_programs):
+            raise ValueError("counterfactual replay bundle contains duplicate IDs")
         descriptor = _counterfactual_replay_descriptor(
             runner=runner,
             tasks=tasks,
-            program=program,
+            programs=canonical_programs,
             baseline_programs=baseline_programs,
             split=split,
+            program_set=program_set,
         )
         replay_key = stable_hash(descriptor)
+        evidence_identity: dict[str, object] = {
+            "candidate_behavior_hash": descriptor["candidate_behavior_hash"],
+            "baseline_behavior_set_hash": descriptor[
+                "baseline_behavior_set_hash"
+            ],
+            "task_set_hash": descriptor["task_set_hash"],
+        }
+        if program_set:
+            evidence_identity.update(
+                {
+                    "candidate_hypothesis_ids": [
+                        row.id for row in canonical_programs
+                    ],
+                    "candidate_behavior_set_hash": descriptor[
+                        "candidate_behavior_set_hash"
+                    ],
+                }
+            )
+        replay_policy = (
+            PROGRAM_SET_COUNTERFACTUAL_REPLAY_POLICY_VERSION
+            if program_set
+            else COUNTERFACTUAL_REPLAY_POLICY_VERSION
+        )
         record = self._records.get(replay_key)
         if record is not None:
             _validate_replayed_pairs(
@@ -207,19 +359,13 @@ class CounterfactualEvidenceReplayCache:
                     stage="evolution.counterfactual_replay",
                     trace_id=trace_id,
                     payload={
-                        "policy": COUNTERFACTUAL_REPLAY_POLICY_VERSION,
+                        "policy": replay_policy,
                         "replay_key": replay_key,
                         "source_trace_id": record.source_trace_id,
                         "target_trace_id": trace_id,
                         "pair_set_hash": record.pair_set_hash,
                         "pair_count": len(record.pairs),
-                        "candidate_behavior_hash": descriptor[
-                            "candidate_behavior_hash"
-                        ],
-                        "baseline_behavior_set_hash": descriptor[
-                            "baseline_behavior_set_hash"
-                        ],
-                        "task_set_hash": descriptor["task_set_hash"],
+                        **evidence_identity,
                         "behavior_identical": True,
                         "new_counterfactual_executions": 0,
                         "sealed_test_accessed": False,
@@ -229,15 +375,26 @@ class CounterfactualEvidenceReplayCache:
             )
             return record.pairs
 
-        pairs = tuple(
-            runner.run(
-                tasks,
-                program=program,
-                baseline_programs=baseline_programs,
-                split=split,
-                trace_id=trace_id,
+        if program_set:
+            pairs = tuple(
+                runner.run_bundle(
+                    tasks,
+                    programs=canonical_programs,
+                    baseline_programs=baseline_programs,
+                    split=split,
+                    trace_id=trace_id,
+                )
             )
-        )
+        else:
+            pairs = tuple(
+                runner.run(
+                    tasks,
+                    program=canonical_programs[0],
+                    baseline_programs=baseline_programs,
+                    split=split,
+                    trace_id=trace_id,
+                )
+            )
         _validate_replayed_pairs(
             pairs,
             tasks=tasks,
@@ -253,19 +410,13 @@ class CounterfactualEvidenceReplayCache:
                     stage="evolution.counterfactual_replay",
                     trace_id=trace_id,
                     payload={
-                        "policy": COUNTERFACTUAL_REPLAY_POLICY_VERSION,
+                        "policy": replay_policy,
                         "replay_key": replay_key,
                         "source_trace_id": trace_id,
                         "pair_set_hash": pair_set_hash,
                         "pair_count": len(pairs),
                         "invalid_pair_count": invalid_pair_count,
-                        "candidate_behavior_hash": descriptor[
-                            "candidate_behavior_hash"
-                        ],
-                        "baseline_behavior_set_hash": descriptor[
-                            "baseline_behavior_set_hash"
-                        ],
-                        "task_set_hash": descriptor["task_set_hash"],
+                        **evidence_identity,
                         "sealed_test_accessed": False,
                         "raw_content_persisted": False,
                     },
@@ -283,18 +434,12 @@ class CounterfactualEvidenceReplayCache:
                 stage="evolution.counterfactual_replay",
                 trace_id=trace_id,
                 payload={
-                    "policy": COUNTERFACTUAL_REPLAY_POLICY_VERSION,
+                    "policy": replay_policy,
                     "replay_key": replay_key,
                     "source_trace_id": trace_id,
                     "pair_set_hash": pair_set_hash,
                     "pair_count": len(pairs),
-                    "candidate_behavior_hash": descriptor[
-                        "candidate_behavior_hash"
-                    ],
-                    "baseline_behavior_set_hash": descriptor[
-                        "baseline_behavior_set_hash"
-                    ],
-                    "task_set_hash": descriptor["task_set_hash"],
+                    **evidence_identity,
                     "sealed_test_accessed": False,
                     "raw_content_persisted": False,
                 },
@@ -317,6 +462,7 @@ class EvolutionKernel:
         split_guard: SplitAccessGuard,
         proposal_candidates_per_generation: int = 3,
         candidate_selection_policy: str = TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
+        candidate_bundle_policy: str | None = None,
         contrastive_training_evidence_policy: str | None = None,
         repair_request_scope_policy: str | None = None,
         event_sink: EventSink | None = None,
@@ -325,6 +471,7 @@ class EvolutionKernel:
             TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
             CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
             PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
+            COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
         }:
             raise ValueError(
                 f"unsupported candidate selection policy: {candidate_selection_policy}"
@@ -353,10 +500,22 @@ class EvolutionKernel:
             in {
                 CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
                 PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
+                COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
             }
         ):
             raise ValueError(
                 "contrastive evidence and candidate selection policies must be paired"
+            )
+        bundle_selection_enabled = (
+            candidate_selection_policy
+            == COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION
+        )
+        if bundle_selection_enabled != (
+            candidate_bundle_policy == CANDIDATE_BUNDLE_POLICY_VERSION
+        ):
+            raise ValueError(
+                "complementary bundle selection and candidate bundle policies "
+                "must be paired"
             )
         self.proposer = proposer
         self.validator = validator
@@ -368,7 +527,10 @@ class EvolutionKernel:
             raise ValueError("proposal candidate count must be positive")
         if (
             candidate_selection_policy
-            == PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION
+            in {
+                PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
+                COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+            }
             and proposal_candidates_per_generation != 3
         ):
             raise ValueError(
@@ -376,6 +538,7 @@ class EvolutionKernel:
             )
         self.proposal_candidates_per_generation = proposal_candidates_per_generation
         self.candidate_selection_policy = candidate_selection_policy
+        self.candidate_bundle_policy = candidate_bundle_policy
         self.contrastive_training_evidence_policy = (
             contrastive_training_evidence_policy
         )
@@ -517,6 +680,36 @@ class EvolutionKernel:
             (audit for audit in audits if audit.accepted is not None),
             key=lambda audit: audit.training_score,
         )
+        candidate_bundle_audits: tuple[_TrainingCandidateBundleAudit, ...] = ()
+        if (
+            self.candidate_selection_policy
+            == COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION
+            and eligible
+        ):
+            candidate_bundle_audits = _training_candidate_bundle_audits(
+                eligible,
+                validation_context.residuals,
+                family_coverage_target=family_coverage_target,
+            )
+            selected_audits = candidate_bundle_audits[0].members
+            selected_candidate_set_hash = candidate_bundle_audits[
+                0
+            ].canonical_set_hash
+        else:
+            selected_audits = tuple(eligible[:1])
+            selected_candidate_set_hash = (
+                _candidate_audit_set_hash(selected_audits)
+                if selected_audits
+                else None
+            )
+        selected_candidate_hypothesis_ids = tuple(
+            sorted(
+                audit.accepted.id
+                for audit in selected_audits
+                if audit.accepted is not None
+            )
+        )
+        selected_candidate_id_set = set(selected_candidate_hypothesis_ids)
         static_node_count = sum(len(audit.tree.nodes) for audit in audits)
         static_max_depth = max(
             (audit.tree.recursion_depth for audit in audits),
@@ -560,7 +753,10 @@ class EvolutionKernel:
                                     family_coverage_target=(
                                         family_coverage_target
                                         if self.candidate_selection_policy
-                                        == PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION
+                                        in {
+                                            PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
+                                            COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+                                        }
                                         else None
                                     )
                                 )
@@ -568,16 +764,48 @@ class EvolutionKernel:
                                 in {
                                     CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
                                     PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
+                                    COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
                                 }
                                 else None
                             ),
-                            "selected": bool(eligible and audit is eligible[0]),
+                            "selected": bool(
+                                audit.accepted
+                                and audit.accepted.id
+                                in selected_candidate_id_set
+                            ),
                         }
                         for audit in audits
                     ],
                     "selection_uses_validation_outcomes": False,
                     "selection_uses_validation": False,
                     "selection_policy": self.candidate_selection_policy,
+                    **(
+                        {
+                            "candidate_bundle_policy": (
+                                self.candidate_bundle_policy
+                            ),
+                            "selected_candidate_hypothesis_ids": list(
+                                selected_candidate_hypothesis_ids
+                            ),
+                            "selected_candidate_set_hash": (
+                                selected_candidate_set_hash
+                            ),
+                            "candidate_subsets": [
+                                _training_candidate_bundle_event_row(
+                                    audit,
+                                    family_coverage_target=(
+                                        family_coverage_target
+                                    ),
+                                    selected=(index == 0),
+                                )
+                                for index, audit in enumerate(
+                                    candidate_bundle_audits
+                                )
+                            ],
+                        }
+                        if self.candidate_bundle_policy
+                        else {}
+                    ),
                     "contrastive_training_evidence_policy": (
                         self.contrastive_training_evidence_policy
                     ),
@@ -585,7 +813,16 @@ class EvolutionKernel:
             )
         )
         if repair_model_failure_count:
-            selected_audit = eligible[0] if eligible else audits[0]
+            selected_audit = (
+                min(
+                    selected_audits,
+                    key=lambda audit: (
+                        audit.accepted.id if audit.accepted else audit.root.id
+                    ),
+                )
+                if selected_audits
+                else audits[0]
+            )
             for audit in eligible:
                 assert audit.accepted is not None
                 self.archive.set_hypothesis_status(
@@ -622,6 +859,7 @@ class EvolutionKernel:
                 static_validation_max_recursion_depth=static_max_depth,
                 repaired_candidate_count=repaired_candidate_count,
                 repair_model_failure_count=repair_model_failure_count,
+                selected_candidate_hypothesis_ids=(),
             )
         if not eligible:
             rejected = audits[0]
@@ -639,15 +877,31 @@ class EvolutionKernel:
                 static_validation_max_recursion_depth=static_max_depth,
                 repaired_candidate_count=repaired_candidate_count,
                 repair_model_failure_count=repair_model_failure_count,
+                selected_candidate_hypothesis_ids=(),
             )
-        selected = eligible[0]
+        selected = min(
+            selected_audits,
+            key=lambda audit: (
+                audit.accepted.id if audit.accepted else audit.root.id
+            ),
+        )
         root = selected.root
         tree = selected.tree
         accepted = selected.accepted
         assert accepted is not None
-        for audit in eligible[1:]:
+        selected_programs = tuple(
+            sorted(
+                (
+                    audit.accepted
+                    for audit in selected_audits
+                    if audit.accepted is not None
+                ),
+                key=lambda program: program.id,
+            )
+        )
+        for audit in eligible:
             assert audit.accepted is not None
-            if audit.accepted.id != accepted.id:
+            if audit.accepted.id not in selected_candidate_id_set:
                 self.archive.set_hypothesis_status(
                     audit.accepted.id,
                     HypothesisStatus.SHADOW,
@@ -659,7 +913,14 @@ class EvolutionKernel:
             self.archive.hypotheses[hypothesis_id]
             for hypothesis_id in (parent.active_hypothesis_ids if parent else ())
         )
-        active_ids = tuple(sorted({*(parent.active_hypothesis_ids if parent else ()), accepted.id}))
+        active_ids = tuple(
+            sorted(
+                {
+                    *(parent.active_hypothesis_ids if parent else ()),
+                    *(program.id for program in selected_programs),
+                }
+            )
+        )
         candidate_node = self.archive.create_node(
             active_hypothesis_ids=active_ids,
             evaluator_epoch_id=accepted.evaluator_epoch,
@@ -667,33 +928,85 @@ class EvolutionKernel:
             parent_id=parent.id if parent else None,
             trace_id=trace_id,
         )
+        bundle_selection = (
+            self.candidate_selection_policy
+            == COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION
+        )
         if counterfactual_replay_cache is None:
-            pairs = self.counterfactual_runner.run(
-                validation_tasks,
-                program=accepted,
-                baseline_programs=baseline_programs,
-                split=SplitName.VALIDATION,
+            if bundle_selection:
+                pairs = self.counterfactual_runner.run_bundle(
+                    validation_tasks,
+                    programs=selected_programs,
+                    baseline_programs=baseline_programs,
+                    split=SplitName.VALIDATION,
+                    trace_id=trace_id,
+                )
+            else:
+                pairs = self.counterfactual_runner.run(
+                    validation_tasks,
+                    program=accepted,
+                    baseline_programs=baseline_programs,
+                    split=SplitName.VALIDATION,
+                    trace_id=trace_id,
+                )
+        else:
+            if bundle_selection:
+                pairs = counterfactual_replay_cache.run_or_replay_bundle(
+                    runner=self.counterfactual_runner,
+                    tasks=validation_tasks,
+                    programs=selected_programs,
+                    baseline_programs=baseline_programs,
+                    split=SplitName.VALIDATION,
+                    trace_id=trace_id,
+                )
+            else:
+                pairs = counterfactual_replay_cache.run_or_replay(
+                    runner=self.counterfactual_runner,
+                    tasks=validation_tasks,
+                    program=accepted,
+                    baseline_programs=baseline_programs,
+                    split=SplitName.VALIDATION,
+                    trace_id=trace_id,
+                )
+        if bundle_selection:
+            decision = self.promotion_gate.evaluate_bundle(
+                selected_programs,
+                pairs,
+                sealed_test_accessed=self.split_guard.test_accessed,
                 trace_id=trace_id,
             )
         else:
-            pairs = counterfactual_replay_cache.run_or_replay(
-                runner=self.counterfactual_runner,
-                tasks=validation_tasks,
-                program=accepted,
-                baseline_programs=baseline_programs,
-                split=SplitName.VALIDATION,
+            decision = self.promotion_gate.evaluate(
+                accepted,
+                pairs,
+                sealed_test_accessed=self.split_guard.test_accessed,
                 trace_id=trace_id,
             )
-        decision = self.promotion_gate.evaluate(
-            accepted,
-            pairs,
-            sealed_test_accessed=self.split_guard.test_accessed,
-            trace_id=trace_id,
-        )
         self._promotion_feedback.append(
             {
-                "hypothesis_id": accepted.id,
-                "hypothesis_hash": accepted.payload_hash,
+                "hypothesis_id": (
+                    f"program_set_{selected_candidate_set_hash[:16]}"
+                    if bundle_selection and selected_candidate_set_hash
+                    else accepted.id
+                ),
+                "hypothesis_hash": (
+                    selected_candidate_set_hash
+                    if bundle_selection and selected_candidate_set_hash
+                    else accepted.payload_hash
+                ),
+                **(
+                    {
+                        "candidate_unit": "program_set",
+                        "selected_candidate_hypothesis_ids": list(
+                            selected_candidate_hypothesis_ids
+                        ),
+                        "selected_candidate_set_hash": (
+                            selected_candidate_set_hash
+                        ),
+                    }
+                    if bundle_selection
+                    else {}
+                ),
                 "allowed": decision.allowed,
                 "blockers": list(decision.blockers),
                 "pair_summary": decision.summary.to_dict(confidence=decision.confidence),
@@ -726,6 +1039,7 @@ class EvolutionKernel:
         candidate_node = self.archive.apply_promotion(
             candidate_node_id=candidate_node.id,
             decision=decision,
+            retain_rejected_hypotheses_as_shadow=bundle_selection,
             trace_id=trace_id,
         )
         return self._result(
@@ -742,9 +1056,19 @@ class EvolutionKernel:
             static_validation_max_recursion_depth=static_max_depth,
             repaired_candidate_count=repaired_candidate_count,
             repair_model_failure_count=repair_model_failure_count,
-            evaluated_candidate_behavior_hash=_runner_behavior_hash(
-                self.counterfactual_runner,
-                accepted,
+            evaluated_candidate_behavior_hash=(
+                _runner_behavior_set_hash(
+                    self.counterfactual_runner,
+                    selected_programs,
+                )
+                if bundle_selection
+                else _runner_behavior_hash(
+                    self.counterfactual_runner,
+                    accepted,
+                )
+            ),
+            selected_candidate_hypothesis_ids=(
+                selected_candidate_hypothesis_ids
             ),
         )
 
@@ -810,6 +1134,20 @@ class EvolutionKernel:
                         },
                         "train_coverage_objective": {
                             "policy": self.candidate_selection_policy,
+                            **(
+                                {
+                                    "candidate_bundle_policy": (
+                                        self.candidate_bundle_policy
+                                    ),
+                                    "candidate_unit": (
+                                        "complementary_program_set"
+                                    ),
+                                    "component_precision_precedes_bundle_coverage": True,
+                                    "bundle_selected_before_validation": True,
+                                }
+                                if self.candidate_bundle_policy
+                                else {}
+                            ),
                             "evidence_scope": "train_only",
                             "coverage_unit": "distinct_failure_family",
                             "minimum_activation_rate": (
@@ -836,7 +1174,10 @@ class EvolutionKernel:
                         },
                     }
                     if self.candidate_selection_policy
-                    == PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION
+                    in {
+                        PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
+                        COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+                    }
                     else {}
                 ),
                 **(
@@ -894,11 +1235,24 @@ class EvolutionKernel:
         repaired_candidate_count: int = 0,
         repair_model_failure_count: int = 0,
         evaluated_candidate_behavior_hash: str | None = None,
+        selected_candidate_hypothesis_ids: tuple[str, ...] = (),
     ) -> EvolutionRunResult:
+        canonical_selected_ids = tuple(
+            sorted(
+                set(
+                    selected_candidate_hypothesis_ids
+                    or ((accepted.id,) if accepted else ())
+                )
+            )
+        )
         result = EvolutionRunResult(
             trace_id=trace_id,
             root_hypothesis_id=root.id,
-            accepted_hypothesis_id=accepted.id if accepted else None,
+            accepted_hypothesis_id=(
+                canonical_selected_ids[0]
+                if canonical_selected_ids
+                else (accepted.id if accepted else None)
+            ),
             validation_tree=tree,
             promotion_decision=decision,
             archive_node=archive_node,
@@ -911,6 +1265,7 @@ class EvolutionKernel:
             repaired_candidate_count=repaired_candidate_count,
             repair_model_failure_count=repair_model_failure_count,
             evaluated_candidate_behavior_hash=evaluated_candidate_behavior_hash,
+            selected_candidate_hypothesis_ids=canonical_selected_ids,
         )
         self.event_sink.emit(
             Event(
@@ -920,6 +1275,18 @@ class EvolutionKernel:
                 payload={
                     "root_hypothesis_id": root.id,
                     "accepted_hypothesis_id": result.accepted_hypothesis_id,
+                    **(
+                        {
+                            "selected_candidate_hypothesis_ids": list(
+                                canonical_selected_ids
+                            ),
+                            "candidate_bundle_policy": (
+                                self.candidate_bundle_policy
+                            ),
+                        }
+                        if self.candidate_bundle_policy
+                        else {}
+                    ),
                     "recursive_node_count": len(tree.nodes),
                     "recursive_depth": tree.recursion_depth,
                     "promotion_allowed": result.promoted,
@@ -941,6 +1308,20 @@ class EvolutionKernel:
                         {
                             "root": root.payload_hash,
                             "accepted": accepted.payload_hash if accepted else None,
+                            **(
+                                {
+                                    "selected_candidate_hypothesis_hashes": [
+                                        self.archive.hypotheses[
+                                            hypothesis_id
+                                        ].payload_hash
+                                        for hypothesis_id in canonical_selected_ids
+                                        if hypothesis_id
+                                        in self.archive.hypotheses
+                                    ]
+                                }
+                                if self.candidate_bundle_policy
+                                else {}
+                            ),
                             "decision": decision.to_dict() if decision else None,
                             "archive_node": archive_node.payload_hash if archive_node else None,
                             "evaluated_candidate_behavior_hash": (
@@ -982,13 +1363,37 @@ def _runner_behavior_hash(
     return _behavior_hash(program)
 
 
+def _runner_behavior_set_hash(
+    runner: CounterfactualRunner,
+    programs: Sequence[HypothesisProgram],
+) -> str:
+    if not programs:
+        raise ValueError("candidate behavior set cannot be empty")
+    canonical_programs = tuple(sorted(programs, key=lambda row: row.id))
+    backend_hash = getattr(runner, "behavior_set_hash", None)
+    if callable(backend_hash):
+        try:
+            value = str(backend_hash(canonical_programs)).strip()
+        except (TypeError, ValueError):
+            value = ""
+        if value:
+            return value
+    return stable_hash(
+        sorted(
+            _runner_behavior_hash(runner, program)
+            for program in canonical_programs
+        )
+    )
+
+
 def _counterfactual_replay_descriptor(
     *,
     runner: CounterfactualRunner,
     tasks: Sequence[TaskInput],
-    program: HypothesisProgram,
+    programs: Sequence[HypothesisProgram],
     baseline_programs: Sequence[HypothesisProgram],
     split: SplitName,
+    program_set: bool,
 ) -> dict[str, object]:
     evaluator_epoch = str(getattr(runner.evaluator, "epoch", ""))
     runtime_version = str(getattr(runner.runtime, "runtime_version", ""))
@@ -1005,18 +1410,32 @@ def _counterfactual_replay_descriptor(
         }
         for task in tasks
     ]
+    if not programs:
+        raise ValueError("counterfactual replay candidate set cannot be empty")
+    candidate_behavior_set_hash = _runner_behavior_set_hash(runner, programs)
+    candidate_behavior_hash = _runner_behavior_hash(runner, programs[0])
+    if program_set and len(programs) > 1:
+        candidate_behavior_hash = candidate_behavior_set_hash
     baseline_behavior_hashes = sorted(
         _runner_behavior_hash(runner, row) for row in baseline_programs
     )
     descriptor: dict[str, object] = {
-        "policy": COUNTERFACTUAL_REPLAY_POLICY_VERSION,
+        "policy": (
+            PROGRAM_SET_COUNTERFACTUAL_REPLAY_POLICY_VERSION
+            if program_set
+            else COUNTERFACTUAL_REPLAY_POLICY_VERSION
+        ),
         "split": split.value,
         "evaluator_epoch": evaluator_epoch,
         "runtime_version": runtime_version,
-        "candidate_behavior_hash": _runner_behavior_hash(runner, program),
+        "candidate_behavior_hash": candidate_behavior_hash,
         "baseline_behavior_set_hash": stable_hash(baseline_behavior_hashes),
         "task_set_hash": stable_hash(task_rows),
     }
+    if program_set:
+        descriptor["candidate_behavior_set_hash"] = (
+            candidate_behavior_set_hash
+        )
     if evidence_execution_policy_hash:
         descriptor["evidence_execution_policy_hash"] = (
             evidence_execution_policy_hash
@@ -1114,6 +1533,7 @@ def _training_candidate_score(
         TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
         CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
         PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
+        COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
     }:
         raise ValueError(f"unsupported candidate selection policy: {selection_policy}")
     if family_coverage_target < 0:
@@ -1248,6 +1668,178 @@ def _training_candidate_metrics(
         predicate_count=predicate_count,
         action_count=len(program.action_graph),
     )
+
+
+def _training_candidate_bundle_metrics(
+    programs: Sequence[HypothesisProgram],
+    residuals: Sequence[ResidualExample],
+) -> _TrainingCandidateBundleMetrics:
+    if not programs:
+        raise ValueError("training candidate bundle cannot be empty")
+    train_rows = [row for row in residuals if row.split is SplitName.TRAIN]
+    failure_rows = [row for row in train_rows if not row.baseline_success]
+    success_controls = [row for row in train_rows if row.baseline_success]
+
+    def activation_multiplicity(row: ResidualExample) -> int:
+        return sum(program.matches(row.features) for program in programs)
+
+    failure_multiplicities = [
+        activation_multiplicity(row) for row in failure_rows
+    ]
+    success_multiplicities = [
+        activation_multiplicity(row) for row in success_controls
+    ]
+    failure_activation_count = sum(count > 0 for count in failure_multiplicities)
+    success_false_positive_activation_count = sum(
+        count > 0 for count in success_multiplicities
+    )
+    complexity = sum(
+        metrics.predicate_count + metrics.action_count
+        for metrics in (
+            _training_candidate_metrics(program, residuals)
+            for program in programs
+        )
+    )
+    return _TrainingCandidateBundleMetrics(
+        failure_count=len(failure_rows),
+        success_control_count=len(success_controls),
+        failure_activation_count=failure_activation_count,
+        failure_activation_family_count=len(
+            {
+                row.family
+                for row, count in zip(
+                    failure_rows,
+                    failure_multiplicities,
+                    strict=True,
+                )
+                if count > 0
+            }
+        ),
+        train_family_count=len({row.family for row in train_rows}),
+        success_false_positive_activation_count=(
+            success_false_positive_activation_count
+        ),
+        overlap_count=sum(
+            max(count - 1, 0)
+            for count in (*failure_multiplicities, *success_multiplicities)
+        ),
+        bundle_size=len(programs),
+        complexity=complexity,
+    )
+
+
+def _candidate_audit_set_hash(
+    audits: Sequence[_StaticCandidateAudit],
+) -> str:
+    accepted_programs = tuple(
+        audit.accepted for audit in audits if audit.accepted is not None
+    )
+    if not accepted_programs:
+        raise ValueError("candidate audit set cannot be empty")
+    return stable_hash(
+        {
+            "accepted_hypothesis_ids": sorted(
+                row.id for row in accepted_programs
+            ),
+            "accepted_behavior_hashes": sorted(
+                _behavior_hash(row) for row in accepted_programs
+            ),
+        }
+    )
+
+
+def _training_candidate_bundle_audits(
+    eligible: Sequence[_StaticCandidateAudit],
+    residuals: Sequence[ResidualExample],
+    *,
+    family_coverage_target: int,
+) -> tuple[_TrainingCandidateBundleAudit, ...]:
+    if family_coverage_target < 0:
+        raise ValueError("training family coverage target cannot be negative")
+    canonical_eligible = tuple(
+        sorted(
+            eligible,
+            key=lambda audit: (
+                audit.accepted.id if audit.accepted else audit.root.id
+            ),
+        )
+    )
+    bundle_audits: list[_TrainingCandidateBundleAudit] = []
+    for bundle_size in range(1, len(canonical_eligible) + 1):
+        for members in combinations(canonical_eligible, bundle_size):
+            programs = tuple(
+                audit.accepted
+                for audit in members
+                if audit.accepted is not None
+            )
+            if len(programs) != len(members):
+                raise ValueError("bundle selection received an ineligible candidate")
+            metrics = _training_candidate_bundle_metrics(programs, residuals)
+            canonical_set_hash = _candidate_audit_set_hash(members)
+            family_deficit = max(
+                family_coverage_target
+                - metrics.failure_activation_family_count,
+                0,
+            )
+            ranking_score = (
+                -metrics.precision,
+                family_deficit,
+                metrics.success_false_positive_activation_count,
+                metrics.overlap_count,
+                metrics.bundle_size,
+                -metrics.failure_activation_count,
+                metrics.complexity,
+                canonical_set_hash,
+            )
+            bundle_audits.append(
+                _TrainingCandidateBundleAudit(
+                    members=members,
+                    metrics=metrics,
+                    canonical_set_hash=canonical_set_hash,
+                    ranking_score=ranking_score,
+                )
+            )
+    return tuple(sorted(bundle_audits, key=lambda audit: audit.ranking_score))
+
+
+def _training_candidate_bundle_event_row(
+    audit: _TrainingCandidateBundleAudit,
+    *,
+    family_coverage_target: int,
+    selected: bool,
+) -> dict[str, Any]:
+    accepted_programs = tuple(
+        row.accepted for row in audit.members if row.accepted is not None
+    )
+    return {
+        "accepted_hypothesis_ids": list(audit.accepted_hypothesis_ids),
+        "accepted_hypothesis_hashes": sorted(
+            row.payload_hash for row in accepted_programs
+        ),
+        "accepted_behavior_hashes": sorted(
+            _behavior_hash(row) for row in accepted_programs
+        ),
+        "root_hypothesis_ids": sorted(row.root.id for row in audit.members),
+        "root_hypothesis_hashes": sorted(
+            row.root.payload_hash for row in audit.members
+        ),
+        "canonical_set_hash": audit.canonical_set_hash,
+        "union_training_metrics": audit.metrics.to_dict(
+            family_coverage_target=family_coverage_target
+        ),
+        "ranking_priority": [
+            "precision_desc",
+            "family_target_deficit_asc",
+            "success_false_positives_asc",
+            "overlap_asc",
+            "bundle_size_asc",
+            "failure_support_desc",
+            "complexity_asc",
+            "canonical_set_hash_asc",
+        ],
+        "selected": selected,
+        "selection_uses_validation": False,
+    }
 
 
 def _training_family_coverage_target(

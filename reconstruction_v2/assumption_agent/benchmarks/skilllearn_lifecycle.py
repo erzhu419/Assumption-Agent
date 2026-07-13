@@ -28,6 +28,8 @@ from ..archive import PolicyArchive
 from ..evaluation import PromotionGate
 from ..events import Event, EventSink, NullEventSink
 from ..evolution import (
+    CANDIDATE_BUNDLE_POLICY_VERSION,
+    COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
     CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
     CounterfactualEvidenceReplayCache,
     EvolutionKernel,
@@ -371,6 +373,11 @@ class SkillLearnTrialRequest:
     program_id: str | None = None
     program_set_hash: str = ""
     treatment_hash: str = ""
+    candidate_delta_program_set_hash: str = ""
+    candidate_full_program_set_hash: str = ""
+    matched_candidate_program_set_hash: str = ""
+    selected_candidate_hypothesis_ids: tuple[str, ...] = ()
+    matched_candidate_hypothesis_ids: tuple[str, ...] = ()
 
     @property
     def request_hash(self) -> str:
@@ -381,7 +388,7 @@ class SkillLearnTrialRequest:
         return f"v2_{self.variant.value}_{self.request_hash[:18]}"
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "item_id_hash": stable_hash({"item_id": self.item_id}),
             "family_hash": stable_hash({"family": self.family}),
             "split": self.split.value,
@@ -400,6 +407,27 @@ class SkillLearnTrialRequest:
             "program_set_hash": self.program_set_hash,
             "treatment_hash": self.treatment_hash,
         }
+        if self.candidate_delta_program_set_hash:
+            payload.update(
+                {
+                    "candidate_delta_program_set_hash": (
+                        self.candidate_delta_program_set_hash
+                    ),
+                    "candidate_full_program_set_hash": (
+                        self.candidate_full_program_set_hash
+                    ),
+                    "matched_candidate_program_set_hash": (
+                        self.matched_candidate_program_set_hash
+                    ),
+                    "selected_candidate_hypothesis_ids": list(
+                        self.selected_candidate_hypothesis_ids
+                    ),
+                    "matched_candidate_hypothesis_ids": list(
+                        self.matched_candidate_hypothesis_ids
+                    ),
+                }
+            )
+        return payload
 
 
 @dataclass(frozen=True)
@@ -2706,6 +2734,32 @@ class _ExternalRuntimeDescriptor:
     runtime_version: str = "skilllearn_external_runtime_v2"
 
 
+def _canonical_program_bundle(
+    programs: Sequence[HypothesisProgram | Mapping[str, Any]],
+    *,
+    label: str,
+) -> tuple[HypothesisProgram, ...]:
+    """Normalize a program bundle to a unique, ID-sorted immutable sequence."""
+
+    by_id: dict[str, HypothesisProgram] = {}
+    for raw_program in programs:
+        program = (
+            raw_program
+            if isinstance(raw_program, HypothesisProgram)
+            else HypothesisProgram.from_dict(raw_program)
+        )
+        previous = by_id.get(program.id)
+        if previous is not None:
+            qualifier = (
+                "conflicting "
+                if previous.payload_hash != program.payload_hash
+                else "duplicate "
+            )
+            raise ValueError(f"{label} contains {qualifier}program ID: {program.id}")
+        by_id[program.id] = program
+    return tuple(by_id[program_id] for program_id in sorted(by_id))
+
+
 class SkillLearnCounterfactualRunner:
     """Run matched policy-off/on SkillLearnBench trials under one frozen epoch."""
 
@@ -2762,6 +2816,20 @@ class SkillLearnCounterfactualRunner:
     def behavior_hash(program: HypothesisProgram) -> str:
         return skilllearn_program_treatment_hash(program)
 
+    @staticmethod
+    def behavior_set_hash(
+        programs: Sequence[HypothesisProgram | Mapping[str, Any]],
+    ) -> str:
+        """Return the order-independent executable identity of a delta bundle."""
+
+        return skilllearn_program_set_treatment_hash(
+            _canonical_program_bundle(programs, label="candidate delta")
+        )
+
+    # Compatibility aliases for callers that name the program-set hash explicitly.
+    bundle_behavior_hash = behavior_set_hash
+    behavior_hash_bundle = behavior_set_hash
+
     def run(
         self,
         tasks: Sequence[TaskInput],
@@ -2771,11 +2839,93 @@ class SkillLearnCounterfactualRunner:
         split: SplitName,
         trace_id: str = "skilllearn_counterfactual",
     ) -> tuple[CounterfactualPair, ...]:
+        """Backward-compatible singleton challenger wrapper."""
+
+        return self._run_bundle(
+            tasks,
+            programs=(program,),
+            baseline_programs=baseline_programs,
+            split=split,
+            trace_id=trace_id,
+            legacy_singleton=True,
+        )
+
+    def run_bundle(
+        self,
+        tasks: Sequence[TaskInput],
+        *,
+        programs: Sequence[HypothesisProgram | Mapping[str, Any]] | None = None,
+        candidate_programs: Sequence[
+            HypothesisProgram | Mapping[str, Any]
+        ] | None = None,
+        baseline_programs: Sequence[HypothesisProgram | Mapping[str, Any]] = (),
+        split: SplitName,
+        trace_id: str = "skilllearn_counterfactual_bundle",
+    ) -> tuple[CounterfactualPair, ...]:
+        """Evaluate one canonical candidate delta bundle in one paired run.
+
+        ``candidate_programs`` is accepted as an API alias while the v3.13 core
+        uses ``programs``.  The bundle is the delta relative to
+        ``baseline_programs``; the policy-on treatment compiles their full union.
+        """
+
+        if programs is not None and candidate_programs is not None:
+            raise TypeError("provide either programs or candidate_programs, not both")
+        selected = programs if programs is not None else candidate_programs
+        if selected is None:
+            raise TypeError("run_bundle requires programs")
+        return self._run_bundle(
+            tasks,
+            programs=selected,
+            baseline_programs=baseline_programs,
+            split=split,
+            trace_id=trace_id,
+            legacy_singleton=False,
+        )
+
+    def _run_bundle(
+        self,
+        tasks: Sequence[TaskInput],
+        *,
+        programs: Sequence[HypothesisProgram | Mapping[str, Any]],
+        baseline_programs: Sequence[HypothesisProgram | Mapping[str, Any]],
+        split: SplitName,
+        trace_id: str,
+        legacy_singleton: bool,
+    ) -> tuple[CounterfactualPair, ...]:
+        candidate_delta_programs = _canonical_program_bundle(
+            programs,
+            label="candidate delta",
+        )
+        canonical_baseline_programs = _canonical_program_bundle(
+            baseline_programs,
+            label="baseline",
+        )
+        if not candidate_delta_programs:
+            raise ValueError("candidate delta bundle must not be empty")
+        if any(
+            row.status is not HypothesisStatus.PROMOTED
+            for row in canonical_baseline_programs
+        ):
+            raise ValueError("baseline program bundle must contain promoted programs only")
+        baseline_ids = {row.id for row in canonical_baseline_programs}
+        overlapping_ids = sorted(
+            row.id for row in candidate_delta_programs if row.id in baseline_ids
+        )
+        if overlapping_ids:
+            raise ValueError(
+                "candidate delta must not repeat baseline program IDs: "
+                + ",".join(overlapping_ids)
+            )
         if split not in {SplitName.VALIDATION, SplitName.TEST}:
             raise ValueError("external counterfactuals are restricted to validation or sealed test")
-        if program.evaluator_epoch != self.evaluator.epoch:
+        all_programs = (*canonical_baseline_programs, *candidate_delta_programs)
+        if any(row.evaluator_epoch != self.evaluator.epoch for row in all_programs):
             raise ValueError("program and SkillLearnBench evaluator epochs differ")
-        if split is SplitName.TEST and program.status is not HypothesisStatus.PROMOTED:
+        if split is SplitName.TEST and any(
+            row.status is not HypothesisStatus.PROMOTED
+            for row in candidate_delta_programs
+        ):
             raise PermissionError("sealed test requires a promoted, frozen hypothesis program")
         phase = AccessPhase.PROMOTION if split is SplitName.VALIDATION else AccessPhase.FINAL_REPORT
         for task in tasks:
@@ -2786,12 +2936,12 @@ class SkillLearnCounterfactualRunner:
         target_ids = tuple(task.id for task in tasks)
         target_hash = stable_hash({"item_ids": sorted(target_ids)})[:10]
         baseline_compile_result = None
-        if baseline_programs:
+        if canonical_baseline_programs:
             baseline_hash = skilllearn_program_set_treatment_hash(
-                baseline_programs
+                canonical_baseline_programs
             )[:12]
             baseline_compile_result = self.compiler.compile(
-                programs=baseline_programs,
+                programs=canonical_baseline_programs,
                 items=tuple(self.items.values()),
                 split_manifest=self.manifest,
                 output_root=self.output_root,
@@ -2801,14 +2951,18 @@ class SkillLearnCounterfactualRunner:
                 target_split=split.value,
                 trace_id=trace_id,
             )
-        candidate_programs = tuple(
-            {row.id: row for row in (*baseline_programs, program)}.values()
+        full_candidate_programs = _canonical_program_bundle(
+            (*canonical_baseline_programs, *candidate_delta_programs),
+            label="full candidate",
+        )
+        candidate_delta_program_set_hash = self.behavior_set_hash(
+            candidate_delta_programs
         )
         candidate_program_set_hash = skilllearn_program_set_treatment_hash(
-            candidate_programs
+            full_candidate_programs
         )
         candidate_compile_result = self.compiler.compile(
-            programs=candidate_programs,
+            programs=full_candidate_programs,
             items=tuple(self.items.values()),
             split_manifest=self.manifest,
             output_root=self.output_root,
@@ -2826,13 +2980,17 @@ class SkillLearnCounterfactualRunner:
         def run_one(task: TaskInput) -> CounterfactualPair:
             return self._run_pair(
                 task,
-                program=program,
-                baseline_programs=baseline_programs,
-                candidate_programs=candidate_programs,
+                candidate_delta_programs=candidate_delta_programs,
+                baseline_programs=canonical_baseline_programs,
+                full_candidate_programs=full_candidate_programs,
+                candidate_delta_program_set_hash=(
+                    candidate_delta_program_set_hash
+                ),
                 baseline_compile_result=baseline_compile_result,
                 candidate_compile_result=candidate_compile_result,
                 split=split,
                 trace_id=trace_id,
+                legacy_singleton=legacy_singleton,
             )
 
         return _ordered_parallel_map(tasks, run_one, self.parallel_workers)
@@ -2841,31 +2999,71 @@ class SkillLearnCounterfactualRunner:
         self,
         task: TaskInput,
         *,
-        program: HypothesisProgram,
+        candidate_delta_programs: Sequence[HypothesisProgram],
         baseline_programs: Sequence[HypothesisProgram],
-        candidate_programs: Sequence[HypothesisProgram],
+        full_candidate_programs: Sequence[HypothesisProgram],
+        candidate_delta_program_set_hash: str,
         baseline_compile_result: Any,
         candidate_compile_result: Any,
         split: SplitName,
         trace_id: str,
+        legacy_singleton: bool,
     ) -> CounterfactualPair:
-        challenger_treatment_hash = self.behavior_hash(program)
-        pair_id = stable_hash(
-            {
-                "trace_id": trace_id,
-                "task_id": task.id,
-                "challenger_treatment_hash": challenger_treatment_hash,
-                "split": split.value,
-            }
-        )[:20]
         task_features = {**dict(task.features), "family": task.family}
-        trigger_matched = program.matches(task_features)
+        matched_candidate_delta_programs = tuple(
+            row for row in candidate_delta_programs if row.matches(task_features)
+        )
+        matched_candidate_hypothesis_ids = tuple(
+            row.id for row in matched_candidate_delta_programs
+        )
+        selected_candidate_hypothesis_ids = tuple(
+            row.id for row in candidate_delta_programs
+        )
+        trigger_matched = bool(matched_candidate_delta_programs)
         active_baseline_programs = tuple(
             row for row in baseline_programs if row.matches(task_features)
         )
-        active_candidate_programs = tuple(
-            row for row in candidate_programs if row.matches(task_features)
+        active_full_candidate_programs = (
+            (*active_baseline_programs, *matched_candidate_delta_programs)
+            if legacy_singleton
+            else tuple(
+                row
+                for row in full_candidate_programs
+                if row.matches(task_features)
+            )
         )
+        candidate_full_program_set_hash = candidate_compile_result.program_set_hash
+        matched_candidate_program_set_hash = skilllearn_program_set_treatment_hash(
+            matched_candidate_delta_programs
+        )
+        if legacy_singleton:
+            pair_id_payload = {
+                "trace_id": trace_id,
+                "task_id": task.id,
+                "challenger_treatment_hash": self.behavior_hash(
+                    candidate_delta_programs[0]
+                ),
+                "split": split.value,
+            }
+        else:
+            pair_id_payload = {
+                "trace_id": trace_id,
+                "task_id": task.id,
+                "candidate_delta_program_set_hash": (
+                    candidate_delta_program_set_hash
+                ),
+                "candidate_full_program_set_hash": (
+                    candidate_full_program_set_hash
+                ),
+                "matched_candidate_hypothesis_ids": list(
+                    matched_candidate_hypothesis_ids
+                ),
+                "matched_candidate_program_set_hash": (
+                    matched_candidate_program_set_hash
+                ),
+                "split": split.value,
+            }
+        pair_id = stable_hash(pair_id_payload)[:20]
         baseline_skill_source = (
             baseline_compile_result.source_for(task.id)
             if baseline_compile_result
@@ -2894,15 +3092,49 @@ class SkillLearnCounterfactualRunner:
             None,
             program_set_hash=baseline_program_set_hash,
             treatment_hash=baseline_treatment_hash,
+            candidate_delta_program_set_hash=(
+                "" if legacy_singleton else candidate_delta_program_set_hash
+            ),
+            candidate_full_program_set_hash=(
+                "" if legacy_singleton else candidate_full_program_set_hash
+            ),
+            matched_candidate_program_set_hash=(
+                "" if legacy_singleton else matched_candidate_program_set_hash
+            ),
+            selected_candidate_hypothesis_ids=(
+                () if legacy_singleton else selected_candidate_hypothesis_ids
+            ),
+            matched_candidate_hypothesis_ids=(
+                () if legacy_singleton else matched_candidate_hypothesis_ids
+            ),
         )
         on_request = self._request(
             task,
             split,
             TrialVariant.POLICY_ON,
             pair_id,
-            program.id,
+            (
+                candidate_delta_programs[0].id
+                if len(candidate_delta_programs) == 1
+                else None
+            ),
             program_set_hash=candidate_compile_result.program_set_hash,
             treatment_hash=candidate_compile_result.treatment_hash_for(task.id),
+            candidate_delta_program_set_hash=(
+                "" if legacy_singleton else candidate_delta_program_set_hash
+            ),
+            candidate_full_program_set_hash=(
+                "" if legacy_singleton else candidate_full_program_set_hash
+            ),
+            matched_candidate_program_set_hash=(
+                "" if legacy_singleton else matched_candidate_program_set_hash
+            ),
+            selected_candidate_hypothesis_ids=(
+                () if legacy_singleton else selected_candidate_hypothesis_ids
+            ),
+            matched_candidate_hypothesis_ids=(
+                () if legacy_singleton else matched_candidate_hypothesis_ids
+            ),
         )
         def run_trial(
             request: SkillLearnTrialRequest,
@@ -3048,7 +3280,7 @@ class SkillLearnCounterfactualRunner:
             baseline_preserved=True,
         )
         candidate_active_programs = (
-            active_candidate_programs
+            active_full_candidate_programs
             if treatment_applied
             else (
                 active_baseline_programs
@@ -3081,7 +3313,19 @@ class SkillLearnCounterfactualRunner:
                     "pair_id": pair_id,
                     "task_id_hash": stable_hash({"task_id": task.id}),
                     "split": split.value,
-                    "hypothesis_id": program.id,
+                    "hypothesis_id": selected_candidate_hypothesis_ids[0],
+                    **(
+                        {
+                            "selected_candidate_hypothesis_ids": list(
+                                selected_candidate_hypothesis_ids
+                            ),
+                            "matched_candidate_hypothesis_ids": list(
+                                matched_candidate_hypothesis_ids
+                            ),
+                        }
+                        if not legacy_singleton
+                        else {}
+                    ),
                     "baseline_hypothesis_ids": [
                         row.id
                         for row in (
@@ -3104,6 +3348,21 @@ class SkillLearnCounterfactualRunner:
                     "baseline_program_set_hash": baseline_program_set_hash,
                     "candidate_program_set_hash": (
                         candidate_compile_result.program_set_hash
+                    ),
+                    **(
+                        {
+                            "candidate_full_program_set_hash": (
+                                candidate_full_program_set_hash
+                            ),
+                            "candidate_delta_program_set_hash": (
+                                candidate_delta_program_set_hash
+                            ),
+                            "matched_candidate_program_set_hash": (
+                                matched_candidate_program_set_hash
+                            ),
+                        }
+                        if not legacy_singleton
+                        else {}
                     ),
                     "baseline_treatment_hash": baseline_treatment_hash,
                     "candidate_treatment_hash": (
@@ -3196,6 +3455,11 @@ class SkillLearnCounterfactualRunner:
         *,
         program_set_hash: str,
         treatment_hash: str,
+        candidate_delta_program_set_hash: str = "",
+        candidate_full_program_set_hash: str = "",
+        matched_candidate_program_set_hash: str = "",
+        selected_candidate_hypothesis_ids: tuple[str, ...] = (),
+        matched_candidate_hypothesis_ids: tuple[str, ...] = (),
     ) -> SkillLearnTrialRequest:
         return SkillLearnTrialRequest(
             item_id=task.id,
@@ -3215,6 +3479,19 @@ class SkillLearnCounterfactualRunner:
             program_id=program_id,
             program_set_hash=program_set_hash,
             treatment_hash=treatment_hash,
+            candidate_delta_program_set_hash=(
+                candidate_delta_program_set_hash
+            ),
+            candidate_full_program_set_hash=candidate_full_program_set_hash,
+            matched_candidate_program_set_hash=(
+                matched_candidate_program_set_hash
+            ),
+            selected_candidate_hypothesis_ids=(
+                selected_candidate_hypothesis_ids
+            ),
+            matched_candidate_hypothesis_ids=(
+                matched_candidate_hypothesis_ids
+            ),
         )
 
 
@@ -3227,11 +3504,33 @@ class SkillLearnGenerationResult:
     baseline_hypothesis_ids: tuple[str, ...] = ()
     proposal_model_failure_count: int = 0
     contrastive_training_evidence_policy: str | None = None
+    candidate_bundle_policy: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         decision = self.evolution.promotion_decision if self.evolution else None
         failure_count = sum(not row.baseline_success for row in self.residuals)
         success_control_count = sum(row.baseline_success for row in self.residuals)
+        selected_candidate_hypothesis_ids: tuple[str, ...] = ()
+        if self.evolution and decision:
+            selected_candidate_hypothesis_ids = tuple(
+                sorted(
+                    set(
+                        getattr(
+                            self.evolution,
+                            "selected_candidate_hypothesis_ids",
+                            (),
+                        )
+                        or ()
+                    )
+                )
+            )
+            if (
+                not selected_candidate_hypothesis_ids
+                and self.evolution.accepted_hypothesis_id
+            ):
+                selected_candidate_hypothesis_ids = (
+                    self.evolution.accepted_hypothesis_id,
+                )
         return {
             "train_observation_count": len(self.train_observations),
             "valid_train_observation_count": sum(row.valid for row in self.train_observations),
@@ -3245,6 +3544,15 @@ class SkillLearnGenerationResult:
             "evolution_trace_id": self.evolution.trace_id if self.evolution else None,
             "promoted": bool(self.evolution and self.evolution.promoted),
             "accepted_hypothesis_id": self.evolution.accepted_hypothesis_id if self.evolution else None,
+            **(
+                {
+                    "selected_candidate_hypothesis_ids": list(
+                        selected_candidate_hypothesis_ids
+                    )
+                }
+                if self.candidate_bundle_policy == CANDIDATE_BUNDLE_POLICY_VERSION
+                else {}
+            ),
             "proposal_candidate_count": (
                 self.evolution.proposal_candidate_count if self.evolution else 0
             ),
@@ -3315,6 +3623,7 @@ class SkillLearnEvolutionHarness:
         output_root: str | Path,
         proposal_candidates_per_generation: int = 3,
         candidate_selection_policy: str = TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
+        candidate_bundle_policy: str | None = None,
         contrastive_training_evidence_policy: str | None = None,
         repair_request_scope_policy: str | None = None,
         parallel_workers: int = 1,
@@ -3350,9 +3659,23 @@ class SkillLearnEvolutionHarness:
             TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
             CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
             PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
+            COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
         }:
             raise ValueError(
                 f"unsupported candidate selection policy: {candidate_selection_policy}"
+            )
+        bundle_selection_enabled = (
+            candidate_selection_policy
+            == COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION
+        )
+        if bundle_selection_enabled:
+            if candidate_bundle_policy != CANDIDATE_BUNDLE_POLICY_VERSION:
+                raise ValueError(
+                    "bundle candidate selection requires the v3.13 candidate bundle policy"
+                )
+        elif candidate_bundle_policy is not None:
+            raise ValueError(
+                "candidate bundle policy is only valid with bundle candidate selection"
             )
         if (
             contrastive_training_evidence_policy
@@ -3362,6 +3685,7 @@ class SkillLearnEvolutionHarness:
             in {
                 CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
                 PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
+                COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
             }
         ):
             raise ValueError(
@@ -3383,6 +3707,7 @@ class SkillLearnEvolutionHarness:
             invalid_trial_retry_backoff_seconds
         )
         self.candidate_selection_policy = candidate_selection_policy
+        self.candidate_bundle_policy = candidate_bundle_policy
         self.contrastive_training_evidence_policy = (
             contrastive_training_evidence_policy
         )
@@ -3427,6 +3752,7 @@ class SkillLearnEvolutionHarness:
             split_guard=guard,
             proposal_candidates_per_generation=proposal_candidates_per_generation,
             candidate_selection_policy=candidate_selection_policy,
+            candidate_bundle_policy=candidate_bundle_policy,
             contrastive_training_evidence_policy=(
                 contrastive_training_evidence_policy
             ),
@@ -3633,6 +3959,7 @@ class SkillLearnEvolutionHarness:
                 contrastive_training_evidence_policy=(
                     self.contrastive_training_evidence_policy
                 ),
+                candidate_bundle_policy=self.candidate_bundle_policy,
             )
             self._emit_generation_result(result, trace_id)
             return result
@@ -3663,6 +3990,7 @@ class SkillLearnEvolutionHarness:
             contrastive_training_evidence_policy=(
                 self.contrastive_training_evidence_policy
             ),
+            candidate_bundle_policy=self.candidate_bundle_policy,
         )
         self._emit_generation_result(result, trace_id)
         return result
@@ -3706,6 +4034,7 @@ class SkillLearnEvolutionHarness:
             contrastive_training_evidence_policy=(
                 self.contrastive_training_evidence_policy
             ),
+            candidate_bundle_policy=self.candidate_bundle_policy,
         )
         self._emit_generation_result(result, trace_id)
         return result
@@ -3744,6 +4073,15 @@ class SkillLearnEvolutionHarness:
             train_coverage_objective=(
                 {
                     "policy": self.candidate_selection_policy,
+                    **(
+                        {
+                            "candidate_bundle_policy": (
+                                self.candidate_bundle_policy
+                            )
+                        }
+                        if self.candidate_bundle_policy
+                        else {}
+                    ),
                     "evidence_scope": "train_only",
                     "coverage_unit": "distinct_failure_family",
                     "minimum_activation_rate": (
@@ -3778,7 +4116,10 @@ class SkillLearnEvolutionHarness:
                     "validation_outcomes_used": False,
                 }
                 if self.candidate_selection_policy
-                == PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION
+                in {
+                    PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
+                    COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+                }
                 else None
             ),
             trigger_feature_catalog=build_runtime_feature_catalog(

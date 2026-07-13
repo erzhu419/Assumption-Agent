@@ -154,15 +154,20 @@ class PolicyArchive:
         parent_id: str | None = None,
         trace_id: str = "archive",
     ) -> ArchiveNode:
-        missing = sorted(set(active_hypothesis_ids) - set(self.hypotheses))
+        canonical_active_hypothesis_ids = tuple(
+            sorted(set(active_hypothesis_ids))
+        )
+        missing = sorted(
+            set(canonical_active_hypothesis_ids) - set(self.hypotheses)
+        )
         if missing:
             raise KeyError(f"archive node references unknown hypotheses: {missing}")
         generation = self.nodes[parent_id].generation + 1 if parent_id else 0
-        node_id = f"node_{stable_hash({'parent': parent_id, 'hypotheses': active_hypothesis_ids, 'epoch': evaluator_epoch_id, 'runtime': runtime_version})[:16]}"
+        node_id = f"node_{stable_hash({'parent': parent_id, 'hypotheses': canonical_active_hypothesis_ids, 'epoch': evaluator_epoch_id, 'runtime': runtime_version})[:16]}"
         node = ArchiveNode(
             id=node_id,
             parent_id=parent_id,
-            active_hypothesis_ids=tuple(sorted(active_hypothesis_ids)),
+            active_hypothesis_ids=canonical_active_hypothesis_ids,
             evaluator_epoch_id=evaluator_epoch_id,
             runtime_version=runtime_version,
             generation=generation,
@@ -218,6 +223,7 @@ class PolicyArchive:
         *,
         candidate_node_id: str,
         decision: PromotionDecision,
+        retain_rejected_hypotheses_as_shadow: bool = False,
         trace_id: str = "archive",
     ) -> ArchiveNode:
         candidate = self.nodes[candidate_node_id]
@@ -242,7 +248,11 @@ class PolicyArchive:
             for hypothesis_id in set(candidate.active_hypothesis_ids) - parent_ids:
                 self.hypotheses[hypothesis_id] = replace(
                     self.hypotheses[hypothesis_id],
-                    status=HypothesisStatus.REJECTED,
+                    status=(
+                        HypothesisStatus.SHADOW
+                        if retain_rejected_hypotheses_as_shadow
+                        else HypothesisStatus.REJECTED
+                    ),
                 )
         self.nodes[candidate.id] = candidate
         self.event_sink.emit(
@@ -256,6 +266,11 @@ class PolicyArchive:
                     "promotion_allowed": decision.allowed,
                     "promotion_blockers": list(decision.blockers),
                     "incumbent_id": self.incumbent_id,
+                    **(
+                        {"retain_rejected_hypotheses_as_shadow": True}
+                        if retain_rejected_hypotheses_as_shadow
+                        else {}
+                    ),
                 },
             )
         )

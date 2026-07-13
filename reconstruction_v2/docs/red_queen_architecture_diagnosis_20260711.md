@@ -3,7 +3,7 @@
 > - 初版日期：2026-07-11
 > - 本次复核：2026-07-13
 > - 代码审计基线 revision：`6224bb5a279f50fbcf1f8b36d19cb4ce6cc6c882`
-> - 本次实现复核：receipt/runtime provenance 修复提交 `e43670f6`、`18ff3417`；v3.3 execution-policy 提交 `e0b1a33b`；v3.4 model-only/action-budget 主提交 `e491b0af`，runtime-path 修复 `995e6446`，Ruoli 503 分类修复 `ba0f36cf`，host-readable audit artifact 修复 `1df3092a` / `ad66d5a2`；v3.4 max2 v5 canary 已通过、fresh development 因四并发 429 fail closed；v3.5 将所有在线 phase 版本化为 1 worker，repair identity 修复 `96d53a5d`，malformed proposal/claim binding 修复 `d70562de`；v3.6 contrastive evidence / invalid-evidence lifecycle 实现提交 `01608e1e`；v3.7 六路首批 6/6 收到 429；v3.8 两路在 16 valid 后收到 2 个 503；v3.9 固定为 outer item workers=6 / shared model slot=1，并完成首个 clean full development 负结果；v3.10 exact-three/coverage-first fresh run 将 activation 提高到 2/16 但仍 0 gain，并暴露 semantic-diversity hard reject 与 action lowering 丢 target；v3.11 actionability fresh run 证明 treatment 已改变 trace、PDF 与成本但仍 0 gain，同时暴露 repair response shape 未被 generic system contract 可靠约束；v3.12 显式版本化 singular repair response并完成 56/56 clean development trials，但两代仍各仅激活 1/16、0 gain，无 incumbent；误入的空 freeze/partial controls 已隔离并补上 phase prerequisite，不改 evaluator、promotion gate 或 64 MiB fuse
+> - 本次实现复核：receipt/runtime provenance 修复提交 `e43670f6`、`18ff3417`；v3.3 execution-policy 提交 `e0b1a33b`；v3.4 model-only/action-budget 主提交 `e491b0af`，runtime-path 修复 `995e6446`，Ruoli 503 分类修复 `ba0f36cf`，host-readable audit artifact 修复 `1df3092a` / `ad66d5a2`；v3.4 max2 v5 canary 已通过、fresh development 因四并发 429 fail closed；v3.5 将所有在线 phase 版本化为 1 worker，repair identity 修复 `96d53a5d`，malformed proposal/claim binding 修复 `d70562de`；v3.6 contrastive evidence / invalid-evidence lifecycle 实现提交 `01608e1e`；v3.7 六路首批 6/6 收到 429；v3.8 两路在 16 valid 后收到 2 个 503；v3.9 固定为 outer item workers=6 / shared model slot=1，并完成首个 clean full development 负结果；v3.10 exact-three/coverage-first fresh run 将 activation 提高到 2/16 但仍 0 gain，并暴露 semantic-diversity hard reject 与 action lowering 丢 target；v3.11 actionability fresh run 证明 treatment 已改变 trace、PDF 与成本但仍 0 gain，同时暴露 repair response shape 未被 generic system contract 可靠约束；v3.12 显式版本化 singular repair response并完成 56/56 clean development trials，但两代仍各仅激活 1/16、0 gain，无 incumbent；误入的空 freeze/partial controls 已隔离并补上 phase prerequisite；v3.13 已实现 TRAIN-only complementary program-set selection、set-level runtime/replay/report/freeze，375/375 离线测试通过，不改 evaluator、promotion gate 或 64 MiB fuse，fresh live 待验
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -118,7 +118,7 @@
 | 命题 | 当前状态 | 证据层级 |
 |---|---|---|
 | legacy HLE 是高维手写控制面，学习 policy 没有闭环 | 支持 | 代码审计 + 历史 artifacts |
-| v2 的 proposal -> repair -> off/on -> gate -> archive 接口已连通 | 支持 | 345/345 离线测试 + v3.9/v3.12 clean full development |
+| v2 的 proposal -> repair -> off/on -> gate -> archive 接口已连通 | 支持 | 375/375 离线测试 + v3.9/v3.12 clean full development |
 | v2 的内部 runtime action 能改变 lane plan | 支持 | 代码 + 单元测试 |
 | v2 主 SkillLearn 路径执行了每个 typed action/verifier/fallback 的强语义 | **不支持，且协议已停止这样声称** | 只接受四类显式 prompt/self-check lowering；其余 fail closed |
 | promotion threshold 完全由冻结 protocol 所有 | 支持 | protocol-bound spec + 宽松 candidate 对抗测试 |
@@ -385,7 +385,7 @@ evidence。固定 cohort 越被反复用于决策，越不能承担 sealed claim
 
 ### 7.2 当前证据到哪一层
 
-**[TEST]** 当前 `reconstruction_v2` 离线 suite 为 **345/345 通过**。这证明 schema、
+**[TEST]** 当前 `reconstruction_v2` 离线 suite 为 **375/375 通过**。这证明 schema、
 wiring、guard、replay、failure handling 和若干 invariant；不证明真实 benchmark
 improvement。新增覆盖包括 protocol threshold ownership、candidate 宽松阈值攻击、
 backend action lowering v2、exact-three cardinality 与 audit-only signature diversity、
@@ -955,9 +955,9 @@ development，却不能说明 live repair quality 已改善，也不应通过人
 更重要的新证据来自 candidate formation：G1/G2 的 poster、poem、court roots 都是 TRAIN precision=1、
 success false positive=0，但每个只覆盖一个 family；selector 连续只保留 support=3 的 court root，
 把另两个互补、高精度局部 policy 丢到 shadow。held-out 因而仍只有 1/16 activation、0 gain/0 harm。
-下一步应把 proposal diversity 形成的互补 roots 用一个冻结的 TRAIN-only subset objective 组合成单一
-program-set treatment，只做一次 paired validation；不能逐个试 validation 后挑最好，也不能再增加或
-放宽 promotion gate。
+v3.13 已把 proposal diversity 形成的互补 roots 用冻结的 TRAIN-only subset objective 组合成单一
+program-set treatment，并规定只做一次 paired validation；它不能逐个试 validation 后挑最好，也没有
+增加或放宽 promotion gate。该机制的 live 结果仍待 fresh root。
 
 ### 8.4 P1：prospective runtime features 仍过粗
 
@@ -981,11 +981,12 @@ prospective routing。
 
 [`ArchiveNode`](../assumption_agent/archive.py#L23-L31) 有 parent、active programs、epoch
 和 generation；但 [`PolicyArchive`](../assumption_agent/archive.py#L96-L102) 只有一个
-`incumbent_id`。每代只把 train-only 排名第一的 `eligible[0]` 送入 validation，下一节点
-只从当前 incumbent 扩展：
+`incumbent_id`。v3.12 及以前每代只把 train-only 排名第一的 `eligible[0]` 送入 validation；
+v3.13 虽可把多个互补 roots 组成同一 candidate node，但仍只选择一个 program set、只从当前
+incumbent 扩展：
 [`evolution.py:L325-L453`](../assumption_agent/evolution.py#L325-L453)。
 
-因此当前算法仍是保守的单 incumbent hill climbing，而不是 RQGM 中多 clade 并行保留、
+因此 active 算法仍是保守的单 incumbent configuration hill climbing，而不是 RQGM 中多 clade 并行保留、
 按 metaproductivity 继续扩展的 archive search。
 
 此外，`ScoreRecord` 只存 candidate successes/total 和 item-set hash，未直接绑定完整 pair
@@ -1055,7 +1056,7 @@ runtime provenance、v3.5 serial execution-policy / repair identity / response-c
 | 完成（v3.11 机制有效、性能/claim 失败） | actionable directive lowering 与 audit-only diversity | 38/38 valid train；exact 3 / 3 distinct signatures；court treatment 在激活题改变 trace/PDF 且 66→16 actions，但 0→0；no-rec 因未激活 raw poster 超 64 MiB non-claim；recursive repair 返回 batch envelope 而 non-claim；无 incumbent |
 | 完成（v3.12 clean 负结果；repair path 未触发） | singular repair scope + candidate-formation 诊断 | 56/56 valid actual trials、0 provider/infra/mismatch；两代 exact3/3 static pass但所有 root 均只覆盖 1 family，selected court 仅激活 1/16、4/16 对 4/16、0 gain/0 harm；repair request=0；两臂无 incumbent |
 | 完成（phase prerequisite 修复） | 禁止空 incumbent freeze/control | 误入的 partial controls 仅 2/96 invalid，已标 diagnostic-only/no-reuse；runner 无 incumbent 即结束，freeze producer 与 controls consumer 双向拒绝空候选；不改评分 gate |
-| P1 | train-only complementary policy bundle | exact-three 的非空子集只按 TRAIN union precision/coverage/false-positive/complexity 确定一个 program-set treatment；只做一次 paired validation；set-level replay/report/freeze 全绑定，失败不错误归因到单个成员 |
+| 完成实现、fresh live 待验（v3.13） | train-only complementary policy bundle | exact-three 的最多 7 个非空子集只按 TRAIN union precision/coverage/false-positive/overlap/size/support/complexity 确定一个 program-set treatment；只做一次 paired validation；delta/full/matched set-level replay/report/freeze 全绑定，失败归因 bundle node、成员保留 shadow；promotion policy/阈值不变 |
 | P1 | prospective family-out routing | trigger 不依赖已知 family 或预编译 item ID，只使用冻结、无 gold、运行时可得语义特征 |
 | P2 | 多 clade archive | 同 epoch 至少两个 clade 可继续扩展；node 绑定 protocol/evidence/promotion hashes，并报告 retention 与 branch productivity |
 | P2 | evaluator co-evolution | 独立 anchor challenger、epoch transition、selective invalidation 和旧 incumbent re-evaluation 实际执行后再作主张 |
@@ -1197,6 +1198,17 @@ runtime provenance、v3.5 serial execution-policy / repair identity / response-c
     machine-readable diagnostic-only/no-reuse marker。现已统一 phase invariant：all-development 无真实
     recursive incumbent 即正常结束，paper freeze 拒绝空 archive，control consumer 也拒绝旧空 receipt。
     345/345 离线回归通过；没有新增或放宽 performance gate。
+40. 已实现 v3.13 complementary program-set revision 与 375/375 离线回归。exact-three static-valid
+    roots 的最多 7 个非空子集只在 TRAIN 上枚举；排序依次为 union precision、capped family deficit、
+    success false positive、overlap、bundle size、failure support、complexity 与 canonical set hash。
+    因此低精度成员不会为凑 coverage 被强塞，也没有 minimum bundle size。确定一个 delta set 后才
+    进行一次 paired validation。SkillLearn runner 分别绑定 delta/full/per-item matched set，任一新成员
+    命中才执行一次 policy-on，否则严格 alias baseline；program-set replay 对顺序不敏感但区分 `{A}`
+    与 `{A,B}`。archive rejection 只拒绝 bundle node、成员留 shadow；report/freeze 强校验 selected IDs、
+    treatment-set hash、baseline union、node/status。Promotion 仍是
+    `evaluator_owned_paired_validation_v2`，成员自约束保守聚合，所有 protocol 数值阈值、model/provider、
+    6×outer/1×model、offline evaluator、split、64 MiB fuse、retry、controls 与 sealed 均未改变。
+    v3.12 rows 不复用；须 clean commit/lock/prewarm 后从 fresh root live 验证。
 
 这比立刻扩展 archive 或继续补 HLE source span 更能降低研究风险。
 
@@ -1352,13 +1364,14 @@ contract 实际未进入 repair，因此 v3.12 只新增 protocol-bound singular
 exact-three root、8,000-token budget、train-only coverage selection 和 audit-only signature policy，
 也没有放宽 evaluator/promotion 或修改 split/fuse/retry/sealed。
 
-v3.12 的 clean 结果现在排除了“先等 repair 触发”作为下一步：所有 static node 直接通过，repair=0，
+v3.12 的 clean 结果排除了“先等 repair 触发”作为下一步：所有 static node 直接通过，repair=0，
 而 exact-three 已连续两代产生三个互补、高精度、零 success-FP 的单-family roots。真正的信息损失发生
-在 selector 把其中两个丢弃。所以下一步应一次性版本化为 train-only complementary program-set：
-枚举最多 7 个非空子集，只用 TRAIN union activation/precision/family coverage/false positives/complexity
-选定一个 bundle，再对整个 set 做一次 paired validation。不能根据 validation 在多个 bundle 中挑选，
-不能强制最低 bundle size，也不能把 bundle rejection 误写成每个成员单独被证伪。replay、pair ID、
-report、archive 与 freeze 必须绑定 canonical treatment-set hash；promotion 数值合同保持原样。
+在 selector 把其中两个丢弃。v3.13 已把这一点一次性版本化为 train-only complementary program-set：
+枚举最多 7 个非空子集，按 TRAIN union precision 优先、coverage deficit 次之的冻结 objective 选定
+一个 bundle，再对整个 set 做一次 paired validation；不根据 validation 挑组合、不强制最低 bundle
+size。runner/replay/report/archive/freeze 已绑定 canonical delta/full/matched set identities，bundle
+rejection 留在 node、成员保留 shadow。promotion decision policy 和数值合同原样保留。当前下一步是
+在 clean commit/lock 与 86/86 prewarm 后运行 fresh v3.13 development，而不是继续补 gate 或再改 selector。
 
 只有新的 clean development 产生 retained validation gain 和真实 incumbent，才按既定顺序进入
 freeze、完整 controls、family-out、sealed test，最后才谈 HLE raw/HippoRAG transfer、多 clade 与

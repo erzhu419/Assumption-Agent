@@ -21,8 +21,12 @@ from assumption_agent.evaluation import (
 )
 from assumption_agent.events import MemoryEventSink
 from assumption_agent.evolution import (
+    CANDIDATE_BUNDLE_POLICY_VERSION,
+    COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+    CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
     CounterfactualEvidenceReplayCache,
     EvolutionKernel,
+    EvolutionRunResult,
 )
 from assumption_agent.models import (
     ExternalOutcome,
@@ -1161,6 +1165,235 @@ def test_counterfactual_replay_requires_identical_executable_behavior() -> None:
         )
 
 
+def test_complementary_precise_candidates_are_selected_as_one_train_bundle() -> None:
+    result, archive, sink = _run_bundle_evolution(low_precision_complement=False)
+
+    assert result.selected_candidate_hypothesis_ids == (
+        "bundle-a",
+        "bundle-b",
+    )
+    assert result.accepted_hypothesis_id == "bundle-a"
+    assert result.archive_node is not None
+    assert result.archive_node.active_hypothesis_ids == ("bundle-a", "bundle-b")
+    assert archive.hypotheses["bundle-c"].status is HypothesisStatus.SHADOW
+    selection = next(
+        row
+        for row in sink.events
+        if row["event"] == "hypothesis_training_candidate_selection_completed"
+    )
+    selected_subset = next(
+        row for row in selection["payload"]["candidate_subsets"] if row["selected"]
+    )
+    assert selected_subset["accepted_hypothesis_ids"] == ["bundle-a", "bundle-b"]
+    assert selected_subset["union_training_metrics"][
+        "activation_precision_numerator"
+    ] == 4
+    assert selected_subset["union_training_metrics"][
+        "activation_precision_denominator"
+    ] == 4
+    assert selection["payload"]["selection_uses_validation"] is False
+
+
+def test_low_precision_complement_does_not_override_precision_first_singleton() -> None:
+    result, archive, sink = _run_bundle_evolution(low_precision_complement=True)
+
+    assert result.selected_candidate_hypothesis_ids == ("bundle-a",)
+    assert result.accepted_hypothesis_id == "bundle-a"
+    assert archive.hypotheses["bundle-b"].status is HypothesisStatus.SHADOW
+    selection = next(
+        row
+        for row in sink.events
+        if row["event"] == "hypothesis_training_candidate_selection_completed"
+    )
+    selected_subset = next(
+        row for row in selection["payload"]["candidate_subsets"] if row["selected"]
+    )
+    assert selected_subset["accepted_hypothesis_ids"] == ["bundle-a"]
+    assert selected_subset["union_training_metrics"][
+        "failure_activation_family_deficit"
+    ] == 1
+
+
+def test_bundle_runtime_and_replay_identity_are_order_invariant_and_set_specific() -> None:
+    sink = MemoryEventSink()
+    runner = CounterfactualRunner(
+        runtime=_runtime(sink),
+        evaluator=TruthEvaluator(),
+        event_sink=sink,
+    )
+    programs = _bundle_programs(low_precision_complement=False)
+    program_a, program_b, program_c = programs
+    tasks = (_bundle_task("validation-a", "a"), _bundle_task("validation-b", "b"))
+
+    forward = runner.run_bundle(
+        tasks,
+        programs=(program_a, program_b),
+        split=SplitName.VALIDATION,
+        trace_id="bundle-order",
+    )
+    reverse = runner.run_bundle(
+        tasks,
+        programs=(program_b, program_a),
+        split=SplitName.VALIDATION,
+        trace_id="bundle-order",
+    )
+    assert runner.behavior_set_hash((program_a, program_b)) == (
+        runner.behavior_set_hash((program_b, program_a))
+    )
+    assert [row.candidate.plan_hash for row in forward] == [
+        row.candidate.plan_hash for row in reverse
+    ]
+
+    replay_sink = MemoryEventSink()
+    replay_runner = CounterfactualRunner(
+        runtime=_runtime(replay_sink),
+        evaluator=TruthEvaluator(),
+        event_sink=replay_sink,
+    )
+    cache = CounterfactualEvidenceReplayCache(event_sink=replay_sink)
+    cache.run_or_replay_bundle(
+        runner=replay_runner,
+        tasks=tasks,
+        programs=(program_a, program_b),
+        baseline_programs=(),
+        split=SplitName.VALIDATION,
+        trace_id="bundle-replay-source",
+    )
+    cache.run_or_replay_bundle(
+        runner=replay_runner,
+        tasks=tasks,
+        programs=(program_b, program_a),
+        baseline_programs=(),
+        split=SplitName.VALIDATION,
+        trace_id="bundle-replay-hit",
+    )
+    cache.run_or_replay_bundle(
+        runner=replay_runner,
+        tasks=tasks,
+        programs=(program_a, program_c),
+        baseline_programs=(),
+        split=SplitName.VALIDATION,
+        trace_id="bundle-replay-miss",
+    )
+    replay_events = [
+        row
+        for row in replay_sink.events
+        if row["event"] == "counterfactual_evidence_replayed"
+    ]
+    recorded_events = [
+        row
+        for row in replay_sink.events
+        if row["event"] == "counterfactual_evidence_recorded"
+    ]
+    assert len(replay_events) == 1
+    assert len(recorded_events) == 2
+    assert replay_events[0]["payload"]["candidate_hypothesis_ids"] == [
+        "bundle-a",
+        "bundle-b",
+    ]
+    assert recorded_events[0]["payload"]["replay_key"] != (
+        recorded_events[1]["payload"]["replay_key"]
+    )
+
+
+def test_bundle_gate_aggregates_thresholds_and_archive_handles_both_outcomes() -> None:
+    sink = MemoryEventSink()
+    runner = CounterfactualRunner(
+        runtime=_runtime(sink),
+        evaluator=TruthEvaluator(),
+        event_sink=sink,
+    )
+    program_a, program_b, _ = _bundle_programs(
+        low_precision_complement=False
+    )
+    program_a = replace(
+        program_a,
+        expected_effect=replace(
+            program_a.expected_effect,
+            minimum_delta=0.2,
+            maximum_harm_rate=0.04,
+            maximum_cost_ratio=2.5,
+        ),
+    )
+    program_b = replace(
+        program_b,
+        expected_effect=replace(
+            program_b.expected_effect,
+            minimum_delta=0.3,
+            maximum_harm_rate=0.02,
+            maximum_cost_ratio=2.0,
+        ),
+    )
+    tasks = (_bundle_task("validation-a", "a"), _bundle_task("validation-b", "b"))
+    pairs = runner.run_bundle(
+        tasks,
+        programs=(program_b, program_a),
+        split=SplitName.VALIDATION,
+    )
+    permissive_spec = replace(
+        _promotion_spec(minimum_pairs=2, minimum_net_gain_count=1),
+        minimum_activation_rate=1.0,
+        maximum_harm_rate=0.2,
+        maximum_cost_ratio=5.0,
+    )
+    allowed = PromotionGate(permissive_spec).evaluate_bundle(
+        (program_a, program_b),
+        pairs,
+        sealed_test_accessed=False,
+    )
+    assert allowed.allowed is True
+    assert allowed.candidate_thresholds == {
+        "minimum_effect_lower_bound": 0.3,
+        "maximum_harm_rate": 0.02,
+        "maximum_cost_ratio": 2.0,
+    }
+    assert allowed.policy == "evaluator_owned_paired_validation_v2"
+
+    promoted_archive = PolicyArchive()
+    for program in (program_a, program_b):
+        promoted_archive.register_hypothesis(program)
+    promoted_node = promoted_archive.create_node(
+        active_hypothesis_ids=(program_b.id, program_a.id, program_b.id),
+        evaluator_epoch_id="epoch-0",
+        runtime_version="runtime-v1",
+    )
+    assert promoted_node.active_hypothesis_ids == ("bundle-a", "bundle-b")
+    promoted_archive.apply_promotion(
+        candidate_node_id=promoted_node.id,
+        decision=allowed,
+    )
+    assert {
+        promoted_archive.hypotheses[row.id].status
+        for row in (program_a, program_b)
+    } == {HypothesisStatus.PROMOTED}
+
+    rejected = PromotionGate(
+        replace(permissive_spec, minimum_pairs=3)
+    ).evaluate_bundle(
+        (program_b, program_a),
+        pairs,
+        sealed_test_accessed=False,
+    )
+    assert rejected.allowed is False
+    rejected_archive = PolicyArchive()
+    for program in (program_a, program_b):
+        rejected_archive.register_hypothesis(program)
+    rejected_node = rejected_archive.create_node(
+        active_hypothesis_ids=(program_a.id, program_b.id),
+        evaluator_epoch_id="epoch-0",
+        runtime_version="runtime-v1",
+    )
+    rejected_archive.apply_promotion(
+        candidate_node_id=rejected_node.id,
+        decision=rejected,
+        retain_rejected_hypotheses_as_shadow=True,
+    )
+    assert {
+        rejected_archive.hypotheses[row.id].status
+        for row in (program_a, program_b)
+    } == {HypothesisStatus.SHADOW}
+
+
 def test_evaluator_replacement_invalidates_only_dependent_epoch_scores() -> None:
     sink = MemoryEventSink()
     archive = PolicyArchive(event_sink=sink)
@@ -1306,6 +1539,182 @@ def test_evolution_kernel_closes_proposal_validation_promotion_runtime_loop() ->
     assert second.promotion_decision.summary.candidate_success_count == 20
     assert archive.hypotheses[second.accepted_hypothesis_id].status is HypothesisStatus.REJECTED
     assert archive.incumbent_id == result.archive_node.id
+
+
+def _bundle_programs(
+    *,
+    low_precision_complement: bool,
+) -> tuple[HypothesisProgram, HypothesisProgram, HypothesisProgram]:
+    def program(
+        hypothesis_id: str,
+        family: str,
+        *,
+        require_failure_marker: bool,
+        require_common_marker: bool = False,
+    ) -> HypothesisProgram:
+        payload = _program_dict(hypothesis_id=hypothesis_id)
+        predicates: list[dict[str, Any]] = [
+            {"key": "bundle_family", "op": "eq", "value": family}
+        ]
+        if require_failure_marker:
+            predicates.append(
+                {"key": "baseline_failed", "op": "eq", "value": True}
+            )
+        if require_common_marker:
+            predicates.append(
+                {"key": "common_marker", "op": "eq", "value": True}
+            )
+        payload["trigger"] = {"all_of": predicates}
+        payload["statement"] = f"Bundle candidate for family {family}."
+        return HypothesisProgram.from_dict(payload)
+
+    return (
+        program(
+            "bundle-a",
+            "a",
+            require_failure_marker=True,
+        ),
+        program(
+            "bundle-b",
+            "b",
+            require_failure_marker=not low_precision_complement,
+        ),
+        program(
+            "bundle-c",
+            "a",
+            require_failure_marker=True,
+            require_common_marker=True,
+        ),
+    )
+
+
+def _bundle_residuals() -> tuple[ResidualExample, ...]:
+    rows: list[ResidualExample] = []
+    for family in ("a", "b"):
+        for index in range(2):
+            rows.append(
+                ResidualExample(
+                    transition_id=f"bundle-transition-{family}-{index}",
+                    task_id=f"bundle-train-{family}-{index}",
+                    family=f"family-{family}",
+                    split=SplitName.TRAIN,
+                    features={
+                        "bundle_family": family,
+                        "baseline_failed": True,
+                        "common_marker": True,
+                        "requires_live_source": False,
+                    },
+                    failure_type="bundle_baseline_failure",
+                    evaluator_feedback=("use the family-specific solver",),
+                    baseline_success=False,
+                )
+            )
+        rows.append(
+            ResidualExample(
+                transition_id=f"bundle-transition-{family}-success",
+                task_id=f"bundle-train-{family}-success",
+                family=f"family-{family}",
+                split=SplitName.TRAIN,
+                features={
+                    "bundle_family": family,
+                    "baseline_failed": False,
+                    "common_marker": True,
+                    "requires_live_source": False,
+                },
+                failure_type="success_control",
+                evaluator_feedback=(),
+                baseline_success=True,
+            )
+        )
+    return tuple(rows)
+
+
+def _bundle_task(task_id: str, family: str) -> TaskInput:
+    return TaskInput(
+        id=task_id,
+        family=f"family-{family}",
+        features={
+            "bundle_family": family,
+            "baseline_failed": True,
+            "common_marker": True,
+            "requires_live_source": False,
+        },
+        payload={"expected": "correct"},
+    )
+
+
+def _run_bundle_evolution(
+    *,
+    low_precision_complement: bool,
+) -> tuple[EvolutionRunResult, PolicyArchive, MemoryEventSink]:
+    sink = MemoryEventSink()
+    residuals = _bundle_residuals()
+    validation_tasks = (
+        _bundle_task("bundle-validation-a", "a"),
+        _bundle_task("bundle-validation-b", "b"),
+    )
+    manifest = SplitManifest(
+        benchmark="synthetic_bundle_selection",
+        protocol="instance_holdout",
+        seed="unit",
+        train_ids=tuple(row.task_id for row in residuals),
+        validation_ids=tuple(row.id for row in validation_tasks),
+        test_ids=("bundle-sealed-test",),
+        family_by_id={
+            **{row.task_id: row.family for row in residuals},
+            **{row.id: row.family for row in validation_tasks},
+            "bundle-sealed-test": "family-a",
+        },
+    )
+    proposer = StructuredHypothesisProposer(QueueProposalModel([]))
+    archive = PolicyArchive(event_sink=sink)
+    kernel = EvolutionKernel(
+        proposer=proposer,
+        validator=_validator(proposer, sink),
+        counterfactual_runner=CounterfactualRunner(
+            runtime=_runtime(sink),
+            evaluator=TruthEvaluator(),
+            event_sink=sink,
+        ),
+        promotion_gate=PromotionGate(
+            replace(
+                _promotion_spec(minimum_pairs=2, minimum_net_gain_count=1),
+                minimum_activation_rate=1.0,
+            ),
+            event_sink=sink,
+        ),
+        archive=archive,
+        split_guard=SplitAccessGuard(manifest, event_sink=sink),
+        proposal_candidates_per_generation=3,
+        candidate_selection_policy=(
+            COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION
+        ),
+        candidate_bundle_policy=CANDIDATE_BUNDLE_POLICY_VERSION,
+        contrastive_training_evidence_policy=(
+            CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
+        ),
+        event_sink=sink,
+    )
+    context = ValidationContext(
+        evaluator_epoch="epoch-0",
+        residuals=residuals,
+        available_lanes=frozenset({"raw", "relation_solver"}),
+        baseline_lane="raw",
+        trigger_feature_catalog=build_trigger_feature_catalog(residuals),
+        contrastive_training_evidence_policy=(
+            CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
+        ),
+    )
+    result = kernel.evolve_once(
+        residuals=residuals,
+        validation_tasks=validation_tasks,
+        validation_context=context,
+        proposal_candidates=_bundle_programs(
+            low_precision_complement=low_precision_complement
+        ),
+        trace_id="bundle-selection",
+    )
+    return result, archive, sink
 
 
 def _runtime(sink: MemoryEventSink) -> PolicyRuntime:

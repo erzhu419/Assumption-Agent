@@ -32,6 +32,8 @@ from assumption_agent.evaluation import (
     PromotionGateSpec,
 )
 from assumption_agent.evolution import (
+    CANDIDATE_BUNDLE_POLICY_VERSION,
+    COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
     CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
     PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
     TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
@@ -82,6 +84,7 @@ from assumption_agent.benchmarks.paper_protocol import (
 )
 from assumption_agent.benchmarks.skilllearn_compiler import (
     SKILL_ACTION_LOWERING_VERSION,
+    skilllearn_program_set_treatment_hash,
     skilllearn_program_treatment_hash,
 )
 from assumption_agent.models import (
@@ -151,11 +154,13 @@ class FakeSkillLearnBackend:
         self._invalidated_candidate = False
         self._invalidated_training = False
         self.calls: list[tuple[str, str, bool]] = []
+        self.requests: list[Any] = []
         self.request_hashes: list[str] = []
 
     def run(self, request, *, skill_source_dir, trace_id):
         has_skill = skill_source_dir is not None and skill_source_dir.is_dir()
         self.calls.append((request.item_id, request.variant.value, has_skill))
+        self.requests.append(request)
         self.request_hashes.append(request.request_hash)
         invalid_candidate = (
             request.variant is TrialVariant.POLICY_ON
@@ -1102,6 +1107,7 @@ def test_real_manifest_lifecycle_promotes_and_seals_test(tmp_path: Path) -> None
     assert result.to_dict()["promotion_decision"] == (
         result.evolution.promotion_decision.to_dict()
     )
+    assert "selected_candidate_hypothesis_ids" not in result.to_dict()
     assert len(result.residuals) == 4
     assert all(row.context["task_instruction"] for row in result.residuals)
     assert all(row.split.value == "train" for row in result.residuals)
@@ -1176,6 +1182,268 @@ def test_skilllearn_nonactivation_aliases_observed_baseline(tmp_path: Path) -> N
     assert pairs[0].candidate.action_activated is False
     assert pairs[0].candidate.baseline_preserved is True
     assert pairs[0].candidate.selected_result.lane == "skilllearn_incumbent"
+
+
+def test_skilllearn_bundle_routes_complementary_members_in_one_pair_per_item(
+    tmp_path: Path,
+) -> None:
+    harness, backend, _, _, _, sink = _harness(tmp_path)
+    organize = _family_trigger_program(
+        "bundle-organize",
+        ("organize-messy-files",),
+    )
+    offer = _family_trigger_program(
+        "bundle-offer",
+        ("offer-letter-generator",),
+    )
+    tasks = harness.tasks(
+        ("organize-messy-files-5", "offer-letter-generator-5")
+    )
+
+    pairs = harness.counterfactual_runner.run_bundle(
+        tasks,
+        programs=(offer, organize),
+        split=SplitName.VALIDATION,
+        trace_id="complementary-bundle",
+    )
+
+    assert len(pairs) == 2
+    assert pairs[0].candidate.activated_hypothesis_ids == ("bundle-organize",)
+    assert pairs[1].candidate.activated_hypothesis_ids == ("bundle-offer",)
+    assert all(pair.candidate.action_activated for pair in pairs)
+    assert len(backend.calls) == 4
+    assert sum(row[1] == "policy_on" for row in backend.calls) == 2
+    expected_delta_hash = skilllearn_program_set_treatment_hash((organize, offer))
+    events = [
+        row
+        for row in sink.events
+        if row["event"] == "skilllearn_counterfactual_pair_completed"
+    ]
+    assert [
+        row["payload"]["matched_candidate_hypothesis_ids"]
+        for row in events
+    ] == [["bundle-organize"], ["bundle-offer"]]
+    assert all(
+        row["payload"]["selected_candidate_hypothesis_ids"]
+        == ["bundle-offer", "bundle-organize"]
+        for row in events
+    )
+    assert all(
+        row["payload"]["candidate_delta_program_set_hash"]
+        == expected_delta_hash
+        for row in events
+    )
+    on_requests = [
+        request
+        for request in backend.requests
+        if request.variant is TrialVariant.POLICY_ON
+    ]
+    assert [request.matched_candidate_hypothesis_ids for request in on_requests] == [
+        ("bundle-organize",),
+        ("bundle-offer",),
+    ]
+    assert all(
+        request.candidate_delta_program_set_hash == expected_delta_hash
+        for request in on_requests
+    )
+    assert all(
+        request.candidate_full_program_set_hash == expected_delta_hash
+        for request in backend.requests
+    )
+    assert all(
+        request.matched_candidate_program_set_hash
+        == skilllearn_program_set_treatment_hash(
+            (organize,) if request.item_id == "organize-messy-files-5" else (offer,)
+        )
+        for request in backend.requests
+    )
+
+
+def test_skilllearn_bundle_delta_miss_strictly_aliases_active_baseline(
+    tmp_path: Path,
+) -> None:
+    harness, backend, _, _, _, sink = _harness(tmp_path)
+    baseline = replace(
+        _family_trigger_program(
+            "incumbent-organize",
+            ("organize-messy-files",),
+        ),
+        status=HypothesisStatus.PROMOTED,
+    )
+    delta = _family_trigger_program(
+        "delta-offer",
+        ("offer-letter-generator",),
+    )
+
+    pairs = harness.counterfactual_runner.run_bundle(
+        harness.tasks(("organize-messy-files-5",)),
+        programs=(delta,),
+        baseline_programs=(baseline,),
+        split=SplitName.VALIDATION,
+        trace_id="bundle-delta-miss",
+    )
+
+    assert len(backend.calls) == 1
+    assert backend.requests[0].candidate_full_program_set_hash == (
+        skilllearn_program_set_treatment_hash((baseline, delta))
+    )
+    assert backend.requests[0].matched_candidate_hypothesis_ids == ()
+    pair = pairs[0]
+    assert pair.candidate.action_activated is False
+    assert pair.candidate.baseline_preserved is True
+    assert pair.candidate.selected_result.lane == "skilllearn_incumbent"
+    assert pair.candidate.activated_hypothesis_ids == ("incumbent-organize",)
+    assert pair.candidate_outcome == pair.baseline_outcome
+    event = next(
+        row
+        for row in sink.events
+        if row["event"] == "skilllearn_counterfactual_pair_completed"
+    )
+    assert event["payload"]["selected_candidate_hypothesis_ids"] == [
+        "delta-offer"
+    ]
+    assert event["payload"]["matched_candidate_hypothesis_ids"] == []
+    assert event["payload"]["candidate_trial_executed"] is False
+
+
+def test_skilllearn_bundle_identity_is_set_sensitive_and_order_invariant(
+    tmp_path: Path,
+) -> None:
+    harness, backend, _, _, _, sink = _harness(tmp_path)
+    organize = _family_trigger_program(
+        "bundle-organize",
+        ("organize-messy-files",),
+    )
+    offer = _family_trigger_program(
+        "bundle-offer",
+        ("offer-letter-generator",),
+    )
+    tasks = harness.tasks(("organize-messy-files-5",))
+
+    for programs in ((organize,), (organize, offer), (offer, organize)):
+        harness.counterfactual_runner.run_bundle(
+            tasks,
+            programs=programs,
+            split=SplitName.VALIDATION,
+            trace_id="bundle-identity",
+        )
+
+    events = [
+        row["payload"]
+        for row in sink.events
+        if row["event"] == "skilllearn_counterfactual_pair_completed"
+    ]
+    assert len(events) == 3
+    assert events[0]["pair_id"] != events[1]["pair_id"]
+    assert events[1]["pair_id"] == events[2]["pair_id"]
+    assert (
+        events[0]["candidate_delta_program_set_hash"]
+        != events[1]["candidate_delta_program_set_hash"]
+    )
+    assert (
+        events[1]["candidate_delta_program_set_hash"]
+        == events[2]["candidate_delta_program_set_hash"]
+    )
+    assert harness.counterfactual_runner.behavior_set_hash((organize, offer)) == (
+        harness.counterfactual_runner.behavior_set_hash((offer, organize))
+    )
+    on_requests = [
+        request
+        for request in backend.requests
+        if request.variant is TrialVariant.POLICY_ON
+    ]
+    assert len(on_requests) == 3
+    assert on_requests[0].request_hash != on_requests[1].request_hash
+    assert on_requests[1].request_hash == on_requests[2].request_hash
+    assert (
+        on_requests[1].selected_candidate_hypothesis_ids
+        == on_requests[2].selected_candidate_hypothesis_ids
+        == ("bundle-offer", "bundle-organize")
+    )
+
+
+def test_bundle_selector_executes_selected_union_once_per_validation_item(
+    tmp_path: Path,
+) -> None:
+    organize = _family_trigger_program(
+        "bundle-organize",
+        ("organize-messy-files",),
+    )
+    offer = _family_trigger_program(
+        "bundle-offer",
+        ("offer-letter-generator",),
+    )
+    rejected_payload = _program_dict()
+    rejected_payload["id"] = "bundle-no-support"
+    rejected_payload["trigger"] = {
+        "all_of": [
+            {"key": "family", "op": "eq", "value": "never-matched-family"}
+        ],
+        "any_of": [],
+        "none_of": [],
+    }
+    rejected_payload["verifier"]["repair_on_failure"] = False
+    harness, backend, _, archive, _, sink = _harness(
+        tmp_path,
+        proposal_rows=[
+            organize.to_dict(),
+            offer.to_dict(),
+            rejected_payload,
+        ],
+        candidate_selection_policy=(
+            COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION
+        ),
+        candidate_bundle_policy=CANDIDATE_BUNDLE_POLICY_VERSION,
+        contrastive_training_evidence_policy=(
+            ACTIONABLE_CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
+        ),
+    )
+
+    result = harness.run_generation(
+        train_item_ids=(
+            "organize-messy-files-1",
+            "organize-messy-files-2",
+            "offer-letter-generator-1",
+            "offer-letter-generator-2",
+        ),
+        validation_item_ids=(
+            "organize-messy-files-5",
+            "offer-letter-generator-5",
+        ),
+        trace_id="bundle-selector-single-validation",
+    )
+
+    assert result.evolution is not None
+    assert result.evolution.selected_candidate_hypothesis_ids == (
+        "bundle-offer",
+        "bundle-organize",
+    )
+    assert result.to_dict()["selected_candidate_hypothesis_ids"] == [
+        "bundle-offer",
+        "bundle-organize",
+    ]
+    selected_programs = tuple(
+        archive.hypotheses[hypothesis_id]
+        for hypothesis_id in result.evolution.selected_candidate_hypothesis_ids
+    )
+    assert result.to_dict()["evaluated_candidate_treatment_hash"] == (
+        skilllearn_program_set_treatment_hash(selected_programs)
+    )
+    assert result.evolution.promoted is True
+    assert len(backend.calls) == 8
+    assert sum(row[1] == "policy_on" for row in backend.calls) == 2
+    selection_events = [
+        row
+        for row in sink.events
+        if row["event"] == "hypothesis_training_candidate_selection_completed"
+    ]
+    assert len(selection_events) == 1
+    pair_events = [
+        row
+        for row in sink.events
+        if row["event"] == "skilllearn_counterfactual_pair_completed"
+    ]
+    assert len(pair_events) == 2
 
 
 def test_lowered_equivalent_program_replays_without_resampling(
@@ -3606,6 +3874,7 @@ def _harness(
     invalid_trial_max_attempts: int = 1,
     proposal_rows: list[dict[str, Any]] | None = None,
     candidate_selection_policy: str = TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
+    candidate_bundle_policy: str | None = None,
     contrastive_training_evidence_policy: str | None = None,
     repair_request_scope_policy: str | None = None,
 ):
@@ -3664,6 +3933,7 @@ def _harness(
         evaluator_epoch="skilllearn-eval-epoch-0",
         output_root=tmp_path / "compiled",
         candidate_selection_policy=candidate_selection_policy,
+        candidate_bundle_policy=candidate_bundle_policy,
         contrastive_training_evidence_policy=(
             contrastive_training_evidence_policy
         ),

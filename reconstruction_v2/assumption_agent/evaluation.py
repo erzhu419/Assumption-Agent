@@ -38,6 +38,15 @@ class CounterfactualRunner:
         self.evaluator = evaluator
         self.event_sink = event_sink or NullEventSink()
 
+    def behavior_hash(self, program: HypothesisProgram) -> str:
+        return _program_behavior_hash(program)
+
+    def behavior_set_hash(
+        self,
+        programs: Sequence[HypothesisProgram],
+    ) -> str:
+        return counterfactual_program_set_behavior_hash(programs)
+
     def run(
         self,
         tasks: Sequence[TaskInput],
@@ -47,20 +56,73 @@ class CounterfactualRunner:
         split: SplitName,
         trace_id: str = "counterfactual",
     ) -> tuple[CounterfactualPair, ...]:
-        if program.evaluator_epoch != self.evaluator.epoch:
-            raise ValueError("program and external evaluator must use the same frozen epoch")
+        return self.run_bundle(
+            tasks,
+            programs=(program,),
+            baseline_programs=baseline_programs,
+            split=split,
+            trace_id=trace_id,
+            _program_set=False,
+        )
+
+    def run_bundle(
+        self,
+        tasks: Sequence[TaskInput],
+        *,
+        programs: Sequence[HypothesisProgram],
+        baseline_programs: Sequence[HypothesisProgram] = (),
+        split: SplitName,
+        trace_id: str = "counterfactual",
+        _program_set: bool = True,
+    ) -> tuple[CounterfactualPair, ...]:
+        candidate_programs = _canonical_program_bundle(programs)
+        if not candidate_programs:
+            raise ValueError("counterfactual bundle requires at least one program")
+        if any(
+            program.evaluator_epoch != self.evaluator.epoch
+            for program in candidate_programs
+        ):
+            raise ValueError(
+                "program bundle and external evaluator must use the same frozen epoch"
+            )
+        canonical_baseline_programs = _canonical_program_bundle(baseline_programs)
+        candidate_hypothesis_ids = tuple(
+            sorted(program.id for program in candidate_programs)
+        )
+        candidate_behavior_set_hash = counterfactual_program_set_behavior_hash(
+            candidate_programs
+        )
+        candidate_runtime_programs = _canonical_program_bundle(
+            (*canonical_baseline_programs, *candidate_programs)
+        )
         pairs: list[CounterfactualPair] = []
         for task in tasks:
-            pair_trace = stable_hash({"trace_id": trace_id, "task_id": task.id, "program_id": program.id})[:20]
+            pair_trace = stable_hash(
+                (
+                    {
+                        "trace_id": trace_id,
+                        "task_id": task.id,
+                        "candidate_behavior_set_hash": (
+                            candidate_behavior_set_hash
+                        ),
+                    }
+                    if _program_set
+                    else {
+                        "trace_id": trace_id,
+                        "task_id": task.id,
+                        "program_id": candidate_hypothesis_ids[0],
+                    }
+                )
+            )[:20]
             baseline = self.runtime.execute(
                 task,
-                baseline_programs,
+                canonical_baseline_programs,
                 allowed_statuses={HypothesisStatus.PROMOTED},
                 trace_id=f"{pair_trace}:off",
             )
             candidate = self.runtime.execute(
                 task,
-                (*baseline_programs, program),
+                candidate_runtime_programs,
                 allowed_statuses={
                     HypothesisStatus.CANDIDATE,
                     HypothesisStatus.SHADOW,
@@ -90,8 +152,22 @@ class CounterfactualRunner:
                     payload={
                         "task_id_hash": stable_hash({"task_id": task.id}),
                         "split": split.value,
-                        "hypothesis_id": program.id,
-                        "baseline_hypothesis_ids": [row.id for row in baseline_programs],
+                        "hypothesis_id": candidate_hypothesis_ids[0],
+                        **(
+                            {
+                                "candidate_hypothesis_ids": list(
+                                    candidate_hypothesis_ids
+                                ),
+                                "candidate_behavior_set_hash": (
+                                    candidate_behavior_set_hash
+                                ),
+                            }
+                            if _program_set
+                            else {}
+                        ),
+                        "baseline_hypothesis_ids": [
+                            row.id for row in canonical_baseline_programs
+                        ],
                         "evaluator_id": self.evaluator.id,
                         "evaluator_epoch": self.evaluator.epoch,
                         "baseline_success": baseline_outcome.success,
@@ -110,6 +186,51 @@ class CounterfactualRunner:
                 )
             )
         return tuple(pairs)
+
+
+def _program_behavior_hash(program: HypothesisProgram) -> str:
+    payload = program.to_dict()
+    for key in (
+        "id",
+        "status",
+        "parent_id",
+        "lineage",
+        "created_from_transition_ids",
+    ):
+        payload.pop(key, None)
+    return stable_hash(payload)
+
+
+def _canonical_program_bundle(
+    programs: Sequence[HypothesisProgram],
+) -> tuple[HypothesisProgram, ...]:
+    by_id: dict[str, HypothesisProgram] = {}
+    for program in programs:
+        previous = by_id.get(program.id)
+        if previous is not None and previous.payload_hash != program.payload_hash:
+            raise ValueError(f"program bundle contains an ID collision: {program.id}")
+        by_id[program.id] = program
+    return tuple(
+        sorted(
+            by_id.values(),
+            key=lambda program: (
+                _program_behavior_hash(program),
+                program.id,
+                program.payload_hash,
+            ),
+        )
+    )
+
+
+def counterfactual_program_set_behavior_hash(
+    programs: Sequence[HypothesisProgram],
+) -> str:
+    """Return an order-invariant executable-treatment identity for a bundle."""
+
+    canonical = _canonical_program_bundle(programs)
+    if not canonical:
+        raise ValueError("program-set behavior hash requires at least one program")
+    return stable_hash(sorted(_program_behavior_hash(row) for row in canonical))
 
 
 @dataclass(frozen=True)
@@ -306,6 +427,9 @@ PROSPECTIVE_ABSTENTION_PAIRED_GUARD = (
     "prospective_abstention_with_paired_guard_v1"
 )
 CANDIDATE_MAY_ONLY_TIGHTEN = "candidate_may_only_tighten_v1"
+CONSERVATIVE_PROGRAM_SET_PROMOTION_POLICY_VERSION = (
+    "train_only_union_program_set_single_paired_validation_conservative_thresholds_v1"
+)
 
 
 @dataclass(frozen=True)
@@ -504,18 +628,81 @@ class PromotionGate:
         sealed_test_accessed: bool,
         trace_id: str = "promotion",
     ) -> PromotionDecision:
+        return self._evaluate_programs(
+            programs=(program,),
+            pairs=pairs,
+            sealed_test_accessed=sealed_test_accessed,
+            trace_id=trace_id,
+            policy="evaluator_owned_paired_validation_v2",
+        )
+
+    def evaluate_bundle(
+        self,
+        programs: Sequence[HypothesisProgram],
+        pairs: Sequence[CounterfactualPair],
+        *,
+        sealed_test_accessed: bool,
+        trace_id: str = "promotion",
+    ) -> PromotionDecision:
+        return self._evaluate_programs(
+            programs=programs,
+            pairs=pairs,
+            sealed_test_accessed=sealed_test_accessed,
+            trace_id=trace_id,
+            policy="evaluator_owned_paired_validation_v2",
+            candidate_bundle_policy=(
+                CONSERVATIVE_PROGRAM_SET_PROMOTION_POLICY_VERSION
+            ),
+        )
+
+    def _evaluate_programs(
+        self,
+        *,
+        programs: Sequence[HypothesisProgram],
+        pairs: Sequence[CounterfactualPair],
+        sealed_test_accessed: bool,
+        trace_id: str,
+        policy: str,
+        candidate_bundle_policy: str | None = None,
+    ) -> PromotionDecision:
+        candidate_programs = _canonical_program_bundle(programs)
+        if not candidate_programs:
+            raise ValueError("promotion bundle requires at least one program")
+        evaluator_epochs = {row.evaluator_epoch for row in candidate_programs}
+        if len(evaluator_epochs) != 1:
+            raise ValueError("promotion bundle members crossed evaluator epochs")
+        candidate_metrics = {
+            row.expected_effect.metric for row in candidate_programs
+        }
+        if len(candidate_metrics) != 1:
+            raise ValueError("promotion bundle members must share one metric")
+        evaluator_epoch = next(iter(evaluator_epochs))
+        candidate_metric = next(iter(candidate_metrics))
+        candidate_hypothesis_ids = tuple(
+            sorted(row.id for row in candidate_programs)
+        )
         summary = summarize_pairs(pairs)
         lower_bound = summary.effect_lower_bound(self.spec.confidence)
         candidate_thresholds = {
-            "minimum_effect_lower_bound": program.expected_effect.minimum_delta,
-            "maximum_harm_rate": program.expected_effect.maximum_harm_rate,
-            "maximum_cost_ratio": program.expected_effect.maximum_cost_ratio,
+            "minimum_effect_lower_bound": max(
+                row.expected_effect.minimum_delta for row in candidate_programs
+            ),
+            "maximum_harm_rate": min(
+                row.expected_effect.maximum_harm_rate
+                for row in candidate_programs
+            ),
+            "maximum_cost_ratio": min(
+                row.expected_effect.maximum_cost_ratio
+                for row in candidate_programs
+            ),
         }
-        effective = self.spec.effective_thresholds(program)
+        effective = self.spec.effective_thresholds_from_candidate(
+            candidate_thresholds
+        )
         blockers: list[str] = []
         if not pairs or any(pair.split is not SplitName.VALIDATION for pair in pairs):
             blockers.append("promotion_requires_validation_pairs_only")
-        if any(pair.evaluator_epoch != program.evaluator_epoch for pair in pairs):
+        if any(pair.evaluator_epoch != evaluator_epoch for pair in pairs):
             blockers.append("mixed_or_wrong_evaluator_epoch")
         if sealed_test_accessed:
             blockers.append("sealed_test_accessed_before_promotion")
@@ -531,29 +718,53 @@ class PromotionGate:
             blockers=tuple(blockers),
             summary=summary,
             effect_lower_bound=lower_bound,
-            evaluator_epoch=program.evaluator_epoch,
+            evaluator_epoch=evaluator_epoch,
             confidence=self.spec.confidence,
             promotion_contract=self.spec.to_dict(),
-            candidate_metric=program.expected_effect.metric,
+            candidate_metric=candidate_metric,
             candidate_thresholds=candidate_thresholds,
             effective_thresholds=effective,
+            policy=policy,
         )
+        candidate_behavior_set_hash = counterfactual_program_set_behavior_hash(
+            candidate_programs
+        )
+        canonical_first = min(candidate_programs, key=lambda row: row.id)
+        bundle_evaluation = candidate_bundle_policy is not None
         self.event_sink.emit(
             Event(
                 event="hypothesis_promotion_decided",
                 stage="promotion",
                 trace_id=trace_id,
                 payload={
-                    "hypothesis_id": program.id,
-                    "hypothesis_hash": program.payload_hash,
+                    "hypothesis_id": candidate_hypothesis_ids[0],
+                    "hypothesis_hash": canonical_first.payload_hash,
+                    **(
+                        {
+                            "candidate_hypothesis_ids": list(
+                                candidate_hypothesis_ids
+                            ),
+                            "candidate_hypothesis_hashes": sorted(
+                                row.payload_hash for row in candidate_programs
+                            ),
+                            "candidate_behavior_set_hash": (
+                                candidate_behavior_set_hash
+                            ),
+                            "candidate_bundle_policy": (
+                                candidate_bundle_policy
+                            ),
+                        }
+                        if bundle_evaluation
+                        else {}
+                    ),
                     "allowed": decision.allowed,
                     "blockers": list(decision.blockers),
                     "pair_summary": summary.to_dict(confidence=self.spec.confidence),
                     "promotion_contract": self.spec.to_dict(),
-                    "candidate_metric": program.expected_effect.metric,
+                    "candidate_metric": candidate_metric,
                     "candidate_thresholds": candidate_thresholds,
                     "effective_thresholds": effective,
-                    "evaluator_epoch": program.evaluator_epoch,
+                    "evaluator_epoch": evaluator_epoch,
                     "sealed_test_accessed": sealed_test_accessed,
                 },
             )

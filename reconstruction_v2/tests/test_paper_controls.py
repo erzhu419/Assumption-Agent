@@ -25,6 +25,7 @@ from assumption_agent.benchmarks.skilllearn_compiler import (
     SKILL_ACTION_LOWERING_VERSION,
     SKILL_FALLBACK_SEMANTICS_VERSION,
     SKILL_ROUTING_VERSION,
+    skilllearn_program_set_treatment_hash,
     skilllearn_program_treatment_hash,
 )
 from assumption_agent.benchmarks.skilllearn_lifecycle import SkillLearnTrialObservation
@@ -65,6 +66,9 @@ V311_PROTOCOL_PATH = (
 )
 V312_PROTOCOL_PATH = (
     ROOT / "manifests" / "skilllearn_paper_protocol_v3_12_ruoli_gpt54mini.json"
+)
+V313_PROTOCOL_PATH = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_13_ruoli_gpt54mini.json"
 )
 MANIFEST_PATH = (
     ROOT / "manifests" / "skilllearnbench_instance_holdout_offline_ready_v1.json"
@@ -737,6 +741,7 @@ def test_execution_report_preserves_legacy_promotion_summary_schema(
         V310_PROTOCOL_PATH,
         V311_PROTOCOL_PATH,
         V312_PROTOCOL_PATH,
+        V313_PROTOCOL_PATH,
     ),
 )
 def test_freeze_accepts_clean_contrastive_report(protocol_path: Path) -> None:
@@ -782,6 +787,30 @@ def test_freeze_binds_v312_repair_request_scope_plan_provenance() -> None:
         )
 
 
+def test_freeze_binds_v313_candidate_bundle_plan_provenance() -> None:
+    protocol = PaperProtocol.read(V313_PROTOCOL_PATH)
+    manifest = SplitManifest.read(MANIFEST_PATH)
+    report = _development_report(
+        protocol,
+        manifest,
+        archive_hash="unused",
+        recursive=True,
+        hypothesis_id="bundle-a",
+    )
+    report["plan"]["candidate_bundle_policy"] = "drifted"
+
+    with pytest.raises(
+        ValueError,
+        match="development report plan mismatch: candidate_bundle_policy",
+    ):
+        paper_freeze._validate_development_report(
+            report,
+            protocol=protocol,
+            manifest=manifest,
+            recursive_validation_enabled=True,
+        )
+
+
 @pytest.mark.parametrize(
     ("field", "value", "expected_error"),
     (
@@ -807,6 +836,7 @@ def test_freeze_binds_v312_repair_request_scope_plan_provenance() -> None:
         V310_PROTOCOL_PATH,
         V311_PROTOCOL_PATH,
         V312_PROTOCOL_PATH,
+        V313_PROTOCOL_PATH,
     ),
 )
 def test_freeze_rejects_contrastive_generation_evidence_drift(
@@ -1203,6 +1233,164 @@ def test_frozen_archive_rejects_candidate_treatment_substitution(
         )
 
 
+@pytest.mark.parametrize("allowed", (True, False))
+def test_v313_frozen_archive_accepts_canonical_candidate_bundle(
+    tmp_path: Path,
+    allowed: bool,
+) -> None:
+    protocol = PaperProtocol.read(V313_PROTOCOL_PATH)
+    manifest = SplitManifest.read(MANIFEST_PATH)
+    evaluator_epoch = f"skilllearn-eval-{manifest.manifest_hash[:12]}"
+    archive, report = _bundle_archive_and_report(
+        protocol,
+        manifest,
+        allowed=allowed,
+    )
+    paper_freeze._validate_development_report(
+        report,
+        protocol=protocol,
+        manifest=manifest,
+        recursive_validation_enabled=True,
+    )
+    archive_path = tmp_path / f"bundle-{allowed}.archive.json"
+    archive_path.write_text(json.dumps(archive), encoding="utf-8")
+
+    frozen = paper_freeze.read_frozen_archive(
+        archive_path,
+        expected_evaluator_epoch=evaluator_epoch,
+        expected_report=report,
+        promotion_spec=protocol.promotion_gate_spec,
+        protocol_version="3.13.0",
+    )
+
+    assert [program.id for program in frozen.active_programs] == (
+        ["bundle-a", "bundle-b"] if allowed else []
+    )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_error", "deep_validation"),
+    (
+        (
+            "order",
+            "development selected candidate hypothesis IDs must be sorted and unique",
+            False,
+        ),
+        (
+            "accepted",
+            "development accepted hypothesis is not the canonical selected candidate",
+            False,
+        ),
+        (
+            "set_hash",
+            "archive candidate treatment and development evidence differ",
+            True,
+        ),
+        (
+            "threshold",
+            "archive candidate thresholds and decision differ",
+            True,
+        ),
+        (
+            "node_set",
+            "archive candidate node active hypothesis set mismatch",
+            True,
+        ),
+    ),
+)
+def test_v313_frozen_archive_rejects_bundle_tampering(
+    tmp_path: Path,
+    mutation: str,
+    expected_error: str,
+    deep_validation: bool,
+) -> None:
+    protocol = PaperProtocol.read(V313_PROTOCOL_PATH)
+    manifest = SplitManifest.read(MANIFEST_PATH)
+    evaluator_epoch = f"skilllearn-eval-{manifest.manifest_hash[:12]}"
+    archive, report = _bundle_archive_and_report(protocol, manifest, allowed=True)
+    generation = report["generations"][0]
+    if mutation == "order":
+        generation["selected_candidate_hypothesis_ids"] = [
+            "bundle-b",
+            "bundle-a",
+        ]
+    elif mutation == "accepted":
+        generation["accepted_hypothesis_id"] = "bundle-b"
+    elif mutation == "set_hash":
+        generation["evaluated_candidate_treatment_hash"] = "0" * 64
+    elif mutation == "threshold":
+        candidate = dict(generation["promotion_decision"]["candidate_thresholds"])
+        candidate["minimum_effect_lower_bound"] = 0.2
+        generation["promotion_decision"]["candidate_thresholds"] = candidate
+        generation["promotion_decision"]["effective_thresholds"] = (
+            protocol.promotion_gate_spec.effective_thresholds_from_candidate(candidate)
+        )
+    else:
+        node_id = str(archive["incumbent_id"])
+        archive["nodes"][node_id]["active_hypothesis_ids"] = ["bundle-a"]
+        generation["archive_node_hash"] = stable_hash(archive["nodes"][node_id])
+        archive["archive_hash"] = _recalculate_archive_hash(archive)
+        report["archive_hash"] = archive["archive_hash"]
+    report["generation"] = dict(generation)
+
+    if not deep_validation:
+        with pytest.raises(ValueError, match=expected_error):
+            paper_freeze._validate_development_report(
+                report,
+                protocol=protocol,
+                manifest=manifest,
+                recursive_validation_enabled=True,
+            )
+        return
+
+    paper_freeze._validate_development_report(
+        report,
+        protocol=protocol,
+        manifest=manifest,
+        recursive_validation_enabled=True,
+    )
+    archive_path = tmp_path / f"tampered-{mutation}.archive.json"
+    archive_path.write_text(json.dumps(archive), encoding="utf-8")
+    with pytest.raises(ValueError, match=expected_error):
+        paper_freeze.read_frozen_archive(
+            archive_path,
+            expected_evaluator_epoch=evaluator_epoch,
+            expected_report=report,
+            promotion_spec=protocol.promotion_gate_spec,
+            protocol_version="3.13.0",
+        )
+
+
+def test_v312_frozen_archive_keeps_single_candidate_semantics(
+    tmp_path: Path,
+) -> None:
+    protocol = PaperProtocol.read(V312_PROTOCOL_PATH)
+    manifest = SplitManifest.read(MANIFEST_PATH)
+    evaluator_epoch = f"skilllearn-eval-{manifest.manifest_hash[:12]}"
+    archive = _archive_payload("recursive-policy", evaluator_epoch)
+    report = _development_report(
+        protocol,
+        manifest,
+        archive_hash=archive["archive_hash"],
+        recursive=True,
+        hypothesis_id="recursive-policy",
+    )
+    archive_path = tmp_path / "v312.archive.json"
+    archive_path.write_text(json.dumps(archive), encoding="utf-8")
+
+    frozen = paper_freeze.read_frozen_archive(
+        archive_path,
+        expected_evaluator_epoch=evaluator_epoch,
+        expected_report=report,
+        promotion_spec=protocol.promotion_gate_spec,
+        protocol_version="3.12.0",
+    )
+
+    assert [program.id for program in frozen.active_programs] == [
+        "recursive-policy"
+    ]
+
+
 def test_frozen_archive_cross_checks_candidate_decision_thresholds(
     tmp_path: Path,
 ) -> None:
@@ -1333,6 +1521,156 @@ def test_completed_sealed_journal_rejects_missing_or_changed_records(tmp_path: P
         )
 
 
+def _bundle_archive_and_report(
+    protocol: PaperProtocol,
+    manifest: SplitManifest,
+    *,
+    allowed: bool,
+) -> tuple[dict[str, object], dict[str, object]]:
+    evaluator_epoch = f"skilllearn-eval-{manifest.manifest_hash[:12]}"
+    source = json.loads(
+        (ROOT / "baselines" / "static_generic_program.json").read_text()
+    )
+    programs: list[HypothesisProgram] = []
+    for hypothesis_id, minimum_delta, maximum_harm_rate, maximum_cost_ratio in (
+        ("bundle-a", 0.02, 0.08, 1.4),
+        ("bundle-b", 0.04, 0.03, 1.2),
+    ):
+        payload = json.loads(json.dumps(source))
+        payload["id"] = hypothesis_id
+        payload["evaluator_epoch"] = evaluator_epoch
+        payload["status"] = "promoted" if allowed else "shadow"
+        payload["expected_effect"].update(
+            {
+                "minimum_delta": minimum_delta,
+                "maximum_harm_rate": maximum_harm_rate,
+                "maximum_cost_ratio": maximum_cost_ratio,
+            }
+        )
+        programs.append(HypothesisProgram.from_dict(payload))
+    selected_ids = sorted(program.id for program in programs)
+    node_id = "node-bundle"
+    node = {
+        "id": node_id,
+        "parent_id": None,
+        "active_hypothesis_ids": selected_ids,
+        "evaluator_epoch_id": evaluator_epoch,
+        "runtime_version": "test-runtime",
+        "generation": 0,
+        "status": "incumbent" if allowed else "rejected",
+    }
+    archive: dict[str, object] = {
+        "hypotheses": {
+            program.id: program.to_dict() for program in programs
+        },
+        "nodes": {node_id: node},
+        "score_records": {},
+        "incumbent_id": node_id if allowed else None,
+        "raw_content_persisted": False,
+    }
+    archive["archive_hash"] = _recalculate_archive_hash(archive)
+    report = _development_report(
+        protocol,
+        manifest,
+        archive_hash=archive["archive_hash"],
+        recursive=True,
+        hypothesis_id=selected_ids[0],
+    )
+    generation = report["generations"][0]
+    candidate = {
+        "minimum_effect_lower_bound": max(
+            program.expected_effect.minimum_delta for program in programs
+        ),
+        "maximum_harm_rate": min(
+            program.expected_effect.maximum_harm_rate for program in programs
+        ),
+        "maximum_cost_ratio": min(
+            program.expected_effect.maximum_cost_ratio for program in programs
+        ),
+    }
+    decision = generation["promotion_decision"]
+    decision["candidate_thresholds"] = candidate
+    decision["effective_thresholds"] = (
+        protocol.promotion_gate_spec.effective_thresholds_from_candidate(candidate)
+    )
+    generation.update(
+        {
+            "promoted": allowed,
+            "accepted_hypothesis_id": selected_ids[0],
+            "selected_candidate_hypothesis_ids": selected_ids,
+            "baseline_hypothesis_ids": [],
+            "evaluated_candidate_treatment_hash": (
+                skilllearn_program_set_treatment_hash(programs)
+            ),
+            "archive_node_hash": stable_hash(node),
+        }
+    )
+    if not allowed:
+        summary = decision["summary"]
+        summary.update(
+            {
+                "baseline_success_count": 10,
+                "candidate_success_count": 0,
+                "gain_count": 0,
+                "harm_count": 10,
+                "tie_count": 0,
+                "selection_change_count": 10,
+                "baseline_preserved_count": 0,
+                "mean_effect": -1.0,
+                "effect_standard_error": 0.0,
+                "effect_lower_bound": -1.0,
+                "harm_rate": 1.0,
+                "activated_gain_count": 0,
+                "activated_harm_count": 10,
+                "activation_precision": 0.0,
+                "activated_harm_rate": 1.0,
+            }
+        )
+        summary_object = paper_freeze._pair_summary_from_mapping(
+            summary,
+            confidence=protocol.promotion_gate_spec.confidence,
+            protocol_version="3.13.0",
+        )
+        blockers = paper_freeze.promotion_summary_blockers(
+            protocol.promotion_gate_spec,
+            summary_object,
+            effective_thresholds=decision["effective_thresholds"],
+        )
+        decision.update(
+            {
+                "allowed": False,
+                "blockers": list(blockers),
+                "effect_lower_bound": -1.0,
+            }
+        )
+    generation["promotion_summary"] = dict(decision["summary"])
+    report["generation"] = dict(generation)
+    return archive, report
+
+
+def _recalculate_archive_hash(archive: dict[str, object]) -> str:
+    hypotheses = archive["hypotheses"]
+    nodes = archive["nodes"]
+    scores = archive["score_records"]
+    return stable_hash(
+        {
+            "hypotheses": {
+                str(key): HypothesisProgram.from_dict(value).payload_hash
+                for key, value in sorted(hypotheses.items())
+            },
+            "nodes": {
+                str(key): stable_hash(dict(value))
+                for key, value in sorted(nodes.items())
+            },
+            "scores": {
+                str(key): dict(value)
+                for key, value in sorted(scores.items())
+            },
+            "incumbent_id": archive.get("incumbent_id"),
+        }
+    )
+
+
 def _archive_payload(hypothesis_id: str, evaluator_epoch: str) -> dict[str, object]:
     payload = json.loads((ROOT / "baselines" / "static_generic_program.json").read_text())
     payload["id"] = hypothesis_id
@@ -1385,13 +1723,16 @@ def _development_report(
     payload["evaluator_epoch"] = evaluator_epoch
     payload["status"] = "promoted"
     program = HypothesisProgram.from_dict(payload)
+    bundle_protocol = protocol.payload["protocol_version"] == "3.13.0"
     generation = {
         "promoted": True,
         "recursive_depth": 0,
         "proposal_model_failure_count": 0,
         "accepted_hypothesis_id": hypothesis_id,
         "evaluated_candidate_treatment_hash": (
-            skilllearn_program_treatment_hash(program)
+            skilllearn_program_set_treatment_hash((program,))
+            if bundle_protocol
+            else skilllearn_program_treatment_hash(program)
         ),
         "promotion_decision": _promotion_decision(
             protocol,
@@ -1399,6 +1740,13 @@ def _development_report(
             evaluator_epoch=evaluator_epoch,
         ),
     }
+    if bundle_protocol:
+        generation.update(
+            {
+                "selected_candidate_hypothesis_ids": [hypothesis_id],
+                "baseline_hypothesis_ids": [],
+            }
+        )
     if protocol.payload["protocol_version"] in {
         "3.6.0",
         "3.7.0",
@@ -1407,6 +1755,7 @@ def _development_report(
         "3.10.0",
         "3.11.0",
         "3.12.0",
+        "3.13.0",
     }:
         train_count = int(phase["train_count"])
         generation.update(
@@ -1515,6 +1864,7 @@ def _development_report(
                     "proposal_diversity_policy",
                     "proposal_response_max_tokens",
                     "repair_request_scope_policy",
+                    "candidate_bundle_policy",
                 )
                 if field in protocol.payload["execution"]
             },
@@ -1593,6 +1943,7 @@ def _promotion_decision(
         "3.10.0",
         "3.11.0",
         "3.12.0",
+        "3.13.0",
     }:
         summary.update(
             {
