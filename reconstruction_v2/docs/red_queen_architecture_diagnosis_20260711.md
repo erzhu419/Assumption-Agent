@@ -1,9 +1,9 @@
 # Assumption Agent × Red Queen Gödel Machine：架构诊断与 Reconstruction V2 复核
 
 > - 初版日期：2026-07-11
-> - 本次复核：2026-07-12
+> - 本次复核：2026-07-13
 > - 代码审计基线 revision：`6224bb5a279f50fbcf1f8b36d19cb4ce6cc6c882`
-> - 本次实现复核：receipt/runtime provenance 修复提交 `e43670f6`、`18ff3417`；v3.3 execution-policy 提交 `e0b1a33b`；v3.4 model-only/action-budget 主提交 `e491b0af`，runtime-path 修复 `995e6446`，Ruoli 503 分类修复 `ba0f36cf`，host-readable audit artifact 修复 `1df3092a` / `ad66d5a2`；v3.4 max2 v5 canary 已通过、fresh development 因四并发 429 fail closed；v3.5 将所有在线 phase 版本化为 1 worker，repair identity 修复 `96d53a5d`，malformed proposal/claim binding 修复 `d70562de`；v3.6 contrastive evidence / invalid-evidence lifecycle 实现提交 `01608e1e`；v3.7 六路首批 6/6 收到 429；v3.8 两路在 16 valid 后收到 2 个 503；v3.9 固定为 outer item workers=6 / shared model slot=1
+> - 本次实现复核：receipt/runtime provenance 修复提交 `e43670f6`、`18ff3417`；v3.3 execution-policy 提交 `e0b1a33b`；v3.4 model-only/action-budget 主提交 `e491b0af`，runtime-path 修复 `995e6446`，Ruoli 503 分类修复 `ba0f36cf`，host-readable audit artifact 修复 `1df3092a` / `ad66d5a2`；v3.4 max2 v5 canary 已通过、fresh development 因四并发 429 fail closed；v3.5 将所有在线 phase 版本化为 1 worker，repair identity 修复 `96d53a5d`，malformed proposal/claim binding 修复 `d70562de`；v3.6 contrastive evidence / invalid-evidence lifecycle 实现提交 `01608e1e`；v3.7 六路首批 6/6 收到 429；v3.8 两路在 16 valid 后收到 2 个 503；v3.9 固定为 outer item workers=6 / shared model slot=1，并于 2026-07-13 完成首个 clean full development 负结果
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -48,7 +48,9 @@
 > 后因吞吐主动终止。v3.7 把跨题 worker 从 1 改为 6，但首批 6/6 请求均收到 429，
 > 熔断后其余 30 条本地跳过。v3.8 两路完成 16 valid 后又同时收到 2 个 503，熔断跳过 20。
 > 当前 v3.9 保留 6 路题级 pipeline，但只允许 1 个在线 Codex agent stage；本地准备/verifier
-> 仍并行，完整 fresh-root 结果待运行。
+> 仍并行；2026-07-13 的 fresh root 已完成 38/38 valid train 和 56/56 actual trials，0 provider/
+> infrastructure/mismatch failure，但两代 candidate 均只激活 1/16 validation、0 gain/0 harm，
+> 两臂 archive 仍无 incumbent。
 > 仍未成立的是 clean development promotion、
 > 跨 family 泛化，以及 Red Queen 式多谱系搜索和
 > evaluator co-evolution。v3.3 已把 low reasoning/verbosity、32,768-token
@@ -83,20 +85,20 @@
 > 3 个候选，但第一个 repair 的 transport/JSON 成功后没有 mapping-valued `hypothesis`，裸
 > `ValueError` 穿透旧异常边界，仍在 validation trial 前退出。现已把 malformed root/repair
 > envelope 与 canonical parse 纳入既有 typed failure isolation，并让 report/freeze 从 generation
-> rows 绑定非 claim 状态；没有新增评分 gate、响应 retry 或在线 evaluator。两次 38 条都不能跨进程复用。其后第三个 v3.5 fresh root 首次完成 38/38 train、proposal、真实 repair、双臂 paired validation、两代 lifecycle 与四份 report/archive；两臂均未 promotion，第一代 recursive 为 0 gain/2 harm，no-recursive 为 1 gain/0 harm但 LCB 仍小于 0。第二代 no-recursive 又被一次 Ruoli 503、circuit skip、9 个 invalid pair 与 8 个 budget mismatch 污染，旧 lifecycle 错把它计作普通 non-promotion。v3.6 已一次性把成功 train rows 变成无 instruction/context 的 negative controls，按 train activation precision / false positives / failure support / complexity 选择候选，并把 invalid counterfactual evidence 归类为 terminal non-claim。其串行 live root 完成 38/38 valid train（7 success/31 residual），选出的 root 为 26/27 train activation precision、1 个 success false positive，并完成 2/16 validation pairs 后主动停止；无 report/archive/promotion/freeze。v3.7 的六路 agent 首批 6/6 收到 429；v3.8 的两路 agent 在 16 valid 后同时收到 2 个 503。两轮均被既有 circuit 正确阻止、无可复用 bundle/report。v3.9 不改 evaluator、learning/promotion、model、split、预算、retry 或 circuit；只把调度改为 6 个 outer item pipeline 共用 1 个在线 agent slot，本地容器准备和离线 verifier 仍可并行，同题 variants 仍串行，旧 rows 不复用。**
+> rows 绑定非 claim 状态；没有新增评分 gate、响应 retry 或在线 evaluator。两次 38 条都不能跨进程复用。其后第三个 v3.5 fresh root 首次完成 38/38 train、proposal、真实 repair、双臂 paired validation、两代 lifecycle 与四份 report/archive；两臂均未 promotion，第一代 recursive 为 0 gain/2 harm，no-recursive 为 1 gain/0 harm但 LCB 仍小于 0。第二代 no-recursive 又被一次 Ruoli 503、circuit skip、9 个 invalid pair 与 8 个 budget mismatch 污染，旧 lifecycle 错把它计作普通 non-promotion。v3.6 已一次性把成功 train rows 变成无 instruction/context 的 negative controls，按 train activation precision / false positives / failure support / complexity 选择候选，并把 invalid counterfactual evidence 归类为 terminal non-claim。其串行 live root 完成 38/38 valid train（7 success/31 residual），选出的 root 为 26/27 train activation precision、1 个 success false positive，并完成 2/16 validation pairs 后主动停止；无 report/archive/promotion/freeze。v3.7 的六路 agent 首批 6/6 收到 429；v3.8 的两路 agent 在 16 valid 后同时收到 2 个 503。两轮均被既有 circuit 正确阻止、无可复用 bundle/report。v3.9 不改 evaluator、learning/promotion、model、split、预算、retry 或 circuit；只把调度改为 6 个 outer item pipeline 共用 1 个在线 agent slot，本地容器准备和离线 verifier 仍可并行，同题 variants 仍串行。该调度现已 clean 完成 full development，负结果把 blocker 定位到 proposal diversity 与 prospective coverage，而不是继续补 gate；旧 rows 不复用。**
 
 ### 1.2 结论分层
 
 | 命题 | 当前状态 | 证据层级 |
 |---|---|---|
 | legacy HLE 是高维手写控制面，学习 policy 没有闭环 | 支持 | 代码审计 + 历史 artifacts |
-| v2 的 proposal -> repair -> off/on -> gate -> archive 接口已连通 | 支持 | 289/289 离线测试 + v3.5 full mechanical live loop |
+| v2 的 proposal -> repair -> off/on -> gate -> archive 接口已连通 | 支持 | 289/289 离线测试 + v3.9 clean full development |
 | v2 的内部 runtime action 能改变 lane plan | 支持 | 代码 + 单元测试 |
 | v2 主 SkillLearn 路径执行了每个 typed action/verifier/fallback 的强语义 | **不支持，且协议已停止这样声称** | 只接受四类显式 prompt/self-check lowering；其余 fail closed |
 | promotion threshold 完全由冻结 protocol 所有 | 支持 | protocol-bound spec + 宽松 candidate 对抗测试 |
 | 86-item offline-ready runtime 已预验 | 支持 | readiness/preflight `blockers=[]`；v3.4 与三份 v3.5 v4 cache-only prewarm 均 86/86、model 未执行、sealed scoring=false |
-| v2 已产生可保留的 promoted incumbent | **不支持** | v3.5 第三轮双臂 archive 均 `incumbent_id=null`；没有可冻结主候选 |
-| v2 稳定优于 raw 或 budget-matched raw | **不支持** | v3.5 clean g1 两臂均未过 promotion；g2 no-recursive 被 provider/circuit invalid evidence 污染 |
+| v2 已产生可保留的 promoted incumbent | **不支持** | v3.9 clean 双臂 archive 均 `incumbent_id=null`；没有可冻结主候选 |
+| v2 稳定优于 raw 或 budget-matched raw | **不支持** | v3.9 recursive 两代均为 candidate/raw 3/16、0 gain/0 harm；no-recursive roots 静态拒绝 |
 | v2 已实现 Red Queen 式多 clade 搜索和 evaluator co-evolution | **不支持** | 目前是单 incumbent；evaluator 路径未接主实验 |
 
 ### 1.3 潜力判断
@@ -353,7 +355,7 @@ evidence。固定 cohort 越被反复用于决策，越不能承担 sealed claim
 | utility 来自 failure frequency | promotion 已使用 protocol-owned paired gain/harm/cost/LCB，candidate 只能收紧 | [`evaluation.py`](../assumption_agent/evaluation.py) | 尚缺真实 promotion 与 retained gain |
 | train/validation/test 混用 | split guard 与 archive-freeze gate 已实现 | [`splits.py:L220-L267`](../assumption_agent/splits.py#L220-L267) | 一次完整 current-protocol sealed run |
 | evaluator 变更无依赖失效 | controller/anchor lower bound/selective invalidation 已实现 | [`archive.py:L291-L370`](../assumption_agent/archive.py#L291-L370) | 尚未接入主 evolution 或真实 challenger |
-| HLE 是唯一主战场 | 已转向 86-item offline-ready SkillLearnBench instance-out/family-out | [`BENCHMARK_PROTOCOL.md`](../BENCHMARK_PROTOCOL.md) | 尚缺 clean development/family-out 结果 |
+| HLE 是唯一主战场 | 已转向 86-item offline-ready SkillLearnBench instance-out/family-out | [`BENCHMARK_PROTOCOL.md`](../BENCHMARK_PROTOCOL.md) | clean development 已完成但无 incumbent；尚缺 freeze、controls 与 family-out |
 
 ### 7.2 当前证据到哪一层
 
@@ -671,6 +673,33 @@ failure support 与复杂度排序；invalid counterfactual evidence 以 termina
 non-promotion counter。model、single worker、split、预算、offline evaluator 与 promotion mapping
 保持不变，旧 v3.5 rows 不跨协议复用。
 
+**[ARTIFACT]** 2026-07-13 的 v3.9 fresh root
+`paper_primary_v3_9_offline86_ruoli_gpt54mini_outer6_model1_plus01` 首先通过 clean lock 和
+86/86 cache-only prewarm，随后完整写出 recursive/no-recursive 两组 report/archive。事件账本记录
+56 次实际外部 trial、56 次 model-slot acquire/release、观测最大在线 agent 并发为 1；56 次
+trial 全部完成，provider failure、circuit open/skip、infrastructure failure、network-budget failure、
+invalid pair、provider mismatch 和 budget mismatch 均为 0。唯一在线环节仍是同一 Ruoli 模型
+推理；task 数据与 verifier 均为本地，verifier 在 agent 退出后以 `--network none` 执行；sealed/test
+访问保持 false。
+
+共享 train evidence 为 38/38 valid、10 success、28 residual。recursive 第一代 root 的初始
+family scope 因 anti-scope support 静态失败，depth-1 repair 通过；它在 train 上只激活 2 个 failure、
+0 个 success control。held-out 16 pairs 全部有效，但 prospective activation 只有 1/16，candidate/raw
+均为 3/16，gain 0、harm 0、effect lower bound 0、cost ratio 1.038462。第二代未修复 root 也只在
+held-out 激活 1/16，仍是 3/16 对 3/16、0 gain/0 harm，cost ratio 1.052885。两代均被原冻结
+promotion contract 以 zero net gain、6.25% activation 和 zero effect lower bound 拒绝。no-recursive
+两代各返回一个 root，但都未通过 train-only static audit，因而没有消费 held-out treatment trial。
+两臂最终均为 `consecutive_non_promotion_limit`、`incumbent_id=null`。
+
+这是首份 clean、完整、可解释的 current-protocol development 结果，也是负学习结果。它排除了
+“当前只差 API 恢复”与“离线 evaluator 不可用”这两个解释；真正瓶颈前移到了 candidate search：
+协议允许每代最多 3 个 proposal，但该 run 每代只返回 1 个；通过静态审计的两个 recursive
+candidate 又都收缩到 2/38 train support 和 1/16 prospective activation。继续放宽 promotion gate、
+重复同一 root，或冻结空 archive 都不会接近目标。下一次架构工作应限定在 gate 之前：让 proposer
+稳定给出多样化 roots，并把多个高精度、低覆盖的局部程序组成一个可审计 candidate configuration，
+或用不读取 validation outcome 的 train-only coverage objective 选择可达到 prospective coverage 的
+候选。evaluator、split、预算、sealed policy 与现有 promotion thresholds 不应随之改变。
+
 ### 7.3 当前 infrastructure/protocol 状态
 
 全 inventory 的
@@ -772,7 +801,7 @@ fallback 的伪证据链也已删除：activated candidate 是独立 treatment�
 agent instruction 的证据层级说清楚。真正强类型外部 operator 仍可作为后续研究方向，
 但不再是当前论文协议的隐含主张。
 
-### 8.3 P1：failure-only support bias 已在 v3.6 实现层关闭，live 证据待补
+### 8.3 P1：failure-only support bias 已关闭，但 precision-first 收缩为 coverage starvation
 
 v3.5 的真实第一代已经给出反例：最大 failure-support 的 recursive repair 在 held-out
 validation 造成 0 gain / 2 harm，而较窄的 no-recursive root 为 1 gain / 0 harm。v3.6
@@ -789,8 +818,11 @@ validation 造成 0 gain / 2 harm，而较窄的 no-recursive root 为 1 gain / 
 held-out report 另增加 evidence-valid activation、activated gain/harm、precision、harm rate 与
 abstention。其分母排除 evaluator-invalid、provider mismatch 与 budget mismatch 的并集；零
 valid activation 时 ratio 为 `null` 且 `defined=false`。这些字段是诊断，不进入既有
-`PromotionGateSpec`。因此旧 bias 已在代码路径上关闭，但是否真的提高 prospective trigger
-quality 仍必须由新的 v3.6 fresh-root development 验证，不能用 v3.5 rows 回填。
+`PromotionGateSpec`。v3.9 clean development 已验证这套 selection 不再选择 success false
+positive，却暴露相反失败模式：两代入选 candidate 均为 train support 2/38、held-out activation
+1/16，0 gain/0 harm。precision-first 排序把搜索收缩成了局部 family policy，无法形成足以检验或
+晋级的 prospective coverage。下一步应改变 proposer/search/configuration formation，而不是再给
+promotion 增加 blocker 或放宽 minimum activation。
 
 ### 8.4 P1：prospective runtime features 仍过粗
 
@@ -838,10 +870,12 @@ artifact。
 ### 8.7 P1：递归修复被触发过，但没有因果收益证据
 
 v2 recursive validation 主要修复 schema、trigger support、action vocabulary 和 epoch 等
-静态/训练检查。已有 live run 观察到 repair child 被提出和选中，但尚无完整、clean、
-behavior-different 的 recursive/no-recursive held-out comparison 显示 repair 带来净收益。
+静态/训练检查。v3.9 已得到完整 clean 对照：recursive 第一代的 depth-1 repair 通过静态审计并在
+held-out 真正激活 1/16，但相对 raw 为 0 gain/0 harm；no-recursive 同代 root 因 anti-scope
+support 未通过静态审计。该对照证明 repair 能把 candidate 从静态失败变成可执行 treatment，却
+没有证明它改善 task success，而且激活范围过窄，无法形成 retained incumbent。
 
-因此当前可说“递归修复机制会运行”，不能说“递归验证已经改善性能”。
+因此当前可说“递归修复机制会运行并改变候选可执行性”，不能说“递归验证已经改善性能”。
 
 ### 8.8 文档与协议漂移正在本次收口
 
@@ -877,7 +911,8 @@ runtime provenance、v3.5 serial execution-policy / repair identity / response-c
 | 完成（首次全闭环，非 clean claim） | response-fix fresh-root development | 新 lock/prewarm、38/38 all-valid train、proposal/repair、双臂 paired validation/promotion/report/archive 均实际完成；第一代 32/32 pair valid、sealed=false；第二代 no-rec 被 503/circuit 污染为 9 invalid，故“整轮 0 invalid”硬标准仍未满足 |
 | 完成（v3.6 实现，live 待验） | invalid counterfactual lifecycle/claim | invalid/provider/budget mismatch terminal non-claim，不增加 consecutive non-promotion；archive score invalid；report/freeze 独立重算；legacy 污染报告同样拒绝；mismatch bundle 不缓存 |
 | P1 | 递归因果归因 | 两臂共享 train evidence 和 roots，唯一差异是 repair；behavior-identical 时 effect 报 N/A，不重采样 |
-| 完成（v3.6 实现，live 待验） | contrastive trigger learning | train successes 进入无 context negative controls；candidate selection 按 exact precision/false-positive/support/complexity；报告 evidence-valid activation precision、harm、abstention；不改变 evaluator/promotion |
+| 完成（v3.9 clean 负结果） | contrastive trigger learning 首次 full live 验证 | 38/38 valid train、16/16 valid pairs、0 provider/infra/mismatch；两代 candidate 均仅 1/16 activation、0 gain/0 harm，证明 precision-first 已避开 false positive 但发生 coverage starvation |
+| P0（下一次唯一学习改动） | proposal diversity 与 candidate configuration formation | 每代稳定产生多个 behavior-distinct、train-only 可审计 roots；允许组合多个高精度局部程序或使用 train-only coverage objective；不读取 validation outcome，不改 evaluator/promotion/split/budget |
 | P1 | prospective family-out routing | trigger 不依赖已知 family 或预编译 item ID，只使用冻结、无 gold、运行时可得语义特征 |
 | P2 | 多 clade archive | 同 epoch 至少两个 clade 可继续扩展；node 绑定 protocol/evidence/promotion hashes，并报告 retention 与 branch productivity |
 | P2 | evaluator co-evolution | 独立 anchor challenger、epoch transition、selective invalidation 和旧 incumbent re-evaluation 实际执行后再作主张 |
@@ -972,7 +1007,13 @@ runtime provenance、v3.5 serial execution-policy / repair identity / response-c
     随后两个 fresh root 都在第 0 条 benchmark trial 前停止：health probe 的两次 transport retry
     均为 HTTP 503，`skilllearn_trial_started=0`。其后 10 次低频恢复探针仍失败。当前唯一 blocker
     是 Ruoli route availability；不再版本化 worker、gate、retry 或 evaluator。恢复后从新 clean root
-    启动，不复用任何 v3.7-v3.9 失败行，sealed/test 仍未访问。
+    启动，不复用任何 v3.7-v3.9 失败行；
+33. 已完成 v3.9 lower-cost credential fresh root：clean lock、86/86 prewarm、38/38 valid train、
+    56/56 actual trials、56/56 slot acquire/release，maximum online concurrency=1，0 provider/circuit/
+    infra/budget/mismatch failure。recursive 两代均只激活 1/16 validation，candidate/raw 都为 3/16、
+    0 gain/0 harm；no-recursive 两代 root 均在 train-only static audit 被拒绝。四份 report/archive
+    完整落盘但两臂 `incumbent_id=null`，sealed/test 未访问。当前 blocker 已从 transport 转为
+    candidate diversity/configuration coverage；下一步不新增或放宽 gate，不 freeze 空 incumbent。
 
 这比立刻扩展 archive 或继续补 HLE source span 更能降低研究风险。
 
@@ -1039,7 +1080,7 @@ activation；held-out causal activation precision 的分母则是 evidence-valid
 | 层级 | 可声明内容 | 当前状态 |
 |---|---|---|
 | L0 wiring | schema、repair、off/on、guard、archive transition 的机械链路已连接 | 达到：289 tests、protocol ownership、backend lowering、runtime receipt provenance、两级并发与 offline preflight 均通过 |
-| L1 mechanism live | 真实外部任务中 proposal/repair/treatment/gate 全链路完成 | 达到机械链路：v3.5 第三轮完成；无 promotion claim |
+| L1 mechanism live | 真实外部任务中 proposal/repair/treatment/gate 全链路完成 | 达到且已有 clean negative evidence：v3.9 full development 完成；无 promotion claim |
 | L2 validation learning | clean held-out validation 上有可晋级净收益 | 未达到 |
 | L3 prospective generalization | frozen incumbent 在 unseen instance/family 上保持收益 | 未达到 |
 | L4 self-evolution | 多代 retained improvement，且 recursion ablation 有因果贡献 | 未达到 |
@@ -1113,12 +1154,20 @@ run 只能保留为 L1 机械闭环与 contrastive-learning 动机，不能作�
 archive 冲突硬拒绝、promotion contract 和 evaluator 均未改变。v3.6 live 已从零完成 38/38
 contrastive train 并进入真实 paired validation，但串行执行只完成 2/16 pairs 后主动终止，因而
 没有完整 development claim。v3.7 的固定六路被首批 6/6 429 否决，v3.8 的固定两路又在
-16 valid 后被 2 个同时 503 否决。v3.9 的两级并发实现、289/289 测试、lock/prewarm 已完成，
-但两个 fresh root 均在第 0 条 trial 前被 health-probe HTTP 503 阻断。下一份运行仍应使用 v3.9
-fresh lock/root，以 6 个题级 pipeline 配 1 个共享在线 agent slot；前提是同一路由恢复，
-从零完成同一协议；有 retained validation gain 和真实 incumbent
-后才有资格做 family-out、sealed test、多 clade 与 evaluator co-evolution。v3.4 与 pre-v3.6 rows
-以及被中断的 v3.6 rows 都不能跨协议拼接。最诚实的论文级表述是：
+16 valid 后被 2 个同时 503 否决。v3.9 随后用 6 个题级 pipeline 配 1 个共享在线 agent slot，
+在 2026-07-13 首次完成 clean full development：38/38 valid train、56/56 actual trials、0 provider/
+infra/mismatch failure，并写出四份完整 report/archive。这个结果不是 promotion：recursive 两代
+都只激活 1/16 validation，candidate/raw 均为 3/16、0 gain/0 harm；no-recursive roots 均在
+train-only static audit 被拒绝，两臂 `incumbent_id` 都为空。
+
+因此距离目标最近的缺口不再是 transport、offline evaluator 或更多 promotion gate，而是 gate
+之前的 candidate search 与 configuration representation。当前 proposer 每代只返回 1 个 root，
+precision-first selection 又把通过者收缩到 2/38 train support，导致 prospective coverage starvation。
+下一次只应改 proposal diversity、train-only coverage objective 或多局部程序 bundle formation；
+不放宽 evaluator/promotion，不改 split/budget，不冻结空 incumbent。只有新的 clean development
+产生 retained validation gain 和真实 incumbent，才按既定顺序进入 freeze、完整 controls、family-out、
+sealed test，最后才谈 HLE raw/HippoRAG transfer、多 clade 与 evaluator co-evolution。历史和被中断
+rows 仍不得跨协议拼接。最诚实的论文级表述是：
 
 > **显式 HypothesisProgram 是一个有希望、可能更易归因的 self-evolution 搜索表示；
 > v2 已证明协议所有权、离线 evaluator 和学习环 wiring 可运行，但尚未证明它在冻结、
@@ -1193,7 +1242,11 @@ fresh lock/root，以 6 个题级 pipeline 配 1 个共享在线 agent slot；�
   [`v3.5 38/38 train then repair-ID collision`](../artifacts/paper_primary_v3_5_offline86_ruoli_gpt54mini/development_recursive.events.jsonl)；
   [`v3.5 repairid01 38/38 train then malformed repair envelope`](../artifacts/paper_primary_v3_5_offline86_ruoli_gpt54mini_repairid01/development_recursive.events.jsonl)；
   [`v3.5 repaircontract01 recursive report`](../artifacts/paper_primary_v3_5_offline86_ruoli_gpt54mini_repaircontract01/development_recursive.report.json)；
-  [`v3.5 repaircontract01 no-recursive contaminated report`](../artifacts/paper_primary_v3_5_offline86_ruoli_gpt54mini_repaircontract01/development_no_recursive.report.json)
+  [`v3.5 repaircontract01 no-recursive contaminated report`](../artifacts/paper_primary_v3_5_offline86_ruoli_gpt54mini_repaircontract01/development_no_recursive.report.json)；
+  [`v3.9 clean recursive report`](../artifacts/paper_primary_v3_9_offline86_ruoli_gpt54mini_outer6_model1_plus01/development_recursive.report.json)；
+  [`v3.9 clean recursive archive`](../artifacts/paper_primary_v3_9_offline86_ruoli_gpt54mini_outer6_model1_plus01/development_recursive.archive.json)；
+  [`v3.9 clean no-recursive report`](../artifacts/paper_primary_v3_9_offline86_ruoli_gpt54mini_outer6_model1_plus01/development_no_recursive.report.json)；
+  [`v3.9 clean no-recursive archive`](../artifacts/paper_primary_v3_9_offline86_ruoli_gpt54mini_outer6_model1_plus01/development_no_recursive.archive.json)
 
 ## 附录 B：复杂度统计口径
 
