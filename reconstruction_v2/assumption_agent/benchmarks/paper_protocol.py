@@ -23,6 +23,7 @@ from ..provider_chain import configured_provider_chain, proposal_provider_status
 from ..proposer import (
     LEGACY_PROPOSAL_DIVERSITY_POLICY_VERSION,
     PROPOSAL_DIVERSITY_POLICY_VERSION,
+    REPAIR_REQUEST_SCOPE_POLICY_VERSION,
     ROOT_PROPOSAL_REPLAY_POLICY_VERSION,
 )
 from ..secure_env import (
@@ -110,14 +111,28 @@ TRIAL_NETWORK_BYTE_LIMIT_BY_PROTOCOL_VERSION = {
     "3.9.0": 64 * 1024 * 1024,
     "3.10.0": 64 * 1024 * 1024,
     "3.11.0": 64 * 1024 * 1024,
+    "3.12.0": 64 * 1024 * 1024,
 }
 
 CONTRASTIVE_PROTOCOL_VERSIONS = frozenset(
-    {"3.6.0", "3.7.0", "3.8.0", "3.9.0", "3.10.0", "3.11.0"}
+    {
+        "3.6.0",
+        "3.7.0",
+        "3.8.0",
+        "3.9.0",
+        "3.10.0",
+        "3.11.0",
+        "3.12.0",
+    }
 )
-MODEL_SLOT_PROTOCOL_VERSIONS = frozenset({"3.9.0", "3.10.0", "3.11.0"})
-PROPOSAL_DIVERSITY_PROTOCOL_VERSIONS = frozenset({"3.10.0", "3.11.0"})
-ACTIONABLE_DIRECTIVE_PROTOCOL_VERSIONS = frozenset({"3.11.0"})
+MODEL_SLOT_PROTOCOL_VERSIONS = frozenset(
+    {"3.9.0", "3.10.0", "3.11.0", "3.12.0"}
+)
+PROPOSAL_DIVERSITY_PROTOCOL_VERSIONS = frozenset(
+    {"3.10.0", "3.11.0", "3.12.0"}
+)
+ACTIONABLE_DIRECTIVE_PROTOCOL_VERSIONS = frozenset({"3.11.0", "3.12.0"})
+REPAIR_REQUEST_SCOPE_PROTOCOL_VERSIONS = frozenset({"3.12.0"})
 
 CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION = (
     "train_contrastive_precision_then_support_v1"
@@ -310,6 +325,13 @@ class PaperProtocol:
                 ):
                     if field in execution:
                         issues.append(f"{field}_unexpected")
+            if protocol_version in REPAIR_REQUEST_SCOPE_PROTOCOL_VERSIONS:
+                if execution.get("repair_request_scope_policy") != (
+                    REPAIR_REQUEST_SCOPE_POLICY_VERSION
+                ):
+                    issues.append("repair_request_scope_policy_mismatch")
+            elif "repair_request_scope_policy" in execution:
+                issues.append("repair_request_scope_policy_unexpected")
             if execution.get("runtime_candidate_kinds") != ["task", "policy"]:
                 issues.append("runtime_candidate_kinds_mismatch")
             if (

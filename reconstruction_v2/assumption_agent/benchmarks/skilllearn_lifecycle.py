@@ -48,7 +48,11 @@ from ..models import (
     TaskInput,
     stable_hash,
 )
-from ..proposer import HypothesisProposalCallError, StructuredHypothesisProposer
+from ..proposer import (
+    HypothesisProposalCallError,
+    REPAIR_REQUEST_SCOPE_POLICY_VERSION,
+    StructuredHypothesisProposer,
+)
 from ..secure_env import configured_skilllearn_provider_mode
 from ..splits import AccessPhase, BenchmarkItem, SplitAccessGuard, SplitManifest
 from ..validation import (
@@ -3312,6 +3316,7 @@ class SkillLearnEvolutionHarness:
         proposal_candidates_per_generation: int = 3,
         candidate_selection_policy: str = TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
         contrastive_training_evidence_policy: str | None = None,
+        repair_request_scope_policy: str | None = None,
         parallel_workers: int = 1,
         invalid_trial_max_attempts: int = 1,
         invalid_trial_retry_backoff_seconds: float = 0.0,
@@ -3333,6 +3338,13 @@ class SkillLearnEvolutionHarness:
             raise ValueError(
                 "unsupported contrastive training evidence policy: "
                 f"{contrastive_training_evidence_policy}"
+            )
+        if repair_request_scope_policy not in {
+            None,
+            REPAIR_REQUEST_SCOPE_POLICY_VERSION,
+        }:
+            raise ValueError(
+                f"unsupported repair request scope policy: {repair_request_scope_policy}"
             )
         if candidate_selection_policy not in {
             TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
@@ -3374,6 +3386,7 @@ class SkillLearnEvolutionHarness:
         self.contrastive_training_evidence_policy = (
             contrastive_training_evidence_policy
         )
+        self.repair_request_scope_policy = repair_request_scope_policy
         self._invalid_retry_semaphore = threading.Semaphore(
             invalid_trial_retry_workers
         )
@@ -3417,6 +3430,7 @@ class SkillLearnEvolutionHarness:
             contrastive_training_evidence_policy=(
                 contrastive_training_evidence_policy
             ),
+            repair_request_scope_policy=repair_request_scope_policy,
             event_sink=self.event_sink,
         )
 
@@ -3726,6 +3740,7 @@ class SkillLearnEvolutionHarness:
             contrastive_training_evidence_policy=(
                 self.contrastive_training_evidence_policy
             ),
+            repair_request_scope_policy=self.repair_request_scope_policy,
             train_coverage_objective=(
                 {
                     "policy": self.candidate_selection_policy,

@@ -92,6 +92,7 @@ from assumption_agent.models import (
 )
 from assumption_agent.proposer import (
     PROPOSAL_DIVERSITY_POLICY_VERSION,
+    REPAIR_REQUEST_SCOPE_POLICY_VERSION,
     StructuredHypothesisProposer,
 )
 from assumption_agent.splits import (
@@ -2384,6 +2385,25 @@ def test_family_coverage_proposal_request_contains_diverse_batch_contract(
     ] is True
 
 
+def test_harness_binds_v312_repair_request_scope_into_validation(
+    tmp_path: Path,
+) -> None:
+    harness, _, _, _, _, _ = _harness(
+        tmp_path,
+        repair_request_scope_policy=REPAIR_REQUEST_SCOPE_POLICY_VERSION,
+    )
+    residuals = (_family_residual("a-failure", family="family-a"),)
+
+    context = harness.validation_context(residuals)
+
+    assert context.repair_request_scope_policy == (
+        REPAIR_REQUEST_SCOPE_POLICY_VERSION
+    )
+    assert harness.kernel.repair_request_scope_policy == (
+        REPAIR_REQUEST_SCOPE_POLICY_VERSION
+    )
+
+
 def test_training_support_reports_success_anti_trigger_protection_without_new_gate() -> None:
     residuals = (
         ResidualExample(
@@ -3587,6 +3607,7 @@ def _harness(
     proposal_rows: list[dict[str, Any]] | None = None,
     candidate_selection_policy: str = TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
     contrastive_training_evidence_policy: str | None = None,
+    repair_request_scope_policy: str | None = None,
 ):
     sink = MemoryEventSink()
     adapter = SkillLearnBenchAdapter(BENCH_ROOT)
@@ -3646,6 +3667,7 @@ def _harness(
         contrastive_training_evidence_policy=(
             contrastive_training_evidence_policy
         ),
+        repair_request_scope_policy=repair_request_scope_policy,
         parallel_workers=parallel_workers,
         invalid_trial_max_attempts=invalid_trial_max_attempts,
         event_sink=sink,

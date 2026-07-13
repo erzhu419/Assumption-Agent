@@ -3,7 +3,7 @@
 > - 初版日期：2026-07-11
 > - 本次复核：2026-07-13
 > - 代码审计基线 revision：`6224bb5a279f50fbcf1f8b36d19cb4ce6cc6c882`
-> - 本次实现复核：receipt/runtime provenance 修复提交 `e43670f6`、`18ff3417`；v3.3 execution-policy 提交 `e0b1a33b`；v3.4 model-only/action-budget 主提交 `e491b0af`，runtime-path 修复 `995e6446`，Ruoli 503 分类修复 `ba0f36cf`，host-readable audit artifact 修复 `1df3092a` / `ad66d5a2`；v3.4 max2 v5 canary 已通过、fresh development 因四并发 429 fail closed；v3.5 将所有在线 phase 版本化为 1 worker，repair identity 修复 `96d53a5d`，malformed proposal/claim binding 修复 `d70562de`；v3.6 contrastive evidence / invalid-evidence lifecycle 实现提交 `01608e1e`；v3.7 六路首批 6/6 收到 429；v3.8 两路在 16 valid 后收到 2 个 503；v3.9 固定为 outer item workers=6 / shared model slot=1，并完成首个 clean full development 负结果；v3.10 exact-three/coverage-first fresh run 将 activation 提高到 2/16 但仍 0 gain，并暴露 semantic-diversity hard reject 与 action lowering 丢 target；v3.11 只修 gate 前的 actionability/diversity representation，未改 evaluator 或 promotion gate
+> - 本次实现复核：receipt/runtime provenance 修复提交 `e43670f6`、`18ff3417`；v3.3 execution-policy 提交 `e0b1a33b`；v3.4 model-only/action-budget 主提交 `e491b0af`，runtime-path 修复 `995e6446`，Ruoli 503 分类修复 `ba0f36cf`，host-readable audit artifact 修复 `1df3092a` / `ad66d5a2`；v3.4 max2 v5 canary 已通过、fresh development 因四并发 429 fail closed；v3.5 将所有在线 phase 版本化为 1 worker，repair identity 修复 `96d53a5d`，malformed proposal/claim binding 修复 `d70562de`；v3.6 contrastive evidence / invalid-evidence lifecycle 实现提交 `01608e1e`；v3.7 六路首批 6/6 收到 429；v3.8 两路在 16 valid 后收到 2 个 503；v3.9 固定为 outer item workers=6 / shared model slot=1，并完成首个 clean full development 负结果；v3.10 exact-three/coverage-first fresh run 将 activation 提高到 2/16 但仍 0 gain，并暴露 semantic-diversity hard reject 与 action lowering 丢 target；v3.11 actionability fresh run 证明 treatment 已改变 trace、PDF 与成本但仍 0 gain，同时暴露 repair response shape 未被 generic system contract 可靠约束；v3.12 显式版本化 singular repair response，未改 evaluator、promotion gate 或 64 MiB fuse
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -56,9 +56,18 @@
 > 离线轨迹复核证明 routing/treatment 实际执行并改变了命令和答案；`selection_change_count=0` 只因
 > backend 把 answer 投影为 success 布尔。真正 blocker 是 proposer feedback 硬编码 completion check，
 > 以及 lowering v1 在非空 value 时丢掉 `execute_step`/`check_condition` target、把 action 降为含糊
-> JSON mode blob。当前 v3.11 因此只修 gate 前的 actionable directive、lowering 与 diversity audit；
-> exact-three cardinality、train coverage selection 和所有 evaluator/promotion/split/budget/sealed 合同不变；
-> 320/320 离线测试通过，fresh live root 待运行。
+> JSON mode blob。v3.11 因此只修 gate 前的 actionable directive、lowering 与 diversity audit；
+> fresh root 的 38/38 train 全部 valid（5 success / 33 residual），exact-three 返回三种 distinct
+> activation signature，两个 root 静态通过。入选 court policy 在唯一激活题上真实执行：raw/candidate
+> action starts 为 66/16，输出 PDF 内容不同，但二者都失败；no-rec 汇总仍为 4/16 对 4/16、0 gain/
+> 0 harm。该 arm 又因一个未激活的 raw poster trial 超过冻结 64 MiB 而 non-claim。recursive arm
+> 则在 validation 前失败：repair transport/JSON 成功，却返回 batch 字段 `hypotheses`，而 repair parser
+> 需要 singular `hypothesis`。事后调用链复核纠正了最初判断：真实 repair payload 并不含
+> `proposal_batch_contract`，只是 generic system contract 没有 versioned repair-specific singular
+> override，模型仍复用了 root response shape。v3.12 因而保留 train coverage objective，并新增
+> top-level one-object/`hypothesis` response contract；proposer 只作防御性 batch-contract 清理。exact-three root、
+> train selection 和所有 evaluator/promotion/split/fuse/retry/sealed 合同不变，须 fresh root，v3.11 rows
+> 不复用。
 > 仍未成立的是 clean development promotion、
 > 跨 family 泛化，以及 Red Queen 式多谱系搜索和
 > evaluator co-evolution。v3.3 已把 low reasoning/verbosity、32,768-token
@@ -367,7 +376,7 @@ evidence。固定 cohort 越被反复用于决策，越不能承担 sealed claim
 
 ### 7.2 当前证据到哪一层
 
-**[TEST]** 当前 `reconstruction_v2` 离线 suite 为 **320/320 通过**。这证明 schema、
+**[TEST]** 当前 `reconstruction_v2` 离线 suite 为 **344/344 通过**。这证明 schema、
 wiring、guard、replay、failure handling 和若干 invariant；不证明真实 benchmark
 improvement。新增覆盖包括 protocol threshold ownership、candidate 宽松阈值攻击、
 backend action lowering v2、exact-three cardinality 与 audit-only signature diversity、
@@ -735,6 +744,37 @@ command trace 和实际答案均不同；financial candidate 还新增了 PUT/CA
 硬编码“explicit completion check”，直接把 proposal 引向表面完整性而非任务 operator。这些证据将
 blocker 从 coverage/bundle 前移到 action representation；v3.11 先一次性修这一层，不新增评分 gate。
 
+**[ARTIFACT]** 2026-07-13 的 v3.11 fresh root
+`paper_primary_v3_11_offline86_ruoli_gpt54mini_outer6_model1_actionable_plus01` 绑定 scoped-clean
+commit `a0ca50d8`，通过 86/86 cache-only prewarm（47 images / 7 verifier runtimes）。共享 train
+执行 38 次且全部 evaluation-valid：5 success / 33 residual。一次 root proposal 原子返回 exact 3；
+activation audit 为 3 个 candidate、3 个 distinct signature、group size `[1,1,1]`，0 error、0 retry。
+poster root 因 train support=0 进入 repair；court 与 Mario roots 静态通过，分别为 3/3 与 2/2
+failure activation precision，均只覆盖 1 个 train family，未达到既有 2-family coverage target，最终
+court 因 support=3 入选。
+
+no-recursive arm 运行 16 个 pair slot，只在 `court-form-filling-5` 激活一次。该 pair 的 treatment
+确实执行：编译后的 skill 保留了 form-field scope、`/root/sc100-blank.pdf` 和
+`/root/sc100-filled.pdf` 三个 target/value 指令；raw/candidate 分别产生 66/16 个 action start，
+observation、treatment 和 PDF hash 均不同，两个外部离线 verifier 结果仍都为失败。因此总计
+raw/candidate 均为 4/16，0 gain、0 harm、LCB=0、cost ratio=0.820789；这证明 actionability
+修复改变了实际行为和成本，但尚未产生 task-success gain。另一个不激活 candidate 的
+`anthropic-poster-design-2` raw/policy-off trial 使用 68,400,000 bytes，超过冻结的 67,108,864-byte
+hard cap；容器按合同终止且 hard-budget retry 被抑制。该 pair 因而 invalid，report 以
+`invalid_counterfactual_evidence` non-claim 停止，archive `incumbent_id=null`。这里不提高 fuse，
+也不把 invalid raw row 拼接或改记为普通错误答案。
+
+recursive arm 更早暴露一个与候选质量无关的 request-contract 缺陷。poster repair 的 provider
+transport 与 JSON object 解析在 53.402 秒内成功，但 response 顶层唯一字段为 `hypotheses`；repair
+envelope/parser 严格期待 singular `hypothesis`，因此 candidate-local `response_envelope` failure 阻止
+整代 held-out validation/promotion。事后逐层复核 `ValidationContext -> RecursiveValidationEngine ->
+StructuredHypothesisProposer.revise` 发现，真实 repair capabilities 已不含 `proposal_batch_contract`；
+最初的“batch contract 泄漏”判断错误。实际缺口是 repair 只在 nested `output_schema` 中声明 singular
+field，而共享 system contract 仅明确了 root batch 情况，没有在 versioned policy 存在时显式要求
+one-object/`hypothesis`，模型仍返回了 root-shaped envelope。recursive report 以
+`proposal_model_failure` non-claim 停止，archive 同样无 incumbent。这个结果把下一步限定为显式、
+协议绑定的 singular repair response，而不是添加 gate、放宽 parser、增加 retry 或修改 evaluator。
+
 ### 7.3 当前 infrastructure/protocol 状态
 
 全 inventory 的
@@ -867,6 +907,15 @@ directive 的覆盖面，尚无依据。轨迹和 compiled skill 复核把下一
 training feedback 强推 completion check，lowering 又丢 target 并输出 mode JSON。v3.11 因此保留
 coverage objective，只修训练提示、action schema 与 agent-facing lowering。
 
+v3.11 live 已把这个假设拆成两部分。action representation 部分通过：三项 root directive 都是
+可读的 target/value 指令，入选 court treatment 在 held-out 激活题上把 action starts 从 66 降到 16，
+并生成不同 PDF；因此不能再把 0 gain 解释为 skill 未注入或 lowering 未执行。但 task-success 仍为
+0→0，说明单个局部 directive 尚未解决缺失日期/checkbox 等真实 operator 细节。另一方面，recursive
+arm 没有检验到 repair quality，因为 generic response contract 未显式绑定 singular repair，模型返回
+了 root-shaped batch envelope。v3.12 只显式版本化这一 response scope；它不是新的 performance gate。只有 fresh v3.12
+真实跑完 repair 与 paired validation 后，才能判断下一 blocker 是 repair quality、candidate coverage
+还是局部 policy 仍无净收益。
+
 ### 8.4 P1：prospective runtime features 仍过粗
 
 当前 SkillLearn feature catalog 主要只有
@@ -932,7 +981,7 @@ dependency-cache-only 尚未强制；但当前
 [`docker_egress.py`](../assumption_agent/benchmarks/docker_egress.py) 和 protocol manifest 已
 实现 provider-only hard egress、offline package mode 与 network fuse。本次已同步主
 README、benchmark protocol、offline-verifier matrix 和 status 摘要；本轮又把 receipt
-runtime provenance、v3.5 serial execution-policy / repair identity / response-contract binding、v3.6 contrastive/invalid-evidence contract、v3.7-v3.9 并发容量/共享 slot、v3.10 live 结果、v3.11 actionable lowering/diversity audit 与 test 状态更新为 320/320。历史段落仍
+runtime provenance、v3.5 serial execution-policy / repair identity / response-contract binding、v3.6 contrastive/invalid-evidence contract、v3.7-v3.9 并发容量/共享 slot、v3.10/v3.11 live 结果，以及 v3.12 singular repair scope。历史段落仍
 保留为 diagnostic ledger，不能当作当前协议。
 
 这种文档漂移本身会破坏 protocol review；重新跑论文实验前必须同步。
@@ -960,7 +1009,8 @@ runtime provenance、v3.5 serial execution-policy / repair identity / response-c
 | P1 | 递归因果归因 | 两臂共享 train evidence 和 roots，唯一差异是 repair；behavior-identical 时 effect 报 N/A，不重采样 |
 | 完成（v3.9 clean 负结果） | contrastive trigger learning 首次 full live 验证 | 38/38 valid train、16/16 valid pairs、0 provider/infra/mismatch；两代 candidate 均仅 1/16 activation、0 gain/0 harm，证明 precision-first 已避开 false positive 但发生 coverage starvation |
 | 完成（v3.10 clean 负结果） | proposal diversity 与 train-only coverage selection | exact 3 / 3 static pass；选中 2-family、6/6 precision root；activation 2/16 但 0 gain/0 harm；G2 两批 signature collapse 被 terminal reject；无 incumbent |
-| 完成实现、live 待验（v3.11） | actionable directive lowering 与 audit-only diversity | exact count/atomic parse 保留；同 signature 的 action variants 不再误作 malformed；target+value 均进入 readable SKILL；TRAIN feedback 不再硬编码 completion check；不改 evaluator/promotion/split/budget |
+| 完成（v3.11 机制有效、性能/claim 失败） | actionable directive lowering 与 audit-only diversity | 38/38 valid train；exact 3 / 3 distinct signatures；court treatment 在激活题改变 trace/PDF 且 66→16 actions，但 0→0；no-rec 因未激活 raw poster 超 64 MiB non-claim；recursive repair 返回 batch envelope 而 non-claim；无 incumbent |
+| 完成实现、fresh live 待验（v3.12） | singular repair request scope | repair 保留 train coverage objective，top-level contract 显式要求 one-object/`hypothesis`，并防御性移除意外 batch contract；system prompt/plan/freeze 均版本绑定；不改 gate/evaluator/fuse/model/provider/split/scheduler/retry/sealed；v3.11 rows 不复用 |
 | P1 | prospective family-out routing | trigger 不依赖已知 family 或预编译 item ID，只使用冻结、无 gold、运行时可得语义特征 |
 | P2 | 多 clade archive | 同 epoch 至少两个 clade 可继续扩展；node 绑定 protocol/evidence/promotion hashes，并报告 retention 与 branch productivity |
 | P2 | evaluator co-evolution | 独立 anchor challenger、epoch transition、selective invalidation 和旧 incumbent re-evaluation 实际执行后再作主张 |
@@ -1075,12 +1125,20 @@ runtime provenance、v3.5 serial execution-policy / repair identity / response-c
     都为 3/16、0 gain/0 harm。第二代 recursive/no-rec 各自收到 transport/JSON/exact-count 成功的
     三候选 response，却都只有一个 distinct activation signature，旧合同 terminal reject；两臂
     proposal failure non-claim、`incumbent_id=null`、sealed=false；
-36. 已实现 v3.11 bounded actionability revision 与 320/320 离线回归：exact-three cardinality 和原子
-    parse 保持 hard contract，activation signature 改为 audit-only search preference，允许同 scope 的
-    novel action treatment，不 retry。TRAIN failure feedback 改为具体 corrective operator，不再硬编码
-    completion check；prompt action 必须是 instruction-grounded imperative sentence；lowering v2 始终
-    保留 target+value 并 humanize mapping。model/provider/scheduler/evaluator/promotion/split/budget/retry/
-    controls/sealed 均不变，v3.10 rows 不复用，须 fresh v3.11 lock/root。
+36. 已实现并运行 v3.11 bounded actionability revision：38/38 valid train（5 success / 33 residual），
+    exact-three 得到 3 个 distinct activation signatures；2 个 root 静态通过。选中的 court policy 在
+    validation 激活 1/16，实际改变 trace/PDF 并将 action starts 从 66 降到 16，但 task success 仍
+    0→0；总计 raw/candidate 均 4/16、0 gain/0 harm。no-rec 又因一个未激活 raw poster trial 超过
+    冻结 64 MiB 而 terminal non-claim。recursive repair transport/JSON 成功，却返回 root-shaped
+    `hypotheses`；调用链复核确认真实 repair payload 没有 batch contract，但也没有 versioned singular
+    response override，整代在 validation 前 non-claim。
+    两臂 `incumbent_id=null`、sealed=false，不 freeze、不跑 controls/family-out/HippoRAG；
+37. 已实现 v3.12 bounded repair-scope revision：repair 保留 `train_coverage_objective`，并以
+    `single_candidate_excludes_root_batch_contract_v1` 绑定 top-level one-object/`hypothesis` response、
+    system prompt、plan 与 freeze；若调用方意外提供 root batch contract，`revise()` 防御性删除。
+    root exact-three、model/provider、6×outer/1×model 调度、offline evaluator、promotion gate、split、
+    action/64 MiB network budget、retry、controls 与 sealed 全部不变；须新 clean lock/root，v3.11 rows
+    不复用。
 
 这比立刻扩展 archive 或继续补 HLE source span 更能降低研究风险。
 
@@ -1227,15 +1285,16 @@ infra/mismatch failure，并写出四份完整 report/archive。这个结果不�
 都只激活 1/16 validation，candidate/raw 均为 3/16、0 gain/0 harm；no-recursive roots 均在
 train-only static audit 被拒绝，两臂 `incumbent_id` 都为空。
 
-因此距离目标最近的缺口不再是 transport、offline evaluator 或更多 promotion gate，而是 gate
-之前的 action representation 与 candidate treatment。v3.10 已证明 exact-three/coverage-first 能把
-activation 从 1/16 提高到 2/16，却不能产生 gain；第二代又证明用文本要求模型满足 host 事后计算的
-pairwise signature 不是可靠 response contract。v3.11 因此保留 exact-three cardinality、8,000-token
-budget 和 train-only coverage selection，但把 signature distinctness 降为可审计搜索偏好，并修复
-TRAIN feedback、imperative action schema 和 lowering v2 的 target/value 丢失。它没有放宽
-evaluator/promotion，也没有改 split/budget/sealed。真正 multi-program bundle 暂不进入本轮，因为
-当前尚未证明单个 actionable policy 能产生 gain；此时扩 bundle 只会放大含糊 treatment。只有新的
-clean development
+因此距离目标最近的缺口不再是 transport、offline evaluator 或更多 promotion gate。v3.10 已证明
+exact-three/coverage-first 能把 activation 从 1/16 提高到 2/16，却不能产生 gain；第二代又证明用文本
+要求模型满足 host 事后计算的 pairwise signature 不是可靠 response contract。v3.11 随后证明新的
+imperative action/lowering 确实改变 agent trace、PDF 和 action cost，但唯一激活仍为 0→0；它同时因
+repair model 返回 root-shaped batch envelope 而没有完成 recursive quality 检验。调用链确认 batch
+contract 实际未进入 repair，因此 v3.12 只新增 protocol-bound singular response override，保留
+exact-three root、8,000-token budget、train-only coverage selection 和 audit-only
+signature policy，也没有放宽 evaluator/promotion 或修改 split/fuse/retry/sealed。真正 multi-program
+bundle 暂不进入本轮：先让现有 recursive branch 按其本来 singular contract 完整执行，才能区分
+repair 是否带来局部净收益与是否需要 bundle。只有新的 clean development
 产生 retained validation gain 和真实 incumbent，才按既定顺序进入 freeze、完整 controls、family-out、
 sealed test，最后才谈 HLE raw/HippoRAG transfer、多 clade 与 evaluator co-evolution。历史和被中断
 rows 仍不得跨协议拼接。最诚实的论文级表述是：

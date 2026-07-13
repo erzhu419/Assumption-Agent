@@ -63,6 +63,9 @@ V310_PROTOCOL_PATH = (
 V311_PROTOCOL_PATH = (
     ROOT / "manifests" / "skilllearn_paper_protocol_v3_11_ruoli_gpt54mini.json"
 )
+V312_PROTOCOL_PATH = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_12_ruoli_gpt54mini.json"
+)
 MANIFEST_PATH = (
     ROOT / "manifests" / "skilllearnbench_instance_holdout_offline_ready_v1.json"
 )
@@ -704,6 +707,7 @@ def test_execution_report_preserves_legacy_promotion_summary_schema(
         V39_PROTOCOL_PATH,
         V310_PROTOCOL_PATH,
         V311_PROTOCOL_PATH,
+        V312_PROTOCOL_PATH,
     ),
 )
 def test_freeze_accepts_clean_contrastive_report(protocol_path: Path) -> None:
@@ -723,6 +727,30 @@ def test_freeze_accepts_clean_contrastive_report(protocol_path: Path) -> None:
         manifest=manifest,
         recursive_validation_enabled=True,
     )
+
+
+def test_freeze_binds_v312_repair_request_scope_plan_provenance() -> None:
+    protocol = PaperProtocol.read(V312_PROTOCOL_PATH)
+    manifest = SplitManifest.read(MANIFEST_PATH)
+    report = _development_report(
+        protocol,
+        manifest,
+        archive_hash="unused",
+        recursive=True,
+        hypothesis_id="recursive-policy",
+    )
+    report["plan"]["repair_request_scope_policy"] = "drifted"
+
+    with pytest.raises(
+        ValueError,
+        match="development report plan mismatch: repair_request_scope_policy",
+    ):
+        paper_freeze._validate_development_report(
+            report,
+            protocol=protocol,
+            manifest=manifest,
+            recursive_validation_enabled=True,
+        )
 
 
 @pytest.mark.parametrize(
@@ -749,6 +777,7 @@ def test_freeze_accepts_clean_contrastive_report(protocol_path: Path) -> None:
         V39_PROTOCOL_PATH,
         V310_PROTOCOL_PATH,
         V311_PROTOCOL_PATH,
+        V312_PROTOCOL_PATH,
     ),
 )
 def test_freeze_rejects_contrastive_generation_evidence_drift(
@@ -1348,6 +1377,7 @@ def _development_report(
         "3.9.0",
         "3.10.0",
         "3.11.0",
+        "3.12.0",
     }:
         train_count = int(phase["train_count"])
         generation.update(
@@ -1455,6 +1485,7 @@ def _development_report(
                     "model_inference_slots",
                     "proposal_diversity_policy",
                     "proposal_response_max_tokens",
+                    "repair_request_scope_policy",
                 )
                 if field in protocol.payload["execution"]
             },
@@ -1532,6 +1563,7 @@ def _promotion_decision(
         "3.9.0",
         "3.10.0",
         "3.11.0",
+        "3.12.0",
     }:
         summary.update(
             {

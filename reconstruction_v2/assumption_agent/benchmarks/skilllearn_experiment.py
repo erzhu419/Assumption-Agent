@@ -20,6 +20,7 @@ from ..provider_chain import build_proposal_model, proposal_provider_status
 from ..proposer import (
     LEGACY_PROPOSAL_DIVERSITY_POLICY_VERSION,
     PROPOSAL_DIVERSITY_POLICY_VERSION,
+    REPAIR_REQUEST_SCOPE_POLICY_VERSION,
     ROOT_PROPOSAL_REPLAY_POLICY_VERSION,
     HypothesisProposalCallError,
     StructuredHypothesisProposer,
@@ -170,6 +171,16 @@ def main() -> None:
         proposal_response_max_tokens = int(proposal_response_max_tokens)
         if proposal_response_max_tokens <= 0:
             raise ValueError("proposal response token budget must be positive")
+    repair_request_scope_policy = execution_contract.get(
+        "repair_request_scope_policy"
+    )
+    if repair_request_scope_policy is not None:
+        repair_request_scope_policy = str(repair_request_scope_policy)
+    if repair_request_scope_policy not in {
+        None,
+        REPAIR_REQUEST_SCOPE_POLICY_VERSION,
+    }:
+        raise ValueError("unsupported repair request scope policy")
     if contrastive_training_evidence_policy is not None:
         contrastive_training_evidence_policy = str(
             contrastive_training_evidence_policy
@@ -347,6 +358,11 @@ def main() -> None:
                 "proposal_response_max_tokens": proposal_response_max_tokens,
             }
             if diversity_enabled
+            else {}
+        ),
+        **(
+            {"repair_request_scope_policy": repair_request_scope_policy}
+            if repair_request_scope_policy is not None
             else {}
         ),
         "agent_id": agent_id,
@@ -567,6 +583,7 @@ def main() -> None:
         contrastive_training_evidence_policy=(
             contrastive_training_evidence_policy
         ),
+        repair_request_scope_policy=repair_request_scope_policy,
         parallel_workers=parallel_workers,
         invalid_trial_max_attempts=invalid_trial_max_attempts,
         invalid_trial_retry_backoff_seconds=invalid_trial_retry_backoff_seconds,
@@ -607,6 +624,7 @@ def main() -> None:
             contrastive_training_evidence_policy=(
                 contrastive_training_evidence_policy
             ),
+            repair_request_scope_policy=repair_request_scope_policy,
             parallel_workers=parallel_workers,
             invalid_trial_max_attempts=invalid_trial_max_attempts,
             invalid_trial_retry_backoff_seconds=invalid_trial_retry_backoff_seconds,

@@ -16,6 +16,9 @@ from .models import (
 
 ROOT_PROPOSAL_REPLAY_POLICY_VERSION = "request_identical_root_proposal_replay_v1"
 REPAIR_BRANCH_ID_POLICY_VERSION = "parent_content_scoped_repair_id_v1"
+REPAIR_REQUEST_SCOPE_POLICY_VERSION = (
+    "single_candidate_excludes_root_batch_contract_v1"
+)
 LEGACY_PROPOSAL_DIVERSITY_POLICY_VERSION = (
     "exact_count_pairwise_train_failure_activation_v1"
 )
@@ -365,6 +368,19 @@ class StructuredHypothesisProposer:
         if any(residual.split is not SplitName.TRAIN for residual in residuals):
             raise PermissionError("recursive repair may use training residuals only")
         capability_payload = dict(capabilities or {})
+        repair_request_scope_policy = capability_payload.get(
+            "repair_request_scope_policy"
+        )
+        if repair_request_scope_policy not in {
+            None,
+            REPAIR_REQUEST_SCOPE_POLICY_VERSION,
+        }:
+            raise ValueError("unsupported repair request scope policy")
+        scoped_single_repair = (
+            repair_request_scope_policy == REPAIR_REQUEST_SCOPE_POLICY_VERSION
+        )
+        if scoped_single_repair:
+            capability_payload.pop("proposal_batch_contract", None)
         payload = {
             "request_kind": "repair_hypothesis_program",
             "contract_version": "hypothesis_program_v1",
@@ -387,6 +403,17 @@ class StructuredHypothesisProposer:
             ],
             "repair_depth": depth,
         }
+        if scoped_single_repair:
+            payload["repair_request_scope_policy"] = (
+                REPAIR_REQUEST_SCOPE_POLICY_VERSION
+            )
+            payload["repair_response_contract"] = {
+                "response_field": "hypothesis",
+                "response_type": "object",
+                "required_count": 1,
+                "root_batch_contract_applies": False,
+                "compact_output": True,
+            }
         self._emit_model_event("hypothesis_repair_requested", trace_id, payload)
         response = self._complete(payload, trace_id=trace_id)
         if not isinstance(response, Mapping):
@@ -486,6 +513,9 @@ class StructuredHypothesisProposer:
                 payload={
                     "request_kind": payload.get("request_kind"),
                     "request_hash": stable_hash(payload),
+                    "repair_request_scope_policy": payload.get(
+                        "repair_request_scope_policy"
+                    ),
                     "residual_count": len(payload.get("residuals", [])),
                     "evaluator_epoch": payload.get("evaluator_epoch"),
                     "raw_content_persisted": False,

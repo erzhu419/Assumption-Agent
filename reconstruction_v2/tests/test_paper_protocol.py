@@ -40,6 +40,7 @@ from assumption_agent.evolution import (
 from assumption_agent.proposer import (
     LEGACY_PROPOSAL_DIVERSITY_POLICY_VERSION,
     PROPOSAL_DIVERSITY_POLICY_VERSION,
+    REPAIR_REQUEST_SCOPE_POLICY_VERSION,
 )
 from assumption_agent.benchmarks.skilllearn_compiler import (
     LEGACY_SKILL_ACTION_LOWERING_VERSION,
@@ -82,6 +83,9 @@ V310_PROTOCOL = (
 )
 V311_PROTOCOL = (
     ROOT / "manifests" / "skilllearn_paper_protocol_v3_11_ruoli_gpt54mini.json"
+)
+V312_PROTOCOL = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_12_ruoli_gpt54mini.json"
 )
 MANIFEST_HASH = stable_hash({"manifest": "paper-test"})
 
@@ -429,6 +433,52 @@ def test_v311_changes_only_actionable_pre_gate_search_and_lowering() -> None:
     assert v311 == v310
 
 
+def test_v312_changes_only_repair_request_scope() -> None:
+    protocol = PaperProtocol.read(V312_PROTOCOL)
+
+    assert protocol.validate_structure() == []
+    assert protocol.payload["protocol_version"] == "3.12.0"
+    assert protocol.payload["execution"]["repair_request_scope_policy"] == (
+        REPAIR_REQUEST_SCOPE_POLICY_VERSION
+    )
+
+    v311 = copy.deepcopy(PaperProtocol.read(V311_PROTOCOL).payload)
+    v312 = copy.deepcopy(protocol.payload)
+    for payload in (v311, v312):
+        payload.pop("protocol_id")
+        payload.pop("protocol_version")
+    v312["execution"].pop("repair_request_scope_policy")
+    assert v312 == v311
+
+
+@pytest.mark.parametrize("mutation", ("missing", "drifted"))
+def test_v312_rejects_repair_request_scope_drift(mutation: str) -> None:
+    protocol = PaperProtocol.read(V312_PROTOCOL)
+    payload = copy.deepcopy(protocol.payload)
+    if mutation == "missing":
+        payload["execution"].pop("repair_request_scope_policy")
+    else:
+        payload["execution"]["repair_request_scope_policy"] = "drifted"
+
+    assert "repair_request_scope_policy_mismatch" in PaperProtocol(
+        protocol.path,
+        payload,
+    ).validate_structure()
+
+
+def test_v311_rejects_v312_only_repair_request_scope() -> None:
+    protocol = PaperProtocol.read(V311_PROTOCOL)
+    payload = copy.deepcopy(protocol.payload)
+    payload["execution"]["repair_request_scope_policy"] = (
+        REPAIR_REQUEST_SCOPE_POLICY_VERSION
+    )
+
+    assert "repair_request_scope_policy_unexpected" in PaperProtocol(
+        protocol.path,
+        payload,
+    ).validate_structure()
+
+
 @pytest.mark.parametrize(
     ("field_name", "drifted_value", "expected_issue"),
     (
@@ -561,7 +611,16 @@ def test_v31_through_v35_keep_historical_candidate_selection(
     ),
 )
 @pytest.mark.parametrize(
-    "protocol_path", (V36_PROTOCOL, V37_PROTOCOL, V38_PROTOCOL, V39_PROTOCOL)
+    "protocol_path",
+    (
+        V36_PROTOCOL,
+        V37_PROTOCOL,
+        V38_PROTOCOL,
+        V39_PROTOCOL,
+        V310_PROTOCOL,
+        V311_PROTOCOL,
+        V312_PROTOCOL,
+    ),
 )
 def test_contrastive_protocol_rejects_contract_drift(
     protocol_path: Path,
@@ -779,6 +838,9 @@ def test_execution_lock_binds_tracked_offline_readiness_receipt(
         V37_PROTOCOL,
         V38_PROTOCOL,
         V39_PROTOCOL,
+        V310_PROTOCOL,
+        V311_PROTOCOL,
+        V312_PROTOCOL,
     ),
 )
 def test_versioned_execution_lock_binds_resolved_agent_policy(

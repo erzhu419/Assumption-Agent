@@ -550,6 +550,7 @@ def _validate_development_report(
         "proposal_candidate_selection",
         "proposal_diversity_policy",
         "proposal_response_max_tokens",
+        "repair_request_scope_policy",
         "contrastive_training_evidence_policy",
         "counterfactual_invalid_evidence_policy",
         "provider_failure_policy",

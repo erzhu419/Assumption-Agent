@@ -72,6 +72,9 @@ def test_openai_compatible_proposal_model_uses_json_contract(monkeypatch) -> Non
     assert "TRAIN residual context.task_instruction" in system_prompt
     assert "enum-only value" in system_prompt
     assert "mapping, mode, or check label" in system_prompt
+    assert "repair_request_scope_policy" in system_prompt
+    assert "repair_response_contract" in system_prompt
+    assert "singular top-level field hypothesis" in system_prompt
     assert (
         "never claim preserve_baseline inside an activated action node"
         in system_prompt

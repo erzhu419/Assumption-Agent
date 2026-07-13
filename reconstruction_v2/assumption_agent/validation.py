@@ -50,6 +50,7 @@ class ValidationContext:
     external_evidence_is_hidden: bool = False
     contrastive_training_evidence_policy: str | None = None
     train_coverage_objective: Mapping[str, Any] | None = None
+    repair_request_scope_policy: str | None = None
 
 
 def backend_action_contract_issues(
@@ -658,6 +659,15 @@ class RecursiveValidationEngine:
                             )
                         }
                         if context.train_coverage_objective
+                        else {}
+                    ),
+                    **(
+                        {
+                            "repair_request_scope_policy": (
+                                context.repair_request_scope_policy
+                            )
+                        }
+                        if context.repair_request_scope_policy
                         else {}
                     ),
                 },

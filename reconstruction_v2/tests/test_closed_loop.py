@@ -38,6 +38,7 @@ from assumption_agent.proposer import (
     HypothesisProposalCallError,
     PROPOSAL_DIVERSITY_POLICY_VERSION,
     REPAIR_BRANCH_ID_POLICY_VERSION,
+    REPAIR_REQUEST_SCOPE_POLICY_VERSION,
     StructuredHypothesisProposer,
 )
 from assumption_agent.runtime import LaneRegistry, PolicyRuntime
@@ -180,6 +181,68 @@ def test_failed_hypothesis_is_repaired_and_recursively_revalidated() -> None:
         f"repair_{repair_event['payload']['branch_identity_hash']}"
     )
     assert repair_event["payload"]["model_supplied_child_id_used"] is False
+
+
+def test_repair_request_excludes_root_batch_contract_but_retains_coverage() -> None:
+    model = QueueProposalModel(
+        [{"hypothesis": _program_dict(hypothesis_id="scoped-repair")}]
+    )
+    sink = MemoryEventSink()
+    proposer = StructuredHypothesisProposer(model, event_sink=sink)
+    parent = HypothesisProgram.from_dict(
+        _program_dict(hypothesis_id="repair-scope-parent")
+    )
+    coverage_objective = {
+        "policy": "train_family_coverage_v1",
+        "coverage_unit": "distinct_failure_family",
+        "failure_activation_family_target": 2,
+        "validation_outcomes_used": False,
+    }
+    capabilities = {
+        "repair_request_scope_policy": REPAIR_REQUEST_SCOPE_POLICY_VERSION,
+        "proposal_batch_contract": {
+            "policy": PROPOSAL_DIVERSITY_POLICY_VERSION,
+            "required_count": 3,
+            "max_action_nodes_per_hypothesis": 4,
+        },
+        "train_coverage_objective": coverage_objective,
+    }
+
+    proposer.revise(
+        parent,
+        failed_checks=({"check": "runtime_action", "passed": False},),
+        residuals=_residuals(),
+        depth=1,
+        capabilities=capabilities,
+        trace_id="repair-request-scope",
+    )
+
+    request = model.requests[0]
+    assert request["repair_request_scope_policy"] == (
+        REPAIR_REQUEST_SCOPE_POLICY_VERSION
+    )
+    assert request["repair_response_contract"] == {
+        "response_field": "hypothesis",
+        "response_type": "object",
+        "required_count": 1,
+        "root_batch_contract_applies": False,
+        "compact_output": True,
+    }
+    assert "proposal_batch_contract" not in request
+    assert "proposal_batch_contract" not in request["capabilities"]
+    assert request["capabilities"]["train_coverage_objective"] == coverage_objective
+    assert "proposal_count_must_equal_requested_count" not in request["constraints"]
+    assert request["constraints"]["candidate_search_uses_train_only"] is True
+    assert request["constraints"]["candidate_search_family_target"] == 2
+    assert set(request["output_schema"]) == {"hypothesis"}
+    assert "hypotheses" not in request["output_schema"]
+    assert "proposal_batch_contract" in capabilities
+    requested = next(
+        row for row in sink.events if row["event"] == "hypothesis_repair_requested"
+    )
+    assert requested["payload"]["repair_request_scope_policy"] == (
+        REPAIR_REQUEST_SCOPE_POLICY_VERSION
+    )
 
 
 def test_repair_model_failure_rejects_only_that_candidate_branch() -> None:
