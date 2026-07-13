@@ -70,6 +70,9 @@ V312_PROTOCOL_PATH = (
 V313_PROTOCOL_PATH = (
     ROOT / "manifests" / "skilllearn_paper_protocol_v3_13_ruoli_gpt54mini.json"
 )
+V314_PROTOCOL_PATH = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_14_ruoli_gpt54mini.json"
+)
 MANIFEST_PATH = (
     ROOT / "manifests" / "skilllearnbench_instance_holdout_offline_ready_v1.json"
 )
@@ -742,6 +745,7 @@ def test_execution_report_preserves_legacy_promotion_summary_schema(
         V311_PROTOCOL_PATH,
         V312_PROTOCOL_PATH,
         V313_PROTOCOL_PATH,
+        V314_PROTOCOL_PATH,
     ),
 )
 def test_freeze_accepts_clean_contrastive_report(protocol_path: Path) -> None:
@@ -787,8 +791,14 @@ def test_freeze_binds_v312_repair_request_scope_plan_provenance() -> None:
         )
 
 
-def test_freeze_binds_v313_candidate_bundle_plan_provenance() -> None:
-    protocol = PaperProtocol.read(V313_PROTOCOL_PATH)
+@pytest.mark.parametrize(
+    "protocol_path",
+    (V313_PROTOCOL_PATH, V314_PROTOCOL_PATH),
+)
+def test_freeze_binds_candidate_bundle_plan_provenance(
+    protocol_path: Path,
+) -> None:
+    protocol = PaperProtocol.read(protocol_path)
     manifest = SplitManifest.read(MANIFEST_PATH)
     report = _development_report(
         protocol,
@@ -837,6 +847,7 @@ def test_freeze_binds_v313_candidate_bundle_plan_provenance() -> None:
         V311_PROTOCOL_PATH,
         V312_PROTOCOL_PATH,
         V313_PROTOCOL_PATH,
+        V314_PROTOCOL_PATH,
     ),
 )
 def test_freeze_rejects_contrastive_generation_evidence_drift(
@@ -1233,12 +1244,21 @@ def test_frozen_archive_rejects_candidate_treatment_substitution(
         )
 
 
+@pytest.mark.parametrize(
+    ("protocol_path", "protocol_version"),
+    (
+        (V313_PROTOCOL_PATH, "3.13.0"),
+        (V314_PROTOCOL_PATH, "3.14.0"),
+    ),
+)
 @pytest.mark.parametrize("allowed", (True, False))
-def test_v313_frozen_archive_accepts_canonical_candidate_bundle(
+def test_bundle_protocol_frozen_archive_accepts_canonical_candidate_bundle(
     tmp_path: Path,
+    protocol_path: Path,
+    protocol_version: str,
     allowed: bool,
 ) -> None:
-    protocol = PaperProtocol.read(V313_PROTOCOL_PATH)
+    protocol = PaperProtocol.read(protocol_path)
     manifest = SplitManifest.read(MANIFEST_PATH)
     evaluator_epoch = f"skilllearn-eval-{manifest.manifest_hash[:12]}"
     archive, report = _bundle_archive_and_report(
@@ -1260,7 +1280,7 @@ def test_v313_frozen_archive_accepts_canonical_candidate_bundle(
         expected_evaluator_epoch=evaluator_epoch,
         expected_report=report,
         promotion_spec=protocol.promotion_gate_spec,
-        protocol_version="3.13.0",
+        protocol_version=protocol_version,
     )
 
     assert [program.id for program in frozen.active_programs] == (
@@ -1298,13 +1318,22 @@ def test_v313_frozen_archive_accepts_canonical_candidate_bundle(
         ),
     ),
 )
-def test_v313_frozen_archive_rejects_bundle_tampering(
+@pytest.mark.parametrize(
+    ("protocol_path", "protocol_version"),
+    (
+        (V313_PROTOCOL_PATH, "3.13.0"),
+        (V314_PROTOCOL_PATH, "3.14.0"),
+    ),
+)
+def test_bundle_protocol_frozen_archive_rejects_bundle_tampering(
     tmp_path: Path,
     mutation: str,
     expected_error: str,
     deep_validation: bool,
+    protocol_path: Path,
+    protocol_version: str,
 ) -> None:
-    protocol = PaperProtocol.read(V313_PROTOCOL_PATH)
+    protocol = PaperProtocol.read(protocol_path)
     manifest = SplitManifest.read(MANIFEST_PATH)
     evaluator_epoch = f"skilllearn-eval-{manifest.manifest_hash[:12]}"
     archive, report = _bundle_archive_and_report(protocol, manifest, allowed=True)
@@ -1357,7 +1386,7 @@ def test_v313_frozen_archive_rejects_bundle_tampering(
             expected_evaluator_epoch=evaluator_epoch,
             expected_report=report,
             promotion_spec=protocol.promotion_gate_spec,
-            protocol_version="3.13.0",
+            protocol_version=protocol_version,
         )
 
 
@@ -1629,7 +1658,7 @@ def _bundle_archive_and_report(
         summary_object = paper_freeze._pair_summary_from_mapping(
             summary,
             confidence=protocol.promotion_gate_spec.confidence,
-            protocol_version="3.13.0",
+            protocol_version=str(protocol.payload["protocol_version"]),
         )
         blockers = paper_freeze.promotion_summary_blockers(
             protocol.promotion_gate_spec,
@@ -1723,7 +1752,10 @@ def _development_report(
     payload["evaluator_epoch"] = evaluator_epoch
     payload["status"] = "promoted"
     program = HypothesisProgram.from_dict(payload)
-    bundle_protocol = protocol.payload["protocol_version"] == "3.13.0"
+    bundle_protocol = protocol.payload["protocol_version"] in {
+        "3.13.0",
+        "3.14.0",
+    }
     generation = {
         "promoted": True,
         "recursive_depth": 0,
@@ -1756,6 +1788,7 @@ def _development_report(
         "3.11.0",
         "3.12.0",
         "3.13.0",
+        "3.14.0",
     }:
         train_count = int(phase["train_count"])
         generation.update(
@@ -1944,6 +1977,7 @@ def _promotion_decision(
         "3.11.0",
         "3.12.0",
         "3.13.0",
+        "3.14.0",
     }:
         summary.update(
             {

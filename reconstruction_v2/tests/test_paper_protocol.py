@@ -15,6 +15,7 @@ from assumption_agent.benchmarks.paper_protocol import (
     ACTIONABLE_CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
     CANDIDATE_BUNDLE_POLICY_VERSION,
     COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+    COMPLEMENTARY_FAMILY_SUPPORT_BUNDLE_CANDIDATE_SELECTION_VERSION,
     CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
     CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
     COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION,
@@ -26,9 +27,15 @@ from assumption_agent.benchmarks.codex_execution_policy import (
     LEGACY_CODEX_AGENT_EXECUTION_POLICY,
     LOW_REASONING_LOCAL_COMPACTION_POLICY,
     MODEL_ONLY_ACTION_BUDGET_POLICY,
+    codex_agent_execution_policy_for_protocol_version,
+)
+from assumption_agent.benchmarks.prewarm import (
+    DEVELOPMENT_PREWARM_VERSION,
+    development_prewarm_version_for_protocol,
 )
 from assumption_agent.benchmarks.skilllearn_lifecycle import (
     MODEL_INFERENCE_CONCURRENCY_POLICY_VERSION,
+    SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
 )
 from assumption_agent.benchmarks.skilllearn_experiment import _experiment_phase_name
 from assumption_agent.benchmarks.paper_report import (
@@ -93,6 +100,9 @@ V312_PROTOCOL = (
 V313_PROTOCOL = (
     ROOT / "manifests" / "skilllearn_paper_protocol_v3_13_ruoli_gpt54mini.json"
 )
+V314_PROTOCOL = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_14_ruoli_gpt54mini.json"
+)
 MANIFEST_HASH = stable_hash({"manifest": "paper-test"})
 
 
@@ -102,6 +112,21 @@ def test_historical_codex_execution_policy_hashes_remain_immutable() -> None:
     )
     assert LOW_REASONING_LOCAL_COMPACTION_POLICY.policy_hash == (
         "44b1744deaa2604df54d4d66cc4ad0cfaccdb99f20adfb1343e24088b73bab9f"
+    )
+
+
+def test_v314_reuses_v313_runtime_policy_versions() -> None:
+    assert codex_agent_execution_policy_for_protocol_version("3.13.0") == (
+        MODEL_ONLY_ACTION_BUDGET_POLICY
+    )
+    assert codex_agent_execution_policy_for_protocol_version("3.14.0") == (
+        MODEL_ONLY_ACTION_BUDGET_POLICY
+    )
+    assert development_prewarm_version_for_protocol("3.13.0") == (
+        DEVELOPMENT_PREWARM_VERSION
+    )
+    assert development_prewarm_version_for_protocol("3.14.0") == (
+        DEVELOPMENT_PREWARM_VERSION
     )
 
 
@@ -489,6 +514,118 @@ def test_v313_changes_only_complementary_bundle_evaluation() -> None:
     assert v313 == v312
 
 
+def test_v314_changes_only_selector_ranking_and_shared_baseline_replay() -> None:
+    protocol = PaperProtocol.read(V314_PROTOCOL)
+
+    assert protocol.validate_structure() == []
+    assert protocol.payload["protocol_id"] == (
+        "assumption-agent-v2-skilllearn-paper-v3.14-offline86-ruoli-gpt54mini"
+    )
+    assert protocol.payload["protocol_version"] == "3.14.0"
+    execution = protocol.payload["execution"]
+    assert execution["proposal_candidate_selection"] == (
+        COMPLEMENTARY_FAMILY_SUPPORT_BUNDLE_CANDIDATE_SELECTION_VERSION
+    )
+    assert execution["baseline_arm_evidence_replay_policy"] == (
+        SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+    )
+    assert execution["candidate_bundle_policy"] == CANDIDATE_BUNDLE_POLICY_VERSION
+    assert execution["counterfactual_replay_policy"] == (
+        PROGRAM_SET_COUNTERFACTUAL_REPLAY_POLICY_VERSION
+    )
+
+    v313 = copy.deepcopy(PaperProtocol.read(V313_PROTOCOL).payload)
+    v314 = copy.deepcopy(protocol.payload)
+    for payload in (v313, v314):
+        payload.pop("protocol_id")
+        payload.pop("protocol_version")
+    v314["execution"]["proposal_candidate_selection"] = v313["execution"][
+        "proposal_candidate_selection"
+    ]
+    v314["execution"]["baseline_arm_evidence_replay_policy"] = v313[
+        "execution"
+    ]["baseline_arm_evidence_replay_policy"]
+    assert v314 == v313
+
+
+@pytest.mark.parametrize(
+    ("field_name", "mutation", "expected_issue"),
+    (
+        (
+            "proposal_candidate_selection",
+            COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+            "proposal_candidate_selection_mismatch",
+        ),
+        (
+            "baseline_arm_evidence_replay_policy",
+            None,
+            "baseline_arm_evidence_replay_policy_mismatch",
+        ),
+        (
+            "baseline_arm_evidence_replay_policy",
+            "behavior_identical_validation_baseline_arm_replay_v1",
+            "baseline_arm_evidence_replay_policy_mismatch",
+        ),
+        (
+            "candidate_bundle_policy",
+            "drifted",
+            "candidate_bundle_policy_mismatch",
+        ),
+        (
+            "counterfactual_replay_policy",
+            "drifted",
+            "counterfactual_replay_policy_mismatch",
+        ),
+    ),
+)
+def test_v314_rejects_selector_and_shared_baseline_contract_drift(
+    field_name: str,
+    mutation: str | None,
+    expected_issue: str,
+) -> None:
+    protocol = PaperProtocol.read(V314_PROTOCOL)
+    payload = copy.deepcopy(protocol.payload)
+    if mutation is None:
+        payload["execution"].pop(field_name)
+    else:
+        payload["execution"][field_name] = mutation
+
+    assert expected_issue in PaperProtocol(
+        protocol.path,
+        payload,
+    ).validate_structure()
+
+
+@pytest.mark.parametrize(
+    ("field_name", "v314_value", "expected_issue"),
+    (
+        (
+            "proposal_candidate_selection",
+            COMPLEMENTARY_FAMILY_SUPPORT_BUNDLE_CANDIDATE_SELECTION_VERSION,
+            "proposal_candidate_selection_mismatch",
+        ),
+        (
+            "baseline_arm_evidence_replay_policy",
+            SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
+            "baseline_arm_evidence_replay_policy_mismatch",
+        ),
+    ),
+)
+def test_v313_rejects_v314_only_contract_values(
+    field_name: str,
+    v314_value: str,
+    expected_issue: str,
+) -> None:
+    protocol = PaperProtocol.read(V313_PROTOCOL)
+    payload = copy.deepcopy(protocol.payload)
+    payload["execution"][field_name] = v314_value
+
+    assert expected_issue in PaperProtocol(
+        protocol.path,
+        payload,
+    ).validate_structure()
+
+
 @pytest.mark.parametrize(
     ("field_name", "mutation", "expected_issue"),
     (
@@ -713,6 +850,7 @@ def test_v31_through_v35_keep_historical_candidate_selection(
         V311_PROTOCOL,
         V312_PROTOCOL,
         V313_PROTOCOL,
+        V314_PROTOCOL,
     ),
 )
 def test_contrastive_protocol_rejects_contract_drift(
@@ -935,6 +1073,7 @@ def test_execution_lock_binds_tracked_offline_readiness_receipt(
         V311_PROTOCOL,
         V312_PROTOCOL,
         V313_PROTOCOL,
+        V314_PROTOCOL,
     ),
 )
 def test_versioned_execution_lock_binds_resolved_agent_policy(

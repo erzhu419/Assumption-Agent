@@ -23,6 +23,7 @@ from assumption_agent.events import MemoryEventSink
 from assumption_agent.evolution import (
     CANDIDATE_BUNDLE_POLICY_VERSION,
     COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+    COMPLEMENTARY_FAMILY_SUPPORT_BUNDLE_CANDIDATE_SELECTION_VERSION,
     CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
     CounterfactualEvidenceReplayCache,
     EvolutionKernel,
@@ -1214,6 +1215,158 @@ def test_low_precision_complement_does_not_override_precision_first_singleton() 
     ] == 1
 
 
+def test_v314_no_recursive_g2_fixture_prefers_three_family_support() -> None:
+    programs, residuals, validation_tasks = _no_recursive_g2_bundle_fixture()
+    legacy, _, legacy_sink = _run_bundle_evolution(
+        low_precision_complement=False,
+        proposal_candidates=programs,
+        residuals=residuals,
+        validation_tasks=validation_tasks,
+        minimum_activation_rate=0.5,
+    )
+    revised, _, revised_sink = _run_bundle_evolution(
+        low_precision_complement=False,
+        selection_policy=(
+            COMPLEMENTARY_FAMILY_SUPPORT_BUNDLE_CANDIDATE_SELECTION_VERSION
+        ),
+        proposal_candidates=programs,
+        residuals=residuals,
+        validation_tasks=validation_tasks,
+        minimum_activation_rate=0.5,
+    )
+
+    assert legacy.selected_candidate_hypothesis_ids == ("g2-court", "g2-poster")
+    assert revised.selected_candidate_hypothesis_ids == (
+        "g2-court",
+        "g2-poster",
+        "g2-schedule",
+    )
+    assert revised.repaired_candidate_count == 0
+
+    legacy_selection = next(
+        row
+        for row in legacy_sink.events
+        if row["event"] == "hypothesis_training_candidate_selection_completed"
+    )
+    legacy_subset = next(
+        row
+        for row in legacy_selection["payload"]["candidate_subsets"]
+        if row["selected"]
+    )
+    assert legacy_subset["union_training_metrics"]["failure_support"] == 5
+    assert legacy_subset["union_training_metrics"][
+        "failure_activation_family_count"
+    ] == 2
+
+    revised_selection = next(
+        row
+        for row in revised_sink.events
+        if row["event"] == "hypothesis_training_candidate_selection_completed"
+    )
+    revised_subset = next(
+        row
+        for row in revised_selection["payload"]["candidate_subsets"]
+        if row["selected"]
+    )
+    assert revised_subset["union_training_metrics"][
+        "activation_precision_numerator"
+    ] == 7
+    assert revised_subset["union_training_metrics"][
+        "activation_precision_denominator"
+    ] == 7
+    assert revised_subset["union_training_metrics"]["failure_support"] == 7
+    assert revised_subset["union_training_metrics"][
+        "failure_activation_family_count"
+    ] == 3
+    assert revised_subset["ranking_priority"] == [
+        "precision_desc",
+        "family_target_deficit_asc",
+        "success_false_positives_asc",
+        "overlap_asc",
+        "actual_family_count_desc",
+        "failure_support_desc",
+        "bundle_size_asc",
+        "complexity_asc",
+        "canonical_set_hash_asc",
+    ]
+
+
+def test_v314_no_recursive_g2_bundle_selection_is_order_invariant() -> None:
+    programs, residuals, validation_tasks = _no_recursive_g2_bundle_fixture()
+    results: list[tuple[tuple[str, ...], str]] = []
+    for proposal_candidates in (programs, tuple(reversed(programs))):
+        result, _, sink = _run_bundle_evolution(
+            low_precision_complement=False,
+            selection_policy=(
+                COMPLEMENTARY_FAMILY_SUPPORT_BUNDLE_CANDIDATE_SELECTION_VERSION
+            ),
+            proposal_candidates=proposal_candidates,
+            residuals=residuals,
+            validation_tasks=validation_tasks,
+            minimum_activation_rate=0.5,
+        )
+        selection = next(
+            row
+            for row in sink.events
+            if row["event"]
+            == "hypothesis_training_candidate_selection_completed"
+        )
+        results.append(
+            (
+                result.selected_candidate_hypothesis_ids,
+                selection["payload"]["selected_candidate_set_hash"],
+            )
+        )
+
+    assert results[0] == results[1]
+
+
+def test_v314_no_recursive_g2_lower_precision_false_positive_cannot_win() -> None:
+    programs, residuals, validation_tasks = _no_recursive_g2_bundle_fixture(
+        low_precision_schedule=True
+    )
+    result, _, sink = _run_bundle_evolution(
+        low_precision_complement=False,
+        selection_policy=(
+            COMPLEMENTARY_FAMILY_SUPPORT_BUNDLE_CANDIDATE_SELECTION_VERSION
+        ),
+        proposal_candidates=programs,
+        residuals=residuals,
+        validation_tasks=validation_tasks,
+        minimum_activation_rate=0.5,
+    )
+
+    assert result.selected_candidate_hypothesis_ids == ("g2-court", "g2-poster")
+    selection = next(
+        row
+        for row in sink.events
+        if row["event"] == "hypothesis_training_candidate_selection_completed"
+    )
+    selected_subset = next(
+        row for row in selection["payload"]["candidate_subsets"] if row["selected"]
+    )
+    broad_subset = next(
+        row
+        for row in selection["payload"]["candidate_subsets"]
+        if len(row["accepted_hypothesis_ids"]) == 3
+    )
+    assert selected_subset["union_training_metrics"][
+        "success_false_positive_activation_count"
+    ] == 0
+    assert broad_subset["union_training_metrics"][
+        "activation_precision_numerator"
+    ] == 7
+    assert broad_subset["union_training_metrics"][
+        "activation_precision_denominator"
+    ] == 8
+    assert broad_subset["union_training_metrics"][
+        "success_false_positive_activation_count"
+    ] == 1
+    assert broad_subset["union_training_metrics"][
+        "failure_activation_family_count"
+    ] == 3
+
+
 def test_bundle_runtime_and_replay_identity_are_order_invariant_and_set_specific() -> None:
     sink = MemoryEventSink()
     runner = CounterfactualRunner(
@@ -1643,13 +1796,109 @@ def _bundle_task(task_id: str, family: str) -> TaskInput:
     )
 
 
+def _no_recursive_g2_bundle_fixture(
+    *,
+    low_precision_schedule: bool = False,
+) -> tuple[
+    tuple[HypothesisProgram, ...],
+    tuple[ResidualExample, ...],
+    tuple[TaskInput, ...],
+]:
+    fixture_families = (
+        ("anthropic-poster-design", "poster", 2),
+        ("court-form-filling", "court", 3),
+        ("schedule-coordination", "schedule", 2),
+    )
+
+    def program(family: str, selector: str) -> HypothesisProgram:
+        payload = _program_dict(hypothesis_id=f"g2-{selector}")
+        predicates: list[dict[str, Any]] = [
+            {"key": "g2_selector", "op": "eq", "value": selector}
+        ]
+        if not (low_precision_schedule and selector == "schedule"):
+            predicates.append(
+                {"key": "baseline_failed", "op": "eq", "value": True}
+            )
+        if selector == "schedule":
+            predicates.append(
+                {"key": "common_marker", "op": "eq", "value": True}
+            )
+        payload["trigger"] = {"all_of": predicates}
+        payload["statement"] = f"No-recursive G2 {family} specialist."
+        return HypothesisProgram.from_dict(payload)
+
+    programs = tuple(
+        program(family, selector)
+        for family, selector, _ in fixture_families
+    )
+    residuals: list[ResidualExample] = []
+    tasks: list[TaskInput] = []
+    for family, selector, failure_support in fixture_families:
+        for index in range(failure_support):
+            residuals.append(
+                ResidualExample(
+                    transition_id=f"g2-transition-{selector}-{index}",
+                    task_id=f"g2-train-{selector}-{index}",
+                    family=family,
+                    split=SplitName.TRAIN,
+                    features={
+                        "g2_selector": selector,
+                        "baseline_failed": True,
+                        "common_marker": True,
+                        "requires_live_source": False,
+                    },
+                    failure_type="no_recursive_g2_failure",
+                    evaluator_feedback=("use the family specialist",),
+                    baseline_success=False,
+                )
+            )
+        residuals.append(
+            ResidualExample(
+                transition_id=f"g2-transition-{selector}-success",
+                task_id=f"g2-train-{selector}-success",
+                family=family,
+                split=SplitName.TRAIN,
+                features={
+                    "g2_selector": selector,
+                    "baseline_failed": False,
+                    "common_marker": True,
+                    "requires_live_source": False,
+                },
+                failure_type="success_control",
+                evaluator_feedback=(),
+                baseline_success=True,
+            )
+        )
+        tasks.append(
+            TaskInput(
+                id=f"g2-validation-{selector}",
+                family=family,
+                features={
+                    "g2_selector": selector,
+                    "baseline_failed": True,
+                    "common_marker": True,
+                    "requires_live_source": False,
+                },
+                payload={"expected": "correct"},
+            )
+        )
+    return programs, tuple(residuals), tuple(tasks)
+
+
 def _run_bundle_evolution(
     *,
     low_precision_complement: bool,
+    selection_policy: str = (
+        COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION
+    ),
+    proposal_candidates: tuple[HypothesisProgram, ...] | None = None,
+    residuals: tuple[ResidualExample, ...] | None = None,
+    validation_tasks: tuple[TaskInput, ...] | None = None,
+    minimum_activation_rate: float = 1.0,
 ) -> tuple[EvolutionRunResult, PolicyArchive, MemoryEventSink]:
     sink = MemoryEventSink()
-    residuals = _bundle_residuals()
-    validation_tasks = (
+    residuals = residuals or _bundle_residuals()
+    validation_tasks = validation_tasks or (
         _bundle_task("bundle-validation-a", "a"),
         _bundle_task("bundle-validation-b", "b"),
     )
@@ -1679,16 +1928,14 @@ def _run_bundle_evolution(
         promotion_gate=PromotionGate(
             replace(
                 _promotion_spec(minimum_pairs=2, minimum_net_gain_count=1),
-                minimum_activation_rate=1.0,
+                minimum_activation_rate=minimum_activation_rate,
             ),
             event_sink=sink,
         ),
         archive=archive,
         split_guard=SplitAccessGuard(manifest, event_sink=sink),
         proposal_candidates_per_generation=3,
-        candidate_selection_policy=(
-            COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION
-        ),
+        candidate_selection_policy=selection_policy,
         candidate_bundle_policy=CANDIDATE_BUNDLE_POLICY_VERSION,
         contrastive_training_evidence_policy=(
             CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
@@ -1709,8 +1956,11 @@ def _run_bundle_evolution(
         residuals=residuals,
         validation_tasks=validation_tasks,
         validation_context=context,
-        proposal_candidates=_bundle_programs(
-            low_precision_complement=low_precision_complement
+        proposal_candidates=(
+            proposal_candidates
+            or _bundle_programs(
+                low_precision_complement=low_precision_complement
+            )
         ),
         trace_id="bundle-selection",
     )

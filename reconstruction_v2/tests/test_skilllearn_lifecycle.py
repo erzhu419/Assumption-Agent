@@ -14,6 +14,7 @@ import pytest
 
 from assumption_agent.archive import PolicyArchive
 from assumption_agent.benchmarks import (
+    BaselineArmEvidenceReplayCache,
     SkillLearnBenchAdapter,
     SkillLearnBackendPool,
     SkillLearnEvolutionHarness,
@@ -34,6 +35,7 @@ from assumption_agent.evaluation import (
 from assumption_agent.evolution import (
     CANDIDATE_BUNDLE_POLICY_VERSION,
     COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+    COMPLEMENTARY_FAMILY_SUPPORT_BUNDLE_CANDIDATE_SELECTION_VERSION,
     CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
     PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
     TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
@@ -48,6 +50,7 @@ from assumption_agent.benchmarks.skilllearn_lifecycle import (
     ACTIONABLE_CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
     CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
     MODEL_INFERENCE_CONCURRENCY_POLICY_VERSION,
+    SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
     SkillLearnModelInferenceLimiter,
     SkillLearnPrebuiltImage,
     SkillLearnSubprocessBackend,
@@ -83,6 +86,7 @@ from assumption_agent.benchmarks.paper_protocol import (
     COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION,
 )
 from assumption_agent.benchmarks.skilllearn_compiler import (
+    NO_SKILL_TREATMENT_HASH,
     SKILL_ACTION_LOWERING_VERSION,
     skilllearn_program_set_treatment_hash,
     skilllearn_program_treatment_hash,
@@ -1362,7 +1366,7 @@ def test_skilllearn_bundle_identity_is_set_sensitive_and_order_invariant(
     )
 
 
-def test_bundle_selector_executes_selected_union_once_per_validation_item(
+def test_v314_bundle_selector_executes_selected_union_once_per_validation_item(
     tmp_path: Path,
 ) -> None:
     organize = _family_trigger_program(
@@ -1383,7 +1387,7 @@ def test_bundle_selector_executes_selected_union_once_per_validation_item(
         "none_of": [],
     }
     rejected_payload["verifier"]["repair_on_failure"] = False
-    harness, backend, _, archive, _, sink = _harness(
+    harness, backend, model, archive, _, sink = _harness(
         tmp_path,
         proposal_rows=[
             organize.to_dict(),
@@ -1391,7 +1395,7 @@ def test_bundle_selector_executes_selected_union_once_per_validation_item(
             rejected_payload,
         ],
         candidate_selection_policy=(
-            COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION
+            COMPLEMENTARY_FAMILY_SUPPORT_BUNDLE_CANDIDATE_SELECTION_VERSION
         ),
         candidate_bundle_policy=CANDIDATE_BUNDLE_POLICY_VERSION,
         contrastive_training_evidence_policy=(
@@ -1444,6 +1448,12 @@ def test_bundle_selector_executes_selected_union_once_per_validation_item(
         if row["event"] == "skilllearn_counterfactual_pair_completed"
     ]
     assert len(pair_events) == 2
+    coverage = model.requests[0]["capabilities"]["train_coverage_objective"]
+    assert coverage["family_target_deficit_capped_at_target"] is True
+    assert coverage["post_target_actual_family_count_tiebreak"] is True
+    assert coverage["actual_family_count_precedes_failure_support"] is True
+    assert coverage["failure_support_precedes_bundle_size"] is True
+    assert "coverage_reward_capped_at_target" not in coverage
 
 
 def test_lowered_equivalent_program_replays_without_resampling(
@@ -2055,6 +2065,244 @@ def test_training_evidence_replay_avoids_identical_generation_resampling(
     assert replay["payload"]["new_training_executions"] == 0
 
 
+def test_shared_baseline_arm_cache_reuses_one_immutable_cohort_across_runners(
+    tmp_path: Path,
+) -> None:
+    shared_cache = BaselineArmEvidenceReplayCache(
+        policy=SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+    )
+    recursive, recursive_backend, _, _, _, recursive_sink = _harness(
+        tmp_path / "recursive",
+        baseline_arm_replay_cache=shared_cache,
+        baseline_arm_evidence_replay_policy=(
+            SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+        ),
+    )
+    no_recursive, no_recursive_backend, _, _, _, no_recursive_sink = _harness(
+        tmp_path / "no-recursive",
+        baseline_arm_replay_cache=shared_cache,
+        baseline_arm_evidence_replay_policy=(
+            SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+        ),
+    )
+    programs = []
+    for index in range(3):
+        payload = _program_dict()
+        payload["id"] = f"shared-baseline-generation-{index + 1}"
+        payload["action_graph"][1]["value"] += f" Generation {index + 1}."
+        programs.append(HypothesisProgram.from_dict(payload))
+    item_id = "organize-messy-files-5"
+
+    first = recursive.counterfactual_runner.run(
+        recursive.tasks((item_id,)),
+        program=programs[0],
+        split=SplitName.VALIDATION,
+        trace_id="shared-baseline-recursive-g1",
+    )[0]
+    second = no_recursive.counterfactual_runner.run(
+        no_recursive.tasks((item_id,)),
+        program=programs[1],
+        split=SplitName.VALIDATION,
+        trace_id="shared-baseline-no-recursive-g2",
+    )[0]
+    third = recursive.counterfactual_runner.run(
+        recursive.tasks((item_id,)),
+        program=programs[2],
+        split=SplitName.VALIDATION,
+        trace_id="shared-baseline-recursive-g3",
+    )[0]
+
+    validation_off_requests = [
+        request
+        for request in (*recursive_backend.requests, *no_recursive_backend.requests)
+        if request.split is SplitName.VALIDATION
+        and request.variant is TrialVariant.POLICY_OFF
+    ]
+    assert len(validation_off_requests) == 1
+    assert len(shared_cache) == 1
+    assert first.baseline_outcome == second.baseline_outcome == third.baseline_outcome
+    assert (
+        first.baseline.selected_result.cost
+        == second.baseline.selected_result.cost
+        == third.baseline.selected_result.cost
+    )
+    pair_events = [
+        row
+        for row in (*recursive_sink.events, *no_recursive_sink.events)
+        if row["event"] == "skilllearn_counterfactual_pair_completed"
+    ]
+    assert len({row["payload"]["baseline_evidence_hash"] for row in pair_events}) == 1
+    assert [row["payload"]["baseline_replayed"] for row in pair_events] == [
+        False,
+        True,
+        True,
+    ]
+    assert [
+        row["payload"]["baseline_trial_executed"] for row in pair_events
+    ] == [True, False, False]
+    assert all(
+        row["payload"]["run_order"] == "on_only_shared_baseline_replay"
+        for row in pair_events[1:]
+    )
+    replay_events = [
+        row
+        for row in (*recursive_sink.events, *no_recursive_sink.events)
+        if row["event"] == "skilllearn_baseline_arm_evidence_replayed"
+    ]
+    assert len(replay_events) == 2
+    assert all(
+        row["payload"]["new_baseline_executions"] == 0
+        for row in replay_events
+    )
+
+
+def test_baseline_arm_cache_rejects_invalid_and_conflicting_records() -> None:
+    cache = BaselineArmEvidenceReplayCache(
+        policy=SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+    )
+    request = SkillLearnTrialRequest(
+        item_id="validation-item",
+        family="validation-family",
+        split=SplitName.VALIDATION,
+        variant=TrialVariant.POLICY_OFF,
+        evaluator_epoch="eval-epoch",
+        pair_id="source-pair",
+        repeat=1,
+        agent_id="codex",
+        model="model",
+        max_steps=20,
+        manifest_hash="manifest",
+        program_set_hash="no-skill-program-set",
+        treatment_hash="no-skill-treatment",
+    )
+    invalid = SkillLearnTrialObservation(
+        request=request,
+        success=False,
+        score=0.0,
+        metrics={"evaluation_valid": 0.0, "task_success": 0.0},
+        total_tokens=0,
+        steps=0,
+        duration_seconds=0.0,
+        provider_fingerprint="provider",
+        fairness_fingerprint="fairness",
+        error_type="endpoint_error",
+    )
+    assert cache.record(
+        "replay-key",
+        observation=invalid,
+        source_trace_id="invalid",
+    ) is None
+    assert len(cache) == 0
+
+    source_metrics = {"evaluation_valid": 1.0, "task_success": 0.0}
+    valid = replace(
+        invalid,
+        metrics=source_metrics,
+        error_type=None,
+        total_tokens=100,
+        steps=10,
+    )
+    recorded = cache.record(
+        "replay-key",
+        observation=valid,
+        source_trace_id="valid",
+    )
+    assert recorded is not None
+    source_metrics["task_success"] = 1.0
+    assert recorded.observation.metrics["task_success"] == 0.0
+
+    conflict = replace(
+        valid,
+        success=True,
+        score=1.0,
+        metrics={"evaluation_valid": 1.0, "task_success": 1.0},
+    )
+    assert cache.record(
+        "replay-key",
+        observation=conflict,
+        source_trace_id="conflict",
+    ) is None
+    assert len(cache) == 1
+    assert cache.get("replay-key") is recorded
+
+
+def test_shared_baseline_replay_key_separates_split_and_baseline_treatment(
+    tmp_path: Path,
+) -> None:
+    harness, _, _, _, _, _ = _harness(
+        tmp_path,
+        baseline_arm_evidence_replay_policy=(
+            SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+        ),
+    )
+    runner = harness.counterfactual_runner
+    task = harness.tasks(("organize-messy-files-5",))[0]
+    promoted = replace(
+        HypothesisProgram.from_dict(_program_dict()),
+        status=HypothesisStatus.PROMOTED,
+    )
+
+    no_skill = runner._baseline_arm_replay_key(
+        task,
+        split=SplitName.VALIDATION,
+        baseline_programs=(),
+        baseline_treatment_hash=NO_SKILL_TREATMENT_HASH,
+    )
+    promoted_a = runner._baseline_arm_replay_key(
+        task,
+        split=SplitName.VALIDATION,
+        baseline_programs=(promoted,),
+        baseline_treatment_hash="baseline-treatment-a",
+    )
+    promoted_b = runner._baseline_arm_replay_key(
+        task,
+        split=SplitName.VALIDATION,
+        baseline_programs=(promoted,),
+        baseline_treatment_hash="baseline-treatment-b",
+    )
+    test_split = runner._baseline_arm_replay_key(
+        task,
+        split=SplitName.TEST,
+        baseline_programs=(promoted,),
+        baseline_treatment_hash="baseline-treatment-a",
+    )
+
+    assert len({no_skill, promoted_a, promoted_b, test_split}) == 4
+
+
+def test_legacy_baseline_arm_caches_remain_runner_local(tmp_path: Path) -> None:
+    first, first_backend, _, _, _, _ = _harness(tmp_path / "first")
+    second, second_backend, _, _, _, _ = _harness(tmp_path / "second")
+    assert (
+        first.counterfactual_runner.baseline_arm_replay_cache
+        is not second.counterfactual_runner.baseline_arm_replay_cache
+    )
+    program = HypothesisProgram.from_dict(_program_dict())
+    item_id = "organize-messy-files-5"
+
+    first.counterfactual_runner.run(
+        first.tasks((item_id,)),
+        program=program,
+        split=SplitName.VALIDATION,
+        trace_id="legacy-first",
+    )
+    second.counterfactual_runner.run(
+        second.tasks((item_id,)),
+        program=program,
+        split=SplitName.VALIDATION,
+        trace_id="legacy-second",
+    )
+
+    assert sum(
+        request.variant is TrialVariant.POLICY_OFF
+        for request in first_backend.requests
+    ) == 1
+    assert sum(
+        request.variant is TrialVariant.POLICY_OFF
+        for request in second_backend.requests
+    ) == 1
+
+
 def test_paired_ablation_shares_first_train_checkpoint_and_root(tmp_path: Path) -> None:
     recursive, recursive_backend, recursive_model, _, _, recursive_sink = _harness(
         tmp_path / "recursive"
@@ -2101,6 +2349,52 @@ def test_paired_ablation_shares_first_train_checkpoint_and_root(tmp_path: Path) 
     )
     assert replay_event["payload"]["pair_count"] == len(validation_ids)
     assert replay_event["payload"]["new_counterfactual_executions"] == 0
+
+
+def test_paired_ablation_v2_binds_one_shared_baseline_cache(
+    tmp_path: Path,
+) -> None:
+    recursive, _, _, _, _, _ = _harness(
+        tmp_path / "recursive",
+        baseline_arm_evidence_replay_policy=(
+            SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+        ),
+    )
+    no_recursive, _, _, _, _, _ = _harness(
+        tmp_path / "no-recursive",
+        baseline_arm_evidence_replay_policy=(
+            SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+        ),
+    )
+    no_recursive.validator.proposer = None
+    assert (
+        recursive.counterfactual_runner.baseline_arm_replay_cache
+        is not no_recursive.counterfactual_runner.baseline_arm_replay_cache
+    )
+
+    _run_paired_arms(
+        recursive_harness=recursive,
+        no_recursive_harness=no_recursive,
+        train_ids=(
+            "organize-messy-files-1",
+            "organize-messy-files-2",
+            "offer-letter-generator-1",
+            "offer-letter-generator-2",
+        ),
+        validation_ids=(
+            "organize-messy-files-5",
+            "offer-letter-generator-5",
+        ),
+        manifest_hash=recursive.manifest.manifest_hash,
+        max_generations=1,
+        max_consecutive_non_promotions=1,
+    )
+
+    assert (
+        recursive.counterfactual_runner.baseline_arm_replay_cache
+        is no_recursive.counterfactual_runner.baseline_arm_replay_cache
+    )
+    assert len(recursive.counterfactual_runner.baseline_arm_replay_cache) == 2
 
 
 def test_paired_ablation_replays_later_root_when_arm_state_is_identical(
@@ -3877,6 +4171,8 @@ def _harness(
     candidate_bundle_policy: str | None = None,
     contrastive_training_evidence_policy: str | None = None,
     repair_request_scope_policy: str | None = None,
+    baseline_arm_replay_cache: BaselineArmEvidenceReplayCache | None = None,
+    baseline_arm_evidence_replay_policy: str | None = None,
 ):
     sink = MemoryEventSink()
     adapter = SkillLearnBenchAdapter(BENCH_ROOT)
@@ -3940,6 +4236,16 @@ def _harness(
         repair_request_scope_policy=repair_request_scope_policy,
         parallel_workers=parallel_workers,
         invalid_trial_max_attempts=invalid_trial_max_attempts,
+        baseline_arm_replay_cache=baseline_arm_replay_cache,
+        **(
+            {
+                "baseline_arm_evidence_replay_policy": (
+                    baseline_arm_evidence_replay_policy
+                )
+            }
+            if baseline_arm_evidence_replay_policy is not None
+            else {}
+        ),
         event_sink=sink,
     )
     return harness, backend, model, archive, guard, sink

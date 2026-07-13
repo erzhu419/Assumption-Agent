@@ -17,6 +17,7 @@ from ..models import HypothesisProgram, stable_hash
 from ..evolution import (
     CANDIDATE_BUNDLE_POLICY_VERSION,
     COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+    COMPLEMENTARY_FAMILY_SUPPORT_BUNDLE_CANDIDATE_SELECTION_VERSION,
     COUNTERFACTUAL_REPLAY_POLICY_VERSION,
     PROGRAM_SET_COUNTERFACTUAL_REPLAY_POLICY_VERSION,
     PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
@@ -67,6 +68,7 @@ from .skilllearn_lifecycle import (
     MODEL_INFERENCE_CONCURRENCY_POLICY_VERSION,
     INVALID_TRIAL_RETRY_POLICY_VERSION,
     LOCAL_EVIDENCE_TRANSPORT_VERSION,
+    SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
     NETWORK_SCOPE_AUDIT_VERSION,
     OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION,
     PREBUILT_IMAGE_POLICY_VERSION,
@@ -116,6 +118,7 @@ TRIAL_NETWORK_BYTE_LIMIT_BY_PROTOCOL_VERSION = {
     "3.11.0": 64 * 1024 * 1024,
     "3.12.0": 64 * 1024 * 1024,
     "3.13.0": 64 * 1024 * 1024,
+    "3.14.0": 64 * 1024 * 1024,
 }
 
 CONTRASTIVE_PROTOCOL_VERSIONS = frozenset(
@@ -128,19 +131,24 @@ CONTRASTIVE_PROTOCOL_VERSIONS = frozenset(
         "3.11.0",
         "3.12.0",
         "3.13.0",
+        "3.14.0",
     }
 )
 MODEL_SLOT_PROTOCOL_VERSIONS = frozenset(
-    {"3.9.0", "3.10.0", "3.11.0", "3.12.0", "3.13.0"}
+    {"3.9.0", "3.10.0", "3.11.0", "3.12.0", "3.13.0", "3.14.0"}
 )
 PROPOSAL_DIVERSITY_PROTOCOL_VERSIONS = frozenset(
-    {"3.10.0", "3.11.0", "3.12.0", "3.13.0"}
+    {"3.10.0", "3.11.0", "3.12.0", "3.13.0", "3.14.0"}
 )
 ACTIONABLE_DIRECTIVE_PROTOCOL_VERSIONS = frozenset(
-    {"3.11.0", "3.12.0", "3.13.0"}
+    {"3.11.0", "3.12.0", "3.13.0", "3.14.0"}
 )
-REPAIR_REQUEST_SCOPE_PROTOCOL_VERSIONS = frozenset({"3.12.0", "3.13.0"})
-CANDIDATE_BUNDLE_PROTOCOL_VERSIONS = frozenset({"3.13.0"})
+REPAIR_REQUEST_SCOPE_PROTOCOL_VERSIONS = frozenset(
+    {"3.12.0", "3.13.0", "3.14.0"}
+)
+CANDIDATE_BUNDLE_PROTOCOL_VERSIONS = frozenset({"3.13.0", "3.14.0"})
+FAMILY_SUPPORT_BUNDLE_PROTOCOL_VERSIONS = frozenset({"3.14.0"})
+SHARED_BASELINE_ARM_REPLAY_PROTOCOL_VERSIONS = frozenset({"3.14.0"})
 
 CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION = (
     "train_contrastive_precision_then_support_v1"
@@ -281,15 +289,19 @@ class PaperProtocol:
             if execution.get("agent_runtime_version") != SHARED_CODEX_CLI_VERSION:
                 issues.append("agent_runtime_version_mismatch")
             expected_candidate_selection = (
-                COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION
-                if protocol_version in CANDIDATE_BUNDLE_PROTOCOL_VERSIONS
+                COMPLEMENTARY_FAMILY_SUPPORT_BUNDLE_CANDIDATE_SELECTION_VERSION
+                if protocol_version in FAMILY_SUPPORT_BUNDLE_PROTOCOL_VERSIONS
                 else (
-                    PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION
-                    if protocol_version in PROPOSAL_DIVERSITY_PROTOCOL_VERSIONS
+                    COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION
+                    if protocol_version in CANDIDATE_BUNDLE_PROTOCOL_VERSIONS
                     else (
-                        CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION
-                        if protocol_version in CONTRASTIVE_PROTOCOL_VERSIONS
-                        else TRAIN_ONLY_CANDIDATE_SELECTION_VERSION
+                        PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION
+                        if protocol_version in PROPOSAL_DIVERSITY_PROTOCOL_VERSIONS
+                        else (
+                            CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION
+                            if protocol_version in CONTRASTIVE_PROTOCOL_VERSIONS
+                            else TRAIN_ONLY_CANDIDATE_SELECTION_VERSION
+                        )
                     )
                 )
             )
@@ -530,11 +542,17 @@ class PaperProtocol:
                 declared_codex_policy,
             ):
                 issues.append("codex_agent_execution_policy_mismatch")
+            expected_baseline_replay_policy = (
+                SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+                if protocol_version
+                in SHARED_BASELINE_ARM_REPLAY_PROTOCOL_VERSIONS
+                else BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+            )
             if (
                 major is not None
                 and major >= 3
                 and execution.get("baseline_arm_evidence_replay_policy")
-                != BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+                != expected_baseline_replay_policy
             ):
                 issues.append("baseline_arm_evidence_replay_policy_mismatch")
             if (

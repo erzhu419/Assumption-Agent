@@ -20,7 +20,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
-from types import ModuleType
+from types import MappingProxyType, ModuleType
 from typing import Any, Callable, Iterable, Iterator, Mapping, Protocol, Sequence, TypeVar
 from urllib.parse import urlsplit, urlunsplit
 
@@ -29,7 +29,8 @@ from ..evaluation import PromotionGate
 from ..events import Event, EventSink, NullEventSink
 from ..evolution import (
     CANDIDATE_BUNDLE_POLICY_VERSION,
-    COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+    COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS,
+    COMPLEMENTARY_FAMILY_SUPPORT_BUNDLE_CANDIDATE_SELECTION_VERSION,
     CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
     CounterfactualEvidenceReplayCache,
     EvolutionKernel,
@@ -134,8 +135,20 @@ CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSIONS = frozenset(
 TRAINING_EVIDENCE_REPLAY_POLICY_VERSION = (
     "behavior_identical_training_replay_v1"
 )
-BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION = (
+LEGACY_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION = (
     "behavior_identical_validation_baseline_arm_replay_v1"
+)
+SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION = (
+    "behavior_identical_shared_validation_baseline_arm_replay_v2"
+)
+BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION = (
+    LEGACY_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+)
+BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSIONS = frozenset(
+    {
+        LEGACY_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
+        SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
+    }
 )
 INVALID_TRIAL_RETRY_POLICY_VERSION = (
     "same_request_transient_invalid_clean_replacement_v2"
@@ -510,6 +523,105 @@ class SkillLearnTrialObservation:
             "step_budget_receipt_hash": self.step_budget_receipt_hash,
             "secret_value_persisted": False,
         }
+
+
+def _baseline_arm_evidence_hash(
+    observation: SkillLearnTrialObservation,
+) -> str:
+    """Hash one policy-off result independently of its challenger pairing."""
+
+    payload = observation.to_dict()
+    request = dict(payload["request"])
+    for key in (
+        "pair_id",
+        "candidate_delta_program_set_hash",
+        "candidate_full_program_set_hash",
+        "matched_candidate_program_set_hash",
+        "selected_candidate_hypothesis_ids",
+        "matched_candidate_hypothesis_ids",
+    ):
+        request.pop(key, None)
+    payload["request"] = request
+    payload.pop("raw_trial_artifacts_persisted", None)
+    return stable_hash(payload)
+
+
+@dataclass(frozen=True)
+class BaselineArmEvidenceRecord:
+    """Immutable in-memory source record for one validation baseline arm."""
+
+    observation: SkillLearnTrialObservation
+    source_trace_id: str
+    evidence_hash: str
+
+
+class BaselineArmEvidenceReplayCache:
+    """Thread-safe policy-off cohort store, optionally shared by paired runners."""
+
+    def __init__(
+        self,
+        *,
+        policy: str = BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
+    ) -> None:
+        if policy not in BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSIONS:
+            raise ValueError(f"unsupported baseline arm replay policy: {policy}")
+        self.policy = policy
+        self._lock = threading.Lock()
+        self._key_locks: dict[str, threading.Lock] = {}
+        self._records: dict[str, BaselineArmEvidenceRecord] = {}
+
+    def __len__(self) -> int:
+        with self._lock:
+            return len(self._records)
+
+    @contextmanager
+    def locked(self, replay_key: str) -> Iterator[None]:
+        """Serialize producers for one item without serializing other items."""
+
+        if not replay_key:
+            raise ValueError("baseline arm replay key must not be empty")
+        with self._lock:
+            key_lock = self._key_locks.setdefault(replay_key, threading.Lock())
+        with key_lock:
+            yield
+
+    def get(self, replay_key: str) -> BaselineArmEvidenceRecord | None:
+        with self._lock:
+            return self._records.get(replay_key)
+
+    def record(
+        self,
+        replay_key: str,
+        *,
+        observation: SkillLearnTrialObservation,
+        source_trace_id: str,
+    ) -> BaselineArmEvidenceRecord | None:
+        """Insert once; reject invalid or conflicting evidence without mutation."""
+
+        if not observation.valid:
+            return None
+        if (
+            observation.request.split is not SplitName.VALIDATION
+            or observation.request.variant is not TrialVariant.POLICY_OFF
+        ):
+            return None
+        snapshot = replace(
+            observation,
+            metrics=MappingProxyType(dict(observation.metrics)),
+        )
+        candidate = BaselineArmEvidenceRecord(
+            observation=snapshot,
+            source_trace_id=source_trace_id,
+            evidence_hash=_baseline_arm_evidence_hash(snapshot),
+        )
+        with self._lock:
+            existing = self._records.get(replay_key)
+            if existing is None:
+                self._records[replay_key] = candidate
+                return candidate
+            if existing.evidence_hash == candidate.evidence_hash:
+                return existing
+            return None
 
 
 @dataclass(frozen=True)
@@ -2777,6 +2889,10 @@ class SkillLearnCounterfactualRunner:
         invalid_trial_max_attempts: int = 1,
         invalid_trial_retry_backoff_seconds: float = 0.0,
         invalid_trial_retry_workers: int = 1,
+        baseline_arm_replay_cache: BaselineArmEvidenceReplayCache | None = None,
+        baseline_arm_evidence_replay_policy: str = (
+            BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+        ),
         event_sink: EventSink | None = None,
     ) -> None:
         if parallel_workers <= 0:
@@ -2787,6 +2903,22 @@ class SkillLearnCounterfactualRunner:
             raise ValueError("invalid trial retry backoff cannot be negative")
         if invalid_trial_retry_workers <= 0:
             raise ValueError("invalid trial retry worker count must be positive")
+        if (
+            baseline_arm_evidence_replay_policy
+            not in BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSIONS
+        ):
+            raise ValueError(
+                "unsupported baseline arm replay policy: "
+                f"{baseline_arm_evidence_replay_policy}"
+            )
+        if (
+            baseline_arm_replay_cache is not None
+            and baseline_arm_replay_cache.policy
+            != baseline_arm_evidence_replay_policy
+        ):
+            raise ValueError(
+                "baseline arm replay cache and runner policies must match"
+            )
         self.adapter = adapter
         self.manifest = manifest
         self.guard = guard
@@ -2807,10 +2939,28 @@ class SkillLearnCounterfactualRunner:
         self.event_sink = event_sink or NullEventSink()
         self.items = {item.id: item for item in adapter.discover()}
         self.runtime = _ExternalRuntimeDescriptor()
-        self._baseline_arm_cache_lock = threading.Lock()
-        self._baseline_arm_cache: dict[
-            str, tuple[SkillLearnTrialObservation, str]
-        ] = {}
+        self.baseline_arm_evidence_replay_policy = (
+            baseline_arm_evidence_replay_policy
+        )
+        self.baseline_arm_replay_cache = (
+            baseline_arm_replay_cache
+            if baseline_arm_replay_cache is not None
+            else BaselineArmEvidenceReplayCache(
+                policy=baseline_arm_evidence_replay_policy
+            )
+        )
+
+    def bind_baseline_arm_replay_cache(
+        self,
+        cache: BaselineArmEvidenceReplayCache,
+    ) -> None:
+        """Bind an explicitly shared cache before a paired validation run."""
+
+        if cache.policy != self.baseline_arm_evidence_replay_policy:
+            raise ValueError(
+                "baseline arm replay cache and runner policies must match"
+            )
+        self.baseline_arm_replay_cache = cache
 
     @staticmethod
     def behavior_hash(program: HypothesisProgram) -> str:
@@ -3158,92 +3308,190 @@ class SkillLearnCounterfactualRunner:
                 trace_id=f"{trace_id}:{pair_id}:{arm}",
             )
 
-        def run_baseline_trial() -> SkillLearnTrialObservation:
+        def run_baseline_trial() -> tuple[
+            SkillLearnTrialObservation,
+            str,
+            bool,
+            bool,
+        ]:
             replay_key = self._baseline_arm_replay_key(
                 task,
                 split=split,
                 baseline_programs=baseline_programs,
+                baseline_treatment_hash=baseline_treatment_hash,
             )
-            if split is SplitName.VALIDATION:
-                with self._baseline_arm_cache_lock:
-                    cached = self._baseline_arm_cache.get(replay_key)
+
+            def replay(
+                record: BaselineArmEvidenceRecord,
+                *,
+                baseline_trial_executed: bool = False,
+            ) -> tuple[SkillLearnTrialObservation, str, bool, bool]:
+                source = record.observation
+                replayed = replace(
+                    source.as_variant(off_request),
+                    raw_trial_artifacts_persisted=False,
+                )
+                self.event_sink.emit(
+                    Event(
+                        event="skilllearn_baseline_arm_evidence_replayed",
+                        stage="benchmark.skilllearn.counterfactual",
+                        trace_id=f"{trace_id}:{pair_id}:off",
+                        payload={
+                            "policy": self.baseline_arm_evidence_replay_policy,
+                            "replay_key": replay_key,
+                            "source_trace_id": record.source_trace_id,
+                            "target_trace_id": f"{trace_id}:{pair_id}:off",
+                            "source_request_hash": source.request.request_hash,
+                            "target_request_hash": off_request.request_hash,
+                            "source_observation_hash": source.observation_hash,
+                            "source_evidence_hash": record.evidence_hash,
+                            "behavior_identical": True,
+                            "new_baseline_executions": 0,
+                            "sealed_test_accessed": False,
+                            "raw_content_persisted": False,
+                        },
+                    )
+                )
+                return (
+                    replayed,
+                    record.evidence_hash,
+                    True,
+                    baseline_trial_executed,
+                )
+
+            if split is not SplitName.VALIDATION:
+                observation = run_trial(
+                    off_request,
+                    skill_source_dir=baseline_skill_source,
+                    arm="off",
+                )
+                return (
+                    observation,
+                    _baseline_arm_evidence_hash(observation),
+                    False,
+                    True,
+                )
+
+            cache = self.baseline_arm_replay_cache
+            with cache.locked(replay_key):
+                cached = cache.get(replay_key)
                 if cached is not None:
-                    source, source_trace_id = cached
-                    replayed = replace(
-                        source.as_variant(off_request),
-                        raw_trial_artifacts_persisted=False,
-                    )
-                    self.event_sink.emit(
-                        Event(
-                            event="skilllearn_baseline_arm_evidence_replayed",
-                            stage="benchmark.skilllearn.counterfactual",
-                            trace_id=f"{trace_id}:{pair_id}:off",
-                            payload={
-                                "policy": (
-                                    BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
-                                ),
-                                "replay_key": replay_key,
-                                "source_trace_id": source_trace_id,
-                                "target_trace_id": f"{trace_id}:{pair_id}:off",
-                                "source_request_hash": source.request.request_hash,
-                                "target_request_hash": off_request.request_hash,
-                                "source_observation_hash": source.observation_hash,
-                                "behavior_identical": True,
-                                "new_baseline_executions": 0,
-                                "sealed_test_accessed": False,
-                                "raw_content_persisted": False,
-                            },
-                        )
-                    )
-                    return replayed
-            observation = run_trial(
-                off_request,
-                skill_source_dir=baseline_skill_source,
-                arm="off",
-            )
-            if split is SplitName.VALIDATION and observation.valid:
+                    return replay(cached)
+                observation = run_trial(
+                    off_request,
+                    skill_source_dir=baseline_skill_source,
+                    arm="off",
+                )
                 source_trace_id = f"{trace_id}:{pair_id}:off"
-                recorded = False
-                with self._baseline_arm_cache_lock:
-                    if replay_key not in self._baseline_arm_cache:
-                        self._baseline_arm_cache[replay_key] = (
-                            observation,
-                            source_trace_id,
-                        )
-                        recorded = True
-                if recorded:
+                if not observation.valid:
                     self.event_sink.emit(
                         Event(
-                            event="skilllearn_baseline_arm_evidence_recorded",
+                            event=(
+                                "skilllearn_baseline_arm_evidence_not_recorded_invalid"
+                            ),
                             stage="benchmark.skilllearn.counterfactual",
                             trace_id=source_trace_id,
                             payload={
-                                "policy": (
-                                    BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
-                                ),
+                                "policy": self.baseline_arm_evidence_replay_policy,
                                 "replay_key": replay_key,
                                 "source_request_hash": off_request.request_hash,
-                                "source_observation_hash": observation.observation_hash,
+                                "source_observation_hash": (
+                                    observation.observation_hash
+                                ),
+                                "new_baseline_executions": 1,
                                 "sealed_test_accessed": False,
                                 "raw_content_persisted": False,
                             },
                         )
                     )
-            return observation
+                    return (
+                        observation,
+                        _baseline_arm_evidence_hash(observation),
+                        False,
+                        True,
+                    )
+                recorded = cache.record(
+                    replay_key,
+                    observation=observation,
+                    source_trace_id=source_trace_id,
+                )
+                if recorded is None:
+                    conflict = cache.get(replay_key)
+                    self.event_sink.emit(
+                        Event(
+                            event=(
+                                "skilllearn_baseline_arm_evidence_conflict_rejected"
+                            ),
+                            stage="benchmark.skilllearn.counterfactual",
+                            trace_id=source_trace_id,
+                            payload={
+                                "policy": self.baseline_arm_evidence_replay_policy,
+                                "replay_key": replay_key,
+                                "source_request_hash": off_request.request_hash,
+                                "source_observation_hash": (
+                                    observation.observation_hash
+                                ),
+                                "cache_mutated": False,
+                                "sealed_test_accessed": False,
+                                "raw_content_persisted": False,
+                            },
+                        )
+                    )
+                    if conflict is not None:
+                        return replay(
+                            conflict,
+                            baseline_trial_executed=True,
+                        )
+                    return (
+                        observation,
+                        _baseline_arm_evidence_hash(observation),
+                        False,
+                        True,
+                    )
+                self.event_sink.emit(
+                    Event(
+                        event="skilllearn_baseline_arm_evidence_recorded",
+                        stage="benchmark.skilllearn.counterfactual",
+                        trace_id=source_trace_id,
+                        payload={
+                            "policy": self.baseline_arm_evidence_replay_policy,
+                            "replay_key": replay_key,
+                            "source_request_hash": off_request.request_hash,
+                            "source_observation_hash": (
+                                recorded.observation.observation_hash
+                            ),
+                            "source_evidence_hash": recorded.evidence_hash,
+                            "new_baseline_executions": 1,
+                            "sealed_test_accessed": False,
+                            "raw_content_persisted": False,
+                        },
+                    )
+                )
+                return recorded.observation, recorded.evidence_hash, False, True
 
         run_on_first = False
         treatment_applied = False
         if trigger_matched and (
             candidate_skill_source is None or not candidate_skill_source.is_dir()
         ):
-            baseline_observation = run_baseline_trial()
+            (
+                baseline_observation,
+                baseline_evidence_hash,
+                baseline_replayed,
+                baseline_trial_executed,
+            ) = run_baseline_trial()
             candidate_observation = _invalid_observation_like(
                 on_request,
                 baseline_observation,
                 "compiled_candidate_skill_missing",
             )
         elif not trigger_matched:
-            baseline_observation = run_baseline_trial()
+            (
+                baseline_observation,
+                baseline_evidence_hash,
+                baseline_replayed,
+                baseline_trial_executed,
+            ) = run_baseline_trial()
             candidate_observation = baseline_observation.as_variant(on_request)
         else:
             treatment_applied = True
@@ -3256,9 +3504,19 @@ class SkillLearnCounterfactualRunner:
                     skill_source_dir=candidate_skill_source,
                     arm="on",
                 )
-                baseline_observation = run_baseline_trial()
+                (
+                    baseline_observation,
+                    baseline_evidence_hash,
+                    baseline_replayed,
+                    baseline_trial_executed,
+                ) = run_baseline_trial()
             else:
-                baseline_observation = run_baseline_trial()
+                (
+                    baseline_observation,
+                    baseline_evidence_hash,
+                    baseline_replayed,
+                    baseline_trial_executed,
+                ) = run_baseline_trial()
                 candidate_observation = run_trial(
                     on_request,
                     skill_source_dir=candidate_skill_source,
@@ -3304,6 +3562,32 @@ class SkillLearnCounterfactualRunner:
             baseline_outcome=self.evaluator.evaluate(task, baseline_execution),
             candidate_outcome=self.evaluator.evaluate(task, candidate_execution),
         )
+        shared_baseline_replay = (
+            baseline_replayed
+            and self.baseline_arm_evidence_replay_policy
+            == SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+        )
+        if shared_baseline_replay and not baseline_trial_executed:
+            run_order = (
+                "on_only_shared_baseline_replay"
+                if treatment_applied
+                else "baseline_alias_shared_replay"
+            )
+        elif shared_baseline_replay:
+            if not treatment_applied:
+                run_order = "baseline_only_with_shared_baseline_conflict_replay"
+            else:
+                run_order = (
+                    "on_off_with_shared_baseline_conflict_replay"
+                    if run_on_first
+                    else "off_on_with_shared_baseline_conflict_replay"
+                )
+        else:
+            run_order = (
+                "on_off"
+                if treatment_applied and run_on_first
+                else "off_on"
+            )
         self.event_sink.emit(
             Event(
                 event="skilllearn_counterfactual_pair_completed",
@@ -3375,6 +3659,9 @@ class SkillLearnCounterfactualRunner:
                     "baseline_valid": bool(pair.baseline_outcome.metrics.get("evaluation_valid")),
                     "candidate_valid": bool(pair.candidate_outcome.metrics.get("evaluation_valid")),
                     "baseline_observation_hash": baseline_observation.observation_hash,
+                    "baseline_evidence_hash": baseline_evidence_hash,
+                    "baseline_replayed": baseline_replayed,
+                    "baseline_trial_executed": baseline_trial_executed,
                     "candidate_observation_hash": candidate_observation.observation_hash,
                     "baseline_cost": baseline_observation.cost_units,
                     "candidate_cost": candidate_observation.cost_units,
@@ -3386,11 +3673,7 @@ class SkillLearnCounterfactualRunner:
                         baseline_observation.fairness_fingerprint
                         == candidate_observation.fairness_fingerprint
                     ),
-                    "run_order": (
-                        "on_off"
-                        if treatment_applied and run_on_first
-                        else "off_on"
-                    ),
+                    "run_order": run_order,
                     "parallel_workers": self.parallel_workers,
                 },
             )
@@ -3403,47 +3686,52 @@ class SkillLearnCounterfactualRunner:
         *,
         split: SplitName,
         baseline_programs: Sequence[HypothesisProgram],
+        baseline_treatment_hash: str,
     ) -> str:
         provider_mode = str(
             getattr(self.backend, "provider_mode", "openai_compatible")
         )
-        return stable_hash(
-            {
-                "policy": BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
-                "task_id": task.id,
-                "family": task.family,
-                "split": split.value,
-                "evaluator_epoch": self.evaluator.epoch,
-                "manifest_hash": self.manifest.manifest_hash,
-                "agent_id": self.backend.agent_id,
-                "model": self.backend.model,
-                "max_steps": self.backend.max_steps,
-                "provider_fingerprint": _provider_fingerprint(
-                    self.backend.agent_id,
-                    self.backend.model,
-                    provider_mode,
-                    codex_agent_execution_policy_for_backend(self.backend),
-                ),
-                "codex_agent_execution_policy_hash": (
-                    codex_agent_execution_policy_for_backend(
-                        self.backend
-                    ).policy_hash
-                ),
-                "baseline_behavior_set_hash": (
-                    skilllearn_program_set_treatment_hash(baseline_programs)
-                ),
-                "runtime_version": self.runtime.runtime_version,
-                "skill_routing_version": SKILL_ROUTING_VERSION,
-                "action_lowering_version": SKILL_ACTION_LOWERING_VERSION,
-                "fallback_semantics": SKILL_FALLBACK_SEMANTICS_VERSION,
-                "agent_runtime_version": SHARED_CODEX_CLI_VERSION,
-                "verifier_isolation": VERIFIER_ISOLATION_VERSION,
-                "container_egress_policy": DOCKER_EGRESS_POLICY_VERSION,
-                "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
-                "trial_network_budget_policy": TRIAL_NETWORK_BUDGET_POLICY_VERSION,
-                "trial_network_byte_limit": configured_trial_network_byte_limit(),
-            }
-        )
+        descriptor = {
+            "policy": self.baseline_arm_evidence_replay_policy,
+            "task_id": task.id,
+            "family": task.family,
+            "split": split.value,
+            "evaluator_epoch": self.evaluator.epoch,
+            "manifest_hash": self.manifest.manifest_hash,
+            "agent_id": self.backend.agent_id,
+            "model": self.backend.model,
+            "max_steps": self.backend.max_steps,
+            "provider_fingerprint": _provider_fingerprint(
+                self.backend.agent_id,
+                self.backend.model,
+                provider_mode,
+                codex_agent_execution_policy_for_backend(self.backend),
+            ),
+            "codex_agent_execution_policy_hash": (
+                codex_agent_execution_policy_for_backend(
+                    self.backend
+                ).policy_hash
+            ),
+            "baseline_behavior_set_hash": (
+                skilllearn_program_set_treatment_hash(baseline_programs)
+            ),
+            "runtime_version": self.runtime.runtime_version,
+            "skill_routing_version": SKILL_ROUTING_VERSION,
+            "action_lowering_version": SKILL_ACTION_LOWERING_VERSION,
+            "fallback_semantics": SKILL_FALLBACK_SEMANTICS_VERSION,
+            "agent_runtime_version": SHARED_CODEX_CLI_VERSION,
+            "verifier_isolation": VERIFIER_ISOLATION_VERSION,
+            "container_egress_policy": DOCKER_EGRESS_POLICY_VERSION,
+            "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
+            "trial_network_budget_policy": TRIAL_NETWORK_BUDGET_POLICY_VERSION,
+            "trial_network_byte_limit": configured_trial_network_byte_limit(),
+        }
+        if (
+            self.baseline_arm_evidence_replay_policy
+            == SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+        ):
+            descriptor["baseline_treatment_hash"] = baseline_treatment_hash
+        return stable_hash(descriptor)
 
     def _request(
         self,
@@ -3630,6 +3918,10 @@ class SkillLearnEvolutionHarness:
         invalid_trial_max_attempts: int = 1,
         invalid_trial_retry_backoff_seconds: float = 0.0,
         invalid_trial_retry_workers: int = 1,
+        baseline_arm_replay_cache: BaselineArmEvidenceReplayCache | None = None,
+        baseline_arm_evidence_replay_policy: str = (
+            BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+        ),
         event_sink: EventSink | None = None,
     ) -> None:
         if parallel_workers <= 0:
@@ -3659,14 +3951,14 @@ class SkillLearnEvolutionHarness:
             TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
             CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
             PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
-            COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+            *COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS,
         }:
             raise ValueError(
                 f"unsupported candidate selection policy: {candidate_selection_policy}"
             )
         bundle_selection_enabled = (
             candidate_selection_policy
-            == COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION
+            in COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS
         )
         if bundle_selection_enabled:
             if candidate_bundle_policy != CANDIDATE_BUNDLE_POLICY_VERSION:
@@ -3685,7 +3977,7 @@ class SkillLearnEvolutionHarness:
             in {
                 CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
                 PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
-                COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+                *COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS,
             }
         ):
             raise ValueError(
@@ -3741,6 +4033,10 @@ class SkillLearnEvolutionHarness:
                 invalid_trial_retry_backoff_seconds
             ),
             invalid_trial_retry_workers=invalid_trial_retry_workers,
+            baseline_arm_replay_cache=baseline_arm_replay_cache,
+            baseline_arm_evidence_replay_policy=(
+                baseline_arm_evidence_replay_policy
+            ),
             event_sink=self.event_sink,
         )
         self.kernel = EvolutionKernel(
@@ -4077,7 +4373,16 @@ class SkillLearnEvolutionHarness:
                         {
                             "candidate_bundle_policy": (
                                 self.candidate_bundle_policy
-                            )
+                            ),
+                            **(
+                                {
+                                    "actual_family_count_precedes_failure_support": True,
+                                    "failure_support_precedes_bundle_size": True,
+                                }
+                                if self.candidate_selection_policy
+                                == COMPLEMENTARY_FAMILY_SUPPORT_BUNDLE_CANDIDATE_SELECTION_VERSION
+                                else {}
+                            ),
                         }
                         if self.candidate_bundle_policy
                         else {}
@@ -4111,14 +4416,22 @@ class SkillLearnEvolutionHarness:
                             ),
                         )
                     ),
-                    "coverage_reward_capped_at_target": True,
+                    **(
+                        {
+                            "family_target_deficit_capped_at_target": True,
+                            "post_target_actual_family_count_tiebreak": True,
+                        }
+                        if self.candidate_selection_policy
+                        == COMPLEMENTARY_FAMILY_SUPPORT_BUNDLE_CANDIDATE_SELECTION_VERSION
+                        else {"coverage_reward_capped_at_target": True}
+                    ),
                     "validation_features_used": False,
                     "validation_outcomes_used": False,
                 }
                 if self.candidate_selection_policy
                 in {
                     PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
-                    COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+                    *COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS,
                 }
                 else None
             ),

@@ -1,6 +1,7 @@
 __all__ = [
     "SkillLearnBenchAdapter",
     "SkillLearnProgramCompiler",
+    "BaselineArmEvidenceReplayCache",
     "SkillLearnCounterfactualRunner",
     "SkillLearnBackendPool",
     "SkillLearnEvolutionHarness",
@@ -25,6 +26,7 @@ def __getattr__(name: str):
 
         return SkillLearnProgramCompiler
     if name in {
+        "BaselineArmEvidenceReplayCache",
         "SkillLearnCounterfactualRunner",
         "SkillLearnBackendPool",
         "SkillLearnEvolutionHarness",

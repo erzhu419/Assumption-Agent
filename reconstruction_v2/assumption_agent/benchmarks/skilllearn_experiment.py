@@ -9,6 +9,7 @@ from ..archive import PolicyArchive
 from ..evaluation import PromotionGate
 from ..events import Event, JsonlEventSink
 from ..evolution import (
+    COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS,
     CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
     PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
     TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
@@ -43,7 +44,6 @@ from .preflight import build_preflight
 from .prewarm import validate_development_prewarm_receipt
 from .paper_protocol import (
     CANDIDATE_BUNDLE_POLICY_VERSION,
-    COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
     COUNTERFACTUAL_REPLAY_POLICY_VERSION,
     COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION,
     PaperProtocol,
@@ -63,6 +63,7 @@ from .docker_egress import (
 )
 from .skilllearn_lifecycle import (
     BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
+    BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSIONS,
     CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSIONS,
     MODEL_INFERENCE_CONCURRENCY_POLICY_VERSION,
     MODEL_ONLY_TOOL_POLICY_VERSION,
@@ -71,6 +72,7 @@ from .skilllearn_lifecycle import (
     PROVIDER_FAILURE_POLICY_VERSION,
     PROVIDER_ROUTE_POLICY_VERSION,
     RUNNER_AGENT_REGISTRY_ISOLATION_VERSION,
+    SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
     INVALID_TRIAL_RETRY_POLICY_VERSION,
     LOCAL_EVIDENCE_TRANSPORT_VERSION,
     NETWORK_SCOPE_AUDIT_VERSION,
@@ -79,6 +81,7 @@ from .skilllearn_lifecycle import (
     TRAINING_EVIDENCE_REPLAY_POLICY_VERSION,
     TRIAL_TIMEOUT_POLICY_VERSION,
     VERIFIER_EXECUTION_RECEIPT_POLICY_VERSION,
+    BaselineArmEvidenceReplayCache,
     SkillLearnBackendPool,
     SkillLearnEvolutionHarness,
     SkillLearnGenerationResult,
@@ -163,6 +166,17 @@ def main() -> None:
     counterfactual_replay_policy = str(
         execution_contract["counterfactual_replay_policy"]
     )
+    baseline_arm_evidence_replay_policy = str(
+        execution_contract.get(
+            "baseline_arm_evidence_replay_policy",
+            BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
+        )
+    )
+    if (
+        baseline_arm_evidence_replay_policy
+        not in BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSIONS
+    ):
+        raise ValueError("unsupported protocol baseline arm replay policy")
     contrastive_training_evidence_policy = execution_contract.get(
         "contrastive_training_evidence_policy"
     )
@@ -198,12 +212,12 @@ def main() -> None:
         TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
         CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
         PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
-        COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+        *COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS,
     }:
         raise ValueError("unsupported protocol candidate selection policy")
     if (
         candidate_selection_policy
-        == COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION
+        in COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS
     ) != (candidate_bundle_policy == CANDIDATE_BUNDLE_POLICY_VERSION):
         raise ValueError(
             "bundle candidate selection and candidate bundle policies must be paired"
@@ -227,7 +241,7 @@ def main() -> None:
         candidate_selection_policy in {
             CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
             PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
-            COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+            *COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS,
         }
     ):
         raise ValueError(
@@ -235,7 +249,7 @@ def main() -> None:
         )
     diversity_enabled = candidate_selection_policy in {
         PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
-        COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+        *COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS,
     }
     if diversity_enabled != (
         proposal_diversity_policy
@@ -417,7 +431,7 @@ def main() -> None:
         "provider_route_policy": PROVIDER_ROUTE_POLICY_VERSION,
         "counterfactual_replay_policy": counterfactual_replay_policy,
         "baseline_arm_evidence_replay_policy": (
-            BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+            baseline_arm_evidence_replay_policy
         ),
         "root_proposal_replay_policy": ROOT_PROPOSAL_REPLAY_POLICY_VERSION,
         "training_evidence_replay_policy": (
@@ -594,6 +608,15 @@ def main() -> None:
         for _ in range(parallel_workers)
     )
     backend = backends[0] if len(backends) == 1 else SkillLearnBackendPool(backends)
+    shared_baseline_arm_replay_cache = (
+        BaselineArmEvidenceReplayCache(
+            policy=baseline_arm_evidence_replay_policy
+        )
+        if paired_ablation
+        and baseline_arm_evidence_replay_policy
+        == SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+        else None
+    )
     harness = SkillLearnEvolutionHarness(
         adapter=adapter,
         manifest=manifest,
@@ -619,6 +642,10 @@ def main() -> None:
         invalid_trial_max_attempts=invalid_trial_max_attempts,
         invalid_trial_retry_backoff_seconds=invalid_trial_retry_backoff_seconds,
         invalid_trial_retry_workers=invalid_trial_retry_workers,
+        baseline_arm_replay_cache=shared_baseline_arm_replay_cache,
+        baseline_arm_evidence_replay_policy=(
+            baseline_arm_evidence_replay_policy
+        ),
         event_sink=sink,
     )
     archive_path = args.archive_out or args.work_dir / "archive.json"
@@ -661,6 +688,10 @@ def main() -> None:
             invalid_trial_max_attempts=invalid_trial_max_attempts,
             invalid_trial_retry_backoff_seconds=invalid_trial_retry_backoff_seconds,
             invalid_trial_retry_workers=invalid_trial_retry_workers,
+            baseline_arm_replay_cache=shared_baseline_arm_replay_cache,
+            baseline_arm_evidence_replay_policy=(
+                baseline_arm_evidence_replay_policy
+            ),
             event_sink=sink,
         )
         paired = _run_paired_arms(
@@ -804,6 +835,33 @@ def _run_paired_arms(
         != no_recursive_harness.contrastive_training_evidence_policy
     ):
         raise ValueError("paired arms must share training evidence and selection policies")
+    recursive_runner = recursive_harness.counterfactual_runner
+    no_recursive_runner = no_recursive_harness.counterfactual_runner
+    if (
+        recursive_runner.baseline_arm_evidence_replay_policy
+        != no_recursive_runner.baseline_arm_evidence_replay_policy
+    ):
+        raise ValueError("paired arms must share the baseline arm replay policy")
+    if (
+        recursive_runner.baseline_arm_evidence_replay_policy
+        == SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+    ):
+        recursive_cache = recursive_runner.baseline_arm_replay_cache
+        no_recursive_cache = no_recursive_runner.baseline_arm_replay_cache
+        if recursive_cache is not no_recursive_cache:
+            if len(recursive_cache) and len(no_recursive_cache):
+                raise ValueError(
+                    "paired shared baseline caches cannot both contain evidence"
+                )
+            shared_baseline_cache = (
+                recursive_cache if len(recursive_cache) else no_recursive_cache
+            )
+            recursive_runner.bind_baseline_arm_replay_cache(
+                shared_baseline_cache
+            )
+            no_recursive_runner.bind_baseline_arm_replay_cache(
+                shared_baseline_cache
+            )
     shared_trace = f"skilllearn-paired-{manifest_hash[:12]}-g1"
     replay_cache = CounterfactualEvidenceReplayCache(
         event_sink=recursive_harness.event_sink

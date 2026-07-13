@@ -43,6 +43,15 @@ PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION = (
 COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION = (
     "train_contrastive_complementary_family_bundle_precision_first_v1"
 )
+COMPLEMENTARY_FAMILY_SUPPORT_BUNDLE_CANDIDATE_SELECTION_VERSION = (
+    "train_contrastive_complementary_family_support_bundle_precision_first_v2"
+)
+COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS = frozenset(
+    {
+        COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+        COMPLEMENTARY_FAMILY_SUPPORT_BUNDLE_CANDIDATE_SELECTION_VERSION,
+    }
+)
 CANDIDATE_BUNDLE_POLICY_VERSION = (
     "train_only_union_program_set_single_paired_validation_conservative_thresholds_v1"
 )
@@ -471,7 +480,7 @@ class EvolutionKernel:
             TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
             CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
             PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
-            COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+            *COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS,
         }:
             raise ValueError(
                 f"unsupported candidate selection policy: {candidate_selection_policy}"
@@ -500,7 +509,7 @@ class EvolutionKernel:
             in {
                 CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
                 PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
-                COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+                *COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS,
             }
         ):
             raise ValueError(
@@ -508,7 +517,7 @@ class EvolutionKernel:
             )
         bundle_selection_enabled = (
             candidate_selection_policy
-            == COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION
+            in COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS
         )
         if bundle_selection_enabled != (
             candidate_bundle_policy == CANDIDATE_BUNDLE_POLICY_VERSION
@@ -529,7 +538,7 @@ class EvolutionKernel:
             candidate_selection_policy
             in {
                 PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
-                COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+                *COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS,
             }
             and proposal_candidates_per_generation != 3
         ):
@@ -683,13 +692,14 @@ class EvolutionKernel:
         candidate_bundle_audits: tuple[_TrainingCandidateBundleAudit, ...] = ()
         if (
             self.candidate_selection_policy
-            == COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION
+            in COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS
             and eligible
         ):
             candidate_bundle_audits = _training_candidate_bundle_audits(
                 eligible,
                 validation_context.residuals,
                 family_coverage_target=family_coverage_target,
+                selection_policy=self.candidate_selection_policy,
             )
             selected_audits = candidate_bundle_audits[0].members
             selected_candidate_set_hash = candidate_bundle_audits[
@@ -755,7 +765,7 @@ class EvolutionKernel:
                                         if self.candidate_selection_policy
                                         in {
                                             PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
-                                            COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+                                            *COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS,
                                         }
                                         else None
                                     )
@@ -764,7 +774,7 @@ class EvolutionKernel:
                                 in {
                                     CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
                                     PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
-                                    COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+                                    *COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS,
                                 }
                                 else None
                             ),
@@ -795,6 +805,9 @@ class EvolutionKernel:
                                     audit,
                                     family_coverage_target=(
                                         family_coverage_target
+                                    ),
+                                    selection_policy=(
+                                        self.candidate_selection_policy
                                     ),
                                     selected=(index == 0),
                                 )
@@ -930,7 +943,7 @@ class EvolutionKernel:
         )
         bundle_selection = (
             self.candidate_selection_policy
-            == COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION
+            in COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS
         )
         if counterfactual_replay_cache is None:
             if bundle_selection:
@@ -1144,6 +1157,15 @@ class EvolutionKernel:
                                     ),
                                     "component_precision_precedes_bundle_coverage": True,
                                     "bundle_selected_before_validation": True,
+                                    **(
+                                        {
+                                            "actual_family_count_precedes_failure_support": True,
+                                            "failure_support_precedes_bundle_size": True,
+                                        }
+                                        if self.candidate_selection_policy
+                                        == COMPLEMENTARY_FAMILY_SUPPORT_BUNDLE_CANDIDATE_SELECTION_VERSION
+                                        else {}
+                                    ),
                                 }
                                 if self.candidate_bundle_policy
                                 else {}
@@ -1168,7 +1190,15 @@ class EvolutionKernel:
                                     ),
                                 )
                             ),
-                            "coverage_reward_capped_at_target": True,
+                            **(
+                                {
+                                    "family_target_deficit_capped_at_target": True,
+                                    "post_target_actual_family_count_tiebreak": True,
+                                }
+                                if self.candidate_selection_policy
+                                == COMPLEMENTARY_FAMILY_SUPPORT_BUNDLE_CANDIDATE_SELECTION_VERSION
+                                else {"coverage_reward_capped_at_target": True}
+                            ),
                             "validation_features_used": False,
                             "validation_outcomes_used": False,
                         },
@@ -1176,7 +1206,7 @@ class EvolutionKernel:
                     if self.candidate_selection_policy
                     in {
                         PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
-                        COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+                        *COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS,
                     }
                     else {}
                 ),
@@ -1533,7 +1563,7 @@ def _training_candidate_score(
         TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
         CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
         PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
-        COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
+        *COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS,
     }:
         raise ValueError(f"unsupported candidate selection policy: {selection_policy}")
     if family_coverage_target < 0:
@@ -1753,9 +1783,19 @@ def _training_candidate_bundle_audits(
     residuals: Sequence[ResidualExample],
     *,
     family_coverage_target: int,
+    selection_policy: str = (
+        COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION
+    ),
 ) -> tuple[_TrainingCandidateBundleAudit, ...]:
     if family_coverage_target < 0:
         raise ValueError("training family coverage target cannot be negative")
+    if (
+        selection_policy
+        not in COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS
+    ):
+        raise ValueError(
+            f"unsupported candidate bundle selection policy: {selection_policy}"
+        )
     canonical_eligible = tuple(
         sorted(
             eligible,
@@ -1781,16 +1821,32 @@ def _training_candidate_bundle_audits(
                 - metrics.failure_activation_family_count,
                 0,
             )
-            ranking_score = (
+            ranking_prefix = (
                 -metrics.precision,
                 family_deficit,
                 metrics.success_false_positive_activation_count,
                 metrics.overlap_count,
-                metrics.bundle_size,
-                -metrics.failure_activation_count,
-                metrics.complexity,
-                canonical_set_hash,
             )
+            if (
+                selection_policy
+                == COMPLEMENTARY_FAMILY_SUPPORT_BUNDLE_CANDIDATE_SELECTION_VERSION
+            ):
+                ranking_score = (
+                    *ranking_prefix,
+                    -metrics.failure_activation_family_count,
+                    -metrics.failure_activation_count,
+                    metrics.bundle_size,
+                    metrics.complexity,
+                    canonical_set_hash,
+                )
+            else:
+                ranking_score = (
+                    *ranking_prefix,
+                    metrics.bundle_size,
+                    -metrics.failure_activation_count,
+                    metrics.complexity,
+                    canonical_set_hash,
+                )
             bundle_audits.append(
                 _TrainingCandidateBundleAudit(
                     members=members,
@@ -1806,6 +1862,9 @@ def _training_candidate_bundle_event_row(
     audit: _TrainingCandidateBundleAudit,
     *,
     family_coverage_target: int,
+    selection_policy: str = (
+        COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION
+    ),
     selected: bool,
 ) -> dict[str, Any]:
     accepted_programs = tuple(
@@ -1827,16 +1886,31 @@ def _training_candidate_bundle_event_row(
         "union_training_metrics": audit.metrics.to_dict(
             family_coverage_target=family_coverage_target
         ),
-        "ranking_priority": [
-            "precision_desc",
-            "family_target_deficit_asc",
-            "success_false_positives_asc",
-            "overlap_asc",
-            "bundle_size_asc",
-            "failure_support_desc",
-            "complexity_asc",
-            "canonical_set_hash_asc",
-        ],
+        "ranking_priority": (
+            [
+                "precision_desc",
+                "family_target_deficit_asc",
+                "success_false_positives_asc",
+                "overlap_asc",
+                "actual_family_count_desc",
+                "failure_support_desc",
+                "bundle_size_asc",
+                "complexity_asc",
+                "canonical_set_hash_asc",
+            ]
+            if selection_policy
+            == COMPLEMENTARY_FAMILY_SUPPORT_BUNDLE_CANDIDATE_SELECTION_VERSION
+            else [
+                "precision_desc",
+                "family_target_deficit_asc",
+                "success_false_positives_asc",
+                "overlap_asc",
+                "bundle_size_asc",
+                "failure_support_desc",
+                "complexity_asc",
+                "canonical_set_hash_asc",
+            ]
+        ),
         "selected": selected,
         "selection_uses_validation": False,
     }
