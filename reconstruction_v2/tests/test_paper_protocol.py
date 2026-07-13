@@ -12,6 +12,7 @@ from assumption_agent.benchmarks.docker_egress import (
     TRIAL_NETWORK_BUDGET_POLICY_VERSION,
 )
 from assumption_agent.benchmarks.paper_protocol import (
+    ACTIONABLE_CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
     CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
     CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
     COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION,
@@ -36,7 +37,14 @@ from assumption_agent.models import stable_hash
 from assumption_agent.evolution import (
     PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
 )
-from assumption_agent.proposer import PROPOSAL_DIVERSITY_POLICY_VERSION
+from assumption_agent.proposer import (
+    LEGACY_PROPOSAL_DIVERSITY_POLICY_VERSION,
+    PROPOSAL_DIVERSITY_POLICY_VERSION,
+)
+from assumption_agent.benchmarks.skilllearn_compiler import (
+    LEGACY_SKILL_ACTION_LOWERING_VERSION,
+    SKILL_ACTION_LOWERING_VERSION,
+)
 from assumption_agent.splits import SplitManifest
 
 
@@ -71,6 +79,9 @@ V39_PROTOCOL = (
 )
 V310_PROTOCOL = (
     ROOT / "manifests" / "skilllearn_paper_protocol_v3_10_ruoli_gpt54mini.json"
+)
+V311_PROTOCOL = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_11_ruoli_gpt54mini.json"
 )
 MANIFEST_HASH = stable_hash({"manifest": "paper-test"})
 
@@ -370,7 +381,7 @@ def test_v310_protocol_changes_only_prospective_diverse_candidate_search() -> No
         PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION
     )
     assert protocol.payload["execution"]["proposal_diversity_policy"] == (
-        PROPOSAL_DIVERSITY_POLICY_VERSION
+        LEGACY_PROPOSAL_DIVERSITY_POLICY_VERSION
     )
     assert protocol.payload["execution"]["proposal_response_max_tokens"] == 8000
 
@@ -385,6 +396,72 @@ def test_v310_protocol_changes_only_prospective_diverse_candidate_search() -> No
     v310["execution"].pop("proposal_diversity_policy")
     v310["execution"].pop("proposal_response_max_tokens")
     assert v310 == v39
+
+
+def test_v311_changes_only_actionable_pre_gate_search_and_lowering() -> None:
+    protocol = PaperProtocol.read(V311_PROTOCOL)
+
+    assert protocol.validate_structure() == []
+    assert protocol.payload["protocol_version"] == "3.11.0"
+    execution = protocol.payload["execution"]
+    assert execution["proposal_diversity_policy"] == (
+        PROPOSAL_DIVERSITY_POLICY_VERSION
+    )
+    assert execution["contrastive_training_evidence_policy"] == (
+        ACTIONABLE_CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
+    )
+    assert execution["skill_action_lowering"] == SKILL_ACTION_LOWERING_VERSION
+
+    v310 = copy.deepcopy(PaperProtocol.read(V310_PROTOCOL).payload)
+    v311 = copy.deepcopy(protocol.payload)
+    for payload in (v310, v311):
+        payload.pop("protocol_id")
+        payload.pop("protocol_version")
+    v311["execution"]["proposal_diversity_policy"] = (
+        LEGACY_PROPOSAL_DIVERSITY_POLICY_VERSION
+    )
+    v311["execution"]["contrastive_training_evidence_policy"] = (
+        CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
+    )
+    v311["execution"]["skill_action_lowering"] = (
+        LEGACY_SKILL_ACTION_LOWERING_VERSION
+    )
+    assert v311 == v310
+
+
+@pytest.mark.parametrize(
+    ("field_name", "drifted_value", "expected_issue"),
+    (
+        (
+            "proposal_diversity_policy",
+            LEGACY_PROPOSAL_DIVERSITY_POLICY_VERSION,
+            "proposal_diversity_policy_mismatch",
+        ),
+        (
+            "contrastive_training_evidence_policy",
+            CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
+            "contrastive_training_evidence_policy_mismatch",
+        ),
+        (
+            "skill_action_lowering",
+            LEGACY_SKILL_ACTION_LOWERING_VERSION,
+            "skill_action_lowering_mismatch",
+        ),
+    ),
+)
+def test_v311_rejects_actionable_contract_drift(
+    field_name: str,
+    drifted_value: str,
+    expected_issue: str,
+) -> None:
+    protocol = PaperProtocol.read(V311_PROTOCOL)
+    payload = copy.deepcopy(protocol.payload)
+    payload["execution"][field_name] = drifted_value
+
+    assert expected_issue in PaperProtocol(
+        protocol.path,
+        payload,
+    ).validate_structure()
 
 
 @pytest.mark.parametrize(

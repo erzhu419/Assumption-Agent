@@ -18,6 +18,7 @@ from ..evolution import (
 from ..models import stable_hash
 from ..provider_chain import build_proposal_model, proposal_provider_status
 from ..proposer import (
+    LEGACY_PROPOSAL_DIVERSITY_POLICY_VERSION,
     PROPOSAL_DIVERSITY_POLICY_VERSION,
     ROOT_PROPOSAL_REPLAY_POLICY_VERSION,
     HypothesisProposalCallError,
@@ -58,7 +59,7 @@ from .docker_egress import (
 )
 from .skilllearn_lifecycle import (
     BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
-    CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
+    CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSIONS,
     MODEL_INFERENCE_CONCURRENCY_POLICY_VERSION,
     MODEL_ONLY_TOOL_POLICY_VERSION,
     OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION,
@@ -181,12 +182,12 @@ def main() -> None:
         raise ValueError("unsupported protocol candidate selection policy")
     if contrastive_training_evidence_policy not in {
         None,
-        CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
+        *CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSIONS,
     }:
         raise ValueError("unsupported protocol contrastive training evidence policy")
     if (
         contrastive_training_evidence_policy
-        == CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
+        in CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSIONS
     ) != (
         candidate_selection_policy in {
             CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
@@ -201,7 +202,11 @@ def main() -> None:
         == PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION
     )
     if diversity_enabled != (
-        proposal_diversity_policy == PROPOSAL_DIVERSITY_POLICY_VERSION
+        proposal_diversity_policy
+        in {
+            LEGACY_PROPOSAL_DIVERSITY_POLICY_VERSION,
+            PROPOSAL_DIVERSITY_POLICY_VERSION,
+        }
         and proposal_response_max_tokens is not None
     ):
         raise ValueError(

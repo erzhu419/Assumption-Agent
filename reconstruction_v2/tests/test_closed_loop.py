@@ -358,7 +358,15 @@ def test_exact_count_proposal_batch_rejects_short_or_overlong_atomically(
     assert request_contract["policy"] == PROPOSAL_DIVERSITY_POLICY_VERSION
     assert request_contract["response_type"] == "array"
     assert request_contract["required_count"] == 2
-    assert request_contract["diversity_unit"] == "train_failure_activation_set"
+    assert request_contract["diversity_unit"] == (
+        "train_failure_activation_or_action_treatment"
+    )
+    assert request_contract["activation_signature_distinctness"] == (
+        "search_preference_audit_only"
+    )
+    assert request_contract["action_treatment_diversity"] == (
+        "allowed_when_activation_signatures_coincide"
+    )
     assert request_contract["max_action_nodes_per_hypothesis"] == 4
     assert request_contract["profile_roles"] == ["precision", "coverage"]
     rejected = next(
@@ -375,7 +383,7 @@ def test_exact_count_proposal_batch_rejects_short_or_overlong_atomically(
     )
 
 
-def test_proposal_batch_rejects_duplicate_failure_activation_signatures_atomically() -> None:
+def test_proposal_batch_audits_duplicate_signatures_without_rejection_or_retry() -> None:
     sink = MemoryEventSink()
     rows = [
         _program_dict(hypothesis_id="duplicate-signature-a", priority=10),
@@ -384,31 +392,40 @@ def test_proposal_batch_rejects_duplicate_failure_activation_signatures_atomical
     model = QueueProposalModel([{"hypotheses": rows}])
     proposer = StructuredHypothesisProposer(model, event_sink=sink)
 
-    with pytest.raises(HypothesisProposalCallError) as caught:
-        proposer.propose(
-            _residuals(),
-            evaluator_epoch="epoch-0",
-            max_hypotheses=2,
-            capabilities={
-                "proposal_batch_contract": {
-                    "policy": PROPOSAL_DIVERSITY_POLICY_VERSION,
-                }
-            },
-            trace_id="duplicate-activation-signatures",
-        )
+    programs = proposer.propose(
+        _residuals(),
+        evaluator_epoch="epoch-0",
+        max_hypotheses=2,
+        capabilities={
+            "proposal_batch_contract": {
+                "policy": PROPOSAL_DIVERSITY_POLICY_VERSION,
+            }
+        },
+        trace_id="duplicate-activation-signatures",
+    )
 
-    assert caught.value.failure_phase == "response_activation_diversity"
+    assert len(programs) == 2
     assert len(model.requests) == 1
-    rejected = next(
+    audited = next(
         row
         for row in sink.events
-        if row["event"] == "hypothesis_proposal_response_rejected"
+        if row["event"] == "proposal_activation_signature_audited"
     )
-    assert rejected["payload"]["failure_train_row_count"] == 2
-    assert rejected["payload"]["distinct_activation_signature_count"] == 1
-    assert rejected["payload"]["raw_content_persisted"] is False
-    assert not any(row["event"] == "hypothesis_proposed" for row in sink.events)
+    assert audited["payload"]["failure_train_row_count"] == 2
+    assert audited["payload"]["distinct_activation_signature_count"] == 1
+    assert audited["payload"]["activation_signature_group_sizes"] == [2]
+    assert len(audited["payload"]["activation_signature_group_hashes"]) == 1
+    assert audited["payload"]["pairwise_distinct_required"] is False
+    assert audited["payload"]["search_preference_only"] is True
+    assert audited["payload"]["response_rejected"] is False
+    assert audited["payload"]["proposal_retry_requested"] is False
+    assert audited["payload"]["raw_content_persisted"] is False
+    assert sum(row["event"] == "hypothesis_proposed" for row in sink.events) == 2
     assert not any(
+        row["event"] == "hypothesis_proposal_response_rejected"
+        for row in sink.events
+    )
+    assert any(
         row["event"] == "root_proposal_evidence_recorded" for row in sink.events
     )
 
@@ -452,6 +469,14 @@ def test_exact_distinct_proposal_batch_is_accepted_and_replayed() -> None:
     assert sum(
         row["event"] == "root_proposal_evidence_replayed" for row in sink.events
     ) == 1
+    audited = next(
+        row
+        for row in sink.events
+        if row["event"] == "proposal_activation_signature_audited"
+    )
+    assert audited["payload"]["distinct_activation_signature_count"] == 2
+    assert audited["payload"]["activation_signature_group_sizes"] == [1, 1]
+    assert len(audited["payload"]["activation_signature_group_hashes"]) == 2
 
 
 @pytest.mark.parametrize(

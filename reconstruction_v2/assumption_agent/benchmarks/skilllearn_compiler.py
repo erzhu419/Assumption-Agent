@@ -17,7 +17,8 @@ from ..validation import backend_action_contract_issues
 
 
 SKILL_ROUTING_VERSION = "per_item_trigger_routing_v2"
-SKILL_ACTION_LOWERING_VERSION = "skilllearn_prompt_directive_lowering_v1"
+LEGACY_SKILL_ACTION_LOWERING_VERSION = "skilllearn_prompt_directive_lowering_v1"
+SKILL_ACTION_LOWERING_VERSION = "skilllearn_prompt_directive_lowering_v2"
 SKILL_FALLBACK_SEMANTICS_VERSION = "baseline_on_nonactivation_only_v1"
 SKILLLEARN_ALLOWED_ACTION_OPERATIONS = frozenset(
     {"execute_step", "check_condition", "produce_artifact", "request_evidence"}
@@ -411,10 +412,14 @@ def _lower_skilllearn_program(
         )
     lowered: list[LoweredSkillAction] = []
     for action in _ordered_actions(program.action_graph):
-        value = _display_value(action.value).strip()
+        value = _display_action_value(action.value).strip()
         target = action.target.strip()
         if action.operation == "execute_step":
-            instruction = value or f"Execute the task step `{target}`."
+            instruction = (
+                f"Execute the task step `{target}`: {value}"
+                if value
+                else f"Execute the task step `{target}`."
+            )
             semantics = "prompt_directive"
         elif action.operation == "produce_artifact":
             detail = f": {value}" if value else "."
@@ -428,8 +433,10 @@ def _lower_skilllearn_program(
             )
             semantics = "prompt_directive"
         else:
-            detail = value or target
-            instruction = f"Before completion, check locally that {detail}."
+            detail = f"`{target}`: {value}" if value else target
+            instruction = f"Before completion, check locally that {detail}"
+            if not instruction.endswith((".", "!", "?")):
+                instruction += "."
             semantics = "agent_local_self_check"
         lowered.append(
             LoweredSkillAction(
@@ -543,3 +550,32 @@ def _display_value(value: Any) -> str:
     if isinstance(value, str):
         return value
     return json.dumps(value, ensure_ascii=True, sort_keys=True)
+
+
+def _display_action_value(value: Any, *, humanize_identifiers: bool = False) -> str:
+    """Render structured action values as deterministic, agent-readable prose."""
+
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        if humanize_identifiers and re.fullmatch(r"[A-Za-z0-9_]+", value):
+            return value.replace("_", " ")
+        return value
+    if isinstance(value, Mapping):
+        return "; ".join(
+            f"{_humanize_action_identifier(str(key))}: "
+            f"{_display_action_value(value[key], humanize_identifiers=True)}"
+            for key in sorted(value, key=lambda row: str(row))
+        )
+    if isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):
+        return ", ".join(
+            _display_action_value(row, humanize_identifiers=True)
+            for row in value
+        )
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
+
+
+def _humanize_action_identifier(value: str) -> str:
+    return value.replace("_", " ")

@@ -168,7 +168,10 @@ def test_promoted_task_hypothesis_compiles_to_skilllearn_skill(tmp_path: Path) -
                     "id": "classify",
                     "operation": "execute_step",
                     "target": "classify_sources",
-                    "value": "Assign one deterministic destination category to each file.",
+                    "value": {
+                        "review_stage": "source_classification",
+                        "mode": "evidence_join_then_compute",
+                    },
                     "depends_on": ["inventory"],
                 },
                 {
@@ -229,18 +232,39 @@ def test_promoted_task_hypothesis_compiles_to_skilllearn_skill(tmp_path: Path) -
     assert all(result.source_for(item_id) is not None for item_id in matching_ids)
     skill_text = result.skill_paths[0].read_text(encoding="utf-8")
     assert "items" in result.skill_paths[0].parts
-    assert "**Agent instruction:** Inventory every input file" in skill_text
-    assert "**Agent-local self-check:**" in skill_text
+    assert (
+        "**Agent instruction:** Execute the task step `inventory_sources`: "
+        "Inventory every input file and extract enough content to classify it."
+    ) in skill_text
+    assert (
+        "**Agent instruction:** Execute the task step `classify_sources`: "
+        "mode: evidence join then compute; review stage: source classification"
+    ) in skill_text
+    assert '"mode": "evidence_join_then_compute"' not in skill_text
+    assert (
+        "**Agent-local self-check:** Before completion, check locally that "
+        "`all_sources_accounted_for`: The output count and source count must "
+        "match before completion."
+    ) in skill_text
     assert "benchmark verifier runs after the agent exits" in skill_text
     assert "skilllearn_external_task_verifier" not in skill_text
     assert "source_inventory" not in skill_text
     assert "Minimum held-out delta" not in skill_text
     assert "post-hoc baseline output" in skill_text
-    compile_manifest = (
-        result.output_root / "compile_manifest.json"
-    ).read_text(encoding="utf-8")
-    assert SKILL_ACTION_LOWERING_VERSION in compile_manifest
-    assert SKILL_FALLBACK_SEMANTICS_VERSION in compile_manifest
+    compile_manifest = json.loads(
+        (result.output_root / "compile_manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert (
+        SKILL_ACTION_LOWERING_VERSION
+        == "skilllearn_prompt_directive_lowering_v2"
+    )
+    assert (
+        compile_manifest["action_lowering_version"]
+        == SKILL_ACTION_LOWERING_VERSION
+    )
+    assert compile_manifest["fallback_semantics"] == SKILL_FALLBACK_SEMANTICS_VERSION
 
     routed_payload = program.to_dict()
     routed_payload["id"] = "hyp-item-routed-workflow"

@@ -21,6 +21,7 @@ from ..evolution import (
 )
 from ..provider_chain import configured_provider_chain, proposal_provider_status
 from ..proposer import (
+    LEGACY_PROPOSAL_DIVERSITY_POLICY_VERSION,
     PROPOSAL_DIVERSITY_POLICY_VERSION,
     ROOT_PROPOSAL_REPLAY_POLICY_VERSION,
 )
@@ -49,6 +50,7 @@ from .docker_egress import (
     configured_trial_network_byte_limit,
 )
 from .skilllearn_compiler import (
+    LEGACY_SKILL_ACTION_LOWERING_VERSION,
     SKILL_ACTION_LOWERING_VERSION,
     SKILL_FALLBACK_SEMANTICS_VERSION,
     SKILL_ROUTING_VERSION,
@@ -107,19 +109,24 @@ TRIAL_NETWORK_BYTE_LIMIT_BY_PROTOCOL_VERSION = {
     "3.8.0": 64 * 1024 * 1024,
     "3.9.0": 64 * 1024 * 1024,
     "3.10.0": 64 * 1024 * 1024,
+    "3.11.0": 64 * 1024 * 1024,
 }
 
 CONTRASTIVE_PROTOCOL_VERSIONS = frozenset(
-    {"3.6.0", "3.7.0", "3.8.0", "3.9.0", "3.10.0"}
+    {"3.6.0", "3.7.0", "3.8.0", "3.9.0", "3.10.0", "3.11.0"}
 )
-MODEL_SLOT_PROTOCOL_VERSIONS = frozenset({"3.9.0", "3.10.0"})
-PROPOSAL_DIVERSITY_PROTOCOL_VERSIONS = frozenset({"3.10.0"})
+MODEL_SLOT_PROTOCOL_VERSIONS = frozenset({"3.9.0", "3.10.0", "3.11.0"})
+PROPOSAL_DIVERSITY_PROTOCOL_VERSIONS = frozenset({"3.10.0", "3.11.0"})
+ACTIONABLE_DIRECTIVE_PROTOCOL_VERSIONS = frozenset({"3.11.0"})
 
 CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION = (
     "train_contrastive_precision_then_support_v1"
 )
 CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION = (
     "valid_train_failures_and_success_controls_v1"
+)
+ACTIONABLE_CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION = (
+    "valid_train_failures_actionable_feedback_and_success_controls_v2"
 )
 COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION = (
     "generation_terminal_non_claim_v1"
@@ -264,8 +271,13 @@ class PaperProtocol:
             ):
                 issues.append("proposal_candidate_selection_mismatch")
             if protocol_version in CONTRASTIVE_PROTOCOL_VERSIONS:
+                expected_contrastive_evidence_policy = (
+                    ACTIONABLE_CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
+                    if protocol_version in ACTIONABLE_DIRECTIVE_PROTOCOL_VERSIONS
+                    else CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
+                )
                 if execution.get("contrastive_training_evidence_policy") != (
-                    CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
+                    expected_contrastive_evidence_policy
                 ):
                     issues.append("contrastive_training_evidence_policy_mismatch")
                 if execution.get("counterfactual_invalid_evidence_policy") != (
@@ -280,8 +292,13 @@ class PaperProtocol:
                     if field in execution:
                         issues.append(f"{field}_unexpected")
             if protocol_version in PROPOSAL_DIVERSITY_PROTOCOL_VERSIONS:
-                if execution.get("proposal_diversity_policy") != (
+                expected_proposal_diversity_policy = (
                     PROPOSAL_DIVERSITY_POLICY_VERSION
+                    if protocol_version in ACTIONABLE_DIRECTIVE_PROTOCOL_VERSIONS
+                    else LEGACY_PROPOSAL_DIVERSITY_POLICY_VERSION
+                )
+                if execution.get("proposal_diversity_policy") != (
+                    expected_proposal_diversity_policy
                 ):
                     issues.append("proposal_diversity_policy_mismatch")
                 if execution.get("proposal_response_max_tokens") != 8000:
@@ -302,9 +319,13 @@ class PaperProtocol:
                 issues.append("evaluator_hypothesis_mode_mismatch")
             if execution.get("skill_routing") != SKILL_ROUTING_VERSION:
                 issues.append("skill_routing_mismatch")
-            if (
-                execution.get("skill_action_lowering")
-                != SKILL_ACTION_LOWERING_VERSION
+            expected_skill_action_lowering = (
+                SKILL_ACTION_LOWERING_VERSION
+                if protocol_version in ACTIONABLE_DIRECTIVE_PROTOCOL_VERSIONS
+                else LEGACY_SKILL_ACTION_LOWERING_VERSION
+            )
+            if execution.get("skill_action_lowering") != (
+                expected_skill_action_lowering
             ):
                 issues.append("skill_action_lowering_mismatch")
             if (

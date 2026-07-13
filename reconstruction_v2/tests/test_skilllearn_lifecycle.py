@@ -43,12 +43,14 @@ from assumption_agent.evolution import (
 )
 from assumption_agent.events import MemoryEventSink
 from assumption_agent.benchmarks.skilllearn_lifecycle import (
+    ACTIONABLE_CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
     CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
     MODEL_INFERENCE_CONCURRENCY_POLICY_VERSION,
     SkillLearnModelInferenceLimiter,
     SkillLearnPrebuiltImage,
     SkillLearnSubprocessBackend,
     _ContainerNetworkBudgetMonitor,
+    _classify_training_failure,
     _DockerVerifierIsolationSubprocessProxy,
     _inspect_codex_tool_policy,
     _inspect_verifier_execution_receipt,
@@ -79,6 +81,7 @@ from assumption_agent.benchmarks.paper_protocol import (
     COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION,
 )
 from assumption_agent.benchmarks.skilllearn_compiler import (
+    SKILL_ACTION_LOWERING_VERSION,
     skilllearn_program_treatment_hash,
 )
 from assumption_agent.models import (
@@ -393,6 +396,48 @@ class BlockingAgentSubprocess:
         if "/tests/test.sh" in command_text:
             self.verifier_entered.set()
         return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+
+def test_actionable_train_failure_feedback_removes_completion_check_bias() -> None:
+    request = SkillLearnTrialRequest(
+        item_id="financial-analysis-1",
+        family="financial-analysis",
+        split=SplitName.TRAIN,
+        variant=TrialVariant.POLICY_OFF,
+        evaluator_epoch="skilllearn-eval-test",
+        pair_id="train",
+        repeat=1,
+        agent_id="codex",
+        model="gpt-5.4-mini",
+        max_steps=100,
+        manifest_hash="manifest",
+    )
+    observation = SkillLearnTrialObservation(
+        request=request,
+        success=False,
+        score=0.0,
+        metrics={"task_success": 0.0, "evaluation_valid": 1.0},
+        total_tokens=100,
+        steps=10,
+        duration_seconds=1.0,
+        provider_fingerprint="provider",
+        fairness_fingerprint="budget",
+    )
+
+    _, legacy_feedback = _classify_training_failure(observation)
+    _, actionable_feedback = _classify_training_failure(
+        observation,
+        actionable_feedback=True,
+    )
+
+    assert ACTIONABLE_CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION.endswith(
+        "_v2"
+    )
+    assert "completion check" in legacy_feedback[-1]
+    assert "concrete reusable corrective operator" in actionable_feedback[-1]
+    assert "do not default to a generic completeness check" in (
+        actionable_feedback[-1]
+    )
 
 
 def test_network_budget_parser_and_monitor_kill_over_limit() -> None:
@@ -2237,6 +2282,7 @@ def test_family_coverage_proposal_request_contains_diverse_batch_contract(
         residuals=residuals,
         available_lanes=frozenset({"baseline", "candidate"}),
         baseline_lane="baseline",
+        action_semantics=SKILL_ACTION_LOWERING_VERSION,
         contrastive_training_evidence_policy=(
             CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
         ),
@@ -2256,7 +2302,13 @@ def test_family_coverage_proposal_request_contains_diverse_batch_contract(
     assert request_contract["policy"] == PROPOSAL_DIVERSITY_POLICY_VERSION
     assert request_contract["required_count"] == 3
     assert request_contract["diversity_unit"] == (
-        "train_failure_activation_set"
+        "train_failure_activation_or_action_treatment"
+    )
+    assert request_contract["activation_signature_distinctness"] == (
+        "search_preference_audit_only"
+    )
+    assert request_contract["action_treatment_diversity"] == (
+        "allowed_when_activation_signatures_coincide"
     )
     assert request_contract["max_action_nodes_per_hypothesis"] == 4
     assert request_contract["compact_output"] is True
@@ -2264,11 +2316,21 @@ def test_family_coverage_proposal_request_contains_diverse_batch_contract(
         "hypotheses"
     ]
     assert response_schema["minItems"] == response_schema["maxItems"] == 3
+    action_schema = response_schema["items"]["action_graph"][0]
+    assert action_schema["target"] == (
+        "task-local subject of the imperative directive"
+    )
+    assert action_schema["value"] == (
+        "complete imperative task-local sentence grounded in TRAIN residual "
+        "context.task_instruction; never an enum-only value, mapping/mode/check "
+        "label, or preserve_baseline claim"
+    )
+    assert response_schema["items"]["fallback"] == "preserve_baseline"
     assert capability_contract["required_count"] == 3
     assert capability_contract["profile_roles"] == [
-        "train_only_family_precision_anchor",
+        "train_only_precision_anchor",
         "train_only_cross_family_coverage",
-        "train_only_coverage_target_then_precision",
+        "train_only_action_treatment_diversity",
     ]
     coverage = model.requests[0]["capabilities"]["train_coverage_objective"]
     assert coverage == {
@@ -2286,6 +2348,40 @@ def test_family_coverage_proposal_request_contains_diverse_batch_contract(
     assert constraints["candidate_search_uses_train_only"] is True
     assert constraints["candidate_search_family_target"] == 2
     assert constraints["candidate_search_validation_outcomes_forbidden"] is True
+    assert constraints[
+        "proposal_activation_signature_distinctness_is_search_preference"
+    ] is True
+    assert constraints[
+        "proposal_activation_signatures_are_audited_not_rejected"
+    ] is True
+    assert constraints[
+        "proposal_action_or_backend_treatment_diversity_allowed"
+    ] is True
+    assert constraints[
+        "proposal_same_activation_signature_allowed_when_treatment_differs"
+    ] is True
+    assert (
+        "proposal_train_failure_activation_sets_must_be_pairwise_distinct"
+        not in constraints
+    )
+    assert constraints[
+        "prompt_directive_action_values_must_be_complete_imperative_task_local_sentences"
+    ] is True
+    assert constraints["prompt_directive_action_value_grounding_source"] == (
+        "TRAIN residual context.task_instruction"
+    )
+    assert constraints[
+        "prompt_directive_enum_only_action_values_forbidden"
+    ] is True
+    assert constraints[
+        "prompt_directive_mapping_mode_check_labels_forbidden"
+    ] is True
+    assert constraints[
+        "prompt_directive_activated_action_preserve_baseline_claim_forbidden"
+    ] is True
+    assert constraints[
+        "prompt_directive_top_level_fallback_remains_preserve_baseline"
+    ] is True
 
 
 def test_training_support_reports_success_anti_trigger_protection_without_new_gate() -> None:

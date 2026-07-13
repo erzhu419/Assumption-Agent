@@ -15,7 +15,6 @@ from .codex_execution_policy import LEGACY_CODEX_AGENT_EXECUTION_POLICY
 from .paper_protocol import (
     COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION,
     CONTRASTIVE_PROTOCOL_VERSIONS,
-    CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
     PaperProtocol,
     _code_fingerprint,
     _git_state,
@@ -616,6 +615,12 @@ def _validate_development_report(
         _validate_generation_training_evidence(
             row,
             protocol_version=str(protocol.payload.get("protocol_version") or ""),
+            expected_policy=str(
+                protocol.payload["execution"].get(
+                    "contrastive_training_evidence_policy"
+                )
+                or ""
+            ),
         )
         _validate_generation_promotion_decision(
             row,
@@ -791,12 +796,11 @@ def _validate_generation_training_evidence(
     generation: Mapping[str, Any],
     *,
     protocol_version: str,
+    expected_policy: str,
 ) -> None:
     if protocol_version not in CONTRASTIVE_PROTOCOL_VERSIONS:
         return
-    if generation.get("contrastive_training_evidence_policy") != (
-        CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
-    ):
+    if generation.get("contrastive_training_evidence_policy") != expected_policy:
         raise ValueError(
             "development generation contrastive evidence policy mismatch"
         )

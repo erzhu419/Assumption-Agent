@@ -22,8 +22,16 @@ PROPOSAL_SYSTEM_PROMPT = (
     "external-anchor verifier used only by the evaluator unless explicitly declared "
     "agent-local, and the supplied prospective fallback contract. When a "
     "proposal_batch_contract is present, return exactly its requested hypothesis "
-    "count, make activation signatures pairwise distinct on the specified training "
-    "failure rows, and keep the JSON output compact."
+    "count and keep the JSON output compact. Treat distinct activation signatures "
+    "on the specified training failure rows as a search preference, not a hard "
+    "response requirement: candidates may share a signature when they diversify "
+    "the action graph or backend treatment. When action_semantics contains "
+    "prompt_directive, every activated action value must be a complete imperative, "
+    "task-local sentence grounded in the provided TRAIN residual "
+    "context.task_instruction. Never use an enum-only value or a mapping, mode, or "
+    "check label as the action value, and never claim preserve_baseline inside an "
+    "activated action node; preserve_baseline remains only in the unchanged "
+    "top-level fallback field."
 )
 
 

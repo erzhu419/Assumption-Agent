@@ -41,6 +41,15 @@ PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION = (
 CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION = (
     "valid_train_failures_and_success_controls_v1"
 )
+ACTIONABLE_CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION = (
+    "valid_train_failures_actionable_feedback_and_success_controls_v2"
+)
+CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSIONS = frozenset(
+    {
+        CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
+        ACTIONABLE_CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
+    }
+)
 COUNTERFACTUAL_REPLAY_POLICY_VERSION = (
     "behavior_identical_validation_replay_v1"
 )
@@ -320,7 +329,7 @@ class EvolutionKernel:
             )
         if contrastive_training_evidence_policy not in {
             None,
-            CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
+            *CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSIONS,
         }:
             raise ValueError(
                 "unsupported contrastive training evidence policy: "
@@ -328,7 +337,7 @@ class EvolutionKernel:
             )
         contrastive_enabled = (
             contrastive_training_evidence_policy
-            == CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
+            in CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSIONS
         )
         if contrastive_enabled != (
             candidate_selection_policy
@@ -772,13 +781,13 @@ class EvolutionKernel:
                                 self.proposal_candidates_per_generation
                             ),
                             "diversity_unit": (
-                                "train_failure_activation_set"
+                                "train_failure_activation_or_action_treatment"
                             ),
                             "max_action_nodes_per_hypothesis": 4,
                             "profile_roles": [
-                                "train_only_family_precision_anchor",
+                                "train_only_precision_anchor",
                                 "train_only_cross_family_coverage",
-                                "train_only_coverage_target_then_precision",
+                                "train_only_action_treatment_diversity",
                             ],
                             "compact_output": True,
                         },

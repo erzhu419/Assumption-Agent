@@ -16,8 +16,11 @@ from .models import (
 
 ROOT_PROPOSAL_REPLAY_POLICY_VERSION = "request_identical_root_proposal_replay_v1"
 REPAIR_BRANCH_ID_POLICY_VERSION = "parent_content_scoped_repair_id_v1"
-PROPOSAL_DIVERSITY_POLICY_VERSION = (
+LEGACY_PROPOSAL_DIVERSITY_POLICY_VERSION = (
     "exact_count_pairwise_train_failure_activation_v1"
+)
+PROPOSAL_DIVERSITY_POLICY_VERSION = (
+    "exact_count_train_failure_activation_audit_only_v2"
 )
 
 
@@ -121,7 +124,13 @@ class StructuredHypothesisProposer:
                 "response_field": "hypotheses",
                 "response_type": "array",
                 "required_count": max_hypotheses,
-                "diversity_unit": "train_failure_activation_set",
+                "diversity_unit": "train_failure_activation_or_action_treatment",
+                "activation_signature_distinctness": (
+                    "search_preference_audit_only"
+                ),
+                "action_treatment_diversity": (
+                    "allowed_when_activation_signatures_coincide"
+                ),
                 "max_action_nodes_per_hypothesis": int(configured_action_limit),
                 "profile_roles": profile_roles,
                 "compact_output": True,
@@ -245,41 +254,59 @@ class StructuredHypothesisProposer:
                 if residual.split is SplitName.TRAIN
                 and residual.baseline_success is False
             )
-            activation_signatures: list[tuple[bool, ...]] = []
-            for index, program in staged_programs:
-                try:
-                    signature = tuple(
-                        program.matches(residual.features)
-                        for residual in failure_rows
-                    )
-                except (TypeError, ValueError, OverflowError) as exc:
-                    raise self._response_contract_error(
-                        payload=payload,
-                        response=response,
-                        expected_field="hypotheses",
-                        failure_phase="response_activation_diversity",
-                        trace_id=trace_id,
-                        consumed_row_index=index,
-                        consumed_row=rows[index],
-                        parse_error=exc,
-                        expected_item_count=max_hypotheses,
-                        failure_train_row_count=len(failure_rows),
-                        response_contract_policy=PROPOSAL_DIVERSITY_POLICY_VERSION,
-                    ) from exc
-                activation_signatures.append(signature)
-            distinct_signature_count = len(set(activation_signatures))
-            if distinct_signature_count != len(activation_signatures):
-                raise self._response_contract_error(
-                    payload=payload,
-                    response=response,
-                    expected_field="hypotheses",
-                    failure_phase="response_activation_diversity",
-                    trace_id=trace_id,
-                    expected_item_count=max_hypotheses,
-                    failure_train_row_count=len(failure_rows),
-                    distinct_activation_signature_count=distinct_signature_count,
-                    response_contract_policy=PROPOSAL_DIVERSITY_POLICY_VERSION,
+            activation_signatures: list[tuple[bool | None, ...]] = []
+            activation_audit_error_count = 0
+            for _, program in staged_programs:
+                signature: list[bool | None] = []
+                for residual in failure_rows:
+                    try:
+                        signature.append(program.matches(residual.features))
+                    except (TypeError, ValueError, OverflowError):
+                        # Static validation owns malformed trigger rejection. This
+                        # search audit must never turn signature diversity into a
+                        # second response gate or a proposal retry.
+                        signature.append(None)
+                        activation_audit_error_count += 1
+                activation_signatures.append(tuple(signature))
+            signature_group_sizes: dict[str, int] = {}
+            for signature in activation_signatures:
+                signature_hash = stable_hash(
+                    {"train_failure_activation_signature": signature}
                 )
+                signature_group_sizes[signature_hash] = (
+                    signature_group_sizes.get(signature_hash, 0) + 1
+                )
+            signature_group_hashes = sorted(signature_group_sizes)
+            self.event_sink.emit(
+                Event(
+                    event="proposal_activation_signature_audited",
+                    stage="proposal.search_audit",
+                    trace_id=trace_id,
+                    payload={
+                        "policy": PROPOSAL_DIVERSITY_POLICY_VERSION,
+                        "candidate_count": len(programs),
+                        "failure_train_row_count": len(failure_rows),
+                        "distinct_activation_signature_count": len(
+                            signature_group_hashes
+                        ),
+                        "activation_signature_group_hashes": (
+                            signature_group_hashes
+                        ),
+                        "activation_signature_group_sizes": [
+                            signature_group_sizes[signature_hash]
+                            for signature_hash in signature_group_hashes
+                        ],
+                        "activation_audit_error_count": (
+                            activation_audit_error_count
+                        ),
+                        "pairwise_distinct_required": False,
+                        "search_preference_only": True,
+                        "response_rejected": False,
+                        "proposal_retry_requested": False,
+                        "raw_content_persisted": False,
+                    },
+                )
+            )
         for index, program in staged_programs:
             self.event_sink.emit(
                 Event(
@@ -690,6 +717,21 @@ def _proposal_constraints(
             else []
         ),
     }
+    if prompt_directive_backend:
+        constraints.update(
+            {
+                "prompt_directive_action_values_must_be_complete_imperative_"
+                "task_local_sentences": True,
+                "prompt_directive_action_value_grounding_source": (
+                    "TRAIN residual context.task_instruction"
+                ),
+                "prompt_directive_enum_only_action_values_forbidden": True,
+                "prompt_directive_mapping_mode_check_labels_forbidden": True,
+                "prompt_directive_activated_action_preserve_baseline_claim_"
+                "forbidden": True,
+                "prompt_directive_top_level_fallback_remains_preserve_baseline": True,
+            }
+        )
     training_evidence_contract = (capabilities or {}).get(
         "training_evidence_contract"
     )
@@ -720,7 +762,10 @@ def _proposal_constraints(
         constraints.update(
             {
                 "proposal_count_must_equal_requested_count": True,
-                "proposal_train_failure_activation_sets_must_be_pairwise_distinct": True,
+                "proposal_activation_signature_distinctness_is_search_preference": True,
+                "proposal_activation_signatures_are_audited_not_rejected": True,
+                "proposal_action_or_backend_treatment_diversity_allowed": True,
+                "proposal_same_activation_signature_allowed_when_treatment_differs": True,
                 "proposal_output_must_be_compact": True,
                 "proposal_max_action_nodes_per_hypothesis": int(
                     proposal_batch_contract.get(
@@ -753,6 +798,12 @@ def _program_schema(
     capabilities: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     action_contract = (capabilities or {}).get("action_contract")
+    action_semantics = (
+        str(action_contract.get("semantics"))
+        if isinstance(action_contract, Mapping)
+        else "typed_runtime_action_v1"
+    )
+    prompt_directive_backend = "prompt_directive" in action_semantics
     external_evidence_is_hidden = bool(
         action_contract.get("external_evidence_is_hidden", False)
         if isinstance(action_contract, Mapping)
@@ -770,11 +821,21 @@ def _program_schema(
                 "id": "action ID",
                 "operation": "one allowed action operation",
                 "target": (
-                    "task-local step, condition, evidence, or artifact; never the external verifier or policy-off/on outcome"
-                    if external_evidence_is_hidden
-                    else "declared capability, step, verifier, or artifact"
+                    "task-local subject of the imperative directive"
+                    if prompt_directive_backend
+                    else (
+                        "task-local step, condition, evidence, or artifact; never the external verifier or policy-off/on outcome"
+                        if external_evidence_is_hidden
+                        else "declared capability, step, verifier, or artifact"
+                    )
                 ),
-                "value": "JSON value",
+                "value": (
+                    "complete imperative task-local sentence grounded in TRAIN "
+                    "residual context.task_instruction; never an enum-only value, "
+                    "mapping/mode/check label, or preserve_baseline claim"
+                    if prompt_directive_backend
+                    else "JSON value"
+                ),
                 "depends_on": [],
             }
         ],

@@ -67,6 +67,16 @@ def test_openai_compatible_proposal_model_uses_json_contract(monkeypatch) -> Non
     assert transport.calls[0]["payload"]["temperature"] == 0
     assert transport.calls[0]["payload"]["response_format"] == {"type": "json_object"}
     assert transport.calls[0]["headers"]["Authorization"] == "Bearer secret-value"
+    system_prompt = transport.calls[0]["payload"]["messages"][0]["content"]
+    assert "complete imperative, task-local sentence" in system_prompt
+    assert "TRAIN residual context.task_instruction" in system_prompt
+    assert "enum-only value" in system_prompt
+    assert "mapping, mode, or check label" in system_prompt
+    assert (
+        "never claim preserve_baseline inside an activated action node"
+        in system_prompt
+    )
+    assert "top-level fallback field" in system_prompt
 
 
 def test_model_attempt_events_are_sanitized(monkeypatch) -> None:

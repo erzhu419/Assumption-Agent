@@ -116,6 +116,15 @@ TRAINING_EVIDENCE_POLICY_VERSION = "all_valid_before_proposal_v1"
 CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION = (
     "valid_train_failures_and_success_controls_v1"
 )
+ACTIONABLE_CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION = (
+    "valid_train_failures_actionable_feedback_and_success_controls_v2"
+)
+CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSIONS = frozenset(
+    {
+        CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
+        ACTIONABLE_CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
+    }
+)
 TRAINING_EVIDENCE_REPLAY_POLICY_VERSION = (
     "behavior_identical_training_replay_v1"
 )
@@ -2539,7 +2548,7 @@ class SkillLearnResidualMiner:
     ) -> None:
         if contrastive_training_evidence_policy not in {
             None,
-            CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
+            *CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSIONS,
         }:
             raise ValueError(
                 "unsupported contrastive training evidence policy: "
@@ -2586,7 +2595,13 @@ class SkillLearnResidualMiner:
                     phase=AccessPhase.PROPOSAL,
                     guard=self.guard,
                 ).strip()
-                failure_type, feedback = _classify_training_failure(observation)
+                failure_type, feedback = _classify_training_failure(
+                    observation,
+                    actionable_feedback=(
+                        self.contrastive_training_evidence_policy
+                        == ACTIONABLE_CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
+                    ),
+                )
                 context = {
                     "task_instruction": instruction,
                     "observed_metrics": dict(sorted(observation.metrics.items())),
@@ -3313,7 +3328,7 @@ class SkillLearnEvolutionHarness:
             raise ValueError("invalid trial retry worker count must be positive")
         if contrastive_training_evidence_policy not in {
             None,
-            CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
+            *CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSIONS,
         }:
             raise ValueError(
                 "unsupported contrastive training evidence policy: "
@@ -3329,7 +3344,7 @@ class SkillLearnEvolutionHarness:
             )
         if (
             contrastive_training_evidence_policy
-            == CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
+            in CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSIONS
         ) != (
             candidate_selection_policy
             in {
@@ -4000,6 +4015,8 @@ def _invalid_observation_like(
 
 def _classify_training_failure(
     observation: SkillLearnTrialObservation,
+    *,
+    actionable_feedback: bool = False,
 ) -> tuple[str, tuple[str, ...]]:
     recall = observation.metrics.get("trajectory_key_point_recall")
     if recall is not None and recall < 0.5:
@@ -4008,6 +4025,14 @@ def _classify_training_failure(
             (
                 "The external verifier rejected the baseline outcome.",
                 "The observed trajectory key-point recall was below the frozen evaluator threshold.",
+            ),
+        )
+    if actionable_feedback:
+        return (
+            "external_task_verifier_failed",
+            (
+                "The offline TRAIN verifier rejected the baseline outcome.",
+                "Infer a concrete reusable corrective operator from the TRAIN task instruction; use complete imperative task-local steps and do not default to a generic completeness check.",
             ),
         )
     return (

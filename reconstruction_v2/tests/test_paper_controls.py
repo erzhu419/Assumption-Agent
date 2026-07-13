@@ -60,6 +60,9 @@ V39_PROTOCOL_PATH = (
 V310_PROTOCOL_PATH = (
     ROOT / "manifests" / "skilllearn_paper_protocol_v3_10_ruoli_gpt54mini.json"
 )
+V311_PROTOCOL_PATH = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_11_ruoli_gpt54mini.json"
+)
 MANIFEST_PATH = (
     ROOT / "manifests" / "skilllearnbench_instance_holdout_offline_ready_v1.json"
 )
@@ -700,6 +703,7 @@ def test_execution_report_preserves_legacy_promotion_summary_schema(
         V38_PROTOCOL_PATH,
         V39_PROTOCOL_PATH,
         V310_PROTOCOL_PATH,
+        V311_PROTOCOL_PATH,
     ),
 )
 def test_freeze_accepts_clean_contrastive_report(protocol_path: Path) -> None:
@@ -744,6 +748,7 @@ def test_freeze_accepts_clean_contrastive_report(protocol_path: Path) -> None:
         V38_PROTOCOL_PATH,
         V39_PROTOCOL_PATH,
         V310_PROTOCOL_PATH,
+        V311_PROTOCOL_PATH,
     ),
 )
 def test_freeze_rejects_contrastive_generation_evidence_drift(
@@ -1342,6 +1347,7 @@ def _development_report(
         "3.8.0",
         "3.9.0",
         "3.10.0",
+        "3.11.0",
     }:
         train_count = int(phase["train_count"])
         generation.update(
@@ -1525,6 +1531,7 @@ def _promotion_decision(
         "3.8.0",
         "3.9.0",
         "3.10.0",
+        "3.11.0",
     }:
         summary.update(
             {
