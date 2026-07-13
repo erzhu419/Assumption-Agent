@@ -22,6 +22,7 @@ from ..proposer import (
     PROPOSAL_DIVERSITY_POLICY_VERSION,
     REPAIR_REQUEST_SCOPE_POLICY_VERSION,
     ROOT_PROPOSAL_REPLAY_POLICY_VERSION,
+    TRAIN_ACTION_DESIGN_POLICY_VERSIONS,
     HypothesisProposalCallError,
     StructuredHypothesisProposer,
 )
@@ -72,7 +73,8 @@ from .skilllearn_lifecycle import (
     PROVIDER_FAILURE_POLICY_VERSION,
     PROVIDER_ROUTE_POLICY_VERSION,
     RUNNER_AGENT_REGISTRY_ISOLATION_VERSION,
-    SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
+    SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSIONS,
+    TERMINAL_INVALID_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSIONS,
     INVALID_TRIAL_RETRY_POLICY_VERSION,
     LOCAL_EVIDENCE_TRANSPORT_VERSION,
     NETWORK_SCOPE_AUDIT_VERSION,
@@ -180,6 +182,16 @@ def main() -> None:
     contrastive_training_evidence_policy = execution_contract.get(
         "contrastive_training_evidence_policy"
     )
+    train_action_design_policy = execution_contract.get(
+        "train_action_design_policy"
+    )
+    if train_action_design_policy is not None:
+        train_action_design_policy = str(train_action_design_policy)
+    if train_action_design_policy not in {
+        None,
+        *TRAIN_ACTION_DESIGN_POLICY_VERSIONS,
+    }:
+        raise ValueError("unsupported protocol TRAIN action design policy")
     proposal_diversity_policy = execution_contract.get(
         "proposal_diversity_policy"
     )
@@ -405,6 +417,11 @@ def main() -> None:
             else {}
         ),
         **(
+            {"train_action_design_policy": train_action_design_policy}
+            if train_action_design_policy is not None
+            else {}
+        ),
+        **(
             {"candidate_bundle_policy": candidate_bundle_policy}
             if candidate_bundle_policy is not None
             else {}
@@ -602,6 +619,7 @@ def main() -> None:
             prebuilt_cache=prebuilt_cache,
             provider_circuit=provider_circuit,
             model_inference_limiter=model_inference_limiter,
+            train_action_design_policy=train_action_design_policy,
             codex_agent_execution_policy=codex_agent_execution_policy,
             event_sink=sink,
         )
@@ -614,7 +632,7 @@ def main() -> None:
         )
         if paired_ablation
         and baseline_arm_evidence_replay_policy
-        == SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+        in SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSIONS
         else None
     )
     harness = SkillLearnEvolutionHarness(
@@ -637,6 +655,7 @@ def main() -> None:
         contrastive_training_evidence_policy=(
             contrastive_training_evidence_policy
         ),
+        train_action_design_policy=train_action_design_policy,
         repair_request_scope_policy=repair_request_scope_policy,
         parallel_workers=parallel_workers,
         invalid_trial_max_attempts=invalid_trial_max_attempts,
@@ -683,6 +702,7 @@ def main() -> None:
             contrastive_training_evidence_policy=(
                 contrastive_training_evidence_policy
             ),
+            train_action_design_policy=train_action_design_policy,
             repair_request_scope_policy=repair_request_scope_policy,
             parallel_workers=parallel_workers,
             invalid_trial_max_attempts=invalid_trial_max_attempts,
@@ -707,6 +727,17 @@ def main() -> None:
             ),
         )
         plan["shared_first_generation_checkpoint_hash"] = paired["checkpoint_hash"]
+        if train_action_design_policy:
+            plan.update(
+                {
+                    "shared_first_generation_action_context_profile_count": (
+                        paired["action_context_profile_count"]
+                    ),
+                    "shared_first_generation_action_context_profile_set_hash": (
+                        paired["action_context_profile_set_hash"]
+                    ),
+                }
+            )
         no_recursive_plan = {
             **plan,
             "recursive_validation_enabled": False,
@@ -833,6 +864,8 @@ def _run_paired_arms(
         != no_recursive_harness.candidate_bundle_policy
         or recursive_harness.contrastive_training_evidence_policy
         != no_recursive_harness.contrastive_training_evidence_policy
+        or recursive_harness.train_action_design_policy
+        != no_recursive_harness.train_action_design_policy
     ):
         raise ValueError("paired arms must share training evidence and selection policies")
     recursive_runner = recursive_harness.counterfactual_runner
@@ -844,7 +877,17 @@ def _run_paired_arms(
         raise ValueError("paired arms must share the baseline arm replay policy")
     if (
         recursive_runner.baseline_arm_evidence_replay_policy
-        == SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+        in TERMINAL_INVALID_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSIONS
+        and recursive_runner.invalid_trial_retry_descriptor()
+        != no_recursive_runner.invalid_trial_retry_descriptor()
+    ):
+        raise ValueError(
+            "paired terminal-invalid replay arms must share the invalid trial "
+            "retry configuration"
+        )
+    if (
+        recursive_runner.baseline_arm_evidence_replay_policy
+        in SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSIONS
     ):
         recursive_cache = recursive_runner.baseline_arm_replay_cache
         no_recursive_cache = no_recursive_runner.baseline_arm_replay_cache
@@ -919,6 +962,30 @@ def _run_paired_arms(
                 ),
             }
         )
+    action_context_profile_hashes = sorted(
+        {
+            str(row.context.get("action_context_profile_hash") or "")
+            for row in residuals
+            if row.context.get("action_context_profile_hash")
+        }
+    )
+    action_context_profile_set_hash = stable_hash(
+        {"profile_hashes": action_context_profile_hashes}
+    )
+    if recursive_harness.train_action_design_policy:
+        checkpoint_descriptor.update(
+            {
+                "train_action_design_policy": (
+                    recursive_harness.train_action_design_policy
+                ),
+                "action_context_profile_count": len(
+                    action_context_profile_hashes
+                ),
+                "action_context_profile_set_hash": (
+                    action_context_profile_set_hash
+                ),
+            }
+        )
     checkpoint_hash = stable_hash(checkpoint_descriptor)
     failure_count = sum(not row.baseline_success for row in residuals)
     success_control_count = sum(row.baseline_success for row in residuals)
@@ -960,6 +1027,20 @@ def _run_paired_arms(
                 ),
             }
         )
+    if recursive_harness.train_action_design_policy:
+        checkpoint_payload.update(
+            {
+                "train_action_design_policy": (
+                    recursive_harness.train_action_design_policy
+                ),
+                "action_context_profile_count": len(
+                    action_context_profile_hashes
+                ),
+                "action_context_profile_set_hash": (
+                    action_context_profile_set_hash
+                ),
+            }
+        )
     recursive_harness.event_sink.emit(
         Event(
             event="skilllearn_paired_ablation_checkpoint_frozen",
@@ -983,6 +1064,8 @@ def _run_paired_arms(
         )
         return {
             "checkpoint_hash": checkpoint_hash,
+            "action_context_profile_count": len(action_context_profile_hashes),
+            "action_context_profile_set_hash": action_context_profile_set_hash,
             "recursive_generations": [recursive_generation],
             "recursive_stop_reason": "proposal_model_failure",
             "no_recursive_generations": [no_recursive_generation],
@@ -1071,6 +1154,8 @@ def _run_paired_arms(
         no_recursive_stop = "max_generations_reached"
     return {
         "checkpoint_hash": checkpoint_hash,
+        "action_context_profile_count": len(action_context_profile_hashes),
+        "action_context_profile_set_hash": action_context_profile_set_hash,
         "recursive_generations": recursive_generations,
         "recursive_stop_reason": recursive_stop,
         "no_recursive_generations": no_recursive_generations,

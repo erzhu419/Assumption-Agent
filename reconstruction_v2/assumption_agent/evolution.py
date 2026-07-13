@@ -28,6 +28,8 @@ from .proposer import (
     PROPOSAL_DIVERSITY_POLICY_VERSION,
     REPAIR_REQUEST_SCOPE_POLICY_VERSION,
     StructuredHypothesisProposer,
+    TRAIN_ACTION_DESIGN_POLICY_VERSIONS,
+    train_action_quality_contract,
 )
 from .splits import AccessPhase, SplitAccessGuard
 from .validation import RecursiveValidationEngine, ValidationContext, ValidationTree
@@ -473,6 +475,7 @@ class EvolutionKernel:
         candidate_selection_policy: str = TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
         candidate_bundle_policy: str | None = None,
         contrastive_training_evidence_policy: str | None = None,
+        train_action_design_policy: str | None = None,
         repair_request_scope_policy: str | None = None,
         event_sink: EventSink | None = None,
     ) -> None:
@@ -499,6 +502,14 @@ class EvolutionKernel:
         }:
             raise ValueError(
                 f"unsupported repair request scope policy: {repair_request_scope_policy}"
+            )
+        if train_action_design_policy not in {
+            None,
+            *TRAIN_ACTION_DESIGN_POLICY_VERSIONS,
+        }:
+            raise ValueError(
+                "unsupported TRAIN action design policy: "
+                f"{train_action_design_policy}"
             )
         contrastive_enabled = (
             contrastive_training_evidence_policy
@@ -551,6 +562,7 @@ class EvolutionKernel:
         self.contrastive_training_evidence_policy = (
             contrastive_training_evidence_policy
         )
+        self.train_action_design_policy = train_action_design_policy
         self.repair_request_scope_policy = repair_request_scope_policy
         self.event_sink = event_sink or NullEventSink()
         self._promotion_feedback: list[dict[str, object]] = []
@@ -580,6 +592,13 @@ class EvolutionKernel:
         ):
             raise ValueError(
                 "validation context repair request scope policy mismatch"
+            )
+        if (
+            validation_context.train_action_design_policy
+            != self.train_action_design_policy
+        ):
+            raise ValueError(
+                "validation context TRAIN action design policy mismatch"
             )
         for task in validation_tasks:
             self.split_guard.authorize(task.id, AccessPhase.PROMOTION)
@@ -1107,6 +1126,7 @@ class EvolutionKernel:
                         "task_instruction",
                         "observed_metrics",
                         "execution_signals",
+                        "action_context_profile_hash",
                     ],
                     "context_is_for_action_design_only": True,
                 },
@@ -1127,6 +1147,21 @@ class EvolutionKernel:
                 "prior_hypotheses": self._prior_hypothesis_context(),
                 "prior_promotion_feedback": list(self._promotion_feedback),
                 "novel_hypothesis_required": True,
+                **(
+                    {
+                        "action_quality_contract": train_action_quality_contract(
+                            validation_context.train_action_design_policy
+                        ),
+                        "train_action_design_profiles": {
+                            str(key): dict(value)
+                            for key, value in sorted(
+                                validation_context.action_design_profiles.items()
+                            )
+                        },
+                    }
+                    if validation_context.train_action_design_policy
+                    else {}
+                ),
                 **(
                     {
                         "proposal_batch_contract": {

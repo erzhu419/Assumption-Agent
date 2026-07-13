@@ -49,14 +49,18 @@ from assumption_agent.events import MemoryEventSink
 from assumption_agent.benchmarks.skilllearn_lifecycle import (
     ACTIONABLE_CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
     CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
+    INVALID_TRIAL_RETRY_POLICY_VERSION,
+    LEGACY_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
     MODEL_INFERENCE_CONCURRENCY_POLICY_VERSION,
     SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
+    TERMINAL_SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
     SkillLearnModelInferenceLimiter,
     SkillLearnPrebuiltImage,
     SkillLearnSubprocessBackend,
     _ContainerNetworkBudgetMonitor,
     _classify_training_failure,
     _DockerVerifierIsolationSubprocessProxy,
+    _extract_train_action_trace_profile,
     _inspect_codex_tool_policy,
     _inspect_verifier_execution_receipt,
     _parse_docker_byte_size,
@@ -96,11 +100,15 @@ from assumption_agent.models import (
     HypothesisStatus,
     ResidualExample,
     SplitName,
+    stable_hash,
 )
 from assumption_agent.proposer import (
     PROPOSAL_DIVERSITY_POLICY_VERSION,
     REPAIR_REQUEST_SCOPE_POLICY_VERSION,
     StructuredHypothesisProposer,
+    TRAIN_ACTION_DESIGN_INTERNAL_CONTEXT_KEY,
+    TRAIN_ACTION_DESIGN_POLICY_VERSION,
+    train_action_quality_contract,
 )
 from assumption_agent.splits import (
     SplitAccessGuard,
@@ -213,6 +221,41 @@ class AlwaysFailSkillLearnBackend(FakeSkillLearnBackend):
             success=False,
             score=0.0,
             metrics=metrics,
+        )
+
+
+class ValidationBaselineSequenceBackend(FakeSkillLearnBackend):
+    """Return a frozen sequence of validation policy-off error types."""
+
+    def __init__(self, errors: tuple[str | None, ...]) -> None:
+        super().__init__()
+        self.errors = errors
+        self.validation_baseline_call_count = 0
+
+    def run(self, request, *, skill_source_dir, trace_id):
+        observation = super().run(
+            request,
+            skill_source_dir=skill_source_dir,
+            trace_id=trace_id,
+        )
+        if not (
+            request.split is SplitName.VALIDATION
+            and request.variant is TrialVariant.POLICY_OFF
+        ):
+            return observation
+        index = self.validation_baseline_call_count
+        self.validation_baseline_call_count += 1
+        error_type = self.errors[index] if index < len(self.errors) else None
+        if error_type is None:
+            return observation
+        metrics = dict(observation.metrics)
+        metrics.update({"evaluation_valid": 0.0, "task_success": 0.0})
+        return replace(
+            observation,
+            success=False,
+            score=0.0,
+            metrics=metrics,
+            error_type=error_type,
         )
 
 
@@ -885,6 +928,215 @@ def test_codex_tool_audit_rejects_remote_tools_and_runtime_installs(
     assert audit.remote_tool_call_count == 1
     assert audit.runtime_install_command_count == 1
     assert audit.trace_hash
+
+
+def test_train_action_trace_profile_keeps_actions_without_outputs_or_secrets(
+    tmp_path: Path,
+) -> None:
+    trace = tmp_path / "codex.txt"
+    trace.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "type": "item.completed",
+                        "item": {
+                            "id": "message",
+                            "type": "agent_message",
+                            "text": "raw model prose must not enter the profile",
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "item.completed",
+                        "item": {
+                            "id": "relative-solution-command",
+                            "type": "command_execution",
+                            "command": "cat solution.txt",
+                            "status": "completed",
+                            "exit_code": 0,
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "item.completed",
+                        "item": {
+                            "id": "command",
+                            "type": "command_execution",
+                            "command": (
+                                "/bin/bash -lc 'trivy fs --skip-db-update "
+                                "--cache-dir /root/.cache/trivy "
+                                "/root/package-lock.json'"
+                            ),
+                            "aggregated_output": "hidden command output",
+                            "status": "failed",
+                            "exit_code": 1,
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "item.completed",
+                        "item": {
+                            "id": "secret-command",
+                            "type": "command_execution",
+                            "command": (
+                                "trivy fs --api-key placeholder_sensitive_value "
+                                "--header 'Authorization: Bearer "
+                                "placeholder_bearer_value' "
+                                "https://example.invalid/scan?token=hidden"
+                            ),
+                            "status": "failed",
+                            "exit_code": 1,
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "item.completed",
+                        "item": {
+                            "id": "oracle-command",
+                            "type": "command_execution",
+                            "command": "cat /root/tests/oracle_solution.json",
+                            "status": "completed",
+                            "exit_code": 0,
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "item.completed",
+                        "item": {
+                            "id": "file",
+                            "type": "file_change",
+                            "changes": [
+                                {"path": "/root/security_audit.csv", "kind": "add"},
+                                {"path": "/root/tests/oracle.json", "kind": "add"},
+                            ],
+                        },
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    profile = _extract_train_action_trace_profile(trace)
+
+    assert profile["commands_observed"] == 1
+    assert profile["failed_commands_observed"] == 1
+    assert profile["changed_task_paths"] == ["/root/security_audit.csv"]
+    assert profile["commands_returned"] == 1
+    signature = profile["command_signatures"][0]
+    assert signature["executable_basename"] == "trivy"
+    assert signature["safe_flags"] == ["--cache-dir", "--skip-db-update"]
+    assert signature["task_local_paths"] == [
+        "/root/.cache/trivy",
+        "/root/package-lock.json",
+    ]
+    assert signature["original_command_hash"]
+    assert "command" not in signature
+    serialized = json.dumps(profile, sort_keys=True)
+    assert "trivy" in serialized
+    assert "--skip-db-update" in serialized
+    assert "hidden command output" not in serialized
+    assert "raw model prose" not in serialized
+    assert "placeholder_sensitive_value" not in serialized
+    assert "placeholder_bearer_value" not in serialized
+    assert "example.invalid" not in serialized
+    assert "Authorization" not in serialized
+    assert "oracle_solution" not in serialized
+    assert "/root/tests" not in serialized
+
+
+def test_train_action_trace_profile_normalizes_status_and_rejects_sensitive_paths(
+    tmp_path: Path,
+) -> None:
+    trace = tmp_path / "codex.txt"
+    key_like_path = "/root/sk-" + ("placeholder" * 4)
+    trace.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "type": "item.completed",
+                        "item": {
+                            "type": "command_execution",
+                            "command": "jq -r . /root/input.json",
+                            "status": "SENSITIVE_STATUS_VALUE_123",
+                            "exit_code": 987654321,
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "item.completed",
+                        "item": {
+                            "type": "command_execution",
+                            "command": "cat /root/api_key/SENSITIVE_PATH_VALUE_456",
+                            "status": "completed",
+                            "exit_code": 0,
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "item.completed",
+                        "item": {
+                            "type": "file_change",
+                            "changes": [
+                                {
+                                    "path": "/root/access_token/SENSITIVE_CHANGE_789",
+                                    "kind": "add",
+                                },
+                                {"path": key_like_path, "kind": "add"},
+                            ],
+                        },
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    profile = _extract_train_action_trace_profile(trace)
+
+    assert profile["commands_observed"] == 1
+    assert profile["command_signatures"][0]["status"] == "unknown"
+    assert profile["command_signatures"][0]["exit_code"] == 1
+    assert profile["changed_task_paths"] == []
+    serialized = json.dumps(profile, sort_keys=True)
+    assert "SENSITIVE_STATUS_VALUE_123" not in serialized
+    assert "SENSITIVE_PATH_VALUE_456" not in serialized
+    assert "SENSITIVE_CHANGE_789" not in serialized
+    assert key_like_path not in serialized
+
+
+def test_train_action_trace_profile_rejects_trace_symlink(tmp_path: Path) -> None:
+    outside = tmp_path / "outside.jsonl"
+    outside.write_text(
+        json.dumps(
+            {
+                "type": "item.completed",
+                "item": {
+                    "type": "command_execution",
+                    "command": "trivy fs /root/package-lock.json",
+                    "status": "completed",
+                    "exit_code": 0,
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    trace = tmp_path / "codex.txt"
+    trace.symlink_to(outside)
+
+    assert _extract_train_action_trace_profile(trace) == {}
 
 
 def test_unlocalized_online_verifier_family_is_blocked_before_model_start() -> None:
@@ -2065,6 +2317,35 @@ def test_training_evidence_replay_avoids_identical_generation_resampling(
     assert replay["payload"]["new_training_executions"] == 0
 
 
+def test_training_replay_identity_binds_v315_action_profile_capture(
+    tmp_path: Path,
+) -> None:
+    legacy, _, _, _, _, _ = _harness(tmp_path / "legacy")
+    action, _, _, _, _, _ = _harness(
+        tmp_path / "action",
+        train_action_design_policy=TRAIN_ACTION_DESIGN_POLICY_VERSION,
+    )
+    train_ids = ("organize-messy-files-1",)
+
+    legacy_descriptor = legacy._training_replay_descriptor(
+        train_ids=train_ids,
+        incumbent_programs=(),
+    )
+    action_descriptor = action._training_replay_descriptor(
+        train_ids=train_ids,
+        incumbent_programs=(),
+    )
+
+    assert "train_action_design_policy" not in legacy_descriptor
+    assert "train_action_trace_profile_version" not in legacy_descriptor
+    assert action_descriptor["train_action_design_policy"] == (
+        TRAIN_ACTION_DESIGN_POLICY_VERSION
+    )
+    assert action_descriptor["train_action_environment_profile_version"]
+    assert action_descriptor["train_action_trace_profile_version"]
+    assert stable_hash(legacy_descriptor) != stable_hash(action_descriptor)
+
+
 def test_shared_baseline_arm_cache_reuses_one_immutable_cohort_across_runners(
     tmp_path: Path,
 ) -> None:
@@ -2156,6 +2437,228 @@ def test_shared_baseline_arm_cache_reuses_one_immutable_cohort_across_runners(
     )
 
 
+def test_terminal_invalid_baseline_memo_prevents_cross_consumer_resampling(
+    tmp_path: Path,
+) -> None:
+    shared_cache = BaselineArmEvidenceReplayCache(
+        policy=TERMINAL_SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+    )
+    source_backend = ValidationBaselineSequenceBackend(
+        ("trial_network_byte_limit_exceeded",)
+    )
+    target_backend = ValidationBaselineSequenceBackend((None,))
+    recursive, _, _, _, _, recursive_sink = _harness(
+        tmp_path / "recursive-terminal-invalid",
+        backend_override=source_backend,
+        invalid_trial_max_attempts=3,
+        baseline_arm_replay_cache=shared_cache,
+        baseline_arm_evidence_replay_policy=(
+            TERMINAL_SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+        ),
+    )
+    no_recursive, _, _, _, _, no_recursive_sink = _harness(
+        tmp_path / "no-recursive-terminal-invalid",
+        backend_override=target_backend,
+        invalid_trial_max_attempts=3,
+        baseline_arm_replay_cache=shared_cache,
+        baseline_arm_evidence_replay_policy=(
+            TERMINAL_SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+        ),
+    )
+    program = HypothesisProgram.from_dict(_program_dict())
+    item_id = "organize-messy-files-5"
+
+    first = recursive.counterfactual_runner.run(
+        recursive.tasks((item_id,)),
+        program=program,
+        split=SplitName.VALIDATION,
+        trace_id="terminal-invalid-source",
+    )[0]
+    second = no_recursive.counterfactual_runner.run(
+        no_recursive.tasks((item_id,)),
+        program=program,
+        split=SplitName.VALIDATION,
+        trace_id="terminal-invalid-target",
+    )[0]
+
+    assert source_backend.validation_baseline_call_count == 1
+    assert target_backend.validation_baseline_call_count == 0
+    assert len(shared_cache) == 1
+    assert first.baseline_outcome.metrics["evaluation_valid"] == 0.0
+    assert second.baseline_outcome.metrics["evaluation_valid"] == 0.0
+    memoized = next(
+        row
+        for row in recursive_sink.events
+        if row["event"] == "skilllearn_baseline_arm_terminal_invalid_memoized"
+    )
+    replayed = next(
+        row
+        for row in no_recursive_sink.events
+        if row["event"] == "skilllearn_baseline_arm_terminal_invalid_replayed"
+    )
+    assert memoized["payload"]["promotion_evidence"] is False
+    assert memoized["payload"]["terminal_for_replay_key"] is True
+    assert memoized["payload"]["new_baseline_executions"] == 1
+    assert replayed["payload"]["promotion_evidence"] is False
+    assert replayed["payload"]["terminal_for_replay_key"] is True
+    assert replayed["payload"]["new_baseline_executions"] == 0
+    assert (
+        replayed["payload"]["source_terminal_outcome_hash"]
+        == memoized["payload"]["source_terminal_outcome_hash"]
+    )
+    pair_events = [
+        next(
+            row
+            for row in sink.events
+            if row["event"] == "skilllearn_counterfactual_pair_completed"
+        )
+        for sink in (recursive_sink, no_recursive_sink)
+    ]
+    assert [
+        row["payload"]["baseline_terminal_invalid_memoized"]
+        for row in pair_events
+    ] == [True, False]
+    assert [
+        row["payload"]["baseline_terminal_invalid_replayed"]
+        for row in pair_events
+    ] == [False, True]
+    assert all(
+        row["payload"]["baseline_promotion_evidence_eligible"] is False
+        for row in pair_events
+    )
+    assert len(
+        {
+            row["payload"]["baseline_evidence_hash"]
+            for row in pair_events
+        }
+    ) == 1
+
+
+def test_v2_invalid_baseline_remains_unmemoized_for_historical_replay_semantics(
+    tmp_path: Path,
+) -> None:
+    shared_cache = BaselineArmEvidenceReplayCache(
+        policy=SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+    )
+    source_backend = ValidationBaselineSequenceBackend(
+        ("trial_network_byte_limit_exceeded",)
+    )
+    target_backend = ValidationBaselineSequenceBackend((None,))
+    first_harness, _, _, _, _, first_sink = _harness(
+        tmp_path / "v2-invalid-source",
+        backend_override=source_backend,
+        invalid_trial_max_attempts=3,
+        baseline_arm_replay_cache=shared_cache,
+        baseline_arm_evidence_replay_policy=(
+            SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+        ),
+    )
+    second_harness, _, _, _, _, second_sink = _harness(
+        tmp_path / "v2-valid-target",
+        backend_override=target_backend,
+        invalid_trial_max_attempts=3,
+        baseline_arm_replay_cache=shared_cache,
+        baseline_arm_evidence_replay_policy=(
+            SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+        ),
+    )
+    program = HypothesisProgram.from_dict(_program_dict())
+    item_id = "organize-messy-files-5"
+
+    first = first_harness.counterfactual_runner.run(
+        first_harness.tasks((item_id,)),
+        program=program,
+        split=SplitName.VALIDATION,
+        trace_id="v2-invalid-source",
+    )[0]
+    second = second_harness.counterfactual_runner.run(
+        second_harness.tasks((item_id,)),
+        program=program,
+        split=SplitName.VALIDATION,
+        trace_id="v2-valid-target",
+    )[0]
+
+    assert source_backend.validation_baseline_call_count == 1
+    assert target_backend.validation_baseline_call_count == 1
+    assert first.baseline_outcome.metrics["evaluation_valid"] == 0.0
+    assert second.baseline_outcome.metrics["evaluation_valid"] == 1.0
+    assert len(shared_cache) == 1
+    assert any(
+        row["event"] == "skilllearn_baseline_arm_evidence_not_recorded_invalid"
+        for row in first_sink.events
+    )
+    assert any(
+        row["event"] == "skilllearn_baseline_arm_evidence_recorded"
+        for row in second_sink.events
+    )
+    assert not any(
+        "terminal_invalid" in row["event"]
+        for row in (*first_sink.events, *second_sink.events)
+    )
+
+
+def test_terminal_memo_policy_allows_declared_same_request_clean_replacement(
+    tmp_path: Path,
+) -> None:
+    shared_cache = BaselineArmEvidenceReplayCache(
+        policy=TERMINAL_SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+    )
+    source_backend = ValidationBaselineSequenceBackend(
+        ("endpoint_error", None)
+    )
+    target_backend = ValidationBaselineSequenceBackend((None,))
+    source, _, _, _, _, source_sink = _harness(
+        tmp_path / "same-request-replacement-source",
+        backend_override=source_backend,
+        invalid_trial_max_attempts=2,
+        baseline_arm_replay_cache=shared_cache,
+        baseline_arm_evidence_replay_policy=(
+            TERMINAL_SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+        ),
+    )
+    target, _, _, _, _, target_sink = _harness(
+        tmp_path / "same-request-replacement-target",
+        backend_override=target_backend,
+        invalid_trial_max_attempts=2,
+        baseline_arm_replay_cache=shared_cache,
+        baseline_arm_evidence_replay_policy=(
+            TERMINAL_SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+        ),
+    )
+    program = HypothesisProgram.from_dict(_program_dict())
+    item_id = "organize-messy-files-5"
+
+    first = source.counterfactual_runner.run(
+        source.tasks((item_id,)),
+        program=program,
+        split=SplitName.VALIDATION,
+        trace_id="same-request-replacement-source",
+    )[0]
+    second = target.counterfactual_runner.run(
+        target.tasks((item_id,)),
+        program=program,
+        split=SplitName.VALIDATION,
+        trace_id="same-request-replacement-target",
+    )[0]
+
+    assert source_backend.validation_baseline_call_count == 2
+    assert target_backend.validation_baseline_call_count == 0
+    assert first.baseline_outcome.metrics["evaluation_valid"] == 1.0
+    assert second.baseline_outcome.metrics["evaluation_valid"] == 1.0
+    assert any(
+        row["event"] == "skilllearn_invalid_trial_clean_replacement"
+        for row in source_sink.events
+    )
+    assert any(
+        row["event"] == "skilllearn_baseline_arm_evidence_replayed"
+        for row in target_sink.events
+    )
+    assert not any(
+        "terminal_invalid" in row["event"]
+        for row in (*source_sink.events, *target_sink.events)
+    )
+
+
 def test_baseline_arm_cache_rejects_invalid_and_conflicting_records() -> None:
     cache = BaselineArmEvidenceReplayCache(
         policy=SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
@@ -2225,6 +2728,41 @@ def test_baseline_arm_cache_rejects_invalid_and_conflicting_records() -> None:
     assert len(cache) == 1
     assert cache.get("replay-key") is recorded
 
+    terminal_cache = BaselineArmEvidenceReplayCache(
+        policy=TERMINAL_SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+    )
+    memo = terminal_cache.memoize_terminal_invalid(
+        "terminal-replay-key",
+        observation=invalid,
+        source_trace_id="terminal-invalid",
+    )
+    assert memo is not None
+    assert memo.error_type == "endpoint_error"
+    assert terminal_cache.record(
+        "terminal-replay-key",
+        observation=valid,
+        source_trace_id="late-valid",
+    ) is None
+    assert terminal_cache.get("terminal-replay-key") is memo
+
+    valid_first = terminal_cache.record(
+        "valid-first-key",
+        observation=valid,
+        source_trace_id="valid-first",
+    )
+    assert valid_first is not None
+    assert terminal_cache.memoize_terminal_invalid(
+        "valid-first-key",
+        observation=invalid,
+        source_trace_id="late-invalid",
+    ) is None
+    assert terminal_cache.get("valid-first-key") is valid_first
+    assert cache.memoize_terminal_invalid(
+        "v2-does-not-memoize-invalid",
+        observation=invalid,
+        source_trace_id="v2-invalid",
+    ) is None
+
 
 def test_shared_baseline_replay_key_separates_split_and_baseline_treatment(
     tmp_path: Path,
@@ -2268,6 +2806,89 @@ def test_shared_baseline_replay_key_separates_split_and_baseline_treatment(
     )
 
     assert len({no_skill, promoted_a, promoted_b, test_split}) == 4
+
+
+def test_terminal_baseline_replay_key_binds_invalid_retry_identity(
+    tmp_path: Path,
+) -> None:
+    retry_configurations = (
+        {
+            "invalid_trial_max_attempts": 2,
+            "invalid_trial_retry_backoff_seconds": 0.125,
+            "invalid_trial_retry_workers": 2,
+        },
+        {
+            "invalid_trial_max_attempts": 3,
+            "invalid_trial_retry_backoff_seconds": 0.125,
+            "invalid_trial_retry_workers": 2,
+        },
+        {
+            "invalid_trial_max_attempts": 2,
+            "invalid_trial_retry_backoff_seconds": 0.25,
+            "invalid_trial_retry_workers": 2,
+        },
+        {
+            "invalid_trial_max_attempts": 2,
+            "invalid_trial_retry_backoff_seconds": 0.125,
+            "invalid_trial_retry_workers": 3,
+        },
+    )
+    terminal_harnesses = []
+    for index, retry_configuration in enumerate(retry_configurations):
+        harness, _, _, _, _, _ = _harness(
+            tmp_path / f"terminal-{index}",
+            baseline_arm_evidence_replay_policy=(
+                TERMINAL_SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+            ),
+            **retry_configuration,
+        )
+        terminal_harnesses.append(harness)
+
+    terminal_runners = [
+        harness.counterfactual_runner for harness in terminal_harnesses
+    ]
+    task = terminal_harnesses[0].tasks(("organize-messy-files-5",))[0]
+    terminal_keys = {
+        runner._baseline_arm_replay_key(
+            task,
+            split=SplitName.VALIDATION,
+            baseline_programs=(),
+            baseline_treatment_hash=NO_SKILL_TREATMENT_HASH,
+        )
+        for runner in terminal_runners
+    }
+
+    assert terminal_runners[0].invalid_trial_retry_descriptor() == {
+        "policy": INVALID_TRIAL_RETRY_POLICY_VERSION,
+        **retry_configurations[0],
+    }
+    assert len(terminal_keys) == len(retry_configurations)
+
+    for policy_index, policy in enumerate(
+        (
+            LEGACY_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
+            SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
+        )
+    ):
+        historical_keys = set()
+        for config_index, retry_configuration in enumerate(
+            (retry_configurations[0], retry_configurations[-1])
+        ):
+            harness, _, _, _, _, _ = _harness(
+                tmp_path / f"historical-{policy_index}-{config_index}",
+                baseline_arm_evidence_replay_policy=policy,
+                **retry_configuration,
+            )
+            runner = harness.counterfactual_runner
+            historical_keys.add(
+                runner._baseline_arm_replay_key(
+                    harness.tasks(("organize-messy-files-5",))[0],
+                    split=SplitName.VALIDATION,
+                    baseline_programs=(),
+                    baseline_treatment_hash=NO_SKILL_TREATMENT_HASH,
+                )
+            )
+        assert len(historical_keys) == 1
 
 
 def test_legacy_baseline_arm_caches_remain_runner_local(tmp_path: Path) -> None:
@@ -2395,6 +3016,57 @@ def test_paired_ablation_v2_binds_one_shared_baseline_cache(
         is no_recursive.counterfactual_runner.baseline_arm_replay_cache
     )
     assert len(recursive.counterfactual_runner.baseline_arm_replay_cache) == 2
+
+
+@pytest.mark.parametrize(
+    "mismatched_retry_configuration",
+    (
+        {"invalid_trial_max_attempts": 2},
+        {"invalid_trial_retry_backoff_seconds": 0.125},
+        {"invalid_trial_retry_workers": 2},
+    ),
+)
+def test_paired_terminal_replay_rejects_mismatched_retry_configuration(
+    tmp_path: Path,
+    mismatched_retry_configuration: dict[str, Any],
+) -> None:
+    recursive, recursive_backend, _, _, _, _ = _harness(
+        tmp_path / "recursive",
+        baseline_arm_evidence_replay_policy=(
+            TERMINAL_SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+        ),
+    )
+    no_recursive, no_recursive_backend, _, _, _, _ = _harness(
+        tmp_path / "no-recursive",
+        baseline_arm_evidence_replay_policy=(
+            TERMINAL_SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+        ),
+        **mismatched_retry_configuration,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="terminal-invalid replay arms must share the invalid trial retry",
+    ):
+        _run_paired_arms(
+            recursive_harness=recursive,
+            no_recursive_harness=no_recursive,
+            train_ids=(
+                "organize-messy-files-1",
+                "organize-messy-files-2",
+            ),
+            validation_ids=("organize-messy-files-5",),
+            manifest_hash=recursive.manifest.manifest_hash,
+            max_generations=1,
+            max_consecutive_non_promotions=1,
+        )
+
+    assert recursive_backend.calls == []
+    assert no_recursive_backend.calls == []
+    assert (
+        recursive.counterfactual_runner.baseline_arm_replay_cache
+        is not no_recursive.counterfactual_runner.baseline_arm_replay_cache
+    )
 
 
 def test_paired_ablation_replays_later_root_when_arm_state_is_identical(
@@ -2945,6 +3617,277 @@ def test_family_coverage_proposal_request_contains_diverse_batch_contract(
     assert constraints[
         "prompt_directive_top_level_fallback_remains_preserve_baseline"
     ] is True
+
+
+def test_action_quality_profiles_shape_prompt_and_audit_without_gating() -> None:
+    profile_hash = "profile-train-runtime-01"
+    profile = {
+        "policy": TRAIN_ACTION_DESIGN_POLICY_VERSION,
+        "runtime_environment": {
+            "declared_os_packages": ["trivy"],
+            "declared_python_packages": ["pypdf==5.1.0"],
+            "declared_task_local_paths": [
+                "/root/.cache/trivy",
+                "/root/package-lock.json",
+                "/root/sc100-blank.pdf",
+            ],
+            "copied_task_files": [
+                "/root/package-lock.json",
+                "/root/sc100-blank.pdf",
+            ],
+            "environment_source_files": [],
+        },
+        "baseline_action_trace": {
+            "command_signatures": [
+                {
+                    "executable_basename": "trivy",
+                    "safe_flags": ["--format"],
+                    "task_local_paths": ["/root/package-lock.json"],
+                    "original_command_hash": "trace-command-hash",
+                    "status": "failed",
+                    "exit_code": 1,
+                }
+            ]
+        },
+    }
+    failure = ResidualExample(
+        transition_id="action-quality-failure",
+        task_id="dependency-vulnerability-check-1",
+        family="dependency-vulnerability-check",
+        split=SplitName.TRAIN,
+        features={
+            "benchmark": "skilllearnbench",
+            "family": "dependency-vulnerability-check",
+            "has_container_environment": True,
+        },
+        failure_type="task_failed_with_actionable_training_feedback",
+        evaluator_feedback=("Infer a concrete operator.",),
+        baseline_success=False,
+        context={
+            "task_instruction": (
+                "Audit the dependency file offline and write the results to CSV."
+            ),
+            "action_context_profile_hash": profile_hash,
+            TRAIN_ACTION_DESIGN_INTERNAL_CONTEXT_KEY: profile,
+        },
+    )
+    success = ResidualExample(
+        transition_id="action-quality-success",
+        task_id="offer-letter-generator-1",
+        family="offer-letter-generator",
+        split=SplitName.TRAIN,
+        features={
+            "benchmark": "skilllearnbench",
+            "family": "offer-letter-generator",
+            "has_container_environment": True,
+        },
+        failure_type="baseline_success_control",
+        evaluator_feedback=(),
+        baseline_success=True,
+        context={},
+    )
+
+    def proposal(program_id: str, value: str) -> dict[str, Any]:
+        payload = _program_dict()
+        payload["id"] = program_id
+        payload["action_graph"] = [
+            {
+                "id": "material-delta",
+                "operation": "execute_step",
+                "target": "task_procedure",
+                "value": value,
+            }
+        ]
+        return payload
+
+    rows = [
+        proposal(
+            "instruction-paraphrase",
+            "Collect authoritative offline records and write the requested CSV.",
+        ),
+        proposal(
+            "concrete-trivy-command",
+            "Run `trivy fs --skip-db-update --cache-dir /root/.cache/trivy "
+            "--format json /root/package-lock.json` before converting JSON to CSV.",
+        ),
+        proposal(
+            "exact-brand-mapping",
+            "Set the background to #141413 and the primary accent to #D97757.",
+        ),
+        proposal(
+            "pdf-field-operation",
+            "Call pypdf.PdfReader('/root/sc100-blank.pdf').get_fields() and "
+            "update_page_form_field_values() before a reopen round-trip check.",
+        ),
+    ]
+    sink = MemoryEventSink()
+    model = QueueProposalModel([{"hypotheses": rows}])
+    proposer = StructuredHypothesisProposer(model, event_sink=sink)
+    contract = train_action_quality_contract(TRAIN_ACTION_DESIGN_POLICY_VERSION)
+    assert contract is not None
+
+    programs = proposer.propose(
+        (failure, success),
+        evaluator_epoch="skilllearn-eval-epoch-0",
+        max_hypotheses=4,
+        capabilities={
+            "primary_metric": "task_success",
+            "action_contract": {
+                "allowed_action_operations": [
+                    "execute_step",
+                    "check_condition",
+                    "produce_artifact",
+                    "request_evidence",
+                ],
+                "semantics": SKILL_ACTION_LOWERING_VERSION,
+                "external_evidence_is_hidden": True,
+            },
+            "action_quality_contract": contract,
+            "train_action_design_profiles": {profile_hash: profile},
+        },
+        trace_id="action-quality-audit-only",
+    )
+
+    assert [program.id for program in programs] == [row["id"] for row in rows]
+    request = model.requests[0]
+    assert TRAIN_ACTION_DESIGN_INTERNAL_CONTEXT_KEY not in request["residuals"][0][
+        "context"
+    ]
+    assert request["residuals"][0]["context"][
+        "action_context_profile_hash"
+    ] == profile_hash
+    assert request["residuals"][1]["context"] == {}
+    assert request["constraints"][
+        "task_instruction_is_baseline_requirement_not_treatment"
+    ] is True
+    assert request["constraints"]["action_quality_enforcement"] == (
+        "prompt_and_audit_only"
+    )
+    assert "material delta absent" in request["output_schema"]["hypotheses"][0][
+        "action_graph"
+    ][0]["value"]
+
+    audit = next(
+        row for row in sink.events if row["event"] == "proposal_action_delta_audited"
+    )["payload"]
+    by_hash = {
+        row["hypothesis_hash"]: row for row in audit["candidate_audits"]
+    }
+    program_audits = {
+        program.id: by_hash[program.payload_hash] for program in programs
+    }
+    assert program_audits["instruction-paraphrase"]["restatement_risk"] is True
+    assert program_audits["concrete-trivy-command"]["observed_delta_kinds"] == [
+        "concrete_local_tool_command"
+    ]
+    assert program_audits["exact-brand-mapping"]["observed_delta_kinds"] == [
+        "exact_constant_or_mapping"
+    ]
+    assert "artifact_internal_manipulation" in program_audits[
+        "pdf-field-operation"
+    ]["observed_delta_kinds"]
+    assert audit["response_rejected"] is False
+    assert audit["proposal_retry_requested"] is False
+    assert audit["recursive_repair_requested_by_audit"] is False
+    assert audit["candidate_selection_affected"] is False
+    assert audit["promotion_gate_affected"] is False
+
+
+def test_harness_builds_train_only_action_profiles_for_proposal(
+    tmp_path: Path,
+) -> None:
+    harness, _, model, _, guard, _ = _harness(
+        tmp_path,
+        train_action_design_policy=TRAIN_ACTION_DESIGN_POLICY_VERSION,
+    )
+    train_ids = (
+        "dependency-vulnerability-check-1",
+        "dependency-vulnerability-check-4",
+    )
+
+    observations = harness.collect_training_observations(
+        train_item_ids=train_ids,
+        trace_id="action-profile-training",
+    )
+    residuals = harness.residual_miner.mine(
+        observations,
+        trace_id="action-profile-residuals",
+    )
+    harness.propose_candidates(
+        residuals,
+        trace_id="action-profile-proposal",
+    )
+
+    assert len(residuals) == 2
+    assert all(
+        row.context.get("action_context_profile_hash") for row in residuals
+    )
+    internal_profiles = [
+        row.context[TRAIN_ACTION_DESIGN_INTERNAL_CONTEXT_KEY]
+        for row in residuals
+    ]
+    assert all(
+        "trivy" in profile["runtime_environment"]["declared_os_packages"]
+        for profile in internal_profiles
+    )
+    request = model.requests[0]
+    assert request["capabilities"]["action_quality_contract"]["policy"] == (
+        TRAIN_ACTION_DESIGN_POLICY_VERSION
+    )
+    assert len(request["capabilities"]["train_action_design_profiles"]) == 1
+    assert len(
+        {row.context["action_context_profile_hash"] for row in residuals}
+    ) == 1
+    assert all(
+        TRAIN_ACTION_DESIGN_INTERNAL_CONTEXT_KEY not in row["context"]
+        for row in request["residuals"]
+    )
+    context = harness.validation_context(residuals)
+    assert context.train_action_design_policy == TRAIN_ACTION_DESIGN_POLICY_VERSION
+    assert len(context.action_design_profiles) == 1
+    assert guard.test_accessed is False
+
+
+def test_action_quality_audit_failure_cannot_change_proposal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from assumption_agent import proposer as proposer_module
+
+    def fail_audit(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        raise TypeError("synthetic diagnostic failure")
+
+    monkeypatch.setattr(proposer_module, "_action_delta_audit_row", fail_audit)
+    sink = MemoryEventSink()
+    model = QueueProposalModel(
+        [{"hypotheses": [_program_dict()]}]
+    )
+    proposer = StructuredHypothesisProposer(model, event_sink=sink)
+    residual = _family_residual("audit-no-throw", family="family-a")
+
+    programs = proposer.propose(
+        (residual,),
+        evaluator_epoch="skilllearn-eval-epoch-0",
+        max_hypotheses=1,
+        capabilities={
+            "action_quality_contract": train_action_quality_contract(
+                TRAIN_ACTION_DESIGN_POLICY_VERSION
+            ),
+            "train_action_design_profiles": {},
+        },
+        trace_id="audit-no-throw",
+    )
+
+    assert len(programs) == 1
+    failure = next(
+        row
+        for row in sink.events
+        if row["event"] == "proposal_action_delta_audit_failed"
+    )["payload"]
+    assert failure["response_rejected"] is False
+    assert failure["proposal_retry_requested"] is False
+    assert failure["candidate_selection_affected"] is False
+    assert failure["promotion_gate_affected"] is False
+    assert failure["raw_error_persisted"] is False
 
 
 def test_harness_binds_v312_repair_request_scope_into_validation(
@@ -4166,10 +5109,13 @@ def _harness(
     backend_override=None,
     parallel_workers: int = 1,
     invalid_trial_max_attempts: int = 1,
+    invalid_trial_retry_backoff_seconds: float = 0.0,
+    invalid_trial_retry_workers: int = 1,
     proposal_rows: list[dict[str, Any]] | None = None,
     candidate_selection_policy: str = TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
     candidate_bundle_policy: str | None = None,
     contrastive_training_evidence_policy: str | None = None,
+    train_action_design_policy: str | None = None,
     repair_request_scope_policy: str | None = None,
     baseline_arm_replay_cache: BaselineArmEvidenceReplayCache | None = None,
     baseline_arm_evidence_replay_policy: str | None = None,
@@ -4233,9 +5179,14 @@ def _harness(
         contrastive_training_evidence_policy=(
             contrastive_training_evidence_policy
         ),
+        train_action_design_policy=train_action_design_policy,
         repair_request_scope_policy=repair_request_scope_policy,
         parallel_workers=parallel_workers,
         invalid_trial_max_attempts=invalid_trial_max_attempts,
+        invalid_trial_retry_backoff_seconds=(
+            invalid_trial_retry_backoff_seconds
+        ),
+        invalid_trial_retry_workers=invalid_trial_retry_workers,
         baseline_arm_replay_cache=baseline_arm_replay_cache,
         **(
             {

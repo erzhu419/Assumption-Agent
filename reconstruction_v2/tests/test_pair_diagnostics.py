@@ -145,6 +145,7 @@ def test_pair_diagnostics_exclude_mismatched_activated_pair(
         "3.12.0",
         "3.13.0",
         "3.14.0",
+        "3.15.0",
     ),
 )
 def test_freeze_contrastive_protocol_rejects_tampered_pair_diagnostic(
@@ -191,6 +192,7 @@ def test_freeze_contrastive_protocol_rejects_tampered_pair_diagnostic(
         "3.12.0",
         "3.13.0",
         "3.14.0",
+        "3.15.0",
     ),
 )
 def test_freeze_contrastive_protocol_rejects_tampered_activated_gain_count(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import urllib.error
 from typing import Any, Mapping
@@ -7,7 +8,13 @@ from typing import Any, Mapping
 import pytest
 
 from assumption_agent.events import MemoryEventSink
-from assumption_agent.model_client import OpenAICompatibleConfig, OpenAICompatibleProposalModel
+from assumption_agent.model_client import (
+    ACTION_QUALITY_SYSTEM_PROMPT_ADDENDUM,
+    PROPOSAL_SYSTEM_PROMPT,
+    OpenAICompatibleConfig,
+    OpenAICompatibleProposalModel,
+)
+from assumption_agent.proposer import TRAIN_ACTION_DESIGN_POLICY_VERSION
 from assumption_agent.secure_env import (
     configured_api_origin,
     configured_model,
@@ -80,6 +87,83 @@ def test_openai_compatible_proposal_model_uses_json_contract(monkeypatch) -> Non
         in system_prompt
     )
     assert "top-level fallback field" in system_prompt
+    assert system_prompt == PROPOSAL_SYSTEM_PROMPT
+    assert ACTION_QUALITY_SYSTEM_PROMPT_ADDENDUM not in system_prompt
+    assert hashlib.sha256(system_prompt.encode("utf-8")).hexdigest() == (
+        "a726e60d76516379ad021cd2ad7fedd465593ac203b0774e038d7f0772e6c66e"
+    )
+
+
+def test_action_quality_addendum_is_request_local_to_supported_contract(monkeypatch) -> None:
+    monkeypatch.setenv("TEST_ASSUMPTION_API_KEY", "secret-value")
+    transport = FakeTransport()
+    model = OpenAICompatibleProposalModel(
+        OpenAICompatibleConfig(
+            base_url="https://provider.example/v1",
+            model="gpt-5.4-mini",
+            api_key_env="TEST_ASSUMPTION_API_KEY",
+            attempts=1,
+        ),
+        transport=transport,
+    )
+
+    model.complete(
+        {
+            "request_kind": "propose_hypothesis_programs",
+            "capabilities": {
+                "action_quality_contract": {
+                    "policy": TRAIN_ACTION_DESIGN_POLICY_VERSION,
+                }
+            },
+        }
+    )
+
+    system_prompt = transport.calls[0]["payload"]["messages"][0]["content"]
+    assert system_prompt == (
+        f"{PROPOSAL_SYSTEM_PROMPT} {ACTION_QUALITY_SYSTEM_PROMPT_ADDENDUM}"
+    )
+    assert "task_instruction as the baseline requirement" in system_prompt
+    assert "action-quality audit is diagnostic only" in system_prompt
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {
+            "request_kind": "propose_hypothesis_programs",
+            "action_quality_contract": {
+                "policy": TRAIN_ACTION_DESIGN_POLICY_VERSION,
+            },
+        },
+        {
+            "request_kind": "propose_hypothesis_programs",
+            "capabilities": {
+                "action_quality_contract": {"policy": "unsupported_policy"},
+            },
+        },
+    ],
+)
+def test_action_quality_addendum_does_not_leak_to_other_requests(
+    monkeypatch,
+    payload,
+) -> None:
+    monkeypatch.setenv("TEST_ASSUMPTION_API_KEY", "secret-value")
+    transport = FakeTransport()
+    model = OpenAICompatibleProposalModel(
+        OpenAICompatibleConfig(
+            base_url="https://provider.example/v1",
+            model="gpt-5.4-mini",
+            api_key_env="TEST_ASSUMPTION_API_KEY",
+            attempts=1,
+        ),
+        transport=transport,
+    )
+
+    model.complete(payload)
+
+    system_prompt = transport.calls[0]["payload"]["messages"][0]["content"]
+    assert system_prompt == PROPOSAL_SYSTEM_PROMPT
+    assert ACTION_QUALITY_SYSTEM_PROMPT_ADDENDUM not in system_prompt
 
 
 def test_model_attempt_events_are_sanitized(monkeypatch) -> None:

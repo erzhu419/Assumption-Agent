@@ -10,6 +10,7 @@ from typing import Any, Mapping, Protocol
 
 from .events import Event, EventSink, NullEventSink
 from .models import stable_hash
+from .proposer import TRAIN_ACTION_DESIGN_POLICY_VERSIONS
 from .secure_env import LOCKED_MODEL, configured_model
 
 
@@ -36,6 +37,38 @@ PROPOSAL_SYSTEM_PROMPT = (
     "activated action node; preserve_baseline remains only in the unchanged "
     "top-level fallback field."
 )
+
+
+ACTION_QUALITY_SYSTEM_PROMPT_ADDENDUM = (
+    "This request contains a supported action_quality_contract. During proposal generation, "
+    "do not call tools, read files, execute shell commands, search the network, or acquire new "
+    "external context; reason only from the supplied contract, TRAIN residuals, referenced "
+    "TRAIN action-design profiles, and static model knowledge. Treat each "
+    "task_instruction as the baseline requirement rather than the treatment. Every "
+    "hypothesis must directly add at least one material runtime delta that is not already "
+    "explicit in that instruction: an exact constant or mapping, a concrete local tool "
+    "command with flags and paths, or a specific artifact-internal manipulation. Bind "
+    "commands and operations to the supplied TRAIN runtime/action profile when possible. "
+    "Treat environment setup recipes as build-time provenance: runtime actions may use "
+    "the resulting preinstalled local resources but must never fetch network content or "
+    "install packages. "
+    "Static model knowledge may provide an exact constant for prospective validation, but "
+    "do not replace a missing detail with vague instructions to request, collect, translate, "
+    "look up, or verify it later. The action-quality audit is diagnostic only and must not "
+    "change response cardinality."
+)
+
+
+def _proposal_system_prompt(payload: Mapping[str, Any]) -> str:
+    capabilities = payload.get("capabilities")
+    if not isinstance(capabilities, Mapping):
+        return PROPOSAL_SYSTEM_PROMPT
+    contract = capabilities.get("action_quality_contract")
+    if not isinstance(contract, Mapping):
+        return PROPOSAL_SYSTEM_PROMPT
+    if contract.get("policy") not in TRAIN_ACTION_DESIGN_POLICY_VERSIONS:
+        return PROPOSAL_SYSTEM_PROMPT
+    return f"{PROPOSAL_SYSTEM_PROMPT} {ACTION_QUALITY_SYSTEM_PROMPT_ADDENDUM}"
 
 
 class JsonTransport(Protocol):
@@ -121,7 +154,7 @@ class OpenAICompatibleProposalModel:
             "messages": [
                 {
                     "role": "system",
-                    "content": PROPOSAL_SYSTEM_PROMPT,
+                    "content": _proposal_system_prompt(payload),
                 },
                 {
                     "role": "user",

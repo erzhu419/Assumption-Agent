@@ -36,6 +36,7 @@ from assumption_agent.benchmarks.prewarm import (
 from assumption_agent.benchmarks.skilllearn_lifecycle import (
     MODEL_INFERENCE_CONCURRENCY_POLICY_VERSION,
     SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
+    TERMINAL_SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
 )
 from assumption_agent.benchmarks.skilllearn_experiment import _experiment_phase_name
 from assumption_agent.benchmarks.paper_report import (
@@ -51,6 +52,7 @@ from assumption_agent.proposer import (
     LEGACY_PROPOSAL_DIVERSITY_POLICY_VERSION,
     PROPOSAL_DIVERSITY_POLICY_VERSION,
     REPAIR_REQUEST_SCOPE_POLICY_VERSION,
+    TRAIN_ACTION_DESIGN_POLICY_VERSION,
 )
 from assumption_agent.benchmarks.skilllearn_compiler import (
     LEGACY_SKILL_ACTION_LOWERING_VERSION,
@@ -103,6 +105,9 @@ V313_PROTOCOL = (
 V314_PROTOCOL = (
     ROOT / "manifests" / "skilllearn_paper_protocol_v3_14_ruoli_gpt54mini.json"
 )
+V315_PROTOCOL = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_15_ruoli_gpt54mini.json"
+)
 MANIFEST_HASH = stable_hash({"manifest": "paper-test"})
 
 
@@ -115,17 +120,23 @@ def test_historical_codex_execution_policy_hashes_remain_immutable() -> None:
     )
 
 
-def test_v314_reuses_v313_runtime_policy_versions() -> None:
+def test_v315_reuses_v314_runtime_policy_versions() -> None:
     assert codex_agent_execution_policy_for_protocol_version("3.13.0") == (
         MODEL_ONLY_ACTION_BUDGET_POLICY
     )
     assert codex_agent_execution_policy_for_protocol_version("3.14.0") == (
         MODEL_ONLY_ACTION_BUDGET_POLICY
     )
+    assert codex_agent_execution_policy_for_protocol_version("3.15.0") == (
+        MODEL_ONLY_ACTION_BUDGET_POLICY
+    )
     assert development_prewarm_version_for_protocol("3.13.0") == (
         DEVELOPMENT_PREWARM_VERSION
     )
     assert development_prewarm_version_for_protocol("3.14.0") == (
+        DEVELOPMENT_PREWARM_VERSION
+    )
+    assert development_prewarm_version_for_protocol("3.15.0") == (
         DEVELOPMENT_PREWARM_VERSION
     )
 
@@ -546,6 +557,88 @@ def test_v314_changes_only_selector_ranking_and_shared_baseline_replay() -> None
         "execution"
     ]["baseline_arm_evidence_replay_policy"]
     assert v314 == v313
+
+
+def test_v315_changes_only_action_design_and_terminal_invalid_replay() -> None:
+    protocol = PaperProtocol.read(V315_PROTOCOL)
+
+    assert protocol.validate_structure() == []
+    assert protocol.payload["protocol_id"] == (
+        "assumption-agent-v2-skilllearn-paper-v3.15-offline86-ruoli-gpt54mini"
+    )
+    assert protocol.payload["protocol_version"] == "3.15.0"
+    execution = protocol.payload["execution"]
+    assert execution["train_action_design_policy"] == (
+        TRAIN_ACTION_DESIGN_POLICY_VERSION
+    )
+    assert execution["baseline_arm_evidence_replay_policy"] == (
+        TERMINAL_SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+    )
+    assert execution["proposal_candidate_selection"] == (
+        COMPLEMENTARY_FAMILY_SUPPORT_BUNDLE_CANDIDATE_SELECTION_VERSION
+    )
+
+    v314 = copy.deepcopy(PaperProtocol.read(V314_PROTOCOL).payload)
+    v315 = copy.deepcopy(protocol.payload)
+    for payload in (v314, v315):
+        payload.pop("protocol_id")
+        payload.pop("protocol_version")
+    v315["execution"].pop("train_action_design_policy")
+    v315["execution"]["baseline_arm_evidence_replay_policy"] = v314[
+        "execution"
+    ]["baseline_arm_evidence_replay_policy"]
+    assert v315 == v314
+
+
+@pytest.mark.parametrize(
+    ("field_name", "mutation", "expected_issue"),
+    (
+        (
+            "train_action_design_policy",
+            None,
+            "train_action_design_policy_mismatch",
+        ),
+        (
+            "train_action_design_policy",
+            "drifted",
+            "train_action_design_policy_mismatch",
+        ),
+        (
+            "baseline_arm_evidence_replay_policy",
+            SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
+            "baseline_arm_evidence_replay_policy_mismatch",
+        ),
+    ),
+)
+def test_v315_rejects_action_design_and_terminal_replay_drift(
+    field_name: str,
+    mutation: str | None,
+    expected_issue: str,
+) -> None:
+    protocol = PaperProtocol.read(V315_PROTOCOL)
+    payload = copy.deepcopy(protocol.payload)
+    if mutation is None:
+        payload["execution"].pop(field_name)
+    else:
+        payload["execution"][field_name] = mutation
+
+    assert expected_issue in PaperProtocol(
+        protocol.path,
+        payload,
+    ).validate_structure()
+
+
+def test_v314_rejects_v315_only_action_design_policy() -> None:
+    protocol = PaperProtocol.read(V314_PROTOCOL)
+    payload = copy.deepcopy(protocol.payload)
+    payload["execution"]["train_action_design_policy"] = (
+        TRAIN_ACTION_DESIGN_POLICY_VERSION
+    )
+
+    assert "train_action_design_policy_unexpected" in PaperProtocol(
+        protocol.path,
+        payload,
+    ).validate_structure()
 
 
 @pytest.mark.parametrize(

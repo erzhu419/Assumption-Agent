@@ -29,6 +29,7 @@ from ..proposer import (
     PROPOSAL_DIVERSITY_POLICY_VERSION,
     REPAIR_REQUEST_SCOPE_POLICY_VERSION,
     ROOT_PROPOSAL_REPLAY_POLICY_VERSION,
+    TRAIN_ACTION_DESIGN_POLICY_VERSION,
 )
 from ..secure_env import (
     configured_api_origin,
@@ -69,6 +70,7 @@ from .skilllearn_lifecycle import (
     INVALID_TRIAL_RETRY_POLICY_VERSION,
     LOCAL_EVIDENCE_TRANSPORT_VERSION,
     SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
+    TERMINAL_SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
     NETWORK_SCOPE_AUDIT_VERSION,
     OPENAI_COMPATIBLE_CODEX_CONFIG_VERSION,
     PREBUILT_IMAGE_POLICY_VERSION,
@@ -119,6 +121,7 @@ TRIAL_NETWORK_BYTE_LIMIT_BY_PROTOCOL_VERSION = {
     "3.12.0": 64 * 1024 * 1024,
     "3.13.0": 64 * 1024 * 1024,
     "3.14.0": 64 * 1024 * 1024,
+    "3.15.0": 64 * 1024 * 1024,
 }
 
 CONTRASTIVE_PROTOCOL_VERSIONS = frozenset(
@@ -132,23 +135,28 @@ CONTRASTIVE_PROTOCOL_VERSIONS = frozenset(
         "3.12.0",
         "3.13.0",
         "3.14.0",
+        "3.15.0",
     }
 )
 MODEL_SLOT_PROTOCOL_VERSIONS = frozenset(
-    {"3.9.0", "3.10.0", "3.11.0", "3.12.0", "3.13.0", "3.14.0"}
+    {"3.9.0", "3.10.0", "3.11.0", "3.12.0", "3.13.0", "3.14.0", "3.15.0"}
 )
 PROPOSAL_DIVERSITY_PROTOCOL_VERSIONS = frozenset(
-    {"3.10.0", "3.11.0", "3.12.0", "3.13.0", "3.14.0"}
+    {"3.10.0", "3.11.0", "3.12.0", "3.13.0", "3.14.0", "3.15.0"}
 )
 ACTIONABLE_DIRECTIVE_PROTOCOL_VERSIONS = frozenset(
-    {"3.11.0", "3.12.0", "3.13.0", "3.14.0"}
+    {"3.11.0", "3.12.0", "3.13.0", "3.14.0", "3.15.0"}
 )
 REPAIR_REQUEST_SCOPE_PROTOCOL_VERSIONS = frozenset(
-    {"3.12.0", "3.13.0", "3.14.0"}
+    {"3.12.0", "3.13.0", "3.14.0", "3.15.0"}
 )
-CANDIDATE_BUNDLE_PROTOCOL_VERSIONS = frozenset({"3.13.0", "3.14.0"})
-FAMILY_SUPPORT_BUNDLE_PROTOCOL_VERSIONS = frozenset({"3.14.0"})
+CANDIDATE_BUNDLE_PROTOCOL_VERSIONS = frozenset(
+    {"3.13.0", "3.14.0", "3.15.0"}
+)
+FAMILY_SUPPORT_BUNDLE_PROTOCOL_VERSIONS = frozenset({"3.14.0", "3.15.0"})
 SHARED_BASELINE_ARM_REPLAY_PROTOCOL_VERSIONS = frozenset({"3.14.0"})
+TERMINAL_SHARED_BASELINE_ARM_REPLAY_PROTOCOL_VERSIONS = frozenset({"3.15.0"})
+TRAIN_ACTION_DESIGN_PROTOCOL_VERSIONS = frozenset({"3.15.0"})
 
 CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION = (
     "train_contrastive_precision_then_support_v1"
@@ -363,6 +371,13 @@ class PaperProtocol:
                     issues.append("candidate_bundle_policy_mismatch")
             elif "candidate_bundle_policy" in execution:
                 issues.append("candidate_bundle_policy_unexpected")
+            if protocol_version in TRAIN_ACTION_DESIGN_PROTOCOL_VERSIONS:
+                if execution.get("train_action_design_policy") != (
+                    TRAIN_ACTION_DESIGN_POLICY_VERSION
+                ):
+                    issues.append("train_action_design_policy_mismatch")
+            elif "train_action_design_policy" in execution:
+                issues.append("train_action_design_policy_unexpected")
             if execution.get("runtime_candidate_kinds") != ["task", "policy"]:
                 issues.append("runtime_candidate_kinds_mismatch")
             if (
@@ -543,10 +558,15 @@ class PaperProtocol:
             ):
                 issues.append("codex_agent_execution_policy_mismatch")
             expected_baseline_replay_policy = (
-                SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+                TERMINAL_SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
                 if protocol_version
-                in SHARED_BASELINE_ARM_REPLAY_PROTOCOL_VERSIONS
-                else BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+                in TERMINAL_SHARED_BASELINE_ARM_REPLAY_PROTOCOL_VERSIONS
+                else (
+                    SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+                    if protocol_version
+                    in SHARED_BASELINE_ARM_REPLAY_PROTOCOL_VERSIONS
+                    else BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+                )
             )
             if (
                 major is not None

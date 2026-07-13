@@ -17,7 +17,7 @@ import tempfile
 import threading
 import time
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from pathlib import Path
 from types import MappingProxyType, ModuleType
@@ -55,6 +55,9 @@ from ..proposer import (
     HypothesisProposalCallError,
     REPAIR_REQUEST_SCOPE_POLICY_VERSION,
     StructuredHypothesisProposer,
+    TRAIN_ACTION_DESIGN_INTERNAL_CONTEXT_KEY,
+    TRAIN_ACTION_DESIGN_POLICY_VERSION,
+    TRAIN_ACTION_DESIGN_POLICY_VERSIONS,
 )
 from ..secure_env import configured_skilllearn_provider_mode
 from ..splits import AccessPhase, BenchmarkItem, SplitAccessGuard, SplitManifest
@@ -73,7 +76,10 @@ from .skilllearn_compiler import (
     skilllearn_program_set_treatment_hash,
     skilllearn_program_treatment_hash,
 )
-from .skilllearnbench import SkillLearnBenchAdapter
+from .skilllearnbench import (
+    TRAIN_ACTION_ENVIRONMENT_PROFILE_VERSION,
+    SkillLearnBenchAdapter,
+)
 from .codex_action_budget import (
     CODEX_ACTION_BUDGET_COST_ACCOUNTING_POLICY,
     CODEX_ACTION_BUDGET_POLICY_VERSION,
@@ -126,6 +132,9 @@ CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION = (
 ACTIONABLE_CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION = (
     "valid_train_failures_actionable_feedback_and_success_controls_v2"
 )
+TRAIN_ACTION_TRACE_PROFILE_VERSION = (
+    "train_policy_off_allowlisted_tool_facts_v2"
+)
 CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSIONS = frozenset(
     {
         CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION,
@@ -141,13 +150,25 @@ LEGACY_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION = (
 SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION = (
     "behavior_identical_shared_validation_baseline_arm_replay_v2"
 )
+TERMINAL_SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION = (
+    "behavior_identical_shared_validation_baseline_terminal_outcome_replay_v3"
+)
 BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION = (
     LEGACY_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+)
+SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSIONS = frozenset(
+    {
+        SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
+        TERMINAL_SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
+    }
+)
+TERMINAL_INVALID_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSIONS = frozenset(
+    {TERMINAL_SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION}
 )
 BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSIONS = frozenset(
     {
         LEGACY_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
-        SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
+        *SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSIONS,
     }
 )
 INVALID_TRIAL_RETRY_POLICY_VERSION = (
@@ -194,6 +215,98 @@ _FORBIDDEN_CODEX_TOOL_TYPES = frozenset(
         "image_generation",
         "image_generation_call",
     }
+)
+_ACTION_TRACE_ALLOWED_EXECUTABLES = frozenset(
+    {
+        "awk",
+        "cat",
+        "convert",
+        "cp",
+        "csvkit",
+        "cut",
+        "file",
+        "find",
+        "ffmpeg",
+        "grep",
+        "gs",
+        "jq",
+        "libreoffice",
+        "ls",
+        "mkdir",
+        "mv",
+        "node",
+        "pandoc",
+        "pdfinfo",
+        "pdftoppm",
+        "pdftotext",
+        "python",
+        "python3",
+        "qpdf",
+        "ruby",
+        "sed",
+        "sort",
+        "sqlite3",
+        "tar",
+        "trivy",
+        "unzip",
+        "wc",
+        "xlsx2csv",
+        "xmlstarlet",
+        "zip",
+    }
+)
+_ACTION_TRACE_ALLOWED_FLAGS = frozenset(
+    {
+        "--cache-dir",
+        "--csv",
+        "--format",
+        "--ignore-unfixed",
+        "--input",
+        "--json",
+        "--no-progress",
+        "--offline-scan",
+        "--output",
+        "--quiet",
+        "--scanners",
+        "--severity",
+        "--skip-db-update",
+        "--text",
+        "--version",
+        "-f",
+        "-m",
+        "-o",
+        "-q",
+    }
+)
+_ACTION_TRACE_SHELL_WRAPPERS = frozenset({"bash", "dash", "sh", "zsh"})
+_ACTION_TRACE_COMMAND_WRAPPERS = frozenset({"env", "sudo", "timeout"})
+_ACTION_TRACE_FORBIDDEN_REFERENCE_PATTERN = re.compile(
+    r"(?:^|[\s/_.-])(?:tests?|verifier|oracle|solutions?)(?:$|[\s/_.-])",
+    re.IGNORECASE,
+)
+_ACTION_TRACE_SENSITIVE_PATH_COMPONENT_PATTERN = re.compile(
+    r"(?:^|[/_.-])(?:api[-_]?keys?|access[-_]?tokens?|auth|credentials?|"
+    r"env|id[-_]?rsa|netrc|npmrc|passwords?|passwds?|private|pypirc|"
+    r"secrets?|sk-[A-Za-z0-9_-]{8,}|tokens?|keys?)"
+    r"(?:$|[/_.-])",
+    re.IGNORECASE,
+)
+_ACTION_TRACE_SENSITIVE_PATTERN = re.compile(
+    r"(?ix)(?:"
+    r"\b(?:https?|ftp)://|"
+    r"\bwww\.|"
+    r"(?:^|\s)(?:-H|--header|--api[-_]?key|--access[-_]?token|--auth|"
+    r"--password|--passwd|--secret|--token)(?:[=\s]|$)|"
+    r"\bBearer\s+|"
+    r"\bBasic\s+[A-Za-z0-9+/=]+|"
+    r"\b[A-Z0-9_]*(?:API[-_]?KEY|ACCESS[-_]?TOKEN|AUTH[-_]?TOKEN|"
+    r"PASSWORD|PASSWD|SECRET|TOKEN)\s*=|"
+    r"\bsk-[A-Za-z0-9_-]{8,}\b|"
+    r"(?:\?|&)[A-Za-z0-9_.~-]+=[^\s&]+"
+    r")"
+)
+_ACTION_TRACE_ROOT_PATH_PATTERN = re.compile(
+    r"/root(?:/[A-Za-z0-9._+-]+)+"
 )
 _FORBIDDEN_RUNTIME_COMMAND_PATTERNS = (
     re.compile(
@@ -470,6 +583,11 @@ class SkillLearnTrialObservation:
     step_budget_truncated: bool = False
     step_budget_token_usage_complete: bool = False
     step_budget_receipt_hash: str = ""
+    proposal_action_trace: Mapping[str, Any] = field(
+        default_factory=dict,
+        compare=False,
+        repr=False,
+    )
 
     @property
     def valid(self) -> bool:
@@ -493,7 +611,7 @@ class SkillLearnTrialObservation:
         return replace(self, request=request)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "request": self.request.to_dict(),
             "success": self.success,
             "score": self.score,
@@ -523,6 +641,11 @@ class SkillLearnTrialObservation:
             "step_budget_receipt_hash": self.step_budget_receipt_hash,
             "secret_value_persisted": False,
         }
+        if self.proposal_action_trace:
+            payload["proposal_action_trace_hash"] = stable_hash(
+                dict(self.proposal_action_trace)
+            )
+        return payload
 
 
 def _baseline_arm_evidence_hash(
@@ -555,8 +678,23 @@ class BaselineArmEvidenceRecord:
     evidence_hash: str
 
 
+@dataclass(frozen=True)
+class BaselineArmTerminalInvalidMemo:
+    """Immutable non-evidence tombstone for one terminal invalid baseline arm."""
+
+    observation: SkillLearnTrialObservation
+    source_trace_id: str
+    terminal_outcome_hash: str
+    error_type: str
+
+
+BaselineArmReplayEntry = (
+    BaselineArmEvidenceRecord | BaselineArmTerminalInvalidMemo
+)
+
+
 class BaselineArmEvidenceReplayCache:
-    """Thread-safe policy-off cohort store, optionally shared by paired runners."""
+    """Thread-safe policy-off outcome store, optionally shared by paired runners."""
 
     def __init__(
         self,
@@ -568,11 +706,11 @@ class BaselineArmEvidenceReplayCache:
         self.policy = policy
         self._lock = threading.Lock()
         self._key_locks: dict[str, threading.Lock] = {}
-        self._records: dict[str, BaselineArmEvidenceRecord] = {}
+        self._entries: dict[str, BaselineArmReplayEntry] = {}
 
     def __len__(self) -> int:
         with self._lock:
-            return len(self._records)
+            return len(self._entries)
 
     @contextmanager
     def locked(self, replay_key: str) -> Iterator[None]:
@@ -585,9 +723,9 @@ class BaselineArmEvidenceReplayCache:
         with key_lock:
             yield
 
-    def get(self, replay_key: str) -> BaselineArmEvidenceRecord | None:
+    def get(self, replay_key: str) -> BaselineArmReplayEntry | None:
         with self._lock:
-            return self._records.get(replay_key)
+            return self._entries.get(replay_key)
 
     def record(
         self,
@@ -615,11 +753,57 @@ class BaselineArmEvidenceReplayCache:
             evidence_hash=_baseline_arm_evidence_hash(snapshot),
         )
         with self._lock:
-            existing = self._records.get(replay_key)
+            existing = self._entries.get(replay_key)
             if existing is None:
-                self._records[replay_key] = candidate
+                self._entries[replay_key] = candidate
                 return candidate
-            if existing.evidence_hash == candidate.evidence_hash:
+            if (
+                isinstance(existing, BaselineArmEvidenceRecord)
+                and existing.evidence_hash == candidate.evidence_hash
+            ):
+                return existing
+            return None
+
+    def memoize_terminal_invalid(
+        self,
+        replay_key: str,
+        *,
+        observation: SkillLearnTrialObservation,
+        source_trace_id: str,
+    ) -> BaselineArmTerminalInvalidMemo | None:
+        """Memoize a terminal invalid outcome without admitting it as evidence."""
+
+        if (
+            self.policy
+            not in TERMINAL_INVALID_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSIONS
+            or observation.valid
+        ):
+            return None
+        if (
+            observation.request.split is not SplitName.VALIDATION
+            or observation.request.variant is not TrialVariant.POLICY_OFF
+        ):
+            return None
+        snapshot = replace(
+            observation,
+            metrics=MappingProxyType(dict(observation.metrics)),
+        )
+        candidate = BaselineArmTerminalInvalidMemo(
+            observation=snapshot,
+            source_trace_id=source_trace_id,
+            terminal_outcome_hash=_baseline_arm_evidence_hash(snapshot),
+            error_type=str(snapshot.error_type),
+        )
+        with self._lock:
+            existing = self._entries.get(replay_key)
+            if existing is None:
+                self._entries[replay_key] = candidate
+                return candidate
+            if (
+                isinstance(existing, BaselineArmTerminalInvalidMemo)
+                and existing.terminal_outcome_hash
+                == candidate.terminal_outcome_hash
+            ):
                 return existing
             return None
 
@@ -1309,11 +1493,20 @@ class SkillLearnSubprocessBackend:
         offline_verifier_cache: SkillLearnOfflineVerifierRuntimeCache | None = None,
         provider_circuit: SkillLearnProviderCircuit | None = None,
         model_inference_limiter: SkillLearnModelInferenceLimiter | None = None,
+        train_action_design_policy: str | None = None,
         codex_agent_execution_policy: CodexAgentExecutionPolicy = (
             LEGACY_CODEX_AGENT_EXECUTION_POLICY
         ),
         event_sink: EventSink | None = None,
     ) -> None:
+        if train_action_design_policy not in {
+            None,
+            *TRAIN_ACTION_DESIGN_POLICY_VERSIONS,
+        }:
+            raise ValueError(
+                "unsupported TRAIN action design policy: "
+                f"{train_action_design_policy}"
+            )
         self.benchmark_root = Path(benchmark_root).expanduser().resolve()
         self.agent_id = agent_id
         self.model = model
@@ -1335,6 +1528,7 @@ class SkillLearnSubprocessBackend:
         self.prebuilt_cache = prebuilt_cache
         self.provider_circuit = provider_circuit or SkillLearnProviderCircuit()
         self.model_inference_limiter = model_inference_limiter
+        self.train_action_design_policy = train_action_design_policy
         self.trial_network_byte_limit = configured_trial_network_byte_limit()
         self.event_sink = event_sink or NullEventSink()
         self.offline_verifier_cache = (
@@ -2112,6 +2306,17 @@ class SkillLearnSubprocessBackend:
         )
         codex_trace_path = trial_path / "agent" / "codex.txt"
         tool_audit = _inspect_codex_tool_policy(codex_trace_path)
+        proposal_action_trace = (
+            _extract_train_action_trace_profile(
+                codex_trace_path,
+                containment_root=trials_root,
+            )
+            if self.train_action_design_policy
+            == TRAIN_ACTION_DESIGN_POLICY_VERSION
+            and request.split is SplitName.TRAIN
+            and request.variant is TrialVariant.POLICY_OFF
+            else {}
+        )
         trace_terminal_error = _provider_scoped_terminal_error(
             _codex_terminal_error_label(
                 codex_trace_path.read_text(encoding="utf-8", errors="replace")
@@ -2189,6 +2394,7 @@ class SkillLearnSubprocessBackend:
                 "model_terminal_trace_hash": (
                     tool_audit.trace_hash if trace_terminal_error else None
                 ),
+                "proposal_action_trace": proposal_action_trace,
                 "steps_used": (
                     action_budget_audit.observed_steps
                     if action_budget_audit is not None
@@ -2632,6 +2838,11 @@ class SkillLearnSubprocessBackend:
             step_budget_receipt_hash=str(
                 result.get("step_budget_receipt_hash") or ""
             ),
+            proposal_action_trace=(
+                MappingProxyType(dict(result["proposal_action_trace"]))
+                if isinstance(result.get("proposal_action_trace"), Mapping)
+                else MappingProxyType({})
+            ),
         )
 
     def _local_error(self, request: SkillLearnTrialRequest, error_type: str) -> SkillLearnTrialObservation:
@@ -2688,6 +2899,7 @@ class SkillLearnResidualMiner:
         manifest: SplitManifest,
         guard: SplitAccessGuard,
         contrastive_training_evidence_policy: str | None = None,
+        train_action_design_policy: str | None = None,
         event_sink: EventSink | None = None,
     ) -> None:
         if contrastive_training_evidence_policy not in {
@@ -2698,12 +2910,21 @@ class SkillLearnResidualMiner:
                 "unsupported contrastive training evidence policy: "
                 f"{contrastive_training_evidence_policy}"
             )
+        if train_action_design_policy not in {
+            None,
+            *TRAIN_ACTION_DESIGN_POLICY_VERSIONS,
+        }:
+            raise ValueError(
+                "unsupported TRAIN action design policy: "
+                f"{train_action_design_policy}"
+            )
         self.adapter = adapter
         self.manifest = manifest
         self.guard = guard
         self.contrastive_training_evidence_policy = (
             contrastive_training_evidence_policy
         )
+        self.train_action_design_policy = train_action_design_policy
         self.event_sink = event_sink or NullEventSink()
         self.items = {item.id: item for item in adapter.discover()}
 
@@ -2755,6 +2976,33 @@ class SkillLearnResidualMiner:
                         "duration_seconds": observation.duration_seconds,
                     },
                 }
+                if (
+                    self.train_action_design_policy
+                    == TRAIN_ACTION_DESIGN_POLICY_VERSION
+                ):
+                    action_profile = {
+                        "policy": self.train_action_design_policy,
+                        "runtime_environment": (
+                            self.adapter.load_action_design_context(
+                                request.item_id,
+                                phase=AccessPhase.PROPOSAL,
+                                guard=self.guard,
+                            )
+                        ),
+                        "baseline_action_trace": dict(
+                            observation.proposal_action_trace
+                        ),
+                        "evidence_scope": "train_policy_off_nonoracle_only",
+                        "validation_outcomes_used": False,
+                        "verifier_content_used": False,
+                        "test_content_used": False,
+                    }
+                    action_profile_hash = stable_hash(action_profile)
+                    context = {
+                        **context,
+                        "action_context_profile_hash": action_profile_hash,
+                        TRAIN_ACTION_DESIGN_INTERNAL_CONTEXT_KEY: action_profile,
+                    }
             residual = ResidualExample(
                 transition_id=f"transition_{stable_hash({'request': request.request_hash, 'outcome': observation.observation_hash})[:18]}",
                 task_id=request.item_id,
@@ -2785,6 +3033,7 @@ class SkillLearnResidualMiner:
                     "contrastive_training_evidence_policy": (
                         self.contrastive_training_evidence_policy
                     ),
+                    "train_action_design_policy": self.train_action_design_policy,
                     "infrastructure_rows_skipped": skipped_infrastructure,
                     "transition_set_hash": stable_hash(
                         {"transition_ids": sorted(row.transition_id for row in residuals)}
@@ -2933,6 +3182,7 @@ class SkillLearnCounterfactualRunner:
         self.invalid_trial_retry_backoff_seconds = (
             invalid_trial_retry_backoff_seconds
         )
+        self.invalid_trial_retry_workers = invalid_trial_retry_workers
         self._invalid_retry_semaphore = threading.Semaphore(
             invalid_trial_retry_workers
         )
@@ -2961,6 +3211,18 @@ class SkillLearnCounterfactualRunner:
                 "baseline arm replay cache and runner policies must match"
             )
         self.baseline_arm_replay_cache = cache
+
+    def invalid_trial_retry_descriptor(self) -> dict[str, Any]:
+        """Return the execution identity of one terminal-invalid retry cohort."""
+
+        return {
+            "policy": INVALID_TRIAL_RETRY_POLICY_VERSION,
+            "invalid_trial_max_attempts": self.invalid_trial_max_attempts,
+            "invalid_trial_retry_backoff_seconds": (
+                self.invalid_trial_retry_backoff_seconds
+            ),
+            "invalid_trial_retry_workers": self.invalid_trial_retry_workers,
+        }
 
     @staticmethod
     def behavior_hash(program: HypothesisProgram) -> str:
@@ -3321,7 +3583,7 @@ class SkillLearnCounterfactualRunner:
                 baseline_treatment_hash=baseline_treatment_hash,
             )
 
-            def replay(
+            def replay_valid(
                 record: BaselineArmEvidenceRecord,
                 *,
                 baseline_trial_executed: bool = False,
@@ -3359,6 +3621,66 @@ class SkillLearnCounterfactualRunner:
                     baseline_trial_executed,
                 )
 
+            def replay_terminal_invalid(
+                memo: BaselineArmTerminalInvalidMemo,
+                *,
+                baseline_trial_executed: bool = False,
+            ) -> tuple[SkillLearnTrialObservation, str, bool, bool]:
+                source = memo.observation
+                replayed = replace(
+                    source.as_variant(off_request),
+                    raw_trial_artifacts_persisted=False,
+                )
+                self.event_sink.emit(
+                    Event(
+                        event=(
+                            "skilllearn_baseline_arm_terminal_invalid_replayed"
+                        ),
+                        stage="benchmark.skilllearn.counterfactual",
+                        trace_id=f"{trace_id}:{pair_id}:off",
+                        payload={
+                            "policy": self.baseline_arm_evidence_replay_policy,
+                            "replay_key": replay_key,
+                            "source_trace_id": memo.source_trace_id,
+                            "target_trace_id": f"{trace_id}:{pair_id}:off",
+                            "source_request_hash": source.request.request_hash,
+                            "target_request_hash": off_request.request_hash,
+                            "source_observation_hash": source.observation_hash,
+                            "source_terminal_outcome_hash": (
+                                memo.terminal_outcome_hash
+                            ),
+                            "error_type": memo.error_type,
+                            "behavior_identical": True,
+                            "terminal_for_replay_key": True,
+                            "promotion_evidence": False,
+                            "new_baseline_executions": 0,
+                            "sealed_test_accessed": False,
+                            "raw_content_persisted": False,
+                        },
+                    )
+                )
+                return (
+                    replayed,
+                    memo.terminal_outcome_hash,
+                    True,
+                    baseline_trial_executed,
+                )
+
+            def replay_entry(
+                entry: BaselineArmReplayEntry,
+                *,
+                baseline_trial_executed: bool = False,
+            ) -> tuple[SkillLearnTrialObservation, str, bool, bool]:
+                if isinstance(entry, BaselineArmTerminalInvalidMemo):
+                    return replay_terminal_invalid(
+                        entry,
+                        baseline_trial_executed=baseline_trial_executed,
+                    )
+                return replay_valid(
+                    entry,
+                    baseline_trial_executed=baseline_trial_executed,
+                )
+
             if split is not SplitName.VALIDATION:
                 observation = run_trial(
                     off_request,
@@ -3376,7 +3698,7 @@ class SkillLearnCounterfactualRunner:
             with cache.locked(replay_key):
                 cached = cache.get(replay_key)
                 if cached is not None:
-                    return replay(cached)
+                    return replay_entry(cached)
                 observation = run_trial(
                     off_request,
                     skill_source_dir=baseline_skill_source,
@@ -3384,6 +3706,93 @@ class SkillLearnCounterfactualRunner:
                 )
                 source_trace_id = f"{trace_id}:{pair_id}:off"
                 if not observation.valid:
+                    if (
+                        self.baseline_arm_evidence_replay_policy
+                        in TERMINAL_INVALID_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSIONS
+                    ):
+                        memoized = cache.memoize_terminal_invalid(
+                            replay_key,
+                            observation=observation,
+                            source_trace_id=source_trace_id,
+                        )
+                        if memoized is None:
+                            conflict = cache.get(replay_key)
+                            self.event_sink.emit(
+                                Event(
+                                    event=(
+                                        "skilllearn_baseline_arm_terminal_invalid_conflict_rejected"
+                                    ),
+                                    stage="benchmark.skilllearn.counterfactual",
+                                    trace_id=source_trace_id,
+                                    payload={
+                                        "policy": (
+                                            self.baseline_arm_evidence_replay_policy
+                                        ),
+                                        "replay_key": replay_key,
+                                        "source_request_hash": (
+                                            off_request.request_hash
+                                        ),
+                                        "source_observation_hash": (
+                                            observation.observation_hash
+                                        ),
+                                        "error_type": observation.error_type,
+                                        "terminal_for_replay_key": True,
+                                        "promotion_evidence": False,
+                                        "cache_mutated": False,
+                                        "sealed_test_accessed": False,
+                                        "raw_content_persisted": False,
+                                    },
+                                )
+                            )
+                            if conflict is not None:
+                                return replay_entry(
+                                    conflict,
+                                    baseline_trial_executed=True,
+                                )
+                            return (
+                                observation,
+                                _baseline_arm_evidence_hash(observation),
+                                False,
+                                True,
+                            )
+                        self.event_sink.emit(
+                            Event(
+                                event=(
+                                    "skilllearn_baseline_arm_terminal_invalid_memoized"
+                                ),
+                                stage="benchmark.skilllearn.counterfactual",
+                                trace_id=source_trace_id,
+                                payload={
+                                    "policy": (
+                                        self.baseline_arm_evidence_replay_policy
+                                    ),
+                                    "replay_key": replay_key,
+                                    "source_trace_id": source_trace_id,
+                                    "source_request_hash": (
+                                        off_request.request_hash
+                                    ),
+                                    "source_observation_hash": (
+                                        memoized.observation.observation_hash
+                                    ),
+                                    "source_terminal_outcome_hash": (
+                                        memoized.terminal_outcome_hash
+                                    ),
+                                    "error_type": memoized.error_type,
+                                    "terminal_for_replay_key": True,
+                                    "same_request_retry_policy_complete": True,
+                                    "promotion_evidence": False,
+                                    "new_baseline_executions": 1,
+                                    "sealed_test_accessed": False,
+                                    "raw_content_persisted": False,
+                                },
+                            )
+                        )
+                        return (
+                            memoized.observation,
+                            memoized.terminal_outcome_hash,
+                            False,
+                            True,
+                        )
                     self.event_sink.emit(
                         Event(
                             event=(
@@ -3438,7 +3847,7 @@ class SkillLearnCounterfactualRunner:
                         )
                     )
                     if conflict is not None:
-                        return replay(
+                        return replay_entry(
                             conflict,
                             baseline_trial_executed=True,
                         )
@@ -3565,9 +3974,21 @@ class SkillLearnCounterfactualRunner:
         shared_baseline_replay = (
             baseline_replayed
             and self.baseline_arm_evidence_replay_policy
-            == SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+            in SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSIONS
         )
-        if shared_baseline_replay and not baseline_trial_executed:
+        terminal_invalid_baseline_replay = (
+            shared_baseline_replay
+            and not baseline_observation.valid
+            and self.baseline_arm_evidence_replay_policy
+            in TERMINAL_INVALID_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSIONS
+        )
+        if terminal_invalid_baseline_replay and not baseline_trial_executed:
+            run_order = (
+                "on_only_shared_baseline_terminal_invalid_replay"
+                if treatment_applied
+                else "baseline_alias_shared_terminal_invalid_replay"
+            )
+        elif shared_baseline_replay and not baseline_trial_executed:
             run_order = (
                 "on_only_shared_baseline_replay"
                 if treatment_applied
@@ -3662,6 +4083,20 @@ class SkillLearnCounterfactualRunner:
                     "baseline_evidence_hash": baseline_evidence_hash,
                     "baseline_replayed": baseline_replayed,
                     "baseline_trial_executed": baseline_trial_executed,
+                    "baseline_terminal_invalid_memoized": bool(
+                        split is SplitName.VALIDATION
+                        and not baseline_observation.valid
+                        and baseline_trial_executed
+                        and not baseline_replayed
+                        and self.baseline_arm_evidence_replay_policy
+                        in TERMINAL_INVALID_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSIONS
+                    ),
+                    "baseline_terminal_invalid_replayed": (
+                        terminal_invalid_baseline_replay
+                    ),
+                    "baseline_promotion_evidence_eligible": (
+                        baseline_observation.valid
+                    ),
                     "candidate_observation_hash": candidate_observation.observation_hash,
                     "baseline_cost": baseline_observation.cost_units,
                     "candidate_cost": candidate_observation.cost_units,
@@ -3728,9 +4163,16 @@ class SkillLearnCounterfactualRunner:
         }
         if (
             self.baseline_arm_evidence_replay_policy
-            == SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION
+            in SHARED_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSIONS
         ):
             descriptor["baseline_treatment_hash"] = baseline_treatment_hash
+        if (
+            self.baseline_arm_evidence_replay_policy
+            in TERMINAL_INVALID_BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSIONS
+        ):
+            descriptor["invalid_trial_retry"] = (
+                self.invalid_trial_retry_descriptor()
+            )
         return stable_hash(descriptor)
 
     def _request(
@@ -3798,6 +4240,13 @@ class SkillLearnGenerationResult:
         decision = self.evolution.promotion_decision if self.evolution else None
         failure_count = sum(not row.baseline_success for row in self.residuals)
         success_control_count = sum(row.baseline_success for row in self.residuals)
+        action_context_profile_hashes = sorted(
+            {
+                str(row.context.get("action_context_profile_hash") or "")
+                for row in self.residuals
+                if row.context.get("action_context_profile_hash")
+            }
+        )
         selected_candidate_hypothesis_ids: tuple[str, ...] = ()
         if self.evolution and decision:
             selected_candidate_hypothesis_ids = tuple(
@@ -3825,6 +4274,18 @@ class SkillLearnGenerationResult:
             "training_residual_count": failure_count,
             "success_control_count": success_control_count,
             "example_count": len(self.residuals),
+            **(
+                {
+                    "action_context_profile_count": len(
+                        action_context_profile_hashes
+                    ),
+                    "action_context_profile_set_hash": stable_hash(
+                        {"profile_hashes": action_context_profile_hashes}
+                    ),
+                }
+                if action_context_profile_hashes
+                else {}
+            ),
             "contrastive_training_evidence_policy": (
                 self.contrastive_training_evidence_policy
             ),
@@ -3913,6 +4374,7 @@ class SkillLearnEvolutionHarness:
         candidate_selection_policy: str = TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
         candidate_bundle_policy: str | None = None,
         contrastive_training_evidence_policy: str | None = None,
+        train_action_design_policy: str | None = None,
         repair_request_scope_policy: str | None = None,
         parallel_workers: int = 1,
         invalid_trial_max_attempts: int = 1,
@@ -3939,6 +4401,14 @@ class SkillLearnEvolutionHarness:
             raise ValueError(
                 "unsupported contrastive training evidence policy: "
                 f"{contrastive_training_evidence_policy}"
+            )
+        if train_action_design_policy not in {
+            None,
+            *TRAIN_ACTION_DESIGN_POLICY_VERSIONS,
+        }:
+            raise ValueError(
+                "unsupported TRAIN action design policy: "
+                f"{train_action_design_policy}"
             )
         if repair_request_scope_policy not in {
             None,
@@ -4003,6 +4473,7 @@ class SkillLearnEvolutionHarness:
         self.contrastive_training_evidence_policy = (
             contrastive_training_evidence_policy
         )
+        self.train_action_design_policy = train_action_design_policy
         self.repair_request_scope_policy = repair_request_scope_policy
         self._invalid_retry_semaphore = threading.Semaphore(
             invalid_trial_retry_workers
@@ -4016,6 +4487,7 @@ class SkillLearnEvolutionHarness:
             contrastive_training_evidence_policy=(
                 contrastive_training_evidence_policy
             ),
+            train_action_design_policy=train_action_design_policy,
             event_sink=self.event_sink,
         )
         self.compiler = SkillLearnProgramCompiler(event_sink=self.event_sink)
@@ -4052,6 +4524,7 @@ class SkillLearnEvolutionHarness:
             contrastive_training_evidence_policy=(
                 contrastive_training_evidence_policy
             ),
+            train_action_design_policy=train_action_design_policy,
             repair_request_scope_policy=repair_request_scope_policy,
             event_sink=self.event_sink,
         )
@@ -4365,6 +4838,19 @@ class SkillLearnEvolutionHarness:
             contrastive_training_evidence_policy=(
                 self.contrastive_training_evidence_policy
             ),
+            train_action_design_policy=self.train_action_design_policy,
+            action_design_profiles={
+                str(row.context["action_context_profile_hash"]): dict(
+                    row.context[TRAIN_ACTION_DESIGN_INTERNAL_CONTEXT_KEY]
+                )
+                for row in residuals
+                if not row.baseline_success
+                and isinstance(
+                    row.context.get(TRAIN_ACTION_DESIGN_INTERNAL_CONTEXT_KEY),
+                    Mapping,
+                )
+                and row.context.get("action_context_profile_hash")
+            },
             repair_request_scope_policy=self.repair_request_scope_policy,
             train_coverage_objective=(
                 {
@@ -4582,7 +5068,7 @@ class SkillLearnEvolutionHarness:
         incumbent_behavior_hashes = sorted(
             skilllearn_program_treatment_hash(row) for row in incumbent_programs
         )
-        return {
+        descriptor = {
             "policy": TRAINING_EVIDENCE_REPLAY_POLICY_VERSION,
             "split": SplitName.TRAIN.value,
             "manifest_hash": self.manifest.manifest_hash,
@@ -4603,6 +5089,19 @@ class SkillLearnEvolutionHarness:
             ),
             "task_set_hash": stable_hash(task_rows),
         }
+        if self.train_action_design_policy:
+            descriptor.update(
+                {
+                    "train_action_design_policy": self.train_action_design_policy,
+                    "train_action_environment_profile_version": (
+                        TRAIN_ACTION_ENVIRONMENT_PROFILE_VERSION
+                    ),
+                    "train_action_trace_profile_version": (
+                        TRAIN_ACTION_TRACE_PROFILE_VERSION
+                    ),
+                }
+            )
+        return descriptor
 
     def _emit_generation_result(self, result: SkillLearnGenerationResult, trace_id: str) -> None:
         self.event_sink.emit(
@@ -5781,6 +6280,248 @@ def _inspect_codex_tool_policy(trace_path: Path) -> _CodexToolPolicyAudit:
         runtime_install_command_count=runtime_install_count,
         trace_hash=_file_content_hash(trace_path),
     )
+
+
+def _extract_train_action_trace_profile(
+    trace_path: Path,
+    *,
+    containment_root: Path | None = None,
+) -> dict[str, Any]:
+    """Extract bounded, allowlisted action facts without raw command text.
+
+    The resulting mapping is safe to place in a proposal request: it contains only
+    a fixed executable label, fixed flag labels, normalized task-local paths,
+    outcome metadata, and a one-way hash of the original command.  Any reference
+    to verifier/oracle material or credential-bearing/network syntax is discarded
+    as a whole rather than partially redacted.
+    """
+
+    if trace_path.is_symlink():
+        return {}
+    if containment_root is not None:
+        try:
+            root = containment_root.resolve(strict=True)
+        except FileNotFoundError:
+            return {}
+        try:
+            relative = trace_path.relative_to(root)
+        except ValueError:
+            return {}
+        current = root
+        for part in relative.parts:
+            if part in {"", ".", ".."}:
+                return {}
+            current = current / part
+            if current.is_symlink():
+                return {}
+        try:
+            resolved_trace = trace_path.resolve(strict=True)
+            resolved_trace.relative_to(root)
+        except (FileNotFoundError, ValueError):
+            return {}
+    if not trace_path.is_file():
+        return {}
+    command_rows: list[dict[str, Any]] = []
+    changed_paths: set[str] = set()
+    for raw_line in trace_path.read_text(
+        encoding="utf-8",
+        errors="replace",
+    ).splitlines():
+        try:
+            row = json.loads(raw_line)
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if not isinstance(row, Mapping) or row.get("type") != "item.completed":
+            continue
+        item = row.get("item")
+        if not isinstance(item, Mapping):
+            continue
+        item_type = str(item.get("type") or "")
+        if item_type == "command_execution":
+            command = str(item.get("command") or "")
+            signature = _allowlisted_action_trace_command(command)
+            if signature is None:
+                continue
+            exit_code = item.get("exit_code")
+            normalized_exit_code = (
+                0
+                if isinstance(exit_code, int)
+                and not isinstance(exit_code, bool)
+                and exit_code == 0
+                else (
+                    1
+                    if isinstance(exit_code, int)
+                    and not isinstance(exit_code, bool)
+                    else None
+                )
+            )
+            command_rows.append(
+                {
+                    **signature,
+                    "status": _normalized_action_trace_status(
+                        item.get("status")
+                    ),
+                    "exit_code": normalized_exit_code,
+                }
+            )
+        elif item_type == "file_change":
+            changes = item.get("changes")
+            if not isinstance(changes, list):
+                continue
+            for change in changes:
+                if not isinstance(change, Mapping):
+                    continue
+                path = str(change.get("path") or "").strip()
+                safe_path = _allowlisted_action_trace_root_path(path)
+                if safe_path is not None:
+                    changed_paths.add(safe_path)
+    unique_by_hash: dict[str, dict[str, Any]] = {}
+    for row in command_rows:
+        unique_by_hash.setdefault(str(row["original_command_hash"]), row)
+    unique = list(unique_by_hash.values())
+    failed = [
+        row
+        for row in unique
+        if row["status"] == "failed"
+        or (isinstance(row["exit_code"], int) and row["exit_code"] != 0)
+    ]
+    successful = [row for row in unique if row not in failed]
+    selected = [*failed, *successful]
+    selected = selected[:12]
+    profile = {
+        "policy": TRAIN_ACTION_TRACE_PROFILE_VERSION,
+        "command_signatures": selected,
+        "commands_observed": len(command_rows),
+        "unique_commands_observed": len(unique),
+        "failed_commands_observed": len(failed),
+        "commands_returned": len(selected),
+        "changed_task_paths": sorted(changed_paths)[:12],
+        "model_messages_used": False,
+        "command_output_used": False,
+        "verifier_trace_used": False,
+        "raw_trace_content_persisted": False,
+    }
+    return profile
+
+
+def _allowlisted_action_trace_command(command: str) -> dict[str, Any] | None:
+    """Return non-free-text command facts, or fail closed for unsafe input."""
+
+    value = command.strip()
+    if not value or len(value) > 100_000:
+        return None
+    decoded_for_checks = value.replace("%2f", "/").replace("%2F", "/")
+    decoded_for_checks = decoded_for_checks.replace("%2e", ".").replace("%2E", ".")
+    if (
+        _ACTION_TRACE_FORBIDDEN_REFERENCE_PATTERN.search(decoded_for_checks)
+        or _ACTION_TRACE_SENSITIVE_PATTERN.search(value)
+        or "\x00" in value
+    ):
+        return None
+    tokens = _action_trace_command_tokens(value)
+    if not tokens:
+        return None
+    executable = Path(tokens[0]).name.lower()
+    if re.fullmatch(r"python3(?:\.\d+)?", executable):
+        executable = "python3"
+    if executable not in _ACTION_TRACE_ALLOWED_EXECUTABLES:
+        return None
+    safe_flags = sorted(
+        {
+            flag
+            for token in tokens[1:]
+            if (flag := token.split("=", 1)[0])
+            in _ACTION_TRACE_ALLOWED_FLAGS
+        }
+    )
+    observed_task_local_paths = [
+        match.group(0)
+        for match in _ACTION_TRACE_ROOT_PATH_PATTERN.finditer(value)
+    ]
+    normalized_task_local_paths = [
+        _allowlisted_action_trace_root_path(path)
+        for path in observed_task_local_paths
+    ]
+    if any(path is None for path in normalized_task_local_paths):
+        return None
+    task_local_paths = sorted(
+        {str(path) for path in normalized_task_local_paths if path is not None}
+    )[:12]
+    return {
+        "executable_basename": executable,
+        "safe_flags": safe_flags,
+        "task_local_paths": task_local_paths,
+        "original_command_hash": stable_hash({"command": value}),
+    }
+
+
+def _action_trace_command_tokens(command: str) -> list[str]:
+    """Parse the invoked local executable through a small wrapper allowlist."""
+
+    try:
+        tokens = shlex.split(command, posix=True)
+    except ValueError:
+        return []
+    if not tokens:
+        return []
+    for _ in range(4):
+        while tokens and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", tokens[0]):
+            tokens.pop(0)
+        if not tokens:
+            return []
+        executable = Path(tokens[0]).name.lower()
+        if executable in _ACTION_TRACE_SHELL_WRAPPERS:
+            script_index = next(
+                (
+                    index + 1
+                    for index, token in enumerate(tokens[:-1])
+                    if token in {"-c", "-lc"}
+                ),
+                None,
+            )
+            if script_index is None:
+                return []
+            try:
+                tokens = shlex.split(tokens[script_index], posix=True)
+            except ValueError:
+                return []
+            continue
+        if executable in _ACTION_TRACE_COMMAND_WRAPPERS:
+            tokens = tokens[1:]
+            while tokens and (
+                tokens[0].startswith("-")
+                or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", tokens[0])
+            ):
+                tokens.pop(0)
+            continue
+        break
+    if not tokens or any(token in {"&&", "||", ";", "|"} for token in tokens):
+        return []
+    return tokens
+
+
+def _allowlisted_action_trace_root_path(value: str) -> str | None:
+    candidate = value.strip().rstrip(".,;:)]}\"'")
+    if not candidate.startswith("/root/") or len(candidate) > 300:
+        return None
+    if not _ACTION_TRACE_ROOT_PATH_PATTERN.fullmatch(candidate):
+        return None
+    if any(part in {"", ".", ".."} for part in candidate.split("/")[2:]):
+        return None
+    if _ACTION_TRACE_FORBIDDEN_REFERENCE_PATTERN.search(candidate):
+        return None
+    if _ACTION_TRACE_SENSITIVE_PATH_COMPONENT_PATTERN.search(candidate):
+        return None
+    return candidate
+
+
+def _normalized_action_trace_status(value: Any) -> str:
+    status = str(value or "").strip().lower()
+    if status in {"completed", "complete", "succeeded", "success"}:
+        return "completed"
+    if status in {"failed", "failure", "error"}:
+        return "failed"
+    return "unknown"
 
 
 def _as_nonnegative_int(value: Any) -> int:

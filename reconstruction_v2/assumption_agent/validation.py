@@ -12,7 +12,11 @@ from .models import (
     SplitName,
     stable_hash,
 )
-from .proposer import HypothesisProposalCallError, StructuredHypothesisProposer
+from .proposer import (
+    HypothesisProposalCallError,
+    StructuredHypothesisProposer,
+    train_action_quality_contract,
+)
 
 
 ALL_ACTION_OPERATIONS = frozenset(
@@ -51,6 +55,10 @@ class ValidationContext:
     contrastive_training_evidence_policy: str | None = None
     train_coverage_objective: Mapping[str, Any] | None = None
     repair_request_scope_policy: str | None = None
+    train_action_design_policy: str | None = None
+    action_design_profiles: Mapping[str, Mapping[str, Any]] = field(
+        default_factory=dict
+    )
 
 
 def backend_action_contract_issues(
@@ -619,6 +627,7 @@ class RecursiveValidationEngine:
                             "task_instruction",
                             "observed_metrics",
                             "execution_signals",
+                            "action_context_profile_hash",
                         ],
                         "context_is_for_action_design_only": True,
                     },
@@ -659,6 +668,21 @@ class RecursiveValidationEngine:
                             )
                         }
                         if context.train_coverage_objective
+                        else {}
+                    ),
+                    **(
+                        {
+                            "action_quality_contract": train_action_quality_contract(
+                                context.train_action_design_policy
+                            ),
+                            "train_action_design_profiles": {
+                                str(key): dict(value)
+                                for key, value in sorted(
+                                    context.action_design_profiles.items()
+                                )
+                            },
+                        }
+                        if context.train_action_design_policy
                         else {}
                     ),
                     **(

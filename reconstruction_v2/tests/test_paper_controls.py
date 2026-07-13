@@ -73,6 +73,9 @@ V313_PROTOCOL_PATH = (
 V314_PROTOCOL_PATH = (
     ROOT / "manifests" / "skilllearn_paper_protocol_v3_14_ruoli_gpt54mini.json"
 )
+V315_PROTOCOL_PATH = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_15_ruoli_gpt54mini.json"
+)
 MANIFEST_PATH = (
     ROOT / "manifests" / "skilllearnbench_instance_holdout_offline_ready_v1.json"
 )
@@ -746,6 +749,7 @@ def test_execution_report_preserves_legacy_promotion_summary_schema(
         V312_PROTOCOL_PATH,
         V313_PROTOCOL_PATH,
         V314_PROTOCOL_PATH,
+        V315_PROTOCOL_PATH,
     ),
 )
 def test_freeze_accepts_clean_contrastive_report(protocol_path: Path) -> None:
@@ -791,9 +795,97 @@ def test_freeze_binds_v312_repair_request_scope_plan_provenance() -> None:
         )
 
 
+def test_freeze_binds_v315_action_design_plan_provenance() -> None:
+    protocol = PaperProtocol.read(V315_PROTOCOL_PATH)
+    manifest = SplitManifest.read(MANIFEST_PATH)
+    report = _development_report(
+        protocol,
+        manifest,
+        archive_hash="unused",
+        recursive=True,
+        hypothesis_id="recursive-policy",
+    )
+    report["plan"]["train_action_design_policy"] = "drifted"
+
+    with pytest.raises(
+        ValueError,
+        match="development report plan mismatch: train_action_design_policy",
+    ):
+        paper_freeze._validate_development_report(
+            report,
+            protocol=protocol,
+            manifest=manifest,
+            recursive_validation_enabled=True,
+        )
+
+
+def test_freeze_binds_v315_action_profile_set_to_first_generation() -> None:
+    protocol = PaperProtocol.read(V315_PROTOCOL_PATH)
+    manifest = SplitManifest.read(MANIFEST_PATH)
+    report = _development_report(
+        protocol,
+        manifest,
+        archive_hash="unused",
+        recursive=True,
+        hypothesis_id="recursive-policy",
+    )
+    report["generation"]["action_context_profile_set_hash"] = stable_hash(
+        {"profile_hashes": ["drifted"]}
+    )
+    report["generations"][0]["action_context_profile_set_hash"] = report[
+        "generation"
+    ]["action_context_profile_set_hash"]
+
+    with pytest.raises(
+        ValueError,
+        match="first-generation action profile set hash mismatch",
+    ):
+        paper_freeze._validate_development_report(
+            report,
+            protocol=protocol,
+            manifest=manifest,
+            recursive_validation_enabled=True,
+        )
+
+
+def test_freeze_rejects_v315_paired_checkpoint_provenance_drift() -> None:
+    protocol = PaperProtocol.read(V315_PROTOCOL_PATH)
+    manifest = SplitManifest.read(MANIFEST_PATH)
+    recursive_report = _development_report(
+        protocol,
+        manifest,
+        archive_hash="recursive",
+        recursive=True,
+        hypothesis_id="recursive-policy",
+    )
+    no_recursive_report = _development_report(
+        protocol,
+        manifest,
+        archive_hash="no-recursive",
+        recursive=False,
+        hypothesis_id="no-recursive-policy",
+    )
+    no_recursive_report["plan"][
+        "shared_first_generation_checkpoint_hash"
+    ] = stable_hash({"checkpoint": "drifted"})
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "paired development shared first-generation provenance mismatch: "
+            "shared_first_generation_checkpoint_hash"
+        ),
+    ):
+        paper_freeze._validate_paired_development_provenance(
+            recursive_report,
+            no_recursive_report,
+            protocol=protocol,
+        )
+
+
 @pytest.mark.parametrize(
     "protocol_path",
-    (V313_PROTOCOL_PATH, V314_PROTOCOL_PATH),
+    (V313_PROTOCOL_PATH, V314_PROTOCOL_PATH, V315_PROTOCOL_PATH),
 )
 def test_freeze_binds_candidate_bundle_plan_provenance(
     protocol_path: Path,
@@ -848,6 +940,7 @@ def test_freeze_binds_candidate_bundle_plan_provenance(
         V312_PROTOCOL_PATH,
         V313_PROTOCOL_PATH,
         V314_PROTOCOL_PATH,
+        V315_PROTOCOL_PATH,
     ),
 )
 def test_freeze_rejects_contrastive_generation_evidence_drift(
@@ -1249,6 +1342,7 @@ def test_frozen_archive_rejects_candidate_treatment_substitution(
     (
         (V313_PROTOCOL_PATH, "3.13.0"),
         (V314_PROTOCOL_PATH, "3.14.0"),
+        (V315_PROTOCOL_PATH, "3.15.0"),
     ),
 )
 @pytest.mark.parametrize("allowed", (True, False))
@@ -1323,6 +1417,7 @@ def test_bundle_protocol_frozen_archive_accepts_canonical_candidate_bundle(
     (
         (V313_PROTOCOL_PATH, "3.13.0"),
         (V314_PROTOCOL_PATH, "3.14.0"),
+        (V315_PROTOCOL_PATH, "3.15.0"),
     ),
 )
 def test_bundle_protocol_frozen_archive_rejects_bundle_tampering(
@@ -1755,6 +1850,7 @@ def _development_report(
     bundle_protocol = protocol.payload["protocol_version"] in {
         "3.13.0",
         "3.14.0",
+        "3.15.0",
     }
     generation = {
         "promoted": True,
@@ -1789,6 +1885,7 @@ def _development_report(
         "3.12.0",
         "3.13.0",
         "3.14.0",
+        "3.15.0",
     }:
         train_count = int(phase["train_count"])
         generation.update(
@@ -1801,6 +1898,16 @@ def _development_report(
                 "contrastive_training_evidence_policy": protocol.payload[
                     "execution"
                 ]["contrastive_training_evidence_policy"],
+            }
+        )
+    if protocol.payload["protocol_version"] == "3.15.0":
+        action_profile_set_hash = stable_hash(
+            {"profile_hashes": ["profile-a"]}
+        )
+        generation.update(
+            {
+                "action_context_profile_count": 1,
+                "action_context_profile_set_hash": action_profile_set_hash,
             }
         )
     generation["promotion_summary"] = dict(
@@ -1898,6 +2005,7 @@ def _development_report(
                     "proposal_response_max_tokens",
                     "repair_request_scope_policy",
                     "candidate_bundle_policy",
+                    "train_action_design_policy",
                 )
                 if field in protocol.payload["execution"]
             },
@@ -1918,6 +2026,24 @@ def _development_report(
                 "proposal_candidates_per_generation"
             ],
             "test_content_accessed": False,
+            **(
+                {
+                    "paired_arm": (
+                        "recursive_repair"
+                        if recursive
+                        else "no_recursive_repair"
+                    ),
+                    "shared_first_generation_checkpoint_hash": stable_hash(
+                        {"checkpoint": "v3.15-test"}
+                    ),
+                    "shared_first_generation_action_context_profile_count": 1,
+                    "shared_first_generation_action_context_profile_set_hash": (
+                        action_profile_set_hash
+                    ),
+                }
+                if protocol.payload["protocol_version"] == "3.15.0"
+                else {}
+            ),
         },
         "generation": dict(generation),
         "generations": [generation],
@@ -1978,6 +2104,7 @@ def _promotion_decision(
         "3.12.0",
         "3.13.0",
         "3.14.0",
+        "3.15.0",
     }:
         summary.update(
             {

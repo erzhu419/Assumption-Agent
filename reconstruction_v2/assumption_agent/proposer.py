@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import re
 import threading
 from dataclasses import replace
 from typing import Any, Mapping, Protocol, Sequence
@@ -25,6 +27,48 @@ LEGACY_PROPOSAL_DIVERSITY_POLICY_VERSION = (
 PROPOSAL_DIVERSITY_POLICY_VERSION = (
     "exact_count_train_failure_activation_audit_only_v2"
 )
+TRAIN_ACTION_DESIGN_POLICY_VERSION = (
+    "train_only_material_action_delta_prompt_audit_v1"
+)
+TRAIN_ACTION_DESIGN_POLICY_VERSIONS = frozenset(
+    {TRAIN_ACTION_DESIGN_POLICY_VERSION}
+)
+TRAIN_ACTION_DESIGN_INTERNAL_CONTEXT_KEY = "_train_action_design_profile"
+
+
+def train_action_quality_contract(policy: str | None) -> dict[str, Any] | None:
+    if policy is None:
+        return None
+    if policy not in TRAIN_ACTION_DESIGN_POLICY_VERSIONS:
+        raise ValueError(f"unsupported TRAIN action design policy: {policy}")
+    return {
+        "policy": policy,
+        "task_instruction_role": "baseline_requirement_not_treatment",
+        "profile_reference_field": "action_context_profile_hash",
+        "profile_map_field": "train_action_design_profiles",
+        "required_material_delta_kinds": [
+            "exact_constant_or_mapping",
+            "concrete_local_tool_command",
+            "artifact_internal_manipulation",
+        ],
+        "minimum_material_delta_per_hypothesis": 1,
+        "vague_placeholder_policy": (
+            "do_not_substitute_request_collect_or_verify_for_missing_detail"
+        ),
+        "static_model_knowledge_allowed": True,
+        "proposal_external_tools_allowed": False,
+        "runtime_network_or_install_actions_allowed": False,
+        "enforcement": "prompt_and_audit_only",
+        "response_rejection_allowed": False,
+        "proposal_retry_allowed": False,
+        "candidate_selection_affected": False,
+        "evidence_scope": (
+            "train_instruction_runtime_profile_and_policy_off_action_trace"
+        ),
+        "validation_outcomes_used": False,
+        "verifier_content_used": False,
+        "test_content_used": False,
+    }
 
 
 class ProposalModel(Protocol):
@@ -250,6 +294,13 @@ class StructuredHypothesisProposer:
                 expected_item_count=max_hypotheses,
                 response_contract_policy=PROPOSAL_DIVERSITY_POLICY_VERSION,
             )
+        self._emit_action_delta_audit(
+            programs,
+            residuals=residuals,
+            capabilities=capability_payload,
+            trace_id=trace_id,
+            request_kind="root_proposal",
+        )
         if diversity_contract_enabled:
             failure_rows = tuple(
                 residual
@@ -478,6 +529,13 @@ class StructuredHypothesisProposer:
             }
         )
         child = replace(canonical_child, id=f"repair_{branch_identity_hash}")
+        self._emit_action_delta_audit(
+            (child,),
+            residuals=residuals,
+            capabilities=capability_payload,
+            trace_id=trace_id,
+            request_kind="repair_proposal",
+        )
         self.event_sink.emit(
             Event(
                 event="hypothesis_repair_proposed",
@@ -503,6 +561,83 @@ class StructuredHypothesisProposer:
             )
         )
         return child
+
+    def _emit_action_delta_audit(
+        self,
+        programs: Sequence[HypothesisProgram],
+        *,
+        residuals: Sequence[ResidualExample],
+        capabilities: Mapping[str, Any],
+        trace_id: str,
+        request_kind: str,
+    ) -> None:
+        contract = capabilities.get("action_quality_contract")
+        if not isinstance(contract, Mapping):
+            return
+        if contract.get("policy") != TRAIN_ACTION_DESIGN_POLICY_VERSION:
+            return
+        try:
+            profile_rows = capabilities.get("train_action_design_profiles")
+            profiles = profile_rows if isinstance(profile_rows, Mapping) else {}
+            audits = [
+                _action_delta_audit_row(
+                    program,
+                    residuals=residuals,
+                    profiles=profiles,
+                )
+                for program in programs
+            ]
+            self.event_sink.emit(
+                Event(
+                    event="proposal_action_delta_audited",
+                    stage="proposal.action_quality_audit",
+                    trace_id=trace_id,
+                    payload={
+                        "policy": TRAIN_ACTION_DESIGN_POLICY_VERSION,
+                        "request_kind": request_kind,
+                        "candidate_count": len(audits),
+                        "candidate_audits": audits,
+                        "candidate_with_material_delta_count": sum(
+                            bool(row["observed_delta_kinds"]) for row in audits
+                        ),
+                        "candidate_with_restatement_risk_count": sum(
+                            bool(row["restatement_risk"]) for row in audits
+                        ),
+                        "response_rejected": False,
+                        "proposal_retry_requested": False,
+                        "recursive_repair_requested_by_audit": False,
+                        "candidate_selection_affected": False,
+                        "promotion_gate_affected": False,
+                        "validation_outcomes_used": False,
+                        "verifier_content_used": False,
+                        "test_content_used": False,
+                        "raw_content_persisted": False,
+                    },
+                )
+            )
+        except Exception as exc:
+            # This policy is deliberately diagnostic-only: malformed audit input
+            # must never reject, retry, re-rank, or otherwise change a proposal.
+            try:
+                self.event_sink.emit(
+                    Event(
+                        event="proposal_action_delta_audit_failed",
+                        stage="proposal.action_quality_audit",
+                        trace_id=trace_id,
+                        payload={
+                            "policy": TRAIN_ACTION_DESIGN_POLICY_VERSION,
+                            "request_kind": request_kind,
+                            "error_type": type(exc).__name__,
+                            "response_rejected": False,
+                            "proposal_retry_requested": False,
+                            "candidate_selection_affected": False,
+                            "promotion_gate_affected": False,
+                            "raw_error_persisted": False,
+                        },
+                    )
+                )
+            except Exception:
+                pass
 
     def _emit_model_event(self, event: str, trace_id: str, payload: Mapping[str, Any]) -> None:
         self.event_sink.emit(
@@ -670,6 +805,8 @@ def _residual_payload(
     *,
     labeled: bool = False,
 ) -> dict[str, Any]:
+    public_context = dict(residual.context)
+    public_context.pop(TRAIN_ACTION_DESIGN_INTERNAL_CONTEXT_KEY, None)
     payload = {
         "transition_id": residual.transition_id,
         "task_id_hash": stable_hash({"task_id": residual.task_id}),
@@ -678,7 +815,7 @@ def _residual_payload(
         "failure_type": residual.failure_type,
         "evaluator_feedback": list(residual.evaluator_feedback),
         "baseline_success": residual.baseline_success,
-        "context": dict(residual.context),
+        "context": public_context,
     }
     if labeled:
         payload["evidence_label"] = (
@@ -691,6 +828,17 @@ def _proposal_constraints(
     capabilities: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     action_contract = (capabilities or {}).get("action_contract")
+    action_quality_contract = (capabilities or {}).get(
+        "action_quality_contract"
+    )
+    action_quality_policy = (
+        str(action_quality_contract.get("policy") or "")
+        if isinstance(action_quality_contract, Mapping)
+        else ""
+    )
+    material_action_delta_prompt = (
+        action_quality_policy == TRAIN_ACTION_DESIGN_POLICY_VERSION
+    )
     backend_operations = None
     if isinstance(action_contract, Mapping):
         operations = action_contract.get("allowed_action_operations")
@@ -753,13 +901,42 @@ def _proposal_constraints(
                 "prompt_directive_action_values_must_be_complete_imperative_"
                 "task_local_sentences": True,
                 "prompt_directive_action_value_grounding_source": (
-                    "TRAIN residual context.task_instruction"
+                    (
+                        "TRAIN residual task requirement plus referenced "
+                        "train_action_design_profiles and model static knowledge"
+                    )
+                    if material_action_delta_prompt
+                    else "TRAIN residual context.task_instruction"
                 ),
                 "prompt_directive_enum_only_action_values_forbidden": True,
                 "prompt_directive_mapping_mode_check_labels_forbidden": True,
                 "prompt_directive_activated_action_preserve_baseline_claim_"
                 "forbidden": True,
                 "prompt_directive_top_level_fallback_remains_preserve_baseline": True,
+            }
+        )
+    if material_action_delta_prompt:
+        constraints.update(
+            {
+                "task_instruction_is_baseline_requirement_not_treatment": True,
+                "each_hypothesis_must_add_material_runtime_delta": True,
+                "material_delta_kinds": list(
+                    action_quality_contract.get(
+                        "required_material_delta_kinds",
+                        (),
+                    )
+                ),
+                "material_delta_must_not_already_be_explicit_in_instruction": True,
+                "concrete_tool_command_or_artifact_operation_preferred_when_profile_supports_it": True,
+                "exact_constants_may_use_model_static_knowledge": True,
+                "request_collect_or_verify_placeholder_for_missing_detail_forbidden": True,
+                "proposal_must_not_call_tools_files_or_network": True,
+                "runtime_action_must_use_preinstalled_local_resources_only": True,
+                "runtime_network_fetch_or_package_install_forbidden": True,
+                "action_quality_enforcement": "prompt_and_audit_only",
+                "action_quality_audit_must_not_reject_retry_or_affect_selection": True,
+                "validation_outcomes_for_action_design_forbidden": True,
+                "verifier_content_for_action_design_forbidden": True,
             }
         )
     training_evidence_contract = (capabilities or {}).get(
@@ -828,6 +1005,14 @@ def _program_schema(
     capabilities: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     action_contract = (capabilities or {}).get("action_contract")
+    action_quality_contract = (capabilities or {}).get(
+        "action_quality_contract"
+    )
+    material_action_delta_prompt = bool(
+        isinstance(action_quality_contract, Mapping)
+        and action_quality_contract.get("policy")
+        == TRAIN_ACTION_DESIGN_POLICY_VERSION
+    )
     action_semantics = (
         str(action_contract.get("semantics"))
         if isinstance(action_contract, Mapping)
@@ -860,9 +1045,25 @@ def _program_schema(
                     )
                 ),
                 "value": (
-                    "complete imperative task-local sentence grounded in TRAIN "
-                    "residual context.task_instruction; never an enum-only value, "
-                    "mapping/mode/check label, or preserve_baseline claim"
+                    (
+                        "complete imperative task-local sentence that directly states "
+                        "at least one material delta absent from the baseline task "
+                        "instruction: an exact constant/mapping, a concrete local tool "
+                        "command with flags and path, or an artifact-internal API/field "
+                        "operation. Bind to the referenced TRAIN runtime/action profile "
+                        "when available; model static knowledge may supply an exact "
+                        "constant. Never substitute request/collect/verify for the "
+                        "missing detail, and never claim later access to tools, files, "
+                        "network, verifier, or validation outcomes. Use only preinstalled "
+                        "local runtime resources; never prescribe network fetches or "
+                        "package installation."
+                        if material_action_delta_prompt
+                        else (
+                            "complete imperative task-local sentence grounded in TRAIN "
+                            "residual context.task_instruction; never an enum-only value, "
+                            "mapping/mode/check label, or preserve_baseline claim"
+                        )
+                    )
                     if prompt_directive_backend
                     else "JSON value"
                 ),
@@ -884,4 +1085,189 @@ def _program_schema(
         },
         "fallback": "preserve_baseline",
         "status": "candidate",
+    }
+
+
+def _action_delta_audit_row(
+    program: HypothesisProgram,
+    *,
+    residuals: Sequence[ResidualExample],
+    profiles: Mapping[str, Any],
+) -> dict[str, Any]:
+    matched_failures: list[ResidualExample] = []
+    for residual in residuals:
+        if residual.split is not SplitName.TRAIN or residual.baseline_success:
+            continue
+        try:
+            matched = program.matches(residual.features)
+        except (TypeError, ValueError, OverflowError):
+            matched = False
+        if matched:
+            matched_failures.append(residual)
+    instructions = [
+        str(row.context.get("task_instruction") or "")
+        for row in matched_failures
+    ]
+    instruction_tokens = _audit_tokens(" ".join(instructions))
+    profile_hashes = sorted(
+        {
+            str(row.context.get("action_context_profile_hash") or "")
+            for row in matched_failures
+            if row.context.get("action_context_profile_hash")
+        }
+    )
+    selected_profiles = [
+        profiles[profile_hash]
+        for profile_hash in profile_hashes
+        if isinstance(profiles.get(profile_hash), Mapping)
+    ]
+    environment_terms, baseline_tokens = _action_profile_terms(selected_profiles)
+    action_rows: list[dict[str, Any]] = []
+    observed_delta_kinds: set[str] = set()
+    new_primitives: set[str] = set()
+    for action in program.action_graph:
+        value_text = (
+            action.value
+            if isinstance(action.value, str)
+            else json.dumps(action.value, sort_keys=True, ensure_ascii=True)
+        )
+        action_text = f"{action.target} {value_text}".strip()
+        lowered = action_text.lower()
+        tokens = _audit_tokens(action_text)
+        novel_tokens = tokens - instruction_tokens
+        overlap_ratio = (
+            len(tokens & instruction_tokens) / len(tokens) if tokens else 1.0
+        )
+        mentioned_environment_terms = {
+            term
+            for term in environment_terms
+            if term in lowered
+        }
+        mentioned_new_primitives = {
+            term
+            for term in mentioned_environment_terms
+            if term not in baseline_tokens and term not in instruction_tokens
+        }
+        new_primitives.update(mentioned_new_primitives)
+        delta_kinds: set[str] = set()
+        if re.search(r"#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?\b", action_text):
+            delta_kinds.add("exact_constant_or_mapping")
+        if (
+            re.search(r"--[a-zA-Z0-9][a-zA-Z0-9-]*", action_text)
+            or any(
+                term in lowered
+                for term in mentioned_environment_terms
+                if not term.startswith("/root/")
+            )
+        ):
+            delta_kinds.add("concrete_local_tool_command")
+        if (
+            re.search(r"\b[A-Za-z_][A-Za-z0-9_.]*\([^\n)]*\)", action_text)
+            or re.search(
+                r"\b(?:get_fields|update_page_form_field_values|dictwriter|pdfreader|pdfwriter|acroform|checkbox|round[- ]trip)\b",
+                lowered,
+            )
+        ):
+            delta_kinds.add("artifact_internal_manipulation")
+        vague_placeholder = bool(
+            re.search(
+                r"\b(?:request|collect|look up|lookup|obtain|translate|determine|verify)\b",
+                lowered,
+            )
+            and not delta_kinds
+        )
+        restatement_only = bool(
+            not delta_kinds
+            and not mentioned_new_primitives
+            and (overlap_ratio >= 0.70 or len(novel_tokens) <= 3)
+        )
+        observed_delta_kinds.update(delta_kinds)
+        action_rows.append(
+            {
+                "action_id_hash": stable_hash({"action_id": action.id}),
+                "observed_delta_kinds": sorted(delta_kinds),
+                "instruction_token_overlap_milli": round(
+                    overlap_ratio * 1000
+                ),
+                "environment_binding_count": len(
+                    mentioned_environment_terms
+                ),
+                "new_environment_primitive_count": len(
+                    mentioned_new_primitives
+                ),
+                "vague_placeholder": vague_placeholder,
+                "instruction_restatement_only": restatement_only,
+            }
+        )
+    return {
+        "hypothesis_id_hash": stable_hash({"hypothesis_id": program.id}),
+        "hypothesis_hash": program.payload_hash,
+        "matched_failure_count": len(matched_failures),
+        "action_profile_count": len(selected_profiles),
+        "action_count": len(action_rows),
+        "observed_delta_kinds": sorted(observed_delta_kinds),
+        "new_environment_primitive_count": len(new_primitives),
+        "vague_placeholder_action_count": sum(
+            bool(row["vague_placeholder"]) for row in action_rows
+        ),
+        "instruction_restatement_only_action_count": sum(
+            bool(row["instruction_restatement_only"]) for row in action_rows
+        ),
+        "restatement_risk": not observed_delta_kinds,
+        "action_audits": action_rows,
+    }
+
+
+def _action_profile_terms(
+    profiles: Sequence[Mapping[str, Any]],
+) -> tuple[set[str], set[str]]:
+    environment_terms: set[str] = set()
+    baseline_tokens: set[str] = set()
+    for profile in profiles:
+        environment = profile.get("runtime_environment")
+        if isinstance(environment, Mapping):
+            for key in (
+                "declared_os_packages",
+                "declared_python_packages",
+                "declared_task_local_paths",
+                "copied_task_files",
+                "environment_source_files",
+            ):
+                values = environment.get(key)
+                if not isinstance(values, (list, tuple)):
+                    continue
+                for value in values:
+                    term = str(value).strip().lower()
+                    if "==" in term:
+                        term = term.split("==", 1)[0]
+                    if len(term) >= 3:
+                        environment_terms.add(term)
+        trace = profile.get("baseline_action_trace")
+        if not isinstance(trace, Mapping):
+            continue
+        command_rows = trace.get("command_signatures")
+        if not isinstance(command_rows, list):
+            continue
+        for command_row in command_rows:
+            if not isinstance(command_row, Mapping):
+                continue
+            executable = str(
+                command_row.get("executable_basename") or ""
+            ).strip()
+            if executable:
+                baseline_tokens.update(_audit_tokens(executable))
+            for key in ("safe_flags", "task_local_paths"):
+                values = command_row.get(key)
+                if not isinstance(values, (list, tuple)):
+                    continue
+                for value in values:
+                    baseline_tokens.update(_audit_tokens(str(value)))
+    return environment_terms, baseline_tokens
+
+
+def _audit_tokens(value: str) -> set[str]:
+    return {
+        token.lower()
+        for token in re.findall(r"[A-Za-z0-9_./#-]+", value)
+        if len(token) >= 3
     }

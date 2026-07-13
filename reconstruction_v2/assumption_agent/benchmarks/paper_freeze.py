@@ -194,6 +194,11 @@ def freeze_paper_workspace(
         recursive_validation_enabled=False,
         protocol_lock_hash=str(protocol_lock.get("lock_hash") or ""),
     )
+    _validate_paired_development_provenance(
+        recursive_report,
+        no_recursive_report,
+        protocol=protocol,
+    )
     recursive_archive = read_frozen_archive(
         recursive_archive_path,
         expected_evaluator_epoch=evaluator_epoch,
@@ -266,6 +271,22 @@ def freeze_paper_workspace(
         "no_recursive_archive": no_recursive_archive.to_dict(),
         "recursive_report_hash": _file_content_hash(recursive_report_path),
         "no_recursive_report_hash": _file_content_hash(no_recursive_report_path),
+        **(
+            {
+                "shared_first_generation_provenance": {
+                    field: recursive_report["plan"][field]
+                    for field in (
+                        "shared_first_generation_checkpoint_hash",
+                        "shared_first_generation_action_context_profile_count",
+                        "shared_first_generation_action_context_profile_set_hash",
+                    )
+                }
+            }
+            if protocol.payload["execution"].get(
+                "train_action_design_policy"
+            )
+            else {}
+        ),
         "control_sets": control_sets,
         "code_fingerprint": protocol_lock.get("code_fingerprint"),
         "git_commit": dict(protocol_lock.get("git") or {}).get("commit"),
@@ -643,6 +664,7 @@ def _validate_development_report(
         "proposal_response_max_tokens",
         "repair_request_scope_policy",
         "contrastive_training_evidence_policy",
+        "train_action_design_policy",
         "counterfactual_invalid_evidence_policy",
         "provider_failure_policy",
         "provider_route_policy",
@@ -680,6 +702,11 @@ def _validate_development_report(
     for key, value in expected.items():
         if plan.get(key) != value:
             raise ValueError(f"development report plan mismatch: {key}")
+    action_design_policy = protocol.payload["execution"].get(
+        "train_action_design_policy"
+    )
+    if action_design_policy:
+        _validate_action_design_plan_provenance(plan)
     if prewarm_version and not str(plan.get("prewarm_receipt_hash") or ""):
         raise ValueError("development report has no prewarm receipt provenance")
     generation = report.get("generation")
@@ -690,6 +717,22 @@ def _validate_development_report(
         raise ValueError("development generation count mismatch")
     if len(generations) > int(protocol.payload["evolution"]["max_generations"]):
         raise ValueError("development exceeded the frozen generation budget")
+    if action_design_policy:
+        first_generation = generations[0]
+        if not isinstance(first_generation, Mapping):
+            raise ValueError("development first generation row is malformed")
+        if first_generation.get("action_context_profile_count") != plan.get(
+            "shared_first_generation_action_context_profile_count"
+        ):
+            raise ValueError(
+                "development first-generation action profile count mismatch"
+            )
+        if first_generation.get("action_context_profile_set_hash") != plan.get(
+            "shared_first_generation_action_context_profile_set_hash"
+        ):
+            raise ValueError(
+                "development first-generation action profile set hash mismatch"
+            )
     _validate_performance_claim_binding(
         report,
         generations,
@@ -726,6 +769,63 @@ def _validate_development_report(
         if isinstance(row, Mapping)
     ):
         raise ValueError("no-recursive control unexpectedly used recursive repair")
+
+
+def _validate_action_design_plan_provenance(plan: Mapping[str, Any]) -> None:
+    checkpoint_hash = plan.get("shared_first_generation_checkpoint_hash")
+    profile_set_hash = plan.get(
+        "shared_first_generation_action_context_profile_set_hash"
+    )
+    for label, value in (
+        ("checkpoint", checkpoint_hash),
+        ("action profile set", profile_set_hash),
+    ):
+        if not isinstance(value, str) or len(value) != 64 or any(
+            char not in "0123456789abcdef" for char in value
+        ):
+            raise ValueError(
+                f"development shared first-generation {label} hash is malformed"
+            )
+    profile_count = plan.get(
+        "shared_first_generation_action_context_profile_count"
+    )
+    if (
+        isinstance(profile_count, bool)
+        or not isinstance(profile_count, int)
+        or profile_count <= 0
+    ):
+        raise ValueError(
+            "development shared first-generation action profile count is malformed"
+        )
+
+
+def _validate_paired_development_provenance(
+    recursive_report: Mapping[str, Any],
+    no_recursive_report: Mapping[str, Any],
+    *,
+    protocol: PaperProtocol,
+) -> None:
+    if not protocol.payload["execution"].get("train_action_design_policy"):
+        return
+    recursive_plan = recursive_report.get("plan")
+    no_recursive_plan = no_recursive_report.get("plan")
+    if not isinstance(recursive_plan, Mapping) or not isinstance(
+        no_recursive_plan, Mapping
+    ):
+        raise ValueError("paired development report plan is missing")
+    if recursive_plan.get("paired_arm") != "recursive_repair":
+        raise ValueError("recursive development paired-arm provenance mismatch")
+    if no_recursive_plan.get("paired_arm") != "no_recursive_repair":
+        raise ValueError("no-recursive development paired-arm provenance mismatch")
+    for field in (
+        "shared_first_generation_checkpoint_hash",
+        "shared_first_generation_action_context_profile_count",
+        "shared_first_generation_action_context_profile_set_hash",
+    ):
+        if recursive_plan.get(field) != no_recursive_plan.get(field):
+            raise ValueError(
+                f"paired development shared first-generation provenance mismatch: {field}"
+            )
 
 
 def _validate_performance_claim_binding(
