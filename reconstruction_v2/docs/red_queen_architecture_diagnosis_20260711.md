@@ -3,7 +3,7 @@
 > - 初版日期：2026-07-11
 > - 本次复核：2026-07-13
 > - 代码审计基线 revision：`6224bb5a279f50fbcf1f8b36d19cb4ce6cc6c882`
-> - 本次实现复核：receipt/runtime provenance 修复提交 `e43670f6`、`18ff3417`；v3.3 execution-policy 提交 `e0b1a33b`；v3.4 model-only/action-budget 主提交 `e491b0af`，runtime-path 修复 `995e6446`，Ruoli 503 分类修复 `ba0f36cf`，host-readable audit artifact 修复 `1df3092a` / `ad66d5a2`；v3.4 max2 v5 canary 已通过、fresh development 因四并发 429 fail closed；v3.5 将所有在线 phase 版本化为 1 worker，repair identity 修复 `96d53a5d`，malformed proposal/claim binding 修复 `d70562de`；v3.6 contrastive evidence / invalid-evidence lifecycle 实现提交 `01608e1e`；v3.7 六路首批 6/6 收到 429；v3.8 两路在 16 valid 后收到 2 个 503；v3.9 固定为 outer item workers=6 / shared model slot=1，并完成首个 clean full development 负结果；v3.10 exact-three/coverage-first fresh run 将 activation 提高到 2/16 但仍 0 gain，并暴露 semantic-diversity hard reject 与 action lowering 丢 target；v3.11 actionability fresh run 证明 treatment 已改变 trace、PDF 与成本但仍 0 gain，同时暴露 repair response shape 未被 generic system contract 可靠约束；v3.12 显式版本化 singular repair response，未改 evaluator、promotion gate 或 64 MiB fuse
+> - 本次实现复核：receipt/runtime provenance 修复提交 `e43670f6`、`18ff3417`；v3.3 execution-policy 提交 `e0b1a33b`；v3.4 model-only/action-budget 主提交 `e491b0af`，runtime-path 修复 `995e6446`，Ruoli 503 分类修复 `ba0f36cf`，host-readable audit artifact 修复 `1df3092a` / `ad66d5a2`；v3.4 max2 v5 canary 已通过、fresh development 因四并发 429 fail closed；v3.5 将所有在线 phase 版本化为 1 worker，repair identity 修复 `96d53a5d`，malformed proposal/claim binding 修复 `d70562de`；v3.6 contrastive evidence / invalid-evidence lifecycle 实现提交 `01608e1e`；v3.7 六路首批 6/6 收到 429；v3.8 两路在 16 valid 后收到 2 个 503；v3.9 固定为 outer item workers=6 / shared model slot=1，并完成首个 clean full development 负结果；v3.10 exact-three/coverage-first fresh run 将 activation 提高到 2/16 但仍 0 gain，并暴露 semantic-diversity hard reject 与 action lowering 丢 target；v3.11 actionability fresh run 证明 treatment 已改变 trace、PDF 与成本但仍 0 gain，同时暴露 repair response shape 未被 generic system contract 可靠约束；v3.12 显式版本化 singular repair response并完成 56/56 clean development trials，但两代仍各仅激活 1/16、0 gain，无 incumbent；误入的空 freeze/partial controls 已隔离并补上 phase prerequisite，不改 evaluator、promotion gate 或 64 MiB fuse
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -66,8 +66,17 @@
 > `proposal_batch_contract`，只是 generic system contract 没有 versioned repair-specific singular
 > override，模型仍复用了 root response shape。v3.12 因而保留 train coverage objective，并新增
 > top-level one-object/`hypothesis` response contract；proposer 只作防御性 batch-contract 清理。exact-three root、
-> train selection 和所有 evaluator/promotion/split/fuse/retry/sealed 合同不变，须 fresh root，v3.11 rows
-> 不复用。
+> train selection 和所有 evaluator/promotion/split/fuse/retry/sealed 合同不变。fresh root 已完成
+> 56/56 valid external trials：38 train 为 8 success / 30 residual，0 provider/infra/action/network/
+> mismatch；两代 exact-three 均 3/3 static pass、三种 distinct signature，但每个 root 都只覆盖
+> 一个 train family。coverage-first 连续选择 court root，held-out 都仅激活 `court-form-filling-5`
+> 这 1/16，raw/candidate 均为 4/16、0 gain/0 harm，action starts 从 raw 9 变为 candidate 32/43。
+> 两臂以 consecutive non-promotion 停止，archive 字节相同且 `incumbent_id=null`。由于 12 个
+> static node 全部通过，本轮 repair request=0；所以 singular scope 未破坏 full development，但
+> 尚不能声称 full-run repair path 已验证。随后旧 runner 错把空 archive 写成 frozen receipt 并误入
+> controls；该批仅 2/96 record 且全部 interruption-invalid，现已 quarantine，禁止拼接或作 claim，
+> sealed/test 未访问。runner/freeze/control consumer 已统一要求真实 recursive incumbent；这是阶段
+> 前置条件，不是新增评分 gate。
 > 仍未成立的是 clean development promotion、
 > 跨 family 泛化，以及 Red Queen 式多谱系搜索和
 > evaluator co-evolution。v3.3 已把 low reasoning/verbosity、32,768-token
@@ -109,13 +118,13 @@
 | 命题 | 当前状态 | 证据层级 |
 |---|---|---|
 | legacy HLE 是高维手写控制面，学习 policy 没有闭环 | 支持 | 代码审计 + 历史 artifacts |
-| v2 的 proposal -> repair -> off/on -> gate -> archive 接口已连通 | 支持 | 289/289 离线测试 + v3.9 clean full development |
+| v2 的 proposal -> repair -> off/on -> gate -> archive 接口已连通 | 支持 | 345/345 离线测试 + v3.9/v3.12 clean full development |
 | v2 的内部 runtime action 能改变 lane plan | 支持 | 代码 + 单元测试 |
 | v2 主 SkillLearn 路径执行了每个 typed action/verifier/fallback 的强语义 | **不支持，且协议已停止这样声称** | 只接受四类显式 prompt/self-check lowering；其余 fail closed |
 | promotion threshold 完全由冻结 protocol 所有 | 支持 | protocol-bound spec + 宽松 candidate 对抗测试 |
 | 86-item offline-ready runtime 已预验 | 支持 | readiness/preflight `blockers=[]`；v3.4 与三份 v3.5 v4 cache-only prewarm 均 86/86、model 未执行、sealed scoring=false |
-| v2 已产生可保留的 promoted incumbent | **不支持** | v3.9 clean 双臂 archive 均 `incumbent_id=null`；没有可冻结主候选 |
-| v2 稳定优于 raw 或 budget-matched raw | **不支持** | v3.9 recursive 两代均为 candidate/raw 3/16、0 gain/0 harm；no-recursive roots 静态拒绝 |
+| v2 已产生可保留的 promoted incumbent | **不支持** | v3.12 clean 双臂 archive 均 `incumbent_id=null`；没有可冻结主候选 |
+| v2 稳定优于 raw 或 budget-matched raw | **不支持** | v3.12 两代均为 candidate/raw 4/16、0 gain/0 harm、1/16 activation |
 | v2 已实现 Red Queen 式多 clade 搜索和 evaluator co-evolution | **不支持** | 目前是单 incumbent；evaluator 路径未接主实验 |
 
 ### 1.3 潜力判断
@@ -372,11 +381,11 @@ evidence。固定 cohort 越被反复用于决策，越不能承担 sealed claim
 | utility 来自 failure frequency | promotion 已使用 protocol-owned paired gain/harm/cost/LCB，candidate 只能收紧 | [`evaluation.py`](../assumption_agent/evaluation.py) | 尚缺真实 promotion 与 retained gain |
 | train/validation/test 混用 | split guard 与 archive-freeze gate 已实现 | [`splits.py:L220-L267`](../assumption_agent/splits.py#L220-L267) | 一次完整 current-protocol sealed run |
 | evaluator 变更无依赖失效 | controller/anchor lower bound/selective invalidation 已实现 | [`archive.py:L291-L370`](../assumption_agent/archive.py#L291-L370) | 尚未接入主 evolution 或真实 challenger |
-| HLE 是唯一主战场 | 已转向 86-item offline-ready SkillLearnBench instance-out/family-out | [`BENCHMARK_PROTOCOL.md`](../BENCHMARK_PROTOCOL.md) | clean development 已完成但无 incumbent；尚缺 freeze、controls 与 family-out |
+| HLE 是唯一主战场 | 已转向 86-item offline-ready SkillLearnBench instance-out/family-out | [`BENCHMARK_PROTOCOL.md`](../BENCHMARK_PROTOCOL.md) | v3.12 clean development 已完成但无 incumbent；empty freeze/partial controls 已 quarantine，尚缺真实 freeze、完整 controls 与 family-out |
 
 ### 7.2 当前证据到哪一层
 
-**[TEST]** 当前 `reconstruction_v2` 离线 suite 为 **344/344 通过**。这证明 schema、
+**[TEST]** 当前 `reconstruction_v2` 离线 suite 为 **345/345 通过**。这证明 schema、
 wiring、guard、replay、failure handling 和若干 invariant；不证明真实 benchmark
 improvement。新增覆盖包括 protocol threshold ownership、candidate 宽松阈值攻击、
 backend action lowering v2、exact-three cardinality 与 audit-only signature diversity、
@@ -775,6 +784,32 @@ one-object/`hypothesis`，模型仍返回了 root-shaped envelope。recursive re
 `proposal_model_failure` non-claim 停止，archive 同样无 incumbent。这个结果把下一步限定为显式、
 协议绑定的 singular repair response，而不是添加 gate、放宽 parser、增加 retry 或修改 evaluator。
 
+**[ARTIFACT]** 2026-07-13 的 v3.12 fresh root
+`paper_primary_v3_12_offline86_ruoli_gpt54mini_outer6_model1_repairscope01` 绑定 scoped-clean commit
+`9c692b2d` 并通过 86/86 prewarm。development 的 56/56 actual external trials 全部 valid：38 train
+policy-off、16 validation raw/policy-off、2 个实际激活的 policy-on；train 为 8 success / 30 residual，
+最大 finalized network 为 35,070,000 bytes，0 provider、infrastructure、action、network、budget、
+invalid-pair 或 mismatch。两臂均完成两代并以 `consecutive_non_promotion_limit` 停止。
+
+G1/G2 均返回 exact 3、三种 distinct activation signature、3/3 static pass。三个候选分别覆盖
+poster、poem、court 的互斥单一 family；TRAIN precision 都为 1、success false positive 都为 0，
+coverage target=2 却没有单 root 达到。单体 selector 因 support=3 连续选择 court root。两代都只在
+`court-form-filling-5` 激活：raw 为 9 action starts，两个 candidate 分别为 32/43，三者都失败。
+因此每代都是 activation 1/16、raw/candidate 4/16、0 gain/0 harm、LCB=0，cost ratio 分别为
+1.079038 与 1.116838。recursive/no-recursive 共享或重放同一证据，最终 archive 字节相同且
+`incumbent_id=null`。全部 12 个 static node 直接通过，所以本轮 repair request=0；v3.12 singular
+contract 已绑定并通过 bounded live canary，但 full development 没有提供 repair-path 样本。
+
+**[ARTIFACT / QUARANTINE]** 旧 `all-development` 紧接着无条件执行 freeze/controls，产生
+`frozen=true` 但 `selected_candidate_available=false` 的空 receipt；`promoted_v2` 与 no-rec control
+均编译为空 program set/raw alias。进程被立即终止。partial validation 只留下 8 starts、2 completes、
+2/96 records，且两条都因 `codex_action_budget_receipt_missing` invalid；没有 control report、family-out、
+HippoRAG、sealed journal 或 test access。`validation.partial_admissibility.json` 已把该批标成
+diagnostic-only、performance-claim inadmissible、row-reuse forbidden。它不反向污染此前完整有效的
+development report/archive。随后增加的是单一 phase-transition invariant：无 promoted recursive
+candidate 时 runner 正常结束，freeze producer fail closed，controls consumer 也拒绝旧空 receipt；
+没有调整任何 promotion 分数或阈值。
+
 ### 7.3 当前 infrastructure/protocol 状态
 
 全 inventory 的
@@ -912,9 +947,17 @@ v3.11 live 已把这个假设拆成两部分。action representation 部分通�
 并生成不同 PDF；因此不能再把 0 gain 解释为 skill 未注入或 lowering 未执行。但 task-success 仍为
 0→0，说明单个局部 directive 尚未解决缺失日期/checkbox 等真实 operator 细节。另一方面，recursive
 arm 没有检验到 repair quality，因为 generic response contract 未显式绑定 singular repair，模型返回
-了 root-shaped batch envelope。v3.12 只显式版本化这一 response scope；它不是新的 performance gate。只有 fresh v3.12
-真实跑完 repair 与 paired validation 后，才能判断下一 blocker 是 repair quality、candidate coverage
-还是局部 policy 仍无净收益。
+了 root-shaped batch envelope。v3.12 只显式版本化这一 response scope；它不是新的 performance gate。
+
+v3.12 fresh root 随后完整结束，但没有进入 repair：两代各 3 个 root、共 12 个 recursive/no-recursive
+static node 全部通过，`hypothesis_repair_requested=0`。因此这轮能说明 singular contract 没有破坏正常
+development，却不能说明 live repair quality 已改善，也不应通过人为收紧 static check 来强迫 repair。
+更重要的新证据来自 candidate formation：G1/G2 的 poster、poem、court roots 都是 TRAIN precision=1、
+success false positive=0，但每个只覆盖一个 family；selector 连续只保留 support=3 的 court root，
+把另两个互补、高精度局部 policy 丢到 shadow。held-out 因而仍只有 1/16 activation、0 gain/0 harm。
+下一步应把 proposal diversity 形成的互补 roots 用一个冻结的 TRAIN-only subset objective 组合成单一
+program-set treatment，只做一次 paired validation；不能逐个试 validation 后挑最好，也不能再增加或
+放宽 promotion gate。
 
 ### 8.4 P1：prospective runtime features 仍过粗
 
@@ -981,7 +1024,7 @@ dependency-cache-only 尚未强制；但当前
 [`docker_egress.py`](../assumption_agent/benchmarks/docker_egress.py) 和 protocol manifest 已
 实现 provider-only hard egress、offline package mode 与 network fuse。本次已同步主
 README、benchmark protocol、offline-verifier matrix 和 status 摘要；本轮又把 receipt
-runtime provenance、v3.5 serial execution-policy / repair identity / response-contract binding、v3.6 contrastive/invalid-evidence contract、v3.7-v3.9 并发容量/共享 slot、v3.10/v3.11 live 结果，以及 v3.12 singular repair scope。历史段落仍
+runtime provenance、v3.5 serial execution-policy / repair identity / response-contract binding、v3.6 contrastive/invalid-evidence contract、v3.7-v3.9 并发容量/共享 slot、v3.10/v3.11 live 结果，以及 v3.12 singular repair scope、clean 负结果与 empty-incumbent phase prerequisite。历史段落仍
 保留为 diagnostic ledger，不能当作当前协议。
 
 这种文档漂移本身会破坏 protocol review；重新跑论文实验前必须同步。
@@ -1010,7 +1053,9 @@ runtime provenance、v3.5 serial execution-policy / repair identity / response-c
 | 完成（v3.9 clean 负结果） | contrastive trigger learning 首次 full live 验证 | 38/38 valid train、16/16 valid pairs、0 provider/infra/mismatch；两代 candidate 均仅 1/16 activation、0 gain/0 harm，证明 precision-first 已避开 false positive 但发生 coverage starvation |
 | 完成（v3.10 clean 负结果） | proposal diversity 与 train-only coverage selection | exact 3 / 3 static pass；选中 2-family、6/6 precision root；activation 2/16 但 0 gain/0 harm；G2 两批 signature collapse 被 terminal reject；无 incumbent |
 | 完成（v3.11 机制有效、性能/claim 失败） | actionable directive lowering 与 audit-only diversity | 38/38 valid train；exact 3 / 3 distinct signatures；court treatment 在激活题改变 trace/PDF 且 66→16 actions，但 0→0；no-rec 因未激活 raw poster 超 64 MiB non-claim；recursive repair 返回 batch envelope 而 non-claim；无 incumbent |
-| 完成实现、fresh live 待验（v3.12） | singular repair request scope | repair 保留 train coverage objective，top-level contract 显式要求 one-object/`hypothesis`，并防御性移除意外 batch contract；system prompt/plan/freeze 均版本绑定；不改 gate/evaluator/fuse/model/provider/split/scheduler/retry/sealed；v3.11 rows 不复用 |
+| 完成（v3.12 clean 负结果；repair path 未触发） | singular repair scope + candidate-formation 诊断 | 56/56 valid actual trials、0 provider/infra/mismatch；两代 exact3/3 static pass但所有 root 均只覆盖 1 family，selected court 仅激活 1/16、4/16 对 4/16、0 gain/0 harm；repair request=0；两臂无 incumbent |
+| 完成（phase prerequisite 修复） | 禁止空 incumbent freeze/control | 误入的 partial controls 仅 2/96 invalid，已标 diagnostic-only/no-reuse；runner 无 incumbent 即结束，freeze producer 与 controls consumer 双向拒绝空候选；不改评分 gate |
+| P1 | train-only complementary policy bundle | exact-three 的非空子集只按 TRAIN union precision/coverage/false-positive/complexity 确定一个 program-set treatment；只做一次 paired validation；set-level replay/report/freeze 全绑定，失败不错误归因到单个成员 |
 | P1 | prospective family-out routing | trigger 不依赖已知 family 或预编译 item ID，只使用冻结、无 gold、运行时可得语义特征 |
 | P2 | 多 clade archive | 同 epoch 至少两个 clade 可继续扩展；node 绑定 protocol/evidence/promotion hashes，并报告 retention 与 branch productivity |
 | P2 | evaluator co-evolution | 独立 anchor challenger、epoch transition、selective invalidation 和旧 incumbent re-evaluation 实际执行后再作主张 |
@@ -1139,6 +1184,19 @@ runtime provenance、v3.5 serial execution-policy / repair identity / response-c
     root exact-three、model/provider、6×outer/1×model 调度、offline evaluator、promotion gate、split、
     action/64 MiB network budget、retry、controls 与 sealed 全部不变；须新 clean lock/root，v3.11 rows
     不复用。
+38. 已完成 v3.12 fresh root：clean commit `9c692b2d`、86/86 prewarm、56/56 actual external trials
+    全部 valid；38 train 为 8 success / 30 residual，最大网络流量 35,070,000 bytes，0 provider/infra/
+    action/network/budget/mismatch。两代 exact-three 均 3/3 static pass且三种 distinct signature，
+    但每个 root 都只覆盖一个 train family；selected court treatments 在同一 held-out item 上把 raw 9
+    actions 改为 32/43 actions，仍均 0→0。两臂每代都是 1/16 activation、raw/candidate 4/16、
+    0 gain/0 harm，最终 archive 字节相同且 `incumbent_id=null`。12 个 static node 全通过，故本轮
+    repair request=0，不能声称 full-run singular repair path 已实跑。
+39. 同一旧 runner 在 `selected_candidate_available=false` 后仍无条件进入 controls，生成空
+    `promoted_v2`/no-rec program set并启动 8 个 trial；立即中止后仅 2/96 records 落盘且两条都因
+    缺 action-budget receipt invalid，无 report、family-out、HippoRAG、sealed/test access。该批已有
+    machine-readable diagnostic-only/no-reuse marker。现已统一 phase invariant：all-development 无真实
+    recursive incumbent 即正常结束，paper freeze 拒绝空 archive，control consumer 也拒绝旧空 receipt。
+    345/345 离线回归通过；没有新增或放宽 performance gate。
 
 这比立刻扩展 archive 或继续补 HLE source span 更能降低研究风险。
 
@@ -1291,13 +1349,21 @@ exact-three/coverage-first 能把 activation 从 1/16 提高到 2/16，却不能
 imperative action/lowering 确实改变 agent trace、PDF 和 action cost，但唯一激活仍为 0→0；它同时因
 repair model 返回 root-shaped batch envelope 而没有完成 recursive quality 检验。调用链确认 batch
 contract 实际未进入 repair，因此 v3.12 只新增 protocol-bound singular response override，保留
-exact-three root、8,000-token budget、train-only coverage selection 和 audit-only
-signature policy，也没有放宽 evaluator/promotion 或修改 split/fuse/retry/sealed。真正 multi-program
-bundle 暂不进入本轮：先让现有 recursive branch 按其本来 singular contract 完整执行，才能区分
-repair 是否带来局部净收益与是否需要 bundle。只有新的 clean development
-产生 retained validation gain 和真实 incumbent，才按既定顺序进入 freeze、完整 controls、family-out、
-sealed test，最后才谈 HLE raw/HippoRAG transfer、多 clade 与 evaluator co-evolution。历史和被中断
-rows 仍不得跨协议拼接。最诚实的论文级表述是：
+exact-three root、8,000-token budget、train-only coverage selection 和 audit-only signature policy，
+也没有放宽 evaluator/promotion 或修改 split/fuse/retry/sealed。
+
+v3.12 的 clean 结果现在排除了“先等 repair 触发”作为下一步：所有 static node 直接通过，repair=0，
+而 exact-three 已连续两代产生三个互补、高精度、零 success-FP 的单-family roots。真正的信息损失发生
+在 selector 把其中两个丢弃。所以下一步应一次性版本化为 train-only complementary program-set：
+枚举最多 7 个非空子集，只用 TRAIN union activation/precision/family coverage/false positives/complexity
+选定一个 bundle，再对整个 set 做一次 paired validation。不能根据 validation 在多个 bundle 中挑选，
+不能强制最低 bundle size，也不能把 bundle rejection 误写成每个成员单独被证伪。replay、pair ID、
+report、archive 与 freeze 必须绑定 canonical treatment-set hash；promotion 数值合同保持原样。
+
+只有新的 clean development 产生 retained validation gain 和真实 incumbent，才按既定顺序进入
+freeze、完整 controls、family-out、sealed test，最后才谈 HLE raw/HippoRAG transfer、多 clade 与
+evaluator co-evolution。v3.12 误入的空 freeze/partial-control rows 已隔离，历史和被中断 rows 仍不得
+跨协议拼接。最诚实的论文级表述是：
 
 > **显式 HypothesisProgram 是一个有希望、可能更易归因的 self-evolution 搜索表示；
 > v2 已证明协议所有权、离线 evaluator 和学习环 wiring 可运行，但尚未证明它在冻结、

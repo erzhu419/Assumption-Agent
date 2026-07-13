@@ -120,6 +120,11 @@ freeze() {
     --out "${RECEIPT}"
 }
 
+development_has_promoted_candidate() {
+  python3 -c 'import json,sys; payload=json.load(open(sys.argv[1], encoding="utf-8")); incumbent=payload.get("incumbent_id"); nodes=payload.get("nodes") or {}; node=nodes.get(incumbent) if incumbent else None; raise SystemExit(0 if isinstance(node, dict) and node.get("status") == "incumbent" and node.get("active_hypothesis_ids") else 1)' \
+    "${RUN_ROOT}/development_recursive.archive.json"
+}
+
 run_controls() {
   local split="$1"
   local records="${RUN_ROOT}/${split}.records.jsonl"
@@ -170,6 +175,10 @@ case "${1:-}" in
     prewarm
     smoke
     develop
+    if ! development_has_promoted_candidate; then
+      echo "Development completed without a promoted recursive candidate; freeze and validation controls skipped." >&2
+      exit 0
+    fi
     freeze
     run_controls validation
     report validation

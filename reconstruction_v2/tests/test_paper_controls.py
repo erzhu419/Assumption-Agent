@@ -357,6 +357,7 @@ def test_sealed_receipt_and_journal_are_content_bound(tmp_path: Path) -> None:
     }
     receipt = {
         "frozen": True,
+        "selected_candidate_available": True,
         "protocol_hash": protocol.protocol_hash,
         "protocol_lock_hash": lock["lock_hash"],
         "manifest_hash": manifest.manifest_hash,
@@ -378,6 +379,21 @@ def test_sealed_receipt_and_journal_are_content_bound(tmp_path: Path) -> None:
     with pytest.raises(PermissionError, match="git commit mismatch"):
         validate_freeze_receipt(
             drifted,
+            protocol=protocol,
+            protocol_lock=lock,
+            manifest=manifest,
+        )
+    no_candidate = {**receipt, "selected_candidate_available": False}
+    no_candidate["receipt_hash"] = stable_hash(
+        {
+            key: value
+            for key, value in no_candidate.items()
+            if key != "receipt_hash"
+        }
+    )
+    with pytest.raises(PermissionError, match="no selected candidate"):
+        validate_freeze_receipt(
+            no_candidate,
             protocol=protocol,
             protocol_lock=lock,
             manifest=manifest,
@@ -492,6 +508,19 @@ def test_freeze_compiles_content_bound_validation_and_test_controls(
         assert receipt["control_sets"][split]["config_hash"] == control_config_hash(
             controls
         )
+
+
+def test_freeze_requires_promoted_recursive_candidate() -> None:
+    empty_archive = paper_freeze.FrozenArchive(
+        archive_hash="empty-archive",
+        incumbent_id=None,
+        evaluator_epoch="skilllearn-eval-test",
+        active_programs=(),
+        content_hash="empty-content",
+    )
+
+    with pytest.raises(PermissionError, match="promoted recursive candidate"):
+        paper_freeze.require_promoted_recursive_candidate(empty_archive)
 
 
 def test_execution_report_binds_proposal_failure_claim_fields(

@@ -495,6 +495,8 @@ def validate_freeze_receipt(
         raise PermissionError("freeze receipt content hash mismatch")
     if receipt.get("frozen") is not True:
         raise PermissionError("sealed test requires a frozen archive receipt")
+    if receipt.get("selected_candidate_available") is not True:
+        raise PermissionError("freeze receipt has no selected candidate")
     if receipt.get("protocol_hash") != protocol.protocol_hash:
         raise PermissionError("freeze receipt protocol mismatch")
     if receipt.get("protocol_lock_hash") != protocol_lock.get("lock_hash"):

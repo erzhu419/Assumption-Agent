@@ -10,6 +10,7 @@
 - Evaluators are frozen within an epoch.
 - Evaluator challengers are compared on the same fixed anchor.
 - Replacing an evaluator invalidates only records that depend on its prior epoch.
+- Freeze and control execution require a nonempty promoted recursive incumbent; an empty archive is a completed negative development result, not a control treatment.
 - Every proposal, validation check, runtime action, evaluation, and promotion decision emits a structured event.
 - One protocol-frozen provider route and one model ID serve every proposal, raw, ablation, and agent call in a run.
 - Raw, ablations, and the evolving agent use the same digest-pinned container runtime, model, provider policy, and action budget.
@@ -18,7 +19,7 @@
 
 ## Proposal Boundary
 
-The proposal model is behind a transport-neutral JSON contract. The active v3.12 protocol uses only the ruoli OpenAI-compatible endpoint with `gpt-5.4-mini`; the historical v2 protocol used local Codex app-server before an OpenAI-compatible fallback. Each configured provider receives the same system contract, payload, model ID, and strict output schema. Root proposal calls keep exact-three cardinality and atomic parse as response invariants, while train-failure activation-signature diversity is a search audit. Equal-signature candidates may continue when their action/backend treatments differ; no candidate-completion retry is added. Recursive repair is explicitly singular: `single_candidate_excludes_root_batch_contract_v1` adds a top-level one-object/`hypothesis` response contract, retains the train-only coverage objective, and defensively removes root batch semantics if a caller supplies them. The rule is activated only by the v3.12 policy field, preserving earlier request behavior. Prompt-directive action values are requested as complete imperative task-local sentences grounded only in TRAIN residual instructions.
+The proposal model is behind a transport-neutral JSON contract. The active v3.12 protocol uses only the ruoli OpenAI-compatible endpoint with `gpt-5.4-mini`; the historical v2 protocol used local Codex app-server before an OpenAI-compatible fallback. Each configured provider receives the same system contract, payload, model ID, and strict output schema. Root proposal calls keep exact-three cardinality and atomic parse as response invariants, while train-failure activation-signature diversity is a search audit. Equal-signature candidates may continue when their action/backend treatments differ; no candidate-completion retry is added. Recursive repair is explicitly singular: `single_candidate_excludes_root_batch_contract_v1` adds a top-level one-object/`hypothesis` response contract, retains the train-only coverage objective, and defensively removes root batch semantics if a caller supplies them. The rule is activated only by the v3.12 policy field, preserving earlier request behavior. Prompt-directive action values are requested as complete imperative task-local sentences grounded only in TRAIN residual instructions. The fresh v3.12 full development did not exercise this branch because all 12 static nodes passed; singular repair therefore has contract/canary evidence but no new full-run repair-benefit evidence.
 
 Codex app-server runs one ephemeral turn in a fresh empty directory. The thread is read-only, has no dynamic tools, environment capabilities, selected capability roots, or approval route, and receives no API-key environment variables. The transport rejects any observed tool event. Logs retain only provider/config/request/response hashes, timing, status, and error classes.
 
@@ -55,6 +56,8 @@ frozen train IDs
   -> paired no-skill versus generated-skill trials
   -> validity/fairness audit
   -> promotion gate and archive
+  -> nonempty recursive incumbent
+  -> freeze and controls
 ```
 
 Instruction text is available only as ephemeral failed-train proposal context. A successful negative control contains the runtime feature label but no instruction, feedback, or execution context. Instruction text is not a trigger feature and is not persisted in JSONL. Validation instructions are consumed only inside the external trial runner. Test execution is rejected before archive freeze.
@@ -91,3 +94,5 @@ Atomic assumptions remain reusable programs. The archive evaluates interactions 
 3. Outcome: externally judged success, paired gain/harm, cost, latency, and stability.
 
 Only layer 3 may promote a runtime policy. Layers 1 and 2 diagnose why it failed. V3.6-v3.12 activation precision, activated harm rate, and abstention fields are diagnostics only and do not add promotion blockers. On SkillLearn, `selection_change_count` currently compares the boolean success projection, not trace identity; command/answer changes can therefore exist when this field is zero.
+
+V3.12 completed clean development but produced no layer-3 improvement: 56/56 external trials were valid, both generations activated 1/16 and tied raw at 4/16 with zero gain/harm, and both archives remained empty. A subsequent empty-freeze/partial-control admission error is quarantined and cannot count as control evidence. The runner, freeze producer, and control consumer now enforce the same nonempty-incumbent phase prerequisite before any later model work; no promotion threshold changed.

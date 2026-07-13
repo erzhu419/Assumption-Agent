@@ -204,6 +204,7 @@ def freeze_paper_workspace(
         expected_report=no_recursive_report,
         promotion_spec=protocol.promotion_gate_spec,
     )
+    require_promoted_recursive_candidate(recursive_archive)
     controls_root = Path(controls_output_root).resolve()
     if controls_root.exists():
         raise FileExistsError("paper control output must not already exist")
@@ -271,6 +272,14 @@ def freeze_paper_workspace(
     }
     receipt["receipt_hash"] = stable_hash(receipt)
     return receipt
+
+
+def require_promoted_recursive_candidate(archive: FrozenArchive) -> None:
+    """Refuse to freeze controls when development produced no incumbent."""
+    if archive.incumbent_id is None or not archive.active_programs:
+        raise PermissionError(
+            "paper freeze requires a promoted recursive candidate"
+        )
 
 
 def read_frozen_archive(
