@@ -16,10 +16,14 @@ from ..evaluation import (
 from ..models import HypothesisProgram, stable_hash
 from ..evolution import (
     COUNTERFACTUAL_REPLAY_POLICY_VERSION,
+    PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
     TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
 )
 from ..provider_chain import configured_provider_chain, proposal_provider_status
-from ..proposer import ROOT_PROPOSAL_REPLAY_POLICY_VERSION
+from ..proposer import (
+    PROPOSAL_DIVERSITY_POLICY_VERSION,
+    ROOT_PROPOSAL_REPLAY_POLICY_VERSION,
+)
 from ..secure_env import (
     configured_api_origin,
     configured_model,
@@ -102,12 +106,14 @@ TRIAL_NETWORK_BYTE_LIMIT_BY_PROTOCOL_VERSION = {
     "3.7.0": 64 * 1024 * 1024,
     "3.8.0": 64 * 1024 * 1024,
     "3.9.0": 64 * 1024 * 1024,
+    "3.10.0": 64 * 1024 * 1024,
 }
 
 CONTRASTIVE_PROTOCOL_VERSIONS = frozenset(
-    {"3.6.0", "3.7.0", "3.8.0", "3.9.0"}
+    {"3.6.0", "3.7.0", "3.8.0", "3.9.0", "3.10.0"}
 )
-MODEL_SLOT_PROTOCOL_VERSIONS = frozenset({"3.9.0"})
+MODEL_SLOT_PROTOCOL_VERSIONS = frozenset({"3.9.0", "3.10.0"})
+PROPOSAL_DIVERSITY_PROTOCOL_VERSIONS = frozenset({"3.10.0"})
 
 CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION = (
     "train_contrastive_precision_then_support_v1"
@@ -245,9 +251,13 @@ class PaperProtocol:
             if execution.get("agent_runtime_version") != SHARED_CODEX_CLI_VERSION:
                 issues.append("agent_runtime_version_mismatch")
             expected_candidate_selection = (
-                CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION
-                if protocol_version in CONTRASTIVE_PROTOCOL_VERSIONS
-                else TRAIN_ONLY_CANDIDATE_SELECTION_VERSION
+                PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION
+                if protocol_version in PROPOSAL_DIVERSITY_PROTOCOL_VERSIONS
+                else (
+                    CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION
+                    if protocol_version in CONTRASTIVE_PROTOCOL_VERSIONS
+                    else TRAIN_ONLY_CANDIDATE_SELECTION_VERSION
+                )
             )
             if execution.get("proposal_candidate_selection") != (
                 expected_candidate_selection
@@ -266,6 +276,20 @@ class PaperProtocol:
                 for field in (
                     "contrastive_training_evidence_policy",
                     "counterfactual_invalid_evidence_policy",
+                ):
+                    if field in execution:
+                        issues.append(f"{field}_unexpected")
+            if protocol_version in PROPOSAL_DIVERSITY_PROTOCOL_VERSIONS:
+                if execution.get("proposal_diversity_policy") != (
+                    PROPOSAL_DIVERSITY_POLICY_VERSION
+                ):
+                    issues.append("proposal_diversity_policy_mismatch")
+                if execution.get("proposal_response_max_tokens") != 8000:
+                    issues.append("proposal_response_max_tokens_mismatch")
+            else:
+                for field in (
+                    "proposal_diversity_policy",
+                    "proposal_response_max_tokens",
                 ):
                     if field in execution:
                         issues.append(f"{field}_unexpected")
@@ -506,6 +530,11 @@ class PaperProtocol:
                 issues.append("evolution_early_stop_invalid")
             if not 1 <= int(evolution.get("proposal_candidates_per_generation") or 0) <= 10:
                 issues.append("evolution_candidate_budget_invalid")
+            if (
+                protocol_version in PROPOSAL_DIVERSITY_PROTOCOL_VERSIONS
+                and evolution.get("proposal_candidates_per_generation") != 3
+            ):
+                issues.append("proposal_diversity_candidate_count_mismatch")
         phases = self.payload.get("phases")
         if not isinstance(phases, Mapping):
             issues.append("phases_missing")

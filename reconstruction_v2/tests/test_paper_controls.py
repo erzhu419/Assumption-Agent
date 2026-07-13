@@ -57,6 +57,9 @@ V38_PROTOCOL_PATH = (
 V39_PROTOCOL_PATH = (
     ROOT / "manifests" / "skilllearn_paper_protocol_v3_9_ruoli_gpt54mini.json"
 )
+V310_PROTOCOL_PATH = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_10_ruoli_gpt54mini.json"
+)
 MANIFEST_PATH = (
     ROOT / "manifests" / "skilllearnbench_instance_holdout_offline_ready_v1.json"
 )
@@ -691,7 +694,13 @@ def test_execution_report_preserves_legacy_promotion_summary_schema(
 
 @pytest.mark.parametrize(
     "protocol_path",
-    (V36_PROTOCOL_PATH, V37_PROTOCOL_PATH, V38_PROTOCOL_PATH, V39_PROTOCOL_PATH),
+    (
+        V36_PROTOCOL_PATH,
+        V37_PROTOCOL_PATH,
+        V38_PROTOCOL_PATH,
+        V39_PROTOCOL_PATH,
+        V310_PROTOCOL_PATH,
+    ),
 )
 def test_freeze_accepts_clean_contrastive_report(protocol_path: Path) -> None:
     protocol = PaperProtocol.read(protocol_path)
@@ -729,7 +738,13 @@ def test_freeze_accepts_clean_contrastive_report(protocol_path: Path) -> None:
 )
 @pytest.mark.parametrize(
     "protocol_path",
-    (V36_PROTOCOL_PATH, V37_PROTOCOL_PATH, V38_PROTOCOL_PATH, V39_PROTOCOL_PATH),
+    (
+        V36_PROTOCOL_PATH,
+        V37_PROTOCOL_PATH,
+        V38_PROTOCOL_PATH,
+        V39_PROTOCOL_PATH,
+        V310_PROTOCOL_PATH,
+    ),
 )
 def test_freeze_rejects_contrastive_generation_evidence_drift(
     protocol_path: Path,
@@ -1326,6 +1341,7 @@ def _development_report(
         "3.7.0",
         "3.8.0",
         "3.9.0",
+        "3.10.0",
     }:
         train_count = int(phase["train_count"])
         generation.update(
@@ -1431,6 +1447,8 @@ def _development_report(
                     "counterfactual_invalid_evidence_policy",
                     "model_inference_concurrency_policy",
                     "model_inference_slots",
+                    "proposal_diversity_policy",
+                    "proposal_response_max_tokens",
                 )
                 if field in protocol.payload["execution"]
             },
@@ -1506,6 +1524,7 @@ def _promotion_decision(
         "3.7.0",
         "3.8.0",
         "3.9.0",
+        "3.10.0",
     }:
         summary.update(
             {

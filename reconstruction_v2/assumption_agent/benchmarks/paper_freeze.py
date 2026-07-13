@@ -549,6 +549,8 @@ def _validate_development_report(
         expected["trial_timeout_policy"] = timeout_policy
     for field in (
         "proposal_candidate_selection",
+        "proposal_diversity_policy",
+        "proposal_response_max_tokens",
         "contrastive_training_evidence_policy",
         "counterfactual_invalid_evidence_policy",
         "provider_failure_policy",

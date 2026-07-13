@@ -33,6 +33,10 @@ from assumption_agent.benchmarks.paper_report import (
     render_markdown,
 )
 from assumption_agent.models import stable_hash
+from assumption_agent.evolution import (
+    PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
+)
+from assumption_agent.proposer import PROPOSAL_DIVERSITY_POLICY_VERSION
 from assumption_agent.splits import SplitManifest
 
 
@@ -64,6 +68,9 @@ V38_PROTOCOL = (
 )
 V39_PROTOCOL = (
     ROOT / "manifests" / "skilllearn_paper_protocol_v3_9_ruoli_gpt54mini.json"
+)
+V310_PROTOCOL = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_10_ruoli_gpt54mini.json"
 )
 MANIFEST_HASH = stable_hash({"manifest": "paper-test"})
 
@@ -352,6 +359,97 @@ def test_v39_protocol_adds_outer_parallelism_with_one_shared_model_slot() -> Non
     v39["execution"].pop("model_inference_concurrency_policy")
     v39["execution"].pop("model_inference_slots")
     assert v39 == v38
+
+
+def test_v310_protocol_changes_only_prospective_diverse_candidate_search() -> None:
+    protocol = PaperProtocol.read(V310_PROTOCOL)
+
+    assert protocol.validate_structure() == []
+    assert protocol.payload["protocol_version"] == "3.10.0"
+    assert protocol.payload["execution"]["proposal_candidate_selection"] == (
+        PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION
+    )
+    assert protocol.payload["execution"]["proposal_diversity_policy"] == (
+        PROPOSAL_DIVERSITY_POLICY_VERSION
+    )
+    assert protocol.payload["execution"]["proposal_response_max_tokens"] == 8000
+
+    v39 = copy.deepcopy(PaperProtocol.read(V39_PROTOCOL).payload)
+    v310 = copy.deepcopy(protocol.payload)
+    for payload in (v39, v310):
+        payload.pop("protocol_id")
+        payload.pop("protocol_version")
+    v310["execution"]["proposal_candidate_selection"] = v39["execution"][
+        "proposal_candidate_selection"
+    ]
+    v310["execution"].pop("proposal_diversity_policy")
+    v310["execution"].pop("proposal_response_max_tokens")
+    assert v310 == v39
+
+
+@pytest.mark.parametrize(
+    ("field_name", "drifted_value", "expected_issue"),
+    (
+        (
+            "proposal_candidate_selection",
+            "drifted",
+            "proposal_candidate_selection_mismatch",
+        ),
+        (
+            "proposal_diversity_policy",
+            "drifted",
+            "proposal_diversity_policy_mismatch",
+        ),
+        (
+            "proposal_response_max_tokens",
+            7999,
+            "proposal_response_max_tokens_mismatch",
+        ),
+    ),
+)
+def test_v310_protocol_rejects_candidate_search_contract_drift(
+    field_name: str,
+    drifted_value: object,
+    expected_issue: str,
+) -> None:
+    protocol = PaperProtocol.read(V310_PROTOCOL)
+    payload = copy.deepcopy(protocol.payload)
+    payload["execution"][field_name] = drifted_value
+
+    assert expected_issue in PaperProtocol(
+        protocol.path,
+        payload,
+    ).validate_structure()
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    ("proposal_diversity_policy", "proposal_response_max_tokens"),
+)
+def test_v39_rejects_v310_only_candidate_search_fields(field_name: str) -> None:
+    protocol = PaperProtocol.read(V39_PROTOCOL)
+    payload = copy.deepcopy(protocol.payload)
+    payload["execution"][field_name] = (
+        PROPOSAL_DIVERSITY_POLICY_VERSION
+        if field_name.endswith("policy")
+        else 8000
+    )
+
+    assert f"{field_name}_unexpected" in PaperProtocol(
+        protocol.path,
+        payload,
+    ).validate_structure()
+
+
+def test_v310_requires_exact_three_candidate_budget() -> None:
+    protocol = PaperProtocol.read(V310_PROTOCOL)
+    payload = copy.deepcopy(protocol.payload)
+    payload["evolution"]["proposal_candidates_per_generation"] = 2
+
+    assert "proposal_diversity_candidate_count_mismatch" in PaperProtocol(
+        protocol.path,
+        payload,
+    ).validate_structure()
 
 
 @pytest.mark.parametrize(

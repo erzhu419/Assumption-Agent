@@ -32,6 +32,7 @@ from ..evolution import (
     CounterfactualEvidenceReplayCache,
     EvolutionKernel,
     EvolutionRunResult,
+    PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
     TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
 )
 from ..models import (
@@ -3321,6 +3322,7 @@ class SkillLearnEvolutionHarness:
         if candidate_selection_policy not in {
             TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
             CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
+            PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
         }:
             raise ValueError(
                 f"unsupported candidate selection policy: {candidate_selection_policy}"
@@ -3330,7 +3332,10 @@ class SkillLearnEvolutionHarness:
             == CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
         ) != (
             candidate_selection_policy
-            == CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION
+            in {
+                CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
+                PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
+            }
         ):
             raise ValueError(
                 "contrastive evidence and candidate selection policies must be paired"
@@ -3705,6 +3710,46 @@ class SkillLearnEvolutionHarness:
             external_evidence_is_hidden=True,
             contrastive_training_evidence_policy=(
                 self.contrastive_training_evidence_policy
+            ),
+            train_coverage_objective=(
+                {
+                    "policy": self.candidate_selection_policy,
+                    "evidence_scope": "train_only",
+                    "coverage_unit": "distinct_failure_family",
+                    "minimum_activation_rate": (
+                        self.promotion_gate.spec.minimum_activation_rate
+                    ),
+                    "train_family_count": len(
+                        {
+                            row.family
+                            for row in residuals
+                            if row.split is SplitName.TRAIN
+                        }
+                    ),
+                    "failure_activation_family_target": (
+                        0
+                        if self.promotion_gate.spec.minimum_activation_rate <= 0.0
+                        else max(
+                            1,
+                            math.ceil(
+                                self.promotion_gate.spec.minimum_activation_rate
+                                * len(
+                                    {
+                                        row.family
+                                        for row in residuals
+                                        if row.split is SplitName.TRAIN
+                                    }
+                                )
+                            ),
+                        )
+                    ),
+                    "coverage_reward_capped_at_target": True,
+                    "validation_features_used": False,
+                    "validation_outcomes_used": False,
+                }
+                if self.candidate_selection_policy
+                == PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION
+                else None
             ),
             trigger_feature_catalog=build_runtime_feature_catalog(
                 [

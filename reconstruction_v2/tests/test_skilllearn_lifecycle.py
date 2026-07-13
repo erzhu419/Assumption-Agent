@@ -33,8 +33,13 @@ from assumption_agent.evaluation import (
 )
 from assumption_agent.evolution import (
     CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
+    PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
     TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
     CounterfactualEvidenceReplayCache,
+    EvolutionKernel,
+    _training_candidate_metrics,
+    _training_candidate_score,
+    _training_family_coverage_target,
 )
 from assumption_agent.events import MemoryEventSink
 from assumption_agent.benchmarks.skilllearn_lifecycle import (
@@ -82,7 +87,10 @@ from assumption_agent.models import (
     ResidualExample,
     SplitName,
 )
-from assumption_agent.proposer import StructuredHypothesisProposer
+from assumption_agent.proposer import (
+    PROPOSAL_DIVERSITY_POLICY_VERSION,
+    StructuredHypothesisProposer,
+)
 from assumption_agent.splits import (
     SplitAccessGuard,
     build_family_out_manifest,
@@ -2053,6 +2061,233 @@ def test_contrastive_selection_prefers_zero_false_positives_over_more_support(
     assert selection["selection_uses_validation_outcomes"] is False
 
 
+def test_family_coverage_selection_prefers_two_families_over_exact_two_of_two() -> None:
+    residuals = (
+        _family_residual("a-failure-1", family="family-a"),
+        _family_residual("a-failure-2", family="family-a"),
+        _family_residual("b-failure", family="family-b"),
+        _family_residual(
+            "b-success",
+            family="family-b",
+            baseline_success=True,
+        ),
+    )
+    single_family = _family_trigger_program(
+        "single-family-exact-two-of-two",
+        ("family-a",),
+    )
+    two_families = _family_trigger_program(
+        "two-family-lower-precision",
+        ("family-a", "family-b"),
+    )
+    target = _training_family_coverage_target(
+        residuals,
+        minimum_activation_rate=1.0,
+    )
+    single_metrics = _training_candidate_metrics(
+        single_family,
+        residuals,
+    ).to_dict(family_coverage_target=target)
+    two_family_metrics = _training_candidate_metrics(
+        two_families,
+        residuals,
+    ).to_dict(family_coverage_target=target)
+
+    single_score = _training_candidate_score(
+        single_family,
+        residuals,
+        selection_policy=(
+            PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION
+        ),
+        family_coverage_target=target,
+    )
+    two_family_score = _training_candidate_score(
+        two_families,
+        residuals,
+        selection_policy=(
+            PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION
+        ),
+        family_coverage_target=target,
+    )
+
+    assert target == 2
+    assert (
+        single_metrics["activation_precision_numerator"],
+        single_metrics["activation_precision_denominator"],
+    ) == (2, 2)
+    assert (
+        two_family_metrics["activation_precision_numerator"],
+        two_family_metrics["activation_precision_denominator"],
+    ) == (3, 4)
+    assert single_metrics["failure_activation_family_deficit"] == 1
+    assert two_family_metrics["failure_activation_family_deficit"] == 0
+    assert two_family_score < single_score
+
+
+def test_family_coverage_target_caps_breadth_before_exact_precision() -> None:
+    residuals = (
+        _family_residual("a-failure", family="family-a"),
+        _family_residual("b-failure", family="family-b"),
+        _family_residual("c-failure", family="family-c"),
+        _family_residual(
+            "c-success",
+            family="family-c",
+            baseline_success=True,
+        ),
+        _family_residual("d-failure", family="family-d"),
+        replace(
+            _family_residual("heldout-validation", family="heldout-family"),
+            split=SplitName.VALIDATION,
+            features={
+                "benchmark": "skilllearnbench",
+                "family": "heldout-family",
+                "validation_only_signal": True,
+            },
+        ),
+    )
+    target_met_precise = _family_trigger_program(
+        "target-met-precise",
+        ("family-a", "family-b"),
+    )
+    extra_breadth_false_positive = _family_trigger_program(
+        "extra-breadth-false-positive",
+        ("family-a", "family-b", "family-c"),
+    )
+    target = _training_family_coverage_target(
+        residuals,
+        minimum_activation_rate=0.5,
+    )
+    precise_score = _training_candidate_score(
+        target_met_precise,
+        residuals,
+        selection_policy=(
+            PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION
+        ),
+        family_coverage_target=target,
+    )
+    broad_score = _training_candidate_score(
+        extra_breadth_false_positive,
+        residuals,
+        selection_policy=(
+            PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION
+        ),
+        family_coverage_target=target,
+    )
+    precise_metrics = _training_candidate_metrics(
+        target_met_precise,
+        residuals,
+    ).to_dict(family_coverage_target=target)
+    broad_metrics = _training_candidate_metrics(
+        extra_breadth_false_positive,
+        residuals,
+    ).to_dict(family_coverage_target=target)
+
+    assert target == 2
+    assert precise_score < broad_score
+    assert precise_metrics["failure_activation_family_count"] == 2
+    assert broad_metrics["failure_activation_family_count"] == 3
+    assert broad_metrics["train_family_count"] == 4
+    assert broad_metrics["failure_activation_family_target"] == 2
+    assert broad_metrics["failure_activation_family_deficit"] == 0
+    assert broad_metrics["failure_activation_family_target_met"] is True
+
+
+def test_family_coverage_proposal_request_contains_diverse_batch_contract(
+    tmp_path: Path,
+) -> None:
+    proposal_rows = [
+        _family_trigger_program("family-a-specialist", ("family-a",)).to_dict(),
+        _family_trigger_program("family-b-specialist", ("family-b",)).to_dict(),
+        _family_trigger_program(
+            "cross-family-coverage",
+            ("family-a", "family-b"),
+        ).to_dict(),
+    ]
+    harness, _, model, archive, guard, _ = _harness(
+        tmp_path,
+        proposal_rows=proposal_rows,
+        candidate_selection_policy=(
+            CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION
+        ),
+        contrastive_training_evidence_policy=(
+            CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
+        ),
+    )
+    kernel = EvolutionKernel(
+        proposer=harness.proposer,
+        validator=harness.validator,
+        counterfactual_runner=harness.counterfactual_runner,
+        promotion_gate=harness.promotion_gate,
+        archive=archive,
+        split_guard=guard,
+        proposal_candidates_per_generation=3,
+        candidate_selection_policy=(
+            PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION
+        ),
+        contrastive_training_evidence_policy=(
+            CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
+        ),
+    )
+    residuals = (
+        _family_residual("a-failure", family="family-a"),
+        _family_residual("b-failure", family="family-b"),
+    )
+    context = ValidationContext(
+        evaluator_epoch="skilllearn-eval-epoch-0",
+        residuals=residuals,
+        available_lanes=frozenset({"baseline", "candidate"}),
+        baseline_lane="baseline",
+        contrastive_training_evidence_policy=(
+            CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
+        ),
+    )
+
+    proposals = kernel.propose_candidates(
+        residuals,
+        validation_context=context,
+        trace_id="family-coverage-proposal-contract",
+    )
+
+    assert len(proposals) == 3
+    request_contract = model.requests[0]["proposal_batch_contract"]
+    capability_contract = model.requests[0]["capabilities"][
+        "proposal_batch_contract"
+    ]
+    assert request_contract["policy"] == PROPOSAL_DIVERSITY_POLICY_VERSION
+    assert request_contract["required_count"] == 3
+    assert request_contract["diversity_unit"] == (
+        "train_failure_activation_set"
+    )
+    assert request_contract["max_action_nodes_per_hypothesis"] == 4
+    assert request_contract["compact_output"] is True
+    response_schema = model.requests[0]["output_schema"]["properties"][
+        "hypotheses"
+    ]
+    assert response_schema["minItems"] == response_schema["maxItems"] == 3
+    assert capability_contract["required_count"] == 3
+    assert capability_contract["profile_roles"] == [
+        "train_only_family_precision_anchor",
+        "train_only_cross_family_coverage",
+        "train_only_coverage_target_then_precision",
+    ]
+    coverage = model.requests[0]["capabilities"]["train_coverage_objective"]
+    assert coverage == {
+        "policy": PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
+        "evidence_scope": "train_only",
+        "coverage_unit": "distinct_failure_family",
+        "minimum_activation_rate": 1.0,
+        "train_family_count": 2,
+        "failure_activation_family_target": 2,
+        "coverage_reward_capped_at_target": True,
+        "validation_features_used": False,
+        "validation_outcomes_used": False,
+    }
+    constraints = model.requests[0]["constraints"]
+    assert constraints["candidate_search_uses_train_only"] is True
+    assert constraints["candidate_search_family_target"] == 2
+    assert constraints["candidate_search_validation_outcomes_forbidden"] is True
+
+
 def test_training_support_reports_success_anti_trigger_protection_without_new_gate() -> None:
     residuals = (
         ResidualExample(
@@ -3320,6 +3555,48 @@ def _harness(
         event_sink=sink,
     )
     return harness, backend, model, archive, guard, sink
+
+
+def _family_residual(
+    transition_id: str,
+    *,
+    family: str,
+    baseline_success: bool = False,
+) -> ResidualExample:
+    return ResidualExample(
+        transition_id=transition_id,
+        task_id=transition_id,
+        family=family,
+        split=SplitName.TRAIN,
+        features={"benchmark": "skilllearnbench", "family": family},
+        failure_type=(
+            "baseline_success_control"
+            if baseline_success
+            else "trajectory_keypoints_missing"
+        ),
+        evaluator_feedback=() if baseline_success else ("missing",),
+        baseline_success=baseline_success,
+        context={},
+    )
+
+
+def _family_trigger_program(
+    program_id: str,
+    families: tuple[str, ...],
+) -> HypothesisProgram:
+    payload = _program_dict()
+    payload["id"] = program_id
+    payload["trigger"] = {
+        "all_of": [
+            {"key": "benchmark", "op": "eq", "value": "skilllearnbench"}
+        ],
+        "any_of": [
+            {"key": "family", "op": "eq", "value": family}
+            for family in families
+        ],
+        "none_of": [],
+    }
+    return HypothesisProgram.from_dict(payload)
 
 
 def _program_dict(*, status: str = "candidate") -> dict[str, Any]:

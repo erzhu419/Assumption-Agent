@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from fractions import Fraction
+from math import ceil
 from typing import Any, Sequence
 
 from .archive import ArchiveNode, PolicyArchive
@@ -22,7 +23,10 @@ from .models import (
     TaskInput,
     stable_hash,
 )
-from .proposer import StructuredHypothesisProposer
+from .proposer import (
+    PROPOSAL_DIVERSITY_POLICY_VERSION,
+    StructuredHypothesisProposer,
+)
 from .splits import AccessPhase, SplitAccessGuard
 from .validation import RecursiveValidationEngine, ValidationContext, ValidationTree
 
@@ -30,6 +34,9 @@ from .validation import RecursiveValidationEngine, ValidationContext, Validation
 TRAIN_ONLY_CANDIDATE_SELECTION_VERSION = "train_static_support_then_complexity_v1"
 CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION = (
     "train_contrastive_precision_then_support_v1"
+)
+PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION = (
+    "train_contrastive_instance_family_coverage_then_precision_v1"
 )
 CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION = (
     "valid_train_failures_and_success_controls_v1"
@@ -72,6 +79,8 @@ class _TrainingCandidateMetrics:
     failure_count: int
     success_control_count: int
     failure_activation_count: int
+    failure_activation_family_count: int
+    train_family_count: int
     success_false_positive_activation_count: int
     success_anti_trigger_protection_count: int
     failure_anti_trigger_block_count: int
@@ -91,10 +100,14 @@ class _TrainingCandidateMetrics:
             return Fraction(0, 1)
         return Fraction(self.failure_activation_count, self.activation_count)
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(
+        self,
+        *,
+        family_coverage_target: int | None = None,
+    ) -> dict[str, Any]:
         example_count = self.failure_count + self.success_control_count
         abstention_count = example_count - self.activation_count
-        return {
+        payload = {
             "failure_count": self.failure_count,
             "success_control_count": self.success_control_count,
             "example_count": example_count,
@@ -115,6 +128,23 @@ class _TrainingCandidateMetrics:
             "predicate_count": self.predicate_count,
             "action_count": self.action_count,
         }
+        if family_coverage_target is not None:
+            family_deficit = max(
+                family_coverage_target - self.failure_activation_family_count,
+                0,
+            )
+            payload.update(
+                {
+                    "failure_activation_family_count": (
+                        self.failure_activation_family_count
+                    ),
+                    "train_family_count": self.train_family_count,
+                    "failure_activation_family_target": family_coverage_target,
+                    "failure_activation_family_deficit": family_deficit,
+                    "failure_activation_family_target_met": family_deficit == 0,
+                }
+            )
+        return payload
 
 
 @dataclass(frozen=True)
@@ -283,6 +313,7 @@ class EvolutionKernel:
         if candidate_selection_policy not in {
             TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
             CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
+            PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
         }:
             raise ValueError(
                 f"unsupported candidate selection policy: {candidate_selection_policy}"
@@ -301,7 +332,10 @@ class EvolutionKernel:
         )
         if contrastive_enabled != (
             candidate_selection_policy
-            == CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION
+            in {
+                CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
+                PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
+            }
         ):
             raise ValueError(
                 "contrastive evidence and candidate selection policies must be paired"
@@ -314,6 +348,14 @@ class EvolutionKernel:
         self.split_guard = split_guard
         if proposal_candidates_per_generation <= 0:
             raise ValueError("proposal candidate count must be positive")
+        if (
+            candidate_selection_policy
+            == PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION
+            and proposal_candidates_per_generation != 3
+        ):
+            raise ValueError(
+                "coverage-aware proposal diversity requires exactly three candidates"
+            )
         self.proposal_candidates_per_generation = proposal_candidates_per_generation
         self.candidate_selection_policy = candidate_selection_policy
         self.contrastive_training_evidence_policy = (
@@ -397,6 +439,12 @@ class EvolutionKernel:
                 repaired_candidate_count=0,
             )
         audits: list[_StaticCandidateAudit] = []
+        family_coverage_target = _training_family_coverage_target(
+            validation_context.residuals,
+            minimum_activation_rate=(
+                self.promotion_gate.spec.minimum_activation_rate
+            ),
+        )
         for index, root in enumerate(novel_roots):
             candidate_trace = f"{trace_id}:static-{index + 1}"
             tree = self.validator.validate(
@@ -431,6 +479,7 @@ class EvolutionKernel:
                         accepted,
                         validation_context.residuals,
                         selection_policy=self.candidate_selection_policy,
+                        family_coverage_target=family_coverage_target,
                     ),
                     training_metrics=_training_candidate_metrics(
                         accepted,
@@ -481,9 +530,19 @@ class EvolutionKernel:
                                 else audit.training_metrics.to_dict()
                             ),
                             "contrastive_training_metrics": (
-                                audit.training_metrics.to_dict()
+                                audit.training_metrics.to_dict(
+                                    family_coverage_target=(
+                                        family_coverage_target
+                                        if self.candidate_selection_policy
+                                        == PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION
+                                        else None
+                                    )
+                                )
                                 if self.candidate_selection_policy
-                                == CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION
+                                in {
+                                    CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
+                                    PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
+                                }
                                 else None
                             ),
                             "selected": bool(eligible and audit is eligible[0]),
@@ -705,6 +764,55 @@ class EvolutionKernel:
                 "prior_hypotheses": self._prior_hypothesis_context(),
                 "prior_promotion_feedback": list(self._promotion_feedback),
                 "novel_hypothesis_required": True,
+                **(
+                    {
+                        "proposal_batch_contract": {
+                            "policy": PROPOSAL_DIVERSITY_POLICY_VERSION,
+                            "required_count": (
+                                self.proposal_candidates_per_generation
+                            ),
+                            "diversity_unit": (
+                                "train_failure_activation_set"
+                            ),
+                            "max_action_nodes_per_hypothesis": 4,
+                            "profile_roles": [
+                                "train_only_family_precision_anchor",
+                                "train_only_cross_family_coverage",
+                                "train_only_coverage_target_then_precision",
+                            ],
+                            "compact_output": True,
+                        },
+                        "train_coverage_objective": {
+                            "policy": self.candidate_selection_policy,
+                            "evidence_scope": "train_only",
+                            "coverage_unit": "distinct_failure_family",
+                            "minimum_activation_rate": (
+                                self.promotion_gate.spec.minimum_activation_rate
+                            ),
+                            "train_family_count": len(
+                                {
+                                    row.family
+                                    for row in residuals
+                                    if row.split is SplitName.TRAIN
+                                }
+                            ),
+                            "failure_activation_family_target": (
+                                _training_family_coverage_target(
+                                    residuals,
+                                    minimum_activation_rate=(
+                                        self.promotion_gate.spec.minimum_activation_rate
+                                    ),
+                                )
+                            ),
+                            "coverage_reward_capped_at_target": True,
+                            "validation_features_used": False,
+                            "validation_outcomes_used": False,
+                        },
+                    }
+                    if self.candidate_selection_policy
+                    == PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION
+                    else {}
+                ),
                 **(
                     {
                         "training_evidence_contract": {
@@ -974,13 +1082,30 @@ def _training_candidate_score(
     residuals: Sequence[ResidualExample],
     *,
     selection_policy: str = TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
+    family_coverage_target: int = 0,
 ) -> tuple[Any, ...]:
     if selection_policy not in {
         TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
         CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
+        PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
     }:
         raise ValueError(f"unsupported candidate selection policy: {selection_policy}")
+    if family_coverage_target < 0:
+        raise ValueError("training family coverage target cannot be negative")
     if program is None:
+        if (
+            selection_policy
+            == PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION
+        ):
+            return (
+                10**9,
+                10**9,
+                10**9,
+                10**9,
+                10**9,
+                10**9,
+                "f" * 64,
+            )
         return (0, 10**9, 10**9, 10**9, "f" * 64)
     metrics = _training_candidate_metrics(program, residuals)
     legacy_score = (
@@ -992,9 +1117,29 @@ def _training_candidate_score(
     )
     if (
         selection_policy == TRAIN_ONLY_CANDIDATE_SELECTION_VERSION
-        or metrics.success_control_count == 0
+        or (
+            selection_policy == CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION
+            and metrics.success_control_count == 0
+        )
     ):
         return legacy_score
+    if (
+        selection_policy
+        == PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION
+    ):
+        return (
+            max(
+                family_coverage_target
+                - metrics.failure_activation_family_count,
+                0,
+            ),
+            -metrics.precision,
+            metrics.success_false_positive_activation_count,
+            -metrics.failure_activation_count,
+            metrics.predicate_count,
+            metrics.action_count,
+            program.payload_hash,
+        )
     return (
         -metrics.precision,
         metrics.success_false_positive_activation_count,
@@ -1012,11 +1157,14 @@ def _training_candidate_metrics(
     train_rows = [row for row in residuals if row.split is SplitName.TRAIN]
     failure_rows = [row for row in train_rows if not row.baseline_success]
     success_controls = [row for row in train_rows if row.baseline_success]
+    train_family_count = len({row.family for row in train_rows})
     if program is None:
         return _TrainingCandidateMetrics(
             failure_count=len(failure_rows),
             success_control_count=len(success_controls),
             failure_activation_count=0,
+            failure_activation_family_count=0,
+            train_family_count=train_family_count,
             success_false_positive_activation_count=0,
             success_anti_trigger_protection_count=0,
             failure_anti_trigger_block_count=0,
@@ -1025,6 +1173,13 @@ def _training_candidate_metrics(
         )
     failure_activation_count = sum(
         program.matches(row.features) for row in failure_rows
+    )
+    failure_activation_family_count = len(
+        {
+            row.family
+            for row in failure_rows
+            if program.matches(row.features)
+        }
     )
     success_false_positive_activation_count = sum(
         program.matches(row.features) for row in success_controls
@@ -1055,6 +1210,8 @@ def _training_candidate_metrics(
         failure_count=len(failure_rows),
         success_control_count=len(success_controls),
         failure_activation_count=failure_activation_count,
+        failure_activation_family_count=failure_activation_family_count,
+        train_family_count=train_family_count,
         success_false_positive_activation_count=(
             success_false_positive_activation_count
         ),
@@ -1065,3 +1222,20 @@ def _training_candidate_metrics(
         predicate_count=predicate_count,
         action_count=len(program.action_graph),
     )
+
+
+def _training_family_coverage_target(
+    residuals: Sequence[ResidualExample],
+    *,
+    minimum_activation_rate: float,
+) -> int:
+    train_family_count = len(
+        {
+            row.family
+            for row in residuals
+            if row.split is SplitName.TRAIN
+        }
+    )
+    if minimum_activation_rate <= 0.0:
+        return 0
+    return max(1, ceil(minimum_activation_rate * train_family_count))

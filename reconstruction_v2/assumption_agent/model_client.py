@@ -20,7 +20,10 @@ PROPOSAL_SYSTEM_PROMPT = (
     "network search, or external context. Every hypothesis needs structured triggers, "
     "an action graph whose semantics match the supplied backend capabilities, an "
     "external-anchor verifier used only by the evaluator unless explicitly declared "
-    "agent-local, and the supplied prospective fallback contract."
+    "agent-local, and the supplied prospective fallback contract. When a "
+    "proposal_batch_contract is present, return exactly its requested hypothesis "
+    "count, make activation signatures pairwise distinct on the specified training "
+    "failure rows, and keep the JSON output compact."
 )
 
 

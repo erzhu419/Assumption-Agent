@@ -36,6 +36,7 @@ from assumption_agent.models import (
 )
 from assumption_agent.proposer import (
     HypothesisProposalCallError,
+    PROPOSAL_DIVERSITY_POLICY_VERSION,
     REPAIR_BRANCH_ID_POLICY_VERSION,
     StructuredHypothesisProposer,
 )
@@ -316,6 +317,135 @@ def test_mixed_root_response_is_atomic_and_not_replayed_after_rejection() -> Non
     assert accepted == replayed
     assert len(model.requests) == 2
     assert sum(row["event"] == "hypothesis_proposed" for row in sink.events) == 1
+    assert sum(
+        row["event"] == "root_proposal_evidence_recorded" for row in sink.events
+    ) == 1
+    assert sum(
+        row["event"] == "root_proposal_evidence_replayed" for row in sink.events
+    ) == 1
+
+
+@pytest.mark.parametrize("returned_count", [0, 1, 3])
+def test_exact_count_proposal_batch_rejects_short_or_overlong_atomically(
+    returned_count: int,
+) -> None:
+    sink = MemoryEventSink()
+    rows = [
+        _program_dict(hypothesis_id=f"batch-count-{index}", priority=10 + index)
+        for index in range(returned_count)
+    ]
+    model = QueueProposalModel([{"hypotheses": rows}])
+    proposer = StructuredHypothesisProposer(model, event_sink=sink)
+    capabilities = {
+        "proposal_batch_contract": {
+            "policy": PROPOSAL_DIVERSITY_POLICY_VERSION,
+            "profile_roles": ["precision", "coverage"],
+        }
+    }
+
+    with pytest.raises(HypothesisProposalCallError) as caught:
+        proposer.propose(
+            _residuals(),
+            evaluator_epoch="epoch-0",
+            max_hypotheses=2,
+            capabilities=capabilities,
+            trace_id=f"batch-count-{returned_count}",
+        )
+
+    assert caught.value.failure_phase == "response_exact_count"
+    assert len(model.requests) == 1
+    request_contract = model.requests[0]["proposal_batch_contract"]
+    assert request_contract["policy"] == PROPOSAL_DIVERSITY_POLICY_VERSION
+    assert request_contract["response_type"] == "array"
+    assert request_contract["required_count"] == 2
+    assert request_contract["diversity_unit"] == "train_failure_activation_set"
+    assert request_contract["max_action_nodes_per_hypothesis"] == 4
+    assert request_contract["profile_roles"] == ["precision", "coverage"]
+    rejected = next(
+        row
+        for row in sink.events
+        if row["event"] == "hypothesis_proposal_response_rejected"
+    )
+    assert rejected["payload"]["expected_item_count"] == 2
+    assert rejected["payload"]["expected_field_item_count"] == returned_count
+    assert rejected["payload"]["raw_content_persisted"] is False
+    assert not any(row["event"] == "hypothesis_proposed" for row in sink.events)
+    assert not any(
+        row["event"] == "root_proposal_evidence_recorded" for row in sink.events
+    )
+
+
+def test_proposal_batch_rejects_duplicate_failure_activation_signatures_atomically() -> None:
+    sink = MemoryEventSink()
+    rows = [
+        _program_dict(hypothesis_id="duplicate-signature-a", priority=10),
+        _program_dict(hypothesis_id="duplicate-signature-b", priority=20),
+    ]
+    model = QueueProposalModel([{"hypotheses": rows}])
+    proposer = StructuredHypothesisProposer(model, event_sink=sink)
+
+    with pytest.raises(HypothesisProposalCallError) as caught:
+        proposer.propose(
+            _residuals(),
+            evaluator_epoch="epoch-0",
+            max_hypotheses=2,
+            capabilities={
+                "proposal_batch_contract": {
+                    "policy": PROPOSAL_DIVERSITY_POLICY_VERSION,
+                }
+            },
+            trace_id="duplicate-activation-signatures",
+        )
+
+    assert caught.value.failure_phase == "response_activation_diversity"
+    assert len(model.requests) == 1
+    rejected = next(
+        row
+        for row in sink.events
+        if row["event"] == "hypothesis_proposal_response_rejected"
+    )
+    assert rejected["payload"]["failure_train_row_count"] == 2
+    assert rejected["payload"]["distinct_activation_signature_count"] == 1
+    assert rejected["payload"]["raw_content_persisted"] is False
+    assert not any(row["event"] == "hypothesis_proposed" for row in sink.events)
+    assert not any(
+        row["event"] == "root_proposal_evidence_recorded" for row in sink.events
+    )
+
+
+def test_exact_distinct_proposal_batch_is_accepted_and_replayed() -> None:
+    sink = MemoryEventSink()
+    matching = _program_dict(hypothesis_id="distinct-signature-match")
+    nonmatching = _program_dict(hypothesis_id="distinct-signature-miss")
+    nonmatching["trigger"]["all_of"][0]["value"] = "other_relation"
+    model = QueueProposalModel([{"hypotheses": [matching, nonmatching]}])
+    proposer = StructuredHypothesisProposer(model, event_sink=sink)
+    residuals = _residuals()
+    capabilities = {
+        "proposal_batch_contract": {
+            "policy": PROPOSAL_DIVERSITY_POLICY_VERSION,
+        }
+    }
+
+    accepted = proposer.propose(
+        residuals,
+        evaluator_epoch="epoch-0",
+        max_hypotheses=2,
+        capabilities=capabilities,
+        trace_id="distinct-batch-accepted",
+    )
+    replayed = proposer.propose(
+        residuals,
+        evaluator_epoch="epoch-0",
+        max_hypotheses=2,
+        capabilities=capabilities,
+        trace_id="distinct-batch-replayed",
+    )
+
+    assert accepted == replayed
+    assert len(accepted) == 2
+    assert len(model.requests) == 1
+    assert sum(row["event"] == "hypothesis_proposed" for row in sink.events) == 2
     assert sum(
         row["event"] == "root_proposal_evidence_recorded" for row in sink.events
     ) == 1

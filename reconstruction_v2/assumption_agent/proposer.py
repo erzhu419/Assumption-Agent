@@ -16,6 +16,9 @@ from .models import (
 
 ROOT_PROPOSAL_REPLAY_POLICY_VERSION = "request_identical_root_proposal_replay_v1"
 REPAIR_BRANCH_ID_POLICY_VERSION = "parent_content_scoped_repair_id_v1"
+PROPOSAL_DIVERSITY_POLICY_VERSION = (
+    "exact_count_pairwise_train_failure_activation_v1"
+)
 
 
 class ProposalModel(Protocol):
@@ -76,6 +79,12 @@ class StructuredHypothesisProposer:
         ).strip()
         if not primary_metric:
             raise ValueError("proposal primary metric is missing")
+        proposal_batch_contract = capability_payload.get("proposal_batch_contract")
+        diversity_contract_enabled = bool(
+            isinstance(proposal_batch_contract, Mapping)
+            and proposal_batch_contract.get("policy")
+            == PROPOSAL_DIVERSITY_POLICY_VERSION
+        )
         payload = {
             "request_kind": "propose_hypothesis_programs",
             "contract_version": "hypothesis_program_v1",
@@ -96,6 +105,39 @@ class StructuredHypothesisProposer:
             ],
             "max_hypotheses": max_hypotheses,
         }
+        if diversity_contract_enabled:
+            configured_profile_roles = proposal_batch_contract.get("profile_roles", ())
+            profile_roles = (
+                [str(value) for value in configured_profile_roles]
+                if isinstance(configured_profile_roles, (list, tuple))
+                else []
+            )
+            configured_action_limit = proposal_batch_contract.get(
+                "max_action_nodes_per_hypothesis",
+                4,
+            )
+            payload["proposal_batch_contract"] = {
+                "policy": PROPOSAL_DIVERSITY_POLICY_VERSION,
+                "response_field": "hypotheses",
+                "response_type": "array",
+                "required_count": max_hypotheses,
+                "diversity_unit": "train_failure_activation_set",
+                "max_action_nodes_per_hypothesis": int(configured_action_limit),
+                "profile_roles": profile_roles,
+                "compact_output": True,
+            }
+            payload["output_schema"] = {
+                "type": "object",
+                "required": ["hypotheses"],
+                "properties": {
+                    "hypotheses": {
+                        "type": "array",
+                        "minItems": max_hypotheses,
+                        "maxItems": max_hypotheses,
+                        "items": _program_schema(capability_payload),
+                    }
+                },
+            }
         self._emit_model_event("hypothesis_proposal_requested", trace_id, payload)
         request_hash = stable_hash(payload)
         with self._root_replay_lock:
@@ -133,7 +175,7 @@ class StructuredHypothesisProposer:
                 trace_id=trace_id,
             )
         rows = response.get("hypotheses")
-        if not isinstance(rows, list) or not rows:
+        if not isinstance(rows, list) or (not rows and not diversity_contract_enabled):
             raise self._response_contract_error(
                 payload=payload,
                 response=response,
@@ -143,7 +185,8 @@ class StructuredHypothesisProposer:
             )
         staged_programs: list[tuple[int, HypothesisProgram]] = []
         transition_ids = tuple(sorted(residual.transition_id for residual in residuals))
-        for index, row in enumerate(rows[:max_hypotheses]):
+        returned_rows = rows if diversity_contract_enabled else rows[:max_hypotheses]
+        for index, row in enumerate(returned_rows):
             if not isinstance(row, Mapping):
                 raise self._response_contract_error(
                     payload=payload,
@@ -176,7 +219,7 @@ class StructuredHypothesisProposer:
                     parse_error=exc,
                 ) from exc
             staged_programs.append((index, program))
-        if not staged_programs:
+        if not staged_programs and not diversity_contract_enabled:
             raise self._response_contract_error(
                 payload=payload,
                 response=response,
@@ -185,6 +228,58 @@ class StructuredHypothesisProposer:
                 trace_id=trace_id,
             )
         programs = [program for _, program in staged_programs]
+        if diversity_contract_enabled and len(programs) != max_hypotheses:
+            raise self._response_contract_error(
+                payload=payload,
+                response=response,
+                expected_field="hypotheses",
+                failure_phase="response_exact_count",
+                trace_id=trace_id,
+                expected_item_count=max_hypotheses,
+                response_contract_policy=PROPOSAL_DIVERSITY_POLICY_VERSION,
+            )
+        if diversity_contract_enabled:
+            failure_rows = tuple(
+                residual
+                for residual in residuals
+                if residual.split is SplitName.TRAIN
+                and residual.baseline_success is False
+            )
+            activation_signatures: list[tuple[bool, ...]] = []
+            for index, program in staged_programs:
+                try:
+                    signature = tuple(
+                        program.matches(residual.features)
+                        for residual in failure_rows
+                    )
+                except (TypeError, ValueError, OverflowError) as exc:
+                    raise self._response_contract_error(
+                        payload=payload,
+                        response=response,
+                        expected_field="hypotheses",
+                        failure_phase="response_activation_diversity",
+                        trace_id=trace_id,
+                        consumed_row_index=index,
+                        consumed_row=rows[index],
+                        parse_error=exc,
+                        expected_item_count=max_hypotheses,
+                        failure_train_row_count=len(failure_rows),
+                        response_contract_policy=PROPOSAL_DIVERSITY_POLICY_VERSION,
+                    ) from exc
+                activation_signatures.append(signature)
+            distinct_signature_count = len(set(activation_signatures))
+            if distinct_signature_count != len(activation_signatures):
+                raise self._response_contract_error(
+                    payload=payload,
+                    response=response,
+                    expected_field="hypotheses",
+                    failure_phase="response_activation_diversity",
+                    trace_id=trace_id,
+                    expected_item_count=max_hypotheses,
+                    failure_train_row_count=len(failure_rows),
+                    distinct_activation_signature_count=distinct_signature_count,
+                    response_contract_policy=PROPOSAL_DIVERSITY_POLICY_VERSION,
+                )
         for index, program in staged_programs:
             self.event_sink.emit(
                 Event(
@@ -417,6 +512,10 @@ class StructuredHypothesisProposer:
         consumed_row_index: int | None = None,
         consumed_row: Any = None,
         parse_error: Exception | None = None,
+        expected_item_count: int | None = None,
+        failure_train_row_count: int | None = None,
+        distinct_activation_signature_count: int | None = None,
+        response_contract_policy: str | None = None,
     ) -> HypothesisProposalCallError:
         request_kind = str(payload.get("request_kind") or "hypothesis_proposal")
         request_hash = stable_hash(payload)
@@ -465,6 +564,12 @@ class StructuredHypothesisProposer:
                         if isinstance(expected_value, (list, tuple))
                         else None
                     ),
+                    "expected_item_count": expected_item_count,
+                    "failure_train_row_count": failure_train_row_count,
+                    "distinct_activation_signature_count": (
+                        distinct_activation_signature_count
+                    ),
+                    "response_contract_policy": response_contract_policy,
                     "consumed_row_present": consumed_row_present,
                     "consumed_row_index": consumed_row_index,
                     "consumed_row_type": (
@@ -599,6 +704,46 @@ def _proposal_constraints(
                 "training_evidence_policy": str(
                     training_evidence_contract.get("policy") or ""
                 ),
+            }
+        )
+    proposal_batch_contract = (capabilities or {}).get(
+        "proposal_batch_contract"
+    )
+    train_coverage_objective = (capabilities or {}).get(
+        "train_coverage_objective"
+    )
+    if (
+        isinstance(proposal_batch_contract, Mapping)
+        and proposal_batch_contract.get("policy")
+        == PROPOSAL_DIVERSITY_POLICY_VERSION
+    ):
+        constraints.update(
+            {
+                "proposal_count_must_equal_requested_count": True,
+                "proposal_train_failure_activation_sets_must_be_pairwise_distinct": True,
+                "proposal_output_must_be_compact": True,
+                "proposal_max_action_nodes_per_hypothesis": int(
+                    proposal_batch_contract.get(
+                        "max_action_nodes_per_hypothesis",
+                        4,
+                    )
+                ),
+            }
+        )
+    if isinstance(train_coverage_objective, Mapping):
+        constraints.update(
+            {
+                "candidate_search_uses_train_only": True,
+                "candidate_search_coverage_unit": str(
+                    train_coverage_objective.get("coverage_unit") or ""
+                ),
+                "candidate_search_family_target": int(
+                    train_coverage_objective.get(
+                        "failure_activation_family_target",
+                        0,
+                    )
+                ),
+                "candidate_search_validation_outcomes_forbidden": True,
             }
         )
     return constraints

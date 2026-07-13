@@ -49,6 +49,7 @@ class ValidationContext:
     action_semantics: str = "typed_runtime_action_v1"
     external_evidence_is_hidden: bool = False
     contrastive_training_evidence_policy: str | None = None
+    train_coverage_objective: Mapping[str, Any] | None = None
 
 
 def backend_action_contract_issues(
@@ -648,6 +649,15 @@ class RecursiveValidationEngine:
                             }
                         }
                         if context.contrastive_training_evidence_policy
+                        else {}
+                    ),
+                    **(
+                        {
+                            "train_coverage_objective": dict(
+                                context.train_coverage_objective
+                            )
+                        }
+                        if context.train_coverage_objective
                         else {}
                     ),
                 },

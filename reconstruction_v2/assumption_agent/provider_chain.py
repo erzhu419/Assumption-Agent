@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Mapping, Protocol, Sequence
 
 from .events import Event, EventSink, NullEventSink
@@ -163,8 +163,14 @@ def configured_provider_chain() -> tuple[str, ...]:
     return values
 
 
-def build_proposal_model(*, event_sink: EventSink | None = None) -> ProviderChainProposalModel:
+def build_proposal_model(
+    *,
+    event_sink: EventSink | None = None,
+    max_tokens: int | None = None,
+) -> ProviderChainProposalModel:
     sink = event_sink or NullEventSink()
+    if max_tokens is not None and max_tokens <= 0:
+        raise ValueError("proposal response token budget must be positive")
     requested = configured_provider_chain()
     bindings: list[ProviderBinding] = []
     unavailable: list[str] = []
@@ -177,7 +183,14 @@ def build_proposal_model(*, event_sink: EventSink | None = None) -> ProviderChai
                 ProviderBinding(
                     provider_id=provider_id,
                     model=OpenAICompatibleProposalModel(
-                        OpenAICompatibleConfig.from_env(),
+                        replace(
+                            OpenAICompatibleConfig.from_env(),
+                            **(
+                                {"max_tokens": max_tokens}
+                                if max_tokens is not None
+                                else {}
+                            ),
+                        ),
                         event_sink=sink,
                     ),
                 )

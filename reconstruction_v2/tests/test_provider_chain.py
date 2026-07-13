@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+import pytest
+
 from assumption_agent.events import MemoryEventSink
 from assumption_agent.provider_chain import (
     ProviderBinding,
     ProviderChainProposalModel,
+    build_proposal_model,
     configured_provider_chain,
 )
 
@@ -64,3 +67,17 @@ def test_default_provider_chain_uses_direct_openai_compatible_route(monkeypatch)
     monkeypatch.delenv("ASSUMPTION_V2_PROVIDER_CHAIN", raising=False)
 
     assert configured_provider_chain() == ("openai_compatible",)
+
+
+def test_build_provider_chain_binds_protocol_proposal_response_budget(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("ASSUMPTION_V2_API_BASE", "https://example.invalid")
+    monkeypatch.setenv("ASSUMPTION_V2_API_KEY", "test-only")
+    monkeypatch.setenv("ASSUMPTION_V2_PROVIDER_CHAIN", "openai_compatible")
+
+    chain = build_proposal_model(max_tokens=8000)
+
+    assert chain.providers[0].model.config.max_tokens == 8000
+    with pytest.raises(ValueError, match="token budget"):
+        build_proposal_model(max_tokens=0)

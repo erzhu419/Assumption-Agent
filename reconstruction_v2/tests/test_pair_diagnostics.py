@@ -134,7 +134,7 @@ def test_pair_diagnostics_exclude_mismatched_activated_pair(
 
 
 @pytest.mark.parametrize(
-    "protocol_version", ("3.6.0", "3.7.0", "3.8.0", "3.9.0")
+    "protocol_version", ("3.6.0", "3.7.0", "3.8.0", "3.9.0", "3.10.0")
 )
 def test_freeze_contrastive_protocol_rejects_tampered_pair_diagnostic(
     protocol_version: str,
@@ -169,7 +169,7 @@ def test_freeze_contrastive_protocol_rejects_tampered_pair_diagnostic(
 
 
 @pytest.mark.parametrize(
-    "protocol_version", ("3.6.0", "3.7.0", "3.8.0", "3.9.0")
+    "protocol_version", ("3.6.0", "3.7.0", "3.8.0", "3.9.0", "3.10.0")
 )
 def test_freeze_contrastive_protocol_rejects_tampered_activated_gain_count(
     protocol_version: str,

@@ -11,12 +11,14 @@ from ..events import Event, JsonlEventSink
 from ..evolution import (
     COUNTERFACTUAL_REPLAY_POLICY_VERSION,
     CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
+    PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
     TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
     CounterfactualEvidenceReplayCache,
 )
 from ..models import stable_hash
 from ..provider_chain import build_proposal_model, proposal_provider_status
 from ..proposer import (
+    PROPOSAL_DIVERSITY_POLICY_VERSION,
     ROOT_PROPOSAL_REPLAY_POLICY_VERSION,
     HypothesisProposalCallError,
     StructuredHypothesisProposer,
@@ -153,6 +155,20 @@ def main() -> None:
     contrastive_training_evidence_policy = execution_contract.get(
         "contrastive_training_evidence_policy"
     )
+    proposal_diversity_policy = execution_contract.get(
+        "proposal_diversity_policy"
+    )
+    if proposal_diversity_policy is not None:
+        proposal_diversity_policy = str(proposal_diversity_policy)
+    proposal_response_max_tokens = execution_contract.get(
+        "proposal_response_max_tokens"
+    )
+    if proposal_response_max_tokens is not None:
+        if isinstance(proposal_response_max_tokens, bool):
+            raise ValueError("proposal response token budget must be an integer")
+        proposal_response_max_tokens = int(proposal_response_max_tokens)
+        if proposal_response_max_tokens <= 0:
+            raise ValueError("proposal response token budget must be positive")
     if contrastive_training_evidence_policy is not None:
         contrastive_training_evidence_policy = str(
             contrastive_training_evidence_policy
@@ -160,6 +176,7 @@ def main() -> None:
     if candidate_selection_policy not in {
         TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
         CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
+        PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
     }:
         raise ValueError("unsupported protocol candidate selection policy")
     if contrastive_training_evidence_policy not in {
@@ -171,11 +188,24 @@ def main() -> None:
         contrastive_training_evidence_policy
         == CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION
     ) != (
-        candidate_selection_policy
-        == CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION
+        candidate_selection_policy in {
+            CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
+            PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
+        }
     ):
         raise ValueError(
             "protocol contrastive evidence and candidate selection policies must be paired"
+        )
+    diversity_enabled = (
+        candidate_selection_policy
+        == PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION
+    )
+    if diversity_enabled != (
+        proposal_diversity_policy == PROPOSAL_DIVERSITY_POLICY_VERSION
+        and proposal_response_max_tokens is not None
+    ):
+        raise ValueError(
+            "coverage-aware selection requires the proposal diversity and response-budget contracts"
         )
     counterfactual_invalid_evidence_policy = execution_contract.get(
         "counterfactual_invalid_evidence_policy"
@@ -306,6 +336,14 @@ def main() -> None:
         "max_generations": max_generations,
         "max_consecutive_non_promotions": max_consecutive_non_promotions,
         "proposal_candidates_per_generation": proposal_candidates_per_generation,
+        **(
+            {
+                "proposal_diversity_policy": proposal_diversity_policy,
+                "proposal_response_max_tokens": proposal_response_max_tokens,
+            }
+            if diversity_enabled
+            else {}
+        ),
         "agent_id": agent_id,
         "model": model,
         "trial_provider_mode": trial_provider_mode,
@@ -453,7 +491,10 @@ def main() -> None:
 
     if configured_model() != model:
         raise RuntimeError("proposal model and benchmark model must match")
-    proposal_model = build_proposal_model(event_sink=sink)
+    proposal_model = build_proposal_model(
+        event_sink=sink,
+        max_tokens=proposal_response_max_tokens,
+    )
     proposal_model.complete_with_trace(
         {
             "request_kind": "health_probe",
