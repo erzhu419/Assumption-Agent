@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -25,8 +26,10 @@ from assumption_agent.benchmarks.skilllearn_compiler import (
     SKILL_ACTION_LOWERING_VERSION,
     SKILL_FALLBACK_SEMANTICS_VERSION,
     SKILL_ROUTING_VERSION,
+    SkillLearnProgramCompiler,
     skilllearn_program_set_treatment_hash,
     skilllearn_program_treatment_hash,
+    verify_skill_source_tree,
 )
 from assumption_agent.benchmarks.skilllearn_lifecycle import SkillLearnTrialObservation
 from assumption_agent.benchmarks.skilllearnbench import SkillLearnBenchAdapter
@@ -95,6 +98,7 @@ class FakePaperBackend:
     agent_id = "codex"
     model = "gpt-5.3-codex-spark"
     max_steps = 100
+    requires_installed_skill_receipt = True
 
     def __init__(
         self,
@@ -131,6 +135,12 @@ class FakePaperBackend:
             fairness_fingerprint="budget-fixed",
             error_type="endpoint_error" if invalid else None,
             upstream_result_hash=stable_hash({"trace": trace_id, "invalid": invalid}),
+            installed_skill_source_receipt_hash=(
+                request.skill_source_receipt_hash
+                or request.external_skill_source_receipt_hash
+            )
+            if skill_source_dir is not None and not invalid
+            else "",
         )
 
 
@@ -178,7 +188,105 @@ def test_paper_controls_reject_stale_records_after_control_content_changes(
 
     with pytest.raises(PermissionError, match="control configuration changed"):
         resumed.run((item_id,), split=SplitName.VALIDATION, repeats=1)
+
+
+def test_paper_controls_reject_source_change_after_runner_initialization(
+    tmp_path: Path,
+) -> None:
+    runner, backend, manifest = _runner(tmp_path)
+    changed = next(row for row in runner.controls if row.root is not None)
+    assert changed.root is not None
+    skill = next(changed.root.rglob("SKILL.md"))
+    skill.write_text("# changed after freeze\n", encoding="utf-8")
+
+    with pytest.raises(PermissionError, match="changed after runner"):
+        runner.run(
+            (manifest.validation_ids[0],),
+            split=SplitName.VALIDATION,
+            repeats=1,
+        )
     assert backend.calls == []
+
+
+def test_paper_controls_pin_external_family_receipt_at_initialization(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner, backend, manifest = _runner(tmp_path)
+    item_id = manifest.validation_ids[0]
+    family = manifest.family_by_id[item_id]
+    control = next(row for row in runner.controls if row.root is not None)
+    assert control.root is not None
+    source = control.root / family
+    frozen_receipt = verify_skill_source_tree(source)
+    forged_receipt = replace(
+        frozen_receipt,
+        source_file_hashes=(
+            *frozen_receipt.source_file_hashes,
+            ("swapped/SKILL.md", "0" * 64),
+        ),
+    )
+    monkeypatch.setattr(
+        paper_controls_module,
+        "verify_skill_source_tree",
+        lambda _: forged_receipt,
+    )
+
+    with pytest.raises(
+        PermissionError,
+        match="external control source receipt changed",
+    ):
+        runner._run_control(
+            item_id=item_id,
+            split=SplitName.VALIDATION,
+            repeat=1,
+            pair_id="pinned-external-receipt",
+            control=control,
+            attempt=1,
+            trace_id="pinned-external-receipt",
+        )
+    assert backend.calls == []
+
+
+def test_paper_controls_reject_valid_result_without_installed_receipt(
+    tmp_path: Path,
+) -> None:
+    protocol = PaperProtocol.read(PROTOCOL_PATH)
+    manifest = SplitManifest.read(MANIFEST_PATH)
+    item_id = manifest.validation_ids[0]
+    family = manifest.family_by_id[item_id]
+
+    class MissingReceiptBackend(FakePaperBackend):
+        def run(self, request, *, skill_source_dir, trace_id):
+            observation = super().run(
+                request,
+                skill_source_dir=skill_source_dir,
+                trace_id=trace_id,
+            )
+            return replace(
+                observation,
+                installed_skill_source_receipt_hash="",
+            )
+
+    backend = MissingReceiptBackend()
+    runner = PaperControlRunner(
+        adapter=SkillLearnBenchAdapter(BENCH_ROOT),
+        manifest=manifest,
+        guard=SplitAccessGuard(manifest),
+        backend=backend,
+        protocol=protocol,
+        controls=_controls(tmp_path, protocol, families={family}),
+        record_store=PaperRecordStore(tmp_path / "missing-receipt.records.jsonl"),
+        evaluator_epoch="skilllearn-eval-test",
+    )
+
+    with pytest.raises(PermissionError, match="installed treatment receipt"):
+        runner.run(
+            (item_id,),
+            split=SplitName.VALIDATION,
+            repeats=1,
+        )
+    assert backend.calls
 
 
 def test_paper_controls_validate_lock_before_model_work(
@@ -321,28 +429,44 @@ def test_compiled_control_uses_per_item_routes(tmp_path: Path) -> None:
     item_ids = manifest.validation_ids[:2]
     families = {manifest.family_by_id[item_id] for item_id in item_ids}
     controls = _controls(tmp_path, protocol, families=families)
-    promoted = next(row for row in controls if row.id == "promoted_v2")
-    assert promoted.root is not None
-    route = promoted.root / "items" / stable_hash({"item_id": item_ids[0]})
-    skill = route / "routed-skill"
-    skill.mkdir(parents=True)
-    (skill / "SKILL.md").write_text("# routed\n", encoding="utf-8")
-    (promoted.root / "compile_manifest.json").write_text(
-        json.dumps(
-                {
-                    "routing_version": SKILL_ROUTING_VERSION,
-                    "action_lowering_version": SKILL_ACTION_LOWERING_VERSION,
-                    "fallback_semantics": SKILL_FALLBACK_SEMANTICS_VERSION,
-                    "external_verifier_exposed_to_agent": False,
-                "item_routes": {
-                    stable_hash({"item_id": item_ids[0]}): str(
-                        route.relative_to(promoted.root)
-                    ),
-                    stable_hash({"item_id": item_ids[1]}): None,
-                },
-            }
-        ),
-        encoding="utf-8",
+    adapter = SkillLearnBenchAdapter(BENCH_ROOT)
+    routed_items = tuple(
+        replace(
+            item,
+            features={
+                **dict(item.features),
+                "route_variant": (
+                    "selected" if item.id == item_ids[0] else "not-selected"
+                ),
+            },
+        )
+        for item in adapter.discover()
+    )
+    payload = json.loads(
+        (ROOT / "baselines" / "static_generic_program.json").read_text()
+    )
+    payload["id"] = "promoted-v2-routed-fixture"
+    payload["trigger"] = {
+        "all_of": [
+            {"key": "route_variant", "op": "eq", "value": "selected"}
+        ],
+        "any_of": [],
+        "none_of": [],
+    }
+    compiled = SkillLearnProgramCompiler().compile(
+        programs=(HypothesisProgram.from_dict(payload),),
+        items=routed_items,
+        split_manifest=manifest,
+        output_root=tmp_path / "compiled",
+        method_name="promoted_v2",
+        target_item_ids=item_ids,
+        target_split="validation",
+    )
+    controls = tuple(
+        ControlSource(row.id, compiled.output_root)
+        if row.id == "promoted_v2"
+        else row
+        for row in controls
     )
     backend = FakePaperBackend()
     runner = PaperControlRunner(

@@ -14,6 +14,17 @@ from .models import (
     SplitName,
     stable_hash,
 )
+from .typed_operator_grammar import (
+    TYPED_OPERATOR_GRAMMAR_VERSION,
+    TYPED_REPAIR_BRANCH_ID_POLICY_VERSION,
+    TYPED_RECIPE_SELECTION_VERSION,
+    TypedProgramBindingRegistry,
+    TypedRecipeSelectionSnapshot,
+    canonical_typed_recipe_selection_request,
+    canonical_typed_recipe_selection_response,
+    materialize_recipe_selection,
+    typed_recipe_id_for_program,
+)
 
 
 ROOT_PROPOSAL_REPLAY_POLICY_VERSION = "request_identical_root_proposal_replay_v1"
@@ -46,8 +57,8 @@ TRAIN_ACTION_DESIGN_POLICY_VERSIONS = frozenset(
     {TRAIN_ACTION_DESIGN_POLICY_VERSION}
 )
 TRAIN_ACTION_DESIGN_INTERNAL_CONTEXT_KEY = "_train_action_design_profile"
-
-
+TYPED_ROOT_RECIPE_SELECTION_REQUEST = "select_typed_root_recipe"
+TYPED_REPAIR_RECIPE_SELECTION_REQUEST = "select_typed_repair_recipe"
 def train_action_quality_contract(policy: str | None) -> dict[str, Any] | None:
     if policy is None:
         return None
@@ -112,9 +123,18 @@ class HypothesisProposalCallError(RuntimeError):
 
 
 class StructuredHypothesisProposer:
-    def __init__(self, model: ProposalModel, *, event_sink: EventSink | None = None) -> None:
+    def __init__(
+        self,
+        model: ProposalModel,
+        *,
+        event_sink: EventSink | None = None,
+        typed_program_registry: TypedProgramBindingRegistry | None = None,
+    ) -> None:
         self.model = model
         self.event_sink = event_sink or NullEventSink()
+        self.typed_program_registry = (
+            typed_program_registry or TypedProgramBindingRegistry()
+        )
         self._root_replay_lock = threading.Lock()
         self._root_replay_records: dict[
             str,
@@ -125,6 +145,11 @@ class StructuredHypothesisProposer:
         self._latest_family_slot_batch_targets: dict[
             str,
             tuple[tuple[str, ...], tuple[str | None, ...]],
+        ] = {}
+        self._typed_selection_replay_lock = threading.Lock()
+        self._typed_selection_replay_records: dict[
+            str,
+            tuple[HypothesisProgram, str, str],
         ] = {}
 
     def family_slot_target_for(
@@ -204,6 +229,305 @@ class StructuredHypothesisProposer:
                     program.payload_hash,
                     set(),
                 ).add(target)
+
+    def select_typed_recipe(
+        self,
+        *,
+        snapshot: TypedRecipeSelectionSnapshot,
+        evaluator_epoch: str,
+        trace_id: str,
+        parent: HypothesisProgram | None = None,
+        failed_checks: Sequence[Mapping[str, Any]] = (),
+        depth: int = 0,
+        excluded_recipe_ids: Sequence[str] = (),
+        selection_round: int | None = None,
+    ) -> HypothesisProgram:
+        """Select one opaque recipe and materialize it with harness-owned text."""
+
+        snapshot_issues = snapshot.validate()
+        if snapshot_issues:
+            raise PermissionError(
+                f"typed selection snapshot is invalid: {list(snapshot_issues)}"
+            )
+        snapshot_ledger = (
+            self.typed_program_registry.require_snapshot_ledger(snapshot)
+        )
+        if not evaluator_epoch.strip():
+            raise ValueError("typed recipe selection evaluator epoch is missing")
+        repair = parent is not None
+        if repair != bool(depth):
+            raise ValueError("typed repair depth and parent must be paired")
+        if selection_round is not None and (
+            not isinstance(selection_round, int)
+            or isinstance(selection_round, bool)
+            or selection_round < 1
+        ):
+            raise ValueError("typed selection round must be a positive integer")
+        graph_recipe_ids = {
+            row.recipe_id for row in snapshot.graph.recipes
+        }
+        if (
+            any(
+                not isinstance(recipe_id, str) or not recipe_id
+                for recipe_id in excluded_recipe_ids
+            )
+        ):
+            raise PermissionError("typed selection exclusions are malformed")
+        canonical_excluded_recipe_ids = set(excluded_recipe_ids)
+        if not canonical_excluded_recipe_ids.issubset(graph_recipe_ids):
+            raise PermissionError("typed selection exclusions are malformed")
+        parent_recipe_id: str | None = None
+        parent_binding = None
+        if parent is not None:
+            if parent.evaluator_epoch != evaluator_epoch:
+                raise PermissionError("typed repair crossed evaluator epochs")
+            parent_binding = (
+                self.typed_program_registry.require_for_snapshot(
+                    parent,
+                    snapshot,
+                )
+            )
+            parent_recipe_id = typed_recipe_id_for_program(
+                parent,
+                snapshot=snapshot,
+            )
+            if parent_recipe_id is None:
+                raise PermissionError(
+                    "typed repair parent is outside the frozen snapshot"
+                )
+            if parent_binding.recipe_id != parent_recipe_id:
+                raise PermissionError(
+                    "typed repair parent recipe binding mismatch"
+                )
+            canonical_excluded_recipe_ids.update(
+                parent_binding.excluded_recipe_ids
+            )
+            canonical_excluded_recipe_ids.update(
+                self.typed_program_registry.lineage_recipe_ids(
+                    parent,
+                    snapshot=snapshot,
+                )
+            )
+
+        canonical_excluded = tuple(sorted(canonical_excluded_recipe_ids))
+        expected_selection_round = len(canonical_excluded) + 1
+        if selection_round is None:
+            selection_round = expected_selection_round
+        elif selection_round != expected_selection_round:
+            raise PermissionError(
+                "typed selection round does not match the complete exclusion scope"
+            )
+        request_kind = (
+            TYPED_REPAIR_RECIPE_SELECTION_REQUEST
+            if repair
+            else TYPED_ROOT_RECIPE_SELECTION_REQUEST
+        )
+        payload = canonical_typed_recipe_selection_request(
+            snapshot=snapshot,
+            snapshot_ledger=snapshot_ledger,
+            evaluator_epoch=evaluator_epoch,
+            selection_round=selection_round,
+            excluded_recipe_ids=canonical_excluded,
+            parent_program_hash=(
+                parent_binding.program_identity_hash
+                if parent_binding is not None
+                else None
+            ),
+            parent_recipe_id=parent_recipe_id,
+            failed_checks=failed_checks,
+            repair_depth=depth,
+        )
+        if payload["request_kind"] != request_kind:
+            raise PermissionError("typed selection request kind is inconsistent")
+        output_schema = payload["output_schema"]
+        allowed_recipe_ids = list(
+            output_schema["properties"]["recipe_id"]["enum"]
+        )
+        request_hash = stable_hash(payload)
+        self.event_sink.emit(
+            Event(
+                event="typed_recipe_selection_requested",
+                stage="proposal.typed_selection",
+                trace_id=trace_id,
+                payload={
+                    "request_kind": request_kind,
+                    "request_hash": request_hash,
+                    "snapshot_hash": snapshot.snapshot_hash,
+                    "snapshot_ledger_hash": snapshot_ledger.ledger_hash,
+                    "graph_hash": snapshot.expected_graph_hash,
+                    "model_catalog_hash": (
+                        snapshot.expected_model_catalog_hash
+                    ),
+                    "target_family_hash": (
+                        snapshot.graph.target_family_hash
+                    ),
+                    "allowed_recipe_count": len(allowed_recipe_ids),
+                    "selection_round": selection_round,
+                    "excluded_recipe_count": len(canonical_excluded),
+                    "excluded_recipe_set_hash": stable_hash(
+                        {"recipe_ids": list(canonical_excluded)}
+                    ),
+                    "repair_depth": depth,
+                    "model_output_fields": ["recipe_id"],
+                    "model_authored_primitive_count": 0,
+                    "raw_artifact_locator_disclosure_count": 0,
+                    "raw_content_persisted": False,
+                },
+            )
+        )
+        with self._typed_selection_replay_lock:
+            replay = self._typed_selection_replay_records.get(request_hash)
+        if replay is not None:
+            program, response_hash, source_trace_id = replay
+            self.typed_program_registry.require(program)
+            self.event_sink.emit(
+                Event(
+                    event="typed_recipe_selection_replayed",
+                    stage="proposal.typed_selection",
+                    trace_id=trace_id,
+                    payload={
+                        "request_kind": request_kind,
+                        "request_hash": request_hash,
+                        "response_hash": response_hash,
+                        "snapshot_hash": snapshot.snapshot_hash,
+                        "snapshot_ledger_hash": snapshot_ledger.ledger_hash,
+                        "source_trace_id": source_trace_id,
+                        "target_trace_id": trace_id,
+                        "program_id": program.id,
+                        "program_hash": program.payload_hash,
+                        "new_selector_calls": 0,
+                        "raw_content_persisted": False,
+                    },
+                )
+            )
+            return program
+
+        response = self._complete(payload, trace_id=trace_id)
+        if not isinstance(response, Mapping) or set(response) != {"recipe_id"}:
+            raise self._response_contract_error(
+                payload=payload,
+                response=response,
+                expected_field="recipe_id",
+                failure_phase="typed_selection_response_envelope",
+                trace_id=trace_id,
+                response_contract_policy=TYPED_RECIPE_SELECTION_VERSION,
+            )
+        recipe_id = response.get("recipe_id")
+        if not isinstance(recipe_id, str) or recipe_id not in allowed_recipe_ids:
+            raise self._response_contract_error(
+                payload=payload,
+                response=response,
+                expected_field="recipe_id",
+                failure_phase="typed_selection_recipe_reference",
+                trace_id=trace_id,
+                response_contract_policy=TYPED_RECIPE_SELECTION_VERSION,
+            )
+        try:
+            program = materialize_recipe_selection(
+                {"recipe_id": recipe_id},
+                graph=snapshot.graph,
+                evaluator_epoch=evaluator_epoch,
+                expected_graph_hash=snapshot.expected_graph_hash,
+                expected_model_catalog_hash=(
+                    snapshot.expected_model_catalog_hash
+                ),
+            )
+        except PermissionError as exc:
+            raise self._response_contract_error(
+                payload=payload,
+                response=response,
+                expected_field="recipe_id",
+                failure_phase="typed_selection_materialization",
+                trace_id=trace_id,
+                parse_error=exc,
+                response_contract_policy=TYPED_RECIPE_SELECTION_VERSION,
+            ) from exc
+
+        parent_hash: str | None = None
+        if parent is not None:
+            assert parent_binding is not None
+            parent_hash = parent_binding.program_identity_hash
+            canonical_content = program.to_dict()
+            canonical_content.pop("id", None)
+            branch_identity_hash = stable_hash(
+                {
+                    "policy": TYPED_REPAIR_BRANCH_ID_POLICY_VERSION,
+                    "parent_program_hash": parent_hash,
+                    "snapshot_hash": snapshot.snapshot_hash,
+                    "snapshot_ledger_hash": snapshot_ledger.ledger_hash,
+                    "recipe_id": recipe_id,
+                    "repair_depth": depth,
+                    "canonical_program_without_id": canonical_content,
+                }
+            )
+            program = replace(
+                program,
+                id=f"repair_{branch_identity_hash}",
+                parent_id=parent.id,
+                lineage=(*parent.lineage, parent.id),
+                created_from_transition_ids=(
+                    parent.created_from_transition_ids
+                ),
+            )
+        canonical_response = canonical_typed_recipe_selection_response(
+            recipe_id
+        )
+        if dict(response) != canonical_response:
+            raise PermissionError("typed selection response is not canonical")
+        response_hash = stable_hash(canonical_response)
+        binding = self.typed_program_registry.register(
+            program,
+            snapshot=snapshot,
+            recipe_id=recipe_id,
+            request_kind=request_kind,
+            request_hash=request_hash,
+            response_hash=response_hash,
+            selection_round=selection_round,
+            excluded_recipe_ids=canonical_excluded,
+            parent=parent,
+            failed_checks=failed_checks,
+            repair_depth=depth,
+        )
+        with self._typed_selection_replay_lock:
+            existing = self._typed_selection_replay_records.get(request_hash)
+            if existing is not None and existing[0] != program:
+                raise PermissionError("typed selection replay conflict")
+            self._typed_selection_replay_records[request_hash] = (
+                program,
+                response_hash,
+                trace_id,
+            )
+        self.event_sink.emit(
+            Event(
+                event="typed_recipe_selection_materialized",
+                stage="proposal.typed_selection",
+                trace_id=trace_id,
+                payload={
+                    "request_kind": request_kind,
+                    "request_hash": request_hash,
+                    "response_hash": response_hash,
+                    "snapshot_hash": snapshot.snapshot_hash,
+                    "graph_hash": snapshot.expected_graph_hash,
+                    "model_catalog_hash": (
+                        snapshot.expected_model_catalog_hash
+                    ),
+                    "recipe_id": recipe_id,
+                    "program_id": program.id,
+                    "program_hash": program.payload_hash,
+                    "binding_hash": binding.binding_hash,
+                    "selection_round": selection_round,
+                    "excluded_recipe_count": len(canonical_excluded),
+                    "excluded_recipe_set_hash": stable_hash(
+                        {"recipe_ids": list(canonical_excluded)}
+                    ),
+                    "repair_depth": depth,
+                    "model_authored_primitive_count": 0,
+                    "harness_owned_materialization": True,
+                    "raw_content_persisted": False,
+                },
+            )
+        )
+        return program
 
     def propose(
         self,
@@ -574,10 +898,35 @@ class StructuredHypothesisProposer:
         residuals: Sequence[ResidualExample],
         depth: int,
         capabilities: Mapping[str, Any] | None = None,
+        typed_recipe_snapshot: TypedRecipeSelectionSnapshot | None = None,
         trace_id: str,
     ) -> HypothesisProgram:
         if any(residual.split is not SplitName.TRAIN for residual in residuals):
             raise PermissionError("recursive repair may use training residuals only")
+        try:
+            parent_typed_binding = self.typed_program_registry.require(parent)
+        except PermissionError:
+            parent_typed_binding = None
+        if (
+            parent_typed_binding is None
+            and self.typed_program_registry.matches_registered_snapshot(parent)
+        ):
+            raise PermissionError(
+                "unbound typed parent cannot enter generic free-text repair"
+            )
+        if parent_typed_binding is not None and typed_recipe_snapshot is None:
+            raise PermissionError(
+                "typed parent cannot enter generic free-text repair"
+            )
+        if typed_recipe_snapshot is not None:
+            return self.select_typed_recipe(
+                snapshot=typed_recipe_snapshot,
+                evaluator_epoch=parent.evaluator_epoch,
+                trace_id=trace_id,
+                parent=parent,
+                failed_checks=failed_checks,
+                depth=depth,
+            )
         capability_payload = dict(capabilities or {})
         repair_request_scope_policy = capability_payload.get(
             "repair_request_scope_policy"
@@ -839,7 +1188,11 @@ class StructuredHypothesisProposer:
                         "request_hash": request_hash,
                         "error_type": type(exc).__name__,
                         "candidate_local_failure": (
-                            request_kind == "repair_hypothesis_program"
+                            request_kind
+                            in {
+                                "repair_hypothesis_program",
+                                TYPED_REPAIR_RECIPE_SELECTION_REQUEST,
+                            }
                         ),
                         "raw_error_persisted": False,
                         "raw_content_persisted": False,
@@ -897,7 +1250,11 @@ class StructuredHypothesisProposer:
                     "failure_phase": failure_phase,
                     "error_type": "MalformedProposalResponse",
                     "candidate_local_failure": (
-                        request_kind == "repair_hypothesis_program"
+                        request_kind
+                        in {
+                            "repair_hypothesis_program",
+                            TYPED_REPAIR_RECIPE_SELECTION_REQUEST,
+                        }
                     ),
                     "expected_field": expected_field,
                     "top_level_type": type(response).__name__,

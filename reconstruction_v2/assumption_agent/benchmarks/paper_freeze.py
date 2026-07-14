@@ -3,13 +3,19 @@ from __future__ import annotations
 import argparse
 import json
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from ..evaluation import PairSummary, PromotionGateSpec, promotion_summary_blockers
+from ..evolution import TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION
 from ..models import HypothesisProgram, HypothesisStatus, SplitName, stable_hash
 from ..splits import SplitManifest
+from ..typed_operator_grammar import (
+    TypedProgramBindingRegistry,
+    TypedSelectionSnapshotLedger,
+    validate_typed_selection_history_payloads,
+)
 from .paper_controls import ControlSource, control_config_hash, source_tree_hash
 from .codex_execution_policy import LEGACY_CODEX_AGENT_EXECUTION_POLICY
 from .paper_protocol import (
@@ -140,9 +146,17 @@ class FrozenArchive:
     evaluator_epoch: str
     active_programs: tuple[HypothesisProgram, ...]
     content_hash: str
+    typed_bindings: tuple[Mapping[str, Any], ...] = ()
+    typed_selection_history: tuple[Mapping[str, Any], ...] = ()
+    typed_snapshot_ledger_hash: str = ""
+    typed_program_registry: TypedProgramBindingRegistry | None = field(
+        default=None,
+        repr=False,
+        compare=False,
+    )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "archive_hash": self.archive_hash,
             "incumbent_id": self.incumbent_id,
             "evaluator_epoch": self.evaluator_epoch,
@@ -150,6 +164,34 @@ class FrozenArchive:
             "active_program_hashes": [row.payload_hash for row in self.active_programs],
             "content_hash": self.content_hash,
         }
+        if self.typed_bindings:
+            payload.update(
+                {
+                    "typed_binding_hashes": [
+                        row["binding_hash"] for row in self.typed_bindings
+                    ],
+                    "typed_binding_set_hash": stable_hash(
+                        {
+                            "binding_hashes": [
+                                row["binding_hash"]
+                                for row in self.typed_bindings
+                            ]
+                        }
+                    ),
+                    "typed_snapshot_ledger_hash": (
+                        self.typed_snapshot_ledger_hash
+                    ),
+                }
+            )
+        if self.typed_selection_history:
+            payload["typed_selection_history_hash"] = stable_hash(
+                {
+                    "bindings": [
+                        dict(row) for row in self.typed_selection_history
+                    ]
+                }
+            )
+        return payload
 
 
 def freeze_paper_workspace(
@@ -167,6 +209,9 @@ def freeze_paper_workspace(
 ) -> dict[str, Any]:
     project = Path(project_root).resolve()
     benchmark = Path(benchmark_root).resolve()
+    typed_protocol = protocol.payload.get("execution", {}).get(
+        "proposal_formation_policy"
+    ) == TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION
     _validate_protocol_lock(
         protocol,
         protocol_lock,
@@ -174,6 +219,37 @@ def freeze_paper_workspace(
         project,
         benchmark,
     )
+    typed_selection_ledger: TypedSelectionSnapshotLedger | None = None
+    if typed_protocol:
+        if manifest.manifest_hash != protocol_lock.get(
+            "primary_manifest_hash"
+        ):
+            raise PermissionError(
+                "typed paper freeze currently requires the primary frozen manifest"
+            )
+        # Do not accept a caller-supplied ledger: the public freeze boundary
+        # reopens the formal result receipt through the production loader.
+        from .skilllearn_experiment import (
+            _load_typed_selection_for_execution,
+        )
+
+        loaded_typed_selection = _load_typed_selection_for_execution(
+            root=benchmark,
+            manifest_path=(
+                project / str(protocol.payload["primary_manifest"])
+            ),
+            protocol=protocol,
+            execution_contract=protocol.payload["execution"],
+            proposal_formation_policy=str(
+                protocol.payload["execution"].get(
+                    "proposal_formation_policy"
+                )
+            ),
+        )
+        loaded_typed_selection.require_freeze_authorization()
+        typed_selection_ledger = (
+            loaded_typed_selection.production_snapshot_ledger
+        )
     recursive_report = _read_mapping(recursive_report_path, "recursive development report")
     no_recursive_report = _read_mapping(
         no_recursive_report_path,
@@ -205,6 +281,7 @@ def freeze_paper_workspace(
         expected_report=recursive_report,
         promotion_spec=protocol.promotion_gate_spec,
         protocol_version=str(protocol.payload["protocol_version"]),
+        typed_selection_ledger=typed_selection_ledger,
     )
     no_recursive_archive = read_frozen_archive(
         no_recursive_archive_path,
@@ -212,6 +289,7 @@ def freeze_paper_workspace(
         expected_report=no_recursive_report,
         promotion_spec=protocol.promotion_gate_spec,
         protocol_version=str(protocol.payload["protocol_version"]),
+        typed_selection_ledger=typed_selection_ledger,
     )
     require_promoted_recursive_candidate(recursive_archive)
     controls_root = Path(controls_output_root).resolve()
@@ -327,6 +405,7 @@ def read_frozen_archive(
     expected_report: Mapping[str, Any],
     promotion_spec: PromotionGateSpec,
     protocol_version: str = "",
+    typed_selection_ledger: TypedSelectionSnapshotLedger | None = None,
 ) -> FrozenArchive:
     source = Path(path)
     payload = _read_mapping(source, "policy archive")
@@ -352,6 +431,75 @@ def read_frozen_archive(
         if program.evaluator_epoch != expected_evaluator_epoch:
             raise ValueError("archive hypothesis evaluator epoch mismatch")
         hypotheses[str(key)] = program
+    typed_bindings_payload = payload.get("typed_bindings")
+    typed_selection_history_payload = payload.get(
+        "typed_selection_history"
+    )
+    if typed_selection_ledger is None:
+        if (
+            typed_bindings_payload is not None
+            or typed_selection_history_payload is not None
+        ):
+            raise ValueError(
+                "typed archive bindings require the frozen snapshot ledger"
+            )
+        typed_bindings: tuple[Mapping[str, Any], ...] = ()
+        typed_selection_history: tuple[Mapping[str, Any], ...] = ()
+        typed_program_registry: TypedProgramBindingRegistry | None = None
+    else:
+        if not isinstance(typed_bindings_payload, Mapping) or set(
+            str(key) for key in typed_bindings_payload
+        ) != set(hypotheses):
+            raise ValueError(
+                "typed archive binding coverage does not match hypotheses"
+            )
+        typed_program_registry = TypedProgramBindingRegistry(
+            snapshot_ledger=typed_selection_ledger
+        )
+        ordered_binding_rows: list[Mapping[str, Any]] = []
+        sortable_rows: list[tuple[int, str, Mapping[str, Any]]] = []
+        for key, row in typed_bindings_payload.items():
+            if not isinstance(row, Mapping):
+                raise ValueError("typed archive binding row is malformed")
+            lineage = row.get("lineage_program_ids")
+            if not isinstance(lineage, list) or not all(
+                isinstance(value, str) for value in lineage
+            ):
+                raise ValueError("typed archive binding lineage is malformed")
+            sortable_rows.append((len(lineage), str(key), dict(row)))
+        for _, key, row in sorted(sortable_rows):
+            try:
+                restored = typed_program_registry.restore_safe_payload(
+                    hypotheses[key],
+                    row,
+                )
+            except (PermissionError, ValueError) as exc:
+                raise ValueError(
+                    "typed archive binding provenance is invalid"
+                ) from exc
+            ordered_binding_rows.append(restored.safe_payload())
+        typed_bindings = tuple(ordered_binding_rows)
+        if not isinstance(typed_selection_history_payload, Mapping):
+            raise ValueError("typed archive selection history is missing")
+        try:
+            history_rows = validate_typed_selection_history_payloads(
+                typed_selection_history_payload,
+                snapshot_ledger=typed_selection_ledger,
+            )
+        except PermissionError as exc:
+            raise ValueError(
+                "typed archive selection history provenance is invalid"
+            ) from exc
+        binding_hashes = {
+            row["binding_hash"] for row in typed_bindings
+        }
+        if not binding_hashes <= {
+            row["binding_hash"] for row in history_rows
+        }:
+            raise ValueError(
+                "typed archive selection history omits a hypothesis binding"
+            )
+        typed_selection_history = tuple(history_rows)
     for key, row in nodes_payload.items():
         if not isinstance(row, Mapping) or row.get("id") != key:
             raise ValueError("archive node identity is invalid")
@@ -397,6 +545,32 @@ def read_frozen_archive(
                 if isinstance(value, Mapping)
             },
             "incumbent_id": incumbent_id,
+            **(
+                {
+                    "typed_bindings": {
+                        str(key): dict(value)
+                        for key, value in sorted(
+                            typed_bindings_payload.items()
+                        )
+                    }
+                }
+                if isinstance(typed_bindings_payload, Mapping)
+                else {}
+            ),
+            **(
+                {
+                    "typed_selection_history": {
+                        str(key): dict(value)
+                        for key, value in sorted(
+                            typed_selection_history_payload.items()
+                        )
+                    }
+                }
+                if isinstance(
+                    typed_selection_history_payload, Mapping
+                )
+                else {}
+            ),
         }
     )
     if calculated_hash != payload.get("archive_hash"):
@@ -538,6 +712,14 @@ def read_frozen_archive(
         evaluator_epoch=expected_evaluator_epoch,
         active_programs=active_programs,
         content_hash=_file_content_hash(source),
+        typed_bindings=typed_bindings,
+        typed_selection_history=typed_selection_history,
+        typed_snapshot_ledger_hash=(
+            typed_selection_ledger.ledger_hash
+            if typed_selection_ledger is not None
+            else ""
+        ),
+        typed_program_registry=typed_program_registry,
     )
 
 
@@ -552,7 +734,6 @@ def _compile_control_set(
     static_program: HypothesisProgram,
     archives: Mapping[str, FrozenArchive],
 ) -> tuple[ControlSource, ...]:
-    compiler = SkillLearnProgramCompiler()
     controls: list[ControlSource] = []
     for control in protocol.payload["controls"]:
         control_id = str(control["id"])
@@ -562,16 +743,29 @@ def _compile_control_set(
             continue
         if source == "baselines/static_generic_program.json":
             programs = (static_program,)
+            typed_program_registry = None
         elif source == "frozen_archive_incumbent":
-            programs = archives["promoted_v2"].active_programs
+            selected_archive = archives["promoted_v2"]
+            programs = selected_archive.active_programs
+            typed_program_registry = (
+                selected_archive.typed_program_registry
+            )
         elif source == "no_recursive_archive_incumbent":
-            programs = archives["v2_no_recursive_repair"].active_programs
+            selected_archive = archives["v2_no_recursive_repair"]
+            programs = selected_archive.active_programs
+            typed_program_registry = (
+                selected_archive.typed_program_registry
+            )
         else:
             root = (project_root / source).resolve()
             if not root.is_dir():
                 raise FileNotFoundError(f"external control source is missing: {control_id}")
             controls.append(ControlSource(control_id, root))
             continue
+        compiler = SkillLearnProgramCompiler(
+            typed_program_registry=typed_program_registry,
+            require_typed_bindings=typed_program_registry is not None,
+        )
         result = compiler.compile(
             programs=programs,
             items=items,

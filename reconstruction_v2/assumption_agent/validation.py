@@ -17,6 +17,10 @@ from .proposer import (
     StructuredHypothesisProposer,
     train_action_quality_contract,
 )
+from .typed_operator_grammar import (
+    TypedRecipeSelectionSnapshot,
+    typed_program_snapshot_binding,
+)
 
 
 ALL_ACTION_OPERATIONS = frozenset(
@@ -59,6 +63,10 @@ class ValidationContext:
     action_design_profiles: Mapping[str, Mapping[str, Any]] = field(
         default_factory=dict
     )
+    typed_selection_snapshots: tuple[
+        TypedRecipeSelectionSnapshot, ...
+    ] = ()
+    typed_selection_ledger_hash: str = ""
 
 
 def backend_action_contract_issues(
@@ -610,6 +618,51 @@ class RecursiveValidationEngine:
                 )
             )
             return None
+        typed_recipe_snapshot: TypedRecipeSelectionSnapshot | None = None
+        if context.typed_selection_snapshots:
+            typed_binding = typed_program_snapshot_binding(
+                program,
+                context.typed_selection_snapshots,
+            )
+            try:
+                registry_binding = (
+                    self.proposer.typed_program_registry.require(program)
+                    if self.proposer is not None
+                    else None
+                )
+            except PermissionError:
+                registry_binding = None
+            if (
+                typed_binding is None
+                or registry_binding is None
+                or typed_binding[0].snapshot_hash
+                != registry_binding.snapshot_hash
+            ):
+                self.event_sink.emit(
+                    Event(
+                        event="typed_repair_blocked_unbound_parent",
+                        stage="validation.repair",
+                        trace_id=trace_id,
+                        payload={
+                            "parent_id": program.id,
+                            "parent_hash": program.payload_hash,
+                            "repair_depth": depth + 1,
+                            "generic_repair_invoked": False,
+                            "raw_content_persisted": False,
+                        },
+                    )
+                )
+                nodes.append(
+                    ValidationNode(
+                        program=program,
+                        depth=depth,
+                        checks=results,
+                        child_id=None,
+                        terminal_reason="typed_snapshot_unbound",
+                    )
+                )
+                return None
+            typed_recipe_snapshot = typed_binding[0]
         try:
             child = self.proposer.revise(
                 program,
@@ -695,6 +748,7 @@ class RecursiveValidationEngine:
                         else {}
                     ),
                 },
+                typed_recipe_snapshot=typed_recipe_snapshot,
                 trace_id=trace_id,
             )
         except HypothesisProposalCallError as exc:

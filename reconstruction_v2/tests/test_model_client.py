@@ -11,10 +11,14 @@ from assumption_agent.events import MemoryEventSink
 from assumption_agent.model_client import (
     ACTION_QUALITY_SYSTEM_PROMPT_ADDENDUM,
     PROPOSAL_SYSTEM_PROMPT,
+    TYPED_RECIPE_SELECTION_SYSTEM_PROMPT,
     OpenAICompatibleConfig,
     OpenAICompatibleProposalModel,
 )
-from assumption_agent.proposer import TRAIN_ACTION_DESIGN_POLICY_VERSION
+from assumption_agent.proposer import (
+    TRAIN_ACTION_DESIGN_POLICY_VERSION,
+    TYPED_ROOT_RECIPE_SELECTION_REQUEST,
+)
 from assumption_agent.secure_env import (
     configured_api_origin,
     configured_model,
@@ -124,6 +128,28 @@ def test_action_quality_addendum_is_request_local_to_supported_contract(monkeypa
     )
     assert "task_instruction as the baseline requirement" in system_prompt
     assert "action-quality audit is diagnostic only" in system_prompt
+
+
+def test_typed_recipe_request_uses_closed_selection_system_prompt(monkeypatch) -> None:
+    monkeypatch.setenv("TEST_ASSUMPTION_API_KEY", "secret-value")
+    transport = FakeTransport()
+    model = OpenAICompatibleProposalModel(
+        OpenAICompatibleConfig(
+            base_url="https://provider.example/v1",
+            model="gpt-5.4-mini",
+            api_key_env="TEST_ASSUMPTION_API_KEY",
+            attempts=1,
+        ),
+        transport=transport,
+    )
+
+    model.complete({"request_kind": TYPED_ROOT_RECIPE_SELECTION_REQUEST})
+
+    system_prompt = transport.calls[0]["payload"]["messages"][0]["content"]
+    assert system_prompt == TYPED_RECIPE_SELECTION_SYSTEM_PROMPT
+    assert "only permitted output field is recipe_id" in system_prompt
+    assert "Do not return a statement, trigger, action, command, locator" in system_prompt
+    assert PROPOSAL_SYSTEM_PROMPT not in system_prompt
 
 
 @pytest.mark.parametrize(

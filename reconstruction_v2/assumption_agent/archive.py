@@ -96,14 +96,46 @@ class EvaluatorTransition:
 class PolicyArchive:
     def __init__(self, *, event_sink: EventSink | None = None) -> None:
         self.hypotheses: dict[str, HypothesisProgram] = {}
+        # Typed recipe bindings are deliberately stored beside, rather than in,
+        # HypothesisProgram.  Promotion changes a program's status and therefore
+        # its payload hash, while the harness-owned executable binding must stay
+        # immutable and independently auditable across process boundaries.
+        self.typed_bindings: dict[str, dict[str, Any]] = {}
+        # Every successful opaque recipe selection is retained independently of
+        # behavior deduplication or promotion.  This is the exclusion source for
+        # future generations; the hypothesis archive alone is not an attempt
+        # ledger because duplicate behaviors may never become hypotheses.
+        self.typed_selection_history: dict[str, dict[str, Any]] = {}
         self.nodes: dict[str, ArchiveNode] = {}
         self.score_records: dict[str, ScoreRecord] = {}
         self.incumbent_id: str | None = None
         self.event_sink = event_sink or NullEventSink()
 
-    def register_hypothesis(self, program: HypothesisProgram, *, trace_id: str = "archive") -> None:
+    def register_hypothesis(
+        self,
+        program: HypothesisProgram,
+        *,
+        typed_binding: Mapping[str, Any] | None = None,
+        trace_id: str = "archive",
+    ) -> None:
         if program.id in self.hypotheses and self.hypotheses[program.id].payload_hash != program.payload_hash:
             raise ValueError(f"hypothesis ID collision: {program.id}")
+        canonical_binding: dict[str, Any] | None = None
+        if typed_binding is not None:
+            canonical_binding = self.register_typed_selection(
+                program,
+                typed_binding=typed_binding,
+                trace_id=trace_id,
+            )
+            existing_binding = self.typed_bindings.get(program.id)
+            if (
+                existing_binding is not None
+                and existing_binding != canonical_binding
+            ):
+                raise ValueError(
+                    f"typed archive binding collision: {program.id}"
+                )
+            self.typed_bindings[program.id] = canonical_binding
         self.hypotheses[program.id] = program
         self.event_sink.emit(
             Event(
@@ -116,9 +148,63 @@ class PolicyArchive:
                     "kind": program.kind.value,
                     "status": program.status.value,
                     "evaluator_epoch": program.evaluator_epoch,
+                    "typed_binding_hash": (
+                        canonical_binding["binding_hash"]
+                        if canonical_binding is not None
+                        else None
+                    ),
                 },
             )
         )
+
+    def register_typed_selection(
+        self,
+        program: HypothesisProgram,
+        *,
+        typed_binding: Mapping[str, Any],
+        trace_id: str = "archive",
+    ) -> dict[str, Any]:
+        canonical_binding = dict(typed_binding)
+        declared_hash = canonical_binding.pop("binding_hash", None)
+        if canonical_binding.get("program_id") != program.id:
+            raise ValueError("typed archive binding program identity mismatch")
+        if canonical_binding.get("raw_content_persisted") is not False:
+            raise ValueError("typed archive binding safety receipt is missing")
+        if declared_hash != stable_hash(canonical_binding):
+            raise ValueError("typed archive binding content hash mismatch")
+        canonical_binding["binding_hash"] = declared_hash
+        existing = self.typed_selection_history.get(str(declared_hash))
+        if existing is not None and existing != canonical_binding:
+            raise ValueError(
+                f"typed selection history collision: {declared_hash}"
+            )
+        if existing is None:
+            self.typed_selection_history[str(declared_hash)] = (
+                canonical_binding
+            )
+            self.event_sink.emit(
+                Event(
+                    event="archive_typed_selection_recorded",
+                    stage="archive.typed_selection",
+                    trace_id=trace_id,
+                    payload={
+                        "program_id": program.id,
+                        "program_identity_hash": canonical_binding.get(
+                            "program_identity_hash"
+                        ),
+                        "binding_hash": declared_hash,
+                        "snapshot_hash": canonical_binding.get(
+                            "snapshot_hash"
+                        ),
+                        "recipe_id": canonical_binding.get("recipe_id"),
+                        "selection_round": canonical_binding.get(
+                            "selection_round"
+                        ),
+                        "raw_content_persisted": False,
+                    },
+                )
+            )
+        return dict(canonical_binding)
 
     def set_hypothesis_status(
         self,
@@ -289,21 +375,41 @@ class PolicyArchive:
         return tuple(sorted(invalidated))
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        archive_evidence: dict[str, Any] = {
+            "hypotheses": {key: value.payload_hash for key, value in sorted(self.hypotheses.items())},
+            "nodes": {key: value.payload_hash for key, value in sorted(self.nodes.items())},
+            "scores": {key: asdict(value) for key, value in sorted(self.score_records.items())},
+            "incumbent_id": self.incumbent_id,
+        }
+        payload: dict[str, Any] = {
             "hypotheses": {key: value.to_dict() for key, value in sorted(self.hypotheses.items())},
             "nodes": {key: value.to_dict() for key, value in sorted(self.nodes.items())},
             "score_records": {key: asdict(value) for key, value in sorted(self.score_records.items())},
             "incumbent_id": self.incumbent_id,
-            "archive_hash": stable_hash(
-                {
-                    "hypotheses": {key: value.payload_hash for key, value in sorted(self.hypotheses.items())},
-                    "nodes": {key: value.payload_hash for key, value in sorted(self.nodes.items())},
-                    "scores": {key: asdict(value) for key, value in sorted(self.score_records.items())},
-                    "incumbent_id": self.incumbent_id,
-                }
-            ),
             "raw_content_persisted": False,
         }
+        # Preserve the byte/hash contract of historical untyped archives while
+        # making typed archives receipt-complete.
+        if self.typed_bindings:
+            typed_bindings = {
+                key: dict(value)
+                for key, value in sorted(self.typed_bindings.items())
+            }
+            payload["typed_bindings"] = typed_bindings
+            archive_evidence["typed_bindings"] = typed_bindings
+        if self.typed_selection_history:
+            typed_selection_history = {
+                key: dict(value)
+                for key, value in sorted(
+                    self.typed_selection_history.items()
+                )
+            }
+            payload["typed_selection_history"] = typed_selection_history
+            archive_evidence["typed_selection_history"] = (
+                typed_selection_history
+            )
+        payload["archive_hash"] = stable_hash(archive_evidence)
+        return payload
 
     def write(self, path: str | Path) -> None:
         destination = Path(path)

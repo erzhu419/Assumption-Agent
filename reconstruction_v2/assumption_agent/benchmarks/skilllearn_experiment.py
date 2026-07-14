@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -13,10 +15,15 @@ from ..evolution import (
     CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
     PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
     PROPOSAL_FORMATION_POLICY_VERSIONS,
+    TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION,
     TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
     CounterfactualEvidenceReplayCache,
 )
 from ..models import stable_hash
+from ..typed_operator_grammar import (
+    TYPED_SELECTION_FREEZE_AUTHORIZATION_VERSION,
+    TypedSelectionFreezeAuthorization,
+)
 from ..provider_chain import build_proposal_model, proposal_provider_status
 from ..proposer import (
     LEGACY_PROPOSAL_DIVERSITY_POLICY_VERSION,
@@ -50,6 +57,8 @@ from .paper_protocol import (
     COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION,
     PaperProtocol,
     PROGRAM_SET_COUNTERFACTUAL_REPLAY_POLICY_VERSION,
+    TYPED_SELECTION_PROTOCOL_VERSION,
+    authorize_typed_selection_execution,
     validate_protocol_lock_for_execution,
 )
 from .skilllearn_compiler import (
@@ -97,6 +106,11 @@ from .skilllearn_lifecycle import (
 )
 from .offline_verifier import OFFLINE_VERIFIER_POLICY_VERSION
 from .skilllearnbench import SkillLearnBenchAdapter
+from .typed_selection_integration import (
+    TYPED_SELECTION_INTEGRATION_VERSION,
+    load_frozen_typed_selection_ledger,
+    verify_typed_selection_integration_result_receipt,
+)
 
 
 _PROPOSAL_MODEL_FAILURE_CLAIM_BLOCKER = (
@@ -327,12 +341,14 @@ def main() -> None:
         raise ValueError("experiment manifest is not owned by the frozen paper protocol")
     protocol_lock_hash: str | None = None
     protocol_lock_error: str | None = None
+    protocol_lock_payload: Mapping[str, Any] | None = None
     if args.protocol_lock:
-        protocol_lock_payload = json.loads(
+        loaded_protocol_lock = json.loads(
             args.protocol_lock.read_text(encoding="utf-8")
         )
-        if not isinstance(protocol_lock_payload, Mapping):
+        if not isinstance(loaded_protocol_lock, Mapping):
             raise ValueError("protocol lock must contain one JSON object")
+        protocol_lock_payload = loaded_protocol_lock
         try:
             protocol_lock_hash = validate_protocol_lock_for_execution(
                 paper_protocol,
@@ -359,6 +375,41 @@ def main() -> None:
     manifest_ids = {*manifest.train_ids, *manifest.validation_ids, *manifest.test_ids}
     if not manifest_ids <= inventory_ids:
         raise ValueError("manifest contains IDs absent from the local SkillLearnBench inventory")
+
+    typed_selection_ledger = _load_typed_selection_for_execution(
+        root=args.root,
+        manifest_path=args.manifest,
+        protocol=paper_protocol,
+        execution_contract=execution_contract,
+        proposal_formation_policy=proposal_formation_policy,
+    )
+    typed_selection_freeze_authorization = (
+        typed_selection_ledger.require_freeze_authorization()
+        if typed_selection_ledger is not None
+        else None
+    )
+    typed_selection_execution_authorization = None
+    if (
+        typed_selection_ledger is not None
+        and typed_selection_freeze_authorization is not None
+        and protocol_lock_payload is not None
+        and protocol_lock_error is None
+    ):
+        typed_selection_execution_authorization = (
+            authorize_typed_selection_execution(
+                paper_protocol,
+                protocol_lock_payload,
+                manifest,
+                protocol_root,
+                args.root,
+                ledger=(
+                    typed_selection_ledger.production_snapshot_ledger
+                ),
+                freeze_authorization=(
+                    typed_selection_freeze_authorization
+                ),
+            )
+        )
 
     train_ids = _select_ids(args.train_id, manifest.train_ids, args.train_limit)
     validation_ids = _select_ids(
@@ -417,6 +468,27 @@ def main() -> None:
         **(
             {"proposal_formation_policy": proposal_formation_policy}
             if proposal_formation_policy is not None
+            else {}
+        ),
+        **(
+            {
+                "typed_selection_snapshot_ledger_hash": (
+                    typed_selection_ledger.production_snapshot_ledger.ledger_hash
+                ),
+                "typed_selection_integration_authorized": True,
+                "typed_selection_task_execution_authorized": (
+                    typed_selection_execution_authorization is not None
+                ),
+                "typed_selection_freeze_authorization_hash": (
+                    typed_selection_freeze_authorization.authorization_hash
+                ),
+                "typed_selection_execution_authorization_hash": (
+                    typed_selection_execution_authorization.authorization_hash
+                    if typed_selection_execution_authorization is not None
+                    else None
+                ),
+            }
+            if typed_selection_ledger is not None
             else {}
         ),
         **(
@@ -668,6 +740,22 @@ def main() -> None:
         proposal_candidates_per_generation=proposal_candidates_per_generation,
         candidate_selection_policy=candidate_selection_policy,
         proposal_formation_policy=proposal_formation_policy,
+        typed_selection_snapshots=(
+            typed_selection_ledger.snapshots
+            if typed_selection_ledger is not None
+            else ()
+        ),
+        typed_selection_ledger=(
+            typed_selection_ledger.production_snapshot_ledger
+            if typed_selection_ledger is not None
+            else None
+        ),
+        typed_selection_freeze_authorization=(
+            typed_selection_freeze_authorization
+        ),
+        typed_selection_execution_authorization=(
+            typed_selection_execution_authorization
+        ),
         candidate_bundle_policy=candidate_bundle_policy,
         contrastive_training_evidence_policy=(
             contrastive_training_evidence_policy
@@ -716,6 +804,22 @@ def main() -> None:
             proposal_candidates_per_generation=proposal_candidates_per_generation,
             candidate_selection_policy=candidate_selection_policy,
             proposal_formation_policy=proposal_formation_policy,
+            typed_selection_snapshots=(
+                typed_selection_ledger.snapshots
+                if typed_selection_ledger is not None
+                else ()
+            ),
+            typed_selection_ledger=(
+                typed_selection_ledger.production_snapshot_ledger
+                if typed_selection_ledger is not None
+                else None
+            ),
+            typed_selection_freeze_authorization=(
+                typed_selection_freeze_authorization
+            ),
+            typed_selection_execution_authorization=(
+                typed_selection_execution_authorization
+            ),
             candidate_bundle_policy=candidate_bundle_policy,
             contrastive_training_evidence_policy=(
                 contrastive_training_evidence_policy
@@ -886,6 +990,16 @@ def _run_paired_arms(
         != no_recursive_harness.contrastive_training_evidence_policy
         or recursive_harness.train_action_design_policy
         != no_recursive_harness.train_action_design_policy
+        or (
+            recursive_harness.typed_selection_ledger.ledger_hash
+            if recursive_harness.typed_selection_ledger is not None
+            else ""
+        )
+        != (
+            no_recursive_harness.typed_selection_ledger.ledger_hash
+            if no_recursive_harness.typed_selection_ledger is not None
+            else ""
+        )
     ):
         raise ValueError("paired arms must share training evidence and selection policies")
     recursive_runner = recursive_harness.counterfactual_runner
@@ -986,6 +1100,10 @@ def _run_paired_arms(
         checkpoint_descriptor["proposal_formation_policy"] = (
             recursive_harness.proposal_formation_policy
         )
+    if recursive_harness.typed_selection_ledger is not None:
+        checkpoint_descriptor["typed_selection_snapshot_ledger_hash"] = (
+            recursive_harness.typed_selection_ledger.ledger_hash
+        )
     action_context_profile_hashes = sorted(
         {
             str(row.context.get("action_context_profile_hash") or "")
@@ -1054,6 +1172,10 @@ def _run_paired_arms(
     if recursive_harness.proposal_formation_policy:
         checkpoint_payload["proposal_formation_policy"] = (
             recursive_harness.proposal_formation_policy
+        )
+    if recursive_harness.typed_selection_ledger is not None:
+        checkpoint_payload["typed_selection_snapshot_ledger_hash"] = (
+            recursive_harness.typed_selection_ledger.ledger_hash
         )
     if recursive_harness.train_action_design_policy:
         checkpoint_payload.update(
@@ -1370,6 +1492,204 @@ def _generation_counterfactual_evidence_counts(
             )
         counts.append(value)
     return counts[0], counts[1], counts[2]
+
+
+def _load_typed_selection_for_execution(
+    *,
+    root: str | Path,
+    manifest_path: str | Path,
+    protocol: PaperProtocol,
+    execution_contract: Mapping[str, Any],
+    proposal_formation_policy: str | None,
+    integration_diagnostic_policy: str | None = None,
+) -> Any:
+    """Load the receipt-authorized typed snapshot source for production.
+
+    The formal integration diagnostic and production CLI share the same
+    offline reconstruction loader. Production additionally verifies the
+    completed result receipt and every canonical artifact committed by it.
+    The named diagnostic-only path never grants task execution authority.
+    """
+
+    typed_enabled = (
+        proposal_formation_policy
+        == TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION
+    )
+    source = execution_contract.get("typed_selection_snapshot_source")
+    if typed_enabled != isinstance(source, Mapping):
+        raise ValueError(
+            "typed proposal formation and snapshot source must be paired"
+        )
+    if not typed_enabled:
+        return None
+    if protocol.payload.get("protocol_version") != (
+        TYPED_SELECTION_PROTOCOL_VERSION
+    ):
+        raise PermissionError(
+            "typed selection requires the frozen typed protocol version"
+        )
+    diagnostic_only = (
+        integration_diagnostic_policy
+        == TYPED_SELECTION_INTEGRATION_VERSION
+    )
+    if integration_diagnostic_policy is not None and not diagnostic_only:
+        raise PermissionError(
+            "typed selection integration diagnostic policy is invalid"
+        )
+    assert isinstance(source, Mapping)
+    required = {
+        "preregistration",
+        "preregistration_file_sha256",
+        "source_run_root",
+        "source_train_receipt",
+        "source_train_receipt_file_sha256",
+        "integration_result_receipt",
+        "integration_result_receipt_file_sha256",
+        "snapshot_ledger_hash",
+    }
+    if set(source) != required:
+        raise PermissionError("typed selection snapshot source is malformed")
+    protocol_root = protocol.path.parent.parent.resolve(strict=True)
+    preregistration = _resolve_protocol_source_path(
+        protocol_root,
+        source["preregistration"],
+        expect_directory=False,
+    )
+    source_run_root = _resolve_protocol_source_path(
+        protocol_root,
+        source["source_run_root"],
+        expect_directory=True,
+    )
+    source_train_receipt = _resolve_protocol_source_path(
+        protocol_root,
+        source["source_train_receipt"],
+        expect_directory=False,
+    )
+    if _sha256_path(preregistration) != source[
+        "preregistration_file_sha256"
+    ]:
+        raise PermissionError(
+            "typed selection preregistration file hash drifted"
+        )
+    if _sha256_path(source_train_receipt) != source[
+        "source_train_receipt_file_sha256"
+    ]:
+        raise PermissionError(
+            "typed selection source TRAIN receipt file hash drifted"
+        )
+    authorization: Mapping[str, Any] | None = None
+    authorization_path: Path | None = None
+    source_binding: Mapping[str, Any] | None = None
+    if not diagnostic_only:
+        authorization_path = _resolve_protocol_source_path(
+            protocol_root,
+            source["integration_result_receipt"],
+            expect_directory=False,
+        )
+        if _sha256_path(authorization_path) != source[
+            "integration_result_receipt_file_sha256"
+        ]:
+            raise PermissionError(
+                "typed selection authorization receipt file hash drifted"
+            )
+        authorization = verify_typed_selection_integration_result_receipt(
+            preregistration_path=preregistration,
+            result_receipt_path=authorization_path,
+        )
+        source_binding = authorization.get("source_binding")
+        if not isinstance(source_binding, Mapping) or (
+            source_binding.get("source_run_root")
+            != source["source_run_root"]
+            or source_binding.get("source_train_receipt")
+            != source["source_train_receipt"]
+            or source_binding.get("source_train_receipt_file_sha256")
+            != source["source_train_receipt_file_sha256"]
+            or source_binding.get("production_snapshot_ledger_hash")
+            != source["snapshot_ledger_hash"]
+        ):
+            raise PermissionError(
+                "typed selection authorization source binding drifted"
+            )
+    ledger = load_frozen_typed_selection_ledger(
+        root=root,
+        manifest_path=manifest_path,
+        source_run_root=source_run_root,
+        source_train_receipt=source_train_receipt,
+        preregistration_path=preregistration,
+    )
+    if ledger.production_snapshot_ledger.ledger_hash != source[
+        "snapshot_ledger_hash"
+    ]:
+        raise PermissionError(
+            "typed selection production snapshot ledger drifted"
+        )
+    if authorization is not None and authorization.get(
+        "fresh_development_protocol_freeze_eligible"
+    ) is not True:
+        raise PermissionError(
+            "typed selection integration did not authorize protocol freeze"
+        )
+    if authorization is not None:
+        assert authorization_path is not None
+        assert source_binding is not None
+        freeze_authorization = TypedSelectionFreezeAuthorization(
+            authorization_policy=(
+                TYPED_SELECTION_FREEZE_AUTHORIZATION_VERSION
+            ),
+            result_receipt_stable_hash=stable_hash(authorization),
+            result_receipt_file_sha256=_sha256_path(authorization_path),
+            source_binding_hash=stable_hash(dict(source_binding)),
+            snapshot_ledger_hash=(
+                ledger.production_snapshot_ledger.ledger_hash
+            ),
+            fresh_development_protocol_freeze_eligible=True,
+            development_task_execution_authorized=False,
+        )
+        issues = freeze_authorization.validate_for(
+            ledger.production_snapshot_ledger
+        )
+        if issues:
+            raise PermissionError(
+                f"typed selection freeze authorization is invalid: {list(issues)}"
+            )
+        ledger = replace(
+            ledger,
+            freeze_authorization=freeze_authorization,
+        )
+    return ledger
+
+
+def _resolve_protocol_source_path(
+    protocol_root: Path,
+    declared: Any,
+    *,
+    expect_directory: bool,
+) -> Path:
+    if not isinstance(declared, str) or not declared.strip():
+        raise PermissionError("typed selection source path is malformed")
+    candidate = Path(declared)
+    if candidate.is_absolute():
+        raise PermissionError("typed selection source path must be relative")
+    resolved = (protocol_root / candidate).resolve(strict=True)
+    try:
+        resolved.relative_to(protocol_root)
+    except ValueError as exc:
+        raise PermissionError(
+            "typed selection source path escaped the project root"
+        ) from exc
+    if expect_directory != resolved.is_dir():
+        raise PermissionError("typed selection source path kind mismatch")
+    if not expect_directory and not resolved.is_file():
+        raise PermissionError("typed selection source file is missing")
+    return resolved
+
+
+def _sha256_path(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _experiment_phase_name(

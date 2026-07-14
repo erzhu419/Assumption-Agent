@@ -35,6 +35,13 @@ from .proposer import (
     train_action_quality_contract,
 )
 from .splits import AccessPhase, SplitAccessGuard
+from .typed_operator_grammar import (
+    TypedRecipeSelectionSnapshot,
+    TypedSelectionExecutionAuthorization,
+    TypedSelectionFreezeAuthorization,
+    TypedSelectionSnapshotLedger,
+    typed_program_snapshot_binding,
+)
 from .validation import RecursiveValidationEngine, ValidationContext, ValidationTree
 
 
@@ -82,8 +89,17 @@ PROPOSAL_FORMATION_POLICY_VERSION = (
     FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION
 )
 PROPOSAL_FORMATION_POLICY_V2 = FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_V2
-PROPOSAL_FORMATION_POLICY_VERSIONS = frozenset(
+FREE_TEXT_PROPOSAL_FORMATION_POLICY_VERSIONS = frozenset(
     {PROPOSAL_FORMATION_POLICY_VERSION, PROPOSAL_FORMATION_POLICY_V2}
+)
+TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION = (
+    "train_closed_typed_recipe_selection_v1"
+)
+PROPOSAL_FORMATION_POLICY_VERSIONS = frozenset(
+    {
+        *FREE_TEXT_PROPOSAL_FORMATION_POLICY_VERSIONS,
+        TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION,
+    }
 )
 _RECOMMENDED_ARTIFACT_KIND_PRIORITY = {
     "artifact_command_path": 0,
@@ -546,6 +562,16 @@ class EvolutionKernel:
         contrastive_training_evidence_policy: str | None = None,
         train_action_design_policy: str | None = None,
         proposal_formation_policy: str | None = None,
+        typed_selection_snapshots: Sequence[
+            TypedRecipeSelectionSnapshot
+        ] = (),
+        typed_selection_ledger: TypedSelectionSnapshotLedger | None = None,
+        typed_selection_freeze_authorization: (
+            TypedSelectionFreezeAuthorization | None
+        ) = None,
+        typed_selection_execution_authorization: (
+            TypedSelectionExecutionAuthorization | None
+        ) = None,
         repair_request_scope_policy: str | None = None,
         event_sink: EventSink | None = None,
     ) -> None:
@@ -590,7 +616,8 @@ class EvolutionKernel:
                 f"{proposal_formation_policy}"
             )
         if (
-            proposal_formation_policy in PROPOSAL_FORMATION_POLICY_VERSIONS
+            proposal_formation_policy
+            in FREE_TEXT_PROPOSAL_FORMATION_POLICY_VERSIONS
             and train_action_design_policy
             != TRAIN_ACTION_DESIGN_POLICY_VERSION
         ):
@@ -651,6 +678,49 @@ class EvolutionKernel:
                 "profile-grounded family-slot proposal formation requires "
                 "exactly three candidates"
             )
+        canonical_typed_snapshots = tuple(typed_selection_snapshots)
+        typed_policy_enabled = (
+            proposal_formation_policy
+            == TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION
+        )
+        if typed_policy_enabled != bool(canonical_typed_snapshots) or (
+            typed_policy_enabled != (typed_selection_ledger is not None)
+        ):
+            raise ValueError(
+                "typed proposal formation, frozen snapshots, and ledger must be paired"
+            )
+        if typed_policy_enabled:
+            assert typed_selection_ledger is not None
+            ledger_issues = typed_selection_ledger.validate()
+            if ledger_issues:
+                raise PermissionError(
+                    f"typed selection ledger is invalid: {list(ledger_issues)}"
+                )
+            if typed_selection_ledger.snapshots != canonical_typed_snapshots:
+                raise PermissionError(
+                    "typed proposal snapshots drifted from the frozen ledger"
+                )
+            if len(canonical_typed_snapshots) != proposal_candidates_per_generation:
+                raise ValueError(
+                    "typed proposal formation requires one snapshot per candidate"
+                )
+            if any(row.validate() for row in canonical_typed_snapshots):
+                raise PermissionError(
+                    "typed proposal formation received an invalid snapshot"
+                )
+            if len(
+                {row.snapshot_hash for row in canonical_typed_snapshots}
+            ) != len(canonical_typed_snapshots):
+                raise ValueError("typed proposal snapshots must be distinct")
+            if len(
+                {
+                    row.graph.target_family_hash
+                    for row in canonical_typed_snapshots
+                }
+            ) != len(canonical_typed_snapshots):
+                raise ValueError(
+                    "typed proposal snapshots must target distinct families"
+                )
         self.proposal_candidates_per_generation = proposal_candidates_per_generation
         self.candidate_selection_policy = candidate_selection_policy
         self.candidate_bundle_policy = candidate_bundle_policy
@@ -659,6 +729,54 @@ class EvolutionKernel:
         )
         self.train_action_design_policy = train_action_design_policy
         self.proposal_formation_policy = proposal_formation_policy
+        self.typed_selection_snapshots = canonical_typed_snapshots
+        self.typed_selection_ledger = typed_selection_ledger
+        self.typed_selection_freeze_authorization = (
+            typed_selection_freeze_authorization
+        )
+        self.typed_selection_execution_authorization = (
+            typed_selection_execution_authorization
+        )
+        if typed_policy_enabled:
+            assert typed_selection_ledger is not None
+            if typed_selection_freeze_authorization is not None:
+                authorization_issues = (
+                    typed_selection_freeze_authorization.validate_for(
+                        typed_selection_ledger
+                    )
+                )
+                if authorization_issues:
+                    raise PermissionError(
+                        "typed selection freeze authorization is invalid: "
+                        f"{list(authorization_issues)}"
+                    )
+            if typed_selection_execution_authorization is not None:
+                if typed_selection_freeze_authorization is None:
+                    raise PermissionError(
+                        "typed task execution authorization requires its "
+                        "formal freeze authorization"
+                    )
+                execution_issues = (
+                    typed_selection_execution_authorization.validate_for(
+                        typed_selection_ledger,
+                        typed_selection_freeze_authorization,
+                    )
+                )
+                if execution_issues:
+                    raise PermissionError(
+                        "typed task execution authorization is invalid: "
+                        f"{list(execution_issues)}"
+                    )
+            self.proposer.typed_program_registry.bind_snapshot_ledger(
+                typed_selection_ledger
+            )
+        elif (
+            typed_selection_freeze_authorization is not None
+            or typed_selection_execution_authorization is not None
+        ):
+            raise ValueError(
+                "typed selection authorization requires typed proposal formation"
+            )
         self.repair_request_scope_policy = repair_request_scope_policy
         self.event_sink = event_sink or NullEventSink()
         self._promotion_feedback: list[dict[str, object]] = []
@@ -701,6 +819,53 @@ class EvolutionKernel:
             raise ValueError(
                 "validation context TRAIN action design policy mismatch"
             )
+        typed_policy_enabled = (
+            self.proposal_formation_policy
+            == TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION
+        )
+        if typed_policy_enabled:
+            assert self.typed_selection_ledger is not None
+            if (
+                self.typed_selection_freeze_authorization is None
+                or self.typed_selection_execution_authorization is None
+            ):
+                raise PermissionError(
+                    "typed evolution requires validated protocol-lock task "
+                    "execution authorization"
+                )
+            execution_issues = (
+                self.typed_selection_execution_authorization.validate_for(
+                    self.typed_selection_ledger,
+                    self.typed_selection_freeze_authorization,
+                )
+            )
+            if execution_issues:
+                raise PermissionError(
+                    "typed task execution authorization is invalid: "
+                    f"{list(execution_issues)}"
+                )
+            if validation_context.typed_selection_ledger_hash != (
+                self.typed_selection_ledger.ledger_hash
+            ):
+                raise PermissionError(
+                    "validation context typed ledger commitment mismatch"
+                )
+            expected_snapshot_hashes = tuple(
+                row.snapshot_hash for row in self.typed_selection_snapshots
+            )
+            context_snapshot_hashes = tuple(
+                row.snapshot_hash
+                for row in validation_context.typed_selection_snapshots
+            )
+            if context_snapshot_hashes != expected_snapshot_hashes:
+                raise PermissionError(
+                    "validation context typed snapshot commitment mismatch"
+                )
+            if proposal_candidates:
+                self.validate_typed_shared_proposal_candidates(
+                    proposal_candidates,
+                    trace_id=trace_id,
+                )
         for task in validation_tasks:
             self.split_guard.authorize(task.id, AccessPhase.PROMOTION)
         shared_proposals_supplied = bool(proposal_candidates)
@@ -717,6 +882,12 @@ class EvolutionKernel:
         )
         if not proposals:
             raise ValueError("evolution requires at least one proposal candidate")
+        if typed_policy_enabled:
+            self._require_typed_candidate_batch(proposals)
+            self.record_typed_selection_attempts(
+                proposals,
+                trace_id=trace_id,
+            )
         if any(row.evaluator_epoch != validation_context.evaluator_epoch for row in proposals):
             raise ValueError("shared proposal candidate crossed evaluator epochs")
         if (
@@ -787,7 +958,18 @@ class EvolutionKernel:
                 trace_id=candidate_trace,
             )
             for node in tree.nodes:
-                self.archive.register_hypothesis(node.program, trace_id=candidate_trace)
+                self.archive.register_hypothesis(
+                    node.program,
+                    typed_binding=(
+                        self.proposer.typed_program_registry.safe_binding(
+                            node.program
+                        )
+                        if self.proposal_formation_policy
+                        == TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION
+                        else None
+                    ),
+                    trace_id=candidate_trace,
+                )
             accepted = tree.accepted_program
             if accepted is None:
                 for node in tree.nodes:
@@ -1230,7 +1412,16 @@ class EvolutionKernel:
     ) -> tuple[HypothesisProgram, ...]:
         if (
             self.proposal_formation_policy
-            in PROPOSAL_FORMATION_POLICY_VERSIONS
+            == TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION
+        ):
+            return self._propose_typed_recipe_candidates(
+                residuals,
+                validation_context=validation_context,
+                trace_id=trace_id,
+            )
+        if (
+            self.proposal_formation_policy
+            in FREE_TEXT_PROPOSAL_FORMATION_POLICY_VERSIONS
         ):
             return self._propose_family_slot_candidates(
                 residuals,
@@ -1391,6 +1582,326 @@ class EvolutionKernel:
             },
             trace_id=trace_id,
         )
+
+    def _propose_typed_recipe_candidates(
+        self,
+        residuals: Sequence[ResidualExample],
+        *,
+        validation_context: ValidationContext,
+        trace_id: str,
+    ) -> tuple[HypothesisProgram, ...]:
+        issues = [
+            issue for residual in residuals for issue in residual.validate()
+        ]
+        if issues:
+            raise PermissionError(
+                f"proposal data isolation failed: {sorted(set(issues))}"
+            )
+        expected_snapshot_hashes = tuple(
+            row.snapshot_hash for row in self.typed_selection_snapshots
+        )
+        context_snapshot_hashes = tuple(
+            row.snapshot_hash
+            for row in validation_context.typed_selection_snapshots
+        )
+        if context_snapshot_hashes != expected_snapshot_hashes:
+            raise PermissionError(
+                "typed proposal snapshot commitment mismatch"
+            )
+        if self.typed_selection_ledger is None or (
+            validation_context.typed_selection_ledger_hash
+            != self.typed_selection_ledger.ledger_hash
+        ):
+            raise PermissionError(
+                "typed proposal ledger commitment mismatch"
+            )
+        plan_rows: list[dict[str, Any]] = []
+        selection_scopes: list[tuple[tuple[str, ...], int]] = []
+        for index, snapshot in enumerate(
+            self.typed_selection_snapshots,
+            start=1,
+        ):
+            excluded_recipe_ids: set[str] = set()
+            for history_row in self.archive.typed_selection_history.values():
+                if history_row.get("snapshot_hash") != snapshot.snapshot_hash:
+                    continue
+                recipe_id = history_row.get("recipe_id")
+                prior_exclusions = history_row.get("excluded_recipe_ids")
+                if not isinstance(recipe_id, str) or not isinstance(
+                    prior_exclusions, list
+                ):
+                    raise PermissionError(
+                        "typed selection history is malformed"
+                    )
+                excluded_recipe_ids.update(
+                    str(value) for value in prior_exclusions
+                )
+                excluded_recipe_ids.add(recipe_id)
+            canonical_exclusions = tuple(sorted(excluded_recipe_ids))
+            selection_round = len(canonical_exclusions) + 1
+            selection_scopes.append(
+                (canonical_exclusions, selection_round)
+            )
+            plan_rows.append(
+                {
+                    "slot_index": index,
+                    **snapshot.safe_payload(),
+                    "selection_round": selection_round,
+                    "excluded_recipe_ids": list(canonical_exclusions),
+                    "excluded_recipe_set_hash": stable_hash(
+                        {"recipe_ids": list(canonical_exclusions)}
+                    ),
+                }
+            )
+        plan_hash = stable_hash(
+            {
+                "policy": TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION,
+                "snapshot_ledger_hash": (
+                    self.typed_selection_ledger.ledger_hash
+                    if self.typed_selection_ledger is not None
+                    else ""
+                ),
+                "slots": plan_rows,
+            }
+        )
+        self.event_sink.emit(
+            Event(
+                event="proposal_typed_recipe_plan_created",
+                stage="proposal.typed_selection",
+                trace_id=trace_id,
+                payload={
+                    "policy": TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION,
+                    "slot_count": len(plan_rows),
+                    "distinct_target_family_count": len(
+                        {
+                            row.graph.target_family_hash
+                            for row in self.typed_selection_snapshots
+                        }
+                    ),
+                    "snapshot_set_hash": stable_hash(
+                        {"snapshot_hashes": expected_snapshot_hashes}
+                    ),
+                    "snapshot_ledger_hash": (
+                        self.typed_selection_ledger.ledger_hash
+                        if self.typed_selection_ledger is not None
+                        else ""
+                    ),
+                    "plan_hash": plan_hash,
+                    "slots": plan_rows,
+                    "validation_features_used": False,
+                    "validation_outcomes_used": False,
+                    "verifier_content_used": False,
+                    "test_content_used": False,
+                    "raw_content_persisted": False,
+                },
+            )
+        )
+        programs: list[HypothesisProgram] = []
+        for index, (snapshot, selection_scope) in enumerate(
+            zip(self.typed_selection_snapshots, selection_scopes),
+            start=1,
+        ):
+            excluded_recipe_ids, selection_round = selection_scope
+            program = self.proposer.select_typed_recipe(
+                snapshot=snapshot,
+                evaluator_epoch=validation_context.evaluator_epoch,
+                trace_id=f"{trace_id}:typed-slot-{index}",
+                excluded_recipe_ids=excluded_recipe_ids,
+                selection_round=selection_round,
+            )
+            binding = self.proposer.typed_program_registry.require(program)
+            programs.append(program)
+            self.event_sink.emit(
+                Event(
+                    event="proposal_typed_recipe_slot_completed",
+                    stage="proposal.typed_selection",
+                    trace_id=f"{trace_id}:typed-slot-{index}",
+                    payload={
+                        "policy": (
+                            TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION
+                        ),
+                        "slot_index": index,
+                        "plan_hash": plan_hash,
+                        "snapshot_hash": snapshot.snapshot_hash,
+                        "snapshot_ledger_hash": (
+                            self.typed_selection_ledger.ledger_hash
+                            if self.typed_selection_ledger is not None
+                            else ""
+                        ),
+                        "target_family_hash": (
+                            snapshot.graph.target_family_hash
+                        ),
+                        "recipe_id": binding.recipe_id,
+                        "program_id": program.id,
+                        "program_hash": program.payload_hash,
+                        "binding_hash": binding.binding_hash,
+                        "selection_round": selection_round,
+                        "excluded_recipe_count": len(excluded_recipe_ids),
+                        "excluded_recipe_set_hash": stable_hash(
+                            {"recipe_ids": list(excluded_recipe_ids)}
+                        ),
+                        "model_authored_primitive_count": 0,
+                        "harness_owned_materialization": True,
+                        "raw_content_persisted": False,
+                    },
+                )
+            )
+        result = tuple(programs)
+        self._require_typed_candidate_batch(result)
+        requested_targets = tuple(
+            row.graph.target_family for row in self.typed_selection_snapshots
+        )
+        self.proposer.record_family_slot_batch(result, requested_targets)
+        self._record_matched_proposal_families(
+            result,
+            residuals=residuals,
+            validation_context=validation_context,
+            trace_id=trace_id,
+            source="generated_typed_recipe_slots",
+            requested_targets=requested_targets,
+        )
+        self.event_sink.emit(
+            Event(
+                event="proposal_typed_recipes_completed",
+                stage="proposal.typed_selection",
+                trace_id=trace_id,
+                payload={
+                    "policy": TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION,
+                    "plan_hash": plan_hash,
+                    "candidate_count": len(result),
+                    "candidate_set_hash": stable_hash(
+                        {
+                            "candidate_hashes": [
+                                row.payload_hash for row in result
+                            ]
+                        }
+                    ),
+                    "binding_set_hash": stable_hash(
+                        {
+                            "binding_hashes": [
+                                self.proposer.typed_program_registry.require(
+                                    row
+                                ).binding_hash
+                                for row in result
+                            ]
+                        }
+                    ),
+                    "snapshot_ledger_hash": (
+                        self.typed_selection_ledger.ledger_hash
+                        if self.typed_selection_ledger is not None
+                        else ""
+                    ),
+                    "model_authored_primitive_count": 0,
+                    "validation_features_used": False,
+                    "validation_outcomes_used": False,
+                    "verifier_content_used": False,
+                    "test_content_used": False,
+                    "raw_content_persisted": False,
+                },
+            )
+        )
+        return result
+
+    def record_typed_selection_attempts(
+        self,
+        programs: Sequence[HypothesisProgram],
+        *,
+        trace_id: str,
+    ) -> None:
+        """Persist every selected recipe before behavior deduplication."""
+
+        if self.proposal_formation_policy != (
+            TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION
+        ):
+            raise PermissionError(
+                "typed selection attempts require typed proposal formation"
+            )
+        self._require_typed_candidate_batch(programs)
+        for program in programs:
+            self.archive.register_typed_selection(
+                program,
+                typed_binding=(
+                    self.proposer.typed_program_registry.safe_binding(program)
+                ),
+                trace_id=trace_id,
+            )
+
+    def _require_typed_candidate_batch(
+        self,
+        programs: Sequence[HypothesisProgram],
+    ) -> tuple[dict[str, Any], ...]:
+        if len(programs) != self.proposal_candidates_per_generation:
+            raise PermissionError(
+                "typed shared candidate batch cardinality mismatch"
+            )
+        bindings: list[dict[str, Any]] = []
+        snapshot_hashes: list[str] = []
+        for program in programs:
+            binding = self.proposer.typed_program_registry.require(program)
+            matched = typed_program_snapshot_binding(
+                program,
+                self.typed_selection_snapshots,
+            )
+            if matched is None or matched[0].snapshot_hash != (
+                binding.snapshot_hash
+            ):
+                raise PermissionError(
+                    "typed shared candidate snapshot binding mismatch"
+                )
+            bindings.append(binding.safe_payload())
+            snapshot_hashes.append(binding.snapshot_hash)
+        if tuple(snapshot_hashes) != tuple(
+            row.snapshot_hash for row in self.typed_selection_snapshots
+        ):
+            raise PermissionError(
+                "typed shared candidate batch order or coverage mismatch"
+            )
+        return tuple(bindings)
+
+    def validate_typed_shared_proposal_candidates(
+        self,
+        programs: Sequence[HypothesisProgram],
+        *,
+        trace_id: str,
+    ) -> tuple[dict[str, Any], ...]:
+        if (
+            self.proposal_formation_policy
+            != TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION
+        ):
+            raise PermissionError(
+                "typed shared proposals require the typed formation policy"
+            )
+        bindings = self._require_typed_candidate_batch(programs)
+        self.event_sink.emit(
+            Event(
+                event="typed_shared_proposal_batch_validated",
+                stage="evolution.shared_proposals",
+                trace_id=trace_id,
+                payload={
+                    "policy": TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION,
+                    "candidate_count": len(programs),
+                    "candidate_set_hash": stable_hash(
+                        {
+                            "candidate_hashes": [
+                                row.payload_hash for row in programs
+                            ]
+                        }
+                    ),
+                    "binding_set_hash": stable_hash(
+                        {
+                            "binding_hashes": [
+                                row["binding_hash"] for row in bindings
+                            ]
+                        }
+                    ),
+                    "new_selector_calls": 0,
+                    "validation_features_used": False,
+                    "validation_outcomes_used": False,
+                    "raw_content_persisted": False,
+                },
+            )
+        )
+        return bindings
 
     def _propose_family_slot_candidates(
         self,

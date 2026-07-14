@@ -19,7 +19,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from enum import Enum
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from types import MappingProxyType, ModuleType
 from typing import Any, Callable, Iterable, Iterator, Mapping, Protocol, Sequence, TypeVar
 from urllib.parse import urlsplit, urlunsplit
@@ -37,6 +37,7 @@ from ..evolution import (
     EvolutionRunResult,
     PROPOSAL_FORMATION_POLICY_VERSIONS,
     PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
+    TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION,
     TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
 )
 from ..models import (
@@ -62,6 +63,12 @@ from ..proposer import (
 )
 from ..secure_env import configured_skilllearn_provider_mode
 from ..splits import AccessPhase, BenchmarkItem, SplitAccessGuard, SplitManifest
+from ..typed_operator_grammar import (
+    TypedRecipeSelectionSnapshot,
+    TypedSelectionExecutionAuthorization,
+    TypedSelectionFreezeAuthorization,
+    TypedSelectionSnapshotLedger,
+)
 from ..validation import (
     RecursiveValidationEngine,
     ValidationContext,
@@ -74,8 +81,12 @@ from .skilllearn_compiler import (
     SKILL_ROUTING_VERSION,
     SKILLLEARN_ALLOWED_ACTION_OPERATIONS,
     SkillLearnProgramCompiler,
+    SkillSourceReceipt,
+    SkillSourceTreeReceipt,
     skilllearn_program_set_treatment_hash,
     skilllearn_program_treatment_hash,
+    verify_compiled_skill_source,
+    verify_skill_source_tree,
 )
 from .skilllearnbench import (
     TRAIN_ACTION_ENVIRONMENT_PROFILE_VERSION,
@@ -500,11 +511,52 @@ class SkillLearnTrialRequest:
     program_id: str | None = None
     program_set_hash: str = ""
     treatment_hash: str = ""
+    compile_manifest_hash: str = ""
+    skill_source_receipt_hash: str = ""
+    external_skill_source_receipt_hash: str = ""
+    # Ephemeral host capability used to re-open a compiled no-route receipt.
+    # It is intentionally excluded from ``to_dict`` and therefore never enters
+    # a persisted request, trial ID, or model-visible payload.
+    compile_root: Path | None = field(default=None, compare=False, repr=False)
+    typed_binding_set_hash: str = ""
+    typed_snapshot_hashes: tuple[str, ...] = ()
+    typed_snapshot_ledger_hash: str = ""
     candidate_delta_program_set_hash: str = ""
     candidate_full_program_set_hash: str = ""
     matched_candidate_program_set_hash: str = ""
     selected_candidate_hypothesis_ids: tuple[str, ...] = ()
     matched_candidate_hypothesis_ids: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        typed_fields = (
+            bool(self.typed_binding_set_hash),
+            bool(self.typed_snapshot_hashes),
+            bool(self.typed_snapshot_ledger_hash),
+        )
+        if any(typed_fields) and not all(typed_fields):
+            raise ValueError("typed compile provenance must be complete")
+        if any(typed_fields) and not self.compile_manifest_hash:
+            raise ValueError("typed compile provenance requires a compile manifest")
+        if self.compile_manifest_hash and not self.skill_source_receipt_hash:
+            raise ValueError("compiled trial requires an item source receipt")
+        if self.skill_source_receipt_hash and not self.compile_manifest_hash:
+            raise ValueError("item source receipt requires a compile manifest")
+        if self.external_skill_source_receipt_hash and (
+            self.compile_manifest_hash or self.skill_source_receipt_hash
+        ):
+            raise ValueError(
+                "external and compiled source receipts are mutually exclusive"
+            )
+        if self.external_skill_source_receipt_hash and (
+            not self.program_id
+            or not self.program_set_hash
+            or not self.treatment_hash
+            or self.treatment_hash == NO_SKILL_TREATMENT_HASH
+            or self.variant is not TrialVariant.POLICY_ON
+        ):
+            raise ValueError(
+                "external source receipt requires a policy-on treatment identity"
+            )
 
     @property
     def request_hash(self) -> str:
@@ -534,6 +586,26 @@ class SkillLearnTrialRequest:
             "program_set_hash": self.program_set_hash,
             "treatment_hash": self.treatment_hash,
         }
+        if self.compile_manifest_hash:
+            payload.update(
+                {
+                    "compile_manifest_hash": self.compile_manifest_hash,
+                    "skill_source_receipt_hash": (
+                        self.skill_source_receipt_hash
+                    ),
+                    "typed_binding_set_hash": self.typed_binding_set_hash,
+                    "typed_snapshot_hashes": list(
+                        self.typed_snapshot_hashes
+                    ),
+                    "typed_snapshot_ledger_hash": (
+                        self.typed_snapshot_ledger_hash
+                    ),
+                }
+            )
+        elif self.external_skill_source_receipt_hash:
+            payload["external_skill_source_receipt_hash"] = (
+                self.external_skill_source_receipt_hash
+            )
         if self.candidate_delta_program_set_hash:
             payload.update(
                 {
@@ -584,6 +656,7 @@ class SkillLearnTrialObservation:
     step_budget_truncated: bool = False
     step_budget_token_usage_complete: bool = False
     step_budget_receipt_hash: str = ""
+    installed_skill_source_receipt_hash: str = ""
     proposal_action_trace: Mapping[str, Any] = field(
         default_factory=dict,
         compare=False,
@@ -640,6 +713,9 @@ class SkillLearnTrialObservation:
                 self.step_budget_token_usage_complete
             ),
             "step_budget_receipt_hash": self.step_budget_receipt_hash,
+            "installed_skill_source_receipt_hash": (
+                self.installed_skill_source_receipt_hash
+            ),
             "secret_value_persisted": False,
         }
         if self.proposal_action_trace:
@@ -1455,6 +1531,23 @@ class SkillLearnBackendPool:
         self.max_steps = first.max_steps
         self.codex_agent_execution_policy = first_policy
         self.codex_agent_execution_policy_hash = first_policy.policy_hash
+        installed_receipt_policies = {
+            bool(
+                getattr(
+                    backend,
+                    "requires_installed_skill_receipt",
+                    False,
+                )
+            )
+            for backend in backends
+        }
+        if len(installed_receipt_policies) != 1:
+            raise ValueError(
+                "all pooled backends must share one treatment receipt policy"
+            )
+        self.requires_installed_skill_receipt = next(
+            iter(installed_receipt_policies)
+        )
         self._available: queue.Queue[SkillLearnTrialBackend] = queue.Queue()
         for backend in backends:
             self._available.put(backend)
@@ -1479,6 +1572,8 @@ class SkillLearnBackendPool:
 
 class SkillLearnSubprocessBackend:
     """Thin, sanitized adapter around SkillLearnBench's Docker trial runner."""
+
+    requires_installed_skill_receipt = True
 
     def __init__(
         self,
@@ -1708,6 +1803,187 @@ class SkillLearnSubprocessBackend:
                 ),
             )
 
+        staged_skill_root: Path | None = None
+        runtime_source_receipt: SkillSourceReceipt | None = None
+        runtime_external_source_receipt: SkillSourceTreeReceipt | None = None
+        active_source_file_hashes: tuple[tuple[str, str], ...] = ()
+        active_source_tree_hash = ""
+        active_source_receipt_hash = ""
+        if request.compile_manifest_hash or skill_source_dir is not None:
+            try:
+                if request.compile_manifest_hash:
+                    if request.compile_root is None:
+                        raise PermissionError(
+                            "compiled trial has no ephemeral compile root"
+                        )
+                    compile_root = request.compile_root.expanduser().resolve(
+                        strict=True
+                    )
+                    if skill_source_dir is not None and (
+                        Path(skill_source_dir).expanduser().resolve(strict=True)
+                        != compile_root
+                        / "items"
+                        / stable_hash({"item_id": request.item_id})
+                    ):
+                        raise PermissionError(
+                            "compiled skill source escaped its declared root"
+                        )
+                    runtime_source_receipt = verify_compiled_skill_source(
+                        compile_root=compile_root,
+                        item_id=request.item_id,
+                        skill_source_dir=skill_source_dir,
+                        expected_compile_manifest_hash=(
+                            request.compile_manifest_hash
+                        ),
+                        expected_program_set_hash=request.program_set_hash,
+                        expected_treatment_hash=request.treatment_hash,
+                        expected_typed_binding_set_hash=(
+                            request.typed_binding_set_hash
+                        ),
+                        expected_typed_snapshot_hashes=(
+                            request.typed_snapshot_hashes
+                        ),
+                        expected_typed_snapshot_ledger_hash=(
+                            request.typed_snapshot_ledger_hash
+                        ),
+                    )
+                    if (
+                        runtime_source_receipt.receipt_hash
+                        != request.skill_source_receipt_hash
+                    ):
+                        raise PermissionError(
+                            "runtime skill source receipt does not match request"
+                        )
+                    active_source_receipt_hash = (
+                        runtime_source_receipt.receipt_hash
+                    )
+                    active_source_tree_hash = (
+                        runtime_source_receipt.source_tree_hash
+                    )
+                    if skill_source_dir is not None:
+                        staged_skill_root = Path(
+                            tempfile.mkdtemp(
+                                prefix="skilllearn_verified_treatment-"
+                            )
+                        )
+                        staged_compile_root = staged_skill_root / "compiled"
+                        staged_source = (
+                            staged_compile_root
+                            / "items"
+                            / runtime_source_receipt.item_id_hash
+                        )
+                        staged_source.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copytree(Path(skill_source_dir), staged_source)
+                        shutil.copy2(
+                            compile_root / "compile_manifest.json",
+                            staged_compile_root / "compile_manifest.json",
+                        )
+                        staged_receipt = verify_compiled_skill_source(
+                            compile_root=staged_compile_root,
+                            item_id=request.item_id,
+                            skill_source_dir=staged_source,
+                            expected_compile_manifest_hash=(
+                                request.compile_manifest_hash
+                            ),
+                            expected_program_set_hash=request.program_set_hash,
+                            expected_treatment_hash=request.treatment_hash,
+                            expected_typed_binding_set_hash=(
+                                request.typed_binding_set_hash
+                            ),
+                            expected_typed_snapshot_hashes=(
+                                request.typed_snapshot_hashes
+                            ),
+                            expected_typed_snapshot_ledger_hash=(
+                                request.typed_snapshot_ledger_hash
+                            ),
+                        )
+                        if staged_receipt != runtime_source_receipt:
+                            raise PermissionError(
+                                "staged runtime skill source drifted"
+                            )
+                        active_source_file_hashes = (
+                            runtime_source_receipt.source_file_hashes
+                        )
+                        skill_source_dir = staged_source
+                elif request.external_skill_source_receipt_hash:
+                    assert skill_source_dir is not None
+                    staged_skill_root = Path(
+                        tempfile.mkdtemp(
+                            prefix="skilllearn_verified_treatment-"
+                        )
+                    )
+                    runtime_external_source_receipt = (
+                        verify_skill_source_tree(skill_source_dir)
+                    )
+                    if (
+                        runtime_external_source_receipt.receipt_hash
+                        != request.external_skill_source_receipt_hash
+                    ):
+                        raise PermissionError(
+                            "external skill source receipt does not match request"
+                        )
+                    staged_source = staged_skill_root / "external-source"
+                    shutil.copytree(Path(skill_source_dir), staged_source)
+                    staged_external_receipt = verify_skill_source_tree(
+                        staged_source
+                    )
+                    if (
+                        staged_external_receipt
+                        != runtime_external_source_receipt
+                    ):
+                        raise PermissionError(
+                            "staged external skill source drifted"
+                        )
+                    active_source_file_hashes = (
+                        runtime_external_source_receipt.source_file_hashes
+                    )
+                    active_source_tree_hash = (
+                        runtime_external_source_receipt.source_tree_hash
+                    )
+                    active_source_receipt_hash = (
+                        runtime_external_source_receipt.receipt_hash
+                    )
+                    skill_source_dir = staged_source
+                else:
+                    raise PermissionError(
+                        "runtime skill source has no content receipt"
+                    )
+            except (OSError, PermissionError, ValueError) as exc:
+                if staged_skill_root is not None:
+                    shutil.rmtree(staged_skill_root, ignore_errors=True)
+                self.event_sink.emit(
+                    Event(
+                        event="skilllearn_trial_blocked_invalid_treatment_receipt",
+                        stage="benchmark.skilllearn.treatment_receipt",
+                        trace_id=trace_id,
+                        payload={
+                            "request_hash": request.request_hash,
+                            "compile_manifest_hash": (
+                                request.compile_manifest_hash
+                            ),
+                            "skill_source_receipt_hash": (
+                                request.skill_source_receipt_hash
+                            ),
+                            "external_skill_source_receipt_hash": (
+                                request.external_skill_source_receipt_hash
+                            ),
+                            "error_type": type(exc).__name__,
+                            "model_container_started": False,
+                            "raw_content_persisted": False,
+                        },
+                    )
+                )
+                return self._local_error(
+                    request,
+                    (
+                        "compiled_skill_source_receipt_invalid"
+                        if request.compile_manifest_hash
+                        else "external_skill_source_receipt_invalid"
+                    ),
+                )
+        elif request.treatment_hash not in {"", NO_SKILL_TREATMENT_HASH}:
+            return self._local_error(request, "declared_treatment_source_missing")
+
         self.event_sink.emit(
             Event(
                 event="skilllearn_trial_started",
@@ -1769,7 +2045,21 @@ class SkillLearnSubprocessBackend:
                     "prebuilt_policy": (
                         PREBUILT_IMAGE_POLICY_VERSION if self.prebuilt_cache else "disabled"
                     ),
-                    "skill_source_hash": stable_hash({"path": str(skill_source_dir)}) if skill_source_dir else None,
+                    "skill_source_receipt_hash": (
+                        active_source_receipt_hash or None
+                    ),
+                    "skill_source_receipt_kind": (
+                        "compiled"
+                        if runtime_source_receipt is not None
+                        else (
+                            "external"
+                            if runtime_external_source_receipt is not None
+                            else None
+                        )
+                    ),
+                    "skill_source_tree_hash": (
+                        active_source_tree_hash or None
+                    ),
                 },
             )
         )
@@ -1781,6 +2071,20 @@ class SkillLearnSubprocessBackend:
         egress_policy: DockerEgressPolicy | None = None
         try:
             runner = self._load_runner()
+            if active_source_file_hashes:
+                dockerfile = (
+                    self.benchmark_root
+                    / "tasks"
+                    / request.family
+                    / request.item_id
+                    / "environment"
+                    / "Dockerfile"
+                )
+                declared_skill_copies = runner._parse_skill_copies(dockerfile)
+                if not declared_skill_copies:
+                    raise SkillLearnAgentTerminalError(
+                        "installed_treatment_receipt_invalid"
+                    )
             if self.prebuilt_cache is None or not self.prebuilt_cache.cache_only:
                 raise RuntimeError("skilllearn_trial_requires_cache_only_prebuilt_images")
             prebuilt_image = self.prebuilt_cache.ensure(
@@ -1885,10 +2189,64 @@ class SkillLearnSubprocessBackend:
                 offline_verifier_runtime=offline_verifier_runtime,
                 trace_id=trace_id,
             ):
+                setattr(
+                    runner,
+                    "_assumption_v2_installed_skill_receipt",
+                    None,
+                )
                 return_code, result = runner.run_task(
                     f"{request.family}/{request.item_id}",
                     **kwargs,
                 )
+                if active_source_file_hashes:
+                    installed_receipt = getattr(
+                        runner,
+                        "_assumption_v2_installed_skill_receipt",
+                        None,
+                    )
+                    if not isinstance(installed_receipt, Mapping) or tuple(
+                        installed_receipt.get("source_file_hashes") or ()
+                    ) != active_source_file_hashes:
+                        raise SkillLearnAgentTerminalError(
+                            "installed_treatment_receipt_invalid"
+                        )
+                    result = dict(result)
+                    result["installed_skill_source_receipt_hash"] = (
+                        active_source_receipt_hash
+                    )
+                    result["installed_skill_tree_hash"] = (
+                        installed_receipt.get("installed_tree_hash")
+                    )
+                    result["installed_skill_destination_count"] = (
+                        installed_receipt.get("destination_count")
+                    )
+                    self.event_sink.emit(
+                        Event(
+                            event="skilllearn_treatment_installation_verified",
+                            stage="benchmark.skilllearn.treatment_receipt",
+                            trace_id=trace_id,
+                            payload={
+                                "request_hash": request.request_hash,
+                                "skill_source_receipt_hash": (
+                                    active_source_receipt_hash
+                                ),
+                                "skill_source_receipt_kind": (
+                                    "compiled"
+                                    if runtime_source_receipt is not None
+                                    else "external"
+                                ),
+                                "installed_skill_tree_hash": (
+                                    installed_receipt.get("installed_tree_hash")
+                                ),
+                                "destination_count": (
+                                    installed_receipt.get("destination_count")
+                                ),
+                                "receipt_obtained_before_agent_start": True,
+                                "host_trial_artifact_mutated": False,
+                                "raw_content_persisted": False,
+                            },
+                        )
+                    )
                 result = self._audit_trial_artifacts(
                     runner=runner,
                     request=request,
@@ -1925,6 +2283,8 @@ class SkillLearnSubprocessBackend:
             )
             result = {"error": caught_error_type}
             return_code = 2
+        if staged_skill_root is not None:
+            shutil.rmtree(staged_skill_root, ignore_errors=True)
         observation = self._sanitize_result(
             request,
             result=result,
@@ -1994,6 +2354,9 @@ class SkillLearnSubprocessBackend:
                     "step_budget_receipt_hash": (
                         observation.step_budget_receipt_hash
                     ),
+                    "installed_skill_source_receipt_hash": (
+                        observation.installed_skill_source_receipt_hash
+                    ),
                 },
             )
         )
@@ -2025,8 +2388,186 @@ class SkillLearnSubprocessBackend:
         module.get_agent = lambda agent_id: local_agents.get(str(agent_id))
         module.list_agents = lambda: sorted(local_agents)
         module._assumption_v2_local_agents = local_agents
+        self._install_treatment_receipt_adapter(module)
         self._runner_module = module
         return module
+
+    def _install_treatment_receipt_adapter(self, runner: ModuleType) -> None:
+        """Make every benchmark-declared runtime injection observable.
+
+        Preserve the benchmark's Dockerfile-declared multi-destination treatment
+        exactly, but read every destination back and verify its bytes before
+        run_task is allowed to continue to the agent process.  Discovery paths
+        are therefore evidenced by the benchmark image contract rather than
+        inferred from ``CODEX_HOME``.
+        """
+
+        original_inject = runner._inject_skills_runtime
+        original_copy_skills = getattr(
+            runner,
+            "_copy_skills_to_dest",
+            None,
+        )
+        if not callable(original_copy_skills):
+            raise RuntimeError(
+                "installed_treatment_receipt_adapter_incompatible"
+            )
+
+        def source_rows(source: Path) -> tuple[tuple[str, str], ...]:
+            rows: list[tuple[str, str]] = []
+            for path in source.rglob("*"):
+                if path.is_symlink():
+                    raise SkillLearnAgentTerminalError(
+                        "installed_treatment_receipt_invalid"
+                    )
+                if path.is_file():
+                    relative_path = path.relative_to(source).as_posix()
+                    rows.append(
+                        (
+                            relative_path,
+                            hashlib.sha256(path.read_bytes()).hexdigest(),
+                        )
+                    )
+                elif not path.is_dir():
+                    raise SkillLearnAgentTerminalError(
+                        "installed_treatment_receipt_invalid"
+                    )
+            return tuple(sorted(rows))
+
+        def inject_with_receipt(
+            container_name: str,
+            skill_source_dir: Path,
+            copies: list[tuple[str, str]],
+        ) -> None:
+            runner._assumption_v2_installed_skill_receipt = None
+            source = Path(skill_source_dir)
+            expected_rows = source_rows(source)
+            if not expected_rows:
+                raise SkillLearnAgentTerminalError(
+                    "installed_treatment_receipt_invalid"
+                )
+            if any(
+                PurePosixPath(path).name == "package.json"
+                for path, _ in expected_rows
+            ):
+                # Upstream mutates such skills with an unreceipted npm install
+                # after injection.  The frozen offline treatment grammar does
+                # not need that capability, so make it inexpressible instead
+                # of trying to audit a network/package-manager side effect.
+                raise SkillLearnAgentTerminalError(
+                    "installed_treatment_receipt_invalid"
+                )
+            if not copies:
+                raise SkillLearnAgentTerminalError(
+                    "installed_treatment_receipt_invalid"
+                )
+            receipt_root = Path(
+                tempfile.mkdtemp(prefix="skilllearn_installed_treatment-")
+            )
+            try:
+                # Pin the exact source bytes before invoking the upstream
+                # normalizer.  Runtime injection and our expected tree now read
+                # the same immutable snapshot, while a concurrent mutation of
+                # the declared source still fails the post-injection check.
+                pinned_parent = receipt_root / "pinned"
+                pinned_parent.mkdir()
+                pinned_source = pinned_parent / source.name
+                shutil.copytree(source, pinned_source)
+                if source_rows(pinned_source) != expected_rows:
+                    raise SkillLearnAgentTerminalError(
+                        "installed_treatment_receipt_invalid"
+                    )
+
+                expected_destination_rows: list[
+                    tuple[tuple[str, str], ...]
+                ] = []
+                for index, (src_pattern, _) in enumerate(copies):
+                    if src_pattern == "skills":
+                        normalized = receipt_root / f"expected-{index}"
+                        if original_copy_skills(
+                            pinned_source,
+                            normalized,
+                        ) is not True:
+                            raise SkillLearnAgentTerminalError(
+                                "installed_treatment_receipt_invalid"
+                            )
+                        expected_destination_rows.append(
+                            source_rows(normalized)
+                        )
+                        continue
+                    local_source = (
+                        pinned_source
+                        / src_pattern.removeprefix("skills/")
+                    )
+                    if not local_source.is_dir():
+                        raise SkillLearnAgentTerminalError(
+                            "installed_treatment_receipt_invalid"
+                        )
+                    expected_destination_rows.append(
+                        source_rows(local_source)
+                    )
+
+                original_inject(container_name, pinned_source, copies)
+                if source_rows(source) != expected_rows:
+                    raise SkillLearnAgentTerminalError(
+                        "installed_treatment_receipt_invalid"
+                    )
+                destination_rows: list[dict[str, Any]] = []
+                for index, (src_pattern, destination) in enumerate(copies):
+                    installed = receipt_root / f"installed-{index}"
+                    installed.mkdir(parents=True)
+                    copied = runner.subprocess.run(
+                        [
+                            "docker",
+                            "cp",
+                            f"{container_name}:{destination}/.",
+                            str(installed),
+                        ],
+                        capture_output=True,
+                        text=True,
+                    )
+                    if copied.returncode != 0:
+                        raise SkillLearnAgentTerminalError(
+                            "installed_treatment_receipt_invalid"
+                        )
+                    installed_rows = source_rows(installed)
+                    if installed_rows != expected_destination_rows[index]:
+                        raise SkillLearnAgentTerminalError(
+                            "installed_treatment_receipt_invalid"
+                        )
+                    destination_rows.append(
+                        {
+                            "source_pattern": src_pattern,
+                            "destination_hash": stable_hash(
+                                {"path": destination}
+                            ),
+                            "files": [
+                                {
+                                    "path": path,
+                                    "sha256": sha256,
+                                }
+                                for path, sha256 in installed_rows
+                            ],
+                        }
+                    )
+                if source_rows(source) != expected_rows:
+                    raise SkillLearnAgentTerminalError(
+                        "installed_treatment_receipt_invalid"
+                    )
+                installed_tree_hash = stable_hash(
+                    {"destinations": destination_rows}
+                )
+                runner._assumption_v2_installed_skill_receipt = {
+                    "source_file_hashes": expected_rows,
+                    "installed_tree_hash": installed_tree_hash,
+                    "destination_count": len(destination_rows),
+                    "agent_started": False,
+                }
+            finally:
+                shutil.rmtree(receipt_root, ignore_errors=True)
+
+        runner._inject_skills_runtime = inject_with_receipt
+        runner._assumption_v2_installed_skill_receipt = None
 
     @contextmanager
     def _provider_runtime(
@@ -2794,6 +3335,15 @@ class SkillLearnSubprocessBackend:
             "step_budget_action_event_hash": result.get(
                 "step_budget_action_event_hash"
             ),
+            "installed_skill_source_receipt_hash": result.get(
+                "installed_skill_source_receipt_hash"
+            ),
+            "installed_skill_tree_hash": result.get(
+                "installed_skill_tree_hash"
+            ),
+            "installed_skill_destination_count": _as_nonnegative_int(
+                result.get("installed_skill_destination_count")
+            ),
             "error_type": error_type,
             "token_usage": {str(key): _as_nonnegative_int(value) for key, value in usage.items()},
         }
@@ -2838,6 +3388,9 @@ class SkillLearnSubprocessBackend:
             ),
             step_budget_receipt_hash=str(
                 result.get("step_budget_receipt_hash") or ""
+            ),
+            installed_skill_source_receipt_hash=str(
+                result.get("installed_skill_source_receipt_hash") or ""
             ),
             proposal_action_trace=(
                 MappingProxyType(dict(result["proposal_action_trace"]))
@@ -3134,6 +3687,12 @@ class SkillLearnCounterfactualRunner:
         backend: SkillLearnTrialBackend,
         evaluator: SkillLearnExternalEvaluator,
         compiler: SkillLearnProgramCompiler,
+        typed_selection_freeze_authorization: (
+            TypedSelectionFreezeAuthorization | None
+        ) = None,
+        typed_selection_execution_authorization: (
+            TypedSelectionExecutionAuthorization | None
+        ) = None,
         output_root: str | Path,
         parallel_workers: int = 1,
         invalid_trial_max_attempts: int = 1,
@@ -3177,6 +3736,50 @@ class SkillLearnCounterfactualRunner:
         self.evidence_execution_policy_hash = backend_policy.policy_hash
         self.evaluator = evaluator
         self.compiler = compiler
+        self.typed_selection_freeze_authorization = (
+            typed_selection_freeze_authorization
+        )
+        self.typed_selection_execution_authorization = (
+            typed_selection_execution_authorization
+        )
+        typed_compiler_enabled = bool(
+            getattr(compiler, "require_typed_bindings", False)
+        )
+        typed_ledger = (
+            compiler.typed_program_registry.require_snapshot_ledger()
+            if typed_compiler_enabled
+            and compiler.typed_program_registry is not None
+            else None
+        )
+        if typed_compiler_enabled:
+            if (
+                typed_ledger is None
+                or typed_selection_freeze_authorization is None
+                or typed_selection_execution_authorization is None
+            ):
+                raise PermissionError(
+                    "typed counterfactual execution requires validated "
+                    "protocol-lock task authority"
+                )
+            execution_issues = (
+                typed_selection_execution_authorization.validate_for(
+                    typed_ledger,
+                    typed_selection_freeze_authorization,
+                    manifest_hash=manifest.manifest_hash,
+                )
+            )
+            if execution_issues:
+                raise PermissionError(
+                    "typed counterfactual execution authorization is invalid: "
+                    f"{list(execution_issues)}"
+                )
+        elif (
+            typed_selection_freeze_authorization is not None
+            or typed_selection_execution_authorization is not None
+        ):
+            raise ValueError(
+                "typed execution authorization requires a typed compiler"
+            )
         self.output_root = Path(output_root)
         self.parallel_workers = parallel_workers
         self.invalid_trial_max_attempts = invalid_trial_max_attempts
@@ -3335,6 +3938,36 @@ class SkillLearnCounterfactualRunner:
         all_programs = (*canonical_baseline_programs, *candidate_delta_programs)
         if any(row.evaluator_epoch != self.evaluator.epoch for row in all_programs):
             raise ValueError("program and SkillLearnBench evaluator epochs differ")
+        binding_validator = getattr(
+            self.compiler,
+            "require_program_bindings",
+            None,
+        )
+        if callable(binding_validator):
+            binding_validator(all_programs)
+        elif bool(getattr(self.compiler, "require_typed_bindings", False)):
+            raise PermissionError(
+                "typed compiler boundary has no binding validator"
+            )
+        if bool(getattr(self.compiler, "require_typed_bindings", False)):
+            assert self.compiler.typed_program_registry is not None
+            assert self.typed_selection_freeze_authorization is not None
+            assert self.typed_selection_execution_authorization is not None
+            typed_ledger = (
+                self.compiler.typed_program_registry.require_snapshot_ledger()
+            )
+            execution_issues = (
+                self.typed_selection_execution_authorization.validate_for(
+                    typed_ledger,
+                    self.typed_selection_freeze_authorization,
+                    manifest_hash=self.manifest.manifest_hash,
+                )
+            )
+            if execution_issues:
+                raise PermissionError(
+                    "typed counterfactual execution authorization is invalid: "
+                    f"{list(execution_issues)}"
+                )
         if split is SplitName.TEST and any(
             row.status is not HypothesisStatus.PROMOTED
             for row in candidate_delta_programs
@@ -3487,6 +4120,30 @@ class SkillLearnCounterfactualRunner:
             if trigger_matched
             else None
         )
+        baseline_source_receipt = (
+            baseline_compile_result.source_receipt_for(task.id)
+            if baseline_compile_result
+            else None
+        )
+        candidate_source_receipt: SkillSourceReceipt | None = None
+        candidate_source_receipt_error = ""
+        try:
+            candidate_source_receipt = (
+                candidate_compile_result.source_receipt_for(task.id)
+            )
+        except (OSError, PermissionError, ValueError) as exc:
+            candidate_source_receipt_error = type(exc).__name__
+        candidate_source_receipt_hash = (
+            candidate_source_receipt.receipt_hash
+            if candidate_source_receipt is not None
+            else stable_hash(
+                {
+                    "compile_manifest_hash": candidate_compile_result.manifest_hash,
+                    "item_id_hash": stable_hash({"item_id": task.id}),
+                    "source_receipt_error": candidate_source_receipt_error,
+                }
+            )
+        )
         baseline_program_set_hash = (
             baseline_compile_result.program_set_hash
             if baseline_compile_result
@@ -3505,6 +4162,36 @@ class SkillLearnCounterfactualRunner:
             None,
             program_set_hash=baseline_program_set_hash,
             treatment_hash=baseline_treatment_hash,
+            compile_manifest_hash=(
+                baseline_compile_result.manifest_hash
+                if baseline_compile_result
+                else ""
+            ),
+            skill_source_receipt_hash=(
+                baseline_source_receipt.receipt_hash
+                if baseline_source_receipt is not None
+                else ""
+            ),
+            compile_root=(
+                baseline_compile_result.output_root
+                if baseline_compile_result is not None
+                else None
+            ),
+            typed_binding_set_hash=(
+                baseline_compile_result.typed_binding_set_hash
+                if baseline_compile_result
+                else ""
+            ),
+            typed_snapshot_hashes=(
+                baseline_compile_result.typed_snapshot_hashes
+                if baseline_compile_result
+                else ()
+            ),
+            typed_snapshot_ledger_hash=(
+                baseline_compile_result.typed_snapshot_ledger_hash
+                if baseline_compile_result
+                else ""
+            ),
             candidate_delta_program_set_hash=(
                 "" if legacy_singleton else candidate_delta_program_set_hash
             ),
@@ -3533,6 +4220,18 @@ class SkillLearnCounterfactualRunner:
             ),
             program_set_hash=candidate_compile_result.program_set_hash,
             treatment_hash=candidate_compile_result.treatment_hash_for(task.id),
+            compile_manifest_hash=candidate_compile_result.manifest_hash,
+            skill_source_receipt_hash=candidate_source_receipt_hash,
+            compile_root=candidate_compile_result.output_root,
+            typed_binding_set_hash=(
+                candidate_compile_result.typed_binding_set_hash
+            ),
+            typed_snapshot_hashes=(
+                candidate_compile_result.typed_snapshot_hashes
+            ),
+            typed_snapshot_ledger_hash=(
+                candidate_compile_result.typed_snapshot_ledger_hash
+            ),
             candidate_delta_program_set_hash=(
                 "" if legacy_singleton else candidate_delta_program_set_hash
             ),
@@ -3882,7 +4581,9 @@ class SkillLearnCounterfactualRunner:
         run_on_first = False
         treatment_applied = False
         if trigger_matched and (
-            candidate_skill_source is None or not candidate_skill_source.is_dir()
+            candidate_source_receipt is None
+            or candidate_skill_source is None
+            or not candidate_skill_source.is_dir()
         ):
             (
                 baseline_observation,
@@ -3933,10 +4634,29 @@ class SkillLearnCounterfactualRunner:
                     arm="on",
                 )
 
+        installed_receipt_required = bool(
+            getattr(
+                self.backend,
+                "requires_installed_skill_receipt",
+                False,
+            )
+        )
+        if (
+            treatment_applied
+            and installed_receipt_required
+            and candidate_observation.installed_skill_source_receipt_hash
+            != on_request.skill_source_receipt_hash
+        ):
+            treatment_applied = False
         baseline_treatment_applied = bool(
             active_baseline_programs
             and baseline_skill_source is not None
             and baseline_skill_source.is_dir()
+            and (
+                not installed_receipt_required
+                or baseline_observation.installed_skill_source_receipt_hash
+                == off_request.skill_source_receipt_hash
+            )
         )
         baseline_execution = _execution_from_observation(
             baseline_observation,
@@ -4054,6 +4774,48 @@ class SkillLearnCounterfactualRunner:
                     "baseline_program_set_hash": baseline_program_set_hash,
                     "candidate_program_set_hash": (
                         candidate_compile_result.program_set_hash
+                    ),
+                    "baseline_compile_manifest_hash": (
+                        baseline_compile_result.manifest_hash
+                        if baseline_compile_result
+                        else ""
+                    ),
+                    "candidate_compile_manifest_hash": (
+                        candidate_compile_result.manifest_hash
+                    ),
+                    "baseline_request_hash": off_request.request_hash,
+                    "candidate_request_hash": on_request.request_hash,
+                    "baseline_skill_source_receipt_hash": (
+                        baseline_source_receipt.receipt_hash
+                        if baseline_source_receipt is not None
+                        else ""
+                    ),
+                    "candidate_skill_source_receipt_hash": (
+                        candidate_source_receipt_hash
+                    ),
+                    "baseline_typed_binding_set_hash": (
+                        baseline_compile_result.typed_binding_set_hash
+                        if baseline_compile_result
+                        else ""
+                    ),
+                    "candidate_typed_binding_set_hash": (
+                        candidate_compile_result.typed_binding_set_hash
+                    ),
+                    "baseline_typed_snapshot_ledger_hash": (
+                        baseline_compile_result.typed_snapshot_ledger_hash
+                        if baseline_compile_result
+                        else ""
+                    ),
+                    "baseline_typed_snapshot_hashes": list(
+                        baseline_compile_result.typed_snapshot_hashes
+                        if baseline_compile_result
+                        else ()
+                    ),
+                    "candidate_typed_snapshot_hashes": list(
+                        candidate_compile_result.typed_snapshot_hashes
+                    ),
+                    "candidate_typed_snapshot_ledger_hash": (
+                        candidate_compile_result.typed_snapshot_ledger_hash
                     ),
                     **(
                         {
@@ -4186,6 +4948,12 @@ class SkillLearnCounterfactualRunner:
         *,
         program_set_hash: str,
         treatment_hash: str,
+        compile_manifest_hash: str = "",
+        skill_source_receipt_hash: str = "",
+        compile_root: Path | None = None,
+        typed_binding_set_hash: str = "",
+        typed_snapshot_hashes: tuple[str, ...] = (),
+        typed_snapshot_ledger_hash: str = "",
         candidate_delta_program_set_hash: str = "",
         candidate_full_program_set_hash: str = "",
         matched_candidate_program_set_hash: str = "",
@@ -4210,6 +4978,12 @@ class SkillLearnCounterfactualRunner:
             program_id=program_id,
             program_set_hash=program_set_hash,
             treatment_hash=treatment_hash,
+            compile_manifest_hash=compile_manifest_hash,
+            skill_source_receipt_hash=skill_source_receipt_hash,
+            compile_root=compile_root,
+            typed_binding_set_hash=typed_binding_set_hash,
+            typed_snapshot_hashes=typed_snapshot_hashes,
+            typed_snapshot_ledger_hash=typed_snapshot_ledger_hash,
             candidate_delta_program_set_hash=(
                 candidate_delta_program_set_hash
             ),
@@ -4374,6 +5148,16 @@ class SkillLearnEvolutionHarness:
         proposal_candidates_per_generation: int = 3,
         candidate_selection_policy: str = TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
         proposal_formation_policy: str | None = None,
+        typed_selection_snapshots: Sequence[
+            TypedRecipeSelectionSnapshot
+        ] = (),
+        typed_selection_ledger: TypedSelectionSnapshotLedger | None = None,
+        typed_selection_freeze_authorization: (
+            TypedSelectionFreezeAuthorization | None
+        ) = None,
+        typed_selection_execution_authorization: (
+            TypedSelectionExecutionAuthorization | None
+        ) = None,
         candidate_bundle_policy: str | None = None,
         contrastive_training_evidence_policy: str | None = None,
         train_action_design_policy: str | None = None,
@@ -4435,6 +5219,66 @@ class SkillLearnEvolutionHarness:
             raise ValueError(
                 f"unsupported proposal formation policy: {proposal_formation_policy}"
             )
+        canonical_typed_snapshots = tuple(typed_selection_snapshots)
+        typed_policy_enabled = (
+            proposal_formation_policy
+            == TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION
+        )
+        if typed_policy_enabled != bool(canonical_typed_snapshots) or (
+            typed_policy_enabled != (typed_selection_ledger is not None)
+        ):
+            raise ValueError(
+                "typed proposal formation, frozen snapshots, and ledger must be paired"
+            )
+        if typed_policy_enabled:
+            assert typed_selection_ledger is not None
+            ledger_issues = typed_selection_ledger.validate()
+            if ledger_issues:
+                raise PermissionError(
+                    f"typed selection ledger is invalid: {list(ledger_issues)}"
+                )
+            if typed_selection_ledger.snapshots != canonical_typed_snapshots:
+                raise PermissionError(
+                    "typed selection snapshots drifted from the frozen ledger"
+                )
+            if typed_selection_freeze_authorization is None:
+                raise PermissionError(
+                    "typed execution harness requires formal freeze authorization"
+                )
+            authorization_issues = (
+                typed_selection_freeze_authorization.validate_for(
+                    typed_selection_ledger
+                )
+            )
+            if authorization_issues:
+                raise PermissionError(
+                    "typed selection freeze authorization is invalid: "
+                    f"{list(authorization_issues)}"
+                )
+            if typed_selection_execution_authorization is None:
+                raise PermissionError(
+                    "typed execution harness requires validated protocol-lock "
+                    "task authority"
+                )
+            execution_issues = (
+                typed_selection_execution_authorization.validate_for(
+                    typed_selection_ledger,
+                    typed_selection_freeze_authorization,
+                    manifest_hash=manifest.manifest_hash,
+                )
+            )
+            if execution_issues:
+                raise PermissionError(
+                    "typed execution harness authorization is invalid: "
+                    f"{list(execution_issues)}"
+                )
+        elif (
+            typed_selection_freeze_authorization is not None
+            or typed_selection_execution_authorization is not None
+        ):
+            raise ValueError(
+                "typed selection authorization requires typed proposal formation"
+            )
         bundle_selection_enabled = (
             candidate_selection_policy
             in COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS
@@ -4479,6 +5323,14 @@ class SkillLearnEvolutionHarness:
         )
         self.candidate_selection_policy = candidate_selection_policy
         self.proposal_formation_policy = proposal_formation_policy
+        self.typed_selection_snapshots = canonical_typed_snapshots
+        self.typed_selection_ledger = typed_selection_ledger
+        self.typed_selection_freeze_authorization = (
+            typed_selection_freeze_authorization
+        )
+        self.typed_selection_execution_authorization = (
+            typed_selection_execution_authorization
+        )
         self.candidate_bundle_policy = candidate_bundle_policy
         self.contrastive_training_evidence_policy = (
             contrastive_training_evidence_policy
@@ -4500,7 +5352,11 @@ class SkillLearnEvolutionHarness:
             train_action_design_policy=train_action_design_policy,
             event_sink=self.event_sink,
         )
-        self.compiler = SkillLearnProgramCompiler(event_sink=self.event_sink)
+        self.compiler = SkillLearnProgramCompiler(
+            event_sink=self.event_sink,
+            typed_program_registry=proposer.typed_program_registry,
+            require_typed_bindings=typed_policy_enabled,
+        )
         self.counterfactual_runner = SkillLearnCounterfactualRunner(
             adapter=adapter,
             manifest=manifest,
@@ -4508,6 +5364,12 @@ class SkillLearnEvolutionHarness:
             backend=backend,
             evaluator=SkillLearnExternalEvaluator(evaluator_epoch),
             compiler=self.compiler,
+            typed_selection_freeze_authorization=(
+                typed_selection_freeze_authorization
+            ),
+            typed_selection_execution_authorization=(
+                typed_selection_execution_authorization
+            ),
             output_root=self.output_root,
             parallel_workers=parallel_workers,
             invalid_trial_max_attempts=invalid_trial_max_attempts,
@@ -4531,6 +5393,14 @@ class SkillLearnEvolutionHarness:
             proposal_candidates_per_generation=proposal_candidates_per_generation,
             candidate_selection_policy=candidate_selection_policy,
             proposal_formation_policy=proposal_formation_policy,
+            typed_selection_snapshots=canonical_typed_snapshots,
+            typed_selection_ledger=typed_selection_ledger,
+            typed_selection_freeze_authorization=(
+                typed_selection_freeze_authorization
+            ),
+            typed_selection_execution_authorization=(
+                typed_selection_execution_authorization
+            ),
             candidate_bundle_policy=candidate_bundle_policy,
             contrastive_training_evidence_policy=(
                 contrastive_training_evidence_policy
@@ -4599,6 +5469,36 @@ class SkillLearnEvolutionHarness:
                     incumbent_compile.treatment_hash_for(item_id)
                     if incumbent_compile
                     else NO_SKILL_TREATMENT_HASH
+                ),
+                compile_manifest_hash=(
+                    incumbent_compile.manifest_hash
+                    if incumbent_compile
+                    else ""
+                ),
+                skill_source_receipt_hash=(
+                    incumbent_compile.source_receipt_for(item_id).receipt_hash
+                    if incumbent_compile
+                    else ""
+                ),
+                compile_root=(
+                    incumbent_compile.output_root
+                    if incumbent_compile is not None
+                    else None
+                ),
+                typed_binding_set_hash=(
+                    incumbent_compile.typed_binding_set_hash
+                    if incumbent_compile
+                    else ""
+                ),
+                typed_snapshot_hashes=(
+                    incumbent_compile.typed_snapshot_hashes
+                    if incumbent_compile
+                    else ()
+                ),
+                typed_snapshot_ledger_hash=(
+                    incumbent_compile.typed_snapshot_ledger_hash
+                    if incumbent_compile
+                    else ""
                 ),
                 trace_id=trace_id,
             )
@@ -4862,6 +5762,12 @@ class SkillLearnEvolutionHarness:
                 )
                 and row.context.get("action_context_profile_hash")
             },
+            typed_selection_snapshots=self.typed_selection_snapshots,
+            typed_selection_ledger_hash=(
+                self.typed_selection_ledger.ledger_hash
+                if self.typed_selection_ledger is not None
+                else ""
+            ),
             repair_request_scope_policy=self.repair_request_scope_policy,
             train_coverage_objective=(
                 {
@@ -5011,6 +5917,12 @@ class SkillLearnEvolutionHarness:
         program_set_hash: str,
         treatment_hash: str,
         trace_id: str,
+        compile_manifest_hash: str = "",
+        skill_source_receipt_hash: str = "",
+        compile_root: Path | None = None,
+        typed_binding_set_hash: str = "",
+        typed_snapshot_hashes: tuple[str, ...] = (),
+        typed_snapshot_ledger_hash: str = "",
     ) -> SkillLearnTrialObservation:
         self.guard.authorize(item_id, AccessPhase.PROPOSAL)
         item = self.items[item_id]
@@ -5040,6 +5952,12 @@ class SkillLearnEvolutionHarness:
             ),
             program_set_hash=program_set_hash,
             treatment_hash=treatment_hash,
+            compile_manifest_hash=compile_manifest_hash,
+            skill_source_receipt_hash=skill_source_receipt_hash,
+            compile_root=compile_root,
+            typed_binding_set_hash=typed_binding_set_hash,
+            typed_snapshot_hashes=typed_snapshot_hashes,
+            typed_snapshot_ledger_hash=typed_snapshot_ledger_hash,
         )
         return _run_invalid_only_trial(
             request=request,
@@ -6667,6 +7585,9 @@ def _invalid_retry_suppression_reason(
     if error_type in {
         "candidate_skill_source_missing",
         "compiled_candidate_skill_missing",
+        "compiled_skill_source_receipt_invalid",
+        "declared_treatment_source_missing",
+        "installed_treatment_receipt_invalid",
         "runner_configuration_error",
     }:
         return "nontransient_configuration_error"

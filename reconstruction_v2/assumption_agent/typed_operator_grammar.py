@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import threading
 from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path, PurePosixPath
@@ -27,6 +28,29 @@ CAUSAL_ACTION_SPAN_EVIDENCE_VERSION = (
 TYPED_OPERATOR_GRAMMAR_VERSION = "closed_typed_operator_artifact_graph_v1"
 TYPED_RECIPE_SELECTION_VERSION = "opaque_recipe_id_only_selection_v1"
 TYPED_OPERATOR_LOWERING_VERSION = "harness_owned_typed_recipe_lowering_v1"
+TYPED_PROGRAM_BINDING_VERSION = "harness_owned_typed_program_binding_v2"
+TYPED_SELECTION_SNAPSHOT_LEDGER_VERSION = (
+    "externally_frozen_typed_selection_snapshot_ledger_v1"
+)
+TYPED_SELECTION_FREEZE_AUTHORIZATION_VERSION = (
+    "formal_result_receipt_bound_typed_selection_freeze_v1"
+)
+TYPED_SELECTION_EXECUTION_AUTHORIZATION_VERSION = (
+    "validated_protocol_lock_bound_typed_selection_execution_v1"
+)
+TYPED_REPAIR_BRANCH_ID_POLICY_VERSION = (
+    "parent_snapshot_scoped_typed_repair_id_v1"
+)
+TYPED_PROGRAM_STATEMENT = (
+    "Apply a harness-owned typed task-local artifact workflow for this "
+    "TRAIN-supported family."
+)
+TYPED_PROGRAM_VERIFIER_CHECKS = (
+    "task-local result structure is complete",
+)
+TYPED_PROGRAM_VERIFIER_ANCHOR = "offline-post-agent-verifier"
+
+_TYPED_SELECTION_EXECUTION_AUTHORIZATION_SEAL = object()
 
 MAX_TRACE_ACTION_SPANS = 100
 MAX_REGISTERED_ARTIFACTS_PER_FAMILY = 6
@@ -679,6 +703,1525 @@ class FamilyCapabilityGraph:
         return tuple(sorted(set(issues)))
 
 
+@dataclass(frozen=True)
+class TypedRecipeSelectionSnapshot:
+    """Frozen graph/catalog commitments used by the production selector.
+
+    The graph retains harness-only artifact locators in memory.  Only
+    ``model_payload`` may cross the model boundary, and that payload is derived
+    from ``FamilyCapabilityGraph.model_catalog`` where locators and executable
+    values are absent.
+    """
+
+    graph: FamilyCapabilityGraph
+    expected_graph_hash: str
+    expected_model_catalog_hash: str
+
+    @property
+    def snapshot_hash(self) -> str:
+        return stable_hash(self.safe_payload(include_hash=False))
+
+    def validate(self) -> tuple[str, ...]:
+        issues = list(self.graph.validate())
+        if (
+            not _is_sha256(self.expected_graph_hash)
+            or self.graph.graph_hash != self.expected_graph_hash
+        ):
+            issues.append("typed_snapshot_graph_hash_mismatch")
+        model_catalog_hash = (
+            stable_hash(self.graph.model_catalog()) if not issues else ""
+        )
+        if not _is_sha256(self.expected_model_catalog_hash) or (
+            model_catalog_hash
+            and model_catalog_hash != self.expected_model_catalog_hash
+        ):
+            issues.append("typed_snapshot_model_catalog_hash_mismatch")
+        return tuple(sorted(set(issues)))
+
+    def safe_payload(self, *, include_hash: bool = True) -> dict[str, Any]:
+        payload = {
+            "grammar_version": TYPED_OPERATOR_GRAMMAR_VERSION,
+            "selection_contract": TYPED_RECIPE_SELECTION_VERSION,
+            "target_family_hash": self.graph.target_family_hash,
+            "source_evidence_hash": self.graph.source_evidence_hash,
+            "graph_hash": self.expected_graph_hash,
+            "model_catalog_hash": self.expected_model_catalog_hash,
+            "recipe_count": len(self.graph.recipes),
+            "raw_artifact_locators_persisted": False,
+            "raw_primitive_values_persisted": False,
+        }
+        if include_hash:
+            payload["snapshot_hash"] = self.snapshot_hash
+        return payload
+
+    def model_payload(self) -> dict[str, Any]:
+        issues = self.validate()
+        if issues:
+            raise PermissionError(
+                f"typed selection snapshot is invalid: {list(issues)}"
+            )
+        return {
+            **self.safe_payload(),
+            "catalog": self.graph.model_catalog(),
+        }
+
+
+def freeze_typed_recipe_selection_snapshot(
+    graph: FamilyCapabilityGraph,
+) -> TypedRecipeSelectionSnapshot:
+    issues = graph.validate()
+    if issues:
+        raise PermissionError(
+            f"typed recipe graph is invalid: {list(issues)}"
+        )
+    snapshot = TypedRecipeSelectionSnapshot(
+        graph=graph,
+        expected_graph_hash=graph.graph_hash,
+        expected_model_catalog_hash=stable_hash(graph.model_catalog()),
+    )
+    snapshot_issues = snapshot.validate()
+    if snapshot_issues:
+        raise PermissionError(
+            f"typed selection snapshot is invalid: {list(snapshot_issues)}"
+        )
+    return snapshot
+
+
+@dataclass(frozen=True)
+class TypedSelectionSnapshotLedger:
+    """Externally anchored ordered snapshot set for production selection.
+
+    Snapshot self-hashes establish internal consistency only.  This ledger
+    additionally binds the exact feasibility decision, frozen TRAIN source,
+    split manifest, and ordered graph/catalog set authorized by the execution
+    protocol.  File and receipt verification is performed by the benchmark
+    loader before this immutable object is constructed.
+    """
+
+    ledger_version: str
+    feasibility_preregistration_hash: str
+    feasibility_result_receipt_sha256: str
+    feasibility_decision_hash: str
+    feasibility_report_hash: str
+    manifest_hash: str
+    source_train_receipt_hash: str
+    graph_set_hash: str
+    model_catalog_set_hash: str
+    expected_target_family_hashes: tuple[str, ...]
+    snapshots: tuple[TypedRecipeSelectionSnapshot, ...]
+
+    @property
+    def snapshot_hashes(self) -> tuple[str, ...]:
+        return tuple(row.snapshot_hash for row in self.snapshots)
+
+    @property
+    def snapshot_set_hash(self) -> str:
+        return stable_hash({"snapshot_hashes": list(self.snapshot_hashes)})
+
+    @property
+    def ledger_hash(self) -> str:
+        return stable_hash(self.safe_payload(include_hash=False))
+
+    def validate(self) -> tuple[str, ...]:
+        issues: list[str] = []
+        if self.ledger_version != TYPED_SELECTION_SNAPSHOT_LEDGER_VERSION:
+            issues.append("typed_snapshot_ledger_version_mismatch")
+        for value, issue in (
+            (
+                self.feasibility_preregistration_hash,
+                "typed_snapshot_ledger_preregistration_hash_invalid",
+            ),
+            (
+                self.feasibility_result_receipt_sha256,
+                "typed_snapshot_ledger_result_receipt_hash_invalid",
+            ),
+            (
+                self.feasibility_decision_hash,
+                "typed_snapshot_ledger_decision_hash_invalid",
+            ),
+            (
+                self.feasibility_report_hash,
+                "typed_snapshot_ledger_report_hash_invalid",
+            ),
+            (
+                self.manifest_hash,
+                "typed_snapshot_ledger_manifest_hash_invalid",
+            ),
+            (
+                self.source_train_receipt_hash,
+                "typed_snapshot_ledger_source_receipt_hash_invalid",
+            ),
+            (
+                self.graph_set_hash,
+                "typed_snapshot_ledger_graph_set_hash_invalid",
+            ),
+            (
+                self.model_catalog_set_hash,
+                "typed_snapshot_ledger_catalog_set_hash_invalid",
+            ),
+        ):
+            if not _is_sha256(value):
+                issues.append(issue)
+        if not self.snapshots:
+            issues.append("typed_snapshot_ledger_empty")
+        issues.extend(
+            issue for row in self.snapshots for issue in row.validate()
+        )
+        snapshot_hashes = self.snapshot_hashes
+        if len(set(snapshot_hashes)) != len(snapshot_hashes):
+            issues.append("typed_snapshot_ledger_duplicate_snapshot")
+        target_hashes = tuple(
+            row.graph.target_family_hash for row in self.snapshots
+        )
+        if (
+            not self.expected_target_family_hashes
+            or target_hashes != self.expected_target_family_hashes
+            or any(not _is_sha256(value) for value in target_hashes)
+        ):
+            issues.append("typed_snapshot_ledger_target_order_mismatch")
+        if len(set(target_hashes)) != len(target_hashes):
+            issues.append("typed_snapshot_ledger_duplicate_target")
+        computed_graph_set_hash = stable_hash(
+            {
+                "outcomes": [
+                    {
+                        "target_family_hash": row.graph.target_family_hash,
+                        "graph_hash": row.expected_graph_hash,
+                        "availability_error_hash": None,
+                    }
+                    for row in self.snapshots
+                ]
+            }
+        )
+        if computed_graph_set_hash != self.graph_set_hash:
+            issues.append("typed_snapshot_ledger_graph_set_mismatch")
+        computed_catalog_set_hash = stable_hash(
+            {
+                "catalog_hashes": [
+                    row.expected_model_catalog_hash
+                    for row in self.snapshots
+                ]
+            }
+        )
+        if computed_catalog_set_hash != self.model_catalog_set_hash:
+            issues.append("typed_snapshot_ledger_catalog_set_mismatch")
+        return tuple(sorted(set(issues)))
+
+    def safe_payload(self, *, include_hash: bool = True) -> dict[str, Any]:
+        payload = {
+            "ledger_version": self.ledger_version,
+            "feasibility_preregistration_hash": (
+                self.feasibility_preregistration_hash
+            ),
+            "feasibility_result_receipt_sha256": (
+                self.feasibility_result_receipt_sha256
+            ),
+            "feasibility_decision_hash": self.feasibility_decision_hash,
+            "feasibility_report_hash": self.feasibility_report_hash,
+            "manifest_hash": self.manifest_hash,
+            "source_train_receipt_hash": self.source_train_receipt_hash,
+            "graph_set_hash": self.graph_set_hash,
+            "model_catalog_set_hash": self.model_catalog_set_hash,
+            "expected_target_family_hashes": list(
+                self.expected_target_family_hashes
+            ),
+            "snapshot_hashes": list(self.snapshot_hashes),
+            "snapshot_set_hash": self.snapshot_set_hash,
+            "snapshots": [row.safe_payload() for row in self.snapshots],
+            "raw_content_persisted": False,
+        }
+        if include_hash:
+            payload["ledger_hash"] = self.ledger_hash
+        return payload
+
+
+@dataclass(frozen=True)
+class TypedSelectionFreezeAuthorization:
+    """Receipt-derived authority to freeze a fresh typed protocol.
+
+    This is deliberately separate from the TRAIN snapshot ledger.  A ledger
+    reconstructed by the offline integration diagnostic has no authorization;
+    only the production loader may attach this object after exact verification
+    of the formal result receipt and its canonical artifacts.
+    """
+
+    authorization_policy: str
+    result_receipt_stable_hash: str
+    result_receipt_file_sha256: str
+    source_binding_hash: str
+    snapshot_ledger_hash: str
+    fresh_development_protocol_freeze_eligible: bool
+    development_task_execution_authorized: bool
+
+    def validate_for(
+        self,
+        ledger: TypedSelectionSnapshotLedger,
+    ) -> tuple[str, ...]:
+        issues: list[str] = []
+        if self.authorization_policy != (
+            TYPED_SELECTION_FREEZE_AUTHORIZATION_VERSION
+        ):
+            issues.append("typed_selection_freeze_authorization_policy_invalid")
+        for value, issue in (
+            (
+                self.result_receipt_stable_hash,
+                "typed_selection_result_receipt_hash_invalid",
+            ),
+            (
+                self.result_receipt_file_sha256,
+                "typed_selection_result_receipt_file_hash_invalid",
+            ),
+            (
+                self.source_binding_hash,
+                "typed_selection_source_binding_hash_invalid",
+            ),
+            (
+                self.snapshot_ledger_hash,
+                "typed_selection_authorized_ledger_hash_invalid",
+            ),
+        ):
+            if not _is_sha256(value):
+                issues.append(issue)
+        if self.snapshot_ledger_hash != ledger.ledger_hash:
+            issues.append("typed_selection_authorized_ledger_mismatch")
+        if self.fresh_development_protocol_freeze_eligible is not True:
+            issues.append("typed_selection_protocol_freeze_not_authorized")
+        # The integration receipt grants protocol-freeze authority only.  Task
+        # execution additionally requires the separately validated protocol
+        # lock at the experiment boundary.
+        if self.development_task_execution_authorized is not False:
+            issues.append("typed_selection_receipt_scope_overclaimed")
+        return tuple(sorted(set(issues)))
+
+    @property
+    def authorization_hash(self) -> str:
+        return stable_hash(self.safe_payload(include_hash=False))
+
+    def safe_payload(self, *, include_hash: bool = True) -> dict[str, Any]:
+        payload = {
+            "authorization_policy": self.authorization_policy,
+            "result_receipt_stable_hash": self.result_receipt_stable_hash,
+            "result_receipt_file_sha256": self.result_receipt_file_sha256,
+            "source_binding_hash": self.source_binding_hash,
+            "snapshot_ledger_hash": self.snapshot_ledger_hash,
+            "fresh_development_protocol_freeze_eligible": (
+                self.fresh_development_protocol_freeze_eligible
+            ),
+            "development_task_execution_authorized": (
+                self.development_task_execution_authorized
+            ),
+            "raw_content_persisted": False,
+        }
+        if include_hash:
+            payload["authorization_hash"] = self.authorization_hash
+        return payload
+
+
+class TypedSelectionExecutionAuthorization:
+    """Process-local capability issued only after protocol-lock validation.
+
+    The formal result receipt authorizes freezing a protocol, not executing a
+    task.  This separate sealed type is created by the paper-protocol boundary
+    only after the claim-eligible lock and its embedded freeze receipt have
+    both been revalidated.  Diagnostic callers can reconstruct snapshots and
+    compile them offline, but cannot manufacture this execution type from a
+    JSON payload or a collection of plausible hashes.
+    """
+
+    __slots__ = (
+        "authorization_policy",
+        "protocol_id",
+        "protocol_hash",
+        "protocol_lock_hash",
+        "manifest_hash",
+        "snapshot_ledger_hash",
+        "freeze_authorization_hash",
+        "task_execution_authorized",
+        "_seal",
+    )
+
+    def __init__(
+        self,
+        *,
+        authorization_policy: str,
+        protocol_id: str,
+        protocol_hash: str,
+        protocol_lock_hash: str,
+        manifest_hash: str,
+        snapshot_ledger_hash: str,
+        freeze_authorization_hash: str,
+        task_execution_authorized: bool,
+        _seal: object | None = None,
+    ) -> None:
+        if _seal is not _TYPED_SELECTION_EXECUTION_AUTHORIZATION_SEAL:
+            raise PermissionError(
+                "typed selection execution authorization is factory-only"
+            )
+        object.__setattr__(self, "authorization_policy", authorization_policy)
+        object.__setattr__(self, "protocol_id", protocol_id)
+        object.__setattr__(self, "protocol_hash", protocol_hash)
+        object.__setattr__(self, "protocol_lock_hash", protocol_lock_hash)
+        object.__setattr__(self, "manifest_hash", manifest_hash)
+        object.__setattr__(
+            self,
+            "snapshot_ledger_hash",
+            snapshot_ledger_hash,
+        )
+        object.__setattr__(
+            self,
+            "freeze_authorization_hash",
+            freeze_authorization_hash,
+        )
+        object.__setattr__(
+            self,
+            "task_execution_authorized",
+            task_execution_authorized,
+        )
+        object.__setattr__(self, "_seal", _seal)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        raise AttributeError(
+            "typed selection execution authorization is immutable"
+        )
+
+    def validate_for(
+        self,
+        ledger: TypedSelectionSnapshotLedger,
+        freeze_authorization: TypedSelectionFreezeAuthorization,
+        *,
+        manifest_hash: str | None = None,
+        protocol_hash: str | None = None,
+    ) -> tuple[str, ...]:
+        issues: list[str] = []
+        if self._seal is not _TYPED_SELECTION_EXECUTION_AUTHORIZATION_SEAL:
+            issues.append("typed_selection_execution_authorization_unsealed")
+        if self.authorization_policy != (
+            TYPED_SELECTION_EXECUTION_AUTHORIZATION_VERSION
+        ):
+            issues.append(
+                "typed_selection_execution_authorization_policy_invalid"
+            )
+        if not isinstance(self.protocol_id, str) or not self.protocol_id:
+            issues.append("typed_selection_execution_protocol_id_invalid")
+        for value, issue in (
+            (
+                self.protocol_hash,
+                "typed_selection_execution_protocol_hash_invalid",
+            ),
+            (
+                self.protocol_lock_hash,
+                "typed_selection_execution_lock_hash_invalid",
+            ),
+            (
+                self.manifest_hash,
+                "typed_selection_execution_manifest_hash_invalid",
+            ),
+            (
+                self.snapshot_ledger_hash,
+                "typed_selection_execution_ledger_hash_invalid",
+            ),
+            (
+                self.freeze_authorization_hash,
+                "typed_selection_execution_freeze_hash_invalid",
+            ),
+        ):
+            if not _is_sha256(value):
+                issues.append(issue)
+        if self.snapshot_ledger_hash != ledger.ledger_hash:
+            issues.append("typed_selection_execution_ledger_mismatch")
+        if (
+            self.freeze_authorization_hash
+            != freeze_authorization.authorization_hash
+        ):
+            issues.append("typed_selection_execution_freeze_mismatch")
+        if freeze_authorization.validate_for(ledger):
+            issues.append("typed_selection_execution_freeze_invalid")
+        if manifest_hash is not None and self.manifest_hash != manifest_hash:
+            issues.append("typed_selection_execution_manifest_mismatch")
+        if protocol_hash is not None and self.protocol_hash != protocol_hash:
+            issues.append("typed_selection_execution_protocol_mismatch")
+        if self.task_execution_authorized is not True:
+            issues.append("typed_selection_task_execution_not_authorized")
+        return tuple(sorted(set(issues)))
+
+    @property
+    def authorization_hash(self) -> str:
+        return stable_hash(self.safe_payload(include_hash=False))
+
+    def safe_payload(self, *, include_hash: bool = True) -> dict[str, Any]:
+        payload = {
+            "authorization_policy": self.authorization_policy,
+            "protocol_id": self.protocol_id,
+            "protocol_hash": self.protocol_hash,
+            "protocol_lock_hash": self.protocol_lock_hash,
+            "manifest_hash": self.manifest_hash,
+            "snapshot_ledger_hash": self.snapshot_ledger_hash,
+            "freeze_authorization_hash": self.freeze_authorization_hash,
+            "task_execution_authorized": self.task_execution_authorized,
+            "raw_content_persisted": False,
+        }
+        if include_hash:
+            payload["authorization_hash"] = self.authorization_hash
+        return payload
+
+
+def _issue_typed_selection_execution_authorization(
+    *,
+    protocol_id: str,
+    protocol_hash: str,
+    protocol_lock_hash: str,
+    manifest_hash: str,
+    ledger: TypedSelectionSnapshotLedger,
+    freeze_authorization: TypedSelectionFreezeAuthorization,
+) -> TypedSelectionExecutionAuthorization:
+    """Issue one sealed execution capability after protocol validation."""
+
+    authorization = TypedSelectionExecutionAuthorization(
+        authorization_policy=(
+            TYPED_SELECTION_EXECUTION_AUTHORIZATION_VERSION
+        ),
+        protocol_id=protocol_id,
+        protocol_hash=protocol_hash,
+        protocol_lock_hash=protocol_lock_hash,
+        manifest_hash=manifest_hash,
+        snapshot_ledger_hash=ledger.ledger_hash,
+        freeze_authorization_hash=(
+            freeze_authorization.authorization_hash
+        ),
+        task_execution_authorized=True,
+        _seal=_TYPED_SELECTION_EXECUTION_AUTHORIZATION_SEAL,
+    )
+    issues = authorization.validate_for(
+        ledger,
+        freeze_authorization,
+        manifest_hash=manifest_hash,
+        protocol_hash=protocol_hash,
+    )
+    if issues:
+        raise PermissionError(
+            "typed selection execution authorization is invalid: "
+            f"{list(issues)}"
+        )
+    return authorization
+
+
+def freeze_typed_selection_snapshot_ledger(
+    snapshots: Sequence[TypedRecipeSelectionSnapshot],
+    *,
+    feasibility_preregistration_hash: str,
+    feasibility_result_receipt_sha256: str,
+    feasibility_decision_hash: str,
+    feasibility_report_hash: str,
+    manifest_hash: str,
+    source_train_receipt_hash: str,
+    expected_graph_set_hash: str,
+    expected_model_catalog_set_hash: str,
+    expected_target_family_hashes: Sequence[str],
+) -> TypedSelectionSnapshotLedger:
+    ledger = TypedSelectionSnapshotLedger(
+        ledger_version=TYPED_SELECTION_SNAPSHOT_LEDGER_VERSION,
+        feasibility_preregistration_hash=feasibility_preregistration_hash,
+        feasibility_result_receipt_sha256=(
+            feasibility_result_receipt_sha256
+        ),
+        feasibility_decision_hash=feasibility_decision_hash,
+        feasibility_report_hash=feasibility_report_hash,
+        manifest_hash=manifest_hash,
+        source_train_receipt_hash=source_train_receipt_hash,
+        graph_set_hash=expected_graph_set_hash,
+        model_catalog_set_hash=expected_model_catalog_set_hash,
+        expected_target_family_hashes=tuple(expected_target_family_hashes),
+        snapshots=tuple(snapshots),
+    )
+    issues = ledger.validate()
+    if issues:
+        raise PermissionError(
+            f"typed snapshot ledger is invalid: {list(issues)}"
+        )
+    return ledger
+
+
+def canonical_typed_recipe_selection_request(
+    *,
+    snapshot: TypedRecipeSelectionSnapshot,
+    snapshot_ledger: TypedSelectionSnapshotLedger,
+    evaluator_epoch: str,
+    selection_round: int,
+    excluded_recipe_ids: Sequence[str] = (),
+    parent_program_hash: str | None = None,
+    parent_recipe_id: str | None = None,
+    failed_checks: Sequence[Mapping[str, Any]] = (),
+    repair_depth: int = 0,
+) -> dict[str, Any]:
+    """Build the one canonical, sanitized opaque recipe-selection request.
+
+    Both the proposer and the harness-owned binding registry call this builder.
+    A binding therefore cannot merely carry caller-supplied receipt hashes: the
+    registry independently reconstructs the request those hashes must describe.
+    """
+
+    snapshot_issues = snapshot.validate()
+    if snapshot_issues:
+        raise PermissionError(
+            f"typed selection snapshot is invalid: {list(snapshot_issues)}"
+        )
+    ledger_issues = snapshot_ledger.validate()
+    if ledger_issues:
+        raise PermissionError(
+            f"typed snapshot ledger is invalid: {list(ledger_issues)}"
+        )
+    if snapshot.snapshot_hash not in snapshot_ledger.snapshot_hashes:
+        raise PermissionError("typed snapshot is outside the frozen ledger")
+    if not isinstance(evaluator_epoch, str) or not evaluator_epoch.strip():
+        raise ValueError("typed recipe selection evaluator epoch is missing")
+    if (
+        not isinstance(repair_depth, int)
+        or isinstance(repair_depth, bool)
+        or repair_depth < 0
+    ):
+        raise ValueError("typed repair depth must be a nonnegative integer")
+    repair = bool(
+        repair_depth or parent_program_hash is not None or parent_recipe_id is not None
+    )
+    if repair != bool(repair_depth):
+        raise ValueError("typed repair depth and parent must be paired")
+    if repair:
+        if (
+            not _is_sha256(parent_program_hash)
+            or not isinstance(parent_recipe_id, str)
+            or not parent_recipe_id
+        ):
+            raise PermissionError("typed repair parent receipt is malformed")
+    elif parent_program_hash is not None or parent_recipe_id is not None:
+        raise PermissionError("typed root parent receipt is malformed")
+    elif failed_checks:
+        raise PermissionError("typed root cannot carry failed-check receipts")
+
+    graph_recipe_ids = {
+        row.recipe_id for row in snapshot.graph.recipes
+    }
+    if any(
+        not isinstance(recipe_id, str) or not recipe_id
+        for recipe_id in excluded_recipe_ids
+    ):
+        raise PermissionError("typed selection exclusions are malformed")
+    canonical_excluded = tuple(sorted(set(excluded_recipe_ids)))
+    if not set(canonical_excluded).issubset(graph_recipe_ids):
+        raise PermissionError("typed selection exclusions are malformed")
+    expected_selection_round = len(canonical_excluded) + 1
+    if (
+        not isinstance(selection_round, int)
+        or isinstance(selection_round, bool)
+        or selection_round != expected_selection_round
+    ):
+        raise PermissionError(
+            "typed selection round does not match the complete exclusion scope"
+        )
+
+    output_schema = selection_schema(snapshot.graph)
+    allowed_recipe_ids = [
+        recipe_id
+        for recipe_id in output_schema["properties"]["recipe_id"]["enum"]
+        if recipe_id not in canonical_excluded
+    ]
+    if not allowed_recipe_ids:
+        raise PermissionError("typed selection snapshot has no untried recipe")
+    output_schema = {
+        **output_schema,
+        "properties": {
+            "recipe_id": {
+                "type": "string",
+                "enum": allowed_recipe_ids,
+            }
+        },
+    }
+    catalog = dict(snapshot.graph.model_catalog())
+    catalog["model_output_schema"] = output_schema
+    request_kind = (
+        "select_typed_repair_recipe"
+        if repair
+        else "select_typed_root_recipe"
+    )
+    payload: dict[str, Any] = {
+        "request_kind": request_kind,
+        "contract_version": TYPED_RECIPE_SELECTION_VERSION,
+        "grammar_version": TYPED_OPERATOR_GRAMMAR_VERSION,
+        "evaluator_epoch": evaluator_epoch,
+        "selection_scope": {
+            "selection_round": selection_round,
+            "excluded_recipe_ids": list(canonical_excluded),
+            "excluded_recipe_set_hash": stable_hash(
+                {"recipe_ids": list(canonical_excluded)}
+            ),
+            "excluded_recipe_count": len(canonical_excluded),
+        },
+        "selection_snapshot": {
+            **snapshot.safe_payload(),
+            "catalog": catalog,
+        },
+        "selection_authority": snapshot_ledger.safe_payload(),
+        "output_schema": output_schema,
+        "constraints": {
+            "model_output_fields": ["recipe_id"],
+            "primitive_values_model_authored": False,
+            "artifact_locators_model_authored": False,
+            "free_text_actions_model_authored": False,
+            "harness_owned_materialization": True,
+        },
+    }
+    if repair:
+        assert parent_program_hash is not None
+        assert parent_recipe_id is not None
+        failed_check_rows: list[dict[str, str]] = []
+        for row in failed_checks:
+            if not isinstance(row, Mapping):
+                raise PermissionError("typed failed-check receipt is malformed")
+            failed_check_rows.append(
+                {
+                    "check": str(row.get("check") or ""),
+                    "reason": str(row.get("reason") or ""),
+                }
+            )
+        payload["repair_context"] = {
+            "parent_program_hash": parent_program_hash,
+            "parent_recipe_id": parent_recipe_id,
+            "repair_depth": repair_depth,
+            "failed_checks": failed_check_rows,
+            "failed_check_set_hash": stable_hash(failed_check_rows),
+            "parent_action_graph_disclosed": False,
+            "free_text_repair_fields_allowed": False,
+        }
+    return payload
+
+
+def canonical_typed_recipe_selection_response(
+    recipe_id: str,
+) -> dict[str, str]:
+    """Return the complete canonical opaque selector response envelope."""
+
+    if not isinstance(recipe_id, str) or not recipe_id:
+        raise PermissionError("typed recipe response is malformed")
+    return {"recipe_id": recipe_id}
+
+
+@dataclass(frozen=True)
+class TypedProgramBinding:
+    binding_policy: str
+    request_kind: str
+    snapshot_hash: str
+    graph_hash: str
+    model_catalog_hash: str
+    snapshot_ledger_hash: str
+    recipe_id: str
+    evaluator_epoch: str
+    program_id: str
+    program_executable_hash: str
+    request_hash: str
+    response_hash: str
+    selection_round: int
+    excluded_recipe_ids: tuple[str, ...] = ()
+    repair_depth: int = 0
+    failed_checks: tuple[tuple[str, str], ...] = ()
+    parent_program_id: str | None = None
+    parent_program_hash: str | None = None
+    parent_recipe_id: str | None = None
+    parent_binding_hash: str | None = None
+    lineage_program_ids: tuple[str, ...] = ()
+    lineage_recipe_ids: tuple[str, ...] = ()
+
+    @property
+    def program_identity_hash(self) -> str:
+        """Status-invariant identity used by descendant request receipts."""
+
+        return stable_hash(
+            {
+                "program_id": self.program_id,
+                "evaluator_epoch": self.evaluator_epoch,
+                "program_executable_hash": self.program_executable_hash,
+            }
+        )
+
+    @property
+    def binding_hash(self) -> str:
+        return stable_hash(self.safe_payload(include_hash=False))
+
+    def safe_payload(self, *, include_hash: bool = True) -> dict[str, Any]:
+        payload = {
+            "binding_policy": self.binding_policy,
+            "request_kind": self.request_kind,
+            "snapshot_hash": self.snapshot_hash,
+            "graph_hash": self.graph_hash,
+            "model_catalog_hash": self.model_catalog_hash,
+            "snapshot_ledger_hash": self.snapshot_ledger_hash,
+            "recipe_id": self.recipe_id,
+            "evaluator_epoch": self.evaluator_epoch,
+            "program_id": self.program_id,
+            "program_executable_hash": self.program_executable_hash,
+            "program_identity_hash": self.program_identity_hash,
+            "request_hash": self.request_hash,
+            "response_hash": self.response_hash,
+            "selection_round": self.selection_round,
+            "excluded_recipe_ids": list(self.excluded_recipe_ids),
+            "excluded_recipe_set_hash": stable_hash(
+                {"recipe_ids": list(self.excluded_recipe_ids)}
+            ),
+            "repair_depth": self.repair_depth,
+            "failed_checks": [
+                {"check": check, "reason": reason}
+                for check, reason in self.failed_checks
+            ],
+            "failed_check_set_hash": stable_hash(
+                [
+                    {"check": check, "reason": reason}
+                    for check, reason in self.failed_checks
+                ]
+            ),
+            "parent_program_id": self.parent_program_id,
+            "parent_program_hash": self.parent_program_hash,
+            "parent_recipe_id": self.parent_recipe_id,
+            "parent_binding_hash": self.parent_binding_hash,
+            "lineage_program_ids": list(self.lineage_program_ids),
+            "lineage_recipe_ids": list(self.lineage_recipe_ids),
+            "raw_content_persisted": False,
+        }
+        if include_hash:
+            payload["binding_hash"] = self.binding_hash
+        return payload
+
+
+def validate_typed_selection_history_payloads(
+    history_payload: Mapping[str, Any],
+    *,
+    snapshot_ledger: TypedSelectionSnapshotLedger,
+) -> tuple[dict[str, Any], ...]:
+    """Rebuild every history-only receipt without trusting caller hashes.
+
+    Attempt rows may have no archived HypothesisProgram because behavior
+    deduplication intentionally happens after selection.  The frozen recipe,
+    evaluator epoch and parent binding still determine every executable and
+    provenance field, so the reader can reconstruct the canonical binding
+    directly and reject a self-rehashed forged attempt.
+    """
+
+    if snapshot_ledger.validate():
+        raise PermissionError("typed selection history ledger is invalid")
+    snapshots = {
+        row.snapshot_hash: row for row in snapshot_ledger.snapshots
+    }
+    pending: list[tuple[int, str, dict[str, Any]]] = []
+    for key, raw_row in history_payload.items():
+        if not isinstance(key, str) or not isinstance(raw_row, Mapping):
+            raise PermissionError(
+                "typed selection history row is malformed"
+            )
+        row = dict(raw_row)
+        repair_depth = row.get("repair_depth")
+        if (
+            not isinstance(repair_depth, int)
+            or isinstance(repair_depth, bool)
+            or repair_depth < 0
+        ):
+            raise PermissionError(
+                "typed selection history repair depth is malformed"
+            )
+        pending.append((repair_depth, key, row))
+
+    bindings_by_hash: dict[str, TypedProgramBinding] = {}
+    canonical_rows: list[dict[str, Any]] = []
+    for repair_depth, key, row in sorted(pending):
+        snapshot = snapshots.get(str(row.get("snapshot_hash") or ""))
+        if snapshot is None:
+            raise PermissionError(
+                "typed selection history snapshot is outside the ledger"
+            )
+        evaluator_epoch = row.get("evaluator_epoch")
+        recipe_id = row.get("recipe_id")
+        excluded_recipe_ids = row.get("excluded_recipe_ids")
+        failed_checks = row.get("failed_checks")
+        if (
+            not isinstance(evaluator_epoch, str)
+            or not evaluator_epoch
+            or not isinstance(recipe_id, str)
+            or not isinstance(excluded_recipe_ids, list)
+            or not all(
+                isinstance(value, str)
+                for value in excluded_recipe_ids
+            )
+            or not isinstance(failed_checks, list)
+            or any(
+                not isinstance(value, Mapping)
+                or set(value) != {"check", "reason"}
+                or not isinstance(value.get("check"), str)
+                or not isinstance(value.get("reason"), str)
+                for value in failed_checks
+            )
+        ):
+            raise PermissionError(
+                "typed selection history selection receipt is malformed"
+            )
+        canonical_exclusions = tuple(
+            sorted(set(excluded_recipe_ids))
+        )
+        if canonical_exclusions != tuple(excluded_recipe_ids):
+            raise PermissionError(
+                "typed selection history exclusions are not canonical"
+            )
+        selection_round = row.get("selection_round")
+        if (
+            not isinstance(selection_round, int)
+            or isinstance(selection_round, bool)
+            or selection_round != len(canonical_exclusions) + 1
+        ):
+            raise PermissionError(
+                "typed selection history round is malformed"
+            )
+        canonical_failed_checks = tuple(
+            (str(value["check"]), str(value["reason"]))
+            for value in failed_checks
+        )
+        base_program = materialize_recipe_selection(
+            {"recipe_id": recipe_id},
+            graph=snapshot.graph,
+            evaluator_epoch=evaluator_epoch,
+            expected_graph_hash=snapshot.expected_graph_hash,
+            expected_model_catalog_hash=(
+                snapshot.expected_model_catalog_hash
+            ),
+        )
+        executable_hash = stable_hash(
+            _typed_program_executable_payload(base_program)
+        )
+
+        parent_binding_hash = row.get("parent_binding_hash")
+        parent_binding = (
+            bindings_by_hash.get(parent_binding_hash)
+            if isinstance(parent_binding_hash, str)
+            else None
+        )
+        if repair_depth == 0:
+            if parent_binding_hash is not None:
+                raise PermissionError(
+                    "typed root selection history has a parent"
+                )
+            program_id = base_program.id
+            parent_program_id = None
+            parent_program_hash = None
+            parent_recipe_id = None
+            lineage_program_ids: tuple[str, ...] = ()
+            lineage_recipe_ids: tuple[str, ...] = ()
+        else:
+            if parent_binding is None:
+                raise PermissionError(
+                    "typed repair selection history parent is missing"
+                )
+            if (
+                parent_binding.snapshot_hash != snapshot.snapshot_hash
+                or parent_binding.evaluator_epoch != evaluator_epoch
+                or repair_depth != parent_binding.repair_depth + 1
+            ):
+                raise PermissionError(
+                    "typed repair selection history parent drifted"
+                )
+            parent_program_id = parent_binding.program_id
+            parent_program_hash = parent_binding.program_identity_hash
+            parent_recipe_id = parent_binding.recipe_id
+            lineage_program_ids = (
+                *parent_binding.lineage_program_ids,
+                parent_binding.program_id,
+            )
+            lineage_recipe_ids = (
+                *parent_binding.lineage_recipe_ids,
+                parent_binding.recipe_id,
+            )
+            canonical_content = base_program.to_dict()
+            canonical_content.pop("id", None)
+            branch_identity_hash = stable_hash(
+                {
+                    "policy": TYPED_REPAIR_BRANCH_ID_POLICY_VERSION,
+                    "parent_program_hash": parent_program_hash,
+                    "snapshot_hash": snapshot.snapshot_hash,
+                    "snapshot_ledger_hash": snapshot_ledger.ledger_hash,
+                    "recipe_id": recipe_id,
+                    "repair_depth": repair_depth,
+                    "canonical_program_without_id": canonical_content,
+                }
+            )
+            program_id = f"repair_{branch_identity_hash}"
+
+        expected_request = canonical_typed_recipe_selection_request(
+            snapshot=snapshot,
+            snapshot_ledger=snapshot_ledger,
+            evaluator_epoch=evaluator_epoch,
+            selection_round=selection_round,
+            excluded_recipe_ids=canonical_exclusions,
+            parent_program_hash=parent_program_hash,
+            parent_recipe_id=parent_recipe_id,
+            failed_checks=[
+                {"check": check, "reason": reason}
+                for check, reason in canonical_failed_checks
+            ],
+            repair_depth=repair_depth,
+        )
+        expected_response = canonical_typed_recipe_selection_response(
+            recipe_id
+        )
+        binding = TypedProgramBinding(
+            binding_policy=TYPED_PROGRAM_BINDING_VERSION,
+            request_kind=str(expected_request["request_kind"]),
+            snapshot_hash=snapshot.snapshot_hash,
+            graph_hash=snapshot.expected_graph_hash,
+            model_catalog_hash=snapshot.expected_model_catalog_hash,
+            snapshot_ledger_hash=snapshot_ledger.ledger_hash,
+            recipe_id=recipe_id,
+            evaluator_epoch=evaluator_epoch,
+            program_id=program_id,
+            program_executable_hash=executable_hash,
+            request_hash=stable_hash(expected_request),
+            response_hash=stable_hash(expected_response),
+            selection_round=selection_round,
+            excluded_recipe_ids=canonical_exclusions,
+            repair_depth=repair_depth,
+            failed_checks=canonical_failed_checks,
+            parent_program_id=parent_program_id,
+            parent_program_hash=parent_program_hash,
+            parent_recipe_id=parent_recipe_id,
+            parent_binding_hash=(
+                parent_binding.binding_hash
+                if parent_binding is not None
+                else None
+            ),
+            lineage_program_ids=lineage_program_ids,
+            lineage_recipe_ids=lineage_recipe_ids,
+        )
+        canonical = binding.safe_payload()
+        if key != binding.binding_hash or canonical != row:
+            raise PermissionError(
+                "typed selection history is not canonical"
+            )
+        bindings_by_hash[binding.binding_hash] = binding
+        canonical_rows.append(canonical)
+    return tuple(canonical_rows)
+
+
+class TypedProgramBindingRegistry:
+    """Harness-owned provenance registry shared by proposer and compiler."""
+
+    def __init__(
+        self,
+        *,
+        snapshot_ledger: TypedSelectionSnapshotLedger | None = None,
+    ) -> None:
+        self._lock = threading.Lock()
+        self._bindings: dict[str, TypedProgramBinding] = {}
+        self._binding_keys_by_program_id: dict[str, str] = {}
+        self._bindings_by_hash: dict[str, TypedProgramBinding] = {}
+        self._programs_by_binding_hash: dict[str, HypothesisProgram] = {}
+        self._snapshots: dict[str, TypedRecipeSelectionSnapshot] = {}
+        self._snapshot_ledger: TypedSelectionSnapshotLedger | None = None
+        if snapshot_ledger is not None:
+            self.bind_snapshot_ledger(snapshot_ledger)
+
+    @property
+    def snapshot_ledger_hash(self) -> str:
+        with self._lock:
+            ledger = self._snapshot_ledger
+        return ledger.ledger_hash if ledger is not None else ""
+
+    def bind_snapshot_ledger(
+        self,
+        ledger: TypedSelectionSnapshotLedger,
+    ) -> None:
+        issues = ledger.validate()
+        if issues:
+            raise PermissionError(
+                f"typed snapshot ledger is invalid: {list(issues)}"
+            )
+        with self._lock:
+            existing = self._snapshot_ledger
+            if existing is not None and existing.ledger_hash != ledger.ledger_hash:
+                raise PermissionError("typed snapshot ledger binding conflict")
+            self._snapshot_ledger = ledger
+
+    def require_snapshot_ledger(
+        self,
+        snapshot: TypedRecipeSelectionSnapshot | None = None,
+    ) -> TypedSelectionSnapshotLedger:
+        with self._lock:
+            ledger = self._snapshot_ledger
+        if ledger is None:
+            raise PermissionError("typed snapshot ledger binding is missing")
+        if ledger.validate():
+            raise PermissionError("typed snapshot ledger binding is invalid")
+        if snapshot is not None and snapshot.snapshot_hash not in (
+            ledger.snapshot_hashes
+        ):
+            raise PermissionError("typed snapshot is outside the frozen ledger")
+        return ledger
+
+    def register(
+        self,
+        program: HypothesisProgram,
+        *,
+        snapshot: TypedRecipeSelectionSnapshot,
+        recipe_id: str,
+        request_kind: str,
+        request_hash: str,
+        response_hash: str,
+        selection_round: int,
+        excluded_recipe_ids: Sequence[str] = (),
+        parent: HypothesisProgram | None = None,
+        failed_checks: Sequence[Mapping[str, Any]] = (),
+        repair_depth: int = 0,
+    ) -> TypedProgramBinding:
+        ledger = self.require_snapshot_ledger(snapshot)
+        if snapshot.validate():
+            raise PermissionError("typed program snapshot is invalid")
+        if typed_recipe_id_for_program(program, snapshot=snapshot) != recipe_id:
+            raise PermissionError(
+                "typed program is not the frozen recipe materialization"
+            )
+        if request_kind not in {
+            "select_typed_root_recipe",
+            "select_typed_repair_recipe",
+        }:
+            raise PermissionError("typed program request kind is malformed")
+        if (request_kind == "select_typed_repair_recipe") != (
+            parent is not None
+        ):
+            raise PermissionError(
+                "typed repair registration requires a bound parent"
+            )
+        graph_recipe_ids = {
+            row.recipe_id for row in snapshot.graph.recipes
+        }
+        if any(
+            not isinstance(value, str) or not value
+            for value in excluded_recipe_ids
+        ):
+            raise PermissionError("typed selection exclusions are malformed")
+        canonical_excluded_recipe_ids = tuple(
+            sorted(set(excluded_recipe_ids))
+        )
+        if (
+            not set(canonical_excluded_recipe_ids).issubset(graph_recipe_ids)
+            or recipe_id in canonical_excluded_recipe_ids
+        ):
+            raise PermissionError("typed selection exclusions are malformed")
+        parent_binding: TypedProgramBinding | None = None
+        parent_recipe_id: str | None = None
+        if parent is None:
+            if program.parent_id is not None or program.lineage:
+                raise PermissionError(
+                    "typed repair registration requires a bound parent"
+                )
+        else:
+            parent_binding = self.require(parent)
+            parent_recipe_id = typed_recipe_id_for_program(
+                parent,
+                snapshot=snapshot,
+            )
+            if parent_binding.snapshot_hash != snapshot.snapshot_hash:
+                raise PermissionError(
+                    "typed repair parent snapshot binding mismatch"
+                )
+            if parent.evaluator_epoch != program.evaluator_epoch:
+                raise PermissionError("typed repair crossed evaluator epochs")
+            if (
+                parent_recipe_id is None
+                or parent_recipe_id != parent_binding.recipe_id
+            ):
+                raise PermissionError(
+                    "typed repair parent recipe binding mismatch"
+                )
+            if program.parent_id != parent.id or tuple(program.lineage) != (
+                *parent.lineage,
+                parent.id,
+            ):
+                raise PermissionError(
+                    "typed repair ancestry does not match its bound parent"
+                )
+            required_lineage_recipe_ids = {
+                *parent_binding.excluded_recipe_ids,
+                *parent_binding.lineage_recipe_ids,
+                parent_binding.recipe_id,
+            }
+            if not required_lineage_recipe_ids.issubset(
+                canonical_excluded_recipe_ids
+            ):
+                raise PermissionError(
+                    "typed repair exclusions omit inherited or lineage recipes"
+                )
+        expected_selection_round = len(canonical_excluded_recipe_ids) + 1
+        if (
+            not isinstance(selection_round, int)
+            or isinstance(selection_round, bool)
+            or selection_round != expected_selection_round
+        ):
+            raise PermissionError(
+                "typed selection round does not match the complete exclusion scope"
+            )
+        canonical_failed_checks = tuple(
+            (
+                str(row.get("check") or ""),
+                str(row.get("reason") or ""),
+            )
+            for row in failed_checks
+            if isinstance(row, Mapping)
+        )
+        if len(canonical_failed_checks) != len(failed_checks):
+            raise PermissionError("typed failed-check receipt is malformed")
+        expected_request = canonical_typed_recipe_selection_request(
+            snapshot=snapshot,
+            snapshot_ledger=ledger,
+            evaluator_epoch=program.evaluator_epoch,
+            selection_round=selection_round,
+            excluded_recipe_ids=canonical_excluded_recipe_ids,
+            parent_program_hash=(
+                parent_binding.program_identity_hash
+                if parent_binding is not None
+                else None
+            ),
+            parent_recipe_id=parent_recipe_id,
+            failed_checks=[
+                {"check": check, "reason": reason}
+                for check, reason in canonical_failed_checks
+            ],
+            repair_depth=repair_depth,
+        )
+        if (
+            not _is_sha256(request_hash)
+            or request_hash != stable_hash(expected_request)
+        ):
+            raise PermissionError(
+                "typed selection request receipt does not match the canonical request"
+            )
+        expected_response = canonical_typed_recipe_selection_response(
+            recipe_id
+        )
+        if (
+            not _is_sha256(response_hash)
+            or response_hash != stable_hash(expected_response)
+        ):
+            raise PermissionError(
+                "typed selection response receipt does not match the canonical response"
+            )
+        executable_hash = stable_hash(
+            _typed_program_executable_payload(program)
+        )
+        key = _typed_program_binding_key(program)
+        binding = TypedProgramBinding(
+            binding_policy=TYPED_PROGRAM_BINDING_VERSION,
+            request_kind=request_kind,
+            snapshot_hash=snapshot.snapshot_hash,
+            graph_hash=snapshot.expected_graph_hash,
+            model_catalog_hash=snapshot.expected_model_catalog_hash,
+            snapshot_ledger_hash=ledger.ledger_hash,
+            recipe_id=recipe_id,
+            evaluator_epoch=program.evaluator_epoch,
+            program_id=program.id,
+            program_executable_hash=executable_hash,
+            request_hash=request_hash,
+            response_hash=response_hash,
+            selection_round=selection_round,
+            excluded_recipe_ids=canonical_excluded_recipe_ids,
+            repair_depth=repair_depth,
+            failed_checks=canonical_failed_checks,
+            parent_program_id=parent.id if parent is not None else None,
+            parent_program_hash=(
+                parent_binding.program_identity_hash
+                if parent_binding is not None
+                else None
+            ),
+            parent_recipe_id=parent_recipe_id,
+            parent_binding_hash=(
+                parent_binding.binding_hash
+                if parent_binding is not None
+                else None
+            ),
+            lineage_program_ids=tuple(program.lineage),
+            lineage_recipe_ids=(
+                (
+                    *parent_binding.lineage_recipe_ids,
+                    parent_binding.recipe_id,
+                )
+                if parent_binding is not None
+                else ()
+            ),
+        )
+        with self._lock:
+            existing_snapshot = self._snapshots.get(snapshot.snapshot_hash)
+            if (
+                existing_snapshot is not None
+                and existing_snapshot.safe_payload()
+                != snapshot.safe_payload()
+            ):
+                raise PermissionError("typed snapshot hash collision")
+            existing = self._bindings.get(key)
+            if existing is not None and existing != binding:
+                raise PermissionError("typed program binding conflict")
+            existing_key = self._binding_keys_by_program_id.get(program.id)
+            if existing_key is not None and existing_key != key:
+                raise PermissionError("typed program ID binding conflict")
+            self._snapshots[snapshot.snapshot_hash] = snapshot
+            self._bindings[key] = binding
+            self._binding_keys_by_program_id[program.id] = key
+            self._bindings_by_hash[binding.binding_hash] = binding
+            self._programs_by_binding_hash[binding.binding_hash] = program
+        return binding
+
+    def require(self, program: HypothesisProgram) -> TypedProgramBinding:
+        key = _typed_program_binding_key(program)
+        with self._lock:
+            binding = self._bindings.get(key)
+            snapshot = (
+                self._snapshots.get(binding.snapshot_hash)
+                if binding is not None
+                else None
+            )
+            parent_binding = (
+                self._bindings_by_hash.get(binding.parent_binding_hash)
+                if binding is not None
+                and binding.parent_binding_hash is not None
+                else None
+            )
+        if binding is None or snapshot is None:
+            raise PermissionError("typed program binding is missing")
+        ledger = self.require_snapshot_ledger(snapshot)
+        expected_request = canonical_typed_recipe_selection_request(
+            snapshot=snapshot,
+            snapshot_ledger=ledger,
+            evaluator_epoch=binding.evaluator_epoch,
+            selection_round=binding.selection_round,
+            excluded_recipe_ids=binding.excluded_recipe_ids,
+            parent_program_hash=binding.parent_program_hash,
+            parent_recipe_id=binding.parent_recipe_id,
+            failed_checks=[
+                {"check": check, "reason": reason}
+                for check, reason in binding.failed_checks
+            ],
+            repair_depth=binding.repair_depth,
+        )
+        if (
+            binding.binding_policy != TYPED_PROGRAM_BINDING_VERSION
+            or binding.program_id != program.id
+            or binding.evaluator_epoch != program.evaluator_epoch
+            or binding.program_executable_hash
+            != stable_hash(_typed_program_executable_payload(program))
+            or binding.program_identity_hash != key
+            or snapshot.expected_graph_hash != binding.graph_hash
+            or snapshot.expected_model_catalog_hash
+            != binding.model_catalog_hash
+            or binding.snapshot_ledger_hash
+            != ledger.ledger_hash
+            or typed_recipe_id_for_program(program, snapshot=snapshot)
+            != binding.recipe_id
+            or binding.parent_program_id != program.parent_id
+            or binding.lineage_program_ids != tuple(program.lineage)
+            or binding.request_kind != expected_request["request_kind"]
+            or binding.request_hash != stable_hash(expected_request)
+            or binding.response_hash
+            != stable_hash(
+                canonical_typed_recipe_selection_response(binding.recipe_id)
+            )
+        ):
+            raise PermissionError("typed program binding does not validate")
+        if binding.parent_binding_hash is None:
+            if (
+                binding.parent_program_id is not None
+                or binding.parent_program_hash is not None
+                or binding.parent_recipe_id is not None
+                or binding.lineage_program_ids
+                or binding.lineage_recipe_ids
+                or binding.repair_depth != 0
+                or binding.failed_checks
+            ):
+                raise PermissionError("typed root ancestry binding is malformed")
+        elif (
+            parent_binding is None
+            or parent_binding.binding_hash != binding.parent_binding_hash
+            or parent_binding.program_id != binding.parent_program_id
+            or parent_binding.snapshot_hash != binding.snapshot_hash
+            or parent_binding.recipe_id != binding.parent_recipe_id
+            or parent_binding.program_identity_hash
+            != binding.parent_program_hash
+            or binding.lineage_recipe_ids
+            != (*parent_binding.lineage_recipe_ids, parent_binding.recipe_id)
+        ):
+            raise PermissionError("typed repair parent binding does not validate")
+        return binding
+
+    def require_for_snapshot(
+        self,
+        program: HypothesisProgram,
+        snapshot: TypedRecipeSelectionSnapshot,
+    ) -> TypedProgramBinding:
+        binding = self.require(program)
+        if binding.snapshot_hash != snapshot.snapshot_hash:
+            raise PermissionError(
+                "typed program snapshot binding mismatch"
+            )
+        return binding
+
+    def lineage_recipe_ids(
+        self,
+        program: HypothesisProgram,
+        *,
+        snapshot: TypedRecipeSelectionSnapshot,
+    ) -> tuple[str, ...]:
+        """Return every bound recipe on the root-to-program typed branch."""
+
+        binding = self.require_for_snapshot(program, snapshot)
+        return (*binding.lineage_recipe_ids, binding.recipe_id)
+
+    def matches_registered_snapshot(
+        self,
+        program: HypothesisProgram,
+    ) -> bool:
+        """Whether executable fields match any snapshot known to the registry."""
+
+        with self._lock:
+            snapshots = tuple(self._snapshots.values())
+        return any(
+            typed_recipe_id_for_program(program, snapshot=snapshot)
+            is not None
+            for snapshot in snapshots
+        )
+
+    def safe_binding(self, program: HypothesisProgram) -> dict[str, Any]:
+        return self.require(program).safe_payload()
+
+    def restore_safe_payload(
+        self,
+        program: HypothesisProgram,
+        binding_payload: Mapping[str, Any],
+    ) -> TypedProgramBinding:
+        """Restore one persisted binding under the currently frozen ledger.
+
+        Repair parents must be restored first.  Registration reconstructs both
+        opaque selector receipts from the sanitized payload, and the exact
+        generated safe payload (including its binding hash) must then match the
+        persisted row byte-for-structure.  A failed restore leaves no new
+        binding in the registry.
+        """
+
+        if not isinstance(binding_payload, Mapping):
+            raise PermissionError("typed binding restore payload is malformed")
+        payload = dict(binding_payload)
+        ledger = self.require_snapshot_ledger()
+        snapshot_hash = payload.get("snapshot_hash")
+        snapshots = tuple(
+            row
+            for row in ledger.snapshots
+            if row.snapshot_hash == snapshot_hash
+        )
+        if len(snapshots) != 1:
+            raise PermissionError(
+                "typed binding restore snapshot is outside the frozen ledger"
+            )
+        snapshot = snapshots[0]
+
+        excluded_recipe_ids = payload.get("excluded_recipe_ids")
+        failed_checks = payload.get("failed_checks")
+        if not isinstance(excluded_recipe_ids, list) or not isinstance(
+            failed_checks, list
+        ):
+            raise PermissionError("typed binding restore payload is malformed")
+        if any(
+            not isinstance(row, Mapping)
+            or set(row) != {"check", "reason"}
+            or not isinstance(row.get("check"), str)
+            or not isinstance(row.get("reason"), str)
+            for row in failed_checks
+        ):
+            raise PermissionError(
+                "typed binding restore failed-check receipt is malformed"
+            )
+
+        parent: HypothesisProgram | None = None
+        parent_binding_hash = payload.get("parent_binding_hash")
+        if parent_binding_hash is not None:
+            if not _is_sha256(parent_binding_hash):
+                raise PermissionError(
+                    "typed binding restore parent receipt is malformed"
+                )
+            with self._lock:
+                parent = self._programs_by_binding_hash.get(
+                    parent_binding_hash
+                )
+            if parent is None:
+                raise PermissionError(
+                    "typed binding restore requires its parent first"
+                )
+            self.require(parent)
+
+        key = _typed_program_binding_key(program)
+        with self._lock:
+            preexisting = self._bindings.get(key)
+        try:
+            restored = self.register(
+                program,
+                snapshot=snapshot,
+                recipe_id=payload.get("recipe_id"),
+                request_kind=payload.get("request_kind"),
+                request_hash=payload.get("request_hash"),
+                response_hash=payload.get("response_hash"),
+                selection_round=payload.get("selection_round"),
+                excluded_recipe_ids=excluded_recipe_ids,
+                parent=parent,
+                failed_checks=failed_checks,
+                repair_depth=payload.get("repair_depth"),
+            )
+            if restored.safe_payload() != payload:
+                raise PermissionError(
+                    "typed binding restore payload does not match canonical provenance"
+                )
+            return self.require(program)
+        except Exception:
+            if preexisting is None:
+                with self._lock:
+                    inserted = self._bindings.get(key)
+                    if inserted is not None:
+                        self._bindings.pop(key, None)
+                        if self._binding_keys_by_program_id.get(program.id) == key:
+                            self._binding_keys_by_program_id.pop(
+                                program.id,
+                                None,
+                            )
+                        self._bindings_by_hash.pop(
+                            inserted.binding_hash,
+                            None,
+                        )
+                        self._programs_by_binding_hash.pop(
+                            inserted.binding_hash,
+                            None,
+                        )
+                        if not any(
+                            row.snapshot_hash == inserted.snapshot_hash
+                            for row in self._bindings.values()
+                        ):
+                            self._snapshots.pop(
+                                inserted.snapshot_hash,
+                                None,
+                            )
+            raise
+
+    def binding_count(self) -> int:
+        with self._lock:
+            return len(self._bindings)
+
+
+def _typed_program_binding_key(program: HypothesisProgram) -> str:
+    return stable_hash(
+        {
+            "program_id": program.id,
+            "evaluator_epoch": program.evaluator_epoch,
+            "program_executable_hash": stable_hash(
+                _typed_program_executable_payload(program)
+            ),
+        }
+    )
+
+
 def extract_trial_trace_evidence(
     trace_path: str | Path,
     *,
@@ -1316,10 +2859,7 @@ def materialize_recipe_selection(
             }
         )[:18],
         kind=HypothesisKind.POLICY,
-        statement=(
-            "Apply a harness-owned typed task-local artifact workflow for "
-            "this TRAIN-supported family."
-        ),
+        statement=TYPED_PROGRAM_STATEMENT,
         trigger=TriggerSpec(
             all_of=(
                 FeaturePredicate(
@@ -1331,9 +2871,9 @@ def materialize_recipe_selection(
         action_graph=actions,
         expected_effect=ExpectedEffect(),
         verifier=VerifierContract(
-            checks=("task-local result structure is complete",),
+            checks=TYPED_PROGRAM_VERIFIER_CHECKS,
             required_evidence=(),
-            anchor_id="offline-post-agent-verifier",
+            anchor_id=TYPED_PROGRAM_VERIFIER_ANCHOR,
         ),
         evaluator_epoch=evaluator_epoch,
     )
@@ -1343,6 +2883,80 @@ def materialize_recipe_selection(
             f"typed recipe materialized invalid program: {issues}"
         )
     return program
+
+
+def is_typed_recipe_materialization(
+    program: HypothesisProgram,
+) -> bool:
+    """Recognize the immutable harness-owned typed program envelope."""
+
+    return bool(
+        program.kind is HypothesisKind.POLICY
+        and program.statement == TYPED_PROGRAM_STATEMENT
+        and program.verifier.checks == TYPED_PROGRAM_VERIFIER_CHECKS
+        and program.verifier.anchor_id == TYPED_PROGRAM_VERIFIER_ANCHOR
+    )
+
+
+def typed_recipe_id_for_program(
+    program: HypothesisProgram,
+    *,
+    snapshot: TypedRecipeSelectionSnapshot,
+) -> str | None:
+    """Return the unique frozen recipe whose harness lowering produced a program.
+
+    Harness-owned lineage and status fields are intentionally ignored so the
+    same check binds both root candidates and recursively repaired children.
+    Every executable trigger/action/verifier field remains part of the match.
+    """
+
+    if snapshot.validate():
+        return None
+    candidate = _typed_program_executable_payload(program)
+    matches: list[str] = []
+    for recipe in snapshot.graph.recipes:
+        expected = materialize_recipe_selection(
+            {"recipe_id": recipe.recipe_id},
+            graph=snapshot.graph,
+            evaluator_epoch=program.evaluator_epoch,
+            expected_graph_hash=snapshot.expected_graph_hash,
+            expected_model_catalog_hash=(
+                snapshot.expected_model_catalog_hash
+            ),
+        )
+        if _typed_program_executable_payload(expected) == candidate:
+            matches.append(recipe.recipe_id)
+    return matches[0] if len(matches) == 1 else None
+
+
+def typed_program_snapshot_binding(
+    program: HypothesisProgram,
+    snapshots: Sequence[TypedRecipeSelectionSnapshot],
+) -> tuple[TypedRecipeSelectionSnapshot, str] | None:
+    matches: list[tuple[TypedRecipeSelectionSnapshot, str]] = []
+    for snapshot in snapshots:
+        recipe_id = typed_recipe_id_for_program(
+            program,
+            snapshot=snapshot,
+        )
+        if recipe_id is not None:
+            matches.append((snapshot, recipe_id))
+    return matches[0] if len(matches) == 1 else None
+
+
+def _typed_program_executable_payload(
+    program: HypothesisProgram,
+) -> dict[str, Any]:
+    payload = program.to_dict()
+    for key in (
+        "id",
+        "parent_id",
+        "lineage",
+        "status",
+        "created_from_transition_ids",
+    ):
+        payload.pop(key, None)
+    return payload
 
 
 def canonical_recipe(graph: FamilyCapabilityGraph) -> TypedRecipe:

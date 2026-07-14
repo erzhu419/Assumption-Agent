@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -13,6 +14,10 @@ from typing import Any, Mapping, Sequence
 from ..events import Event, EventSink, NullEventSink
 from ..models import ActionNode, HypothesisProgram, HypothesisStatus, stable_hash
 from ..splits import BenchmarkItem, SplitManifest
+from ..typed_operator_grammar import (
+    TypedProgramBindingRegistry,
+    is_typed_recipe_materialization,
+)
 from ..validation import backend_action_contract_issues
 
 
@@ -58,6 +63,10 @@ class SkillCompileResult:
     program_set_hash: str
     treatment_hash: str
     item_treatment_hashes: Mapping[str, str]
+    typed_binding_hashes: tuple[str, ...] = ()
+    typed_binding_set_hash: str = ""
+    typed_snapshot_hashes: tuple[str, ...] = ()
+    typed_snapshot_ledger_hash: str = ""
 
     def source_for(self, item_id: str) -> Path | None:
         return self.item_sources.get(stable_hash({"item_id": item_id}))
@@ -68,12 +77,352 @@ class SkillCompileResult:
             NO_SKILL_TREATMENT_HASH,
         )
 
+    def source_receipt_for(self, item_id: str) -> "SkillSourceReceipt":
+        return verify_compiled_skill_source(
+            compile_root=self.output_root,
+            item_id=item_id,
+            skill_source_dir=self.source_for(item_id),
+            expected_compile_manifest_hash=self.manifest_hash,
+            expected_program_set_hash=self.program_set_hash,
+            expected_treatment_hash=self.treatment_hash_for(item_id),
+            expected_typed_binding_set_hash=self.typed_binding_set_hash,
+            expected_typed_snapshot_hashes=self.typed_snapshot_hashes,
+            expected_typed_snapshot_ledger_hash=(
+                self.typed_snapshot_ledger_hash
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class SkillSourceReceipt:
+    """Content-addressed compiler-to-runtime treatment receipt for one item."""
+
+    compile_manifest_hash: str
+    item_id_hash: str
+    source_route: str | None
+    source_file_hashes: tuple[tuple[str, str], ...]
+    source_tree_hash: str
+    program_set_hash: str
+    treatment_hash: str
+    typed_binding_set_hash: str
+    typed_snapshot_hashes: tuple[str, ...]
+    typed_snapshot_ledger_hash: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "compile_manifest_hash": self.compile_manifest_hash,
+            "item_id_hash": self.item_id_hash,
+            "source_route": self.source_route,
+            "source_file_hashes": [
+                {"path": path, "sha256": sha256}
+                for path, sha256 in self.source_file_hashes
+            ],
+            "source_tree_hash": self.source_tree_hash,
+            "program_set_hash": self.program_set_hash,
+            "treatment_hash": self.treatment_hash,
+            "typed_binding_set_hash": self.typed_binding_set_hash,
+            "typed_snapshot_hashes": list(self.typed_snapshot_hashes),
+            "typed_snapshot_ledger_hash": self.typed_snapshot_ledger_hash,
+        }
+
+    @property
+    def receipt_hash(self) -> str:
+        return stable_hash(self.to_dict())
+
+
+@dataclass(frozen=True)
+class SkillSourceTreeReceipt:
+    """Path-independent byte receipt for a non-compiler skill source tree."""
+
+    source_file_hashes: tuple[tuple[str, str], ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "source_file_hashes": [
+                {"path": path, "sha256": sha256}
+                for path, sha256 in self.source_file_hashes
+            ],
+            "source_tree_hash": self.source_tree_hash,
+        }
+
+    @property
+    def source_tree_hash(self) -> str:
+        return stable_hash(
+            {
+                "files": [
+                    {"path": path, "sha256": sha256}
+                    for path, sha256 in self.source_file_hashes
+                ]
+            }
+        )
+
+    @property
+    def receipt_hash(self) -> str:
+        return stable_hash(self.to_dict())
+
+
+def verify_skill_source_tree(
+    source_root: str | Path,
+) -> SkillSourceTreeReceipt:
+    """Hash every regular source byte and reject links or special files."""
+
+    source_path = Path(source_root).expanduser()
+    if source_path.is_symlink() or not source_path.is_dir():
+        raise PermissionError("skill source tree must be a real directory")
+    source = source_path.resolve(strict=True)
+    rows: list[tuple[str, str]] = []
+    for path in source.rglob("*"):
+        if path.is_symlink():
+            raise PermissionError("skill source tree contains a link")
+        if path.is_file():
+            rows.append(
+                (
+                    path.relative_to(source).as_posix(),
+                    hashlib.sha256(path.read_bytes()).hexdigest(),
+                )
+            )
+        elif not path.is_dir():
+            raise PermissionError("skill source tree contains a special file")
+    if not rows:
+        raise PermissionError("skill source tree is empty")
+    return SkillSourceTreeReceipt(tuple(sorted(rows)))
+
+
+def verify_compiled_skill_source(
+    *,
+    compile_root: str | Path,
+    item_id: str,
+    skill_source_dir: str | Path | None,
+    expected_compile_manifest_hash: str,
+    expected_program_set_hash: str,
+    expected_treatment_hash: str,
+    expected_typed_binding_set_hash: str = "",
+    expected_typed_snapshot_hashes: Sequence[str] = (),
+    expected_typed_snapshot_ledger_hash: str = "",
+) -> SkillSourceReceipt:
+    """Verify the exact compiled item tree immediately before runtime use.
+
+    The receipt intentionally excludes host paths.  It binds the manifest, item
+    route, every source byte (through raw SHA-256 file hashes), treatment, and
+    the complete typed-selection provenance surface.  The manifest's canonical
+    text hashes are independently rechecked when recomputing treatment identity.
+    """
+
+    root_path = Path(compile_root).expanduser()
+    if root_path.is_symlink() or not root_path.is_dir():
+        raise PermissionError("compiled skill root must be a real directory")
+    root = root_path.resolve(strict=True)
+    manifest_path = root / "compile_manifest.json"
+    if manifest_path.is_symlink() or not manifest_path.is_file():
+        raise PermissionError("compiled skill manifest is missing or linked")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise PermissionError("compiled skill manifest is unreadable") from exc
+    if not isinstance(manifest, dict):
+        raise PermissionError("compiled skill manifest must be an object")
+    manifest_hash = stable_hash(manifest)
+    if manifest_hash != expected_compile_manifest_hash:
+        raise PermissionError("compiled skill manifest hash mismatch")
+    if manifest.get("program_set_hash") != expected_program_set_hash:
+        raise PermissionError("compiled skill program set mismatch")
+
+    typed_rows = manifest.get("typed_binding_rows")
+    if not isinstance(typed_rows, list):
+        raise PermissionError("compiled skill typed binding rows are malformed")
+    manifest_binding_set_hash = str(
+        manifest.get("typed_binding_set_hash") or ""
+    )
+    recomputed_binding_set_hash = (
+        stable_hash({"bindings": typed_rows}) if typed_rows else ""
+    )
+    if manifest_binding_set_hash != recomputed_binding_set_hash:
+        raise PermissionError("compiled skill typed binding set is inconsistent")
+    if manifest_binding_set_hash != expected_typed_binding_set_hash:
+        raise PermissionError("compiled skill typed binding set mismatch")
+    manifest_snapshot_hashes = manifest.get("typed_snapshot_hashes")
+    if not isinstance(manifest_snapshot_hashes, list) or any(
+        not isinstance(value, str) for value in manifest_snapshot_hashes
+    ):
+        raise PermissionError("compiled skill snapshot hashes are malformed")
+    if tuple(manifest_snapshot_hashes) != tuple(expected_typed_snapshot_hashes):
+        raise PermissionError("compiled skill snapshot hashes mismatch")
+    if str(manifest.get("typed_snapshot_ledger_hash") or "") != (
+        expected_typed_snapshot_ledger_hash
+    ):
+        raise PermissionError("compiled skill snapshot ledger mismatch")
+
+    item_hash = stable_hash({"item_id": item_id})
+    item_routes = manifest.get("item_routes")
+    item_treatments = manifest.get("item_treatment_hashes")
+    skill_paths = manifest.get("skill_paths")
+    content_hashes = manifest.get("skill_content_hashes")
+    if not isinstance(item_routes, dict) or not isinstance(item_treatments, dict):
+        raise PermissionError("compiled skill item routing is malformed")
+    if not isinstance(skill_paths, list) or not isinstance(content_hashes, dict):
+        raise PermissionError("compiled skill content index is malformed")
+    if item_hash not in item_routes or item_hash not in item_treatments:
+        raise PermissionError("compiled skill item is outside the manifest")
+    source_route_value = item_routes[item_hash]
+    if source_route_value is not None and not isinstance(source_route_value, str):
+        raise PermissionError("compiled skill source route is malformed")
+    source_route = source_route_value
+    canonical_route = str(Path("items") / item_hash)
+    if source_route not in {None, canonical_route}:
+        raise PermissionError("compiled skill source route escaped its item")
+    if item_treatments[item_hash] != expected_treatment_hash:
+        raise PermissionError("compiled skill treatment hash mismatch")
+
+    expected_rows: list[tuple[str, str]] = []
+    if source_route is not None:
+        prefix = f"{source_route}/"
+        for raw_path in skill_paths:
+            if not isinstance(raw_path, str):
+                raise PermissionError("compiled skill path is malformed")
+            if not raw_path.startswith(prefix):
+                continue
+            relative_path = raw_path[len(prefix) :]
+            parts = Path(relative_path).parts
+            if (
+                not parts
+                or Path(relative_path).is_absolute()
+                or ".." in parts
+                or parts[-1] != "SKILL.md"
+            ):
+                raise PermissionError("compiled skill item path is unsafe")
+            content_hash = content_hashes.get(raw_path)
+            if not isinstance(content_hash, str):
+                raise PermissionError("compiled skill content hash is missing")
+            expected_rows.append((relative_path, content_hash))
+    expected_rows.sort()
+
+    if source_route is None:
+        if skill_source_dir is not None:
+            raise PermissionError("no-skill manifest item received a source tree")
+        if expected_rows or expected_treatment_hash != NO_SKILL_TREATMENT_HASH:
+            raise PermissionError("no-skill manifest item has a nonempty treatment")
+        actual_treatment_rows: tuple[tuple[str, str], ...] = ()
+        actual_receipt_rows: tuple[tuple[str, str], ...] = ()
+    else:
+        if skill_source_dir is None:
+            raise PermissionError("compiled treatment source tree is missing")
+        source_path = Path(skill_source_dir).expanduser()
+        if source_path.is_symlink() or not source_path.is_dir():
+            raise PermissionError("compiled treatment source must be a real directory")
+        source = source_path.resolve(strict=True)
+        expected_source = (root / source_route).resolve(strict=True)
+        if source != expected_source:
+            raise PermissionError("compiled treatment source route mismatch")
+        actual_files: list[Path] = []
+        for path in source.rglob("*"):
+            if path.is_symlink():
+                raise PermissionError("compiled treatment source contains a link")
+            if path.is_file():
+                actual_files.append(path)
+            elif not path.is_dir():
+                raise PermissionError("compiled treatment source has a special file")
+        actual_relative_paths = tuple(
+            sorted(path.relative_to(source).as_posix() for path in actual_files)
+        )
+        expected_relative_paths = tuple(path for path, _ in expected_rows)
+        if actual_relative_paths != expected_relative_paths:
+            raise PermissionError("compiled treatment source tree is not exact")
+        actual_treatment_row_list: list[tuple[str, str]] = []
+        actual_receipt_row_list: list[tuple[str, str]] = []
+        expected_by_path = dict(expected_rows)
+        for relative_path in actual_relative_paths:
+            path = source / relative_path
+            try:
+                raw_content = path.read_bytes()
+                text = raw_content.decode("utf-8")
+            except (OSError, UnicodeError) as exc:
+                raise PermissionError("compiled treatment source is unreadable") from exc
+            content_hash = stable_hash({"content": text})
+            if content_hash != expected_by_path[relative_path]:
+                raise PermissionError("compiled treatment source content mismatch")
+            actual_treatment_row_list.append((relative_path, content_hash))
+            actual_receipt_row_list.append(
+                (relative_path, hashlib.sha256(raw_content).hexdigest())
+            )
+        actual_treatment_rows = tuple(actual_treatment_row_list)
+        actual_receipt_rows = tuple(actual_receipt_row_list)
+
+    recomputed_treatment_hash = (
+        stable_hash(
+            {
+                "routing_version": SKILL_ROUTING_VERSION,
+                "action_lowering_version": SKILL_ACTION_LOWERING_VERSION,
+                "fallback_semantics": SKILL_FALLBACK_SEMANTICS_VERSION,
+                "skill_content_hashes": sorted(
+                    content_hash for _, content_hash in actual_treatment_rows
+                ),
+            }
+        )
+        if actual_treatment_rows
+        else NO_SKILL_TREATMENT_HASH
+    )
+    if recomputed_treatment_hash != expected_treatment_hash:
+        raise PermissionError("compiled treatment content does not match treatment hash")
+    source_tree_hash = stable_hash(
+        {
+            "item_id_hash": item_hash,
+            "files": [
+                {"path": path, "sha256": sha256}
+                for path, sha256 in actual_receipt_rows
+            ],
+        }
+    )
+    return SkillSourceReceipt(
+        compile_manifest_hash=manifest_hash,
+        item_id_hash=item_hash,
+        source_route=source_route,
+        source_file_hashes=actual_receipt_rows,
+        source_tree_hash=source_tree_hash,
+        program_set_hash=expected_program_set_hash,
+        treatment_hash=expected_treatment_hash,
+        typed_binding_set_hash=expected_typed_binding_set_hash,
+        typed_snapshot_hashes=tuple(expected_typed_snapshot_hashes),
+        typed_snapshot_ledger_hash=expected_typed_snapshot_ledger_hash,
+    )
+
 
 class SkillLearnProgramCompiler:
     """Compile promoted programs into SkillLearnBench-compatible SKILL.md files."""
 
-    def __init__(self, *, event_sink: EventSink | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        event_sink: EventSink | None = None,
+        typed_program_registry: TypedProgramBindingRegistry | None = None,
+        require_typed_bindings: bool = False,
+    ) -> None:
         self.event_sink = event_sink or NullEventSink()
+        self.typed_program_registry = typed_program_registry
+        self.require_typed_bindings = require_typed_bindings
+        if require_typed_bindings and typed_program_registry is None:
+            raise ValueError(
+                "typed compiler mode requires a binding registry"
+            )
+
+    def require_program_bindings(
+        self,
+        programs: Sequence[HypothesisProgram],
+    ) -> tuple[str, ...]:
+        if not self.require_typed_bindings:
+            if any(
+                is_typed_recipe_materialization(program)
+                for program in programs
+            ):
+                raise PermissionError(
+                    "typed recipe materialization requires the receipt-bound "
+                    "typed compiler"
+                )
+            return ()
+        assert self.typed_program_registry is not None
+        return tuple(
+            self.typed_program_registry.require(program).binding_hash
+            for program in programs
+        )
 
     def compile(
         self,
@@ -88,6 +437,7 @@ class SkillLearnProgramCompiler:
         target_split: str = "train",
         trace_id: str = "skill_compile",
     ) -> SkillCompileResult:
+        self.require_program_bindings(programs)
         allowed = allowed_statuses or {HypothesisStatus.PROMOTED}
         destination = Path(output_root) / method_name
         target_ids = set(target_item_ids or split_manifest.train_ids)
@@ -119,10 +469,16 @@ class SkillLearnProgramCompiler:
                 str,
             ]
         ] = []
+        typed_bindings: dict[str, Any] = {}
         seen_program_ids: set[str] = set()
         for program in sorted(programs, key=lambda row: row.id):
             if program.status not in allowed:
                 continue
+            if self.require_typed_bindings:
+                assert self.typed_program_registry is not None
+                typed_bindings[program.id] = (
+                    self.typed_program_registry.require(program)
+                )
             validation_issues = program.validate()
             if validation_issues:
                 raise ValueError(
@@ -149,6 +505,37 @@ class SkillLearnProgramCompiler:
                     treatment_hash,
                 )
             )
+
+        typed_binding_rows = [
+            {
+                **binding.safe_payload(),
+                "program_id": program_id,
+            }
+            for program_id, binding in sorted(typed_bindings.items())
+        ]
+        typed_binding_hashes = tuple(
+            row["binding_hash"] for row in typed_binding_rows
+        )
+        typed_snapshot_hashes = tuple(
+            sorted({row["snapshot_hash"] for row in typed_binding_rows})
+        )
+        typed_snapshot_ledger_hashes = {
+            row["snapshot_ledger_hash"] for row in typed_binding_rows
+        }
+        if len(typed_snapshot_ledger_hashes) > 1:
+            raise PermissionError(
+                "typed compiler programs crossed snapshot ledgers"
+            )
+        typed_snapshot_ledger_hash = (
+            next(iter(typed_snapshot_ledger_hashes))
+            if typed_snapshot_ledger_hashes
+            else ""
+        )
+        typed_binding_set_hash = (
+            stable_hash({"bindings": typed_binding_rows})
+            if typed_binding_rows
+            else ""
+        )
 
         program_set_hash = stable_hash(
             {
@@ -252,6 +639,11 @@ class SkillLearnProgramCompiler:
             "skill_content_hashes": skill_content_hashes,
             "item_treatment_hashes": item_treatment_hashes,
             "treatment_hash": treatment_hash,
+            "typed_binding_required": self.require_typed_bindings,
+            "typed_binding_rows": typed_binding_rows,
+            "typed_binding_set_hash": typed_binding_set_hash,
+            "typed_snapshot_hashes": list(typed_snapshot_hashes),
+            "typed_snapshot_ledger_hash": typed_snapshot_ledger_hash,
             "skill_paths": sorted(rendered_skills),
             "item_routes": {
                 item.id_hash: (
@@ -270,6 +662,7 @@ class SkillLearnProgramCompiler:
             "test_content_accessed": False,
             "raw_content_persisted": False,
         }
+        compile_manifest_hash = stable_hash(compile_manifest)
         destination.parent.mkdir(parents=True, exist_ok=True)
         staging = Path(
             tempfile.mkdtemp(
@@ -325,6 +718,27 @@ class SkillLearnProgramCompiler:
                         "family_hash": stable_hash({"family": item.family}),
                         "skill_path_hash": stable_hash({"path": str(skill_path)}),
                         "skill_content_hash": content_hash,
+                        "compile_manifest_hash": compile_manifest_hash,
+                        "typed_binding_hash": (
+                            typed_bindings[program.id].binding_hash
+                            if program.id in typed_bindings
+                            else ""
+                        ),
+                        "typed_binding_set_hash": typed_binding_set_hash,
+                        "typed_binding_hashes": list(typed_binding_hashes),
+                        "typed_snapshot_hash": (
+                            typed_bindings[program.id].snapshot_hash
+                            if program.id in typed_bindings
+                            else ""
+                        ),
+                        "typed_recipe_id": (
+                            typed_bindings[program.id].recipe_id
+                            if program.id in typed_bindings
+                            else ""
+                        ),
+                        "typed_snapshot_ledger_hash": (
+                            typed_snapshot_ledger_hash
+                        ),
                         "split_manifest_hash": split_manifest.manifest_hash,
                         "action_lowering_version": SKILL_ACTION_LOWERING_VERSION,
                         "action_lowering_hash": action_lowering_hashes[program.id],
@@ -339,11 +753,15 @@ class SkillLearnProgramCompiler:
             skill_paths=skill_paths,
             family_count=len(families),
             hypothesis_ids=tuple(sorted(used_hypotheses)),
-            manifest_hash=stable_hash(compile_manifest),
+            manifest_hash=compile_manifest_hash,
             item_sources=dict(item_sources),
             program_set_hash=program_set_hash,
             treatment_hash=treatment_hash,
             item_treatment_hashes=item_treatment_hashes,
+            typed_binding_hashes=typed_binding_hashes,
+            typed_binding_set_hash=typed_binding_set_hash,
+            typed_snapshot_hashes=typed_snapshot_hashes,
+            typed_snapshot_ledger_hash=typed_snapshot_ledger_hash,
         )
 
 

@@ -21,6 +21,9 @@ from assumption_agent.benchmarks.paper_protocol import (
     COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION,
     PaperProtocol,
     PROGRAM_SET_COUNTERFACTUAL_REPLAY_POLICY_VERSION,
+    TYPED_SELECTION_PROTOCOL_VERSION,
+    TYPED_SELECTION_MODEL_INFERENCE_SLOTS,
+    TYPED_SELECTION_PHASE_PARALLEL_WORKERS,
     validate_protocol_lock_for_execution,
 )
 from assumption_agent.benchmarks.codex_execution_policy import (
@@ -49,6 +52,7 @@ from assumption_agent.evolution import (
     PROPOSAL_FORMATION_POLICY_V2,
     PROPOSAL_FORMATION_POLICY_VERSION,
     PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
+    TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION,
 )
 from assumption_agent.proposer import (
     LEGACY_PROPOSAL_DIVERSITY_POLICY_VERSION,
@@ -694,6 +698,68 @@ def test_v317_rejects_proposal_formation_policy_drift(
         payload["execution"]["proposal_formation_policy"] = mutation
 
     assert "proposal_formation_policy_mismatch" in PaperProtocol(
+        protocol.path,
+        payload,
+    ).validate_structure()
+
+
+def test_v318_read_accepts_only_receipt_bound_typed_selection_contract(
+    tmp_path: Path,
+) -> None:
+    payload = copy.deepcopy(PaperProtocol.read(V317_PROTOCOL).payload)
+    payload["protocol_id"] = "typed-selection-v318-contract-test"
+    payload["protocol_version"] = TYPED_SELECTION_PROTOCOL_VERSION
+    payload["execution"]["proposal_formation_policy"] = (
+        TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION
+    )
+    payload["execution"]["model_inference_slots"] = (
+        TYPED_SELECTION_MODEL_INFERENCE_SLOTS
+    )
+    for phase_name, workers in (
+        TYPED_SELECTION_PHASE_PARALLEL_WORKERS.items()
+    ):
+        payload["phases"][phase_name]["parallel_workers"] = workers
+    payload["execution"]["typed_selection_snapshot_source"] = {
+        "preregistration": "manifests/integration.json",
+        "preregistration_file_sha256": "0" * 64,
+        "source_run_root": "artifacts/source-run",
+        "source_train_receipt": "manifests/source-receipt.json",
+        "source_train_receipt_file_sha256": "1" * 64,
+        "integration_result_receipt": "manifests/result-receipt.json",
+        "integration_result_receipt_file_sha256": "2" * 64,
+        "snapshot_ledger_hash": "3" * 64,
+    }
+    path = tmp_path / "protocol.json"
+    path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+    protocol = PaperProtocol.read(path)
+
+    assert protocol.payload["protocol_version"] == "3.18.0"
+    assert protocol.payload["execution"]["proposal_formation_policy"] == (
+        TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION
+    )
+    assert protocol.payload["execution"]["model_inference_slots"] == 48
+    assert {
+        name: phase["parallel_workers"]
+        for name, phase in protocol.payload["phases"].items()
+    } == TYPED_SELECTION_PHASE_PARALLEL_WORKERS
+    assert protocol.validate_structure() == []
+
+    malformed = copy.deepcopy(payload)
+    malformed["execution"]["typed_selection_snapshot_source"].pop(
+        "integration_result_receipt_file_sha256"
+    )
+    assert "typed_selection_snapshot_source_fields_mismatch" in (
+        PaperProtocol(path, malformed).validate_structure()
+    )
+
+
+def test_v317_rejects_typed_selection_source_contract() -> None:
+    protocol = PaperProtocol.read(V317_PROTOCOL)
+    payload = copy.deepcopy(protocol.payload)
+    payload["execution"]["typed_selection_snapshot_source"] = {}
+
+    assert "typed_selection_snapshot_source_unexpected" in PaperProtocol(
         protocol.path,
         payload,
     ).validate_structure()

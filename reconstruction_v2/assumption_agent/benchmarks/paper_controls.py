@@ -20,6 +20,8 @@ from .skilllearn_compiler import (
     SKILL_FALLBACK_SEMANTICS_VERSION,
     SKILL_ROUTING_VERSION,
     skilllearn_program_set_treatment_hash,
+    verify_compiled_skill_source,
+    verify_skill_source_tree,
 )
 from .skilllearn_lifecycle import (
     SkillLearnBackendPool,
@@ -122,6 +124,22 @@ class PaperControlRunner:
         self.items = {row.id: row for row in adapter.discover()}
         self._routing_manifests: dict[Path, Mapping[str, Any] | None] = {}
         self._routing_lock = threading.Lock()
+        self._external_source_receipts: dict[
+            tuple[str, str], str
+        ] = {}
+        for control in self.controls:
+            if control.root is None or self._routing_manifest(
+                control.root
+            ) is not None:
+                continue
+            for family in sorted(
+                {row.family for row in self.items.values()}
+            ):
+                source = control.root / family
+                if source.is_dir():
+                    self._external_source_receipts[
+                        (control.id, family)
+                    ] = verify_skill_source_tree(source).receipt_hash
         if (
             codex_agent_execution_policy_for_backend(self.backend).policy_hash
             != self.protocol.codex_agent_execution_policy.policy_hash
@@ -165,6 +183,8 @@ class PaperControlRunner:
         unexpected = sorted(set(item_ids) - set(allowed))
         if unexpected:
             raise PermissionError("paper control selection is outside the frozen split")
+        for control in self.controls:
+            self._assert_control_source_unchanged(control)
         phase = AccessPhase.PROMOTION if split is SplitName.VALIDATION else AccessPhase.FINAL_REPORT
         for item_id in item_ids:
             self.guard.authorize(item_id, phase)
@@ -230,6 +250,7 @@ class PaperControlRunner:
             )
         )
         for order_index, control in enumerate(controls):
+            self._assert_control_source_unchanged(control)
             incumbent = self.record_store.get(
                 item_id_hash=item_id_hash,
                 control_id=control.id,
@@ -275,29 +296,98 @@ class PaperControlRunner:
         source = self._source_for(control, item)
         variant = TrialVariant.POLICY_OFF if source is None else TrialVariant.POLICY_ON
         source_hash = self._control_source_hashes[control.id]
-        program_set_hash = (
-            stable_hash(
+        routing = (
+            self._routing_manifest(control.root)
+            if control.root is not None
+            else None
+        )
+        compile_manifest_hash = ""
+        skill_source_receipt_hash = ""
+        external_skill_source_receipt_hash = ""
+        compile_root: Path | None = None
+        typed_binding_set_hash = ""
+        typed_snapshot_hashes: tuple[str, ...] = ()
+        typed_snapshot_ledger_hash = ""
+        if routing is not None:
+            item_treatments = routing.get("item_treatment_hashes")
+            if not isinstance(item_treatments, Mapping):
+                raise ValueError(
+                    "compiled control manifest has no item treatments"
+                )
+            program_set_hash = str(routing.get("program_set_hash") or "")
+            treatment_hash = str(
+                item_treatments.get(item_id_hash) or ""
+            )
+            compile_manifest_hash = stable_hash(routing)
+            typed_binding_set_hash = str(
+                routing.get("typed_binding_set_hash") or ""
+            )
+            raw_snapshot_hashes = routing.get("typed_snapshot_hashes")
+            if not isinstance(raw_snapshot_hashes, list) or not all(
+                isinstance(value, str) for value in raw_snapshot_hashes
+            ):
+                raise ValueError(
+                    "compiled control snapshot provenance is malformed"
+                )
+            typed_snapshot_hashes = tuple(raw_snapshot_hashes)
+            typed_snapshot_ledger_hash = str(
+                routing.get("typed_snapshot_ledger_hash") or ""
+            )
+            compiled_receipt = verify_compiled_skill_source(
+                compile_root=control.root,
+                item_id=item_id,
+                skill_source_dir=source,
+                expected_compile_manifest_hash=compile_manifest_hash,
+                expected_program_set_hash=program_set_hash,
+                expected_treatment_hash=treatment_hash,
+                expected_typed_binding_set_hash=typed_binding_set_hash,
+                expected_typed_snapshot_hashes=typed_snapshot_hashes,
+                expected_typed_snapshot_ledger_hash=(
+                    typed_snapshot_ledger_hash
+                ),
+            )
+            skill_source_receipt_hash = compiled_receipt.receipt_hash
+            compile_root = control.root
+        elif source is not None:
+            program_set_hash = stable_hash(
                 {
                     "control_id": control.id,
                     "control_config_hash": self.control_config_hash,
                     "source_hash": source_hash,
                 }
             )
-            if control.root is not None
-            else skilllearn_program_set_treatment_hash(())
-        )
-        treatment_hash = (
-            stable_hash(
+            external_receipt = verify_skill_source_tree(source)
+            external_skill_source_receipt_hash = (
+                external_receipt.receipt_hash
+            )
+            expected_external_receipt_hash = (
+                self._external_source_receipts.get(
+                    (control.id, item.family)
+                )
+            )
+            if (
+                expected_external_receipt_hash is None
+                or external_skill_source_receipt_hash
+                != expected_external_receipt_hash
+            ):
+                raise PermissionError(
+                    "paper external control source receipt changed after "
+                    "runner initialization"
+                )
+            treatment_hash = stable_hash(
                 {
                     "control_source_hash": source_hash,
                     "selected_source": source.resolve().relative_to(
                         control.root.resolve()
                     ).as_posix(),
+                    "external_skill_source_receipt_hash": (
+                        external_skill_source_receipt_hash
+                    ),
                 }
             )
-            if source is not None
-            else NO_SKILL_TREATMENT_HASH
-        )
+        else:
+            program_set_hash = skilllearn_program_set_treatment_hash(())
+            treatment_hash = NO_SKILL_TREATMENT_HASH
         request = SkillLearnTrialRequest(
             item_id=item_id,
             family=item.family,
@@ -316,12 +406,44 @@ class PaperControlRunner:
             program_id=None if control.root is None else control.id,
             program_set_hash=program_set_hash,
             treatment_hash=treatment_hash,
+            compile_manifest_hash=compile_manifest_hash,
+            skill_source_receipt_hash=skill_source_receipt_hash,
+            external_skill_source_receipt_hash=(
+                external_skill_source_receipt_hash
+            ),
+            compile_root=compile_root,
+            typed_binding_set_hash=typed_binding_set_hash,
+            typed_snapshot_hashes=typed_snapshot_hashes,
+            typed_snapshot_ledger_hash=typed_snapshot_ledger_hash,
         )
+        self._assert_control_source_unchanged(control)
         observation = self.backend.run(
             request,
             skill_source_dir=source,
             trace_id=f"{trace_id}:{pair_id}:{control.id}:r{repeat}:a{attempt}",
         )
+        self._assert_control_source_unchanged(control)
+        expected_installed_receipt_hash = (
+            skill_source_receipt_hash
+            if source is not None and skill_source_receipt_hash
+            else external_skill_source_receipt_hash
+        )
+        if expected_installed_receipt_hash and (
+            getattr(self.backend, "requires_installed_skill_receipt", False)
+            is not True
+        ):
+            raise PermissionError(
+                "paper control backend does not require installed treatment receipts"
+            )
+        if (
+            observation.valid
+            and expected_installed_receipt_hash
+            and observation.installed_skill_source_receipt_hash
+            != expected_installed_receipt_hash
+        ):
+            raise PermissionError(
+                "paper control installed treatment receipt mismatch"
+            )
         record = PaperTrialRecord(
             item_id_hash=item_id_hash,
             family_hash=stable_hash({"family": item.family}),
@@ -362,6 +484,16 @@ class PaperControlRunner:
             step_budget_receipt_hash=observation.step_budget_receipt_hash,
         )
         return record
+
+    def _assert_control_source_unchanged(self, control: ControlSource) -> None:
+        if control.root is None:
+            return
+        expected = self._control_source_hashes[control.id]
+        actual = source_tree_hash(control.root)
+        if actual != expected:
+            raise PermissionError(
+                f"paper control source changed after runner initialization: {control.id}"
+            )
 
     def _emit_record(self, record: PaperTrialRecord, trace_id: str) -> None:
         self.event_sink.emit(

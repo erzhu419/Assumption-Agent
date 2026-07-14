@@ -925,6 +925,66 @@ def test_archive_still_rejects_same_hypothesis_id_with_different_content() -> No
         archive.register_hypothesis(collision)
 
 
+def test_archive_persists_typed_binding_inside_archive_hash() -> None:
+    archive = PolicyArchive()
+    program = HypothesisProgram.from_dict(
+        _program_dict(hypothesis_id="typed-bound")
+    )
+    binding = {
+        "binding_policy": "test-typed-binding",
+        "program_id": program.id,
+        "program_executable_hash": stable_hash({"program": program.id}),
+        "raw_content_persisted": False,
+    }
+    binding["binding_hash"] = stable_hash(binding)
+
+    archive.register_hypothesis(program, typed_binding=binding)
+    payload = archive.to_dict()
+
+    assert payload["typed_bindings"] == {program.id: binding}
+    assert payload["typed_selection_history"] == {
+        binding["binding_hash"]: binding
+    }
+    expected_evidence = {
+        "hypotheses": {program.id: program.payload_hash},
+        "nodes": {},
+        "scores": {},
+        "incumbent_id": None,
+        "typed_bindings": {program.id: binding},
+        "typed_selection_history": {
+            binding["binding_hash"]: binding
+        },
+    }
+    assert payload["archive_hash"] == stable_hash(expected_evidence)
+
+
+def test_archive_rejects_typed_binding_tampering_and_collision() -> None:
+    archive = PolicyArchive()
+    program = HypothesisProgram.from_dict(
+        _program_dict(hypothesis_id="typed-bound")
+    )
+    binding = {
+        "binding_policy": "test-typed-binding",
+        "program_id": program.id,
+        "raw_content_persisted": False,
+    }
+    binding["binding_hash"] = stable_hash(binding)
+    archive.register_hypothesis(program, typed_binding=binding)
+
+    tampered = {**binding, "binding_policy": "tampered"}
+    with pytest.raises(ValueError, match="content hash mismatch"):
+        archive.register_hypothesis(program, typed_binding=tampered)
+
+    replacement = {
+        **binding,
+        "binding_policy": "other-valid-binding",
+    }
+    replacement.pop("binding_hash")
+    replacement["binding_hash"] = stable_hash(replacement)
+    with pytest.raises(ValueError, match="typed archive binding collision"):
+        archive.register_hypothesis(program, typed_binding=replacement)
+
+
 def test_root_proposal_replay_requires_the_exact_request_state() -> None:
     sink = MemoryEventSink()
     first_payload = _program_dict(hypothesis_id="root-first")

@@ -10,7 +10,11 @@ from typing import Any, Mapping, Protocol
 
 from .events import Event, EventSink, NullEventSink
 from .models import stable_hash
-from .proposer import TRAIN_ACTION_DESIGN_POLICY_VERSIONS
+from .proposer import (
+    TRAIN_ACTION_DESIGN_POLICY_VERSIONS,
+    TYPED_REPAIR_RECIPE_SELECTION_REQUEST,
+    TYPED_ROOT_RECIPE_SELECTION_REQUEST,
+)
 from .secure_env import LOCKED_MODEL, configured_model
 
 
@@ -59,7 +63,23 @@ ACTION_QUALITY_SYSTEM_PROMPT_ADDENDUM = (
 )
 
 
+TYPED_RECIPE_SELECTION_SYSTEM_PROMPT = (
+    "You are the typed recipe selector of a controlled self-evolution system. "
+    "Return exactly one JSON object matching the supplied output_schema. The "
+    "only permitted output field is recipe_id, and its value must be one of "
+    "the opaque IDs in the supplied enum. Do not return a statement, trigger, "
+    "action, command, locator, argument, explanation, markdown, or any extra "
+    "field. Do not use tools, files, shell commands, network access, or hidden "
+    "context. Harness-owned code materializes the selected recipe."
+)
+
+
 def _proposal_system_prompt(payload: Mapping[str, Any]) -> str:
+    if payload.get("request_kind") in {
+        TYPED_ROOT_RECIPE_SELECTION_REQUEST,
+        TYPED_REPAIR_RECIPE_SELECTION_REQUEST,
+    }:
+        return TYPED_RECIPE_SELECTION_SYSTEM_PROMPT
     capabilities = payload.get("capabilities")
     if not isinstance(capabilities, Mapping):
         return PROPOSAL_SYSTEM_PROMPT

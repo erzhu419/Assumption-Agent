@@ -683,8 +683,8 @@ def test_preregistration_is_single_decision_and_matches_code_constants() -> None
     preregistration_path = (
         root / "manifests" / "skilllearn_typed_operator_feasibility_v1.json"
     )
-    preregistration = _read_preregistration(
-        preregistration_path
+    preregistration = json.loads(
+        preregistration_path.read_text(encoding="utf-8")
     )
     assert preregistration["decision_budget"] == 1
     assert preregistration["model_surface"][
@@ -700,10 +700,20 @@ def test_preregistration_is_single_decision_and_matches_code_constants() -> None
         _ACCEPTANCE_PREDICATES
     )
     assert all(preregistration["acceptance"].values())
+    result_receipt = json.loads(
+        (
+            root
+            / "manifests"
+            / "skilllearn_typed_operator_feasibility_result_v1.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert preregistration["expected_implementation_file_set_hash"] == (
+        result_receipt["implementation_file_set_hash"]
+    )
     assert _implementation_file_set_hash(
         preregistration,
         preregistration_path=preregistration_path,
-    ) == preregistration["expected_implementation_file_set_hash"]
+    ) != preregistration["expected_implementation_file_set_hash"]
     canonical = _canonical_decision_paths(
         preregistration,
         preregistration_path=preregistration_path,
@@ -731,7 +741,7 @@ def test_decision_lock_is_exclusive_and_noncanonical_run_fails_closed(
     )
 
     root = Path(__file__).resolve().parents[1]
-    with pytest.raises(PermissionError, match="canonical paths"):
+    with pytest.raises(PermissionError, match="implementation binding drifted"):
         run_typed_operator_feasibility(
             root=tmp_path,
             manifest_path=tmp_path / "unused-manifest.json",

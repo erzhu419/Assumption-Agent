@@ -23,6 +23,7 @@ from ..evolution import (
     PROPOSAL_FORMATION_POLICY_V2,
     PROPOSAL_FORMATION_POLICY_VERSION,
     PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
+    TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION,
     TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
 )
 from ..provider_chain import configured_provider_chain, proposal_provider_status
@@ -41,6 +42,13 @@ from ..secure_env import (
     map_legacy_model_env,
 )
 from ..splits import SplitManifest
+from ..typed_operator_grammar import (
+    TYPED_SELECTION_FREEZE_AUTHORIZATION_VERSION,
+    TypedSelectionExecutionAuthorization,
+    TypedSelectionFreezeAuthorization,
+    TypedSelectionSnapshotLedger,
+    _issue_typed_selection_execution_authorization,
+)
 from .preflight import build_preflight
 from .codex_execution_policy import (
     CodexAgentExecutionPolicy,
@@ -126,7 +134,13 @@ TRIAL_NETWORK_BYTE_LIMIT_BY_PROTOCOL_VERSION = {
     "3.15.0": 64 * 1024 * 1024,
     "3.16.0": 64 * 1024 * 1024,
     "3.17.0": 64 * 1024 * 1024,
+    "3.18.0": 64 * 1024 * 1024,
 }
+
+TYPED_SELECTION_PROTOCOL_VERSION = "3.18.0"
+TYPED_SELECTION_PROTOCOL_VERSIONS = frozenset(
+    {TYPED_SELECTION_PROTOCOL_VERSION}
+)
 
 CONTRASTIVE_PROTOCOL_VERSIONS = frozenset(
     {
@@ -142,6 +156,7 @@ CONTRASTIVE_PROTOCOL_VERSIONS = frozenset(
         "3.15.0",
         "3.16.0",
         "3.17.0",
+        "3.18.0",
     }
 )
 MODEL_SLOT_PROTOCOL_VERSIONS = frozenset(
@@ -155,8 +170,17 @@ MODEL_SLOT_PROTOCOL_VERSIONS = frozenset(
         "3.15.0",
         "3.16.0",
         "3.17.0",
+        "3.18.0",
     }
 )
+TYPED_SELECTION_MODEL_INFERENCE_SLOTS = 48
+TYPED_SELECTION_PHASE_PARALLEL_WORKERS = {
+    "smoke": 6,
+    "development": 38,
+    "family_out_development": 48,
+    "sealed_test": 32,
+    "family_out_transfer": 27,
+}
 PROPOSAL_DIVERSITY_PROTOCOL_VERSIONS = frozenset(
     {
         "3.10.0",
@@ -167,6 +191,7 @@ PROPOSAL_DIVERSITY_PROTOCOL_VERSIONS = frozenset(
         "3.15.0",
         "3.16.0",
         "3.17.0",
+        "3.18.0",
     }
 )
 ACTIONABLE_DIRECTIVE_PROTOCOL_VERSIONS = frozenset(
@@ -178,27 +203,39 @@ ACTIONABLE_DIRECTIVE_PROTOCOL_VERSIONS = frozenset(
         "3.15.0",
         "3.16.0",
         "3.17.0",
+        "3.18.0",
     }
 )
 REPAIR_REQUEST_SCOPE_PROTOCOL_VERSIONS = frozenset(
-    {"3.12.0", "3.13.0", "3.14.0", "3.15.0", "3.16.0", "3.17.0"}
+    {
+        "3.12.0",
+        "3.13.0",
+        "3.14.0",
+        "3.15.0",
+        "3.16.0",
+        "3.17.0",
+        "3.18.0",
+    }
 )
 CANDIDATE_BUNDLE_PROTOCOL_VERSIONS = frozenset(
-    {"3.13.0", "3.14.0", "3.15.0", "3.16.0", "3.17.0"}
+    {"3.13.0", "3.14.0", "3.15.0", "3.16.0", "3.17.0", "3.18.0"}
 )
 FAMILY_SUPPORT_BUNDLE_PROTOCOL_VERSIONS = frozenset(
-    {"3.14.0", "3.15.0", "3.16.0", "3.17.0"}
+    {"3.14.0", "3.15.0", "3.16.0", "3.17.0", "3.18.0"}
 )
 SHARED_BASELINE_ARM_REPLAY_PROTOCOL_VERSIONS = frozenset({"3.14.0"})
 TERMINAL_SHARED_BASELINE_ARM_REPLAY_PROTOCOL_VERSIONS = frozenset(
-    {"3.15.0", "3.16.0", "3.17.0"}
+    {"3.15.0", "3.16.0", "3.17.0", "3.18.0"}
 )
 TRAIN_ACTION_DESIGN_PROTOCOL_VERSIONS = frozenset(
-    {"3.15.0", "3.16.0", "3.17.0"}
+    {"3.15.0", "3.16.0", "3.17.0", "3.18.0"}
 )
 PROPOSAL_FORMATION_POLICY_BY_PROTOCOL_VERSION = {
     "3.16.0": PROPOSAL_FORMATION_POLICY_VERSION,
     "3.17.0": PROPOSAL_FORMATION_POLICY_V2,
+    TYPED_SELECTION_PROTOCOL_VERSION: (
+        TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION
+    ),
 }
 PROPOSAL_FORMATION_PROTOCOL_VERSIONS = frozenset(
     PROPOSAL_FORMATION_POLICY_BY_PROTOCOL_VERSION
@@ -216,6 +253,26 @@ ACTIONABLE_CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION = (
 COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION = (
     "generation_terminal_non_claim_v1"
 )
+
+
+def _paper_codex_execution_policy(protocol_version: object) -> CodexAgentExecutionPolicy | None:
+    inherited_version = (
+        "3.17.0"
+        if str(protocol_version or "") in TYPED_SELECTION_PROTOCOL_VERSIONS
+        else protocol_version
+    )
+    return codex_agent_execution_policy_for_protocol_version(
+        inherited_version
+    )
+
+
+def _paper_development_prewarm_version(protocol_version: object) -> str | None:
+    inherited_version = (
+        "3.17.0"
+        if str(protocol_version or "") in TYPED_SELECTION_PROTOCOL_VERSIONS
+        else protocol_version
+    )
+    return development_prewarm_version_for_protocol(inherited_version)
 
 
 @dataclass(frozen=True)
@@ -240,7 +297,7 @@ class PaperProtocol:
 
     @property
     def codex_agent_execution_policy(self) -> CodexAgentExecutionPolicy:
-        policy = codex_agent_execution_policy_for_protocol_version(
+        policy = _paper_codex_execution_policy(
             self.payload.get("protocol_version")
         )
         if policy is None:
@@ -313,7 +370,7 @@ class PaperProtocol:
                 major is not None
                 and major >= 2
                 and execution.get("development_prewarm")
-                != development_prewarm_version_for_protocol(
+                != _paper_development_prewarm_version(
                     self.payload.get("protocol_version")
                 )
             ):
@@ -436,6 +493,14 @@ class PaperProtocol:
                     issues.append("proposal_formation_policy_mismatch")
             elif "proposal_formation_policy" in execution:
                 issues.append("proposal_formation_policy_unexpected")
+            if protocol_version in TYPED_SELECTION_PROTOCOL_VERSIONS:
+                issues.extend(
+                    _typed_selection_source_contract_issues(
+                        execution.get("typed_selection_snapshot_source")
+                    )
+                )
+            elif "typed_selection_snapshot_source" in execution:
+                issues.append("typed_selection_snapshot_source_unexpected")
             if execution.get("runtime_candidate_kinds") != ["task", "policy"]:
                 issues.append("runtime_candidate_kinds_mismatch")
             if (
@@ -491,7 +556,12 @@ class PaperProtocol:
                     MODEL_INFERENCE_CONCURRENCY_POLICY_VERSION
                 ):
                     issues.append("model_inference_concurrency_policy_mismatch")
-                if execution.get("model_inference_slots") != 1:
+                expected_model_slots = (
+                    TYPED_SELECTION_MODEL_INFERENCE_SLOTS
+                    if protocol_version == TYPED_SELECTION_PROTOCOL_VERSION
+                    else 1
+                )
+                if execution.get("model_inference_slots") != expected_model_slots:
                     issues.append("model_inference_slots_mismatch")
             else:
                 for field in (
@@ -588,7 +658,7 @@ class PaperProtocol:
                 != PROPOSAL_FAILURE_ISOLATION_POLICY_VERSION
             ):
                 issues.append("proposal_failure_isolation_policy_mismatch")
-            resolved_codex_policy = codex_agent_execution_policy_for_protocol_version(
+            resolved_codex_policy = _paper_codex_execution_policy(
                 self.payload.get("protocol_version")
             )
             if (
@@ -718,6 +788,14 @@ class PaperProtocol:
                 workers = phase.get("parallel_workers") if isinstance(phase, Mapping) else None
                 if isinstance(workers, bool) or not isinstance(workers, int) or workers <= 0:
                     issues.append(f"phase_parallel_workers_invalid:{phase_name}")
+                if (
+                    protocol_version == TYPED_SELECTION_PROTOCOL_VERSION
+                    and workers
+                    != TYPED_SELECTION_PHASE_PARALLEL_WORKERS[phase_name]
+                ):
+                    issues.append(
+                        f"phase_parallel_workers_mismatch:{phase_name}"
+                    )
             smoke = phases.get("smoke")
             if isinstance(smoke, Mapping):
                 smoke_generations = smoke.get("max_generations")
@@ -831,6 +909,56 @@ def _is_nonnegative_number(value: Any) -> bool:
         return False
 
 
+def _typed_selection_source_contract_issues(value: Any) -> list[str]:
+    if not isinstance(value, Mapping):
+        return ["typed_selection_snapshot_source_missing"]
+    required = {
+        "preregistration",
+        "preregistration_file_sha256",
+        "source_run_root",
+        "source_train_receipt",
+        "source_train_receipt_file_sha256",
+        "integration_result_receipt",
+        "integration_result_receipt_file_sha256",
+        "snapshot_ledger_hash",
+    }
+    if set(value) != required:
+        return ["typed_selection_snapshot_source_fields_mismatch"]
+    issues: list[str] = []
+    for field in (
+        "preregistration",
+        "source_run_root",
+        "source_train_receipt",
+        "integration_result_receipt",
+    ):
+        raw = value.get(field)
+        if not isinstance(raw, str):
+            issues.append(f"typed_selection_source_path_invalid:{field}")
+            continue
+        path = Path(raw)
+        if (
+            not raw.strip()
+            or path.is_absolute()
+            or not path.parts
+            or any(part in {"", ".", ".."} for part in path.parts)
+        ):
+            issues.append(f"typed_selection_source_path_invalid:{field}")
+    for field in (
+        "preregistration_file_sha256",
+        "source_train_receipt_file_sha256",
+        "integration_result_receipt_file_sha256",
+        "snapshot_ledger_hash",
+    ):
+        raw = value.get(field)
+        if not (
+            isinstance(raw, str)
+            and len(raw) == 64
+            and all(character in "0123456789abcdef" for character in raw)
+        ):
+            issues.append(f"typed_selection_source_hash_invalid:{field}")
+    return issues
+
+
 def _read_offline_readiness_receipt(
     protocol: PaperProtocol,
     *,
@@ -928,6 +1056,7 @@ def build_protocol_lock(
     primary_ids = {*primary.train_ids, *primary.validation_ids, *primary.test_ids}
     secondary_ids = {*secondary.train_ids, *secondary.validation_ids, *secondary.test_ids}
     issues: list[str] = []
+    typed_selection_freeze_authorization: Mapping[str, Any] | None = None
     offline_readiness_receipt_hash: str | None = None
     try:
         _, offline_readiness_receipt_hash = _read_offline_readiness_receipt(
@@ -1001,6 +1130,41 @@ def build_protocol_lock(
         issues.extend(f"static_program:{issue}" for issue in static_issues)
     source_issues = _validate_control_sources(protocol, project)
     issues.extend(source_issues)
+    if protocol.payload.get("protocol_version") == TYPED_SELECTION_PROTOCOL_VERSION:
+        try:
+            # The lock is itself a freeze authority, so it must traverse the
+            # same receipt-verifying loader as execution.  A structurally valid
+            # protocol with a missing or forged formal result receipt cannot
+            # produce a claim-eligible lock.
+            from .skilllearn_experiment import (
+                _load_typed_selection_for_execution,
+            )
+
+            loaded_typed_selection = _load_typed_selection_for_execution(
+                root=benchmark,
+                manifest_path=primary_path,
+                protocol=protocol,
+                execution_contract=protocol.payload["execution"],
+                proposal_formation_policy=str(
+                    protocol.payload["execution"].get(
+                        "proposal_formation_policy"
+                    )
+                ),
+            )
+            typed_selection_freeze_authorization = (
+                loaded_typed_selection.require_freeze_authorization().safe_payload()
+            )
+        except (
+            KeyError,
+            OSError,
+            TypeError,
+            ValueError,
+            PermissionError,
+        ) as exc:
+            issues.append(
+                "typed_selection_freeze_authorization_invalid:"
+                f"{type(exc).__name__}"
+            )
     code_fingerprint = _code_fingerprint(project)
     git_state = _git_state(project)
     preflight = build_preflight(
@@ -1050,6 +1214,15 @@ def build_protocol_lock(
         "provider_status": provider_status,
         "max_steps": int(protocol.payload["max_steps"]),
         "execution": dict(protocol.payload["execution"]),
+        **(
+            {
+                "typed_selection_freeze_authorization": dict(
+                    typed_selection_freeze_authorization
+                )
+            }
+            if typed_selection_freeze_authorization is not None
+            else {}
+        ),
         "resolved_codex_agent_execution_policy": (
             protocol.codex_agent_execution_policy.to_dict()
         ),
@@ -1108,6 +1281,41 @@ def validate_protocol_lock_for_execution(
         raise PermissionError("execution promotion contract lock mismatch")
     if lock.get("execution") != dict(protocol.payload["execution"]):
         raise PermissionError("execution policy lock mismatch")
+    if protocol.payload.get("protocol_version") == TYPED_SELECTION_PROTOCOL_VERSION:
+        typed_authorization = lock.get(
+            "typed_selection_freeze_authorization"
+        )
+        if not isinstance(typed_authorization, Mapping):
+            raise PermissionError(
+                "execution lock has no typed selection freeze authorization"
+            )
+        unhashed_authorization = {
+            key: value
+            for key, value in typed_authorization.items()
+            if key != "authorization_hash"
+        }
+        source = protocol.payload["execution"][
+            "typed_selection_snapshot_source"
+        ]
+        if (
+            typed_authorization.get("authorization_policy")
+            != TYPED_SELECTION_FREEZE_AUTHORIZATION_VERSION
+            or typed_authorization.get("authorization_hash")
+            != stable_hash(unhashed_authorization)
+            or typed_authorization.get("snapshot_ledger_hash")
+            != source["snapshot_ledger_hash"]
+            or typed_authorization.get(
+                "fresh_development_protocol_freeze_eligible"
+            )
+            is not True
+            or typed_authorization.get(
+                "development_task_execution_authorized"
+            )
+            is not False
+        ):
+            raise PermissionError(
+                "execution typed selection freeze authorization mismatch"
+            )
     resolved_policy_fields_present = any(
         key in lock
         for key in (
@@ -1220,6 +1428,51 @@ def validate_protocol_lock_for_execution(
     ):
         raise PermissionError("execution source tree changed after protocol lock")
     return declared_hash
+
+
+def authorize_typed_selection_execution(
+    protocol: PaperProtocol,
+    lock: Mapping[str, Any],
+    manifest: SplitManifest,
+    project_root: str | Path,
+    benchmark_root: str | Path,
+    *,
+    ledger: TypedSelectionSnapshotLedger,
+    freeze_authorization: TypedSelectionFreezeAuthorization,
+) -> TypedSelectionExecutionAuthorization:
+    """Issue task authority only from the live validated v3.18 lock."""
+
+    if protocol.payload.get("protocol_version") != (
+        TYPED_SELECTION_PROTOCOL_VERSION
+    ):
+        raise PermissionError(
+            "typed selection execution requires the typed protocol"
+        )
+    lock_hash = validate_protocol_lock_for_execution(
+        protocol,
+        lock,
+        manifest,
+        project_root,
+        benchmark_root,
+    )
+    embedded_freeze_authorization = lock.get(
+        "typed_selection_freeze_authorization"
+    )
+    if embedded_freeze_authorization != (
+        freeze_authorization.safe_payload()
+    ):
+        raise PermissionError(
+            "execution lock freeze authorization differs from the "
+            "receipt-verified production loader"
+        )
+    return _issue_typed_selection_execution_authorization(
+        protocol_id=protocol.id,
+        protocol_hash=protocol.protocol_hash,
+        protocol_lock_hash=lock_hash,
+        manifest_hash=manifest.manifest_hash,
+        ledger=ledger,
+        freeze_authorization=freeze_authorization,
+    )
 
 
 def _counts(manifest: SplitManifest) -> dict[str, int]:

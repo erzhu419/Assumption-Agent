@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -1799,6 +1800,30 @@ def test_missing_compiled_candidate_is_not_recorded_as_applied(
         if row["event"] == "skilllearn_counterfactual_pair_completed"
     )
     assert event["payload"]["trigger_matched"] is True
+    assert event["payload"]["treatment_applied"] is False
+    assert event["payload"]["candidate_trial_executed"] is False
+
+
+def test_missing_installed_treatment_receipt_is_not_recorded_as_applied(
+    tmp_path: Path,
+) -> None:
+    harness, backend, _, _, _, sink = _harness(tmp_path)
+    backend.requires_installed_skill_receipt = True
+
+    pairs = harness.counterfactual_runner.run(
+        harness.tasks(("organize-messy-files-5",)),
+        program=HypothesisProgram.from_dict(_program_dict()),
+        split=SplitName.VALIDATION,
+        trace_id="missing-installed-treatment-receipt",
+    )
+
+    assert len(backend.calls) == 2
+    assert pairs[0].candidate.action_activated is False
+    event = next(
+        row
+        for row in sink.events
+        if row["event"] == "skilllearn_counterfactual_pair_completed"
+    )
     assert event["payload"]["treatment_applied"] is False
     assert event["payload"]["candidate_trial_executed"] is False
 
@@ -4915,6 +4940,315 @@ def test_family_out_compiler_targets_unseen_validation_families(tmp_path: Path) 
     assert len(compiled.skill_paths) == len(target_ids)
     assert all(compiled.source_for(item_id) is not None for item_id in target_ids)
     assert all("items" in path.parts for path in compiled.skill_paths)
+
+
+def test_compiler_runtime_source_receipt_rejects_post_compile_mutation(
+    tmp_path: Path,
+) -> None:
+    adapter = SkillLearnBenchAdapter(BENCH_ROOT)
+    items = adapter.discover()
+    manifest = build_family_out_manifest(
+        items,
+        benchmark="skilllearnbench",
+        seed="skilllearnbench-v2-family-out",
+    )
+    item_id = manifest.validation_ids[0]
+    compiled = SkillLearnProgramCompiler().compile(
+        programs=(
+            HypothesisProgram.from_dict(_program_dict(status="promoted")),
+        ),
+        items=items,
+        split_manifest=manifest,
+        output_root=tmp_path,
+        target_item_ids=(item_id,),
+        target_split="validation",
+    )
+
+    receipt = compiled.source_receipt_for(item_id)
+    assert receipt.compile_manifest_hash == compiled.manifest_hash
+    assert receipt.treatment_hash == compiled.treatment_hash_for(item_id)
+    assert receipt.source_file_hashes
+
+    source = compiled.source_for(item_id)
+    assert source is not None
+    skill_path = next(source.rglob("SKILL.md"))
+    skill_path.write_text(
+        skill_path.read_text(encoding="utf-8") + "\nmutated\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(PermissionError, match="content mismatch"):
+        compiled.source_receipt_for(item_id)
+
+
+def test_trial_request_rejects_partial_compile_provenance() -> None:
+    common = {
+        "item_id": "item-1",
+        "family": "family",
+        "split": SplitName.TRAIN,
+        "variant": TrialVariant.POLICY_ON,
+        "evaluator_epoch": "epoch",
+        "pair_id": "pair",
+        "repeat": 1,
+        "agent_id": "codex",
+        "model": "gpt-5.4-mini",
+        "max_steps": 100,
+        "manifest_hash": "manifest",
+    }
+    with pytest.raises(ValueError, match="item source receipt"):
+        SkillLearnTrialRequest(
+            **common,
+            compile_manifest_hash="compile",
+        )
+    with pytest.raises(ValueError, match="typed compile provenance"):
+        SkillLearnTrialRequest(
+            **common,
+            compile_manifest_hash="compile",
+            skill_source_receipt_hash="receipt",
+            typed_binding_set_hash="binding-set",
+        )
+    with pytest.raises(ValueError, match="policy-on treatment identity"):
+        SkillLearnTrialRequest(
+            **common,
+            program_id="external-control",
+            program_set_hash="program-set",
+            treatment_hash=NO_SKILL_TREATMENT_HASH,
+            external_skill_source_receipt_hash="external-receipt",
+        )
+    with pytest.raises(ValueError, match="policy-on treatment identity"):
+        SkillLearnTrialRequest(
+            **{
+                **common,
+                "variant": TrialVariant.POLICY_OFF,
+            },
+            program_id="external-control",
+            program_set_hash="program-set",
+            treatment_hash="treatment",
+            external_skill_source_receipt_hash="external-receipt",
+        )
+
+
+def test_runtime_treatment_adapter_fails_closed_on_partial_injection(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    skill = source / "frozen-skill" / "SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text("---\nname: frozen-skill\n---\n# Frozen\n", encoding="utf-8")
+    asset = source / "frozen-skill" / "assets" / "reference.bin"
+    asset.parent.mkdir()
+    asset.write_bytes(b"\x00\x01frozen-reference\xff")
+    copies = [
+        ("skills", "/root/.codex/skills"),
+        ("skills", "/root/.agents/skills"),
+    ]
+
+    class ReadbackSubprocess:
+        def __init__(self) -> None:
+            self.destinations: dict[str, Path] = {}
+
+        def run(self, args, **kwargs):
+            command = list(args)
+            assert command[:2] == ["docker", "cp"]
+            container_path = command[2].split(":", 1)[1]
+            destination = container_path.removesuffix("/.")
+            installed_source = self.destinations.get(destination)
+            if installed_source is None:
+                return SimpleNamespace(returncode=1, stdout="", stderr="missing")
+            readback = Path(command[3])
+            for child in installed_source.iterdir():
+                target = readback / child.name
+                if child.is_dir():
+                    shutil.copytree(child, target)
+                else:
+                    shutil.copy2(child, target)
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    def runner_with_injected_count(count: int) -> tuple[ModuleType, ReadbackSubprocess]:
+        runner = ModuleType(f"receipt_runner_{count}")
+        delegate = ReadbackSubprocess()
+
+        def copy_skills_to_dest(src: Path, destination: Path) -> bool:
+            if destination.exists():
+                shutil.rmtree(destination)
+            destination.mkdir(parents=True)
+            directory_skills = [
+                path
+                for path in src.iterdir()
+                if path.is_dir() and (path / "SKILL.md").is_file()
+            ]
+            if directory_skills:
+                for path in directory_skills:
+                    shutil.copytree(path, destination / path.name)
+                return True
+            if (src / "SKILL.md").is_file():
+                target = destination / src.name
+                target.mkdir()
+                shutil.copy2(src / "SKILL.md", target / "SKILL.md")
+                return True
+            markdown_files = sorted(src.glob("*.md"))
+            if markdown_files:
+                for path in markdown_files:
+                    target = destination / path.stem.replace("_", "-")
+                    target.mkdir()
+                    shutil.copy2(path, target / "SKILL.md")
+                return True
+            return False
+
+        def original_inject(container_name, skill_source_dir, destinations):
+            for _, destination in destinations[:count]:
+                delegate.destinations[destination] = Path(skill_source_dir)
+
+        runner.subprocess = delegate
+        runner._copy_skills_to_dest = copy_skills_to_dest
+        runner._inject_skills_runtime = original_inject
+        backend = SkillLearnSubprocessBackend(
+            BENCH_ROOT,
+            model="gpt-5.4-mini",
+            provider_mode="openai_compatible",
+        )
+        backend._install_treatment_receipt_adapter(runner)
+        return runner, delegate
+
+    partial, _ = runner_with_injected_count(1)
+    with pytest.raises(RuntimeError, match="installed_treatment_receipt_invalid"):
+        partial._inject_skills_runtime("trial", source, copies)
+    assert partial._assumption_v2_installed_skill_receipt is None
+
+    complete, _ = runner_with_injected_count(2)
+    complete._inject_skills_runtime("trial", source, copies)
+    receipt = complete._assumption_v2_installed_skill_receipt
+    assert receipt["destination_count"] == 2
+    assert receipt["source_file_hashes"] == (
+        (
+            "frozen-skill/SKILL.md",
+            hashlib.sha256(skill.read_bytes()).hexdigest(),
+        ),
+        (
+            "frozen-skill/assets/reference.bin",
+            hashlib.sha256(asset.read_bytes()).hexdigest(),
+        ),
+    )
+    (source / "frozen-skill" / "package.json").write_text(
+        '{"name":"unreceipted-runtime-install"}\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        RuntimeError,
+        match="installed_treatment_receipt_invalid",
+    ):
+        complete._inject_skills_runtime("trial", source, copies)
+    assert complete._assumption_v2_installed_skill_receipt is None
+
+
+@pytest.mark.parametrize("layout", ("root_skill", "flat_markdown"))
+def test_runtime_treatment_adapter_matches_upstream_normalization(
+    tmp_path: Path,
+    layout: str,
+) -> None:
+    source = tmp_path / "normalized-family"
+    source.mkdir()
+    if layout == "root_skill":
+        (source / "SKILL.md").write_text(
+            "---\nname: normalized-family\n---\n# Root skill\n",
+            encoding="utf-8",
+        )
+        expected_paths = ("normalized-family/SKILL.md",)
+    else:
+        (source / "first_skill.md").write_text(
+            "# First\n",
+            encoding="utf-8",
+        )
+        (source / "second.md").write_text(
+            "# Second\n",
+            encoding="utf-8",
+        )
+        expected_paths = (
+            "first-skill/SKILL.md",
+            "second/SKILL.md",
+        )
+
+    def copy_skills_to_dest(src: Path, destination: Path) -> bool:
+        if destination.exists():
+            shutil.rmtree(destination)
+        destination.mkdir(parents=True)
+        directory_skills = [
+            path
+            for path in src.iterdir()
+            if path.is_dir() and (path / "SKILL.md").is_file()
+        ]
+        if directory_skills:
+            for path in directory_skills:
+                shutil.copytree(path, destination / path.name)
+            return True
+        if (src / "SKILL.md").is_file():
+            target = destination / src.name
+            target.mkdir()
+            shutil.copy2(src / "SKILL.md", target / "SKILL.md")
+            return True
+        markdown_files = sorted(src.glob("*.md"))
+        if not markdown_files:
+            return False
+        for path in markdown_files:
+            target = destination / path.stem.replace("_", "-")
+            target.mkdir()
+            shutil.copy2(path, target / "SKILL.md")
+        return True
+
+    class NormalizedReadback:
+        def __init__(self) -> None:
+            self.destinations: dict[str, Path] = {}
+
+        def run(self, args, **kwargs):
+            command = list(args)
+            container_path = command[2].split(":", 1)[1]
+            destination = container_path.removesuffix("/.")
+            installed_source = self.destinations[destination]
+            readback = Path(command[3])
+            for child in installed_source.iterdir():
+                target = readback / child.name
+                if child.is_dir():
+                    shutil.copytree(child, target)
+                else:
+                    shutil.copy2(child, target)
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    runner = ModuleType(f"normalized_receipt_runner_{layout}")
+    delegate = NormalizedReadback()
+    runner.subprocess = delegate
+    runner._copy_skills_to_dest = copy_skills_to_dest
+
+    def original_inject(container_name, skill_source_dir, destinations):
+        for index, (_, destination) in enumerate(destinations):
+            installed = tmp_path / f"installed-{layout}-{index}"
+            assert copy_skills_to_dest(Path(skill_source_dir), installed)
+            delegate.destinations[destination] = installed
+
+    runner._inject_skills_runtime = original_inject
+    backend = SkillLearnSubprocessBackend(
+        BENCH_ROOT,
+        model="gpt-5.4-mini",
+        provider_mode="openai_compatible",
+    )
+    backend._install_treatment_receipt_adapter(runner)
+    runner._inject_skills_runtime(
+        "trial",
+        source,
+        [
+            ("skills", "/root/.codex/skills"),
+            ("skills", "/root/.agents/skills"),
+        ],
+    )
+
+    receipt = runner._assumption_v2_installed_skill_receipt
+    assert receipt["destination_count"] == 2
+    for destination in delegate.destinations.values():
+        assert tuple(
+            sorted(
+                path.relative_to(destination).as_posix()
+                for path in destination.rglob("*")
+                if path.is_file()
+            )
+        ) == expected_paths
 
 
 def test_low_reasoning_local_compaction_policy_renders_exact_codex_cli_values() -> None:
