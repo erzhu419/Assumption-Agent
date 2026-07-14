@@ -5279,6 +5279,11 @@ class SkillLearnEvolutionHarness:
             raise ValueError(
                 "typed selection authorization requires typed proposal formation"
             )
+        if typed_policy_enabled:
+            assert typed_selection_ledger is not None
+            proposer.typed_program_registry.bind_snapshot_ledger(
+                typed_selection_ledger
+            )
         bundle_selection_enabled = (
             candidate_selection_policy
             in COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS

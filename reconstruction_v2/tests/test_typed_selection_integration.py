@@ -14,6 +14,7 @@ from assumption_agent.benchmarks.skilllearn_compiler import (
 )
 from assumption_agent.benchmarks.skilllearn_lifecycle import (
     SkillLearnCounterfactualRunner,
+    SkillLearnEvolutionHarness,
     SkillLearnExternalEvaluator,
 )
 from assumption_agent.benchmarks import skilllearn_experiment
@@ -148,7 +149,7 @@ def _snapshot_fixture():
     return tuple(residuals), action_profiles, tuple(snapshots)
 
 
-def _snapshot_ledger(snapshots):
+def _snapshot_ledger(snapshots, *, manifest_hash: str | None = None):
     target_hashes = tuple(
         row.graph.target_family_hash for row in snapshots
     )
@@ -183,7 +184,11 @@ def _snapshot_ledger(snapshots):
             {"synthetic": "decision"}
         ),
         feasibility_report_hash=stable_hash({"synthetic": "report"}),
-        manifest_hash=stable_hash({"synthetic": "manifest"}),
+        manifest_hash=(
+            manifest_hash
+            if manifest_hash is not None
+            else stable_hash({"synthetic": "manifest"})
+        ),
         source_train_receipt_hash=stable_hash(
             {"synthetic": "source-receipt"}
         ),
@@ -703,6 +708,111 @@ def test_validated_protocol_lock_issues_sealed_typed_task_authority(
         protocol_hash=protocol_hash,
     ) == ()
     assert authorization.task_execution_authorized is True
+
+
+def test_live_harness_binds_typed_ledger_before_runner_construction(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    _, _, snapshots = _snapshot_fixture()
+    manifest_hash = stable_hash({"manifest": "typed-harness"})
+    ledger = _snapshot_ledger(
+        snapshots,
+        manifest_hash=manifest_hash,
+    )
+    freeze_authorization = TypedSelectionFreezeAuthorization(
+        authorization_policy=(
+            TYPED_SELECTION_FREEZE_AUTHORIZATION_VERSION
+        ),
+        result_receipt_stable_hash="0" * 64,
+        result_receipt_file_sha256="1" * 64,
+        source_binding_hash="2" * 64,
+        snapshot_ledger_hash=ledger.ledger_hash,
+        fresh_development_protocol_freeze_eligible=True,
+        development_task_execution_authorized=False,
+    )
+    protocol_hash = stable_hash({"protocol": "typed-harness"})
+    protocol = SimpleNamespace(
+        payload={"protocol_version": "3.18.0"},
+        id="typed-harness",
+        protocol_hash=protocol_hash,
+    )
+    manifest = SimpleNamespace(manifest_hash=manifest_hash)
+    lock_hash = stable_hash({"lock": "typed-harness"})
+    lock = {
+        "typed_selection_freeze_authorization": (
+            freeze_authorization.safe_payload()
+        )
+    }
+    monkeypatch.setattr(
+        paper_protocol_module,
+        "validate_protocol_lock_for_execution",
+        lambda *args, **kwargs: lock_hash,
+    )
+    execution_authorization = authorize_typed_selection_execution(
+        protocol,
+        lock,
+        manifest,
+        tmp_path,
+        tmp_path,
+        ledger=ledger,
+        freeze_authorization=freeze_authorization,
+    )
+    assert ledger.manifest_hash == manifest.manifest_hash
+    assert execution_authorization.validate_for(
+        ledger,
+        freeze_authorization,
+        manifest_hash=manifest_hash,
+        protocol_hash=protocol_hash,
+    ) == ()
+    proposer = StructuredHypothesisProposer(_RecipeSelectionModel())
+    adapter = SimpleNamespace(discover=lambda: ())
+
+    harness = SkillLearnEvolutionHarness(
+        adapter=adapter,
+        manifest=manifest,
+        guard=SimpleNamespace(),
+        backend=SimpleNamespace(),
+        proposer=proposer,
+        validator=RecursiveValidationEngine((), proposer=proposer),
+        promotion_gate=SimpleNamespace(
+            spec=SimpleNamespace(metric="task_success")
+        ),
+        archive=PolicyArchive(),
+        evaluator_epoch="typed-live-harness-epoch-v1",
+        output_root=tmp_path / "compiled",
+        proposal_candidates_per_generation=3,
+        proposal_formation_policy=(
+            TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION
+        ),
+        typed_selection_snapshots=snapshots,
+        typed_selection_ledger=ledger,
+        typed_selection_freeze_authorization=freeze_authorization,
+        typed_selection_execution_authorization=(
+            execution_authorization
+        ),
+    )
+
+    assert harness.compiler.typed_program_registry is (
+        proposer.typed_program_registry
+    )
+    assert harness.kernel.proposer.typed_program_registry is (
+        proposer.typed_program_registry
+    )
+    assert harness.compiler.require_typed_bindings is True
+    assert (
+        harness.compiler.typed_program_registry.require_snapshot_ledger()
+        == ledger
+    )
+    assert harness.counterfactual_runner.typed_selection_execution_authorization is (
+        execution_authorization
+    )
+    assert harness.kernel.typed_selection_execution_authorization is (
+        execution_authorization
+    )
+    assert harness.kernel.typed_selection_freeze_authorization is (
+        freeze_authorization
+    )
 
 
 def test_attempt_history_excludes_recipe_without_hypothesis_archival() -> None:
