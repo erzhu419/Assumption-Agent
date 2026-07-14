@@ -5,7 +5,7 @@
 > - 代码审计基线 revision：`6224bb5a279f50fbcf1f8b36d19cb4ce6cc6c882`
 > - 本次实现复核：receipt/runtime provenance 修复提交 `e43670f6`、`18ff3417`；v3.3 execution-policy 提交 `e0b1a33b`；v3.4 model-only/action-budget 主提交 `e491b0af`，runtime-path 修复 `995e6446`，Ruoli 503 分类修复 `ba0f36cf`，host-readable audit artifact 修复 `1df3092a` / `ad66d5a2`；v3.4 max2 v5 canary 已通过、fresh development 因四并发 429 fail closed；v3.5 将所有在线 phase 版本化为 1 worker，repair identity 修复 `96d53a5d`，malformed proposal/claim binding 修复 `d70562de`；v3.6 contrastive evidence / invalid-evidence lifecycle 实现提交 `01608e1e`；v3.7 六路首批 6/6 收到 429；v3.8 两路在 16 valid 后收到 2 个 503；v3.9 固定为 outer item workers=6 / shared model slot=1，并完成首个 clean full development 负结果；v3.10 exact-three/coverage-first fresh run 将 activation 提高到 2/16 但仍 0 gain，并暴露 semantic-diversity hard reject 与 action lowering 丢 target；v3.11 actionability fresh run 证明 treatment 已改变 trace、PDF 与成本但仍 0 gain，同时暴露 repair response shape 未被 generic system contract 可靠约束；v3.12 显式版本化 singular repair response并完成 56/56 clean development trials，但两代仍各仅激活 1/16、0 gain，无 incumbent；误入的空 freeze/partial controls 已隔离并补上 phase prerequisite；v3.13 complementary program-set 已完成 375/375 离线测试和 76/76 valid live development，三套 bundle 均激活 2/16、6 个 policy-on 全部失败、0 gain/0 harm、无 incumbent，同时暴露 G2 cross-arm raw replay 不一致；v3.14 提交 `2229d7af` 完成 411/411 离线测试及 62/62 attempted live development，selector 成功选中 7/7 三-family set、activation=3/16，但 7 个 policy-on 全失败；一条 recursive raw 超 64 MiB 使 primary non-claim，valid baseline replay=31、invalid key 又跨臂执行一次，两份 archive 仍无 incumbent；v3.15 action-quality / terminal-invalid provenance 实现提交 `696a2954`，453/453 离线测试通过，随后 clean lock、86/86 cache-only prewarm、smoke 与 57/57-valid live development 全部完成，但两臂仍 0 gain/0 harm、`incumbent_id=null`
 > - 最新 proposal-only 复核：v3.16 family-slot formation 提交 `6ad5c156`；v3.17 artifact-blueprint formation 提交 `4f94e613`。两轮均失败且未启动 benchmark trial
-> - 最新表示层进展：causal action-span extractor、closed typed operator/artifact graph、opaque recipe-only selection 与一次性离线 preregistration 已实现；正式 decision 尚未执行，当前无 feasibility pass/fail，亦未授权 development
+> - 最新表示层进展：commit `b03c643a` 的 causal action-span extractor、closed typed operator/artifact graph 与 opaque recipe-only selection 已完成唯一一次正式离线 decision，9/9 preregistered predicates PASS，既有 report/event/lock 精确复验 PASS；该结果只使另行冻结的 typed-selection integration diagnostic 有资格运行，仍未授权 development
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -1222,7 +1222,8 @@ provenance，以及随后 clean 57/57-valid live negative evidence。两臂 clai
 | 完成（v3.14 mixed-claim 负结果） | shared baseline cohort + support-aware tied-set ranking | lock/prewarm/smoke clean；62/62 attempted、38/38 valid train；G1 选中 7/7 三-family set并 activation 3/16，但 7 个 on 全失败、0 gain/0 harm。一条 recursive raw 68.66 MB 超 fuse 使 primary non-claim；31 次 valid baseline replay，invalid key 又跨臂执行一次；两份 archive 无 incumbent |
 | 完成（v3.15 clean 负结果） | TRAIN-only material action delta + terminal-invalid attribution | commit `696a2954`、453/453 offline 后，clean lock、86/86 prewarm、smoke 与 57/57 valid live 完成；8/8 model calls、max online concurrency=1、0 provider/infra/budget/network/pair error；recursive G1/G2 与 no-rec G2 均 1/16、0 gain/0 harm，32 次 baseline 零执行 replay；两臂 claim-eligible non-promotion、incumbent null、无 downstream |
 | 完成（v3.16/v3.17 proposal-only 负结果） | structural family-stratified proposal formation + artifact blueprint | 复用冻结 TRAIN receipt，0 source rerun、0 benchmark/evaluator call；v3.17 通过 8/9 feasibility，解决 family collapse/support/self-block/restatement，但第三候选仍绑定 2 个 failed primitives，故未授权 development |
-| P0（实现/预注册就绪；正式 decision 待执行） | typed operator/capability grammar + causal action-span evidence | 38 条 receipt-bound trace 重建 429 个 chronological allowlisted spans（70 failed），另计 208 discarded commands；模型只能选择 opaque registered `recipe_id`，primitive/locator/free-text action 不可生成。仅一次正式离线 decision；PASS 只使另行冻结的 typed-selection integration diagnostic 有资格运行，PASS 不授权 development。不做 v3.18 prompt/gate patch；无真实 incumbent 时继续禁止 freeze/controls/family-out/HippoRAG/sealed |
+| 完成（正式离线 PASS） | typed operator/capability grammar + causal action-span evidence | commit `b03c643a` 的唯一一次 decision 通过 9/9 predicates，既有 report/event/lock 精确复验通过。38 条 receipt-bound trace 含 655 个 action starts（max 61/100）、429 个 chronological allowlisted spans、70 failed、63 later scope-matched recoveries 与 208 discarded commands；3/3 graph/program materialize、9/9 tamper probes fail closed、primitive/locator disclosure=0、live model/backend/evaluator call=0。PASS 仅证明闭合表示的离线 feasibility，不授权 development |
+| P0（下一 workstream） | separately frozen typed-selection integration diagnostic | 把 production proposer/evolution 的候选选择面真正收缩为 opaque registered `recipe_id`，并把 snapshot graph/catalog commitment 与 harness materialization 贯穿真实选择路径；禁止模型生成 primitive、locator 或 free-text action。另行预注册、只做非评分 integration diagnostic；通过前不启动 fresh development，且不新增 prompt/gate patch |
 | P1 | prospective family-out routing | trigger 不依赖已知 family 或预编译 item ID，只使用冻结、无 gold、运行时可得语义特征 |
 | P2 | 多 clade archive | 同 epoch 至少两个 clade 可继续扩展；node 绑定 protocol/evidence/promotion hashes，并报告 retention 与 branch productivity |
 | P2 | evaluator co-evolution | 独立 anchor challenger、epoch transition、selective invalidation 和旧 incumbent re-evaluation 实际执行后再作主张 |
@@ -1432,12 +1433,20 @@ provenance，以及随后 clean 57/57-valid live negative evidence。两臂 clai
     artifact-operation graph，并以 causal action-span evidence 定义不可表达项；只允许一次 preregistered
     feasibility decision。没有真实 incumbent 时继续禁止 controls/family-out/HippoRAG/sealed。
 48. causal action-span extractor、closed typed operator/artifact graph、opaque recipe-only selection、harness-owned
-    materializer 与 single-decision lock/preregistration 已实现。前置结构复核得到 38/38 complete trace、429
-    allowlisted occurrences、70 failed、208 discarded、655 action starts、max 61/100。该路径使用 stored offline
-    TRAIN outcomes、本地 contract validation 并哈希 unit-test source，但有 0 live model/task-backend/evaluator
-    invocation，且未访问 validation/test/sealed split 或 verifier content。正式 decision 尚未运行，因此当前没有 pass/fail。该表示只闭合 proposal
-    selection；现有 lowering 仍是 prompt directive，非 restricted executor。PASS 只使 separately frozen
-    typed-selection integration diagnostic freeze-eligible，PASS 不授权 development。
+    materializer 与 single-decision lock/preregistration 已实现并冻结为 commit `b03c643a`。前置结构复核得到
+    38/38 complete trace、429 allowlisted occurrences、70 failed、208 discarded、655 action starts、max 61/100。
+    该路径使用 stored offline TRAIN outcomes、本地 contract validation 并哈希 unit-test source，但有 0 live
+    model/task-backend/evaluator invocation，且未访问 validation/test/sealed split 或 verifier content。该表示只
+    闭合 proposal selection；现有 lowering 仍是 prompt directive，非 restricted executor。
+49. 唯一一次正式离线 decision 已按预注册命令完成：9/9 predicates PASS，decision hash
+    `79acda9b9e393330b8418e5fea15f176236edf8ecf802d310d73862710ba8bfc`，report hash
+    `aa1033429980cfc5881aa6b3ccf25609c3d80ce0514c1dc37d1188354789797d`；随后 `--verify-existing`
+    对 report、9-event ledger 与 completed lock 精确复验通过。3/3 target graph/program materialize、9/9
+    tamper probes fail closed、raw primitive/locator disclosure 均为 0，70 个 failed spans 中 63 个存在后续
+    scope-matched recovery。结果收据见
+    [`skilllearn_typed_operator_feasibility_result_v1.json`](../manifests/skilllearn_typed_operator_feasibility_result_v1.json)。
+    该 PASS 只使 separately frozen typed-selection integration diagnostic freeze-eligible；它不验证 capability
+    implementation、restricted executor 或 benchmark gain，也不授权 development。
 
 这比立刻扩展 archive 或继续补 HLE source span 更能降低研究风险。
 
@@ -1634,9 +1643,9 @@ manipulation、0 restatement/self-block；但第三项仍绑定 `file`/`python` 
 
 这也终止了“继续写更强 prompt”的路线：failed command 中出现通用 executable 并不证明它在因果上应被
 禁用，而只把 count/hash 给模型又无法要求其避开未知具体值。causal action-span taxonomy 与 closed typed
-operator/artifact graph 已实现并预注册；正式一次性离线 decision 尚未执行。失败即停，不再补 gate；PASS
-也只使一个另行冻结的 typed-selection integration diagnostic 有资格运行，因为当前 production selection
-尚未接入 proposer/evolution，runtime 仍是通用 prompt-directive agent。
+operator/artifact graph 已实现，并在唯一一次正式离线 decision 中 9/9 PASS、精确复验 PASS。这个结果不再
+触发任何 prompt/gate patch；它只使一个另行冻结的 typed-selection integration diagnostic 有资格运行，
+因为当前 production selection 尚未接入 proposer/evolution，runtime 仍是通用 prompt-directive agent。
 
 只有 feasibility 通过、typed-selection integration 经独立冻结诊断验证、随后新的 clean development 产生
 retained validation gain 和真实 incumbent，才按既定顺序进入 freeze、完整 controls、family-out、sealed test；
