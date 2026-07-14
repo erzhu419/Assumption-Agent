@@ -25,6 +25,7 @@ from .models import (
     stable_hash,
 )
 from .proposer import (
+    FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_V2,
     FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION,
     PROPOSAL_DIVERSITY_POLICY_VERSION,
     REPAIR_REQUEST_SCOPE_POLICY_VERSION,
@@ -80,9 +81,16 @@ PROGRAM_SET_COUNTERFACTUAL_REPLAY_POLICY_VERSION = (
 PROPOSAL_FORMATION_POLICY_VERSION = (
     FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION
 )
+PROPOSAL_FORMATION_POLICY_V2 = FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_V2
 PROPOSAL_FORMATION_POLICY_VERSIONS = frozenset(
-    {PROPOSAL_FORMATION_POLICY_VERSION}
+    {PROPOSAL_FORMATION_POLICY_VERSION, PROPOSAL_FORMATION_POLICY_V2}
 )
+_RECOMMENDED_ARTIFACT_KIND_PRIORITY = {
+    "artifact_command_path": 0,
+    "artifact_task_local_path": 1,
+    "artifact_copied_file": 2,
+    "artifact_environment_source_file": 3,
+}
 
 
 @dataclass(frozen=True)
@@ -219,6 +227,25 @@ class _FamilyProposalSlot:
     @property
     def reusable_preferred_primitive_count(self) -> int:
         return sum(row.reusable for row in self.preferred_primitives)
+
+    @property
+    def recommended_artifact(self) -> _FamilyProfilePrimitive | None:
+        eligible = tuple(
+            row
+            for row in self.preferred_primitives
+            if row.reusable
+            and row.kind in _RECOMMENDED_ARTIFACT_KIND_PRIORITY
+        )
+        if not eligible:
+            return None
+        return min(
+            eligible,
+            key=lambda row: (
+                _RECOMMENDED_ARTIFACT_KIND_PRIORITY[row.kind],
+                -row.train_failure_evidence_count,
+                row.value,
+            ),
+        )
 
 
 @dataclass(frozen=True)
@@ -563,7 +590,7 @@ class EvolutionKernel:
                 f"{proposal_formation_policy}"
             )
         if (
-            proposal_formation_policy == PROPOSAL_FORMATION_POLICY_VERSION
+            proposal_formation_policy in PROPOSAL_FORMATION_POLICY_VERSIONS
             and train_action_design_policy
             != TRAIN_ACTION_DESIGN_POLICY_VERSION
         ):
@@ -617,7 +644,7 @@ class EvolutionKernel:
                 "coverage-aware proposal diversity requires exactly three candidates"
             )
         if (
-            proposal_formation_policy == PROPOSAL_FORMATION_POLICY_VERSION
+            proposal_formation_policy in PROPOSAL_FORMATION_POLICY_VERSIONS
             and proposal_candidates_per_generation != 3
         ):
             raise ValueError(
@@ -695,7 +722,7 @@ class EvolutionKernel:
         if (
             shared_proposals_supplied
             and self.proposal_formation_policy
-            == PROPOSAL_FORMATION_POLICY_VERSION
+            in PROPOSAL_FORMATION_POLICY_VERSIONS
         ):
             self._record_matched_proposal_families(
                 proposals,
@@ -1203,7 +1230,7 @@ class EvolutionKernel:
     ) -> tuple[HypothesisProgram, ...]:
         if (
             self.proposal_formation_policy
-            == PROPOSAL_FORMATION_POLICY_VERSION
+            in PROPOSAL_FORMATION_POLICY_VERSIONS
         ):
             return self._propose_family_slot_candidates(
                 residuals,
@@ -1396,19 +1423,35 @@ class EvolutionKernel:
             profiles=validation_context.action_design_profiles,
             family_use_counts=self._proposal_family_use_counts,
         )
-        if len(ranked_slots) < self.proposal_candidates_per_generation:
+        proposal_slots = (
+            tuple(
+                slot
+                for slot in ranked_slots
+                if slot.recommended_artifact is not None
+            )
+            if self.proposal_formation_policy
+            == PROPOSAL_FORMATION_POLICY_V2
+            else ranked_slots
+        )
+        if len(proposal_slots) < self.proposal_candidates_per_generation:
             raise ValueError(
                 "profile-grounded family-slot proposal formation requires "
                 "three distinct TRAIN failure families"
+                + (
+                    " with reusable preferred artifacts"
+                    if self.proposal_formation_policy
+                    == PROPOSAL_FORMATION_POLICY_V2
+                    else ""
+                )
             )
-        selected_slots = ranked_slots[: self.proposal_candidates_per_generation]
+        selected_slots = proposal_slots[: self.proposal_candidates_per_generation]
         slot_plan_rows = [
             _family_slot_event_row(slot, slot_index=index)
             for index, slot in enumerate(selected_slots, start=1)
         ]
         slot_plan_hash = stable_hash(
             {
-                "policy": PROPOSAL_FORMATION_POLICY_VERSION,
+                "policy": self.proposal_formation_policy,
                 "slots": slot_plan_rows,
             }
         )
@@ -1418,7 +1461,7 @@ class EvolutionKernel:
                 stage="proposal.family_slots",
                 trace_id=trace_id,
                 payload={
-                    "policy": PROPOSAL_FORMATION_POLICY_VERSION,
+                    "policy": self.proposal_formation_policy,
                     "slot_count": len(selected_slots),
                     "distinct_target_family_count": len(
                         {slot.target_family for slot in selected_slots}
@@ -1488,7 +1531,7 @@ class EvolutionKernel:
                     stage="proposal.family_slots",
                     trace_id=f"{trace_id}:family-slot-{index}",
                     payload={
-                        "policy": PROPOSAL_FORMATION_POLICY_VERSION,
+                        "policy": self.proposal_formation_policy,
                         "slot_id": f"train-family-slot-{index}",
                         "slot_plan_hash": slot_plan_hash,
                         "target_family": slot.target_family,
@@ -1528,7 +1571,7 @@ class EvolutionKernel:
                 stage="proposal.family_slots",
                 trace_id=trace_id,
                 payload={
-                    "policy": PROPOSAL_FORMATION_POLICY_VERSION,
+                    "policy": self.proposal_formation_policy,
                     "slot_plan_hash": slot_plan_hash,
                     "candidate_count": len(result),
                     "candidate_set_hash": stable_hash(
@@ -1566,6 +1609,27 @@ class EvolutionKernel:
             row.to_dict() for row in slot.preferred_primitives
         ]
         failed_primitives = [row.to_dict() for row in slot.failed_primitives]
+        formation_policy = str(self.proposal_formation_policy or "")
+        recommended_artifact = slot.recommended_artifact
+        if (
+            formation_policy == PROPOSAL_FORMATION_POLICY_V2
+            and recommended_artifact is None
+        ):
+            raise ValueError("V2 family slot is missing a reusable artifact")
+        failed_primitive_set_hash = stable_hash(
+            {"primitives": failed_primitives}
+        )
+        workflow_blueprint = (
+            (
+                f"read the current artifact exactly at {recommended_artifact.value}; "
+                "parse that artifact with a preinstalled task-appropriate local "
+                "parser; update the task-required content in memory; serialize the "
+                "updated content in the required original format; write the "
+                f"serialized result back to {recommended_artifact.value}"
+            )
+            if recommended_artifact is not None
+            else ""
+        )
         return {
             "available_lanes": sorted(validation_context.available_lanes),
             "baseline_lane": validation_context.baseline_lane,
@@ -1604,16 +1668,39 @@ class EvolutionKernel:
                     "action_quality_contract": train_action_quality_contract(
                         validation_context.train_action_design_policy
                     ),
-                    "train_action_design_profiles": {
-                        profile_hash: dict(profile)
-                        for profile_hash, profile in slot.profile_items
-                    },
+                    **(
+                        {
+                            "train_action_design_profiles": {
+                                profile_hash: dict(profile)
+                                for profile_hash, profile in slot.profile_items
+                            }
+                        }
+                        if formation_policy
+                        == PROPOSAL_FORMATION_POLICY_VERSION
+                        else {
+                            "train_action_design_profile_summary": {
+                                "profile_reference_count": len(
+                                    slot.profile_items
+                                ),
+                                "profile_evidence_hash": (
+                                    slot.profile_evidence_hash
+                                ),
+                                "failed_primitive_count": len(
+                                    failed_primitives
+                                ),
+                                "failed_primitive_set_hash": (
+                                    failed_primitive_set_hash
+                                ),
+                                "failed_primitive_values_disclosed": False,
+                            }
+                        }
+                    ),
                 }
                 if validation_context.train_action_design_policy
                 else {}
             ),
             "family_slot_contract": {
-                "policy": PROPOSAL_FORMATION_POLICY_VERSION,
+                "policy": formation_policy,
                 "slot_id": slot_id,
                 "target_failure_family": slot.target_family,
                 "target_failure_family_hash": stable_hash(
@@ -1623,34 +1710,76 @@ class EvolutionKernel:
                 "success_control_count": success_control_count,
                 "profile_evidence_hash": slot.profile_evidence_hash,
                 "profile_reference_count": len(slot.profile_items),
-                "portable_recipe_policy": {
-                    "literal_hardcoding_allowed_only_when": (
-                        "the_identical_literal_is_observed_in_at_least_two_"
-                        "target_family_train_failures"
-                    ),
-                    "minimum_same_family_train_evidence_for_literal": 2,
-                    "otherwise_extract_from": "current_task_or_artifact",
-                    "preferred_allowlisted_profile_primitives": (
-                        preferred_primitives
-                    ),
-                    "failed_profile_primitives_to_avoid": failed_primitives,
-                    "reusable_preferred_primitive_count": (
-                        slot.reusable_preferred_primitive_count
-                    ),
-                    "profile_primitive_allowlist": [
-                        "executable",
-                        "environment_os_package",
-                        "environment_python_package",
-                        "artifact_task_local_path",
-                        "artifact_copied_file",
-                        "artifact_environment_source_file",
-                        "artifact_command_path",
-                    ],
-                    "validation_features_used": False,
-                    "validation_outcomes_used": False,
-                    "verifier_content_used": False,
-                    "test_content_used": False,
-                },
+                "portable_recipe_policy": (
+                    {
+                        "literal_hardcoding_allowed_only_when": (
+                            "the_identical_literal_is_observed_in_at_least_two_"
+                            "target_family_train_failures"
+                        ),
+                        "minimum_same_family_train_evidence_for_literal": 2,
+                        "otherwise_extract_from": "current_task_or_artifact",
+                        "preferred_allowlisted_profile_primitives": (
+                            preferred_primitives
+                        ),
+                        "failed_profile_primitives_to_avoid": failed_primitives,
+                        "reusable_preferred_primitive_count": (
+                            slot.reusable_preferred_primitive_count
+                        ),
+                        "profile_primitive_allowlist": [
+                            "executable",
+                            "environment_os_package",
+                            "environment_python_package",
+                            "artifact_task_local_path",
+                            "artifact_copied_file",
+                            "artifact_environment_source_file",
+                            "artifact_command_path",
+                        ],
+                        "validation_features_used": False,
+                        "validation_outcomes_used": False,
+                        "verifier_content_used": False,
+                        "test_content_used": False,
+                    }
+                    if formation_policy == PROPOSAL_FORMATION_POLICY_VERSION
+                    else {
+                        "minimum_same_family_train_evidence_for_literal": 2,
+                        "preferred_allowlisted_profile_primitives": (
+                            preferred_primitives
+                        ),
+                        "reusable_preferred_primitive_count": (
+                            slot.reusable_preferred_primitive_count
+                        ),
+                        "recommended_artifact_selection_priority": [
+                            "artifact_command_path",
+                            "artifact_task_local_path",
+                            "artifact_copied_file",
+                            "artifact_environment_source_file",
+                        ],
+                        "recommended_artifact_minimum_support": 2,
+                        "recommended_artifact": (
+                            recommended_artifact.to_dict()
+                            if recommended_artifact is not None
+                            else None
+                        ),
+                        "required_artifact_workflow_order": [
+                            "read",
+                            "parse",
+                            "update",
+                            "serialize",
+                            "write_back",
+                        ],
+                        "required_artifact_workflow_blueprint": (
+                            workflow_blueprint
+                        ),
+                        "recommended_artifact_value_must_be_mentioned_exactly": True,
+                        "failed_primitive_count": len(failed_primitives),
+                        "failed_primitive_set_hash": failed_primitive_set_hash,
+                        "failed_primitive_values_disclosed": False,
+                        "validation_features_used": False,
+                        "validation_outcomes_used": False,
+                        "verifier_content_used": False,
+                        "test_content_used": False,
+                    }
+                ),
                 "response_field": "hypothesis",
                 "response_type": "object",
                 "required_count": 1,
@@ -1751,7 +1880,7 @@ class EvolutionKernel:
                     stage="proposal.family_slots",
                     trace_id=trace_id,
                     payload={
-                        "policy": PROPOSAL_FORMATION_POLICY_VERSION,
+                        "policy": self.proposal_formation_policy,
                         "source": source,
                         "proposal_set_hash": proposal_set_hash,
                         "usage_identity_hash": usage_identity_hash,
@@ -1845,7 +1974,7 @@ class EvolutionKernel:
                 stage="proposal.family_slots",
                 trace_id=trace_id,
                 payload={
-                    "policy": PROPOSAL_FORMATION_POLICY_VERSION,
+                    "policy": self.proposal_formation_policy,
                     "source": source,
                     "proposal_set_hash": proposal_set_hash,
                     "usage_identity_hash": usage_identity_hash,

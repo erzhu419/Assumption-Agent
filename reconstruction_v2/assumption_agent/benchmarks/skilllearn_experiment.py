@@ -12,7 +12,7 @@ from ..evolution import (
     COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS,
     CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
     PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
-    PROPOSAL_FORMATION_POLICY_VERSION,
+    PROPOSAL_FORMATION_POLICY_VERSIONS,
     TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
     CounterfactualEvidenceReplayCache,
 )
@@ -170,7 +170,7 @@ def main() -> None:
         proposal_formation_policy = str(proposal_formation_policy)
     if proposal_formation_policy not in {
         None,
-        PROPOSAL_FORMATION_POLICY_VERSION,
+        *PROPOSAL_FORMATION_POLICY_VERSIONS,
     }:
         raise ValueError("unsupported protocol proposal formation policy")
     candidate_bundle_policy = execution_contract.get("candidate_bundle_policy")

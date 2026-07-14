@@ -19,7 +19,7 @@ from ..archive import PolicyArchive
 from ..events import Event, EventSink, JsonlEventSink, NullEventSink
 from ..evolution import (
     EvolutionKernel,
-    PROPOSAL_FORMATION_POLICY_VERSION,
+    PROPOSAL_FORMATION_POLICY_V2,
 )
 from ..models import (
     HypothesisKind,
@@ -29,7 +29,7 @@ from ..models import (
     stable_hash,
 )
 from ..proposer import (
-    FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION,
+    FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_V2,
     HypothesisProposalCallError,
     TRAIN_ACTION_DESIGN_INTERNAL_CONTEXT_KEY,
     TRAIN_ACTION_DESIGN_POLICY_VERSION,
@@ -46,11 +46,14 @@ from .skilllearnbench import SkillLearnBenchAdapter
 
 
 TRAIN_PROPOSAL_DIAGNOSTIC_VERSION = (
-    "v315_train_evidence_v316_family_slot_proposal_only_v1"
+    "v315_train_evidence_v317_family_slot_proposal_only_v2"
 )
 TRAIN_SOURCE_RECEIPT_VERSION = "v315_train_source_provenance_receipt_v1"
 SOURCE_PROTOCOL_VERSION = "3.15.0"
-TARGET_PROTOCOL_VERSION = "3.16.0"
+TARGET_PROTOCOL_VERSION = "3.17.0"
+TARGET_PROPOSAL_FORMATION_POLICY_VERSION = (
+    FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_V2
+)
 EXPECTED_TRAIN_OBSERVATIONS = 38
 EXPECTED_TRAIN_FAILURES = 32
 EXPECTED_TRAIN_SUCCESSES = 6
@@ -516,6 +519,8 @@ class FamilyProposalSlot:
     preferred_primitives: tuple[ProfilePrimitive, ...]
     failed_primitives: tuple[ProfilePrimitive, ...]
     prior_use_count: int = 0
+    declared_failed_primitive_count: int | None = None
+    declared_failed_primitive_set_hash: str | None = None
 
     @property
     def target_family_hash(self) -> str:
@@ -533,6 +538,8 @@ class FamilyProposalSlot:
 
     @property
     def failed_primitive_set_hash(self) -> str:
+        if self.declared_failed_primitive_set_hash is not None:
+            return self.declared_failed_primitive_set_hash
         return stable_hash(
             {
                 "primitives": [
@@ -542,18 +549,23 @@ class FamilyProposalSlot:
         )
 
     @property
+    def failed_primitive_count(self) -> int:
+        if self.declared_failed_primitive_count is not None:
+            return self.declared_failed_primitive_count
+        return len(self.failed_primitives)
+
+    @property
     def reusable_preferred_primitive_count(self) -> int:
         return sum(row.reusable for row in self.preferred_primitives)
 
     def formation_payload(self) -> dict[str, Any]:
-        """Return the exact V3.16 production slot-plan payload.
+        """Return the exact V3.17 production slot-plan payload.
 
         This payload is used only for the plan hash and model contract.  The
         report uses :meth:`safe_payload`, which never persists primitive values.
         """
 
         preferred = [row.model_payload() for row in self.preferred_primitives]
-        failed = [row.model_payload() for row in self.failed_primitives]
         slot_number = self.index + 1
         return {
             "slot_id": f"train-family-slot-{slot_number}",
@@ -568,7 +580,7 @@ class FamilyProposalSlot:
             "reusable_preferred_primitive_count": (
                 self.reusable_preferred_primitive_count
             ),
-            "failed_primitive_count": len(failed),
+            "failed_primitive_count": self.failed_primitive_count,
             "failed_primitive_set_hash": self.failed_primitive_set_hash,
             "raw_content_persisted": False,
         }
@@ -588,7 +600,7 @@ class FamilyProposalSlot:
             "reusable_preferred_primitive_count": (
                 self.reusable_preferred_primitive_count
             ),
-            "failed_primitive_count": len(self.failed_primitives),
+            "failed_primitive_count": self.failed_primitive_count,
             "failed_primitive_set_hash": self.failed_primitive_set_hash,
         }
 
@@ -1247,10 +1259,10 @@ def run_train_proposal_diagnostic(
     )
     if evidence.source_model != str(protocol["model"]):
         raise PermissionError("source and target proposal model identities differ")
-    if PROPOSAL_FORMATION_POLICY_VERSION != (
-        FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION
+    if PROPOSAL_FORMATION_POLICY_V2 != (
+        TARGET_PROPOSAL_FORMATION_POLICY_VERSION
     ):
-        raise RuntimeError("V3.16 family-slot policy constants disagree")
+        raise RuntimeError("V3.17 family-slot policy constants disagree")
 
     recording_model = _RecordingProposalModel(proposal_model)
     proposer = StructuredHypothesisProposer(recording_model, event_sink=sink)
@@ -1319,46 +1331,47 @@ def run_train_proposal_diagnostic(
         kernel.propose_candidates(
             evidence.residuals,
             validation_context=validation_context,
-            trace_id=f"{trace_id}:production-v316",
+            trace_id=f"{trace_id}:production-v317",
         )
     )
     if len(programs) != REQUIRED_SLOT_COUNT:
-        raise PermissionError("production V3.16 did not return exactly three roots")
+        raise PermissionError("production V3.17 did not return exactly three roots")
     if len(recording_model.requests) != REQUIRED_SLOT_COUNT:
-        raise PermissionError("production V3.16 did not make exactly three model calls")
+        raise PermissionError("production V3.17 did not make exactly three model calls")
 
     plan_event = _single_production_event(
         sink.events,
         event="proposal_family_slot_plan_created",
-        trace_id=f"{trace_id}:production-v316",
+        trace_id=f"{trace_id}:production-v317",
     )
     completed_events = _production_events(
         sink.events,
         event="proposal_family_slot_completed",
-        trace_prefix=f"{trace_id}:production-v316:family-slot-",
+        trace_prefix=f"{trace_id}:production-v317:family-slot-",
     )
     if len(completed_events) != REQUIRED_SLOT_COUNT:
-        raise PermissionError("production V3.16 slot completion ledger is incomplete")
+        raise PermissionError("production V3.17 slot completion ledger is incomplete")
     plan_payload = plan_event["payload"]
     production_plan_rows = plan_payload.get("slots")
     if not isinstance(production_plan_rows, list) or len(
         production_plan_rows
     ) != REQUIRED_SLOT_COUNT:
-        raise PermissionError("production V3.16 slot plan is malformed")
+        raise PermissionError("production V3.17 slot plan is malformed")
     slot_plan_hash = str(plan_payload.get("slot_plan_hash") or "")
     if slot_plan_hash != stable_hash(
         {
-            "policy": FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION,
+            "policy": TARGET_PROPOSAL_FORMATION_POLICY_VERSION,
             "slots": production_plan_rows,
         }
     ):
-        raise PermissionError("production V3.16 slot plan hash mismatch")
+        raise PermissionError("production V3.17 slot plan hash mismatch")
 
     slots = tuple(
         _slot_from_production_request(
             request,
             plan_row=production_plan_rows[index],
             index=index,
+            action_profiles=evidence.action_profiles,
         )
         for index, request in enumerate(recording_model.requests)
     )
@@ -1375,7 +1388,7 @@ def run_train_proposal_diagnostic(
         payload={
             "diagnostic_policy": TRAIN_PROPOSAL_DIAGNOSTIC_VERSION,
             "proposal_formation_policy": (
-                FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION
+                TARGET_PROPOSAL_FORMATION_POLICY_VERSION
             ),
             "production_evolution_kernel_used": True,
             "slot_plan_hash": slot_plan_hash,
@@ -1420,7 +1433,7 @@ def run_train_proposal_diagnostic(
             payload={
                 "diagnostic_policy": TRAIN_PROPOSAL_DIAGNOSTIC_VERSION,
                 "proposal_formation_policy": (
-                    FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION
+                    TARGET_PROPOSAL_FORMATION_POLICY_VERSION
                 ),
                 "slot_plan_hash": slot_plan_hash,
                 "slot_index": slot.index,
@@ -1565,11 +1578,11 @@ def run_train_proposal_diagnostic(
             "protocol_id": str(protocol["protocol_id"]),
             "protocol_hash": protocol_hash,
             "proposal_formation_policy": (
-                FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION
+                TARGET_PROPOSAL_FORMATION_POLICY_VERSION
             ),
             "proposal_formation_policy_hash": stable_hash(
                 {
-                    "policy": FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION
+                    "policy": TARGET_PROPOSAL_FORMATION_POLICY_VERSION
                 }
             ),
             "proposal_model": str(protocol["model"]),
@@ -1581,7 +1594,7 @@ def run_train_proposal_diagnostic(
             "source_provenance_matched": True,
         },
         "slot_plan": {
-            "policy": FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION,
+            "policy": TARGET_PROPOSAL_FORMATION_POLICY_VERSION,
             "slot_plan_hash": slot_plan_hash,
             "slot_count": len(slots),
             "target_family_hashes": [
@@ -1731,10 +1744,10 @@ def verify_existing_train_proposal_diagnostic(
             "protocol_id": str(protocol["protocol_id"]),
             "protocol_hash": protocol_hash,
             "proposal_formation_policy": (
-                FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION
+                TARGET_PROPOSAL_FORMATION_POLICY_VERSION
             ),
             "proposal_formation_policy_hash": stable_hash(
-                {"policy": FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION}
+                {"policy": TARGET_PROPOSAL_FORMATION_POLICY_VERSION}
             ),
             "proposal_model": str(protocol["model"]),
             "proposal_model_call_count": REQUIRED_SLOT_COUNT,
@@ -1756,7 +1769,7 @@ def verify_existing_train_proposal_diagnostic(
     _require_exact_fields(
         slot_plan,
         {
-            "policy": FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION,
+            "policy": TARGET_PROPOSAL_FORMATION_POLICY_VERSION,
             "slot_count": REQUIRED_SLOT_COUNT,
         },
         label="existing diagnostic slot plan",
@@ -2050,6 +2063,7 @@ def _verify_live_three_slot_proposal_flow(
     endpoint_hash = stable_hash({"url": endpoint_url})
     proposal_request_hashes: list[str] = []
     transport_request_hashes: list[str] = []
+    failed_binding_counts: list[int] = []
     accounted_attempt_starts = 0
     accounted_attempt_failures = 0
     prior_slot_recorded_index = plan_index
@@ -2119,6 +2133,10 @@ def _verify_live_three_slot_proposal_flow(
         proposed_payload = _required_mapping(proposed_event, "payload")
         recorded_payload = _required_mapping(recorded_event, "payload")
         completion_payload = _required_mapping(completion_event, "payload")
+        proposal_audit_row = _required_mapping(
+            {"row": proposals[slot_number - 1]},
+            "row",
+        )
         proposal_request_hash = str(request_payload.get("request_hash") or "")
         proposal_request_hashes.append(proposal_request_hash)
         _require_exact_fields(
@@ -2256,6 +2274,28 @@ def _verify_live_three_slot_proposal_flow(
             },
             label="proposal diagnostic live slot completion",
         )
+        raw_failed_binding_count = completion_payload.get(
+            "failed_profile_binding_count"
+        )
+        if (
+            isinstance(raw_failed_binding_count, bool)
+            or not isinstance(raw_failed_binding_count, int)
+            or raw_failed_binding_count < 0
+        ):
+            raise PermissionError(
+                "proposal diagnostic live failed-binding count is malformed"
+            )
+        failed_binding_counts.append(raw_failed_binding_count)
+        _require_exact_fields(
+            proposal_audit_row,
+            {
+                "production_failed_profile_binding_count": (
+                    raw_failed_binding_count
+                ),
+                "failed_primitive_binding_count": raw_failed_binding_count,
+            },
+            label="proposal diagnostic live failed-binding audit",
+        )
         if report_row.get("target_family_hash") != plan_row.get(
             "target_family_hash"
         ):
@@ -2280,6 +2320,16 @@ def _verify_live_three_slot_proposal_flow(
     ):
         raise PermissionError(
             "proposal diagnostic live transport request identities mismatch"
+        )
+    acceptance = _required_mapping(report, "acceptance")
+    expected_failed_avoidance = all(
+        count == 0 for count in failed_binding_counts
+    )
+    if acceptance.get("failed_profile_primitive_avoidance_passed") is not (
+        expected_failed_avoidance
+    ):
+        raise PermissionError(
+            "proposal diagnostic live failed-binding acceptance mismatch"
         )
 
     usage_index, usage_event = _only_indexed_event(
@@ -2538,7 +2588,7 @@ def _single_production_event(
     ]
     if len(matches) != 1:
         raise PermissionError(
-            f"production V3.16 event count mismatch: {event}"
+            f"production V3.17 event count mismatch: {event}"
         )
     return matches[0]
 
@@ -2548,9 +2598,10 @@ def _slot_from_production_request(
     *,
     plan_row: Any,
     index: int,
+    action_profiles: Mapping[str, Mapping[str, Any]],
 ) -> FamilyProposalSlot:
     if not isinstance(plan_row, Mapping):
-        raise PermissionError("production V3.16 slot plan row is malformed")
+        raise PermissionError("production V3.17 slot plan row is malformed")
     if request.get("max_hypotheses") != 1:
         raise PermissionError("production family slot was not singular")
     if "proposal_batch_contract" in request:
@@ -2558,7 +2609,7 @@ def _slot_from_production_request(
     response_contract = request.get("family_slot_response_contract")
     if not isinstance(response_contract, Mapping) or response_contract.get(
         "policy"
-    ) != FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION:
+    ) != TARGET_PROPOSAL_FORMATION_POLICY_VERSION:
         raise PermissionError("production family-slot response contract is missing")
     if response_contract.get("response_field") != "hypothesis":
         raise PermissionError("production family-slot response is not singular")
@@ -2567,7 +2618,7 @@ def _slot_from_production_request(
         raise PermissionError("production family-slot capabilities are missing")
     contract = capabilities.get("family_slot_contract")
     if not isinstance(contract, Mapping) or contract.get("policy") != (
-        FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION
+        TARGET_PROPOSAL_FORMATION_POLICY_VERSION
     ):
         raise PermissionError("production family-slot contract is missing")
     for key in (
@@ -2597,21 +2648,24 @@ def _slot_from_production_request(
         portable.get("preferred_allowlisted_profile_primitives"),
         label="preferred",
     )
-    failed = _parse_profile_primitives(
-        portable.get("failed_profile_primitives_to_avoid"),
-        label="failed",
-    )
+    if "failed_profile_primitives_to_avoid" in portable:
+        raise PermissionError(
+            "production V2 family slot disclosed failed primitive values"
+        )
     reusable_count = sum(row.reusable for row in preferred)
     if portable.get("reusable_preferred_primitive_count") != reusable_count:
         raise PermissionError(
             "production reusable preferred-primitive count mismatch"
         )
-    profiles = capabilities.get("train_action_design_profiles")
-    if not isinstance(profiles, Mapping) or not profiles:
-        raise PermissionError("production family slot omitted TRAIN profiles")
-    profile_hashes = tuple(sorted(str(value) for value in profiles))
-    if any(not _is_sha256(value) for value in profile_hashes):
-        raise PermissionError("production family slot has malformed profile hash")
+    if "train_action_design_profiles" in capabilities:
+        raise PermissionError(
+            "production V2 family slot disclosed the TRAIN profile map"
+        )
+    profile_summary = capabilities.get("train_action_design_profile_summary")
+    if not isinstance(profile_summary, Mapping):
+        raise PermissionError("production V2 profile summary is missing")
+    if profile_summary.get("failed_primitive_values_disclosed") is not False:
+        raise PermissionError("production V2 failed primitive disclosure flag drifted")
     target_family = str(contract.get("target_failure_family") or "")
     if not target_family:
         raise PermissionError("production family slot target is missing")
@@ -2623,8 +2677,6 @@ def _slot_from_production_request(
     profile_evidence_hash = str(contract.get("profile_evidence_hash") or "")
     if not _is_sha256(profile_evidence_hash):
         raise PermissionError("production profile-evidence hash is malformed")
-    if contract.get("profile_reference_count") != len(profile_hashes):
-        raise PermissionError("production profile-reference count mismatch")
     if contract.get("success_control_count") != EXPECTED_TRAIN_SUCCESSES:
         raise PermissionError("production family slot omitted success controls")
     request_residuals = request.get("residuals")
@@ -2648,6 +2700,101 @@ def _slot_from_production_request(
         row.get("context") != {} for row in success_rows
     ):
         raise PermissionError("production success-control scope drifted")
+    profile_hashes = tuple(
+        sorted(
+            {
+                str((row.get("context") or {}).get("action_context_profile_hash") or "")
+                for row in failure_rows
+                if isinstance(row.get("context"), Mapping)
+            }
+        )
+    )
+    if not profile_hashes or any(not _is_sha256(value) for value in profile_hashes):
+        raise PermissionError("production family slot has malformed profile references")
+    expected_profile_evidence_hash = stable_hash(
+        {
+            "profile_references": [
+                {
+                    "profile_hash": profile_hash,
+                    "profile_payload_hash": stable_hash(
+                        dict(action_profiles[profile_hash])
+                    ),
+                }
+                for profile_hash in profile_hashes
+                if isinstance(action_profiles.get(profile_hash), Mapping)
+            ]
+        }
+    )
+    if (
+        any(profile_hash not in action_profiles for profile_hash in profile_hashes)
+        or contract.get("profile_reference_count") != len(profile_hashes)
+        or profile_summary.get("profile_reference_count") != len(profile_hashes)
+        or profile_summary.get("profile_evidence_hash") != profile_evidence_hash
+        or expected_profile_evidence_hash != profile_evidence_hash
+    ):
+        raise PermissionError("production V2 profile summary drifted")
+
+    failed_count = portable.get("failed_primitive_count")
+    failed_set_hash = str(portable.get("failed_primitive_set_hash") or "")
+    if (
+        isinstance(failed_count, bool)
+        or not isinstance(failed_count, int)
+        or failed_count < 0
+        or not _is_sha256(failed_set_hash)
+        or portable.get("failed_primitive_values_disclosed") is not False
+        or profile_summary.get("failed_primitive_count") != failed_count
+        or profile_summary.get("failed_primitive_set_hash") != failed_set_hash
+        or plan_row.get("failed_primitive_count") != failed_count
+        or plan_row.get("failed_primitive_set_hash") != failed_set_hash
+    ):
+        raise PermissionError("production V2 failed-primitive summary drifted")
+
+    recommended_rows = _parse_profile_primitives(
+        [portable.get("recommended_artifact")],
+        label="recommended artifact",
+    )
+    recommended = recommended_rows[0]
+    if (
+        not recommended.reusable
+        or not recommended.kind.startswith("artifact_")
+        or recommended.model_payload()
+        not in [row.model_payload() for row in preferred]
+    ):
+        raise PermissionError("production V2 recommended artifact is invalid")
+    blueprint = str(portable.get("required_artifact_workflow_blueprint") or "")
+    lowered_blueprint = blueprint.lower()
+    positions = [
+        lowered_blueprint.find(token)
+        for token in ("read", "parse", "update", "serialize", "write")
+    ]
+    if (
+        recommended.value not in blueprint
+        or any(position < 0 for position in positions)
+        or positions != sorted(positions)
+        or portable.get("recommended_artifact_value_must_be_mentioned_exactly")
+        is not True
+    ):
+        raise PermissionError("production V2 artifact blueprint drifted")
+
+    output_schema = request.get("output_schema")
+    hypothesis_schema = (
+        output_schema.get("properties", {}).get("hypothesis")
+        if isinstance(output_schema, Mapping)
+        and isinstance(output_schema.get("properties"), Mapping)
+        else None
+    )
+    expected_trigger = {
+        "all_of": [{"key": "family", "op": "eq", "value": target_family}],
+        "any_of": [],
+        "none_of": [],
+    }
+    expected_anti_trigger = {"all_of": [], "any_of": [], "none_of": []}
+    if (
+        not isinstance(hypothesis_schema, Mapping)
+        or hypothesis_schema.get("trigger") != expected_trigger
+        or hypothesis_schema.get("anti_trigger") != expected_anti_trigger
+    ):
+        raise PermissionError("production V2 trigger schema drifted")
     slot = FamilyProposalSlot(
         index=index,
         target_family=target_family,
@@ -2655,8 +2802,10 @@ def _slot_from_production_request(
         target_profile_hashes=profile_hashes,
         profile_evidence_hash=profile_evidence_hash,
         preferred_primitives=preferred,
-        failed_primitives=failed,
+        failed_primitives=(),
         prior_use_count=int(plan_row.get("prior_family_use_count") or 0),
+        declared_failed_primitive_count=failed_count,
+        declared_failed_primitive_set_hash=failed_set_hash,
     )
     if contract.get("slot_id") != slot.formation_payload()["slot_id"]:
         raise PermissionError("production family-slot identifier drifted")
@@ -2711,7 +2860,7 @@ def _bind_production_completion(
         raise PermissionError("production family-slot completion is malformed")
     formation = slot.formation_payload()
     expected = {
-        "policy": FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION,
+        "policy": TARGET_PROPOSAL_FORMATION_POLICY_VERSION,
         "slot_id": formation["slot_id"],
         "target_family": slot.target_family,
         "target_family_hash": slot.target_family_hash,
@@ -2720,7 +2869,7 @@ def _bind_production_completion(
         "preferred_primitive_set_hash": formation[
             "preferred_primitive_set_hash"
         ],
-        "failed_primitive_count": len(slot.failed_primitives),
+        "failed_primitive_count": slot.failed_primitive_count,
         "failed_primitive_set_hash": formation["failed_primitive_set_hash"],
         "candidate_hash": program.payload_hash,
         "response_rejected_by_diversity": False,
@@ -2731,6 +2880,18 @@ def _bind_production_completion(
             raise PermissionError(
                 f"production family-slot completion drifted: {key}"
             )
+    raw_failed_binding_count = completed_payload.get(
+        "failed_profile_binding_count"
+    )
+    if (
+        isinstance(raw_failed_binding_count, bool)
+        or not isinstance(raw_failed_binding_count, int)
+        or raw_failed_binding_count < 0
+    ):
+        raise PermissionError(
+            "production failed-profile binding count is malformed"
+        )
+    production_failed_binding_count = raw_failed_binding_count
     audit.update(
         {
             "production_slot_completion_hash": stable_hash(
@@ -2745,11 +2906,25 @@ def _bind_production_completion(
             "production_profile_binding_count": int(
                 completed_payload.get("profile_binding_count") or 0
             ),
-            "production_failed_profile_binding_count": int(
-                completed_payload.get("failed_profile_binding_count") or 0
+            "production_failed_profile_binding_count": (
+                production_failed_binding_count
             ),
             "production_portable_delta_kinds": list(
                 completed_payload.get("portable_delta_kinds") or []
+            ),
+            # V2 deliberately withholds failed primitive values from the model
+            # request.  The production kernel retains them locally and this
+            # bound completion audit is therefore the authoritative source for
+            # the unchanged failed-primitive avoidance acceptance check.
+            "failed_primitive_binding_count": production_failed_binding_count,
+            "failed_primitive_binding_set_hash": stable_hash(
+                {
+                    "candidate_hash": program.payload_hash,
+                    "failed_primitive_set_hash": slot.failed_primitive_set_hash,
+                    "failed_profile_binding_count": (
+                        production_failed_binding_count
+                    ),
+                }
             ),
         }
     )
@@ -2952,7 +3127,7 @@ def _read_target_protocol(
     )
     protocol = _read_json_object(protocol_path, label="target protocol")
     if protocol.get("protocol_version") != TARGET_PROTOCOL_VERSION:
-        raise ValueError("proposal diagnostic requires V3.16 protocol")
+        raise ValueError("proposal diagnostic requires V3.17 protocol")
     if protocol.get("sealed_test_content_accessed") is not False:
         raise ValueError("target protocol already accessed sealed test content")
     if protocol.get("raw_content_persisted") is not False:
@@ -2968,7 +3143,7 @@ def _read_target_protocol(
     assert isinstance(execution, Mapping)
     assert isinstance(evolution, Mapping)
     if execution.get("proposal_formation_policy") != (
-        FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION
+        TARGET_PROPOSAL_FORMATION_POLICY_VERSION
     ):
         raise ValueError("target proposal formation policy mismatch")
     if execution.get("train_action_design_policy") != (
@@ -3271,7 +3446,7 @@ def _write_json_atomic(path: Path, payload: Mapping[str, Any]) -> None:
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         description=(
-            "Rebuild frozen V3.15 TRAIN evidence and spend only three V3.16 "
+            "Rebuild frozen V3.15 TRAIN evidence and spend only three V3.17 "
             "proposal slots; no task agent, evaluator, validation, or sealed access."
         )
     )
@@ -3296,11 +3471,11 @@ def main(argv: Sequence[str] | None = None) -> None:
     map_legacy_model_env()
     protocol, _ = _read_target_protocol(args.protocol)
     if configured_model() != str(protocol["model"]):
-        raise RuntimeError("configured proposal model differs from V3.16")
+        raise RuntimeError("configured proposal model differs from V3.17")
     if list(configured_provider_chain()) != list(
         protocol["proposal_provider_chain"]
     ):
-        raise RuntimeError("configured proposal provider chain differs from V3.16")
+        raise RuntimeError("configured proposal provider chain differs from V3.17")
     sink = _DiagnosticEventSink(JsonlEventSink(args.events))
     proposal_model = build_proposal_model(
         event_sink=sink,

@@ -46,6 +46,7 @@ from assumption_agent.benchmarks.paper_report import (
 )
 from assumption_agent.models import stable_hash
 from assumption_agent.evolution import (
+    PROPOSAL_FORMATION_POLICY_V2,
     PROPOSAL_FORMATION_POLICY_VERSION,
     PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
 )
@@ -112,6 +113,9 @@ V315_PROTOCOL = (
 V316_PROTOCOL = (
     ROOT / "manifests" / "skilllearn_paper_protocol_v3_16_ruoli_gpt54mini.json"
 )
+V317_PROTOCOL = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_17_ruoli_gpt54mini.json"
+)
 MANIFEST_HASH = stable_hash({"manifest": "paper-test"})
 
 
@@ -124,7 +128,7 @@ def test_historical_codex_execution_policy_hashes_remain_immutable() -> None:
     )
 
 
-def test_v315_and_v316_reuse_v314_runtime_policy_versions() -> None:
+def test_v315_v316_and_v317_reuse_v314_runtime_policy_versions() -> None:
     assert codex_agent_execution_policy_for_protocol_version("3.13.0") == (
         MODEL_ONLY_ACTION_BUDGET_POLICY
     )
@@ -137,6 +141,9 @@ def test_v315_and_v316_reuse_v314_runtime_policy_versions() -> None:
     assert codex_agent_execution_policy_for_protocol_version("3.16.0") == (
         MODEL_ONLY_ACTION_BUDGET_POLICY
     )
+    assert codex_agent_execution_policy_for_protocol_version("3.17.0") == (
+        MODEL_ONLY_ACTION_BUDGET_POLICY
+    )
     assert development_prewarm_version_for_protocol("3.13.0") == (
         DEVELOPMENT_PREWARM_VERSION
     )
@@ -147,6 +154,9 @@ def test_v315_and_v316_reuse_v314_runtime_policy_versions() -> None:
         DEVELOPMENT_PREWARM_VERSION
     )
     assert development_prewarm_version_for_protocol("3.16.0") == (
+        DEVELOPMENT_PREWARM_VERSION
+    )
+    assert development_prewarm_version_for_protocol("3.17.0") == (
         DEVELOPMENT_PREWARM_VERSION
     )
 
@@ -625,11 +635,58 @@ def test_v316_changes_only_proposal_formation_and_required_smoke_size() -> None:
     assert v316 == v315
 
 
-@pytest.mark.parametrize("mutation", (None, "drifted"))
+@pytest.mark.parametrize(
+    "mutation",
+    (None, "drifted", PROPOSAL_FORMATION_POLICY_V2),
+)
 def test_v316_rejects_proposal_formation_policy_drift(
     mutation: str | None,
 ) -> None:
     protocol = PaperProtocol.read(V316_PROTOCOL)
+    payload = copy.deepcopy(protocol.payload)
+    if mutation is None:
+        payload["execution"].pop("proposal_formation_policy")
+    else:
+        payload["execution"]["proposal_formation_policy"] = mutation
+
+    assert "proposal_formation_policy_mismatch" in PaperProtocol(
+        protocol.path,
+        payload,
+    ).validate_structure()
+
+
+def test_v317_changes_only_proposal_formation_v1_to_v2() -> None:
+    protocol = PaperProtocol.read(V317_PROTOCOL)
+
+    assert protocol.validate_structure() == []
+    assert protocol.payload["protocol_id"] == (
+        "assumption-agent-v2-skilllearn-paper-v3.17-offline86-ruoli-gpt54mini"
+    )
+    assert protocol.payload["protocol_version"] == "3.17.0"
+    assert protocol.payload["execution"]["proposal_formation_policy"] == (
+        PROPOSAL_FORMATION_POLICY_V2
+    )
+    assert protocol.payload["phases"]["smoke"]["train_count"] == 6
+
+    v316 = copy.deepcopy(PaperProtocol.read(V316_PROTOCOL).payload)
+    v317 = copy.deepcopy(protocol.payload)
+    for payload in (v316, v317):
+        payload.pop("protocol_id")
+        payload.pop("protocol_version")
+    v317["execution"]["proposal_formation_policy"] = v316["execution"][
+        "proposal_formation_policy"
+    ]
+    assert v317 == v316
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (None, "drifted", PROPOSAL_FORMATION_POLICY_VERSION),
+)
+def test_v317_rejects_proposal_formation_policy_drift(
+    mutation: str | None,
+) -> None:
+    protocol = PaperProtocol.read(V317_PROTOCOL)
     payload = copy.deepcopy(protocol.payload)
     if mutation is None:
         payload["execution"].pop("proposal_formation_policy")
@@ -1011,6 +1068,7 @@ def test_v31_through_v35_keep_historical_candidate_selection(
         V314_PROTOCOL,
         V315_PROTOCOL,
         V316_PROTOCOL,
+        V317_PROTOCOL,
     ),
 )
 def test_contrastive_protocol_rejects_contract_drift(
@@ -1236,6 +1294,7 @@ def test_execution_lock_binds_tracked_offline_readiness_receipt(
         V314_PROTOCOL,
         V315_PROTOCOL,
         V316_PROTOCOL,
+        V317_PROTOCOL,
     ),
 )
 def test_versioned_execution_lock_binds_resolved_agent_policy(

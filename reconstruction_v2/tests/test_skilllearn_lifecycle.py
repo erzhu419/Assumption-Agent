@@ -38,6 +38,7 @@ from assumption_agent.evolution import (
     COMPLEMENTARY_FAMILY_SUPPORT_BUNDLE_CANDIDATE_SELECTION_VERSION,
     CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
     PROPOSAL_FORMATION_POLICY_VERSION,
+    PROPOSAL_FORMATION_POLICY_V2,
     PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
     TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
     CounterfactualEvidenceReplayCache,
@@ -3678,6 +3679,9 @@ def test_profile_grounded_family_slots_scope_three_singular_train_requests(
     )
 
     assert len(proposals) == len(model.requests) == 3
+    assert stable_hash(model.requests[0]) == (
+        "aaa6f35db6662ede625cfd9cebb0d46b728755e862d9a8be0e8c2430fd157693"
+    )
     success_ids = {"success-control-1", "success-control-2"}
     for request, expected_family in zip(model.requests, families):
         assert request["max_hypotheses"] == 1
@@ -3786,6 +3790,143 @@ def test_profile_grounded_family_slots_scope_three_singular_train_requests(
         and row["payload"]["raw_content_persisted"] is False
         for row in completed
     )
+
+
+def test_family_slot_v2_fixes_trigger_artifact_blueprint_and_hides_failed_values(
+    tmp_path: Path,
+) -> None:
+    families = ("family-a", "family-b", "family-c")
+    profiles = {
+        f"profile-{family}": _family_slot_profile(family)
+        for family in families
+    }
+    residuals = tuple(
+        _family_slot_residual(
+            f"{family}-failure-{index}",
+            family=family,
+            profile_hash=f"profile-{family}",
+        )
+        for family in families
+        for index in range(2)
+    )
+    proposal_rows = [
+        _family_slot_v2_program(
+            family,
+            include_failed_primitive=(index == 0),
+        ).to_dict()
+        for index, family in enumerate(families)
+    ]
+    harness, _, model, _, _, sink = _harness(
+        tmp_path,
+        proposal_rows=proposal_rows,
+        train_action_design_policy=TRAIN_ACTION_DESIGN_POLICY_VERSION,
+        proposal_formation_policy=PROPOSAL_FORMATION_POLICY_V2,
+    )
+    context = ValidationContext(
+        evaluator_epoch="skilllearn-eval-epoch-0",
+        residuals=residuals,
+        available_lanes=frozenset({"baseline", "candidate"}),
+        baseline_lane="baseline",
+        action_semantics=SKILL_ACTION_LOWERING_VERSION,
+        train_action_design_policy=TRAIN_ACTION_DESIGN_POLICY_VERSION,
+        action_design_profiles=profiles,
+    )
+
+    proposals = harness.kernel.propose_candidates(
+        residuals,
+        validation_context=context,
+        trace_id="profile-grounded-family-slots-v2",
+    )
+
+    assert len(proposals) == len(model.requests) == 3
+    for request, expected_family in zip(model.requests, families):
+        serialized_request = json.dumps(request, sort_keys=True)
+        assert f"{expected_family}-broken" not in serialized_request
+        capabilities = request["capabilities"]
+        assert "train_action_design_profiles" not in capabilities
+        profile_summary = capabilities[
+            "train_action_design_profile_summary"
+        ]
+        assert profile_summary["failed_primitive_count"] == 1
+        assert profile_summary["failed_primitive_set_hash"]
+        assert profile_summary["failed_primitive_values_disclosed"] is False
+        slot_contract = capabilities["family_slot_contract"]
+        assert slot_contract["policy"] == PROPOSAL_FORMATION_POLICY_V2
+        portable = slot_contract["portable_recipe_policy"]
+        assert "failed_profile_primitives_to_avoid" not in portable
+        assert portable["failed_primitive_count"] == 1
+        assert portable["failed_primitive_set_hash"]
+        assert portable["failed_primitive_values_disclosed"] is False
+        recommended = portable["recommended_artifact"]
+        assert recommended == {
+            "kind": "artifact_command_path",
+            "value": f"/root/{expected_family}.json",
+            "train_failure_evidence_count": 2,
+            "reusable_across_same_family_failures": True,
+        }
+        assert portable["recommended_artifact_selection_priority"] == [
+            "artifact_command_path",
+            "artifact_task_local_path",
+            "artifact_copied_file",
+            "artifact_environment_source_file",
+        ]
+        blueprint = portable["required_artifact_workflow_blueprint"]
+        assert f"/root/{expected_family}.json" in blueprint
+        assert all(
+            stage in blueprint
+            for stage in ("read", "parse", "update", "serialize", "write")
+        )
+        hypothesis_schema = request["output_schema"]["properties"][
+            "hypothesis"
+        ]
+        exact_trigger = {
+            "all_of": [
+                {"key": "family", "op": "eq", "value": expected_family}
+            ],
+            "any_of": [],
+            "none_of": [],
+        }
+        empty_anti_trigger = {
+            "all_of": [],
+            "any_of": [],
+            "none_of": [],
+        }
+        assert hypothesis_schema["trigger"] == exact_trigger
+        assert hypothesis_schema["anti_trigger"] == empty_anti_trigger
+        constraints = request["constraints"]
+        assert constraints[
+            "trigger_schema_must_equal_exact_target_family_only"
+        ] == exact_trigger
+        assert constraints["anti_trigger_schema_must_equal_empty"] == (
+            empty_anti_trigger
+        )
+        assert constraints[
+            "recommended_artifact_value_must_be_mentioned_exactly"
+        ] == f"/root/{expected_family}.json"
+        action_schema = hypothesis_schema["action_graph"][0]["value"]
+        assert f"/root/{expected_family}.json" in action_schema
+        assert "read -> parse -> update -> serialize -> write-back" in (
+            action_schema
+        )
+
+    assert proposals[0].anti_trigger.is_empty
+    assert [
+        (row.key, row.op, row.value)
+        for row in proposals[0].trigger.all_of
+    ] == [
+        ("family", "eq", "family-a")
+    ]
+    assert proposals[0].trigger.any_of == ()
+    assert proposals[0].trigger.none_of == ()
+    completed = [
+        row
+        for row in sink.events
+        if row["event"] == "proposal_family_slot_completed"
+    ]
+    assert completed[0]["payload"]["failed_profile_binding_count"] == 1
+    assert completed[0]["payload"]["response_rejected_by_diversity"] is False
+    assert completed[0]["payload"]["proposal_retry_by_diversity"] is False
+    assert completed[0]["payload"]["policy"] == PROPOSAL_FORMATION_POLICY_V2
 
 
 def test_family_slot_profile_primitives_are_failure_dominant_and_path_safe() -> None:
@@ -5698,7 +5839,10 @@ def _harness(
                 for row in (proposal_rows or [_program_dict()] * 3)
             ]
             if proposal_formation_policy
-            == PROPOSAL_FORMATION_POLICY_VERSION
+            in {
+                PROPOSAL_FORMATION_POLICY_VERSION,
+                PROPOSAL_FORMATION_POLICY_V2,
+            }
             else [{"hypotheses": proposal_rows or [_program_dict()]}]
         )
     )
@@ -5883,6 +6027,36 @@ def _family_slot_program(family: str) -> HypothesisProgram:
             "depends_on": [],
         }
     ]
+    return HypothesisProgram.from_dict(payload)
+
+
+def _family_slot_v2_program(
+    family: str,
+    *,
+    include_failed_primitive: bool = False,
+) -> HypothesisProgram:
+    payload = _family_slot_program(family).to_dict()
+    payload["trigger"] = {
+        "all_of": [{"key": "family", "op": "eq", "value": family}],
+        "any_of": [],
+        "none_of": [],
+    }
+    payload["anti_trigger"] = {
+        "all_of": [],
+        "any_of": [],
+        "none_of": [],
+    }
+    failed_suffix = (
+        f" Never invoke {family}-broken."
+        if include_failed_primitive
+        else ""
+    )
+    payload["action_graph"][0]["value"] = (
+        f"Read the current artifact at /root/{family}.json, parse it with a "
+        "preinstalled local parser, update the task-required content in "
+        "memory, serialize it in the original format, and write the result "
+        f"back to /root/{family}.json.{failed_suffix}"
+    )
     return HypothesisProgram.from_dict(payload)
 
 

@@ -79,6 +79,9 @@ V315_PROTOCOL_PATH = (
 V316_PROTOCOL_PATH = (
     ROOT / "manifests" / "skilllearn_paper_protocol_v3_16_ruoli_gpt54mini.json"
 )
+V317_PROTOCOL_PATH = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_17_ruoli_gpt54mini.json"
+)
 MANIFEST_PATH = (
     ROOT / "manifests" / "skilllearnbench_instance_holdout_offline_ready_v1.json"
 )
@@ -754,6 +757,7 @@ def test_execution_report_preserves_legacy_promotion_summary_schema(
         V314_PROTOCOL_PATH,
         V315_PROTOCOL_PATH,
         V316_PROTOCOL_PATH,
+        V317_PROTOCOL_PATH,
     ),
 )
 def test_freeze_accepts_clean_contrastive_report(protocol_path: Path) -> None:
@@ -823,8 +827,14 @@ def test_freeze_binds_v315_action_design_plan_provenance() -> None:
         )
 
 
-def test_freeze_binds_v316_proposal_formation_plan_provenance() -> None:
-    protocol = PaperProtocol.read(V316_PROTOCOL_PATH)
+@pytest.mark.parametrize(
+    "protocol_path",
+    (V316_PROTOCOL_PATH, V317_PROTOCOL_PATH),
+)
+def test_freeze_binds_proposal_formation_plan_provenance(
+    protocol_path: Path,
+) -> None:
+    protocol = PaperProtocol.read(protocol_path)
     manifest = SplitManifest.read(MANIFEST_PATH)
     report = _development_report(
         protocol,
@@ -911,8 +921,14 @@ def test_freeze_rejects_v315_paired_checkpoint_provenance_drift() -> None:
         )
 
 
-def test_freeze_rejects_v316_paired_proposal_formation_provenance_drift() -> None:
-    protocol = PaperProtocol.read(V316_PROTOCOL_PATH)
+@pytest.mark.parametrize(
+    "protocol_path",
+    (V316_PROTOCOL_PATH, V317_PROTOCOL_PATH),
+)
+def test_freeze_rejects_paired_proposal_formation_provenance_drift(
+    protocol_path: Path,
+) -> None:
+    protocol = PaperProtocol.read(protocol_path)
     manifest = SplitManifest.read(MANIFEST_PATH)
     recursive_report = _development_report(
         protocol,
@@ -951,6 +967,7 @@ def test_freeze_rejects_v316_paired_proposal_formation_provenance_drift() -> Non
         V314_PROTOCOL_PATH,
         V315_PROTOCOL_PATH,
         V316_PROTOCOL_PATH,
+        V317_PROTOCOL_PATH,
     ),
 )
 def test_freeze_binds_candidate_bundle_plan_provenance(
@@ -1008,6 +1025,7 @@ def test_freeze_binds_candidate_bundle_plan_provenance(
         V314_PROTOCOL_PATH,
         V315_PROTOCOL_PATH,
         V316_PROTOCOL_PATH,
+        V317_PROTOCOL_PATH,
     ),
 )
 def test_freeze_rejects_contrastive_generation_evidence_drift(
@@ -1411,6 +1429,7 @@ def test_frozen_archive_rejects_candidate_treatment_substitution(
         (V314_PROTOCOL_PATH, "3.14.0"),
         (V315_PROTOCOL_PATH, "3.15.0"),
         (V316_PROTOCOL_PATH, "3.16.0"),
+        (V317_PROTOCOL_PATH, "3.17.0"),
     ),
 )
 @pytest.mark.parametrize("allowed", (True, False))
@@ -1487,6 +1506,7 @@ def test_bundle_protocol_frozen_archive_accepts_canonical_candidate_bundle(
         (V314_PROTOCOL_PATH, "3.14.0"),
         (V315_PROTOCOL_PATH, "3.15.0"),
         (V316_PROTOCOL_PATH, "3.16.0"),
+        (V317_PROTOCOL_PATH, "3.17.0"),
     ),
 )
 def test_bundle_protocol_frozen_archive_rejects_bundle_tampering(
@@ -1921,6 +1941,7 @@ def _development_report(
         "3.14.0",
         "3.15.0",
         "3.16.0",
+        "3.17.0",
     }
     generation = {
         "promoted": True,
@@ -1957,6 +1978,7 @@ def _development_report(
         "3.14.0",
         "3.15.0",
         "3.16.0",
+        "3.17.0",
     }:
         train_count = int(phase["train_count"])
         generation.update(
@@ -1971,7 +1993,11 @@ def _development_report(
                 ]["contrastive_training_evidence_policy"],
             }
         )
-    if protocol.payload["protocol_version"] in {"3.15.0", "3.16.0"}:
+    if protocol.payload["protocol_version"] in {
+        "3.15.0",
+        "3.16.0",
+        "3.17.0",
+    }:
         action_profile_set_hash = stable_hash(
             {"profile_hashes": ["profile-a"]}
         )
@@ -2114,7 +2140,7 @@ def _development_report(
                     ),
                 }
                 if protocol.payload["protocol_version"]
-                in {"3.15.0", "3.16.0"}
+                in {"3.15.0", "3.16.0", "3.17.0"}
                 else {}
             ),
         },
@@ -2179,6 +2205,7 @@ def _promotion_decision(
         "3.14.0",
         "3.15.0",
         "3.16.0",
+        "3.17.0",
     }:
         summary.update(
             {

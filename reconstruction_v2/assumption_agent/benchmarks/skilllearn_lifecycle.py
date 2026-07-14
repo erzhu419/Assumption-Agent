@@ -35,7 +35,7 @@ from ..evolution import (
     CounterfactualEvidenceReplayCache,
     EvolutionKernel,
     EvolutionRunResult,
-    PROPOSAL_FORMATION_POLICY_VERSION,
+    PROPOSAL_FORMATION_POLICY_VERSIONS,
     PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
     TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
 )
@@ -4430,7 +4430,7 @@ class SkillLearnEvolutionHarness:
             )
         if proposal_formation_policy not in {
             None,
-            PROPOSAL_FORMATION_POLICY_VERSION,
+            *PROPOSAL_FORMATION_POLICY_VERSIONS,
         }:
             raise ValueError(
                 f"unsupported proposal formation policy: {proposal_formation_policy}"

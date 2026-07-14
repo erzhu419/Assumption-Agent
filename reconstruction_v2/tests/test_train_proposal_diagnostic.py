@@ -74,19 +74,28 @@ class FakeProposalModel:
             ]
         ) == 6
         preferred = portable["preferred_allowlisted_profile_primitives"]
-        executable = next(
-            row["value"]
-            for row in preferred
-            if row["kind"] == "executable"
-            and row["reusable_across_same_family_failures"] is True
-        )
-        artifact = next(
-            row["value"]
-            for row in preferred
-            if row["kind"].startswith("artifact")
-            and row["reusable_across_same_family_failures"] is True
-        )
+        assert "train_action_design_profiles" not in capabilities
+        assert "failed_profile_primitives_to_avoid" not in portable
+        assert portable["failed_primitive_values_disclosed"] is False
+        artifact_row = portable["recommended_artifact"]
+        assert artifact_row in preferred
+        assert artifact_row["kind"].startswith("artifact_")
+        assert artifact_row["reusable_across_same_family_failures"] is True
+        artifact = artifact_row["value"]
+        blueprint = portable["required_artifact_workflow_blueprint"]
+        assert artifact in blueprint
         family = contract["target_failure_family"]
+        hypothesis_schema = payload["output_schema"]["properties"]["hypothesis"]
+        assert hypothesis_schema["trigger"] == {
+            "all_of": [{"key": "family", "op": "eq", "value": family}],
+            "any_of": [],
+            "none_of": [],
+        }
+        assert hypothesis_schema["anti_trigger"] == {
+            "all_of": [],
+            "any_of": [],
+            "none_of": [],
+        }
         return {
             "hypothesis": {
                 "id": f"{self.id_marker}-{len(self.calls)}",
@@ -112,11 +121,7 @@ class FakeProposalModel:
                         "id": "profile-grounded-local-operation",
                         "operation": "execute_step",
                         "target": "task-local artifact procedure",
-                        "value": (
-                            f"Run {executable} --version against {artifact}, then "
-                            "parse and update the current task artifact with its "
-                            "documented local API."
-                        ),
+                        "value": blueprint,
                         "depends_on": [],
                     }
                 ],
@@ -304,7 +309,7 @@ class MalformedKindProposalModel(FakeProposalModel):
         return response
 
 
-def test_v316_diagnostic_uses_production_slots_without_forbidden_reads(
+def test_v317_diagnostic_uses_production_slots_without_forbidden_reads(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -528,7 +533,7 @@ def test_v316_diagnostic_uses_production_slots_without_forbidden_reads(
     )
 
 
-def test_v316_diagnostic_fails_closed_on_source_profile_provenance_drift(
+def test_v317_diagnostic_fails_closed_on_source_profile_provenance_drift(
     tmp_path: Path,
 ) -> None:
     fixture = _diagnostic_fixture(tmp_path)
@@ -559,7 +564,7 @@ def test_v316_diagnostic_fails_closed_on_source_profile_provenance_drift(
     assert model.calls == []
 
 
-def test_v316_reuse_never_opens_legacy_development_ledgers(
+def test_v317_reuse_never_opens_legacy_development_ledgers(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -593,7 +598,7 @@ def test_v316_reuse_never_opens_legacy_development_ledgers(
     assert verified["diagnostic_reuse_verified"] is True
 
 
-def test_v316_diagnostic_rejects_protocol_lock_drift(tmp_path: Path) -> None:
+def test_v317_diagnostic_rejects_protocol_lock_drift(tmp_path: Path) -> None:
     fixture = _diagnostic_fixture(tmp_path)
     lock = json.loads(fixture.protocol_lock_path.read_text(encoding="utf-8"))
     lock.pop("lock_hash")
@@ -618,7 +623,7 @@ def test_v316_diagnostic_rejects_protocol_lock_drift(tmp_path: Path) -> None:
         )
 
 
-def test_v316_diagnostic_persistence_redacts_malicious_id_and_family(
+def test_v317_diagnostic_persistence_redacts_malicious_id_and_family(
     tmp_path: Path,
 ) -> None:
     fixture = _diagnostic_fixture(tmp_path)
@@ -679,7 +684,7 @@ def test_v316_diagnostic_persistence_redacts_malicious_id_and_family(
     assert verified["raw_content_persisted"] is False
 
 
-def test_v316_existing_diagnostic_reuse_rejects_event_tamper(
+def test_v317_existing_diagnostic_reuse_rejects_event_tamper(
     tmp_path: Path,
 ) -> None:
     fixture, report_path, events_path = _persisted_diagnostic_fixture(
@@ -713,7 +718,7 @@ def test_v316_existing_diagnostic_reuse_rejects_event_tamper(
         )
 
 
-def test_v316_existing_diagnostic_reuse_rejects_stale_source_artifact(
+def test_v317_existing_diagnostic_reuse_rejects_stale_source_artifact(
     tmp_path: Path,
 ) -> None:
     fixture, report_path, events_path = _persisted_diagnostic_fixture(
@@ -746,7 +751,7 @@ def test_v316_existing_diagnostic_reuse_rejects_stale_source_artifact(
         )
 
 
-def test_v316_existing_diagnostic_requires_each_live_model_selection(
+def test_v317_existing_diagnostic_requires_each_live_model_selection(
     tmp_path: Path,
 ) -> None:
     fixture, report_path, events_path = _persisted_diagnostic_fixture(
@@ -778,7 +783,7 @@ def test_v316_existing_diagnostic_requires_each_live_model_selection(
         )
 
 
-def test_v316_existing_diagnostic_rejects_semantic_response_hash_tamper(
+def test_v317_existing_diagnostic_rejects_semantic_response_hash_tamper(
     tmp_path: Path,
 ) -> None:
     fixture, report_path, events_path = _persisted_diagnostic_fixture(
@@ -807,7 +812,40 @@ def test_v316_existing_diagnostic_rejects_semantic_response_hash_tamper(
         )
 
 
-def test_v316_existing_diagnostic_accepts_one_transport_retry(
+@pytest.mark.parametrize("mutation", ("missing", "changed"))
+def test_v317_existing_diagnostic_binds_failed_profile_audit(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    fixture, report_path, events_path = _persisted_diagnostic_fixture(
+        tmp_path
+    )
+    rows = _event_file_rows(events_path)
+    completed = next(
+        row
+        for row in rows
+        if row["event"] == "proposal_family_slot_completed"
+    )
+    if mutation == "missing":
+        completed["payload"].pop("failed_profile_binding_count")
+    else:
+        completed["payload"]["failed_profile_binding_count"] = 1
+    _rehash_event(completed)
+    _write_event_file(events_path, rows)
+
+    with pytest.raises(PermissionError, match="failed-binding"):
+        verify_existing_train_proposal_diagnostic(
+            root=fixture.root,
+            manifest_path=fixture.manifest_path,
+            source_run_root=fixture.source_root,
+            source_train_receipt=fixture.source_train_receipt,
+            protocol_path=fixture.protocol_path,
+            report_path=report_path,
+            events_path=events_path,
+        )
+
+
+def test_v317_existing_diagnostic_accepts_one_transport_retry(
     tmp_path: Path,
 ) -> None:
     fixture, report_path, events_path = _persisted_diagnostic_fixture(
@@ -829,7 +867,7 @@ def test_v316_existing_diagnostic_accepts_one_transport_retry(
     assert sum(row["event"] == "model_attempt_failed" for row in rows) == 1
 
 
-def test_v316_cli_hides_model_controlled_parse_exception(
+def test_v317_cli_hides_model_controlled_parse_exception(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -967,7 +1005,7 @@ def _diagnostic_fixture(tmp_path: Path) -> DiagnosticFixture:
     root = tmp_path / "SkillLearnBench"
     source_root = tmp_path / "source-v315"
     manifest_path = tmp_path / "manifest.json"
-    protocol_path = tmp_path / "protocol-v316.json"
+    protocol_path = tmp_path / "protocol-v317.json"
     protocol_lock_path = source_root / "protocol_lock.json"
     source_train_receipt = source_root / "train_source_receipt.json"
 
@@ -1164,7 +1202,7 @@ def _diagnostic_fixture(tmp_path: Path) -> DiagnosticFixture:
         (
             repository_root
             / "manifests"
-            / "skilllearn_paper_protocol_v3_16_ruoli_gpt54mini.json"
+            / "skilllearn_paper_protocol_v3_17_ruoli_gpt54mini.json"
         ).read_text(encoding="utf-8")
     )
     protocol_path.write_text(

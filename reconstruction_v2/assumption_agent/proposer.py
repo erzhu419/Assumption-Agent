@@ -33,6 +33,15 @@ TRAIN_ACTION_DESIGN_POLICY_VERSION = (
 FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION = (
     "train_only_profile_grounded_family_slots_v1"
 )
+FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_V2 = (
+    "train_only_profile_grounded_family_slots_v2"
+)
+FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSIONS = frozenset(
+    {
+        FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION,
+        FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_V2,
+    }
+)
 TRAIN_ACTION_DESIGN_POLICY_VERSIONS = frozenset(
     {TRAIN_ACTION_DESIGN_POLICY_VERSION}
 )
@@ -223,10 +232,15 @@ class StructuredHypothesisProposer:
             == PROPOSAL_DIVERSITY_POLICY_VERSION
         )
         family_slot_contract = capability_payload.get("family_slot_contract")
+        family_slot_policy = (
+            str(family_slot_contract.get("policy") or "")
+            if isinstance(family_slot_contract, Mapping)
+            else ""
+        )
         family_slot_contract_enabled = bool(
             isinstance(family_slot_contract, Mapping)
-            and family_slot_contract.get("policy")
-            == FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION
+            and family_slot_policy
+            in FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSIONS
         )
         if family_slot_contract_enabled and max_hypotheses != 1:
             raise ValueError("family-slot proposal requests exactly one hypothesis")
@@ -291,7 +305,7 @@ class StructuredHypothesisProposer:
             }
         elif family_slot_contract_enabled:
             payload["family_slot_response_contract"] = {
-                "policy": FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION,
+                "policy": family_slot_policy,
                 "response_field": "hypothesis",
                 "response_type": "object",
                 "required_count": 1,
@@ -363,9 +377,7 @@ class StructuredHypothesisProposer:
                     failure_phase="response_envelope",
                     trace_id=trace_id,
                     expected_item_count=1,
-                    response_contract_policy=(
-                        FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION
-                    ),
+                    response_contract_policy=family_slot_policy,
                 )
             rows = [singular_row]
         else:
@@ -1088,10 +1100,15 @@ def _proposal_constraints(
             }
         )
     family_slot_contract = (capabilities or {}).get("family_slot_contract")
+    family_slot_policy = (
+        str(family_slot_contract.get("policy") or "")
+        if isinstance(family_slot_contract, Mapping)
+        else ""
+    )
     if (
         isinstance(family_slot_contract, Mapping)
-        and family_slot_contract.get("policy")
-        == FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION
+        and family_slot_policy
+        in FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSIONS
     ):
         portable_recipe_policy = family_slot_contract.get(
             "portable_recipe_policy"
@@ -1107,8 +1124,7 @@ def _proposal_constraints(
         target_failure_family = str(
             family_slot_contract.get("target_failure_family") or ""
         )
-        constraints.update(
-            {
+        family_constraints: dict[str, Any] = {
                 "proposal_targets_exactly_one_train_failure_family": True,
                 "proposal_target_family_field": "target_failure_family",
                 "proposal_target_failure_family": target_failure_family,
@@ -1143,8 +1159,66 @@ def _proposal_constraints(
                 "family_slot_response_is_singular_transport_contract": True,
                 "family_slot_response_diversity_rejection_forbidden": True,
                 "family_slot_diversity_retry_forbidden": True,
-            }
-        )
+        }
+        if family_slot_policy == FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_V2:
+            recommended_artifact = (
+                portable_recipe_policy.get("recommended_artifact")
+                if isinstance(portable_recipe_policy, Mapping)
+                else None
+            )
+            workflow_blueprint = (
+                portable_recipe_policy.get(
+                    "required_artifact_workflow_blueprint"
+                )
+                if isinstance(portable_recipe_policy, Mapping)
+                else None
+            )
+            family_constraints.update(
+                {
+                    "trigger_schema_must_equal_exact_target_family_only": {
+                        "all_of": [
+                            {
+                                "key": "family",
+                                "op": "eq",
+                                "value": target_failure_family,
+                            }
+                        ],
+                        "any_of": [],
+                        "none_of": [],
+                    },
+                    "anti_trigger_schema_must_equal_empty": {
+                        "all_of": [],
+                        "any_of": [],
+                        "none_of": [],
+                    },
+                    "recommended_artifact": recommended_artifact,
+                    "recommended_artifact_value_must_be_mentioned_exactly": (
+                        str(recommended_artifact.get("value") or "")
+                        if isinstance(recommended_artifact, Mapping)
+                        else ""
+                    ),
+                    "required_artifact_workflow_order": [
+                        "read",
+                        "parse",
+                        "update",
+                        "serialize",
+                        "write_back",
+                    ],
+                    "required_artifact_workflow_blueprint": (
+                        workflow_blueprint
+                    ),
+                    "failed_profile_primitive_values_disclosed_to_model": False,
+                    "failed_profile_primitive_summary_only": True,
+                }
+            )
+            if prompt_directive_backend:
+                constraints[
+                    "prompt_directive_action_value_grounding_source"
+                ] = (
+                    "TRAIN residual task requirement plus the derived preferred "
+                    "primitive summary and exact recommended-artifact blueprint"
+                )
+        constraints.update(family_constraints)
     training_evidence_contract = (capabilities or {}).get(
         "training_evidence_contract"
     )
@@ -1220,10 +1294,18 @@ def _program_schema(
         == TRAIN_ACTION_DESIGN_POLICY_VERSION
     )
     family_slot_contract = (capabilities or {}).get("family_slot_contract")
+    family_slot_policy = (
+        str(family_slot_contract.get("policy") or "")
+        if isinstance(family_slot_contract, Mapping)
+        else ""
+    )
     family_slot_prompt = bool(
         isinstance(family_slot_contract, Mapping)
-        and family_slot_contract.get("policy")
-        == FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION
+        and family_slot_policy
+        in FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSIONS
+    )
+    family_slot_v2_prompt = (
+        family_slot_policy == FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_V2
     )
     portable_recipe_policy = (
         family_slot_contract.get("portable_recipe_policy")
@@ -1250,12 +1332,57 @@ def _program_schema(
         else False
     )
     predicate = {"key": "feature name", "op": "eq|ne|in|contains|exists|gte|lte", "value": "JSON value"}
+    target_failure_family = (
+        str(family_slot_contract.get("target_failure_family") or "")
+        if family_slot_prompt
+        else ""
+    )
+    trigger_schema = (
+        {
+            "all_of": [
+                {
+                    "key": "family",
+                    "op": "eq",
+                    "value": target_failure_family,
+                }
+            ],
+            "any_of": [],
+            "none_of": [],
+        }
+        if family_slot_v2_prompt
+        else {"all_of": [predicate], "any_of": [], "none_of": []}
+    )
+    anti_trigger_schema = (
+        {"all_of": [], "any_of": [], "none_of": []}
+        if family_slot_v2_prompt
+        else {"all_of": [], "any_of": [predicate], "none_of": []}
+    )
+    recommended_artifact = (
+        portable_recipe_policy.get("recommended_artifact")
+        if isinstance(portable_recipe_policy, Mapping)
+        else None
+    )
+    recommended_artifact_value = (
+        str(recommended_artifact.get("value") or "")
+        if isinstance(recommended_artifact, Mapping)
+        else ""
+    )
+    required_artifact_workflow_blueprint = (
+        str(
+            portable_recipe_policy.get(
+                "required_artifact_workflow_blueprint"
+            )
+            or ""
+        )
+        if isinstance(portable_recipe_policy, Mapping)
+        else ""
+    )
     return {
         "id": "stable descriptive ID",
         "kind": "task|policy|evaluator",
         "statement": "falsifiable hypothesis",
-        "trigger": {"all_of": [predicate], "any_of": [], "none_of": []},
-        "anti_trigger": {"all_of": [], "any_of": [predicate], "none_of": []},
+        "trigger": trigger_schema,
+        "anti_trigger": anti_trigger_schema,
         "action_graph": [
             {
                 "id": "action ID",
@@ -1272,6 +1399,20 @@ def _program_schema(
                 "value": (
                     (
                         (
+                            (
+                                "complete imperative task-local sentence that "
+                                "mentions the recommended artifact value exactly "
+                                f"as {recommended_artifact_value!r} "
+                                "and implements this exact ordered read -> parse -> "
+                                "update -> serialize -> write-back blueprint: "
+                                f"{required_artifact_workflow_blueprint} Never use "
+                                "validation outcomes, verifier content, test content, "
+                                "network fetches, package installation, or a failed "
+                                "profile primitive."
+                            )
+                            if family_slot_v2_prompt
+                            else
+                            (
                             "complete imperative task-local sentence for the target "
                             "family. It must provide at least one portable operational "
                             "delta: a concrete preinstalled local tool command, an "
@@ -1291,6 +1432,7 @@ def _program_schema(
                             "rows; otherwise extract it from the current task/artifact. "
                             "Never use validation outcomes, verifier content, test "
                             "content, network fetches, or package installation."
+                            )
                         )
                         if family_slot_prompt
                         else (
