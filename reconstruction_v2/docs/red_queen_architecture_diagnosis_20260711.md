@@ -4,6 +4,7 @@
 > - 本次复核：2026-07-14
 > - 代码审计基线 revision：`6224bb5a279f50fbcf1f8b36d19cb4ce6cc6c882`
 > - 本次实现复核：receipt/runtime provenance 修复提交 `e43670f6`、`18ff3417`；v3.3 execution-policy 提交 `e0b1a33b`；v3.4 model-only/action-budget 主提交 `e491b0af`，runtime-path 修复 `995e6446`，Ruoli 503 分类修复 `ba0f36cf`，host-readable audit artifact 修复 `1df3092a` / `ad66d5a2`；v3.4 max2 v5 canary 已通过、fresh development 因四并发 429 fail closed；v3.5 将所有在线 phase 版本化为 1 worker，repair identity 修复 `96d53a5d`，malformed proposal/claim binding 修复 `d70562de`；v3.6 contrastive evidence / invalid-evidence lifecycle 实现提交 `01608e1e`；v3.7 六路首批 6/6 收到 429；v3.8 两路在 16 valid 后收到 2 个 503；v3.9 固定为 outer item workers=6 / shared model slot=1，并完成首个 clean full development 负结果；v3.10 exact-three/coverage-first fresh run 将 activation 提高到 2/16 但仍 0 gain，并暴露 semantic-diversity hard reject 与 action lowering 丢 target；v3.11 actionability fresh run 证明 treatment 已改变 trace、PDF 与成本但仍 0 gain，同时暴露 repair response shape 未被 generic system contract 可靠约束；v3.12 显式版本化 singular repair response并完成 56/56 clean development trials，但两代仍各仅激活 1/16、0 gain，无 incumbent；误入的空 freeze/partial controls 已隔离并补上 phase prerequisite；v3.13 complementary program-set 已完成 375/375 离线测试和 76/76 valid live development，三套 bundle 均激活 2/16、6 个 policy-on 全部失败、0 gain/0 harm、无 incumbent，同时暴露 G2 cross-arm raw replay 不一致；v3.14 提交 `2229d7af` 完成 411/411 离线测试及 62/62 attempted live development，selector 成功选中 7/7 三-family set、activation=3/16，但 7 个 policy-on 全失败；一条 recursive raw 超 64 MiB 使 primary non-claim，valid baseline replay=31、invalid key 又跨臂执行一次，两份 archive 仍无 incumbent；v3.15 action-quality / terminal-invalid provenance 实现提交 `696a2954`，453/453 离线测试通过，随后 clean lock、86/86 cache-only prewarm、smoke 与 57/57-valid live development 全部完成，但两臂仍 0 gain/0 harm、`incumbent_id=null`
+> - 最新 proposal-only 复核：v3.16 family-slot formation 提交 `6ad5c156`；v3.17 artifact-blueprint formation 提交 `4f94e613`。两轮均失败且未启动 benchmark trial
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -121,6 +122,16 @@
 > （9 roots + 4 repairs）中 7 个有 material delta、6 个有 restatement risk，但所有 material delta 都仅是
 > `exact_constant_or_mapping`，没有 concrete local tool、artifact manipulation 或 environment primitive；
 > 9 个 root 又全部坍缩到 `anthropic-poster`，搜索从 v3.14 G1 的 3-family/7-support 退回单-family/2-support。
+> v3.16/v3.17 随后没有直接重跑 development，而是复用冻结的 v3.15 TRAIN receipt 做 proposal-only
+> feasibility：38 observations、6 success controls、32 failures、31 profiles、0 source-agent re-execution。
+> v3.16 三个 logical call 全部成功，但 9 项标准失败 6 项。v3.17 固定 exact family trigger、空 anti-trigger、
+> deterministic reusable artifact 与 read→parse→update→serialize→write-back blueprint 后，distinct single-family
+> signature、support 2/2/3、3/3 concrete local tool、2/3 artifact manipulation、0 restatement/self-block 等 8/9
+> 均通过；第三个 action 仍绑定两个来自失败 TRAIN command 的 primitive，故唯一剩余项
+> `failed_profile_primitive_avoidance_passed=false`，整体仍 fail。一次 `RemoteDisconnected` 在同 request retry
+> 后恢复，3 个 logical call 均完成，因此不是 credential/provider-capacity 结论。两轮 backend/evaluator/
+> validation/test/verifier/sealed access 全为 0，没有 benchmark trial、promotion 或 archive。该 free-text
+> family-slot 路线到此停止，不再做 v3.18 prompt/gate/acceptance patch。
 > 仍未成立的是 clean development promotion、
 > 跨 family 泛化，以及 Red Queen 式多谱系搜索和
 > evaluator co-evolution。v3.3 已把 low reasoning/verbosity、32,768-token
@@ -162,7 +173,7 @@
 | 命题 | 当前状态 | 证据层级 |
 |---|---|---|
 | legacy HLE 是高维手写控制面，学习 policy 没有闭环 | 支持 | 代码审计 + 历史 artifacts |
-| v2 的 proposal -> repair -> off/on -> gate -> archive 接口已连通 | 支持 | v3.15 的 453/453 离线测试 + clean 57/57-valid live development |
+| v2 的 proposal -> repair -> off/on -> gate -> archive 接口已连通 | 支持 | 当前完整离线 suite + v3.15 clean 57/57-valid live development |
 | v2 的内部 runtime action 能改变 lane plan | 支持 | 代码 + 单元测试 |
 | v2 主 SkillLearn 路径执行了每个 typed action/verifier/fallback 的强语义 | **不支持，且协议已停止这样声称** | 只接受四类显式 prompt/self-check lowering；其余 fail closed |
 | promotion threshold 完全由冻结 protocol 所有 | 支持 | protocol-bound spec + 宽松 candidate 对抗测试 |
@@ -170,6 +181,7 @@
 | v2 已产生可保留的 promoted incumbent | **不支持** | v3.15 两份 claim-eligible negative report 均停止于 non-promotion，archive 仍为 `incumbent_id=null` |
 | v2 稳定优于 raw 或 budget-matched raw | **不支持** | v3.15 recursive G1/G2 都是 candidate/raw 4/16，三次 on 全部 0 gain/0 harm |
 | v3.15 已改善真实 action utility | **不支持；clean live 负结果** | 13 个 candidate audit 中 7 material / 6 restatement-risk；material 仅 exact constant/mapping，且 9 roots 全坍缩为 poster 单-family |
+| v3.17 family-slot/artifact-blueprint proposal 已达到 trial-feasible | **不支持；proposal-only 负结果** | 8/9 feasibility 通过，但第三候选绑定 2 个 failed TRAIN primitives；0 benchmark/evaluator call |
 | v2 已实现 Red Queen 式多 clade 搜索和 evaluator co-evolution | **不支持** | 目前是单 incumbent；evaluator 路径未接主实验 |
 
 ### 1.3 潜力判断
@@ -431,7 +443,8 @@ evidence。固定 cohort 越被反复用于决策，越不能承担 sealed claim
 ### 7.2 当前证据到哪一层
 
 **[TEST]** v3.13 的 `reconstruction_v2` 离线 suite 为 **375/375 通过**，v3.14 为
-**411/411 通过**；当前 v3.15 提交 `696a2954` 为 **453/453 通过**。新增覆盖包括 TRAIN-only
+**411/411 通过**；v3.15 提交 `696a2954` 当时为 **453/453 通过**；加入 v3.16/v3.17 formation、
+proposal-only boundary 与失败产物本地复核后，当前完整 suite 为 **525/525 通过**。新增覆盖包括 TRAIN-only
 action profile 的 containment/allowlist/secret isolation、request-local action-quality prompt、audit-only
 不改变 retry/selection/promotion、terminal-invalid memo 的 retry identity 与零执行 replay，以及
 report/freeze 的首代 checkpoint/profile provenance。此前 shared immutable valid baseline cohort、
@@ -859,6 +872,27 @@ development report/archive。随后增加的是单一 phase-transition invariant
 candidate 时 runner 正常结束，freeze producer fail closed，controls consumer 也拒绝旧空 receipt；
 没有调整任何 promotion 分数或阈值。
 
+**[ARTIFACT / PROPOSAL-ONLY]** v3.16 与 v3.17 在正式 benchmark 之前增加一次有界的
+TRAIN-only feasibility screen，并复用受版本控制的 v3.15 source receipt。该路径重新从 38 份
+policy-off result/trace/action receipt 与 public TRAIN environment 重建 38 observations（6 success / 32
+failure）和 31 action profiles，`source_agent_trials_reexecuted=0`；不读取 v3.15 development report/events，
+不访问 validation/test/verifier，也不构造 task backend 或 evaluator。
+
+v3.16 的 3/3 singular family-slot model calls 均成功，但只通过 root count、profile binding 与 schema 三项；
+distinct single-family signature、minimum support、anti-trigger self-block、executable delta、restatement absence
+和 failed-primitive avoidance 六项失败。v3.17 随后只作一次结构修订：host 固定 exact family trigger 与空
+anti-trigger，按冻结优先级为每个 slot 选一个 support≥2 的 reusable artifact，并给出
+read→parse→update→serialize→write-back blueprint。新结果的 support 为 2/2/3，3/3 有 concrete local tool，
+2/3 有 artifact manipulation，且 distinct signature、self-block、restatement、schema 等八项全部通过；
+唯一失败是第三候选的 `failed_primitive_binding_count=2`。一次 transport `RemoteDisconnected` 在有界 retry
+后恢复，最终仍为 3 个 logical success，因此整体失败不能归因于 credential tier 或 route outage。
+
+两轮报告都明确 `backend_call_count=0`、`evaluator_call_count=0`、`validation_task_count=0`、sealed/test=false、
+raw response/secret 未落盘。`failure_blocks_future_trial_spend_only=true`，既没有 benchmark row，也没有
+promotion/archive。这个结果正确阻止了 preflight/lock/prewarm/smoke/development 支出，并冻结该 free-text
+family-slot 路线为负结果；后续不再通过新增 prompt、acceptance predicate、retry、selector 或 promotion gate
+继续追逐同一表示。
+
 ### 7.3 当前 infrastructure/protocol 状态
 
 全 inventory 的
@@ -1057,6 +1091,19 @@ environment primitive 都是 0。更严重的是 9 个 roots 全部指向 `anthr
 的 3-family/7-support 倒退为单-family/2-support。由此可见 action-quality prompt/profile 的 wiring 生效，
 但 proposal 仍没有把 profile grounding 转成多 family、可执行 operator；下一改动必须留在 gate 前。
 
+v3.16/v3.17 已把这个 gate 前假设做成独立 proposal-only 试验，而不是再花一轮 38+16 task trials。
+结构化 family slot 成功消除了 root family collapse；v3.17 的 exact trigger、空 anti-trigger 和 artifact
+blueprint 又消除了 support=0、self-block 与 restatement，并使 3/3 candidate 具有 concrete local tool。
+所以 diversity、support 和表面 actionability 已不再是最后 blocker。唯一失败落在第三候选对两个 failed
+TRAIN primitives 的绑定。
+
+这里的更深问题不是再加一条“不要使用失败 primitive”的 prompt。第三个 slot 的本地 failed set 是通用
+executable `file` 与 `python`；它们来自失败 command 的共现，而不是证明这些工具本身导致失败。自由文本
+action 又很自然会在“解析文件”工作流中提到 file/Python。因此当前 taxonomy 同时混合了“在失败轨迹中出现”
+与“因果上应禁止”，而模型侧只收到 count/hash，也不可能可靠满足未知的逐值 exclusion。继续补 prompt 或
+把 acceptance 放宽都会掩盖这一矛盾。下一研究对象应是 typed operator/capability representation 与带结果
+归因的 action-span evidence，使真正 inadmissible primitive 在生成域中不可表示；不是 v3.18 gate patch。
+
 ### 8.4 P1：prospective runtime features 仍过粗
 
 当前 SkillLearn feature catalog 主要只有
@@ -1164,7 +1211,8 @@ provenance，以及随后 clean 57/57-valid live negative evidence。两臂 clai
 | 完成（v3.13 clean 负结果） | train-only complementary policy bundle | 76/76 valid、0 provider/infra/mismatch；三套两成员 bundle 均为 TRAIN 5/5、2-family、0 success-FP，held-out activation 2/16；6 个 policy-on 全失败、0 gain/0 harm、无 incumbent。program-set routing/replay 正常，但 G2 cross-arm raw 未共享，且 7/7 三-family subset 被 capped target + size-first 排到第四 |
 | 完成（v3.14 mixed-claim 负结果） | shared baseline cohort + support-aware tied-set ranking | lock/prewarm/smoke clean；62/62 attempted、38/38 valid train；G1 选中 7/7 三-family set并 activation 3/16，但 7 个 on 全失败、0 gain/0 harm。一条 recursive raw 68.66 MB 超 fuse 使 primary non-claim；31 次 valid baseline replay，invalid key 又跨臂执行一次；两份 archive 无 incumbent |
 | 完成（v3.15 clean 负结果） | TRAIN-only material action delta + terminal-invalid attribution | commit `696a2954`、453/453 offline 后，clean lock、86/86 prewarm、smoke 与 57/57 valid live 完成；8/8 model calls、max online concurrency=1、0 provider/infra/budget/network/pair error；recursive G1/G2 与 no-rec G2 均 1/16、0 gain/0 harm，32 次 baseline 零执行 replay；两臂 claim-eligible non-promotion、incumbent null、无 downstream |
-| P0（下一步，gate 前） | structural family-stratified proposal formation + profile-grounded action search | 先在 TRAIN-only、非评分诊断中证明 proposal formation 不再把 9 个 roots 全压到一个 family，并能从 profile 生成 concrete local tool / artifact manipulation / environment primitive，而不只是 exact constant/mapping；不新增或放宽 promotion gate。没有真实 incumbent 时禁止 freeze/controls/family-out/HippoRAG/sealed |
+| 完成（v3.16/v3.17 proposal-only 负结果） | structural family-stratified proposal formation + artifact blueprint | 复用冻结 TRAIN receipt，0 source rerun、0 benchmark/evaluator call；v3.17 通过 8/9 feasibility，解决 family collapse/support/self-block/restatement，但第三候选仍绑定 2 个 failed primitives，故未授权 development |
+| P0（下一 workstream，表示层） | typed operator/capability grammar + causal action-span evidence | 先离线区分 failed-command 共现与真正 inadmissible primitive；候选只能从预注册 typed operator/artifact graph 组合，使硬负约束由生成域保证。仅一次 preregistered feasibility decision；不做 v3.18 prompt/gate patch。无真实 incumbent 时继续禁止 freeze/controls/family-out/HippoRAG/sealed |
 | P1 | prospective family-out routing | trigger 不依赖已知 family 或预编译 item ID，只使用冻结、无 gold、运行时可得语义特征 |
 | P2 | 多 clade archive | 同 epoch 至少两个 clade 可继续扩展；node 绑定 protocol/evidence/promotion hashes，并报告 retention 与 branch productivity |
 | P2 | evaluator co-evolution | 独立 anchor challenger、epoch transition、selective invalidation 和旧 incumbent re-evaluation 实际执行后再作主张 |
@@ -1360,9 +1408,19 @@ provenance，以及随后 clean 57/57-valid live negative evidence。两臂 clai
 45. v3.15 的 13 个 candidate audits（9 roots + 4 repairs）中 7 个 material、6 个 restatement-risk；7 个
     material delta 全是 `exact_constant_or_mapping`，concrete local tool、artifact manipulation、environment
     primitive 全为 0。9 个 roots 又全部坍缩到 `anthropic-poster`，从 v3.14 G1 的 3-family/7-support 退回
-    单-family/2-support。下一步因此是 gate 前的 structural family-stratified proposal formation 与
-    profile-grounded action search；不新增/放宽 gate，也不以空 incumbent 启动 controls/family-out/
-    HippoRAG/sealed。
+    单-family/2-support。因此先授权一次 gate 前的 structural family-stratified proposal-only feasibility，
+    不直接启动新 development，也不新增/放宽 promotion gate。
+46. v3.16 提交 `6ad5c156` 用冻结 v3.15 TRAIN receipt 形成三个 singular family slots。3/3 logical proposal
+    calls 完成，0 source-agent/backend/evaluator/validation/test/sealed access，但 9 项 feasibility 中 6 项失败；
+    没有 benchmark trial。v3.17 提交 `4f94e613` 只作最后一次结构修订：exact trigger、empty anti-trigger、
+    deterministic reusable artifact 和固定 workflow blueprint。新结果通过 8/9：support=2/2/3、3/3 concrete
+    tool、2/3 artifact manipulation、0 restatement/self-block；第三候选仍绑定 2 个 failed TRAIN primitives，
+    故 `diagnostic_passed=false`。一次 retryable disconnect 已恢复，不改变 semantic negative 结论。
+47. free-text family-slot 路线按预设停止。离线重建显示第三 slot 的两个 failed primitives 是通用 `file`/
+    `python` executable，暴露了 failed-command 共现不等于 causal inadmissibility，且模型只获 count/hash 无法
+    满足未知逐值 exclusion 的表示矛盾。下一 workstream 必须换成 typed operator/capability grammar 或
+    artifact-operation graph，并以 causal action-span evidence 定义不可表达项；只允许一次 preregistered
+    feasibility decision。没有真实 incumbent 时继续禁止 controls/family-out/HippoRAG/sealed。
 
 这比立刻扩展 archive 或继续补 HLE source span 更能降低研究风险。
 
@@ -1428,8 +1486,8 @@ activation；held-out causal activation precision 的分母则是 evidence-valid
 
 | 层级 | 可声明内容 | 当前状态 |
 |---|---|---|
-| L0 wiring | schema、repair、off/on、guard、archive transition 的机械链路已连接 | 达到：v3.15 为 453/453 tests；protocol ownership、backend lowering、runtime receipt provenance、两级并发、exact-three proposal、TRAIN-only action profile 与 offline preflight 均通过 |
-| L1 mechanism live | 真实外部任务中 proposal/repair/treatment/gate 全链路完成 | 达到且已有最新 clean negative evidence：v3.15 为 57/57 valid、8/8 model calls、0 infra/fairness error；无 promotion claim |
+| L0 wiring | schema、repair、off/on、guard、archive transition 的机械链路已连接 | 达到：当前完整离线 suite 525/525 通过；除 v3.15 的既有 wiring 外，v3.16/v3.17 TRAIN receipt reconstruction、family-slot production path、redacted live ledger、失败结果复核与 proposal-only boundary 均有覆盖 |
+| L1 mechanism live | 真实外部任务中 proposal/repair/treatment/gate 全链路完成 | 达到且最新 benchmark evidence 仍是 v3.15 clean negative：57/57 valid、8/8 model calls、0 infra/fairness error；v3.16/v3.17 未运行 task trial，不提升 L1，也无 promotion claim |
 | L2 validation learning | clean held-out validation 上有可晋级净收益 | 未达到 |
 | L3 prospective generalization | frozen incumbent 在 unseen instance/family 上保持收益 | 未达到 |
 | L4 self-evolution | 多代 retained improvement，且 recursion ablation 有因果贡献 | 未达到 |
@@ -1551,15 +1609,23 @@ G2 仍为 1/16 与 0 gain/0 harm。两臂 claim-eligible 只意味着 clean nega
 action audit 解释了为什么机制更干净却没有更强：13 个 candidates（9 roots + 4 repairs）中 7 个有
 material delta、6 个有 restatement risk，但 7 个 material 全部只是 `exact_constant_or_mapping`；concrete
 local tool、artifact manipulation 与 environment primitive 均为 0。九个 roots 又全部坍缩为
-`anthropic-poster`，从 v3.14 G1 的 3-family/7-support 退到 single-family/2-support。于是下一步不再是
-同一 prompt 上追加 action-quality 文字，也不是新增或放宽 gate，而是 gate 前的 structural family-stratified
-proposal formation 与 profile-grounded action search：结构上分配不同 TRAIN residual families 的 proposal
-机会，并把 environment/action-trace profile 转成可执行 local-tool/artifact/environment primitives。
+`anthropic-poster`，从 v3.14 G1 的 3-family/7-support 退到 single-family/2-support。v3.16/v3.17 因而先把
+structural family stratification 与 artifact grounding 放进 proposal-only screen，而不是再跑完整 development。
+v3.17 确实把三项 proposal 分到不同 family，取得 support 2/2/3、3/3 concrete local tool、2/3 artifact
+manipulation、0 restatement/self-block；但第三项仍绑定 `file`/`python` 两个 failed-command primitives，
+因此 8/9 pass 仍是整体 fail。0 backend/evaluator/benchmark trial 是正确的 spend-control 结果。
 
-只有该 pre-gate search 在新的 clean development 中产生 retained validation gain 和真实 incumbent，才按
-既定顺序进入 freeze、完整 controls、family-out、sealed test；在此之前不跑 HippoRAG/raw transfer，更不谈
-多 clade 或 evaluator co-evolution。v3.12 空 freeze/partial-control rows 与 v3.14 mixed-claim rows 均不能
-拼入新 evidence；v3.15 两臂虽 claim-eligible，archive 仍为空，同样不得绕过 phase prerequisite。
+这也终止了“继续写更强 prompt”的路线：failed command 中出现通用 executable 并不证明它在因果上应被
+禁用，而只把 count/hash 给模型又无法要求其避开未知具体值。下一 workstream 先用现有 TRAIN ledger 离线
+建立 causal action-span taxonomy，再把候选空间换成 typed operator/capability grammar 或 artifact-operation
+graph，使真正 inadmissible primitive 在生成域中不可表达。该新表示只允许一次 preregistered feasibility
+decision；失败即停，不再补 gate。
+
+只有新表示通过 feasibility，并在新的 clean development 中产生 retained validation gain 和真实 incumbent，
+才按既定顺序进入 freeze、完整 controls、family-out、sealed test；在此之前不跑 HippoRAG/raw transfer，
+更不谈 multi-clade 或 evaluator co-evolution。v3.12 空 freeze/partial-control rows、v3.14 mixed-claim rows 与
+v3.16/v3.17 proposal-only artifacts 都不能拼入 performance evidence；v3.15 两臂虽 claim-eligible，archive
+仍为空，同样不得绕过 phase prerequisite。
 最诚实的论文级表述是：
 
 > **显式 HypothesisProgram 是一个有希望、可能更易归因的 self-evolution 搜索表示；
@@ -1579,8 +1645,12 @@ proposal formation 与 profile-grounded action search：结构上分配不同 TR
 - v2 architecture：[`ARCHITECTURE.md`](../ARCHITECTURE.md)
 - v2 benchmark protocol：[`BENCHMARK_PROTOCOL.md`](../BENCHMARK_PROTOCOL.md)
 - v2 current status：[`STATUS.md`](../STATUS.md)
-- active paper protocol：
+- last completed claim-bearing benchmark protocol：
   [`skilllearn_paper_protocol_v3_15_ruoli_gpt54mini.json`](../manifests/skilllearn_paper_protocol_v3_15_ruoli_gpt54mini.json)
+- latest failed proposal-only diagnostic protocol：
+  [`skilllearn_paper_protocol_v3_17_ruoli_gpt54mini.json`](../manifests/skilllearn_paper_protocol_v3_17_ruoli_gpt54mini.json)
+- immutable v3.16 proposal-only diagnostic protocol：
+  [`skilllearn_paper_protocol_v3_16_ruoli_gpt54mini.json`](../manifests/skilllearn_paper_protocol_v3_16_ruoli_gpt54mini.json)
 - immutable v3.10 proposal-diversity diagnostic protocol：
   [`skilllearn_paper_protocol_v3_10_ruoli_gpt54mini.json`](../manifests/skilllearn_paper_protocol_v3_10_ruoli_gpt54mini.json)
 - immutable v3.9 clean negative-development protocol：
@@ -1654,7 +1724,11 @@ proposal formation 与 profile-grounded action search：结构上分配不同 TR
   [`v3.15 recursive archive`](../artifacts/paper_primary_v3_15_offline86_ruoli_gpt54mini_outer6_model1_actiondelta01/development_recursive.archive.json)；
   [`v3.15 no-recursive report`](../artifacts/paper_primary_v3_15_offline86_ruoli_gpt54mini_outer6_model1_actiondelta01/development_no_recursive.report.json)；
   [`v3.15 no-recursive archive`](../artifacts/paper_primary_v3_15_offline86_ruoli_gpt54mini_outer6_model1_actiondelta01/development_no_recursive.archive.json)；
-  [`v3.15 action-audit/event ledger`](../artifacts/paper_primary_v3_15_offline86_ruoli_gpt54mini_outer6_model1_actiondelta01/development_recursive.events.jsonl)
+  [`v3.15 action-audit/event ledger`](../artifacts/paper_primary_v3_15_offline86_ruoli_gpt54mini_outer6_model1_actiondelta01/development_recursive.events.jsonl)；
+  [`v3.16 failed proposal-only report`](../artifacts/paper_primary_v3_16_offline86_ruoli_gpt54mini_outer6_model1_familyslots01/train_proposal_diagnostic.report.json)；
+  [`v3.16 proposal-only event ledger`](../artifacts/paper_primary_v3_16_offline86_ruoli_gpt54mini_outer6_model1_familyslots01/train_proposal_diagnostic.events.jsonl)；
+  [`v3.17 failed proposal-only report`](../artifacts/paper_primary_v3_17_offline86_ruoli_gpt54mini_outer6_model1_familyslots02/train_proposal_diagnostic.report.json)；
+  [`v3.17 proposal-only event ledger`](../artifacts/paper_primary_v3_17_offline86_ruoli_gpt54mini_outer6_model1_familyslots02/train_proposal_diagnostic.events.jsonl)
 
 ## 附录 B：复杂度统计口径
 
