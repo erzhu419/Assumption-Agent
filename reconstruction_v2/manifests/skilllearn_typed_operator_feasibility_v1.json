@@ -1,0 +1,150 @@
+{
+  "feasibility_policy": "v315_train_closed_typed_operator_feasibility_v1",
+  "decision_budget": 1,
+  "decision_scope": "offline_representation_feasibility_only",
+  "manifest": "manifests/skilllearnbench_instance_holdout_offline_ready_v1.json",
+  "manifest_hash": "9c7eb39a5b514b68fd87de5e60329a8fbaf626db6150d18b26dc59f17d80b652",
+  "source_train_receipt": "manifests/skilllearn_v315_train_source_provenance_receipt_v1.json",
+  "source_train_receipt_hash": "5a15e0dd1c456d551631dc15392a8f697739cd9e75ee726cd3021ca30de43aa9",
+  "canonical_decision_paths": {
+    "report": "artifacts/typed_operator_feasibility_v1_v315_train/typed_operator_feasibility.report.json",
+    "events": "artifacts/typed_operator_feasibility_v1_v315_train/typed_operator_feasibility.events.jsonl",
+    "decision_lock": "artifacts/typed_operator_feasibility_v1_v315_train/typed_operator_feasibility.decision.lock.json"
+  },
+  "evidence_policy": "train_policy_off_chronological_action_span_evidence_v1",
+  "grammar_version": "closed_typed_operator_artifact_graph_v1",
+  "selection_contract": "opaque_recipe_id_only_selection_v1",
+  "lowering_version": "harness_owned_typed_recipe_lowering_v1",
+  "slot_count": 3,
+  "minimum_family_support": 2,
+  "maximum_artifacts_per_family": 6,
+  "maximum_trace_action_spans": 100,
+  "expected_v317_slot_plan_hash": "7c8fe59d89f0a8d2f9f31b70b061ef541d8b0ccac97b1e65b1ef0d32346548d0",
+  "expected_target_family_hashes": [
+    "6c99324f2d314f4711f3286bffd27b37130cafac78343d8c3a420559b54e35dc",
+    "ef5022a31b01e03f4b7b45c33c38b790f65f20033c73c1f35c1c5f2265933c65",
+    "6c761bda82d039b992e8ab7c1479cb8d994bf7d52af1b2d1225848231ad80306"
+  ],
+  "expected_span_evidence": {
+    "train_trial_count": 38,
+    "complete_trace_count": 38,
+    "command_span_count": 429,
+    "failed_command_span_count": 70,
+    "discarded_command_count": 208,
+    "trials_with_failed_span_count": 25,
+    "successful_trials_with_failed_span_count": 4
+  },
+  "causal_rules": {
+    "preserve_all_chronological_allowlisted_occurrences": true,
+    "deduplicate_or_truncate_before_assessment": false,
+    "command_failure_attaches_only_to_exact_span": true,
+    "failure_propagates_to_executable_or_artifact": false,
+    "observational_task_failure_can_mark_primitive_inadmissible": false,
+    "hard_policy_is_the_only_inadmissibility_source": true,
+    "recovered_or_successful_cooccurrence_blocks_negative_causal_claim": true
+  },
+  "model_surface": {
+    "output_fields": [
+      "recipe_id"
+    ],
+    "model_authored_primitive_fields": [],
+    "artifact_locator_disclosed": false,
+    "executable_disclosed": false,
+    "free_text_action_disclosed": false,
+    "unknown_or_extra_fields_fail_closed": true
+  },
+  "runtime_scope": {
+    "proposal_model_primitive_generation_closed": true,
+    "lowered_action_text_owned_by_harness": true,
+    "capability_implementation_verified": false,
+    "restricted_runtime_executor_claimed": false,
+    "existing_network_and_dependency_sandbox_still_required": true
+  },
+  "boundary_contract": {
+    "source_agent_trials_reexecuted": false,
+    "stored_offline_train_outcomes_used": true,
+    "local_contract_validation_used": true,
+    "unit_test_source_hashed": true,
+    "live_model_invoked": false,
+    "live_task_backend_invoked": false,
+    "live_evaluator_invoked": false,
+    "validation_split_accessed": false,
+    "test_split_accessed": false,
+    "sealed_split_accessed": false,
+    "verifier_content_accessed": false,
+    "promotion_policy_evaluated": false,
+    "secret_value_persisted": false,
+    "raw_content_persisted": false
+  },
+  "allowed_operator_kinds": [
+    "check_task_local_result",
+    "derive_organization_plan",
+    "derive_task_delta",
+    "derive_visualization_spec",
+    "inspect_generated_output",
+    "inspect_registered_metadata",
+    "invoke_registered_local_capability",
+    "move_within_task_root",
+    "parse_with_registered_capability",
+    "read_registered_artifact",
+    "render_local_visualization",
+    "serialize_with_registered_capability",
+    "write_back_registered_artifact",
+    "write_task_declared_output"
+  ],
+  "forbidden_operator_kinds": [
+    "arbitrary_shell_command",
+    "free_text_directive",
+    "network_fetch",
+    "package_install",
+    "read_external_verifier",
+    "read_secret_or_credential",
+    "read_validation_or_test_content",
+    "write_outside_task_root"
+  ],
+  "acceptance_predicates": {
+    "source_provenance_passed": "manifest and V3.15 TRAIN receipt hashes match preregistration and reconstruction yields exactly 38 TRAIN observations, 32 failures and 6 success controls",
+    "v317_target_plan_replay_passed": "the frozen V3.17 production family-slot algorithm reconstructs the preregistered slot-plan hash and ordered three target-family hashes",
+    "chronological_span_evidence_passed": "38 complete receipt-bound TRAIN traces yield exactly 429 chronological allowlisted command occurrences, 70 failed occurrences, 208 explicitly discarded commands, 25 trials with a failed span and 4 successful trials with a failed span; no allowlisted occurrence is deduplicated or truncated and every item.started count/identity matches its self-hashed receipt and stays within the frozen 100-action budget",
+    "failure_causality_separation_passed": "at least one failed allowlisted span has a later scope-matched recovery, at least one successful trial contains a failed span, no failed span is the last allowlisted span, and observational inadmissibility count is zero",
+    "typed_graph_coverage_passed": "the three frozen target families each have a valid closed graph with at least one TRAIN-supported artifact and recipe and minimum support two",
+    "closed_selection_surface_passed": "model output is exactly one registered recipe_id; raw primitive values and artifact locators are absent; nine unknown/extra/type tamper probes fail closed; allowed and forbidden operator sets are disjoint",
+    "prompt_lowering_compatibility_passed": "three canonical registered recipes materialize valid harness-owned HypothesisPrograms and lower through the existing prompt-directive compiler with zero contract issues; no capability implementation or restricted runtime executor is claimed",
+    "deterministic_replay_passed": "a second in-process graph build has identical ordered graph hashes while the three graph and model-catalog identities remain distinct",
+    "offline_boundary_contract_passed": "the bounded event ledger before decision completion contains only one start, one TRAIN span reconstruction, three graph outcome events and three materialization outcome events; stored offline TRAIN outcomes, local contract checks and unit-test source hashing are declared, while no live model/task-backend/evaluator invocation, validation/test/sealed split access, verifier-content access or promotion evaluation occurs"
+  },
+  "acceptance": {
+    "source_provenance_passed": true,
+    "v317_target_plan_replay_passed": true,
+    "chronological_span_evidence_passed": true,
+    "failure_causality_separation_passed": true,
+    "typed_graph_coverage_passed": true,
+    "closed_selection_surface_passed": true,
+    "prompt_lowering_compatibility_passed": true,
+    "deterministic_replay_passed": true,
+    "offline_boundary_contract_passed": true
+  },
+  "pass_authority": {
+    "selection_integration_diagnostic_freeze_eligible": true,
+    "development_protocol_authorized": false,
+    "development_task_execution_authorized": false
+  },
+  "forbidden_followups_on_failure": [
+    "prompt_patch",
+    "acceptance_relaxation",
+    "selector_change",
+    "promotion_gate_change",
+    "benchmark_development",
+    "controls",
+    "family_out",
+    "hipporag_transfer",
+    "sealed_test"
+  ],
+  "expected_implementation_file_set_hash": "e723efc03ad6e8649942696e347d59506f40f7539b095c05820efe109812f1ae",
+  "implementation_roots": [
+    "assumption_agent"
+  ],
+  "implementation_files": [
+    "tests/test_typed_operator_feasibility.py"
+  ]
+}

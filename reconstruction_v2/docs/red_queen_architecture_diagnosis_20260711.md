@@ -5,6 +5,7 @@
 > - 代码审计基线 revision：`6224bb5a279f50fbcf1f8b36d19cb4ce6cc6c882`
 > - 本次实现复核：receipt/runtime provenance 修复提交 `e43670f6`、`18ff3417`；v3.3 execution-policy 提交 `e0b1a33b`；v3.4 model-only/action-budget 主提交 `e491b0af`，runtime-path 修复 `995e6446`，Ruoli 503 分类修复 `ba0f36cf`，host-readable audit artifact 修复 `1df3092a` / `ad66d5a2`；v3.4 max2 v5 canary 已通过、fresh development 因四并发 429 fail closed；v3.5 将所有在线 phase 版本化为 1 worker，repair identity 修复 `96d53a5d`，malformed proposal/claim binding 修复 `d70562de`；v3.6 contrastive evidence / invalid-evidence lifecycle 实现提交 `01608e1e`；v3.7 六路首批 6/6 收到 429；v3.8 两路在 16 valid 后收到 2 个 503；v3.9 固定为 outer item workers=6 / shared model slot=1，并完成首个 clean full development 负结果；v3.10 exact-three/coverage-first fresh run 将 activation 提高到 2/16 但仍 0 gain，并暴露 semantic-diversity hard reject 与 action lowering 丢 target；v3.11 actionability fresh run 证明 treatment 已改变 trace、PDF 与成本但仍 0 gain，同时暴露 repair response shape 未被 generic system contract 可靠约束；v3.12 显式版本化 singular repair response并完成 56/56 clean development trials，但两代仍各仅激活 1/16、0 gain，无 incumbent；误入的空 freeze/partial controls 已隔离并补上 phase prerequisite；v3.13 complementary program-set 已完成 375/375 离线测试和 76/76 valid live development，三套 bundle 均激活 2/16、6 个 policy-on 全部失败、0 gain/0 harm、无 incumbent，同时暴露 G2 cross-arm raw replay 不一致；v3.14 提交 `2229d7af` 完成 411/411 离线测试及 62/62 attempted live development，selector 成功选中 7/7 三-family set、activation=3/16，但 7 个 policy-on 全失败；一条 recursive raw 超 64 MiB 使 primary non-claim，valid baseline replay=31、invalid key 又跨臂执行一次，两份 archive 仍无 incumbent；v3.15 action-quality / terminal-invalid provenance 实现提交 `696a2954`，453/453 离线测试通过，随后 clean lock、86/86 cache-only prewarm、smoke 与 57/57-valid live development 全部完成，但两臂仍 0 gain/0 harm、`incumbent_id=null`
 > - 最新 proposal-only 复核：v3.16 family-slot formation 提交 `6ad5c156`；v3.17 artifact-blueprint formation 提交 `4f94e613`。两轮均失败且未启动 benchmark trial
+> - 最新表示层进展：causal action-span extractor、closed typed operator/artifact graph、opaque recipe-only selection 与一次性离线 preregistration 已实现；正式 decision 尚未执行，当前无 feasibility pass/fail，亦未授权 development
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -444,7 +445,7 @@ evidence。固定 cohort 越被反复用于决策，越不能承担 sealed claim
 
 **[TEST]** v3.13 的 `reconstruction_v2` 离线 suite 为 **375/375 通过**，v3.14 为
 **411/411 通过**；v3.15 提交 `696a2954` 当时为 **453/453 通过**；加入 v3.16/v3.17 formation、
-proposal-only boundary 与失败产物本地复核后，当前完整 suite 为 **525/525 通过**。新增覆盖包括 TRAIN-only
+proposal-only boundary、typed representation 与 single-decision binding 后，当前完整 suite 为 **540/540 通过**。新增覆盖包括 TRAIN-only
 action profile 的 containment/allowlist/secret isolation、request-local action-quality prompt、audit-only
 不改变 retry/selection/promotion、terminal-invalid memo 的 retry identity 与零执行 replay，以及
 report/freeze 的首代 checkpoint/profile provenance。此前 shared immutable valid baseline cohort、
@@ -1100,9 +1101,18 @@ TRAIN primitives 的绑定。
 这里的更深问题不是再加一条“不要使用失败 primitive”的 prompt。第三个 slot 的本地 failed set 是通用
 executable `file` 与 `python`；它们来自失败 command 的共现，而不是证明这些工具本身导致失败。自由文本
 action 又很自然会在“解析文件”工作流中提到 file/Python。因此当前 taxonomy 同时混合了“在失败轨迹中出现”
-与“因果上应禁止”，而模型侧只收到 count/hash，也不可能可靠满足未知的逐值 exclusion。继续补 prompt 或
-把 acceptance 放宽都会掩盖这一矛盾。下一研究对象应是 typed operator/capability representation 与带结果
-归因的 action-span evidence，使真正 inadmissible primitive 在生成域中不可表示；不是 v3.18 gate patch。
+与“因果上应禁止”，而模型侧只收到 count/hash，也不可能可靠满足未知的逐值 exclusion。
+
+新的前置结构复核已从 38 条 receipt-bound V3.15 TRAIN trace 中保留 429 个按时间排序的 allowlisted command
+occurrences，其中 70 个失败；另有 208 个 non-allowlisted command 被显式计数后丢弃。38 条 trace 均完整，
+总 relevant action starts 为 655，单 trace 最大 61，低于冻结的 100-action budget；失败 span 没有一个是最后
+allowlisted span，且 observational inadmissibility 计数为 0。这些数字只证明 allowlisted chronology 未去重、
+未截断，不声称覆盖完整 raw-command chronology。closed typed graph 已把 proposal output 收窄为一个 opaque、
+已注册的 `recipe_id`，使 primitive、locator 与 free-text action 不进入模型输出域；但 materialization 仍经现有
+prompt-directive/self-check compiler 交给通用 agent，capability implementation 未验证，也没有 restricted
+runtime executor。实现与 preregistration 已就绪，正式的一次性离线 decision 仍未执行；即使 PASS，也只使
+另行冻结的 typed-selection integration diagnostic 有资格运行，不授权 development。继续补 prompt 或放宽
+acceptance 都会掩盖这一边界；这不是 v3.18 gate patch。
 
 ### 8.4 P1：prospective runtime features 仍过粗
 
@@ -1212,7 +1222,7 @@ provenance，以及随后 clean 57/57-valid live negative evidence。两臂 clai
 | 完成（v3.14 mixed-claim 负结果） | shared baseline cohort + support-aware tied-set ranking | lock/prewarm/smoke clean；62/62 attempted、38/38 valid train；G1 选中 7/7 三-family set并 activation 3/16，但 7 个 on 全失败、0 gain/0 harm。一条 recursive raw 68.66 MB 超 fuse 使 primary non-claim；31 次 valid baseline replay，invalid key 又跨臂执行一次；两份 archive 无 incumbent |
 | 完成（v3.15 clean 负结果） | TRAIN-only material action delta + terminal-invalid attribution | commit `696a2954`、453/453 offline 后，clean lock、86/86 prewarm、smoke 与 57/57 valid live 完成；8/8 model calls、max online concurrency=1、0 provider/infra/budget/network/pair error；recursive G1/G2 与 no-rec G2 均 1/16、0 gain/0 harm，32 次 baseline 零执行 replay；两臂 claim-eligible non-promotion、incumbent null、无 downstream |
 | 完成（v3.16/v3.17 proposal-only 负结果） | structural family-stratified proposal formation + artifact blueprint | 复用冻结 TRAIN receipt，0 source rerun、0 benchmark/evaluator call；v3.17 通过 8/9 feasibility，解决 family collapse/support/self-block/restatement，但第三候选仍绑定 2 个 failed primitives，故未授权 development |
-| P0（下一 workstream，表示层） | typed operator/capability grammar + causal action-span evidence | 先离线区分 failed-command 共现与真正 inadmissible primitive；候选只能从预注册 typed operator/artifact graph 组合，使硬负约束由生成域保证。仅一次 preregistered feasibility decision；不做 v3.18 prompt/gate patch。无真实 incumbent 时继续禁止 freeze/controls/family-out/HippoRAG/sealed |
+| P0（实现/预注册就绪；正式 decision 待执行） | typed operator/capability grammar + causal action-span evidence | 38 条 receipt-bound trace 重建 429 个 chronological allowlisted spans（70 failed），另计 208 discarded commands；模型只能选择 opaque registered `recipe_id`，primitive/locator/free-text action 不可生成。仅一次正式离线 decision；PASS 只使另行冻结的 typed-selection integration diagnostic 有资格运行，PASS 不授权 development。不做 v3.18 prompt/gate patch；无真实 incumbent 时继续禁止 freeze/controls/family-out/HippoRAG/sealed |
 | P1 | prospective family-out routing | trigger 不依赖已知 family 或预编译 item ID，只使用冻结、无 gold、运行时可得语义特征 |
 | P2 | 多 clade archive | 同 epoch 至少两个 clade 可继续扩展；node 绑定 protocol/evidence/promotion hashes，并报告 retention 与 branch productivity |
 | P2 | evaluator co-evolution | 独立 anchor challenger、epoch transition、selective invalidation 和旧 incumbent re-evaluation 实际执行后再作主张 |
@@ -1421,6 +1431,13 @@ provenance，以及随后 clean 57/57-valid live negative evidence。两臂 clai
     满足未知逐值 exclusion 的表示矛盾。下一 workstream 必须换成 typed operator/capability grammar 或
     artifact-operation graph，并以 causal action-span evidence 定义不可表达项；只允许一次 preregistered
     feasibility decision。没有真实 incumbent 时继续禁止 controls/family-out/HippoRAG/sealed。
+48. causal action-span extractor、closed typed operator/artifact graph、opaque recipe-only selection、harness-owned
+    materializer 与 single-decision lock/preregistration 已实现。前置结构复核得到 38/38 complete trace、429
+    allowlisted occurrences、70 failed、208 discarded、655 action starts、max 61/100。该路径使用 stored offline
+    TRAIN outcomes、本地 contract validation 并哈希 unit-test source，但有 0 live model/task-backend/evaluator
+    invocation，且未访问 validation/test/sealed split 或 verifier content。正式 decision 尚未运行，因此当前没有 pass/fail。该表示只闭合 proposal
+    selection；现有 lowering 仍是 prompt directive，非 restricted executor。PASS 只使 separately frozen
+    typed-selection integration diagnostic freeze-eligible，PASS 不授权 development。
 
 这比立刻扩展 archive 或继续补 HLE source span 更能降低研究风险。
 
@@ -1486,7 +1503,7 @@ activation；held-out causal activation precision 的分母则是 evidence-valid
 
 | 层级 | 可声明内容 | 当前状态 |
 |---|---|---|
-| L0 wiring | schema、repair、off/on、guard、archive transition 的机械链路已连接 | 达到：当前完整离线 suite 525/525 通过；除 v3.15 的既有 wiring 外，v3.16/v3.17 TRAIN receipt reconstruction、family-slot production path、redacted live ledger、失败结果复核与 proposal-only boundary 均有覆盖 |
+| L0 wiring | schema、repair、off/on、guard、archive transition 的机械链路已连接 | 达到：当前完整离线 suite 540/540 通过；除 v3.15 的既有 wiring 外，v3.16/v3.17 TRAIN receipt reconstruction、family-slot production path、redacted live ledger、失败结果复核，以及 typed all-item budget/action-span/canonical-graph/semantic-failure/decision-lock boundary 均有覆盖 |
 | L1 mechanism live | 真实外部任务中 proposal/repair/treatment/gate 全链路完成 | 达到且最新 benchmark evidence 仍是 v3.15 clean negative：57/57 valid、8/8 model calls、0 infra/fairness error；v3.16/v3.17 未运行 task trial，不提升 L1，也无 promotion claim |
 | L2 validation learning | clean held-out validation 上有可晋级净收益 | 未达到 |
 | L3 prospective generalization | frozen incumbent 在 unseen instance/family 上保持收益 | 未达到 |
@@ -1616,13 +1633,14 @@ manipulation、0 restatement/self-block；但第三项仍绑定 `file`/`python` 
 因此 8/9 pass 仍是整体 fail。0 backend/evaluator/benchmark trial 是正确的 spend-control 结果。
 
 这也终止了“继续写更强 prompt”的路线：failed command 中出现通用 executable 并不证明它在因果上应被
-禁用，而只把 count/hash 给模型又无法要求其避开未知具体值。下一 workstream 先用现有 TRAIN ledger 离线
-建立 causal action-span taxonomy，再把候选空间换成 typed operator/capability grammar 或 artifact-operation
-graph，使真正 inadmissible primitive 在生成域中不可表达。该新表示只允许一次 preregistered feasibility
-decision；失败即停，不再补 gate。
+禁用，而只把 count/hash 给模型又无法要求其避开未知具体值。causal action-span taxonomy 与 closed typed
+operator/artifact graph 已实现并预注册；正式一次性离线 decision 尚未执行。失败即停，不再补 gate；PASS
+也只使一个另行冻结的 typed-selection integration diagnostic 有资格运行，因为当前 production selection
+尚未接入 proposer/evolution，runtime 仍是通用 prompt-directive agent。
 
-只有新表示通过 feasibility，并在新的 clean development 中产生 retained validation gain 和真实 incumbent，
-才按既定顺序进入 freeze、完整 controls、family-out、sealed test；在此之前不跑 HippoRAG/raw transfer，
+只有 feasibility 通过、typed-selection integration 经独立冻结诊断验证、随后新的 clean development 产生
+retained validation gain 和真实 incumbent，才按既定顺序进入 freeze、完整 controls、family-out、sealed test；
+在此之前不跑 HippoRAG/raw transfer，
 更不谈 multi-clade 或 evaluator co-evolution。v3.12 空 freeze/partial-control rows、v3.14 mixed-claim rows 与
 v3.16/v3.17 proposal-only artifacts 都不能拼入 performance evidence；v3.15 两臂虽 claim-eligible，archive
 仍为空，同样不得绕过 phase prerequisite。
