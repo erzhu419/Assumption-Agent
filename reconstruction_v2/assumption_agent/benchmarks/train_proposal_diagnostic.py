@@ -1212,6 +1212,123 @@ def _validate_source_train_receipt(
         raise PermissionError("source TRAIN receipt drift")
 
 
+def _recompute_diagnostic_acceptance(
+    proposal_rows: Sequence[Mapping[str, Any]],
+) -> dict[str, bool]:
+    """Derive every diagnostic acceptance bit from proposal audit rows."""
+
+    normalized: list[Mapping[str, Any]] = []
+    for index, row in enumerate(proposal_rows):
+        if not isinstance(row, Mapping):
+            raise PermissionError(
+                f"proposal diagnostic acceptance row is malformed: {index}"
+            )
+        for key in (
+            "matched_failure_family_count",
+            "matched_target_support",
+            "target_anti_trigger_self_block_count",
+            "profile_environment_binding_count",
+            "restatement_only_action_count",
+            "failed_primitive_binding_count",
+        ):
+            value = row.get(key)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise PermissionError(
+                    "proposal diagnostic acceptance count is malformed: "
+                    f"{index}:{key}"
+                )
+        for key in ("matched_target_family_only", "restatement_risk"):
+            if not isinstance(row.get(key), bool):
+                raise PermissionError(
+                    "proposal diagnostic acceptance flag is malformed: "
+                    f"{index}:{key}"
+                )
+        if not _is_sha256(row.get("activation_signature_hash")):
+            raise PermissionError(
+                "proposal diagnostic activation signature is malformed"
+            )
+        delta_kinds = row.get("profile_grounded_delta_kinds")
+        if not isinstance(delta_kinds, list) or any(
+            not isinstance(value, str) for value in delta_kinds
+        ):
+            raise PermissionError(
+                "proposal diagnostic executable-delta audit is malformed"
+            )
+        if not isinstance(row.get("validation_issues"), list):
+            raise PermissionError(
+                "proposal diagnostic schema audit is malformed"
+            )
+        normalized.append(row)
+
+    root_count_passed = len(normalized) == REQUIRED_SLOT_COUNT
+    signature_hashes = {
+        str(row["activation_signature_hash"]) for row in normalized
+    }
+    return {
+        "root_count_passed": root_count_passed,
+        "distinct_single_family_signatures_passed": bool(
+            root_count_passed
+            and len(signature_hashes) == REQUIRED_SLOT_COUNT
+            and all(
+                row["matched_failure_family_count"] == 1
+                and row["matched_target_family_only"] is True
+                for row in normalized
+            )
+        ),
+        "minimum_target_support_passed": bool(
+            normalized
+            and all(
+                row["matched_target_support"] >= MINIMUM_TARGET_SUPPORT
+                for row in normalized
+            )
+        ),
+        "target_anti_trigger_self_block_absent": bool(
+            normalized
+            and all(
+                row["target_anti_trigger_self_block_count"] == 0
+                for row in normalized
+            )
+        ),
+        "profile_environment_binding_passed": bool(
+            normalized
+            and all(
+                row["profile_environment_binding_count"] > 0
+                for row in normalized
+            )
+        ),
+        "profile_grounded_executable_delta_passed": bool(
+            normalized
+            and all(
+                {
+                    "concrete_local_tool_command",
+                    "artifact_internal_manipulation",
+                }
+                & set(row["profile_grounded_delta_kinds"])
+                for row in normalized
+            )
+        ),
+        "restatement_only_absent": bool(
+            normalized
+            and all(
+                row["restatement_only_action_count"] == 0
+                and row["restatement_risk"] is False
+                for row in normalized
+            )
+        ),
+        "failed_profile_primitive_avoidance_passed": bool(
+            normalized
+            and all(
+                row["failed_primitive_binding_count"] == 0
+                for row in normalized
+            )
+        ),
+        "schema_validation_passed": bool(
+            normalized
+            and all(not row["validation_issues"] for row in normalized)
+        ),
+    }
+
+
 def run_train_proposal_diagnostic(
     *,
     root: str | Path,
@@ -1464,84 +1581,7 @@ def run_train_proposal_diagnostic(
     signature_hashes = {
         str(row["activation_signature_hash"]) for row in proposal_rows
     }
-    root_count_passed = len(programs) == REQUIRED_SLOT_COUNT
-    single_family_signatures_passed = bool(
-        root_count_passed
-        and len(signature_hashes) == REQUIRED_SLOT_COUNT
-        and all(
-            int(row["matched_failure_family_count"]) == 1
-            and bool(row["matched_target_family_only"])
-            for row in proposal_rows
-        )
-    )
-    minimum_support_passed = bool(
-        proposal_rows
-        and all(
-            int(row["matched_target_support"]) >= MINIMUM_TARGET_SUPPORT
-            for row in proposal_rows
-        )
-    )
-    anti_trigger_passed = bool(
-        proposal_rows
-        and all(
-            int(row["target_anti_trigger_self_block_count"]) == 0
-            for row in proposal_rows
-        )
-    )
-    environment_binding_passed = bool(
-        proposal_rows
-        and all(
-            int(row["profile_environment_binding_count"]) > 0
-            for row in proposal_rows
-        )
-    )
-    executable_delta_passed = bool(
-        proposal_rows
-        and all(
-            bool(
-                {
-                    "concrete_local_tool_command",
-                    "artifact_internal_manipulation",
-                }
-                & set(row["profile_grounded_delta_kinds"])
-            )
-            for row in proposal_rows
-        )
-    )
-    restatement_passed = bool(
-        proposal_rows
-        and all(
-            int(row["restatement_only_action_count"]) == 0
-            and not bool(row["restatement_risk"])
-            for row in proposal_rows
-        )
-    )
-    failed_primitive_avoidance_passed = bool(
-        proposal_rows
-        and all(
-            int(row["failed_primitive_binding_count"]) == 0
-            for row in proposal_rows
-        )
-    )
-    schema_passed = bool(
-        proposal_rows
-        and all(not row["validation_issues"] for row in proposal_rows)
-    )
-    acceptance = {
-        "root_count_passed": root_count_passed,
-        "distinct_single_family_signatures_passed": (
-            single_family_signatures_passed
-        ),
-        "minimum_target_support_passed": minimum_support_passed,
-        "target_anti_trigger_self_block_absent": anti_trigger_passed,
-        "profile_environment_binding_passed": environment_binding_passed,
-        "profile_grounded_executable_delta_passed": executable_delta_passed,
-        "restatement_only_absent": restatement_passed,
-        "failed_profile_primitive_avoidance_passed": (
-            failed_primitive_avoidance_passed
-        ),
-        "schema_validation_passed": schema_passed,
-    }
+    acceptance = _recompute_diagnostic_acceptance(proposal_rows)
     diagnostic_passed = all(acceptance.values())
     proposal_set_hash = stable_hash(
         {
@@ -1692,7 +1732,6 @@ def verify_existing_train_proposal_diagnostic(
     required_top_level = {
         "diagnostic_policy": TRAIN_PROPOSAL_DIAGNOSTIC_VERSION,
         "diagnostic_only": True,
-        "diagnostic_passed": True,
         "failure_blocks_future_trial_spend_only": True,
         "promotion_gate_or_score": False,
         "production_evolution_kernel_used": True,
@@ -1711,10 +1750,15 @@ def verify_existing_train_proposal_diagnostic(
     )
     acceptance = _required_mapping(report, "acceptance")
     if set(acceptance) != set(_ACCEPTANCE_KEYS) or any(
-        acceptance.get(key) is not True for key in _ACCEPTANCE_KEYS
+        not isinstance(acceptance.get(key), bool) for key in _ACCEPTANCE_KEYS
     ):
         raise PermissionError(
-            "existing diagnostic acceptance is incomplete or not passing"
+            "existing diagnostic acceptance is incomplete or malformed"
+        )
+    declared_diagnostic_passed = report.get("diagnostic_passed")
+    if not isinstance(declared_diagnostic_passed, bool):
+        raise PermissionError(
+            "existing diagnostic pass state is missing or malformed"
         )
 
     source = _required_mapping(report, "source")
@@ -1817,6 +1861,16 @@ def verify_existing_train_proposal_diagnostic(
     )
     if report.get("proposal_set_hash") != proposal_set_hash:
         raise PermissionError("existing diagnostic proposal-set hash mismatch")
+    recomputed_acceptance = _recompute_diagnostic_acceptance(proposals)
+    if dict(acceptance) != recomputed_acceptance:
+        raise PermissionError(
+            "existing diagnostic acceptance does not match proposal audits"
+        )
+    recomputed_diagnostic_passed = all(recomputed_acceptance.values())
+    if declared_diagnostic_passed is not recomputed_diagnostic_passed:
+        raise PermissionError(
+            "existing diagnostic pass state does not match acceptance"
+        )
 
     events = _read_verified_diagnostic_events(events_file)
     completed = _event_rows(
@@ -1836,8 +1890,8 @@ def verify_existing_train_proposal_diagnostic(
             "slot_plan_hash": slot_plan_hash,
             "proposal_count": REQUIRED_SLOT_COUNT,
             "proposal_set_hash": proposal_set_hash,
-            "diagnostic_passed": True,
-            "acceptance": dict(acceptance),
+            "diagnostic_passed": recomputed_diagnostic_passed,
+            "acceptance": recomputed_acceptance,
             "failure_blocks_future_trial_spend_only": True,
             "promotion_gate_or_score": False,
         },
@@ -1923,6 +1977,8 @@ def verify_existing_train_proposal_diagnostic(
         "target_protocol_hash": protocol_hash,
         "slot_plan_hash": slot_plan_hash,
         "proposal_set_hash": proposal_set_hash,
+        "diagnostic_passed": recomputed_diagnostic_passed,
+        "failure_blocks_future_trial_spend_only": True,
         "live_provider_model_ledger_verified": True,
         **_COMMON_BOUNDARY_FLAGS,
     }
@@ -3455,11 +3511,63 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--source-run-root", type=Path, required=True)
     parser.add_argument("--source-train-receipt", type=Path, required=True)
     parser.add_argument("--protocol", type=Path, required=True)
-    parser.add_argument("--env-file", type=Path, required=True)
+    parser.add_argument("--env-file", type=Path)
     parser.add_argument("--events", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument(
+        "--verify-existing",
+        action="store_true",
+        help=(
+            "verify --out/--events locally without loading credentials or "
+            "calling the proposal model"
+        ),
+    )
     args = parser.parse_args(argv)
 
+    if args.verify_existing:
+        try:
+            verified = verify_existing_train_proposal_diagnostic(
+                root=args.root,
+                manifest_path=args.manifest,
+                source_run_root=args.source_run_root,
+                source_train_receipt=args.source_train_receipt,
+                protocol_path=args.protocol,
+                report_path=args.out,
+                events_path=args.events,
+            )
+        except (OSError, ValueError):
+            print(
+                json.dumps(
+                    {
+                        "status": "proposal_diagnostic_reuse_rejected",
+                        "error_type": "verification_failed",
+                        "online_model_called": False,
+                        "raw_error_persisted": False,
+                        "secret_value_persisted": False,
+                    },
+                    sort_keys=True,
+                ),
+                file=sys.stderr,
+            )
+            raise SystemExit(2) from None
+        print(
+            json.dumps(
+                {
+                    **verified,
+                    "status": "proposal_diagnostic_reuse_verified",
+                    "online_model_called": False,
+                },
+                indent=2,
+                sort_keys=True,
+                ensure_ascii=True,
+            )
+        )
+        if not verified["diagnostic_passed"]:
+            raise SystemExit(2)
+        return
+
+    if args.env_file is None:
+        parser.error("--env-file is required unless --verify-existing is used")
     if args.events.exists() or args.out.exists():
         raise FileExistsError(
             "proposal diagnostic events/out paths must be fresh"

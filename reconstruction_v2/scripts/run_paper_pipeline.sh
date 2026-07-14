@@ -53,10 +53,15 @@ preflight() {
 proposal_diagnostic() {
   mkdir -p "${RUN_ROOT}"
   if [[ -s "${PROPOSAL_DIAGNOSTIC_OUT}" && -s "${PROPOSAL_DIAGNOSTIC_EVENTS}" ]]; then
-    python3 -c 'import sys; from assumption_agent.benchmarks.train_proposal_diagnostic import verify_existing_train_proposal_diagnostic as verify; verify(root=sys.argv[1], manifest_path=sys.argv[2], source_run_root=sys.argv[3], source_train_receipt=sys.argv[4], protocol_path=sys.argv[5], report_path=sys.argv[6], events_path=sys.argv[7])' \
-      "${BENCHMARK_ROOT}" "${MANIFEST}" "${SOURCE_RUN_ROOT}" \
-      "${SOURCE_TRAIN_RECEIPT}" "${PROTOCOL}" "${PROPOSAL_DIAGNOSTIC_OUT}" \
-      "${PROPOSAL_DIAGNOSTIC_EVENTS}"
+    python3 -m assumption_agent.benchmarks.train_proposal_diagnostic \
+      --verify-existing \
+      --root "${BENCHMARK_ROOT}" \
+      --manifest "${MANIFEST}" \
+      --source-run-root "${SOURCE_RUN_ROOT}" \
+      --source-train-receipt "${SOURCE_TRAIN_RECEIPT}" \
+      --protocol "${PROTOCOL}" \
+      --events "${PROPOSAL_DIAGNOSTIC_EVENTS}" \
+      --out "${PROPOSAL_DIAGNOSTIC_OUT}"
     return
   fi
   if [[ -e "${PROPOSAL_DIAGNOSTIC_OUT}" || -e "${PROPOSAL_DIAGNOSTIC_EVENTS}" ]]; then

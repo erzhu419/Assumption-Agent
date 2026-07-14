@@ -867,6 +867,161 @@ def test_v317_existing_diagnostic_accepts_one_transport_retry(
     assert sum(row["event"] == "model_attempt_failed" for row in rows) == 1
 
 
+def test_v317_existing_failed_diagnostic_is_verified_and_remains_failed(
+    tmp_path: Path,
+) -> None:
+    fixture, report_path, events_path = _persisted_diagnostic_fixture(
+        tmp_path,
+        failed_primitive=True,
+    )
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["diagnostic_passed"] is False
+    assert report["acceptance"] == {
+        **{key: True for key in report["acceptance"]},
+        "failed_profile_primitive_avoidance_passed": False,
+    }
+
+    verified = verify_existing_train_proposal_diagnostic(
+        root=fixture.root,
+        manifest_path=fixture.manifest_path,
+        source_run_root=fixture.source_root,
+        source_train_receipt=fixture.source_train_receipt,
+        protocol_path=fixture.protocol_path,
+        report_path=report_path,
+        events_path=events_path,
+    )
+
+    assert verified["diagnostic_reuse_verified"] is True
+    assert verified["diagnostic_passed"] is False
+    assert verified["failure_blocks_future_trial_spend_only"] is True
+    assert verified["live_provider_model_ledger_verified"] is True
+
+
+def test_v317_existing_failed_diagnostic_recomputes_all_acceptance_bits(
+    tmp_path: Path,
+) -> None:
+    fixture, report_path, events_path = _persisted_diagnostic_fixture(
+        tmp_path,
+        failed_primitive=True,
+    )
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    report["acceptance"]["failed_profile_primitive_avoidance_passed"] = True
+    report["diagnostic_passed"] = True
+    report_path.write_text(json.dumps(report, sort_keys=True), encoding="utf-8")
+
+    rows = _event_file_rows(events_path)
+    completed = next(
+        row
+        for row in rows
+        if row["event"] == "train_proposal_diagnostic_completed"
+    )
+    completed["payload"]["acceptance"] = dict(report["acceptance"])
+    completed["payload"]["diagnostic_passed"] = True
+    _rehash_event(completed)
+    _write_event_file(events_path, rows)
+
+    with pytest.raises(
+        PermissionError,
+        match="acceptance does not match proposal audits",
+    ):
+        verify_existing_train_proposal_diagnostic(
+            root=fixture.root,
+            manifest_path=fixture.manifest_path,
+            source_run_root=fixture.source_root,
+            source_train_receipt=fixture.source_train_receipt,
+            protocol_path=fixture.protocol_path,
+            report_path=report_path,
+            events_path=events_path,
+        )
+
+
+def test_v317_existing_failed_diagnostic_binds_completion_pass_state(
+    tmp_path: Path,
+) -> None:
+    fixture, report_path, events_path = _persisted_diagnostic_fixture(
+        tmp_path,
+        failed_primitive=True,
+    )
+    rows = _event_file_rows(events_path)
+    completed = next(
+        row
+        for row in rows
+        if row["event"] == "train_proposal_diagnostic_completed"
+    )
+    completed["payload"]["diagnostic_passed"] = True
+    _rehash_event(completed)
+    _write_event_file(events_path, rows)
+
+    with pytest.raises(
+        PermissionError,
+        match="completion event mismatch: diagnostic_passed",
+    ):
+        verify_existing_train_proposal_diagnostic(
+            root=fixture.root,
+            manifest_path=fixture.manifest_path,
+            source_run_root=fixture.source_root,
+            source_train_receipt=fixture.source_train_receipt,
+            protocol_path=fixture.protocol_path,
+            report_path=report_path,
+            events_path=events_path,
+        )
+
+
+@pytest.mark.parametrize("diagnostic_passed", (True, False))
+def test_v317_verify_existing_cli_has_stable_exit_without_online_call(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    diagnostic_passed: bool,
+) -> None:
+    fixture, report_path, events_path = _persisted_diagnostic_fixture(
+        tmp_path,
+        failed_primitive=not diagnostic_passed,
+    )
+
+    def forbidden_online_run(**_: Any) -> dict[str, Any]:
+        raise AssertionError("verify-existing attempted a live proposal run")
+
+    monkeypatch.setattr(
+        diagnostic,
+        "run_train_proposal_diagnostic",
+        forbidden_online_run,
+    )
+    argv = [
+        "--verify-existing",
+        "--root",
+        str(fixture.root),
+        "--manifest",
+        str(fixture.manifest_path),
+        "--source-run-root",
+        str(fixture.source_root),
+        "--source-train-receipt",
+        str(fixture.source_train_receipt),
+        "--protocol",
+        str(fixture.protocol_path),
+        "--events",
+        str(events_path),
+        "--out",
+        str(report_path),
+    ]
+
+    if diagnostic_passed:
+        diagnostic.main(argv)
+    else:
+        with pytest.raises(SystemExit) as caught:
+            diagnostic.main(argv)
+        assert caught.value.code == 2
+
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert "Traceback" not in captured.out
+    output = json.loads(captured.out)
+    assert output["status"] == "proposal_diagnostic_reuse_verified"
+    assert output["diagnostic_reuse_verified"] is True
+    assert output["diagnostic_passed"] is diagnostic_passed
+    assert output["online_model_called"] is False
+
+
 def test_v317_cli_hides_model_controlled_parse_exception(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -964,10 +1119,62 @@ def _write_event_file(path: Path, rows: list[dict[str, Any]]) -> None:
     )
 
 
+def _convert_persisted_diagnostic_to_failed_primitive(
+    report_path: Path,
+    events_path: Path,
+) -> None:
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    events = _event_file_rows(events_path)
+    production = sorted(
+        (
+            row
+            for row in events
+            if row["event"] == "proposal_family_slot_completed"
+        ),
+        key=lambda row: row["trace_id"],
+    )[-1]
+    production["payload"]["failed_profile_binding_count"] = 1
+    _rehash_event(production)
+
+    proposal = report["proposals"][-1]
+    proposal["production_failed_profile_binding_count"] = 1
+    proposal["failed_primitive_binding_count"] = 1
+    proposal["production_slot_completion_hash"] = stable_hash(
+        production["payload"]
+    )
+    proposal["failed_primitive_binding_set_hash"] = stable_hash(
+        {
+            "candidate_hash": production["payload"]["candidate_hash"],
+            "failed_primitive_set_hash": production["payload"][
+                "failed_primitive_set_hash"
+            ],
+            "failed_profile_binding_count": 1,
+        }
+    )
+    report["acceptance"] = diagnostic._recompute_diagnostic_acceptance(
+        report["proposals"]
+    )
+    report["diagnostic_passed"] = all(report["acceptance"].values())
+
+    completed = next(
+        row
+        for row in events
+        if row["event"] == "train_proposal_diagnostic_completed"
+    )
+    completed["payload"]["acceptance"] = dict(report["acceptance"])
+    completed["payload"]["diagnostic_passed"] = report[
+        "diagnostic_passed"
+    ]
+    _rehash_event(completed)
+    diagnostic._write_json_atomic(report_path, report)
+    _write_event_file(events_path, events)
+
+
 def _persisted_diagnostic_fixture(
     tmp_path: Path,
     *,
     retry_slot: int | None = None,
+    failed_primitive: bool = False,
 ) -> tuple[DiagnosticFixture, Path, Path]:
     fixture = _diagnostic_fixture(tmp_path)
     events_path = tmp_path / "diagnostic.events.jsonl"
@@ -988,6 +1195,11 @@ def _persisted_diagnostic_fixture(
         event_sink=sink,
     )
     diagnostic._write_json_atomic(report_path, report)
+    if failed_primitive:
+        _convert_persisted_diagnostic_to_failed_primitive(
+            report_path,
+            events_path,
+        )
     verified = verify_existing_train_proposal_diagnostic(
         root=fixture.root,
         manifest_path=fixture.manifest_path,
@@ -998,6 +1210,7 @@ def _persisted_diagnostic_fixture(
         events_path=events_path,
     )
     assert verified["diagnostic_reuse_verified"] is True
+    assert verified["diagnostic_passed"] is (not failed_primitive)
     return fixture, report_path, events_path
 
 
