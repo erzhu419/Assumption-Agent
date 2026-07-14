@@ -15,6 +15,10 @@ from assumption_agent.benchmarks.skilllearn_lifecycle import (
     SkillLearnTrialRequest,
     TrialVariant,
 )
+from assumption_agent.benchmarks.runtime_profile_injection import (
+    RUNTIME_PROFILE_PROMPT_CONTAINER_PATH,
+    RUNTIME_PROFILE_PROMPT_DELIVERY_VERSION,
+)
 from assumption_agent.benchmarks.typed_task_capability import (
     PORTABLE_TASK_CAPABILITY_COMPILER_VERSION,
     build_compiled_portable_task_capability,
@@ -108,6 +112,13 @@ class FakeDockerSubprocess:
             destination_path.write_bytes(
                 destination_path.read_bytes() + b"tampered\n"
             )
+        if (
+            self.tamper == "prompt_readback"
+            and RUNTIME_PROFILE_PROMPT_CONTAINER_PATH in source
+        ):
+            destination_path.write_bytes(
+                destination_path.read_bytes() + b"tampered\n"
+            )
 
     def _copy_to_container(self, source: str, destination: str) -> None:
         destination_path = self.container_path(destination)
@@ -132,6 +143,9 @@ class FakeDockerSubprocess:
                 parents=True,
                 exist_ok=True,
             )
+            return self._result()
+        if operation[:2] == ("chmod", "0444"):
+            self.container_path(operation[2]).chmod(0o444)
             return self._result()
         if operation[:2] == ("test", "-f"):
             return self._result(
@@ -163,7 +177,15 @@ class FakeDockerSubprocess:
         return self._result(1)
 
 
-def _runtime_fixture(tmp_path: Path, *, tamper: str | None = None):
+def _runtime_fixture(
+    tmp_path: Path,
+    *,
+    tamper: str | None = None,
+    delivery_mode: str = "",
+    run_template: str = (
+        'codex exec --json --model {model} -- "$(cat {instruction_file})"'
+    ),
+):
     compiled, _, _ = _compile(tmp_path / "compile")
     source = compiled.source_for(ITEM_ID)
     assert source is not None
@@ -199,6 +221,7 @@ def _runtime_fixture(tmp_path: Path, *, tamper: str | None = None):
             compiled.portable_capability_role_spec_set_hash
         ),
         portable_capability_role_spec_hashes=role_hashes,
+        portable_capability_delivery_mode=delivery_mode,
     )
     sink = MemoryEventSink()
     backend = SkillLearnSubprocessBackend(
@@ -227,6 +250,8 @@ def _runtime_fixture(tmp_path: Path, *, tamper: str | None = None):
     runner = ModuleType("fake_portable_runtime_runner")
     runner.subprocess = delegate
     runner._copy_skills_to_dest = _copy_skills_to_dest
+    agent = {"run": run_template}
+    runner.get_agent = lambda agent_id: agent if agent_id == "codex" else None
 
     def inject(container_name, skill_source_dir, copies):
         assert container_name == "trial"
@@ -292,6 +317,32 @@ def test_trial_request_requires_complete_portable_provenance(
     assert payload["portable_capability_role_spec_hashes"] == []
     assert "compile_root" not in payload
 
+    with pytest.raises(ValueError, match="delivery mode is unsupported"):
+        SkillLearnTrialRequest(
+            **common,
+            portable_capability_compiler_mode=(
+                PORTABLE_TASK_CAPABILITY_COMPILER_VERSION
+            ),
+            portable_capability_role_spec_set_hash="role-set",
+            portable_capability_role_spec_hashes=(),
+            portable_capability_delivery_mode="future-delivery-mode",
+        )
+    with pytest.raises(
+        ValueError,
+        match="requires a compiled policy-on treatment",
+    ):
+        SkillLearnTrialRequest(
+            **{**common, "variant": TrialVariant.POLICY_OFF},
+            portable_capability_compiler_mode=(
+                PORTABLE_TASK_CAPABILITY_COMPILER_VERSION
+            ),
+            portable_capability_role_spec_set_hash="role-set",
+            portable_capability_role_spec_hashes=(),
+            portable_capability_delivery_mode=(
+                RUNTIME_PROFILE_PROMPT_DELIVERY_VERSION
+            ),
+        )
+
 
 def test_compiled_portable_capability_executes_before_agent_start(
     tmp_path: Path,
@@ -356,6 +407,147 @@ def test_compiled_portable_capability_executes_before_agent_start(
     assert verified[0]["payload"]["agent_started"] is False
     assert verified[0]["payload"]["agent_payloads"] == [payload]
     assert INPUT_LOCATOR not in json.dumps(verified[0], sort_keys=True)
+
+
+def test_runtime_profile_prompt_delivery_is_explicit_and_receipted(
+    tmp_path: Path,
+) -> None:
+    (
+        _backend,
+        runner,
+        delegate,
+        source,
+        context,
+        sink,
+        _input_path,
+    ) = _runtime_fixture(
+        tmp_path,
+        delivery_mode=RUNTIME_PROFILE_PROMPT_DELIVERY_VERSION,
+    )
+    original_template = runner.get_agent("codex")["run"]
+
+    runner._inject_skills_runtime(
+        "trial",
+        source,
+        [("skills", "/root/.codex/skills")],
+    )
+
+    receipt = runner._assumption_v2_runtime_profile_injection_receipt
+    assert receipt.request_hash == context.request_hash
+    assert receipt.context_hash == context.context_hash
+    assert receipt.profile_count == 1
+    assert receipt.safe_payload()["profile_present_in_effective_launch_prompt"] is True
+    assert receipt.safe_payload()["semantic_consumption_claimed"] is False
+    assert receipt.safe_payload()["task_effect_attributed"] is False
+    assert runner.get_agent("codex")["run"] != original_template
+    assert runner.get_agent("codex")["run"].count(
+        RUNTIME_PROFILE_PROMPT_CONTAINER_PATH
+    ) == 1
+
+    fragment = delegate.container_path(
+        RUNTIME_PROFILE_PROMPT_CONTAINER_PATH
+    ).read_bytes()
+    assert hashlib.sha256(fragment).hexdigest() == receipt.fragment_sha256
+    assert b"ASSUMPTION_V2_VERIFIED_RUNTIME_CONTEXT" in fragment
+    assert b'"record_count":2' in fragment
+    assert INPUT_LOCATOR.encode("utf-8") not in fragment
+    effects = runner._assumption_v2_task_capability_effects
+    assert hashlib.sha256(effects[0].profile_bytes).hexdigest() == (
+        effects[0].output_sha256
+    )
+    assert "profile_bytes" not in effects[0].safe_payload()
+
+    injected = [
+        row
+        for row in sink.events
+        if row["event"]
+        == "skilllearn_pre_agent_runtime_profile_prompt_injected"
+    ]
+    assert len(injected) == 1
+    assert injected[0]["payload"]["receipt_hash"] == receipt.receipt_hash
+    assert injected[0]["payload"]["agent_started_at_receipt_time"] is False
+    assert INPUT_LOCATOR not in json.dumps(injected[0], sort_keys=True)
+
+
+def test_default_portable_runtime_does_not_change_agent_prompt(
+    tmp_path: Path,
+) -> None:
+    (
+        _backend,
+        runner,
+        delegate,
+        source,
+        _context,
+        sink,
+        _input_path,
+    ) = _runtime_fixture(tmp_path)
+    original_template = runner.get_agent("codex")["run"]
+
+    runner._inject_skills_runtime(
+        "trial",
+        source,
+        [("skills", "/root/.codex/skills")],
+    )
+
+    assert runner.get_agent("codex")["run"] == original_template
+    assert runner._assumption_v2_runtime_profile_injection_receipt is None
+    assert not delegate.container_path(
+        RUNTIME_PROFILE_PROMPT_CONTAINER_PATH
+    ).exists()
+    assert not any(
+        row["event"]
+        == "skilllearn_pre_agent_runtime_profile_prompt_injected"
+        for row in sink.events
+    )
+
+
+@pytest.mark.parametrize(
+    ("tamper", "run_template"),
+    (
+        ("prompt_readback", 'codex exec -- "$(cat {instruction_file})"'),
+        (None, "codex exec -- no-instruction-expansion"),
+    ),
+)
+def test_runtime_profile_prompt_delivery_tamper_fails_before_agent(
+    tmp_path: Path,
+    tamper: str | None,
+    run_template: str,
+) -> None:
+    (
+        _backend,
+        runner,
+        _delegate,
+        source,
+        _context,
+        sink,
+        _input_path,
+    ) = _runtime_fixture(
+        tmp_path,
+        tamper=tamper,
+        delivery_mode=RUNTIME_PROFILE_PROMPT_DELIVERY_VERSION,
+        run_template=run_template,
+    )
+
+    with pytest.raises(
+        SkillLearnAgentTerminalError,
+        match="task_capability_prompt_delivery_invalid",
+    ):
+        runner._inject_skills_runtime(
+            "trial",
+            source,
+            [("skills", "/root/.codex/skills")],
+        )
+
+    assert runner._assumption_v2_runtime_profile_injection_receipt is None
+    blocked = [
+        row
+        for row in sink.events
+        if row["event"]
+        == "skilllearn_trial_blocked_invalid_runtime_profile_prompt"
+    ]
+    assert len(blocked) == 1
+    assert blocked[0]["payload"]["agent_started"] is False
+    assert blocked[0]["payload"]["model_invoked"] is False
 
 
 @pytest.mark.parametrize("tamper", ("output_readback", "input"))

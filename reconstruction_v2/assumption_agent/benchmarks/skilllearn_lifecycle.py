@@ -136,6 +136,15 @@ from .offline_verifier import (
     offline_verifier_profile_for_family,
     test_script_requires_offline_profile,
 )
+from .runtime_profile_injection import (
+    RUNTIME_PROFILE_PROMPT_CONTAINER_PATH,
+    RUNTIME_PROFILE_PROMPT_DELIVERY_VERSION,
+    RuntimeProfileInjectionError,
+    RuntimeProfilePromptInjectionReceipt,
+    VerifiedRuntimeProfile,
+    bind_verified_runtime_profile_prompt,
+    build_runtime_profile_prompt_capsule,
+)
 from .task_input_closure import (
     TASK_INPUT_CLOSURE_POLICY_VERSION,
     TaskInputClosureError,
@@ -551,6 +560,7 @@ class SkillLearnTrialRequest:
     portable_capability_compiler_mode: str = ""
     portable_capability_role_spec_set_hash: str = ""
     portable_capability_role_spec_hashes: tuple[str, ...] = ()
+    portable_capability_delivery_mode: str = ""
     candidate_delta_program_set_hash: str = ""
     candidate_full_program_set_hash: str = ""
     matched_candidate_program_set_hash: str = ""
@@ -592,6 +602,19 @@ class SkillLearnTrialRequest:
             raise ValueError(
                 "portable capability compile provenance must be complete"
             )
+        if self.portable_capability_delivery_mode:
+            if self.portable_capability_delivery_mode != (
+                RUNTIME_PROFILE_PROMPT_DELIVERY_VERSION
+            ):
+                raise ValueError("portable capability delivery mode is unsupported")
+            if (
+                not self.portable_capability_compiler_mode
+                or self.variant is not TrialVariant.POLICY_ON
+            ):
+                raise ValueError(
+                    "portable capability prompt delivery requires a compiled "
+                    "policy-on treatment"
+                )
         if self.compile_manifest_hash and not self.skill_source_receipt_hash:
             raise ValueError("compiled trial requires an item source receipt")
         if self.skill_source_receipt_hash and not self.compile_manifest_hash:
@@ -671,6 +694,10 @@ class SkillLearnTrialRequest:
                         ),
                     }
                 )
+                if self.portable_capability_delivery_mode:
+                    payload["portable_capability_delivery_mode"] = (
+                        self.portable_capability_delivery_mode
+                    )
         elif self.external_skill_source_receipt_hash:
             payload["external_skill_source_receipt_hash"] = (
                 self.external_skill_source_receipt_hash
@@ -711,6 +738,7 @@ class PortableTaskCapabilityRuntimeContext:
     item_id: str = field(compare=False, repr=False)
     family: str = field(compare=False, repr=False)
     public_instruction: str = field(compare=False, repr=False)
+    delivery_mode: str = ""
 
     @property
     def context_hash(self) -> str:
@@ -730,6 +758,7 @@ class PortableTaskCapabilityRuntimeContext:
             ],
             "metadata_hashes": [row.metadata_hash for row in self.metadata],
             "public_instruction_hash": self.public_instruction_hash,
+            "delivery_mode": self.delivery_mode or None,
             "public_instruction_persisted": False,
             "source_artifact_locator_persisted": False,
         }
@@ -743,6 +772,7 @@ class PortableTaskCapabilityRuntimeEffect:
     effect_receipt_hash: str
     output_sha256: str
     agent_payload: Mapping[str, Any]
+    profile_bytes: bytes = field(compare=False, repr=False, default=b"")
 
     @property
     def effect_hash(self) -> str:
@@ -791,6 +821,9 @@ class SkillLearnTrialObservation:
     step_budget_token_usage_complete: bool = False
     step_budget_receipt_hash: str = ""
     installed_skill_source_receipt_hash: str = ""
+    runtime_profile_prompt_delivery_policy: str = ""
+    runtime_profile_prompt_injection_receipt_hash: str = ""
+    runtime_profile_effective_prompt_sha256: str = ""
     proposal_action_trace: Mapping[str, Any] = field(
         default_factory=dict,
         compare=False,
@@ -849,6 +882,15 @@ class SkillLearnTrialObservation:
             "step_budget_receipt_hash": self.step_budget_receipt_hash,
             "installed_skill_source_receipt_hash": (
                 self.installed_skill_source_receipt_hash
+            ),
+            "runtime_profile_prompt_delivery_policy": (
+                self.runtime_profile_prompt_delivery_policy
+            ),
+            "runtime_profile_prompt_injection_receipt_hash": (
+                self.runtime_profile_prompt_injection_receipt_hash
+            ),
+            "runtime_profile_effective_prompt_sha256": (
+                self.runtime_profile_effective_prompt_sha256
             ),
             "secret_value_persisted": False,
         }
@@ -2123,6 +2165,7 @@ class SkillLearnSubprocessBackend:
             item_id=request.item_id,
             family=request.family,
             public_instruction=instruction,
+            delivery_mode=request.portable_capability_delivery_mode,
         )
 
     def _load_portable_public_instruction(
@@ -2524,6 +2567,7 @@ class SkillLearnSubprocessBackend:
                         agent_payload=MappingProxyType(
                             dict(receipt.agent_payload)
                         ),
+                        profile_bytes=installed_output.read_bytes(),
                     )
                 )
             except SkillLearnAgentTerminalError:
@@ -2543,6 +2587,104 @@ class SkillLearnSubprocessBackend:
                 "task_capability_pre_agent_invalid"
             )
         return tuple(effects)
+
+    def _inject_runtime_profile_prompt_in_container(
+        self,
+        *,
+        runner: ModuleType,
+        container_name: str,
+        context: PortableTaskCapabilityRuntimeContext,
+        effects: Sequence[PortableTaskCapabilityRuntimeEffect],
+    ) -> RuntimeProfilePromptInjectionReceipt:
+        """Put verified profile bytes in the exact Codex launch prompt.
+
+        The receipt proves launch-time delivery only.  It intentionally does
+        not assert semantic model consumption or attribute a task effect.
+        """
+
+        if context.delivery_mode != RUNTIME_PROFILE_PROMPT_DELIVERY_VERSION:
+            raise RuntimeProfileInjectionError(
+                "runtime profile prompt delivery was not authorized"
+            )
+        agent = runner.get_agent(self.agent_id)
+        if not isinstance(agent, dict):
+            raise RuntimeProfileInjectionError("agent definition is unavailable")
+        run_template = str(agent.get("run") or "")
+        profiles = tuple(
+            VerifiedRuntimeProfile(
+                metadata_hash=row.metadata_hash,
+                item_id_hash=row.item_id_hash,
+                role_spec_hash=row.role_spec_hash,
+                effect_receipt_hash=row.effect_receipt_hash,
+                output_sha256=row.output_sha256,
+                profile_bytes=row.profile_bytes,
+            )
+            for row in effects
+        )
+        capsule = build_runtime_profile_prompt_capsule(
+            request_hash=context.request_hash,
+            context_hash=context.context_hash,
+            source_receipt_hash=context.source_receipt_hash,
+            typed_binding_set_hash=context.typed_binding_set_hash,
+            public_instruction_hash=context.public_instruction_hash,
+            profiles=profiles,
+        )
+        target = RUNTIME_PROFILE_PROMPT_CONTAINER_PATH
+        self._require_portable_container_path_without_links(
+            delegate=runner.subprocess,
+            container_name=container_name,
+            locator=target,
+        )
+        if not self._portable_capability_docker_condition(
+            runner.subprocess,
+            [
+                "docker",
+                "exec",
+                container_name,
+                "test",
+                "!",
+                "-e",
+                target,
+            ],
+        ):
+            raise RuntimeProfileInjectionError(
+                "runtime profile prompt target already exists"
+            )
+
+        receipt_root = Path(
+            tempfile.mkdtemp(prefix="skilllearn_runtime_profile_prompt-")
+        )
+        try:
+            source = receipt_root / "fragment.txt"
+            source.write_bytes(capsule.fragment_bytes)
+            self._portable_capability_docker_run(
+                runner.subprocess,
+                ["docker", "cp", str(source), f"{container_name}:{target}"],
+            )
+            self._portable_capability_docker_run(
+                runner.subprocess,
+                ["docker", "exec", container_name, "chmod", "0444", target],
+            )
+            self._require_portable_container_path_without_links(
+                delegate=runner.subprocess,
+                container_name=container_name,
+                locator=target,
+            )
+            readback = receipt_root / "container-readback.txt"
+            self._portable_capability_docker_run(
+                runner.subprocess,
+                ["docker", "cp", f"{container_name}:{target}", str(readback)],
+            )
+            bound = bind_verified_runtime_profile_prompt(
+                capsule,
+                container_readback=readback.read_bytes(),
+                run_template=run_template,
+                public_instruction=context.public_instruction,
+            )
+            agent["run"] = bound.run_template
+            return bound.receipt
+        finally:
+            shutil.rmtree(receipt_root, ignore_errors=True)
 
     def prewarm_trial_environment(
         self,
@@ -3163,6 +3305,11 @@ class SkillLearnSubprocessBackend:
                         else None
                     ),
                 )
+                setattr(
+                    runner,
+                    "_assumption_v2_runtime_profile_injection_receipt",
+                    None,
+                )
                 try:
                     return_code, result = runner.run_task(
                         f"{request.family}/{request.item_id}",
@@ -3183,6 +3330,11 @@ class SkillLearnSubprocessBackend:
                     agent_payloads = getattr(
                         runner,
                         "_assumption_v2_task_capability_agent_payloads",
+                        None,
+                    )
+                    injection_receipt = getattr(
+                        runner,
+                        "_assumption_v2_runtime_profile_injection_receipt",
                         None,
                     )
                     if (
@@ -3206,6 +3358,26 @@ class SkillLearnSubprocessBackend:
                         raise SkillLearnAgentTerminalError(
                             "task_capability_pre_agent_invalid"
                         )
+                    if portable_capability_context.delivery_mode:
+                        if (
+                            not isinstance(
+                                injection_receipt,
+                                RuntimeProfilePromptInjectionReceipt,
+                            )
+                            or injection_receipt.request_hash
+                            != portable_capability_context.request_hash
+                            or injection_receipt.context_hash
+                            != portable_capability_context.context_hash
+                            or injection_receipt.profile_count
+                            != len(runtime_effects)
+                        ):
+                            raise SkillLearnAgentTerminalError(
+                                "task_capability_prompt_delivery_invalid"
+                            )
+                    elif injection_receipt is not None:
+                        raise SkillLearnAgentTerminalError(
+                            "task_capability_prompt_delivery_invalid"
+                        )
                     result = dict(result)
                     result["task_capability_runtime_policy"] = (
                         PRE_AGENT_TASK_CAPABILITY_RUNTIME_VERSION
@@ -3216,6 +3388,16 @@ class SkillLearnSubprocessBackend:
                     result["task_capability_agent_payloads"] = [
                         dict(row) for row in agent_payloads
                     ]
+                    if injection_receipt is not None:
+                        result["runtime_profile_prompt_delivery_policy"] = (
+                            RUNTIME_PROFILE_PROMPT_DELIVERY_VERSION
+                        )
+                        result["runtime_profile_prompt_injection_receipt_hash"] = (
+                            injection_receipt.receipt_hash
+                        )
+                        result["runtime_profile_effective_prompt_sha256"] = (
+                            injection_receipt.effective_prompt_sha256
+                        )
                 if active_source_file_hashes:
                     installed_receipt = getattr(
                         runner,
@@ -3375,6 +3557,15 @@ class SkillLearnSubprocessBackend:
                     "installed_skill_source_receipt_hash": (
                         observation.installed_skill_source_receipt_hash
                     ),
+                    "runtime_profile_prompt_delivery_policy": (
+                        observation.runtime_profile_prompt_delivery_policy
+                    ),
+                    "runtime_profile_prompt_injection_receipt_hash": (
+                        observation.runtime_profile_prompt_injection_receipt_hash
+                    ),
+                    "runtime_profile_effective_prompt_sha256": (
+                        observation.runtime_profile_effective_prompt_sha256
+                    ),
                 },
             )
         )
@@ -3460,6 +3651,7 @@ class SkillLearnSubprocessBackend:
             runner._assumption_v2_installed_skill_receipt = None
             runner._assumption_v2_task_capability_effects = None
             runner._assumption_v2_task_capability_agent_payloads = None
+            runner._assumption_v2_runtime_profile_injection_receipt = None
             source = Path(skill_source_dir)
             expected_rows = source_rows(source)
             if not expected_rows:
@@ -3610,6 +3802,9 @@ class SkillLearnSubprocessBackend:
                         runner._assumption_v2_task_capability_agent_payloads = (
                             None
                         )
+                        runner._assumption_v2_runtime_profile_injection_receipt = (
+                            None
+                        )
                         self.event_sink.emit(
                             Event(
                                 event=(
@@ -3649,6 +3844,74 @@ class SkillLearnSubprocessBackend:
                         MappingProxyType(dict(row.agent_payload))
                         for row in effects
                     )
+                    if capability_context.delivery_mode:
+                        try:
+                            injection_receipt = (
+                                self._inject_runtime_profile_prompt_in_container(
+                                    runner=runner,
+                                    container_name=container_name,
+                                    context=capability_context,
+                                    effects=effects,
+                                )
+                            )
+                            runner._assumption_v2_runtime_profile_injection_receipt = (
+                                injection_receipt
+                            )
+                            self.event_sink.emit(
+                                Event(
+                                    event=(
+                                        "skilllearn_pre_agent_runtime_profile_"
+                                        "prompt_injected"
+                                    ),
+                                    stage=(
+                                        "benchmark.skilllearn."
+                                        "runtime_profile_prompt"
+                                    ),
+                                    trace_id=capability_context.request_hash[:20],
+                                    payload={
+                                        **injection_receipt.safe_payload(),
+                                        "receipt_hash": (
+                                            injection_receipt.receipt_hash
+                                        ),
+                                    },
+                                )
+                            )
+                        except Exception as exc:
+                            runner._assumption_v2_installed_skill_receipt = None
+                            runner._assumption_v2_task_capability_effects = None
+                            runner._assumption_v2_task_capability_agent_payloads = None
+                            runner._assumption_v2_runtime_profile_injection_receipt = None
+                            self.event_sink.emit(
+                                Event(
+                                    event=(
+                                        "skilllearn_trial_blocked_invalid_"
+                                        "runtime_profile_prompt"
+                                    ),
+                                    stage=(
+                                        "benchmark.skilllearn."
+                                        "runtime_profile_prompt"
+                                    ),
+                                    trace_id=capability_context.request_hash[:20],
+                                    payload={
+                                        "delivery_policy": (
+                                            capability_context.delivery_mode
+                                        ),
+                                        "request_hash": (
+                                            capability_context.request_hash
+                                        ),
+                                        "context_hash": (
+                                            capability_context.context_hash
+                                        ),
+                                        "error_type": type(exc).__name__,
+                                        "agent_started": False,
+                                        "model_invoked": False,
+                                        "raw_content_persisted": False,
+                                    },
+                                )
+                            )
+                            raise SkillLearnAgentTerminalError(
+                                "task_capability_prompt_delivery_invalid"
+                            ) from exc
                     self.event_sink.emit(
                         Event(
                             event=(
@@ -3691,6 +3954,7 @@ class SkillLearnSubprocessBackend:
         runner._assumption_v2_task_capability_context = None
         runner._assumption_v2_task_capability_effects = None
         runner._assumption_v2_task_capability_agent_payloads = None
+        runner._assumption_v2_runtime_profile_injection_receipt = None
 
     @contextmanager
     def _provider_runtime(
@@ -4467,6 +4731,15 @@ class SkillLearnSubprocessBackend:
             "installed_skill_destination_count": _as_nonnegative_int(
                 result.get("installed_skill_destination_count")
             ),
+            "runtime_profile_prompt_delivery_policy": result.get(
+                "runtime_profile_prompt_delivery_policy"
+            ),
+            "runtime_profile_prompt_injection_receipt_hash": result.get(
+                "runtime_profile_prompt_injection_receipt_hash"
+            ),
+            "runtime_profile_effective_prompt_sha256": result.get(
+                "runtime_profile_effective_prompt_sha256"
+            ),
             "error_type": error_type,
             "token_usage": {str(key): _as_nonnegative_int(value) for key, value in usage.items()},
         }
@@ -4514,6 +4787,15 @@ class SkillLearnSubprocessBackend:
             ),
             installed_skill_source_receipt_hash=str(
                 result.get("installed_skill_source_receipt_hash") or ""
+            ),
+            runtime_profile_prompt_delivery_policy=str(
+                result.get("runtime_profile_prompt_delivery_policy") or ""
+            ),
+            runtime_profile_prompt_injection_receipt_hash=str(
+                result.get("runtime_profile_prompt_injection_receipt_hash") or ""
+            ),
+            runtime_profile_effective_prompt_sha256=str(
+                result.get("runtime_profile_effective_prompt_sha256") or ""
             ),
             proposal_action_trace=(
                 MappingProxyType(dict(result["proposal_action_trace"]))
@@ -4816,6 +5098,7 @@ class SkillLearnCounterfactualRunner:
         typed_selection_execution_authorization: (
             TypedSelectionExecutionAuthorization | None
         ) = None,
+        portable_capability_delivery_mode: str | None = None,
         output_root: str | Path,
         parallel_workers: int = 1,
         invalid_trial_max_attempts: int = 1,
@@ -4903,6 +5186,22 @@ class SkillLearnCounterfactualRunner:
             raise ValueError(
                 "typed execution authorization requires a typed compiler"
             )
+        if portable_capability_delivery_mode not in {
+            None,
+            RUNTIME_PROFILE_PROMPT_DELIVERY_VERSION,
+        }:
+            raise ValueError("unsupported portable capability delivery mode")
+        if portable_capability_delivery_mode and not getattr(
+            compiler,
+            "portable_capability_compiler_mode",
+            None,
+        ):
+            raise ValueError(
+                "portable capability delivery requires the portable compiler"
+            )
+        self.portable_capability_delivery_mode = (
+            portable_capability_delivery_mode or ""
+        )
         self.output_root = Path(output_root)
         self.parallel_workers = parallel_workers
         self.invalid_trial_max_attempts = invalid_trial_max_attempts
@@ -5384,6 +5683,9 @@ class SkillLearnCounterfactualRunner:
                     stable_hash({"item_id": task.id}),
                     (),
                 )
+            ),
+            portable_capability_delivery_mode=(
+                self.portable_capability_delivery_mode
             ),
             candidate_delta_program_set_hash=(
                 "" if legacy_singleton else candidate_delta_program_set_hash
@@ -6110,6 +6412,7 @@ class SkillLearnCounterfactualRunner:
         portable_capability_compiler_mode: str = "",
         portable_capability_role_spec_set_hash: str = "",
         portable_capability_role_spec_hashes: tuple[str, ...] = (),
+        portable_capability_delivery_mode: str = "",
         candidate_delta_program_set_hash: str = "",
         candidate_full_program_set_hash: str = "",
         matched_candidate_program_set_hash: str = "",
@@ -6148,6 +6451,9 @@ class SkillLearnCounterfactualRunner:
             ),
             portable_capability_role_spec_hashes=(
                 portable_capability_role_spec_hashes
+            ),
+            portable_capability_delivery_mode=(
+                portable_capability_delivery_mode
             ),
             candidate_delta_program_set_hash=(
                 candidate_delta_program_set_hash
@@ -6324,6 +6630,7 @@ class SkillLearnEvolutionHarness:
             TypedSelectionExecutionAuthorization | None
         ) = None,
         portable_capability_compiler_mode: str | None = None,
+        portable_capability_delivery_mode: str | None = None,
         candidate_bundle_policy: str | None = None,
         contrastive_training_evidence_policy: str | None = None,
         train_action_design_policy: str | None = None,
@@ -6543,6 +6850,9 @@ class SkillLearnEvolutionHarness:
             ),
             typed_selection_execution_authorization=(
                 typed_selection_execution_authorization
+            ),
+            portable_capability_delivery_mode=(
+                portable_capability_delivery_mode
             ),
             output_root=self.output_root,
             parallel_workers=parallel_workers,

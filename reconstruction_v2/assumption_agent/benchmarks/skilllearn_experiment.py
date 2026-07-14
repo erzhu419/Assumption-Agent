@@ -110,6 +110,9 @@ from .skilllearn_lifecycle import (
     codex_network_minimization_for_policy,
 )
 from .offline_verifier import OFFLINE_VERIFIER_POLICY_VERSION
+from .runtime_profile_injection import (
+    RUNTIME_PROFILE_PROMPT_DELIVERY_VERSION,
+)
 from .skilllearnbench import SkillLearnBenchAdapter
 from .task_input_freeze import (
     expected_prewarm_closure_rows,
@@ -359,6 +362,17 @@ def main() -> None:
         portable_capability_compiler_mode = str(
             portable_capability_compiler_mode
         )
+    portable_capability_delivery_mode = execution_contract.get(
+        "portable_capability_delivery_mode"
+    )
+    if portable_capability_delivery_mode is not None:
+        portable_capability_delivery_mode = str(
+            portable_capability_delivery_mode
+        )
+        if portable_capability_delivery_mode != (
+            RUNTIME_PROFILE_PROMPT_DELIVERY_VERSION
+        ):
+            raise ValueError("unsupported portable capability delivery mode")
     manifest = SplitManifest.read(args.manifest)
     protocol_root = paper_protocol.path.parent.parent
     frozen_task_inputs = load_frozen_task_input_closure(
@@ -837,6 +851,9 @@ def main() -> None:
         portable_capability_compiler_mode=(
             portable_capability_compiler_mode
         ),
+        portable_capability_delivery_mode=(
+            portable_capability_delivery_mode
+        ),
         candidate_bundle_policy=candidate_bundle_policy,
         contrastive_training_evidence_policy=(
             contrastive_training_evidence_policy
@@ -903,6 +920,9 @@ def main() -> None:
             ),
             portable_capability_compiler_mode=(
                 portable_capability_compiler_mode
+            ),
+            portable_capability_delivery_mode=(
+                portable_capability_delivery_mode
             ),
             candidate_bundle_policy=candidate_bundle_policy,
             contrastive_training_evidence_policy=(
