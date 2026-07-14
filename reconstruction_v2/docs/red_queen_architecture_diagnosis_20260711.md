@@ -11,6 +11,7 @@
 > - 最新 typed-portable integration：2026-07-14 的唯一一次正式非评分 integration 及其 exact replay 均通过，decision hash `a151ca52916101f0ea31b0d2f11c8fde8407f4410d175b1ac983e013d6e7957e`；真实 Docker canary、v3.20 production authorization loader 与 container cleanup 均通过，model/task-backend/evaluator call 均为 0。该结果只执行 agent-start 前的只读 artifact-evidence sidecar，不声称 write/render/move 等 recipe operator 已由 capability 执行；它允许建立 fresh v3.20 development root，但不是 incumbent 或 promotion
 > - 最新 clean development 结果：v3.20 在 fresh root 上以 38 个 item workers / 48 model slots 完成 38/38 valid TRAIN、16/16 valid validation baseline 与 6 个 policy-on；61 次 attempt 中 60 次 valid，唯一 `codex_turn_failed` 以 same-request clean retry 恢复。两代均为 raw/candidate 5/16、activation 3/16、0 gain/0 harm、16 个 binary tie，两臂均 `incumbent_id=null`。非评分因果审计显示两代 recipe 与 action trace 确实不同，但 6 份 candidate trace 没有留下读取或消费 pre-agent sidecar 的可审计证据；因此断点是 capability evidence 未被下游动作消费，不是 selector、并发、budget 或新 gate 缺失。本轮已按预注册停止，不进入 freeze/controls/family-out/HippoRAG/sealed
 > - 最新 runtime-delivery integration：2026-07-15 的唯一一次 TRAIN-only、非评分正式 decision 及其 exact no-model Docker replay 已通过 8/8 predicates 与 4/4 固定 tamper probes。三个 exact-image canary 以 3 路并发、`--network none` 完成 production TRAIN compile、canonical profile 生成/回读、真实 Codex run-template 注入与 effective-prompt shell readback；model、`run_task`、evaluator、verifier、score、promotion call 均为 0。该结果证明 profile 已进入 launch input，并不证明模型在认知上使用了 profile，也不产生 incumbent 或 task-utility claim
+> - 最新 profile-consumption 诊断：2026-07-15 的预注册 consumed-development diagnostic 只新增 G1/G2 × 3 项共 6 个 policy-on trial，6 路同时启动、无 retry，6/6 valid 且 runtime receipt binding 全部通过；全程复用冻结 RAW 并使用离线 post-agent verifier。G1/G2 均为 0/3，prompt-delivery delta 与相对 RAW utility signal 均为 0/6。该结果 `fresh_validation=false`、`claim_eligible=false`，不创建 incumbent 或 promotion，也不触碰 test trial/sealed scoring；它终止的是“继续强化同一 profile 的 delivery”路线，下一步先改变 task-local execution contract 与 TRAIN-only action-utility 搜索对象，而不是立刻消耗新的 holdout 或增加 gate
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -1367,6 +1368,44 @@ treatment、action count 与 verifier 子测试结果均发生变化。然而 6 
 “生成的 capability profile 没有被下游任务动作强制消费”。同类 read-only-sidecar +
 prompt-directive recipe 的 development 搜索到此停止；不新增 recipe prompt、selector 或评分 gate。
 
+### 8.10 P0 已执行：profile 已进入 launch prompt，剩余断点转为 task-local execution semantics
+
+runtime-delivery integration 解决的是 launch wiring，不是 task utility。为避免直接消耗新的无偏
+split，2026-07-15 另行预注册了一个严格限额的 consumed-development diagnostic：只运行既有
+v3.20 G1/G2 在三个已消费 validation item 上的 6 个新 policy-on trial，不运行新的 policy-off、
+proposal 或 training model call，不 retry。六个独立 backend 由 6 workers 同时调度，实际 agent
+launch=6、峰值并发=6；6/6 observation valid，全部使用 offline post-agent verifier，且 runtime
+profile effect、launch fragment、effective prompt、request/source/typed binding receipt 全部闭合。
+
+正式结果为 G1=0/3、G2=0/3；相对同代未注入 prompt 的冻结历史 observation，delivery delta
+signal=0/6；相对冻结 RAW，utility signal=0/6。该 diagnostic 明确
+`fresh_validation=false`、`claim_eligible=false`、`semantic_profile_consumption_claimed=false`、
+`task_utility_causal_claimed=false`，没有 incumbent、promotion、test trial 或 sealed scoring。运行只
+检查了 test infrastructure metadata，没有读取 test task-input bytes，也没有向模型暴露；HippoRAG
+没有同构 executable file-task arm，因此本次只用已冻结 RAW 作比较。
+
+这排除了“verified profile 根本没有进入 launch input”这一解释，但不能证明模型语义性读取、遵循或
+把 profile 转化为因果 task action。尤其 validation 在预注册前已经消费，本轮又没有同时随机化的新
+policy-off；所以 0/6 不是 clean causal null efficacy，只能支持一个 bounded stopping decision：继续
+把同一份 schema/inventory profile 更牢地塞进 prompt，不值得直接消耗新的无偏 split。
+
+local-only、非评分的 CTRF/trace 解释进一步缩小了设计缺口，但不属于 formal performance claim：
+六份 trace 都没有打开注入的 `portable-*.json`；只有 temperature G2 另行读取过 frozen `SKILL.md`，
+其中虽列出 profile locator，后续仍未打开 sidecar。因此 launch receipt 不能替代 semantic-consumption
+证据。
+
+| family | G1 / G2 离线子测试 | 精确 residual | 设计含义 |
+|---|---:|---|---|
+| stock visualization | 9/10、9/10 | 都只剩 non-ETF tooltip interaction | 需要可重放的 interaction/postcondition contract，而不只是表头 profile |
+| temperature simulation | 4/7、6/7 | G2 的 final output 已过参数和 RMSE 阈值，只因 `metrics.json` 的自评语义与离线重算不一致 | 需要 final-artifact single-source metric recomputation，而不是 search-time 近似 |
+| organize files | 3/6、4/6 | G2 只剩错误分类，G1 另有缺件与 source completion 问题 | 需要 exhaustive mapping、one-to-one move reconciliation 与 completion audit |
+
+共同点不是“还缺一个 promotion gate”，而是当前 profile 主要给出 schema/inventory facts，没有表达
+决定成败的 task-local 操作不变量、postcondition 和 self-evaluation semantics。另一个关键资源反例是
+temperature G2：66 个 action starts 却消耗 3,000,056 tokens 和 1,763.18 秒，local trace 中一个 shell
+action 内调度/尝试 140-point grid search（不能证明 140 点全部完成）。action-start count 不能约束 action-span 内部计算；下一表示应让
+typed operator 声明有限候选集、搜索空间 hash 与实际 evaluation count receipt，而不是再叠一个评分 gate。
+
 ## 九、下一步优先级与硬验收标准
 
 | 优先级 | 工作 | 硬验收标准 |
@@ -1403,12 +1442,14 @@ prompt-directive recipe 的 development 搜索到此停止；不新增 recipe pr
 | 完成（v3.19 task closure） | offline task input/dependency closure | manifest v2 绑定 transport-stable source environment；preparation receipt 冻结 11-item ledger / 126 objects；11/11 affected images 重建并以 immutable ID 无网络检查；86-worker v5 cache-only prewarm 86/86、closure 11/11、0 model/evaluator/sealed scoring。evaluator 与 promotion gate 未改变 |
 | 完成（typed-portable formal integration PASS） | capability-backed portable artifact role 的 pre-agent 只读 sidecar | 唯一一次正式 run + exact replay PASS，decision `a151ca52…e7957e`；3 项真实 Docker canary、production v3.20 loader、exact image 与 cleanup 通过，0 model/task-backend/evaluator call。只声明 evidence profile/inventory sidecar，write/render/move 不属于 capability effect；该次性 development 授权已使用 |
 | 完成（v3.20 clean negative） | 验证 portable treatment 的真实 task utility | 38/38 TRAIN、16/16 baseline、6/6 policy-on valid；两代均 3/16 activation、5/16 对 5/16、0 gain/0 harm、incumbent null。G1/G2 行为不同，但 6 份 trace 都未消费 sidecar；已按停止条件终止，不新增 recipe prompt、selector 或评分 gate |
-| STOP（当前 claim 路线） | freeze、controls、family-out、HippoRAG transfer、sealed | 无 incumbent；primary validation 已被 v3.20 消费。不得用已见 validation 子测试调 recipe 后再将同一 split 当 claim evidence |
-| 可选的 exploratory/train-only | runtime-enforced typed capability invocation | 由 harness 直接注入或返回结构化 profile，并让首个相关 task action 绑定 profile/effect receipt hash；完成前不再跑 development，之后仍需新的无偏 development split 才能重建 claim |
+| 完成（consumed、non-claim diagnostic） | verified profile launch-prompt delivery | 6/6 valid、actual peak concurrency=6、runtime receipt binding PASS；G1/G2 均 0/3，delivery delta=0/6、RAW utility=0/6；明确不声明 semantic consumption 或 task causality |
+| STOP | 重跑相同 6 题、立即使用相同候选消耗 fresh split、freeze/controls/family-out/HippoRAG/sealed | 已见 validation 只能作为 design evidence；无 incumbent；不得把调过的同一 split 再包装成无偏 claim，也不应让相同候选继续消耗 holdout |
+| NEXT（候选类改变，不是新 gate） | task-local typed execution contract 与 TRAIN-only action-utility search | 候选包含 role-resolved input、decisive invariant、bounded operation、postcondition/completion audit、single-source self-evaluation 和 effect receipt；禁止携带 verifier/test literal |
+| 后续一次性验证 | fresh paired efficacy | 只有新候选类先在 deterministic TRAIN cross-fit 上产生 transferable utility signal，才冻结新的未消费 development split；RAW/Agent 最大并发、同模型/镜像/预算、离线评价。HippoRAG 仅在存在同构 executable adapter 时加入 |
 | P2 | 多 clade archive | 同 epoch 至少两个 clade 可继续扩展；node 绑定 protocol/evidence/promotion hashes，并报告 retention 与 branch productivity |
 | P2 | evaluator co-evolution | 独立 anchor challenger、epoch transition、selective invalidation 和旧 incumbent re-evaluation 实际执行后再作主张 |
 
-以下为按时间保留的执行记录（当前停止结论见第 59 项）：
+以下为按时间保留的执行记录（当前停止结论见第 62 项）：
 
 1. 已完成：审阅并提交 protocol/action/subset 改动以及 3 个新 manifest/receipt 文件；
 2. 已完成：在 clean scoped commit 上重建 claim-eligible lock 和 86-item content-hashed prewarm receipt；
@@ -1689,6 +1730,20 @@ prompt-directive recipe 的 development 搜索到此停止；不新增 recipe pr
     `run_task`、evaluator、verifier、score、
     promotion 均为 0。它解决了“profile 只在 host sidecar/metadata 中、没有进入模型 launch input”的机制
     断点，但不把 prompt delivery 偷换成模型理解、action causality 或 task utility。
+61. 预注册的 consumed-development profile-consumption diagnostic 已严格用完 6 个新 policy-on trial
+    的一次性预算：G1/G2 × stock、temperature、organize，0 retry、0 新 policy-off、0 proposal/training
+    call，6 workers 的实际 peak agent concurrency=6。6/6 valid，offline verifier 与 runtime receipt
+    binding 全部通过；G1/G2 均 0/3，delivery delta=0/6、stored-RAW utility=0/6。结果明确为
+    `fresh_validation=false`、`claim_eligible=false`，没有 incumbent/promotion、test trial 或 sealed
+    scoring；只检查 test infrastructure metadata，未读取 test task-input bytes。HippoRAG 因没有同构
+    executable file-task arm而不运行。formal report hash 为 `6e7620ff…e321e`。
+62. delivery-only 路线到此停止，但不把 0/6 写成 clean causal null。local-only CTRF 显示三类失败已
+    收缩为 exact interaction contract、文件映射/completion audit 与 final-artifact metric semantics；
+    temperature G2 又用 66 个 action starts 隐藏了单 action 调度/尝试的 140-point search，最终达到 3,000,056
+    tokens / 1,763.18 秒。所以下一步改变的是候选生成空间和 TRAIN-only objective：task-local invariant、
+    bounded operator、postcondition 与 single-source self-evaluation，而不是增加 gate 或立刻用同一候选
+    消耗 fresh holdout。只有 deterministic TRAIN cross-fit 先出现 transferable action-utility signal，才
+    进行一次新的 paired development。
 
 这个负结果比继续扩展 gate、archive 或 HLE source span 更能降低研究风险。
 
@@ -1904,19 +1959,27 @@ validation baseline、6/6 policy-on 均 valid；两代均为 3/16 activation、5
 action count 和 verifier 子测试都不同；stock 从 6/10 升至 8/10，但 organize 从 5/6 降至
 3/6 或 4/6，temperature 从 6/7 降至 5/7。这些都没有翻转二元 task success。
 
-更关键的因果审计结果是：6 份 candidate trace 都没有留下显式读取或消费 pre-agent portable sidecar
-的可审计证据，也没有 fine-grained action receipt。因此断点是 sidecar 未被 runtime-enforced task action
-消费，而不是需要
-更多 recipe prompt、selector 或 promotion gate。当前 read-only-sidecar + prompt-directive 路线已按预注册
-停止。primary validation 也已被消费，不得用已见子测试调参后再当无偏证据。所以现在不跑
-freeze、controls、family-out、HippoRAG/raw transfer 或 sealed test，更不谈 multi-clade 或 evaluator
-co-evolution。TRAIN-only exploratory integration 现已把 profile 改为 harness 强制注入 launch prompt 并
-绑定 effect receipt/effective-prompt receipt，且全部预注册 predicate 通过；因此下一步不再补机制 gate，
-而是冻结一个**新的、此前未消费的 development validation split**再做 paired efficacy。现有 primary
-validation 已被 v3.20 消费，不能复用；任何把 primary sealed item 改作 development 的方案都会消耗既有
-sealed holdout，必须先重新划分并保留新的最终 sealed 集，不能在本轮默默执行。v3.12 空
-freeze/partial-control rows、v3.14 mixed-claim rows、v3.16/v3.17 proposal-only artifacts 和 v3.18r1
-mixed-validity rows 都不能拼入 v3.20 performance evidence。
+launch-prompt integration 与随后严格限额的 6-trial diagnostic 已把旧断点进一步缩小：问题不再是 profile
+缺席于模型输入，而是 delivered profile 没有表达足够 task-local、可执行且可自校验的决定性不变量；
+material task action 仍主要由 agent 自由规划。6/6 runtime receipt 虽然闭合，G1/G2 仍各 0/3，且相对
+同代历史 treatment 与冻结 RAW 都没有 utility signal。因为这些 validation item 在预注册前已经消费，
+这个结果只能作 design evidence，不能作 clean causal null。
+
+所以当前停止条件比“换一个 fresh split 立刻再跑”更严格：现有 primary validation 不能继续用于无偏
+claim，但也不应让**相同候选类**立即消耗新的 holdout。先把搜索对象改为 TRAIN-derived closed execution
+contract：role-resolved input、decisive invariant、bounded operation、postcondition/completion audit、
+single-source self-evaluation 与 effect receipt；再在 deterministic TRAIN inner/cross-fit 上，用已存 RAW
+baseline 和最大并行的 candidate-on 离线评价实际 action utility。这个 TRAIN objective 是候选排序信号，
+不是新的 promotion gate，也不得读取 consumed validation、test 或 hidden verifier literal。只有 cross-fit
+先出现 transferable utility，才冻结一次新的未消费 development split并做 paired efficacy。
+
+因此现在不跑 freeze、controls、family-out、HippoRAG/raw transfer 或 sealed test，更不谈 multi-clade 或
+evaluator co-evolution。任何把 primary sealed item 改作 development 的方案都会消耗既有 sealed holdout，
+必须另行显式重划并保留新的最终 sealed 集；v3.12 空 freeze/partial-control rows、v3.14 mixed-claim rows、
+v3.16/v3.17 proposal-only artifacts、v3.18r1 mixed-validity rows和本轮 consumed diagnostic 都不能拼成
+performance evidence。距离目标的状态是：L1 wiring/delivery 已完成；L2 可归因行为改善仍缺；无 incumbent
+所以 L3 unseen generalization 尚未开始，L4 recursive retained improvement 未证明，L5 evaluator
+co-evolution 未开始。
 最诚实的论文级表述是：
 
 > **显式 HypothesisProgram 是一个有希望、可能更易归因的 self-evolution 搜索表示；
@@ -1965,6 +2028,12 @@ mixed-validity rows 都不能拼入 v3.20 performance evidence。
   [`report`](../artifacts/typed_profile_injection_integration_v1_v320_train/typed_profile_injection.report.json)；
   [`event ledger`](../artifacts/typed_profile_injection_integration_v1_v320_train/typed_profile_injection.events.jsonl)；
   [`decision lock`](../artifacts/typed_profile_injection_integration_v1_v320_train/typed_profile_injection.decision.lock.json)
+- formal consumed-development runtime-profile consumption diagnostic v1（非 claim）：
+  [`preregistration`](../manifests/skilllearn_typed_profile_consumption_diagnostic_v1.json)；
+  [`result receipt`](../manifests/skilllearn_typed_profile_consumption_diagnostic_result_v1.json)；
+  [`report`](../artifacts/typed_profile_consumption_diagnostic_v1_v320_consumed_validation/profile_consumption.report.json)；
+  [`event ledger`](../artifacts/typed_profile_consumption_diagnostic_v1_v320_consumed_validation/profile_consumption.events.jsonl)；
+  [`completion lock`](../artifacts/typed_profile_consumption_diagnostic_v1_v320_consumed_validation/profile_consumption.completion.lock.json)
 - latest failed proposal-only diagnostic protocol：
   [`skilllearn_paper_protocol_v3_17_ruoli_gpt54mini.json`](../manifests/skilllearn_paper_protocol_v3_17_ruoli_gpt54mini.json)
 - immutable v3.16 proposal-only diagnostic protocol：
