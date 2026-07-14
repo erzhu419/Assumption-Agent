@@ -12,6 +12,7 @@ from ..evolution import (
     COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS,
     CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
     PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
+    PROPOSAL_FORMATION_POLICY_VERSION,
     TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
     CounterfactualEvidenceReplayCache,
 )
@@ -162,6 +163,16 @@ def main() -> None:
     candidate_selection_policy = str(
         execution_contract["proposal_candidate_selection"]
     )
+    proposal_formation_policy = execution_contract.get(
+        "proposal_formation_policy"
+    )
+    if proposal_formation_policy is not None:
+        proposal_formation_policy = str(proposal_formation_policy)
+    if proposal_formation_policy not in {
+        None,
+        PROPOSAL_FORMATION_POLICY_VERSION,
+    }:
+        raise ValueError("unsupported protocol proposal formation policy")
     candidate_bundle_policy = execution_contract.get("candidate_bundle_policy")
     if candidate_bundle_policy is not None:
         candidate_bundle_policy = str(candidate_bundle_policy)
@@ -403,6 +414,11 @@ def main() -> None:
         "max_generations": max_generations,
         "max_consecutive_non_promotions": max_consecutive_non_promotions,
         "proposal_candidates_per_generation": proposal_candidates_per_generation,
+        **(
+            {"proposal_formation_policy": proposal_formation_policy}
+            if proposal_formation_policy is not None
+            else {}
+        ),
         **(
             {
                 "proposal_diversity_policy": proposal_diversity_policy,
@@ -651,6 +667,7 @@ def main() -> None:
         output_root=args.work_dir / "compiled_skills",
         proposal_candidates_per_generation=proposal_candidates_per_generation,
         candidate_selection_policy=candidate_selection_policy,
+        proposal_formation_policy=proposal_formation_policy,
         candidate_bundle_policy=candidate_bundle_policy,
         contrastive_training_evidence_policy=(
             contrastive_training_evidence_policy
@@ -698,6 +715,7 @@ def main() -> None:
             output_root=args.work_dir / "compiled_skills_no_recursive",
             proposal_candidates_per_generation=proposal_candidates_per_generation,
             candidate_selection_policy=candidate_selection_policy,
+            proposal_formation_policy=proposal_formation_policy,
             candidate_bundle_policy=candidate_bundle_policy,
             contrastive_training_evidence_policy=(
                 contrastive_training_evidence_policy
@@ -862,6 +880,8 @@ def _run_paired_arms(
         != no_recursive_harness.candidate_selection_policy
         or recursive_harness.candidate_bundle_policy
         != no_recursive_harness.candidate_bundle_policy
+        or recursive_harness.proposal_formation_policy
+        != no_recursive_harness.proposal_formation_policy
         or recursive_harness.contrastive_training_evidence_policy
         != no_recursive_harness.contrastive_training_evidence_policy
         or recursive_harness.train_action_design_policy
@@ -962,6 +982,10 @@ def _run_paired_arms(
                 ),
             }
         )
+    if recursive_harness.proposal_formation_policy:
+        checkpoint_descriptor["proposal_formation_policy"] = (
+            recursive_harness.proposal_formation_policy
+        )
     action_context_profile_hashes = sorted(
         {
             str(row.context.get("action_context_profile_hash") or "")
@@ -1026,6 +1050,10 @@ def _run_paired_arms(
                     else {}
                 ),
             }
+        )
+    if recursive_harness.proposal_formation_policy:
+        checkpoint_payload["proposal_formation_policy"] = (
+            recursive_harness.proposal_formation_policy
         )
     if recursive_harness.train_action_design_policy:
         checkpoint_payload.update(

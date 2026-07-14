@@ -59,6 +59,7 @@ def development_prewarm_version_for_protocol(
         "3.13.0": DEVELOPMENT_PREWARM_VERSION,
         "3.14.0": DEVELOPMENT_PREWARM_VERSION,
         "3.15.0": DEVELOPMENT_PREWARM_VERSION,
+        "3.16.0": DEVELOPMENT_PREWARM_VERSION,
     }.get(str(protocol_version or ""))
 
 

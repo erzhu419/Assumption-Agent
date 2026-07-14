@@ -4,7 +4,7 @@ from dataclasses import dataclass, replace
 from fractions import Fraction
 from itertools import combinations
 from math import ceil
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 from .archive import ArchiveNode, PolicyArchive
 from .evaluation import (
@@ -25,9 +25,11 @@ from .models import (
     stable_hash,
 )
 from .proposer import (
+    FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION,
     PROPOSAL_DIVERSITY_POLICY_VERSION,
     REPAIR_REQUEST_SCOPE_POLICY_VERSION,
     StructuredHypothesisProposer,
+    TRAIN_ACTION_DESIGN_POLICY_VERSION,
     TRAIN_ACTION_DESIGN_POLICY_VERSIONS,
     train_action_quality_contract,
 )
@@ -74,6 +76,12 @@ COUNTERFACTUAL_REPLAY_POLICY_VERSION = (
 )
 PROGRAM_SET_COUNTERFACTUAL_REPLAY_POLICY_VERSION = (
     "behavior_identical_validation_program_set_replay_v2"
+)
+PROPOSAL_FORMATION_POLICY_VERSION = (
+    FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION
+)
+PROPOSAL_FORMATION_POLICY_VERSIONS = frozenset(
+    {PROPOSAL_FORMATION_POLICY_VERSION}
 )
 
 
@@ -177,6 +185,40 @@ class _TrainingCandidateMetrics:
                 }
             )
         return payload
+
+
+@dataclass(frozen=True)
+class _FamilyProfilePrimitive:
+    kind: str
+    value: str
+    train_failure_evidence_count: int
+
+    @property
+    def reusable(self) -> bool:
+        return self.train_failure_evidence_count >= 2
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "kind": self.kind,
+            "value": self.value,
+            "train_failure_evidence_count": self.train_failure_evidence_count,
+            "reusable_across_same_family_failures": self.reusable,
+        }
+
+
+@dataclass(frozen=True)
+class _FamilyProposalSlot:
+    target_family: str
+    failures: tuple[ResidualExample, ...]
+    profile_items: tuple[tuple[str, Mapping[str, Any]], ...]
+    profile_evidence_hash: str
+    preferred_primitives: tuple[_FamilyProfilePrimitive, ...]
+    failed_primitives: tuple[_FamilyProfilePrimitive, ...]
+    prior_use_count: int
+
+    @property
+    def reusable_preferred_primitive_count(self) -> int:
+        return sum(row.reusable for row in self.preferred_primitives)
 
 
 @dataclass(frozen=True)
@@ -476,6 +518,7 @@ class EvolutionKernel:
         candidate_bundle_policy: str | None = None,
         contrastive_training_evidence_policy: str | None = None,
         train_action_design_policy: str | None = None,
+        proposal_formation_policy: str | None = None,
         repair_request_scope_policy: str | None = None,
         event_sink: EventSink | None = None,
     ) -> None:
@@ -510,6 +553,23 @@ class EvolutionKernel:
             raise ValueError(
                 "unsupported TRAIN action design policy: "
                 f"{train_action_design_policy}"
+            )
+        if proposal_formation_policy not in {
+            None,
+            *PROPOSAL_FORMATION_POLICY_VERSIONS,
+        }:
+            raise ValueError(
+                "unsupported proposal formation policy: "
+                f"{proposal_formation_policy}"
+            )
+        if (
+            proposal_formation_policy == PROPOSAL_FORMATION_POLICY_VERSION
+            and train_action_design_policy
+            != TRAIN_ACTION_DESIGN_POLICY_VERSION
+        ):
+            raise ValueError(
+                "profile-grounded family-slot proposal formation requires "
+                f"TRAIN action design policy {TRAIN_ACTION_DESIGN_POLICY_VERSION}"
             )
         contrastive_enabled = (
             contrastive_training_evidence_policy
@@ -556,6 +616,14 @@ class EvolutionKernel:
             raise ValueError(
                 "coverage-aware proposal diversity requires exactly three candidates"
             )
+        if (
+            proposal_formation_policy == PROPOSAL_FORMATION_POLICY_VERSION
+            and proposal_candidates_per_generation != 3
+        ):
+            raise ValueError(
+                "profile-grounded family-slot proposal formation requires "
+                "exactly three candidates"
+            )
         self.proposal_candidates_per_generation = proposal_candidates_per_generation
         self.candidate_selection_policy = candidate_selection_policy
         self.candidate_bundle_policy = candidate_bundle_policy
@@ -563,9 +631,15 @@ class EvolutionKernel:
             contrastive_training_evidence_policy
         )
         self.train_action_design_policy = train_action_design_policy
+        self.proposal_formation_policy = proposal_formation_policy
         self.repair_request_scope_policy = repair_request_scope_policy
         self.event_sink = event_sink or NullEventSink()
         self._promotion_feedback: list[dict[str, object]] = []
+        self._proposal_family_use_counts: dict[str, int] = {}
+        self._recorded_proposal_family_usage: dict[
+            str,
+            tuple[tuple[str, ...], tuple[str | None, ...]],
+        ] = {}
 
     def evolve_once(
         self,
@@ -602,6 +676,7 @@ class EvolutionKernel:
             )
         for task in validation_tasks:
             self.split_guard.authorize(task.id, AccessPhase.PROMOTION)
+        shared_proposals_supplied = bool(proposal_candidates)
         proposals = tuple(
             _with_primary_metric(program, self.promotion_gate.spec.metric)
             for program in (
@@ -617,6 +692,21 @@ class EvolutionKernel:
             raise ValueError("evolution requires at least one proposal candidate")
         if any(row.evaluator_epoch != validation_context.evaluator_epoch for row in proposals):
             raise ValueError("shared proposal candidate crossed evaluator epochs")
+        if (
+            shared_proposals_supplied
+            and self.proposal_formation_policy
+            == PROPOSAL_FORMATION_POLICY_VERSION
+        ):
+            self._record_matched_proposal_families(
+                proposals,
+                residuals=residuals,
+                validation_context=validation_context,
+                trace_id=trace_id,
+                source="shared_proposal_candidates",
+                requested_targets=self.proposer.family_slot_targets_for(
+                    proposals
+                ),
+            )
         known_behaviors = {
             _runner_behavior_hash(self.counterfactual_runner, program)
             for program in self.archive.hypotheses.values()
@@ -1111,6 +1201,15 @@ class EvolutionKernel:
         validation_context: ValidationContext,
         trace_id: str,
     ) -> tuple[HypothesisProgram, ...]:
+        if (
+            self.proposal_formation_policy
+            == PROPOSAL_FORMATION_POLICY_VERSION
+        ):
+            return self._propose_family_slot_candidates(
+                residuals,
+                validation_context=validation_context,
+                trace_id=trace_id,
+            )
         return self.proposer.propose(
             residuals,
             evaluator_epoch=validation_context.evaluator_epoch,
@@ -1266,6 +1365,533 @@ class EvolutionKernel:
             trace_id=trace_id,
         )
 
+    def _propose_family_slot_candidates(
+        self,
+        residuals: Sequence[ResidualExample],
+        *,
+        validation_context: ValidationContext,
+        trace_id: str,
+    ) -> tuple[HypothesisProgram, ...]:
+        issues = [
+            issue
+            for residual in residuals
+            for issue in residual.validate()
+        ]
+        if issues:
+            raise PermissionError(
+                f"proposal data isolation failed: {sorted(set(issues))}"
+            )
+        success_controls = tuple(
+            sorted(
+                (
+                    row
+                    for row in residuals
+                    if row.split is SplitName.TRAIN and row.baseline_success
+                ),
+                key=_residual_stable_order,
+            )
+        )
+        ranked_slots = _rank_family_proposal_slots(
+            residuals,
+            profiles=validation_context.action_design_profiles,
+            family_use_counts=self._proposal_family_use_counts,
+        )
+        if len(ranked_slots) < self.proposal_candidates_per_generation:
+            raise ValueError(
+                "profile-grounded family-slot proposal formation requires "
+                "three distinct TRAIN failure families"
+            )
+        selected_slots = ranked_slots[: self.proposal_candidates_per_generation]
+        slot_plan_rows = [
+            _family_slot_event_row(slot, slot_index=index)
+            for index, slot in enumerate(selected_slots, start=1)
+        ]
+        slot_plan_hash = stable_hash(
+            {
+                "policy": PROPOSAL_FORMATION_POLICY_VERSION,
+                "slots": slot_plan_rows,
+            }
+        )
+        self.event_sink.emit(
+            Event(
+                event="proposal_family_slot_plan_created",
+                stage="proposal.family_slots",
+                trace_id=trace_id,
+                payload={
+                    "policy": PROPOSAL_FORMATION_POLICY_VERSION,
+                    "slot_count": len(selected_slots),
+                    "distinct_target_family_count": len(
+                        {slot.target_family for slot in selected_slots}
+                    ),
+                    "available_train_failure_family_count": len(ranked_slots),
+                    "train_success_control_count": len(success_controls),
+                    "slot_plan_hash": slot_plan_hash,
+                    "slots": slot_plan_rows,
+                    "validation_features_used": False,
+                    "validation_outcomes_used": False,
+                    "verifier_content_used": False,
+                    "test_content_used": False,
+                    "raw_content_persisted": False,
+                },
+            )
+        )
+        programs: list[HypothesisProgram] = []
+        for index, slot in enumerate(selected_slots, start=1):
+            slot_id = f"train-family-slot-{index}"
+            scoped_residuals = (*slot.failures, *success_controls)
+            capability_payload = self._family_slot_capabilities(
+                slot,
+                slot_id=slot_id,
+                success_control_count=len(success_controls),
+                validation_context=validation_context,
+            )
+            proposed = self.proposer.propose(
+                scoped_residuals,
+                evaluator_epoch=validation_context.evaluator_epoch,
+                max_hypotheses=1,
+                capabilities=capability_payload,
+                trace_id=f"{trace_id}:family-slot-{index}",
+            )
+            programs.append(proposed[0])
+
+        requested_targets = tuple(
+            slot.target_family for slot in selected_slots
+        )
+        self.proposer.record_family_slot_batch(
+            programs,
+            requested_targets,
+        )
+        matched_families = self._record_matched_proposal_families(
+            programs,
+            residuals=residuals,
+            validation_context=validation_context,
+            trace_id=trace_id,
+            source="generated_family_slots",
+            requested_targets=requested_targets,
+        )
+        for index, (slot, program, matched_family) in enumerate(
+            zip(selected_slots, programs, matched_families),
+            start=1,
+        ):
+            candidate_audit = _family_slot_candidate_audit(
+                program,
+                target_slot=slot,
+                all_slots=ranked_slots,
+            )
+            preferred_rows = [
+                row.to_dict() for row in slot.preferred_primitives
+            ]
+            failed_rows = [row.to_dict() for row in slot.failed_primitives]
+            self.event_sink.emit(
+                Event(
+                    event="proposal_family_slot_completed",
+                    stage="proposal.family_slots",
+                    trace_id=f"{trace_id}:family-slot-{index}",
+                    payload={
+                        "policy": PROPOSAL_FORMATION_POLICY_VERSION,
+                        "slot_id": f"train-family-slot-{index}",
+                        "slot_plan_hash": slot_plan_hash,
+                        "target_family": slot.target_family,
+                        "target_family_hash": stable_hash(
+                            {"family": slot.target_family}
+                        ),
+                        "profile_evidence_hash": slot.profile_evidence_hash,
+                        "preferred_primitive_count": len(preferred_rows),
+                        "preferred_primitive_set_hash": stable_hash(
+                            {"primitives": preferred_rows}
+                        ),
+                        "failed_primitive_count": len(failed_rows),
+                        "failed_primitive_set_hash": stable_hash(
+                            {"primitives": failed_rows}
+                        ),
+                        "candidate_hash": program.payload_hash,
+                        "matched_family_hash": (
+                            stable_hash({"family": matched_family})
+                            if matched_family is not None
+                            else None
+                        ),
+                        **candidate_audit,
+                        "response_rejected_by_diversity": False,
+                        "proposal_retry_by_diversity": False,
+                        "validation_features_used": False,
+                        "validation_outcomes_used": False,
+                        "verifier_content_used": False,
+                        "test_content_used": False,
+                        "raw_content_persisted": False,
+                    },
+                )
+            )
+        result = tuple(programs)
+        self.event_sink.emit(
+            Event(
+                event="proposal_family_slots_completed",
+                stage="proposal.family_slots",
+                trace_id=trace_id,
+                payload={
+                    "policy": PROPOSAL_FORMATION_POLICY_VERSION,
+                    "slot_plan_hash": slot_plan_hash,
+                    "candidate_count": len(result),
+                    "candidate_set_hash": stable_hash(
+                        {
+                            "candidate_hashes": [
+                                row.payload_hash for row in result
+                            ]
+                        }
+                    ),
+                    "matched_family_count": sum(
+                        family is not None for family in matched_families
+                    ),
+                    "distinct_matched_family_count": len(
+                        {family for family in matched_families if family}
+                    ),
+                    "validation_features_used": False,
+                    "validation_outcomes_used": False,
+                    "verifier_content_used": False,
+                    "test_content_used": False,
+                    "raw_content_persisted": False,
+                },
+            )
+        )
+        return result
+
+    def _family_slot_capabilities(
+        self,
+        slot: _FamilyProposalSlot,
+        *,
+        slot_id: str,
+        success_control_count: int,
+        validation_context: ValidationContext,
+    ) -> dict[str, Any]:
+        preferred_primitives = [
+            row.to_dict() for row in slot.preferred_primitives
+        ]
+        failed_primitives = [row.to_dict() for row in slot.failed_primitives]
+        return {
+            "available_lanes": sorted(validation_context.available_lanes),
+            "baseline_lane": validation_context.baseline_lane,
+            "runtime_trigger_contract": {
+                "allowed_feature_catalog": dict(
+                    validation_context.trigger_feature_catalog
+                ),
+                "forbidden_context_only_keys": [
+                    "task_instruction",
+                    "observed_metrics",
+                    "execution_signals",
+                    "action_context_profile_hash",
+                ],
+                "context_is_for_action_design_only": True,
+            },
+            "runtime_candidate_kinds": sorted(
+                kind.value for kind in validation_context.allowed_runtime_kinds
+            ),
+            "action_contract": {
+                "allowed_action_operations": sorted(
+                    validation_context.allowed_action_operations
+                ),
+                "semantics": validation_context.action_semantics,
+                "external_evidence_is_hidden": (
+                    validation_context.external_evidence_is_hidden
+                ),
+            },
+            "primary_metric": self.promotion_gate.spec.metric,
+            "evaluator_hypotheses_require_separate_epoch_challenger": True,
+            "prior_hypotheses": [],
+            "prior_promotion_feedback": [],
+            "prior_history_excluded_from_family_slot_proposal": True,
+            "novel_hypothesis_required": True,
+            **(
+                {
+                    "action_quality_contract": train_action_quality_contract(
+                        validation_context.train_action_design_policy
+                    ),
+                    "train_action_design_profiles": {
+                        profile_hash: dict(profile)
+                        for profile_hash, profile in slot.profile_items
+                    },
+                }
+                if validation_context.train_action_design_policy
+                else {}
+            ),
+            "family_slot_contract": {
+                "policy": PROPOSAL_FORMATION_POLICY_VERSION,
+                "slot_id": slot_id,
+                "target_failure_family": slot.target_family,
+                "target_failure_family_hash": stable_hash(
+                    {"family": slot.target_family}
+                ),
+                "target_failure_support_count": len(slot.failures),
+                "success_control_count": success_control_count,
+                "profile_evidence_hash": slot.profile_evidence_hash,
+                "profile_reference_count": len(slot.profile_items),
+                "portable_recipe_policy": {
+                    "literal_hardcoding_allowed_only_when": (
+                        "the_identical_literal_is_observed_in_at_least_two_"
+                        "target_family_train_failures"
+                    ),
+                    "minimum_same_family_train_evidence_for_literal": 2,
+                    "otherwise_extract_from": "current_task_or_artifact",
+                    "preferred_allowlisted_profile_primitives": (
+                        preferred_primitives
+                    ),
+                    "failed_profile_primitives_to_avoid": failed_primitives,
+                    "reusable_preferred_primitive_count": (
+                        slot.reusable_preferred_primitive_count
+                    ),
+                    "profile_primitive_allowlist": [
+                        "executable",
+                        "environment_os_package",
+                        "environment_python_package",
+                        "artifact_task_local_path",
+                        "artifact_copied_file",
+                        "artifact_environment_source_file",
+                        "artifact_command_path",
+                    ],
+                    "validation_features_used": False,
+                    "validation_outcomes_used": False,
+                    "verifier_content_used": False,
+                    "test_content_used": False,
+                },
+                "response_field": "hypothesis",
+                "response_type": "object",
+                "required_count": 1,
+                "response_rejection_by_diversity_allowed": False,
+                "proposal_retry_by_diversity_allowed": False,
+                "validation_features_used": False,
+                "validation_outcomes_used": False,
+                "verifier_content_used": False,
+                "test_content_used": False,
+            },
+            **(
+                {
+                    "training_evidence_contract": {
+                        "policy": self.contrastive_training_evidence_policy,
+                        "label_field": "baseline_success",
+                        "failure_label": False,
+                        "success_control_label": True,
+                        "success_control_role": "anti_trigger_negative_control",
+                        "context_may_be_used_for_trigger": False,
+                        "context_may_shape_actions": True,
+                    }
+                }
+                if self.contrastive_training_evidence_policy
+                else {}
+            ),
+        }
+
+    def _record_matched_proposal_families(
+        self,
+        programs: Sequence[HypothesisProgram],
+        *,
+        residuals: Sequence[ResidualExample],
+        validation_context: ValidationContext,
+        trace_id: str,
+        source: str,
+        requested_targets: Sequence[str | None],
+    ) -> tuple[str | None, ...]:
+        if len(programs) != len(requested_targets):
+            raise ValueError(
+                "family-slot requested targets must align with proposals"
+            )
+        ranked_slots = _rank_family_proposal_slots(
+            residuals,
+            profiles=validation_context.action_design_profiles,
+            family_use_counts=self._proposal_family_use_counts,
+        )
+        available_families = {
+            slot.target_family for slot in ranked_slots
+        }
+        seen_requested_targets: set[str] = set()
+        canonical_requested_targets: list[str | None] = []
+        for target in requested_targets:
+            canonical = str(target or "").strip()
+            if (
+                not canonical
+                or canonical not in available_families
+                or canonical in seen_requested_targets
+            ):
+                canonical_requested_targets.append(None)
+                continue
+            canonical_requested_targets.append(canonical)
+            seen_requested_targets.add(canonical)
+        requested_target_tuple = tuple(canonical_requested_targets)
+        program_hashes = tuple(program.payload_hash for program in programs)
+        proposal_set_hash = stable_hash(
+            {"candidate_hashes": sorted(program_hashes)}
+        )
+        requested_target_hashes = [
+            stable_hash({"family": target}) if target is not None else None
+            for target in requested_target_tuple
+        ]
+        usage_identity_hash = stable_hash(
+            {
+                "proposal_set_hash": proposal_set_hash,
+                "requested_target_hashes": requested_target_hashes,
+            }
+        )
+        recorded = self._recorded_proposal_family_usage.get(
+            usage_identity_hash
+        )
+        if recorded is not None:
+            recorded_program_hashes, recorded_matches = recorded
+            actual_match_by_program_hash = dict(
+                zip(recorded_program_hashes, recorded_matches)
+            )
+            replayed_actual_matches = tuple(
+                actual_match_by_program_hash.get(program_hash)
+                for program_hash in program_hashes
+            )
+            replayed_actual_hashes = [
+                stable_hash({"family": family})
+                for family in replayed_actual_matches
+                if family is not None
+            ]
+            self.event_sink.emit(
+                Event(
+                    event="proposal_family_slot_usage_replayed",
+                    stage="proposal.family_slots",
+                    trace_id=trace_id,
+                    payload={
+                        "policy": PROPOSAL_FORMATION_POLICY_VERSION,
+                        "source": source,
+                        "proposal_set_hash": proposal_set_hash,
+                        "usage_identity_hash": usage_identity_hash,
+                        "candidate_count": len(programs),
+                        "requested_target_count": sum(
+                            target is not None
+                            for target in requested_target_tuple
+                        ),
+                        "distinct_requested_target_count": len(
+                            {
+                                target
+                                for target in requested_target_tuple
+                                if target is not None
+                            }
+                        ),
+                        "requested_target_set_hash": stable_hash(
+                            {
+                                "family_hashes": sorted(
+                                    target_hash
+                                    for target_hash in requested_target_hashes
+                                    if target_hash is not None
+                                )
+                            }
+                        ),
+                        "actual_matched_count": len(
+                            replayed_actual_hashes
+                        ),
+                        "distinct_actual_matched_family_count": len(
+                            set(replayed_actual_hashes)
+                        ),
+                        "actual_matched_family_set_hash": stable_hash(
+                            {
+                                "family_hashes": sorted(
+                                    replayed_actual_hashes
+                                )
+                            }
+                        ),
+                        "proposal_set_replayed": True,
+                        "family_use_updated": False,
+                        "new_family_use_count": 0,
+                        "family_use_count_state_hash": (
+                            _family_use_count_state_hash(
+                                self._proposal_family_use_counts
+                            )
+                        ),
+                        "validation_features_used": False,
+                        "validation_outcomes_used": False,
+                        "verifier_content_used": False,
+                        "test_content_used": False,
+                        "raw_content_persisted": False,
+                    },
+                )
+            )
+            return replayed_actual_matches
+        actual_matches: list[str | None] = []
+        for program in programs:
+            actual_match = next(
+                (
+                    slot.target_family
+                    for slot in ranked_slots
+                    if any(
+                        _program_matches_residual(program, failure)
+                        for failure in slot.failures
+                    )
+                ),
+                None,
+            )
+            actual_matches.append(actual_match)
+        for requested_target in requested_target_tuple:
+            if requested_target is None:
+                continue
+            self._proposal_family_use_counts[requested_target] = (
+                self._proposal_family_use_counts.get(requested_target, 0) + 1
+            )
+        result = tuple(actual_matches)
+        self._recorded_proposal_family_usage[usage_identity_hash] = (
+            program_hashes,
+            result,
+        )
+        actual_match_hashes = [
+            stable_hash({"family": family})
+            for family in actual_matches
+            if family is not None
+        ]
+        requested_target_count = sum(
+            target is not None for target in requested_target_tuple
+        )
+        self.event_sink.emit(
+            Event(
+                event="proposal_family_slot_usage_recorded",
+                stage="proposal.family_slots",
+                trace_id=trace_id,
+                payload={
+                    "policy": PROPOSAL_FORMATION_POLICY_VERSION,
+                    "source": source,
+                    "proposal_set_hash": proposal_set_hash,
+                    "usage_identity_hash": usage_identity_hash,
+                    "candidate_count": len(programs),
+                    "requested_target_count": requested_target_count,
+                    "distinct_requested_target_count": len(
+                        {
+                            target
+                            for target in requested_target_tuple
+                            if target is not None
+                        }
+                    ),
+                    "requested_target_set_hash": stable_hash(
+                        {
+                            "family_hashes": sorted(
+                                target_hash
+                                for target_hash in requested_target_hashes
+                                if target_hash is not None
+                            )
+                        }
+                    ),
+                    "actual_matched_count": len(actual_match_hashes),
+                    "distinct_actual_matched_family_count": len(
+                        set(actual_match_hashes)
+                    ),
+                    "actual_matched_family_set_hash": stable_hash(
+                        {"family_hashes": sorted(actual_match_hashes)}
+                    ),
+                    "proposal_set_replayed": False,
+                    "family_use_updated": requested_target_count > 0,
+                    "new_family_use_count": requested_target_count,
+                    "family_use_count_state_hash": (
+                        _family_use_count_state_hash(
+                            self._proposal_family_use_counts
+                        )
+                    ),
+                    "validation_features_used": False,
+                    "validation_outcomes_used": False,
+                    "verifier_content_used": False,
+                    "test_content_used": False,
+                    "raw_content_persisted": False,
+                },
+            )
+        )
+        return result
+
     def _prior_hypothesis_context(self) -> list[dict[str, object]]:
         return [
             {
@@ -1398,6 +2024,407 @@ class EvolutionKernel:
             )
         )
         return result
+
+
+def _residual_stable_order(residual: ResidualExample) -> tuple[str, str, str]:
+    return (
+        residual.family,
+        residual.transition_id,
+        stable_hash(
+            {
+                "features": dict(residual.features),
+                "failure_type": residual.failure_type,
+                "baseline_success": residual.baseline_success,
+            }
+        ),
+    )
+
+
+def _family_use_count_state_hash(
+    family_use_counts: Mapping[str, int],
+) -> str:
+    return stable_hash(
+        {
+            "family_use_counts": sorted(
+                (
+                    stable_hash({"family": family}),
+                    count,
+                )
+                for family, count in family_use_counts.items()
+            )
+        }
+    )
+
+
+def _rank_family_proposal_slots(
+    residuals: Sequence[ResidualExample],
+    *,
+    profiles: Mapping[str, Mapping[str, Any]],
+    family_use_counts: Mapping[str, int],
+) -> tuple[_FamilyProposalSlot, ...]:
+    failures_by_family: dict[str, list[ResidualExample]] = {}
+    for residual in residuals:
+        if residual.split is not SplitName.TRAIN or residual.baseline_success:
+            continue
+        failures_by_family.setdefault(residual.family, []).append(residual)
+    slots: list[_FamilyProposalSlot] = []
+    for family, unsorted_failures in failures_by_family.items():
+        failures = tuple(sorted(unsorted_failures, key=_residual_stable_order))
+        referenced_profile_hashes = tuple(
+            sorted(
+                {
+                    str(profile_hash)
+                    for residual in failures
+                    if (
+                        profile_hash := residual.context.get(
+                            "action_context_profile_hash"
+                        )
+                    )
+                }
+            )
+        )
+        profile_items = tuple(
+            (profile_hash, profiles[profile_hash])
+            for profile_hash in referenced_profile_hashes
+            if isinstance(profiles.get(profile_hash), Mapping)
+        )
+        positive_counts: dict[tuple[str, str], int] = {}
+        failed_counts: dict[tuple[str, str], int] = {}
+        for residual in failures:
+            profile_hash = str(
+                residual.context.get("action_context_profile_hash") or ""
+            )
+            profile = profiles.get(profile_hash)
+            if not isinstance(profile, Mapping):
+                continue
+            positive, failed = _allowlisted_profile_primitives(profile)
+            for primitive in positive:
+                positive_counts[primitive] = positive_counts.get(primitive, 0) + 1
+            for primitive in failed:
+                failed_counts[primitive] = failed_counts.get(primitive, 0) + 1
+        failed_executables = {
+            value.lower()
+            for (kind, value), count in failed_counts.items()
+            if kind == "executable" and count > 0
+        }
+        preferred_primitives = tuple(
+            sorted(
+                (
+                    _FamilyProfilePrimitive(
+                        kind=kind,
+                        value=value,
+                        train_failure_evidence_count=count,
+                    )
+                    for (kind, value), count in positive_counts.items()
+                    if (kind, value) not in failed_counts
+                    and not (
+                        kind
+                        in {
+                            "executable",
+                            "environment_os_package",
+                            "environment_python_package",
+                        }
+                        and value.lower() in failed_executables
+                    )
+                ),
+                key=lambda row: (
+                    -row.train_failure_evidence_count,
+                    row.kind,
+                    row.value,
+                ),
+            )
+        )
+        failed_primitives = tuple(
+            sorted(
+                (
+                    _FamilyProfilePrimitive(
+                        kind=kind,
+                        value=value,
+                        train_failure_evidence_count=count,
+                    )
+                    for (kind, value), count in failed_counts.items()
+                ),
+                key=lambda row: (
+                    -row.train_failure_evidence_count,
+                    row.kind,
+                    row.value,
+                ),
+            )
+        )
+        profile_evidence_hash = stable_hash(
+            {
+                "profile_references": [
+                    {
+                        "profile_hash": profile_hash,
+                        "profile_payload_hash": stable_hash(dict(profile)),
+                    }
+                    for profile_hash, profile in profile_items
+                ]
+            }
+        )
+        slots.append(
+            _FamilyProposalSlot(
+                target_family=family,
+                failures=failures,
+                profile_items=profile_items,
+                profile_evidence_hash=profile_evidence_hash,
+                preferred_primitives=preferred_primitives,
+                failed_primitives=failed_primitives,
+                prior_use_count=int(family_use_counts.get(family, 0)),
+            )
+        )
+    return tuple(
+        sorted(
+            slots,
+            key=lambda slot: (
+                slot.prior_use_count,
+                -int(slot.reusable_preferred_primitive_count > 0),
+                -slot.reusable_preferred_primitive_count,
+                -len(slot.failures),
+                slot.target_family,
+                slot.profile_evidence_hash,
+            ),
+        )
+    )
+
+
+def _allowlisted_profile_primitives(
+    profile: Mapping[str, Any],
+) -> tuple[set[tuple[str, str]], set[tuple[str, str]]]:
+    preferred: set[tuple[str, str]] = set()
+    failed: set[tuple[str, str]] = set()
+    environment = profile.get("runtime_environment")
+    if isinstance(environment, Mapping):
+        environment_fields = {
+            "declared_os_packages": "environment_os_package",
+            "declared_python_packages": "environment_python_package",
+            "declared_task_local_paths": "artifact_task_local_path",
+            "copied_task_files": "artifact_copied_file",
+            "environment_source_files": "artifact_environment_source_file",
+        }
+        for field, kind in environment_fields.items():
+            values = environment.get(field)
+            if not isinstance(values, (list, tuple)):
+                continue
+            for value in values:
+                canonical = _canonical_profile_primitive_value(kind, value)
+                if canonical:
+                    preferred.add((kind, canonical))
+    trace = profile.get("baseline_action_trace")
+    command_rows = (
+        trace.get("command_signatures") if isinstance(trace, Mapping) else None
+    )
+    if isinstance(command_rows, (list, tuple)):
+        for command in command_rows:
+            if not isinstance(command, Mapping):
+                continue
+            executable = _canonical_profile_primitive_value(
+                "executable",
+                command.get("executable_basename"),
+            )
+            status = str(command.get("status") or "").strip().lower()
+            exit_code = command.get("exit_code")
+            succeeded = status in {
+                "success",
+                "succeeded",
+                "completed",
+                "passed",
+                "ok",
+            } or (
+                isinstance(exit_code, int)
+                and not isinstance(exit_code, bool)
+                and exit_code == 0
+            )
+            did_fail = status in {
+                "failed",
+                "failure",
+                "error",
+                "timed_out",
+                "timeout",
+            } or (
+                isinstance(exit_code, int)
+                and not isinstance(exit_code, bool)
+                and exit_code != 0
+            )
+            if did_fail:
+                if executable:
+                    failed.add(("executable", executable))
+                continue
+            if not succeeded:
+                continue
+            if executable:
+                preferred.add(("executable", executable))
+            task_paths = command.get("task_local_paths")
+            if isinstance(task_paths, (list, tuple)):
+                for path in task_paths:
+                    canonical_path = _canonical_profile_primitive_value(
+                        "artifact_command_path",
+                        path,
+                    )
+                    if canonical_path:
+                        preferred.add(
+                            ("artifact_command_path", canonical_path)
+                        )
+    failed_executables = {
+        value
+        for kind, value in failed
+        if kind == "executable"
+    }
+    preferred = {
+        (kind, value)
+        for kind, value in preferred
+        if not (
+            kind
+            in {
+                "executable",
+                "environment_os_package",
+                "environment_python_package",
+            }
+            and value in failed_executables
+        )
+    }
+    return preferred, failed
+
+
+def _canonical_profile_primitive_value(kind: str, value: Any) -> str:
+    canonical = str(value or "").strip()
+    if not canonical:
+        return ""
+    if kind in {
+        "executable",
+        "environment_os_package",
+        "environment_python_package",
+    }:
+        return canonical.lower()
+    return canonical
+
+
+def _family_slot_event_row(
+    slot: _FamilyProposalSlot,
+    *,
+    slot_index: int,
+) -> dict[str, Any]:
+    preferred_rows = [row.to_dict() for row in slot.preferred_primitives]
+    failed_rows = [row.to_dict() for row in slot.failed_primitives]
+    return {
+        "slot_id": f"train-family-slot-{slot_index}",
+        "target_family": slot.target_family,
+        "target_family_hash": stable_hash({"family": slot.target_family}),
+        "target_failure_support_count": len(slot.failures),
+        "prior_family_use_count": slot.prior_use_count,
+        "profile_reference_count": len(slot.profile_items),
+        "profile_evidence_hash": slot.profile_evidence_hash,
+        "preferred_primitive_count": len(preferred_rows),
+        "preferred_primitive_set_hash": stable_hash(
+            {"primitives": preferred_rows}
+        ),
+        "reusable_preferred_primitive_count": (
+            slot.reusable_preferred_primitive_count
+        ),
+        "failed_primitive_count": len(failed_rows),
+        "failed_primitive_set_hash": stable_hash(
+            {"primitives": failed_rows}
+        ),
+        "raw_content_persisted": False,
+    }
+
+
+def _program_matches_residual(
+    program: HypothesisProgram,
+    residual: ResidualExample,
+) -> bool:
+    try:
+        return bool(program.matches(residual.features))
+    except (TypeError, ValueError, OverflowError):
+        return False
+
+
+def _family_slot_candidate_audit(
+    program: HypothesisProgram,
+    *,
+    target_slot: _FamilyProposalSlot,
+    all_slots: Sequence[_FamilyProposalSlot],
+) -> dict[str, Any]:
+    action_text = " ".join(
+        text
+        for action in program.action_graph
+        for value in (action.target, action.value)
+        for text in _nested_action_strings(value)
+    ).lower()
+    bound_preferred = tuple(
+        row
+        for row in target_slot.preferred_primitives
+        if row.value.lower() in action_text
+    )
+    bound_failed = tuple(
+        row
+        for row in target_slot.failed_primitives
+        if row.value.lower() in action_text
+    )
+    portable_delta_kinds: set[str] = set()
+    if any(
+        row.kind.startswith("executable")
+        or row.kind.startswith("environment")
+        for row in bound_preferred
+    ):
+        portable_delta_kinds.add(
+            "profile_grounded_executable_or_environment"
+        )
+    if any(row.kind.startswith("artifact") for row in bound_preferred):
+        portable_delta_kinds.add("profile_grounded_artifact")
+    if (
+        any(
+            token in action_text
+            for token in ("extract", "read", "parse", "inspect")
+        )
+        and any(
+            token in action_text
+            for token in ("current task", "artifact", "file", "path")
+        )
+    ):
+        portable_delta_kinds.add("current_task_or_artifact_extraction")
+    target_support = sum(
+        _program_matches_residual(program, failure)
+        for failure in target_slot.failures
+    )
+    matched_family_count = sum(
+        any(
+            _program_matches_residual(program, failure)
+            for failure in slot.failures
+        )
+        for slot in all_slots
+    )
+    return {
+        "candidate_matched_target_support": target_support,
+        "candidate_matched_target": target_support > 0,
+        "matched_family_count": matched_family_count,
+        "profile_binding_count": len(bound_preferred),
+        "failed_profile_binding_count": len(bound_failed),
+        "portable_delta_kinds": sorted(portable_delta_kinds),
+    }
+
+
+def _nested_action_strings(value: Any) -> tuple[str, ...]:
+    if isinstance(value, str):
+        return (value,)
+    if isinstance(value, Mapping):
+        return tuple(
+            child
+            for key, item in value.items()
+            for child in (
+                *_nested_action_strings(key),
+                *_nested_action_strings(item),
+            )
+        )
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return tuple(
+            child
+            for item in value
+            for child in _nested_action_strings(item)
+        )
+    if value is None:
+        return ()
+    return (str(value),)
 
 
 def _behavior_hash(program: HypothesisProgram) -> str:

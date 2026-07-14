@@ -30,6 +30,9 @@ PROPOSAL_DIVERSITY_POLICY_VERSION = (
 TRAIN_ACTION_DESIGN_POLICY_VERSION = (
     "train_only_material_action_delta_prompt_audit_v1"
 )
+FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION = (
+    "train_only_profile_grounded_family_slots_v1"
+)
 TRAIN_ACTION_DESIGN_POLICY_VERSIONS = frozenset(
     {TRAIN_ACTION_DESIGN_POLICY_VERSION}
 )
@@ -108,6 +111,90 @@ class StructuredHypothesisProposer:
             str,
             tuple[tuple[HypothesisProgram, ...], str, str],
         ] = {}
+        self._family_slot_target_lock = threading.Lock()
+        self._family_slot_targets_by_program_hash: dict[str, set[str]] = {}
+        self._latest_family_slot_batch_targets: dict[
+            str,
+            tuple[tuple[str, ...], tuple[str | None, ...]],
+        ] = {}
+
+    def family_slot_target_for(
+        self,
+        program: HypothesisProgram,
+    ) -> str | None:
+        with self._family_slot_target_lock:
+            targets = set(
+                self._family_slot_targets_by_program_hash.get(
+                    program.payload_hash,
+                    set(),
+                )
+            )
+        if len(targets) != 1:
+            return None
+        return next(iter(targets))
+
+    def record_family_slot_batch(
+        self,
+        programs: Sequence[HypothesisProgram],
+        targets: Sequence[str],
+    ) -> None:
+        if len(programs) != len(targets):
+            raise ValueError("family-slot batch programs and targets must align")
+        program_hashes = tuple(program.payload_hash for program in programs)
+        canonical_targets = tuple(
+            str(target).strip() or None for target in targets
+        )
+        proposal_set_hash = stable_hash(
+            {"candidate_hashes": sorted(program_hashes)}
+        )
+        with self._family_slot_target_lock:
+            self._latest_family_slot_batch_targets[proposal_set_hash] = (
+                program_hashes,
+                canonical_targets,
+            )
+
+    def family_slot_targets_for(
+        self,
+        programs: Sequence[HypothesisProgram],
+    ) -> tuple[str | None, ...]:
+        program_hashes = tuple(program.payload_hash for program in programs)
+        proposal_set_hash = stable_hash(
+            {"candidate_hashes": sorted(program_hashes)}
+        )
+        with self._family_slot_target_lock:
+            batch = self._latest_family_slot_batch_targets.get(
+                proposal_set_hash
+            )
+        if batch is not None:
+            recorded_hashes, recorded_targets = batch
+            if recorded_hashes == program_hashes:
+                return recorded_targets
+            target_by_program_hash = dict(
+                zip(recorded_hashes, recorded_targets)
+            )
+            return tuple(
+                target_by_program_hash.get(program_hash)
+                for program_hash in program_hashes
+            )
+        return tuple(
+            self.family_slot_target_for(program) for program in programs
+        )
+
+    def _record_family_slot_target(
+        self,
+        programs: Sequence[HypothesisProgram],
+        *,
+        target_family: str,
+    ) -> None:
+        target = target_family.strip()
+        if not target:
+            return
+        with self._family_slot_target_lock:
+            for program in programs:
+                self._family_slot_targets_by_program_hash.setdefault(
+                    program.payload_hash,
+                    set(),
+                ).add(target)
 
     def propose(
         self,
@@ -135,6 +222,14 @@ class StructuredHypothesisProposer:
             and proposal_batch_contract.get("policy")
             == PROPOSAL_DIVERSITY_POLICY_VERSION
         )
+        family_slot_contract = capability_payload.get("family_slot_contract")
+        family_slot_contract_enabled = bool(
+            isinstance(family_slot_contract, Mapping)
+            and family_slot_contract.get("policy")
+            == FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION
+        )
+        if family_slot_contract_enabled and max_hypotheses != 1:
+            raise ValueError("family-slot proposal requests exactly one hypothesis")
         payload = {
             "request_kind": "propose_hypothesis_programs",
             "contract_version": "hypothesis_program_v1",
@@ -194,12 +289,37 @@ class StructuredHypothesisProposer:
                     }
                 },
             }
+        elif family_slot_contract_enabled:
+            payload["family_slot_response_contract"] = {
+                "policy": FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION,
+                "response_field": "hypothesis",
+                "response_type": "object",
+                "required_count": 1,
+                "root_batch_contract_applies": False,
+                "response_rejection_by_diversity_allowed": False,
+                "proposal_retry_by_diversity_allowed": False,
+                "compact_output": True,
+            }
+            payload["output_schema"] = {
+                "type": "object",
+                "required": ["hypothesis"],
+                "properties": {
+                    "hypothesis": _program_schema(capability_payload),
+                },
+            }
         self._emit_model_event("hypothesis_proposal_requested", trace_id, payload)
         request_hash = stable_hash(payload)
         with self._root_replay_lock:
             replay = self._root_replay_records.get(request_hash)
         if replay is not None:
             programs, source_trace_id, program_set_hash = replay
+            if family_slot_contract_enabled:
+                self._record_family_slot_target(
+                    programs,
+                    target_family=str(
+                        family_slot_contract.get("target_failure_family") or ""
+                    ),
+                )
             self.event_sink.emit(
                 Event(
                     event="root_proposal_evidence_replayed",
@@ -222,23 +342,44 @@ class StructuredHypothesisProposer:
             )
             return programs
         response = self._complete(payload, trace_id=trace_id)
+        expected_response_field = (
+            "hypothesis" if family_slot_contract_enabled else "hypotheses"
+        )
         if not isinstance(response, Mapping):
             raise self._response_contract_error(
                 payload=payload,
                 response=response,
-                expected_field="hypotheses",
+                expected_field=expected_response_field,
                 failure_phase="response_envelope",
                 trace_id=trace_id,
             )
-        rows = response.get("hypotheses")
-        if not isinstance(rows, list) or (not rows and not diversity_contract_enabled):
-            raise self._response_contract_error(
-                payload=payload,
-                response=response,
-                expected_field="hypotheses",
-                failure_phase="response_envelope",
-                trace_id=trace_id,
-            )
+        if family_slot_contract_enabled:
+            singular_row = response.get("hypothesis")
+            if not isinstance(singular_row, Mapping):
+                raise self._response_contract_error(
+                    payload=payload,
+                    response=response,
+                    expected_field="hypothesis",
+                    failure_phase="response_envelope",
+                    trace_id=trace_id,
+                    expected_item_count=1,
+                    response_contract_policy=(
+                        FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION
+                    ),
+                )
+            rows = [singular_row]
+        else:
+            rows = response.get("hypotheses")
+            if not isinstance(rows, list) or (
+                not rows and not diversity_contract_enabled
+            ):
+                raise self._response_contract_error(
+                    payload=payload,
+                    response=response,
+                    expected_field="hypotheses",
+                    failure_phase="response_envelope",
+                    trace_id=trace_id,
+                )
         staged_programs: list[tuple[int, HypothesisProgram]] = []
         transition_ids = tuple(sorted(residual.transition_id for residual in residuals))
         returned_rows = rows if diversity_contract_enabled else rows[:max_hypotheses]
@@ -247,7 +388,7 @@ class StructuredHypothesisProposer:
                 raise self._response_contract_error(
                     payload=payload,
                     response=response,
-                    expected_field="hypotheses",
+                    expected_field=expected_response_field,
                     failure_phase="response_envelope",
                     trace_id=trace_id,
                     consumed_row_index=index,
@@ -267,7 +408,7 @@ class StructuredHypothesisProposer:
                 raise self._response_contract_error(
                     payload=payload,
                     response=response,
-                    expected_field="hypotheses",
+                    expected_field=expected_response_field,
                     failure_phase="response_program_parse",
                     trace_id=trace_id,
                     consumed_row_index=index,
@@ -279,7 +420,7 @@ class StructuredHypothesisProposer:
             raise self._response_contract_error(
                 payload=payload,
                 response=response,
-                expected_field="hypotheses",
+                expected_field=expected_response_field,
                 failure_phase="response_envelope",
                 trace_id=trace_id,
             )
@@ -404,6 +545,13 @@ class StructuredHypothesisProposer:
                 },
             )
         )
+        if family_slot_contract_enabled:
+            self._record_family_slot_target(
+                result,
+                target_family=str(
+                    family_slot_contract.get("target_failure_family") or ""
+                ),
+            )
         return result
 
     def revise(
@@ -939,6 +1087,64 @@ def _proposal_constraints(
                 "verifier_content_for_action_design_forbidden": True,
             }
         )
+    family_slot_contract = (capabilities or {}).get("family_slot_contract")
+    if (
+        isinstance(family_slot_contract, Mapping)
+        and family_slot_contract.get("policy")
+        == FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION
+    ):
+        portable_recipe_policy = family_slot_contract.get(
+            "portable_recipe_policy"
+        )
+        reusable_preferred_primitive_count = int(
+            portable_recipe_policy.get(
+                "reusable_preferred_primitive_count",
+                0,
+            )
+            if isinstance(portable_recipe_policy, Mapping)
+            else 0
+        )
+        target_failure_family = str(
+            family_slot_contract.get("target_failure_family") or ""
+        )
+        constraints.update(
+            {
+                "proposal_targets_exactly_one_train_failure_family": True,
+                "proposal_target_family_field": "target_failure_family",
+                "proposal_target_failure_family": target_failure_family,
+                "trigger_must_include_exact_target_family_predicate": {
+                    "key": "family",
+                    "op": "eq",
+                    "value": target_failure_family,
+                },
+                "anti_trigger_must_not_block_target_family": True,
+                "proposal_other_failure_families_forbidden": True,
+                "proposal_all_train_success_controls_are_negative_controls": True,
+                "portable_recipe_literal_requires_two_same_family_train_rows": True,
+                "portable_recipe_without_repeated_literal_extracts_from_current_task_or_artifact": True,
+                "successful_allowlisted_profile_primitives_preferred": True,
+                "reusable_preferred_primitive_count": (
+                    reusable_preferred_primitive_count
+                ),
+                "reusable_preferred_primitive_requires_action_binding": (
+                    reusable_preferred_primitive_count > 0
+                ),
+                "exact_constant_alone_is_insufficient": True,
+                "required_portable_delta_choice": [
+                    "concrete_local_tool_command",
+                    "artifact_internal_manipulation",
+                    "current_task_or_artifact_extraction",
+                ],
+                "hardcoded_train_instance_path_field_or_hex_requires_two_same_family_identical_evidence_rows": True,
+                "failed_profile_primitives_must_be_avoided": True,
+                "family_slot_validation_outcomes_forbidden": True,
+                "family_slot_verifier_content_forbidden": True,
+                "family_slot_test_content_forbidden": True,
+                "family_slot_response_is_singular_transport_contract": True,
+                "family_slot_response_diversity_rejection_forbidden": True,
+                "family_slot_diversity_retry_forbidden": True,
+            }
+        )
     training_evidence_contract = (capabilities or {}).get(
         "training_evidence_contract"
     )
@@ -1013,6 +1219,25 @@ def _program_schema(
         and action_quality_contract.get("policy")
         == TRAIN_ACTION_DESIGN_POLICY_VERSION
     )
+    family_slot_contract = (capabilities or {}).get("family_slot_contract")
+    family_slot_prompt = bool(
+        isinstance(family_slot_contract, Mapping)
+        and family_slot_contract.get("policy")
+        == FAMILY_SLOT_PROPOSAL_FORMATION_POLICY_VERSION
+    )
+    portable_recipe_policy = (
+        family_slot_contract.get("portable_recipe_policy")
+        if family_slot_prompt
+        else None
+    )
+    reusable_preferred_primitive_count = int(
+        portable_recipe_policy.get(
+            "reusable_preferred_primitive_count",
+            0,
+        )
+        if isinstance(portable_recipe_policy, Mapping)
+        else 0
+    )
     action_semantics = (
         str(action_contract.get("semantics"))
         if isinstance(action_contract, Mapping)
@@ -1046,17 +1271,41 @@ def _program_schema(
                 ),
                 "value": (
                     (
-                        "complete imperative task-local sentence that directly states "
-                        "at least one material delta absent from the baseline task "
-                        "instruction: an exact constant/mapping, a concrete local tool "
-                        "command with flags and path, or an artifact-internal API/field "
-                        "operation. Bind to the referenced TRAIN runtime/action profile "
-                        "when available; model static knowledge may supply an exact "
-                        "constant. Never substitute request/collect/verify for the "
-                        "missing detail, and never claim later access to tools, files, "
-                        "network, verifier, or validation outcomes. Use only preinstalled "
-                        "local runtime resources; never prescribe network fetches or "
-                        "package installation."
+                        (
+                            "complete imperative task-local sentence for the target "
+                            "family. It must provide at least one portable operational "
+                            "delta: a concrete preinstalled local tool command, an "
+                            "artifact-internal manipulation, or extraction of a needed "
+                            "value from the current task/artifact; an exact constant "
+                            "alone is insufficient. "
+                            + (
+                                "At least one action must bind a canonical preferred "
+                                "profile primitive because reusable preferred evidence "
+                                f"count is {reusable_preferred_primitive_count}. "
+                                if reusable_preferred_primitive_count > 0
+                                else ""
+                            )
+                            + "Avoid every failed profile primitive. Do not hardcode a "
+                            "TRAIN-instance path, field, or HEX literal unless the same "
+                            "value appears in at least two target-family TRAIN evidence "
+                            "rows; otherwise extract it from the current task/artifact. "
+                            "Never use validation outcomes, verifier content, test "
+                            "content, network fetches, or package installation."
+                        )
+                        if family_slot_prompt
+                        else (
+                            "complete imperative task-local sentence that directly states "
+                            "at least one material delta absent from the baseline task "
+                            "instruction: an exact constant/mapping, a concrete local tool "
+                            "command with flags and path, or an artifact-internal API/field "
+                            "operation. Bind to the referenced TRAIN runtime/action profile "
+                            "when available; model static knowledge may supply an exact "
+                            "constant. Never substitute request/collect/verify for the "
+                            "missing detail, and never claim later access to tools, files, "
+                            "network, verifier, or validation outcomes. Use only preinstalled "
+                            "local runtime resources; never prescribe network fetches or "
+                            "package installation."
+                        )
                         if material_action_delta_prompt
                         else (
                             "complete imperative task-local sentence grounded in TRAIN "

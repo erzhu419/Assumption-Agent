@@ -274,12 +274,25 @@ def freeze_paper_workspace(
         **(
             {
                 "shared_first_generation_provenance": {
-                    field: recursive_report["plan"][field]
-                    for field in (
-                        "shared_first_generation_checkpoint_hash",
-                        "shared_first_generation_action_context_profile_count",
-                        "shared_first_generation_action_context_profile_set_hash",
-                    )
+                    **{
+                        field: recursive_report["plan"][field]
+                        for field in (
+                            "shared_first_generation_checkpoint_hash",
+                            "shared_first_generation_action_context_profile_count",
+                            "shared_first_generation_action_context_profile_set_hash",
+                        )
+                    },
+                    **(
+                        {
+                            "proposal_formation_policy": recursive_report[
+                                "plan"
+                            ]["proposal_formation_policy"]
+                        }
+                        if protocol.payload["execution"].get(
+                            "proposal_formation_policy"
+                        )
+                        else {}
+                    ),
                 }
             }
             if protocol.payload["execution"].get(
@@ -659,6 +672,7 @@ def _validate_development_report(
         expected["trial_timeout_policy"] = timeout_policy
     for field in (
         "proposal_candidate_selection",
+        "proposal_formation_policy",
         "candidate_bundle_policy",
         "proposal_diversity_policy",
         "proposal_response_max_tokens",
@@ -817,11 +831,14 @@ def _validate_paired_development_provenance(
         raise ValueError("recursive development paired-arm provenance mismatch")
     if no_recursive_plan.get("paired_arm") != "no_recursive_repair":
         raise ValueError("no-recursive development paired-arm provenance mismatch")
-    for field in (
+    shared_fields = [
         "shared_first_generation_checkpoint_hash",
         "shared_first_generation_action_context_profile_count",
         "shared_first_generation_action_context_profile_set_hash",
-    ):
+    ]
+    if protocol.payload["execution"].get("proposal_formation_policy"):
+        shared_fields.append("proposal_formation_policy")
+    for field in shared_fields:
         if recursive_plan.get(field) != no_recursive_plan.get(field):
             raise ValueError(
                 f"paired development shared first-generation provenance mismatch: {field}"

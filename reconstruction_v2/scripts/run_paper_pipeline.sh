@@ -6,12 +6,16 @@ cd "${PROJECT_ROOT}"
 
 BENCHMARK_ROOT="${BENCHMARK_ROOT:-reference/self_evo_continual_20260707/repos/SkillLearnBench}"
 ENV_FILE="${ENV_FILE:-../.env}"
-PROTOCOL="${PROTOCOL:-manifests/skilllearn_paper_protocol_v3_15_ruoli_gpt54mini.json}"
+PROTOCOL="${PROTOCOL:-manifests/skilllearn_paper_protocol_v3_16_ruoli_gpt54mini.json}"
 MANIFEST="${MANIFEST:-manifests/skilllearnbench_instance_holdout_offline_ready_v1.json}"
-RUN_ROOT="${RUN_ROOT:-artifacts/paper_primary_v3_15_offline86_ruoli_gpt54mini_outer6_model1_actiondelta01}"
+RUN_ROOT="${RUN_ROOT:-artifacts/paper_primary_v3_16_offline86_ruoli_gpt54mini_outer6_model1_familyslots01}"
+SOURCE_RUN_ROOT="${SOURCE_RUN_ROOT:-artifacts/paper_primary_v3_15_offline86_ruoli_gpt54mini_outer6_model1_actiondelta01}"
+SOURCE_TRAIN_RECEIPT="${SOURCE_TRAIN_RECEIPT:-manifests/skilllearn_v315_train_source_provenance_receipt_v1.json}"
 LOCK="${RUN_ROOT}/protocol_lock.json"
 RECEIPT="${RUN_ROOT}/freeze_receipt.json"
 PREWARM_RECEIPT="${RUN_ROOT}/development_prewarm.json"
+PROPOSAL_DIAGNOSTIC_EVENTS="${RUN_ROOT}/train_proposal_diagnostic.events.jsonl"
+PROPOSAL_DIAGNOSTIC_OUT="${RUN_ROOT}/train_proposal_diagnostic.report.json"
 PARALLEL_WORKERS="$(python3 -c 'import json,sys; p=json.load(open(sys.argv[1], encoding="utf-8")); m=json.load(open(sys.argv[2], encoding="utf-8")); phase="family_out_development" if m["protocol"] == "family_out" else "development"; print(p["phases"][phase]["parallel_workers"])' "${PROTOCOL}" "${MANIFEST}")"
 MODEL="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["model"])' "${PROTOCOL}")"
 TRIAL_PROVIDER_MODE="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["trial_provider_mode"])' "${PROTOCOL}")"
@@ -44,6 +48,30 @@ preflight() {
     --manifest "${MANIFEST}" \
     --trial-provider-mode "${TRIAL_PROVIDER_MODE}" \
     --root "${BENCHMARK_ROOT}"
+}
+
+proposal_diagnostic() {
+  mkdir -p "${RUN_ROOT}"
+  if [[ -s "${PROPOSAL_DIAGNOSTIC_OUT}" && -s "${PROPOSAL_DIAGNOSTIC_EVENTS}" ]]; then
+    python3 -c 'import sys; from assumption_agent.benchmarks.train_proposal_diagnostic import verify_existing_train_proposal_diagnostic as verify; verify(root=sys.argv[1], manifest_path=sys.argv[2], source_run_root=sys.argv[3], source_train_receipt=sys.argv[4], protocol_path=sys.argv[5], report_path=sys.argv[6], events_path=sys.argv[7])' \
+      "${BENCHMARK_ROOT}" "${MANIFEST}" "${SOURCE_RUN_ROOT}" \
+      "${SOURCE_TRAIN_RECEIPT}" "${PROTOCOL}" "${PROPOSAL_DIAGNOSTIC_OUT}" \
+      "${PROPOSAL_DIAGNOSTIC_EVENTS}"
+    return
+  fi
+  if [[ -e "${PROPOSAL_DIAGNOSTIC_OUT}" || -e "${PROPOSAL_DIAGNOSTIC_EVENTS}" ]]; then
+    echo "Incomplete or failed proposal diagnostic exists; use a fresh RUN_ROOT." >&2
+    exit 2
+  fi
+  python3 -m assumption_agent.benchmarks.train_proposal_diagnostic \
+    --root "${BENCHMARK_ROOT}" \
+    --manifest "${MANIFEST}" \
+    --source-run-root "${SOURCE_RUN_ROOT}" \
+    --source-train-receipt "${SOURCE_TRAIN_RECEIPT}" \
+    --protocol "${PROTOCOL}" \
+    --env-file "${ENV_FILE}" \
+    --events "${PROPOSAL_DIAGNOSTIC_EVENTS}" \
+    --out "${PROPOSAL_DIAGNOSTIC_OUT}"
 }
 
 lock_protocol() {
@@ -93,7 +121,7 @@ run_generation() {
 smoke() {
   mkdir -p "${RUN_ROOT}"
   run_generation smoke_recursive \
-    --train-limit 4 --validation-limit 2 \
+    --train-limit 6 --validation-limit 2 \
     --paired-no-recursive-out "${RUN_ROOT}/smoke_no_recursive.report.json" \
     --paired-no-recursive-archive-out "${RUN_ROOT}/smoke_no_recursive.archive.json"
 }
@@ -161,6 +189,7 @@ report() {
 }
 
 case "${1:-}" in
+  proposal-diagnostic) proposal_diagnostic ;;
   preflight) preflight ;;
   lock) lock_protocol ;;
   prewarm) prewarm ;;
@@ -170,6 +199,7 @@ case "${1:-}" in
   validation-controls) run_controls validation; report validation ;;
   sealed-test) run_controls test; report test ;;
   all-development)
+    proposal_diagnostic
     preflight
     lock_protocol
     prewarm
@@ -184,7 +214,7 @@ case "${1:-}" in
     report validation
     ;;
   *)
-    echo "Usage: $0 {preflight|lock|prewarm|smoke|develop|freeze|validation-controls|sealed-test|all-development}" >&2
+    echo "Usage: $0 {proposal-diagnostic|preflight|lock|prewarm|smoke|develop|freeze|validation-controls|sealed-test|all-development}" >&2
     exit 2
     ;;
 esac

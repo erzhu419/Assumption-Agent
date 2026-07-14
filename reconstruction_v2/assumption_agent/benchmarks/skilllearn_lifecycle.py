@@ -35,6 +35,7 @@ from ..evolution import (
     CounterfactualEvidenceReplayCache,
     EvolutionKernel,
     EvolutionRunResult,
+    PROPOSAL_FORMATION_POLICY_VERSION,
     PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
     TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
 )
@@ -4372,6 +4373,7 @@ class SkillLearnEvolutionHarness:
         output_root: str | Path,
         proposal_candidates_per_generation: int = 3,
         candidate_selection_policy: str = TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
+        proposal_formation_policy: str | None = None,
         candidate_bundle_policy: str | None = None,
         contrastive_training_evidence_policy: str | None = None,
         train_action_design_policy: str | None = None,
@@ -4426,6 +4428,13 @@ class SkillLearnEvolutionHarness:
             raise ValueError(
                 f"unsupported candidate selection policy: {candidate_selection_policy}"
             )
+        if proposal_formation_policy not in {
+            None,
+            PROPOSAL_FORMATION_POLICY_VERSION,
+        }:
+            raise ValueError(
+                f"unsupported proposal formation policy: {proposal_formation_policy}"
+            )
         bundle_selection_enabled = (
             candidate_selection_policy
             in COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSIONS
@@ -4469,6 +4478,7 @@ class SkillLearnEvolutionHarness:
             invalid_trial_retry_backoff_seconds
         )
         self.candidate_selection_policy = candidate_selection_policy
+        self.proposal_formation_policy = proposal_formation_policy
         self.candidate_bundle_policy = candidate_bundle_policy
         self.contrastive_training_evidence_policy = (
             contrastive_training_evidence_policy
@@ -4520,6 +4530,7 @@ class SkillLearnEvolutionHarness:
             split_guard=guard,
             proposal_candidates_per_generation=proposal_candidates_per_generation,
             candidate_selection_policy=candidate_selection_policy,
+            proposal_formation_policy=proposal_formation_policy,
             candidate_bundle_policy=candidate_bundle_policy,
             contrastive_training_evidence_policy=(
                 contrastive_training_evidence_policy

@@ -37,10 +37,12 @@ from assumption_agent.evolution import (
     COMPLEMENTARY_FAMILY_BUNDLE_CANDIDATE_SELECTION_VERSION,
     COMPLEMENTARY_FAMILY_SUPPORT_BUNDLE_CANDIDATE_SELECTION_VERSION,
     CONTRASTIVE_TRAIN_CANDIDATE_SELECTION_VERSION,
+    PROPOSAL_FORMATION_POLICY_VERSION,
     PROSPECTIVE_FAMILY_COVERAGE_CANDIDATE_SELECTION_VERSION,
     TRAIN_ONLY_CANDIDATE_SELECTION_VERSION,
     CounterfactualEvidenceReplayCache,
     EvolutionKernel,
+    _allowlisted_profile_primitives,
     _training_candidate_metrics,
     _training_candidate_score,
     _training_family_coverage_target,
@@ -3530,6 +3532,9 @@ def test_family_coverage_proposal_request_contains_diverse_batch_contract(
     )
 
     assert len(proposals) == 3
+    assert len(model.requests) == 1
+    assert "hypotheses" in model.requests[0]["output_schema"]["properties"]
+    assert "family_slot_response_contract" not in model.requests[0]
     request_contract = model.requests[0]["proposal_batch_contract"]
     capability_contract = model.requests[0]["capabilities"][
         "proposal_batch_contract"
@@ -3617,6 +3622,563 @@ def test_family_coverage_proposal_request_contains_diverse_batch_contract(
     assert constraints[
         "prompt_directive_top_level_fallback_remains_preserve_baseline"
     ] is True
+
+
+def test_profile_grounded_family_slots_scope_three_singular_train_requests(
+    tmp_path: Path,
+) -> None:
+    families = ("family-a", "family-b", "family-c")
+    profiles = {
+        f"profile-{family}": _family_slot_profile(family)
+        for family in families
+    }
+    residuals = tuple(
+        _family_slot_residual(
+            f"{family}-failure-{index}",
+            family=family,
+            profile_hash=f"profile-{family}",
+        )
+        for family in families
+        for index in range(2)
+    ) + (
+        _family_residual(
+            "success-control-1",
+            family="success-family-1",
+            baseline_success=True,
+        ),
+        _family_residual(
+            "success-control-2",
+            family="success-family-2",
+            baseline_success=True,
+        ),
+    )
+    proposal_rows = [
+        _family_slot_program(family).to_dict() for family in families
+    ]
+    harness, _, model, _, _, sink = _harness(
+        tmp_path,
+        proposal_rows=proposal_rows,
+        train_action_design_policy=TRAIN_ACTION_DESIGN_POLICY_VERSION,
+        proposal_formation_policy=PROPOSAL_FORMATION_POLICY_VERSION,
+    )
+    context = ValidationContext(
+        evaluator_epoch="skilllearn-eval-epoch-0",
+        residuals=residuals,
+        available_lanes=frozenset({"baseline", "candidate"}),
+        baseline_lane="baseline",
+        action_semantics=SKILL_ACTION_LOWERING_VERSION,
+        train_action_design_policy=TRAIN_ACTION_DESIGN_POLICY_VERSION,
+        action_design_profiles=profiles,
+    )
+
+    proposals = harness.kernel.propose_candidates(
+        residuals,
+        validation_context=context,
+        trace_id="profile-grounded-family-slots",
+    )
+
+    assert len(proposals) == len(model.requests) == 3
+    success_ids = {"success-control-1", "success-control-2"}
+    for request, expected_family in zip(model.requests, families):
+        assert request["max_hypotheses"] == 1
+        assert request["output_schema"]["required"] == ["hypothesis"]
+        assert set(request["output_schema"]["properties"]) == {"hypothesis"}
+        assert request["family_slot_response_contract"] == {
+            "policy": PROPOSAL_FORMATION_POLICY_VERSION,
+            "response_field": "hypothesis",
+            "response_type": "object",
+            "required_count": 1,
+            "root_batch_contract_applies": False,
+            "response_rejection_by_diversity_allowed": False,
+            "proposal_retry_by_diversity_allowed": False,
+            "compact_output": True,
+        }
+        assert "proposal_batch_contract" not in request
+        capabilities = request["capabilities"]
+        slot_contract = capabilities["family_slot_contract"]
+        assert slot_contract["policy"] == PROPOSAL_FORMATION_POLICY_VERSION
+        assert slot_contract["target_failure_family"] == expected_family
+        assert slot_contract["target_failure_support_count"] == 2
+        assert slot_contract["success_control_count"] == 2
+        assert slot_contract["validation_outcomes_used"] is False
+        assert slot_contract["verifier_content_used"] is False
+        assert slot_contract["test_content_used"] is False
+        assert capabilities["action_quality_contract"]["policy"] == (
+            TRAIN_ACTION_DESIGN_POLICY_VERSION
+        )
+        assert set(capabilities["train_action_design_profiles"]) == {
+            f"profile-{expected_family}"
+        }
+        assert capabilities["prior_hypotheses"] == []
+        assert capabilities["prior_promotion_feedback"] == []
+        portable = slot_contract["portable_recipe_policy"]
+        assert portable["minimum_same_family_train_evidence_for_literal"] == 2
+        assert portable["otherwise_extract_from"] == (
+            "current_task_or_artifact"
+        )
+        assert portable["reusable_preferred_primitive_count"] > 0
+        preferred = portable["preferred_allowlisted_profile_primitives"]
+        failed = portable["failed_profile_primitives_to_avoid"]
+        assert any(
+            row["kind"] == "executable"
+            and row["value"] == f"{expected_family}-tool"
+            and row["train_failure_evidence_count"] == 2
+            for row in preferred
+        )
+        assert any(
+            row["kind"] == "executable"
+            and row["value"] == f"{expected_family}-broken"
+            and row["train_failure_evidence_count"] == 2
+            for row in failed
+        )
+        request_failures = [
+            row for row in request["residuals"] if not row["baseline_success"]
+        ]
+        request_successes = [
+            row for row in request["residuals"] if row["baseline_success"]
+        ]
+        assert {row["family"] for row in request_failures} == {
+            expected_family
+        }
+        assert len(request_failures) == 2
+        assert {
+            row["transition_id"] for row in request_successes
+        } == success_ids
+        constraints = request["constraints"]
+        assert constraints["proposal_target_failure_family"] == expected_family
+        assert constraints[
+            "trigger_must_include_exact_target_family_predicate"
+        ] == {"key": "family", "op": "eq", "value": expected_family}
+        assert constraints[
+            "reusable_preferred_primitive_requires_action_binding"
+        ] is True
+        assert constraints["exact_constant_alone_is_insufficient"] is True
+        action_value_schema = request["output_schema"]["properties"][
+            "hypothesis"
+        ]["action_graph"][0]["value"]
+        assert "must bind a canonical preferred profile primitive" in (
+            action_value_schema
+        )
+        assert "exact constant alone is insufficient" in action_value_schema
+
+    plan = next(
+        row
+        for row in sink.events
+        if row["event"] == "proposal_family_slot_plan_created"
+    )
+    completed = [
+        row
+        for row in sink.events
+        if row["event"] == "proposal_family_slot_completed"
+    ]
+    assert plan["payload"]["slot_count"] == 3
+    assert plan["payload"]["distinct_target_family_count"] == 3
+    assert plan["payload"]["raw_content_persisted"] is False
+    assert len(completed) == 3
+    assert all(
+        row["payload"]["candidate_matched_target_support"] == 2
+        and row["payload"]["matched_family_count"] == 1
+        and row["payload"]["profile_binding_count"] >= 1
+        and row["payload"]["preferred_primitive_count"] >= 1
+        and row["payload"]["preferred_primitive_set_hash"]
+        and row["payload"]["failed_primitive_set_hash"]
+        and row["payload"]["portable_delta_kinds"]
+        and row["payload"]["raw_content_persisted"] is False
+        for row in completed
+    )
+
+
+def test_family_slot_profile_primitives_are_failure_dominant_and_path_safe() -> None:
+    profile = {
+        "runtime_environment": {
+            "declared_os_packages": ["completed-nonzero"],
+            "declared_python_packages": [],
+            "declared_task_local_paths": ["/root/available.json"],
+            "copied_task_files": [],
+            "environment_source_files": [],
+        },
+        "baseline_action_trace": {
+            "command_signatures": [
+                {
+                    "executable_basename": "completed-nonzero",
+                    "task_local_paths": ["/root/not-the-cause-a.json"],
+                    "status": "completed",
+                    "exit_code": 1,
+                },
+                {
+                    "executable_basename": "failed-zero",
+                    "task_local_paths": ["/root/not-the-cause-b.json"],
+                    "status": "failed",
+                    "exit_code": 0,
+                },
+                {
+                    "executable_basename": "successful-tool",
+                    "task_local_paths": ["/root/success.json"],
+                    "status": "completed",
+                    "exit_code": 0,
+                },
+            ]
+        },
+    }
+
+    preferred, failed = _allowlisted_profile_primitives(profile)
+
+    assert ("executable", "completed-nonzero") in failed
+    assert ("environment_os_package", "completed-nonzero") not in preferred
+    assert ("executable", "failed-zero") in failed
+    assert ("executable", "successful-tool") in preferred
+    assert ("artifact_command_path", "/root/success.json") in preferred
+    assert (
+        "artifact_command_path",
+        "/root/not-the-cause-a.json",
+    ) not in failed | preferred
+    assert (
+        "artifact_command_path",
+        "/root/not-the-cause-b.json",
+    ) not in failed | preferred
+    assert ("artifact_task_local_path", "/root/available.json") in preferred
+    assert preferred.isdisjoint(failed)
+
+
+def test_family_slot_formation_requires_train_action_profile_policy(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(
+        ValueError,
+        match="profile-grounded family-slot proposal formation requires TRAIN action design policy",
+    ):
+        _harness(
+            tmp_path,
+            proposal_formation_policy=PROPOSAL_FORMATION_POLICY_VERSION,
+            train_action_design_policy=None,
+        )
+
+
+def test_family_slot_formation_rejects_non_train_before_model(
+    tmp_path: Path,
+) -> None:
+    families = ("family-a", "family-b", "family-c")
+    residuals = tuple(
+        replace(
+            _family_slot_residual(
+                f"{family}-failure",
+                family=family,
+                profile_hash=f"profile-{family}",
+            ),
+            split=(
+                SplitName.VALIDATION
+                if family == "family-c"
+                else SplitName.TRAIN
+            ),
+        )
+        for family in families
+    )
+    profiles = {
+        f"profile-{family}": _family_slot_profile(family)
+        for family in families
+    }
+    harness, _, model, _, _, _ = _harness(
+        tmp_path,
+        proposal_rows=[
+            _family_slot_program(family).to_dict() for family in families
+        ],
+        train_action_design_policy=TRAIN_ACTION_DESIGN_POLICY_VERSION,
+        proposal_formation_policy=PROPOSAL_FORMATION_POLICY_VERSION,
+    )
+    context = ValidationContext(
+        evaluator_epoch="skilllearn-eval-epoch-0",
+        residuals=residuals,
+        available_lanes=frozenset({"baseline", "candidate"}),
+        baseline_lane="baseline",
+        action_semantics=SKILL_ACTION_LOWERING_VERSION,
+        train_action_design_policy=TRAIN_ACTION_DESIGN_POLICY_VERSION,
+        action_design_profiles=profiles,
+    )
+
+    with pytest.raises(
+        PermissionError,
+        match="proposal_residual_not_training",
+    ):
+        harness.kernel.propose_candidates(
+            residuals,
+            validation_context=context,
+            trace_id="family-slot-non-train",
+        )
+
+    assert model.requests == []
+
+
+def test_family_slot_plan_is_deterministic_rotates_and_shared_g1_matches(
+    tmp_path: Path,
+) -> None:
+    families = tuple(f"family-{suffix}" for suffix in "abcdef")
+    profiles = {
+        f"profile-{family}": _family_slot_profile(family)
+        for family in families
+    }
+    residuals = tuple(
+        _family_slot_residual(
+            f"{family}-failure-{index}",
+            family=family,
+            profile_hash=f"profile-{family}",
+        )
+        for family in families
+        for index in range(2)
+    )
+    context = ValidationContext(
+        evaluator_epoch="skilllearn-eval-epoch-0",
+        residuals=residuals,
+        available_lanes=frozenset({"baseline", "candidate"}),
+        baseline_lane="baseline",
+        action_semantics=SKILL_ACTION_LOWERING_VERSION,
+        train_action_design_policy=TRAIN_ACTION_DESIGN_POLICY_VERSION,
+        action_design_profiles=profiles,
+    )
+    all_rows = [_family_slot_program(family).to_dict() for family in families]
+    harness_a, _, model_a, archive_a, _, sink_a = _harness(
+        tmp_path / "a",
+        proposal_rows=all_rows,
+        train_action_design_policy=TRAIN_ACTION_DESIGN_POLICY_VERSION,
+        proposal_formation_policy=PROPOSAL_FORMATION_POLICY_VERSION,
+    )
+
+    shared_g1 = harness_a.kernel.propose_candidates(
+        residuals,
+        validation_context=context,
+        trace_id="family-slot-a-g1",
+    )
+    harness_a.kernel.validator = RecursiveValidationEngine(
+        (),
+        proposer=harness_a.proposer,
+        event_sink=sink_a,
+    )
+    family_use_after_proposal = dict(
+        harness_a.kernel._proposal_family_use_counts
+    )
+    harness_a.kernel.evolve_once(
+        residuals=residuals,
+        validation_tasks=harness_a.tasks(
+            harness_a.manifest.validation_ids[:2]
+        ),
+        validation_context=context,
+        proposal_candidates=shared_g1,
+        trace_id="family-slot-a-shared-own-g1",
+    )
+    assert harness_a.kernel._proposal_family_use_counts == (
+        family_use_after_proposal
+    )
+    own_replay = next(
+        row
+        for row in sink_a.events
+        if row["event"] == "proposal_family_slot_usage_replayed"
+    )
+    assert own_replay["payload"]["source"] == "shared_proposal_candidates"
+    assert own_replay["payload"]["proposal_set_replayed"] is True
+    assert own_replay["payload"]["family_use_updated"] is False
+    assert own_replay["payload"]["new_family_use_count"] == 0
+    assert own_replay["payload"]["raw_content_persisted"] is False
+    assert harness_a.kernel._promotion_feedback
+    assert archive_a.hypotheses
+    harness_a.kernel.propose_candidates(
+        residuals,
+        validation_context=context,
+        trace_id="family-slot-a-g2",
+    )
+    a_g1_targets = [
+        row["capabilities"]["family_slot_contract"]["target_failure_family"]
+        for row in model_a.requests[:3]
+    ]
+    a_g2_targets = [
+        row["capabilities"]["family_slot_contract"]["target_failure_family"]
+        for row in model_a.requests[3:]
+    ]
+    assert a_g1_targets == list(families[:3])
+    assert a_g2_targets == list(families[3:])
+    assert set(a_g1_targets).isdisjoint(a_g2_targets)
+    assert all(
+        request["capabilities"]["prior_hypotheses"] == []
+        and request["capabilities"]["prior_promotion_feedback"] == []
+        and request["capabilities"][
+            "prior_history_excluded_from_family_slot_proposal"
+        ]
+        is True
+        and request["capabilities"]["family_slot_contract"][
+            "validation_outcomes_used"
+        ]
+        is False
+        for request in model_a.requests[3:]
+    )
+
+    harness_fresh, _, model_fresh, _, _, _ = _harness(
+        tmp_path / "fresh",
+        proposal_rows=all_rows[:3],
+        train_action_design_policy=TRAIN_ACTION_DESIGN_POLICY_VERSION,
+        proposal_formation_policy=PROPOSAL_FORMATION_POLICY_VERSION,
+    )
+    harness_fresh.kernel.propose_candidates(
+        tuple(reversed(residuals)),
+        validation_context=context,
+        trace_id="family-slot-fresh-g1",
+    )
+    fresh_targets = [
+        row["capabilities"]["family_slot_contract"]["target_failure_family"]
+        for row in model_fresh.requests
+    ]
+    assert fresh_targets == a_g1_targets
+
+    harness_b, _, model_b, _, _, sink_b = _harness(
+        tmp_path / "b",
+        proposal_rows=all_rows[3:],
+        train_action_design_policy=TRAIN_ACTION_DESIGN_POLICY_VERSION,
+        proposal_formation_policy=PROPOSAL_FORMATION_POLICY_VERSION,
+    )
+    harness_b.kernel.validator = RecursiveValidationEngine(
+        (),
+        proposer=harness_b.proposer,
+        event_sink=sink_b,
+    )
+    b_generation_proposer = harness_b.kernel.proposer
+    harness_b.kernel.proposer = harness_a.proposer
+    harness_b.kernel.evolve_once(
+        residuals=residuals,
+        validation_tasks=harness_b.tasks(
+            harness_b.manifest.validation_ids[:2]
+        ),
+        validation_context=context,
+        proposal_candidates=shared_g1,
+        trace_id="family-slot-b-shared-g1",
+    )
+    harness_b.kernel.proposer = b_generation_proposer
+    assert harness_b.kernel._proposal_family_use_counts == (
+        family_use_after_proposal
+    )
+    harness_b.kernel.propose_candidates(
+        residuals,
+        validation_context=context,
+        trace_id="family-slot-b-g2",
+    )
+    b_g2_targets = [
+        row["capabilities"]["family_slot_contract"]["target_failure_family"]
+        for row in model_b.requests
+    ]
+    assert b_g2_targets == a_g2_targets
+    shared_usage = next(
+        row
+        for row in sink_b.events
+        if row["event"] == "proposal_family_slot_usage_recorded"
+        and row["payload"]["source"] == "shared_proposal_candidates"
+    )
+    assert shared_usage["payload"]["requested_target_count"] == 3
+    assert shared_usage["payload"]["distinct_requested_target_count"] == 3
+    assert shared_usage["payload"]["actual_matched_count"] == 3
+    assert shared_usage["payload"][
+        "distinct_actual_matched_family_count"
+    ] == 3
+    assert shared_usage["payload"]["raw_content_persisted"] is False
+
+
+def test_family_slot_rotation_uses_requested_targets_and_identity_binds_plan(
+    tmp_path: Path,
+) -> None:
+    families = tuple(f"family-{suffix}" for suffix in "abcdef")
+    residuals = tuple(
+        _family_slot_residual(
+            f"{family}-failure-{index}",
+            family=family,
+            profile_hash=f"profile-{family}",
+        )
+        for family in families
+        for index in range(2)
+    )
+    profiles = {
+        f"profile-{family}": _family_slot_profile(family)
+        for family in families
+    }
+    repeated_program_set = [
+        _family_slot_program("family-f").to_dict(),
+        _family_slot_program("family-b").to_dict(),
+        _family_slot_program("family-c").to_dict(),
+    ]
+    harness, _, model, _, _, sink = _harness(
+        tmp_path,
+        proposal_rows=[*repeated_program_set, *repeated_program_set],
+        train_action_design_policy=TRAIN_ACTION_DESIGN_POLICY_VERSION,
+        proposal_formation_policy=PROPOSAL_FORMATION_POLICY_VERSION,
+    )
+    context = ValidationContext(
+        evaluator_epoch="skilllearn-eval-epoch-0",
+        residuals=residuals,
+        available_lanes=frozenset({"baseline", "candidate"}),
+        baseline_lane="baseline",
+        action_semantics=SKILL_ACTION_LOWERING_VERSION,
+        train_action_design_policy=TRAIN_ACTION_DESIGN_POLICY_VERSION,
+        action_design_profiles=profiles,
+    )
+
+    first = harness.kernel.propose_candidates(
+        residuals,
+        validation_context=context,
+        trace_id="requested-target-g1",
+    )
+    second = harness.kernel.propose_candidates(
+        residuals,
+        validation_context=context,
+        trace_id="requested-target-g2",
+    )
+
+    targets = [
+        row["capabilities"]["family_slot_contract"]["target_failure_family"]
+        for row in model.requests
+    ]
+    assert targets[:3] == list(families[:3])
+    assert targets[3:] == list(families[3:])
+    assert harness.kernel._proposal_family_use_counts == {
+        family: 1 for family in families
+    }
+    assert harness.proposer.family_slot_targets_for(second) == families[3:]
+    harness.kernel._record_matched_proposal_families(
+        first,
+        residuals=residuals,
+        validation_context=context,
+        trace_id="same-program-set-different-slots",
+        source="test_same_program_set_different_slots",
+        requested_targets=families[3:],
+    )
+    assert harness.kernel._proposal_family_use_counts == {
+        **{family: 1 for family in families[:3]},
+        **{family: 2 for family in families[3:]},
+    }
+    usage_events = [
+        row
+        for row in sink.events
+        if row["event"] == "proposal_family_slot_usage_recorded"
+    ]
+    assert len(usage_events) == 3
+    same_set_events = [
+        row
+        for row in usage_events
+        if row["payload"]["proposal_set_hash"]
+        == usage_events[0]["payload"]["proposal_set_hash"]
+    ]
+    assert len(same_set_events) == 2
+    assert same_set_events[0]["payload"]["usage_identity_hash"] != (
+        same_set_events[1]["payload"]["usage_identity_hash"]
+    )
+    assert all(
+        row["payload"]["requested_target_count"] == 3
+        and row["payload"]["family_use_updated"] is True
+        and row["payload"]["proposal_set_replayed"] is False
+        for row in usage_events
+    )
+    first_slot = next(
+        row
+        for row in sink.events
+        if row["event"] == "proposal_family_slot_completed"
+        and row["trace_id"] == "requested-target-g1:family-slot-1"
+    )
+    assert first_slot["payload"]["target_family"] == "family-a"
+    assert first_slot["payload"]["candidate_matched_target"] is False
+    assert first_slot["payload"]["candidate_matched_target_support"] == 0
 
 
 def test_action_quality_profiles_shape_prompt_and_audit_without_gating() -> None:
@@ -5116,6 +5678,7 @@ def _harness(
     candidate_bundle_policy: str | None = None,
     contrastive_training_evidence_policy: str | None = None,
     train_action_design_policy: str | None = None,
+    proposal_formation_policy: str | None = None,
     repair_request_scope_policy: str | None = None,
     baseline_arm_replay_cache: BaselineArmEvidenceReplayCache | None = None,
     baseline_arm_evidence_replay_policy: str | None = None,
@@ -5129,7 +5692,15 @@ def _harness(
     )
     guard = SplitAccessGuard(manifest, event_sink=sink)
     model = QueueProposalModel(
-        [{"hypotheses": proposal_rows or [_program_dict()]}]
+        (
+            [
+                {"hypothesis": row}
+                for row in (proposal_rows or [_program_dict()] * 3)
+            ]
+            if proposal_formation_policy
+            == PROPOSAL_FORMATION_POLICY_VERSION
+            else [{"hypotheses": proposal_rows or [_program_dict()]}]
+        )
     )
     proposer = StructuredHypothesisProposer(model, event_sink=sink)
     validator = RecursiveValidationEngine(
@@ -5175,6 +5746,7 @@ def _harness(
         evaluator_epoch="skilllearn-eval-epoch-0",
         output_root=tmp_path / "compiled",
         candidate_selection_policy=candidate_selection_policy,
+        proposal_formation_policy=proposal_formation_policy,
         candidate_bundle_policy=candidate_bundle_policy,
         contrastive_training_evidence_policy=(
             contrastive_training_evidence_policy
@@ -5241,6 +5813,76 @@ def _family_trigger_program(
         ],
         "none_of": [],
     }
+    return HypothesisProgram.from_dict(payload)
+
+
+def _family_slot_profile(family: str) -> dict[str, Any]:
+    return {
+        "policy": TRAIN_ACTION_DESIGN_POLICY_VERSION,
+        "runtime_environment": {
+            "declared_os_packages": [f"{family}-env"],
+            "declared_python_packages": [],
+            "declared_task_local_paths": [f"/root/{family}.json"],
+            "copied_task_files": [f"/root/{family}.json"],
+            "environment_source_files": [],
+        },
+        "baseline_action_trace": {
+            "command_signatures": [
+                {
+                    "executable_basename": f"{family}-tool",
+                    "safe_flags": ["--offline"],
+                    "task_local_paths": [f"/root/{family}.json"],
+                    "original_command_hash": f"{family}-success-hash",
+                    "status": "succeeded",
+                    "exit_code": 0,
+                },
+                {
+                    "executable_basename": f"{family}-broken",
+                    "safe_flags": [],
+                    "task_local_paths": [],
+                    "original_command_hash": f"{family}-failed-hash",
+                    "status": "failed",
+                    "exit_code": 1,
+                },
+            ]
+        },
+    }
+
+
+def _family_slot_residual(
+    transition_id: str,
+    *,
+    family: str,
+    profile_hash: str,
+) -> ResidualExample:
+    return replace(
+        _family_residual(transition_id, family=family),
+        context={
+            "task_instruction": (
+                f"Process the current {family} task artifact offline."
+            ),
+            "action_context_profile_hash": profile_hash,
+        },
+    )
+
+
+def _family_slot_program(family: str) -> HypothesisProgram:
+    payload = _family_trigger_program(
+        f"{family}-profile-grounded",
+        (family,),
+    ).to_dict()
+    payload["action_graph"] = [
+        {
+            "id": "portable-profile-recipe",
+            "operation": "execute_step",
+            "target": "task_procedure",
+            "value": (
+                f"Run {family}-tool --offline on /root/{family}.json and "
+                "parse the current task artifact file."
+            ),
+            "depends_on": [],
+        }
+    ]
     return HypothesisProgram.from_dict(payload)
 
 

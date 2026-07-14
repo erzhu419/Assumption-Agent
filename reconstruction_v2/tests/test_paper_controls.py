@@ -76,6 +76,9 @@ V314_PROTOCOL_PATH = (
 V315_PROTOCOL_PATH = (
     ROOT / "manifests" / "skilllearn_paper_protocol_v3_15_ruoli_gpt54mini.json"
 )
+V316_PROTOCOL_PATH = (
+    ROOT / "manifests" / "skilllearn_paper_protocol_v3_16_ruoli_gpt54mini.json"
+)
 MANIFEST_PATH = (
     ROOT / "manifests" / "skilllearnbench_instance_holdout_offline_ready_v1.json"
 )
@@ -750,6 +753,7 @@ def test_execution_report_preserves_legacy_promotion_summary_schema(
         V313_PROTOCOL_PATH,
         V314_PROTOCOL_PATH,
         V315_PROTOCOL_PATH,
+        V316_PROTOCOL_PATH,
     ),
 )
 def test_freeze_accepts_clean_contrastive_report(protocol_path: Path) -> None:
@@ -810,6 +814,30 @@ def test_freeze_binds_v315_action_design_plan_provenance() -> None:
     with pytest.raises(
         ValueError,
         match="development report plan mismatch: train_action_design_policy",
+    ):
+        paper_freeze._validate_development_report(
+            report,
+            protocol=protocol,
+            manifest=manifest,
+            recursive_validation_enabled=True,
+        )
+
+
+def test_freeze_binds_v316_proposal_formation_plan_provenance() -> None:
+    protocol = PaperProtocol.read(V316_PROTOCOL_PATH)
+    manifest = SplitManifest.read(MANIFEST_PATH)
+    report = _development_report(
+        protocol,
+        manifest,
+        archive_hash="unused",
+        recursive=True,
+        hypothesis_id="recursive-policy",
+    )
+    report["plan"]["proposal_formation_policy"] = "drifted"
+
+    with pytest.raises(
+        ValueError,
+        match="development report plan mismatch: proposal_formation_policy",
     ):
         paper_freeze._validate_development_report(
             report,
@@ -883,9 +911,47 @@ def test_freeze_rejects_v315_paired_checkpoint_provenance_drift() -> None:
         )
 
 
+def test_freeze_rejects_v316_paired_proposal_formation_provenance_drift() -> None:
+    protocol = PaperProtocol.read(V316_PROTOCOL_PATH)
+    manifest = SplitManifest.read(MANIFEST_PATH)
+    recursive_report = _development_report(
+        protocol,
+        manifest,
+        archive_hash="recursive",
+        recursive=True,
+        hypothesis_id="recursive-policy",
+    )
+    no_recursive_report = _development_report(
+        protocol,
+        manifest,
+        archive_hash="no-recursive",
+        recursive=False,
+        hypothesis_id="no-recursive-policy",
+    )
+    no_recursive_report["plan"]["proposal_formation_policy"] = "drifted"
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "paired development shared first-generation provenance mismatch: "
+            "proposal_formation_policy"
+        ),
+    ):
+        paper_freeze._validate_paired_development_provenance(
+            recursive_report,
+            no_recursive_report,
+            protocol=protocol,
+        )
+
+
 @pytest.mark.parametrize(
     "protocol_path",
-    (V313_PROTOCOL_PATH, V314_PROTOCOL_PATH, V315_PROTOCOL_PATH),
+    (
+        V313_PROTOCOL_PATH,
+        V314_PROTOCOL_PATH,
+        V315_PROTOCOL_PATH,
+        V316_PROTOCOL_PATH,
+    ),
 )
 def test_freeze_binds_candidate_bundle_plan_provenance(
     protocol_path: Path,
@@ -941,6 +1007,7 @@ def test_freeze_binds_candidate_bundle_plan_provenance(
         V313_PROTOCOL_PATH,
         V314_PROTOCOL_PATH,
         V315_PROTOCOL_PATH,
+        V316_PROTOCOL_PATH,
     ),
 )
 def test_freeze_rejects_contrastive_generation_evidence_drift(
@@ -1343,6 +1410,7 @@ def test_frozen_archive_rejects_candidate_treatment_substitution(
         (V313_PROTOCOL_PATH, "3.13.0"),
         (V314_PROTOCOL_PATH, "3.14.0"),
         (V315_PROTOCOL_PATH, "3.15.0"),
+        (V316_PROTOCOL_PATH, "3.16.0"),
     ),
 )
 @pytest.mark.parametrize("allowed", (True, False))
@@ -1418,6 +1486,7 @@ def test_bundle_protocol_frozen_archive_accepts_canonical_candidate_bundle(
         (V313_PROTOCOL_PATH, "3.13.0"),
         (V314_PROTOCOL_PATH, "3.14.0"),
         (V315_PROTOCOL_PATH, "3.15.0"),
+        (V316_PROTOCOL_PATH, "3.16.0"),
     ),
 )
 def test_bundle_protocol_frozen_archive_rejects_bundle_tampering(
@@ -1851,6 +1920,7 @@ def _development_report(
         "3.13.0",
         "3.14.0",
         "3.15.0",
+        "3.16.0",
     }
     generation = {
         "promoted": True,
@@ -1886,6 +1956,7 @@ def _development_report(
         "3.13.0",
         "3.14.0",
         "3.15.0",
+        "3.16.0",
     }:
         train_count = int(phase["train_count"])
         generation.update(
@@ -1900,7 +1971,7 @@ def _development_report(
                 ]["contrastive_training_evidence_policy"],
             }
         )
-    if protocol.payload["protocol_version"] == "3.15.0":
+    if protocol.payload["protocol_version"] in {"3.15.0", "3.16.0"}:
         action_profile_set_hash = stable_hash(
             {"profile_hashes": ["profile-a"]}
         )
@@ -2006,6 +2077,7 @@ def _development_report(
                     "repair_request_scope_policy",
                     "candidate_bundle_policy",
                     "train_action_design_policy",
+                    "proposal_formation_policy",
                 )
                 if field in protocol.payload["execution"]
             },
@@ -2041,7 +2113,8 @@ def _development_report(
                         action_profile_set_hash
                     ),
                 }
-                if protocol.payload["protocol_version"] == "3.15.0"
+                if protocol.payload["protocol_version"]
+                in {"3.15.0", "3.16.0"}
                 else {}
             ),
         },
@@ -2105,6 +2178,7 @@ def _promotion_decision(
         "3.13.0",
         "3.14.0",
         "3.15.0",
+        "3.16.0",
     }:
         summary.update(
             {
