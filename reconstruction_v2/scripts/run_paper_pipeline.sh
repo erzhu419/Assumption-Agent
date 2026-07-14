@@ -6,9 +6,9 @@ cd "${PROJECT_ROOT}"
 
 BENCHMARK_ROOT="${BENCHMARK_ROOT:-reference/self_evo_continual_20260707/repos/SkillLearnBench}"
 ENV_FILE="${ENV_FILE:-../.env}"
-PROTOCOL="${PROTOCOL:-manifests/skilllearn_paper_protocol_v3_17_ruoli_gpt54mini.json}"
+PROTOCOL="${PROTOCOL:-manifests/skilllearn_paper_protocol_v3_20_ruoli_gpt54mini.json}"
 MANIFEST="${MANIFEST:-manifests/skilllearnbench_instance_holdout_offline_ready_v1.json}"
-RUN_ROOT="${RUN_ROOT:-artifacts/paper_primary_v3_17_offline86_ruoli_gpt54mini_outer6_model1_familyslots02}"
+RUN_ROOT="${RUN_ROOT:-artifacts/paper_primary_v3_20_offline86_ruoli_gpt54mini_outer38_model48_portable01}"
 SOURCE_RUN_ROOT="${SOURCE_RUN_ROOT:-artifacts/paper_primary_v3_15_offline86_ruoli_gpt54mini_outer6_model1_actiondelta01}"
 SOURCE_TRAIN_RECEIPT="${SOURCE_TRAIN_RECEIPT:-manifests/skilllearn_v315_train_source_provenance_receipt_v1.json}"
 LOCK="${RUN_ROOT}/protocol_lock.json"
@@ -25,6 +25,8 @@ PROVIDER_ENDPOINT_ORIGIN="$(python3 -c 'import json,sys; print(json.load(open(sy
 PROVIDER_ENDPOINT_IPV4S="$(python3 -c 'import json,sys; print(",".join(json.load(open(sys.argv[1], encoding="utf-8"))["provider_endpoint_ipv4s"]))' "${PROTOCOL}")"
 TRIAL_NETWORK_BYTE_LIMIT="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["execution"]["trial_network_byte_limit"])' "${PROTOCOL}")"
 PREWARM_VERSION="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["execution"]["development_prewarm"])' "${PROTOCOL}")"
+PROTOCOL_VERSION="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["protocol_version"])' "${PROTOCOL}")"
+PORTABLE_CAPABILITY_COMPILER_MODE="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["execution"].get("portable_capability_compiler_mode", ""))' "${PROTOCOL}")"
 export ASSUMPTION_V2_MODEL="${MODEL}"
 export ASSUMPTION_V2_SKILLLEARN_PROVIDER_MODE="${TRIAL_PROVIDER_MODE}"
 export ASSUMPTION_V2_PROVIDER_CHAIN="${PROPOSAL_PROVIDER_CHAIN}"
@@ -43,6 +45,11 @@ run_docker_group() {
   sg docker -c "${command}"
 }
 
+is_frozen_portable_typed_protocol() {
+  [[ "${PROTOCOL_VERSION}" == "3.20.0" ]] &&
+    [[ "${PORTABLE_CAPABILITY_COMPILER_MODE}" == "receipt_bound_portable_task_capability_compiler_v1" ]]
+}
+
 preflight() {
   run_docker_group python3 -m assumption_agent.benchmarks.docker_egress --ensure
   run_docker_group python3 -m assumption_agent.benchmarks.preflight \
@@ -53,6 +60,9 @@ preflight() {
 }
 
 proposal_diagnostic() {
+  if is_frozen_portable_typed_protocol; then
+    return 0
+  fi
   mkdir -p "${RUN_ROOT}"
   if [[ -s "${PROPOSAL_DIAGNOSTIC_OUT}" && -s "${PROPOSAL_DIAGNOSTIC_EVENTS}" ]]; then
     python3 -m assumption_agent.benchmarks.train_proposal_diagnostic \
@@ -229,12 +239,18 @@ case "${1:-}" in
   validation-controls) run_controls validation; report validation ;;
   sealed-test) run_controls test; report test ;;
   all-development)
-    proposal_diagnostic
-    preflight
-    lock_protocol
-    prewarm
-    smoke
-    develop
+    if is_frozen_portable_typed_protocol; then
+      lock_protocol
+      prewarm
+      develop
+    else
+      proposal_diagnostic
+      preflight
+      lock_protocol
+      prewarm
+      smoke
+      develop
+    fi
     if ! development_has_promoted_candidate; then
       echo "Development completed without a promoted recursive candidate; freeze and validation controls skipped." >&2
       exit 0
