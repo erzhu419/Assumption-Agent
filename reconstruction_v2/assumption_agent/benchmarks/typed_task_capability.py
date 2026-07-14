@@ -10,6 +10,10 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Mapping, Sequence
 
 from ..models import stable_hash
+from ..typed_execution_contract import (
+    TypedExecutionContract,
+    load_typed_execution_contract,
+)
 from ..typed_operator_grammar import (
     ArtifactFormat,
     BoundTypedRecipe,
@@ -36,6 +40,9 @@ PORTABLE_TASK_CAPABILITY_COMPILER_VERSION = (
 )
 PORTABLE_TASK_CAPABILITY_METADATA_VERSION = (
     "harness_owned_pre_agent_task_capability_metadata_v1"
+)
+PORTABLE_TASK_CAPABILITY_METADATA_WITH_EXECUTION_CONTRACT_VERSION = (
+    "harness_owned_pre_agent_task_capability_metadata_v2_execution_contract"
 )
 PORTABLE_CAPABILITY_GRAPH_PROJECTION_VERSION = (
     "complete_recipe_portable_capability_projection_v1"
@@ -505,6 +512,7 @@ class CompiledPortableTaskCapability:
     typed_binding_hash: str
     bound_recipe_hash: str
     output_container_locator: str
+    execution_contract: TypedExecutionContract | None = None
 
     @property
     def metadata_hash(self) -> str:
@@ -512,7 +520,11 @@ class CompiledPortableTaskCapability:
 
     def safe_payload(self, *, include_hash: bool = True) -> dict[str, Any]:
         payload = {
-            "metadata_version": PORTABLE_TASK_CAPABILITY_METADATA_VERSION,
+            "metadata_version": (
+                PORTABLE_TASK_CAPABILITY_METADATA_WITH_EXECUTION_CONTRACT_VERSION
+                if self.execution_contract is not None
+                else PORTABLE_TASK_CAPABILITY_METADATA_VERSION
+            ),
             "compiler_mode": PORTABLE_TASK_CAPABILITY_COMPILER_VERSION,
             "item_id_hash": self.item_id_hash,
             "program_id_hash": self.program_id_hash,
@@ -536,6 +548,18 @@ class CompiledPortableTaskCapability:
             "agent_start_requires_verified_effect_receipt": True,
             "raw_content_persisted": False,
         }
+        if self.execution_contract is not None:
+            payload.update(
+                {
+                    "execution_contract": (
+                        self.execution_contract.safe_payload()
+                    ),
+                    "execution_contract_hash": (
+                        self.execution_contract.contract_hash
+                    ),
+                    "execution_contract_runtime_enforcement_claimed": False,
+                }
+            )
         if include_hash:
             payload["metadata_hash"] = self.metadata_hash
         return payload
@@ -548,6 +572,7 @@ def build_compiled_portable_task_capability(
     program_id: str,
     typed_binding_hash: str,
     bound_recipe_hash: str,
+    execution_contract: TypedExecutionContract | None = None,
 ) -> CompiledPortableTaskCapability:
     """Build one deterministic pre-agent hook without an input locator."""
 
@@ -568,6 +593,20 @@ def build_compiled_portable_task_capability(
         role_spec_hash=role_spec.role_spec_hash,
         typed_binding_hash=typed_binding_hash,
     )
+    if execution_contract is not None:
+        issues = execution_contract.validate_closed()
+        if issues:
+            raise PermissionError(
+                f"portable execution contract is invalid: {list(issues)}"
+            )
+        if execution_contract.graph_hash != role_spec.source_graph_hash:
+            raise PermissionError(
+                "portable execution contract graph binding mismatch"
+            )
+        if execution_contract.recipe_id != role_spec.source_recipe_id:
+            raise PermissionError(
+                "portable execution contract recipe binding mismatch"
+            )
     metadata = CompiledPortableTaskCapability(
         role_spec=role_spec,
         item_id_hash=stable_hash({"item_id": item_id}),
@@ -575,6 +614,7 @@ def build_compiled_portable_task_capability(
         typed_binding_hash=typed_binding_hash,
         bound_recipe_hash=bound_recipe_hash,
         output_container_locator=output_locator,
+        execution_contract=execution_contract,
     )
     validate_compiled_portable_task_capability(metadata.safe_payload())
     return metadata
@@ -617,7 +657,33 @@ def validate_compiled_portable_task_capability(
         output_container_locator=str(
             payload.get("output_container_locator") or ""
         ),
+        execution_contract=(
+            load_typed_execution_contract(payload["execution_contract"])
+            if isinstance(payload.get("execution_contract"), Mapping)
+            else None
+        ),
     )
+    if ("execution_contract" in payload) != (
+        metadata.execution_contract is not None
+    ):
+        raise PermissionError(
+            "portable capability execution contract is malformed"
+        )
+    if metadata.execution_contract is not None:
+        if (
+            metadata.execution_contract.graph_hash
+            != metadata.role_spec.source_graph_hash
+        ):
+            raise PermissionError(
+                "portable capability execution contract graph drifted"
+            )
+        if (
+            metadata.execution_contract.recipe_id
+            != metadata.role_spec.source_recipe_id
+        ):
+            raise PermissionError(
+                "portable capability execution contract recipe drifted"
+            )
     for value in (
         metadata.item_id_hash,
         metadata.program_id_hash,

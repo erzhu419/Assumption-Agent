@@ -7,6 +7,7 @@ from typing import Any, Mapping, Sequence
 
 from .models import ResidualExample, SplitName, stable_hash
 from .typed_operator_grammar import (
+    BoundTypedRecipe,
     FamilyCapabilityGraph,
     OperatorKind,
     TypedRecipe,
@@ -420,8 +421,9 @@ class ResourceBudgetSpec:
             "max_repair_attempts": self.max_repair_attempts,
             "max_completion_checks": self.max_completion_checks,
             "max_search_evaluations": self.max_search_evaluations,
-            "action_span_compute_is_budgeted": True,
+            "action_span_compute_budget_declared": True,
             "runtime_receipt_required": True,
+            "runtime_enforcement_claimed": False,
         }
 
 
@@ -447,33 +449,24 @@ class TypedExecutionContract:
     def contract_hash(self) -> str:
         return stable_hash(self.safe_payload(include_hash=False))
 
-    def validate(self, graph: FamilyCapabilityGraph) -> tuple[str, ...]:
+    def validate_closed(self) -> tuple[str, ...]:
         issues: list[str] = []
-        graph_issues = graph.validate()
-        if graph_issues:
-            issues.append("execution_contract_graph_invalid")
         if self.contract_version != TYPED_EXECUTION_CONTRACT_VERSION:
             issues.append("execution_contract_version_mismatch")
-        if not _is_sha256(self.graph_hash) or self.graph_hash != graph.graph_hash:
-            issues.append("execution_contract_graph_hash_mismatch")
-        if (
-            not _is_sha256(self.target_family_hash)
-            or self.target_family_hash != graph.target_family_hash
-        ):
-            issues.append("execution_contract_family_hash_mismatch")
+        if not _is_sha256(self.graph_hash):
+            issues.append("execution_contract_graph_hash_invalid")
+        if not _is_sha256(self.target_family_hash):
+            issues.append("execution_contract_family_hash_invalid")
         if not _OPAQUE_RECIPE_ID.fullmatch(self.recipe_id):
             issues.append("execution_contract_recipe_id_not_opaque")
-        recipes = {row.recipe_id: row for row in graph.recipes}
-        recipe = recipes.get(self.recipe_id)
-        if recipe is None:
-            issues.append("execution_contract_recipe_missing")
-            recipe_operator_kinds: frozenset[OperatorKind] = frozenset()
-        else:
-            recipe_operator_kinds = frozenset(row.kind for row in recipe.nodes)
-            if self.workflow is not recipe.workflow:
-                issues.append("execution_contract_workflow_mismatch")
         if not isinstance(self.workflow, WorkflowKind):
             issues.append("execution_contract_workflow_not_closed")
+            expected_rows: tuple[
+                tuple[InvariantKind, RuntimeRole, RuntimeRole, OperatorKind], ...
+            ] = ()
+        else:
+            expected_rows = _workflow_invariant_rows(self.workflow)
+        expected_operator_kinds = frozenset(row[3] for row in expected_rows)
         if not self.invariants:
             issues.append("execution_contract_invariants_empty")
         if tuple(
@@ -497,7 +490,7 @@ class TypedExecutionContract:
             for row in self.invariants
             for issue in row.validate(
                 target_family_hash=self.target_family_hash,
-                recipe_operator_kinds=recipe_operator_kinds,
+                recipe_operator_kinds=expected_operator_kinds,
             )
         )
         issues.extend(self.completion.validate())
@@ -522,11 +515,40 @@ class TypedExecutionContract:
                 issues.append("configure_run_search_receipt_check_missing")
         elif self.search_space.candidate_hashes:
             issues.append("non_search_workflow_has_search_space")
-        expected_kinds = {
-            row[0] for row in _workflow_invariant_rows(self.workflow)
-        } if isinstance(self.workflow, WorkflowKind) else set()
-        if {row.kind for row in self.invariants} != expected_kinds:
+        actual_rows = {
+            (row.kind, row.input_role, row.output_role, row.operation)
+            for row in self.invariants
+        }
+        if actual_rows != set(expected_rows):
             issues.append("execution_contract_workflow_invariants_mismatch")
+        return tuple(sorted(set(issues)))
+
+    def validate(self, graph: FamilyCapabilityGraph) -> tuple[str, ...]:
+        issues = list(self.validate_closed())
+        graph_issues = graph.validate()
+        if graph_issues:
+            issues.append("execution_contract_graph_invalid")
+        if self.graph_hash != graph.graph_hash:
+            issues.append("execution_contract_graph_hash_mismatch")
+        if self.target_family_hash != graph.target_family_hash:
+            issues.append("execution_contract_family_hash_mismatch")
+        recipes = {row.recipe_id: row for row in graph.recipes}
+        recipe = recipes.get(self.recipe_id)
+        if recipe is None:
+            issues.append("execution_contract_recipe_missing")
+            recipe_operator_kinds: frozenset[OperatorKind] = frozenset()
+        else:
+            recipe_operator_kinds = frozenset(row.kind for row in recipe.nodes)
+            if self.workflow is not recipe.workflow:
+                issues.append("execution_contract_workflow_mismatch")
+        issues.extend(
+            issue
+            for row in self.invariants
+            for issue in row.validate(
+                target_family_hash=self.target_family_hash,
+                recipe_operator_kinds=recipe_operator_kinds,
+            )
+        )
         return tuple(sorted(set(issues)))
 
     def safe_payload(
@@ -826,6 +848,218 @@ def derive_train_execution_contract(
             f"derived execution contract is invalid: {list(issues)}"
         )
     return contract
+
+
+def load_typed_execution_contract(
+    payload: Mapping[str, Any],
+) -> TypedExecutionContract:
+    """Reconstruct a canonical closed contract from an untrusted mapping."""
+
+    if not isinstance(payload, Mapping):
+        raise PermissionError("execution contract payload is malformed")
+    try:
+        raw_invariants = payload["invariants"]
+        raw_completion = payload["completion"]
+        raw_search = payload["search_space"]
+        raw_resources = payload["resources"]
+    except KeyError as exc:
+        raise PermissionError("execution contract payload is incomplete") from exc
+    if (
+        not isinstance(raw_invariants, list)
+        or not isinstance(raw_completion, Mapping)
+        or not isinstance(raw_search, Mapping)
+        or not isinstance(raw_resources, Mapping)
+    ):
+        raise PermissionError("execution contract payload shape is malformed")
+
+    invariants: list[ExecutableInvariantSpec] = []
+    for raw_invariant in raw_invariants:
+        if not isinstance(raw_invariant, Mapping):
+            raise PermissionError("execution contract invariant is malformed")
+        raw_supports = raw_invariant.get("supports")
+        if not isinstance(raw_supports, list):
+            raise PermissionError(
+                "execution contract invariant support is malformed"
+            )
+        supports: list[TrainSupportRef] = []
+        for raw_support in raw_supports:
+            if not isinstance(raw_support, Mapping):
+                raise PermissionError(
+                    "execution contract support receipt is malformed"
+                )
+            support = TrainSupportRef(
+                family_hash=str(raw_support.get("family_hash") or ""),
+                transition_id_hash=str(
+                    raw_support.get("transition_id_hash") or ""
+                ),
+                task_id_hash=str(raw_support.get("task_id_hash") or ""),
+                evidence_hash=str(raw_support.get("evidence_hash") or ""),
+            )
+            if dict(raw_support) != support.safe_payload():
+                raise PermissionError(
+                    "execution contract support receipt is not canonical"
+                )
+            supports.append(support)
+        try:
+            invariant = ExecutableInvariantSpec(
+                kind=InvariantKind(str(raw_invariant.get("kind") or "")),
+                input_role=RuntimeRole(
+                    str(raw_invariant.get("input_role") or "")
+                ),
+                output_role=RuntimeRole(
+                    str(raw_invariant.get("output_role") or "")
+                ),
+                operation=OperatorKind(
+                    str(raw_invariant.get("operation") or "")
+                ),
+                supports=tuple(supports),
+            )
+        except ValueError as exc:
+            raise PermissionError(
+                "execution contract invariant uses an open value"
+            ) from exc
+        if dict(raw_invariant) != invariant.safe_payload():
+            raise PermissionError(
+                "execution contract invariant is not canonical"
+            )
+        invariants.append(invariant)
+
+    raw_phases = raw_completion.get("phase_order")
+    raw_checks = raw_completion.get("checks")
+    raw_candidate_hashes = raw_search.get("candidate_hashes")
+    if (
+        not isinstance(raw_phases, list)
+        or not isinstance(raw_checks, list)
+        or not isinstance(raw_candidate_hashes, list)
+    ):
+        raise PermissionError("execution contract closed lists are malformed")
+    try:
+        completion = CompletionContractSpec(
+            final_output_role=RuntimeRole(
+                str(raw_completion.get("final_output_role") or "")
+            ),
+            self_evaluation_source_role=RuntimeRole(
+                str(
+                    raw_completion.get("self_evaluation_source_role") or ""
+                )
+            ),
+            effect_receipt_role=RuntimeRole(
+                str(raw_completion.get("effect_receipt_role") or "")
+            ),
+            phase_order=tuple(
+                CompletionPhaseKind(str(value)) for value in raw_phases
+            ),
+            checks=tuple(CompletionCheckKind(str(value)) for value in raw_checks),
+        )
+        search_space = FiniteSearchSpaceSpec(
+            candidate_hashes=tuple(str(value) for value in raw_candidate_hashes),
+            evaluation_limit=_strict_int(
+                raw_search.get("evaluation_limit"),
+                label="search evaluation limit",
+            ),
+        )
+        resources = ResourceBudgetSpec(
+            max_action_starts=_strict_int(
+                raw_resources.get("max_action_starts"),
+                label="action-start limit",
+            ),
+            max_mutations=_strict_int(
+                raw_resources.get("max_mutations"),
+                label="mutation limit",
+            ),
+            max_repair_attempts=_strict_int(
+                raw_resources.get("max_repair_attempts"),
+                label="repair-attempt limit",
+            ),
+            max_completion_checks=_strict_int(
+                raw_resources.get("max_completion_checks"),
+                label="completion-check limit",
+            ),
+            max_search_evaluations=_strict_int(
+                raw_resources.get("max_search_evaluations"),
+                label="search-evaluation limit",
+            ),
+        )
+        contract = TypedExecutionContract(
+            contract_version=str(payload.get("contract_version") or ""),
+            graph_hash=str(payload.get("graph_hash") or ""),
+            target_family_hash=str(payload.get("target_family_hash") or ""),
+            recipe_id=str(payload.get("recipe_id") or ""),
+            workflow=WorkflowKind(str(payload.get("workflow") or "")),
+            invariants=tuple(invariants),
+            completion=completion,
+            search_space=search_space,
+            resources=resources,
+        )
+    except ValueError as exc:
+        raise PermissionError(
+            "execution contract payload uses an open value"
+        ) from exc
+    if completion.safe_payload() != dict(raw_completion):
+        raise PermissionError("execution contract completion is not canonical")
+    if search_space.safe_payload() != dict(raw_search):
+        raise PermissionError("execution contract search space is not canonical")
+    if resources.safe_payload() != dict(raw_resources):
+        raise PermissionError("execution contract resources are not canonical")
+    issues = contract.validate_closed()
+    if issues:
+        raise PermissionError(
+            f"execution contract payload is invalid: {list(issues)}"
+        )
+    if dict(payload) != contract.safe_payload():
+        raise PermissionError("execution contract payload or hash is not canonical")
+    return contract
+
+
+def _strict_int(value: object, *, label: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise PermissionError(f"execution contract {label} is malformed")
+    return value
+
+
+class TypedExecutionContractRegistry:
+    """Opt-in companion registry; frozen typed-v1 objects remain untouched."""
+
+    def __init__(self) -> None:
+        self._contracts: dict[tuple[str, str], TypedExecutionContract] = {}
+
+    def register(
+        self,
+        contract: TypedExecutionContract,
+        *,
+        graph: FamilyCapabilityGraph,
+    ) -> None:
+        issues = contract.validate(graph)
+        if issues:
+            raise PermissionError(
+                f"execution contract is invalid: {list(issues)}"
+            )
+        key = (graph.graph_hash, contract.recipe_id)
+        existing = self._contracts.get(key)
+        if existing is not None and existing != contract:
+            raise PermissionError("execution contract registry binding conflict")
+        self._contracts[key] = contract
+
+    def require_for_bound_recipe(
+        self,
+        bound_recipe: BoundTypedRecipe,
+    ) -> TypedExecutionContract:
+        graph = bound_recipe.snapshot.graph
+        if bound_recipe.binding.graph_hash != graph.graph_hash:
+            raise PermissionError("bound recipe graph receipt drifted")
+        if bound_recipe.recipe.recipe_id != bound_recipe.binding.recipe_id:
+            raise PermissionError("bound recipe selection receipt drifted")
+        contract = self._contracts.get(
+            (graph.graph_hash, bound_recipe.recipe.recipe_id)
+        )
+        if contract is None:
+            raise PermissionError("bound recipe execution contract is missing")
+        issues = contract.validate(graph)
+        if issues:
+            raise PermissionError(
+                f"bound recipe execution contract is invalid: {list(issues)}"
+            )
+        return contract
 
 
 def verify_execution_contract_payload(
