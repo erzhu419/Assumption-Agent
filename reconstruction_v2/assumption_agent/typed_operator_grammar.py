@@ -1489,6 +1489,43 @@ class TypedProgramBinding:
         return payload
 
 
+@dataclass(frozen=True)
+class BoundTypedRecipe:
+    """Exact harness-side recipe context behind one opaque program binding.
+
+    The graph retains its TRAIN locator in memory so the binding can be
+    revalidated, but this receipt deliberately exposes only content hashes and
+    opaque registry identifiers.  Compiler/runtime consumers must not infer a
+    current-item locator from the frozen TRAIN artifact.
+    """
+
+    binding: TypedProgramBinding
+    snapshot: TypedRecipeSelectionSnapshot
+    recipe: TypedRecipe
+
+    @property
+    def bound_recipe_hash(self) -> str:
+        return stable_hash(self.safe_payload(include_hash=False))
+
+    def safe_payload(self, *, include_hash: bool = True) -> dict[str, Any]:
+        payload = {
+            "binding_hash": self.binding.binding_hash,
+            "snapshot_hash": self.snapshot.snapshot_hash,
+            "graph_hash": self.snapshot.expected_graph_hash,
+            "target_family_hash": self.snapshot.graph.target_family_hash,
+            "recipe_id": self.recipe.recipe_id,
+            "recipe_payload_hash": stable_hash(self.recipe.payload()),
+            "primary_artifact_id": self.recipe.primary_artifact_id,
+            "capability_id": self.recipe.capability_id,
+            "workflow": self.recipe.workflow.value,
+            "source_artifact_locator_disclosed": False,
+            "raw_content_persisted": False,
+        }
+        if include_hash:
+            payload["bound_recipe_hash"] = self.bound_recipe_hash
+        return payload
+
+
 def validate_typed_selection_history_payloads(
     history_payload: Mapping[str, Any],
     *,
@@ -2049,6 +2086,48 @@ class TypedProgramBindingRegistry:
         ):
             raise PermissionError("typed repair parent binding does not validate")
         return binding
+
+    def require_bound_recipe(
+        self,
+        program: HypothesisProgram,
+    ) -> BoundTypedRecipe:
+        """Resolve the exact frozen snapshot and recipe for a bound program.
+
+        This is the only compiler-facing recipe resolution surface.  It first
+        performs the complete binding validation above, then requires one and
+        only one recipe match inside that already-frozen snapshot.  Callers do
+        not receive or select an alternate recipe and cannot fall back to a
+        prompt-derived locator.
+        """
+
+        binding = self.require(program)
+        with self._lock:
+            snapshot = self._snapshots.get(binding.snapshot_hash)
+        if snapshot is None:
+            raise PermissionError("typed program snapshot binding is missing")
+        self.require_snapshot_ledger(snapshot)
+        matches = tuple(
+            row
+            for row in snapshot.graph.recipes
+            if row.recipe_id == binding.recipe_id
+        )
+        if len(matches) != 1:
+            raise PermissionError(
+                "typed program recipe binding is not unique"
+            )
+        bound = BoundTypedRecipe(
+            binding=binding,
+            snapshot=snapshot,
+            recipe=matches[0],
+        )
+        if (
+            bound.snapshot.expected_graph_hash
+            != bound.snapshot.graph.graph_hash
+            or bound.binding.graph_hash != bound.snapshot.graph.graph_hash
+            or bound.binding.recipe_id != bound.recipe.recipe_id
+        ):
+            raise PermissionError("typed bound recipe does not validate")
+        return bound
 
     def require_for_snapshot(
         self,

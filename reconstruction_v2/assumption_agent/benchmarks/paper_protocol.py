@@ -71,7 +71,10 @@ from .skilllearn_compiler import (
     SKILL_FALLBACK_SEMANTICS_VERSION,
     SKILL_ROUTING_VERSION,
 )
-from .prewarm import development_prewarm_version_for_protocol
+from .prewarm import (
+    TASK_INPUT_CLOSURE_DEVELOPMENT_PREWARM_VERSION,
+    development_prewarm_version_for_protocol,
+)
 from .skilllearn_lifecycle import (
     BASELINE_ARM_EVIDENCE_REPLAY_POLICY_VERSION,
     CODEX_NETWORK_MINIMIZATION_VERSION,
@@ -97,6 +100,14 @@ from .skilllearn_lifecycle import (
     VERIFIER_EXECUTION_RECEIPT_POLICY_VERSION,
     VERIFIER_ISOLATION_VERSION,
     codex_network_minimization_for_policy,
+)
+from .task_input_closure import TASK_INPUT_CLOSURE_POLICY_VERSION
+from .typed_task_capability import (
+    PORTABLE_TASK_CAPABILITY_COMPILER_VERSION,
+)
+from .task_input_freeze import (
+    load_frozen_task_input_closure,
+    task_input_closure_source_contract_issues,
 )
 from .offline_verifier import OFFLINE_VERIFIER_POLICY_VERSION
 from .skilllearnbench import (
@@ -135,11 +146,25 @@ TRIAL_NETWORK_BYTE_LIMIT_BY_PROTOCOL_VERSION = {
     "3.16.0": 64 * 1024 * 1024,
     "3.17.0": 64 * 1024 * 1024,
     "3.18.0": 64 * 1024 * 1024,
+    "3.19.0": 64 * 1024 * 1024,
+    "3.20.0": 64 * 1024 * 1024,
 }
 
 TYPED_SELECTION_PROTOCOL_VERSION = "3.18.0"
+TASK_INPUT_CLOSURE_PROTOCOL_VERSION = "3.19.0"
+PORTABLE_TASK_CAPABILITY_PROTOCOL_VERSION = "3.20.0"
 TYPED_SELECTION_PROTOCOL_VERSIONS = frozenset(
-    {TYPED_SELECTION_PROTOCOL_VERSION}
+    {
+        TYPED_SELECTION_PROTOCOL_VERSION,
+        TASK_INPUT_CLOSURE_PROTOCOL_VERSION,
+        PORTABLE_TASK_CAPABILITY_PROTOCOL_VERSION,
+    }
+)
+TASK_INPUT_CLOSURE_PROTOCOL_VERSIONS = frozenset(
+    {
+        TASK_INPUT_CLOSURE_PROTOCOL_VERSION,
+        PORTABLE_TASK_CAPABILITY_PROTOCOL_VERSION,
+    }
 )
 
 CONTRASTIVE_PROTOCOL_VERSIONS = frozenset(
@@ -157,6 +182,8 @@ CONTRASTIVE_PROTOCOL_VERSIONS = frozenset(
         "3.16.0",
         "3.17.0",
         "3.18.0",
+        "3.19.0",
+        "3.20.0",
     }
 )
 MODEL_SLOT_PROTOCOL_VERSIONS = frozenset(
@@ -171,6 +198,8 @@ MODEL_SLOT_PROTOCOL_VERSIONS = frozenset(
         "3.16.0",
         "3.17.0",
         "3.18.0",
+        "3.19.0",
+        "3.20.0",
     }
 )
 TYPED_SELECTION_MODEL_INFERENCE_SLOTS = 48
@@ -192,6 +221,8 @@ PROPOSAL_DIVERSITY_PROTOCOL_VERSIONS = frozenset(
         "3.16.0",
         "3.17.0",
         "3.18.0",
+        "3.19.0",
+        "3.20.0",
     }
 )
 ACTIONABLE_DIRECTIVE_PROTOCOL_VERSIONS = frozenset(
@@ -204,6 +235,8 @@ ACTIONABLE_DIRECTIVE_PROTOCOL_VERSIONS = frozenset(
         "3.16.0",
         "3.17.0",
         "3.18.0",
+        "3.19.0",
+        "3.20.0",
     }
 )
 REPAIR_REQUEST_SCOPE_PROTOCOL_VERSIONS = frozenset(
@@ -215,25 +248,64 @@ REPAIR_REQUEST_SCOPE_PROTOCOL_VERSIONS = frozenset(
         "3.16.0",
         "3.17.0",
         "3.18.0",
+        "3.19.0",
+        "3.20.0",
     }
 )
 CANDIDATE_BUNDLE_PROTOCOL_VERSIONS = frozenset(
-    {"3.13.0", "3.14.0", "3.15.0", "3.16.0", "3.17.0", "3.18.0"}
+    {
+        "3.13.0",
+        "3.14.0",
+        "3.15.0",
+        "3.16.0",
+        "3.17.0",
+        "3.18.0",
+        "3.19.0",
+        "3.20.0",
+    }
 )
 FAMILY_SUPPORT_BUNDLE_PROTOCOL_VERSIONS = frozenset(
-    {"3.14.0", "3.15.0", "3.16.0", "3.17.0", "3.18.0"}
+    {
+        "3.14.0",
+        "3.15.0",
+        "3.16.0",
+        "3.17.0",
+        "3.18.0",
+        "3.19.0",
+        "3.20.0",
+    }
 )
 SHARED_BASELINE_ARM_REPLAY_PROTOCOL_VERSIONS = frozenset({"3.14.0"})
 TERMINAL_SHARED_BASELINE_ARM_REPLAY_PROTOCOL_VERSIONS = frozenset(
-    {"3.15.0", "3.16.0", "3.17.0", "3.18.0"}
+    {
+        "3.15.0",
+        "3.16.0",
+        "3.17.0",
+        "3.18.0",
+        "3.19.0",
+        "3.20.0",
+    }
 )
 TRAIN_ACTION_DESIGN_PROTOCOL_VERSIONS = frozenset(
-    {"3.15.0", "3.16.0", "3.17.0", "3.18.0"}
+    {
+        "3.15.0",
+        "3.16.0",
+        "3.17.0",
+        "3.18.0",
+        "3.19.0",
+        "3.20.0",
+    }
 )
 PROPOSAL_FORMATION_POLICY_BY_PROTOCOL_VERSION = {
     "3.16.0": PROPOSAL_FORMATION_POLICY_VERSION,
     "3.17.0": PROPOSAL_FORMATION_POLICY_V2,
     TYPED_SELECTION_PROTOCOL_VERSION: (
+        TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION
+    ),
+    TASK_INPUT_CLOSURE_PROTOCOL_VERSION: (
+        TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION
+    ),
+    PORTABLE_TASK_CAPABILITY_PROTOCOL_VERSION: (
         TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION
     ),
 }
@@ -267,6 +339,8 @@ def _paper_codex_execution_policy(protocol_version: object) -> CodexAgentExecuti
 
 
 def _paper_development_prewarm_version(protocol_version: object) -> str | None:
+    if str(protocol_version or "") in TASK_INPUT_CLOSURE_PROTOCOL_VERSIONS:
+        return TASK_INPUT_CLOSURE_DEVELOPMENT_PREWARM_VERSION
     inherited_version = (
         "3.17.0"
         if str(protocol_version or "") in TYPED_SELECTION_PROTOCOL_VERSIONS
@@ -375,6 +449,20 @@ class PaperProtocol:
                 )
             ):
                 issues.append("development_prewarm_mismatch")
+            if protocol_version in TASK_INPUT_CLOSURE_PROTOCOL_VERSIONS:
+                if execution.get("task_input_closure_policy") != (
+                    TASK_INPUT_CLOSURE_POLICY_VERSION
+                ):
+                    issues.append("task_input_closure_policy_mismatch")
+                issues.extend(
+                    task_input_closure_source_contract_issues(
+                        execution.get("task_input_closure_source")
+                    )
+                )
+            elif "task_input_closure_policy" in execution:
+                issues.append("task_input_closure_policy_unexpected")
+            elif "task_input_closure_source" in execution:
+                issues.append("task_input_closure_source_unexpected")
             if (
                 major is not None and major >= 2
                 and execution.get("trial_timeout_policy")
@@ -501,6 +589,17 @@ class PaperProtocol:
                 )
             elif "typed_selection_snapshot_source" in execution:
                 issues.append("typed_selection_snapshot_source_unexpected")
+            if protocol_version == PORTABLE_TASK_CAPABILITY_PROTOCOL_VERSION:
+                if execution.get("portable_capability_compiler_mode") != (
+                    PORTABLE_TASK_CAPABILITY_COMPILER_VERSION
+                ):
+                    issues.append(
+                        "portable_capability_compiler_mode_mismatch"
+                    )
+            elif "portable_capability_compiler_mode" in execution:
+                issues.append(
+                    "portable_capability_compiler_mode_unexpected"
+                )
             if execution.get("runtime_candidate_kinds") != ["task", "policy"]:
                 issues.append("runtime_candidate_kinds_mismatch")
             if (
@@ -558,7 +657,7 @@ class PaperProtocol:
                     issues.append("model_inference_concurrency_policy_mismatch")
                 expected_model_slots = (
                     TYPED_SELECTION_MODEL_INFERENCE_SLOTS
-                    if protocol_version == TYPED_SELECTION_PROTOCOL_VERSION
+                    if protocol_version in TYPED_SELECTION_PROTOCOL_VERSIONS
                     else 1
                 )
                 if execution.get("model_inference_slots") != expected_model_slots:
@@ -789,7 +888,7 @@ class PaperProtocol:
                 if isinstance(workers, bool) or not isinstance(workers, int) or workers <= 0:
                     issues.append(f"phase_parallel_workers_invalid:{phase_name}")
                 if (
-                    protocol_version == TYPED_SELECTION_PROTOCOL_VERSION
+                    protocol_version in TYPED_SELECTION_PROTOCOL_VERSIONS
                     and workers
                     != TYPED_SELECTION_PHASE_PARALLEL_WORKERS[phase_name]
                 ):
@@ -1057,6 +1156,7 @@ def build_protocol_lock(
     secondary_ids = {*secondary.train_ids, *secondary.validation_ids, *secondary.test_ids}
     issues: list[str] = []
     typed_selection_freeze_authorization: Mapping[str, Any] | None = None
+    task_input_closure_freeze_hash: str | None = None
     offline_readiness_receipt_hash: str | None = None
     try:
         _, offline_readiness_receipt_hash = _read_offline_readiness_receipt(
@@ -1130,7 +1230,24 @@ def build_protocol_lock(
         issues.extend(f"static_program:{issue}" for issue in static_issues)
     source_issues = _validate_control_sources(protocol, project)
     issues.extend(source_issues)
-    if protocol.payload.get("protocol_version") == TYPED_SELECTION_PROTOCOL_VERSION:
+    if (
+        protocol.payload.get("protocol_version")
+        in TASK_INPUT_CLOSURE_PROTOCOL_VERSIONS
+    ):
+        try:
+            frozen_task_inputs = load_frozen_task_input_closure(
+                protocol.payload,
+                project_root=project,
+            )
+            if frozen_task_inputs is None:
+                raise PermissionError("task input closure freeze is absent")
+            task_input_closure_freeze_hash = frozen_task_inputs.freeze_hash
+        except (KeyError, OSError, TypeError, ValueError, PermissionError) as exc:
+            issues.append(
+                "task_input_closure_freeze_invalid:"
+                f"{type(exc).__name__}"
+            )
+    if protocol.payload.get("protocol_version") in TYPED_SELECTION_PROTOCOL_VERSIONS:
         try:
             # The lock is itself a freeze authority, so it must traverse the
             # same receipt-verifying loader as execution.  A structurally valid
@@ -1216,6 +1333,15 @@ def build_protocol_lock(
         "execution": dict(protocol.payload["execution"]),
         **(
             {
+                "task_input_closure_freeze_hash": (
+                    task_input_closure_freeze_hash
+                )
+            }
+            if task_input_closure_freeze_hash is not None
+            else {}
+        ),
+        **(
+            {
                 "typed_selection_freeze_authorization": dict(
                     typed_selection_freeze_authorization
                 )
@@ -1281,7 +1407,30 @@ def validate_protocol_lock_for_execution(
         raise PermissionError("execution promotion contract lock mismatch")
     if lock.get("execution") != dict(protocol.payload["execution"]):
         raise PermissionError("execution policy lock mismatch")
-    if protocol.payload.get("protocol_version") == TYPED_SELECTION_PROTOCOL_VERSION:
+    if (
+        protocol.payload.get("protocol_version")
+        in TASK_INPUT_CLOSURE_PROTOCOL_VERSIONS
+    ):
+        try:
+            frozen_task_inputs = load_frozen_task_input_closure(
+                protocol.payload,
+                project_root=project,
+            )
+        except (KeyError, OSError, TypeError, ValueError, PermissionError) as exc:
+            raise PermissionError(
+                "execution task input closure freeze is invalid"
+            ) from exc
+        if (
+            frozen_task_inputs is None
+            or lock.get("task_input_closure_freeze_hash")
+            != frozen_task_inputs.freeze_hash
+        ):
+            raise PermissionError(
+                "execution task input closure freeze lock mismatch"
+            )
+    elif "task_input_closure_freeze_hash" in lock:
+        raise PermissionError("execution task input closure freeze is unexpected")
+    if protocol.payload.get("protocol_version") in TYPED_SELECTION_PROTOCOL_VERSIONS:
         typed_authorization = lock.get(
             "typed_selection_freeze_authorization"
         )
@@ -1440,10 +1589,11 @@ def authorize_typed_selection_execution(
     ledger: TypedSelectionSnapshotLedger,
     freeze_authorization: TypedSelectionFreezeAuthorization,
 ) -> TypedSelectionExecutionAuthorization:
-    """Issue task authority only from the live validated v3.18 lock."""
+    """Issue task authority only from a live validated typed-selection lock."""
 
-    if protocol.payload.get("protocol_version") != (
-        TYPED_SELECTION_PROTOCOL_VERSION
+    if (
+        protocol.payload.get("protocol_version")
+        not in TYPED_SELECTION_PROTOCOL_VERSIONS
     ):
         raise PermissionError(
             "typed selection execution requires the typed protocol"

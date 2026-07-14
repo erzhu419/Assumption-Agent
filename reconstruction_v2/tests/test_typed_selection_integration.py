@@ -27,6 +27,12 @@ from assumption_agent.benchmarks.typed_selection_integration import (
     TYPED_SELECTION_INTEGRATION_VERSION,
     _validate_completed_result_artifacts,
 )
+from assumption_agent.benchmarks.typed_portable_integration import (
+    TYPED_PORTABLE_INTEGRATION_VERSION,
+)
+from assumption_agent.benchmarks.typed_task_capability import (
+    PORTABLE_TASK_CAPABILITY_COMPILER_VERSION,
+)
 from assumption_agent.events import MemoryEventSink
 from assumption_agent.evolution import (
     EvolutionKernel,
@@ -346,6 +352,126 @@ def test_production_cli_requires_formal_integration_authority(
                 TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION
             ),
         )
+
+
+def test_v320_production_loader_requires_portable_integration_authority(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    project_root = tmp_path / "project"
+    manifests = project_root / "manifests"
+    artifacts = project_root / "artifacts"
+    manifests.mkdir(parents=True)
+    source_run_root = artifacts / "source-run"
+    source_run_root.mkdir(parents=True)
+    protocol_path = manifests / "protocol.json"
+    protocol_path.write_text("{}\n", encoding="utf-8")
+    preregistration = manifests / "portable-prereg.json"
+    preregistration.write_text("{}\n", encoding="utf-8")
+    source_receipt = manifests / "source-receipt.json"
+    source_receipt.write_text("{}\n", encoding="utf-8")
+    authorization = manifests / "portable-result.json"
+    authorization.write_text("{}\n", encoding="utf-8")
+    ledger_hash = stable_hash({"portable": "projected-ledger"})
+
+    @dataclass(frozen=True)
+    class FakeLedger:
+        production_snapshot_ledger: Any
+        freeze_authorization: Any = None
+
+    fake_ledger = FakeLedger(
+        production_snapshot_ledger=SimpleNamespace(ledger_hash=ledger_hash)
+    )
+    monkeypatch.setattr(
+        skilllearn_experiment,
+        "load_frozen_portable_typed_selection_ledger",
+        lambda **_: fake_ledger,
+    )
+    monkeypatch.setattr(
+        skilllearn_experiment,
+        "load_frozen_typed_selection_ledger",
+        lambda **_: (_ for _ in ()).throw(
+            AssertionError("v3.20 used the legacy typed ledger loader")
+        ),
+    )
+    verified_receipt = {
+        "source_binding": {
+            "source_run_root": "artifacts/source-run",
+            "source_train_receipt": "manifests/source-receipt.json",
+            "source_train_receipt_file_sha256": _file_sha256(
+                source_receipt
+            ),
+            "projected_snapshot_ledger_hash": ledger_hash,
+        },
+        "fresh_development_protocol_freeze_eligible": True,
+    }
+    monkeypatch.setattr(
+        skilllearn_experiment,
+        "verify_typed_portable_integration_result_receipt",
+        lambda **_: verified_receipt,
+    )
+    monkeypatch.setattr(
+        skilllearn_experiment,
+        "verify_typed_selection_integration_result_receipt",
+        lambda **_: (_ for _ in ()).throw(
+            AssertionError("v3.20 used the legacy integration verifier")
+        ),
+    )
+    source = {
+        "preregistration": "manifests/portable-prereg.json",
+        "preregistration_file_sha256": _file_sha256(preregistration),
+        "source_run_root": "artifacts/source-run",
+        "source_train_receipt": "manifests/source-receipt.json",
+        "source_train_receipt_file_sha256": _file_sha256(source_receipt),
+        "integration_result_receipt": "manifests/portable-result.json",
+        "integration_result_receipt_file_sha256": _file_sha256(
+            authorization
+        ),
+        "snapshot_ledger_hash": ledger_hash,
+    }
+    protocol = PaperProtocol(
+        path=protocol_path,
+        payload={"protocol_version": "3.20.0"},
+    )
+
+    loaded = skilllearn_experiment._load_typed_selection_for_execution(
+        root=project_root,
+        manifest_path=manifests / "manifest.json",
+        protocol=protocol,
+        execution_contract={"typed_selection_snapshot_source": source},
+        proposal_formation_policy=(
+            TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION
+        ),
+    )
+    assert loaded.production_snapshot_ledger is (
+        fake_ledger.production_snapshot_ledger
+    )
+    assert loaded.freeze_authorization is not None
+
+    with pytest.raises(PermissionError, match="diagnostic policy"):
+        skilllearn_experiment._load_typed_selection_for_execution(
+            root=project_root,
+            manifest_path=manifests / "manifest.json",
+            protocol=protocol,
+            execution_contract={"typed_selection_snapshot_source": source},
+            proposal_formation_policy=(
+                TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION
+            ),
+            integration_diagnostic_policy=(
+                TYPED_SELECTION_INTEGRATION_VERSION
+            ),
+        )
+    diagnostic = skilllearn_experiment._load_typed_selection_for_execution(
+        root=project_root,
+        manifest_path=manifests / "manifest.json",
+        protocol=protocol,
+        execution_contract={"typed_selection_snapshot_source": source},
+        proposal_formation_policy=(
+            TYPED_RECIPE_PROPOSAL_FORMATION_POLICY_VERSION
+        ),
+        integration_diagnostic_policy=TYPED_PORTABLE_INTEGRATION_VERSION,
+    )
+    assert diagnostic.freeze_authorization is None
 
 
 def test_result_receipt_validation_binds_events_lock_and_compiler_evidence() -> None:
@@ -791,6 +917,9 @@ def test_live_harness_binds_typed_ledger_before_runner_construction(
         typed_selection_execution_authorization=(
             execution_authorization
         ),
+        portable_capability_compiler_mode=(
+            PORTABLE_TASK_CAPABILITY_COMPILER_VERSION
+        ),
     )
 
     assert harness.compiler.typed_program_registry is (
@@ -800,6 +929,9 @@ def test_live_harness_binds_typed_ledger_before_runner_construction(
         proposer.typed_program_registry
     )
     assert harness.compiler.require_typed_bindings is True
+    assert harness.compiler.portable_capability_compiler_mode == (
+        PORTABLE_TASK_CAPABILITY_COMPILER_VERSION
+    )
     assert (
         harness.compiler.typed_program_registry.require_snapshot_ledger()
         == ledger

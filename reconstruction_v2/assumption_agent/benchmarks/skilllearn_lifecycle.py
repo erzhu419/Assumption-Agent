@@ -92,6 +92,19 @@ from .skilllearnbench import (
     TRAIN_ACTION_ENVIRONMENT_PROFILE_VERSION,
     SkillLearnBenchAdapter,
 )
+from .typed_task_capability import (
+    INVENTORY_OFFICE_DOCUMENT_COLLECTION_CAPABILITY,
+    MAX_RUNTIME_DISCOVERY_TEXT_BYTES,
+    PORTABLE_TASK_CAPABILITY_COMPILER_VERSION,
+    CompiledPortableTaskCapability,
+    execute_restricted_task_capability,
+    portable_artifact_locators_from_public_instruction,
+    portable_collection_locators_from_runtime_entries,
+    portable_task_artifact_fingerprint,
+    resolve_portable_artifact_role,
+    validate_compiled_portable_task_capability,
+    verify_task_capability_effect,
+)
 from .codex_action_budget import (
     CODEX_ACTION_BUDGET_COST_ACCOUNTING_POLICY,
     CODEX_ACTION_BUDGET_POLICY_VERSION,
@@ -123,6 +136,17 @@ from .offline_verifier import (
     offline_verifier_profile_for_family,
     test_script_requires_offline_profile,
 )
+from .task_input_closure import (
+    TASK_INPUT_CLOSURE_POLICY_VERSION,
+    TaskInputClosureError,
+    default_task_input_cache_root,
+    family_requires_task_input_closure,
+    inspect_image_inputs,
+    load_task_input_closure,
+    materialize_build_context,
+    source_environment_hash as task_input_source_environment_hash,
+    validate_closure_source_environment_hash,
+)
 
 
 BASELINE_LANE = "skilllearn_incumbent"
@@ -136,6 +160,9 @@ TRIAL_TIMEOUT_POLICY_VERSION = "no_fixed_trial_wall_or_container_timeout_v2"
 PROVIDER_FAILURE_POLICY_VERSION = "codex_jsonl_terminal_error_circuit_v1"
 MODEL_INFERENCE_CONCURRENCY_POLICY_VERSION = (
     "process_shared_agent_stage_semaphore_v1"
+)
+PRE_AGENT_TASK_CAPABILITY_RUNTIME_VERSION = (
+    "verified_compiled_metadata_container_effect_before_agent_v1"
 )
 TRAINING_EVIDENCE_POLICY_VERSION = "all_valid_before_proposal_v1"
 CONTRASTIVE_TRAINING_EVIDENCE_POLICY_VERSION = (
@@ -521,6 +548,9 @@ class SkillLearnTrialRequest:
     typed_binding_set_hash: str = ""
     typed_snapshot_hashes: tuple[str, ...] = ()
     typed_snapshot_ledger_hash: str = ""
+    portable_capability_compiler_mode: str = ""
+    portable_capability_role_spec_set_hash: str = ""
+    portable_capability_role_spec_hashes: tuple[str, ...] = ()
     candidate_delta_program_set_hash: str = ""
     candidate_full_program_set_hash: str = ""
     matched_candidate_program_set_hash: str = ""
@@ -537,6 +567,31 @@ class SkillLearnTrialRequest:
             raise ValueError("typed compile provenance must be complete")
         if any(typed_fields) and not self.compile_manifest_hash:
             raise ValueError("typed compile provenance requires a compile manifest")
+        portable_fields = (
+            bool(self.portable_capability_compiler_mode),
+            bool(self.portable_capability_role_spec_set_hash),
+            bool(self.portable_capability_role_spec_hashes),
+        )
+        if self.portable_capability_compiler_mode:
+            if self.portable_capability_compiler_mode != (
+                PORTABLE_TASK_CAPABILITY_COMPILER_VERSION
+            ):
+                raise ValueError(
+                    "portable capability compiler mode is unsupported"
+                )
+            if (
+                not self.portable_capability_role_spec_set_hash
+                or not all(typed_fields)
+                or not self.compile_manifest_hash
+                or not self.skill_source_receipt_hash
+            ):
+                raise ValueError(
+                    "portable capability compile provenance must be complete"
+                )
+        elif any(portable_fields[1:]):
+            raise ValueError(
+                "portable capability compile provenance must be complete"
+            )
         if self.compile_manifest_hash and not self.skill_source_receipt_hash:
             raise ValueError("compiled trial requires an item source receipt")
         if self.skill_source_receipt_hash and not self.compile_manifest_hash:
@@ -602,6 +657,20 @@ class SkillLearnTrialRequest:
                     ),
                 }
             )
+            if self.portable_capability_compiler_mode:
+                payload.update(
+                    {
+                        "portable_capability_compiler_mode": (
+                            self.portable_capability_compiler_mode
+                        ),
+                        "portable_capability_role_spec_set_hash": (
+                            self.portable_capability_role_spec_set_hash
+                        ),
+                        "portable_capability_role_spec_hashes": list(
+                            self.portable_capability_role_spec_hashes
+                        ),
+                    }
+                )
         elif self.external_skill_source_receipt_hash:
             payload["external_skill_source_receipt_hash"] = (
                 self.external_skill_source_receipt_hash
@@ -627,6 +696,71 @@ class SkillLearnTrialRequest:
                 }
             )
         return payload
+
+
+@dataclass(frozen=True)
+class PortableTaskCapabilityRuntimeContext:
+    request_hash: str
+    item_id_hash: str
+    source_receipt_hash: str
+    typed_binding_set_hash: str
+    role_spec_hashes: tuple[str, ...]
+    metadata_file_hashes: tuple[tuple[str, str], ...]
+    metadata: tuple[CompiledPortableTaskCapability, ...]
+    public_instruction_hash: str
+    item_id: str = field(compare=False, repr=False)
+    family: str = field(compare=False, repr=False)
+    public_instruction: str = field(compare=False, repr=False)
+
+    @property
+    def context_hash(self) -> str:
+        return stable_hash(self.safe_payload())
+
+    def safe_payload(self) -> dict[str, Any]:
+        return {
+            "runtime_policy": PRE_AGENT_TASK_CAPABILITY_RUNTIME_VERSION,
+            "request_hash": self.request_hash,
+            "item_id_hash": self.item_id_hash,
+            "source_receipt_hash": self.source_receipt_hash,
+            "typed_binding_set_hash": self.typed_binding_set_hash,
+            "role_spec_hashes": list(self.role_spec_hashes),
+            "metadata_file_hashes": [
+                {"path": path, "sha256": sha256}
+                for path, sha256 in self.metadata_file_hashes
+            ],
+            "metadata_hashes": [row.metadata_hash for row in self.metadata],
+            "public_instruction_hash": self.public_instruction_hash,
+            "public_instruction_persisted": False,
+            "source_artifact_locator_persisted": False,
+        }
+
+
+@dataclass(frozen=True)
+class PortableTaskCapabilityRuntimeEffect:
+    metadata_hash: str
+    item_id_hash: str
+    role_spec_hash: str
+    effect_receipt_hash: str
+    output_sha256: str
+    agent_payload: Mapping[str, Any]
+
+    @property
+    def effect_hash(self) -> str:
+        return stable_hash(self.safe_payload())
+
+    def safe_payload(self) -> dict[str, Any]:
+        return {
+            "runtime_policy": PRE_AGENT_TASK_CAPABILITY_RUNTIME_VERSION,
+            "metadata_hash": self.metadata_hash,
+            "item_id_hash": self.item_id_hash,
+            "role_spec_hash": self.role_spec_hash,
+            "effect_receipt_hash": self.effect_receipt_hash,
+            "output_sha256": self.output_sha256,
+            "agent_payload": dict(self.agent_payload),
+            "effect_verified_before_agent_start": True,
+            "source_artifact_locator_disclosed": False,
+            "raw_content_persisted": False,
+        }
 
 
 @dataclass(frozen=True)
@@ -1069,6 +1203,13 @@ class SkillLearnPrebuiltImage:
     agent_runtime_volume: str
     agent_runtime_version: str
     reused: bool
+    source_environment_hash: str | None = None
+    task_input_closure_required: bool = False
+    task_input_closure_policy: str | None = None
+    task_input_closure_hash: str | None = None
+    task_input_build_context_receipt_hash: str | None = None
+    task_input_integrity_receipt_hash: str | None = None
+    task_input_integrity_container_network: str | None = None
 
 
 class SkillLearnPrebuiltImageCache:
@@ -1080,10 +1221,21 @@ class SkillLearnPrebuiltImageCache:
         *,
         cache_only: bool = True,
         event_sink: EventSink | None = None,
+        task_input_closure_policy: str | None = None,
+        task_input_cache_root: str | Path | None = None,
     ) -> None:
+        if task_input_closure_policy not in {
+            None,
+            TASK_INPUT_CLOSURE_POLICY_VERSION,
+        }:
+            raise ValueError("task input closure policy is unsupported")
         self.benchmark_root = Path(benchmark_root).expanduser().resolve()
         self.cache_only = cache_only
         self.event_sink = event_sink or NullEventSink()
+        self.task_input_closure_policy = task_input_closure_policy
+        self.task_input_cache_root = Path(
+            task_input_cache_root or default_task_input_cache_root()
+        ).expanduser().resolve()
         self._metadata: dict[tuple[str, str, str], SkillLearnPrebuiltImage] = {}
         self._locks: dict[str, threading.Lock] = {}
         self._state_lock = threading.Lock()
@@ -1109,7 +1261,33 @@ class SkillLearnPrebuiltImageCache:
         agent = runner.get_agent(agent_id)
         if not isinstance(agent, Mapping):
             raise RuntimeError("prebuilt image requires a valid upstream agent definition")
-        environment_hash = _directory_content_hash(environment, excluded_top_level={"skills"})
+        source_environment_hash = _directory_content_hash(
+            environment,
+            excluded_top_level={"skills"},
+        )
+        task_input_manifest: Mapping[str, Any] | None = None
+        if (
+            self.task_input_closure_policy is not None
+            and family_requires_task_input_closure(family)
+        ):
+            task_input_manifest = load_task_input_closure(
+                self.task_input_cache_root,
+                family,
+                item_id,
+            )
+            validate_closure_source_environment_hash(
+                task_input_manifest,
+                task_input_source_environment_hash(environment),
+            )
+            environment_hash = stable_hash(
+                {
+                    "source_environment_hash": source_environment_hash,
+                    "task_input_closure_policy": self.task_input_closure_policy,
+                    "task_input_closure_hash": task_input_manifest["closure_hash"],
+                }
+            )
+        else:
+            environment_hash = source_environment_hash
         runner_hash = _file_content_hash(self.benchmark_root / "core" / "eval_runner.py")
         agent_image_hash = stable_hash(
             {
@@ -1150,9 +1328,11 @@ class SkillLearnPrebuiltImageCache:
                 runner=runner,
                 cache_key=cache_key,
                 environment_hash=environment_hash,
+                source_environment_hash=source_environment_hash,
                 agent_runtime_key=runtime[0],
                 agent_runtime_volume=runtime[1],
                 agent_runtime_version=runtime[2],
+                task_input_manifest=task_input_manifest,
                 trace_id=trace_id,
             )
             with self._state_lock:
@@ -1167,14 +1347,31 @@ class SkillLearnPrebuiltImageCache:
         runner: ModuleType,
         cache_key: str,
         environment_hash: str,
+        source_environment_hash: str,
         agent_runtime_key: str,
         agent_runtime_volume: str,
         agent_runtime_version: str,
+        task_input_manifest: Mapping[str, Any] | None,
         trace_id: str,
     ) -> SkillLearnPrebuiltImage:
         tag = f"assumption-v2-item:{cache_key[:24]}"
-        existing_id = _inspect_prebuilt_image(runner, tag, cache_key)
+        task_input_closure_hash = (
+            str(task_input_manifest["closure_hash"])
+            if task_input_manifest is not None
+            else None
+        )
+        existing_id = _inspect_prebuilt_image(
+            runner,
+            tag,
+            cache_key,
+            expected_task_input_closure_hash=task_input_closure_hash,
+        )
         if existing_id:
+            integrity_receipt = self._inspect_task_input_closure(
+                runner=runner,
+                image_id=existing_id,
+                task_input_manifest=task_input_manifest,
+            )
             image = SkillLearnPrebuiltImage(
                 tag=tag,
                 cache_key=cache_key,
@@ -1184,6 +1381,24 @@ class SkillLearnPrebuiltImageCache:
                 agent_runtime_volume=agent_runtime_volume,
                 agent_runtime_version=agent_runtime_version,
                 reused=True,
+                source_environment_hash=source_environment_hash,
+                task_input_closure_required=task_input_manifest is not None,
+                task_input_closure_policy=(
+                    self.task_input_closure_policy
+                    if task_input_manifest is not None
+                    else None
+                ),
+                task_input_closure_hash=task_input_closure_hash,
+                task_input_integrity_receipt_hash=(
+                    str(integrity_receipt["receipt_hash"])
+                    if integrity_receipt is not None
+                    else None
+                ),
+                task_input_integrity_container_network=(
+                    str(integrity_receipt["container_network"])
+                    if integrity_receipt is not None
+                    else None
+                ),
             )
             self._emit_image_event("skilllearn_prebuilt_image_reused", image, trace_id)
             return image
@@ -1197,6 +1412,13 @@ class SkillLearnPrebuiltImageCache:
                     payload={
                         "cache_key": cache_key,
                         "environment_hash": environment_hash,
+                        "source_environment_hash": source_environment_hash,
+                        "task_input_closure_policy": (
+                            self.task_input_closure_policy
+                            if task_input_manifest is not None
+                            else None
+                        ),
+                        "task_input_closure_hash": task_input_closure_hash,
                         "dependency_cache_policy": DEPENDENCY_CACHE_POLICY_VERSION,
                         "online_build_attempted": False,
                         "secret_value_persisted": False,
@@ -1213,8 +1435,15 @@ class SkillLearnPrebuiltImageCache:
                 payload={
                     "cache_key": cache_key,
                     "environment_hash": environment_hash,
+                    "source_environment_hash": source_environment_hash,
                     "policy": PREBUILT_IMAGE_POLICY_VERSION,
                     "verifier_isolation": VERIFIER_ISOLATION_VERSION,
+                    "task_input_closure_policy": (
+                        self.task_input_closure_policy
+                        if task_input_manifest is not None
+                        else None
+                    ),
+                    "task_input_closure_hash": task_input_closure_hash,
                 },
             )
         )
@@ -1225,23 +1454,45 @@ class SkillLearnPrebuiltImageCache:
         build_env = prepare(environment, "no_skill", None)
         build_root = build_env.parent
         try:
+            build_context_receipt: Mapping[str, Any] | None = None
+            if task_input_manifest is not None:
+                build_context_receipt = materialize_build_context(
+                    source_context=build_env,
+                    destination=build_env,
+                    manifest=task_input_manifest,
+                    object_store=self.task_input_cache_root / "objects" / "sha256",
+                )
             for source_pattern, _ in parse_copies(build_env / "Dockerfile"):
                 if source_pattern.startswith("skills/"):
                     (build_env / source_pattern).mkdir(parents=True, exist_ok=True)
+            build_command = [
+                "docker",
+                "build",
+                "--label",
+                f"org.assumption-agent.prebuild.key={cache_key}",
+                "--label",
+                f"org.assumption-agent.prebuild.environment={environment_hash}",
+                "--label",
+                f"org.assumption-agent.prebuild.policy={PREBUILT_IMAGE_POLICY_VERSION}",
+            ]
+            if task_input_manifest is not None:
+                build_command.extend(
+                    [
+                        "--label",
+                        (
+                            "org.assumption-agent.prebuild.task-input-policy="
+                            f"{self.task_input_closure_policy}"
+                        ),
+                        "--label",
+                        (
+                            "org.assumption-agent.prebuild.task-input-closure="
+                            f"{task_input_closure_hash}"
+                        ),
+                    ]
+                )
+            build_command.extend(["-t", tag, str(build_env)])
             base = runner.subprocess.run(
-                [
-                    "docker",
-                    "build",
-                    "--label",
-                    f"org.assumption-agent.prebuild.key={cache_key}",
-                    "--label",
-                    f"org.assumption-agent.prebuild.environment={environment_hash}",
-                    "--label",
-                    f"org.assumption-agent.prebuild.policy={PREBUILT_IMAGE_POLICY_VERSION}",
-                    "-t",
-                    tag,
-                    str(build_env),
-                ],
+                build_command,
                 capture_output=True,
                 text=True,
             )
@@ -1250,9 +1501,19 @@ class SkillLearnPrebuiltImageCache:
                     "prebuilt_base_build_failed:"
                     + _safe_subprocess_snippet(base)
                 )
-            image_id = _inspect_prebuilt_image(runner, tag, cache_key)
+            image_id = _inspect_prebuilt_image(
+                runner,
+                tag,
+                cache_key,
+                expected_task_input_closure_hash=task_input_closure_hash,
+            )
             if not image_id:
                 raise RuntimeError("prebuilt_image_inspection_failed")
+            integrity_receipt = self._inspect_task_input_closure(
+                runner=runner,
+                image_id=image_id,
+                task_input_manifest=task_input_manifest,
+            )
             image = SkillLearnPrebuiltImage(
                 tag=tag,
                 cache_key=cache_key,
@@ -1262,11 +1523,60 @@ class SkillLearnPrebuiltImageCache:
                 agent_runtime_volume=agent_runtime_volume,
                 agent_runtime_version=agent_runtime_version,
                 reused=False,
+                source_environment_hash=source_environment_hash,
+                task_input_closure_required=task_input_manifest is not None,
+                task_input_closure_policy=(
+                    self.task_input_closure_policy
+                    if task_input_manifest is not None
+                    else None
+                ),
+                task_input_closure_hash=task_input_closure_hash,
+                task_input_build_context_receipt_hash=(
+                    str(build_context_receipt["receipt_hash"])
+                    if build_context_receipt is not None
+                    else None
+                ),
+                task_input_integrity_receipt_hash=(
+                    str(integrity_receipt["receipt_hash"])
+                    if integrity_receipt is not None
+                    else None
+                ),
+                task_input_integrity_container_network=(
+                    str(integrity_receipt["container_network"])
+                    if integrity_receipt is not None
+                    else None
+                ),
             )
             self._emit_image_event("skilllearn_prebuilt_image_built", image, trace_id)
             return image
         finally:
             shutil.rmtree(build_root, ignore_errors=True)
+
+    def _inspect_task_input_closure(
+        self,
+        *,
+        runner: ModuleType,
+        image_id: str,
+        task_input_manifest: Mapping[str, Any] | None,
+    ) -> Mapping[str, Any] | None:
+        if task_input_manifest is None:
+            return None
+        receipt = inspect_image_inputs(
+            image=image_id,
+            image_id=image_id,
+            expected_manifest=task_input_manifest,
+            run=runner.subprocess.run,
+        )
+        if (
+            receipt.get("passed") is not True
+            or receipt.get("container_network") != "none"
+            or receipt.get("manifest_hash") != task_input_manifest.get("manifest_hash")
+            or not receipt.get("receipt_hash")
+        ):
+            raise TaskInputClosureError(
+                "task input image integrity receipt is incomplete"
+            )
+        return receipt
 
     def _ensure_agent_runtime(
         self,
@@ -1488,6 +1798,7 @@ class SkillLearnPrebuiltImageCache:
                 payload={
                     "cache_key": image.cache_key,
                     "environment_hash": image.environment_hash,
+                    "source_environment_hash": image.source_environment_hash,
                     "image_id": image.image_id,
                     "agent_runtime_key": image.agent_runtime_key,
                     "agent_runtime_volume_hash": stable_hash(
@@ -1496,6 +1807,20 @@ class SkillLearnPrebuiltImageCache:
                     "agent_runtime_version": image.agent_runtime_version,
                     "reused": image.reused,
                     "policy": PREBUILT_IMAGE_POLICY_VERSION,
+                    "task_input_closure_required": (
+                        image.task_input_closure_required
+                    ),
+                    "task_input_closure_policy": image.task_input_closure_policy,
+                    "task_input_closure_hash": image.task_input_closure_hash,
+                    "task_input_build_context_receipt_hash": (
+                        image.task_input_build_context_receipt_hash
+                    ),
+                    "task_input_integrity_receipt_hash": (
+                        image.task_input_integrity_receipt_hash
+                    ),
+                    "task_input_integrity_container_network": (
+                        image.task_input_integrity_container_network
+                    ),
                     "raw_content_persisted": False,
                 },
             )
@@ -1653,6 +1978,572 @@ class SkillLearnSubprocessBackend:
             trace_id=trace_id,
         )
 
+    def _load_portable_task_capability_context(
+        self,
+        *,
+        request: SkillLearnTrialRequest,
+        source_receipt: SkillSourceReceipt,
+        compile_root: Path,
+    ) -> PortableTaskCapabilityRuntimeContext | None:
+        mode = source_receipt.portable_capability_compiler_mode
+        if not mode:
+            if request.portable_capability_compiler_mode:
+                raise PermissionError(
+                    "portable capability request has no verified source receipt"
+                )
+            return None
+        if (
+            mode != PORTABLE_TASK_CAPABILITY_COMPILER_VERSION
+            or request.portable_capability_compiler_mode != mode
+            or request.portable_capability_role_spec_set_hash
+            != source_receipt.portable_capability_role_spec_set_hash
+            or tuple(request.portable_capability_role_spec_hashes)
+            != source_receipt.portable_capability_role_spec_hashes
+            or request.typed_binding_set_hash
+            != source_receipt.typed_binding_set_hash
+            or request.skill_source_receipt_hash
+            != source_receipt.receipt_hash
+        ):
+            raise PermissionError(
+                "portable capability request provenance does not match receipt"
+            )
+
+        root = Path(compile_root).expanduser().resolve(strict=True)
+        manifest_path = root / "compile_manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        typed_rows = manifest.get("typed_binding_rows")
+        if not isinstance(typed_rows, list):
+            raise PermissionError(
+                "portable capability typed binding index is malformed"
+            )
+        typed_by_hash: dict[str, Mapping[str, Any]] = {}
+        for raw_row in typed_rows:
+            if not isinstance(raw_row, Mapping):
+                raise PermissionError(
+                    "portable capability typed binding row is malformed"
+                )
+            binding_hash = str(raw_row.get("binding_hash") or "")
+            if not binding_hash or binding_hash in typed_by_hash:
+                raise PermissionError(
+                    "portable capability typed binding is not unique"
+                )
+            typed_by_hash[binding_hash] = raw_row
+
+        item_id_hash = stable_hash({"item_id": request.item_id})
+        metadata_rows: list[CompiledPortableTaskCapability] = []
+        metadata_file_hashes = tuple(
+            source_receipt.portable_capability_metadata_file_hashes
+        )
+        for relative_path, expected_sha256 in metadata_file_hashes:
+            relative = Path(relative_path)
+            if relative.is_absolute() or ".." in relative.parts:
+                raise PermissionError(
+                    "portable capability metadata path is unsafe"
+                )
+            path = root / relative
+            current = root
+            for component in relative.parts:
+                current = current / component
+                if current.is_symlink():
+                    raise PermissionError(
+                        "portable capability metadata path contains a link"
+                    )
+            raw_content = path.read_bytes()
+            if hashlib.sha256(raw_content).hexdigest() != expected_sha256:
+                raise PermissionError(
+                    "portable capability metadata file hash drifted"
+                )
+            try:
+                payload = json.loads(raw_content.decode("utf-8"))
+            except (UnicodeError, json.JSONDecodeError) as exc:
+                raise PermissionError(
+                    "portable capability metadata is unreadable"
+                ) from exc
+            metadata = validate_compiled_portable_task_capability(payload)
+            if metadata.item_id_hash != item_id_hash:
+                raise PermissionError(
+                    "portable capability metadata item mismatch"
+                )
+            typed_row = typed_by_hash.get(metadata.typed_binding_hash)
+            if (
+                typed_row is None
+                or stable_hash(
+                    {"program_id": str(typed_row.get("program_id") or "")}
+                )
+                != metadata.program_id_hash
+                or str(typed_row.get("graph_hash") or "")
+                != metadata.role_spec.source_graph_hash
+                or str(typed_row.get("recipe_id") or "")
+                != metadata.role_spec.source_recipe_id
+            ):
+                raise PermissionError(
+                    "portable capability metadata typed binding mismatch"
+                )
+            metadata_rows.append(metadata)
+        metadata_rows.sort(
+            key=lambda row: (row.program_id_hash, row.metadata_hash)
+        )
+        if (
+            tuple(sorted(row.role_spec.role_spec_hash for row in metadata_rows))
+            != source_receipt.portable_capability_role_spec_hashes
+            or len({row.metadata_hash for row in metadata_rows})
+            != len(metadata_rows)
+            or len(
+                {row.output_container_locator for row in metadata_rows}
+            )
+            != len(metadata_rows)
+        ):
+            raise PermissionError(
+                "portable capability metadata coverage is not exact"
+            )
+        if metadata_rows and source_receipt.source_route is None:
+            raise PermissionError(
+                "portable capability metadata has no installed skill route"
+            )
+
+        instruction = self._load_portable_public_instruction(
+            family=request.family,
+            item_id=request.item_id,
+        )
+        if metadata_rows and not instruction:
+            raise PermissionError(
+                "portable capability public instruction is empty"
+            )
+        return PortableTaskCapabilityRuntimeContext(
+            request_hash=request.request_hash,
+            item_id_hash=item_id_hash,
+            source_receipt_hash=source_receipt.receipt_hash,
+            typed_binding_set_hash=source_receipt.typed_binding_set_hash,
+            role_spec_hashes=source_receipt.portable_capability_role_spec_hashes,
+            metadata_file_hashes=metadata_file_hashes,
+            metadata=tuple(metadata_rows),
+            public_instruction_hash=stable_hash(
+                {"public_instruction": instruction}
+            ),
+            item_id=request.item_id,
+            family=request.family,
+            public_instruction=instruction,
+        )
+
+    def _load_portable_public_instruction(
+        self,
+        *,
+        family: str,
+        item_id: str,
+    ) -> str:
+        task_root = (self.benchmark_root / "tasks").resolve(strict=True)
+        task_relative = Path(family) / item_id
+        if task_relative.is_absolute() or ".." in task_relative.parts:
+            raise PermissionError(
+                "portable capability task path is unsafe"
+            )
+        current_task_path = task_root
+        for component in task_relative.parts:
+            current_task_path = current_task_path / component
+            if current_task_path.is_symlink():
+                raise PermissionError(
+                    "portable capability task path contains a link"
+                )
+        task_path = current_task_path.resolve(strict=True)
+        try:
+            task_path.relative_to(task_root)
+        except ValueError as exc:
+            raise PermissionError(
+                "portable capability task path escaped benchmark root"
+            ) from exc
+        instruction_path = task_path / "instruction.md"
+        if instruction_path.is_symlink() or not instruction_path.is_file():
+            raise PermissionError(
+                "portable capability public instruction is unavailable"
+            )
+        return instruction_path.read_text(encoding="utf-8").strip()
+
+    @staticmethod
+    def _portable_capability_docker_run(
+        delegate: Any,
+        command: Sequence[str],
+    ) -> Any:
+        result = delegate.run(
+            list(command),
+            capture_output=True,
+            text=True,
+        )
+        if getattr(result, "returncode", 1) != 0:
+            raise SkillLearnAgentTerminalError(
+                "task_capability_pre_agent_invalid"
+            )
+        return result
+
+    @staticmethod
+    def _portable_capability_docker_condition(
+        delegate: Any,
+        command: Sequence[str],
+    ) -> bool:
+        result = delegate.run(
+            list(command),
+            capture_output=True,
+            text=True,
+        )
+        return getattr(result, "returncode", 1) == 0
+
+    @staticmethod
+    def _portable_capability_container_path_components(
+        locator: str,
+    ) -> tuple[str, ...]:
+        path = PurePosixPath(locator)
+        if (
+            not path.is_absolute()
+            or ".." in path.parts
+            or path == PurePosixPath("/")
+        ):
+            raise SkillLearnAgentTerminalError(
+                "task_capability_pre_agent_invalid"
+            )
+        current = PurePosixPath("/")
+        components: list[str] = []
+        for part in path.parts[1:]:
+            current /= part
+            components.append(str(current))
+        return tuple(components)
+
+    def _require_portable_container_path_without_links(
+        self,
+        *,
+        delegate: Any,
+        container_name: str,
+        locator: str,
+    ) -> None:
+        for component in self._portable_capability_container_path_components(
+            locator
+        ):
+            if not self._portable_capability_docker_condition(
+                delegate,
+                [
+                    "docker",
+                    "exec",
+                    container_name,
+                    "test",
+                    "!",
+                    "-L",
+                    component,
+                ],
+            ):
+                raise SkillLearnAgentTerminalError(
+                    "task_capability_pre_agent_invalid"
+                )
+
+    def _discover_portable_container_collection_locators(
+        self,
+        *,
+        delegate: Any,
+        container_name: str,
+        metadata: CompiledPortableTaskCapability,
+    ) -> tuple[str, ...]:
+        result = self._portable_capability_docker_run(
+            delegate,
+            [
+                "docker",
+                "exec",
+                container_name,
+                "find",
+                "/root",
+                "-xdev",
+                "-mindepth",
+                "1",
+                "-printf",
+                "%y\\t%p\\0",
+            ],
+        )
+        stdout = getattr(result, "stdout", "")
+        if (
+            not isinstance(stdout, str)
+            or len(stdout.encode("utf-8"))
+            > MAX_RUNTIME_DISCOVERY_TEXT_BYTES
+        ):
+            raise SkillLearnAgentTerminalError(
+                "task_capability_pre_agent_invalid"
+            )
+        entries: list[tuple[str, str]] = []
+        for raw_entry in stdout.split("\x00"):
+            if not raw_entry:
+                continue
+            kind, separator, locator = raw_entry.partition("\t")
+            if not separator:
+                raise SkillLearnAgentTerminalError(
+                    "task_capability_pre_agent_invalid"
+                )
+            entries.append((kind, locator))
+        try:
+            return portable_collection_locators_from_runtime_entries(
+                metadata.role_spec,
+                entries,
+            )
+        except (PermissionError, ValueError) as exc:
+            raise SkillLearnAgentTerminalError(
+                "task_capability_pre_agent_invalid"
+            ) from exc
+
+    def _execute_portable_task_capabilities_in_container(
+        self,
+        *,
+        runner: ModuleType,
+        container_name: str,
+        context: PortableTaskCapabilityRuntimeContext,
+    ) -> tuple[PortableTaskCapabilityRuntimeEffect, ...]:
+        """Install exact derived profiles before upstream can start the agent."""
+
+        current_instruction = self._load_portable_public_instruction(
+            family=context.family,
+            item_id=context.item_id,
+        )
+        if (
+            current_instruction != context.public_instruction
+            or stable_hash({"public_instruction": current_instruction})
+            != context.public_instruction_hash
+        ):
+            raise SkillLearnAgentTerminalError(
+                "task_capability_pre_agent_invalid"
+            )
+        effects: list[PortableTaskCapabilityRuntimeEffect] = []
+        for metadata in context.metadata:
+            is_collection = (
+                metadata.role_spec.capability
+                == INVENTORY_OFFICE_DOCUMENT_COLLECTION_CAPABILITY
+            )
+            if is_collection:
+                candidates = (
+                    self._discover_portable_container_collection_locators(
+                        delegate=runner.subprocess,
+                        container_name=container_name,
+                        metadata=metadata,
+                    )
+                )
+            else:
+                candidates = portable_artifact_locators_from_public_instruction(
+                    metadata.role_spec,
+                    public_instruction=context.public_instruction,
+                )
+            if len(candidates) != 1:
+                raise SkillLearnAgentTerminalError(
+                    "task_capability_pre_agent_invalid"
+                )
+            input_locator = candidates[0]
+            self._require_portable_container_path_without_links(
+                delegate=runner.subprocess,
+                container_name=container_name,
+                locator=input_locator,
+            )
+            if not self._portable_capability_docker_condition(
+                runner.subprocess,
+                [
+                    "docker",
+                    "exec",
+                    container_name,
+                    "test",
+                    "-d" if is_collection else "-f",
+                    input_locator,
+                ],
+            ):
+                raise SkillLearnAgentTerminalError(
+                    "task_capability_pre_agent_invalid"
+                )
+
+            receipt_root = Path(
+                tempfile.mkdtemp(prefix="skilllearn_task_capability-")
+            )
+            try:
+                runtime_root = receipt_root / "runtime-root"
+                input_relative = PurePosixPath(input_locator).relative_to(
+                    "/root"
+                )
+                input_path = runtime_root.joinpath(*input_relative.parts)
+                input_path.parent.mkdir(parents=True, exist_ok=True)
+                self._portable_capability_docker_run(
+                    runner.subprocess,
+                    [
+                        "docker",
+                        "cp",
+                        f"{container_name}:{input_locator}",
+                        str(input_path),
+                    ],
+                )
+                binding = resolve_portable_artifact_role(
+                    metadata.role_spec,
+                    item_id=context.item_id,
+                    public_instruction=context.public_instruction,
+                    runtime_root=runtime_root,
+                )
+                receipt = execute_restricted_task_capability(
+                    binding,
+                    runtime_root=runtime_root,
+                    required_output_container_locator=(
+                        metadata.output_container_locator
+                    ),
+                )
+                verify_task_capability_effect(
+                    receipt,
+                    runtime_root=runtime_root,
+                )
+                if (
+                    receipt.binding.item_id_hash != context.item_id_hash
+                    or receipt.binding.public_instruction_hash
+                    != context.public_instruction_hash
+                    or receipt.binding.spec.role_spec_hash
+                    != metadata.role_spec.role_spec_hash
+                    or receipt.output_container_locator
+                    != metadata.output_container_locator
+                ):
+                    raise SkillLearnAgentTerminalError(
+                        "task_capability_pre_agent_invalid"
+                    )
+
+                after_input = receipt_root / "container-input-after"
+                self._portable_capability_docker_run(
+                    runner.subprocess,
+                    [
+                        "docker",
+                        "cp",
+                        f"{container_name}:{input_locator}",
+                        str(after_input),
+                    ],
+                )
+                after_fingerprint = portable_task_artifact_fingerprint(
+                    metadata.role_spec,
+                    after_input,
+                )
+                if (
+                    after_fingerprint.sha256 != receipt.input_after_sha256
+                    or after_fingerprint.size != receipt.input_size_after
+                    or after_fingerprint.entry_count
+                    != getattr(receipt, "input_entry_count_after", 1)
+                ):
+                    raise SkillLearnAgentTerminalError(
+                        "task_capability_pre_agent_invalid"
+                    )
+
+                output_locator = metadata.output_container_locator
+                output_parent = str(PurePosixPath(output_locator).parent)
+                self._require_portable_container_path_without_links(
+                    delegate=runner.subprocess,
+                    container_name=container_name,
+                    locator=output_locator,
+                )
+                if not self._portable_capability_docker_condition(
+                    runner.subprocess,
+                    [
+                        "docker",
+                        "exec",
+                        container_name,
+                        "test",
+                        "!",
+                        "-e",
+                        output_locator,
+                    ],
+                ):
+                    raise SkillLearnAgentTerminalError(
+                        "task_capability_pre_agent_invalid"
+                    )
+                self._portable_capability_docker_run(
+                    runner.subprocess,
+                    [
+                        "docker",
+                        "exec",
+                        container_name,
+                        "mkdir",
+                        "-p",
+                        output_parent,
+                    ],
+                )
+                self._require_portable_container_path_without_links(
+                    delegate=runner.subprocess,
+                    container_name=container_name,
+                    locator=output_locator,
+                )
+                self._portable_capability_docker_run(
+                    runner.subprocess,
+                    [
+                        "docker",
+                        "cp",
+                        str(receipt.output_host_path),
+                        f"{container_name}:{output_locator}",
+                    ],
+                )
+                self._require_portable_container_path_without_links(
+                    delegate=runner.subprocess,
+                    container_name=container_name,
+                    locator=output_locator,
+                )
+                installed_output = receipt_root / "container-output"
+                self._portable_capability_docker_run(
+                    runner.subprocess,
+                    [
+                        "docker",
+                        "cp",
+                        f"{container_name}:{output_locator}",
+                        str(installed_output),
+                    ],
+                )
+                if (
+                    hashlib.sha256(installed_output.read_bytes()).hexdigest()
+                    != receipt.output_sha256
+                    or installed_output.stat().st_size != receipt.output_size
+                ):
+                    raise SkillLearnAgentTerminalError(
+                        "task_capability_pre_agent_invalid"
+                    )
+                final_input = receipt_root / "container-input-final"
+                self._portable_capability_docker_run(
+                    runner.subprocess,
+                    [
+                        "docker",
+                        "cp",
+                        f"{container_name}:{input_locator}",
+                        str(final_input),
+                    ],
+                )
+                final_fingerprint = portable_task_artifact_fingerprint(
+                    metadata.role_spec,
+                    final_input,
+                )
+                if (
+                    final_fingerprint.sha256 != receipt.input_after_sha256
+                    or final_fingerprint.size != receipt.input_size_after
+                    or final_fingerprint.entry_count
+                    != getattr(receipt, "input_entry_count_after", 1)
+                ):
+                    raise SkillLearnAgentTerminalError(
+                        "task_capability_pre_agent_invalid"
+                    )
+                effects.append(
+                    PortableTaskCapabilityRuntimeEffect(
+                        metadata_hash=metadata.metadata_hash,
+                        item_id_hash=context.item_id_hash,
+                        role_spec_hash=metadata.role_spec.role_spec_hash,
+                        effect_receipt_hash=receipt.receipt_hash,
+                        output_sha256=receipt.output_sha256,
+                        agent_payload=MappingProxyType(
+                            dict(receipt.agent_payload)
+                        ),
+                    )
+                )
+            except SkillLearnAgentTerminalError:
+                raise
+            except (OSError, PermissionError, ValueError) as exc:
+                raise SkillLearnAgentTerminalError(
+                    "task_capability_pre_agent_invalid"
+                ) from exc
+            finally:
+                shutil.rmtree(receipt_root, ignore_errors=True)
+        if (
+            tuple(sorted(row.role_spec_hash for row in effects))
+            != context.role_spec_hashes
+            or len(effects) != len(context.metadata)
+        ):
+            raise SkillLearnAgentTerminalError(
+                "task_capability_pre_agent_invalid"
+            )
+        return tuple(effects)
+
     def prewarm_trial_environment(
         self,
         *,
@@ -1806,6 +2697,9 @@ class SkillLearnSubprocessBackend:
         staged_skill_root: Path | None = None
         runtime_source_receipt: SkillSourceReceipt | None = None
         runtime_external_source_receipt: SkillSourceTreeReceipt | None = None
+        portable_capability_context: (
+            PortableTaskCapabilityRuntimeContext | None
+        ) = None
         active_source_file_hashes: tuple[tuple[str, str], ...] = ()
         active_source_tree_hash = ""
         active_source_receipt_hash = ""
@@ -1846,6 +2740,15 @@ class SkillLearnSubprocessBackend:
                         expected_typed_snapshot_ledger_hash=(
                             request.typed_snapshot_ledger_hash
                         ),
+                        expected_portable_capability_compiler_mode=(
+                            request.portable_capability_compiler_mode
+                        ),
+                        expected_portable_capability_role_spec_set_hash=(
+                            request.portable_capability_role_spec_set_hash
+                        ),
+                        expected_portable_capability_role_spec_hashes=(
+                            request.portable_capability_role_spec_hashes
+                        ),
                     )
                     if (
                         runtime_source_receipt.receipt_hash
@@ -1878,6 +2781,25 @@ class SkillLearnSubprocessBackend:
                             compile_root / "compile_manifest.json",
                             staged_compile_root / "compile_manifest.json",
                         )
+                        for (
+                            relative_path,
+                            expected_sha256,
+                        ) in runtime_source_receipt.portable_capability_metadata_file_hashes:
+                            source_metadata = compile_root / relative_path
+                            staged_metadata = (
+                                staged_compile_root / relative_path
+                            )
+                            staged_metadata.parent.mkdir(
+                                parents=True,
+                                exist_ok=True,
+                            )
+                            shutil.copy2(source_metadata, staged_metadata)
+                            if hashlib.sha256(
+                                staged_metadata.read_bytes()
+                            ).hexdigest() != expected_sha256:
+                                raise PermissionError(
+                                    "staged portable capability metadata drifted"
+                                )
                         staged_receipt = verify_compiled_skill_source(
                             compile_root=staged_compile_root,
                             item_id=request.item_id,
@@ -1896,6 +2818,15 @@ class SkillLearnSubprocessBackend:
                             expected_typed_snapshot_ledger_hash=(
                                 request.typed_snapshot_ledger_hash
                             ),
+                            expected_portable_capability_compiler_mode=(
+                                request.portable_capability_compiler_mode
+                            ),
+                            expected_portable_capability_role_spec_set_hash=(
+                                request.portable_capability_role_spec_set_hash
+                            ),
+                            expected_portable_capability_role_spec_hashes=(
+                                request.portable_capability_role_spec_hashes
+                            ),
                         )
                         if staged_receipt != runtime_source_receipt:
                             raise PermissionError(
@@ -1905,6 +2836,14 @@ class SkillLearnSubprocessBackend:
                             runtime_source_receipt.source_file_hashes
                         )
                         skill_source_dir = staged_source
+                        compile_root = staged_compile_root
+                    portable_capability_context = (
+                        self._load_portable_task_capability_context(
+                            request=request,
+                            source_receipt=runtime_source_receipt,
+                            compile_root=compile_root,
+                        )
+                    )
                 elif request.external_skill_source_receipt_hash:
                     assert skill_source_dir is not None
                     staged_skill_root = Path(
@@ -2194,10 +3133,89 @@ class SkillLearnSubprocessBackend:
                     "_assumption_v2_installed_skill_receipt",
                     None,
                 )
-                return_code, result = runner.run_task(
-                    f"{request.family}/{request.item_id}",
-                    **kwargs,
+                setattr(
+                    runner,
+                    "_assumption_v2_task_capability_context",
+                    (
+                        portable_capability_context
+                        if portable_capability_context is not None
+                        and portable_capability_context.metadata
+                        else None
+                    ),
                 )
+                setattr(
+                    runner,
+                    "_assumption_v2_task_capability_effects",
+                    (
+                        ()
+                        if portable_capability_context is not None
+                        and not portable_capability_context.metadata
+                        else None
+                    ),
+                )
+                setattr(
+                    runner,
+                    "_assumption_v2_task_capability_agent_payloads",
+                    (
+                        ()
+                        if portable_capability_context is not None
+                        and not portable_capability_context.metadata
+                        else None
+                    ),
+                )
+                try:
+                    return_code, result = runner.run_task(
+                        f"{request.family}/{request.item_id}",
+                        **kwargs,
+                    )
+                finally:
+                    setattr(
+                        runner,
+                        "_assumption_v2_task_capability_context",
+                        None,
+                    )
+                if portable_capability_context is not None:
+                    runtime_effects = getattr(
+                        runner,
+                        "_assumption_v2_task_capability_effects",
+                        None,
+                    )
+                    agent_payloads = getattr(
+                        runner,
+                        "_assumption_v2_task_capability_agent_payloads",
+                        None,
+                    )
+                    if (
+                        not isinstance(runtime_effects, tuple)
+                        or not isinstance(agent_payloads, tuple)
+                        or len(runtime_effects)
+                        != len(portable_capability_context.metadata)
+                        or len(agent_payloads) != len(runtime_effects)
+                        or any(
+                            not isinstance(
+                                row,
+                                PortableTaskCapabilityRuntimeEffect,
+                            )
+                            for row in runtime_effects
+                        )
+                        or tuple(
+                            sorted(row.role_spec_hash for row in runtime_effects)
+                        )
+                        != portable_capability_context.role_spec_hashes
+                    ):
+                        raise SkillLearnAgentTerminalError(
+                            "task_capability_pre_agent_invalid"
+                        )
+                    result = dict(result)
+                    result["task_capability_runtime_policy"] = (
+                        PRE_AGENT_TASK_CAPABILITY_RUNTIME_VERSION
+                    )
+                    result["task_capability_effect_hashes"] = [
+                        row.effect_hash for row in runtime_effects
+                    ]
+                    result["task_capability_agent_payloads"] = [
+                        dict(row) for row in agent_payloads
+                    ]
                 if active_source_file_hashes:
                     installed_receipt = getattr(
                         runner,
@@ -2440,6 +3458,8 @@ class SkillLearnSubprocessBackend:
             copies: list[tuple[str, str]],
         ) -> None:
             runner._assumption_v2_installed_skill_receipt = None
+            runner._assumption_v2_task_capability_effects = None
+            runner._assumption_v2_task_capability_agent_payloads = None
             source = Path(skill_source_dir)
             expected_rows = source_rows(source)
             if not expected_rows:
@@ -2563,11 +3583,114 @@ class SkillLearnSubprocessBackend:
                     "destination_count": len(destination_rows),
                     "agent_started": False,
                 }
+                capability_context = getattr(
+                    runner,
+                    "_assumption_v2_task_capability_context",
+                    None,
+                )
+                if capability_context is not None:
+                    if not isinstance(
+                        capability_context,
+                        PortableTaskCapabilityRuntimeContext,
+                    ):
+                        raise SkillLearnAgentTerminalError(
+                            "task_capability_pre_agent_invalid"
+                        )
+                    try:
+                        effects = (
+                            self._execute_portable_task_capabilities_in_container(
+                                runner=runner,
+                                container_name=container_name,
+                                context=capability_context,
+                            )
+                        )
+                    except Exception as exc:
+                        runner._assumption_v2_installed_skill_receipt = None
+                        runner._assumption_v2_task_capability_effects = None
+                        runner._assumption_v2_task_capability_agent_payloads = (
+                            None
+                        )
+                        self.event_sink.emit(
+                            Event(
+                                event=(
+                                    "skilllearn_trial_blocked_invalid_"
+                                    "pre_agent_task_capability"
+                                ),
+                                stage=(
+                                    "benchmark.skilllearn."
+                                    "pre_agent_task_capability"
+                                ),
+                                trace_id=capability_context.request_hash[:20],
+                                payload={
+                                    "runtime_policy": (
+                                        PRE_AGENT_TASK_CAPABILITY_RUNTIME_VERSION
+                                    ),
+                                    "request_hash": (
+                                        capability_context.request_hash
+                                    ),
+                                    "context_hash": (
+                                        capability_context.context_hash
+                                    ),
+                                    "error_type": type(exc).__name__,
+                                    "agent_started": False,
+                                    "model_invoked": False,
+                                    "source_artifact_locator_disclosed": False,
+                                    "raw_content_persisted": False,
+                                },
+                            )
+                        )
+                        if isinstance(exc, SkillLearnAgentTerminalError):
+                            raise
+                        raise SkillLearnAgentTerminalError(
+                            "task_capability_pre_agent_invalid"
+                        ) from exc
+                    runner._assumption_v2_task_capability_effects = effects
+                    runner._assumption_v2_task_capability_agent_payloads = tuple(
+                        MappingProxyType(dict(row.agent_payload))
+                        for row in effects
+                    )
+                    self.event_sink.emit(
+                        Event(
+                            event=(
+                                "skilllearn_pre_agent_task_capability_verified"
+                            ),
+                            stage=(
+                                "benchmark.skilllearn."
+                                "pre_agent_task_capability"
+                            ),
+                            trace_id=capability_context.request_hash[:20],
+                            payload={
+                                "runtime_policy": (
+                                    PRE_AGENT_TASK_CAPABILITY_RUNTIME_VERSION
+                                ),
+                                "request_hash": capability_context.request_hash,
+                                "context_hash": capability_context.context_hash,
+                                "effect_hashes": [
+                                    row.effect_hash for row in effects
+                                ],
+                                "effect_count": len(effects),
+                                "agent_payload_hashes": [
+                                    stable_hash(dict(row.agent_payload))
+                                    for row in effects
+                                ],
+                                "agent_payloads": [
+                                    dict(row.agent_payload) for row in effects
+                                ],
+                                "agent_started": False,
+                                "effect_verified_before_agent_start": True,
+                                "source_artifact_locator_disclosed": False,
+                                "raw_content_persisted": False,
+                            },
+                        )
+                    )
             finally:
                 shutil.rmtree(receipt_root, ignore_errors=True)
 
         runner._inject_skills_runtime = inject_with_receipt
         runner._assumption_v2_installed_skill_receipt = None
+        runner._assumption_v2_task_capability_context = None
+        runner._assumption_v2_task_capability_effects = None
+        runner._assumption_v2_task_capability_agent_payloads = None
 
     @contextmanager
     def _provider_runtime(
@@ -4192,6 +5315,24 @@ class SkillLearnCounterfactualRunner:
                 if baseline_compile_result
                 else ""
             ),
+            portable_capability_compiler_mode=(
+                baseline_compile_result.portable_capability_compiler_mode
+                if baseline_compile_result
+                else ""
+            ),
+            portable_capability_role_spec_set_hash=(
+                baseline_compile_result.portable_capability_role_spec_set_hash
+                if baseline_compile_result
+                else ""
+            ),
+            portable_capability_role_spec_hashes=(
+                baseline_compile_result.item_portable_capability_role_spec_hashes.get(
+                    stable_hash({"item_id": task.id}),
+                    (),
+                )
+                if baseline_compile_result
+                else ()
+            ),
             candidate_delta_program_set_hash=(
                 "" if legacy_singleton else candidate_delta_program_set_hash
             ),
@@ -4231,6 +5372,18 @@ class SkillLearnCounterfactualRunner:
             ),
             typed_snapshot_ledger_hash=(
                 candidate_compile_result.typed_snapshot_ledger_hash
+            ),
+            portable_capability_compiler_mode=(
+                candidate_compile_result.portable_capability_compiler_mode
+            ),
+            portable_capability_role_spec_set_hash=(
+                candidate_compile_result.portable_capability_role_spec_set_hash
+            ),
+            portable_capability_role_spec_hashes=(
+                candidate_compile_result.item_portable_capability_role_spec_hashes.get(
+                    stable_hash({"item_id": task.id}),
+                    (),
+                )
             ),
             candidate_delta_program_set_hash=(
                 "" if legacy_singleton else candidate_delta_program_set_hash
@@ -4954,6 +6107,9 @@ class SkillLearnCounterfactualRunner:
         typed_binding_set_hash: str = "",
         typed_snapshot_hashes: tuple[str, ...] = (),
         typed_snapshot_ledger_hash: str = "",
+        portable_capability_compiler_mode: str = "",
+        portable_capability_role_spec_set_hash: str = "",
+        portable_capability_role_spec_hashes: tuple[str, ...] = (),
         candidate_delta_program_set_hash: str = "",
         candidate_full_program_set_hash: str = "",
         matched_candidate_program_set_hash: str = "",
@@ -4984,6 +6140,15 @@ class SkillLearnCounterfactualRunner:
             typed_binding_set_hash=typed_binding_set_hash,
             typed_snapshot_hashes=typed_snapshot_hashes,
             typed_snapshot_ledger_hash=typed_snapshot_ledger_hash,
+            portable_capability_compiler_mode=(
+                portable_capability_compiler_mode
+            ),
+            portable_capability_role_spec_set_hash=(
+                portable_capability_role_spec_set_hash
+            ),
+            portable_capability_role_spec_hashes=(
+                portable_capability_role_spec_hashes
+            ),
             candidate_delta_program_set_hash=(
                 candidate_delta_program_set_hash
             ),
@@ -5158,6 +6323,7 @@ class SkillLearnEvolutionHarness:
         typed_selection_execution_authorization: (
             TypedSelectionExecutionAuthorization | None
         ) = None,
+        portable_capability_compiler_mode: str | None = None,
         candidate_bundle_policy: str | None = None,
         contrastive_training_evidence_policy: str | None = None,
         train_action_design_policy: str | None = None,
@@ -5361,6 +6527,9 @@ class SkillLearnEvolutionHarness:
             event_sink=self.event_sink,
             typed_program_registry=proposer.typed_program_registry,
             require_typed_bindings=typed_policy_enabled,
+            portable_capability_compiler_mode=(
+                portable_capability_compiler_mode
+            ),
         )
         self.counterfactual_runner = SkillLearnCounterfactualRunner(
             adapter=adapter,
@@ -5504,6 +6673,24 @@ class SkillLearnEvolutionHarness:
                     incumbent_compile.typed_snapshot_ledger_hash
                     if incumbent_compile
                     else ""
+                ),
+                portable_capability_compiler_mode=(
+                    incumbent_compile.portable_capability_compiler_mode
+                    if incumbent_compile
+                    else ""
+                ),
+                portable_capability_role_spec_set_hash=(
+                    incumbent_compile.portable_capability_role_spec_set_hash
+                    if incumbent_compile
+                    else ""
+                ),
+                portable_capability_role_spec_hashes=(
+                    incumbent_compile.item_portable_capability_role_spec_hashes.get(
+                        stable_hash({"item_id": item_id}),
+                        (),
+                    )
+                    if incumbent_compile
+                    else ()
                 ),
                 trace_id=trace_id,
             )
@@ -5928,6 +7115,9 @@ class SkillLearnEvolutionHarness:
         typed_binding_set_hash: str = "",
         typed_snapshot_hashes: tuple[str, ...] = (),
         typed_snapshot_ledger_hash: str = "",
+        portable_capability_compiler_mode: str = "",
+        portable_capability_role_spec_set_hash: str = "",
+        portable_capability_role_spec_hashes: tuple[str, ...] = (),
     ) -> SkillLearnTrialObservation:
         self.guard.authorize(item_id, AccessPhase.PROPOSAL)
         item = self.items[item_id]
@@ -5963,6 +7153,15 @@ class SkillLearnEvolutionHarness:
             typed_binding_set_hash=typed_binding_set_hash,
             typed_snapshot_hashes=typed_snapshot_hashes,
             typed_snapshot_ledger_hash=typed_snapshot_ledger_hash,
+            portable_capability_compiler_mode=(
+                portable_capability_compiler_mode
+            ),
+            portable_capability_role_spec_set_hash=(
+                portable_capability_role_spec_set_hash
+            ),
+            portable_capability_role_spec_hashes=(
+                portable_capability_role_spec_hashes
+            ),
         )
         return _run_invalid_only_trial(
             request=request,
@@ -6681,6 +7880,8 @@ def _inspect_prebuilt_image(
     runner: ModuleType,
     tag: str,
     expected_cache_key: str,
+    *,
+    expected_task_input_closure_hash: str | None = None,
 ) -> str | None:
     inspected = runner.subprocess.run(
         ["docker", "image", "inspect", tag],
@@ -6695,6 +7896,15 @@ def _inspect_prebuilt_image(
         labels = row.get("Config", {}).get("Labels") or {}
         if labels.get("org.assumption-agent.prebuild.key") != expected_cache_key:
             raise PermissionError("prebuilt image label does not match its cache key")
+        if expected_task_input_closure_hash is not None and (
+            labels.get("org.assumption-agent.prebuild.task-input-policy")
+            != TASK_INPUT_CLOSURE_POLICY_VERSION
+            or labels.get("org.assumption-agent.prebuild.task-input-closure")
+            != expected_task_input_closure_hash
+        ):
+            raise PermissionError(
+                "prebuilt image task input closure label does not match"
+            )
         image_id = str(row.get("Id") or "")
         if not image_id.startswith("sha256:"):
             raise ValueError("prebuilt image has no immutable Docker image ID")

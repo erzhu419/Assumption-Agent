@@ -32,12 +32,84 @@ from .offline_verifier import (
     offline_verifier_profile_for_family,
     offline_verifier_runtime_key,
 )
+from .task_input_closure import (
+    TASK_INPUT_BUILD_CONTEXT_POLICY_VERSION,
+    TASK_INPUT_CLOSURE_POLICY_VERSION,
+    family_requires_task_input_closure,
+)
+from .task_input_freeze import (
+    FrozenTaskInputClosure,
+    expected_prewarm_closure_rows,
+    load_frozen_task_input_closure,
+    verify_current_task_input_closure,
+)
 
 
 LEGACY_DEVELOPMENT_PREWARM_VERSION = (
     "all_manifest_images_and_offline_verifiers_v3"
 )
 DEVELOPMENT_PREWARM_VERSION = "all_manifest_images_and_offline_verifiers_v4"
+TASK_INPUT_CLOSURE_DEVELOPMENT_PREWARM_VERSION = (
+    "all_manifest_images_offline_verifiers_and_public_inputs_v5"
+)
+
+
+class FrozenTaskInputPrebuiltImageCache(SkillLearnPrebuiltImageCache):
+    """Fail closed against both the protocol ledger and a passed v5 prewarm."""
+
+    def __init__(
+        self,
+        benchmark_root: str | Path,
+        *,
+        frozen_task_inputs: FrozenTaskInputClosure,
+        expected_prewarm_rows: Mapping[str, Mapping[str, Any]] | None = None,
+        cache_only: bool = True,
+        event_sink=None,
+        task_input_cache_root: str | Path | None = None,
+    ) -> None:
+        verified_root = verify_current_task_input_closure(
+            frozen_task_inputs,
+            cache_root=task_input_cache_root,
+        )
+        super().__init__(
+            benchmark_root,
+            cache_only=cache_only,
+            event_sink=event_sink,
+            task_input_closure_policy=TASK_INPUT_CLOSURE_POLICY_VERSION,
+            task_input_cache_root=verified_root,
+        )
+        self.frozen_task_inputs = frozen_task_inputs
+        self.expected_prewarm_rows = dict(expected_prewarm_rows or {})
+
+    def ensure(self, **kwargs):
+        family = str(kwargs.get("family") or "")
+        item_id = str(kwargs.get("item_id") or "")
+        image = super().ensure(**kwargs)
+        if not family_requires_task_input_closure(family):
+            return image
+        item_hash = stable_hash({"item_id": item_id})
+        frozen_row = self.frozen_task_inputs.ledger_by_item_hash.get(item_hash)
+        if (
+            frozen_row is None
+            or frozen_row.get("family_hash") != stable_hash({"family": family})
+            or image.task_input_closure_policy != TASK_INPUT_CLOSURE_POLICY_VERSION
+            or image.task_input_closure_hash != frozen_row.get("closure_hash")
+        ):
+            raise PermissionError("runtime task input image is not frozen by the protocol ledger")
+        expected = self.expected_prewarm_rows.get(item_hash)
+        if self.expected_prewarm_rows and expected is None:
+            raise PermissionError("runtime task input image has no validated v5 prewarm row")
+        if expected is not None and (
+            expected.get("family_hash") != stable_hash({"family": family})
+            or expected.get("task_input_closure_hash") != image.task_input_closure_hash
+            or expected.get("prebuilt_image_key") != image.cache_key
+            or expected.get("prebuilt_image_id") != image.image_id
+            or expected.get("task_input_integrity_receipt_hash")
+            != image.task_input_integrity_receipt_hash
+            or image.task_input_integrity_container_network != "none"
+        ):
+            raise PermissionError("runtime task input image differs from its validated v5 prewarm row")
+        return image
 
 
 def development_prewarm_version_for_protocol(
@@ -61,6 +133,9 @@ def development_prewarm_version_for_protocol(
         "3.15.0": DEVELOPMENT_PREWARM_VERSION,
         "3.16.0": DEVELOPMENT_PREWARM_VERSION,
         "3.17.0": DEVELOPMENT_PREWARM_VERSION,
+        "3.18.0": DEVELOPMENT_PREWARM_VERSION,
+        "3.19.0": TASK_INPUT_CLOSURE_DEVELOPMENT_PREWARM_VERSION,
+        "3.20.0": TASK_INPUT_CLOSURE_DEVELOPMENT_PREWARM_VERSION,
     }.get(str(protocol_version or ""))
 
 
@@ -72,11 +147,26 @@ def prewarm_development_images(
     parallel_workers: int = 4,
     attempts: int = 3,
     trial_provider_mode: str = "openai_compatible",
+    prewarm_version: str = DEVELOPMENT_PREWARM_VERSION,
+    task_input_cache_root: str | Path | None = None,
+    frozen_task_inputs: FrozenTaskInputClosure | None = None,
 ) -> dict[str, Any]:
     if parallel_workers <= 0:
         raise ValueError("parallel_workers must be positive")
     if attempts <= 0:
         raise ValueError("attempts must be positive")
+    if prewarm_version not in {
+        DEVELOPMENT_PREWARM_VERSION,
+        TASK_INPUT_CLOSURE_DEVELOPMENT_PREWARM_VERSION,
+    }:
+        raise ValueError("development prewarm version is unsupported")
+    task_input_closure_enabled = (
+        prewarm_version == TASK_INPUT_CLOSURE_DEVELOPMENT_PREWARM_VERSION
+    )
+    if task_input_closure_enabled != (frozen_task_inputs is not None):
+        raise ValueError(
+            "v5 development prewarm and frozen task input source must be paired"
+        )
     selected_ids = (
         *manifest.train_ids,
         *manifest.validation_ids,
@@ -91,7 +181,16 @@ def prewarm_development_images(
         raise RuntimeError(f"development prewarm preflight failed: {preflight['blockers']}")
 
     sink = JsonlEventSink(events_path)
-    cache = SkillLearnPrebuiltImageCache(benchmark_root, event_sink=sink)
+    cache = (
+        FrozenTaskInputPrebuiltImageCache(
+            benchmark_root,
+            event_sink=sink,
+            frozen_task_inputs=frozen_task_inputs,
+            task_input_cache_root=task_input_cache_root,
+        )
+        if frozen_task_inputs is not None
+        else SkillLearnPrebuiltImageCache(benchmark_root, event_sink=sink)
+    )
     backends: queue.Queue[SkillLearnSubprocessBackend] = queue.Queue()
     for _ in range(parallel_workers):
         backends.put(
@@ -170,6 +269,26 @@ def prewarm_development_images(
                         "error_type": None,
                         "error_message_hash": None,
                     }
+                    if task_input_closure_enabled:
+                        row.update(
+                            {
+                                "task_input_closure_required": (
+                                    image.task_input_closure_required
+                                ),
+                                "task_input_closure_policy": (
+                                    image.task_input_closure_policy
+                                ),
+                                "task_input_closure_hash": (
+                                    image.task_input_closure_hash
+                                ),
+                                "task_input_integrity_receipt_hash": (
+                                    image.task_input_integrity_receipt_hash
+                                ),
+                                "task_input_integrity_container_network": (
+                                    image.task_input_integrity_container_network
+                                ),
+                            }
+                        )
                     sink.emit(
                         Event(
                             event="skilllearn_development_prewarm_completed",
@@ -190,6 +309,26 @@ def prewarm_development_images(
                                     "offline_verifier_runtime_key"
                                 ],
                                 "verifier_runtime_network": "none",
+                                "task_input_closure_required": (
+                                    image.task_input_closure_required
+                                    if task_input_closure_enabled
+                                    else None
+                                ),
+                                "task_input_closure_hash": (
+                                    image.task_input_closure_hash
+                                    if task_input_closure_enabled
+                                    else None
+                                ),
+                                "task_input_integrity_receipt_hash": (
+                                    image.task_input_integrity_receipt_hash
+                                    if task_input_closure_enabled
+                                    else None
+                                ),
+                                "task_input_integrity_container_network": (
+                                    image.task_input_integrity_container_network
+                                    if task_input_closure_enabled
+                                    else None
+                                ),
                                 "secret_value_persisted": False,
                                 "raw_content_persisted": False,
                             },
@@ -215,7 +354,7 @@ def prewarm_development_images(
                     if attempt < attempts:
                         time.sleep(float(attempt))
             assert last_error is not None
-            return {
+            row = {
                 "item_id_hash": stable_hash({"item_id": item_id}),
                 "family_hash": stable_hash(
                     {"family": manifest.family_by_id[item_id]}
@@ -234,6 +373,19 @@ def prewarm_development_images(
                 "error_type": type(last_error).__name__,
                 "error_message_hash": stable_hash({"message": str(last_error)}),
             }
+            if task_input_closure_enabled:
+                row.update(
+                    {
+                        "task_input_closure_required": family_requires_task_input_closure(
+                            manifest.family_by_id[item_id]
+                        ),
+                        "task_input_closure_policy": None,
+                        "task_input_closure_hash": None,
+                        "task_input_integrity_receipt_hash": None,
+                        "task_input_integrity_container_network": None,
+                    }
+                )
+            return row
         finally:
             backends.put(backend)
 
@@ -242,7 +394,7 @@ def prewarm_development_images(
 
     passed = all(bool(row["passed"]) for row in rows)
     payload: dict[str, Any] = {
-        "prewarm_version": DEVELOPMENT_PREWARM_VERSION,
+        "prewarm_version": prewarm_version,
         "manifest_hash": manifest.manifest_hash,
         "split_names": ["train", "validation", "test"],
         "selected_item_set_hash": _selected_item_set_hash(manifest),
@@ -314,6 +466,66 @@ def prewarm_development_images(
         "secret_value_persisted": False,
         "raw_content_persisted": False,
     }
+    if task_input_closure_enabled:
+        assert frozen_task_inputs is not None
+        required_rows = [
+            row for row in rows if row["task_input_closure_required"]
+        ]
+        verified_rows = [
+            row
+            for row in required_rows
+            if row["passed"]
+            and row["task_input_integrity_receipt_hash"]
+            and row["task_input_integrity_container_network"] == "none"
+        ]
+        payload.update(
+            {
+                "task_input_closure_policy": (
+                    TASK_INPUT_CLOSURE_POLICY_VERSION
+                ),
+                "task_input_build_context_policy": (
+                    TASK_INPUT_BUILD_CONTEXT_POLICY_VERSION
+                ),
+                "task_input_integrity_container_network": "none",
+                "task_input_runtime_network_fallback_allowed": False,
+                "task_input_closure_required_item_count": len(required_rows),
+                "task_input_closure_verified_item_count": len(verified_rows),
+                "task_input_closure_set_hash": stable_hash(
+                    sorted(
+                        str(row["task_input_closure_hash"])
+                        for row in required_rows
+                        if row["task_input_closure_hash"]
+                    )
+                ),
+                "task_input_integrity_receipt_set_hash": stable_hash(
+                    sorted(
+                        str(row["task_input_integrity_receipt_hash"])
+                        for row in verified_rows
+                    )
+                ),
+                "task_input_preparation_receipt_file_sha256": (
+                    frozen_task_inputs.source[
+                        "preparation_receipt_file_sha256"
+                    ]
+                ),
+                "task_input_preparation_receipt_hash": (
+                    frozen_task_inputs.source["preparation_receipt_hash"]
+                ),
+                "task_input_closure_ledger_item_count": (
+                    frozen_task_inputs.source["closure_ledger_item_count"]
+                ),
+                "task_input_closure_ledger_hash": (
+                    frozen_task_inputs.source["closure_ledger_hash"]
+                ),
+                "task_input_content_object_count": (
+                    frozen_task_inputs.source["content_object_count"]
+                ),
+                "task_input_object_set_hash": (
+                    frozen_task_inputs.source["object_set_hash"]
+                ),
+                "task_input_freeze_hash": frozen_task_inputs.freeze_hash,
+            }
+        )
     payload["receipt_hash"] = stable_hash(payload)
     return payload
 
@@ -323,7 +535,15 @@ def validate_development_prewarm_receipt(
     *,
     manifest: SplitManifest,
     expected_version: str = DEVELOPMENT_PREWARM_VERSION,
+    frozen_task_inputs: FrozenTaskInputClosure | None = None,
 ) -> str:
+    if (
+        expected_version == TASK_INPUT_CLOSURE_DEVELOPMENT_PREWARM_VERSION
+        and frozen_task_inputs is None
+    ):
+        raise ValueError(
+            "v5 development prewarm validation requires the frozen task input ledger"
+        )
     declared_hash = str(receipt.get("receipt_hash") or "")
     calculated_hash = stable_hash(
         {key: value for key, value in receipt.items() if key != "receipt_hash"}
@@ -356,7 +576,11 @@ def validate_development_prewarm_receipt(
         "secret_value_persisted": False,
         "raw_content_persisted": False,
     }
-    if expected_version == DEVELOPMENT_PREWARM_VERSION:
+    modern_versions = {
+        DEVELOPMENT_PREWARM_VERSION,
+        TASK_INPUT_CLOSURE_DEVELOPMENT_PREWARM_VERSION,
+    }
+    if expected_version in modern_versions:
         expected.update(
             {
                 "test_infrastructure_inspected": bool(manifest.test_ids),
@@ -373,6 +597,49 @@ def validate_development_prewarm_receipt(
                 ),
             }
         )
+        if expected_version == TASK_INPUT_CLOSURE_DEVELOPMENT_PREWARM_VERSION:
+            expected.update(
+                {
+                    "task_input_closure_policy": (
+                        TASK_INPUT_CLOSURE_POLICY_VERSION
+                    ),
+                    "task_input_build_context_policy": (
+                        TASK_INPUT_BUILD_CONTEXT_POLICY_VERSION
+                    ),
+                    "task_input_integrity_container_network": "none",
+                    "task_input_runtime_network_fallback_allowed": False,
+                }
+            )
+            if frozen_task_inputs is not None:
+                expected.update(
+                    {
+                        "task_input_preparation_receipt_file_sha256": (
+                            frozen_task_inputs.source[
+                                "preparation_receipt_file_sha256"
+                            ]
+                        ),
+                        "task_input_preparation_receipt_hash": (
+                            frozen_task_inputs.source[
+                                "preparation_receipt_hash"
+                            ]
+                        ),
+                        "task_input_closure_ledger_item_count": (
+                            frozen_task_inputs.source[
+                                "closure_ledger_item_count"
+                            ]
+                        ),
+                        "task_input_closure_ledger_hash": (
+                            frozen_task_inputs.source["closure_ledger_hash"]
+                        ),
+                        "task_input_content_object_count": (
+                            frozen_task_inputs.source["content_object_count"]
+                        ),
+                        "task_input_object_set_hash": (
+                            frozen_task_inputs.source["object_set_hash"]
+                        ),
+                        "task_input_freeze_hash": frozen_task_inputs.freeze_hash,
+                    }
+                )
     elif expected_version == LEGACY_DEVELOPMENT_PREWARM_VERSION:
         expected["test_content_accessed"] = False
     else:
@@ -401,6 +668,16 @@ def validate_development_prewarm_receipt(
             *manifest.test_ids,
         )
     }
+    expected_closure_by_item_hash = {
+        stable_hash({"item_id": item_id}): family_requires_task_input_closure(
+            manifest.family_by_id[item_id]
+        )
+        for item_id in (
+            *manifest.train_ids,
+            *manifest.validation_ids,
+            *manifest.test_ids,
+        )
+    }
     observed_item_hashes: set[str] = set()
     for row in rows:
         if (
@@ -416,13 +693,57 @@ def validate_development_prewarm_receipt(
         if not item_hash or item_hash in observed_item_hashes:
             raise ValueError("development prewarm item hashes are incomplete")
         observed_item_hashes.add(item_hash)
-        if expected_version == DEVELOPMENT_PREWARM_VERSION and (
+        if item_hash not in expected_closure_by_item_hash:
+            raise ValueError(
+                "development prewarm item hashes do not match the manifest"
+            )
+        if expected_version in modern_versions and (
             row.get("agent_runtime_key") != shared_codex_agent_runtime_key()
             or row.get("agent_runtime_version") != SHARED_CODEX_CLI_VERSION
         ):
             raise ValueError(
                 "development prewarm agent runtime does not match the active runtime"
             )
+        if expected_version == TASK_INPUT_CLOSURE_DEVELOPMENT_PREWARM_VERSION:
+            closure_required = expected_closure_by_item_hash[item_hash]
+            if row.get("task_input_closure_required") is not closure_required:
+                raise ValueError(
+                    "development prewarm task input closure requirement mismatch"
+                )
+            closure_fields = (
+                row.get("task_input_closure_policy"),
+                row.get("task_input_closure_hash"),
+                row.get("task_input_integrity_receipt_hash"),
+                row.get("task_input_integrity_container_network"),
+            )
+            if closure_required:
+                if (
+                    closure_fields[0] != TASK_INPUT_CLOSURE_POLICY_VERSION
+                    or not _is_sha256_text(closure_fields[1])
+                    or not _is_sha256_text(closure_fields[2])
+                    or closure_fields[3] != "none"
+                ):
+                    raise ValueError(
+                        "development prewarm task input integrity provenance is incomplete"
+                    )
+                if frozen_task_inputs is not None:
+                    frozen_row = frozen_task_inputs.ledger_by_item_hash.get(
+                        item_hash
+                    )
+                    if (
+                        frozen_row is None
+                        or frozen_row.get("family_hash")
+                        != row.get("family_hash")
+                        or frozen_row.get("closure_hash")
+                        != row.get("task_input_closure_hash")
+                    ):
+                        raise ValueError(
+                            "development prewarm task input row differs from frozen ledger"
+                        )
+            elif any(value is not None for value in closure_fields):
+                raise ValueError(
+                    "development prewarm task input provenance is unexpected"
+                )
         mode = row.get("verifier_runtime_mode")
         expected_profile = expected_profile_by_item_hash.get(item_hash)
         if mode == "local_profile":
@@ -494,7 +815,55 @@ def validate_development_prewarm_receipt(
         sorted(runtime_keys)
     ):
         raise ValueError("development prewarm offline verifier runtime set mismatch")
+    if expected_version == TASK_INPUT_CLOSURE_DEVELOPMENT_PREWARM_VERSION:
+        closure_rows = [
+            row for row in rows if row.get("task_input_closure_required")
+        ]
+        if receipt.get("task_input_closure_required_item_count") != len(
+            closure_rows
+        ):
+            raise ValueError(
+                "development prewarm task input closure count mismatch"
+            )
+        if receipt.get("task_input_closure_verified_item_count") != len(
+            closure_rows
+        ):
+            raise ValueError(
+                "development prewarm task input verified count mismatch"
+            )
+        closure_hashes = sorted(
+            str(row["task_input_closure_hash"]) for row in closure_rows
+        )
+        integrity_hashes = sorted(
+            str(row["task_input_integrity_receipt_hash"])
+            for row in closure_rows
+        )
+        if receipt.get("task_input_closure_set_hash") != stable_hash(
+            closure_hashes
+        ):
+            raise ValueError(
+                "development prewarm task input closure set mismatch"
+            )
+        if receipt.get("task_input_integrity_receipt_set_hash") != stable_hash(
+            integrity_hashes
+        ):
+            raise ValueError(
+                "development prewarm task input integrity receipt set mismatch"
+            )
+        if frozen_task_inputs is not None and set(
+            expected_prewarm_closure_rows(receipt)
+        ) != set(frozen_task_inputs.ledger_by_item_hash):
+            raise ValueError(
+                "development prewarm task input rows do not cover the frozen ledger"
+            )
     return declared_hash
+
+
+def _is_sha256_text(value: object) -> bool:
+    text = str(value or "")
+    return len(text) == 64 and all(
+        character in "0123456789abcdef" for character in text
+    )
 
 
 def _selected_item_set_hash(manifest: SplitManifest) -> str:
@@ -519,11 +888,22 @@ def main() -> None:
     )
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, required=True)
+    parser.add_argument("--protocol", type=Path)
+    parser.add_argument("--project-root", type=Path, default=Path.cwd())
     parser.add_argument("--env-file", type=Path, required=True)
     parser.add_argument("--events", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--parallel-workers", type=int, default=4)
     parser.add_argument("--attempts", type=int, default=3)
+    parser.add_argument(
+        "--prewarm-version",
+        choices=(
+            DEVELOPMENT_PREWARM_VERSION,
+            TASK_INPUT_CLOSURE_DEVELOPMENT_PREWARM_VERSION,
+        ),
+        default=DEVELOPMENT_PREWARM_VERSION,
+    )
+    parser.add_argument("--task-input-cache-root", type=Path)
     parser.add_argument(
         "--trial-provider-mode",
         choices=("openai_compatible",),
@@ -533,6 +913,24 @@ def main() -> None:
     load_dotenv(args.env_file)
     map_legacy_model_env()
     manifest = SplitManifest.read(args.manifest)
+    frozen_task_inputs: FrozenTaskInputClosure | None = None
+    if args.protocol is not None:
+        protocol_payload = json.loads(args.protocol.read_text(encoding="utf-8"))
+        if not isinstance(protocol_payload, Mapping):
+            raise ValueError("paper protocol must contain one JSON object")
+        declared_version = dict(protocol_payload.get("execution") or {}).get(
+            "development_prewarm"
+        )
+        if declared_version != args.prewarm_version:
+            raise ValueError(
+                "prewarm CLI version differs from the paper protocol"
+            )
+        frozen_task_inputs = load_frozen_task_input_closure(
+            protocol_payload,
+            project_root=args.project_root,
+        )
+    elif args.prewarm_version == TASK_INPUT_CLOSURE_DEVELOPMENT_PREWARM_VERSION:
+        raise ValueError("v5 development prewarm requires --protocol")
     receipt = prewarm_development_images(
         benchmark_root=args.root,
         manifest=manifest,
@@ -542,6 +940,9 @@ def main() -> None:
         trial_provider_mode=(
             args.trial_provider_mode or configured_skilllearn_provider_mode()
         ),
+        prewarm_version=args.prewarm_version,
+        task_input_cache_root=args.task_input_cache_root,
+        frozen_task_inputs=frozen_task_inputs,
     )
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(

@@ -13,6 +13,10 @@ from ..models import SplitName, stable_hash
 from ..secure_env import load_dotenv, map_legacy_model_env
 from ..splits import AccessPhase, BenchmarkItem, SplitAccessGuard, SplitManifest
 from .paper_protocol import PaperProtocol, validate_protocol_lock_for_execution
+from .prewarm import (
+    FrozenTaskInputPrebuiltImageCache,
+    validate_development_prewarm_receipt,
+)
 from .paper_report import PaperTrialRecord, read_records
 from .skilllearn_compiler import (
     NO_SKILL_TREATMENT_HASH,
@@ -35,6 +39,10 @@ from .skilllearn_lifecycle import (
     codex_agent_execution_policy_for_backend,
 )
 from .skilllearnbench import SkillLearnBenchAdapter
+from .task_input_freeze import (
+    expected_prewarm_closure_rows,
+    load_frozen_task_input_closure,
+)
 
 
 @dataclass(frozen=True)
@@ -851,6 +859,30 @@ def _parse_control(value: str, project_root: Path) -> ControlSource:
     return ControlSource(control_id, path.resolve())
 
 
+def _build_control_prebuilt_cache(
+    *,
+    benchmark_root: str | Path,
+    event_sink: EventSink,
+    frozen_task_inputs,
+    prewarm_payload: Mapping[str, Any] | None,
+    task_input_cache_root: str | Path | None,
+):
+    if frozen_task_inputs is None:
+        return SkillLearnPrebuiltImageCache(
+            benchmark_root,
+            event_sink=event_sink,
+        )
+    return FrozenTaskInputPrebuiltImageCache(
+        benchmark_root,
+        event_sink=event_sink,
+        frozen_task_inputs=frozen_task_inputs,
+        expected_prewarm_rows=expected_prewarm_closure_rows(
+            prewarm_payload or {}
+        ),
+        task_input_cache_root=task_input_cache_root,
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run resumable paper controls on a frozen split.")
     parser.add_argument("--project-root", type=Path, default=Path.cwd())
@@ -865,6 +897,8 @@ def main() -> None:
     parser.add_argument("--split", choices=("validation", "test"), required=True)
     parser.add_argument("--control", action="append", default=[])
     parser.add_argument("--freeze-receipt", type=Path)
+    parser.add_argument("--prewarm-receipt", type=Path)
+    parser.add_argument("--task-input-cache-root", type=Path)
     parser.add_argument("--sealed-journal", type=Path)
     parser.add_argument("--limit", type=int)
     args = parser.parse_args()
@@ -872,6 +906,10 @@ def main() -> None:
     load_dotenv(args.env_file)
     map_legacy_model_env()
     protocol = PaperProtocol.read(args.protocol)
+    frozen_task_inputs = load_frozen_task_input_closure(
+        protocol.payload,
+        project_root=project_root,
+    )
     lock = json.loads(args.protocol_lock.read_text(encoding="utf-8"))
     if not isinstance(lock, Mapping):
         raise ValueError("protocol lock must contain one JSON object")
@@ -883,6 +921,28 @@ def main() -> None:
         project_root,
         args.benchmark_root,
     )
+    prewarm_payload: Mapping[str, Any] | None = None
+    if args.prewarm_receipt is not None:
+        loaded_prewarm = json.loads(
+            args.prewarm_receipt.read_text(encoding="utf-8")
+        )
+        if not isinstance(loaded_prewarm, Mapping):
+            raise ValueError(
+                "development prewarm receipt must contain one JSON object"
+            )
+        prewarm_payload = loaded_prewarm
+        validate_development_prewarm_receipt(
+            prewarm_payload,
+            manifest=manifest,
+            expected_version=str(
+                protocol.payload["execution"]["development_prewarm"]
+            ),
+            frozen_task_inputs=frozen_task_inputs,
+        )
+    elif frozen_task_inputs is not None:
+        raise PermissionError(
+            "task input closure controls require the validated v5 prewarm receipt"
+        )
     split = SplitName(args.split)
     receipt: Mapping[str, Any] | None = None
     receipt_evaluator_epoch: str | None = None
@@ -944,9 +1004,12 @@ def main() -> None:
         protocol.payload["execution"].get("model_inference_slots") or 0
     )
     sink = JsonlEventSink(args.events)
-    prebuilt_cache = SkillLearnPrebuiltImageCache(
-        args.benchmark_root,
+    prebuilt_cache = _build_control_prebuilt_cache(
+        benchmark_root=args.benchmark_root,
         event_sink=sink,
+        frozen_task_inputs=frozen_task_inputs,
+        prewarm_payload=prewarm_payload,
+        task_input_cache_root=args.task_input_cache_root,
     )
     provider_circuit = SkillLearnProviderCircuit()
     model_inference_limiter = (

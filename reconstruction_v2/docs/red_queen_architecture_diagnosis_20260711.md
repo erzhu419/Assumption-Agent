@@ -5,7 +5,9 @@
 > - 代码审计基线 revision：`6224bb5a279f50fbcf1f8b36d19cb4ce6cc6c882`
 > - 本次实现复核：receipt/runtime provenance 修复提交 `e43670f6`、`18ff3417`；v3.3 execution-policy 提交 `e0b1a33b`；v3.4 model-only/action-budget 主提交 `e491b0af`，runtime-path 修复 `995e6446`，Ruoli 503 分类修复 `ba0f36cf`，host-readable audit artifact 修复 `1df3092a` / `ad66d5a2`；v3.4 max2 v5 canary 已通过、fresh development 因四并发 429 fail closed；v3.5 将所有在线 phase 版本化为 1 worker，repair identity 修复 `96d53a5d`，malformed proposal/claim binding 修复 `d70562de`；v3.6 contrastive evidence / invalid-evidence lifecycle 实现提交 `01608e1e`；v3.7 六路首批 6/6 收到 429；v3.8 两路在 16 valid 后收到 2 个 503；v3.9 固定为 outer item workers=6 / shared model slot=1，并完成首个 clean full development 负结果；v3.10 exact-three/coverage-first fresh run 将 activation 提高到 2/16 但仍 0 gain，并暴露 semantic-diversity hard reject 与 action lowering 丢 target；v3.11 actionability fresh run 证明 treatment 已改变 trace、PDF 与成本但仍 0 gain，同时暴露 repair response shape 未被 generic system contract 可靠约束；v3.12 显式版本化 singular repair response并完成 56/56 clean development trials，但两代仍各仅激活 1/16、0 gain，无 incumbent；误入的空 freeze/partial controls 已隔离并补上 phase prerequisite；v3.13 complementary program-set 已完成 375/375 离线测试和 76/76 valid live development，三套 bundle 均激活 2/16、6 个 policy-on 全部失败、0 gain/0 harm、无 incumbent，同时暴露 G2 cross-arm raw replay 不一致；v3.14 提交 `2229d7af` 完成 411/411 离线测试及 62/62 attempted live development，selector 成功选中 7/7 三-family set、activation=3/16，但 7 个 policy-on 全失败；一条 recursive raw 超 64 MiB 使 primary non-claim，valid baseline replay=31、invalid key 又跨臂执行一次，两份 archive 仍无 incumbent；v3.15 action-quality / terminal-invalid provenance 实现提交 `696a2954`，453/453 离线测试通过，随后 clean lock、86/86 cache-only prewarm、smoke 与 57/57-valid live development 全部完成，但两臂仍 0 gain/0 harm、`incumbent_id=null`
 > - 最新 proposal-only 复核：v3.16 family-slot formation 提交 `6ad5c156`；v3.17 artifact-blueprint formation 提交 `4f94e613`。两轮均失败且未启动 benchmark trial
-> - 最新表示层进展：commit `b03c643a` 的 causal action-span extractor、closed typed operator/artifact graph 与 opaque recipe-only selection 已完成唯一一次正式离线 decision，9/9 preregistered predicates PASS，既有 report/event/lock 精确复验 PASS；该结果只使另行冻结的 typed-selection integration diagnostic 有资格运行，仍未授权 development
+> - 最新表示层进展：commit `b03c643a` 的 causal action-span extractor、closed typed operator/artifact graph 与 opaque recipe-only selection 已完成唯一一次正式离线 decision，9/9 preregistered predicates PASS，既有 report/event/lock 精确复验 PASS
+> - 最新 production integration：提交 `ad6a8314` 首次把 proposer/evolution 接入 receipt-bound opaque `recipe_id`；live smoke 随后发现 ledger 绑定晚于 runner 构造的真实顺序错误。提交 `8caba466` 修复后，正式 integration v2 通过 13/13 predicates、12/12 tamper probes 与 exact replay，0 live model/backend/evaluator call；提交 `9b4623f9` 冻结该结果
+> - 最新 live 结果：v3.18r1 以 38 个 item workers / 48 model slots 完成 38/38 TRAIN、16/16 logical paired validation 与两臂两代生命周期，报告均为 3/16 对 3/16、0 gain/0 harm、`incumbent_id=null`。事后非评分因果审计发现 `organize-messy-files-*` 镜像缺少应有的 100 个 PDF，且 stock 的 RAW/G1/G2 实际为 8/10、4/10、3/10 tests，却被二元 success 投影为三次 0；所以本轮只证明 production selection/provenance 的机械闭环，不能作为 clean typed-action utility negative
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -169,20 +171,46 @@
 > envelope 与 canonical parse 纳入既有 typed failure isolation，并让 report/freeze 从 generation
 > rows 绑定非 claim 状态；没有新增评分 gate、响应 retry 或在线 evaluator。两次 38 条都不能跨进程复用。其后第三个 v3.5 fresh root 首次完成 38/38 train、proposal、真实 repair、双臂 paired validation、两代 lifecycle 与四份 report/archive；两臂均未 promotion，第一代 recursive 为 0 gain/2 harm，no-recursive 为 1 gain/0 harm但 LCB 仍小于 0。第二代 no-recursive 又被一次 Ruoli 503、circuit skip、9 个 invalid pair 与 8 个 budget mismatch 污染，旧 lifecycle 错把它计作普通 non-promotion。v3.6 已一次性把成功 train rows 变成无 instruction/context 的 negative controls，按 train activation precision / false positives / failure support / complexity 选择候选，并把 invalid counterfactual evidence 归类为 terminal non-claim。其串行 live root 完成 38/38 valid train（7 success/31 residual），选出的 root 为 26/27 train activation precision、1 个 success false positive，并完成 2/16 validation pairs 后主动停止；无 report/archive/promotion/freeze。v3.7 的六路 agent 首批 6/6 收到 429；v3.8 的两路 agent 在 16 valid 后同时收到 2 个 503。两轮均被既有 circuit 正确阻止、无可复用 bundle/report。v3.9 不改 evaluator、learning/promotion、model、split、预算、retry 或 circuit；只把调度改为 6 个 outer item pipeline 共用 1 个在线 agent slot，本地容器准备和离线 verifier 仍可并行，同题 variants 仍串行。该调度现已 clean 完成 full development，负结果把 blocker 定位到 proposal diversity 与 prospective coverage，而不是继续补 gate；旧 rows 不复用。**
 
+2026-07-14 的 typed-selection integration 与 v3.18r1 又把结论向前推进了一层，但也纠正了
+“clean negative”的含义：
+
+- production proposer 现在只能选择已注册 opaque `recipe_id`，snapshot/catalog commitment、跨代
+  exclusion、recursive repair、archive round-trip、compiler/runtime installation receipt 已贯穿真实路径；
+  formal integration v2 为 13/13 predicates、12/12 tamper probes、exact replay PASS。
+- fresh v3.18r1 以最大并行完成 38/38 valid TRAIN、16/16 runner-valid logical pairs、58 个实际
+  task trials 和 12/12 model attempts；两臂两代都只激活 `organize-messy-files-3` 与
+  `stock-data-visualization-3`，二元结果均为 raw/candidate 3/16、0 gain/0 harm，且无 incumbent。
+- 这 0/0 不能解释为行为相同。`organize-messy-files-3` 的缓存镜像只有 3 个 Office 文件，缺 verifier
+  要求的 100 个 PDF；三路在不可完成的输入上得到相同 4/6 tests。stock 输入完整，但 RAW/G1/G2
+  分别为 8/10、4/10、3/10 tests；全或无 `task_success` 把明显退化压成三个 0，报告遂记为 tie。
+- 两个 candidate 的 `fine_grained_action_receipt_available=false`；轨迹证明 skill 已路由和安装，却没有
+  证明 agent 读取或执行了 recipe。recipe 还把 TRAIN locator（例如 `.csv` 与单一 Office 文件绝对路径）
+  带到 validation，而当前 item 实际是 `.tsv` 或另一个目录；G2 也只是排除 G1 recipe 后枚举新 root，
+  没有非空 `parent_recipe_id` / `failed_checks` 来吸收上一代 residual。
+
+因此 v3.18r1 的 `performance_claim_eligible=true` 只表示冻结协议下的运行记录机械有效，不能提升为
+benchmark construct-valid 的 action-utility 结论。当前最短路径不是补 promotion gate，而是先恢复
+离线 task input/dependency closure，再把 literal locator 改成运行时 artifact role，并让至少一个受限
+capability 由 harness 实际执行、产出 effect receipt；TRAIN/search 可保留离线 per-test residual vector，
+最终 promotion 的 task-success gate 不变。
+
 ### 1.2 结论分层
 
 | 命题 | 当前状态 | 证据层级 |
 |---|---|---|
 | legacy HLE 是高维手写控制面，学习 policy 没有闭环 | 支持 | 代码审计 + 历史 artifacts |
-| v2 的 proposal -> repair -> off/on -> gate -> archive 接口已连通 | 支持 | 当前完整离线 suite + v3.15 clean 57/57-valid live development |
+| v2 的 proposal -> repair -> off/on -> gate -> archive 接口已连通 | 支持 | typed-selection integration v2 13/13 + 12/12；v3.18r1 完成 38/38 TRAIN、双臂两代与四份 report/archive |
 | v2 的内部 runtime action 能改变 lane plan | 支持 | 代码 + 单元测试 |
 | v2 主 SkillLearn 路径执行了每个 typed action/verifier/fallback 的强语义 | **不支持，且协议已停止这样声称** | 只接受四类显式 prompt/self-check lowering；其余 fail closed |
 | promotion threshold 完全由冻结 protocol 所有 | 支持 | protocol-bound spec + 宽松 candidate 对抗测试 |
-| 86-item offline-ready runtime 已预验 | 支持 | readiness/preflight `blockers=[]`；v3.4 与三份 v3.5 v4 cache-only prewarm 均 86/86、model 未执行、sealed scoring=false |
-| v2 已产生可保留的 promoted incumbent | **不支持** | v3.15 两份 claim-eligible negative report 均停止于 non-promotion，archive 仍为 `incumbent_id=null` |
-| v2 稳定优于 raw 或 budget-matched raw | **不支持** | v3.15 recursive G1/G2 都是 candidate/raw 4/16，三次 on 全部 0 gain/0 harm |
+| 86-item offline-ready runtime 已预验 | **仅支持运行时/验证器可启动，不支持 task input 完整** | v3.18r1 prewarm 86/86，但 `organize-messy-files-*` 的 100 PDF 下载层为 0B；现有 receipt 未绑定 input inventory |
+| production opaque recipe selection 已接入真实 proposer/evolution | 支持（机械层） | formal integration v2 13/13 predicates、12/12 tamper、exact replay；live v3.18r1 已 materialize/install/route |
+| v2 主 SkillLearn 路径实际执行 typed capability | **不支持** | integration result 明示 `capability_implementation_verified=false`、`restricted_runtime_executor_claimed=false`；live pair 均无 fine-grained action receipt |
+| v2 已产生可保留的 promoted incumbent | **不支持** | v3.18r1 两臂均 consecutive non-promotion，archive 仍为 `incumbent_id=null` |
+| v2 稳定优于 raw 或 budget-matched raw | **不支持** | v3.18r1 二元报告 3/16 对 3/16；唯一完整的 stock 激活实际从 RAW 8/10 tests 退化到 G1 4/10、G2 3/10 |
 | v3.15 已改善真实 action utility | **不支持；clean live 负结果** | 13 个 candidate audit 中 7 material / 6 restatement-risk；material 仅 exact constant/mapping，且 9 roots 全坍缩为 poster 单-family |
 | v3.17 family-slot/artifact-blueprint proposal 已达到 trial-feasible | **不支持；proposal-only 负结果** | 8/9 feasibility 通过，但第三候选绑定 2 个 failed TRAIN primitives；0 benchmark/evaluator call |
+| v3.18r1 是 clean typed-action utility negative | **不支持；只能作机械闭环与异常诊断** | organize 输入缺 100 PDF；stock partial-test harm 被 binary success 投影为 tie；literal TRAIN locator 不可移植 |
 | v2 已实现 Red Queen 式多 clade 搜索和 evaluator co-evolution | **不支持** | 目前是单 incumbent；evaluator 路径未接主实验 |
 
 ### 1.3 潜力判断
@@ -445,7 +473,9 @@ evidence。固定 cohort 越被反复用于决策，越不能承担 sealed claim
 
 **[TEST]** v3.13 的 `reconstruction_v2` 离线 suite 为 **375/375 通过**，v3.14 为
 **411/411 通过**；v3.15 提交 `696a2954` 当时为 **453/453 通过**；加入 v3.16/v3.17 formation、
-proposal-only boundary、typed representation 与 single-decision binding 后，当前完整 suite 为 **540/540 通过**。新增覆盖包括 TRAIN-only
+proposal-only boundary、typed representation 与 single-decision binding 后，当时完整 suite 为 **540/540 通过**。
+后续 production integration v2 的 13/13 predicates、12/12 tamper probes、真实 harness-construction
+regression 与 exact replay 另行通过；本文不把不同时点的 suite 数拼成新的总数。新增覆盖包括 TRAIN-only
 action profile 的 containment/allowlist/secret isolation、request-local action-quality prompt、audit-only
 不改变 retry/selection/promotion、terminal-invalid memo 的 retry identity 与零执行 replay，以及
 report/freeze 的首代 checkpoint/profile provenance。此前 shared immutable valid baseline cohort、
@@ -1110,9 +1140,11 @@ allowlisted span，且 observational inadmissibility 计数为 0。这些数字�
 未截断，不声称覆盖完整 raw-command chronology。closed typed graph 已把 proposal output 收窄为一个 opaque、
 已注册的 `recipe_id`，使 primitive、locator 与 free-text action 不进入模型输出域；但 materialization 仍经现有
 prompt-directive/self-check compiler 交给通用 agent，capability implementation 未验证，也没有 restricted
-runtime executor。实现与 preregistration 已就绪，正式的一次性离线 decision 仍未执行；即使 PASS，也只使
-另行冻结的 typed-selection integration diagnostic 有资格运行，不授权 development。继续补 prompt 或放宽
-acceptance 都会掩盖这一边界；这不是 v3.18 gate patch。
+runtime executor。正式 operator feasibility 已 9/9 PASS；production integration v1 的 live smoke 继而发现
+ledger-binding construction-order bug，修复后的 v2 通过 13/13 predicates、12/12 tamper probes 与 exact replay。
+v3.18r1 也已完成真实 development，但其 action receipt 仍止于安装/路由，且暴露 task input/dependency 与
+literal locator 问题。继续补 prompt 或放宽 acceptance 都会掩盖这一边界；下一步是 task closure 与
+capability-backed portable role，不是新的 gate patch。
 
 ### 8.4 P1：prospective runtime features 仍过粗
 
@@ -1172,6 +1204,12 @@ v3.10 第一代 3/3 roots 均直接通过静态检查，没有触发 repair；�
 处终止。recursive/no-recursive archive 因而字节相同，report 只在 arm/trace/path provenance 上不同。
 这轮没有提供新的 repair 因果样本，也不能把两臂相同解释成 repair 无效。
 
+v3.18r1 的 recursive archive 确实比 no-recursive 多出 4 个 repair binding，但最终被验证的 treatment、
+nodes 与 score records 完全相同。更关键的是 stock G2 记录 `parent_recipe_id=null`、`failed_checks=[]`、
+`repair_depth=0`：它只是排除 G1 recipe 后选择另一个 root，并未把 G1 的 59-row、tooltip/click 或浏览器
+residual 编译成 child repair。故本轮只能说明 recursive machinery 扩大了搜索/archive，不能说明它把
+上一代执行反馈转化为因果修复。
+
 因此当前可说“递归修复机制会运行并改变候选可执行性”，不能说“递归验证已经改善性能”。
 
 ### 8.8 文档与协议漂移正在本次收口
@@ -1191,6 +1229,76 @@ provenance，以及随后 clean 57/57-valid live negative evidence。两臂 clai
 没有被写成 promotion 或 performance improvement。
 
 这种文档漂移本身会破坏 protocol review；重新跑论文实验前必须同步。
+
+### 8.9 P0：selection surface 已闭合，task closure、portable role 与 effect semantics 尚未闭合
+
+formal integration v1 的离线 predicates 曾全部通过，但第一次真实 smoke 在 task trial 前暴露
+`typed snapshot ledger binding is missing`：harness 在把 ledger 绑定到共享 proposer registry 之前就构造
+compiler/runner，后续 `EvolutionKernel` 的绑定永远不可达。提交 `8caba466` 把 binding 移到 auth validation
+之后、compiler/runner 之前，并以真实 live-harness construction regression 覆盖。另行冻结的 v2 此后
+13/13 predicates、12/12 tamper probes 与 exact replay 全过，0 live model/backend/evaluator call。这个过程
+说明非评分 integration diagnostic 有价值，但也明确了它的边界：selection/provenance pass 不等于 task
+semantics pass。
+
+v3.18r1 是第一轮真实使用这条 production path 的 development。38/38 TRAIN、16/16 logical pairs、
+58 actual trials、12/12 model attempts 均在 38 个 item workers / 48 shared model slots 下完成，0 provider、
+budget、pair mismatch。recursive 与 no-recursive 每代都选中 stock + organize，activation=2/16，二元
+score 都是 3/16 对 3/16；G1/G2 平均 action cost 分别从 15.8125 变为 15.75/15.0。两臂均停止于
+consecutive non-promotion，`incumbent_id=null`，因此 freeze、controls、HippoRAG、family-out、sealed
+均正确未运行。
+
+非评分 action-span/CTRF 审计否定了“0 gain/0 harm 即行为相同”：
+
+1. **task input closure 失败。** `organize-messy-files-3` 的 Dockerfile 声明下载 100 PDF 后再复制 3 个
+   Office 文件；实际 content-addressed image 的下载 heredoc layer 为 0B，初始 `/root/papers/all` 仅有
+   3 个 Office 文件。确定根因是本机 Docker 29.1.3 没有 `buildx`，`docker build` 落到 deprecated legacy
+   builder；它把 BuildKit-only `RUN <<'EOF'` 当成无命令 here-doc 重定向，body 中的 `wget`、count assertion
+   乃至 `false` 都不执行且返回 0。RAW/G1/G2 最终结构相同、均为 4/6 tests，失败只来自缺失 100 PDF。
+   相同模式影响全部 6 个 organize task instance（5 个 unique cached images）；其中 3 个又构成当前 selected
+   TRAIN support 5 的多数。prewarm 的 86/86
+   只证明 image/runtime/verifier 可启动，没有证明 task input inventory 完整。
+2. **离线依赖 closure 失败。** stock 输入本身完整：50 个 logical TSV records、50 个 history CSV、
+   5 sectors，三路 data-integrity test 都通过；但题目要求 D3 v6，task image 没有 vendored D3，official
+   solution 原本运行时 `npm install d3@6.7.0`，而冻结协议正确禁止 runtime install。三路只能手写 shim。
+   下一次离线运行应预下载并 checksum 固化 D3 6.7.0，而不是切到在线 evaluator。
+3. **portable role binding 失败。** G1/G2 recipe 把 TRAIN `stock-data-visualization-5` 的
+   `/root/data/stock-descriptions.csv` 带到 validation item 3，但后者声明 `.tsv`；organize recipe 同样绑定
+   不存在或实例不匹配的单一文档路径。closed grammar 只让模型不能生成 locator，没有把 concrete locator
+   提升为 `primary_table` / `input_document_collection` 等由当前 item 解析的 artifact role。
+4. **effect semantics 失败。** event 证明 recipe 被编译、安装到 7 个目的地并命中路由，却全部记录
+   `fine_grained_action_receipt_available=false`。agent 没有读取 `SKILL.md`，也未遵循错误的 `.csv` 指令；
+   三条 stock 轨迹共同表现为检查数据、搜索 D3、手写 shim、只做语法检查。prompt materialization 不是
+   restricted capability execution，`action_activated=true` 只能解释为 treatment delivered。
+5. **搜索反馈被压扁。** stock RAW 实际通过 8/10 tests，只剩 tooltip/click 的共同 pointer-event residual；
+   G1 误把 60 个物理行当 59 条数据而降到 4/10，G2 浏览器在 `parentNode` 报错、降到 3/10。全或无
+   `task_success` 把 8→4→3 都投影成 0。G2 又是 `parent_recipe_id=null`、`failed_checks=[]` 的另一个 root，
+   并非吸收 G1 residual 的 repair child。
+
+因此下一 workstream 不再增加 recipe prompt、selector 或 promotion blocker。先恢复并哈希 task
+input/dependency closure；随后只做一条 bounded vertical slice：
+
+`artifact role → current-item resolver → restricted task-local capability → effect receipt`
+
+TRAIN/search 侧可使用不泄露 verifier 内容的离线 per-test status vector，至少保留 8→4→3 的退化并把
+上一代 residual 绑定到非空 parent/failed-check child；最终 promotion 仍使用原冻结 task-success contract。
+
+2026-07-14 已完成前半段底座修复。125 个去重 PDF 与 D3 6.7.0 bundle 被放入本地
+content-addressed cache；随后 cache-only v2 preparation 以 0 下载冻结 11 项 closure / 126 个实际注入对象。
+第一次实现审查又发现 closure 未绑定源 Dockerfile、以及 WSL `/mnt/c` staging 会把 0644 mode 变为 0777；
+最终 manifest v2 因而绑定不含 mode、但包含 path/kind/size/content 的 transport-stable source-environment
+hash，并在原始 environment 与改写前 staging 各验证一次。protocol v3.19 进一步冻结 preparation file、
+receipt、per-item ledger、object set 与 source-environment set，development、controls 和 sealed runtime 都只能
+复用 v5 prewarm 中的精确 image ID。
+
+11/11 affected images 已重建；`organize-messy-files-3` 的无网络实测 inventory 为 103 files = 100 PDF +
+2 DOCX + 1 PPTX，stock image 内 D3 header 为 v6.7.0。随后 86-worker cache-only v5 prewarm 为 86/86 PASS，
+其中 closure-required/verified=11/11、0 online build、0 model/evaluator、0 sealed scoring。
+
+后半段的独立离线 feasibility 也已跑通：冻结 stock recipe 在当前 item 3 上不使用 TRAIN `.csv` locator，
+只从 public instruction 唯一解析当前 `.tsv`，固定只读 capability 真实解析 50×14，并产生 input pre/post、
+output 与 role binding 的 exact effect receipt。这个结果仍不是 production hook；只有 compiler/runtime 把同一
+role contract 放到 agent 启动前真实执行并回读后，才值得 fresh、最大并行 development。若届时仍无
+selection change、gain 或 incumbent，则停止 external typed-skill 路线，而不是继续补 gate。
 
 ## 九、下一步优先级与硬验收标准
 
@@ -1223,7 +1331,10 @@ provenance，以及随后 clean 57/57-valid live negative evidence。两臂 clai
 | 完成（v3.15 clean 负结果） | TRAIN-only material action delta + terminal-invalid attribution | commit `696a2954`、453/453 offline 后，clean lock、86/86 prewarm、smoke 与 57/57 valid live 完成；8/8 model calls、max online concurrency=1、0 provider/infra/budget/network/pair error；recursive G1/G2 与 no-rec G2 均 1/16、0 gain/0 harm，32 次 baseline 零执行 replay；两臂 claim-eligible non-promotion、incumbent null、无 downstream |
 | 完成（v3.16/v3.17 proposal-only 负结果） | structural family-stratified proposal formation + artifact blueprint | 复用冻结 TRAIN receipt，0 source rerun、0 benchmark/evaluator call；v3.17 通过 8/9 feasibility，解决 family collapse/support/self-block/restatement，但第三候选仍绑定 2 个 failed primitives，故未授权 development |
 | 完成（正式离线 PASS） | typed operator/capability grammar + causal action-span evidence | commit `b03c643a` 的唯一一次 decision 通过 9/9 predicates，既有 report/event/lock 精确复验通过。38 条 receipt-bound trace 含 655 个 action starts（max 61/100）、429 个 chronological allowlisted spans、70 failed、63 later scope-matched recoveries 与 208 discarded commands；3/3 graph/program materialize、9/9 tamper probes fail closed、primitive/locator disclosure=0、live model/backend/evaluator call=0。PASS 仅证明闭合表示的离线 feasibility，不授权 development |
-| P0（下一 workstream） | separately frozen typed-selection integration diagnostic | 把 production proposer/evolution 的候选选择面真正收缩为 opaque registered `recipe_id`，并把 snapshot graph/catalog commitment 与 harness materialization 贯穿真实选择路径；禁止模型生成 primitive、locator 或 free-text action。另行预注册、只做非评分 integration diagnostic；通过前不启动 fresh development，且不新增 prompt/gate patch |
+| 完成（integration v1 暴露顺序 bug；v2 正式 PASS） | production opaque recipe selection | 提交 `ad6a8314` 接入真实 proposer/evolution；live smoke 发现 ledger 绑定晚于 runner construction。提交 `8caba466` 修复，正式 v2 13/13 predicates、12/12 tamper、exact replay、0 live call；提交 `9b4623f9` 冻结。只证明 selection/provenance，不证明 capability execution |
+| 完成（v3.18r1 机械闭环；performance 降级为 mixed-validity diagnostic） | typed selection live development | 38/38 TRAIN、16/16 runner-valid logical pairs、58 actual trials、12/12 model attempts、max agent concurrency=38；两臂两代 3/16 对 3/16、0/0、incumbent null。organize 缺 100 PDF，stock 8/10→4/10→3/10 被 binary success 压成 tie，故不得解释为 clean action-utility negative |
+| 完成（v3.19 task closure） | offline task input/dependency closure | manifest v2 绑定 transport-stable source environment；preparation receipt 冻结 11-item ledger / 126 objects；11/11 affected images 重建并以 immutable ID 无网络检查；86-worker v5 cache-only prewarm 86/86、closure 11/11、0 model/evaluator/sealed scoring。evaluator 与 promotion gate 未改变 |
+| P0（feasibility 已过，production hook 待接） | capability-backed portable artifact role | stock item 3 离线 role resolver + fixed read-only capability 已解析当前 TSV 50×14 并产 exact effect receipt；下一步只接 compiler/runtime pre-agent hook，彻底移除 TRAIN literal。G2 的 parent/residual repair 仍待真实 generation 验证；禁止新增 recipe prompt、selector 或 promotion blocker |
 | P1 | prospective family-out routing | trigger 不依赖已知 family 或预编译 item ID，只使用冻结、无 gold、运行时可得语义特征 |
 | P2 | 多 clade archive | 同 epoch 至少两个 clade 可继续扩展；node 绑定 protocol/evidence/promotion hashes，并报告 retention 与 branch productivity |
 | P2 | evaluator co-evolution | 独立 anchor challenger、epoch transition、selective invalidation 和旧 incumbent re-evaluation 实际执行后再作主张 |
@@ -1447,6 +1558,37 @@ provenance，以及随后 clean 57/57-valid live negative evidence。两臂 clai
     [`skilllearn_typed_operator_feasibility_result_v1.json`](../manifests/skilllearn_typed_operator_feasibility_result_v1.json)。
     该 PASS 只使 separately frozen typed-selection integration diagnostic freeze-eligible；它不验证 capability
     implementation、restricted executor 或 benchmark gain，也不授权 development。
+50. production typed-selection integration v1 已接入真实 proposer/evolution，但 formal predicates 没有覆盖
+    live harness construction 顺序；第一次 smoke 在 task trial 前以 `typed snapshot ledger binding is missing`
+    fail closed。根因是 compiler/runner 先于 shared proposer registry 的 ledger binding 构造。提交 `8caba466`
+    调整顺序并加入真实 harness construction regression；没有修改 evaluator、promotion 或 recipe acceptance。
+51. 另行冻结的 integration v2 已通过 13/13 predicates、12/12 tamper probes 与 `--verify-existing` exact replay，
+    implementation/decision/report hashes 均绑定，且 0 live model/backend/evaluator call。提交 `9b4623f9` 保留
+    v1 失败证据并冻结 v2。result 明示 capability implementation 与 restricted executor 均未验证。
+52. v3.18r1 fresh root 已以 38 个 item workers / 48 model slots 完成 38/38 TRAIN、16/16 logical paired
+    validation、58 actual trials、12/12 model attempts；两臂两代均 activation=2/16、raw/candidate=3/16、
+    gain=0、harm=0、`incumbent_id=null`，因此所有 downstream 正确跳过。recursive 产生更多 repair binding，
+    但最终 selected treatment/nodes/scores 与 no-recursive 相同，不能声称 recursion gain。
+53. 事后离线 audit 使该 performance 结论降级：全部 organize 镜像的 100-PDF heredoc layer 为 0B，当前
+    selected TRAIN support 5 中有 3 条 organize，且 validation organize-3 不可完成；stock 虽输入完整，
+    RAW/G1/G2 的 CTRF 为 8/10、4/10、3/10，却被二元 task success 投影为三个 0。报告的 runner-valid
+    tie 不是行为 tie，也不是 typed operator efficacy 的 clean 反例。
+54. 下一步固定为 task closure 与单条 capability-backed role vertical slice：先离线固化 organize PDFs 和
+    D3 6.7.0，再以 `artifact role → current-item resolver → restricted capability → effect receipt` 消除 TRAIN
+    literal locator 与 prompt-only activation。TRAIN/search 保留 per-test residual，最终 promotion gate 不变；
+    禁止继续补 recipe prompt、selector、minimum-activation 或其他评分 gate。
+55. task-input preparation v2 已冻结 11 项 per-item closure ledger 和 126 个实际注入对象；source binding 使用
+    transport-stable environment hash，能拒绝 Dockerfile URL 漂移，同时不受 WSL staging 的 0644→0777 mode
+    变化影响。冻结 file SHA 为 `73c25f8e…e1b8b06`、receipt 为 `8d1979e5…6771a16`、ledger 为
+    `7ad7f448…9ac3a9`；cache-only regeneration 为 126/126 hit、0 download。
+56. 11/11 affected images 已重建并经 immutable image ID、`--network none` 精确检查。v3.19 将 preparation
+    ledger 同时接入 prewarm、development、controls 与 sealed cache；86-worker v5 cache-only prewarm 为
+    86/86 PASS、closure-required/verified=11/11、failed=0、online-build=false、sealed-scoring=false，receipt
+    为 `e7851d19…6e7839`。这恢复了实验输入构造，不是 performance claim。
+57. 独立 portable-capability feasibility 已让冻结 stock recipe 在 item 3 上从 public instruction 解析当前
+    `.tsv`、固定只读解析 50×14，并产生 `c45bd4…6744f8` effect receipt；compiler phase 1 又以显式 opt-in
+    生成 locator-free per-item role metadata，并把其 hash 绑定到 treatment/manifest/source/event，默认路径
+    byte-compatible。尚缺的唯一执行接点是 container 内、agent start 前的 capability/effect receipt hook。
 
 这比立刻扩展 archive 或继续补 HLE source span 更能降低研究风险。
 
@@ -1512,8 +1654,8 @@ activation；held-out causal activation precision 的分母则是 evidence-valid
 
 | 层级 | 可声明内容 | 当前状态 |
 |---|---|---|
-| L0 wiring | schema、repair、off/on、guard、archive transition 的机械链路已连接 | 达到：当前完整离线 suite 540/540 通过；除 v3.15 的既有 wiring 外，v3.16/v3.17 TRAIN receipt reconstruction、family-slot production path、redacted live ledger、失败结果复核，以及 typed all-item budget/action-span/canonical-graph/semantic-failure/decision-lock boundary 均有覆盖 |
-| L1 mechanism live | 真实外部任务中 proposal/repair/treatment/gate 全链路完成 | 达到且最新 benchmark evidence 仍是 v3.15 clean negative：57/57 valid、8/8 model calls、0 infra/fairness error；v3.16/v3.17 未运行 task trial，不提升 L1，也无 promotion claim |
+| L0 wiring | schema、repair、off/on、guard、archive transition 的机械链路已连接 | 达到：typed operator feasibility 9/9，production integration v2 13/13 + 12/12 tamper + exact replay；snapshot/catalog、opaque selection、repair/exclusion、archive/compiler/runtime receipt 均有覆盖 |
+| L1 mechanism live | 真实外部任务中 proposal/repair/treatment/gate 全链路完成 | 达到（仅机械层）：v3.18r1 完成 38/38 TRAIN、双臂两代、16/16 runner-valid logical pairs、58 actual trials、12/12 model attempts 与四份 report/archive；但无 fine-grained effect receipt，且 task closure 异常使其不能作 clean efficacy negative |
 | L2 validation learning | clean held-out validation 上有可晋级净收益 | 未达到 |
 | L3 prospective generalization | frozen incumbent 在 unseen instance/family 上保持收益 | 未达到 |
 | L4 self-evolution | 多代 retained improvement，且 recursion ablation 有因果贡献 | 未达到 |
@@ -1643,16 +1785,21 @@ manipulation、0 restatement/self-block；但第三项仍绑定 `file`/`python` 
 
 这也终止了“继续写更强 prompt”的路线：failed command 中出现通用 executable 并不证明它在因果上应被
 禁用，而只把 count/hash 给模型又无法要求其避开未知具体值。causal action-span taxonomy 与 closed typed
-operator/artifact graph 已实现，并在唯一一次正式离线 decision 中 9/9 PASS、精确复验 PASS。这个结果不再
-触发任何 prompt/gate patch；它只使一个另行冻结的 typed-selection integration diagnostic 有资格运行，
-因为当前 production selection 尚未接入 proposer/evolution，runtime 仍是通用 prompt-directive agent。
+operator/artifact graph 已实现，并在唯一一次正式离线 decision 中 9/9 PASS、精确复验 PASS。production
+typed selection 也已经独立冻结并在 v3.18r1 live 接通；旧文中“尚未接入 proposer/evolution”的判断到此失效。
+新证据同时给出更严格边界：opaque selection/provenance 成立，portable locator、capability implementation
+和 effect receipt 不成立。当前 materializer 仍把 recipe 降为 prompt skill，不能把 installation/route receipt
+写成 typed operator execution。
 
-只有 feasibility 通过、typed-selection integration 经独立冻结诊断验证、随后新的 clean development 产生
-retained validation gain 和真实 incumbent，才按既定顺序进入 freeze、完整 controls、family-out、sealed test；
-在此之前不跑 HippoRAG/raw transfer，
+v3.18r1 的二元报告虽为 0 gain/0 harm，却不能作 clean efficacy negative：当时 organize 输入缺 100 PDF，
+stock 又把 8/10→4/10→3/10 的真实退化压成三个 task-success=0。v3.19 现在已经恢复并冻结 task
+input/dependency closure，locator-free role/capability 的离线 feasibility 与 compiler phase 1 也已通过；尚不能
+越过的边界是 production container 中 agent-start 前的 capability/effect hook。它不是新的评分 gate。
+只有该执行 hook 通过、随后 fresh development 产生 retained validation gain 和真实 incumbent，才按既定顺序
+进入 freeze、完整 controls、family-out、sealed test；在此之前不跑 HippoRAG/raw transfer，
 更不谈 multi-clade 或 evaluator co-evolution。v3.12 空 freeze/partial-control rows、v3.14 mixed-claim rows 与
-v3.16/v3.17 proposal-only artifacts 都不能拼入 performance evidence；v3.15 两臂虽 claim-eligible，archive
-仍为空，同样不得绕过 phase prerequisite。
+v3.16/v3.17 proposal-only artifacts 都不能拼入 performance evidence；v3.18r1 也只能保留为 production
+integration 与 benchmark-integrity diagnostic，archive 仍为空，同样不得绕过 phase prerequisite。
 最诚实的论文级表述是：
 
 > **显式 HypothesisProgram 是一个有希望、可能更易归因的 self-evolution 搜索表示；
@@ -1672,8 +1819,16 @@ v3.16/v3.17 proposal-only artifacts 都不能拼入 performance evidence；v3.15
 - v2 architecture：[`ARCHITECTURE.md`](../ARCHITECTURE.md)
 - v2 benchmark protocol：[`BENCHMARK_PROTOCOL.md`](../BENCHMARK_PROTOCOL.md)
 - v2 current status：[`STATUS.md`](../STATUS.md)
-- last completed claim-bearing benchmark protocol：
+- latest completed live-mechanism protocol（performance mixed-validity）：
+  [`skilllearn_paper_protocol_v3_18r1_ruoli_gpt54mini.json`](../manifests/skilllearn_paper_protocol_v3_18r1_ruoli_gpt54mini.json)
+- last clean claim-bearing negative benchmark protocol：
   [`skilllearn_paper_protocol_v3_15_ruoli_gpt54mini.json`](../manifests/skilllearn_paper_protocol_v3_15_ruoli_gpt54mini.json)
+- formal production typed-selection integration v2：
+  [`preregistration`](../manifests/skilllearn_typed_selection_integration_v2.json)；
+  [`result receipt`](../manifests/skilllearn_typed_selection_integration_result_v2.json)；
+  [`report`](../artifacts/typed_selection_integration_v2_v315_train/typed_selection_integration.report.json)；
+  [`event ledger`](../artifacts/typed_selection_integration_v2_v315_train/typed_selection_integration.events.jsonl)；
+  [`decision lock`](../artifacts/typed_selection_integration_v2_v315_train/typed_selection_integration.decision.lock.json)
 - latest failed proposal-only diagnostic protocol：
   [`skilllearn_paper_protocol_v3_17_ruoli_gpt54mini.json`](../manifests/skilllearn_paper_protocol_v3_17_ruoli_gpt54mini.json)
 - immutable v3.16 proposal-only diagnostic protocol：
@@ -1755,7 +1910,18 @@ v3.16/v3.17 proposal-only artifacts 都不能拼入 performance evidence；v3.15
   [`v3.16 failed proposal-only report`](../artifacts/paper_primary_v3_16_offline86_ruoli_gpt54mini_outer6_model1_familyslots01/train_proposal_diagnostic.report.json)；
   [`v3.16 proposal-only event ledger`](../artifacts/paper_primary_v3_16_offline86_ruoli_gpt54mini_outer6_model1_familyslots01/train_proposal_diagnostic.events.jsonl)；
   [`v3.17 failed proposal-only report`](../artifacts/paper_primary_v3_17_offline86_ruoli_gpt54mini_outer6_model1_familyslots02/train_proposal_diagnostic.report.json)；
-  [`v3.17 proposal-only event ledger`](../artifacts/paper_primary_v3_17_offline86_ruoli_gpt54mini_outer6_model1_familyslots02/train_proposal_diagnostic.events.jsonl)
+  [`v3.17 proposal-only event ledger`](../artifacts/paper_primary_v3_17_offline86_ruoli_gpt54mini_outer6_model1_familyslots02/train_proposal_diagnostic.events.jsonl)；
+  [`v3.18r1 claim lock`](../artifacts/paper_primary_v3_18r1_offline86_ruoli_gpt54mini_outer38_model48_typed02/protocol_lock.json)；
+  [`v3.18r1 86-item prewarm`](../artifacts/paper_primary_v3_18r1_offline86_ruoli_gpt54mini_outer38_model48_typed02/development_prewarm.json)；
+  [`v3.18r1 recursive report`](../artifacts/paper_primary_v3_18r1_offline86_ruoli_gpt54mini_outer38_model48_typed02/development_recursive.report.json)；
+  [`v3.18r1 recursive archive`](../artifacts/paper_primary_v3_18r1_offline86_ruoli_gpt54mini_outer38_model48_typed02/development_recursive.archive.json)；
+  [`v3.18r1 no-recursive report`](../artifacts/paper_primary_v3_18r1_offline86_ruoli_gpt54mini_outer38_model48_typed02/development_no_recursive.report.json)；
+  [`v3.18r1 no-recursive archive`](../artifacts/paper_primary_v3_18r1_offline86_ruoli_gpt54mini_outer38_model48_typed02/development_no_recursive.archive.json)；
+  [`v3.18r1 causal event ledger`](../artifacts/paper_primary_v3_18r1_offline86_ruoli_gpt54mini_outer38_model48_typed02/development_recursive.events.jsonl)；
+  [`organize-3 missing-input verifier`](../artifacts/paper_primary_v3_18r1_offline86_ruoli_gpt54mini_outer38_model48_typed02/development_recursive/upstream_trials/no_skill/organize-messy-files/organize-messy-files-3/v2_policy_off_9fd24b87613fdf5ce0/verifier/ctrf.json)；
+  [`stock-3 RAW 8/10 verifier`](../artifacts/paper_primary_v3_18r1_offline86_ruoli_gpt54mini_outer38_model48_typed02/development_recursive/upstream_trials/no_skill/stock-data-visualization/stock-data-visualization-3/v2_policy_off_a7ed3142643bb27425/verifier/ctrf.json)；
+  [`stock-3 G1 4/10 verifier`](../artifacts/paper_primary_v3_18r1_offline86_ruoli_gpt54mini_outer38_model48_typed02/development_recursive/upstream_trials/assumption-agent-v2-challenger/stock-data-visualization/stock-data-visualization-3/v2_policy_on_3828e1d61fc53a4d3a/verifier/ctrf.json)；
+  [`stock-3 G2 3/10 verifier`](../artifacts/paper_primary_v3_18r1_offline86_ruoli_gpt54mini_outer38_model48_typed02/development_recursive/upstream_trials/assumption-agent-v2-challenger/stock-data-visualization/stock-data-visualization-3/v2_policy_on_9929872798245bb924/verifier/ctrf.json)
 
 ## 附录 B：复杂度统计口径
 

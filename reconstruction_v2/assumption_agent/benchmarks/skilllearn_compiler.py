@@ -7,7 +7,7 @@ import re
 import shutil
 import tempfile
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -15,10 +15,19 @@ from ..events import Event, EventSink, NullEventSink
 from ..models import ActionNode, HypothesisProgram, HypothesisStatus, stable_hash
 from ..splits import BenchmarkItem, SplitManifest
 from ..typed_operator_grammar import (
+    BoundTypedRecipe,
     TypedProgramBindingRegistry,
     is_typed_recipe_materialization,
 )
 from ..validation import backend_action_contract_issues
+from .typed_task_capability import (
+    PORTABLE_TASK_CAPABILITY_COMPILER_VERSION,
+    CompiledPortableTaskCapability,
+    build_compiled_portable_task_capability,
+    deterministic_portable_capability_output_locator,
+    portable_role_spec_for_bound_recipe,
+    validate_compiled_portable_task_capability,
+)
 
 
 SKILL_ROUTING_VERSION = "per_item_trigger_routing_v2"
@@ -67,6 +76,14 @@ class SkillCompileResult:
     typed_binding_set_hash: str = ""
     typed_snapshot_hashes: tuple[str, ...] = ()
     typed_snapshot_ledger_hash: str = ""
+    portable_capability_compiler_mode: str = ""
+    portable_capability_role_spec_set_hash: str = ""
+    item_portable_capability_role_spec_hashes: Mapping[
+        str, tuple[str, ...]
+    ] = field(default_factory=dict)
+    item_portable_capability_metadata_paths: Mapping[
+        str, tuple[Path, ...]
+    ] = field(default_factory=dict)
 
     def source_for(self, item_id: str) -> Path | None:
         return self.item_sources.get(stable_hash({"item_id": item_id}))
@@ -90,6 +107,18 @@ class SkillCompileResult:
             expected_typed_snapshot_ledger_hash=(
                 self.typed_snapshot_ledger_hash
             ),
+            expected_portable_capability_compiler_mode=(
+                self.portable_capability_compiler_mode
+            ),
+            expected_portable_capability_role_spec_set_hash=(
+                self.portable_capability_role_spec_set_hash
+            ),
+            expected_portable_capability_role_spec_hashes=(
+                self.item_portable_capability_role_spec_hashes.get(
+                    stable_hash({"item_id": item_id}),
+                    (),
+                )
+            ),
         )
 
 
@@ -107,9 +136,15 @@ class SkillSourceReceipt:
     typed_binding_set_hash: str
     typed_snapshot_hashes: tuple[str, ...]
     typed_snapshot_ledger_hash: str
+    portable_capability_compiler_mode: str = ""
+    portable_capability_role_spec_set_hash: str = ""
+    portable_capability_role_spec_hashes: tuple[str, ...] = ()
+    portable_capability_metadata_file_hashes: tuple[
+        tuple[str, str], ...
+    ] = ()
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "compile_manifest_hash": self.compile_manifest_hash,
             "item_id_hash": self.item_id_hash,
             "source_route": self.source_route,
@@ -124,6 +159,37 @@ class SkillSourceReceipt:
             "typed_snapshot_hashes": list(self.typed_snapshot_hashes),
             "typed_snapshot_ledger_hash": self.typed_snapshot_ledger_hash,
         }
+        if self.portable_capability_compiler_mode:
+            payload.update(
+                {
+                    "portable_capability_compiler_mode": (
+                        self.portable_capability_compiler_mode
+                    ),
+                    "portable_capability_role_spec_set_hash": (
+                        self.portable_capability_role_spec_set_hash
+                    ),
+                    "portable_capability_role_spec_hashes": list(
+                        self.portable_capability_role_spec_hashes
+                    ),
+                    "portable_capability_metadata_file_hashes": [
+                        {"path": path, "sha256": sha256}
+                        for path, sha256 in (
+                            self.portable_capability_metadata_file_hashes
+                        )
+                    ],
+                    "portable_capability_metadata_tree_hash": stable_hash(
+                        {
+                            "files": [
+                                {"path": path, "sha256": sha256}
+                                for path, sha256 in (
+                                    self.portable_capability_metadata_file_hashes
+                                )
+                            ]
+                        }
+                    ),
+                }
+            )
+        return payload
 
     @property
     def receipt_hash(self) -> str:
@@ -199,6 +265,9 @@ def verify_compiled_skill_source(
     expected_typed_binding_set_hash: str = "",
     expected_typed_snapshot_hashes: Sequence[str] = (),
     expected_typed_snapshot_ledger_hash: str = "",
+    expected_portable_capability_compiler_mode: str = "",
+    expected_portable_capability_role_spec_set_hash: str = "",
+    expected_portable_capability_role_spec_hashes: Sequence[str] = (),
 ) -> SkillSourceReceipt:
     """Verify the exact compiled item tree immediately before runtime use.
 
@@ -253,6 +322,23 @@ def verify_compiled_skill_source(
         raise PermissionError("compiled skill snapshot ledger mismatch")
 
     item_hash = stable_hash({"item_id": item_id})
+    (
+        portable_role_spec_hashes,
+        portable_metadata_file_hashes,
+    ) = _verify_portable_capability_item_metadata(
+        root=root,
+        manifest=manifest,
+        item_id_hash=item_hash,
+        expected_compiler_mode=(
+            expected_portable_capability_compiler_mode
+        ),
+        expected_role_spec_set_hash=(
+            expected_portable_capability_role_spec_set_hash
+        ),
+        expected_role_spec_hashes=tuple(
+            expected_portable_capability_role_spec_hashes
+        ),
+    )
     item_routes = manifest.get("item_routes")
     item_treatments = manifest.get("item_treatment_hashes")
     skill_paths = manifest.get("skill_paths")
@@ -347,17 +433,34 @@ def verify_compiled_skill_source(
         actual_treatment_rows = tuple(actual_treatment_row_list)
         actual_receipt_rows = tuple(actual_receipt_row_list)
 
-    recomputed_treatment_hash = (
-        stable_hash(
+    treatment_payload = {
+        "routing_version": SKILL_ROUTING_VERSION,
+        "action_lowering_version": SKILL_ACTION_LOWERING_VERSION,
+        "fallback_semantics": SKILL_FALLBACK_SEMANTICS_VERSION,
+        "skill_content_hashes": sorted(
+            content_hash for _, content_hash in actual_treatment_rows
+        ),
+    }
+    if expected_portable_capability_compiler_mode:
+        treatment_payload.update(
             {
-                "routing_version": SKILL_ROUTING_VERSION,
-                "action_lowering_version": SKILL_ACTION_LOWERING_VERSION,
-                "fallback_semantics": SKILL_FALLBACK_SEMANTICS_VERSION,
-                "skill_content_hashes": sorted(
-                    content_hash for _, content_hash in actual_treatment_rows
+                "portable_capability_compiler_mode": (
+                    expected_portable_capability_compiler_mode
+                ),
+                "portable_capability_role_spec_hashes": list(
+                    portable_role_spec_hashes
+                ),
+                "portable_capability_metadata_content_hashes": sorted(
+                    row["metadata_content_hash"]
+                    for row in manifest[
+                        "portable_capability_role_spec_rows"
+                    ]
+                    if row["item_id_hash"] == item_hash
                 ),
             }
         )
+    recomputed_treatment_hash = (
+        stable_hash(treatment_payload)
         if actual_treatment_rows
         else NO_SKILL_TREATMENT_HASH
     )
@@ -383,7 +486,222 @@ def verify_compiled_skill_source(
         typed_binding_set_hash=expected_typed_binding_set_hash,
         typed_snapshot_hashes=tuple(expected_typed_snapshot_hashes),
         typed_snapshot_ledger_hash=expected_typed_snapshot_ledger_hash,
+        portable_capability_compiler_mode=(
+            expected_portable_capability_compiler_mode
+        ),
+        portable_capability_role_spec_set_hash=(
+            expected_portable_capability_role_spec_set_hash
+        ),
+        portable_capability_role_spec_hashes=portable_role_spec_hashes,
+        portable_capability_metadata_file_hashes=(
+            portable_metadata_file_hashes
+        ),
     )
+
+
+_PORTABLE_CAPABILITY_MANIFEST_KEYS = frozenset(
+    {
+        "portable_capability_compiler_mode",
+        "portable_capability_role_spec_rows",
+        "portable_capability_role_spec_set_hash",
+        "item_portable_capability_role_spec_hashes",
+        "item_portable_capability_metadata_paths",
+        "source_artifact_locators_persisted",
+    }
+)
+
+
+def _verify_portable_capability_item_metadata(
+    *,
+    root: Path,
+    manifest: Mapping[str, Any],
+    item_id_hash: str,
+    expected_compiler_mode: str,
+    expected_role_spec_set_hash: str,
+    expected_role_spec_hashes: tuple[str, ...],
+) -> tuple[tuple[str, ...], tuple[tuple[str, str], ...]]:
+    present_keys = _PORTABLE_CAPABILITY_MANIFEST_KEYS.intersection(manifest)
+    if not expected_compiler_mode:
+        if present_keys:
+            raise PermissionError(
+                "compiled skill has unexpected portable capability metadata"
+            )
+        if expected_role_spec_set_hash or expected_role_spec_hashes:
+            raise PermissionError(
+                "portable capability receipt is partial"
+            )
+        return (), ()
+    if expected_compiler_mode != PORTABLE_TASK_CAPABILITY_COMPILER_VERSION:
+        raise PermissionError("portable capability compiler mode is unsupported")
+    if present_keys != _PORTABLE_CAPABILITY_MANIFEST_KEYS:
+        raise PermissionError(
+            "compiled skill portable capability manifest is partial"
+        )
+    if manifest.get("portable_capability_compiler_mode") != (
+        expected_compiler_mode
+    ):
+        raise PermissionError("portable capability compiler mode mismatch")
+    if manifest.get("source_artifact_locators_persisted") is not False:
+        raise PermissionError("portable capability source locator was persisted")
+
+    raw_rows = manifest.get("portable_capability_role_spec_rows")
+    raw_role_map = manifest.get(
+        "item_portable_capability_role_spec_hashes"
+    )
+    raw_path_map = manifest.get("item_portable_capability_metadata_paths")
+    if (
+        not isinstance(raw_rows, list)
+        or not isinstance(raw_role_map, dict)
+        or not isinstance(raw_path_map, dict)
+    ):
+        raise PermissionError(
+            "compiled skill portable capability index is malformed"
+        )
+    row_keys = {
+        "item_id_hash",
+        "program_id_hash",
+        "typed_binding_hash",
+        "bound_recipe_hash",
+        "role_spec_hash",
+        "metadata_hash",
+        "metadata_path",
+        "metadata_content_hash",
+    }
+    rows: list[dict[str, str]] = []
+    for raw_row in raw_rows:
+        if (
+            not isinstance(raw_row, dict)
+            or set(raw_row) != row_keys
+            or any(not isinstance(value, str) for value in raw_row.values())
+        ):
+            raise PermissionError(
+                "compiled skill portable capability row is malformed"
+            )
+        row = dict(raw_row)
+        for key in row_keys - {"metadata_path"}:
+            if not re.fullmatch(r"[0-9a-f]{64}", row[key]):
+                raise PermissionError(
+                    "compiled skill portable capability hash is malformed"
+                )
+        expected_path = str(
+            Path("task_capabilities")
+            / row["item_id_hash"]
+            / f'{row["program_id_hash"]}.json'
+        )
+        if row["metadata_path"] != expected_path:
+            raise PermissionError(
+                "compiled skill portable capability path is not canonical"
+            )
+        rows.append(row)
+    canonical_rows = sorted(
+        rows,
+        key=lambda row: (
+            row["item_id_hash"],
+            row["program_id_hash"],
+            row["metadata_path"],
+        ),
+    )
+    if rows != canonical_rows or len(
+        {row["metadata_path"] for row in rows}
+    ) != len(rows):
+        raise PermissionError(
+            "compiled skill portable capability rows are not canonical"
+        )
+    role_spec_set_hash = stable_hash({"rows": rows})
+    if (
+        manifest.get("portable_capability_role_spec_set_hash")
+        != role_spec_set_hash
+        or role_spec_set_hash != expected_role_spec_set_hash
+    ):
+        raise PermissionError(
+            "compiled skill portable capability set hash mismatch"
+        )
+
+    item_keys = set(manifest.get("item_routes") or {})
+    if set(raw_role_map) != item_keys or set(raw_path_map) != item_keys:
+        raise PermissionError(
+            "compiled skill portable capability item coverage is malformed"
+        )
+    computed_role_map = {
+        item_hash: sorted(
+            row["role_spec_hash"]
+            for row in rows
+            if row["item_id_hash"] == item_hash
+        )
+        for item_hash in sorted(item_keys)
+    }
+    computed_path_map = {
+        item_hash: sorted(
+            row["metadata_path"]
+            for row in rows
+            if row["item_id_hash"] == item_hash
+        )
+        for item_hash in sorted(item_keys)
+    }
+    if raw_role_map != computed_role_map or raw_path_map != computed_path_map:
+        raise PermissionError(
+            "compiled skill portable capability item index drifted"
+        )
+    item_role_hashes = tuple(computed_role_map.get(item_id_hash, ()))
+    if item_role_hashes != expected_role_spec_hashes:
+        raise PermissionError(
+            "compiled skill portable capability item roles mismatch"
+        )
+
+    receipt_rows: list[tuple[str, str]] = []
+    for row in rows:
+        if row["item_id_hash"] != item_id_hash:
+            continue
+        relative_path = Path(row["metadata_path"])
+        current = root
+        for component in relative_path.parts:
+            current = current / component
+            if current.is_symlink():
+                raise PermissionError(
+                    "compiled skill portable capability path contains a link"
+                )
+        if not current.is_file():
+            raise PermissionError(
+                "compiled skill portable capability metadata is missing"
+            )
+        try:
+            raw_content = current.read_bytes()
+            text = raw_content.decode("utf-8")
+            payload = json.loads(text)
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise PermissionError(
+                "compiled skill portable capability metadata is unreadable"
+            ) from exc
+        metadata = validate_compiled_portable_task_capability(payload)
+        canonical_text = json.dumps(
+            metadata.safe_payload(),
+            indent=2,
+            sort_keys=True,
+        ) + "\n"
+        if text != canonical_text:
+            raise PermissionError(
+                "compiled skill portable capability encoding drifted"
+            )
+        if (
+            metadata.item_id_hash != row["item_id_hash"]
+            or metadata.program_id_hash != row["program_id_hash"]
+            or metadata.typed_binding_hash != row["typed_binding_hash"]
+            or metadata.bound_recipe_hash != row["bound_recipe_hash"]
+            or metadata.role_spec.role_spec_hash != row["role_spec_hash"]
+            or metadata.metadata_hash != row["metadata_hash"]
+            or stable_hash({"content": text})
+            != row["metadata_content_hash"]
+        ):
+            raise PermissionError(
+                "compiled skill portable capability metadata drifted"
+            )
+        receipt_rows.append(
+            (
+                relative_path.as_posix(),
+                hashlib.sha256(raw_content).hexdigest(),
+            )
+        )
+    return item_role_hashes, tuple(sorted(receipt_rows))
 
 
 class SkillLearnProgramCompiler:
@@ -395,13 +713,28 @@ class SkillLearnProgramCompiler:
         event_sink: EventSink | None = None,
         typed_program_registry: TypedProgramBindingRegistry | None = None,
         require_typed_bindings: bool = False,
+        portable_capability_compiler_mode: str | None = None,
     ) -> None:
         self.event_sink = event_sink or NullEventSink()
         self.typed_program_registry = typed_program_registry
         self.require_typed_bindings = require_typed_bindings
+        self.portable_capability_compiler_mode = (
+            str(portable_capability_compiler_mode or "")
+        )
         if require_typed_bindings and typed_program_registry is None:
             raise ValueError(
                 "typed compiler mode requires a binding registry"
+            )
+        if self.portable_capability_compiler_mode and (
+            self.portable_capability_compiler_mode
+            != PORTABLE_TASK_CAPABILITY_COMPILER_VERSION
+        ):
+            raise ValueError("portable capability compiler mode is unsupported")
+        if self.portable_capability_compiler_mode and (
+            not require_typed_bindings or typed_program_registry is None
+        ):
+            raise ValueError(
+                "portable capability compiler mode requires typed bindings"
             )
 
     def require_program_bindings(
@@ -470,15 +803,29 @@ class SkillLearnProgramCompiler:
             ]
         ] = []
         typed_bindings: dict[str, Any] = {}
+        bound_typed_recipes: dict[str, BoundTypedRecipe] = {}
+        portable_role_specs: dict[str, Any] = {}
         seen_program_ids: set[str] = set()
         for program in sorted(programs, key=lambda row: row.id):
             if program.status not in allowed:
                 continue
             if self.require_typed_bindings:
                 assert self.typed_program_registry is not None
-                typed_bindings[program.id] = (
-                    self.typed_program_registry.require(program)
-                )
+                if self.portable_capability_compiler_mode:
+                    bound_recipe = (
+                        self.typed_program_registry.require_bound_recipe(
+                            program
+                        )
+                    )
+                    typed_bindings[program.id] = bound_recipe.binding
+                    bound_typed_recipes[program.id] = bound_recipe
+                    portable_role_specs[program.id] = (
+                        portable_role_spec_for_bound_recipe(bound_recipe)
+                    )
+                else:
+                    typed_bindings[program.id] = (
+                        self.typed_program_registry.require(program)
+                    )
             validation_issues = program.validate()
             if validation_issues:
                 raise ValueError(
@@ -488,13 +835,62 @@ class SkillLearnProgramCompiler:
             if program.id in seen_program_ids:
                 raise ValueError("SkillLearn compiler program IDs must be unique")
             seen_program_ids.add(program.id)
-            lowered_actions = _lower_skilllearn_program(program)
             skill_name = _slug(program.id)
-            skill_text = _render_skill(program, skill_name, lowered_actions)
+            if self.portable_capability_compiler_mode:
+                role_spec = portable_role_specs[program.id]
+                output_locator = (
+                    deterministic_portable_capability_output_locator(
+                        role_spec_hash=role_spec.role_spec_hash,
+                        typed_binding_hash=(
+                            typed_bindings[program.id].binding_hash
+                        ),
+                    )
+                )
+                lowered_actions = _lower_portable_capability_skill(
+                    role_spec_hash=role_spec.role_spec_hash,
+                    output_container_locator=output_locator,
+                    role=role_spec.role,
+                    artifact_format=role_spec.artifact_format.value,
+                    capability=role_spec.capability,
+                    workflow=(
+                        bound_typed_recipes[program.id].recipe.workflow.value
+                    ),
+                    operator_kinds=tuple(
+                        node.kind.value
+                        for node in bound_typed_recipes[
+                            program.id
+                        ].recipe.nodes
+                    ),
+                )
+                skill_text = _render_portable_capability_skill(
+                    program,
+                    skill_name,
+                    lowered_actions,
+                    role_spec_hash=role_spec.role_spec_hash,
+                    output_container_locator=output_locator,
+                    role=role_spec.role,
+                    artifact_format=role_spec.artifact_format.value,
+                    capability=role_spec.capability,
+                    workflow=(
+                        bound_typed_recipes[program.id].recipe.workflow.value
+                    ),
+                )
+            else:
+                lowered_actions = _lower_skilllearn_program(program)
+                skill_text = _render_skill(
+                    program,
+                    skill_name,
+                    lowered_actions,
+                )
             treatment_hash = skilllearn_program_treatment_hash(
                 program,
                 lowered_actions=lowered_actions,
                 rendered_skill=skill_text,
+                portable_capability_role_spec_hash=(
+                    portable_role_specs[program.id].role_spec_hash
+                    if self.portable_capability_compiler_mode
+                    else ""
+                ),
             )
             program_rows.append(
                 (
@@ -537,16 +933,25 @@ class SkillLearnProgramCompiler:
             else ""
         )
 
-        program_set_hash = stable_hash(
-            {
-                "routing_version": SKILL_ROUTING_VERSION,
-                "action_lowering_version": SKILL_ACTION_LOWERING_VERSION,
-                "fallback_semantics": SKILL_FALLBACK_SEMANTICS_VERSION,
-                "program_treatment_hashes": sorted(
-                    row[4] for row in program_rows
-                ),
-            }
-        )
+        program_set_payload = {
+            "routing_version": SKILL_ROUTING_VERSION,
+            "action_lowering_version": SKILL_ACTION_LOWERING_VERSION,
+            "fallback_semantics": SKILL_FALLBACK_SEMANTICS_VERSION,
+            "program_treatment_hashes": sorted(
+                row[4] for row in program_rows
+            ),
+        }
+        if self.portable_capability_compiler_mode:
+            program_set_payload["portable_capability_compiler_mode"] = (
+                self.portable_capability_compiler_mode
+            )
+            program_set_payload["portable_capability_role_spec_hashes"] = (
+                sorted(
+                    row.role_spec_hash
+                    for row in portable_role_specs.values()
+                )
+            )
+        program_set_hash = stable_hash(program_set_payload)
         rendered_skills: dict[str, tuple[HypothesisProgram, str, str]] = {}
         used_hypotheses: set[str] = set()
         families: set[str] = set()
@@ -568,6 +973,16 @@ class SkillLearnProgramCompiler:
             for program, _, _, _, treatment_hash in program_rows
         }
         item_skill_content_hashes: dict[str, list[str]] = {
+            item.id_hash: [] for item in target_items
+        }
+        portable_metadata_sources: dict[
+            str, tuple[CompiledPortableTaskCapability, str, str]
+        ] = {}
+        portable_role_spec_rows: list[dict[str, str]] = []
+        item_portable_role_spec_hashes: dict[str, list[str]] = {
+            item.id_hash: [] for item in target_items
+        }
+        item_portable_metadata_content_hashes: dict[str, list[str]] = {
             item.id_hash: [] for item in target_items
         }
         for program, skill_name, _, skill_text, _ in program_rows:
@@ -596,27 +1011,101 @@ class SkillLearnProgramCompiler:
                     content_hash,
                 )
                 item_skill_content_hashes[item_hash].append(content_hash)
+                if self.portable_capability_compiler_mode:
+                    bound_recipe = bound_typed_recipes[program.id]
+                    role_spec = portable_role_specs[program.id]
+                    metadata = build_compiled_portable_task_capability(
+                        role_spec,
+                        item_id=item.id,
+                        program_id=program.id,
+                        typed_binding_hash=(
+                            bound_recipe.binding.binding_hash
+                        ),
+                        bound_recipe_hash=bound_recipe.bound_recipe_hash,
+                    )
+                    metadata_path = str(
+                        Path("task_capabilities")
+                        / item_hash
+                        / f"{metadata.program_id_hash}.json"
+                    )
+                    if metadata_path in portable_metadata_sources:
+                        raise ValueError(
+                            "portable capability metadata path collision"
+                        )
+                    metadata_text = json.dumps(
+                        metadata.safe_payload(),
+                        indent=2,
+                        sort_keys=True,
+                    ) + "\n"
+                    metadata_content_hash = stable_hash(
+                        {"content": metadata_text}
+                    )
+                    portable_metadata_sources[metadata_path] = (
+                        metadata,
+                        metadata_text,
+                        metadata_content_hash,
+                    )
+                    portable_role_spec_rows.append(
+                        {
+                            "item_id_hash": item_hash,
+                            "program_id_hash": metadata.program_id_hash,
+                            "typed_binding_hash": (
+                                metadata.typed_binding_hash
+                            ),
+                            "bound_recipe_hash": metadata.bound_recipe_hash,
+                            "role_spec_hash": role_spec.role_spec_hash,
+                            "metadata_hash": metadata.metadata_hash,
+                            "metadata_path": metadata_path,
+                            "metadata_content_hash": metadata_content_hash,
+                        }
+                    )
+                    item_portable_role_spec_hashes[item_hash].append(
+                        role_spec.role_spec_hash
+                    )
+                    item_portable_metadata_content_hashes[item_hash].append(
+                        metadata_content_hash
+                    )
                 routed_item_hashes.add(item_hash)
                 used_hypotheses.add(program.id)
                 families.add(item.family)
 
-        item_treatment_hashes = {
-            item_hash: (
-                stable_hash(
+        portable_role_spec_rows.sort(
+            key=lambda row: (
+                row["item_id_hash"],
+                row["program_id_hash"],
+                row["metadata_path"],
+            )
+        )
+        item_treatment_hashes: dict[str, str] = {}
+        for item_hash, content_hashes in sorted(
+            item_skill_content_hashes.items()
+        ):
+            if not content_hashes:
+                item_treatment_hashes[item_hash] = NO_SKILL_TREATMENT_HASH
+                continue
+            item_treatment_payload = {
+                "routing_version": SKILL_ROUTING_VERSION,
+                "action_lowering_version": SKILL_ACTION_LOWERING_VERSION,
+                "fallback_semantics": SKILL_FALLBACK_SEMANTICS_VERSION,
+                "skill_content_hashes": sorted(content_hashes),
+            }
+            if self.portable_capability_compiler_mode:
+                item_treatment_payload.update(
                     {
-                        "routing_version": SKILL_ROUTING_VERSION,
-                        "action_lowering_version": SKILL_ACTION_LOWERING_VERSION,
-                        "fallback_semantics": SKILL_FALLBACK_SEMANTICS_VERSION,
-                        "skill_content_hashes": sorted(content_hashes),
+                        "portable_capability_compiler_mode": (
+                            self.portable_capability_compiler_mode
+                        ),
+                        "portable_capability_role_spec_hashes": sorted(
+                            item_portable_role_spec_hashes[item_hash]
+                        ),
+                        "portable_capability_metadata_content_hashes": sorted(
+                            item_portable_metadata_content_hashes[item_hash]
+                        ),
                     }
                 )
-                if content_hashes
-                else NO_SKILL_TREATMENT_HASH
+            item_treatment_hashes[item_hash] = stable_hash(
+                item_treatment_payload
             )
-            for item_hash, content_hashes in sorted(
-                item_skill_content_hashes.items()
-            )
-        }
         treatment_hash = stable_hash(
             {
                 "program_set_hash": program_set_hash,
@@ -662,6 +1151,69 @@ class SkillLearnProgramCompiler:
             "test_content_accessed": False,
             "raw_content_persisted": False,
         }
+        portable_capability_role_spec_set_hash = ""
+        item_portable_capability_metadata_paths: dict[
+            str, tuple[Path, ...]
+        ] = {}
+        if self.portable_capability_compiler_mode:
+            portable_capability_role_spec_set_hash = stable_hash(
+                {"rows": portable_role_spec_rows}
+            )
+            role_hash_map = {
+                item_hash: sorted(role_hashes)
+                for item_hash, role_hashes in sorted(
+                    item_portable_role_spec_hashes.items()
+                )
+            }
+            metadata_path_map = {
+                item_hash: sorted(
+                    row["metadata_path"]
+                    for row in portable_role_spec_rows
+                    if row["item_id_hash"] == item_hash
+                )
+                for item_hash in sorted(item_portable_role_spec_hashes)
+            }
+            compile_manifest.update(
+                {
+                    "portable_capability_compiler_mode": (
+                        self.portable_capability_compiler_mode
+                    ),
+                    "portable_capability_role_spec_rows": (
+                        portable_role_spec_rows
+                    ),
+                    "portable_capability_role_spec_set_hash": (
+                        portable_capability_role_spec_set_hash
+                    ),
+                    "item_portable_capability_role_spec_hashes": (
+                        role_hash_map
+                    ),
+                    "item_portable_capability_metadata_paths": (
+                        metadata_path_map
+                    ),
+                    "source_artifact_locators_persisted": False,
+                }
+            )
+            item_portable_capability_metadata_paths = {
+                item_hash: tuple(
+                    destination / relative_path
+                    for relative_path in relative_paths
+                )
+                for item_hash, relative_paths in metadata_path_map.items()
+            }
+            _require_portable_compiler_outputs_locator_free(
+                train_locators=tuple(
+                    artifact.locator
+                    for bound_recipe in bound_typed_recipes.values()
+                    for artifact in bound_recipe.snapshot.graph.artifacts
+                ),
+                skill_texts=tuple(
+                    row[1] for row in rendered_skills.values()
+                ),
+                metadata_texts=tuple(
+                    row[1] for row in portable_metadata_sources.values()
+                ),
+                compile_manifest=compile_manifest,
+            )
         compile_manifest_hash = stable_hash(compile_manifest)
         destination.parent.mkdir(parents=True, exist_ok=True)
         staging = Path(
@@ -677,6 +1229,12 @@ class SkillLearnProgramCompiler:
                 skill_path = staging / relative_path
                 skill_path.parent.mkdir(parents=True, exist_ok=True)
                 skill_path.write_text(skill_text, encoding="utf-8")
+            for relative_path, (_, metadata_text, _) in sorted(
+                portable_metadata_sources.items()
+            ):
+                metadata_path = staging / relative_path
+                metadata_path.parent.mkdir(parents=True, exist_ok=True)
+                metadata_path.write_text(metadata_text, encoding="utf-8")
             (staging / "compile_manifest.json").write_text(
                 json.dumps(compile_manifest, indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",
@@ -701,6 +1259,42 @@ class SkillLearnProgramCompiler:
             item_hash = Path(relative_path).parts[1]
             item = items_by_hash[item_hash]
             skill_path = destination / relative_path
+            portable_event_payload: dict[str, Any] = {}
+            if self.portable_capability_compiler_mode:
+                program_id_hash = stable_hash({"program_id": program.id})
+                matching_rows = [
+                    row
+                    for row in portable_role_spec_rows
+                    if row["item_id_hash"] == item_hash
+                    and row["program_id_hash"] == program_id_hash
+                ]
+                if len(matching_rows) != 1:
+                    raise PermissionError(
+                        "portable capability event binding is not unique"
+                    )
+                portable_row = matching_rows[0]
+                portable_event_payload = {
+                    "portable_capability_compiler_mode": (
+                        self.portable_capability_compiler_mode
+                    ),
+                    "portable_capability_role_spec_hash": (
+                        portable_row["role_spec_hash"]
+                    ),
+                    "portable_capability_metadata_hash": (
+                        portable_row["metadata_hash"]
+                    ),
+                    "portable_capability_metadata_content_hash": (
+                        portable_row["metadata_content_hash"]
+                    ),
+                    "portable_capability_metadata_path_hash": stable_hash(
+                        {"path": portable_row["metadata_path"]}
+                    ),
+                    "portable_capability_bound_recipe_hash": (
+                        portable_row["bound_recipe_hash"]
+                    ),
+                    "portable_capability_executes_before_agent_start": True,
+                    "source_artifact_locator_disclosed": False,
+                }
             self.event_sink.emit(
                 Event(
                     event="skilllearn_skill_compiled",
@@ -745,6 +1339,7 @@ class SkillLearnProgramCompiler:
                         "external_verifier_exposed_to_agent": False,
                         "source_split": "train",
                         "target_split": target_split,
+                        **portable_event_payload,
                     },
                 )
             )
@@ -762,6 +1357,175 @@ class SkillLearnProgramCompiler:
             typed_binding_set_hash=typed_binding_set_hash,
             typed_snapshot_hashes=typed_snapshot_hashes,
             typed_snapshot_ledger_hash=typed_snapshot_ledger_hash,
+            portable_capability_compiler_mode=(
+                self.portable_capability_compiler_mode
+            ),
+            portable_capability_role_spec_set_hash=(
+                portable_capability_role_spec_set_hash
+            ),
+            item_portable_capability_role_spec_hashes={
+                item_hash: tuple(sorted(role_hashes))
+                for item_hash, role_hashes in sorted(
+                    item_portable_role_spec_hashes.items()
+                )
+            }
+            if self.portable_capability_compiler_mode
+            else {},
+            item_portable_capability_metadata_paths=(
+                item_portable_capability_metadata_paths
+            ),
+        )
+
+
+def _lower_portable_capability_skill(
+    *,
+    role_spec_hash: str,
+    output_container_locator: str,
+    role: str,
+    artifact_format: str,
+    capability: str,
+    workflow: str,
+    operator_kinds: Sequence[str],
+) -> tuple[LoweredSkillAction, ...]:
+    """Fixed compiler-owned instructions for the supported capability mode."""
+
+    return (
+        LoweredSkillAction(
+            action_id="portable-current-item-role",
+            semantics="prompt_directive",
+            instruction=(
+                f"Use the harness-resolved `{role}` role for the current "
+                f"`{artifact_format}` task artifact only; do not reuse a "
+                "path from another item."
+            ),
+        ),
+        LoweredSkillAction(
+            action_id="portable-read-harness-profile",
+            semantics="harness_prepared_evidence",
+            instruction=(
+                "Use the harness-created, receipt-verified task-artifact "
+                f"profile at `{output_container_locator}` as supplemental "
+                f"task-local evidence via the fixed `{capability}` capability "
+                f"(role receipt `{role_spec_hash}`)."
+            ),
+        ),
+        LoweredSkillAction(
+            action_id="portable-selected-typed-workflow",
+            semantics="harness_selected_typed_workflow",
+            instruction=(
+                "The pre-agent capability supplies read-only artifact "
+                "evidence only; it does not execute task writes, rendering, "
+                "or transforms. Follow the harness-selected "
+                f"`{workflow}` workflow as the fixed agent plan `"
+                + " -> ".join(operator_kinds)
+                + "`, using only current-task tools and arguments grounded "
+                "in the public instruction and current environment."
+            ),
+        ),
+        LoweredSkillAction(
+            action_id="portable-complete-current-task",
+            semantics="agent_local_self_check",
+            instruction=(
+                "Complete the request in the current public task instruction "
+                "and check the resulting task-local state before finishing."
+            ),
+        ),
+    )
+
+
+def _render_portable_capability_skill(
+    program: HypothesisProgram,
+    skill_name: str,
+    lowered_actions: Sequence[LoweredSkillAction],
+    *,
+    role_spec_hash: str,
+    output_container_locator: str,
+    role: str,
+    artifact_format: str,
+    capability: str,
+    workflow: str,
+) -> str:
+    description = (
+        "Use a harness-prepared profile and a closed typed workflow for the "
+        "current task artifact."
+    )
+    lines = [
+        "---",
+        f"name: {skill_name}",
+        f"description: {json.dumps(description, ensure_ascii=True)}",
+        "---",
+        "# Portable current-item typed workflow",
+        "",
+        "## Activation",
+        "",
+    ]
+    lines.extend(_render_trigger(program))
+    lines.extend(
+        [
+            "",
+            "## Harness receipt",
+            "",
+            f"- Input role receipt: `{role_spec_hash}`",
+            f"- Input role: `{role}` (`{artifact_format}`)",
+            f"- Fixed capability: `{capability}`",
+            f"- Selected workflow: `{workflow}`",
+            "- Capability scope: read-only pre-agent artifact evidence; remaining workflow operators are agent-executed.",
+            f"- Derived profile: `{output_container_locator}`",
+            "- The profile must exist and have a verified effect receipt before the agent starts.",
+            "- No source input path is supplied by this skill.",
+            "",
+            "## Procedure",
+            "",
+        ]
+    )
+    for index, action in enumerate(lowered_actions, start=1):
+        if action.semantics == "harness_prepared_evidence":
+            label = "Harness-prepared evidence"
+        elif action.semantics == "harness_selected_typed_workflow":
+            label = "Harness-selected typed workflow"
+        elif action.semantics == "agent_local_self_check":
+            label = "Agent-local self-check"
+        else:
+            label = "Agent instruction"
+        lines.append(f"{index}. **{label}:** {action.instruction}")
+    lines.extend(
+        [
+            "",
+            "## Evaluation boundary",
+            "",
+            "- Use only current-task files, the public task instruction, and the verified derived profile.",
+            "- The hidden benchmark verifier is unavailable until after the agent exits.",
+            "- Runtime package installation and network access are not part of this capability.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _require_portable_compiler_outputs_locator_free(
+    *,
+    train_locators: Sequence[str],
+    skill_texts: Sequence[str],
+    metadata_texts: Sequence[str],
+    compile_manifest: Mapping[str, Any],
+) -> None:
+    corpus = "\n".join(
+        (
+            *skill_texts,
+            *metadata_texts,
+            json.dumps(compile_manifest, ensure_ascii=True, sort_keys=True),
+        )
+    )
+    leaked = sorted(
+        {
+            locator
+            for locator in train_locators
+            if isinstance(locator, str) and locator and locator in corpus
+        }
+    )
+    if leaked:
+        raise PermissionError(
+            "portable capability compiler attempted to persist a TRAIN locator"
         )
 
 
@@ -871,6 +1635,7 @@ def skilllearn_program_treatment_hash(
     *,
     lowered_actions: Sequence[LoweredSkillAction] | None = None,
     rendered_skill: str | None = None,
+    portable_capability_role_spec_hash: str = "",
 ) -> str:
     """Hash only the external treatment that can reach the SkillLearn agent."""
 
@@ -880,15 +1645,32 @@ def skilllearn_program_treatment_hash(
         _slug(program.id),
         lowered,
     )
-    return stable_hash(
-        {
-            "routing_version": SKILL_ROUTING_VERSION,
-            "action_lowering_version": SKILL_ACTION_LOWERING_VERSION,
-            "fallback_semantics": SKILL_FALLBACK_SEMANTICS_VERSION,
-            "external_verifier_exposed_to_agent": False,
-            "rendered_skill_hash": stable_hash({"content": skill_text}),
-        }
-    )
+    payload = {
+        "routing_version": SKILL_ROUTING_VERSION,
+        "action_lowering_version": SKILL_ACTION_LOWERING_VERSION,
+        "fallback_semantics": SKILL_FALLBACK_SEMANTICS_VERSION,
+        "external_verifier_exposed_to_agent": False,
+        "rendered_skill_hash": stable_hash({"content": skill_text}),
+    }
+    if portable_capability_role_spec_hash:
+        if not re.fullmatch(
+            r"[0-9a-f]{64}",
+            portable_capability_role_spec_hash,
+        ):
+            raise PermissionError(
+                "portable capability role spec hash is malformed"
+            )
+        payload.update(
+            {
+                "portable_capability_compiler_mode": (
+                    PORTABLE_TASK_CAPABILITY_COMPILER_VERSION
+                ),
+                "portable_capability_role_spec_hash": (
+                    portable_capability_role_spec_hash
+                ),
+            }
+        )
+    return stable_hash(payload)
 
 
 def skilllearn_program_set_treatment_hash(

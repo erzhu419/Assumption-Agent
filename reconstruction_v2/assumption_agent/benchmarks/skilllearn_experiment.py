@@ -50,14 +50,19 @@ from ..validation import (
     TriggerVocabularyCheck,
 )
 from .preflight import build_preflight
-from .prewarm import validate_development_prewarm_receipt
+from .prewarm import (
+    FrozenTaskInputPrebuiltImageCache,
+    validate_development_prewarm_receipt,
+)
 from .paper_protocol import (
     CANDIDATE_BUNDLE_POLICY_VERSION,
     COUNTERFACTUAL_REPLAY_POLICY_VERSION,
     COUNTERFACTUAL_INVALID_EVIDENCE_POLICY_VERSION,
     PaperProtocol,
+    PORTABLE_TASK_CAPABILITY_PROTOCOL_VERSION,
     PROGRAM_SET_COUNTERFACTUAL_REPLAY_POLICY_VERSION,
-    TYPED_SELECTION_PROTOCOL_VERSION,
+    TASK_INPUT_CLOSURE_PROTOCOL_VERSION,
+    TYPED_SELECTION_PROTOCOL_VERSIONS,
     authorize_typed_selection_execution,
     validate_protocol_lock_for_execution,
 )
@@ -106,10 +111,21 @@ from .skilllearn_lifecycle import (
 )
 from .offline_verifier import OFFLINE_VERIFIER_POLICY_VERSION
 from .skilllearnbench import SkillLearnBenchAdapter
+from .task_input_freeze import (
+    expected_prewarm_closure_rows,
+    load_frozen_task_input_closure,
+    task_input_closure_policy_for_protocol_payload,
+    verify_current_task_input_closure,
+)
 from .typed_selection_integration import (
     TYPED_SELECTION_INTEGRATION_VERSION,
     load_frozen_typed_selection_ledger,
     verify_typed_selection_integration_result_receipt,
+)
+from .typed_portable_integration import (
+    TYPED_PORTABLE_INTEGRATION_VERSION,
+    load_frozen_portable_typed_selection_ledger,
+    verify_typed_portable_integration_result_receipt,
 )
 
 
@@ -150,6 +166,7 @@ def main() -> None:
     parser.add_argument("--paired-no-recursive-out", type=Path)
     parser.add_argument("--paired-no-recursive-archive-out", type=Path)
     parser.add_argument("--prewarm-receipt", type=Path)
+    parser.add_argument("--task-input-cache-root", type=Path)
     parser.add_argument("--train-id", action="append", default=[])
     parser.add_argument("--validation-id", action="append", default=[])
     parser.add_argument("--train-limit", type=int)
@@ -331,8 +348,28 @@ def main() -> None:
         raise ValueError("unsupported model inference concurrency policy")
     if (model_inference_concurrency_policy is None) != (model_inference_slots == 0):
         raise ValueError("model inference concurrency policy and slots must be paired")
+    task_input_closure_policy = _task_input_closure_policy_for_execution(
+        paper_protocol,
+        execution_contract,
+    )
+    portable_capability_compiler_mode = execution_contract.get(
+        "portable_capability_compiler_mode"
+    )
+    if portable_capability_compiler_mode is not None:
+        portable_capability_compiler_mode = str(
+            portable_capability_compiler_mode
+        )
     manifest = SplitManifest.read(args.manifest)
     protocol_root = paper_protocol.path.parent.parent
+    frozen_task_inputs = load_frozen_task_input_closure(
+        paper_protocol.payload,
+        project_root=protocol_root,
+    )
+    if frozen_task_inputs is not None:
+        verify_current_task_input_closure(
+            frozen_task_inputs,
+            cache_root=args.task_input_cache_root,
+        )
     allowed_manifest_paths = {
         (protocol_root / str(paper_protocol.payload[key])).resolve()
         for key in ("primary_manifest", "secondary_manifest")
@@ -360,14 +397,19 @@ def main() -> None:
         except PermissionError as exc:
             protocol_lock_error = str(exc)
     prewarm_receipt_hash: str | None = None
+    prewarm_payload: Mapping[str, Any] | None = None
     if args.prewarm_receipt:
-        prewarm_payload = json.loads(args.prewarm_receipt.read_text(encoding="utf-8"))
-        if not isinstance(prewarm_payload, Mapping):
+        loaded_prewarm_payload = json.loads(
+            args.prewarm_receipt.read_text(encoding="utf-8")
+        )
+        if not isinstance(loaded_prewarm_payload, Mapping):
             raise ValueError("development prewarm receipt must contain one JSON object")
+        prewarm_payload = loaded_prewarm_payload
         prewarm_receipt_hash = validate_development_prewarm_receipt(
             prewarm_payload,
             manifest=manifest,
             expected_version=str(execution_contract["development_prewarm"]),
+            frozen_task_inputs=frozen_task_inputs,
         )
     adapter = SkillLearnBenchAdapter(args.root)
     items = adapter.discover()
@@ -472,6 +514,15 @@ def main() -> None:
         ),
         **(
             {
+                "portable_capability_compiler_mode": (
+                    portable_capability_compiler_mode
+                )
+            }
+            if portable_capability_compiler_mode is not None
+            else {}
+        ),
+        **(
+            {
                 "typed_selection_snapshot_ledger_hash": (
                     typed_selection_ledger.production_snapshot_ledger.ledger_hash
                 ),
@@ -530,6 +581,21 @@ def main() -> None:
             else {}
         ),
         "prebuilt_image_policy": PREBUILT_IMAGE_POLICY_VERSION,
+        **(
+            {"task_input_closure_policy": task_input_closure_policy}
+            if task_input_closure_policy is not None
+            else {}
+        ),
+        **(
+            {
+                "task_input_freeze_hash": frozen_task_inputs.freeze_hash,
+                "task_input_closure_ledger_hash": frozen_task_inputs.source[
+                    "closure_ledger_hash"
+                ],
+            }
+            if frozen_task_inputs is not None
+            else {}
+        ),
         "runner_agent_registry_isolation": RUNNER_AGENT_REGISTRY_ISOLATION_VERSION,
         "trial_timeout_policy": TRIAL_TIMEOUT_POLICY_VERSION,
         "provider_failure_policy": PROVIDER_FAILURE_POLICY_VERSION,
@@ -689,7 +755,19 @@ def main() -> None:
     )
     archive = PolicyArchive(event_sink=sink)
     guard = SplitAccessGuard(manifest, event_sink=sink)
-    prebuilt_cache = SkillLearnPrebuiltImageCache(args.root, event_sink=sink)
+    prebuilt_cache = (
+        FrozenTaskInputPrebuiltImageCache(
+            args.root,
+            event_sink=sink,
+            frozen_task_inputs=frozen_task_inputs,
+            expected_prewarm_rows=expected_prewarm_closure_rows(
+                prewarm_payload or {}
+            ),
+            task_input_cache_root=args.task_input_cache_root,
+        )
+        if frozen_task_inputs is not None
+        else SkillLearnPrebuiltImageCache(args.root, event_sink=sink)
+    )
     provider_circuit = SkillLearnProviderCircuit()
     model_inference_limiter = (
         SkillLearnModelInferenceLimiter(model_inference_slots)
@@ -756,6 +834,9 @@ def main() -> None:
         typed_selection_execution_authorization=(
             typed_selection_execution_authorization
         ),
+        portable_capability_compiler_mode=(
+            portable_capability_compiler_mode
+        ),
         candidate_bundle_policy=candidate_bundle_policy,
         contrastive_training_evidence_policy=(
             contrastive_training_evidence_policy
@@ -819,6 +900,9 @@ def main() -> None:
             ),
             typed_selection_execution_authorization=(
                 typed_selection_execution_authorization
+            ),
+            portable_capability_compiler_mode=(
+                portable_capability_compiler_mode
             ),
             candidate_bundle_policy=candidate_bundle_policy,
             contrastive_training_evidence_policy=(
@@ -1494,6 +1578,20 @@ def _generation_counterfactual_evidence_counts(
     return counts[0], counts[1], counts[2]
 
 
+def _task_input_closure_policy_for_execution(
+    protocol: PaperProtocol,
+    execution_contract: Mapping[str, Any],
+) -> str | None:
+    """Return the closure policy only for the protocol that freezes it."""
+
+    if execution_contract != protocol.payload.get("execution"):
+        payload = dict(protocol.payload)
+        payload["execution"] = dict(execution_contract)
+    else:
+        payload = protocol.payload
+    return task_input_closure_policy_for_protocol_payload(payload)
+
+
 def _load_typed_selection_for_execution(
     *,
     root: str | Path,
@@ -1522,32 +1620,48 @@ def _load_typed_selection_for_execution(
         )
     if not typed_enabled:
         return None
-    if protocol.payload.get("protocol_version") != (
-        TYPED_SELECTION_PROTOCOL_VERSION
+    if (
+        protocol.payload.get("protocol_version")
+        not in TYPED_SELECTION_PROTOCOL_VERSIONS
     ):
         raise PermissionError(
             "typed selection requires the frozen typed protocol version"
         )
+    portable_protocol = (
+        protocol.payload.get("protocol_version")
+        == PORTABLE_TASK_CAPABILITY_PROTOCOL_VERSION
+    )
+    expected_integration_policy = (
+        TYPED_PORTABLE_INTEGRATION_VERSION
+        if portable_protocol
+        else TYPED_SELECTION_INTEGRATION_VERSION
+    )
     diagnostic_only = (
-        integration_diagnostic_policy
-        == TYPED_SELECTION_INTEGRATION_VERSION
+        integration_diagnostic_policy == expected_integration_policy
     )
     if integration_diagnostic_policy is not None and not diagnostic_only:
         raise PermissionError(
             "typed selection integration diagnostic policy is invalid"
         )
     assert isinstance(source, Mapping)
-    required = {
+    diagnostic_required = {
         "preregistration",
         "preregistration_file_sha256",
         "source_run_root",
         "source_train_receipt",
         "source_train_receipt_file_sha256",
-        "integration_result_receipt",
-        "integration_result_receipt_file_sha256",
         "snapshot_ledger_hash",
     }
-    if set(source) != required:
+    production_required = diagnostic_required | {
+        "integration_result_receipt",
+        "integration_result_receipt_file_sha256",
+    }
+    allowed_source_fields = (
+        {frozenset(diagnostic_required), frozenset(production_required)}
+        if diagnostic_only
+        else {frozenset(production_required)}
+    )
+    if frozenset(source) not in allowed_source_fields:
         raise PermissionError("typed selection snapshot source is malformed")
     protocol_root = protocol.path.parent.parent.resolve(strict=True)
     preregistration = _resolve_protocol_source_path(
@@ -1592,11 +1706,26 @@ def _load_typed_selection_for_execution(
             raise PermissionError(
                 "typed selection authorization receipt file hash drifted"
             )
-        authorization = verify_typed_selection_integration_result_receipt(
-            preregistration_path=preregistration,
-            result_receipt_path=authorization_path,
-        )
+        if portable_protocol:
+            authorization = (
+                verify_typed_portable_integration_result_receipt(
+                    preregistration_path=preregistration,
+                    result_receipt_path=authorization_path,
+                )
+            )
+        else:
+            authorization = (
+                verify_typed_selection_integration_result_receipt(
+                    preregistration_path=preregistration,
+                    result_receipt_path=authorization_path,
+                )
+            )
         source_binding = authorization.get("source_binding")
+        expected_source_ledger_key = (
+            "projected_snapshot_ledger_hash"
+            if portable_protocol
+            else "production_snapshot_ledger_hash"
+        )
         if not isinstance(source_binding, Mapping) or (
             source_binding.get("source_run_root")
             != source["source_run_root"]
@@ -1604,19 +1733,28 @@ def _load_typed_selection_for_execution(
             != source["source_train_receipt"]
             or source_binding.get("source_train_receipt_file_sha256")
             != source["source_train_receipt_file_sha256"]
-            or source_binding.get("production_snapshot_ledger_hash")
+            or source_binding.get(expected_source_ledger_key)
             != source["snapshot_ledger_hash"]
         ):
             raise PermissionError(
                 "typed selection authorization source binding drifted"
             )
-    ledger = load_frozen_typed_selection_ledger(
-        root=root,
-        manifest_path=manifest_path,
-        source_run_root=source_run_root,
-        source_train_receipt=source_train_receipt,
-        preregistration_path=preregistration,
-    )
+    if portable_protocol:
+        ledger = load_frozen_portable_typed_selection_ledger(
+            root=root,
+            manifest_path=manifest_path,
+            source_run_root=source_run_root,
+            source_train_receipt=source_train_receipt,
+            preregistration_path=preregistration,
+        )
+    else:
+        ledger = load_frozen_typed_selection_ledger(
+            root=root,
+            manifest_path=manifest_path,
+            source_run_root=source_run_root,
+            source_train_receipt=source_train_receipt,
+            preregistration_path=preregistration,
+        )
     if ledger.production_snapshot_ledger.ledger_hash != source[
         "snapshot_ledger_hash"
     ]:

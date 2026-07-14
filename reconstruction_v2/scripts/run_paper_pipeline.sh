@@ -14,6 +14,7 @@ SOURCE_TRAIN_RECEIPT="${SOURCE_TRAIN_RECEIPT:-manifests/skilllearn_v315_train_so
 LOCK="${RUN_ROOT}/protocol_lock.json"
 RECEIPT="${RUN_ROOT}/freeze_receipt.json"
 PREWARM_RECEIPT="${RUN_ROOT}/development_prewarm.json"
+TASK_INPUT_CACHE_ROOT="${TASK_INPUT_CACHE_ROOT:-${HOME}/.cache/assumption-agent-v2/task-inputs}"
 PROPOSAL_DIAGNOSTIC_EVENTS="${RUN_ROOT}/train_proposal_diagnostic.events.jsonl"
 PROPOSAL_DIAGNOSTIC_OUT="${RUN_ROOT}/train_proposal_diagnostic.report.json"
 PARALLEL_WORKERS="$(python3 -c 'import json,sys; p=json.load(open(sys.argv[1], encoding="utf-8")); m=json.load(open(sys.argv[2], encoding="utf-8")); phase="family_out_development" if m["protocol"] == "family_out" else "development"; print(p["phases"][phase]["parallel_workers"])' "${PROTOCOL}" "${MANIFEST}")"
@@ -23,6 +24,7 @@ PROPOSAL_PROVIDER_CHAIN="$(python3 -c 'import json,sys; print(",".join(json.load
 PROVIDER_ENDPOINT_ORIGIN="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["provider_endpoint_origin"])' "${PROTOCOL}")"
 PROVIDER_ENDPOINT_IPV4S="$(python3 -c 'import json,sys; print(",".join(json.load(open(sys.argv[1], encoding="utf-8"))["provider_endpoint_ipv4s"]))' "${PROTOCOL}")"
 TRIAL_NETWORK_BYTE_LIMIT="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["execution"]["trial_network_byte_limit"])' "${PROTOCOL}")"
+PREWARM_VERSION="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["execution"]["development_prewarm"])' "${PROTOCOL}")"
 export ASSUMPTION_V2_MODEL="${MODEL}"
 export ASSUMPTION_V2_SKILLLEARN_PROVIDER_MODE="${TRIAL_PROVIDER_MODE}"
 export ASSUMPTION_V2_PROVIDER_CHAIN="${PROPOSAL_PROVIDER_CHAIN}"
@@ -95,13 +97,32 @@ prewarm() {
   run_docker_group python3 -m assumption_agent.benchmarks.prewarm \
     --root "${BENCHMARK_ROOT}" \
     --manifest "${MANIFEST}" \
+    --protocol "${PROTOCOL}" \
+    --project-root . \
     --env-file "${ENV_FILE}" \
     --events "${RUN_ROOT}/development_prewarm.events.jsonl" \
     --out "${PREWARM_RECEIPT}" \
     --parallel-workers "${PARALLEL_WORKERS}" \
     --attempts 3 \
+    --prewarm-version "${PREWARM_VERSION}" \
+    --task-input-cache-root "${TASK_INPUT_CACHE_ROOT}" \
     --trial-provider-mode "${TRIAL_PROVIDER_MODE}" \
     --require-passed
+}
+
+prepare_images() {
+  mkdir -p "${RUN_ROOT}"
+  run_docker_group python3 scripts/prepare_codex_agent_runtime.py \
+    --root "${BENCHMARK_ROOT}" \
+    --manifest "${MANIFEST}" \
+    --protocol "${PROTOCOL}" \
+    --project-root . \
+    --scope all \
+    --parallel-workers 0 \
+    --task-input-cache-root "${TASK_INPUT_CACHE_ROOT}" \
+    --events "${RUN_ROOT}/explicit_image_preparation.events.jsonl" \
+    --out "${RUN_ROOT}/explicit_image_preparation.receipt.json" \
+    --allow-network-download
 }
 
 run_generation() {
@@ -119,6 +140,7 @@ run_generation() {
     --work-dir "${RUN_ROOT}/${name}" \
     --archive-out "${RUN_ROOT}/${name}.archive.json" \
     --prewarm-receipt "${PREWARM_RECEIPT}" \
+    --task-input-cache-root "${TASK_INPUT_CACHE_ROOT}" \
     --execute \
     "$@"
 }
@@ -173,6 +195,8 @@ run_controls() {
     --protocol "${PROTOCOL}" \
     --protocol-lock "${LOCK}" \
     --freeze-receipt "${RECEIPT}" \
+    --prewarm-receipt "${PREWARM_RECEIPT}" \
+    --task-input-cache-root "${TASK_INPUT_CACHE_ROOT}" \
     --env-file "${ENV_FILE}" \
     --events "${RUN_ROOT}/${split}.events.jsonl" \
     --records "${records}" \
@@ -197,6 +221,7 @@ case "${1:-}" in
   proposal-diagnostic) proposal_diagnostic ;;
   preflight) preflight ;;
   lock) lock_protocol ;;
+  prepare-images) prepare_images ;;
   prewarm) prewarm ;;
   smoke) smoke ;;
   develop) develop ;;
@@ -219,7 +244,7 @@ case "${1:-}" in
     report validation
     ;;
   *)
-    echo "Usage: $0 {proposal-diagnostic|preflight|lock|prewarm|smoke|develop|freeze|validation-controls|sealed-test|all-development}" >&2
+    echo "Usage: $0 {proposal-diagnostic|preflight|lock|prepare-images|prewarm|smoke|develop|freeze|validation-controls|sealed-test|all-development}" >&2
     exit 2
     ;;
 esac
