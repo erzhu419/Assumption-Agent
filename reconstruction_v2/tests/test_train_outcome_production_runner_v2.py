@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+import json
 from pathlib import Path
 import threading
 
@@ -15,13 +17,17 @@ from assumption_agent.benchmarks.execution_contract_prompt_v2 import (
     ExecutionContractPromptInjectionReceiptV2,
 )
 from assumption_agent.benchmarks.skilllearn_lifecycle import (
+    SkillLearnProviderCircuit,
     SkillLearnTrialObservation,
     SkillLearnTrialRequest,
     TrialVariant,
 )
 from assumption_agent.benchmarks.train_outcome_production_runner_v2 import (
+    PROVIDER_MODEL_CAPACITY_ERROR_TYPE,
     ProductionTrainCandidateRunnerV2,
+    ProductionTrainProviderCapacityError,
     ProductionTrainRunnerError,
+    classify_v2_provider_capacity_terminal,
 )
 from assumption_agent.benchmarks.train_outcome_ranker_v2 import (
     FrozenRawTrainBaselineSetV2,
@@ -356,3 +362,140 @@ def test_unbound_execution_evidence_fails_closed(tmp_path: Path) -> None:
     )
     with pytest.raises(ProductionTrainRunnerError):
         runner(work)
+
+
+@pytest.mark.parametrize(
+    "message",
+    (
+        "Selected model is at capacity. Please try a different model.",
+        "The selected model is at capacity. Please try again later.",
+        "Model is at capacity. Please try again later.",
+    ),
+)
+def test_v2_exact_capacity_terminals_are_nonfatal(message: str) -> None:
+    top_level = json.dumps({"type": "error", "message": message})
+    nested = json.dumps(
+        {"type": "turn.failed", "error": {"message": message}}
+    )
+
+    assert (
+        classify_v2_provider_capacity_terminal(top_level, nested)
+        == PROVIDER_MODEL_CAPACITY_ERROR_TYPE
+    )
+    circuit = SkillLearnProviderCircuit()
+    assert circuit.open(PROVIDER_MODEL_CAPACITY_ERROR_TYPE) is False
+    assert circuit.error_type is None
+
+
+@pytest.mark.parametrize(
+    "stream",
+    (
+        "Selected model is at capacity. Please try a different model.",
+        json.dumps(
+            {
+                "type": "item.completed",
+                "item": {
+                    "type": "agent_message",
+                    "text": (
+                        "Selected model is at capacity. "
+                        "Please try a different model."
+                    ),
+                },
+            }
+        ),
+        json.dumps(
+            {
+                "type": "turn.failed",
+                "error": {
+                    "message": (
+                        "Selected model is at capacity because this request "
+                        "violated a policy."
+                    )
+                },
+            }
+        ),
+        json.dumps(
+            {
+                "type": "turn.failed",
+                "error": {"message": "Model is not available."},
+            }
+        ),
+    ),
+)
+def test_v2_capacity_classifier_rejects_nonexact_or_nonterminal_text(
+    stream: str,
+) -> None:
+    assert classify_v2_provider_capacity_terminal(stream) is None
+
+
+def test_production_runner_surfaces_capacity_before_frozen_boundary(
+    tmp_path: Path,
+) -> None:
+    _compiled, bundle, candidate, baseline_set = _fixture(tmp_path)
+    work = TrainCandidateWorkUnitV2(candidate, baseline_set.rows[0])
+    created: list[FakeProductionBackend] = []
+
+    class CapacityBackend(FakeProductionBackend):
+        def run_with_evidence(
+            self,
+            request: SkillLearnTrialRequest,
+            *,
+            skill_source_dir: Path | None,
+            trace_id: str,
+        ) -> ExecutionContractTrialEvidenceV2:
+            evidence = super().run_with_evidence(
+                request,
+                skill_source_dir=skill_source_dir,
+                trace_id=trace_id,
+            )
+            assert self.trials_dir is not None
+            trace = self.trials_dir / "attempt" / "agent" / "codex.txt"
+            trace.parent.mkdir(parents=True)
+            trace.write_text(
+                json.dumps(
+                    {
+                        "type": "turn.failed",
+                        "error": {
+                            "message": (
+                                "Selected model is at capacity. "
+                                "Please try a different model."
+                            )
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            return replace(
+                evidence,
+                observation=replace(
+                    evidence.observation,
+                    success=False,
+                    score=0.0,
+                    metrics={"evaluation_valid": 0.0},
+                    error_type="codex_turn_failed",
+                ),
+            )
+
+    def factory(current_work, current_bundle):
+        backend = CapacityBackend(
+            work=current_work,
+            bundle=current_bundle,
+        )
+        backend.trials_dir = tmp_path / "capacity-trials"
+        created.append(backend)
+        return backend
+
+    runner = ProductionTrainCandidateRunnerV2(
+        baseline_set=baseline_set,
+        candidate_bundles={candidate.candidate_hash: bundle},
+        backend_factory=factory,
+        trace_prefix="production-test",
+    )
+    with pytest.raises(ProductionTrainProviderCapacityError) as caught:
+        runner(work)
+
+    assert caught.value.error_type == PROVIDER_MODEL_CAPACITY_ERROR_TYPE
+    assert caught.value.request_hash == created[0].requests[0].request_hash
+    assert caught.value.work_unit_hash == work.work_unit_hash
+    assert created[0].provider_circuit.error_type is None

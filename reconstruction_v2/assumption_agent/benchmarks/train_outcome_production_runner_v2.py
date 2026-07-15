@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+import json
 from pathlib import Path
 import threading
 
@@ -25,10 +26,117 @@ from .train_outcome_ranker_v2 import (
 TRAIN_OUTCOME_PRODUCTION_RUNNER_VERSION = (
     "execution_contract_train_candidate_runner_v2"
 )
+PROVIDER_MODEL_CAPACITY_ERROR_TYPE = "provider_model_capacity"
+
+_CODEX_TERMINAL_EVENT_TYPES = frozenset({"error", "turn.failed"})
+_PROVIDER_MODEL_CAPACITY_MESSAGES = frozenset(
+    {
+        "selected model is at capacity. please try a different model.",
+        "the selected model is at capacity. please try a different model.",
+        "selected model is at capacity. please try again later.",
+        "the selected model is at capacity. please try again later.",
+        "model is at capacity. please try again later.",
+        "the model is at capacity. please try again later.",
+    }
+)
+_MAX_CODEX_TERMINAL_TRACE_BYTES = 16 * 1024 * 1024
 
 
 class ProductionTrainRunnerError(PermissionError):
     """A production candidate run crossed its frozen TRAIN binding."""
+
+
+class ProductionTrainProviderCapacityError(ProductionTrainRunnerError):
+    """A bound work unit hit a transient, non-fatal provider capacity error."""
+
+    error_type = PROVIDER_MODEL_CAPACITY_ERROR_TYPE
+
+    def __init__(self, *, request_hash: str, work_unit_hash: str) -> None:
+        super().__init__(self.error_type)
+        self.request_hash = request_hash
+        self.work_unit_hash = work_unit_hash
+
+
+def classify_v2_provider_capacity_terminal(
+    *streams: object,
+) -> str | None:
+    """Classify only exact structured Codex capacity terminal messages.
+
+    The frozen v1 terminal detector predates this provider wording.  This v2
+    compatibility classifier deliberately does not broaden the frozen fatal
+    provider circuit: callers may retry the same frozen work-unit request.
+    """
+
+    for stream in streams:
+        if isinstance(stream, bytes):
+            text = stream.decode(errors="replace")
+        elif isinstance(stream, str):
+            text = stream
+        else:
+            continue
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if not line.startswith("{"):
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if (
+                not isinstance(row, Mapping)
+                or str(row.get("type") or "")
+                not in _CODEX_TERMINAL_EVENT_TYPES
+            ):
+                continue
+            nested = (
+                row.get("error")
+                if isinstance(row.get("error"), Mapping)
+                else {}
+            )
+            message = str(
+                row.get("message") or nested.get("message") or ""
+            )
+            normalized = " ".join(message.strip().lower().split())
+            if normalized in _PROVIDER_MODEL_CAPACITY_MESSAGES:
+                return PROVIDER_MODEL_CAPACITY_ERROR_TYPE
+    return None
+
+
+def _classify_backend_provider_capacity(
+    backend: ExecutionContractSubprocessBackendV2,
+) -> str | None:
+    trials_dir = backend.trials_dir
+    if trials_dir is None:
+        return None
+    try:
+        root = Path(trials_dir).resolve(strict=True)
+    except (OSError, RuntimeError):
+        return None
+    if not root.is_dir() or Path(trials_dir).is_symlink():
+        return None
+    traces: list[Path] = []
+    try:
+        candidates = root.rglob("codex.txt")
+        for candidate in candidates:
+            if candidate.is_symlink() or not candidate.is_file():
+                continue
+            resolved = candidate.resolve(strict=True)
+            resolved.relative_to(root)
+            traces.append(resolved)
+            if len(traces) > 1:
+                return None
+    except (OSError, RuntimeError, ValueError):
+        return None
+    if len(traces) != 1:
+        return None
+    trace = traces[0]
+    try:
+        if trace.stat().st_size > _MAX_CODEX_TERMINAL_TRACE_BYTES:
+            return None
+        raw = trace.read_bytes()
+    except OSError:
+        return None
+    return classify_v2_provider_capacity_terminal(raw)
 
 
 ProductionBackendFactoryV2 = Callable[
@@ -286,6 +394,16 @@ class ProductionTrainCandidateRunnerV2:
                 "production TRAIN backend returned unbound evidence"
             )
         evidence.verify()
+        if (
+            not evidence.observation.valid
+            and evidence.observation.error_type == "codex_turn_failed"
+            and _classify_backend_provider_capacity(backend)
+            == PROVIDER_MODEL_CAPACITY_ERROR_TYPE
+        ):
+            raise ProductionTrainProviderCapacityError(
+                request_hash=request.request_hash,
+                work_unit_hash=work.work_unit_hash,
+            )
         result = TrainCandidateRunResultV2.from_observation(
             work,
             evidence.observation,
