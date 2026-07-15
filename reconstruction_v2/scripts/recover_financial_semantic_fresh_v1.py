@@ -65,6 +65,9 @@ from assumption_agent.benchmarks.paper_protocol import PaperProtocol
 
 RECOVERY_VERSION = "financial_semantic_scheduler_loss_recovery_v1"
 PREREG_VERSION = "financial_semantic_scheduler_loss_recovery_prereg_v1"
+CONTINUATION_PREREG_VERSION = (
+    "financial_semantic_scheduler_loss_recovery_continuation_prereg_v1"
+)
 SCRIPT_RELATIVE_PATH = "scripts/recover_financial_semantic_fresh_v1.py"
 ORIGINAL_EVENTS = "execution.events.jsonl"
 ORIGINAL_PREFLIGHT = "asset_preflight.report.json"
@@ -116,6 +119,15 @@ def _read_json(path: Path) -> dict[str, Any]:
     value = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(value, dict):
         raise RecoveryError(f"JSON receipt is not an object: {path}")
+    return value
+
+
+def _validated_hashed_json(path: Path, hash_key: str) -> dict[str, Any]:
+    value = _read_json(path)
+    body = dict(value)
+    declared = body.pop(hash_key, None)
+    if declared != stable_hash(body):
+        raise RecoveryError(f"self-hash drifted: {path.name}")
     return value
 
 
@@ -332,6 +344,26 @@ def _file_rows(root: Path) -> tuple[tuple[str, str], ...]:
         elif not path.is_dir():
             raise RecoveryError("non-regular receipt tree entry")
     return tuple(rows)
+
+
+def _container_test_content_receipt(
+    *, container_name: str, source: Path
+) -> dict[str, Any]:
+    expected = _file_rows(source)
+    with tempfile.TemporaryDirectory(prefix="financial-recovery-tests-readback-") as raw:
+        readback = Path(raw) / "tests"
+        readback.mkdir()
+        _run(["docker", "cp", f"{container_name}:/tests/.", str(readback)])
+        observed = _file_rows(readback)
+    if observed != expected:
+        raise RecoveryError("container verifier file bytes drifted")
+    rows = [{"path": path, "sha256": sha256} for path, sha256 in observed]
+    return {
+        "file_count": len(rows),
+        "file_rows": rows,
+        "content_only_file_set_hash": stable_hash({"rows": rows}),
+        "mode_bits_excluded": True,
+    }
 
 
 def _reconstruct_installed_candidate_receipt(
@@ -593,6 +625,168 @@ def preregister(args: argparse.Namespace) -> dict[str, Any]:
     return manifest
 
 
+def preregister_continuation(args: argparse.Namespace) -> dict[str, Any]:
+    """Freeze the no-outcome state left by a failed metadata readback check."""
+
+    project = args.project_root.resolve(strict=True)
+    batch_root = args.batch_root.resolve(strict=True)
+    context = _load_context(
+        project=project,
+        batch_root=batch_root,
+        treatment_manifest=args.treatment_manifest,
+    )
+    parent = _validated_hashed_json(
+        args.parent_prereg_manifest.resolve(strict=True), "manifest_hash"
+    )
+    if (
+        parent.get("manifest_version") != PREREG_VERSION
+        or parent.get("execution_plan_hash") != context["plan"].plan_hash
+        or parent.get("treatment_manifest_hash") != context["treatment"].manifest_hash
+    ):
+        raise RecoveryError("parent recovery preregistration drifted")
+    repository_prefix = _git(project, "rev-parse", "--show-prefix")
+    parent_source = _git_bytes(
+        project,
+        "show",
+        (
+            f"{parent['recovery_source_commit']}:"
+            f"{repository_prefix}{SCRIPT_RELATIVE_PATH}"
+        ),
+    )
+    if hashlib.sha256(parent_source).hexdigest() != parent["recovery_script_sha256"]:
+        raise RecoveryError("parent recovery source binding drifted")
+    if (
+        _sha256(batch_root / ORIGINAL_EVENTS)
+        != parent["snapshot"]["original_event_ledger_sha256"]
+        or _sha256(batch_root / ORIGINAL_PREFLIGHT)
+        != parent["snapshot"]["original_preflight_sha256"]
+    ):
+        raise RecoveryError("original batch evidence changed during failed recovery")
+    session = _validated_hashed_json(batch_root / SESSION_RECEIPT, "session_hash")
+    if session.get("preregistration_manifest_hash") != parent["manifest_hash"]:
+        raise RecoveryError("recovery session does not bind the parent preregistration")
+    failure = _validated_hashed_json(batch_root / RECOVERY_FAILURE, "report_hash")
+    if failure.get("error_type") != "RecoveryError":
+        raise RecoveryError("failed recovery receipt has an unexpected type")
+
+    semantic_work = next(
+        work for work in context["plan"].physical_work_units if work.arm == "semantic"
+    )
+    semantic_stage_path = (
+        _trial_path(context, semantic_work) / "semantic_runtime" / SEMANTIC_STAGE
+    )
+    semantic_stage = _validated_hashed_json(semantic_stage_path, "stage_hash")
+    evidence = semantic_stage.get("runtime_evidence")
+    if (
+        semantic_stage.get("status") != "completed"
+        or not isinstance(evidence, dict)
+        or evidence.get("plan_hash")
+        != parent["snapshot"]["semantic_pre_agent_binding"]["plan_hash"]
+    ):
+        raise RecoveryError("semantic operator completion evidence drifted")
+    evidence_body = dict(evidence)
+    evidence_hash = evidence_body.pop("evidence_hash", None)
+    if evidence_hash != stable_hash(evidence_body):
+        raise RecoveryError("semantic runtime evidence self-hash drifted")
+    semantic_name = _container_name(semantic_work)
+    if any(_container_exists(semantic_name, path) for path in _SEMANTIC_TEMP_PATHS):
+        raise RecoveryError("semantic operator temporary files were not cleaned")
+
+    rows = []
+    for work in context["plan"].physical_work_units:
+        trial_path = _trial_path(context, work)
+        if (trial_path / "result.json").is_file():
+            continue
+        name = _container_name(work)
+        inspect = _container_inspect(name)
+        stage = _validated_hashed_json(
+            trial_path / "verifier" / VERIFIER_STAGE,
+            "stage_hash",
+        )
+        profile = offline_verifier_profile_for_family(work.family)
+        tests = context["benchmark_root"] / "tasks" / work.family / work.item_id / "tests"
+        if (
+            stage.get("status") != "started"
+            or stage.get("work_unit_hash") != work.work_unit_hash
+            or stage.get("request_hash") != work.request.request_hash
+            or profile is None
+            or stage.get("verifier_profile_hash") != profile.profile_hash
+            or not _container_exists(name, "/tests")
+        ):
+            raise RecoveryError("continued verifier stage identity drifted")
+        verifier_dir = trial_path / "verifier"
+        if any((verifier_dir / value).exists() for value in ("reward.txt", "ctrf.json")):
+            raise RecoveryError("verifier outcome exists before continuation preregistration")
+        content = _container_test_content_receipt(
+            container_name=name,
+            source=tests,
+        )
+        rows.append(
+            {
+                "work_unit_hash": work.work_unit_hash,
+                "request_hash": work.request.request_hash,
+                "container": inspect,
+                "idle_process_receipt": _idle_process_receipt(name),
+                "verifier_stage_hash": stage["stage_hash"],
+                "tests_source_mode_sensitive_hash": _directory_content_hash(tests),
+                "tests_content_only_file_set_hash": content[
+                    "content_only_file_set_hash"
+                ],
+                "verifier_outcome_present": False,
+            }
+        )
+    rows.sort(key=lambda row: row["work_unit_hash"])
+    if len(rows) != EXPECTED_ORPHANS:
+        raise RecoveryError("continuation verifier coverage drifted")
+
+    script_path = project / SCRIPT_RELATIVE_PATH
+    body = {
+        "manifest_version": CONTINUATION_PREREG_VERSION,
+        "created_at_utc": _utc_now(),
+        "recovery_version": RECOVERY_VERSION,
+        "recovery_script_relative_path": SCRIPT_RELATIVE_PATH,
+        "recovery_script_sha256": _sha256(script_path),
+        "recovery_source_commit": _git(project, "rev-parse", "HEAD"),
+        "parent_preregistration_manifest_hash": parent["manifest_hash"],
+        "parent_failure_report_sha256": _sha256(batch_root / RECOVERY_FAILURE),
+        "parent_failure_report_hash": failure["report_hash"],
+        "parent_session_hash": session["session_hash"],
+        "batch_root": _relative(project, batch_root),
+        "treatment_manifest": _relative(project, args.treatment_manifest.resolve(strict=True)),
+        "treatment_manifest_hash": context["treatment"].manifest_hash,
+        "fresh_split_manifest_hash": context["split"].manifest_hash,
+        "execution_plan_hash": context["plan"].plan_hash,
+        "snapshot": parent["snapshot"],
+        "continuation_state": {
+            "semantic_stage_hash": semantic_stage["stage_hash"],
+            "semantic_runtime_evidence_hash": evidence_hash,
+            "verifier_rows": rows,
+            "verifier_row_set_hash": stable_hash({"rows": rows}),
+            "recovery_event_ledger_sha256": _sha256(batch_root / RECOVERY_EVENTS),
+            "operator_replay_authorized": False,
+            "verifier_outcomes_accessed": False,
+        },
+        "intervention": {
+            "metadata_only_hash_failure_diagnosed": True,
+            "source_and_container_test_file_bytes_match": True,
+            "mode_bits_excluded_from_continuation_check": True,
+            "semantic_operator_resume_count": 0,
+            "offline_verifier_resume_count": EXPECTED_ORPHANS,
+            "offline_verifier_workers": EXPECTED_VERIFIER_WORKERS,
+            "model_calls_authorized": 0,
+            "model_call_replay_authorized": False,
+            "online_evaluation_authorized": False,
+            "outcome_conditioned_branching_authorized": False,
+            "new_performance_gate_added": False,
+        },
+        "claim_boundary": parent["claim_boundary"],
+        "secret_value_persisted": False,
+    }
+    manifest = _self_hashed(body, "manifest_hash")
+    _atomic_json(args.output.resolve(), manifest, refuse=True)
+    return manifest
+
+
 def _verify_prereg(
     context: Mapping[str, Any], manifest_path: Path
 ) -> dict[str, Any]:
@@ -601,8 +795,9 @@ def _verify_prereg(
     if declared != stable_hash(manifest):
         raise RecoveryError("recovery preregistration self-hash drifted")
     manifest["manifest_hash"] = declared
+    manifest_version = manifest.get("manifest_version")
     if (
-        manifest.get("manifest_version") != PREREG_VERSION
+        manifest_version not in {PREREG_VERSION, CONTINUATION_PREREG_VERSION}
         or manifest.get("recovery_version") != RECOVERY_VERSION
         or manifest.get("execution_plan_hash") != context["plan"].plan_hash
         or manifest.get("treatment_manifest_hash") != context["treatment"].manifest_hash
@@ -630,6 +825,67 @@ def _verify_prereg(
         != snapshot["original_preflight_sha256"]
     ):
         raise RecoveryError("original interrupted evidence changed after preregistration")
+    if manifest_version == CONTINUATION_PREREG_VERSION:
+        continuation = manifest.get("continuation_state")
+        if not isinstance(continuation, dict):
+            raise RecoveryError("continuation state is missing")
+        if (
+            _sha256(context["batch_root"] / RECOVERY_FAILURE)
+            != manifest.get("parent_failure_report_sha256")
+            or _sha256(context["batch_root"] / RECOVERY_EVENTS)
+            != continuation.get("recovery_event_ledger_sha256")
+        ):
+            raise RecoveryError("failed recovery evidence changed after continuation freeze")
+        session = _validated_hashed_json(
+            context["batch_root"] / SESSION_RECEIPT, "session_hash"
+        )
+        if session.get("session_hash") != manifest.get("parent_session_hash"):
+            raise RecoveryError("recovery session changed after continuation freeze")
+        semantic_work = next(
+            work for work in context["plan"].physical_work_units if work.arm == "semantic"
+        )
+        semantic_stage = _validated_hashed_json(
+            _trial_path(context, semantic_work) / "semantic_runtime" / SEMANTIC_STAGE,
+            "stage_hash",
+        )
+        if semantic_stage.get("stage_hash") != continuation.get("semantic_stage_hash"):
+            raise RecoveryError("semantic completion changed after continuation freeze")
+        declared_rows = {
+            row["work_unit_hash"]: row for row in continuation.get("verifier_rows", [])
+        }
+        if len(declared_rows) != EXPECTED_ORPHANS:
+            raise RecoveryError("continuation row coverage is incomplete")
+        for work in context["plan"].physical_work_units:
+            if work.work_unit_hash not in declared_rows:
+                continue
+            trial_path = _trial_path(context, work)
+            stage = _validated_hashed_json(
+                trial_path / "verifier" / VERIFIER_STAGE,
+                "stage_hash",
+            )
+            verifier_dir = trial_path / "verifier"
+            if (
+                stage.get("status") != "started"
+                or stage.get("stage_hash")
+                != declared_rows[work.work_unit_hash]["verifier_stage_hash"]
+                or (trial_path / "result.json").exists()
+                or any(
+                    (verifier_dir / value).exists()
+                    for value in ("reward.txt", "ctrf.json")
+                )
+            ):
+                raise RecoveryError("verifier state changed after continuation freeze")
+            tests = (
+                context["benchmark_root"] / "tasks" / work.family / work.item_id / "tests"
+            )
+            content = _container_test_content_receipt(
+                container_name=_container_name(work),
+                source=tests,
+            )
+            if content["content_only_file_set_hash"] != declared_rows[
+                work.work_unit_hash
+            ]["tests_content_only_file_set_hash"]:
+                raise RecoveryError("materialized test bytes changed after continuation freeze")
     return manifest
 
 
@@ -651,42 +907,54 @@ def _copy_tests_and_verify(
     trial_path = _trial_path(context, work)
     verifier_dir = trial_path / "verifier"
     stage_path = verifier_dir / VERIFIER_STAGE
-    if stage_path.exists():
-        existing = _read_json(stage_path)
-        if existing.get("status") == "completed":
-            return existing
-        raise RecoveryError("ambiguous prior verifier recovery stage")
     profile = offline_verifier_profile_for_family(work.family)
     if profile is None:
         raise RecoveryError("offline verifier profile unavailable")
     tests = context["benchmark_root"] / "tasks" / work.family / work.item_id / "tests"
     source_hash = _directory_content_hash(tests)
-    started = _self_hashed(
-        {
-            "stage_version": RECOVERY_VERSION,
-            "status": "started",
-            "started_at_utc": _utc_now(),
-            "work_unit_hash": work.work_unit_hash,
-            "request_hash": work.request.request_hash,
-            "container_name_hash": stable_hash({"container_name": name}),
-            "tests_content_hash": source_hash,
-            "verifier_profile_id": profile.profile_id,
-            "verifier_profile_hash": profile.profile_hash,
-            "verifier_command_hash": stable_hash({"command": profile.verifier_command}),
-            "model_calls": 0,
-            "online_judge_calls": 0,
-        },
-        "stage_hash",
+    resumed_materialization = False
+    if stage_path.exists():
+        started = _validated_hashed_json(stage_path, "stage_hash")
+        if started.get("status") == "completed":
+            return started
+        if (
+            started.get("status") != "started"
+            or started.get("work_unit_hash") != work.work_unit_hash
+            or started.get("request_hash") != work.request.request_hash
+            or started.get("tests_content_hash") != source_hash
+            or started.get("verifier_profile_hash") != profile.profile_hash
+            or started.get("verifier_command_hash")
+            != stable_hash({"command": profile.verifier_command})
+        ):
+            raise RecoveryError("ambiguous prior verifier recovery stage")
+        if any((verifier_dir / value).exists() for value in ("reward.txt", "ctrf.json")):
+            raise RecoveryError("verifier outcome appeared before continuation freeze")
+        resumed_materialization = True
+    else:
+        started = _self_hashed(
+            {
+                "stage_version": RECOVERY_VERSION,
+                "status": "started",
+                "started_at_utc": _utc_now(),
+                "work_unit_hash": work.work_unit_hash,
+                "request_hash": work.request.request_hash,
+                "container_name_hash": stable_hash({"container_name": name}),
+                "tests_content_hash": source_hash,
+                "verifier_profile_id": profile.profile_id,
+                "verifier_profile_hash": profile.profile_hash,
+                "verifier_command_hash": stable_hash({"command": profile.verifier_command}),
+                "model_calls": 0,
+                "online_judge_calls": 0,
+            },
+            "stage_hash",
+        )
+        _atomic_json(stage_path, started, refuse=True)
+        _run(["docker", "exec", name, "mkdir", "-p", "/tests"])
+        _run(["docker", "cp", f"{tests}/.", f"{name}:/tests"])
+    content_receipt = _container_test_content_receipt(
+        container_name=name,
+        source=tests,
     )
-    _atomic_json(stage_path, started, refuse=True)
-    _run(["docker", "exec", name, "mkdir", "-p", "/tests"])
-    _run(["docker", "cp", f"{tests}/.", f"{name}:/tests"])
-    with tempfile.TemporaryDirectory(prefix="financial-recovery-tests-") as raw:
-        readback = Path(raw) / "tests"
-        readback.mkdir()
-        _run(["docker", "cp", f"{name}:/tests/.", str(readback)])
-        if _directory_content_hash(readback) != source_hash:
-            raise RecoveryError("container verifier materialization drifted")
     _emit(
         sink,
         "financial_semantic_recovery_verifier_materialized_v1",
@@ -696,6 +964,10 @@ def _copy_tests_and_verify(
             "tests_content_hash": source_hash,
             "tests_present_during_agent": False,
             "materialized_after_agent_exit": True,
+            "resumed_after_metadata_only_hash_failure": resumed_materialization,
+            "content_only_file_set_hash": content_receipt[
+                "content_only_file_set_hash"
+            ],
         },
     )
     started_monotonic = time.monotonic()
@@ -917,9 +1189,13 @@ def recover(args: argparse.Namespace) -> dict[str, Any]:
     manifest = _verify_prereg(context, args.prereg_manifest.resolve(strict=True))
     _configure_nonsecret_environment(context["protocol"])
     session_path = batch_root / SESSION_RECEIPT
+    session_preregistration_hash = (
+        manifest.get("parent_preregistration_manifest_hash")
+        or manifest["manifest_hash"]
+    )
     if session_path.exists():
         session = _read_json(session_path)
-        if session.get("preregistration_manifest_hash") != manifest["manifest_hash"]:
+        if session.get("preregistration_manifest_hash") != session_preregistration_hash:
             raise RecoveryError("recovery session belongs to another preregistration")
     else:
         current_snapshot = _prereg_snapshot(context)
@@ -943,6 +1219,9 @@ def recover(args: argparse.Namespace) -> dict[str, Any]:
         {
             "session_hash": session["session_hash"],
             "preregistration_manifest_hash": manifest["manifest_hash"],
+            "parent_preregistration_manifest_hash": manifest.get(
+                "parent_preregistration_manifest_hash"
+            ),
             "model_calls_authorized": 0,
             "offline_verifier_workers": EXPECTED_VERIFIER_WORKERS,
         },
@@ -1223,13 +1502,23 @@ def main() -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
     prereg = subparsers.add_parser("preregister")
     prereg.add_argument("--output", type=Path, required=True)
+    continuation = subparsers.add_parser("preregister-continuation")
+    continuation.add_argument(
+        "--parent-prereg-manifest", type=Path, required=True
+    )
+    continuation.add_argument("--output", type=Path, required=True)
     execute = subparsers.add_parser("recover")
     execute.add_argument("--prereg-manifest", type=Path, required=True)
     execute.add_argument("--minilm-snapshot-root", type=Path, required=True)
     execute.add_argument("--qa-snapshot-root", type=Path, required=True)
     args = parser.parse_args()
     try:
-        result = preregister(args) if args.command == "preregister" else recover(args)
+        if args.command == "preregister":
+            result = preregister(args)
+        elif args.command == "preregister-continuation":
+            result = preregister_continuation(args)
+        else:
+            result = recover(args)
     except Exception as error:
         if args.command == "recover":
             failure_body = {
