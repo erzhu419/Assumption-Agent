@@ -613,8 +613,10 @@ def _verify_prereg(
     if _sha256(script_path) != manifest.get("recovery_script_sha256"):
         raise RecoveryError("recovery script changed after preregistration")
     source_commit = str(manifest.get("recovery_source_commit") or "")
+    repository_prefix = _git(context["project"], "rev-parse", "--show-prefix")
+    committed_path = f"{repository_prefix}{SCRIPT_RELATIVE_PATH}"
     committed = _git_bytes(
-        context["project"], "show", f"{source_commit}:{SCRIPT_RELATIVE_PATH}"
+        context["project"], "show", f"{source_commit}:{committed_path}"
     )
     if hashlib.sha256(committed).hexdigest() != manifest.get(
         "recovery_script_sha256"
