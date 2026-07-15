@@ -14,11 +14,6 @@ from typing import Any, Mapping, Sequence
 from ..events import Event, EventSink, NullEventSink
 from ..models import ActionNode, HypothesisProgram, HypothesisStatus, stable_hash
 from ..splits import BenchmarkItem, SplitManifest
-from ..typed_execution_contract import (
-    InvariantKind,
-    TypedExecutionContract,
-    TypedExecutionContractRegistry,
-)
 from ..typed_operator_grammar import (
     BoundTypedRecipe,
     TypedProgramBindingRegistry,
@@ -89,7 +84,6 @@ class SkillCompileResult:
     item_portable_capability_metadata_paths: Mapping[
         str, tuple[Path, ...]
     ] = field(default_factory=dict)
-    typed_execution_contract_hashes: tuple[str, ...] = ()
 
     def source_for(self, item_id: str) -> Path | None:
         return self.item_sources.get(stable_hash({"item_id": item_id}))
@@ -720,18 +714,12 @@ class SkillLearnProgramCompiler:
         typed_program_registry: TypedProgramBindingRegistry | None = None,
         require_typed_bindings: bool = False,
         portable_capability_compiler_mode: str | None = None,
-        typed_execution_contract_registry: (
-            TypedExecutionContractRegistry | None
-        ) = None,
     ) -> None:
         self.event_sink = event_sink or NullEventSink()
         self.typed_program_registry = typed_program_registry
         self.require_typed_bindings = require_typed_bindings
         self.portable_capability_compiler_mode = (
             str(portable_capability_compiler_mode or "")
-        )
-        self.typed_execution_contract_registry = (
-            typed_execution_contract_registry
         )
         if require_typed_bindings and typed_program_registry is None:
             raise ValueError(
@@ -747,14 +735,6 @@ class SkillLearnProgramCompiler:
         ):
             raise ValueError(
                 "portable capability compiler mode requires typed bindings"
-            )
-        if typed_execution_contract_registry is not None and not (
-            self.portable_capability_compiler_mode
-            and require_typed_bindings
-            and typed_program_registry is not None
-        ):
-            raise ValueError(
-                "execution contracts require portable typed compiler mode"
             )
 
     def require_program_bindings(
@@ -825,9 +805,6 @@ class SkillLearnProgramCompiler:
         typed_bindings: dict[str, Any] = {}
         bound_typed_recipes: dict[str, BoundTypedRecipe] = {}
         portable_role_specs: dict[str, Any] = {}
-        typed_execution_contracts: dict[
-            str, TypedExecutionContract
-        ] = {}
         seen_program_ids: set[str] = set()
         for program in sorted(programs, key=lambda row: row.id):
             if program.status not in allowed:
@@ -845,15 +822,6 @@ class SkillLearnProgramCompiler:
                     portable_role_specs[program.id] = (
                         portable_role_spec_for_bound_recipe(bound_recipe)
                     )
-                    if self.typed_execution_contract_registry is not None:
-                        contract_registry = (
-                            self.typed_execution_contract_registry
-                        )
-                        typed_execution_contracts[program.id] = (
-                            contract_registry.require_for_bound_recipe(
-                                bound_recipe
-                            )
-                        )
                 else:
                     typed_bindings[program.id] = (
                         self.typed_program_registry.require(program)
@@ -893,9 +861,6 @@ class SkillLearnProgramCompiler:
                             program.id
                         ].recipe.nodes
                     ),
-                    execution_contract=typed_execution_contracts.get(
-                        program.id
-                    ),
                 )
                 skill_text = _render_portable_capability_skill(
                     program,
@@ -908,9 +873,6 @@ class SkillLearnProgramCompiler:
                     capability=role_spec.capability,
                     workflow=(
                         bound_typed_recipes[program.id].recipe.workflow.value
-                    ),
-                    execution_contract=typed_execution_contracts.get(
-                        program.id
                     ),
                 )
             else:
@@ -989,11 +951,6 @@ class SkillLearnProgramCompiler:
                     for row in portable_role_specs.values()
                 )
             )
-            if self.typed_execution_contract_registry is not None:
-                program_set_payload["typed_execution_contract_hashes"] = sorted(
-                    row.contract_hash
-                    for row in typed_execution_contracts.values()
-                )
         program_set_hash = stable_hash(program_set_payload)
         rendered_skills: dict[str, tuple[HypothesisProgram, str, str]] = {}
         used_hypotheses: set[str] = set()
@@ -1065,9 +1022,6 @@ class SkillLearnProgramCompiler:
                             bound_recipe.binding.binding_hash
                         ),
                         bound_recipe_hash=bound_recipe.bound_recipe_hash,
-                        execution_contract=typed_execution_contracts.get(
-                            program.id
-                        ),
                     )
                     metadata_path = str(
                         Path("task_capabilities")
@@ -1239,18 +1193,6 @@ class SkillLearnProgramCompiler:
                     "source_artifact_locators_persisted": False,
                 }
             )
-            if self.typed_execution_contract_registry is not None:
-                compile_manifest.update(
-                    {
-                        "typed_execution_contract_hashes": sorted(
-                            row.contract_hash
-                            for row in typed_execution_contracts.values()
-                        ),
-                        "typed_execution_contract_runtime_enforcement_claimed": (
-                            False
-                        ),
-                    }
-                )
             item_portable_capability_metadata_paths = {
                 item_hash: tuple(
                     destination / relative_path
@@ -1432,57 +1374,7 @@ class SkillLearnProgramCompiler:
             item_portable_capability_metadata_paths=(
                 item_portable_capability_metadata_paths
             ),
-            typed_execution_contract_hashes=tuple(
-                sorted(
-                    row.contract_hash
-                    for row in typed_execution_contracts.values()
-                )
-            ),
         )
-
-
-_EXECUTION_INVARIANT_INSTRUCTIONS: Mapping[InvariantKind, str] = {
-    InvariantKind.PRIMARY_ARTIFACT_READ_BEFORE_MUTATION: (
-        "Open and inspect the current bound primary artifact before any mutation; "
-        "derive changes only from that observed current state."
-    ),
-    InvariantKind.TASK_DELTA_ONLY: (
-        "Apply only the concrete delta required by the current public task and "
-        "preserve content outside that delta."
-    ),
-    InvariantKind.PRESERVE_UNTARGETED_CONTENT: (
-        "Preserve every field, record, and artifact not targeted by the current "
-        "public task."
-    ),
-    InvariantKind.EACH_SOURCE_ITEM_ASSIGNED_EXACTLY_ONCE: (
-        "Before moving files, construct a complete one-to-one assignment in which "
-        "each current source item appears exactly once."
-    ),
-    InvariantKind.SOURCE_COLLECTION_EMPTY_AFTER_SUCCESS: (
-        "Treat a nonempty current source collection after organization as an "
-        "incomplete result."
-    ),
-    InvariantKind.INPUT_DERIVATION_PRESERVED: (
-        "Derive the rendered result from the current bound input data and retain "
-        "that data-to-output relationship."
-    ),
-    InvariantKind.OBSERVABLE_INTERACTION_POSTCONDITION: (
-        "Define and replay the task-required interaction; success requires an "
-        "observable visible state change, not only event-handler source code."
-    ),
-    InvariantKind.FINITE_SEARCH_SPACE_DECLARED: (
-        "Evaluate only the receipt-bound finite candidate set and record the exact "
-        "number of evaluated candidates."
-    ),
-    InvariantKind.FINAL_METRICS_FROM_FINAL_OUTPUT: (
-        "Recompute every reported metric from the final materialized output using "
-        "one canonical computation; do not copy an intermediate-run metric."
-    ),
-    InvariantKind.FINAL_OUTPUT_REOPENED: (
-        "After materializing the result, reopen it from task-local storage and "
-        "check the reopened state before finishing."
-    ),
-}
 
 
 def _lower_portable_capability_skill(
@@ -1494,11 +1386,10 @@ def _lower_portable_capability_skill(
     capability: str,
     workflow: str,
     operator_kinds: Sequence[str],
-    execution_contract: TypedExecutionContract | None = None,
 ) -> tuple[LoweredSkillAction, ...]:
     """Fixed compiler-owned instructions for the supported capability mode."""
 
-    base_actions = (
+    return (
         LoweredSkillAction(
             action_id="portable-current-item-role",
             semantics="prompt_directive",
@@ -1540,53 +1431,6 @@ def _lower_portable_capability_skill(
             ),
         ),
     )
-    if execution_contract is None:
-        return base_actions
-    issues = execution_contract.validate_closed()
-    if issues:
-        raise PermissionError(
-            f"portable execution contract is invalid: {list(issues)}"
-        )
-    invariant_actions = tuple(
-        LoweredSkillAction(
-            action_id=f"execution-invariant-{row.kind.value}",
-            semantics="harness_selected_execution_contract",
-            instruction=_EXECUTION_INVARIANT_INSTRUCTIONS[row.kind],
-        )
-        for row in execution_contract.invariants
-    )
-    resource_action = LoweredSkillAction(
-        action_id="execution-contract-resource-receipt",
-        semantics="harness_selected_execution_contract",
-        instruction=(
-            "Keep this task within the declared contract limits: at most "
-            f"{execution_contract.resources.max_action_starts} action starts, "
-            f"{execution_contract.resources.max_mutations} mutations, "
-            f"{execution_contract.resources.max_repair_attempts} repair attempts, "
-            f"{execution_contract.resources.max_completion_checks} completion "
-            "checks, and "
-            f"{execution_contract.resources.max_search_evaluations} finite-search "
-            "evaluations; record the observed counts in the final effect receipt."
-        ),
-    )
-    completion_action = LoweredSkillAction(
-        action_id="execution-contract-completion-loop",
-        semantics="agent_local_self_check",
-        instruction=(
-            "Use the fixed completion loop: apply the registered mutation, reopen "
-            "the materialized output, check all closed invariants, perform only "
-            "bounded repairs, reopen and recheck after a repair, then finalize one "
-            "effect receipt. Recompute self-evaluation only from the final reopened "
-            "output."
-        ),
-    )
-    return (
-        *base_actions[:-1],
-        *invariant_actions,
-        resource_action,
-        completion_action,
-        base_actions[-1],
-    )
 
 
 def _render_portable_capability_skill(
@@ -1600,7 +1444,6 @@ def _render_portable_capability_skill(
     artifact_format: str,
     capability: str,
     workflow: str,
-    execution_contract: TypedExecutionContract | None = None,
 ) -> str:
     description = (
         "Use a harness-prepared profile and a closed typed workflow for the "
@@ -1617,47 +1460,15 @@ def _render_portable_capability_skill(
         "",
     ]
     lines.extend(_render_trigger(program))
-    receipt_lines = [
-        "",
-        "## Harness receipt",
-        "",
-        f"- Input role receipt: `{role_spec_hash}`",
-        f"- Input role: `{role}` (`{artifact_format}`)",
-        f"- Fixed capability: `{capability}`",
-        f"- Selected workflow: `{workflow}`",
-    ]
-    if execution_contract is not None:
-        issues = execution_contract.validate_closed()
-        if issues:
-            raise PermissionError(
-                f"portable execution contract is invalid: {list(issues)}"
-            )
-        receipt_lines.extend(
-            [
-                f"- Execution contract receipt: `{execution_contract.contract_hash}`",
-                "- Closed invariants: "
-                + ", ".join(
-                    f"`{row.kind.value}`"
-                    for row in execution_contract.invariants
-                ),
-                "- Completion phases: "
-                + " -> ".join(
-                    f"`{row.value}`"
-                    for row in execution_contract.completion.phase_order
-                ),
-                "- Declared resource limits: "
-                f"actions={execution_contract.resources.max_action_starts}, "
-                f"mutations={execution_contract.resources.max_mutations}, "
-                f"repairs={execution_contract.resources.max_repair_attempts}, "
-                f"checks={execution_contract.resources.max_completion_checks}, "
-                "search_evaluations="
-                f"{execution_contract.resources.max_search_evaluations}.",
-                "- Contract delivery is receipt-bound; runtime enforcement and "
-                "semantic compliance are not claimed by the compiler.",
-            ]
-        )
-    receipt_lines.extend(
+    lines.extend(
         [
+            "",
+            "## Harness receipt",
+            "",
+            f"- Input role receipt: `{role_spec_hash}`",
+            f"- Input role: `{role}` (`{artifact_format}`)",
+            f"- Fixed capability: `{capability}`",
+            f"- Selected workflow: `{workflow}`",
             "- Capability scope: read-only pre-agent artifact evidence; remaining workflow operators are agent-executed.",
             f"- Derived profile: `{output_container_locator}`",
             "- The profile must exist and have a verified effect receipt before the agent starts.",
@@ -1667,14 +1478,11 @@ def _render_portable_capability_skill(
             "",
         ]
     )
-    lines.extend(receipt_lines)
     for index, action in enumerate(lowered_actions, start=1):
         if action.semantics == "harness_prepared_evidence":
             label = "Harness-prepared evidence"
         elif action.semantics == "harness_selected_typed_workflow":
             label = "Harness-selected typed workflow"
-        elif action.semantics == "harness_selected_execution_contract":
-            label = "Closed execution contract"
         elif action.semantics == "agent_local_self_check":
             label = "Agent-local self-check"
         else:

@@ -15,17 +15,8 @@ from assumption_agent.benchmarks.typed_task_capability import (
     validate_compiled_portable_task_capability,
 )
 from assumption_agent.events import MemoryEventSink
-from assumption_agent.models import (
-    HypothesisStatus,
-    ResidualExample,
-    SplitName,
-    stable_hash,
-)
+from assumption_agent.models import HypothesisStatus, stable_hash
 from assumption_agent.splits import BenchmarkItem, SplitManifest
-from assumption_agent.typed_execution_contract import (
-    TypedExecutionContractRegistry,
-    derive_train_execution_contract,
-)
 from assumption_agent.typed_operator_grammar import (
     ArtifactFormat,
     ArtifactSpec,
@@ -209,7 +200,6 @@ def _compile(
     artifact_format: ArtifactFormat = ArtifactFormat.TABULAR,
     workflow: WorkflowKind = WorkflowKind.BUILD_VISUALIZATION,
     portable: bool = True,
-    with_execution_contract: bool = False,
 ):
     program, registry = _bound_program(
         family=family,
@@ -219,39 +209,6 @@ def _compile(
     )
     items, manifest = _items_and_manifest(family)
     sink = MemoryEventSink()
-    execution_contract_registry = None
-    if with_execution_contract:
-        bound = registry.require_bound_recipe(program)
-        residuals = tuple(
-            ResidualExample(
-                transition_id=f"train-transition-{index}",
-                task_id=f"train-support-{index}",
-                family=family,
-                split=SplitName.TRAIN,
-                features={"family": family},
-                failure_type="policy_off_failure",
-                evaluator_feedback=(),
-                baseline_success=False,
-                context={},
-            )
-            for index in range(2)
-        )
-        search_candidates = (
-            tuple(stable_hash({"candidate": index}) for index in range(3))
-            if workflow is WorkflowKind.CONFIGURE_AND_RUN
-            else ()
-        )
-        contract = derive_train_execution_contract(
-            graph=bound.snapshot.graph,
-            recipe_id=bound.recipe.recipe_id,
-            residuals=residuals,
-            search_candidate_hashes=search_candidates,
-        )
-        execution_contract_registry = TypedExecutionContractRegistry()
-        execution_contract_registry.register(
-            contract,
-            graph=bound.snapshot.graph,
-        )
     compiler = SkillLearnProgramCompiler(
         event_sink=sink,
         typed_program_registry=registry,
@@ -259,7 +216,6 @@ def _compile(
         portable_capability_compiler_mode=(
             PORTABLE_TASK_CAPABILITY_COMPILER_VERSION if portable else None
         ),
-        typed_execution_contract_registry=execution_contract_registry,
     )
     result = compiler.compile(
         programs=(program,),
@@ -349,97 +305,6 @@ def test_portable_compiler_metadata_mutation_fails_source_receipt(
     )
     with pytest.raises(PermissionError):
         result.source_receipt_for(manifest.train_ids[0])
-
-
-def test_execution_contract_is_compiled_into_skill_and_bound_metadata(
-    tmp_path: Path,
-) -> None:
-    result, _, manifest = _compile(
-        tmp_path,
-        with_execution_contract=True,
-    )
-
-    assert len(result.typed_execution_contract_hashes) == 1
-    contract_hash = result.typed_execution_contract_hashes[0]
-    skill_text = "\n".join(
-        path.read_text(encoding="utf-8") for path in result.skill_paths
-    )
-    assert contract_hash in skill_text
-    assert "observable visible state change" in skill_text
-    assert "apply the registered mutation, reopen" in skill_text
-    assert "bounded repairs" in skill_text
-    assert "runtime enforcement and semantic compliance are not claimed" in (
-        skill_text
-    )
-    assert TRAIN_LITERAL not in skill_text
-
-    compile_manifest = json.loads(
-        (result.output_root / "compile_manifest.json").read_text(
-            encoding="utf-8"
-        )
-    )
-    assert compile_manifest["typed_execution_contract_hashes"] == [
-        contract_hash
-    ]
-    assert compile_manifest[
-        "typed_execution_contract_runtime_enforcement_claimed"
-    ] is False
-    for row in compile_manifest["portable_capability_role_spec_rows"]:
-        metadata = validate_compiled_portable_task_capability(
-            json.loads((result.output_root / row["metadata_path"]).read_text())
-        )
-        assert metadata.execution_contract is not None
-        assert metadata.execution_contract.contract_hash == contract_hash
-        assert metadata.execution_contract.graph_hash == (
-            metadata.role_spec.source_graph_hash
-        )
-        assert metadata.execution_contract.recipe_id == (
-            metadata.role_spec.source_recipe_id
-        )
-    for item_id in manifest.train_ids:
-        result.source_receipt_for(item_id)
-
-
-def test_execution_contract_sidecar_tamper_fails_source_receipt(
-    tmp_path: Path,
-) -> None:
-    result, _, manifest = _compile(
-        tmp_path,
-        with_execution_contract=True,
-    )
-    metadata_path = next(
-        iter(
-            result.item_portable_capability_metadata_paths[
-                stable_hash({"item_id": manifest.train_ids[0]})
-            ]
-        )
-    )
-    payload = json.loads(metadata_path.read_text(encoding="utf-8"))
-    payload["execution_contract"]["resources"]["max_mutations"] += 1
-    metadata_path.write_text(
-        json.dumps(payload, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    with pytest.raises(PermissionError):
-        result.source_receipt_for(manifest.train_ids[0])
-
-
-def test_portable_v1_without_contract_preserves_exact_bytes(tmp_path: Path) -> None:
-    first, _, _ = _compile(tmp_path / "first")
-    second, _, _ = _compile(tmp_path / "second")
-    first_files = {
-        path.relative_to(first.output_root).as_posix(): path.read_bytes()
-        for path in first.output_root.rglob("*")
-        if path.is_file()
-    }
-    second_files = {
-        path.relative_to(second.output_root).as_posix(): path.read_bytes()
-        for path in second.output_root.rglob("*")
-        if path.is_file()
-    }
-    assert first_files == second_files
-    assert first.typed_execution_contract_hashes == ()
-    assert second.typed_execution_contract_hashes == ()
 
 
 def test_portable_compiler_fails_closed_without_prompt_fallback(
