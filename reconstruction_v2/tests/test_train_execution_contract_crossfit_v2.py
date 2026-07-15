@@ -10,6 +10,7 @@ from assumption_agent.benchmarks.train_execution_contract_crossfit_v2 import (
     EXPECTED_FOLD_RECEIPT_HASH,
     EXPECTED_WORK_UNIT_HASH,
     GRAPH_SOURCE_ITEM_IDS,
+    ORGANIZE_ITEM_OUT_FOLDS,
     SOURCE_RANKING_REPORT_RELATIVE_PATH,
     compile_v320_train_item_out_crossfit_v2,
 )
@@ -58,3 +59,33 @@ def test_compiles_exact_single_train_item_out_route_without_scoring(
     assert result.report["model_calls"] == 0
     assert result.report["evaluator_calls"] == 0
     assert result.report["online_judge_calls"] == 0
+
+
+@pytest.mark.skipif(
+    not SOURCE_ROOT.is_dir() or not SOURCE_RANKING_REPORT.is_file(),
+    reason="historical v3.20 source ranking is not installed",
+)
+@pytest.mark.parametrize(
+    "heldout_item_id",
+    ("organize-messy-files-5", "organize-messy-files-6"),
+)
+def test_compiles_remaining_registered_item_out_folds(
+    tmp_path: Path,
+    heldout_item_id: str,
+) -> None:
+    fold = ORGANIZE_ITEM_OUT_FOLDS[heldout_item_id]
+    result = compile_v320_train_item_out_crossfit_v2(
+        project_root=PROJECT_ROOT,
+        output_root=tmp_path / heldout_item_id,
+        fold=fold,
+    )
+
+    result.verify()
+    assert result.fold == fold
+    assert result.candidate.candidate_hash == fold.expected_candidate_hash
+    assert result.work.work_unit_hash == fold.expected_work_unit_hash
+    assert result.contract.contract_hash == fold.expected_contract_hash
+    assert result.report["heldout_item_id_hash"] == stable_hash(
+        {"item_id": heldout_item_id}
+    )
+    assert result.report["unbiased_crossfit"] is False

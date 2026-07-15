@@ -80,37 +80,8 @@ CROSSFIT_ACTUAL_POLICY = (
     "v320_train_item_out_execution_contract_actual_offline_v2"
 )
 TARGET_FAMILY = "organize-messy-files"
-HELDOUT_ITEM_ID = "organize-messy-files-2"
-GRAPH_SOURCE_ITEM_IDS = (
-    "organize-messy-files-5",
-    "organize-messy-files-6",
-)
 SELECTED_WORKFLOW = WorkflowKind.ORGANIZE_COLLECTION
-SELECTED_RECIPE_ID = "recipe_0443d11a27ce50690356"
-EXPECTED_FULL_GRAPH_HASH = (
-    "8df3ac39d152dd4eb8288e5cd9cbcd37ef03f85db69526f2f5c9ea013aa873c2"
-)
-EXPECTED_PROJECTED_GRAPH_HASH = (
-    "dfa967562901e54b62bf3e44a26486640e3b1791761d33a55b05e019dfbc96e5"
-)
-EXPECTED_SNAPSHOT_HASH = (
-    "f0658025004be64cb64bee3358cbb9c37363bf70cd74f7a86c8e0d4a9532f5df"
-)
-EXPECTED_CONTRACT_HASH = (
-    "d166655e3499539025552c2eab5fd50703ef542088ab5d400213a7f636ea1b9f"
-)
-EXPECTED_FOLD_RECEIPT_HASH = (
-    "6819b23a3a6b84417d7be049cf6c885d6011a47d97220ae0ae97613059f27a4e"
-)
-EXPECTED_SNAPSHOT_LEDGER_HASH = (
-    "630c12c4393b5fc5a0b8d20bca527fe76025b74c4f8f87341a4a26adcf5c4127"
-)
-EXPECTED_CANDIDATE_HASH = (
-    "a34f06d0e3f9082380f4a29f0596f1f4a3c867c4ab7cd1f6e550ae38dc052634"
-)
-EXPECTED_WORK_UNIT_HASH = (
-    "17463272acb75c16e8f6a9aa3f0035345672744fa6d3ef01b1b19c6ebc84fcb4"
-)
+SOURCE_RECOVERY_ITEM_ID = "organize-messy-files-2"
 SOURCE_TRAIN_RANKING_HASH = (
     "2ec01860409bfcba4a43c239810481450c0e5d126b3378234d437f234b14db33"
 )
@@ -134,6 +105,178 @@ EXECUTION_EVENTS_FILENAME = "crossfit.execution.events.jsonl"
 ASSET_PREFLIGHT_POLICY = (
     "v320_train_item_out_local_asset_exact_reuse_preflight_v2"
 )
+
+
+@dataclass(frozen=True)
+class TrainItemOutFoldSpecV2:
+    heldout_item_id: str
+    graph_source_item_ids: tuple[str, str]
+    selected_recipe_id: str
+    expected_full_graph_hash: str
+    expected_projected_graph_hash: str
+    expected_snapshot_hash: str
+    expected_contract_hash: str
+    expected_fold_receipt_hash: str
+    expected_snapshot_ledger_hash: str
+    expected_candidate_hash: str
+    expected_work_unit_hash: str
+
+    @property
+    def candidate_id(self) -> str:
+        item_suffix = self.heldout_item_id.rsplit("-", maxsplit=1)[-1]
+        return f"v320-train-loo-organize-{item_suffix}-organize-collection"
+
+    def verify(self) -> None:
+        family_items = {
+            "organize-messy-files-2",
+            "organize-messy-files-5",
+            "organize-messy-files-6",
+        }
+        hashes = (
+            self.expected_full_graph_hash,
+            self.expected_projected_graph_hash,
+            self.expected_snapshot_hash,
+            self.expected_contract_hash,
+            self.expected_fold_receipt_hash,
+            self.expected_snapshot_ledger_hash,
+            self.expected_candidate_hash,
+            self.expected_work_unit_hash,
+        )
+        if (
+            self.heldout_item_id not in family_items
+            or set(self.graph_source_item_ids)
+            != family_items - {self.heldout_item_id}
+            or self.graph_source_item_ids
+            != tuple(sorted(self.graph_source_item_ids))
+            or not self.selected_recipe_id.startswith("recipe_")
+            or any(
+                len(value) != 64
+                or any(
+                    character not in "0123456789abcdef"
+                    for character in value
+                )
+                for value in hashes
+            )
+        ):
+            raise TrainExecutionContractCrossfitError(
+                "TRAIN item-out fold preregistration drifted"
+            )
+
+
+ORGANIZE_ITEM_OUT_FOLDS: Mapping[str, TrainItemOutFoldSpecV2] = {
+    "organize-messy-files-2": TrainItemOutFoldSpecV2(
+        heldout_item_id="organize-messy-files-2",
+        graph_source_item_ids=(
+            "organize-messy-files-5",
+            "organize-messy-files-6",
+        ),
+        selected_recipe_id="recipe_0443d11a27ce50690356",
+        expected_full_graph_hash=(
+            "8df3ac39d152dd4eb8288e5cd9cbcd37ef03f85db69526f2f5c9ea013aa873c2"
+        ),
+        expected_projected_graph_hash=(
+            "dfa967562901e54b62bf3e44a26486640e3b1791761d33a55b05e019dfbc96e5"
+        ),
+        expected_snapshot_hash=(
+            "f0658025004be64cb64bee3358cbb9c37363bf70cd74f7a86c8e0d4a9532f5df"
+        ),
+        expected_contract_hash=(
+            "d166655e3499539025552c2eab5fd50703ef542088ab5d400213a7f636ea1b9f"
+        ),
+        expected_fold_receipt_hash=(
+            "6819b23a3a6b84417d7be049cf6c885d6011a47d97220ae0ae97613059f27a4e"
+        ),
+        expected_snapshot_ledger_hash=(
+            "630c12c4393b5fc5a0b8d20bca527fe76025b74c4f8f87341a4a26adcf5c4127"
+        ),
+        expected_candidate_hash=(
+            "a34f06d0e3f9082380f4a29f0596f1f4a3c867c4ab7cd1f6e550ae38dc052634"
+        ),
+        expected_work_unit_hash=(
+            "17463272acb75c16e8f6a9aa3f0035345672744fa6d3ef01b1b19c6ebc84fcb4"
+        ),
+    ),
+    "organize-messy-files-5": TrainItemOutFoldSpecV2(
+        heldout_item_id="organize-messy-files-5",
+        graph_source_item_ids=(
+            "organize-messy-files-2",
+            "organize-messy-files-6",
+        ),
+        selected_recipe_id="recipe_9ab1f97c6b07c7fafa1e",
+        expected_full_graph_hash=(
+            "fa8aea8060837caa8564b52c31f3e1d7a3ce0eeac2a6c0ee655a9159d31271e3"
+        ),
+        expected_projected_graph_hash=(
+            "3b369a8f54d663bc9c5c0a7b5c9c9a43ec636604e42e844bb6a0189a2f9c36c3"
+        ),
+        expected_snapshot_hash=(
+            "694064469682eae3fd696a23806306320e5d0076ae55dab6c27b925545fc3984"
+        ),
+        expected_contract_hash=(
+            "0475c1a9a6dc60a73a0e580863cde44fbf43af96f1f437f20edebfcee4e69b57"
+        ),
+        expected_fold_receipt_hash=(
+            "fd7b59fdae09779d0323ae5ea18a6ceddf5909b06f01589b3c7e1e62f2092911"
+        ),
+        expected_snapshot_ledger_hash=(
+            "e863c9ba45f962abfaf37169d6b248a054cae3328ed40879bb09c9a7be36906b"
+        ),
+        expected_candidate_hash=(
+            "3fd2c79284778bc71fbb9c67425a56ad662164657dc47d93201016a9d978114b"
+        ),
+        expected_work_unit_hash=(
+            "4ce67e966e9429145be5eac054156ae26f978ad5e3b609a275dbb343b0db1c02"
+        ),
+    ),
+    "organize-messy-files-6": TrainItemOutFoldSpecV2(
+        heldout_item_id="organize-messy-files-6",
+        graph_source_item_ids=(
+            "organize-messy-files-2",
+            "organize-messy-files-5",
+        ),
+        selected_recipe_id="recipe_00504dbb63d0f9dc608e",
+        expected_full_graph_hash=(
+            "89507ff8fc07d9c3521ad495414357c93bbd21ff51b2ea3eb1028e1dd9e403aa"
+        ),
+        expected_projected_graph_hash=(
+            "cad0e924faeb1372d9bfec26c092b686a045cf8d23d50afd292d66e7c06f396f"
+        ),
+        expected_snapshot_hash=(
+            "ad5ae281f06ad699af5c0c6e4d78937e2f2384617ba05dd5e22ea6be3dad3169"
+        ),
+        expected_contract_hash=(
+            "97a19511018749dfb8b52acd632aee70b1d8a254b9e178ef6bffc36bcf06b1dd"
+        ),
+        expected_fold_receipt_hash=(
+            "49f0636fab08bb8664f243f56b48ef85f1cecb0460510667c284055cf48aacb8"
+        ),
+        expected_snapshot_ledger_hash=(
+            "87c49af6efb3e509ffc519139e943cfce9c97b995a945eab0ffaa3b4060df8e2"
+        ),
+        expected_candidate_hash=(
+            "999b2e5e7f2537128445bd81375ac00909770ca20bf4b2ec0cba5186f1573dc3"
+        ),
+        expected_work_unit_hash=(
+            "3e6981c6c2a9870b6ebda002b51d531553a161b7e6c1e548e709a0928da52961"
+        ),
+    ),
+}
+ORGANIZE_2_FOLD = ORGANIZE_ITEM_OUT_FOLDS["organize-messy-files-2"]
+
+# Compatibility aliases for the first, already executed targeted fold.
+HELDOUT_ITEM_ID = ORGANIZE_2_FOLD.heldout_item_id
+GRAPH_SOURCE_ITEM_IDS = ORGANIZE_2_FOLD.graph_source_item_ids
+SELECTED_RECIPE_ID = ORGANIZE_2_FOLD.selected_recipe_id
+EXPECTED_FULL_GRAPH_HASH = ORGANIZE_2_FOLD.expected_full_graph_hash
+EXPECTED_PROJECTED_GRAPH_HASH = ORGANIZE_2_FOLD.expected_projected_graph_hash
+EXPECTED_SNAPSHOT_HASH = ORGANIZE_2_FOLD.expected_snapshot_hash
+EXPECTED_CONTRACT_HASH = ORGANIZE_2_FOLD.expected_contract_hash
+EXPECTED_FOLD_RECEIPT_HASH = ORGANIZE_2_FOLD.expected_fold_receipt_hash
+EXPECTED_SNAPSHOT_LEDGER_HASH = (
+    ORGANIZE_2_FOLD.expected_snapshot_ledger_hash
+)
+EXPECTED_CANDIDATE_HASH = ORGANIZE_2_FOLD.expected_candidate_hash
+EXPECTED_WORK_UNIT_HASH = ORGANIZE_2_FOLD.expected_work_unit_hash
 
 
 class TrainExecutionContractCrossfitError(PermissionError):
@@ -176,7 +319,7 @@ def _verify_source_ranking_report(project_root: Path) -> dict[str, Any]:
         if isinstance(row, Mapping)
         and row.get("candidate_hash") == SOURCE_TOP_CANDIDATE_HASH
         and row.get("item_id_hash")
-        == stable_hash({"item_id": HELDOUT_ITEM_ID})
+        == stable_hash({"item_id": SOURCE_RECOVERY_ITEM_ID})
         and row.get("recovery") is True
     ]
     if (
@@ -206,7 +349,7 @@ def _verify_source_ranking_report(project_root: Path) -> dict[str, Any]:
         "source_semantic_ranking_hash": SOURCE_SEMANTIC_RANKING_HASH,
         "source_top_candidate_hash": SOURCE_TOP_CANDIDATE_HASH,
         "source_recovery_item_id_hash": stable_hash(
-            {"item_id": HELDOUT_ITEM_ID}
+            {"item_id": SOURCE_RECOVERY_ITEM_ID}
         ),
         "source_top_recovery_count": 1,
         "source_top_regression_count": 0,
@@ -232,6 +375,7 @@ def _support_task_id_hashes(
 class TrainItemOutCompileV2:
     output_root: Path = field(compare=False)
     report: Mapping[str, Any]
+    fold: TrainItemOutFoldSpecV2
     candidate_material: V320TrainCandidateMaterialV2 = field(
         compare=False,
         repr=False,
@@ -264,6 +408,7 @@ class TrainItemOutCompileV2:
         return self.output_root / COMPILE_REPORT_FILENAME
 
     def verify(self) -> None:
+        self.fold.verify()
         self.candidate_material.verify()
         self.raw_projection.verify()
         if self.graph.validate() or self.snapshot.validate():
@@ -284,7 +429,7 @@ class TrainItemOutCompileV2:
         bound = self.typed_program_registry.require_bound_recipe(self.program)
         if (
             bound.snapshot.snapshot_hash != self.snapshot.snapshot_hash
-            or bound.recipe.recipe_id != SELECTED_RECIPE_ID
+            or bound.recipe.recipe_id != self.fold.selected_recipe_id
             or self.contract.validate(self.graph)
         ):
             raise TrainExecutionContractCrossfitError(
@@ -293,9 +438,7 @@ class TrainItemOutCompileV2:
         self.bundle.verify()
         self.candidate.verify()
         reconstructed = TrainCandidateSpecV2.from_verified_bundle(
-            candidate_id=(
-                "v320-train-loo-organize-2-organize-collection"
-            ),
+            candidate_id=self.fold.candidate_id,
             bundle=self.bundle,
             static_complexity=5,
         )
@@ -304,20 +447,25 @@ class TrainItemOutCompileV2:
                 "TRAIN item-out candidate bundle drifted"
             )
         if (
-            self.graph.graph_hash != EXPECTED_PROJECTED_GRAPH_HASH
-            or self.snapshot.snapshot_hash != EXPECTED_SNAPSHOT_HASH
+            self.graph.graph_hash
+            != self.fold.expected_projected_graph_hash
+            or self.snapshot.snapshot_hash
+            != self.fold.expected_snapshot_hash
             or self.snapshot_ledger.ledger_hash
-            != EXPECTED_SNAPSHOT_LEDGER_HASH
-            or self.contract.contract_hash != EXPECTED_CONTRACT_HASH
-            or self.candidate.candidate_hash != EXPECTED_CANDIDATE_HASH
-            or self.work.work_unit_hash != EXPECTED_WORK_UNIT_HASH
+            != self.fold.expected_snapshot_ledger_hash
+            or self.contract.contract_hash
+            != self.fold.expected_contract_hash
+            or self.candidate.candidate_hash
+            != self.fold.expected_candidate_hash
+            or self.work.work_unit_hash
+            != self.fold.expected_work_unit_hash
             or not self.work.candidate_active
-            or self.work.baseline.item_id != HELDOUT_ITEM_ID
+            or self.work.baseline.item_id != self.fold.heldout_item_id
             or _support_task_id_hashes(self.contract)
             != tuple(
                 sorted(
                     stable_hash({"task_id": value})
-                    for value in GRAPH_SOURCE_ITEM_IDS
+                    for value in self.fold.graph_source_item_ids
                 )
             )
         ):
@@ -362,10 +510,12 @@ def compile_v320_train_item_out_crossfit_v2(
     *,
     project_root: Path,
     output_root: Path,
+    fold: TrainItemOutFoldSpecV2 = ORGANIZE_2_FOLD,
 ) -> TrainItemOutCompileV2:
-    """Compile one organize-2 route from organize-5/-6 TRAIN evidence."""
+    """Compile one registered organize-family TRAIN item-out route."""
 
     project = project_root.resolve(strict=True)
+    fold.verify()
     destination = output_root.expanduser().resolve()
     if destination.exists() or destination.is_symlink():
         raise FileExistsError("TRAIN item-out compile output already exists")
@@ -396,7 +546,9 @@ def compile_v320_train_item_out_crossfit_v2(
             manifest=manifest,
             raw_projection=raw_projection,
         )
-        heldout_items = tuple(row for row in items if row.id == HELDOUT_ITEM_ID)
+        heldout_items = tuple(
+            row for row in items if row.id == fold.heldout_item_id
+        )
         if len(heldout_items) != 1:
             raise TrainExecutionContractCrossfitError(
                 "TRAIN item-out public item binding drifted"
@@ -405,7 +557,7 @@ def compile_v320_train_item_out_crossfit_v2(
         baseline_rows = tuple(
             row
             for row in raw_projection.baseline_set.rows
-            if row.item_id == HELDOUT_ITEM_ID
+            if row.item_id == fold.heldout_item_id
         )
         if len(baseline_rows) != 1 or baseline_rows[0].success:
             raise TrainExecutionContractCrossfitError(
@@ -419,14 +571,17 @@ def compile_v320_train_item_out_crossfit_v2(
                 (
                     row
                     for row in evidence.residuals
-                    if row.task_id in GRAPH_SOURCE_ITEM_IDS
+                    if row.task_id in fold.graph_source_item_ids
                     and row.family == TARGET_FAMILY
                     and not row.baseline_success
                 ),
                 key=lambda row: row.task_id,
             )
         )
-        if tuple(row.task_id for row in graph_residuals) != GRAPH_SOURCE_ITEM_IDS:
+        if (
+            tuple(row.task_id for row in graph_residuals)
+            != fold.graph_source_item_ids
+        ):
             raise TrainExecutionContractCrossfitError(
                 "TRAIN item-out graph source cohort drifted"
             )
@@ -452,7 +607,7 @@ def compile_v320_train_item_out_crossfit_v2(
         graph_trial_hashes = tuple(
             sorted(
                 stable_hash({"item_id": value})
-                for value in GRAPH_SOURCE_ITEM_IDS
+                for value in fold.graph_source_item_ids
             )
         )
         try:
@@ -463,13 +618,16 @@ def compile_v320_train_item_out_crossfit_v2(
             raise TrainExecutionContractCrossfitError(
                 "TRAIN item-out trial evidence is missing"
             ) from exc
-        heldout_item_hash = stable_hash({"item_id": HELDOUT_ITEM_ID})
-        heldout_task_hash = stable_hash({"task_id": HELDOUT_ITEM_ID})
+        heldout_item_hash = stable_hash({"item_id": fold.heldout_item_id})
+        heldout_task_hash = stable_hash({"task_id": fold.heldout_item_id})
         if (
             heldout_item.id_hash != heldout_item_hash
             or baseline.item_id_hash != heldout_item_hash
             or heldout_item_hash in graph_trials
-            or any(row.task_id == HELDOUT_ITEM_ID for row in graph_residuals)
+            or any(
+                row.task_id == fold.heldout_item_id
+                for row in graph_residuals
+            )
         ):
             raise TrainExecutionContractCrossfitError(
                 "TRAIN item-out graph contains held-out evidence"
@@ -488,33 +646,35 @@ def compile_v320_train_item_out_crossfit_v2(
         )
         if (
             MAX_REGISTERED_ARTIFACTS_PER_FAMILY != 6
-            or full_graph.graph_hash != EXPECTED_FULL_GRAPH_HASH
-            or graph.graph_hash != EXPECTED_PROJECTED_GRAPH_HASH
-            or snapshot.snapshot_hash != EXPECTED_SNAPSHOT_HASH
+            or full_graph.graph_hash != fold.expected_full_graph_hash
+            or graph.graph_hash != fold.expected_projected_graph_hash
+            or snapshot.snapshot_hash != fold.expected_snapshot_hash
             or len(recipes) != 1
-            or recipes[0].recipe_id != SELECTED_RECIPE_ID
+            or recipes[0].recipe_id != fold.selected_recipe_id
         ):
             raise TrainExecutionContractCrossfitError(
                 "TRAIN item-out projected recipe drifted"
             )
 
         contract_residuals = tuple(
-            row for row in v320_residuals if row.task_id != HELDOUT_ITEM_ID
+            row
+            for row in v320_residuals
+            if row.task_id != fold.heldout_item_id
         )
         contract = derive_train_execution_contract(
             graph=graph,
-            recipe_id=SELECTED_RECIPE_ID,
+            recipe_id=fold.selected_recipe_id,
             residuals=contract_residuals,
         )
         contract_source_task_hashes = _support_task_id_hashes(contract)
         expected_source_task_hashes = tuple(
             sorted(
                 stable_hash({"task_id": value})
-                for value in GRAPH_SOURCE_ITEM_IDS
+                for value in fold.graph_source_item_ids
             )
         )
         if (
-            contract.contract_hash != EXPECTED_CONTRACT_HASH
+            contract.contract_hash != fold.expected_contract_hash
             or contract_source_task_hashes != expected_source_task_hashes
             or heldout_task_hash in contract_source_task_hashes
         ):
@@ -563,7 +723,7 @@ def compile_v320_train_item_out_crossfit_v2(
             "raw_content_persisted": False,
         }
         fold_receipt_hash = stable_hash(fold_receipt)
-        if fold_receipt_hash != EXPECTED_FOLD_RECEIPT_HASH:
+        if fold_receipt_hash != fold.expected_fold_receipt_hash:
             raise TrainExecutionContractCrossfitError(
                 "TRAIN item-out fold receipt drifted"
             )
@@ -605,13 +765,16 @@ def compile_v320_train_item_out_crossfit_v2(
             expected_model_catalog_set_hash=model_catalog_set_hash,
             expected_target_family_hashes=(graph.target_family_hash,),
         )
-        if snapshot_ledger.ledger_hash != EXPECTED_SNAPSHOT_LEDGER_HASH:
+        if (
+            snapshot_ledger.ledger_hash
+            != fold.expected_snapshot_ledger_hash
+        ):
             raise TrainExecutionContractCrossfitError(
                 "TRAIN item-out diagnostic ledger drifted"
             )
 
         program = materialize_recipe_selection(
-            {"recipe_id": SELECTED_RECIPE_ID},
+            {"recipe_id": fold.selected_recipe_id},
             graph=graph,
             evaluator_epoch=V320_EVALUATOR_EPOCH,
             expected_graph_hash=snapshot.expected_graph_hash,
@@ -624,7 +787,7 @@ def compile_v320_train_item_out_crossfit_v2(
             selection_round=1,
         )
         response = canonical_typed_recipe_selection_response(
-            SELECTED_RECIPE_ID
+            fold.selected_recipe_id
         )
         registry = TypedProgramBindingRegistry(
             snapshot_ledger=snapshot_ledger
@@ -632,7 +795,7 @@ def compile_v320_train_item_out_crossfit_v2(
         binding = registry.register(
             program,
             snapshot=snapshot,
-            recipe_id=SELECTED_RECIPE_ID,
+            recipe_id=fold.selected_recipe_id,
             request_kind="select_typed_root_recipe",
             request_hash=stable_hash(request),
             response_hash=stable_hash(response),
@@ -658,9 +821,11 @@ def compile_v320_train_item_out_crossfit_v2(
             output_root=destination / "base_compile",
             method_name="candidate",
             allowed_statuses={HypothesisStatus.CANDIDATE},
-            target_item_ids=(HELDOUT_ITEM_ID,),
+            target_item_ids=(fold.heldout_item_id,),
             target_split="train",
-            trace_id="v320-train-item-out-organize-2-compile",
+            trace_id=(
+                f"v320-train-item-out-{fold.heldout_item_id}-compile"
+            ),
         )
         contract_registry = TypedExecutionContractRegistry()
         contract_registry.register(contract, graph=graph)
@@ -673,9 +838,7 @@ def compile_v320_train_item_out_crossfit_v2(
             output_root=destination / "contract_bundle",
         )
         candidate = TrainCandidateSpecV2.from_verified_bundle(
-            candidate_id=(
-                "v320-train-loo-organize-2-organize-collection"
-            ),
+            candidate_id=fold.candidate_id,
             bundle=bundle,
             static_complexity=static_complexity,
         )
@@ -684,8 +847,8 @@ def compile_v320_train_item_out_crossfit_v2(
             baseline=baseline,
         )
         if (
-            candidate.candidate_hash != EXPECTED_CANDIDATE_HASH
-            or work.work_unit_hash != EXPECTED_WORK_UNIT_HASH
+            candidate.candidate_hash != fold.expected_candidate_hash
+            or work.work_unit_hash != fold.expected_work_unit_hash
             or len(candidate.item_routes) != 1
             or candidate.item_routes[0].item_id_hash != heldout_item_hash
         ):
@@ -709,7 +872,7 @@ def compile_v320_train_item_out_crossfit_v2(
             "projected_graph_hash": graph.graph_hash,
             "snapshot_hash": snapshot.snapshot_hash,
             "snapshot_ledger_hash": snapshot_ledger.ledger_hash,
-            "recipe_id": SELECTED_RECIPE_ID,
+            "recipe_id": fold.selected_recipe_id,
             "workflow": SELECTED_WORKFLOW.value,
             "program_id_hash": stable_hash({"program_id": program.id}),
             "program_payload_hash": program.payload_hash,
@@ -756,6 +919,7 @@ def compile_v320_train_item_out_crossfit_v2(
         result = TrainItemOutCompileV2(
             output_root=destination,
             report=report,
+            fold=fold,
             candidate_material=material,
             raw_projection=raw_projection,
             graph=graph,
@@ -837,10 +1001,12 @@ def run_v320_train_item_out_crossfit_actual_v2(
     canary_report_path: Path,
     provider_label: str,
     task_input_cache_root: Path | None = None,
+    fold: TrainItemOutFoldSpecV2 = ORGANIZE_2_FOLD,
 ) -> TrainItemOutActualV2:
-    """Run the single registered organize-2 item-out route offline."""
+    """Run one registered organize-family item-out route offline."""
 
     project = project_root.resolve(strict=True)
+    fold.verify()
     destination = output_root.expanduser().resolve()
     if destination.exists() or destination.is_symlink():
         raise FileExistsError("TRAIN item-out actual output already exists")
@@ -869,6 +1035,7 @@ def run_v320_train_item_out_crossfit_actual_v2(
         compilation = compile_v320_train_item_out_crossfit_v2(
             project_root=project,
             output_root=destination / "compile_diagnostic",
+            fold=fold,
         )
         event_sink = JsonlEventSink(destination / EXECUTION_EVENTS_FILENAME)
         active_hash = compilation.work.baseline.item_id_hash
@@ -924,7 +1091,9 @@ def run_v320_train_item_out_crossfit_actual_v2(
                 compilation.candidate.candidate_hash: compilation.bundle
             },
             backend_factory=backend_factory,
-            trace_prefix="v320-train-item-out-organize-2-actual",
+            trace_prefix=(
+                f"v320-train-item-out-{fold.heldout_item_id}-actual"
+            ),
         )
         ranking = TrainOutcomeRankerV2(max_workers=1).rank(
             baseline_set=compilation.raw_projection.baseline_set,
@@ -946,7 +1115,7 @@ def run_v320_train_item_out_crossfit_actual_v2(
             )
         run_result = ranking.run_results[0]
         if (
-            run_result.work_unit_hash != EXPECTED_WORK_UNIT_HASH
+            run_result.work_unit_hash != fold.expected_work_unit_hash
             or not run_result.offline_evaluation.evaluation_valid
         ):
             raise TrainExecutionContractCrossfitError(
@@ -955,9 +1124,12 @@ def run_v320_train_item_out_crossfit_actual_v2(
         outcome = next(
             row
             for row in ranking.outcomes
-            if row.work_unit_hash == EXPECTED_WORK_UNIT_HASH
+            if row.work_unit_hash == fold.expected_work_unit_hash
         )
         heldout_recovery = outcome.recovery
+        source_recovery_target = (
+            fold.heldout_item_id == SOURCE_RECOVERY_ITEM_ID
+        )
         report_without_hash: dict[str, Any] = {
             "execution_policy": CROSSFIT_ACTUAL_POLICY,
             "execution_completed": True,
@@ -975,7 +1147,7 @@ def run_v320_train_item_out_crossfit_actual_v2(
             ),
             "source_top_candidate_hash": SOURCE_TOP_CANDIDATE_HASH,
             "candidate_hash": compilation.candidate.candidate_hash,
-            "work_unit_hash": EXPECTED_WORK_UNIT_HASH,
+            "work_unit_hash": fold.expected_work_unit_hash,
             "heldout_item_id_hash": active_hash,
             "heldout_excluded_from_graph": True,
             "heldout_excluded_from_contract": True,
@@ -1005,7 +1177,10 @@ def run_v320_train_item_out_crossfit_actual_v2(
             "heldout_baseline_success": outcome.baseline_success,
             "heldout_candidate_success": outcome.candidate_success,
             "heldout_recovery_observed": heldout_recovery,
-            "in_sample_recovery_survived_item_out": heldout_recovery,
+            "source_in_sample_recovery_target": source_recovery_target,
+            "in_sample_recovery_survived_item_out": (
+                heldout_recovery if source_recovery_target else None
+            ),
             "offline_evaluation_only": True,
             "online_judge_calls": 0,
             "network_fallback_used": False,
@@ -1058,13 +1233,18 @@ def run_v320_train_item_out_crossfit_actual_v2(
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Compile and run the single v3.20 organize-2 TRAIN item-out "
-            "execution-contract diagnostic."
+            "Compile and run one registered v3.20 organize-family TRAIN "
+            "item-out execution-contract diagnostic."
         )
     )
     parser.add_argument("--project-root", type=Path, default=Path("."))
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--canary-report", type=Path, required=True)
+    parser.add_argument(
+        "--heldout-item-id",
+        choices=tuple(ORGANIZE_ITEM_OUT_FOLDS),
+        default=ORGANIZE_2_FOLD.heldout_item_id,
+    )
     parser.add_argument(
         "--provider-label",
         choices=("plus", "pro"),
@@ -1078,6 +1258,7 @@ def main() -> int:
         canary_report_path=args.canary_report,
         provider_label=args.provider_label,
         task_input_cache_root=args.task_input_cache_root,
+        fold=ORGANIZE_ITEM_OUT_FOLDS[args.heldout_item_id],
     )
     print(
         json.dumps(

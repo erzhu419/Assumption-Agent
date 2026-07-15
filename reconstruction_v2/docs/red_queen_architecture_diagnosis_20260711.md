@@ -12,6 +12,8 @@
 > - 最新 clean development 结果：v3.20 在 fresh root 上以 38 个 item workers / 48 model slots 完成 38/38 valid TRAIN、16/16 valid validation baseline 与 6 个 policy-on；61 次 attempt 中 60 次 valid，唯一 `codex_turn_failed` 以 same-request clean retry 恢复。两代均为 raw/candidate 5/16、activation 3/16、0 gain/0 harm、16 个 binary tie，两臂均 `incumbent_id=null`。非评分因果审计显示两代 recipe 与 action trace 确实不同，但 6 份 candidate trace 没有留下读取或消费 pre-agent sidecar 的可审计证据；因此断点是 capability evidence 未被下游动作消费，不是 selector、并发、budget 或新 gate 缺失。本轮已按预注册停止，不进入 freeze/controls/family-out/HippoRAG/sealed
 > - 最新 runtime-delivery integration：2026-07-15 的唯一一次 TRAIN-only、非评分正式 decision 及其 exact no-model Docker replay 已通过 8/8 predicates 与 4/4 固定 tamper probes。三个 exact-image canary 以 3 路并发、`--network none` 完成 production TRAIN compile、canonical profile 生成/回读、真实 Codex run-template 注入与 effective-prompt shell readback；model、`run_task`、evaluator、verifier、score、promotion call 均为 0。该结果证明 profile 已进入 launch input，并不证明模型在认知上使用了 profile，也不产生 incumbent 或 task-utility claim
 > - 最新 profile-consumption 诊断：2026-07-15 的预注册 consumed-development diagnostic 只新增 G1/G2 × 3 项共 6 个 policy-on trial，6 路同时启动、无 retry，6/6 valid 且 runtime receipt binding 全部通过；全程复用冻结 RAW 并使用离线 post-agent verifier。G1/G2 均为 0/3，prompt-delivery delta 与相对 RAW utility signal 均为 0/6。该结果 `fresh_validation=false`、`claim_eligible=false`，不创建 incumbent 或 promotion，也不触碰 test trial/sealed scoring；它终止的是“继续强化同一 profile 的 delivery”路线，下一步先改变 task-local execution contract 与 TRAIN-only action-utility 搜索对象，而不是立刻消耗新的 holdout 或增加 gate
+> - 最新 execution-contract TRAIN ranking：14 个历史候选已编译为 6 个 typed programs，并在 38 个 TRAIN item 上形成完整的 14×38=532 outcome grid：56 个实际 policy-on、476 个冻结 RAW replay。Plus 首轮以 56 outer workers / 48 model slots 调度，实测 model 峰值并发 34，得到 55 个有效结果与 1 个 provider-capacity terminal；随后只用 Pro 重试该 1 路并得到 valid failure，没有重跑其余 55 路。最终 56/56 active outcome 有效，全部由本地离线 verifier 评价，online judge=0、validation/test=false。首位 `72c5ea9e…cd295` 为 1 recovery / 0 regression；被补跑的 `4033a94b…dedabf` 为 valid failure、0 recovery。该 ranking 未运行 promotion gate，也不授权 freeze 或 downstream
+> - 最新泄漏审计与 targeted item-out 结果：上述 56 个 active outcome 的 route source 都包含被评价题本身，strict leave-item-out count=0；因此 `72c5…` 只是 in-sample TRAIN signal。事后看过 ranking 后，先对 recovery 所在的 `organize-messy-files-2` 做 bounded item-out refit/falsification，再以同一固定 workflow 并发补齐 organize-5/-6 两个 family fold；每 fold 都只用另外两题构图和派生 contract，固定 minimum support=2、maximum registered artifacts=6，不新增 gate。三路均 evaluation-valid、各带 37 个冻结 RAW replay，结果为 organize-2 false→true、organize-5 false→false、organize-6 false→false，即 1/3 recovery、0 regression；后两路分别使用 17/100 与 12/100 actions。全程 offline judge、validation/test=false，Codex/verifier 原始文件已持久化。由于整个 family audit 是看过 source ranking 后启动，`unbiased_crossfit=false`；且 1/3 不支持 family-wide transferable signal，因此该候选已被否决，不再补 gate，也不产生 freeze、promotion 或 incumbent
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -1406,6 +1408,72 @@ temperature G2：66 个 action starts 却消耗 3,000,056 tokens 和 1,763.18 �
 action 内调度/尝试 140-point grid search（不能证明 140 点全部完成）。action-start count 不能约束 action-span 内部计算；下一表示应让
 typed operator 声明有限候选集、搜索空间 hash 与实际 evaluation count receipt，而不是再叠一个评分 gate。
 
+### 8.11 P0 已执行：execution-contract TRAIN ranking 出现阳性，但证据仍受 in-sample 与 post-selection 限制
+
+closed execution-contract 的候选搜索已经真正接入 production compile 与离线 outcome ranking，而不再停留在
+prompt/profile delivery。正式非评分 integration 从 v3.20 的 38 条冻结 TRAIN evidence（9 success / 29
+failure）重建 14 个历史候选、6 个 typed programs，以 14 个 compile workers 形成 14×38=532 个完整
+candidate/item outcome：56 个 route-matched active execution 与 476 个 exact frozen-RAW replay。integration
+本身的 model、evaluator、online judge、network call 均为 0，validation/test content access=false，且不授权
+freeze、promotion 或 scoring。
+
+正式 active execution 首轮使用 Plus，以 56 outer workers / 48 model slots 最大化题级调度，实测 source
+model 峰值并发为 34。56 路中 55 路有效；唯一异常是 candidate `4033a94b…dedabf` 在
+`temperature-simulation-2` 上收到明确的 provider model-capacity terminal，而不是 budget、web、verifier 或
+route drift。1356-event source ledger 经 envelope/hash/identity 复核后恢复 55 份有效 observation；随后只用
+Pro 对该 exact request 补跑 1 路，得到 evaluation-valid task failure，0 recovery / 0 regression。其余 55 路
+没有重跑。因为最初 backend instance hashes 只存在进程内，不能声称恢复了原 run 的 bit-exact ranking hash；
+最终 report 对此显式标记 `source_bit_exact_original_ranking_hash_recoverable=false`，并另行冻结排除 backend
+identity 的 semantic ranking。
+
+最终 grid 为 56/56 active valid + 476 replay，online judge=0、network fallback=false、
+validation/test=false、promotion gate=false。排名首位是 `72c5ea9e…cd295`：总 recovery=1、regression=0，
+唯一翻转为 `organize-messy-files-2` 的冻结 RAW failure → candidate success；第二次补跑的 `4033…` 仍为
+valid failure。ranking hash 为 `2ec01860…db33`，semantic ranking hash 为 `58b35d34…82e0`。这证明新的
+search object 至少不再是全零，但**不能直接建立 incumbent**。
+
+关键原因是 source leakage audit：56 个 active route 的 candidate graph/contract source 都包含当前被评价的
+TRAIN item，strict leave-item-out active outcome=0。换言之，`72c5…` 的 +1/0 是 in-sample fit；它既不是
+unseen transfer，也不是 clean L2 validation learning。把它直接 freeze、送 controls、family-out、HippoRAG
+或 sealed，都会把候选形成证据与效用检验混写。
+
+因此只做了最低成本的 falsification，而没有增加 gate 或重跑全 grid：针对阳性所在的
+`organize-messy-files-2`，从 graph 与 execution contract 中同时排除该题，只用 organize-5/-6 两条独立
+source，保持 `minimum_independent_support=2`、`maximum_registered_artifacts_per_family=6`，编译
+`organize_collection` recipe `recipe_0443d11a27ce50690356` 为新 candidate
+`a34f06d0…52634`。非评分 compile 预注册为 1 个 active held-out execution + 37 个 frozen-RAW replay，
+model/evaluator/network/online-judge call=0、validation/test access=false；post-run compile audit exact replay
+hash 为 `0cb50293…deb74`。
+
+该单路 Plus actual 已完成：`organize-messy-files-2` 从 baseline=false 变为 candidate=true，
+evaluation-valid，14/100 actions、182.488 秒；完整 ranking 为 1 active + 37 replay，ranking hash
+`2e070ea0…ea10`、active run receipt `a728245b…f5516`、最终 report hash `849bfbc6…b58ec`。actual
+worker_state 保留了 Codex trace 与 verifier 原始文件，报告也明确
+`raw_candidate_trial_artifacts_persisted=true`。
+
+但这个阳性只能解释为 **post-selection targeted item-out refit/falsification**：item 与 workflow 都是在看过
+source TRAIN ranking 后选择，workflow 也没有在不看 heldout 的条件下重新选择。正式 report 因而冻结
+`fold_and_workflow_selected_post_source_ranking=true`、`unbiased_crossfit=false`、
+`single_fold_incumbent_authorized=false`。它说明原来的 in-sample recovery 在移除本题 graph/contract
+evidence 后没有立刻消失，但不估计无偏泛化率。
+
+为避免把单个成功题反复包装成证据，同时也不新增 gate，随后一次性补齐同一 organize family 的另外两个
+item-out fold。每个 fold 都保持同一 `organize_collection` workflow、support=2、max artifacts=6，graph 与
+contract 同时排除 heldout，只用另外两题；fold 的 exact graph/snapshot/contract/candidate/work hashes 在 actual
+前固定。organize-5 与 organize-6 以两路 Plus 并发启动，均无 retry、provider anomaly 或 online judge：
+
+- organize-5：candidate `3fd2c792…114b`，17/100 actions、236,454 tokens，offline-valid false→false，
+  ranking=`33cd43f4…47f1`，report=`3201ca6c…6fd8`；
+- organize-6：candidate `999b2e5e…3dc3`，12/100 actions、207,469 tokens，offline-valid false→false，
+  ranking=`22f69877…9fe2`，report=`a59d6f4e…70da`。
+
+因此这组 post-selected family audit 的完整结果是 3/3 active valid + 111 frozen-RAW replay、1/3 recovery、
+0 regression、online judge=0、validation/test=false。它不是 prospective unbiased cross-fit，但已经足够否定
+“organize-2 阳性代表 family-wide transferable signal”：另外两道同 family RAW failure 都没有恢复。这里按
+候选级停止条件终止，不再给该 workflow 增加规则、gate 或更多 holdout；它不创建 promotion/incumbent，也
+不改变“无 incumbent 前禁止 downstream”的结论。下一步必须改变 candidate search/selection objective，
+让 out-of-item utility 直接参与 TRAIN 候选形成，而不是继续验证这一个失败候选。
+
 ## 九、下一步优先级与硬验收标准
 
 | 优先级 | 工作 | 硬验收标准 |
@@ -1443,13 +1511,16 @@ typed operator 声明有限候选集、搜索空间 hash 与实际 evaluation co
 | 完成（typed-portable formal integration PASS） | capability-backed portable artifact role 的 pre-agent 只读 sidecar | 唯一一次正式 run + exact replay PASS，decision `a151ca52…e7957e`；3 项真实 Docker canary、production v3.20 loader、exact image 与 cleanup 通过，0 model/task-backend/evaluator call。只声明 evidence profile/inventory sidecar，write/render/move 不属于 capability effect；该次性 development 授权已使用 |
 | 完成（v3.20 clean negative） | 验证 portable treatment 的真实 task utility | 38/38 TRAIN、16/16 baseline、6/6 policy-on valid；两代均 3/16 activation、5/16 对 5/16、0 gain/0 harm、incumbent null。G1/G2 行为不同，但 6 份 trace 都未消费 sidecar；已按停止条件终止，不新增 recipe prompt、selector 或评分 gate |
 | 完成（consumed、non-claim diagnostic） | verified profile launch-prompt delivery | 6/6 valid、actual peak concurrency=6、runtime receipt binding PASS；G1/G2 均 0/3，delivery delta=0/6、RAW utility=0/6；明确不声明 semantic consumption 或 task causality |
+| 完成（execution-contract TRAIN ranking） | 改变候选搜索对象并按实际离线 outcome 排名 | 14 candidates × 38 TRAIN=532：56 active + 476 frozen-RAW replay；56/56 active valid，online judge=0、validation/test=false。`72c5…` 为 1 recovery / 0 regression；`4033…` capacity exact retry 后为 valid failure。未应用 promotion gate |
+| 完成（证据边界审计） | 区分 in-sample ranking 与 transferable signal | 56 个 active route 全部包含被评价题的 source evidence，strict item-out=0；`72c5…` 不是 incumbent、L2 learning 或迁移证据 |
+| 完成（targeted family item-out falsification；有 post-selection bias） | 检验 organize-2 阳性是否扩展到同 family 的另外两题 | 三个 fold 都只用其余两题构图/派生 contract，support=2、max artifacts=6；3/3 active valid + 111 RAW replay，结果依次为 false→true、false→false、false→false，即 1/3 recovery、0 regression。`unbiased_crossfit=false`；已否定 family-wide signal并停止该候选 |
 | STOP | 重跑相同 6 题、立即使用相同候选消耗 fresh split、freeze/controls/family-out/HippoRAG/sealed | 已见 validation 只能作为 design evidence；无 incumbent；不得把调过的同一 split 再包装成无偏 claim，也不应让相同候选继续消耗 holdout |
-| NEXT（候选类改变，不是新 gate） | task-local typed execution contract 与 TRAIN-only action-utility search | 候选包含 role-resolved input、decisive invariant、bounded operation、postcondition/completion audit、single-source self-evaluation 和 effect receipt；禁止携带 verifier/test literal |
+| NEXT（候选搜索改变，不是新 gate） | 把 out-of-item utility 纳入 TRAIN candidate formation/selection | 不再扩展 organize 候选；候选必须在形成时使用 deterministic item-out objective，graph 与 contract 同时排除 heldout，使用冻结 RAW、最大并发和离线 verifier；只有跨多个事前固定 item/fold 的 recovery 才能成为 fresh paired efficacy 的候选 |
 | 后续一次性验证 | fresh paired efficacy | 只有新候选类先在 deterministic TRAIN cross-fit 上产生 transferable utility signal，才冻结新的未消费 development split；RAW/Agent 最大并发、同模型/镜像/预算、离线评价。HippoRAG 仅在存在同构 executable adapter 时加入 |
 | P2 | 多 clade archive | 同 epoch 至少两个 clade 可继续扩展；node 绑定 protocol/evidence/promotion hashes，并报告 retention 与 branch productivity |
 | P2 | evaluator co-evolution | 独立 anchor challenger、epoch transition、selective invalidation 和旧 incumbent re-evaluation 实际执行后再作主张 |
 
-以下为按时间保留的执行记录（当前停止结论见第 62 项）：
+以下为按时间保留的执行记录（当前证据边界见第 66 项）：
 
 1. 已完成：审阅并提交 protocol/action/subset 改动以及 3 个新 manifest/receipt 文件；
 2. 已完成：在 clean scoped commit 上重建 claim-eligible lock 和 86-item content-hashed prewarm receipt；
@@ -1744,6 +1815,31 @@ typed operator 声明有限候选集、搜索空间 hash 与实际 evaluation co
     bounded operator、postcondition 与 single-source self-evaluation，而不是增加 gate 或立刻用同一候选
     消耗 fresh holdout。只有 deterministic TRAIN cross-fit 先出现 transferable action-utility signal，才
     进行一次新的 paired development。
+63. execution-contract candidate grid 已完成 production compile 与最大并行 actual。非评分 integration 从
+    v3.20 的 38 TRAIN rows（9 success / 29 failure）形成 14 candidates、6 programs、14×38=532 outcomes，
+    其中 56 active / 476 frozen-RAW replay。Plus 首轮以 56 outer workers / 48 model slots 调度，source
+    model 峰值并发 34；55 路有效，唯一 `4033…`/temperature-2 为明确 provider-capacity terminal。
+64. 1356-event ledger 完整恢复 55 个有效结果后，只以 Pro exact retry 该 1 路并得到 valid failure；最终
+    56/56 active valid、476 replay、online judge=0、validation/test=false。`72c5…` 以 organize-2 的
+    1 recovery / 0 regression 排名第一，ranking=`2ec01860…db33`；但 56 个 active route 的 source
+    evidence 全部包含当前 item，strict leave-item-out=0，所以它仍只是 in-sample signal。未运行 promotion
+    gate，未产生 incumbent，也不授权 freeze/controls/family-out/HippoRAG/sealed。
+65. 看过上述 ranking 后，完成一次明确标记 selection leakage 的 organize-2 targeted item-out
+    refit/falsification。graph 与 contract 均排除 organize-2，仅使用 organize-5/-6，support=2、max
+    artifacts=6；candidate `a34f…` 的唯一 active run 以 Plus 在 14 actions / 182.488 秒内得到 offline-valid
+    false→true，另 37 outcomes 为冻结 RAW replay。post-run compile exact audit hash=`0cb50293…deb74`，
+    final report=`849bfbc6…b58ec`，raw Codex/verifier worker artifacts 已持久化。由于 item/workflow 是
+    post-selection，`unbiased_crossfit=false`、single-fold incumbent unauthorized；该结果只说明阳性在移除
+    同题 graph/contract evidence 后存活，不是无偏 transfer。下一步若继续，必须事前冻结 multi-fold /
+    multi-item TRAIN cross-fit；仍不增加 gate，也不进入 downstream。
+66. 为一次性判定这个候选而非围绕成功题继续补 gate，已固定同一 workflow 并以两路 Plus 最大并发补齐
+    organize-5/-6 item-out；每路只用另外两题形成 graph/contract，各 1 active + 37 RAW replay，均无 retry。
+    两路分别在 17/100 与 12/100 actions 内得到 offline-valid false→false，reports=`3201ca6c…6fd8` /
+    `a59d6f4e…70da`。完整 targeted family 结果因此为 3/3 active valid、111 replay、1/3 recovery、0
+    regression、online judge=0、validation/test=false。整个 audit 仍有 post-selection bias，但 1/3 已足以
+    否定 family-wide transferable signal；该候选在此停止，不 freeze、不进 controls/family-out/HippoRAG/
+    sealed。下一步改 candidate search objective，使 out-of-item utility 在 TRAIN candidate formation 时直接
+    参与选择，而不是继续验证这个失败候选。
 
 这个负结果比继续扩展 gate、archive 或 HLE source span 更能降低研究风险。
 
@@ -1810,8 +1906,8 @@ activation；held-out causal activation precision 的分母则是 evidence-valid
 | 层级 | 可声明内容 | 当前状态 |
 |---|---|---|
 | L0 wiring | schema、repair、off/on、guard、archive transition 的机械链路已连接 | 达到：typed operator feasibility 9/9，production selection integration v2 13/13 + 12/12 tamper + exact replay；typed-portable formal integration 又以一次 run + exact replay、3 项真实 Docker canary、production loader/cleanup 闭合 pre-agent 只读 sidecar。它不覆盖 write/render/move task effect |
-| L1 mechanism live | 真实外部任务中 proposal/repair/treatment/gate 全链路完成 | 达到：v3.20 在 task closure 修复后完成 38/38 TRAIN、16/16 shared baseline、6/6 policy-on 与两代决策；60/60 valid trial receipts 完整。G1/G2 确实改变 action trace，但 sidecar 没有被下游动作消费 |
-| L2 validation learning | clean held-out validation 上有可晋级净收益 | 未达到；v3.20 两代均 5/16 对 5/16、0 gain/0 harm、`incumbent_id=null` |
+| L1 mechanism live | 真实外部任务中 proposal/repair/treatment/gate 全链路完成 | 达到：v3.20 完成 60/60 valid trial receipts；新的 execution-contract 搜索又完成 14×38 TRAIN grid、56 active offline outcomes，以及 organize family 的 3 个 targeted item-out active runs。三 fold 只有 1/3 recovery，且有 post-selection bias，不提高 claim 层级 |
+| L2 validation learning | clean held-out validation 上有可晋级净收益 | 未达到；v3.20 为 0 gain/0 harm、`incumbent_id=null`。execution-contract source ranking 的 strict item-out=0；targeted family audit 为 1/3 recovery、`unbiased_crossfit=false`，已否定 family-wide signal并拒绝该候选 |
 | L3 prospective generalization | frozen incumbent 在 unseen instance/family 上保持收益 | 未达到 |
 | L4 self-evolution | 多代 retained improvement，且 recursion ablation 有因果贡献 | 未达到 |
 | L5 evaluator co-evolution | anchor-guided evaluator replacement 与 selective erasure 改善搜索 | 未达到 |
@@ -1965,18 +2061,28 @@ material task action 仍主要由 agent 自由规划。6/6 runtime receipt 虽�
 同代历史 treatment 与冻结 RAW 都没有 utility signal。因为这些 validation item 在预注册前已经消费，
 这个结果只能作 design evidence，不能作 clean causal null。
 
-所以当前停止条件比“换一个 fresh split 立刻再跑”更严格：现有 primary validation 不能继续用于无偏
-claim，但也不应让**相同候选类**立即消耗新的 holdout。先把搜索对象改为 TRAIN-derived closed execution
-contract：role-resolved input、decisive invariant、bounded operation、postcondition/completion audit、
-single-source self-evaluation 与 effect receipt；再在 deterministic TRAIN inner/cross-fit 上，用已存 RAW
-baseline 和最大并行的 candidate-on 离线评价实际 action utility。这个 TRAIN objective 是候选排序信号，
-不是新的 promotion gate，也不得读取 consumed validation、test 或 hidden verifier literal。只有 cross-fit
-先出现 transferable utility，才冻结一次新的未消费 development split并做 paired efficacy。
+closed execution-contract 搜索现已真正跑过 14×38 TRAIN grid：56 active + 476 RAW replay 全部有效，首位
+`72c5…` 出现 1 recovery / 0 regression。但 source audit 同时证明 56 个 active 都是 in-sample，strict
+item-out=0。随后仅用 organize-5/-6 refit 的 organize-2 targeted item-out 又得到一次离线 valid
+false→true，说明该阳性在移除同题 graph/contract evidence 后存活；其 Codex/verifier worker artifacts 已持久化。
+然而这道题和 workflow 是看过 ranking 后才选定，`unbiased_crossfit=false`，所以仍不能把 single-fold
+survival 写成 transfer、promotion 或 incumbent。现在同一 workflow 的另外两个 item-out fold 也已最大并发
+补齐，organize-5/-6 均为 offline-valid false→false；完整 family audit 是 1/3 recovery、0 regression。它仍
+有 post-selection bias，却已经足够反驳 family-wide transferable signal，因此该候选已终止。
+
+所以当前停止条件比“有一个阳性就换 fresh split”更严格：现有 primary validation 不能继续用于无偏 claim，
+也不能让这个 post-selected candidate 直接消耗新 holdout，更不应继续围绕它增加规则或 gate。下一步改变
+candidate search/selection objective：在候选形成时就以 deterministic item-out utility 排序，graph 和
+contract 同时排除 heldout，并继续使用已存 RAW、最大并发 candidate-on 与本地离线 verifier。这个 TRAIN
+objective 是候选搜索信号，不是新 promotion gate，也不得读取 consumed validation、test 或 hidden verifier
+literal。只有新的候选在多个 outcome 前固定的 item/fold 上给出可重复 recovery，才冻结一次新的未消费
+development split做 paired efficacy。
 
 因此现在不跑 freeze、controls、family-out、HippoRAG/raw transfer 或 sealed test，更不谈 multi-clade 或
 evaluator co-evolution。任何把 primary sealed item 改作 development 的方案都会消耗既有 sealed holdout，
 必须另行显式重划并保留新的最终 sealed 集；v3.12 空 freeze/partial-control rows、v3.14 mixed-claim rows、
-v3.16/v3.17 proposal-only artifacts、v3.18r1 mixed-validity rows和本轮 consumed diagnostic 都不能拼成
+v3.16/v3.17 proposal-only artifacts、v3.18r1 mixed-validity rows、本轮 consumed diagnostic、in-sample
+execution-contract grid 与 post-selected organize family 1/3 audit 都不能拼成
 performance evidence。距离目标的状态是：L1 wiring/delivery 已完成；L2 可归因行为改善仍缺；无 incumbent
 所以 L3 unseen generalization 尚未开始，L4 recursive retained improvement 未证明，L5 evaluator
 co-evolution 未开始。
@@ -2008,6 +2114,28 @@ co-evolution 未开始。
   [`no-recursive report`](../artifacts/paper_primary_v3_20_offline86_ruoli_gpt54mini_outer38_model48_portable01/development_no_recursive.report.json)；
   [`shared event ledger`](../artifacts/paper_primary_v3_20_offline86_ruoli_gpt54mini_outer38_model48_portable01/development_recursive.events.jsonl)；
   [`recursive archive`](../artifacts/paper_primary_v3_20_offline86_ruoli_gpt54mini_outer38_model48_portable01/development_recursive.archive.json)
+- execution-contract candidate compile integration（14 candidates / 6 programs / 14×38；非评分）：
+  [`integration report`](../artifacts/train_execution_contract_integration_v2_v320_train_actual01/integration.report.json)
+- execution-contract TRAIN actual source run（Plus；55 valid + 1 capacity terminal）：
+  [`compile integration report`](../artifacts/train_execution_contract_development_v2_v320_train_plus_actual01/compile_integration/integration.report.json)；
+  [`source event ledger`](../artifacts/train_execution_contract_development_v2_v320_train_plus_actual01/execution.events.jsonl)；
+  [`ranking failure receipt`](../artifacts/train_execution_contract_development_v2_v320_train_plus_actual01/ranking.failure.json)
+- execution-contract TRAIN one-route resume 与最终离线 ranking（Pro；56 active + 476 replay）：
+  [`final ranking report`](../artifacts/train_execution_contract_development_v2_v320_train_resume_pro_actual01/ranking.report.json)；
+  [`exact retry event ledger`](../artifacts/train_execution_contract_development_v2_v320_train_resume_pro_actual01/retry.execution.events.jsonl)
+- organize-2 post-selection targeted item-out refit/falsification（`unbiased_crossfit=false`；非 incumbent）：
+  [`compile report`](../artifacts/train_execution_contract_crossfit_v2_v320_train_loo_organize2_plus_actual01/compile_diagnostic/crossfit.compile.report.json)；
+  [`post-run compile audit replay`](../artifacts/train_execution_contract_crossfit_v2_v320_train_loo_organize2_plus_actual01/compile_diagnostic_audit_replay/crossfit.compile.report.json)；
+  [`actual event ledger`](../artifacts/train_execution_contract_crossfit_v2_v320_train_loo_organize2_plus_actual01/crossfit.execution.events.jsonl)；
+  [`final report`](../artifacts/train_execution_contract_crossfit_v2_v320_train_loo_organize2_plus_actual01/crossfit.report.json)；
+  [`raw Codex/verifier worker artifacts`](../artifacts/train_execution_contract_crossfit_v2_v320_train_loo_organize2_plus_actual01/worker_state/)
+- organize-5/-6 targeted item-out family completion（两路 Plus 并发；均 valid failure）：
+  [`organize-5 compile report`](../artifacts/train_execution_contract_crossfit_v2_v320_train_loo_organize5_plus_actual01/compile_diagnostic/crossfit.compile.report.json)；
+  [`organize-5 final report`](../artifacts/train_execution_contract_crossfit_v2_v320_train_loo_organize5_plus_actual01/crossfit.report.json)；
+  [`organize-5 raw worker artifacts`](../artifacts/train_execution_contract_crossfit_v2_v320_train_loo_organize5_plus_actual01/worker_state/)；
+  [`organize-6 compile report`](../artifacts/train_execution_contract_crossfit_v2_v320_train_loo_organize6_plus_actual01/compile_diagnostic/crossfit.compile.report.json)；
+  [`organize-6 final report`](../artifacts/train_execution_contract_crossfit_v2_v320_train_loo_organize6_plus_actual01/crossfit.report.json)；
+  [`organize-6 raw worker artifacts`](../artifacts/train_execution_contract_crossfit_v2_v320_train_loo_organize6_plus_actual01/worker_state/)
 - previous live-mechanism protocol（performance mixed-validity）：
   [`skilllearn_paper_protocol_v3_18r1_ruoli_gpt54mini.json`](../manifests/skilllearn_paper_protocol_v3_18r1_ruoli_gpt54mini.json)
 - formal production typed-selection integration v2：
