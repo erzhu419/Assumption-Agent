@@ -1559,7 +1559,9 @@ TRAIN cross-fit objective 上提高 recovery coverage；这仍是 candidate form
 | 完成（trace-refined candidate negative；仍有 design leakage） | 检验 destination/evidence/reopen 三个 generic invariant 是否提高 organize family recovery coverage | 提交 `baa3230a` 在 actual 前冻结 manifest=`da85625c…5483` 与三折 hashes；三路 Plus 同时启动，3/3 active valid + 111 RAW replay，结果为 false→false、false→false、false→true，仍是 1/3 recovery、0 regression。阳性 fold 改变但 coverage 未提高，故停止该分支 |
 | 完成（typed-assignment representation negative；历史知情） | 检验 content evidence→typed plan→harness reconciliation 是否提高多折 recovery coverage | 最终提交 `0eba5b7c` 后三路 Pro 同时启动，3/3 active valid + 111 RAW replay；每路 103/103 evidence/assignment/reopen/hash-match，但结果仍为 false→false、false→false、false→true，1/3 < 预注册 2/3。org2/org5 wrong-subject=1/32，证明剩余方差在 trial 内 semantic classifier；representation stopped |
 | STOP | 重跑相同 organize 题、继续修改同类 prompt/keyword、立即消耗 fresh split、freeze/controls/family-out/HippoRAG/sealed | 三类候选都只有 1/3；无 incumbent。2/5/6 已全部成为设计数据，不得把再调参后的同 cohort 包装成 cross-fit generalization，也不得用更多自然语言 invariant/gate 追逐单折成功 |
-| NEXT（新的 operator class，不是新 gate） | 冻结的本地 semantic assignment operator | 仅可改成预先绑定权重/prototype/tie-break/default 的离线 embedding/NLI 或显式元数据 parser，并先找到未消费 TRAIN-derived target 或独立 synthetic holdout；否则停止 organize benchmark 路线，不读取 1/4 sealed 或 consumed 3 |
+| 完成（operator 已冻结；prospective acquisition invalid） | 冻结的本地 semantic assignment operator | commit `2f804812` 固定 MiniLM/115 条 consumed TRAIN/OVR 参数/default/runtime；两次事前注册且 period-disjoint 的 public-OA acquisition 分别在 trapped-ion 40-pool 与 LLM 120-pool 供给不足处、prediction 前 fail closed。合计 operator call=0、outcome=0；efficacy unknown，不是 PASS/FAIL/incumbent |
+| STOP | 第三次 public-OA acquisition、拼接 partial/reference PDF 或 synthetic 文献分类替代 task effect | 本地只存在 6 个 organize instance：2/5/6 已作 TRAIN、3 已消费、1/4 sealed；其余 reference/HF cache 不具备五类独立 gold。两批 partial 已成为关闭的 acquisition data。不得换 period/source、扩 pool、读取 sealed 或用人为措辞的分类 PASS 冒充 L2 utility |
+| 已冻结，待一次性诊断（新的 operator，不是新 gate） | SC-100 semantic field compiler | 在仅使用 consumed TRAIN 的 family scan 中，court-form-filling 3/4/6 提供 frozen RAW=`1/0/0`：两个 gain target 与一个 no-harm control。candidate `86319d63…10bb` 把 intake 事实编译为固定 30-field AcroForm 白名单，禁止 XFA stream/raster/arbitrary shell；manifest `9388b249…0fb1` 事前绑定代码、三题 plan、镜像、离线 verifier 和 3+3 最大并发。由于 TRAIN tests 已参与设计，结果只允许称 historically informed representation diagnostic，不是 OOF/incumbent |
 | 后续一次性验证 | fresh paired efficacy | 只有新候选类先在 deterministic TRAIN cross-fit 上产生 transferable utility signal，才冻结新的未消费 development split；RAW/Agent 最大并发、同模型/镜像/预算、离线评价。HippoRAG 仅在存在同构 executable adapter 时加入 |
 | P2 | 多 clade archive | 同 epoch 至少两个 clade 可继续扩展；node 绑定 protocol/evidence/promotion hashes，并报告 retention 与 branch productivity |
 | P2 | evaluator co-evolution | 独立 anchor challenger、epoch transition、selective invalidation 和旧 incumbent re-evaluation 实际执行后再作主张 |
@@ -2193,6 +2195,14 @@ stratum 只有 2 个合格 partial PDF，仍无 pack lock/report/decision/outcom
 `semantic_assignment_public_oa_period_out_feasibility_result_v2.json` 因而将
 `public_oa_feasibility_route_stopped=true` 固化。至此不再换 period/source、扩 pool 或补 acquisition gate；
 local operator 本身仍是“未评价”，不是 PASS、FAIL 或 incumbent。
+
+随后只读审计了全部本地可用 target，结论为 NONE：SkillLearnBench 的 organize family 只有上述 6 题；
+约 34 篇 reference PDF 高度偏 LLM/self-evolution，无法组成 trapped-ion/black-hole/DNA/music-history/
+LLM 五类平衡且独立的 gold；本地 Hugging Face cache 也没有相应分类数据。因而不把人为 synthetic 文献
+分类当作 task-level causal gain 的替身，semantic operator 归档为
+`transport-blocked / efficacy-unknown`。离目标最近的下一搜索对象改为非-organize TRAIN 上的有限
+heterogeneous typed-action library：候选直接生成可执行 action 与 reopen/reconcile receipt，以 frozen RAW
+和本地 verifier 的 item-out task-success 净恢复排序，而不是再修改 recipe prompt 或增加 acceptance gate。
 
 因此现在仍不跑 SkillLearn incumbent freeze、controls、family-out、HippoRAG/raw transfer 或 sealed test，
 更不谈 multi-clade 或
