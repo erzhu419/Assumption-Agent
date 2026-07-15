@@ -65,10 +65,10 @@ TYPED_ASSIGNMENT_PREREGISTRATION_POLICY = (
     "v320_typed_assignment_train_crossfit_preregistration_v3"
 )
 TYPED_ASSIGNMENT_PROVIDER_POLICY = (
-    "pretask_plus_model_response_then_transport_only_pro_single_batch_v2"
+    "pretask_plus_model_response_then_unavailable_only_pro_single_batch_v3"
 )
 PROVIDER_TRANSPORT_FAILURE_RECEIPT_VERSION = (
-    "provider_transport_no_model_response_receipt_v1"
+    "provider_pre_task_unavailability_receipt_v2"
 )
 TYPED_ASSIGNMENT_CLASSIFICATION_OBJECTIVE = (
     "content_evidence_to_typed_file_assignment_to_one_to_one_reconciliation"
@@ -378,7 +378,7 @@ _TRANSPORT_FAILURE_ERROR_TYPES = frozenset(
     }
 )
 _TRANSPORT_FAILURE_HTTP_STATUSES = frozenset(
-    {408, 425, 429, 500, 502, 503, 504}
+    {401, 402, 403, 408, 425, 429, 500, 502, 503, 504}
 )
 
 
@@ -440,7 +440,7 @@ def _transport_failure_summary_v3(
         )
     ):
         raise TrainTypedAssignmentCrossfitError(
-            "Plus canary failure is not a verified transport/no-response failure"
+            "Plus canary failure is not verified pre-task unavailability"
         )
     return {
         "event_ledger_sha256": ledger_sha256,
@@ -453,7 +453,7 @@ def _transport_failure_summary_v3(
             {"failure_rows": failure_rows}
         ),
         "model_response_received": False,
-        "transport_or_no_response_failure_verified": True,
+        "pre_task_provider_unavailability_verified": True,
         "raw_failure_content_persisted": False,
     }
 
@@ -567,7 +567,7 @@ def _verify_plus_transport_failure_receipt_v3(
             "Plus transport failure receipt drifted"
         )
     return {
-        "probe_kind": "transport_or_no_model_response_failure",
+        "probe_kind": "pre_task_provider_unavailability",
         "receipt_file_sha256": hashlib.sha256(raw).hexdigest(),
         "receipt_hash": receipt_hash,
         "failure_summary": summary,
@@ -629,7 +629,7 @@ def write_provider_selection_receipt_v3(
         selected_provider_label = "pro"
         selected_response_receipt = pro_receipt
         probe_order = [
-            "plus_transport_or_no_model_response_failure",
+            "plus_pre_task_provider_unavailability",
             "pro_complete_model_response",
         ]
     without_hash = {
@@ -729,7 +729,7 @@ def _verify_provider_selection_receipt_v3(
             expected_canary_report_path=plus_expected_canary_report_path,
         )
         pro_route_valid = payload.get("probe_order") == [
-            "plus_transport_or_no_model_response_failure",
+            "plus_pre_task_provider_unavailability",
             "pro_complete_model_response",
         ]
     else:
@@ -1082,7 +1082,7 @@ class TypedAssignmentCrossfitCompileV3:
                 "initial_probe_provider_label": "plus",
                 "complete_plus_model_response_always_selected": True,
                 "plus_semantic_acceptance_used_for_selection": False,
-                "pro_requires_verified_plus_transport_or_no_response_failure": (
+                "pro_requires_verified_plus_pre_task_unavailability": (
                     True
                 ),
                 "pro_requires_complete_model_response": True,
@@ -1806,7 +1806,7 @@ def run_v320_typed_assignment_crossfit_actual_v3(
             "candidate_search_success": search_success,
             "candidate_class_eligible_for_fresh_development": search_success,
             "valid_failures_retried": False,
-            "pro_selected_after_plus_transport_or_no_response_failure": (
+            "pro_selected_after_plus_pre_task_unavailability": (
                 provider_label == "pro"
             ),
             "selected_provider_fixed_for_complete_three_cell_batch": True,

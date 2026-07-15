@@ -103,7 +103,12 @@ def _write_canary(path: Path, *, accepted: bool) -> None:
     )
 
 
-def _write_transport_failure_events(path: Path) -> None:
+def _write_transport_failure_events(
+    path: Path,
+    *,
+    error_type: str = "TimeoutError",
+    http_status: int | None = None,
+) -> None:
     rows = (
         Event(
             event="model_attempt_started",
@@ -126,8 +131,8 @@ def _write_transport_failure_events(path: Path) -> None:
                 "request_hash": SHA_A,
                 "attempt": 1,
                 "elapsed_seconds": 30.0,
-                "error_type": "TimeoutError",
-                "http_status": None,
+                "error_type": error_type,
+                "http_status": http_status,
                 "retryable": False,
                 "model": "gpt-5.4-mini",
             },
@@ -274,7 +279,7 @@ def test_preregistration_labels_history_and_fixes_one_parallel_batch() -> None:
     assert provider["complete_plus_model_response_always_selected"] is True
     assert provider["plus_semantic_acceptance_used_for_selection"] is False
     assert provider[
-        "pro_requires_verified_plus_transport_or_no_response_failure"
+        "pro_requires_verified_plus_pre_task_unavailability"
     ] is True
     assert provider["mid_batch_provider_switch_authorized"] is False
     assert provider["mid_batch_retry_authorized"] is False
@@ -355,6 +360,28 @@ def test_no_plus_model_response_receipt_then_complete_pro_selects_pro(
     assert receipt["selected_model_response_receipt"][
         "canary_semantic_accepted"
     ] is False
+
+
+def test_plus_authentication_unavailability_authorizes_pretask_pro(
+    tmp_path: Path,
+) -> None:
+    plus_report = tmp_path / "plus.json"
+    plus_events = tmp_path / "plus.events.jsonl"
+    plus_failure = tmp_path / "plus.failure.json"
+    _write_transport_failure_events(
+        plus_events,
+        error_type="HTTPError",
+        http_status=401,
+    )
+    write_plus_transport_failure_receipt_v3(
+        event_ledger_path=plus_events,
+        expected_canary_report_path=plus_report,
+        process_exit_code=1,
+        output_path=plus_failure,
+    )
+    assert json.loads(plus_failure.read_text())["failure_summary"][
+        "failure_rows"
+    ][0]["http_status"] == 401
 
 
 def test_provider_selection_rejects_forged_or_drifted_failure_evidence(
