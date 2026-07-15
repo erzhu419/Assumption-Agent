@@ -1,0 +1,218 @@
+{
+  "analysis_policy": {
+    "candidate_mutation_authorized": false,
+    "controls_are_mechanism_characterization": true,
+    "controls_can_revoke_or_replace_incumbent": false,
+    "controls_complete_promotion": false,
+    "descriptive_contrasts_only": true,
+    "new_candidate_search_authorized": false,
+    "numeric_performance_threshold_bound": false,
+    "performance_gate_bound": false,
+    "promotion_gate_reopened": false,
+    "sealed_authorization_created": false,
+    "transfer_claim_authorized": false
+  },
+  "control_design": {
+    "arms": {
+      "full": {
+        "agent_model_enabled": true,
+        "alias": "promoted_candidate_full",
+        "candidate_skill_enabled": true,
+        "incremental_model_calls": 0,
+        "incremental_offline_verifier_calls": 0,
+        "incremental_operator_calls": 0,
+        "item_count": 8,
+        "operator_enabled": true,
+        "reuse_policy": "reuse_replication_c_completed_candidate_records_without_reexecution",
+        "source_arm": "candidate"
+      },
+      "operator_only": {
+        "agent_model_enabled": false,
+        "alias": "no_agent",
+        "candidate_skill_enabled": false,
+        "incremental_model_calls": 0,
+        "incremental_offline_verifier_calls": 8,
+        "incremental_operator_calls": 8,
+        "item_count": 8,
+        "operator_enabled": true,
+        "operator_semantics": "invoke_the_exact_frozen_typed_operator_once_per_item_then_the_exact_frozen_offline_verifier",
+        "reuse_policy": "new_local_execution_exactly_once_per_item"
+      },
+      "raw": {
+        "agent_model_enabled": true,
+        "alias": "no_skill_no_operator",
+        "candidate_skill_enabled": false,
+        "incremental_model_calls": 0,
+        "incremental_offline_verifier_calls": 0,
+        "incremental_operator_calls": 0,
+        "item_count": 8,
+        "operator_enabled": false,
+        "reuse_policy": "reuse_replication_c_completed_raw_records_without_reexecution",
+        "source_arm": "raw"
+      },
+      "skill_only": {
+        "agent_model_enabled": true,
+        "alias": "operator_knockout",
+        "candidate_skill_enabled": true,
+        "incremental_model_calls": 8,
+        "incremental_offline_verifier_calls": 8,
+        "incremental_operator_calls": 0,
+        "item_count": 8,
+        "operator_enabled": false,
+        "operator_knockout_semantics": "the_frozen_candidate_skill_is_exposed_but_no_post_agent_typed_operator_is_invoked",
+        "reuse_policy": "new_model_execution_exactly_once_per_item"
+      }
+    },
+    "evaluation": {
+      "evaluator_epoch": "financial-sec13f-contract-v2-replication-c-ad3b0852e40f",
+      "offline_evaluation_only": true,
+      "offline_verifier_network": "none",
+      "online_judge_calls": 0,
+      "report_each_arm_validity": true,
+      "report_fold_level_descriptive_results": true,
+      "report_item_level_hashed_relations": true,
+      "report_missing_or_invalid_as_invalid_not_failure_or_success": true,
+      "report_preregistered_descriptive_contrasts": [
+        "full_minus_raw",
+        "skill_only_minus_raw",
+        "full_minus_skill_only",
+        "operator_only_minus_raw",
+        "full_minus_operator_only"
+      ],
+      "same_frozen_offline_verifier_required": true,
+      "thresholds": []
+    },
+    "execution": {
+      "all_incremental_futures_submitted_before_results_read": true,
+      "completed_arm_reexecution_authorized": false,
+      "completed_work_unit_replay_authorized": false,
+      "incremental_offline_verifier_calls": 16,
+      "incremental_operator_calls": 8,
+      "invalid_item_replacement_authorized": false,
+      "maximum_concurrent_incremental_work_units": 16,
+      "maximum_concurrent_model_calls": 8,
+      "maximum_concurrent_operator_only_calls": 8,
+      "mid_batch_provider_switch_authorized": false,
+      "model_replay_authorized": false,
+      "new_model_calls": 8,
+      "new_physical_work_units": 16,
+      "operator_replay_authorized": false,
+      "provider_retry_authorized": false,
+      "resampling_authorized": false,
+      "retry_count": 0,
+      "schedule": "submit_all_8_skill_only_and_all_8_operator_only_work_units_before_reading_any_outcome",
+      "verifier_replay_authorized": false
+    },
+    "execution_freeze_requirements": {
+      "control_execution_requires_separate_committed_freeze": true,
+      "freeze_must_bind_exact_16_incremental_work_units": true,
+      "freeze_must_bind_exact_candidate_and_operator_source": true,
+      "freeze_must_bind_exact_item_set_without_content_in_manifest": true,
+      "freeze_must_bind_exact_offline_verifier_and_runtime_closure": true,
+      "freeze_must_bind_plus_identity_without_persisting_secret": true,
+      "freeze_must_preserve_raw_and_full_reuse": true,
+      "preregistration_alone_authorizes_execution": false
+    },
+    "failure_and_disposition": {
+      "execution_disposition_if_all_16_incremental_units_close": "executed_complete",
+      "execution_disposition_if_any_incremental_unit_is_invalid_or_unresolved": "executed_incomplete_no_retry",
+      "invalid_result_retained": true,
+      "no_resample_after_invalid": true,
+      "no_retry_after_invalid": true,
+      "no_semantic_imputation": true,
+      "prior_completed_raw_and_full_records_are_never_replayed": true,
+      "promotion_status_unchanged_for_either_disposition": true
+    }
+  },
+  "evidence_access_boundary": {
+    "aggregate_replication_c_report_used": true,
+    "answer_payload_content_read_to_create_preregistration": false,
+    "expected_output_content_read_to_create_preregistration": false,
+    "gold_artifact_content_read_to_create_preregistration": false,
+    "model_calls_made_to_create_preregistration": 0,
+    "network_calls_made_to_create_preregistration": 0,
+    "online_judge_calls_made_to_create_preregistration": 0,
+    "private_pack_content_read_to_create_preregistration": false,
+    "sealed_content_read_to_create_preregistration": false,
+    "trajectory_or_trace_content_read_to_create_preregistration": false
+  },
+  "freeze_bindings": {
+    "candidate": {
+      "asset_file_sha256": "0ac57339bab304e10ccfbcd85898676c007d320bee0a63a1c378d19d095fae33",
+      "asset_manifest_hash": "aff2f3e2424d948d5047d92befed7578e245c3d6baf5946c256cd498c8e2ae51",
+      "asset_relative_path": "manifests/financial_sec13f_public_contract_asset_v2.json",
+      "candidate_commit": "7738b348abc06d319f337c9a925dda692e980349",
+      "candidate_id": "5230094b7838e6a542db6c1fb7d7e067a76820282e8e56a5f38071a8735f19ad",
+      "candidate_skill_file_sha256": "2b976ac4e538ca3a7b321e717f14af5b5988c1d79bf9eb4587ec60fa5d99291d",
+      "candidate_skill_relative_path": "candidates/financial_sec13f_contract_operator_v2/SKILL.md",
+      "external_skill_source_receipt_hash": "224acbb4d2af868b7e2cb15dc9b1ca6c5d2ec7d1fc5e26a80e06ee830aa7952e",
+      "operator_source_sha256": "882dac414dd30b9df88ea4130fdfd0d774db58f7c347104d4fe997e9a618887d",
+      "operator_version": "financial_sec13f_public_contract_operator_v2",
+      "program_set_hash": "3eed23d8d6ff4addac96ff63d518a9555a054f7f17c2f1d3b70ac586fd3718f9",
+      "recipe_id": "aab58b6a6223edda5dee3a5610995148f55698624641e881432854d085b67bbe"
+    },
+    "cohort": {
+      "fold_count": 4,
+      "fold_set_hash": "bdf92ada12f1238679a2e67e2c3fff4b032b98604fb58a2d68374410dbd70d10",
+      "item_count": 8,
+      "measurement_view_file_sha256": "ad589f62d3f2ecd2202b84850716e083e6daedc122fa81c174bdd3c3c30e25c9",
+      "measurement_view_hash": "02a1c2bb10f1517d5f63c53afccdd6b388b84687486593fe9bc7d376272ac7d8",
+      "measurement_view_relative_path": "manifests/financial_sec13f_contract_v2_replication_c_measurement_view_v1.json",
+      "pair_set_hash": "c15b80007137cd3db27a8f851493b9a9fed63cdea3a953c0fb91e28a165aaa85",
+      "resampling_authorized": false,
+      "sealed_item_substitution_authorized": false,
+      "selection_or_replacement_after_outcome_authorized": false
+    },
+    "measurement_report": {
+      "candidate_model_call_count": 8,
+      "evidence_valid": true,
+      "execution_completed": true,
+      "file_sha256": "16fbb94ad53a554525f7b3961651c3086e16acf7f543d494f5e0bd92ef5d73dd",
+      "model_calls_this_invocation": 16,
+      "raw_model_call_count": 8,
+      "relative_path": "artifacts/financial_sec13f_contract_v2_replication_c_measurement_run_v1/measurement.report.json",
+      "report_hash": "5282709f1b71dbc83c12796b4d389b99e8c892f4c70a3275018ae1122adeea18",
+      "reuse_authorized_only_for_arms": [
+        "raw",
+        "full"
+      ],
+      "reused_record_count": 16
+    },
+    "promotion_decision": {
+      "authoritative_git_commit": "392d377c5fb7c206e7e9ad52a329ba97281ffd11",
+      "decision_kind": "separate_post_measurement_scientific_promotion_decision_v1",
+      "file_sha256": "4e92ea4389de0c38a177d952f66012e2bc2091f108fb77cb90e9237a970ab7d8",
+      "manifest_hash": "9022d84c5741fa1d7f69004d89093a82d342021562166eba9374b6821eff0044",
+      "relative_path": "manifests/financial_sec13f_contract_v2_replication_c_promotion_decision_v1.json"
+    },
+    "provider": {
+      "api_origin": "https://ruoli.dev",
+      "inherit_replication_c_execution_policy_hash": "13a1ce1e13e57dd4ecb0fd26ab8bf8f3df1da4e35c16688ac037fe7ed782b3a6",
+      "model": "gpt-5.4-mini",
+      "pro_fallback_authorized": false,
+      "provider_binding_hash_from_replication_c": "cd0bfba0a1262126d792f8d67af83bc1dc1e83629da43a71a611b49e394e5fd2",
+      "provider_label": "plus",
+      "provider_label_hash": "c6b482f2b42539a85ae525d5769b5395a07ff198acf3216e1c840787f0e7a0a3",
+      "secret_value_persisted": false
+    },
+    "replication_c_execution_freeze": {
+      "authoritative_git_commit": "524b76f13013676db1eabcc72a3b39705251b05c",
+      "file_sha256": "c8fc37ee997cd37ca2afdf5928baa95371969110f166b4d391ede3cd47d69ddb",
+      "freeze_hash": "d0b813d2545bd66936f022dbad6bed7d28cc8922f8972f908191ae7b574cf5ba",
+      "precomputed_plan_set_hash": "de63b9eac8d45fd67b6c465e13f877c9ae30c135b65bd09dcdb3a1d3e11201e0",
+      "relative_path": "manifests/financial_sec13f_contract_v2_replication_c_execution_freeze_v1.json",
+      "runtime_closure_hash": "23437e5e69e3ae0447768768355643e18ddbebbf78fde98a974cf8fae5412940"
+    }
+  },
+  "manifest_hash": "157d3f2259022333c0d16606a0174e3ab235916b3366b89d2316095cdb043d23",
+  "manifest_version": "financial_sec13f_contract_v2_controls_preregistration_v1",
+  "sealed_boundary": {
+    "sealed_content_access_authorized": false,
+    "sealed_content_read": false,
+    "sealed_evaluation_authorized": false,
+    "sealed_item_count_materialized": 0,
+    "sealed_requires_later_controls_disposition_receipt": true,
+    "sealed_requires_separate_later_authorization": true
+  },
+  "study_id": "financial-sec13f-contract-v2-post-promotion-controls-20260716"
+}
