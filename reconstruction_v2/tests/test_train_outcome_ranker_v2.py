@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import json
 from pathlib import Path
 import threading
 import time
@@ -110,6 +111,9 @@ def _observation(
         ),
         offline_verifier_profile_id=OFFLINE_VERIFIER_PROFILE_ID,
         offline_verifier_runtime_key=OFFLINE_VERIFIER_RUNTIME_KEY,
+        installed_skill_source_receipt_hash=(
+            request.skill_source_receipt_hash
+        ),
         runtime_profile_prompt_delivery_policy=(
             EXECUTION_CONTRACT_PROMPT_DELIVERY_VERSION
             if prompt_receipt is not None
@@ -210,6 +214,44 @@ def _candidate(name: str, *, complexity: int) -> TrainCandidateSpecV2:
         item_routes=item_routes,
         static_complexity=complexity,
     )
+
+
+def _sparse_candidate(
+    name: str,
+    *,
+    complexity: int,
+    active_item_ids: tuple[str, ...],
+) -> TrainCandidateSpecV2:
+    candidate = _candidate(name, complexity=complexity)
+    active_hashes = {
+        stable_hash({"item_id": item_id}) for item_id in active_item_ids
+    }
+    routes = tuple(
+        row
+        for row in candidate.item_routes
+        if row.item_id_hash in active_hashes
+    )
+    assert routes and len(routes) == len(active_hashes)
+    behavior_hash = stable_hash(
+        {
+            "program_set_hash": candidate.program_set_hash,
+            "base_compile_manifest_hash": (
+                candidate.base_compile_manifest_hash
+            ),
+            "typed_binding_set_hash": candidate.typed_binding_set_hash,
+            "execution_contract_set_hash": (
+                candidate.execution_contract_set_hash
+            ),
+            "item_routes": [row.safe_payload() for row in routes],
+        }
+    )
+    sparse = replace(
+        candidate,
+        candidate_behavior_hash=behavior_hash,
+        item_routes=routes,
+    )
+    sparse.verify()
+    return sparse
 
 
 def _prompt_receipt(
@@ -435,6 +477,96 @@ def test_actual_utility_wins_and_all_candidate_train_units_run_in_parallel() -> 
     assert payload["promotion_authorized"] is False
 
 
+def test_sparse_routes_replay_raw_without_runner_or_model_calls() -> None:
+    baseline_set = _baseline_set((True, False, True, False))
+    two_active = _sparse_candidate(
+        "two-active",
+        complexity=2,
+        active_item_ids=(ITEM_IDS[0], ITEM_IDS[1]),
+    )
+    one_active = _sparse_candidate(
+        "one-active",
+        complexity=1,
+        active_item_ids=(ITEM_IDS[2],),
+    )
+    outcomes = {
+        "two-active": {
+            ITEM_IDS[0]: (True, 1.0, True, 11),
+            ITEM_IDS[1]: (True, 1.0, True, 12),
+        },
+        "one-active": {
+            ITEM_IDS[2]: (False, 0.0, True, 13),
+        },
+    }
+    delegate = SyntheticCandidateRunner(
+        outcomes,
+        barrier=threading.Barrier(3),
+    )
+
+    def active_only_runner(
+        work: TrainCandidateWorkUnitV2,
+    ) -> TrainCandidateRunResultV2:
+        assert work.candidate_active is True
+        return delegate(work)
+
+    result = TrainOutcomeRankerV2().rank(
+        baseline_set=baseline_set,
+        candidates=(one_active, two_active),
+        runner=active_only_runner,
+    )
+    payload = result.to_dict()
+
+    assert len(result.outcomes) == 8
+    assert len(result.run_results) == 3
+    assert len(result.replay_receipts) == 5
+    assert len(delegate.calls) == 3
+    assert result.effective_worker_count == 3
+    assert result.maximum_concurrent_runner_calls == 3
+    assert payload["candidate_outcome_count"] == 8
+    assert payload["candidate_execution_count"] == 3
+    assert payload["active_policy_on_execution_count"] == 3
+    assert payload["inactive_frozen_raw_replay_count"] == 5
+    assert payload["baseline_execution_count"] == 0
+
+    baseline_by_item_hash = {
+        row.item_id_hash: row for row in baseline_set.rows
+    }
+    replayed = tuple(
+        row for row in result.outcomes if not row.candidate_executed
+    )
+    assert len(replayed) == 5
+    for row in replayed:
+        baseline = baseline_by_item_hash[row.item_id_hash]
+        assert row.execution_mode == "frozen_raw_behavior_replay"
+        assert row.valid is True
+        assert row.candidate_success is baseline.success
+        assert row.candidate_score_units == baseline.score_units
+        assert row.score_delta_units == 0
+        assert row.candidate_cost_units == 0
+        assert row.regression is False
+        assert row.recovery is False
+
+    serial = TrainOutcomeRankerV2(max_workers=1).rank(
+        baseline_set=baseline_set,
+        candidates=(two_active, one_active),
+        runner=SyntheticCandidateRunner(outcomes),
+    )
+    assert serial.ranking_hash == result.ranking_hash
+
+    tampered = replace(
+        result,
+        replay_receipts=(
+            replace(
+                result.replay_receipts[0],
+                projected_score_units=999,
+            ),
+            *result.replay_receipts[1:],
+        ),
+    )
+    with pytest.raises(TrainOutcomeRankingError):
+        tampered.verify()
+
+
 def test_completion_order_and_input_order_do_not_change_ranking_receipt() -> None:
     baseline_set = _baseline_set()
     candidates, outcomes = _utility_fixture()
@@ -566,6 +698,50 @@ def test_raw_baseline_rejects_non_train_invalid_and_duplicate_evidence() -> None
             source_train_receipt_hash=SOURCE_TRAIN_RECEIPT_HASH,
             expected_item_ids=ITEM_IDS,
         )
+
+
+def test_existing_raw_source_artifacts_are_reused_without_embedding_them() -> None:
+    clean = _baseline_set((True, False, False, True))
+    source_observations = tuple(
+        replace(row.observation, raw_trial_artifacts_persisted=True)
+        for row in clean.rows
+    )
+    reused = FrozenRawTrainBaselineSetV2.from_observations(
+        source_observations,
+        manifest_hash=MANIFEST_HASH,
+        evaluator_epoch=EVALUATOR_EPOCH,
+        source_train_receipt_hash=SOURCE_TRAIN_RECEIPT_HASH,
+        expected_item_ids=ITEM_IDS,
+    )
+
+    assert reused.source_raw_trial_artifact_row_count == len(ITEM_IDS)
+    assert reused.source_raw_trial_artifacts_present is True
+    assert reused.baseline_set_hash != clean.baseline_set_hash
+    assert all(
+        row.source_raw_trial_artifacts_persisted for row in reused.rows
+    )
+
+    candidate = _candidate("source-reuse", complexity=1)
+    outcomes = {
+        "source-reuse": {
+            item_id: (True, 1.0, True, 10) for item_id in ITEM_IDS
+        }
+    }
+    result = TrainOutcomeRankerV2().rank(
+        baseline_set=reused,
+        candidates=(candidate,),
+        runner=SyntheticCandidateRunner(outcomes),
+    )
+    payload = result.to_dict()
+    encoded = json.dumps(payload, sort_keys=True)
+
+    assert payload["baseline_execution_count"] == 0
+    assert payload["source_raw_trial_artifact_row_count"] == len(ITEM_IDS)
+    assert payload["source_raw_trial_artifacts_present"] is True
+    assert payload["candidate_raw_trial_artifact_count"] == 0
+    assert payload["new_raw_artifacts_persisted_by_ranker"] is False
+    assert payload["raw_content_embedded_in_ranking_receipt"] is False
+    assert all(item_id not in encoded for item_id in ITEM_IDS)
 
 
 def test_online_or_cross_split_candidate_receipts_fail_closed() -> None:

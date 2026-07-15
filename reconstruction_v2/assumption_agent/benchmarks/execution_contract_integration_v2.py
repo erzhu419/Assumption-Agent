@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 import tempfile
 import threading
+import uuid
 from types import ModuleType
 from typing import Any, Mapping, Sequence
 
@@ -178,6 +179,102 @@ class ExecutionContractRuntimeContextV2:
 
 
 @dataclass(frozen=True)
+class ExecutionContractTrialEvidenceV2:
+    """Post-run evidence returned without exposing mutable runner state."""
+
+    observation: SkillLearnTrialObservation = field(
+        compare=False,
+        repr=False,
+    )
+    prompt_receipt: ExecutionContractPromptInjectionReceiptV2 | None = field(
+        compare=False,
+        repr=False,
+    )
+    execution_backend_instance_hash: str
+    contract_route_expected: bool
+    prompt_receipt_valid: bool
+
+    @property
+    def evidence_hash(self) -> str:
+        return stable_hash(self.safe_payload())
+
+    def safe_payload(self) -> dict[str, Any]:
+        return {
+            "runtime_policy": EXECUTION_CONTRACT_RUNTIME_VERSION,
+            "request_hash": self.observation.request.request_hash,
+            "observation_hash": self.observation.observation_hash,
+            "execution_backend_instance_hash": (
+                self.execution_backend_instance_hash
+            ),
+            "contract_route_expected": self.contract_route_expected,
+            "prompt_receipt_valid": self.prompt_receipt_valid,
+            "prompt_receipt_hash": (
+                self.prompt_receipt.receipt_hash
+                if self.prompt_receipt is not None
+                else None
+            ),
+            "effective_prompt_sha256": (
+                self.prompt_receipt.effective_prompt_sha256
+                if self.prompt_receipt is not None
+                else None
+            ),
+            "raw_observation_or_prompt_content_persisted": False,
+        }
+
+    def verify(self) -> None:
+        receipt = self.prompt_receipt
+        observation = self.observation
+        # The backend hash is opaque to this value object.  Requiring a
+        # canonical digest still rejects empty or malformed evidence.
+        if (
+            not isinstance(self.execution_backend_instance_hash, str)
+            or len(self.execution_backend_instance_hash) != 64
+            or any(
+                character not in "0123456789abcdef"
+                for character in self.execution_backend_instance_hash
+            )
+        ):
+            raise PermissionError(
+                "execution-contract backend instance hash is invalid"
+            )
+        if self.prompt_receipt_valid != (receipt is not None):
+            raise PermissionError(
+                "execution-contract evidenced receipt validity drifted"
+            )
+        if receipt is not None and not self.contract_route_expected:
+            raise PermissionError(
+                "execution-contract receipt appeared outside its route"
+            )
+        if (
+            self.contract_route_expected
+            and observation.request.variant is not TrialVariant.POLICY_ON
+        ):
+            raise PermissionError(
+                "execution-contract route is not a policy-on request"
+            )
+        if (
+            self.contract_route_expected
+            and observation.valid
+            and receipt is None
+        ):
+            raise PermissionError(
+                "valid execution-contract route lacks an evidenced receipt"
+            )
+        if receipt is not None and (
+            receipt.request_hash != observation.request.request_hash
+            or observation.runtime_profile_prompt_delivery_policy
+            != EXECUTION_CONTRACT_PROMPT_DELIVERY_VERSION
+            or observation.runtime_profile_prompt_injection_receipt_hash
+            != receipt.receipt_hash
+            or observation.runtime_profile_effective_prompt_sha256
+            != receipt.effective_prompt_sha256
+        ):
+            raise PermissionError(
+                "execution-contract evidenced prompt receipt drifted"
+            )
+
+
+@dataclass(frozen=True)
 class ExecutionContractCompileBundleV2:
     root: Path = field(compare=False)
     manifest_hash: str
@@ -249,13 +346,18 @@ class ExecutionContractCompileBundleV2:
             raise PermissionError(
                 "execution-contract bundle family route drifted"
             )
-        program_id_hash = stable_hash(
-            {"program_id": str(request.program_id or "")}
-        )
-        if program_id_hash not in tuple(raw_route["program_id_hashes"]):
+        if request.program_id == "":
             raise PermissionError(
-                "execution-contract request program is outside the item route"
+                "execution-contract request program identity is empty"
             )
+        if request.program_id is not None:
+            program_id_hash = stable_hash(
+                {"program_id": request.program_id}
+            )
+            if program_id_hash not in tuple(raw_route["program_id_hashes"]):
+                raise PermissionError(
+                    "execution-contract request program is outside the item route"
+                )
         if (
             request.compile_manifest_hash
             != self.manifest["base_compile_manifest_hash"]
@@ -661,10 +763,26 @@ class ExecutionContractSubprocessBackendV2(SkillLearnSubprocessBackend):
         execution_contract_bundle.verify()
         self.execution_contract_bundle = execution_contract_bundle
         self._execution_contract_local = threading.local()
+        self._execution_contract_instance_nonce = uuid.uuid4().hex
         # The frozen v1 backend caches one mutable runner module.  A single
         # wrapper instance is therefore serialized; flat experiment
         # parallelism uses one backend instance per worker.
         self._execution_contract_run_lock = threading.Lock()
+
+    @property
+    def execution_backend_instance_hash(self) -> str:
+        return stable_hash(
+            {
+                "runtime_policy": EXECUTION_CONTRACT_RUNTIME_VERSION,
+                "runner_instance_token": self._runner_instance_token,
+                "execution_contract_instance_nonce": (
+                    self._execution_contract_instance_nonce
+                ),
+                "bundle_manifest_hash": (
+                    self.execution_contract_bundle.manifest_hash
+                ),
+            }
+        )
 
     def _load_portable_task_capability_context(
         self,
@@ -894,19 +1012,33 @@ class ExecutionContractSubprocessBackendV2(SkillLearnSubprocessBackend):
         trace_id: str,
     ) -> SkillLearnTrialObservation:
         with self._execution_contract_run_lock:
-            return self._run_serialized(
+            return self._run_serialized_evidence(
                 request,
                 skill_source_dir=skill_source_dir,
                 trace_id=trace_id,
-            )
+            ).observation
 
-    def _run_serialized(
+    def run_with_evidence(
         self,
         request: SkillLearnTrialRequest,
         *,
         skill_source_dir: Path | None,
         trace_id: str,
-    ) -> SkillLearnTrialObservation:
+    ) -> ExecutionContractTrialEvidenceV2:
+        with self._execution_contract_run_lock:
+            return self._run_serialized_evidence(
+                request,
+                skill_source_dir=skill_source_dir,
+                trace_id=trace_id,
+            )
+
+    def _run_serialized_evidence(
+        self,
+        request: SkillLearnTrialRequest,
+        *,
+        skill_source_dir: Path | None,
+        trace_id: str,
+    ) -> ExecutionContractTrialEvidenceV2:
         self._execution_contract_local.context = None
         self._execution_contract_local.receipt = None
         expected_route = (
@@ -1084,7 +1216,17 @@ class ExecutionContractSubprocessBackendV2(SkillLearnSubprocessBackend):
                         },
                     )
                 )
-            return observation
+            evidence = ExecutionContractTrialEvidenceV2(
+                observation=observation,
+                prompt_receipt=(receipt if receipt_valid else None),
+                execution_backend_instance_hash=(
+                    self.execution_backend_instance_hash
+                ),
+                contract_route_expected=expected_route,
+                prompt_receipt_valid=receipt_valid,
+            )
+            evidence.verify()
+            return evidence
         finally:
             self._execution_contract_local.context = None
             self._execution_contract_local.receipt = None

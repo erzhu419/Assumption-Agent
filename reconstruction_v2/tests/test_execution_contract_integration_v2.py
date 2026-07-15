@@ -347,6 +347,44 @@ def test_prompt_keeps_each_profile_bound_to_its_contract(
     assert len(bound.receipt.profile_contract_binding_hashes) == 2
 
 
+def test_bundle_program_set_request_uses_none_without_claiming_one_program(
+    tmp_path: Path,
+) -> None:
+    sink = MemoryEventSink()
+    (
+        compiled,
+        _bundle,
+        _contract,
+        request,
+        backend,
+        _base_context,
+        _source,
+    ) = _request_and_context(tmp_path, sink=sink)
+    source_receipt = compiled.source_receipt_for(ITEM_ID)
+    program_set_request = replace(request, program_id=None)
+
+    context = backend._load_portable_task_capability_context(
+        request=program_set_request,
+        source_receipt=source_receipt,
+        compile_root=compiled.output_root,
+    )
+    assert context is not None
+    runtime_context = backend._execution_contract_local.context
+    assert runtime_context.request_hash == program_set_request.request_hash
+    assert len(runtime_context.contracts) == len(runtime_context.base_metadata)
+
+    for invalid_program_id in ("", "unknown-program"):
+        with pytest.raises(PermissionError):
+            backend._load_portable_task_capability_context(
+                request=replace(
+                    request,
+                    program_id=invalid_program_id,
+                ),
+                source_receipt=source_receipt,
+                compile_root=compiled.output_root,
+            )
+
+
 def test_expected_route_missing_prompt_receipt_invalidates_success(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -471,10 +509,18 @@ def test_successful_run_overlays_verified_v2_receipt(
         )
 
     monkeypatch.setattr(SkillLearnSubprocessBackend, "run", run_with_receipt)
-    observation = backend.run(
+    evidence = backend.run_with_evidence(
         request,
         skill_source_dir=source,
         trace_id="verified-receipt",
+    )
+    observation = evidence.observation
+    evidence.verify()
+    assert evidence.prompt_receipt == receipt
+    assert evidence.prompt_receipt_valid is True
+    assert evidence.contract_route_expected is True
+    assert evidence.execution_backend_instance_hash == (
+        backend.execution_backend_instance_hash
     )
     assert observation.valid is True
     assert observation.success is True

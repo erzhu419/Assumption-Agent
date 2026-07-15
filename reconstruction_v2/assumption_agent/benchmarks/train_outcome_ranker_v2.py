@@ -27,10 +27,10 @@ from .typed_task_capability import (
 
 
 FROZEN_RAW_TRAIN_BASELINE_VERSION = (
-    "frozen_policy_off_train_outcomes_v2"
+    "frozen_policy_off_train_outcomes_v3_source_artifact_aware"
 )
 TRAIN_OUTCOME_RANKING_VERSION = (
-    "actual_train_policy_on_outcome_ranking_v2"
+    "actual_train_policy_on_outcome_ranking_v3_source_artifact_aware"
 )
 OFFLINE_TRAIN_EVALUATION_MODE = "offline_post_agent_verifier"
 SCORE_UNIT_SCALE = 1_000_000
@@ -120,6 +120,17 @@ def _execution_boundary_payload(
                 )
             }
         ),
+        "step_budget_policy_hash": stable_hash(
+            {"step_budget_policy": observation.step_budget_policy}
+        ),
+        "step_budget_unit_hash": stable_hash(
+            {"step_budget_unit": observation.step_budget_unit}
+        ),
+        "step_budget_limit": observation.step_budget_limit,
+        "step_budget_truncated": observation.step_budget_truncated,
+        "step_budget_token_usage_complete": (
+            observation.step_budget_token_usage_complete
+        ),
     }
 
 
@@ -133,6 +144,7 @@ class FrozenRawTrainOutcomeV2:
     family_hash: str
     score_units: int
     execution_boundary_hash: str
+    source_raw_trial_artifacts_persisted: bool
     baseline_evidence_hash: str
 
     @classmethod
@@ -152,7 +164,6 @@ class FrozenRawTrainOutcomeV2:
             or request.evaluator_epoch != evaluator_epoch
             or not snapshot.valid
             or not _evaluation_valid(snapshot)
-            or snapshot.raw_trial_artifacts_persisted
         ):
             raise TrainOutcomeRankingError(
                 "RAW baseline is not valid frozen TRAIN policy-off evidence"
@@ -174,6 +185,9 @@ class FrozenRawTrainOutcomeV2:
             "score_units": score_units,
             "success": snapshot.success,
             "execution_boundary_hash": execution_boundary_hash,
+            "source_raw_trial_artifacts_persisted": (
+                snapshot.raw_trial_artifacts_persisted
+            ),
             "split": SplitName.TRAIN.value,
             "variant": TrialVariant.POLICY_OFF.value,
         }
@@ -183,6 +197,9 @@ class FrozenRawTrainOutcomeV2:
             family_hash=family_hash,
             score_units=score_units,
             execution_boundary_hash=execution_boundary_hash,
+            source_raw_trial_artifacts_persisted=(
+                snapshot.raw_trial_artifacts_persisted
+            ),
             baseline_evidence_hash=stable_hash(evidence_payload),
         )
 
@@ -207,10 +224,14 @@ class FrozenRawTrainOutcomeV2:
             "score_units": self.score_units,
             "success": self.success,
             "execution_boundary_hash": self.execution_boundary_hash,
+            "source_raw_trial_artifacts_persisted": (
+                self.source_raw_trial_artifacts_persisted
+            ),
             "baseline_evidence_hash": self.baseline_evidence_hash,
             "split": SplitName.TRAIN.value,
             "variant": TrialVariant.POLICY_OFF.value,
-            "raw_item_family_or_observation_persisted": False,
+            "source_raw_artifact_content_embedded_in_receipt": False,
+            "source_raw_artifact_locator_embedded_in_receipt": False,
         }
 
     def verify(self, *, manifest_hash: str, evaluator_epoch: str) -> None:
@@ -288,6 +309,16 @@ class FrozenRawTrainBaselineSetV2:
     def baseline_set_hash(self) -> str:
         return stable_hash(self.safe_payload())
 
+    @property
+    def source_raw_trial_artifact_row_count(self) -> int:
+        return sum(
+            row.source_raw_trial_artifacts_persisted for row in self.rows
+        )
+
+    @property
+    def source_raw_trial_artifacts_present(self) -> bool:
+        return self.source_raw_trial_artifact_row_count > 0
+
     def safe_payload(self) -> dict[str, Any]:
         return {
             "baseline_policy": FROZEN_RAW_TRAIN_BASELINE_VERSION,
@@ -311,11 +342,18 @@ class FrozenRawTrainBaselineSetV2:
                     ]
                 }
             ),
+            "source_raw_trial_artifact_row_count": (
+                self.source_raw_trial_artifact_row_count
+            ),
+            "source_raw_trial_artifacts_present": (
+                self.source_raw_trial_artifacts_present
+            ),
             "new_baseline_executions": 0,
             "online_judge_calls": 0,
             "validation_accessed": False,
             "test_accessed": False,
-            "raw_content_persisted": False,
+            "new_raw_artifacts_persisted_by_ranker": False,
+            "raw_content_embedded_in_ranking_receipt": False,
         }
 
     def verify(self) -> None:
@@ -335,6 +373,11 @@ class FrozenRawTrainBaselineSetV2:
             or tuple(sorted(self.rows, key=lambda row: row.item_id_hash))
             != self.rows
             or len({row.item_id_hash for row in self.rows}) != len(self.rows)
+            or self.source_raw_trial_artifact_row_count
+            != sum(
+                row.observation.raw_trial_artifacts_persisted
+                for row in self.rows
+            )
         ):
             raise TrainOutcomeRankingError(
                 "frozen RAW TRAIN baseline set is not canonical"
@@ -755,12 +798,21 @@ class TrainCandidateSpecV2:
         self,
         item_id_hash: str,
     ) -> TrainCandidateItemRouteV2:
-        for route in self.item_routes:
-            if route.item_id_hash == item_id_hash:
-                return route
+        route = self.route_for_item_hash_or_none(item_id_hash)
+        if route is not None:
+            return route
         raise TrainOutcomeRankingError(
             "candidate bundle has no frozen route for TRAIN item"
         )
+
+    def route_for_item_hash_or_none(
+        self,
+        item_id_hash: str,
+    ) -> TrainCandidateItemRouteV2 | None:
+        for route in self.item_routes:
+            if route.item_id_hash == item_id_hash:
+                return route
+        return None
 
 
 @dataclass(frozen=True)
@@ -772,7 +824,19 @@ class TrainCandidateWorkUnitV2:
     def work_unit_hash(self) -> str:
         return stable_hash(self.safe_payload())
 
+    @property
+    def candidate_active(self) -> bool:
+        return (
+            self.candidate.route_for_item_hash_or_none(
+                self.baseline.item_id_hash
+            )
+            is not None
+        )
+
     def safe_payload(self) -> dict[str, Any]:
+        route = self.candidate.route_for_item_hash_or_none(
+            self.baseline.item_id_hash
+        )
         return {
             "ranking_policy": TRAIN_OUTCOME_RANKING_VERSION,
             "candidate_hash": self.candidate.candidate_hash,
@@ -780,9 +844,136 @@ class TrainCandidateWorkUnitV2:
             "family_hash": self.baseline.family_hash,
             "baseline_evidence_hash": self.baseline.baseline_evidence_hash,
             "split": SplitName.TRAIN.value,
-            "variant": TrialVariant.POLICY_ON.value,
-            "raw_item_family_or_candidate_persisted": False,
+            "candidate_active": self.candidate_active,
+            "item_route_hash": (
+                route.item_route_hash if route is not None else None
+            ),
+            "inactive_replay_projection_hash": (
+                None
+                if route is not None
+                else stable_hash(
+                    {
+                        "baseline_evidence_hash": (
+                            self.baseline.baseline_evidence_hash
+                        ),
+                        "success": self.baseline.success,
+                        "score_units": self.baseline.score_units,
+                    }
+                )
+            ),
+            "execution_mode": (
+                "candidate_policy_on"
+                if self.candidate_active
+                else "frozen_raw_behavior_replay"
+            ),
+            "variant": (
+                TrialVariant.POLICY_ON.value
+                if self.candidate_active
+                else TrialVariant.POLICY_OFF.value
+            ),
+            "raw_item_family_or_candidate_embedded_in_receipt": False,
         }
+
+
+@dataclass(frozen=True)
+class FrozenRawTrainReplayReceiptV2:
+    work_unit_hash: str
+    candidate_hash: str
+    item_id_hash: str
+    family_hash: str
+    baseline_evidence_hash: str
+    source_request_hash: str
+    source_observation_hash: str
+    source_raw_trial_artifacts_persisted: bool
+    projected_success: bool
+    projected_score_units: int
+
+    @classmethod
+    def from_work(
+        cls,
+        work: TrainCandidateWorkUnitV2,
+    ) -> "FrozenRawTrainReplayReceiptV2":
+        if work.candidate_active:
+            raise TrainOutcomeRankingError(
+                "active TRAIN candidate cannot use RAW behavior replay"
+            )
+        result = cls(
+            work_unit_hash=work.work_unit_hash,
+            candidate_hash=work.candidate.candidate_hash,
+            item_id_hash=work.baseline.item_id_hash,
+            family_hash=work.baseline.family_hash,
+            baseline_evidence_hash=work.baseline.baseline_evidence_hash,
+            source_request_hash=(
+                work.baseline.observation.request.request_hash
+            ),
+            source_observation_hash=(
+                work.baseline.observation.observation_hash
+            ),
+            source_raw_trial_artifacts_persisted=(
+                work.baseline.source_raw_trial_artifacts_persisted
+            ),
+            projected_success=work.baseline.success,
+            projected_score_units=work.baseline.score_units,
+        )
+        result.verify(work)
+        return result
+
+    @property
+    def replay_receipt_hash(self) -> str:
+        return stable_hash(self.safe_payload())
+
+    def safe_payload(self) -> dict[str, Any]:
+        return {
+            "ranking_policy": TRAIN_OUTCOME_RANKING_VERSION,
+            "replay_policy": "exact_frozen_raw_nonactivation_replay_v1",
+            "work_unit_hash": self.work_unit_hash,
+            "candidate_hash": self.candidate_hash,
+            "item_id_hash": self.item_id_hash,
+            "family_hash": self.family_hash,
+            "baseline_evidence_hash": self.baseline_evidence_hash,
+            "source_request_hash": self.source_request_hash,
+            "source_observation_hash": self.source_observation_hash,
+            "source_raw_trial_artifacts_persisted": (
+                self.source_raw_trial_artifacts_persisted
+            ),
+            "projected_success": self.projected_success,
+            "projected_score_units": self.projected_score_units,
+            "projection_hash": stable_hash(
+                {
+                    "baseline_evidence_hash": self.baseline_evidence_hash,
+                    "success": self.projected_success,
+                    "score_units": self.projected_score_units,
+                }
+            ),
+            "behavior_identical": True,
+            "candidate_execution_count": 0,
+            "model_call_count": 0,
+            "variant": TrialVariant.POLICY_OFF.value,
+            "source_raw_artifact_content_embedded_in_receipt": False,
+            "source_raw_artifact_locator_embedded_in_receipt": False,
+        }
+
+    def verify(self, work: TrainCandidateWorkUnitV2) -> None:
+        if (
+            work.candidate_active
+            or self.work_unit_hash != work.work_unit_hash
+            or self.candidate_hash != work.candidate.candidate_hash
+            or self.item_id_hash != work.baseline.item_id_hash
+            or self.family_hash != work.baseline.family_hash
+            or self.baseline_evidence_hash
+            != work.baseline.baseline_evidence_hash
+            or self.source_request_hash
+            != work.baseline.observation.request.request_hash
+            or self.source_observation_hash
+            != work.baseline.observation.observation_hash
+            or self.source_raw_trial_artifacts_persisted
+            != work.baseline.source_raw_trial_artifacts_persisted
+            or self.projected_success != work.baseline.success
+            or self.projected_score_units != work.baseline.score_units
+        ):
+            raise TrainOutcomeRankingError(
+                "frozen RAW nonactivation replay receipt drifted"
+            )
 
 
 @dataclass(frozen=True)
@@ -854,7 +1045,7 @@ class OfflineTrainEvaluationReceiptV2:
             "online_judge_calls": self.online_judge_calls,
             "validation_accessed": self.validation_accessed,
             "test_accessed": self.test_accessed,
-            "raw_evaluator_content_persisted": False,
+            "raw_evaluator_content_embedded_in_receipt": False,
         }
 
     def verify(
@@ -1008,7 +1199,7 @@ class TrainCandidateRunResultV2:
                 self.observation.valid
                 and _evaluation_valid(self.observation)
             ),
-            "raw_observation_or_evaluator_content_persisted": False,
+            "raw_observation_or_evaluator_content_embedded_in_receipt": False,
         }
 
     def verify(
@@ -1064,6 +1255,16 @@ class TrainCandidateRunResultV2:
             != baseline.offline_verifier_profile_id
             or observation.offline_verifier_runtime_key
             != baseline.offline_verifier_runtime_key
+            or observation.step_budget_policy
+            != baseline.step_budget_policy
+            or observation.step_budget_unit != baseline.step_budget_unit
+            or observation.step_budget_limit != baseline.step_budget_limit
+            or observation.step_budget_truncated
+            != baseline.step_budget_truncated
+            or observation.step_budget_token_usage_complete
+            != baseline.step_budget_token_usage_complete
+            or observation.installed_skill_source_receipt_hash
+            != request.skill_source_receipt_hash
             or observation.raw_trial_artifacts_persisted
         ):
             raise TrainOutcomeRankingError(
@@ -1155,7 +1356,10 @@ class TrainOutcomeRowV2:
     baseline_evidence_hash: str
     run_receipt_hash: str
     observation_hash: str
+    execution_mode: str
+    candidate_executed: bool
     valid: bool
+    baseline_source_raw_trial_artifacts_persisted: bool
     baseline_success: bool
     candidate_success: bool
     regression: bool
@@ -1186,7 +1390,12 @@ class TrainOutcomeRowV2:
             baseline_evidence_hash=work.baseline.baseline_evidence_hash,
             run_receipt_hash=result.run_receipt_hash,
             observation_hash=observation.observation_hash,
+            execution_mode="candidate_policy_on",
+            candidate_executed=True,
             valid=valid,
+            baseline_source_raw_trial_artifacts_persisted=(
+                work.baseline.source_raw_trial_artifacts_persisted
+            ),
             baseline_success=baseline_success,
             candidate_success=candidate_success,
             regression=(baseline_success and not candidate_success),
@@ -1202,6 +1411,37 @@ class TrainOutcomeRowV2:
             ),
         )
 
+    @classmethod
+    def from_replay(
+        cls,
+        work: TrainCandidateWorkUnitV2,
+        replay: FrozenRawTrainReplayReceiptV2,
+    ) -> "TrainOutcomeRowV2":
+        replay.verify(work)
+        baseline = work.baseline
+        return cls(
+            work_unit_hash=work.work_unit_hash,
+            candidate_hash=work.candidate.candidate_hash,
+            item_id_hash=baseline.item_id_hash,
+            baseline_evidence_hash=baseline.baseline_evidence_hash,
+            run_receipt_hash=replay.replay_receipt_hash,
+            observation_hash=baseline.observation.observation_hash,
+            execution_mode="frozen_raw_behavior_replay",
+            candidate_executed=False,
+            valid=True,
+            baseline_source_raw_trial_artifacts_persisted=(
+                baseline.source_raw_trial_artifacts_persisted
+            ),
+            baseline_success=baseline.success,
+            candidate_success=baseline.success,
+            regression=False,
+            recovery=False,
+            baseline_score_units=baseline.score_units,
+            candidate_score_units=baseline.score_units,
+            score_delta_units=0,
+            candidate_cost_units=0,
+        )
+
     @property
     def outcome_hash(self) -> str:
         return stable_hash(self.safe_payload())
@@ -1215,7 +1455,12 @@ class TrainOutcomeRowV2:
             "baseline_evidence_hash": self.baseline_evidence_hash,
             "run_receipt_hash": self.run_receipt_hash,
             "observation_hash": self.observation_hash,
+            "execution_mode": self.execution_mode,
+            "candidate_executed": self.candidate_executed,
             "valid": self.valid,
+            "baseline_source_raw_trial_artifacts_persisted": (
+                self.baseline_source_raw_trial_artifacts_persisted
+            ),
             "baseline_success": self.baseline_success,
             "candidate_success": self.candidate_success,
             "regression": self.regression,
@@ -1224,7 +1469,7 @@ class TrainOutcomeRowV2:
             "candidate_score_units": self.candidate_score_units,
             "score_delta_units": self.score_delta_units,
             "candidate_cost_units": self.candidate_cost_units,
-            "raw_content_persisted": False,
+            "raw_content_embedded_in_outcome_receipt": False,
         }
 
 
@@ -1313,6 +1558,10 @@ class TrainOutcomeRankingResultV2:
         compare=False,
         repr=False,
     )
+    replay_receipts: tuple[FrozenRawTrainReplayReceiptV2, ...] = field(
+        compare=False,
+        repr=False,
+    )
     outcomes: tuple[TrainOutcomeRowV2, ...]
     aggregates: tuple[TrainCandidateAggregateV2, ...]
     ordered_candidate_hashes: tuple[str, ...]
@@ -1336,6 +1585,8 @@ class TrainOutcomeRankingResultV2:
             {
                 "ranking_hash": self.ranking_hash,
                 "work_unit_count": len(self.work_units),
+                "active_runner_call_count": len(self.run_results),
+                "inactive_replay_count": len(self.replay_receipts),
                 "effective_worker_count": self.effective_worker_count,
                 "maximum_concurrent_runner_calls": (
                     self.maximum_concurrent_runner_calls
@@ -1348,6 +1599,25 @@ class TrainOutcomeRankingResultV2:
                     }
                 ),
             }
+        )
+
+    @property
+    def full_grid_receipt_hashes(self) -> tuple[str | None, ...]:
+        active = {
+            row.work_unit_hash: row.run_receipt_hash
+            for row in self.run_results
+        }
+        replayed = {
+            row.work_unit_hash: row.replay_receipt_hash
+            for row in self.replay_receipts
+        }
+        return tuple(
+            (
+                active.get(work.work_unit_hash)
+                if work.candidate_active
+                else replayed.get(work.work_unit_hash)
+            )
+            for work in self.work_units
         )
 
     def safe_payload(self) -> dict[str, Any]:
@@ -1365,7 +1635,12 @@ class TrainOutcomeRankingResultV2:
             "top_candidate_hash": self.top_candidate_hash,
             "candidate_count": len(self.candidates),
             "train_item_count": len(self.baseline_set.rows),
-            "candidate_execution_count": len(self.work_units),
+            "candidate_outcome_count": len(self.work_units),
+            "candidate_execution_count": len(self.run_results),
+            "active_policy_on_execution_count": len(self.run_results),
+            "inactive_frozen_raw_replay_count": len(
+                self.replay_receipts
+            ),
             "baseline_execution_count": 0,
             "run_receipt_hashes": [
                 row.run_receipt_hash for row in self.run_results
@@ -1375,6 +1650,24 @@ class TrainOutcomeRankingResultV2:
                     "run_receipt_hashes": [
                         row.run_receipt_hash for row in self.run_results
                     ]
+                }
+            ),
+            "replay_receipt_hashes": [
+                row.replay_receipt_hash for row in self.replay_receipts
+            ],
+            "replay_receipt_set_hash": stable_hash(
+                {
+                    "replay_receipt_hashes": [
+                        row.replay_receipt_hash
+                        for row in self.replay_receipts
+                    ]
+                }
+            ),
+            "full_grid_receipt_set_hash": stable_hash(
+                {
+                    "work_receipt_hashes": list(
+                        self.full_grid_receipt_hashes
+                    )
                 }
             ),
             "execution_backend_instance_set_hash": stable_hash(
@@ -1393,7 +1686,15 @@ class TrainOutcomeRankingResultV2:
             "promotion_gate_applied": False,
             "promotion_authorized": False,
             "ranking_only_not_a_promotion_decision": True,
-            "raw_content_persisted": False,
+            "source_raw_trial_artifact_row_count": (
+                self.baseline_set.source_raw_trial_artifact_row_count
+            ),
+            "source_raw_trial_artifacts_present": (
+                self.baseline_set.source_raw_trial_artifacts_present
+            ),
+            "candidate_raw_trial_artifact_count": 0,
+            "new_raw_artifacts_persisted_by_ranker": False,
+            "raw_content_embedded_in_ranking_receipt": False,
         }
 
     def to_dict(self) -> dict[str, Any]:
@@ -1414,11 +1715,11 @@ class TrainOutcomeRankingResultV2:
             raise TrainOutcomeRankingError("candidate set is invalid")
         for candidate in self.candidates:
             candidate.verify()
-            if tuple(
+            if not set(
                 route.item_id_hash for route in candidate.item_routes
-            ) != self.baseline_set.train_item_hashes:
+            ).issubset(self.baseline_set.train_item_hashes):
                 raise TrainOutcomeRankingError(
-                    "candidate bundle does not exactly cover frozen TRAIN"
+                    "candidate bundle route is outside frozen TRAIN"
                 )
         expected_candidates = tuple(
             sorted(self.candidates, key=lambda row: row.candidate_hash)
@@ -1457,10 +1758,18 @@ class TrainOutcomeRankingResultV2:
             )
         ):
             raise TrainOutcomeRankingError("candidate-by-TRAIN grid drifted")
+        expected_active_work_units = tuple(
+            work for work in expected_work_units if work.candidate_active
+        )
+        expected_replay_work_units = tuple(
+            work for work in expected_work_units if not work.candidate_active
+        )
         if (
-            len(self.run_results) != len(expected_work_units)
+            len(self.run_results) != len(expected_active_work_units)
             or tuple(row.work_unit_hash for row in self.run_results)
-            != tuple(row.work_unit_hash for row in expected_work_units)
+            != tuple(
+                row.work_unit_hash for row in expected_active_work_units
+            )
             or len(
                 {
                     row.execution_backend_instance_hash
@@ -1473,11 +1782,39 @@ class TrainOutcomeRankingResultV2:
                 "TRAIN run receipt grid or backend instances drifted"
             )
         for work, run_result in zip(
-            expected_work_units,
+            expected_active_work_units,
             self.run_results,
             strict=True,
         ):
             run_result.verify(work, self.baseline_set)
+        if (
+            len(self.replay_receipts) != len(expected_replay_work_units)
+            or tuple(
+                row.work_unit_hash for row in self.replay_receipts
+            )
+            != tuple(
+                row.work_unit_hash for row in expected_replay_work_units
+            )
+            or len(
+                {row.work_unit_hash for row in self.replay_receipts}
+            )
+            != len(self.replay_receipts)
+        ):
+            raise TrainOutcomeRankingError(
+                "TRAIN inactive replay receipt grid drifted"
+            )
+        for work, replay in zip(
+            expected_replay_work_units,
+            self.replay_receipts,
+            strict=True,
+        ):
+            replay.verify(work)
+        active_by_work = {
+            row.work_unit_hash: row for row in self.run_results
+        }
+        replay_by_work = {
+            row.work_unit_hash: row for row in self.replay_receipts
+        }
         expected_outcome_bindings = {
             work.work_unit_hash: (
                 work.candidate.candidate_hash,
@@ -1487,12 +1824,18 @@ class TrainOutcomeRankingResultV2:
             for work in expected_work_units
         }
         expected_outcomes = tuple(
-            TrainOutcomeRowV2.from_result(work, run_result)
-            for work, run_result in zip(
-                expected_work_units,
-                self.run_results,
-                strict=True,
+            (
+                TrainOutcomeRowV2.from_result(
+                    work,
+                    active_by_work[work.work_unit_hash],
+                )
+                if work.candidate_active
+                else TrainOutcomeRowV2.from_replay(
+                    work,
+                    replay_by_work[work.work_unit_hash],
+                )
             )
+            for work in expected_work_units
         )
         if (
             len(self.outcomes) != len(self.work_units)
@@ -1522,14 +1865,9 @@ class TrainOutcomeRankingResultV2:
                 )
                 for row in self.outcomes
             )
-            or any(
-                outcome.run_receipt_hash != run_result.run_receipt_hash
-                for outcome, run_result in zip(
-                    self.outcomes,
-                    self.run_results,
-                    strict=True,
-                )
-            )
+            or any(value is None for value in self.full_grid_receipt_hashes)
+            or tuple(row.run_receipt_hash for row in self.outcomes)
+            != self.full_grid_receipt_hashes
             or self.outcome_set_hash
             != stable_hash(
                 {"outcome_hashes": [row.outcome_hash for row in self.outcomes]}
@@ -1557,9 +1895,30 @@ class TrainOutcomeRankingResultV2:
         if (
             expected_aggregates != self.aggregates
             or expected_order != self.ordered_candidate_hashes
-            or self.effective_worker_count <= 0
-            or self.effective_worker_count > len(self.work_units)
-            or self.maximum_concurrent_runner_calls <= 0
+            or isinstance(self.effective_worker_count, bool)
+            or not isinstance(self.effective_worker_count, int)
+            or self.effective_worker_count < 0
+            or self.effective_worker_count
+            > len(expected_active_work_units)
+            or isinstance(self.maximum_concurrent_runner_calls, bool)
+            or not isinstance(self.maximum_concurrent_runner_calls, int)
+            or self.maximum_concurrent_runner_calls < 0
+            or (
+                expected_active_work_units
+                and self.effective_worker_count <= 0
+            )
+            or (
+                not expected_active_work_units
+                and self.effective_worker_count != 0
+            )
+            or (
+                expected_active_work_units
+                and self.maximum_concurrent_runner_calls <= 0
+            )
+            or (
+                not expected_active_work_units
+                and self.maximum_concurrent_runner_calls != 0
+            )
             or self.maximum_concurrent_runner_calls
             > self.effective_worker_count
         ):
@@ -1600,11 +1959,11 @@ class TrainOutcomeRankerV2:
             raise TrainOutcomeRankingError("TRAIN ranker has no candidates")
         for candidate in ordered_candidates:
             candidate.verify()
-            if tuple(
+            if not set(
                 route.item_id_hash for route in candidate.item_routes
-            ) != baseline_set.train_item_hashes:
+            ).issubset(baseline_set.train_item_hashes):
                 raise TrainOutcomeRankingError(
-                    "candidate bundle does not exactly cover frozen TRAIN"
+                    "candidate bundle route is outside frozen TRAIN"
                 )
         if len({row.candidate_hash for row in ordered_candidates}) != len(
             ordered_candidates
@@ -1617,9 +1976,19 @@ class TrainOutcomeRankerV2:
             for candidate in ordered_candidates
             for baseline in baseline_set.rows
         )
-        effective_workers = min(
-            self.max_workers or len(work_units),
-            len(work_units),
+        active_work_units = tuple(
+            work for work in work_units if work.candidate_active
+        )
+        replay_work_units = tuple(
+            work for work in work_units if not work.candidate_active
+        )
+        effective_workers = (
+            min(
+                self.max_workers or len(active_work_units),
+                len(active_work_units),
+            )
+            if active_work_units
+            else 0
         )
         active = 0
         maximum_active = 0
@@ -1651,42 +2020,58 @@ class TrainOutcomeRankerV2:
                     active -= 1
 
         results_by_work_hash: dict[str, TrainCandidateRunResultV2] = {}
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=effective_workers,
-            thread_name_prefix="train-outcome-v2",
-        ) as executor:
-            futures = {
-                executor.submit(invoke, work): work for work in work_units
-            }
-            try:
-                for future in concurrent.futures.as_completed(futures):
-                    work = futures[future]
-                    result = future.result()
-                    if result.work_unit_hash in results_by_work_hash:
-                        raise TrainOutcomeRankingError(
-                            "TRAIN runner duplicated a work-unit receipt"
-                        )
-                    results_by_work_hash[work.work_unit_hash] = result
-            except Exception:
-                for future in futures:
-                    future.cancel()
-                raise
+        if active_work_units:
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=effective_workers,
+                thread_name_prefix="train-outcome-v2",
+            ) as executor:
+                futures = {
+                    executor.submit(invoke, work): work
+                    for work in active_work_units
+                }
+                try:
+                    for future in concurrent.futures.as_completed(futures):
+                        work = futures[future]
+                        result = future.result()
+                        if result.work_unit_hash in results_by_work_hash:
+                            raise TrainOutcomeRankingError(
+                                "TRAIN runner duplicated a work-unit receipt"
+                            )
+                        results_by_work_hash[work.work_unit_hash] = result
+                except Exception:
+                    for future in futures:
+                        future.cancel()
+                    raise
         if set(results_by_work_hash) != {
-            row.work_unit_hash for row in work_units
+            row.work_unit_hash for row in active_work_units
         }:
             raise TrainOutcomeRankingError(
-                "TRAIN candidate-by-item result grid is incomplete"
+                "TRAIN active candidate result grid is incomplete"
             )
         run_results = tuple(
             results_by_work_hash[work.work_unit_hash]
-            for work in work_units
+            for work in active_work_units
         )
+        replay_receipts = tuple(
+            FrozenRawTrainReplayReceiptV2.from_work(work)
+            for work in replay_work_units
+        )
+        replay_by_work_hash = {
+            row.work_unit_hash: row for row in replay_receipts
+        }
         outcomes = tuple(
             sorted(
                 (
-                    TrainOutcomeRowV2.from_result(
-                        work,
-                        results_by_work_hash[work.work_unit_hash],
+                    (
+                        TrainOutcomeRowV2.from_result(
+                            work,
+                            results_by_work_hash[work.work_unit_hash],
+                        )
+                        if work.candidate_active
+                        else TrainOutcomeRowV2.from_replay(
+                            work,
+                            replay_by_work_hash[work.work_unit_hash],
+                        )
                     )
                     for work in work_units
                 ),
@@ -1713,6 +2098,7 @@ class TrainOutcomeRankerV2:
             candidates=ordered_candidates,
             work_units=work_units,
             run_results=run_results,
+            replay_receipts=replay_receipts,
             outcomes=outcomes,
             aggregates=aggregates,
             ordered_candidate_hashes=ordered_candidate_hashes,
