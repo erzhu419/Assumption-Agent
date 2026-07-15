@@ -18,6 +18,7 @@
 > - 最新 typed-assignment organize 负结果：最终提交 `0eba5b7c` 预注册 content evidence→typed plan→post-agent harness apply/reconcile 三折 candidate；Plus canary 401/0 response 后在 task call 前固定 Pro，3 路 actual 最大并发完成，另 replay 111 个冻结 RAW。3/3 evaluation-valid，三路均对 103/103 文件完成证据、assignment、reopen 与 hash reconciliation；organize-2/-5/-6 仍为 false→false、false→false、false→true，即 1/3 recovery，低于事前 2/3。org2 错 1 个，org5 因 trial 内临时宽关键词分类器错 32 个，org6 6/6 PASS。执行 grammar 已闭合，但 semantic assignment operator 不稳定；该 representation 已按预注册停止，不 retry、不补 prompt gate、不进入 fresh development 或 downstream
 > - 最新 frozen semantic financial candidate：提交 `c66e3a73` 将声明 TRAIN distribution 中的财务表格 evidence→question→typed answer operator、离线 DistilBERT QA/runtime assets 与 post-agent capability 固定；formation replay 为 candidate 3/3、历史 RAW 0/3，但明确是 `in_sample_formation_replay=true`、`cross_fit=false`、不授权因果或 prospective claim。提交 `2a8ade07` 随后把唯一 fresh treatment、recipe 与 split commitment 在读取 fresh outcome 前冻结
 > - 最新 prospective paired 结果：fresh split `9698dd65…a9f3` 中 9 个 RAW 与 `financial-analysis-4` 的 1 个 candidate 共 10 次 Plus 模型调用最大并发启动，评价全为本地 offline verifier；app scheduler 在 agent 完成后丢失，但三次事前冻结的 recovery/continuation 只恢复 post-agent semantic stage 与 verifier，模型 replay=0、operator replay=0、verifier replay=0。最终 active pair 为 RAW=false、candidate=true，`candidate_minus_raw=+1`，两份 observation、typed operator receipt 与 CTRF 均有效；final report=`e6bc247e…d389`。这是协议定义下的 single-item treatment-associated gain；完整 9-item physical audit 因一条 inactive temperature RAW 的冻结 `codex_turn_failed` 标记仍为 invalid（trace 实为 reconnect 后 `turn.completed`，但未覆盖原 observation），所以 1/9→projected 2/9 只作描述，不作 promotion。无新 gate、无 online judge、无 official HippoRAG adapter、sealed 未访问，仍无 incumbent
+> - 最新 SEC 13F period-out 多折复验：preregistration=`ab051822…454e6`、execution freeze=`20358ad1…9d3c`，8 个 measurement item 的 RAW/candidate 共 16 个物理调用按冻结上限同时启动，固定 Plus、同镜像/100-step budget、全本地 offline verifier、0 retry、0 online judge，4 个 sealed item 未访问。15 个 observation 完整有效；`financial-period-out-measurement-f1-r0` 的 RAW 虽收到一个 `turn.completed` 且 agent exit=0，却在退出审计中留下 1 个 residual process/TID，action-budget receipt 因而 fail closed。随后 recover-only 对 backend/model/operator/verifier 的调用均为 0，明确拒绝 replay。7 个完整 pair 上 candidate=2/7、RAW=1/7，均值差 `+1/7=+14.29pp`，candidate-only=1、RAW-only=0；但阳性只位于 fold 2，fold 0/1/3 的可比较差均为 0。把缺失 RAW 按最好/最坏情况界定后，完整 8-pair 差值只能落在 `[0,+12.5pp]`。因此本轮不是有效 primary positive，也没有证明多折稳定收益，不 promotion、不跑 controls/family-out/sealed。离线 failure attribution 又发现复用的 parent operator 把 TRAIN stock-class 尾部错误拼成一个 token，和 period-out 公开合同不一致；candidate 的 6 个首个可见失败正好是 2 个 stock-count scalar 与 4 个 increase-ranking。下一步是更换为 contract-derived typed SEC-13F operator 并使用全新 untouched measurement，不是继续补 gate。partial report=`d75d8d4f…ba7`
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -257,6 +258,39 @@ runner 不是 pristine completion，完整 9-item physical cohort 又保留一�
 不得据其 trace 调候选后再次当作 fresh；`financial-analysis-6` 仍 sealed，且没有 incumbent，所以
 freeze、controls、family-out、HippoRAG transfer 与 sealed test 仍不启动。
 
+随后对同一冻结 candidate 进行了真正的 period/source-out 多折复验。两份官方 SEC 13F archive 在正式执行前
+下载并做双 oracle 一致性检查；8 个 measurement item 按 4 fold × 2 replicate 固定，另有 4 个 sealed
+commitment 不进入 materialized benchmark。执行计划没有 HippoRAG projection：项目没有同构 official adapter，
+所以只运行 RAW/candidate 的 `2×8=16` 个物理调用，并把 16 worker/16 inference slot 一次性全部放开。结果
+不是“跑得慢所以串行化”，而是约 7 分钟完成模型阶段；唯一缺口来自退出审计 fail closed，而非吞吐或 provider。
+
+16 路都有 model-execution claim，15 路完整进入 observation；缺失的是 fold 1 replicate 0 的 RAW。该路 action
+trace 本身有且仅有一个 `turn.completed`、agent exit=0、token usage 完整，但 dedicated container 扫描仍发现
+1 个 residual process/TID，且对它完成一次 SIGKILL。冻结的 action-budget contract 要求非 budget-triggered
+退出时 residual=0，因此不能把它事后接受为 valid。recover-only receipt 进一步证明没有安全的 post-agent
+resume：本次恢复 backend/model/operator/verifier/online-judge call 全为 0、stage transition=0、model replay=0，
+并返回 `do_not_replay_model`。这条 RAW 不重跑，也不靠放宽 receipt 补齐。
+
+剩余 7 个完整 pair 的描述性结果为 candidate 2/7、RAW 1/7，candidate-only 1、RAW-only 0、both-fail 5、
+both-pass 1，均值差 `+14.29pp`。但唯一正 discordance 位于 fold 2；fold 0、fold 1 的一个可比较 replicate、
+fold 3 都是零差。若缺失 RAW 为失败，完整八对差为 `+12.5pp`；若它为成功，差为 0，所以严格缺失值界为
+`[0,+12.5pp]`。这保留了“方向非负”的信号，却直接否定了当前数据上“多个 fold 稳定复现正收益”的表述。
+primary batch 不完整且下界含 0，不能 promotion，也不能进入 controls、family-out 或 sealed。
+
+事后只读、非评分诊断没有再制造 gate。8/8 candidate 的 semantic operation assignment 都与公开模板一致，
+而 15/15 完成路都成功生成文件；candidate 的首个可见 verifier failure 集中在 2 个 stock count 和 4 个
+quarter-increase rank。静态代码审计给出一个直接机制解释：冻结 parent candidate 为复现三条 consumed TRAIN
+solution，故把相邻的 stock-class string literals 尾部合并成一个值；period-out instruction 却显式声明了完整、
+分离的 TITLEOFCLASS 集合。同一旧 operator 还没有把 manager-rank inventory 限制到 latest eligible accessions，
+tie-break 也未完全实现新合同。这说明下一候选应更换 evaluator-contract semantics，而不是给 prompt 或 promotion
+再加条件。由于该判断发生在 outcome 后，只有全新的 untouched measurement 才能检验修复是否真的带来 task gain。
+
+还有一项证据卫生缺陷：pytest CTRF 的失败 traceback 会保存部分 expected/observed diff，和 measurement view
+声明的 `ground_truth_persisted=false` 不完全一致。它发生在 agent 结束、verifier 执行期间，不会回流影响本轮
+模型输出，也没有触碰 sealed；但 8 个 measurement item 必须视为彻底消费，后续报告和诊断不得复制其中的答案值。
+完整的无答案值离线汇总见
+[`financial_semantic_sec13f_period_out_partial_result_v1.json`](../manifests/financial_semantic_sec13f_period_out_partial_result_v1.json)。
+
 ### 1.2 结论分层
 
 | 命题 | 当前状态 | 证据层级 |
@@ -269,10 +303,10 @@ freeze、controls、family-out、HippoRAG transfer 与 sealed test 仍不启动�
 | 86-item offline-ready runtime 与 affected task-input closure 已预验 | 支持（冻结 closure scope） | v3.19 v5 cache-only prewarm 86/86；11/11 closure-required images 以 immutable ID、无网络 inventory/content receipt 复验 |
 | production opaque recipe selection 已接入真实 proposer/evolution | 支持（机械层） | formal integration v2 13/13 predicates、12/12 tamper、exact replay；live v3.18r1 已 materialize/install/route |
 | v2 主 SkillLearn 路径实际执行 typed capability | **部分支持，仅限 pre-agent 只读 evidence sidecar** | typed-portable integration 的真实 Docker canary 执行只读 evidence profile/inventory；`task_effect_claimed=false`、`recipe_operator_effect_claimed=false`，write/render/move 未由 capability 执行 |
-| frozen financial semantic capability 在 fresh item 上是否出现 paired task gain | **支持，但仅一个 active pair** | treatment 在 outcome 前冻结；`financial-analysis-4` 为 RAW=false→candidate=true，模型/operator/verifier 均无 replay，offline evidence valid；scheduler-loss recovery 已披露 |
+| frozen financial semantic capability 在 fresh item 上是否出现 paired task gain | **支持存在性，但 period-out 未复现为稳定多折收益** | `financial-analysis-4` 为 0→1；随后 8-pair SEC 13F period-out 最大并发运行得到 15 valid + 1 fail-closed RAW。7 个完整 pair 为 candidate 2/7、RAW 1/7、+14.29pp，但唯一正差只在 fold 2，完整八对缺失值界 `[0,+12.5pp]` |
 | typed-portable integration 已授权 fresh v3.20 development | 支持，且授权已使用完毕 | 一次正式 run + exact replay PASS；随后 v3.20 fresh development 已完成，本身仍无 incumbent/promotion |
-| v2 已产生可保留的 promoted incumbent | **不支持** | financial fresh pair 没有预注册 promotion threshold 且只含一个 active item；此前 v3.20 两代 archive 仍为 `incumbent_id=null` |
-| v2 稳定优于 raw 或 budget-matched raw | **不支持，但已有单题 prospective 阳性** | financial active pair 为 0→1；其余 8 条仅 exact RAW projection，完整 cohort 含 1 条 inactive audit invalid，尚无多 item/fold 的稳定净收益 |
+| v2 已产生可保留的 promoted incumbent | **不支持** | single-item gain 之后的独立 period-out batch 不完整，且稳定多折收益未建立；v3.20 两代 archive 仍为 `incumbent_id=null` |
+| v2 稳定优于 raw 或 budget-matched raw | **不支持；方向信号仍非稳定复现** | period-out 7 个完整 pair 无 observed regression、1 个 candidate-only gain，但只有 fold 2 为正；缺失 RAW 使八对差值下界为 0，不能作 promotion claim |
 | v3.15 已改善真实 action utility | **不支持；clean live 负结果** | 13 个 candidate audit 中 7 material / 6 restatement-risk；material 仅 exact constant/mapping，且 9 roots 全坍缩为 poster 单-family |
 | v3.17 family-slot/artifact-blueprint proposal 已达到 trial-feasible | **不支持；proposal-only 负结果** | 8/9 feasibility 通过，但第三候选绑定 2 个 failed TRAIN primitives；0 benchmark/evaluator call |
 | v3.18r1 是 clean typed-action utility negative | **不支持；只能作机械闭环与异常诊断** | organize 输入缺 100 PDF；stock partial-test harm 被 binary success 投影为 tie；literal TRAIN locator 不可移植 |
@@ -520,6 +554,9 @@ evidence。固定 cohort 越被反复用于决策，越不能承担 sealed claim
 - 某些改动能改变单题或固定 cohort 的行为；
 - frozen financial semantic treatment 已在一个 fresh same-item pair 上给出 RAW=false→candidate=true 的
   preregistered treatment-associated gain；
+- 同一 candidate 的独立 SEC 13F period-out 复验在 7 个完整 pair 上保持 observed non-regression，并得到
+  1 个 candidate-only gain；但该 gain 只出现于一个 fold，另有 1 条 RAW 因 residual process fail closed，
+  八对缺失值界包含 0；
 - 尚无可靠证据证明 agent 在多 item/fold 上稳定优于 raw、HippoRAG 或 budget-matched raw，也尚无
   attribution 证明该单题收益来自可迁移、可保留的 Assumption 机制。
 
@@ -530,12 +567,12 @@ evidence。固定 cohort 越被反复用于决策，越不能承担 sealed claim
 | legacy 缺口 | v2 状态 | 证据 | 尚缺 |
 |---|---|---|---|
 | assumption 没有统一可执行 schema | 已实现三类 `HypothesisProgram`，独立 financial path 又执行了 bounded post-agent typed operator | [`models.py:L221-L275`](../assumption_agent/models.py#L221-L275)；[`financial_semantic_operator_v1.py`](../assumption_agent/benchmarks/financial_semantic_operator_v1.py) | production evolution 中通用、多 family 的 typed lowering |
-| policy 不改变 runtime | 内部 `PolicyRuntime` 可启停、排序 lane、设参数和执行 operator step；financial fresh pair 已出现一次 0→1 treatment-associated gain | [`runtime.py:L72-L226`](../assumption_agent/runtime.py#L72-L226)；[`financial recovered report`](../artifacts/financial_semantic_fresh_v1_plus_actual01/fresh_paired.recovered.report.json) | 多 item/fold 复验、promotion 与 retained benefit |
+| policy 不改变 runtime | 内部 `PolicyRuntime` 可启停、排序 lane、设参数和执行 operator step；financial fresh pair 已出现一次 0→1，period-out 又有 1 个 candidate-only discordance | [`runtime.py:L72-L226`](../assumption_agent/runtime.py#L72-L226)；[`financial recovered report`](../artifacts/financial_semantic_fresh_v1_plus_actual01/fresh_paired.recovered.report.json)；[`period-out partial report`](../manifests/financial_semantic_sec13f_period_out_partial_result_v1.json) | 完整有效且跨多个 fold 的稳定复验、promotion 与 retained benefit |
 | 无 hypothesis repair lineage | 已实现 failed-check -> child repair tree | [`validation.py`](../assumption_agent/validation.py) | empirical repair benefit |
 | utility 来自 failure frequency | promotion 已使用 protocol-owned paired gain/harm/cost/LCB，candidate 只能收紧 | [`evaluation.py`](../assumption_agent/evaluation.py) | 尚缺真实 promotion 与 retained gain |
 | train/validation/test 混用 | split guard 与 archive-freeze gate 已实现 | [`splits.py:L220-L267`](../assumption_agent/splits.py#L220-L267) | 一次完整 current-protocol sealed run |
 | evaluator 变更无依赖失效 | controller/anchor lower bound/selective invalidation 已实现 | [`archive.py:L291-L370`](../assumption_agent/archive.py#L291-L370) | 尚未接入主 evolution 或真实 challenger |
-| HLE 是唯一主战场 | 已转向 86-item offline-ready SkillLearnBench instance-out/family-out | [`BENCHMARK_PROTOCOL.md`](../BENCHMARK_PROTOCOL.md) | v3.20 为 clean negative；financial path 后续有一个 fresh +1 active pair，但尚缺 replicated multi-item evidence 与 incumbent，所以下游仍停止 |
+| HLE 是唯一主战场 | 已转向 86-item offline-ready SkillLearnBench，并增加 project-authored SEC 13F period-out measurement | [`BENCHMARK_PROTOCOL.md`](../BENCHMARK_PROTOCOL.md)；[`period-out freeze`](../manifests/financial_semantic_sec13f_period_out_execution_freeze_v1.json) | v3.20 为 clean negative；financial period-out 只有局部方向信号且 primary 不完整，仍无 replicated stable gain/incumbent，所以下游停止 |
 
 ### 7.2 当前证据到哪一层
 
@@ -1588,6 +1625,62 @@ measurement item/fold 的同一 paired treatment。未来 runner 同时应把 po
 durable state，并把“transient `error` 后 `turn.completed`”与 terminal `turn.failed` 分开；这属于执行证据
 基础设施，不能回溯重评分本次 temperature row。
 
+### 8.13 P0 仍未关闭：SEC 13F period-out 只有局部方向信号，未形成稳定多折收益
+
+单题 existence proof 之后没有把同一题反复调优，而是建立了 project-authored SEC 13F period-out replication。
+preregistration `ab051822…454e6` 在 acquisition 前固定两份官方季度 archive、4 fold × 2 replicate
+measurement、4 个独立 sealed commitment、双 oracle、RAW/candidate 两臂、Plus、100 action starts、16 路
+最大并发、0 retry 和 offline-only evaluator。acquisition `f0770832…df1c` 在两次暂时 403 后从预注册的
+exact SEC URL 成功取得原文件；pandas/streaming 两套独立 oracle 对 measurement 与 private sealed gold
+逐项一致。execution freeze `20358ad1…9d3c` 又绑定 materialization、共享 image/cache、provider receipt、
+prewarm `2fec4bc0…f91` 和 16 个 exact work unit。这里为修复 producer/consumer schema、live sibling receipt、
+detached-input 与 `__pycache__` 污染做的是一次有限 integration audit；所有修复在最终 freeze 前收敛，没有
+根据 performance outcome 增加 gate。
+
+正式 root `financial_semantic_sec13f_period_out_v1_actual01` 一次启动全部 16 路。16/16 都写入
+model-execution claim；15/16 完成 agent→operator→offline verifier→observation。唯一 invalid 是
+`financial-period-out-measurement-f1-r0` RAW：trace 有一个 terminal `turn.completed`、agent exit=0、
+15/100 actions、token usage 完整，但退出扫描仍发现并 SIGKILL 1 个 residual process/TID。冻结 receipt
+要求这一计数为 0，所以 runner 正确 fail closed。随后唯一一次 `--recover-only` 只读取 durable artifacts，
+backend/model/operator/verifier/online-judge call、stage transition 与 model replay 全为 0；由于 upstream
+没有安全的 post-agent resume API，它将该路固定为 `do_not_replay_model`。不能为补齐样本而重放模型，也
+不能把 residual 当成“可能无害”后放宽 contract。
+
+7 个完整 pair 的统计为：candidate success 2、RAW success 1；candidate-only 1、RAW-only 0、both-fail 5、
+both-pass 1；平均 paired delta `+1/7=+14.2857pp`。fold 0 为 0/2，fold 1 的唯一完整 pair 为 0，fold 2
+为 `+1/2`，fold 3 为 0/2。换言之，唯一净 gain 只在 fold 2 replicate 1，不能被描述为多个 fold 的
+稳定复制。完整八对的 candidate 固定为 2/8；缺失 RAW 若失败则 RAW=1/8、delta `+12.5pp`，若成功则
+RAW=2/8、delta 0。因此最强诚实结论是“已观察 complete pairs 上无 regression、存在一个局部正 discordance”，
+不是 valid primary positive。report `d75d8d4f…ba7` 固定 `promotion_authorized=false`、
+`controls_authorized=false`、`family_out_authorized=false` 和 `sealed_test_authorized=false`。
+
+非评分 failure attribution 将二元失败进一步定位到 operator semantics，而不是 routing 或 gate。8/8 candidate
+都产生与公开模板完全一致的 operation assignment；15/15 完成路都有 `answers.json`，3/15 通过完整
+answer-quality test。candidate 的 6 个首个可见 assertion failure 是 2 个 stock-count scalar 和 4 个
+quarter-increase rank value/order，Q1 AUM 没有成为首个失败点。冻结 parent operator 的
+`TRAIN_DEFINED_STOCK_CLASSES` 为忠实复现三条 consumed TRAIN solution，把多项相邻 literal 拼成一个长 token；
+它与 period-out 公开合同的 25 类只重合 9 类，缺 16 类，另多 1 个拼接伪类别；而本 period-out task 明确给出
+分离、规范化的 stock-title class ontology，且 stock count 与 investment-increase 两种 operation 都使用该集合。
+operator 对 manager rank 的 latest-eligible-accession filter 和 normalized-manager
+tie-break 也没有完整实现新合同。复用 candidate 的 provenance 是正确的，但它证明的是：**原 candidate 在新
+evaluator 中可执行，不等于它已经语义适配新 evaluator。**
+
+operator 在 agent exit 后会无条件替换 `answers.json`，但 receipt 没有保存替换前的 output hash；因此现有证据
+只证明 candidate treatment 接管了 verifier 输入，不能对每题计算“同一 candidate trajectory 在 operator 前后”的
+内容 delta。这个限制和两臂本来就是独立 trajectory 一起，要求归因继续停留在整个 frozen treatment。
+
+这项静态诊断发生在 outcome 后，故不能修改 operator 后继续使用这 8 题作 fresh claim。正确的候选变化是：
+从公开 instruction/evaluator contract 编译 NFKC manager identity、完整 stock-class set、latest non-NOTICE
+eligible accession、CUSIP/manager aggregate 与确定性 tie-break，形成新的 typed SEC-13F operator；随后只在
+全新 period/source 与新 selection commitment 上做 paired measurement。旧 8 题可以用于 deterministic
+regression 和 consumed diagnosis，不能参与 selection threshold、promotion 或再评价。
+
+最后，CTRF failure traceback 会持久化 expected/observed diff 片段，违反 measurement view 对
+`ground_truth_persisted=false` 的字面强表述。由于 verifier 在 agent 完成后才 materialize，现有 15 个分数
+没有 treatment leakage；sealed 也未 materialize 或访问。但 measurement content 已不可再作为秘密 holdout，
+未来 verifier 应只持久化结构化 failure category/hash，不保存 assertion value diff。这是 future evidence
+hygiene 修复，不改变本轮 success，也不是新的 performance gate。
+
 ## 九、下一步优先级与硬验收标准
 
 | 优先级 | 工作 | 硬验收标准 |
@@ -1637,12 +1730,13 @@ durable state，并把“transient `error` 后 `turn.completed`”与 terminal `
 | 完成（instrument qualified；shadow candidate stopped） | 独立 SC-100 synthetic shadow 与离线 oracle | instrument 先通过 2/2 canary + 5/5 mutant；唯一 frozen 24-case shadow 随后为 required 0/12、true-negative 5/6、coverage 0/6，18 个 task-valid case 全在 parser 阶段 reject，oracle call=0。candidate-class 失败，不补 regex、不重跑 |
 | 完成（formation only；不是 cross-fit） | frozen financial semantic structured extractor | commit `c66e3a73` 固定 candidate/assets/runtime；financial-1/-3/-5 formation replay 为 3/3 对历史 RAW 0/3，但 `in_sample_formation_replay=true`、`cross_fit=false`。这修订了此前“先通过 deterministic TRAIN cross-fit 才消费 fresh”的 spend-control 路线；不能倒写成已通过 cross-fit |
 | 完成（single-item existence evidence） | fresh paired financial efficacy | split/treatment 在 outcome 前冻结；9 RAW + 1 candidate 共 10 次 Plus model call 最大并发，offline only。scheduler-loss 后只恢复 post-agent stage，0 model/operator/verifier replay；financial-4 为 false→true、+1，active pair valid。runner 非 pristine、cohort 有 1 条 inactive audit invalid，无 promotion/incumbent |
-| NEXT（不新增 gate） | 固定 financial candidate 的独立多 item/fold 复验 | financial-4 已消费，禁止调参后重测；financial-6 继续 sealed，除非显式重划并另留最终 sealed。需从未接触 measurement items 运行同 candidate 的 RAW/candidate 最大并发、同模型/镜像/预算、离线 paired evaluation；HippoRAG 仅在存在同构 executable adapter 时加入。取得 replicated net gain 后才定义 incumbent 并进入 freeze/controls/family-out/sealed |
+| 完成但 primary invalid（不 retry） | 固定 financial candidate 的独立 SEC 13F multi-fold period-out 复验 | 16 路 RAW/candidate 最大并发、Plus、offline-only；15 valid + 1 RAW residual-process fail closed。7 个完整 pair 为 2/7 对 1/7、+14.29pp、0 observed regression，但唯一 gain 只在 fold 2，八对缺失值界 `[0,+12.5pp]`。没有 stable replicated gain，不 promotion；4 sealed 未访问 |
+| NEXT（候选变化，不新增 gate） | contract-derived typed SEC-13F operator + 全新 untouched measurement | 用公开 task contract 实现完整 stock-class ontology、NFKC/punctuation-insensitive identity、latest eligible accession、aggregate 与 exact tie-break；当前 8 题只能作 consumed regression。新 candidate、period/source、selection 和 sanitized offline verifier 必须在任何新 outcome 前冻结；通过完整多折 paired batch 后才谈 incumbent/controls/family-out/sealed |
 | P0 infrastructure（仅未来运行） | durable post-agent resume + terminal event auditor | runner 持久化 post-agent checkpoint，恢复不得重放模型/operator/verifier；auditor 区分 transient `error` 后 `turn.completed` 与 terminal `turn.failed`。这是 evidence plumbing，不是 performance gate，也不得回改本轮 temperature-4 |
 | P2 | 多 clade archive | 同 epoch 至少两个 clade 可继续扩展；node 绑定 protocol/evidence/promotion hashes，并报告 retention 与 branch productivity |
 | P2 | evaluator co-evolution | 独立 anchor challenger、epoch transition、selective invalidation 和旧 incumbent re-evaluation 实际执行后再作主张 |
 
-以下为按时间保留的执行记录（当前证据边界见第 73 项）：
+以下为按时间保留的执行记录（当前证据边界见第 74 项）：
 
 1. 已完成：审阅并提交 protocol/action/subset 改动以及 3 个新 manifest/receipt 文件；
 2. 已完成：在 clean scoped commit 上重建 claim-eligible lock 和 86-item content-hashed prewarm receipt；
@@ -1997,9 +2091,14 @@ durable state，并把“transient `error` 后 `turn.completed`”与 terminal `
     financial-4 为 RAW=false→candidate=true、+1 且 evidence valid；完整 cohort 因 temperature-4 inactive
     frozen-audit invalid 仍非 valid，1/9→projected 2/9 仅描述。无 promotion/incumbent/HippoRAG/sealed，
     final report=`e6bc247e…d389`。
+74. SEC 13F period-out 以 16 路 RAW/candidate 最大并发执行，固定 Plus、offline-only、0 retry。15 路
+    observation valid，1 路 RAW 因 residual process action receipt fail closed；recover-only 为 0 call/
+    0 replay。7 个完整 pair 为 2/7 对 1/7、+14.29pp、0 observed regression，但唯一 gain 在 fold 2，
+    八对缺失值界 `[0,+12.5pp]`。复用 parent operator 的 stock ontology 与公开合同确定性不一致；本轮
+    不 promotion，当前 8 题成为 consumed diagnosis，4 sealed 未访问。partial report=`d75d8d4f…ba7`。
 
-这些负结果与首个 single-item prospective 阳性共同把下一风险定位到 replicated utility，而不是继续扩展
-gate、archive 或 HLE source span。
+这些负结果、首个 single-item prospective 阳性与 period-out 局部方向信号共同把下一风险定位到 candidate
+semantic contract 和完整 replicated utility，而不是继续扩展 gate、archive 或 HLE source span。
 
 ## 十、建议的实验协议与 claim ladder
 
@@ -2065,8 +2164,8 @@ activation；held-out causal activation precision 的分母则是 evidence-valid
 |---|---|---|
 | L0 wiring | schema、repair、off/on、guard、archive transition 的机械链路已连接 | 达到：typed operator feasibility 9/9，production selection integration v2 13/13 + 12/12 tamper + exact replay；typed-portable formal integration 又以一次 run + exact replay、3 项真实 Docker canary、production loader/cleanup 闭合 pre-agent 只读 sidecar。它不覆盖 write/render/move task effect |
 | L1 mechanism live | 真实外部任务中 proposal/repair/treatment/gate 全链路完成 | 达到：v3.20 完成 60/60 valid receipts；execution-contract/organize 路径闭合实际 action；独立 financial path 又在 agent 后执行 bounded typed operator，并在 fresh active pair 留下 operator/verifier evidence |
-| L2 validation learning | clean held-out validation 上有可晋级净收益 | **部分达到“因果存在性”，尚未达到可晋级层级**：pre-frozen financial-4 treatment-associated pair 为 0→1、+1；但仅一个 active item，两个独立 agent trajectories、无 candidate operator 前输出快照，runner 经 preregistered recovery、未绑定 performance threshold，且 cohort 有一个 inactive audit invalid。因此无统计稳定性、promotion 或 incumbent |
-| L3 prospective generalization | frozen incumbent 在 unseen instance/family 上保持收益 | 未达到；已有一次 candidate-level unseen-item transfer signal，但不是 frozen-incumbent 的 cross-instance/family retention |
+| L2 validation learning | clean held-out validation 上有可晋级净收益 | **达到单题因果存在性，未达到可晋级层级**：financial-4 为 0→1；后续 SEC 13F period-out 7 个完整 pair 为 +1/7 且无 observed regression，但唯一 gain 只在 fold 2，另有 1 个 RAW invalid，八对缺失值界 `[0,+12.5pp]`。两个独立 trajectories、无 operator 前输出 hash，因此无稳定多折净收益、promotion 或 incumbent |
+| L3 prospective generalization | frozen incumbent 在 unseen instance/family 上保持收益 | 未达到；period-out 是 candidate-level instance/period transfer diagnostic，不是 promoted incumbent retention，且结果没有跨多个 fold 稳定为正 |
 | L4 self-evolution | 多代 retained improvement，且 recursion ablation 有因果贡献 | 未达到 |
 | L5 evaluator co-evolution | anchor-guided evaluator replacement 与 selective erasure 改善搜索 | 未达到 |
 
@@ -2388,22 +2487,35 @@ RAW observation 保留 frozen audit invalid；1/9 RAW→2/9 projected candidate 
 exact RAW projection。finalizer 没有覆盖 invalid，也没有运行 promotion gate。official HippoRAG 因无同构
 adapter 明确 N/A，residual sealed 未访问。
 
-因此现在仍不跑 SkillLearn incumbent freeze、完整 controls、family-out、HippoRAG 或 sealed test，更不谈
-multi-clade 或 evaluator co-evolution。任何把 primary sealed item 改作 development 的方案都会消耗既有 sealed holdout，
+同一 frozen candidate 随后完成 SEC 13F period-out 多折复验的全部 16 个模型 claim。15 路 observation 有效，
+1 路 RAW 因 residual process receipt fail closed；recover-only 证明 0 replay 且不能安全补齐。7 个完整 pair
+为 candidate 2/7、RAW 1/7、平均 `+14.29pp`、0 observed regression，但唯一 candidate-only gain 只在
+fold 2，完整八对缺失值界为 `[0,+12.5pp]`。因此这一轮把证据从“单题阳性”推进为“多个 untouched item
+上的局部方向信号”，却没有推进到“多个 fold 稳定正收益”。它是 primary-invalid descriptive result，不能
+和旧 single-item gain 拼成 promotion evidence。
+
+离线归因又把下一 blocker 收窄为 candidate/evaluator semantic contract mismatch：parent operator 的 stock
+ontology 只覆盖 period-out 25 个合法类中的 9 个，缺 16 个并含一个拼接伪类别；candidate 的首个失败全部落在
+依赖该 filter 的 stock count 或 quarter-increase rank。下一步直接改变 operator 本体，在新 untouched
+period/source 上复验；不再给 gate、prompt 或同一 8 题增加规则。当前 8 个 measurement item 因已运行且
+CTRF traceback 泄漏部分首错 diff，只能作为 consumed diagnosis；4 个 sealed commitment 仍未访问。
+
+因此现在仍不跑 incumbent freeze、完整 controls、family-out、HippoRAG 或 sealed test，更不谈 multi-clade
+或 evaluator co-evolution。任何把 primary sealed item 改作 development 的方案都会消耗既有 sealed holdout，
 必须另行显式重划并保留新的最终 sealed 集；v3.12 空 freeze/partial-control rows、v3.14 mixed-claim rows、
-v3.16/v3.17 proposal-only artifacts、v3.18r1 mixed-validity rows、本轮 consumed diagnostic、in-sample
-execution-contract grid、post-selected organize family 1/3 audit 与 trace-refined 1/3 audit 都不能拼成
-performance evidence。距离目标的状态是：L1 wiring/delivery 已完成；L2 的 single-item prospective
-treatment-associated gain 存在性已证明，但 replicated、可晋级的稳定净收益仍缺；已有一次 candidate-level
-unseen-item signal，但无 incumbent，所以 L3 incumbent retention/family transfer 尚未开始；L4 recursive
-retained improvement 未证明，L5 evaluator co-evolution 未开始。
+v3.16/v3.17 proposal-only artifacts、v3.18r1 mixed-validity rows、consumed diagnostics、in-sample
+execution-contract grid、post-selected organize family 1/3 与本次 incomplete period-out 都不能拼成
+performance evidence。距离目标的状态是：L1 wiring/delivery 已完成；L2 的 single-item causal existence 已证明，
+且有一个独立 period-out candidate-only signal，但 replicated、完整、可晋级的稳定净收益仍缺；无 incumbent，
+所以 L3 retention/family transfer 尚未开始；L4 recursive retained improvement 未证明，L5 evaluator
+co-evolution 未开始。
 最诚实的论文级表述是：
 
 > **显式 HypothesisProgram 是一个有希望、可能更易归因的 self-evolution 搜索表示；
-> v2 已证明协议所有权、离线 evaluator 和学习环 wiring 可运行，并取得一次冻结、untouched、
-> single-item 的 prospective treatment-associated success；但尚未证明它在冻结、干净的外部
-> benchmark 上产生可复验的稳定净收益，更未证明 retained self-evolution、Red Queen 式多谱系或 evaluator
-> 共演化。**
+> v2 已证明协议所有权、离线 evaluator 和学习环 wiring 可运行，取得一次冻结、untouched、single-item
+> prospective success，并在独立 period-out 多题复验中观察到一个局部 candidate-only gain、没有 observed
+> regression；但该批次缺一条有效 RAW、完整差值下界为 0，且正差未跨 fold 复制，所以仍未证明冻结候选能
+> 产生可晋级的稳定净收益，更未证明 retained self-evolution、Red Queen 式多谱系或 evaluator 共演化。**
 
 ## 附录 A：关键证据索引
 
@@ -2432,6 +2544,15 @@ retained improvement 未证明，L5 evaluator co-evolution 未开始。
   [`finalization event ledger`](../artifacts/financial_semantic_fresh_v1_plus_actual01/recovery.finalization.events.jsonl)；
   [`final recovered report`](../artifacts/financial_semantic_fresh_v1_plus_actual01/fresh_paired.recovered.report.json)；
   [`raw worker artifacts`](../artifacts/financial_semantic_fresh_v1_plus_actual01/worker_state/)
+- SEC 13F period-out 多折复验（15 valid + 1 fail-closed RAW；partial descriptive、非 incumbent）：
+  [`preregistration`](../manifests/financial_semantic_sec13f_period_out_preregistration_v1.json)；
+  [`acquisition receipt`](../manifests/financial_semantic_sec13f_period_out_acquisition_v1.json)；
+  [`measurement view`](../manifests/financial_semantic_sec13f_period_out_measurement_view_v1.json)；
+  [`execution freeze`](../manifests/financial_semantic_sec13f_period_out_execution_freeze_v1.json)；
+  [`offline partial result`](../manifests/financial_semantic_sec13f_period_out_partial_result_v1.json)；
+  [`formal failure receipt`](../artifacts/financial_semantic_sec13f_period_out_v1_actual01/measurement.failure.json)；
+  [`zero-replay recovery report`](../artifacts/financial_semantic_sec13f_period_out_v1_actual01/recovery_attempts/4c2c8a6018952eadc1d3445cfaabc8d05150e279d557c2ae821e9a8081cbeb27.json)；
+  [`raw worker artifacts`](../artifacts/financial_semantic_sec13f_period_out_v1_actual01/worker_state/)
 - latest clean negative development protocol：
   [`skilllearn_paper_protocol_v3_20_ruoli_gpt54mini.json`](../manifests/skilllearn_paper_protocol_v3_20_ruoli_gpt54mini.json)
 - v3.20 development evidence：
