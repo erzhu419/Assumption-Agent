@@ -1163,6 +1163,7 @@ def _validate_materialization_stage(
         "measurement_gold_hash",
         "previous_archive_sha256",
         "current_archive_sha256",
+        "period_source_receipts",
         "period_aliases",
         "item_count",
         "items",
@@ -1170,6 +1171,8 @@ def _validate_materialization_stage(
         "benchmark_tree_hash",
         "sealed_task_count_materialized",
         "sealed_content_accessed_by_measurement_root",
+        "sealed_content_persisted",
+        "sealed_gold_accessed",
         "model_calls",
         "online_judge_calls",
         "secret_value_persisted",
@@ -1191,6 +1194,25 @@ def _validate_materialization_stage(
         != acquired["previous"]["archive_sha256"]
         or payload.get("current_archive_sha256")
         != acquired["current"]["archive_sha256"]
+        or payload.get("period_source_receipts")
+        != {
+            "previous": {
+                "container_alias": "/root/2025-q2",
+                "archive_sha256": acquired["previous"]["archive_sha256"],
+                "coverpage_sha256": acquired["previous"]["coverpage_sha256"],
+                "infotable_sha256": acquired["previous"]["infotable_sha256"],
+                "source_fingerprint": acquired["previous"]["source_fingerprint"],
+                "source_path_persisted": False,
+            },
+            "current": {
+                "container_alias": "/root/2025-q3",
+                "archive_sha256": acquired["current"]["archive_sha256"],
+                "coverpage_sha256": acquired["current"]["coverpage_sha256"],
+                "infotable_sha256": acquired["current"]["infotable_sha256"],
+                "source_fingerprint": acquired["current"]["source_fingerprint"],
+                "source_path_persisted": False,
+            },
+        }
         or payload.get("period_aliases")
         != {
             "previous": "/root/2025-q2",
@@ -1206,6 +1228,8 @@ def _validate_materialization_stage(
         or not _is_sha256(payload.get("benchmark_tree_hash"))
         or payload.get("sealed_task_count_materialized") != 0
         or payload.get("sealed_content_accessed_by_measurement_root") is not False
+        or payload.get("sealed_content_persisted") is not False
+        or payload.get("sealed_gold_accessed") is not False
         or payload.get("model_calls") != 0
         or payload.get("online_judge_calls") != 0
         or payload.get("secret_value_persisted") is not False

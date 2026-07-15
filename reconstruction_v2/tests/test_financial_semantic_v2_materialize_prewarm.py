@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import copy
 from dataclasses import dataclass
 import json
 from pathlib import Path
@@ -15,6 +16,7 @@ from replication_runtime.financial_semantic_v2 import oracle_pandas
 from replication_runtime.financial_semantic_v2 import oracle_streaming
 from replication_runtime.financial_semantic_v2 import pack as period_pack
 from replication_runtime.financial_semantic_v2 import prewarm
+from replication_runtime.financial_semantic_v2 import freeze
 
 
 MANAGER_COUNT = 32
@@ -270,6 +272,64 @@ def test_materialization_rejects_archive_role_swap_before_writing(
         )
 
     assert not output.exists()
+
+
+def test_freeze_accepts_materializer_schema_and_binds_nonleakage_receipts(
+    inputs: _Inputs,
+    tmp_path: Path,
+) -> None:
+    report = _materialize(inputs, tmp_path / "benchmark")
+    acquisition = {
+        "archives": [
+            {
+                "role": role,
+                **{
+                    field: report["period_source_receipts"][role][field]
+                    for field in (
+                        "archive_sha256",
+                        "coverpage_sha256",
+                        "infotable_sha256",
+                        "source_fingerprint",
+                    )
+                },
+            }
+            for role in ("previous", "current")
+        ]
+    }
+
+    assert freeze._validate_materialization_stage(
+        report,
+        view=inputs.measurement_view,
+        acquisition=acquisition,
+    ) == report["materialization_hash"]
+
+    tampered_reports: list[dict[str, Any]] = []
+    for field in ("sealed_content_persisted", "sealed_gold_accessed"):
+        tampered = copy.deepcopy(report)
+        tampered[field] = True
+        body = dict(tampered)
+        body.pop("materialization_hash")
+        tampered["materialization_hash"] = period_pack.payload_hash(body)
+        tampered_reports.append(tampered)
+    tampered_source = copy.deepcopy(report)
+    tampered_source["period_source_receipts"]["current"][
+        "source_path_persisted"
+    ] = True
+    body = dict(tampered_source)
+    body.pop("materialization_hash")
+    tampered_source["materialization_hash"] = period_pack.payload_hash(body)
+    tampered_reports.append(tampered_source)
+
+    for tampered in tampered_reports:
+        with pytest.raises(
+            freeze.PeriodOutFreezeError,
+            match="measurement materialization drifted",
+        ):
+            freeze._validate_materialization_stage(
+                tampered,
+                view=inputs.measurement_view,
+                acquisition=acquisition,
+            )
 
 
 def _install_fake_runtime(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
