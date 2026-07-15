@@ -19,9 +19,14 @@ import os
 from pathlib import Path, PurePosixPath
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from typing import Any, Mapping, Sequence
+
+_PROJECT_IMPORT_ROOT = Path(__file__).resolve().parents[1]
+if str(_PROJECT_IMPORT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_IMPORT_ROOT))
 
 from assumption_agent.benchmarks.codex_action_budget import (
     audit_codex_action_budget,
