@@ -2171,7 +2171,24 @@ keyword classifier，造成大量 LLM false positives，并把多篇 music-histo
 可用的未消费 TRAIN-derived target 或独立 synthetic holdout，应诚实停止该 benchmark 路线，而不是提前读取
 organize-1/-4 sealed 或 consumed organize-3。
 
-因此现在不跑 freeze、controls、family-out、HippoRAG/raw transfer 或 sealed test，更不谈 multi-clade 或
+该 NEXT 已按边界执行到第一次独立 acquisition。提交 `2f804812` 先冻结了本地
+`all-MiniLM-L6-v2` runtime、115 条 consumed-TRAIN PDF、四个 one-vs-rest logistic target operator、
+`music_history` 全负分 default、参数字节与全部依赖；2/5/6 上的 115/115 仅记为 resubstitution，
+不作 prospective claim。随后预注册 6 strata × 10、60/60 exact-map 的 public-OA feasibility；正式评价
+要求 Linux network namespace 只剩 loopback，Ruoli/online judge/Agent/HippoRAG/RAW 均为 0，且没有读取
+organize-1/-4 sealed 或复用 organize-3。
+
+第一次目标采集没有形成评价包：在每 stratum 最多 40 个已排序候选的冻结条件下，
+`trapped_ion_and_qc` 不足 10 个可下载、可抽取且去重后的 PDF，程序 fail closed；现场只留下 18 个
+partial PDF（content-set hash `51845c7c…8bb8`），没有 `pack.lock.json`、decision lock、report、operator
+prediction 或 semantic outcome。该失败是 acquisition invalid，不是 classifier 的正/负结果。按照预注册，
+不放宽这一个 holdout、不重试、不把 partial PDFs 当评价数据；结果 receipt 为
+`semantic_assignment_public_oa_feasibility_result_v1.json`。下一次若继续，只能保持 candidate 完全不变，
+事前冻结一个与 2020--2025 查询区间不相交的新 public-OA period/source 及更充足的纯 transport pool；
+若第二次仍不能锁定 pack，则停止 public-OA feasibility 路线，而不是继续修 acquisition gate。
+
+因此现在仍不跑 SkillLearn incumbent freeze、controls、family-out、HippoRAG/raw transfer 或 sealed test，
+更不谈 multi-clade 或
 evaluator co-evolution。任何把 primary sealed item 改作 development 的方案都会消耗既有 sealed holdout，
 必须另行显式重划并保留新的最终 sealed 集；v3.12 空 freeze/partial-control rows、v3.14 mixed-claim rows、
 v3.16/v3.17 proposal-only artifacts、v3.18r1 mixed-validity rows、本轮 consumed diagnostic、in-sample
@@ -2251,6 +2268,12 @@ co-evolution 未开始。
   [`actual report`](../artifacts/train_typed_assignment_crossfit_v3_v320_pro_actual01/typed_assignment_crossfit.report.json)；
   [`actual event ledger`](../artifacts/train_typed_assignment_crossfit_v3_v320_pro_actual01/typed_assignment_crossfit.execution.events.jsonl)；
   [`raw Codex/verifier worker artifacts`](../artifacts/train_typed_assignment_crossfit_v3_v320_pro_actual01/worker_state/)
+- frozen local semantic-assignment operator 与第一次 public-OA acquisition（operator 未被评价）：
+  [`consumed TRAIN pack`](../manifests/semantic_assignment_consumed_train_pack_v1.json)；
+  [`MiniLM runtime asset`](../manifests/semantic_assignment_minilm_runtime_asset_v1.json)；
+  [`frozen operator asset`](../manifests/semantic_assignment_operator_asset_v1.json)；
+  [`public-OA preregistration`](../manifests/semantic_assignment_public_oa_feasibility_v1.json)；
+  [`acquisition failure receipt`](../manifests/semantic_assignment_public_oa_feasibility_result_v1.json)
 - previous live-mechanism protocol（performance mixed-validity）：
   [`skilllearn_paper_protocol_v3_18r1_ruoli_gpt54mini.json`](../manifests/skilllearn_paper_protocol_v3_18r1_ruoli_gpt54mini.json)
 - formal production typed-selection integration v2：
