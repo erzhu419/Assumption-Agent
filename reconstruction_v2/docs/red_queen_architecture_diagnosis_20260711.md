@@ -2235,12 +2235,24 @@ field-tree topology、page resources、XFA/security、未授权字段与非 rast
 address-prefix contamination、amount、Q9、Q10、swapped gold）全部符合预期，decision
 `00ecee97…fdf36`、report `600467dc…b69f4`；shadow case/model/Ruoli/online judge call 全为 0。
 
-因此下一步不再增加 gate，而是冻结一个新的 role-anchored typed parser/operator：按 plaintiff/defendant
-局部证据块绑定姓名、地址和 primary phone，按标签区分 event/demand/signature date，金额冲突 fail closed，
-显式处理 Q9/Q10、venue basis/ZIP，并在 reject 时原子零写入。随后只运行一次已冻结 24-case shadow；12/12
-required 与 6/6 true-negative 是唯一硬判定，6 个 coverage probe 只原样报告 `coverage_starved`，不得事后
-改成负例或据其修补重跑。即使通过，也仅是 synthetic feasibility，只能进入新的 paired development root，
-不能直接成为 incumbent。
+该步现已在任何 shadow outcome 前完成冻结，而没有增加新 gate。candidate
+`8d5fb7d9…7478b` 是 role-anchored closed grammar：按 plaintiff/defendant 局部证据绑定姓名、地址、primary
+phone 和 email；event/demand/signature date、claim currency、Q9/Q10 与 venue basis/ZIP 分别使用 typed
+parser；8 类 reject 按固定 precedence 返回自校验 receipt。写入仍限于 24 text + 6 button，先写临时 PDF、
+复用 v1 reopen/reconcile，再以同文件系统 no-clobber hard link 原子发布；官方 blank、plan、inner receipt、
+source/output hash 与临时文件清理都进入 outer receipt。冻结前独立自造输入审计发现并修复了 phone-prefix
+street、`I am suing` name alias、defendant email 冒充 plaintiff email、否定 public/attorney 语句、无标签日期
+范围、跨句 rent currency、双 plaintiff precedence、contract venue 和 unsigned-contract 等缺口；这些修正均
+发生在读取 24-case outcome 之前。SC-100 相关 100+ 项离线 test 通过，page 2--4 Poppler render 也确认 invented
+case 的文本和按钮在正确位置可见。
+
+one-shot runner 同时冻结：24 路 generation 必须全部 join 后才加载 latent gold，随后最多 18 路 immutable
+Docker oracle、`--network none`；negative 要 exact reason 且零写入。preregistration
+`5cbe4815…3df9` 绑定 candidate、v1 writer、corpus `5e16c371…b0660`、已合格 oracle、host
+PyMuPDF/Poppler 与 container image，并预留唯一 decision root。下一步只运行这一次已冻结 24-case shadow；
+12/12 required 与 6/6 true-negative 是唯一硬判定，6 个 coverage probe 只原样报告 `coverage_starved`，
+不得事后改成负例或据其修补重跑。即使通过，也仅是 synthetic feasibility，只能支持另行预注册新的 paired
+development root，不能直接成为 incumbent。
 
 因此现在仍不跑 SkillLearn incumbent freeze、controls、family-out、HippoRAG/raw transfer 或 sealed test，
 更不谈 multi-clade 或
