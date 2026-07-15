@@ -51,6 +51,7 @@ from .train_outcome_production_runner_v2 import (
     ProductionTrainCandidateRunnerV2,
 )
 from .train_outcome_ranker_v2 import (
+    FrozenRawTrainBaselineSetV2,
     TrainCandidateWorkUnitV2,
     TrainOutcomeRankerV2,
     TrainOutcomeRankingResultV2,
@@ -227,13 +228,16 @@ class _RuntimeAssets:
     preflight_report: Mapping[str, Any]
 
 
-def _prepare_runtime_assets(
+def _prepare_scoped_runtime_assets(
     *,
     project_root: Path,
     destination: Path,
     protocol: PaperProtocol,
     manifest: SplitManifest,
-    integration: TrainExecutionContractIntegrationV2,
+    baseline_set: FrozenRawTrainBaselineSetV2,
+    active_item_hashes: set[str],
+    expected_active_item_count: int,
+    preflight_policy: str,
     event_sink: JsonlEventSink,
     task_input_cache_root: Path | None,
 ) -> _RuntimeAssets:
@@ -261,14 +265,10 @@ def _prepare_runtime_assets(
         frozen_task_inputs=frozen,
     )
 
-    active_hashes = {
-        route.item_id_hash
-        for candidate in integration.candidate_specs
-        for route in candidate.item_routes
-    }
+    active_hashes = set(active_item_hashes)
     baseline_by_hash = {
         row.item_id_hash: row
-        for row in integration.raw_projection.baseline_set.rows
+        for row in baseline_set.rows
     }
     prewarm_by_hash = {
         str(row["item_id_hash"]): row
@@ -276,7 +276,12 @@ def _prepare_runtime_assets(
         if isinstance(row, Mapping)
     }
     if (
-        len(active_hashes) != 7
+        not isinstance(expected_active_item_count, int)
+        or isinstance(expected_active_item_count, bool)
+        or expected_active_item_count <= 0
+        or not isinstance(preflight_policy, str)
+        or not preflight_policy
+        or len(active_hashes) != expected_active_item_count
         or not active_hashes <= set(baseline_by_hash)
         or not active_hashes <= set(prewarm_by_hash)
     ):
@@ -374,9 +379,7 @@ def _prepare_runtime_assets(
             "local asset preflight crossed the no-model boundary"
         )
     report_without_hash = {
-        "preflight_policy": (
-            "v320_active_train_local_asset_exact_reuse_preflight_v2"
-        ),
+        "preflight_policy": preflight_policy,
         "passed": True,
         "active_item_count": len(rows),
         "rows": list(rows),
@@ -402,6 +405,37 @@ def _prepare_runtime_assets(
         provider_circuit=provider_circuit,
         model_limiter=model_limiter,
         preflight_report=report,
+    )
+
+
+def _prepare_runtime_assets(
+    *,
+    project_root: Path,
+    destination: Path,
+    protocol: PaperProtocol,
+    manifest: SplitManifest,
+    integration: TrainExecutionContractIntegrationV2,
+    event_sink: JsonlEventSink,
+    task_input_cache_root: Path | None,
+) -> _RuntimeAssets:
+    active_hashes = {
+        route.item_id_hash
+        for candidate in integration.candidate_specs
+        for route in candidate.item_routes
+    }
+    return _prepare_scoped_runtime_assets(
+        project_root=project_root,
+        destination=destination,
+        protocol=protocol,
+        manifest=manifest,
+        baseline_set=integration.raw_projection.baseline_set,
+        active_item_hashes=active_hashes,
+        expected_active_item_count=7,
+        preflight_policy=(
+            "v320_active_train_local_asset_exact_reuse_preflight_v2"
+        ),
+        event_sink=event_sink,
+        task_input_cache_root=task_input_cache_root,
     )
 
 
