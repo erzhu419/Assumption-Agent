@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import hashlib
 import json
 from pathlib import Path
@@ -12,9 +12,12 @@ from ..events import JsonlEventSink
 from ..models import HypothesisProgram, HypothesisStatus, ResidualExample, stable_hash
 from ..splits import SplitManifest
 from ..typed_execution_contract import (
+    TRACE_REFINED_ORGANIZATION_CONTRACT_VERSION,
+    TYPED_EXECUTION_CONTRACT_VERSION,
     TypedExecutionContract,
     TypedExecutionContractRegistry,
     derive_train_execution_contract,
+    derive_train_trace_refined_organization_contract_v2,
 )
 from ..typed_operator_grammar import (
     MAX_REGISTERED_ARTIFACTS_PER_FAMILY,
@@ -98,6 +101,18 @@ SOURCE_RANKING_REPORT_RELATIVE_PATH = (
     "artifacts/train_execution_contract_development_v2_v320_train_"
     "resume_pro_actual01/ranking.report.json"
 )
+TRACE_REFINED_MANIFEST_RELATIVE_PATH = (
+    "manifests/train_trace_refined_organize_item_out_v2.json"
+)
+TRACE_REFINED_MANIFEST_HASH = (
+    "da85625ca58b63adb82ea0c7dba3ff7403c44160aa734ad224083a4167dc5483"
+)
+TRACE_REFINED_MANIFEST_FILE_SHA256 = (
+    "c9326e600e647826949c2569374ee40de9a3525d90da32a49ca2c061afd3148d"
+)
+TRACE_DESIGN_EVIDENCE_SET_HASH = (
+    "bc365eaf082f113f32677154d4711f8991ab2a1043be54431b9742d4387f9de2"
+)
 COMPILE_REPORT_FILENAME = "crossfit.compile.report.json"
 ACTUAL_REPORT_FILENAME = "crossfit.report.json"
 FAILURE_REPORT_FILENAME = "crossfit.failure.json"
@@ -105,6 +120,8 @@ EXECUTION_EVENTS_FILENAME = "crossfit.execution.events.jsonl"
 ASSET_PREFLIGHT_POLICY = (
     "v320_train_item_out_local_asset_exact_reuse_preflight_v2"
 )
+LEGACY_CONTRACT_VARIANT = "closed_execution_contract_v1"
+TRACE_REFINED_CONTRACT_VARIANT = "trace_refined_organization_contract_v2"
 
 
 @dataclass(frozen=True)
@@ -120,9 +137,15 @@ class TrainItemOutFoldSpecV2:
     expected_snapshot_ledger_hash: str
     expected_candidate_hash: str
     expected_work_unit_hash: str
+    contract_variant: str = LEGACY_CONTRACT_VARIANT
+    static_complexity: int = 5
+    candidate_id_override: str | None = None
+    expected_compile_bundle_manifest_hash: str | None = None
 
     @property
     def candidate_id(self) -> str:
+        if self.candidate_id_override is not None:
+            return self.candidate_id_override
         item_suffix = self.heldout_item_id.rsplit("-", maxsplit=1)[-1]
         return f"v320-train-loo-organize-{item_suffix}-organize-collection"
 
@@ -149,6 +172,38 @@ class TrainItemOutFoldSpecV2:
             or self.graph_source_item_ids
             != tuple(sorted(self.graph_source_item_ids))
             or not self.selected_recipe_id.startswith("recipe_")
+            or self.contract_variant
+            not in {
+                LEGACY_CONTRACT_VARIANT,
+                TRACE_REFINED_CONTRACT_VARIANT,
+            }
+            or self.static_complexity not in {5, 8}
+            or (
+                self.contract_variant == LEGACY_CONTRACT_VARIANT
+                and (
+                    self.static_complexity != 5
+                    or self.candidate_id_override is not None
+                    or self.expected_compile_bundle_manifest_hash is not None
+                )
+            )
+            or (
+                self.contract_variant == TRACE_REFINED_CONTRACT_VARIANT
+                and (
+                    self.static_complexity != 8
+                    or not self.candidate_id_override
+                    or not self.candidate_id_override.endswith(
+                        "-evidence-collection-v2"
+                    )
+                    or not self.expected_compile_bundle_manifest_hash
+                    or len(self.expected_compile_bundle_manifest_hash) != 64
+                    or any(
+                        character not in "0123456789abcdef"
+                        for character in (
+                            self.expected_compile_bundle_manifest_hash
+                        )
+                    )
+                )
+            )
             or any(
                 len(value) != 64
                 or any(
@@ -261,6 +316,71 @@ ORGANIZE_ITEM_OUT_FOLDS: Mapping[str, TrainItemOutFoldSpecV2] = {
         ),
     ),
 }
+ORGANIZE_TRACE_REFINED_ITEM_OUT_FOLDS: Mapping[
+    str,
+    TrainItemOutFoldSpecV2,
+] = {
+    "organize-messy-files-2": replace(
+        ORGANIZE_ITEM_OUT_FOLDS["organize-messy-files-2"],
+        expected_contract_hash=(
+            "4a60241adaefe9b39d6011fa3bac9d33de934e4dcd5a152339874b3beec8a3db"
+        ),
+        expected_candidate_hash=(
+            "c6c2521b8456b405289cc0b209536d3ae87a880114d84e6b97cd0e841599f48a"
+        ),
+        expected_work_unit_hash=(
+            "67be91fe0951ce1ca562ee938b4989e4641908e58480318e5ddcf5d30dfd1230"
+        ),
+        contract_variant=TRACE_REFINED_CONTRACT_VARIANT,
+        static_complexity=8,
+        candidate_id_override=(
+            "v320-train-loo-organize-2-evidence-collection-v2"
+        ),
+        expected_compile_bundle_manifest_hash=(
+            "cfc2866b5a4ec1900ff9008c39df4289e0b410378e47e43ae01f96f3545986dc"
+        ),
+    ),
+    "organize-messy-files-5": replace(
+        ORGANIZE_ITEM_OUT_FOLDS["organize-messy-files-5"],
+        expected_contract_hash=(
+            "dbc8a128ef5bc5eab13085bfffd87b4a753447727ad3d828c7ef0be86a16efa1"
+        ),
+        expected_candidate_hash=(
+            "aa9955362c8ccfeef1e4c1c0cd6a02fb8c03347da9ea323521da78b58c0431da"
+        ),
+        expected_work_unit_hash=(
+            "0316f30c5ec8b8bcd6b777cc1e653f79fda9cf72b95ec0fe0564a2210244e0fb"
+        ),
+        contract_variant=TRACE_REFINED_CONTRACT_VARIANT,
+        static_complexity=8,
+        candidate_id_override=(
+            "v320-train-loo-organize-5-evidence-collection-v2"
+        ),
+        expected_compile_bundle_manifest_hash=(
+            "aa5d94d8d61c70af90710256989442cc1a19046629c1dd9d7212dd428a555f29"
+        ),
+    ),
+    "organize-messy-files-6": replace(
+        ORGANIZE_ITEM_OUT_FOLDS["organize-messy-files-6"],
+        expected_contract_hash=(
+            "83c2138eadd1f06e3f19ef0c3a485ac0b231bd2f6322aea346bd5a3abe317191"
+        ),
+        expected_candidate_hash=(
+            "eadd5ab92b57b4307a1a0b419cf1af6c5ea6226d43fcc9b651fcf2b3102db945"
+        ),
+        expected_work_unit_hash=(
+            "705a8ae5be964655c2ebf2272493fd3d089147ebce803e6abff6b4b3abc7602a"
+        ),
+        contract_variant=TRACE_REFINED_CONTRACT_VARIANT,
+        static_complexity=8,
+        candidate_id_override=(
+            "v320-train-loo-organize-6-evidence-collection-v2"
+        ),
+        expected_compile_bundle_manifest_hash=(
+            "bfe65238a3fa12ffaece69b1be143dd478a57e7046eccebf5aa2f1699bf6a412"
+        ),
+    ),
+}
 ORGANIZE_2_FOLD = ORGANIZE_ITEM_OUT_FOLDS["organize-messy-files-2"]
 
 # Compatibility aliases for the first, already executed targeted fold.
@@ -357,6 +477,99 @@ def _verify_source_ranking_report(project_root: Path) -> dict[str, Any]:
     }
 
 
+def _verify_trace_refined_manifest(
+    project_root: Path,
+    *,
+    fold: TrainItemOutFoldSpecV2,
+) -> dict[str, Any] | None:
+    if fold.contract_variant == LEGACY_CONTRACT_VARIANT:
+        return None
+    path = project_root / TRACE_REFINED_MANIFEST_RELATIVE_PATH
+    if path.is_symlink() or not path.is_file():
+        raise TrainExecutionContractCrossfitError(
+            "trace-refined TRAIN manifest is unavailable"
+        )
+    try:
+        raw = path.read_bytes()
+        payload = json.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise TrainExecutionContractCrossfitError(
+            "trace-refined TRAIN manifest is unreadable"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise TrainExecutionContractCrossfitError(
+            "trace-refined TRAIN manifest is malformed"
+        )
+    without_hash = dict(payload)
+    manifest_hash = without_hash.pop("manifest_hash", None)
+    cells = payload.get("cells")
+    if not isinstance(cells, list):
+        raise TrainExecutionContractCrossfitError(
+            "trace-refined TRAIN cell registry is malformed"
+        )
+    matching_cells = [
+        row
+        for row in cells
+        if isinstance(row, Mapping)
+        and row.get("heldout_item_id") == fold.heldout_item_id
+    ]
+    cell = matching_cells[0] if len(matching_cells) == 1 else {}
+    if (
+        hashlib.sha256(raw).hexdigest()
+        != TRACE_REFINED_MANIFEST_FILE_SHA256
+        or manifest_hash != TRACE_REFINED_MANIFEST_HASH
+        or manifest_hash != stable_hash(without_hash)
+        or payload.get("contract_version")
+        != TRACE_REFINED_ORGANIZATION_CONTRACT_VERSION
+        or payload.get("registered_cell_count") != 3
+        or payload.get("maximum_concurrent_model_calls") != 3
+        or payload.get("actual_authorized_after_manifest_commit") is not True
+        or payload.get("train_candidate_search_only") is not True
+        or payload.get("base_program_static_complexity") != 5
+        or payload.get("trace_refinement_static_complexity_delta") != 3
+        or payload.get("static_complexity_per_cell") != 8
+        or payload.get("static_complexity_formula")
+        != (
+            "program_action_graph_count_plus_one_plus_"
+            "trace_refined_invariant_delta"
+        )
+        or payload.get("new_cell_outcomes_observed_at_registration_time")
+        is not False
+        or payload.get("prior_item_out_outcomes_used_for_candidate_design")
+        is not True
+        or payload.get("historical_collection_outcomes_excluded_from_refined_score")
+        is not True
+        or payload.get("globally_unbiased_crossfit") is not False
+        or payload.get("offline_evaluation_only") is not True
+        or payload.get("online_judge_calls") != 0
+        or payload.get("validation_access_authorized") is not False
+        or payload.get("test_access_authorized") is not False
+        or payload.get("promotion_authorized") is not False
+        or payload.get("incumbent_authorized") is not False
+        or payload.get("trace_design_evidence_set_hash")
+        != TRACE_DESIGN_EVIDENCE_SET_HASH
+        or cell.get("graph_source_item_ids")
+        != list(fold.graph_source_item_ids)
+        or cell.get("contract_hash") != fold.expected_contract_hash
+        or cell.get("compile_bundle_manifest_hash")
+        != fold.expected_compile_bundle_manifest_hash
+        or cell.get("candidate_hash") != fold.expected_candidate_hash
+        or cell.get("work_unit_hash") != fold.expected_work_unit_hash
+    ):
+        raise TrainExecutionContractCrossfitError(
+            "trace-refined TRAIN manifest drifted"
+        )
+    return {
+        "manifest_file_sha256": TRACE_REFINED_MANIFEST_FILE_SHA256,
+        "manifest_hash": TRACE_REFINED_MANIFEST_HASH,
+        "trace_design_evidence_set_hash": TRACE_DESIGN_EVIDENCE_SET_HASH,
+        "cell_candidate_hash": fold.expected_candidate_hash,
+        "cell_work_unit_hash": fold.expected_work_unit_hash,
+        "new_cell_outcomes_observed_at_registration_time": False,
+        "raw_trace_content_embedded": False,
+    }
+
+
 def _support_task_id_hashes(
     contract: TypedExecutionContract,
 ) -> tuple[str, ...]:
@@ -427,9 +640,15 @@ class TrainItemOutCompileV2:
                 "TRAIN item-out program drifted"
             )
         bound = self.typed_program_registry.require_bound_recipe(self.program)
+        expected_contract_version = (
+            TRACE_REFINED_ORGANIZATION_CONTRACT_VERSION
+            if self.fold.contract_variant == TRACE_REFINED_CONTRACT_VARIANT
+            else TYPED_EXECUTION_CONTRACT_VERSION
+        )
         if (
             bound.snapshot.snapshot_hash != self.snapshot.snapshot_hash
             or bound.recipe.recipe_id != self.fold.selected_recipe_id
+            or self.contract.contract_version != expected_contract_version
             or self.contract.validate(self.graph)
         ):
             raise TrainExecutionContractCrossfitError(
@@ -440,7 +659,7 @@ class TrainItemOutCompileV2:
         reconstructed = TrainCandidateSpecV2.from_verified_bundle(
             candidate_id=self.fold.candidate_id,
             bundle=self.bundle,
-            static_complexity=5,
+            static_complexity=self.fold.static_complexity,
         )
         if reconstructed.safe_payload() != self.candidate.safe_payload():
             raise TrainExecutionContractCrossfitError(
@@ -455,6 +674,11 @@ class TrainItemOutCompileV2:
             != self.fold.expected_snapshot_ledger_hash
             or self.contract.contract_hash
             != self.fold.expected_contract_hash
+            or (
+                self.fold.expected_compile_bundle_manifest_hash is not None
+                and self.bundle.manifest_hash
+                != self.fold.expected_compile_bundle_manifest_hash
+            )
             or self.candidate.candidate_hash
             != self.fold.expected_candidate_hash
             or self.work.work_unit_hash
@@ -500,6 +724,19 @@ class TrainItemOutCompileV2:
             or persisted.get("evaluator_calls") != 0
             or persisted.get("online_judge_calls") != 0
             or persisted.get("freeze_or_promotion_authorized") is not False
+            or (
+                self.fold.contract_variant == LEGACY_CONTRACT_VARIANT
+                and persisted.get("trace_refined_manifest_receipt")
+                is not None
+            )
+            or (
+                self.fold.contract_variant
+                == TRACE_REFINED_CONTRACT_VARIANT
+                and not isinstance(
+                    persisted.get("trace_refined_manifest_receipt"),
+                    Mapping,
+                )
+            )
         ):
             raise TrainExecutionContractCrossfitError(
                 "TRAIN item-out compile report drifted"
@@ -523,6 +760,10 @@ def compile_v320_train_item_out_crossfit_v2(
     destination.mkdir()
     try:
         source_ranking_receipt = _verify_source_ranking_report(project)
+        trace_refined_manifest_receipt = _verify_trace_refined_manifest(
+            project,
+            fold=fold,
+        )
         source_root = (project / V320_SOURCE_RELATIVE_ROOT).resolve(strict=True)
         manifest_path = (project / V320_MANIFEST_RELATIVE_PATH).resolve(
             strict=True
@@ -661,11 +902,22 @@ def compile_v320_train_item_out_crossfit_v2(
             for row in v320_residuals
             if row.task_id != fold.heldout_item_id
         )
-        contract = derive_train_execution_contract(
-            graph=graph,
-            recipe_id=fold.selected_recipe_id,
-            residuals=contract_residuals,
-        )
+        if fold.contract_variant == LEGACY_CONTRACT_VARIANT:
+            contract = derive_train_execution_contract(
+                graph=graph,
+                recipe_id=fold.selected_recipe_id,
+                residuals=contract_residuals,
+            )
+        elif fold.contract_variant == TRACE_REFINED_CONTRACT_VARIANT:
+            contract = derive_train_trace_refined_organization_contract_v2(
+                graph=graph,
+                recipe_id=fold.selected_recipe_id,
+                residuals=contract_residuals,
+            )
+        else:  # pragma: no cover - fold.verify rejects this first.
+            raise TrainExecutionContractCrossfitError(
+                "TRAIN item-out contract variant is not registered"
+            )
         contract_source_task_hashes = _support_task_id_hashes(contract)
         expected_source_task_hashes = tuple(
             sorted(
@@ -801,8 +1053,16 @@ def compile_v320_train_item_out_crossfit_v2(
             response_hash=stable_hash(response),
             selection_round=1,
         )
-        static_complexity = len(program.action_graph) + 1
-        if static_complexity != 5:
+        base_static_complexity = len(program.action_graph) + 1
+        static_complexity = base_static_complexity + (
+            3
+            if fold.contract_variant == TRACE_REFINED_CONTRACT_VARIANT
+            else 0
+        )
+        if (
+            base_static_complexity != 5
+            or static_complexity != fold.static_complexity
+        ):
             raise TrainExecutionContractCrossfitError(
                 "TRAIN item-out program complexity drifted"
             )
@@ -847,7 +1107,12 @@ def compile_v320_train_item_out_crossfit_v2(
             baseline=baseline,
         )
         if (
-            candidate.candidate_hash != fold.expected_candidate_hash
+            (
+                fold.expected_compile_bundle_manifest_hash is not None
+                and bundle.manifest_hash
+                != fold.expected_compile_bundle_manifest_hash
+            )
+            or candidate.candidate_hash != fold.expected_candidate_hash
             or work.work_unit_hash != fold.expected_work_unit_hash
             or len(candidate.item_routes) != 1
             or candidate.item_routes[0].item_id_hash != heldout_item_hash
@@ -860,6 +1125,9 @@ def compile_v320_train_item_out_crossfit_v2(
             "compile_policy": CROSSFIT_COMPILE_POLICY,
             "compile_passed": True,
             "source_train_ranking_receipt": source_ranking_receipt,
+            "trace_refined_manifest_receipt": (
+                trace_refined_manifest_receipt
+            ),
             "source_train_ranking_hash": SOURCE_TRAIN_RANKING_HASH,
             "source_semantic_ranking_hash": (
                 SOURCE_SEMANTIC_RANKING_HASH
@@ -874,6 +1142,29 @@ def compile_v320_train_item_out_crossfit_v2(
             "snapshot_ledger_hash": snapshot_ledger.ledger_hash,
             "recipe_id": fold.selected_recipe_id,
             "workflow": SELECTED_WORKFLOW.value,
+            "contract_variant": fold.contract_variant,
+            "execution_contract_version": contract.contract_version,
+            "candidate_static_complexity": fold.static_complexity,
+            "base_program_static_complexity": 5,
+            "contract_invariant_count": len(contract.invariants),
+            "trace_refinement_static_complexity_delta": (
+                3
+                if fold.contract_variant == TRACE_REFINED_CONTRACT_VARIANT
+                else 0
+            ),
+            "static_complexity_formula": (
+                "program_action_graph_count_plus_one_plus_"
+                "trace_refined_invariant_delta"
+            ),
+            "trace_informed_candidate_refinement": (
+                fold.contract_variant == TRACE_REFINED_CONTRACT_VARIANT
+            ),
+            "prior_item_out_outcomes_used_for_candidate_design": (
+                fold.contract_variant == TRACE_REFINED_CONTRACT_VARIANT
+            ),
+            "refined_cell_hashes_preregistered_before_actual": (
+                fold.contract_variant == TRACE_REFINED_CONTRACT_VARIANT
+            ),
             "program_id_hash": stable_hash({"program_id": program.id}),
             "program_payload_hash": program.payload_hash,
             "typed_binding_hash": binding.binding_hash,
@@ -1092,7 +1383,8 @@ def run_v320_train_item_out_crossfit_actual_v2(
             },
             backend_factory=backend_factory,
             trace_prefix=(
-                f"v320-train-item-out-{fold.heldout_item_id}-actual"
+                f"v320-train-item-out-{fold.heldout_item_id}-"
+                f"{fold.contract_variant}-actual"
             ),
         )
         ranking = TrainOutcomeRankerV2(max_workers=1).rank(
@@ -1128,7 +1420,8 @@ def run_v320_train_item_out_crossfit_actual_v2(
         )
         heldout_recovery = outcome.recovery
         source_recovery_target = (
-            fold.heldout_item_id == SOURCE_RECOVERY_ITEM_ID
+            fold.contract_variant == LEGACY_CONTRACT_VARIANT
+            and fold.heldout_item_id == SOURCE_RECOVERY_ITEM_ID
         )
         report_without_hash: dict[str, Any] = {
             "execution_policy": CROSSFIT_ACTUAL_POLICY,
@@ -1148,6 +1441,38 @@ def run_v320_train_item_out_crossfit_actual_v2(
             "source_top_candidate_hash": SOURCE_TOP_CANDIDATE_HASH,
             "candidate_hash": compilation.candidate.candidate_hash,
             "work_unit_hash": fold.expected_work_unit_hash,
+            "contract_variant": fold.contract_variant,
+            "execution_contract_version": (
+                compilation.contract.contract_version
+            ),
+            "candidate_static_complexity": fold.static_complexity,
+            "base_program_static_complexity": 5,
+            "contract_invariant_count": len(
+                compilation.contract.invariants
+            ),
+            "trace_refinement_static_complexity_delta": (
+                3
+                if fold.contract_variant == TRACE_REFINED_CONTRACT_VARIANT
+                else 0
+            ),
+            "static_complexity_formula": (
+                "program_action_graph_count_plus_one_plus_"
+                "trace_refined_invariant_delta"
+            ),
+            "trace_informed_candidate_refinement": (
+                fold.contract_variant == TRACE_REFINED_CONTRACT_VARIANT
+            ),
+            "prior_item_out_outcomes_used_for_candidate_design": (
+                fold.contract_variant == TRACE_REFINED_CONTRACT_VARIANT
+            ),
+            "refined_cell_hashes_preregistered_before_actual": (
+                fold.contract_variant == TRACE_REFINED_CONTRACT_VARIANT
+            ),
+            "trace_refined_manifest_hash": (
+                TRACE_REFINED_MANIFEST_HASH
+                if fold.contract_variant == TRACE_REFINED_CONTRACT_VARIANT
+                else None
+            ),
             "heldout_item_id_hash": active_hash,
             "heldout_excluded_from_graph": True,
             "heldout_excluded_from_contract": True,
@@ -1177,6 +1502,13 @@ def run_v320_train_item_out_crossfit_actual_v2(
             "heldout_baseline_success": outcome.baseline_success,
             "heldout_candidate_success": outcome.candidate_success,
             "heldout_recovery_observed": heldout_recovery,
+            "heldout_was_source_ranking_recovery_item": (
+                fold.heldout_item_id == SOURCE_RECOVERY_ITEM_ID
+            ),
+            "same_candidate_as_source_top": (
+                compilation.candidate.candidate_hash
+                == SOURCE_TOP_CANDIDATE_HASH
+            ),
             "source_in_sample_recovery_target": source_recovery_target,
             "in_sample_recovery_survived_item_out": (
                 heldout_recovery if source_recovery_target else None
@@ -1246,19 +1578,33 @@ def main() -> int:
         default=ORGANIZE_2_FOLD.heldout_item_id,
     )
     parser.add_argument(
+        "--contract-variant",
+        choices=(
+            LEGACY_CONTRACT_VARIANT,
+            TRACE_REFINED_CONTRACT_VARIANT,
+        ),
+        default=LEGACY_CONTRACT_VARIANT,
+    )
+    parser.add_argument(
         "--provider-label",
         choices=("plus", "pro"),
         required=True,
     )
     parser.add_argument("--task-input-cache-root", type=Path)
     args = parser.parse_args()
+    fold_sets = {
+        LEGACY_CONTRACT_VARIANT: ORGANIZE_ITEM_OUT_FOLDS,
+        TRACE_REFINED_CONTRACT_VARIANT: (
+            ORGANIZE_TRACE_REFINED_ITEM_OUT_FOLDS
+        ),
+    }
     result = run_v320_train_item_out_crossfit_actual_v2(
         project_root=args.project_root,
         output_root=args.output_root,
         canary_report_path=args.canary_report,
         provider_label=args.provider_label,
         task_input_cache_root=args.task_input_cache_root,
-        fold=ORGANIZE_ITEM_OUT_FOLDS[args.heldout_item_id],
+        fold=fold_sets[args.contract_variant][args.heldout_item_id],
     )
     print(
         json.dumps(

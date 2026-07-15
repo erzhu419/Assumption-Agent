@@ -11,6 +11,7 @@ from assumption_agent.benchmarks.train_execution_contract_crossfit_v2 import (
     EXPECTED_WORK_UNIT_HASH,
     GRAPH_SOURCE_ITEM_IDS,
     ORGANIZE_ITEM_OUT_FOLDS,
+    ORGANIZE_TRACE_REFINED_ITEM_OUT_FOLDS,
     SOURCE_RANKING_REPORT_RELATIVE_PATH,
     compile_v320_train_item_out_crossfit_v2,
 )
@@ -89,3 +90,42 @@ def test_compiles_remaining_registered_item_out_folds(
         {"item_id": heldout_item_id}
     )
     assert result.report["unbiased_crossfit"] is False
+
+
+@pytest.mark.skipif(
+    not SOURCE_ROOT.is_dir() or not SOURCE_RANKING_REPORT.is_file(),
+    reason="historical v3.20 source ranking is not installed",
+)
+@pytest.mark.parametrize(
+    "heldout_item_id",
+    tuple(ORGANIZE_TRACE_REFINED_ITEM_OUT_FOLDS),
+)
+def test_compiles_trace_refined_item_out_cells_before_actual(
+    tmp_path: Path,
+    heldout_item_id: str,
+) -> None:
+    fold = ORGANIZE_TRACE_REFINED_ITEM_OUT_FOLDS[heldout_item_id]
+    result = compile_v320_train_item_out_crossfit_v2(
+        project_root=PROJECT_ROOT,
+        output_root=tmp_path / heldout_item_id,
+        fold=fold,
+    )
+
+    result.verify()
+    assert len(result.contract.invariants) == 6
+    assert result.candidate.static_complexity == 8
+    assert result.bundle.manifest_hash == (
+        fold.expected_compile_bundle_manifest_hash
+    )
+    assert result.report["base_program_static_complexity"] == 5
+    assert result.report["trace_refinement_static_complexity_delta"] == 3
+    assert result.report["contract_invariant_count"] == 6
+    assert result.report["trace_informed_candidate_refinement"] is True
+    assert result.report[
+        "prior_item_out_outcomes_used_for_candidate_design"
+    ] is True
+    assert result.report[
+        "refined_cell_hashes_preregistered_before_actual"
+    ] is True
+    assert result.report["model_calls"] == 0
+    assert result.report["online_judge_calls"] == 0

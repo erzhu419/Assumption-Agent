@@ -18,6 +18,9 @@ from .typed_operator_grammar import (
 TYPED_EXECUTION_CONTRACT_VERSION = (
     "train_supported_closed_task_execution_contract_v1"
 )
+TRACE_REFINED_ORGANIZATION_CONTRACT_VERSION = (
+    "train_trace_refined_organization_execution_contract_v2"
+)
 MIN_INDEPENDENT_TRAIN_SUPPORT = 2
 MAX_SUPPORTS_PER_INVARIANT = 16
 MAX_ACTION_STARTS = 100
@@ -59,6 +62,15 @@ class InvariantKind(str, Enum):
     FINITE_SEARCH_SPACE_DECLARED = "finite_search_space_declared"
     FINAL_METRICS_FROM_FINAL_OUTPUT = "final_metrics_from_final_output"
     FINAL_OUTPUT_REOPENED = "final_output_reopened"
+    ORGANIZATION_DESTINATIONS_FROM_PUBLIC_TASK = (
+        "organization_destinations_from_public_task"
+    )
+    ORGANIZATION_ASSIGNMENTS_REQUIRE_POSITIVE_EVIDENCE = (
+        "organization_assignments_require_positive_evidence"
+    )
+    ORGANIZATION_DESTINATION_LAYOUT_REOPENED = (
+        "organization_destination_layout_reopened"
+    )
 
 
 class CompletionCheckKind(str, Enum):
@@ -451,7 +463,10 @@ class TypedExecutionContract:
 
     def validate_closed(self) -> tuple[str, ...]:
         issues: list[str] = []
-        if self.contract_version != TYPED_EXECUTION_CONTRACT_VERSION:
+        if self.contract_version not in {
+            TYPED_EXECUTION_CONTRACT_VERSION,
+            TRACE_REFINED_ORGANIZATION_CONTRACT_VERSION,
+        }:
             issues.append("execution_contract_version_mismatch")
         if not _is_sha256(self.graph_hash):
             issues.append("execution_contract_graph_hash_invalid")
@@ -465,7 +480,12 @@ class TypedExecutionContract:
                 tuple[InvariantKind, RuntimeRole, RuntimeRole, OperatorKind], ...
             ] = ()
         else:
-            expected_rows = _workflow_invariant_rows(self.workflow)
+            expected_rows = _contract_invariant_rows(
+                contract_version=self.contract_version,
+                workflow=self.workflow,
+            )
+            if not expected_rows:
+                issues.append("execution_contract_version_workflow_mismatch")
         expected_operator_kinds = frozenset(row[3] for row in expected_rows)
         if not self.invariants:
             issues.append("execution_contract_invariants_empty")
@@ -686,11 +706,48 @@ _WORKFLOW_INVARIANTS: Mapping[
     ),
 }
 
+_TRACE_REFINED_ORGANIZATION_INVARIANTS = (
+    *_WORKFLOW_INVARIANTS[WorkflowKind.ORGANIZE_COLLECTION],
+    (
+        InvariantKind.ORGANIZATION_DESTINATIONS_FROM_PUBLIC_TASK,
+        RuntimeRole.SOURCE_COLLECTION,
+        RuntimeRole.WORKING_STATE,
+        OperatorKind.DERIVE_ORGANIZATION_PLAN,
+    ),
+    (
+        InvariantKind.ORGANIZATION_ASSIGNMENTS_REQUIRE_POSITIVE_EVIDENCE,
+        RuntimeRole.SOURCE_COLLECTION,
+        RuntimeRole.WORKING_STATE,
+        OperatorKind.DERIVE_ORGANIZATION_PLAN,
+    ),
+    (
+        InvariantKind.ORGANIZATION_DESTINATION_LAYOUT_REOPENED,
+        RuntimeRole.DECLARED_OUTPUT,
+        RuntimeRole.FINAL_MATERIALIZED_OUTPUT,
+        OperatorKind.CHECK_TASK_LOCAL_RESULT,
+    ),
+)
+
 
 def _workflow_invariant_rows(
     workflow: WorkflowKind,
 ) -> tuple[tuple[InvariantKind, RuntimeRole, RuntimeRole, OperatorKind], ...]:
     return _WORKFLOW_INVARIANTS[workflow]
+
+
+def _contract_invariant_rows(
+    *,
+    contract_version: str,
+    workflow: WorkflowKind,
+) -> tuple[tuple[InvariantKind, RuntimeRole, RuntimeRole, OperatorKind], ...]:
+    if contract_version == TYPED_EXECUTION_CONTRACT_VERSION:
+        return _workflow_invariant_rows(workflow)
+    if (
+        contract_version == TRACE_REFINED_ORGANIZATION_CONTRACT_VERSION
+        and workflow is WorkflowKind.ORGANIZE_COLLECTION
+    ):
+        return _TRACE_REFINED_ORGANIZATION_INVARIANTS
+    return ()
 
 
 def _completion_checks(workflow: WorkflowKind) -> tuple[CompletionCheckKind, ...]:
@@ -722,7 +779,7 @@ def _recipe_for_id(
     return matches[0]
 
 
-def derive_train_execution_contract(
+def _derive_train_execution_contract(
     *,
     graph: FamilyCapabilityGraph,
     recipe_id: str,
@@ -730,6 +787,7 @@ def derive_train_execution_contract(
     search_candidate_hashes: Sequence[str] = (),
     max_action_starts: int = MAX_ACTION_STARTS,
     max_mutations: int = 8,
+    contract_version: str,
 ) -> TypedExecutionContract:
     """Build a closed contract using only independent TRAIN failure receipts.
 
@@ -739,6 +797,14 @@ def derive_train_execution_contract(
     """
 
     recipe = _recipe_for_id(graph, recipe_id)
+    invariant_rows = _contract_invariant_rows(
+        contract_version=contract_version,
+        workflow=recipe.workflow,
+    )
+    if not invariant_rows:
+        raise PermissionError(
+            "execution-contract version does not support this workflow"
+        )
     supports_by_identity: dict[tuple[str, str], TrainSupportRef] = {}
     for residual in residuals:
         if residual.split is not SplitName.TRAIN:
@@ -796,7 +862,7 @@ def derive_train_execution_contract(
     )
     checks = _completion_checks(recipe.workflow)
     contract = TypedExecutionContract(
-        contract_version=TYPED_EXECUTION_CONTRACT_VERSION,
+        contract_version=contract_version,
         graph_hash=graph.graph_hash,
         target_family_hash=graph.target_family_hash,
         recipe_id=recipe.recipe_id,
@@ -812,7 +878,7 @@ def derive_train_execution_contract(
                         supports=supports,
                     )
                     for kind, input_role, output_role, operation in (
-                        _workflow_invariant_rows(recipe.workflow)
+                        invariant_rows
                     )
                 ),
                 key=lambda row: (row.kind.value, row.operation.value),
@@ -848,6 +914,48 @@ def derive_train_execution_contract(
             f"derived execution contract is invalid: {list(issues)}"
         )
     return contract
+
+
+def derive_train_execution_contract(
+    *,
+    graph: FamilyCapabilityGraph,
+    recipe_id: str,
+    residuals: Sequence[ResidualExample],
+    search_candidate_hashes: Sequence[str] = (),
+    max_action_starts: int = MAX_ACTION_STARTS,
+    max_mutations: int = 8,
+) -> TypedExecutionContract:
+    """Build the original closed contract from independent TRAIN failures."""
+
+    return _derive_train_execution_contract(
+        graph=graph,
+        recipe_id=recipe_id,
+        residuals=residuals,
+        search_candidate_hashes=search_candidate_hashes,
+        max_action_starts=max_action_starts,
+        max_mutations=max_mutations,
+        contract_version=TYPED_EXECUTION_CONTRACT_VERSION,
+    )
+
+
+def derive_train_trace_refined_organization_contract_v2(
+    *,
+    graph: FamilyCapabilityGraph,
+    recipe_id: str,
+    residuals: Sequence[ResidualExample],
+    max_action_starts: int = MAX_ACTION_STARTS,
+    max_mutations: int = 8,
+) -> TypedExecutionContract:
+    """Build the trace-refined organization contract without task literals."""
+
+    return _derive_train_execution_contract(
+        graph=graph,
+        recipe_id=recipe_id,
+        residuals=residuals,
+        max_action_starts=max_action_starts,
+        max_mutations=max_mutations,
+        contract_version=TRACE_REFINED_ORGANIZATION_CONTRACT_VERSION,
+    )
 
 
 def load_typed_execution_contract(

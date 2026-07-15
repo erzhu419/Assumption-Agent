@@ -7,13 +7,18 @@ from typing import Any, Mapping
 
 import pytest
 
+from assumption_agent.benchmarks.execution_contract_prompt_v2 import (
+    _instruction_payload,
+)
 from assumption_agent.models import ResidualExample, SplitName, stable_hash
 from assumption_agent.typed_execution_contract import (
     CompletionCheckKind,
     CompletionPhaseKind,
     InvariantKind,
     RuntimeRole,
+    TRACE_REFINED_ORGANIZATION_CONTRACT_VERSION,
     derive_train_execution_contract,
+    derive_train_trace_refined_organization_contract_v2,
     verify_execution_contract_payload,
 )
 from assumption_agent.typed_operator_grammar import (
@@ -234,6 +239,61 @@ def test_contract_requires_two_independent_same_family_train_failures() -> None:
             graph=graph,
             recipe_id=recipe.recipe_id,
             residuals=(residuals[0], successful),
+        )
+
+
+def test_trace_refined_organization_contract_is_closed_and_literal_free() -> None:
+    graph, residuals, _ = _graph_fixture(path="/root/files")
+    recipe = _recipe(graph, WorkflowKind.ORGANIZE_COLLECTION)
+
+    contract = derive_train_trace_refined_organization_contract_v2(
+        graph=graph,
+        recipe_id=recipe.recipe_id,
+        residuals=residuals,
+    )
+
+    assert contract.contract_version == (
+        TRACE_REFINED_ORGANIZATION_CONTRACT_VERSION
+    )
+    assert contract.validate(graph) == ()
+    assert {
+        InvariantKind.ORGANIZATION_DESTINATIONS_FROM_PUBLIC_TASK,
+        InvariantKind.ORGANIZATION_ASSIGNMENTS_REQUIRE_POSITIVE_EVIDENCE,
+        InvariantKind.ORGANIZATION_DESTINATION_LAYOUT_REOPENED,
+    }.issubset({row.kind for row in contract.invariants})
+    assert len(contract.invariants) == 6
+    payload_text = json.dumps(contract.safe_payload(), sort_keys=True)
+    instruction_text = json.dumps(
+        _instruction_payload(contract),
+        sort_keys=True,
+    )
+    assert "siblings of" in instruction_text
+    assert "fallback or catch-all" in instruction_text
+    assert "frozen pre-move manifest" in instruction_text
+    for forbidden in (
+        "/root",
+        "data.csv",
+        "synthetic-family",
+        "item-1",
+        "verifier",
+        "hidden answer",
+    ):
+        assert forbidden not in payload_text
+
+    wrong_version = replace(
+        contract,
+        contract_version="unknown_trace_refinement",
+    )
+    assert "execution_contract_version_mismatch" in (
+        wrong_version.validate(graph)
+    )
+
+    other_recipe = _recipe(graph, WorkflowKind.TRANSFORM_IN_PLACE)
+    with pytest.raises(PermissionError, match="does not support"):
+        derive_train_trace_refined_organization_contract_v2(
+            graph=graph,
+            recipe_id=other_recipe.recipe_id,
+            residuals=residuals,
         )
 
 

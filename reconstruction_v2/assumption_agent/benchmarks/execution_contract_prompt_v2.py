@@ -73,6 +73,25 @@ _INVARIANT_INSTRUCTIONS: Mapping[InvariantKind, str] = {
         "Reopen the materialized output from task-local storage and check the "
         "reopened state before finishing."
     ),
+    InvariantKind.ORGANIZATION_DESTINATIONS_FROM_PUBLIC_TASK: (
+        "Before moving anything, resolve the source collection, destination "
+        "root, and every allowed destination name from the current public "
+        "task. Freeze an absolute source-to-destination manifest. Unless the "
+        "public task explicitly requires nesting, destination folders must be "
+        "siblings of, never children inside, the source collection."
+    ),
+    InvariantKind.ORGANIZATION_ASSIGNMENTS_REQUIRE_POSITIVE_EVIDENCE: (
+        "Assign every source item using positive title, content, or metadata "
+        "evidence for its named destination. Never use a destination as a "
+        "fallback or catch-all; re-inspect every ambiguous item before any "
+        "mutation."
+    ),
+    InvariantKind.ORGANIZATION_DESTINATION_LAYOUT_REOPENED: (
+        "After moving, reopen the destination root named by the public task. "
+        "Reject nested destination folders under the source collection, "
+        "unexpected destination names, or any final filename-to-folder map "
+        "that differs from the frozen pre-move manifest."
+    ),
 }
 
 _COMPLETION_INSTRUCTION = (
