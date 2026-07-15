@@ -2187,6 +2187,13 @@ prediction 或 semantic outcome。该失败是 acquisition invalid，不是 clas
 事前冻结一个与 2020--2025 查询区间不相交的新 public-OA period/source 及更充足的纯 transport pool；
 若第二次仍不能锁定 pack，则停止 public-OA feasibility 路线，而不是继续修 acquisition gate。
 
+第二次 preregistration `74a387b3` 保持同一 candidate/threshold，改用从未查询的 2015--2019 period，
+把纯 transport pool 事前扩到每 stratum 120、96 路并发；它仍在任何 prediction 前 fail closed：LLM
+stratum 只有 2 个合格 partial PDF，仍无 pack lock/report/decision/outcome。结果 receipt
+`semantic_assignment_public_oa_period_out_feasibility_result_v2.json` 因而将
+`public_oa_feasibility_route_stopped=true` 固化。至此不再换 period/source、扩 pool 或补 acquisition gate；
+local operator 本身仍是“未评价”，不是 PASS、FAIL 或 incumbent。
+
 因此现在仍不跑 SkillLearn incumbent freeze、controls、family-out、HippoRAG/raw transfer 或 sealed test，
 更不谈 multi-clade 或
 evaluator co-evolution。任何把 primary sealed item 改作 development 的方案都会消耗既有 sealed holdout，
@@ -2273,7 +2280,9 @@ co-evolution 未开始。
   [`MiniLM runtime asset`](../manifests/semantic_assignment_minilm_runtime_asset_v1.json)；
   [`frozen operator asset`](../manifests/semantic_assignment_operator_asset_v1.json)；
   [`public-OA preregistration`](../manifests/semantic_assignment_public_oa_feasibility_v1.json)；
-  [`acquisition failure receipt`](../manifests/semantic_assignment_public_oa_feasibility_result_v1.json)
+  [`acquisition failure receipt`](../manifests/semantic_assignment_public_oa_feasibility_result_v1.json)；
+  [`period-out preregistration`](../manifests/semantic_assignment_public_oa_period_out_feasibility_v2.json)；
+  [`period-out acquisition failure receipt`](../manifests/semantic_assignment_public_oa_period_out_feasibility_result_v2.json)
 - previous live-mechanism protocol（performance mixed-validity）：
   [`skilllearn_paper_protocol_v3_18r1_ruoli_gpt54mini.json`](../manifests/skilllearn_paper_protocol_v3_18r1_ruoli_gpt54mini.json)
 - formal production typed-selection integration v2：
