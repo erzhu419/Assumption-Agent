@@ -2254,6 +2254,28 @@ PyMuPDF/Poppler 与 container image，并预留唯一 decision root。下一步�
 不得事后改成负例或据其修补重跑。即使通过，也仅是 synthetic feasibility，只能支持另行预注册新的 paired
 development root，不能直接成为 incumbent。
 
+这次唯一 decision 已在 frozen commit `40734632` 上消费，结论不是边界阳性而是明确的 candidate-class
+失败。24 路 generation 全部先 join，但 18 个 task-valid case 全在 parser 阶段返回 reject，因而没有生成
+任何 candidate PDF，也没有启动 Docker oracle：required positive 为 0/12，true negative exact reason +
+zero-write 为 5/6，coverage probe 为 0/6、全部原样记为 `coverage_starved`。N01/N02/N03/N04/N06 的
+scope control 正确；N05 应为 `conflicting_claim_amount`，却在 claim-type 阶段先给
+`missing_or_ambiguous_required_fact`。report hash `39834131…c916`、decision
+`e82ff2b2…0dc7`，result receipt `26843d5e…4b2f`；model/Ruoli/online/official-test call 均为 0。
+
+只读 post-hoc stage attribution 进一步说明这不是 evaluator 或新 gate 的问题，而是 hand-authored grammar
+本身没有覆盖任务语言：12 个 required 的首个失败分布为 pre-rejection 4、event date 4、list-style plaintiff
+name 2、currency 1、phone 1；6 个 coverage 则为 pre-rejection 2、event date 2、signature 1、interleaved
+address 1。`rather than / neither / ... or public entity` 被误当成 positive public-entity evidence；“leave
+second-plaintiff fields blank”被误当成存在第二原告；`relevant period`、列表式 Name/Address、自然语言签名和
+金额标点也落在 invented tests 之外。candidate 在 outcome 后未修改、未 rescore、未 retry，并按 manifest
+永久停止。
+
+因此不能把下一步写成“再补几个 regex”。这条证据否定的是从少量 invented examples 手工枚举 source
+surface form 的 candidate class。若继续，只能换成由声明 TRAIN distribution 形成、输出严格 typed facts
+并由独立 writer/reconcile 执行的 semantic structured extractor（或等价 capability interface），同时使用
+全新的 untouched measurement；本 24-case corpus 只能作为 consumed diagnosis，不能再成为 selection 或
+promotion evidence。这是 candidate search 的改变，不是增加 acceptance gate。
+
 因此现在仍不跑 SkillLearn incumbent freeze、controls、family-out、HippoRAG/raw transfer 或 sealed test，
 更不谈 multi-clade 或
 evaluator co-evolution。任何把 primary sealed item 改作 development 的方案都会消耗既有 sealed holdout，
@@ -2343,14 +2365,18 @@ co-evolution 未开始。
   [`acquisition failure receipt`](../manifests/semantic_assignment_public_oa_feasibility_result_v1.json)；
   [`period-out preregistration`](../manifests/semantic_assignment_public_oa_period_out_feasibility_v2.json)；
   [`period-out acquisition failure receipt`](../manifests/semantic_assignment_public_oa_period_out_feasibility_result_v2.json)
-- SC-100 v1 false-positive closure 与 frozen synthetic measurement instrument：
+- SC-100 v1 false-positive closure、frozen instrument 与已停止的 role-v2 shadow：
   [`v1 semantic result`](../manifests/sc100_typed_train_diagnostic_result_v1.json)；
   [`synthetic corpus`](../reference/synthetic_sc100_shadow_v1/)；
   [`oracle qualification fixtures`](../manifests/sc100_shadow_oracle_qualification_fixtures_v1.json)；
   [`oracle preregistration`](../manifests/sc100_shadow_oracle_qualification_v1.json)；
   [`oracle result receipt`](../manifests/sc100_shadow_oracle_qualification_result_v1.json)；
   [`offline report`](../artifacts/sc100_shadow_oracle_qualification_v1/sc100_shadow_oracle_qualification.report.json)；
-  [`decision lock`](../artifacts/sc100_shadow_oracle_qualification_v1/sc100_shadow_oracle_qualification.decision.lock.json)
+  [`decision lock`](../artifacts/sc100_shadow_oracle_qualification_v1/sc100_shadow_oracle_qualification.decision.lock.json)；
+  [`role-v2 shadow preregistration`](../manifests/sc100_synthetic_shadow_v1.json)；
+  [`role-v2 shadow result receipt`](../manifests/sc100_synthetic_shadow_result_v1.json)；
+  [`role-v2 shadow report`](../artifacts/sc100_synthetic_shadow_v1_role_v2/sc100_synthetic_shadow.report.json)；
+  [`role-v2 shadow decision lock`](../artifacts/sc100_synthetic_shadow_v1_role_v2/sc100_synthetic_shadow.decision.lock.json)
 - previous live-mechanism protocol（performance mixed-validity）：
   [`skilllearn_paper_protocol_v3_18r1_ruoli_gpt54mini.json`](../manifests/skilllearn_paper_protocol_v3_18r1_ruoli_gpt54mini.json)
 - formal production typed-selection integration v2：
