@@ -1,0 +1,121 @@
+{
+  "schema": "sc100-shadow-oracle-qualification-fixtures-v1",
+  "provenance": {
+    "source": "consumed TRAIN conformance artifacts from the rejected SC-100 v1 diagnostic",
+    "statistical_role": "instrument conformance only",
+    "shadow_case_count": 0,
+    "shadow_outcomes_accessed": false,
+    "candidate_score_computed": false
+  },
+  "blank": {
+    "path": "artifacts/sc100_typed_train_diagnostic_v1/workspaces/court-form-filling-3/sc100-blank.pdf",
+    "sha256": "ef3421b14ebf64dbf884566ff659b39776035ec5b6e6500be0af91e3cc15533c"
+  },
+  "fixtures": [
+    {
+      "fixture_id": "canary_q9_yes_q10_yes",
+      "kind": "positive_canary",
+      "filled_pdf": {
+        "path": "artifacts/sc100_typed_train_diagnostic_v1/workspaces/court-form-filling-3/sc100-filled.pdf",
+        "sha256": "b72810e84e8647cd4b84cfc8ac4d7316aa521a25548c54bc7d33f70d23b3bdf5"
+      },
+      "semantic_gold": {
+        "plaintiff": {"name": "Phoebe Caldwell", "phone": "6505550142", "street": "1724 Kifer Rd Apt 11", "city": "Sunnyvale", "state": "CA", "zip": "94086", "email": "phoebe.caldwell@outlook.com"},
+        "defendant": {"name": "Dylan Mercer", "phone": "6505550189", "street": "889 W Olive Ave", "city": "Sunnyvale", "state": "CA", "zip": "94086"},
+        "venue": {"zip": "94086"},
+        "claim": {"amount": "3745", "start_date": "2025-07-18", "end_date": "2025-11-02", "contract": "room rental agreement"},
+        "questions": {"asked_to_pay": true, "venue_choice": 1, "attorney_fee_dispute": false, "public_entity": false, "more_than_12_claims": true, "more_than_2500": true},
+        "signature": {"date": "2025-11-02", "name": "Phoebe Caldwell"}
+      },
+      "expected_qualified": true,
+      "must_include_failure_codes": []
+    },
+    {
+      "fixture_id": "canary_q9_no_q10_no",
+      "kind": "positive_canary",
+      "filled_pdf": {
+        "path": "artifacts/sc100_typed_train_diagnostic_v1/workspaces/court-form-filling-6/sc100-filled.pdf",
+        "sha256": "f7cda14b1b82727ad1dbde3e51591b1deb983a45863a63c4cfb976a5a9ce50ec"
+      },
+      "semantic_gold": {
+        "plaintiff": {"name": "Tessa Nguyen", "phone": "4085550164", "street": "2148 Monroe St Apt 6", "city": "Santa Clara", "state": "CA", "zip": "95050", "email": "tessa.nguyen@gmail.com"},
+        "defendant": {"name": "Brandon Lee", "phone": "4085550191", "street": "901 Benton St Apt 4", "city": "Santa Clara", "state": "CA", "zip": "95050"},
+        "venue": {"zip": "95050"},
+        "claim": {"amount": "1675", "start_date": "2025-08-21", "end_date": "2025-12-14", "contract": "room rental agreement"},
+        "questions": {"asked_to_pay": true, "venue_choice": 1, "attorney_fee_dispute": false, "public_entity": false, "more_than_12_claims": false, "more_than_2500": false},
+        "signature": {"date": "2025-12-14", "name": "Tessa Nguyen"}
+      },
+      "expected_qualified": true,
+      "must_include_failure_codes": []
+    },
+    {
+      "fixture_id": "mutant_address_prefix_contamination",
+      "kind": "mutant",
+      "mutation_class": "extra_prefix_in_defendant_street",
+      "filled_pdf": {
+        "path": "artifacts/sc100_typed_train_diagnostic_v1/workspaces/court-form-filling-4/sc100-filled.pdf",
+        "sha256": "f00753ff1efbc4e8b96fce69996cf0998d37419bfc6b2302338e45695bbb32e9"
+      },
+      "semantic_gold": {
+        "plaintiff": {"name": "Madeline Harper", "phone": "6505550142", "street": "311 Elmwood Dr", "city": "Santa Clara", "state": "CA", "zip": "95051", "email": "madeline.harper@outlook.com"},
+        "defendant": {"name": "Connor Hayes", "phone": "4155550184", "street": "245 Mission St Apt 9", "city": "San Francisco", "state": "CA", "zip": "94105"},
+        "venue": {"zip": "94105"},
+        "claim": {"amount": "3640", "start_date": "2025-03-14", "end_date": "2025-09-08", "contract": "roommate sublease contract"},
+        "questions": {"asked_to_pay": true, "venue_choice": 1, "attorney_fee_dispute": false, "public_entity": false, "more_than_12_claims": false, "more_than_2500": true},
+        "signature": {"date": "2025-09-08", "name": "Madeline Harper"}
+      },
+      "expected_qualified": false,
+      "must_include_failure_codes": ["text_value_mismatch:defendant.street"]
+    },
+    {
+      "fixture_id": "mutant_wrong_amount_gold",
+      "kind": "mutant",
+      "mutation_class": "off_by_one_expected_amount",
+      "filled_pdf_ref": "canary_q9_yes_q10_yes",
+      "semantic_gold_ref": "canary_q9_yes_q10_yes",
+      "semantic_gold_patch": {"claim.amount": "3746"},
+      "expected_qualified": false,
+      "must_include_failure_codes": ["amount_mismatch"]
+    },
+    {
+      "fixture_id": "mutant_q9_single_bit_gold",
+      "kind": "mutant",
+      "mutation_class": "q9_expected_bit_flip",
+      "filled_pdf_ref": "canary_q9_yes_q10_yes",
+      "semantic_gold_ref": "canary_q9_yes_q10_yes",
+      "semantic_gold_patch": {"questions.more_than_12_claims": false},
+      "expected_qualified": false,
+      "must_include_failure_codes": ["button_state_mismatch:q9.yes"]
+    },
+    {
+      "fixture_id": "mutant_q10_boundary_gold",
+      "kind": "mutant",
+      "mutation_class": "q10_boundary_expected_bit_flip",
+      "filled_pdf_ref": "canary_q9_no_q10_no",
+      "semantic_gold_ref": "canary_q9_no_q10_no",
+      "semantic_gold_patch": {"claim.amount": "2501", "questions.more_than_2500": true},
+      "expected_qualified": false,
+      "must_include_failure_codes": ["button_state_mismatch:q10.no"]
+    },
+    {
+      "fixture_id": "mutant_swapped_gold",
+      "kind": "mutant",
+      "mutation_class": "unrelated_semantic_gold",
+      "filled_pdf_ref": "canary_q9_yes_q10_yes",
+      "semantic_gold_ref": "canary_q9_no_q10_no",
+      "expected_qualified": false,
+      "must_include_failure_codes": ["text_value_mismatch:plaintiff.name"]
+    }
+  ],
+  "decision_rule": {
+    "single_decision": "oracle_ready_for_frozen_measurement",
+    "required_positive_canaries": "2/2 qualified",
+    "required_mutants": "5/5 rejected and each preregistered failure code observed",
+    "same_pack_repair_allowed_before_first_shadow_outcome": true,
+    "candidate_or_benchmark_score": false
+  },
+  "claim_boundary": {
+    "may_authorize": ["one frozen synthetic shadow measurement"],
+    "may_not_authorize": ["task utility", "development", "incumbent", "promotion", "validation", "sealed test", "generalization"]
+  }
+}

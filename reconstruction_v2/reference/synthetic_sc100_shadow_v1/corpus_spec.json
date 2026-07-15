@@ -1,0 +1,136 @@
+{
+  "schema_version": "synthetic-sc100-shadow-corpus-v1",
+  "corpus_id": "synthetic_sc100_shadow_v1",
+  "frozen_date": "2026-07-15",
+  "seed": "sc100-shadow-v1|2026-07-15|a1",
+  "ordering_algorithm": "ascending SHA-256 of UTF-8(seed) || NUL || UTF-8(case_id)",
+  "case_order": [
+    "S06",
+    "C03",
+    "N03",
+    "S04",
+    "S03",
+    "S01",
+    "N02",
+    "C02",
+    "S07",
+    "N04",
+    "S05",
+    "N05",
+    "S10",
+    "N06",
+    "C05",
+    "C01",
+    "S11",
+    "N01",
+    "C04",
+    "S08",
+    "C06",
+    "S12",
+    "S09",
+    "S02"
+  ],
+  "cohorts": {
+    "required_positive": {
+      "count": 12,
+      "case_ids": ["S01", "S02", "S03", "S04", "S05", "S06", "S07", "S08", "S09", "S10", "S11", "S12"],
+      "expected_action": "fill",
+      "hard_pass_threshold": "12/12 exact semantic and artifact pass"
+    },
+    "coverage_probe": {
+      "count": 6,
+      "case_ids": ["C01", "C02", "C03", "C04", "C05", "C06"],
+      "expected_action": "coverage_probe_fill",
+      "hard_pass_effect": "excluded from the required-positive 12/12 decision",
+      "failure_label": "coverage_starved",
+      "post_hoc_relabeling": "forbidden"
+    },
+    "true_negative": {
+      "count": 6,
+      "case_ids": ["N01", "N02", "N03", "N04", "N05", "N06"],
+      "expected_action": "reject",
+      "scope_control_threshold": "6/6 reject with the frozen reason class",
+      "post_hoc_relabeling": "forbidden"
+    }
+  },
+  "required_positive_templates": {
+    "T1": {"description": "first-person ordered narrative", "case_ids": ["S01", "S10"]},
+    "T2": {"description": "My-name-is narrative with separate defendant paragraph", "case_ids": ["S02", "S11"]},
+    "T3": {"description": "explicit plaintiff and defendant role labels", "case_ids": ["S03", "S12"]},
+    "T4": {"description": "defendant facts precede plaintiff facts", "case_ids": ["S04", "S07"]},
+    "T5": {"description": "structured contact and claim blocks", "case_ids": ["S05", "S08"]},
+    "T6": {"description": "claim facts precede party identities", "case_ids": ["S06", "S09"]}
+  },
+  "required_positive_coverage": {
+    "q9_q10_quadrants": {
+      "no_no": ["S01", "S02", "S03"],
+      "no_yes": ["S04", "S05", "S06"],
+      "yes_no": ["S07", "S08", "S09"],
+      "yes_yes": ["S10", "S11", "S12"]
+    },
+    "amount_boundaries": {"2499": ["S02"], "2500": ["S03", "S09"], "2501": ["S04", "S10"]},
+    "prior_claim_boundaries": {"12": ["S03", "S06"], "13": ["S07", "S10"]}
+  },
+  "coverage_probe_dimensions": {
+    "C01": "payment request by email and mailed letter rather than text",
+    "C02": "signature date later than event end",
+    "C03": "extra but explicitly disambiguated demand date",
+    "C04": "California contract venue rather than defendant-residence venue",
+    "C05": "explicit primary phone plus backup phone",
+    "C06": "hyphenated and apostrophe names with interleaved party facts"
+  },
+  "true_negative_dimensions": {
+    "N01": "public_entity",
+    "N02": "attorney_fee_dispute",
+    "N03": "multiple_plaintiffs",
+    "N04": "payment_not_requested",
+    "N05": "conflicting_claim_amount",
+    "N06": "non_california_venue"
+  },
+  "claim_boundary": {
+    "in_scope": "Synthetic, single-private-plaintiff, single-private-defendant California SC-100 security-deposit cases under the bound blank form and frozen runtime.",
+    "coverage_probe_interpretation": "Coverage probes are task-valid diagnostics. Their failure may only be reported as coverage_starved and never converted into a true negative after observation.",
+    "allowed_success_claim": "The frozen operator completed the preregistered synthetic in-scope cohort under the bound corpus and runtime.",
+    "forbidden_claims": [
+      "incumbent authorization",
+      "promotion authorization",
+      "benchmark, validation, test, sealed, or real-world generalization",
+      "general SC-100 or legal correctness",
+      "causal self-evolution benefit"
+    ],
+    "synthetic_can_authorize_incumbent": false,
+    "synthetic_can_authorize_promotion": false
+  },
+  "payload_sha256": {
+    "gold.jsonl": "26f238ddf624a5789b2be67a7fd658dd1ccc55dcbdc43e0ecd53a9d3b0c63507",
+    "prompts/C01.md": "31cb0a027ec493f54748f3e3548a054aa59bb4cb4cdf52ae9bf83158e00df078",
+    "prompts/C02.md": "0c6a7c12e283fe69e7b9efc99c5aa297c72c908df36a3b623927a971643b791f",
+    "prompts/C03.md": "c9f5bd1e2605aa4282bdb35c0d1ea9ed9deed2ec61c8331d3ede2399e25a2a77",
+    "prompts/C04.md": "66d5ce5ee18fb346f8cf242be49c9a5ec94272bd8e3ceb9a82ec0354d08efeb6",
+    "prompts/C05.md": "e83ec2f151b715104fd45235232095e496021c7ca4614329f627cc8e1c55a264",
+    "prompts/C06.md": "49f2c76822b221952a0e03a46b63a813dde06a361465850bf0a7541c34d37463",
+    "prompts/N01.md": "cef3897442f20f7b6119f87c2f63cccd3e1c5f08b3336eeee774d2580dea4f70",
+    "prompts/N02.md": "36ebdc227a4889e854daf51eaa2245fbe9de91843463bdde229ae51c1a1eb18e",
+    "prompts/N03.md": "a59bffb1af7e355710f19455f273f2c2ffea61ac3fd166b4655ed4b308922695",
+    "prompts/N04.md": "c26f194aa63de631c6eff18ee8f03dd2be089e5ac9c8eec429e60d286c7209b8",
+    "prompts/N05.md": "5d270bb8860ccdf9f948769b1bd7524d616b5864e04fd46c7f3df86f676574bb",
+    "prompts/N06.md": "91c9f32ff6a98f75e9c8711e67a480c20dcb5444805194a284f324cd4c65b3ef",
+    "prompts/S01.md": "44215de05def1f3afce265dc65467e3b944662c22c04e8cdbdd19e5d1a061666",
+    "prompts/S02.md": "6749cc43762da818d4955ee64df711fa9339aa03790d555fd4a991ab0bb68336",
+    "prompts/S03.md": "3c11dd47a884d86ef9cf8f5be028fcc2665f00816006519f8221f0431c992776",
+    "prompts/S04.md": "ec3e94a53d365d82cb1f515ec1b5759e1a26ecec0f8b4888e827d41bb8dba556",
+    "prompts/S05.md": "d5416bdc1dc0c209e8e6b5139b27521da7efcb9c06a76ea01b7fbdf9b5bab8d9",
+    "prompts/S06.md": "5f255240bb06e2752048fbc5124ca0323059b4ac8a3f871f60aeab2c0ca6ea17",
+    "prompts/S07.md": "265fab5abf3f21c85955788296553541df505045573067d7bf0c63457845cea1",
+    "prompts/S08.md": "6798ab0a7c428293c195b4e9952f79bf9bf7ad306d1fdc1d28b194ee88090152",
+    "prompts/S09.md": "b619af4c78fe9e72475e94e165f27234dd1e9aaf154a721b506dccf130c9e0dd",
+    "prompts/S10.md": "5d1e5db7462726b656c02ef5ecb48ae57eb4f4d384a62c9574378fbd8c8dad4e",
+    "prompts/S11.md": "0799f864434f2d19595cc78948ea549def23210bb7f8b076ef828ab741645895",
+    "prompts/S12.md": "65fe7e37f6e0a122db7f896860def94114879f881002c95df3882dcf219552e6"
+  },
+  "corpus_self_hash": {
+    "algorithm": "sha256",
+    "canonicalization": "Parse corpus_spec.json as UTF-8 JSON, replace corpus_self_hash.value with 64 ASCII zero characters, serialize with Python json.dumps(ensure_ascii=False, sort_keys=True, separators=(',', ':')), then hash the UTF-8 bytes. payload_sha256 binds every other corpus file.",
+    "value": "5e16c371f9dcf03959d9f941f57840ff2a09553f2160d87f74543f0787cb0660"
+  }
+}

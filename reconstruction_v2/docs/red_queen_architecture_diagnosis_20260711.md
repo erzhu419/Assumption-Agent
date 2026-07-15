@@ -1562,6 +1562,7 @@ TRAIN cross-fit objective 上提高 recovery coverage；这仍是 candidate form
 | 完成（operator 已冻结；prospective acquisition invalid） | 冻结的本地 semantic assignment operator | commit `2f804812` 固定 MiniLM/115 条 consumed TRAIN/OVR 参数/default/runtime；两次事前注册且 period-disjoint 的 public-OA acquisition 分别在 trapped-ion 40-pool 与 LLM 120-pool 供给不足处、prediction 前 fail closed。合计 operator call=0、outcome=0；efficacy unknown，不是 PASS/FAIL/incumbent |
 | STOP | 第三次 public-OA acquisition、拼接 partial/reference PDF 或 synthetic 文献分类替代 task effect | 本地只存在 6 个 organize instance：2/5/6 已作 TRAIN、3 已消费、1/4 sealed；其余 reference/HF cache 不具备五类独立 gold。两批 partial 已成为关闭的 acquisition data。不得换 period/source、扩 pool、读取 sealed 或用人为措辞的分类 PASS 冒充 L2 utility |
 | 完成（native verifier false positive；candidate stopped） | SC-100 semantic field compiler | commit `edb88957`、manifest `9388b249…0fb1` 事前冻结 candidate `86319d63…10bb`、三题 plan、镜像与 3+3 最大并发。native offline verifier 报 `1/0/0→1/1/1`，但强制 PDF 渲染审计发现 item4 被告地址实际为 `550184 and lives at 245 Mission St Apt 9`；substring test 漏掉 extra content。语义改判 `1/0/0→1/0/1`，仅 1 gain、0 harm，未达 2 gain；result `1460d8f6…fc1d0`，不在同三题修 parser 或重跑 |
+| 完成（instrument qualification only；尚无 shadow outcome） | 独立 SC-100 synthetic shadow 与离线 oracle | 24-case corpus 在任何 successor code/outcome 前冻结；审计先发现并修正 literal `\\0`/NUL 排序矛盾，新 corpus self-hash=`5e16c371…b0660`。strict latent→oracle adapter 24/24 通过；oracle 增加逐字段 `/AP`↔`/V`、Poppler bbox、button AP、field tree/page resources/XFA/security 与非目标 mutation 检查。正式 `--network none`、7 路并发 conformance 为 2/2 canary PASS、5/5 mutant REJECT，decision=`00ecee97…fdf36`、report=`600467dc…b69f4`。它只授权一次 frozen synthetic measurement，不授权 development/incumbent/promotion，也不新增 post-outcome mutant/gate |
 | 后续一次性验证 | fresh paired efficacy | 只有新候选类先在 deterministic TRAIN cross-fit 上产生 transferable utility signal，才冻结新的未消费 development split；RAW/Agent 最大并发、同模型/镜像/预算、离线评价。HippoRAG 仅在存在同构 executable adapter 时加入 |
 | P2 | 多 clade archive | 同 epoch 至少两个 clade 可继续扩展；node 绑定 protocol/evidence/promotion hashes，并报告 retention 与 branch productivity |
 | P2 | evaluator co-evolution | 独立 anchor challenger、epoch transition、selective invalidation 和旧 incumbent re-evaluation 实际执行后再作主张 |
@@ -2216,9 +2217,30 @@ PyMuPDF 精确重读为 `550184 and lives at 245 Mission St Apt 9`，而正确�
 官方 test 只要求正确地址是 PDF text 的 substring，因此仍给 reward=1。这是 evaluator false positive，
 也说明“operator 自己抽 facts、再用同一 facts reconcile”不能证明 source-to-action 正确。post-decision
 result `1460d8f6…fc1d0` 将语义 reward 改判为 `1/0/1`，只有 1 gain、0 harm，candidate stopped；不在
-同三题补 regex 或重跑。下一步若继续，必须先于任何 successor code 冻结一次独立 synthetic task shadow，
-由不 import operator/receipt/旧 tests 的 oracle 做 exact field、未授权字段、`/V`/`/AS` 可见 appearance、
-双渲染和 fail-closed 零写入检查；successor 即使通过也仅是 synthetic feasibility，不能直接成为 incumbent。
+同三题补 regex 或重跑。
+
+这条 NEXT 已推进到“测量仪器冻结”，但尚未运行 candidate shadow。独立作者先生成 12 个 required positive、
+6 个 task-valid coverage probe 和 6 个 true negative；随后只读审计发现 `corpus_spec.json` 声明按真实 NUL
+排序、实际却按字面 `\\0` 排序。该矛盾在任何 successor code/outcome 前修正，24 个 case/prompt/gold
+重新自校验为 corpus self-hash `5e16c371…b0660`。strict adapter 逐项验证 role/address/phone/date/amount、
+Q9/Q10 边界、venue ZIP、C05 primary phone、C06 Unicode name，以及 reject reason；N02 明确冻结为
+`attorney_fee_dispute` 优先于 `unsupported_claim_type`，negative receipt 禁止生成空白副本或 partial PDF。
+
+独立 oracle 的冻结前对抗审计又发现两个会让错误 artifact 假通过的缺口：全页 `pdftotext` 没把显示文本
+绑定到具体 widget，且未选 button 的 `/AP` 变化被 target whitelist 豁免。修正后，oracle 逐字段解析
+`/AP/N` 并绑定 `/V`、以 Poppler bbox 和局部像素差验证可见位置，同时检查 `/AS`、button AP、DV、
+field-tree topology、page resources、XFA/security、未授权字段与非 rasterization；reason/calculation 也改为
+显式未返还语义和唯一 `$` currency value。正式 manifest `dfc7f3a1…0058` 在 immutable image、
+`--network none`、只读 root、7 路并发下完成唯一 conformance decision：2/2 正 canary、5/5 mutant（含真实
+address-prefix contamination、amount、Q9、Q10、swapped gold）全部符合预期，decision
+`00ecee97…fdf36`、report `600467dc…b69f4`；shadow case/model/Ruoli/online judge call 全为 0。
+
+因此下一步不再增加 gate，而是冻结一个新的 role-anchored typed parser/operator：按 plaintiff/defendant
+局部证据块绑定姓名、地址和 primary phone，按标签区分 event/demand/signature date，金额冲突 fail closed，
+显式处理 Q9/Q10、venue basis/ZIP，并在 reject 时原子零写入。随后只运行一次已冻结 24-case shadow；12/12
+required 与 6/6 true-negative 是唯一硬判定，6 个 coverage probe 只原样报告 `coverage_starved`，不得事后
+改成负例或据其修补重跑。即使通过，也仅是 synthetic feasibility，只能进入新的 paired development root，
+不能直接成为 incumbent。
 
 因此现在仍不跑 SkillLearn incumbent freeze、controls、family-out、HippoRAG/raw transfer 或 sealed test，
 更不谈 multi-clade 或
@@ -2309,6 +2331,14 @@ co-evolution 未开始。
   [`acquisition failure receipt`](../manifests/semantic_assignment_public_oa_feasibility_result_v1.json)；
   [`period-out preregistration`](../manifests/semantic_assignment_public_oa_period_out_feasibility_v2.json)；
   [`period-out acquisition failure receipt`](../manifests/semantic_assignment_public_oa_period_out_feasibility_result_v2.json)
+- SC-100 v1 false-positive closure 与 frozen synthetic measurement instrument：
+  [`v1 semantic result`](../manifests/sc100_typed_train_diagnostic_result_v1.json)；
+  [`synthetic corpus`](../reference/synthetic_sc100_shadow_v1/)；
+  [`oracle qualification fixtures`](../manifests/sc100_shadow_oracle_qualification_fixtures_v1.json)；
+  [`oracle preregistration`](../manifests/sc100_shadow_oracle_qualification_v1.json)；
+  [`oracle result receipt`](../manifests/sc100_shadow_oracle_qualification_result_v1.json)；
+  [`offline report`](../artifacts/sc100_shadow_oracle_qualification_v1/sc100_shadow_oracle_qualification.report.json)；
+  [`decision lock`](../artifacts/sc100_shadow_oracle_qualification_v1/sc100_shadow_oracle_qualification.decision.lock.json)
 - previous live-mechanism protocol（performance mixed-validity）：
   [`skilllearn_paper_protocol_v3_18r1_ruoli_gpt54mini.json`](../manifests/skilllearn_paper_protocol_v3_18r1_ruoli_gpt54mini.json)
 - formal production typed-selection integration v2：
