@@ -1561,7 +1561,7 @@ TRAIN cross-fit objective 上提高 recovery coverage；这仍是 candidate form
 | STOP | 重跑相同 organize 题、继续修改同类 prompt/keyword、立即消耗 fresh split、freeze/controls/family-out/HippoRAG/sealed | 三类候选都只有 1/3；无 incumbent。2/5/6 已全部成为设计数据，不得把再调参后的同 cohort 包装成 cross-fit generalization，也不得用更多自然语言 invariant/gate 追逐单折成功 |
 | 完成（operator 已冻结；prospective acquisition invalid） | 冻结的本地 semantic assignment operator | commit `2f804812` 固定 MiniLM/115 条 consumed TRAIN/OVR 参数/default/runtime；两次事前注册且 period-disjoint 的 public-OA acquisition 分别在 trapped-ion 40-pool 与 LLM 120-pool 供给不足处、prediction 前 fail closed。合计 operator call=0、outcome=0；efficacy unknown，不是 PASS/FAIL/incumbent |
 | STOP | 第三次 public-OA acquisition、拼接 partial/reference PDF 或 synthetic 文献分类替代 task effect | 本地只存在 6 个 organize instance：2/5/6 已作 TRAIN、3 已消费、1/4 sealed；其余 reference/HF cache 不具备五类独立 gold。两批 partial 已成为关闭的 acquisition data。不得换 period/source、扩 pool、读取 sealed 或用人为措辞的分类 PASS 冒充 L2 utility |
-| 已冻结，待一次性诊断（新的 operator，不是新 gate） | SC-100 semantic field compiler | 在仅使用 consumed TRAIN 的 family scan 中，court-form-filling 3/4/6 提供 frozen RAW=`1/0/0`：两个 gain target 与一个 no-harm control。candidate `86319d63…10bb` 把 intake 事实编译为固定 30-field AcroForm 白名单，禁止 XFA stream/raster/arbitrary shell；manifest `9388b249…0fb1` 事前绑定代码、三题 plan、镜像、离线 verifier 和 3+3 最大并发。由于 TRAIN tests 已参与设计，结果只允许称 historically informed representation diagnostic，不是 OOF/incumbent |
+| 完成（native verifier false positive；candidate stopped） | SC-100 semantic field compiler | commit `edb88957`、manifest `9388b249…0fb1` 事前冻结 candidate `86319d63…10bb`、三题 plan、镜像与 3+3 最大并发。native offline verifier 报 `1/0/0→1/1/1`，但强制 PDF 渲染审计发现 item4 被告地址实际为 `550184 and lives at 245 Mission St Apt 9`；substring test 漏掉 extra content。语义改判 `1/0/0→1/0/1`，仅 1 gain、0 harm，未达 2 gain；result `1460d8f6…fc1d0`，不在同三题修 parser 或重跑 |
 | 后续一次性验证 | fresh paired efficacy | 只有新候选类先在 deterministic TRAIN cross-fit 上产生 transferable utility signal，才冻结新的未消费 development split；RAW/Agent 最大并发、同模型/镜像/预算、离线评价。HippoRAG 仅在存在同构 executable adapter 时加入 |
 | P2 | 多 clade archive | 同 epoch 至少两个 clade 可继续扩展；node 绑定 protocol/evidence/promotion hashes，并报告 retention 与 branch productivity |
 | P2 | evaluator co-evolution | 独立 anchor challenger、epoch transition、selective invalidation 和旧 incumbent re-evaluation 实际执行后再作主张 |
@@ -2203,6 +2203,22 @@ LLM 五类平衡且独立的 gold；本地 Hugging Face cache 也没有相应分
 `transport-blocked / efficacy-unknown`。离目标最近的下一搜索对象改为非-organize TRAIN 上的有限
 heterogeneous typed-action library：候选直接生成可执行 action 与 reopen/reconcile receipt，以 frozen RAW
 和本地 verifier 的 item-out task-success 净恢复排序，而不是再修改 recipe prompt 或增加 acceptance gate。
+
+第一个 executable vertical slice 是 SC-100 security-deposit field compiler。commit `edb88957` 在任何新
+operator outcome 前冻结了 role/fact parser、固定 24 个 text field + 6 个 button action、原始 `/AP`
+保留策略、三题 plan hash、PyMuPDF/Poppler、immutable Docker image、offline verifier 和一次 decision。
+三路 generation 完成后才把 tests 交给另外三路 `--network none` verifier；native report
+`5e717696…3747c` 给出 RAW `1/0/0` 到 candidate `1/1/1`、2 gain、0 harm。
+
+但这不是有效阳性。按 PDF 交付要求渲染三份 page 2--4 后，item4 被告 street field 肉眼显示并由
+PyMuPDF 精确重读为 `550184 and lives at 245 Mission St Apt 9`，而正确值应是
+`245 Mission St Apt 9`。原因是未锚定的 address regex 从前一个 10 位电话内部最后 6 位开始匹配；
+官方 test 只要求正确地址是 PDF text 的 substring，因此仍给 reward=1。这是 evaluator false positive，
+也说明“operator 自己抽 facts、再用同一 facts reconcile”不能证明 source-to-action 正确。post-decision
+result `1460d8f6…fc1d0` 将语义 reward 改判为 `1/0/1`，只有 1 gain、0 harm，candidate stopped；不在
+同三题补 regex 或重跑。下一步若继续，必须先于任何 successor code 冻结一次独立 synthetic task shadow，
+由不 import operator/receipt/旧 tests 的 oracle 做 exact field、未授权字段、`/V`/`/AS` 可见 appearance、
+双渲染和 fail-closed 零写入检查；successor 即使通过也仅是 synthetic feasibility，不能直接成为 incumbent。
 
 因此现在仍不跑 SkillLearn incumbent freeze、controls、family-out、HippoRAG/raw transfer 或 sealed test，
 更不谈 multi-clade 或
