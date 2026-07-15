@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
+import sys
 from typing import Any, Mapping, Sequence
 
 from assumption_agent.benchmarks.offline_verifier import (
@@ -178,6 +180,8 @@ def prepare_measurement_runtime_v1(
     output_root: str | Path,
     agent_id: str = "codex",
 ) -> dict[str, Any]:
+    sys.dont_write_bytecode = True
+    os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
     benchmark = Path(benchmark_root).expanduser().resolve(strict=True)
     destination = Path(output_root).expanduser().resolve()
     if destination.exists() or destination.is_symlink():
@@ -451,6 +455,14 @@ def prepare_measurement_runtime_v1(
         ):
             raise PeriodOutPrewarmError(
                 "formal measurement tasks do not share one frozen local runtime"
+            )
+        post_prewarm_tree = measurement_benchmark_tree_receipt_v1(benchmark)
+        if (
+            post_prewarm_tree["tree_hash"]
+            != materialization["benchmark_tree_hash"]
+        ):
+            raise PeriodOutPrewarmError(
+                "prewarm modified the frozen measurement benchmark"
             )
         body = {
             "prewarm_version": PREWARM_VERSION,

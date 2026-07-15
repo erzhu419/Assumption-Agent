@@ -15,6 +15,9 @@ from assumption_agent.benchmarks.financial_semantic_fresh_runner_v1 import (
     V320_PROTOCOL_RELATIVE_PATH,
     _provider_selection_receipt,
 )
+from assumption_agent.benchmarks.offline_verifier import (
+    OFFLINE_VERIFIER_POLICY_VERSION,
+)
 from assumption_agent.benchmarks.paper_protocol import PaperProtocol
 
 from .pack import (
@@ -1296,6 +1299,7 @@ def _validate_prewarm_stage(
     *,
     view: Mapping[str, Any],
     materialization: Mapping[str, Any],
+    prewarm_path: str | Path,
 ) -> str:
     declared = _verify_self_hashed_payload(
         payload,
@@ -1484,6 +1488,50 @@ def _validate_prewarm_stage(
         != payload_hash({"cache_key": next(iter(cache_keys), "")})
     ):
         raise PeriodOutFreezeError("prewarm shared runtime binding drifted")
+    source_path = Path(prewarm_path).expanduser()
+    if source_path.is_symlink() or not source_path.is_file():
+        raise PeriodOutFreezeError("prewarm report is not a regular file")
+    prewarm_file = source_path.resolve(strict=True)
+    if read_json(prewarm_file) != dict(payload):
+        raise PeriodOutFreezeError("prewarm report payload differs from file")
+    receipt_path = prewarm_file.parent / str(
+        offline_preparation["relative_path"]
+    )
+    if (
+        receipt_path.parent != prewarm_file.parent
+        or receipt_path.is_symlink()
+        or not receipt_path.is_file()
+        or sha256_file(receipt_path) != offline_preparation["file_sha256"]
+    ):
+        raise PeriodOutFreezeError(
+            "offline verifier preparation file binding drifted"
+        )
+    receipt = read_json(receipt_path)
+    receipt_hash = _verify_self_hashed_payload(
+        receipt,
+        field="receipt_hash",
+        label="offline verifier preparation receipt",
+    )
+    if (
+        receipt_hash != offline_preparation["receipt_hash"]
+        or receipt.get("report_version")
+        != "offline_verifier_preparation_receipt_v2"
+        or receipt.get("policy") != OFFLINE_VERIFIER_POLICY_VERSION
+        or receipt.get("profile_id") != OFFLINE_VERIFIER_PROFILE_ID
+        or receipt.get("profile_hash")
+        != payload.get("offline_verifier_profile_hash")
+        or receipt.get("runtime_key")
+        != payload.get("offline_verifier_runtime_key")
+        or receipt.get("base_image_id") != next(iter(image_ids))
+        or receipt.get("python_version") != "3.12"
+        or receipt.get("python_abi") != "cp312"
+        or receipt.get("docker_install_network") != "none"
+        or receipt.get("probe_passed") is not True
+        or receipt.get("raw_content_persisted") is not False
+    ):
+        raise PeriodOutFreezeError(
+            "offline verifier preparation receipt drifted"
+        )
     return declared
 
 
@@ -1588,6 +1636,7 @@ def build_execution_freeze_v1(
         prewarm,
         view=view,
         materialization=materialization,
+        prewarm_path=prewarm_file,
     )
     selection_path, selection_relative = _relative_artifact(
         project, provider_selection_path
@@ -1930,6 +1979,7 @@ def validate_execution_freeze_v1(
         prewarm,
         view=view,
         materialization=materialization,
+        prewarm_path=resolved["prewarm"],
     )
     prewarm_binding = payload["prewarm"]
     if (

@@ -9,6 +9,7 @@ import json
 import math
 import os
 from pathlib import Path
+import sys
 import threading
 from typing import Any, Mapping, Sequence
 
@@ -49,7 +50,11 @@ from .durable_state import (
     read_hashed_json_v2,
     transition_durable_stage_v2,
 )
-from .materialize import FAMILY
+from .materialize import (
+    FAMILY,
+    MATERIALIZATION_REPORT_NAME,
+    measurement_benchmark_tree_receipt_v1,
+)
 from .pack import (
     payload_hash,
     read_json,
@@ -107,6 +112,83 @@ def _verify_hashed_payload(
     if not isinstance(declared, str) or declared != payload_hash(body):
         raise PeriodOutRunnerError(f"{label} self hash mismatch")
     return declared
+
+
+def _require_frozen_input_bindings_v1(
+    *,
+    project_root: Path,
+    benchmark_root: Path,
+    measurement_view_path: Path,
+    prewarm_path: Path,
+    execution_freeze: Mapping[str, Any],
+) -> None:
+    project = project_root.resolve(strict=True)
+
+    def require_file(section: str, supplied: Path) -> Path:
+        binding = execution_freeze.get(section)
+        if not isinstance(binding, Mapping):
+            raise PeriodOutRunnerError(f"{section} freeze binding is missing")
+        relative_value = binding.get("relative_path")
+        expected_hash = binding.get("file_sha256")
+        if (
+            not isinstance(relative_value, str)
+            or not relative_value
+            or Path(relative_value).is_absolute()
+            or ".." in Path(relative_value).parts
+            or not _is_sha256(expected_hash)
+        ):
+            raise PeriodOutRunnerError(f"{section} freeze binding is malformed")
+        unresolved = project / relative_value
+        if unresolved.is_symlink() or not unresolved.is_file():
+            raise PeriodOutRunnerError(
+                f"{section} frozen input is not a regular file"
+            )
+        expected = unresolved.resolve(strict=True)
+        try:
+            expected.relative_to(project)
+        except ValueError as exc:
+            raise PeriodOutRunnerError(
+                f"{section} frozen input escapes the project"
+            ) from exc
+        supplied_unresolved = supplied.expanduser()
+        if supplied_unresolved.is_symlink() or not supplied_unresolved.is_file():
+            raise PeriodOutRunnerError(
+                f"{section} supplied input is not a regular file"
+            )
+        observed = supplied_unresolved.resolve(strict=True)
+        if observed != expected or sha256_file(observed) != expected_hash:
+            raise PeriodOutRunnerError(
+                f"{section} supplied input differs from execution freeze"
+            )
+        return expected
+
+    require_file("measurement_view", measurement_view_path)
+    require_file("prewarm", prewarm_path)
+    materialization = require_file(
+        "materialization",
+        benchmark_root / MATERIALIZATION_REPORT_NAME,
+    )
+    supplied_benchmark = benchmark_root.expanduser()
+    if supplied_benchmark.is_symlink() or not supplied_benchmark.is_dir():
+        raise PeriodOutRunnerError(
+            "supplied measurement benchmark is not a regular directory"
+        )
+    if supplied_benchmark.resolve(strict=True) != materialization.parent:
+        raise PeriodOutRunnerError(
+            "supplied measurement benchmark differs from execution freeze"
+        )
+    materialization_binding = execution_freeze["materialization"]
+    expected_tree_hash = materialization_binding.get("benchmark_tree_hash")
+    if (
+        not _is_sha256(expected_tree_hash)
+        or measurement_benchmark_tree_receipt_v1(supplied_benchmark)[
+            "tree_hash"
+        ]
+        != expected_tree_hash
+    ):
+        raise PeriodOutRunnerError(
+            "supplied measurement benchmark tree differs from execution freeze"
+        )
 
 
 class BoundPrecomputedPlannerV2:
@@ -1039,10 +1121,22 @@ def run_measurement_v1(
     output_root: str | Path,
     recover_only: bool = False,
 ) -> dict[str, Any]:
+    sys.dont_write_bytecode = True
+    os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
     project = Path(project_root).expanduser().resolve(strict=True)
-    benchmark = Path(benchmark_root).expanduser().resolve(strict=True)
-    view_path = Path(measurement_view_path).expanduser().resolve(strict=True)
-    prewarm_file = Path(prewarm_path).expanduser().resolve(strict=True)
+    benchmark_input = Path(benchmark_root).expanduser()
+    view_input = Path(measurement_view_path).expanduser()
+    prewarm_input = Path(prewarm_path).expanduser()
+    _require_frozen_input_bindings_v1(
+        project_root=project,
+        benchmark_root=benchmark_input,
+        measurement_view_path=view_input,
+        prewarm_path=prewarm_input,
+        execution_freeze=execution_freeze,
+    )
+    benchmark = benchmark_input.resolve(strict=True)
+    view_path = view_input.resolve(strict=True)
+    prewarm_file = prewarm_input.resolve(strict=True)
     destination = Path(output_root).expanduser().resolve()
     if destination.is_symlink():
         raise FileExistsError(destination)
@@ -1215,6 +1309,12 @@ def run_measurement_v1(
         ):
             raise PeriodOutRunnerError(
                 "formal execution requires cache-only offline evaluation"
+            )
+        if measurement_benchmark_tree_receipt_v1(benchmark)[
+            "tree_hash"
+        ] != execution_freeze["materialization"]["benchmark_tree_hash"]:
+            raise PeriodOutRunnerError(
+                "cache preflight modified the frozen measurement benchmark"
             )
 
         batch_start_body = {

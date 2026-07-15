@@ -4,7 +4,9 @@ import csv
 import copy
 from dataclasses import dataclass
 import json
+import os
 from pathlib import Path
+import sys
 from types import SimpleNamespace
 from typing import Any
 import zipfile
@@ -399,6 +401,8 @@ def _install_fake_runtime(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
             ),
             "base_image_tag": base_image_tag,
             "base_image_id": "sha256:" + "d" * 64,
+            "python_version": profile.python_version,
+            "python_abi": profile.python_abi,
             "docker_install_network": "none",
             "probe_passed": True,
             "raw_content_persisted": False,
@@ -430,6 +434,8 @@ def test_prewarm_prepares_dependencies_then_rechecks_cache_only_idempotently(
     benchmark = tmp_path / "benchmark"
     _materialize(inputs, benchmark)
     state = _install_fake_runtime(monkeypatch)
+    monkeypatch.setattr(sys, "dont_write_bytecode", False)
+    monkeypatch.delenv("PYTHONDONTWRITEBYTECODE", raising=False)
 
     first = prewarm.prepare_measurement_runtime_v1(
         benchmark_root=benchmark,
@@ -443,6 +449,8 @@ def test_prewarm_prepares_dependencies_then_rechecks_cache_only_idempotently(
     )
 
     assert first == second
+    assert sys.dont_write_bytecode is True
+    assert os.environ["PYTHONDONTWRITEBYTECODE"] == "1"
     body = dict(first)
     declared = body.pop("prewarm_hash")
     assert declared == period_pack.payload_hash(body)
@@ -484,6 +492,7 @@ def test_prewarm_prepares_dependencies_then_rechecks_cache_only_idempotently(
         first,
         view=inputs.measurement_view,
         materialization=materialization_report,
+        prewarm_path=(tmp_path / "prewarm-first" / "measurement.prewarm.json"),
     ) == first["prewarm_hash"]
 
     def rehash(report: dict[str, Any]) -> dict[str, Any]:
@@ -534,6 +543,9 @@ def test_prewarm_prepares_dependencies_then_rechecks_cache_only_idempotently(
                 tampered,
                 view=inputs.measurement_view,
                 materialization=materialization_report,
+                prewarm_path=(
+                    tmp_path / "prewarm-first" / "measurement.prewarm.json"
+                ),
             )
 
 

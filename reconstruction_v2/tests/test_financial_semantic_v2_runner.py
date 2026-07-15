@@ -26,6 +26,7 @@ from replication_runtime.financial_semantic_v2.recovery import (
     RecoveryDecisionV2,
 )
 from replication_runtime.financial_semantic_v2 import runner
+from replication_runtime.financial_semantic_v2.pack import sha256_file
 
 
 def _sha(label: str) -> str:
@@ -356,3 +357,82 @@ def test_explicit_recovery_only_path_scans_all_sixteen_without_backend(
         tmp_path / "output" / "recovery_attempts" / f"{report['report_hash']}.json"
     )
     assert attempt.is_file()
+
+
+def test_runner_rejects_detached_inputs_even_when_bytes_match(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    benchmark = project / "private" / "benchmark"
+    view = project / "manifests" / "view.json"
+    prewarm = project / "private" / "prewarm.json"
+    materialization = benchmark / "measurement.materialization.json"
+    instruction = benchmark / "tasks" / "item" / "instruction.md"
+    for path, content in (
+        (view, b"view\n"),
+        (prewarm, b"prewarm\n"),
+        (materialization, b"materialization\n"),
+    ):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+    instruction.parent.mkdir(parents=True, exist_ok=True)
+    instruction.write_text("frozen instruction\n", encoding="utf-8")
+    execution_freeze = {
+        section: {
+            "relative_path": path.relative_to(project).as_posix(),
+            "file_sha256": sha256_file(path),
+        }
+        for section, path in (
+            ("measurement_view", view),
+            ("prewarm", prewarm),
+            ("materialization", materialization),
+        )
+    }
+    execution_freeze["materialization"]["benchmark_tree_hash"] = (
+        runner.measurement_benchmark_tree_receipt_v1(benchmark)["tree_hash"]
+    )
+
+    runner._require_frozen_input_bindings_v1(
+        project_root=project,
+        benchmark_root=benchmark,
+        measurement_view_path=view,
+        prewarm_path=prewarm,
+        execution_freeze=execution_freeze,
+    )
+
+    detached = tmp_path / "detached"
+    detached.mkdir()
+    detached_view = detached / "view.json"
+    detached_view.write_bytes(view.read_bytes())
+    with pytest.raises(runner.PeriodOutRunnerError, match="execution freeze"):
+        runner._require_frozen_input_bindings_v1(
+            project_root=project,
+            benchmark_root=benchmark,
+            measurement_view_path=detached_view,
+            prewarm_path=prewarm,
+            execution_freeze=execution_freeze,
+        )
+
+    instruction.write_text("tampered instruction\n", encoding="utf-8")
+    with pytest.raises(runner.PeriodOutRunnerError, match="benchmark tree"):
+        runner._require_frozen_input_bindings_v1(
+            project_root=project,
+            benchmark_root=benchmark,
+            measurement_view_path=view,
+            prewarm_path=prewarm,
+            execution_freeze=execution_freeze,
+        )
+
+    detached_benchmark = detached / "benchmark"
+    detached_benchmark.mkdir()
+    (detached_benchmark / "measurement.materialization.json").write_bytes(
+        materialization.read_bytes()
+    )
+    with pytest.raises(runner.PeriodOutRunnerError, match="execution freeze"):
+        runner._require_frozen_input_bindings_v1(
+            project_root=project,
+            benchmark_root=detached_benchmark,
+            measurement_view_path=view,
+            prewarm_path=prewarm,
+            execution_freeze=execution_freeze,
+        )
