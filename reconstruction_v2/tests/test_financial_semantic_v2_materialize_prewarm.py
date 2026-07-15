@@ -477,6 +477,65 @@ def test_prewarm_prepares_dependencies_then_rechecks_cache_only_idempotently(
     assert first["sealed_task_count"] == 0
     assert first["sealed_content_accessed"] is False
 
+    materialization_report = period_pack.read_json(
+        benchmark / materialize.MATERIALIZATION_REPORT_NAME
+    )
+    assert freeze._validate_prewarm_stage(
+        first,
+        view=inputs.measurement_view,
+        materialization=materialization_report,
+    ) == first["prewarm_hash"]
+
+    def rehash(report: dict[str, Any]) -> dict[str, Any]:
+        body = dict(report)
+        body.pop("prewarm_hash")
+        report["prewarm_hash"] = period_pack.payload_hash(body)
+        return report
+
+    tampered_reports: list[dict[str, Any]] = []
+    for field, value in (
+        ("formal_image_cache_only", False),
+        ("formal_offline_verifier_cache_only", False),
+        ("sealed_task_count", 1),
+    ):
+        tampered = copy.deepcopy(first)
+        tampered[field] = value
+        tampered_reports.append(rehash(tampered))
+    tampered_requirements = copy.deepcopy(first)
+    tampered_requirements["offline_verifier_requirements"].append(
+        "unexpected==1"
+    )
+    tampered_reports.append(rehash(tampered_requirements))
+    tampered_preparation = copy.deepcopy(first)
+    tampered_preparation["offline_verifier_preparation"][
+        "network_allowed_only_during_preparation"
+    ] = False
+    tampered_reports.append(rehash(tampered_preparation))
+    tampered_row = copy.deepcopy(first)
+    tampered_row["preparation_rows"][0][
+        "prepared_before_formal_cache_check"
+    ] = False
+    tampered_row["preparation_row_set_hash"] = period_pack.payload_hash(
+        tampered_row["preparation_rows"]
+    )
+    tampered_reports.append(rehash(tampered_row))
+    tampered_formal = copy.deepcopy(first)
+    tampered_formal["formal_cache_rows"][0][
+        "offline_verifier_runtime_reused"
+    ] = False
+    tampered_formal["formal_cache_row_set_hash"] = period_pack.payload_hash(
+        tampered_formal["formal_cache_rows"]
+    )
+    tampered_reports.append(rehash(tampered_formal))
+
+    for tampered in tampered_reports:
+        with pytest.raises(freeze.PeriodOutFreezeError):
+            freeze._validate_prewarm_stage(
+                tampered,
+                view=inputs.measurement_view,
+                materialization=materialization_report,
+            )
+
 
 def test_prewarm_rejects_added_sealed_task_before_runtime_construction(
     inputs: _Inputs,

@@ -32,7 +32,11 @@ from .plan import (
     MeasurementTargetV2,
     build_measurement_plan_v2,
 )
-from .prewarm import PREWARM_VERSION
+from .prewarm import (
+    OFFLINE_VERIFIER_PROFILE_ID,
+    OFFLINE_VERIFIER_REQUIREMENTS,
+    PREWARM_VERSION,
+)
 from .treatment import (
     FixedFinancialCandidateIdentityV1,
     build_replication_evaluator_binding_v1,
@@ -1300,6 +1304,7 @@ def _validate_prewarm_stage(
     )
     preparation = payload.get("preparation_rows")
     formal = payload.get("formal_cache_rows")
+    offline_preparation = payload.get("offline_verifier_preparation")
     expected_fields = {
         "prewarm_version",
         "measurement_view_hash",
@@ -1314,12 +1319,18 @@ def _validate_prewarm_stage(
         "unique_cache_key_hash",
         "offline_verifier_profile_id",
         "offline_verifier_profile_hash",
+        "offline_verifier_requirements",
+        "offline_verifier_requirements_hash",
         "offline_verifier_runtime_key",
+        "offline_verifier_preparation",
         "formal_execution_cache_only",
+        "formal_image_cache_only",
+        "formal_offline_verifier_cache_only",
         "preparation_network_allowed",
         "formal_verifier_network",
         "model_calls",
         "online_judge_calls",
+        "sealed_task_count",
         "sealed_content_accessed",
         "secret_value_persisted",
         "prewarm_hash",
@@ -1348,15 +1359,42 @@ def _validate_prewarm_stage(
         or not _is_sha256(payload.get("unique_image_id_hash"))
         or not _is_sha256(payload.get("unique_cache_key_hash"))
         or payload.get("offline_verifier_profile_id")
-        != "common-pytest-ctrf-py312-v1"
+        != OFFLINE_VERIFIER_PROFILE_ID
         or not _is_sha256(payload.get("offline_verifier_profile_hash"))
+        or payload.get("offline_verifier_requirements")
+        != list(OFFLINE_VERIFIER_REQUIREMENTS)
+        or payload.get("offline_verifier_requirements_hash")
+        != payload_hash(list(OFFLINE_VERIFIER_REQUIREMENTS))
         or not isinstance(payload.get("offline_verifier_runtime_key"), str)
         or not payload["offline_verifier_runtime_key"]
+        or not isinstance(offline_preparation, Mapping)
+        or set(offline_preparation)
+        != {
+            "relative_path",
+            "file_sha256",
+            "receipt_hash",
+            "network_allowed_only_during_preparation",
+            "docker_install_network",
+            "probe_passed",
+        }
+        or offline_preparation.get("relative_path")
+        != "offline-verifier.preparation.json"
+        or not _is_sha256(offline_preparation.get("file_sha256"))
+        or not _is_sha256(offline_preparation.get("receipt_hash"))
+        or offline_preparation.get(
+            "network_allowed_only_during_preparation"
+        )
+        is not True
+        or offline_preparation.get("docker_install_network") != "none"
+        or offline_preparation.get("probe_passed") is not True
         or payload.get("formal_execution_cache_only") is not True
+        or payload.get("formal_image_cache_only") is not True
+        or payload.get("formal_offline_verifier_cache_only") is not True
         or payload.get("preparation_network_allowed") is not True
         or payload.get("formal_verifier_network") != "none"
         or payload.get("model_calls") != 0
         or payload.get("online_judge_calls") != 0
+        or payload.get("sealed_task_count") != 0
         or payload.get("sealed_content_accessed") is not False
         or payload.get("secret_value_persisted") is not False
     ):
@@ -1370,7 +1408,7 @@ def _validate_prewarm_stage(
         "image_id",
         "agent_runtime_key",
         "agent_runtime_version",
-        "built_or_reused_during_preparation",
+        "prepared_before_formal_cache_check",
     }
     formal_fields = {
         "item_id",
@@ -1399,17 +1437,53 @@ def _validate_prewarm_stage(
                 or set(row) != (formal_fields if formal_rows else preparation_fields)
                 or row.get("item_id_hash")
                 != payload_hash({"item_id": row.get("item_id")})
+                or not all(
+                    _is_sha256(row.get(field))
+                    for field in (
+                        "cache_key",
+                        "environment_hash",
+                        "source_environment_hash",
+                        "agent_runtime_key",
+                    )
+                )
+                or not isinstance(row.get("image_id"), str)
+                or re.fullmatch(r"sha256:[0-9a-f]{64}", row["image_id"])
+                is None
+                or not isinstance(row.get("agent_runtime_version"), str)
+                or not row["agent_runtime_version"]
+                or (
+                    not formal_rows
+                    and row.get("prepared_before_formal_cache_check") is not True
+                )
                 or (
                     formal_rows
                     and (
                         row.get("prebuilt_cache_reused") is not True
                         or row.get("offline_verifier_profile_id")
-                        != "common-pytest-ctrf-py312-v1"
+                        != OFFLINE_VERIFIER_PROFILE_ID
+                        or row.get("offline_verifier_profile_hash")
+                        != payload.get("offline_verifier_profile_hash")
+                        or row.get("offline_verifier_runtime_key")
+                        != payload.get("offline_verifier_runtime_key")
+                        or row.get("offline_verifier_runtime_reused") is not True
                         or row.get("verifier_runtime_network") != "none"
                     )
                 )
             ):
                 raise PeriodOutFreezeError("prewarm item binding drifted")
+    image_ids = {str(row["image_id"]) for row in formal}
+    cache_keys = {str(row["cache_key"]) for row in formal}
+    runtime_keys = {str(row["offline_verifier_runtime_key"]) for row in formal}
+    if (
+        len(image_ids) != 1
+        or len(cache_keys) != 1
+        or runtime_keys != {str(payload["offline_verifier_runtime_key"])}
+        or payload.get("unique_image_id_hash")
+        != payload_hash({"image_id": next(iter(image_ids), "")})
+        or payload.get("unique_cache_key_hash")
+        != payload_hash({"cache_key": next(iter(cache_keys), "")})
+    ):
+        raise PeriodOutFreezeError("prewarm shared runtime binding drifted")
     return declared
 
 
