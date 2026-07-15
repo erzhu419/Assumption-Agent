@@ -262,6 +262,7 @@ class BoundContractPlannerV2:
         if not _is_sha256(instruction_sha256):
             raise ContractRunnerError("instruction hash is malformed")
         self.asset = shared.asset
+        self.asset_path = shared.asset_path.resolve(strict=True)
         self._instruction_sha256 = instruction_sha256
         self._plan = copy.deepcopy(dict(plan))
         self._receipt = copy.deepcopy(dict(extraction_receipt))

@@ -15,14 +15,17 @@ from assumption_agent.benchmarks.financial_sec13f_contract_integration_v2 import
     INTEGRATION_VERSION,
     SharedFinancialSec13FContractPlannerV2,
 )
-from assumption_agent.models import stable_hash
+from assumption_agent.models import SplitName, stable_hash
 from assumption_agent.benchmarks.skilllearn_lifecycle import (
     SkillLearnAgentTerminalError,
+    SkillLearnTrialRequest,
+    TrialVariant,
 )
-from replication_runtime.financial_sec13f_contract_v2 import formation
+from replication_runtime.financial_sec13f_contract_v2 import formation, runner
 from replication_runtime.financial_sec13f_contract_v2.backends import (
     DurableFinancialSec13FContractBackendV2,
     FinancialSemanticReplicationBackendError,
+    initialize_work_state_v2,
 )
 
 
@@ -347,7 +350,9 @@ def test_cleanup_failure_never_publishes_deleted_plan_evidence(
                     )
                 else:
                     container_path = destination.split(":", 1)[1]
-                    self.container_files[container_path] = Path(source).read_bytes()
+                    self.container_files[container_path] = Path(
+                        source
+                    ).read_bytes()
                 return SimpleNamespace(returncode=0, stdout="")
             if "sha256sum" in args:
                 paths = args[args.index("sha256sum") + 1 :]
@@ -357,7 +362,8 @@ def test_cleanup_failure_never_publishes_deleted_plan_evidence(
                         stdout=f"{output_sha256}  /root/answers.json\n",
                     )
                 stdout = "".join(
-                    f"{hashlib.sha256(self.container_files[path]).hexdigest()}  {path}\n"
+                    f"{hashlib.sha256(self.container_files[path]).hexdigest()}  "
+                    f"{path}\n"
                     for path in paths
                 )
                 return SimpleNamespace(returncode=0, stdout=stdout)
@@ -395,3 +401,140 @@ def test_cleanup_failure_never_publishes_deleted_plan_evidence(
         for event in sink.events
     )
     assert (host_root / "plan.json").is_file()
+
+
+def test_bound_planner_reaches_durable_operator_hook(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    backend, base_state, evidence = _runtime_fixture()
+    shared = backend.planner
+    bound = runner.BoundContractPlannerV2(
+        shared=shared,
+        instruction_sha256=base_state.plan["instruction_sha256"],
+        plan=base_state.plan,
+        extraction_receipt=evidence["extraction_receipt"],
+    )
+    assert bound.asset_path == shared.asset_path
+    assert bound.asset_path.is_file()
+    backend.planner = bound
+
+    program_set_hash = _hash("bound-program-set")
+    request = SkillLearnTrialRequest(
+        item_id="financial-contract-bound-planner-fixture",
+        family="financial-analysis",
+        split=SplitName.VALIDATION,
+        variant=TrialVariant.POLICY_ON,
+        evaluator_epoch="bound-planner-operator-hook-audit-v2",
+        pair_id="bound-planner-operator-hook-pair",
+        repeat=0,
+        agent_id=backend.agent_id,
+        model=backend.model,
+        max_steps=backend.max_steps,
+        manifest_hash=_hash("bound-manifest"),
+        codex_agent_execution_policy_hash=(
+            backend.codex_agent_execution_policy_hash
+        ),
+        program_id=backend.expected_program_id,
+        program_set_hash=program_set_hash,
+        treatment_hash=backend.expected_treatment_hash,
+        external_skill_source_receipt_hash=(
+            backend.expected_external_skill_source_receipt_hash
+        ),
+    )
+    backend.durable_state_root = tmp_path / "durable"
+    backend.durable_work_unit_hash = _hash("bound-work-unit")
+    backend.durable_request_hash = request.request_hash
+    backend.durable_arm = "candidate"
+    backend.expected_program_set_hash = program_set_hash
+    backend._active_request = request
+    initialize_work_state_v2(
+        state_root=backend.durable_state_root,
+        work_unit_hash=backend.durable_work_unit_hash,
+        request_hash=request.request_hash,
+        planned_payload={"arm": "candidate", "model_calls": 0},
+        semantic_plan_payload={
+            "applicable": True,
+            "plan_hash": base_state.plan["plan_hash"],
+            "model_calls": 0,
+        },
+    )
+    state = integration._ContractRunStateV2(
+        request_hash=request.request_hash,
+        plan=dict(base_state.plan),
+        extraction_receipt=evidence["extraction_receipt"],
+    )
+    backend._contract_local = threading.local()
+    backend._contract_local.state = state
+    backend._contract_evidence_lock = threading.Lock()
+    backend._contract_runtime_evidence = []
+    monkeypatch.setattr(
+        backend,
+        "_agent_completion_payload",
+        lambda request, *, reconciled_after_backend_return: {
+            "arm": "candidate",
+            "model_calls": 1,
+            "reconciled_after_backend_return": (
+                reconciled_after_backend_return
+            ),
+        },
+    )
+
+    class _Sink:
+        def __init__(self) -> None:
+            self.events: list[object] = []
+
+        def emit(self, event: object) -> None:
+            self.events.append(event)
+
+    sink = _Sink()
+    backend.event_sink = sink
+    query_receipt = evidence["query_receipt"]
+    output_sha256 = evidence["output_sha256"]
+
+    class _Delegate:
+        def __init__(self) -> None:
+            self.container_files: dict[str, bytes] = {}
+
+        def run(self, args: list[str], **kwargs: object) -> SimpleNamespace:
+            if args[:2] == ["docker", "cp"]:
+                source, destination = args[2], args[3]
+                if source.startswith("fixture:"):
+                    Path(destination).write_text(
+                        json.dumps(query_receipt), encoding="utf-8"
+                    )
+                else:
+                    container_path = destination.split(":", 1)[1]
+                    self.container_files[container_path] = Path(source).read_bytes()
+                return SimpleNamespace(returncode=0, stdout="")
+            if "sha256sum" in args:
+                paths = args[args.index("sha256sum") + 1 :]
+                if paths == ["/root/answers.json"]:
+                    return SimpleNamespace(
+                        returncode=0,
+                        stdout=f"{output_sha256}  /root/answers.json\n",
+                    )
+                stdout = "".join(
+                    f"{hashlib.sha256(self.container_files[path]).hexdigest()}  {path}\n"
+                    for path in paths
+                )
+                return SimpleNamespace(returncode=0, stdout=stdout)
+            return SimpleNamespace(returncode=0, stdout="")
+
+    backend._execute_contract_plan_before_verifier_v2(
+        delegate=_Delegate(),
+        container_name="fixture",
+    )
+
+    assert [row.stage for row in backend._durable_chain()] == [
+        "planned",
+        "semantic_plan_ready",
+        "agent_completed",
+        "operator_completed",
+    ]
+    assert (backend.durable_state_root / "semantic_runtime_evidence.json").is_file()
+    assert state.runtime_evidence is not None
+    assert not any(
+        getattr(event, "event", None)
+        == "financial_sec13f_contract_runtime_failed_v2"
+        for event in sink.events
+    )
