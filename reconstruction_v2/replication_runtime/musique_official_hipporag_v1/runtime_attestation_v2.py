@@ -10,6 +10,7 @@ identity-probe subprocess and it has no retry path.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import os
@@ -712,6 +713,26 @@ def qualify_and_build_attestation_v2(
     return receipt
 
 
+def write_attestation_exclusive(path: Path, payload: Mapping[str, Any]) -> None:
+    """Persist one validated public receipt without an overwrite path."""
+
+    _validate_receipt_structure(payload)
+    destination = path.absolute()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    raw = (
+        json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    descriptor = os.open(
+        destination,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+        0o644,
+    )
+    with os.fdopen(descriptor, "wb") as handle:
+        handle.write(raw)
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
 def _validate_receipt_structure(payload: Mapping[str, Any]) -> None:
     _require_exact_keys(payload, _TOP_LEVEL_KEYS, "v2 attestation receipt")
     body = dict(payload)
@@ -850,4 +871,29 @@ __all__ = [
     "current_v2_implementation_binding",
     "qualify_and_build_attestation_v2",
     "verify_formal_runtime_attestation_v2",
+    "write_attestation_exclusive",
 ]
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--project-root", type=Path, required=True)
+    parser.add_argument("--base-binding-receipt", type=Path, required=True)
+    parser.add_argument("--runtime-python", type=Path, required=True)
+    parser.add_argument("--local-llm-model", type=Path, required=True)
+    parser.add_argument("--local-embedding-model", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    arguments = parser.parse_args(argv)
+    receipt = qualify_and_build_attestation_v2(
+        project_root=arguments.project_root,
+        base_binding_receipt_path=arguments.base_binding_receipt,
+        runtime_python=arguments.runtime_python,
+        local_llm_model=arguments.local_llm_model,
+        local_embedding_model=arguments.local_embedding_model,
+    )
+    write_attestation_exclusive(arguments.output, receipt)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
