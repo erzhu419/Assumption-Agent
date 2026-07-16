@@ -2692,8 +2692,12 @@ development outcome 前显式改为完整 canonical request body 的 65,536 UTF-
 no truncation，不再声称 token budget。独立审计复现并关闭了可重算 worker plan、synthetic formal injection、
 private-index 换金标、换 output root replay、实际使用点 TOCTOU、缺失 transitive binding 和失真实 failure
 receipt 等绕过；相关 acquisition/formation/adapter/custody/freeze/runner 64 项合成与失效测试通过。当前状态仍
-是 pre-run protocol：没有读取本次 development、没有 task/scoring call，也没有 performance 或 family-out
-claim；下一步只允许先提交这套 implementation，再形成一次 public custody/freeze，最后执行唯一的一批 18 call。
+是 pre-run protocol：implementation 提交后，formal custodian 已唯一一次打开 6-item development pack，生成
+gold-safe source view、独立 private index 与 public receipt；freeze 随后 opaque-copy index bytes 并形成唯一
+authorization，但没有解析 gold、没有 task/scoring call，也没有 performance 或 family-out claim。custody、
+private-index binding、freeze、worker 与 controller hashes 分别为 `d8ec4968...6e44`、`2b096194...9483`、
+`852ea437...78a4`、`9b34ebd5...0f6a` 与 `4b043ed0...29f5`；`formal_execution` 和全局 consumption marker
+均尚不存在。下一步只允许先公开提交这些 hash-only evidence，再执行唯一的一批 18 call。
 
 NOAA TRAIN-only typed formation 随后实际完成，而没有读取 development/sealed。冻结 grammar 枚举 864 个
 七节点 relational program（上限 4096/8），先 type-check，再按 12 个匿名 TRAIN item 的完整输出行为 hash
