@@ -23,6 +23,8 @@
     "items_per_wave": 24,
     "physical_work_unit_count": 384,
     "promotion_comparison": "challenger_portfolio_minus_incumbent_portfolio",
+    "promotion_validity_requires_all_eight_components_and_official_runtime_postflight": true,
+    "control_infrastructure_failure_classifies_the_whole_A_hold_as_invalid_but_control_scores_never_enter_the_promotion_statistic": true,
     "secondary_comparisons_do_not_affect_promotion": true,
     "single_start_barrier_party_count_per_wave": 192,
     "source_member": "train.json",
@@ -51,6 +53,7 @@
     "item_waves": 1,
     "physical_work_unit_count": 192,
     "primary_comparison": "active_portfolio_minus_incumbent_portfolio",
+    "L5_claim_eligible_success_rule": "active_minus_incumbent_net_support_hits_positive_and_one_sided_exact_magnitude_preserving_sign_flip_p_at_or_below_0.10",
     "secondary_comparisons": [
       "active_portfolio_minus_canonical_RAW",
       "active_portfolio_minus_retained_P",
@@ -77,7 +80,7 @@
     "population_or_SOTA_superiority": false,
     "target": "fresh_item_zero_shot_cross_family_item_local_support_recall_at_5_and_evaluator_transition"
   },
-  "design_sha256": "c183fc2e5929d951337b816b2140a71ffb2990dfd955389b18be07873fa803dc",
+  "design_sha256": "7e254e5959b77f8037528e28b6e92c4cf3aad965eee468c1031efc71a52c641b",
   "eligibility": {
     "allowed_question_types": [
       "bridge_comparison",
@@ -101,6 +104,8 @@
     "variable_support_document_count_supported": true
   },
   "evaluator_epoch_contract": {
+    "A_challenger_promotion_maps_exactly_to_F_challenger_as_active_M_search_action": true,
+    "A_incumbent_maps_exactly_to_F_incumbent_as_M_search_comparator": true,
     "A_hold_promotion_invalidates_only_dependent_evaluator_scores": true,
     "independent_source_records_retained": true,
     "M_search_cannot_rollback_or_change_epoch": true,
@@ -161,6 +166,16 @@
     "paragraph_title": "source_title_exact",
     "retrieval_payload_contains_gold": false,
     "support_indices": "deduplicated_supporting_fact_titles_mapped_to_unique_context_titles"
+  },
+  "mechanical_definitions": {
+    "canonical_JSON_bytes": "UTF_8_ASCII_escaped_sort_keys_true_separators_comma_colon_allow_nan_false",
+    "canonical_RAW": "source_context_indices_0_through_4_in_order",
+    "HMAC_identity": "HMAC_SHA256_selection_secret_over_domain_NUL_member_NUL_question_type_NUL_canonical_JSON_identity_commitment",
+    "HMAC_rank_order": "ascending_digest_then_ascending_identity_commitment",
+    "item_support_hit_at_5": "cardinality_of_intersection_between_unique_support_indices_and_top_5_ranking",
+    "paired_item_delta": "left_item_support_hit_at_5_minus_right_item_support_hit_at_5",
+    "RRF": "for_each_document_sum_exact_Fraction_1_over_60_plus_one_based_rank_across_exactly_P_Q1_Q2_then_sort_by_descending_score_and_ascending_document_id_take_5",
+    "sign_flip": "enumerate_all_2_power_n_sign_assignments_of_nonzero_observed_delta_magnitudes_and_compute_one_sided_probability_of_sum_at_least_observed_sum_ties_included"
   },
   "promotion_contract": {
     "alpha_denominator": 10,
