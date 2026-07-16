@@ -34,6 +34,11 @@ from .musique_official_core_comparison_v1 import (
     generate_selection_secret,
     official_source_receipt,
 )
+from replication_runtime.musique_official_hipporag_v1.runtime_attestation_v2 import (
+    ATTESTATION_SCHEMA,
+    FORMAL_ENTRY_POLICY,
+    current_v2_implementation_binding,
+)
 
 
 VERSION = "musique_recursive_evaluator_study_v1"
@@ -50,6 +55,9 @@ BLOCK_COUNTS = {name: BLOCK_COUNT for name in BLOCK_ORDER}
 SELECTED_COUNT = len(BLOCK_ORDER) * BLOCK_COUNT
 TOP_K = 5
 RRF_K = 60
+RUNTIME_ATTESTATION_RELATIVE_PATH = (
+    "manifests/musique_official_hipporag_runtime_attestation_v2.json"
+)
 
 # This is a fixed transitive research-protocol closure.  Prospective runtime
 # attestation and L4 protocol files are added here before the preregistration is
@@ -91,6 +99,47 @@ def _implementation_binding(project: Path) -> dict[str, Any]:
             )
         rows.append({"path": relative, "sha256": _sha256_file(path)})
     return {"files": rows, "set_sha256": stable_hash(rows)}
+
+
+def _runtime_attestation_binding(project: Path) -> dict[str, Any]:
+    path = project / RUNTIME_ATTESTATION_RELATIVE_PATH
+    if path.is_symlink() or not path.is_file():
+        raise MuSiQueRecursiveAcquisitionError(
+            "prospective runtime attestation is unavailable"
+        )
+    raw = path.read_bytes()
+    try:
+        payload = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise MuSiQueRecursiveAcquisitionError(
+            "prospective runtime attestation is invalid"
+        ) from exc
+    if not isinstance(payload, Mapping):
+        raise MuSiQueRecursiveAcquisitionError(
+            "prospective runtime attestation must be one object"
+        )
+    body = dict(payload)
+    declared = body.pop("receipt_sha256", None)
+    implementation = payload.get("implementation_binding")
+    runtime = payload.get("runtime_filesystem_binding")
+    if (
+        payload.get("schema") != ATTESTATION_SCHEMA
+        or stable_hash(body) != declared
+        or implementation != current_v2_implementation_binding(project)
+        or payload.get("formal_entry_policy") != FORMAL_ENTRY_POLICY
+        or not isinstance(runtime, Mapping)
+    ):
+        raise MuSiQueRecursiveAcquisitionError(
+            "prospective runtime attestation drifted"
+        )
+    return {
+        "relative_path": RUNTIME_ATTESTATION_RELATIVE_PATH,
+        "file_sha256": _sha256_bytes(raw),
+        "receipt_sha256": declared,
+        "implementation_set_sha256": implementation["set_sha256"],
+        "formal_entry_policy_sha256": stable_hash(FORMAL_ENTRY_POLICY),
+        "runtime_filesystem_binding_sha256": stable_hash(runtime),
+    }
 
 
 def _selection_key(item_id: str, secret: bytes) -> str:
@@ -249,6 +298,7 @@ def build_preregistration(
             "online_evaluator_calls": 0,
             "generator_calls_in_primary_retrieval_study": 0,
         },
+        "runtime_attestation": _runtime_attestation_binding(project),
         "claim_boundary": {
             "primary_scope": "MuSiQue_official_DEV_private_HMAC_retrieval_only",
             "public_benchmark_pretraining_cannot_be_excluded": True,

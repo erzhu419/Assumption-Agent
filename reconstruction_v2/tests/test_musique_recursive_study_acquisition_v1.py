@@ -83,6 +83,18 @@ def test_fresh_pack_forms_all_eight_blocks_without_public_content(
         )
     monkeypatch.setattr(study, "IMPLEMENTATION_RELATIVE_FILES", ("impl.py",))
     monkeypatch.setattr(study, "OFFICIAL_ARCHIVE_SHA256", study._sha256_file(archive_path))
+    monkeypatch.setattr(
+        study,
+        "_runtime_attestation_binding",
+        lambda _project: {
+            "relative_path": study.RUNTIME_ATTESTATION_RELATIVE_PATH,
+            "file_sha256": "3" * 64,
+            "receipt_sha256": "4" * 64,
+            "implementation_set_sha256": "5" * 64,
+            "formal_entry_policy_sha256": "6" * 64,
+            "runtime_filesystem_binding_sha256": "7" * 64,
+        },
+    )
     official_repository = project / "official-repository"
     official_repository.mkdir()
     monkeypatch.setattr(
