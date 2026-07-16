@@ -2642,6 +2642,24 @@ official core 的 import、initialize、index、retrieve、QA。层级 JSON→do
 另取未接触的原生 knowledge-QA corpus，再让 RAW / Assumption treatment / official-core retrieval 共享同一
 generator、预算与离线 evaluator；不能把本 synthetic probe 计作 family-out。
 
+MuSiQue-Answerable v1.0 的原生 QA acquisition 随后形成，但尚未授权执行。第一次草案使用公开固定 salt，
+即使公开 receipt 没有明文 item ID，任何人仍可从官方数据重建精确成员；该草案因此在模型调用和评分均为 0
+时即作废，旧 private root 不再引用，也不能作为 sealed 证据。替代 acquisition 在读取 source row 前生成
+32-byte 私有 secret，公开只提交 commitment，并以 HMAC 排序形成新的 12 TRAIN / 6 development / 6
+residual-sealed。官方 TRAIN 共 19,938 行；预注册的 answerable、至少 5 段、至少 2 supporting、连续 paragraph
+index、非空且双 normalizer 一致的 multi-alias 条件留下 4,589 行，再取固定 24 行。preregistration hash 为
+`1ab83845...bce0`，acquisition hash 为 `86cd2881...d742`，private-pack commitment 为
+`86d0e4d1...3924`。RAW 已准确命名为 canonical-order top-k=5 context baseline；三臂将共享逐 item candidate
+corpus、generator、prompt、document count 与预算，answer/alias/support label 不进入 retriever 或 generator。
+该 claim 只覆盖 official TRAIN 的预注册 multi-alias eligible subset；Assumption retriever 尚未 TRAIN-only
+形成和冻结，所以当前仍是 `draft_no_execution_authority`，不是 family-out 或 HippoRAG 性能结果。对应的
+有限 typed-retrieval 实现现已在不打开真实 pack 的条件下完成：84 个 Unicode/casefold、BM25/TF-IDF、
+title/text 权重及至多一跳 token/entity-token expansion 的 program，固定 top-k=5、paragraph idx tie-break、
+行为去重和 4-fold TRAIN cross-fit；但这只是形成器与合成隔离测试通过，尚不是一次真实 formation receipt。
+见
+[`MuSiQue preregistration`](../manifests/musique_official_core_comparison_v1_preregistration.json) 与
+[`acquisition receipt`](../manifests/musique_official_core_comparison_v1_acquisition.json)。
+
 NOAA TRAIN-only typed formation 随后实际完成，而没有读取 development/sealed。冻结 grammar 枚举 864 个
 七节点 relational program（上限 4096/8），先 type-check，再按 12 个匿名 TRAIN item 的完整输出行为 hash
 去重为 103 类；固定 rank 为 invalid、harm、负 exact recovery、program length、program hash。winner 对
@@ -2651,6 +2669,30 @@ NOAA TRAIN-only typed formation 随后实际完成，而没有读取 development
 program hash 为 `499aa46a...a3dd`，formation receipt 为 `cda7c209...138d`。这证明的是“在一个闭合、有限、
 contract-derived relational DSL 内自动形成可执行 operator”，不是无约束自然语言语义发现，也仍不构成
 development performance。见 [`formation result`](../manifests/noaa_gsod_typed_relational_formation_result_v1.json)。
+
+NOAA development 的一次性执行边界也已在真实访问前完成，但尚未启动。monolithic acquisition pack 只能由
+source custodian 打开；它将只导出 6 份匿名、最小列 `STATION/DATE/PRCP` 输入和一份无 gold/oracle/sealed
+mapping 的 private index。后续 freeze/controller 不接受 pack path，只接受该 source view，并形成精确的
+6 item ×（RAW model、typed-agent model、local operator-only）=18 work-unit Cartesian grid。pre-run public
+freeze 绑定 TRAIN preparation、formed program、source-view tree、worker/controller schema、provider identity、
+公开 acquisition receipt 以及固定 20-file executable implementation set；runner 在任何 credential、canary
+或 task call 前重新计算
+live implementation hash。provider route 只允许 `https://ruoli.dev` 上 exact `gpt-5.4-mini`，先以不含任务内容
+的 Plus canary 选择整批 Plus 或整批 Pro；task 中途不切换，12 个 model request 在调用前一次性提交 hash，
+18 个 claim 先落盘再并发提交，retry/replay/resample 均为 0。全部 terminal join 后才运行两套本地 oracle，
+完整 canonical request body 受同一 64 KiB UTF-8 byte budget 约束，而不再伪称未执行的 token budget。
+公开报告只保留 arm 总数和逐 item ITT 配对 gain/harm/tie/incomplete 计数；invalid/transport failure 是已分配
+terminal 的 incorrect，而不是从 paired denominator 删除。formal 入口也不再接受 transport/oracle 注入，
+并分别报告 execution integrity、paired completeness 与 formal evidence validity。当前 source/freeze/runner
+只通过 35 项
+隔离与失效关闭测试，真实 source export、pre-run freeze、provider call 和 development score 都仍为 0；因此
+此处只关闭执行架构缺口，不提前记作 L2 收益或 promotion 证据。
+
+还必须限缩 NOAA 后续 sealed 的含义：该 acquisition 的 selection seed、算法与官方源均已公开，第三方可以
+离线重建 split；它只有“执行流程没有把 sealed 内容交给 development controller”的程序性 custody，不具有
+MuSiQue private-HMAC split 的不可重建盲化。因而本轮 6-item development 仍可作 prospective descriptive
+measurement，但若要把 NOAA sealed 用作最终确认性证据，必须在启动前另建私密选择层和 commitment，不能直接
+把现有公开-seed sealed 重命名为强盲 holdout。
 
 本次审计还记录两项边界事件。一次 broad file search 意外展开官方 HippoRAG bundled public benchmark 的少量
 question/answer/support 样例；这些样例不再属于 untouched acquisition。另一次只读检索看到 SkillLearn

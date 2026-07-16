@@ -1,0 +1,191 @@
+{
+  "dataset_contract": {
+    "archive_member_basename": "musique_ans_v1.0_train.jsonl",
+    "claim_scope": "multi_alias_eligible_subset_of_official_train_not_full_musique",
+    "dataset": "MuSiQue-Answerable v1.0",
+    "eligibility": {
+      "answerable": true,
+      "empty_normalized_answers_do_not_count": true,
+      "independent_normalizers_must_agree": true,
+      "minimum_distinct_normalized_answers": 2,
+      "minimum_non_supporting_paragraph_count": 1,
+      "minimum_paragraph_count": 5,
+      "minimum_supporting_paragraph_count": 2,
+      "paragraph_idx_namespace": "official_contiguous_zero_based_idx"
+    },
+    "required_item_fields": [
+      "id",
+      "question",
+      "answer",
+      "answer_aliases",
+      "answerable",
+      "paragraphs"
+    ],
+    "required_paragraph_fields": [
+      "idx",
+      "title",
+      "paragraph_text",
+      "is_supporting"
+    ],
+    "source_split": "official_train_only"
+  },
+  "decision": "acquisition_authorized_model_execution_not_authorized",
+  "homologous_three_arm_draft": {
+    "arms": [
+      {
+        "arm_id": "canonical_order_top_k_context_baseline",
+        "retriever": "official_paragraph_idx_order_first_k_no_learned_retrieval"
+      },
+      {
+        "arm_id": "assumption_retrieval",
+        "current_status": "not_yet_frozen",
+        "retriever": "train_only_typed_retrieval_treatment_to_be_frozen"
+      },
+      {
+        "arm_id": "official_hipporag_retrieval",
+        "retriever": "official_core_plus_frozen_custom_adapter_only",
+        "runtime_binding": {
+          "claim_scope": "official_core_plus_frozen_custom_adapter_only",
+          "file_sha256": "89bbe828a5941197031baf01180f12d9ae82cb10ddbe7b6b371b59894aed1d90",
+          "official_commit": "ef2f14c4f254f11ac29f9395f262466ad1bb4d10",
+          "path": "manifests/official_hipporag_runtime_adapter_qualification_v1.json",
+          "qualification_sha256": "c2a6b540e4b91347a23bbe918b495caebcc35a23fbacee9754cd1b7661fda4e4"
+        }
+      }
+    ],
+    "automatic_performance_gate": false,
+    "development_max_parallel_generator_calls": 18,
+    "offline_evaluation": {
+      "answer_exact_match": true,
+      "answer_token_f1": true,
+      "dual_oracle_consensus_required": true,
+      "online_evaluator_calls": 0,
+      "support_recall_at_k": true
+    },
+    "planned_contrasts": [
+      "assumption_retrieval_minus_canonical_order_top_k_context_baseline",
+      "official_hipporag_retrieval_minus_canonical_order_top_k_context_baseline",
+      "assumption_retrieval_minus_official_hipporag_retrieval"
+    ],
+    "result_policy": "paired_descriptive_estimates_with_item_level_receipts",
+    "shared_context": {
+      "answers_aliases_and_labels_not_exposed_to_generator": true,
+      "answers_aliases_and_labels_not_exposed_to_retrievers": true,
+      "candidate_corpus_exact_same_across_arms": true,
+      "candidate_paragraph_idx_namespace_frozen": true,
+      "gold_support_not_exposed_to_any_arm": true,
+      "maximum_context_tokens": 8192,
+      "retrieval_top_k": 5,
+      "same_document_count": true,
+      "same_document_serialization": true,
+      "same_prompt_template": true
+    },
+    "shared_generator": {
+      "max_output_tokens": 256,
+      "model_family": "gpt-5.4",
+      "one_call_per_arm_item": true,
+      "retry_replay_resample": 0,
+      "same_provider_and_model_within_every_paired_block": true,
+      "temperature": 0
+    },
+    "status": "draft_no_execution_authority"
+  },
+  "implementation": {
+    "files": [
+      {
+        "path": "assumption_agent/benchmarks/musique_official_core_comparison_v1.py",
+        "sha256": "f74f897d318b15622da3ea400a8f62d605e6f8bfec496b3e30839eaf1c26e70d"
+      },
+      {
+        "path": "tests/test_musique_official_core_comparison_v1.py",
+        "sha256": "3426f5cc7302fb3de8aa510aff11659ef831ccfbc71e86b541e7b7a7f7a17b9d"
+      }
+    ],
+    "set_sha256": "0da3ce21406a099c55dc40fc0cdc73963eb7bdf71f0db57cf0c00894f1922b4d"
+  },
+  "oracles": {
+    "answer_primary": "normalize_answer_primary_plus_evaluate_aliases_primary",
+    "answer_secondary": "normalize_answer_secondary_plus_evaluate_aliases_secondary",
+    "dual_oracle_consensus_required": true,
+    "official_reference_evaluator_sha256": "10368f619b4d5ef5d83748c05a96c0afd332a14ab5c010740c98d58dfaefe974",
+    "online_judge": false,
+    "support_primary": "evaluate_support_primary",
+    "support_secondary": "evaluate_support_secondary",
+    "synthetic_conformance": {
+      "answer_case_count": 8,
+      "conformance_sha256": "8a749a6b811f725abab0251a55dd330c07481f537bdd2b95a9c0d1468cee71c2",
+      "oracle_disagreement_count": 0,
+      "support_case_count": 3
+    }
+  },
+  "preregistration_sha256": "1ab838457ea8f3ef0c3daad56b6b056d3fbaf12450f3538aaf85a417cdacbce0",
+  "private_boundary": {
+    "answers_and_aliases_private": true,
+    "corpus_private": true,
+    "item_ids_persisted_publicly": false,
+    "private_paths_persisted_publicly": false,
+    "questions_private": true,
+    "raw_archive_private": true,
+    "residual_sealed_must_be_a_separate_file": true,
+    "support_labels_private": true
+  },
+  "safety": {
+    "dataset_rows_read_during_preregistration": 0,
+    "hipporag_bundled_data_accessed": false,
+    "model_calls": 0,
+    "noaa_private_or_split_data_accessed": false,
+    "online_judge_calls": 0,
+    "scores_computed": 0,
+    "skilllearn_residual_sealed_accessed": false
+  },
+  "schema": "musique-official-core-comparison-v1-preregistration",
+  "selection": {
+    "algorithm": "ascending_hmac_sha256_of_private_secret_and_official_item_id_v1",
+    "content_conditioned_selection_after_eligibility": false,
+    "manual_item_selection": false,
+    "selected_count": 24,
+    "selection_secret_commitment_sha256": "a7245002ef480105dc356c5bb3e77e4f094db7c69f8ca0f8068b054cf40b0b68",
+    "selection_secret_path_persisted_publicly": false,
+    "selection_secret_persisted_publicly": false,
+    "split_counts": {
+      "development": 6,
+      "residual_sealed": 6,
+      "train": 12
+    },
+    "split_order": [
+      "train",
+      "development",
+      "residual_sealed"
+    ]
+  },
+  "source": {
+    "commit": "922ac98f19a201998dbdae6d7f2887a5258dbdeb",
+    "download": {
+      "declared_archive_name": "musique_v1.0.zip",
+      "google_drive_file_id": "1tGdADlNjWFaHLeZZGShh2IRcpO6Lv24h",
+      "official_script": "download_data.sh"
+    },
+    "file_sha256": {
+      "LICENSE": "cce5d01fa4a83b794271bd2c28cffdf99afd43c803e6ddefddae39b591ea7448",
+      "README.md": "7a3fb6a960f3fa122d2a1a81b73b9cf5a39ac983b11735d158490947960b9359",
+      "download_data.sh": "3242f928d7c0f8db885296872397af33ce19014e6edab62bbd44bab3d73a09d2",
+      "evaluate_v1.0.py": "f5fe66ae61dbea5172cba9d428d9924a5811f3457edc945fc1d81369c30e74b7",
+      "metrics/answer.py": "10368f619b4d5ef5d83748c05a96c0afd332a14ab5c010740c98d58dfaefe974"
+    },
+    "license": {
+      "attribution_required": true,
+      "license_file_sha256": "cce5d01fa4a83b794271bd2c28cffdf99afd43c803e6ddefddae39b591ea7448",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "official_repository_url": "https://github.com/StonyBrookNLP/musique",
+      "spdx": "CC-BY-4.0"
+    },
+    "repository": "https://github.com/StonyBrookNLP/musique.git",
+    "tracked_checkout_clean": true
+  },
+  "split_access": {
+    "development": "one_shot_after_complete_execution_freeze",
+    "preregistration_authorizes_sealed_access": false,
+    "residual_sealed": "no_access_before_post_development_authorization",
+    "train": "formation_and_infrastructure_only"
+  }
+}
