@@ -2651,14 +2651,25 @@ index、非空且双 normalizer 一致的 multi-alias 条件留下 4,589 行，�
 `1ab83845...bce0`，acquisition hash 为 `86cd2881...d742`，private-pack commitment 为
 `86d0e4d1...3924`。RAW 已准确命名为 canonical-order top-k=5 context baseline；三臂将共享逐 item candidate
 corpus、generator、prompt、document count 与预算，answer/alias/support label 不进入 retriever 或 generator。
-该 claim 只覆盖 official TRAIN 的预注册 multi-alias eligible subset；Assumption retriever 尚未 TRAIN-only
-形成和冻结，所以当前仍是 `draft_no_execution_authority`，不是 family-out 或 HippoRAG 性能结果。对应的
-有限 typed-retrieval 实现现已在不打开真实 pack 的条件下完成：84 个 Unicode/casefold、BM25/TF-IDF、
-title/text 权重及至多一跳 token/entity-token expansion 的 program，固定 top-k=5、paragraph idx tie-break、
-行为去重和 4-fold TRAIN cross-fit；但这只是形成器与合成隔离测试通过，尚不是一次真实 formation receipt。
-见
-[`MuSiQue preregistration`](../manifests/musique_official_core_comparison_v1_preregistration.json) 与
-[`acquisition receipt`](../manifests/musique_official_core_comparison_v1_acquisition.json)。
+该 claim 只覆盖 official TRAIN 的预注册 multi-alias eligible subset，不等同于完整 MuSiQue 或其内部
+family-out。acquisition 工具最初把成功的新 private root 留在随机 `mktemp` 路径而没有另存 path receipt；为避免
+通过目录遍历暴露 dev/sealed/secret，后续 custodian 只对精确的 `train.jsonl` 候选计算 hash，并以公开 receipt
+中的 TRAIN SHA 唯一匹配成功 root。这个 provenance 缺陷没有改变 split 或打开非 TRAIN 分区，但新 acquisition
+工具必须把 secret-free root locator 单独持久化，不能再依赖事后定位。
+
+在这条受限 custody 下，Assumption retriever 的真实 TRAIN-only formation 已完成一次，模型、network、online
+evaluator 与 development/sealed access 都为 0。有限 grammar 的 84 个 type-valid program 先按完整 TRAIN
+retrieval behavior 去重为 66 类，再以固定 support-recall@5、invalid、program length、program hash 排序；选中
+program 在 12 个 TRAIN item 上命中 22/30 个 supporting paragraph（按 item 聚合为 11/15），invalid 为 0。
+冻结 program 是 `BM25(title=4,text=1) → entity-token one-hop → expansion-weight=1 → top-5`，program hash
+为 `a2404490...5119`，formation receipt hash 为 `03731387...1f7e`。四折 held-out 合计分别为 3/8、6/9、
+3/6、6/7，且 fold winner 的 program/behavior 均不稳定；这项不稳定性作为形成结果保留，不再回到相同 TRAIN
+fold 调 prompt、补关键词或补 gate。全 TRAIN winner 现可被冻结用于唯一一次 prospective development，但仍不是
+performance、family-out 或 HippoRAG comparison 证据。见
+[`MuSiQue preregistration`](../manifests/musique_official_core_comparison_v1_preregistration.json)、
+[`acquisition receipt`](../manifests/musique_official_core_comparison_v1_acquisition.json)、
+[`formation result`](../manifests/musique_typed_retriever_formation_result_v1.json) 与
+[`frozen program`](../manifests/musique_typed_retriever_program_v1.json)。
 
 NOAA TRAIN-only typed formation 随后实际完成，而没有读取 development/sealed。冻结 grammar 枚举 864 个
 七节点 relational program（上限 4096/8），先 type-check，再按 12 个匿名 TRAIN item 的完整输出行为 hash
