@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import concurrent.futures
 from dataclasses import replace
 import inspect
 from pathlib import Path
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -191,6 +193,34 @@ def test_two_environment_barriers_join_before_support_scoring(
     assert execution["environment_barrier_count"] == 2
     assert execution["environment_barrier_party_count"] == 6
     assert execution["all_terminals_joined_before_support_scoring"] is True
+
+
+def test_all_barrier_paths_use_eager_bulk_submission() -> None:
+    party_count = 8
+    barrier = threading.Barrier(party_count)
+    entered: list[int] = []
+    lock = threading.Lock()
+
+    def run_one(unit: int) -> int:
+        with lock:
+            entered.append(unit)
+        barrier.wait(timeout=5)
+        return unit
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=party_count) as executor:
+        terminals = study._submit_all_then_join(
+            executor=executor,
+            function=run_one,
+            work_units=tuple(range(party_count)),
+        )
+    assert terminals == list(range(party_count))
+    assert sorted(entered) == list(range(party_count))
+    for function in (
+        study._evaluate_formation_grid,
+        study.execute_a_hold_formal,
+        study.execute_m_search_formal,
+    ):
+        assert "_submit_all_then_join(" in inspect.getsource(function)
 
 
 def test_formation_marker_is_one_shot_and_parent_is_precreated(tmp_path: Path) -> None:

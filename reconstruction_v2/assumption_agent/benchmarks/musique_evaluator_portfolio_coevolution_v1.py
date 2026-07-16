@@ -790,6 +790,20 @@ def formation_evidence_sha256(grid: FormationGridEvidence) -> str:
     return stable_hash(_grid_to_dict(grid.validate()))
 
 
+def _submit_all_then_join(
+    *,
+    executor: concurrent.futures.Executor,
+    function: Any,
+    work_units: Sequence[Any],
+) -> list[Any]:
+    """Submit the complete barrier width before awaiting any terminal."""
+
+    futures = tuple(executor.submit(function, unit) for unit in work_units)
+    if len(futures) != len(work_units):
+        raise MuSiQueEvaluatorPortfolioError("bulk submission width drifted")
+    return [future.result() for future in futures]
+
+
 def _evaluate_formation_grid(
     *,
     p_program: TypedRetrievalProgram,
@@ -851,8 +865,11 @@ def _evaluate_formation_grid(
             max_workers=FORMATION_MAXIMUM_CONCURRENCY,
             thread_name_prefix=f"musique-portfolio-env{environment_ordinal}",
         ) as executor:
-            futures = [executor.submit(run_one, unit, barrier) for unit in units]
-            terminals.extend(future.result() for future in futures)
+            terminals.extend(_submit_all_then_join(
+                executor=executor,
+                function=lambda unit: run_one(unit, barrier),
+                work_units=units,
+            ))
     direct = dict(terminals)
     if (
         attempted != FORMATION_WORK_UNIT_COUNT
@@ -1801,9 +1818,9 @@ def execute_a_hold_formal(
             max_workers=ANCHOR_MAXIMUM_CONCURRENCY,
             thread_name_prefix="musique-portfolio-anchor",
         ) as executor:
-            terminals = [future.result() for future in (
-                executor.submit(run_one, unit) for unit in work_units
-            )]
+            terminals = _submit_all_then_join(
+                executor=executor, function=run_one, work_units=work_units,
+            )
         direct = dict(terminals)
         if attempted != ANCHOR_WORK_UNIT_COUNT or completed != ANCHOR_WORK_UNIT_COUNT or len(direct) != ANCHOR_WORK_UNIT_COUNT:
             raise MuSiQueEvaluatorPortfolioError("A_hold terminal closure incomplete")
@@ -2437,9 +2454,9 @@ def execute_m_search_formal(
             max_workers=SEARCH_MAXIMUM_CONCURRENCY,
             thread_name_prefix="musique-portfolio-search",
         ) as executor:
-            terminals = [future.result() for future in (
-                executor.submit(run_one, unit) for unit in work_units
-            )]
+            terminals = _submit_all_then_join(
+                executor=executor, function=run_one, work_units=work_units,
+            )
         direct = dict(terminals)
         if attempted != SEARCH_WORK_UNIT_COUNT or completed != SEARCH_WORK_UNIT_COUNT or len(direct) != SEARCH_WORK_UNIT_COUNT:
             raise MuSiQueEvaluatorPortfolioError("M_search terminal closure incomplete")
