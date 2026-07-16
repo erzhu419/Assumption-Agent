@@ -26,6 +26,7 @@
 > - 最新 MuSiQue generation-two / evaluator 结果：Q 已在 F2 形成，但 one-shot M2 在授权消费、exact M2 打开及 36/36 unit 启动后，被当前 managed sandbox 禁止 bubblewrap 创建 `NETLINK_ROUTE` socket；24 个 terminal 完成、0 score，M2 以 infrastructure-invalid / efficacy-unknown 终态关闭且不重放。该 stderr digest 已由不含 benchmark/model 的最小 bwrap postdiagnostic 精确复现，P 的 M1 晋升不受影响。独立 L5 链随后完成：A_form 形成 `micro_worst_v1` challenger，但 incumbent/challenger 在 A_form 选择同一 program；A_hold 两者均为 `12/29`、0.9 Wilson 下界均为 `0.304297...`，challenger 不晋升；M3 active 仍为 incumbent，`18/29` 对 `18/29`、净收益 0。因此本轮没有证明 recursive retention，也没有发生 evaluator co-evolution；不再补 gate 或重跑已消费 block
 > - 最新 MuSiQue→HotpotQA family-out：提交 `7306f333` 固定 acquisition/runner，`87fd35f7` 在与正式执行相同的 host 权限下验证 bwrap network namespace+writable-bind，`6852f15f` 在打开任何 row 前预注册，`bc6afb6b` 从固定 SHA 的 Hugging Face-hosted HotpotQA distractor-validation conversion 中以私有 HMAC 一次选取 12 项，`86242994` 冻结同一 RAW/P/official-HippoRAG 三臂后只执行一次，`d2981542` 只公开 aggregate result。frozen P 未适配或重形成；36/36 retrieval terminal 由单一 36-party barrier 释放，全部 join 与 fresh runtime postflight 后才离线评分。source-provided support recall@5 为 RAW `11/24`、P `21/24`、official HippoRAG `20/24`；P−RAW 为 +10 support hits / 7 gain / 0 harm / 5 tie，P−official 为 +1 / 4 gain / 2 harm / 6 tie。0 Ruoli/external-network、0 study-level answer-generator、0 online evaluator、0 retry/replay/resample；official arm 内部保留冻结本地 LLM/OpenIE。该结果支持 frozen P 的小样本 cross-family retrieval transfer，不声称 Parquet 与原始 CMU JSON 等价、answer generation、M2 recursive retention 或 L5 evaluator co-evolution
 > - 最新 fresh Hotpot L4/L5：提交 `aedc0bd3` 固定六分区 acquisition、P/Q retained-recursion runner 与行为可识别的 evaluator protocol；`126ba352` 在 row access 前预注册 F_Q=36 及 M_L4/A_form/A_hold/F_search/M_search 各 24，`1f4f6b42` 一次取得 156 项且排除旧 Hotpot 12 项。纯合成文本的 24-worker official-HippoRAG capacity diagnostic 为 24/24 terminal + fresh postflight，未访问私有/评分数据。Q 只在 F_Q 形成；其四折 program/behavior 不稳定但不作为 gate。untouched M_L4 的 96/96 terminal + postflight 后，RAW/P/Q/P+Q/official support hit 为 `22/48`、`36/48`、`40/48`、`43/48`、`31/48`；P+Q−Q=+3、P+Q−P=+7、P+Q−official=+12，P support 只遗忘 1 个。故 L4 在这一 retrieval-only fresh cohort 的窄定义上达到，但不声称统计优越、family-out、等算力或端到端 QA。L5 的 A_form/F_search 形成 program 与 observed-action 均不同的 evaluator contrast；untouched A_hold 72/72 terminal 后 challenger `38/48`、incumbent `41/48`、净 −3，exact sign-flip `p=0.96875`，不晋升、不 invalidation，M_search 未授权且未打开。同一 anchor 不重试、不换候选、不补 gate；L5 仍未达到
+> - 最新 final Hotpot portfolio acquisition 终止：`b504f8b3` 冻结 two-Q portfolio 机制，`6f373fce` 固定实现，`257d6283` 在任何新 source/private row 打开前预注册 continuation rank window `[156,324)`。第一次带 typo 的调用停在 one-shot marker 前，0 消费、0 private input；纠正后的正式调用先持久化 marker（semantic SHA `bcfed9d9…41f3`），随后才打开旧 12-item exclusion pack 与固定 source，并在内存中确定 168-item window。它在第一次 `os.mkdir(pack_root, 0o700)` 因父目录缺失抛出 `FileNotFoundError`，早于任何 block、locator 或 acquisition receipt 写入。结果为 0 block、0 locator、0 receipt、0 score、0 model/network/online-evaluator call；该 window 仍因 marker 与 post-marker selection 永久烧毁，不 retry/replay/resample，不再启动 Hotpot v4。此前 family-out 阳性、窄 L4 阳性与有效 L5 阴性均不受影响；新 portfolio efficacy 为 unknown。公开终态 semantic SHA 为 `b929ae19…199b`
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -1871,6 +1872,35 @@ A_form/F_search/A_hold/M_search；不能把连续尝试到成功包装成 evalua
 evaluator epoch replacement、selective invalidation 实际发生，以及被晋升 evaluator 在预先冻结的新 search
 measurement 上改善后续 candidate search。
 
+### 8.19 final Hotpot portfolio cohort 因 acquisition 持久化故障严格终止
+
+上一节允许的唯一同源后续不是重配旧 single-Q objective，而是一个事前冻结的 two-Q portfolio 机制。
+`b504f8b3` 固定 design（file SHA `1cb6d552…ba43`；semantic SHA `3ed3811d…d37d`）；
+`6f373fce` 固定 acquisition/portfolio 实现（两个模块 SHA 分别为 `2638c9c7…202`、`822bff25…a88`，
+preregistered implementation-set SHA `2f3979ef…f6e0`）；`257d6283` 再提交 preregistration（file SHA
+`82b84903…053`；semantic SHA `5e265fd7…697c`）。固定 selection 复用既有 HMAC ordering，在排除原 12 项后只取
+与 v2 `[0,156)` 构造性不相交的 continuation `[156,324)`，并事前分配 A_form_0/A_form_1/F_search_0/
+F_search_1/A_hold/M_search 共 168 项。旧 v2 acquisition 与 final disposition 的 file/semantic SHA 也分别绑定为
+`2d907a72…dd6` / `ebd6e89f…ce4` 与 `631c8091…949` / `487831a0…aef`，没有打开任何旧 v2 private block，
+旧 M_search 仍保持 unopened。
+
+执行中有两个必须分开的事件。第一次调用带有 invocation typo，在 marker 前即停止：authorization 未消费，
+source/original pack 未打开，也没有形成 cohort。纠正调用先原子持久化 one-shot marker（file SHA
+`31b6a9c6…e00`；semantic SHA `bcfed9d9…41f3`）；只有此后才打开原 12-item exclusion pack（既有 file commitment
+`bf22661c…6c9`）和固定 source（file SHA `c20b638c…7c6`），完成 exact continuation window 的内存选择。
+下一条操作 `os.mkdir(pack_root, 0o700)` 因预定 private root 的父目录不存在而抛出 errno 2
+`FileNotFoundError`。故失败位置在 deterministic selection 之后、任何 private-pack root/block/locator/public
+acquisition receipt 写入之前；最终只有一个 marker，block、locator、receipt、持久化 selected row 均为 0。
+
+这是 non-scoring local-persistence infrastructure failure，不是 evaluator negative：没有运行 retrieval、RAW、
+HippoRAG、agent、answer generator 或 evaluator，没有计算 support score，也没有外网/online evaluator 调用。
+但 corrected call 已消费 authorization，并在 post-marker 阶段确定 fixed cohort，所以不能把“没有 block 文件”解释为
+可安全重跑。严格终态是：`[156,324)` 的六个 logical slice 全部永久烧毁，禁止 retry/replay/resample、同 window
+reconstruction、换 secret 重新抽样或 Hotpot v4；新 portfolio efficacy 保持 unknown。此前独立完成的 Hotpot
+family-out、L4 positive 和 L5 negative 不依赖这次失败，因而全部保留。公开 hash-only disposition 为
+[`hotpot_evaluator_portfolio_acquisition_infrastructure_failure_disposition_v1.json`](../manifests/hotpot_evaluator_portfolio_acquisition_infrastructure_failure_disposition_v1.json)，
+semantic SHA `b929ae19bfac016ed9e34f13e08afd4435d76005445772935845a0122df2199b`。
+
 ## 九、下一步优先级与硬验收标准
 
 | 优先级 | 工作 | 硬验收标准 |
@@ -1881,7 +1911,8 @@ measurement 上改善后续 candidate search。
 | 完成（cross-family retrieval L3） | frozen P 的 HotpotQA transfer | 固定 SHA 的 HF-hosted distractor-validation conversion 在 row-open 前预注册，7,318 eligible 中 private-HMAC 一次取 12；P 无适配；36-party barrier、36/36 terminal、fresh postflight 后离线评分；RAW 11/24、P 21/24、official 20/24；P−RAW +10 / 7 gain / 0 harm / 5 tie；P−official +1；0 retry/replay/online evaluator。claim 限于 12-item source-support retrieval，不等同端到端 QA/完整 Hotpot/原 CMU JSON |
 | 完成（窄 retrieval-only L4） | fresh Hotpot P/Q retained recursion | 新六分区 pack 排除旧 12 项；Q 仅在 F_Q 形成且不因 cross-fit 不稳定而重选；M_L4 96/96 terminal + postflight 后，P/Q/P+Q 为 36/48、40/48、43/48，P+Q−Q=+3、P+Q−P=+7，P forgetting=1；RAW 22/48、official 31/48。只支持 fixed-cohort source-support multi-generation contribution，不扩张为统计/等算力/端到端 QA claim |
 | 完成但未晋升（fresh Hotpot L5） | behavior-distinct evaluator transition | A_form/F_search 的 program 与 observed action 均不同；A_hold 72/72 terminal，challenger 38/48、incumbent 41/48、净 −3，exact p=31/32，不 promotion、不 invalidation；M_search 未授权且未打开。同一 anchor 禁止换候选、补 gate 或重试 |
-| 下一步（P0，不新增 gate） | genuinely new evaluator mechanism + new cohort | L4 不再重复；当前 A_form/F_search/A_hold 已成为设计数据。只有先形成实质不同的 evaluator objective，再一次取得全新 A_form/F_search/A_hold/M_search，且 challenger 在 untouched anchor 晋升并在预先冻结的 M_search 改善后续搜索，才能达到 L5；不能连续抽 challenger 直到成功 |
+| 严格终止（final Hotpot portfolio acquisition） | genuinely new two-Q evaluator mechanism + continuation cohort | 机制、实现和 `[156,324)` cohort 均先冻结；corrected call 消费 marker 并在 post-marker 内存选择后，因 private-root 父目录缺失在首个 `os.mkdir` 失败；0 block/locator/receipt/score/model/online evaluator。整段 window 永久烧毁，不 retry/replay/resample，不做 Hotpot v4；portfolio efficacy unknown，既有 claims 不变 |
+| 下一步（P0，不新增 gate） | 独立 family/domain 的 fresh precommitted evaluator test | 不再从 Hotpot 同源连续抽样到成功；只能把机制冻结后转到未消费的独立 cohort。其结果无论正负一次闭合，不能反向改写这次 infrastructure-invalid Hotpot 终态 |
 | 完成（exact-domain L2/L3 instance） | Replication C promotion、controls disposition 与 one-shot sealed | development 8/8 gain、四 fold 各 +2；operator-only output 8/8 exact match；sealed 4/4 gain、8 路最大并发、8/8 network-none verifier receipts、0 retry/replay/online judge；两条盲化事件完整披露，claim 限于固定 SEC-13F treatment |
 | 完成 | 冻结 evaluator-owned promotion policy | 已由 protocol 绑定完整 spec；candidate 只能收紧；对抗测试通过 |
 | 完成 | 收紧外部 action/fallback contract | 4 类 prompt/self-check lowering；6 类 unsupported op fail closed；observed fallback 不再由字符串伪造 |
@@ -2966,6 +2997,15 @@ M_search 不授权、不打开。故最终状态不再是“L4 未测得、L5 wi
 behavior-identifiable L5 negative”。这正是预注册 evaluator 应允许出现的结果；任何在同一 anchor 上继续抽样、换
 objective 或降低晋升阈值都会破坏证据。
 
+### 12.5 2026-07-16 final Hotpot portfolio acquisition infrastructure-invalid 闭合
+
+single-Q evaluator 负结果之后冻结的 final two-Q portfolio 机制没有产生新的 efficacy observation。design、实现与
+preregistration 依次由 `b504f8b3`、`6f373fce`、`257d6283` 固定；纠正后的 acquisition 先消费 one-shot marker，
+再打开 exclusion/source 并在内存选定 `[156,324)`，但在首个 private-root `os.mkdir` 因缺父目录失败。没有 block、
+locator、acquisition receipt、retrieval 或 score。该失效已按 hash-only disposition 严格关闭；固定 window 不重建，
+不进行 Hotpot v4。它既不能算 portfolio 阴性，也不能升级 L5，只把新机制的 Hotpot efficacy 留为 unknown；此前
+family-out、L4 与 L5 结果不变。后续测试必须转到独立、fresh、事前提交的 family/domain，而非在 Hotpot 上补 gate。
+
 ## 附录 A：关键证据索引
 
 - MuSiQue fresh generation-one public chain（旧 6-item cohort 未重放）：
@@ -3002,6 +3042,12 @@ objective 或降低晋升阈值都会破坏证据。
   [`A_hold no-promotion report`](../manifests/hotpot_recursive_evaluator_a_hold_report_v2.json)；
   [`L4-positive / L5-negative final disposition`](../manifests/hotpot_recursive_study_v1_final_disposition.json)。
   M_search 没有 artifact：它未获授权且未打开
+- final Hotpot two-Q portfolio acquisition strict-termination chain（不含任何 selected ID/private row）：
+  [`portfolio design`](../manifests/hotpot_evaluator_portfolio_design_v1.json)；
+  [`portfolio preregistration`](../manifests/hotpot_evaluator_portfolio_preregistration_v1.json)；
+  [`one-shot consumption marker`](../artifacts/hotpot_evaluator_robust_acquisition_v1/authorization.consumed.json)；
+  [`infrastructure-failure disposition`](../manifests/hotpot_evaluator_portfolio_acquisition_infrastructure_failure_disposition_v1.json)。
+  没有 block、locator 或 acquisition receipt artifact；`[156,324)` 永久烧毁且不做 Hotpot v4
 - Replication C promotion / controls / sealed final chain：
   [`promotion decision`](../manifests/financial_sec13f_contract_v2_replication_c_promotion_decision_v1.json)；
   [`controls disposition`](../manifests/financial_sec13f_contract_v2_controls_disposition_v1.json)；
