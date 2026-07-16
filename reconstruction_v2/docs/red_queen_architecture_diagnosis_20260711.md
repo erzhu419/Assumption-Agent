@@ -23,6 +23,7 @@
 > - 最新 controls / family-out：operator-only 的 8 个输出逐字节匹配 Replication C candidate output，skill-only 因 host verifier leaf 权限与 `--cap-drop ALL` 的已定位 infrastructure defect 得到 7 个有效失败、1 个 unresolved；该批固定为 `executed_incomplete_no_retry`、不补跑，单独 disposition 认定 output-level operator sufficiency 满足 promotion condition。family-out 因没有同构 proxy/adapter 固定为 `not_applicable_scope_mismatch_no_proxy`，不产生 transfer claim
 > - 最新 sealed 结果：4 个预提交 sealed item 的 RAW/candidate 共 8 个 Plus 调用以 8 路最大并发一次完成，离线 verifier、0 retry/replay/resample/provider switch/online judge；4/4 pair valid，RAW 0/4、candidate 4/4、4 gain/0 harm。4 个 candidate 均有 post-agent typed-operator evidence，8/8 容器均在 verifier materialize 前断网并在 verifier 后保持 network-none。严格盲化有两个必须披露的程序性事件：授权前曾对 private pack 做过一次只返回既有 digest 的 SHA stream；正式批次启动后，host `ps` 诊断又意外显示 sealed instruction text。两者均发生在 candidate/freeze 不可变之后，未暴露 gold/outcome、未触发 adaptation 或补跑；因此结果可作固定候选的 paired descriptive confirmation，但不能声称严格 blind holdout
 > - 最新 MuSiQue generation-one 结果：提交 `aac4ceb3` 先冻结 official HippoRAG v2 filesystem attestation；`8702c369` / `97644e21` 随后在读取 outcome 前预注册并一次形成 official DEV 的 96-item、8×12 block HMAC custody；`fdef9d45` 只在 F1 的 12 项上形成 frozen typed program；`7b38a23d` 再冻结 M1 的 12×3=36 路 one-shot retrieval-only comparison，`4617a976` 只公开 aggregate result。M1 official support recall@5 为 RAW `7/29`、P `14/29`、official HippoRAG `14/29`；P−RAW 净增 7 个 support hit，逐题为 7 gain / 1 harm / 4 tie，按事前 strict-positive policy 产生 `promote_P_to_retained_generation_one` disposition。36/36 retrieval terminal 在评分前 join，0 Ruoli/external-network、0 generator、0 online evaluator、0 retry/replay/resample；postflight fresh filesystem attestation 通过。该阳性不覆盖 F1 cross-fit 稳定性（program 与 behavior 均为 false）、M2 retention、evaluator co-evolution 或 family-out；第三方 runtime 依赖仍只绑定 distribution metadata tree，而非完整第三方源码/行为。旧 6-item MuSiQue cohort 没有重放。下一步只形成 Q 并执行预注册 M2 的 `empty/P/Q/P+Q`，不在 M1 上补 gate
+> - 最新 MuSiQue generation-two / evaluator 结果：Q 已在 F2 形成，但 one-shot M2 在授权消费、exact M2 打开及 36/36 unit 启动后，被当前 managed sandbox 禁止 bubblewrap 创建 `NETLINK_ROUTE` socket；24 个 terminal 完成、0 score，M2 以 infrastructure-invalid / efficacy-unknown 终态关闭且不重放。该 stderr digest 已由不含 benchmark/model 的最小 bwrap postdiagnostic 精确复现，P 的 M1 晋升不受影响。独立 L5 链随后完成：A_form 形成 `micro_worst_v1` challenger，但 incumbent/challenger 在 A_form 选择同一 program；A_hold 两者均为 `12/29`、0.9 Wilson 下界均为 `0.304297...`，challenger 不晋升；M3 active 仍为 incumbent，`18/29` 对 `18/29`、净收益 0。因此本轮没有证明 recursive retention，也没有发生 evaluator co-evolution；不再补 gate 或重跑已消费 block
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -1754,17 +1755,46 @@ implementation 和本地 model assets。这个 metadata boundary 必须继续写
 
 因此本轮真正推进的是：在 fresh official-DEV M1 上，frozen P 相对 canonical RAW 取得预注册的 positive
 retrieval utility，并按固定规则获得 generation-one promotion disposition；它没有证明 P 在新一代与 Q 共存时
-被保留，也没有证明 evaluator 会按 anchor evidence 自主升级。下一步只允许在 F2 形成 Q，随后一次冻结并执行
+被保留，也没有证明 evaluator 会按 anchor evidence 自主升级。当时下一步只允许在 F2 形成 Q，随后一次冻结并执行
 M2 的 `empty / P / Q / P+Q`，分别估计 novelty、retention 与 forgetting；M2 完成前，L4 recursive retention
 仍未达到。A_form/A_hold evaluator co-evolution、跨域或同构 family-out 也都尚未执行。这里的正确动作是进入
 Q/M2，而不是在已经看过的 F1/M1 上补 gate。
+
+### 8.16 M2 因 sandbox 基础设施失效；L5 有效完成但没有 evaluator transition
+
+提交 `ee8f3a48` 先冻结 stage-specific M2 runner，`2956d5b7` 只打开 F2 并形成 Q，`57d7e601` 再在 M2
+仍未打开时冻结 exact root、positive M1 lineage、P/Q program、M2 commitment 与三臂同构 comparison。正式 M2
+随后只启动一次：authorization 已消费，exact M2 已打开，36 个 P/Q/official work unit 全部提交；其中 24 个
+terminal 完成后 official worker 返回非零。无 benchmark/model 的最小 postdiagnostic 精确复现相同 stderr digest：
+当前 managed sandbox 不允许 bubblewrap 为 `--unshare-net` 创建 `NETLINK_ROUTE` socket。该故障发生在 scoring
+之前，aggregate report 不存在，任何 P/Q partial terminal 都没有评分或转作结果。`7bb8061e` 因而将 M2 固定为
+`closed_invalid_environmental_no_replay_no_score`：retention efficacy 仍为 unknown，不能把 infrastructure failure
+解释为 P retained、forgotten 或 Q 无效；也不能在解除 sandbox 后重放同一 M2。M1 对 P 的 generation-one
+promotion 是独立已完成证据，不因 M2 invalid 而撤销。
+
+与 M2 独立的 evaluator 链没有使用 official HippoRAG、Ruoli、generator 或在线 evaluator。A_form 与 F3 各对
+84 个 fixed typed program × 12 item 执行 1008 路最大本地并发，全部 terminal join 后才形成 official-support
+evidence。A_form 选择 `micro_worst_v1` 作为 challenger，但它与 `micro_recall_v1` incumbent 选择同一 program；
+untouched A_hold 上两者因此均为 `12/29`，0.9 Wilson lower bound 同为 `0.3042971842`，strict-improvement policy
+拒绝晋升。F3 上两条规则原本会选择不同 program，但由于 anchor transition 未发生，M3 依法保持 incumbent；
+untouched M3 上 incumbent/active 均为 `18/29`，net support hit 为 0，positive search utility 为 false。故本轮
+证明了 evaluator candidate formation、anchor rejection 与未晋升时的 score-dependency preservation 能执行，
+但没有证明 evaluator co-evolution。
+
+这一 L5 结果还有明确的完整性边界：实际观察到的命令均由 clean `python -m` 进程执行，formal API 没有
+result/callback 参数；但实现不能抵御任意可信主机内的 in-process monkeypatch，measurement implementation set
+也不是完整 transitive closure，private evidence 从执行到 public commit 依赖本地 custody。结果因此可作为当前
+committed observed offline run，而不是 adversarial-host integrity proof。正确下一步不是修改 A_form/A_hold 或
+追加 gate，而是把 M2 retention 标为未测得，并只在新 domain/family 的新 acquisition 上检验 P 的 transfer。
 
 ## 九、下一步优先级与硬验收标准
 
 | 优先级 | 工作 | 硬验收标准 |
 |---|---|---|
+| 完成但无 efficacy（MuSiQue M2） | F2→Q 与 one-shot M2 retention | Q 已冻结；M2 授权消费后因 managed-sandbox/bubblewrap `NETLINK_ROUTE` 权限失败，36 attempted / 24 terminal / 0 score；相同 digest 由 benchmark-free postdiagnostic 复现；终态 no replay，retention efficacy unknown，不撤销 M1 P promotion |
+| 完成但未晋升（MuSiQue L5） | A_form/A_hold evaluator transition 与 F3→M3 utility | A_form/F3/A_hold/M3 各 84×12=1008 local terminal；challenger=`micro_worst_v1`，A_hold 12/29 vs 12/29、Wilson lower bound 相同、not promoted；M3 active=incumbent，18/29 vs 18/29、net 0；只可声称 formation/rejection wiring，不可声称 evaluator co-evolution |
 | 完成（MuSiQue generation-one M1） | fresh official-DEV P vs RAW vs official HippoRAG one-shot retrieval | 96-item/8-block pack 在 outcome 前一次形成；F1-only P 冻结；M1 36/36 terminal 后离线评分；RAW 7/29、P 14/29、official 14/29，P−RAW 为 +7 support hits / 7 gain / 1 harm / 4 tie；0 Ruoli/generator/online evaluator/retry/replay/resample；promotion disposition 与 postflight attestation 均公开 |
-| 下一步（P0，不新增 gate） | 在 F2 形成 Q，并一次执行 M2 `empty/P/Q/P+Q` | formation 不打开 M2；完整 freeze 后一次提交同 item/budget 四臂；分别报告 novelty、`Y(P+Q)-Y(Q)` retention 与 forgetting；不得回到 F1/M1 调规则或补 gate。M2 前不得声称 L4 retention；A_form/A_hold 与同构 family-out 前不得声称 evaluator co-evolution 或 transfer |
+| 下一步（P0，不新增 gate） | frozen P 的新 domain/family transfer | 使用新的、事前 HMAC 取得的 HotpotQA distractor cohort；P 不适配、不重形成；同一 question/corpus/top-5 下比较 RAW / frozen P / official HippoRAG。正式启动前必须在相同执行权限下确认 bubblewrap 可用，不能把已消费 M2 当作 canary；不得重用 MuSiQue M2/L5 block |
 | 完成（exact-domain L2/L3 instance） | Replication C promotion、controls disposition 与 one-shot sealed | development 8/8 gain、四 fold 各 +2；operator-only output 8/8 exact match；sealed 4/4 gain、8 路最大并发、8/8 network-none verifier receipts、0 retry/replay/online judge；两条盲化事件完整披露，claim 限于固定 SEC-13F treatment |
 | 完成 | 冻结 evaluator-owned promotion policy | 已由 protocol 绑定完整 spec；candidate 只能收紧；对抗测试通过 |
 | 完成 | 收紧外部 action/fallback contract | 4 类 prompt/self-check lowering；6 类 unsupported op fail closed；observed fallback 不再由字符串伪造 |
@@ -2826,6 +2856,12 @@ HippoRAG 只在总 support hit 上持平；runner 给出 promotion disposition�
 以及同构 family-out 均未完成。因此论文级状态应写成“generation-one P positive”，不能写成“recursive retention、
 evaluator co-evolution 或一般 Red Queen 已证明”。下一步是 F2→Q→一次 M2，不是继续修改 P 或补 gate。
 
+后续实际执行改变了“尚未完成”但没有改变结论上限：F2/Q 已形成；M2 因 sandbox 阻止 bubblewrap network
+namespace 而在评分前终止，0 score、no replay，所以 recursive retention 仍是 efficacy unknown。A_form/F3/A_hold/M3
+则完整执行，但 challenger 在 A_form 与 incumbent 选择同一 program，A_hold 12/29 对 12/29 未晋升，M3 保持
+incumbent 并得到 18/29 对 18/29、net 0。因此 evaluator co-evolution 也没有发生。下一条科学缺口已经不再是
+“补 gate”，而是在新的、事前取得的 family/domain 上检验 frozen P transfer；原 M2 与 L5 blocks 不得重用。
+
 ## 附录 A：关键证据索引
 
 - MuSiQue fresh generation-one public chain（旧 6-item cohort 未重放）：
@@ -2835,7 +2871,13 @@ evaluator co-evolution 或一般 Red Queen 已证明”。下一步是 F2→Q→
   [`F1 formation receipt`](../manifests/musique_recursive_study_f1_formation_v1/formation.receipt.json)；
   [`F1 frozen program`](../manifests/musique_recursive_study_f1_formation_v1/frozen_program.json)；
   [`M1 one-shot pre-run freeze`](../manifests/musique_recursive_study_m1_pre_run_freeze_v1.json)；
-  [`M1 aggregate result / promotion disposition / postflight`](../manifests/musique_recursive_study_m1_aggregate_report_v1.json)
+  [`M1 aggregate result / promotion disposition / postflight`](../manifests/musique_recursive_study_m1_aggregate_report_v1.json)；
+  [`M2 infrastructure failure disposition`](../manifests/musique_recursive_study_m2_infrastructure_failure_disposition_v1.json)；
+  [`A_form evaluator receipt`](../manifests/musique_recursive_evaluator_a_form_receipt_v1.json)；
+  [`F3 search-formation receipt`](../manifests/musique_recursive_evaluator_f3_receipt_v1.json)；
+  [`A_hold anchor report`](../manifests/musique_recursive_evaluator_a_hold_report_v1.json)；
+  [`M3 prospective utility report`](../manifests/musique_recursive_evaluator_m3_report_v1.json)；
+  [`L5 no-transition disposition`](../manifests/musique_recursive_evaluator_coevolution_disposition_v1.json)
 - Replication C promotion / controls / sealed final chain：
   [`promotion decision`](../manifests/financial_sec13f_contract_v2_replication_c_promotion_decision_v1.json)；
   [`controls disposition`](../manifests/financial_sec13f_contract_v2_controls_disposition_v1.json)；
