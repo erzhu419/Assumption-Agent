@@ -2671,6 +2671,30 @@ performance、family-out 或 HippoRAG comparison 证据。见
 [`formation result`](../manifests/musique_typed_retriever_formation_result_v1.json) 与
 [`frozen program`](../manifests/musique_typed_retriever_program_v1.json)。
 
+official HippoRAG 对照也从 qualification placeholder 收敛为可执行但仍未评分的 retrieve-only adapter。它对
+每个 item 建立独立 official-core index，只调用 `index/retrieve`，向下游只返回按 official score、paragraph
+idx 稳定裁决的 5 个 idx；question/corpus/index 在隔离网络的私有 work root 中使用后删除。冻结 binding 同时
+绑定 official commit 的 52-file source tree、overlay venv/dependency、local causal/embedding assets、8-file
+transitive implementation closure 与 config，并如实保留 `openai==1.91.0` 相对 official `1.91.1` pin 的偏差。
+本地 synthetic item 已实际走通 official index+retrieve，online model/evaluator 和 benchmark row access 都为
+0；binding receipt 为 `522d3192...45d0`。这仍只是 homologous baseline infrastructure，不是 MuSiQue 分数，
+见 [`retrieve-only binding`](../manifests/musique_official_hipporag_retrieve_only_binding_v1.json)。
+
+与之配套的 gold-safe custody、launchable freeze 和三臂 formal runner 已在读取真实 development 前闭合。正式
+custodian 先钉死 preregistration/acquisition/formation/program/qualification/adapter 六个已发布 trust root，
+再把 6 题转成匿名 question+label-free corpus；answers/aliases/support 进入独立 0600 index，freeze 只把其 bytes
+按事前 hash opaque-copy，直到 18 个 generation terminal 全部 join 后才允许解析。freeze 固定
+`canonical first-5 / formed Assumption retriever / official HippoRAG retrieve-only` 的 6×3 grid、同一
+serialization/prompt/model/top-5、18 路 generator concurrency、Plus canary→整批 Pro fallback 和
+retry/replay/resample=0；invalid/transport terminal 按 ITT 直接记 answer EM/F1=0，不从 denominator 删除。
+旧 acquisition draft 的 `maximum_context_tokens=8192` 没有 tokenizer 或可执行计数语义，因此在任何
+development outcome 前显式改为完整 canonical request body 的 65,536 UTF-8 bytes、overflow fail-closed、
+no truncation，不再声称 token budget。独立审计复现并关闭了可重算 worker plan、synthetic formal injection、
+private-index 换金标、换 output root replay、实际使用点 TOCTOU、缺失 transitive binding 和失真实 failure
+receipt 等绕过；相关 acquisition/formation/adapter/custody/freeze/runner 64 项合成与失效测试通过。当前状态仍
+是 pre-run protocol：没有读取本次 development、没有 task/scoring call，也没有 performance 或 family-out
+claim；下一步只允许先提交这套 implementation，再形成一次 public custody/freeze，最后执行唯一的一批 18 call。
+
 NOAA TRAIN-only typed formation 随后实际完成，而没有读取 development/sealed。冻结 grammar 枚举 864 个
 七节点 relational program（上限 4096/8），先 type-check，再按 12 个匿名 TRAIN item 的完整输出行为 hash
 去重为 103 类；固定 rank 为 invalid、harm、负 exact recovery、program length、program hash。winner 对
