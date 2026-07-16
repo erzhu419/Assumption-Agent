@@ -28,6 +28,7 @@
 > - 最新 fresh Hotpot L4/L5：提交 `aedc0bd3` 固定六分区 acquisition、P/Q retained-recursion runner 与行为可识别的 evaluator protocol；`126ba352` 在 row access 前预注册 F_Q=36 及 M_L4/A_form/A_hold/F_search/M_search 各 24，`1f4f6b42` 一次取得 156 项且排除旧 Hotpot 12 项。纯合成文本的 24-worker official-HippoRAG capacity diagnostic 为 24/24 terminal + fresh postflight，未访问私有/评分数据。Q 只在 F_Q 形成；其四折 program/behavior 不稳定但不作为 gate。untouched M_L4 的 96/96 terminal + postflight 后，RAW/P/Q/P+Q/official support hit 为 `22/48`、`36/48`、`40/48`、`43/48`、`31/48`；P+Q−Q=+3、P+Q−P=+7、P+Q−official=+12，P support 只遗忘 1 个。故 L4 在这一 retrieval-only fresh cohort 的窄定义上达到，但不声称统计优越、family-out、等算力或端到端 QA。L5 的 A_form/F_search 形成 program 与 observed-action 均不同的 evaluator contrast；untouched A_hold 72/72 terminal 后 challenger `38/48`、incumbent `41/48`、净 −3，exact sign-flip `p=0.96875`，不晋升、不 invalidation，M_search 未授权且未打开。同一 anchor 不重试、不换候选、不补 gate；L5 仍未达到
 > - 最新 final Hotpot portfolio acquisition 终止：`b504f8b3` 冻结 two-Q portfolio 机制，`6f373fce` 固定实现，`257d6283` 在任何新 source/private row 打开前预注册 continuation rank window `[156,324)`。第一次带 typo 的调用停在 one-shot marker 前，0 消费、0 private input；纠正后的正式调用先持久化 marker（semantic SHA `bcfed9d9…41f3`），随后才打开旧 12-item exclusion pack 与固定 source，并在内存中确定 168-item window。它在第一次 `os.mkdir(pack_root, 0o700)` 因父目录缺失抛出 `FileNotFoundError`，早于任何 block、locator 或 acquisition receipt 写入。结果为 0 block、0 locator、0 receipt、0 score、0 model/network/online-evaluator call；该 window 仍因 marker 与 post-marker selection 永久烧毁，不 retry/replay/resample，不再启动 Hotpot v4。此前 family-out 阳性、窄 L4 阳性与有效 L5 阴性均不受影响；新 portfolio efficacy 为 unknown。公开终态 semantic SHA 为 `b929ae19…199b`
 > - 最新 MuSiQue residual portfolio（备选 A）终止：`6dd53a19` / `c7e20674` 固定 same-source residual two-Q portfolio design 与实现，`0271f9e5` 在 source row、旧 private row 均为 0 次读取时预注册 continuation `[96,264)`，`96d779ce` 一次形成 A_form/F_search/A_hold/M_search 六块共 168 项。A_form 与 F_search 各完成 4080/4080 local terminal，形成 behavior-distinct 的 incumbent/challenger action，并由 `1b9d53c9` 在 A_hold 前提交；`47faa049` 再冻结 48-item A_hold 的 288 路单屏障运行，冻结时 A_hold/M_search 均 0 row/label。正式运行先消费 authorization 并完整反序列化 A_hold 48 行与 labels，但 committed runner 的 terminal list comprehension 对 lazy submit generator 逐项立即调用 `future.result()`：只有第 1 个 work unit 被提交并进入 288-party barrier，其余 287 个尚未提交，180 秒后确定性 `BrokenBarrierError`。结果为 attempted=1、terminal=0、0 ranking/score/private evidence/report/model/network/online evaluator；这是 implementation-invalid，不是 efficacy negative。A_hold 永久烧毁，禁止 replay/retry/resample 或 same-source 新 cohort；无 promotion，M_search 仍未授权且未打开。MuSiQue portfolio efficacy 与 L5 仍为 unknown；公开终态 semantic SHA 为 `f1f51d93…3d2c`。严格终态提交后，`98763f27` 才把 formation/A_hold/M_search 统一为 eager bulk submit→join，并通过 focused 16/16 与 grouped 66/66 tests；该修复只供未来独立 study，不授权重放 A_hold
+> - 最新 fresh 2Wiki fixed-action transfer：official archive、历史 1000-row denylist、train/dev/test collision scan 与 exact MuSiQue A/F action hashes 在 private selection 前固定；`3ac92a5d` 提交 corrected eager runner，唯一 public-synthetic diagnostic 完成 384/384 terminal 和两个 192-party barrier。正式 acquisition 一次形成按四 type 均衡的 A_hold=48、M_search=24；A_hold 384/384 terminal + fresh postflight 后离线得到 incumbent/challenger/P/official/RAW=`111/110/110/99/56`（support 总数 120）。唯一 promotion comparison 为 challenger−incumbent=−1、exact p=1，不晋升，M_search 未授权且未打开。预声明 non-gating comparison 中 incumbent−official=+12、16 gain/4 harm/28 tie、exact p=1549/262144；该强阳性只支持 fresh-item item-local retrieval transfer，不等同 official full-corpus 2Wiki、answer generation 或 L5 evaluator co-evolution
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -1940,6 +1941,37 @@ execution root 或重放 A_hold。
 [`musique_evaluator_portfolio_a_hold_implementation_failure_disposition_v1.json`](../manifests/musique_evaluator_portfolio_a_hold_implementation_failure_disposition_v1.json)，
 semantic SHA `f1f51d9343f1d9d134344dcdb93c9514ea34353a7714664d57a2c1d512803d2c`。
 
+### 8.21 fresh 2Wiki fixed-action transfer 有效完成；agent 明显高于 item-local HippoRAG，但 evaluator 未晋升
+
+MuSiQue residual implementation-invalid 后没有修复并重放，也没有回到 Hotpot 连续抽样。新 study 改用 official
+2WikiMultiHopQA archive，archive SHA 固定为 `95df2bf…9eef`。只在 source qualification 阶段做 outcome-blind
+aggregate/hash 解析；正式 selection 前又固定 exact canonical identity、私有 HMAC、历史 HippoRAG 1000-row
+四字段 denylist，以及 train/dev/test 三 split 的 normalized-question/item-ID collision exclusion。test 只参加
+metadata collision scan，从不进入候选；最终 ledger 对 train `167454`、dev `12576`、test `12576` 逐行闭合。
+A_hold 从 train 按四种官方 type 各取 12 项，M_search 从 dev 各取 6 项；两块在一次 acquisition 中同时形成，
+但 M_search 只有在 A_hold 晋升后才可打开。
+
+这不是新的 2Wiki candidate search。retained P、A incumbent/challenger 与未来 F incumbent/challenger 全部由既有
+MuSiQue public action hashes 在任何 2Wiki private row 打开前固定。提交 `3ac92a5d` 锁定 corrected eager-submit
+runner；随后唯一一次 public-synthetic diagnostic 完成 384/384 terminal、两个 192-party wave 和 48/48 official
+terminal。正式 A_hold freeze 再固定相同的 `2 × (24 items × 8 components)` 结构、official concurrency cap 24、
+0 retry/replay/resample、fresh pre-marker bubblewrap probe 与 postflight-before-scoring。正式运行得到 384/384
+terminal、barrier parties `[192,192]`、official 48/48，且所有 support score 均在 terminal closure 与 runtime
+postflight 后离线计算。
+
+固定 cohort 上，incumbent portfolio 为 `111/120` support hits，challenger `110/120`，retained P `110/120`，
+official item-local HippoRAG core `99/120`，canonical RAW `56/120`。唯一 promotion comparison 是 challenger−incumbent：
+0 gain / 1 harm / 47 tie，净 `−1`，one-sided exact magnitude-preserving sign-flip `p=1`；所以 challenger 不晋升，
+epoch 不变，M_search 没有 freeze、授权、打开或 artifact。不能换 challenger、降低 alpha、把 M_search 当 backup，
+也不能继续抽同源 2Wiki cohort。
+
+预先声明为不影响 promotion 的 descriptive control 给出一条更强的 retrieval 结果：incumbent−official 为
+`+12` support hits，16 gain / 4 harm / 28 tie，exact `p=1549/262144=0.0059089661`；retained P−official 为
+`+11`，15 gain / 4 harm / 29 tie，exact `p=1259/131072=0.0096054077`。因此 frozen agent retrieval 在这组
+fresh 2Wiki items 上并非只“略高”于 HippoRAG；但该结论严格限于 48-item、10-paragraph item-local
+support-recall@5，不是 official shared-index/full-corpus 2Wiki benchmark、端到端 answer generation、等算力或总体/SOTA
+优越。L3 fixed-action/frozen-P transfer 证据因此增强，L5 evaluator replacement 仍未达到。
+
 ## 九、下一步优先级与硬验收标准
 
 | 优先级 | 工作 | 硬验收标准 |
@@ -1952,7 +1984,8 @@ semantic SHA `f1f51d9343f1d9d134344dcdb93c9514ea34353a7714664d57a2c1d512803d2c`�
 | 完成但未晋升（fresh Hotpot L5） | behavior-distinct evaluator transition | A_form/F_search 的 program 与 observed action 均不同；A_hold 72/72 terminal，challenger 38/48、incumbent 41/48、净 −3，exact p=31/32，不 promotion、不 invalidation；M_search 未授权且未打开。同一 anchor 禁止换候选、补 gate 或重试 |
 | 严格终止（final Hotpot portfolio acquisition） | genuinely new two-Q evaluator mechanism + continuation cohort | 机制、实现和 `[156,324)` cohort 均先冻结；corrected call 消费 marker 并在 post-marker 内存选择后，因 private-root 父目录缺失在首个 `os.mkdir` 失败；0 block/locator/receipt/score/model/online evaluator。整段 window 永久烧毁，不 retry/replay/resample，不做 Hotpot v4；portfolio efficacy unknown，既有 claims 不变 |
 | 严格终止（MuSiQue residual portfolio A） | same-source residual two-Q evaluator test | `[96,264)` 在 row-zero preregistration 后一次 acquisition；A/F 各 4080/4080 terminal 并冻结 behavior-distinct actions；A_hold freeze 固定 288 路。正式调用消费 authorization、打开 48 项后，lazy-submit/early-result 的 committed ordering defect 使 barrier attempted=1/terminal=0；0 ranking/score/model/network。A_hold 烧毁、不 replay；无 promotion，M_search 永久未开；efficacy unknown，不追加同源 cohort |
-| 下一步（P0，不新增 gate） | 独立新 family/domain 的 fresh precommitted transfer test | 不再从 Hotpot 或 MuSiQue 同源连续抽样到成功。`98763f27` 已完成 eager bulk-submit 修复及 16/16 + 66/66 回归；下一 study 可把已冻结 A/F action commitments 作为 zero-shot transfer，或只转移 typed grammar 后在新域 formation，两者必须事前二选一、做该域非评分 preflight、一次闭合 fresh cohort，并明确不能反向改写两个 implementation/infrastructure-invalid 终态 |
+| 完成但未晋升（fresh 2Wiki fixed-action transfer） | 独立 fresh-item A_hold 与 agent/RAW/official HippoRAG 对照 | official archive + 历史 1000-row denylist + 三 split collision exclusion 在 selection 前固定；A_hold 48 项按四 type 均衡。384/384 terminal 后 incumbent/challenger/P/official/RAW 为 111/110/110/99/56（总 support=120）；challenger−incumbent=−1、exact p=1，不晋升，M_search 未开。incumbent−official=+12、16 gain/4 harm、descriptive exact p=1549/262144；claim 限 item-local retrieval |
+| 下一步（仅当论文必须继续追 L5；不新增 gate） | 新领域上的实质不同 evaluator objective | Hotpot 与 2Wiki 已各给出有效 non-promotion，不能在已消费 anchor 上连续换候选到成功。若 L5 是硬目标，只能先从这些失败形成机制级设计假设，再在独立 QASC 等新领域一次性预注册新的 evaluator objective 与完整 A/F/M；否则应停止实验，把“强 retrieval transfer + 正确 rejection、尚无 evaluator replacement”作为诚实结论 |
 | 完成（exact-domain L2/L3 instance） | Replication C promotion、controls disposition 与 one-shot sealed | development 8/8 gain、四 fold 各 +2；operator-only output 8/8 exact match；sealed 4/4 gain、8 路最大并发、8/8 network-none verifier receipts、0 retry/replay/online judge；两条盲化事件完整披露，claim 限于固定 SEC-13F treatment |
 | 完成 | 冻结 evaluator-owned promotion policy | 已由 protocol 绑定完整 spec；candidate 只能收紧；对抗测试通过 |
 | 完成 | 收紧外部 action/fallback contract | 4 类 prompt/self-check lowering；6 类 unsupported op fail closed；observed fallback 不再由字符串伪造 |
@@ -2434,9 +2467,9 @@ activation；held-out causal activation precision 的分母则是 evidence-valid
 | L0 wiring | schema、repair、off/on、guard、archive transition 的机械链路已连接 | 达到：typed operator feasibility 9/9，production selection integration v2 13/13 + 12/12 tamper + exact replay；typed-portable formal integration 又以一次 run + exact replay、3 项真实 Docker canary、production loader/cleanup 闭合 pre-agent 只读 sidecar。它不覆盖 write/render/move task effect |
 | L1 mechanism live | 真实外部任务中 proposal/repair/treatment/gate 全链路完成 | 达到：v3.20 完成 60/60 valid receipts；execution-contract/organize 路径闭合实际 action；独立 financial path 又在 agent 后执行 bounded typed operator，并在 fresh active pair 留下 operator/verifier evidence |
 | L2 validation learning | clean held-out validation 上有可晋级净收益 | **在 exact SEC-13F workstream 达到**：contract-derived candidate 的 Replication C development 为 8/8 valid gains、四 fold 各 +2、0 harm，并产生正式 promotion；旧 financial-4 与 parent period-out incomplete 只保留为历史诊断，不与本结果拼接 |
-| L3 prospective generalization | frozen incumbent 在 unseen instance/family 上保持收益 | **分两条窄 scope 达到**：SEC-13F promotion 后冻结 candidate 在 4 个预提交同域 sealed item 上为 4/4 paired gain、0 harm，但不具严格 supervising-channel blindness；另一个只在 MuSiQue F1 形成的 frozen P 在事前 HMAC 取得的 12-item HotpotQA conversion cohort 上为 21/24 support hits，相对 RAW 11/24 为 +10、7 gain/0 harm，并略高于 official HippoRAG 20/24。后者是真实 cross-family retrieval-only positive，但不覆盖 answer generation、完整 HotpotQA 或 broad Assumption-Agent transfer |
+| L3 prospective generalization | frozen incumbent 在 unseen instance/family 上保持收益 | **在多个窄 scope 达到**：SEC-13F frozen candidate 在 4 个预提交同域 sealed item 上 4/4 gain；只在 MuSiQue F1 形成的 P 在 12-item Hotpot cohort 为 21/24，相对 RAW +10、相对 official +1；随后 exact frozen actions 在 48-item fresh 2Wiki A_hold 上得到 incumbent/P/official/RAW=111/110/99/56（总 support=120），incumbent−official=+12、16 gain/4 harm、descriptive exact p=1549/262144。2Wiki family 历史上并非从未见过，所以最强表述是 fresh-item no-new-search transfer；全部 QA claim 都只覆盖 item-local retrieval，不覆盖 answer generation、full-corpus benchmark 或 broad Assumption-Agent transfer |
 | L4 self-evolution | 多代 retained improvement，且 recursion ablation 有因果贡献 | **在窄 Hotpot retrieval-only scope 达到**：fresh M_L4 上 P+Q=43/48、Q=40/48、P=36/48；P+Q−Q=+3、P+Q−P=+7，只有 1 个 P support 被遗忘。P/Q direct retrieval 与固定 RRF ablation 在同一 24-item cohort 完成 96/96 terminal 后才评分。Q 的 F_Q cross-fit 不稳定，故不能外推为广义自我演化或端到端 QA |
-| L5 evaluator co-evolution | anchor-guided evaluator replacement 与 selective erasure 改善搜索 | 未达到：behavior-distinct challenger 在 untouched A_hold 为 38/48，对 incumbent 41/48，exact p=31/32；不晋升、无 selective invalidation，M_search 未打开。当前已证明有效 rejection wiring，而非 evaluator replacement 或 improved search |
+| L5 evaluator co-evolution | anchor-guided evaluator replacement 与 selective erasure改善搜索 | **未达到，且已有两个有效 rejection**：fresh Hotpot behavior-distinct challenger 为 38/48，对 incumbent 41/48，exact p=31/32；fresh 2Wiki fixed-action challenger 为 110/120，对 incumbent 111/120，exact p=1。两者均不晋升、无 selective invalidation，M_search 均未打开。当前证明的是 evaluator 能拒绝无收益候选，不是 evaluator replacement 或 improved subsequent search |
 
 ## 十一、什么才算“真正自我提出并递归验证假设”
 
@@ -3079,7 +3112,35 @@ HippoRAG 只能作为 custom-dataset official-core 对照，不是官方 2Wiki b
 preregistration、一个 fresh cohort 和一次终态；不得把 A 的 M_search、MuSiQue 余量、Hotpot continuation、SEC13F
 或 SkillLearn sealed 数据当作 backup。
 
+### 12.8 2026-07-16 fresh 2Wiki 备选测试闭合
+
+12.7 的首选已经执行完毕，不再是“待下载/待选择”。official archive、历史 1000-row exclusion、test-only
+collision scan、fixed MuSiQue A/F action transfer、corrected eager-submit implementation、唯一 synthetic diagnostic、
+acquisition、A_hold freeze 与 aggregate report 全部形成 committed custody。A_hold 384/384 terminal，两个 barrier
+均为 192 parties；incumbent/P/official/RAW 为 111/110/99/56 support hits（总数 120）。incumbent 相对 official
+为 +12，paired descriptive exact p=1549/262144；这给出了目前最强的 fresh-item retrieval transfer 证据。
+
+但 evaluator 主问题仍是有效 negative：challenger 110 对 incumbent 111，净 −1、exact p=1，不 promotion。
+因此 M_search 按设计保持未授权、未打开，不能提供“promoted evaluator 改善后续 search”的 L5 证据。当前距离完整
+Red Queen 目标只剩但也确实缺少这一层：一次真实 evaluator epoch replacement、selective invalidation，以及在
+事前冻结的后续 measurement 上改善 search。不能通过继续 2Wiki、重用 M_search 或新增 gate 来填补。若论文把 L5
+视为硬性主张，下一次实验必须转向独立新领域和实质不同 evaluator objective；若不是硬性主张，当前证据已足以支撑
+更窄且更稳的结论——typed retrieval 能跨 fresh items/family 转移并超过 local HippoRAG，而 evaluator 更新机制目前
+只证明了正确拒绝，没有证明成功自我改写。
+
 ## 附录 A：关键证据索引
+
+- fresh 2Wiki fixed-action transfer public chain（M_search 未打开）：
+  [`source custody`](../manifests/twowiki_fresh_source_custody_v1.json)；
+  [`outcome-blind source qualification`](../manifests/twowiki_fresh_source_qualification_v2.json)；
+  [`source-access addendum`](../manifests/twowiki_source_access_addendum_v3.json)；
+  [`fixed transfer design`](../manifests/twowiki_evaluator_zero_shot_transfer_design_v1.json)；
+  [`eager 2×192 infrastructure diagnostic`](../manifests/twowiki_evaluator_zero_shot_transfer_infrastructure_diagnostic_v1.json)；
+  [`row-zero acquisition preregistration`](../manifests/twowiki_evaluator_zero_shot_transfer_acquisition_v1_preregistration.json)；
+  [`72-item acquisition receipt`](../manifests/twowiki_evaluator_zero_shot_transfer_acquisition_v1_acquisition.json)；
+  [`A_hold pre-run freeze`](../manifests/twowiki_evaluator_zero_shot_transfer_a_hold_pre_run_freeze_v1.json)；
+  [`A_hold aggregate report`](../manifests/twowiki_evaluator_zero_shot_transfer_a_hold_aggregate_report_v1.json)；
+  [`terminal disposition`](../manifests/twowiki_evaluator_zero_shot_transfer_disposition_v1.json)
 
 - MuSiQue fresh generation-one public chain（旧 6-item cohort 未重放）：
   [`v2 runtime attestation`](../manifests/musique_official_hipporag_runtime_attestation_v2.json)；
