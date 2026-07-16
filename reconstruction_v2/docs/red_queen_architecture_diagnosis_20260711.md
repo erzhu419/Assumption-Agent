@@ -27,7 +27,7 @@
 > - 最新 MuSiQue→HotpotQA family-out：提交 `7306f333` 固定 acquisition/runner，`87fd35f7` 在与正式执行相同的 host 权限下验证 bwrap network namespace+writable-bind，`6852f15f` 在打开任何 row 前预注册，`bc6afb6b` 从固定 SHA 的 Hugging Face-hosted HotpotQA distractor-validation conversion 中以私有 HMAC 一次选取 12 项，`86242994` 冻结同一 RAW/P/official-HippoRAG 三臂后只执行一次，`d2981542` 只公开 aggregate result。frozen P 未适配或重形成；36/36 retrieval terminal 由单一 36-party barrier 释放，全部 join 与 fresh runtime postflight 后才离线评分。source-provided support recall@5 为 RAW `11/24`、P `21/24`、official HippoRAG `20/24`；P−RAW 为 +10 support hits / 7 gain / 0 harm / 5 tie，P−official 为 +1 / 4 gain / 2 harm / 6 tie。0 Ruoli/external-network、0 study-level answer-generator、0 online evaluator、0 retry/replay/resample；official arm 内部保留冻结本地 LLM/OpenIE。该结果支持 frozen P 的小样本 cross-family retrieval transfer，不声称 Parquet 与原始 CMU JSON 等价、answer generation、M2 recursive retention 或 L5 evaluator co-evolution
 > - 最新 fresh Hotpot L4/L5：提交 `aedc0bd3` 固定六分区 acquisition、P/Q retained-recursion runner 与行为可识别的 evaluator protocol；`126ba352` 在 row access 前预注册 F_Q=36 及 M_L4/A_form/A_hold/F_search/M_search 各 24，`1f4f6b42` 一次取得 156 项且排除旧 Hotpot 12 项。纯合成文本的 24-worker official-HippoRAG capacity diagnostic 为 24/24 terminal + fresh postflight，未访问私有/评分数据。Q 只在 F_Q 形成；其四折 program/behavior 不稳定但不作为 gate。untouched M_L4 的 96/96 terminal + postflight 后，RAW/P/Q/P+Q/official support hit 为 `22/48`、`36/48`、`40/48`、`43/48`、`31/48`；P+Q−Q=+3、P+Q−P=+7、P+Q−official=+12，P support 只遗忘 1 个。故 L4 在这一 retrieval-only fresh cohort 的窄定义上达到，但不声称统计优越、family-out、等算力或端到端 QA。L5 的 A_form/F_search 形成 program 与 observed-action 均不同的 evaluator contrast；untouched A_hold 72/72 terminal 后 challenger `38/48`、incumbent `41/48`、净 −3，exact sign-flip `p=0.96875`，不晋升、不 invalidation，M_search 未授权且未打开。同一 anchor 不重试、不换候选、不补 gate；L5 仍未达到
 > - 最新 final Hotpot portfolio acquisition 终止：`b504f8b3` 冻结 two-Q portfolio 机制，`6f373fce` 固定实现，`257d6283` 在任何新 source/private row 打开前预注册 continuation rank window `[156,324)`。第一次带 typo 的调用停在 one-shot marker 前，0 消费、0 private input；纠正后的正式调用先持久化 marker（semantic SHA `bcfed9d9…41f3`），随后才打开旧 12-item exclusion pack 与固定 source，并在内存中确定 168-item window。它在第一次 `os.mkdir(pack_root, 0o700)` 因父目录缺失抛出 `FileNotFoundError`，早于任何 block、locator 或 acquisition receipt 写入。结果为 0 block、0 locator、0 receipt、0 score、0 model/network/online-evaluator call；该 window 仍因 marker 与 post-marker selection 永久烧毁，不 retry/replay/resample，不再启动 Hotpot v4。此前 family-out 阳性、窄 L4 阳性与有效 L5 阴性均不受影响；新 portfolio efficacy 为 unknown。公开终态 semantic SHA 为 `b929ae19…199b`
-> - 最新 MuSiQue residual portfolio（备选 A）终止：`6dd53a19` / `c7e20674` 固定 same-source residual two-Q portfolio design 与实现，`0271f9e5` 在 source row、旧 private row 均为 0 次读取时预注册 continuation `[96,264)`，`96d779ce` 一次形成 A_form/F_search/A_hold/M_search 六块共 168 项。A_form 与 F_search 各完成 4080/4080 local terminal，形成 behavior-distinct 的 incumbent/challenger action，并由 `1b9d53c9` 在 A_hold 前提交；`47faa049` 再冻结 48-item A_hold 的 288 路单屏障运行，冻结时 A_hold/M_search 均 0 row/label。正式运行先消费 authorization 并完整反序列化 A_hold 48 行与 labels，但 committed runner 的 terminal list comprehension 对 lazy submit generator 逐项立即调用 `future.result()`：只有第 1 个 work unit 被提交并进入 288-party barrier，其余 287 个尚未提交，180 秒后确定性 `BrokenBarrierError`。结果为 attempted=1、terminal=0、0 ranking/score/private evidence/report/model/network/online evaluator；这是 implementation-invalid，不是 efficacy negative。A_hold 永久烧毁，禁止 replay/retry/resample 或 same-source 新 cohort；无 promotion，M_search 仍未授权且未打开。MuSiQue portfolio efficacy 与 L5 仍为 unknown；公开终态 semantic SHA 为 `f1f51d93…3d2c`
+> - 最新 MuSiQue residual portfolio（备选 A）终止：`6dd53a19` / `c7e20674` 固定 same-source residual two-Q portfolio design 与实现，`0271f9e5` 在 source row、旧 private row 均为 0 次读取时预注册 continuation `[96,264)`，`96d779ce` 一次形成 A_form/F_search/A_hold/M_search 六块共 168 项。A_form 与 F_search 各完成 4080/4080 local terminal，形成 behavior-distinct 的 incumbent/challenger action，并由 `1b9d53c9` 在 A_hold 前提交；`47faa049` 再冻结 48-item A_hold 的 288 路单屏障运行，冻结时 A_hold/M_search 均 0 row/label。正式运行先消费 authorization 并完整反序列化 A_hold 48 行与 labels，但 committed runner 的 terminal list comprehension 对 lazy submit generator 逐项立即调用 `future.result()`：只有第 1 个 work unit 被提交并进入 288-party barrier，其余 287 个尚未提交，180 秒后确定性 `BrokenBarrierError`。结果为 attempted=1、terminal=0、0 ranking/score/private evidence/report/model/network/online evaluator；这是 implementation-invalid，不是 efficacy negative。A_hold 永久烧毁，禁止 replay/retry/resample 或 same-source 新 cohort；无 promotion，M_search 仍未授权且未打开。MuSiQue portfolio efficacy 与 L5 仍为 unknown；公开终态 semantic SHA 为 `f1f51d93…3d2c`。严格终态提交后，`98763f27` 才把 formation/A_hold/M_search 统一为 eager bulk submit→join，并通过 focused 16/16 与 grouped 66/66 tests；该修复只供未来独立 study，不授权重放 A_hold
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -1932,6 +1932,10 @@ maximum-width retrieval：committed code 以
 terminal policy 同时排除新的 MuSiQue evaluator attempt。没有 A_hold report 就没有 promotion，M_search 必须保持
 未授权、未打开。A/F action commitments 仍是有效的 prospective provenance，可在独立新领域被明确标为
 zero-shot action transfer 或 grammar transfer，但不能称为 promoted/active evaluator，更不能补写 MuSiQue L5。
+严格终态由 `db8db16d` 先行提交。其后 `98763f27` 才将三个 barrier path 统一为先 eager submit 完整
+party width、再逐一 join terminal；新 runner/test file SHA 分别为 `6c3bb16c…3f51` / `27194911…a29`，focused
+16/16 与相关 grouped 66/66 tests 均通过。该 postmortem 修复不改变旧 implementation binding，也不授权删除
+execution root 或重放 A_hold。
 公开 disposition 为
 [`musique_evaluator_portfolio_a_hold_implementation_failure_disposition_v1.json`](../manifests/musique_evaluator_portfolio_a_hold_implementation_failure_disposition_v1.json)，
 semantic SHA `f1f51d9343f1d9d134344dcdb93c9514ea34353a7714664d57a2c1d512803d2c`。
@@ -1948,7 +1952,7 @@ semantic SHA `f1f51d9343f1d9d134344dcdb93c9514ea34353a7714664d57a2c1d512803d2c`�
 | 完成但未晋升（fresh Hotpot L5） | behavior-distinct evaluator transition | A_form/F_search 的 program 与 observed action 均不同；A_hold 72/72 terminal，challenger 38/48、incumbent 41/48、净 −3，exact p=31/32，不 promotion、不 invalidation；M_search 未授权且未打开。同一 anchor 禁止换候选、补 gate 或重试 |
 | 严格终止（final Hotpot portfolio acquisition） | genuinely new two-Q evaluator mechanism + continuation cohort | 机制、实现和 `[156,324)` cohort 均先冻结；corrected call 消费 marker 并在 post-marker 内存选择后，因 private-root 父目录缺失在首个 `os.mkdir` 失败；0 block/locator/receipt/score/model/online evaluator。整段 window 永久烧毁，不 retry/replay/resample，不做 Hotpot v4；portfolio efficacy unknown，既有 claims 不变 |
 | 严格终止（MuSiQue residual portfolio A） | same-source residual two-Q evaluator test | `[96,264)` 在 row-zero preregistration 后一次 acquisition；A/F 各 4080/4080 terminal 并冻结 behavior-distinct actions；A_hold freeze 固定 288 路。正式调用消费 authorization、打开 48 项后，lazy-submit/early-result 的 committed ordering defect 使 barrier attempted=1/terminal=0；0 ranking/score/model/network。A_hold 烧毁、不 replay；无 promotion，M_search 永久未开；efficacy unknown，不追加同源 cohort |
-| 下一步（P0，不新增 gate） | 独立新 family/domain 的 fresh precommitted transfer test | 不再从 Hotpot 或 MuSiQue 同源连续抽样到成功。可把已冻结 A/F action commitments 作为 zero-shot transfer，或只转移 typed grammar 后在新域 formation；两者必须事前二选一、修复并合成复验 runner、一次闭合 fresh cohort，并明确不能反向改写两个 implementation/infrastructure-invalid 终态 |
+| 下一步（P0，不新增 gate） | 独立新 family/domain 的 fresh precommitted transfer test | 不再从 Hotpot 或 MuSiQue 同源连续抽样到成功。`98763f27` 已完成 eager bulk-submit 修复及 16/16 + 66/66 回归；下一 study 可把已冻结 A/F action commitments 作为 zero-shot transfer，或只转移 typed grammar 后在新域 formation，两者必须事前二选一、做该域非评分 preflight、一次闭合 fresh cohort，并明确不能反向改写两个 implementation/infrastructure-invalid 终态 |
 | 完成（exact-domain L2/L3 instance） | Replication C promotion、controls disposition 与 one-shot sealed | development 8/8 gain、四 fold 各 +2；operator-only output 8/8 exact match；sealed 4/4 gain、8 路最大并发、8/8 network-none verifier receipts、0 retry/replay/online judge；两条盲化事件完整披露，claim 限于固定 SEC-13F treatment |
 | 完成 | 冻结 evaluator-owned promotion policy | 已由 protocol 绑定完整 spec；candidate 只能收紧；对抗测试通过 |
 | 完成 | 收紧外部 action/fallback contract | 4 类 prompt/self-check lowering；6 类 unsupported op fail closed；observed fallback 不再由字符串伪造 |
@@ -3051,10 +3055,29 @@ formation receipt 在 A_hold 前提交且各为 4080/4080 terminal；A_hold free
 open 之后，该 cohort 不能通过修复代码重放；因为没有 terminal、score 或 transition，也不能把失败当成 evaluator
 阴性。M_search 没有授权或 artifact，继续保持未打开。
 
-这次闭合把下一步约束得更清楚：先在纯合成数据上修复 future bulk submission，并将回归测试绑定
-`attempted == terminal == barrier.parties`；随后若继续，只能使用独立新 family/domain 的 fresh preregistration。
+这次闭合把下一步约束得更清楚。终态提交后，`98763f27` 已在纯合成数据上修复 future bulk submission，并将
+formation/A_hold/M_search 三个路径统一绑定为完整 bulk submit 后才 join；focused 16/16 与相关 grouped 66/66
+tests 通过。该修复不回溯授权；随后若继续，只能使用独立新 family/domain 的 fresh preregistration。
 不得新建 MuSiQue continuation、把 M_search 充当 A_hold、或围绕同一 action 追加 gate。既有 MuSiQue M1、Hotpot
 family-out/L4/L5 claims 均不受影响；新 portfolio 的 MuSiQue efficacy 与 evaluator co-evolution 仍未知。
+
+### 12.7 A 终止后仍保持干净的备选测试
+
+本地盘点没有发现“零下载且 untouched”的 QA family。现有 HippoRAG reproduction rows 中，HotpotQA、MuSiQue、
+2WikiMultiHopQA 各 1000 项都已被历史流程使用；MuSiQue 虽还有未抽取 row，但 final same-source policy 禁止继续，
+Hotpot continuation 也已关闭。因此不能为了省下载把本地余量包装成 fresh family。
+
+若目标仍是直接检验 L5 与相对 HippoRAG 的增益，首选是下载 official 2Wiki 的另一个 fresh split，先按公开 ID/hash
+排除本地既有 1000 项，再对剩余集合做私有 HMAC selection；exact frozen A/F actions 与 corrected eager-submit runner
+必须在任何 row 打开前绑定。这样最贴近现有 source-support recall 与 official Hippo core，但只能声称 fresh-item
+family-out，不能声称模型从未接触 2Wiki family。更低污染的第二选择是 QASC：下载 official split 与 fact corpus，
+把两条 gold fact 只用于 join 后离线 recall；它是真正的新科学问答领域，但 paragraph/title 映射需事前机械固定，
+HippoRAG 只能作为 custom-dataset official-core 对照，不是官方 2Wiki benchmark。fresh NOAA GSOD 时间窗下载成本最低、
+时间污染也低，但 HippoRAG 不适用，只能补 typed-operator/retention 证据，不能替代 evaluator co-evolution L5。
+
+因此若继续当前主目标，建议顺序是 **fresh official 2Wiki → QASC → NOAA**。任何选择都只能有一个 row-zero
+preregistration、一个 fresh cohort 和一次终态；不得把 A 的 M_search、MuSiQue 余量、Hotpot continuation、SEC13F
+或 SkillLearn sealed 数据当作 backup。
 
 ## 附录 A：关键证据索引
 
