@@ -19,6 +19,9 @@
 > - 最新 frozen semantic financial candidate：提交 `c66e3a73` 将声明 TRAIN distribution 中的财务表格 evidence→question→typed answer operator、离线 DistilBERT QA/runtime assets 与 post-agent capability 固定；formation replay 为 candidate 3/3、历史 RAW 0/3，但明确是 `in_sample_formation_replay=true`、`cross_fit=false`、不授权因果或 prospective claim。提交 `2a8ade07` 随后把唯一 fresh treatment、recipe 与 split commitment 在读取 fresh outcome 前冻结
 > - 最新 prospective paired 结果：fresh split `9698dd65…a9f3` 中 9 个 RAW 与 `financial-analysis-4` 的 1 个 candidate 共 10 次 Plus 模型调用最大并发启动，评价全为本地 offline verifier；app scheduler 在 agent 完成后丢失，但三次事前冻结的 recovery/continuation 只恢复 post-agent semantic stage 与 verifier，模型 replay=0、operator replay=0、verifier replay=0。最终 active pair 为 RAW=false、candidate=true，`candidate_minus_raw=+1`，两份 observation、typed operator receipt 与 CTRF 均有效；final report=`e6bc247e…d389`。这是协议定义下的 single-item treatment-associated gain；完整 9-item physical audit 因一条 inactive temperature RAW 的冻结 `codex_turn_failed` 标记仍为 invalid（trace 实为 reconnect 后 `turn.completed`，但未覆盖原 observation），所以 1/9→projected 2/9 只作描述，不作 promotion。无新 gate、无 online judge、无 official HippoRAG adapter、sealed 未访问，仍无 incumbent
 > - 最新 SEC 13F period-out 多折复验：preregistration=`ab051822…454e6`、execution freeze=`20358ad1…9d3c`，8 个 measurement item 的 RAW/candidate 共 16 个物理调用按冻结上限同时启动，固定 Plus、同镜像/100-step budget、全本地 offline verifier、0 retry、0 online judge，4 个 sealed item 未访问。15 个 observation 完整有效；`financial-period-out-measurement-f1-r0` 的 RAW 虽收到一个 `turn.completed` 且 agent exit=0，却在退出审计中留下 1 个 residual process/TID，action-budget receipt 因而 fail closed。随后 recover-only 对 backend/model/operator/verifier 的调用均为 0，明确拒绝 replay。7 个完整 pair 上 candidate=2/7、RAW=1/7，均值差 `+1/7=+14.29pp`，candidate-only=1、RAW-only=0；但阳性只位于 fold 2，fold 0/1/3 的可比较差均为 0。把缺失 RAW 按最好/最坏情况界定后，完整 8-pair 差值只能落在 `[0,+12.5pp]`。因此本轮不是有效 primary positive，也没有证明多折稳定收益，不 promotion、不跑 controls/family-out/sealed。离线 failure attribution 又发现复用的 parent operator 把 TRAIN stock-class 尾部错误拼成一个 token，和 period-out 公开合同不一致；candidate 的 6 个首个可见失败正好是 2 个 stock-count scalar 与 4 个 increase-ranking。下一步是更换为 contract-derived typed SEC-13F operator 并使用全新 untouched measurement，不是继续补 gate。partial report=`d75d8d4f…ba7`
+> - 最新 Replication C promotion：contract-derived SEC-13F typed operator 在 fresh development 上完成 8/8 valid pair，RAW 0/8、candidate 8/8、8 gain/0 harm，四个 fold 各为 +2；固定候选随后被正式 promotion，未再修改 candidate 或 gate
+> - 最新 controls / family-out：operator-only 的 8 个输出逐字节匹配 Replication C candidate output，skill-only 因 host verifier leaf 权限与 `--cap-drop ALL` 的已定位 infrastructure defect 得到 7 个有效失败、1 个 unresolved；该批固定为 `executed_incomplete_no_retry`、不补跑，单独 disposition 认定 output-level operator sufficiency 满足 promotion condition。family-out 因没有同构 proxy/adapter 固定为 `not_applicable_scope_mismatch_no_proxy`，不产生 transfer claim
+> - 最新 sealed 结果：4 个预提交 sealed item 的 RAW/candidate 共 8 个 Plus 调用以 8 路最大并发一次完成，离线 verifier、0 retry/replay/resample/provider switch/online judge；4/4 pair valid，RAW 0/4、candidate 4/4、4 gain/0 harm。4 个 candidate 均有 post-agent typed-operator evidence，8/8 容器均在 verifier materialize 前断网并在 verifier 后保持 network-none。严格盲化有两个必须披露的程序性事件：授权前曾对 private pack 做过一次只返回既有 digest 的 SHA stream；正式批次启动后，host `ps` 诊断又意外显示 sealed instruction text。两者均发生在 candidate/freeze 不可变之后，未暴露 gold/outcome、未触发 adaptation 或补跑；因此结果可作固定候选的 paired descriptive confirmation，但不能声称严格 blind holdout
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -1681,10 +1684,44 @@ regression 和 consumed diagnosis，不能参与 selection threshold、promotion
 未来 verifier 应只持久化结构化 failure category/hash，不保存 assertion value diff。这是 future evidence
 hygiene 修复，不改变本轮 success，也不是新的 performance gate。
 
+### 8.14 exact-domain P0 已关闭：Replication C promotion 与 sealed 形成完整正复验
+
+8.13 的结论只适用于已消费的 parent operator。随后没有在同一 measurement 上补关键词或加 gate，而是把
+公开 period-out contract 编译为 closed typed operator：完整 stock-class ontology、latest non-NOTICE
+eligible accession、NFKC/punctuation-insensitive identity、CUSIP/manager aggregate、deterministic rank/tie-break
+均成为可执行语义。候选、recipe、source closure 与 8 个 development pair 在 fresh root 前冻结；正式批次
+16 个 Plus 调用一次最大并发完成，8/8 pair valid，RAW 0/8、candidate 8/8，四个 fold 各为 +2，0 harm。
+这一次满足了预注册 promotion decision，而不是修改 evaluator 或把旧 incomplete rows 拼接成 positive。
+
+promotion 后的 controls 没有陷入继续补 gate。operator-only 8/8 产生与 development candidate 完全相同的
+output SHA，直接支持 output-level operator sufficiency。skill-only arm 的 verifier leaf 由 UID 1000、mode 0755
+创建，而容器又 `--cap-drop ALL`；写失败被旧 verifier 的 unconditional exit 0 吞掉，造成 7 个有效失败与
+1 个 unresolved。该批按原样固定为 `executed_incomplete_no_retry`，不修后补跑；separate disposition 把它
+解释为 control infrastructure defect，并接受 operator-only 的完整因果输出闭包。family-out 同样没有伪造
+HippoRAG 或近似 proxy：任务范围没有同构 official adapter，故固定 N/A，不声称 family transfer。
+
+sealed preparation 在单独 post-controls authorization 后才开始。access journal 以 `O_EXCL` 写 claim、fsync
+文件与父目录，再读取一次 private pack；pandas/streaming 两个本地 oracle 对 4 项完全一致。执行 freeze
+绑定完整 runtime source roots、candidate/provider、payload/gold/materialization/prewarm、4 对/8 calls 与 one-shot
+launcher；正式 Plus 批次 8 路同时提交，0 retry/replay/resample/switch。最终 4/4 pair valid，RAW 0/4、
+candidate 4/4、4 gain/0 harm；4 份 candidate runtime evidence 证明 operator 真正在 agent exit 后执行，8 份
+hash-only network receipt 证明所有容器都先断开 provider network、8 方 barrier 到齐后才 materialize `/tests`，
+offline verifier 后仍为 network-none。
+
+这项 sealed 证据有两条必须同时保留的盲化限定。第一，authorization 前曾发生一次只返回已提交 digest、没有
+结构化/语义字段的 private-pack SHA stream，故严格 zero-byte claim 已被正式放弃。第二，正式 frozen batch
+启动后，监督诊断的 host process-table 检查意外展开 sealed instruction text；gold、expected output、answer、
+model response 与 outcome 均未显示。第二事件发生时 candidate、freeze、assignment 与 one-shot batch 已不可变，
+之后没有 adaptation、重试或 provider switch，所以它不改变本批 paired treatment contrast；但监督通道的严格
+query blindness 已失效。最窄、可审计的结论因此是：**固定 SEC-13F typed treatment 在声明的 Replication C
+development 与 sealed cohort 上分别取得 8/8 和 4/4 paired gain；这是 exact-domain L2 与 unseen-instance L3
+confirmation，不是严格 blind、family-wide transfer、一般 recursive learning 或 RQGM 结论。**
+
 ## 九、下一步优先级与硬验收标准
 
 | 优先级 | 工作 | 硬验收标准 |
 |---|---|---|
+| 完成（exact-domain L2/L3 instance） | Replication C promotion、controls disposition 与 one-shot sealed | development 8/8 gain、四 fold 各 +2；operator-only output 8/8 exact match；sealed 4/4 gain、8 路最大并发、8/8 network-none verifier receipts、0 retry/replay/online judge；两条盲化事件完整披露，claim 限于固定 SEC-13F treatment |
 | 完成 | 冻结 evaluator-owned promotion policy | 已由 protocol 绑定完整 spec；candidate 只能收紧；对抗测试通过 |
 | 完成 | 收紧外部 action/fallback contract | 4 类 prompt/self-check lowering；6 类 unsupported op fail closed；observed fallback 不再由字符串伪造 |
 | 完成 | 冻结 offline-ready 范围 | 86-item manifests 保留旧 split；readiness matrix/static preflight 均 `blockers=[]`，无模型调用 |
@@ -2164,8 +2201,8 @@ activation；held-out causal activation precision 的分母则是 evidence-valid
 |---|---|---|
 | L0 wiring | schema、repair、off/on、guard、archive transition 的机械链路已连接 | 达到：typed operator feasibility 9/9，production selection integration v2 13/13 + 12/12 tamper + exact replay；typed-portable formal integration 又以一次 run + exact replay、3 项真实 Docker canary、production loader/cleanup 闭合 pre-agent 只读 sidecar。它不覆盖 write/render/move task effect |
 | L1 mechanism live | 真实外部任务中 proposal/repair/treatment/gate 全链路完成 | 达到：v3.20 完成 60/60 valid receipts；execution-contract/organize 路径闭合实际 action；独立 financial path 又在 agent 后执行 bounded typed operator，并在 fresh active pair 留下 operator/verifier evidence |
-| L2 validation learning | clean held-out validation 上有可晋级净收益 | **达到单题因果存在性，未达到可晋级层级**：financial-4 为 0→1；后续 SEC 13F period-out 7 个完整 pair 为 +1/7 且无 observed regression，但唯一 gain 只在 fold 2，另有 1 个 RAW invalid，八对缺失值界 `[0,+12.5pp]`。两个独立 trajectories、无 operator 前输出 hash，因此无稳定多折净收益、promotion 或 incumbent |
-| L3 prospective generalization | frozen incumbent 在 unseen instance/family 上保持收益 | 未达到；period-out 是 candidate-level instance/period transfer diagnostic，不是 promoted incumbent retention，且结果没有跨多个 fold 稳定为正 |
+| L2 validation learning | clean held-out validation 上有可晋级净收益 | **在 exact SEC-13F workstream 达到**：contract-derived candidate 的 Replication C development 为 8/8 valid gains、四 fold 各 +2、0 harm，并产生正式 promotion；旧 financial-4 与 parent period-out incomplete 只保留为历史诊断，不与本结果拼接 |
+| L3 prospective generalization | frozen incumbent 在 unseen instance/family 上保持收益 | **达到同一 exact domain 的 unseen-instance 层，不到 family 层**：promotion 后冻结 candidate 在 4 个预提交 sealed item 上为 4/4 paired gain、0 harm；但 post-launch instruction exposure 使严格 supervising-channel blindness 失败，family-out/official HippoRAG 又因无同构 adapter 为 N/A，故不支持 broad transfer |
 | L4 self-evolution | 多代 retained improvement，且 recursion ablation 有因果贡献 | 未达到 |
 | L5 evaluator co-evolution | anchor-guided evaluator replacement 与 selective erasure 改善搜索 | 未达到 |
 
@@ -2517,8 +2554,46 @@ co-evolution 未开始。
 > regression；但该批次缺一条有效 RAW、完整差值下界为 0，且正差未跨 fold 复制，所以仍未证明冻结候选能
 > 产生可晋级的稳定净收益，更未证明 retained self-evolution、Red Queen 式多谱系或 evaluator 共演化。**
 
+### 12.1 2026-07-16 最终状态修订
+
+上面的纵向叙述保留了每个已消费时间切片，但“仍无 incumbent、sealed 未开始”的旧结论已经被 Replication C
+取代。当前最强证据链是：全新 contract-derived candidate 在 development 上 8/8 paired gain 并 promotion；
+operator-only control 对 8/8 candidate output 做 exact SHA 复现；promotion 后冻结的 candidate 在 4 个 sealed
+item 上再次 4/4 paired gain。正式 sealed 批次只有 8 个物理模型调用、峰值并发 8，RAW 0/4、candidate 4/4，
+离线 verifier、0 online judge、0 retry/replay/resample/provider switch；所有 verifier 都在 agent/operator 完成且
+容器断网后才看到 tests/gold。
+
+这关闭了“typed action 是否只能改变 trace、不能产生稳定 task utility”的 exact-domain P0，也把 claim ladder
+推进到 SEC-13F workstream 的 L2 和同域 unseen-instance L3。它没有证明 Assumption Agent 的一般 hypothesis
+search、recursive repair 或 archive retention 自身产生了这些收益：本次获益对象是人工收敛并冻结的 typed
+domain operator。family-out 与 official HippoRAG 因无同构 adapter 为 N/A，不能用 RAW 之外的伪代理补齐。
+
+两个盲化事件又要求进一步收窄措辞。授权前的 digest-only private-pack stream 违反程序性 zero-byte 边界；
+post-launch `ps` 又使监督通道看到 sealed instruction text。前者没有新增 digest 信息，后者发生在 candidate、
+freeze、assignment 和唯一批次都不可变之后；两者均未显示 gold/outcome，也没有带来 adaptation 或补跑。
+所以 4/4 结果仍是有效的固定 treatment paired observation，但不再是严格 blind holdout。后续不能重跑这 4 项
+来“洗掉”事件；若要形成更宽论文主张，应在新的 period/source、重新建立的 sealed cohort 上由不读取 host
+process argv 的独立执行器完成，而不是继续给当前候选补 gate。
+
+因此，距离总目标仍缺三件不同层级的东西：第一，把同类 typed operator 的形成过程从人工诊断收敛提升为
+TRAIN-only、可重复的 candidate search；第二，在真正同构的 family-out/adapter 上验证跨域保留，而不是把 N/A
+写成成功；第三，证明 recursive/no-recursive 的 retained multi-generation 差异与 evaluator co-evolution。
+当前 SEC-13F workstream 已完成，应停止在其 sealed item 上继续优化；下一研究单元必须是新的数据与新的
+预注册 claim scope，而不是新的 gate。
+
 ## 附录 A：关键证据索引
 
+- Replication C promotion / controls / sealed final chain：
+  [`promotion decision`](../manifests/financial_sec13f_contract_v2_replication_c_promotion_decision_v1.json)；
+  [`controls disposition`](../manifests/financial_sec13f_contract_v2_controls_disposition_v1.json)；
+  [`family-out disposition`](../manifests/financial_sec13f_contract_v2_family_out_applicability_disposition_v1.json)；
+  [`sealed preregistration`](../manifests/financial_sec13f_contract_v2_sealed_preregistration_v1.json)；
+  [`sealed authorization`](../manifests/financial_sec13f_contract_v2_sealed_authorization_v1.json)；
+  [`sealed execution freeze`](../manifests/financial_sec13f_contract_v2_replication_c_sealed_execution_freeze_v1.json)；
+  [`sealed report`](../artifacts/financial_sec13f_contract_v2_replication_c_sealed_formal_v1/sealed.report.json)；
+  [`sealed result disposition`](../manifests/financial_sec13f_contract_v2_replication_c_sealed_result_v1.json)；
+  [`preauthorization digest incident`](../manifests/financial_sec13f_contract_v2_sealed_hash_only_access_incident_v1.json)；
+  [`post-launch instruction exposure incident`](../manifests/financial_sec13f_contract_v2_sealed_runtime_instruction_exposure_incident_v1.json)
 - legacy 代码：[`assumption_os/`](../../assumption_os/)
 - legacy 自我演化评估：
   [`codex_gpt_advice_assessment_20260707.md`](../../reconstruction/md/codex_gpt_advice_assessment_20260707.md)
