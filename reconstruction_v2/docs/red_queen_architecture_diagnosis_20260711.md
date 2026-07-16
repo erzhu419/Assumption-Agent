@@ -2697,7 +2697,18 @@ gold-safe source view、独立 private index 与 public receipt；freeze 随后 
 authorization，但没有解析 gold、没有 task/scoring call，也没有 performance 或 family-out claim。custody、
 private-index binding、freeze、worker 与 controller hashes 分别为 `d8ec4968...6e44`、`2b096194...9483`、
 `852ea437...78a4`、`9b34ebd5...0f6a` 与 `4b043ed0...29f5`；`formal_execution` 和全局 consumption marker
-均尚不存在。下一步只允许先公开提交这些 hash-only evidence，再执行唯一的一批 18 call。
+均尚不存在。这些 hash-only evidence 随后已在任何 outcome 前公开提交。
+
+唯一的 formal 启动随后在进入任何 benchmark 执行前关闭：公开绑定与 credential preflight 通过后，
+official HippoRAG overlay venv 的离线 runtime-identity 子进程未启动成功。失败位置在 authorization
+consumption、Plus/Pro canary、task/network call、gold parse、prediction terminal 和 scoring 之前；因此相应计数
+均为 0，`formal_execution` 与 consumption marker 均没有形成。事后不读数据、不评分的同一探针
+5/5 通过，但这不能确定首次启动失败的根因，也不能追溯性恢复 formal validity。根据事前
+`retry/replay/resample=0` ，原 6-item cohort 已作为 `closed_efficacy_unknown` 封存：这不是负效果，
+也不允许删除 failure receipt 或重启同一批。下一次 measurement 必须先在无数据 synthetic 环境中把
+可执行子进程 qualification 与 formal-entry 的确定性 filesystem attestation 分离，再为全新预提交样本建立
+新 root；不为这个失败增加 retry gate。见
+[`prelaunch failure disposition`](../manifests/musique_formal_development_prelaunch_failure_v1.json)。
 
 NOAA TRAIN-only typed formation 随后实际完成，而没有读取 development/sealed。冻结 grammar 枚举 864 个
 七节点 relational program（上限 4096/8），先 type-check，再按 12 个匿名 TRAIN item 的完整输出行为 hash
