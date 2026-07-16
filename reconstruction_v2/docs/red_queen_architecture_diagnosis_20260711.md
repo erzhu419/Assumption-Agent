@@ -2670,23 +2670,33 @@ program hash 为 `499aa46a...a3dd`，formation receipt 为 `cda7c209...138d`。�
 contract-derived relational DSL 内自动形成可执行 operator”，不是无约束自然语言语义发现，也仍不构成
 development performance。见 [`formation result`](../manifests/noaa_gsod_typed_relational_formation_result_v1.json)。
 
-NOAA development 的一次性执行边界也已在真实访问前完成，但尚未启动。monolithic acquisition pack 只能由
-source custodian 打开；它将只导出 6 份匿名、最小列 `STATION/DATE/PRCP` 输入和一份无 gold/oracle/sealed
+NOAA development 随后在上述边界下完成唯一一次正式执行。monolithic acquisition pack 只由 source
+custodian 打开；它只导出 6 份匿名、最小列 `STATION/DATE/PRCP` 输入和一份无 gold/oracle/sealed
 mapping 的 private index。后续 freeze/controller 不接受 pack path，只接受该 source view，并形成精确的
 6 item ×（RAW model、typed-agent model、local operator-only）=18 work-unit Cartesian grid。pre-run public
 freeze 绑定 TRAIN preparation、formed program、source-view tree、worker/controller schema、provider identity、
-公开 acquisition receipt 以及固定 23-file executable implementation set（含三个 CLI entrypoint）；runner 在任何 credential、canary
-或 task call 前重新计算
-live implementation hash。provider route 只允许 `https://ruoli.dev` 上 exact `gpt-5.4-mini`，先以不含任务内容
+公开 acquisition receipt 以及固定 23-file executable implementation set（含三个 CLI entrypoint）；runner
+在任何 credential、canary 或 task call 前重新计算 live implementation hash。provider route 只允许
+`https://ruoli.dev` 上 exact `gpt-5.4-mini`，先以不含任务内容
 的 Plus canary 选择整批 Plus 或整批 Pro；task 中途不切换，12 个 model request 在调用前一次性提交 hash，
 18 个 claim 先落盘再并发提交，retry/replay/resample 均为 0。全部 terminal join 后才运行两套本地 oracle，
 完整 canonical request body 受同一 64 KiB UTF-8 byte budget 约束，而不再伪称未执行的 token budget。
 公开报告只保留 arm 总数和逐 item ITT 配对 gain/harm/tie/incomplete 计数；invalid/transport failure 是已分配
 terminal 的 incorrect，而不是从 paired denominator 删除。formal 入口也不再接受 transport/oracle 注入，
 并分别报告 execution integrity、paired completeness 与 formal evidence validity。当前 source/freeze/runner
-只通过 36 项
-隔离与失效关闭测试，真实 source export、pre-run freeze、provider call 和 development score 都仍为 0；因此
-此处只关闭执行架构缺口，不提前记作 L2 收益或 promotion 证据。
+通过 36 项隔离与失效关闭测试。
+
+正式 run 中 Plus canary 不可用，事前规则因此在读取任务前把完整 12-call model batch 固定到 Pro；两次 canary
+加 12 次 task call 共 14 次 model call，online judge 为 0，12 次 offline oracle 一致，observed model
+concurrency 为 12，18/18 terminal 全部 join，retry/replay/resample 仍为 0。三臂 contract-valid 与 exact 都是
+6/6；agent-minus-RAW、operator-only-minus-RAW 和 agent-minus-operator-only 均为 0 gain / 0 harm / 6 tie，
+paired net gain 全为 0。formal evidence validity 为真只表示执行和比较完整，不表示正效应：这个 saturated
+relational task 上 RAW 已经全对，因此没有建立 L2 causal gain，也不授权 promotion 或 sealed。source receipt、
+pre-run freeze、formal report 与 result hashes 分别为 `d40d6867...c179`、`de9ba630...43e1`、
+`f5dbdc89...c7b3` 与 `50c37a2d...b29`；见 [`source receipt`](../manifests/noaa_gsod_development_source_receipt_v1.json)、
+[`pre-run freeze`](../manifests/noaa_gsod_formal_development_pre_run_freeze_v2.json) 和
+[`formal result`](../manifests/noaa_gsod_formal_development_result_v1.json)。这条零收益结果终止 NOAA 上继续调
+prompt、补关键词或补 gate 的路线；下一次因果 measurement 必须换到有真实 retrieval bottleneck 的原生 QA。
 
 第一次 direct-script source export 还暴露出一个纯启动器缺陷：`scripts/` 作为 `sys.path[0]` 时无法导入项目
 package。该进程在 import 阶段、读取任何 private pack 之前即退出，所以没有形成一次被消费的 development
