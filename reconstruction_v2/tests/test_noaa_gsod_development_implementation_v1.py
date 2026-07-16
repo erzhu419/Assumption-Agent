@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 import shutil
+import subprocess
+import sys
 
 import pytest
 
@@ -72,3 +74,20 @@ def test_missing_or_symlinked_fixed_dependency_fails_closed(tmp_path: Path) -> N
     target.symlink_to(external)
     with pytest.raises(NoaaGsodError, match="symbolic link"):
         build_development_implementation_set(repository_root=repository)
+
+
+def test_committed_cli_entrypoints_import_from_a_direct_script_launch() -> None:
+    scripts = (
+        "scripts/export_noaa_gsod_development_source_v1.py",
+        "scripts/prepare_noaa_gsod_development_freeze_v1.py",
+        "scripts/run_noaa_gsod_formal_development_v1.py",
+    )
+    for relative_path in scripts:
+        completed = subprocess.run(
+            [sys.executable, str(PROJECT / relative_path), "--help"],
+            cwd=PROJECT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert completed.returncode == 0, completed.stderr

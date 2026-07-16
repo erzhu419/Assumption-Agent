@@ -2675,7 +2675,7 @@ source custodian 打开；它将只导出 6 份匿名、最小列 `STATION/DATE/
 mapping 的 private index。后续 freeze/controller 不接受 pack path，只接受该 source view，并形成精确的
 6 item ×（RAW model、typed-agent model、local operator-only）=18 work-unit Cartesian grid。pre-run public
 freeze 绑定 TRAIN preparation、formed program、source-view tree、worker/controller schema、provider identity、
-公开 acquisition receipt 以及固定 20-file executable implementation set；runner 在任何 credential、canary
+公开 acquisition receipt 以及固定 23-file executable implementation set（含三个 CLI entrypoint）；runner 在任何 credential、canary
 或 task call 前重新计算
 live implementation hash。provider route 只允许 `https://ruoli.dev` 上 exact `gpt-5.4-mini`，先以不含任务内容
 的 Plus canary 选择整批 Plus 或整批 Pro；task 中途不切换，12 个 model request 在调用前一次性提交 hash，
@@ -2684,9 +2684,14 @@ live implementation hash。provider route 只允许 `https://ruoli.dev` 上 exac
 公开报告只保留 arm 总数和逐 item ITT 配对 gain/harm/tie/incomplete 计数；invalid/transport failure 是已分配
 terminal 的 incorrect，而不是从 paired denominator 删除。formal 入口也不再接受 transport/oracle 注入，
 并分别报告 execution integrity、paired completeness 与 formal evidence validity。当前 source/freeze/runner
-只通过 35 项
+只通过 36 项
 隔离与失效关闭测试，真实 source export、pre-run freeze、provider call 和 development score 都仍为 0；因此
 此处只关闭执行架构缺口，不提前记作 L2 收益或 promotion 证据。
+
+第一次 direct-script source export 还暴露出一个纯启动器缺陷：`scripts/` 作为 `sys.path[0]` 时无法导入项目
+package。该进程在 import 阶段、读取任何 private pack 之前即退出，所以没有形成一次被消费的 development
+measurement；三个 entrypoint 随后统一显式绑定 project root，并纳入上述 implementation set 与 direct-launch
+测试。
 
 还必须限缩 NOAA 后续 sealed 的含义：该 acquisition 的 selection seed、算法与官方源均已公开，第三方可以
 离线重建 split；它只有“执行流程没有把 sealed 内容交给 development controller”的程序性 custody，不具有

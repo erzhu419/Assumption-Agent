@@ -39,6 +39,9 @@ IMPLEMENTATION_RELATIVE_PATHS = tuple(
             "replication_runtime/noaa_gsod_v1/train_export.py",
             "replication_runtime/noaa_gsod_v1/train_schemas.py",
             "replication_runtime/noaa_gsod_v1/typed_relational.py",
+            "scripts/export_noaa_gsod_development_source_v1.py",
+            "scripts/prepare_noaa_gsod_development_freeze_v1.py",
+            "scripts/run_noaa_gsod_formal_development_v1.py",
         }
     )
 )
