@@ -580,6 +580,7 @@ class FinancialSec13FContractSubprocessBackendV2(SkillLearnSubprocessBackend):
                 "financial_sec13f_contract_runtime_receipt_invalid"
             ) from error
         finally:
+            cleanup_error: Exception | None = None
             try:
                 self._run_checked(
                     delegate,
@@ -595,11 +596,20 @@ class FinancialSec13FContractSubprocessBackendV2(SkillLearnSubprocessBackend):
                         _CONTAINER_RECEIPT,
                     ],
                 )
+            except Exception as error:
+                cleanup_error = error
+            # The host directory contains the ephemeral typed plan and receipt.
+            # Remove it even when container cleanup fails; nesting this call in
+            # the Docker try block would leave raw plan material in /tmp.
+            try:
                 _remove_ephemeral_host_root_v2(root)
             except Exception as error:
+                if cleanup_error is None:
+                    cleanup_error = error
+            if cleanup_error is not None:
                 raise SkillLearnAgentTerminalError(
                     "financial_sec13f_contract_runtime_cleanup_invalid"
-                ) from error
+                ) from cleanup_error
         if pending_evidence is None:
             raise SkillLearnAgentTerminalError(
                 "financial_sec13f_contract_runtime_receipt_invalid"
