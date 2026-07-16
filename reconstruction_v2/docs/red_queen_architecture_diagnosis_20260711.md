@@ -25,6 +25,7 @@
 > - 最新 MuSiQue generation-one 结果：提交 `aac4ceb3` 先冻结 official HippoRAG v2 filesystem attestation；`8702c369` / `97644e21` 随后在读取 outcome 前预注册并一次形成 official DEV 的 96-item、8×12 block HMAC custody；`fdef9d45` 只在 F1 的 12 项上形成 frozen typed program；`7b38a23d` 再冻结 M1 的 12×3=36 路 one-shot retrieval-only comparison，`4617a976` 只公开 aggregate result。M1 official support recall@5 为 RAW `7/29`、P `14/29`、official HippoRAG `14/29`；P−RAW 净增 7 个 support hit，逐题为 7 gain / 1 harm / 4 tie，按事前 strict-positive policy 产生 `promote_P_to_retained_generation_one` disposition。36/36 retrieval terminal 在评分前 join，0 Ruoli/external-network、0 study-level answer-generator、0 online evaluator、0 retry/replay/resample；official arm 内部保留冻结本地 LLM/OpenIE。postflight fresh filesystem attestation 通过。该 M1 阳性本身不覆盖 F1 cross-fit 稳定性（program 与 behavior 均为 false）、M2 retention、evaluator co-evolution 或 family-out；后续 family-out 见下。第三方 runtime 依赖仍只绑定 distribution metadata tree，而非完整第三方源码/行为。旧 6-item MuSiQue cohort 没有重放；当时只继续形成 Q/M2，没有在 M1 上补 gate
 > - 最新 MuSiQue generation-two / evaluator 结果：Q 已在 F2 形成，但 one-shot M2 在授权消费、exact M2 打开及 36/36 unit 启动后，被当前 managed sandbox 禁止 bubblewrap 创建 `NETLINK_ROUTE` socket；24 个 terminal 完成、0 score，M2 以 infrastructure-invalid / efficacy-unknown 终态关闭且不重放。该 stderr digest 已由不含 benchmark/model 的最小 bwrap postdiagnostic 精确复现，P 的 M1 晋升不受影响。独立 L5 链随后完成：A_form 形成 `micro_worst_v1` challenger，但 incumbent/challenger 在 A_form 选择同一 program；A_hold 两者均为 `12/29`、0.9 Wilson 下界均为 `0.304297...`，challenger 不晋升；M3 active 仍为 incumbent，`18/29` 对 `18/29`、净收益 0。因此本轮没有证明 recursive retention，也没有发生 evaluator co-evolution；不再补 gate 或重跑已消费 block
 > - 最新 MuSiQue→HotpotQA family-out：提交 `7306f333` 固定 acquisition/runner，`87fd35f7` 在与正式执行相同的 host 权限下验证 bwrap network namespace+writable-bind，`6852f15f` 在打开任何 row 前预注册，`bc6afb6b` 从固定 SHA 的 Hugging Face-hosted HotpotQA distractor-validation conversion 中以私有 HMAC 一次选取 12 项，`86242994` 冻结同一 RAW/P/official-HippoRAG 三臂后只执行一次，`d2981542` 只公开 aggregate result。frozen P 未适配或重形成；36/36 retrieval terminal 由单一 36-party barrier 释放，全部 join 与 fresh runtime postflight 后才离线评分。source-provided support recall@5 为 RAW `11/24`、P `21/24`、official HippoRAG `20/24`；P−RAW 为 +10 support hits / 7 gain / 0 harm / 5 tie，P−official 为 +1 / 4 gain / 2 harm / 6 tie。0 Ruoli/external-network、0 study-level answer-generator、0 online evaluator、0 retry/replay/resample；official arm 内部保留冻结本地 LLM/OpenIE。该结果支持 frozen P 的小样本 cross-family retrieval transfer，不声称 Parquet 与原始 CMU JSON 等价、answer generation、M2 recursive retention 或 L5 evaluator co-evolution
+> - 最新 fresh Hotpot L4/L5：提交 `aedc0bd3` 固定六分区 acquisition、P/Q retained-recursion runner 与行为可识别的 evaluator protocol；`126ba352` 在 row access 前预注册 F_Q=36 及 M_L4/A_form/A_hold/F_search/M_search 各 24，`1f4f6b42` 一次取得 156 项且排除旧 Hotpot 12 项。纯合成文本的 24-worker official-HippoRAG capacity diagnostic 为 24/24 terminal + fresh postflight，未访问私有/评分数据。Q 只在 F_Q 形成；其四折 program/behavior 不稳定但不作为 gate。untouched M_L4 的 96/96 terminal + postflight 后，RAW/P/Q/P+Q/official support hit 为 `22/48`、`36/48`、`40/48`、`43/48`、`31/48`；P+Q−Q=+3、P+Q−P=+7、P+Q−official=+12，P support 只遗忘 1 个。故 L4 在这一 retrieval-only fresh cohort 的窄定义上达到，但不声称统计优越、family-out、等算力或端到端 QA。L5 的 A_form/F_search 形成 program 与 observed-action 均不同的 evaluator contrast；untouched A_hold 72/72 terminal 后 challenger `38/48`、incumbent `41/48`、净 −3，exact sign-flip `p=0.96875`，不晋升、不 invalidation，M_search 未授权且未打开。同一 anchor 不重试、不换候选、不补 gate；L5 仍未达到
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -1823,6 +1824,53 @@ metric 只覆盖 retrieval support recall，不覆盖 answer generation、端到
 该阳性也不能修复已经不可重放的 M2：recursive retention 仍 unknown；L5 challenger 仍未晋升，evaluator
 co-evolution 仍未发生。下一研究缺口因此回到真正的 L4/L5，而不是继续重跑 Hotpot、调整 P 或增加 retrieval gate。
 
+### 8.18 fresh Hotpot 多代保留成立；evaluator challenger 被 untouched anchor 否决
+
+这轮没有重用旧 MuSiQue M2/L5，也没有把上一批 12-item Hotpot family-out 当作新 measurement。提交
+`aedc0bd3` 先固定 acquisition、L4 与 L5 实现及对抗测试；审计在任何新 private block 打开前发现并修复了
+两个会破坏因果解释的问题：Q 必须重新绑定 acquisition/F_Q/P/one-shot marker，evaluator 的 action hash 必须只由
+实际 Q 与 P+Q rankings 决定而不能混入 program ID。最终 formal cache 又强制 exact ordered 84-program pool、每个
+program exact 24 rows 与 source commitment。38 项相关回归全部通过；另一次只含合成公开文本的 24-worker
+official-HippoRAG capacity diagnostic 完成 24/24 terminal 与 fresh postflight，未访问题目、label 或 score，因而
+保留 M_L4=24，而不是为规避资源风险把样本缩回 12。这里的 clean-CLI / local-custody 仍不是 adversarial-host
+integrity proof，但 action-identifiability 已不再只是 program-ID inequality。
+
+`126ba352` 随后在 source row 与旧 private pack 都未打开时提交六分区 preregistration。固定 HF Parquet 中一次
+private-HMAC selection 形成 F_Q=36，M_L4/A_form/A_hold/F_search/M_search 各 24，共 156 项；全部旧 Hotpot 12 项
+在新 HMAC 排序前精确排除，公开 acquisition 不保存 ID、question、corpus、support 或私有路径。`1f4f6b42`
+提交该 acquisition 后，Q formation 才消费固定 marker 并打开 F_Q。冻结 Q 在 F_Q 上 P+Q 命中 64/72，Q direct
+63/72，相对 P 新增 10、相对 Q 保留 4、P forgetting=0；但四折 selected program 与完整 behavior 均不稳定。
+预注册明确把 cross-fit 作为描述而非 gate，所以没有重选 Q、调 prompt、补关键词或重采样；`62005707` 直接冻结
+第一次形成的 Q。
+
+`2e0da52c` 在 M_L4 打开前冻结 exact P/Q、positive M1 lineage、block commitment、runtime、execution root 与
+24×4=96 work-unit single barrier。一次正式执行完成 96/96 terminal；RAW/P/Q/official 是物理 retrieval，P+Q 只在
+全部 terminal join 与 fresh runtime postflight 通过后由 P/Q rankings 做固定 RRF，再用 source-provided support
+离线评分。`4caa37fc` 的聚合结果为：RAW 22/48，retained P 36/48，novel Q 40/48，P+Q 43/48，official
+HippoRAG 31/48。primary retained contribution P+Q−Q 为 +3（4 gain / 1 harm / 19 tie）；novel contribution
+P+Q−P 为 +7（6/1/17）；只在 1 个 item 丢失 1 个 P support。因而这个 fresh retrieval-only cohort 同时观察到
+旧 P 与新 Q 对组合的正边际贡献，关闭了此前由 MuSiQue M2 infrastructure failure 留下的 L4 efficacy 缺口。
+P+Q−official 为 +12（13/3/8），明显强于旧 12-item family-out 的 +1，但协议没有预注册 population-level
+significance 或 compute matching；因此只写 fixed-cohort positive net，不写 statistical superiority、广义
+family-out、等算力、answer generation 或完整 HotpotQA 优越。
+
+L5 没有因为 L4 阳性而调 evaluator。A_form 对 exact 84-program pool 形成 incumbent `q_direct_micro_v2` 与
+challenger `combined_novelty_balanced_v2`；两者在 A_form 的 program 与 observed action 都不同。F_search 又在
+A_hold 打开前冻结未来 incumbent/challenger program 与 behavior hash，`measurable_contrast=true`；不存在相同行为
+时换 fallback 的路径。`4dd34197` 冻结 A_hold 的 P、两组 A-form Q action 与 24×3=72 barrier；一次执行 72/72
+terminal 后才离线读取 support。结果 incumbent P+Q 为 41/48，challenger P+Q 为 38/48，challenger−incumbent
+=−3，1 gain / 4 harm / 19 tie，单侧 exact paired sign-flip p=31/32=0.96875。唯一 promotion criterion 因而为
+false；epoch 保持 `q_direct_micro_v2`，dependent score 没有被 invalidation，independent-source record 保留。
+`18b94c44` 明确记录 M_search_authorized=false、M_search_opened=false。
+
+所以当前 claim ladder 必须非对称更新：**L4 在这一窄的 Hotpot source-support retrieval 定义上达到；L5 仍未
+达到。** 后者不是 wiring 或 identifiability 缺失，而是一个有效、可比较、untouched anchor 上的真实负结果。
+不得在同一 A_hold 上换 challenger、降低 alpha、追加 gate 或打开 M_search。若继续研究 L5，只能先用已消费的
+formation/anchor 作为设计数据，提出实质不同且可执行的 evaluator objective，再从新 acquisition 同时取得新的
+A_form/F_search/A_hold/M_search；不能把连续尝试到成功包装成 evaluator co-evolution。更高层目标还缺：成功的
+evaluator epoch replacement、selective invalidation 实际发生，以及被晋升 evaluator 在预先冻结的新 search
+measurement 上改善后续 candidate search。
+
 ## 九、下一步优先级与硬验收标准
 
 | 优先级 | 工作 | 硬验收标准 |
@@ -1831,7 +1879,9 @@ co-evolution 仍未发生。下一研究缺口因此回到真正的 L4/L5，而�
 | 完成但未晋升（MuSiQue L5） | A_form/A_hold evaluator transition 与 F3→M3 utility | A_form/F3/A_hold/M3 各 84×12=1008 local terminal；challenger=`micro_worst_v1`，A_hold 12/29 vs 12/29、Wilson lower bound 相同、not promoted；M3 active=incumbent，18/29 vs 18/29、net 0；只可声称 formation/rejection wiring，不可声称 evaluator co-evolution |
 | 完成（MuSiQue generation-one M1） | fresh official-DEV P vs RAW vs official HippoRAG one-shot retrieval | 96-item/8-block pack 在 outcome 前一次形成；F1-only P 冻结；M1 36/36 terminal 后离线评分；RAW 7/29、P 14/29、official 14/29，P−RAW 为 +7 support hits / 7 gain / 1 harm / 4 tie；0 Ruoli/generator/online evaluator/retry/replay/resample；promotion disposition 与 postflight attestation 均公开 |
 | 完成（cross-family retrieval L3） | frozen P 的 HotpotQA transfer | 固定 SHA 的 HF-hosted distractor-validation conversion 在 row-open 前预注册，7,318 eligible 中 private-HMAC 一次取 12；P 无适配；36-party barrier、36/36 terminal、fresh postflight 后离线评分；RAW 11/24、P 21/24、official 20/24；P−RAW +10 / 7 gain / 0 harm / 5 tie；P−official +1；0 retry/replay/online evaluator。claim 限于 12-item source-support retrieval，不等同端到端 QA/完整 Hotpot/原 CMU JSON |
-| 下一步（P0，不新增 retrieval gate） | L4 retained recursion 与 L5 successful evaluator transition | Hotpot transfer 已完成且不再重跑/调 P；M2 已消费、不得 replay，因此需要全新的 multi-generation domain/cohort，在 acquisition 前冻结 P/Q/archive retention contrast，并由独立 untouched anchor 决定 evaluator challenger 是否真实晋升；不能用当前 Hotpot positive 代替 retention 或 evaluator co-evolution |
+| 完成（窄 retrieval-only L4） | fresh Hotpot P/Q retained recursion | 新六分区 pack 排除旧 12 项；Q 仅在 F_Q 形成且不因 cross-fit 不稳定而重选；M_L4 96/96 terminal + postflight 后，P/Q/P+Q 为 36/48、40/48、43/48，P+Q−Q=+3、P+Q−P=+7，P forgetting=1；RAW 22/48、official 31/48。只支持 fixed-cohort source-support multi-generation contribution，不扩张为统计/等算力/端到端 QA claim |
+| 完成但未晋升（fresh Hotpot L5） | behavior-distinct evaluator transition | A_form/F_search 的 program 与 observed action 均不同；A_hold 72/72 terminal，challenger 38/48、incumbent 41/48、净 −3，exact p=31/32，不 promotion、不 invalidation；M_search 未授权且未打开。同一 anchor 禁止换候选、补 gate 或重试 |
+| 下一步（P0，不新增 gate） | genuinely new evaluator mechanism + new cohort | L4 不再重复；当前 A_form/F_search/A_hold 已成为设计数据。只有先形成实质不同的 evaluator objective，再一次取得全新 A_form/F_search/A_hold/M_search，且 challenger 在 untouched anchor 晋升并在预先冻结的 M_search 改善后续搜索，才能达到 L5；不能连续抽 challenger 直到成功 |
 | 完成（exact-domain L2/L3 instance） | Replication C promotion、controls disposition 与 one-shot sealed | development 8/8 gain、四 fold 各 +2；operator-only output 8/8 exact match；sealed 4/4 gain、8 路最大并发、8/8 network-none verifier receipts、0 retry/replay/online judge；两条盲化事件完整披露，claim 限于固定 SEC-13F treatment |
 | 完成 | 冻结 evaluator-owned promotion policy | 已由 protocol 绑定完整 spec；candidate 只能收紧；对抗测试通过 |
 | 完成 | 收紧外部 action/fallback contract | 4 类 prompt/self-check lowering；6 类 unsupported op fail closed；observed fallback 不再由字符串伪造 |
@@ -2314,8 +2364,8 @@ activation；held-out causal activation precision 的分母则是 evidence-valid
 | L1 mechanism live | 真实外部任务中 proposal/repair/treatment/gate 全链路完成 | 达到：v3.20 完成 60/60 valid receipts；execution-contract/organize 路径闭合实际 action；独立 financial path 又在 agent 后执行 bounded typed operator，并在 fresh active pair 留下 operator/verifier evidence |
 | L2 validation learning | clean held-out validation 上有可晋级净收益 | **在 exact SEC-13F workstream 达到**：contract-derived candidate 的 Replication C development 为 8/8 valid gains、四 fold 各 +2、0 harm，并产生正式 promotion；旧 financial-4 与 parent period-out incomplete 只保留为历史诊断，不与本结果拼接 |
 | L3 prospective generalization | frozen incumbent 在 unseen instance/family 上保持收益 | **分两条窄 scope 达到**：SEC-13F promotion 后冻结 candidate 在 4 个预提交同域 sealed item 上为 4/4 paired gain、0 harm，但不具严格 supervising-channel blindness；另一个只在 MuSiQue F1 形成的 frozen P 在事前 HMAC 取得的 12-item HotpotQA conversion cohort 上为 21/24 support hits，相对 RAW 11/24 为 +10、7 gain/0 harm，并略高于 official HippoRAG 20/24。后者是真实 cross-family retrieval-only positive，但不覆盖 answer generation、完整 HotpotQA 或 broad Assumption-Agent transfer |
-| L4 self-evolution | 多代 retained improvement，且 recursion ablation 有因果贡献 | 未达到 |
-| L5 evaluator co-evolution | anchor-guided evaluator replacement 与 selective erasure 改善搜索 | 未达到 |
+| L4 self-evolution | 多代 retained improvement，且 recursion ablation 有因果贡献 | **在窄 Hotpot retrieval-only scope 达到**：fresh M_L4 上 P+Q=43/48、Q=40/48、P=36/48；P+Q−Q=+3、P+Q−P=+7，只有 1 个 P support 被遗忘。P/Q direct retrieval 与固定 RRF ablation 在同一 24-item cohort 完成 96/96 terminal 后才评分。Q 的 F_Q cross-fit 不稳定，故不能外推为广义自我演化或端到端 QA |
+| L5 evaluator co-evolution | anchor-guided evaluator replacement 与 selective erasure 改善搜索 | 未达到：behavior-distinct challenger 在 untouched A_hold 为 38/48，对 incumbent 41/48，exact p=31/32；不晋升、无 selective invalidation，M_search 未打开。当前已证明有效 rejection wiring，而非 evaluator replacement 或 improved search |
 
 ## 十一、什么才算“真正自我提出并递归验证假设”
 
@@ -2902,6 +2952,20 @@ fresh postflight 后离线得到 RAW 11/24、P 21/24、official HippoRAG 20/24�
 P−official 为 +1。family transfer 因此在 retrieval-only 小样本 scope 获得正证据；原 M2 与 L5 blocks 仍不得
 重用，L4 retained recursion 与 L5 successful evaluator transition 仍是下一缺口。
 
+### 12.4 2026-07-16 fresh Hotpot L4/L5 闭合
+
+12.3 末尾所列的 L4/L5 缺口随后在不重用旧 block 的全新六分区 acquisition 上正式检验。L4 得到有效 positive：
+P+Q=43/48，同时高于 Q=40/48 与 P=36/48，分别提供 +3 retained contribution 与 +7 novel contribution；
+96/96 work unit、24 个 official worker、fresh postflight 与离线 source-support scoring 全部闭合。相对 official
+HippoRAG 的 fixed-cohort 差为 +12，但没有据此追加 post-hoc significance 或 broad superiority claim。Q formation
+的四折不稳定作为风险保留，不触发重选。
+
+L5 则得到有效 negative：A_form/F_search 先证明 program 与实际 retrieval behavior 都不同，A_hold 再以 72 路
+一次执行得到 challenger 38/48、incumbent 41/48、exact p=31/32。challenger 不晋升，archive 不 invalidation，
+M_search 不授权、不打开。故最终状态不再是“L4 未测得、L5 wiring 不充分”，而是“窄 retrieval-only L4 positive；
+behavior-identifiable L5 negative”。这正是预注册 evaluator 应允许出现的结果；任何在同一 anchor 上继续抽样、换
+objective 或降低晋升阈值都会破坏证据。
+
 ## 附录 A：关键证据索引
 
 - MuSiQue fresh generation-one public chain（旧 6-item cohort 未重放）：
@@ -2924,6 +2988,20 @@ P−official 为 +1。family transfer 因此在 retrieval-only 小样本 scope �
   [`private-HMAC acquisition receipt`](../manifests/hotpot_family_out_acquisition_v1.json)；
   [`one-shot pre-run freeze`](../manifests/hotpot_family_out_pre_run_freeze_v1.json)；
   [`36/36 aggregate offline result`](../manifests/hotpot_family_out_aggregate_report_v1.json)
+- fresh Hotpot retained-recursion / evaluator public chain（旧 12-item cohort 已排除）：
+  [`24-worker synthetic capacity diagnostic`](../manifests/hotpot_recursive_official_capacity24_diagnostic_v1.json)；
+  [`row-zero six-block preregistration`](../manifests/hotpot_recursive_study_v1_preregistration.json)；
+  [`156-item private-HMAC acquisition receipt`](../manifests/hotpot_recursive_study_v1_acquisition.json)；
+  [`F_Q formation receipt`](../manifests/hotpot_recursive_study_fq_formation_v1/formation.receipt.json)；
+  [`frozen Q program`](../manifests/hotpot_recursive_study_fq_formation_v1/frozen_program.json)；
+  [`M_L4 pre-run freeze`](../manifests/hotpot_recursive_study_l4_pre_run_freeze_v1.json)；
+  [`M_L4 96/96 aggregate report`](../manifests/hotpot_recursive_study_l4_aggregate_report_v1.json)；
+  [`A_form behavior-distinct challenger receipt`](../manifests/hotpot_recursive_evaluator_a_form_receipt_v2.json)；
+  [`F_search future-action receipt`](../manifests/hotpot_recursive_evaluator_f_search_receipt_v2.json)；
+  [`A_hold pre-run freeze`](../manifests/hotpot_recursive_evaluator_a_hold_pre_run_freeze_v2.json)；
+  [`A_hold no-promotion report`](../manifests/hotpot_recursive_evaluator_a_hold_report_v2.json)；
+  [`L4-positive / L5-negative final disposition`](../manifests/hotpot_recursive_study_v1_final_disposition.json)。
+  M_search 没有 artifact：它未获授权且未打开
 - Replication C promotion / controls / sealed final chain：
   [`promotion decision`](../manifests/financial_sec13f_contract_v2_replication_c_promotion_decision_v1.json)；
   [`controls disposition`](../manifests/financial_sec13f_contract_v2_controls_disposition_v1.json)；
