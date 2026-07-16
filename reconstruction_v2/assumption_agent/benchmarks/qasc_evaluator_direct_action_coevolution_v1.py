@@ -97,7 +97,10 @@ RECIPE_COUNT = 16
 FOLD_COUNT = 4
 NLI_WORKERS = 8
 TORCH_THREADS_PER_WORKER = 4
-OFFICIAL_CONCURRENCY_CAP = 24
+# The row-free 2026-07-17 capacity probe established 8/8 terminals at eight
+# workers while 24/24 concurrent model processes failed before retrieval.
+# Eight is therefore the maximum qualified useful concurrency on this host.
+OFFICIAL_CONCURRENCY_CAP = 8
 PROMOTION_ALPHA = Fraction(1, 10)
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")

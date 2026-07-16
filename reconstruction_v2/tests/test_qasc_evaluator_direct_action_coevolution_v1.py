@@ -153,6 +153,10 @@ def test_control_failures_are_item_local_and_primary_independent() -> None:
     assert summary["affects_primary_or_epoch"] is False
 
 
+def test_official_control_uses_qualified_maximum_concurrency() -> None:
+    assert runner.OFFICIAL_CONCURRENCY_CAP == 8
+
+
 def test_view_hash_boundary_rejects_identity_or_label_proxy() -> None:
     safe = {
         "schema": "view",
