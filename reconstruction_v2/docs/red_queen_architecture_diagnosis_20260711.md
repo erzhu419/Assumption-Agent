@@ -2581,6 +2581,83 @@ TRAIN-only、可重复的 candidate search；第二，在真正同构的 family-
 当前 SEC-13F workstream 已完成，应停止在其 sealed item 上继续优化；下一研究单元必须是新的数据与新的
 预注册 claim scope，而不是新的 gate。
 
+### 12.2 2026-07-16 后续路线审计：先闭合 archive/epoch，再取得新域数据
+
+三条路线的只读审计进一步收窄了可执行顺序。现有 typed grammar 能从 TRAIN trace 发现 artifact、按文件格式
+生成通用 workflow，并让 production proposer 只选择 opaque `recipe_id`；但
+`DERIVE_TASK_DELTA` 等节点仍是无参数占位，filter、group、aggregate、missing normalization、unit conversion
+和 stable tie-break 不在可生成空间。因此它证明的是“闭合表示与选择”，还不是“自动形成具体语义 operator”。
+已有 public development cohort 又已被后续运行消费，不能按已知 RAW outcome 再选 operator 后倒写成 fresh
+measurement；14 个 residual-sealed SkillLearn item 继续保持不读。
+
+官方 HippoRAG 2 源码镜像实际已在本地，绑定 commit `ef2f14c4`；此前 N/A 的准确含义是“没有同构且冻结的
+benchmark adapter/runtime”，不是“没有源码”。当前没有 graph/index，官方 import/runtime 依赖也未在独立环境
+冻结。`enterprise-information-search` 虽然在任务形态上最接近，但其 public TRAIN/validation 已消费，只余一个
+residual-sealed item；而 upstream core 不负责层级 JSON 到 documents、复数答案 normalization 和 `answer.json`
+写出。故后续若执行，只能称“official HippoRAG core + frozen custom adapter”，且一个 sealed item 不能支撑
+family-out。正式 RAW / typed / HippoRAG 三臂必须另建 HippoRAG 原生 knowledge-QA claim scope、共享答案指标与
+预算；它不是 SEC-13F transfer control，也不能用计算型文件任务上的伪代理替代。
+
+在消费任何新数据前，最小研究单元改为零模型、全离线的 archive/epoch integration：G1 确定性 promotion 后，
+从同一 checkpoint 在 G2 比较 `empty / P / Q / P+Q`，以 `Y(P+Q)-Y(Q)` 单独识别 retention；随后在固定 anchor
+上执行 evaluator challenger、只失效旧 epoch 依赖分数、保留 independent objective，并对旧 incumbent 在新
+epoch 重评分。它不是新的 performance gate，也不能把 synthetic integration 写成 L4/L5。完成该机械闭环后，
+第一个新 efficacy 域采用固定历史 NOAA GSOD 气候 CSV 和闭合 relational DSL；station-out 的
+12 TRAIN / 6 development / 6 residual-sealed acquisition 在任何 outcome 前形成，唯一一次 development 后无论
+结果正负都停止 relational-DSL v1，不在同 cohort 补 primitive 或 gate。
+
+这两个前置单元现已实际完成。零模型 integration 的 G1 为 4 gain / 0 harm 并产生 synthetic incumbent；
+G2 从完全相同的 archive bytes 形成 `empty / P / Q / P+Q` 四臂，`Y(P+Q)-Y(Q)=4/4`，且 repair 没有参与。
+两个不同的 synthetic evaluator 又在同一 8-row anchor 上实际计算出 4/8 与 8/8，challenger 随后晋级；分数
+不是注入的 60/100 与 90/100。旧 epoch 的 1 条依赖 score 被失效、independent objective 保持有效；旧 node
+在新 epoch 下 readiness 为 false，同一行为被显式 clone 到新 epoch node、重新完成 paired validation 和
+promotion 后才变为 true，旧 node 同时标成 superseded。13/13 integration invariants 全部通过，archive
+write/reload 完全同 hash，model/backend/online-evaluator call 均为 0；result hash 为
+`51d71b3c...ef04`。这只把 retention/epoch skeleton 推进到 synthetic L0 integration，不改变 L4/L5 的
+“未达到”结论，见 [`integration result`](../manifests/archive_epoch_retention_integration_result_v1.json) 与
+[`safe report`](../artifacts/archive_epoch_retention_integration_v1/report.json)。
+
+NOAA acquisition 也已一次性闭合：官方 2020 GSOD 的美国全年 station/file 交集为 2700，固定 hash 顺序检查
+36 个 source，24 个满足事前 completeness，12 个只因覆盖不足被排除；划分固定为 12/6/6。stdlib
+`csv+Decimal` 与 `sqlite3+integer` 两套 aggregation oracle 在 24/24 项一致，pack hash 为
+`ab488057...3fc98`，公开 receipt hash 为 `90daaaf5...3e4a`。候选形成、评分、模型与 online judge call 均为 0；
+sealed station identity、raw CSV、oracle output 和 private pack 只保存在 git-ignored acquisition root。该步
+结束时的状态是“新数据已取得、typed operator 尚未形成”，因此没有提前消费 development，见
+[`NOAA acquisition receipt`](../manifests/noaa_gsod_auto_typed_operator_v1_acquisition.json)。
+
+随后只从 private pack 导出了 12 个 TRAIN item 的匿名、最小三列 CSV、公开 task contract 与 TRAIN oracle
+consensus；development/sealed 的 identity、raw、gold 和 commitment mapping 均未进入该视图。导出后两套
+oracle 又在匿名输入上完成 24 次一致性复核；TRAIN view hash 为 `8949062c...731a4`、preparation receipt hash
+为 `30c38847...d93c9`，network/model/scoring/online-judge call 仍为 0。该视图只作为 candidate formation input，
+保留在 git-ignored root，公开仓库只保存不含 TRAIN answer 的
+[`preparation receipt`](../manifests/noaa_gsod_auto_typed_operator_v1_train_preparation.json)。
+
+HippoRAG 的 N/A 也已缩窄。官方 commit `ef2f14c4...d10` 的 52 个 Python source 与独立 overlay runtime 的
+安装树完全同 hash；在物理隔离的 network namespace 中，本地 tiny causal model 与本地 MiniLM 已实际走通
+official core 的 import、initialize、index、retrieve、QA。层级 JSON→documents、multi-answer normalization
+和 prediction-only `answer.json` adapter 同时通过；online model/evaluator call 为 0，receipt hash 为
+`c2a6b540...a4e4`。但 official `openai==1.91.1` pin 无可满足版本，overlay 使用 1.91.0，vLLM 也未安装；因此
+这只关闭“core+adapter 能否离线执行”的 runtime blocker，不是 benchmark、homologous baseline 或性能证据，
+见 [`non-scoring qualification`](../manifests/official_hipporag_runtime_adapter_qualification_v1.json)。下一步必须
+另取未接触的原生 knowledge-QA corpus，再让 RAW / Assumption treatment / official-core retrieval 共享同一
+generator、预算与离线 evaluator；不能把本 synthetic probe 计作 family-out。
+
+NOAA TRAIN-only typed formation 随后实际完成，而没有读取 development/sealed。冻结 grammar 枚举 864 个
+七节点 relational program（上限 4096/8），先 type-check，再按 12 个匿名 TRAIN item 的完整输出行为 hash
+去重为 103 类；固定 rank 为 invalid、harm、负 exact recovery、program length、program hash。winner 对
+12/12 TRAIN exact，四折 anonymous-station-out 均为 held-out exact，并且四折选择同一 program。TRAIN 上存在
+4 个行为等价 program，系统没有把 dedup 后的一行伪称为“行为唯一”：冻结 task contract 作为公开语义来源，
+把 contract deviation 纳入事前固定的 program-length 项，最终仅 1 个 exact candidate 与 contract 一致；选中
+program hash 为 `499aa46a...a3dd`，formation receipt 为 `cda7c209...138d`。这证明的是“在一个闭合、有限、
+contract-derived relational DSL 内自动形成可执行 operator”，不是无约束自然语言语义发现，也仍不构成
+development performance。见 [`formation result`](../manifests/noaa_gsod_typed_relational_formation_result_v1.json)。
+
+本次审计还记录两项边界事件。一次 broad file search 意外展开官方 HippoRAG bundled public benchmark 的少量
+question/answer/support 样例；这些样例不再属于 untouched acquisition。另一次只读检索看到 SkillLearn
+residual-sealed item 的名称列表与少量 evaluator-epoch 元数据，但没有 instruction、gold、expected、answer、
+outcome、verifier result 或 worker trace；涉事子任务不参与这些 item 的后续执行或决策。两项事件均未形成
+候选或修改 split，但后续新数据必须使用新的 acquisition/split，而不能靠重命名现有 holdout 恢复盲化。
+
 ## 附录 A：关键证据索引
 
 - Replication C promotion / controls / sealed final chain：

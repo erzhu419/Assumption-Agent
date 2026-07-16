@@ -1,0 +1,78 @@
+{
+  "formation_receipt_hash": "cda7c209894f8d3eb708660d262291e60c84a84bc882dd1eec671b0b9cab138d",
+  "operator_version": "noaa_gsod_typed_relational_operator_v1",
+  "program": {
+    "aggregation": "mean",
+    "decimal_places": 2,
+    "dsl_version": "finite_typed_relational_csv_dsl_v1",
+    "extreme": "argmax",
+    "fixed_envelope": {
+      "read": "RFC4180_csv_dict_rows",
+      "serialize": "canonical_json_sorted_keys_compact_no_nan"
+    },
+    "input_columns": [
+      "STATION",
+      "DATE",
+      "PRCP"
+    ],
+    "missing_tokens": [
+      "",
+      "99.99"
+    ],
+    "output_fields": [
+      "mean_daily_precip_mm",
+      "month",
+      "valid_day_count"
+    ],
+    "rounding": "ROUND_HALF_UP",
+    "semantic_nodes": [
+      {
+        "column": "PRCP",
+        "op": "normalize_missing",
+        "tokens": [
+          "",
+          "99.99"
+        ]
+      },
+      {
+        "column": "DATE",
+        "op": "filter_year",
+        "year": 2020
+      },
+      {
+        "column": "DATE",
+        "format": "%m",
+        "op": "derive_month"
+      },
+      {
+        "key": "month",
+        "measures": [
+          "sum",
+          "count",
+          "mean"
+        ],
+        "op": "group_aggregate",
+        "value": "PRCP"
+      },
+      {
+        "op": "argmax",
+        "tie_break": "earliest",
+        "value": "mean"
+      },
+      {
+        "factor": "25.4",
+        "op": "unit_convert"
+      },
+      {
+        "mode": "ROUND_HALF_UP",
+        "op": "decimal_round",
+        "places": 2
+      }
+    ],
+    "tie_break": "earliest",
+    "unit_factor": "25.4",
+    "year": 2020
+  },
+  "program_hash": "499aa46ad5564b1b12e56a9c0f9428445ee48c814629f048b895a7418576a3dd",
+  "raw_content_persisted": false
+}
