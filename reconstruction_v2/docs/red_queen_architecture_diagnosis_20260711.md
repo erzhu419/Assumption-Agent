@@ -1,7 +1,7 @@
 # Assumption Agent × Red Queen Gödel Machine：架构诊断与 Reconstruction V2 复核
 
 > - 初版日期：2026-07-11
-> - 本次复核：2026-07-16
+> - 本次复核：2026-07-17
 > - 代码审计基线 revision：`6224bb5a279f50fbcf1f8b36d19cb4ce6cc6c882`
 > - 本次实现复核：receipt/runtime provenance 修复提交 `e43670f6`、`18ff3417`；v3.3 execution-policy 提交 `e0b1a33b`；v3.4 model-only/action-budget 主提交 `e491b0af`，runtime-path 修复 `995e6446`，Ruoli 503 分类修复 `ba0f36cf`，host-readable audit artifact 修复 `1df3092a` / `ad66d5a2`；v3.4 max2 v5 canary 已通过、fresh development 因四并发 429 fail closed；v3.5 将所有在线 phase 版本化为 1 worker，repair identity 修复 `96d53a5d`，malformed proposal/claim binding 修复 `d70562de`；v3.6 contrastive evidence / invalid-evidence lifecycle 实现提交 `01608e1e`；v3.7 六路首批 6/6 收到 429；v3.8 两路在 16 valid 后收到 2 个 503；v3.9 固定为 outer item workers=6 / shared model slot=1，并完成首个 clean full development 负结果；v3.10 exact-three/coverage-first fresh run 将 activation 提高到 2/16 但仍 0 gain，并暴露 semantic-diversity hard reject 与 action lowering 丢 target；v3.11 actionability fresh run 证明 treatment 已改变 trace、PDF 与成本但仍 0 gain，同时暴露 repair response shape 未被 generic system contract 可靠约束；v3.12 显式版本化 singular repair response并完成 56/56 clean development trials，但两代仍各仅激活 1/16、0 gain，无 incumbent；误入的空 freeze/partial controls 已隔离并补上 phase prerequisite；v3.13 complementary program-set 已完成 375/375 离线测试和 76/76 valid live development，三套 bundle 均激活 2/16、6 个 policy-on 全部失败、0 gain/0 harm、无 incumbent，同时暴露 G2 cross-arm raw replay 不一致；v3.14 提交 `2229d7af` 完成 411/411 离线测试及 62/62 attempted live development，selector 成功选中 7/7 三-family set、activation=3/16，但 7 个 policy-on 全失败；一条 recursive raw 超 64 MiB 使 primary non-claim，valid baseline replay=31、invalid key 又跨臂执行一次，两份 archive 仍无 incumbent；v3.15 action-quality / terminal-invalid provenance 实现提交 `696a2954`，453/453 离线测试通过，随后 clean lock、86/86 cache-only prewarm、smoke 与 57/57-valid live development 全部完成，但两臂仍 0 gain/0 harm、`incumbent_id=null`
 > - 最新 proposal-only 复核：v3.16 family-slot formation 提交 `6ad5c156`；v3.17 artifact-blueprint formation 提交 `4f94e613`。两轮均失败且未启动 benchmark trial
@@ -29,6 +29,7 @@
 > - 最新 final Hotpot portfolio acquisition 终止：`b504f8b3` 冻结 two-Q portfolio 机制，`6f373fce` 固定实现，`257d6283` 在任何新 source/private row 打开前预注册 continuation rank window `[156,324)`。第一次带 typo 的调用停在 one-shot marker 前，0 消费、0 private input；纠正后的正式调用先持久化 marker（semantic SHA `bcfed9d9…41f3`），随后才打开旧 12-item exclusion pack 与固定 source，并在内存中确定 168-item window。它在第一次 `os.mkdir(pack_root, 0o700)` 因父目录缺失抛出 `FileNotFoundError`，早于任何 block、locator 或 acquisition receipt 写入。结果为 0 block、0 locator、0 receipt、0 score、0 model/network/online-evaluator call；该 window 仍因 marker 与 post-marker selection 永久烧毁，不 retry/replay/resample，不再启动 Hotpot v4。此前 family-out 阳性、窄 L4 阳性与有效 L5 阴性均不受影响；新 portfolio efficacy 为 unknown。公开终态 semantic SHA 为 `b929ae19…199b`
 > - 最新 MuSiQue residual portfolio（备选 A）终止：`6dd53a19` / `c7e20674` 固定 same-source residual two-Q portfolio design 与实现，`0271f9e5` 在 source row、旧 private row 均为 0 次读取时预注册 continuation `[96,264)`，`96d779ce` 一次形成 A_form/F_search/A_hold/M_search 六块共 168 项。A_form 与 F_search 各完成 4080/4080 local terminal，形成 behavior-distinct 的 incumbent/challenger action，并由 `1b9d53c9` 在 A_hold 前提交；`47faa049` 再冻结 48-item A_hold 的 288 路单屏障运行，冻结时 A_hold/M_search 均 0 row/label。正式运行先消费 authorization 并完整反序列化 A_hold 48 行与 labels，但 committed runner 的 terminal list comprehension 对 lazy submit generator 逐项立即调用 `future.result()`：只有第 1 个 work unit 被提交并进入 288-party barrier，其余 287 个尚未提交，180 秒后确定性 `BrokenBarrierError`。结果为 attempted=1、terminal=0、0 ranking/score/private evidence/report/model/network/online evaluator；这是 implementation-invalid，不是 efficacy negative。A_hold 永久烧毁，禁止 replay/retry/resample 或 same-source 新 cohort；无 promotion，M_search 仍未授权且未打开。MuSiQue portfolio efficacy 与 L5 仍为 unknown；公开终态 semantic SHA 为 `f1f51d93…3d2c`。严格终态提交后，`98763f27` 才把 formation/A_hold/M_search 统一为 eager bulk submit→join，并通过 focused 16/16 与 grouped 66/66 tests；该修复只供未来独立 study，不授权重放 A_hold
 > - 最新 fresh 2Wiki fixed-action transfer：official archive、历史 1000-row denylist、train/dev/test collision scan 与 exact MuSiQue A/F action hashes 在 private selection 前固定；`3ac92a5d` 提交 corrected eager runner，唯一 public-synthetic diagnostic 完成 384/384 terminal 和两个 192-party barrier。正式 acquisition 一次形成按四 type 均衡的 A_hold=48、M_search=24；A_hold 384/384 terminal + fresh postflight 后离线得到 incumbent/challenger/P/official/RAW=`111/110/110/99/56`（support 总数 120）。唯一 promotion comparison 为 challenger−incumbent=−1、exact p=1，不晋升，M_search 未授权且未打开。预声明 non-gating comparison 中 incumbent−official=+12、16 gain/4 harm/28 tie、exact p=1549/262144；该强阳性只支持 fresh-item item-local retrieval transfer，不等同 official full-corpus 2Wiki、answer generation 或 L5 evaluator co-evolution
+> - 最新 QASC evaluator direct-action 终态：known viewer disclosures 后轮换私有 secret，并在正式 row open 前固定 official archive/corpus、NLI runtime、16 个 equal-compute recipes、四块各 64 的 A/F/A_hold/M acquisition 与唯一 promotion policy。row-free probe 暴露 24 路 official HippoRAG 为 0/24、8 路为 8/8，故在 marker 前把最大稳定并发固定为 8；最终 synthetic diagnostic 的 RAW/P/official 全可用。一次性 acquisition 严格得到 TRAIN 7175、DEV 865，16 路两遍 BM25 扫描 16,987,130 行且 TEST 未重开。A/F formation 完成 2048 个 recipe action，并形成 behavior-distinct pair。untouched A_hold 上 incumbent/challenger support hit=`67/128`、`66/128`，总 U=`90/84`，challenger−incumbent=−6、exact p=`1668987/2097152≈0.795835`，不晋升；RAW/P/official HippoRAG support hit=`19/38/103`，official complete=`44/64`。因此 agent 不仅未改善 evaluator，也明显落后 item-local HippoRAG；epoch 不变，M_search 未授权、未打开，不在同源 QASC 上换 objective、补 gate 或重试
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -1972,6 +1973,39 @@ fresh 2Wiki items 上并非只“略高”于 HippoRAG；但该结论严格限�
 support-recall@5，不是 official shared-index/full-corpus 2Wiki benchmark、端到端 answer generation、等算力或总体/SOTA
 优越。L3 fixed-action/frozen-P transfer 证据因此增强，L5 evaluator replacement 仍未达到。
 
+### 8.22 QASC direct-action evaluator 有效完成；未晋升且显著落后 HippoRAG
+
+2Wiki 的有效 non-promotion 后没有在同一 family 继续换 evaluator。QASC study 使用 official TRAIN/DEV archive 与
+16,987,130 行 fact corpus；两次 unsolicited viewer disclosure 后烧毁旧 secret，再生成当前私有 HMAC secret。正式
+selection 只用 TRAIN/DEV 的 normalized `question.stem` 做 collision exclusion，严格复现 TRAIN `7175`、DEV `865`，
+TEST 不重开。四块 A_form/F_search/A_hold/M_search 各 64 项在任何 formation 前一次取得并封存；每项由 row fact1/fact2
+和 full-corpus BM25 top-30 distractors 组成固定 32-document retrieval view。gold、answerKey、identity commitment 均不进入
+view；labels 与 views 物理分离。
+
+候选不再是关键词或追加 gate，而是 16 个 equal-compute two-hop recipes：两种 q1、两种 bridge budget、两种 q2 与
+两种 pair aggregation 的笛卡尔积。冻结 DistilRoBERTa NLI 在 8 worker × 4 threads 上分两波计算；incumbent 只按
+support maximin 形成，challenger 只按 answer counterfactual chain margin 形成。row-free capacity diagnostic 首先发现
+24 个 concurrent official model process 为 0/24 terminal，而独立 8-worker probe 与最终 diagnostic 均为 8/8；这一
+调整发生在 acquisition marker 与任何 formal QA row 之前。正式 formation 随后完成 A/F 共 128×16=2048 个 action，
+两组 incumbent/challenger 的 ordered top-5 behavior 都不同，因此 A_hold 可执行。
+
+untouched A_hold 的唯一 confirmatory comparison 为 item utility `U=support_hits+complete`。incumbent 得到 `67/128`
+support hits、23 个 complete、总 U=90；challenger 得到 `66/128`、18 complete、U=84。逐题 challenger−incumbent 为
+10 gain / 11 harm / 43 tie、净 U `−6`，one-sided exact magnitude-preserving sign-flip
+`p=1668987/2097152≈0.795835`。所以 counterfactual evaluator 不晋升，support-maximin epoch 保留，不发生 selective
+invalidation，M_search 没有 freeze、report、execution root 或 row/label open。
+
+三条 descriptive control 全部 64/64 可用：RAW 为 `19/128` support、0 complete、U=19；retained P 为 `38/128`、
+2 complete、U=40；official item-local HippoRAG core 为 `103/128`、44 complete、U=147。challenger 相对 official 的
+净 U 为 `−63`，6 gain / 36 harm / 22 tie。该结果推翻了“当前 agent 只比 HippoRAG 少赢一点”的乐观解释：在这个
+QASC-derived 32-document task 上，主要缺口是 graph/two-fact coverage action 本身，以及 evaluator objective 与实际
+support utility 的对齐，不是缺少更多 promotion gate。它仍不是 official full-corpus QASC、端到端 answer generation、
+等算力或 SOTA 比较；row facts 直接注入，official HippoRAG 只是 custom item-local control。
+
+本 study 已按预注册终止。不能在已消费 QASC blocks 上换 objective、调 alpha、改 recipe、打开 M_search 或抽 backup。
+若论文仍硬追 L5，下一研究对象必须同时改变 action family 与 evaluator mechanism，并在独立新领域/新 custody 上一次性
+预注册；若保持当前 action family，最诚实结论是三次 behavior-valid evaluator rejection 与零次 evaluator replacement。
+
 ## 九、下一步优先级与硬验收标准
 
 | 优先级 | 工作 | 硬验收标准 |
@@ -1985,7 +2019,8 @@ support-recall@5，不是 official shared-index/full-corpus 2Wiki benchmark、�
 | 严格终止（final Hotpot portfolio acquisition） | genuinely new two-Q evaluator mechanism + continuation cohort | 机制、实现和 `[156,324)` cohort 均先冻结；corrected call 消费 marker 并在 post-marker 内存选择后，因 private-root 父目录缺失在首个 `os.mkdir` 失败；0 block/locator/receipt/score/model/online evaluator。整段 window 永久烧毁，不 retry/replay/resample，不做 Hotpot v4；portfolio efficacy unknown，既有 claims 不变 |
 | 严格终止（MuSiQue residual portfolio A） | same-source residual two-Q evaluator test | `[96,264)` 在 row-zero preregistration 后一次 acquisition；A/F 各 4080/4080 terminal 并冻结 behavior-distinct actions；A_hold freeze 固定 288 路。正式调用消费 authorization、打开 48 项后，lazy-submit/early-result 的 committed ordering defect 使 barrier attempted=1/terminal=0；0 ranking/score/model/network。A_hold 烧毁、不 replay；无 promotion，M_search 永久未开；efficacy unknown，不追加同源 cohort |
 | 完成但未晋升（fresh 2Wiki fixed-action transfer） | 独立 fresh-item A_hold 与 agent/RAW/official HippoRAG 对照 | official archive + 历史 1000-row denylist + 三 split collision exclusion 在 selection 前固定；A_hold 48 项按四 type 均衡。384/384 terminal 后 incumbent/challenger/P/official/RAW 为 111/110/110/99/56（总 support=120）；challenger−incumbent=−1、exact p=1，不晋升，M_search 未开。incumbent−official=+12、16 gain/4 harm、descriptive exact p=1549/262144；claim 限 item-local retrieval |
-| 下一步（仅当论文必须继续追 L5；不新增 gate） | 新领域上的实质不同 evaluator objective | Hotpot 与 2Wiki 已各给出有效 non-promotion，不能在已消费 anchor 上连续换候选到成功。若 L5 是硬目标，只能先从这些失败形成机制级设计假设，再在独立 QASC 等新领域一次性预注册新的 evaluator objective 与完整 A/F/M；否则应停止实验，把“强 retrieval transfer + 正确 rejection、尚无 evaluator replacement”作为诚实结论 |
+| 完成但未晋升（QASC direct-action evaluator） | 新领域的自动 recipe formation、A/F pair 与 RAW/P/official HippoRAG 对照 | 四块各 64 在 formation 前一次 acquisition；16 路 full-corpus BM25 两遍扫描 16,987,130 行，TEST 未开；A/F 2048 actions 后 pair behavior-distinct。A_hold incumbent/challenger support=67/66、U=90/84、净 U −6、exact p=1668987/2097152，不晋升；RAW/P/official support=19/38/103，official 44 complete、U=147。M_search 未授权未开，同源 QASC 终止 |
+| 下一步（仅当论文必须继续追 L5；不新增 gate） | 独立新 custody 上同时改变 action family 与 evaluator mechanism | Hotpot、2Wiki、QASC 已给出三次有效 non-promotion；QASC 还显示当前 local NLI pair recipes 明显低于 graph-style HippoRAG。不能再把“另一个 evaluator objective”单独当修复。下一候选必须事前提出能表达 graph/two-fact coverage 的 action，并用与后续 search utility 同构但不泄漏 measurement 的 evaluator；在新的 domain/cohort 一次性预注册 A/F/A_hold/M。否则停止实验，以“窄 L3/L4 positive + 三次正确 rejection、L5 未达到”为论文结论 |
 | 完成（exact-domain L2/L3 instance） | Replication C promotion、controls disposition 与 one-shot sealed | development 8/8 gain、四 fold 各 +2；operator-only output 8/8 exact match；sealed 4/4 gain、8 路最大并发、8/8 network-none verifier receipts、0 retry/replay/online judge；两条盲化事件完整披露，claim 限于固定 SEC-13F treatment |
 | 完成 | 冻结 evaluator-owned promotion policy | 已由 protocol 绑定完整 spec；candidate 只能收紧；对抗测试通过 |
 | 完成 | 收紧外部 action/fallback contract | 4 类 prompt/self-check lowering；6 类 unsupported op fail closed；observed fallback 不再由字符串伪造 |
@@ -2469,7 +2504,7 @@ activation；held-out causal activation precision 的分母则是 evidence-valid
 | L2 validation learning | clean held-out validation 上有可晋级净收益 | **在 exact SEC-13F workstream 达到**：contract-derived candidate 的 Replication C development 为 8/8 valid gains、四 fold 各 +2、0 harm，并产生正式 promotion；旧 financial-4 与 parent period-out incomplete 只保留为历史诊断，不与本结果拼接 |
 | L3 prospective generalization | frozen incumbent 在 unseen instance/family 上保持收益 | **在多个窄 scope 达到**：SEC-13F frozen candidate 在 4 个预提交同域 sealed item 上 4/4 gain；只在 MuSiQue F1 形成的 P 在 12-item Hotpot cohort 为 21/24，相对 RAW +10、相对 official +1；随后 exact frozen actions 在 48-item fresh 2Wiki A_hold 上得到 incumbent/P/official/RAW=111/110/99/56（总 support=120），incumbent−official=+12、16 gain/4 harm、descriptive exact p=1549/262144。2Wiki family 历史上并非从未见过，所以最强表述是 fresh-item no-new-search transfer；全部 QA claim 都只覆盖 item-local retrieval，不覆盖 answer generation、full-corpus benchmark 或 broad Assumption-Agent transfer |
 | L4 self-evolution | 多代 retained improvement，且 recursion ablation 有因果贡献 | **在窄 Hotpot retrieval-only scope 达到**：fresh M_L4 上 P+Q=43/48、Q=40/48、P=36/48；P+Q−Q=+3、P+Q−P=+7，只有 1 个 P support 被遗忘。P/Q direct retrieval 与固定 RRF ablation 在同一 24-item cohort 完成 96/96 terminal 后才评分。Q 的 F_Q cross-fit 不稳定，故不能外推为广义自我演化或端到端 QA |
-| L5 evaluator co-evolution | anchor-guided evaluator replacement 与 selective erasure改善搜索 | **未达到，且已有两个有效 rejection**：fresh Hotpot behavior-distinct challenger 为 38/48，对 incumbent 41/48，exact p=31/32；fresh 2Wiki fixed-action challenger 为 110/120，对 incumbent 111/120，exact p=1。两者均不晋升、无 selective invalidation，M_search 均未打开。当前证明的是 evaluator 能拒绝无收益候选，不是 evaluator replacement 或 improved subsequent search |
+| L5 evaluator co-evolution | anchor-guided evaluator replacement 与 selective erasure改善搜索 | **未达到，且已有三个有效 rejection**：fresh Hotpot challenger 38/48 对 incumbent 41/48、exact p=31/32；fresh 2Wiki challenger 110/120 对 incumbent 111/120、exact p=1；QASC direct-action challenger/incumbent support=66/67、总 U=84/90、净 U −6、exact p=1668987/2097152。三者均 behavior-distinct 或 fixed-action distinct，却都不晋升、不 invalidation、M_search 未开。QASC official HippoRAG 又以 103/128 support、44 complete、U=147 显著高于两条 agent action。当前证明的是 evaluator 能拒绝无收益候选，不是 evaluator replacement 或 improved subsequent search |
 
 ## 十一、什么才算“真正自我提出并递归验证假设”
 
@@ -3128,7 +3163,42 @@ Red Queen 目标只剩但也确实缺少这一层：一次真实 evaluator epoch
 更窄且更稳的结论——typed retrieval 能跨 fresh items/family 转移并超过 local HippoRAG，而 evaluator 更新机制目前
 只证明了正确拒绝，没有证明成功自我改写。
 
+### 12.9 2026-07-17 QASC 新领域检验闭合
+
+12.8 所列“转向独立新领域和实质不同 evaluator objective”已经执行，不再是待办。QASC 的 source custody、viewer
+exposure limitation、rotated HMAC、NLI asset、16-recipe design、row-free infrastructure diagnostic、四块 acquisition、
+A/F formation、A_hold freeze/report 与 terminal disposition 全部形成 committed public chain。正式 source selection
+得到事前固定的 TRAIN `7175` / DEV `865`；两遍 full-corpus BM25 完整扫描 16,987,130 行。A/F formation behavior
+可识别，故这不是因 candidate collapse 而无法检验。
+
+结果仍然是有效 negative：challenger 总 U=84、incumbent=90，净 −6、exact p≈0.795835，不 promotion。更重要的是，
+official HippoRAG 的 U=147、support=103/128，远高于 challenger/incumbent 的 84/90 与 66/67 support。由此可以把
+“距离目标还缺什么”进一步收窄：不是第四个 gate，也不是继续换 evaluator scoring key；当前 action family 没有表达
+HippoRAG 已表现出的 graph/two-fact coverage，而 counterfactual choice separation 也没有改善 support utility。
+
+因此新的硬前提是 **action–evaluator joint mechanism change**：proposal grammar 必须先能产生 graph-aware retrieval
+action；evaluator formation 再使用与未来 search improvement 同构的 coverage/robustness signal，而不能只优化 choice
+margin。该机制若没有独立新 custody，就只允许做不评分的 retrospective design analysis；不得重用 QASC M_search、
+读取其 labels，或在 Hotpot/2Wiki/QASC 已消费 anchor 上继续试到成功。论文当前最强、可复核的结论应停在：窄 L3/L4
+已有 positive，L5 有三次有效 rejection，尚无 evaluator epoch replacement，也没有 promoted evaluator 改善后续 search。
+
 ## 附录 A：关键证据索引
+
+- QASC direct-action evaluator public chain（valid non-promotion；M_search 未打开）：
+  [`source custody`](../manifests/qasc_fresh_source_custody_v1.json)；
+  [`source-access addendum`](../manifests/qasc_source_access_addendum_v2.json)；
+  [`outcome-blind source qualification`](../manifests/qasc_fresh_source_qualification_v1.json)；
+  [`NLI runtime asset`](../manifests/qasc_nli_runtime_asset_v1.json)；
+  [`frozen design`](../manifests/qasc_evaluator_direct_action_coevolution_design_v1.json)；
+  [`row-free infrastructure diagnostic`](../manifests/qasc_evaluator_direct_action_infrastructure_diagnostic_v1.json)；
+  [`row-zero acquisition preregistration`](../manifests/qasc_evaluator_direct_action_acquisition_v1_preregistration.json)；
+  [`256-item acquisition receipt`](../manifests/qasc_evaluator_direct_action_acquisition_v1_acquisition.json)；
+  [`formation pre-run freeze`](../manifests/qasc_evaluator_direct_action_formation_pre_run_freeze_v1.json)；
+  [`formation receipt`](../manifests/qasc_evaluator_direct_action_formation_receipt_v1.json)；
+  [`A_hold pre-run freeze`](../manifests/qasc_evaluator_direct_action_a_hold_pre_run_freeze_v1.json)；
+  [`A_hold aggregate report`](../manifests/qasc_evaluator_direct_action_a_hold_aggregate_report_v1.json)；
+  [`terminal disposition`](../manifests/qasc_evaluator_direct_action_coevolution_disposition_v1.json)。
+  没有 M_search freeze/report/execution root：A_hold 未晋升，M_search 未授权且未打开
 
 - fresh 2Wiki fixed-action transfer public chain（M_search 未打开）：
   [`source custody`](../manifests/twowiki_fresh_source_custody_v1.json)；
