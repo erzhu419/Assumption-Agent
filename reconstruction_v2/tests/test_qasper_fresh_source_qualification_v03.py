@@ -540,3 +540,32 @@ def test_formal_byte_bindings_fail_before_any_dataset_row_parse(
         audit.build_qualification(
             archive, reference, enforce_formal_bindings=True
         )
+
+
+def test_frozen_qualifier_rejects_official_reader_nullable_section_name(
+    tmp_path: Path,
+) -> None:
+    """Postfailure diagnostic: the frozen parser is narrower than official code.
+
+    The official Qasper baseline reader explicitly accepts a null
+    ``section_name``.  This synthetic test records that the already-committed
+    formal qualifier did not, without reopening the official source archive.
+    It is diagnostic only and does not authorize a Qasper replay.
+    """
+
+    train, dev = _datasets()
+    train["PAPER_ID_DO_NOT_LEAK_train"]["full_text"][0]["section_name"] = None
+    archive = tmp_path / "nullable-section-name.tgz"
+    with tarfile.open(archive, mode="w:gz") as bundle:
+        _write_member(
+            bundle, audit.EXPECTED_MEMBERS["train"], json.dumps(train).encode()
+        )
+        _write_member(
+            bundle, audit.EXPECTED_MEMBERS["dev"], json.dumps(dev).encode()
+        )
+    reference = tmp_path / "reference.md"
+    reference.write_text("no matching disclosure", encoding="utf-8")
+    with pytest.raises(
+        audit.QasperQualificationError, match="section name must be text"
+    ):
+        audit.build_qualification(archive, reference)
