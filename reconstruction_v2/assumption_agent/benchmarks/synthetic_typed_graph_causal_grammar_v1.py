@@ -71,7 +71,9 @@ NEGATIVE = "negative"
 TRAIN_SPLIT = "train_templates"
 FAMILYOUT_SPLIT = "familyout_templates"
 EDGE_PRESENT_NONCAUSAL = "edge_present_but_noncausal"
-EDGE_TO_MATCHED_DECOY = "edge_points_to_degree_matched_decoy"
+EDGE_PRESENT_INDEPENDENT_DIRECT_CUE_VARIANT_2 = (
+    "edge_present_but_query_and_gold_are_independent_direct_cue"
+)
 
 FULL_GRAPH = "full"
 DROP_DESIGNATED = "drop_designated"
@@ -257,7 +259,7 @@ def _family_registry() -> tuple[FamilySpec, ...]:
             NEGATIVE,
             2,
             TRAIN_POSITIVE_2,
-            EDGE_TO_MATCHED_DECOY,
+            EDGE_PRESENT_INDEPENDENT_DIRECT_CUE_VARIANT_2,
         ),
         (
             FAMILYOUT_POSITIVE,
@@ -984,9 +986,9 @@ def evaluator_label_derangement(
                     family_key=item.edge_family,
                     slot=len(item.gold_node_indices),
                     field="evaluator_label_derangement_order",
-                    counter=int(item.item_commitment_sha256[:8], 16),
+                    counter=int(item.label_free_commitment_sha256[:8], 16),
                 ),
-                item.item_commitment_sha256,
+                item.label_free_commitment_sha256,
             ),
         )
         shift = 1 + field_integer(
@@ -999,12 +1001,15 @@ def evaluator_label_derangement(
         )
         for index, destination in enumerate(ordered):
             source = ordered[(index + shift) % len(ordered)]
-            if source.item_commitment_sha256 == destination.item_commitment_sha256:
+            if (
+                source.label_free_commitment_sha256
+                == destination.label_free_commitment_sha256
+            ):
                 raise SyntheticCausalGrammarError("derangement contains a fixed point")
             pairs.append(
                 (
-                    destination.item_commitment_sha256,
-                    source.item_commitment_sha256,
+                    destination.label_free_commitment_sha256,
+                    source.label_free_commitment_sha256,
                 )
             )
     pairs.sort()

@@ -72,6 +72,11 @@ def test_registry_is_exactly_four_edges_times_six_frozen_roles() -> None:
             assert mate.match_group == row.match_group
             assert mate.polarity != row.polarity
             assert (row.negative_kind is None) == (row.polarity == g.POSITIVE)
+            if row.family_role == g.TRAIN_NEGATIVE_2:
+                assert row.negative_kind == (
+                    "edge_present_but_query_and_gold_are_independent_direct_cue"
+                )
+                assert "decoy" not in row.negative_kind
 
 
 def test_quotas_are_16_train_times_4_and_8_familyout_times_8() -> None:
@@ -255,7 +260,7 @@ def test_unique_evaluator_derangement_is_deterministic_fixed_point_free_and_stra
     assert len(first) == 64
     assert len({destination for destination, _source in first}) == 64
     assert len({source for _destination, source in first}) == 64
-    by_commitment = {item.item_commitment_sha256: item for item in a_form}
+    by_commitment = {item.label_free_commitment_sha256: item for item in a_form}
     for destination, source in first:
         assert destination != source
         destination_item = by_commitment[destination]
@@ -270,6 +275,14 @@ def test_unique_evaluator_derangement_is_deterministic_fixed_point_free_and_stra
             len(source_item.gold_node_indices),
         )
     assert g.E00_CONTROL_EVALUATOR_ID == "E_UNIFORM_L025"
+
+
+def test_derangement_identifiers_and_order_are_label_free() -> None:
+    source = Path(g.__file__).read_text(encoding="utf-8")
+    function = source[source.index("def evaluator_label_derangement(") :]
+    function = function[: function.index("\ndef block_commitment(")]
+    assert "label_free_commitment_sha256" in function
+    assert "item_commitment_sha256" not in function
 
 
 def test_grammar_source_has_only_frozen_stdlib_imports_and_no_source_loader() -> None:
