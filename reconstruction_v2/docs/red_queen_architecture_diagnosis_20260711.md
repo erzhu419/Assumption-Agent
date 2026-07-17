@@ -33,7 +33,8 @@
 > - 最新 ContractNLI 独立法律域终态：在 commit `b018f948`，唯一 clean aggregate source-qualification 已因无 receipt 的隐藏 worker failure 严格终止；正式 marker 已消费，但 TRAIN 是否在失败前被程序性打开、精确失败原因、eligible capacity 与 source feasibility 均未知。selection/四块/action/RAW/P/official HippoRAG/evaluator/model/score 全为 0，故其 typed clause graph 与 evaluator efficacy 仍为 unknown，不构成性能负结果，也不允许同源重放
 > - 最新 CUAD direct-acquisition 终态：为避开连续 clean-worker qualification，CUAD 改为 no-prequalification、parent-process direct one-shot。首个 CLI 在 marker、secret、archive/member 前因 design 缺顶层 schema 停止并由 `2cb8718a` 透明记账；唯一 marker-consuming attempt 随后只打开 TRAIN member 一次。commit `3e458d5f` 的公开 receipt 得到 407 个 contract components、232 个 eligible，低于冻结的 4×64=256；主要 aggregate exclusion reason 为 node cardinality 173，另有 exposure 2、gold cardinality 3。0 block/private/model/score，故这是 source-capacity terminal 而非 Agent 对 HippoRAG 的性能负结果；`1b9aaaa5` 已固定 no replay/no smaller block/no TEST/CUADv1
 > - 最新 synthetic typed-graph causal 终态：原始设计 `d24dfb96` 后、任何 formal seed/cohort 之前，`b37054e2` 透明修正 TN2 语义、label-free evaluator derangement 与 sign-enumeration 的非随机化解释，并固定 acquisition/runner；41/41 focused tests、`py_compile` 与 diff check 通过。唯一 32-byte seed 一次形成 A_form/F_search/A_hold/M_search 各 64 项，F_search label 从未创建。formation 形成 behavior-distinct 的 real/permuted recipe；untouched A_hold 上 Agent full / official HippoRAG / RAW 的 total U=`168/164/158`、support hit=`108/106/101`（总 112）、complete=`60/58/57`。Agent−HippoRAG 的 matched net U=+4，但只有 2 个 nonzero pair，预注册 reference tail=`1/4=0.25>0.1`，故 valid non-promotion；M_search 未授权且未打开。drop-designated/wrong-type 各回落 4 U，endpoint-permuted 回落 6 U，增益只出现在 `MENTIONS_DEFINITION` positive family；real/permuted evaluator 在 A_hold 的净差为 0。终止后 `6f06464a` 已公开 exact seed 与 256-row cohort，不含 retrieval/model/score output。该结果支持这份 synthetic SCM 内很窄的 typed-action 因果效应，但不支持 evaluator co-evolution、family-out、L4/L5、现实总体效果或 Agent 普遍优于 HippoRAG
-> - 最新后续缺口：不再围绕这 64-item A_hold 修改阈值、补 gate、换 recipe 或追加 seed 到成功。距离目标仍缺一个与现实 reader 等价、来源/许可/容量合格、可一次性隔离执行的全新验证域，以及其中稳定而非 definition-only 的 Agent−HippoRAG 净收益；若只做 synthetic，多 seed replication 也只能检验机制稳定性，不能补上现实效度
+> - 最新 FEVER fixed-P 现实域 acquisition 终态：本地候选审计只发现 FEVER 具备继续价值；`543bed23` / `e5d5a7d7` 在内容读取前固定并下载官方 labelled `paper_test`、1.713 GB June-2017 wiki archive 与许可证，`e07cf640` 冻结一个无 promotion/gate 的 128-item gold-injected item-local reranking design，`83e185d7` 的 acquisition/runner 通过 13/13 synthetic tests 与独立审计。唯一 formal run 在 marker 后完整解析 paper_test 并在内存 HMAC 固定 64 SUPPORTS+64 REFUTES；随后在任何 wiki JSONL member content 打开前，central-directory contract 发现至少一个非目录 member 的 suffix 不是 `.jsonl`，以 `source_schema_invalid` 终止。action/label pack、RAW/P/Hippo、model/evaluator/score 均为 0；不事后查看 member 名、不改 allowlist、不重跑。FEVER transfer efficacy 仍 unknown，不是 Agent 的性能负结果
+> - 最新后续缺口：不再围绕 synthetic 64-item A_hold 或 FEVER archive contract 修改阈值、补 gate、换 recipe、放宽 schema 或追加 seed 到成功。当前本地没有另一个同时满足未消费、reader/许可/容量、离线和隔离约束的现实来源；距离目标仍缺现实域中稳定且跨 relation family 的 Agent−HippoRAG 净收益。若只做 synthetic，多 seed replication 只能检验现有 definition-only +4 的机制稳定性，不能补现实效度
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -3353,6 +3354,54 @@ family-out 证据。** 这不能支撑 official benchmark、production utility�
 在一个全新且与现实 reader 等价、许可/容量/隔离均合格的来源上，证明跨 relation family 的稳定 Agent−HippoRAG 净收益。
 当前结果不授权回到同一 64-item A_hold 继续调 gate，也不支持消耗已密封的 M_search。
 
+### 12.15 FEVER fixed-P 现实域备选：source-schema terminal
+
+synthetic 终态后，对本地可见来源做了只读排查。GSM8K 与 HumanEval 已存在同题代码、输出或机制污染；唯一接近现实 evidence
+retrieval 要求的是 FEVER，但本地只有 reference repo 内的 `paper_dev.jsonl`，缺少匹配的离线 Wikipedia corpus。因而没有把
+reference copy 当正式源，而是先依据 FEVER 官方公开的 labelled paper split、JSONL schema、June-2017 preprocessed wiki 与
+许可页面建立新的 source chain。
+
+commit `543bed23` 的
+[source custody](../manifests/fever_official_fixed_transfer_source_custody_v1.json) 在下载前固定官方 `paper_test.jsonl`
+（2,181,168 bytes）、`wiki-pages.zip`（1,713,485,474 bytes）与 `license.html`（670 bytes）的 HTTPS URL、ETag、长度与
+Last-Modified；commit `e5d5a7d7` 的
+[source-access binding](../manifests/fever_official_fixed_transfer_source_access_v1.json) 随后只做 opaque whole-file hash，得到
+SHA256 `fb7b0280...d88e`、`4b06d95d...65f2`、`eaddbd6e...d05`。三文件存入 Git-ignored mode-0600 目录；此时 archive
+listing、decompression、JSON decode、row/wiki sentence open、selection 与 score 均为 0。FEVER annotations 继续受官方
+Wikipedia/CC-BY-SA 条款约束；该许可链没有被 Apache-2.0 baseline code license 替代。
+
+commit `e07cf640` 的
+[fixed-P design](../manifests/fever_fixed_p_itemlocal_reranking_design_v1.json) 没有重新 formation 或新 evaluator：它冻结既有
+MuSiQue P `0e9fea15...0785`，只计划一次 64 SUPPORTS + 64 REFUTES 的 HMAC holdout。每题先 HMAC 固定一套 1–5 句完整
+evidence set，再把 gold 句注入由 full-wiki frozen BM25 hard negatives 组成的 32-sentence pool；RAW、item-local official
+HippoRAG 与 exact frozen P 只做 top-5 reranking。指标只有 selected-set support hits、complete count 与 descriptive paired
+delta；没有 p-value、promotion、gate、M_search、retry 或第二 cohort。claim boundary 也事前写死：这不是 full-Wikipedia
+FEVER retrieval、label prediction、official FEVER score 或开放域优越性。
+
+commit `83e185d7` 的
+[acquisition](../assumption_agent/benchmarks/fever_fixed_p_itemlocal_acquisition_v1.py) 与
+[runner](../assumption_agent/benchmarks/fever_fixed_p_itemlocal_runner_v1.py) 把 source/selection/action/late-label 隔离、8 路 official
+与 64 路 local eager barrier、fresh postflight 及 aggregate-only receipt 固定下来；13/13 synthetic tests、`py_compile` 与独立
+formal audit 通过。commit `406fe880` 的
+[implementation freeze](../manifests/fever_official_fixed_transfer_implementation_freeze_v1.json) 绑定 21 个代码、测试、P 与
+runtime 文件；commit `7d70cce3` 的
+[selection custody](../manifests/fever_official_fixed_transfer_selection_custody_v1.json) 在 source parse 前只公开唯一 secret
+commitment。
+
+唯一 acquisition 先持久化 marker，随后完整解析 `paper_test`，仅按 label 和 syntactic 1–5-reference eligibility 在内存中固定
+128 rows 与各自 evidence set；没有用 wiki resolvability 或 BM25 coverage 换 row。它进入 wiki pass-1 后先打开 central
+directory，在任何 JSONL member content 打开前触发冻结条件：至少一个非目录 member 的 suffix 不是 `.jsonl`。commit
+`694d5184` 的 [failure receipt](../manifests/fever_official_fixed_transfer_acquisition_failure_v1.json) 与 commit `2ecb7a4a` 的
+[terminal disposition](../manifests/fever_official_fixed_transfer_acquisition_terminal_disposition_v1.json) 将其固定为
+`source_schema_invalid / efficacy_unknown`：wiki page/sentence parse=0、action pack=0、label pack=0、RAW/P/Hippo action=0、
+model/evaluator/score=0。空 identity ledger 只由冻结控制流推断，未作 post-failure query；offending member 名也没有事后查看或
+公开。
+
+因此不把这个失败解释成“只要忽略 README/metadata 就能继续”。正式 cohort 与 selection secret 已消费；同源不 replay、
+不添加 member allowlist、不解压后手工挑 JSONL、不换 `paper_dev/shared_task_dev`、不旋转 secret，也不把内存中已选 128 rows
+交给修正版 runner。此前 synthetic definition-only +4、QASC 中 HippoRAG 优势及其他现实域结论均不受影响；FEVER 固定 P
+相对 RAW/HippoRAG 的效果仍完全未知。
+
 ## 附录 A：关键证据索引
 
 - QASPER source qualification implementation-invalid chain（无 selection/retrieval/score）：
@@ -3403,6 +3452,17 @@ family-out 证据。** 这不能支撑 official benchmark、production utility�
   [`formation receipt`](../manifests/synthetic_typed_graph_causal_formation_v1.json)；
   [`A_hold non-promotion receipt`](../manifests/synthetic_typed_graph_causal_A_hold_v1.json)；
   [`terminal exact seed/cohort publication`](../published/synthetic_typed_graph_causal_v1/formal_seed_and_cohort.json)
+
+- FEVER fixed-P real-source acquisition terminal chain（wiki member contract invalid；无 pack/action/score）：
+  [`source custody`](../manifests/fever_official_fixed_transfer_source_custody_v1.json)；
+  [`source-access binding`](../manifests/fever_official_fixed_transfer_source_access_v1.json)；
+  [`fixed-P item-local design`](../manifests/fever_fixed_p_itemlocal_reranking_design_v1.json)；
+  [`acquisition implementation`](../assumption_agent/benchmarks/fever_fixed_p_itemlocal_acquisition_v1.py)；
+  [`fixed-P runner`](../assumption_agent/benchmarks/fever_fixed_p_itemlocal_runner_v1.py)；
+  [`implementation freeze`](../manifests/fever_official_fixed_transfer_implementation_freeze_v1.json)；
+  [`selection custody`](../manifests/fever_official_fixed_transfer_selection_custody_v1.json)；
+  [`aggregate failure receipt`](../manifests/fever_official_fixed_transfer_acquisition_failure_v1.json)；
+  [`terminal disposition`](../manifests/fever_official_fixed_transfer_acquisition_terminal_disposition_v1.json)
 
 - QASC direct-action evaluator public chain（valid non-promotion；M_search 未打开）：
   [`source custody`](../manifests/qasc_fresh_source_custody_v1.json)；
