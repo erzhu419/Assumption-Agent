@@ -34,7 +34,8 @@
 > - 最新 CUAD direct-acquisition 终态：为避开连续 clean-worker qualification，CUAD 改为 no-prequalification、parent-process direct one-shot。首个 CLI 在 marker、secret、archive/member 前因 design 缺顶层 schema 停止并由 `2cb8718a` 透明记账；唯一 marker-consuming attempt 随后只打开 TRAIN member 一次。commit `3e458d5f` 的公开 receipt 得到 407 个 contract components、232 个 eligible，低于冻结的 4×64=256；主要 aggregate exclusion reason 为 node cardinality 173，另有 exposure 2、gold cardinality 3。0 block/private/model/score，故这是 source-capacity terminal 而非 Agent 对 HippoRAG 的性能负结果；`1b9aaaa5` 已固定 no replay/no smaller block/no TEST/CUADv1
 > - 最新 synthetic typed-graph causal 终态：原始设计 `d24dfb96` 后、任何 formal seed/cohort 之前，`b37054e2` 透明修正 TN2 语义、label-free evaluator derangement 与 sign-enumeration 的非随机化解释，并固定 acquisition/runner；41/41 focused tests、`py_compile` 与 diff check 通过。唯一 32-byte seed 一次形成 A_form/F_search/A_hold/M_search 各 64 项，F_search label 从未创建。formation 形成 behavior-distinct 的 real/permuted recipe；untouched A_hold 上 Agent full / official HippoRAG / RAW 的 total U=`168/164/158`、support hit=`108/106/101`（总 112）、complete=`60/58/57`。Agent−HippoRAG 的 matched net U=+4，但只有 2 个 nonzero pair，预注册 reference tail=`1/4=0.25>0.1`，故 valid non-promotion；M_search 未授权且未打开。drop-designated/wrong-type 各回落 4 U，endpoint-permuted 回落 6 U，增益只出现在 `MENTIONS_DEFINITION` positive family；real/permuted evaluator 在 A_hold 的净差为 0。终止后 `6f06464a` 已公开 exact seed 与 256-row cohort，不含 retrieval/model/score output。该结果支持这份 synthetic SCM 内很窄的 typed-action 因果效应，但不支持 evaluator co-evolution、family-out、L4/L5、现实总体效果或 Agent 普遍优于 HippoRAG
 > - 最新 FEVER fixed-P 现实域 acquisition 终态：本地候选审计只发现 FEVER 具备继续价值；`543bed23` / `e5d5a7d7` 在内容读取前固定并下载官方 labelled `paper_test`、1.713 GB June-2017 wiki archive 与许可证，`e07cf640` 冻结一个无 promotion/gate 的 128-item gold-injected item-local reranking design，`83e185d7` 的 acquisition/runner 通过 13/13 synthetic tests 与独立审计。唯一 formal run 在 marker 后完整解析 paper_test 并在内存 HMAC 固定 64 SUPPORTS+64 REFUTES；随后在任何 wiki JSONL member content 打开前，central-directory contract 发现至少一个非目录 member 的 suffix 不是 `.jsonl`，以 `source_schema_invalid` 终止。action/label pack、RAW/P/Hippo、model/evaluator/score 均为 0；不事后查看 member 名、不改 allowlist、不重跑。FEVER transfer efficacy 仍 unknown，不是 Agent 的性能负结果
-> - 最新后续缺口：不再围绕 synthetic 64-item A_hold 或 FEVER archive contract 修改阈值、补 gate、换 recipe、放宽 schema 或追加 seed 到成功。当前本地没有另一个同时满足未消费、reader/许可/容量、离线和隔离约束的现实来源；距离目标仍缺现实域中稳定且跨 relation family 的 Agent−HippoRAG 净收益。若只做 synthetic，多 seed replication 只能检验现有 definition-only +4 的机制稳定性，不能补现实效度
+> - 最新 synthetic 8-seed replication 终态：`dabcbde7` 在 seed 前固定 exact R1、RAW/official-HippoRAG/Agent 三臂、8 个 fresh seed cluster 与纯描述 estimand；两轮审计先修正 official paragraph title、1536-future submission barrier、未声明分析面、重复 grammar regeneration 及 success/failure terminal publication，64 项相关测试通过。`2ecf5ec8` / `5efbb5b1` / `f7d3335b` 依次提交 implementation freeze、8-seed custody 与 512-item acquisition。唯一 runner 在 marker 后、任何 retrieval/action/label/score 前，把 512×(1 question+32 nodes)=16,896 条文本一次交给冻结 MiniLM encoder；该 runtime 的单次上限是 16,384，故以 implementation/infrastructure-invalid 严格终止。没有 seed-level delta、Agent−HippoRAG 稳定性或性能负结论；`d185b84a` 仅按事前合同公开 8 seeds 与 512-row cohort，不含 action/model/score
+> - 最新后续缺口：不再围绕已消费的 synthetic 单 seed、多 seed cohort 或 FEVER archive contract 修改阈值、补 gate、换 recipe、放宽 schema、分批后重放同一 cohort，或追加 seed 到成功。原始 definition-only +4 仍只是单 seed 窄机制信号；8-seed 稳定性因 runner 在 action 前失效而 unknown。当前本地也没有另一个同时满足未消费、reader/许可/容量、离线和隔离约束的现实来源；距离目标仍缺现实域中稳定且跨 relation family 的 Agent−HippoRAG 净收益，以及 L5 evaluator replacement 对后续 search 的真实改善
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -3402,6 +3403,54 @@ model/evaluator/score=0。空 identity ledger 只由冻结控制流推断，未�
 交给修正版 runner。此前 synthetic definition-only +4、QASC 中 HippoRAG 优势及其他现实域结论均不受影响；FEVER 固定 P
 相对 RAW/HippoRAG 的效果仍完全未知。
 
+### 12.16 post-terminal synthetic 8-seed replication：action 前 implementation-invalid
+
+单 seed A_hold 的 +4 U 只集中在 definition-positive family，因而下一项没有继续改 recipe、阈值或 promotion gate，而是建立
+[post-terminal 8-seed design](../manifests/synthetic_typed_graph_multiseed_replication_design_v1.json)：8 个 fresh seed 各只调用一次
+公开 grammar 的 `generate_block(seed, "A_hold")`，每个 seed 固定 64 项；exact `R1_DEFINITION_1SWAP`、RAW、official HippoRAG 与
+Agent_R1 三臂不再 formation/search。primary 只描述每个 seed 的 Agent−HippoRAG 总 U 差及八个 cluster 的 mean/median/min/max/
+range/K-positive；Agent−RAW 与三臂 overall/by-seed/by-family/by-polarity 是事前声明的 secondary 描述。没有 threshold、p-value、
+confidence interval、pass/fail、promotion、gate 或 population inference；原单 seed +4 只作排除在 estimand 外的历史参照。
+
+seed 前的两轮独立审计发现并一次性关闭五类 formal defect：official paragraph title 必须与原 causal run 完全相同；Agent worker
+不能在 1,536 个 future 全部 submit 前读取 official future；RAW/三臂分层与 Agent−RAW 必须进入 design；terminal publication 必须
+同时支持 success 与 infrastructure-invalid；publication 不能再次调用 grammar、把 8 次生成变成 16 次。因此 commit `dabcbde7` 的
+[acquisition](../assumption_agent/benchmarks/synthetic_typed_graph_multiseed_acquisition_v1.py) 在同一批 8 次生成中额外密封 mode-0600、
+逐行及整包自哈希的 full-compiled cohort pack，[runner](../assumption_agent/benchmarks/synthetic_typed_graph_multiseed_runner_v1.py)
+使用 submission barrier，并把 success/failure 统一写入 canonical result。64 项相关 grammar/formal/runtime/adapter 测试通过；隔离临时
+Git root 还按真实 CLI 与逐阶段 commit 顺序验证了 freeze→seed-custody→acquire，没有触碰正式 root。
+
+commit `2ecf5ec8` 的
+[implementation freeze](../manifests/synthetic_typed_graph_multiseed_replication_implementation_freeze_v1.json) 绑定 25 个文件，
+self-hash=`46aa3baf...fe7`。commit `5efbb5b1` 的
+[seed custody](../manifests/synthetic_typed_graph_multiseed_replication_seed_custody_v1.json) 只在 durable marker 后调用一次
+`os.urandom(256)`，按顺序切成 8×32 bytes；8 个 commitment 互异且不与原 seed 相撞。commit `f7d3335b` 的
+[acquisition receipt](../manifests/synthetic_typed_graph_multiseed_replication_acquisition_v1.json) 随后一次形成 512 个彼此唯一、且与原
+64-item A_hold 不重叠的 item commitment；action、late-label 与 full-compiled pack 均为 512 rows、mode 0600，receipt 绑定六个
+file/set hash。没有 A_form/F_search/M_search、candidate pool、formation、filter、recipe search、网络或 score。
+
+唯一 formal runner 在 committed marker 后打开并验证 label-free action pack，随后尚未进入 `_execute_all_actions` 就在
+`precompute_local_tensors` 终止。实现把 512 个 question 与每题 32 个 node text 合成一次 `encoder.encode`，精确为
+`512×33=16,896` texts；冻结的 `OfflineMiniLMEncoder` 单次上限是 `MAXIMUM_TEXTS_PER_CALL=16,384`，因此抛出
+`QasperMiniLMError: text count is outside the frozen bound`，再被封装为 `SyntheticTypedGraphMultiseedRunnerError`。正式 work root、
+action seal 与 late-label open 均未发生；RAW、official HippoRAG、Agent_R1 action、post-action score 与 seed-level delta 都是 0。
+这不是 provider/network/capacity 波动，也不是 Agent 的性能负结果，而是 tests 使用无该 runtime bound 的 fake encoder、正式
+preflight 又只实例化资源而没有验证 full-call shape 所遗漏的 implementation defect。
+
+commit `d7d4b86d` 的
+[canonical terminal result](../manifests/synthetic_typed_graph_multiseed_replication_result_v1.json) 已把该轮固定为
+`terminal_infrastructure_or_implementation_invalid_no_replay`，receipt=`3f7c5e6d...a7ee`；没有修改 chunking 后重放、缩小 seed 数、
+替换 seed 或追加 cohort。commit `d185b84a` 随后只执行事前授权的 terminal publication，公开
+[exact 8 seeds 与 512-row cohort](../published/synthetic_typed_graph_multiseed_replication_v1/formal_seeds_and_cohort.json)，
+reproducibility self-hash=`f54998ce...a13c`，明确不含 retrieval action、model output 或 score。labels 与 cohort 现已公开，故同一
+cohort 也不能交给分批修正版 runner。
+
+最终结论是：**8-seed stability 仍为 unknown。** 原单 seed Agent−HippoRAG +4 U 的窄 synthetic mechanism signal 没有被复现，
+也没有被否定。若另立 v2，必须使用全新 seeds/cohort，并在 seed 前让真实 frozen encoder 对 exact 16,896-text call shape 或事前
+固定的 deterministic chunk schedule 做 executable preflight；但这会是新的独立研究，而不是本轮 repair/replay，而且仍无法补
+现实效度。为避免“失败后不断补 gate/contract 再试到成功”，当前应停止 synthetic 分支。论文距离目标仍缺现实域中跨 relation
+family 的稳定 Agent−HippoRAG 净收益，以及 evaluator challenger 晋升后对 untouched search 的真实改善。
+
 ## 附录 A：关键证据索引
 
 - QASPER source qualification implementation-invalid chain（无 selection/retrieval/score）：
@@ -3452,6 +3501,16 @@ model/evaluator/score=0。空 identity ledger 只由冻结控制流推断，未�
   [`formation receipt`](../manifests/synthetic_typed_graph_causal_formation_v1.json)；
   [`A_hold non-promotion receipt`](../manifests/synthetic_typed_graph_causal_A_hold_v1.json)；
   [`terminal exact seed/cohort publication`](../published/synthetic_typed_graph_causal_v1/formal_seed_and_cohort.json)
+
+- synthetic typed-graph post-terminal 8-seed replication（MiniLM full-call bound；action/score=0；stability unknown）：
+  [`frozen replication design`](../manifests/synthetic_typed_graph_multiseed_replication_design_v1.json)；
+  [`formal acquisition/publication implementation`](../assumption_agent/benchmarks/synthetic_typed_graph_multiseed_acquisition_v1.py)；
+  [`formal three-arm runner`](../assumption_agent/benchmarks/synthetic_typed_graph_multiseed_runner_v1.py)；
+  [`implementation freeze`](../manifests/synthetic_typed_graph_multiseed_replication_implementation_freeze_v1.json)；
+  [`eight-seed custody`](../manifests/synthetic_typed_graph_multiseed_replication_seed_custody_v1.json)；
+  [`512-item acquisition receipt`](../manifests/synthetic_typed_graph_multiseed_replication_acquisition_v1.json)；
+  [`canonical infrastructure-invalid result`](../manifests/synthetic_typed_graph_multiseed_replication_result_v1.json)；
+  [`terminal exact seeds/cohort publication`](../published/synthetic_typed_graph_multiseed_replication_v1/formal_seeds_and_cohort.json)
 
 - FEVER fixed-P real-source acquisition terminal chain（wiki member contract invalid；无 pack/action/score）：
   [`source custody`](../manifests/fever_official_fixed_transfer_source_custody_v1.json)；
