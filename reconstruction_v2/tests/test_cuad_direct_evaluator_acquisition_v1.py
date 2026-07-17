@@ -303,6 +303,55 @@ def test_formal_api_cannot_be_called_as_a_row_probe(tmp_path: Path) -> None:
         )
 
 
+def test_pre_marker_incident_is_bound_and_schema_shim_is_design_only(
+    tmp_path: Path,
+) -> None:
+    project = Path(__file__).resolve().parents[1]
+    incident, binding = c._read_self_hashed_manifest(
+        project / c.INCIDENT_RELATIVE,
+        schema=c.INCIDENT_SCHEMA,
+        hash_field="incident_sha256",
+    )
+    assert binding["semantic_sha256"] == c.INCIDENT_SHA256
+    assert binding["file_sha256"] == c.INCIDENT_FILE_SHA256
+    assert incident["failure"]["marker_consuming_attempt_count"] == 0
+    assert (
+        incident["correction_contract"]["next_entry_public_ledger"]
+        ["observed_formal_cli_entry_count"]
+        == 2
+    )
+
+    body = {"value": 1}
+    body["design_sha256"] = hashlib.sha256(
+        json.dumps(
+            {"value": 1},
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    path = tmp_path / "schema-less-design.json"
+    path.write_text(json.dumps(body), encoding="utf-8")
+    with pytest.raises(c.CUADAcquisitionError, match="schema mismatch"):
+        c._read_self_hashed_manifest(
+            path, schema=c.DESIGN_SCHEMA, hash_field="design_sha256"
+        )
+    accepted, _binding = c._read_self_hashed_manifest(
+        path,
+        schema=c.DESIGN_SCHEMA,
+        hash_field="design_sha256",
+        allow_exact_missing_schema=True,
+    )
+    assert "schema" not in accepted
+    with pytest.raises(c.CUADAcquisitionError, match="schema mismatch"):
+        c._read_self_hashed_manifest(
+            path,
+            schema=c.CUSTODY_SCHEMA,
+            hash_field="design_sha256",
+            allow_exact_missing_schema=True,
+        )
+
+
 def test_marker_precedes_member_read_no_replay_and_capacity_has_no_private_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -332,6 +381,18 @@ def test_marker_precedes_member_read_no_replay_and_capacity_has_no_private_files
     )
     assert observed["called"] == 1
     assert receipt["status"] == "terminal_source_capacity_insufficient"
+    assert receipt["attempt"] == {
+        **receipt["attempt"],
+        "preregistered_formal_invocation_count": 1,
+        "observed_formal_cli_entry_count": 2,
+        "pre_marker_protocol_validation_abort_count": 1,
+        "observed_marker_consuming_attempt_count": 1,
+        "attempt_marker_creation_count": 1,
+        "TRAIN_member_content_open_attempt_count": 1,
+        "same_source_replay_count": 0,
+        "resample_count": 0,
+        "secret_rotation_count": 0,
+    }
     assert paths.public_receipt.is_file()
     assert not any(path.exists() for pair in paths.private.values() for path in pair)
 
@@ -455,4 +516,3 @@ def test_local_qa_errors_are_counted_without_root_abort() -> None:
     assert reasons["answer_offset_mismatch"] == 1
     assert reasons["qa_impossible"] == 1
     assert reasons["duplicate_qa_id"] == 2
-

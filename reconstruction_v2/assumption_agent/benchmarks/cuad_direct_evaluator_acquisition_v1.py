@@ -81,6 +81,14 @@ SOURCE_ACCESS_SHA256 = (
 SOURCE_ACCESS_FILE_SHA256 = (
     "92f1a6aacb5449dab00ec8d275ca1cffbd9021f8e4e60d3c8cb2e09ceeb81fbb"
 )
+INCIDENT_RELATIVE = "manifests/cuad_pre_marker_invocation_incident_v1.json"
+INCIDENT_SCHEMA = "cuad_pre_marker_invocation_incident_v1"
+INCIDENT_SHA256 = (
+    "7e730801f8cc4271a35161acdbf5524cbf4bef765a715c8a0f7310f149d00853"
+)
+INCIDENT_FILE_SHA256 = (
+    "fcdba4e1b5e5bd1075ca7050e7cb31a7f31b6a51216b0306a857452af116ef88"
+)
 GRAPH_CORE_RELATIVE = (
     "assumption_agent/benchmarks/contractnli_typed_clause_graph_v1.py"
 )
@@ -1017,12 +1025,23 @@ def _strict_json(raw: bytes, *, label: str) -> Any:
 
 
 def _read_self_hashed_manifest(
-    path: Path, *, schema: str, hash_field: str
+    path: Path,
+    *,
+    schema: str,
+    hash_field: str,
+    allow_exact_missing_schema: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     _require_regular_file(path, label=schema)
     raw = path.read_bytes()
     payload = _strict_json(raw, label=schema)
-    if not isinstance(payload, Mapping) or payload.get("schema") != schema:
+    if not isinstance(payload, Mapping) or (
+        payload.get("schema") != schema
+        and not (
+            allow_exact_missing_schema is True
+            and "schema" not in payload
+            and schema == DESIGN_SCHEMA
+        )
+    ):
         raise CUADAcquisitionError(f"{schema} schema mismatch")
     declared = payload.get(hash_field)
     if not isinstance(declared, str) or _HEX64.fullmatch(declared) is None:
@@ -1198,6 +1217,7 @@ def verify_protocol_files_at_head(project: Path) -> dict[str, Any]:
         DESIGN_RELATIVE,
         CUSTODY_RELATIVE,
         SOURCE_ACCESS_RELATIVE,
+        INCIDENT_RELATIVE,
         GRAPH_CORE_RELATIVE,
         "assumption_agent/benchmarks/cuad_direct_evaluator_acquisition_v1.py",
         "assumption_agent/benchmarks/cuad_graph_evaluator_runner_v1.py",
@@ -1228,8 +1248,16 @@ def verify_formal_protocol(
     """Perform every operation allowed before the one-shot marker."""
 
     head_binding = verify_protocol_files_at_head(project)
+    incident, incident_binding = _read_self_hashed_manifest(
+        project / INCIDENT_RELATIVE,
+        schema=INCIDENT_SCHEMA,
+        hash_field="incident_sha256",
+    )
     design, design_binding = _read_self_hashed_manifest(
-        project / DESIGN_RELATIVE, schema=DESIGN_SCHEMA, hash_field="design_sha256"
+        project / DESIGN_RELATIVE,
+        schema=DESIGN_SCHEMA,
+        hash_field="design_sha256",
+        allow_exact_missing_schema=True,
     )
     custody, custody_binding = _read_self_hashed_manifest(
         project / CUSTODY_RELATIVE, schema=CUSTODY_SCHEMA, hash_field="custody_sha256"
@@ -1246,9 +1274,45 @@ def verify_formal_protocol(
         or custody_binding["file_sha256"] != CUSTODY_FILE_SHA256
         or access_binding["semantic_sha256"] != SOURCE_ACCESS_SHA256
         or access_binding["file_sha256"] != SOURCE_ACCESS_FILE_SHA256
+        or incident_binding["semantic_sha256"] != INCIDENT_SHA256
+        or incident_binding["file_sha256"] != INCIDENT_FILE_SHA256
         or _sha256_file(project / GRAPH_CORE_RELATIVE) != GRAPH_CORE_SHA256
     ):
-        raise CUADAcquisitionError("frozen design, custody, or graph-core binding drifted")
+        raise CUADAcquisitionError(
+            "frozen design, custody, incident, or graph-core binding drifted"
+        )
+    if (
+        incident.get("status")
+        != "recorded_pre_marker_schema_validation_abort_with_data_attempt_unconsumed"
+        or _nested(incident, "binding", "design_sha256") != DESIGN_SHA256
+        or _nested(incident, "binding", "design_file_sha256")
+        != DESIGN_FILE_SHA256
+        or _nested(incident, "binding", "custody_sha256") != CUSTODY_SHA256
+        or _nested(incident, "binding", "source_access_sha256")
+        != SOURCE_ACCESS_SHA256
+        or _nested(incident, "failure", "formal_CLI_activation_count") != 1
+        or _nested(incident, "failure", "marker_consuming_attempt_count") != 0
+        or _nested(
+            incident,
+            "failure",
+            "TRAIN_member_content_open_or_decompress_attempt_count",
+        )
+        != 0
+        or _nested(
+            incident,
+            "correction_contract",
+            "next_entry_public_ledger",
+            "observed_formal_cli_entry_count",
+        )
+        != 2
+        or _nested(
+            incident,
+            "scientific_disposition",
+            "data_acquisition_one_shot_remaining",
+        )
+        != 1
+    ):
+        raise CUADAcquisitionError("pre-marker incident binding drifted")
     if (
         _nested(custody, "official_source_contract", "repository_fixed_commit")
         != SOURCE_COMMIT
@@ -1354,6 +1418,7 @@ def verify_formal_protocol(
         "design": design_binding,
         "custody": custody_binding,
         "source_access": access_binding,
+        "pre_marker_incident": incident_binding,
         "graph_core_file_sha256": GRAPH_CORE_SHA256,
         "acquisition_implementation_file_sha256": _sha256_file(Path(__file__)),
         "git_HEAD": head_binding,
@@ -1642,7 +1707,18 @@ def _base_public_receipt(
             "marker_file_sha256": _sha256_bytes(marker_raw),
             "marker_sha256": marker_payload["marker_sha256"],
             "marker_durable_before_train_member_open": True,
-            "formal_invocation_count": 1,
+            "preregistered_formal_invocation_count": 1,
+            "preregistered_formal_invocation_interpretation": (
+                "marker_consuming_attempt_limit"
+            ),
+            "observed_formal_cli_entry_count": 2,
+            "pre_marker_protocol_validation_abort_count": 1,
+            "observed_marker_consuming_attempt_count": 1,
+            "attempt_marker_creation_count": 1,
+            "TRAIN_member_content_open_attempt_count": 1,
+            "same_source_replay_count": 0,
+            "resample_count": 0,
+            "secret_rotation_count": 0,
             "worker_or_subprocess_count": 0,
             "retry_replay_resample_authorized": False,
         },
