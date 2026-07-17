@@ -3182,7 +3182,48 @@ margin。该机制若没有独立新 custody，就只允许做不评分的 retro
 读取其 labels，或在 Hotpot/2Wiki/QASC 已消费 anchor 上继续试到成功。论文当前最强、可复核的结论应停在：窄 L3/L4
 已有 positive，L5 有三次有效 rejection，尚无 evaluator epoch replacement，也没有 promoted evaluator 改善后续 search。
 
+### 12.10 2026-07-17 QASPER / FinQA 独立域 source-qualification 闭合
+
+QASC 之后没有继续补 gate，而是依次转向 scientific-paper graph evidence 与 financial table-text evidence；两条路线都在
+任何 item action、retrieval 或评分之前终止，因而不能算 efficacy negative。QASPER 先固定 source custody、公开样例
+排除、四块容量合同与 aggregate-only qualifier；唯一正式 clean-worker 调用失败，没有 receipt、selection、model call 或
+score。事后只读官方 reader 代码表明它允许 `section_name=null`，而冻结 qualifier 拒绝该分支；这证明实现兼容域比官方
+schema 窄，但不能证明隐藏失败正由这一条件触发。按一次性政策没有修复重跑。同期冻结的离线 MiniLM runtime 是纯
+asset/canary 结果，可供独立新来源复用，但没有取得 QASPER 性能证据。
+
+随后 FinQA 在 source bytes 下载前提交了固定 commit、公开暴露整页 denylist、private HMAC、TRAIN/DEV 四块容量与
+官方 HippoRAG-primary 边界；官方归档只做 whole-archive binding。具体 action/evaluator 也在 source row 打开前固定为
+16 个 typed table-text graph swap recipes：cell/header 只能回落到官方 `table_i` parent，official HippoRAG top-5 是唯一
+primary incumbent，A/F 使用 gold-free coverage evaluator，A_hold/M 才使用 `hits + complete` 离线 utility，且不存在
+runner-up、补阈值或第二 objective。qualifier 与 QASPER 回归合计 45 项 synthetic test 通过。
+
+但 FinQA 唯一正式 aggregate qualification 仍在 clean worker 内非零退出。worker 程序性打开了固定 TRAIN/DEV bytes，
+却没有向父进程返回 receipt；无人看到 item ID、question、table、gold、program、answer 或 row，selection secret 未打开，
+四个 private block 未选择，RAW/P/Hippo/action/evaluator/model/score 均为 0，TEST/private TEST 未开。事后只打开两个
+官方代码 member；`read_mathqa_entry` 的 retrieval contract 只直接消费 `id`、`qa.question`、可缺省 `gold_inds`、
+`pre_text`、`post_text` 和 `table`，而冻结 qualifier 还强制非空 `program/program_re` 与更窄的 `exe_ans` 类型。因此可
+确认 **qualifier implementation 严于 official retriever**，但隐藏 worker 的精确失败条件仍未知。该 FinQA 来源现已按
+预注册记为 implementation-invalid、efficacy unknown，同源不 replay、不缩块、不放宽 schema，也不用 unopened TEST
+作 backup。
+
+这两次失效把下一步工程约束进一步收窄，但没有引出新 gate：独立新来源必须直接复用或逐分支等价实现其官方
+retrieval reader，只验证 action 真正需要的最小字段；不能把 generator-only annotation 类型伪装成 retrieval source
+schema。新来源仍只允许一次 aggregate qualification、一次 fresh cohort 与一次终态。FinQA 的 row-free graph design
+可以移植，FinQA 数据与 secret 不可再用；L5 状态保持未证明。
+
 ## 附录 A：关键证据索引
+
+- QASPER source qualification implementation-invalid chain（无 selection/retrieval/score）：
+  [`source custody`](../manifests/qasper_graph_evaluator_source_custody_v1.json)；
+  [`aggregate qualifier`](../assumption_agent/benchmarks/qasper_fresh_source_qualification_v03.py)；
+  [`terminal disposition`](../manifests/qasper_graph_evaluator_source_qualification_failure_disposition_v1.json)；
+  [`reusable offline MiniLM asset`](../manifests/qasper_minilm_runtime_asset_v1.json)
+- FinQA source qualification implementation-invalid chain（无 receipt/private block/action/score）：
+  [`source custody`](../manifests/finqa_graph_evaluator_source_custody_v1.json)；
+  [`source archive binding`](../manifests/finqa_source_access_addendum_v1.json)；
+  [`frozen graph/evaluator design`](../manifests/finqa_graph_evaluator_design_v1.json)；
+  [`aggregate qualifier`](../assumption_agent/benchmarks/finqa_fresh_source_qualification_v1.py)；
+  [`terminal disposition`](../manifests/finqa_source_qualification_failure_disposition_v1.json)
 
 - QASC direct-action evaluator public chain（valid non-promotion；M_search 未打开）：
   [`source custody`](../manifests/qasc_fresh_source_custody_v1.json)；
