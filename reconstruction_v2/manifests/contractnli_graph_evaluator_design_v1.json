@@ -1,0 +1,306 @@
+{
+  "action_contract": {
+    "candidate_record": "(edge_family_order,official_seed_rank,seed_span_i,neighbor_span_i,query_similarity_int,absolute_start_offset_distance)",
+    "candidate_sort": [
+      "descending_query_similarity_int",
+      "ascending_absolute_start_offset_distance",
+      "ascending_neighbor_span_i",
+      "ascending_official_seed_rank",
+      "ascending_edge_family_order"
+    ],
+    "drop_rule": "for_each_accepted_new_neighbor_drop_one_current_original_Hippo_member_with_minimum_query_similarity_excluding_the_origin_seed_of_every_previously_or_currently_accepted_record;_ties_use_descending_worse_official_rank_then_descending_span_i;_added_neighbors_are_never_drop_candidates",
+    "final_order": "retained_official_Hippo_members_in_original_order_then_added_neighbors_in_acceptance_order",
+    "greedy_execution": "every_recipe_visits_every_record_in_the_complete_common_candidate_table_in_common_sort_order_without_early_exit;_a_record_with_an_edge_family_outside_the_recipe_mask_or_after_budget_exhaustion_is_visited_then_rejected;_otherwise_accept_only_if_its_origin_seed_is_still_selected_its_neighbor_is_not_selected_or_previously_accepted_and_a_drop_candidate_exists;_otherwise_reject_and_continue;_return_exactly_five_unique_source_span_indices",
+    "identity": "R0_returns_the_exact_official_HippoRAG_top5_after_executing_and_discarding_the_same_common_candidate_scan",
+    "one_hop_only": true,
+    "recipe_registry": [
+      {
+        "budget": 0,
+        "edge_families": [],
+        "recipe_id": "R0_HIPPO_TOP5"
+      },
+      {
+        "budget": 1,
+        "edge_families": [
+          "MENTIONS_DEFINITION"
+        ],
+        "recipe_id": "R1_DEFINITION_1SWAP"
+      },
+      {
+        "budget": 1,
+        "edge_families": [
+          "EXCEPTION_SCOPE"
+        ],
+        "recipe_id": "R2_EXCEPTION_1SWAP"
+      },
+      {
+        "budget": 1,
+        "edge_families": [
+          "LIST_SIBLING"
+        ],
+        "recipe_id": "R3_LIST_1SWAP"
+      },
+      {
+        "budget": 1,
+        "edge_families": [
+          "EXPLICIT_CROSS_REFERENCE"
+        ],
+        "recipe_id": "R4_CROSS_REFERENCE_1SWAP"
+      },
+      {
+        "budget": 2,
+        "edge_families": [
+          "MENTIONS_DEFINITION",
+          "EXCEPTION_SCOPE"
+        ],
+        "recipe_id": "R5_DEFINITION_EXCEPTION_2SWAP"
+      },
+      {
+        "budget": 2,
+        "edge_families": [
+          "MENTIONS_DEFINITION",
+          "LIST_SIBLING"
+        ],
+        "recipe_id": "R6_DEFINITION_LIST_2SWAP"
+      },
+      {
+        "budget": 2,
+        "edge_families": [
+          "EXCEPTION_SCOPE",
+          "LIST_SIBLING"
+        ],
+        "recipe_id": "R7_EXCEPTION_LIST_2SWAP"
+      },
+      {
+        "budget": 2,
+        "edge_families": [
+          "MENTIONS_DEFINITION",
+          "EXCEPTION_SCOPE",
+          "LIST_SIBLING",
+          "EXPLICIT_CROSS_REFERENCE"
+        ],
+        "recipe_id": "R8_ALL_TYPED_2SWAP"
+      }
+    ],
+    "source_seed_rule": "a_candidate_neighbor_is_reachable_only_from_an_official_HippoRAG_top5_seed_through_one_allowed_undirected_typed_edge",
+    "swap_count": "five_minus_cardinality_of_output_intersection_official_Hippo_top5"
+  },
+  "claim_boundary": {
+    "complete_ContractNLI_or_end_to_end_three_class_prediction": false,
+    "official_ContractNLI_HippoRAG_baseline": false,
+    "population_or_SOTA_superiority": false,
+    "primary_scope": "item_local_legal_contract_evidence_retrieval_at_5_on_fresh_document_disjoint_internal_TRAIN_cohorts",
+    "typed_graph_or_coverage_keyword_exhaustiveness": false
+  },
+  "control_contract": {
+    "canonical_RAW": "first_five_source_span_indices_descriptive_only",
+    "official_HippoRAG": "sole_primary_incumbent_R0_and_required_stage_component",
+    "RAW_or_retained_P_failure_affects_primary": false,
+    "retained_P": "frozen_typed_retrieval_program_descriptive_only_when_schema_compatible"
+  },
+  "coverage_contract": {
+    "component_integer_scale": 1000000,
+    "components": {
+      "Churn": "200000_times_5_minus_cardinality_of_candidate_intersection_R0",
+      "Closure_t": "floor_1000000_times_closed_demand_edges_over_demand_edges_for_type_t;_a_demand_edge_is_a_unique_unordered_typed_edge_incident_to_at_least_one_R0_member_and_is_closed_only_when_both_endpoints_are_in_the_candidate;_zero_if_denominator_is_zero",
+      "Diversity": "1000000_minus_floor_the_sum_over_the_10_unordered_candidate_pairs_of_max_0_quantized_cosine_divided_by_10",
+      "Lex": "floor_1000000_times_the_sum_of_weights_of_unique_usable_query_tokens_mentioned_by_at_least_one_candidate_span_over_total_usable_query_token_weight;_zero_if_no_usable_query_token",
+      "Sem": "for_each_quantized_cosine_s_define_c_equal_min_1000000_max_minus1000000_s_and_sim01_equal_floor((c_plus_1000000)/2);_sort_the_five_sim01_values_descending_as_v1_through_v5_and_return_floor((3_times_v1_plus_v2)/4)"
+    },
+    "evaluator_archetype_weights_in_DEFINITION_EXCEPTION_LIST_CROSS_REFERENCE_order": {
+      "DEF_HEAVY": [
+        "11/20",
+        "3/20",
+        "3/20",
+        "3/20"
+      ],
+      "EXCEPTION_HEAVY": [
+        "3/20",
+        "11/20",
+        "3/20",
+        "3/20"
+      ],
+      "LIST_XREF_HEAVY": [
+        "1/10",
+        "1/10",
+        "2/5",
+        "2/5"
+      ],
+      "UNIFORM": [
+        "1/4",
+        "1/4",
+        "1/4",
+        "1/4"
+      ]
+    },
+    "evaluator_registry": [
+      "E_DEF_HEAVY_L025",
+      "E_DEF_HEAVY_L050",
+      "E_DEF_HEAVY_L100",
+      "E_DEF_HEAVY_L200",
+      "E_EXCEPTION_HEAVY_L025",
+      "E_EXCEPTION_HEAVY_L050",
+      "E_EXCEPTION_HEAVY_L100",
+      "E_EXCEPTION_HEAVY_L200",
+      "E_LIST_XREF_HEAVY_L025",
+      "E_LIST_XREF_HEAVY_L050",
+      "E_LIST_XREF_HEAVY_L100",
+      "E_LIST_XREF_HEAVY_L200",
+      "E_UNIFORM_L025",
+      "E_UNIFORM_L050",
+      "E_UNIFORM_L100",
+      "E_UNIFORM_L200"
+    ],
+    "exact_score": "Fraction(2,5)*Sem_plus_Fraction(1,5)*Lex_plus_Fraction(1,10)*Diversity_minus_Fraction(1,20)*Churn_plus_Fraction(3,10)*lambda_times_sum_of_archetype_edge_weight_times_Closure_t",
+    "lambda_ID_mapping": {
+      "L025": "1/4",
+      "L050": "1/2",
+      "L100": "1",
+      "L200": "2"
+    },
+    "query_token_DF_and_weight": "over_all_source_spans_in_the_current_document_only;_DF_is_number_of_spans_containing_the_token;_usable_if_not_a_stopword_not_pure_numeric_length_at_least_2_and_DF_at_most_floor_N_over_2;_integer_weight_is_N_plus_1_minus_DF",
+    "score_comparison": "exact_Python_Fraction_without_binary_float_or_rounding",
+    "token_normalization": "Unicode_NFKC_then_casefold_with_regex_[^\\W_]+",
+    "token_stopwords": [
+      "a",
+      "an",
+      "and",
+      "are",
+      "as",
+      "at",
+      "be",
+      "been",
+      "being",
+      "by",
+      "for",
+      "from",
+      "has",
+      "have",
+      "in",
+      "is",
+      "it",
+      "of",
+      "on",
+      "or",
+      "that",
+      "the",
+      "their",
+      "this",
+      "to",
+      "was",
+      "were",
+      "will",
+      "with"
+    ]
+  },
+  "design_hash_contract": {
+    "algorithm": "sha256",
+    "canonicalization": "json.dumps(body_without_design_sha256, ensure_ascii=True, sort_keys=True, separators=(',', ':')).encode('utf-8')",
+    "excluded_top_level_fields": [
+      "design_sha256"
+    ]
+  },
+  "design_sha256": "49f8f6dba1ddffd63dc97d1a23ced48ddd70fcc6657404a4c71b33431e6a7157",
+  "equal_information_and_work_contract": {
+    "action": "one_official_Hippo_top5_one_complete_MiniLM_tensor_one_typed_graph_and_one_common_candidate_record_table_are_shared_by_all_nine_recipes;_every_recipe_scans_the_complete_common_table_without_early_exit",
+    "coverage": "all_16_evaluators_receive_the_same_nine_recipe_outputs_and_same_component_table_and_each_executes_the_complete_fixed_registry_scan",
+    "identity": "R0_executes_and_discards_the_same_action_candidate_scan",
+    "official_failure": "invalidates_the_affected_primary_stage"
+  },
+  "formation_and_epoch_contract": {
+    "A_form": {
+      "gold_open_order": "only_after_all_64_times_9_action_outputs_and_runtime_postflights_are_terminal",
+      "per_evaluator_item_choice": "choose_the_recipe_with_maximum_exact_coverage_score_then_minimum_Churn_then_ascending_recipe_id",
+      "per_item_regret": "maximum_true_U_over_nine_recipes_minus_true_U_of_the_evaluator_chosen_recipe",
+      "select_evaluator": "minimize_sum_64_item_regret_then_maximize_total_true_U_of_chosen_outputs_then_maximize_chosen_output_complete_count_then_minimize_total_Churn_then_ascending_evaluator_id"
+    },
+    "A_hold": {
+      "comparison": "F_selected_recipe_minus_R0_item_U",
+      "labels_open_order": "only_after_both_primary_actions_and_postflights_are_terminal",
+      "sole_promotion": "net_U_strictly_positive_and_one_sided_exact_magnitude_preserving_signflip_p_at_most_0.10"
+    },
+    "F_search": {
+      "gold_access": false,
+      "select_recipe": "maximize_the_sum_over_64_items_of_the_A_selected_evaluator_exact_coverage_score_then_minimize_declared_recipe_budget_then_ascending_recipe_id"
+    },
+    "M_search": {
+      "open_condition": "A_hold_promotes",
+      "positive_later_search": "the_same_net_U_and_exact_p_criterion_as_A_hold",
+      "recipe_or_evaluator_reformation": false
+    },
+    "no_action_transition": "if_F_selects_R0_or_the_selected_recipe_has_identical_top5_membership_to_R0_on_all_64_F_items_terminate_as_no_identifiable_transition_before_A_hold_without_runner_up",
+    "one_selected_hypothesis_per_document": true
+  },
+  "gold_and_statistical_contract": {
+    "choice_use": "Entailment_or_Contradiction_is_used_only_by_the_isolated_eligibility_controller_and_never_action_coverage_or_score",
+    "exact_signflip": "remove_zero_integer_item_deltas_and_count_with_exact_integer_dynamic_programming_all_sign_assignments_whose_signed_magnitude_sum_is_at_least_the_observed_sum_with_ties_included;_n_zero_gives_p_one",
+    "F_gold": "never_released_from_the_private_eligibility_envelope_and_never_scored",
+    "gold": "sorted_distinct_bounded_source_span_indices_only",
+    "utility": "number_of_distinct_gold_span_indices_in_top5_plus_one_if_all_gold_span_indices_are_in_top5"
+  },
+  "minilm_binding": {
+    "asset_file_sha256": "62b85c7752f2e46932fb9fb13ae2f3aac9eb750a33c8f07102739040feb6cc75",
+    "asset_sha256": "921d9b1945581130e03c53f448092c3de3b30714431c6cac9b3b32c2ec10abad",
+    "model_revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+    "quantized_cosine": "int(round(math.fsum(float(query_i)*float(span_i) for_i_in_range_384)*1000000))_with_normalized_float32_source_components_Python_binary64_products_and_fsum_and_ties_to_even",
+    "relative_path": "manifests/qasper_minilm_runtime_asset_v1.json"
+  },
+  "official_runtime_binding": {
+    "bubblewrap_capability_file_sha256": "8f13ede556d1651f88fdce3c0bd6a6565bbe432a41759e733bd0040a50a100ae",
+    "bubblewrap_capability_relative_path": "manifests/hotpot_family_out_bubblewrap_capability_v1.json",
+    "filesystem_attestation_file_sha256": "a2a103774b6166283fbcb3d5fd97c05d8d49a14bedb21bba8ca28aff43193801",
+    "filesystem_attestation_relative_path": "manifests/musique_official_hipporag_runtime_attestation_v2.json",
+    "paragraph_mapping": "constant_title_ContractNLI_evidence_span_exact_identity_text_and_source_span_i_as_paragraph_idx",
+    "query": "exact_public_hypothesis_natural_text",
+    "top_k": 5
+  },
+  "recorded_date": "2026-07-17",
+  "schema": "contractnli_graph_evaluator_design_v1",
+  "source_boundary": {
+    "custody_relative_path": "manifests/contractnli_graph_evaluator_source_custody_v1.json",
+    "custody_schema": "contractnli_graph_evaluator_source_custody_v1",
+    "data_fixed_commit": "eced6528dd3c1d14d73f9a87df8f7bdbc03126f9",
+    "feature_forbidden": "document_ID_file_name_URL_document_type_choice_gold_span_hypothesis_ID_short_description_and_historical_hypothesis_prior",
+    "embedding_text": "identity_text_with_all_whitespace_collapsed_to_one_ASCII_space_and_strip_with_case_preserved",
+    "pattern_text": "Unicode_NFKC_then_casefold_identity_text_then_collapse_all_whitespace_to_one_ASCII_space_and_strip",
+    "source_node": "span_i_identity_is_the_source_list_index_and_identity_text_is_exact_document_text_start_colon_end_without_deduplication"
+  },
+  "terminal_policy": {
+    "A_hold_nonpromotion": "terminal_and_leave_M_unopened",
+    "M_result": "terminal_positive_or_negative_without_rollback_or_reformation",
+    "no_same_source_retry_runner_up_new_regex_keyword_edge_recipe_evaluator_weight_objective_threshold_or_gate": true,
+    "primary_infrastructure_or_post_selection_schema_failure": "burn_the_affected_study_without_replay",
+    "source_qualification_shortfall": "terminal_without_item_action_or_score"
+  },
+  "typed_graph_contract": {
+    "all_edges": "undirected_unique_pairs_of_distinct_source_span_indices_with_parallel_edge_types_preserved;_the_common_candidate_table_contains_one_raw_record_per_edge_family_seed_neighbor_triple_and_recipe_execution_deduplicates_neighbors_by_first_accepted_record",
+    "edge_family_order": [
+      "MENTIONS_DEFINITION",
+      "EXCEPTION_SCOPE",
+      "LIST_SIBLING",
+      "EXPLICIT_CROSS_REFERENCE"
+    ],
+    "exception_scope": {
+      "deontic_regex_on_model_text": "\\b(?:shall|must|may not|shall not|agrees? to|is required to|will not)\\b",
+      "edge": "from_each_exception_span_to_the_nearest_preceding_deontic_span_with_source_index_in_i_minus_8_through_i_minus_1;_no_edge_if_none",
+      "exception_regex_on_model_text": "\\b(?:except(?: that| as)?|provided(?:, however,?)?(?: that)?|subject to|notwithstanding|unless)\\b"
+    },
+    "explicit_cross_reference": {
+      "anchor": "casefolded_capture_1_without_whitespace_change_other_than_model_text_collapse",
+      "edge": "from_each_nonheading_span_reference_match_to_every_distinct_heading_span_with_the_same_anchor;_self_edges_forbidden",
+      "heading_regex_on_model_text": "^\\s*(?:section|clause|paragraph)\\s+([0-9]+(?:\\.[0-9]+)*|[a-z])\\b",
+      "reference_regex_on_model_text": "\\b(?:section|clause|paragraph)\\s+([0-9]+(?:\\.[0-9]+)*|[a-z])\\b"
+    },
+    "list_sibling": {
+      "edge": "between_consecutive_source_span_indices_only_when_both_spans_have_a_marker_of_the_same_parenthesized_or_suffix_family",
+      "marker_regex_on_model_text": "^\\s*(?:(\\((?:[a-z]|[ivxlcdm]+|[0-9]{1,3})\\))|((?:[a-z]|[ivxlcdm]+|[0-9]{1,3})[.)]))\\s+"
+    },
+    "mentions_definition": {
+      "definition_regex_on_model_text": "(?:^|[.;:]\\s*)(?:[\"“]([^\"”]{1,80})[\"”]|([a-z][a-z0-9_-]*(?:\\s+[a-z][a-z0-9_-]*){0,7}))\\s+(?:shall\\s+mean|means|refers\\s+to)\\b",
+      "edge": "from_each_definition_span_to_each_other_pattern_text_matching_Python_re_UNICODE_(?<!\\w)_plus_re.escape(normalized_term)_plus_(?!\\w);_empty_or_all_stopword_terms_are_discarded",
+      "term": "first_nonempty_capture_then_Unicode_NFKC_casefold_collapse_all_whitespace_to_one_ASCII_space_strip_and_require_1_through_8_declared_lexical_tokens"
+    },
+    "pattern_input": "pattern_text_equal_Unicode_NFKC_then_casefold_then_collapse_all_whitespace_to_one_ASCII_space_then_strip_with_Python_re_UNICODE_and_no_IGNORECASE_MULTILINE_or_DOTALL_flags;_no_hypothesis_ID_choice_gold_or_document_metadata",
+    "unmatched_or_malformed_pattern": "create_no_role_or_edge_without_invalidating_the_item"
+  }
+}
