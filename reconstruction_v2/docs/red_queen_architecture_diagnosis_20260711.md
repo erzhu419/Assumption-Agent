@@ -30,6 +30,10 @@
 > - 最新 MuSiQue residual portfolio（备选 A）终止：`6dd53a19` / `c7e20674` 固定 same-source residual two-Q portfolio design 与实现，`0271f9e5` 在 source row、旧 private row 均为 0 次读取时预注册 continuation `[96,264)`，`96d779ce` 一次形成 A_form/F_search/A_hold/M_search 六块共 168 项。A_form 与 F_search 各完成 4080/4080 local terminal，形成 behavior-distinct 的 incumbent/challenger action，并由 `1b9d53c9` 在 A_hold 前提交；`47faa049` 再冻结 48-item A_hold 的 288 路单屏障运行，冻结时 A_hold/M_search 均 0 row/label。正式运行先消费 authorization 并完整反序列化 A_hold 48 行与 labels，但 committed runner 的 terminal list comprehension 对 lazy submit generator 逐项立即调用 `future.result()`：只有第 1 个 work unit 被提交并进入 288-party barrier，其余 287 个尚未提交，180 秒后确定性 `BrokenBarrierError`。结果为 attempted=1、terminal=0、0 ranking/score/private evidence/report/model/network/online evaluator；这是 implementation-invalid，不是 efficacy negative。A_hold 永久烧毁，禁止 replay/retry/resample 或 same-source 新 cohort；无 promotion，M_search 仍未授权且未打开。MuSiQue portfolio efficacy 与 L5 仍为 unknown；公开终态 semantic SHA 为 `f1f51d93…3d2c`。严格终态提交后，`98763f27` 才把 formation/A_hold/M_search 统一为 eager bulk submit→join，并通过 focused 16/16 与 grouped 66/66 tests；该修复只供未来独立 study，不授权重放 A_hold
 > - 最新 fresh 2Wiki fixed-action transfer：official archive、历史 1000-row denylist、train/dev/test collision scan 与 exact MuSiQue A/F action hashes 在 private selection 前固定；`3ac92a5d` 提交 corrected eager runner，唯一 public-synthetic diagnostic 完成 384/384 terminal 和两个 192-party barrier。正式 acquisition 一次形成按四 type 均衡的 A_hold=48、M_search=24；A_hold 384/384 terminal + fresh postflight 后离线得到 incumbent/challenger/P/official/RAW=`111/110/110/99/56`（support 总数 120）。唯一 promotion comparison 为 challenger−incumbent=−1、exact p=1，不晋升，M_search 未授权且未打开。预声明 non-gating comparison 中 incumbent−official=+12、16 gain/4 harm/28 tie、exact p=1549/262144；该强阳性只支持 fresh-item item-local retrieval transfer，不等同 official full-corpus 2Wiki、answer generation 或 L5 evaluator co-evolution
 > - 最新 QASC evaluator direct-action 终态：known viewer disclosures 后轮换私有 secret，并在正式 row open 前固定 official archive/corpus、NLI runtime、16 个 equal-compute recipes、四块各 64 的 A/F/A_hold/M acquisition 与唯一 promotion policy。row-free probe 暴露 24 路 official HippoRAG 为 0/24、8 路为 8/8，故在 marker 前把最大稳定并发固定为 8；最终 synthetic diagnostic 的 RAW/P/official 全可用。一次性 acquisition 严格得到 TRAIN 7175、DEV 865，16 路两遍 BM25 扫描 16,987,130 行且 TEST 未重开。A/F formation 完成 2048 个 recipe action，并形成 behavior-distinct pair。untouched A_hold 上 incumbent/challenger support hit=`67/128`、`66/128`，总 U=`90/84`，challenger−incumbent=−6、exact p=`1668987/2097152≈0.795835`，不晋升；RAW/P/official HippoRAG support hit=`19/38/103`，official complete=`44/64`。因此 agent 不仅未改善 evaluator，也明显落后 item-local HippoRAG；epoch 不变，M_search 未授权、未打开，不在同源 QASC 上换 objective、补 gate 或重试
+> - 最新 ContractNLI 独立法律域终态：在 commit `b018f948`，唯一 clean aggregate source-qualification 已因无 receipt 的隐藏 worker failure 严格终止；正式 marker 已消费，但 TRAIN 是否在失败前被程序性打开、精确失败原因、eligible capacity 与 source feasibility 均未知。selection/四块/action/RAW/P/official HippoRAG/evaluator/model/score 全为 0，故其 typed clause graph 与 evaluator efficacy 仍为 unknown，不构成性能负结果，也不允许同源重放
+> - 最新 CUAD direct-acquisition 终态：为避开连续 clean-worker qualification，CUAD 改为 no-prequalification、parent-process direct one-shot。首个 CLI 在 marker、secret、archive/member 前因 design 缺顶层 schema 停止并由 `2cb8718a` 透明记账；唯一 marker-consuming attempt 随后只打开 TRAIN member 一次。commit `3e458d5f` 的公开 receipt 得到 407 个 contract components、232 个 eligible，低于冻结的 4×64=256；主要 aggregate exclusion reason 为 node cardinality 173，另有 exposure 2、gold cardinality 3。0 block/private/model/score，故这是 source-capacity terminal 而非 Agent 对 HippoRAG 的性能负结果；`1b9aaaa5` 已固定 no replay/no smaller block/no TEST/CUADv1
+> - 最新 synthetic typed-graph causal 终态：原始设计 `d24dfb96` 后、任何 formal seed/cohort 之前，`b37054e2` 透明修正 TN2 语义、label-free evaluator derangement 与 sign-enumeration 的非随机化解释，并固定 acquisition/runner；41/41 focused tests、`py_compile` 与 diff check 通过。唯一 32-byte seed 一次形成 A_form/F_search/A_hold/M_search 各 64 项，F_search label 从未创建。formation 形成 behavior-distinct 的 real/permuted recipe；untouched A_hold 上 Agent full / official HippoRAG / RAW 的 total U=`168/164/158`、support hit=`108/106/101`（总 112）、complete=`60/58/57`。Agent−HippoRAG 的 matched net U=+4，但只有 2 个 nonzero pair，预注册 reference tail=`1/4=0.25>0.1`，故 valid non-promotion；M_search 未授权且未打开。drop-designated/wrong-type 各回落 4 U，endpoint-permuted 回落 6 U，增益只出现在 `MENTIONS_DEFINITION` positive family；real/permuted evaluator 在 A_hold 的净差为 0。终止后 `6f06464a` 已公开 exact seed 与 256-row cohort，不含 retrieval/model/score output。该结果支持这份 synthetic SCM 内很窄的 typed-action 因果效应，但不支持 evaluator co-evolution、family-out、L4/L5、现实总体效果或 Agent 普遍优于 HippoRAG
+> - 最新后续缺口：不再围绕这 64-item A_hold 修改阈值、补 gate、换 recipe 或追加 seed 到成功。距离目标仍缺一个与现实 reader 等价、来源/许可/容量合格、可一次性隔离执行的全新验证域，以及其中稳定而非 definition-only 的 Agent−HippoRAG 净收益；若只做 synthetic，多 seed replication 也只能检验机制稳定性，不能补上现实效度
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -3211,6 +3215,144 @@ retrieval reader，只验证 action 真正需要的最小字段；不能把 gene
 schema。新来源仍只允许一次 aggregate qualification、一次 fresh cohort 与一次终态。FinQA 的 row-free graph design
 可以移植，FinQA 数据与 secret 不可再用；L5 状态保持未证明。
 
+### 12.11 2026-07-17 ContractNLI 独立法律域 source-qualification 终止
+
+ContractNLI 路线在 source row 前固定了 [source custody](../manifests/contractnli_graph_evaluator_source_custody_v1.json)、
+[graph/evaluator design](../manifests/contractnli_graph_evaluator_design_v1.json)、
+[source-access addendum](../manifests/contractnli_source_access_addendum_v1.json) 与
+[TRAIN member binding](../manifests/contractnli_source_member_binding_v1.json)。它的目标不是复用 CUAD prompt，而是从
+官方 document spans 形成 definition、exception、list-sibling 与 explicit-cross-reference 四类 typed edges，再用固定
+recipe/coverage registry 检验一次 evaluator transition。该机制的 row-free graph core 与 synthetic tests 成立，但不携带
+任何 ContractNLI 性能证明。
+
+唯一正式 clean aggregate qualification 在 marker 已持久化后非零退出，没有形成 receipt；stdout、stderr 与 traceback
+按冻结隔离协议没有转发。因而 TRAIN member 是否在失败前已被程序性打开未知，精确失败原因、schema/capacity 结果与
+eligible content-group 数也未知；DEV、TEST、raw contract member 未打开，selection secret 未被 qualification runtime
+读取，HMAC selection、四块 materialization、RAW/P/official HippoRAG、typed action、coverage evaluator、model 与 score
+均为 0。commit `b018f948` 的
+[terminal disposition](../manifests/contractnli_source_qualification_failure_disposition_v1.json) 因此把它分类为
+`implementation_or_infrastructure_invalid`、source feasibility 未建立也未否定、efficacy unknown，而不是有效 negative。
+
+正式 marker 已消费，所以同源 ContractNLI 不 replay、不缩块、不放宽 schema、不轮换 secret，也不把未开的 DEV/TEST
+当 backup。typed clause graph core 只可作为 row-free engineering 复用；不能据此声明 ContractNLI retrieval utility、
+相对 HippoRAG 优势或 evaluator replacement。此前 2Wiki、QASC、Hotpot、MuSiQue、QASPER 与 FinQA 的结论均不受影响。
+
+### 12.12 2026-07-17 CUAD parent-process direct acquisition 容量终止
+
+为避免 QASPER、FinQA、ContractNLI 所暴露的“clean-worker 无 receipt → 再换 source qualification”循环，CUAD 在任何
+真实 row 打开前改为 no-prequalification、parent-process direct one-shot，并固定
+[design](../manifests/cuad_graph_evaluator_design_v1.json)、
+[source custody](../manifests/cuad_graph_evaluator_source_custody_v1.json) 与
+[source-access binding](../manifests/cuad_graph_evaluator_source_access_v1.json)。首个 formal CLI 只读到公开 design manifest，
+因其遗漏顶层 `schema` 而在 secret、archive hash/central directory、marker、member、selection 与 output 之前失败。
+commit `2cb8718a` 的 [pre-marker incident](../manifests/cuad_pre_marker_invocation_incident_v1.json) 公开绑定了原 design
+self/file hash 与唯一允许的 exact compatibility correction；它记录 formal CLI entry=1、marker-consuming attempt=0、
+source/member bytes=0，而没有静默把这次 activation failure 擦除。
+
+修正后的唯一 marker-consuming run 在 durable marker 后只打开固定 TRAIN member 一次，其他 member content open=0，
+TEST/CUADv1 open=0。commit `3e458d5f` 的
+[aggregate acquisition receipt](../manifests/cuad_graph_evaluator_acquisition_v1.json) 显示：408 个 contract records 形成
+407 个 components，公开 exposure 排除 2 个，冻结 eligibility 最终只剩 232 个，低于事前 4×64=256，缺口 24。
+aggregate parser reason 中 `node_cardinality=173` 是主要容量损失，`gold_cardinality=3`；offset mismatch、schema、
+duplicate QA ID 与 omitted alignment 等错误均为 0。这里的 reason counts 不应相加解释为互斥 document 数，但足以定位
+固定 node envelope 与长合同分布不相容，而不是 parser 普遍损坏。
+
+容量不足发生在 block materialization 前：selected blocks/items=0、private files=0、model=0、online evaluator=0、
+performance score=0。因此它没有运行 Agent、RAW 或 official HippoRAG，**不是性能负结果**，也不能改变 QASC 中
+HippoRAG 明显领先的既有事实。commit `1b9aaaa5` 的
+[capacity disposition](../manifests/cuad_graph_evaluator_capacity_disposition_v1.json) 已终止该来源：不 replay/resample、
+不缩成 3×64、不改 node/gold/exposure/parser 条件、不旋转 secret，也不开 TEST/CUADv1 或其他 archive member。
+
+### 12.13 EvidenceBench 独立科学域 direct acquisition 终止
+
+CUAD 之后没有再写 clean-worker qualifier，而是选择了唯一通过许可、公开来源 pin、至少 256 个候选容量与科学文献
+evidence 任务初审的 EvidenceBench。来源固定为 `EvidenceBench/EvidenceBench` commit
+`bf1d9633c694381c7b016fd56ee9f95f48593cc3` 的 `datasets/evidencebench_test_set.json`，Git blob
+`df380a1...e6513`、12,735,397 bytes；已公开论文示例的 PMCID/DOI/URL 整个 component 事前排除。设计把每篇论文精确
+分为 32 个连续 bucket，以原 `hypothesis` 为 query，把每个 aspect 的官方 evidence sentence indices 映射成 alternative
+gold bucket set；utility 是 aspect coverage，而不是把 aspect ID 错当自然语言 query。
+
+commit `ebd80d25` 在任何 source bytes 下载前固定了 9-recipe/16-evaluator scientific graph core 的 direct parent-process
+acquisition 和 stage-isolated runner；独立审计发现并在正式执行前消除了任意 pack/path、可重复 stage root、未绑定 prior
+receipt、A-form/A-hold eager label load 等阻断。修正后每个 stage 只能使用 canonical paths，acquisition→formation→
+A_hold→M_search 的公开 receipt 必须先提交并逐级匹配 current HEAD blob；任何 private pack 在 stage marker 前均不打开，
+F_search label 永不加载。52 项离线 synthetic/mock test 通过。随后依次提交
+[source custody](../manifests/evidencebench_graph_evaluator_source_custody_v1.json)、
+[source-access binding](../manifests/evidencebench_graph_evaluator_source_access_v1.json) 与
+[implementation freeze](../manifests/evidencebench_implementation_freeze_v1.json)；下载后只做 opaque whole-file SHA256/Git-blob/
+size 校验，未在 marker 前 decode JSON 或打开 row。
+
+唯一正式 acquisition 在 commit `a7bfc9d5` 的 actual HEAD 上验证 freeze 与全部 9 个文件后持久化 marker，随后打开并解析
+固定 source 一次。它在 `form_paper_disjoint_selection` 的 root contract 立即终止：可确认的精确析取只有“decoded root
+不是 list，或其长度不等于冻结的 293”，不能在不重开 source 的情况下进一步区分。commit `58063cc7` 的
+[aggregate receipt](../manifests/evidencebench_direct_acquisition_v1.json) 与
+[terminal disposition](../manifests/evidencebench_acquisition_terminal_disposition_v1.json) 记录：private blocks=0、selection=0、
+model/RAW/official HippoRAG/Agent/score=0，efficacy 与 source feasibility 均未知。该来源不 replay、不改 root schema/293、
+不缩 block、不旋转 secret，也不做 post-hoc root-shape diagnostic；它不是 Agent 的性能负结果，更没有缩小 QASC 中
+HippoRAG 已有优势。
+
+### 12.14 方案 A 终态：公开 grammar 的 synthetic mechanistic causal stress test
+
+QASPER、FinQA、ContractNLI、CUAD 与 EvidenceBench 已足以否决“再找相似数据集、失败后补 schema/gate”的工作方式。
+现实数据主线因此暂停，备选 A 改为**公开 grammar synthetic mechanistic causal stress test**；目的只是把 source/schema
+不确定性拿掉后检验 typed graph intervention 是否真的造成可审计的 action utility，而不是把 synthetic 阳性包装成现实效果。
+
+原始 commit `d24dfb96` 在任何 formal seed/cohort 生成前冻结
+[公开 grammar](../assumption_agent/benchmarks/synthetic_typed_graph_causal_grammar_v1.py) 与
+[causal design](../manifests/synthetic_typed_graph_causal_design_v1.json)。正式实现审计随后发现三项必须在 seed 前透明处理的问题：
+TN2 metadata 声称 edge 指向 degree-matched decoy，但实际 DGP 保留 target endpoint；evaluator derangement 的排序标识间接包含
+gold hash；DGP 又没有随机 treatment sign，因而完整 magnitude-sign enumeration 不能称为 design-based randomization p-value。
+commit `b37054e2` 的
+[pre-seed amendment](../manifests/synthetic_typed_graph_causal_preseed_amendment_v1.json) 没有更改 surface、nodes、edges、gold、
+block quota 或增加 gate：TN2 被如实描述为“edge present、query/gold 由独立 direct cue 决定”，derangement 改用唯一
+label-free commitment，sign enumeration 只保留为事前 one-shot protocol heuristic/reference tail。acquisition/runner、late-label
+barrier、递归 receipt/marker/seal/历史 HEAD 验证与终止后复现发布一并固定；41/41 focused tests、`py_compile` 与 diff check 通过。
+
+commit `80c8110f` 的
+[implementation freeze](../manifests/synthetic_typed_graph_causal_implementation_freeze_v1.json) 绑定 21 个代码、测试、MiniLM 与
+official-HippoRAG runtime 文件。唯一 seed 的
+[custody](../manifests/synthetic_typed_graph_causal_seed_custody_v1.json) 在 commit `96364f68` 先公开 commitment；随后 commit
+`2f98ce9b` 的 [acquisition receipt](../manifests/synthetic_typed_graph_causal_acquisition_v1.json) 一次形成 4×64=256 项，不存在
+candidate pool/filter/retry/replacement。A_form、F_search、A_hold、M_search 的 label-free pack 全部形成；只有 A_form/A_hold/M_search
+有独立 late-label pack，F_search label 从未创建。全程 offline judge=0、外部在线网络=0；official HippoRAG 最大 8 并发，
+本地计算最大 64 并发。
+
+commit `dd781261` 的 [formation receipt](../manifests/synthetic_typed_graph_causal_formation_v1.json) 得到 real evaluator
+`E_DEF_HEAVY_L050`、real recipe `R1_DEFINITION_1SWAP`、permuted recipe `R5_DEFINITION_EXCEPTION_2SWAP` 与固定 E00 recipe
+`R1_DEFINITION_1SWAP`。real/permuted recipe 的 observed action 不同，所以 transition 在 formation 的窄定义上可识别并授权
+untouched A_hold；formation 分数仅用于形成，不作效果 claim。
+
+commit `808f43a4` 的 [A_hold receipt](../manifests/synthetic_typed_graph_causal_A_hold_v1.json) 给出最终有效结果：
+
+| A_hold arm | total U | support hit / 112 | complete / 64 |
+|---|---:|---:|---:|
+| Agent full | 168 | 108 | 60 |
+| official HippoRAG | 164 | 106 | 58 |
+| canonical RAW | 158 | 101 | 57 |
+| Agent drop-designated | 164 | 106 | 58 |
+| Agent wrong-type | 164 | 106 | 58 |
+| Agent endpoint-permuted | 162 | 105 | 57 |
+
+Agent full 相对 official HippoRAG 的 matched net U 是 +4，但 32 个 matched contrast 中只有 2 个 nonzero pair；完整
+magnitude-sign reference tail 为 `1/4=0.25`，高于预注册 `0.1`。因此结果是 `valid_nonpromotion`，M_search 未授权且从未打开，
+不能在当前 A_hold 上换 recipe、阈值、objective 或追加 seed。机制方向与设计一致：drop-designated 和 wrong-type 各损失 4 U，
+endpoint-permuted 损失 6 U；但相应 reference tail 分别为 `1/4`、`1/4`、`1/8`，它们是非 gating 描述而非新的通过条件。
+增益全部来自 `MENTIONS_DEFINITION` 的 positive family：该 family 的 U 为 Agent 44、HippoRAG 40、RAW 26，其余三类 Agent 与
+HippoRAG 完全相同。real recipe、permuted-evaluator recipe 与 E00 在 A_hold 的总 U 又同为 168，real−permuted matched net U=0；
+所以本轮没有证明 evaluator co-evolution。
+
+终止后，commit `6f06464a` 按事前合同发布
+[exact seed 与完整 256-row cohort](../published/synthetic_typed_graph_causal_v1/formal_seed_and_cohort.json)，不含 retrieval action、
+model output 或 score；self-hash、seed commitment、四个 block commitment 与 exact regeneration 均已复验。结论因此不是
+“Agent 没有任何作用”，而是更窄也更准确：**在这份 synthetic SCM 内，typed definition edge 的干预造成了方向正确但稀疏的
+小幅收益；它只比 HippoRAG 多 4 U / 2 support hits / 2 complete items，未达到事前晋升规则，也没有 evaluator transition 或
+family-out 证据。** 这不能支撑 official benchmark、production utility、现实总体效果或 Agent 普遍优于 HippoRAG。
+
+距离目标仍缺两层证据。第一层是机制稳定性：若继续 synthetic，只能新建明确标为 post-terminal 的多 seed replication，事前
+固定所有 seeds 与 pooled estimand，回答这个 definition-only +4 是否稳定；它仍不能补现实效度。第二层也是更关键的一层，是
+在一个全新且与现实 reader 等价、许可/容量/隔离均合格的来源上，证明跨 relation family 的稳定 Agent−HippoRAG 净收益。
+当前结果不授权回到同一 64-item A_hold 继续调 gate，也不支持消耗已密封的 M_search。
+
 ## 附录 A：关键证据索引
 
 - QASPER source qualification implementation-invalid chain（无 selection/retrieval/score）：
@@ -3224,6 +3366,43 @@ schema。新来源仍只允许一次 aggregate qualification、一次 fresh coho
   [`frozen graph/evaluator design`](../manifests/finqa_graph_evaluator_design_v1.json)；
   [`aggregate qualifier`](../assumption_agent/benchmarks/finqa_fresh_source_qualification_v1.py)；
   [`terminal disposition`](../manifests/finqa_source_qualification_failure_disposition_v1.json)
+
+- ContractNLI source qualification terminal chain（efficacy/source feasibility unknown）：
+  [`source custody`](../manifests/contractnli_graph_evaluator_source_custody_v1.json)；
+  [`frozen graph/evaluator design`](../manifests/contractnli_graph_evaluator_design_v1.json)；
+  [`source-access addendum`](../manifests/contractnli_source_access_addendum_v1.json)；
+  [`TRAIN member binding`](../manifests/contractnli_source_member_binding_v1.json)；
+  [`terminal disposition`](../manifests/contractnli_source_qualification_failure_disposition_v1.json)
+
+- CUAD direct-acquisition terminal chain（232/256 capacity shortfall；无 block/action/score）：
+  [`frozen design`](../manifests/cuad_graph_evaluator_design_v1.json)；
+  [`source custody`](../manifests/cuad_graph_evaluator_source_custody_v1.json)；
+  [`source-access binding`](../manifests/cuad_graph_evaluator_source_access_v1.json)；
+  [`pre-marker schema incident`](../manifests/cuad_pre_marker_invocation_incident_v1.json)；
+  [`aggregate acquisition receipt`](../manifests/cuad_graph_evaluator_acquisition_v1.json)；
+  [`terminal capacity disposition`](../manifests/cuad_graph_evaluator_capacity_disposition_v1.json)
+
+- EvidenceBench direct-acquisition terminal chain（root contract invalid；无 block/action/score）：
+  [`frozen design`](../manifests/evidencebench_graph_evaluator_design_v1.json)；
+  [`source custody`](../manifests/evidencebench_graph_evaluator_source_custody_v1.json)；
+  [`source-access binding`](../manifests/evidencebench_graph_evaluator_source_access_v1.json)；
+  [`implementation freeze`](../manifests/evidencebench_implementation_freeze_v1.json)；
+  [`aggregate terminal receipt`](../manifests/evidencebench_direct_acquisition_v1.json)；
+  [`terminal disposition`](../manifests/evidencebench_acquisition_terminal_disposition_v1.json)
+
+- synthetic typed-graph causal study terminal chain（valid non-promotion；M_search 未打开）：
+  [`public grammar`](../assumption_agent/benchmarks/synthetic_typed_graph_causal_grammar_v1.py)；
+  [`row-free tests`](../tests/test_synthetic_typed_graph_causal_grammar_v1.py)；
+  [`frozen causal design`](../manifests/synthetic_typed_graph_causal_design_v1.json)；
+  [`pre-seed amendment`](../manifests/synthetic_typed_graph_causal_preseed_amendment_v1.json)；
+  [`formal implementation`](../assumption_agent/benchmarks/synthetic_typed_graph_causal_acquisition_v1.py)；
+  [`formal runner`](../assumption_agent/benchmarks/synthetic_typed_graph_causal_runner_v1.py)；
+  [`implementation freeze`](../manifests/synthetic_typed_graph_causal_implementation_freeze_v1.json)；
+  [`seed custody`](../manifests/synthetic_typed_graph_causal_seed_custody_v1.json)；
+  [`256-item acquisition receipt`](../manifests/synthetic_typed_graph_causal_acquisition_v1.json)；
+  [`formation receipt`](../manifests/synthetic_typed_graph_causal_formation_v1.json)；
+  [`A_hold non-promotion receipt`](../manifests/synthetic_typed_graph_causal_A_hold_v1.json)；
+  [`terminal exact seed/cohort publication`](../published/synthetic_typed_graph_causal_v1/formal_seed_and_cohort.json)
 
 - QASC direct-action evaluator public chain（valid non-promotion；M_search 未打开）：
   [`source custody`](../manifests/qasc_fresh_source_custody_v1.json)；
