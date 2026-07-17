@@ -1,0 +1,391 @@
+{
+  "arm_contract": {
+    "canonical_RAW": {
+      "action": "score_the_exact_final_32_sentence_documents_with_the_frozen_full_wiki_BM25_statistics_and_take_top_5_by_descending_quantized_score_then_ascending_doc_id",
+      "gold_or_label_available_to_action": false,
+      "role": "descriptive_control"
+    },
+    "exact_frozen_P": {
+      "adapt_or_reform_on_FEVER": false,
+      "mapping": {
+        "corpus": "the_exact_same_32_ordered_sentence_documents_as_the_other_arms",
+        "paragraph_idx": "doc_id",
+        "paragraph_text": "exact_official_wiki_line_sentence_text",
+        "paragraph_title": "exact_official_wiki_page_id",
+        "question": "exact_FEVER_claim"
+      },
+      "program_sha256": "0e9fea159e2dbcb302575f97954be8461c9921a91e11ef9b64a80ecab9640785",
+      "role": "fixed_candidate",
+      "top_k": 5
+    },
+    "official_HippoRAG": {
+      "action": "run_the_frozen_official_core_retrieve_only_adapter_with_one_independent_item_local_index_per_item",
+      "adapter_function": "run_official_hipporag_retrieve_only_v2",
+      "adapter_id": "official_hipporag_retrieve_only_filesystem_attested_v2",
+      "gold_or_label_available_to_action": false,
+      "query_and_documents": "the_exact_same_claim_and_32_ordered_sentence_documents_as_RAW_and_exact_frozen_P",
+      "role": "descriptive_item_local_control_not_an_official_full_wiki_FEVER_baseline",
+      "top_k": 5
+    }
+  },
+  "candidate_corpus_contract": {
+    "document_count_per_item": 32,
+    "document_fields": [
+      "doc_id",
+      "page_id",
+      "line_number",
+      "sentence_text"
+    ],
+    "document_id_assignment": "sort_all_32_documents_by_ascending_HMAC_doc_order_digest_then_ascending_page_id_UTF8_then_line_number_then_sentence_text_UTF8_and_assign_contiguous_zero_based_doc_id",
+    "document_order_HMAC_message": "UTF8(domain_separator_NUL_doc_order_NUL_item_identity_commitment_NUL_page_id_NUL_decimal_line_number_NUL_SHA256_exact_sentence_UTF8)",
+    "gold_document_count": "the_selected_complete_evidence_set_cardinality_inclusive_1_through_5",
+    "gold_document_source": "exact_official_wiki_sentences_resolved_from_the_one_HMAC_selected_complete_annotated_evidence_set",
+    "gold_injected": true,
+    "hard_negative_count": "32_minus_selected_gold_document_count",
+    "hard_negative_source": "full_official_wiki_sentence_stream_ranked_by_the_frozen_BM25_contract_for_the_exact_claim",
+    "postselection_failure_policy": "after_the_128_rows_and_their_evidence_sets_are_fixed_any_unresolved_chosen_reference_empty_or_untokenizable_claim_or_insufficient_eligible_hard_negative_count_is_terminal_infrastructure_invalid_without_row_set_or_negative_replacement",
+    "negative_exclusions": [
+      "every_page_id_line_number_pair_in_any_annotated_evidence_set_for_the_row",
+      "every_already_selected_page_id_line_number_pair_for_the_item"
+    ],
+    "private_label_fields": [
+      "source_label",
+      "selected_evidence_set_pairs",
+      "selected_gold_doc_ids",
+      "all_annotated_evidence_pairs"
+    ],
+    "retrieval_action_view": [
+      "exact_claim",
+      "32_ordered_doc_id_page_id_sentence_text_records"
+    ],
+    "retrieval_action_view_excludes": [
+      "source_label",
+      "annotation_ids",
+      "evidence_ids",
+      "selected_evidence_set_identity",
+      "gold_doc_ids",
+      "gold_flags"
+    ],
+    "sentence_identity": "exact_official_page_id_and_nonnegative_line_number",
+    "sentence_text": "the_exact_FEVER_preprocessed_wiki_line_text_field_without_link_target_columns",
+    "title_mapping": "exact_official_wiki_page_id_without_domain_specific_rewriting"
+  },
+  "claim_boundary": {
+    "answer_generation_or_FEVER_label_prediction": false,
+    "candidate_pool_is_gold_injected": true,
+    "candidate_pool_is_query_conditioned_by_BM25": true,
+    "evidence_sentence_retrieval_beyond_the_fixed_item_local_pool": false,
+    "exact_frozen_P_and_official_HippoRAG_are_mechanistically_equivalent": false,
+    "full_corpus_FEVER_retrieval": false,
+    "full_wikipedia_document_discovery": false,
+    "hard_negative_miner_is_part_of_the_measured_candidate": false,
+    "item_local_HippoRAG_is_an_official_FEVER_baseline": false,
+    "model_pretraining_contamination_excluded": false,
+    "official_FEVER_score_or_leaderboard_reproduction": false,
+    "population_or_SOTA_superiority": false,
+    "primary_scope": "one_shot_fixed_candidate_transfer_of_exact_frozen_P_on_fresh_official_FEVER_derived_gold_injected_32_sentence_item_local_reranking_pools",
+    "source_population": "official_labelled_paper_test_SUPPORTS_and_REFUTES_rows_only",
+    "unsupported_claims": [
+      "end_to_end_fact_verification",
+      "open_domain_retrieval",
+      "full_FEVER_superiority",
+      "general_agent_superiority",
+      "evaluator_coevolution",
+      "L4_or_L5_recursive_evolution"
+    ]
+  },
+  "cohort_contract": {
+    "cohort_count": 128,
+    "evidence_set_cardinality_inclusive": [
+      1,
+      5
+    ],
+    "formal_source_member": "official_labelled_paper_test",
+    "label_counts": {
+      "REFUTES": 64,
+      "SUPPORTS": 64
+    },
+    "not_enough_info_selected": 0,
+    "row_eligibility": [
+      "label_is_exactly_SUPPORTS_or_REFUTES",
+      "at_least_one_syntactically_complete_annotated_evidence_set_has_1_through_5_unique_nonnull_page_id_line_number_references"
+    ],
+    "row_identity_commitment": "SHA256_of_canonical_JSON_over_source_member_source_row_ordinal_exact_id_exact_claim_and_full_canonical_source_row",
+    "row_selection": "within_each_exact_label_sort_eligible_rows_by_ascending_HMAC_row_rank_digest_then_ascending_row_identity_commitment_and_take_64",
+    "row_selection_HMAC_message": "UTF8(domain_separator_NUL_row_rank_NUL_exact_label_NUL_row_identity_commitment)",
+    "selected_IDs_claims_rows_labels_or_evidence_persisted_publicly": false,
+    "selection_failure": "if_either_exact_label_has_fewer_than_64_syntactically_eligible_rows_after_the_formal_marker_write_one_terminal_infrastructure_invalid_receipt_without_substitution_relaxation_retry_or_another_FEVER_attempt",
+    "wiki_or_BM25_information_used_for_row_rank_or_replacement": false
+  },
+  "decision": "freeze_one_fixed_candidate_FEVER_derived_item_local_reranking_measurement_without_candidate_search_evaluator_search_or_performance_gate",
+  "design_sha256": "d000802fdc2a56aa8d91991abd013101a33aa147d89225d292b31b60b4d014aa",
+  "evidence_set_contract": {
+    "alternative_set_canonicalization": "deduplicate_each_set_by_exact_page_id_line_number_pair_sort_pairs_by_page_id_UTF8_then_line_number_deduplicate_identical_canonical_sets",
+    "chosen_set_postselection_validation": "after_row_and_set_selection_every_chosen_reference_must_resolve_to_exactly_one_nonempty_sentence_in_the_bound_official_wiki_archive_or_the_formal_acquisition_is_terminal_infrastructure_invalid_without_row_or_set_replacement",
+    "syntactically_eligible_set_cardinality_inclusive": [
+      1,
+      5
+    ],
+    "evidence_set_selection": "for_each_selected_row_sort_all_syntactically_eligible_sets_by_ascending_HMAC_evidence_set_digest_then_ascending_canonical_set_bytes_and_take_exactly_one_before_any_wiki_resolution_or_BM25_coverage_information",
+    "evidence_set_selection_HMAC_message": "UTF8(domain_separator_NUL_evidence_set_NUL_row_identity_commitment_NUL_SHA256_canonical_evidence_set_JSON)",
+    "official_alternative_sets_not_selected": "excluded_from_hard_negatives_but_not_counted_as_gold_or_scored",
+    "selected_set_is_the_only_scored_gold_set": true
+  },
+  "execution_contract": {
+    "all_action_terminals_join_before_private_label_pack_open": true,
+    "all_work_units_eagerly_submitted_before_join": true,
+    "arm_count": 3,
+    "external_network_calls": 0,
+    "generator_calls": 0,
+    "item_count": 128,
+    "local_worker_concurrency_cap": 64,
+    "official_HippoRAG_worker_concurrency_cap": 8,
+    "online_evaluator_calls": 0,
+    "performance_dependent_work_changes": 0,
+    "replays": 0,
+    "resamples": 0,
+    "retries": 0,
+    "top_k": 5,
+    "work_unit_count": 384,
+    "worker_pools": "one_shared_8_worker_official_pool_and_one_shared_64_worker_local_pool_run_concurrently",
+    "zero_or_partial_action_terminal_policy": "any_missing_duplicate_or_invalid_terminal_makes_the_measurement_terminal_infrastructure_invalid_before_label_open_and_scoring"
+  },
+  "formal_ordering": {
+    "before_design_commit": {
+      "FEVER_source_bytes_opened_by_this_study": 0,
+      "candidate_or_score_outputs": 0,
+      "formal_secret_created": 0,
+      "selected_rows": 0
+    },
+    "implementation_freeze": "design_adapter_acquisition_runner_tests_and_all_external_bindings_must_be_committed_and_hash_frozen_before_secret_creation_or_source_open",
+    "one_parent_process_order": [
+      "verify_clean_committed_implementation_freeze_and_bound_source_modes_sizes_and_hashes",
+      "create_exactly_one_32_byte_secret_at_mode_0600_and_publish_only_its_SHA256_commitment",
+      "persist_and_fsync_the_unique_formal_acquisition_marker_before_first_source_byte_or_archive_member_open",
+      "parse_official_paper_test_under_the_frozen_reader_without_opening_the_wiki_archive",
+      "select_the_exact_128_rows_using_only_label_and_syntactic_evidence_reference_eligibility_then_select_one_syntactically_eligible_evidence_set_per_row",
+      "stream_the_official_wiki_under_the_frozen_reader_to_validate_only_the_already_chosen_references_compute_frozen_full_wiki_BM25_statistics_and_mine_hard_negatives",
+      "persist_separate_label_free_action_pack_and_private_late_label_pack_with_public_commitments",
+      "commit_the_public_acquisition_receipt_unchanged",
+      "persist_and_fsync_the_unique_formal_run_marker",
+      "execute_all_384_action_work_units_and_join_all_terminals",
+      "perform_fresh_official_runtime_postflight",
+      "seal_action_receipts_then_open_private_labels_once_and_score",
+      "persist_one_terminal_aggregate_report"
+    ],
+    "prequalification_or_schema_probe_on_bound_source_bytes": false,
+    "source_access_policy": "no_FEVER_source_or_wiki_member_bytes_before_the_unique_formal_acquisition_marker",
+    "source_open_count_if_formal_acquisition_starts": "one_parent_process_attempt_only"
+  },
+  "frozen_BM25_contract": {
+    "average_document_length": "total_frozen_token_count_over_all_eligible_nonempty_official_wiki_sentences_divided_by_N_as_Python_binary64",
+    "b": 0.75,
+    "document_frequency": "number_of_eligible_official_wiki_sentences_containing_the_query_token_at_least_once",
+    "hard_negative_rank": "descending_quantized_BM25_score_then_ascending_page_id_UTF8_then_line_number_then_exact_sentence_UTF8",
+    "idf": "math.log1p((N_minus_df_plus_0.5)/(df_plus_0.5))_as_Python_binary64",
+    "integer_quantization": "int(round(binary64_score_times_1000000000000))_with_Python_round_ties_to_even",
+    "k1": 1.2,
+    "negative_shortfall_policy": "fewer_than_32_minus_selected_gold_count_eligible_hard_negatives_for_any_already_selected_item_is_terminal_infrastructure_invalid_without_row_or_evidence_set_replacement_threshold_relaxation_retry_or_another_FEVER_attempt",
+    "pass_1": "stream_every_eligible_official_wiki_sentence_once_to_compute_N_total_length_and_DF_for_the_union_of_the_128_selected_claim_token_sets",
+    "pass_2": "stream_every_eligible_official_wiki_sentence_once_to_retain_each_items_exact_top_required_count_of_positive_overlap_nonannotated_hard_negatives",
+    "query": "exact_FEVER_claim",
+    "query_term_frequency": "ignored_each_unique_query_token_contributes_once",
+    "score": "sum_in_ascending_Unicode_query_token_order_of_idf_times_tf_times_(k1_plus_1)_divided_by_(tf_plus_k1_times_(1_minus_b_plus_b_times_dl_over_avgdl))",
+    "tokenizer": {
+      "normalization": "Unicode_NFKC_then_casefold",
+      "regex": "[^\\W_]+",
+      "regex_flags": "Python_re_UNICODE",
+      "version": "unicode_nfkc_casefold_alnum_v1"
+    }
+  },
+  "hash_contract": {
+    "algorithm": "sha256",
+    "canonicalization": "json.dumps(body_without_design_sha256,ensure_ascii=True,sort_keys=True,separators=(',',':')).encode('utf-8')",
+    "excluded_top_level_fields": [
+      "design_sha256"
+    ]
+  },
+  "late_label_contract": {
+    "action_pack_contains_gold_or_source_label": false,
+    "all_three_arm_rankings_and_the_official_postflight_complete_before_label_open": true,
+    "labels_opened_by": "one_parent_scoring_process_after_the_action_receipt_set_is_sealed",
+    "private_label_pack_created_during_formal_acquisition": true,
+    "private_label_pack_open_count_during_formal_run": 1,
+    "retrieval_workers_receive": "claim_and_the_exact_32_label_free_sentence_documents_only"
+  },
+  "measurement_contract": {
+    "aggregate_arm_metrics": [
+      "set_aware_support_hit_count_at_5",
+      "set_aware_support_total",
+      "micro_set_aware_support_recall_at_5",
+      "complete_item_count",
+      "item_count"
+    ],
+    "complete_item": "one_iff_every_doc_id_in_the_one_selected_gold_evidence_set_is_present_in_the_unique_top_5_else_zero",
+    "descriptive_only": true,
+    "label_stratified_metrics": "report_the_same_arm_metrics_separately_for_the_fixed_64_SUPPORTS_and_64_REFUTES_strata",
+    "no_additional_evaluator": true,
+    "paired_comparisons": {
+      "P_minus_HippoRAG": "per_item_set_aware_support_hit_delta_and_complete_delta_with_observed_sum_gain_harm_and_tie_counts",
+      "P_minus_RAW": "per_item_set_aware_support_hit_delta_and_complete_delta_with_observed_sum_gain_harm_and_tie_counts"
+    },
+    "performance_gate": false,
+    "promotion_or_archive_mutation": false,
+    "set_aware_support_hits_at_5": "cardinality_of_intersection_between_the_one_selected_gold_evidence_set_doc_ids_and_the_arms_unique_top_5_doc_ids",
+    "statistical_test_or_p_value": false
+  },
+  "precedent_binding": {
+    "claim": "the_QASC_study_is_a_mechanical_precedent_for_gold_injected_fixed_32_document_item_local_support_retrieval_with_full_corpus_BM25_hard_negatives_RAW_official_HippoRAG_and_retained_P_not_evidence_of_FEVER_performance",
+    "qasc_acquisition": {
+      "acquisition_sha256": "a8ee9f8756fc202bf9e3fb851f7f5c48989c8168b99858e22fb047367b339e8b",
+      "file_sha256": "8c96b8d44ebbc67f38bc67714fa477458edad3cf4d3e0c744b38c993524328b4",
+      "relative_path": "manifests/qasc_evaluator_direct_action_acquisition_v1_acquisition.json"
+    },
+    "qasc_design": {
+      "design_sha256": "7c52b7e43d02ffa986683c49ca61863c3f36985b97a1a4677a40b6cddef8c150",
+      "file_sha256": "fdd1bd1d088cee851a20015227d1f3dea1d086bcaf5c0f435f1bf52e943ab003",
+      "relative_path": "manifests/qasc_evaluator_direct_action_coevolution_design_v1.json"
+    },
+    "qasc_disposition": {
+      "file_sha256": "9cef989dfb0f5b319a7dac0009288eb68211a0592041ffe74a0a0d82dad378a2",
+      "relative_path": "manifests/qasc_evaluator_direct_action_coevolution_disposition_v1.json"
+    }
+  },
+  "recorded_date": "2026-07-17",
+  "reader_contract": {
+    "paper_test": {
+      "encoding": "UTF_8_strict",
+      "evidence_reference": "each_reference_is_a_four_element_JSON_array_annotation_id_evidence_id_page_id_line_number_with_page_id_nonempty_string_and_line_number_nonnegative_integer_for_a_syntactically_eligible_set",
+      "evidence_sets": "top_level_evidence_is_a_JSON_array_of_annotated_evidence_set_arrays",
+      "format": "one_complete_JSON_object_per_LF_terminated_nonblank_line",
+      "required_fields": [
+        "id",
+        "verifiable",
+        "label",
+        "claim",
+        "evidence"
+      ],
+      "row_order": "zero_based_physical_nonblank_JSONL_row_ordinal",
+      "structural_failure": "invalid_UTF8_invalid_JSON_nonobject_missing_required_field_duplicate_exact_id_or_malformed_top_level_evidence_is_terminal_infrastructure_invalid_without_partial_selection_or_fallback"
+    },
+    "wiki_archive": {
+      "archive_member_policy": "after_the_formal_marker_open_the_ZIP_central_directory_ignore_directory_entries_reject_encrypted_symlink_absolute_parent_traversal_duplicate_member_names_or_any_other_nonregular_member_and_stream_all_regular_JSONL_members_in_ascending_member_name_UTF8_order",
+      "encoding": "UTF_8_strict",
+      "line_record": "split_each_nonempty_physical_line_record_in_the_page_lines_string_at_TAB_require_decimal_nonnegative_line_number_then_exact_sentence_text_as_the_second_field_and_ignore_remaining_link_annotation_fields",
+      "page_record_required_fields": [
+        "id",
+        "text",
+        "lines"
+      ],
+      "page_sentence_identity": "exact_page_id_and_line_number_must_be_unique_across_the_archive",
+      "stored_retrieval_text_normalization": "none_preserve_exact_decoded_page_id_and_sentence_text",
+      "structural_failure": "invalid_archive_UTF8_JSON_page_or_line_schema_duplicate_page_sentence_identity_or_ambiguous_chosen_reference_is_terminal_infrastructure_invalid_without_repair_fallback_or_rerun"
+    }
+  },
+  "runtime_binding": {
+    "adapter_v2_file_sha256": "3855341aafaede179674b52ba32fe6d5f0a7404761a8efb1e7fba791626b66bd",
+    "attestation_file_sha256": "a2a103774b6166283fbcb3d5fd97c05d8d49a14bedb21bba8ca28aff43193801",
+    "attestation_receipt_sha256": "d22f6239ee1003eacc01bc3a5d2d61b335971a17c79e105756c0c551bff6e99d",
+    "attestation_relative_path": "manifests/musique_official_hipporag_runtime_attestation_v2.json",
+    "base_binding_file_sha256": "effdd1de442c88760d15950739d30479613cdcccba90166bcd7e622f6a7dd03b",
+    "base_binding_receipt_sha256": "522d31926df70f983ae2f644f05c9f3ee45fcd08e0d847642e144652df5a45d0",
+    "base_binding_relative_path": "manifests/musique_official_hipporag_retrieve_only_binding_v1.json",
+    "contract_file_sha256": "f2886718d49921794c8969e45e13d2499b6c0c4b28b91eb54b1da1d85c44b394",
+    "external_network_transport_possible": false,
+    "implementation_set_sha256": "8366f1ec7155726428a37efc329e2faba4c132fb5562aba53b02f2fe78f756e5",
+    "local_embedding_asset_sha256": "92cb157b9fff6a2d81ff1713aa36db90d5ccae5a6576c87b643a19be4675a9ef",
+    "local_llm_asset_sha256": "3676ff83a4cbd775928a6ce6d757dfb5e556d9c433affaea2dec86f8027036a7",
+    "official_source_commit": "ef2f14c4f254f11ac29f9395f262466ad1bb4d10",
+    "official_source_tree_sha256": "30941a14e8dc48f7a41f8679ce6cba0bac9e3cdd99ed919560b45872e1058700"
+  },
+  "schema": "fever_fixed_p_itemlocal_reranking_design_v1",
+  "secret_contract": {
+    "algorithm": "HMAC_SHA256",
+    "commitment": "SHA256_of_the_exact_32_secret_bytes",
+    "domain_separator": "fever_fixed_p_itemlocal_reranking_v1",
+    "one_secret_bytes": 32,
+    "one_secret_file_mode": "0600",
+    "same_secret_uses": [
+      "row_rank",
+      "evidence_set_selection",
+      "document_order"
+    ],
+    "secret_created_after": "committed_external_implementation_freeze",
+    "secret_created_before": "formal_source_open_and_row_selection",
+    "secret_replacement_or_regeneration": false
+  },
+  "source_binding": {
+    "access": {
+      "file_sha256": "a982c7104329b3ae35cbe9d5698b9597bf66208423a32bcd55115532aae45596",
+      "relative_path": "manifests/fever_official_fixed_transfer_source_access_v1.json",
+      "source_access_sha256": "05d7ef2a16f30349d145fd84c775a61d870e9fc15e34e23b37b9967b0586c0b8"
+    },
+    "assets": {
+      "license": {
+        "file_sha256": "eaddbd6e2854b45e6925bac9171fb6a2438492dc0efd4fda80144e836ae1ad05",
+        "relative_path": "artifacts/fever_official_source_v1/license.html",
+        "size_bytes": 670
+      },
+      "paper_test": {
+        "file_sha256": "fb7b0280a0adc2302bbb29bfb7af37274fa585de3171bcf908f180642d11d88e",
+        "relative_path": "artifacts/fever_official_source_v1/paper_test.jsonl",
+        "size_bytes": 2181168
+      },
+      "wiki_pages": {
+        "file_sha256": "4b06d95da6adf7fe02d2796176c670dacccb21348da89cba4c50676ab99665f2",
+        "relative_path": "artifacts/fever_official_source_v1/wiki-pages.zip",
+        "size_bytes": 1713485474
+      }
+    },
+    "custody": {
+      "committed_at_HEAD": "543bed238326371d29def64b61ea2c94a36374b9",
+      "file_sha256": "5595339d3b089b9cd278382381225946f6c0409ba6c64395d376dae3cb0c7a9e",
+      "relative_path": "manifests/fever_official_fixed_transfer_source_custody_v1.json",
+      "source_custody_sha256": "ba0a4aca54a06d8b29e851120a68fc2ca0fb28bc58f3066ffb1fcfcad4957050"
+    },
+    "formal_source": "official_labelled_paper_test_only",
+    "prohibited_sources_or_fallbacks": [
+      "reference/repos/ExpeL/data/fever/paper_dev.jsonl",
+      "official_paper_dev",
+      "shared_task_dev",
+      "train",
+      "blind_test",
+      "live_Wikipedia",
+      "a_different_Wikipedia_snapshot"
+    ]
+  },
+  "terminal_policy": {
+    "additional_FEVER_cohort_after_any_valid_or_performance_result": false,
+    "candidate_or_evaluator_reformation": false,
+    "M_search": false,
+    "performance_gate": false,
+    "promotion": false,
+    "replay_resample_retry": false,
+    "terminal_infrastructure_failure": "preserve_the_marker_and_receipts_report_efficacy_unknown_do_not_substitute_relax_or_rerun",
+    "valid_terminal": "report_all_predeclared_descriptive_metrics_regardless_of_direction_or_magnitude_and_stop"
+  },
+  "typed_candidate_binding": {
+    "formation_receipt_file_sha256": "bbc4f1c737df7c908fc86160719789e20ee4e1c6cb4b77d25b6cb81188f15b6a",
+    "formation_receipt_sha256": "5aacbf417ebd1fce30087c9fc4653aa563709c2302f57500cbcbaaa300fae145",
+    "formation_receipt_relative_path": "manifests/musique_recursive_study_f1_formation_v1/formation.receipt.json",
+    "frozen_program_envelope_sha256": "052cd52956d9196d78fa1bde77071433bddaa76d47b505619ad2d05142640474",
+    "frozen_program_file_sha256": "3ea4362281fa6d86eec41506e7f017dd8794f8d09aecbac04fd2ce6309dda8a6",
+    "frozen_program_relative_path": "manifests/musique_recursive_study_f1_formation_v1/frozen_program.json",
+    "operator_version": "musique_typed_retriever_operator_v1",
+    "program_sha256": "0e9fea159e2dbcb302575f97954be8461c9921a91e11ef9b64a80ecab9640785",
+    "semantic_program": {
+      "dsl_version": "musique_finite_typed_retrieval_dsl_v1",
+      "expansion_mode": "entity_token_one_hop",
+      "expansion_weight": 2,
+      "seed_algorithm": "tfidf",
+      "text_weight": 1,
+      "title_weight": 4,
+      "tokenizer_version": "unicode_nfkc_casefold_alnum_v1",
+      "top_k": 5
+    },
+    "typed_dsl_implementation_file_sha256": "516a7297e2097aed1f8ce85e18a0251b9892a9b77b44428252f36759d0bb5368",
+    "typed_dsl_implementation_relative_path": "assumption_agent/benchmarks/musique_typed_retriever_formation_v1.py",
+    "typed_dsl_implementation_set_sha256": "cb92711b81af461c4748f6e5abbbd503f68c63ad5eb822bea1764144f4fb8954"
+  },
+  "version": "v1"
+}
