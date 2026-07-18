@@ -185,6 +185,31 @@ def _dummy_trace(
     return replace(trace, trace_sha256=recompute_action_trace_sha256(trace))
 
 
+def test_action_trace_receipt_binds_exact_coverage_slot_identities() -> None:
+    trace = _dummy_trace(
+        ACTION_IDS[0],
+        e0=(Fraction(1), 1, 0),
+        e1=(
+            Fraction(1, 4),
+            Fraction(0),
+            Fraction(0),
+            Fraction(1),
+            1,
+            0,
+        ),
+        output=(0, 1, 2, 3, 4),
+    )
+    changed = replace(
+        trace,
+        coverage=replace(
+            trace.coverage,
+            slot_keys=("different-slot",),
+            covered_slot_keys=("different-slot",),
+        ),
+    )
+    assert recompute_action_trace_sha256(changed) != trace.trace_sha256
+
+
 def test_fixed_e0_and_causal_e1_can_select_identifiable_policies_without_labels() -> None:
     observations = []
     for offset in range(3):

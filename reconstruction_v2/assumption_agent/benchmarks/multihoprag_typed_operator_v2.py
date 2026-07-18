@@ -1241,6 +1241,8 @@ def _action_trace_receipt_body(trace: ActionTrace) -> dict[str, object]:
         "core": list(trace.core),
         "core_quality": [_json_number(value) for value in trace.core_quality],
         "coverage": [trace.coverage.covered, trace.coverage.total],
+        "coverage_slot_keys": list(trace.coverage.slot_keys),
+        "coverage_covered_slot_keys": list(trace.coverage.covered_slot_keys),
         "e0": [_json_number(value) for value in trace.e0_key],
         "e1": [_json_number(value) for value in trace.e1_key],
         "extension_scan_count": trace.extension_scan_count,
