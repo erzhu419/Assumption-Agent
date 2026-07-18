@@ -174,7 +174,7 @@ class TrainSourceSpec:
             raise FeverousFormalSourceError("source spec count is invalid")
         if self.annotation_blank_sentinel_rows != 1:
             raise FeverousFormalSourceError(
-                "TRAIN source must contain one empty-object sentinel"
+                "TRAIN source must contain one exact all-empty-field sentinel"
             )
         if self.database_schema != FROZEN_DATABASE_SCHEMA:
             raise FeverousFormalSourceError("wiki schema binding drifted")
@@ -625,10 +625,10 @@ class ControlledTrainSource:
                             "TRAIN JSONL contains an empty physical line"
                         )
                     record = _decode_json_line(content)
-                    if record:
-                        nonblank += 1
-                    else:
+                    if source_adapter._is_blank_sentinel(record):
                         blank += 1
+                    else:
+                        nonblank += 1
                     records.append(record)
         except OSError as exc:
             raise FeverousFormalSourceError("TRAIN annotation read failed") from exc

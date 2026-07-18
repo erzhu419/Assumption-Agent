@@ -15,6 +15,10 @@ from assumption_agent.benchmarks import feverous_p6_e2_source_adapter_v1 as adap
 
 
 EQUIVALENCE_QUALIFICATION_SHA256 = "ab" * 32
+OFFICIAL_BLANK_SENTINEL_BYTES = (
+    b'{"id":"","claim":"","label":"","evidence":"",'
+    b'"annotator_operations":"","challenge":""}\n'
+)
 
 
 def _sha256(path: Path) -> str:
@@ -42,7 +46,7 @@ def _page(page_id: str, count: int) -> dict[str, Any]:
 def _source(tmp_path: Path, pages: list[dict[str, Any]]) -> formal.ControlledTrainSource:
     tmp_path.mkdir(parents=True, exist_ok=True)
     annotation = tmp_path / "synthetic_train.jsonl"
-    annotation.write_bytes(b"{}\n")
+    annotation.write_bytes(OFFICIAL_BLANK_SENTINEL_BYTES)
     annotation.chmod(0o600)
     database = tmp_path / "synthetic_wiki.db"
     connection = sqlite3.connect(database)

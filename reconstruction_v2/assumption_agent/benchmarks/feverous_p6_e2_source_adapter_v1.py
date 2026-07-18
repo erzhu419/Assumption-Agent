@@ -82,6 +82,7 @@ OFFICIAL_RECORD_FIELDS = frozenset(
         "label",
     }
 )
+_OFFICIAL_BLANK_SENTINEL_VALUE = ""
 STRUCTURED_TYPES = frozenset({"cell", "header_cell", "table_caption"})
 TEXT_TYPES = frozenset({"sentence", "item"})
 _SHA256_FIELDS = (
@@ -1048,6 +1049,24 @@ def _source_key(source_id: object) -> str:
     raise FeverousSourceAdapterError("official TRAIN id is invalid")
 
 
+def _is_blank_sentinel(record: Mapping[str, Any]) -> bool:
+    """Recognize only the exact all-empty-string row in official TRAIN.
+
+    The released JSONL does not use an empty object for its leading sentinel.
+    It retains the complete six-field official record schema and assigns an
+    empty JSON string to every field, including fields that are lists in real
+    annotations.  Keeping both the root-key and value-type checks exact makes
+    malformed, merely-falsy near-sentinels continue through the normal
+    fail-closed record validator instead of silently disappearing.
+    """
+
+    return set(record) == OFFICIAL_RECORD_FIELDS and all(
+        type(record[field]) is str
+        and record[field] == _OFFICIAL_BLANK_SENTINEL_VALUE
+        for field in OFFICIAL_RECORD_FIELDS
+    )
+
+
 def _require_official_record(record: Mapping[str, Any]) -> None:
     if set(record) != OFFICIAL_RECORD_FIELDS:
         raise FeverousSourceAdapterError(
@@ -1207,7 +1226,7 @@ def adapt_train_record(
     _require_binding(binding, source_split=source_split)
     if not isinstance(record, Mapping):
         raise FeverousSourceAdapterError("official TRAIN record must be an object")
-    if not record:
+    if _is_blank_sentinel(record):
         return RecordAdaptation(None, "blank_sentinel", 0, 0, 0, 0, 0, 0)
     _require_official_record(record)
     family = record["challenge"]

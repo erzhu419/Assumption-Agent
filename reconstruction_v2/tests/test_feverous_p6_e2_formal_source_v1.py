@@ -17,6 +17,16 @@ from assumption_agent.benchmarks.feverous_p6_e2_source_adapter_v1 import (
 )
 
 
+OFFICIAL_BLANK_SENTINEL = {
+    "annotator_operations": "",
+    "challenge": "",
+    "claim": "",
+    "evidence": "",
+    "id": "",
+    "label": "",
+}
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -25,9 +35,13 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _write_annotation(path: Path) -> None:
+def _write_annotation(
+    path: Path,
+    *,
+    sentinel: dict[str, Any] | None = None,
+) -> None:
     rows: list[dict[str, Any]] = [
-        {},
+        OFFICIAL_BLANK_SENTINEL if sentinel is None else sentinel,
         {
             "annotator_operations": [],
             "challenge": "Other",
@@ -109,12 +123,43 @@ def test_annotation_is_one_controlled_read_and_synthetic_never_becomes_formal(
 ) -> None:
     source = _source(tmp_path)
     records = source.read_annotations_once()
-    assert len(records) == 2 and records[0] == {}
+    assert len(records) == 2 and records[0] == OFFICIAL_BLANK_SENTINEL
     receipt = source.annotation_receipt
     assert receipt["formal_source"] is False
     assert receipt["annotation_file_read_count"] == 1
+    assert receipt["annotation_nonblank_rows"] == 1
+    assert receipt["annotation_blank_sentinel_rows"] == 1
     assert module.verify_annotation_receipt(receipt)
     with pytest.raises(module.FeverousFormalSourceError, match="one-shot"):
+        source.read_annotations_once()
+    source.close()
+
+
+@pytest.mark.parametrize(
+    "near_sentinel",
+    [
+        {},
+        {**OFFICIAL_BLANK_SENTINEL, "evidence": []},
+        {**OFFICIAL_BLANK_SENTINEL, "unexpected": ""},
+    ],
+)
+def test_falsy_near_sentinel_is_not_counted_as_official_blank_row(
+    tmp_path: Path,
+    near_sentinel: dict[str, Any],
+) -> None:
+    annotation = tmp_path / "synthetic_train.jsonl"
+    database = tmp_path / "synthetic_wiki.db"
+    _write_annotation(annotation, sentinel=near_sentinel)
+    _write_database(database)
+    source = module.ControlledTrainSource(
+        annotation_path=annotation,
+        database_path=database,
+        spec=_fixture_spec(annotation, database),
+    )
+    with pytest.raises(
+        module.FeverousFormalSourceError,
+        match="content differs from its frozen binding",
+    ):
         source.read_annotations_once()
     source.close()
 

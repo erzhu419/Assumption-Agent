@@ -214,7 +214,11 @@ def test_controlled_source_delegates_only_after_hash_and_candidate_screen(
 ) -> None:
     path, _binding = _database(tmp_path / "source", rows=8)
     annotation = tmp_path / "source" / "train.jsonl"
-    annotation.write_text("{}\n", encoding="utf-8")
+    annotation.write_text(
+        '{"id":"","claim":"","label":"","evidence":"",'
+        '"annotator_operations":"","challenge":""}\n',
+        encoding="utf-8",
+    )
     annotation.chmod(0o600)
     annotation_bytes = annotation.read_bytes()
     database_bytes = path.read_bytes()
@@ -331,7 +335,10 @@ def _dense_source(
 ) -> formal_source.ControlledTrainSource:
     tmp_path.mkdir(parents=True, exist_ok=True)
     annotation = tmp_path / "dense_train.jsonl"
-    annotation.write_bytes(b"{}\n")
+    annotation.write_bytes(
+        b'{"id":"","claim":"","label":"","evidence":"",'
+        b'"annotator_operations":"","challenge":""}\n'
+    )
     annotation.chmod(0o600)
     database = tmp_path / "dense_wiki.db"
     connection = sqlite3.connect(database)

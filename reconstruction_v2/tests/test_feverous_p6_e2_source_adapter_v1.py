@@ -21,6 +21,14 @@ from assumption_agent.benchmarks.feverous_wikipedia_source_qualification_v1 impo
 
 PAGE_A = "Synthetic_Official_Page_A"
 PAGE_B = "Synthetic_Official_Page_B"
+OFFICIAL_BLANK_SENTINEL = {
+    "annotator_operations": "",
+    "challenge": "",
+    "claim": "",
+    "evidence": "",
+    "id": "",
+    "label": "",
+}
 
 
 def _page_a() -> dict[str, Any]:
@@ -208,7 +216,7 @@ def test_exact_four_family_structural_eligibility_and_all_alternatives() -> None
             [_evidence(cell_a, header_a)],
             label="REFUTES",
         ),
-        {},
+        OFFICIAL_BLANK_SENTINEL,
     ]
     batch = adapter.adapt_train_records(
         records,
@@ -239,6 +247,40 @@ def test_exact_four_family_structural_eligibility_and_all_alternatives() -> None
     }
     assert batch.receipt["candidate_count"] == 4
     assert adapter.verify_adapter_receipt(batch.receipt)
+    connection.close()
+
+
+@pytest.mark.parametrize(
+    ("near_sentinel", "error"),
+    [
+        ({}, "root schema drifted"),
+        (
+            {**OFFICIAL_BLANK_SENTINEL, "evidence": []},
+            "official TRAIN id is invalid",
+        ),
+        (
+            {**OFFICIAL_BLANK_SENTINEL, "unexpected": ""},
+            "root schema drifted",
+        ),
+        (
+            {**OFFICIAL_BLANK_SENTINEL, "id": False},
+            "official TRAIN id is invalid",
+        ),
+    ],
+)
+def test_only_exact_official_blank_sentinel_is_suppressed(
+    near_sentinel: dict[str, Any],
+    error: str,
+) -> None:
+    connection, resolver, pages = _adapted_sources()
+    with pytest.raises(adapter.FeverousSourceAdapterError, match=error):
+        adapter.adapt_train_record(
+            near_sentinel,
+            source_split="TRAIN",
+            resolver=resolver,
+            pages=pages,
+            binding=adapter.FROZEN_TRAIN_BINDING,
+        )
     connection.close()
 
 
