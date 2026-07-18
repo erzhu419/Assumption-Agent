@@ -2047,6 +2047,11 @@ def _validate_formal_receipt_aggregates(payload: Mapping[str, Any]) -> None:
         or int(corpus["distractor_counter_attempt_count"])
         > DISTRACTOR_ATTEMPT_CAP
         or any(int(corpus[field]) < 0 for field in corpus_integer_fields[2:])
+        or int(corpus["distractor_counter_attempt_count"])
+        != int(corpus["filler_article_count"])
+        + int(corpus["distractor_rejected_missing_rowid_count"])
+        + int(corpus["distractor_rejected_duplicate_or_gold_count"])
+        + int(corpus["distractor_rejected_duplicate_serialization_count"])
         or corpus.get("all_selected_gold_included") is not True
         or corpus.get("origin_or_is_gold_in_corpus_view") is not False
         or corpus.get("shared_all_blocks_and_methods") is not True
