@@ -63,6 +63,42 @@ def _synthetic_project(
     return project
 
 
+def _synthetic_subdirectory_project(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Path:
+    repository = tmp_path / "repository"
+    project = repository / "reconstruction_v2"
+    (project / "roles").mkdir(parents=True)
+    (project / "manifests").mkdir()
+    (project / "roles" / "role.py").write_text("VALUE = 1\n", encoding="utf-8")
+    design_body = {"schema": "synthetic_design_v1", "status": "frozen"}
+    design_sha = freeze.stable_hash(design_body)
+    (project / "manifests" / "design.json").write_text(
+        json.dumps({**design_body, "design_sha256": design_sha}) + "\n",
+        encoding="utf-8",
+    )
+    _git(repository, "init", "-q")
+    _git(repository, "config", "user.email", "synthetic@example.invalid")
+    _git(repository, "config", "user.name", "Synthetic Freeze Test")
+    _git(repository, "add", "reconstruction_v2/roles/role.py")
+    _git(repository, "add", "reconstruction_v2/manifests/design.json")
+    _git(repository, "commit", "-q", "-m", "synthetic nested implementation")
+
+    monkeypatch.setattr(freeze, "BOUND_PATHS", {"role": "roles/role.py"})
+    monkeypatch.setattr(
+        freeze, "MANIFEST_RELATIVE", Path("manifests/freeze.json")
+    )
+    monkeypatch.setattr(
+        freeze, "DESIGN_RELATIVE", Path("manifests/design.json")
+    )
+    monkeypatch.setattr(freeze, "DESIGN_SHA256", design_sha)
+    monkeypatch.setattr(
+        freeze, "_qualification_sha256", lambda _project: QUALIFICATION_SHA
+    )
+    return project
+
+
 def _commit_freeze(
     project: Path,
     *,
@@ -145,6 +181,24 @@ def test_forms_and_verifies_clean_committed_ancestor(
     assert verified == formed
     assert verified["identity_compiler_qualification_sha256"] == QUALIFICATION_SHA
     assert verified["formal_selection_secret_generated"] is False
+
+
+def test_subdirectory_project_forms_commits_and_verifies_in_repo_namespace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root_project = _synthetic_project(tmp_path / "root", monkeypatch)
+    root_formed = _commit_freeze(root_project)
+    assert freeze.verify_committed_implementation_freeze(root_project) == root_formed
+
+    project = _synthetic_subdirectory_project(tmp_path / "nested", monkeypatch)
+    formed = _commit_freeze(project)
+    verified = freeze.verify_committed_implementation_freeze(project)
+
+    assert verified == formed
+    assert verified["bound_files"] == root_formed["bound_files"]
+    assert verified["bound_file_set_sha256"] == root_formed[
+        "bound_file_set_sha256"
+    ]
 
 
 def test_rejects_dirty_untracked_bound_path_and_uncommitted_manifest(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 import hashlib
 import json
 from pathlib import Path
@@ -196,6 +197,71 @@ def _git(project: Path, *arguments: str, binary: bool = False) -> str | bytes:
         raise FeverousImplementationFreezeError("Git output is not ASCII") from exc
 
 
+@dataclass(frozen=True)
+class _GitLayout:
+    repository_root: Path
+    project_prefix: Path
+
+
+def _git_layout(project: Path) -> _GitLayout:
+    """Resolve one project to its containing Git root without path escape."""
+
+    top_level = _git(project, "rev-parse", "--show-toplevel")
+    if not isinstance(top_level, str) or not top_level:
+        raise FeverousImplementationFreezeError("Git top-level is invalid")
+    top_level_path = Path(top_level)
+    if not top_level_path.is_absolute():
+        raise FeverousImplementationFreezeError("Git top-level is not absolute")
+    try:
+        repository_root = top_level_path.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise FeverousImplementationFreezeError("Git top-level is unavailable") from exc
+    if not repository_root.is_dir():
+        raise FeverousImplementationFreezeError("Git top-level is not a directory")
+    try:
+        project_prefix = project.relative_to(repository_root)
+    except ValueError as exc:
+        raise FeverousImplementationFreezeError(
+            "project is outside the Git top-level"
+        ) from exc
+    if project_prefix.is_absolute() or any(
+        part in {"", ".", ".."} for part in project_prefix.parts
+    ):
+        raise FeverousImplementationFreezeError("Git project prefix is unsafe")
+    if (repository_root / project_prefix) != project:
+        raise FeverousImplementationFreezeError("Git project prefix escaped")
+    return _GitLayout(
+        repository_root=repository_root,
+        project_prefix=project_prefix,
+    )
+
+
+def _repository_relative_path(
+    layout: _GitLayout, relative_text: str | Path
+) -> Path:
+    """Map a safe project-relative path to the Git repository namespace."""
+
+    relative = Path(relative_text)
+    if (
+        relative.is_absolute()
+        or not relative.parts
+        or any(part in {"", ".", ".."} for part in relative.parts)
+    ):
+        raise FeverousImplementationFreezeError("bound project path is unsafe")
+    repository_relative = layout.project_prefix / relative
+    if repository_relative.is_absolute() or any(
+        part in {"", ".", ".."} for part in repository_relative.parts
+    ):
+        raise FeverousImplementationFreezeError("bound Git path is unsafe")
+    try:
+        (layout.repository_root / repository_relative).relative_to(
+            layout.repository_root
+        )
+    except ValueError as exc:
+        raise FeverousImplementationFreezeError("bound Git path escaped") from exc
+    return repository_relative
+
+
 def _git_is_ancestor(project: Path, ancestor: str, descendant: str) -> bool:
     try:
         completed = subprocess.run(
@@ -247,18 +313,23 @@ def _qualification_sha256(project: Path) -> str:
     return _require_sha256(declared, "identity/compiler qualification")
 
 
-def _bound_file_rows(project: Path, implementation_commit: str) -> list[dict[str, object]]:
+def _bound_file_rows(
+    project: Path,
+    implementation_commit: str,
+    git_layout: _GitLayout,
+) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     for role, relative_text in BOUND_PATHS.items():
         relative = Path(relative_text)
+        repository_relative = _repository_relative_path(git_layout, relative)
         path = project / relative
         if path.is_symlink() or not path.is_file():
             raise FeverousImplementationFreezeError(f"bound role is unavailable: {role}")
         raw = path.read_bytes()
         committed = _git(
-            project,
+            git_layout.repository_root,
             "show",
-            f"{implementation_commit}:{relative.as_posix()}",
+            f"{implementation_commit}:{repository_relative.as_posix()}",
             binary=True,
         )
         assert isinstance(committed, bytes)
@@ -287,24 +358,28 @@ def form_implementation_freeze(
     """Form (but do not write) the manifest from one clean implementation commit."""
 
     root = _project(project)
+    git_layout = _git_layout(root)
     _verify_design(root)
     qualification_sha = _qualification_sha256(root)
     preflight_sha = _require_sha256(runtime_preflight_sha256, "runtime preflight")
-    head = _git(root, "rev-parse", "HEAD")
+    head = _git(git_layout.repository_root, "rev-parse", "HEAD")
     if not isinstance(head, str) or _GIT_SHA1.fullmatch(head) is None:
         raise FeverousImplementationFreezeError("implementation Git HEAD is invalid")
     status = _git(
-        root,
+        git_layout.repository_root,
         "status",
         "--porcelain=v1",
         "--",
-        *(Path(value).as_posix() for value in BOUND_PATHS.values()),
+        *(
+            _repository_relative_path(git_layout, value).as_posix()
+            for value in BOUND_PATHS.values()
+        ),
     )
     if status:
         raise FeverousImplementationFreezeError("bound implementation paths are dirty")
     if not _valid_test_receipt(test_receipt):
         raise FeverousImplementationFreezeError("implementation test receipt is invalid")
-    files = _bound_file_rows(root, head)
+    files = _bound_file_rows(root, head, git_layout)
     body: dict[str, Any] = {
         "schema": SCHEMA,
         "version": VERSION,
@@ -331,6 +406,7 @@ def verify_committed_implementation_freeze(
     """Verify manifest semantics, implementation commit blobs, and clean paths."""
 
     root = _project(project)
+    git_layout = _git_layout(root)
     _verify_design(root)
     manifest = _load_json(root / MANIFEST_RELATIVE)
     body = dict(manifest)
@@ -366,23 +442,34 @@ def verify_committed_implementation_freeze(
     roles = {row.get("role") for row in files if isinstance(row, Mapping)}
     if roles != set(BOUND_PATHS) or len(files) != len(BOUND_PATHS):
         raise FeverousImplementationFreezeError("implementation freeze role set drifted")
-    expected = _bound_file_rows(root, implementation_commit)
+    expected = _bound_file_rows(root, implementation_commit, git_layout)
     if files != expected:
         raise FeverousImplementationFreezeError("bound implementation content drifted")
-    if not _git_is_ancestor(root, implementation_commit, "HEAD"):
+    if not _git_is_ancestor(
+        git_layout.repository_root, implementation_commit, "HEAD"
+    ):
         raise FeverousImplementationFreezeError("implementation commit is not an ancestor")
     status = _git(
-        root,
+        git_layout.repository_root,
         "status",
         "--porcelain=v1",
         "--",
-        *(Path(value).as_posix() for value in BOUND_PATHS.values()),
-        MANIFEST_RELATIVE.as_posix(),
+        *(
+            _repository_relative_path(git_layout, value).as_posix()
+            for value in BOUND_PATHS.values()
+        ),
+        _repository_relative_path(git_layout, MANIFEST_RELATIVE).as_posix(),
     )
     if status:
         raise FeverousImplementationFreezeError("formal implementation paths are dirty")
-    tracked = _git(root, "ls-files", "--error-unmatch", MANIFEST_RELATIVE.as_posix())
-    if tracked != MANIFEST_RELATIVE.as_posix():
+    repository_manifest = _repository_relative_path(git_layout, MANIFEST_RELATIVE)
+    tracked = _git(
+        git_layout.repository_root,
+        "ls-files",
+        "--error-unmatch",
+        repository_manifest.as_posix(),
+    )
+    if tracked != repository_manifest.as_posix():
         raise FeverousImplementationFreezeError("freeze manifest is not committed")
     return manifest
 
