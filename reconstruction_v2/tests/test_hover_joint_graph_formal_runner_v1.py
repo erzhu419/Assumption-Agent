@@ -5,6 +5,8 @@ from dataclasses import replace
 from fractions import Fraction
 import hashlib
 import inspect
+import os
+from pathlib import Path
 import threading
 from typing import Any, Mapping, Sequence
 
@@ -496,17 +498,79 @@ def test_gold_free_signature_rejects_label_fields_and_agent_wave_is_eager_parall
 def test_late_scoring_accepts_gold_2_3_4_and_enforces_fixed_id_bounds(
     runtime_bundle: tuple[FakeEncoder, FakeNER, FakeHippo, runner.PreparedCorpus],
 ) -> None:
-    stage = _execute("A_form", runtime_bundle)
+    stage = _controlled_stage(_execute("A_form", runtime_bundle))
+    e0, e1, identifiable = runner.select_label_free_policies(
+        stage=stage,
+        expected_block="A_form",
+    )
+    assert identifiable is True
+    assert e0.action_id == "P0_IND_SUM"
+    assert e1.action_id == "P2_ENTITY_BRIDGE"
     labels = _labels(stage)
     joined = runner.DEFAULT_ACQUISITION_ADAPTER.join_late_labels(stage, labels)
     assert [len(row.gold_article_ids) for row in joined] == [2, 3, 4, 2, 3, 4]
-    report = runner.descriptive_stage_scores(stage=stage, labels=labels)
+    report = runner.descriptive_stage_scores(
+        stage=stage,
+        labels=labels,
+        e0_policy=e0,
+        e1_policy=e1,
+    )
     assert report["item_count"] == 6
     assert report["exact_hop_stratum_counts"] == {
         "2_hop": 2,
         "3_hop": 2,
         "4_hop": 2,
     }
+    expected_arms = {"RAW", "HippoRAG", "E0", "E1", *ACTION_IDS}
+    assert set(report["arm_utility_totals"]) == expected_arms
+    assert set(report["arm_hop_stratum_scores"]) == expected_arms
+    assert set(report["arm_equal_weight_hop_stratum_mean"]) == expected_arms
+    assert report["arm_utility_totals"]["E0"] == report["arm_utility_totals"][
+        e0.action_id
+    ]
+    assert report["arm_utility_totals"]["E1"] == report["arm_utility_totals"][
+        e1.action_id
+    ]
+    for arm in expected_arms:
+        rows = report["arm_hop_stratum_scores"][arm]
+        assert tuple(rows) == runner.HOP_STRATA
+        assert all(rows[stratum]["item_count"] == 2 for stratum in runner.HOP_STRATA)
+        stratum_totals = [
+            Fraction(*rows[stratum]["utility_total"])
+            for stratum in runner.HOP_STRATA
+        ]
+        stratum_means = [
+            Fraction(*rows[stratum]["utility_mean"])
+            for stratum in runner.HOP_STRATA
+        ]
+        assert Fraction(*report["arm_utility_totals"][arm]) == sum(
+            stratum_totals, Fraction(0)
+        )
+        assert Fraction(*report["arm_equal_weight_hop_stratum_mean"][arm]) == sum(
+            stratum_means, Fraction(0)
+        ) / len(runner.HOP_STRATA)
+    assert report["prelabel_frozen_policies"] == {
+        "e0_action_id": e0.action_id,
+        "e0_policy_sha256": e0.selection_sha256,
+        "e1_action_id": e1.action_id,
+        "e1_policy_sha256": e1.selection_sha256,
+        "policies_identifiable": True,
+    }
+    assert report["policy_selection_inside_descriptive_scoring"] is False
+    runner.verify_self_hash(report, "descriptive_sha256")
+
+    with pytest.raises(runner.HoVerFormalRunnerError, match="prelabel policy receipt"):
+        runner.descriptive_stage_scores(
+            stage=stage,
+            labels=labels,
+            e0_policy=replace(e0, selection_sha256="0" * 64),
+            e1_policy=e1,
+        )
+    with pytest.raises(runner.HoVerFormalRunnerError, match="block drifted"):
+        runner.select_label_free_policies(
+            stage=stage,
+            expected_block="F_search",
+        )
 
     boundary = _labels(stage)
     del boundary["block_labels_sha256"]
@@ -560,3 +624,23 @@ def test_label_free_policy_selection_a_hold_primary_and_l5_scoring(
     assert assessment.l5_passed is True
     assert assessment.l5_delta_total > 0
     assert assessment.e1_minus_hippo_delta_total > 0
+
+
+def test_agent_spawn_uses_empty_private_pycache_and_restores_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PYTHONPYCACHEPREFIX", "/synthetic/original")
+    monkeypatch.delenv("PYTHONDONTWRITEBYTECODE", raising=False)
+    root = tmp_path / "agent_pycache"
+    with runner.isolated_agent_child_imports(root):
+        assert os.environ["PYTHONPYCACHEPREFIX"] == str(root)
+        assert os.environ["PYTHONDONTWRITEBYTECODE"] == "1"
+        assert os.environ["PYTHONNOUSERSITE"] == "1"
+        assert list(root.iterdir()) == []
+    assert os.environ["PYTHONPYCACHEPREFIX"] == "/synthetic/original"
+    assert "PYTHONDONTWRITEBYTECODE" not in os.environ
+
+    (root / "unexpected.pyc").write_bytes(b"not trusted")
+    with pytest.raises(runner.HoVerFormalRunnerError, match="unsafe"):
+        with runner.isolated_agent_child_imports(root):
+            pass

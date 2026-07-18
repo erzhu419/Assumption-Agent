@@ -11,14 +11,16 @@ hop labels, support sentences, or verdicts.
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor
-from contextlib import AbstractContextManager
+from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass, replace
 from fractions import Fraction
 import hashlib
 import json
 import multiprocessing
+import os
+from pathlib import Path
 import re
 from typing import Any, Protocol
 
@@ -33,6 +35,7 @@ from assumption_agent.benchmarks.multihoprag_typed_operator_v2 import (
     ArticleRecord,
     EvaluationObservation,
     FrozenMapping,
+    MultiHopRAGTypedOperatorV2Error,
     PolicySelection,
     QueryPlan,
     TypedCorpusGraph,
@@ -367,6 +370,45 @@ def spawn_process_pool_executor(**kwargs: Any) -> ProcessPoolExecutor:
         mp_context=multiprocessing.get_context("spawn"),
         **kwargs,
     )
+
+
+@contextmanager
+def isolated_agent_child_imports(
+    pycache_root: Path | None,
+) -> Iterator[None]:
+    """Make spawned Agent workers ignore every ambient project pycache."""
+
+    if pycache_root is None:
+        yield
+        return
+    path = pycache_root.absolute()
+    try:
+        path.mkdir(mode=0o700, parents=False)
+    except FileExistsError:
+        pass
+    except OSError as exc:
+        raise HoVerFormalRunnerError(
+            "Agent private pycache root creation failed"
+        ) from exc
+    if path.is_symlink() or not path.is_dir() or any(path.iterdir()):
+        raise HoVerFormalRunnerError("Agent private pycache root is unsafe")
+    keys = ("PYTHONPYCACHEPREFIX", "PYTHONDONTWRITEBYTECODE", "PYTHONNOUSERSITE")
+    previous = {key: os.environ.get(key) for key in keys}
+    os.environ.update(
+        {
+            "PYTHONPYCACHEPREFIX": str(path),
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONNOUSERSITE": "1",
+        }
+    )
+    try:
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
 
 @dataclass(frozen=True)
@@ -854,6 +896,7 @@ def execute_gold_free_stage(
     local_worker_cap: int = LOCAL_CONCURRENCY_CAP,
     formal_shape: bool = True,
     executor_factory: ExecutorFactory = spawn_process_pool_executor,
+    agent_pycache_root: Path | None = None,
     acquisition_adapter: HoverAcquisitionAdapter = DEFAULT_ACQUISITION_ADAPTER,
 ) -> StageExecution:
     """Execute the three retrieval arms from claim-only views."""
@@ -906,13 +949,16 @@ def execute_gold_free_stage(
         raw_rows = tuple(
             raw_top5(feature.dense_relevance_ints) for feature in features
         )
-        traces = execute_agent_actions_eager(
-            graph=prepared.graph,
-            plans=plans,
-            relevance_vectors=[feature.dense_relevance_ints for feature in features],
-            local_worker_cap=local_worker_cap,
-            executor_factory=executor_factory,
-        )
+        with isolated_agent_child_imports(agent_pycache_root):
+            traces = execute_agent_actions_eager(
+                graph=prepared.graph,
+                plans=plans,
+                relevance_vectors=[
+                    feature.dense_relevance_ints for feature in features
+                ],
+                local_worker_cap=local_worker_cap,
+                executor_factory=executor_factory,
+            )
         hippo_batch = hippo_future.result()
     hippo_rows = _validate_hippo_indices(
         hippo_batch, count=len(items), corpus_count=len(prepared.articles)
@@ -961,12 +1007,64 @@ def _trace_for_policy(item: StageItem, policy: PolicySelection) -> ActionTrace:
 def select_f_policies(
     *, f_stage: StageExecution
 ) -> tuple[PolicySelection, PolicySelection, bool]:
-    if f_stage.block != "F_search":
-        raise HoVerFormalRunnerError("policy selection requires F_search")
-    observations = f_stage.observations()
-    e0 = select_global_policy(evaluator_id=E0_ID, observations=observations)
-    e1 = select_global_policy(evaluator_id=E1_ID, observations=observations)
-    return e0, e1, policies_identifiable(e0, e1, observations)
+    return select_label_free_policies(
+        stage=f_stage,
+        expected_block="F_search",
+    )
+
+
+def select_label_free_policies(
+    *,
+    stage: StageExecution,
+    expected_block: str,
+) -> tuple[PolicySelection, PolicySelection, bool]:
+    """Select both frozen evaluators from a complete label-free action matrix."""
+
+    if (
+        not isinstance(stage, StageExecution)
+        or expected_block not in {"A_form", "F_search"}
+        or stage.block != expected_block
+    ):
+        raise HoVerFormalRunnerError("label-free policy-selection block drifted")
+    observations = stage.observations()
+    try:
+        e0 = select_global_policy(evaluator_id=E0_ID, observations=observations)
+        e1 = select_global_policy(evaluator_id=E1_ID, observations=observations)
+        identifiable = policies_identifiable(e0, e1, observations)
+    except MultiHopRAGTypedOperatorV2Error as exc:
+        raise HoVerFormalRunnerError(
+            "label-free policy selection could not be recomputed"
+        ) from exc
+    return e0, e1, identifiable
+
+
+def _validate_frozen_policy_pair(
+    *,
+    stage: StageExecution,
+    e0_policy: PolicySelection,
+    e1_policy: PolicySelection,
+) -> bool:
+    if not isinstance(e0_policy, PolicySelection) or not isinstance(
+        e1_policy, PolicySelection
+    ):
+        raise HoVerFormalRunnerError("prelabel policy selection type drifted")
+    try:
+        if (
+            e0_policy.selection_sha256
+            != recompute_policy_selection_sha256(e0_policy)
+            or e1_policy.selection_sha256
+            != recompute_policy_selection_sha256(e1_policy)
+        ):
+            raise HoVerFormalRunnerError("prelabel policy receipt drifted")
+        return policies_identifiable(
+            e0_policy,
+            e1_policy,
+            stage.observations(),
+        )
+    except MultiHopRAGTypedOperatorV2Error as exc:
+        raise HoVerFormalRunnerError(
+            "prelabel policies do not bind the supplied action matrix"
+        ) from exc
 
 
 def _utility(output: Sequence[int], gold: Sequence[int]) -> Fraction:
@@ -991,22 +1089,65 @@ def descriptive_stage_scores(
     *,
     stage: StageExecution,
     labels: Mapping[str, Any],
+    e0_policy: PolicySelection,
+    e1_policy: PolicySelection,
     acquisition_adapter: HoverAcquisitionAdapter = DEFAULT_ACQUISITION_ADAPTER,
 ) -> dict[str, Any]:
-    """Return exact arm totals without selecting or changing a policy."""
+    """Score A_form using only its already-frozen prelabel policy pair."""
 
+    if stage.block != "A_form":
+        raise HoVerFormalRunnerError("descriptive scoring requires A_form")
+    policies_are_identifiable = _validate_frozen_policy_pair(
+        stage=stage,
+        e0_policy=e0_policy,
+        e1_policy=e1_policy,
+    )
     joined = acquisition_adapter.join_late_labels(stage, labels)
-    arms: dict[str, list[Fraction]] = {"RAW": [], "HippoRAG": []}
-    arms.update({action_id: [] for action_id in ACTION_IDS})
+    arm_ids = ("RAW", "HippoRAG", "E0", "E1", *ACTION_IDS)
+    arms: dict[str, list[Fraction]] = {arm: [] for arm in arm_ids}
+    arms_by_stratum: dict[str, dict[str, list[Fraction]]] = {
+        arm: {stratum: [] for stratum in HOP_STRATA} for arm in arm_ids
+    }
     strata: Counter[str] = Counter()
     for item, label in zip(stage.items, joined, strict=True):
         strata[label.hop_stratum] += 1
-        arms["RAW"].append(_utility(item.raw_top5, label.gold_article_ids))
-        arms["HippoRAG"].append(_utility(item.hippo_top5, label.gold_article_ids))
-        for trace in item.traces:
-            arms[trace.action_id].append(
-                _utility(trace.output_top5, label.gold_article_ids)
-            )
+        outputs: dict[str, Sequence[int]] = {
+            "RAW": item.raw_top5,
+            "HippoRAG": item.hippo_top5,
+            "E0": _trace_for_policy(item, e0_policy).output_top5,
+            "E1": _trace_for_policy(item, e1_policy).output_top5,
+            **{trace.action_id: trace.output_top5 for trace in item.traces},
+        }
+        if set(outputs) != set(arm_ids):
+            raise HoVerFormalRunnerError("descriptive arm registry drifted")
+        for arm in arm_ids:
+            value = _utility(outputs[arm], label.gold_article_ids)
+            arms[arm].append(value)
+            arms_by_stratum[arm][label.hop_stratum].append(value)
+    if any(strata[stratum] <= 0 for stratum in HOP_STRATA):
+        raise HoVerFormalRunnerError(
+            "descriptive equal-weight hop mean requires every stratum"
+        )
+
+    stratum_scores: dict[str, dict[str, dict[str, Any]]] = {}
+    equal_weight_means: dict[str, list[int]] = {}
+    for arm in sorted(arms):
+        per_stratum: dict[str, dict[str, Any]] = {}
+        means: list[Fraction] = []
+        for stratum in HOP_STRATA:
+            values = arms_by_stratum[arm][stratum]
+            total = sum(values, Fraction(0))
+            mean = total / len(values)
+            means.append(mean)
+            per_stratum[stratum] = {
+                "item_count": len(values),
+                "utility_total": fraction_payload(total),
+                "utility_mean": fraction_payload(mean),
+            }
+        stratum_scores[arm] = per_stratum
+        equal_weight_means[arm] = fraction_payload(
+            sum(means, Fraction(0)) / len(HOP_STRATA)
+        )
     return _self_hashed(
         {
             "schema": f"{VERSION}_descriptive_stage_scores",
@@ -1018,6 +1159,16 @@ def descriptive_stage_scores(
                 arm: fraction_payload(sum(values, Fraction(0)))
                 for arm, values in sorted(arms.items())
             },
+            "arm_hop_stratum_scores": stratum_scores,
+            "arm_equal_weight_hop_stratum_mean": equal_weight_means,
+            "prelabel_frozen_policies": {
+                "e0_action_id": e0_policy.action_id,
+                "e0_policy_sha256": e0_policy.selection_sha256,
+                "e1_action_id": e1_policy.action_id,
+                "e1_policy_sha256": e1_policy.selection_sha256,
+                "policies_identifiable": policies_are_identifiable,
+            },
+            "policy_selection_inside_descriptive_scoring": False,
             "policy_or_threshold_changed": False,
         },
         "descriptive_sha256",
@@ -1166,8 +1317,10 @@ __all__ = [
     "execute_agent_actions_eager",
     "execute_gold_free_stage",
     "fraction_payload",
+    "isolated_agent_child_imports",
     "prepare_offline_corpus",
     "raw_top5",
+    "select_label_free_policies",
     "select_f_policies",
     "stable_hash",
     "stage_execution_matrix_sha256",

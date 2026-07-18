@@ -158,6 +158,7 @@ def _launch_worker(
         "PYTHONPATH": str(project_root),
         "PYTHONNOUSERSITE": "1",
         "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONPYCACHEPREFIX": str(writable_root / "pycache"),
         "HF_HUB_OFFLINE": "1",
         "TRANSFORMERS_OFFLINE": "1",
         "CUDA_VISIBLE_DEVICES": "",
@@ -297,7 +298,7 @@ def build_official_hipporag_global_index_v1(
         )
     stage_root.mkdir(mode=0o700)
     try:
-        for name in ("home", "cache", "tmp"):
+        for name in ("home", "cache", "tmp", "pycache"):
             (stage_root / name).mkdir(mode=0o700)
         corpus_input = stage_root / CORPUS_INPUT_FILENAME
         build_receipt_path = stage_root / BUILD_RECEIPT_FILENAME
@@ -436,7 +437,7 @@ def retrieve_official_hipporag_global_index_v1(
     os.close(lock_descriptor)
     try:
         work_root.mkdir(mode=0o700)
-        for name in ("home", "cache", "tmp"):
+        for name in ("home", "cache", "tmp", "pycache"):
             (work_root / name).mkdir(mode=0o700)
         working_index_root = work_root / "official_global_index.read_clone"
         shutil.copytree(index_root, working_index_root, copy_function=shutil.copy2)

@@ -223,6 +223,9 @@ def test_ner_client_uses_one_offline_row_minimal_worker(
     environment = launch["env"]
     assert isinstance(environment, dict)
     assert environment["PYTHONPATH"] == str(tmp_path.resolve())
+    assert environment["PYTHONPYCACHEPREFIX"] == str(
+        tmp_path.resolve() / runtime.NER_PYCACHE_RELATIVE
+    )
     assert environment["HF_HUB_OFFLINE"] == "1"
     assert environment["TRANSFORMERS_OFFLINE"] == "1"
     assert environment["CUDA_VISIBLE_DEVICES"] == ""

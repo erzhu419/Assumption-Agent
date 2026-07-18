@@ -51,6 +51,7 @@ NER_PROCESS_COUNT = 1
 FORMAL_ROOT_RELATIVE = Path("artifacts/hover_joint_graph_formal_v1")
 HIPPORAG_STAGE_RELATIVE = FORMAL_ROOT_RELATIVE / "official_hipporag_stage"
 HIPPORAG_WORK_RELATIVE = FORMAL_ROOT_RELATIVE / "hipporag_query_work"
+NER_PYCACHE_RELATIVE = HIPPORAG_WORK_RELATIVE / "ner_pycache"
 
 
 class HoVerLocalRuntimeError(RuntimeError):
@@ -231,6 +232,15 @@ class OfflineNERJSONLClient:
         if NER_PROCESS_COUNT != 1:
             raise HoVerLocalRuntimeError("NER process contract drifted")
         project = _canonical_project(project_root)
+        pycache_root = project / NER_PYCACHE_RELATIVE
+        try:
+            pycache_root.mkdir(mode=0o700, parents=True)
+        except OSError as exc:
+            raise HoVerLocalRuntimeError(
+                "NER private pycache root creation failed"
+            ) from exc
+        if pycache_root.is_symlink() or not pycache_root.is_dir():
+            raise HoVerLocalRuntimeError("NER private pycache root is unsafe")
         try:
             self.runtime_binding = verify_ner_runtime_binding(
                 asset_manifest_path=asset_manifest_path,
@@ -250,6 +260,7 @@ class OfflineNERJSONLClient:
                 "HF_HUB_OFFLINE": "1",
                 "PYTHONNOUSERSITE": "1",
                 "PYTHONPATH": str(project),
+                "PYTHONPYCACHEPREFIX": str(pycache_root),
                 "TOKENIZERS_PARALLELISM": "false",
                 "TRANSFORMERS_OFFLINE": "1",
             }
@@ -340,6 +351,7 @@ __all__ = [
     "HIPPORAG_WORK_RELATIVE",
     "HoVerLocalRuntimeError",
     "LOCAL_CONCURRENCY_CAP",
+    "NER_PYCACHE_RELATIVE",
     "OfflineNERJSONLClient",
     "OfficialHippoGateway",
     "PREFLIGHT_SCHEMA",

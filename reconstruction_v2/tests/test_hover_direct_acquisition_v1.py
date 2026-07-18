@@ -12,6 +12,7 @@ import unicodedata
 import pytest
 
 from assumption_agent.benchmarks import hover_direct_acquisition_v1 as acq
+from assumption_agent.benchmarks import hover_implementation_freeze_v1 as freeze
 
 
 def _synthetic_sources() -> tuple[list[dict[str, object]], acq.DocumentCatalog]:
@@ -163,17 +164,20 @@ def test_one_shot_persistence_loaders_modes_and_tamper_detection(tmp_path: Path)
         calls.append(length)
         return b"S" * length
 
+    paths = acq.default_acquisition_paths(tmp_path)
+    stability_calls: list[bool] = []
     receipt = acq.execute_acquisition_once(
         train_payload=payload,
         documents=documents,
         qualification=qualification,
-        paths=acq.default_acquisition_paths(tmp_path),
+        paths=paths,
         source_bindings={"synthetic": True, "source_stats_sha256": acq.stable_hash(stats)},
         random_bytes=fixed_random,
+        stability_check=lambda: stability_calls.append(paths.public_receipt.exists()),
     )
     assert calls == [32]
+    assert stability_calls == [False]
     assert receipt["status"] == "private_four_block_pack_formed"
-    paths = acq.default_acquisition_paths(tmp_path)
     for private_path in (
         paths.marker,
         paths.secret,
@@ -243,6 +247,66 @@ def test_one_shot_persistence_loaders_modes_and_tamper_detection(tmp_path: Path)
     paths.block_views["A_form"].write_bytes(raw.replace(b"Synthetic claim", b"Synthetic claiM", 1))
     with pytest.raises(acq.HoVerAcquisitionError, match="file binding drifted"):
         acq.load_block_view(project=tmp_path, expected_block="A_form")
+
+
+def test_formal_entrypoint_verifies_implementation_before_source_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = Path(acq.__file__).resolve().parents[2]
+    receipt = {
+        freeze.HASH_FIELD: "1" * 64,
+        "implementation_freeze_file_sha256": "2" * 64,
+        "implementation_freeze_git_blob_sha1": "3" * 40,
+        "verified_git_head": "4" * 40,
+        "role_paths": {
+            "acquisition": "assumption_agent/benchmarks/hover_direct_acquisition_v1.py"
+        },
+    }
+    calls: list[str] = []
+    monkeypatch.setenv(
+        acq.isolated_bootstrap.TARGET_ENV,
+        "assumption_agent.benchmarks.hover_direct_acquisition_v1",
+    )
+    monkeypatch.setattr(
+        acq.isolated_bootstrap,
+        "assert_isolated",
+        lambda _target: calls.append("isolated"),
+    )
+    monkeypatch.setattr(
+        freeze,
+        "verify_committed_implementation_freeze",
+        lambda _project: calls.append("verify") or receipt,
+    )
+    monkeypatch.setattr(
+        freeze,
+        "import_and_verify_frozen_python_roles",
+        lambda **_kwargs: calls.append("origins"),
+    )
+    assert acq._verify_formal_implementation(project) == {
+        "implementation_freeze_sha256": "1" * 64,
+        "implementation_freeze_file_sha256": "2" * 64,
+        "implementation_freeze_git_blob_sha1": "3" * 40,
+        "acquisition_execution_git_head": "4" * 40,
+        "all_frozen_python_origins_verified": True,
+    }
+    assert calls == ["isolated", "verify", "origins"]
+
+    monkeypatch.setattr(
+        acq,
+        "_verify_formal_implementation",
+        lambda _project: (_ for _ in ()).throw(
+            acq.HoVerAcquisitionError("synthetic implementation failure")
+        ),
+    )
+    source_reads: list[bool] = []
+    monkeypatch.setattr(
+        acq,
+        "_read_bound_json",
+        lambda *_args, **_kwargs: source_reads.append(True),
+    )
+    with pytest.raises(acq.HoVerAcquisitionError, match="implementation failure"):
+        acq.formal_acquire(project)
+    assert source_reads == []
 
 
 def test_strict_json_committed_qualification_and_synthetic_sqlite(tmp_path: Path) -> None:

@@ -21,10 +21,13 @@ import re
 import sqlite3
 import stat
 import subprocess
+import sys
 from typing import Any
 import unicodedata
 from urllib.parse import quote
 import argparse
+
+from assumption_agent.benchmarks import hover_isolated_bootstrap_v1 as isolated_bootstrap
 
 
 VERSION = "hover_direct_acquisition_v1"
@@ -1315,10 +1318,63 @@ def _reject_symlink_ancestors(path: Path) -> None:
             raise HoVerAcquisitionError("output path has a symlink ancestor")
 
 
+def _ensure_directory_durable(path: Path) -> None:
+    """Create each missing directory and fsync its parent entry."""
+
+    directory = path.absolute()
+    missing: list[Path] = []
+    cursor = directory
+    while not os.path.lexists(cursor):
+        missing.append(cursor)
+        if cursor.parent == cursor:
+            raise HoVerAcquisitionError("durable output ancestor is unavailable")
+        cursor = cursor.parent
+    try:
+        metadata = cursor.lstat()
+    except OSError as exc:
+        raise HoVerAcquisitionError("durable output ancestor is unavailable") from exc
+    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+        raise HoVerAcquisitionError("durable output ancestor is unsafe")
+    for directory_to_create in reversed(missing):
+        try:
+            directory_to_create.mkdir(mode=0o700)
+            parent_descriptor = os.open(
+                directory_to_create.parent,
+                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+            )
+            try:
+                os.fsync(parent_descriptor)
+            finally:
+                os.close(parent_descriptor)
+        except OSError as exc:
+            raise HoVerAcquisitionError(
+                "durable output parent creation failed"
+            ) from exc
+        metadata = directory_to_create.lstat()
+        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+            raise HoVerAcquisitionError("durable output parent is unsafe")
+    cursor = directory
+    while cursor.parent != cursor:
+        try:
+            descriptor = os.open(
+                cursor.parent,
+                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+            )
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+        except OSError as exc:
+            raise HoVerAcquisitionError(
+                "durable output ancestor fsync failed"
+            ) from exc
+        cursor = cursor.parent
+
+
 def _prepare_output_parents(paths: AcquisitionPaths) -> None:
     for path in _all_output_paths(paths):
         _reject_symlink_ancestors(path)
-        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        _ensure_directory_durable(path.parent)
         _reject_symlink_ancestors(path)
         metadata = path.parent.lstat()
         if not stat.S_ISDIR(metadata.st_mode):
@@ -1637,11 +1693,16 @@ def execute_acquisition_once(
     source_bindings: Mapping[str, Any],
     enforce_formal_counts: bool = False,
     random_bytes: Callable[[int], bytes] = os.urandom,
+    stability_check: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
     if not isinstance(qualification, QualificationBinding) or not isinstance(
         source_bindings, Mapping
     ):
         raise HoVerAcquisitionError("acquisition qualification or source binding is absent")
+    if enforce_formal_counts and stability_check is None:
+        raise HoVerAcquisitionError(
+            "formal acquisition requires an implementation stability check"
+        )
     _preflight_outputs(paths)
     _prepare_output_parents(paths)
     marker, marker_binding = _consume_marker(
@@ -1682,6 +1743,15 @@ def execute_acquisition_once(
     commitments = persist_private_payloads(
         corpus=corpus, views=views, labels=labels, paths=paths
     )
+    if stability_check is not None:
+        try:
+            stability_check()
+        except HoVerAcquisitionError:
+            raise
+        except Exception as exc:
+            raise HoVerAcquisitionError(
+                "implementation closure drifted before public receipt"
+            ) from exc
     body = {
         "schema": PUBLIC_RECEIPT_SCHEMA,
         "version": VERSION,
@@ -1970,10 +2040,46 @@ def _validate_formal_receipt_aggregates(payload: Mapping[str, Any]) -> None:
         },
         "qualification_sha256": QUALIFICATION_SHA256,
     }
+    source_bindings = payload.get("source_bindings")
+    implementation = (
+        source_bindings.get("implementation")
+        if isinstance(source_bindings, Mapping)
+        else None
+    )
     source_stats = payload.get("source_requalification")
     if (
         payload.get("qualification_sha256") != QUALIFICATION_SHA256
-        or payload.get("source_bindings") != expected_sources
+        or not isinstance(source_bindings, Mapping)
+        or set(source_bindings) != {*expected_sources, "implementation"}
+        or any(source_bindings.get(key) != value for key, value in expected_sources.items())
+        or not isinstance(implementation, Mapping)
+        or set(implementation)
+        != {
+            "implementation_freeze_sha256",
+            "implementation_freeze_file_sha256",
+            "implementation_freeze_git_blob_sha1",
+            "acquisition_execution_git_head",
+            "all_frozen_python_origins_verified",
+        }
+        or _HEX64.fullmatch(
+            str(implementation.get("implementation_freeze_sha256"))
+        )
+        is None
+        or _HEX64.fullmatch(
+            str(implementation.get("implementation_freeze_file_sha256"))
+        )
+        is None
+        or re.fullmatch(
+            r"[0-9a-f]{40}",
+            str(implementation.get("implementation_freeze_git_blob_sha1")),
+        )
+        is None
+        or re.fullmatch(
+            r"[0-9a-f]{40}",
+            str(implementation.get("acquisition_execution_git_head")),
+        )
+        is None
+        or implementation.get("all_frozen_python_origins_verified") is not True
         or not isinstance(source_stats, Mapping)
     ):
         raise HoVerAcquisitionError("formal acquisition source binding drifted")
@@ -2093,9 +2199,82 @@ def load_formal_committed_acquisition_receipt(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Load the Git-bound receipt and enforce every formal aggregate boundary."""
 
-    payload, binding = load_committed_acquisition_receipt(project)
+    root = _canonical_project(project)
+    payload, binding = load_committed_acquisition_receipt(root)
     _validate_formal_receipt_aggregates(payload)
+    implementation = _verify_formal_implementation(root)
+    frozen = payload["source_bindings"]["implementation"]
+    for field in (
+        "implementation_freeze_sha256",
+        "implementation_freeze_file_sha256",
+        "implementation_freeze_git_blob_sha1",
+        "all_frozen_python_origins_verified",
+    ):
+        if frozen.get(field) != implementation.get(field):
+            raise HoVerAcquisitionError(
+                "formal acquisition implementation binding drifted"
+            )
+    current_head = binding.get("receipt_git_head")
+    execution_head = frozen.get("acquisition_execution_git_head")
+    if implementation.get("acquisition_execution_git_head") != current_head:
+        raise HoVerAcquisitionError("formal acquisition current HEAD drifted")
+    try:
+        _git_output(
+            root,
+            "merge-base",
+            "--is-ancestor",
+            str(execution_head),
+            str(current_head),
+        )
+    except HoVerAcquisitionError as exc:
+        raise HoVerAcquisitionError(
+            "acquisition execution HEAD is not an ancestor of its receipt"
+        ) from exc
     return payload, binding
+
+
+def _verify_formal_implementation(project: Path) -> dict[str, Any]:
+    """Close the executing acquisition module to the committed freeze."""
+
+    from assumption_agent.benchmarks import hover_implementation_freeze_v1 as freeze
+
+    try:
+        current_target = os.environ.get(isolated_bootstrap.TARGET_ENV)
+        if current_target not in isolated_bootstrap.TARGETS:
+            raise HoVerAcquisitionError(
+                "formal acquisition has no isolated interpreter target"
+            )
+        isolated_bootstrap.assert_isolated(current_target)
+        receipt = freeze.verify_committed_implementation_freeze(project)
+        freeze.import_and_verify_frozen_python_roles(
+            project=project,
+            implementation_receipt=receipt,
+        )
+    except Exception as exc:
+        raise HoVerAcquisitionError(
+            "formal acquisition implementation freeze verification failed"
+        ) from exc
+    role_paths = receipt.get("role_paths")
+    acquisition_relative = (
+        role_paths.get("acquisition") if isinstance(role_paths, Mapping) else None
+    )
+    if (
+        not isinstance(acquisition_relative, str)
+        or (project / acquisition_relative).resolve(strict=True)
+        != Path(__file__).resolve(strict=True)
+    ):
+        raise HoVerAcquisitionError("executing acquisition module is not frozen")
+    return {
+        "implementation_freeze_sha256": receipt[freeze.HASH_FIELD],
+        "implementation_freeze_file_sha256": receipt[
+            "implementation_freeze_file_sha256"
+        ],
+        "implementation_freeze_git_blob_sha1": receipt[
+            "implementation_freeze_git_blob_sha1"
+        ],
+        "acquisition_execution_git_head": receipt["verified_git_head"],
+        "all_frozen_python_origins_verified": True,
+    }
 
 
 def _read_private_payload(path: Path, binding: Mapping[str, Any], *, label: str) -> dict[str, Any]:
@@ -2158,8 +2337,63 @@ def load_block_labels(*, project: Path, expected_block: str) -> dict[str, Any]:
     return payload
 
 
+def preflight_formal_private_pack_files(project: Path) -> dict[str, Any]:
+    """Hash-bind every private pack file without decoding any view or label."""
+
+    root = _canonical_project(project)
+    _receipt, bindings = load_formal_committed_acquisition_receipt(root)
+    paths = default_acquisition_paths(root)
+    targets: list[tuple[Path, Mapping[str, Any], str]] = [
+        (paths.corpus_view, bindings["corpus"], "corpus view"),
+    ]
+    for block in BLOCK_ORDER:
+        block_binding = bindings["blocks"][block]
+        targets.append(
+            (
+                paths.block_views[block],
+                block_binding["view"],
+                f"{block} claim view",
+            )
+        )
+        if block != "F_search":
+            targets.append(
+                (
+                    paths.block_labels[block],
+                    block_binding["labels"],
+                    f"{block} utility labels",
+                )
+            )
+    total_bytes = 0
+    for path, binding, label in targets:
+        observed_sha, observed_size = _stream_file_sha256(
+            path, label=label, mode=0o600
+        )
+        if (
+            observed_size != binding.get("byte_size")
+            or not hmac.compare_digest(
+                observed_sha, str(binding.get("file_sha256"))
+            )
+        ):
+            raise HoVerAcquisitionError(f"{label} preflight binding drifted")
+        total_bytes += observed_size
+    f_label = FORMAL_OUTPUT_ROOT_RELATIVE / "private/F_search.utility_labels.json"
+    if os.path.lexists(root / f_label):
+        raise HoVerAcquisitionError("F_search utility label residue exists")
+    return {
+        "private_pack_file_count": len(targets),
+        "private_pack_total_bytes": total_bytes,
+        "private_pack_json_payloads_decoded": 0,
+        "claim_or_label_fields_exposed_to_controller": False,
+        "all_private_file_hashes_match_committed_receipt": True,
+    }
+
+
 def formal_acquire(project: Path) -> dict[str, Any]:
     root = _canonical_project(project)
+    isolated_bootstrap.assert_isolated(
+        "assumption_agent.benchmarks.hover_direct_acquisition_v1"
+    )
+    implementation_binding = _verify_formal_implementation(root)
     qualification_path = root / FORMAL_QUALIFICATION_RELATIVE
     qualification_payload, qualification_raw = _read_bound_json(
         qualification_path,
@@ -2202,7 +2436,15 @@ def formal_acquire(project: Path) -> dict[str, Any]:
             "mode": "0600",
         },
         "qualification_sha256": qualification.qualification_sha256,
+        "implementation": implementation_binding,
     }
+
+    def assert_implementation_stable() -> None:
+        if _verify_formal_implementation(root) != implementation_binding:
+            raise HoVerAcquisitionError(
+                "formal acquisition implementation changed during execution"
+            )
+
     with ImmutableSQLiteDocumentResolver(
         path=sqlite_path,
         row_count=qualification.sqlite_document_row_count,
@@ -2216,6 +2458,7 @@ def formal_acquire(project: Path) -> dict[str, Any]:
             paths=default_acquisition_paths(root),
             source_bindings=source_bindings,
             enforce_formal_counts=True,
+            stability_check=assert_implementation_stable,
         )
 
 
@@ -2226,7 +2469,12 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    arguments = _parser().parse_args(argv)
+    raw_arguments = tuple(sys.argv[1:] if argv is None else argv)
+    isolated_bootstrap.reexec_isolated(
+        "assumption_agent.benchmarks.hover_direct_acquisition_v1",
+        raw_arguments,
+    )
+    arguments = _parser().parse_args(raw_arguments)
     formal_acquire(arguments.project)
     return 0
 
@@ -2270,6 +2518,7 @@ __all__ = [
     "normalize_claim",
     "normalize_support_title_nfd",
     "parse_train_payload",
+    "preflight_formal_private_pack_files",
     "persist_private_payloads",
     "select_private_blocks",
     "stable_hash",
@@ -2285,4 +2534,6 @@ __all__ = [
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    from assumption_agent.benchmarks import hover_direct_acquisition_v1 as _canonical
+
+    raise SystemExit(_canonical.main())

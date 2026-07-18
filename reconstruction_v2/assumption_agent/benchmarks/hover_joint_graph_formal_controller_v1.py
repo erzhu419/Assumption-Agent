@@ -8,8 +8,9 @@ separate sentinel-gated entrypoint and never open the formal source pack.
 
 from __future__ import annotations
 
-from contextlib import AbstractContextManager
-from dataclasses import dataclass, replace
+import argparse
+from contextlib import AbstractContextManager, ExitStack
+from dataclasses import dataclass
 from fractions import Fraction
 import hashlib
 import json
@@ -17,15 +18,17 @@ import os
 from pathlib import Path
 import re
 import stat
+import sys
 from typing import Any, Mapping, Protocol, Sequence
 
 from assumption_agent.benchmarks import hover_direct_acquisition_v1 as acquisition
+from assumption_agent.benchmarks import hover_implementation_freeze_v1 as implementation_freeze
+from assumption_agent.benchmarks import hover_isolated_bootstrap_v1 as isolated_bootstrap
 from assumption_agent.benchmarks import hover_joint_graph_formal_runner_v1 as runner
-from assumption_agent.benchmarks import multihoprag_joint_graph_formal_runner_v1 as legacy
+from assumption_agent.benchmarks import hover_lifecycle_store_v1 as lifecycle_store
+from assumption_agent.benchmarks import hover_local_runtime_v1 as local_runtime
+from assumption_agent.benchmarks.multihoprag_typed_operator_v2 import PolicySelection
 from replication_runtime.qasper_minilm_v1.binding import OfflineMiniLMEncoder
-from replication_runtime.musique_official_hipporag_v1.runtime_attestation_v3 import (
-    verify_formal_runtime_attestation_v3,
-)
 
 
 VERSION = "hover_joint_graph_formal_controller_v1"
@@ -41,10 +44,11 @@ SYNTHETIC_SENTINEL = ".hover_joint_graph_synthetic_lifecycle_test_root"
 SYNTHETIC_SENTINEL_CONTENT = "offline_synthetic_no_formal_capabilities_v1\n"
 
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
+_GIT_SHA1 = re.compile(r"[0-9a-f]{40}\Z")
 
-FormalRuntimeConfig = legacy.FormalRuntimeConfig
-OfficialHippoGateway = legacy.OfficialHippoGateway
-OfflineNERJSONLClient = legacy.OfflineNERJSONLClient
+FormalRuntimeConfig = local_runtime.FormalRuntimeConfig
+OfficialHippoGateway = local_runtime.OfficialHippoGateway
+OfflineNERJSONLClient = local_runtime.OfflineNERJSONLClient
 
 
 class HoVerFormalControllerError(RuntimeError):
@@ -123,12 +127,15 @@ SYNTHETIC_OUTPUT_PATHS = LifecycleOutputPaths(
 class PrerequisiteBinding:
     implementation_freeze_sha256: str
     acquisition_receipt_sha256: str
+    verified_git_head: str
 
     def validate(self) -> "PrerequisiteBinding":
         _require_sha256(
             self.implementation_freeze_sha256, "implementation freeze"
         )
         _require_sha256(self.acquisition_receipt_sha256, "acquisition receipt")
+        if _GIT_SHA1.fullmatch(self.verified_git_head) is None:
+            raise HoVerFormalControllerError("prerequisite Git HEAD is invalid")
         return self
 
 
@@ -194,6 +201,18 @@ class LifecycleAcquisition(Protocol):
 
     def verify_prerequisites(self, *, project: Path) -> PrerequisiteBinding: ...
 
+    def preflight_outputs(
+        self,
+        *,
+        project: Path,
+        config: FormalRuntimeConfig,
+        output_paths: LifecycleOutputPaths,
+    ) -> Mapping[str, Any]: ...
+
+    def assert_repository_stable(
+        self, *, project: Path, prerequisites: PrerequisiteBinding
+    ) -> None: ...
+
     def load_corpus_view(self, *, project: Path) -> Mapping[str, Any]: ...
 
     def load_block_view(
@@ -212,6 +231,15 @@ class LifecycleAcquisition(Protocol):
         self, *, project: Path, block: str, archive: LifecycleArtifact
     ) -> LifecycleArtifact: ...
 
+    def freeze_a_form_evaluators(
+        self,
+        *,
+        project: Path,
+        policies: PolicyPair,
+        archive: LifecycleArtifact,
+        seal: LifecycleArtifact,
+    ) -> LifecycleArtifact: ...
+
     def freeze_f_policies(
         self,
         *,
@@ -219,6 +247,27 @@ class LifecycleAcquisition(Protocol):
         policies: PolicyPair,
         archive: LifecycleArtifact,
     ) -> LifecycleArtifact: ...
+
+    def validate_a_hold_outcome(
+        self,
+        *,
+        project: Path,
+        outcome: AHoldOutcome,
+        policy_freeze: LifecycleArtifact,
+        archive: LifecycleArtifact,
+        seal: LifecycleArtifact,
+    ) -> None: ...
+
+    def validate_m_search_outcome(
+        self,
+        *,
+        project: Path,
+        outcome: MSearchOutcome,
+        policy_freeze: LifecycleArtifact,
+        promotion: LifecycleArtifact,
+        archive: LifecycleArtifact,
+        seal: LifecycleArtifact,
+    ) -> None: ...
 
     def authorize_promotion(
         self,
@@ -265,8 +314,16 @@ class JointGraphCore(Protocol):
     ) -> object: ...
 
     def descriptive(
-        self, *, stage: object, labels: Mapping[str, Any]
+        self,
+        *,
+        stage: object,
+        labels: Mapping[str, Any],
+        policies: PolicyPair,
     ) -> Mapping[str, Any]: ...
+
+    def select_label_free_policies(
+        self, *, stage: object, expected_block: str
+    ) -> PolicyPair: ...
 
     def select_f_policies(self, *, stage: object) -> PolicyPair: ...
 
@@ -337,23 +394,42 @@ class RunnerCoreAdapter:
             local_worker_cap=config.local_worker_cap,
             formal_shape=True,
             executor_factory=self.executor_factory,
+            agent_pycache_root=config.hippo_work_root / "agent_pycache",
         )
 
     def descriptive(
-        self, *, stage: object, labels: Mapping[str, Any]
+        self,
+        *,
+        stage: object,
+        labels: Mapping[str, Any],
+        policies: PolicyPair,
     ) -> Mapping[str, Any]:
         if not isinstance(stage, runner.StageExecution):
             raise HoVerFormalControllerError("descriptive stage type drifted")
-        return runner.descriptive_stage_scores(stage=stage, labels=labels)
+        return runner.descriptive_stage_scores(
+            stage=stage,
+            labels=labels,
+            e0_policy=policies.e0.runtime_policy,  # type: ignore[arg-type]
+            e1_policy=policies.e1.runtime_policy,  # type: ignore[arg-type]
+        )
 
-    def select_f_policies(self, *, stage: object) -> PolicyPair:
+    def select_label_free_policies(
+        self, *, stage: object, expected_block: str
+    ) -> PolicyPair:
         if not isinstance(stage, runner.StageExecution):
-            raise HoVerFormalControllerError("F stage type drifted")
-        e0, e1, identifiable = runner.select_f_policies(f_stage=stage)
+            raise HoVerFormalControllerError("label-free stage type drifted")
+        e0, e1, identifiable = runner.select_label_free_policies(
+            stage=stage, expected_block=expected_block
+        )
         return PolicyPair(
             e0=PolicyHandle(e0.evaluator_id, e0.action_id, e0.selection_sha256, e0),
             e1=PolicyHandle(e1.evaluator_id, e1.action_id, e1.selection_sha256, e1),
             identifiable=identifiable,
+        )
+
+    def select_f_policies(self, *, stage: object) -> PolicyPair:
+        return self.select_label_free_policies(
+            stage=stage, expected_block="F_search"
         )
 
     def assess_a_hold(
@@ -480,28 +556,40 @@ def _artifact(
 
 
 class ModuleAcquisitionAdapter:
-    """Central translation point for the still-evolving acquisition module."""
+    """Bind direct acquisition, implementation freeze, and lifecycle storage."""
 
-    @staticmethod
-    def _callable(name: str) -> Any:
-        function = getattr(acquisition, name, None)
-        if not callable(function):
-            raise HoVerFormalControllerError(
-                f"HoVer acquisition capability {name} is unavailable"
-            )
-        return function
+    def __init__(self) -> None:
+        self._verified_git_head: str | None = None
+        self._implementation_freeze_sha256: str | None = None
 
     def verify_prerequisites(self, *, project: Path) -> PrerequisiteBinding:
-        implementation = self._callable("verify_committed_implementation_freeze")(
+        isolated_bootstrap.assert_isolated(
+            "assumption_agent.benchmarks.hover_joint_graph_formal_controller_v1"
+        )
+        implementation = implementation_freeze.verify_committed_implementation_freeze(
             project
         )
-        loaded = self._callable("load_committed_acquisition_receipt")(project)
-        receipt = loaded[0] if isinstance(loaded, tuple) else loaded
+        implementation_freeze.import_and_verify_frozen_python_roles(
+            project=project, implementation_receipt=implementation
+        )
+        receipt, binding = acquisition.load_formal_committed_acquisition_receipt(
+            project
+        )
         if not isinstance(implementation, Mapping) or not isinstance(
             receipt, Mapping
-        ):
+        ) or not isinstance(binding, Mapping):
             raise HoVerFormalControllerError("committed prerequisite receipt drifted")
-        return PrerequisiteBinding(
+        implementation_head = implementation.get("verified_git_head")
+        acquisition_head = binding.get("receipt_git_head")
+        if (
+            not isinstance(implementation_head, str)
+            or _GIT_SHA1.fullmatch(implementation_head) is None
+            or acquisition_head != implementation_head
+        ):
+            raise HoVerFormalControllerError(
+                "implementation and acquisition Git HEAD differ"
+            )
+        binding = PrerequisiteBinding(
             implementation_freeze_sha256=_find_receipt_sha256(
                 implementation,
                 ("implementation_freeze_sha256", "freeze_sha256"),
@@ -509,15 +597,57 @@ class ModuleAcquisitionAdapter:
             acquisition_receipt_sha256=_find_receipt_sha256(
                 receipt, ("acquisition_sha256", "acquisition_receipt_sha256")
             ),
+            verified_git_head=implementation_head,
         ).validate()
+        self._verified_git_head = implementation_head
+        self._implementation_freeze_sha256 = binding.implementation_freeze_sha256
+        return binding
+
+    def assert_repository_stable(
+        self, *, project: Path, prerequisites: PrerequisiteBinding
+    ) -> None:
+        prerequisites.validate()
+        if self._verified_git_head != prerequisites.verified_git_head:
+            raise HoVerFormalControllerError("adapter prerequisite HEAD drifted")
+        verified = implementation_freeze.verify_committed_implementation_freeze(
+            project
+        )
+        if (
+            verified.get("verified_git_head") != prerequisites.verified_git_head
+            or verified.get(implementation_freeze.HASH_FIELD)
+            != self._implementation_freeze_sha256
+        ):
+            raise HoVerFormalControllerError(
+                "implementation closure changed after prerequisite verification"
+            )
+
+    def preflight_outputs(
+        self,
+        *,
+        project: Path,
+        config: FormalRuntimeConfig,
+        output_paths: LifecycleOutputPaths,
+    ) -> Mapping[str, Any]:
+        private_pack = acquisition.preflight_formal_private_pack_files(project)
+        lifecycle_paths = lifecycle_store.preflight_lifecycle_outputs_absent(project)
+        controller_paths = preflight_controller_output_paths(
+            project=project, config=config, output_paths=output_paths
+        )
+        return {
+            "lifecycle_output_count": len(lifecycle_paths),
+            "controller_output_count": len(controller_paths),
+            "private_pack_file_count": private_pack["private_pack_file_count"],
+            "private_pack_json_payloads_decoded": 0,
+            "all_outcome_paths_absent": True,
+        }
 
     def load_corpus_view(self, *, project: Path) -> Mapping[str, Any]:
-        return self._callable("load_corpus_view")(project=project)
+        return acquisition.load_corpus_view(project=project)
 
     def load_block_view(
         self, *, project: Path, expected_block: str
     ) -> Mapping[str, Any]:
-        return self._callable("load_block_view")(
+        return acquisition.load_block_view(
             project=project, expected_block=expected_block
         )
 
@@ -526,7 +656,7 @@ class ModuleAcquisitionAdapter:
     ) -> Mapping[str, Any]:
         if expected_block == "F_search":
             raise HoVerFormalControllerError("F_search has no utility label pack")
-        return self._callable("load_block_labels")(
+        return acquisition.load_block_labels(
             project=project, expected_block=expected_block
         )
 
@@ -537,12 +667,11 @@ class ModuleAcquisitionAdapter:
             stage, runner.StageExecution
         ):
             raise HoVerFormalControllerError("stage archive input type drifted")
-        builder = self._callable("build_stage_output_record")
         view_items = stage.view.get("items")
         if not isinstance(view_items, list) or len(view_items) != len(stage.items):
             raise HoVerFormalControllerError("stage/view archive binding drifted")
         records = tuple(
-            builder(
+            lifecycle_store.build_stage_output_record(
                 block=stage.block,
                 ordinal=item.ordinal,
                 view_sha256=stable_hash(view_items[item.ordinal]),
@@ -565,7 +694,7 @@ class ModuleAcquisitionAdapter:
             ),
             "execution_matrix_sha256": stage.execution_matrix_sha256,
         }
-        created = self._callable("create_stage_output_archive_once")(
+        created = lifecycle_store.create_stage_output_archive_once(
             project=project,
             block=stage.block,
             records=records,
@@ -585,12 +714,45 @@ class ModuleAcquisitionAdapter:
         self, *, project: Path, block: str, archive: LifecycleArtifact
     ) -> LifecycleArtifact:
         archive.validate(kind="stage_archive", block=block)
-        payload = self._callable("create_action_seal_once")(
+        payload = lifecycle_store.create_action_seal_once(
             project=project, block=block
         )
         if not isinstance(payload, Mapping):
             raise HoVerFormalControllerError("action seal capability drifted")
         return _artifact(kind="action_seal", block=block, payload=payload)
+
+    def freeze_a_form_evaluators(
+        self,
+        *,
+        project: Path,
+        policies: PolicyPair,
+        archive: LifecycleArtifact,
+        seal: LifecycleArtifact,
+    ) -> LifecycleArtifact:
+        archive.validate(kind="stage_archive", block="A_form")
+        seal.validate(kind="action_seal", block="A_form")
+        if not isinstance(policies.e0.runtime_policy, PolicySelection) or not isinstance(
+            policies.e1.runtime_policy, PolicySelection
+        ):
+            raise HoVerFormalControllerError("A_form policy type drifted")
+        payload = lifecycle_store.create_a_form_evaluator_freeze_once(
+            project=project,
+            e0_policy=policies.e0.runtime_policy,
+            e1_policy=policies.e1.runtime_policy,
+        )
+        public = policies.public_payload()
+        if (
+            payload.get("selection_purpose") != "diagnostic_only_not_F_policy"
+            or payload.get("policies_identifiable") is not policies.identifiable
+            or payload.get("e0_policy", {}).get("selection_sha256")
+            != public["e0_policy_sha256"]
+            or payload.get("e1_policy", {}).get("selection_sha256")
+            != public["e1_policy_sha256"]
+        ):
+            raise HoVerFormalControllerError("A_form evaluator freeze drifted")
+        return _artifact(
+            kind="evaluator_freeze", block="A_form", payload=payload
+        )
 
     def freeze_f_policies(
         self,
@@ -602,8 +764,14 @@ class ModuleAcquisitionAdapter:
         archive.validate(kind="stage_archive", block="F_search")
         if not policies.identifiable:
             raise HoVerFormalControllerError("unidentifiable policies cannot freeze")
-        payload = self._callable("create_f_search_policy_freeze_once")(
-            project=project
+        if not isinstance(policies.e0.runtime_policy, PolicySelection) or not isinstance(
+            policies.e1.runtime_policy, PolicySelection
+        ):
+            raise HoVerFormalControllerError("F policy type drifted")
+        payload = lifecycle_store.create_f_search_policy_freeze_once(
+            project=project,
+            e0_policy=policies.e0.runtime_policy,
+            e1_policy=policies.e1.runtime_policy,
         )
         public = policies.public_payload()
         if not isinstance(payload, Mapping) or any(
@@ -620,6 +788,32 @@ class ModuleAcquisitionAdapter:
             kind="policy_freeze", block="F_search", payload=payload
         )
 
+    def validate_a_hold_outcome(
+        self,
+        *,
+        project: Path,
+        outcome: AHoldOutcome,
+        policy_freeze: LifecycleArtifact,
+        archive: LifecycleArtifact,
+        seal: LifecycleArtifact,
+    ) -> None:
+        policy_freeze.validate(kind="policy_freeze", block="F_search")
+        archive.validate(kind="stage_archive", block="A_hold")
+        seal.validate(kind="action_seal", block="A_hold")
+        recomputed = lifecycle_store.recompute_a_hold_outcome_report(
+            project=project
+        )
+        if (
+            not isinstance(outcome.report, Mapping)
+            or _canonical_bytes(dict(outcome.report))
+            != _canonical_bytes(recomputed)
+            or recomputed.get("primary_passed") is not outcome.primary_passed
+            or recomputed.get("promoted") is not outcome.promoted
+        ):
+            raise HoVerFormalControllerError(
+                "A_hold controller outcome differs from sealed evidence"
+            )
+
     def authorize_promotion(
         self,
         *,
@@ -634,13 +828,35 @@ class ModuleAcquisitionAdapter:
         policy_freeze.validate(kind="policy_freeze", block="F_search")
         archive.validate(kind="stage_archive", block="A_hold")
         seal.validate(kind="action_seal", block="A_hold")
-        payload = self._callable("create_a_hold_promotion_once")(
-            project=project
+        payload = lifecycle_store.create_a_hold_promotion_once(
+            project=project, outcome_report=outcome.report
         )
         if not isinstance(payload, Mapping):
             raise HoVerFormalControllerError("promotion capability drifted")
         return _artifact(
             kind="promotion_authorization", block="A_hold", payload=payload
+        )
+
+    def validate_m_search_outcome(
+        self,
+        *,
+        project: Path,
+        outcome: MSearchOutcome,
+        policy_freeze: LifecycleArtifact,
+        promotion: LifecycleArtifact,
+        archive: LifecycleArtifact,
+        seal: LifecycleArtifact,
+    ) -> None:
+        policy_freeze.validate(kind="policy_freeze", block="F_search")
+        promotion.validate(
+            kind="promotion_authorization", block="A_hold"
+        )
+        archive.validate(kind="stage_archive", block="M_search")
+        seal.validate(kind="action_seal", block="M_search")
+        lifecycle_store.validate_m_search_outcome_report(
+            project=project,
+            outcome_report=outcome.report,
+            l5_passed=outcome.l5_passed,
         )
 
 
@@ -675,15 +891,7 @@ class DefaultLocalRuntimeFactory:
 
 
 def default_formal_runtime_config(project: Path) -> FormalRuntimeConfig:
-    root = project.resolve(strict=True)
-    base = legacy.default_formal_runtime_config(root)
-    return replace(
-        base,
-        hippo_stage_root=root / FORMAL_ROOT_RELATIVE / "official_hipporag_stage",
-        hippo_work_root=root / FORMAL_ROOT_RELATIVE / "hipporag_query_work",
-        local_worker_cap=runner.LOCAL_CONCURRENCY_CAP,
-        ner_batch_size=runner.DEFAULT_NER_BATCH_SIZE,
-    )
+    return local_runtime.default_formal_runtime_config(project)
 
 
 def preflight_formal_runtime_config(
@@ -694,14 +902,135 @@ def preflight_formal_runtime_config(
     project = config.project.resolve(strict=True)
     if config != default_formal_runtime_config(project):
         raise HoVerFormalControllerError("formal runtime config is not canonical")
-    return verify_formal_runtime_attestation_v3(
-        project_root=project,
-        attestation_receipt_path=config.hippo_attestation_receipt,
-        base_binding_receipt_path=config.hippo_base_binding_receipt,
-        runtime_python=config.hippo_runtime_python,
-        local_llm_model=config.hippo_llm_model,
-        local_embedding_model=config.hippo_embedding_model,
+    return local_runtime.preflight_formal_runtime_config(config)
+
+
+def _reject_unsafe_output_ancestors(*, project: Path, path: Path) -> None:
+    try:
+        relative = path.absolute().relative_to(project)
+    except ValueError as exc:
+        raise HoVerFormalControllerError("formal output escaped project root") from exc
+    cursor = project
+    for part in relative.parts[:-1]:
+        cursor = cursor / part
+        try:
+            info = cursor.lstat()
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            raise HoVerFormalControllerError("formal output ancestor is unavailable") from exc
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+            raise HoVerFormalControllerError("formal output ancestor is unsafe")
+
+
+def preflight_controller_output_paths(
+    *,
+    project: Path,
+    config: FormalRuntimeConfig,
+    output_paths: LifecycleOutputPaths,
+) -> tuple[Path, ...]:
+    """Prepare only the empty Hippo work parent; reject every other residue."""
+
+    root = project.resolve(strict=True)
+    if config != default_formal_runtime_config(root):
+        raise HoVerFormalControllerError("output preflight config drifted")
+    owned = tuple(
+        root / relative
+        for relative in (
+            output_paths.marker,
+            output_paths.failure,
+            output_paths.result,
+            output_paths.a_form_descriptive,
+        )
     )
+    if len(set(owned)) != len(owned):
+        raise HoVerFormalControllerError("controller output paths overlap")
+    for path in (*owned, config.hippo_stage_root, config.hippo_work_root):
+        _reject_unsafe_output_ancestors(project=root, path=path)
+    occupied = [
+        path
+        for path in (*owned, config.hippo_stage_root, config.hippo_work_root)
+        if os.path.lexists(path)
+    ]
+    if occupied:
+        raise HoVerFormalControllerError("formal controller output already exists")
+
+    formal_root = root / FORMAL_ROOT_RELATIVE
+    if os.path.lexists(formal_root):
+        info = formal_root.lstat()
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+            raise HoVerFormalControllerError("formal root is unsafe")
+        unexpected = list(formal_root.iterdir())
+        if unexpected:
+            raise HoVerFormalControllerError("formal root contains residual outputs")
+    return (*owned, config.hippo_stage_root, config.hippo_work_root)
+
+
+def ensure_durable_output_directory(*, project: Path, directory: Path) -> Path:
+    """Create an output directory chain and fsync every parent entry."""
+
+    root = project.resolve(strict=True)
+    try:
+        relative = directory.absolute().relative_to(root)
+    except ValueError as exc:
+        raise HoVerFormalControllerError(
+            "durable output directory escaped project"
+        ) from exc
+    cursor = root
+    for part in relative.parts:
+        child = cursor / part
+        if not os.path.lexists(child):
+            try:
+                child.mkdir(mode=0o700)
+            except OSError as exc:
+                raise HoVerFormalControllerError(
+                    "durable output directory creation failed"
+                ) from exc
+        try:
+            metadata = child.lstat()
+        except OSError as exc:
+            raise HoVerFormalControllerError(
+                "durable output directory is unavailable"
+            ) from exc
+        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+            raise HoVerFormalControllerError(
+                "durable output directory is unsafe"
+            )
+        try:
+            descriptor = os.open(
+                cursor,
+                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+            )
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+        except OSError as exc:
+            raise HoVerFormalControllerError(
+                "durable output directory fsync failed"
+            ) from exc
+        cursor = child
+    return cursor
+
+
+def prepare_hippo_work_root(config: FormalRuntimeConfig) -> Path:
+    """Create the sole empty runtime work root after the cohort marker."""
+
+    project = config.project.resolve(strict=True)
+    if config != default_formal_runtime_config(project):
+        raise HoVerFormalControllerError("Hippo work-root config drifted")
+    path = config.hippo_work_root
+    _reject_unsafe_output_ancestors(project=project, path=path)
+    try:
+        path.mkdir(mode=0o700, parents=True)
+    except OSError as exc:
+        raise HoVerFormalControllerError(
+            "Hippo query work root cannot be prepared"
+        ) from exc
+    info = path.lstat()
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+        raise HoVerFormalControllerError("Hippo query work root is unsafe")
+    return path
 
 
 def write_json_exclusive(
@@ -734,6 +1063,14 @@ def write_json_exclusive(
         # O_NOFOLLOW, and the regular-file check remain authoritative there.
         if not stat.S_ISREG(info.st_mode):
             raise HoVerFormalControllerError("exclusive output type drifted")
+        parent_descriptor = os.open(
+            absolute.parent,
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+        )
+        try:
+            os.fsync(parent_descriptor)
+        finally:
+            os.close(parent_descriptor)
     except BaseException:
         try:
             os.close(descriptor)
@@ -743,11 +1080,11 @@ def write_json_exclusive(
     return hashlib.sha256(raw).hexdigest()
 
 
-def consume_one_shot_marker(
-    *, path: Path, prerequisites: PrerequisiteBinding
+def _one_shot_marker_payload(
+    prerequisites: PrerequisiteBinding,
 ) -> dict[str, Any]:
     prerequisites.validate()
-    marker = _self_hashed(
+    return _self_hashed(
         {
             "schema": MARKER_SCHEMA,
             "version": VERSION,
@@ -758,10 +1095,17 @@ def consume_one_shot_marker(
             "acquisition_receipt_sha256": (
                 prerequisites.acquisition_receipt_sha256
             ),
+            "verified_git_head": prerequisites.verified_git_head,
             "replay_retry_resample_replacement_authorized": False,
         },
         "marker_sha256",
     )
+
+
+def consume_one_shot_marker(
+    *, path: Path, prerequisites: PrerequisiteBinding
+) -> dict[str, Any]:
+    marker = _one_shot_marker_payload(prerequisites)
     write_json_exclusive(path, marker, mode=0o600)
     return marker
 
@@ -807,11 +1151,40 @@ def _run_lifecycle_core(
         raise HoVerFormalControllerError("runtime concurrency binding drifted")
     project = config.project.resolve(strict=True)
     prerequisites = acquisition_adapter.verify_prerequisites(project=project).validate()
-    marker = consume_one_shot_marker(
-        path=project / output_paths.marker,
-        prerequisites=prerequisites,
+    acquisition_adapter.assert_repository_stable(
+        project=project, prerequisites=prerequisites
     )
-    marker_sha256 = str(marker["marker_sha256"])
+    acquisition_adapter.preflight_outputs(
+        project=project, config=config, output_paths=output_paths
+    )
+    acquisition_adapter.assert_repository_stable(
+        project=project, prerequisites=prerequisites
+    )
+    marker_path = project / output_paths.marker
+    ensure_durable_output_directory(
+        project=project,
+        directory=marker_path.parent,
+    )
+    marker_existed_before = os.path.lexists(marker_path)
+    marker_sha256 = str(
+        _one_shot_marker_payload(prerequisites)["marker_sha256"]
+    )
+    try:
+        marker = consume_one_shot_marker(
+            path=marker_path,
+            prerequisites=prerequisites,
+        )
+    except BaseException as exc:
+        if not marker_existed_before and os.path.lexists(marker_path):
+            _write_terminal_failure(
+                path=project / output_paths.failure,
+                marker_sha256=marker_sha256,
+                stage="one_shot_marker_consumption",
+                exc=exc,
+            )
+        raise
+    if marker.get("marker_sha256") != marker_sha256:
+        raise HoVerFormalControllerError("one-shot marker identity drifted")
     failure_stage = "runtime_initialization"
     artifacts: dict[str, str] = {}
 
@@ -820,6 +1193,9 @@ def _run_lifecycle_core(
         artifacts[name] = artifact.receipt_sha256
 
     def finish(status: str, body: Mapping[str, Any]) -> dict[str, Any]:
+        acquisition_adapter.assert_repository_stable(
+            project=project, prerequisites=prerequisites
+        )
         result = _self_hashed(
             {
                 "schema": RESULT_SCHEMA,
@@ -832,6 +1208,7 @@ def _run_lifecycle_core(
                 "acquisition_receipt_sha256": (
                     prerequisites.acquisition_receipt_sha256
                 ),
+                "verified_git_head": prerequisites.verified_git_head,
                 "artifact_receipt_sha256s": dict(sorted(artifacts.items())),
                 **dict(body),
                 "external_network_calls": 0,
@@ -844,10 +1221,15 @@ def _run_lifecycle_core(
         return result
 
     try:
+        if output_paths == FORMAL_OUTPUT_PATHS:
+            failure_stage = "Hippo_work_root_initialization"
+            prepare_hippo_work_root(config)
+        failure_stage = "runtime_initialization"
         encoder = runtime_factory.create_encoder(config)
         hippo = runtime_factory.create_hippo(config)
         ner_context = runtime_factory.create_ner_context(config)
-        with ner_context as ner:
+        with ExitStack() as runtime_stack:
+            ner = runtime_stack.enter_context(ner_context)
             failure_stage = "corpus_preparation"
             corpus_view = acquisition_adapter.load_corpus_view(project=project)
             prepared = core.prepare(
@@ -857,9 +1239,15 @@ def _run_lifecycle_core(
                 hippo=hippo,
                 config=config,
             )
+            acquisition_adapter.assert_repository_stable(
+                project=project, prerequisites=prerequisites
+            )
 
             def execute_archive(block: str) -> tuple[object, LifecycleArtifact]:
                 nonlocal failure_stage
+                acquisition_adapter.assert_repository_stable(
+                    project=project, prerequisites=prerequisites
+                )
                 failure_stage = f"{block}_claim_view_and_gold_free_execution"
                 view = acquisition_adapter.load_block_view(
                     project=project, expected_block=block
@@ -872,6 +1260,9 @@ def _run_lifecycle_core(
                     ner=ner,
                     hippo=hippo,
                     config=config,
+                )
+                acquisition_adapter.assert_repository_stable(
+                    project=project, prerequisites=prerequisites
                 )
                 failure_stage = f"{block}_canonical_archive"
                 archive = acquisition_adapter.archive_stage(
@@ -886,12 +1277,33 @@ def _run_lifecycle_core(
                 project=project, block="A_form", archive=a_form_archive
             )
             record("A_form_seal", a_form_seal, "action_seal", "A_form")
+            failure_stage = "A_form_prelabel_evaluator_selection_and_freeze"
+            a_form_policies = core.select_label_free_policies(
+                stage=a_form_stage, expected_block="A_form"
+            )
+            a_form_evaluator_freeze = acquisition_adapter.freeze_a_form_evaluators(
+                project=project,
+                policies=a_form_policies,
+                archive=a_form_archive,
+                seal=a_form_seal,
+            )
+            record(
+                "A_form_evaluator_freeze",
+                a_form_evaluator_freeze,
+                "evaluator_freeze",
+                "A_form",
+            )
             failure_stage = "A_form_late_descriptive"
+            acquisition_adapter.assert_repository_stable(
+                project=project, prerequisites=prerequisites
+            )
             a_form_labels = acquisition_adapter.load_block_labels(
                 project=project, expected_block="A_form"
             )
             descriptive_report = core.descriptive(
-                stage=a_form_stage, labels=a_form_labels
+                stage=a_form_stage,
+                labels=a_form_labels,
+                policies=a_form_policies,
             )
             if not isinstance(descriptive_report, Mapping):
                 raise HoVerFormalControllerError("A_form descriptive report drifted")
@@ -905,8 +1317,12 @@ def _run_lifecycle_core(
                         a_form_archive.receipt_sha256
                     ),
                     "A_form_seal_receipt_sha256": a_form_seal.receipt_sha256,
+                    "A_form_evaluator_freeze_receipt_sha256": (
+                        a_form_evaluator_freeze.receipt_sha256
+                    ),
                     "report": dict(descriptive_report),
                     "labels_opened_after_action_seal": True,
+                    "labels_opened_after_evaluator_freeze": True,
                     "policy_or_threshold_changed": False,
                 },
                 "descriptive_receipt_sha256",
@@ -925,6 +1341,8 @@ def _run_lifecycle_core(
             policies = core.select_f_policies(stage=f_stage)
             policy_payload = policies.public_payload()
             if not policies.identifiable:
+                failure_stage = "runtime_shutdown"
+                runtime_stack.close()
                 return finish(
                     "valid_F_search_nonidentifiable_A_hold_and_M_unopened",
                     {
@@ -953,6 +1371,9 @@ def _run_lifecycle_core(
             )
             record("A_hold_seal", a_hold_seal, "action_seal", "A_hold")
             failure_stage = "A_hold_late_labels_primary_and_promotion"
+            acquisition_adapter.assert_repository_stable(
+                project=project, prerequisites=prerequisites
+            )
             a_hold_labels = acquisition_adapter.load_block_labels(
                 project=project, expected_block="A_hold"
             )
@@ -964,7 +1385,17 @@ def _run_lifecycle_core(
             )
             if not isinstance(a_hold_outcome.report, Mapping):
                 raise HoVerFormalControllerError("A_hold outcome report drifted")
+            failure_stage = "A_hold_sealed_evidence_recomputation"
+            acquisition_adapter.validate_a_hold_outcome(
+                project=project,
+                outcome=a_hold_outcome,
+                policy_freeze=policy_freeze,
+                archive=a_hold_archive,
+                seal=a_hold_seal,
+            )
             if not a_hold_outcome.promoted:
+                failure_stage = "runtime_shutdown"
+                runtime_stack.close()
                 return finish(
                     "valid_A_hold_nonpromotion_M_unopened",
                     {
@@ -997,6 +1428,9 @@ def _run_lifecycle_core(
             )
             record("M_search_seal", m_seal, "action_seal", "M_search")
             failure_stage = "M_search_late_labels_and_L5"
+            acquisition_adapter.assert_repository_stable(
+                project=project, prerequisites=prerequisites
+            )
             m_labels = acquisition_adapter.load_block_labels(
                 project=project, expected_block="M_search"
             )
@@ -1008,6 +1442,17 @@ def _run_lifecycle_core(
             )
             if not isinstance(m_outcome.report, Mapping):
                 raise HoVerFormalControllerError("M_search outcome report drifted")
+            failure_stage = "M_search_sealed_evidence_recomputation"
+            acquisition_adapter.validate_m_search_outcome(
+                project=project,
+                outcome=m_outcome,
+                policy_freeze=policy_freeze,
+                promotion=promotion,
+                archive=m_archive,
+                seal=m_seal,
+            )
+            failure_stage = "runtime_shutdown"
+            runtime_stack.close()
             return finish(
                 "formal_M_search_complete",
                 {
@@ -1079,6 +1524,35 @@ def run_synthetic_lifecycle(
     )
 
 
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--project", required=True, type=Path)
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    raw_arguments = tuple(sys.argv[1:] if argv is None else argv)
+    isolated_bootstrap.reexec_isolated(
+        "assumption_agent.benchmarks.hover_joint_graph_formal_controller_v1",
+        raw_arguments,
+    )
+    arguments = _parser().parse_args(raw_arguments)
+    project = arguments.project.resolve(strict=True)
+    result = run_formal_lifecycle(default_formal_runtime_config(project))
+    print(
+        json.dumps(
+            {
+                "status": result["status"],
+                "result_sha256": result["result_sha256"],
+            },
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    )
+    return 0
+
+
 __all__ = [
     "AHoldOutcome",
     "DefaultLocalRuntimeFactory",
@@ -1104,6 +1578,9 @@ __all__ = [
     "VERSION",
     "consume_one_shot_marker",
     "default_formal_runtime_config",
+    "ensure_durable_output_directory",
+    "main",
+    "preflight_controller_output_paths",
     "preflight_formal_runtime_config",
     "run_formal_lifecycle",
     "run_synthetic_lifecycle",
@@ -1111,3 +1588,11 @@ __all__ = [
     "verify_self_hash",
     "write_json_exclusive",
 ]
+
+
+if __name__ == "__main__":
+    from assumption_agent.benchmarks import (
+        hover_joint_graph_formal_controller_v1 as _canonical,
+    )
+
+    raise SystemExit(_canonical.main())
