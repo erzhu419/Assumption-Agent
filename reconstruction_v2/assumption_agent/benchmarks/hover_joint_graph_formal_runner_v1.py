@@ -22,11 +22,9 @@ import multiprocessing
 import re
 from typing import Any, Protocol
 
+import numpy as np
+
 from assumption_agent.benchmarks import hover_direct_acquisition_v1 as acquisition
-from assumption_agent.benchmarks.multihoprag_joint_graph_formal_runner_v1 import (
-    compile_query_features_batched,
-    raw_top5,
-)
 from assumption_agent.benchmarks.multihoprag_typed_operator_v2 import (
     ACTION_IDS,
     CAPABILITIES,
@@ -55,11 +53,23 @@ from replication_runtime.multihoprag_minilm_v1 import (
     CorpusEmbeddingIndex,
     QueryFeatures,
     build_corpus_embedding_index,
+    canonical_text,
+    encoder_receipt_sha256,
     reciprocal_topic_neighbors,
+    recompute_query_feature_sha256,
     validate_corpus_embedding_index,
+    validate_query_features,
+)
+from replication_runtime.multihoprag_minilm_v1.adapter import (
+    CAPABILITY_ORDER,
+    CAPABILITY_PROTOTYPES,
 )
 from replication_runtime.multihoprag_ner_v1 import EntitySpan
 from replication_runtime.multihoprag_official_hipporag_v1 import RetrievalBatch
+from replication_runtime.qasper_minilm_v1.binding import (
+    EMBEDDING_DIMENSION,
+    quantized_cosine_similarity,
+)
 
 
 VERSION = "hover_joint_graph_formal_runner_v1"
@@ -122,6 +132,96 @@ def verify_self_hash(payload: Mapping[str, Any], field: str) -> str:
     if stable_hash(body) != declared:
         raise HoVerFormalRunnerError(f"{field} self-hash mismatch")
     return declared
+
+
+def _validated_embedding_matrix(matrix: object, rows: int) -> np.ndarray:
+    if (
+        not isinstance(matrix, np.ndarray)
+        or matrix.shape != (rows, EMBEDDING_DIMENSION)
+        or matrix.dtype != np.float32
+        or not np.isfinite(matrix).all()
+    ):
+        raise HoVerFormalRunnerError("batched MiniLM output drifted")
+    norms = np.linalg.norm(matrix.astype(np.float64), axis=1)
+    if not np.allclose(norms, 1.0, rtol=0.0, atol=2e-5):
+        raise HoVerFormalRunnerError("batched MiniLM output is not normalized")
+    return np.ascontiguousarray(matrix, dtype=np.float32)
+
+
+def compile_query_features_batched(
+    *,
+    queries: Sequence[str],
+    index: CorpusEmbeddingIndex,
+    encoder: Encoder,
+) -> tuple[QueryFeatures, ...]:
+    """Encode one complete authorized query block in a single model call."""
+
+    index = validate_corpus_embedding_index(index)
+    if encoder_receipt_sha256(encoder) != index.encoder_receipt_sha256:
+        raise HoVerFormalRunnerError("query encoder differs from corpus encoder")
+    if isinstance(queries, (str, bytes)) or not isinstance(queries, Sequence):
+        raise HoVerFormalRunnerError("queries must be a sequence")
+    normalized = tuple(canonical_text(query, field="query") for query in queries)
+    if not normalized:
+        raise HoVerFormalRunnerError("query stage is empty")
+    texts = (
+        *normalized,
+        *(CAPABILITY_PROTOTYPES[name] for name in CAPABILITY_ORDER),
+    )
+    matrix = _validated_embedding_matrix(encoder.encode(texts), len(texts))
+    prototypes = matrix[len(normalized) :]
+    output: list[QueryFeatures] = []
+    for query_text, query_vector in zip(
+        normalized, matrix[: len(normalized)], strict=True
+    ):
+        capability_scores = tuple(
+            quantized_cosine_similarity(query_vector, prototypes[offset])
+            for offset in range(len(CAPABILITY_ORDER))
+        )
+        predicted = min(
+            CAPABILITY_ORDER,
+            key=lambda name: (
+                -capability_scores[CAPABILITY_ORDER.index(name)],
+                CAPABILITY_ORDER.index(name),
+            ),
+        )
+        relevance = tuple(
+            max(
+                quantized_cosine_similarity(query_vector, index.chunk_vectors[row])
+                for row in range(start, end)
+            )
+            for start, end in index.article_chunk_ranges
+        )
+        provisional = QueryFeatures(
+            embedding_index_sha256=index.index_sha256,
+            normalized_query_sha256=hashlib.sha256(
+                query_text.casefold().encode("utf-8")
+            ).hexdigest(),
+            capability_similarity_ints=capability_scores,
+            predicted_capability=predicted,
+            dense_relevance_ints=relevance,
+            feature_sha256="0" * 64,
+        )
+        feature = replace(
+            provisional,
+            feature_sha256=recompute_query_feature_sha256(
+                provisional, index=index
+            ),
+        )
+        output.append(validate_query_features(feature, index=index))
+    return tuple(output)
+
+
+def raw_top5(
+    relevance_ints: Sequence[int],
+) -> tuple[int, int, int, int, int]:
+    """Return dense top-five indices with the frozen row-index tie break."""
+
+    rows = tuple(relevance_ints)
+    if len(rows) < TOP_K or any(type(value) is not int for value in rows):
+        raise HoVerFormalRunnerError("RAW relevance vector is invalid")
+    selected = tuple(sorted(range(len(rows)), key=lambda i: (-rows[i], i))[:TOP_K])
+    return selected  # type: ignore[return-value]
 
 
 def fraction_payload(value: Fraction) -> list[int]:
@@ -1060,12 +1160,14 @@ __all__ = [
     "StageExecution",
     "StageItem",
     "assess_m_search",
+    "compile_query_features_batched",
     "decide_a_hold_promotion",
     "descriptive_stage_scores",
     "execute_agent_actions_eager",
     "execute_gold_free_stage",
     "fraction_payload",
     "prepare_offline_corpus",
+    "raw_top5",
     "select_f_policies",
     "stable_hash",
     "stage_execution_matrix_sha256",
