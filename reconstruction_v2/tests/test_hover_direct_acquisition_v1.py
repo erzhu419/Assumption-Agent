@@ -309,6 +309,60 @@ def test_formal_entrypoint_verifies_implementation_before_source_read(
     assert source_reads == []
 
 
+def test_git_head_file_verification_uses_worktree_root_for_subproject(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repository"
+    project = repository / "nested" / "project"
+    bound_file = project / "manifests" / "qualification.json"
+    bound_file.parent.mkdir(parents=True)
+    bound_file.write_text('{"qualified":true}\n', encoding="utf-8")
+    subprocess.run(["git", "init", "-q", str(repository)], check=True)
+    subprocess.run(["git", "-C", str(repository), "add", "."], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repository),
+            "-c",
+            "user.name=synthetic-test",
+            "-c",
+            "user.email=synthetic@example.invalid",
+            "commit",
+            "-q",
+            "-m",
+            "commit nested qualification",
+        ],
+        check=True,
+    )
+
+    raw = bound_file.read_bytes()
+    head, object_id = acq._verify_regular_file_at_head(
+        project=project,
+        path=bound_file,
+        working_raw=raw,
+        label="nested qualification",
+    )
+    assert head == subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", "HEAD"],
+        check=True,
+        stdout=subprocess.PIPE,
+        text=True,
+    ).stdout.strip()
+    assert object_id == subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repository),
+            "rev-parse",
+            "HEAD:nested/project/manifests/qualification.json",
+        ],
+        check=True,
+        stdout=subprocess.PIPE,
+        text=True,
+    ).stdout.strip()
+
+
 def test_strict_json_committed_qualification_and_synthetic_sqlite(tmp_path: Path) -> None:
     with pytest.raises(acq.HoVerAcquisitionError, match="duplicate object key"):
         acq.strict_json_loads(b'{"a":1,"a":2}', label="duplicate")

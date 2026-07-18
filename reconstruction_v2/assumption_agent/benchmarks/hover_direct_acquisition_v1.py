@@ -1883,12 +1883,15 @@ def _verify_regular_file_at_head(
         relative = path.absolute().relative_to(git_root).as_posix()
     except (UnicodeDecodeError, ValueError) as exc:
         raise HoVerAcquisitionError(f"{label} is outside its Git worktree") from exc
-    head_before = _git_output(project, "rev-parse", "--verify", "HEAD").decode(
+    # Pathspecs passed to ``git ls-tree`` are interpreted relative to ``-C``.
+    # ``relative`` is rooted at the worktree, so all subsequent Git commands
+    # must run from that same root even when ``project`` is a subdirectory.
+    head_before = _git_output(git_root, "rev-parse", "--verify", "HEAD").decode(
         "ascii", errors="strict"
     ).strip()
     if re.fullmatch(r"[0-9a-f]{40}", head_before) is None:
         raise HoVerAcquisitionError("Git HEAD identity drifted")
-    tree = _git_output(project, "ls-tree", "-z", head_before, "--", relative)
+    tree = _git_output(git_root, "ls-tree", "-z", head_before, "--", relative)
     rows = [row for row in tree.split(b"\0") if row]
     if len(rows) != 1 or b"\t" not in rows[0]:
         raise HoVerAcquisitionError(f"{label} is not a unique Git HEAD blob")
@@ -1905,8 +1908,8 @@ def _verify_regular_file_at_head(
         or re.fullmatch(r"[0-9a-f]{40}", object_id) is None
     ):
         raise HoVerAcquisitionError(f"{label} Git tree binding drifted")
-    committed_raw = _git_output(project, "cat-file", "blob", object_id)
-    head_after = _git_output(project, "rev-parse", "--verify", "HEAD").decode(
+    committed_raw = _git_output(git_root, "cat-file", "blob", object_id)
+    head_after = _git_output(git_root, "rev-parse", "--verify", "HEAD").decode(
         "ascii", errors="strict"
     ).strip()
     if head_after != head_before or not hmac.compare_digest(committed_raw, working_raw):
