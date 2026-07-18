@@ -53,6 +53,35 @@ SYSTEMD_NETWORK_PROPERTIES = (
     "IPAddressDeny=any",
     "RestrictAddressFamilies=AF_UNIX",
 )
+# The user service manager may hold arbitrary session variables.  The adapter
+# launches the worker through ``env --ignore-environment`` and supplies exactly
+# this allowlist; the DBus/XDG variables needed to contact the manager belong
+# only to the outer launcher and are deliberately absent here.
+WORKER_ENVIRONMENT_KEYS = frozenset(
+    {
+        "PATH",
+        "HOME",
+        "LANG",
+        "HF_HOME",
+        "TMPDIR",
+        "TMP",
+        "TEMP",
+        "PYTHONPATH",
+        "PYTHONNOUSERSITE",
+        "PYTHONDONTWRITEBYTECODE",
+        "HF_HUB_OFFLINE",
+        "TRANSFORMERS_OFFLINE",
+        "TOKENIZERS_PARALLELISM",
+    }
+)
+WORKER_FIXED_ENVIRONMENT_VALUES = {
+    "LANG": "C.UTF-8",
+    "PYTHONNOUSERSITE": "1",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "HF_HUB_OFFLINE": "1",
+    "TRANSFORMERS_OFFLINE": "1",
+    "TOKENIZERS_PARALLELISM": "false",
+}
 
 FROZEN_CORE_CONFIG: dict[str, Any] = {
     "config_class": "hipporag.utils.config_utils.BaseConfig",
@@ -851,6 +880,8 @@ __all__ = [
     "SERIALIZATION",
     "SYSTEMD_NETWORK_PROPERTIES",
     "TRANSPORT",
+    "WORKER_ENVIRONMENT_KEYS",
+    "WORKER_FIXED_ENVIRONMENT_VALUES",
     "canonical_json_bytes",
     "corpus_sha256",
     "corpus_text_multiplicity",

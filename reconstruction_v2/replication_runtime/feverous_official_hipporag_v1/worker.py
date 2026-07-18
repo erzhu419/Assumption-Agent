@@ -19,6 +19,8 @@ from .contract import (
     FeverousOfficialHippoRAGError,
     QUERY_INPUT_SCHEMA,
     RETRIEVAL_OUTPUT_SCHEMA,
+    WORKER_ENVIRONMENT_KEYS,
+    WORKER_FIXED_ENVIRONMENT_VALUES,
     canonical_json_bytes,
     corpus_sha256,
     corpus_text_multiplicity,
@@ -31,6 +33,27 @@ from .contract import (
     validate_corpus,
     validate_queries,
 )
+
+
+def _validate_effective_environment(
+    environment: Mapping[str, str] | None = None,
+) -> None:
+    """Fail closed unless the worker received the frozen exact environment."""
+
+    effective = os.environ if environment is None else environment
+    if (
+        not isinstance(effective, Mapping)
+        or frozenset(effective) != WORKER_ENVIRONMENT_KEYS
+        or any(
+            effective.get(key) != value
+            for key, value in WORKER_FIXED_ENVIRONMENT_VALUES.items()
+        )
+    ):
+        # Keep the failure content-free: do not reveal unexpected names or
+        # either expected or observed values through the worker error surface.
+        raise FeverousOfficialHippoRAGError(
+            "worker environment contract failed"
+        )
 
 
 def build_index_with_core(
@@ -303,6 +326,7 @@ def _run_retrieve(arguments: argparse.Namespace) -> dict[str, object]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    _validate_effective_environment()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--stage", choices=("build", "retrieve"), required=True)
     parser.add_argument("--corpus-input", required=True, type=Path)

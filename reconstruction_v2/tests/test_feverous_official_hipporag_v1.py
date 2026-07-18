@@ -25,6 +25,8 @@ from replication_runtime.feverous_official_hipporag_v1.contract import (
     OFFICIAL_HIPPORAG_COMMIT,
     QUERY_INPUT_SCHEMA,
     RETRIEVAL_OUTPUT_SCHEMA,
+    WORKER_ENVIRONMENT_KEYS,
+    WORKER_FIXED_ENVIRONMENT_VALUES,
     FeverousOfficialHippoRAGError,
     canonical_json_bytes,
     corpus_text_multiplicity,
@@ -79,6 +81,24 @@ def _units_with_one_exact_duplicate() -> list[dict[str, object]]:
     units = _units()
     units[-1]["text"] = units[0]["text"]
     return units
+
+
+def _exact_worker_environment(root: Path) -> dict[str, str]:
+    return {
+        "PATH": f"{Path(sys.executable).parent}:/usr/bin:/bin",
+        "HOME": str(root / "home"),
+        "LANG": "C.UTF-8",
+        "HF_HOME": str(root / "cache"),
+        "TMPDIR": str(root / "tmp"),
+        "TMP": str(root / "tmp"),
+        "TEMP": str(root / "tmp"),
+        "PYTHONPATH": str(PROJECT),
+        "PYTHONNOUSERSITE": "1",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "HF_HUB_OFFLINE": "1",
+        "TRANSFORMERS_OFFLINE": "1",
+        "TOKENIZERS_PARALLELISM": "false",
+    }
 
 
 @dataclass
@@ -428,6 +448,64 @@ def test_receipts_are_feverous_specific_and_output_has_no_content_channel(
             )
 
 
+def test_worker_environment_validation_is_exact_and_content_free(
+    tmp_path: Path,
+) -> None:
+    exact = _exact_worker_environment(tmp_path)
+    assert frozenset(exact) == WORKER_ENVIRONMENT_KEYS
+    worker._validate_effective_environment(exact)
+
+    placeholder_name = "UNDECLARED_CREDENTIAL_PLACEHOLDER"
+    placeholder_value = "synthetic-redacted"
+    invalid_environments = []
+
+    with_extra = dict(exact)
+    with_extra[placeholder_name] = placeholder_value
+    invalid_environments.append(with_extra)
+
+    with_missing_path = dict(exact)
+    del with_missing_path["HF_HOME"]
+    invalid_environments.append(with_missing_path)
+
+    with_wrong_fixed_value = dict(exact)
+    with_wrong_fixed_value["HF_HUB_OFFLINE"] = "synthetic-invalid"
+    invalid_environments.append(with_wrong_fixed_value)
+
+    for invalid in invalid_environments:
+        with pytest.raises(FeverousOfficialHippoRAGError) as caught:
+            worker._validate_effective_environment(invalid)
+        message = str(caught.value)
+        assert message == "worker environment contract failed"
+        assert placeholder_name not in message
+        assert placeholder_value not in message
+
+
+def test_worker_rejects_environment_before_argument_parsing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    placeholder_name = "UNDECLARED_CREDENTIAL_PLACEHOLDER"
+    placeholder_value = "synthetic-redacted"
+    monkeypatch.setattr(
+        worker.os,
+        "environ",
+        {placeholder_name: placeholder_value},
+    )
+    parser_calls: list[bool] = []
+
+    def parser_must_not_run(*_args: object, **_kwargs: object) -> object:
+        parser_calls.append(True)
+        raise AssertionError("argument parser ran before environment validation")
+
+    monkeypatch.setattr(worker.argparse, "ArgumentParser", parser_must_not_run)
+    with pytest.raises(FeverousOfficialHippoRAGError) as caught:
+        worker.main(["--unparsed-placeholder"])
+    assert not parser_calls
+    message = str(caught.value)
+    assert message == "worker environment contract failed"
+    assert placeholder_name not in message
+    assert placeholder_value not in message
+
+
 def test_worker_cli_builds_8192_once_then_reopens_without_label_or_gold_fields(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -456,6 +534,11 @@ def test_worker_cli_builds_8192_once_then_reopens_without_label_or_gold_fields(
         return _FakeCore(store, build_mode=force)
 
     monkeypatch.setattr(worker, "_build_official_core", fake_factory)
+    monkeypatch.setattr(
+        worker.os,
+        "environ",
+        _exact_worker_environment(tmp_path),
+    )
     build_output = tmp_path / "build.receipt.json"
     common = [
         "--corpus-input",
@@ -665,13 +748,18 @@ def test_systemd_capability_preflight_freezes_both_network_properties(
         "--collect",
         "--quiet",
     ]
-    assert command[-5:] == [
+    assert command[-9:] == [
         "--",
+        "/usr/bin/env",
+        "--ignore-environment",
+        "--",
+        "LANG=C.UTF-8",
         "/usr/bin/python3",
         "-I",
         "-c",
         adapter.SYSTEMD_PREFLIGHT_SCRIPT,
     ]
+    assert not any(value.startswith("--setenv=") for value in command)
     assert "IPAddressDeny=any" in command
     assert "RestrictAddressFamilies=AF_UNIX" in command
     assert observed["timeout"] == adapter.SYSTEMD_PREFLIGHT_TIMEOUT_SECONDS
@@ -681,6 +769,8 @@ def test_launcher_is_systemd_network_isolated_offline_gpu_visible_and_feverous(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     observed: dict[str, object] = {}
+    inherited_placeholder_name = "UNDECLARED_CREDENTIAL_PLACEHOLDER"
+    monkeypatch.setenv(inherited_placeholder_name, "synthetic-redacted")
 
     def fake_run(command: list[str], **kwargs: object) -> SimpleNamespace:
         observed["command"] = command
@@ -732,12 +822,45 @@ def test_launcher_is_systemd_network_isolated_offline_gpu_visible_and_feverous(
     ]
     assert "IPAddressDeny=any" in command
     assert "RestrictAddressFamilies=AF_UNIX" in command
-    assert "--setenv=HF_HUB_OFFLINE=1" in command
-    assert "--setenv=TRANSFORMERS_OFFLINE=1" in command
+    assert not any(value.startswith("--setenv=") for value in command)
+    env_index = command.index("/usr/bin/env")
+    runtime_index = command.index(str(Path(sys.executable)), env_index)
+    assert command[env_index : env_index + 3] == [
+        "/usr/bin/env",
+        "--ignore-environment",
+        "--",
+    ]
+    worker_environment = dict(
+        value.split("=", 1)
+        for value in command[env_index + 3 : runtime_index]
+    )
+    assert frozenset(worker_environment) == WORKER_ENVIRONMENT_KEYS
+    assert {
+        key: worker_environment[key]
+        for key in WORKER_FIXED_ENVIRONMENT_VALUES
+    } == WORKER_FIXED_ENVIRONMENT_VALUES
+    assert worker_environment["PATH"] == (
+        f"{Path(sys.executable).parent}:/usr/bin:/bin"
+    )
+    assert worker_environment["HOME"] == str(stage / "home")
+    assert worker_environment["HF_HOME"] == str(stage / "cache")
+    assert worker_environment["TMPDIR"] == str(stage / "tmp")
+    assert worker_environment["TMP"] == str(stage / "tmp")
+    assert worker_environment["TEMP"] == str(stage / "tmp")
+    assert worker_environment["PYTHONPATH"] == str(PROJECT)
     assert not any("CUDA_VISIBLE_DEVICES" in value for value in command)
+    assert not any(inherited_placeholder_name in value for value in command)
     assert "--unshare-net" not in command
     assert "replication_runtime.feverous_official_hipporag_v1.worker" in command
     assert isinstance(environment, dict)
+    assert set(environment) <= {
+        "PATH",
+        "HOME",
+        "LANG",
+        "DBUS_SESSION_BUS_ADDRESS",
+        "XDG_RUNTIME_DIR",
+    }
+    assert inherited_placeholder_name not in environment
     assert "XDG_RUNTIME_DIR" not in environment or environment["XDG_RUNTIME_DIR"]
 
 

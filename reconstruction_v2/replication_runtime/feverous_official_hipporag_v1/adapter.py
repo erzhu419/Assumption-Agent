@@ -26,6 +26,8 @@ from .contract import (
     FeverousOfficialHippoRAGError,
     RetrievalBatch,
     SYSTEMD_NETWORK_PROPERTIES,
+    WORKER_ENVIRONMENT_KEYS,
+    WORKER_FIXED_ENVIRONMENT_VALUES,
     canonical_json_bytes,
     corpus_sha256,
     parse_retrieval_output,
@@ -43,10 +45,13 @@ RUNTIME_RECEIPT_FILENAME = "runtime.attestation_receipt.json"
 INDEX_DIRECTORY_NAME = "official_global_index"
 QUERY_LOCK_FILENAME = ".retrieve.lock"
 SYSTEMD_RUN = Path("/usr/bin/systemd-run")
+ENV_EXECUTABLE = Path("/usr/bin/env")
 SYSTEMD_RUN_FLAGS = ("--user", "--wait", "--pipe", "--collect", "--quiet")
 SYSTEMD_PREFLIGHT_TIMEOUT_SECONDS = 30
 SYSTEMD_PREFLIGHT_SCRIPT = (
-    "import socket\n"
+    "import os,socket\n"
+    "if set(os.environ)!={'LANG'} or os.environ.get('LANG')!='C.UTF-8':"
+    " raise SystemExit(40)\n"
     "probe=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM);probe.close()\n"
     "for family in (socket.AF_INET,socket.AF_INET6):\n"
     " try: probe=socket.socket(family,socket.SOCK_STREAM)\n"
@@ -152,12 +157,28 @@ def _launcher_environment() -> dict[str, str]:
     return environment
 
 
-def _systemd_command_prefix(child_environment: Mapping[str, str]) -> list[str]:
+def _systemd_command_prefix() -> list[str]:
     """Freeze the GPU-preserving, transport-denying transient-unit prefix."""
 
     if not SYSTEMD_RUN.is_file():
         raise FeverousOfficialHippoRAGError(
             "systemd network-isolating runtime is unavailable"
+        )
+    command = [str(SYSTEMD_RUN), *SYSTEMD_RUN_FLAGS]
+    for property_value in SYSTEMD_NETWORK_PROPERTIES:
+        command.extend(("--property", property_value))
+    command.append("--")
+    return command
+
+
+def _clean_environment_exec_prefix(
+    environment: Mapping[str, str],
+) -> list[str]:
+    """Discard the user-manager environment before the target is exec'd."""
+
+    if not ENV_EXECUTABLE.is_file():
+        raise FeverousOfficialHippoRAGError(
+            "environment-clearing runtime is unavailable"
         )
     if any(
         not isinstance(key, str)
@@ -167,29 +188,32 @@ def _systemd_command_prefix(child_environment: Mapping[str, str]) -> list[str]:
         or not isinstance(value, str)
         or "\x00" in value
         or "\n" in value
-        for key, value in child_environment.items()
+        for key, value in environment.items()
     ):
         raise FeverousOfficialHippoRAGError(
             "systemd child environment is malformed"
         )
-    command = [str(SYSTEMD_RUN), *SYSTEMD_RUN_FLAGS]
-    for property_value in SYSTEMD_NETWORK_PROPERTIES:
-        command.extend(("--property", property_value))
-    for key in sorted(child_environment):
-        command.append(f"--setenv={key}={child_environment[key]}")
-    command.append("--")
-    return command
+    return [
+        str(ENV_EXECUTABLE),
+        "--ignore-environment",
+        "--",
+        *(f"{key}={environment[key]}" for key in sorted(environment)),
+    ]
 
 
 def _preflight_systemd_transport() -> None:
     """Prove that the user manager accepts both frozen network properties."""
 
-    command = _systemd_command_prefix({}) + [
-        "/usr/bin/python3",
-        "-I",
-        "-c",
-        SYSTEMD_PREFLIGHT_SCRIPT,
-    ]
+    command = (
+        _systemd_command_prefix()
+        + _clean_environment_exec_prefix({"LANG": "C.UTF-8"})
+        + [
+            "/usr/bin/python3",
+            "-I",
+            "-c",
+            SYSTEMD_PREFLIGHT_SCRIPT,
+        ]
+    )
     try:
         completed = subprocess.run(
             command,
@@ -240,6 +264,7 @@ def _launch_worker(
     child_environment = {
         "PATH": f"{runtime_python.parent}:/usr/bin:/bin",
         "HOME": str(writable_root / "home"),
+        "LANG": "C.UTF-8",
         "HF_HOME": str(writable_root / "cache"),
         "TMPDIR": str(writable_root / "tmp"),
         "TMP": str(writable_root / "tmp"),
@@ -251,7 +276,15 @@ def _launch_worker(
         "TRANSFORMERS_OFFLINE": "1",
         "TOKENIZERS_PARALLELISM": "false",
     }
-    command = _systemd_command_prefix(child_environment)
+    if frozenset(child_environment) != WORKER_ENVIRONMENT_KEYS or any(
+        child_environment.get(key) != value
+        for key, value in WORKER_FIXED_ENVIRONMENT_VALUES.items()
+    ):
+        raise FeverousOfficialHippoRAGError(
+            "worker environment contract drifted"
+        )
+    command = _systemd_command_prefix()
+    command.extend(_clean_environment_exec_prefix(child_environment))
     command.extend(
         [
             str(runtime_python),
