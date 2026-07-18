@@ -1,7 +1,13 @@
 # Assumption Agent × Red Queen Gödel Machine：架构诊断与 Reconstruction V2 复核
 
 > - 初版日期：2026-07-11
-> - 本次复核：2026-07-17
+> - 本次复核：2026-07-18
+> - 最新 post-terminal synthetic multiseed 结果：全新 v3 `8×64=512` cohort 已由 v5 在单一 detached
+>   formal attempt 中完成 RAW / official HippoRAG / Agent_R1 共 1,536 个 action；离线终态为 success。
+>   Agent−HippoRAG 的 seed-level U 差为 `[3,8,0,2,1,5,6,2]`，总 U `+27`、7 positive / 1 tie；
+>   但 Agent−RAW 总 U 为 `−14`，且 Agent 相对 HippoRAG 的全部 `+27 U` 只来自 definition-positive 两个 family，故只把
+>   窄 synthetic mechanism stability 从 unknown 更新为 descriptively supported，不扩张为现实域、L4/L5
+>   或 Agent 普遍优于 HippoRAG
 > - 代码审计基线 revision：`6224bb5a279f50fbcf1f8b36d19cb4ce6cc6c882`
 > - 本次实现复核：receipt/runtime provenance 修复提交 `e43670f6`、`18ff3417`；v3.3 execution-policy 提交 `e0b1a33b`；v3.4 model-only/action-budget 主提交 `e491b0af`，runtime-path 修复 `995e6446`，Ruoli 503 分类修复 `ba0f36cf`，host-readable audit artifact 修复 `1df3092a` / `ad66d5a2`；v3.4 max2 v5 canary 已通过、fresh development 因四并发 429 fail closed；v3.5 将所有在线 phase 版本化为 1 worker，repair identity 修复 `96d53a5d`，malformed proposal/claim binding 修复 `d70562de`；v3.6 contrastive evidence / invalid-evidence lifecycle 实现提交 `01608e1e`；v3.7 六路首批 6/6 收到 429；v3.8 两路在 16 valid 后收到 2 个 503；v3.9 固定为 outer item workers=6 / shared model slot=1，并完成首个 clean full development 负结果；v3.10 exact-three/coverage-first fresh run 将 activation 提高到 2/16 但仍 0 gain，并暴露 semantic-diversity hard reject 与 action lowering 丢 target；v3.11 actionability fresh run 证明 treatment 已改变 trace、PDF 与成本但仍 0 gain，同时暴露 repair response shape 未被 generic system contract 可靠约束；v3.12 显式版本化 singular repair response并完成 56/56 clean development trials，但两代仍各仅激活 1/16、0 gain，无 incumbent；误入的空 freeze/partial controls 已隔离并补上 phase prerequisite；v3.13 complementary program-set 已完成 375/375 离线测试和 76/76 valid live development，三套 bundle 均激活 2/16、6 个 policy-on 全部失败、0 gain/0 harm、无 incumbent，同时暴露 G2 cross-arm raw replay 不一致；v3.14 提交 `2229d7af` 完成 411/411 离线测试及 62/62 attempted live development，selector 成功选中 7/7 三-family set、activation=3/16，但 7 个 policy-on 全失败；一条 recursive raw 超 64 MiB 使 primary non-claim，valid baseline replay=31、invalid key 又跨臂执行一次，两份 archive 仍无 incumbent；v3.15 action-quality / terminal-invalid provenance 实现提交 `696a2954`，453/453 离线测试通过，随后 clean lock、86/86 cache-only prewarm、smoke 与 57/57-valid live development 全部完成，但两臂仍 0 gain/0 harm、`incumbent_id=null`
 > - 最新 proposal-only 复核：v3.16 family-slot formation 提交 `6ad5c156`；v3.17 artifact-blueprint formation 提交 `4f94e613`。两轮均失败且未启动 benchmark trial
@@ -34,8 +40,8 @@
 > - 最新 CUAD direct-acquisition 终态：为避开连续 clean-worker qualification，CUAD 改为 no-prequalification、parent-process direct one-shot。首个 CLI 在 marker、secret、archive/member 前因 design 缺顶层 schema 停止并由 `2cb8718a` 透明记账；唯一 marker-consuming attempt 随后只打开 TRAIN member 一次。commit `3e458d5f` 的公开 receipt 得到 407 个 contract components、232 个 eligible，低于冻结的 4×64=256；主要 aggregate exclusion reason 为 node cardinality 173，另有 exposure 2、gold cardinality 3。0 block/private/model/score，故这是 source-capacity terminal 而非 Agent 对 HippoRAG 的性能负结果；`1b9aaaa5` 已固定 no replay/no smaller block/no TEST/CUADv1
 > - 最新 synthetic typed-graph causal 终态：原始设计 `d24dfb96` 后、任何 formal seed/cohort 之前，`b37054e2` 透明修正 TN2 语义、label-free evaluator derangement 与 sign-enumeration 的非随机化解释，并固定 acquisition/runner；41/41 focused tests、`py_compile` 与 diff check 通过。唯一 32-byte seed 一次形成 A_form/F_search/A_hold/M_search 各 64 项，F_search label 从未创建。formation 形成 behavior-distinct 的 real/permuted recipe；untouched A_hold 上 Agent full / official HippoRAG / RAW 的 total U=`168/164/158`、support hit=`108/106/101`（总 112）、complete=`60/58/57`。Agent−HippoRAG 的 matched net U=+4，但只有 2 个 nonzero pair，预注册 reference tail=`1/4=0.25>0.1`，故 valid non-promotion；M_search 未授权且未打开。drop-designated/wrong-type 各回落 4 U，endpoint-permuted 回落 6 U，增益只出现在 `MENTIONS_DEFINITION` positive family；real/permuted evaluator 在 A_hold 的净差为 0。终止后 `6f06464a` 已公开 exact seed 与 256-row cohort，不含 retrieval/model/score output。该结果支持这份 synthetic SCM 内很窄的 typed-action 因果效应，但不支持 evaluator co-evolution、family-out、L4/L5、现实总体效果或 Agent 普遍优于 HippoRAG
 > - 最新 FEVER fixed-P 现实域 acquisition 终态：本地候选审计只发现 FEVER 具备继续价值；`543bed23` / `e5d5a7d7` 在内容读取前固定并下载官方 labelled `paper_test`、1.713 GB June-2017 wiki archive 与许可证，`e07cf640` 冻结一个无 promotion/gate 的 128-item gold-injected item-local reranking design，`83e185d7` 的 acquisition/runner 通过 13/13 synthetic tests 与独立审计。唯一 formal run 在 marker 后完整解析 paper_test 并在内存 HMAC 固定 64 SUPPORTS+64 REFUTES；随后在任何 wiki JSONL member content 打开前，central-directory contract 发现至少一个非目录 member 的 suffix 不是 `.jsonl`，以 `source_schema_invalid` 终止。action/label pack、RAW/P/Hippo、model/evaluator/score 均为 0；不事后查看 member 名、不改 allowlist、不重跑。FEVER transfer efficacy 仍 unknown，不是 Agent 的性能负结果
-> - 最新 synthetic 8-seed replication 终态：`dabcbde7` 在 seed 前固定 exact R1、RAW/official-HippoRAG/Agent 三臂、8 个 fresh seed cluster 与纯描述 estimand；两轮审计先修正 official paragraph title、1536-future submission barrier、未声明分析面、重复 grammar regeneration 及 success/failure terminal publication，64 项相关测试通过。`2ecf5ec8` / `5efbb5b1` / `f7d3335b` 依次提交 implementation freeze、8-seed custody 与 512-item acquisition。唯一 runner 在 marker 后、任何 retrieval/action/label/score 前，把 512×(1 question+32 nodes)=16,896 条文本一次交给冻结 MiniLM encoder；该 runtime 的单次上限是 16,384，故以 implementation/infrastructure-invalid 严格终止。没有 seed-level delta、Agent−HippoRAG 稳定性或性能负结论；`d185b84a` 仅按事前合同公开 8 seeds 与 512-row cohort，不含 action/model/score
-> - 最新后续缺口：不再围绕已消费的 synthetic 单 seed、多 seed cohort 或 FEVER archive contract 修改阈值、补 gate、换 recipe、放宽 schema、分批后重放同一 cohort，或追加 seed 到成功。原始 definition-only +4 仍只是单 seed 窄机制信号；8-seed 稳定性因 runner 在 action 前失效而 unknown。当前本地也没有另一个同时满足未消费、reader/许可/容量、离线和隔离约束的现实来源；距离目标仍缺现实域中稳定且跨 relation family 的 Agent−HippoRAG 净收益，以及 L5 evaluator replacement 对后续 search 的真实改善
+> - 历史 synthetic 8-seed v1 终态（已由 v3→v5 更新）：`dabcbde7` 在 seed 前固定 exact R1、RAW/official-HippoRAG/Agent 三臂、8 个 fresh seed cluster 与纯描述 estimand；两轮审计先修正 official paragraph title、1536-future submission barrier、未声明分析面、重复 grammar regeneration 及 success/failure terminal publication，64 项相关测试通过。`2ecf5ec8` / `5efbb5b1` / `f7d3335b` 依次提交 implementation freeze、8-seed custody 与 512-item acquisition。唯一 v1 runner 在 marker 后、任何 retrieval/action/label/score 前，把 512×(1 question+32 nodes)=16,896 条文本一次交给冻结 MiniLM encoder；该 runtime 的单次上限是 16,384，故以 implementation/infrastructure-invalid 严格终止。该 v1 cohort 的 stability 仍未知，`d185b84a` 只公开 seeds/cohort；它没有被修补后作为正式/评分 efficacy evidence 重放，后续 v2 只做过非评分 integration diagnostic。2026-07-18 的结论已由顶部最新 bullet 与 12.17 的全新 v3 cohort / v5 success 取代
+> - 最新后续缺口：全新 v3 8-seed cohort 已由 v5 有效完成，故 synthetic definition-positive mechanism stability 不再是 unknown；但 +27 U 仍只来自 DEF_TP1/TP2，Agent 总 U 又比 RAW 低 14。当前不再围绕任何已消费 synthetic cohort 或 FEVER archive 修改阈值、补 gate、换 recipe、放宽 schema、分批重放或追加 seed。距离目标仍缺现实域中稳定且跨 relation family 的 Agent−HippoRAG 净收益，以及真正晋升的 L5 evaluator replacement 对预冻结 untouched search 的后续改善
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -2026,6 +2032,7 @@ support utility 的对齐，不是缺少更多 promotion gate。它仍不是 off
 | 严格终止（MuSiQue residual portfolio A） | same-source residual two-Q evaluator test | `[96,264)` 在 row-zero preregistration 后一次 acquisition；A/F 各 4080/4080 terminal 并冻结 behavior-distinct actions；A_hold freeze 固定 288 路。正式调用消费 authorization、打开 48 项后，lazy-submit/early-result 的 committed ordering defect 使 barrier attempted=1/terminal=0；0 ranking/score/model/network。A_hold 烧毁、不 replay；无 promotion，M_search 永久未开；efficacy unknown，不追加同源 cohort |
 | 完成但未晋升（fresh 2Wiki fixed-action transfer） | 独立 fresh-item A_hold 与 agent/RAW/official HippoRAG 对照 | official archive + 历史 1000-row denylist + 三 split collision exclusion 在 selection 前固定；A_hold 48 项按四 type 均衡。384/384 terminal 后 incumbent/challenger/P/official/RAW 为 111/110/110/99/56（总 support=120）；challenger−incumbent=−1、exact p=1，不晋升，M_search 未开。incumbent−official=+12、16 gain/4 harm、descriptive exact p=1549/262144；claim 限 item-local retrieval |
 | 完成但未晋升（QASC direct-action evaluator） | 新领域的自动 recipe formation、A/F pair 与 RAW/P/official HippoRAG 对照 | 四块各 64 在 formation 前一次 acquisition；16 路 full-corpus BM25 两遍扫描 16,987,130 行，TEST 未开；A/F 2048 actions 后 pair behavior-distinct。A_hold incumbent/challenger support=67/66、U=90/84、净 U −6、exact p=1668987/2097152，不晋升；RAW/P/official support=19/38/103，official 44 complete、U=147。M_search 未授权未开，同源 QASC 终止 |
+| 完成（窄 synthetic multiseed stability） | fresh 8-seed typed-graph Agent_R1 / RAW / official HippoRAG replication | 全新 v3 cohort 为 8×64=512；v5 单次 detached formal 完成 1536/1536 action，official/local 峰值并发 8/64，MiniLM 固定两段 8448。Agent/Hippo/RAW 总 U=1259/1232/1273；Agent−Hippo seed delta `[3,8,0,2,1,5,6,2]`，mean=3.375、7 positive/1 tie；Agent−RAW 总 U −14。+27 全在 DEF_TP1/TP2，其他 family 与 Hippo 完全相同。只支持固定 synthetic distribution 的窄机制稳定性，不是现实域 transfer、promotion、L4/L5 或总体优越性 |
 | 下一步（仅当论文必须继续追 L5；不新增 gate） | 独立新 custody 上同时改变 action family 与 evaluator mechanism | Hotpot、2Wiki、QASC 已给出三次有效 non-promotion；QASC 还显示当前 local NLI pair recipes 明显低于 graph-style HippoRAG。不能再把“另一个 evaluator objective”单独当修复。下一候选必须事前提出能表达 graph/two-fact coverage 的 action，并用与后续 search utility 同构但不泄漏 measurement 的 evaluator；在新的 domain/cohort 一次性预注册 A/F/A_hold/M。否则停止实验，以“窄 L3/L4 positive + 三次正确 rejection、L5 未达到”为论文结论 |
 | 完成（exact-domain L2/L3 instance） | Replication C promotion、controls disposition 与 one-shot sealed | development 8/8 gain、四 fold 各 +2；operator-only output 8/8 exact match；sealed 4/4 gain、8 路最大并发、8/8 network-none verifier receipts、0 retry/replay/online judge；两条盲化事件完整披露，claim 限于固定 SEC-13F treatment |
 | 完成 | 冻结 evaluator-owned promotion policy | 已由 protocol 绑定完整 spec；candidate 只能收紧；对抗测试通过 |
@@ -3445,11 +3452,95 @@ commit `d7d4b86d` 的
 reproducibility self-hash=`f54998ce...a13c`，明确不含 retrieval action、model output 或 score。labels 与 cohort 现已公开，故同一
 cohort 也不能交给分批修正版 runner。
 
-最终结论是：**8-seed stability 仍为 unknown。** 原单 seed Agent−HippoRAG +4 U 的窄 synthetic mechanism signal 没有被复现，
+该 v1 attempt 的当时终态结论是：**8-seed stability 仍为 unknown。** 原单 seed Agent−HippoRAG +4 U 的窄 synthetic mechanism signal 没有被复现，
 也没有被否定。若另立 v2，必须使用全新 seeds/cohort，并在 seed 前让真实 frozen encoder 对 exact 16,896-text call shape 或事前
 固定的 deterministic chunk schedule 做 executable preflight；但这会是新的独立研究，而不是本轮 repair/replay，而且仍无法补
-现实效度。为避免“失败后不断补 gate/contract 再试到成功”，当前应停止 synthetic 分支。论文距离目标仍缺现实域中跨 relation
+现实效度。为避免“失败后不断补 gate/contract 再试到成功”，当时应停止对该 v1 cohort 的 synthetic repair；12.17 记录后来另立
+全新 cohort 后的独立 v3→v5 研究。论文距离目标仍缺现实域中跨 relation
 family 的稳定 Agent−HippoRAG 净收益，以及 evaluator challenger 晋升后对 untouched search 的真实改善。
+
+### 12.17 post-terminal multiseed v2→v5：窄机制稳定性完成，但不构成现实域或 L5
+
+12.16 的“8-seed stability unknown”是 v1 在第一次 action 前因 MiniLM 单次 `16,896` rows 超过冻结上限而终止时的
+正确结论；它不是对后续研究的永久禁止。后续工作没有在已公开的 v1 cohort 上改到成功，也没有继续添加 performance
+gate，而是把每一次失败严格分成独立、事前声明且不读取 outcome 的 execution-repair 阶段。
+
+首先，commit `3f8a779a` 的
+[v2 design](../manifests/synthetic_typed_graph_multiseed_replication_design_v2.json) 与 exact v2 kernel 将 MiniLM 固定为
+`8,448+8,448` 两段，并把 official/local 并发上限固定为 8/64。它只在已经公开的 v1 cohort 上做非评分 integration
+diagnostic；唯一进程被外部终止，commit `6d60139c` 的
+[diagnostic receipt](../manifests/synthetic_typed_graph_multiseed_replication_integration_diagnostic_v2.json) 因而是
+`terminal_integration_diagnostic_invalid_fresh_formal_not_authorized`。labels、scores、estimand 与 claim 均为 0，不能把它当成
+chunk repair 的性能反证，也没有为 v2 生成正式 seed/cohort。
+
+commit `d1b6771b` 的 [v3 design](../manifests/synthetic_typed_graph_multiseed_replication_design_v3.json) 改用 detached
+`systemd --user` custody；row/model-free
+[preseed verification](../manifests/synthetic_typed_graph_multiseed_replication_preseed_verification_v3.json)、
+[implementation freeze](../manifests/synthetic_typed_graph_multiseed_replication_implementation_freeze_v3.json)、
+[seed custody](../manifests/synthetic_typed_graph_multiseed_replication_seed_custody_v3.json) 与一次性
+[acquisition](../manifests/synthetic_typed_graph_multiseed_replication_acquisition_v3.json) 随后形成全新 `8×64=512` A_hold。
+generated item set 为 `22cdb517…2fcc2f`，action/label/compiled file hash 分别为 `56feacea…0f55`、
+`caf548c9…ff78`、`e09d1ac5…b561`。正式 launch 前发现 frozen driver 的 `Path.resolve(strict=True)` 会消除
+`venv/bin/python` 的 lexical symlink identity，而 frozen v2 attestation 恰好要求保留该 identity。commit `5b43dd74` 的
+[v3 prelaunch closure](../manifests/synthetic_typed_graph_multiseed_replication_prelaunch_terminal_v3.json) 因此在 marker、pack open、
+action、label、score 全为 0 时关闭 v3；正式 attempt 未消费，这份 prospectively acquired cohort 仍 untouched。
+
+v4 只预注册 lexical-path transport repair，没有授权修改 kernel/cohort/metric。临时 official-HippoRAG runtime 消失后，
+SmolLM2 revision `12fd25f…`, 11 个 payload（272,030,008 bytes）、依赖、52-file source 与 embedding 都能重建；但 11 个
+Hugging Face `.metadata` 第三行由 `time.time()` 生成，旧 timestamp bytes 无法恢复，而 v2 raw attestation 又把它们计入
+asset/topology identity。故 commit `8842a327` 的
+[v4 prefreeze closure](../manifests/synthetic_typed_graph_multiseed_execution_repair_prefreeze_terminal_v4.json) 在 implementation
+freeze 之前终止；v4 attempt 仍未消费，也没有正式 v4 implementation code/result。
+
+commit `df96bf93` / `da449cd3` 的
+[v5 design](../manifests/synthetic_typed_graph_multiseed_runtime_normalization_design_v5.json) 在实现前只授权四项变化：保留 lexical
+symlink；仅从 runtime identity 排除已经验证为 finite nonnegative float 的 download timestamp 行；机械地把 adapter verifier
+从 v2 换成 v3；修正 failure receipt 的 pack/label open state 与 systemd invocation provenance。payload path/size/hash、commit、
+ETag、`.gitignore`、Python target、dependency/source/embedding bindings 仍严格验证，额外/symlink/lock/temp 文件均拒绝。
+commit `8cf78fd5` 的
+[runtime attestation v3](../manifests/musique_official_hipporag_runtime_attestation_v3.json) self-hash 为 `23996f9f…2c60`；
+normalized LLM、filesystem 与 path-free safe binding 分别为 `8d3cd27a…b4bb`、`3330c67e…e894`、`818f16bc…6038`。
+
+v5 lifecycle 在冻结前经两轮独立审计。后审计关闭了三个 blocker：finalizer 只有在完整、正向的 systemd terminal evidence
+下才能写 failure；`systemd-run` 非零不能无证据声称 child/pack 未启动；success readback 必须逐项复验 exact v2 receipt、
+`512/1536` counts、8/64 caps、两段 8448、pack commitments、private action seal 与 512 action rows。focused 28/28 tests
+通过且复审未发现新的 P0/P1。commit `ef4d918b` 固定实现；commit `e0498961` 的
+[v5 implementation freeze](../manifests/synthetic_typed_graph_multiseed_runtime_normalization_implementation_freeze_v5.json)
+self-hash=`5f7d3535…162a`，只按 path/mode/size/raw hash 绑定三份 v3 private pack，`semantic_payload_opened=false`，没有新 seed、
+cohort、smoke、candidate search 或 gate。
+
+唯一 v5 formal attempt 随后完成。launcher 与 child 的 MiniLM/runtime preflight 都在 action pack 前通过；全部 1,536 futures
+先提交，observed official/local peak concurrency 为 8/64。512 次 official retrieval、512 RAW 与 512 Agent_R1 action 全部
+terminal；MiniLM observed input/output 均严格为 `[8448,8448]`。fresh official postflight 后先写 private action seal
+`f1bdc1d7…2c81`（file `f4a387c7…ce0d`），late-label pack 才恰好打开一次并离线评分。commit `a83f6d54` 的
+[canonical v5 result](../manifests/synthetic_typed_graph_multiseed_replication_result_v5.json) 为
+`terminal_descriptive_eight_seed_replication_complete`，self-hash=`3e2bb0f9…2084`：
+
+| arm | total U | support hit / 896 | complete / 512 |
+|---|---:|---:|---:|
+| Agent_R1 | 1259 | 817 | 442 |
+| official HippoRAG | 1232 | 801 | 431 |
+| RAW | 1273 | 813 | 460 |
+
+primary Agent_R1−official-HippoRAG seed deltas 为 `[3,8,0,2,1,5,6,2]`：mean `3.375`、median `2.5`、
+min/max `0/8`、7 positive / 1 tie / 0 negative，总 U `+27`，可分解为 support `+16` 与 complete `+11`。
+这把单 seed 的稀疏 `+4` 更新为**同一固定 synthetic distribution 内可跨 seed 保留的窄 positive mechanism signal**。
+但它并不广：全部 `+27` 只来自 `DEF_TP1 +10` 与 `DEF_TP2 +17`；其余 14 个 family 的 Agent 与 HippoRAG total U
+完全相同，negative polarity 也完全相同。相对 RAW 的 seed deltas 又是 `[0,-5,-6,-2,-5,2,4,-2]`，总 U `−14`；
+Agent 虽多 4 个 support hit，却少 18 个 complete item。因此“Agent 已普遍超过 HippoRAG/RAW”仍然不成立。
+
+terminal result 提交后，commit `b9b9989c` 才执行事前授权的
+[exact v3 seed/cohort publication](../published/synthetic_typed_graph_multiseed_replication_v5/reproducibility.json)，
+reproducibility self-hash=`c9cbf99e…2962`；publication 没有再次调用 grammar，也不含 action、model output 或 score。
+协议没有 threshold、p-value、CI、promotion 或 performance gate，所以以上是 fixed-cohort descriptive replication，不能包装成
+population inference、official benchmark、端到端 QA、现实 family-out、L4 retained recursion 或 L5 evaluator co-evolution。
+
+因此 synthetic 分支现在应以**有效完成**而不是再次 repair 结束：不再对当前 cohort 补 gate、换 recipe/evaluator 或重跑。
+距离总目标仍缺两项没有被这次阳性缩短的核心证据：其一，在全新现实 reader/domain 中跨 relation family 保持稳定的
+Agent−HippoRAG 净收益，并同时说明为何不被 RAW 的 complete advantage 反超；其二，一个真正晋升的 evaluator challenger，
+在预先冻结的 untouched search cohort 上改善后续搜索。若论文不再追加一个同时改变 graph/two-fact action 与 evaluator
+mechanism、且一次性预注册 A/F/A_hold/M 的新现实域 study，最诚实的终稿结论就是：**现实 retrieval-only 的窄 L3/L4 与 synthetic mechanism
+stability 已有证据，evaluator replacement/L5 仍未达到。**
 
 ## 附录 A：关键证据索引
 
