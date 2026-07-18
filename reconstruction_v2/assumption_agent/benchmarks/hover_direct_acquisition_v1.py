@@ -1944,6 +1944,155 @@ def load_committed_acquisition_receipt(
     }
 
 
+def _validate_formal_receipt_aggregates(payload: Mapping[str, Any]) -> None:
+    """Reject a committed but nonformal or semantically rewritten receipt."""
+
+    qualification = QualificationBinding(
+        qualification_sha256=QUALIFICATION_SHA256,
+        eligible_record_count=17_905,
+        normalized_claim_collision_member_count=266,
+        eligible_hpqa_group_count=6_103,
+        sqlite_document_row_count=5_233_329,
+        sqlite_maximum_rowid=5_233_329,
+    )
+    expected_sources = {
+        "training": {
+            "relative_path": FORMAL_TRAIN_RELATIVE.as_posix(),
+            "sha256": TRAINING_SHA256,
+            "byte_size": TRAINING_SIZE,
+            "mode": "0600",
+        },
+        "sqlite_corpus": {
+            "relative_path": FORMAL_SQLITE_RELATIVE.as_posix(),
+            "sha256": CORPUS_SOURCE_SHA256,
+            "byte_size": CORPUS_SOURCE_SIZE,
+            "mode": "0600",
+        },
+        "qualification_sha256": QUALIFICATION_SHA256,
+    }
+    source_stats = payload.get("source_requalification")
+    if (
+        payload.get("qualification_sha256") != QUALIFICATION_SHA256
+        or payload.get("source_bindings") != expected_sources
+        or not isinstance(source_stats, Mapping)
+    ):
+        raise HoVerAcquisitionError("formal acquisition source binding drifted")
+    _formal_source_stats_match(source_stats, qualification)
+    if source_stats.get("item_uid_claim_title_body_or_support_text_emitted") is not False:
+        raise HoVerAcquisitionError("formal source aggregate leaked item content")
+
+    expected_hop_counts = {
+        block: {hop: HOP_QUOTAS[block] for hop in HOP_STRATA}
+        for block in BLOCK_ORDER
+    }
+    selection = payload.get("selection_qualification")
+    if (
+        not isinstance(selection, Mapping)
+        or set(selection)
+        != {
+            "qualification_sha256",
+            "maximum_b_matching_cardinality",
+            "required_b_matching_cardinality",
+            "selected_block_counts",
+            "selected_hop_stratum_counts",
+            "selected_unique_uid_count",
+            "selected_unique_hpqa_group_count",
+            "selected_unique_normalized_claim_count",
+            "selection_contract",
+        }
+        or selection.get("qualification_sha256") != QUALIFICATION_SHA256
+        or selection.get("maximum_b_matching_cardinality") != TOTAL_SELECTED
+        or selection.get("required_b_matching_cardinality") != TOTAL_SELECTED
+        or selection.get("selected_block_counts") != BLOCK_COUNTS
+        or selection.get("selected_hop_stratum_counts") != expected_hop_counts
+        or selection.get("selected_unique_uid_count") != TOTAL_SELECTED
+        or selection.get("selected_unique_hpqa_group_count") != TOTAL_SELECTED
+        or selection.get("selected_unique_normalized_claim_count") != TOTAL_SELECTED
+        or selection.get("selection_contract")
+        != {
+            "whole_normalized_claim_collision_groups_excluded": True,
+            "hpqa_id_global_at_most_one": True,
+            "private_HMAC_b_matching": True,
+            "private_HMAC_hop_assignment": True,
+            "private_HMAC_block_unified_order": True,
+        }
+    ):
+        raise HoVerAcquisitionError("formal acquisition selection aggregates drifted")
+
+    corpus = payload.get("corpus_qualification")
+    corpus_integer_fields = (
+        "unique_selected_gold_article_count",
+        "filler_article_count",
+        "distractor_counter_attempt_count",
+        "distractor_rejected_missing_rowid_count",
+        "distractor_rejected_duplicate_or_gold_count",
+        "distractor_rejected_duplicate_serialization_count",
+    )
+    if (
+        not isinstance(corpus, Mapping)
+        or set(corpus)
+        != {
+            "fixed_article_count",
+            *corpus_integer_fields,
+            "all_selected_gold_included",
+            "origin_or_is_gold_in_corpus_view",
+            "shared_all_blocks_and_methods",
+            "corpus_order_independent_private_HMAC",
+        }
+        or corpus.get("fixed_article_count") != CORPUS_SIZE
+        or any(type(corpus.get(field)) is not int for field in corpus_integer_fields)
+        or not 1 <= int(corpus["unique_selected_gold_article_count"]) <= 432
+        or corpus.get("filler_article_count")
+        != CORPUS_SIZE - int(corpus["unique_selected_gold_article_count"])
+        or int(corpus["distractor_counter_attempt_count"])
+        > DISTRACTOR_ATTEMPT_CAP
+        or any(int(corpus[field]) < 0 for field in corpus_integer_fields[2:])
+        or corpus.get("all_selected_gold_included") is not True
+        or corpus.get("origin_or_is_gold_in_corpus_view") is not False
+        or corpus.get("shared_all_blocks_and_methods") is not True
+        or corpus.get("corpus_order_independent_private_HMAC") is not True
+    ):
+        raise HoVerAcquisitionError("formal acquisition corpus aggregates drifted")
+
+    materialization = payload.get("materialization_qualification")
+    expected_histograms = {
+        block: {
+            str(hop): HOP_QUOTAS[block]
+            for hop in (2, 3, 4)
+        }
+        for block in BLOCK_ORDER
+    }
+    if (
+        not isinstance(materialization, Mapping)
+        or materialization
+        != {
+            "fixed_article_count": CORPUS_SIZE,
+            "block_gold_cardinality_histograms": expected_histograms,
+            "F_search_utility_label_pack_created": False,
+            "claim_verdict_support_sentences_or_hop_in_view": False,
+            "origin_or_is_gold_in_corpus_view": False,
+        }
+        or payload.get("label_isolation")
+        != {
+            "A_form": "separate_late_utility_pack",
+            "F_search": "utility_pack_not_created",
+            "A_hold": "separate_late_utility_pack",
+            "M_search": "separate_late_utility_pack",
+        }
+    ):
+        raise HoVerAcquisitionError("formal acquisition materialization drifted")
+
+
+def load_formal_committed_acquisition_receipt(
+    project: Path,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Load the Git-bound receipt and enforce every formal aggregate boundary."""
+
+    payload, binding = load_committed_acquisition_receipt(project)
+    _validate_formal_receipt_aggregates(payload)
+    return payload, binding
+
+
 def _read_private_payload(path: Path, binding: Mapping[str, Any], *, label: str) -> dict[str, Any]:
     metadata = _require_regular_file(path, label=label, mode=0o600)
     raw = path.read_bytes()
@@ -2110,6 +2259,7 @@ __all__ = [
     "load_block_labels",
     "load_block_view",
     "load_committed_acquisition_receipt",
+    "load_formal_committed_acquisition_receipt",
     "load_corpus_view",
     "materialize_private_payloads",
     "normalize_claim",

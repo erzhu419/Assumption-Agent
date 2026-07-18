@@ -212,6 +212,10 @@ def test_one_shot_persistence_loaders_modes_and_tamper_detection(tmp_path: Path)
     assert bindings["receipt_file_sha256"]
     assert bindings["receipt_git_head"]
     assert bindings["receipt_git_blob_sha1"]
+    with pytest.raises(
+        acq.HoVerAcquisitionError, match="formal acquisition source binding"
+    ):
+        acq.load_formal_committed_acquisition_receipt(tmp_path)
     assert len(acq.load_corpus_view(project=tmp_path)["articles"]) == 609
     for block in acq.BLOCK_ORDER:
         assert len(acq.load_block_view(project=tmp_path, expected_block=block)["items"]) == acq.BLOCK_COUNTS[block]
