@@ -1,0 +1,244 @@
+{
+  "claim_boundary": {
+    "absolute_base_model_or_public_pretraining_row_zero": false,
+    "answer_generation_or_end_to_end_QA": false,
+    "equal_compute_claim": false,
+    "official_HippoRAG_claim": "source_verified_official_HippoRAG_core_on_the_complete_fixed_MultiHopRAG_article_corpus_through_a_custom_retrieve_only_adapter_not_a_native_MultiHopRAG_adapter",
+    "primary_real_domain_claim_if_supported": "relation_family_balanced_document_retrieval_on_one_fixed_real_news_corpus",
+    "project_local_source_history_row_zero": true,
+    "successful_L5_claim_requires_both_evaluator_promotion_and_improved_untouched_M_search": true
+  },
+  "cohort_contract": {
+    "block_counts": {
+      "A_form": 96,
+      "A_hold": 72,
+      "F_search": 48,
+      "M_search": 72
+    },
+    "block_order": [
+      "A_form",
+      "F_search",
+      "A_hold",
+      "M_search"
+    ],
+    "corpus_shared_by_all_blocks_and_arms": true,
+    "exact_relation_family_counts": {
+      "A_form": {
+        "comparison_query": 32,
+        "inference_query": 32,
+        "temporal_query": 32
+      },
+      "A_hold": {
+        "comparison_query": 24,
+        "inference_query": 24,
+        "temporal_query": 24
+      },
+      "F_search": {
+        "comparison_query": 16,
+        "inference_query": 16,
+        "temporal_query": 16
+      },
+      "M_search": {
+        "comparison_query": 24,
+        "inference_query": 24,
+        "temporal_query": 24
+      }
+    },
+    "global_disjointness": "normalized_query_collision_groups_and_canonical_query_rows_are_disjoint_across_all_four_blocks",
+    "null_query_policy": "excluded_before_HMAC_ranking_because_no_positive_evidence_set_exists_for_the_frozen_support_utility",
+    "public_exposure_exclusion": "exclude_source_order_rows_0_through_127_inclusive_before_any_HMAC_ranking",
+    "selection": "within_each_exact_source_question_type_rank_eligible_normalized_query_group_representatives_by_private_HMAC_SHA256_and_assign_consecutive_block_quotas",
+    "selection_secret_rotation": false,
+    "source_order_exclusion_is_not_a_performance_filter": true,
+    "total_selected_queries": 288
+  },
+  "design_hash_contract": {
+    "algorithm": "sha256",
+    "canonicalization": "json.dumps(body_without_design_sha256, ensure_ascii=True, sort_keys=True, separators=(',', ':')).encode('utf-8')",
+    "excluded_top_level_fields": [
+      "design_sha256"
+    ]
+  },
+  "design_sha256": "1082346dc722c50a3f53d61b209489144ac1b774c3acf4e5932894dde1ba1821",
+  "evaluator_contract": {
+    "A_form": "all_eight_label_free_action_traces_reach_terminal_and_are_sealed_before_A_form_gold_is_opened_once;_fit_exactly_one_challenger_from_the_frozen_feature_set",
+    "A_hold": "after_the_formation_receipt_and_F_search_policy_selection_are_committed_compare_the_single_E1_selected_policy_against_the_single_E0_selected_policy_on_one_untouched_balanced_block",
+    "challenger_E1": {
+      "family_label_feature_use": false,
+      "feature_standardization": "weighted_A_form_mean_and_population_standard_deviation_with_zero_variance_features_set_to_zero",
+      "fit": "weighted_ridge_regression_predicting_exact_item_utility_for_all_eight_actions",
+      "lambda_grid": [
+        "0",
+        "1/100",
+        "1/10",
+        "1",
+        "10"
+      ],
+      "lambda_selection": "leave_one_relation_family_out_minimum_sum_top_action_true_utility_regret_then_smaller_lambda_tie_break",
+      "refit": "one_refit_on_all_A_form_rows_with_the_selected_lambda",
+      "relation_family_use": "inverse_frequency_training_weights_and_fold_identity_only",
+      "runner_up_or_post_outcome_refit": false
+    },
+    "F_search": "F_search_gold_file_is_never_created;_E0_and_E1_each_select_one_global_action_recipe_by_maximizing_mean_predicted_utility_across_F_search_with_recipe_ID_tie_break_then_both_policy_hashes_are_frozen",
+    "incumbent_E0": "fixed_untrained_semantic_source_entity_temporal_coverage_minus_redundancy_and_churn_linear_score",
+    "M_search": "only_after_promotion_apply_the_frozen_E0_counterfactual_policy_and_promoted_E1_active_policy_to_untouched_M_search_then_open_M_gold_once_after_all_RAW_HippoRAG_and_action_units_join",
+    "no_new_evaluator_or_objective_after_A_form": true,
+    "promotion": "strictly_positive_sum_of_family_balanced_paired_E1_minus_E0_item_utility_and_one_sided_magnitude_preserving_exact_signflip_p_at_most_0.10",
+    "unidentifiable_policy": "if_E0_and_E1_select_the_same_recipe_or_have_identical_top5_on_every_F_search_item_stop_validly_as_unidentifiable_without_opening_A_hold_or_M_search"
+  },
+  "global_corpus_contract": {
+    "addressable_unit": "one_source_native_news_article",
+    "article_identity": "zero_based_corpus_source_order_with_exact_title_published_at_source_and_body",
+    "expected_article_count_from_paper": 609,
+    "gold_join": "each_exact_normalized_evidence_fact_must_be_a_substring_of_exactly_one_source_article_and_distinct_evidence_facts_for_an_item_must_map_to_distinct_article_indices",
+    "gold_or_query_injection_into_corpus": false,
+    "HippoRAG_document_serialization": "canonical_JSON_object_with_article_idx_title_published_at_source_and_body",
+    "item_local_candidate_reduction": false,
+    "RAW_document_score": "maximum_query_cosine_over_frozen_article_chunks_with_article_index_tie_break",
+    "segmentation": "sentence_boundary_split_then_greedy_chunks_at_most_1000_Unicode_characters;_oversized_segments_slice_at_1000_with_100_character_overlap;_title_source_and_published_at_prefix_every_chunk",
+    "shared_corpus_for_RAW_HippoRAG_and_Agent": true
+  },
+  "label_isolation": {
+    "A_form_labels": "separate_private_pack_opened_once_only_after_all_A_form_actions_terminal",
+    "A_hold_labels": "separate_private_pack_opened_once_only_after_authorization_and_all_A_hold_actions_terminal",
+    "F_search_labels": "not_created",
+    "M_search_labels": "separate_private_pack_not_authorized_or_opened_unless_A_hold_promotes",
+    "question_type": "available_only_to_acquisition_stratification_late_scoring_and_E1_training_fold_weights_never_to_action_or_evaluator_features",
+    "source_answer": "never_enters_retrieval_action_evaluator_or_online_judge"
+  },
+  "objective": "one_new_source_one_HMAC_cohort_one_evaluator_epoch_jointly_tests_real_relation_family_Agent_minus_official_HippoRAG_and_promoted_evaluator_improvement_of_untouched_search",
+  "offline_and_parallel_contract": {
+    "eager_submission": "materialize_every_stage_work_unit_then_bulk_submit_then_join;_lazy_submit_generators_are_forbidden",
+    "external_network_during_formal_actions_or_scoring": false,
+    "local_concurrency_cap": 64,
+    "offline_local_assets_only": true,
+    "official_HippoRAG_concurrency_cap": 8,
+    "online_evaluator_or_Ruoli_calls": 0,
+    "physical_retrieval_reuse": "one_official_top20_and_one_RAW_top20_per_query_are_shared_by_all_eight_derived_action_recipes",
+    "stage_barrier": "all_physical_and_derived_actions_terminal_plus_fresh_runtime_postflight_before_any_late_label_open"
+  },
+  "prior_source_boundary": {
+    "forbidden_as_backups": [
+      "MuSiQue",
+      "HotpotQA",
+      "2WikiMultiHopQA",
+      "QASC",
+      "QASPER",
+      "FinQA",
+      "ContractNLI",
+      "CUAD",
+      "EvidenceBench",
+      "FEVER",
+      "synthetic_typed_graph",
+      "SEC13F",
+      "NOAA_GSOD",
+      "SkillLearnBench"
+    ],
+    "unopened_old_M_or_TEST_blocks_are_not_fresh_backups": true
+  },
+  "recipe_registry": [
+    {
+      "recipe_id": "P0_HIPPO_TOP5",
+      "semantics": "identity_top5_of_the_single_official_HippoRAG_top20_result"
+    },
+    {
+      "recipe_id": "P1_RAW_TOP5",
+      "semantics": "identity_top5_of_the_single_frozen_dense_RAW_top20_result"
+    },
+    {
+      "recipe_id": "P2_SOURCE_BALANCED",
+      "semantics": "replace_lowest_priority_duplicates_to_cover_distinct_exact_query_mentioned_source_values"
+    },
+    {
+      "recipe_id": "P3_ENTITY_WALK",
+      "semantics": "expand_seed_articles_over_SHARED_RARE_ENTITY_edges_under_fixed_scan_and_swap_budget"
+    },
+    {
+      "recipe_id": "P4_TEMPORAL_WALK",
+      "semantics": "expand_over_SHARED_ENTITY_TEMPORAL_ORDER_edges_and_query_date_anchors_under_fixed_budget"
+    },
+    {
+      "recipe_id": "P5_CROSS_SOURCE_SIBLING",
+      "semantics": "expand_to_distinct_source_articles_sharing_a_rare_entity_with_a_seed"
+    },
+    {
+      "recipe_id": "P6_ENTITY_TEMPORAL",
+      "semantics": "two_swap_union_of_entity_and_temporal_candidates"
+    },
+    {
+      "recipe_id": "P7_ALL_TYPED",
+      "semantics": "three_swap_closed_union_of_source_entity_temporal_and_cross_source_candidates"
+    }
+  ],
+  "recorded_date": "2026-07-18",
+  "relation_family_registry": [
+    "inference_query",
+    "comparison_query",
+    "temporal_query"
+  ],
+  "row_zero_status": {
+    "formal_item_selection_performed": false,
+    "human_real_query_or_evidence_inspection_after_design": false,
+    "private_selection_secret_generated": false,
+    "source_dataset_bytes_downloaded": false,
+    "source_dataset_JSON_decoded": false,
+    "source_dataset_rows_opened": false,
+    "status": "row_zero_design_frozen_before_source_dataset_access"
+  },
+  "schema": "multihoprag_joint_graph_evaluator_design_v1",
+  "source_candidate_public_metadata_binding": {
+    "dataset_license": "odc-by",
+    "GitHub_code_commit": "cde8e844af14b3012f20158abc2854fe8458212a",
+    "GitHub_repository": "https://github.com/yixuantt/MultiHop-RAG",
+    "Hugging_Face_dataset_commit": "71ac0d0bd1f951d2d6b70311f7d2ae404e1ffa82",
+    "Hugging_Face_repository": "https://huggingface.co/datasets/yixuantt/MultiHopRAG",
+    "paper": "https://arxiv.org/abs/2401.15391",
+    "public_metadata_only_at_design": true
+  },
+  "statistical_contract": {
+    "Agent_minus_HippoRAG_cross_family_claim": "M_search_macro_family_mean_delta_strictly_positive_and_one_sided_exact_signflip_p_at_most_0.10_and_each_of_the_three_family_sum_deltas_strictly_positive",
+    "Agent_minus_RAW_boundary": "report_macro_utility_and_complete_count_deltas;_if_complete_delta_is_negative_do_not_claim_RAW_complete_advantage_was_overcome",
+    "family_balance": "exact_equal_query_counts_make_overall_mean_equal_to_macro_family_mean",
+    "item_utility": "exact_Fraction_distinct_gold_article_hits_divided_by_gold_article_count_plus_one_if_all_gold_articles_are_in_top5",
+    "L5_success": "promoted_E1_minus_counterfactual_E0_on_M_search_has_strictly_positive_sum_item_utility_and_one_sided_magnitude_preserving_exact_signflip_p_at_most_0.10",
+    "secondary_metrics": "support_hits_complete_count_recall_at5_per_family_churn_runtime_and_cost_are_descriptive_and_cannot_change_epoch_or_trigger_retry"
+  },
+  "terminal_policy": {
+    "after_source_or_selection_marker": "any_schema_capacity_path_worker_barrier_or_runtime_failure_burns_the_affected_source_cohort_or_authorized_stage_without_retry_replay_resample_replacement_backup_split_or_secret_rotation",
+    "after_valid_nonpromotion": "leave_M_search_unopened_and_end_the_study",
+    "after_valid_result": "publish_once_and_do_not_add_recipe_evaluator_threshold_gate_or_seed",
+    "online_evaluation_fallback": false,
+    "same_source_redesign_after_outcome": false
+  },
+  "typed_graph_contract": {
+    "action_features": [
+      "query_semantic_coverage",
+      "query_source_coverage",
+      "query_entity_coverage",
+      "query_temporal_alignment",
+      "cross_source_diversity",
+      "typed_path_closure",
+      "redundancy",
+      "churn_from_P0",
+      "RAW_agreement",
+      "HippoRAG_agreement"
+    ],
+    "edge_families": [
+      "SHARED_RARE_ENTITY",
+      "SHARED_ENTITY_TEMPORAL_ORDER",
+      "CROSS_SOURCE_ENTITY_SIBLING",
+      "SAME_SOURCE"
+    ],
+    "entity_parser": "frozen_language_level_case_preserving_alphanumeric_span_parser_plus_corpus_document_frequency_2_through_32_without_domain_keyword_lists_or_source_question_type",
+    "query_anchors": [
+      "exact_corpus_source_value_mentions",
+      "ISO_or_English_month_date_expressions",
+      "rare_entity_spans"
+    ],
+    "query_type_feature_use": false,
+    "scan_order": "edge_family_order_then_negative_seed_priority_then_negative_query_similarity_then_neighbor_article_idx",
+    "top_k": 5,
+    "unallowed_primitive_unexpressible": true
+  },
+  "version": "v1"
+}
