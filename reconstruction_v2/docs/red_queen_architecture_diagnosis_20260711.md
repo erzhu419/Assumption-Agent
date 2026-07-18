@@ -2033,7 +2033,8 @@ support utility 的对齐，不是缺少更多 promotion gate。它仍不是 off
 | 完成但未晋升（fresh 2Wiki fixed-action transfer） | 独立 fresh-item A_hold 与 agent/RAW/official HippoRAG 对照 | official archive + 历史 1000-row denylist + 三 split collision exclusion 在 selection 前固定；A_hold 48 项按四 type 均衡。384/384 terminal 后 incumbent/challenger/P/official/RAW 为 111/110/110/99/56（总 support=120）；challenger−incumbent=−1、exact p=1，不晋升，M_search 未开。incumbent−official=+12、16 gain/4 harm、descriptive exact p=1549/262144；claim 限 item-local retrieval |
 | 完成但未晋升（QASC direct-action evaluator） | 新领域的自动 recipe formation、A/F pair 与 RAW/P/official HippoRAG 对照 | 四块各 64 在 formation 前一次 acquisition；16 路 full-corpus BM25 两遍扫描 16,987,130 行，TEST 未开；A/F 2048 actions 后 pair behavior-distinct。A_hold incumbent/challenger support=67/66、U=90/84、净 U −6、exact p=1668987/2097152，不晋升；RAW/P/official support=19/38/103，official 44 complete、U=147。M_search 未授权未开，同源 QASC 终止 |
 | 完成（窄 synthetic multiseed stability） | fresh 8-seed typed-graph Agent_R1 / RAW / official HippoRAG replication | 全新 v3 cohort 为 8×64=512；v5 单次 detached formal 完成 1536/1536 action，official/local 峰值并发 8/64，MiniLM 固定两段 8448。Agent/Hippo/RAW 总 U=1259/1232/1273；Agent−Hippo seed delta `[3,8,0,2,1,5,6,2]`，mean=3.375、7 positive/1 tie；Agent−RAW 总 U −14。+27 全在 DEF_TP1/TP2，其他 family 与 Hippo 完全相同。只支持固定 synthetic distribution 的窄机制稳定性，不是现实域 transfer、promotion、L4/L5 或总体优越性 |
-| 下一步（仅当论文必须继续追 L5；不新增 gate） | 独立新 custody 上同时改变 action family 与 evaluator mechanism | Hotpot、2Wiki、QASC 已给出三次有效 non-promotion；QASC 还显示当前 local NLI pair recipes 明显低于 graph-style HippoRAG。不能再把“另一个 evaluator objective”单独当修复。下一候选必须事前提出能表达 graph/two-fact coverage 的 action，并用与后续 search utility 同构但不泄漏 measurement 的 evaluator；在新的 domain/cohort 一次性预注册 A/F/A_hold/M。否则停止实验，以“窄 L3/L4 positive + 三次正确 rejection、L5 未达到”为论文结论 |
+| 完成但未晋升（HoVer joint graph/evaluator） | 新现实 derived closed-corpus 上六 typed actions、RAW、official HippoRAG 与 A/F/A_hold/M lifecycle | TRAIN-only private-HMAC 一次形成 A_form/F/A_hold/M=48/36/30/30 与 609-doc corpus；A_hold E0/RAW/Hippo 均 U=487/12、72 hits、16 complete，30/30 item utility tie；E1−E0=−47/12、2 gain/10 harm/18 tie、exact p=3739/4096。primary=false、promotion=false，M_search 未打开；0 online/network evaluator。claim 不等同 official HoVer/open-domain/family-out |
+| 下一步（仅当论文必须继续追 L5；不新增 gate） | 独立新 custody 上改变候选生成与 evaluator mechanism | Hotpot、2Wiki、QASC、HoVer 已给出四次有效 non-promotion；HoVer 又显示 E0 action 只重排 RAW/Hippo 的同一 top-5 集合，当前问题已不是再换 objective，而是 action 没有产生新的支持文档。下一候选必须事前提出能扩展 baseline candidate set 的 graph/two-fact action，并用与 late support-recall utility 同构但不读取 gold 的 evaluator；在新的 domain/cohort 一次性预注册 A/F/A_hold/M。否则停止实验，以“窄 L3/L4 positive + synthetic mechanism stability + 四次正确 rejection、L5 未达到”为论文结论 |
 | 完成（exact-domain L2/L3 instance） | Replication C promotion、controls disposition 与 one-shot sealed | development 8/8 gain、四 fold 各 +2；operator-only output 8/8 exact match；sealed 4/4 gain、8 路最大并发、8/8 network-none verifier receipts、0 retry/replay/online judge；两条盲化事件完整披露，claim 限于固定 SEC-13F treatment |
 | 完成 | 冻结 evaluator-owned promotion policy | 已由 protocol 绑定完整 spec；candidate 只能收紧；对抗测试通过 |
 | 完成 | 收紧外部 action/fallback contract | 4 类 prompt/self-check lowering；6 类 unsupported op fail closed；observed fallback 不再由字符串伪造 |
@@ -2517,7 +2518,7 @@ activation；held-out causal activation precision 的分母则是 evidence-valid
 | L2 validation learning | clean held-out validation 上有可晋级净收益 | **在 exact SEC-13F workstream 达到**：contract-derived candidate 的 Replication C development 为 8/8 valid gains、四 fold 各 +2、0 harm，并产生正式 promotion；旧 financial-4 与 parent period-out incomplete 只保留为历史诊断，不与本结果拼接 |
 | L3 prospective generalization | frozen incumbent 在 unseen instance/family 上保持收益 | **在多个窄 scope 达到**：SEC-13F frozen candidate 在 4 个预提交同域 sealed item 上 4/4 gain；只在 MuSiQue F1 形成的 P 在 12-item Hotpot cohort 为 21/24，相对 RAW +10、相对 official +1；随后 exact frozen actions 在 48-item fresh 2Wiki A_hold 上得到 incumbent/P/official/RAW=111/110/99/56（总 support=120），incumbent−official=+12、16 gain/4 harm、descriptive exact p=1549/262144。2Wiki family 历史上并非从未见过，所以最强表述是 fresh-item no-new-search transfer；全部 QA claim 都只覆盖 item-local retrieval，不覆盖 answer generation、full-corpus benchmark 或 broad Assumption-Agent transfer |
 | L4 self-evolution | 多代 retained improvement，且 recursion ablation 有因果贡献 | **在窄 Hotpot retrieval-only scope 达到**：fresh M_L4 上 P+Q=43/48、Q=40/48、P=36/48；P+Q−Q=+3、P+Q−P=+7，只有 1 个 P support 被遗忘。P/Q direct retrieval 与固定 RRF ablation 在同一 24-item cohort 完成 96/96 terminal 后才评分。Q 的 F_Q cross-fit 不稳定，故不能外推为广义自我演化或端到端 QA |
-| L5 evaluator co-evolution | anchor-guided evaluator replacement 与 selective erasure改善搜索 | **未达到，且已有三个有效 rejection**：fresh Hotpot challenger 38/48 对 incumbent 41/48、exact p=31/32；fresh 2Wiki challenger 110/120 对 incumbent 111/120、exact p=1；QASC direct-action challenger/incumbent support=66/67、总 U=84/90、净 U −6、exact p=1668987/2097152。三者均 behavior-distinct 或 fixed-action distinct，却都不晋升、不 invalidation、M_search 未开。QASC official HippoRAG 又以 103/128 support、44 complete、U=147 显著高于两条 agent action。当前证明的是 evaluator 能拒绝无收益候选，不是 evaluator replacement 或 improved subsequent search |
+| L5 evaluator co-evolution | anchor-guided evaluator replacement 与 selective erasure改善搜索 | **未达到，且已有四个有效 rejection**：fresh Hotpot challenger 38/48 对 incumbent 41/48、exact p=31/32；fresh 2Wiki challenger 110/120 对 incumbent 111/120、exact p=1；QASC direct-action challenger/incumbent 总 U=84/90、净 −6、exact p=1668987/2097152；HoVer E1−E0=−47/12、2 gain/10 harm/18 tie、exact p=3739/4096。四者均 behavior/action identifiable，却都不晋升、不 invalidation、M_search 未开。HoVer 的 E0 又与 RAW/official HippoRAG 在 30/30 item utility 上完全相同。当前证明的是 evaluator 能拒绝无收益候选，不是 evaluator replacement 或 improved subsequent search |
 
 ## 十一、什么才算“真正自我提出并递归验证假设”
 
@@ -3542,7 +3543,94 @@ Agent−HippoRAG 净收益，并同时说明为何不被 RAW 的 complete advant
 mechanism、且一次性预注册 A/F/A_hold/M 的新现实域 study，最诚实的终稿结论就是：**现实 retrieval-only 的窄 L3/L4 与 synthetic mechanism
 stability 已有证据，evaluator replacement/L5 仍未达到。**
 
+### 12.18 2026-07-19 HoVer joint graph/evaluator：正式有效 non-promotion，并定位为候选生成退化
+
+这项新现实域研究没有继续 Hotpot/2Wiki/QASC 的旧 cohort，也没有在结果后追加 gate。official HoVer TRAIN 与其固定
+Wikipedia SQLite 先通过 source qualification；随后一次 private-HMAC acquisition 同时形成 A_form/F_search/A_hold/M_search
+`48/36/30/30` 项和一个 609-document closed corpus。该任务是 TRAIN-only、transductive、oracle-gold-containing 的
+derived retrieval task，不能写成 official HoVer、open-domain benchmark 或 relation-family transfer。公开
+[design](../manifests/hover_joint_graph_evaluator_design_v1.json)、
+[implementation freeze](../manifests/hover_joint_graph_implementation_freeze_v1.json) 与
+[acquisition receipt](../manifests/hover_direct_acquisition_v1_acquisition.json) 分别绑定设计、45-role/36-Python 实现闭包和四块
+private pack；M_search 的 utility label 从未创建为 F_search，且只有 promotion 才允许打开 M。
+
+正式 acquisition 前第一次入口暴露了一个 Git subdirectory pathspec bug：repo-root relative path 却从
+`reconstruction_v2/` 执行，因而错误查找双重前缀。失败发生在 qualification HEAD 校验、TRAIN/SQLite read 与 acquisition
+marker 之前；commit `0b4ef6b6` 只把后续 Git 命令统一到 worktree root，并增加真实 nested-repo regression，49 项相关测试
+通过；commit `f0d6f763` 重新冻结实现。之后 acquisition 一次成功并由 commit `48a97596` 提交。controller 的两次环境
+preflight 又分别发现 `-I` 看不到 user-site distribution metadata、以及 pinned `sentence-transformers` 导入时由 Torch
+生成临时 remote-module path 导致 project 不再位于 `sys.path` 末端；二者都在 lifecycle marker 与 private view/label read
+之前终止。最终执行环境只把已经版本锁定的依赖预载到 project path 之前，不改 frozen code、action、evaluator、cohort 或
+threshold；正式 runtime preflight 记录 0 inference、0 private-pack decode、0 network，并通过 MiniLM、NER 与 official
+HippoRAG attestation。
+
+唯一正式 lifecycle 随后完整执行到 A_hold。official HippoRAG global index 只 build 一次；RAW、HippoRAG 与六个 Agent
+action 对每块最大并行，A_form label 在 action seal 与 evaluator freeze 后才打开，F_search 没有 utility label。A_form
+label-free E0/E1 选为 P0/P5；独立 F_search 又冻结为 E0=`P0_IND_SUM`、E1=`P3_TOPIC_BRIDGE`。公开
+[A_form action seal](../manifests/hover_a_form_action_seal_v1.json)、
+[A_form evaluator freeze](../manifests/hover_a_form_evaluator_freeze_v1.json)、
+[F policy freeze](../manifests/hover_f_search_policy_freeze_v1.json) 与
+[A_hold action seal](../manifests/hover_a_hold_action_seal_v1.json) 把 complete trace matrix、policy 和 late-label 顺序逐级锁定。
+
+A_hold 的冻结 utility 为 `distinct-gold recall + complete bonus`，30 项安全聚合如下：
+
+| arm | total U | distinct gold hits | complete / 30 |
+|---|---:|---:|---:|
+| RAW | 487/12 | 72 | 16 |
+| official HippoRAG | 487/12 | 72 | 16 |
+| P0_IND_SUM（E0） | 487/12 | 72 | 16 |
+| P1_IND_MAXIMIN | 487/12 | 72 | 16 |
+| P2_ENTITY_BRIDGE | 65/6 | 30 | 0 |
+| P3_TOPIC_BRIDGE（E1） | 110/3 | 63 | 15 |
+| P4_META_ASSIGN | 505/12 | 73 | 17 |
+| P5_FAMILY_UNION | 63/2 | 56 | 12 |
+
+E0−HippoRAG 与 E0−RAW 都是 `0`，30/30 item utility tie、exact sign-flip `p=1`，2/3/4-hop 三层 delta 也都是
+`0`。更强的非评分 trace audit 表明 P0 与 RAW/official HippoRAG 在 30/30 项选择相同 top-5 集合；12 项只有顺序变化，
+而冻结 utility 不计顺序。E1−E0 则为 `−47/12`：2 gain / 10 harm / 18 tie，exact `p=3739/4096`；其中 recall
+从 `295/12` 降到 `65/3`（`−35/12`），complete 又从 16 降到 15（`−1`）。P4 虽事后总 U 比 baseline 高
+`3/2`，但全部来自单个 2-hop item、1 gain / 0 harm / 29 tie、`p=1/2`；它不是预先冻结政策，不能在看到 A_hold 后
+改选 P4、补 threshold 或重跑。
+
+[terminal result](../artifacts/hover_joint_graph_formal_v1/formal_result.json) 因此有效地记录
+`valid_A_hold_nonpromotion_M_unopened`：primary=false、promotion=false，M_search view/labels 均未打开；online evaluator 与
+external network calls 都是 0。它不是 implementation-invalid，也不是“小幅输给 HippoRAG”：E0 在定义的 utility 上与
+HippoRAG/RAW 精确打平，而 challenger 明确变差。这使 L5 更新为第四次 behavior/action-identifiable rejection；仍然没有
+evaluator replacement，也没有 promotion 后改善 untouched search 的证据。
+
+静态机制审计进一步解释了退化，而不是再提出新 gate。HoVer adapter 把 source/category 设为每文档唯一的 missing
+sentinel、date 为空，query plan 又固定没有 normalized source，因此 E0 的 metadata-coverage 首维对六个 action 恒为 0；
+P0 的 pair/extension/tail 都按 dense relevance sum 排序，数学上退化为 RAW dense top-5。P3 则不受 query plan 锚定，先在
+全语料最大化 reciprocal-topic 边与连通性，再用 relevance 破平；E1 的 necessary-fraction 首维词典序把“删点易断的稀疏
+topic clique”误当作因果必要，后续相关性再高也无法补偿。A_form 的 E1=P5、F_search 却翻为 P3，也显示这个结构键跨 block
+不稳定。
+
+当前 cohort 只允许继续做不改变决策的描述性根因诊断，不能选择 P4/P5、调权、追加 relevance gate、重跑 A_hold 或越过
+non-promotion 打开 M。若继续总目标，下一最小但实质不同的机制应是 query-anchored residual path：新 action
+`P6_QUERY_ANCHORED_RESIDUAL_PATH` 只允许由 claim entity/relation facet 锚定边，逐步补充 baseline top-5 尚未覆盖的 facet；
+doc-doc bridge 只有连接 query anchor 时才计分，禁止 query-independent corpus clique。配套 evaluator
+`E2_QUERY_INTERVENTION` 使用冻结本地 embedding/NLI 衡量 claim-facet 语义覆盖，并以删除/同型替换后的连续覆盖下降作为
+干预效应，不再让 necessary-count 的单个脆弱首维支配全部相关性。P6/E2 必须在任何新 outcome 前冻结，并进入全新现实
+custody；HoVer DEV 最多能做同域 fresh test，不能把 hop strata 包装成 relation family。离线资产盘点中，优先的新 domain 是
+FEVEROUS（text/table/cell/cross-page/aggregation family），其次是 HybridQA/OTT-QA 的 table-linked-passage task；两者都需要
+新下载 official dataset 与对应 corpus。IIRC 已有 public source audit disposition，因 license、规模和缺少原生 relation-family
+标签被拒，不再列作候选。若不再承担这一项新 study，当前最诚实的终稿结论仍是：**现实域没有稳定 Agent−HippoRAG 净收益，L5 未达到；
+系统已证明能正确拒绝候选，而不是已经实现 evaluator co-evolution。**
+
 ## 附录 A：关键证据索引
+
+- HoVer joint graph/evaluator formal chain（有效 A_hold non-promotion；M_search 未打开）：
+  [`source custody`](../manifests/hover_source_custody_v1.json)；
+  [`source access`](../manifests/hover_source_access_v1.json)；
+  [`source qualification`](../manifests/hover_source_qualification_v1.json)；
+  [`design`](../manifests/hover_joint_graph_evaluator_design_v1.json)；
+  [`implementation freeze`](../manifests/hover_joint_graph_implementation_freeze_v1.json)；
+  [`acquisition receipt`](../manifests/hover_direct_acquisition_v1_acquisition.json)；
+  [`A_form action seal`](../manifests/hover_a_form_action_seal_v1.json)；
+  [`A_form evaluator freeze`](../manifests/hover_a_form_evaluator_freeze_v1.json)；
+  [`F_search policy freeze`](../manifests/hover_f_search_policy_freeze_v1.json)；
+  [`A_hold action seal`](../manifests/hover_a_hold_action_seal_v1.json)；
+  [`terminal result`](../artifacts/hover_joint_graph_formal_v1/formal_result.json)
 
 - QASPER source qualification implementation-invalid chain（无 selection/retrieval/score）：
   [`source custody`](../manifests/qasper_graph_evaluator_source_custody_v1.json)；
