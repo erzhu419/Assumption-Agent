@@ -27,7 +27,7 @@ from typing import Any, Protocol
 
 from assumption_agent.benchmarks import feverous_e2_evaluator_v1 as evaluator
 from assumption_agent.benchmarks import feverous_offline_semantic_tensor_v1 as semantic
-from assumption_agent.benchmarks import feverous_p6_e2_formal_acquisition_v1 as formal_acquisition
+from assumption_agent.benchmarks import feverous_p6_e2_formal_acquisition_v2 as formal_acquisition
 from assumption_agent.benchmarks import feverous_p6_e2_formal_runner_v1 as runner
 from assumption_agent.benchmarks import feverous_p6_e2_implementation_freeze_v1 as implementation_freeze
 from assumption_agent.benchmarks import feverous_local_runtime_v1 as local_runtime
@@ -42,7 +42,7 @@ FAILURE_SCHEMA = f"{VERSION}_terminal_failure"
 RESULT_SCHEMA = f"{VERSION}_terminal_result"
 
 FORMAL_OUTPUT_ROOT_RELATIVE = Path(
-    "artifacts/feverous_p6_e2_formal_v1/controller"
+    "artifacts/feverous_p6_e2_formal_v2/controller"
 )
 BLOCK_ORDER = ("A_form", "F_search", "A_hold", "M_search")
 FORMATION_BLOCKS = ("A_form", "F_search")
@@ -837,6 +837,10 @@ class ModuleAcquisitionBoundary:
                 "identity_full_compile_equivalence_qualification_sha256"
             )
             != freeze.get("identity_compiler_qualification_sha256")
+            or acquisition.get("source_epoch_rollover_sha256")
+            != freeze.get("source_epoch_rollover_sha256")
+            or acquisition.get("train_loader_qualification_sha256")
+            != freeze.get("train_loader_qualification_sha256")
         ):
             raise FeverousFormalControllerError(
                 "acquisition is outside the implementation freeze"

@@ -12,6 +12,8 @@ from assumption_agent.benchmarks import (
 
 
 QUALIFICATION_SHA = "1" * 64
+ROLLOVER_SHA = "3" * 64
+TRAIN_LOADER_QUALIFICATION_SHA = "4" * 64
 PREFLIGHT_SHA = "2" * 64
 TEST_RECEIPT = {"status": "passed", "test_count": 7, "suite": "synthetic"}
 
@@ -60,6 +62,14 @@ def _synthetic_project(
     monkeypatch.setattr(
         freeze, "_qualification_sha256", lambda _project: state["sha"]
     )
+    monkeypatch.setattr(
+        freeze,
+        "_source_epoch_rollover_bindings",
+        lambda _project, *, require_successor_absent: (
+            ROLLOVER_SHA,
+            TRAIN_LOADER_QUALIFICATION_SHA,
+        ),
+    )
     return project
 
 
@@ -95,6 +105,14 @@ def _synthetic_subdirectory_project(
     monkeypatch.setattr(freeze, "DESIGN_SHA256", design_sha)
     monkeypatch.setattr(
         freeze, "_qualification_sha256", lambda _project: QUALIFICATION_SHA
+    )
+    monkeypatch.setattr(
+        freeze,
+        "_source_epoch_rollover_bindings",
+        lambda _project, *, require_successor_absent: (
+            ROLLOVER_SHA,
+            TRAIN_LOADER_QUALIFICATION_SHA,
+        ),
     )
     return project
 
@@ -143,12 +161,30 @@ def test_production_registry_closes_over_verifier_tests_and_parallel_evidence() 
         "test_implementation_freeze": (
             "tests/test_feverous_p6_e2_implementation_freeze_v1.py"
         ),
-        "formal_acquisition_entrypoint": (
+        "formal_acquisition_v2": (
             "assumption_agent/benchmarks/"
-            "feverous_p6_e2_formal_acquisition_entrypoint_v1.py"
+            "feverous_p6_e2_formal_acquisition_v2.py"
         ),
-        "test_formal_acquisition_entrypoint": (
-            "tests/test_feverous_p6_e2_formal_acquisition_entrypoint_v1.py"
+        "formal_acquisition_entrypoint_v2": (
+            "assumption_agent/benchmarks/"
+            "feverous_p6_e2_formal_acquisition_entrypoint_v2.py"
+        ),
+        "test_formal_acquisition_entrypoint_v2": (
+            "tests/test_feverous_p6_e2_formal_acquisition_entrypoint_v2.py"
+        ),
+        "source_epoch_rollover_v2": (
+            "assumption_agent/benchmarks/"
+            "feverous_p6_e2_source_epoch_rollover_v2.py"
+        ),
+        "source_epoch_rollover_v2_manifest": (
+            "manifests/feverous_p6_e2_source_epoch_rollover_v2.json"
+        ),
+        "train_loader_qualification_v2": (
+            "assumption_agent/benchmarks/"
+            "feverous_p6_e2_train_loader_qualification_v2.py"
+        ),
+        "train_loader_qualification_v2_manifest": (
+            "manifests/feverous_p6_e2_train_loader_qualification_v2.json"
         ),
         "identity_parallel_performance_diagnostic": (
             "assumption_agent/benchmarks/"
@@ -180,7 +216,14 @@ def test_forms_and_verifies_clean_committed_ancestor(
     verified = freeze.verify_committed_implementation_freeze(project)
     assert verified == formed
     assert verified["identity_compiler_qualification_sha256"] == QUALIFICATION_SHA
-    assert verified["formal_selection_secret_generated"] is False
+    assert verified["source_epoch_rollover_sha256"] == ROLLOVER_SHA
+    assert (
+        verified["train_loader_qualification_sha256"]
+        == TRAIN_LOADER_QUALIFICATION_SHA
+    )
+    assert verified["predecessor_v1_terminal_failure_bound"] is True
+    assert verified["successor_v2_selection_secret_generated"] is False
+    assert verified["successor_v2_cohort_acquisition_started"] is False
 
 
 def test_subdirectory_project_forms_commits_and_verifies_in_repo_namespace(

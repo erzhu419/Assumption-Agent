@@ -620,3 +620,17 @@ def test_failure_file_contains_only_hashes_not_exception_plaintext(
     }
     assert failure["exception_type_or_message_plaintext_persisted"] is False
     assert failure["retry_replay_resample_or_replacement_authorized"] is False
+
+
+def test_controller_is_bound_only_to_successor_v2_acquisition_and_roots() -> None:
+    assert controller.formal_acquisition.VERSION == "feverous_p6_e2_formal_acquisition_v2"
+    assert controller.formal_acquisition.FORMAL_ROOT_RELATIVE == Path(
+        "artifacts/feverous_p6_e2_formal_v2"
+    )
+    assert controller.FORMAL_OUTPUT_ROOT_RELATIVE == (
+        controller.formal_acquisition.FORMAL_ROOT_RELATIVE / "controller"
+    )
+    assert (
+        controller.local_runtime.FORMAL_ROOT_RELATIVE
+        == controller.formal_acquisition.FORMAL_ROOT_RELATIVE
+    )

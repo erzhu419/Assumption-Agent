@@ -529,3 +529,14 @@ def test_runtime_source_has_no_controller_acquisition_or_inherited_environment()
     assert "dict(os.environ)" not in source
     assert "HTTP_PROXY" not in source
     assert "OPENAI_API_KEY" not in source
+
+
+def test_runtime_private_roots_are_exclusively_in_successor_v2_epoch() -> None:
+    assert runtime.FORMAL_ROOT_RELATIVE == Path("artifacts/feverous_p6_e2_formal_v2")
+    for relative in (
+        runtime.HIPPORAG_STAGE_RELATIVE,
+        runtime.HIPPORAG_WORK_RELATIVE,
+        runtime.NER_PRIVATE_RELATIVE,
+        runtime.NER_PYCACHE_RELATIVE,
+    ):
+        assert relative.is_relative_to(runtime.FORMAL_ROOT_RELATIVE)

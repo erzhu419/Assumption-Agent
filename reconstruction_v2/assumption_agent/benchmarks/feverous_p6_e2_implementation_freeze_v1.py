@@ -14,6 +14,9 @@ from typing import Any
 from assumption_agent.benchmarks import (
     feverous_p6_e2_identity_compiler_qualification_v1 as identity_qualification,
 )
+from assumption_agent.benchmarks import (
+    feverous_p6_e2_source_epoch_rollover_v2 as source_epoch_rollover,
+)
 
 
 VERSION = "feverous_p6_e2_implementation_freeze_v1"
@@ -39,9 +42,30 @@ BOUND_PATHS: dict[str, str] = {
         "feverous_p6_e2_parallel_identity_selection_v1.py"
     ),
     "formal_acquisition": "assumption_agent/benchmarks/feverous_p6_e2_formal_acquisition_v1.py",
+    "formal_acquisition_v2": (
+        "assumption_agent/benchmarks/feverous_p6_e2_formal_acquisition_v2.py"
+    ),
     "formal_acquisition_entrypoint": (
         "assumption_agent/benchmarks/"
         "feverous_p6_e2_formal_acquisition_entrypoint_v1.py"
+    ),
+    "formal_acquisition_entrypoint_v2": (
+        "assumption_agent/benchmarks/"
+        "feverous_p6_e2_formal_acquisition_entrypoint_v2.py"
+    ),
+    "source_epoch_rollover_v2": (
+        "assumption_agent/benchmarks/"
+        "feverous_p6_e2_source_epoch_rollover_v2.py"
+    ),
+    "source_epoch_rollover_v2_manifest": (
+        "manifests/feverous_p6_e2_source_epoch_rollover_v2.json"
+    ),
+    "train_loader_qualification_v2": (
+        "assumption_agent/benchmarks/"
+        "feverous_p6_e2_train_loader_qualification_v2.py"
+    ),
+    "train_loader_qualification_v2_manifest": (
+        "manifests/feverous_p6_e2_train_loader_qualification_v2.json"
     ),
     "operator": "assumption_agent/benchmarks/feverous_p6_query_anchored_operator_v1.py",
     "semantic_tensor": "assumption_agent/benchmarks/feverous_offline_semantic_tensor_v1.py",
@@ -65,8 +89,20 @@ BOUND_PATHS: dict[str, str] = {
         "tests/test_feverous_p6_e2_parallel_identity_selection_v1.py"
     ),
     "test_formal_acquisition": "tests/test_feverous_p6_e2_formal_acquisition_v1.py",
+    "test_formal_acquisition_v2": (
+        "tests/test_feverous_p6_e2_formal_acquisition_v2.py"
+    ),
     "test_formal_acquisition_entrypoint": (
         "tests/test_feverous_p6_e2_formal_acquisition_entrypoint_v1.py"
+    ),
+    "test_formal_acquisition_entrypoint_v2": (
+        "tests/test_feverous_p6_e2_formal_acquisition_entrypoint_v2.py"
+    ),
+    "test_source_epoch_rollover_v2": (
+        "tests/test_feverous_p6_e2_source_epoch_rollover_v2.py"
+    ),
+    "test_train_loader_qualification_v2": (
+        "tests/test_feverous_p6_e2_train_loader_qualification_v2.py"
     ),
     "test_operator": "tests/test_feverous_p6_query_anchored_operator_v1.py",
     "test_semantic_tensor": "tests/test_feverous_offline_semantic_tensor_v1.py",
@@ -313,6 +349,34 @@ def _qualification_sha256(project: Path) -> str:
     return _require_sha256(declared, "identity/compiler qualification")
 
 
+def _source_epoch_rollover_bindings(
+    project: Path, *, require_successor_absent: bool
+) -> tuple[str, str]:
+    """Return the committed content-free v1->v2 and real-loader bindings."""
+
+    try:
+        manifest = source_epoch_rollover.verify_rollover_manifest(
+            project, require_successor_absent=require_successor_absent
+        )
+    except source_epoch_rollover.FeverousSourceEpochRolloverError as exc:
+        raise FeverousImplementationFreezeError(
+            "successor source epoch rollover binding drifted"
+        ) from exc
+    rollover_sha = _require_sha256(
+        manifest.get("source_epoch_rollover_sha256"), "source epoch rollover"
+    )
+    qualification = manifest.get("real_train_loader_qualification")
+    if not isinstance(qualification, Mapping):
+        raise FeverousImplementationFreezeError(
+            "real TRAIN loader qualification binding is absent"
+        )
+    qualification_sha = _require_sha256(
+        qualification.get("qualification_sha256"),
+        "real TRAIN loader qualification",
+    )
+    return rollover_sha, qualification_sha
+
+
 def _bound_file_rows(
     project: Path,
     implementation_commit: str,
@@ -361,6 +425,11 @@ def form_implementation_freeze(
     git_layout = _git_layout(root)
     _verify_design(root)
     qualification_sha = _qualification_sha256(root)
+    rollover_sha, train_loader_qualification_sha = (
+        _source_epoch_rollover_bindings(
+            root, require_successor_absent=True
+        )
+    )
     preflight_sha = _require_sha256(runtime_preflight_sha256, "runtime preflight")
     head = _git(git_layout.repository_root, "rev-parse", "HEAD")
     if not isinstance(head, str) or _GIT_SHA1.fullmatch(head) is None:
@@ -383,17 +452,25 @@ def form_implementation_freeze(
     body: dict[str, Any] = {
         "schema": SCHEMA,
         "version": VERSION,
-        "status": "implementation_frozen_before_formal_secret_or_train_acquisition",
+        "status": (
+            "successor_v2_implementation_frozen_after_terminal_v1_and_"
+            "real_loader_qualification_before_v2_secret_or_cohort"
+        ),
         "design_sha256": DESIGN_SHA256,
         "identity_compiler_qualification_sha256": qualification_sha,
+        "source_epoch_rollover_sha256": rollover_sha,
+        "train_loader_qualification_sha256": train_loader_qualification_sha,
         "runtime_preflight_sha256": preflight_sha,
         "implementation_git_commit": head,
         "bound_files": files,
         "bound_role_set_sha256": stable_hash(sorted(BOUND_PATHS)),
         "bound_file_set_sha256": stable_hash(files),
         "test_receipt": dict(test_receipt),
-        "formal_selection_secret_generated": False,
-        "formal_train_acquisition_started": False,
+        "predecessor_v1_terminal_failure_bound": True,
+        "predecessor_v1_train_rows_transiently_decoded": True,
+        "real_train_loader_aggregate_qualification_completed": True,
+        "successor_v2_selection_secret_generated": False,
+        "successor_v2_cohort_acquisition_started": False,
         "development_or_test_source_accessed": False,
         "online_evaluator_calls": 0,
     }
@@ -408,6 +485,11 @@ def verify_committed_implementation_freeze(
     root = _project(project)
     git_layout = _git_layout(root)
     _verify_design(root)
+    rollover_sha, train_loader_qualification_sha = (
+        _source_epoch_rollover_bindings(
+            root, require_successor_absent=False
+        )
+    )
     manifest = _load_json(root / MANIFEST_RELATIVE)
     body = dict(manifest)
     declared = _require_sha256(
@@ -420,11 +502,17 @@ def verify_committed_implementation_freeze(
         manifest.get("schema") != SCHEMA
         or manifest.get("version") != VERSION
         or manifest.get("status")
-        != "implementation_frozen_before_formal_secret_or_train_acquisition"
+        != (
+            "successor_v2_implementation_frozen_after_terminal_v1_and_"
+            "real_loader_qualification_before_v2_secret_or_cohort"
+        )
         or stable_hash(body) != declared
         or manifest.get("design_sha256") != DESIGN_SHA256
         or manifest.get("identity_compiler_qualification_sha256")
         != _qualification_sha256(root)
+        or manifest.get("source_epoch_rollover_sha256") != rollover_sha
+        or manifest.get("train_loader_qualification_sha256")
+        != train_loader_qualification_sha
         or not _valid_test_receipt(manifest.get("test_receipt"))
         or not isinstance(manifest.get("runtime_preflight_sha256"), str)
         or _SHA256.fullmatch(manifest["runtime_preflight_sha256"]) is None
@@ -433,8 +521,13 @@ def verify_committed_implementation_freeze(
         or not isinstance(files, list)
         or manifest.get("bound_role_set_sha256") != stable_hash(sorted(BOUND_PATHS))
         or manifest.get("bound_file_set_sha256") != stable_hash(files)
-        or manifest.get("formal_selection_secret_generated") is not False
-        or manifest.get("formal_train_acquisition_started") is not False
+        or manifest.get("predecessor_v1_terminal_failure_bound") is not True
+        or manifest.get("predecessor_v1_train_rows_transiently_decoded")
+        is not True
+        or manifest.get("real_train_loader_aggregate_qualification_completed")
+        is not True
+        or manifest.get("successor_v2_selection_secret_generated") is not False
+        or manifest.get("successor_v2_cohort_acquisition_started") is not False
         or manifest.get("development_or_test_source_accessed") is not False
         or manifest.get("online_evaluator_calls") != 0
     ):
