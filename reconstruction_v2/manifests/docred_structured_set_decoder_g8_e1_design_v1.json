@@ -1,0 +1,252 @@
+{
+  "action_grammar": {
+    "authorized_terminal": "a_sentence_is_authorized_iff_it_is_one_of_the_top_eight_relation_description_MiniLM_anchors_or_contains_a_head_or_tail_mention_or_is_a_terminal_of_one_official_Coreference_or_one_Bridge_witness",
+    "bridge": "Bridge_head_sentence_bridge_entity_tail_sentence_requires_two_distinct_sentences_and_one_non_head_non_tail_official_entity_with_a_mention_in_the_head_mention_sentence_and_a_mention_in_the_tail_mention_sentence;_no_second_bridge",
+    "constructors": [
+      "Sentence_document_local_ordinal",
+      "HeadMention_official_entity_sentence",
+      "TailMention_official_entity_sentence",
+      "QueryAtom_public_relation_description_sentence",
+      "Direct_head_sentence_tail",
+      "Coreference_official_entity_left_sentence_right_sentence",
+      "Bridge_head_left_sentence_official_entity_right_sentence_tail",
+      "ExactUniqueSet3_three_authorized_sentences"
+    ],
+    "coreference": "Coreference_entity_left_sentence_right_sentence_requires_two_distinct_sentences_with_mentions_of_the_same_official_entity",
+    "direct": "one_sentence_contains_at_least_one_official_head_mention_and_one_official_tail_mention",
+    "forbidden_or_unrepresentable_primitives": [
+      "gold_or_evidence_ordinal",
+      "utility_or_label",
+      "item_title_or_item_ID_as_feature",
+      "block_or_family_identity",
+      "RAW_or_HippoRAG_output_or_agreement",
+      "free_text_generated_edge_or_terminal",
+      "cross_document_terminal",
+      "more_than_one_bridge_entity",
+      "unbounded_hop_or_search",
+      "retry_fallback_or_dense_fill_constructor"
+    ],
+    "query_atom": "top_eight_sentence_ordinals_by_descending_quantized_cosine_between_the_public_relation_description_and_sentence_then_ascending_ordinal;_eligibility_requires_at_least_ten_sentences",
+    "set_space": "all_lexicographically_enumerated_three_combinations_of_distinct_authorized_sentence_ordinals",
+    "type_safety": "constructors_accept_only_validated_document_local_integer_ordinals_and_official_sidecar_entity_indices;_invalid_or_foreign_values_are_not_coercible"
+  },
+  "baseline_RAW3": {
+    "candidate_gate": "none;_every_validated_document_sentence_is_ranked",
+    "encoder": "the_same_bound_offline_all_MiniLM_L6_v2_asset_used_by_G8",
+    "input": "the_exact_common_query_serialization_and_the_complete_rendered_same_document_sentence_sequence_with_no_entity_sidecar_title_or_ordinal_prefix",
+    "normalization": "cosines_are_round_ties_to_even_times_1000000_then_divided_by_1000000",
+    "output": "the_first_three_distinct_sentence_ordinals_in_rank_order",
+    "ranking": "descending_quantized_cosine_between_the_common_query_and_each_sentence_then_ascending_document_local_ordinal",
+    "seed_or_learned_parameter": "none"
+  },
+  "block_and_label_contract": {
+    "A_form": "48_TRAIN_16_per_family;_seal_frozen_G8_top16_frontier_for_every_item_then_open_only_A_form_labels_once_and_fit_E1",
+    "A_hold": "30_DEV_10_per_family;_eager_three_arm_actions_and_E0_counterfactual_sealed_before_one_late_label_open",
+    "F_search": "36_TRAIN_12_per_family;_no_utility_label_pack_exists;_freeze_E0_and_E1_actions_and_behavior_hashes",
+    "G_form": "96_TRAIN_32_per_family;_only_block_whose_labels_fit_G8;_generator_frozen_before_A_form_label_open",
+    "M_search": "30_DEV_10_per_family;_private_view_and_label_are_precommitted_but_open_only_after_valid_A_hold_evaluator_promotion",
+    "all_240_documents_disjoint": true,
+    "cross_block_label_pooling_or_refit": false,
+    "explicit_family_label_family_one_hot_property_ID_categorical_or_block_identity_available_to_G8_or_E1": false
+  },
+  "claim_contract": {
+    "claim_if_successful": "project_local_fixed_top3_known_positive_relation_triple_document_local_evidence_retrieval_on_three_predeclared_DocRED_relation_families",
+    "model_pretraining_freshness_claim": false,
+    "not_claimed": [
+      "official_DocRED_relation_extraction",
+      "open_domain_source_retrieval",
+      "top5_retrieval",
+      "unseen_relation_ID_family_out",
+      "model_equal_training_or_equal_compute",
+      "general_Agent_superiority"
+    ],
+    "project_local_data_freshness": "no_committed_or_historical_DocRED_item_or_label_use_before_this_source_epoch"
+  },
+  "derived_item_contract": {
+    "aliases": "all_official_mentions_for_the_head_or_tail_entity_in_source_mention_order;_Unicode_NFKC_whitespace_collapse_casefold_is_only_the_deduplication_key_and_first_surface_is_retained",
+    "common_query_serialization": "HEAD_colon_space_aliases_joined_by_space_vertical_bar_space_then_LF_RELATION_colon_space_public_relation_description_then_LF_TAIL_colon_space_aliases_joined_by_space_vertical_bar_space",
+    "corpus": "the_complete_same_document_official_sentence_sequence_rendered_by_single_ASCII_space_join_of_validated_nonempty_text_tokens_without_title_or_ordinal_prefix",
+    "document_identity": "private_SHA256_over_canonical_title_and_complete_rendered_sentence_sequence_used_only_for_collision_and_disjointness_not_as_a_feature",
+    "item": "one_official_positive_h_t_r_label_whose_relation_ID_is_in_the_frozen_20_ID_union_and_whose_official_evidence_union_has_size_one_through_three",
+    "relation_description": "exact_value_from_the_bound_official_rel_info_mapping",
+    "sentence_count": "at_least_ten",
+    "task_input_sidecar": "Agent_additionally_receives_official_entity_mentions_entity_types_and_coreference_groups;_RAW_and_HippoRAG_receive_only_the_identical_query_and_sentence_texts",
+    "test_and_distant": "not_downloaded_not_opened_not_used"
+  },
+  "evaluator_E1": {
+    "counterfactual_feature_definitions": {
+      "best_same_authority_substitute_one_query_coverage_drop": "coverage_Set3_minus_the_maximum_coverage_over_every_Set3_formed_by_replacing_exactly_one_selected_terminal_with_one_unselected_authorized_terminal_sharing_at_least_one_of_QUERY_HEAD_TAIL_DIRECT_COREFERENCE_BRIDGE_authority_kinds_with_the_replaced_terminal;_zero_if_no_such_replacement",
+      "coverage": "open_parenthesis_max_selected_full_query_similarity_plus_max_selected_relation_description_similarity_plus_head_presence_indicator_plus_tail_presence_indicator_close_parenthesis_divided_by_four",
+      "delete_one_drops": "coverage_of_the_full_Set3_minus_coverage_of_each_of_its_three_exact_two_terminal_deletions",
+      "G8_generator_energy": "the_exact_dot_product_of_the_frozen_G8_coefficient_vector_and_the_twelve_fixed_G8_features",
+      "head_and_tail_set_coverage_indicator": "the_same_fixed_G8_feature_semantics",
+      "mean_delete_one_query_coverage_drop": "arithmetic_mean_of_the_three_delete_one_drops",
+      "minimum_delete_one_query_coverage_drop": "minimum_of_the_three_delete_one_drops",
+      "minimum_selected_terminal_singleton_sufficiency": "minimum_over_selected_terminals_of_open_parenthesis_full_query_similarity_plus_relation_description_similarity_plus_HEAD_plus_TAIL_plus_DIRECT_plus_QUERY_indicators_close_parenthesis_divided_by_six",
+      "negative_maximum_selected_pair_sentence_redundancy": "the_same_fixed_G8_feature_semantics",
+      "one_bridge_witness_indicator": "one_iff_at_least_one_selected_unordered_sentence_pair_has_a_frozen_head_bridge_tail_witness"
+    },
+    "fit": "each_of_the_120_unordered_top16_frontier_pairs_per_A_form_item_is_expanded_into_both_orientations;_x_is_Psi_left_minus_Psi_right_y_is_exact_U_left_minus_U_right;_no_intercept_weighted_ridge_lambda_1",
+    "fixed_feature_order": [
+      "G8_generator_energy",
+      "minimum_selected_terminal_singleton_sufficiency",
+      "mean_delete_one_query_coverage_drop",
+      "minimum_delete_one_query_coverage_drop",
+      "best_same_authority_substitute_one_query_coverage_drop",
+      "head_and_tail_set_coverage_indicator",
+      "one_bridge_witness_indicator",
+      "negative_maximum_selected_pair_sentence_redundancy"
+    ],
+    "forbidden_features": "gold_family_block_item_identity_property_ID_categorical_RAW_Hippo_output_recipe_or_frontier_rank",
+    "frontier": "the_same_frozen_G8_top16_unique_set_frontier;_E1_cannot_generate_a_new_set_or_change_G8",
+    "item_weight": "the_full_weight_vector_sums_to_one;_each_A_form_item_has_weight_1_over_48_and_each_of_its_240_oriented_pairs_has_weight_1_over_11520",
+    "lambda": "exact_float64_1_0",
+    "policy": "argmax_E1_score_then_higher_G8_energy_then_ascending_ordinal_tuple",
+    "solver": "numpy_float64_solve_of_XtWX_plus_identity_with_finite_checks_and_weight_vector_SHA256",
+    "standardization": "each_feature_is_standardized_by_the_weighted_A_form_pair_difference_population_standard_deviation_over_both_pair_orientations_with_zero_variance_mapped_to_zero;_weighted_means_are_exactly_zero_by_pair_antisymmetry"
+  },
+  "generator_G8": {
+    "fit": "enumerate_every_typed_valid_Set3_for_each_G_form_item;_subtract_each_items_unweighted_mean_Phi_and_unweighted_mean_exact_set_utility_over_that_items_complete_set_space;_regress_centered_utility_on_centered_Phi_with_no_intercept_weighted_ridge_lambda_1",
+    "fixed_feature_order": [
+      "mean_full_query_sentence_similarity",
+      "minimum_full_query_sentence_similarity",
+      "mean_relation_description_sentence_similarity",
+      "head_mention_terminal_fraction",
+      "tail_mention_terminal_fraction",
+      "direct_head_tail_terminal_fraction",
+      "head_and_tail_set_coverage_indicator",
+      "one_bridge_witness_pair_fraction",
+      "shared_entity_connected_pair_fraction",
+      "query_atom_terminal_fraction",
+      "authorization_kind_coverage_fraction",
+      "negative_maximum_selected_pair_sentence_redundancy"
+    ],
+    "fixed_feature_semantics": {
+      "authorization_kind_coverage_fraction": "cardinality_of_the_union_of_QUERY_HEAD_TAIL_DIRECT_COREFERENCE_BRIDGE_authority_kinds_over_the_three_selected_terminals_divided_by_six",
+      "direct_head_tail_terminal_fraction": "selected_sentences_containing_both_an_official_head_and_tail_mention_divided_by_three",
+      "head_and_tail_set_coverage_indicator": "one_iff_at_least_one_selected_sentence_contains_a_head_mention_and_at_least_one_contains_a_tail_mention",
+      "head_mention_terminal_fraction": "selected_sentences_containing_an_official_head_mention_divided_by_three",
+      "mean_full_query_sentence_similarity": "arithmetic_mean_of_the_three_quantized_full_query_sentence_cosines",
+      "mean_relation_description_sentence_similarity": "arithmetic_mean_of_the_three_quantized_relation_description_sentence_cosines",
+      "minimum_full_query_sentence_similarity": "minimum_of_the_three_quantized_full_query_sentence_cosines",
+      "negative_maximum_selected_pair_sentence_redundancy": "negative_of_the_maximum_quantized_MiniLM_cosine_over_the_three_selected_sentence_pairs",
+      "one_bridge_witness_pair_fraction": "selected_unordered_sentence_pairs_with_at_least_one_frozen_head_bridge_tail_witness_divided_by_three",
+      "query_atom_terminal_fraction": "selected_top_eight_relation_QueryAtom_sentences_divided_by_three",
+      "shared_entity_connected_pair_fraction": "selected_unordered_sentence_pairs_sharing_at_least_one_official_entity_divided_by_three",
+      "tail_mention_terminal_fraction": "selected_sentences_containing_an_official_tail_mention_divided_by_three"
+    },
+    "frontier": "top_16_unique_Set3_by_descending_generator_energy_then_ascending_ordinal_tuple;_fewer_than_16_is_implementation_invalid",
+    "item_and_family_weight": "the_full_weight_vector_sums_to_one;_each_family_has_weight_one_third;_each_of_its_32_items_has_weight_1_over_96;_each_set_in_an_item_has_that_item_weight_divided_by_its_complete_typed_set_count",
+    "lambda": "exact_float64_1_0",
+    "normalization": "cosines_are_round_ties_to_even_times_1000000_then_divided_by_1000000;_fractions_use_fixed_denominator_three_terminals_three_pairs_or_six_authority_kinds_as_declared;_counts_are_capped_at_their_set_pair_or_authority_denominator",
+    "policy_E0": "rank_one_generator_energy_set",
+    "seed": "none_closed_form_deterministic",
+    "solver": "numpy_float64_solve_of_XtWX_plus_identity_with_finite_checks_and_matrix_weight_target_SHA256",
+    "target": "U_equals_gold_recall_at_3_plus_one_if_the_complete_gold_set_is_contained"
+  },
+  "intervention_and_trace_contract": {
+    "behavior_hash": "hash_of_query_commitment_authorized_terminal_set_complete_typed_edge_set_frontier_and_selected_ordinal_tuple",
+    "causal_trace": "for_every_selected_terminal_record_authorizing_constructor_witnesses_and_redecode_after_deleting_each_used_Direct_Coreference_or_Bridge_edge;_no_gold_or_text_is_public",
+    "edge_active_report": "aggregate_count_of_items_where_at_least_one_used_edge_deletion_changes_E0_or_E1_selected_Set3",
+    "outside_RAW3_report": "aggregate_count_of_selected_Agent_ordinals_outside_the_independently_computed_RAW3"
+  },
+  "lifecycle_and_epoch_contract": {
+    "A_hold_promotion": "E1_minus_E0_total_U_strictly_positive_and_one_sided_exact_magnitude_preserving_sign_flip_p_at_most_0_10_after_F_search_E0_and_E1_behavior_hashes_have_already_differed",
+    "F_inert": "if_E0_and_E1_choose_the_same_Set3_on_all_F_search_items_stop_mechanism_inert_without_A_hold_or_parameter_change",
+    "M_L5": "unchanged_E1_minus_E0_total_U_strictly_positive_and_exact_p_at_most_0_10_on_M_search",
+    "archive": "A_hold_promotion_creates_a_provisional_E1_epoch_receipt_without_deleting_or_superseding_E0",
+    "merge": "only_M_L5_success_makes_E1_active;_E0_is_retained_as_superseded_counterfactual_and_only_scores_explicitly_dependent_on_E0_are_invalidated",
+    "M_failure": "retain_the_historical_A_hold_promotion_fact_but_leave_global_active_evaluator_E0_and_record_L5_false",
+    "M_generation": "after_authorization_open_M_query_view_then_generate_new_G8_frontiers_and_E0_E1_actions;_do_not_reorder_precomputed_answers"
+  },
+  "offline_asset_contract": {
+    "MiniLM_asset_manifest_path": "manifests/qasper_minilm_runtime_asset_v1.json",
+    "MiniLM_asset_manifest_file_sha256": "62b85c7752f2e46932fb9fb13ae2f3aac9eb750a33c8f07102739040feb6cc75",
+    "MiniLM_asset_self_sha256": "921d9b1945581130e03c53f448092c3de3b30714431c6cac9b3b32c2ec10abad",
+    "HippoRAG_item_local_implementation_freeze_file_sha256": "66e116f3d49343922a3e50f6186447f09aea8b8fb6192478a0d0f04726903a51",
+    "HippoRAG_item_local_implementation_freeze_path": "manifests/eraser_evidence_inference_hipporag_implementation_freeze_v1.json",
+    "HippoRAG_item_local_implementation_freeze_schema": "eraser_evidence_inference_hipporag_implementation_freeze_v1",
+    "HippoRAG_item_local_implementation_freeze_self_sha256": "17911e90909bb447ce94b097e139694595c436624ccc9b81ec22b39378349219",
+    "HippoRAG_projection": "run_the_frozen_complete_item_local_exact_text_quotient_top5_adapter_and_take_its_first_three_ordinals_without_reranking",
+    "HippoRAG_runtime_attestation_v3_file_sha256": "0f047699560fbc10a2d39f9de6380004cd2887915c3e2f6ef0fcc806a6670c0e",
+    "HippoRAG_runtime_attestation_v3_path": "manifests/musique_official_hipporag_runtime_attestation_v3.json",
+    "HippoRAG_runtime_attestation_v3_schema": "musique_official_hipporag_filesystem_attestation_v3",
+    "HippoRAG_runtime_attestation_v3_self_sha256": "23996f9f41f494e2fd032b285039ec9420f6a893c24081e59c1ec79f229c2c60",
+    "external_network_or_Ruoli_or_online_evaluator_calls": 0,
+    "semantic_encoder": "offline_all_MiniLM_L6_v2_only"
+  },
+  "parallel_execution_contract": {
+    "A_hold_and_M_logical_submission": "submit_all_3_times_n_Agent_RAW_HippoRAG_tasks_before_reading_any_future_result_then_join_all_and_only_then_open_labels",
+    "Agent_and_RAW_physical_cap": 32,
+    "G_A_F": "local_G8_and_E1_formation_only_without_wasting_RAW_or_HippoRAG_calls",
+    "HippoRAG_physical_cap": 2,
+    "HippoRAG_reason": "ERASER_resource_audit_observed_hundreds_of_internal_threads_per_item_local_worker_and_host_freeze_at_32",
+    "missing_or_nonterminal_arm": "entire_block_invalid_no_partial_score",
+    "thread_environment": "OMP_NUM_THREADS_MKL_NUM_THREADS_OPENBLAS_NUM_THREADS_TORCH_NUM_THREADS_equals_1_where_the_bound_runtime_accepts_them"
+  },
+  "prerequisite_bindings": {
+    "custody_path": "manifests/docred_structured_set_decoder_source_custody_v1.json",
+    "custody_schema": "docred_structured_set_decoder_source_custody_v1",
+    "custody_commit": "1fafd20977b6fee3006fdb40060a6a86a84e536d",
+    "custody_file_sha256": "8f9eae7c5c19de40d8cbd19ac2e0354fc58abbb03402c3cbf51a375cfd90fdfa",
+    "custody_self_sha256": "6cdad6ead4b278fe204ebdcb95b771ec4eee5ef5310101e39310bc5fd9fb50b2",
+    "family_freeze_file_sha256": "c642bd8fff84fbe31598dc25e3c47a3ed1ea6122eeee8e6fe9cba71e8e8112be",
+    "family_freeze_path": "manifests/docred_structured_set_decoder_relation_family_freeze_v1.json",
+    "family_freeze_schema": "docred_structured_set_decoder_relation_family_freeze_v1",
+    "family_freeze_self_sha256": "ab33255be53005cb03ee54b582b65ee3d9195e165de8a6bf5c5774482f7d1387",
+    "k3_amendment_file_sha256": "2a4e808cae3f0b24f437d3eb3cccaea434c9bb80565821dc3a9e7fe9ca8fd31d",
+    "k3_amendment_path": "manifests/docred_structured_set_decoder_k3_pre_row_amendment_v1.json",
+    "k3_amendment_schema": "docred_structured_set_decoder_k3_pre_row_amendment_v1",
+    "k3_amendment_self_sha256": "4db719cb0f4fa4d4175e1afb8c441afcef7b5d0c214a6db0d0b9eab463cccd3c",
+    "source_access_file_sha256": "cf30877de97d63dc2db04aa3e9884e7032dd0ec3fb6a5d3933d48d4124b7b5ff",
+    "source_access_path": "manifests/docred_structured_set_decoder_source_access_v1.json",
+    "source_access_schema": "docred_structured_set_decoder_source_access_v1",
+    "source_access_self_sha256": "47ad9f3e7150f81cb1ad02896745528a6a45c1d2b0fb86c94d2f3a5fb9b9d65f",
+    "source_freeze_commit": "3eb0a31bf8985669cecc4516bccff508b81ae82b"
+  },
+  "primary_and_reporting_contract": {
+    "A_hold_real_domain_primary": "E1_minus_official_HippoRAG_total_U_strictly_positive_with_exact_p_at_most_0_10_each_of_three_family_net_sums_strictly_positive_and_E1_complete_count_not_lower_than_RAW",
+    "M_real_domain_retention": "E1_minus_official_HippoRAG_total_U_strictly_positive_with_exact_p_at_most_0_10_each_family_net_strictly_positive_and_E1_complete_count_not_lower_than_RAW",
+    "A_hold_RAW_advantage_overcome": "E1_minus_RAW_total_U_strictly_positive_with_exact_p_at_most_0_10_and_E1_complete_count_not_lower_than_RAW_on_A_hold",
+    "exact_test": "multiply_all_fraction_deltas_by_six_then_dynamic_program_all_plus_minus_sign_assignments;_one_sided_tail_is_count_signed_sums_at_least_observed_over_2_power_nonzero_pairs",
+    "report_always": "all_arm_total_recall_complete_pairwise_family_activation_outside_RAW3_edge_deletion_behavior_and_online_call_aggregates_including_negative_or_null_results",
+    "M_RAW_advantage_overcome": "E1_minus_RAW_total_U_strictly_positive_with_exact_p_at_most_0_10_and_E1_complete_count_not_lower_than_RAW_on_M_search",
+    "RAW_advantage_overcome": "A_hold_RAW_advantage_overcome_and_M_RAW_advantage_overcome",
+    "total_goal": "A_hold_real_domain_primary_and_A_hold_RAW_advantage_overcome_and_A_hold_promotion_and_M_L5_and_M_real_domain_retention_and_M_RAW_advantage_overcome"
+  },
+  "recorded_date": "2026-07-19",
+  "redistribution_and_license_boundary": {
+    "local_source": "git_ignored_private_research_copy_only",
+    "official_repository_LICENSE": "the_MIT_binding_applies_only_to_the_published_repository_software_and_license_text_and_does_not_establish_a_dataset_redistribution_grant",
+    "project_redistributes_DocRED_rows_or_Wikipedia_text": false,
+    "upstream_rights": "private_research_copy_and_aggregate_only_outputs;_do_not_relicense_or_expand_the_rights_of_the_DocRED_rows_or_underlying_Wikipedia_or_Wikidata_content;_retain_official_attribution_and_source_links;_any_public_release_requires_a_separate_rights_review"
+  },
+  "schema": "docred_structured_set_decoder_g8_e1_design_v1",
+  "self_hash_contract": {
+    "algorithm": "sha256",
+    "canonicalization": "json.dumps(body_without_design_sha256, ensure_ascii=True, allow_nan=False, sort_keys=True, separators=(',', ':')).encode('ascii')"
+  },
+  "design_sha256": "67bbba4dc0cf62928e28f97f96cd757249400f95abddec3b3ec2f753053f3345",
+  "source_access_lifecycle": {
+    "assignment_after_pass": "create_exactly_one_new_32_byte_OS_random_secret_once;_one_deterministic_process_commits_all_five_disjoint_block_assignments_in_the_frozen_order_without_resampling;_M_search_private_view_and_label_pack_remain_unopened_until_valid_A_hold_promotion",
+    "failure_burn": "any_schema_collision_or_simultaneous_capacity_failure_burns_this_source_epoch_without_smaller_blocks_regrouping_resampling_TEST_distant_or_a_second_qualification",
+    "implementation_freeze_before_qualification": "a_separately_committed_manifest_must_bind_this_design_and_the_exact_qualification_assignment_implementations_and_tests_before_any_formal_source_row_is_opened",
+    "one_shot_order": "design_freeze_then_qualification_and_assignment_implementation_freeze_then_exactly_one_aggregate_source_qualification_then_if_and_only_if_pass_one_secret_and_one_all_block_assignment_commitment",
+    "qualification_is_not_a_candidate_gate": true,
+    "qualification_path": "assumption_agent/benchmarks/docred_structured_set_decoder_source_qualification_v1.py",
+    "qualification_public_output": "one_self_hashed_aggregate_receipt_with_schema_family_capacity_histogram_collision_and_source_binding_counts_only;_no_title_text_alias_triple_ordinal_item_or_per_document_hash",
+    "qualification_schema": "docred_structured_set_decoder_source_qualification_v1",
+    "qualification_terminal_replay_count": 0
+  },
+  "stopping_contract": {
+    "A_hold_nonpromotion": "leave_M_unopened_retain_E0_and_stop",
+    "M_failure_after_promotion": "valid_L5_negative_stop_without_same_source_retry",
+    "allowed_label_blind_crash_recovery": "at_most_one_recovery_whose_plan_is_committed_before_the_blocks_first_action;_code_input_environment_and_assignment_hashes_remain_identical;_only_tasks_without_a_terminal_self_hashed_action_artifact_may_run;_completed_or_terminal_items_are_never_replayed;_any_second_recovery_or_post_label_recovery_is_infrastructure_invalid",
+    "forbidden_after_any_row_or_outcome": "change_K_family_relation_ID_feature_lambda_frontier_size_encoder_utility_alpha_seed_secret_cohort_or_candidate_then_retry",
+    "implementation_or_nonfinite_failure": "terminal_implementation_invalid_without_relaxation_or_same_source_replay",
+    "online_fallback": false,
+    "same_source_backup": false,
+    "source_schema_collision_or_capacity_failure": "terminal_source_incompatible_without_smaller_blocks_regrouping_or_TEST_distant_use"
+  },
+  "version": "v1"
+}
