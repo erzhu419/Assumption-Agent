@@ -202,6 +202,16 @@ def test_source_native_empty_answer_nodes_are_counted_not_rejected() -> None:
     }
 
 
+def test_source_native_empty_request_passage_is_counted_not_rejected() -> None:
+    payloads, corpus = _fixture()
+    corpus[0][2]["/private_link"] = ""
+
+    receipt = _qualify(payloads, corpus)
+
+    assert receipt["corpus"]["empty_request_entry_count"] == 1
+    assert receipt["corpus"]["empty_request_link_reference_count"] == 1
+
+
 def test_question_id_overlap_between_splits_fails_closed() -> None:
     payloads, corpus = _fixture()
     payloads["test"][0]["question_id"] = "private_train_qid"

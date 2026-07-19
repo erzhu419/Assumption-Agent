@@ -591,13 +591,18 @@ def _validate_cell(value: Any, *, label: str) -> tuple[str, tuple[str, ...]]:
     return text, links
 
 
-def _validate_request_map(value: Any) -> Mapping[str, str]:
+def _validate_request_map(value: Any) -> tuple[Mapping[str, str], int]:
     mapping = _require_mapping(value, label="request map")
     output: dict[str, str] = {}
+    empty_count = 0
     for key, passage in mapping.items():
         link = _require_text(key, label="request map link")
-        output[link] = _require_text(passage, label="request map passage")
-    return output
+        text = _require_text(
+            passage, label="request map passage", allow_empty=True
+        )
+        output[link] = text
+        empty_count += int(text == "")
+    return output, empty_count
 
 
 def _validated_source_custody(value: Mapping[str, Any]) -> dict[str, Any]:
@@ -667,7 +672,7 @@ def _validate_table_and_nodes(
     uid = _require_text(table.get("uid"), label="table uid")
     if uid != table_id:
         raise HybridQaSourceQualificationError("table uid/filename stem drifted")
-    request = _validate_request_map(request_value)
+    request, empty_request_entry_count = _validate_request_map(request_value)
 
     raw_header = table.get("header")
     if not isinstance(raw_header, list) or not raw_header:
@@ -686,12 +691,16 @@ def _validate_table_and_nodes(
             [_validate_cell(cell, label="table data cell") for cell in raw_row]
         )
     link_reference_count = 0
+    empty_request_link_reference_count = 0
     for _text, links in [*header, *(cell for row in data for cell in row)]:
         link_reference_count += len(links)
         if any(link not in request for link in links):
             raise HybridQaSourceQualificationError(
                 "table link is not exactly resolvable in request map"
             )
+        empty_request_link_reference_count += sum(
+            request[link] == "" for link in links
+        )
     source_counts: Counter[str] = Counter()
     for node in answer_nodes:
         if node.row >= len(data) or node.column >= len(data[node.row]):
@@ -721,6 +730,10 @@ def _validate_table_and_nodes(
         "cell_count": len(header) + sum(len(row) for row in data),
         "link_reference_count": link_reference_count,
         "request_entry_count": len(request),
+        "empty_request_entry_count": empty_request_entry_count,
+        "empty_request_link_reference_count": (
+            empty_request_link_reference_count
+        ),
         "table_answer_node_count": source_counts["table"],
         "passage_answer_node_count": source_counts["passage"],
     }
@@ -846,6 +859,12 @@ def qualify_decoded_sources(
             "header_and_data_cell_count": aggregate["cell_count"],
             "link_reference_count": aggregate["link_reference_count"],
             "request_entry_count": aggregate["request_entry_count"],
+            "empty_request_entry_count": aggregate[
+                "empty_request_entry_count"
+            ],
+            "empty_request_link_reference_count": aggregate[
+                "empty_request_link_reference_count"
+            ],
             "all_links_exactly_resolved": True,
         },
         "answer_nodes": {
