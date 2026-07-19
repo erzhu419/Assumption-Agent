@@ -3897,7 +3897,76 @@ payload open=0；因此 SciFact efficacy 完全未知，不能把它计为 Agent
 必须在公开统计层面就有充足的**多事实/多跳 explanation**，而不是事后把稀有 multi-rationale 子群硬凑成三分之一。后续应转向自带
 proof/explanation graph 且 TRAIN/DEV 容量公开充足的独立来源；仍只允许一次 aggregate qualification，不回到 SciFact 补 gate。
 
+### 12.27 2026-07-19 EntailmentBank G1/E1：Agent 与 HippoRAG 近似持平，但 evaluator 反向且未晋升
+
+SciFact 因 source capacity 终止后，下一来源转向 official EntailmentBank Task2（repository commit
+`daac2fdb7ab52ec3ef8f2953f59288c1edd7c2f0`）。TRAIN/DEV 文件分别为 10,867,722 / 1,537,951 bytes，SHA256
+为 `36cdb362...55a1b` / `3271adc6...a28f7`；TEST payload 始终未打开。事前 source qualification 把 gold proof leaf 数固定成
+`TWO_LEAF / THREE_LEAF / FOUR_FIVE_LEAF` 三族，并要求 ID、normalized question、normalized hypothesis 的传递闭包 component-disjoint。
+aggregate-only qualification 得到 TRAIN clean candidates `265/294/415`、可分配 components `253/292/405`，DEV clean candidates
+`37/44/48`，足以同时满足 TRAIN 每族 52 与 DEV 每族 10；因此这次确实进入了 efficacy，而不是再次用 capacity gate 代替实验。
+
+[`formal design v1`](../manifests/entailmentbank_proof_retrieval_g1_e1_formal_design_v1.json) 在 selection 前固定 186 项：
+G/A/F/A_hold=`60/36/30/30` 来自 TRAIN，M=`30` 来自 DEV，所有 block 三族平衡。每项只有 question、answer、hypothesis 与按官方
+JSON insertion order 的 25 条 exact fact；utility 是 Set5 命中的 distinct gold proof leaves 数，再加“完整覆盖全部 gold leaves”的 1 分。
+G1 是八个冻结离线特征上的 weighted ridge；16 个 action recipe 是四个 seed rank 与四个 graph-bridge α 的笛卡尔积。E0 是固定
+label-free proxy；E1 用 A_form 中 16×36 个 frozen action 的真实 utility 拟合 ridge，然后 E0/E1 分别在完全无 label 的 F_search 上选
+一个全局 Q0/Q1。A_hold primary 只允许 `Q1−Q0>0` 且 exact one-sided sign-flip `p≤0.10` 时晋升并打开 M；不存在 runner-up、阈值修改或
+同源重试。
+
+第一次 acquisition v1 在 source 各读一次后、component 构造与 HMAC selection 之前 fail-closed：实现错误地要求 `split:ID` 行唯一，
+而官方数据允许同 ID 多行变体。它没有选 item、没有生成 pack、没有运行 action/model/label/score；旧 secret 永久退役，failure 由
+[`v1 terminal receipt`](../manifests/entailmentbank_proof_retrieval_acquisition_failure_v1.json) 固定。随后先提交
+[`v2 remediation design`](../manifests/entailmentbank_proof_retrieval_g1_e1_formal_design_v2.json)：唯一改动是把私有 source line ordinal
+加入 row identity 与 full-item commitment，component 等价关系、family、quota、HMAC flow、recipe、evaluator、promotion 和 controls 全部不变。
+22 项 regression 与三套 row-free 离线 runtime preflight 通过、[`v2 implementation freeze`](../manifests/entailmentbank_proof_retrieval_g1_e1_implementation_freeze_v2.json)
+提交后，fresh v2 secret 一次选定 186 项；[`v2 acquisition receipt`](../manifests/entailmentbank_proof_retrieval_acquisition_receipt_v2.json)
+复现 qualification 的 1,091 components、15 个 cross-split components 与所有 clean counts，`F_search.labels` 从未创建。
+
+formation 在 A label 打开前已封存 A/F 的全部 16-recipe action matrix。E0 选出 Q0=`R00_G_RIDGE_A0000000`；E1 选出
+Q1=`R09_MINILM_HYPOTHESIS_A0250000`。值得警惕的是，A_form 的**真实** aggregate utility 已经是 Q0=`99`、Q1=`97`，即 challenger
+在形成样本上也没有超过 incumbent；它只是按 E1 对 label-free F_search 的预测总分胜出。冻结后 A_hold 的正式结果如下：
+
+| arm / comparison | total U | net | nonzero pairs | exact one-sided p | family net `two / three / four-five` |
+|---|---:|---:|---:|---:|---:|
+| Q0 | 96 | — | — | — | — |
+| Q1 | 92 | Q1−Q0=`−4` | 7 | `57/64` | `0 / −4 / 0` |
+| official HippoRAG | 90 | Q1−Hippo=`+2` | 1 | `1/2` | `0 / +2 / 0` |
+| RAW | 19 | Q1−RAW=`+73` | 26 | `1/67,108,864` | `+25 / +24 / +24` |
+
+因此“看起来没有比 HippoRAG 赢太多”是准确判断：promoted candidate Q1 只多 2 分，29/30 项与 HippoRAG utility 相同，证据远不足以
+支持稳定优势。预先固定的 Q0 描述性地比 HippoRAG 多 6 分，但 post-terminal exact audit 为 `35/256≈0.137`，而且净收益
+`0/+6/0` 全部集中在 THREE_LEAF；它同样不满足跨 family 稳定正收益。相反，两种 Agent recipe 对 RAW 的优势很大，说明 typed semantic
+retrieval 本身有效，但 official HippoRAG 已吸收了绝大部分可得收益。
+
+[`A_hold result`](../manifests/entailmentbank_proof_retrieval_g1_e1_ahold_result_v2.json) 因 `Q1−Q0=−4` 合法 non-promotion；
+[`final result`](../manifests/entailmentbank_proof_retrieval_g1_e1_final_result_v2.json) 因而终止，M view/label 与 TEST 均未打开。
+这条 source epoch 不能再改 E1 feature、ridge、recipe、threshold 或把 sealed M 改成 generator confirmation。对总目标的更新是：首次在新
+proof domain 得到 Agent≈official HippoRAG、显著优于 RAW 的有效现实域证据，但仍没有跨 family 的稳定 Agent−HippoRAG 净收益，更没有
+evaluator promotion 后改善 untouched search 的 L5。下一候选必须在**新来源/新 cohort**采用实质不同的 evaluator mechanism，例如直接学习
+recipe pairwise utility difference、带 out-of-source calibration 的 conservative selector，并事前允许保留 incumbent；不能继续用同类
+absolute-utility ridge 在近乎等价的 recipe 上外推。
+
 ## 附录 A：关键证据索引
+
+- EntailmentBank proof-retrieval qualification、v1 fail-closed、v2 formal terminal chain：
+  [`source custody`](../manifests/entailmentbank_proof_retrieval_source_custody_v1.json)；
+  [`source access`](../manifests/entailmentbank_proof_retrieval_source_access_v1.json)；
+  [`qualification design`](../manifests/entailmentbank_proof_retrieval_source_qualification_design_v1.json)；
+  [`qualification implementation freeze`](../manifests/entailmentbank_proof_retrieval_source_qualification_implementation_freeze_v1.json)；
+  [`qualification result`](../manifests/entailmentbank_proof_retrieval_source_qualification_result_v1.json)；
+  [`formal design v1`](../manifests/entailmentbank_proof_retrieval_g1_e1_formal_design_v1.json)；
+  [`implementation freeze v1`](../manifests/entailmentbank_proof_retrieval_g1_e1_implementation_freeze_v1.json)；
+  [`selection custody v1`](../manifests/entailmentbank_proof_retrieval_selection_secret_custody_v1.json)；
+  [`v1 acquisition failure`](../manifests/entailmentbank_proof_retrieval_acquisition_failure_v1.json)；
+  [`v2 remediation design`](../manifests/entailmentbank_proof_retrieval_g1_e1_formal_design_v2.json)；
+  [`v2 implementation freeze`](../manifests/entailmentbank_proof_retrieval_g1_e1_implementation_freeze_v2.json)；
+  [`selection custody v2`](../manifests/entailmentbank_proof_retrieval_selection_secret_custody_v2.json)；
+  [`v2 acquisition receipt`](../manifests/entailmentbank_proof_retrieval_acquisition_receipt_v2.json)；
+  [`formation result`](../manifests/entailmentbank_proof_retrieval_g1_e1_formation_result_v2.json)；
+  [`A_hold result`](../manifests/entailmentbank_proof_retrieval_g1_e1_ahold_result_v2.json)；
+  [`post-terminal Q0 descriptive audit`](../manifests/entailmentbank_proof_retrieval_q0_postterminal_descriptive_audit_v1.json)；
+  [`final result`](../manifests/entailmentbank_proof_retrieval_g1_e1_final_result_v2.json)
 
 - SciFact direct-evidence source terminal chain（无 selection/action/score，TEST payload 未打开）：
   [`source custody`](../manifests/scifact_direct_evidence_source_custody_v1.json)；
