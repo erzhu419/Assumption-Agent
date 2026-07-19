@@ -4,8 +4,11 @@ This module is the only production constructor for the evaluator runner's
 eight-dimensional :class:`DifferenceTrace`.  It accepts verified public
 operator objects, not a caller-supplied feature mapping.  Every feature is
 recomputed from the complete graph/tensor, the independently verified R0/R7
-action traces, and a complete self-hashed sentence-by-sentence MiniLM cosine
-matrix.  No source reader, label, rationale, classifier, HippoRAG result,
+action traces, and a self-hashed exact measurement of the canonical sentence
+pairs induced by those two frozen top-five actions.  Measuring that exact
+pair union after the actions are fixed avoids an unnecessary quadratic scan
+of a full clinical article while retaining the frozen MiniLM and quantization
+identity.  No source reader, label, rationale, classifier, HippoRAG result,
 network client, or binary float enters this boundary.
 """
 
@@ -40,7 +43,7 @@ _HEX_SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 
 
 class EraserExactFeatureBridgeError(RuntimeError):
-    """A matrix, operator binding, exact feature, or receipt drifted."""
+    """A semantic measurement, operator binding, feature, or receipt drifted."""
 
 
 stable_hash = operator.stable_hash
@@ -74,184 +77,6 @@ def _sentence_identity_sha256(
     )
 
 
-@dataclass(frozen=True)
-class SentencePairSemanticMatrix:
-    """Complete symmetric quantized MiniLM cosine matrix in sentence order."""
-
-    graph_sha256: str
-    semantic_tensor_sha256: str
-    sentence_sha256s: tuple[str, ...]
-    sentence_identity_sha256: str
-    minilm_asset_manifest_sha256: str
-    quantized_cosine_rows: tuple[tuple[int, ...], ...]
-    matrix_sha256: str
-
-    @property
-    def sentence_count(self) -> int:
-        return len(self.sentence_sha256s)
-
-    def payload(self) -> dict[str, object]:
-        return {
-            **_sentence_pair_matrix_receipt_body(self),
-            "matrix_sha256": self.matrix_sha256,
-        }
-
-
-def _sentence_pair_matrix_receipt_body(
-    matrix: SentencePairSemanticMatrix,
-) -> dict[str, object]:
-    return {
-        "complete_square_matrix": True,
-        "diagonal": QUANTIZATION_SCALE,
-        "graph_sha256": matrix.graph_sha256,
-        "minilm_asset_manifest_sha256": matrix.minilm_asset_manifest_sha256,
-        "quantization": "cosine_times_1000000_Python_round_ties_to_even_v1",
-        "quantization_scale": QUANTIZATION_SCALE,
-        "quantized_cosine_rows": [
-            list(row) for row in matrix.quantized_cosine_rows
-        ],
-        "schema": f"{VERSION}_sentence_pair_semantic_matrix",
-        "semantic_tensor_sha256": matrix.semantic_tensor_sha256,
-        "sentence_count": matrix.sentence_count,
-        "sentence_identity_sha256": matrix.sentence_identity_sha256,
-        "sentence_sha256s": list(matrix.sentence_sha256s),
-        "symmetric": True,
-        "version": VERSION,
-    }
-
-
-def recompute_sentence_pair_matrix_sha256(
-    matrix: SentencePairSemanticMatrix,
-) -> str:
-    if not isinstance(matrix, SentencePairSemanticMatrix):
-        raise EraserExactFeatureBridgeError("sentence-pair matrix has the wrong type")
-    return stable_hash(_sentence_pair_matrix_receipt_body(matrix))
-
-
-def _verify_matrix_shape_and_hash(matrix: SentencePairSemanticMatrix) -> str:
-    if not isinstance(matrix, SentencePairSemanticMatrix):
-        raise EraserExactFeatureBridgeError("sentence-pair matrix has the wrong type")
-    for value, field in (
-        (matrix.graph_sha256, "matrix graph hash"),
-        (matrix.semantic_tensor_sha256, "matrix tensor hash"),
-        (matrix.sentence_identity_sha256, "sentence identity hash"),
-        (matrix.minilm_asset_manifest_sha256, "MiniLM asset manifest hash"),
-        (matrix.matrix_sha256, "sentence-pair matrix hash"),
-    ):
-        _require_sha256(value, field)
-    if matrix.minilm_asset_manifest_sha256 != MINILM_ASSET_MANIFEST_SHA256:
-        raise EraserExactFeatureBridgeError("sentence-pair matrix uses an unfrozen model")
-    if not isinstance(matrix.sentence_sha256s, tuple) or any(
-        _HEX_SHA256.fullmatch(value) is None
-        for value in matrix.sentence_sha256s
-        if isinstance(value, str)
-    ) or any(not isinstance(value, str) for value in matrix.sentence_sha256s):
-        raise EraserExactFeatureBridgeError("sentence identity registry is malformed")
-    sentence_count = len(matrix.sentence_sha256s)
-    if sentence_count < TOP_K:
-        raise EraserExactFeatureBridgeError("sentence-pair matrix is smaller than top five")
-    if matrix.sentence_identity_sha256 != _sentence_identity_sha256(
-        matrix.sentence_sha256s
-    ):
-        raise EraserExactFeatureBridgeError("sentence identity hash drifted")
-    if (
-        not isinstance(matrix.quantized_cosine_rows, tuple)
-        or len(matrix.quantized_cosine_rows) != sentence_count
-        or any(not isinstance(row, tuple) for row in matrix.quantized_cosine_rows)
-        or any(len(row) != sentence_count for row in matrix.quantized_cosine_rows)
-    ):
-        raise EraserExactFeatureBridgeError("sentence-pair matrix is not complete square")
-    for left in range(sentence_count):
-        for right in range(sentence_count):
-            value = matrix.quantized_cosine_rows[left][right]
-            if (
-                isinstance(value, bool)
-                or not isinstance(value, int)
-                or not -QUANTIZATION_SCALE <= value <= QUANTIZATION_SCALE
-            ):
-                raise EraserExactFeatureBridgeError(
-                    "sentence-pair cosine is outside exact quantized bounds"
-                )
-            if left == right and value != QUANTIZATION_SCALE:
-                raise EraserExactFeatureBridgeError(
-                    "sentence-pair cosine diagonal is not exact one"
-                )
-            if value != matrix.quantized_cosine_rows[right][left]:
-                raise EraserExactFeatureBridgeError(
-                    "sentence-pair cosine matrix is not symmetric"
-                )
-    if recompute_sentence_pair_matrix_sha256(matrix) != matrix.matrix_sha256:
-        raise EraserExactFeatureBridgeError("sentence-pair matrix self hash drifted")
-    return matrix.matrix_sha256
-
-
-def build_sentence_pair_semantic_matrix(
-    *,
-    graph: operator.QueryAnchoredSentenceGraph,
-    semantic_tensor: operator.QuerySemanticTensor,
-    quantized_cosine_rows: Sequence[Sequence[int]],
-    minilm_asset_manifest_sha256: str = MINILM_ASSET_MANIFEST_SHA256,
-) -> SentencePairSemanticMatrix:
-    """Bind a complete integer pair matrix to the verified sentence ordinals."""
-
-    try:
-        operator.verify_query_anchored_graph(graph, semantic_tensor)
-    except operator.EraserR7OperatorError as exc:
-        raise EraserExactFeatureBridgeError("operator graph/tensor verification failed") from exc
-    sentence_sha256s = tuple(unit.sentence_sha256 for unit in graph.units)
-    matrix = SentencePairSemanticMatrix(
-        graph_sha256=graph.graph_sha256,
-        semantic_tensor_sha256=semantic_tensor.tensor_sha256,
-        sentence_sha256s=sentence_sha256s,
-        sentence_identity_sha256=_sentence_identity_sha256(sentence_sha256s),
-        minilm_asset_manifest_sha256=minilm_asset_manifest_sha256,
-        quantized_cosine_rows=tuple(tuple(row) for row in quantized_cosine_rows),
-        matrix_sha256="0" * 64,
-    )
-    matrix = replace(
-        matrix,
-        matrix_sha256=recompute_sentence_pair_matrix_sha256(matrix),
-    )
-    verify_sentence_pair_semantic_matrix(
-        matrix,
-        graph=graph,
-        semantic_tensor=semantic_tensor,
-    )
-    return matrix
-
-
-def verify_sentence_pair_semantic_matrix(
-    matrix: SentencePairSemanticMatrix,
-    *,
-    graph: operator.QueryAnchoredSentenceGraph | None = None,
-    semantic_tensor: operator.QuerySemanticTensor | None = None,
-) -> str:
-    result = _verify_matrix_shape_and_hash(matrix)
-    if (graph is None) != (semantic_tensor is None):
-        raise EraserExactFeatureBridgeError(
-            "matrix input verification requires graph and tensor"
-        )
-    if graph is not None and semantic_tensor is not None:
-        try:
-            operator.verify_query_anchored_graph(graph, semantic_tensor)
-        except operator.EraserR7OperatorError as exc:
-            raise EraserExactFeatureBridgeError(
-                "operator graph/tensor verification failed"
-            ) from exc
-        expected_sentence_sha256s = tuple(
-            unit.sentence_sha256 for unit in graph.units
-        )
-        if (
-            matrix.graph_sha256 != graph.graph_sha256
-            or matrix.semantic_tensor_sha256 != semantic_tensor.tensor_sha256
-            or matrix.sentence_sha256s != expected_sentence_sha256s
-        ):
-            raise EraserExactFeatureBridgeError(
-                "sentence-pair matrix ordinal binding drifted"
-            )
-    return result
-
-
 def _canonical_pairs(selected: Sequence[int]) -> tuple[tuple[int, int], ...]:
     rows = tuple(selected)
     if (
@@ -261,18 +86,6 @@ def _canonical_pairs(selected: Sequence[int]) -> tuple[tuple[int, int], ...]:
     ):
         raise EraserExactFeatureBridgeError("selected ordinals are not an exact top five")
     return tuple(combinations(sorted(rows), 2))
-
-
-def _pair_values(
-    matrix: SentencePairSemanticMatrix,
-    selected: Sequence[int],
-) -> tuple[int, ...]:
-    pairs = _canonical_pairs(selected)
-    if any(right >= matrix.sentence_count for _left, right in pairs):
-        raise EraserExactFeatureBridgeError("selected ordinal is outside pair matrix")
-    return tuple(
-        matrix.quantized_cosine_rows[left][right] for left, right in pairs
-    )
 
 
 def _validate_top5(selected: tuple[int, ...], sentence_count: int, field: str) -> None:
@@ -286,6 +99,194 @@ def _validate_top5(selected: tuple[int, ...], sentence_count: int, field: str) -
         )
     ):
         raise EraserExactFeatureBridgeError(f"{field} is not an in-corpus top five")
+
+
+def _required_pair_union(
+    r0_top5: Sequence[int], r7_top5: Sequence[int]
+) -> tuple[tuple[int, int], ...]:
+    return tuple(sorted(set(_canonical_pairs(r0_top5)) | set(_canonical_pairs(r7_top5))))
+
+
+@dataclass(frozen=True)
+class SelectedPairSemanticReceipt:
+    """Exact MiniLM cosines for the action-induced canonical pair union."""
+
+    graph_sha256: str
+    semantic_tensor_sha256: str
+    sentence_sha256s: tuple[str, ...]
+    sentence_identity_sha256: str
+    minilm_asset_manifest_sha256: str
+    r0_top5: tuple[int, ...]
+    r7_top5: tuple[int, ...]
+    pair_rows: tuple[tuple[int, int, int], ...]
+    receipt_sha256: str
+
+    @property
+    def sentence_count(self) -> int:
+        return len(self.sentence_sha256s)
+
+    def payload(self) -> dict[str, object]:
+        return {
+            **_selected_pair_receipt_body(self),
+            "receipt_sha256": self.receipt_sha256,
+        }
+
+
+def _selected_pair_receipt_body(
+    receipt: SelectedPairSemanticReceipt,
+) -> dict[str, object]:
+    return {
+        "full_square_scan_required": False,
+        "graph_sha256": receipt.graph_sha256,
+        "measurement_scope": "exact_union_of_R0_and_R7_canonical_top5_pairs",
+        "minilm_asset_manifest_sha256": receipt.minilm_asset_manifest_sha256,
+        "pair_rows": [list(row) for row in receipt.pair_rows],
+        "quantization": "cosine_times_1000000_math_fsum_then_Python_round_v1",
+        "quantization_scale": QUANTIZATION_SCALE,
+        "r0_top5": list(receipt.r0_top5),
+        "r7_top5": list(receipt.r7_top5),
+        "required_pair_count": len(receipt.pair_rows),
+        "schema": f"{VERSION}_selected_pair_semantic_receipt",
+        "semantic_tensor_sha256": receipt.semantic_tensor_sha256,
+        "sentence_count": receipt.sentence_count,
+        "sentence_identity_sha256": receipt.sentence_identity_sha256,
+        "sentence_sha256s": list(receipt.sentence_sha256s),
+        "version": VERSION,
+    }
+
+
+def recompute_selected_pair_receipt_sha256(
+    receipt: SelectedPairSemanticReceipt,
+) -> str:
+    if not isinstance(receipt, SelectedPairSemanticReceipt):
+        raise EraserExactFeatureBridgeError("selected-pair receipt has wrong type")
+    return stable_hash(_selected_pair_receipt_body(receipt))
+
+
+def _verify_selected_pair_shape_and_hash(
+    receipt: SelectedPairSemanticReceipt,
+) -> str:
+    if not isinstance(receipt, SelectedPairSemanticReceipt):
+        raise EraserExactFeatureBridgeError("selected-pair receipt has wrong type")
+    for value, field in (
+        (receipt.graph_sha256, "pair receipt graph hash"),
+        (receipt.semantic_tensor_sha256, "pair receipt tensor hash"),
+        (receipt.sentence_identity_sha256, "sentence identity hash"),
+        (receipt.minilm_asset_manifest_sha256, "MiniLM asset manifest hash"),
+        (receipt.receipt_sha256, "selected-pair receipt hash"),
+    ):
+        _require_sha256(value, field)
+    if receipt.minilm_asset_manifest_sha256 != MINILM_ASSET_MANIFEST_SHA256:
+        raise EraserExactFeatureBridgeError("selected-pair receipt uses an unfrozen model")
+    if (
+        not isinstance(receipt.sentence_sha256s, tuple)
+        or any(not isinstance(value, str) or _HEX_SHA256.fullmatch(value) is None for value in receipt.sentence_sha256s)
+    ):
+        raise EraserExactFeatureBridgeError("sentence identity registry is malformed")
+    sentence_count = len(receipt.sentence_sha256s)
+    if sentence_count < TOP_K:
+        raise EraserExactFeatureBridgeError("selected-pair corpus is smaller than top five")
+    if receipt.sentence_identity_sha256 != _sentence_identity_sha256(receipt.sentence_sha256s):
+        raise EraserExactFeatureBridgeError("sentence identity hash drifted")
+    _validate_top5(receipt.r0_top5, sentence_count, "R0 pair action")
+    _validate_top5(receipt.r7_top5, sentence_count, "R7 pair action")
+    expected_pairs = _required_pair_union(receipt.r0_top5, receipt.r7_top5)
+    if (
+        not isinstance(receipt.pair_rows, tuple)
+        or any(
+            not isinstance(row, tuple) or len(row) != 3
+            for row in receipt.pair_rows
+        )
+    ):
+        raise EraserExactFeatureBridgeError("selected-pair row is malformed")
+    if tuple((row[0], row[1]) for row in receipt.pair_rows) != expected_pairs:
+        raise EraserExactFeatureBridgeError(
+            "selected-pair registry is incomplete or noncanonical"
+        )
+    for row in receipt.pair_rows:
+        if (
+            not isinstance(row, tuple)
+            or len(row) != 3
+            or any(type(value) is not int for value in row)
+            or not 0 <= row[0] < row[1] < sentence_count
+            or not -QUANTIZATION_SCALE <= row[2] <= QUANTIZATION_SCALE
+        ):
+            raise EraserExactFeatureBridgeError("selected-pair row is malformed")
+    if recompute_selected_pair_receipt_sha256(receipt) != receipt.receipt_sha256:
+        raise EraserExactFeatureBridgeError("selected-pair receipt self hash drifted")
+    return receipt.receipt_sha256
+
+
+def build_selected_pair_semantic_receipt(
+    *,
+    graph: operator.QueryAnchoredSentenceGraph,
+    semantic_tensor: operator.QuerySemanticTensor,
+    r0_top5: Sequence[int],
+    r7_top5: Sequence[int],
+    pair_rows: Sequence[Sequence[int]],
+    minilm_asset_manifest_sha256: str = MINILM_ASSET_MANIFEST_SHA256,
+) -> SelectedPairSemanticReceipt:
+    """Bind exactly the pair measurements required by two fixed actions."""
+
+    try:
+        operator.verify_query_anchored_graph(graph, semantic_tensor)
+    except operator.EraserR7OperatorError as exc:
+        raise EraserExactFeatureBridgeError("operator graph/tensor verification failed") from exc
+    sentence_sha256s = tuple(unit.sentence_sha256 for unit in graph.units)
+    receipt = SelectedPairSemanticReceipt(
+        graph_sha256=graph.graph_sha256,
+        semantic_tensor_sha256=semantic_tensor.tensor_sha256,
+        sentence_sha256s=sentence_sha256s,
+        sentence_identity_sha256=_sentence_identity_sha256(sentence_sha256s),
+        minilm_asset_manifest_sha256=minilm_asset_manifest_sha256,
+        r0_top5=tuple(r0_top5),
+        r7_top5=tuple(r7_top5),
+        pair_rows=tuple(tuple(row) for row in pair_rows),
+        receipt_sha256="0" * 64,
+    )
+    receipt = replace(
+        receipt,
+        receipt_sha256=recompute_selected_pair_receipt_sha256(receipt),
+    )
+    verify_selected_pair_semantic_receipt(
+        receipt, graph=graph, semantic_tensor=semantic_tensor
+    )
+    return receipt
+
+
+def verify_selected_pair_semantic_receipt(
+    receipt: SelectedPairSemanticReceipt,
+    *,
+    graph: operator.QueryAnchoredSentenceGraph | None = None,
+    semantic_tensor: operator.QuerySemanticTensor | None = None,
+) -> str:
+    result = _verify_selected_pair_shape_and_hash(receipt)
+    if (graph is None) != (semantic_tensor is None):
+        raise EraserExactFeatureBridgeError("pair input verification requires graph and tensor")
+    if graph is not None and semantic_tensor is not None:
+        try:
+            operator.verify_query_anchored_graph(graph, semantic_tensor)
+        except operator.EraserR7OperatorError as exc:
+            raise EraserExactFeatureBridgeError("operator graph/tensor verification failed") from exc
+        if (
+            receipt.graph_sha256 != graph.graph_sha256
+            or receipt.semantic_tensor_sha256 != semantic_tensor.tensor_sha256
+            or receipt.sentence_sha256s != tuple(unit.sentence_sha256 for unit in graph.units)
+        ):
+            raise EraserExactFeatureBridgeError("selected-pair ordinal binding drifted")
+    return result
+
+
+def _pair_values(
+    receipt: SelectedPairSemanticReceipt,
+    selected: Sequence[int],
+) -> tuple[int, ...]:
+    pairs = _canonical_pairs(selected)
+    values = {(left, right): value for left, right, value in receipt.pair_rows}
+    try:
+        return tuple(values[pair] for pair in pairs)
+    except KeyError as exc:
+        raise EraserExactFeatureBridgeError("selected pair is absent from receipt") from exc
 
 
 def _validate_loo_matrix(
@@ -308,7 +309,7 @@ class ExactFeatureComputationReceipt:
     sentence_count: int
     graph_sha256: str
     semantic_tensor_sha256: str
-    sentence_pair_matrix_sha256: str
+    selected_pair_semantic_receipt_sha256: str
     r0_action_trace_sha256: str
     r7_action_trace_sha256: str
     r0_operator_behavior_sha256: str
@@ -382,8 +383,10 @@ def _feature_receipt_body(
         "schema": f"{VERSION}_feature_computation_receipt",
         "semantic_tensor_sha256": receipt.semantic_tensor_sha256,
         "sentence_count": receipt.sentence_count,
-        "sentence_pair_matrix_sha256": receipt.sentence_pair_matrix_sha256,
-        "source": "verified_operator_graph_tensor_actions_and_complete_pair_matrix",
+        "selected_pair_semantic_receipt_sha256": (
+            receipt.selected_pair_semantic_receipt_sha256
+        ),
+        "source": "verified_operator_graph_tensor_actions_and_exact_selected_pair_union",
         "version": VERSION,
     }
 
@@ -455,7 +458,10 @@ def verify_feature_computation_receipt(
         (receipt.item_commitment_sha256, "item commitment"),
         (receipt.graph_sha256, "graph hash"),
         (receipt.semantic_tensor_sha256, "semantic tensor hash"),
-        (receipt.sentence_pair_matrix_sha256, "sentence-pair matrix hash"),
+        (
+            receipt.selected_pair_semantic_receipt_sha256,
+            "selected-pair semantic receipt hash",
+        ),
         (receipt.r0_action_trace_sha256, "R0 action hash"),
         (receipt.r7_action_trace_sha256, "R7 action hash"),
         (receipt.r0_operator_behavior_sha256, "R0 operator behavior hash"),
@@ -575,7 +581,7 @@ def build_exact_difference_trace(
     semantic_tensor: operator.QuerySemanticTensor,
     r0_action: operator.ActionTrace,
     r7_action: operator.ActionTrace,
-    sentence_pair_matrix: SentencePairSemanticMatrix,
+    selected_pair_semantic_receipt: SelectedPairSemanticReceipt,
 ) -> ExactDifferenceTraceBuild:
     """Derive the frozen exact 8D vector; no external feature map is accepted."""
 
@@ -584,8 +590,8 @@ def build_exact_difference_trace(
         operator.verify_query_anchored_graph(graph, semantic_tensor)
     except operator.EraserR7OperatorError as exc:
         raise EraserExactFeatureBridgeError("operator graph/tensor verification failed") from exc
-    verify_sentence_pair_semantic_matrix(
-        sentence_pair_matrix,
+    verify_selected_pair_semantic_receipt(
+        selected_pair_semantic_receipt,
         graph=graph,
         semantic_tensor=semantic_tensor,
     )
@@ -606,6 +612,13 @@ def build_exact_difference_trace(
     r7_top5 = r7.output_top5
     _validate_top5(r0_top5, sentence_count, "R0 output")
     _validate_top5(r7_top5, sentence_count, "R7 output")
+    if (
+        selected_pair_semantic_receipt.r0_top5 != r0_top5
+        or selected_pair_semantic_receipt.r7_top5 != r7_top5
+    ):
+        raise EraserExactFeatureBridgeError(
+            "selected-pair receipt is bound to different actions"
+        )
 
     r0_maxima = operator.facet_maxima_ints(semantic_tensor, r0_top5)
     r7_maxima = operator.facet_maxima_ints(semantic_tensor, r7_top5)
@@ -638,8 +651,8 @@ def build_exact_difference_trace(
             for witness in r7.edge_deletion_witnesses
         )
     )
-    r0_pairs = _pair_values(sentence_pair_matrix, r0_top5)
-    r7_pairs = _pair_values(sentence_pair_matrix, r7_top5)
+    r0_pairs = _pair_values(selected_pair_semantic_receipt, r0_top5)
+    r7_pairs = _pair_values(selected_pair_semantic_receipt, r7_top5)
     r0_runner_behavior = runner.behavior_sha256(
         item_commitment_sha256=item_commitment_sha256,
         recipe_id=R0_RECIPE_ID,
@@ -655,7 +668,9 @@ def build_exact_difference_trace(
         sentence_count=sentence_count,
         graph_sha256=graph.graph_sha256,
         semantic_tensor_sha256=semantic_tensor.tensor_sha256,
-        sentence_pair_matrix_sha256=sentence_pair_matrix.matrix_sha256,
+        selected_pair_semantic_receipt_sha256=(
+            selected_pair_semantic_receipt.receipt_sha256
+        ),
         r0_action_trace_sha256=r0.trace_sha256,
         r7_action_trace_sha256=r7.trace_sha256,
         r0_operator_behavior_sha256=r0.behavior_sha256,
@@ -709,7 +724,7 @@ def verify_exact_difference_trace_build(
     semantic_tensor: operator.QuerySemanticTensor | None = None,
     r0_action: operator.ActionTrace | None = None,
     r7_action: operator.ActionTrace | None = None,
-    sentence_pair_matrix: SentencePairSemanticMatrix | None = None,
+    selected_pair_semantic_receipt: SelectedPairSemanticReceipt | None = None,
 ) -> str:
     if not isinstance(build, ExactDifferenceTraceBuild):
         raise EraserExactFeatureBridgeError("exact DifferenceTrace build has wrong type")
@@ -720,7 +735,7 @@ def verify_exact_difference_trace_build(
         semantic_tensor,
         r0_action,
         r7_action,
-        sentence_pair_matrix,
+        selected_pair_semantic_receipt,
     )
     if any(value is not None for value in supplied):
         if any(value is None for value in supplied):
@@ -730,14 +745,14 @@ def verify_exact_difference_trace_build(
         assert item_commitment_sha256 is not None
         assert graph is not None and semantic_tensor is not None
         assert r0_action is not None and r7_action is not None
-        assert sentence_pair_matrix is not None
+        assert selected_pair_semantic_receipt is not None
         expected = build_exact_difference_trace(
             item_commitment_sha256=item_commitment_sha256,
             graph=graph,
             semantic_tensor=semantic_tensor,
             r0_action=r0_action,
             r7_action=r7_action,
-            sentence_pair_matrix=sentence_pair_matrix,
+            selected_pair_semantic_receipt=selected_pair_semantic_receipt,
         )
         if build != expected:
             raise EraserExactFeatureBridgeError(
@@ -755,14 +770,14 @@ __all__ = [
     "MINILM_ASSET_MANIFEST_SHA256",
     "PAIR_COUNT",
     "QUANTIZATION_SCALE",
-    "SentencePairSemanticMatrix",
+    "SelectedPairSemanticReceipt",
     "VERSION",
     "build_exact_difference_trace",
-    "build_sentence_pair_semantic_matrix",
+    "build_selected_pair_semantic_receipt",
     "recompute_feature_receipt_sha256",
-    "recompute_sentence_pair_matrix_sha256",
+    "recompute_selected_pair_receipt_sha256",
     "stable_hash",
     "verify_exact_difference_trace_build",
     "verify_feature_computation_receipt",
-    "verify_sentence_pair_semantic_matrix",
+    "verify_selected_pair_semantic_receipt",
 ]

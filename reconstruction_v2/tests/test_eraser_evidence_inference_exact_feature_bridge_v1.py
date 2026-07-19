@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import fields, replace
 from fractions import Fraction
 import inspect
+from itertools import combinations
 
 import pytest
 
@@ -67,41 +68,45 @@ def _operator_fixture() -> tuple[
     return graph, tensor, r0, r7
 
 
-def _pair_rows(count: int = 12) -> tuple[tuple[int, ...], ...]:
+def _pair_rows(
+    r0_top5: tuple[int, ...] = (0, 1, 2, 3, 4),
+    r7_top5: tuple[int, ...] = (10, 8, 7, 9, 6),
+) -> tuple[tuple[int, int, int], ...]:
     # R0's ten unordered pairs have cosine +100.  R7's disjoint ten pairs
     # have cosine -100.  Everything else is zero and the exact diagonal is 1.
     r0_set = set(range(5))
     r7_set = set(range(6, 11))
-    rows: list[tuple[int, ...]] = []
-    for left in range(count):
-        row: list[int] = []
-        for right in range(count):
-            if left == right:
-                value = subject.QUANTIZATION_SCALE
-            elif left in r0_set and right in r0_set:
-                value = 100
-            elif left in r7_set and right in r7_set:
-                value = -100
-            else:
-                value = 0
-            row.append(value)
-        rows.append(tuple(row))
+    pairs = sorted(
+        set(combinations(sorted(r0_top5), 2))
+        | set(combinations(sorted(r7_top5), 2))
+    )
+    rows: list[tuple[int, int, int]] = []
+    for left, right in pairs:
+        if left in r0_set and right in r0_set:
+            value = 100
+        elif left in r7_set and right in r7_set:
+            value = -100
+        else:
+            value = 0
+        rows.append((left, right, value))
     return tuple(rows)
 
 
 def _build() -> tuple[
     subject.ExactDifferenceTraceBuild,
-    subject.SentencePairSemanticMatrix,
+    subject.SelectedPairSemanticReceipt,
     operator.QueryAnchoredSentenceGraph,
     operator.QuerySemanticTensor,
     operator.ActionTrace,
     operator.ActionTrace,
 ]:
     graph, tensor, r0, r7 = _operator_fixture()
-    matrix = subject.build_sentence_pair_semantic_matrix(
+    pair_receipt = subject.build_selected_pair_semantic_receipt(
         graph=graph,
         semantic_tensor=tensor,
-        quantized_cosine_rows=_pair_rows(),
+        r0_top5=r0.output_top5,
+        r7_top5=r7.output_top5,
+        pair_rows=_pair_rows(r0.output_top5, r7.output_top5),
     )
     built = subject.build_exact_difference_trace(
         item_commitment_sha256="e" * 64,
@@ -109,80 +114,88 @@ def _build() -> tuple[
         semantic_tensor=tensor,
         r0_action=r0,
         r7_action=r7,
-        sentence_pair_matrix=matrix,
+        selected_pair_semantic_receipt=pair_receipt,
     )
-    return built, matrix, graph, tensor, r0, r7
+    return built, pair_receipt, graph, tensor, r0, r7
 
 
-def test_complete_pair_matrix_is_symmetric_quantized_ordinal_bound_and_self_hashed() -> None:
-    graph, tensor, _r0, _r7 = _operator_fixture()
-    matrix = subject.build_sentence_pair_semantic_matrix(
+def test_selected_pair_union_is_complete_quantized_ordinal_bound_and_self_hashed() -> None:
+    graph, tensor, r0, r7 = _operator_fixture()
+    receipt = subject.build_selected_pair_semantic_receipt(
         graph=graph,
         semantic_tensor=tensor,
-        quantized_cosine_rows=_pair_rows(),
+        r0_top5=r0.output_top5,
+        r7_top5=r7.output_top5,
+        pair_rows=_pair_rows(r0.output_top5, r7.output_top5),
     )
 
-    assert matrix.sentence_count == len(graph.units) == 12
-    assert matrix.minilm_asset_manifest_sha256 == subject.MINILM_ASSET_MANIFEST_SHA256
-    assert matrix.payload()["complete_square_matrix"] is True
-    assert matrix.payload()["symmetric"] is True
-    assert matrix.payload()["quantization_scale"] == 1_000_000
-    assert subject.verify_sentence_pair_semantic_matrix(
-        matrix, graph=graph, semantic_tensor=tensor
-    ) == matrix.matrix_sha256
-    assert subject.recompute_sentence_pair_matrix_sha256(matrix) == matrix.matrix_sha256
+    assert receipt.sentence_count == len(graph.units) == 12
+    assert receipt.minilm_asset_manifest_sha256 == subject.MINILM_ASSET_MANIFEST_SHA256
+    assert receipt.payload()["full_square_scan_required"] is False
+    assert receipt.payload()["required_pair_count"] == 20
+    assert receipt.payload()["quantization_scale"] == 1_000_000
+    assert subject.verify_selected_pair_semantic_receipt(
+        receipt, graph=graph, semantic_tensor=tensor
+    ) == receipt.receipt_sha256
+    assert subject.recompute_selected_pair_receipt_sha256(receipt) == receipt.receipt_sha256
 
 
-def test_pair_matrix_api_accepts_complete_integer_rows_without_an_encoder() -> None:
+def test_selected_pair_api_accepts_exact_integer_rows_without_an_encoder() -> None:
     parameters = inspect.signature(
-        subject.build_sentence_pair_semantic_matrix
+        subject.build_selected_pair_semantic_receipt
     ).parameters
 
     assert tuple(parameters) == (
         "graph",
         "semantic_tensor",
-        "quantized_cosine_rows",
+        "r0_top5",
+        "r7_top5",
+        "pair_rows",
         "minilm_asset_manifest_sha256",
     )
     assert "encoder" not in parameters
-    assert tuple(field.name for field in fields(subject.SentencePairSemanticMatrix)) == (
+    assert tuple(field.name for field in fields(subject.SelectedPairSemanticReceipt)) == (
         "graph_sha256",
         "semantic_tensor_sha256",
         "sentence_sha256s",
         "sentence_identity_sha256",
         "minilm_asset_manifest_sha256",
-        "quantized_cosine_rows",
-        "matrix_sha256",
+        "r0_top5",
+        "r7_top5",
+        "pair_rows",
+        "receipt_sha256",
     )
 
 
-@pytest.mark.parametrize("kind", ("asymmetric", "diagonal", "bounds", "dimension"))
-def test_pair_matrix_fails_closed_on_symmetry_quantization_and_dimension(kind: str) -> None:
-    graph, tensor, _r0, _r7 = _operator_fixture()
+@pytest.mark.parametrize("kind", ("missing", "noncanonical", "bounds", "dimension"))
+def test_selected_pair_receipt_fails_closed_on_registry_quantization_and_dimension(kind: str) -> None:
+    graph, tensor, r0, r7 = _operator_fixture()
     rows = [list(row) for row in _pair_rows()]
-    if kind == "asymmetric":
-        rows[0][1] += 1
-        match = "not symmetric"
-    elif kind == "diagonal":
-        rows[0][0] -= 1
-        match = "diagonal"
-    elif kind == "bounds":
-        rows[0][1] = rows[1][0] = 1_000_001
-        match = "bounds"
-    else:
+    if kind == "missing":
         rows.pop()
-        match = "complete square"
+        match = "incomplete"
+    elif kind == "noncanonical":
+        rows[0], rows[1] = rows[1], rows[0]
+        match = "noncanonical"
+    elif kind == "bounds":
+        rows[0][2] = 1_000_001
+        match = "malformed"
+    else:
+        rows[0] = rows[0][:-1]
+        match = "incomplete|malformed"
 
     with pytest.raises(subject.EraserExactFeatureBridgeError, match=match):
-        subject.build_sentence_pair_semantic_matrix(
+        subject.build_selected_pair_semantic_receipt(
             graph=graph,
             semantic_tensor=tensor,
-            quantized_cosine_rows=rows,
+            r0_top5=r0.output_top5,
+            r7_top5=r7.output_top5,
+            pair_rows=rows,
         )
 
 
 def test_exact_synthetic_vector_causally_covers_all_eight_features() -> None:
-    built, matrix, graph, tensor, r0, r7 = _build()
+    built, pair_receipt, graph, tensor, r0, r7 = _build()
     trace = built.difference_trace
     receipt = built.feature_receipt
 
@@ -227,7 +240,7 @@ def test_exact_synthetic_vector_causally_covers_all_eight_features() -> None:
         semantic_tensor=tensor,
         r0_action=r0,
         r7_action=r7,
-        sentence_pair_matrix=matrix,
+        selected_pair_semantic_receipt=pair_receipt,
     ) == receipt.feature_receipt_sha256
 
 
@@ -242,22 +255,21 @@ def test_bridge_accepts_no_external_feature_mapping() -> None:
         "semantic_tensor",
         "r0_action",
         "r7_action",
-        "sentence_pair_matrix",
+        "selected_pair_semantic_receipt",
     )
 
 
-def test_matrix_action_and_receipt_tamper_fail_closed() -> None:
-    built, matrix, graph, tensor, r0, r7 = _build()
+def test_pair_action_and_receipt_tamper_fail_closed() -> None:
+    built, pair_receipt, graph, tensor, r0, r7 = _build()
 
-    changed_rows = [list(row) for row in matrix.quantized_cosine_rows]
-    changed_rows[0][1] += 1
-    changed_rows[1][0] += 1
-    tampered_matrix = replace(
-        matrix,
-        quantized_cosine_rows=tuple(tuple(row) for row in changed_rows),
+    changed_rows = [list(row) for row in pair_receipt.pair_rows]
+    changed_rows[0][2] += 1
+    tampered_pairs = replace(
+        pair_receipt,
+        pair_rows=tuple(tuple(row) for row in changed_rows),
     )
     with pytest.raises(subject.EraserExactFeatureBridgeError, match="self hash drifted"):
-        subject.verify_sentence_pair_semantic_matrix(tampered_matrix)
+        subject.verify_selected_pair_semantic_receipt(tampered_pairs)
 
     tampered_action = replace(r7, trace_sha256="f" * 64)
     with pytest.raises(subject.EraserExactFeatureBridgeError, match="action verification"):
@@ -267,7 +279,7 @@ def test_matrix_action_and_receipt_tamper_fail_closed() -> None:
             semantic_tensor=tensor,
             r0_action=r0,
             r7_action=tampered_action,
-            sentence_pair_matrix=matrix,
+            selected_pair_semantic_receipt=pair_receipt,
         )
 
     tampered_receipt = replace(
@@ -280,27 +292,33 @@ def test_matrix_action_and_receipt_tamper_fail_closed() -> None:
         subject.verify_feature_computation_receipt(tampered_receipt)
 
 
-def test_matrix_rejects_wrong_model_and_cross_graph_sentence_identity() -> None:
-    graph, tensor, _r0, _r7 = _operator_fixture()
+def test_pair_receipt_rejects_wrong_model_and_cross_graph_sentence_identity() -> None:
+    graph, tensor, r0, r7 = _operator_fixture()
     with pytest.raises(subject.EraserExactFeatureBridgeError, match="unfrozen model"):
-        subject.build_sentence_pair_semantic_matrix(
+        subject.build_selected_pair_semantic_receipt(
             graph=graph,
             semantic_tensor=tensor,
-            quantized_cosine_rows=_pair_rows(),
+            r0_top5=r0.output_top5,
+            r7_top5=r7.output_top5,
+            pair_rows=_pair_rows(r0.output_top5, r7.output_top5),
             minilm_asset_manifest_sha256="f" * 64,
         )
 
-    matrix = subject.build_sentence_pair_semantic_matrix(
+    pair_receipt = subject.build_selected_pair_semantic_receipt(
         graph=graph,
         semantic_tensor=tensor,
-        quantized_cosine_rows=_pair_rows(),
+        r0_top5=r0.output_top5,
+        r7_top5=r7.output_top5,
+        pair_rows=_pair_rows(r0.output_top5, r7.output_top5),
     )
     swapped = list(graph.units)
     swapped[0], swapped[1] = swapped[1], swapped[0]
-    # Reordering units is invalid even before the matrix can be consumed.
+    # Reordering units is invalid even before pair measurements can be consumed.
     with pytest.raises(subject.EraserExactFeatureBridgeError, match="graph/tensor"):
-        subject.build_sentence_pair_semantic_matrix(
+        subject.build_selected_pair_semantic_receipt(
             graph=replace(graph, units=tuple(swapped)),
             semantic_tensor=tensor,
-            quantized_cosine_rows=matrix.quantized_cosine_rows,
+            r0_top5=r0.output_top5,
+            r7_top5=r7.output_top5,
+            pair_rows=pair_receipt.pair_rows,
         )
