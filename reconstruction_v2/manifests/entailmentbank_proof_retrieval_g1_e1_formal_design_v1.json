@@ -1,0 +1,196 @@
+{
+  "acquisition_contract": {
+    "all_blocks_selected_in_one_source_parse_before_any_action": true,
+    "block_order": [
+      "G_form",
+      "A_form",
+      "F_search",
+      "A_hold",
+      "M_search"
+    ],
+    "block_sizes": {
+      "A_form": 36,
+      "A_hold": 30,
+      "F_search": 30,
+      "G_form": 60,
+      "M_search": 30
+    },
+    "component_assignment": "minimum_cost_max_flow_over_component_to_family_edges_using_private_HMAC_cost_then_independent_HMAC_within_family_block_order",
+    "family_balance": "G_20_A_12_F_10_Ahold_10_per_TRAIN_family_and_M_10_per_DEV_family",
+    "fresh_secret": "one_32_byte_private_secret_generated_after_this_design_and_full_implementation_are_committed",
+    "one_selected_item_per_fixed_ID_question_hypothesis_component": true,
+    "source_parse_attempts": 1
+  },
+  "action_feature_contract": {
+    "answer_query": "question_plus_literal_newline_Answer_colon_space_plus_answer",
+    "fixed_node_feature_order": [
+      "NLI_fact_to_hypothesis_margin",
+      "NLI_fact_to_answer_query_margin",
+      "MiniLM_fact_hypothesis_cosine",
+      "MiniLM_fact_answer_query_cosine",
+      "token_F1_fact_hypothesis",
+      "token_F1_fact_question",
+      "token_F1_fact_answer",
+      "mean_token_F1_fact_to_other_24_facts"
+    ],
+    "integer_scale": 1000000,
+    "MiniLM": "frozen_offline_all_MiniLM_L6_v2_normalized_float32_then_integer_cosine",
+    "NLI": "frozen_offline_nli_distilroberta_base_entailment_minus_max_contradiction_neutral_integer_margin",
+    "pair_graph_edge": "integer_token_F1_between_exact_fact_texts",
+    "text_normalization": "Unicode_NFKC_then_casefold_then_ASCII_regex_[a-z0-9]+_tokens_with_duplicates_removed_only_for_set_F1",
+    "token_F1": "zero_if_either_token_set_empty_else_round(2_times_intersection_size_divided_by_sum_set_sizes_times_1000000)"
+  },
+  "action_formation_contract": {
+    "G_form_only": true,
+    "gold_node_label": "one_iff_node_ID_is_a_gold_proof_leaf",
+    "model": "weighted_ridge_on_z_scored_eight_features_with_float64_pseudoinverse_rcond_1e-12_intercept_unpenalized_lambda_1_then_coefficients_and_feature_moments_quantized_at_1e6",
+    "negative_row_weight": 1,
+    "positive_row_weight": "G_form_negative_node_count_divided_by_G_form_positive_node_count",
+    "recipe_registry": {
+      "alpha_integer_registry": [
+        0,
+        250000,
+        500000,
+        1000000
+      ],
+      "count": 16,
+      "greedy_rule": "first_choose_max_base_rank_score;_later_choose_max_base_rank_score_plus_floor(alpha_times_max_token_F1_edge_to_selected_divided_by_1e6);_ties_by_lower_source_ordinal",
+      "seed_score_registries": [
+        "G_RIDGE",
+        "NLI_HYPOTHESIS",
+        "MINILM_HYPOTHESIS",
+        "BORDA_G_RIDGE_NLI_HYPOTHESIS_MINILM_HYPOTHESIS_TOKEN_F1_HYPOTHESIS"
+      ],
+      "seed_score_to_base_rank": "descending_score_then_lower_source_ordinal_mapped_linearly_from_1e6_for_rank_0_to_0_for_rank_24_with_Python_round_ties_to_even"
+    },
+    "selected_output": "five_distinct_source_ordinals_in_greedy_selection_order",
+    "training_model_or_recipe_retry": false
+  },
+  "claim_boundary": {
+    "absolute_family_blind_or_base_model_row_zero": false,
+    "full_EntailmentBank_proof_generation_or_QA_accuracy": false,
+    "official_HippoRAG_claim": "official_core_item_local_exact_fact_text_adapter_only",
+    "primary_action_claim": "fresh_Task2_proof_leaf_retrieval_utility_at_5",
+    "test_split_or_online_evaluator": false,
+    "universal_Agent_superiority": false
+  },
+  "control_contract": {
+    "canonical_RAW": "first_five_meta.triples_ordinals_in_JSON_insertion_order",
+    "official_HippoRAG": "fresh_destroyed_item_local_exact_text_quotient_index_query_equals_hypothesis_return_exactly_five_logical_ordinals",
+    "three_arm_evaluation": "Q1_Agent_official_HippoRAG_RAW_on_A_hold_and_conditionally_M_search",
+    "Q0_retained_action": "the_E0_selected_F_search_recipe_remains_executable_beside_Q1"
+  },
+  "design_sha256": "340e42cfced3b3fa0aae42eef99b2e7e6587e495f594f36b27f9b8e8966455a2",
+  "evaluator_contract": {
+    "A_form_targets": "direct_item_utility_for_each_of_16_frozen_recipe_actions",
+    "challenger_E1": "ridge_regression_from_the_fixed_16_label_free_action_features_to_A_form_direct_utility_with_z_scoring_lambda_1_intercept_unpenalized_float64_pseudoinverse_rcond_1e-12_and_1e6_quantized_parameters",
+    "E0_fixed_score": "sum_selected_G_RIDGE_base_rank_plus_min_selected_G_RIDGE_base_rank_plus_mean_selected_pair_token_F1",
+    "fixed_E1_feature_order": [
+      "sum_selected_G_RIDGE_base_rank",
+      "min_selected_G_RIDGE_base_rank",
+      "sum_selected_NLI_HYPOTHESIS_base_rank",
+      "min_selected_NLI_HYPOTHESIS_base_rank",
+      "sum_selected_MINILM_HYPOTHESIS_base_rank",
+      "min_selected_MINILM_HYPOTHESIS_base_rank",
+      "sum_selected_TOKEN_F1_HYPOTHESIS_base_rank",
+      "min_selected_TOKEN_F1_HYPOTHESIS_base_rank",
+      "mean_selected_pair_token_F1",
+      "minimum_selected_pair_token_F1",
+      "selected_union_hypothesis_token_coverage_F1",
+      "recipe_alpha_integer",
+      "seed_is_G_RIDGE",
+      "seed_is_NLI_HYPOTHESIS",
+      "seed_is_MINILM_HYPOTHESIS",
+      "seed_is_BORDA"
+    ],
+    "F_search_labels": "never_materialized_or_opened",
+    "future_action_search": "E0_and_E1_each_sum_their_item_recipe_scores_over_all_30_label_free_F_search_items_and_select_one_global_recipe_with_recipe_ID_tie_break",
+    "no_challenger_or_recipe_runner_up": true,
+    "Q0": "single_E0_selected_F_search_recipe",
+    "Q1": "single_E1_selected_F_search_recipe"
+  },
+  "execution_contract": {
+    "action_label_barrier": "every_required_agent_Q0_Q1_official_HippoRAG_and_RAW_action_for_a_measurement_block_is_terminal_and_durably_sealed_before_that_block_label_pack_opens",
+    "external_network_calls": 0,
+    "local_NLI_workers": 2,
+    "model_assets": "local_immutable_safetensors_only",
+    "official_HippoRAG_maximum_live_workers": 8,
+    "submission": "all_3_times_n_measurement_arm_tasks_are_submitted_before_any_result_is_joined_with_an_8_process_official_semaphore_and_local_tasks_remain_eager",
+    "subagent_or_Codex_worker_count": 0
+  },
+  "hash_contract": {
+    "algorithm": "sha256",
+    "canonicalization": "json.dumps(body_without_design_sha256, ensure_ascii=True, allow_nan=False, sort_keys=True, separators=(',', ':')).encode('ascii')",
+    "excluded_top_level_fields": [
+      "design_sha256"
+    ]
+  },
+  "label_and_pack_isolation": {
+    "A_form": "label_free_view_and_separate_late_label_pack",
+    "A_hold": "label_free_view_and_separate_late_label_pack",
+    "F_search": "label_free_view_only_no_label_pack",
+    "G_form": "label_free_view_and_separate_formation_label_pack",
+    "M_search": "label_free_view_and_separate_sealed_late_label_pack",
+    "view_excludes": [
+      "proof",
+      "meta.distractors",
+      "meta.intermediate_conclusions",
+      "gold_leaf_IDs",
+      "family",
+      "source_item_ID"
+    ],
+    "view_includes": [
+      "item_commitment",
+      "question",
+      "answer",
+      "hypothesis",
+      "ordered_exact_meta.triples_texts"
+    ]
+  },
+  "promotion_and_measurement_contract": {
+    "A_hold_primary_pair": "Q1_minus_Q0_direct_item_utility",
+    "direct_item_utility": "number_of_distinct_gold_proof_leaves_in_selected_Set5_plus_one_if_all_gold_proof_leaves_are_selected",
+    "exact_test": "one_sided_magnitude_preserving_signflip_tail_computed_by_exact_integer_dynamic_programming_over_all_nonzero_paired_differences",
+    "M_search_authorization": "A_hold_Q1_minus_Q0_net_strictly_positive_and_exact_p_at_most_0.10",
+    "nonpromotion": "terminal_without_opening_M_search_labels",
+    "secondary_A_hold": "Q1_minus_official_HippoRAG_and_Q1_minus_RAW_total_family_and_exact_p_descriptive",
+    "L5_success": "on_untouched_M_search_Q1_minus_Q0_net_strictly_positive_exact_p_at_most_0.10_Q1_total_strictly_above_official_HippoRAG_and_RAW_and_Q1_minus_each_control_net_nonnegative_in_all_three_proof_leaf_families",
+    "M_search_failure": "valid_negative_without_recipe_threshold_evaluator_or_cohort_retry"
+  },
+  "recorded_date": "2026-07-19",
+  "runtime_bindings": {
+    "MiniLM_asset": {
+      "asset_sha256": "921d9b1945581130e03c53f448092c3de3b30714431c6cac9b3b32c2ec10abad",
+      "file_sha256": "62b85c7752f2e46932fb9fb13ae2f3aac9eb750a33c8f07102739040feb6cc75",
+      "model": "sentence-transformers/all-MiniLM-L6-v2",
+      "revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
+    },
+    "NLI_asset": {
+      "asset_sha256": "d64f4403e7603ea71e622e7e7124eae466cbf67bf4c758979b54c4ccf9bb5fe8",
+      "file_sha256": "7abe0922a800739cdea06a269310681d50cb00d73e6d9b995d8a147e45d7c961",
+      "model": "cross-encoder/nli-distilroberta-base",
+      "revision": "fe43becf0e9bb49299eabd1fe5cc2a74ecf1fcd6"
+    },
+    "official_HippoRAG": {
+      "base_binding_file_sha256": "effdd1de442c88760d15950739d30479613cdcccba90166bcd7e622f6a7dd03b",
+      "runtime_attestation_file_sha256": "0f047699560fbc10a2d39f9de6380004cd2887915c3e2f6ef0fcc806a6670c0e",
+      "runtime_attestation_sha256": "23996f9f41f494e2fd032b285039ec9420f6a893c24081e59c1ec79f229c2c60"
+    }
+  },
+  "schema": "entailmentbank_proof_retrieval_g1_e1_formal_design_v1",
+  "source_and_qualification_binding": {
+    "official_repository_commit": "daac2fdb7ab52ec3ef8f2953f59288c1edd7c2f0",
+    "qualification_committed_at": "9eafd548a0f82d1054d1fe47e62b0cc0f7ba016b",
+    "qualification_file_sha256": "0dd64bb20b5b7acf5c4421085e79a99262e4a99aed95ae83bec9e0bc7ffcb45b",
+    "qualification_git_blob_sha1": "9228952bc93b0751c920a5e2162fdd2e40be209d",
+    "qualification_sha256": "15c51f0c9a182eef7e0ce1169ec2cc8a1a410cc4d7328f6515f5dc5ec8430d52",
+    "qualification_status": "qualified_source_capacity_no_selection"
+  },
+  "status": "preregistered_before_selection_secret_generation_item_selection_or_any_item_action",
+  "terminal_policy": {
+    "implementation_or_infrastructure_failure_after_a_stage_marker": "terminal_without_replay_of_that_stage_or_later_label_open",
+    "no_same_source_recipe_feature_threshold_evaluator_gate_cohort_or_objective_revision": true,
+    "no_smaller_blocks_or_backup_family": true,
+    "test_split_after_any_failure": false
+  }
+}
