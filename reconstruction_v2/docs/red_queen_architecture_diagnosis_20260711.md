@@ -3704,7 +3704,61 @@ evaluator 在 `R0` 与近似退化的 P6 recipes 之间选择；正式 measureme
 [`v2 result disposition`](../manifests/hybridqa_p6_e2_formal_v2_result_disposition_v1.json)，原始 public terminal receipt 见
 [`terminal result`](../artifacts/hybridqa_p6_e2_formal_v2/controller/lifecycle.terminal_result.json)。
 
+### 12.21 2026-07-19 ERASER Evidence Inference R7/E3：恢复有效，但真实域三臂与 evaluator 均明确负
+
+下一项独立现实域使用 ERASER Evidence Inference TRAIN/VAL，事前固定三类临床 effect relation、`48 / 36 / 30 / 30`
+四块、完整 article-local sentence corpus、RAW / official HippoRAG / Agent 三臂、`R0_DENSE5` 与
+`R7_QUERY_ANCHORED_ATOMIC_PATH_BUNDLE` 两个 action，以及只从 A_form 拟合的八特征无截距 ridge E3。原 v1 已进入
+`A_form + F_search` 预定 252 个逻辑任务的首轮、但尚未形成任何 schedule/archive/label/score 时遭主机硬中断；残留恰有
+32 个 A_form HippoRAG work root，没有 output/result。由于没有 durable schedule receipt，不能反推全 252 项已提交或任何 future
+完成；它因此被封为 infrastructure-invalid，而非性能结果。
+
+结果盲 crash-recovery v2 在任何 label/score access 前单独预注册并冻结：原 499-entry tree 原子归档；只 byte-for-byte 克隆
+同一 secret/assignment 的五个 acquisition 基础文件；不重跑 qualifier/acquire、不生成 secret、不 resample，也不复用任何 partial
+cache。资源审计发现每个 item-local HippoRAG 进程还会扩张大量内部 OpenIE/Torch 线程，所以物理 pool 从上限 32 固定为 2；这不拆波，
+仍由冻结 scheduler 在第一次读取 future result 前一次提交完整 `3×84=252` 和后续 `3×30=90` 个逻辑任务。正式 receipt 确认两次
+`all_3n_tasks_submitted_before_first_result=true`，外部网络/online evaluator/test access 均为 0。
+
+A_hold 是有效的强负结果，而不是“比 HippoRAG 赢得不多”：
+
+| comparison | net U | nonzero pairs | exact one-sided p | complete count delta |
+|---|---:|---:|---:|---:|
+| E3−E0 | −13/2 | 4 | 1 | −3 |
+| E3−official HippoRAG | −13/2 | 4 | 1 | −3 |
+| E3−RAW | −13/2 | 4 | 1 | −3 |
+
+E0/E3/HippoRAG/RAW complete counts 为 `9/6/9/9`。E3−HippoRAG 的三个事前 relation-family net U 又全部为负：
+`NO_SIGNIFICANT_DIFFERENCE=−2`、`SIGNIFICANTLY_DECREASED=−1/2`、`SIGNIFICANTLY_INCREASED=−4`。
+E3 在 30 项中选择 R7 12 次、R0 18 次；这 12 次全部 behavior-distinct，全部有 used-edge deletion action change，共引入
+40 个 RAW5 之外的 sentence。因此失败不是 typed action 没执行、没有越出 RAW，或 HippoRAG 没跑，而是**可识别、因果活跃的 R7
+route 在真实 held anchor 上产生净伤害**。
+
+evaluator 的失败也能在事前 A_form descriptive cross-fit 中看到：四折非零 utility item 共 11 个，held correct-direction 只有 5 个；
+冻结 E3 随后仍在 A_hold 激活 12 个 R7 route，最终对 E0、RAW 与 HippoRAG 都是同一个 `−13/2`。所以不应再给同一个 router
+补 feature、关键词、threshold 或 promotion gate。A_hold promotion 为 false，M_search 没有 materialize/open/measure，L5 仍为 null。
+
+另有一个不影响 A_hold 的透明元数据边界：外部进度监控在正式 controller 之外做了 15 次 block-phase check，对已知但始终不存在的
+HippoRAG `M_search` runtime directory name 调用了 30 次 `Path.is_dir()`；没有枚举目录、没有 stat/open acquisition M view，亦没有
+接触 M query/document/label/gold。因此 controller 的零调用 postflight 仍成立，M 数据仍未 materialize 或测量；但全局意义上不能再写
+“任何进程从未 stat 过任何含 M_search 的路径”。该事实已单独封存，且不授权 M、recovery retry 或新 gate。
+
+至此总目标的两个缺口均未闭合：现实域稳定 Agent−HippoRAG 增益仍不存在，evaluator 也没有晋升，更没有改善 untouched search。
+ERASER 同 cohort、同 source epoch 与 sealed M 全部停止。下一条允许的路线只能进入独立 domain/source epoch，并把学习作用于
+evidence-sufficiency / terminal-selection 的 action generator 本身，而不是继续训练一个在 dense R0 与当前有害 R7 之间切换的 gate。
+安全聚合见 [`recovery result disposition`](../manifests/eraser_evidence_inference_r7_e3_recovery_v2_result_disposition_v1.json)，
+恢复终局见 [`recovery terminal`](../artifacts/eraser_evidence_inference_r7_e3_crash_recovery_v2/controller/recovery.terminal_result.json)。
+
 ## 附录 A：关键证据索引
+
+- ERASER Evidence Inference R7/E3 formal/recovery chain：
+  [`base design`](../manifests/eraser_evidence_inference_r7_e3_design_v1.json)；
+  [`v1 full implementation freeze`](../manifests/eraser_evidence_inference_full_implementation_freeze_v1.json)；
+  [`hard-interruption incident`](../manifests/eraser_evidence_inference_formal_v1_hard_interruption_incident_v1.json)；
+  [`crash-recovery design`](../manifests/eraser_evidence_inference_crash_recovery_design_v2.json)；
+  [`recovery implementation freeze`](../manifests/eraser_evidence_inference_crash_recovery_implementation_freeze_v2.json)；
+  [`monitoring metadata incident`](../manifests/eraser_evidence_inference_recovery_monitoring_metadata_incident_v1.json)；
+  [`recovery result disposition`](../manifests/eraser_evidence_inference_r7_e3_recovery_v2_result_disposition_v1.json)；
+  [`recovery terminal`](../artifacts/eraser_evidence_inference_r7_e3_crash_recovery_v2/controller/recovery.terminal_result.json)
 
 - HybridQA P6/E2 formal chain：
   [`v1 implementation failure disposition`](../manifests/hybridqa_p6_e2_formal_v1_implementation_failure_disposition_v1.json)；
