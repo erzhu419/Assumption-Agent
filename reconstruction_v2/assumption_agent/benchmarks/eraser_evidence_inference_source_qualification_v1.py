@@ -65,6 +65,9 @@ FORMAL_TAR_HEADER_AMENDMENT_RELATIVE_PATH = Path(
 FORMAL_DESIGN_AMENDMENT_RELATIVE_PATH = Path(
     "manifests/eraser_evidence_inference_r7_e3_design_amendment_v1.json"
 )
+FORMAL_HIPPORAG_FREEZE_RELATIVE_PATH = Path(
+    "manifests/eraser_evidence_inference_hipporag_implementation_freeze_v1.json"
+)
 
 FORMAL_ARCHIVE_SIZE = 21_903_872
 FORMAL_ARCHIVE_SHA256 = (
@@ -119,6 +122,15 @@ FORMAL_DESIGN_AMENDMENT_COMMIT = (
 )
 FORMAL_BASE_DESIGN_SELF_SHA256 = (
     "49920ccaa8e3f52eeb95fa86d64ecab577971fb8d0cc50d2bd93e0d5baaa2196"
+)
+FORMAL_HIPPORAG_FREEZE_FILE_SHA256 = (
+    "66e116f3d49343922a3e50f6186447f09aea8b8fb6192478a0d0f04726903a51"
+)
+FORMAL_HIPPORAG_FREEZE_SELF_SHA256 = (
+    "17911e90909bb447ce94b097e139694595c436624ccc9b81ec22b39378349219"
+)
+FORMAL_HIPPORAG_IMPLEMENTATION_COMMIT = (
+    "23487651662e15ce225a63208c03e6f0aabf8a0e"
 )
 
 FORMAL_EXPECTED_ANNOTATION_COUNTS = {"train": 7_958, "val": 972}
@@ -638,6 +650,117 @@ def _validate_container_amendments(
         "tar_header_amendment_self_sha256": tar_self_hash,
         "design_amendment_file_sha256": design_file_hash,
         "design_amendment_self_sha256": design_self_hash,
+    }
+
+
+def _validate_hipporag_implementation_freeze(
+    path: Path,
+    *,
+    enforce_formal_manifest_identity: bool,
+) -> dict[str, str]:
+    payload, file_hash, self_hash = _load_manifest(
+        path,
+        schema="eraser_evidence_inference_hipporag_implementation_freeze_v1",
+        self_hash_field="implementation_freeze_sha256",
+    )
+    if enforce_formal_manifest_identity and (
+        file_hash != FORMAL_HIPPORAG_FREEZE_FILE_SHA256
+        or self_hash != FORMAL_HIPPORAG_FREEZE_SELF_SHA256
+    ):
+        raise EraserEvidenceInferenceQualificationError(
+            "formal ERASER HippoRAG freeze identity drifted"
+        )
+    design = _require_mapping(
+        payload.get("design_binding"), context="HippoRAG freeze design binding"
+    )
+    runtime = _require_mapping(
+        payload.get("base_runtime_binding"),
+        context="HippoRAG freeze runtime binding",
+    )
+    implementation = _require_mapping(
+        payload.get("implementation_binding"),
+        context="HippoRAG freeze implementation binding",
+    )
+    formal_tests = _require_mapping(
+        payload.get("synthetic_formal_tests"),
+        context="HippoRAG freeze synthetic tests",
+    )
+    integration = _require_mapping(
+        payload.get("synthetic_official_core_integration"),
+        context="HippoRAG freeze integration",
+    )
+    files = implementation.get("files")
+    if not isinstance(files, list) or not files:
+        raise EraserEvidenceInferenceQualificationError(
+            "HippoRAG implementation file binding drifted"
+        )
+    required_suffixes = {
+        "__init__.py",
+        "adapter.py",
+        "contract.py",
+        "worker.py",
+        "test_eraser_evidence_inference_official_hipporag_v1.py",
+    }
+    observed_suffixes: set[str] = set()
+    for row in files:
+        row_mapping = _require_mapping(
+            row, context="HippoRAG implementation file row"
+        )
+        file_path = row_mapping.get("path")
+        file_sha256 = row_mapping.get("sha256")
+        if (
+            not isinstance(file_path, str)
+            or not isinstance(file_sha256, str)
+            or not _SHA256_RE.fullmatch(file_sha256)
+        ):
+            raise EraserEvidenceInferenceQualificationError(
+                "HippoRAG implementation file row drifted"
+            )
+        observed_suffixes.add(PurePosixPath(file_path).name)
+    if observed_suffixes != required_suffixes:
+        raise EraserEvidenceInferenceQualificationError(
+            "HippoRAG implementation file set drifted"
+        )
+    if (
+        payload.get("status")
+        != "frozen_offline_item_local_implementation_after_non_scoring_integration_pass"
+        or design.get("base_design_self_sha256")
+        != FORMAL_BASE_DESIGN_SELF_SHA256
+        or design.get("container_design_amendment_self_sha256")
+        != FORMAL_DESIGN_AMENDMENT_SELF_SHA256
+        or runtime.get("base_binding_receipt_sha256")
+        != "522d31926df70f983ae2f644f05c9f3ee45fcd08e0d847642e144652df5a45d0"
+        or runtime.get("runtime_attestation_receipt_sha256")
+        != "23996f9f41f494e2fd032b285039ec9420f6a893c24081e59c1ec79f229c2c60"
+        or not isinstance(implementation.get("frozen_contract"), str)
+        or formal_tests.get("real_source_or_benchmark_item_read") is not False
+        or formal_tests.get("passed_case_count")
+        != formal_tests.get("collected_case_count")
+        or type(formal_tests.get("passed_case_count")) is not int
+        or formal_tests.get("passed_case_count", 0) <= 0
+        or integration.get("passed") is not True
+        or integration.get("external_network_transport_possible") is not False
+        or type(integration.get("logical_sentence_count")) is not int
+        or integration.get("logical_sentence_count", 0) <= 128
+        or type(integration.get("unique_exact_text_count")) is not int
+        or not 0
+        < integration.get("unique_exact_text_count", 0)
+        < integration.get("logical_sentence_count", 0)
+        or integration.get("output_count") != 5
+        or integration.get("work_root_removed_before_return") is not True
+    ):
+        raise EraserEvidenceInferenceQualificationError(
+            "ERASER HippoRAG implementation freeze contract drifted"
+        )
+    if enforce_formal_manifest_identity and (
+        implementation.get("commit") != FORMAL_HIPPORAG_IMPLEMENTATION_COMMIT
+    ):
+        raise EraserEvidenceInferenceQualificationError(
+            "formal ERASER HippoRAG implementation commit drifted"
+        )
+    return {
+        "hipporag_implementation_freeze_file_sha256": file_hash,
+        "hipporag_implementation_freeze_self_sha256": self_hash,
     }
 
 
@@ -1479,6 +1602,7 @@ def qualify_archive(
     prompt_access_manifest_path: Path,
     tar_header_amendment_path: Path,
     design_amendment_path: Path,
+    hipporag_implementation_freeze_path: Path,
     *,
     expected_archive_sha256: str,
     expected_archive_size: int,
@@ -1548,6 +1672,10 @@ def qualify_archive(
         archive_sha256=expected_archive_sha256,
         custody_self_sha256=manifest_bindings["custody_self_sha256"],
         access_self_sha256=manifest_bindings["access_self_sha256"],
+        enforce_formal_manifest_identity=enforce_formal_manifest_identity,
+    )
+    hipporag_freeze_binding = _validate_hipporag_implementation_freeze(
+        hipporag_implementation_freeze_path,
         enforce_formal_manifest_identity=enforce_formal_manifest_identity,
     )
     observed_archive_hash, observed_archive_size = _sha256_file(archive_path)
@@ -1689,6 +1817,7 @@ def qualify_archive(
                 "self_sha256"
             ],
             **container_amendment_binding,
+            **hipporag_freeze_binding,
             "formal_manifest_identity_enforced": enforce_formal_manifest_identity,
         },
         "archive_header_aggregates": {
@@ -1750,6 +1879,7 @@ def build_formal_qualification(project: Path) -> dict[str, Any]:
     prompt_access = root / FORMAL_PROMPT_ACCESS_RELATIVE_PATH
     tar_header_amendment = root / FORMAL_TAR_HEADER_AMENDMENT_RELATIVE_PATH
     design_amendment = root / FORMAL_DESIGN_AMENDMENT_RELATIVE_PATH
+    hipporag_freeze = root / FORMAL_HIPPORAG_FREEZE_RELATIVE_PATH
     for path in (
         archive,
         custody,
@@ -1758,6 +1888,7 @@ def build_formal_qualification(project: Path) -> dict[str, Any]:
         prompt_access,
         tar_header_amendment,
         design_amendment,
+        hipporag_freeze,
     ):
         if path.is_symlink():
             raise EraserEvidenceInferenceQualificationError(
@@ -1785,6 +1916,7 @@ def build_formal_qualification(project: Path) -> dict[str, Any]:
         prompt_access,
         tar_header_amendment,
         design_amendment,
+        hipporag_freeze,
         expected_archive_sha256=FORMAL_ARCHIVE_SHA256,
         expected_archive_size=FORMAL_ARCHIVE_SIZE,
         expected_prompt_sidecar_sha256=FORMAL_PROMPT_SIDECAR_SHA256,

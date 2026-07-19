@@ -174,7 +174,7 @@ def _source_manifests(
     archive_size: int,
     sidecar_sha256: str,
     sidecar_size: int,
-) -> tuple[Path, Path, Path, Path, Path]:
+) -> tuple[Path, Path, Path, Path, Path, Path]:
     custody_body = {
         "schema": "eraser_evidence_inference_source_custody_v1",
         "archive_metadata": {
@@ -325,7 +325,69 @@ def _source_manifests(
     design_amendment.write_bytes(
         _with_self_hash(design_amendment_body, "design_amendment_sha256")
     )
-    return custody, access, prompt_access, tar_amendment, design_amendment
+    hipporag_freeze_body = {
+        "schema": "eraser_evidence_inference_hipporag_implementation_freeze_v1",
+        "base_runtime_binding": {
+            "base_binding_receipt_sha256": (
+                "522d31926df70f983ae2f644f05c9f3ee45fcd08e0d847642e144652df5a45d0"
+            ),
+            "runtime_attestation_receipt_sha256": (
+                "23996f9f41f494e2fd032b285039ec9420f6a893c24081e59c1ec79f229c2c60"
+            ),
+        },
+        "design_binding": {
+            "base_design_self_sha256": audit.FORMAL_BASE_DESIGN_SELF_SHA256,
+            "container_design_amendment_self_sha256": (
+                audit.FORMAL_DESIGN_AMENDMENT_SELF_SHA256
+            ),
+        },
+        "implementation_binding": {
+            "commit": "d" * 40,
+            "files": [
+                {"path": name, "sha256": "e" * 64}
+                for name in (
+                    "__init__.py",
+                    "adapter.py",
+                    "contract.py",
+                    "worker.py",
+                    "test_eraser_evidence_inference_official_hipporag_v1.py",
+                )
+            ],
+            "frozen_contract": "synthetic exact-text item-local contract",
+        },
+        "status": (
+            "frozen_offline_item_local_implementation_after_non_scoring_"
+            "integration_pass"
+        ),
+        "synthetic_formal_tests": {
+            "collected_case_count": 1,
+            "passed_case_count": 1,
+            "real_source_or_benchmark_item_read": False,
+        },
+        "synthetic_official_core_integration": {
+            "passed": True,
+            "external_network_transport_possible": False,
+            "logical_sentence_count": 129,
+            "unique_exact_text_count": 5,
+            "output_count": 5,
+            "work_root_removed_before_return": True,
+        },
+    }
+    hipporag_freeze = tmp_path / "hipporag_freeze.json"
+    hipporag_freeze.write_bytes(
+        _with_self_hash(
+            hipporag_freeze_body,
+            "implementation_freeze_sha256",
+        )
+    )
+    return (
+        custody,
+        access,
+        prompt_access,
+        tar_amendment,
+        design_amendment,
+        hipporag_freeze,
+    )
 
 
 def _fixture(
@@ -415,14 +477,19 @@ def _fixture(
 
     archive_raw = archive.read_bytes()
     sidecar_raw = sidecar.read_bytes()
-    custody, access, prompt_access, tar_amendment, design_amendment = (
-        _source_manifests(
+    (
+        custody,
+        access,
+        prompt_access,
+        tar_amendment,
+        design_amendment,
+        hipporag_freeze,
+    ) = _source_manifests(
         tmp_path,
         archive_sha256=hashlib.sha256(archive_raw).hexdigest(),
         archive_size=len(archive_raw),
         sidecar_sha256=hashlib.sha256(sidecar_raw).hexdigest(),
         sidecar_size=len(sidecar_raw),
-        )
     )
     return {
         "archive": archive,
@@ -432,6 +499,7 @@ def _fixture(
         "prompt_access": prompt_access,
         "tar_amendment": tar_amendment,
         "design_amendment": design_amendment,
+        "hipporag_freeze": hipporag_freeze,
         "archive_sha256": hashlib.sha256(archive_raw).hexdigest(),
         "archive_size": len(archive_raw),
         "sidecar_sha256": hashlib.sha256(sidecar_raw).hexdigest(),
@@ -448,6 +516,7 @@ def _qualify(fixture: dict[str, Any]) -> dict[str, Any]:
         fixture["prompt_access"],
         fixture["tar_amendment"],
         fixture["design_amendment"],
+        fixture["hipporag_freeze"],
         expected_archive_sha256=fixture["archive_sha256"],
         expected_archive_size=fixture["archive_size"],
         expected_prompt_sidecar_sha256=fixture["sidecar_sha256"],
@@ -669,6 +738,32 @@ def test_container_amendment_scope_tamper_fails_before_archive_header_scan(
     assert opened is False
 
 
+def test_hipporag_freeze_tamper_fails_before_archive_header_scan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path)
+    payload = json.loads(fixture["hipporag_freeze"].read_text(encoding="utf-8"))
+    payload.pop("implementation_freeze_sha256")
+    payload["synthetic_official_core_integration"]["passed"] = False
+    fixture["hipporag_freeze"].write_bytes(
+        _with_self_hash(payload, "implementation_freeze_sha256")
+    )
+    opened = False
+
+    def forbidden_tar_open(*_args: Any, **_kwargs: Any):
+        nonlocal opened
+        opened = True
+        raise AssertionError("archive header scan occurred before freeze check")
+
+    monkeypatch.setattr(tarfile, "open", forbidden_tar_open)
+    with pytest.raises(
+        audit.EraserEvidenceInferenceQualificationError,
+        match="HippoRAG implementation freeze contract",
+    ):
+        _qualify(fixture)
+    assert opened is False
+
+
 def test_duplicate_json_object_key_is_rejected_without_opening_test(
     tmp_path: Path,
 ) -> None:
@@ -702,20 +797,26 @@ def test_duplicate_json_object_key_is_rejected_without_opening_test(
     raw = fixture["archive"].read_bytes()
     fixture["archive_sha256"] = hashlib.sha256(raw).hexdigest()
     fixture["archive_size"] = len(raw)
-    custody, access, prompt_access, tar_amendment, design_amendment = (
-        _source_manifests(
+    (
+        custody,
+        access,
+        prompt_access,
+        tar_amendment,
+        design_amendment,
+        hipporag_freeze,
+    ) = _source_manifests(
         tmp_path,
         archive_sha256=fixture["archive_sha256"],
         archive_size=fixture["archive_size"],
         sidecar_sha256=fixture["sidecar_sha256"],
         sidecar_size=fixture["sidecar_size"],
-        )
     )
     fixture["custody"] = custody
     fixture["access"] = access
     fixture["prompt_access"] = prompt_access
     fixture["tar_amendment"] = tar_amendment
     fixture["design_amendment"] = design_amendment
+    fixture["hipporag_freeze"] = hipporag_freeze
     with pytest.raises(
         audit.EraserEvidenceInferenceQualificationError,
         match="duplicate JSON object key",
