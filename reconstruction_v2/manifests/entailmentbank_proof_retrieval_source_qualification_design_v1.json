@@ -1,0 +1,140 @@
+{
+  "access_contract": {
+    "allowed_payloads": [
+      "official_Task2_TRAIN_JSONL",
+      "official_Task2_DEV_JSONL"
+    ],
+    "human_row_or_item_content_inspection": false,
+    "isolated_aggregate_qualification_process": true,
+    "qualification_attempts": 1,
+    "source_files_must_match_fixed_commit_blob_size_and_SHA256_before_decode": true,
+    "test_payload_hash_open_or_parse": false
+  },
+  "candidate_contract": {
+    "addressable_nodes": "meta.triples_mapping_entries_in_JSON_insertion_order_with_exact_string_ID_and_text_preserved_and_no_text_deduplication",
+    "candidate_context_size": "8_to_64_addressable_nodes_inclusive",
+    "candidate_gold_leaf_size": "2_to_5_distinct_proof_leaf_IDs_inclusive",
+    "distractor_role": "meta.distractors_is_checked_aggregate_only_when_present_but_is_never_used_as_an_action_or_evaluator_input_feature",
+    "gold_leaf_extraction": "split_the_top_level_proof_on_semicolons_then_each_nonempty_step_once_on_arrow_then_each_LHS_on_ampersand;_an_exact_LHS_reference_present_in_meta.triples_is_a_gold_leaf;_an_exact_reference_present_in_meta.intermediate_conclusions_is_not_a_leaf;_unknown_LHS_references_make_the_row_ineligible",
+    "hypothesis": "nonempty_top_level_hypothesis_string_used_as_the_retrieval_query",
+    "item_key": "split_colon_exact_top_level_item_ID",
+    "minimal_official_reader_fields": [
+      "id",
+      "question",
+      "answer",
+      "hypothesis",
+      "proof",
+      "meta.triples",
+      "meta.intermediate_conclusions"
+    ],
+    "official_reader_incompatible_or_formally_ineligible_rows": "excluded_with_aggregate_reason_counts_and_do_not_fail_the_source_if_fixed_capacity_is_saturated",
+    "question_and_answer_role": "shared_input_metadata_available_to_all_future_arms_but_not_addressable_output_nodes"
+  },
+  "component_and_exclusion_contract": {
+    "component_graph": "connect_formally_eligible_rows_sharing_exact_item_ID_or_exact_Unicode_NFKC_casefold_whitespace_collapsed_question_or_hypothesis_across_TRAIN_and_DEV",
+    "corpus_fact_reuse": "shared_WorldTree_facts_do_not_create_components_because_they_are_reusable_background_corpus_knowledge_and_connecting_them_would_change_the_official_split_unit",
+    "cross_split_component": "exclude_every_candidate_in_a_component_containing_both_TRAIN_and_DEV_rows",
+    "documentation_example_ID": "Mercury_SC_401371",
+    "documentation_example_scope": "exclude_its_entire_exact_ID_question_hypothesis_component",
+    "formal_reuse_limit": "at_most_one_selected_item_per_connected_component_across_all_blocks"
+  },
+  "design_sha256": "9ada3f1760e8bcc46a5a78ef09f5c0621cc89fa52902c74eaf8c0e3bb4f6d1b4",
+  "family_contract": {
+    "FOUR_FIVE_LEAF": "gold_proof_leaf_count_is_4_or_5",
+    "THREE_LEAF": "gold_proof_leaf_count_is_exactly_3",
+    "TWO_LEAF": "gold_proof_leaf_count_is_exactly_2",
+    "families_are_mutually_exclusive_and_exhaustive_over_formally_eligible_rows": true,
+    "family_is_a_proof_evidence_cardinality_family_not_a_keyword_or_model_prediction": true
+  },
+  "future_formal_population_contract": {
+    "A_form_TRAIN": {
+      "FOUR_FIVE_LEAF": 12,
+      "THREE_LEAF": 12,
+      "TWO_LEAF": 12
+    },
+    "A_hold_TRAIN": {
+      "FOUR_FIVE_LEAF": 10,
+      "THREE_LEAF": 10,
+      "TWO_LEAF": 10
+    },
+    "F_search_TRAIN": {
+      "FOUR_FIVE_LEAF": 10,
+      "THREE_LEAF": 10,
+      "TWO_LEAF": 10
+    },
+    "G_form_TRAIN": {
+      "FOUR_FIVE_LEAF": 20,
+      "THREE_LEAF": 20,
+      "TWO_LEAF": 20
+    },
+    "M_search_DEV": {
+      "FOUR_FIVE_LEAF": 10,
+      "THREE_LEAF": 10,
+      "TWO_LEAF": 10
+    },
+    "all_blocks_selected_and_sealed_before_any_item_action": true,
+    "total_DEV_required": 30,
+    "total_TRAIN_required": 156,
+    "total_required": 186
+  },
+  "future_mechanism_boundary": {
+    "action_formation_data": "G_form_gold_leaf_labels_only",
+    "candidate_output": "exactly_five_distinct_meta.triples_IDs",
+    "canonical_RAW_control": "first_five_meta.triples_IDs_in_JSON_insertion_order",
+    "direct_item_utility": "number_of_distinct_gold_proof_leaves_in_Set5_plus_one_if_every_gold_proof_leaf_is_in_Set5",
+    "evaluator_formation_data": "A_form_gold_leaf_labels_only_after_the_action_registry_is_frozen",
+    "evaluator_promotion_data": "A_hold_labels_only_after_one_challenger_is_frozen",
+    "final_search_measurement": "M_search_only_after_promotion",
+    "gold_leaf_IDs_or_values_reaching_action_or_evaluator_inputs": false,
+    "official_HippoRAG_incumbent": "frozen_official_core_item_local_top5_over_the_same_hypothesis_question_answer_and_meta.triples_information",
+    "same_semantic_scorer_as_action_feature_proxy_and_final_utility": false,
+    "source_qualification_is_capacity_only_not_a_performance_gate": true
+  },
+  "hash_contract": {
+    "algorithm": "sha256",
+    "canonicalization": "json.dumps(body_without_design_sha256, ensure_ascii=True, allow_nan=False, sort_keys=True, separators=(',', ':')).encode('ascii')",
+    "excluded_top_level_fields": [
+      "design_sha256"
+    ]
+  },
+  "qualification_contract": {
+    "capacity_test": "for_each_split_build_a_bipartite_flow_network_from_nonexcluded_components_to_the_families_present_in_each_component_with_unit_component_capacity_and_fixed_family_demands;_all_demands_must_be_saturated",
+    "DEV_family_demands": {
+      "FOUR_FIVE_LEAF": 10,
+      "THREE_LEAF": 10,
+      "TWO_LEAF": 10
+    },
+    "failure": "terminal_source_infeasible_without_smaller_blocks_family_redefinition_same_source_retry_or_item_action",
+    "no_selection_secret_or_item_selection_during_qualification": true,
+    "output": "aggregate_line_validity_ineligibility_proof_leaf_context_component_capacity_and_population_digest_statistics_only_without_item_ID_question_answer_hypothesis_fact_proof_or_per_item_record",
+    "success": "exact_saturation_of_all_TRAIN_and_DEV_family_demands_after_all_fixed_exclusions",
+    "TRAIN_family_demands": {
+      "FOUR_FIVE_LEAF": 52,
+      "THREE_LEAF": 52,
+      "TWO_LEAF": 52
+    }
+  },
+  "recorded_date": "2026-07-19",
+  "schema": "entailmentbank_proof_retrieval_source_qualification_design_v1",
+  "selection_after_qualification": {
+    "candidate_within_component_family": "minimum_private_HMAC_rank",
+    "component_to_family_assignment": "deterministic_minimum_cost_max_flow_using_private_HMAC_costs_and_fixed_lexicographic_tie_breaking",
+    "secret": "generate_and_commit_one_fresh_32_byte_private_selection_secret_only_after_qualification_success",
+    "within_family_block_assignment": "independent_private_HMAC_order_then_fixed_block_slices_in_manifest_order_G_form_A_form_F_search_A_hold_for_TRAIN_and_M_search_for_DEV"
+  },
+  "source_bindings": {
+    "access_addendum": {
+      "committed_at": "429c8fe4e95c0dba8e922a9daee1b55de4672b0e",
+      "file_sha256": "155789a2e581f8e43f622021b1adb7839bb10fefd35ce6523e87e7650bf12a7f",
+      "git_blob_sha1": "f5ac082d3da4e758dc19e2df51800fd59cfcd800",
+      "relative_path": "manifests/entailmentbank_proof_retrieval_source_access_v1.json",
+      "source_access_sha256": "ecb0d0c6508373e5df3564a60231d3011728d4350412a69b5b94492cfa24ce40"
+    },
+    "custody": {
+      "file_sha256": "458717659938c93201a71c7f28684a459e61240d3b15342b5c53211aadcbb7f7",
+      "relative_path": "manifests/entailmentbank_proof_retrieval_source_custody_v1.json",
+      "source_custody_sha256": "99ccb112e7bfb5f326c13a3928d58d10a9ea341a9ca49d58c41fd4954fb018b3"
+    }
+  },
+  "status": "preregistered_before_any_official_Task2_TRAIN_or_DEV_JSON_decode_or_row_parse"
+}
