@@ -94,7 +94,7 @@ def _annotation(
                 }
             ],
         ],
-        "classification": family,
+        "classification": audit.FAMILY_TO_OFFICIAL_CLASSIFICATION[family],
         "query_type": "PRIVATE_QUERY_TYPE_DO_NOT_LEAK",
         "docids": [docid],
     }
@@ -776,7 +776,7 @@ def test_duplicate_json_object_key_is_rejected_without_opening_test(
     ]
     train_lines[0] = train_lines[0].replace(
         b'"classification":',
-        b'"classification":"SIGNIFICANTLY_DECREASED","classification":',
+        b'"classification":"significantly decreased","classification":',
         1,
     )
     val_raw = b"\n".join(

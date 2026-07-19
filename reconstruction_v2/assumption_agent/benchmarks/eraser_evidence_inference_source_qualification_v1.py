@@ -136,11 +136,16 @@ FORMAL_HIPPORAG_IMPLEMENTATION_COMMIT = (
 FORMAL_EXPECTED_ANNOTATION_COUNTS = {"train": 7_958, "val": 972}
 FORMAL_EXPECTED_ARTICLE_COUNTS = {"train": 1_924, "val": 247}
 
-RELATION_FAMILIES = (
-    "SIGNIFICANTLY_DECREASED",
-    "NO_SIGNIFICANT_DIFFERENCE",
-    "SIGNIFICANTLY_INCREASED",
-)
+OFFICIAL_CLASSIFICATION_TO_FAMILY = {
+    "significantly decreased": "SIGNIFICANTLY_DECREASED",
+    "no significant difference": "NO_SIGNIFICANT_DIFFERENCE",
+    "significantly increased": "SIGNIFICANTLY_INCREASED",
+}
+RELATION_FAMILIES = tuple(OFFICIAL_CLASSIFICATION_TO_FAMILY.values())
+FAMILY_TO_OFFICIAL_CLASSIFICATION = {
+    family: official
+    for official, family in OFFICIAL_CLASSIFICATION_TO_FAMILY.items()
+}
 FORMAL_COHORT_DEMANDS = {
     "train": {"A_form": 16, "F_search": 12},
     "val": {"A_hold": 10, "M_search": 10},
@@ -941,11 +946,14 @@ def _parse_jsonl(raw: bytes, *, split: str) -> _ParsedSplit:
             raise EraserEvidenceInferenceQualificationError(
                 "annotation query_type drifted"
             )
-        classification = row.get("classification")
-        if classification not in RELATION_FAMILIES:
+        official_classification = row.get("classification")
+        if official_classification not in OFFICIAL_CLASSIFICATION_TO_FAMILY:
             raise EraserEvidenceInferenceQualificationError(
                 "annotation relation family drifted"
             )
+        classification = OFFICIAL_CLASSIFICATION_TO_FAMILY[
+            official_classification
+        ]
         class_counts[classification] += 1
 
         declared_docids_raw = row.get("docids")
