@@ -3838,6 +3838,35 @@ Agent−HippoRAG/RAW 优势真正复现后，才值得在**新 training cohort**
 [`E2 result disposition`](../manifests/maven_ere_global_family_e2_train_crossfit_result_disposition_v1.json)，原始训练结果见
 [`cross-fit result`](../artifacts/maven_ere_global_family_e2_train_crossfit_v1/crossfit.result.json)。
 
+### 12.25 2026-07-19 MAVEN-ERE fresh G8/E0：先前描述性优势未复现
+
+E2 停止后，没有继续试 evaluator，而是直接检验上一轮唯一正向线索：固定 G8/E0 在原 A_hold 中比 HippoRAG/RAW 多 4 个 correct。
+该确认在 original secret 和 valid source 重开前由
+[`fresh confirmation design`](../manifests/maven_ere_g8_e0_fresh_confirmation_design_v1.json) 与
+[`implementation freeze`](../manifests/maven_ere_g8_e0_fresh_confirmation_implementation_freeze_v1.json) 固定。runner 只读一次 original secret
+和 official valid，不打开任何原 private pack；它从 source+secret 精确重构 original A_hold/M assignment，要求四个 view/label pack 的
+公开 file/pack hash 全部相等，然后排除这 60 个 collision component。新 secret 一次分配 60 个 fresh item，每族 20；无 retry、replacement、
+TRAIN/TEST/online access。随后固定读取既有 G8 model，不再打开 G/A training pack，并在读取 label 前提交和封存完整 `3×60` 三臂动作。
+
+fresh 结果不是边缘 non-significant，而是方向反转：
+
+| comparison | correct count | net U | nonzero pairs | exact one-sided p | family net `C / S / T` |
+|---|---:|---:|---:|---:|---:|
+| E0 | 18 | — | — | — | — |
+| official HippoRAG | 22 | E0−Hippo=`−4` | 12 | 3797/4096 | `−1 / −4 / +1` |
+| RAW | 22 | E0−RAW=`−4` | 12 | 3797/4096 | `−1 / −4 / +1` |
+
+E0 仍不是“没有执行”：60 项中 9 项有 used-edge deletion action change，共 485 个 deletion witness；但因果活跃不等于收益。
+原 30 项上的 E0 `+4` 只能认定为不稳定的描述性波动，不能再作为 generator incumbent 的现实域证据。尤其 SUBEVENT 在 fresh cohort
+净输 4，CAUSAL 也输 1；只有 TEMPORAL `+1`，完全不满足跨 relation family 稳定性。
+
+因此 MAVEN-ERE source epoch 到此终止：G8、E1、global-family E2 都不能在同 source 上继续改 feature、prompt、threshold 或补 gate。
+总目标的两项关键实证仍都缺失：没有稳定 Agent−HippoRAG/RAW 优势，也没有 evaluator promotion→untouched-search improvement。
+下一候选若继续，必须换独立 domain 与 fresh training cohort，并让监督直接对应 evidence sufficiency 或下游 task utility；不能再用同一个
+NLI family scorer 同时充当生成特征、训练 target proxy 和最终效用来源。安全聚合见
+[`fresh result disposition`](../manifests/maven_ere_g8_e0_fresh_confirmation_result_disposition_v1.json)，原始 aggregate terminal 见
+[`fresh terminal`](../artifacts/maven_ere_g8_e0_fresh_confirmation_v1/controller/terminal.result.json)。
+
 ## 附录 A：关键证据索引
 
 - MAVEN-ERE G8/E1 formal/recovery chain：
@@ -3854,7 +3883,11 @@ Agent−HippoRAG/RAW 优势真正复现后，才值得在**新 training cohort**
   [`E2 TRAIN design`](../manifests/maven_ere_global_family_e2_train_crossfit_design_v1.json)；
   [`E2 implementation freeze`](../manifests/maven_ere_global_family_e2_train_crossfit_implementation_freeze_v1.json)；
   [`E2 result disposition`](../manifests/maven_ere_global_family_e2_train_crossfit_result_disposition_v1.json)；
-  [`E2 cross-fit result`](../artifacts/maven_ere_global_family_e2_train_crossfit_v1/crossfit.result.json)
+  [`E2 cross-fit result`](../artifacts/maven_ere_global_family_e2_train_crossfit_v1/crossfit.result.json)；
+  [`fresh G8 confirmation design`](../manifests/maven_ere_g8_e0_fresh_confirmation_design_v1.json)；
+  [`fresh G8 implementation freeze`](../manifests/maven_ere_g8_e0_fresh_confirmation_implementation_freeze_v1.json)；
+  [`fresh G8 result disposition`](../manifests/maven_ere_g8_e0_fresh_confirmation_result_disposition_v1.json)；
+  [`fresh G8 terminal`](../artifacts/maven_ere_g8_e0_fresh_confirmation_v1/controller/terminal.result.json)
 
 - ERASER Evidence Inference R7/E3 formal/recovery chain：
   [`base design`](../manifests/eraser_evidence_inference_r7_e3_design_v1.json)；
