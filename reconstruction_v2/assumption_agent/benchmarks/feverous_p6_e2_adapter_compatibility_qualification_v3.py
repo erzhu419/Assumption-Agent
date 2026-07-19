@@ -59,11 +59,24 @@ EXPECTED_TRAIN_RECORD_COUNT = 71_292
 EXPECTED_BLANK_SENTINEL_RECORD_COUNT = 1
 EXPECTED_RAW_EVIDENCE_SET_COUNT = 77_492
 EXPECTED_RAW_CONTENT_REFERENCE_COUNT = 349_556
-EXPECTED_ADAPTER_EVIDENCE_SET_COUNT = 75_219
-EXPECTED_ADAPTER_CONTENT_REFERENCE_COUNT = 338_061
+# The source-qualification manifest reports the exact-context subset after the
+# two preregistered nonexact title-context sets are removed.  The production
+# adapter's ``official_*`` counters are deliberately incremented before any
+# exclusion, so their corresponding raw totals are larger by those two sets
+# and references.  Bind both accounting layers explicitly.
+EXPECTED_EXACT_CONTEXT_EVIDENCE_SET_COUNT = 75_219
+EXPECTED_EXACT_CONTEXT_CONTENT_REFERENCE_COUNT = 338_061
 EXPECTED_NONEXACT_TITLE_CONTEXT_SET_COUNT = 2
 EXPECTED_NONEXACT_TITLE_CONTEXT_REFERENCE_COUNT = 2
 EXPECTED_NONEXACT_TITLE_CONTEXT_RECORD_COUNT = 2
+EXPECTED_ADAPTER_OFFICIAL_EVIDENCE_SET_COUNT = (
+    EXPECTED_EXACT_CONTEXT_EVIDENCE_SET_COUNT
+    + EXPECTED_NONEXACT_TITLE_CONTEXT_SET_COUNT
+)
+EXPECTED_ADAPTER_OFFICIAL_CONTENT_REFERENCE_COUNT = (
+    EXPECTED_EXACT_CONTEXT_CONTENT_REFERENCE_COUNT
+    + EXPECTED_NONEXACT_TITLE_CONTEXT_REFERENCE_COUNT
+)
 
 
 class FeverousAdapterCompatibilityQualificationError(RuntimeError):
@@ -110,6 +123,8 @@ _RECEIPT_KEYS = frozenset(
         "raw_content_reference_count",
         "adapter_evidence_set_count",
         "adapter_content_reference_count",
+        "exact_context_evidence_set_count_after_nonexact_exclusion",
+        "exact_context_reference_count_after_nonexact_exclusion",
         "invalid_nonexact_title_context_evidence_set_count",
         "invalid_nonexact_title_context_reference_count",
         "records_with_invalid_nonexact_title_context_count",
@@ -273,9 +288,9 @@ def _validate_aggregate_topology(
         or status_counts.get("blank_sentinel")
         != EXPECTED_BLANK_SENTINEL_RECORD_COUNT
         or adapter_receipt.get("official_evidence_set_count")
-        != EXPECTED_ADAPTER_EVIDENCE_SET_COUNT
+        != EXPECTED_ADAPTER_OFFICIAL_EVIDENCE_SET_COUNT
         or adapter_receipt.get("official_evidence_reference_count")
-        != EXPECTED_ADAPTER_CONTENT_REFERENCE_COUNT
+        != EXPECTED_ADAPTER_OFFICIAL_CONTENT_REFERENCE_COUNT
         or adapter_receipt.get("excluded_nonexact_title_context_set_count")
         != EXPECTED_NONEXACT_TITLE_CONTEXT_SET_COUNT
         or adapter_receipt.get(
@@ -397,6 +412,16 @@ def form_adapter_compatibility_qualification_receipt(
         "adapter_content_reference_count": adapter_receipt[
             "official_evidence_reference_count"
         ],
+        "exact_context_evidence_set_count_after_nonexact_exclusion": (
+            adapter_receipt["official_evidence_set_count"]
+            - adapter_receipt["excluded_nonexact_title_context_set_count"]
+        ),
+        "exact_context_reference_count_after_nonexact_exclusion": (
+            adapter_receipt["official_evidence_reference_count"]
+            - adapter_receipt[
+                "excluded_nonexact_title_context_reference_count"
+            ]
+        ),
         "invalid_nonexact_title_context_evidence_set_count": adapter_receipt[
             "excluded_nonexact_title_context_set_count"
         ],
@@ -495,9 +520,17 @@ def validate_adapter_compatibility_qualification_receipt(
         != _callable_source_sha256(source_adapter._is_blank_sentinel)
         or annotation_receipt.get("annotation_receipt_sha256") != annotation_sha
         or receipt.get("adapter_evidence_set_count")
-        != EXPECTED_ADAPTER_EVIDENCE_SET_COUNT
+        != EXPECTED_ADAPTER_OFFICIAL_EVIDENCE_SET_COUNT
         or receipt.get("adapter_content_reference_count")
-        != EXPECTED_ADAPTER_CONTENT_REFERENCE_COUNT
+        != EXPECTED_ADAPTER_OFFICIAL_CONTENT_REFERENCE_COUNT
+        or receipt.get(
+            "exact_context_evidence_set_count_after_nonexact_exclusion"
+        )
+        != EXPECTED_EXACT_CONTEXT_EVIDENCE_SET_COUNT
+        or receipt.get(
+            "exact_context_reference_count_after_nonexact_exclusion"
+        )
+        != EXPECTED_EXACT_CONTEXT_CONTENT_REFERENCE_COUNT
         or receipt.get("invalid_nonexact_title_context_evidence_set_count")
         != EXPECTED_NONEXACT_TITLE_CONTEXT_SET_COUNT
         or receipt.get("invalid_nonexact_title_context_reference_count")
@@ -592,12 +625,14 @@ def verify_adapter_compatibility_qualification(
 __all__ = [
     "ANNOTATION_RELATIVE",
     "DATABASE_RELATIVE",
-    "EXPECTED_ADAPTER_CONTENT_REFERENCE_COUNT",
-    "EXPECTED_ADAPTER_EVIDENCE_SET_COUNT",
+    "EXPECTED_ADAPTER_OFFICIAL_CONTENT_REFERENCE_COUNT",
+    "EXPECTED_ADAPTER_OFFICIAL_EVIDENCE_SET_COUNT",
     "EXPECTED_BLANK_SENTINEL_RECORD_COUNT",
     "EXPECTED_NONEXACT_TITLE_CONTEXT_RECORD_COUNT",
     "EXPECTED_NONEXACT_TITLE_CONTEXT_REFERENCE_COUNT",
     "EXPECTED_NONEXACT_TITLE_CONTEXT_SET_COUNT",
+    "EXPECTED_EXACT_CONTEXT_CONTENT_REFERENCE_COUNT",
+    "EXPECTED_EXACT_CONTEXT_EVIDENCE_SET_COUNT",
     "EXPECTED_RAW_CONTENT_REFERENCE_COUNT",
     "EXPECTED_RAW_EVIDENCE_SET_COUNT",
     "EXPECTED_TRAIN_RECORD_COUNT",

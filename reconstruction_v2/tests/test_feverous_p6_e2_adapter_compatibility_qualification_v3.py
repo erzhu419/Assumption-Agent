@@ -63,10 +63,10 @@ def _adapter_receipt() -> dict[str, Any]:
             },
             "candidate_count": 0,
             "official_evidence_set_count": (
-                qualification.EXPECTED_ADAPTER_EVIDENCE_SET_COUNT
+                qualification.EXPECTED_ADAPTER_OFFICIAL_EVIDENCE_SET_COUNT
             ),
             "official_evidence_reference_count": (
-                qualification.EXPECTED_ADAPTER_CONTENT_REFERENCE_COUNT
+                qualification.EXPECTED_ADAPTER_OFFICIAL_CONTENT_REFERENCE_COUNT
             ),
             "excluded_family_structure_set_count": 7,
             "excluded_nonexact_title_context_set_count": 2,
@@ -108,6 +108,16 @@ def test_forms_and_validates_content_free_exact_aggregate_receipt() -> None:
     ) == receipt["qualification_sha256"]
     assert receipt["raw_evidence_set_count"] == 77_492
     assert receipt["raw_content_reference_count"] == 349_556
+    assert receipt["adapter_evidence_set_count"] == 75_221
+    assert receipt["adapter_content_reference_count"] == 338_063
+    assert (
+        receipt["exact_context_evidence_set_count_after_nonexact_exclusion"]
+        == 75_219
+    )
+    assert (
+        receipt["exact_context_reference_count_after_nonexact_exclusion"]
+        == 338_061
+    )
     assert receipt["invalid_nonexact_title_context_evidence_set_count"] == 2
     assert receipt["invalid_nonexact_title_context_reference_count"] == 2
     assert receipt["records_with_invalid_nonexact_title_context_count"] == 2
