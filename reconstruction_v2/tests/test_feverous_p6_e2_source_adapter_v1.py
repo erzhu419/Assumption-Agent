@@ -365,20 +365,124 @@ def test_family_mismatch_never_becomes_a_canonical_candidate(
     connection.close()
 
 
-def test_context_page_drift_fails_closed_without_guessing() -> None:
+def test_content_title_page_drift_excludes_entire_set_without_guessing() -> None:
+    connection, resolver, pages = _adapted_sources()
+    content = _full(PAGE_A, "sentence_0")
+    evidence = _evidence(content)
+    # This mirrors the released anomaly: the exact page strings differ while
+    # NFD + casefold identifies the sole title as the same nonexact form.
+    evidence["context"][content] = [_full(PAGE_A.lower(), "title")]
+    decision = adapter.adapt_train_record(
+        _record(9, "Entity Disambiguation", [evidence]),
+        source_split="TRAIN",
+        resolver=resolver,
+        pages=pages,
+        binding=adapter.FROZEN_TRAIN_BINDING,
+    )
+    assert decision.candidate is None
+    assert decision.status == "no_eligible_canonical_set"
+    assert decision.official_evidence_set_count == 1
+    assert decision.official_evidence_reference_count == 1
+    assert decision.excluded_nonexact_title_context_set_count == 1
+    assert decision.excluded_nonexact_title_context_reference_count == 1
+    assert decision.excluded_family_structure_set_count == 0
+    connection.close()
+
+
+def test_page_drift_set_is_excluded_while_other_valid_set_is_preserved() -> None:
+    connection, resolver, pages = _adapted_sources()
+    valid_left = _full(PAGE_A, "sentence_0")
+    valid_right = _full(PAGE_A, "sentence_1")
+    invalid_content = _full(PAGE_A, "item_0_0")
+    invalid = _evidence(invalid_content)
+    invalid["context"][invalid_content] = [_full(PAGE_A.lower(), "title")]
+
+    batch = adapter.adapt_train_records(
+        [
+            _record(
+                10,
+                "Entity Disambiguation",
+                [invalid, _evidence(valid_left, valid_right)],
+            )
+        ],
+        source_split="TRAIN",
+        resolver=resolver,
+        pages=pages,
+        binding=adapter.FROZEN_TRAIN_BINDING,
+    )
+    assert len(batch.candidates) == 1
+    candidate = batch.candidates[0]
+    assert candidate.evidence_sets == (tuple(sorted((valid_left, valid_right))),)
+    assert set(candidate.all_official_evidence_keys) == {
+        invalid_content,
+        valid_left,
+        valid_right,
+    }
+    assert batch.receipt["official_evidence_set_count"] == 2
+    assert batch.receipt["official_evidence_reference_count"] == 3
+    assert batch.receipt["eligible_evidence_set_count"] == 1
+    assert batch.receipt["excluded_nonexact_title_context_set_count"] == 1
+    assert batch.receipt["excluded_nonexact_title_context_reference_count"] == 1
+    assert batch.receipt["records_with_excluded_nonexact_title_context_count"] == 1
+    assert batch.receipt["excluded_family_structure_set_count"] == 0
+    assert adapter.verify_adapter_receipt(batch.receipt)
+    connection.close()
+
+
+def test_context_member_page_drift_still_fails_closed() -> None:
     connection, resolver, pages = _adapted_sources()
     content = _full(PAGE_A, "sentence_0")
     evidence = _evidence(content)
     evidence["context"][content] = [
-        _full(PAGE_B, "title"),
-        _full(PAGE_A, "section_0"),
+        _full(PAGE_A, "title"),
+        _full(PAGE_B, "section_0"),
     ]
     with pytest.raises(
         adapter.FeverousSourceAdapterError,
-        match="page drifted",
+        match="context member/title page drifted",
     ):
         adapter.adapt_train_record(
-            _record(9, "Entity Disambiguation", [evidence]),
+            _record(11, "Entity Disambiguation", [evidence]),
+            source_split="TRAIN",
+            resolver=resolver,
+            pages=pages,
+            binding=adapter.FROZEN_TRAIN_BINDING,
+        )
+    connection.close()
+
+
+def test_unrelated_content_title_page_drift_still_fails_closed() -> None:
+    connection, resolver, pages = _adapted_sources()
+    content = _full(PAGE_A, "sentence_0")
+    evidence = _evidence(content)
+    evidence["context"][content] = [_full(PAGE_B, "title")]
+    with pytest.raises(
+        adapter.FeverousSourceAdapterError,
+        match="outside preregistration",
+    ):
+        adapter.adapt_train_record(
+            _record(12, "Entity Disambiguation", [evidence]),
+            source_split="TRAIN",
+            resolver=resolver,
+            pages=pages,
+            binding=adapter.FROZEN_TRAIN_BINDING,
+        )
+    connection.close()
+
+
+def test_known_nonexact_member_does_not_mask_later_invalid_member() -> None:
+    connection, resolver, pages = _adapted_sources()
+    known_nonexact = _full(PAGE_A, "sentence_0")
+    invalid = _full(PAGE_A, "sentence_1")
+    evidence = _evidence(known_nonexact, invalid)
+    evidence["context"][known_nonexact] = [_full(PAGE_A.lower(), "title")]
+    evidence["context"][invalid] = [_full(PAGE_B, "title")]
+    with pytest.raises(
+        adapter.FeverousSourceAdapterError,
+        match="outside preregistration",
+    ):
+        adapter.adapt_train_record(
+            _record(13, "Entity Disambiguation", [evidence]),
             source_split="TRAIN",
             resolver=resolver,
             pages=pages,

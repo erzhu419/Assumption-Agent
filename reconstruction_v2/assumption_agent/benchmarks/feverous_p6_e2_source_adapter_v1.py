@@ -7,10 +7,14 @@ recipe, or accept any selection secret.  Its public receipt is aggregate-only;
 claims, source ids, evidence ids, page ids, page text, and per-record digests
 remain absent.
 
-Every evidence reference is resolved through :class:`FeverousWikiResolver`
-using the single exact title in its official context.  The same page is also
-compiled by the frozen atomic compiler, and resolver target text must agree
-with the compiler target after the frozen NFKC/whitespace normalization.
+Every valid evidence reference is resolved through
+:class:`FeverousWikiResolver` using the single exact title in its official
+context.  A set using the preregistered NFD + casefold-equivalent nonexact
+content/title form is invalid and excluded as a whole; every unrelated page
+drift still fails closed.  The adapter never guesses which page to use.  The
+same page is also compiled by the frozen atomic compiler, and resolver target
+text must agree with the compiler target after the frozen NFKC/whitespace
+normalization.
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ import json
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
+import unicodedata
 
 from assumption_agent.benchmarks import feverous_atomic_corpus_v1 as atomic_corpus
 from assumption_agent.benchmarks import feverous_p6_e2_acquisition_v1 as acquisition_core
@@ -123,6 +128,9 @@ _RECEIPT_KEYS = frozenset(
         "excluded_empty_set_count",
         "excluded_cardinality_set_count",
         "excluded_family_structure_set_count",
+        "excluded_nonexact_title_context_set_count",
+        "excluded_nonexact_title_context_reference_count",
+        "records_with_excluded_nonexact_title_context_count",
         "adapted_page_count",
         "eligible_atomic_source_unit_count",
         "excluded_empty_atomic_source_unit_count",
@@ -140,6 +148,10 @@ _RECEIPT_KEYS = frozenset(
 
 class FeverousSourceAdapterError(RuntimeError):
     """The qualified-source boundary or exact topology drifted."""
+
+
+class _NonexactTitleContext(FeverousSourceAdapterError):
+    """One complete evidence set uses the preregistered nonexact title form."""
 
 
 def _canonical_json(value: object) -> bytes:
@@ -274,6 +286,8 @@ class RecordAdaptation:
     excluded_empty_set_count: int
     excluded_cardinality_set_count: int
     excluded_family_structure_set_count: int
+    excluded_nonexact_title_context_set_count: int
+    excluded_nonexact_title_context_reference_count: int
 
 
 @dataclass(frozen=True)
@@ -1083,7 +1097,7 @@ def _require_official_record(record: Mapping[str, Any]) -> None:
 def _context_page(
     content_id: str,
     context_values: object,
-) -> tuple[str, tuple[str, ...]]:
+) -> tuple[str, tuple[str, ...], bool]:
     if not isinstance(context_values, list) or any(
         not isinstance(value, str) for value in context_values
     ):
@@ -1117,13 +1131,23 @@ def _context_page(
         raise FeverousSourceAdapterError(
             "official evidence content kind is invalid"
         )
-    if parsed_content.page != page or any(
-        parsed.page != page for _, parsed in parsed_context
+    if any(parsed.page != page for _, parsed in parsed_context):
+        raise FeverousSourceAdapterError(
+            "official evidence context member/title page drifted"
+        )
+    content_title_nonexact = parsed_content.page != page
+    if content_title_nonexact and (
+        unicodedata.normalize("NFD", parsed_content.page).casefold()
+        != unicodedata.normalize("NFD", page).casefold()
     ):
         raise FeverousSourceAdapterError(
-            "official evidence content/context page drifted"
+            "official evidence content/title page drifted outside preregistration"
         )
-    return page, tuple(context_id for context_id, _ in parsed_context)
+    return (
+        page,
+        tuple(context_id for context_id, _ in parsed_context),
+        content_title_nonexact,
+    )
 
 
 def _resolve_evidence_set(
@@ -1149,12 +1173,20 @@ def _resolve_evidence_set(
             "official evidence context keys drifted from content"
         )
 
+    validated_contexts = tuple(
+        (content_id, *_context_page(content_id, context[content_id]))
+        for content_id in content
+    )
+    if any(nonexact for _, _, _, nonexact in validated_contexts):
+        raise _NonexactTitleContext(
+            "official evidence set has preregistered nonexact title context"
+        )
+
     unit_keys: list[str] = []
     unit_types: list[str] = []
     page_ids: list[str] = []
     contains_empty = False
-    for content_id in content:
-        page_id, context_ids = _context_page(content_id, context[content_id])
+    for content_id, page_id, context_ids, _nonexact in validated_contexts:
         resolved_target = _resolver_target(
             resolver, content_id, context_page=page_id
         )
@@ -1227,14 +1259,18 @@ def adapt_train_record(
     if not isinstance(record, Mapping):
         raise FeverousSourceAdapterError("official TRAIN record must be an object")
     if _is_blank_sentinel(record):
-        return RecordAdaptation(None, "blank_sentinel", 0, 0, 0, 0, 0, 0)
+        return RecordAdaptation(None, "blank_sentinel", 0, 0, 0, 0, 0, 0, 0, 0)
     _require_official_record(record)
     family = record["challenge"]
     verdict = record["label"]
     if family not in FAMILIES:
-        return RecordAdaptation(None, "unsupported_family", 0, 0, 0, 0, 0, 0)
+        return RecordAdaptation(
+            None, "unsupported_family", 0, 0, 0, 0, 0, 0, 0, 0
+        )
     if verdict not in VERDICTS:
-        return RecordAdaptation(None, "unsupported_verdict", 0, 0, 0, 0, 0, 0)
+        return RecordAdaptation(
+            None, "unsupported_verdict", 0, 0, 0, 0, 0, 0, 0, 0
+        )
     claim = record["claim"]
     try:
         normalized_claim = normalize_surface(claim)
@@ -1249,13 +1285,31 @@ def adapt_train_record(
     empty_count = 0
     cardinality_count = 0
     structure_count = 0
+    nonexact_title_context_count = 0
+    nonexact_title_context_reference_count = 0
     reference_count = 0
     for evidence_set in official_sets:
-        resolved = _resolve_evidence_set(
-            evidence_set,
-            resolver=resolver,
-            pages=pages,
-        )
+        try:
+            resolved = _resolve_evidence_set(
+                evidence_set,
+                resolver=resolver,
+                pages=pages,
+            )
+        except _NonexactTitleContext:
+            content = (
+                evidence_set.get("content")
+                if isinstance(evidence_set, Mapping)
+                else None
+            )
+            if not isinstance(content, list):
+                raise FeverousSourceAdapterError(
+                    "invalid page-drift exclusion state"
+                )
+            reference_count += len(content)
+            all_official_keys.update(content)
+            nonexact_title_context_count += 1
+            nonexact_title_context_reference_count += len(content)
+            continue
         reference_count += len(resolved.unit_keys)
         all_official_keys.update(resolved.unit_keys)
         if resolved.contains_empty_target:
@@ -1279,6 +1333,8 @@ def adapt_train_record(
             empty_count,
             cardinality_count,
             structure_count,
+            nonexact_title_context_count,
+            nonexact_title_context_reference_count,
         )
     if not all_official_keys:
         raise FeverousSourceAdapterError(
@@ -1301,6 +1357,8 @@ def adapt_train_record(
         empty_count,
         cardinality_count,
         structure_count,
+        nonexact_title_context_count,
+        nonexact_title_context_reference_count,
     )
 
 
@@ -1358,6 +1416,18 @@ def _aggregate_receipt(
             decision.excluded_family_structure_set_count
             for decision in decisions
         ),
+        "excluded_nonexact_title_context_set_count": sum(
+            decision.excluded_nonexact_title_context_set_count
+            for decision in decisions
+        ),
+        "excluded_nonexact_title_context_reference_count": sum(
+            decision.excluded_nonexact_title_context_reference_count
+            for decision in decisions
+        ),
+        "records_with_excluded_nonexact_title_context_count": sum(
+            decision.excluded_nonexact_title_context_set_count > 0
+            for decision in decisions
+        ),
         "adapted_page_count": len(pages),
         "eligible_atomic_source_unit_count": len(corpus_units),
         "excluded_empty_atomic_source_unit_count": sum(
@@ -1392,6 +1462,9 @@ def verify_adapter_receipt(receipt: Mapping[str, Any]) -> str:
         "excluded_empty_set_count",
         "excluded_cardinality_set_count",
         "excluded_family_structure_set_count",
+        "excluded_nonexact_title_context_set_count",
+        "excluded_nonexact_title_context_reference_count",
+        "records_with_excluded_nonexact_title_context_count",
         "adapted_page_count",
         "eligible_atomic_source_unit_count",
         "excluded_empty_atomic_source_unit_count",
