@@ -26,22 +26,22 @@ from assumption_agent.benchmarks import eraser_evidence_inference_local_runtime_
 from replication_runtime.qasc_nli_v1.contract import NLIPair
 
 
-VERSION = "entailmentbank_proof_retrieval_controller_v1"
+VERSION = "entailmentbank_proof_retrieval_controller_v2"
 OFFICIAL_CONCURRENCY_CAP = 8
 FORMAL_ROOT_RELATIVE_PATH = acquisition.PRIVATE_ROOT_RELATIVE_PATH
 STUDY_ATTEMPT_RELATIVE_PATH = FORMAL_ROOT_RELATIVE_PATH / "study_attempt.json"
 STAGE_ROOT_RELATIVE_PATH = FORMAL_ROOT_RELATIVE_PATH / "study_private"
 FORMATION_RESULT_RELATIVE_PATH = Path(
-    "manifests/entailmentbank_proof_retrieval_g1_e1_formation_result_v1.json"
+    "manifests/entailmentbank_proof_retrieval_g1_e1_formation_result_v2.json"
 )
 AHOLD_RESULT_RELATIVE_PATH = Path(
-    "manifests/entailmentbank_proof_retrieval_g1_e1_ahold_result_v1.json"
+    "manifests/entailmentbank_proof_retrieval_g1_e1_ahold_result_v2.json"
 )
 M_RESULT_RELATIVE_PATH = Path(
-    "manifests/entailmentbank_proof_retrieval_g1_e1_m_result_v1.json"
+    "manifests/entailmentbank_proof_retrieval_g1_e1_m_result_v2.json"
 )
 FINAL_RESULT_RELATIVE_PATH = Path(
-    "manifests/entailmentbank_proof_retrieval_g1_e1_final_result_v1.json"
+    "manifests/entailmentbank_proof_retrieval_g1_e1_final_result_v2.json"
 )
 
 
@@ -454,7 +454,7 @@ def public_score_result(
 ) -> Mapping[str, Any]:
     block = score["block"]
     body = {
-        "schema": f"entailmentbank_proof_retrieval_g1_e1_{block}_result_v1",
+        "schema": f"entailmentbank_proof_retrieval_g1_e1_{block}_result_v2",
         "status": (
             "evaluator_promoted_M_search_authorized"
             if block == "A_hold" and score["evaluator_promoted"]
@@ -671,7 +671,7 @@ def run_formal_study(project_root: Path) -> Mapping[str, Any]:
             g_model=g_model, e1_model=e1_model, f_features=f_features
         )
         formation_body = {
-            "schema": "entailmentbank_proof_retrieval_g1_e1_formation_result_v1",
+            "schema": "entailmentbank_proof_retrieval_g1_e1_formation_result_v2",
             "status": "G1_E1_Q0_Q1_frozen_before_A_hold_view_open",
             "acquisition_receipt_sha256": receipt["acquisition_receipt_sha256"],
             "G_model": g_model.payload(),
@@ -728,7 +728,7 @@ def run_formal_study(project_root: Path) -> Mapping[str, Any]:
             _write_public_once(root / M_RESULT_RELATIVE_PATH, m_public)
 
         final_body = {
-            "schema": "entailmentbank_proof_retrieval_g1_e1_final_result_v1",
+            "schema": "entailmentbank_proof_retrieval_g1_e1_final_result_v2",
             "status": (
                 "completed_untouched_M_search"
                 if m_public is not None

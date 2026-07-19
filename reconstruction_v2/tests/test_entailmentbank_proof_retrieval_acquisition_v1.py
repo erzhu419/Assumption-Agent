@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+import hashlib
 import json
 from pathlib import Path
 import stat
@@ -60,7 +62,8 @@ def _candidate(split: str, item_id: str, leaf_count: int, **kwargs: str):
         _jsonl([_row(item_id, leaf_count, **kwargs)]), split=split
     )
     assert audit["candidate_count"] == 1
-    return parsed[0]
+    source_line_ordinal = int(hashlib.sha256(item_id.encode()).hexdigest()[:8], 16) + 1
+    return replace(parsed[0], source_line_ordinal=source_line_ordinal)
 
 
 def _pool() -> tuple[tuple[acquisition.Candidate, ...], tuple[acquisition.Candidate, ...]]:
@@ -123,6 +126,19 @@ def test_component_graph_excludes_cross_split_and_documentation_components() -> 
     assert audit["cross_split_component_count"] == 1
     assert audit["documentation_example_component_count"] == 1
     assert audit["clean_candidate_counts"]["train"]["FOUR_FIVE_LEAF"] == 1
+
+
+def test_same_split_same_id_variants_use_line_identity_but_one_component() -> None:
+    rows = [
+        _row("duplicate-official-id", 2, question="first private question"),
+        _row("duplicate-official-id", 3, question="second private question"),
+    ]
+    parsed, _audit = acquisition.parse_source(_jsonl(rows), split="train")
+    assert len({row.item_key for row in parsed}) == 2
+    clean, component_audit = acquisition.build_clean_components(parsed, ())
+    assert len(clean["train"]) == 1
+    assert clean["train"][0].families == frozenset({"TWO_LEAF", "THREE_LEAF"})
+    assert component_audit["multi_row_component_count"] == 1
 
 
 def test_min_cost_flow_assigns_each_component_once_and_saturates_family_demands() -> None:

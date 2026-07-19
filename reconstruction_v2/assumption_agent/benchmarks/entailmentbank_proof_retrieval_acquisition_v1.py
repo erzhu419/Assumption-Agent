@@ -22,7 +22,7 @@ from typing import Any, Mapping, Sequence
 import unicodedata
 
 
-VERSION = "entailmentbank_proof_retrieval_acquisition_v1"
+VERSION = "entailmentbank_proof_retrieval_acquisition_v2"
 FAMILY_ORDER = ("TWO_LEAF", "THREE_LEAF", "FOUR_FIVE_LEAF")
 BLOCK_ORDER = ("G_form", "A_form", "F_search", "A_hold", "M_search")
 TRAIN_BLOCKS = BLOCK_ORDER[:4]
@@ -44,7 +44,7 @@ SPLIT_DEMANDS = {
     "dev": dict(BLOCK_FAMILY_COUNTS["M_search"]),
 }
 DOCUMENTATION_EXAMPLE_ID = "Mercury_SC_401371"
-DESIGN_SHA256 = "340e42cfced3b3fa0aae42eef99b2e7e6587e495f594f36b27f9b8e8966455a2"
+DESIGN_SHA256 = "95c42921f0fdbc62902234b8ed911c20253dd33cd9df620a0cd4382bbca1e1f6"
 SOURCE_REPOSITORY_RELATIVE_PATH = Path(
     "reference/entailment_bank_official_repo_daac2fdb"
 )
@@ -92,21 +92,21 @@ FORMAL_COMPONENT_AGGREGATES = {
     },
 }
 PRIVATE_ROOT_RELATIVE_PATH = Path(
-    "artifacts/entailmentbank_proof_retrieval_g1_e1_v1"
+    "artifacts/entailmentbank_proof_retrieval_g1_e1_v2"
 )
 SECRET_RELATIVE_PATH = PRIVATE_ROOT_RELATIVE_PATH / "selection_secret.bin"
 ATTEMPT_RELATIVE_PATH = PRIVATE_ROOT_RELATIVE_PATH / "acquisition_attempt.json"
 PACK_ROOT_RELATIVE_PATH = PRIVATE_ROOT_RELATIVE_PATH / "private_packs"
 CUSTODY_RELATIVE_PATH = Path(
-    "manifests/entailmentbank_proof_retrieval_selection_secret_custody_v1.json"
+    "manifests/entailmentbank_proof_retrieval_selection_secret_custody_v2.json"
 )
 RECEIPT_RELATIVE_PATH = Path(
-    "manifests/entailmentbank_proof_retrieval_acquisition_receipt_v1.json"
+    "manifests/entailmentbank_proof_retrieval_acquisition_receipt_v2.json"
 )
 FREEZE_RELATIVE_PATH = Path(
-    "manifests/entailmentbank_proof_retrieval_g1_e1_implementation_freeze_v1.json"
+    "manifests/entailmentbank_proof_retrieval_g1_e1_implementation_freeze_v2.json"
 )
-_HMAC_DOMAIN = b"entailmentbank_proof_retrieval_acquisition_v1/hmac-sha256/v1"
+_HMAC_DOMAIN = b"entailmentbank_proof_retrieval_acquisition_v2/hmac-sha256/v1"
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 
 
@@ -261,6 +261,7 @@ def _proof_leaves(
 @dataclass(frozen=True)
 class Candidate:
     source_split: str
+    source_line_ordinal: int
     item_id: str
     question: str
     answer: str
@@ -272,6 +273,12 @@ class Candidate:
     def __post_init__(self) -> None:
         if self.source_split not in {"train", "dev"} or self.family not in FAMILY_ORDER:
             raise EntailmentBankAcquisitionError("candidate split or family drifted")
+        if (
+            isinstance(self.source_line_ordinal, bool)
+            or not isinstance(self.source_line_ordinal, int)
+            or self.source_line_ordinal <= 0
+        ):
+            raise EntailmentBankAcquisitionError("candidate source line ordinal drifted")
         _text(self.item_id, "item ID")
         _text(self.question, "question")
         _text(self.answer, "answer")
@@ -305,7 +312,7 @@ class Candidate:
 
     @property
     def item_key(self) -> str:
-        return f"{self.source_split}:{self.item_id}"
+        return f"{self.source_split}:{self.source_line_ordinal:08d}:{self.item_id}"
 
     @property
     def item_commitment_sha256(self) -> str:
@@ -313,6 +320,7 @@ class Candidate:
             {
                 "schema": f"{VERSION}_source_item_commitment",
                 "source_split": self.source_split,
+                "source_line_ordinal": self.source_line_ordinal,
                 "item_id": self.item_id,
                 "question": self.question,
                 "answer": self.answer,
@@ -323,7 +331,9 @@ class Candidate:
         )
 
 
-def _parse_row(value: Mapping[str, Any], *, split: str) -> Candidate | None:
+def _parse_row(
+    value: Mapping[str, Any], *, split: str, source_line_ordinal: int
+) -> Candidate | None:
     item_id = _text(value.get("id"), "item ID")
     question = _text(value.get("question"), "question")
     answer = _text(value.get("answer"), "answer")
@@ -359,7 +369,17 @@ def _parse_row(value: Mapping[str, Any], *, split: str) -> Candidate | None:
         if len(leaves) == 3
         else "FOUR_FIVE_LEAF"
     )
-    return Candidate(split, item_id, question, answer, hypothesis, triples, leaves, family)
+    return Candidate(
+        split,
+        source_line_ordinal,
+        item_id,
+        question,
+        answer,
+        hypothesis,
+        triples,
+        leaves,
+        family,
+    )
 
 
 def parse_source(raw: bytes, *, split: str) -> tuple[tuple[Candidate, ...], dict[str, int]]:
@@ -372,7 +392,11 @@ def parse_source(raw: bytes, *, split: str) -> tuple[tuple[Candidate, ...], dict
         if not line:
             raise EntailmentBankAcquisitionError("blank source line")
         value = strict_json_bytes(line, label=f"{split} line {line_number}")
-        candidate = _parse_row(_mapping(value, "row root"), split=split)
+        candidate = _parse_row(
+            _mapping(value, "row root"),
+            split=split,
+            source_line_ordinal=line_number,
+        )
         if candidate is None:
             ineligible += 1
         else:
@@ -822,7 +846,7 @@ def generate_selection_secret(project_root: Path) -> Mapping[str, Any]:
     freeze = _load_json_file(freeze_path, label="implementation freeze")
     freeze_sha = verify_self_hash(freeze, "implementation_freeze_sha256")
     if (
-        freeze.get("schema") != "entailmentbank_proof_retrieval_g1_e1_implementation_freeze_v1"
+        freeze.get("schema") != "entailmentbank_proof_retrieval_g1_e1_implementation_freeze_v2"
         or freeze.get("design_sha256") != DESIGN_SHA256
         or freeze.get("status") != "full_implementation_frozen_before_selection_secret"
     ):
@@ -844,7 +868,7 @@ def generate_selection_secret(project_root: Path) -> Mapping[str, Any]:
         os.fsync(handle.fileno())
     os.chmod(secret_path, 0o600)
     body = {
-        "schema": "entailmentbank_proof_retrieval_selection_secret_custody_v1",
+        "schema": "entailmentbank_proof_retrieval_selection_secret_custody_v2",
         "status": "fresh_private_selection_secret_generated_no_source_open",
         "design_sha256": DESIGN_SHA256,
         "implementation_freeze_sha256": freeze_sha,
@@ -922,7 +946,7 @@ def run_formal_acquisition(project_root: Path) -> Mapping[str, Any]:
     payloads = build_private_pack_payloads(blocks)
     file_hashes = write_private_pack_payloads(pack_root, payloads)
     body = {
-        "schema": "entailmentbank_proof_retrieval_acquisition_receipt_v1",
+        "schema": "entailmentbank_proof_retrieval_acquisition_receipt_v2",
         "status": "formal_186_item_private_cohort_acquired_before_any_action",
         "design_sha256": DESIGN_SHA256,
         "selection_secret_custody_sha256": custody_sha,
