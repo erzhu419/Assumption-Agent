@@ -3867,7 +3867,44 @@ NLI family scorer 同时充当生成特征、训练 target proxy 和最终效用
 [`fresh result disposition`](../manifests/maven_ere_g8_e0_fresh_confirmation_result_disposition_v1.json)，原始 aggregate terminal 见
 [`fresh terminal`](../artifacts/maven_ere_g8_e0_fresh_confirmation_v1/controller/terminal.result.json)。
 
+### 12.26 2026-07-19 SciFact direct-evidence：事前平衡 family 容量不足，未进入 efficacy
+
+MAVEN-ERE 终止后，下一条路线按 12.25 的约束转向独立科学事实核验域，并把 utility 直接定义为“所选 Set3 完整覆盖至少一套官方
+gold rationale”，不再复用 NLI family score 充当最终效用。official SciFact repository 固定在 commit
+`68b98a56d93e0f9da0d2aab4e6c3294699a0f72e`；归档 SHA256=`11c62128...d76be`、3,115,079 bytes。来源下载后、任何 member
+payload 打开前提交了 [`source custody`](../manifests/scifact_direct_evidence_source_custody_v1.json)，如实记录只读过 tar headers 与
+official `doc/data.md` 两个示例，并把 claim `123/263` 及相连 document component 事前排除。TEST 只见到 header 名称与大小，payload
+未解包、未单独哈希、未打开。
+
+[`source-qualification design`](../manifests/scifact_direct_evidence_source_qualification_design_v1.json) 在 row 前固定三个互斥 family：
+`CONTRADICT_SINGLE`、`MULTI_SENTENCE`、`SUPPORT_SINGLE`；固定 TRAIN 的 G/A/F/A_hold 共 `52×3=156` 项和 DEV M_search
+`10×3=30` 项，并要求 claim/cited-document 全图 component-disjoint。qualifier 只允许解包 corpus、TRAIN、DEV 三个 member，使用
+component→family exact max-flow 检查同时容量；它不是 performance gate，不生成 secret、不选 item、不运行 action/model/evaluator。
+六项 synthetic regression 与 provenance preflight 通过后，
+[`implementation freeze`](../manifests/scifact_direct_evidence_source_qualification_implementation_freeze_v1.json) 先提交，随后唯一 formal
+qualification 才打开三份允许的 source payload。
+
+[`aggregate terminal result`](../manifests/scifact_direct_evidence_source_qualification_result_v1.json) 明确显示该设计不可行，而非 action
+负结果。TRAIN 可分配 component 数为 single-contradict `81`、multi `19`、single-support `162`，固定需求各 `52`；DEV 对应
+`16/5/42`，固定需求各 `10`。max-flow 只能完成 TRAIN `123/156` 与 DEV `25/30`，总缺口 38，全部由稀缺
+`MULTI_SENTENCE` family 造成。来源另有一条 DEV row 的 `cited_doc_ids` 重复，按冻结 minimal schema 计一个 schema error；evidence-to-corpus
+映射错误为 0。公开示例 component 排除后，clean candidates 为 TRAIN `100/21/210`、DEV `21/5/43`；跨 TRAIN/DEV component
+隔离又分别排除了 `206` 与 `132` 个候选，说明短缺不是 parser 普遍失效。
+
+正式 terminal 的边界是：selection secret/item/block/action/RAW/official HippoRAG/Agent/evaluator/score/online call 全为 0，TEST
+payload open=0；因此 SciFact efficacy 完全未知，不能把它计为 Agent 输给 HippoRAG。该 source epoch 也不能通过把 multi family 降到
+`19/5`、改成 structured/unstructured family、取消 cross-split component 隔离或忽略重复 cited ID 后重跑。这个结果再次说明，下一来源
+必须在公开统计层面就有充足的**多事实/多跳 explanation**，而不是事后把稀有 multi-rationale 子群硬凑成三分之一。后续应转向自带
+proof/explanation graph 且 TRAIN/DEV 容量公开充足的独立来源；仍只允许一次 aggregate qualification，不回到 SciFact 补 gate。
+
 ## 附录 A：关键证据索引
+
+- SciFact direct-evidence source terminal chain（无 selection/action/score，TEST payload 未打开）：
+  [`source custody`](../manifests/scifact_direct_evidence_source_custody_v1.json)；
+  [`source qualification design`](../manifests/scifact_direct_evidence_source_qualification_design_v1.json)；
+  [`source qualifier`](../assumption_agent/benchmarks/scifact_direct_evidence_source_qualification_v1.py)；
+  [`implementation freeze`](../manifests/scifact_direct_evidence_source_qualification_implementation_freeze_v1.json)；
+  [`aggregate terminal result`](../manifests/scifact_direct_evidence_source_qualification_result_v1.json)
 
 - MAVEN-ERE G8/E1 formal/recovery chain：
   [`source qualification design`](../manifests/maven_ere_relation_context_source_qualification_design_v1.json)；
