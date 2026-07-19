@@ -3817,6 +3817,27 @@ promotion、Agent−HippoRAG/RAW 和新的 untouched M。安全聚合见
 [`result disposition`](../manifests/maven_ere_g8_e1_result_blind_recovery_result_disposition_v2.json)，原始 aggregate terminal 见
 [`recovery terminal`](../artifacts/maven_ere_g8_e1_result_blind_recovery_v2/controller/recovery.terminal_result.json)。
 
+### 12.24 2026-07-19 MAVEN-ERE global-family E2：唯一 TRAIN cross-fit 未授权 formal
+
+为避免把 E1 的负结果变成继续补 switch gate，下一候选改成实质不同的 global-family E2：从全部 sentence、authorized sentence、
+head/tail mention sentence 的三族 NLI aggregate 拟合 18 维 multiclass ridge，先预测 item family，再在**完整 typed Set3 空间**中选择
+对该 family margin 最大的候选，G8 energy 只作次级 tie-break。该机制、四折划分和唯一 feasibility rule 在任何新 training-pack reopen 前
+由 [`TRAIN cross-fit design`](../manifests/maven_ere_global_family_e2_train_crossfit_design_v1.json) 与
+[`implementation freeze`](../manifests/maven_ere_global_family_e2_train_crossfit_implementation_freeze_v1.json) 固定；只允许重开原 G_form/A_form
+训练 pack，F/A_hold/M 全部禁止，source row、online evaluator 与 TEST 仍为 0。
+
+四折每次使用 G_form 96 项加 A_form 其余 36 项训练，在 held A_form 12 项评价；总计 48 项且每族 16。结果是
+E0/E2/RAW correct=`21/22/18`，E2 与 E0 在 32 项 behavior-distinct，但 paired E2−E0 只有 `+1`、17 个 nonzero、exact p=`1/2`；
+family net 为 CAUSAL=`+2`、SUBEVENT=`+4`、TEMPORAL=`−5`。E2−RAW 虽为 `+4`，p=`3473/16384≈0.212`，TEMPORAL 仍为 `−1`。
+所以总量上的一项提升不能掩盖明显的 family harm；事前 feasibility 不成立，final E2 model 没有 materialize，也没有 fresh formal cohort。
+
+这条线已严格停止：不能在相同四折上改 feature、lambda、family threshold 或加 fallback gate 直到成功。它进一步说明 current NLI
+global-family posterior 对 CAUSAL/SUBEVENT 有信号，但 TEMPORAL 的结构不能由同一 aggregate 可靠覆盖。后续最干净的下一步不是 E2 v2，
+而是先在完全 fresh、排除既有 240 个 collision component 的 cohort 上对固定 G8/E0 做独立三臂确认；只有其跨三族的
+Agent−HippoRAG/RAW 优势真正复现后，才值得在**新 training cohort**发展另一 evaluator。安全聚合见
+[`E2 result disposition`](../manifests/maven_ere_global_family_e2_train_crossfit_result_disposition_v1.json)，原始训练结果见
+[`cross-fit result`](../artifacts/maven_ere_global_family_e2_train_crossfit_v1/crossfit.result.json)。
+
 ## 附录 A：关键证据索引
 
 - MAVEN-ERE G8/E1 formal/recovery chain：
@@ -3829,7 +3850,11 @@ promotion、Agent−HippoRAG/RAW 和新的 untouched M。安全聚合见
   [`result-blind recovery design`](../manifests/maven_ere_g8_e1_result_blind_recovery_design_v2.json)；
   [`recovery implementation freeze`](../manifests/maven_ere_g8_e1_result_blind_recovery_implementation_freeze_v2.json)；
   [`recovery result disposition`](../manifests/maven_ere_g8_e1_result_blind_recovery_result_disposition_v2.json)；
-  [`recovery terminal`](../artifacts/maven_ere_g8_e1_result_blind_recovery_v2/controller/recovery.terminal_result.json)
+  [`recovery terminal`](../artifacts/maven_ere_g8_e1_result_blind_recovery_v2/controller/recovery.terminal_result.json)；
+  [`E2 TRAIN design`](../manifests/maven_ere_global_family_e2_train_crossfit_design_v1.json)；
+  [`E2 implementation freeze`](../manifests/maven_ere_global_family_e2_train_crossfit_implementation_freeze_v1.json)；
+  [`E2 result disposition`](../manifests/maven_ere_global_family_e2_train_crossfit_result_disposition_v1.json)；
+  [`E2 cross-fit result`](../artifacts/maven_ere_global_family_e2_train_crossfit_v1/crossfit.result.json)
 
 - ERASER Evidence Inference R7/E3 formal/recovery chain：
   [`base design`](../manifests/eraser_evidence_inference_r7_e3_design_v1.json)；
