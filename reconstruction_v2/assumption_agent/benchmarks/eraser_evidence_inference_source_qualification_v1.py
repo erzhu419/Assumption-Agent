@@ -1129,7 +1129,11 @@ def _stream_prompt_sidecar(
                         raise EraserEvidenceInferenceQualificationError(
                             "referenced prompt sidecar ICO field is incomplete"
                         )
-                    facets[field] = value.strip()
+                    # Keep the official sidecar field byte-for-byte at the
+                    # decoded CSV string level.  ``strip`` is used only to
+                    # reject an empty field; the frozen operator consumes the
+                    # exact supplied I/C/O value rather than a repaired one.
+                    facets[field] = value
                 pmcid = row.get("PMCID")
                 if not isinstance(pmcid, str) or _canonical_pmcid(
                     pmcid
@@ -1328,21 +1332,24 @@ def _verify_split(
                             evidence.end_sentence
                         ]
                     )
-                if contained:
-                    span_counts[
-                        "token_span_contained_by_sentence_span_count"
-                    ] += 1
-                    span_counts["fully_valid_span_count"] += 1
-                else:
-                    all_spans_valid = False
-                if (
+                text_exact = (
                     token_valid
                     and evidence.text_tokens is not None
                     and evidence.text_tokens
                     == document.flattened_tokens[
                         evidence.start_token : evidence.end_token
                     ]
-                ):
+                )
+                fully_valid = contained and text_exact
+                if contained:
+                    span_counts[
+                        "token_span_contained_by_sentence_span_count"
+                    ] += 1
+                if fully_valid:
+                    span_counts["fully_valid_span_count"] += 1
+                else:
+                    all_spans_valid = False
+                if text_exact:
                     span_counts[
                         "evidence_text_exact_token_slice_match_count"
                     ] += 1

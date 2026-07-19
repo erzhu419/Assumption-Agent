@@ -85,7 +85,7 @@ def _annotation(
             ],
             [
                 {
-                    "text": list(tokens[2:]),
+                    "text": list(tokens[2:4]),
                     "docid": docid,
                     "start_token": 2,
                     "end_token": 4,
@@ -394,6 +394,7 @@ def _fixture(
     tmp_path: Path,
     *,
     invalid_span: bool = False,
+    mismatched_evidence_text: bool = False,
     empty_group: bool = False,
     cross_split_article_overlap: bool = False,
     sidecar_missing: bool = False,
@@ -407,6 +408,10 @@ def _fixture(
         evidence = datasets["train"][0]["evidences"][0][0]
         evidence["start_token"] = 99
         evidence["end_token"] = 100
+    if mismatched_evidence_text:
+        datasets["train"][0]["evidences"][0][0]["text"] = (
+            "PRIVATE_TOKEN_DO_NOT_LEAK_MISMATCH"
+        )
     if empty_group:
         datasets["train"][0]["evidences"][0] = []
     if cross_split_article_overlap:
@@ -625,7 +630,8 @@ def test_aggregate_only_capacity_and_content_open_boundary(
 
 
 @pytest.mark.parametrize(
-    "mutation", ["invalid_span", "empty_group", "short_document"]
+    "mutation",
+    ["invalid_span", "mismatched_evidence_text", "empty_group", "short_document"],
 )
 def test_incomplete_evidence_or_alternative_group_removes_capacity(
     tmp_path: Path, mutation: str
@@ -633,6 +639,7 @@ def test_incomplete_evidence_or_alternative_group_removes_capacity(
     fixture = _fixture(
         tmp_path,
         invalid_span=mutation == "invalid_span",
+        mismatched_evidence_text=mutation == "mismatched_evidence_text",
         empty_group=mutation == "empty_group",
         short_document=mutation == "short_document",
     )
