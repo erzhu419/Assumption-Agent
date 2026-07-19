@@ -3656,7 +3656,64 @@ Agent 对 HippoRAG 的性能负结果，也不能建立 v3 rollover 或 v4。下
 HybridQA/OTT-QA 的 official table-linked-passage source，并直接采用一次性 acquisition + offline evaluation；不得在 FEVEROUS 上
 继续补 gate 或用更多全量 pass 追逐 topology 常数。
 
+### 12.20 2026-07-19 HybridQA P6/E2：首次 evaluator promotion，但现实域 primary 与 untouched L5 均未通过
+
+HybridQA 的第一轮 official TRAIN source epoch 已封存为 implementation-invalid，而不是性能负结果。一次性 acquisition
+成功形成 144 个三-family、全局 question/table-disjoint item 和 609-unit shared corpus；controller 也已完成
+`A_form / F_search / A_hold` 的 label-free action、feature 与 official HippoRAG 计算。但第一份 A_form archive 写盘后，冻结
+verifier 错把完整 `ActionTrace.trace_sha256` 与较窄的 `RecipeTrace.behavior_sha256` 要求相等，因而在任何 late-label open
+之前必然终止。生产端的 action/type/order 没有漂移，错误只在 durable archive consumer；但按 one-shot 协议，该 root 和
+TRAIN cohort 仍不可救援、补评分或重跑，efficacy 保持 unknown。见
+[`v1 terminal disposition`](../manifests/hybridqa_p6_e2_formal_v1_implementation_failure_disposition_v1.json)。
+
+修复没有回写 v1，而是新建 v2 controller：从 archive JSON 严格重构 typed `SelectionStep / ActionTrace` 并验证完整 operator
+self-hash，同时独立重算 evaluator behavior hash；真实
+`execute_item → BlockExecution → persist → durable verify` 合成 roundtrip 已纳入冻结测试。后续 formal study 使用完全独立的
+official DEV source epoch、新 root、新 secret 与新 freeze；不读取 v1 TRAIN private packs，不打开 TEST，也不改变 P6/E2、utility、
+promotion threshold 或 block size。DEV acquisition 一次完成，候选容量为 DUAL 258、PASSAGE_ONLY 1328、TABLE_ONLY 375，最终仍按
+`48 / 36 / 30 / 30` 形成 A_form/F/A_hold/M。整个 v2 为 0 retry/resample、0 online/Ruoli evaluator，四个 block 都在 label open
+前形成 durable label-free archive。
+
+F_search 冻结出 behavior-identifiable 的不同 policy：E0 选择 `R1_P6_DIRECT_B2`，E2 选择 `R0_DENSE5`。A_hold 首次产生了真正的
+evaluator promotion，因此 M_search 按预注册 capability 正常授权并打开；但最终结果把“evaluator 晋升”和“晋升后改善 untouched
+search”清楚地区分开：
+
+| block / comparison | net U | nonzero pairs | exact one-sided p | disposition |
+|---|---:|---:|---:|---|
+| A_hold E2−E0 | +41/6 | 5 | 1/32 | evaluator promoted |
+| A_hold E2−official HippoRAG | −1/2 | 2 | 3/4 | real-domain primary false |
+| A_hold E2−RAW | 0 | 0 | 1 | RAW advantage not overcome |
+| M_search E2−E0 | +3/2 | 1 | 1/2 | M_L5 false |
+| M_search E2−official HippoRAG | +1/2 | 1 | 1/2 | descriptive only |
+| M_search E2−RAW | 0 | 0 | 1 | RAW advantage not overcome |
+
+A_hold complete count 为 E0/E2/HippoRAG/RAW=`18/22/22/22`；E2−HippoRAG 的 family sums 是
+DUAL=`0`、PASSAGE_ONLY=`+3/2`、TABLE_ONLY=`−2`。M_search complete count 为 `13/14/14/14`；对应 family sums
+是 DUAL=`0`、PASSAGE_ONLY=`+1/2`、TABLE_ONLY=`0`。所以这不是“比 HippoRAG 赢得不多”，而是预注册 primary 明确未通过：
+A_hold 总差为负且 family 条件失败；M 的正差只来自一个 nonzero pair，exact p=`1/2`。E2 在两个 anchor 上又都与 RAW utility
+完全相同。
+
+机制解释也已收敛：监督 evaluator 确实在 A_hold 正确拒绝了表现较差的 P6 direct policy，但它晋升的是 dense `R0`，并没有形成
+一个比 RAW/HippoRAG 更强的新 typed action。换言之，首次 promotion 证明了 evaluator replacement、authorization 与 untouched M
+消费链路真实可执行；M 未通过则说明 **L5 evaluator co-evolution 仍未达到**，因为晋升没有在后续搜索中产生足够稳定的新收益。
+同一结果还再次否定了现实域稳定 Agent−HippoRAG 增益与 RAW advantage overcome。
+
+当前 HybridQA DEV cohort 已终结：不得放大 M、修改 alpha、换 utility、补 gate、改 policy 后再测，TEST 也不用于追结果。若继续总目标，
+下一候选必须改变 action generation 本身，使 Agent 能从 dense top-5 之外生成与 query anchor 因果相连的新增证据，而不是再训练一个
+evaluator 在 `R0` 与近似退化的 P6 recipes 之间选择；正式 measurement 只能进入独立 domain/source epoch 并重新 freeze。完整安全聚合见
+[`v2 result disposition`](../manifests/hybridqa_p6_e2_formal_v2_result_disposition_v1.json)，原始 public terminal receipt 见
+[`terminal result`](../artifacts/hybridqa_p6_e2_formal_v2/controller/lifecycle.terminal_result.json)。
+
 ## 附录 A：关键证据索引
+
+- HybridQA P6/E2 formal chain：
+  [`v1 implementation failure disposition`](../manifests/hybridqa_p6_e2_formal_v1_implementation_failure_disposition_v1.json)；
+  [`v2 DEV design`](../manifests/hybridqa_p6_e2_design_v2.json)；
+  [`v2 implementation freeze`](../manifests/hybridqa_p6_e2_implementation_freeze_v2.json)；
+  [`v2 acquisition`](../assumption_agent/benchmarks/hybridqa_direct_acquisition_v2.py)；
+  [`v2 formal controller`](../assumption_agent/benchmarks/hybridqa_p6_e2_formal_controller_v2.py)；
+  [`v2 result disposition`](../manifests/hybridqa_p6_e2_formal_v2_result_disposition_v1.json)；
+  [`v2 terminal result`](../artifacts/hybridqa_p6_e2_formal_v2/controller/lifecycle.terminal_result.json)
 
 - FEVEROUS source epoch v3 qualification terminal（无 v3 secret/cohort/action/score）：
   [`typed adapter`](../assumption_agent/benchmarks/feverous_p6_e2_source_adapter_v1.py)；
