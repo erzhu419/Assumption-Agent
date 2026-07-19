@@ -18,6 +18,7 @@ import inspect
 import json
 from pathlib import Path
 from typing import Any
+import unicodedata
 
 from assumption_agent.benchmarks import feverous_p6_e2_formal_source_v1 as formal_source
 from assumption_agent.benchmarks import feverous_p6_e2_source_adapter_v1 as source_adapter
@@ -36,6 +37,12 @@ FORMAL_SOURCE_CODE_RELATIVE = Path(
 )
 SOURCE_ADAPTER_CODE_RELATIVE = Path(
     "assumption_agent/benchmarks/feverous_p6_e2_source_adapter_v1.py"
+)
+ATOMIC_CORPUS_CODE_RELATIVE = Path(
+    "assumption_agent/benchmarks/feverous_atomic_corpus_v1.py"
+)
+ACQUISITION_CORE_CODE_RELATIVE = Path(
+    "assumption_agent/benchmarks/feverous_p6_e2_acquisition_v1.py"
 )
 QUALIFICATION_RUNNER_CODE_RELATIVE = Path(
     "assumption_agent/benchmarks/"
@@ -88,8 +95,11 @@ _RECEIPT_KEYS = frozenset(
         "source_adapter_version",
         "formal_source_file_sha256",
         "source_adapter_file_sha256",
+        "atomic_corpus_file_sha256",
+        "acquisition_core_file_sha256",
         "qualification_runner_file_sha256",
         "wikipedia_resolver_file_sha256",
+        "unicode_database_version",
         "strict_json_decoder_source_sha256",
         "exact_blank_sentinel_predicate_source_sha256",
         "annotation_aggregate_receipt",
@@ -356,12 +366,19 @@ def form_adapter_compatibility_qualification_receipt(
         "source_adapter_file_sha256": _sha256_file(
             root / SOURCE_ADAPTER_CODE_RELATIVE
         ),
+        "atomic_corpus_file_sha256": _sha256_file(
+            root / ATOMIC_CORPUS_CODE_RELATIVE
+        ),
+        "acquisition_core_file_sha256": _sha256_file(
+            root / ACQUISITION_CORE_CODE_RELATIVE
+        ),
         "qualification_runner_file_sha256": _sha256_file(
             root / QUALIFICATION_RUNNER_CODE_RELATIVE
         ),
         "wikipedia_resolver_file_sha256": _sha256_file(
             root / WIKIPEDIA_RESOLVER_CODE_RELATIVE
         ),
+        "unicode_database_version": unicodedata.unidata_version,
         "strict_json_decoder_source_sha256": _callable_source_sha256(
             formal_source._decode_json_line
         ),
@@ -463,10 +480,15 @@ def validate_adapter_compatibility_qualification_receipt(
         != _sha256_file(root / FORMAL_SOURCE_CODE_RELATIVE)
         or receipt.get("source_adapter_file_sha256")
         != _sha256_file(root / SOURCE_ADAPTER_CODE_RELATIVE)
+        or receipt.get("atomic_corpus_file_sha256")
+        != _sha256_file(root / ATOMIC_CORPUS_CODE_RELATIVE)
+        or receipt.get("acquisition_core_file_sha256")
+        != _sha256_file(root / ACQUISITION_CORE_CODE_RELATIVE)
         or receipt.get("qualification_runner_file_sha256")
         != _sha256_file(root / QUALIFICATION_RUNNER_CODE_RELATIVE)
         or receipt.get("wikipedia_resolver_file_sha256")
         != _sha256_file(root / WIKIPEDIA_RESOLVER_CODE_RELATIVE)
+        or receipt.get("unicode_database_version") != unicodedata.unidata_version
         or receipt.get("strict_json_decoder_source_sha256")
         != _callable_source_sha256(formal_source._decode_json_line)
         or receipt.get("exact_blank_sentinel_predicate_source_sha256")

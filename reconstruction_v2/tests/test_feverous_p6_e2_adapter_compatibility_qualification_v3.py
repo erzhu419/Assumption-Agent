@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+import unicodedata
 
 import pytest
 
@@ -116,6 +117,13 @@ def test_forms_and_validates_content_free_exact_aggregate_receipt() -> None:
     assert receipt["wikipedia_resolver_file_sha256"] == qualification._sha256_file(
         PROJECT / qualification.WIKIPEDIA_RESOLVER_CODE_RELATIVE
     )
+    assert receipt["atomic_corpus_file_sha256"] == qualification._sha256_file(
+        PROJECT / qualification.ATOMIC_CORPUS_CODE_RELATIVE
+    )
+    assert receipt["acquisition_core_file_sha256"] == qualification._sha256_file(
+        PROJECT / qualification.ACQUISITION_CORE_CODE_RELATIVE
+    )
+    assert receipt["unicode_database_version"] == unicodedata.unidata_version
     assert receipt["strict_json_decoder_source_sha256"] == hashlib.sha256(
         inspect.getsource(formal_source._decode_json_line).encode("utf-8")
     ).hexdigest()
@@ -142,6 +150,8 @@ def test_forms_and_validates_content_free_exact_aggregate_receipt() -> None:
     (
         "qualification_runner_file_sha256",
         "wikipedia_resolver_file_sha256",
+        "atomic_corpus_file_sha256",
+        "acquisition_core_file_sha256",
         "strict_json_decoder_source_sha256",
         "exact_blank_sentinel_predicate_source_sha256",
     ),
@@ -156,6 +166,25 @@ def test_receipt_rejects_tampered_runner_resolver_or_loader_binding(
         raw_topology=_raw_topology(),
     )
     receipt[field] = "b" * 64
+    receipt.pop("qualification_sha256")
+    receipt["qualification_sha256"] = qualification.stable_hash(receipt)
+    with pytest.raises(
+        qualification.FeverousAdapterCompatibilityQualificationError,
+        match="receipt drifted",
+    ):
+        qualification.validate_adapter_compatibility_qualification_receipt(
+            receipt, project=PROJECT
+        )
+
+
+def test_receipt_rejects_tampered_unicode_database_binding() -> None:
+    receipt = qualification.form_adapter_compatibility_qualification_receipt(
+        project=PROJECT,
+        annotation_receipt=_annotation_receipt(),
+        adapter_receipt=_adapter_receipt(),
+        raw_topology=_raw_topology(),
+    )
+    receipt["unicode_database_version"] = "0.0.0"
     receipt.pop("qualification_sha256")
     receipt["qualification_sha256"] = qualification.stable_hash(receipt)
     with pytest.raises(
