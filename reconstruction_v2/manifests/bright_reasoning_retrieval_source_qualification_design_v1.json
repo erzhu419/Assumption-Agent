@@ -1,0 +1,121 @@
+{
+  "access_binding": {
+    "source_access_manifest": "manifests/bright_reasoning_retrieval_source_access_v1.json",
+    "source_access_sha256": "2de28f8e9bb58fc53206311a54c0e5d29cc7649a08ba12c97f6df06b950d0051",
+    "source_custody_manifest": "manifests/bright_reasoning_retrieval_source_custody_v1.json",
+    "source_custody_sha256": "7a545a8168579a72fc4cbfbef7dbcb4ca37885b843ff46e8737c7c2ea05dc12d"
+  },
+  "aggregate_only_output_contract": {
+    "forbidden_public_values": [
+      "document_id",
+      "document_text",
+      "example_id",
+      "gold_answer",
+      "gold_document_id",
+      "query_text",
+      "reasoning_text"
+    ],
+    "permitted_public_values": [
+      "aggregate_counts",
+      "boolean_contract_checks",
+      "cryptographic_file_and_attempt_bindings",
+      "min_max_lengths",
+      "schema_names"
+    ]
+  },
+  "component_contract": {
+    "equivalence_edges": [
+      "same_family_and_exact_example_id",
+      "same_family_and_normalized_query",
+      "same_family_and_exact_sorted_gold_id_set"
+    ],
+    "equivalence_relation": "transitive_closure",
+    "normalization": "unicode_NFKC_casefold_whitespace_collapse",
+    "purpose": "prevent_duplicate_or_paraphrase_leakage_across_G_A_F_Ahold_M"
+  },
+  "eligibility_contract": {
+    "document_id": "nonempty_unique_within_family",
+    "excluded_ids": "list_of_strings_and_disjoint_from_gold_ids_after_ignoring_values_absent_from_the_document_id_set",
+    "gold_ids": "nonempty_unique_list_and_every_value_present_in_the_same_family_document_id_set",
+    "query": "nonempty_after_normalization",
+    "reasoning_and_gold_answer": "columns_must_exist_but_payload_must_not_be_read",
+    "row_id": "family_colon_exact_example_id"
+  },
+  "family_capacity_contract": {
+    "allocation_required_per_family": {
+      "A_form": 20,
+      "A_hold": 15,
+      "F_search": 15,
+      "G_form": 10,
+      "M_search": 15,
+      "total": 75
+    },
+    "families": [
+      "BIOLOGY",
+      "ECONOMICS",
+      "ROBOTICS"
+    ],
+    "minimum_component_disjoint_eligible_rows_per_family": 75,
+    "minimum_eligible_components_per_family": 75
+  },
+  "formal_attempt_contract": {
+    "attempt_marker": "artifacts/bright_reasoning_retrieval_source_qualification_v1/attempt.marker",
+    "attempt_marker_mode": "0600",
+    "each_document_file_open_count": 1,
+    "each_example_file_open_count": 1,
+    "network_calls_after_attempt": 0,
+    "replay_or_retry": false,
+    "selection_secret_or_item_assignment_before_success": false
+  },
+  "parquet_contract": {
+    "document_columns_read": [
+      "id"
+    ],
+    "document_exact_schema": [
+      "id",
+      "content"
+    ],
+    "example_columns_read": [
+      "query",
+      "id",
+      "excluded_ids",
+      "gold_ids"
+    ],
+    "example_exact_schema": [
+      "query",
+      "reasoning",
+      "id",
+      "excluded_ids",
+      "gold_ids_long",
+      "gold_ids",
+      "gold_answer"
+    ],
+    "expected_public_row_counts": {
+      "BIOLOGY": {
+        "documents": 57359,
+        "examples": 103
+      },
+      "ECONOMICS": {
+        "documents": 50220,
+        "examples": 103
+      },
+      "ROBOTICS": {
+        "documents": 61961,
+        "examples": 101
+      }
+    }
+  },
+  "recorded_date": "2026-07-19",
+  "schema": "bright_reasoning_retrieval_source_qualification_design_v1",
+  "self_hash_contract": {
+    "algorithm": "sha256",
+    "canonicalization": "json.dumps(body_without_self_sha256, ensure_ascii=True, sort_keys=True, separators=(',', ':')).encode('utf-8')"
+  },
+  "self_sha256": "3d6b12d6ac500bdaba551eb5f551dbe3ea5db302c6e1084cb36dea9f0777041d",
+  "success_or_terminal_policy": {
+    "failure": "terminal_source_qualification_failure_no_same_source_revision_or_replay",
+    "success": "authorize_implementation_of_one_formal_acquisition_and_study_without_reopening_qualification_rows",
+    "threshold_or_family_revision_after_attempt": false
+  },
+  "version": "v1"
+}
