@@ -972,6 +972,176 @@ def seal_hippo_retrievals(
     )
 
 
+@dataclass(frozen=True)
+class RawRetrieval:
+    """One independently executed RAW/R0 result, bound to its action trace."""
+
+    item_commitment_sha256: str
+    sentence_count: int
+    top5: tuple[int, ...]
+    action_trace_sha256: str
+
+    def __post_init__(self) -> None:
+        _require_sha256(self.item_commitment_sha256, field="RAW commitment")
+        _require_sha256(self.action_trace_sha256, field="RAW action trace")
+        if (
+            type(self.sentence_count) is not int
+            or self.sentence_count < TOP_K
+            or not isinstance(self.top5, tuple)
+            or len(self.top5) != TOP_K
+            or len(set(self.top5)) != TOP_K
+            or any(
+                type(value) is not int or not 0 <= value < self.sentence_count
+                for value in self.top5
+            )
+        ):
+            raise EraserEvidenceInferenceRunnerError(
+                "RAW result is not an in-corpus top five"
+            )
+
+    def payload(self) -> list[object]:
+        return [
+            self.item_commitment_sha256,
+            self.sentence_count,
+            list(self.top5),
+            self.action_trace_sha256,
+        ]
+
+
+def _raw_retrieval_receipt(
+    *,
+    block: str,
+    item_count: int,
+    retrieval_matrix_sha256: str,
+    item_commitment_set_sha256: str,
+) -> dict[str, Any]:
+    body = {
+        "schema": f"{VERSION}_raw_retrieval_receipt",
+        "version": VERSION,
+        "block": block,
+        "item_count": item_count,
+        "retrieval_matrix_sha256": retrieval_matrix_sha256,
+        "item_commitment_set_sha256": item_commitment_set_sha256,
+        "canonical_order": "ascending_item_commitment_sha256",
+        "independent_logical_future_attestation_owner": "scheduler_receipt",
+        "labels_gold_family_or_Hippo_accessed": False,
+        "online_evaluator_calls": 0,
+        "raw_content_persisted": False,
+    }
+    return _self_hashed(body, "raw_retrieval_receipt_sha256")
+
+
+@dataclass(frozen=True)
+class RawRetrievalSeal:
+    block: str
+    rows: tuple[RawRetrieval, ...]
+    retrieval_matrix_sha256: str
+    item_commitment_set_sha256: str
+    raw_retrieval_receipt_sha256: str
+
+    def __post_init__(self) -> None:
+        if self.block not in {"A_hold", "M_search"}:
+            raise EraserEvidenceInferenceRunnerError("RAW block is invalid")
+        if (
+            not isinstance(self.rows, tuple)
+            or len(self.rows) != BLOCK_COUNTS[self.block]
+            or any(not isinstance(row, RawRetrieval) for row in self.rows)
+            or self.rows
+            != tuple(sorted(self.rows, key=lambda row: row.item_commitment_sha256))
+            or len({row.item_commitment_sha256 for row in self.rows})
+            != len(self.rows)
+        ):
+            raise EraserEvidenceInferenceRunnerError("RAW matrix drifted")
+        payload = [row.payload() for row in self.rows]
+        commitments = [row.item_commitment_sha256 for row in self.rows]
+        expected_matrix = stable_hash(payload)
+        expected_items = stable_hash(commitments)
+        expected_receipt = _raw_retrieval_receipt(
+            block=self.block,
+            item_count=len(self.rows),
+            retrieval_matrix_sha256=expected_matrix,
+            item_commitment_set_sha256=expected_items,
+        )
+        if (
+            self.retrieval_matrix_sha256 != expected_matrix
+            or self.item_commitment_set_sha256 != expected_items
+            or self.raw_retrieval_receipt_sha256
+            != expected_receipt["raw_retrieval_receipt_sha256"]
+        ):
+            raise EraserEvidenceInferenceRunnerError("RAW seal binding drifted")
+
+    @property
+    def by_item(self) -> Mapping[str, RawRetrieval]:
+        return {row.item_commitment_sha256: row for row in self.rows}
+
+    @property
+    def receipt(self) -> dict[str, Any]:
+        return _raw_retrieval_receipt(
+            block=self.block,
+            item_count=len(self.rows),
+            retrieval_matrix_sha256=self.retrieval_matrix_sha256,
+            item_commitment_set_sha256=self.item_commitment_set_sha256,
+        )
+
+
+def seal_raw_retrievals(
+    *, block: str, rows: Sequence[RawRetrieval]
+) -> RawRetrievalSeal:
+    if any(not isinstance(row, RawRetrieval) for row in rows):
+        raise EraserEvidenceInferenceRunnerError("RAW rows contain a foreign type")
+    canonical = tuple(sorted(rows, key=lambda row: row.item_commitment_sha256))
+    payload = [row.payload() for row in canonical]
+    commitments = [row.item_commitment_sha256 for row in canonical]
+    matrix_sha = stable_hash(payload)
+    item_set_sha = stable_hash(commitments)
+    receipt = _raw_retrieval_receipt(
+        block=block,
+        item_count=len(canonical),
+        retrieval_matrix_sha256=matrix_sha,
+        item_commitment_set_sha256=item_set_sha,
+    )
+    return RawRetrievalSeal(
+        block=block,
+        rows=canonical,
+        retrieval_matrix_sha256=matrix_sha,
+        item_commitment_set_sha256=item_set_sha,
+        raw_retrieval_receipt_sha256=receipt[
+            "raw_retrieval_receipt_sha256"
+        ],
+    )
+
+
+def _validate_raw_retrievals_against_features(
+    *, raw_retrievals: RawRetrievalSeal, features: FeatureSeal
+) -> Mapping[str, RawRetrieval]:
+    if (
+        not isinstance(raw_retrievals, RawRetrievalSeal)
+        or not isinstance(features, FeatureSeal)
+        or raw_retrievals.block != features.block
+        or raw_retrievals.item_commitment_set_sha256
+        != features.item_commitment_set_sha256
+    ):
+        raise EraserEvidenceInferenceRunnerError(
+            "RAW and Agent feature commitment alignment drifted"
+        )
+    raw_by_item = raw_retrievals.by_item
+    if set(raw_by_item) != set(features.item_commitments):
+        raise EraserEvidenceInferenceRunnerError(
+            "RAW and Agent feature commitment alignment drifted"
+        )
+    for trace in features.traces:
+        raw = raw_by_item[trace.item_commitment_sha256]
+        if (
+            raw.sentence_count != trace.sentence_count
+            or raw.top5 != trace.r0_top5
+            or raw.action_trace_sha256 != trace.r0_action_trace_sha256
+        ):
+            raise EraserEvidenceInferenceRunnerError(
+                "independent RAW output drifted from frozen Agent R0"
+            )
+    return raw_by_item
+
+
 def item_utility(
     selected: Sequence[int], gold_union: Sequence[int]
 ) -> tuple[Fraction, bool]:
@@ -1113,6 +1283,7 @@ class AnchorScoreSeal:
     block: str
     anchor_features: FeatureSeal
     hippo_retrievals: HippoRetrievalSeal
+    raw_retrievals: RawRetrievalSeal
     policies: PolicySeal
     a_hold_authorization: "AnchorScoreSeal | None"
     receipt_json: str
@@ -1124,9 +1295,15 @@ class AnchorScoreSeal:
             or self.anchor_features.block != self.block
             or not isinstance(self.hippo_retrievals, HippoRetrievalSeal)
             or self.hippo_retrievals.block != self.block
+            or not isinstance(self.raw_retrievals, RawRetrievalSeal)
+            or self.raw_retrievals.block != self.block
             or not isinstance(self.policies, PolicySeal)
         ):
             raise EraserEvidenceInferenceRunnerError("anchor dependencies are invalid")
+        _validate_raw_retrievals_against_features(
+            raw_retrievals=self.raw_retrievals,
+            features=self.anchor_features,
+        )
         if self.block == "A_hold":
             if self.a_hold_authorization is not None:
                 raise EraserEvidenceInferenceRunnerError(
@@ -1165,6 +1342,9 @@ class AnchorScoreSeal:
             "hipporag_retrieval_matrix_sha256": (
                 self.hippo_retrievals.retrieval_matrix_sha256
             ),
+            "raw_retrieval_matrix_sha256": (
+                self.raw_retrievals.retrieval_matrix_sha256
+            ),
             "item_commitment_set_sha256": (
                 self.anchor_features.item_commitment_set_sha256
             ),
@@ -1186,6 +1366,7 @@ class AnchorScoreSeal:
             "anchor_feature_receipt_sha256",
             "policy_receipt_sha256",
             "hipporag_retrieval_matrix_sha256",
+            "raw_retrieval_matrix_sha256",
             "item_commitment_set_sha256",
             "late_opened_label_matrix_sha256",
             "A_hold_authorization_score_receipt_sha256",
@@ -1441,6 +1622,7 @@ def score_anchor(
     labels: Sequence[AnchorLabel],
     anchor_feature_seal: FeatureSeal,
     hippo_retrieval_seal: HippoRetrievalSeal,
+    raw_retrieval_seal: RawRetrievalSeal,
     policy_seal: PolicySeal,
     a_hold_authorization: AnchorScoreSeal | None = None,
 ) -> AnchorScoreSeal:
@@ -1453,6 +1635,8 @@ def score_anchor(
         or anchor_feature_seal.block != block
         or not isinstance(hippo_retrieval_seal, HippoRetrievalSeal)
         or hippo_retrieval_seal.block != block
+        or not isinstance(raw_retrieval_seal, RawRetrievalSeal)
+        or raw_retrieval_seal.block != block
         or not isinstance(policy_seal, PolicySeal)
     ):
         raise EraserEvidenceInferenceRunnerError("anchor inputs are not sealed")
@@ -1474,11 +1658,18 @@ def score_anchor(
     commitments = anchor_feature_seal.item_commitments
     traces_by_item = anchor_feature_seal.by_item
     hippo_by_item = hippo_retrieval_seal.by_item
+    raw_by_item = _validate_raw_retrievals_against_features(
+        raw_retrievals=raw_retrieval_seal,
+        features=anchor_feature_seal,
+    )
     if (
         len(labels_by_item) != len(labels)
         or set(labels_by_item) != set(commitments)
         or set(hippo_by_item) != set(commitments)
+        or set(raw_by_item) != set(commitments)
         or hippo_retrieval_seal.item_commitment_set_sha256
+        != anchor_feature_seal.item_commitment_set_sha256
+        or raw_retrieval_seal.item_commitment_set_sha256
         != anchor_feature_seal.item_commitment_set_sha256
     ):
         raise EraserEvidenceInferenceRunnerError(
@@ -1511,8 +1702,11 @@ def score_anchor(
         trace = traces_by_item[item]
         label = labels_by_item[item]
         hippo = hippo_by_item[item]
-        if hippo.sentence_count != trace.sentence_count or any(
-            value >= trace.sentence_count for value in label.gold_ordinals
+        raw = raw_by_item[item]
+        if (
+            hippo.sentence_count != trace.sentence_count
+            or raw.sentence_count != trace.sentence_count
+            or any(value >= trace.sentence_count for value in label.gold_ordinals)
         ):
             raise EraserEvidenceInferenceRunnerError("sentence-corpus alignment drifted")
         e3_recipe = routes_by_item[item]
@@ -1521,7 +1715,7 @@ def score_anchor(
             "E0": item_utility(trace.r0_top5, label.gold_ordinals),
             "E3": item_utility(e3_output, label.gold_ordinals),
             "HippoRAG": item_utility(hippo.top5, label.gold_ordinals),
-            "RAW": item_utility(trace.r0_top5, label.gold_ordinals),
+            "RAW": item_utility(raw.top5, label.gold_ordinals),
         }
         for arm, (_utility, is_complete) in scored.items():
             complete[arm] += int(is_complete)
@@ -1587,6 +1781,9 @@ def score_anchor(
         "hipporag_retrieval_matrix_sha256": (
             hippo_retrieval_seal.retrieval_matrix_sha256
         ),
+        "raw_retrieval_matrix_sha256": (
+            raw_retrieval_seal.retrieval_matrix_sha256
+        ),
         "item_commitment_set_sha256": anchor_feature_seal.item_commitment_set_sha256,
         "late_opened_label_matrix_sha256": stable_hash(
             [
@@ -1649,6 +1846,7 @@ def score_anchor(
         block=block,
         anchor_features=anchor_feature_seal,
         hippo_retrievals=hippo_retrieval_seal,
+        raw_retrievals=raw_retrieval_seal,
         policies=policy_seal,
         a_hold_authorization=a_hold_authorization,
         receipt_json=_canonical_json_text(receipt),
@@ -1676,6 +1874,8 @@ __all__ = [
     "PAIRWISE_COMPARISONS",
     "PROMOTION_ALPHA",
     "PolicySeal",
+    "RawRetrieval",
+    "RawRetrievalSeal",
     "RECIPE_IDS",
     "RIDGE_LAMBDA",
     "TOP_K",
@@ -1690,5 +1890,6 @@ __all__ = [
     "score_anchor",
     "seal_feature_matrix",
     "seal_hippo_retrievals",
+    "seal_raw_retrievals",
     "stable_hash",
 ]

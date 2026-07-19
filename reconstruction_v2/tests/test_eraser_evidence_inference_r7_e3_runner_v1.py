@@ -71,7 +71,19 @@ def _anchor_inputs(block: str, prefix: str):
             for trace in reversed(features.traces)
         ),
     )
-    return features, labels, hippo
+    raw = runner.seal_raw_retrievals(
+        block=block,
+        rows=tuple(
+            runner.RawRetrieval(
+                trace.item_commitment_sha256,
+                trace.sentence_count,
+                trace.r0_top5,
+                trace.r0_action_trace_sha256,
+            )
+            for trace in reversed(features.traces)
+        ),
+    )
+    return features, labels, hippo, raw
 
 
 def test_exact_difference_receipt_keeps_action_and_behavior_hashes_independent() -> None:
@@ -167,9 +179,72 @@ def test_flattened_union_utility_does_not_best_group_maximize() -> None:
     )
 
 
+def test_raw_retrieval_seal_is_canonical_self_hashed_and_item_bound() -> None:
+    features, _labels, _hippo, raw = _anchor_inputs("A_hold", "RAW_SEAL")
+    commitments = tuple(row.item_commitment_sha256 for row in raw.rows)
+    assert commitments == tuple(sorted(commitments))
+    assert raw.item_commitment_set_sha256 == features.item_commitment_set_sha256
+    assert raw.receipt["retrieval_matrix_sha256"] == (
+        raw.retrieval_matrix_sha256
+    )
+    assert raw.receipt["raw_retrieval_receipt_sha256"] == (
+        raw.raw_retrieval_receipt_sha256
+    )
+    assert raw.receipt["independent_logical_future_attestation_owner"] == (
+        "scheduler_receipt"
+    )
+
+    with pytest.raises(
+        runner.EraserEvidenceInferenceRunnerError,
+        match="RAW seal binding drifted",
+    ):
+        runner.RawRetrievalSeal(
+            block="A_hold",
+            rows=raw.rows,
+            retrieval_matrix_sha256="0" * 64,
+            item_commitment_set_sha256=raw.item_commitment_set_sha256,
+            raw_retrieval_receipt_sha256=raw.raw_retrieval_receipt_sha256,
+        )
+
+
+@pytest.mark.parametrize("drift", ["top5", "action_trace"])
+def test_anchor_rejects_independent_raw_output_drift(drift: str) -> None:
+    _fit, policy = _fit_and_policy()
+    features, labels, hippo, _raw = _anchor_inputs("A_hold", f"RAW_{drift}")
+    rows = []
+    for index, trace in enumerate(features.traces):
+        top5 = trace.r7_top5 if index == 0 and drift == "top5" else trace.r0_top5
+        action_hash = (
+            runner.stable_hash(["drifted RAW action"])
+            if index == 0 and drift == "action_trace"
+            else trace.r0_action_trace_sha256
+        )
+        rows.append(
+            runner.RawRetrieval(
+                trace.item_commitment_sha256,
+                trace.sentence_count,
+                top5,
+                action_hash,
+            )
+        )
+    raw = runner.seal_raw_retrievals(block="A_hold", rows=rows)
+    with pytest.raises(
+        runner.EraserEvidenceInferenceRunnerError,
+        match="independent RAW output drifted",
+    ):
+        runner.score_anchor(
+            block="A_hold",
+            labels=labels,
+            anchor_feature_seal=features,
+            hippo_retrieval_seal=hippo,
+            raw_retrieval_seal=raw,
+            policy_seal=policy,
+        )
+
+
 def test_a_hold_promotion_primary_family_raw_and_hippo_decisions() -> None:
     _fit, policy = _fit_and_policy()
-    features, labels, _hippo = _anchor_inputs("A_hold", "AH")
+    features, labels, _hippo, raw = _anchor_inputs("A_hold", "AH")
     # Give HippoRAG one complete item in each relation family so that the
     # three pairwise aggregate families are observably different.
     hippo = runner.seal_hippo_retrievals(
@@ -188,11 +263,15 @@ def test_a_hold_promotion_primary_family_raw_and_hippo_decisions() -> None:
         labels=tuple(reversed(labels)),
         anchor_feature_seal=features,
         hippo_retrieval_seal=hippo,
+        raw_retrieval_seal=raw,
         policy_seal=policy,
     )
     receipt = score.receipt
 
     assert receipt["logical_RAW_HippoRAG_Agent_work_units"] == 90
+    assert receipt["raw_retrieval_matrix_sha256"] == (
+        raw.retrieval_matrix_sha256
+    )
     assert receipt["E3_minus_E0"]["observed_net_U"] == {
         "numerator": 60,
         "denominator": 1,
@@ -264,6 +343,7 @@ def test_a_hold_promotion_primary_family_raw_and_hippo_decisions() -> None:
             block="A_hold",
             anchor_features=features,
             hippo_retrievals=hippo,
+            raw_retrievals=raw,
             policies=policy,
             a_hold_authorization=None,
             receipt_json=json.dumps(
@@ -287,6 +367,7 @@ def test_a_hold_promotion_primary_family_raw_and_hippo_decisions() -> None:
             block="A_hold",
             anchor_features=features,
             hippo_retrievals=hippo,
+            raw_retrievals=raw,
             policies=policy,
             a_hold_authorization=None,
             receipt_json=json.dumps(
@@ -298,10 +379,34 @@ def test_a_hold_promotion_primary_family_raw_and_hippo_decisions() -> None:
             ),
         )
 
+    tampered_raw = dict(receipt)
+    tampered_raw["raw_retrieval_matrix_sha256"] = "0" * 64
+    tampered_raw.pop("score_receipt_sha256")
+    tampered_raw["score_receipt_sha256"] = runner.stable_hash(tampered_raw)
+    with pytest.raises(
+        runner.EraserEvidenceInferenceRunnerError,
+        match="anchor receipt semantics drifted",
+    ):
+        runner.AnchorScoreSeal(
+            block="A_hold",
+            anchor_features=features,
+            hippo_retrievals=hippo,
+            raw_retrievals=raw,
+            policies=policy,
+            a_hold_authorization=None,
+            receipt_json=json.dumps(
+                tampered_raw,
+                ensure_ascii=True,
+                allow_nan=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+        )
+
 
 def test_null_pairwise_result_is_reported_without_promotion_or_primary() -> None:
     _fit, policy = _fit_and_policy()
-    features, _labels, hippo = _anchor_inputs("A_hold", "AH_NULL")
+    features, _labels, hippo, raw = _anchor_inputs("A_hold", "AH_NULL")
     labels = tuple(
         runner.AnchorLabel(
             trace.item_commitment_sha256,
@@ -315,6 +420,7 @@ def test_null_pairwise_result_is_reported_without_promotion_or_primary() -> None
         labels=labels,
         anchor_feature_seal=features,
         hippo_retrieval_seal=hippo,
+        raw_retrieval_seal=raw,
         policy_seal=policy,
     )
     receipt = score.receipt
@@ -347,15 +453,16 @@ def test_null_pairwise_result_is_reported_without_promotion_or_primary() -> None
 
 def test_m_requires_promoted_a_hold_and_reports_l5_combined_claims() -> None:
     _fit, policy = _fit_and_policy()
-    a_features, a_labels, a_hippo = _anchor_inputs("A_hold", "AH2")
+    a_features, a_labels, a_hippo, a_raw = _anchor_inputs("A_hold", "AH2")
     a_score = runner.score_anchor(
         block="A_hold",
         labels=a_labels,
         anchor_feature_seal=a_features,
         hippo_retrieval_seal=a_hippo,
+        raw_retrieval_seal=a_raw,
         policy_seal=policy,
     )
-    m_features, m_labels, m_hippo = _anchor_inputs("M_search", "M")
+    m_features, m_labels, m_hippo, m_raw = _anchor_inputs("M_search", "M")
 
     with pytest.raises(
         runner.EraserEvidenceInferenceRunnerError, match="not authorized"
@@ -365,6 +472,7 @@ def test_m_requires_promoted_a_hold_and_reports_l5_combined_claims() -> None:
             labels=m_labels,
             anchor_feature_seal=m_features,
             hippo_retrieval_seal=m_hippo,
+            raw_retrieval_seal=m_raw,
             policy_seal=policy,
         )
 
@@ -373,6 +481,7 @@ def test_m_requires_promoted_a_hold_and_reports_l5_combined_claims() -> None:
         labels=m_labels,
         anchor_feature_seal=m_features,
         hippo_retrieval_seal=m_hippo,
+        raw_retrieval_seal=m_raw,
         policy_seal=policy,
         a_hold_authorization=a_score,
     )
@@ -401,6 +510,7 @@ def test_m_requires_promoted_a_hold_and_reports_l5_combined_claims() -> None:
             block="M_search",
             anchor_features=m_features,
             hippo_retrievals=m_hippo,
+            raw_retrievals=m_raw,
             policies=policy,
             a_hold_authorization=a_score,
             receipt_json=json.dumps(
