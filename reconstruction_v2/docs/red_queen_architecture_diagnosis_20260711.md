@@ -3770,7 +3770,66 @@ promotion 或 M_search，online/external evaluator 仍为 0。故它既不是 im
 [`terminal incident`](../artifacts/docred_structured_set_decoder_formal_v1/terminal_incident.json)。总目标仍缺同样两项实证；下一次正式测量只能
 换独立 domain/source epoch，并继续让学习直接作用于 evidence sufficiency / terminal selection，而不是给旧候选补 gate。
 
+### 12.23 2026-07-19 MAVEN-ERE G8/E1：generator 有描述性增益，但 evaluator 有效 non-promotion
+
+DocRED 终止后转入 official MAVEN-ERE TRAIN/valid。source qualification 在不选择 cohort 的 aggregate pass 中一次通过：TRAIN/valid
+分别为 2,913/710 个 reader-valid document，3,623 个 collision component；按事前优先级 `CAUSAL > SUBEVENT > TEMPORAL` 可完整容纳
+`96 / 48 / 36 / 30 / 30` 五块共 240 项。正式设计固定 article-local exact sentence、端点关系边双向删除、RAW3、official-core
+HippoRAG top-3、完整 Set3 G8 generator，以及从 A_form 拟合的 pairwise ridge E1；本地线程上限 16、HippoRAG 物理进程上限 2，
+每块仍在读取第一个 future 前提交完整 `3×n` 逻辑任务。设计、实现与 acquisition 分别见
+[`formal design`](../manifests/maven_ere_g8_e1_formal_design_v1.json)、
+[`implementation freeze`](../manifests/maven_ere_g8_e1_implementation_freeze_v1.json) 和
+[`acquisition result`](../manifests/maven_ere_g8_e1_acquisition_result_v1.json)。整个链路只使用离线 MiniLM/NLI/HippoRAG；source
+TRAIN/valid 各打开一次，online/external evaluator 与 hidden TEST 均为 0。
+
+v1 controller 在 G8 已拟合、48 个 A_form 的三臂动作已全部返回、但 A_form label 尚未打开时终止。原因不是 action/model 输出坏掉，
+而是 archive 中 Python tuple 经 JSON 写盘后自然变成 list，旧 `_durable_roundtrip` 却把 decode 后的 list 与写盘前 tuple 直接比较，
+因而必然报 semantic drift。v1 efficacy 保持 unknown，原 root 没有原地重跑或补评分；边界见
+[`v1 failure disposition`](../manifests/maven_ere_g8_e1_formal_v1_implementation_failure_disposition_v1.json)。
+
+随后单独冻结 result-blind v2 recovery：不重采样、不换 secret、不重新打开 released source row，也不重跑 A_form 三臂；只重算 G/A
+label-free semantics，要求 G archive 与 G8 model 和 v1 字节级一致，并在打开 A_form label 前逐项复验已有 archive 的 RAW3、G8 frontier、
+E0 behavior、selection shape 与 `3×n` submission receipt。真实 `BlockExecution → archive → JSON normalize → durable readback` 回归测试纳入
+30 项 MAVEN suite。所有复验均通过后才拟合 E1，再一次执行 F_search 与 A_hold。见
+[`recovery design`](../manifests/maven_ere_g8_e1_result_blind_recovery_design_v2.json)、
+[`recovery implementation freeze`](../manifests/maven_ere_g8_e1_result_blind_recovery_implementation_freeze_v2.json) 和
+[`A_form validation`](../artifacts/maven_ere_g8_e1_result_blind_recovery_v2/controller/A_form.reused_action.validation.json)。因此 v2 是有效恢复，
+不是 implementation-invalid。
+
+A_hold 的正式结果为：
+
+| comparison | net U | nonzero pairs | exact one-sided p | family net `C / S / T` |
+|---|---:|---:|---:|---:|
+| E1−E0 | −3 | 5 | 31/32 | `0 / −1 / −2` |
+| E1−official HippoRAG | +1 | 5 | 1/2 | `0 / +2 / −1` |
+| E1−RAW | +1 | 5 | 1/2 | `0 / +2 / −1` |
+
+E0/E1/HippoRAG/RAW correct count 为 `15/12/11/11`。E1 在 30 项中有 28 项与 E0 behavior-distinct，18 项存在 used-edge
+deletion action change、累计 304 个 deletion witness；所以 evaluator 确实改变了行为，机制也有因果活性，但它相对 E0 净伤害 3 项，
+promotion 明确为 false。E1 对 HippoRAG/RAW 的 `+1` 既不显著，CAUSAL 又为 0、TEMPORAL 为负，real-domain primary 也明确为 false。
+M_search 因未晋升而未打开，故 L5 是 **未测量**，不是失败分数。
+
+这里出现了比前几轮更具体的机制线索：固定 G8/E0 的总正确数描述性地比 HippoRAG 和 RAW 各高 4，而监督 E1 把该优势削弱到 `+1`。
+这不能事后升级为未预注册的 E0 primary 或显著性结论，却说明当前最有希望的组件是 typed generator，不是 pairwise evaluator。
+当前 source epoch 与未打开的 M 均终止，不能在同一 anchor 上修改 threshold、feature 或再加 switch gate。若继续总目标，应在 fresh cohort
+中把 G8/E0 冻结为 generator incumbent，挑战者必须换成实质不同的 setwise expected-utility/uncertainty evaluator，并一次性同时检验
+promotion、Agent−HippoRAG/RAW 和新的 untouched M。安全聚合见
+[`result disposition`](../manifests/maven_ere_g8_e1_result_blind_recovery_result_disposition_v2.json)，原始 aggregate terminal 见
+[`recovery terminal`](../artifacts/maven_ere_g8_e1_result_blind_recovery_v2/controller/recovery.terminal_result.json)。
+
 ## 附录 A：关键证据索引
+
+- MAVEN-ERE G8/E1 formal/recovery chain：
+  [`source qualification design`](../manifests/maven_ere_relation_context_source_qualification_design_v1.json)；
+  [`source qualification result`](../manifests/maven_ere_relation_context_source_qualification_result_v1.json)；
+  [`formal design`](../manifests/maven_ere_g8_e1_formal_design_v1.json)；
+  [`formal implementation freeze`](../manifests/maven_ere_g8_e1_implementation_freeze_v1.json)；
+  [`acquisition result`](../manifests/maven_ere_g8_e1_acquisition_result_v1.json)；
+  [`v1 failure disposition`](../manifests/maven_ere_g8_e1_formal_v1_implementation_failure_disposition_v1.json)；
+  [`result-blind recovery design`](../manifests/maven_ere_g8_e1_result_blind_recovery_design_v2.json)；
+  [`recovery implementation freeze`](../manifests/maven_ere_g8_e1_result_blind_recovery_implementation_freeze_v2.json)；
+  [`recovery result disposition`](../manifests/maven_ere_g8_e1_result_blind_recovery_result_disposition_v2.json)；
+  [`recovery terminal`](../artifacts/maven_ere_g8_e1_result_blind_recovery_v2/controller/recovery.terminal_result.json)
 
 - ERASER Evidence Inference R7/E3 formal/recovery chain：
   [`base design`](../manifests/eraser_evidence_inference_r7_e3_design_v1.json)；
