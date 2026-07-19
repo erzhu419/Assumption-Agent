@@ -47,6 +47,10 @@ def _write_freeze(project: Path) -> Path:
                 "sha256": hashlib.sha256(raw).hexdigest(),
             }
         )
+    supplemental_path = project / subject.SUPPLEMENTAL_CONTROLLER_TEST_PATH
+    supplemental_path.parent.mkdir(parents=True, exist_ok=True)
+    supplemental_raw = b"frozen:formal-controller-lifecycle-test\n"
+    supplemental_path.write_bytes(supplemental_raw)
     body = {
         "schema": acquisition.IMPLEMENTATION_FREEZE_SCHEMA,
         "version": "v1",
@@ -56,6 +60,10 @@ def _write_freeze(project: Path) -> Path:
             acquisition.REQUIRED_IMPLEMENTATION_ROLE_REGISTRY
         ),
         "implementation_binding": {"files": rows},
+        "supplemental_controller_test_binding": {
+            "relative_path": subject.SUPPLEMENTAL_CONTROLLER_TEST_PATH,
+            "sha256": hashlib.sha256(supplemental_raw).hexdigest(),
+        },
         "synthetic_test_receipt": {
             "collected_case_count": 7,
             "passed_case_count": 7,

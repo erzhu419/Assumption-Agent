@@ -120,6 +120,9 @@ EXPECTED_ROLE_PATHS = {
         "manifests/eraser_evidence_inference_hipporag_implementation_freeze_v1.json"
     ),
 }
+SUPPLEMENTAL_CONTROLLER_TEST_PATH = (
+    "tests/test_eraser_evidence_inference_formal_controller_v1.py"
+)
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
 
@@ -322,6 +325,24 @@ def verify_full_implementation_freeze(
     ):
         raise EraserEvidenceInferenceFormalControllerError(
             "full implementation freeze test receipt drifted"
+        )
+    supplemental = payload.get("supplemental_controller_test_binding")
+    if (
+        not isinstance(supplemental, Mapping)
+        or set(supplemental) != {"relative_path", "sha256"}
+        or _safe_relative(supplemental.get("relative_path"))
+        != SUPPLEMENTAL_CONTROLLER_TEST_PATH
+        or _sha256_file(
+            project / SUPPLEMENTAL_CONTROLLER_TEST_PATH,
+            "supplemental formal controller test",
+        )
+        != _require_sha256(
+            supplemental.get("sha256"),
+            "supplemental formal controller test hash",
+        )
+    ):
+        raise EraserEvidenceInferenceFormalControllerError(
+            "supplemental formal controller test binding drifted"
         )
     return payload
 
