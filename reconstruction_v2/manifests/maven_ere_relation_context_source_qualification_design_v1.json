@@ -1,0 +1,117 @@
+{
+  "block_capacity_contract": {
+    "A_form": {
+      "per_family": 16,
+      "split": "train",
+      "total": 48
+    },
+    "A_hold": {
+      "per_family": 10,
+      "split": "valid",
+      "total": 30
+    },
+    "F_search": {
+      "per_family": 12,
+      "split": "train",
+      "total": 36
+    },
+    "G_form": {
+      "per_family": 32,
+      "split": "train",
+      "total": 96
+    },
+    "M_search": {
+      "per_family": 10,
+      "split": "valid",
+      "total": 30
+    },
+    "global_document_or_collision_component_cap": 1,
+    "required_document_count": 240,
+    "required_per_family_split": {
+      "train": 60,
+      "valid": 20
+    }
+  },
+  "candidate_eligibility": {
+    "corpus_projection": "join_each_official_tokens_sentence_with_one_ASCII_space;_empty_tokens_are_allowed_exactly_as_the_pinned_official_reader_allows;_a_document_is_candidate_ineligible_only_if_a_complete_rendered_sentence_is_empty_after_strip",
+    "document_minimum_sentence_count": 6,
+    "endpoint_kind": "two_distinct_official_EVENT_chains;_TIMEX_endpoints_excluded",
+    "endpoint_mentions": "each_endpoint_chain_has_at_least_one_reader_valid_mention_with_nonempty_trigger_word_valid_sentence_index_and_valid_half_open_token_offset",
+    "family_ambiguity_exclusion": "exclude_every_relation_candidate_whose_unordered_EVENT_chain_pair_occurs_in_more_than_one_of_TEMPORAL_CAUSAL_SUBEVENT_within_the_same_document",
+    "family_membership": {
+      "CAUSAL": "union_of_official_CAUSE_and_PRECONDITION_ordered_pairs",
+      "SUBEVENT": "official_subevent_relations_ordered_pairs",
+      "TEMPORAL": "union_of_official_BEFORE_OVERLAP_CONTAINS_SIMULTANEOUS_ENDS-ON_BEGINS-ON_ordered_EVENT_EVENT_pairs"
+    },
+    "pair_duplicate_rule": "within_one_family_and_ordered_endpoint_pair_retain_one_candidate_only;_multiple_fine_labels_for_the_same_ordered_pair_make_the_candidate_ineligible",
+    "relation_label_use": "top_level_family_is_a_late_downstream_classification_label_and_must_not_enter_the_retrieval_query_action_features_or_F_search",
+    "retrieval_query_projection": "EVENT_A_aliases_and_types_plus_EVENT_B_aliases_and_types_plus_the_neutral_question_what_is_the_relationship_between_event_A_and_event_B;_no_relation_family_or_fine_label",
+    "source_document_cap": 1
+  },
+  "collision_contract": {
+    "component_edges": [
+      "same_official_document_id",
+      "same_normalized_title",
+      "same_canonical_rendered_sentence_sequence"
+    ],
+    "normalization": "Unicode_NFKC_then_whitespace_collapse_then_casefold",
+    "public_output_forbids_collision_values_or_per_document_hashes": true
+  },
+  "formal_source_binding": {
+    "member_binding_commit": "6f0175a87a64371bf21bfcd5bbee0ad94a109d1e",
+    "member_binding_file_sha256": "1d52b5835187882764fa2587e871e242955c1af9c831e096a4cb33b3e1c3326c",
+    "member_binding_self_sha256": "1bf7e0ff04ec0373effe93a3c194368006de14cdf68a207c5a8ed6fcc8b2e869",
+    "train_member_sha256": "6a5519fe7c30448690adb13d49217c50d474fc57480eae10aecb29df7eb638b7",
+    "train_member_size": 101215305,
+    "valid_member_sha256": "6faea0e4e16b4a2d5d9631e09ef6e1c6bac6e3f912490bfc48eeaceaf98c6153",
+    "valid_member_size": 24406071
+  },
+  "minimum_reader_equivalent_schema": {
+    "document_fields_used": [
+      "id",
+      "title",
+      "tokens",
+      "events",
+      "TIMEX",
+      "temporal_relations",
+      "causal_relations",
+      "subevent_relations"
+    ],
+    "invalid_document_policy": "aggregate_and_exclude_the_entire_document_before_capacity_accounting;_do_not_make_unrelated_invalid_documents_a_global_source_terminal",
+    "JSONL_contract": "every_physical_line_is_one_nonempty_strict_UTF8_JSON_object_with_no_duplicate_object_keys_or_nonfinite_numbers",
+    "official_reader_binding": "THU_KEG_MAVEN_ERE_commit_ac81a971_joint_src_data_py",
+    "split_document_counts": {
+      "train": 2913,
+      "valid": 710
+    },
+    "source_terminal_conditions": [
+      "bound_file_identity_or_mode_drift",
+      "JSONL_root_or_line_count_drift",
+      "simultaneous_document_disjoint_capacity_shortfall"
+    ]
+  },
+  "outcome_and_retry_boundary": {
+    "first_pass_public_output": "aggregate_counts_histograms_hashes_and_simultaneous_capacity_only;_no_document_item_title_alias_trigger_relation_pair_ordinal_or_per_document_hash",
+    "hidden_TEST_open_authorized": false,
+    "online_or_external_evaluation_authorized": false,
+    "qualification_pass_count": 1,
+    "same_source_schema_eligibility_quota_or_family_patch_after_receipt_authorized": false,
+    "selection_secret_or_private_cohort_during_qualification": false
+  },
+  "prospective_downstream_task": {
+    "family_label_source": "official_top_level_event_relation_annotation",
+    "primary_metric": "frozen_offline_three_way_relation_family_classification_correctness_after_top3_sentence_selection",
+    "study_scope": "derived_article_local_event_relation_context_selection_and_classification_not_official_MAVEN_ERE_relation_extraction",
+    "three_arms": [
+      "RAW3",
+      "official_core_HippoRAG_top3",
+      "typed_Agent_top3"
+    ],
+    "untouched_M_requires_A_hold_evaluator_promotion": true
+  },
+  "recorded_date": "2026-07-19",
+  "schema": "maven_ere_relation_context_source_qualification_design_v1",
+  "source_qualification_design_sha256": "abdf26e29a5a08f60d65bba27355bcc6993aaec6d0cd47c01fcfae19ae039def",
+  "status": "frozen_before_first_train_or_valid_text_decode_or_JSONL_line_iteration",
+  "version": "v1"
+}
