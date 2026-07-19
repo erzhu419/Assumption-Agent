@@ -3748,6 +3748,28 @@ evidence-sufficiency / terminal-selection 的 action generator 本身，而不�
 安全聚合见 [`recovery result disposition`](../manifests/eraser_evidence_inference_r7_e3_recovery_v2_result_disposition_v1.json)，
 恢复终局见 [`recovery terminal`](../artifacts/eraser_evidence_inference_r7_e3_crash_recovery_v2/controller/recovery.terminal_result.json)。
 
+### 12.22 2026-07-19 DocRED G8/E1：正式源资格终止，efficacy 未知
+
+ERASER 后的新 domain/source epoch 选择 official DocRED TRAIN/DEV，先在任何 source row 打开前冻结三类 relation family、
+`96 / 48 / 36 / 30 / 30` 五块、top-3 typed structured-set generator G8、pairwise evaluator E1、完整 dense RAW3 与
+official-core HippoRAG 对照。assignment/controller、G8/E1 core 及 synthetic tests 在提交 `ebb606ce` 后由
+[`pre-row implementation freeze`](../manifests/docred_structured_set_decoder_pre_row_implementation_freeze_v1.json) 固定；正式 provenance
+preflight 通过后才创建唯一 formal root。
+
+正式 one-shot 只各打开一次 `train_annotated.json`、`dev.json` 和 `rel_info.json`，随即在 aggregate source qualification 终止。
+唯一非零 schema anomaly 是 `sentence_token`：TRAIN 169 个 invalid document、DEV 50 个，共 219；root、document keyset、label、mention、
+endpoint 与 evidence 等其他 anomaly 均为 0。值得区分的是，排除这些 invalid document 后的公开聚合容量仍能同时分配要求的 240 个
+document-disjoint item，因此终止原因不是 family/cohort 容量不足，而是冻结的 minimum-schema-equivalent 条件不成立。
+
+该终止发生在 secret generation 之前：没有 HMAC/cohort/private view，没有 G8/E1 formation，没有 RAW、HippoRAG、Agent、utility、
+promotion 或 M_search，online/external evaluator 仍为 0。故它既不是 implementation-invalid，也不是 Agent 性能负结果；DocRED efficacy
+保持 unknown。一次性协议不允许把 219 项改为 post-hoc exclusion、放宽 token schema 后重跑、重组 cohort 或复用 formal root。
+安全聚合已封存在
+[`terminal disposition`](../manifests/docred_structured_set_decoder_formal_v1_source_qualification_terminal_disposition_v1.json)，原始公开聚合见
+[`qualification receipt`](../artifacts/docred_structured_set_decoder_formal_v1/source_qualification_receipt.json) 与
+[`terminal incident`](../artifacts/docred_structured_set_decoder_formal_v1/terminal_incident.json)。总目标仍缺同样两项实证；下一次正式测量只能
+换独立 domain/source epoch，并继续让学习直接作用于 evidence sufficiency / terminal selection，而不是给旧候选补 gate。
+
 ## 附录 A：关键证据索引
 
 - ERASER Evidence Inference R7/E3 formal/recovery chain：
