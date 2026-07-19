@@ -1,0 +1,137 @@
+{
+  "access_contract": {
+    "allowed_archive_payload_members": [
+      "data/claims_train.jsonl",
+      "data/claims_dev.jsonl",
+      "data/corpus.jsonl"
+    ],
+    "archive_must_match_custody_SHA256_and_size_before_extraction": true,
+    "extracted_member_modes": "0600",
+    "human_row_or_item_content_inspection": false,
+    "isolated_qualification_process": true,
+    "qualification_attempts": 1,
+    "test_member_payload_access": false
+  },
+  "candidate_contract": {
+    "abstract_sentence_contract": "abstract_is_a_list_of_5_to_64_nonempty_strings_with_position_preserved_and_no_text_deduplication",
+    "addressable_node": "zero_based_abstract_sentence_position_only",
+    "cited_document_contract": "cited_doc_ids_is_a_unique_list_of_integer_document_IDs_and_the_evidence_document_ID_is_present",
+    "claim_contract": "id_is_an_integer_unique_across_TRAIN_and_DEV_and_claim_is_a_nonempty_string",
+    "corpus_contract": "doc_id_is_an_integer_unique_in_corpus_title_is_a_string_abstract_satisfies_the_sentence_contract_and_structured_is_boolean",
+    "evidence_contract": "one_item_per_claim_evidence_document_pair;_the_document_exists_exactly_once_in_corpus;_rationales_are_a_nonempty_list_with_one_consistent_SUPPORT_or_CONTRADICT_label",
+    "gold_rationale_contract": "every_official_rationale_sentence_list_is_nonempty_has_unique_integer_positions_is_in_bounds_and_has_size_1_to_3;_alternatives_are_not_unioned",
+    "item_key": "split_colon_decimal_claim_id_colon_decimal_evidence_doc_id",
+    "title_role": "shared_input_metadata_for_all_future_arms_but_not_an_addressable_output_node"
+  },
+  "component_and_exclusion_contract": {
+    "component_graph": "undirected_bipartite_graph_over_all_TRAIN_and_DEV_claim_ID_nodes_and_every_integer_doc_ID_in_cited_doc_ids_or_evidence_keys_before_candidate_eligibility_filtering",
+    "cross_split_component": "exclude_every_candidate_in_a_component_containing_both_TRAIN_and_DEV_claims",
+    "declared_public_example_denylist": {
+      "claim_ids": [
+        123,
+        263
+      ],
+      "doc_ids": [
+        4883040,
+        11328820,
+        14853989,
+        30041340
+      ]
+    },
+    "denylist_scope": "exclude_every_candidate_in_a_component_containing_any_declared_claim_or_document_ID",
+    "formal_reuse_limit": "at_most_one_selected_item_per_connected_component_across_all_blocks"
+  },
+  "custody_binding": {
+    "committed_at": "5c3cbaf0de5b6f35a400f3f406bbdc98e6cb99da",
+    "file_sha256": "5826bc56b1a807ec6617a36d3a162e9b97026c86ebb95d4f9ef98cc44f73759c",
+    "git_blob_sha1": "401dc0af910be4bb3778a13575977890d796d2ad",
+    "relative_path": "manifests/scifact_direct_evidence_source_custody_v1.json",
+    "schema": "scifact_direct_evidence_source_custody_v1",
+    "source_custody_sha256": "c7516174a85605d64b84800e7f52f4e2a422e5b90c09c85db04242aa3c82afad"
+  },
+  "design_sha256": "416e96e5f0bd700240f70f393fcc7026d7a3b5d54628f50b274da7fc57700f2a",
+  "family_contract": {
+    "CONTRADICT_SINGLE": "minimum_official_rationale_size_equals_1_and_the_consistent_pair_label_is_CONTRADICT",
+    "MULTI_SENTENCE": "minimum_official_rationale_size_is_2_or_3_regardless_of_the_consistent_pair_label",
+    "SUPPORT_SINGLE": "minimum_official_rationale_size_equals_1_and_the_consistent_pair_label_is_SUPPORT",
+    "families_are_mutually_exclusive_and_exhaustive_over_eligible_pairs": true,
+    "priority_or_keyword_rules": false
+  },
+  "future_formal_population_contract": {
+    "A_form_TRAIN": {
+      "CONTRADICT_SINGLE": 12,
+      "MULTI_SENTENCE": 12,
+      "SUPPORT_SINGLE": 12
+    },
+    "A_hold_TRAIN": {
+      "CONTRADICT_SINGLE": 10,
+      "MULTI_SENTENCE": 10,
+      "SUPPORT_SINGLE": 10
+    },
+    "F_search_TRAIN": {
+      "CONTRADICT_SINGLE": 10,
+      "MULTI_SENTENCE": 10,
+      "SUPPORT_SINGLE": 10
+    },
+    "G_form_TRAIN": {
+      "CONTRADICT_SINGLE": 20,
+      "MULTI_SENTENCE": 20,
+      "SUPPORT_SINGLE": 20
+    },
+    "M_search_DEV": {
+      "CONTRADICT_SINGLE": 10,
+      "MULTI_SENTENCE": 10,
+      "SUPPORT_SINGLE": 10
+    },
+    "all_blocks_selected_and_sealed_before_any_item_action": true,
+    "total_DEV_required": 30,
+    "total_TRAIN_required": 156,
+    "total_required": 186
+  },
+  "future_mechanism_boundary": {
+    "action_formation_data": "G_form_labels_only",
+    "candidate_output": "exactly_three_distinct_abstract_sentence_positions",
+    "canonical_RAW_control": "first_three_abstract_sentence_positions_in_source_order",
+    "direct_item_utility": "one_if_the_selected_Set3_contains_every_sentence_position_of_at_least_one_official_gold_rationale_alternative_else_zero",
+    "evaluator_formation_data": "A_form_labels_only_after_the_action_registry_is_frozen",
+    "evaluator_promotion_data": "A_hold_labels_only_after_one_challenger_is_frozen",
+    "final_search_measurement": "M_search_only_after_promotion",
+    "gold_values_reaching_action_or_evaluator_inputs": false,
+    "official_HippoRAG_incumbent": "frozen_official_core_item_local_top3_over_the_same_claim_title_and_abstract_information",
+    "same_semantic_scorer_as_action_feature_proxy_and_final_utility": false,
+    "source_qualification_is_capacity_only_not_a_performance_gate": true
+  },
+  "hash_contract": {
+    "algorithm": "sha256",
+    "canonicalization": "json.dumps(body_without_design_sha256, ensure_ascii=True, allow_nan=False, sort_keys=True, separators=(',', ':')).encode('ascii')",
+    "excluded_top_level_fields": [
+      "design_sha256"
+    ]
+  },
+  "qualification_contract": {
+    "capacity_test": "for_each_split_build_a_bipartite_flow_network_from_nonexcluded_connected_components_to_the_families_present_in_each_component_with_unit_component_capacity_and_fixed_family_demands;_all_demands_must_be_saturated",
+    "DEV_family_demands": {
+      "CONTRADICT_SINGLE": 10,
+      "MULTI_SENTENCE": 10,
+      "SUPPORT_SINGLE": 10
+    },
+    "failure": "terminal_source_infeasible_without_smaller_blocks_family_redefinition_same_source_retry_or_item_action",
+    "no_selection_secret_or_item_selection_during_qualification": true,
+    "output": "aggregate_counts_distributions_error_counts_member_hashes_component_statistics_flow_capacity_and_population_digests_only_without_item_ID_doc_ID_claim_title_abstract_rationale_text_or_per_item_record",
+    "success": "zero_schema_or_mapping_errors_and_exact_saturation_of_all_TRAIN_and_DEV_family_demands",
+    "TRAIN_family_demands": {
+      "CONTRADICT_SINGLE": 52,
+      "MULTI_SENTENCE": 52,
+      "SUPPORT_SINGLE": 52
+    }
+  },
+  "recorded_date": "2026-07-19",
+  "schema": "scifact_direct_evidence_source_qualification_design_v1",
+  "selection_after_qualification": {
+    "candidate_within_component_family": "minimum_private_HMAC_rank",
+    "component_to_family_assignment": "deterministic_minimum_cost_max_flow_using_private_HMAC_costs_and_fixed_lexicographic_tie_breaking",
+    "secret": "generate_and_commit_one_fresh_32_byte_private_selection_secret_only_after_qualification_success",
+    "within_family_block_assignment": "independent_private_HMAC_order_then_fixed_block_slices_in_the_manifest_order_G_form_A_form_F_search_A_hold_for_TRAIN_and_M_search_for_DEV"
+  },
+  "status": "preregistered_before_any_archive_member_payload_extraction_or_row_parse"
+}
