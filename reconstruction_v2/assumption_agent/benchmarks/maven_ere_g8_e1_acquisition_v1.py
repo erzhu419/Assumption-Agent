@@ -25,6 +25,10 @@ DESIGN_RELATIVE = Path("manifests/maven_ere_g8_e1_formal_design_v1.json")
 DESIGN_FILE_SHA256 = "e8ae662809ead29f2a5c08fd0ca44970ef8916ccda3741f480b87b571f44ddf4"
 DESIGN_SELF_SHA256 = "314a9804d32a3c3fb848e0100bc62bc693a468e8e3ac09c9baf018c7cfeee417"
 DESIGN_COMMIT = "5b6232a927205e85ae78c9726d692819661ad3c2"
+IMPLEMENTATION_FREEZE_RELATIVE = Path(
+    "manifests/maven_ere_g8_e1_implementation_freeze_v1.json"
+)
+IMPLEMENTATION_FREEZE_SCHEMA = "maven_ere_g8_e1_implementation_freeze_v1"
 
 TRAIN_RELATIVE = qualification.TRAIN_RELATIVE_PATH
 VALID_RELATIVE = qualification.VALID_RELATIVE_PATH
@@ -44,6 +48,64 @@ BLOCK_SPECS = (
 )
 FORMAL_ROOT_RELATIVE = Path("artifacts/maven_ere_g8_e1_formal_v1")
 ACQUISITION_ROOT_NAME = "acquisition"
+
+REQUIRED_IMPLEMENTATION_ROLE_PATHS: Mapping[str, Path] = {
+    "formal_design": DESIGN_RELATIVE,
+    "source_qualification_design": Path(
+        "manifests/maven_ere_relation_context_source_qualification_design_v1.json"
+    ),
+    "source_priority_amendment": Path(
+        "manifests/maven_ere_relation_context_pre_row_family_priority_amendment_v1.json"
+    ),
+    "source_qualification_result": Path(
+        "manifests/maven_ere_relation_context_source_qualification_result_v1.json"
+    ),
+    "source_qualifier": Path(
+        "assumption_agent/benchmarks/maven_ere_relation_context_source_qualification_v1.py"
+    ),
+    "G8_E1_core": Path("assumption_agent/benchmarks/maven_ere_g8_e1_core_v1.py"),
+    "acquisition": Path(
+        "assumption_agent/benchmarks/maven_ere_g8_e1_acquisition_v1.py"
+    ),
+    "NLI_runtime": Path(
+        "assumption_agent/benchmarks/maven_ere_nli_runtime_v1.py"
+    ),
+    "local_runtime": Path(
+        "assumption_agent/benchmarks/maven_ere_local_runtime_v1.py"
+    ),
+    "formal_controller": Path(
+        "assumption_agent/benchmarks/maven_ere_g8_e1_formal_controller_v1.py"
+    ),
+    "official_hipporag_init": Path(
+        "assumption_agent/benchmarks/eraser_evidence_inference_official_hipporag_v1/__init__.py"
+    ),
+    "official_hipporag_adapter": Path(
+        "assumption_agent/benchmarks/eraser_evidence_inference_official_hipporag_v1/adapter.py"
+    ),
+    "official_hipporag_contract": Path(
+        "assumption_agent/benchmarks/eraser_evidence_inference_official_hipporag_v1/contract.py"
+    ),
+    "official_hipporag_worker": Path(
+        "assumption_agent/benchmarks/eraser_evidence_inference_official_hipporag_v1/worker.py"
+    ),
+    "NLI_binding": Path("replication_runtime/qasc_nli_v1/binding.py"),
+    "NLI_contract": Path("replication_runtime/qasc_nli_v1/contract.py"),
+    "NLI_worker": Path("replication_runtime/qasc_nli_v1/worker.py"),
+    "MiniLM_binding": Path("replication_runtime/qasper_minilm_v1/binding.py"),
+    "HippoRAG_runtime_attestation": Path(
+        "replication_runtime/musique_official_hipporag_v1/runtime_attestation_v3.py"
+    ),
+    "test_G8_E1_core": Path("tests/test_maven_ere_g8_e1_core_v1.py"),
+    "test_acquisition": Path("tests/test_maven_ere_g8_e1_acquisition_v1.py"),
+    "test_NLI_runtime": Path("tests/test_maven_ere_nli_runtime_v1.py"),
+    "test_local_runtime": Path("tests/test_maven_ere_local_runtime_v1.py"),
+    "test_formal_controller": Path(
+        "tests/test_maven_ere_g8_e1_formal_controller_v1.py"
+    ),
+    "test_source_qualifier": Path(
+        "tests/test_maven_ere_relation_context_source_qualification_v1.py"
+    ),
+}
 
 
 class MavenEreAcquisitionError(RuntimeError):
@@ -702,11 +764,135 @@ def _validate_public_design(project: Path) -> None:
         raise FormalProvenanceError("formal design self hash drifted")
 
 
+def _git_bytes(repository: Path, *arguments: str) -> bytes:
+    completed = subprocess.run(
+        ("git", "-C", str(repository), *arguments),
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+    if completed.returncode != 0:
+        raise FormalProvenanceError("git provenance command failed")
+    return completed.stdout
+
+
+def validate_formal_provenance(project_root: str | Path) -> dict[str, str]:
+    """Bind the committed implementation closure without opening source rows."""
+
+    project = Path(project_root).resolve(strict=True)
+    repository = Path(
+        _git_bytes(project, "rev-parse", "--show-toplevel").decode("utf-8").strip()
+    ).resolve(strict=True)
+    if (repository / "reconstruction_v2").resolve(strict=True) != project:
+        raise FormalProvenanceError("project/repository relationship drifted")
+    _validate_public_design(project)
+    freeze_path = project / IMPLEMENTATION_FREEZE_RELATIVE
+    if freeze_path.is_symlink() or not freeze_path.is_file():
+        raise FormalProvenanceError("implementation freeze is unavailable")
+    raw = freeze_path.read_bytes()
+    try:
+        payload = qualification._strict_json(raw, label="MAVEN implementation freeze")
+    except Exception as exc:
+        raise FormalProvenanceError("implementation freeze is invalid") from exc
+    if not isinstance(payload, Mapping):
+        raise FormalProvenanceError("implementation freeze root drifted")
+    body = dict(payload)
+    declared = body.pop("implementation_freeze_sha256", None)
+    if (
+        not isinstance(declared, str)
+        or len(declared) != 64
+        or stable_hash(body) != declared
+        or payload.get("schema") != IMPLEMENTATION_FREEZE_SCHEMA
+        or payload.get("version") != VERSION
+        or payload.get("status")
+        != "frozen_before_private_selection_secret_cohort_or_formal_model_inference"
+    ):
+        raise FormalProvenanceError("implementation freeze self hash drifted")
+    implementation_commit = payload.get("implementation_commit")
+    if (
+        not isinstance(implementation_commit, str)
+        or len(implementation_commit) != 40
+        or any(value not in "0123456789abcdef" for value in implementation_commit)
+    ):
+        raise FormalProvenanceError("implementation commit is invalid")
+    binding = payload.get("implementation_binding")
+    files = binding.get("files") if isinstance(binding, Mapping) else None
+    if (
+        not isinstance(files, list)
+        or binding.get("file_count") != len(REQUIRED_IMPLEMENTATION_ROLE_PATHS)
+        or len(files) != len(REQUIRED_IMPLEMENTATION_ROLE_PATHS)
+    ):
+        raise FormalProvenanceError("implementation file registry drifted")
+    expected_rows: list[tuple[str, Path, str]] = []
+    for row, (role, relative) in zip(
+        files, REQUIRED_IMPLEMENTATION_ROLE_PATHS.items(), strict=True
+    ):
+        if not isinstance(row, Mapping) or set(row) != {
+            "relative_path",
+            "role",
+            "sha256",
+        }:
+            raise FormalProvenanceError("implementation file row shape drifted")
+        digest = row.get("sha256")
+        if (
+            row.get("role") != role
+            or row.get("relative_path") != relative.as_posix()
+            or not isinstance(digest, str)
+            or len(digest) != 64
+        ):
+            raise FormalProvenanceError("implementation file row drifted")
+        path = project / relative
+        if path.is_symlink() or not path.is_file() or _sha256_file(path) != digest:
+            raise FormalProvenanceError("implementation working blob drifted")
+        expected_rows.append((role, relative, digest))
+    if payload.get("claim_boundary") != {
+        "formal_model_or_HippoRAG_inference_run": False,
+        "hidden_TEST_member_opened": False,
+        "online_or_external_evaluation_used": False,
+        "private_cohort_selected": False,
+        "private_selection_secret_generated": False,
+        "released_train_or_valid_row_reopened_after_source_qualification": False,
+    }:
+        raise FormalProvenanceError("implementation freeze claim boundary drifted")
+    if _git_bytes(repository, "cat-file", "-t", implementation_commit).strip() != b"commit":
+        raise FormalProvenanceError("implementation commit object is unavailable")
+    _git_bytes(repository, "merge-base", "--is-ancestor", implementation_commit, "HEAD")
+    repository_paths = [
+        "reconstruction_v2/" + relative.as_posix()
+        for _role, relative, _digest in expected_rows
+    ]
+    freeze_repository_path = (
+        "reconstruction_v2/" + IMPLEMENTATION_FREEZE_RELATIVE.as_posix()
+    )
+    for path in (*repository_paths, freeze_repository_path):
+        _git_bytes(repository, "ls-files", "--error-unmatch", "--", path)
+    _git_bytes(
+        repository,
+        "diff",
+        "--quiet",
+        "HEAD",
+        "--",
+        *repository_paths,
+        freeze_repository_path,
+    )
+    for _role, relative, digest in expected_rows:
+        repository_path = "reconstruction_v2/" + relative.as_posix()
+        if hashlib.sha256(
+            _git_bytes(repository, "show", f"{implementation_commit}:{repository_path}")
+        ).hexdigest() != digest:
+            raise FormalProvenanceError("implementation committed blob drifted")
+    return {
+        "implementation_commit": implementation_commit,
+        "implementation_freeze_file_sha256": hashlib.sha256(raw).hexdigest(),
+        "implementation_freeze_self_sha256": declared,
+    }
+
+
 def run_formal_acquisition(project_root: str | Path) -> dict[str, Any]:
     project = Path(project_root).resolve(strict=True)
     if project.name != "reconstruction_v2":
         raise FormalProvenanceError("project root must be reconstruction_v2")
-    _validate_public_design(project)
+    provenance = validate_formal_provenance(project)
     root = project / FORMAL_ROOT_RELATIVE / ACQUISITION_ROOT_NAME
     if os.path.lexists(root):
         raise OneShotRefusal("formal acquisition root already exists")
@@ -765,6 +951,7 @@ def run_formal_acquisition(project_root: str | Path) -> dict[str, Any]:
                 },
                 "collision_component_count": materials.collision_component_count,
                 "design_sha256": DESIGN_SELF_SHA256,
+                "implementation_provenance": provenance,
                 "eligible_candidate_occurrence_count": materials.eligible_candidate_count,
                 "label_pack_bindings": label_bindings,
                 "minimum_cost_sum_sha256": hashlib.sha256(
@@ -800,18 +987,6 @@ def run_formal_acquisition(project_root: str | Path) -> dict[str, Any]:
         raise
 
 
-def _git(root: Path, *arguments: str) -> str:
-    completed = subprocess.run(
-        ("git", "-C", str(root), *arguments),
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if completed.returncode != 0:
-        raise FormalProvenanceError("git provenance command failed")
-    return completed.stdout.strip()
-
-
 __all__ = [
     "AcquisitionMaterials",
     "AssignmentShortfall",
@@ -829,4 +1004,5 @@ __all__ = [
     "parse_released_members",
     "run_formal_acquisition",
     "stable_hash",
+    "validate_formal_provenance",
 ]

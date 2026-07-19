@@ -13,6 +13,7 @@ import re
 from typing import Any, Mapping, Sequence
 
 from assumption_agent.benchmarks import maven_ere_g8_e1_core_v1 as core
+from assumption_agent.benchmarks import maven_ere_g8_e1_acquisition_v1 as acquisition
 from assumption_agent.benchmarks import maven_ere_local_runtime_v1 as local_runtime
 
 
@@ -533,6 +534,7 @@ def _fit_e1(
 
 def run_formal_lifecycle(project_root: str | Path) -> dict[str, Any]:
     project = Path(project_root).resolve(strict=True)
+    implementation_provenance = acquisition.validate_formal_provenance(project)
     acquisition_root = project / ACQUISITION_RELATIVE
     controller_root = project / CONTROLLER_RELATIVE
     if os.path.lexists(controller_root):
@@ -546,6 +548,7 @@ def run_formal_lifecycle(project_root: str | Path) -> dict[str, Any]:
     marker = _self_hashed(
         {
             "design_sha256": DESIGN_SELF_SHA256,
+            "implementation_provenance": implementation_provenance,
             "schema": "maven_ere_g8_e1_lifecycle_authorization_consumed_v1",
             "status": "consumed_before_private_view_or_label_open",
             "version": VERSION,
@@ -759,6 +762,7 @@ def run_formal_lifecycle(project_root: str | Path) -> dict[str, Any]:
                         "same_source_retry_or_resample": False,
                     },
                     "evaluator_promoted": promotion,
+                    "implementation_provenance": implementation_provenance,
                     "real_domain_primary_passed": primary,
                     "schema": "maven_ere_g8_e1_terminal_result_v1",
                     "status": (
