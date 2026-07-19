@@ -8,6 +8,14 @@
 >   但 Agent−RAW 总 U 为 `−14`，且 Agent 相对 HippoRAG 的全部 `+27 U` 只来自 definition-positive 两个 family，故只把
 >   窄 synthetic mechanism stability 从 unknown 更新为 descriptively supported，不扩张为现实域、L4/L5
 >   或 Agent 普遍优于 HippoRAG
+> - 最新 FEVEROUS source-epoch v3 终态：原 source qualification 在设计冻结前已记录并规定整组排除 2 个
+>   `NFD+casefold` 等价但 exact 不同的 title-context evidence sets；提交 `96234cf5` 将该 typed exclusion
+>   接入 production adapter，`ac2919c0` 绑定 runner/resolver/formal-source/adapter/atomic-corpus/acquisition-core、
+>   loader callable 与 Unicode DB，`c2c7efb8` 只修正 exact-subset 与 adapter pre-exclusion counter 的会计口径。
+>   一次不足绑定的 nonqualifying prepass 在 TRAIN 读完、DB 哈希未完时中止，adapter=0；随后两次 pass 均完整
+>   哈希 53.5 GB DB 并穷尽 TRAIN resolver/adapter，但都在形成 receipt 前被同一 aggregate topology 断言拒绝。
+>   实际不一致字段/数值从未输出或落盘，v3 root/secret/HMAC/cohort/retrieval/action/score 均为 0。终态
+>   `04ee399d…6b46` 禁止 FEVEROUS v3/v4 重跑；这不是 efficacy negative，Agent/RAW/HippoRAG 效果仍 unknown。
 > - 代码审计基线 revision：`6224bb5a279f50fbcf1f8b36d19cb4ce6cc6c882`
 > - 本次实现复核：receipt/runtime provenance 修复提交 `e43670f6`、`18ff3417`；v3.3 execution-policy 提交 `e0b1a33b`；v3.4 model-only/action-budget 主提交 `e491b0af`，runtime-path 修复 `995e6446`，Ruoli 503 分类修复 `ba0f36cf`，host-readable audit artifact 修复 `1df3092a` / `ad66d5a2`；v3.4 max2 v5 canary 已通过、fresh development 因四并发 429 fail closed；v3.5 将所有在线 phase 版本化为 1 worker，repair identity 修复 `96d53a5d`，malformed proposal/claim binding 修复 `d70562de`；v3.6 contrastive evidence / invalid-evidence lifecycle 实现提交 `01608e1e`；v3.7 六路首批 6/6 收到 429；v3.8 两路在 16 valid 后收到 2 个 503；v3.9 固定为 outer item workers=6 / shared model slot=1，并完成首个 clean full development 负结果；v3.10 exact-three/coverage-first fresh run 将 activation 提高到 2/16 但仍 0 gain，并暴露 semantic-diversity hard reject 与 action lowering 丢 target；v3.11 actionability fresh run 证明 treatment 已改变 trace、PDF 与成本但仍 0 gain，同时暴露 repair response shape 未被 generic system contract 可靠约束；v3.12 显式版本化 singular repair response并完成 56/56 clean development trials，但两代仍各仅激活 1/16、0 gain，无 incumbent；误入的空 freeze/partial controls 已隔离并补上 phase prerequisite；v3.13 complementary program-set 已完成 375/375 离线测试和 76/76 valid live development，三套 bundle 均激活 2/16、6 个 policy-on 全部失败、0 gain/0 harm、无 incumbent，同时暴露 G2 cross-arm raw replay 不一致；v3.14 提交 `2229d7af` 完成 411/411 离线测试及 62/62 attempted live development，selector 成功选中 7/7 三-family set、activation=3/16，但 7 个 policy-on 全失败；一条 recursive raw 超 64 MiB 使 primary non-claim，valid baseline replay=31、invalid key 又跨臂执行一次，两份 archive 仍无 incumbent；v3.15 action-quality / terminal-invalid provenance 实现提交 `696a2954`，453/453 离线测试通过，随后 clean lock、86/86 cache-only prewarm、smoke 与 57/57-valid live development 全部完成，但两臂仍 0 gain/0 harm、`incumbent_id=null`
 > - 最新 proposal-only 复核：v3.16 family-slot formation 提交 `6ad5c156`；v3.17 artifact-blueprint formation 提交 `4f94e613`。两轮均失败且未启动 benchmark trial
@@ -3617,7 +3625,43 @@ FEVEROUS（text/table/cell/cross-page/aggregation family），其次是 HybridQA
 标签被拒，不再列作候选。若不再承担这一项新 study，当前最诚实的终稿结论仍是：**现实域没有稳定 Agent−HippoRAG 净收益，L5 未达到；
 系统已证明能正确拒绝候选，而不是已经实现 evaluator co-evolution。**
 
+### 12.19 2026-07-19 FEVEROUS source epoch v3：adapter 可穷尽，但 aggregate compatibility 未获证明
+
+FEVEROUS 路线没有沿用 v1/v2 的 root、secret 或失败后的 partial state。v1 在 TRAIN decode 后、DB open 前终止；v2 完成
+TRAIN decode、53.5 GB SQLite SHA 校验与 partial adapter scan 后，在第一个 content/title exact-page mismatch 处终止。
+后续只做 aggregate-only、无评分诊断，确认全 TRAIN 恰有 2 个 reference、2 个 evidence set、2 个 record 命中同一形态；更早的
+[Wikipedia source qualification](../manifests/feverous_wikipedia_source_qualification_v1.json) 已在任何 cohort selection 前记录
+`casefold_nfd_only_title_context_occurrences=2`，并明确要求整组排除。因此这不是看结果后新增关键词或 gate，而是补回冻结来源协议中
+遗漏的 typed exclusion：只允许 exact 不同但 `NFD→casefold` 相等的 content/title page 被分类为 invalid whole-set；不改写 ID、
+不 fuzzy resolve，任何无关跨页、非-title context member 跨页、缺/多 title 或非法 ID 仍 fail closed。invalid set 的 content ID
+只保留在 distractor 禁入 universe，不进入 canonical evidence set；set/reference/record 三类计数与 family-structure exclusion 分开。
+
+实现与资格闭包分三次提交：`96234cf5` 固定 adapter、aggregate receipt 和 synthetic tests；`ac2919c0` 再把实际 candidate scan
+执行到的 qualification runner、Wikipedia resolver、formal source、adapter、atomic corpus、acquisition core、strict JSON decoder、
+blank-sentinel predicate 与 `unicodedata` version 全部纳入 receipt；`c2c7efb8` 仅把 source qualification 的 exact-context subset
+`75,219 / 338,061` 与 adapter 在 exclusion 前递增的 `official_*` counter 明确分层，不改变 source、candidate、selection 或 evaluator。
+相关 synthetic suite 均通过，且没有生成或读取任何 v3 selection secret。
+
+正式 compatibility qualification 没有成功产生 receipt。第一次不足绑定的 prepass 在 TRAIN 已完整读取、SQLite SHA 尚未完成时因
+独立审计主动中止；resolver 未打开、adapter 未调用。补齐绑定后的第一次 completed pass 完整哈希 DB 并穷尽 resolver/adapter，
+但在最终 aggregate 断言处以 generic `FeverousAdapterCompatibilityQualificationError` 终止。根据预先公开的 source aggregate 与
+counter 定义修正会计口径后，最后一次 capped pass 再次完整穷尽 adapter，仍在同一断言处终止。runner 没有打印 actual mismatch
+字段或值，也没有把 adapter aggregate、candidate 或 raw identifier/claim/label/evidence 写盘；因此不能继续根据隐藏差异调常数再试。
+
+[terminal failure receipt](../manifests/feverous_p6_e2_adapter_compatibility_qualification_v3_terminal_failure.json)
+以 `04ee399d40f475b23a013d8e2eaa1ffd8e70cea29fce38908a35e97c8c066b46` 固定三次边界：两次 completed pass 都是
+adapter exhaustion、0 receipt；整个 v3 为 0 root、0 secret、0 HMAC/cohort/corpus、0 RAW/P6/HippoRAG、0 evaluator/score、
+0 DEV/TEST/online evaluator。故结论是 **source adapter execution 可完成，但冻结 aggregate compatibility 未被证明**；不能把它写成
+Agent 对 HippoRAG 的性能负结果，也不能建立 v3 rollover 或 v4。下一项总目标实验必须转到独立 domain/custody，优先审计
+HybridQA/OTT-QA 的 official table-linked-passage source，并直接采用一次性 acquisition + offline evaluation；不得在 FEVEROUS 上
+继续补 gate 或用更多全量 pass 追逐 topology 常数。
+
 ## 附录 A：关键证据索引
+
+- FEVEROUS source epoch v3 qualification terminal（无 v3 secret/cohort/action/score）：
+  [`typed adapter`](../assumption_agent/benchmarks/feverous_p6_e2_source_adapter_v1.py)；
+  [`aggregate-only qualifier`](../assumption_agent/benchmarks/feverous_p6_e2_adapter_compatibility_qualification_v3.py)；
+  [`terminal failure receipt`](../manifests/feverous_p6_e2_adapter_compatibility_qualification_v3_terminal_failure.json)
 
 - HoVer joint graph/evaluator formal chain（有效 A_hold non-promotion；M_search 未打开）：
   [`source custody`](../manifests/hover_source_custody_v1.json)；
