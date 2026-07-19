@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import stat
 from typing import Any, Mapping, Sequence
 
 from assumption_agent.benchmarks import hybridqa_direct_acquisition_v1 as acquisition
@@ -146,6 +147,26 @@ class OfficialHippoGateway:
     def retrieve(self, *, block: str, queries: Sequence[str]) -> RetrievalBatch:
         if block not in {"A_form_F_search_A_hold", "M_search"}:
             raise HybridQaLocalRuntimeError("HippoRAG retrieval stage is invalid")
+        try:
+            self.config.hippo_work_root.mkdir(mode=0o700)
+        except FileExistsError:
+            pass
+        except OSError as exc:
+            raise HybridQaLocalRuntimeError(
+                "HippoRAG work root cannot be created"
+            ) from exc
+        try:
+            metadata = self.config.hippo_work_root.lstat()
+        except OSError as exc:
+            raise HybridQaLocalRuntimeError(
+                "HippoRAG work root cannot be inspected"
+            ) from exc
+        if (
+            stat.S_ISLNK(metadata.st_mode)
+            or not stat.S_ISDIR(metadata.st_mode)
+            or stat.S_IMODE(metadata.st_mode) != 0o700
+        ):
+            raise HybridQaLocalRuntimeError("HippoRAG work root is unsafe")
         return retrieve_official_hipporag_global_index_v1(
             queries=queries,
             runtime_python=self.config.hippo_runtime_python,

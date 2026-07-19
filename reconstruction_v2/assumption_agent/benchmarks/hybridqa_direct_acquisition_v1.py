@@ -44,6 +44,64 @@ IMPLEMENTATION_FREEZE_RELATIVE = Path("manifests/hybridqa_p6_e2_implementation_f
 DESIGN_RELATIVE = Path("manifests/hybridqa_p6_e2_design_v1.json")
 DESIGN_SHA256 = "028f6a58b4e7809e6165cc04e1356aa1b7904dfbe3a8bee18e92ecf00360de34"
 
+IMPLEMENTATION_FREEZE_REQUIRED_PATHS = tuple(
+    sorted(
+        {
+            "assumption_agent/models.py",
+            "assumption_agent/benchmarks/feverous_e2_evaluator_v1.py",
+            "assumption_agent/benchmarks/hybridqa_direct_acquisition_v1.py",
+            "assumption_agent/benchmarks/hybridqa_isolated_bootstrap_v1.py",
+            "assumption_agent/benchmarks/hybridqa_local_runtime_v1.py",
+            "assumption_agent/benchmarks/hybridqa_p6_e2_formal_controller_v1.py",
+            "assumption_agent/benchmarks/hybridqa_query_anchored_formal_runner_v1.py",
+            "assumption_agent/benchmarks/hybridqa_query_anchored_operator_v1.py",
+            "assumption_agent/benchmarks/hybridqa_source_qualification_v1.py",
+            "assumption_agent/benchmarks/musique_formal_runtime_binding_v2.py",
+            "assumption_agent/benchmarks/musique_formal_runtime_binding_v3.py",
+            "replication_runtime/hybridqa_official_hipporag_v1/__init__.py",
+            "replication_runtime/hybridqa_official_hipporag_v1/adapter.py",
+            "replication_runtime/hybridqa_official_hipporag_v1/contract.py",
+            "replication_runtime/hybridqa_official_hipporag_v1/worker.py",
+            "replication_runtime/multihoprag_minilm_v1/__init__.py",
+            "replication_runtime/multihoprag_minilm_v1/adapter.py",
+            "replication_runtime/qasper_minilm_v1/__init__.py",
+            "replication_runtime/qasper_minilm_v1/binding.py",
+            "replication_runtime/musique_official_hipporag_v1/__init__.py",
+            "replication_runtime/musique_official_hipporag_v1/adapter.py",
+            "replication_runtime/musique_official_hipporag_v1/adapter_v2.py",
+            "replication_runtime/musique_official_hipporag_v1/adapter_v3.py",
+            "replication_runtime/musique_official_hipporag_v1/binding.py",
+            "replication_runtime/musique_official_hipporag_v1/contract.py",
+            "replication_runtime/musique_official_hipporag_v1/runtime_attestation_v2.py",
+            "replication_runtime/musique_official_hipporag_v1/runtime_attestation_v3.py",
+            "replication_runtime/musique_official_hipporag_v1/worker.py",
+            "manifests/hybridqa_official_hipporag_duplicate_compatibility_qualification_v1.json",
+            "manifests/hybridqa_p6_e2_design_v1.json",
+            "manifests/hybridqa_source_custody_v1.json",
+            "manifests/musique_official_hipporag_retrieve_only_binding_v1.json",
+            "manifests/musique_official_hipporag_runtime_attestation_v2.json",
+            "manifests/musique_official_hipporag_runtime_attestation_v3.json",
+            "manifests/qasper_minilm_runtime_asset_v1.json",
+            "tests/test_hybridqa_direct_acquisition_v1.py",
+            "tests/test_hybridqa_isolated_bootstrap_v1.py",
+            "tests/test_hybridqa_local_runtime_v1.py",
+            "tests/test_hybridqa_official_hipporag_v1.py",
+            "tests/test_hybridqa_p6_e2_formal_controller_v1.py",
+            "tests/test_hybridqa_query_anchored_formal_runner_v1.py",
+            "tests/test_hybridqa_query_anchored_operator_v1.py",
+            "tests/test_hybridqa_source_qualification_v1.py",
+        }
+    )
+)
+IMPLEMENTATION_FREEZE_SEMANTICS = {
+    "dependency_site": "explicit_user_site_before_system_third_party_under_python_isolated_mode",
+    "formal_python_version": [3, 10, 12],
+    "offline_only": True,
+    "one_shot_no_retry_replay_resample_or_threshold_change": True,
+    "raw_hipporag_agent_logical_parallelism": "3_times_n",
+    "selection_split": "official_TRAIN_only",
+}
+
 MARKER_FILENAME = "acquisition.one_shot_marker.json"
 SECRET_FILENAME = "selection_secret.private.bin"
 PUBLIC_FILENAME = "acquisition.public.json"
@@ -464,12 +522,31 @@ def form_fixed_corpus(
     return frozen, {unit.key: index for index, unit in enumerate(frozen)}
 
 
-def _item_commitment(block: str, ordinal: int, candidate: Candidate) -> str:
+def item_commitment(
+    *,
+    block: str,
+    ordinal: int,
+    question: str,
+    question_postag: str,
+) -> str:
+    if (
+        block not in BLOCK_COUNTS
+        or type(ordinal) is not int
+        or not 0 <= ordinal < BLOCK_COUNTS[block]
+        or not isinstance(question, str)
+        or not question.strip()
+        or not isinstance(question_postag, str)
+        or not question_postag.strip()
+    ):
+        raise HybridQaAcquisitionError("item commitment input drifted")
     return stable_hash(
         {
             "block": block,
             "ordinal": ordinal,
-            "question_sha256": hashlib.sha256(candidate.question.encode("utf-8")).hexdigest(),
+            "question_postag_sha256": hashlib.sha256(
+                question_postag.encode("utf-8")
+            ).hexdigest(),
+            "question_sha256": hashlib.sha256(question.encode("utf-8")).hexdigest(),
             "version": VERSION,
         }
     )
@@ -517,15 +594,19 @@ def form_private_packs(
             for index, unit in enumerate(corpus)
         ],
     }
-    packs: dict[str, dict[str, Any]] = {
-        CORPUS_FILENAME: self_hashed(corpus_body, "corpus_pack_sha256")
-    }
+    corpus_pack = self_hashed(corpus_body, "corpus_pack_sha256")
+    packs: dict[str, dict[str, Any]] = {CORPUS_FILENAME: corpus_pack}
     for block in BLOCK_ORDER:
         candidates = tuple(selected[block])
         if len(candidates) != BLOCK_COUNTS[block]:
             raise HybridQaAcquisitionError("selected block count drifted")
         commitments = [
-            _item_commitment(block, ordinal, candidate)
+            item_commitment(
+                block=block,
+                ordinal=ordinal,
+                question=candidate.question,
+                question_postag=candidate.question_postag,
+            )
             for ordinal, candidate in enumerate(candidates)
         ]
         view_body = {
@@ -543,13 +624,16 @@ def form_private_packs(
             ],
             "labels_family_gold_or_table_included": False,
         }
-        packs[f"{block}.view.private.json"] = self_hashed(view_body, "block_view_sha256")
+        view_pack = self_hashed(view_body, "block_view_sha256")
+        packs[f"{block}.view.private.json"] = view_pack
         if block != "F_search":
             labels_body = {
                 "schema": f"{VERSION}_label_pack",
                 "version": VERSION,
                 "block": block,
                 "item_count": len(candidates),
+                "block_view_sha256": view_pack["block_view_sha256"],
+                "corpus_pack_sha256": corpus_pack["corpus_pack_sha256"],
                 "items": [
                     {
                         "item_commitment_sha256": commitment,
@@ -597,31 +681,108 @@ def _write_secret(path: Path, secret: bytes) -> None:
             raise HybridQaAcquisitionError("selection secret permissions are unenforceable")
 
 
+def _read_frozen_regular(project: Path, relative: str, *, label: str) -> bytes:
+    if not isinstance(relative, str):
+        raise HybridQaAcquisitionError(f"{label} path is unsafe")
+    candidate = Path(relative)
+    if (
+        not relative
+        or candidate.is_absolute()
+        or candidate.as_posix() != relative
+        or ".." in candidate.parts
+    ):
+        raise HybridQaAcquisitionError(f"{label} path is unsafe")
+    cursor = project
+    for component in candidate.parts:
+        cursor = cursor / component
+        try:
+            metadata = cursor.lstat()
+        except OSError as exc:
+            raise HybridQaAcquisitionError(f"{label} is unavailable") from exc
+        if stat.S_ISLNK(metadata.st_mode):
+            raise HybridQaAcquisitionError(f"{label} contains a symlink")
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(project / candidate, flags)
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise HybridQaAcquisitionError(f"{label} is not a regular file")
+        with os.fdopen(descriptor, "rb", closefd=True) as handle:
+            return handle.read()
+    except HybridQaAcquisitionError:
+        raise
+    except OSError as exc:
+        raise HybridQaAcquisitionError(f"{label} is unreadable") from exc
+
+
 def _verify_implementation_freeze(project: Path) -> dict[str, Any]:
     path = project / IMPLEMENTATION_FREEZE_RELATIVE
-    value = _read_json(path, label="implementation freeze")
-    if not isinstance(value, Mapping):
+    raw = _read_frozen_regular(
+        project,
+        IMPLEMENTATION_FREEZE_RELATIVE.as_posix(),
+        label="implementation freeze",
+    )
+    try:
+        value = json.loads(raw.decode("ascii"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HybridQaAcquisitionError("implementation freeze is invalid") from exc
+    if (
+        not isinstance(value, Mapping)
+        or raw != _canonical_bytes(value, newline=True)
+    ):
         raise HybridQaAcquisitionError("implementation freeze is not an object")
     verify_self_hash(value, "freeze_sha256")
     files = value.get("files")
-    if value.get("schema") != "hybridqa_p6_e2_implementation_freeze_v1" or value.get("status") != "implementation_frozen" or value.get("design_sha256") != DESIGN_SHA256 or not isinstance(files, list):
+    if (
+        set(value)
+        != {
+            "schema",
+            "version",
+            "status",
+            "design_sha256",
+            "required_path_registry_sha256",
+            "implementation_file_count",
+            "freeze_semantics",
+            "files",
+            "freeze_sha256",
+        }
+        or value.get("schema") != "hybridqa_p6_e2_implementation_freeze_v1"
+        or value.get("version") != "v1"
+        or value.get("status") != "implementation_frozen"
+        or value.get("design_sha256") != DESIGN_SHA256
+        or value.get("required_path_registry_sha256")
+        != stable_hash(list(IMPLEMENTATION_FREEZE_REQUIRED_PATHS))
+        or value.get("implementation_file_count")
+        != len(IMPLEMENTATION_FREEZE_REQUIRED_PATHS)
+        or value.get("freeze_semantics") != IMPLEMENTATION_FREEZE_SEMANTICS
+        or not isinstance(files, list)
+        or len(files) != len(IMPLEMENTATION_FREEZE_REQUIRED_PATHS)
+    ):
         raise HybridQaAcquisitionError("implementation freeze contract drifted")
+    observed_paths: list[str] = []
     for row in files:
         if not isinstance(row, Mapping) or set(row) != {"relative_path", "sha256"}:
             raise HybridQaAcquisitionError("implementation freeze file row drifted")
         relative = row.get("relative_path")
         digest = row.get("sha256")
-        if not isinstance(relative, str) or not isinstance(digest, str) or _HEX64.fullmatch(digest) is None:
+        if (
+            not isinstance(relative, str)
+            or not isinstance(digest, str)
+            or _HEX64.fullmatch(digest) is None
+        ):
             raise HybridQaAcquisitionError("implementation freeze file identity is invalid")
-        candidate = Path(relative)
-        if candidate.is_absolute() or ".." in candidate.parts:
-            raise HybridQaAcquisitionError("implementation freeze path is unsafe")
-        try:
-            raw = (project / candidate).read_bytes()
-        except OSError as exc:
-            raise HybridQaAcquisitionError("implementation freeze file is unavailable") from exc
-        if hashlib.sha256(raw).hexdigest() != digest:
+        observed_paths.append(relative)
+        file_raw = _read_frozen_regular(
+            project, relative, label="implementation freeze member"
+        )
+        if hashlib.sha256(file_raw).hexdigest() != digest:
             raise HybridQaAcquisitionError("implementation freeze file hash drifted")
+    if tuple(observed_paths) != IMPLEMENTATION_FREEZE_REQUIRED_PATHS:
+        raise HybridQaAcquisitionError(
+            "implementation freeze required path registry drifted"
+        )
     return dict(value)
 
 
@@ -769,6 +930,21 @@ def run_formal_acquisition(project_root: str | Path) -> dict[str, Any]:
         }
         public = self_hashed(public_body, "acquisition_receipt_sha256")
         _write_exclusive(acquisition_root / PUBLIC_FILENAME, public)
+        try:
+            acquisition_root.chmod(0o500)
+            metadata = acquisition_root.lstat()
+        except OSError as exc:
+            raise HybridQaAcquisitionError(
+                "completed acquisition root cannot be sealed"
+            ) from exc
+        if (
+            stat.S_ISLNK(metadata.st_mode)
+            or not stat.S_ISDIR(metadata.st_mode)
+            or stat.S_IMODE(metadata.st_mode) != 0o500
+        ):
+            raise HybridQaAcquisitionError(
+                "completed acquisition root seal drifted"
+            )
         return public
     except BaseException as exc:
         _terminal_failure(acquisition_root, stage="selection_or_materialization", exc=exc)
@@ -805,6 +981,8 @@ __all__ = [
     "CorpusUnit",
     "FAMILIES",
     "HybridQaAcquisitionError",
+    "IMPLEMENTATION_FREEZE_REQUIRED_PATHS",
+    "IMPLEMENTATION_FREEZE_SEMANTICS",
     "PER_FAMILY_QUOTA",
     "UnitKey",
     "canonical_lexical_tokens",
@@ -812,6 +990,7 @@ __all__ = [
     "decoded_corpus_units",
     "form_fixed_corpus",
     "form_private_packs",
+    "item_commitment",
     "normalized_question",
     "run_formal_acquisition",
     "select_blocks",

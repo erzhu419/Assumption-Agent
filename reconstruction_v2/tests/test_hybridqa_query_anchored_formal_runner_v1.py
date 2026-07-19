@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 import hashlib
+import json
 
 import numpy as np
 import pytest
@@ -355,6 +356,29 @@ def test_anchor_scores_three_times_n_and_all_prespecified_families() -> None:
         family: 10 for family in runner.FAMILIES
     }
     assert set(receipt["E2_minus_HippoRAG_family_sums"]) == set(runner.FAMILIES)
+
+    tampered = dict(receipt)
+    tampered["evaluator_promoted"] = not receipt["evaluator_promoted"]
+    tampered.pop("score_receipt_sha256")
+    tampered["score_receipt_sha256"] = runner.stable_hash(tampered)
+    with pytest.raises(
+        runner.HybridQaFormalRunnerError,
+        match="derived decision semantics drifted",
+    ):
+        runner.AnchorScoreSeal(
+            block="A_hold",
+            anchor_features=anchor_features,
+            hippo_retrievals=hippo,
+            policies=policy,
+            a_hold_authorization=None,
+            receipt_json=json.dumps(
+                tampered,
+                ensure_ascii=True,
+                allow_nan=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+        )
 
     wrong_labels = labels[:-1] + (
         runner.AnchorLabel("f" * 64, (0,), runner.FAMILIES[-1]),

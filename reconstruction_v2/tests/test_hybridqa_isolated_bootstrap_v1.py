@@ -14,11 +14,31 @@ class _ExecCaptured(RuntimeError):
         self.arguments = arguments
 
 
+def test_target_capability_set_includes_exact_controller_entrypoint() -> None:
+    assert bootstrap.TARGETS == frozenset(
+        {
+            "assumption_agent.benchmarks.hybridqa_direct_acquisition_v1",
+            "assumption_agent.benchmarks.hybridqa_p6_e2_formal_controller_v1",
+            "assumption_agent.benchmarks.hybridqa_query_anchored_formal_runner_v1",
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    "target",
+    (
+        "assumption_agent.benchmarks.hybridqa_direct_acquisition_v1",
+        "assumption_agent.benchmarks.hybridqa_p6_e2_formal_controller_v1",
+        "assumption_agent.benchmarks.hybridqa_query_anchored_formal_runner_v1",
+    ),
+)
 def test_reexec_builds_isolated_empty_pycache_command(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    target: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    target = "assumption_agent.benchmarks.hybridqa_direct_acquisition_v1"
+    dependency_site = tmp_path / "dependency-site"
+    dependency_site.mkdir(mode=0o700)
     monkeypatch.setattr(bootstrap, "_project_root", lambda: tmp_path)
+    monkeypatch.setattr(bootstrap, "_dependency_site", lambda: dependency_site)
     monkeypatch.setattr(bootstrap.os, "getpid", lambda: 123)
     monkeypatch.setattr(bootstrap.os, "urandom", lambda _count: b"A" * 8)
     monkeypatch.delenv(bootstrap.TARGET_ENV, raising=False)
@@ -41,6 +61,13 @@ def test_reexec_builds_isolated_empty_pycache_command(
     assert environment[bootstrap.TARGET_ENV] == target
     assert environment[bootstrap.PROJECT_ENV] == str(tmp_path)
     assert environment[bootstrap.PYCACHE_ENV] in command[4]
+    assert environment[bootstrap.DEPENDENCY_SITE_ENV] == str(dependency_site)
+    assert environment["PYTHONNOUSERSITE"] == "1"
+    assert environment["HF_HUB_OFFLINE"] == "1"
+    assert environment["TRANSFORMERS_OFFLINE"] == "1"
+    assert environment["TOKENIZERS_PARALLELISM"] == "false"
+    assert environment["CUDA_VISIBLE_DEVICES"] == ""
+    assert str(dependency_site) in command[6]
     assert "PYTHONPATH" not in environment
 
 

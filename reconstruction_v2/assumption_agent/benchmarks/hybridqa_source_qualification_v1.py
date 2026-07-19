@@ -904,6 +904,248 @@ def qualify_decoded_sources(
     return receipt
 
 
+def verify_qualification_receipt(
+    receipt: Mapping[str, Any], *, expected_qualification_code_sha256: str
+) -> dict[str, Any]:
+    """Verify the complete formal aggregate receipt without reopening source."""
+
+    if (
+        not isinstance(receipt, Mapping)
+        or not isinstance(expected_qualification_code_sha256, str)
+        or _HEX64_RE.fullmatch(expected_qualification_code_sha256) is None
+    ):
+        raise HybridQaSourceQualificationError(
+            "qualification receipt verification input is invalid"
+        )
+    value = dict(receipt)
+    expected_keys = {
+        "schema",
+        "version",
+        "source_release",
+        "qualification_class",
+        "status",
+        "formal_identity_enforced",
+        "qualification_code_sha256",
+        "file_sets",
+        "qa",
+        "dev_reference",
+        "corpus",
+        "answer_nodes",
+        "safeguards",
+        "source_custody",
+        "receipt_sha256",
+    }
+    if set(value) != expected_keys:
+        raise HybridQaSourceQualificationError(
+            "qualification receipt key schema drifted"
+        )
+    declared = value.get("receipt_sha256")
+    body = dict(value)
+    body.pop("receipt_sha256", None)
+    if (
+        not isinstance(declared, str)
+        or _HEX64_RE.fullmatch(declared) is None
+        or _stable_hash(body) != declared
+        or value.get("schema") != SCHEMA
+        or value.get("version") != VERSION
+        or value.get("source_release") != SOURCE_RELEASE
+        or value.get("qualification_class") != QUALIFICATION_CLASS
+        or value.get("status")
+        != "source_qualified_for_embedded_pre_secret_acquisition"
+        or value.get("formal_identity_enforced") is not True
+        or value.get("qualification_code_sha256")
+        != expected_qualification_code_sha256
+    ):
+        raise HybridQaSourceQualificationError(
+            "qualification receipt identity drifted"
+        )
+
+    file_sets = value.get("file_sets")
+    if (
+        not isinstance(file_sets, Mapping)
+        or set(file_sets)
+        != {
+            "qa_required_file_count",
+            "qa_required_file_set_sha256",
+            "table_request_pair_count",
+            "table_request_file_set_sha256",
+        }
+        or file_sets.get("qa_required_file_count") != len(QA_RELATIVE_PATHS)
+        or file_sets.get("table_request_pair_count") != FORMAL_CORPUS_COUNT
+        or any(
+            not isinstance(file_sets.get(field), str)
+            or _HEX64_RE.fullmatch(file_sets[field]) is None
+            for field in (
+                "qa_required_file_set_sha256",
+                "table_request_file_set_sha256",
+            )
+        )
+    ):
+        raise HybridQaSourceQualificationError(
+            "qualification file-set binding drifted"
+        )
+
+    qa = value.get("qa")
+    expected_qa_keys = {
+        "train_row_count",
+        "dev_row_count",
+        "test_row_count",
+        "question_id_count",
+        "question_ids_unique_within_splits",
+        "question_id_splits_pairwise_disjoint",
+        "train_traced_raw_exact_match",
+        "dev_traced_raw_exact_match",
+        "train_empty_answer_node_row_count",
+        "dev_empty_answer_node_row_count",
+        "referenced_table_count",
+    }
+    if (
+        not isinstance(qa, Mapping)
+        or set(qa) != expected_qa_keys
+        or qa.get("train_row_count") != FORMAL_QA_COUNTS["train"]
+        or qa.get("dev_row_count") != FORMAL_QA_COUNTS["dev"]
+        or qa.get("test_row_count") != FORMAL_QA_COUNTS["test"]
+        or qa.get("question_id_count") != sum(FORMAL_QA_COUNTS.values())
+        or any(
+            qa.get(field) is not True
+            for field in (
+                "question_ids_unique_within_splits",
+                "question_id_splits_pairwise_disjoint",
+                "train_traced_raw_exact_match",
+                "dev_traced_raw_exact_match",
+            )
+        )
+        or any(
+            type(qa.get(field)) is not int or qa[field] < 0
+            for field in (
+                "train_empty_answer_node_row_count",
+                "dev_empty_answer_node_row_count",
+                "referenced_table_count",
+            )
+        )
+        or qa["referenced_table_count"] > FORMAL_CORPUS_COUNT
+    ):
+        raise HybridQaSourceQualificationError(
+            "qualification QA aggregate drifted"
+        )
+
+    dev_reference = value.get("dev_reference")
+    if (
+        not isinstance(dev_reference, Mapping)
+        or set(dev_reference)
+        != {
+            "question_id_count",
+            "reference_answer_exact_match",
+            "table_partition_count",
+            "passage_partition_count",
+            "computed_partition_count",
+            "partition_complete_and_disjoint",
+        }
+        or dev_reference.get("question_id_count") != FORMAL_QA_COUNTS["dev"]
+        or dev_reference.get("reference_answer_exact_match") is not True
+        or dev_reference.get("partition_complete_and_disjoint") is not True
+        or {
+            "table": dev_reference.get("table_partition_count"),
+            "passage": dev_reference.get("passage_partition_count"),
+            "computed": dev_reference.get("computed_partition_count"),
+        }
+        != FORMAL_DEV_REFERENCE_PARTITION
+    ):
+        raise HybridQaSourceQualificationError(
+            "qualification DEV reference aggregate drifted"
+        )
+
+    corpus = value.get("corpus")
+    count_fields = {
+        "unused_table_count",
+        "data_row_count",
+        "header_and_data_cell_count",
+        "link_reference_count",
+        "request_entry_count",
+        "empty_request_entry_count",
+        "empty_request_link_reference_count",
+    }
+    if (
+        not isinstance(corpus, Mapping)
+        or set(corpus)
+        != {
+            "table_json_count",
+            "request_json_count",
+            "table_request_filename_sets_equal",
+            "dataset_table_ids_exactly_resolved",
+            *count_fields,
+            "all_links_exactly_resolved",
+        }
+        or corpus.get("table_json_count") != FORMAL_CORPUS_COUNT
+        or corpus.get("request_json_count") != FORMAL_CORPUS_COUNT
+        or corpus.get("table_request_filename_sets_equal") is not True
+        or corpus.get("dataset_table_ids_exactly_resolved") is not True
+        or corpus.get("all_links_exactly_resolved") is not True
+        or any(
+            type(corpus.get(field)) is not int or corpus[field] < 0
+            for field in count_fields
+        )
+        or corpus["unused_table_count"]
+        != FORMAL_CORPUS_COUNT - qa["referenced_table_count"]
+        or corpus["empty_request_entry_count"] > corpus["request_entry_count"]
+        or corpus["empty_request_link_reference_count"]
+        > corpus["link_reference_count"]
+    ):
+        raise HybridQaSourceQualificationError(
+            "qualification corpus aggregate drifted"
+        )
+
+    answer_nodes = value.get("answer_nodes")
+    if (
+        not isinstance(answer_nodes, Mapping)
+        or set(answer_nodes)
+        != {
+            "answer_node_count",
+            "table_source_count",
+            "passage_source_count",
+            "sources_coordinates_and_links_valid",
+        }
+        or answer_nodes.get("sources_coordinates_and_links_valid") is not True
+        or any(
+            type(answer_nodes.get(field)) is not int or answer_nodes[field] < 0
+            for field in (
+                "answer_node_count",
+                "table_source_count",
+                "passage_source_count",
+            )
+        )
+        or answer_nodes["answer_node_count"]
+        != answer_nodes["table_source_count"]
+        + answer_nodes["passage_source_count"]
+    ):
+        raise HybridQaSourceQualificationError(
+            "qualification answer-node aggregate drifted"
+        )
+
+    safeguards = value.get("safeguards")
+    expected_safeguards = {
+        "pre_design_programmatic_audit_occurred": True,
+        "pre_design_programmatic_audit_raw_output_count": 0,
+        "raw_record_output_count": 0,
+        "per_row_or_linkable_hash_output_count": 0,
+        "selection_secret_created_or_read_count": 0,
+        "selection_or_hmac_count": 0,
+        "action_or_retrieval_count": 0,
+        "score_or_utility_count": 0,
+        "dev_test_online_evaluator_count": 0,
+        "standalone_qualification_manifest_persisted_count": 0,
+    }
+    if not isinstance(safeguards, Mapping) or dict(safeguards) != expected_safeguards:
+        raise HybridQaSourceQualificationError(
+            "qualification safeguards drifted"
+        )
+    _validated_source_custody(
+        _require_mapping(value.get("source_custody"), label="source custody")
+    )
+    _canonical_json(value)
+    return value
+
+
 def _official_corpus_items(
     *,
     wiki_root: Path,
@@ -1071,4 +1313,5 @@ __all__ = [
     "HybridQaSourceQualificationError",
     "qualify_decoded_sources",
     "qualify_official_source",
+    "verify_qualification_receipt",
 ]

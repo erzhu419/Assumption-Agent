@@ -180,11 +180,37 @@ def _fraction_payload(value: Fraction) -> list[int]:
     return [value.numerator, value.denominator]
 
 
+def _fraction_from_payload(value: object, *, field: str) -> Fraction:
+    if (
+        not isinstance(value, list)
+        or len(value) != 2
+        or any(type(part) is not int for part in value)
+        or value[1] <= 0
+    ):
+        raise HybridQaFormalRunnerError(f"{field} is not a canonical fraction")
+    fraction = Fraction(value[0], value[1])
+    if value != [fraction.numerator, fraction.denominator]:
+        raise HybridQaFormalRunnerError(f"{field} is not a reduced fraction")
+    return fraction
+
+
 def _decimal_text(value: Decimal) -> str:
     text = format(value, "f")
     if "." in text:
         text = text.rstrip("0").rstrip(".")
     return "0" if text in {"", "-0"} else text
+
+
+def _decimal_from_text(value: object, *, field: str) -> Decimal:
+    if not isinstance(value, str):
+        raise HybridQaFormalRunnerError(f"{field} is not a decimal string")
+    try:
+        result = Decimal(value)
+    except Exception as exc:
+        raise HybridQaFormalRunnerError(f"{field} is not decimal") from exc
+    if not result.is_finite() or _decimal_text(result) != value:
+        raise HybridQaFormalRunnerError(f"{field} is not canonical decimal")
+    return result
 
 
 def _normalized_text(value: str, *, field: str) -> str:
@@ -1233,6 +1259,32 @@ class PolicySeal:
             schema=f"{VERSION}_policy_receipt",
             field="policy_receipt_sha256",
         )
+        if set(receipt) != {
+            "schema",
+            "version",
+            "block",
+            "F_feature_receipt_sha256",
+            "A_form_feature_receipt_sha256",
+            "fit_receipt_sha256",
+            "trace_matrix_sha256",
+            "item_commitment_set_sha256",
+            "item_count",
+            "recipe_registry",
+            "E0_recipe_scores",
+            "E2_recipe_scores",
+            "E0_selected_recipe_id",
+            "E2_selected_recipe_id",
+            "same_recipe",
+            "identical_all_F_ordered_top5",
+            "evaluator_comparison_identifiable",
+            "labels_gold_utility_or_family_accessed",
+            "A_hold_authorized",
+            "M_search_authorized_before_A_hold_promotion",
+            "online_evaluator_calls",
+            "raw_content_persisted",
+            "policy_receipt_sha256",
+        }:
+            raise HybridQaFormalRunnerError("policy receipt key schema drifted")
         required = {
             "version": VERSION,
             "block": "F_search",
@@ -1259,13 +1311,58 @@ class PolicySeal:
             raise HybridQaFormalRunnerError("policy seal semantics drifted")
         e0_recipe = receipt.get("E0_selected_recipe_id")
         e2_recipe = receipt.get("E2_selected_recipe_id")
+        e0_payload = receipt.get("E0_recipe_scores")
+        e2_payload = receipt.get("E2_recipe_scores")
+        if (
+            not isinstance(e0_payload, Mapping)
+            or set(e0_payload) != set(RECIPE_IDS)
+            or not isinstance(e2_payload, Mapping)
+            or set(e2_payload) != set(RECIPE_IDS)
+        ):
+            raise HybridQaFormalRunnerError("policy score maps drifted")
+        e0_scores = {
+            recipe: _fraction_from_payload(
+                e0_payload[recipe], field=f"{recipe} E0 score"
+            )
+            for recipe in RECIPE_IDS
+        }
+        e2_scores = {
+            recipe: _decimal_from_text(
+                e2_payload[recipe], field=f"{recipe} E2 score"
+            )
+            for recipe in RECIPE_IDS
+        }
+        expected_e0_recipe = min(
+            RECIPE_IDS, key=lambda recipe: (-e0_scores[recipe], recipe)
+        )
+        expected_e2_recipe = min(
+            RECIPE_IDS, key=lambda recipe: (-e2_scores[recipe], recipe)
+        )
         same = e0_recipe == e2_recipe
         identical = receipt.get("identical_all_F_ordered_top5")
+        try:
+            matrix = evaluator_math._normalize_matrix(
+                self.f_search_features.traces
+            )
+        except evaluator_math.FeverousEvaluatorError as exc:
+            raise HybridQaFormalRunnerError("policy feature matrix drifted") from exc
+        recomputed_identical = all(
+            next(
+                row for row in rows if row.recipe_id == expected_e0_recipe
+            ).behavior_sha256
+            == next(
+                row for row in rows if row.recipe_id == expected_e2_recipe
+            ).behavior_sha256
+            for _item, rows in matrix
+        )
         if (
-            e0_recipe not in RECIPE_IDS
-            or e2_recipe not in RECIPE_IDS
+            e0_recipe != expected_e0_recipe
+            or e2_recipe != expected_e2_recipe
             or type(identical) is not bool
+            or identical is not recomputed_identical
             or receipt.get("same_recipe") is not same
+            or type(receipt.get("same_recipe")) is not bool
+            or type(receipt.get("evaluator_comparison_identifiable")) is not bool
             or receipt.get("evaluator_comparison_identifiable")
             is not (not same and not identical)
         ):
@@ -1393,6 +1490,70 @@ def _sign_flip_payload(deltas: Sequence[Fraction]) -> dict[str, Any]:
     return body
 
 
+def _validate_sign_flip_payload(
+    value: object, *, field: str, item_count: int
+) -> tuple[Fraction, Fraction, bool]:
+    expected_keys = {
+        "test",
+        "consumer",
+        "observed_net_U",
+        "nonzero_pair_count",
+        "p_value",
+        "alpha",
+        "positive_observed_net",
+        "exact_p_at_or_below_alpha",
+        "promoted",
+    }
+    if not isinstance(value, Mapping) or set(value) != expected_keys:
+        raise HybridQaFormalRunnerError(f"{field} sign-flip schema drifted")
+
+    def sign_fraction(raw: object, name: str) -> Fraction:
+        if (
+            not isinstance(raw, Mapping)
+            or set(raw) != {"numerator", "denominator"}
+            or type(raw.get("numerator")) is not int
+            or type(raw.get("denominator")) is not int
+            or raw["denominator"] <= 0
+        ):
+            raise HybridQaFormalRunnerError(
+                f"{field} {name} is not a canonical fraction"
+            )
+        result = Fraction(raw["numerator"], raw["denominator"])
+        if dict(raw) != {
+            "numerator": result.numerator,
+            "denominator": result.denominator,
+        }:
+            raise HybridQaFormalRunnerError(
+                f"{field} {name} is not a reduced fraction"
+            )
+        return result
+
+    net = sign_fraction(value.get("observed_net_U"), "net")
+    exact_p = sign_fraction(value.get("p_value"), "p")
+    alpha = sign_fraction(value.get("alpha"), "alpha")
+    nonzero = value.get("nonzero_pair_count")
+    positive = value.get("positive_observed_net")
+    at_alpha = value.get("exact_p_at_or_below_alpha")
+    promoted = value.get("promoted")
+    if (
+        value.get("test")
+        != "hybridqa_one_sided_exact_magnitude_preserving_sign_flip_v1"
+        or value.get("consumer") != VERSION
+        or type(nonzero) is not int
+        or not 0 <= nonzero <= item_count
+        or not 0 <= exact_p <= 1
+        or alpha != PROMOTION_ALPHA
+        or type(positive) is not bool
+        or type(at_alpha) is not bool
+        or type(promoted) is not bool
+        or positive is not (net > 0)
+        or at_alpha is not (exact_p <= alpha)
+        or promoted is not (net > 0 and exact_p <= alpha)
+    ):
+        raise HybridQaFormalRunnerError(f"{field} sign-flip semantics drifted")
+    return net, exact_p, promoted
+
+
 @dataclass(frozen=True)
 class AnchorScoreSeal:
     """Terminal A_hold/M score bound to all pre-label sealed dependencies."""
@@ -1438,10 +1599,45 @@ class AnchorScoreSeal:
             schema=f"{VERSION}_{self.block}_score_receipt",
             field="score_receipt_sha256",
         )
+        expected_keys = {
+            "schema",
+            "version",
+            "block",
+            "item_count",
+            "logical_RAW_HippoRAG_Agent_work_units",
+            "anchor_feature_receipt_sha256",
+            "policy_receipt_sha256",
+            "hipporag_retrieval_matrix_sha256",
+            "item_commitment_set_sha256",
+            "late_opened_label_matrix_sha256",
+            "A_hold_authorization_score_receipt_sha256",
+            "E0_recipe_id",
+            "E2_recipe_id",
+            "evaluator_comparison_identifiable",
+            "E2_minus_E0",
+            "E2_minus_HippoRAG",
+            "E2_minus_RAW",
+            "E2_minus_HippoRAG_family_sums",
+            "family_item_counts",
+            "complete_counts",
+            "A_hold_real_domain_primary_passed",
+            "evaluator_promoted",
+            "M_L5_passed",
+            "RAW_complete_advantage_overcome",
+            "item_level_utility_values_persisted",
+            "online_evaluator_calls",
+            "raw_content_persisted",
+            "score_receipt_sha256",
+        }
+        if set(receipt) != expected_keys:
+            raise HybridQaFormalRunnerError("anchor score receipt key schema drifted")
         required = {
             "version": VERSION,
             "block": self.block,
             "item_count": BLOCK_COUNTS[self.block],
+            "logical_RAW_HippoRAG_Agent_work_units": (
+                3 * BLOCK_COUNTS[self.block]
+            ),
             "anchor_feature_receipt_sha256": (
                 self.anchor_features.feature_receipt_sha256
             ),
@@ -1463,6 +1659,70 @@ class AnchorScoreSeal:
         }
         if any(receipt.get(key) != value for key, value in required.items()):
             raise HybridQaFormalRunnerError("anchor score seal semantics drifted")
+        if not _is_sha256(receipt.get("late_opened_label_matrix_sha256")):
+            raise HybridQaFormalRunnerError(
+                "late-opened label matrix hash drifted"
+            )
+        _e0_net, _e0_p, e0_promoted = _validate_sign_flip_payload(
+            receipt.get("E2_minus_E0"),
+            field="E2-minus-E0",
+            item_count=BLOCK_COUNTS[self.block],
+        )
+        _hippo_net, _hippo_p, hippo_promoted = _validate_sign_flip_payload(
+            receipt.get("E2_minus_HippoRAG"),
+            field="E2-minus-HippoRAG",
+            item_count=BLOCK_COUNTS[self.block],
+        )
+        _raw_net, _raw_p, raw_promoted = _validate_sign_flip_payload(
+            receipt.get("E2_minus_RAW"),
+            field="E2-minus-RAW",
+            item_count=BLOCK_COUNTS[self.block],
+        )
+        family_payload = receipt.get("E2_minus_HippoRAG_family_sums")
+        if not isinstance(family_payload, Mapping) or set(family_payload) != set(
+            FAMILIES
+        ):
+            raise HybridQaFormalRunnerError("anchor family sums drifted")
+        family_sums = {
+            family: _fraction_from_payload(
+                family_payload[family], field=f"{family} HippoRAG delta"
+            )
+            for family in FAMILIES
+        }
+        complete = receipt.get("complete_counts")
+        if (
+            not isinstance(complete, Mapping)
+            or set(complete) != {"E0", "E2", "HippoRAG", "RAW"}
+            or any(
+                type(value) is not int
+                or not 0 <= value <= BLOCK_COUNTS[self.block]
+                for value in complete.values()
+            )
+        ):
+            raise HybridQaFormalRunnerError("anchor complete counts drifted")
+        identifiable = self.policies.identifiable
+        promoted = e0_promoted and identifiable
+        primary = hippo_promoted and all(value > 0 for value in family_sums.values())
+        raw_overcome = raw_promoted and complete["E2"] >= complete["RAW"]
+        expected_terminal = {
+            "A_hold_real_domain_primary_passed": (
+                primary if self.block == "A_hold" else None
+            ),
+            "evaluator_promoted": promoted if self.block == "A_hold" else None,
+            "M_L5_passed": promoted if self.block == "M_search" else None,
+            "RAW_complete_advantage_overcome": raw_overcome,
+        }
+        if any(
+            type(receipt.get(key)) is not bool
+            if value is not None
+            else receipt.get(key) is not None
+            for key, value in expected_terminal.items()
+        ) or any(
+            receipt.get(key) != value for key, value in expected_terminal.items()
+        ):
+            raise HybridQaFormalRunnerError(
+                "anchor derived decision semantics drifted"
+            )
 
     @property
     def receipt(self) -> dict[str, Any]:
@@ -1476,7 +1736,8 @@ class AnchorScoreSeal:
 
     @property
     def evaluator_promoted(self) -> bool:
-        return bool(self.receipt.get("evaluator_promoted"))
+        value = self.receipt.get("evaluator_promoted")
+        return value if type(value) is bool else False
 
 
 def score_anchor(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import tempfile
@@ -8,6 +9,33 @@ from typing import Iterator
 import pytest
 
 from assumption_agent.benchmarks import hybridqa_direct_acquisition_v1 as acquisition
+
+
+def _write_synthetic_freeze(
+    project: Path, *, paths: tuple[str, ...]
+) -> dict[str, object]:
+    files = [
+        {
+            "relative_path": relative,
+            "sha256": hashlib.sha256((project / relative).read_bytes()).hexdigest(),
+        }
+        for relative in paths
+    ]
+    body: dict[str, object] = {
+        "schema": "hybridqa_p6_e2_implementation_freeze_v1",
+        "version": "v1",
+        "status": "implementation_frozen",
+        "design_sha256": acquisition.DESIGN_SHA256,
+        "required_path_registry_sha256": acquisition.stable_hash(list(paths)),
+        "implementation_file_count": len(paths),
+        "freeze_semantics": acquisition.IMPLEMENTATION_FREEZE_SEMANTICS,
+        "files": files,
+    }
+    value = acquisition.self_hashed(body, "freeze_sha256")
+    destination = project / acquisition.IMPLEMENTATION_FREEZE_RELATIVE
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(acquisition._canonical_bytes(value, newline=True))
+    return value
 
 
 @pytest.fixture
@@ -100,6 +128,55 @@ def _units_for_selected(
         )
         index += 1
     return tuple(units.values())
+
+
+def test_implementation_freeze_requires_exact_sorted_registry(
+    private_project_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    member = private_project_root / "frozen_member.py"
+    member.write_text("VALUE = 1\n", encoding="ascii")
+    paths = ("frozen_member.py",)
+    monkeypatch.setattr(acquisition, "IMPLEMENTATION_FREEZE_REQUIRED_PATHS", paths)
+    expected = _write_synthetic_freeze(private_project_root, paths=paths)
+    assert acquisition._verify_implementation_freeze(private_project_root) == expected
+
+    duplicated = ("frozen_member.py", "frozen_member.py")
+    _write_synthetic_freeze(private_project_root, paths=duplicated)
+    monkeypatch.setattr(
+        acquisition, "IMPLEMENTATION_FREEZE_REQUIRED_PATHS", paths
+    )
+    with pytest.raises(acquisition.HybridQaAcquisitionError, match="contract drifted"):
+        acquisition._verify_implementation_freeze(private_project_root)
+
+
+def test_implementation_freeze_rejects_symlink_member(
+    private_project_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = private_project_root / "target.py"
+    target.write_text("VALUE = 1\n", encoding="ascii")
+    link = private_project_root / "frozen_member.py"
+    link.symlink_to(target)
+    paths = ("frozen_member.py",)
+    monkeypatch.setattr(acquisition, "IMPLEMENTATION_FREEZE_REQUIRED_PATHS", paths)
+    _write_synthetic_freeze(private_project_root, paths=paths)
+    with pytest.raises(acquisition.HybridQaAcquisitionError, match="symlink"):
+        acquisition._verify_implementation_freeze(private_project_root)
+
+
+def test_item_commitment_binds_question_postag_and_ordinal() -> None:
+    common = {
+        "block": "A_form",
+        "question": "Which synthetic value",
+    }
+    first = acquisition.item_commitment(
+        **common, ordinal=0, question_postag="WDT JJ NN"
+    )
+    assert first != acquisition.item_commitment(
+        **common, ordinal=0, question_postag="WDT NN VB"
+    )
+    assert first != acquisition.item_commitment(
+        **common, ordinal=1, question_postag="WDT JJ NN"
+    )
 
 
 def test_clean_classifier_forms_three_exclusive_locus_families() -> None:
