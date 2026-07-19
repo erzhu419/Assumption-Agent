@@ -1,7 +1,14 @@
 # Assumption Agent × Red Queen Gödel Machine：架构诊断与 Reconstruction V2 复核
 
 > - 初版日期：2026-07-11
-> - 本次复核：2026-07-18
+> - 本次复核：2026-07-19
+> - 最新 EntailmentBank G1/E1 终态：official Task2 TRAIN/DEV aggregate qualification 通过后，fresh v2 secret 一次形成
+>   G/A/F/A_hold/M=`60/36/30/30/30` 的三-family平衡 186-item cohort，F label 从未创建。v1 acquisition 因把同 ID
+>   多行变体误当非法而在 selection/action 前 fail-closed；v2 只事前增加私有 source-line identity，未改任何 efficacy contract。
+>   E0/E1 在 F 上分别冻结 Q0/Q1；A_hold 总 U 为 Q0/Q1/official HippoRAG/RAW=`96/92/90/19`。
+>   Q1−Q0=`−4`、exact p=`57/64`，故 evaluator valid non-promotion，M 与 TEST 未开；Q1−Hippo 仅 `+2`、29/30 tie、
+>   p=`1/2`。post-terminal Q0−Hippo 虽为 `+6`，p=`35/256` 且 family net=`0/+6/0`，仍不是跨 family 稳定优势。
+>   该结果证明 Agent 明显优于 RAW、与 item-local official HippoRAG 近似持平，但 L5 仍未达到，同源不再补 gate 或换 evaluator
 > - 最新 post-terminal synthetic multiseed 结果：全新 v3 `8×64=512` cohort 已由 v5 在单一 detached
 >   formal attempt 中完成 RAW / official HippoRAG / Agent_R1 共 1,536 个 action；离线终态为 success。
 >   Agent−HippoRAG 的 seed-level U 差为 `[3,8,0,2,1,5,6,2]`，总 U `+27`、7 positive / 1 tie；
@@ -49,7 +56,7 @@
 > - 最新 synthetic typed-graph causal 终态：原始设计 `d24dfb96` 后、任何 formal seed/cohort 之前，`b37054e2` 透明修正 TN2 语义、label-free evaluator derangement 与 sign-enumeration 的非随机化解释，并固定 acquisition/runner；41/41 focused tests、`py_compile` 与 diff check 通过。唯一 32-byte seed 一次形成 A_form/F_search/A_hold/M_search 各 64 项，F_search label 从未创建。formation 形成 behavior-distinct 的 real/permuted recipe；untouched A_hold 上 Agent full / official HippoRAG / RAW 的 total U=`168/164/158`、support hit=`108/106/101`（总 112）、complete=`60/58/57`。Agent−HippoRAG 的 matched net U=+4，但只有 2 个 nonzero pair，预注册 reference tail=`1/4=0.25>0.1`，故 valid non-promotion；M_search 未授权且未打开。drop-designated/wrong-type 各回落 4 U，endpoint-permuted 回落 6 U，增益只出现在 `MENTIONS_DEFINITION` positive family；real/permuted evaluator 在 A_hold 的净差为 0。终止后 `6f06464a` 已公开 exact seed 与 256-row cohort，不含 retrieval/model/score output。该结果支持这份 synthetic SCM 内很窄的 typed-action 因果效应，但不支持 evaluator co-evolution、family-out、L4/L5、现实总体效果或 Agent 普遍优于 HippoRAG
 > - 最新 FEVER fixed-P 现实域 acquisition 终态：本地候选审计只发现 FEVER 具备继续价值；`543bed23` / `e5d5a7d7` 在内容读取前固定并下载官方 labelled `paper_test`、1.713 GB June-2017 wiki archive 与许可证，`e07cf640` 冻结一个无 promotion/gate 的 128-item gold-injected item-local reranking design，`83e185d7` 的 acquisition/runner 通过 13/13 synthetic tests 与独立审计。唯一 formal run 在 marker 后完整解析 paper_test 并在内存 HMAC 固定 64 SUPPORTS+64 REFUTES；随后在任何 wiki JSONL member content 打开前，central-directory contract 发现至少一个非目录 member 的 suffix 不是 `.jsonl`，以 `source_schema_invalid` 终止。action/label pack、RAW/P/Hippo、model/evaluator/score 均为 0；不事后查看 member 名、不改 allowlist、不重跑。FEVER transfer efficacy 仍 unknown，不是 Agent 的性能负结果
 > - 历史 synthetic 8-seed v1 终态（已由 v3→v5 更新）：`dabcbde7` 在 seed 前固定 exact R1、RAW/official-HippoRAG/Agent 三臂、8 个 fresh seed cluster 与纯描述 estimand；两轮审计先修正 official paragraph title、1536-future submission barrier、未声明分析面、重复 grammar regeneration 及 success/failure terminal publication，64 项相关测试通过。`2ecf5ec8` / `5efbb5b1` / `f7d3335b` 依次提交 implementation freeze、8-seed custody 与 512-item acquisition。唯一 v1 runner 在 marker 后、任何 retrieval/action/label/score 前，把 512×(1 question+32 nodes)=16,896 条文本一次交给冻结 MiniLM encoder；该 runtime 的单次上限是 16,384，故以 implementation/infrastructure-invalid 严格终止。该 v1 cohort 的 stability 仍未知，`d185b84a` 只公开 seeds/cohort；它没有被修补后作为正式/评分 efficacy evidence 重放，后续 v2 只做过非评分 integration diagnostic。2026-07-18 的结论已由顶部最新 bullet 与 12.17 的全新 v3 cohort / v5 success 取代
-> - 最新后续缺口：全新 v3 8-seed cohort 已由 v5 有效完成，故 synthetic definition-positive mechanism stability 不再是 unknown；但 +27 U 仍只来自 DEF_TP1/TP2，Agent 总 U 又比 RAW 低 14。当前不再围绕任何已消费 synthetic cohort 或 FEVER archive 修改阈值、补 gate、换 recipe、放宽 schema、分批重放或追加 seed。距离目标仍缺现实域中稳定且跨 relation family 的 Agent−HippoRAG 净收益，以及真正晋升的 L5 evaluator replacement 对预冻结 untouched search 的后续改善
+> - 最新后续缺口：全新 v3 8-seed cohort 已由 v5 有效完成，故 synthetic definition-positive mechanism stability 不再是 unknown；EntailmentBank 又补充了 Agent 显著高于 RAW、与 item-local HippoRAG 近似持平的有效现实域证据。但 synthetic +27 U 仍只来自 DEF_TP1/TP2，EntailmentBank 的 Q0−Hippo +6 又只来自 THREE_LEAF，Q1 evaluator 反而比 Q0 低 4。当前不再围绕任何已消费 synthetic、FEVER 或 EntailmentBank cohort 修改阈值、补 gate、换 recipe、分批重放或追加 seed。距离目标仍缺现实域中稳定且跨 relation family 的 Agent−HippoRAG 净收益，以及真正晋升的 L5 evaluator replacement 对预冻结 untouched search 的后续改善
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
