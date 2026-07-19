@@ -1,0 +1,116 @@
+{
+  "claim_boundary": {
+    "formal_A_hold_M_or_primary_claim": false,
+    "hidden_TEST_opened": false,
+    "online_or_external_evaluator_calls": 0,
+    "released_train_or_valid_source_rows_reopened": false,
+    "training_private_packs_allowed": [
+      "G_form.view",
+      "G_form.labels",
+      "A_form.view",
+      "A_form.labels"
+    ],
+    "training_private_packs_forbidden": [
+      "F_search.view",
+      "A_hold.view",
+      "A_hold.labels",
+      "M_search.view",
+      "M_search.labels"
+    ]
+  },
+  "crossfit": {
+    "evaluation_block": "A_form_only",
+    "fold_count": 4,
+    "fold_rule": "within_each_family_sort_A_form_item_id_ascending_then_rank_modulo_4",
+    "per_fold_evaluation_count": 12,
+    "per_fold_training_count": 132,
+    "training_rows": "all_96_G_form_plus_the_other_36_A_form_items",
+    "total_evaluation_count": 48
+  },
+  "feasibility_rule": {
+    "behavior_distinct_E2_vs_E0_count_at_least": 3,
+    "each_family_E2_minus_E0_net_nonnegative": true,
+    "exact_one_sided_sign_flip_p_at_most": {
+      "denominator": 5,
+      "numerator": 1
+    },
+    "formal_fresh_cohort_authorized_only_if_all_conditions_hold": true,
+    "total_E2_minus_E0_binary_utility_strictly_positive": true
+  },
+  "fixed_E2_model": {
+    "class_order_and_tie_order": [
+      "CAUSAL",
+      "SUBEVENT",
+      "TEMPORAL"
+    ],
+    "feature_order": [
+      "CAUSAL_all_sentence_max",
+      "CAUSAL_all_sentence_top3_mean",
+      "CAUSAL_authorized_sentence_max",
+      "CAUSAL_head_mention_sentence_max",
+      "CAUSAL_tail_mention_sentence_max",
+      "CAUSAL_singleton_argmax_vote_fraction",
+      "SUBEVENT_all_sentence_max",
+      "SUBEVENT_all_sentence_top3_mean",
+      "SUBEVENT_authorized_sentence_max",
+      "SUBEVENT_head_mention_sentence_max",
+      "SUBEVENT_tail_mention_sentence_max",
+      "SUBEVENT_singleton_argmax_vote_fraction",
+      "TEMPORAL_all_sentence_max",
+      "TEMPORAL_all_sentence_top3_mean",
+      "TEMPORAL_authorized_sentence_max",
+      "TEMPORAL_head_mention_sentence_max",
+      "TEMPORAL_tail_mention_sentence_max",
+      "TEMPORAL_singleton_argmax_vote_fraction"
+    ],
+    "fit": "item_weighted_multiclass_centered_ridge_on_one_hot_family_targets",
+    "intercept": "training_class_mean",
+    "lambda": 1.0,
+    "standardization": "training_mean_and_population_std_zero_variance_columns_map_to_zero",
+    "target": "family_label"
+  },
+  "fixed_E2_selection": {
+    "candidate_space": "all_authorized_typed_Set3_not_only_the_G8_top16_frontier",
+    "fallback": "exact_G8_E0_if_no_candidate_predicts_the_E2_target_family",
+    "item_target_family": "argmax_E2_multiclass_logit",
+    "selection_order_within_target_family": [
+      "descending_target_family_score_minus_best_other_family_score",
+      "descending_G8_generator_energy",
+      "ascending_ordinal_tuple"
+    ]
+  },
+  "incumbent": {
+    "G8_model_file_sha256": "7fc8bee5e794e774a4b82ddf44b477279b1e0d6a78137a570834738db27a0db4",
+    "G8_model_is_refit_and_byte_verified_before_crossfit": true,
+    "policy": "G8_E0"
+  },
+  "metrics": {
+    "comparisons": [
+      "E2_minus_E0",
+      "E2_minus_RAW"
+    ],
+    "statistic": "paired_binary_family_classification_utility_and_exact_one_sided_random_sign_flip",
+    "training_only": true
+  },
+  "one_shot_policy": {
+    "alternative_feature_model_threshold_or_fold_attempts_after_result": 0,
+    "purpose": "single_train_only_feasibility_not_a_sequence_of_added_gates",
+    "same_root_retry": false
+  },
+  "recorded_date": "2026-07-19",
+  "runtime": {
+    "MiniLM": "same_frozen_offline_all_MiniLM_L6_v2",
+    "NLI": "same_frozen_offline_qasc_nli_v3_exactly_two_workers",
+    "external_network": false
+  },
+  "schema": "maven_ere_global_family_e2_train_crossfit_design_v1",
+  "source_binding": {
+    "acquisition_receipt_file_sha256": "5ced719eaa73e62234fbdc21530a34f927fb0921a5fe1ee50b68c958c5737704",
+    "acquisition_receipt_self_sha256": "7842feff65de8e659bd0953c84e4c8f7a0a4a96ff005628a4d3f1369f4e03d74",
+    "recovery_terminal_file_sha256": "27feb3b5abb0034790cd9d64b87a0126bbdf61207a356e2666a645760128eb38",
+    "recovery_terminal_self_sha256": "25629a500dad05dd29996353b1224034856fd6301090d3706edfdca9f40e2f23"
+  },
+  "status": "frozen_before_new_training_pack_reopen_or_E2_model_inference",
+  "version": "v1",
+  "design_sha256": "2a3ae6817a5ea83dc25bdad1853f781922d99197adc651582e05778119f875fb"
+}
