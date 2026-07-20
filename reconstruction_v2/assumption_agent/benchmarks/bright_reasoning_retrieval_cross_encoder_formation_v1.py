@@ -230,6 +230,7 @@ def _source_state(project_root: Path) -> dict[str, Any]:
 
 def run(project_root: Path) -> dict[str, Any]:
     project_root = project_root.resolve(strict=True)
+    reserve.v3._activate_v3()
     reconstruction_root = project_root / "reconstruction_v2"
     result_path = reconstruction_root / RESULT_RELATIVE
     root = reconstruction_root / ROOT_RELATIVE
@@ -563,5 +564,6 @@ def main(argv: Iterable[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 
 
