@@ -1,7 +1,7 @@
 # Assumption Agent × Red Queen Gödel Machine：架构诊断与 Reconstruction V2 复核
 
 > - 初版日期：2026-07-11
-> - 本次复核：2026-07-19
+> - 本次复核：2026-07-20
 > - 最新 EntailmentBank G1/E1 终态：official Task2 TRAIN/DEV aggregate qualification 通过后，fresh v2 secret 一次形成
 >   G/A/F/A_hold/M=`60/36/30/30/30` 的三-family平衡 186-item cohort，F label 从未创建。v1 acquisition 因把同 ID
 >   多行变体误当非法而在 selection/action 前 fail-closed；v2 只事前增加私有 source-line identity，未改任何 efficacy contract。
@@ -56,7 +56,8 @@
 > - 最新 synthetic typed-graph causal 终态：原始设计 `d24dfb96` 后、任何 formal seed/cohort 之前，`b37054e2` 透明修正 TN2 语义、label-free evaluator derangement 与 sign-enumeration 的非随机化解释，并固定 acquisition/runner；41/41 focused tests、`py_compile` 与 diff check 通过。唯一 32-byte seed 一次形成 A_form/F_search/A_hold/M_search 各 64 项，F_search label 从未创建。formation 形成 behavior-distinct 的 real/permuted recipe；untouched A_hold 上 Agent full / official HippoRAG / RAW 的 total U=`168/164/158`、support hit=`108/106/101`（总 112）、complete=`60/58/57`。Agent−HippoRAG 的 matched net U=+4，但只有 2 个 nonzero pair，预注册 reference tail=`1/4=0.25>0.1`，故 valid non-promotion；M_search 未授权且未打开。drop-designated/wrong-type 各回落 4 U，endpoint-permuted 回落 6 U，增益只出现在 `MENTIONS_DEFINITION` positive family；real/permuted evaluator 在 A_hold 的净差为 0。终止后 `6f06464a` 已公开 exact seed 与 256-row cohort，不含 retrieval/model/score output。该结果支持这份 synthetic SCM 内很窄的 typed-action 因果效应，但不支持 evaluator co-evolution、family-out、L4/L5、现实总体效果或 Agent 普遍优于 HippoRAG
 > - 最新 FEVER fixed-P 现实域 acquisition 终态：本地候选审计只发现 FEVER 具备继续价值；`543bed23` / `e5d5a7d7` 在内容读取前固定并下载官方 labelled `paper_test`、1.713 GB June-2017 wiki archive 与许可证，`e07cf640` 冻结一个无 promotion/gate 的 128-item gold-injected item-local reranking design，`83e185d7` 的 acquisition/runner 通过 13/13 synthetic tests 与独立审计。唯一 formal run 在 marker 后完整解析 paper_test 并在内存 HMAC 固定 64 SUPPORTS+64 REFUTES；随后在任何 wiki JSONL member content 打开前，central-directory contract 发现至少一个非目录 member 的 suffix 不是 `.jsonl`，以 `source_schema_invalid` 终止。action/label pack、RAW/P/Hippo、model/evaluator/score 均为 0；不事后查看 member 名、不改 allowlist、不重跑。FEVER transfer efficacy 仍 unknown，不是 Agent 的性能负结果
 > - 历史 synthetic 8-seed v1 终态（已由 v3→v5 更新）：`dabcbde7` 在 seed 前固定 exact R1、RAW/official-HippoRAG/Agent 三臂、8 个 fresh seed cluster 与纯描述 estimand；两轮审计先修正 official paragraph title、1536-future submission barrier、未声明分析面、重复 grammar regeneration 及 success/failure terminal publication，64 项相关测试通过。`2ecf5ec8` / `5efbb5b1` / `f7d3335b` 依次提交 implementation freeze、8-seed custody 与 512-item acquisition。唯一 v1 runner 在 marker 后、任何 retrieval/action/label/score 前，把 512×(1 question+32 nodes)=16,896 条文本一次交给冻结 MiniLM encoder；该 runtime 的单次上限是 16,384，故以 implementation/infrastructure-invalid 严格终止。该 v1 cohort 的 stability 仍未知，`d185b84a` 只公开 seeds/cohort；它没有被修补后作为正式/评分 efficacy evidence 重放，后续 v2 只做过非评分 integration diagnostic。2026-07-18 的结论已由顶部最新 bullet 与 12.17 的全新 v3 cohort / v5 success 取代
-> - 最新后续缺口：全新 v3 8-seed cohort 已由 v5 有效完成，故 synthetic definition-positive mechanism stability 不再是 unknown；EntailmentBank 又补充了 Agent 显著高于 RAW、与 item-local HippoRAG 近似持平的有效现实域证据。但 synthetic +27 U 仍只来自 DEF_TP1/TP2，EntailmentBank 的 Q0−Hippo +6 又只来自 THREE_LEAF，Q1 evaluator 反而比 Q0 低 4。当前不再围绕任何已消费 synthetic、FEVER 或 EntailmentBank cohort 修改阈值、补 gate、换 recipe、分批重放或追加 seed。距离目标仍缺现实域中稳定且跨 relation family 的 Agent−HippoRAG 净收益，以及真正晋升的 L5 evaluator replacement 对预冻结 untouched search 的后续改善
+> - 最新 BRIGHT P9 前瞻结果：在已消费 TRAIN45 上形成 relation/mechanism cross-encoder + RAW + HippoRAG 的固定 RRF 候选后，设计与实现均先于剩余 RESERVE 内容访问冻结；随后一次性测量每 family 11 项、共 33 项。P9 / RAW / HippoRAG mean nDCG@10=`0.12338/0.11431/0.09218`。P9−HippoRAG aggregate `+0.03120` 且三 family 全正；P9−RAW aggregate `+0.00907`，但 family integer delta=`−72,732,371 / 0 / +372,156,928`，因此事前固定的双 baseline、三 family 全正 primary 为 false。该 cohort 不调参、不补 gate、不重跑；剩余 4 项不作为 rescue cohort
+> - 最新后续缺口：BRIGHT P9 已把“现实域跨 family 超过 candidate-restricted HippoRAG”推进到同源前瞻描述性支持，但 P9 直接融合 RAW/HippoRAG 且使用额外 cross-encoder 计算，不能解释成等算力或普遍 Agent 优越性，并且仍未跨 family 稳定超过 RAW。下一 action 必须在新的来源/领域扩展或重写 baseline candidate set，而不是继续重排相同 32 项、改 RRF 权重或 promotion gate；L5 则需由实质不同的 evaluator 在独立 A_hold 上晋升，并改善事前冻结且 untouched 的 M_search
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -2050,7 +2051,8 @@ support utility 的对齐，不是缺少更多 promotion gate。它仍不是 off
 | 完成（窄 synthetic multiseed stability） | fresh 8-seed typed-graph Agent_R1 / RAW / official HippoRAG replication | 全新 v3 cohort 为 8×64=512；v5 单次 detached formal 完成 1536/1536 action，official/local 峰值并发 8/64，MiniLM 固定两段 8448。Agent/Hippo/RAW 总 U=1259/1232/1273；Agent−Hippo seed delta `[3,8,0,2,1,5,6,2]`，mean=3.375、7 positive/1 tie；Agent−RAW 总 U −14。+27 全在 DEF_TP1/TP2，其他 family 与 Hippo 完全相同。只支持固定 synthetic distribution 的窄机制稳定性，不是现实域 transfer、promotion、L4/L5 或总体优越性 |
 | 完成但未晋升（HoVer joint graph/evaluator） | 新现实 derived closed-corpus 上六 typed actions、RAW、official HippoRAG 与 A/F/A_hold/M lifecycle | TRAIN-only private-HMAC 一次形成 A_form/F/A_hold/M=48/36/30/30 与 609-doc corpus；A_hold E0/RAW/Hippo 均 U=487/12、72 hits、16 complete，30/30 item utility tie；E1−E0=−47/12、2 gain/10 harm/18 tie、exact p=3739/4096。primary=false、promotion=false，M_search 未打开；0 online/network evaluator。claim 不等同 official HoVer/open-domain/family-out |
 | 完成但 primary 未通过（BRIGHT fresh RESERVE） | 现实 reasoning-retrieval 上 retained P6 / RAW / candidate-restricted official HippoRAG core 三臂与 E1 counterfactual | fresh 45 项三 family 各 15；45/45 Qwen valid、135 intents 先于 join、45/45 HippoRAG terminal、单 launch 峰值并发 12、late label 仅开一次、0 external network。Agent/Hippo/RAW mean nDCG@10=`0.14538/0.13598/0.14874`；Agent−Hippo aggregate `+0.00939`，但 family delta=`−0.46468/+0.16826/+0.71916`（integer-sum scale）、7 gain/9 harm/29 tie，未跨 family 稳定；Agent−RAW=`−0.00336`。E1−P6=`−0.00495`，既有 non-promotion 被 fresh reserve 再次支持；不是 full-corpus BRIGHT、answer generation、SOTA 或 L5 positive |
-| 当前剩余（不新增 gate、不重用已评分 cohort 调参） | 同时闭合现实域稳定净收益与 evaluator→untouched-search 因果链 | BRIGHT 把“略高 HippoRAG”收窄为 aggregate-only、family-unstable 且仍输 RAW；HybridQA 虽出现一次 evaluator promotion，untouched M primary 仍失败。下一候选必须是实质不同、能扩展 RAW/HippoRAG candidate set 的 action，而非再改关键词、ridge 或 promotion threshold；在新 TRAIN distribution 形成后，用独立 A_hold 决定一次 promotion，再用预先冻结且 untouched 的 M_search 检验 retained search improvement。否则应以“窄 L3/L4 positive、现实域无稳定三臂优势、L5 未达到”收束 |
+| 完成但 primary 未通过（BRIGHT P9 prospective C_confirm） | 固定 semantic P9 对剩余同源 RESERVE 的一次前瞻五臂确认 | 在打开剩余内容前固定每 family rank 15–25（0-based），共 33 项并保留 4 项 untouched；33/33 generation valid、66 external intents、1 cross-encoder + 12 HippoRAG 最大并发、33/33 HippoRAG terminal、late label 一次、0 external network。P9/Hippo/RAW mean=`0.12338/0.09218/0.11431`；P9−Hippo=`+1,029,664,470` 且 family 全正，7 gain/1 harm/25 tie；P9−RAW=`+299,424,557`，但 family=`−72,732,371/0/+372,156,928`，6/1/26，故预注册 primary=false。P9 含 RAW+Hippo+CE，结果只支持额外 ensemble 的同源增量，不支持等算力/SOTA/L5 |
+| 当前剩余（不新增 gate、不重用已评分 cohort 调参） | 同时闭合现实域稳定三臂净收益与 evaluator→untouched-search 因果链 | P9 已在前瞻 cohort 的三个 family 都超过 candidate-restricted HippoRAG，但未在 Biology/Economics 严格超过 RAW，且其候选池仍是相同 32 项。停止该 reranker/RRF 分支；下一 action 必须在新来源/领域通过新的检索、结构推理或证据合成扩展/改写 baseline candidate set，一次冻结 formation 与 measurement。L5 独立使用全新 evaluator mechanism、A_hold promotion 与预冻结 M_search；否则以“窄 L3/L4 positive、现实域无稳定三臂优势、L5 未达到”收束 |
 | 完成（exact-domain L2/L3 instance） | Replication C promotion、controls disposition 与 one-shot sealed | development 8/8 gain、四 fold 各 +2；operator-only output 8/8 exact match；sealed 4/4 gain、8 路最大并发、8/8 network-none verifier receipts、0 retry/replay/online judge；两条盲化事件完整披露，claim 限于固定 SEC-13F treatment |
 | 完成 | 冻结 evaluator-owned promotion policy | 已由 protocol 绑定完整 spec；candidate 只能收紧；对抗测试通过 |
 | 完成 | 收紧外部 action/fallback contract | 4 类 prompt/self-check lowering；6 类 unsupported op fail closed；observed fallback 不再由字符串伪造 |
@@ -3980,6 +3982,30 @@ Agent−HippoRAG 的 aggregate delta 为 `+422,737,472`，即 mean `+0.009394`�
 
 当前仍缺两项决定性证据：其一，在新的现实 cohort 上，实质不同的 action 同时对 RAW 与 HippoRAG 产生跨 relation family 的稳定正净收益；其二，一个 evaluator challenger 在独立 A_hold 上真实晋升，并在事前冻结且 untouched 的 M_search 上改善 retained search。BRIGHT 已评分 45 项不得用于继续调 P6/E1、补关键词或改 promotion gate；余下数据也不能把同源 post-hoc 调参包装成独立 family-out。若继续，下一机制必须从新 TRAIN distribution 形成能扩展 baseline candidate set 的 action，并一次性冻结 A/F/A_hold/M，而不是继续修改 gate。
 
+### 12.29 2026-07-20 BRIGHT P9：前瞻 aggregate 仍为正，但 RAW 跨 family 稳定性判据失败
+
+本轮没有在上一节已评分的 45 项上继续改 P6/E1 或 promotion gate，而是只把它们作为**已消费的候选形成数据**。冻结的 P9=`P9_RELATION_MECHANISM_CE_RAW_HIPPORAG_RRF` 以 relation/mechanism 两类 query 对完整 32-document pool 做本地 cross-encoder 排序，再把 `cross_encoder_full32`、`RAW_top10` 与 `HippoRAG_top10` 用等权、exact-Fraction RRF（`k=60`）融合并截取 top-10。cross-encoder 资产、deterministic runtime 与 implementation freeze 均先固定；该形成过程没有读取剩余 RESERVE 内容或 label，也没有外部网络调用。
+
+在已消费 TRAIN45 上，P9 的 sum integer nDCG@10 为 `8,245,721,318`（mean `0.183238`），高于 HippoRAG 的 `6,119,227,934`（`0.135983`）和 RAW 的 `6,693,156,962`（`0.148737`）。P9−HippoRAG 的三-family delta 为 `+651,825,052 / +929,763,162 / +544,905,170`，12 gain / 4 harm / 29 tie；P9−RAW 为 `+1,144,742,346 / +60,733,489 / +347,088,521`，11/2/32。单独 cross-encoder relation/mechanism arm 的 mean 为 `0.202240`。这些数字是在查看已消费 TRAIN45 outcome 后从多个候选中形成 P9，只是 historically informed formation evidence，`prospective_confirmation_claim=false`，不能充当独立性能结论。
+
+真正的前瞻检验在任何新 row/label 打开前预注册：从原 HMAC RESERVE 顺序中，对每个 family 取紧接既有前 15 项的 rank 15–25（0-based），即 Biology、Economics、Robotics 各 11 项、共 33 项；另外 4 项保持 untouched。设计与 implementation freeze 都在 acquisition 前提交，且固定只有 P9 一个 candidate、没有 fallback、weight search 或失败后替换。prepare 得到 33/33 valid Qwen generation，并在 join 前持久化 66 个 external action intents。action 以一个 cross-encoder worker 加 12 个 HippoRAG workers 的最大 13 进程并发、单 launch 完成；33/33 HippoRAG terminal，最小 graph 40 nodes / 22 edges。所有 action seal 后才一次打开 labels 并离线评分，external network、online evaluator 与 retry/replay/resample 均为 0。
+
+前瞻 `C_confirm` 的五臂 aggregate 为：
+
+| arm | sum integer nDCG@10 | mean nDCG@10 | Biology / Economics / Robotics family sums |
+|---|---:|---:|---:|
+| P9 | 4,071,558,132 | 0.123381 | 1,473,774,717 / 1,000,000,000 / 1,597,783,415 |
+| CrossEncoder_RM | 3,852,937,636 | 0.116756 | 702,054,217 / 1,000,000,000 / 2,150,883,419 |
+| candidate-restricted HippoRAG core | 3,041,893,662 | 0.092179 | 1,433,994,531 / 630,929,754 / 976,969,377 |
+| RAW | 3,772,133,575 | 0.114307 | 1,546,507,088 / 1,000,000,000 / 1,225,626,487 |
+| retained P6 | 2,409,166,381 | 0.073005 | 788,482,861 / 1,000,000,000 / 620,683,520 |
+
+P9−HippoRAG aggregate 为 `+1,029,664,470`，三-family 为 `+39,780,186 / +369,070,246 / +620,814,038`，逐题 7 gain / 1 harm / 25 tie；因此在这份同源前瞻 cohort 上，“每个 family 均超过 candidate-restricted HippoRAG”得到描述性支持。P9−RAW aggregate 也为正（`+299,424,557`），但三-family 为 `−72,732,371 / 0 / +372,156,928`，逐题 6/1/26。预注册 primary 要求 P9 对 RAW、HippoRAG 的 aggregate 和每个 family 都严格为正，因此 `primary_passed=false`；不能用 overall mean 抹去 Biology 的负差和 Economics 的零差。
+
+这项结果把断点定位得更精确：当前主要障碍不再是是否能在三个 family 都高于这份 HippoRAG core，而是是否能对最简单 RAW baseline 也保持跨 family 稳定收益。与此同时，P9 本身直接融合 RAW top-10 与 HippoRAG top-10，并增加完整 32-document cross-encoder 计算，所以 P9−HippoRAG 只能解释为 fixed ensemble 的增量价值，不能解释为等算力、full-corpus BRIGHT、SOTA 或 Agent 普遍优越性。
+
+本 source epoch 到此停止：不在 TRAIN45 或 `C_confirm` 上改 query、RRF 权重、top-k、family rule 或 gate；剩余 4 项数量太小且 family 不平衡，只保留为审计余量，不作为 rescue cohort。下一条非 gate 主线必须换成能在**新来源/新领域扩展或重写候选集**的 action，例如新检索入口、typed multi-hop evidence synthesis 或跨文档结构生成，而不是继续在同一 32 项上重排。它应从新的 TRAIN distribution 一次形成并冻结，再进入独立 measurement。L5 仍是另一条未闭合链：需要实质不同的 evaluator challenger 在独立 A_hold 上真正晋升，并改善事前冻结且 untouched 的 M_search。若不开展这两项，诚实终态就是窄 L3/L4 positive、现实域无稳定三臂优势、L5 未达到。
+
 ## 附录 A：关键证据索引
 
 - BRIGHT reasoning-retrieval v3、terminal M failure 与 fresh RESERVE 三臂链：
@@ -3998,7 +4024,16 @@ Agent−HippoRAG 的 aggregate delta 为 `+422,737,472`，即 mean `+0.009394`�
   [`recovered acquisition result`](../manifests/bright_reasoning_retrieval_reserve_acquisition_result_v1.json)；
   [`prepare result`](../manifests/bright_reasoning_retrieval_reserve_prepare_result_v1.json)；
   [`action seal`](../manifests/bright_reasoning_retrieval_reserve_actions_result_v1.json)；
-  [`final three-arm result`](../manifests/bright_reasoning_retrieval_reserve_final_result_v1.json)
+  [`final three-arm result`](../manifests/bright_reasoning_retrieval_reserve_final_result_v1.json)；
+  [`cross-encoder asset`](../manifests/bright_cross_encoder_runtime_asset_v1.json)；
+  [`cross-encoder runtime freeze`](../manifests/bright_cross_encoder_runtime_implementation_freeze_v1.json)；
+  [`P9 consumed-TRAIN45 formation result`](../manifests/bright_reasoning_retrieval_cross_encoder_formation_result_v1.json)；
+  [`P9 prospective design`](../manifests/bright_reasoning_retrieval_p9_confirmation_design_v1.json)；
+  [`P9 implementation freeze`](../manifests/bright_reasoning_retrieval_p9_confirmation_implementation_freeze_v1.json)；
+  [`P9 acquisition`](../manifests/bright_reasoning_retrieval_p9_confirmation_acquisition_result_v1.json)；
+  [`P9 prepare`](../manifests/bright_reasoning_retrieval_p9_confirmation_prepare_result_v1.json)；
+  [`P9 action seal`](../manifests/bright_reasoning_retrieval_p9_confirmation_actions_result_v1.json)；
+  [`P9 prospective final result`](../manifests/bright_reasoning_retrieval_p9_confirmation_final_result_v1.json)
 
 - EntailmentBank proof-retrieval qualification、v1 fail-closed、v2 formal terminal chain：
   [`source custody`](../manifests/entailmentbank_proof_retrieval_source_custody_v1.json)；
