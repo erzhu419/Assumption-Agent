@@ -25,7 +25,7 @@ from reconstruction_v2.replication_runtime.hipporag_upstream_hardening_v1 import
 
 
 SCHEMA = "hipporag_upstream_hardening_qualification_result_v1"
-FREEZE_SCHEMA = "hipporag_upstream_hardening_qualification_freeze_v1"
+FREEZE_SCHEMA = "hipporag_upstream_hardening_qualification_freeze_v1_r1"
 DESIGN_SCHEMA = "hipporag_upstream_hardening_qualification_design_v1"
 DESIGN_SELF_SHA256 = (
     "ce2814f09297bc5b07dfa1657086f363a93fab213ed2b6e7ee761ea343482a39"
@@ -37,7 +37,7 @@ DESIGN_RELATIVE = Path(
     "manifests/hipporag_upstream_hardening_qualification_design_v1.json"
 )
 FREEZE_RELATIVE = Path(
-    "manifests/hipporag_upstream_hardening_qualification_freeze_v1.json"
+    "manifests/hipporag_upstream_hardening_qualification_freeze_v1_r1.json"
 )
 RESULT_RELATIVE = Path(
     "manifests/hipporag_upstream_hardening_qualification_result_v1.json"
@@ -558,6 +558,19 @@ def _run_parity(
     return [completed[index] for index in range(ITEM_COUNT)], counter.peak
 
 
+def verify_offline_runtime_assets(base: Path) -> None:
+    for directory in (base / LLM_MODEL_RELATIVE, base / EMBEDDING_MODEL_RELATIVE):
+        if not directory.is_dir() or directory.is_symlink():
+            raise HippoRAGQualificationError("offline model asset is unavailable")
+    runtime = base / RUNTIME_PYTHON_RELATIVE
+    if not runtime.is_file():
+        raise HippoRAGQualificationError("offline runtime Python is unavailable")
+    try:
+        runtime.resolve(strict=True)
+    except OSError as exc:
+        raise HippoRAGQualificationError("offline runtime Python is broken") from exc
+
+
 def run_formal(project_root: Path) -> dict[str, Any]:
     project_root = project_root.resolve(strict=True)
     base = project_root / "reconstruction_v2"
@@ -569,13 +582,7 @@ def run_formal(project_root: Path) -> dict[str, Any]:
         raise OneShotRefusal("hardening qualification root already exists")
     freeze = _verify_design_and_freeze(base, project_root)
     artifact_binding = verify_frozen_artifact_sets(base)
-    for required in (
-        base / LLM_MODEL_RELATIVE,
-        base / EMBEDDING_MODEL_RELATIVE,
-        base / RUNTIME_PYTHON_RELATIVE,
-    ):
-        if not required.exists() or required.is_symlink():
-            raise HippoRAGQualificationError("offline runtime asset is unavailable")
+    verify_offline_runtime_assets(base)
     root.mkdir(mode=0o700)
     source = _verify_and_materialize_source(base, root)
     synthetic = _run_synthetic(base, root, source["patched_path"])
