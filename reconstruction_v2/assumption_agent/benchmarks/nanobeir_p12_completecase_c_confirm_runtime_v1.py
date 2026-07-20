@@ -98,6 +98,14 @@ def _runtime_freeze(base: Path) -> Mapping[str, Any]:
     if not isinstance(declared, str):
         raise CompleteCaseCConfirmError("C_confirm freeze hash is absent")
     _verify_self(value, declared, "C_confirm freeze")
+    commit = value.get("formal_implementation_commit")
+    if (
+        not isinstance(commit, str)
+        or not acquisition._git_is_ancestor(commit, base.parent)
+        or value.get("study_design_self_sha256")
+        != STUDY_DESIGN_SELF_SHA256
+    ):
+        raise CompleteCaseCConfirmError("C_confirm freeze prerequisite drifted")
     bindings = value.get("dependency_bindings")
     if not isinstance(bindings, list):
         raise CompleteCaseCConfirmError("C_confirm dependency bindings are absent")
