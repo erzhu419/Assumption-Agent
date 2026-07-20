@@ -1,0 +1,134 @@
+{
+  "action_contract": {
+    "Agent_P10": {
+      "base_pool": "original_plus_four_typed_query_global_depth64_pool32",
+      "bridge_anchor_source": "up_to_four_label_free_seed_documents_selected_from_the_base_pool",
+      "bridge_query_count_cap": 4,
+      "bridge_retrieval_depth": 64,
+      "candidate_expansion": "union_base_pool_with_full_corpus_bridge_results_without_qrel_injection",
+      "candidate_name": "P10_TYPED_BRIDGE_EXPAND_CE_RRF",
+      "core_implementation_freeze_self_sha256": "47e102f3da12a3021929a48c525cb9c4a6b69f5d6cb4f3cc260e4a15ddac6f8b",
+      "final_rank": "exact_fraction_RRF_k60_over_cross_encoder_relation_mechanism_original_and_bridge_rankings",
+      "maximum_cross_encoder_candidates_per_item": 288
+    },
+    "HippoRAG": "candidate_restricted_official_core_reranks_the_same_label_free_32_document_base_pool_available_before_bridge_expansion",
+    "RAW": "original_query_MiniLM_full_corpus_top10",
+    "candidate_restricted_disclosure": "HippoRAG_is_not_full_corpus_and_P10_uses_extra_bridge_retrieval_and_cross_encoder_compute",
+    "gold_qrel_or_document_identifier_exposure_to_models": false,
+    "top_k": 10
+  },
+  "acquisition": {
+    "block_order_and_items_per_family": {
+      "G_form": 16,
+      "C_confirm": 24,
+      "A_form": 12,
+      "F_search": 12,
+      "A_hold": 16,
+      "M_search": 16
+    },
+    "direct_one_shot_no_prequalification": true,
+    "family_HMAC_order": "HMAC_SHA256_over_family_and_query_ID_with_a_fresh_32_byte_secret",
+    "public_split": "test",
+    "qrel_rule": "positive_integer_qrel_becomes_binary_relevance_one",
+    "query_eligibility": "unique_nonempty_query_ID_and_text_with_at_least_one_positive_qrel_to_an_existing_document",
+    "schema": {
+      "corpus": "corpus.jsonl_with__id_title_text",
+      "qrels": "qrels/test.tsv_with_query_id_corpus_id_score",
+      "queries": "queries.jsonl_with__id_text"
+    },
+    "selection_retry_resample_replacement_or_smaller_blocks": false
+  },
+  "block_lifecycle": [
+    {
+      "block": "G_form",
+      "labels_opened_after_all_fixed_actions_seal": true,
+      "purpose": "mechanism_and_causal_action_span_characterization_only_without_P10_retuning"
+    },
+    {
+      "block": "C_confirm",
+      "labels_opened_once_after_all_three_arm_actions_join": true,
+      "purpose": "one_shot_prospective_P10_RAW_HippoRAG_confirmation"
+    },
+    {
+      "block": "A_form",
+      "labels_opened_only_if_C_confirm_primary_passes": true,
+      "purpose": "form_one_substantively_new_evaluator_challenger_under_a_separate_freeze"
+    },
+    {
+      "block": "F_search",
+      "labels_opened_only_if_C_confirm_primary_passes": true,
+      "purpose": "evaluator_search_evidence_without_changing_P10"
+    },
+    {
+      "block": "A_hold",
+      "labels_opened_once_after_incumbent_and_challenger_actions_join": true,
+      "purpose": "one_shot_evaluator_promotion"
+    },
+    {
+      "block": "M_search",
+      "labels_opened_once_only_after_A_hold_promotion_and_all_frozen_actions_join": true,
+      "purpose": "untouched_retained_search_improvement_required_for_L5"
+    }
+  ],
+  "claim_boundary": {
+    "answer_generation": false,
+    "binary_qrel_metric_is_official_graded_BEIR_metric": false,
+    "C_confirm_primary_is_population_inference": false,
+    "candidate_restricted_HippoRAG_is_official_full_corpus_result": false,
+    "end_to_end_QA": false,
+    "external_network_or_online_evaluator": false,
+    "official_BEIR_leaderboard_comparability": false,
+    "primary_task": "binary_qrel_nDCG_at_10_across_three_BEIR_tasks"
+  },
+  "execution": {
+    "action_intents_persisted_before_first_join": true,
+    "cross_encoder_process_concurrency": 1,
+    "external_process_concurrency_cap": 13,
+    "HippoRAG_process_concurrency": 12,
+    "late_label_scoring": true,
+    "offline_first": true,
+    "online_fallback": false,
+    "retry_replay_resample_provider_switch_or_candidate_fallback": false,
+    "single_controller_launch_per_formal_block": true
+  },
+  "metric": {
+    "candidate_expansion_descriptives": [
+      "unique_bridge_candidates_outside_base_pool",
+      "P10_top10_documents_outside_base_pool",
+      "positive_qrel_documents_absent_from_base_pool_but_recovered_by_P10_top10"
+    ],
+    "integer_scale": 1000000000,
+    "nDCG_formula": "binary_positive_qrel_DCG_at_10_divided_by_ideal_DCG_for_min(positive_qrel_count,10)",
+    "primary_C_confirm_rule": "P10_minus_RAW_and_P10_minus_HippoRAG_are_strictly_positive_in_aggregate_and_in_each_of_NFCORPUS_ARGUANA_SCIDOCS",
+    "secondary": [
+      "mean_nDCG_at_10",
+      "gain_harm_tie_counts",
+      "per_family_arm_totals",
+      "candidate_expansion_descriptives"
+    ]
+  },
+  "no_gate_loop_policy": {
+    "C_confirm_is_not_used_to_change_bridge_extraction_or_ranking": true,
+    "failure_of_primary_stops_P10_same_source_development": true,
+    "remaining_rows_are_not_a_rescue_cohort": true,
+    "same_source_topk_weight_prompt_anchor_or_threshold_search_after_G_form_or_C_confirm": false
+  },
+  "recorded_date": "2026-07-20",
+  "schema": "beir_bridge_expansion_study_design_v1",
+  "self_hash_contract": {
+    "algorithm": "sha256",
+    "canonicalization": "json.dumps(body_without_self_sha256, ensure_ascii=True, sort_keys=True, separators=(',', ':')).encode('utf-8')"
+  },
+  "self_sha256": "088460f99d647a02cc7b8f1d5b4577fe8cfbd5ce109d714a7bf73f6a67f0905e",
+  "source_binding": {
+    "BEIR_repository_commit": "ef83d29307061c65d04b035b4f4e7c18bd8374af",
+    "families": [
+      "NFCORPUS",
+      "ARGUANA",
+      "SCIDOCS"
+    ],
+    "source_custody_manifest": "manifests/beir_bridge_expansion_source_custody_v1.json",
+    "source_custody_self_sha256": "e680c9f49a3ee4dfe62e11201d6f0e9a466ebebe907455b73c34c9655a016fb4"
+  },
+  "version": "v1"
+}
