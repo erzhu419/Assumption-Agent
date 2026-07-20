@@ -27,13 +27,22 @@ from reconstruction_v2.assumption_agent.benchmarks import (
 SCHEMA = "fiqa_bridge_expansion_train_runtime_result_v2"
 ATTEMPT_SCHEMA = "fiqa_bridge_expansion_train_runtime_attempt_v2"
 ACTION_SCHEMA = "fiqa_bridge_expansion_train_runtime_actions_v2"
-FREEZE_SCHEMA = "fiqa_bridge_expansion_train_runtime_implementation_freeze_v2"
+FREEZE_SCHEMA = "fiqa_bridge_expansion_train_runtime_implementation_freeze_v2_r1"
 
 FAILURE_RELATIVE = Path("manifests/fiqa_bridge_expansion_train_runtime_failure_v1.json")
 FAILURE_FILE_SHA256 = "3956bd1d1302bd7249676dfd64cf3c47879d6ccb3a5fa86d09a74d8a14383522"
 FAILURE_SELF_SHA256 = "d7b322eff80798982de4b4ad4e5e18e155216280ba9bfffe212437a84f0f24dc"
+CORRECTION_RELATIVE = Path(
+    "manifests/fiqa_bridge_expansion_train_runtime_failure_v1_correction_v1.json"
+)
+CORRECTION_FILE_SHA256 = (
+    "943292e4b97bd2753b62af2017675e1d087a7452c296783de538246e9117e543"
+)
+CORRECTION_SELF_SHA256 = (
+    "3b9bd0fb746e9ec382da7c854831542d863ca830adaac0083a6fee063407ac08"
+)
 FREEZE_RELATIVE = Path(
-    "manifests/fiqa_bridge_expansion_train_runtime_implementation_freeze_v2.json"
+    "manifests/fiqa_bridge_expansion_train_runtime_implementation_freeze_v2_r1.json"
 )
 RESULT_RELATIVE = Path("manifests/fiqa_bridge_expansion_train_runtime_result_v2.json")
 RUN_ROOT_RELATIVE = Path("artifacts/fiqa_bridge_expansion_train_runtime_v2")
@@ -82,6 +91,28 @@ def _load_failure(base: Path) -> Mapping[str, Any]:
     return value
 
 
+def _load_correction(base: Path) -> Mapping[str, Any]:
+    path = base / CORRECTION_RELATIVE
+    if (
+        not path.is_file()
+        or path.is_symlink()
+        or v1.integration_v1.file_sha256(path) != CORRECTION_FILE_SHA256
+    ):
+        raise FiqaTrainRuntimeV2Error("v1 failure correction file binding drifted")
+    value = _read_json(path, "v1 TRAIN runtime failure correction")
+    if (
+        value.get("schema")
+        != "fiqa_bridge_expansion_train_runtime_failure_v1_correction_v1"
+        or value.get("source_failure_receipt_self_sha256") != FAILURE_SELF_SHA256
+    ):
+        raise FiqaTrainRuntimeV2Error("v1 failure correction identity drifted")
+    try:
+        v1._verify_self(value, "self_sha256", CORRECTION_SELF_SHA256)
+    except v1.FiqaTrainRuntimeError as exc:
+        raise FiqaTrainRuntimeV2Error(str(exc)) from exc
+    return value
+
+
 def _verify_freeze(base: Path) -> Mapping[str, Any]:
     value = _read_json(base / FREEZE_RELATIVE, "v2 TRAIN runtime freeze")
     if value.get("schema") != FREEZE_SCHEMA:
@@ -113,17 +144,40 @@ def _verify_freeze(base: Path) -> Mapping[str, Any]:
             raise FiqaTrainRuntimeV2Error("v2 TRAIN runtime implementation drifted")
     if value.get("failure_v1_self_sha256") != FAILURE_SELF_SHA256:
         raise FiqaTrainRuntimeV2Error("v2 TRAIN runtime failure binding drifted")
+    if value.get("correction_receipt_self_sha256") != CORRECTION_SELF_SHA256:
+        raise FiqaTrainRuntimeV2Error("v2 TRAIN runtime correction binding drifted")
     return value
 
 
 def _verify_label_free_artifacts(
     base: Path,
     failure: Mapping[str, Any],
+    correction: Mapping[str, Any] | None = None,
 ) -> Mapping[str, Path]:
     rows = failure.get("label_free_artifact_bindings")
     if not isinstance(rows, list) or len(rows) != 9:
         raise FiqaTrainRuntimeV2Error("v1 label-free artifact registry drifted")
+    replacement_relative: str | None = None
+    erroneous_digest: str | None = None
+    corrected_digest: str | None = None
+    if correction is not None:
+        row = correction.get("correction")
+        if not isinstance(row, Mapping):
+            raise FiqaTrainRuntimeV2Error("v1 correction row drifted")
+        replacement_relative = row.get("relative_path")
+        erroneous_digest = row.get("erroneous_declared_sha256")
+        corrected_digest = row.get("correct_sha256")
+        if (
+            not isinstance(replacement_relative, str)
+            or not isinstance(erroneous_digest, str)
+            or not isinstance(corrected_digest, str)
+            or len(erroneous_digest) != 65
+            or len(corrected_digest) != 64
+            or erroneous_digest[:64] != corrected_digest
+        ):
+            raise FiqaTrainRuntimeV2Error("v1 correction value drifted")
     output: dict[str, Path] = {}
+    replacement_seen = False
     for row in rows:
         if not isinstance(row, Mapping):
             raise FiqaTrainRuntimeV2Error("v1 artifact row drifted")
@@ -137,16 +191,24 @@ def _verify_label_free_artifacts(
             or not isinstance(size, int)
         ):
             raise FiqaTrainRuntimeV2Error("v1 artifact binding value drifted")
+        expected_digest = digest
+        if relative == replacement_relative:
+            if digest != erroneous_digest or replacement_seen:
+                raise FiqaTrainRuntimeV2Error("v1 corrected artifact row drifted")
+            expected_digest = corrected_digest
+            replacement_seen = True
+        if len(expected_digest) != 64:
+            raise FiqaTrainRuntimeV2Error("v1 artifact digest is not SHA-256")
         path = base / relative
         if (
             not path.is_file()
             or path.is_symlink()
             or path.stat().st_size != size
-            or v1.integration_v1.file_sha256(path) != digest
+            or v1.integration_v1.file_sha256(path) != expected_digest
         ):
             raise FiqaTrainRuntimeV2Error("v1 label-free artifact file drifted")
         output[path.name] = path
-    if len(output) != 9:
+    if len(output) != 9 or (replacement_relative is not None and not replacement_seen):
         raise FiqaTrainRuntimeV2Error("v1 label-free artifact names drifted")
     return output
 
@@ -412,8 +474,9 @@ def run_formal(project_root: Path) -> dict[str, Any]:
         raise OneShotRefusal("v2 TRAIN runtime result already exists")
     preconditions = v1._load_preconditions(project_root)
     failure = _load_failure(base)
+    correction = _load_correction(base)
     freeze = _verify_freeze(base)
-    artifacts = _verify_label_free_artifacts(base, failure)
+    artifacts = _verify_label_free_artifacts(base, failure, correction)
     integration = preconditions["integration"]
     items = load_train_views(base, integration)
     reconstructed = reconstruct_label_free_plan(
@@ -590,6 +653,7 @@ def run_formal(project_root: Path) -> dict[str, Any]:
                 "action_pack_sha256": actions["pack_sha256"],
                 "attempt_marker_sha256": v1.integration_v1.file_sha256(marker_path),
                 "failure_v1_self_sha256": FAILURE_SELF_SHA256,
+                "failure_v1_correction_self_sha256": CORRECTION_SELF_SHA256,
                 "formal_implementation_commit": _git_head(project_root),
                 "implementation_freeze_self_sha256": freeze["self_sha256"],
                 "integration_result_self_sha256": v1.INTEGRATION_RESULT_SELF_SHA256,

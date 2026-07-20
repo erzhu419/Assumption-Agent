@@ -152,6 +152,58 @@ def test_bound_artifact_verifier_rejects_byte_drift(tmp_path: Path) -> None:
         )
 
 
+def test_bound_artifact_verifier_applies_exact_impossible_hash_correction(
+    tmp_path: Path,
+) -> None:
+    rows = []
+    for index in range(9):
+        path = tmp_path / f"artifact-{index}.bin"
+        path.write_bytes(str(index).encode())
+        digest = runtime.v1.integration_v1.file_sha256(path)
+        rows.append(
+            {
+                "relative_path": path.name,
+                "sha256": digest + ("f" if index == 3 else ""),
+                "size_bytes": path.stat().st_size,
+            }
+        )
+    corrected = rows[3]["sha256"][:64]
+    observed = runtime._verify_label_free_artifacts(
+        tmp_path,
+        {"label_free_artifact_bindings": rows},
+        {
+            "correction": {
+                "correct_sha256": corrected,
+                "erroneous_declared_sha256": rows[3]["sha256"],
+                "relative_path": rows[3]["relative_path"],
+            }
+        },
+    )
+    assert len(observed) == 9
+
+
+def test_bound_artifact_verifier_rejects_unregistered_impossible_hash(
+    tmp_path: Path,
+) -> None:
+    rows = []
+    for index in range(9):
+        path = tmp_path / f"artifact-{index}.bin"
+        path.write_bytes(str(index).encode())
+        digest = runtime.v1.integration_v1.file_sha256(path)
+        rows.append(
+            {
+                "relative_path": path.name,
+                "sha256": digest + ("f" if index == 3 else ""),
+                "size_bytes": path.stat().st_size,
+            }
+        )
+    with pytest.raises(runtime.FiqaTrainRuntimeV2Error):
+        runtime._verify_label_free_artifacts(
+            tmp_path,
+            {"label_free_artifact_bindings": rows},
+        )
+
+
 def test_hipporag_replay_requires_all_inputs(tmp_path: Path) -> None:
     previous_root = tmp_path / "previous"
     previous_root.mkdir()
