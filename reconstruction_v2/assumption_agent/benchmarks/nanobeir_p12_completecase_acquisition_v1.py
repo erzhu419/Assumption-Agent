@@ -29,7 +29,7 @@ from reconstruction_v2.assumption_agent.benchmarks import (
 
 SCHEMA = "nanobeir_p12_completecase_acquisition_result_v1"
 ATTEMPT_SCHEMA = "nanobeir_p12_completecase_acquisition_attempt_v1"
-FREEZE_SCHEMA = "nanobeir_p12_completecase_acquisition_freeze_v1"
+FREEZE_SCHEMA = "nanobeir_p12_completecase_acquisition_freeze_v2"
 VIEW_SCHEMA = "nanobeir_p12_completecase_private_view_v1"
 LABEL_SCHEMA = "nanobeir_p12_completecase_private_labels_v1"
 HIPPO_SCHEMA = "nanobeir_p12_completecase_private_hipporag_v1"
@@ -54,7 +54,7 @@ RESULT_RELATIVE = Path(
     "manifests/nanobeir_p12_completecase_acquisition_result_v1.json"
 )
 FREEZE_RELATIVE = Path(
-    "manifests/nanobeir_p12_completecase_acquisition_freeze_v1.json"
+    "manifests/nanobeir_p12_completecase_acquisition_freeze_v2.json"
 )
 IMPLEMENTATION_RELATIVE = Path(
     "assumption_agent/benchmarks/nanobeir_p12_completecase_acquisition_v1.py"
@@ -343,6 +343,37 @@ def _item_key(secret: bytes, family: str, query_id: str) -> str:
     ).hexdigest()
 
 
+def valid_cached_rank_sets(
+    base_pool: object, raw_top10: object, hippo_top10: object
+) -> bool:
+    def ordinal_list(value: object, length: int) -> bool:
+        return (
+            isinstance(value, list)
+            and len(value) == length
+            and all(
+                isinstance(row, int) and not isinstance(row, bool) and row >= 0
+                for row in value
+            )
+            and len(set(value)) == length
+        )
+
+    if (
+        not ordinal_list(base_pool, 32)
+        or not ordinal_list(raw_top10, 10)
+        or not ordinal_list(hippo_top10, 10)
+    ):
+        return False
+    assert isinstance(base_pool, list)
+    assert isinstance(raw_top10, list)
+    assert isinstance(hippo_top10, list)
+    base_set = set(base_pool)
+    return (
+        base_pool == sorted(base_pool)
+        and set(raw_top10) <= base_set
+        and set(hippo_top10) <= base_set
+    )
+
+
 def _eligible_rows(
     base: Path, rows: Sequence[Mapping[str, Any]]
 ) -> Mapping[str, Mapping[str, Mapping[str, Any]]]:
@@ -386,16 +417,7 @@ def _eligible_rows(
         raw_top10 = row["raw_top10"]
         top_rows = row["HippoRAG_top_rows"]
         if (
-            not isinstance(base_pool, list)
-            or len(base_pool) != 32
-            or len(set(base_pool)) != 32
-            or not isinstance(raw_top10, list)
-            or len(raw_top10) != 10
-            or raw_top10 != base_pool[:10]
-            or not isinstance(top_rows, list)
-            or len(top_rows) != 10
-            or len(set(top_rows)) != 10
-            or any(value not in base_pool for value in top_rows)
+            not valid_cached_rank_sets(base_pool, raw_top10, top_rows)
             or not isinstance(row["stderr_sha256"], str)
             or not isinstance(row["stdout_sha256"], str)
         ):

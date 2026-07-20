@@ -212,16 +212,8 @@ def load_cached_hipporag(
         base_pool = cache_row.get("base_pool")
         raw_top10 = cache_row.get("raw_top10")
         top_rows = cache_row.get("top_rows")
-        if (
-            not isinstance(base_pool, list)
-            or len(base_pool) != 32
-            or len(set(base_pool)) != 32
-            or not isinstance(raw_top10, list)
-            or raw_top10 != base_pool[:10]
-            or not isinstance(top_rows, list)
-            or len(top_rows) != 10
-            or len(set(top_rows)) != 10
-            or any(value not in base_pool for value in top_rows)
+        if not acquisition.valid_cached_rank_sets(
+            base_pool, raw_top10, top_rows
         ):
             raise CompleteCaseCConfirmError("C_confirm cached ranks drifted")
         source_ordinal = cache_row.get("source_screen_ordinal")

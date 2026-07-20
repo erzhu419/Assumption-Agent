@@ -72,3 +72,19 @@ def test_block_contract_totals_exactly_36() -> None:
         + acquisition.RESERVE_COUNT
         == acquisition.SELECTED_PER_FAMILY
     )
+
+
+def test_rank_contract_keeps_ranked_raw_subset_not_pool_prefix() -> None:
+    base_pool = list(range(32))
+    raw_top10 = [20, 3, 7, 1, 30, 2, 18, 9, 4, 12]
+    hippo_top10 = [5, 8, 2, 19, 4, 11, 1, 0, 31, 7]
+    assert raw_top10 != base_pool[:10]
+    assert acquisition.valid_cached_rank_sets(
+        base_pool, raw_top10, hippo_top10
+    )
+
+
+def test_rank_contract_rejects_rows_outside_candidate_pool() -> None:
+    assert not acquisition.valid_cached_rank_sets(
+        list(range(32)), list(range(9)) + [99], list(range(10))
+    )
