@@ -1,0 +1,110 @@
+{
+  "action_contract": {
+    "Agent_P10": {
+      "base_pool": "original_plus_four_frozen_typed_queries_global_depth64_pool32",
+      "bridge_anchor_source": "up_to_four_label_free_seed_documents_selected_from_the_base_pool",
+      "bridge_query_count_cap": 4,
+      "bridge_retrieval_depth": 64,
+      "candidate_expansion": "union_base_pool_with_full_corpus_bridge_results_without_qrel_injection",
+      "candidate_name": "P10_TYPED_BRIDGE_EXPAND_CE_RRF",
+      "core_implementation_freeze_self_sha256": "47e102f3da12a3021929a48c525cb9c4a6b69f5d6cb4f3cc260e4a15ddac6f8b",
+      "final_rank": "exact_fraction_RRF_k60_over_cross_encoder_relation_mechanism_original_and_bridge_rankings",
+      "maximum_cross_encoder_candidates_per_item": 288
+    },
+    "HippoRAG": "candidate_restricted_official_core_reranks_the_same_label_free_32_document_base_pool_available_before_bridge_expansion",
+    "RAW": "original_query_MiniLM_full_corpus_top10",
+    "candidate_restricted_disclosure": "HippoRAG_is_not_full_corpus_and_P10_uses_extra_bridge_retrieval_and_cross_encoder_compute",
+    "gold_qrel_or_document_identifier_exposure_to_models": false,
+    "top_k": 10
+  },
+  "claim_boundary": {
+    "answer_generation": false,
+    "cross_relation_family_stability": false,
+    "DEV_primary_is_population_inference": false,
+    "end_to_end_QA": false,
+    "external_network_or_online_evaluator": false,
+    "official_BEIR_leaderboard_comparability": false,
+    "primary_task": "binary_positive_qrel_nDCG_at_10_on_a_single_FiQA_DEV_cohort"
+  },
+  "DEV_measurement": {
+    "block": "C_confirm",
+    "cohort_size": 48,
+    "eligibility": "unique_nonempty_query_ID_and_text_with_at_least_one_positive_qrel_to_an_existing_nonself_document",
+    "label_access": "open_DEV_qrels_once_for_HMAC_allocation_then_keep_labels_separate_until_all_three_arm_actions_join_and_seal",
+    "selection": "fresh_32_byte_secret_HMAC_SHA256_over_FIQA_DEV_and_query_ID",
+    "selection_retry_replay_resample_or_smaller_cohort": false
+  },
+  "execution": {
+    "action_intents_persisted_before_first_join": true,
+    "cross_encoder_process_concurrency": 1,
+    "external_process_concurrency_cap": 13,
+    "HippoRAG_process_concurrency": 12,
+    "late_label_scoring": true,
+    "offline_first": true,
+    "online_fallback": false,
+    "retry_replay_resample_provider_switch_or_candidate_fallback": false,
+    "single_controller_launch_per_formal_block": true
+  },
+  "metric": {
+    "candidate_expansion_descriptives": [
+      "unique_bridge_candidates_outside_base_pool",
+      "P10_top10_documents_outside_base_pool",
+      "positive_qrel_documents_absent_from_base_pool_but_recovered_by_P10_top10"
+    ],
+    "integer_scale": 1000000000,
+    "nDCG_formula": "binary_positive_qrel_DCG_at_10_divided_by_ideal_DCG_for_min(positive_qrel_count,10)",
+    "primary_DEV_rule": "P10_minus_RAW_and_P10_minus_candidate_restricted_HippoRAG_are_each_strictly_positive_in_aggregate",
+    "secondary": [
+      "mean_nDCG_at_10",
+      "gain_harm_tie_counts",
+      "paired_integer_deltas",
+      "candidate_expansion_descriptives"
+    ]
+  },
+  "no_gate_loop_policy": {
+    "DEV_outcome_is_not_used_to_change_bridge_extraction_ranking_query_generation_or_source_handling": true,
+    "failure_of_primary_stops_P10_FiQA_development": true,
+    "same_DEV_or_TEST_topk_weight_prompt_anchor_threshold_or_cohort_search": false,
+    "TEST_is_not_a_rescue_cohort": true
+  },
+  "recorded_date": "2026-07-20",
+  "schema": "fiqa_bridge_expansion_study_design_v1",
+  "self_hash_contract": {
+    "algorithm": "sha256",
+    "canonicalization": "json.dumps(body_without_self_sha256, ensure_ascii=True, sort_keys=True, separators=(',', ':')).encode('utf-8')"
+  },
+  "self_sha256": "7db0cb44f243d2aab9a76b58107db9a529a2e3f54ef08f8368af01ca36afb7c7",
+  "source_binding": {
+    "BEIR_repository_commit": "ef83d29307061c65d04b035b4f4e7c18bd8374af",
+    "dataset": "FiQA-2018",
+    "source_custody_manifest": "manifests/fiqa_bridge_expansion_source_custody_v1.json",
+    "source_custody_self_sha256": "1dca30855419ac37816cd8efa1a405c7c013cd796d22a619dea6a6e418a822ef"
+  },
+  "source_contract": {
+    "corpus": "fiqa/corpus.jsonl_with__id_title_text",
+    "duplicate_query_document_or_qrel_pair": "fail_closed",
+    "positive_qrel": "integer_score_greater_than_zero_is_binary_relevance_one",
+    "qrels": "fiqa/qrels/{train,dev,test}.tsv_with_query_id_corpus_id_score",
+    "queries": "fiqa/queries.jsonl_with__id_text",
+    "unknown_document_qrel": "record_and_exclude_as_source_unretrievable; retain_query_only_if_at_least_one_existing_nonself_positive_remains",
+    "unknown_query_qrel": "fail_closed"
+  },
+  "split_lifecycle": {
+    "DEV": {
+      "purpose": "one_shot_prospective_P10_RAW_candidate_restricted_HippoRAG_confirmation",
+      "qrels_unopened_until_acquisition_implementation_is_frozen": true
+    },
+    "TEST": {
+      "purpose": "sealed_future_study_only",
+      "qrels_or_labels_opened_in_this_study": false
+    },
+    "TRAIN": {
+      "allowed_changes": "loader_schema_and_execution_integration_only;_P10_core_query_types_bridge_grammar_ranking_weights_and_primary_metric_cannot_change",
+      "claim_eligible": false,
+      "diagnostic_query_selection": "public_SHA256_order_over_TRAIN_eligible_query_IDs",
+      "labels_may_be_used": true,
+      "purpose": "source_schema_runtime_and_full_pipeline_integration_before_DEV_freeze"
+    }
+  },
+  "version": "v1"
+}
