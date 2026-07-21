@@ -62,13 +62,23 @@ def test_outer_compatibility_context_restores_mature_runtime() -> None:
     original_acquisition = runtime.mature.acquisition
     original_loader = runtime.p11_runtime.load_corpora
     original_totalizer = runtime.p12_runtime.totalize_qwen_output
+    had_git_ancestor = hasattr(runtime.acquisition, "_git_is_ancestor")
+    original_git_ancestor = getattr(runtime.acquisition, "_git_is_ancestor", None)
     with runtime._patched_mature_runtime():
         assert runtime.mature.acquisition is runtime.acquisition
+        assert (
+            runtime.acquisition._git_is_ancestor
+            is runtime.acquisition.mature._git_is_ancestor
+        )
         assert runtime.p11_runtime.load_corpora is runtime.load_corpora
         assert runtime.p12_runtime.totalize_qwen_output is not original_totalizer
     assert runtime.mature.acquisition is original_acquisition
     assert runtime.p11_runtime.load_corpora is original_loader
     assert runtime.p12_runtime.totalize_qwen_output is original_totalizer
+    if had_git_ancestor:
+        assert runtime.acquisition._git_is_ancestor is original_git_ancestor
+    else:
+        assert not hasattr(runtime.acquisition, "_git_is_ancestor")
 
 
 def test_formal_refuses_consumed_root_before_private_access(

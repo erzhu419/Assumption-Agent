@@ -256,6 +256,8 @@ def _patched_mature_runtime() -> Iterator[None]:
     mature_originals = {
         name: getattr(mature, name) for name in mature_replacements
     }
+    acquisition_had_git_ancestor = hasattr(acquisition, "_git_is_ancestor")
+    acquisition_git_ancestor = getattr(acquisition, "_git_is_ancestor", None)
     original_load_corpora = p11_runtime.load_corpora
     original_totalizer = p12_runtime.totalize_qwen_output
     original_candidate_name = p12_runtime.CANDIDATE_NAME
@@ -263,6 +265,7 @@ def _patched_mature_runtime() -> Iterator[None]:
     try:
         for name, value in mature_replacements.items():
             setattr(mature, name, value)
+        acquisition._git_is_ancestor = acquisition.mature._git_is_ancestor
         p11_runtime.load_corpora = load_corpora
         p12_runtime.CANDIDATE_NAME = CANDIDATE_NAME
         p12_runtime._rename_public_slot = _rename_p11_slot_to_p13
@@ -273,6 +276,10 @@ def _patched_mature_runtime() -> Iterator[None]:
         p12_runtime._rename_public_slot = original_slot_rename
         p12_runtime.CANDIDATE_NAME = original_candidate_name
         p11_runtime.load_corpora = original_load_corpora
+        if acquisition_had_git_ancestor:
+            acquisition._git_is_ancestor = acquisition_git_ancestor
+        else:
+            delattr(acquisition, "_git_is_ancestor")
         for name, value in mature_originals.items():
             setattr(mature, name, value)
 
