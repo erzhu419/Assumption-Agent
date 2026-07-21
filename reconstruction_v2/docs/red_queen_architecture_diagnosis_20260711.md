@@ -4006,8 +4006,66 @@ P9−HippoRAG aggregate 为 `+1,029,664,470`，三-family 为 `+39,780,186 / +36
 
 本 source epoch 到此停止：不在 TRAIN45 或 `C_confirm` 上改 query、RRF 权重、top-k、family rule 或 gate；剩余 4 项数量太小且 family 不平衡，只保留为审计余量，不作为 rescue cohort。下一条非 gate 主线必须换成能在**新来源/新领域扩展或重写候选集**的 action，例如新检索入口、typed multi-hop evidence synthesis 或跨文档结构生成，而不是继续在同一 32 项上重排。它应从新的 TRAIN distribution 一次形成并冻结，再进入独立 measurement。L5 仍是另一条未闭合链：需要实质不同的 evaluator challenger 在独立 A_hold 上真正晋升，并改善事前冻结且 untouched 的 M_search。若不开展这两项，诚实终态就是窄 L3/L4 positive、现实域无稳定三臂优势、L5 未达到。
 
+### 12.30 2026-07-20～21 FiQA P10/P11：TRAIN 形成了更强 recipe，但 DEV comparator 在评分前失效
+
+为避免继续在 BRIGHT 已评分 cohort 上补规则，后续路线转向 BEIR/FiQA 的独立 TRAIN distribution，并把候选形成与前瞻验证严格分开。P10 的离线 TRAIN 端到端结果覆盖 12 项：P10 mean nDCG@10=`0.297878`，高于 candidate-restricted HippoRAG 的 `0.182360`，但低于 RAW 的 `0.421876`；P10−HippoRAG 为 5 gain / 2 harm / 5 tie，而 P10−RAW 仅 1/3/8。它还生成 1,729 个 base pool 外的唯一 bridge candidates，但没有找回任何“原 base pool 缺失且被 P10 top-10 找回”的 gold document。因此，typed bridge 确实改变了 action space，却尚未证明扩展候选带来标签收益。
+
+在这 12 个已消费 TRAIN item 上，固定候选族的离线 formation 选择 `P11_RAW1_CE_SUM2_EXPANDED_RRF_K60`。其 mean nDCG@10=`0.473354`，相对 RAW 为 3 gain / 0 harm / 9 tie，整数 nDCG 净增 `617,741,586`；相对 HippoRAG 为 8/0/4，净增 `3,491,935,267`，且 leave-one-out 对 RAW 的最小净值仍为 `+235,061,267`。这只是看过 TRAIN outcome 后的 candidate formation，不是 prospective claim。
+
+随后冻结的 FiQA DEV `C_confirm` 在 48/48 Qwen generation、48/48 cross-encoder output 和 48 个 action intents 完成后，official HippoRAG 于 item 2 触发 phrase-weight assertion；当时只有 11 个 comparator terminal outputs，尚无 action seal、label pack 打开或 performance score。该 DEV cohort 因而严格记为 infrastructure-invalid 并永久不 replay，TEST 也未打开。这个结果既不能证明 P11 有效，也不能把 comparator failure 当作 P11 失败；它只证明未加固的 official comparator 不是 complete-case evaluator。
+
+### 12.31 2026-07-21 NanoBEIR P11：新域 acquisition 完成，但 typed generator 不是 total function
+
+在对 official HippoRAG 的已知 nonfinite/missing-phrase failure 做独立、非评分 hardening qualification 后，P11 被原样冻结到三个新 NanoBEIR family：NanoClimateFEVER、NanoDBPedia、NanoHotpotQA。三族均有 50 个 source-valid query；fresh HMAC 在任何 action、model 或 score 前分配 138 个 private items，其中 `C_confirm` 每族 12 项、共 36 项，A/F/A_hold/M 与 reserve 同时密封。
+
+正式 `C_confirm` 没有到达 retrieval。36 个 label-free Qwen completion 中 34 个满足 grammar，NanoDBPedia 的 2 个 completion 无效；运行在 corpus embedding、bridge retrieval、cross-encoder、HippoRAG、action seal 和 label access 前 fail-closed。公开 failure receipt 明确记录 action intent=0、action seal=0、label/score=0，当前 cohort 与同源 P11 均禁止 replay 或 prompt/grammar 搜索。这里暴露的是架构缺口而非性能负结果：若 typed operator 仍依赖自由生成 JSON，那么“不允许的 primitive 不可表达”并未真正成立；generator 必须被 totalize，且 totalization 本身要在新 cohort 前冻结。
+
+### 12.32 2026-07-21 NanoBEIR P12：generator 已 totalize，但 comparator complete-case 仍是必要条件
+
+P12 将 P11 的 source-valid generation 保留，对无效 completion 使用事前固定的本地 totalizer，并在 fresh source/cohort 上重新开始。第一轮 `C_confirm` 的 36 项均形成 action intent：35 项使用 source-valid Qwen，1 项使用 frozen totalization；36/36 cross-encoder 均完成。然而 official HippoRAG 在 NanoNQ item 15 上再次触发 top-k/nonzero-cardinality assertion。此时 35/36 comparator outputs 已完成，但三臂 action 尚未 seal，labels 与 scores 均未打开，因此该 cohort 仍是 comparator-runtime-invalid，而不是 P12 efficacy evidence。
+
+这次 failure 把需求从“再补一个异常分支”收敛为可验证的 complete-case 合同：先对全部 source-valid query 做一次 label-free、single-launch availability screen，只有 terminal、返回 10 个唯一 ordinal 且 graph counts 为正的 query 才进入后续 HMAC population；未来选中的 HippoRAG bytes 必须原样复用，不能在评分 block 再次启动 comparator。该设计不是为 P12 提高分数的 gate，而是防止任一 comparator crash 在 label 打开前摧毁整组 paired comparison。
+
+complete-case fresh source 的首版 NanoSCIDOCS 含 344 个空正文，违反冻结的 nonempty-document contract；在 selection/action/score 前按预注册只允许一次的 compatibility replacement 换为 NanoSciFact。最终 NanoArguAna、NanoFEVER、NanoSciFact 各 50 项的 availability screen 达到 150/150 terminal，零 failure；随后 corrected one-shot acquisition 形成每族 36 个 selected items、共 99 个 runtime items与 14 个 private packs。acquisition v1 曾因错误要求 RAW top-10 等于 ordinal-sorted base pool 的前十项而在 secret 生成前失败；v2 只修正为“ranked unique subset”语义，没有读取 query assignment、label、action 或 score。
+
+但 P12 complete-case `C_confirm` 仍在 action 前终止。30 项中有 2 个 NanoArguAna source generation 无效并触发 totalizer；P12 fallback 的 typed query cap 为 900，而 bridge composer cap 为 768，附加在末尾的 distinct anchor 被整体截断，导致 bridge query 空或重复。没有 action intent、action seal、Hippo reuse、label 或 score。由于 cap=900 属于已冻结 candidate，而不是单纯 runtime bug，当前 P12 cohort 不得修补或 replay。由此形成的下一候选 P13 只做一个候选级变化：把 relation/mechanism 投影到带 role prefix 的 671 字符上限，使 `671 + 1 + 96 = 768`，从生成空间排除 anchor truncation；它必须在全新 source/cohort 上验证，不能继承 P12 的 performance opportunity。
+
+### 12.33 2026-07-21 NanoBEIR P13：bridge 已可执行，但 availability 与 runtime 的 base-pool 合同不一致
+
+P13 在任何新 outcome 打开前，把 P12 totalizer 输出再投影为 role-prefixed、最多 671 字符的 relation/mechanism query。对上一轮失败的 30 个 label-free item 做 formation replay 时，30/30 local plan 可执行，118 个 bridge query 的最大长度为 699，证明 anchor truncation 已从生成空间消失。随后候选被单独冻结，并换到 NanoFiQA2018、NanoNFCorpus、NanoTouche2020 三个 fresh family。NanoFiQA2018 原始 corpus 有 27 个空正文且没有 qrel 指向它们；唯一一次、跨三臂一致的 source projection 在 selection/action/score 前排除这 27 行，其余 family 不变。
+
+single-launch availability screen 对 149 个 source-valid query 运行 candidate-restricted official HippoRAG：NanoFiQA2018 为 36 terminal / 14 failure，NanoNFCorpus 为 40/10，NanoTouche2020 为 40/9，三族均达到事前最低 36。该 screen 没有读取 qrel/label、没有 selection secret、candidate action 或 score。随后 fresh HMAC 一次性形成每族 C10/A8/F5/A_hold5/M5/reserve3，共 99 个 runtime items和 14 个 private packs；选中的 HippoRAG bytes 本应在正式 block 原样复用。
+
+正式 P13 `C_confirm` 在 cached comparator join 处 fail-closed。30 项的 Qwen/totalizer、corpus/typed/bridge embeddings、cross-encoder output 与 action intents 已完成：29 项是 source-valid generation，1 项使用 frozen totalizer。但 label-free audit 证明 availability 与 runtime 计算的不是同一个候选池：screen 以**原问题单向量**构造 MiniLM top-32；runtime 的 frozen Agent pipeline 则以 RAW top-10 为 seed，再从原问题与四个 typed query 的全局 ranking 做 RRF fill 到 32。30/30 ordered set 与 unordered set 都不相等，交集范围 15–31、均值 23.733；虽然 cached RAW top-10 在 30/30 runtime pool 中仍是子集，cached HippoRAG 结果却不能映射到新 pool。于是 0 个 reuse receipt、0 action seal、0 label、0 score，A/F/A_hold/M 均未打开。
+
+这不是 P13 的性能负结果，也不能靠把 cache-check 放宽来恢复：若忽略 pool mismatch，HippoRAG ordinal 将指向不同文档，三臂比较会直接失真。当前 P13 同源 cohort 因此永久终止。下一次测量不再添加一个与 candidate 脱节的 availability gate，而应在 fresh family 上先冻结 HMAC query order，对每项先形成 candidate-specific typed pool，再在该同一 pool 上单次运行 HippoRAG；按事前顺序取得每族固定数量 terminal complete cases 后一次 seal 并离线评分。这样 comparator availability 是直接 measurement 的缺失数据规则，而不是可反复修改的前置 gate。
+
 ## 附录 A：关键证据索引
 
+- FiQA TRAIN P10/P11 formation 与 DEV comparator-invalid chain：
+  [`TRAIN source integration`](../manifests/fiqa_bridge_expansion_train_integration_result_v2.json)；
+  [`P10 TRAIN runtime`](../manifests/fiqa_bridge_expansion_train_runtime_result_v2.json)；
+  [`P11 formation`](../manifests/fiqa_p11_formation_result_v1.json)；
+  [`DEV acquisition`](../manifests/fiqa_bridge_expansion_dev_acquisition_result_v1.json)；
+  [`DEV runtime failure`](../manifests/fiqa_bridge_expansion_dev_runtime_failure_v1.json)；
+  [`HippoRAG hardening qualification`](../manifests/hipporag_upstream_hardening_qualification_result_v1.json)
+- NanoBEIR P11/P12 与 complete-case comparator chain：
+  [`P11 source qualification`](../manifests/nanobeir_p11_source_access_v1.json)；
+  [`P11 private acquisition`](../manifests/nanobeir_p11_acquisition_result_v1.json)；
+  [`P11 generation failure`](../manifests/nanobeir_p11_c_confirm_runtime_failure_v1.json)；
+  [`P12 source qualification`](../manifests/nanobeir_p12_source_access_v2.json)；
+  [`P12 private acquisition`](../manifests/nanobeir_p12_acquisition_result_v1.json)；
+  [`P12 comparator failure`](../manifests/nanobeir_p12_c_confirm_runtime_failure_v1.json)；
+  [`complete-case source qualification`](../manifests/nanobeir_p12_completecase_source_access_v2.json)；
+  [`150-item availability result`](../manifests/nanobeir_p12_completecase_availability_result_v1.json)；
+  [`corrected complete-case acquisition`](../manifests/nanobeir_p12_completecase_acquisition_result_v1.json)；
+  [`P12 bridge-query failure`](../manifests/nanobeir_p12_completecase_c_confirm_runtime_failure_v1.json)；
+  [`P13 bridge-safe formation`](../manifests/nanobeir_p13_bridge_safe_formation_v1.json)；
+  [`P13 candidate freeze`](../manifests/nanobeir_p13_candidate_freeze_v1.json)；
+  [`P13 source qualification`](../manifests/nanobeir_p13_source_access_v2.json)；
+  [`P13 availability result`](../manifests/nanobeir_p13_availability_result_v1.json)；
+  [`P13 private acquisition`](../manifests/nanobeir_p13_acquisition_result_v1.json)；
+  [`P13 base-pool contract failure`](../manifests/nanobeir_p13_c_confirm_runtime_failure_v1.json)
 - BRIGHT reasoning-retrieval v3、terminal M failure 与 fresh RESERVE 三臂链：
   [`v3 executor design`](../manifests/bright_reasoning_retrieval_executor_repair_design_v3.json)；
   [`v3 implementation freeze`](../manifests/bright_reasoning_retrieval_study_implementation_freeze_v3.json)；
