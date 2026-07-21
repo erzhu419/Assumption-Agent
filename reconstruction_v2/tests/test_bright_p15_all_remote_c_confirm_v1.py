@@ -149,7 +149,7 @@ def test_remote_work_root_is_one_shot(tmp_path: Path) -> None:
 
 
 def test_remote_timeout_covers_saturated_cpu_openie_execution() -> None:
-    assert runner.TIMEOUT_SECONDS == 7200
+    assert runner.TIMEOUT_SECONDS == 14_400
 
 
 def test_p15_minilm_binding_verifies_model_and_fingerprints_live_runtime(

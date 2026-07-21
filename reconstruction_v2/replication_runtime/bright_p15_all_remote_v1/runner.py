@@ -45,7 +45,7 @@ LAUNCH_SCHEMA = "bright_p15_all_remote_hipporag_launch_v1"
 COMPLETION_SCHEMA = "bright_p15_all_remote_hipporag_completion_v1"
 CONTROLLER_SCHEMA = "bright_p15_all_remote_controller_launch_v1"
 CONCURRENCY = 12
-TIMEOUT_SECONDS = 7200
+TIMEOUT_SECONDS = 14_400
 DENIED_NETWORK_SYSCALLS = ("connect", "sendto", "sendmsg", "sendmmsg")
 
 
