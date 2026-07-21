@@ -36,6 +36,20 @@ def test_extension_is_exact_contiguous_hmac_slice() -> None:
     assert not set(selected).intersection(ordered[:72])
 
 
+def test_design_self_uses_newline_inclusive_canonical_sha256() -> None:
+    body = {"schema": "test_design"}
+    expected = hashlib.sha256(
+        acquisition.p14_acquisition.utilities.canonical_json_bytes(body)
+    ).hexdigest()
+    acquisition._verify_design_self(
+        {**body, "self_sha256": expected}, expected, "test design"
+    )
+    with pytest.raises(acquisition.P15AcquisitionError, match="self hash drifted"):
+        acquisition._verify_design_self(
+            {**body, "self_sha256": "0" * 64}, expected, "test design"
+        )
+
+
 def test_view_source_loader_never_requests_gold_column(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

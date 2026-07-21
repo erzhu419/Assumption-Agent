@@ -101,6 +101,20 @@ def _verify_self(value: Mapping[str, Any], expected: str, name: str) -> None:
     p14_acquisition._verify_self(value, expected, name)
 
 
+def _verify_design_self(
+    value: Mapping[str, Any], expected: str, name: str
+) -> None:
+    """Verify the design's newline-inclusive canonical SHA-256 convention."""
+
+    body = dict(value)
+    declared = body.pop("self_sha256", None)
+    observed = hashlib.sha256(
+        p14_acquisition.utilities.canonical_json_bytes(body)
+    ).hexdigest()
+    if declared != expected or observed != expected:
+        raise P15AcquisitionError(f"{name} self hash drifted")
+
+
 def _git_head(project_root: Path) -> str:
     completed = subprocess.run(
         ["git", "rev-parse", "HEAD"],
@@ -128,7 +142,7 @@ def _verify_design_and_P14(base: Path) -> Mapping[str, Any]:
     if p14_acquisition.utilities.file_sha256(design_path) != DESIGN_FILE_SHA256:
         raise P15AcquisitionError("P15 design file drifted")
     design = _read_json(design_path, "P15 design")
-    _verify_self(design, DESIGN_SELF_SHA256, "P15 design")
+    _verify_design_self(design, DESIGN_SELF_SHA256, "P15 design")
     p14_path = base / P14_RESULT_RELATIVE
     if p14_acquisition.utilities.file_sha256(p14_path) != P14_RESULT_FILE_SHA256:
         raise P15AcquisitionError("P14 acquisition result file drifted")
