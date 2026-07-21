@@ -148,8 +148,8 @@ def test_remote_work_root_is_one_shot(tmp_path: Path) -> None:
         runner.run(plan)
 
 
-def test_remote_timeout_covers_the_frozen_cpu_openie_canary() -> None:
-    assert runner.TIMEOUT_SECONDS == 3600
+def test_remote_timeout_covers_saturated_cpu_openie_execution() -> None:
+    assert runner.TIMEOUT_SECONDS == 7200
 
 
 def test_p15_minilm_binding_verifies_model_and_fingerprints_live_runtime(
