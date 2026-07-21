@@ -81,6 +81,78 @@ def _file_sha256(path: Path) -> str:
     return acquisition.p14_acquisition.utilities.file_sha256(path)
 
 
+def _tree_receipt(root: Path) -> Mapping[str, Any]:
+    if root.is_symlink() or not root.is_dir():
+        raise P15RemoteRuntimeError("P15 frozen tree is unavailable")
+    rows: list[dict[str, Any]] = []
+    total = 0
+    for current, directories, files in os.walk(root, followlinks=False):
+        base = Path(current)
+        for name in directories:
+            if (base / name).is_symlink():
+                raise P15RemoteRuntimeError("P15 frozen tree contains a symlink")
+        for name in files:
+            path = base / name
+            if path.is_symlink():
+                raise P15RemoteRuntimeError("P15 frozen tree contains a symlink")
+            if not path.is_file():
+                raise P15RemoteRuntimeError("P15 frozen tree contains a non-file")
+            size = path.stat().st_size
+            total += size
+            rows.append(
+                {
+                    "path": path.relative_to(root).as_posix(),
+                    "sha256": _file_sha256(path),
+                    "size_bytes": size,
+                }
+            )
+    rows.sort(key=lambda row: row["path"])
+    return {
+        "file_count": len(rows),
+        "size_bytes": total,
+        "tree_sha256": _stable_hash(rows),
+    }
+
+
+def _runtime_inventory_receipt() -> Mapping[str, Any]:
+    rows: list[dict[str, str]] = []
+    for distribution in metadata.distributions():
+        name = distribution.metadata.get("Name")
+        version = distribution.version
+        location = str(distribution.locate_file(""))
+        if not isinstance(name, str) or not name or not version or not location:
+            raise P15RemoteRuntimeError("P15 package inventory is malformed")
+        rows.append({"location": location, "name": name, "version": version})
+    rows.sort(key=lambda row: (row["name"].casefold(), row["version"], row["location"]))
+    body = {
+        "distributions": rows,
+        "python_executable": sys.executable,
+        "python_version": ".".join(map(str, sys.version_info[:3])),
+        "sys_path": list(sys.path),
+    }
+    return {
+        "distribution_count": len(rows),
+        "inventory_sha256": _stable_hash(body),
+        "python_executable": sys.executable,
+        "python_version": body["python_version"],
+        "sys_path_sha256": _stable_hash(body["sys_path"]),
+    }
+
+
+def _frozen_asset_receipts(base: Path) -> Mapping[str, Mapping[str, Any]]:
+    bright = p11_runtime.train.bright_runtime
+    source_root = (
+        base / p11_runtime.hardening_qualification.BASELINE_REPO_RELATIVE / "src"
+    )
+    return {
+        "cross_encoder": _tree_receipt(base / p11_runtime.train.CROSS_MODEL_RELATIVE),
+        "HippoRAG_LLM": _tree_receipt(base / bright.HIPPORAG_LLM_RELATIVE),
+        "HippoRAG_source": _tree_receipt(source_root),
+        "MiniLM": _tree_receipt(base / bright.MINILM_MODEL_RELATIVE),
+        "Qwen": _tree_receipt(base / bright.QWEN_MODEL_RELATIVE),
+    }
+
+
 def _self_hashed(value: Mapping[str, Any]) -> dict[str, Any]:
     return acquisition.p14_acquisition.utilities.self_hashed(value, field="pack_sha256")
 
@@ -607,6 +679,14 @@ def run(plan_path: Path) -> Mapping[str, Any]:
     fingerprint = contract.load_fingerprint(base)
     if fingerprint["self_sha256"] != plan["remote_runtime_fingerprint_self_sha256"]:
         raise P15RemoteRuntimeError("P15 remote fingerprint binding drifted")
+    if dict(fingerprint.get("runtime_inventory_receipt", {})) != dict(
+        _runtime_inventory_receipt()
+    ):
+        raise P15RemoteRuntimeError("P15 remote package inventory drifted")
+    if dict(fingerprint.get("frozen_asset_receipts", {})) != dict(
+        _frozen_asset_receipts(base)
+    ):
+        raise P15RemoteRuntimeError("P15 remote frozen asset tree drifted")
     root.mkdir(mode=0o700, parents=True)
     controller = _self_hashed(
         {

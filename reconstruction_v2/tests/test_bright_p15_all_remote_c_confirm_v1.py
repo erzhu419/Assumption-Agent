@@ -187,3 +187,20 @@ def test_p15_minilm_binding_verifies_model_and_fingerprints_live_runtime(
     assert receipt["status"] == (
         "verified_P15_fingerprinted_runtime_with_immutable_model"
     )
+
+
+def test_tree_receipt_binds_content_and_rejects_symlinks(tmp_path: Path) -> None:
+    root = tmp_path / "tree"
+    root.mkdir()
+    (root / "a.txt").write_text("alpha", encoding="ascii")
+    first = runner._tree_receipt(root)
+    (root / "a.txt").write_text("beta", encoding="ascii")
+    second = runner._tree_receipt(root)
+    assert first["tree_sha256"] != second["tree_sha256"]
+    (root / "link").symlink_to(root / "a.txt")
+    with pytest.raises(runner.P15RemoteRuntimeError, match="symlink"):
+        runner._tree_receipt(root)
+
+
+def test_runtime_inventory_receipt_is_repeat_stable() -> None:
+    assert runner._runtime_inventory_receipt() == runner._runtime_inventory_receipt()
