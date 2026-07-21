@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
-from typing import Sequence
+from typing import Callable, Mapping, Sequence
 
 import numpy as np
 
@@ -67,16 +67,27 @@ def quantized_scores(matrix: object, query: object) -> np.ndarray:
 class BrightMiniLMEncoder:
     """One verified float32 CUDA model with a repeat-exact synthetic canary."""
 
-    def __init__(self, *, asset_manifest: Path, model_root: Path) -> None:
+    def __init__(
+        self,
+        *,
+        asset_manifest: Path,
+        model_root: Path,
+        runtime_binding_verifier: Callable[..., Mapping[str, object]] | None = None,
+    ) -> None:
         import torch
         from sentence_transformers import SentenceTransformer
 
         if not torch.cuda.is_available():
             raise BrightMiniLMError("the frozen CUDA device is unavailable")
-        self.runtime_receipt = frozen_asset.verify_runtime_binding(
+        verifier = (
+            frozen_asset.verify_runtime_binding
+            if runtime_binding_verifier is None
+            else runtime_binding_verifier
+        )
+        self.runtime_receipt = dict(verifier(
             asset_manifest_path=asset_manifest,
             model_root=model_root,
-        )
+        ))
         torch.manual_seed(0)
         torch.cuda.manual_seed_all(0)
         torch.use_deterministic_algorithms(True)

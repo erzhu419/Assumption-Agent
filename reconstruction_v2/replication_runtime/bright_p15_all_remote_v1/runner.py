@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 import hashlib
+from importlib import import_module, metadata
 import json
 import os
 from pathlib import Path
@@ -12,6 +13,7 @@ import shutil
 import signal
 import socket
 import subprocess
+import sys
 import threading
 from typing import Any, Mapping, Sequence
 
@@ -35,6 +37,7 @@ from reconstruction_v2.assumption_agent.benchmarks import (
 from reconstruction_v2.replication_runtime.bright_minilm_v1.encoder import (
     BrightMiniLMEncoder,
 )
+from replication_runtime.qasper_minilm_v1 import binding as minilm_asset
 
 
 INTENT_SCHEMA = "bright_p15_all_remote_action_intents_v1"
@@ -42,7 +45,7 @@ LAUNCH_SCHEMA = "bright_p15_all_remote_hipporag_launch_v1"
 COMPLETION_SCHEMA = "bright_p15_all_remote_hipporag_completion_v1"
 CONTROLLER_SCHEMA = "bright_p15_all_remote_controller_launch_v1"
 CONCURRENCY = 12
-TIMEOUT_SECONDS = 1800
+TIMEOUT_SECONDS = 3600
 DENIED_NETWORK_SYSCALLS = ("connect", "sendto", "sendmsg", "sendmmsg")
 
 
@@ -166,7 +169,6 @@ def _minimal_environment(
 def _strace_command(command: Sequence[str], trace_prefix: Path) -> list[str]:
     return [
         "/usr/bin/strace",
-        "--seccomp-bpf",
         "-ff",
         "-e",
         "trace=network",
@@ -347,12 +349,57 @@ def _run_qwen(
     return projected, receipt
 
 
-def _new_minilm(base: Path, expected_canary: Mapping[str, Any]) -> BrightMiniLMEncoder:
+def _verify_p15_minilm_binding(
+    *, asset_manifest_path: Path, model_root: Path
+) -> Mapping[str, object]:
+    """Verify immutable model bytes while fingerprinting this fresh P15 runtime."""
+
+    manifest_path, asset = minilm_asset._load_asset_manifest(asset_manifest_path)
+    minilm_asset._verify_manifest_contract(asset)
+    verified_root = minilm_asset._verify_model_tree(asset, model_root)
+    versions: dict[str, str] = {
+        "python": ".".join(map(str, sys.version_info[:3]))
+    }
+    for key, (distribution, module_name) in minilm_asset._PACKAGE_TO_MODULE.items():
+        try:
+            distribution_version = metadata.version(distribution)
+            module_version = str(getattr(import_module(module_name), "__version__"))
+        except (ImportError, AttributeError, metadata.PackageNotFoundError) as exc:
+            raise P15RemoteRuntimeError(
+                f"P15 MiniLM package is missing: {distribution}"
+            ) from exc
+        if key != "torch" and distribution_version != module_version:
+            raise P15RemoteRuntimeError(
+                "P15 MiniLM module and distribution versions disagree"
+            )
+        versions[key] = module_version
+    return {
+        "asset_file_sha256": minilm_asset.ASSET_FILE_SHA256,
+        "asset_manifest_path": str(manifest_path),
+        "asset_sha256": minilm_asset.ASSET_SELF_SHA256,
+        "embedding_dimension": minilm_asset.EMBEDDING_DIMENSION,
+        "maximum_sequence_length": minilm_asset.MAXIMUM_SEQUENCE_LENGTH,
+        "model_root": str(verified_root),
+        "model_tree_sha256": minilm_asset.MODEL_TREE_SHA256,
+        "runtime_versions": versions,
+        "status": "verified_P15_fingerprinted_runtime_with_immutable_model",
+        "weights_sha256": minilm_asset.WEIGHTS_SHA256,
+    }
+
+
+def _new_minilm(
+    base: Path,
+    expected_canary: Mapping[str, Any],
+    expected_runtime: Mapping[str, Any],
+) -> BrightMiniLMEncoder:
     bright = p11_runtime.train.bright_runtime
     encoder = BrightMiniLMEncoder(
         asset_manifest=base / bright.MINILM_MANIFEST_RELATIVE,
         model_root=base / bright.MINILM_MODEL_RELATIVE,
+        runtime_binding_verifier=_verify_p15_minilm_binding,
     )
+    if dict(encoder.runtime_receipt) != dict(expected_runtime):
+        raise P15RemoteRuntimeError("P15 remote MiniLM runtime drifted")
     if dict(encoder.canary_receipt) != dict(expected_canary):
         raise P15RemoteRuntimeError("P15 remote MiniLM canary drifted")
     return encoder
@@ -460,9 +507,9 @@ def _run_hipporag(
             "--index-root",
             str(item_root / "index"),
             "--llm-model",
-            str(base / p11_runtime.train.bright_runtime.HIPPORAG_LLM_RELATIVE),
+            str(p11_runtime.train.bright_runtime.HIPPORAG_LLM_RELATIVE),
             "--embedding-model",
-            str(base / p11_runtime.train.bright_runtime.MINILM_MODEL_RELATIVE),
+            str(p11_runtime.train.bright_runtime.MINILM_MODEL_RELATIVE),
         ],
         item_root / "network.trace",
     )
@@ -576,7 +623,11 @@ def run(plan_path: Path) -> Mapping[str, Any]:
     qwen_rows = qwen_output.get("items")
     if not isinstance(qwen_rows, list) or len(qwen_rows) != contract.ATTEMPT_COUNT:
         raise P15RemoteRuntimeError("P15 Qwen row count drifted")
-    encoder = _new_minilm(base, fingerprint["minilm_canary_receipt"])
+    encoder = _new_minilm(
+        base,
+        fingerprint["minilm_canary_receipt"],
+        fingerprint["minilm_runtime_receipt"],
+    )
     corpus_embeddings = {
         family: p11_runtime.train.bright_runtime._encode_chunks(
             encoder, corpora[family].contents

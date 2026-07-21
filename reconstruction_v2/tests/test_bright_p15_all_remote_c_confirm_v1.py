@@ -1,4 +1,5 @@
 from pathlib import Path
+import sys
 
 import pytest
 
@@ -104,6 +105,14 @@ def test_network_audit_rejects_external_denied_attempts(
     assert external["denied_external_network_syscall_count"] == 1
 
 
+def test_strace_injection_does_not_require_newer_seccomp_acceleration(
+    tmp_path: Path,
+) -> None:
+    command = runner._strace_command(["/bin/true"], tmp_path / "trace")
+    assert "--seccomp-bpf" not in command
+    assert "inject=connect,sendto,sendmsg,sendmmsg:error=EPERM" in command
+
+
 def test_finalizer_does_not_open_labels_before_action_archive_verifies(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -137,3 +146,44 @@ def test_remote_work_root_is_one_shot(tmp_path: Path) -> None:
     plan.write_text("{}\n", encoding="ascii")
     with pytest.raises(Exception):
         runner.run(plan)
+
+
+def test_remote_timeout_covers_the_frozen_cpu_openie_canary() -> None:
+    assert runner.TIMEOUT_SECONDS == 3600
+
+
+def test_p15_minilm_binding_verifies_model_and_fingerprints_live_runtime(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest = tmp_path / "asset.json"
+    model = tmp_path / "model"
+    manifest.write_text("{}", encoding="ascii")
+    model.mkdir()
+    monkeypatch.setattr(
+        runner.minilm_asset,
+        "_load_asset_manifest",
+        lambda path: (path, {"asset": "verified"}),
+    )
+    monkeypatch.setattr(
+        runner.minilm_asset, "_verify_manifest_contract", lambda _asset: None
+    )
+    monkeypatch.setattr(
+        runner.minilm_asset,
+        "_verify_model_tree",
+        lambda _asset, path: path,
+    )
+    monkeypatch.setattr(
+        runner.minilm_asset,
+        "_PACKAGE_TO_MODULE",
+        {"numpy": ("numpy", "numpy")},
+    )
+    receipt = runner._verify_p15_minilm_binding(
+        asset_manifest_path=manifest, model_root=model
+    )
+    assert receipt["runtime_versions"] == {
+        "numpy": runner.np.__version__,
+        "python": ".".join(map(str, sys.version_info[:3])),
+    }
+    assert receipt["status"] == (
+        "verified_P15_fingerprinted_runtime_with_immutable_model"
+    )

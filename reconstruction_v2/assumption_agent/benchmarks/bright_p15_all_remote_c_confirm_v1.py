@@ -57,6 +57,9 @@ RUNNER_RELATIVE = Path(
     "replication_runtime/bright_p15_all_remote_v1/runner.py"
 )
 TEST_RELATIVE = Path("tests/test_bright_p15_all_remote_c_confirm_v1.py")
+MINILM_ENCODER_RELATIVE = Path(
+    "replication_runtime/bright_minilm_v1/encoder.py"
+)
 
 
 class P15AllRemoteError(RuntimeError):
@@ -145,6 +148,7 @@ def load_freeze(base: Path, project_root: Path) -> Mapping[str, Any]:
     } if isinstance(rows, list) else {}
     required = {
         IMPLEMENTATION_RELATIVE.as_posix(),
+        MINILM_ENCODER_RELATIVE.as_posix(),
         RUNNER_RELATIVE.as_posix(),
         TEST_RELATIVE.as_posix(),
     }
