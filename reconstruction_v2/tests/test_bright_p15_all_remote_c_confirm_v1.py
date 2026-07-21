@@ -204,3 +204,41 @@ def test_tree_receipt_binds_content_and_rejects_symlinks(tmp_path: Path) -> None
 
 def test_runtime_inventory_receipt_is_repeat_stable() -> None:
     assert runner._runtime_inventory_receipt() == runner._runtime_inventory_receipt()
+
+
+def test_remote_freeze_binds_implementation_and_dependencies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    implementation = tmp_path / "implementation.py"
+    dependency = tmp_path / "dependency.py"
+    implementation.write_text("implementation", encoding="ascii")
+    dependency.write_text("dependency", encoding="ascii")
+    body = {
+        "dependency_bindings": [
+            {
+                "relative_path": dependency.name,
+                "sha256": runner._file_sha256(dependency),
+            }
+        ],
+        "implementation_bindings": [
+            {
+                "relative_path": implementation.name,
+                "sha256": runner._file_sha256(implementation),
+            }
+        ],
+        "schema": "test_freeze",
+    }
+    freeze = {**body, "self_sha256": runner._stable_hash(body)}
+    freeze_path = tmp_path / "freeze.json"
+    freeze_path.write_bytes(runner._canonical_json_bytes(freeze))
+    monkeypatch.setattr(runner.contract, "FREEZE_RELATIVE", Path("freeze.json"))
+    monkeypatch.setattr(runner.contract, "FREEZE_SCHEMA", "test_freeze")
+    runner._verify_remote_freeze(
+        tmp_path, {"implementation_freeze_self_sha256": freeze["self_sha256"]}
+    )
+    dependency.write_text("drifted", encoding="ascii")
+    with pytest.raises(runner.P15RemoteRuntimeError, match="file drifted"):
+        runner._verify_remote_freeze(
+            tmp_path,
+            {"implementation_freeze_self_sha256": freeze["self_sha256"]},
+        )

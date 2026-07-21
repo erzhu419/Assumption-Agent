@@ -178,6 +178,43 @@ def _verify_self(value: Mapping[str, Any], schema: str) -> str:
     return declared
 
 
+def _verify_remote_freeze(base: Path, plan: Mapping[str, Any]) -> None:
+    freeze = _read_canonical(
+        base / contract.FREEZE_RELATIVE, "P15 remote implementation freeze"
+    )
+    body = dict(freeze)
+    declared = body.pop("self_sha256", None)
+    if (
+        freeze.get("schema") != contract.FREEZE_SCHEMA
+        or declared != _stable_hash(body)
+        or declared != plan.get("implementation_freeze_self_sha256")
+    ):
+        raise P15RemoteRuntimeError("P15 remote implementation freeze drifted")
+    seen: set[str] = set()
+    for field in ("implementation_bindings", "dependency_bindings"):
+        rows = freeze.get(field)
+        if not isinstance(rows, list) or not rows:
+            raise P15RemoteRuntimeError("P15 remote implementation binding is absent")
+        for row in rows:
+            if not isinstance(row, Mapping):
+                raise P15RemoteRuntimeError("P15 remote implementation row drifted")
+            relative_text = row.get("relative_path")
+            expected = row.get("sha256")
+            if not isinstance(relative_text, str) or not isinstance(expected, str):
+                raise P15RemoteRuntimeError("P15 remote implementation row drifted")
+            relative = Path(relative_text)
+            if (
+                relative.is_absolute()
+                or ".." in relative.parts
+                or relative.as_posix() in seen
+            ):
+                raise P15RemoteRuntimeError("P15 remote implementation path drifted")
+            seen.add(relative.as_posix())
+            path = base / relative
+            if path.is_symlink() or not path.is_file() or _file_sha256(path) != expected:
+                raise P15RemoteRuntimeError("P15 remote implementation file drifted")
+
+
 def _network_audit(root: Path, prefix: str) -> Mapping[str, Any]:
     paths = sorted(root.glob(prefix + "*"), key=lambda path: path.name)
     if not paths or any(path.is_symlink() or not path.is_file() for path in paths):
@@ -266,6 +303,7 @@ def _verify_plan(path: Path) -> tuple[Mapping[str, Any], Path, tuple[acquisition
     base = Path(str(plan.get("remote_base"))).resolve(strict=True)
     if base != contract.REMOTE_BASE:
         raise P15RemoteRuntimeError("P15 remote base drifted")
+    _verify_remote_freeze(base, plan)
     acquisition_result, items = contract.load_acquisition(base)
     binding = plan.get("acquisition_result")
     if (
