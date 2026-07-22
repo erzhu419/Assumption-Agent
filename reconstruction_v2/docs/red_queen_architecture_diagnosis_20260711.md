@@ -4134,6 +4134,34 @@ P19 root 已烧毁，不能补变量后原地重试。该终态应记为 launch-
 建立新 study ID/root，并在源外预注册中把 safe user-bus launch envelope 当作执行能力显式绑定；候选、cohort、metric、
 promotion 与 gate 不得改动，也不得把 P19 计入 efficacy sample。修复属于 host launcher contract，不是增加新 gate。
 
+### 12.37 2026-07-23 TAT-QA P20：entry launch 已修复，但 post-inventory 环境断言使 qualification 终止
+
+P20 是 P19 之后的新 study，而不是在 P19 root 上补变量重跑。提交 `a0c9e5ab…862d` 保持 P19 的 typed P0/P1、四个
+cohort、E0/E1 promotion、RAW/official HippoRAG 三臂指标与全部 efficacy gate 不变，只新增事前绑定的 safe
+user-systemd launch capability。外层 `/usr/bin/env -i` 精确保留 12 个变量，其中包括
+`XDG_RUNTIME_DIR=/run/user/1001` 与 `DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1001/bus`；receipt 只记录变量名、
+路径/地址哈希和 socket 类型/ownership boolean，不读取或保存任何 provider/API credential。实现同时把两个真实
+runtime 的 nested self-hash 交叉绑定到 composite fingerprint、canary、qualification 与 freeze。
+
+源外实现经 206/206 tests、`py_compile`、diff check 和双人 adversarial audit。审计在提交前修复了两个真实缺口：
+implementation registry 补绑四个实际 import 的 package/model 文件，worker transient unit 从残留的 `tatqa-p18-*`
+改为独立 `tatqa-p20-*` namespace。311linux 上从该提交导出的 37 个 P20 文件与本地 Git object 逐文件 SHA-256 一致；
+official TAT-QA source、selection secret、formal item、action、label 与评分仍未创建。
+
+唯一一次 P20 qualification 的 entry capability 已通过，但在约 2 秒后仍于 `systemd_network_preflight` fail-closed。
+marker 文件 SHA-256 为 `7eb226c8…1585`，terminal failure 文件 SHA-256 为 `005b7607…2d19`、self-hash 为
+`3a7257e3…00c`；回执明确 `formal_source_opened=false`、external network=0、online evaluator=0。只读 journal 证明
+底层异常是 `outer launch environment variable allowlist drifted`。随后在相同提交、相同 12 项 entry environment、
+相同 user-systemd 网络隔离下做的非 qualification 源外诊断给出唯一变化：`runtime_inventory_snapshot()` 导入并初始化
+CUDA-capable torch 后自动新增 `CUDA_MODULE_LOADING=LAZY`，环境名从 12 变为 13，未删除或修改其余 entry 名；因此
+后续 `_launcher_environment()` 把可信 runtime 的确定性内部 mutation 误判为外层凭据注入。P19 的 user-bus 缺失已真实
+修复，本次是 P20 post-import validation implementation-invalid，不是模型、双 runtime 或 efficacy 失败。
+
+P20 root 已烧毁，不允许删回执、重试 qualification 或把该 run 计入 performance sample。若继续，下一独立 study 只能
+把“entry 时 exact 12-name allowlist”与“torch inventory 后唯一允许的 exact safe mutation
+`CUDA_MODULE_LOADING=LAZY`”分成两个明确 phase；nested worker 仍只复制固定 safe subset，候选、cohort、metric、
+promotion 与 gate 不得变化。在新的 source-free qualification 成功并提交前，仍不得下载或打开 official TAT-QA。
+
 ## 附录 A：关键证据索引
 
 - FiQA TRAIN P10/P11 formation 与 DEV comparator-invalid chain：
@@ -4192,6 +4220,11 @@ promotion 与 gate 不得改动，也不得把 P19 计入 efficacy sample。修�
   [`P19 HippoRAG runtime attestation`](../manifests/tatqa_p19_hipporag_runtime_attestation_v1.json)；
   [`P19 qualification marker`](../artifacts/tatqa_p19_runtime_qualification_v1/qualification.one_shot_marker.json)；
   [`P19 terminal qualification failure`](../artifacts/tatqa_p19_runtime_qualification_v1/qualification.terminal_failure.json)
+- TAT-QA P20 post-inventory environment-validation-invalid chain（official source 未下载/未打开）：
+  [`P20 design`](../manifests/tatqa_p20_typed_evaluator_study_design_v1.json)；
+  [`P20 source custody`](../manifests/tatqa_p20_public_source_custody_v1.json)；
+  [`P20 qualification marker`](../artifacts/tatqa_p20_runtime_qualification_v1/qualification.one_shot_marker.json)；
+  [`P20 terminal qualification failure`](../artifacts/tatqa_p20_runtime_qualification_v1/qualification.terminal_failure.json)
 - BRIGHT reasoning-retrieval v3、terminal M failure 与 fresh RESERVE 三臂链：
   [`v3 executor design`](../manifests/bright_reasoning_retrieval_executor_repair_design_v3.json)；
   [`v3 implementation freeze`](../manifests/bright_reasoning_retrieval_study_implementation_freeze_v3.json)；
