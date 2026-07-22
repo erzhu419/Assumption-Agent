@@ -38,12 +38,23 @@ DESIGN_PATH = (
 DOWNLOAD_RECEIPT_PATH = (
     PROJECT_ROOT / "manifests/fanoutqa_p1_source_download_receipt_v1.json"
 )
+DOWNLOAD_AUTHORIZATION_PATH = (
+    PROJECT_ROOT / "manifests/fanoutqa_p1_source_download_authorization_v1.json"
+)
+HARDENING_AMENDMENT_PATH = (
+    PROJECT_ROOT
+    / "manifests/fanoutqa_p1_prequalification_hardening_amendment_v1.json"
+)
 FREEZE_PATH = (
     PROJECT_ROOT / "manifests/fanoutqa_p1_source_qualification_freeze_v1.json"
 )
 MARKER_PATH = (
     PROJECT_ROOT
     / "artifacts/fanoutqa_p1_source_qualification_v1/qualification.one_shot_marker.json"
+)
+SOURCE_OPEN_MARKER_PATH = (
+    PROJECT_ROOT
+    / "artifacts/fanoutqa_p1_source_qualification_v1/source_open.one_shot_marker.json"
 )
 FAILURE_PATH = (
     PROJECT_ROOT
@@ -57,12 +68,22 @@ DEV_GIT_BLOB_SHA1 = "76ad1feb689b754bfe4e5e24d3ea371b647efa67"
 DEV_SHA256 = "359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288"
 DEV_SIZE_BYTES = 1177174
 CACHE_SIZE_BYTES = 1538812319
+CACHE_SHA256 = "62059df8d8d78a2acf61b6e210b89d2fa2604390751dbc8b404c30301c07d5f4"
 DEV_COUNT = 310
 EXPECTED_CUSTODY_SELF_SHA256 = (
     "6b35ea60e2e867927771fa540e7095bbd0dd6f27ad37345636dded4c9c8160b6"
 )
 EXPECTED_DESIGN_SELF_SHA256 = (
-    "934e4ad48a379eb356feb6ab4f685684c0218866a616c6418fd560d0cecb0412"
+    "39d5c15d849fa3a6e9926e246b88e06456b58616cd0851bd5224859a8833fc59"
+)
+EXPECTED_DOWNLOAD_AUTHORIZATION_SELF_SHA256 = (
+    "ca09d1b8726fac99fd55bf70b69ad640ae2ee9b5787b6942ab20e5c5dba4f608"
+)
+EXPECTED_DOWNLOAD_RECEIPT_SELF_SHA256 = (
+    "9ea765ab227806345888275e7abf4c9b79642abc6c8234000c8fa7ff44b931f2"
+)
+EXPECTED_HARDENING_AMENDMENT_SELF_SHA256 = (
+    "566befbcb4680d7f1f5b0b64a160b3dfebe85f6f26c863544487c73046529db7"
 )
 EXAMPLE_QUESTION_DENY_SHA256 = frozenset(
     {"bc7a89c9bf662eef176ae1f93f2e017637a7f366205db0d7c342c32e236edb9d"}
@@ -128,6 +149,7 @@ class QualificationContract:
     dev_git_blob_sha1: str
     dev_sha256: str
     cache_size_bytes: int
+    cache_sha256: str
     required_per_family: int
     min_evidence_pages: int = MIN_EVIDENCE_PAGES
     max_evidence_pages: int = MAX_EVIDENCE_PAGES
@@ -141,6 +163,7 @@ FORMAL_CONTRACT = QualificationContract(
     dev_git_blob_sha1=DEV_GIT_BLOB_SHA1,
     dev_sha256=DEV_SHA256,
     cache_size_bytes=CACHE_SIZE_BYTES,
+    cache_sha256=CACHE_SHA256,
     required_per_family=REQUIRED_PER_FAMILY,
 )
 
@@ -174,9 +197,53 @@ def _semantic_hash(value: object) -> str:
     return hashlib.sha256(_canonical_bytes(value).rstrip(b"\n")).hexdigest()
 
 
+def _fsync_directory(path: Path) -> None:
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags)
+    try:
+        if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
+            raise FanOutQaP1SourceQualificationError(
+                "qualification receipt parent is not a directory"
+            )
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _ensure_durable_directory(path: Path) -> None:
+    missing: list[Path] = []
+    cursor = path
+    while True:
+        try:
+            metadata = cursor.lstat()
+        except FileNotFoundError:
+            if cursor.parent == cursor:
+                raise FanOutQaP1SourceQualificationError(
+                    "qualification receipt parent is unavailable"
+                )
+            missing.append(cursor)
+            cursor = cursor.parent
+            continue
+        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+            raise FanOutQaP1SourceQualificationError(
+                "qualification receipt parent is unsafe"
+            )
+        break
+    for directory in reversed(missing):
+        os.mkdir(directory, mode=0o700)
+        _fsync_directory(directory)
+        _fsync_directory(directory.parent)
+
+
 def _write_exclusive(path: Path, value: Mapping[str, Any]) -> str:
     raw = _canonical_bytes(value)
-    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    try:
+        _ensure_durable_directory(path.parent)
+    except OSError as exc:
+        raise FanOutQaP1SourceQualificationError(
+            "qualification receipt parent creation failed"
+        ) from exc
     descriptor = -1
     try:
         descriptor = os.open(
@@ -190,6 +257,7 @@ def _write_exclusive(path: Path, value: Mapping[str, Any]) -> str:
             handle.write(raw)
             handle.flush()
             os.fsync(handle.fileno())
+        _fsync_directory(path.parent)
     except OSError as exc:
         raise FanOutQaP1SourceQualificationError(
             "one-shot qualification path is already consumed"
@@ -246,7 +314,15 @@ def _validate_analysis_marker() -> dict[str, Any]:
         or marker.get("official_release") != OFFICIAL_RELEASE
         or marker.get("official_tree") != OFFICIAL_TREE
         or marker.get("DEV_git_blob_sha1") != DEV_GIT_BLOB_SHA1
+        or marker.get("DEV_size_bytes") != DEV_SIZE_BYTES
+        or marker.get("cache_size_bytes") != CACHE_SIZE_BYTES
         or marker.get("test_open_authorized") is not False
+        or marker.get(
+            "source_item_question_answer_evidence_URL_or_id_output_count"
+        )
+        != 0
+        or marker.get("model_action_or_score_count") != 0
+        or marker.get("retry_replay_resample_or_contract_revision") != 0
     ):
         raise FanOutQaP1SourceQualificationError("one-shot marker drifted")
     return marker
@@ -592,6 +668,25 @@ def _audit_cache_tar(
             raise FanOutQaP1SourceQualificationError(
                 "cache archive is not one bound regular file"
             )
+        opaque_digest = hashlib.sha256()
+        opaque_count = 0
+        while opaque_count < contract.cache_size_bytes:
+            block = os.pread(
+                descriptor,
+                min(8 * 1024 * 1024, contract.cache_size_bytes - opaque_count),
+                opaque_count,
+            )
+            if not block:
+                break
+            opaque_digest.update(block)
+            opaque_count += len(block)
+        if (
+            opaque_count != contract.cache_size_bytes
+            or opaque_digest.hexdigest() != contract.cache_sha256
+        ):
+            raise FanOutQaP1SourceQualificationError(
+                "cache archive identity drifted before semantic audit"
+            )
         with os.fdopen(os.dup(descriptor), "rb", closefd=True) as binary:
             digest_reader = _DigestReader(binary)
             buffered = io.BufferedReader(digest_reader, buffer_size=1024 * 1024)
@@ -680,6 +775,13 @@ def _audit_cache_tar(
                             raise FanOutQaP1SourceQualificationError(
                                 "cache tar has a nonzero trailing payload"
                             )
+                        if (
+                            total_uncompressed + trailing_uncompressed
+                            > contract.max_cache_uncompressed_bytes
+                        ):
+                            raise FanOutQaP1SourceQualificationError(
+                                "cache archive aggregate bound exceeded"
+                            )
                 remaining_compressed = buffered.read(1)
                 if remaining_compressed:
                     raise FanOutQaP1SourceQualificationError(
@@ -699,9 +801,11 @@ def _audit_cache_tar(
             or before.st_ino != after.st_ino
             or before.st_size != after.st_size
             or before.st_mtime_ns != after.st_mtime_ns
+            or before.st_ctime_ns != after.st_ctime_ns
             or after.st_dev != path_after.st_dev
             or after.st_ino != path_after.st_ino
             or compressed_bytes != before.st_size
+            or cache_sha256 != contract.cache_sha256
         ):
             raise FanOutQaP1SourceQualificationError(
                 "cache archive changed during qualification"
@@ -797,19 +901,49 @@ def _page_disjoint_witness(
     return best
 
 
-def _analyze_sources(
-    dev_path: Path,
-    cache_path: Path,
-    *,
-    contract: QualificationContract = FORMAL_CONTRACT,
-) -> dict[str, object]:
+def _analyze_fixed_sources() -> dict[str, object]:
     """Analyze fixed sources and return only safe aggregate facts."""
 
-    _validate_analysis_marker()
+    qualification_marker = _validate_analysis_marker()
+    if SOURCE_OPEN_MARKER_PATH.exists() or SOURCE_OPEN_MARKER_PATH.is_symlink():
+        raise FanOutQaP1SourceQualificationError(
+            "source-open one-shot marker is already consumed"
+        )
+    source_open_body = {
+        "schema": f"{VERSION}_source_open_one_shot_marker_v1",
+        "status": "consumed_immediately_before_fixed_DEV_and_cache_open",
+        "fixed_DEV_relative_path": (
+            "artifacts/fanoutqa_p1_official_source_v1/fanout-final-dev.json"
+        ),
+        "fixed_cache_relative_path": (
+            "artifacts/fanoutqa_p1_official_source_v1/wikicache.tar.gz"
+        ),
+        "official_release": OFFICIAL_RELEASE,
+        "official_tree": OFFICIAL_TREE,
+        "DEV_git_blob_sha1": DEV_GIT_BLOB_SHA1,
+        "DEV_sha256": DEV_SHA256,
+        "DEV_size_bytes": DEV_SIZE_BYTES,
+        "cache_sha256": CACHE_SHA256,
+        "cache_size_bytes": CACHE_SIZE_BYTES,
+        "qualification_marker_self_sha256": qualification_marker["self_sha256"],
+        "source_download_receipt_self_sha256": (
+            EXPECTED_DOWNLOAD_RECEIPT_SELF_SHA256
+        ),
+        "prequalification_hardening_amendment_self_sha256": (
+            EXPECTED_HARDENING_AMENDMENT_SELF_SHA256
+        ),
+        "test_open_authorized": False,
+        "retry_replay_resample_or_contract_revision": 0,
+    }
+    _write_exclusive(
+        SOURCE_OPEN_MARKER_PATH,
+        {**source_open_body, "self_sha256": _semantic_hash(source_open_body)},
+    )
+    contract = FORMAL_CONTRACT
     deny = EXAMPLE_QUESTION_DENY_SHA256
     if any(not isinstance(value, str) or _HEX64.fullmatch(value) is None for value in deny):
         raise FanOutQaP1SourceQualificationError("question denylist drifted")
-    raw, _ = _bound_regular_bytes(dev_path, contract.dev_size_bytes)
+    raw, _ = _bound_regular_bytes(DEV_PATH, contract.dev_size_bytes)
     dev_sha256 = hashlib.sha256(raw).hexdigest()
     dev_git_blob_sha1 = _git_blob_sha1(raw)
     if (
@@ -865,7 +999,7 @@ def _analyze_sources(
         for pageid, revid in page_revisions:
             global_evidence_revisions.setdefault(pageid, set()).add(revid)
 
-    cache = _audit_cache_tar(cache_path, contract)
+    cache = _audit_cache_tar(CACHE_PATH, contract)
     cache_pageids = cache.pop("pageids")
     if not isinstance(cache_pageids, set):
         raise FanOutQaP1SourceQualificationError("cache inventory drifted")
@@ -935,6 +1069,12 @@ def _analyze_sources(
 def _validate_public_contracts() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
     custody = _load_canonical_self_hashed(CUSTODY_PATH, "source custody")
     design = _load_canonical_self_hashed(DESIGN_PATH, "study design")
+    authorization = _load_canonical_self_hashed(
+        DOWNLOAD_AUTHORIZATION_PATH, "source download authorization"
+    )
+    amendment = _load_canonical_self_hashed(
+        HARDENING_AMENDMENT_PATH, "prequalification hardening amendment"
+    )
     download = _load_canonical_self_hashed(
         DOWNLOAD_RECEIPT_PATH, "source download receipt"
     )
@@ -952,6 +1092,18 @@ def _validate_public_contracts() -> tuple[dict[str, Any], dict[str, Any], dict[s
         "study_design": (
             DESIGN_PATH,
             "manifests/fanoutqa_p1_typed_fanout_e3_study_design_v1.json",
+        ),
+        "download_authorization": (
+            DOWNLOAD_AUTHORIZATION_PATH,
+            "manifests/fanoutqa_p1_source_download_authorization_v1.json",
+        ),
+        "download_receipt": (
+            DOWNLOAD_RECEIPT_PATH,
+            "manifests/fanoutqa_p1_source_download_receipt_v1.json",
+        ),
+        "hardening_amendment": (
+            HARDENING_AMENDMENT_PATH,
+            "manifests/fanoutqa_p1_prequalification_hardening_amendment_v1.json",
         ),
     }
     bindings = freeze.get("file_bindings")
@@ -973,7 +1125,41 @@ def _validate_public_contracts() -> tuple[dict[str, Any], dict[str, Any], dict[s
         or design.get("self_sha256") != EXPECTED_DESIGN_SELF_SHA256
         or design.get("study_id") != "FANOUTQA_P1_TYPED_FANOUT_E3_V1"
         or design.get("source_binding", {}).get("test_open") is not False
+        or authorization.get("schema")
+        != "fanoutqa_p1_source_download_authorization_v1"
+        or authorization.get("self_sha256")
+        != EXPECTED_DOWNLOAD_AUTHORIZATION_SELF_SHA256
+        or authorization.get("status")
+        != "authorized_once_before_formal_persisted_source_download"
+        or authorization.get("formal_DEV_file_present_at_authorization") is not False
+        or authorization.get("formal_cache_file_present_at_authorization") is not False
+        or authorization.get("formal_qualification_attempt_count_at_authorization")
+        != 0
+        or authorization.get("model_action_or_score_count_at_authorization") != 0
+        or authorization.get("TEST_download_or_parse_authorized") is not False
+        or amendment.get("schema")
+        != "fanoutqa_p1_prequalification_hardening_amendment_v1"
+        or amendment.get("self_sha256")
+        != EXPECTED_HARDENING_AMENDMENT_SELF_SHA256
+        or amendment.get("status")
+        != "amended_after_opaque_download_before_any_dataset_JSON_or_tar_member_parse"
+        or amendment.get("download_authorization_self_sha256")
+        != EXPECTED_DOWNLOAD_AUTHORIZATION_SELF_SHA256
+        or amendment.get("source_download_receipt_self_sha256")
+        != EXPECTED_DOWNLOAD_RECEIPT_SELF_SHA256
+        or amendment.get("new_study_design_self_sha256")
+        != EXPECTED_DESIGN_SELF_SHA256
+        or amendment.get(
+            "candidate_evaluator_family_quota_metric_or_numeric_threshold_change"
+        )
+        is not False
+        or amendment.get("formal_qualification_attempt_count_at_amendment") != 0
+        or amendment.get("dataset_JSON_parse_count_at_amendment") != 0
+        or amendment.get("tar_member_parse_count_at_amendment") != 0
+        or amendment.get("source_open_marker_present_at_amendment") is not False
+        or amendment.get("TEST_downloaded_or_opened") is not False
         or download.get("schema") != "fanoutqa_p1_source_download_receipt_v1"
+        or download.get("self_sha256") != EXPECTED_DOWNLOAD_RECEIPT_SELF_SHA256
         or download.get("status")
         != "downloaded_exact_pinned_DEV_and_cache_without_semantic_parse"
         or not isinstance(dev_download, dict)
@@ -982,24 +1168,50 @@ def _validate_public_contracts() -> tuple[dict[str, Any], dict[str, Any], dict[s
         or dev_download.get("sha256") != DEV_SHA256
         or not isinstance(cache_download, dict)
         or cache_download.get("size_bytes") != CACHE_SIZE_BYTES
-        or not isinstance(cache_download.get("sha256"), str)
-        or _HEX64.fullmatch(str(cache_download.get("sha256"))) is None
+        or cache_download.get("sha256") != CACHE_SHA256
         or cache_download.get("etag") != "f55692e0e4dc9adb045243d093ced30a-15"
         or cache_download.get("last_modified")
         != "Tue, 13 Feb 2024 20:57:56 GMT"
         or download.get("semantic_source_parse_during_download") is not False
         or download.get("TEST_downloaded_or_opened") is not False
+        or download.get("download_attempt_count") != 1
+        or download.get("download_finalization", {}).get("retry_or_redownload_count")
+        != 0
+        or download.get("model_action_or_score_count") != 0
+        or download.get("online_evaluator_or_API_calls") != 0
         or freeze.get("schema")
         != "fanoutqa_p1_source_qualification_freeze_v1"
         or freeze.get("status")
-        != "frozen_before_formal_persisted_source_download_and_any_dataset_JSON_parse"
+        != "frozen_after_opaque_download_before_any_dataset_JSON_or_tar_member_parse"
         or not isinstance(implementation_commit, str)
         or _HEX40.fullmatch(implementation_commit) is None
         or implementation_commit == "0" * 40
-        or freeze.get("formal_DEV_file_present_at_freeze") is not False
-        or freeze.get("formal_cache_file_present_at_freeze") is not False
+        or freeze.get("source_download_authorization_self_sha256")
+        != EXPECTED_DOWNLOAD_AUTHORIZATION_SELF_SHA256
+        or freeze.get("source_download_receipt_self_sha256")
+        != EXPECTED_DOWNLOAD_RECEIPT_SELF_SHA256
+        or freeze.get("prequalification_hardening_amendment_self_sha256")
+        != EXPECTED_HARDENING_AMENDMENT_SELF_SHA256
+        or freeze.get("formal_DEV_file_present_at_freeze") is not True
+        or freeze.get("formal_cache_file_present_at_freeze") is not True
+        or freeze.get("formal_TEST_file_present_at_freeze") is not False
+        or freeze.get("dataset_JSON_parse_count_at_freeze") != 0
+        or freeze.get("tar_member_parse_count_at_freeze") != 0
+        or freeze.get("qualification_marker_present_at_freeze") is not False
+        or freeze.get("source_open_marker_present_at_freeze") is not False
+        or freeze.get("terminal_failure_present_at_freeze") is not False
+        or freeze.get("qualification_result_present_at_freeze") is not False
         or freeze.get("formal_qualification_attempt_count_at_freeze") != 0
         or freeze.get("model_action_or_score_count_at_freeze") != 0
+        or freeze.get("online_evaluator_or_API_calls_at_freeze") != 0
+        or freeze.get(
+            "candidate_evaluator_family_quota_or_metric_change_after_download"
+        )
+        is not False
+        or freeze.get("authorization_scope_deviation_transparently_recorded")
+        is not True
+        or freeze.get("formal_integrity_claim")
+        != "presemantic_final_freeze_not_strict_prebyte_freeze"
         or not isinstance(bindings, dict)
         or set(bindings) != set(expected_bindings)
     ):
@@ -1043,7 +1255,15 @@ def _terminal_failure(stage: str, exc: BaseException) -> None:
 def run_source_qualification() -> dict[str, object]:
     """Consume the sole fixed FanOutQA P1 aggregate-only qualification."""
 
-    if any(path.exists() or path.is_symlink() for path in (MARKER_PATH, FAILURE_PATH, RESULT_PATH)):
+    if any(
+        path.exists() or path.is_symlink()
+        for path in (
+            MARKER_PATH,
+            SOURCE_OPEN_MARKER_PATH,
+            FAILURE_PATH,
+            RESULT_PATH,
+        )
+    ):
         raise FanOutQaP1SourceQualificationError(
             "FanOutQA P1 source qualification path is already consumed"
         )
@@ -1065,7 +1285,7 @@ def run_source_qualification() -> dict[str, object]:
     try:
         custody, design, download, freeze = _validate_public_contracts()
         stage = "aggregate_DEV_schema_cache_and_structural_capacity"
-        aggregate = _analyze_sources(DEV_PATH, CACHE_PATH)
+        aggregate = _analyze_fixed_sources()
         if (
             aggregate.get("cache_aggregate", {}).get("cache_sha256")
             != download["cache"]["sha256"]
