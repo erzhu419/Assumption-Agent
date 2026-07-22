@@ -57,7 +57,8 @@
 > - 最新 FEVER fixed-P 现实域 acquisition 终态：本地候选审计只发现 FEVER 具备继续价值；`543bed23` / `e5d5a7d7` 在内容读取前固定并下载官方 labelled `paper_test`、1.713 GB June-2017 wiki archive 与许可证，`e07cf640` 冻结一个无 promotion/gate 的 128-item gold-injected item-local reranking design，`83e185d7` 的 acquisition/runner 通过 13/13 synthetic tests 与独立审计。唯一 formal run 在 marker 后完整解析 paper_test 并在内存 HMAC 固定 64 SUPPORTS+64 REFUTES；随后在任何 wiki JSONL member content 打开前，central-directory contract 发现至少一个非目录 member 的 suffix 不是 `.jsonl`，以 `source_schema_invalid` 终止。action/label pack、RAW/P/Hippo、model/evaluator/score 均为 0；不事后查看 member 名、不改 allowlist、不重跑。FEVER transfer efficacy 仍 unknown，不是 Agent 的性能负结果
 > - 历史 synthetic 8-seed v1 终态（已由 v3→v5 更新）：`dabcbde7` 在 seed 前固定 exact R1、RAW/official-HippoRAG/Agent 三臂、8 个 fresh seed cluster 与纯描述 estimand；两轮审计先修正 official paragraph title、1536-future submission barrier、未声明分析面、重复 grammar regeneration 及 success/failure terminal publication，64 项相关测试通过。`2ecf5ec8` / `5efbb5b1` / `f7d3335b` 依次提交 implementation freeze、8-seed custody 与 512-item acquisition。唯一 v1 runner 在 marker 后、任何 retrieval/action/label/score 前，把 512×(1 question+32 nodes)=16,896 条文本一次交给冻结 MiniLM encoder；该 runtime 的单次上限是 16,384，故以 implementation/infrastructure-invalid 严格终止。该 v1 cohort 的 stability 仍未知，`d185b84a` 只公开 seeds/cohort；它没有被修补后作为正式/评分 efficacy evidence 重放，后续 v2 只做过非评分 integration diagnostic。2026-07-18 的结论已由顶部最新 bullet 与 12.17 的全新 v3 cohort / v5 success 取代
 > - 最新 BRIGHT P9 前瞻结果：在已消费 TRAIN45 上形成 relation/mechanism cross-encoder + RAW + HippoRAG 的固定 RRF 候选后，设计与实现均先于剩余 RESERVE 内容访问冻结；随后一次性测量每 family 11 项、共 33 项。P9 / RAW / HippoRAG mean nDCG@10=`0.12338/0.11431/0.09218`。P9−HippoRAG aggregate `+0.03120` 且三 family 全正；P9−RAW aggregate `+0.00907`，但 family integer delta=`−72,732,371 / 0 / +372,156,928`，因此事前固定的双 baseline、三 family 全正 primary 为 false。该 cohort 不调参、不补 gate、不重跑；剩余 4 项不作为 rescue cohort
-> - 最新后续缺口：BRIGHT P9 已把“现实域跨 family 超过 candidate-restricted HippoRAG”推进到同源前瞻描述性支持，但 P9 直接融合 RAW/HippoRAG 且使用额外 cross-encoder 计算，不能解释成等算力或普遍 Agent 优越性，并且仍未跨 family 稳定超过 RAW。下一 action 必须在新的来源/领域扩展或重写 baseline candidate set，而不是继续重排相同 32 项、改 RRF 权重或 promotion gate；L5 则需由实质不同的 evaluator 在独立 A_hold 上晋升，并改善事前冻结且 untouched 的 M_search
+> - 最新 BRIGHT P17 all-remote 终态：P14/P15/P16 均未产生 efficacy 后，P17 在 311linux 上完成 27/27 candidate-specific HippoRAG terminal，并按冻结顺序 seal 每族前 8 个 complete cases，共 24 个三臂 action；26 个 Qwen generation source-valid、1 个由冻结 totalizer 补全，外网与旧 P14/P15 action reuse 均为 0。但远端回执自报 HippoRAG 峰值进程并发为 9，超过 study design、runtime fingerprint 与 plan 共同冻结的 8；根因是 9-worker shared executor 在 cross-encoder 结束后把第九个 slot 交给 HippoRAG。该偏差在任何 gold/score 前由 archive audit 发现，正式 finalizer 未调用，gold/score 均为 0，P17 efficacy=unknown、同 candidate/cohort 永久不 replay。27-attempt forensic tree 已回传并校验；另透明保留 acquisition receipt 中不参与执行的 `target_terminal_count_per_family=10` 遗留字段，规范 target 始终为 8
+> - 最新后续缺口：P17 没有新增可评分 efficacy，不能替代 P9 的现实域证据，也不能把 24 个未评分 action 当成 Agent−RAW/HippoRAG 结果。现实域双 baseline、跨 family 稳定正净收益仍未闭合；L5 仍缺 evaluator 在独立 A_hold 上真实晋升并改善事前冻结且 untouched 的 M_search。当前分支按 no-retry/no-gate 规则停止；若不另立全新 study，终稿应收束为“窄 L3/L4 positive、P9 同源对 HippoRAG 描述性 positive、现实域无有效稳定三臂优势、L5 未达到”
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -2052,7 +2053,8 @@ support utility 的对齐，不是缺少更多 promotion gate。它仍不是 off
 | 完成但未晋升（HoVer joint graph/evaluator） | 新现实 derived closed-corpus 上六 typed actions、RAW、official HippoRAG 与 A/F/A_hold/M lifecycle | TRAIN-only private-HMAC 一次形成 A_form/F/A_hold/M=48/36/30/30 与 609-doc corpus；A_hold E0/RAW/Hippo 均 U=487/12、72 hits、16 complete，30/30 item utility tie；E1−E0=−47/12、2 gain/10 harm/18 tie、exact p=3739/4096。primary=false、promotion=false，M_search 未打开；0 online/network evaluator。claim 不等同 official HoVer/open-domain/family-out |
 | 完成但 primary 未通过（BRIGHT fresh RESERVE） | 现实 reasoning-retrieval 上 retained P6 / RAW / candidate-restricted official HippoRAG core 三臂与 E1 counterfactual | fresh 45 项三 family 各 15；45/45 Qwen valid、135 intents 先于 join、45/45 HippoRAG terminal、单 launch 峰值并发 12、late label 仅开一次、0 external network。Agent/Hippo/RAW mean nDCG@10=`0.14538/0.13598/0.14874`；Agent−Hippo aggregate `+0.00939`，但 family delta=`−0.46468/+0.16826/+0.71916`（integer-sum scale）、7 gain/9 harm/29 tie，未跨 family 稳定；Agent−RAW=`−0.00336`。E1−P6=`−0.00495`，既有 non-promotion 被 fresh reserve 再次支持；不是 full-corpus BRIGHT、answer generation、SOTA 或 L5 positive |
 | 完成但 primary 未通过（BRIGHT P9 prospective C_confirm） | 固定 semantic P9 对剩余同源 RESERVE 的一次前瞻五臂确认 | 在打开剩余内容前固定每 family rank 15–25（0-based），共 33 项并保留 4 项 untouched；33/33 generation valid、66 external intents、1 cross-encoder + 12 HippoRAG 最大并发、33/33 HippoRAG terminal、late label 一次、0 external network。P9/Hippo/RAW mean=`0.12338/0.09218/0.11431`；P9−Hippo=`+1,029,664,470` 且 family 全正，7 gain/1 harm/25 tie；P9−RAW=`+299,424,557`，但 family=`−72,732,371/0/+372,156,928`，6/1/26，故预注册 primary=false。P9 含 RAW+Hippo+CE，结果只支持额外 ensemble 的同源增量，不支持等算力/SOTA/L5 |
-| 当前剩余（不新增 gate、不重用已评分 cohort 调参） | 同时闭合现实域稳定三臂净收益与 evaluator→untouched-search 因果链 | P9 已在前瞻 cohort 的三个 family 都超过 candidate-restricted HippoRAG，但未在 Biology/Economics 严格超过 RAW，且其候选池仍是相同 32 项。停止该 reranker/RRF 分支；下一 action 必须在新来源/领域通过新的检索、结构推理或证据合成扩展/改写 baseline candidate set，一次冻结 formation 与 measurement。L5 独立使用全新 evaluator mechanism、A_hold promotion 与预冻结 M_search；否则以“窄 L3/L4 positive、现实域无稳定三臂优势、L5 未达到”收束 |
+| implementation-invalid（BRIGHT P14→P17 all-remote） | P13 在 fresh Earth Science/Psychology/Sustainable Living complete cases 上相对 RAW 与 candidate-restricted HippoRAG 的方向性三臂确认 | P14 本地在 12 个 HippoRAG terminal 后因机器不可用被用户中止；P15 迁移 gpu1 后无 remote action result；P16 在 HMAC 前因 source capacity 失败。P17 在 311linux 完成 27/27 HippoRAG terminal 并 seal 24 个 action，0 external network/reuse；但实际 HippoRAG 峰值并发=9，违反冻结上限 8。偏差在 prelabel audit 发现，finalizer=0、gold/score=0、primary 未评价、efficacy unknown；禁止 replay/resample、改 candidate 或补 gate |
+| 当前剩余（不新增 gate、不重用已评分 cohort 调参） | 同时闭合现实域稳定三臂净收益与 evaluator→untouched-search 因果链 | P9 仍是该现实域分支最后一份有效评分结果：三个 family 都高于 candidate-restricted HippoRAG，但 Biology/Economics 未严格高于 RAW；P17 因执行契约失效没有增加 efficacy。当前 P13/all-remote cohort 停止，不以同 candidate 重启。只有全新 study ID、root、cohort 与事前修正的 runtime 才可能再次检验三臂问题；L5 仍需独立 evaluator mechanism、A_hold promotion 与预冻结 M_search。若不另立研究，就以“窄 L3/L4 positive、现实域无有效稳定三臂优势、L5 未达到”收束 |
 | 完成（exact-domain L2/L3 instance） | Replication C promotion、controls disposition 与 one-shot sealed | development 8/8 gain、四 fold 各 +2；operator-only output 8/8 exact match；sealed 4/4 gain、8 路最大并发、8/8 network-none verifier receipts、0 retry/replay/online judge；两条盲化事件完整披露，claim 限于固定 SEC-13F treatment |
 | 完成 | 冻结 evaluator-owned promotion policy | 已由 protocol 绑定完整 spec；candidate 只能收紧；对抗测试通过 |
 | 完成 | 收紧外部 action/fallback contract | 4 类 prompt/self-check lowering；6 类 unsupported op fail closed；observed fallback 不再由字符串伪造 |
@@ -4040,6 +4042,50 @@ single-launch availability screen 对 149 个 source-valid query 运行 candidat
 
 这不是 P13 的性能负结果，也不能靠把 cache-check 放宽来恢复：若忽略 pool mismatch，HippoRAG ordinal 将指向不同文档，三臂比较会直接失真。当前 P13 同源 cohort 因此永久终止。下一次测量不再添加一个与 candidate 脱节的 availability gate，而应在 fresh family 上先冻结 HMAC query order，对每项先形成 candidate-specific typed pool，再在该同一 pool 上单次运行 HippoRAG；按事前顺序取得每族固定数量 terminal complete cases 后一次 seal 并离线评分。这样 comparator availability 是直接 measurement 的缺失数据规则，而不是可反复修改的前置 gate。
 
+### 12.34 2026-07-21～22 BRIGHT P14→P17：all-remote action 已 seal，但并发契约偏差使 labels 保持未打开
+
+P13 后续严格改成 candidate-specific same-pool complete-case measurement，没有再增加 availability gate。P14 先从
+Earth Science、Psychology、Sustainable Living 建立 source custody 与 HMAC block；本地 direct run 已形成 Qwen、
+cross-encoder 与 action intents，并得到 12 个 HippoRAG terminal，但 12 路 CPU comparator 使本机不可用而被用户
+中止。其 complete-case selection 与 three-arm action seal 均未形成，direct label pack open count 和 score count 都是
+0；P14 因而以 infrastructure-invalid / efficacy-unknown 关闭且不 replay。
+
+P15 把全部 action-producing computation 迁到 gpu1，并另外取得 HMAC positions `[72,92)` 的 20 attempts/family
+view-only extension；它最后没有形成 `remote_action.result.json`，也没有任何 action/score 被 P17 复用。P16 再迁到
+有线 311linux，预先冻结 8 个 HippoRAG CPU processes，但原计划仍要求从 position 92 起每族再取 20 项。正式
+acquisition 在 HMAC ordering 与 selected-item materialization 前发现 source capacity 只有 `116/101/108`，因此以
+design-invalid 终止；HMAC selection、remote action、gold 与 score 均为 0。这三次终态都不增加 P13 efficacy sample。
+
+P17 使用新的 study ID，把 feasible window 事前固定为 positions `[92,101)`：每族 9 attempts，并按顺序选择前 8 个
+terminal complete cases。corrected runtime、implementation freeze 与 execution plan 共同规定 HippoRAG CPU process
+concurrency=8、OMP threads/process=2、cross-encoder 独占物理 GPU 1、MiniLM/Qwen 使用物理 GPU 0、外网/在线 evaluator/
+retry/replay/resample=0。唯一 formal action 在 311linux 完成：26 个 Qwen output source-valid、1 个由冻结 totalizer
+补全；27/27 HippoRAG terminal，三族各 9 个；selection 与 24-item three-arm action 均 canonical seal；远端 action
+result 的 `external_network_call_count=0`、prior P14/P15 output reuse=0。minimal archive 三文件及排除 top-level
+`corpus_tensors/hf/home/tmp` 后的 2,972-file forensic tree 均已回传，后者 tree SHA-256 为
+`952b8794…7f92`。
+
+但同一远端回执也在 gold 打开前给出了阻断性事实：`HippoRAG_peak_process_concurrency=9`，超过 study design、
+runtime fingerprint 与 plan 冻结的 8。冻结 runner 虽定义 `CONCURRENCY=8`，却用
+`ThreadPoolExecutor(max_workers=CONCURRENCY + 1)` 同池提交一个 cross future 与全部 27 个 Hippo futures；
+cross-encoder 很快结束后，第九个 slot 随即启动额外 HippoRAG process。该 counter 包围真实子进程生命周期，所以 9
+不是日志估计或线程数误读。现有 unit test 只断言常量等于 8，finalizer 又只校验 host/network/reuse，没有校验 observed
+peak；若继续调用它会错误越过冻结 execution contract 并首次读取 gold。因此正式 offline performance finalizer 没有
+调用，gold ID column read、selected label score 与 performance score 全部保持 0，primary 未评价，P17 efficacy
+保持 unknown。
+
+另有一个不参与执行但必须透明保留的 receipt 问题：P17 acquisition result 在每族只有 9 attempts 时仍沿用
+`target_terminal_count_per_family=10` 字面量；authoritative study design、plan、selection 与 finalizer 全部明确为 8。
+该 self-hashed receipt 不回写、不伪装修正；它不是本次 invalidity 的主因，也没有改变 8/family 的实际 selection。
+终态 manifest `90c9490e…7df5` 把两项异常、三份 sealed action hashes、forensic tree 与 label/score=0 一并绑定，并使
+one-shot result path 关闭。P17 不得 retry、resample、改 candidate、放宽并发口径或补 gate；24 个未评分 action 也
+不得被描述成 Agent 对 RAW/HippoRAG 的性能结果。
+
+因此本轮没有把 P9 的断点向 efficacy 方向推进。P9 仍是该现实域分支最后一份有效评分结果：它对
+candidate-restricted HippoRAG 的三 family net 都为正，但未在 Biology/Economics 严格高于 RAW。现实域双 baseline
+稳定三臂优势与 L5 evaluator→A_hold promotion→untouched M_search 因果链都仍未闭合。若不另立完全独立、事前修正
+runtime 的新 study，当前总目标应在这一边界收束，而不是继续启动 P18 或增加 gate。
+
 ## 附录 A：关键证据索引
 
 - FiQA TRAIN P10/P11 formation 与 DEV comparator-invalid chain：
@@ -4066,6 +4112,27 @@ single-launch availability screen 对 149 个 source-valid query 运行 candidat
   [`P13 availability result`](../manifests/nanobeir_p13_availability_result_v1.json)；
   [`P13 private acquisition`](../manifests/nanobeir_p13_acquisition_result_v1.json)；
   [`P13 base-pool contract failure`](../manifests/nanobeir_p13_c_confirm_runtime_failure_v1.json)
+- BRIGHT P14→P17 candidate-specific all-remote terminal chain（P17 labels/scores 未打开）：
+  [`P14 source custody`](../manifests/bright_p14_source_custody_v1.json)；
+  [`P14 complete-case design`](../manifests/bright_p14_direct_completecase_study_design_v1.json)；
+  [`P14 private acquisition`](../manifests/bright_p14_acquisition_result_v1.json)；
+  [`P14 direct freeze`](../manifests/bright_p14_direct_c_confirm_freeze_v1.json)；
+  [`P14 interruption disposition`](../manifests/bright_p14_direct_c_confirm_interruption_disposition_v1.json)；
+  [`P15 all-remote design`](../manifests/bright_p15_all_remote_c_confirm_study_design_v1.json)；
+  [`P15 view-only extension`](../manifests/bright_p15_extension_acquisition_result_v1.json)；
+  [`P15 runtime fingerprint`](../manifests/bright_p15_remote_runtime_fingerprint_v1.json)；
+  [`P16 wired design`](../manifests/bright_p16_all_remote_c_confirm_study_design_v1.json)；
+  [`P16 runtime fingerprint`](../manifests/bright_p16_remote_runtime_fingerprint_v1.json)；
+  [`P16 source-capacity disposition`](../manifests/bright_p16_extension_acquisition_disposition_v1.json)；
+  [`P17 capacity-feasible design`](../manifests/bright_p17_all_remote_c_confirm_study_design_v1.json)；
+  [`P17 view-only extension`](../manifests/bright_p17_extension_acquisition_result_v1.json)；
+  [`P17 implementation freeze`](../manifests/bright_p17_all_remote_implementation_freeze_v1.json)；
+  [`P17 corrected runtime fingerprint`](../manifests/bright_p17_remote_runtime_fingerprint_v1.json)；
+  [`P17 prelaunch runtime disposition`](../manifests/bright_p17_prelaunch_runtime_disposition_v1.json)；
+  [`P17 remote execution plan`](../artifacts/bright_p17_all_remote_c_confirm_v1/remote_execution.plan.json)；
+  [`P17 minimal remote archive`](../artifacts/bright_p17_all_remote_c_confirm_v1/remote_archive/)；
+  [`P17 forensic action/receipt/trace archive`](../artifacts/bright_p17_all_remote_c_confirm_v1/remote_forensic_archive/)；
+  [`P17 prelabel execution-contract-invalid result`](../manifests/bright_p17_all_remote_c_confirm_result_v1.json)
 - BRIGHT reasoning-retrieval v3、terminal M failure 与 fresh RESERVE 三臂链：
   [`v3 executor design`](../manifests/bright_reasoning_retrieval_executor_repair_design_v3.json)；
   [`v3 implementation freeze`](../manifests/bright_reasoning_retrieval_study_implementation_freeze_v3.json)；
