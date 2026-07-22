@@ -4162,6 +4162,37 @@ P20 root 已烧毁，不允许删回执、重试 qualification 或把该 run 计
 `CUDA_MODULE_LOADING=LAZY`”分成两个明确 phase；nested worker 仍只复制固定 safe subset，候选、cohort、metric、
 promotion 与 gate 不得变化。在新的 source-free qualification 成功并提交前，仍不得下载或打开 official TAT-QA。
 
+### 12.38 2026-07-23 TAT-QA P21：三阶段 launcher 与 split runtime 已通过，硬件相关 MiniLM byte canary 终止 qualification
+
+P21 使用新 study ID/root，提交 `4a8550fb…911c`；它没有重放 P20，也没有修改 typed P0/P1、144-item cohort、
+E0/E1 promotion、三臂指标或 efficacy gate。唯一变更是把 launcher 证据拆成三个闭合 phase：entry 精确 12 个变量，
+post-inventory 只允许新增 `CUDA_MODULE_LOADING=LAZY`，post-MiniLM 再只允许
+`CUDA_VISIBLE_DEVICES: "1" -> ""`；nested systemd client 始终只复制 DBUS、HOME、LANG、PATH、XDG 五项。
+fingerprint 绑定前两个 live receipt，canary/terminal 预注册绑定第三个。实现经 209/209 tests、`py_compile`、builder
+idempotence、diff check 与独立 adversarial audit；37 个提交文件在 311linux 与本地 Git object 逐文件 SHA-256 一致。
+
+唯一 qualification 首次越过 P18/P19/P20 的三个前置故障：safe user-bus entry、split runtime inventory、
+post-inventory exact environment、nested `systemd_network_preflight`、五组 asset tree 与两枚 nested runtime
+subfingerprint 均成功，产生 composite fingerprint 文件 SHA-256 `efd48481…d498`、self-hash `dff7f478…d323`。
+这说明 P19 的 dual-runtime 设计与 P21 的 launcher 修复都已得到实际 source-free 证据，而不是只通过 unit test。
+
+终止发生在 `bound_minilm_initialization`，即 Qwen/Hippo public canary 和 official TAT-QA source 之前。marker 文件
+SHA-256 为 `e3cb3d7f…fcaf`；terminal failure 文件 SHA-256 为 `b6db424a…e076`、self-hash 为
+`d5393a48…9cf2`，并记录 `formal_source_opened=false`、external network=0、online evaluator=0。底层错误是冻结的
+Qasper MiniLM 256-sentence startup canary 要求完整 float32 bytes hash `e76f373b…c5746` 与每维乘 `10^6` 后的
+integer-matrix hash `f24c3299…ee1b`；311linux 在相同 Python 3.10.12、torch 2.8.0+cu128、
+sentence-transformers 5.5.1、模型 tree 与 CPU/float32/eval 设置下得到 `6b0a0498…509f` 和
+`86a1a981…16f`，但同机重复逐元素完全相同。进一步 source-free forensic 将 torch CPU dispatch 强制为
+`default` 后又得到第三组稳定 hash `9510f133…f395` / `19065a6d…5435`，而 manifest 没有绑定 CPU ISA/dispatch。
+因此 exact byte/1e-6 component hash 对 CPU dispatch 敏感，不能作为跨 AMD/Intel 主机的 portable runtime 判据；
+这是 canary contract-invalid，而不是模型资产漂移或 semantic/effect failure。
+
+P21 root 同样终止，不允许用 311 的实测 hash 补成“通过 profile”后原地重试。下一步不再直接新立 study 盲跑；应先在
+完全公开 synthetic 输入上做一次非评分、非 qualification 的全链 feasibility：模型 tree/runtime identity 仍 exact，
+MiniLM canary 改为同机 repeat-exact、shape/finite/L2-normalization 与无正式 row 访问，不再要求跨 CPU 的完整 embedding
+bytes；同一次 feasibility 必须实际走通 Qwen typed-plan、MiniLM 与 official HippoRAG 三种 capability。只有该公开源外
+全链一次通过，才值得冻结新 study；这属于删除错误硬件假设，不是新增 performance gate。
+
 ## 附录 A：关键证据索引
 
 - FiQA TRAIN P10/P11 formation 与 DEV comparator-invalid chain：
@@ -4225,6 +4256,12 @@ promotion 与 gate 不得变化。在新的 source-free qualification 成功并�
   [`P20 source custody`](../manifests/tatqa_p20_public_source_custody_v1.json)；
   [`P20 qualification marker`](../artifacts/tatqa_p20_runtime_qualification_v1/qualification.one_shot_marker.json)；
   [`P20 terminal qualification failure`](../artifacts/tatqa_p20_runtime_qualification_v1/qualification.terminal_failure.json)
+- TAT-QA P21 hardware-fragile MiniLM canary-invalid chain（official source 未下载/未打开）：
+  [`P21 design`](../manifests/tatqa_p21_typed_evaluator_study_design_v1.json)；
+  [`P21 source custody`](../manifests/tatqa_p21_public_source_custody_v1.json)；
+  [`P21 successful composite runtime fingerprint`](../manifests/tatqa_p21_composite_runtime_fingerprint_v1.json)；
+  [`P21 qualification marker`](../artifacts/tatqa_p21_runtime_qualification_v1/qualification.one_shot_marker.json)；
+  [`P21 terminal qualification failure`](../artifacts/tatqa_p21_runtime_qualification_v1/qualification.terminal_failure.json)
 - BRIGHT reasoning-retrieval v3、terminal M failure 与 fresh RESERVE 三臂链：
   [`v3 executor design`](../manifests/bright_reasoning_retrieval_executor_repair_design_v3.json)；
   [`v3 implementation freeze`](../manifests/bright_reasoning_retrieval_study_implementation_freeze_v3.json)；
