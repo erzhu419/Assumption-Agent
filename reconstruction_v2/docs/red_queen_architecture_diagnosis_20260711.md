@@ -4086,6 +4086,30 @@ candidate-restricted HippoRAG 的三 family net 都为正，但未在 Biology/Ec
 稳定三臂优势与 L5 evaluator→A_hold promotion→untouched M_search 因果链都仍未闭合。若不另立完全独立、事前修正
 runtime 的新 study，当前总目标应在这一边界收束，而不是继续启动 P18 或增加 gate。
 
+### 12.35 2026-07-22～23 TAT-QA P18：源外 qualification 在 runtime inventory 终止
+
+P18 是在 P17 之后另立的独立 TAT-QA study。它在任何 official TAT-QA 文件下载、row parse、selection secret、
+formal item identity、模型 action 或评分之前，先冻结 typed multi-hop P0/P1、A_form/F_search/A_hold/M_search、
+E0/E1 promotion、RAW 与 project-attested HippoRAG 三臂合同。实现提交 `39e0a80c…82` 经 171 项源外测试与
+独立 adversarial audit；新增的 worker 证据包括真实子模型 monotonic interval、完整 transport receipt、named
+systemd unit、HippoRAG `TasksMax=3`（monitor process 预留 1、worker process 最多 2 threads）以及异常时对全部
+unit 的同步 stop/kill/reap/finalize。这里没有通过补 gate 改变候选或 performance 判据。
+
+唯一一次 source-free production qualification 在有线 311linux 启动后约 2 秒，于 `runtime_inventory` fail-closed。
+terminal failure self-hash 为 `008f6a11…fae5`；`formal_source_opened=false`，external network、online evaluator、
+retry/replay/resample 均为 0。失败发生在 fingerprint 和 public model canary 之前：P17 迁移后的 lexical venv 声明
+`include-system-site-packages=true`，但代码按 `home/../lib/python3.10/site-packages` 查找 base root；该目录不存在，
+实际活动依赖来自另一个 `lib/python3/dist-packages`/`.pth` topology。因此 P18 按预注册记为
+runtime/implementation-invalid、efficacy unknown，qualification root 已烧毁，不重试，也不打开 TAT-QA source。
+
+只读追查还暴露出比路径拼接更深的 capability conflation：P18 把 Qwen/MiniLM 与 HippoRAG 共用一个
+`runtime_python`。冻结的 Qasper MiniLM manifest 要求 Python 3.10.12、torch 2.8.0、sentence-transformers 5.5.1；
+冻结的 HippoRAG attestation v3 则绑定 Python 3.11.15、base torch 2.5.1、sentence-transformers 5.4.1 与另一份
+pyvenv/topology。单一解释器不可能同时满足两套 exact runtime identity。下一 study 不能把同一 P18 root 换路径再跑；
+必须使用新 study ID/root，并把 `typed_plan/MiniLM runtime` 与 `HippoRAG runtime` 拆成两个独立、各自 fingerprinted
+capability。这个修正属于源外执行语义，不允许顺带修改 P0/P1、evaluator、promotion、cohort 或 gate；公开 synthetic
+qualification 通过并提交后，才可首次取得 formal source。
+
 ## 附录 A：关键证据索引
 
 - FiQA TRAIN P10/P11 formation 与 DEV comparator-invalid chain：
@@ -4133,6 +4157,11 @@ runtime 的新 study，当前总目标应在这一边界收束，而不是继续
   [`P17 minimal remote archive`](../artifacts/bright_p17_all_remote_c_confirm_v1/remote_archive/)；
   [`P17 forensic action/receipt/trace archive`](../artifacts/bright_p17_all_remote_c_confirm_v1/remote_forensic_archive/)；
   [`P17 prelabel execution-contract-invalid result`](../manifests/bright_p17_all_remote_c_confirm_result_v1.json)
+- TAT-QA P18 source-free qualification-invalid chain（official source 未下载/未打开）：
+  [`P18 design`](../manifests/tatqa_p18_typed_evaluator_study_design_v1.json)；
+  [`P18 source custody`](../manifests/tatqa_p18_public_source_custody_v1.json)；
+  [`P18 qualification marker`](../artifacts/tatqa_p18_runtime_qualification_v1/qualification.one_shot_marker.json)；
+  [`P18 terminal qualification failure`](../artifacts/tatqa_p18_runtime_qualification_v1/qualification.terminal_failure.json)
 - BRIGHT reasoning-retrieval v3、terminal M failure 与 fresh RESERVE 三臂链：
   [`v3 executor design`](../manifests/bright_reasoning_retrieval_executor_repair_design_v3.json)；
   [`v3 implementation freeze`](../manifests/bright_reasoning_retrieval_study_implementation_freeze_v3.json)；
