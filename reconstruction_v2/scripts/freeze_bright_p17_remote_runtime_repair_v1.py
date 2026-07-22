@@ -52,6 +52,15 @@ CANARY_LAUNCH_DISPOSITION_FILE_SHA256 = (
 CANARY_LAUNCH_DISPOSITION_SELF_SHA256 = (
     "1f5b525a2b0359d5caeea435a8086d98917378506d39e4cb9c6b0cfc9d81db7e"
 )
+FREEZE_WRITE_DISPOSITION_RELATIVE = Path(
+    "manifests/bright_p17_repair_freeze_write_disposition_v1.json"
+)
+FREEZE_WRITE_DISPOSITION_FILE_SHA256 = (
+    "0186a7a113a62631cb063d84f182fb35338e061bf27111da5bf12394a36a7895"
+)
+FREEZE_WRITE_DISPOSITION_SELF_SHA256 = (
+    "250cc3354af828dc5e886837de13f76ed28b276757fd7041b4660de4833aae8b"
+)
 PATCHED_SOURCE_SHA256 = (
     "960561b080531fe4d668bde635e81f8e65620ce50bdacdd9a25531e856fa3e05"
 )
@@ -230,7 +239,7 @@ def _write_replacement(path: Path, value: Mapping[str, Any]) -> None:
     temporary = path.with_name(path.name + ".repair.tmp")
     if temporary.exists() or temporary.is_symlink():
         raise P17RepairFreezeError(f"repair temporary already exists: {temporary}")
-    p14_acquisition.utilities._write_json(temporary, value, mode=0o644)
+    p14_acquisition.utilities._write_json(temporary, value)
     temporary.replace(path)
 
 
@@ -241,6 +250,7 @@ def freeze(project_root: Path) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     implementation_path = base / original.IMPLEMENTATION_FREEZE_PATH
     disposition_path = base / DISPOSITION_RELATIVE
     canary_launch_disposition_path = base / CANARY_LAUNCH_DISPOSITION_RELATIVE
+    freeze_write_disposition_path = base / FREEZE_WRITE_DISPOSITION_RELATIVE
 
     if _file_sha256(fingerprint_path) != OLD_FINGERPRINT_FILE_SHA256:
         raise P17RepairFreezeError("the invalid P17 fingerprint was already consumed")
@@ -253,6 +263,11 @@ def freeze(project_root: Path) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
         != CANARY_LAUNCH_DISPOSITION_FILE_SHA256
     ):
         raise P17RepairFreezeError("the P17 canary launch disposition drifted")
+    if (
+        _file_sha256(freeze_write_disposition_path)
+        != FREEZE_WRITE_DISPOSITION_FILE_SHA256
+    ):
+        raise P17RepairFreezeError("the P17 freeze-write disposition drifted")
 
     fingerprint_old = _read_canonical(fingerprint_path, "invalid P17 fingerprint")
     implementation_old = _read_canonical(
@@ -261,6 +276,9 @@ def freeze(project_root: Path) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     disposition = _read_canonical(disposition_path, "P17 prelaunch disposition")
     canary_launch_disposition = _read_canonical(
         canary_launch_disposition_path, "P17 canary launch disposition"
+    )
+    freeze_write_disposition = _read_canonical(
+        freeze_write_disposition_path, "P17 freeze-write disposition"
     )
     for value, expected, name in (
         (fingerprint_old, OLD_FINGERPRINT_SELF_SHA256, "invalid P17 fingerprint"),
@@ -275,12 +293,19 @@ def freeze(project_root: Path) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
             CANARY_LAUNCH_DISPOSITION_SELF_SHA256,
             "P17 canary launch disposition",
         ),
+        (
+            freeze_write_disposition,
+            FREEZE_WRITE_DISPOSITION_SELF_SHA256,
+            "P17 freeze-write disposition",
+        ),
     ):
         _verify_self(value, name)
         if value.get("self_sha256") != expected:
             raise P17RepairFreezeError(f"{name} identity drifted")
     if (
         disposition.get("study_design_self_sha256")
+        != original.acquisition.DESIGN_SELF_SHA256
+        or freeze_write_disposition.get("study_design_self_sha256")
         != original.acquisition.DESIGN_SELF_SHA256
     ):
         raise P17RepairFreezeError("the corrected P17 design binding drifted")
@@ -349,6 +374,11 @@ def freeze(project_root: Path) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
             "relative_path": DISPOSITION_RELATIVE.as_posix(),
             "self_sha256": DISPOSITION_SELF_SHA256,
         },
+        "freeze_write_disposition_binding": {
+            "file_sha256": FREEZE_WRITE_DISPOSITION_FILE_SHA256,
+            "relative_path": FREEZE_WRITE_DISPOSITION_RELATIVE.as_posix(),
+            "self_sha256": FREEZE_WRITE_DISPOSITION_SELF_SHA256,
+        },
         "measurement_access": facts["measurement_access"],
         "original_invalid_fingerprint": {
             "file_sha256": OLD_FINGERPRINT_FILE_SHA256,
@@ -390,6 +420,12 @@ def freeze(project_root: Path) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
         {
             "relative_path": CANARY_LAUNCH_DISPOSITION_RELATIVE.as_posix(),
             "sha256": CANARY_LAUNCH_DISPOSITION_FILE_SHA256,
+        }
+    )
+    dependencies.append(
+        {
+            "relative_path": FREEZE_WRITE_DISPOSITION_RELATIVE.as_posix(),
+            "sha256": FREEZE_WRITE_DISPOSITION_FILE_SHA256,
         }
     )
     implementation_body["dependency_bindings"] = dependencies
