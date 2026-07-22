@@ -246,6 +246,7 @@ def test_success_uses_real_git_snapshot_fixed_paths_and_source_free_workers(
 ) -> None:
     arguments = _arguments(native_tmp_path)
     observed: dict[str, Any] = {}
+    phase_order: list[str] = []
     phases = {
         name: _phase(name)
         for name in ("entry", "post_runtime_inventory", "post_minilm")
@@ -328,6 +329,11 @@ def test_success_uses_real_git_snapshot_fixed_paths_and_source_free_workers(
     _install_common_runtime_mocks(
         monkeypatch, phases=phases, inventory=inventory, fingerprint=fingerprint
     )
+    monkeypatch.setattr(
+        feasibility.formal_runtime,
+        "user_systemd_launcher_phase_receipt",
+        lambda *, phase: phase_order.append(phase) or phases[phase],
+    )
     monkeypatch.setattr(feasibility, "PortableOfflineMiniLMEncoder", FakePortable)
     monkeypatch.setattr(
         feasibility.formal_runtime, "SystemdTypedPlanBatchRunner", FakeTyped
@@ -335,7 +341,32 @@ def test_success_uses_real_git_snapshot_fixed_paths_and_source_free_workers(
     monkeypatch.setattr(feasibility.formal_runtime, "SystemdHippoByteRunner", FakeHippo)
     monkeypatch.setattr(feasibility.canary, "run_public_production_canary", fake_canary)
 
-    terminal = feasibility.run_source_free_feasibility(**arguments)
+    normalizer_body = {
+        "schema": "synthetic-post-minilm-normalizer-v1",
+        "status": "normalized",
+    }
+    normalizer_receipt = {
+        **normalizer_body,
+        "self_sha256": _semantic_hash(normalizer_body),
+    }
+    normalizer_binding = {
+        "schema": "synthetic-normalizer-binding-v1",
+        "self_sha256": "6" * 64,
+    }
+
+    def normalize() -> dict[str, object]:
+        phase_order.append("normalize")
+        return normalizer_receipt
+
+    monkeypatch.setattr(
+        feasibility,
+        "_post_minilm_normalizer_binding",
+        lambda _project, _normalizer: normalizer_binding,
+    )
+
+    terminal = feasibility.run_source_free_feasibility(
+        **arguments, _post_minilm_environment_normalizer=normalize
+    )
 
     portable = observed["canary_args"]["minilm_worker_receipt"]
     assert portable["schema"] == feasibility.PORTABLE_CAPABILITY_SCHEMA
@@ -354,6 +385,13 @@ def test_success_uses_real_git_snapshot_fixed_paths_and_source_free_workers(
     assert terminal["source_isolation"]["formal_TAT_QA_source_or_rows_present"] is False
     assert terminal["source_free_worker_isolation"]["launch_count"] == 3
     assert terminal["source_free_worker_isolation"]["hook_restored_exact"] is True
+    assert terminal["post_minilm_environment_normalization_receipt"] == (
+        normalizer_receipt
+    )
+    assert terminal["post_minilm_environment_normalizer_binding"] == (
+        normalizer_binding
+    )
+    assert phase_order == ["entry", "post_runtime_inventory", "normalize", "post_minilm"]
     assert observed["typed_abort"] is observed["typed_verify"] is True
     assert observed["hippo_abort"] is observed["hippo_verify"] is True
     root = feasibility.EXPECTED_FEASIBILITY_ROOT

@@ -20,7 +20,7 @@ import re
 import stat
 import subprocess
 import sys
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 from assumption_agent.benchmarks import tatqa_p21_public_canary_v1 as canary
 from replication_runtime.qasper_minilm_portable_v2.binding import (
@@ -75,6 +75,10 @@ REQUIRED_SNAPSHOT_PATHS = (
     | REQUIRED_EVIDENCE_PATHS
     | SOURCE_ISOLATION_SENTINEL_PATHS
 )
+REQUIRED_ENTRY_MODULE_NAME = (
+    "assumption_agent.benchmarks.tatqa_p22_source_free_feasibility_v1"
+)
+EXPECTED_NORMALIZER_CALLABLE_NAME: str | None = None
 EXPECTED_HOST_ROOT = Path("/home/erzhu419/p22_source_free_feasibility_20260723")
 EXPECTED_PROJECT_ROOT = EXPECTED_HOST_ROOT / "runtime/reconstruction_v2"
 EXPECTED_FEASIBILITY_ROOT = EXPECTED_HOST_ROOT / "attempt"
@@ -125,6 +129,79 @@ def _json_copy(value: object) -> object:
         raise TatqaP22SourceFreeFeasibilityError(
             "capability evidence is not JSON-safe"
         ) from exc
+
+
+def _validated_auxiliary_receipt(value: object) -> dict[str, object]:
+    """Copy and verify an optional source-free phase receipt."""
+
+    copied = _json_copy(value)
+    if not isinstance(copied, dict):
+        raise TatqaP22SourceFreeFeasibilityError(
+            "post-MiniLM environment normalization receipt is absent"
+        )
+    body = dict(copied)
+    declared = body.pop("self_sha256", None)
+    if (
+        not isinstance(declared, str)
+        or _HEX64.fullmatch(declared) is None
+        or _semantic_hash(body) != declared
+    ):
+        raise TatqaP22SourceFreeFeasibilityError(
+            "post-MiniLM environment normalization receipt drifted"
+        )
+    return copied
+
+
+def _post_minilm_normalizer_binding(
+    project: Path,
+    normalizer: Callable[[], Mapping[str, object]] | None,
+) -> dict[str, object] | None:
+    """Bind the only optional callback to the frozen entry module object."""
+
+    if EXPECTED_NORMALIZER_CALLABLE_NAME is None:
+        if normalizer is not None:
+            raise TatqaP22SourceFreeFeasibilityError(
+                "post-MiniLM normalizer was not preregistered"
+            )
+        return None
+    module = sys.modules.get(REQUIRED_ENTRY_MODULE_NAME)
+    if (
+        normalizer is None
+        or module is None
+        or getattr(normalizer, "__module__", None) != REQUIRED_ENTRY_MODULE_NAME
+        or getattr(normalizer, "__name__", None)
+        != EXPECTED_NORMALIZER_CALLABLE_NAME
+        or getattr(normalizer, "__qualname__", None)
+        != EXPECTED_NORMALIZER_CALLABLE_NAME
+        or getattr(module, EXPECTED_NORMALIZER_CALLABLE_NAME, None) is not normalizer
+    ):
+        raise TatqaP22SourceFreeFeasibilityError(
+            "post-MiniLM normalizer callable identity drifted"
+        )
+    raw_module_path = getattr(module, "__file__", None)
+    if not isinstance(raw_module_path, str):
+        raise TatqaP22SourceFreeFeasibilityError(
+            "post-MiniLM normalizer module path is absent"
+        )
+    try:
+        module_path = Path(raw_module_path).resolve(strict=True)
+        relative = module_path.relative_to(project).as_posix()
+    except (OSError, ValueError) as exc:
+        raise TatqaP22SourceFreeFeasibilityError(
+            "post-MiniLM normalizer module is outside the snapshot"
+        ) from exc
+    if relative not in REQUIRED_IMPLEMENTATION_PATHS or module_path.suffix != ".py":
+        raise TatqaP22SourceFreeFeasibilityError(
+            "post-MiniLM normalizer module is outside the implementation registry"
+        )
+    body: dict[str, object] = {
+        "schema": f"{VERSION}_post_minilm_normalizer_binding_v1",
+        "module": REQUIRED_ENTRY_MODULE_NAME,
+        "callable": EXPECTED_NORMALIZER_CALLABLE_NAME,
+        "relative_module_path": relative,
+        "module_file_sha256": hashlib.sha256(module_path.read_bytes()).hexdigest(),
+    }
+    return {**body, "self_sha256": _semantic_hash(body)}
 
 
 def _write_exclusive(path: Path, value: Mapping[str, Any]) -> str:
@@ -351,6 +428,7 @@ def _loaded_project_module_binding(project: Path) -> dict[str, object]:
         "replication_runtime.tatqa_p21_v1.runtime_attestation_v1",
         "replication_runtime.tatqa_p21_v1.typed_plan_contract",
     }
+    required_loaded.add(REQUIRED_ENTRY_MODULE_NAME)
     if not required_loaded.issubset(modules):
         raise TatqaP22SourceFreeFeasibilityError(
             "required project module was not loaded from the snapshot"
@@ -783,6 +861,9 @@ def run_source_free_feasibility(
     hippo_attestation: str | Path,
     p21_runtime_fingerprint: str | Path,
     diagnostic_snapshot_commit: str,
+    _post_minilm_environment_normalizer: (
+        Callable[[], Mapping[str, object]] | None
+    ) = None,
 ) -> dict[str, object]:
     """Consume one independent public-synthetic feasibility attempt."""
 
@@ -802,6 +883,9 @@ def run_source_free_feasibility(
         raise TatqaP22SourceFreeFeasibilityError(
             "source-free feasibility work/output path is already consumed"
         )
+    normalizer_binding = _post_minilm_normalizer_binding(
+        project, _post_minilm_environment_normalizer
+    )
     implementation = _diagnostic_snapshot_binding(
         project, diagnostic_snapshot_commit
     )
@@ -822,6 +906,7 @@ def run_source_free_feasibility(
         ],
         "source_isolation_self_sha256": source_isolation["self_sha256"],
         "outer_unit_self_sha256": outer_unit["self_sha256"],
+        "post_minilm_environment_normalizer_binding": normalizer_binding,
     }
     _write_exclusive(
         root / MARKER_FILENAME,
@@ -842,6 +927,7 @@ def run_source_free_feasibility(
     hippo_runner: formal_runtime.SystemdHippoByteRunner | None = None
     isolation_original: object | None = None
     isolation_state: dict[str, object] | None = None
+    normalization_receipt: dict[str, object] | None = None
     stage = "p21_entry_launch_envelope"
     try:
         entry_phase = formal_runtime.user_systemd_launcher_phase_receipt(
@@ -914,6 +1000,29 @@ def run_source_free_feasibility(
             expected_asset_manifest=minilm_manifest,
             expected_model_root=minilm,
         )
+        if _post_minilm_environment_normalizer is not None:
+            stage = "post_minilm_environment_normalization"
+            if (
+                _post_minilm_normalizer_binding(
+                    project, _post_minilm_environment_normalizer
+                )
+                != normalizer_binding
+            ):
+                raise TatqaP22SourceFreeFeasibilityError(
+                    "post-MiniLM normalizer binding changed before invocation"
+                )
+            normalization_receipt = _validated_auxiliary_receipt(
+                _post_minilm_environment_normalizer()
+            )
+            if (
+                _post_minilm_normalizer_binding(
+                    project, _post_minilm_environment_normalizer
+                )
+                != normalizer_binding
+            ):
+                raise TatqaP22SourceFreeFeasibilityError(
+                    "post-MiniLM normalizer binding changed after invocation"
+                )
         stage = "p21_post_minilm_launch_envelope"
         post_minilm_phase = formal_runtime.user_systemd_launcher_phase_receipt(
             phase="post_minilm"
@@ -1038,6 +1147,10 @@ def run_source_free_feasibility(
             "portable_minilm_capability_receipt_self_sha256": portable_receipt[
                 "self_sha256"
             ],
+            "post_minilm_environment_normalization_receipt": (
+                normalization_receipt
+            ),
+            "post_minilm_environment_normalizer_binding": normalizer_binding,
             "public_canary_self_sha256": public_receipt["self_sha256"],
             "public_canary_file_sha256": hashlib.sha256(canary_raw).hexdigest(),
             "diagnostic_snapshot_binding": implementation,
