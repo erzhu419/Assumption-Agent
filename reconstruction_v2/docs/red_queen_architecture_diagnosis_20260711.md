@@ -4110,6 +4110,30 @@ pyvenv/topology。单一解释器不可能同时满足两套 exact runtime ident
 capability。这个修正属于源外执行语义，不允许顺带修改 P0/P1、evaluator、promotion、cohort 或 gate；公开 synthetic
 qualification 通过并提交后，才可首次取得 formal source。
 
+### 12.36 2026-07-23 TAT-QA P19：双 runtime 已冻结，但外层 launch envelope 使 qualification 终止
+
+P19 没有重放 P18。它使用新 study ID/root，把 typed-plan/Qwen 与 exact Qasper MiniLM 固定到一个 Python 3.10.12、
+torch 2.8.0+cu128、sentence-transformers 5.5.1 的 lexical venv；official HippoRAG 则继续使用另一 lexical venv，
+并由新的 P19 attestation 被动复验 executable、`pyvenv.cfg`、`.pth`、19 项 distribution metadata、active module origin
+以及 HippoRAG/SmolLM/MiniLM 三组资产。外层 composite fingerprint 内含两枚 canonical self-hashed subfingerprint，
+public canary 也显式交叉绑定两枚 nested self-hash；没有把 runtime 拆分伪装成两个 gate。P0/P1、cohort、E0/E1、
+A_hold promotion、M_search 与三臂 performance 判据均沿用事前冻结合同。
+
+源外实现提交 `39215941…120` 经 188/188 测试、`py_compile`、diff check 与 adversarial audit。311linux 上新的 typed
+runtime 已验证七项 exact distribution version 与物理 GPU 1 可见；P19 archive 与本地提交逐文件 SHA-256 一致。
+official TAT-QA source、selection secret、formal item、模型 action 和 label 在此时仍全部不存在。
+
+唯一一次 qualification 仍在约 2 秒内、模型 canary 与 fingerprint 写出前，于 `systemd_network_preflight` fail-closed。
+terminal self-hash 为 `2e4dbf0b…9a21`。原因不是双 runtime 不兼容，而是外层 transient service 使用
+`/usr/bin/env -i` 时只保留 HOME/LANG/PATH 等变量，同时删除了 user-systemd client 所需的 `XDG_RUNTIME_DIR` 与
+`DBUS_SESSION_BUS_ADDRESS`；冻结代码的 nested `systemd-run --user` 因而无法连接现存 user bus。只读证据同时证明
+`/run/user/1001/bus` 与 `/run/user/1001/systemd/private` 存在，而该 unit 的 `ExecStart` 不含两项变量。失败回执记录
+`formal_source_opened=false`、external network=0、online evaluator=0；没有 fingerprint、public canary 或模型执行。
+
+P19 root 已烧毁，不能补变量后原地重试。该终态应记为 launch-infrastructure-invalid、efficacy unknown。若继续，只能
+建立新 study ID/root，并在源外预注册中把 safe user-bus launch envelope 当作执行能力显式绑定；候选、cohort、metric、
+promotion 与 gate 不得改动，也不得把 P19 计入 efficacy sample。修复属于 host launcher contract，不是增加新 gate。
+
 ## 附录 A：关键证据索引
 
 - FiQA TRAIN P10/P11 formation 与 DEV comparator-invalid chain：
@@ -4162,6 +4186,12 @@ qualification 通过并提交后，才可首次取得 formal source。
   [`P18 source custody`](../manifests/tatqa_p18_public_source_custody_v1.json)；
   [`P18 qualification marker`](../artifacts/tatqa_p18_runtime_qualification_v1/qualification.one_shot_marker.json)；
   [`P18 terminal qualification failure`](../artifacts/tatqa_p18_runtime_qualification_v1/qualification.terminal_failure.json)
+- TAT-QA P19 split-runtime launch-infrastructure-invalid chain（official source 未下载/未打开）：
+  [`P19 design`](../manifests/tatqa_p19_typed_evaluator_study_design_v1.json)；
+  [`P19 source custody`](../manifests/tatqa_p19_public_source_custody_v1.json)；
+  [`P19 HippoRAG runtime attestation`](../manifests/tatqa_p19_hipporag_runtime_attestation_v1.json)；
+  [`P19 qualification marker`](../artifacts/tatqa_p19_runtime_qualification_v1/qualification.one_shot_marker.json)；
+  [`P19 terminal qualification failure`](../artifacts/tatqa_p19_runtime_qualification_v1/qualification.terminal_failure.json)
 - BRIGHT reasoning-retrieval v3、terminal M failure 与 fresh RESERVE 三臂链：
   [`v3 executor design`](../manifests/bright_reasoning_retrieval_executor_repair_design_v3.json)；
   [`v3 implementation freeze`](../manifests/bright_reasoning_retrieval_study_implementation_freeze_v3.json)；
