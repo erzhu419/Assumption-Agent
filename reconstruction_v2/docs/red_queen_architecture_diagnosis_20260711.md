@@ -58,7 +58,7 @@
 > - 历史 synthetic 8-seed v1 终态（已由 v3→v5 更新）：`dabcbde7` 在 seed 前固定 exact R1、RAW/official-HippoRAG/Agent 三臂、8 个 fresh seed cluster 与纯描述 estimand；两轮审计先修正 official paragraph title、1536-future submission barrier、未声明分析面、重复 grammar regeneration 及 success/failure terminal publication，64 项相关测试通过。`2ecf5ec8` / `5efbb5b1` / `f7d3335b` 依次提交 implementation freeze、8-seed custody 与 512-item acquisition。唯一 v1 runner 在 marker 后、任何 retrieval/action/label/score 前，把 512×(1 question+32 nodes)=16,896 条文本一次交给冻结 MiniLM encoder；该 runtime 的单次上限是 16,384，故以 implementation/infrastructure-invalid 严格终止。该 v1 cohort 的 stability 仍未知，`d185b84a` 只公开 seeds/cohort；它没有被修补后作为正式/评分 efficacy evidence 重放，后续 v2 只做过非评分 integration diagnostic。2026-07-18 的结论已由顶部最新 bullet 与 12.17 的全新 v3 cohort / v5 success 取代
 > - 最新 BRIGHT P9 前瞻结果：在已消费 TRAIN45 上形成 relation/mechanism cross-encoder + RAW + HippoRAG 的固定 RRF 候选后，设计与实现均先于剩余 RESERVE 内容访问冻结；随后一次性测量每 family 11 项、共 33 项。P9 / RAW / HippoRAG mean nDCG@10=`0.12338/0.11431/0.09218`。P9−HippoRAG aggregate `+0.03120` 且三 family 全正；P9−RAW aggregate `+0.00907`，但 family integer delta=`−72,732,371 / 0 / +372,156,928`，因此事前固定的双 baseline、三 family 全正 primary 为 false。该 cohort 不调参、不补 gate、不重跑；剩余 4 项不作为 rescue cohort
 > - 最新 BRIGHT P17 all-remote 终态：P14/P15/P16 均未产生 efficacy 后，P17 在 311linux 上完成 27/27 candidate-specific HippoRAG terminal，并按冻结顺序 seal 每族前 8 个 complete cases，共 24 个三臂 action；26 个 Qwen generation source-valid、1 个由冻结 totalizer 补全，外网与旧 P14/P15 action reuse 均为 0。但远端回执自报 HippoRAG 峰值进程并发为 9，超过 study design、runtime fingerprint 与 plan 共同冻结的 8；根因是 9-worker shared executor 在 cross-encoder 结束后把第九个 slot 交给 HippoRAG。该偏差在任何 gold/score 前由 archive audit 发现，正式 finalizer 未调用，gold/score 均为 0，P17 efficacy=unknown、同 candidate/cohort 永久不 replay。27-attempt forensic tree 已回传并校验；另透明保留 acquisition receipt 中不参与执行的 `target_terminal_count_per_family=10` 遗留字段，规范 target 始终为 8
-> - 最新独立后续 study：TAT-QA P23 在最后一次 source-free feasibility 中越过 portable MiniLM 与环境修复，但首个真实 Qwen typed plan 没有产生 P0 之外的 residual unit，按预注册终止且 official source 始终未下载/未打开。随后 FRAMES P1 固定 official revision `58d9fb63…22ef`、保守排除公开 viewer 可能暴露的 rows `[0,100)`、只允许一次 aggregate-only source/capacity qualification；正式持久化下载前，误把 `raw` URL 当 Git pointer 的一次命令让 TSV 字节流只经过正则且未保存、未解析 row/cell、未输出内容或改变设计，因此严格“零 source byte access before freeze”不成立，但 formal attempt/model/action/score 仍为 0。qualification 通过前不创建正式 block/action/score，失败则不改 parser/quota/family 重跑
+> - 最新独立后续 study：TAT-QA P23 按预注册终止后，FRAMES P1 固定 official revision `58d9fb63…22ef`、Git blob `cea20270…025` 与 viewer-exposed rows `[0,100)` exclusion；实现提交 `6552fefb` 的 18/18 tests 与独立 adversarial audit 通过，freeze `8ee6662c…3f20` 绑定 real Git ancestor/四个 commit blobs，并显式披露 freeze 前一次未保存、未解析 row/cell 的 TSV byte stream。正式 source SHA-256=`4255093c…69ff`；唯一资格 marker 随后消费，但 raw TSV header 与预冻结的 public viewer conversion header 不同，故在首行、任何 row content/action/score 前 terminal。FRAMES 不改 parser、不重跑，efficacy/capacity 仍 unknown；这证明 viewer schema 不能代替 raw repository schema contract
 > - 最新后续缺口：P17 没有新增可评分 efficacy，不能替代 P9 的现实域证据，也不能把 24 个未评分 action 当成 Agent−RAW/HippoRAG 结果。现实域双 baseline、跨 family 稳定正净收益仍未闭合；L5 仍缺 evaluator 在独立 A_hold 上真实晋升并改善事前冻结且 untouched 的 M_search。当前分支按 no-retry/no-gate 规则停止；若不另立全新 study，终稿应收束为“窄 L3/L4 positive、P9 同源对 HippoRAG 描述性 positive、现实域无有效稳定三臂优势、L5 未达到”
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
@@ -4297,6 +4297,18 @@ answer、URL 或单项 row id；online evaluator/API、model action、score 都�
 不得改 quota、family、parser、candidate 或补 gate 后重跑。只有 aggregate qualification 一次通过，才允许另行事前冻结
 私有四块 assignment、Wikipedia snapshot、typed multi-hop candidate、三臂 execution 与 L5 promotion/search 合同。
 
+实际 implementation commit 为 `6552fefb24b7bfc07ec0040e375736704a69abc8`，18/18 focused tests 与独立
+adversarial audit 均 PASS。freeze self-hash `8ee6662c…3f20` 绑定该 real Git ancestor 下 qualifier、tests、custody、
+BRIGHT disposition 四个 blobs，并用固定 Git 的 no-replace-object 路径复验；formal source 下载后 SHA-256 为
+`4255093c…69ff`，Git blob/size 与 repository metadata 精确一致。
+
+唯一 formal qualification 随后写入 one-shot marker，但在 `csv.DictReader.fieldnames == EXPECTED_COLUMNS` 的首行断言
+终止：raw repository TSV header 与 freeze 前公开 dataset viewer 所显示的 conversion header 不同。程序没有输出或继续
+读取任何 row 的 prompt、answer、URL 或 row id；model/action/score、online evaluator、retry/replay/resample 都为 0。
+marker 文件 SHA-256=`e7e5d432…0735`、self-hash=`85f7d9a2…9071`；terminal failure 文件 SHA-256=
+`1a67a42b…ff23`、self-hash=`8b9a2aec…ca6b`。按本节事前终止规则，不能打开 raw header 后改 parser，也不能改为
+viewer-generated conversion 后重跑；FRAMES P1 source capacity 与 efficacy 都保持 unknown，该 route 永久关闭。
+
 ## 附录 A：关键证据索引
 
 - FiQA TRAIN P10/P11 formation 与 DEV comparator-invalid chain：
@@ -4379,7 +4391,11 @@ answer、URL 或单项 row id；online evaluator/API、model action、score 都�
   [`P17 post-terminal view exposure disposition`](../manifests/bright_p17_postterminal_view_exposure_disposition_v1.json)
 - FRAMES P1 source-before-download freeze：
   [`FRAMES P1 source custody`](../manifests/frames_p1_source_custody_v1.json)；
-  [`FRAMES P1 aggregate-only qualifier`](../assumption_agent/benchmarks/frames_p1_source_qualification_v1.py)
+  [`FRAMES P1 aggregate-only qualifier`](../assumption_agent/benchmarks/frames_p1_source_qualification_v1.py)；
+  [`FRAMES P1 implementation freeze`](../manifests/frames_p1_source_qualification_freeze_v1.json)；
+  [`FRAMES P1 source download receipt`](../manifests/frames_p1_source_download_receipt_v1.json)；
+  [`FRAMES P1 one-shot marker`](../artifacts/frames_p1_source_qualification_v1/qualification.one_shot_marker.json)；
+  [`FRAMES P1 terminal header failure`](../artifacts/frames_p1_source_qualification_v1/qualification.terminal_failure.json)
 - BRIGHT reasoning-retrieval v3、terminal M failure 与 fresh RESERVE 三臂链：
   [`v3 executor design`](../manifests/bright_reasoning_retrieval_executor_repair_design_v3.json)；
   [`v3 implementation freeze`](../manifests/bright_reasoning_retrieval_study_implementation_freeze_v3.json)；
