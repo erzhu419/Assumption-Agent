@@ -71,8 +71,13 @@ def repair(project_root: Path) -> Mapping[str, Any]:
     fingerprint_path = base / p17.FINGERPRINT_RELATIVE
     freeze_path = base / p17.FREEZE_RELATIVE
 
-    if archive_path.exists() or archive_path.is_symlink():
-        raise P17PlanRepairError("the invalid P17 plan was already archived")
+    archive_exists = archive_path.exists() or archive_path.is_symlink()
+    if archive_exists and (
+        archive_path.is_symlink()
+        or not archive_path.is_file()
+        or _file_sha256(archive_path) != OLD_PLAN_FILE_SHA256
+    ):
+        raise P17PlanRepairError("the existing invalid P17 plan archive drifted")
     if _file_sha256(plan_path) != OLD_PLAN_FILE_SHA256:
         raise P17PlanRepairError("the invalid P17 plan was already consumed")
     plan = _read(plan_path, "invalid P17 plan")
@@ -109,14 +114,15 @@ def repair(project_root: Path) -> Mapping[str, Any]:
     if any(corrected.get(key) != plan.get(key) for key in unchanged):
         raise P17PlanRepairError("a scientific P17 plan field changed")
 
-    archive_path.parent.mkdir(mode=0o700, parents=True)
-    p14_acquisition.utilities._write_exclusive(
-        archive_path, plan_path.read_bytes(), mode=0o600
-    )
+    if not archive_exists:
+        archive_path.parent.mkdir(mode=0o700, parents=True)
+        p14_acquisition.utilities._write_exclusive(
+            archive_path, plan_path.read_bytes(), mode=0o600
+        )
     temporary = plan_path.with_name(plan_path.name + ".repair.tmp")
     if temporary.exists() or temporary.is_symlink():
         raise P17PlanRepairError("the corrected plan temporary already exists")
-    p14_acquisition.utilities._write_json(temporary, corrected, mode=0o600)
+    p14_acquisition.utilities._write_json(temporary, corrected)
     temporary.replace(plan_path)
     return {
         "corrected_plan_file_sha256": _file_sha256(plan_path),
