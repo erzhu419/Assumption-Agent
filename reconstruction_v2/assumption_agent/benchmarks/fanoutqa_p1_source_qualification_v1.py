@@ -10,6 +10,7 @@ opens TEST, runs a model, scores an action, or invokes an online evaluator.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import gzip
 import hashlib
 import io
 import json
@@ -18,7 +19,7 @@ from pathlib import Path, PurePosixPath
 import re
 import stat
 import tarfile
-from typing import Any, BinaryIO, Iterable, Mapping, Sequence
+from typing import Any, BinaryIO, Mapping, Sequence
 import unicodedata
 from urllib.parse import urlsplit
 
@@ -58,10 +59,10 @@ DEV_SIZE_BYTES = 1177174
 CACHE_SIZE_BYTES = 1538812319
 DEV_COUNT = 310
 EXPECTED_CUSTODY_SELF_SHA256 = (
-    "d0674510f876912ea097750513180db667c1c64b7995d414a0132dcb2896e3b4"
+    "6b35ea60e2e867927771fa540e7095bbd0dd6f27ad37345636dded4c9c8160b6"
 )
 EXPECTED_DESIGN_SELF_SHA256 = (
-    "1586a3898bbce54d428c5a91635598824fd39a5eae7fa75246adb302e4083e7a"
+    "934e4ad48a379eb356feb6ab4f685684c0218866a616c6418fd560d0cecb0412"
 )
 EXAMPLE_QUESTION_DENY_SHA256 = frozenset(
     {"bc7a89c9bf662eef176ae1f93f2e017637a7f366205db0d7c342c32e236edb9d"}
@@ -236,6 +237,21 @@ def _load_canonical_self_hashed(path: Path, field: str) -> dict[str, Any]:
     return value
 
 
+def _validate_analysis_marker() -> dict[str, Any]:
+    marker = _load_canonical_self_hashed(MARKER_PATH, "one-shot marker")
+    if (
+        marker.get("schema") != f"{VERSION}_one_shot_marker_v1"
+        or marker.get("status")
+        != "started_before_contract_validation_or_dataset_JSON_parse"
+        or marker.get("official_release") != OFFICIAL_RELEASE
+        or marker.get("official_tree") != OFFICIAL_TREE
+        or marker.get("DEV_git_blob_sha1") != DEV_GIT_BLOB_SHA1
+        or marker.get("test_open_authorized") is not False
+    ):
+        raise FanOutQaP1SourceQualificationError("one-shot marker drifted")
+    return marker
+
+
 def _file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
     try:
@@ -358,7 +374,16 @@ def _acyclic(node_ids: set[str], edges: set[tuple[str, str]]) -> None:
 
 def _parse_item(
     value: object,
-) -> tuple[str, str, frozenset[int], int, int, int, str]:
+) -> tuple[
+    str,
+    str,
+    frozenset[int],
+    tuple[tuple[int, int], ...],
+    int,
+    int,
+    int,
+    str,
+]:
     if not isinstance(value, dict) or frozenset(value) != TOP_KEYS:
         raise FanOutQaP1SourceQualificationError("DEV item schema drifted")
     item_id = _safe_text(value["id"], maximum=10_000)
@@ -459,6 +484,13 @@ def _parse_item(
         item_id,
         question_sha256,
         frozenset(evidence_revisions),
+        tuple(
+            sorted(
+                (pageid, revid)
+                for pageid, revisions in evidence_revisions.items()
+                for revid in revisions
+            )
+        ),
         conflicting_revision_count,
         maximum_depth,
         dependency_edge_count,
@@ -564,69 +596,99 @@ def _audit_cache_tar(
             digest_reader = _DigestReader(binary)
             buffered = io.BufferedReader(digest_reader, buffer_size=1024 * 1024)
             pageids: set[int] = set()
+            member_names: set[str] = set()
             file_count = 0
             directory_count = 0
             total_uncompressed = 0
             minimum_file_size: int | None = None
             maximum_file_size = 0
             try:
-                with tarfile.open(fileobj=buffered, mode="r|gz") as archive:
-                    for member in archive:
-                        name = member.name
-                        pure = PurePosixPath(name)
-                        if (
-                            pure.is_absolute()
-                            or not pure.parts
-                            or ".." in pure.parts
-                            or "\x00" in name
-                        ):
-                            raise FanOutQaP1SourceQualificationError(
-                                "cache archive member path drifted"
-                            )
-                        if member.isdir():
-                            if name.rstrip("/") not in {".", "./wikicache", "wikicache"}:
+                with gzip.GzipFile(fileobj=buffered, mode="rb") as decompressed:
+                    with tarfile.open(fileobj=decompressed, mode="r|") as archive:
+                        for member in archive:
+                            name = member.name
+                            pure = PurePosixPath(name)
+                            if name in member_names:
                                 raise FanOutQaP1SourceQualificationError(
-                                    "cache archive directory drifted"
+                                    "cache archive member name is duplicated"
                                 )
-                            directory_count += 1
-                            continue
-                        if not member.isfile() or member.issym() or member.islnk():
-                            raise FanOutQaP1SourceQualificationError(
-                                "cache archive contains a non-regular member"
+                            member_names.add(name)
+                            if (
+                                pure.is_absolute()
+                                or not pure.parts
+                                or ".." in pure.parts
+                                or "\x00" in name
+                            ):
+                                raise FanOutQaP1SourceQualificationError(
+                                    "cache archive member path drifted"
+                                )
+                            if member.isdir():
+                                if name.rstrip("/") not in {
+                                    ".",
+                                    "./wikicache",
+                                    "wikicache",
+                                }:
+                                    raise FanOutQaP1SourceQualificationError(
+                                        "cache archive directory drifted"
+                                    )
+                                directory_count += 1
+                                continue
+                            if (
+                                not member.isfile()
+                                or member.issym()
+                                or member.islnk()
+                            ):
+                                raise FanOutQaP1SourceQualificationError(
+                                    "cache archive contains a non-regular member"
+                                )
+                            match = _CACHE_MEMBER.fullmatch(name)
+                            if match is None:
+                                raise FanOutQaP1SourceQualificationError(
+                                    "cache archive file grammar drifted"
+                                )
+                            pageid = int(match.group(1))
+                            if pageid in pageids:
+                                raise FanOutQaP1SourceQualificationError(
+                                    "cache archive page identity is duplicated"
+                                )
+                            pageids.add(pageid)
+                            file_count += 1
+                            total_uncompressed += member.size
+                            minimum_file_size = (
+                                member.size
+                                if minimum_file_size is None
+                                else min(minimum_file_size, member.size)
                             )
-                        match = _CACHE_MEMBER.fullmatch(name)
-                        if match is None:
-                            raise FanOutQaP1SourceQualificationError(
-                                "cache archive file grammar drifted"
+                            maximum_file_size = max(
+                                maximum_file_size, member.size
                             )
-                        pageid = int(match.group(1))
-                        if pageid in pageids:
+                            if (
+                                file_count > contract.max_cache_files
+                                or total_uncompressed
+                                > contract.max_cache_uncompressed_bytes
+                            ):
+                                raise FanOutQaP1SourceQualificationError(
+                                    "cache archive aggregate bound exceeded"
+                                )
+                    trailing_uncompressed = 0
+                    while True:
+                        trailing = decompressed.read(1024 * 1024)
+                        if not trailing:
+                            break
+                        trailing_uncompressed += len(trailing)
+                        if trailing.strip(b"\x00"):
                             raise FanOutQaP1SourceQualificationError(
-                                "cache archive page identity is duplicated"
+                                "cache tar has a nonzero trailing payload"
                             )
-                        pageids.add(pageid)
-                        file_count += 1
-                        total_uncompressed += member.size
-                        minimum_file_size = (
-                            member.size
-                            if minimum_file_size is None
-                            else min(minimum_file_size, member.size)
-                        )
-                        maximum_file_size = max(maximum_file_size, member.size)
-                        if (
-                            file_count > contract.max_cache_files
-                            or total_uncompressed
-                            > contract.max_cache_uncompressed_bytes
-                        ):
-                            raise FanOutQaP1SourceQualificationError(
-                                "cache archive aggregate bound exceeded"
-                            )
-            except (tarfile.TarError, EOFError, OSError) as exc:
+                remaining_compressed = buffered.read(1)
+                if remaining_compressed:
+                    raise FanOutQaP1SourceQualificationError(
+                        "cache gzip has a trailing compressed payload"
+                    )
+            except (tarfile.TarError, gzip.BadGzipFile, EOFError, OSError) as exc:
                 raise FanOutQaP1SourceQualificationError(
                     "cache archive stream is invalid"
                 ) from exc
-            while buffered.read(1024 * 1024):
-                pass
             buffered.close()
             cache_sha256 = digest_reader.digest.hexdigest()
             compressed_bytes = digest_reader.byte_count
@@ -654,6 +716,7 @@ def _audit_cache_tar(
             "maximum_file_size": maximum_file_size,
             "minimum_file_size": minimum_file_size,
             "pageids": pageids,
+            "trailing_zero_padding_bytes": trailing_uncompressed,
             "total_uncompressed_bytes": total_uncompressed,
         }
     except FanOutQaP1SourceQualificationError:
@@ -667,10 +730,12 @@ def _audit_cache_tar(
             os.close(descriptor)
 
 
-def _public_order(candidate: Candidate, round_index: int) -> bytes:
+def _public_order(candidate: Candidate, restart: int, round_index: int) -> bytes:
     return hashlib.sha256(
         (
             PUBLIC_CAPACITY_DOMAIN
+            + "\0"
+            + str(restart)
             + "\0"
             + str(round_index)
             + "\0"
@@ -681,48 +746,67 @@ def _public_order(candidate: Candidate, round_index: int) -> bytes:
     ).digest()
 
 
-def _page_disjoint_capacity(
+def _page_disjoint_witness(
     candidates: Sequence[Candidate], required: int
-) -> tuple[dict[str, int], dict[str, int]]:
-    selected_pages: set[int] = set()
-    selected_questions: set[str] = set()
-    counts = {family: 0 for family in FAMILIES}
-    collision_skips = {family: 0 for family in FAMILIES}
+) -> dict[str, int]:
     by_family = {
         family: [candidate for candidate in candidates if candidate.family == family]
         for family in FAMILIES
     }
-    for round_index in range(required):
-        for family in FAMILIES:
-            ordered = sorted(
-                by_family[family], key=lambda row: _public_order(row, round_index)
-            )
-            chosen: Candidate | None = None
-            for candidate in ordered:
-                if candidate.question_sha256 in selected_questions:
-                    continue
-                if not selected_pages.isdisjoint(candidate.pageids):
-                    collision_skips[family] += 1
-                    continue
-                chosen = candidate
-                break
-            if chosen is not None:
-                selected_questions.add(chosen.question_sha256)
-                selected_pages.update(chosen.pageids)
-                counts[family] += 1
-    return counts, collision_skips
+    best = {family: 0 for family in FAMILIES}
+    for restart in range(64):
+        selected_pages: set[int] = set()
+        selected_questions: set[str] = set()
+        counts = {family: 0 for family in FAMILIES}
+        for round_index in range(required):
+            for family in FAMILIES:
+                ordered = sorted(
+                    by_family[family],
+                    key=lambda row: (
+                        len(row.pageids) if restart == 0 else 0,
+                        _public_order(row, restart, round_index),
+                    ),
+                )
+                chosen = next(
+                    (
+                        candidate
+                        for candidate in ordered
+                        if candidate.question_sha256 not in selected_questions
+                        and selected_pages.isdisjoint(candidate.pageids)
+                    ),
+                    None,
+                )
+                if chosen is not None:
+                    selected_questions.add(chosen.question_sha256)
+                    selected_pages.update(chosen.pageids)
+                    counts[family] += 1
+        counts_key = (
+            min(counts.values()),
+            sum(counts.values()),
+            tuple(counts[family] for family in FAMILIES),
+        )
+        best_key = (
+            min(best.values()),
+            sum(best.values()),
+            tuple(best[family] for family in FAMILIES),
+        )
+        if counts_key > best_key:
+            best = counts
+        if all(counts[family] == required for family in FAMILIES):
+            return counts
+    return best
 
 
-def analyze_sources(
+def _analyze_sources(
     dev_path: Path,
     cache_path: Path,
     *,
     contract: QualificationContract = FORMAL_CONTRACT,
-    deny_question_sha256: Iterable[str] = EXAMPLE_QUESTION_DENY_SHA256,
 ) -> dict[str, object]:
     """Analyze fixed sources and return only safe aggregate facts."""
 
-    deny = frozenset(deny_question_sha256)
+    _validate_analysis_marker()
+    deny = EXAMPLE_QUESTION_DENY_SHA256
     if any(not isinstance(value, str) or _HEX64.fullmatch(value) is None for value in deny):
         raise FanOutQaP1SourceQualificationError("question denylist drifted")
     raw, _ = _bound_regular_bytes(dev_path, contract.dev_size_bytes)
@@ -742,18 +826,34 @@ def analyze_sources(
 
     item_ids: set[str] = set()
     question_hashes: set[str] = set()
-    parsed: list[tuple[str, str, frozenset[int], int, int, int, str]] = []
+    parsed: list[
+        tuple[
+            str,
+            str,
+            frozenset[int],
+            tuple[tuple[int, int], ...],
+            int,
+            int,
+            int,
+            str,
+        ]
+    ] = []
     family_total = {family: 0 for family in FAMILIES}
     category_counts = {category: 0 for category in sorted(ALLOWED_CATEGORIES)}
-    depth_histogram: dict[str, int] = {}
-    dependency_histogram: dict[str, int] = {}
-    evidence_count_histogram: dict[str, int] = {}
-    denied_example_match_count = 0
-    conflicting_revision_item_count = 0
+    global_evidence_revisions: dict[int, set[int]] = {}
 
     for value in source:
         row = _parse_item(value)
-        item_id, question_hash, pageids, conflict_count, depth, dependencies, family = row
+        (
+            item_id,
+            question_hash,
+            _,
+            page_revisions,
+            _,
+            _,
+            _,
+            family,
+        ) = row
         if item_id in item_ids or question_hash in question_hashes:
             raise FanOutQaP1SourceQualificationError("DEV identity closure drifted")
         item_ids.add(item_id)
@@ -762,54 +862,47 @@ def analyze_sources(
         family_total[family] += 1
         for category in value["categories"]:
             category_counts[category] += 1
-        depth_histogram[str(depth)] = depth_histogram.get(str(depth), 0) + 1
-        dependency_histogram[str(dependencies)] = (
-            dependency_histogram.get(str(dependencies), 0) + 1
-        )
-        evidence_count_histogram[str(len(pageids))] = (
-            evidence_count_histogram.get(str(len(pageids)), 0) + 1
-        )
-        if question_hash in deny:
-            denied_example_match_count += 1
-        if conflict_count:
-            conflicting_revision_item_count += 1
+        for pageid, revid in page_revisions:
+            global_evidence_revisions.setdefault(pageid, set()).add(revid)
 
     cache = _audit_cache_tar(cache_path, contract)
     cache_pageids = cache.pop("pageids")
     if not isinstance(cache_pageids, set):
         raise FanOutQaP1SourceQualificationError("cache inventory drifted")
 
-    ineligible = {
-        "cache_missing_required_page": 0,
-        "conflicting_page_revision": 0,
-        "evidence_page_count_outside_3_through_10": 0,
-        "paper_example_question_denylist": 0,
-    }
     eligible_family_counts = {family: 0 for family in FAMILIES}
     eligible: list[Candidate] = []
     distinct_dev_evidence_pages: set[int] = set()
     cache_covered_dev_evidence_pages: set[int] = set()
-    for _, question_hash, pageids, conflict_count, _, _, family in parsed:
+    globally_conflicting_pageids = {
+        pageid
+        for pageid, revisions in global_evidence_revisions.items()
+        if len(revisions) != 1
+    }
+    for (
+        _,
+        question_hash,
+        pageids,
+        _,
+        item_conflict_count,
+        _,
+        _,
+        family,
+    ) in parsed:
         distinct_dev_evidence_pages.update(pageids)
         cache_covered_dev_evidence_pages.update(pageids & cache_pageids)
         if question_hash in deny:
-            ineligible["paper_example_question_denylist"] += 1
             continue
-        if conflict_count:
-            ineligible["conflicting_page_revision"] += 1
+        if item_conflict_count or not pageids.isdisjoint(globally_conflicting_pageids):
             continue
         if not contract.min_evidence_pages <= len(pageids) <= contract.max_evidence_pages:
-            ineligible["evidence_page_count_outside_3_through_10"] += 1
             continue
         if not pageids.issubset(cache_pageids):
-            ineligible["cache_missing_required_page"] += 1
             continue
         eligible.append(Candidate(question_hash, family, pageids))
         eligible_family_counts[family] += 1
 
-    disjoint_counts, collision_skips = _page_disjoint_capacity(
-        eligible, contract.required_per_family
-    )
+    disjoint_counts = _page_disjoint_witness(eligible, contract.required_per_family)
     qualified = all(
         disjoint_counts[family] == contract.required_per_family
         for family in FAMILIES
@@ -821,29 +914,16 @@ def analyze_sources(
             cache_covered_dev_evidence_pages
         ),
         "category_counts": category_counts,
-        "conflicting_revision_item_count": conflicting_revision_item_count,
-        "dependency_edge_count_histogram": dict(
-            sorted(dependency_histogram.items(), key=lambda row: int(row[0]))
-        ),
-        "denied_paper_example_match_count": denied_example_match_count,
-        "depth_histogram": dict(
-            sorted(depth_histogram.items(), key=lambda row: int(row[0]))
-        ),
         "DEV_git_blob_sha1": dev_git_blob_sha1,
         "DEV_row_count": len(source),
         "DEV_sha256": dev_sha256,
         "DEV_size_bytes": len(raw),
         "distinct_DEV_evidence_page_count": len(distinct_dev_evidence_pages),
         "eligible_family_counts": eligible_family_counts,
-        "evidence_page_count_histogram": dict(
-            sorted(evidence_count_histogram.items(), key=lambda row: int(row[0]))
-        ),
         "family_total_counts": family_total,
-        "ineligible_reason_counts": ineligible,
-        "page_disjoint_capacity_collision_skips": collision_skips,
-        "page_disjoint_capacity_counts": disjoint_counts,
+        "page_disjoint_witness_counts": disjoint_counts,
         "qualified": qualified,
-        "required_page_disjoint_capacity_per_family": contract.required_per_family,
+        "required_page_disjoint_witness_per_family": contract.required_per_family,
         "schema_contract": {
             "evidence_keys": sorted(EVIDENCE_KEYS),
             "subquestion_keys": sorted(SUB_KEYS),
@@ -985,7 +1065,7 @@ def run_source_qualification() -> dict[str, object]:
     try:
         custody, design, download, freeze = _validate_public_contracts()
         stage = "aggregate_DEV_schema_cache_and_structural_capacity"
-        aggregate = analyze_sources(DEV_PATH, CACHE_PATH)
+        aggregate = _analyze_sources(DEV_PATH, CACHE_PATH)
         if (
             aggregate.get("cache_aggregate", {}).get("cache_sha256")
             != download["cache"]["sha256"]
@@ -999,7 +1079,7 @@ def run_source_qualification() -> dict[str, object]:
             "status": (
                 "qualified_aggregate_source_cache_and_structural_capacity"
                 if qualified
-                else "terminal_FanOutQA_P1_structural_capacity_failed"
+                else "terminal_FanOutQA_P1_page_disjoint_witness_not_found"
             ),
             "qualified": qualified,
             "official_release": OFFICIAL_RELEASE,
@@ -1041,11 +1121,6 @@ if __name__ == "__main__":
 
 
 __all__ = [
-    "BLOCK_QUOTAS",
-    "Candidate",
     "FanOutQaP1SourceQualificationError",
-    "FAMILIES",
-    "QualificationContract",
-    "analyze_sources",
     "run_source_qualification",
 ]
