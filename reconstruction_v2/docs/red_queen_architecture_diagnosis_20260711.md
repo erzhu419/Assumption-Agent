@@ -60,7 +60,8 @@
 > - 最新 BRIGHT P17 all-remote 终态：P14/P15/P16 均未产生 efficacy 后，P17 在 311linux 上完成 27/27 candidate-specific HippoRAG terminal，并按冻结顺序 seal 每族前 8 个 complete cases，共 24 个三臂 action；26 个 Qwen generation source-valid、1 个由冻结 totalizer 补全，外网与旧 P14/P15 action reuse 均为 0。但远端回执自报 HippoRAG 峰值进程并发为 9，超过 study design、runtime fingerprint 与 plan 共同冻结的 8；根因是 9-worker shared executor 在 cross-encoder 结束后把第九个 slot 交给 HippoRAG。该偏差在任何 gold/score 前由 archive audit 发现，正式 finalizer 未调用，gold/score 均为 0，P17 efficacy=unknown、同 candidate/cohort 永久不 replay。27-attempt forensic tree 已回传并校验；另透明保留 acquisition receipt 中不参与执行的 `target_terminal_count_per_family=10` 遗留字段，规范 target 始终为 8
 > - 最新独立后续 study：TAT-QA P23 按预注册终止后，FRAMES P1 固定 official revision `58d9fb63…22ef`、Git blob `cea20270…025` 与 viewer-exposed rows `[0,100)` exclusion；实现提交 `6552fefb` 的 18/18 tests 与独立 adversarial audit 通过，freeze `8ee6662c…3f20` 绑定 real Git ancestor/四个 commit blobs，并显式披露 freeze 前一次未保存、未解析 row/cell 的 TSV byte stream。正式 source SHA-256=`4255093c…69ff`；唯一资格 marker 随后消费，但 raw TSV header 与预冻结的 public viewer conversion header 不同，故在首行、任何 row content/action/score 前 terminal。FRAMES 不改 parser、不重跑，efficacy/capacity 仍 unknown；这证明 viewer schema 不能代替 raw repository schema contract
 > - 最新 FanOutQA P1 独立 study：固定官方 `v1.1.1` commit `ccf127bd…d54` 的 310-row DEV 与官方 1.539 GB revision cache；不透明下载虽因远端缺少 `git` 在收尾阶段退出，但两个完整 `.part` 已按冻结 size/SHA/Git-blob 校验并原地晋升，未重下。安全审计在任何 JSON/tar-member parse 前以不可变 amendment 透明记录 one-shot、cache trust anchor、qrel 隔离和 selection-commitment 加固；32/32 离线测试与最终审计通过。唯一 formal qualification 随后在 DEV item parse 中因官方 `categories` schema 与冻结 exact contract 不同而 `category schema drifted` fail-closed；cache tar member、TEST、candidate、RAW/HippoRAG、evaluator、score 均为 0。FanOutQA P1 不改 parser、不重跑，source capacity 与 efficacy 仍 unknown
-> - 最新后续缺口：P17、FRAMES P1 与 FanOutQA P1 都没有新增可评分 efficacy，不能替代 P9 的现实域证据，也不能把未评分 action/source qualification 当成 Agent−RAW/HippoRAG 结果。现实域双 baseline、跨 family 稳定正净收益仍未闭合；L5 仍缺 evaluator 在独立 A_hold 上真实晋升并改善事前冻结且 untouched 的 M_search。继续研究只能再换全新 source/domain/study ID；若不另立研究，终稿应收束为“窄 L3/L4 positive、P9 同源对 HippoRAG 描述性 positive、现实域无有效稳定三臂优势、L5 未达到”
+> - 最新 BIRCO P1 独立 study：在任何 formal row parse 前固定 Zenodo record `10850865` 的单一 20,134,244-byte JSON、较严格的 CC-BY-NC 私有使用/不再分发边界、DORIS-MAE/Clinical-Trial/WTB 三个本地 untouched task、query-disjoint 四块各 10/family，以及 typed constraint hypergraph、固定 E0、listwise E4、RAW 与 candidate-pool-restricted official HippoRAG core adapter。source 只在 311linux 下载一次，MD5=`548cad5d…fa78`、SHA-256=`0c30d869…1f34`；23/23 synthetic tests 后的唯一 aggregate-only qualification 已有效通过。正式容量为 query=`60/50/100`、candidate-pair=`6633/3420/5043`；0 query/document/qrel-value/ID 输出，0 model/action/score。候选重叠图同时证明 DORIS 与 WTB 各为单一连通分量、Clinical 最大分量 45/50，因此本研究严格限定为 public-source、query-disjoint、transductive candidate reranking，reference tail 只作描述，不声称 document-disjoint/population inference
+> - 最新后续缺口：BIRCO P1 已消除新来源与 schema/capacity 不确定性，但仍只有资格证据，尚无可评分 action。现实域双 baseline、跨 family 稳定正净收益与 L5 都仍未闭合。下一步不是补 gate，而是按已经冻结的单一设计接入 selection/runtime、typed operator、E4、RAW/official-core adapter，在 A_form/F_search/A_hold 上一次执行；只有 A_hold 真实晋升才打开事前冻结的 M_search
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -4348,7 +4349,49 @@ family/candidate/gate change=0。
 若继续，只能使用全新 source/domain、study ID、root 与 cohort，并在任何新 source semantic access 前一次性冻结真实 raw
 schema acquisition、selection commitment、模型/checkpoint/prompt/corpus projection、三臂与 A_hold→M_search 合同。
 
+### 12.43 2026-07-23 BIRCO P1：全新三域 source qualification 有效通过
+
+FanOutQA P1 关闭后没有修改其 parser 或使用同源 rescue cohort。新 study `BIRCO_P1_TYPED_CONSTRAINT_E4_V1` 选择 BIRCO 的
+`doris-mae`、`clinical-trial` 与 `wtb`，明确排除本地历史已使用过的 ArguAna。正式 source 只绑定 Zenodo record
+`10850865` 的单一 `BIRCO_dataset.json`，不混用后来 GitHub pickle epoch。Zenodo aggregate metadata 的 CC-BY-SA 与仓库 aggregate
+CC-BY-NC、各子任务许可证并不一致，因此 custody 预先采用较严格的 CC-BY-NC 私有研究边界；原始 query/document/qrel 不回传、
+不提交，archive 只允许 hash、aggregate、opaque work ID、rank ordinal 与 score。
+
+设计先于 source semantic access 固定：每族 A_form/F_search/A_hold/M_search 各 10 个 query，四块 query-disjoint；candidate
+membership 来自 qrel keys，但数值 qrel 始终封存到对应 action archive 完成以后。现实域 primary 使用预先固定的 E0 Agent，不能在
+A_hold 看到 E4 是否晋升后偷换 primary。candidate 是 typed required/excluded/eligibility/temporal/relational facet DAG 与
+facet-to-evidence capacity matching，不是 RRF、关键词、删除式 gate 或不断追加 gate；E4 是完整四-recipe slate 上的 listwise
+distributional policy，不复用此前 lower-quantile HGBR。RAW 使用相同 GPT-5.4 endpoint 的 direct relevance scoring；HippoRAG
+只称“pinned official core + frozen candidate-pool adapter”，每 query 对同一 candidate pool fresh index/retrieve，不能声称
+official BIRCO baseline 或 full-corpus retrieval。
+
+311linux 上的一次不透明下载由独立 service 完成，network attempt=1、retry=0，固定字节为 20,134,244 bytes、MD5
+`548cad5d…fa78`、SHA-256 `0c30d869…1f34`。在 JSON parse 前，custody/design/download authorization/receipt、qualifier 与
+23/23 synthetic tests 已冻结；唯一 `birco-p1-source-qualification-v1.service` 随后消费 qualification 与 source-open 两个
+O_EXCL marker，在禁止网络的 scope 内完成 aggregate-only parse。result self-hash=`c708a02d…6618`，qualified=true；没有
+terminal failure、item selection、model/action、online evaluator 或 score。
+
+正式 aggregate 为：DORIS-MAE query/corpus/pool-entry=`60/5543/6633`，Clinical-Trial=`50/3256/3420`，WTB=
+`100/1767/5043`；各族均超过 4×10 query quota。DORIS relevance 含 6,142 个 fractional score，故 primary nDCG@10 保留原始
+linear graded gain，不能全局二值化；Recall@5 才按 score≥1。candidate-ID overlap graph 的 DORIS 与 WTB 都只有一个 query
+component，Clinical 有 6 个 component 但最大一个含 45/50 query。这一结果没有触发新 gate，反而证实预注册的边界是必要的：
+blocks 只能 query-disjoint，不能 document-disjoint；gain-vs-harm tail 只能是描述性 reference，不能包装成总体随机化 p-value。
+
+因此 BIRCO P1 已从“source feasibility unknown”进入 **qualified / implementation pending**。它仍不是 efficacy 结果。下一步只允许
+完成 frozen selection commitment、runtime/capacity attestation 与 typed/E4/RAW/HippoRAG adapter 实现，用公开合成数据作一次
+非评分 integration diagnostic，然后一次性执行 A_form→F_search→A_hold；只有预注册 E4 promotion 成立才打开 M_search。
+
 ## 附录 A：关键证据索引
+
+- BIRCO P1 qualified source chain（formal item/model/action/score 尚为 0）：
+  [`source custody`](../manifests/birco_p1_source_custody_v1.json)；
+  [`study design`](../manifests/birco_p1_typed_constraint_e4_study_design_v1.json)；
+  [`download authorization`](../manifests/birco_p1_source_download_authorization_v1.json)；
+  [`download receipt`](../manifests/birco_p1_source_download_receipt_v1.json)；
+  [`qualification freeze`](../manifests/birco_p1_source_qualification_freeze_v1.json)；
+  [`qualification result`](../manifests/birco_p1_source_qualification_result_v1.json)；
+  [`qualification marker`](../artifacts/birco_p1_source_qualification_v1/qualification.one_shot_marker.json)；
+  [`source-open marker`](../artifacts/birco_p1_source_qualification_v1/source_open.one_shot_marker.json)
 
 - FanOutQA P1 source-contract terminal chain（TEST/model/action/score 均为 0）：
   [`source custody`](../manifests/fanoutqa_p1_source_custody_v1.json)；
