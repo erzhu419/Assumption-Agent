@@ -1,0 +1,382 @@
+{
+  "acquisition_contract": {
+    "block_order": [
+      "A_form",
+      "F_search",
+      "A_hold",
+      "M_search"
+    ],
+    "context_disjointness": "one_selected_question_per_table_context_and_no_context_reuse_across_blocks",
+    "failure": "terminal_source_or_capacity_result_without_smaller_blocks_family_replacement_retry_resample_or_TEST",
+    "family_order": [
+      "TABLE",
+      "TEXT",
+      "TABLE_TEXT"
+    ],
+    "family_source": {
+      "exact_mapping": {
+        "table": "TABLE",
+        "table-text": "TABLE_TEXT",
+        "text": "TEXT"
+      },
+      "other_values": "reject",
+      "raw_and_tagop_answer_from_must_match_exactly": true
+    },
+    "information_firewall": "trusted_acquisition_may_read_source_answer_from_and_mapping_only_to_assign_balanced_blocks_and_create_sealed_label_packs;family_mapping_gold_and_answer_fields_never_enter_view_prompt_feature_filename_or_within_block_execution_order",
+    "private_order": "ascending_HMAC_SHA256_over_split_family_table_uid_question_uid",
+    "public_example_exclusion_binding": "tatqa_p19_public_source_custody_v1",
+    "selection_secret": "one_fresh_32_byte_OS_random_secret_created_after_source_qualification_and_never_rotated",
+    "splits": {
+      "A_form": "official_train",
+      "A_hold": "official_train",
+      "F_search": "official_train",
+      "M_search": "official_dev"
+    },
+    "test_split_opened": false
+  },
+  "action_contract": {
+    "P0_QUERY_ANCHORED_COVERAGE": "rank_every_canonical_unit_by_frozen_typed_plan_facet_coverage_query_anchor_connectivity_then_full_question_MiniLM_relevance",
+    "P1_TYPED_CROSS_MODAL_RESIDUAL": {
+      "candidate_authority": "only_query_anchored_facets_or_paths;query_independent_table_or_paragraph_components_have_zero_authority",
+      "generation": "frozen_local_Qwen_structured_plan_from_question_table_header_and_paragraph_ordered_leads_with_deterministic_totalizer",
+      "output": "retain_P0_QUERY_ANCHORED_COVERAGE_top3_then_fill_two_distinct_units_by_typed_residual_gain_and_frozen_tie_break",
+      "plan_schema": {
+        "entity_facets": "one_to_four_strings",
+        "metric_facets": "one_to_three_strings",
+        "operation": [
+          "LOOKUP",
+          "COMPARE",
+          "DIFFERENCE",
+          "RATIO",
+          "SUM",
+          "AVERAGE",
+          "COUNT",
+          "OTHER"
+        ],
+        "relation_query": "one_nonempty_string",
+        "time_facets": "zero_to_three_strings"
+      },
+      "typed_edges": [
+        "question_facet_to_unit",
+        "table_header_to_row",
+        "same_row_metric_to_value",
+        "paragraph_to_table_shared_entity_metric_or_time",
+        "adjacent_table_row_with_shared_header"
+      ]
+    },
+    "RAW": "MiniLM_full_question_dense_top5_over_every_canonical_unit",
+    "common_corpus": "every_canonical_table_row_and_paragraph_unit_in_the_item_context_without_gold_conditioning",
+    "shared_typed_plan": "P0_and_P1_consume_the_same_frozen_Qwen_or_totalized_structured_plan;P1_changes_candidate_authority_not_the_plan_prompt",
+    "top_k": 5
+  },
+  "block_contract": {
+    "A_form": {
+      "labels": "sealed_by_trusted_acquisition_then_opened_only_after_all_P0_P1_actions_seal_and_runtime_postflight",
+      "per_family": 16,
+      "purpose": "fit_the_single_E1_paired_delta_evaluator",
+      "total": 48
+    },
+    "A_hold": {
+      "labels": "sealed_by_trusted_acquisition_then_opened_once_after_E0_E1_RAW_HippoRAG_actions_seal_and_runtime_postflight",
+      "per_family": 10,
+      "purpose": "one_shot_four_arm_action_with_three_predeclared_E1_pairwise_comparisons_against_E0_RAW_and_HippoRAG",
+      "total": 30
+    },
+    "F_search": {
+      "label_pack_created": false,
+      "per_family": 12,
+      "purpose": "freeze_E0_and_E1_item_policy_selections_and_behavior_hashes_before_A_hold",
+      "total": 36
+    },
+    "M_search": {
+      "labels": "sealed_by_trusted_acquisition_but_opened_once_only_after_promotion_M_authorization_all_actions_seal_and_runtime_postflight",
+      "per_family": 10,
+      "purpose": "untouched_post_transition_joint_primary",
+      "total": 30,
+      "view_open_only_after_A_hold_promotion": true,
+      "view_sealed_by_trusted_acquisition_before_formal_execution": true
+    },
+    "reserve_or_backup": false,
+    "total_selected_items": 144
+  },
+  "canonical_evidence_contract": {
+    "canonical_serialization": {
+      "normalization": "reject_NUL_then_Unicode_NFKC_then_collapse_every_whitespace_run_to_one_ASCII_space_and_strip",
+      "paragraph": "P:<positive_official_order> with text PARAGRAPH_<order>_PIPE_<normalized_text>",
+      "table_data_row": "T:<zero_based_row> with text TABLE_ROW_<row>_PIPE_then_each_column_as_normalized_header_or_COLUMN_<col>_EQUAL_normalized_cell_joined_by_DOUBLE_PIPE",
+      "table_header_row": "T:0 with text TABLE_HEADER_PIPE_then_each_column_as_C<col>_EQUAL_normalized_header_cell_joined_by_DOUBLE_PIPE"
+    },
+    "gold_projection": {
+      "deduplication": "map_every_valid_cell_or_span_to_a_unit_ID_then_deduplicate_before_gold_count_and_family_consistency_checks",
+      "paragraph_mapping": "require_a_dict_of_canonical_positive_decimal_order_strings_to_nonempty_lists_of_two_integer_character_spans;each_order_must_exist_exactly_once;require_0_le_start_lt_end_le_text_length_and_nonblank_exact_substring;map_every_span_to_the_whole_P:<order>_unit",
+      "table_mapping": "require_a_nonempty_list_of_two_integer_row_column_coordinates;require_0_le_row_lt_row_count_and_0_le_column_lt_column_count;map_every_cell_to_the_whole_T:<row>_unit;row_zero_is_the_header_unit",
+      "union": "deduplicated_union_of_projected_table_and_paragraph_units"
+    },
+    "gold_units": "the_fixed_official_dataset_tagop_heuristic_mapping_coarsened_to_whole_canonical_rows_and_paragraphs",
+    "mapping_provenance": "fixed_official_repository_heuristic_derivative_used_as_offline_evidence_label_not_claimed_as_raw_human_annotation",
+    "paragraph_unit": "P:<official_positive_order>",
+    "qualification": {
+      "family_mapping_consistency_required": true,
+      "gold_unit_count_range": [
+        1,
+        5
+      ],
+      "maximum_canonical_unit_count": 96,
+      "minimum_canonical_unit_count": 5,
+      "minimum_paragraph_count": 2,
+      "minimum_table_column_count": 2,
+      "minimum_table_row_count": 2,
+      "official_raw_and_tagop_question_table_paragraph_identity_must_match_byte_for_byte_before_normalization": true
+    },
+    "table_row_unit": "T:<zero_based_row_including_row_zero_header>",
+    "utility": "exact_Fraction_gold_unit_recall_at_5_plus_one_exact_complete_set_bonus"
+  },
+  "claim_contract": {
+    "A_hold_promotion": "E1_minus_E0_total_U_strictly_positive_and_one_sided_exact_magnitude_preserving_sign_flip_p_at_most_0.10",
+    "joint_primary": {
+      "condition_1": "A_hold_valid_E1_promotion",
+      "condition_2": "M_search_E1_minus_E0_total_U_strictly_positive_with_exact_p_at_most_0.10",
+      "condition_3": {
+        "comparison": "M_search_E1_minus_RAW",
+        "families": [
+          "TABLE",
+          "TEXT",
+          "TABLE_TEXT"
+        ],
+        "requirement": "aggregate_and_every_listed_family_delta_strictly_positive"
+      },
+      "condition_4": {
+        "comparison": "M_search_E1_minus_HippoRAG",
+        "families": [
+          "TABLE",
+          "TEXT",
+          "TABLE_TEXT"
+        ],
+        "requirement": "aggregate_and_every_listed_family_delta_strictly_positive"
+      },
+      "operator": "AND",
+      "primary_count": 1
+    },
+    "nonpromotion": "valid_primary_false_M_search_view_and_labels_remain_unopened",
+    "population_inference": false,
+    "runtime_or_implementation_invalid": {
+      "efficacy": "unknown",
+      "primary_evaluated": false,
+      "replay": false
+    },
+    "secondary_only": [
+      "A_hold_E1_minus_RAW_and_HippoRAG_family_deltas",
+      "baseline_exact_p_values",
+      "gain_harm_tie_counts",
+      "complete_counts",
+      "candidate_expansion_outside_baseline_top5_counts"
+    ]
+  },
+  "evaluator_contract": {
+    "E0": "always_select_P0_QUERY_ANCHORED_COVERAGE",
+    "E1": {
+      "decision": "select_P1_only_when_predicted_P1_minus_P0_utility_is_strictly_positive_else_P0",
+      "feature_order": [
+        "typed_facet_coverage_delta",
+        "numeric_or_time_operand_coverage_delta",
+        "cross_modal_query_anchored_path_delta",
+        "dense_relevance_mass_delta",
+        "selected_unit_redundancy_delta",
+        "P1_outside_P0_unit_count"
+      ],
+      "fit": "paired_delta_ridge_lambda_1_with_unpenalized_intercept_on_A_form_exact_P1_minus_P0_utility",
+      "forbidden_features": [
+        "answer",
+        "answer_from_or_family",
+        "gold_unit_or_mapping",
+        "HippoRAG_or_RAW_ranking",
+        "question_table_or_context_identity"
+      ],
+      "scaler": "A_form_population_mean_and_population_standard_deviation_with_zero_variance_mapping_to_zero"
+    },
+    "epoch_transition": "on_promotion_E1_active_E0_counterfactual_and_M_capability_authorized_exactly_once",
+    "threshold_or_model_search": false
+  },
+  "execution_contract": {
+    "HippoRAG_executor": "dedicated_executor_or_semaphore_not_shared_with_Qwen_MiniLM_cross_encoder_or_controller_tasks",
+    "HippoRAG_observed_peak_acceptance": "integer_between_1_and_8_inclusive_and_never_above_the_frozen_cap",
+    "action_submission": "eagerly_submit_every_available_logical_work_unit_before_the_first_future_result_join",
+    "api_or_online_evaluator_calls": 0,
+    "configured_HippoRAG_process_concurrency": 8,
+    "external_network_during_action_or_scoring": 0,
+    "label_boundary": "after_acquisition_the_action_controller_and_workers_cannot_stat_or_open_raw_or_tagop_source_or_any_sealed_label_pack_until_the_corresponding_stage_actions_archive_and_postflight_validate;only_the_trusted_acquisition_may_read_source_labels",
+    "logical_A_hold_arms": [
+      "E0",
+      "E1",
+      "RAW",
+      "official_HippoRAG_retrieve_only"
+    ],
+    "logical_M_arms": [
+      "E0",
+      "E1",
+      "RAW",
+      "official_HippoRAG_retrieve_only"
+    ],
+    "maximum_CPU_threads_per_HippoRAG_process": 2,
+    "official_HippoRAG_scope": "project_attested_offline_retrieve_only_core_over_the_same_item_local_canonical_units_not_the_official_TATQA_leaderboard",
+    "retry_replay_resample_provider_switch": 0,
+    "runtime_capability_contract": {
+      "HippoRAG": {
+        "capability_id": "TATQA_P19_HIPPORAG_RUNTIME_PYTHON_V1",
+        "nested_subfingerprint_key": "hipporag_runtime_python",
+        "nested_subfingerprint_schema": "tatqa_p19_hipporag_runtime_python_subfingerprint_v1",
+        "nested_subfingerprint_self_hash_field": "self_sha256",
+        "permitted_capability": "official_HippoRAG_item_local_retrieve_only_worker",
+        "runtime_python": "dedicated_lexical_venv_bin_python_path_bound_by_file_tree_dependency_and_pyvenv_receipts"
+      },
+      "composite_runtime_fingerprint": {
+        "cross_bindings": [
+          "typed_plan_and_MiniLM_runtime_python_path_to_typed_subfingerprint",
+          "HippoRAG_runtime_python_path_to_hipporag_subfingerprint",
+          "both_subfingerprint_self_hashes_to_composite_self_hash",
+          "composite_canary_receipts_to_both_subfingerprint_self_hashes"
+        ],
+        "nested_subfingerprint_keys": [
+          "typed_plan_minilm_runtime_python",
+          "hipporag_runtime_python"
+        ],
+        "relative_path": "manifests/tatqa_p19_composite_runtime_fingerprint_v1.json",
+        "schema": "tatqa_p19_composite_runtime_fingerprint_v1",
+        "self_hash_field": "self_sha256"
+      },
+      "independence": {
+        "cross_capability_dependency_satisfaction_forbidden": true,
+        "nested_subfingerprints_separately_canonical_and_self_hashed": true,
+        "runtime_python_lexical_paths_must_be_distinct": true,
+        "shared_fallback_or_provider_switch": false
+      },
+      "source_free_qualification": {
+        "additional_effect_or_promotion_gate": false,
+        "composite_canary_count": 1,
+        "composite_canary_relative_path": "manifests/tatqa_p19_public_synthetic_production_canary_v1.json",
+        "qualification_root_count": 1,
+        "qualification_root_relative": "artifacts/tatqa_p19_runtime_qualification_v1",
+        "terminal_count": 1,
+        "terminal_schema": "tatqa_p19_runtime_qualification_v1_terminal_success_v1",
+        "validates_both_nested_subfingerprints_before_source_download": true
+      },
+      "typed_plan_and_MiniLM": {
+        "capability_id": "TATQA_P19_TYPED_PLAN_MINILM_RUNTIME_PYTHON_V1",
+        "nested_subfingerprint_key": "typed_plan_minilm_runtime_python",
+        "nested_subfingerprint_schema": "tatqa_p19_typed_minilm_runtime_python_subfingerprint_v1",
+        "nested_subfingerprint_self_hash_field": "self_sha256",
+        "permitted_capabilities": [
+          "local_Qwen_typed_plan_generation",
+          "exact_offline_MiniLM_encoding"
+        ],
+        "runtime_python": "dedicated_lexical_venv_bin_python_path_bound_by_file_tree_dependency_and_pyvenv_receipts"
+      }
+    },
+    "runtime_qualification": "one_source_free_qualification_atomically_validates_one_composite_fingerprint_containing_two_independent_runtime_Python_subfingerprints_and_one_composite_public_synthetic_canary_before_source_row_qualification_secret_or_formal_item_identity",
+    "scoring": "local_offline_exact_only"
+  },
+  "implementation_freeze_contract": {
+    "commit_and_self_hashed_manifest_required_before_any_formal_source_row_parse_or_selection_secret": true,
+    "must_bind": [
+      "trusted_source_qualification_and_acquisition_parser",
+      "canonical_unit_serialization_and_gold_projection",
+      "Qwen_prompt_input_projection_truncation_decoding_validator_and_totalizer",
+      "P0_quantized_score_and_exact_tie_break",
+      "P1_typed_residual_score_candidate_authority_and_exact_tie_break",
+      "evaluator_feature_quantization_order_scaler_ridge_solver_and_selector",
+      "HMAC_message_bytes_block_family_assignment_and_collision_rules",
+      "exact_Fraction_utility_and_sign_flip",
+      "eager_submission_dedicated_HippoRAG_cap_and_observed_peak_counter",
+      "stage_archive_verifier_label_boundary_and_terminal_disposition",
+      "two_distinct_runtime_Python_paths_two_nested_self_hashed_subfingerprints_one_composite_fingerprint_one_qualification_terminal_and_one_composite_canary_cross_binding"
+    ],
+    "post_freeze_behavioral_change_after_source_rows": false
+  },
+  "lifecycle": {
+    "allowed_order": [
+      "implementation_freeze_composite_runtime_fingerprint_and_public_synthetic_diagnostic",
+      "source_download_and_aggregate_qualification",
+      "one_shot_acquisition",
+      "A_form_action_and_E1_fit",
+      "F_search_policy_freeze",
+      "A_hold_action_and_promotion",
+      "conditional_epoch_transition",
+      "conditional_M_search",
+      "terminal_disposition"
+    ],
+    "forbidden": [
+      "same_source_or_cohort_retry",
+      "smaller_or_rebalanced_blocks_after_capacity",
+      "family_or_metric_change",
+      "feature_lambda_threshold_topk_prompt_or_promotion_change",
+      "complete_case_postselection",
+      "nonpromotion_M_open",
+      "TEST_or_reserve_rescue",
+      "online_evaluation",
+      "additional_gate_or_runner_up_candidate",
+      "P18_retry_replay_resume_or_root_reuse",
+      "shared_typed_minilm_and_HippoRAG_runtime_Python_capability"
+    ]
+  },
+  "objective": "one_new_real_domain_study_of_typed_candidate_expansion_and_evaluator_transition_without_replaying_P18_or_adding_gates",
+  "offline_asset_bindings": {
+    "HippoRAG_attestation_file_sha256": "96479f597bbf6ae9f69998df375816db9d870634d787976513ccb5bbef173955",
+    "MiniLM_asset_file_sha256": "62b85c7752f2e46932fb9fb13ae2f3aac9eb750a33c8f07102739040feb6cc75",
+    "MiniLM_asset_sha256": "921d9b1945581130e03c53f448092c3de3b30714431c6cac9b3b32c2ec10abad",
+    "Qwen_model_tree_sha256": "199326617a7dfca1a87357add5b6ad7478ef0681fa3cd42a01256a50042571c3"
+  },
+  "p18_design_invariance": {
+    "acquisition_cohort_contract_sha256": "fbf72ac443e2ec049924e3fa93c72fddad5a34c596e47347793bb2cb462d3905",
+    "action_contract": "732e6cd1298ffea7e578b76e910e302025c6ba3f0d39d9d046bc0b21e6561c12",
+    "block_contract": "aec4447727abd7c046e684656608e319cb99388c901d0bf079bc174c539ed1cd",
+    "canonical_evidence_contract": "30f7dc4a2439804dd4fb61d5dad45fc5f2e4cdfd156cdbe89f3c4071bdba516e",
+    "claim_contract": "62b49f0c47a809aae2d09e4e74030b10ba403e878ac24b5fa7147f44ef090bd3",
+    "evaluator_contract": "5c7b7dd3a7516fc34c60544b4a0e8ec85b01c5e579cf55bc2127d9b2dfc82601",
+    "execution_change_scope": "runtime_Python_capability_separation_and_P19_administrative_paths_only",
+    "statistical_contract": "c933de4acec43ae6e437366496a60a9a9f10f21ec7c11e2153bdcfa303e80c62",
+    "structural_contrast_contract": "fd9e7644d9ffee284578a164a4458700679e5f749cff8f569aa75972b9ccc717"
+  },
+  "recorded_date": "2026-07-23",
+  "root_contract": {
+    "composite_public_canary_relative": "manifests/tatqa_p19_public_synthetic_production_canary_v1.json",
+    "composite_runtime_fingerprint_relative": "manifests/tatqa_p19_composite_runtime_fingerprint_v1.json",
+    "composite_runtime_qualification_root_relative": "artifacts/tatqa_p19_runtime_qualification_v1",
+    "formal_root_relative": "artifacts/tatqa_p19_formal_v1",
+    "implementation_freeze_relative": "manifests/tatqa_p19_implementation_freeze_v1.json",
+    "official_source_root_relative": "artifacts/tatqa_p19_official_source_v1/TAT-QA",
+    "p18_control_source_or_runtime_root_reused": false,
+    "runtime_qualification_terminal_relative": "artifacts/tatqa_p19_runtime_qualification_v1/qualification.terminal_success.json"
+  },
+  "schema": "tatqa_p19_typed_evaluator_study_design_v1",
+  "self_sha256": "c83fc46cecfcaf34455f09ce5356259445f61ef6b623d2baa8998eb532ccc2a7",
+  "source_binding": {
+    "custody_relative_path": "manifests/tatqa_p19_public_source_custody_v1.json",
+    "custody_self_sha256": "e37eb1ca699e2b0bbdd6b032fe92b6ae5146894b7118c0a6fa32a21cc09a7d56",
+    "formal_files_not_opened_before_design": true,
+    "source_commit": "870accc41953dcde885aabeb963d94aabdc0fbc3",
+    "source_dataset": "official_TAT_QA_train_and_dev_only"
+  },
+  "statistical_contract": {
+    "arithmetic": "fractions.Fraction_only_for_utility_deltas_tests_and_decisions",
+    "baseline_exact_p_values": "same_sign_flip_function_but_secondary_only",
+    "one_sided_exact_magnitude_preserving_sign_flip": "remove_zero_deltas;enumerate_all_two_to_the_m_sign_assignments_of_the_exact_absolute_nonzero_deltas;p_is_the_fraction_of_signed_sums_at_least_the_observed_sum;p_equals_one_when_m_is_zero"
+  },
+  "structural_contrast_contract": {
+    "F_search_behavior_hashes_always_reported": true,
+    "formal_gate": false,
+    "public_synthetic_canary_must_prove_P0_and_P1_can_produce_distinct_rankings": true,
+    "same_formal_E0_and_E1_behavior_yields_zero_delta_and_ordinary_nonpromotion_not_runtime_invalidation": true
+  },
+  "study_boundary": {
+    "p18_candidate_or_cohort_result_reused": false,
+    "p18_formal_source_download_count": 0,
+    "p18_formal_source_payload_open_count": 0,
+    "p18_formal_source_row_parse_count": 0,
+    "p18_replay_retry_resume_or_requalification_authorized": false,
+    "p18_terminal_status": "source_free_runtime_inventory_terminal_invalid",
+    "p19_new_selection_secret_and_one_shot_roots_required": true,
+    "predecessor_study_id": "TATQA_P18_TYPED_EVIDENCE_COEVOLUTION_V1",
+    "study_identity": "new_independent_preregistered_study"
+  },
+  "study_id": "TATQA_P19_TYPED_EVIDENCE_COEVOLUTION_V1"
+}
