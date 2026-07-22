@@ -4193,6 +4193,41 @@ MiniLM canary 改为同机 repeat-exact、shape/finite/L2-normalization 与无�
 bytes；同一次 feasibility 必须实际走通 Qwen typed-plan、MiniLM 与 official HippoRAG 三种 capability。只有该公开源外
 全链一次通过，才值得冻结新 study；这属于删除错误硬件假设，不是新增 performance gate。
 
+### 12.39 2026-07-23 TAT-QA P22：portable MiniLM 已越过硬件假设，但源外 feasibility 在 post-model 环境合同终止
+
+P22 不是正式 study，也不替代 P21 qualification；它是事前限定的一次 source-free、nonqualification、non-efficacy
+全链 feasibility。实现提交为 `b18656d0…facf`，从该提交导出的最小 51-file Git snapshot commit 为
+`8cb0ffd9…774a`。snapshot 同时绑定真实 Git object/clean worktree、完整文件系统 closure、18 个已加载项目模块、四个
+空 source-isolation sentinel root，以及 311linux 上本地解包的 Git 2.43.0 executable SHA-256
+`2a8c18fb…d668`。独立 adversarial re-audit 通过；P22 focused tests 34/34、继承的 P21 runtime/public-canary/MiniLM
+tests 50/50 通过。official TAT-QA source 在整个阶段仍未下载、未打开。
+
+唯一固定 unit `p22-source-free-feasibility-c1-v1.service`、固定 root
+`/home/erzhu419/p22_source_free_feasibility_20260723/attempt` 依次越过 entry、split runtime inventory、
+post-inventory launcher、network-denied nested systemd preflight、P21 composite fingerprint 复验、portable MiniLM exact
+asset/runtime identity 与公开 256-sentence structural startup canary。后者在 311linux 上满足同机两次 byte/elementwise
+exact、shape/dtype/finite、向量非退化与 L2 norm 误差上限，且不再把 CPU-dependent embedding bytes 当作 normative
+acceptance；因此 P21 的跨 CPU hash contract 缺陷已被真实消除，而不只是单元测试中的假设。
+
+随后 feasibility 在 `p21_post_minilm_launch_envelope` fail-closed，尚未启动 Qwen typed-plan 或 official HippoRAG
+public canary。marker 文件 SHA-256 为 `1bd11b8c…5940`、self-hash 为 `c991995f…f19c`；terminal failure 文件
+SHA-256 为 `4101aeda…e239`、self-hash 为 `f810a0e9…990b`。两份回执均绑定
+`formal_TAT_QA_source_opened=false`、external network=0、online evaluator=0、retry/replay/resample/provider switch=0。
+P22 attempt 已永久消耗，不得重试。
+
+在相同 network-denied/source-free 条件下进行的一次非 qualification、非 canary postmortem 只比较变量名与预期安全值，
+没有 encode、Qwen、HippoRAG、正式 source 或评分。它把变化精确定位为：inventory 后新增
+`CUDA_MODULE_LOADING=LAZY`；MiniLM model 初始化后又新增 `KMP_DUPLICATE_LIB_OK=True`、
+`KMP_INIT_AT_FORK=FALSE`，并发生原已预注册的 `CUDA_VISIBLE_DEVICES: "1" -> ""`。所以 P22 终态是继承的
+post-model launch-envelope implementation-invalid，不是 portable MiniLM semantic failure，更不是 efficacy 结果。
+
+若继续，只允许另立一次独立编号、固定 root 的最终 source-free feasibility：事前只接受上述两个确定性 KMP mutation，
+在形成自哈希 receipt 后把它们从 nested-launch 环境规范化掉，再复验原 P21 post-MiniLM 合同，并实际走通 Qwen、
+portable MiniLM、official HippoRAG 与 worker closure。候选、cohort、metric、promotion 和 performance gate 全部不变；
+这是一项 launcher implementation correction，而不是继续添加性能 gate。该独立 feasibility 若仍失败，这条 TAT-QA
+可行性路线即终止，不再按新异常逐项扩 allowlist。只有它一次通过并提交，才可下载 official TAT-QA 并冻结真正的新
+study。
+
 ## 附录 A：关键证据索引
 
 - FiQA TRAIN P10/P11 formation 与 DEV comparator-invalid chain：
@@ -4262,6 +4297,9 @@ bytes；同一次 feasibility 必须实际走通 Qwen typed-plan、MiniLM 与 of
   [`P21 successful composite runtime fingerprint`](../manifests/tatqa_p21_composite_runtime_fingerprint_v1.json)；
   [`P21 qualification marker`](../artifacts/tatqa_p21_runtime_qualification_v1/qualification.one_shot_marker.json)；
   [`P21 terminal qualification failure`](../artifacts/tatqa_p21_runtime_qualification_v1/qualification.terminal_failure.json)
+- TAT-QA P22 portable-MiniLM feasibility environment-contract-invalid chain（official source 未下载/未打开）：
+  [`P22 one-shot feasibility marker`](../artifacts/tatqa_p22_source_free_feasibility_v1/feasibility.one_shot_marker.json)；
+  [`P22 terminal feasibility failure`](../artifacts/tatqa_p22_source_free_feasibility_v1/feasibility.terminal_failure.json)
 - BRIGHT reasoning-retrieval v3、terminal M failure 与 fresh RESERVE 三臂链：
   [`v3 executor design`](../manifests/bright_reasoning_retrieval_executor_repair_design_v3.json)；
   [`v3 implementation freeze`](../manifests/bright_reasoning_retrieval_study_implementation_freeze_v3.json)；
