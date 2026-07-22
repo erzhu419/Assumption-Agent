@@ -4228,6 +4228,37 @@ portable MiniLM、official HippoRAG 与 worker closure。候选、cohort、metri
 可行性路线即终止，不再按新异常逐项扩 allowlist。只有它一次通过并提交，才可下载 official TAT-QA 并冻结真正的新
 study。
 
+### 12.40 2026-07-23 TAT-QA P23：环境修复通过，但 public typed-action feasibility 为阴性；该路线关闭
+
+P23 严格执行 12.39 预先限定的最后一次 source-free feasibility，而没有重启 P22。主提交
+`6a946a29…70b`，最小 55-file snapshot commit `9af74536…d39`；snapshot 把 P23 canonical entry module、normalizer
+callable/object/file、六个空 source sentinel root、完整 Git/文件系统/import closure 与固定 Git 2.43.0 binary 一并
+绑定。独立 adversarial audit 为 PASS；P22/P23/portable focused tests 42/42、继承的 P21 runtime/MiniLM tests
+77/77、`py_compile` 与 diff check 均通过。固定 unit 使用 canonical-import `python -c` 入口，部署前的远端只读 binding
+preflight 得到 55/55 files、19 loaded modules、clean worktree；此时 attempt root 仍不存在。
+
+唯一 unit `p23-source-free-feasibility-c1-v1.service` 随后创建固定 attempt。P23 实际越过 P22 的终止点：portable
+MiniLM structural canary 完成；`KMP_DUPLICATE_LIB_OK=True` 与 `KMP_INIT_AT_FORK=FALSE` 先按完整变量名集合和精确值
+验证、形成自哈希 receipt，再从 nested-launch 环境删除；原 P21 post-MiniLM phase 复验也通过。因此 P22 的
+post-model environment invalidity 已被真实修正，而不是继续放宽到任意变量。
+
+终止发生在下一阶段 `p21_public_synthetic_production_path`。真实 Qwen worker 已启动一次并返回 schema-valid typed plan：
+`operation=DIFFERENCE`、`relation_query="one nonempty retrieval"`；input/output 文件 SHA-256 分别为
+`ec4837a7…d0d` 与 `a3a29f06…862`。该 plan 与 portable MiniLM 在冻结 public fixture 上编译出的 P1 没有任何
+P0 之外的 typed residual unit，因而按事前 canary 合同抛出 `P1 introduced no typed residual unit`。这发生在第一
+repeat 内，official HippoRAG canary 尚未启动，不能把 P23 写成三种 capability 全链通过。
+
+marker 文件 SHA-256 为 `61393655…860`、self-hash `6bf2ba48…618`；terminal failure 文件 SHA-256 为
+`03332b63…460`、self-hash `404cf98f…961`；终态仍为 `formal_TAT_QA_source_opened=false`、external network=0、
+online evaluator=0、retry/replay/resample/provider switch=0。源外 postmortem self-hash 为
+`cf842b08…da1`，只绑定冻结 control flow、unit journal 与 public synthetic input/output，不运行第二次模型。
+
+该结果不是 TAT-QA efficacy negative，也不是新的 launcher 故障：Qwen transport/schema、portable MiniLM 与环境修复
+均已执行；失败的是预注册的集成行为条件。按 12.39 的明确终止规则，P23 不重启、不换 fixture、不改 prompt、不把
+`residual unit` 条件删除后重跑，也不再建立 P24 TAT-QA formal study。official TAT-QA source 至此始终未下载、未打开。
+若仍追总目标，只能换完全独立的现实 benchmark/source、study ID、candidate/evaluator mechanism 与 cohort；新研究不得
+继承这条已失败的 P21 public canary，也不得把 P23 的 partial capability evidence 当作性能样本。
+
 ## 附录 A：关键证据索引
 
 - FiQA TRAIN P10/P11 formation 与 DEV comparator-invalid chain：
@@ -4300,6 +4331,12 @@ study。
 - TAT-QA P22 portable-MiniLM feasibility environment-contract-invalid chain（official source 未下载/未打开）：
   [`P22 one-shot feasibility marker`](../artifacts/tatqa_p22_source_free_feasibility_v1/feasibility.one_shot_marker.json)；
   [`P22 terminal feasibility failure`](../artifacts/tatqa_p22_source_free_feasibility_v1/feasibility.terminal_failure.json)
+- TAT-QA P23 final source-free typed-action feasibility-negative chain（official source 未下载/未打开）：
+  [`P23 one-shot feasibility marker`](../artifacts/tatqa_p23_source_free_feasibility_v1/feasibility.one_shot_marker.json)；
+  [`P23 terminal feasibility failure`](../artifacts/tatqa_p23_source_free_feasibility_v1/feasibility.terminal_failure.json)；
+  [`P23 source-free postmortem`](../artifacts/tatqa_p23_source_free_feasibility_v1/feasibility.postmortem.json)；
+  [`P23 public Qwen input`](../artifacts/tatqa_p23_source_free_feasibility_v1/qwen_public_canary_repeat_1.input.json)；
+  [`P23 public Qwen output`](../artifacts/tatqa_p23_source_free_feasibility_v1/qwen_public_canary_repeat_1.output.json)
 - BRIGHT reasoning-retrieval v3、terminal M failure 与 fresh RESERVE 三臂链：
   [`v3 executor design`](../manifests/bright_reasoning_retrieval_executor_repair_design_v3.json)；
   [`v3 implementation freeze`](../manifests/bright_reasoning_retrieval_study_implementation_freeze_v3.json)；
