@@ -209,7 +209,10 @@ service = dict(
             "-p", "ActiveState", "-p", "Result", "-p", "ExecMainStatus",
             "--no-pager",
         ],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "XDG_RUNTIME_DIR": f"/run/user/{os.getuid()}"},
     ).stdout.splitlines()
     if "=" in line
 )
