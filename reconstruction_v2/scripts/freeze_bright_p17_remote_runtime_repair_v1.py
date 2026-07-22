@@ -320,6 +320,12 @@ def freeze(project_root: Path) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     fingerprint_body = dict(fingerprint_old)
     fingerprint_body.pop("self_sha256")
     fingerprint_body["frozen_asset_receipts"] = dict(new_assets)
+    p16_reuse = dict(fingerprint_body["P16_preidentity_runtime_reuse"])
+    p16_reuse["reuse_scope"] = (
+        "same_host_unchanged_Qwen_cross_MiniLM_assets_packages_and_canaries_only;"
+        "HippoRAG_canary_not_reused_after_source_repair"
+    )
+    fingerprint_body["P16_preidentity_runtime_reuse"] = p16_reuse
     worker_canaries = dict(fingerprint_body["worker_canaries"])
     worker_canaries["HippoRAG_CPU"] = facts["hipporag_canary"]
     fingerprint_body["worker_canaries"] = worker_canaries
