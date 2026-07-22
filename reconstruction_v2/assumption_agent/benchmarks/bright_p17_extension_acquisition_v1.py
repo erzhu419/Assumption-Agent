@@ -33,7 +33,7 @@ DESIGN_RELATIVE = Path(
     "manifests/bright_p17_all_remote_c_confirm_study_design_v1.json"
 )
 DESIGN_FILE_SHA256 = (
-    "6db8c9e1d9d6b8ea15f14ae023c510baf01ba1d2bc057fb04697ee87b1f723d0"
+    "e21f9cf8c2498f8cbde1d56c70672823e52e00320556f815ee99e3643b439f80"
 )
 DESIGN_SELF_SHA256 = (
     "89611c99b25dce016d82b2cd2c4b1101a55e3099e48e909859903e7bdd29ed17"
