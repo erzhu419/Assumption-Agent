@@ -38,19 +38,19 @@ OLD_IMPLEMENTATION_FREEZE_SELF_SHA256 = (
 )
 DISPOSITION_RELATIVE = Path("manifests/bright_p17_prelaunch_runtime_disposition_v1.json")
 DISPOSITION_FILE_SHA256 = (
-    "03dcb9ed4ba246a447d8d5d2b74cd442b79825d4300291450b4353c0d5fb0141"
+    "28e2245ac1cd713dbf8e75c033af15dd94994e037213e34cea1c7122af78d118"
 )
 DISPOSITION_SELF_SHA256 = (
-    "3063be7b205ed5cd29b8d1f17c7711a160925786088b804dd4d34fc4914c108a"
+    "4cfdf3bfad69073e5574c090f87e55419bc8bc33138a803c2b74aa0be644cac4"
 )
 CANARY_LAUNCH_DISPOSITION_RELATIVE = Path(
     "manifests/bright_p17_repair_canary_launch_disposition_v1.json"
 )
 CANARY_LAUNCH_DISPOSITION_FILE_SHA256 = (
-    "17fb0364887cb0358f0aa9140739a36601b5633aaff9acc7c9ae682f829d6449"
+    "9b8e319fa641299f91420e52da26a561835a28014a5da58a03bdbb66589e8592"
 )
 CANARY_LAUNCH_DISPOSITION_SELF_SHA256 = (
-    "9fa6e3a620b5982e73313dc7b3429035bb218062f15a334b0a67ddd48c850e1d"
+    "1f5b525a2b0359d5caeea435a8086d98917378506d39e4cb9c6b0cfc9d81db7e"
 )
 PATCHED_SOURCE_SHA256 = (
     "960561b080531fe4d668bde635e81f8e65620ce50bdacdd9a25531e856fa3e05"
@@ -279,6 +279,11 @@ def freeze(project_root: Path) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
         _verify_self(value, name)
         if value.get("self_sha256") != expected:
             raise P17RepairFreezeError(f"{name} identity drifted")
+    if (
+        disposition.get("study_design_self_sha256")
+        != original.acquisition.DESIGN_SELF_SHA256
+    ):
+        raise P17RepairFreezeError("the corrected P17 design binding drifted")
 
     acquisition_path = base / "manifests/bright_p17_extension_acquisition_result_v1.json"
     acquisition_result = _read_canonical(acquisition_path, "P17 acquisition result")
