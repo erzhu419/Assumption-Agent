@@ -1,7 +1,7 @@
 # Assumption Agent × Red Queen Gödel Machine：架构诊断与 Reconstruction V2 复核
 
 > - 初版日期：2026-07-11
-> - 本次复核：2026-07-20
+> - 本次复核：2026-07-23
 > - 最新 EntailmentBank G1/E1 终态：official Task2 TRAIN/DEV aggregate qualification 通过后，fresh v2 secret 一次形成
 >   G/A/F/A_hold/M=`60/36/30/30/30` 的三-family平衡 186-item cohort，F label 从未创建。v1 acquisition 因把同 ID
 >   多行变体误当非法而在 selection/action 前 fail-closed；v2 只事前增加私有 source-line identity，未改任何 efficacy contract。
@@ -59,7 +59,8 @@
 > - 最新 BRIGHT P9 前瞻结果：在已消费 TRAIN45 上形成 relation/mechanism cross-encoder + RAW + HippoRAG 的固定 RRF 候选后，设计与实现均先于剩余 RESERVE 内容访问冻结；随后一次性测量每 family 11 项、共 33 项。P9 / RAW / HippoRAG mean nDCG@10=`0.12338/0.11431/0.09218`。P9−HippoRAG aggregate `+0.03120` 且三 family 全正；P9−RAW aggregate `+0.00907`，但 family integer delta=`−72,732,371 / 0 / +372,156,928`，因此事前固定的双 baseline、三 family 全正 primary 为 false。该 cohort 不调参、不补 gate、不重跑；剩余 4 项不作为 rescue cohort
 > - 最新 BRIGHT P17 all-remote 终态：P14/P15/P16 均未产生 efficacy 后，P17 在 311linux 上完成 27/27 candidate-specific HippoRAG terminal，并按冻结顺序 seal 每族前 8 个 complete cases，共 24 个三臂 action；26 个 Qwen generation source-valid、1 个由冻结 totalizer 补全，外网与旧 P14/P15 action reuse 均为 0。但远端回执自报 HippoRAG 峰值进程并发为 9，超过 study design、runtime fingerprint 与 plan 共同冻结的 8；根因是 9-worker shared executor 在 cross-encoder 结束后把第九个 slot 交给 HippoRAG。该偏差在任何 gold/score 前由 archive audit 发现，正式 finalizer 未调用，gold/score 均为 0，P17 efficacy=unknown、同 candidate/cohort 永久不 replay。27-attempt forensic tree 已回传并校验；另透明保留 acquisition receipt 中不参与执行的 `target_terminal_count_per_family=10` 遗留字段，规范 target 始终为 8
 > - 最新独立后续 study：TAT-QA P23 按预注册终止后，FRAMES P1 固定 official revision `58d9fb63…22ef`、Git blob `cea20270…025` 与 viewer-exposed rows `[0,100)` exclusion；实现提交 `6552fefb` 的 18/18 tests 与独立 adversarial audit 通过，freeze `8ee6662c…3f20` 绑定 real Git ancestor/四个 commit blobs，并显式披露 freeze 前一次未保存、未解析 row/cell 的 TSV byte stream。正式 source SHA-256=`4255093c…69ff`；唯一资格 marker 随后消费，但 raw TSV header 与预冻结的 public viewer conversion header 不同，故在首行、任何 row content/action/score 前 terminal。FRAMES 不改 parser、不重跑，efficacy/capacity 仍 unknown；这证明 viewer schema 不能代替 raw repository schema contract
-> - 最新后续缺口：P17 没有新增可评分 efficacy，不能替代 P9 的现实域证据，也不能把 24 个未评分 action 当成 Agent−RAW/HippoRAG 结果。现实域双 baseline、跨 family 稳定正净收益仍未闭合；L5 仍缺 evaluator 在独立 A_hold 上真实晋升并改善事前冻结且 untouched 的 M_search。当前分支按 no-retry/no-gate 规则停止；若不另立全新 study，终稿应收束为“窄 L3/L4 positive、P9 同源对 HippoRAG 描述性 positive、现实域无有效稳定三臂优势、L5 未达到”
+> - 最新 FanOutQA P1 独立 study：固定官方 `v1.1.1` commit `ccf127bd…d54` 的 310-row DEV 与官方 1.539 GB revision cache；不透明下载虽因远端缺少 `git` 在收尾阶段退出，但两个完整 `.part` 已按冻结 size/SHA/Git-blob 校验并原地晋升，未重下。安全审计在任何 JSON/tar-member parse 前以不可变 amendment 透明记录 one-shot、cache trust anchor、qrel 隔离和 selection-commitment 加固；32/32 离线测试与最终审计通过。唯一 formal qualification 随后在 DEV item parse 中因官方 `categories` schema 与冻结 exact contract 不同而 `category schema drifted` fail-closed；cache tar member、TEST、candidate、RAW/HippoRAG、evaluator、score 均为 0。FanOutQA P1 不改 parser、不重跑，source capacity 与 efficacy 仍 unknown
+> - 最新后续缺口：P17、FRAMES P1 与 FanOutQA P1 都没有新增可评分 efficacy，不能替代 P9 的现实域证据，也不能把未评分 action/source qualification 当成 Agent−RAW/HippoRAG 结果。现实域双 baseline、跨 family 稳定正净收益仍未闭合；L5 仍缺 evaluator 在独立 A_hold 上真实晋升并改善事前冻结且 untouched 的 M_search。继续研究只能再换全新 source/domain/study ID；若不另立研究，终稿应收束为“窄 L3/L4 positive、P9 同源对 HippoRAG 描述性 positive、现实域无有效稳定三臂优势、L5 未达到”
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -4309,8 +4310,57 @@ marker 文件 SHA-256=`e7e5d432…0735`、self-hash=`85f7d9a2…9071`；terminal
 `1a67a42b…ff23`、self-hash=`8b9a2aec…ca6b`。按本节事前终止规则，不能打开 raw header 后改 parser，也不能改为
 viewer-generated conversion 后重跑；FRAMES P1 source capacity 与 efficacy 都保持 unknown，该 route 永久关闭。
 
+### 12.42 2026-07-23 FanOutQA P1：presemantic hardening 后在 DEV category schema fail-closed
+
+FRAMES P1 关闭后，新路线没有修改其 TSV parser 或另取同源 cohort，而是选择官方 FanOutQA release `v1.1.1`：
+commit `ccf127bd0b1e1091e98ffb9aff7dc694eaf58d54`、tree `2b6a01b…fac5`、310-row DEV Git blob
+`76ad1feb…a67`。正式 scope 固定为官方 revision cache 上的 derived closed-corpus retrieval，不声称 official full-Wikipedia
+open-book 或端到端 answer generation；TEST 永久不授权。candidate 也不再是 RRF、关键词或 gate，而预注册为 top-level question
+生成 typed DAG 后执行一对一/依赖条件 page assignment 的四个 recipe；三臂为 E3 Agent、同 corpus RAW MiniLM 与 official
+HippoRAG，另有独立 A_hold promotion 与只有晋升后才能打开的 M_search。
+
+官方 DEV 与 `wikicache.tar.gz` 只在 311linux 上并发下载一次。下载字节已经完整落盘后，原 shell 因远端没有 `git`
+executable 在 Git-blob 收尾检查处以 127 退出；没有第二次网络请求。现有 `.part` 的 size 与 SHA-256 分别复验为
+DEV `1,177,174` bytes / `359300b0…1288`、cache `1,538,812,319` bytes / `62059df8…d5f4`，DEV Git blob
+又由同一现有字节流离线算得 `76ad1feb…a67`，随后才原子晋升为固定 source path。下载回执明确记录 retry/redownload=0、
+semantic parse=0、TEST=0。
+
+这次下载发生在最终 qualification freeze 之前，因此不能声称 strict pre-byte freeze。原 download authorization 又只允许补
+hash/receipt/freeze，而独立审计随后发现 one-shot 可重放、cache SHA 没有硬编码 trust anchor、gzip 尾部零填充未计入上限、
+sign-test 的“exact”措辞不成立等问题。没有静默改写原 authorization；新增 self-hash
+`566befbc…9db7` 的 prequalification hardening amendment，逐项绑定旧/new design hash，并声明当时 JSON parse、tar-member
+parse、model/action/score 均为 0。实现提交 `3662c953b3affc577a41e999b3c3fbb569e902db` 后，source-open marker
+改为 fixed-path、O_EXCL、逐级 directory fsync，并绑定 DEV/cache、父 marker、download receipt 与 amendment；cache 在 tar
+member audit 前先以 `pread` 对硬编码 SHA 做不透明复验。32/32 synthetic focused tests、`py_compile` 与独立 adversarial
+audit 均通过。final freeze self-hash `972d819b…cdc7` 精确绑定 qualifier、tests、custody、design、authorization、receipt
+与 amendment；同时如实写明 source 已持久化但从未语义打开，四类 marker/result/failure 文件都不存在。
+
+唯一 formal service `fanoutqa-p1-source-qualification-v1.service` 随后消费 qualification marker 与 source-open marker。
+DEV exact SHA/blob/size 和 310-row JSON 顶层成立，但在逐 item schema validation 中发现官方 `categories` 字段形态不符合冻结的
+exact list contract，抛出 `FanOutQaP1SourceQualificationError: category schema drifted`。失败发生在 cache tar member audit、
+任何 cohort/item materialization、candidate/RAW/HippoRAG action、qrel release、evaluator 或 score 之前；TEST 也未下载或打开。
+qualification marker、source-open marker、terminal failure 的文件 SHA-256 分别为 `fb8ca663…e09e`、`fcddb1d0…ca32`、
+`c83ae7a1…d06`，终态 observation self-hash 为 `7dc7e356…ca5a`。formal attempt=1，retry/replay/resample/parser/quota/
+family/candidate/gate change=0。
+
+因此 FanOutQA P1 是 **source-contract terminal / efficacy unknown**，不是 Agent 相对 RAW 或 HippoRAG 的负结果。不能根据已经
+看到的 schema 改 `categories` parser 后重跑，也不能缩 quota 或继续同 DEV。现实域三臂稳定优势与 L5 两个总缺口均保持不变；
+若继续，只能使用全新 source/domain、study ID、root 与 cohort，并在任何新 source semantic access 前一次性冻结真实 raw
+schema acquisition、selection commitment、模型/checkpoint/prompt/corpus projection、三臂与 A_hold→M_search 合同。
+
 ## 附录 A：关键证据索引
 
+- FanOutQA P1 source-contract terminal chain（TEST/model/action/score 均为 0）：
+  [`source custody`](../manifests/fanoutqa_p1_source_custody_v1.json)；
+  [`study design`](../manifests/fanoutqa_p1_typed_fanout_e3_study_design_v1.json)；
+  [`download authorization`](../manifests/fanoutqa_p1_source_download_authorization_v1.json)；
+  [`download receipt`](../manifests/fanoutqa_p1_source_download_receipt_v1.json)；
+  [`prequalification hardening amendment`](../manifests/fanoutqa_p1_prequalification_hardening_amendment_v1.json)；
+  [`qualification freeze`](../manifests/fanoutqa_p1_source_qualification_freeze_v1.json)；
+  [`terminal observation`](../manifests/fanoutqa_p1_source_qualification_terminal_observation_v1.json)；
+  [`qualification marker`](../artifacts/fanoutqa_p1_source_qualification_v1/qualification.one_shot_marker.json)；
+  [`source-open marker`](../artifacts/fanoutqa_p1_source_qualification_v1/source_open.one_shot_marker.json)；
+  [`terminal failure`](../artifacts/fanoutqa_p1_source_qualification_v1/qualification.terminal_failure.json)
 - FiQA TRAIN P10/P11 formation 与 DEV comparator-invalid chain：
   [`TRAIN source integration`](../manifests/fiqa_bridge_expansion_train_integration_result_v2.json)；
   [`P10 TRAIN runtime`](../manifests/fiqa_bridge_expansion_train_runtime_result_v2.json)；
