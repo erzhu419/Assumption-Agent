@@ -86,6 +86,12 @@ def test_blocks_are_fixed_balanced_and_have_no_rescue() -> None:
     assert isinstance(acquisition, dict)
     assert acquisition["family_order"] == ["TABLE", "TEXT", "TABLE_TEXT"]
     assert acquisition["test_split_opened"] is False
+    evidence = design["canonical_evidence_contract"]
+    assert isinstance(evidence, dict)
+    qualification = evidence["qualification"]
+    assert isinstance(qualification, dict)
+    assert qualification["minimum_canonical_unit_count"] == 5
+    assert qualification["maximum_canonical_unit_count"] == 96
 
 
 def test_primary_and_promotion_are_not_expandable_gates() -> None:
