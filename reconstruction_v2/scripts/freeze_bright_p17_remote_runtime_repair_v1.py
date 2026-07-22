@@ -43,6 +43,15 @@ DISPOSITION_FILE_SHA256 = (
 DISPOSITION_SELF_SHA256 = (
     "3063be7b205ed5cd29b8d1f17c7711a160925786088b804dd4d34fc4914c108a"
 )
+CANARY_LAUNCH_DISPOSITION_RELATIVE = Path(
+    "manifests/bright_p17_repair_canary_launch_disposition_v1.json"
+)
+CANARY_LAUNCH_DISPOSITION_FILE_SHA256 = (
+    "17fb0364887cb0358f0aa9140739a36601b5633aaff9acc7c9ae682f829d6449"
+)
+CANARY_LAUNCH_DISPOSITION_SELF_SHA256 = (
+    "9fa6e3a620b5982e73313dc7b3429035bb218062f15a334b0a67ddd48c850e1d"
+)
 PATCHED_SOURCE_SHA256 = (
     "960561b080531fe4d668bde635e81f8e65620ce50bdacdd9a25531e856fa3e05"
 )
@@ -108,7 +117,7 @@ from reconstruction_v2.replication_runtime.hipporag_upstream_hardening_v1 import
 
 root = Path("/home/erzhu419/p17_all_remote_20260722")
 base = root / "runtime/reconstruction_v2"
-run = root / "preflight/hippo_repaired_p17/run1"
+run = root / "preflight/hippo_repaired_p17/run2"
 
 def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
@@ -146,7 +155,7 @@ service = dict(
     line.split("=", 1)
     for line in subprocess.run(
         [
-            "systemctl", "--user", "show", "p17-hippo-repair-preflight-v1.service",
+            "systemctl", "--user", "show", "p17-hippo-repair-preflight-v2.service",
             "-p", "ActiveState", "-p", "Result", "-p", "ExecMainStatus", "--no-pager",
         ],
         check=True,
@@ -231,6 +240,7 @@ def freeze(project_root: Path) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     fingerprint_path = base / original.FINGERPRINT_PATH
     implementation_path = base / original.IMPLEMENTATION_FREEZE_PATH
     disposition_path = base / DISPOSITION_RELATIVE
+    canary_launch_disposition_path = base / CANARY_LAUNCH_DISPOSITION_RELATIVE
 
     if _file_sha256(fingerprint_path) != OLD_FINGERPRINT_FILE_SHA256:
         raise P17RepairFreezeError("the invalid P17 fingerprint was already consumed")
@@ -238,12 +248,20 @@ def freeze(project_root: Path) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
         raise P17RepairFreezeError("the invalid P17 implementation freeze was already consumed")
     if _file_sha256(disposition_path) != DISPOSITION_FILE_SHA256:
         raise P17RepairFreezeError("the P17 prelaunch disposition drifted")
+    if (
+        _file_sha256(canary_launch_disposition_path)
+        != CANARY_LAUNCH_DISPOSITION_FILE_SHA256
+    ):
+        raise P17RepairFreezeError("the P17 canary launch disposition drifted")
 
     fingerprint_old = _read_canonical(fingerprint_path, "invalid P17 fingerprint")
     implementation_old = _read_canonical(
         implementation_path, "invalid P17 implementation freeze"
     )
     disposition = _read_canonical(disposition_path, "P17 prelaunch disposition")
+    canary_launch_disposition = _read_canonical(
+        canary_launch_disposition_path, "P17 canary launch disposition"
+    )
     for value, expected, name in (
         (fingerprint_old, OLD_FINGERPRINT_SELF_SHA256, "invalid P17 fingerprint"),
         (
@@ -252,6 +270,11 @@ def freeze(project_root: Path) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
             "invalid P17 implementation freeze",
         ),
         (disposition, DISPOSITION_SELF_SHA256, "P17 prelaunch disposition"),
+        (
+            canary_launch_disposition,
+            CANARY_LAUNCH_DISPOSITION_SELF_SHA256,
+            "P17 canary launch disposition",
+        ),
     ):
         _verify_self(value, name)
         if value.get("self_sha256") != expected:
@@ -305,6 +328,11 @@ def freeze(project_root: Path) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     )
     fingerprint_body["remote_item_identity_staged_count_before_repair"] = STAGED_ITEM_COUNT
     fingerprint_body["prelaunch_runtime_repair"] = {
+        "canary_launch_disposition_binding": {
+            "file_sha256": CANARY_LAUNCH_DISPOSITION_FILE_SHA256,
+            "relative_path": CANARY_LAUNCH_DISPOSITION_RELATIVE.as_posix(),
+            "self_sha256": CANARY_LAUNCH_DISPOSITION_SELF_SHA256,
+        },
         "disposition_binding": {
             "file_sha256": DISPOSITION_FILE_SHA256,
             "relative_path": DISPOSITION_RELATIVE.as_posix(),
@@ -345,6 +373,12 @@ def freeze(project_root: Path) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
         {
             "relative_path": DISPOSITION_RELATIVE.as_posix(),
             "sha256": DISPOSITION_FILE_SHA256,
+        }
+    )
+    dependencies.append(
+        {
+            "relative_path": CANARY_LAUNCH_DISPOSITION_RELATIVE.as_posix(),
+            "sha256": CANARY_LAUNCH_DISPOSITION_FILE_SHA256,
         }
     )
     implementation_body["dependency_bindings"] = dependencies
