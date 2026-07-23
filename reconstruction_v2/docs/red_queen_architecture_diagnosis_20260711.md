@@ -4381,6 +4381,41 @@ blocks 只能 query-disjoint，不能 document-disjoint；gain-vs-harm tail 只�
 完成 frozen selection commitment、runtime/capacity attestation 与 typed/E4/RAW/HippoRAG adapter 实现，用公开合成数据作一次
 非评分 integration diagnostic，然后一次性执行 A_form→F_search→A_hold；只有预注册 E4 promotion 成立才打开 M_search。
 
+### 12.44 2026-07-23 BIRCO P1 正式终态：F_search 不可识别，三臂与 L5 均未进入
+
+后续实现没有修改 candidate 或 performance gate。selector、typed constraint/E0/E4、GPT-5.4 semantic worker、RAW、
+candidate-pool-restricted official HippoRAG adapter、offline scorer 与 crash-closed controller 经 113/113 BIRCO tests 后冻结；
+Plus route 与 4-slot HippoRAG runtime 只用公开常量/合成数据作非评分 preflight。第一次部署 selector 的 systemd 进程在 Python
+package entrypoint import 时因 staging closure 缺少已提交的 `assumption_agent.models` 而退出；当时 selector module/main 尚未进入，
+selection root、secret 与 source open 均为 0。该 pre-capability failure 已单独 disposition，补入同一已提交依赖并发布 superseding
+implementation freeze；它不是一次被消费 selection 的重试。随后唯一 capability-consuming selection 一次成功，以 fresh 32-byte
+HMAC secret 将三个 family 各 `10×4`、共 120 个 query 分配进 query-disjoint A_form/F_search/A_hold/M_search，未公开原始
+qid/cid/query/document/qrel。
+
+正式 `birco-p1-formal-v1.service` 在 311linux 单次启动、0 restart、exit 0，最大 API concurrency 实测 64，CPU 41.759 s、
+memory peak 850.1 MiB。A_form 的 148/148 semantic requests transport succeeded；118 个 completion 通过 grammar，30 个 planner
+输出按事前 totalizer 完成。A_form action archive 先以 0400 封存，随后 qrel capability 只消费一次并离线拟合 30-slate E4；
+solver 在 41 iterations 后 `converged=false`，objective=`41.22566591119905`。这不会绕过后续 identifiability gate。
+
+F_search 的冻结 route 随后发生明显 provider degradation：142 个已消费 requests 中只有 10 个 transport succeeded，132 个是
+`transport_unavailable`；仅 6 个 generation-valid，另 4 个成功响应由 totalizer 完成。controller 没有 retry、replay、resample、
+provider switch 或 online evaluator。由这些冻结 terminal 形成的 E4 与 E0 完整 permutation 仅在 30 项中的 2 项不同，虽跨 2 个
+family，但未达到预注册的“至少 3 项且至少 2 family”。因此 formal terminal 正确写为
+`terminal_F_search_label_free_unidentifiable`，F_search qrel open=0，并在任何 A_hold action/qrel 前停止；A_hold 与 M_search 均未
+materialize，RAW 与 official HippoRAG 也从未在正式 reality block 运行。
+
+该终态应分两层解释。执行层是 **protocol-valid**：freeze/self-hash、只读 archives、attempt/terminal 一一对应、0 failure receipt、
+0 retry 与 qrel custody 均通过离线复核；启动时的 runpy duplicate-import warning 来自 package `__init__` 预先导入同一个无
+import-time action 的 runner，未改变唯一 `__main__` lifecycle，记为以后修复的非结果性 warning，不据此宣告 implementation-invalid。
+实证层则是 **provider-degraded / mechanism-inconclusive**：正式可支持的最窄陈述只有“本次冻结执行中的 E4 action 未通过
+label-free identifiability”，不能把它解释为 Agent 输给 RAW/HippoRAG，也没有现实域三臂数据，更没有 evaluator promotion 或
+untouched M_search 的 L5 证据。BIRCO 当前 root 永久终止，不得用同一 selection 重跑、补一次 ranking、降低 3-item gate 或事后打开
+F/A_hold/M qrel。总目标的两个缺口——跨 family 同时超过 RAW/HippoRAG，以及 promotion 后改善 untouched search——保持原样。
+
+若继续总目标，不能再在 BIRCO terminal 上补 gate。下一项独立 study 应把 semantic action 形成改成 provider-capacity 与正式
+measurement 解耦的冻结机制（优先完全本地、或在新 cohort 身份形成前完成可审计的容量资格），使用新 source/cohort/study ID 一次
+执行；否则最诚实的当前结论仍是现实域稳定双基线优势与 L5 均未达到。
+
 ## 附录 A：关键证据索引
 
 - BIRCO P1 qualified source chain（formal item/model/action/score 尚为 0）：
@@ -4392,6 +4427,19 @@ blocks 只能 query-disjoint，不能 document-disjoint；gain-vs-harm tail 只�
   [`qualification result`](../manifests/birco_p1_source_qualification_result_v1.json)；
   [`qualification marker`](../artifacts/birco_p1_source_qualification_v1/qualification.one_shot_marker.json)；
   [`source-open marker`](../artifacts/birco_p1_source_qualification_v1/source_open.one_shot_marker.json)
+
+- BIRCO P1 formal terminal chain（protocol-valid；provider-degraded；A_hold/RAW/HippoRAG/M_search 未进入）：
+  [`provider preflight`](../manifests/birco_p1_provider_preflight_selection_v1.json)；
+  [`HippoRAG runtime preflight`](../manifests/birco_p1_hipporag_runtime_preflight_v1.json)；
+  [`initial implementation freeze`](../manifests/birco_p1_implementation_freeze_v1.json)；
+  [`preselection entrypoint failure disposition`](../manifests/birco_p1_preselection_entrypoint_failure_disposition_v1.json)；
+  [`superseding implementation freeze`](../manifests/birco_p1_implementation_freeze_v2.json)；
+  [`public selection receipt`](../manifests/birco_p1_private_selection_receipt_v1.json)；
+  [`execution freeze`](../manifests/birco_p1_execution_freeze_v1.json)；
+  [`A_form E4 model receipt`](../manifests/birco_p1_A_form_e4_model_v1.json)；
+  [`F_search identifiability receipt`](../manifests/birco_p1_F_search_identifiability_v1.json)；
+  [`formal terminal`](../manifests/birco_p1_formal_terminal_v1.json)；
+  [`safe aggregate result`](../manifests/birco_p1_formal_result_v1.json)
 
 - FanOutQA P1 source-contract terminal chain（TEST/model/action/score 均为 0）：
   [`source custody`](../manifests/fanoutqa_p1_source_custody_v1.json)；
