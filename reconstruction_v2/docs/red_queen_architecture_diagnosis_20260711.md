@@ -4456,13 +4456,22 @@ synthetic runtime canary 与 external filesystem live revalidation，再冻结 i
 aggregate-only qualification、private component-atomic selection 与正式 controller。任何 source identity/capacity、runtime、one-shot action 或
 valid non-promotion/primary failure都按预注册终止，不 retry、resample、换模型、补 gate 或用在线评价。
 
+2026-07-26 重启 311linux 以使已升级的 NVIDIA `595.84` userspace 与内核模块一致后，第一次 official public-preflight service
+invocation 在 `_json_mapping_argument` 内即退出：远端 shell 对未作为单一 argv 元素保护的 inline JSON 做了 brace expansion。
+traceback 控制流、正式 root 不存在、receipt 与 canary stage 均不存在共同证明
+`build_fresh_comparator_preflight`、runtime inspector、public canary、source、model action 与 score 的消费次数仍全部为 0。该失败已单独
+记录为 [`pre-capability launch disposition`](../manifests/mmqa_p1_official_preflight_launch_disposition_v1.json)；只允许换新 unit 将同一
+两张 frozen JSON map 各自作为一个完整 argv 元素传入，随后消费唯一一次 public-canary capability。它不授权改 candidate、cohort、
+feature、metric、threshold、gate、model/runtime 或 source，也不把一次已消费的 canary 失败重试。
+
 ## 附录 A：关键证据索引
 
 - MMQA P1 pre-source frozen chain（formal source/model/action/score 仍为 0）：
   [`source custody`](../manifests/mmqa_p1_source_custody_v1.json)；
   [`study design`](../manifests/mmqa_p1_local_proof_e5_study_design_v1.json)；
   [`download authorization`](../manifests/mmqa_p1_source_download_authorization_v1.json)；
-  [`pre-execution runtime disposition`](../manifests/mmqa_p1_preexecution_runtime_disposition_v1.json)
+  [`pre-execution runtime disposition`](../manifests/mmqa_p1_preexecution_runtime_disposition_v1.json)；
+  [`official pre-capability launch disposition`](../manifests/mmqa_p1_official_preflight_launch_disposition_v1.json)
 
 - BIRCO P1 qualified source chain（formal item/model/action/score 尚为 0）：
   [`source custody`](../manifests/birco_p1_source_custody_v1.json)；
