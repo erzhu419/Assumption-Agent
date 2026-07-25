@@ -60,8 +60,8 @@
 > - 最新 BRIGHT P17 all-remote 终态：P14/P15/P16 均未产生 efficacy 后，P17 在 311linux 上完成 27/27 candidate-specific HippoRAG terminal，并按冻结顺序 seal 每族前 8 个 complete cases，共 24 个三臂 action；26 个 Qwen generation source-valid、1 个由冻结 totalizer 补全，外网与旧 P14/P15 action reuse 均为 0。但远端回执自报 HippoRAG 峰值进程并发为 9，超过 study design、runtime fingerprint 与 plan 共同冻结的 8；根因是 9-worker shared executor 在 cross-encoder 结束后把第九个 slot 交给 HippoRAG。该偏差在任何 gold/score 前由 archive audit 发现，正式 finalizer 未调用，gold/score 均为 0，P17 efficacy=unknown、同 candidate/cohort 永久不 replay。27-attempt forensic tree 已回传并校验；另透明保留 acquisition receipt 中不参与执行的 `target_terminal_count_per_family=10` 遗留字段，规范 target 始终为 8
 > - 最新独立后续 study：TAT-QA P23 按预注册终止后，FRAMES P1 固定 official revision `58d9fb63…22ef`、Git blob `cea20270…025` 与 viewer-exposed rows `[0,100)` exclusion；实现提交 `6552fefb` 的 18/18 tests 与独立 adversarial audit 通过，freeze `8ee6662c…3f20` 绑定 real Git ancestor/四个 commit blobs，并显式披露 freeze 前一次未保存、未解析 row/cell 的 TSV byte stream。正式 source SHA-256=`4255093c…69ff`；唯一资格 marker 随后消费，但 raw TSV header 与预冻结的 public viewer conversion header 不同，故在首行、任何 row content/action/score 前 terminal。FRAMES 不改 parser、不重跑，efficacy/capacity 仍 unknown；这证明 viewer schema 不能代替 raw repository schema contract
 > - 最新 FanOutQA P1 独立 study：固定官方 `v1.1.1` commit `ccf127bd…d54` 的 310-row DEV 与官方 1.539 GB revision cache；不透明下载虽因远端缺少 `git` 在收尾阶段退出，但两个完整 `.part` 已按冻结 size/SHA/Git-blob 校验并原地晋升，未重下。安全审计在任何 JSON/tar-member parse 前以不可变 amendment 透明记录 one-shot、cache trust anchor、qrel 隔离和 selection-commitment 加固；32/32 离线测试与最终审计通过。唯一 formal qualification 随后在 DEV item parse 中因官方 `categories` schema 与冻结 exact contract 不同而 `category schema drifted` fail-closed；cache tar member、TEST、candidate、RAW/HippoRAG、evaluator、score 均为 0。FanOutQA P1 不改 parser、不重跑，source capacity 与 efficacy 仍 unknown
-> - 最新 MMQA P1 独立 study 终态（source 从未下载或解析）：固定 official MultiModalQA commit `4dd14328…02e3` 的 TRAIN、DEV、tables、texts 四个 gzip，共 69,204,571 bytes；候选、A/F/A_hold/M 与三臂离线评价均在 source 前冻结。311linux 驱动升级后已通过重启恢复为两张 RTX 2080 / `595.84`。第一次 source-free official preflight invocation 因 shell brace expansion 在 builder 前退出，单独 disposition 后，唯一 corrected capability launch 通过 address-family、filesystem 与 runtime inspection并进入 public synthetic official worker；worker exit 1，只留下冻结的 stderr digest，receipt 未生成。formal root/source/item/action/score 与 online evaluator 均为 0。该 study 因 source-free runtime infrastructure-invalid 严格终止，不重跑、不换 runtime/model、不下载 source；不是 Agent 对 RAW/HippoRAG 的效果负结果
-> - 最新执行状态与缺口：MMQA P1 终止后，现实域跨 family 同时超过 RAW/HippoRAG 与 evaluator 晋升后改善 untouched search 的 L5 仍均未闭合。下一步只能建立新 study ID/root，并在其 prospective contract 内先解决可诊断且不丢失失败原因的本地 official-comparator public runtime；不能在 MMQA P1 上补 gate、降低阈值或把 source 解封。评价仍保持全离线
+> - 最新 MMQA P1 独立 study 终态（source 从未下载或解析）：固定 official MultiModalQA commit `4dd14328…02e3` 的 TRAIN、DEV、tables、texts 四个 gzip，共 69,204,571 bytes；候选、A/F/A_hold/M 与三臂离线评价均在 source 前冻结。311linux 驱动升级后已通过重启恢复为两张 RTX 2080 / `595.84`。第一次 source-free official preflight invocation 因 shell brace expansion 在 builder 前退出，单独 disposition 后，唯一 corrected capability launch 通过 address-family、filesystem 与 runtime inspection并进入 public synthetic official worker；worker exit 1，只留下冻结的 stderr digest，receipt 未生成。事后静态复核定位到确定性的首个 worker 内兼容冲突：两个冻结绝对模型路径被 pinned HippoRAG 转成一个 272-byte working-directory basename，超过该文件系统 `NAME_MAX=255`，且目录创建发生在模型构造、index 与 retrieve 之前；该结论来自 exact code/path-length，不冒充从单向 stderr digest 恢复出的异常文本。formal root/source/item/action/score 与 online evaluator 均为 0。该 study 因 source-free runtime infrastructure-invalid 严格终止，不重跑、不换 runtime/model、不下载 source；不是 Agent 对 RAW/HippoRAG 的效果负结果
+> - 最新执行状态与缺口：MMQA P1 终止后，现实域跨 family 同时超过 RAW/HippoRAG 与 evaluator 晋升后改善 untouched search 的 L5 仍均未闭合。下一步建立全新 MAUD supplementary extraction study：它是 contract-disjoint 的 full-contract SQuAD2 evidence-span source，不使用已在公开 viewer 暴露少量 TRAIN 行的 primary MAUD RC，也不使用与已终止 CUAD 高度同源的 ACORD。prospective runtime 固定短 cwd-local 模型别名、显式 child import closure 与失败时 mode-0600 私有 stdout/stderr custody；仍只允许一次 source-free public diagnostic、全离线评价，不能在 MMQA P1 上补 gate、降低阈值或把 source 解封
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -4472,6 +4472,17 @@ stderr SHA-256 `3f8e3cd8…2cc47`，因此没有 receipt。item-local work 已�
 **source-free infrastructure-invalid / efficacy unknown**。不得重放 canary、换 runtime/model 后继续该 study 或下载其 source；后续只能
 新立 study，并在新 prospective runtime contract 中让 public failure 原因可审计。这是换 workstream，不是补 gate。
 
+终止后只做了不执行 worker/model/index/retrieve 的静态 postmortem。冻结 MuSiQue worker 把两个绝对模型路径分别拼成
+`Transformers/<absolute path>`；pinned HippoRAG 对两个名字做 slash→underscore，再以一个下划线连接成单一
+working-directory component，随后在模型构造前调用 `os.makedirs`。311linux 上两个 label 的精确字节数为 153 与 118，
+连接后为 272，而同一目录的 `NAME_MAX=255`。因此存在一个独立于 benchmark 内容与 GPU 状态的确定性不兼容；由于 P1
+只保存 stderr SHA-256，这里严格称为 exact-code/path-length 所定位的 overwhelmingly likely root cause，不声称 digest
+本身确认了 `ENAMETOOLONG` 文本。BIRCO 已在相同 HippoRAG 文件身份上用 cwd-local `smollm2`/`minilm` 两个短 alias
+通过 public synthetic preflight，投影 basename 仅 40 bytes。新的独立 study 必须同时固定：绝对模型 argv 数为 0、alias
+symlink 的 `lstat/readlink/resolve/samefile` 与 target-tree identity、deployed project-first 的 child `PYTHONPATH`/transitive
+module-origin 检查，以及 scratch 外 mode-0600 私有 stdout/stderr custody。完整证据见
+[`static postmortem`](../manifests/mmqa_p1_official_preflight_static_postmortem_v1.json)；它不修复、不重开 MMQA P1。
+
 ## 附录 A：关键证据索引
 
 - MMQA P1 pre-source frozen chain（formal source/model/action/score 仍为 0）：
@@ -4480,7 +4491,8 @@ stderr SHA-256 `3f8e3cd8…2cc47`，因此没有 receipt。item-local work 已�
   [`download authorization`](../manifests/mmqa_p1_source_download_authorization_v1.json)；
   [`pre-execution runtime disposition`](../manifests/mmqa_p1_preexecution_runtime_disposition_v1.json)；
   [`official pre-capability launch disposition`](../manifests/mmqa_p1_official_preflight_launch_disposition_v1.json)；
-  [`official preflight terminal`](../manifests/mmqa_p1_official_preflight_terminal_v1.json)
+  [`official preflight terminal`](../manifests/mmqa_p1_official_preflight_terminal_v1.json)；
+  [`static postmortem`](../manifests/mmqa_p1_official_preflight_static_postmortem_v1.json)
 
 - BIRCO P1 qualified source chain（formal item/model/action/score 尚为 0）：
   [`source custody`](../manifests/birco_p1_source_custody_v1.json)；
