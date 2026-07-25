@@ -60,8 +60,8 @@
 > - 最新 BRIGHT P17 all-remote 终态：P14/P15/P16 均未产生 efficacy 后，P17 在 311linux 上完成 27/27 candidate-specific HippoRAG terminal，并按冻结顺序 seal 每族前 8 个 complete cases，共 24 个三臂 action；26 个 Qwen generation source-valid、1 个由冻结 totalizer 补全，外网与旧 P14/P15 action reuse 均为 0。但远端回执自报 HippoRAG 峰值进程并发为 9，超过 study design、runtime fingerprint 与 plan 共同冻结的 8；根因是 9-worker shared executor 在 cross-encoder 结束后把第九个 slot 交给 HippoRAG。该偏差在任何 gold/score 前由 archive audit 发现，正式 finalizer 未调用，gold/score 均为 0，P17 efficacy=unknown、同 candidate/cohort 永久不 replay。27-attempt forensic tree 已回传并校验；另透明保留 acquisition receipt 中不参与执行的 `target_terminal_count_per_family=10` 遗留字段，规范 target 始终为 8
 > - 最新独立后续 study：TAT-QA P23 按预注册终止后，FRAMES P1 固定 official revision `58d9fb63…22ef`、Git blob `cea20270…025` 与 viewer-exposed rows `[0,100)` exclusion；实现提交 `6552fefb` 的 18/18 tests 与独立 adversarial audit 通过，freeze `8ee6662c…3f20` 绑定 real Git ancestor/四个 commit blobs，并显式披露 freeze 前一次未保存、未解析 row/cell 的 TSV byte stream。正式 source SHA-256=`4255093c…69ff`；唯一资格 marker 随后消费，但 raw TSV header 与预冻结的 public viewer conversion header 不同，故在首行、任何 row content/action/score 前 terminal。FRAMES 不改 parser、不重跑，efficacy/capacity 仍 unknown；这证明 viewer schema 不能代替 raw repository schema contract
 > - 最新 FanOutQA P1 独立 study：固定官方 `v1.1.1` commit `ccf127bd…d54` 的 310-row DEV 与官方 1.539 GB revision cache；不透明下载虽因远端缺少 `git` 在收尾阶段退出，但两个完整 `.part` 已按冻结 size/SHA/Git-blob 校验并原地晋升，未重下。安全审计在任何 JSON/tar-member parse 前以不可变 amendment 透明记录 one-shot、cache trust anchor、qrel 隔离和 selection-commitment 加固；32/32 离线测试与最终审计通过。唯一 formal qualification 随后在 DEV item parse 中因官方 `categories` schema 与冻结 exact contract 不同而 `category schema drifted` fail-closed；cache tar member、TEST、candidate、RAW/HippoRAG、evaluator、score 均为 0。FanOutQA P1 不改 parser、不重跑，source capacity 与 efficacy 仍 unknown
-> - 最新 BIRCO P1 独立 study：在任何 formal row parse 前固定 Zenodo record `10850865` 的单一 20,134,244-byte JSON、较严格的 CC-BY-NC 私有使用/不再分发边界、DORIS-MAE/Clinical-Trial/WTB 三个本地 untouched task、query-disjoint 四块各 10/family，以及 typed constraint hypergraph、固定 E0、listwise E4、RAW 与 candidate-pool-restricted official HippoRAG core adapter。source 只在 311linux 下载一次，MD5=`548cad5d…fa78`、SHA-256=`0c30d869…1f34`；23/23 synthetic tests 后的唯一 aggregate-only qualification 已有效通过。正式容量为 query=`60/50/100`、candidate-pair=`6633/3420/5043`；0 query/document/qrel-value/ID 输出，0 model/action/score。候选重叠图同时证明 DORIS 与 WTB 各为单一连通分量、Clinical 最大分量 45/50，因此本研究严格限定为 public-source、query-disjoint、transductive candidate reranking，reference tail 只作描述，不声称 document-disjoint/population inference
-> - 最新后续缺口：BIRCO P1 已消除新来源与 schema/capacity 不确定性，但仍只有资格证据，尚无可评分 action。现实域双 baseline、跨 family 稳定正净收益与 L5 都仍未闭合。下一步不是补 gate，而是按已经冻结的单一设计接入 selection/runtime、typed operator、E4、RAW/official-core adapter，在 A_form/F_search/A_hold 上一次执行；只有 A_hold 真实晋升才打开事前冻结的 M_search
+> - 最新 MMQA P1 独立 study（source 尚未下载或解析）：固定 official MultiModalQA commit `4dd14328…02e3` 的 TRAIN、DEV、tables、texts 四个 gzip，共 69,204,571 bytes；只研究 exact-support 的 table→text、text→table 与 table-text intersection 三个 relation family。A_form=`120`，F_search=`15`（永久 label-free、非 gate），A_hold=`45`，M_search=`45`；DEV blocks 按共享 table/text 连通分量隔离。候选是 query-local ROW/TEXT closure 与 exact structural-link connected proof bundles；E5 是完全本地、单一、冻结的 conditional maxent structured energy，不再依赖 Ruoli/provider 容量。RAW 与 candidate-restricted official HippoRAG 使用同一 closure，全部只作离线 exact-support nDCG@5 评价
+> - 最新执行状态与缺口：custody/design/download authorization 及 pre-execution disposition 已在 formal source/model/action/score 均为 0 时固定。311linux 的真实边界改为可测的 systemd address-family restriction：outer/formal 为 AF_UNIX-only 并主动验证 AF_INET/6 errno 97，唯一四文件 acquisition sibling 只允许 AF_UNIX/AF_INET/AF_INET6；不声称当前失效的 unprivileged bwrap 或 PrivateNetwork。正式 source 解封前还需完成 source-free runtime preflight、implementation/execution freeze，再一次运行 qualification→selection→A_form→F_search→A_hold；只有 E5−E0 promotion 打开 untouched M_search。现实域同时超过 RAW/HippoRAG 与 L5 仍是未闭合目标，不增加新 gate
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -4416,7 +4416,53 @@ F/A_hold/M qrel。总目标的两个缺口——跨 family 同时超过 RAW/Hipp
 measurement 解耦的冻结机制（优先完全本地、或在新 cohort 身份形成前完成可审计的容量资格），使用新 source/cohort/study ID 一次
 执行；否则最诚实的当前结论仍是现实域稳定双基线优势与 L5 均未达到。
 
+### 12.45 2026-07-23 MMQA P1：本地 structured-proof study 在 source 解封前冻结
+
+BIRCO P1 没有重跑、降低 F gate 或重用其 selection。新的 `MMQA_P1_LOCAL_PROOF_E5_V1` 改用 official MultiModalQA commit
+`4dd14328c6d02a4daa357cc6032915a0b14602e3`，只授权 TRAIN、DEV、tables、texts 四个固定 gzip；size、Git blob SHA-1 与
+总字节数 69,204,571 已从 repository metadata 固定，但四个 formal file 的 download/parse/item/label/support open 仍全部为 0。
+官方仓库没有可确认的 license file，因此边界是 311linux 私有、研究用途、不再分发，只公开 hashes、capacity 与 aggregate score。
+
+这次没有把 provider prompt 换一种写法。action 形成被改成 query-local typed proof：ROW 是一条带 header/cells/link titles 的 table
+row，TEXT 是一段 source text；label-free closure 各最多 48 个 ROW/TEXT node，只用 exact cell-link↔text-title/URL 建边，枚举 2–5
+node、最多 256 个 connected row-text bundles。E0 是固定 unsupervised proof energy；唯一 challenger E5 在 A_form 三族各 40 项上用
+L2=1、L-BFGS max_iter=256 的 conditional maxent 拟合。exact-positive 必须是 bundle 自身包含一个 late exact gold row-text pair；
+top-5 的补齐节点或满 nDCG 不能伪造 positive。若一个 sealed slate 没有 exact-positive，它仍进入全体 bundle feature scaler，但不生成
+伪标签、不贡献 conditional gradient。RAW 直接用同一 frozen cross-encoder 排同一 closure；official HippoRAG 只在同一 closure 内建立
+fresh per-query index。primary 是 binary exact-support linear-gain nDCG@5，utility 固定为 `floor(1e9×nDCG)`。
+
+四块在 source open 前固定为 TRAIN A_form=`40×3=120`，DEV F_search=`5×3=15`、A_hold=`15×3=45`、M_search=`15×3=45`；
+DEV 按共享 table/text connected component 跨块隔离。F_search 永久不打开 gold，也不再充当 identifiability gate。A_hold 的
+E5−E0 正净 utility 与 ties-excluded exact reference tail≤0.10 是 M 的唯一 opening rule；E5 同时超过 RAW/HippoRAG、两组 aggregate
+tail≤0.10 且每个 family 严格为正，是独立 reality-primary claim。reality-primary 失败会关闭该 claim 并禁止同源 rescue，但只要
+E5−E0 已晋升，仍执行事前冻结的 untouched M_search；这提前消除了旧 terminal-list 文句可能造成的歧义。
+
+pre-source adversarial audit 还发现 gold-open capability 不能只相信 caller 提供的 64-hex。冻结实现因此要求在 A_form/A_hold/M 打开
+gold 前复验真实 canonical mode-0600 action archive 的 file/self hash、block、action-pack、item count 与完整有序 anonymous work-ID；
+M 另复验真实 A_hold score 的 `promoted=true`、`M_search_authorized=true`、A_hold archive 及已消费 authorization/marker。两项都只是
+使既有 no-label-leakage 与 promotion-only 合同可执行，不改变 source、cohort、candidate、features、metric、threshold 或 gate。
+
+311linux 当前 AppArmor policy 使 unprivileged bwrap user namespace 不可用，user service 的 `PrivateNetwork` 也不是可依赖的有效边界；
+因此 pre-execution disposition 不再声称二者。outer 从启动起固定 `RestrictAddressFamilies=AF_UNIX` 并主动验证 AF_INET/AF_INET6
+socket creation 均以 errno 97 失败；唯一 network-enabled sibling 只运行四个固定 HTTPS acquisition，显式限制为
+AF_UNIX/AF_INET/AF_INET6、`env -i`、0 retry，完成即退出。正式 child 再独立使用 AF_UNIX-only、NoNewPrivileges、PrivateTmp、
+ProtectSystem、ProtectHome、单一 project ReadWritePaths 与 UMask 0077。official comparator 按其已冻结 runtime 改为 CUDA hidden、
+最多 4 个 CPU worker；GPU0/GPU1 分别留给 MiniLM 与 cross-encoder。这只是实际 scheduling attestation，不改变三臂语义或 pipeline-
+utility（非 equal-compute SOTA）claim。
+
+上述 outer/runtime、gold capability、structured target、source/qualification 与 official adapter 的完整 pre-source 离线套件为
+277/277 PASS，`py_compile` 同时通过。当前阶段仍是 **pre-source implementation freeze pending**，不是 efficacy 结果。下一步只允许先在 source 不存在时完成两套 public-
+synthetic runtime canary 与 external filesystem live revalidation，再冻结 implementation/execution manifests；随后一次执行四文件下载、
+aggregate-only qualification、private component-atomic selection 与正式 controller。任何 source identity/capacity、runtime、one-shot action 或
+valid non-promotion/primary failure都按预注册终止，不 retry、resample、换模型、补 gate 或用在线评价。
+
 ## 附录 A：关键证据索引
+
+- MMQA P1 pre-source frozen chain（formal source/model/action/score 仍为 0）：
+  [`source custody`](../manifests/mmqa_p1_source_custody_v1.json)；
+  [`study design`](../manifests/mmqa_p1_local_proof_e5_study_design_v1.json)；
+  [`download authorization`](../manifests/mmqa_p1_source_download_authorization_v1.json)；
+  [`pre-execution runtime disposition`](../manifests/mmqa_p1_preexecution_runtime_disposition_v1.json)
 
 - BIRCO P1 qualified source chain（formal item/model/action/score 尚为 0）：
   [`source custody`](../manifests/birco_p1_source_custody_v1.json)；
