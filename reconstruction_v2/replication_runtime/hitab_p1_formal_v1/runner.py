@@ -243,6 +243,10 @@ EXPECTED_HIPPORAG_SOURCE_CLEAN_SIZE_BYTES = 332110
 EXPECTED_HIPPORAG_SOURCE_CLEAN_TREE_SHA256 = (
     "925e2a305659cc7ae39464b09e64c800b28455fcf878caebbe81c9f783ec3e4c"
 )
+HIPPORAG_SOURCE_PROJECTION_POLICY = (
+    "same_host_direct_copy_excluding_every___pycache___component_and_"
+    "pyc_or_pyo_file_before_any_hitab_source_access_v1"
+)
 EXPECTED_HIPPORAG_LLM_TREE_SHA256 = (
     "d626d755c99c006761d5e069aa85a73fe8b011c6c0f5d0323a6f8de85246bcb5"
 )
@@ -783,6 +787,12 @@ class FrozenImplementation:
     model_tree_sha256s: Mapping[str, str]
     minilm_asset_manifest: Path
     minilm_asset_manifest_sha256: str
+    hippo_source_root: Path
+    hippo_source_tree_receipt: Mapping[str, object]
+    hippo_source_file_count: int
+    hippo_source_size_bytes: int
+    hippo_source_tree_sha256: str
+    hippo_legacy_source_root: Path
     hippo_worker_module: str
     runtime_policy: Mapping[str, object]
 
@@ -1030,13 +1040,84 @@ def _validate_reusable_hipporag_attestation(
     }
 
 
+def _validate_clean_hipporag_source_tree(
+    source_root: Path,
+    *,
+    expected_file_count: int,
+    expected_size_bytes: int,
+    expected_tree_sha256: str,
+) -> None:
+    """Revalidate the portable source projection, including hardlink state."""
+
+    source_root = Path(source_root)
+    try:
+        root_metadata = source_root.lstat()
+        entries = tuple(source_root.iterdir())
+    except OSError as exc:
+        raise HitabP1ProductionRuntimeError(
+            "clean HippoRAG source projection is unavailable"
+        ) from exc
+    if (
+        not stat.S_ISDIR(root_metadata.st_mode)
+        or stat.S_ISLNK(root_metadata.st_mode)
+        or source_root.resolve() != source_root
+        or {entry.name for entry in entries} != {"src"}
+        or (source_root / "src").is_symlink()
+        or not (source_root / "src").is_dir()
+    ):
+        raise HitabP1ProductionRuntimeError(
+            "clean HippoRAG source projection root drifted"
+        )
+    try:
+        nodes = tuple(source_root.rglob("*"))
+        file_rows = tuple(
+            (path, path.lstat())
+            for path in nodes
+            if stat.S_ISREG(path.lstat().st_mode)
+        )
+    except OSError as exc:
+        raise HitabP1ProductionRuntimeError(
+            "clean HippoRAG source projection could not be scanned"
+        ) from exc
+    if (
+        any(
+            stat.S_ISLNK(path.lstat().st_mode)
+            or not (
+                stat.S_ISDIR(path.lstat().st_mode)
+                or stat.S_ISREG(path.lstat().st_mode)
+            )
+            for path in nodes
+        )
+        or any(
+            "__pycache__" in path.relative_to(source_root).parts
+            for path in nodes
+        )
+        or any(metadata.st_nlink != 1 for _path, metadata in file_rows)
+        or any(
+            path.suffix in {".pyc", ".pyo"}
+            or "__pycache__" in path.relative_to(source_root).parts
+            for path, _metadata in file_rows
+        )
+        or len(file_rows)
+        != expected_file_count
+        or sum(metadata.st_size for _path, metadata in file_rows)
+        != expected_size_bytes
+        or model_tree_sha256(source_root)
+        != expected_tree_sha256
+    ):
+        raise HitabP1ProductionRuntimeError(
+            "current HippoRAG source is not the frozen clean projection"
+        )
+
+
 def _validate_current_hipporag_attestation_linkage(
     attestation: Mapping[str, object],
     *,
     runtime: FrozenPythonRuntime,
     model_hashes: Mapping[str, str],
+    clean_source_root: Path,
 ) -> None:
-    """Prove that this study uses the assets covered by the reused receipt."""
+    """Bind the portable source projection to the reused origin and models."""
 
     probe = runtime.import_probe.get("hipporag")
     if not isinstance(probe, Mapping):
@@ -1059,28 +1140,20 @@ def _validate_current_hipporag_attestation_linkage(
             "current HippoRAG source or model binding is not attested"
         )
     source_root = origin.parent.parent.parent
-    source_files = tuple(
-        path
-        for path in source_root.rglob("*")
-        if path.is_file() and not path.is_symlink()
-    )
+    clean_source_root = Path(clean_source_root)
     if (
-        source_root / "src" not in runtime.ordered_roots
-        or any(
-            path.suffix in {".pyc", ".pyo"}
-            or "__pycache__" in path.relative_to(source_root).parts
-            for path in source_files
-        )
-        or len(source_files)
-        != EXPECTED_HIPPORAG_SOURCE_CLEAN_FILE_COUNT
-        or sum(path.stat().st_size for path in source_files)
-        != EXPECTED_HIPPORAG_SOURCE_CLEAN_SIZE_BYTES
-        or model_tree_sha256(source_root)
-        != EXPECTED_HIPPORAG_SOURCE_CLEAN_TREE_SHA256
+        source_root != clean_source_root
+        or source_root / "src" not in runtime.ordered_roots
     ):
         raise HitabP1ProductionRuntimeError(
-            "current HippoRAG source is not the frozen clean projection"
+            "current HippoRAG import is outside the clean projection"
         )
+    _validate_clean_hipporag_source_tree(
+        source_root,
+        expected_file_count=EXPECTED_HIPPORAG_SOURCE_CLEAN_FILE_COUNT,
+        expected_size_bytes=EXPECTED_HIPPORAG_SOURCE_CLEAN_SIZE_BYTES,
+        expected_tree_sha256=EXPECTED_HIPPORAG_SOURCE_CLEAN_TREE_SHA256,
+    )
 
 
 def _load_python_runtime(
@@ -1426,6 +1499,73 @@ def load_implementation_freeze(path: Path) -> FrozenImplementation:
             "loaded dependency closure verifier drifted"
         )
 
+    raw_source_projection = value.get("hippo_source_projection")
+    if (
+        not isinstance(raw_source_projection, dict)
+        or set(raw_source_projection)
+        != {
+            "clean_root",
+            "file_count",
+            "legacy_attested_root",
+            "projection_policy",
+            "size_bytes",
+            "tree_receipt",
+            "tree_sha256",
+        }
+        or raw_source_projection.get("projection_policy")
+        != HIPPORAG_SOURCE_PROJECTION_POLICY
+        or not isinstance(raw_source_projection.get("clean_root"), str)
+        or not isinstance(
+            raw_source_projection.get("legacy_attested_root"), str
+        )
+        or not isinstance(raw_source_projection.get("tree_receipt"), dict)
+        or raw_source_projection.get("file_count")
+        != EXPECTED_HIPPORAG_SOURCE_CLEAN_FILE_COUNT
+        or raw_source_projection.get("size_bytes")
+        != EXPECTED_HIPPORAG_SOURCE_CLEAN_SIZE_BYTES
+        or raw_source_projection.get("tree_sha256")
+        != EXPECTED_HIPPORAG_SOURCE_CLEAN_TREE_SHA256
+    ):
+        raise HitabP1ProductionRuntimeError(
+            "HippoRAG source projection binding is malformed"
+        )
+    clean_source_root = Path(raw_source_projection["clean_root"])
+    expected_clean_source_root = (
+        project.parent.parent / "runtime/hipporag_clean/HippoRAG"
+    )
+    legacy_source_root = Path(
+        str(hipporag_attestation["hipporag_origin_path"])
+    ).parents[2]
+    if (
+        clean_source_root != expected_clean_source_root
+        or Path(raw_source_projection["legacy_attested_root"])
+        != legacy_source_root
+    ):
+        raise HitabP1ProductionRuntimeError(
+            "HippoRAG source relocation is not the exact study-local mapping"
+        )
+    try:
+        clean_source_tree_receipt = closure.verify_tree_receipt(
+            clean_source_root,
+            raw_source_projection["tree_receipt"],
+        )
+        _validate_clean_hipporag_source_tree(
+            clean_source_root,
+            expected_file_count=(
+                EXPECTED_HIPPORAG_SOURCE_CLEAN_FILE_COUNT
+            ),
+            expected_size_bytes=(
+                EXPECTED_HIPPORAG_SOURCE_CLEAN_SIZE_BYTES
+            ),
+            expected_tree_sha256=(
+                EXPECTED_HIPPORAG_SOURCE_CLEAN_TREE_SHA256
+            ),
+        )
+    except Exception as exc:
+        raise HitabP1ProductionRuntimeError(
+            "HippoRAG full clean source closure drifted"
+        ) from exc
+
     raw_models = value.get("models")
     if not isinstance(raw_models, dict) or set(raw_models) != REQUIRED_MODEL_LABELS:
         raise HitabP1ProductionRuntimeError(
@@ -1491,6 +1631,7 @@ def load_implementation_freeze(path: Path) -> FrozenImplementation:
         hipporag_attestation,
         runtime=hippo_runtime,
         model_hashes=model_hashes,
+        clean_source_root=clean_source_root,
     )
 
     raw_manifest = value.get("minilm_asset_manifest")
@@ -1570,6 +1711,18 @@ def load_implementation_freeze(path: Path) -> FrozenImplementation:
         model_tree_sha256s=model_hashes,
         minilm_asset_manifest=minilm_manifest,
         minilm_asset_manifest_sha256=minilm_manifest_hash,
+        hippo_source_root=clean_source_root,
+        hippo_source_tree_receipt=clean_source_tree_receipt,
+        hippo_source_file_count=(
+            EXPECTED_HIPPORAG_SOURCE_CLEAN_FILE_COUNT
+        ),
+        hippo_source_size_bytes=(
+            EXPECTED_HIPPORAG_SOURCE_CLEAN_SIZE_BYTES
+        ),
+        hippo_source_tree_sha256=(
+            EXPECTED_HIPPORAG_SOURCE_CLEAN_TREE_SHA256
+        ),
+        hippo_legacy_source_root=legacy_source_root,
         hippo_worker_module=HIPPORAG_WORKER_MODULE,
         runtime_policy=dict(RUNTIME_POLICY),
     )
@@ -1615,7 +1768,15 @@ _IMPORT_PROBE_SCRIPT = (
 )
 
 
-def _verify_runtime_filesystem_again(runtime: FrozenPythonRuntime) -> None:
+def _verify_runtime_filesystem_again(
+    runtime: FrozenPythonRuntime,
+    *,
+    hippo_source_root: Path | None = None,
+    hippo_source_tree_receipt: Mapping[str, object] | None = None,
+    hippo_source_file_count: int | None = None,
+    hippo_source_size_bytes: int | None = None,
+    hippo_source_tree_sha256: str | None = None,
+) -> None:
     try:
         from . import dependency_closure as closure
 
@@ -1643,6 +1804,35 @@ def _verify_runtime_filesystem_again(runtime: FrozenPythonRuntime) -> None:
             closure.verify_regular_file_receipt(
                 Path(str(row["origin_path"])),
                 row["origin_receipt"],
+            )
+        source_bindings = (
+            hippo_source_root,
+            hippo_source_tree_receipt,
+            hippo_source_file_count,
+            hippo_source_size_bytes,
+            hippo_source_tree_sha256,
+        )
+        if any(value is None for value in source_bindings) and not all(
+            value is None for value in source_bindings
+        ):
+            raise HitabP1ProductionRuntimeError(
+                "HippoRAG full source recheck binding is incomplete"
+            )
+        if (
+            hippo_source_root is not None
+            and hippo_source_tree_receipt is not None
+            and hippo_source_file_count is not None
+            and hippo_source_size_bytes is not None
+            and hippo_source_tree_sha256 is not None
+        ):
+            closure.verify_tree_receipt(
+                hippo_source_root, hippo_source_tree_receipt
+            )
+            _validate_clean_hipporag_source_tree(
+                hippo_source_root,
+                expected_file_count=hippo_source_file_count,
+                expected_size_bytes=hippo_source_size_bytes,
+                expected_tree_sha256=hippo_source_tree_sha256,
             )
     except Exception as exc:
         raise HitabP1ProductionRuntimeError(
@@ -1904,7 +2094,22 @@ def prepare_implementation_runtime(
     )
     child_probe = None
     if verify_hippo_child:
-        _verify_runtime_filesystem_again(implementation.hippo_runtime)
+        _verify_runtime_filesystem_again(
+            implementation.hippo_runtime,
+            hippo_source_root=implementation.hippo_source_root,
+            hippo_source_tree_receipt=(
+                implementation.hippo_source_tree_receipt
+            ),
+            hippo_source_file_count=(
+                implementation.hippo_source_file_count
+            ),
+            hippo_source_size_bytes=(
+                implementation.hippo_source_size_bytes
+            ),
+            hippo_source_tree_sha256=(
+                implementation.hippo_source_tree_sha256
+            ),
+        )
         child_probe = _probe_child_runtime(implementation)
     return _self_hashed(
         {
@@ -2423,6 +2628,11 @@ class HippoFreshProcessRunner:
         python_executable: Path,
         dependency_roots: Sequence[Path],
         stdlib_root: Path,
+        hippo_source_root: Path,
+        hippo_source_tree_receipt: Mapping[str, object],
+        hippo_source_file_count: int,
+        hippo_source_size_bytes: int,
+        hippo_source_tree_sha256: str,
         worker_module: str,
         worker_file: Path,
         worker_file_sha256: str,
@@ -2452,6 +2662,13 @@ class HippoFreshProcessRunner:
         self.python_executable = python_executable
         self.dependency_roots = tuple(map(Path, dependency_roots))
         self.stdlib_root = Path(stdlib_root)
+        self.hippo_source_root = Path(hippo_source_root)
+        self.hippo_source_tree_receipt = dict(
+            hippo_source_tree_receipt
+        )
+        self.hippo_source_file_count = hippo_source_file_count
+        self.hippo_source_size_bytes = hippo_source_size_bytes
+        self.hippo_source_tree_sha256 = hippo_source_tree_sha256
         if (
             not self.dependency_roots
             or len(set(self.dependency_roots))
@@ -2475,6 +2692,26 @@ class HippoFreshProcessRunner:
                 "HippoRAG runtime root is unsafe"
             )
         os.chmod(runtime_root, 0o700)
+        self._verify_source_projection()
+
+    def _verify_source_projection(self) -> None:
+        try:
+            from . import dependency_closure as closure
+
+            closure.verify_tree_receipt(
+                self.hippo_source_root,
+                self.hippo_source_tree_receipt,
+            )
+            _validate_clean_hipporag_source_tree(
+                self.hippo_source_root,
+                expected_file_count=self.hippo_source_file_count,
+                expected_size_bytes=self.hippo_source_size_bytes,
+                expected_tree_sha256=self.hippo_source_tree_sha256,
+            )
+        except Exception as exc:
+            raise HitabP1ProductionRuntimeError(
+                "HippoRAG clean source drifted before child launch"
+            ) from exc
 
     def _next_ordinal(self) -> int:
         with self._counter_lock:
@@ -2634,6 +2871,7 @@ class HippoFreshProcessRunner:
             stage = "launch_fresh_official_worker"
             try:
                 try:
+                    self._verify_source_projection()
                     launch_ack()
                     completed = self.subprocess_runner(
                         command,
@@ -2918,6 +3156,13 @@ def build_production_bindings(
         python_executable=implementation.hippo_runtime.executable,
         dependency_roots=implementation.hippo_runtime.ordered_roots,
         stdlib_root=implementation.hippo_runtime.stdlib_root,
+        hippo_source_root=implementation.hippo_source_root,
+        hippo_source_tree_receipt=(
+            implementation.hippo_source_tree_receipt
+        ),
+        hippo_source_file_count=implementation.hippo_source_file_count,
+        hippo_source_size_bytes=implementation.hippo_source_size_bytes,
+        hippo_source_tree_sha256=implementation.hippo_source_tree_sha256,
         worker_module=implementation.hippo_worker_module,
         worker_file=implementation.files["hippo_worker"],
         worker_file_sha256=implementation.file_sha256s["hippo_worker"],

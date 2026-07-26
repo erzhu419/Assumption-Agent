@@ -1771,6 +1771,12 @@ def test_frozen_production_factory_reverifies_once_without_test_decode(
         model_tree_sha256s={},
         minilm_asset_manifest=module_path,
         minilm_asset_manifest_sha256="3" * 64,
+        hippo_source_root=tmp_path,
+        hippo_source_tree_receipt={},
+        hippo_source_file_count=0,
+        hippo_source_size_bytes=0,
+        hippo_source_tree_sha256="6" * 64,
+        hippo_legacy_source_root=tmp_path,
         hippo_worker_module="synthetic",
         runtime_policy={},
     )

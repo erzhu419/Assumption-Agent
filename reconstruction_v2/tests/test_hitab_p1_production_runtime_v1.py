@@ -31,6 +31,21 @@ from replication_runtime.hitab_p1_formal_v1 import dependency_closure
 _REAL_CURRENT_HIPPO_ATTESTATION_LINKAGE = (
     runner._validate_current_hipporag_attestation_linkage
 )
+_SYNTHETIC_LEGACY_HIPPO_ROOT = Path(
+    "/synthetic/legacy/HippoRAG"
+)
+_SYNTHETIC_CLEAN_SOURCE_BYTES = b"# synthetic clean HippoRAG source\n"
+_SYNTHETIC_CLEAN_SOURCE_TREE_SHA256 = runner.stable_hash(
+    [
+        {
+            "path": "src/hipporag/__init__.py",
+            "sha256": hashlib.sha256(
+                _SYNTHETIC_CLEAN_SOURCE_BYTES
+            ).hexdigest(),
+            "size_bytes": len(_SYNTHETIC_CLEAN_SOURCE_BYTES),
+        }
+    ]
+)
 
 
 @pytest.fixture(autouse=True)
@@ -41,6 +56,33 @@ def _synthetic_current_attestation_linkage(monkeypatch):
         runner,
         "_validate_current_hipporag_attestation_linkage",
         lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        runner, "EXPECTED_HIPPORAG_SOURCE_CLEAN_FILE_COUNT", 1
+    )
+    monkeypatch.setattr(
+        runner,
+        "EXPECTED_HIPPORAG_SOURCE_CLEAN_SIZE_BYTES",
+        len(_SYNTHETIC_CLEAN_SOURCE_BYTES),
+    )
+    monkeypatch.setattr(
+        runner,
+        "EXPECTED_HIPPORAG_SOURCE_CLEAN_TREE_SHA256",
+        _SYNTHETIC_CLEAN_SOURCE_TREE_SHA256,
+    )
+    monkeypatch.setattr(
+        runner,
+        "_validate_reusable_hipporag_attestation",
+        lambda *_args, **_kwargs: {
+            "embedding_tree_sha256": "1" * 64,
+            "hipporag_origin_file_sha256": "2" * 64,
+            "hipporag_origin_path": str(
+                _SYNTHETIC_LEGACY_HIPPO_ROOT
+                / "src/hipporag/__init__.py"
+            ),
+            "llm_tree_sha256": "3" * 64,
+            "source_tree_sha256": "4" * 64,
+        },
     )
 
 
@@ -222,7 +264,7 @@ def _runtime_binding(
 
 
 def _implementation_freeze(tmp_path: Path) -> tuple[Path, dict[str, object]]:
-    project = tmp_path / "project"
+    project = tmp_path / "study/formal_v1/reconstruction_v2"
     project.mkdir(parents=True)
     source_project = Path(runner.__file__).resolve().parents[2]
     files: dict[str, object] = {}
@@ -297,6 +339,17 @@ def _implementation_freeze(tmp_path: Path) -> tuple[Path, dict[str, object]]:
         required_distributions=runner.HIPPORAG_REQUIRED_DISTRIBUTIONS,
         required_project_imports=runner.HIPPORAG_REQUIRED_PROJECT_IMPORTS,
     )
+    clean_source_root = (
+        project.parent.parent / "runtime/hipporag_clean/HippoRAG"
+    )
+    clean_source_file = clean_source_root / "src/hipporag/__init__.py"
+    clean_source_file.parent.mkdir(parents=True)
+    clean_source_file.write_bytes(_SYNTHETIC_CLEAN_SOURCE_BYTES)
+    clean_source_files = tuple(
+        path
+        for path in clean_source_root.rglob("*")
+        if path.is_file()
+    )
     body: dict[str, object] = {
         "dependency_closure": {
             "hippo_child": hippo_dependency,
@@ -306,6 +359,25 @@ def _implementation_freeze(tmp_path: Path) -> tuple[Path, dict[str, object]]:
         "hippo_worker": {
             "file_label": "hippo_worker",
             "module": runner.HIPPORAG_WORKER_MODULE,
+        },
+        "hippo_source_projection": {
+            "clean_root": str(clean_source_root),
+            "file_count": len(clean_source_files),
+            "legacy_attested_root": str(
+                _SYNTHETIC_LEGACY_HIPPO_ROOT
+            ),
+            "projection_policy": (
+                runner.HIPPORAG_SOURCE_PROJECTION_POLICY
+            ),
+            "size_bytes": sum(
+                path.stat().st_size for path in clean_source_files
+            ),
+            "tree_receipt": dependency_closure.tree_receipt(
+                clean_source_root
+            ),
+            "tree_sha256": runner.model_tree_sha256(
+                clean_source_root
+            ),
         },
         "minilm_asset_manifest": {
             "path": str(minilm_manifest),
@@ -507,6 +579,58 @@ def test_freeze_accepts_lexical_outer_symlink_to_detached_base_runtime(
     )
 
 
+def test_freeze_rejects_nonlocal_or_drifted_full_source_projection(
+    tmp_path: Path,
+) -> None:
+    nonlocal_path, nonlocal_value = _implementation_freeze(
+        tmp_path / "nonlocal"
+    )
+    nonlocal_value["hippo_source_projection"]["clean_root"] = str(
+        tmp_path / "outside-study/HippoRAG"
+    )
+    nonlocal_value.pop("self_sha256")
+    _write_json(nonlocal_path, _self_hashed(nonlocal_value))
+    with pytest.raises(
+        runner.HitabP1ProductionRuntimeError,
+        match="exact study-local mapping",
+    ):
+        runner.load_implementation_freeze(nonlocal_path)
+
+    drift_path, drift_value = _implementation_freeze(tmp_path / "drift")
+    clean_root = Path(
+        drift_value["hippo_source_projection"]["clean_root"]
+    )
+    (clean_root / "src/hipporag/non_origin.py").write_text(
+        "DRIFT = True\n", encoding="ascii"
+    )
+    with pytest.raises(
+        runner.HitabP1ProductionRuntimeError,
+        match="full clean source closure drifted",
+    ):
+        runner.load_implementation_freeze(drift_path)
+
+    empty_cache_path, empty_cache_value = _implementation_freeze(
+        tmp_path / "empty-cache"
+    )
+    empty_cache_root = Path(
+        empty_cache_value["hippo_source_projection"]["clean_root"]
+    )
+    (empty_cache_root / "src/hipporag/__pycache__").mkdir()
+    empty_cache_value["hippo_source_projection"]["tree_receipt"] = (
+        dependency_closure.tree_receipt(empty_cache_root)
+    )
+    empty_cache_value.pop("self_sha256")
+    _write_json(
+        empty_cache_path,
+        _self_hashed(empty_cache_value),
+    )
+    with pytest.raises(
+        runner.HitabP1ProductionRuntimeError,
+        match="full clean source closure drifted",
+    ):
+        runner.load_implementation_freeze(empty_cache_path)
+
+
 def test_committed_units_use_study_local_outer_runtime_symlink() -> None:
     project = Path(runner.__file__).resolve().parents[2]
     expected = (
@@ -637,6 +761,7 @@ def test_current_hipporag_assets_must_equal_reused_attestation(
             "hippo_embedding": "1" * 64,
             "hippo_llm": "2" * 64,
         },
+        clean_source_root=source_root,
     )
     with pytest.raises(
         runner.HitabP1ProductionRuntimeError,
@@ -649,6 +774,7 @@ def test_current_hipporag_assets_must_equal_reused_attestation(
                 "hippo_embedding": "1" * 64,
                 "hippo_llm": "3" * 64,
             },
+            clean_source_root=source_root,
         )
 
     cache = origin.parent / "__pycache__"
@@ -678,6 +804,38 @@ def test_current_hipporag_assets_must_equal_reused_attestation(
                 "hippo_embedding": "1" * 64,
                 "hippo_llm": "2" * 64,
             },
+            clean_source_root=source_root,
+        )
+
+    (cache / "__init__.cpython-310.pyc").unlink()
+    cache.rmdir()
+    alias = origin.parent / "hardlinked_alias.py"
+    os.link(origin, alias)
+    monkeypatch.setattr(
+        runner, "EXPECTED_HIPPORAG_SOURCE_CLEAN_FILE_COUNT", 2
+    )
+    monkeypatch.setattr(
+        runner,
+        "EXPECTED_HIPPORAG_SOURCE_CLEAN_SIZE_BYTES",
+        2 * origin.stat().st_size,
+    )
+    monkeypatch.setattr(
+        runner,
+        "EXPECTED_HIPPORAG_SOURCE_CLEAN_TREE_SHA256",
+        runner.model_tree_sha256(source_root),
+    )
+    with pytest.raises(
+        runner.HitabP1ProductionRuntimeError,
+        match="frozen clean projection",
+    ):
+        _REAL_CURRENT_HIPPO_ATTESTATION_LINKAGE(
+            attestation,
+            runtime=runtime,
+            model_hashes={
+                "hippo_embedding": "1" * 64,
+                "hippo_llm": "2" * 64,
+            },
+            clean_source_root=source_root,
         )
 
 
@@ -847,6 +1005,10 @@ def _fresh_runner(
     dependency_root.mkdir()
     stdlib_root = tmp_path / "hippo-stdlib"
     stdlib_root.mkdir()
+    clean_source_root = tmp_path / "hippo-source/HippoRAG"
+    clean_source = clean_source_root / "src/hipporag/__init__.py"
+    clean_source.parent.mkdir(parents=True)
+    clean_source.write_bytes(_SYNTHETIC_CLEAN_SOURCE_BYTES)
     return runner.HippoFreshProcessRunner(
         project_root=project,
         runtime_root=Path(
@@ -857,6 +1019,15 @@ def _fresh_runner(
         python_executable=Path(sys.executable),
         dependency_roots=(dependency_root,),
         stdlib_root=stdlib_root,
+        hippo_source_root=clean_source_root,
+        hippo_source_tree_receipt=dependency_closure.tree_receipt(
+            clean_source_root
+        ),
+        hippo_source_file_count=1,
+        hippo_source_size_bytes=len(_SYNTHETIC_CLEAN_SOURCE_BYTES),
+        hippo_source_tree_sha256=(
+            _SYNTHETIC_CLEAN_SOURCE_TREE_SHA256
+        ),
         worker_module=runner.HIPPORAG_WORKER_MODULE,
         worker_file=worker,
         worker_file_sha256=runner.file_sha256(worker),
@@ -866,6 +1037,42 @@ def _fresh_runner(
         embedding_model_tree_sha256=runner.model_tree_sha256(embedding),
         subprocess_runner=fake_run,
     )
+
+
+def test_hippo_runner_rechecks_full_source_before_every_launch(
+    tmp_path: Path,
+) -> None:
+    subprocess_called = False
+    acknowledged = False
+
+    def fake_run(*_args: object, **_kwargs: object) -> SimpleNamespace:
+        nonlocal subprocess_called
+        subprocess_called = True
+        return SimpleNamespace(returncode=0)
+
+    fresh = _fresh_runner(tmp_path, fake_run)
+    source = (
+        tmp_path
+        / "hippo-source/HippoRAG/src/hipporag/non_origin.py"
+    )
+    source.write_text("DRIFT = True\n", encoding="ascii")
+
+    def acknowledge() -> None:
+        nonlocal acknowledged
+        acknowledged = True
+
+    with pytest.raises(
+        runner.HitabP1ProductionRuntimeError,
+        match="clean source drifted before child launch",
+    ):
+        fresh(
+            _hippo_input(),
+            physical_gpu=0,
+            cpu_thread_limit=4,
+            launch_ack=acknowledge,
+        )
+    assert subprocess_called is False
+    assert acknowledged is False
 
 
 def test_hippo_runner_is_env_i_offline_fresh_two_lane_and_one_per_gpu(

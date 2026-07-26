@@ -5,7 +5,7 @@
 > - 当前 HiTab P1：全新 study `HITAB_P1_DMC1_HIERARCHICAL_SET_EVALUATOR_V1` 已在任何
 >   HiTab source body、secret、cohort、model action 或 score 前完成 source custody、DMC1
 >   hierarchical evidence-set evaluator、late-qrel controller 与三阶段 production closure。
->   最终 69/69 离线测试及独立终审通过；双 Python filesystem closure、source-free canary
+>   最终 71/71 离线测试及独立终审通过；双 Python filesystem closure、source-free canary
 >   的真实 GPU1-overlap→GPU0-formation→cache-release→GPU0-Hippo 顺序、每 GPU 最多一个
 >   Hippo process、canary/formal 一次性 claim、promotion 后才可首次 decode TEST，以及
 >   `CPUQuota=800% / MemoryMax=40G / TasksMax=64` 均已闭合。当前仍只是
@@ -4767,7 +4767,17 @@ subprocess-launch ACK 与第二次 GPU0 compile/RAW/E0/E1 重叠，empty-cache r
 ACK 缺失/重复、pre-ACK failure、旧 false-overlap 反例、binding failure、重复 canary/formal、source-before-bootstrap、
 qrel-before-seal 与 promotion-before-TEST 都有 fail-closed 回归。
 
-当前 source-free code、design、units 与 69/69 离线测试已通过独立终审；design self hash 为
+implementation inventory 的真实路径资格化在 source access=0 时另外发现三项不能由 synthetic fixture 暴露的
+filesystem drift：typed venv 的 copied executable 会把 loader 推到错误 stdlib，P17 base stdlib/dist-packages
+含无效 symlink，以及旧 P17 HippoRAG receipt 的 36 个 path-sensitive `pyc` 中已有一个漂移。处理没有放宽
+verifier：outer/child 改为两个 study-local lexical venv symlink，共同指向去除无效链接且完整 tree-bound 的
+study-local Python base；HippoRAG 执行源改为事前从五个独立副本一致的 60 个 non-bytecode 文件形成的 portable
+projection（generic tree `925e2a…3e4c`），保留旧 `a644ab…cdd5` receipt lineage、旧 origin-file hash 与两个
+model hash，但不声称 60 文件逐一由已漂移的 legacy bytecode tree 密码学导出。projection 的精确 study-local
+relocation、full-root receipt、`src` dependency receipt、无 symlink/special/hardlink/bytecode 及每次 child
+launch 前重验均已闭合。
+
+当前 source-free code、design、units 与 71/71 离线测试已通过独立终审；design self hash 为
 `9f060347…6dba`。截至本节写入时，HiTab source body download/parse、secret、selected item、model inference、
 Hippo action、qrel open、score、API/online evaluator 均为 0。故这是一份 **implementation-ready prospective
 freeze**，不是 feasibility 或 efficacy positive。下一步只能按固定顺序生成远端 implementation freeze，运行唯一真实
