@@ -1,0 +1,16 @@
+[Unit]
+Description=LoCoMo P0 one-shot public non-scoring source qualification v1
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/locomo_p0_20260727/reconstruction_v2
+UMask=0077
+ExecStartPre=/usr/bin/test ! -e %h/locomo_p0_20260727/p0_work_v1
+ExecStart=/usr/bin/env -i HOME=%h LANG=C.UTF-8 LC_ALL=C.UTF-8 PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONHASHSEED=0 PYTHONNOUSERSITE=1 PYTHONPATH=%h/locomo_p0_20260727/reconstruction_v2 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 /usr/bin/python3 -S -B -m assumption_agent.benchmarks.locomo_p0_public_source_qualification_v1 acquire-and-qualify --project-root %h/locomo_p0_20260727/reconstruction_v2 --work-root %h/locomo_p0_20260727/p0_work_v1
+CPUQuota=200%
+MemoryMax=2G
+TasksMax=16
+KillMode=control-group
+Restart=no
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+TimeoutStartSec=infinity
