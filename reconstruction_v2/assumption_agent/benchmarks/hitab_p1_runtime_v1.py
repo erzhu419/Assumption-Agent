@@ -11,7 +11,8 @@ There are three intentionally narrow model capabilities:
   contract;
 * a pair scorer backed in production by the same immutable local BERT asset as
   ``bright_cross_encoder_v1``; and
-* the existing offline ``BrightMiniLMEncoder.encode`` capability.
+* a HiTab-specific direct Transformers MiniLM encoder over the same immutable
+  all-MiniLM-L6-v2 asset.
 
 The BRIGHT query-generator contract exposes four expansions but no operation
 field.  Therefore this adapter preserves those four expansions and freezes
@@ -34,14 +35,16 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 import hashlib
+from importlib import import_module, metadata
 import json
 import math
 from numbers import Real
 import os
 from pathlib import Path
 import re
+import sys
 import threading
-from typing import Callable, Protocol, Sequence
+from typing import Callable, Mapping, Protocol, Sequence
 import unicodedata
 
 import numpy as np
@@ -53,6 +56,7 @@ from replication_runtime.bright_cross_encoder_v1 import worker as bright_ce_work
 from replication_runtime.bright_query_generator_v1 import contract as planner_contract
 from replication_runtime.bright_query_generator_v1 import worker as planner_v1_worker
 from replication_runtime.bright_query_generator_v2 import worker as planner_v2_worker
+from replication_runtime.qasper_minilm_v1 import binding as minilm_asset
 
 
 VERSION = "hitab_p1_runtime_v1"
@@ -78,6 +82,54 @@ PRODUCTION_OFFLINE_ENVIRONMENT = {
     "HF_HUB_OFFLINE": "1",
     "TOKENIZERS_PARALLELISM": "false",
     "TRANSFORMERS_OFFLINE": "1",
+}
+DIRECT_MINILM_BACKEND = (
+    "transformers_AutoTokenizer_AutoModel_attention_mask_mean_"
+    "single_L2_normalize_v2"
+)
+DIRECT_MINILM_RUNTIME_VERSIONS = {
+    "huggingface_hub": "1.11.0",
+    "numpy": "2.2.6",
+    "python": "3.10.12",
+    "safetensors": "0.7.0",
+    "tokenizers": "0.22.2",
+    "torch": "2.8.0+cu128",
+    "transformers": "5.10.1",
+}
+_DIRECT_MINILM_PACKAGE_TO_MODULE = {
+    "huggingface_hub": ("huggingface-hub", "huggingface_hub"),
+    "numpy": ("numpy", "numpy"),
+    "safetensors": ("safetensors", "safetensors"),
+    "tokenizers": ("tokenizers", "tokenizers"),
+    "torch": ("torch", "torch"),
+    "transformers": ("transformers", "transformers"),
+}
+_DIRECT_MINILM_MODULES = [
+    {
+        "idx": 0,
+        "name": "0",
+        "path": "",
+        "type": "sentence_transformers.models.Transformer",
+    },
+    {
+        "idx": 1,
+        "name": "1",
+        "path": "1_Pooling",
+        "type": "sentence_transformers.models.Pooling",
+    },
+    {
+        "idx": 2,
+        "name": "2",
+        "path": "2_Normalize",
+        "type": "sentence_transformers.models.Normalize",
+    },
+]
+_DIRECT_MINILM_POOLING = {
+    "word_embedding_dimension": EMBEDDING_DIMENSION,
+    "pooling_mode_cls_token": False,
+    "pooling_mode_mean_tokens": True,
+    "pooling_mode_max_tokens": False,
+    "pooling_mode_mean_sqrt_len_tokens": False,
 }
 
 
@@ -866,13 +918,366 @@ class BrightCrossEncoderProductionScorer:
         return tuple(output)
 
 
+def _direct_minilm_json(root: Path, relative: str) -> object:
+    path = root / relative
+    if (
+        path.is_symlink()
+        or not path.is_file()
+        or path.resolve() != path
+        or path.stat().st_size > 64 * 1024
+    ):
+        raise HitabP1RuntimeError(
+            f"direct MiniLM topology file drifted: {relative}"
+        )
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HitabP1RuntimeError(
+            f"direct MiniLM topology file is invalid: {relative}"
+        ) from exc
+
+
+def _validate_direct_minilm_topology(root: Path) -> None:
+    modules = _direct_minilm_json(root, "modules.json")
+    pooling = _direct_minilm_json(root, "1_Pooling/config.json")
+    sentence_bert = _direct_minilm_json(
+        root, "sentence_bert_config.json"
+    )
+    config = _direct_minilm_json(root, "config.json")
+    if (
+        modules != _DIRECT_MINILM_MODULES
+        or pooling != _DIRECT_MINILM_POOLING
+        or sentence_bert
+        != {"max_seq_length": 256, "do_lower_case": False}
+        or not isinstance(config, dict)
+        or config.get("architectures") != ["BertModel"]
+        or config.get("hidden_size") != EMBEDDING_DIMENSION
+        or config.get("model_type") != "bert"
+        or config.get("pad_token_id") != 0
+        or config.get("max_position_embeddings") != 512
+    ):
+        raise HitabP1RuntimeError(
+            "direct Transformers MiniLM topology drifted"
+        )
+
+
+def _reject_outer_sentence_transformers() -> None:
+    if any(
+        name == "sentence_transformers"
+        or name.startswith("sentence_transformers.")
+        for name in sys.modules
+    ):
+        raise HitabP1RuntimeError(
+            "SentenceTransformer entered the direct MiniLM outer runtime"
+        )
+
+
+def _reject_outer_dynamic_python() -> None:
+    """Reject shared-temporary imports before and after every model phase."""
+
+    paths: set[str] = set()
+
+    def record(raw: object) -> None:
+        if not isinstance(raw, str) or not raw.startswith("/"):
+            return
+        path = Path(raw)
+        try:
+            path.relative_to("/tmp")
+        except ValueError:
+            try:
+                path.relative_to("/var/tmp")
+            except ValueError:
+                return
+        paths.add(raw)
+
+    for raw in sys.path:
+        record(raw)
+    for module in tuple(sys.modules.values()):
+        try:
+            namespace = vars(module)
+        except TypeError:
+            continue
+        record(namespace.get("__file__"))
+        spec = namespace.get("__spec__")
+        if spec is not None:
+            record(getattr(spec, "origin", None))
+            locations = getattr(
+                spec, "submodule_search_locations", None
+            )
+            if locations is not None:
+                for value in locations:
+                    record(value)
+        package_paths = namespace.get("__path__")
+        if package_paths is not None:
+            for value in package_paths:
+                record(value)
+    if paths:
+        raise HitabP1RuntimeError(
+            "outer runtime executed Python from shared temporary space"
+        )
+    _reject_outer_sentence_transformers()
+
+
+def _verify_direct_minilm_asset(
+    *,
+    asset_manifest_path: Path,
+    model_root: Path,
+) -> Mapping[str, object]:
+    """Verify only shared immutable asset facts, not the retired ST backend."""
+
+    _reject_outer_sentence_transformers()
+    try:
+        manifest_path, asset = minilm_asset._load_asset_manifest(
+            asset_manifest_path
+        )
+        root = minilm_asset._verify_model_tree(asset, model_root)
+    except Exception as exc:
+        raise HitabP1RuntimeError(
+            "direct MiniLM immutable asset binding failed"
+        ) from exc
+    model = asset.get("model")
+    local = asset.get("local_binding")
+    if (
+        not isinstance(model, Mapping)
+        or not isinstance(local, Mapping)
+        or model.get("model_id") != minilm_asset.MODEL_ID
+        or model.get("snapshot_revision")
+        != minilm_asset.MODEL_REVISION
+        or model.get("architecture")
+        != minilm_asset.MODEL_ARCHITECTURE
+        or model.get("embedding_dimension")
+        != EMBEDDING_DIMENSION
+        or model.get("weights_sha256")
+        != minilm_asset.WEIGHTS_SHA256
+        or local.get("snapshot_tree_sha256")
+        != minilm_asset.MODEL_TREE_SHA256
+    ):
+        raise HitabP1RuntimeError(
+            "direct MiniLM shared asset facts drifted"
+        )
+    _validate_direct_minilm_topology(root)
+
+    versions: dict[str, str] = {
+        "python": ".".join(map(str, sys.version_info[:3]))
+    }
+    for key, (distribution, module_name) in sorted(
+        _DIRECT_MINILM_PACKAGE_TO_MODULE.items()
+    ):
+        try:
+            distribution_version = metadata.version(distribution)
+            module_version = str(
+                getattr(import_module(module_name), "__version__")
+            )
+        except (
+            ImportError,
+            AttributeError,
+            metadata.PackageNotFoundError,
+        ) as exc:
+            raise HitabP1RuntimeError(
+                f"direct MiniLM package is unavailable: {distribution}"
+            ) from exc
+        versions[key] = module_version
+        if key != "torch" and distribution_version != module_version:
+            raise HitabP1RuntimeError(
+                "direct MiniLM module/distribution version drifted"
+            )
+    if versions != DIRECT_MINILM_RUNTIME_VERSIONS:
+        raise HitabP1RuntimeError(
+            "direct MiniLM runtime versions drifted"
+        )
+    _reject_outer_sentence_transformers()
+    return {
+        "asset_file_sha256": minilm_asset.ASSET_FILE_SHA256,
+        "asset_manifest_path": str(manifest_path),
+        "asset_sha256": minilm_asset.ASSET_SELF_SHA256,
+        "backend": DIRECT_MINILM_BACKEND,
+        "embedding_dimension": EMBEDDING_DIMENSION,
+        "maximum_sequence_length": (
+            minilm_asset.MAXIMUM_SEQUENCE_LENGTH
+        ),
+        "model_root": str(root),
+        "model_tree_sha256": minilm_asset.MODEL_TREE_SHA256,
+        "runtime_versions": versions,
+        "status": "verified_hitab_direct_transformers_minilm_v2",
+        "weights_sha256": minilm_asset.WEIGHTS_SHA256,
+    }
+
+
+class DirectTransformersMiniLMEncoder:
+    """HiTab-only GPU encoder without importing SentenceTransformers."""
+
+    def __init__(
+        self,
+        *,
+        asset_manifest: Path,
+        model_root: Path,
+    ) -> None:
+        _reject_outer_dynamic_python()
+        try:
+            import torch
+            from transformers import AutoModel, AutoTokenizer
+        except ImportError as exc:
+            raise HitabP1RuntimeError(
+                "direct MiniLM runtime is unavailable"
+            ) from exc
+        if not torch.cuda.is_available():
+            raise HitabP1RuntimeError(
+                "the frozen direct MiniLM CUDA device is unavailable"
+            )
+        _reject_outer_dynamic_python()
+        self.runtime_receipt = dict(
+            _verify_direct_minilm_asset(
+                asset_manifest_path=asset_manifest,
+                model_root=model_root,
+            )
+        )
+        torch.manual_seed(0)
+        torch.cuda.manual_seed_all(0)
+        torch.use_deterministic_algorithms(True)
+        torch.set_float32_matmul_precision("highest")
+        torch.backends.cuda.matmul.allow_tf32 = False
+        torch.backends.cudnn.allow_tf32 = False
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(
+                model_root,
+                local_files_only=True,
+                trust_remote_code=False,
+            )
+            model = AutoModel.from_pretrained(
+                model_root,
+                dtype=torch.float32,
+                local_files_only=True,
+                trust_remote_code=False,
+                use_safetensors=True,
+            ).float().eval().cuda()
+        except Exception as exc:
+            raise HitabP1RuntimeError(
+                "direct Transformers MiniLM failed to load"
+            ) from exc
+        parameters = tuple(model.parameters())
+        if (
+            model.__class__.__name__ != "BertModel"
+            or model.training
+            or not parameters
+            or getattr(model.config, "hidden_size", None)
+            != EMBEDDING_DIMENSION
+            or any(
+                parameter.device.type != "cuda"
+                or parameter.dtype != torch.float32
+                for parameter in parameters
+            )
+        ):
+            raise HitabP1RuntimeError(
+                "direct Transformers MiniLM model contract drifted"
+            )
+        _reject_outer_dynamic_python()
+        self._model = model
+        self._tokenizer = tokenizer
+        canary = minilm_asset.synthetic_canary_texts()
+        first = self.encode(canary)
+        second = self.encode(canary)
+        if not np.array_equal(first, second):
+            raise HitabP1RuntimeError(
+                "direct Transformers MiniLM canary is not repeat exact"
+            )
+        self.canary_receipt = {
+            "backend": DIRECT_MINILM_BACKEND,
+            "device": "cuda:0",
+            "dtype": "float32",
+            "float32_bytes_sha256": (
+                bright_minilm_encoder.float32_matrix_sha256(first)
+            ),
+            "repeat_count": 2,
+            "repeat_exact": True,
+            "sentence_count": len(canary),
+        }
+        _reject_outer_dynamic_python()
+
+    def encode(self, texts: Sequence[str]) -> np.ndarray:
+        _reject_outer_dynamic_python()
+        rows = bright_minilm_encoder._validate_texts(texts)
+        import torch
+
+        matrices: list[np.ndarray] = []
+        try:
+            with torch.inference_mode():
+                for start in range(
+                    0, len(rows), bright_minilm_encoder.BATCH_SIZE
+                ):
+                    batch = rows[
+                        start : start + bright_minilm_encoder.BATCH_SIZE
+                    ]
+                    encoded = self._tokenizer(
+                        list(batch),
+                        max_length=minilm_asset.MAXIMUM_SEQUENCE_LENGTH,
+                        padding=True,
+                        return_attention_mask=True,
+                        return_tensors="pt",
+                        return_token_type_ids=True,
+                        truncation=True,
+                    )
+                    if set(encoded) != {
+                        "attention_mask",
+                        "input_ids",
+                        "token_type_ids",
+                    }:
+                        raise HitabP1RuntimeError(
+                            "direct MiniLM tokenizer tensor set drifted"
+                        )
+                    encoded = {
+                        key: value.cuda()
+                        for key, value in encoded.items()
+                    }
+                    token_values = self._model(
+                        **encoded
+                    ).last_hidden_state
+                    mask = encoded["attention_mask"].unsqueeze(-1).to(
+                        dtype=token_values.dtype
+                    )
+                    pooled = torch.sum(
+                        token_values * mask, dim=1
+                    ) / torch.clamp(
+                        mask.sum(dim=1), min=1e-9
+                    )
+                    normalized = torch.nn.functional.normalize(
+                        pooled, p=2, dim=1, eps=1e-12
+                    )
+                    matrices.append(
+                        normalized.detach().cpu().numpy().astype(
+                            np.float32, copy=False
+                        )
+                    )
+        except HitabP1RuntimeError:
+            raise
+        except Exception as exc:
+            raise HitabP1RuntimeError(
+                "direct Transformers MiniLM encoding failed"
+            ) from exc
+        matrix = np.concatenate(matrices, axis=0)
+        if matrix.shape != (len(rows), EMBEDDING_DIMENSION):
+            raise HitabP1RuntimeError(
+                "direct Transformers MiniLM output shape drifted"
+            )
+        if not np.isfinite(matrix).all():
+            raise HitabP1RuntimeError(
+                "direct Transformers MiniLM output is nonfinite"
+            )
+        norms = np.linalg.norm(matrix.astype(np.float64), axis=1)
+        if not np.allclose(norms, 1.0, rtol=0.0, atol=2e-6):
+            raise HitabP1RuntimeError(
+                "direct Transformers MiniLM output is unnormalized"
+            )
+        _reject_outer_dynamic_python()
+        return matrix
+
+
 def bind_bright_minilm_production_encoder(
     *,
     asset_manifest: Path,
     model_root: Path,
     physical_gpu: int,
-) -> bright_minilm_encoder.BrightMiniLMEncoder:
-    """Bind the existing verified local MiniLM asset on an explicit GPU."""
+) -> DirectTransformersMiniLMEncoder:
+    """Bind the HiTab v2 direct Transformers MiniLM on an explicit GPU."""
 
     _require_production_offline_environment()
     _require_visible_physical_gpu(physical_gpu)
@@ -887,7 +1292,7 @@ def bind_bright_minilm_production_encoder(
             "MiniLM asset manifest is not a direct local file"
         )
     root = _direct_model_root(model_root, field="MiniLM model root")
-    return bright_minilm_encoder.BrightMiniLMEncoder(
+    return DirectTransformersMiniLMEncoder(
         asset_manifest=asset_manifest,
         model_root=root,
     )

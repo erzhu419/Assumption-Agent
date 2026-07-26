@@ -33,6 +33,7 @@ from typing import Any, Callable, Mapping, Protocol, Sequence
 
 VERSION = "hitab_p1_production_runtime_v1"
 STUDY_ID = "HITAB_P1_DMC1_HIERARCHICAL_SET_EVALUATOR_V1"
+IMPLEMENTATION_REVISION = "direct_transformers_minilm_v2"
 IMPLEMENTATION_FREEZE_SCHEMA = f"{VERSION}_implementation_freeze"
 ACQUISITION_FREEZE_SCHEMA = f"{VERSION}_source_acquisition_freeze"
 EXECUTION_FREEZE_SCHEMA = f"{VERSION}_execution_freeze"
@@ -135,6 +136,9 @@ REQUIRED_PROJECT_FILES: dict[str, str] = {
     "hitab_study_design": (
         "manifests/hitab_p1_dmc1_hierarchical_set_evaluator_design_v1.json"
     ),
+    "hitab_v2_implementation_addendum": (
+        "manifests/hitab_p1_direct_transformers_minilm_addendum_v2.json"
+    ),
     "hippo_contract": (
         "replication_runtime/birco_official_hipporag_v1/contract.py"
     ),
@@ -176,7 +180,6 @@ OUTER_REQUIRED_DISTRIBUTIONS: dict[str, tuple[str, str]] = {
     "huggingface_hub": ("huggingface-hub", "1.11.0"),
     "numpy": ("numpy", "2.2.6"),
     "safetensors": ("safetensors", "0.7.0"),
-    "sentence_transformers": ("sentence-transformers", "5.5.1"),
     "tokenizers": ("tokenizers", "0.22.2"),
     "torch": ("torch", "2.8.0+cu128"),
     "transformers": ("transformers", "5.10.1"),
@@ -229,6 +232,9 @@ EXPECTED_HIPPORAG_ATTESTATION_FILE_SHA256 = (
 )
 EXPECTED_HIPPORAG_ATTESTATION_RECEIPT_SHA256 = (
     "f12863b59a83e19188ccbf35208cafdf2b7c857daf404749a58e7f7787a07618"
+)
+EXPECTED_IMPLEMENTATION_ADDENDUM_SELF_SHA256 = (
+    "b5cb382ec40b4ffbac0648968b286665bed6de64ec705b644fcdff4607174149"
 )
 EXPECTED_HIPPORAG_SOURCE_LEGACY_TREE_SHA256 = (
     "a644ab2811db2739db3cfbdc051561e2cfdf2ed87286f8ebd00a5971d189cdd5"
@@ -1433,6 +1439,8 @@ def load_implementation_freeze(path: Path) -> FrozenImplementation:
     if (
         value.get("schema") != IMPLEMENTATION_FREEZE_SCHEMA
         or value.get("study_id") != STUDY_ID
+        or value.get("implementation_revision")
+        != IMPLEMENTATION_REVISION
         or value.get("runtime_policy") != RUNTIME_POLICY
     ):
         raise HitabP1ProductionRuntimeError(
@@ -1482,6 +1490,41 @@ def load_implementation_freeze(path: Path) -> FrozenImplementation:
             )
         files[label] = candidate
         file_hashes[label] = expected
+    addendum_path = files["hitab_v2_implementation_addendum"]
+    try:
+        addendum = json.loads(addendum_path.read_bytes().decode("ascii"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HitabP1ProductionRuntimeError(
+            "HiTab v2 implementation addendum is invalid"
+        ) from exc
+    if (
+        not isinstance(addendum, dict)
+        or file_sha256(addendum_path)
+        != file_hashes["hitab_v2_implementation_addendum"]
+    ):
+        raise HitabP1ProductionRuntimeError(
+            "HiTab v2 implementation addendum changed while read"
+        )
+    addendum_self = _verify_self(
+        addendum, field="HiTab v2 implementation addendum self hash"
+    )
+    if (
+        addendum_self
+        != EXPECTED_IMPLEMENTATION_ADDENDUM_SELF_SHA256
+        or addendum.get("schema")
+        != "hitab_p1_direct_transformers_minilm_implementation_addendum_v2"
+        or addendum.get("study_id") != STUDY_ID
+        or addendum.get("implementation_revision")
+        != IMPLEMENTATION_REVISION
+        or addendum.get("status")
+        != (
+            "implementation_addendum_frozen_before_any_HiTab_source_"
+            "body_secret_action_qrel_or_score"
+        )
+    ):
+        raise HitabP1ProductionRuntimeError(
+            "HiTab v2 implementation addendum drifted"
+        )
     hipporag_attestation = _validate_reusable_hipporag_attestation(
         files, file_hashes
     )
@@ -1992,6 +2035,70 @@ def _invalid_module_cache_paths(
     )
 
 
+def _temporary_module_paths(
+    modules: Sequence[object],
+) -> list[str]:
+    """Return filesystem-bearing module paths rooted in shared temp space."""
+
+    values: set[str] = set()
+
+    def record(raw: object) -> None:
+        if not isinstance(raw, str) or not raw.startswith("/"):
+            return
+        path = Path(raw)
+        if _path_is_within(path, Path("/tmp")) or _path_is_within(
+            path, Path("/var/tmp")
+        ):
+            values.add(raw)
+
+    for module in modules:
+        try:
+            namespace = vars(module)
+        except TypeError:
+            continue
+        record(namespace.get("__file__"))
+        spec = namespace.get("__spec__")
+        if spec is not None:
+            record(getattr(spec, "origin", None))
+            locations = getattr(
+                spec, "submodule_search_locations", None
+            )
+            if locations is not None:
+                for value in locations:
+                    record(value)
+        package_paths = namespace.get("__path__")
+        if package_paths is not None:
+            for value in package_paths:
+                record(value)
+    return sorted(values)
+
+
+def _reject_outer_dynamic_python() -> None:
+    temporary_paths = set(
+        _temporary_module_paths(tuple(sys.modules.values()))
+    )
+    for raw in sys.path:
+        if not isinstance(raw, str) or not raw.startswith("/"):
+            continue
+        path = Path(raw)
+        if _path_is_within(path, Path("/tmp")) or _path_is_within(
+            path, Path("/var/tmp")
+        ):
+            temporary_paths.add(raw)
+    if temporary_paths:
+        raise HitabP1ProductionRuntimeError(
+            "outer runtime executed Python from shared temporary space"
+        )
+    if any(
+        name == "sentence_transformers"
+        or name.startswith("sentence_transformers.")
+        for name in sys.modules
+    ):
+        raise HitabP1ProductionRuntimeError(
+            "retired SentenceTransformer backend entered outer runtime"
+        )
+
+
 def prepare_implementation_runtime(
     implementation: FrozenImplementation,
     *,
@@ -2074,6 +2181,7 @@ def prepare_implementation_runtime(
             "version": version,
         }
         rows[module_name] = actual
+        _reject_outer_dynamic_python()
     outer_probe = {
         "dont_write_bytecode": sys.dont_write_bytecode,
         "invalid_cached": _invalid_module_cache_paths(
@@ -3174,6 +3282,7 @@ def build_production_bindings(
         ),
     )
     cache_releaser = build_gpu0_cache_releaser()
+    _reject_outer_dynamic_python()
     return ProductionBindings(
         planner_runner=planner,
         cross_encoder_scorer=scorer,
@@ -3335,6 +3444,7 @@ def run_source_free_canary_once(
     bindings = binding_builder(
         implementation, output.parent / "source_free_canary_runtime"
     )
+    _reject_outer_dynamic_python()
     from assumption_agent.benchmarks import hitab_p1_public_canary_v1 as canary
 
     try:
@@ -3346,6 +3456,7 @@ def run_source_free_canary_once(
             gpu0_cache_releaser=bindings.gpu0_cache_releaser,
         )
         canary.validate_receipt(inner)
+        _reject_outer_dynamic_python()
     except Exception as exc:
         raise HitabP1ProductionRuntimeError(
             "source-free production canary failed"
@@ -3462,6 +3573,7 @@ def run_formal_once(
     bindings = binding_builder(
         execution.implementation, root / "production_runtime"
     )
+    _reject_outer_dynamic_python()
     acquisition = acquisition_factory_loader(execution)
     if controller_runner is None:
         from assumption_agent.benchmarks import (
@@ -3470,7 +3582,7 @@ def run_formal_once(
 
         controller_runner = controller.run_formal_controller
     try:
-        return controller_runner(
+        result = controller_runner(
             work_root=root,
             execution_binding_sha256=execution.self_sha256,
             acquisition=acquisition,
@@ -3480,6 +3592,8 @@ def run_formal_once(
             hippo_runner=bindings.hippo_runner,
             gpu0_cache_releaser=bindings.gpu0_cache_releaser,
         )
+        _reject_outer_dynamic_python()
+        return result
     except Exception as exc:
         raise HitabP1ProductionRuntimeError(
             "formal controller terminated; replay is forbidden"

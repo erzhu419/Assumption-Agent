@@ -360,6 +360,7 @@ def _implementation_freeze(tmp_path: Path) -> tuple[Path, dict[str, object]]:
             "file_label": "hippo_worker",
             "module": runner.HIPPORAG_WORKER_MODULE,
         },
+        "implementation_revision": runner.IMPLEMENTATION_REVISION,
         "hippo_source_projection": {
             "clean_root": str(clean_source_root),
             "file_count": len(clean_source_files),
@@ -851,6 +852,31 @@ def test_module_cache_scan_bypasses_lazy_module_getattr() -> None:
     module.__dict__["__cached__"] = "/unexpected/cache.pyc"
     assert runner._invalid_module_cache_paths((module,)) == [
         "/unexpected/cache.pyc"
+    ]
+
+
+def test_v2_outer_excludes_sentence_transformers_and_tmp_modules() -> None:
+    assert runner.IMPLEMENTATION_REVISION == (
+        "direct_transformers_minilm_v2"
+    )
+    assert (
+        "sentence_transformers"
+        not in runner.OUTER_REQUIRED_DISTRIBUTIONS
+    )
+    assert (
+        runner.HIPPORAG_REQUIRED_DISTRIBUTIONS[
+            "sentence_transformers"
+        ]
+        == ("sentence-transformers", "3.1.1")
+    )
+
+    regular = ModuleType("tmp_regular")
+    regular.__file__ = "/tmp/frozen-bypass/module.py"
+    package = ModuleType("tmp_package")
+    package.__path__ = ["/var/tmp/frozen-bypass/package"]
+    assert runner._temporary_module_paths((regular, package)) == [
+        "/tmp/frozen-bypass/module.py",
+        "/var/tmp/frozen-bypass/package",
     ]
 
 
@@ -1360,6 +1386,34 @@ def test_source_free_canary_full_synthetic_path_is_exclusive(
         )
     assert failed_binding_calls == 1
 
+    contaminated_binding_output = (
+        tmp_path / "contaminated_binding" / "canary.json"
+    )
+    contaminated_name = "hitab_v2_tmp_binding_sentinel"
+
+    def contaminated_binding(
+        _implementation: runner.FrozenImplementation, _root: Path
+    ) -> runner.ProductionBindings:
+        module = ModuleType(contaminated_name)
+        module.__file__ = "/tmp/hitab-v2-binding/generated.py"
+        sys.modules[contaminated_name] = module
+        return _synthetic_bindings(_implementation, _root)
+
+    try:
+        with pytest.raises(
+            runner.HitabP1ProductionRuntimeError,
+            match="shared temporary space",
+        ):
+            runner.run_source_free_canary_once(
+                implementation_freeze_path=implementation_path,
+                output_path=contaminated_binding_output,
+                binding_builder=contaminated_binding,
+                runtime_preparer=_noop_runtime_preparer,
+            )
+    finally:
+        sys.modules.pop(contaminated_name, None)
+    assert not contaminated_binding_output.exists()
+
     failed_canary_output = tmp_path / "failed_canary" / "canary.json"
     canary_calls = 0
 
@@ -1395,6 +1449,40 @@ def test_source_free_canary_full_synthetic_path_is_exclusive(
             runtime_preparer=_noop_runtime_preparer,
         )
     assert canary_calls == 1
+
+    contaminated_canary_output = (
+        tmp_path / "contaminated_canary" / "canary.json"
+    )
+    contaminated_canary_name = "hitab_v2_tmp_canary_sentinel"
+    original_public_canary = public_canary.run_public_canary
+
+    def contaminated_canary(**kwargs: object) -> dict[str, object]:
+        value = original_public_canary(**kwargs)
+        module = ModuleType(contaminated_canary_name)
+        module.__file__ = "/var/tmp/hitab-v2-canary/generated.py"
+        sys.modules[contaminated_canary_name] = module
+        return value
+
+    try:
+        with monkeypatch.context() as scoped:
+            scoped.setattr(
+                public_canary,
+                "run_public_canary",
+                contaminated_canary,
+            )
+            with pytest.raises(
+                runner.HitabP1ProductionRuntimeError,
+                match="production canary failed",
+            ):
+                runner.run_source_free_canary_once(
+                    implementation_freeze_path=implementation_path,
+                    output_path=contaminated_canary_output,
+                    binding_builder=_synthetic_bindings,
+                    runtime_preparer=_noop_runtime_preparer,
+                )
+    finally:
+        sys.modules.pop(contaminated_canary_name, None)
+    assert not contaminated_canary_output.exists()
 
     receipt = runner.run_source_free_canary_once(
         implementation_freeze_path=implementation_path,

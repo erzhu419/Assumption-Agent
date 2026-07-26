@@ -5,11 +5,15 @@
 > - 当前 HiTab P1：全新 study `HITAB_P1_DMC1_HIERARCHICAL_SET_EVALUATOR_V1` 已在任何
 >   HiTab source body、secret、cohort、model action 或 score 前完成 source custody、DMC1
 >   hierarchical evidence-set evaluator、late-qrel controller 与三阶段 production closure。
->   最终 71/71 离线测试及独立终审通过；双 Python filesystem closure、source-free canary
+>   首版 implementation inventory 在 source access=0 时发现外层 SentenceTransformers 5.5.1
+>   会从共享 `/tmp` 生成并执行 Python，已作为 implementation-invalid 永久关闭；事前 v2
+>   addendum 改用同一 content-addressed MiniLM 的 direct Transformers mean-pooling backend。
+>   最终 73/73 离线测试及独立终审通过；双 Python filesystem closure、source-free canary
 >   的真实 GPU1-overlap→GPU0-formation→cache-release→GPU0-Hippo 顺序、每 GPU 最多一个
 >   Hippo process、canary/formal 一次性 claim、promotion 后才可首次 decode TEST，以及
 >   `CPUQuota=800% / MemoryMax=40G / TasksMax=64` 均已闭合。当前仍只是
->   **pre-source implementation-ready**：HiTab 四个正式文件尚未下载，真实 canary、三臂
+>   **pre-source v2 implementation-ready**：v2 implementation freeze 与真实 canary 尚未生成/执行，
+>   HiTab 四个正式文件尚未下载，三臂
 >   measurement、evaluator promotion 与 L5 都尚未发生
 > - 最新 AVeriTeC P1 终态：独立 official source/cohort、v4 source-free 双 GPU canary、execution/launch freeze
 >   与唯一 formal launch 均有效；systemd 为 success、`NRestarts=0`，全程 0 API/online evaluator、0 retry/replay。
@@ -4777,11 +4781,29 @@ model hash，但不声称 60 文件逐一由已漂移的 legacy bytecode tree �
 relocation、full-root receipt、`src` dependency receipt、无 symlink/special/hardlink/bytecode 及每次 child
 launch 前重验均已闭合。
 
-当前 source-free code、design、units 与 71/71 离线测试已通过独立终审；design self hash 为
-`9f060347…6dba`。截至本节写入时，HiTab source body download/parse、secret、selected item、model inference、
-Hippo action、qrel open、score、API/online evaluator 均为 0。故这是一份 **implementation-ready prospective
-freeze**，不是 feasibility 或 efficacy positive。下一步只能按固定顺序生成远端 implementation freeze，运行唯一真实
-source-free canary，成功后才下载四个固定文件并形成 execution freeze，最后一次 formal；任何失败都终止该 version，
+首版 clean-source implementation inventory 的 file SHA-256 为
+`95441e20…6dc3`、self SHA-256 为 `30585c5b…3158`，但随后 unitlike live probe 发现外层
+SentenceTransformers 5.5.1 导入 `torch.distributed.nn.jit.instantiator`，在随机共享 `/tmp` 下生成并执行
+`_remote_module_non_scriptable.py`。最早一次以 script file 启动 verifier 的尝试还会把 `preparation/`
+加入 `sys.path`，故单独记为 invocation-invalid；修正为 unitlike `-c` 后复现的 `/tmp` 路径才是首版真正的
+source-free implementation-invalid 根因。两者都发生在 source、model action、qrel 与 score 之前，旧 inventory
+只作失败证据保留，不能授权 canary 或 formal。
+
+事前冻结的 `direct_transformers_minilm_v2` addendum 没有改 study、family、selection、DMC1、promotion 或
+primary contract，也没有增加行为/效果 gate。它只把外层 encoder 换成同一
+`sentence-transformers/all-MiniLM-L6-v2@1110a243…4d41` 的 Transformers 5.10.1
+`AutoTokenizer+AutoModel`：max length 256、attention-mask mean pooling、单次 L2 normalize、float32，
+并在初始化、每次 encode、production binding、完整 public canary 与 formal controller 返回后拒绝任何
+`/tmp`、`/var/tmp` Python module/package path 以及外层 `sentence_transformers`。独立 HippoRAG child 仍使用
+已封闭且 source-free diagnostic 无 shared-tmp module 的 SentenceTransformers 3.1.1。八条公开合成文本上，
+direct 与退役参考的最大绝对差为 `1.4901161193847656e-08`；这只记录 feasibility，不是通过阈值或额外 gate。
+
+当前 v2 source-free code、design、units 与 73/73 离线测试已通过独立终审；design self hash 为
+`9f060347…6dba`，addendum self hash 为 `b5cb382e…149`。截至本节写入时，HiTab source body
+download/parse、secret、selected item、formal model inference、Hippo action、qrel open、score、
+API/online evaluator 均为 0。故这是一份 **v2 implementation-ready prospective amendment**，不是
+feasibility 或 efficacy positive。下一步只能按固定顺序生成并 live-verify 新 implementation freeze，运行唯一真实
+source-free canary，成功后才下载四个固定文件并形成 execution freeze，最后一次 formal；任何失败都终止 v2，
 不 retry、resample、换模型、改 family、缩 quota 或补 gate。总目标的现实域双 baseline 稳定优势与 L5 在正式结果前
 仍保持未证明。
 
@@ -4790,6 +4812,7 @@ source-free canary，成功后才下载四个固定文件并形成 execution fre
 - HiTab P1 pre-source implementation chain（正式 source/model/action/score 均为 0）：
   [`public source custody`](../manifests/hitab_p1_public_source_custody_v1.json)；
   [`study design`](../manifests/hitab_p1_dmc1_hierarchical_set_evaluator_design_v1.json)；
+  [`direct Transformers MiniLM v2 addendum`](../manifests/hitab_p1_direct_transformers_minilm_addendum_v2.json)；
   [`DMC1 core`](../assumption_agent/benchmarks/hitab_p1_dmc1_core_v1.py)；
   [`runtime`](../assumption_agent/benchmarks/hitab_p1_runtime_v1.py)；
   [`source acquisition`](../assumption_agent/benchmarks/hitab_p1_source_acquisition_v1.py)；

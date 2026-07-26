@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import inspect
 import json
+from pathlib import Path
 import threading
 
 import numpy as np
@@ -409,3 +410,64 @@ def test_public_surface_has_no_source_family_gold_or_baseline_feature_input() ->
     assert "physical_gpu" in inspect.signature(
         runtime.bind_bright_minilm_production_encoder
     ).parameters
+
+
+def test_direct_minilm_v2_topology_and_addendum_are_frozen(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "model"
+    (root / "1_Pooling").mkdir(parents=True)
+    rows = {
+        "modules.json": runtime._DIRECT_MINILM_MODULES,
+        "1_Pooling/config.json": runtime._DIRECT_MINILM_POOLING,
+        "sentence_bert_config.json": {
+            "do_lower_case": False,
+            "max_seq_length": 256,
+        },
+        "config.json": {
+            "architectures": ["BertModel"],
+            "hidden_size": runtime.EMBEDDING_DIMENSION,
+            "max_position_embeddings": 512,
+            "model_type": "bert",
+            "pad_token_id": 0,
+        },
+    }
+    for relative, value in rows.items():
+        (root / relative).write_text(
+            json.dumps(value), encoding="utf-8"
+        )
+    runtime._validate_direct_minilm_topology(root)
+    (root / "1_Pooling/config.json").write_text(
+        json.dumps(
+            {
+                **runtime._DIRECT_MINILM_POOLING,
+                "pooling_mode_mean_tokens": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        runtime.HitabP1RuntimeError,
+        match="topology drifted",
+    ):
+        runtime._validate_direct_minilm_topology(root)
+
+    direct_source = inspect.getsource(
+        runtime.DirectTransformersMiniLMEncoder.__init__
+    )
+    assert "from sentence_transformers" not in direct_source
+    manifest_path = (
+        Path(runtime.__file__).resolve().parents[2]
+        / "manifests/hitab_p1_direct_transformers_minilm_addendum_v2.json"
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    claimed = manifest.pop("self_sha256")
+    assert claimed == hashlib.sha256(
+        json.dumps(
+            manifest,
+            allow_nan=False,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("ascii")
+    ).hexdigest()
