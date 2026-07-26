@@ -599,6 +599,19 @@ def test_current_hipporag_assets_must_equal_reused_attestation(
     origin.write_text("# attested synthetic HippoRAG\n", encoding="ascii")
     source_hash = runner.model_tree_sha256(source_root)
     origin_hash = runner.file_sha256(origin)
+    monkeypatch.setattr(
+        runner, "EXPECTED_HIPPORAG_SOURCE_CLEAN_FILE_COUNT", 1
+    )
+    monkeypatch.setattr(
+        runner,
+        "EXPECTED_HIPPORAG_SOURCE_CLEAN_SIZE_BYTES",
+        origin.stat().st_size,
+    )
+    monkeypatch.setattr(
+        runner,
+        "EXPECTED_HIPPORAG_SOURCE_CLEAN_TREE_SHA256",
+        source_hash,
+    )
     runtime = SimpleNamespace(
         import_probe={
             "hipporag": {
@@ -611,9 +624,11 @@ def test_current_hipporag_assets_must_equal_reused_attestation(
     attestation = {
         "embedding_tree_sha256": "1" * 64,
         "hipporag_origin_file_sha256": origin_hash,
-        "hipporag_origin_path": str(origin),
+        "hipporag_origin_path": str(
+            tmp_path / "legacy-runtime/HippoRAG/src/hipporag/__init__.py"
+        ),
         "llm_tree_sha256": "2" * 64,
-        "source_tree_sha256": source_hash,
+        "source_tree_sha256": "3" * 64,
     }
     _REAL_CURRENT_HIPPO_ATTESTATION_LINKAGE(
         attestation,
@@ -633,6 +648,35 @@ def test_current_hipporag_assets_must_equal_reused_attestation(
             model_hashes={
                 "hippo_embedding": "1" * 64,
                 "hippo_llm": "3" * 64,
+            },
+        )
+
+    cache = origin.parent / "__pycache__"
+    cache.mkdir()
+    (cache / "__init__.cpython-310.pyc").write_bytes(b"nonportable")
+    monkeypatch.setattr(
+        runner, "EXPECTED_HIPPORAG_SOURCE_CLEAN_FILE_COUNT", 2
+    )
+    monkeypatch.setattr(
+        runner,
+        "EXPECTED_HIPPORAG_SOURCE_CLEAN_SIZE_BYTES",
+        origin.stat().st_size + len(b"nonportable"),
+    )
+    monkeypatch.setattr(
+        runner,
+        "EXPECTED_HIPPORAG_SOURCE_CLEAN_TREE_SHA256",
+        runner.model_tree_sha256(source_root),
+    )
+    with pytest.raises(
+        runner.HitabP1ProductionRuntimeError,
+        match="frozen clean projection",
+    ):
+        _REAL_CURRENT_HIPPO_ATTESTATION_LINKAGE(
+            attestation,
+            runtime=runtime,
+            model_hashes={
+                "hippo_embedding": "1" * 64,
+                "hippo_llm": "2" * 64,
             },
         )
 
