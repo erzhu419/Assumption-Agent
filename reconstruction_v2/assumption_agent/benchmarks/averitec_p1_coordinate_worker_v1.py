@@ -294,7 +294,10 @@ def validate_output(
         ):
             raise AveritecP1CoordinateError("coordinate result item drifted")
         scores = row.get("variant_scores")
-        if not isinstance(scores, Mapping) or tuple(scores) != QUERY_VARIANT_IDS:
+        if (
+            not isinstance(scores, Mapping)
+            or set(scores) != set(QUERY_VARIANT_IDS)
+        ):
             raise AveritecP1CoordinateError("coordinate result variants drifted")
         for variant in QUERY_VARIANT_IDS:
             values = scores.get(variant)

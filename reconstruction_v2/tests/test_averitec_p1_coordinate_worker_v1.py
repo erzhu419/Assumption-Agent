@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
+import tempfile
 
 import numpy as np
 
@@ -61,3 +63,25 @@ def test_coordinate_worker_emits_opaque_quantized_rows_without_text() -> None:
     rendered = json.dumps(output, sort_keys=True)
     assert "PRIVATE DOCUMENT" not in rendered
     assert "PRIVATE QUERY" not in rendered
+
+    # Canonical JSON sorts mapping keys.  Disk round-trip validation must
+    # consume the frozen variant set in QUERY_VARIANT_IDS order rather than
+    # mistaking JSON object insertion order for contract semantics.
+    with tempfile.TemporaryDirectory(
+        prefix="averitec-coordinate-", dir="/tmp"
+    ) as temporary:
+        path = Path(temporary) / "output.json"
+        path.write_bytes(
+            json.dumps(
+                output,
+                allow_nan=False,
+                ensure_ascii=True,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode("ascii")
+            + b"\n"
+        )
+        restored = json.loads(path.read_text("ascii"))
+        assert validate_output(
+            restored, expected_input=private_input
+        ) == restored

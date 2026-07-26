@@ -432,18 +432,25 @@ def _network_audit(path: Path) -> dict[str, object]:
         text = raw.decode("utf-8", errors="strict")
     except UnicodeDecodeError as exc:
         raise AveritecP1RuntimeError("network syscall audit is invalid") from exc
-    forbidden = sum(
-        token in line
+    ip_family_rows = [
+        line
         for line in text.splitlines()
-        for token in ("AF_INET", "AF_INET6")
-    )
-    if forbidden:
+        if "AF_INET" in line or "AF_INET6" in line
+    ]
+    nonblocked = [
+        line
+        for line in ip_family_rows
+        if "= -1 EAFNOSUPPORT" not in line
+    ]
+    if nonblocked:
         raise AveritecP1RuntimeError(
-            "official worker attempted an IP-family network syscall"
+            "official worker made an IP-family syscall not blocked by "
+            "RestrictAddressFamilies"
         )
     return {
+        "blocked_IP_family_syscall_count": len(ip_family_rows),
         "file_sha256": hashlib.sha256(raw).hexdigest(),
-        "forbidden_IP_family_syscall_count": forbidden,
+        "nonblocked_IP_family_syscall_count": len(nonblocked),
         "size_bytes": len(raw),
     }
 
