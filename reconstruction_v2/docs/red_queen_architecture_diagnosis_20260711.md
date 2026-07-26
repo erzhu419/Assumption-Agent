@@ -15,7 +15,8 @@
 >   的真实 GPU1-overlap→GPU0-formation→cache-release→GPU0-Hippo 顺序、每 GPU 最多一个
 >   Hippo process、canary/formal 一次性 claim、promotion 后才可首次 decode TEST，以及
 >   `CPUQuota=800% / MemoryMax=40G / TasksMax=64` 均已闭合。当前仍只是
->   **pre-source v4 implementation-ready**：v4 implementation freeze 与真实 canary 尚未生成/执行，
+>   **pre-source v4 implementation-frozen**：v4 implementation freeze 与双 runtime live verification
+>   已通过；两张 311linux GPU 仍被无关任务占用，唯一真实 canary 尚未执行，
 >   HiTab 四个正式文件尚未下载，三臂
 >   measurement、evaluator promotion 与 L5 都尚未发生
 > - 最新 AVeriTeC P1 终态：独立 official source/cohort、v4 source-free 双 GPU canary、execution/launch freeze
@@ -4834,8 +4835,12 @@ import-closure defect 的最终结构性修复，不是新增 efficacy gate；
 `9f060347…6dba`，v2/v3/v4 addendum self hash 分别为
 `b5cb382e…149`、`fe55b40f…ca506`、`b15c6f80…91c9`。截至本节写入时，HiTab source body
 download/parse、secret、selected item、formal model inference、Hippo action、qrel open、score、
-API/online evaluator 均为 0。故这是一份 **v4 implementation-ready prospective amendment**，不是
-feasibility 或 efficacy positive。下一步只能按固定顺序生成并 live-verify v4 implementation freeze，运行唯一真实
+API/online evaluator 均为 0。远端唯一 v4 implementation freeze 的 file/self SHA-256 为
+`111bf7e6…fdfdc` / `d163f2b4…9cf0`，断网 unitlike 双 runtime live binding self SHA-256 为
+`b12321e7…d3c3`；真实冻结的 LiteLLM import 已通过，未产生 source/canary/action。故这是一份
+**v4 implementation-frozen prospective implementation**，不是 feasibility 或 efficacy positive。
+两张 311linux GPU 当前仍被无关 `scheduleurm-torch-bench` compute process 占用；不干预该任务。下一步只能等待
+两卡同时空闲后运行唯一真实
 source-free canary，成功后才下载四个固定文件并形成 execution freeze，最后一次 formal；任何失败都终止 HiTab P1，
 不 retry、resample、换模型、改 family、缩 quota 或补 gate。总目标的现实域双 baseline 稳定优势与 L5 在正式结果前
 仍保持未证明。
@@ -4848,6 +4853,7 @@ source-free canary，成功后才下载四个固定文件并形成 execution fre
   [`direct Transformers MiniLM v2 addendum`](../manifests/hitab_p1_direct_transformers_minilm_addendum_v2.json)；
   [`child cwd sanitization v3 addendum`](../manifests/hitab_p1_child_cwd_sanitization_addendum_v3.json)；
   [`sealed child sys.path v4 addendum`](../manifests/hitab_p1_sealed_child_sys_path_addendum_v4.json)；
+  [`v4 implementation freeze`](../manifests/hitab_p1_implementation_freeze_v1.json)；
   [`DMC1 core`](../assumption_agent/benchmarks/hitab_p1_dmc1_core_v1.py)；
   [`runtime`](../assumption_agent/benchmarks/hitab_p1_runtime_v1.py)；
   [`source acquisition`](../assumption_agent/benchmarks/hitab_p1_source_acquisition_v1.py)；
