@@ -15,7 +15,8 @@
 >   的真实 GPU1-overlap→GPU0-formation→cache-release→GPU0-Hippo 顺序、每 GPU 最多一个
 >   Hippo process、canary/formal 一次性 claim、promotion 后才可首次 decode TEST，以及
 >   `CPUQuota=800% / MemoryMax=40G / TasksMax=64` 均已闭合。双卡空闲后唯一 v4 canary
->   有效启动一次，但 direct MiniLM 在 AutoModel 加载后命中 shared-temporary Python guard，
+>   有效启动一次，但 planner/cross-encoder 构造后，direct MiniLM constructor 入口的首个
+>   guard 检出 shared-temporary Python；失败早于 direct MiniLM 自己导入或加载 AutoModel，
 >   未进入 public item execution，qualified receipt 为 0。HiTab 四个正式文件始终未下载，
 >   source/cohort/Hippo action/qrel/score 均为 0；该 study 已按事前规则以
 >   **source-free implementation-invalid / efficacy unknown / no replay** 终止，不能支持三臂优势或 L5
@@ -4839,8 +4840,9 @@ self SHA-256 为 `b12321e7…d3c3`；真实冻结的 LiteLLM import 在这里已
 
 两张 GPU 空闲后，唯一 canary service 于 06:54:30 有效启动：`NRestarts=0`、40 GiB、8 CPU、
 仅 AF_UNIX，attempt file/self SHA-256 为 `c97c9133…c8a0` / `10b4b224…7b90`。Planner 与
-cross-encoder 加载后，direct Transformers MiniLM 完成 AutoModel 权重加载，但在 encoder 赋值和任何 public
-canary item execution 前，外层 guard 再次发现 shared-temporary Python path；静态错误 literal SHA-256 为
+cross-encoder 加载后，direct Transformers MiniLM constructor 入口的首个 guard 立即发现
+shared-temporary Python path；该失败早于 direct MiniLM 自己导入 `torch`/`AutoModel`，也早于任何 public
+canary item execution。未保留具体临时 module path/name，不能再归因给某个前序组件；静态错误 literal SHA-256 为
 `f7ac238d…dd51`。service 于 06:56:10 以 exit 1 fail-closed，qualified receipt、Hippo child launch、
 source acquisition freeze、四个 GET、HiTab decode/selection、qrel、score、API/online evaluator 均为 0。
 
