@@ -61,7 +61,7 @@
 > - 最新独立后续 study：TAT-QA P23 按预注册终止后，FRAMES P1 固定 official revision `58d9fb63…22ef`、Git blob `cea20270…025` 与 viewer-exposed rows `[0,100)` exclusion；实现提交 `6552fefb` 的 18/18 tests 与独立 adversarial audit 通过，freeze `8ee6662c…3f20` 绑定 real Git ancestor/四个 commit blobs，并显式披露 freeze 前一次未保存、未解析 row/cell 的 TSV byte stream。正式 source SHA-256=`4255093c…69ff`；唯一资格 marker 随后消费，但 raw TSV header 与预冻结的 public viewer conversion header 不同，故在首行、任何 row content/action/score 前 terminal。FRAMES 不改 parser、不重跑，efficacy/capacity 仍 unknown；这证明 viewer schema 不能代替 raw repository schema contract
 > - 最新 FanOutQA P1 独立 study：固定官方 `v1.1.1` commit `ccf127bd…d54` 的 310-row DEV 与官方 1.539 GB revision cache；不透明下载虽因远端缺少 `git` 在收尾阶段退出，但两个完整 `.part` 已按冻结 size/SHA/Git-blob 校验并原地晋升，未重下。安全审计在任何 JSON/tar-member parse 前以不可变 amendment 透明记录 one-shot、cache trust anchor、qrel 隔离和 selection-commitment 加固；32/32 离线测试与最终审计通过。唯一 formal qualification 随后在 DEV item parse 中因官方 `categories` schema 与冻结 exact contract 不同而 `category schema drifted` fail-closed；cache tar member、TEST、candidate、RAW/HippoRAG、evaluator、score 均为 0。FanOutQA P1 不改 parser、不重跑，source capacity 与 efficacy 仍 unknown
 > - 最新 MMQA P1 独立 study 终态（source 从未下载或解析）：固定 official MultiModalQA commit `4dd14328…02e3` 的 TRAIN、DEV、tables、texts 四个 gzip，共 69,204,571 bytes；候选、A/F/A_hold/M 与三臂离线评价均在 source 前冻结。311linux 驱动升级后已通过重启恢复为两张 RTX 2080 / `595.84`。第一次 source-free official preflight invocation 因 shell brace expansion 在 builder 前退出，单独 disposition 后，唯一 corrected capability launch 通过 address-family、filesystem 与 runtime inspection并进入 public synthetic official worker；worker exit 1，只留下冻结的 stderr digest，receipt 未生成。事后静态复核定位到确定性的首个 worker 内兼容冲突：两个冻结绝对模型路径被 pinned HippoRAG 转成一个 272-byte working-directory basename，超过该文件系统 `NAME_MAX=255`，且目录创建发生在模型构造、index 与 retrieve 之前；该结论来自 exact code/path-length，不冒充从单向 stderr digest 恢复出的异常文本。formal root/source/item/action/score 与 online evaluator 均为 0。该 study 因 source-free runtime infrastructure-invalid 严格终止，不重跑、不换 runtime/model、不下载 source；不是 Agent 对 RAW/HippoRAG 的效果负结果
-> - 最新执行状态与缺口：MMQA P1 终止后，现实域跨 family 同时超过 RAW/HippoRAG 与 evaluator 晋升后改善 untouched search 的 L5 仍均未闭合。下一步建立全新 MAUD supplementary extraction study：它是 contract-disjoint 的 full-contract SQuAD2 evidence-span source，不使用已在公开 viewer 暴露少量 TRAIN 行的 primary MAUD RC，也不使用与已终止 CUAD 高度同源的 ACORD。prospective runtime 固定短 cwd-local 模型别名、显式 child import closure 与失败时 mode-0600 私有 stdout/stderr custody；仍只允许一次 source-free public diagnostic、全离线评价，不能在 MMQA P1 上补 gate、降低阈值或把 source 解封
+> - 最新执行状态与缺口：MAUD extraction P1 的重启后 runtime fingerprint 已通过，但唯一 full source-free canary 在两个 coordinate worker 都写出完整、同输入绑定的 22-query 输出后，被预冻结的“模型进程 OS-thread peak≤2”检查同时判失败；official HippoRAG 尚未启动，formal source、secret、action、gold 与 score 均为 0。该检查把 CUDA/Transformers helper thread 总数误当成 active CPU parallelism；systemd cgroup 没有 OOM、quota 或 timeout 终止。P1 已按 implementation-invalid / efficacy unknown 关闭，不重放 canary、不复用私有输出、不下载 source。现实域跨 family 同时超过 RAW/HippoRAG 与 evaluator 晋升后改善 untouched search 的 L5 仍均未闭合；后续只能用新 study ID 与新 root，删除这个无效的进程线程数 gate，同时继续固定 native/Torch 线程、worker 数与外部 cgroup CPU/内存/task 上限
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -4538,6 +4538,23 @@ probe 从未进入任何 frozen path，随后已删除。implementation freeze v
 root 之后追加现有 base root，并精确绑定 `distro 1.7.0` 与 `click 8.0.3` 的版本和 module origin；不改变任何
 candidate、evaluator、metric、threshold、cohort 或 gate。
 
+重启验证后，corrected source-free runtime fingerprint 一次通过：kernel、driver、两张 RTX 2080、typed 与 official
+两套显式 import closure、模型/source tree 和新增 `click`/`distro` origin 均与冻结身份一致，且该阶段仍为 0 model
+inference、0 source/score。随后唯一 full canary 在 `CPUQuota=400%`、`MemoryMax=40 GiB`、`TasksMax=64` 的
+user cgroup 中启动；MiniLM 与 cross-encoder 两个 frozen worker 都完成同一 synthetic contract 的 22 个 query，
+分别写出 canonical mode-0600 output，0 API/network、0 retry/resample。二者随后都在 output 写入后的同一检查处
+退出：observed process OS-thread peak 大于冻结值 2。由于 frozen code 只在阈值通过后才把 peak 数值写入 stdout，
+不能事后声称精确 peak；但两份完整 output、模型加载 stderr、无 OOM/timeout/quota termination 以及未创建 official
+scratch/custody 共同把失败定位为 thread-count gate，而非 GPU、内存、模型或 source 问题。
+
+这个 gate 在语义上也是错误的：native BLAS/OpenMP 与 Torch intra/inter-op 均已固定为 1，但 CUDA/Transformers 可创建
+不等于并行计算核心数的 helper threads；用 `/proc/<pid>/task` 总数≤2 作为资源上限会拒绝正常推理。P1 的唯一 canary
+能力已经消费且没有通过 receipt，因此严格终止为 **source-free implementation-invalid / efficacy unknown**。私有
+coordinate outputs 只保留作 custody，不作为 passed canary 复用；official HippoRAG、execution freeze、selection secret、
+三个 formal JSON 的 GET/parse、action、gold、score 均未发生。下一步不是给 P1 补 gate 或重跑，而是新建独立 successor：
+移除无效的 per-process OS-thread-count 判定，保留 native/Torch/OpenIE worker 控制，并把真实资源边界放在预注册的
+bounded process count 与外部 cgroup `CPUQuota`、`MemoryMax`、`TasksMax`。
+
 ## 附录 A：关键证据索引
 
 - MAUD extraction P1 pre-source chain（formal source/action/score 仍为 0）：
@@ -4546,7 +4563,9 @@ candidate、evaluator、metric、threshold、cohort 或 gate。
   [`pre-source clarification`](../manifests/maud_extraction_p1_pre_source_clarification_v1.json)；
   [`implementation freeze v1`](../manifests/maud_extraction_p1_implementation_freeze_v1.json)；
   [`runtime fingerprint failure disposition`](../manifests/maud_extraction_p1_runtime_fingerprint_failure_disposition_v1.json)；
-  [`implementation freeze v2`](../manifests/maud_extraction_p1_implementation_freeze_v2.json)
+  [`implementation freeze v2`](../manifests/maud_extraction_p1_implementation_freeze_v2.json)；
+  [`source-free runtime fingerprint`](../manifests/maud_extraction_p1_remote_runtime_fingerprint_v1.json)；
+  [`full-canary terminal`](../manifests/maud_extraction_p1_full_canary_terminal_v1.json)
 
 - MMQA P1 pre-source frozen chain（formal source/model/action/score 仍为 0）：
   [`source custody`](../manifests/mmqa_p1_source_custody_v1.json)；
