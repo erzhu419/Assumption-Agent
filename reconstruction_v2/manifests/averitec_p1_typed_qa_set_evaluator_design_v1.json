@@ -1,0 +1,156 @@
+{
+  "action_space": {
+    "assignment_algorithm": "stable_global_candidate_order_greedy_one_to_one_slot_document_matching_v1_not_optimal_assignment",
+    "coordinate_model": "sentence-transformers/all-MiniLM-L6-v2_pinned_local_asset",
+    "document_serialization_all_arms": "question_title_utf8_then_two_lf_then_answer_body_utf8_v1",
+    "recipes": {
+      "R0_DIRECT_DENSE": ["DIRECT", "DIRECT", "DIRECT", "DIRECT", "DIRECT"],
+      "R1_CAUSAL_CHAIN": ["CAUSE", "EFFECT", "SOURCE", "CONTEXT", "DIRECT"],
+      "R2_QUOTE_ATTRIBUTION": ["QUOTE", "SOURCE", "CONTEXT", "DIRECT", "EFFECT"],
+      "R3_NUMERICAL_COMPARISON": ["NUMBER", "COMPARE", "CONTEXT", "SOURCE", "DIRECT"],
+      "R4_CAUSAL_QUOTE": ["CAUSE", "EFFECT", "QUOTE", "SOURCE", "DIRECT"],
+      "R5_CAUSAL_NUMERICAL": ["CAUSE", "EFFECT", "NUMBER", "COMPARE", "DIRECT"],
+      "R6_QUOTE_NUMERICAL": ["QUOTE", "SOURCE", "NUMBER", "COMPARE", "DIRECT"],
+      "R7_ALL_TYPED": ["CAUSE", "EFFECT", "QUOTE", "NUMBER", "COMPARE"]
+    },
+    "selection_score": "3_times_slot_MiniLM_plus_2_times_direct_MiniLM",
+    "top_k": 5,
+    "typed_query_variants": ["DIRECT", "CAUSE", "EFFECT", "QUOTE", "SOURCE", "NUMBER", "COMPARE", "CONTEXT"]
+  },
+  "blocks": {
+    "A_form": {
+      "qrel_release": "only_after_complete_action_archive_seal",
+      "split": "TRAIN",
+      "stratum_quota": 36,
+      "total": 108,
+      "use": "fit_E1_once"
+    },
+    "A_hold": {
+      "arms": ["Agent_E1", "RAW_R0_direct_dense", "official_HippoRAG"],
+      "qrel_release": "only_after_complete_three_arm_action_archive_seal",
+      "split": "DEV",
+      "stratum_quota": 12,
+      "total": 36,
+      "use": "independent_E1_promotion_and_reality_primary"
+    },
+    "F_search": {
+      "qrel_pack_created": false,
+      "split": "TRAIN",
+      "stratum_quota": 12,
+      "total": 36,
+      "use": "descriptive_label_free_behavior_trace_only_never_a_gate"
+    },
+    "M_search": {
+      "materialization_authorization": "only_after_sealed_A_hold_E1_promotion",
+      "qrel_release": "only_after_complete_action_archive_seal",
+      "split": "DEV",
+      "stratum_quota": 12,
+      "total": 36,
+      "use": "untouched_L5_measurement_with_frozen_E1"
+    }
+  },
+  "cohort": {
+    "component_disjointness": "exact_normalized_claim_hash_or_exact_normalized_question_NUL_answer_hash",
+    "component_scope_limit": "does_not_claim_semantic_or_source_URL_disjointness",
+    "known_public_example_exclusion_sha256": "24fc11fe8d979bd072bab11baa4aec69fa5d5838345b3a690ce951e6c4ba1d13",
+    "one_row_per_component": true,
+    "selection": "fresh_32_byte_secret_HMAC_order_once",
+    "source_projection": "closed_cohort_claim_to_question_answer_pair_retrieval",
+    "source_projection_exclusions": [
+      "boolean_explanation",
+      "cached_source_url",
+      "fact_checking_justification",
+      "source_medium",
+      "source_url",
+      "verdict_label"
+    ]
+  },
+  "comparators": {
+    "Agent": "E1_selects_one_of_eight_closed_typed_recipes",
+    "HippoRAG": "patched_official_HippoRAG_core_one_fresh_global_index_same_A_hold_query_and_corpus",
+    "RAW": "R0_DIRECT_DENSE_same_MiniLM_coordinates",
+    "independence_clarification": "RAW_and_E0_are_mathematically_the_same_R0_action_not_two_independent_baselines"
+  },
+  "criteria": {
+    "A_hold_E1_promotion": "E1_minus_E0_net_strictly_positive_and_one_sided_exact_magnitude_preserving_sign_flip_tail_le_0.10",
+    "L5": "frozen_E1_minus_E0_on_untouched_M_search_net_strictly_positive_and_exact_tail_le_0.10",
+    "reality_primary": "A_hold_E1_minus_RAW_and_E1_minus_HippoRAG_each_have_positive_aggregate_net_and_exact_tail_le_0.10_and_each_priority_assigned_stratum_has_strictly_positive_net_against_each_baseline",
+    "reality_primary_does_not_gate_M_search": true
+  },
+  "evaluator": {
+    "E0": "always_R0_DIRECT_DENSE",
+    "E1_features": [
+      "recipe_one_hot",
+      "mean_and_min_direct_selected",
+      "mean_and_min_slot_selected",
+      "mean_slot_minus_direct",
+      "RAW_overlap_fraction",
+      "pairwise_lexical_diversity",
+      "typed_slot_fraction"
+    ],
+    "fit": "ridge_L2_1.0_exactly_once_after_A_form_seal_and_qrel_release",
+    "floating_runtime": "NumPy_BLAS_and_interpreter_bound_in_execution_freeze",
+    "target": "recipe_recall_at_5_minus_R0_recall_at_5"
+  },
+  "execution": {
+    "API_or_online_evaluation": false,
+    "failure_policy": "fail_closed_no_retry_replay_resample_provider_model_candidate_or_gate_change",
+    "formal_launch_count": 1,
+    "official_worker": {
+      "completion_only_local_backend": true,
+      "index_call_count": 1,
+      "max_new_tokens": 96,
+      "query_batch_upper_bound": 8,
+      "retrieval_index_call_count": 0,
+      "seed": 0,
+      "single_worker_OpenIE": true,
+      "torch_and_native_compute_threads": 1
+    },
+    "physical_model_lanes": {
+      "GPU0": "typed_MiniLM_coordinate_worker",
+      "GPU1": "hardened_official_HippoRAG_worker",
+      "maximum_concurrent": 2
+    },
+    "resource_envelope": {
+      "CPUQuota_percent": 400,
+      "MemoryMax_bytes": 42949672960,
+      "TasksMax": 64
+    },
+    "source_free_canary": "one_production_isomorphic_two_GPU_canary_before_any_formal_secret_cohort_source_or_score",
+    "systemd_network_boundary": "RestrictAddressFamilies_AF_UNIX_and_IPAddressDeny_any_plus_offline_allowlisted_child_environment_and_passive_strace"
+  },
+  "metric": {
+    "paired_reference_test": "one_sided_exact_magnitude_preserving_sign_flip_meet_in_the_middle_integer_lift_max_36_pairs",
+    "utility": "exact_fraction_qrel_recall_at_5"
+  },
+  "predecessor_public_qualification": {
+    "design_self_sha256": "64a261718a0b2372efc263ad665ba278d8f27602904abd4ed1f7de48ec55137e",
+    "receipt_file_sha256": "618727c173ea3f03fb756e301e4d5f55f8189830f4de427841a98f01e5010686",
+    "receipt_self_sha256": "8e6fdf432bd3f79b8f9ddc11574ddaa8dc12ecfb1691477d2ab0b11691f1f272",
+    "status": "qualified_public_non_scoring_schema_topology"
+  },
+  "privacy": {
+    "local_return": "safe_aggregate_terminal_only",
+    "remote_private_retention": ["source", "secret", "selected_views", "qrels", "coordinates", "actions", "item_scores", "model_logs"],
+    "terminal_excludes": ["claim", "question", "answer", "URL", "item_id", "qrel_ordinal", "per_item_utility"]
+  },
+  "recorded_date": "2026-07-26",
+  "schema": "averitec_p1_typed_qa_set_evaluator_design_v1",
+  "self_sha256": "6e59863a5581f73182d13a7cc471fbcafdbf2d780e7c4211cacab7a75c868aa6",
+  "source": {
+    "license": "CC_BY_NC_4.0",
+    "official_commit": "7c62d1ec8df3fb560d6efe2b85fa191135636f81",
+    "official_repository": "https://github.com/MichSchli/AVeriTeC",
+    "scope_claim": "real_world_fact_check_claims_with_closed_cohort_QA_pair_evidence_retrieval_not_open_domain_web_retrieval",
+    "splits": {
+      "DEV_file_sha256": "499793726b4a5406780928a3d9dedc48d6dd53de778f22437d129cacdb08e300",
+      "TRAIN_file_sha256": "ae5eda7c42ddf1695ef185a7ba1bc716928f5adf57103e4f78aae5f9afe00f9c"
+    }
+  },
+  "strata": {
+    "assignment": "causal_then_quote_then_numerical_priority_for_multilabel_rows",
+    "claim_types": ["CAUSAL_CLAIM", "QUOTE_VERIFICATION", "NUMERICAL_CLAIM"],
+    "clarification": "priority_assigned_native_label_strata_not_mutually_exclusive_source_families"
+  },
+  "study_id": "AVERITEC_P1_TYPED_QA_SET_EVALUATOR_V1"
+}
