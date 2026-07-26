@@ -2093,6 +2093,27 @@ decomposition→evidence-unit coverage→complementarity-aware set selection；e
 coverage，而不是继续在已消费 AVeriTeC anchor 上调整 ridge、recipe、alpha 或关键词。只有该新机制在独立 A_hold
 先真实超过 RAW 与 official HippoRAG、再晋升并改善预冻结 M_search，才能同时关闭现实三臂缺口和 L5。
 
+### 8.24 WiCE P0 一次资格化终止；没有形成 P1 或效果测量
+
+AVeriTeC 后的新候选先按修正后的 study ordering 建立独立、公开、非评分的
+`WICE_P0_PUBLIC_SCHEMA_TOPOLOGY_V1`，而不是直接把正式 source epoch 当 schema canary。P0 design、实现和
+source-free tests 先在提交 `ace43078` 冻结；随后只在 311linux 并行下载 official WiCE commit
+`ddeb6c18…9870f` 的 claim-level TRAIN/DEV/TEST 三个 raw blob，一次成功取得并由冻结实现同时验证 size、
+whole-file SHA-256 与 Git blob SHA-1。没有执行 repository code，也没有形成 secret、cohort、action、model、
+RAW/HippoRAG、qrel 或 score。
+
+冻结 qualifier 对 TRAIN `1260` 行和 DEV `349` 行各解码一次；TEST 只做 identity/newline observation，
+`json_decode_count=0`。official row/meta keyset 全部 exact，但预注册 contract 仍记录 `153` 个 aggregate anomaly：
+TRAIN 中 55 个空白 evidence sentence、14 个 not-supported row 带非空 supporting set、31 个重复 alternative；
+DEV 对应为 12、13、28。安全回执 self hash `5f1e5a73…15d19` 有效，终态因此是
+`not_qualified_public_schema_anomalies`。
+
+这不是 WiCE retrieval 的负结果，也不是 source 本身无效；准确分类是 **pre-efficacy source-contract
+incompatible for this program**。但冻结 terminal policy 已事前规定：P0 failure 后不得在同源修改 parser/family/
+capacity contract、重跑 P0 或形成 WiCE P1。因此 TEST 继续不解析，WiCE 不进入 A_hold/M_search。这里执行的是一次
+资格化终止，不是新增 efficacy gate；下一次总目标尝试必须换独立 source/study/cohort，并复用已经 source-free
+证明可执行的 set-marginal mechanism，而不能围绕这 153 个已观察 aggregate anomaly 反向扩规则。
+
 ## 九、下一步优先级与硬验收标准
 
 | 优先级 | 工作 | 硬验收标准 |
@@ -4695,7 +4716,29 @@ controller 没有读取或执行预冻结 M_search，故 L5 为 `null`。这关�
 assignment 足以提高 evidence recall”的路线。下一 study 必须换 source/cohort，并让 operator 直接优化
 decomposition 后的 evidence-set marginal coverage 与互补性；不能在 AVeriTeC 上继续调 ridge、recipe、alpha 或补 gate。
 
+### 12.49 2026-07-26 WiCE P0：公开 topology 一次资格化失败，按冻结规则关闭
+
+下一候选 WiCE 没有直接进入正式评分。`WICE_P0_PUBLIC_SCHEMA_TOPOLOGY_V1` 先在任何 source body 下载前冻结
+design、qualifier 与 tests；311linux 随后一次并行取得 official commit `ddeb6c18…9870f` 的三个 claim blob，
+且 size、SHA-256、Git blob 全部匹配。TRAIN/DEV 仅产生 schema/topology/capacity/collision 聚合，TEST 只验证
+identity 与 raw newline，JSON decode 为 0；全过程没有 secret、cohort、action、model、evaluator、qrel、score、
+API 或在线评价。
+
+一次 qualifier 终态为 `not_qualified_public_schema_anomalies`：TRAIN/DEV 共记录 67 个空白 evidence sentence、
+27 个 not-supported row 带非空 supporting set、59 个重复 supporting alternative，总计 153。该结果说明
+**冻结 contract 与 public source 不相容**，不说明 WiCE source 本身无效，也没有测到 Agent/RAW/HippoRAG
+performance。P0 design 已明确规定 failure 后不修改同源 parser/family/capacity、不 replay、不形成 P1，因此 WiCE
+在这里严格结束；这避免把观察到的格式特征改写成事后通过规则。总目标仍缺现实域三个可辩护 family 的双基线稳定优势
+和 L5，后续只能转向全新 source/study/cohort。
+
 ## 附录 A：关键证据索引
+
+- WiCE P0 source-contract-incompatible terminal chain（TEST JSON 未解码；无 P1/效果测量）：
+  [`public P0 design`](../manifests/wice_p0_public_schema_qualification_design_v1.json)；
+  [`qualification implementation`](../assumption_agent/benchmarks/wice_p0_public_schema_qualification_v1.py)；
+  [`source acquisition receipt`](../manifests/wice_p0_public_source_acquisition_receipt_v1.json)；
+  [`safe aggregate qualification receipt`](../manifests/wice_p0_public_schema_qualification_receipt_v1.json)；
+  [`terminal disposition`](../manifests/wice_p0_public_schema_qualification_failure_disposition_v1.json)
 
 - AVeriTeC P1 valid-negative chain（M_search 未读取/未执行）：
   [`public P0 design`](../manifests/averitec_p0_public_schema_qualification_design_v1.json)；
