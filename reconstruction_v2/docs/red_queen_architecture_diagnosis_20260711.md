@@ -4531,13 +4531,22 @@ recipes、E0 与 official HippoRAG；formal 只验证该已冻结 receipt，不�
 已全部通过。当前状态推进为 **pre-source implementation frozen；只缺新的 runtime fingerprint、唯一 full canary
 与 execution freeze**，仍不是 efficacy 结果。
 
+第一次生成 runtime fingerprint 时，official import closure 在 receipt 写入前静态失败：`-S` 正确屏蔽了隐式
+system-site，但显式 `PYTHONPATH` 漏列了现有 base Python `dist-packages`，所以先暴露 `distro`、继续只读检查又会暴露
+`click`。该阶段没有模型 inference、full canary、source GET/parse、action 或 score；临时下载的 `distro 1.9.0`
+probe 从未进入任何 frozen path，随后已删除。implementation freeze v2 仅在所有更具体的 project/overlay/HippoRAG/p16
+root 之后追加现有 base root，并精确绑定 `distro 1.7.0` 与 `click 8.0.3` 的版本和 module origin；不改变任何
+candidate、evaluator、metric、threshold、cohort 或 gate。
+
 ## 附录 A：关键证据索引
 
 - MAUD extraction P1 pre-source chain（formal source/action/score 仍为 0）：
   [`source custody`](../manifests/maud_extraction_p1_source_custody_v1.json)；
   [`study design`](../manifests/maud_extraction_p1_typed_evaluator_study_design_v1.json)；
   [`pre-source clarification`](../manifests/maud_extraction_p1_pre_source_clarification_v1.json)；
-  [`implementation freeze`](../manifests/maud_extraction_p1_implementation_freeze_v1.json)
+  [`implementation freeze v1`](../manifests/maud_extraction_p1_implementation_freeze_v1.json)；
+  [`runtime fingerprint failure disposition`](../manifests/maud_extraction_p1_runtime_fingerprint_failure_disposition_v1.json)；
+  [`implementation freeze v2`](../manifests/maud_extraction_p1_implementation_freeze_v2.json)
 
 - MMQA P1 pre-source frozen chain（formal source/model/action/score 仍为 0）：
   [`source custody`](../manifests/mmqa_p1_source_custody_v1.json)；

@@ -471,6 +471,7 @@ def test_coordinate_environment_is_typed_only_clean_and_thread_bounded(
     assert paths.overlay_root not in environment["PYTHONPATH"]
     assert paths.hipporag_source_root not in environment["PYTHONPATH"]
     assert paths.p16_site_root not in environment["PYTHONPATH"]
+    assert paths.official_base_site_root not in environment["PYTHONPATH"]
     assert environment["CUDA_VISIBLE_DEVICES"] == "1"
     assert all(
         environment[key] == value

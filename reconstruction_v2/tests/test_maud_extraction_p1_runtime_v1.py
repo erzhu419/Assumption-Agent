@@ -145,6 +145,7 @@ def _paths(tmp_path: Path) -> runtime.RuntimePaths:
         "overlay_root": "official/site",
         "hipporag_source_root": "hippo/src",
         "p16_site_root": "p16",
+        "official_base_site_root": "official/base-site",
         "smollm_model_root": "models/smollm2",
         "minilm_model_root": "models/minilm",
         "typed_python": "typed/bin/python",
@@ -326,6 +327,7 @@ def test_runtime_paths_freeze_project_first_import_order(
         paths.overlay_root,
         paths.hipporag_source_root,
         paths.p16_site_root,
+        paths.official_base_site_root,
     ]
     assert paths.typed_pythonpath().split(os.pathsep) == [
         paths.deployed_project_root,
@@ -370,6 +372,7 @@ def test_runtime_import_inspector_binds_transitive_origins_and_flags(
         "overlay_root": Path(paths.overlay_root),
         "hipporag_source_root": Path(paths.hipporag_source_root),
         "p16_site_root": Path(paths.p16_site_root),
+        "official_base_site_root": Path(paths.official_base_site_root),
     }
     origins = {}
     for index, (module, label) in enumerate(
@@ -396,6 +399,7 @@ def test_runtime_import_inspector_binds_transitive_origins_and_flags(
                 paths.overlay_root,
                 paths.hipporag_source_root,
                 paths.p16_site_root,
+                paths.official_base_site_root,
             ],
         }
         return SimpleNamespace(

@@ -96,6 +96,8 @@ EXPECTED_TYPED_PYVENV_CFG_SHA256 = (
     "7b20ce176e7bef11f2724ad78c24cfdd77c072b3d5dd28d075d74ed63fed9a42"
 )
 EXPECTED_PACKAGE_VERSIONS = {
+    "click": "8.0.3",
+    "distro": "1.7.0",
     "gritlm": "1.0.2",
     "hipporag": "2.0.0a4",
     "huggingface-hub": "0.25.2",
@@ -131,6 +133,8 @@ EXPECTED_TYPED_MODULES = (
     "transformers",
 )
 EXPECTED_MODULE_IMPORT_ROOTS = {
+    "click": "official_base_site_root",
+    "distro": "official_base_site_root",
     "hipporag": "hipporag_source_root",
     "hipporag.HippoRAG": "hipporag_source_root",
     "hipporag.llm.transformers_llm": "hipporag_source_root",
@@ -256,6 +260,7 @@ class RuntimePaths:
     overlay_root: str
     hipporag_source_root: str
     p16_site_root: str
+    official_base_site_root: str
     smollm_model_root: str
     minilm_model_root: str
     typed_python: str
@@ -286,6 +291,7 @@ class RuntimePaths:
                 self.overlay_root,
                 self.hipporag_source_root,
                 self.p16_site_root,
+                self.official_base_site_root,
             )
         )
 
@@ -476,6 +482,9 @@ def _origin_root(
             paths.hipporag_source_root
         ).resolve(strict=True),
         "p16_site_root": Path(paths.p16_site_root).resolve(strict=True),
+        "official_base_site_root": Path(
+            paths.official_base_site_root
+        ).resolve(strict=True),
     }
     matches: list[tuple[int, str]] = []
     for label, root in roots.items():
@@ -611,6 +620,7 @@ def production_runtime_inspector(
         paths.overlay_root,
         paths.hipporag_source_root,
         paths.p16_site_root,
+        paths.official_base_site_root,
     ]
     positions = []
     for root in declared_roots:
@@ -645,6 +655,7 @@ def production_runtime_inspector(
             "overlay_root",
             "hipporag_source_root",
             "p16_site_root",
+            "official_base_site_root",
         ],
         "module_origins": origin_rows,
         "package_versions": dict(EXPECTED_PACKAGE_VERSIONS),
@@ -790,6 +801,7 @@ def production_typed_runtime_inspector(
             paths.overlay_root,
             paths.hipporag_source_root,
             paths.p16_site_root,
+            paths.official_base_site_root,
         )
     ):
         raise MaudExtractionP1RuntimeError(
