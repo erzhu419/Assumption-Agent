@@ -773,10 +773,10 @@ def test_proc_reader_and_live_formal_envelope_are_effective(
     paths = _paths(tmp_path, "live-runtime")
     config_path = tmp_path / "formal.config.json"
     config_path.write_text("{}\n", encoding="ascii")
-    unit_file = tmp_path / "ebmnlp-p1-formal-v3.service"
+    unit_file = tmp_path / "ebmnlp-p1-formal-v4.service"
     unit_file.write_text("[Service]\nRestart=no\n", encoding="ascii")
     systemctl = Path("/usr/bin/true")
-    unit_name = "ebmnlp-p1-formal-v3.service"
+    unit_name = "ebmnlp-p1-formal-v4.service"
     live_output = tmp_path / "live.json"
     config = {
         "formal_unit_name": unit_name,
@@ -818,7 +818,7 @@ def test_proc_reader_and_live_formal_envelope_are_effective(
         )
 
     properties = {
-        "ActiveState": "active",
+        "ActiveState": "activating",
         "CPUQuotaPerSecUSec": "8s",
         "ControlGroup": control_group,
         "ExecStart": (
@@ -833,7 +833,7 @@ def test_proc_reader_and_live_formal_envelope_are_effective(
         "MemoryMax": str(40 * 1024**3),
         "Restart": "no",
         "RestrictAddressFamilies": "AF_UNIX",
-        "SubState": "running",
+        "SubState": "start",
         "TasksMax": "64",
     }
     monkeypatch.setattr(runtime, "_read_proc_regular", fake_proc)
@@ -865,7 +865,32 @@ def test_proc_reader_and_live_formal_envelope_are_effective(
         ),
     )
     assert receipt["status"].startswith("verified_effective")
+    assert receipt["ActiveState_during_ExecStart"] == "activating"
+    assert receipt["SubState_during_ExecStart"] == "start"
     assert json.loads(live_output.read_text("ascii")) == receipt
+    properties["ActiveState"] = "active"
+    properties["SubState"] = "running"
+    with pytest.raises(
+        runtime.EbmNlpP1RuntimeError,
+        match="systemd envelope drifted",
+    ):
+        runtime.verify_live_formal_execution(
+            config=config,
+            config_path=config_path,
+            paths=paths,
+            command_runner=lambda *_args, **_kwargs: (
+                subprocess.CompletedProcess(
+                    [],
+                    0,
+                    "\n".join(
+                        f"{key}={value}"
+                        for key, value in properties.items()
+                    )
+                    + "\n",
+                    "",
+                )
+            ),
+        )
 
 
 def test_live_canary_envelope_is_attested_before_model_inference(
@@ -874,9 +899,9 @@ def test_live_canary_envelope_is_attested_before_model_inference(
     paths = _paths(tmp_path, "canary-live-runtime")
     config_path = tmp_path / "canary.config.json"
     config_path.write_text("{}\n", encoding="ascii")
-    unit_file = tmp_path / "ebmnlp-p1-canary-v3.service"
+    unit_file = tmp_path / "ebmnlp-p1-canary-v4.service"
     unit_file.write_text("[Service]\nRestart=no\n", encoding="ascii")
-    unit_name = "ebmnlp-p1-canary-v3.service"
+    unit_name = "ebmnlp-p1-canary-v4.service"
     systemctl = Path("/usr/bin/true")
     live_output = tmp_path / "canary.live.json"
     canary_output = tmp_path / "canary.json"
@@ -918,7 +943,7 @@ def test_live_canary_envelope_is_attested_before_model_inference(
         )
 
     properties = {
-        "ActiveState": "active",
+        "ActiveState": "activating",
         "CPUQuotaPerSecUSec": "8s",
         "ControlGroup": control_group,
         "ExecStart": (
@@ -933,7 +958,7 @@ def test_live_canary_envelope_is_attested_before_model_inference(
         "MemoryMax": str(40 * 1024**3),
         "Restart": "no",
         "RestrictAddressFamilies": "AF_UNIX",
-        "SubState": "running",
+        "SubState": "start",
         "TasksMax": "64",
     }
     monkeypatch.setattr(runtime, "_read_proc_regular", fake_proc)
@@ -966,6 +991,8 @@ def test_live_canary_envelope_is_attested_before_model_inference(
         ),
     )
     assert receipt["canary_unit_name"] == unit_name
+    assert receipt["ActiveState_during_ExecStart"] == "activating"
+    assert receipt["SubState_during_ExecStart"] == "start"
     assert receipt["direct_IP_socket_denial_probe"][
         "AF_INET6_socket_creation_denied"
     ] is True

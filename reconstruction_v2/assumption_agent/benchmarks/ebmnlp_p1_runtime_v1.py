@@ -49,7 +49,7 @@ from replication_runtime.ebmnlp_p1_official_v1 import contract as hippo
 from replication_runtime.qasper_minilm_v1 import binding as minilm_binding
 
 
-VERSION = "ebmnlp_p1_runtime_v3"
+VERSION = "ebmnlp_p1_runtime_v4"
 EMBEDDER_RECEIPT_SCHEMA = (
     "ebmnlp_p1_local_minilm_embedder_v1_safe_runtime_receipt"
 )
@@ -58,14 +58,14 @@ HIPPO_RECEIPT_SCHEMA = (
 )
 FINGERPRINT_SCHEMA = f"{VERSION}_source_free_fingerprint"
 CANARY_SCHEMA = f"{VERSION}_source_free_full_path_canary"
-IMPLEMENTATION_FREEZE_SCHEMA = "ebmnlp_p1_implementation_freeze_v3"
+IMPLEMENTATION_FREEZE_SCHEMA = "ebmnlp_p1_implementation_freeze_v4"
 IMPLEMENTATION_FREEZE_STATUS = (
-    "implementation_v3_frozen_after_source_free_v2_pre_model_failure_"
-    "before_v3_fingerprint_canary_or_source_access"
+    "implementation_v4_frozen_after_source_free_v3_pre_model_failure_"
+    "before_v4_fingerprint_canary_or_source_access"
 )
-EXECUTION_FREEZE_SCHEMA = "ebmnlp_p1_execution_freeze_v3"
+EXECUTION_FREEZE_SCHEMA = "ebmnlp_p1_execution_freeze_v4"
 EXECUTION_FREEZE_STATUS = (
-    "execution_v3_frozen_after_source_free_canary_before_source_access"
+    "execution_v4_frozen_after_source_free_canary_before_source_access"
 )
 LIVE_EXECUTION_ATTESTATION_SCHEMA = (
     f"{VERSION}_live_formal_execution_attestation"
@@ -136,11 +136,14 @@ _REQUIRED_IMPLEMENTATION_PATHS = frozenset(
         "manifests/ebmnlp_p1_implementation_clarification_v1.json",
         "manifests/ebmnlp_p1_implementation_clarification_v2.json",
         "manifests/ebmnlp_p1_implementation_clarification_v3.json",
+        "manifests/ebmnlp_p1_implementation_clarification_v4.json",
         "manifests/ebmnlp_p1_pre_source_clarification_v1.json",
         "manifests/ebmnlp_p1_source_free_canary_unit_v2.service",
         "manifests/ebmnlp_p1_source_free_canary_unit_v3.service",
+        "manifests/ebmnlp_p1_source_free_canary_unit_v4.service",
         "manifests/ebmnlp_p1_source_free_canary_v1_failure_disposition.json",
         "manifests/ebmnlp_p1_source_free_canary_v2_failure_disposition.json",
+        "manifests/ebmnlp_p1_source_free_canary_v3_failure_disposition.json",
         "manifests/ebmnlp_p1_source_custody_v1.json",
         "manifests/ebmnlp_p1_typed_pico_set_evaluator_study_design_v1.json",
         "manifests/qasper_minilm_runtime_asset_v1.json",
@@ -1380,8 +1383,8 @@ def _verify_live_execution(
     if (
         completed.returncode != 0
         or set(properties) != set(property_names)
-        or properties["ActiveState"] != "active"
-        or properties["SubState"] not in {"running", "start"}
+        or properties["ActiveState"] != "activating"
+        or properties["SubState"] != "start"
         or main_pid != os.getpid()
         or quota != 8_000_000
         or memory_max != 40 * 1024**3
@@ -1431,6 +1434,8 @@ def _verify_live_execution(
         "Restart": properties["Restart"],
         "RestrictAddressFamilies": ["AF_UNIX"],
         "IPAddressDeny": "any",
+        "ActiveState_during_ExecStart": properties["ActiveState"],
+        "SubState_during_ExecStart": properties["SubState"],
         "direct_IP_socket_denial_probe": direct_ip_probe,
         "CUBLAS_WORKSPACE_CONFIG": CUBLAS_WORKSPACE_CONFIG,
         "gpu_assignment": ["0", "1"],
@@ -1462,7 +1467,7 @@ def verify_live_source_free_canary_execution(
         config_path=config_path,
         paths=paths,
         mode="canary",
-        expected_unit_name="ebmnlp-p1-canary-v3.service",
+        expected_unit_name="ebmnlp-p1-canary-v4.service",
         receipt_schema=CANARY_LIVE_EXECUTION_ATTESTATION_SCHEMA,
         receipt_status=(
             "verified_effective_source_free_canary_service_cgroup_"
@@ -1485,7 +1490,7 @@ def verify_live_formal_execution(
         config_path=config_path,
         paths=paths,
         mode="formal",
-        expected_unit_name="ebmnlp-p1-formal-v3.service",
+        expected_unit_name="ebmnlp-p1-formal-v4.service",
         receipt_schema=LIVE_EXECUTION_ATTESTATION_SCHEMA,
         receipt_status=(
             "verified_effective_service_cgroup_and_network_before_source"
