@@ -456,6 +456,78 @@ def test_freeze_verifies_files_models_worker_python_and_exact_policy(
         runner.load_implementation_freeze(path)
 
 
+def test_freeze_accepts_lexical_outer_symlink_to_detached_base_runtime(
+    tmp_path: Path,
+) -> None:
+    path, value = _implementation_freeze(tmp_path)
+    project = Path(value["project_root"])
+    original = Path(
+        value["python"]["outer"]["executable_path"]
+    )
+    lexical = tmp_path / "study-runtime" / "outer_venv" / "bin" / "python"
+    lexical.parent.mkdir(parents=True)
+    lexical.symlink_to(original)
+    pyvenv = lexical.parent.parent / "pyvenv.cfg"
+    pyvenv.write_text(
+        f"home = {original.parent}\n"
+        "include-system-site-packages = false\n"
+        "version = 3.10.12\n",
+        encoding="ascii",
+    )
+
+    outer = value["python"]["outer"]
+    outer["executable_path"] = str(lexical)
+    outer["lexical_symlink_target"] = str(original)
+    outer["pyvenv_cfg"] = {
+        "path": str(pyvenv),
+        "receipt": dependency_closure.regular_file_receipt(pyvenv),
+    }
+    for label in (
+        "hitab_acquire_unit",
+        "hitab_canary_unit",
+        "hitab_formal_unit",
+    ):
+        unit = project / runner.REQUIRED_PROJECT_FILES[label]
+        text = unit.read_text(encoding="ascii")
+        assert str(original) in text
+        unit.write_text(
+            text.replace(str(original), str(lexical)),
+            encoding="ascii",
+        )
+        value["files"][label]["sha256"] = runner.file_sha256(unit)
+    value.pop("self_sha256")
+    value = _self_hashed(value)
+    _write_json(path, value)
+
+    frozen = runner.load_implementation_freeze(path)
+    assert frozen.outer_runtime.executable == lexical
+    assert frozen.outer_runtime.resolved_target == original
+    assert frozen.outer_runtime.stdlib_root == original.parent.parent / (
+        "lib/python3.10"
+    )
+
+
+def test_committed_units_use_study_local_outer_runtime_symlink() -> None:
+    project = Path(runner.__file__).resolve().parents[2]
+    expected = (
+        "/home/erzhu419/hitab_p1_20260726/runtime/"
+        "outer_venv/bin/python"
+    )
+    old_copied_interpreter = (
+        "/home/erzhu419/p19_runtime_assets_20260723/"
+        "typed_venv/bin/python"
+    )
+    for label in (
+        "hitab_acquire_unit",
+        "hitab_canary_unit",
+        "hitab_formal_unit",
+    ):
+        unit = project / runner.REQUIRED_PROJECT_FILES[label]
+        text = unit.read_text(encoding="ascii")
+        assert expected in text
+        assert old_copied_interpreter not in text
+
+
 def test_freeze_rejects_stdlib_zip_structural_pyvenv_and_project_bytecode(
     tmp_path: Path,
 ) -> None:
