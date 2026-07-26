@@ -4517,14 +4517,27 @@ source epoch，不 rescue、不补 gate。
 必须建立新的 source-free fingerprint。旧 HippoRAG tree hash 把可变 `.pyc` 纳入身份，因此本 study 改为绑定排除
 `__pycache__`/`.pyc` 的 60-file source tree `342505c3…27b1f`，同时设置 `PYTHONDONTWRITEBYTECODE=1`；模型只通过
 study-local `minilm`/`smollm2` 短别名传入，避免 MMQA 的 272-byte basename 冲突。执行上最多两条 GPU lane 与四个
-CPU worker，按 stage bulk-submit 后统一 join，全程离线评分、无 fine-tune、无 API/online evaluator。当前状态仍是
-**pre-source source/design frozen, implementation pending**，不是 efficacy 结果。
+CPU worker，按 stage bulk-submit 后统一 join，全程离线评分、无 fine-tune、无 API/online evaluator。
+
+实现审计又在 source access 前关闭了几处会让结果无效或让 311 再次满载的缺口：HTTP redirect 必须在第二个 GET
+发生前拒绝；trusted acquisition 必须逐字节绑定 downloader receipt，并以 title/context 双身份证明
+TRAIN/DEV/TEST contract-disjoint；TEST capability 不能仅凭任意 self-hash 与两个布尔值，而要精确重算并绑定
+A_hold action/gold/model/contract-tail receipt。A_form 的 unanswerable item 保留全部九个 training rows，训练专用
+target 全为 0，但仍不进入 primary metric。typed coordinate runtime 只允许 project+typed-site import closure，
+不继承 Ruoli/OpenAI/API/proxy 环境；MiniLM、cross-encoder 与 official HippoRAG 都固定 native/Torch
+intra-op/inter-op 线程，OpenIE executor 强制单 worker，并对每个模型进程的 OS-thread peak 设为最多 2。唯一
+source-free canary 必须对同一 `build_passages` corpus 依次覆盖并发 MiniLM/CE、coordinate join、九个 typed
+recipes、E0 与 official HippoRAG；formal 只验证该已冻结 receipt，不重放 canary。62 个纯 synthetic test
+已全部通过。当前状态推进为 **pre-source implementation frozen；只缺新的 runtime fingerprint、唯一 full canary
+与 execution freeze**，仍不是 efficacy 结果。
 
 ## 附录 A：关键证据索引
 
 - MAUD extraction P1 pre-source chain（formal source/action/score 仍为 0）：
   [`source custody`](../manifests/maud_extraction_p1_source_custody_v1.json)；
-  [`study design`](../manifests/maud_extraction_p1_typed_evaluator_study_design_v1.json)
+  [`study design`](../manifests/maud_extraction_p1_typed_evaluator_study_design_v1.json)；
+  [`pre-source clarification`](../manifests/maud_extraction_p1_pre_source_clarification_v1.json)；
+  [`implementation freeze`](../manifests/maud_extraction_p1_implementation_freeze_v1.json)
 
 - MMQA P1 pre-source frozen chain（formal source/model/action/score 仍为 0）：
   [`source custody`](../manifests/mmqa_p1_source_custody_v1.json)；
