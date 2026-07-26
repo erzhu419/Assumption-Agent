@@ -1,7 +1,7 @@
 # Assumption Agent × Red Queen Gödel Machine：架构诊断与 Reconstruction V2 复核
 
 > - 初版日期：2026-07-11
-> - 本次复核：2026-07-23
+> - 本次复核：2026-07-26
 > - 最新 EntailmentBank G1/E1 终态：official Task2 TRAIN/DEV aggregate qualification 通过后，fresh v2 secret 一次形成
 >   G/A/F/A_hold/M=`60/36/30/30/30` 的三-family平衡 186-item cohort，F label 从未创建。v1 acquisition 因把同 ID
 >   多行变体误当非法而在 selection/action 前 fail-closed；v2 只事前增加私有 source-line identity，未改任何 efficacy contract。
@@ -61,7 +61,7 @@
 > - 最新独立后续 study：TAT-QA P23 按预注册终止后，FRAMES P1 固定 official revision `58d9fb63…22ef`、Git blob `cea20270…025` 与 viewer-exposed rows `[0,100)` exclusion；实现提交 `6552fefb` 的 18/18 tests 与独立 adversarial audit 通过，freeze `8ee6662c…3f20` 绑定 real Git ancestor/四个 commit blobs，并显式披露 freeze 前一次未保存、未解析 row/cell 的 TSV byte stream。正式 source SHA-256=`4255093c…69ff`；唯一资格 marker 随后消费，但 raw TSV header 与预冻结的 public viewer conversion header 不同，故在首行、任何 row content/action/score 前 terminal。FRAMES 不改 parser、不重跑，efficacy/capacity 仍 unknown；这证明 viewer schema 不能代替 raw repository schema contract
 > - 最新 FanOutQA P1 独立 study：固定官方 `v1.1.1` commit `ccf127bd…d54` 的 310-row DEV 与官方 1.539 GB revision cache；不透明下载虽因远端缺少 `git` 在收尾阶段退出，但两个完整 `.part` 已按冻结 size/SHA/Git-blob 校验并原地晋升，未重下。安全审计在任何 JSON/tar-member parse 前以不可变 amendment 透明记录 one-shot、cache trust anchor、qrel 隔离和 selection-commitment 加固；32/32 离线测试与最终审计通过。唯一 formal qualification 随后在 DEV item parse 中因官方 `categories` schema 与冻结 exact contract 不同而 `category schema drifted` fail-closed；cache tar member、TEST、candidate、RAW/HippoRAG、evaluator、score 均为 0。FanOutQA P1 不改 parser、不重跑，source capacity 与 efficacy 仍 unknown
 > - 最新 MMQA P1 独立 study 终态（source 从未下载或解析）：固定 official MultiModalQA commit `4dd14328…02e3` 的 TRAIN、DEV、tables、texts 四个 gzip，共 69,204,571 bytes；候选、A/F/A_hold/M 与三臂离线评价均在 source 前冻结。311linux 驱动升级后已通过重启恢复为两张 RTX 2080 / `595.84`。第一次 source-free official preflight invocation 因 shell brace expansion 在 builder 前退出，单独 disposition 后，唯一 corrected capability launch 通过 address-family、filesystem 与 runtime inspection并进入 public synthetic official worker；worker exit 1，只留下冻结的 stderr digest，receipt 未生成。事后静态复核定位到确定性的首个 worker 内兼容冲突：两个冻结绝对模型路径被 pinned HippoRAG 转成一个 272-byte working-directory basename，超过该文件系统 `NAME_MAX=255`，且目录创建发生在模型构造、index 与 retrieve 之前；该结论来自 exact code/path-length，不冒充从单向 stderr digest 恢复出的异常文本。formal root/source/item/action/score 与 online evaluator 均为 0。该 study 因 source-free runtime infrastructure-invalid 严格终止，不重跑、不换 runtime/model、不下载 source；不是 Agent 对 RAW/HippoRAG 的效果负结果
-> - 最新执行状态与缺口：MAUD extraction P1 的重启后 runtime fingerprint 已通过，但唯一 full source-free canary 在两个 coordinate worker 都写出完整、同输入绑定的 22-query 输出后，被预冻结的“模型进程 OS-thread peak≤2”检查同时判失败；official HippoRAG 尚未启动，formal source、secret、action、gold 与 score 均为 0。该检查把 CUDA/Transformers helper thread 总数误当成 active CPU parallelism；systemd cgroup 没有 OOM、quota 或 timeout 终止。P1 已按 implementation-invalid / efficacy unknown 关闭，不重放 canary、不复用私有输出、不下载 source。successor `MAUD_EXTRACTION_P2_CGROUP_BOUNDED_EVALUATOR_V1` 已用新 ID、新 root 与 fresh synthetic seed 冻结：候选、E0/E1、RAW/HippoRAG、source/cohort、metric、promotion/L5 全部不变，只删除无效 total-thread gate；native/Torch/OpenIE/worker count 仍固定，并由 `CPUQuota=400%`、`MemoryMax=40 GiB`、`TasksMax=64` 外部 cgroup 实施真实资源边界。64/64 synthetic tests 与 py_compile 已通过；下一步仅剩新的 source-free fingerprint 与 P2 唯一 canary，通过后才允许 execution freeze 和 source download
+> - 最新执行状态与缺口：MAUD extraction P2 的 corrected runtime fingerprint 与唯一 full source-free canary 均一次通过；canary 覆盖并发 MiniLM/CE、同一 22-query corpus、九个 typed recipes、E0 与 official HippoRAG，并由 `CPUQuota=400%`、`MemoryMax=40 GiB`、`TasksMax=64` cgroup 审计，0 API/network/retry。execution freeze 随后在 source access 前绑定 implementation、runtime、canary、fresh secret commitment 与 formal config。唯一下载 unit 以 `Restart=no`、1 CPU、1 GiB、16 tasks 发出冻结的三个 HTTPS GET：TRAIN/DEV 完整通过 size/Git-blob 校验，TEST stream 在约 300 秒后只得到 `403,264/6,169,945` bytes 并提前结束，触发 frozen size mismatch；service exit 1、restart=0。三个 JSON 均未 parse，formal controller/model/action/gold/score 与 online evaluator 均为 0。P2 已严格关闭为 **acquisition-infrastructure-invalid / efficacy unknown**，禁止 retry/resume/mirror switch、partial parse、formal launch 或在 successor 复用这些私有 bytes；因此现实域 Agent 对 RAW+official HippoRAG 的三-family稳定优势和 L5 仍都缺失
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -4563,17 +4563,41 @@ A_hold promotion 与 untouched M_search L5；P1 的 private coordinate output �
 max-workers=1、每 GPU 最多一个 official contract worker和两条 GPU lane。outer 必须以 `Restart=no`、
 `CPUQuota=400%`、`MemoryMax=40 GiB`、`TasksMax=64` 启动；observed process thread peak 仅保存在私有 diagnostic。
 P2 另使用 `maud-p2-*` public-synthetic contract/query seeds，避免把 P1 已消费的 fixture 或 output 冒充 fresh canary。
-完整 64/64 synthetic tests、`py_compile` 与 whitespace diff check 已通过；当前仍是
-**pre-source implementation frozen**，没有 efficacy 结果。只允许先生成新 project-root-bound runtime fingerprint，
-再消费一次 P2 full canary；二者通过后才能生成 execution freeze、selection secret 和下载三个 formal JSON。
+完整 64/64 synthetic tests、`py_compile` 与 whitespace diff check 已通过。新的 project-root-bound runtime
+fingerprint 一次通过；唯一 full canary 随后在实际 cgroup 中一次完成并发 MiniLM/CE、同一个 22-query synthetic
+corpus、九个 typed recipes、E0 和 official HippoRAG，service restart=0，0 API/network/retry。canary receipt 与
+仍在 active unit 内形成的资源 attestation 都在 execution freeze 前封存。execution freeze
+`8b16fd9e…1472` 再绑定 implementation commit `befe6fb4`、runtime/canary、fresh 32-byte secret 的单向
+commitment 与 formal config；此时 source GET/parse、formal model/action/gold/score 仍全为 0。
+
+唯一 source download 以独立 `maud-p2-download-v1.service` 启动，实际属性为 `Restart=no`、
+`CPUQuota=100%`、`MemoryMax=1 GiB`、`TasksMax=16`、`KillMode=control-group`。它严格发出三个 commit-addressed
+HTTPS GET，不跟随 redirect、不解析 JSON。TRAIN 49,039,965 bytes 与 DEV 6,133,011 bytes 完整通过冻结
+size/Git-blob 校验；第三个 TEST stream 在约 300 秒后只写入 403,264 / 6,169,945 bytes 就结束，因而由冻结代码
+报 `source size does not match frozen metadata`。terminal receipt 只记录两个 complete files、
+`MaudDownloadError` 和 `terminal_no_retry_resume_or_mirror_switch`；unit exit 1、restart=0，未生成成功 receipt。
+完整与 partial source bytes 均为远端 mode-0600 私有 custody，未公开、未解析，也不会输入 successor。
+
+因此 P2 严格终止为 **acquisition-infrastructure-invalid / efficacy unknown**：不 retry、resume、换 mirror/downloader，
+不解析 partial/complete P2 bytes，不启动 P2 formal controller，不产生任何三臂或 L5 分数。这一终态不是
+Agent 对 RAW/HippoRAG 的负结果，也不改变既有证据；总目标仍同时缺现实域三个 relation family 对两条 baseline
+均稳定为正，以及 evaluator 在独立 A_hold 晋升后改善 untouched M_search。下一步只能使用全新 study/source/cohort，
+并优先选择已完整本地冻结、无需临时网络传输的 source artifact；不能把 P2 改名后补跑。
 
 ## 附录 A：关键证据索引
 
-- MAUD extraction P2 pre-source successor chain（P2 runtime/model/canary/source/action/score 均为 0）：
+- MAUD extraction P2 terminal chain（source JSON 未 parse；formal model/action/gold/score 均为 0）：
   [`source custody`](../manifests/maud_extraction_p2_source_custody_v1.json)；
   [`study design`](../manifests/maud_extraction_p2_cgroup_bounded_evaluator_study_design_v1.json)；
   [`pre-source clarification`](../manifests/maud_extraction_p2_pre_source_clarification_v1.json)；
-  [`implementation freeze`](../manifests/maud_extraction_p2_implementation_freeze_v1.json)
+  [`implementation freeze`](../manifests/maud_extraction_p2_implementation_freeze_v1.json)；
+  [`runtime fingerprint`](../manifests/maud_extraction_p2_remote_runtime_fingerprint_v1.json)；
+  [`full canary`](../manifests/maud_extraction_p2_full_canary_receipt_v1.json)；
+  [`canary unit attestation`](../manifests/maud_extraction_p2_full_canary_unit_attestation_v1.json)；
+  [`execution freeze`](../manifests/maud_extraction_p2_execution_freeze_v1.json)；
+  [`download attempt`](../manifests/maud_extraction_p2_source_download_attempt_v1.json)；
+  [`download terminal`](../manifests/maud_extraction_p2_source_download_terminal_v1.json)；
+  [`acquisition failure disposition`](../manifests/maud_extraction_p2_acquisition_failure_disposition_v1.json)
 
 - MAUD extraction P1 pre-source chain（formal source/action/score 仍为 0）：
   [`source custody`](../manifests/maud_extraction_p1_source_custody_v1.json)；
