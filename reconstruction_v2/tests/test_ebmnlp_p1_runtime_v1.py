@@ -773,10 +773,10 @@ def test_proc_reader_and_live_formal_envelope_are_effective(
     paths = _paths(tmp_path, "live-runtime")
     config_path = tmp_path / "formal.config.json"
     config_path.write_text("{}\n", encoding="ascii")
-    unit_file = tmp_path / "ebmnlp-p1-formal-v2.service"
+    unit_file = tmp_path / "ebmnlp-p1-formal-v3.service"
     unit_file.write_text("[Service]\nRestart=no\n", encoding="ascii")
     systemctl = Path("/usr/bin/true")
-    unit_name = "ebmnlp-p1-formal-v2.service"
+    unit_name = "ebmnlp-p1-formal-v3.service"
     live_output = tmp_path / "live.json"
     config = {
         "formal_unit_name": unit_name,
@@ -874,11 +874,12 @@ def test_live_canary_envelope_is_attested_before_model_inference(
     paths = _paths(tmp_path, "canary-live-runtime")
     config_path = tmp_path / "canary.config.json"
     config_path.write_text("{}\n", encoding="ascii")
-    unit_file = tmp_path / "ebmnlp-p1-canary-v2.service"
+    unit_file = tmp_path / "ebmnlp-p1-canary-v3.service"
     unit_file.write_text("[Service]\nRestart=no\n", encoding="ascii")
-    unit_name = "ebmnlp-p1-canary-v2.service"
+    unit_name = "ebmnlp-p1-canary-v3.service"
     systemctl = Path("/usr/bin/true")
     live_output = tmp_path / "canary.live.json"
+    canary_output = tmp_path / "canary.json"
     config = {
         "canary_unit_name": unit_name,
         "canary_hostname_sha256": hashlib.sha256(
@@ -897,6 +898,8 @@ def test_live_canary_envelope_is_attested_before_model_inference(
         + b"assumption_agent.benchmarks.ebmnlp_p1_runtime_v1"
         + b"\0canary\0--config\0"
         + str(config_path.absolute()).encode("utf-8")
+        + b"\0--output\0"
+        + str(canary_output.absolute()).encode("utf-8")
         + b"\0"
     )
 
@@ -951,6 +954,7 @@ def test_live_canary_envelope_is_attested_before_model_inference(
         config=config,
         config_path=config_path,
         paths=paths,
+        output_path=canary_output,
         command_runner=lambda *_args, **_kwargs: subprocess.CompletedProcess(
             [],
             0,

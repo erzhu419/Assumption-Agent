@@ -49,7 +49,7 @@ from replication_runtime.ebmnlp_p1_official_v1 import contract as hippo
 from replication_runtime.qasper_minilm_v1 import binding as minilm_binding
 
 
-VERSION = "ebmnlp_p1_runtime_v2"
+VERSION = "ebmnlp_p1_runtime_v3"
 EMBEDDER_RECEIPT_SCHEMA = (
     "ebmnlp_p1_local_minilm_embedder_v1_safe_runtime_receipt"
 )
@@ -58,14 +58,14 @@ HIPPO_RECEIPT_SCHEMA = (
 )
 FINGERPRINT_SCHEMA = f"{VERSION}_source_free_fingerprint"
 CANARY_SCHEMA = f"{VERSION}_source_free_full_path_canary"
-IMPLEMENTATION_FREEZE_SCHEMA = "ebmnlp_p1_implementation_freeze_v2"
+IMPLEMENTATION_FREEZE_SCHEMA = "ebmnlp_p1_implementation_freeze_v3"
 IMPLEMENTATION_FREEZE_STATUS = (
-    "implementation_v2_frozen_after_source_free_v1_failure_before_"
-    "v2_fingerprint_canary_or_source_access"
+    "implementation_v3_frozen_after_source_free_v2_pre_model_failure_"
+    "before_v3_fingerprint_canary_or_source_access"
 )
-EXECUTION_FREEZE_SCHEMA = "ebmnlp_p1_execution_freeze_v2"
+EXECUTION_FREEZE_SCHEMA = "ebmnlp_p1_execution_freeze_v3"
 EXECUTION_FREEZE_STATUS = (
-    "execution_v2_frozen_after_source_free_canary_before_source_access"
+    "execution_v3_frozen_after_source_free_canary_before_source_access"
 )
 LIVE_EXECUTION_ATTESTATION_SCHEMA = (
     f"{VERSION}_live_formal_execution_attestation"
@@ -135,9 +135,12 @@ _REQUIRED_IMPLEMENTATION_PATHS = frozenset(
         "assumption_agent/benchmarks/ebmnlp_p1_typed_pico_core_v1.py",
         "manifests/ebmnlp_p1_implementation_clarification_v1.json",
         "manifests/ebmnlp_p1_implementation_clarification_v2.json",
+        "manifests/ebmnlp_p1_implementation_clarification_v3.json",
         "manifests/ebmnlp_p1_pre_source_clarification_v1.json",
         "manifests/ebmnlp_p1_source_free_canary_unit_v2.service",
+        "manifests/ebmnlp_p1_source_free_canary_unit_v3.service",
         "manifests/ebmnlp_p1_source_free_canary_v1_failure_disposition.json",
+        "manifests/ebmnlp_p1_source_free_canary_v2_failure_disposition.json",
         "manifests/ebmnlp_p1_source_custody_v1.json",
         "manifests/ebmnlp_p1_typed_pico_set_evaluator_study_design_v1.json",
         "manifests/qasper_minilm_runtime_asset_v1.json",
@@ -1195,6 +1198,7 @@ def _verify_live_execution(
     expected_unit_name: str,
     receipt_schema: str,
     receipt_status: str,
+    output_path: Path | None,
     command_runner: Callable[..., Any] = subprocess.run,
 ) -> dict[str, object]:
     """Attest the executing service/cgroup/network envelope before source."""
@@ -1267,6 +1271,21 @@ def _verify_live_execution(
         "--config",
         str(Path(config_path).expanduser().absolute()),
     ]
+    if mode == "canary":
+        if output_path is None:
+            raise EbmNlpP1RuntimeError(
+                "canary output path is absent from live execution"
+            )
+        expected_tail.extend(
+            [
+                "--output",
+                str(Path(output_path).expanduser().absolute()),
+            ]
+        )
+    elif output_path is not None:
+        raise EbmNlpP1RuntimeError(
+            "formal live execution unexpectedly supplied an output path"
+        )
     if (
         len(cmdline) != 1 + len(expected_tail)
         or Path(cmdline[0]).resolve(strict=True)
@@ -1435,6 +1454,7 @@ def verify_live_source_free_canary_execution(
     config: Mapping[str, object],
     config_path: Path,
     paths: "RuntimePaths",
+    output_path: Path,
     command_runner: Callable[..., Any] = subprocess.run,
 ) -> dict[str, object]:
     return _verify_live_execution(
@@ -1442,12 +1462,13 @@ def verify_live_source_free_canary_execution(
         config_path=config_path,
         paths=paths,
         mode="canary",
-        expected_unit_name="ebmnlp-p1-canary-v2.service",
+        expected_unit_name="ebmnlp-p1-canary-v3.service",
         receipt_schema=CANARY_LIVE_EXECUTION_ATTESTATION_SCHEMA,
         receipt_status=(
             "verified_effective_source_free_canary_service_cgroup_"
             "and_network_before_model_inference"
         ),
+        output_path=output_path,
         command_runner=command_runner,
     )
 
@@ -1464,11 +1485,12 @@ def verify_live_formal_execution(
         config_path=config_path,
         paths=paths,
         mode="formal",
-        expected_unit_name="ebmnlp-p1-formal-v2.service",
+        expected_unit_name="ebmnlp-p1-formal-v3.service",
         receipt_schema=LIVE_EXECUTION_ATTESTATION_SCHEMA,
         receipt_status=(
             "verified_effective_service_cgroup_and_network_before_source"
         ),
+        output_path=None,
         command_runner=command_runner,
     )
 
@@ -3091,6 +3113,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 config=config,
                 config_path=arguments.config,
                 paths=paths,
+                output_path=arguments.output,
             )
         )
         fingerprint = _verify_fingerprint_receipt(
