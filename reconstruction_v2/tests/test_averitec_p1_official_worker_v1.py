@@ -28,10 +28,11 @@ class _Graph:
 class _Core:
     graph = _Graph()
 
-    def __init__(self):
+    def __init__(self, index_root: Path):
         self.documents = []
         self.index_calls = 0
         self.retrieve_calls = 0
+        self.index_root = index_root
 
     def index(self, documents):
         self.index_calls += 1
@@ -40,6 +41,7 @@ class _Core:
     def retrieve(self, queries, num_to_retrieve):
         self.retrieve_calls += 1
         assert num_to_retrieve == 6
+        (self.index_root / "query.cache").write_bytes(b"ephemeral")
         return [
             _Solution(
                 docs=list(self.documents),
@@ -73,7 +75,7 @@ def test_dynamic_official_worker_builds_once_and_returns_only_ordinals(
     index_root = tmp_path / "index"
     index_root.mkdir()
     (index_root / "frozen.index").write_bytes(b"fixture")
-    core = _Core()
+    core = _Core(index_root)
     output = retrieve_with_core(
         core=core,
         private_input=payload,
@@ -87,6 +89,7 @@ def test_dynamic_official_worker_builds_once_and_returns_only_ordinals(
     assert validate_output(output, expected_input=payload) == output
     assert core.index_calls == 1
     assert core.retrieve_calls == 1
+    assert output["receipt"]["index_changed_during_retrieve"] is True
     assert [row["item_id"] for row in output["rows"]] == [
         "a" * 64,
         "b" * 64,

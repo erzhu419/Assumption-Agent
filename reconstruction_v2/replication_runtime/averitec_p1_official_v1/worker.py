@@ -260,10 +260,7 @@ def retrieve_with_core(
             )
         batch_sizes.append(len(batch_rows))
     post_snapshot = global_contract.snapshot_index_tree(index_root)
-    if post_snapshot != build_snapshot:
-        raise AveritecP1OfficialError(
-            "official index changed during retrieve"
-        )
+    index_changed = post_snapshot != build_snapshot
     receipt = _self_hashed(
         {
             "batch_sizes": batch_sizes,
@@ -274,8 +271,11 @@ def retrieve_with_core(
             "cuda_receipt": dict(cuda_receipt),
             "graph_edge_count": _graph_count(core, "ecount"),
             "graph_node_count": _graph_count(core, "vcount"),
-            "index_changed_during_retrieve": False,
+            "index_changed_during_retrieve": index_changed,
             "index_file_count": build_snapshot.file_count,
+            "index_post_file_count": post_snapshot.file_count,
+            "index_post_total_bytes": post_snapshot.total_bytes,
+            "index_post_tree_sha256": post_snapshot.tree_sha256,
             "index_total_bytes": build_snapshot.total_bytes,
             "index_tree_sha256": build_snapshot.tree_sha256,
             "observed_process_thread_peak": observed_process_thread_peak,
@@ -352,10 +352,36 @@ def validate_output(
         or receipt.get("query_batch_upper_bound") != QUERY_BATCH_SIZE
         or receipt.get("openie_max_new_tokens") != OPENIE_MAX_NEW_TOKENS
         or receipt.get("single_worker_openie") is not True
-        or receipt.get("index_changed_during_retrieve") is not False
         or receipt.get("torch_and_native_compute_thread_count") != 1
     ):
         raise AveritecP1OfficialError("official runtime receipt drifted")
+    changed = receipt.get("index_changed_during_retrieve")
+    pre_tree = receipt.get("index_tree_sha256")
+    post_tree = receipt.get("index_post_tree_sha256")
+    pre_count = receipt.get("index_file_count")
+    post_count = receipt.get("index_post_file_count")
+    pre_bytes = receipt.get("index_total_bytes")
+    post_bytes = receipt.get("index_post_total_bytes")
+    if (
+        type(changed) is not bool
+        or not isinstance(pre_tree, str)
+        or _HEX64.fullmatch(pre_tree) is None
+        or not isinstance(post_tree, str)
+        or _HEX64.fullmatch(post_tree) is None
+        or type(pre_count) is not int
+        or pre_count < 1
+        or type(post_count) is not int
+        or post_count < 1
+        or type(pre_bytes) is not int
+        or pre_bytes < 0
+        or type(post_bytes) is not int
+        or post_bytes < 0
+        or changed
+        != ((pre_tree, pre_count, pre_bytes) != (post_tree, post_count, post_bytes))
+    ):
+        raise AveritecP1OfficialError(
+            "official ephemeral index mutation receipt drifted"
+        )
     cuda = receipt.get("cuda_receipt")
     if (
         not isinstance(cuda, Mapping)
@@ -615,4 +641,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
