@@ -176,15 +176,24 @@ def _read_canonical(path: Path, *, mode: int) -> dict[str, object]:
     return value
 
 
-def _absolute_existing(path: str, field: str, *, directory: bool) -> Path:
+def _absolute_existing(
+    path: str,
+    field: str,
+    *,
+    directory: bool,
+    allow_final_symlink: bool = False,
+) -> Path:
     candidate = Path(path)
-    if not candidate.is_absolute() or candidate.is_symlink():
+    if (
+        not candidate.is_absolute()
+        or (candidate.is_symlink() and not allow_final_symlink)
+    ):
         raise AveritecP1RuntimeError(f"{field} is not a direct absolute path")
     try:
         resolved = candidate.resolve(strict=True)
     except OSError as exc:
         raise AveritecP1RuntimeError(f"{field} is unavailable") from exc
-    if resolved != candidate:
+    if not allow_final_symlink and resolved != candidate:
         raise AveritecP1RuntimeError(f"{field} traverses a symlink")
     if directory != resolved.is_dir():
         raise AveritecP1RuntimeError(f"{field} type drifted")
@@ -219,8 +228,14 @@ class RuntimePaths:
             "minilm_model_root",
         ):
             _absolute_existing(getattr(self, field), field, directory=True)
-        for field in ("typed_python", "official_python", "strace_path"):
-            _absolute_existing(getattr(self, field), field, directory=False)
+        for field in ("typed_python", "official_python"):
+            _absolute_existing(
+                getattr(self, field),
+                field,
+                directory=False,
+                allow_final_symlink=True,
+            )
+        _absolute_existing(self.strace_path, "strace_path", directory=False)
 
     def typed_pythonpath(self) -> str:
         return f"{self.project_root}:{self.typed_site_root}"

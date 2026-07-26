@@ -1,0 +1,20 @@
+[Unit]
+Description=AVeriTeC P1 source-free two-GPU production-isomorphic canary v2
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/erzhu419/averitec_p1_20260726/qualification_v2/reconstruction_v2
+UMask=0077
+ExecStart=/usr/bin/env -i CUBLAS_WORKSPACE_CONFIG=:4096:8 CUDA_VISIBLE_DEVICES=0,1 HF_DATASETS_OFFLINE=1 HF_HUB_DISABLE_TELEMETRY=1 HF_HUB_OFFLINE=1 HOME=/home/erzhu419 LANG=C.UTF-8 LC_ALL=C.UTF-8 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 PATH=/home/erzhu419/p19_runtime_assets_20260723/typed_venv/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONHASHSEED=0 PYTHONNOUSERSITE=1 PYTHONPATH=/home/erzhu419/averitec_p1_20260726/qualification_v2/reconstruction_v2:/home/erzhu419/p19_runtime_assets_20260723/typed_venv/lib/python3.10/site-packages TOKENIZERS_PARALLELISM=false TRANSFORMERS_OFFLINE=1 VECLIB_MAXIMUM_THREADS=1 XDG_RUNTIME_DIR=/run/user/1001 /home/erzhu419/p19_runtime_assets_20260723/typed_venv/bin/python -S -B -m assumption_agent.benchmarks.averitec_p1_runtime_v1 source_free_canary --runtime-paths /home/erzhu419/averitec_p1_20260726/qualification_v2/runtime_paths.json --canary-root /home/erzhu419/averitec_p1_20260726/qualification_v2/canary --execution-binding-sha256 6e59863a5581f73182d13a7cc471fbcafdbf2d780e7c4211cacab7a75c868aa6
+CPUQuota=400%
+MemoryMax=42949672960
+TasksMax=64
+Nice=5
+KillMode=control-group
+Restart=no
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+TimeoutStartSec=infinity
+
+[Install]
+WantedBy=default.target
