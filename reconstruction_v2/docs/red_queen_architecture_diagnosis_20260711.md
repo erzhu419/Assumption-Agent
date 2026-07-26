@@ -61,7 +61,7 @@
 > - 最新独立后续 study：TAT-QA P23 按预注册终止后，FRAMES P1 固定 official revision `58d9fb63…22ef`、Git blob `cea20270…025` 与 viewer-exposed rows `[0,100)` exclusion；实现提交 `6552fefb` 的 18/18 tests 与独立 adversarial audit 通过，freeze `8ee6662c…3f20` 绑定 real Git ancestor/四个 commit blobs，并显式披露 freeze 前一次未保存、未解析 row/cell 的 TSV byte stream。正式 source SHA-256=`4255093c…69ff`；唯一资格 marker 随后消费，但 raw TSV header 与预冻结的 public viewer conversion header 不同，故在首行、任何 row content/action/score 前 terminal。FRAMES 不改 parser、不重跑，efficacy/capacity 仍 unknown；这证明 viewer schema 不能代替 raw repository schema contract
 > - 最新 FanOutQA P1 独立 study：固定官方 `v1.1.1` commit `ccf127bd…d54` 的 310-row DEV 与官方 1.539 GB revision cache；不透明下载虽因远端缺少 `git` 在收尾阶段退出，但两个完整 `.part` 已按冻结 size/SHA/Git-blob 校验并原地晋升，未重下。安全审计在任何 JSON/tar-member parse 前以不可变 amendment 透明记录 one-shot、cache trust anchor、qrel 隔离和 selection-commitment 加固；32/32 离线测试与最终审计通过。唯一 formal qualification 随后在 DEV item parse 中因官方 `categories` schema 与冻结 exact contract 不同而 `category schema drifted` fail-closed；cache tar member、TEST、candidate、RAW/HippoRAG、evaluator、score 均为 0。FanOutQA P1 不改 parser、不重跑，source capacity 与 efficacy 仍 unknown
 > - 最新 MMQA P1 独立 study 终态（source 从未下载或解析）：固定 official MultiModalQA commit `4dd14328…02e3` 的 TRAIN、DEV、tables、texts 四个 gzip，共 69,204,571 bytes；候选、A/F/A_hold/M 与三臂离线评价均在 source 前冻结。311linux 驱动升级后已通过重启恢复为两张 RTX 2080 / `595.84`。第一次 source-free official preflight invocation 因 shell brace expansion 在 builder 前退出，单独 disposition 后，唯一 corrected capability launch 通过 address-family、filesystem 与 runtime inspection并进入 public synthetic official worker；worker exit 1，只留下冻结的 stderr digest，receipt 未生成。事后静态复核定位到确定性的首个 worker 内兼容冲突：两个冻结绝对模型路径被 pinned HippoRAG 转成一个 272-byte working-directory basename，超过该文件系统 `NAME_MAX=255`，且目录创建发生在模型构造、index 与 retrieve 之前；该结论来自 exact code/path-length，不冒充从单向 stderr digest 恢复出的异常文本。formal root/source/item/action/score 与 online evaluator 均为 0。该 study 因 source-free runtime infrastructure-invalid 严格终止，不重跑、不换 runtime/model、不下载 source；不是 Agent 对 RAW/HippoRAG 的效果负结果
-> - 最新执行状态与缺口：MAUD extraction P1 的重启后 runtime fingerprint 已通过，但唯一 full source-free canary 在两个 coordinate worker 都写出完整、同输入绑定的 22-query 输出后，被预冻结的“模型进程 OS-thread peak≤2”检查同时判失败；official HippoRAG 尚未启动，formal source、secret、action、gold 与 score 均为 0。该检查把 CUDA/Transformers helper thread 总数误当成 active CPU parallelism；systemd cgroup 没有 OOM、quota 或 timeout 终止。P1 已按 implementation-invalid / efficacy unknown 关闭，不重放 canary、不复用私有输出、不下载 source。现实域跨 family 同时超过 RAW/HippoRAG 与 evaluator 晋升后改善 untouched search 的 L5 仍均未闭合；后续只能用新 study ID 与新 root，删除这个无效的进程线程数 gate，同时继续固定 native/Torch 线程、worker 数与外部 cgroup CPU/内存/task 上限
+> - 最新执行状态与缺口：MAUD extraction P1 的重启后 runtime fingerprint 已通过，但唯一 full source-free canary 在两个 coordinate worker 都写出完整、同输入绑定的 22-query 输出后，被预冻结的“模型进程 OS-thread peak≤2”检查同时判失败；official HippoRAG 尚未启动，formal source、secret、action、gold 与 score 均为 0。该检查把 CUDA/Transformers helper thread 总数误当成 active CPU parallelism；systemd cgroup 没有 OOM、quota 或 timeout 终止。P1 已按 implementation-invalid / efficacy unknown 关闭，不重放 canary、不复用私有输出、不下载 source。successor `MAUD_EXTRACTION_P2_CGROUP_BOUNDED_EVALUATOR_V1` 已用新 ID、新 root 与 fresh synthetic seed 冻结：候选、E0/E1、RAW/HippoRAG、source/cohort、metric、promotion/L5 全部不变，只删除无效 total-thread gate；native/Torch/OpenIE/worker count 仍固定，并由 `CPUQuota=400%`、`MemoryMax=40 GiB`、`TasksMax=64` 外部 cgroup 实施真实资源边界。64/64 synthetic tests 与 py_compile 已通过；下一步仅剩新的 source-free fingerprint 与 P2 唯一 canary，通过后才允许 execution freeze 和 source download
 > - RQGM 版本：arXiv:2606.26294v2，2026-06-29
 > - legacy 代码范围：`assumption_os/`；legacy 报告范围：`reconstruction/md/` 与对应 artifacts
 > - v2 范围：`reconstruction_v2/`
@@ -4555,7 +4555,25 @@ coordinate outputs 只保留作 custody，不作为 passed canary 复用；offic
 移除无效的 per-process OS-thread-count 判定，保留 native/Torch/OpenIE worker 控制，并把真实资源边界放在预注册的
 bounded process count 与外部 cgroup `CPUQuota`、`MemoryMax`、`TasksMax`。
 
+successor `MAUD_EXTRACTION_P2_CGROUP_BOUNDED_EVALUATOR_V1` 已在任何 P2 remote root、runtime fingerprint、model inference、
+canary、secret 或 source access 前另行冻结。P2 继承同一 unopened official extraction source、16-contract exposure denylist、
+contract-disjoint HMAC split、九个 typed recipes、E0/E1 ridge、RAW/official-HippoRAG 三臂、离线 coverage utility、
+A_hold promotion 与 untouched M_search L5；P1 的 private coordinate output 不作为输入。唯一 substantive runtime change
+是删除 total OS-thread-count 的 pass/fail 判定，同时保留 native BLAS/OpenMP=1、Torch intra/inter-op=1、OpenIE
+max-workers=1、每 GPU 最多一个 official contract worker和两条 GPU lane。outer 必须以 `Restart=no`、
+`CPUQuota=400%`、`MemoryMax=40 GiB`、`TasksMax=64` 启动；observed process thread peak 仅保存在私有 diagnostic。
+P2 另使用 `maud-p2-*` public-synthetic contract/query seeds，避免把 P1 已消费的 fixture 或 output 冒充 fresh canary。
+完整 64/64 synthetic tests、`py_compile` 与 whitespace diff check 已通过；当前仍是
+**pre-source implementation frozen**，没有 efficacy 结果。只允许先生成新 project-root-bound runtime fingerprint，
+再消费一次 P2 full canary；二者通过后才能生成 execution freeze、selection secret 和下载三个 formal JSON。
+
 ## 附录 A：关键证据索引
+
+- MAUD extraction P2 pre-source successor chain（P2 runtime/model/canary/source/action/score 均为 0）：
+  [`source custody`](../manifests/maud_extraction_p2_source_custody_v1.json)；
+  [`study design`](../manifests/maud_extraction_p2_cgroup_bounded_evaluator_study_design_v1.json)；
+  [`pre-source clarification`](../manifests/maud_extraction_p2_pre_source_clarification_v1.json)；
+  [`implementation freeze`](../manifests/maud_extraction_p2_implementation_freeze_v1.json)
 
 - MAUD extraction P1 pre-source chain（formal source/action/score 仍为 0）：
   [`source custody`](../manifests/maud_extraction_p1_source_custody_v1.json)；
