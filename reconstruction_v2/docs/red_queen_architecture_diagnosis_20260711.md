@@ -2,6 +2,15 @@
 
 > - 初版日期：2026-07-11
 > - 本次复核：2026-07-26
+> - 当前 HiTab P1：全新 study `HITAB_P1_DMC1_HIERARCHICAL_SET_EVALUATOR_V1` 已在任何
+>   HiTab source body、secret、cohort、model action 或 score 前完成 source custody、DMC1
+>   hierarchical evidence-set evaluator、late-qrel controller 与三阶段 production closure。
+>   最终 65/65 离线测试及两次独立终审通过；双 Python filesystem closure、source-free canary
+>   的真实 GPU1-overlap→GPU0-formation→cache-release→GPU0-Hippo 顺序、每 GPU 最多一个
+>   Hippo process、canary/formal 一次性 claim、promotion 后才可首次 decode TEST，以及
+>   `CPUQuota=800% / MemoryMax=40G / TasksMax=64` 均已闭合。当前仍只是
+>   **pre-source implementation-ready**：HiTab 四个正式文件尚未下载，真实 canary、三臂
+>   measurement、evaluator promotion 与 L5 都尚未发生
 > - 最新 AVeriTeC P1 终态：独立 official source/cohort、v4 source-free 双 GPU canary、execution/launch freeze
 >   与唯一 formal launch 均有效；systemd 为 success、`NRestarts=0`，全程 0 API/online evaluator、0 retry/replay。
 >   A_hold 上 E1 相对 E0/RAW 为 36/36 utility tie、净 0、exact tail 1；虽有 19/36 项实际换 recipe 且改变 top-5，
@@ -4731,7 +4740,53 @@ performance。P0 design 已明确规定 failure 后不修改同源 parser/family
 在这里严格结束；这避免把观察到的格式特征改写成事后通过规则。总目标仍缺现实域三个可辩护 family 的双基线稳定优势
 和 L5，后续只能转向全新 source/study/cohort。
 
+### 12.50 2026-07-26 HiTab P1：直接边际 coverage evaluator 的 pre-source implementation closure
+
+WiCE 没有按观察到的 anomaly 修改 parser 后重开。新的
+`HITAB_P1_DMC1_HIERARCHICAL_SET_EVALUATOR_V1` 改用 Microsoft HiTab 固定 commit
+`d179602662b490249baf068a76fbe4137029126e`，只把 source-native aggregation token 事前归为
+AGGREGATE、COMPARATIVE、SUPERLATIVE 三个 operation family，并永久排除 Wikipedia/ToTTo 与 corporate
+financial table source。这里的 family 只用于 selection balance 与结果分组，不能写成跨 semantic relation family
+证明；任务也只是 item-local hierarchical table evidence-cell retrieval@5，不是 official HiTab QA 或 execution
+accuracy。
+
+候选机制不再增加 recipe gate、fallback 或 RAW retention。DMC1 在同一完整 cell corpus 上从空集合逐步选择五个
+evidence unit；E0 使用固定整数势函数，E1 只从 A_form 已密封的 state/action feature archive 学习 exact DNF utility
+marginal。每个官方 `[ANSWER]` coordinate 是一个独立 singleton requirement，相同 literal 不合并；corpus commitment、
+coordinate-to-ordinal mapping 与 qrel binding 贯穿 registry、model 和四臂 action archive。A_form=`108`、A_hold=`36`、
+M_search=`36`，每个 block 三 family 平衡且所有 block 同 table 最多一个 question。A_hold 的 E1−E0 exact sign-flip
+promotion 是首次 decode TEST 和 materialize M 的唯一 authority；现实 primary 另要求 E1 对 RAW 与 item-local
+official HippoRAG 的 aggregate 及每个 family net 均严格为正，不能反向 gate promotion。
+
+正式实现采用三支独立 user unit：source-free canary、唯一四文件 commit-addressed GET acquisition、以及断网 formal。
+外层 typed runtime 与 Hippo child runtime 都从 `python -S -B`、`PYTHONPYCACHEPREFIX=/dev/null` 和显式 ordered
+roots 启动，分别绑定完整 Python stdlib/dependency tree、module origin/version 与旧 P17 HippoRAG source/SmolLM2/
+MiniLM attestation；claim scope 明确限于 Python filesystem closure，不扩写为 libc/CUDA ABI 的跨机器重现性。
+canary 先在零 Hippo 的 synthetic A_form 完成 registry seal→late qrel→E1 fit，再让 GPU1 odd Hippo 的真实
+subprocess-launch ACK 与第二次 GPU0 compile/RAW/E0/E1 重叠，empty-cache receipt 后才放行 GPU0 even Hippo。
+ACK 缺失/重复、pre-ACK failure、旧 false-overlap 反例、binding failure、重复 canary/formal、source-before-bootstrap、
+qrel-before-seal 与 promotion-before-TEST 都有 fail-closed 回归。
+
+当前 source-free code、design、units 与 65/65 离线测试已通过两次独立终审；design self hash 为
+`9f060347…6dba`。截至本节写入时，HiTab source body download/parse、secret、selected item、model inference、
+Hippo action、qrel open、score、API/online evaluator 均为 0。故这是一份 **implementation-ready prospective
+freeze**，不是 feasibility 或 efficacy positive。下一步只能按固定顺序生成远端 implementation freeze，运行唯一真实
+source-free canary，成功后才下载四个固定文件并形成 execution freeze，最后一次 formal；任何失败都终止该 version，
+不 retry、resample、换模型、改 family、缩 quota 或补 gate。总目标的现实域双 baseline 稳定优势与 L5 在正式结果前
+仍保持未证明。
+
 ## 附录 A：关键证据索引
+
+- HiTab P1 pre-source implementation chain（正式 source/model/action/score 均为 0）：
+  [`public source custody`](../manifests/hitab_p1_public_source_custody_v1.json)；
+  [`study design`](../manifests/hitab_p1_dmc1_hierarchical_set_evaluator_design_v1.json)；
+  [`DMC1 core`](../assumption_agent/benchmarks/hitab_p1_dmc1_core_v1.py)；
+  [`runtime`](../assumption_agent/benchmarks/hitab_p1_runtime_v1.py)；
+  [`source acquisition`](../assumption_agent/benchmarks/hitab_p1_source_acquisition_v1.py)；
+  [`formal controller`](../assumption_agent/benchmarks/hitab_p1_formal_controller_v1.py)；
+  [`public canary`](../assumption_agent/benchmarks/hitab_p1_public_canary_v1.py)；
+  [`production runner`](../replication_runtime/hitab_p1_formal_v1/runner.py)；
+  [`dependency closure`](../replication_runtime/hitab_p1_formal_v1/dependency_closure.py)
 
 - WiCE P0 source-contract-incompatible terminal chain（TEST JSON 未解码；无 P1/效果测量）：
   [`public P0 design`](../manifests/wice_p0_public_schema_qualification_design_v1.json)；
