@@ -1580,7 +1580,7 @@ _IMPORT_PROBE_SCRIPT = (
     "'version':version}\n"
     "invalid_cached=[]\n"
     "for module in tuple(sys.modules.values()):\n"
-    " cached=getattr(module,'__cached__',None)\n"
+    " cached=vars(module).get('__cached__')\n"
     " if isinstance(cached,str) and"
     " (not cached.startswith('/dev/null/') or os.path.exists(cached)):\n"
     "  invalid_cached.append(cached)\n"
@@ -1765,6 +1765,25 @@ def _probe_child_runtime(
     )
 
 
+def _invalid_module_cache_paths(
+    modules: Sequence[object],
+) -> list[str]:
+    """Inspect module dictionaries without invoking lazy ``__getattr__``."""
+
+    return sorted(
+        {
+            cached
+            for module in modules
+            for cached in [vars(module).get("__cached__")]
+            if isinstance(cached, str)
+            and (
+                not cached.startswith("/dev/null/")
+                or os.path.exists(cached)
+            )
+        }
+    )
+
+
 def prepare_implementation_runtime(
     implementation: FrozenImplementation,
     *,
@@ -1849,17 +1868,8 @@ def prepare_implementation_runtime(
         rows[module_name] = actual
     outer_probe = {
         "dont_write_bytecode": sys.dont_write_bytecode,
-        "invalid_cached": sorted(
-            {
-                cached
-                for module in tuple(sys.modules.values())
-                for cached in [getattr(module, "__cached__", None)]
-                if isinstance(cached, str)
-                and (
-                    not cached.startswith("/dev/null/")
-                    or os.path.exists(cached)
-                )
-            }
+        "invalid_cached": _invalid_module_cache_paths(
+            tuple(sys.modules.values())
         ),
         "no_site": sys.flags.no_site,
         "pycache_prefix": sys.pycache_prefix,

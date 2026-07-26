@@ -9,7 +9,7 @@ from pathlib import Path
 import shlex
 import stat
 import subprocess
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 import sys
 import tempfile
 import threading
@@ -635,6 +635,60 @@ def test_current_hipporag_assets_must_equal_reused_attestation(
                 "hippo_llm": "3" * 64,
             },
         )
+
+
+def test_module_cache_scan_bypasses_lazy_module_getattr() -> None:
+    class LazyModule(ModuleType):
+        def __getattr__(self, name: str) -> object:
+            if name == "__cached__":
+                raise AssertionError("lazy __cached__ access executed")
+            raise AttributeError(name)
+
+    module = LazyModule("lazy_cache_sentinel")
+    assert runner._invalid_module_cache_paths((module,)) == []
+    module.__dict__["__cached__"] = "/unexpected/cache.pyc"
+    assert runner._invalid_module_cache_paths((module,)) == [
+        "/unexpected/cache.pyc"
+    ]
+
+
+def test_child_probe_cache_scan_bypasses_lazy_module_getattr() -> None:
+    prefix = (
+        "import sys,types\n"
+        "class LazyCacheModule(types.ModuleType):\n"
+        " def __getattr__(self,name):\n"
+        "  if name=='__cached__':"
+        " raise RuntimeError('lazy cache access executed')\n"
+        "  raise AttributeError(name)\n"
+        "sys.modules['lazy_cache_sentinel']="
+        "LazyCacheModule('lazy_cache_sentinel')\n"
+    )
+    environment = dict(os.environ)
+    environment.update(
+        {
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONNOUSERSITE": "1",
+            "PYTHONPYCACHEPREFIX": "/dev/null",
+        }
+    )
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-S",
+            "-B",
+            "-c",
+            prefix + runner._IMPORT_PROBE_SCRIPT,
+            json.dumps({"json": None}, separators=(",", ":")),
+        ],
+        check=False,
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    assert completed.returncode == 0, completed.stderr.decode(
+        "utf-8", errors="replace"
+    )
+    assert json.loads(completed.stdout)["rows"]["json"]["version"] is None
 
 
 def test_live_probe_rejects_unlisted_python_path(tmp_path: Path) -> None:
