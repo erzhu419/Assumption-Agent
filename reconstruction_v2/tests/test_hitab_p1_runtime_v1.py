@@ -471,3 +471,21 @@ def test_direct_minilm_v2_topology_and_addendum_are_frozen(
             sort_keys=True,
         ).encode("ascii")
     ).hexdigest()
+
+    v3_manifest_path = (
+        Path(runtime.__file__).resolve().parents[2]
+        / "manifests/hitab_p1_child_cwd_sanitization_addendum_v3.json"
+    )
+    v3_manifest = json.loads(
+        v3_manifest_path.read_text(encoding="utf-8")
+    )
+    v3_claimed = v3_manifest.pop("self_sha256")
+    assert v3_claimed == hashlib.sha256(
+        json.dumps(
+            v3_manifest,
+            allow_nan=False,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("ascii")
+    ).hexdigest()

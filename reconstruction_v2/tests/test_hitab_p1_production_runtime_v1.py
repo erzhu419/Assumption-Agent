@@ -11,6 +11,7 @@ import stat
 import subprocess
 from types import ModuleType, SimpleNamespace
 import sys
+import sysconfig
 import tempfile
 import threading
 
@@ -855,9 +856,9 @@ def test_module_cache_scan_bypasses_lazy_module_getattr() -> None:
     ]
 
 
-def test_v2_outer_excludes_sentence_transformers_and_tmp_modules() -> None:
+def test_v3_outer_excludes_sentence_transformers_and_tmp_modules() -> None:
     assert runner.IMPLEMENTATION_REVISION == (
-        "direct_transformers_minilm_v2"
+        "direct_transformers_minilm_v3_child_cwd_sanitized"
     )
     assert (
         "sentence_transformers"
@@ -878,6 +879,102 @@ def test_v2_outer_excludes_sentence_transformers_and_tmp_modules() -> None:
         "/tmp/frozen-bypass/module.py",
         "/var/tmp/frozen-bypass/package",
     ]
+
+
+def test_child_probe_and_bootstrap_remove_every_cwd_alias(
+    tmp_path: Path,
+) -> None:
+    model_cwd = tmp_path / "model-cwd"
+    model_cwd.mkdir()
+    model_cwd_alias = tmp_path / "model-cwd-alias"
+    model_cwd_alias.symlink_to(model_cwd, target_is_directory=True)
+    environment = dict(os.environ)
+    environment.update(
+        {
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONNOUSERSITE": "1",
+            "PYTHONPYCACHEPREFIX": "/dev/null",
+            "PYTHONPATH": os.pathsep.join(
+                [str(model_cwd), ".", str(model_cwd_alias)]
+            ),
+        }
+    )
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-S",
+            "-B",
+            "-c",
+            runner._IMPORT_PROBE_SCRIPT,
+            json.dumps({"json": None}, separators=(",", ":")),
+        ],
+        cwd=model_cwd,
+        check=False,
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    assert completed.returncode == 0, completed.stderr.decode(
+        "utf-8", errors="replace"
+    )
+    probe_paths = json.loads(completed.stdout)["sys_path"]
+    assert probe_paths
+    assert all(Path(path).is_absolute() for path in probe_paths)
+    assert all(
+        Path(path).resolve() != model_cwd.resolve()
+        for path in probe_paths
+    )
+
+    project = tmp_path / "project"
+    project.mkdir()
+    asset = tmp_path / "asset"
+    asset.mkdir()
+    (model_cwd / "smollm2").symlink_to(
+        asset, target_is_directory=True
+    )
+    output = tmp_path / "bootstrap-paths.json"
+    (project / "synthetic_child_worker.py").write_text(
+        "import json,sys\n"
+        "from pathlib import Path\n"
+        "output=Path(sys.argv[1])\n"
+        "expected=Path(sys.argv[2]).resolve()\n"
+        "if Path('smollm2').resolve()!=expected:"
+        " raise RuntimeError('relative model path drifted')\n"
+        "output.write_text(json.dumps(sys.path),encoding='ascii')\n",
+        encoding="ascii",
+    )
+    environment["PYTHONPATH"] = os.pathsep.join(
+        [str(project), str(model_cwd), ".", str(model_cwd_alias)]
+    )
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-S",
+            "-B",
+            "-c",
+            runner._HIPPO_CHILD_BOOTSTRAP_SCRIPT,
+            str(project),
+            str(Path(sysconfig.get_path("stdlib")).resolve()),
+            "synthetic_child_worker",
+            str(output),
+            str(asset),
+        ],
+        cwd=model_cwd,
+        check=False,
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    assert completed.returncode == 0, completed.stderr.decode(
+        "utf-8", errors="replace"
+    )
+    bootstrap_paths = json.loads(output.read_text(encoding="ascii"))
+    assert bootstrap_paths
+    assert all(Path(path).is_absolute() for path in bootstrap_paths)
+    assert all(
+        Path(path).resolve() != model_cwd.resolve()
+        for path in bootstrap_paths
+    )
 
 
 def test_child_probe_cache_scan_bypasses_lazy_module_getattr() -> None:

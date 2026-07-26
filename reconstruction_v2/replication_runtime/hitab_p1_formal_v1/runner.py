@@ -33,7 +33,9 @@ from typing import Any, Callable, Mapping, Protocol, Sequence
 
 VERSION = "hitab_p1_production_runtime_v1"
 STUDY_ID = "HITAB_P1_DMC1_HIERARCHICAL_SET_EVALUATOR_V1"
-IMPLEMENTATION_REVISION = "direct_transformers_minilm_v2"
+IMPLEMENTATION_REVISION = (
+    "direct_transformers_minilm_v3_child_cwd_sanitized"
+)
 IMPLEMENTATION_FREEZE_SCHEMA = f"{VERSION}_implementation_freeze"
 ACQUISITION_FREEZE_SCHEMA = f"{VERSION}_source_acquisition_freeze"
 EXECUTION_FREEZE_SCHEMA = f"{VERSION}_execution_freeze"
@@ -139,6 +141,9 @@ REQUIRED_PROJECT_FILES: dict[str, str] = {
     "hitab_v2_implementation_addendum": (
         "manifests/hitab_p1_direct_transformers_minilm_addendum_v2.json"
     ),
+    "hitab_v3_implementation_addendum": (
+        "manifests/hitab_p1_child_cwd_sanitization_addendum_v3.json"
+    ),
     "hippo_contract": (
         "replication_runtime/birco_official_hipporag_v1/contract.py"
     ),
@@ -233,8 +238,11 @@ EXPECTED_HIPPORAG_ATTESTATION_FILE_SHA256 = (
 EXPECTED_HIPPORAG_ATTESTATION_RECEIPT_SHA256 = (
     "f12863b59a83e19188ccbf35208cafdf2b7c857daf404749a58e7f7787a07618"
 )
-EXPECTED_IMPLEMENTATION_ADDENDUM_SELF_SHA256 = (
+EXPECTED_V2_IMPLEMENTATION_ADDENDUM_SELF_SHA256 = (
     "b5cb382ec40b4ffbac0648968b286665bed6de64ec705b644fcdff4607174149"
+)
+EXPECTED_V3_IMPLEMENTATION_ADDENDUM_SELF_SHA256 = (
+    "fe55b40f9612510751d6dc837ff35076159d68ca25dd7486f12a5e86a61ca506"
 )
 EXPECTED_HIPPORAG_SOURCE_LEGACY_TREE_SHA256 = (
     "a644ab2811db2739db3cfbdc051561e2cfdf2ed87286f8ebd00a5971d189cdd5"
@@ -1510,12 +1518,12 @@ def load_implementation_freeze(path: Path) -> FrozenImplementation:
     )
     if (
         addendum_self
-        != EXPECTED_IMPLEMENTATION_ADDENDUM_SELF_SHA256
+        != EXPECTED_V2_IMPLEMENTATION_ADDENDUM_SELF_SHA256
         or addendum.get("schema")
         != "hitab_p1_direct_transformers_minilm_implementation_addendum_v2"
         or addendum.get("study_id") != STUDY_ID
         or addendum.get("implementation_revision")
-        != IMPLEMENTATION_REVISION
+        != "direct_transformers_minilm_v2"
         or addendum.get("status")
         != (
             "implementation_addendum_frozen_before_any_HiTab_source_"
@@ -1524,6 +1532,44 @@ def load_implementation_freeze(path: Path) -> FrozenImplementation:
     ):
         raise HitabP1ProductionRuntimeError(
             "HiTab v2 implementation addendum drifted"
+        )
+    v3_addendum_path = files["hitab_v3_implementation_addendum"]
+    try:
+        v3_addendum = json.loads(
+            v3_addendum_path.read_bytes().decode("ascii")
+        )
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HitabP1ProductionRuntimeError(
+            "HiTab v3 implementation addendum is invalid"
+        ) from exc
+    if (
+        not isinstance(v3_addendum, dict)
+        or file_sha256(v3_addendum_path)
+        != file_hashes["hitab_v3_implementation_addendum"]
+    ):
+        raise HitabP1ProductionRuntimeError(
+            "HiTab v3 implementation addendum changed while read"
+        )
+    v3_addendum_self = _verify_self(
+        v3_addendum,
+        field="HiTab v3 implementation addendum self hash",
+    )
+    if (
+        v3_addendum_self
+        != EXPECTED_V3_IMPLEMENTATION_ADDENDUM_SELF_SHA256
+        or v3_addendum.get("schema")
+        != "hitab_p1_child_cwd_sanitization_implementation_addendum_v3"
+        or v3_addendum.get("study_id") != STUDY_ID
+        or v3_addendum.get("implementation_revision")
+        != IMPLEMENTATION_REVISION
+        or v3_addendum.get("status")
+        != (
+            "implementation_addendum_frozen_before_any_HiTab_source_"
+            "body_secret_action_qrel_or_score"
+        )
+    ):
+        raise HitabP1ProductionRuntimeError(
+            "HiTab v3 implementation addendum drifted"
         )
     hipporag_attestation = _validate_reusable_hipporag_attestation(
         files, file_hashes
@@ -1773,7 +1819,13 @@ def load_implementation_freeze(path: Path) -> FrozenImplementation:
 
 _IMPORT_PROBE_SCRIPT = (
     "import hashlib,importlib,importlib.metadata,json,os,sys,sysconfig\n"
-    "sys.path[:]=[path for path in sys.path if path and os.path.exists(path)]\n"
+    "cwd=os.path.realpath(os.getcwd())\n"
+    "sys.path[:]=[path for path in sys.path if path and "
+    "os.path.isabs(path) and os.path.exists(path) and "
+    "os.path.realpath(path)!=cwd]\n"
+    "if any((not os.path.isabs(path)) or "
+    "os.path.realpath(path)==cwd for path in sys.path):"
+    " raise RuntimeError('child cwd remained importable')\n"
     "request=json.loads(sys.argv[1])\n"
     "rows={}\n"
     "for name in sorted(request):\n"
@@ -2719,8 +2771,16 @@ _HIPPO_CHILD_BOOTSTRAP_SCRIPT = (
     " if '__pycache__' in dirs or any("
     "name.endswith(('.pyc','.pyo')) for name in dirs+files):"
     "  raise RuntimeError('unbound project bytecode')\n"
-    "sys.path[:]=[path for path in sys.path if path and os.path.exists(path)]\n"
+    "cwd=os.path.realpath(os.getcwd())\n"
+    "sys.path[:]=[path for path in sys.path if path and "
+    "os.path.isabs(path) and os.path.exists(path) and "
+    "os.path.realpath(path)!=cwd]\n"
+    "if any((not os.path.isabs(path)) or "
+    "os.path.realpath(path)==cwd for path in sys.path):"
+    " raise RuntimeError('child cwd remained importable')\n"
     "sys.argv=[module,*sys.argv[4:]]\n"
+    "if any(os.path.realpath(path)==cwd for path in sys.path):"
+    " raise RuntimeError('child cwd returned before module execution')\n"
     "runpy.run_module(module,run_name='__main__')\n"
 )
 
