@@ -463,7 +463,9 @@ def _executor_runtime_receipt(
     elif kind == "hipporag":
         if (
             canonical.get("schema")
-            != "ebmnlp_p1_official_hipporag_batch_v1_safe_runtime_receipt"
+            != "ebmnlp_p1_official_hipporag_batch_v2_safe_runtime_receipt"
+            or canonical.get("status")
+            != "complete_offline_outputs_verified_indexes_destroyed"
             or type(expected_hippo_workers) is not int
             or canonical.get("worker_attempt_count")
             != expected_hippo_workers
@@ -471,8 +473,66 @@ def _executor_runtime_receipt(
             != expected_hippo_workers
             or canonical.get("index_destroyed_count")
             != expected_hippo_workers
+            or canonical.get("worker_cuda_attested_count")
+            != expected_hippo_workers
+            or canonical.get("worker_cuda_receipt_count")
+            != expected_hippo_workers
+            or not isinstance(
+                canonical.get("worker_cuda_receipt_set_sha256"), str
+            )
+            or len(
+                canonical.get("worker_cuda_receipt_set_sha256", "")
+            )
+            != 64
+            or any(
+                character not in "0123456789abcdef"
+                for character in canonical.get(
+                    "worker_cuda_receipt_set_sha256", ""
+                )
+            )
+            or not isinstance(
+                canonical.get("worker_cuda_attested_count_by_gpu"),
+                Mapping,
+            )
+            or any(
+                type(value) is not int or value < 0
+                for value in canonical.get(
+                    "worker_cuda_attested_count_by_gpu", {}
+                ).values()
+            )
+            or sum(
+                canonical.get(
+                    "worker_cuda_attested_count_by_gpu", {}
+                ).values()
+            )
+            != expected_hippo_workers
+            or type(
+                canonical.get("attempted_network_syscall_count")
+            )
+            is not int
+            or canonical.get("attempted_network_syscall_count", -1)
+            < 0
+            or type(canonical.get("denied_network_syscall_count"))
+            is not int
+            or canonical.get("denied_network_syscall_count", -1)
+            < 0
             or canonical.get("attempted_network_syscall_count")
             != canonical.get("denied_network_syscall_count")
+            or type(
+                canonical.get(
+                    "local_AF_UNIX_network_syscall_count"
+                )
+            )
+            is not int
+            or canonical.get(
+                "local_AF_UNIX_network_syscall_count", -1
+            )
+            < 0
+            or canonical.get("network_isolation_mechanism")
+            != (
+                "outer_systemd_AF_UNIX_only_IPAddressDeny_any_plus_"
+                "passive_strace_socket_connect"
+            )
         ):
             raise EbmNlpP1FormalControllerError(
                 "HippoRAG runtime audit receipt drifted"
@@ -480,12 +540,22 @@ def _executor_runtime_receipt(
         if formal_scope and (
             canonical.get("gpu_assignment") != ["0", "1"]
             or canonical.get("maximum_process_count") != 2
-            or not isinstance(
-                canonical.get("observed_process_peak"), int
-            )
-            or not 1
-            <= canonical.get("observed_process_peak", 0)
-            <= 2
+            or canonical.get("maximum_processes_per_gpu") != 1
+            or expected_hippo_workers <= 0
+            or expected_hippo_workers % 2 != 0
+            or canonical.get("worker_completed_count_by_gpu")
+            != {
+                "0": expected_hippo_workers // 2,
+                "1": expected_hippo_workers // 2,
+            }
+            or canonical.get("worker_cuda_attested_count_by_gpu")
+            != {
+                "0": expected_hippo_workers // 2,
+                "1": expected_hippo_workers // 2,
+            }
+            or canonical.get("observed_process_peak") != 2
+            or canonical.get("observed_process_peak_by_gpu")
+            != {"0": 1, "1": 1}
         ):
             raise EbmNlpP1FormalControllerError(
                 "formal HippoRAG runtime concurrency drifted"
@@ -1481,6 +1551,17 @@ def _attach_runtime_receipts(
             ),
             "HippoRAG_denied_network_syscall_count": (
                 hippo_receipt["denied_network_syscall_count"]
+            ),
+            "HippoRAG_local_AF_UNIX_network_syscall_count": (
+                hippo_receipt[
+                    "local_AF_UNIX_network_syscall_count"
+                ]
+            ),
+            "HippoRAG_worker_cuda_attested_count": (
+                hippo_receipt["worker_cuda_attested_count"]
+            ),
+            "HippoRAG_worker_cuda_receipt_set_sha256": (
+                hippo_receipt["worker_cuda_receipt_set_sha256"]
             ),
             "HippoRAG_external_network_call_count": 0,
         }

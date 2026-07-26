@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -27,6 +28,9 @@ NATIVE_THREAD_KEYS = (
     "VECLIB_MAXIMUM_THREADS",
 )
 CUBLAS_WORKSPACE_CONFIG = ":4096:8"
+CUDA_RUNTIME_RECEIPT_SCHEMA = (
+    "ebmnlp_p1_official_hipporag_worker_v2_private_cuda_receipt"
+)
 MAX_MODEL_ALIAS_CHARACTERS = 64
 _MODEL_ALIAS = re.compile(
     rf"[A-Za-z0-9][A-Za-z0-9._-]{{0,{MAX_MODEL_ALIAS_CHARACTERS - 1}}}\Z"
@@ -231,10 +235,190 @@ def _write_output(path: Path, payload: Mapping[str, object]) -> None:
         os.close(descriptor)
 
 
+def _self_hashed(body: Mapping[str, object]) -> dict[str, object]:
+    if "self_sha256" in body:
+        raise contract.EBMNLPOfficialHippoRAGError(
+            "worker receipt self hash was supplied twice"
+        )
+    value = dict(body)
+    value["self_sha256"] = hashlib.sha256(
+        contract.canonical_json_bytes(value, newline=False)
+    ).hexdigest()
+    return value
+
+
+def _module_cuda_residency(
+    module: object,
+    *,
+    label: str,
+    require_hf_device_map: bool,
+) -> dict[str, object]:
+    named_parameters = getattr(module, "named_parameters", None)
+    if not callable(named_parameters):
+        raise contract.EBMNLPOfficialHippoRAGError(
+            f"{label} parameter registry is unavailable"
+        )
+    try:
+        parameters = tuple(named_parameters())
+    except BaseException as exc:
+        raise contract.EBMNLPOfficialHippoRAGError(
+            f"{label} parameter registry failed"
+        ) from exc
+    if (
+        not parameters
+        or len({str(name) for name, _parameter in parameters})
+        != len(parameters)
+    ):
+        raise contract.EBMNLPOfficialHippoRAGError(
+            f"{label} parameter registry drifted"
+        )
+    dtype_counts: dict[str, int] = {}
+    parameter_numel = 0
+    for name, parameter in parameters:
+        device = getattr(parameter, "device", None)
+        dtype = getattr(parameter, "dtype", None)
+        numel = getattr(parameter, "numel", None)
+        if (
+            not isinstance(name, str)
+            or not name
+            or getattr(device, "type", None) != "cuda"
+            or getattr(device, "index", None) != 0
+            or not callable(numel)
+        ):
+            raise contract.EBMNLPOfficialHippoRAGError(
+                f"{label} parameter is not resident on logical cuda:0"
+            )
+        try:
+            count = int(numel())
+        except BaseException as exc:
+            raise contract.EBMNLPOfficialHippoRAGError(
+                f"{label} parameter size is unavailable"
+            ) from exc
+        if count <= 0:
+            raise contract.EBMNLPOfficialHippoRAGError(
+                f"{label} parameter size drifted"
+            )
+        parameter_numel += count
+        dtype_name = str(dtype)
+        if not dtype_name.startswith("torch."):
+            raise contract.EBMNLPOfficialHippoRAGError(
+                f"{label} parameter dtype drifted"
+            )
+        dtype_counts[dtype_name] = dtype_counts.get(dtype_name, 0) + 1
+
+    raw_device_map = getattr(module, "hf_device_map", None)
+    if raw_device_map is None:
+        if require_hf_device_map:
+            raise contract.EBMNLPOfficialHippoRAGError(
+                f"{label} Hugging Face device map is unavailable"
+            )
+        device_map_present = False
+        device_map_entry_count = 0
+    else:
+        if not isinstance(raw_device_map, Mapping) or not raw_device_map:
+            raise contract.EBMNLPOfficialHippoRAGError(
+                f"{label} Hugging Face device map drifted"
+            )
+        normalized = tuple(str(value) for value in raw_device_map.values())
+        if any(value not in {"0", "cuda", "cuda:0"} for value in normalized):
+            raise contract.EBMNLPOfficialHippoRAGError(
+                f"{label} contains CPU disk or nonzero-GPU offload"
+            )
+        device_map_present = True
+        device_map_entry_count = len(normalized)
+    return {
+        "parameter_count": len(parameters),
+        "parameter_numel": parameter_numel,
+        "parameter_dtype_counts": dict(sorted(dtype_counts.items())),
+        "parameter_device": "cuda:0",
+        "hf_device_map_present": device_map_present,
+        "hf_device_map_entry_count": device_map_entry_count,
+        "cpu_disk_or_nonzero_gpu_offload_count": 0,
+    }
+
+
+def _attest_cuda_residency(
+    core: object, *, torch_module: object | None = None
+) -> dict[str, object]:
+    if torch_module is None:
+        import torch as torch_module
+
+    cuda = getattr(torch_module, "cuda", None)
+    if (
+        cuda is None
+        or not callable(getattr(cuda, "is_available", None))
+        or cuda.is_available() is not True
+        or not callable(getattr(cuda, "device_count", None))
+        or cuda.device_count() != 1
+        or not callable(getattr(cuda, "current_device", None))
+        or cuda.current_device() != 0
+    ):
+        raise contract.EBMNLPOfficialHippoRAGError(
+            "exactly one visible logical CUDA device is required"
+        )
+    visible_binding = os.environ.get("CUDA_VISIBLE_DEVICES")
+    if visible_binding not in {"0", "1"}:
+        raise contract.EBMNLPOfficialHippoRAGError(
+            "physical CUDA lane binding drifted"
+        )
+    try:
+        sentinel = torch_module.ones(
+            (1,), dtype=torch_module.float32, device="cuda:0"
+        )
+        sentinel.add_(1.0)
+        if (
+            float(sentinel.item()) != 2.0
+            or getattr(sentinel.device, "type", None) != "cuda"
+            or getattr(sentinel.device, "index", None) != 0
+        ):
+            raise RuntimeError("CUDA allocation value or device drifted")
+        cuda.synchronize(0)
+        device_name = str(cuda.get_device_name(0))
+        memory_allocated = int(cuda.memory_allocated(0))
+    except BaseException as exc:
+        raise contract.EBMNLPOfficialHippoRAGError(
+            "logical CUDA allocation or synchronization failed"
+        ) from exc
+    if not device_name or memory_allocated <= 0:
+        raise contract.EBMNLPOfficialHippoRAGError(
+            "logical CUDA device identity or allocation drifted"
+        )
+    llm_wrapper = getattr(core, "llm_model", None)
+    embedding_wrapper = getattr(core, "embedding_model", None)
+    llm_model = getattr(llm_wrapper, "model", None)
+    embedding_model = getattr(embedding_wrapper, "model", None)
+    if llm_model is None or embedding_model is None:
+        raise contract.EBMNLPOfficialHippoRAGError(
+            "official HippoRAG model boundary drifted"
+        )
+    return {
+        "torch_cuda_is_available": True,
+        "visible_cuda_device_count": 1,
+        "logical_cuda_current_device": 0,
+        "physical_visible_gpu_binding": visible_binding,
+        "cuda_device_name_sha256": hashlib.sha256(
+            device_name.encode("utf-8")
+        ).hexdigest(),
+        "cuda_allocation_and_synchronize_succeeded": True,
+        "cuda_memory_allocated_bytes": memory_allocated,
+        "LLM": _module_cuda_residency(
+            llm_model,
+            label="LLM",
+            require_hf_device_map=True,
+        ),
+        "embedding": _module_cuda_residency(
+            embedding_model,
+            label="embedding",
+            require_hf_device_map=False,
+        ),
+    }
+
+
 def run_once(
     *,
     payload: Mapping[str, object],
     output_path: Path,
+    runtime_receipt_path: Path,
     index_root: Path,
     llm_model: str,
     embedding_model: str,
@@ -258,10 +442,32 @@ def run_once(
         document_count=len(documents),
         hipporag_source_root=hipporag_source_root,
     )
+    pre_inference = _attest_cuda_residency(core)
     result = contract.retrieve_abstract_with_core(
         core=core, payload=payload
     )
     _write_output(output_path, result)
+    post_inference = _attest_cuda_residency(core)
+    _write_output(
+        runtime_receipt_path,
+        _self_hashed(
+            {
+                "schema": CUDA_RUNTIME_RECEIPT_SCHEMA,
+                "status": (
+                    "complete_output_and_pre_post_inference_cuda_"
+                    "residency_attested"
+                ),
+                "input_sha256": hashlib.sha256(
+                    contract.canonical_json_bytes(payload)
+                ).hexdigest(),
+                "output_file_sha256": hashlib.sha256(
+                    contract.canonical_json_bytes(result)
+                ).hexdigest(),
+                "pre_inference": pre_inference,
+                "post_inference": post_inference,
+            }
+        ),
+    )
     return result
 
 
@@ -269,6 +475,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--runtime-receipt", required=True, type=Path)
     parser.add_argument("--index-root", required=True, type=Path)
     parser.add_argument("--llm-model", required=True)
     parser.add_argument("--embedding-model", required=True)
@@ -288,6 +495,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     result = run_once(
         payload=payload,
         output_path=arguments.output,
+        runtime_receipt_path=arguments.runtime_receipt,
         index_root=arguments.index_root,
         llm_model=llm_model,
         embedding_model=embedding_model,

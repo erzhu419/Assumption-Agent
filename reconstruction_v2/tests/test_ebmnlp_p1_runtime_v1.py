@@ -87,6 +87,60 @@ class _Core:
         ]
 
 
+def _cuda_module_receipt(*, device_map: bool) -> dict[str, object]:
+    return {
+        "parameter_count": 4,
+        "parameter_numel": 128,
+        "parameter_dtype_counts": {"torch.float32": 4},
+        "parameter_device": "cuda:0",
+        "hf_device_map_present": device_map,
+        "hf_device_map_entry_count": int(device_map),
+        "cpu_disk_or_nonzero_gpu_offload_count": 0,
+    }
+
+
+def _cuda_state(gpu: str) -> dict[str, object]:
+    return {
+        "torch_cuda_is_available": True,
+        "visible_cuda_device_count": 1,
+        "logical_cuda_current_device": 0,
+        "physical_visible_gpu_binding": gpu,
+        "cuda_device_name_sha256": "a" * 64,
+        "cuda_allocation_and_synchronize_succeeded": True,
+        "cuda_memory_allocated_bytes": 4096,
+        "LLM": _cuda_module_receipt(device_map=True),
+        "embedding": _cuda_module_receipt(device_map=False),
+    }
+
+
+def _write_worker_cuda_receipt(
+    path: Path,
+    *,
+    input_path: Path,
+    output_path: Path,
+    gpu: str,
+) -> None:
+    body = {
+        "schema": runtime.WORKER_CUDA_RECEIPT_SCHEMA,
+        "status": (
+            "complete_output_and_pre_post_inference_cuda_"
+            "residency_attested"
+        ),
+        "input_sha256": hashlib.sha256(
+            input_path.read_bytes()
+        ).hexdigest(),
+        "output_file_sha256": hashlib.sha256(
+            output_path.read_bytes()
+        ).hexdigest(),
+        "pre_inference": _cuda_state(gpu),
+        "post_inference": _cuda_state(gpu),
+    }
+    path.write_bytes(
+        runtime.canonical_json_bytes(runtime.self_hashed(body))
+    )
+    path.chmod(0o600)
+
+
 def _paths(tmp_path: Path, root_name: str = "runtime") -> runtime.RuntimePaths:
     project = tmp_path / "project"
     minilm = tmp_path / "minilm"
@@ -187,6 +241,8 @@ def test_two_lane_launcher_is_bounded_audited_and_nonreplayable(
             Path(command[command.index("--project-root") + 1])
             == paths.project_root
         )
+        assert "trace=socket,connect" in command
+        assert not any("inject=" in value for value in command)
         with lock:
             active += 1
             by_gpu[gpu] += 1
@@ -199,6 +255,9 @@ def test_two_lane_launcher_is_bounded_audited_and_nonreplayable(
             output_path = Path(
                 command[command.index("--output") + 1]
             )
+            worker_runtime_path = Path(
+                command[command.index("--runtime-receipt") + 1]
+            )
             index_root = Path(
                 command[command.index("--index-root") + 1]
             )
@@ -210,11 +269,22 @@ def test_two_lane_launcher_is_bounded_audited_and_nonreplayable(
             index_root.mkdir(mode=0o700)
             output_path.write_bytes(hippo.canonical_json_bytes(result))
             output_path.chmod(0o600)
+            _write_worker_cuda_receipt(
+                worker_runtime_path,
+                input_path=input_path,
+                output_path=output_path,
+                gpu=gpu,
+            )
             audit_path.write_text(
-                "socket(AF_INET, SOCK_STREAM, 0) = -1 EPERM "
-                "(Operation not permitted)\n",
+                "12345 socket(AF_UNIX, SOCK_STREAM, 0) = 3\n"
+                "[pid 12345] connect(3, {sa_family=AF_UNIX, "
+                "sun_path=\"/run/nvidia.sock\"}, 21) = 0\n"
+                "socket(AF_INET, SOCK_STREAM, 0) = -1 "
+                "EAFNOSUPPORT (Address family not supported by "
+                "protocol)\n",
                 encoding="utf-8",
             )
+            audit_path.chmod(0o600)
             time.sleep(0.03)
             return subprocess.CompletedProcess(command, 0, b"", b"")
         finally:
@@ -237,6 +307,13 @@ def test_two_lane_launcher_is_bounded_audited_and_nonreplayable(
     assert receipt["index_destroyed_count"] == 4
     assert receipt["attempted_network_syscall_count"] == 4
     assert receipt["denied_network_syscall_count"] == 4
+    assert receipt["local_AF_UNIX_network_syscall_count"] == 8
+    assert receipt["worker_cuda_attested_count"] == 4
+    assert receipt["worker_cuda_attested_count_by_gpu"] == {
+        "0": 2,
+        "1": 2,
+    }
+    assert receipt["worker_cuda_receipt_count"] == 4
     assert not list(paths.runtime_root.rglob("index"))
     with pytest.raises(runtime.EbmNlpP1RuntimeError, match="retry|replay"):
         launcher(payloads)
@@ -263,6 +340,115 @@ def test_worker_failure_terminally_consumes_launcher_without_retry(
     with pytest.raises(runtime.EbmNlpP1RuntimeError, match="consumed"):
         launcher((_payload("second"),))
     assert calls == 1
+
+
+def _network_audit_file(tmp_path: Path, text: str) -> Path:
+    path = tmp_path / "network.strace"
+    path.write_text(text, encoding="utf-8")
+    path.chmod(0o600)
+    return path
+
+
+def test_network_audit_reconstructs_numeric_pid_and_keeps_unix_local(
+    tmp_path: Path,
+) -> None:
+    path = _network_audit_file(
+        tmp_path,
+        "723 socket(AF_UNIX, SOCK_STREAM, 0 <unfinished ...>\n"
+        "723 <... socket resumed>) = 3\n"
+        "[pid 724] connect(3, {sa_family=AF_UNIX, "
+        "sun_path=\"/tmp/AF_INET-proxy-name\"}, 29) = 0\n"
+        "connect(4, {sa_family=AF_INET6, sin6_port=htons(443)}, "
+        "28) = -1 EACCES (Permission denied)\n",
+    )
+    receipt = runtime.OfficialHippoBatchLauncher._audit_network(path)
+    assert receipt["local_AF_UNIX_network_syscall_count"] == 2
+    assert receipt["attempted_network_syscall_count"] == 1
+    assert receipt["denied_network_syscall_count"] == 1
+
+
+@pytest.mark.parametrize(
+    "trace",
+    [
+        "123 socket(AF_UNIX, SOCK_STREAM, 0\n",
+        "123 socket(AF_INET, SOCK_STREAM, 0) = 3\n",
+        (
+            "123 socket(AF_INET6, SOCK_STREAM, 0) = -1 "
+            "ENOENT (No such file or directory)\n"
+        ),
+        "123 socket(AF_NETLINK, SOCK_RAW, 0) = 3\n",
+        "123 <... socket resumed>) = 3\n",
+        (
+            "123 socket(AF_UNIX, SOCK_STREAM, 0 <unfinished ...>\n"
+            "124 <... socket resumed>) = 3\n"
+        ),
+        (
+            "123 socket(AF_UNIX, SOCK_STREAM, 0 <unfinished ...>\n"
+            "123 <... connect resumed>) = 0\n"
+        ),
+    ],
+)
+def test_network_audit_rejects_incomplete_or_undeniable_calls(
+    tmp_path: Path, trace: str
+) -> None:
+    with pytest.raises(runtime.EbmNlpP1RuntimeError):
+        runtime.OfficialHippoBatchLauncher._audit_network(
+            _network_audit_file(tmp_path, trace)
+        )
+
+
+def test_worker_cuda_receipt_is_private_canonical_and_output_bound(
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "input.json"
+    output_path = tmp_path / "output.json"
+    receipt_path = tmp_path / "worker.runtime.json"
+    input_path.write_bytes(b'{"input":1}\n')
+    output_path.write_bytes(b'{"output":1}\n')
+    _write_worker_cuda_receipt(
+        receipt_path,
+        input_path=input_path,
+        output_path=output_path,
+        gpu="0",
+    )
+    receipt = (
+        runtime.OfficialHippoBatchLauncher._load_worker_cuda_receipt(
+            receipt_path,
+            input_sha256=hashlib.sha256(
+                input_path.read_bytes()
+            ).hexdigest(),
+            output_file_sha256=hashlib.sha256(
+                output_path.read_bytes()
+            ).hexdigest(),
+            visible_gpu="0",
+        )
+    )
+    assert receipt["self_sha256"]
+    with pytest.raises(
+        runtime.EbmNlpP1RuntimeError, match="binding"
+    ):
+        runtime.OfficialHippoBatchLauncher._load_worker_cuda_receipt(
+            receipt_path,
+            input_sha256="0" * 64,
+            output_file_sha256=hashlib.sha256(
+                output_path.read_bytes()
+            ).hexdigest(),
+            visible_gpu="0",
+        )
+    receipt_path.chmod(0o644)
+    with pytest.raises(
+        runtime.EbmNlpP1RuntimeError, match="metadata"
+    ):
+        runtime.OfficialHippoBatchLauncher._load_worker_cuda_receipt(
+            receipt_path,
+            input_sha256=hashlib.sha256(
+                input_path.read_bytes()
+            ).hexdigest(),
+            output_file_sha256=hashlib.sha256(
+                output_path.read_bytes()
+            ).hexdigest(),
+            visible_gpu="0",
+        )
 
 
 class _CanaryEmbedder:
@@ -342,6 +528,15 @@ class _CanaryHippo:
             "HippoRAG_import_origin_verified_worker_count": self.count,
             "attempted_network_syscall_count": 0,
             "denied_network_syscall_count": 0,
+            "local_AF_UNIX_network_syscall_count": 2,
+            "network_isolation_mechanism": (
+                "outer_systemd_AF_UNIX_only_IPAddressDeny_any_plus_"
+                "passive_strace_socket_connect"
+            ),
+            "worker_cuda_attested_count": self.count,
+            "worker_cuda_attested_count_by_gpu": {"0": 1, "1": 1},
+            "worker_cuda_receipt_count": self.count,
+            "worker_cuda_receipt_set_sha256": "f" * 64,
             "external_network_call_count": 0,
             "online_or_api_evaluator_call_count": 0,
             "retry_or_replay_count": 0,
@@ -354,6 +549,7 @@ def test_source_free_canary_exercises_full_local_path_without_source() -> None:
         hippo_launcher=_CanaryHippo(),
         implementation_freeze_sha256="1" * 64,
         runtime_fingerprint_sha256="2" * 64,
+        live_canary_execution_attestation_sha256="3" * 64,
     )
     assert receipt["status"] == "passed_source_free_synthetic_full_path"
     assert receipt["EBM_NLP_archive_path_or_member_access_count"] == 0
@@ -466,6 +662,7 @@ def test_receipt_chain_binds_semantic_formal_config(
         hippo_launcher=_CanaryHippo(),
         implementation_freeze_sha256=implementation_hash,
         runtime_fingerprint_sha256=str(fingerprint["self_sha256"]),
+        live_canary_execution_attestation_sha256="3" * 64,
     )
     canary_path.write_bytes(runtime.canonical_json_bytes(canary))
     config = {
@@ -576,10 +773,10 @@ def test_proc_reader_and_live_formal_envelope_are_effective(
     paths = _paths(tmp_path, "live-runtime")
     config_path = tmp_path / "formal.config.json"
     config_path.write_text("{}\n", encoding="ascii")
-    unit_file = tmp_path / "ebmnlp-p1-formal-v1.service"
+    unit_file = tmp_path / "ebmnlp-p1-formal-v2.service"
     unit_file.write_text("[Service]\nRestart=no\n", encoding="ascii")
     systemctl = Path("/usr/bin/true")
-    unit_name = "ebmnlp-p1-formal-v1.service"
+    unit_name = "ebmnlp-p1-formal-v2.service"
     live_output = tmp_path / "live.json"
     config = {
         "formal_unit_name": unit_name,
@@ -590,7 +787,7 @@ def test_proc_reader_and_live_formal_envelope_are_effective(
         "formal_unit_file_sha256": runtime.file_sha256(unit_file),
         "systemctl_executable": str(systemctl),
         "systemctl_executable_sha256": runtime.file_sha256(systemctl),
-        "live_attestation_output": str(live_output),
+        "formal_live_attestation_output": str(live_output),
     }
     expected_cmdline = (
         str(paths.hippo_python).encode("utf-8")
@@ -640,6 +837,19 @@ def test_proc_reader_and_live_formal_envelope_are_effective(
         "TasksMax": "64",
     }
     monkeypatch.setattr(runtime, "_read_proc_regular", fake_proc)
+    monkeypatch.setattr(
+        runtime,
+        "_probe_direct_ip_socket_denial",
+        lambda: {
+            "AF_INET_socket_creation_denied": True,
+            "AF_INET6_socket_creation_denied": True,
+            "denial_errno_by_family": {
+                "AF_INET": "EAFNOSUPPORT",
+                "AF_INET6": "EAFNOSUPPORT",
+            },
+            "external_network_call_count": 0,
+        },
+    )
     receipt = runtime.verify_live_formal_execution(
         config=config,
         config_path=config_path,
@@ -656,3 +866,131 @@ def test_proc_reader_and_live_formal_envelope_are_effective(
     )
     assert receipt["status"].startswith("verified_effective")
     assert json.loads(live_output.read_text("ascii")) == receipt
+
+
+def test_live_canary_envelope_is_attested_before_model_inference(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = _paths(tmp_path, "canary-live-runtime")
+    config_path = tmp_path / "canary.config.json"
+    config_path.write_text("{}\n", encoding="ascii")
+    unit_file = tmp_path / "ebmnlp-p1-canary-v2.service"
+    unit_file.write_text("[Service]\nRestart=no\n", encoding="ascii")
+    unit_name = "ebmnlp-p1-canary-v2.service"
+    systemctl = Path("/usr/bin/true")
+    live_output = tmp_path / "canary.live.json"
+    config = {
+        "canary_unit_name": unit_name,
+        "canary_hostname_sha256": hashlib.sha256(
+            os.uname().nodename.encode("utf-8")
+        ).hexdigest(),
+        "canary_unit_file": str(unit_file),
+        "canary_unit_file_sha256": runtime.file_sha256(unit_file),
+        "systemctl_executable": str(systemctl),
+        "systemctl_executable_sha256": runtime.file_sha256(systemctl),
+        "canary_live_attestation_output": str(live_output),
+    }
+    control_group = "/user.slice/app.slice/" + unit_name
+    expected_cmdline = (
+        str(paths.hippo_python).encode("utf-8")
+        + b"\0-m\0"
+        + b"assumption_agent.benchmarks.ebmnlp_p1_runtime_v1"
+        + b"\0canary\0--config\0"
+        + str(config_path.absolute()).encode("utf-8")
+        + b"\0"
+    )
+
+    def fake_proc(path: Path, *, maximum_bytes: int) -> bytes:
+        assert maximum_bytes == 64 * 1024
+        if path.name == "cmdline":
+            return expected_cmdline
+        if path.name == "cgroup":
+            return f"0::{control_group}\n".encode("utf-8")
+        return (
+            b"\0".join(
+                f"{key}={value}".encode("utf-8")
+                for key, value in runtime.FORMAL_CLEAN_ENVIRONMENT.items()
+            )
+            + b"\0"
+        )
+
+    properties = {
+        "ActiveState": "active",
+        "CPUQuotaPerSecUSec": "8s",
+        "ControlGroup": control_group,
+        "ExecStart": (
+            f"{paths.hippo_python} -m "
+            "assumption_agent.benchmarks.ebmnlp_p1_runtime_v1 "
+            f"canary --config {config_path.absolute()}"
+        ),
+        "FragmentPath": str(unit_file),
+        "IPAddressDeny": "any",
+        "KillMode": "control-group",
+        "MainPID": str(os.getpid()),
+        "MemoryMax": str(40 * 1024**3),
+        "Restart": "no",
+        "RestrictAddressFamilies": "AF_UNIX",
+        "SubState": "running",
+        "TasksMax": "64",
+    }
+    monkeypatch.setattr(runtime, "_read_proc_regular", fake_proc)
+    monkeypatch.setattr(
+        runtime,
+        "_probe_direct_ip_socket_denial",
+        lambda: {
+            "AF_INET_socket_creation_denied": True,
+            "AF_INET6_socket_creation_denied": True,
+            "denial_errno_by_family": {
+                "AF_INET": "EAFNOSUPPORT",
+                "AF_INET6": "EAFNOSUPPORT",
+            },
+            "external_network_call_count": 0,
+        },
+    )
+    receipt = runtime.verify_live_source_free_canary_execution(
+        config=config,
+        config_path=config_path,
+        paths=paths,
+        command_runner=lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            [],
+            0,
+            "\n".join(
+                f"{key}={value}" for key, value in properties.items()
+            )
+            + "\n",
+            "",
+        ),
+    )
+    assert receipt["canary_unit_name"] == unit_name
+    assert receipt["direct_IP_socket_denial_probe"][
+        "AF_INET6_socket_creation_denied"
+    ] is True
+
+
+def test_direct_ip_socket_probe_requires_both_families_denied(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def denied_socket(_family, _kind):
+        raise OSError(97, "Address family not supported")
+
+    monkeypatch.setattr(runtime.socket, "socket", denied_socket)
+    receipt = runtime._probe_direct_ip_socket_denial()
+    assert receipt["denial_errno_by_family"] == {
+        "AF_INET": "EAFNOSUPPORT",
+        "AF_INET6": "EAFNOSUPPORT",
+    }
+
+    class _OpenSocket:
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(
+        runtime.socket,
+        "socket",
+        lambda _family, _kind: _OpenSocket(),
+    )
+    with pytest.raises(
+        runtime.EbmNlpP1RuntimeError,
+        match="was not denied",
+    ):
+        runtime._probe_direct_ip_socket_denial()

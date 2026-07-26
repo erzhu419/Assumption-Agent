@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import hashlib
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -155,3 +156,126 @@ def test_model_alias_is_single_local_component(
     for value in ("../minilm", "/tmp/minilm", "a/b", "missing"):
         with pytest.raises(contract.EBMNLPOfficialHippoRAGError):
             worker._validate_model_alias(value, "model")
+
+
+class _Device:
+    def __init__(self, kind: str, index: int | None) -> None:
+        self.type = kind
+        self.index = index
+
+
+class _Parameter:
+    def __init__(self, kind: str = "cuda", index: int = 0) -> None:
+        self.device = _Device(kind, index)
+        self.dtype = "torch.float32"
+
+    def numel(self) -> int:
+        return 16
+
+
+class _Module:
+    def __init__(
+        self, *, kind: str = "cuda", device_map: object = None
+    ) -> None:
+        self._parameters = (
+            ("weight", _Parameter(kind)),
+            ("bias", _Parameter(kind)),
+        )
+        if device_map is not None:
+            self.hf_device_map = device_map
+
+    def named_parameters(self):
+        return iter(self._parameters)
+
+
+class _Sentinel:
+    def __init__(self) -> None:
+        self.value = 1.0
+        self.device = _Device("cuda", 0)
+
+    def add_(self, value: float):
+        self.value += value
+        return self
+
+    def item(self) -> float:
+        return self.value
+
+
+class _Cuda:
+    @staticmethod
+    def is_available() -> bool:
+        return True
+
+    @staticmethod
+    def device_count() -> int:
+        return 1
+
+    @staticmethod
+    def current_device() -> int:
+        return 0
+
+    @staticmethod
+    def synchronize(_device: int) -> None:
+        return None
+
+    @staticmethod
+    def get_device_name(_device: int) -> str:
+        return "synthetic CUDA"
+
+    @staticmethod
+    def memory_allocated(_device: int) -> int:
+        return 4096
+
+
+class _Torch:
+    cuda = _Cuda()
+    float32 = "torch.float32"
+
+    @staticmethod
+    def ones(_shape, *, dtype, device):
+        assert dtype == "torch.float32"
+        assert device == "cuda:0"
+        return _Sentinel()
+
+
+def test_worker_cuda_attestation_requires_both_models_on_single_cuda0(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "1")
+    core = SimpleNamespace(
+        llm_model=SimpleNamespace(
+            model=_Module(device_map={"": 0})
+        ),
+        embedding_model=SimpleNamespace(model=_Module()),
+    )
+    receipt = worker._attest_cuda_residency(
+        core, torch_module=_Torch
+    )
+    assert receipt["physical_visible_gpu_binding"] == "1"
+    assert receipt["LLM"]["parameter_device"] == "cuda:0"
+    assert receipt["embedding"]["parameter_device"] == "cuda:0"
+
+    core.embedding_model.model = _Module(kind="cpu")
+    with pytest.raises(
+        contract.EBMNLPOfficialHippoRAGError,
+        match="cuda:0",
+    ):
+        worker._attest_cuda_residency(core, torch_module=_Torch)
+
+
+@pytest.mark.parametrize("offload", ("cpu", "disk", "cuda:1"))
+def test_worker_cuda_attestation_rejects_llm_offload(
+    offload: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0")
+    core = SimpleNamespace(
+        llm_model=SimpleNamespace(
+            model=_Module(device_map={"layer": offload})
+        ),
+        embedding_model=SimpleNamespace(model=_Module()),
+    )
+    with pytest.raises(
+        contract.EBMNLPOfficialHippoRAGError,
+        match="offload",
+    ):
+        worker._attest_cuda_residency(core, torch_module=_Torch)

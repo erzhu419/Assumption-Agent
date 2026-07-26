@@ -186,17 +186,41 @@ class _HippoLauncher:
         workers = sum(self.batch_sizes)
         return {
             "schema": (
-                "ebmnlp_p1_official_hipporag_batch_v1_"
+                "ebmnlp_p1_official_hipporag_batch_v2_"
                 "safe_runtime_receipt"
             ),
-            "gpu_assignment": ["synthetic-0", "synthetic-1"],
+            "status": (
+                "complete_offline_outputs_verified_indexes_destroyed"
+            ),
+            "gpu_assignment": ["0", "1"],
             "maximum_process_count": 2,
+            "maximum_processes_per_gpu": 1,
             "observed_process_peak": min(2, max(self.batch_sizes, default=0)),
+            "observed_process_peak_by_gpu": {
+                "0": int(workers > 0),
+                "1": int(workers > 1),
+            },
             "worker_attempt_count": workers,
             "worker_completed_count": workers,
+            "worker_completed_count_by_gpu": {
+                "0": (workers + 1) // 2,
+                "1": workers // 2,
+            },
             "index_destroyed_count": workers,
+            "worker_cuda_attested_count": workers,
+            "worker_cuda_attested_count_by_gpu": {
+                "0": (workers + 1) // 2,
+                "1": workers // 2,
+            },
+            "worker_cuda_receipt_count": workers,
+            "worker_cuda_receipt_set_sha256": "a" * 64,
             "attempted_network_syscall_count": 0,
             "denied_network_syscall_count": 0,
+            "local_AF_UNIX_network_syscall_count": 0,
+            "network_isolation_mechanism": (
+                "outer_systemd_AF_UNIX_only_IPAddressDeny_any_plus_"
+                "passive_strace_socket_connect"
+            ),
             "external_network_call_count": 0,
             "online_or_api_evaluator_call_count": 0,
             "retry_or_replay_count": 0,
@@ -220,6 +244,38 @@ def _test_binding() -> formal.FormalExecutionBinding:
             formal.EXPECTED_HIPPORAG_LLM_TREE_SHA256
         ),
     )
+
+
+def test_formal_runtime_receipt_requires_exact_balanced_two_gpu_cuda(
+) -> None:
+    launcher = _HippoLauncher()
+    launcher.batch_sizes.append(64)
+    formal._executor_runtime_receipt(
+        launcher,
+        kind="hipporag",
+        formal_scope=True,
+        expected_hippo_workers=64,
+    )
+    drifted = dict(launcher.safe_runtime_receipt())
+    drifted["worker_cuda_attested_count_by_gpu"] = {
+        "0": 64,
+        "1": 0,
+    }
+
+    class _ReceiptOnly:
+        def safe_runtime_receipt(self):
+            return drifted
+
+    with pytest.raises(
+        formal.EbmNlpP1FormalControllerError,
+        match="concurrency",
+    ):
+        formal._executor_runtime_receipt(
+            _ReceiptOnly(),
+            kind="hipporag",
+            formal_scope=True,
+            expected_hippo_workers=64,
+        )
 
 
 def test_actual_logistic_probe_state_is_serialized_and_bound() -> None:

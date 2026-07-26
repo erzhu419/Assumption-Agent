@@ -1,10 +1,13 @@
 """Concrete offline runtime for the frozen EBM-NLP P1 study.
 
 MiniLM runs once in the controller process on visible ``cuda:0``.  Official
-HippoRAG runs in two stable lanes, one subprocess per physical GPU, with every
-network syscall denied and audited by ``strace``.  Each abstract gets one
-fresh index shared by its three frozen role queries; the index is destroyed
-after its complete rank permutations have been verified.
+HippoRAG runs in two stable lanes, one subprocess per physical GPU.  The outer
+systemd service admits only local ``AF_UNIX`` sockets and denies IP networking;
+passive ``strace`` records every worker ``socket`` and ``connect`` call.  Each
+worker also proves that its LLM and embedding parameters reside on its sole
+visible logical ``cuda:0``.  Each abstract gets one fresh index shared by its
+three frozen role queries; the index is destroyed after its complete rank
+permutations have been verified.
 
 This module contains no API/provider path, no retry/recovery path, and no
 online evaluator.  Source-free fingerprint and canary entrypoints do not
@@ -16,6 +19,7 @@ from __future__ import annotations
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+import errno
 import hashlib
 from importlib import metadata
 import json
@@ -25,6 +29,7 @@ from pathlib import Path, PurePosixPath
 import platform
 import re
 import shutil
+import socket
 import stat
 import subprocess
 import sys
@@ -44,28 +49,35 @@ from replication_runtime.ebmnlp_p1_official_v1 import contract as hippo
 from replication_runtime.qasper_minilm_v1 import binding as minilm_binding
 
 
-VERSION = "ebmnlp_p1_runtime_v1"
+VERSION = "ebmnlp_p1_runtime_v2"
 EMBEDDER_RECEIPT_SCHEMA = (
     "ebmnlp_p1_local_minilm_embedder_v1_safe_runtime_receipt"
 )
 HIPPO_RECEIPT_SCHEMA = (
-    "ebmnlp_p1_official_hipporag_batch_v1_safe_runtime_receipt"
+    "ebmnlp_p1_official_hipporag_batch_v2_safe_runtime_receipt"
 )
 FINGERPRINT_SCHEMA = f"{VERSION}_source_free_fingerprint"
 CANARY_SCHEMA = f"{VERSION}_source_free_full_path_canary"
-IMPLEMENTATION_FREEZE_SCHEMA = "ebmnlp_p1_implementation_freeze_v1"
+IMPLEMENTATION_FREEZE_SCHEMA = "ebmnlp_p1_implementation_freeze_v2"
 IMPLEMENTATION_FREEZE_STATUS = (
-    "implementation_frozen_before_runtime_fingerprint_canary_or_source_access"
+    "implementation_v2_frozen_after_source_free_v1_failure_before_"
+    "v2_fingerprint_canary_or_source_access"
 )
-EXECUTION_FREEZE_SCHEMA = "ebmnlp_p1_execution_freeze_v1"
+EXECUTION_FREEZE_SCHEMA = "ebmnlp_p1_execution_freeze_v2"
 EXECUTION_FREEZE_STATUS = (
-    "execution_frozen_after_source_free_canary_before_source_access"
+    "execution_v2_frozen_after_source_free_canary_before_source_access"
 )
 LIVE_EXECUTION_ATTESTATION_SCHEMA = (
     f"{VERSION}_live_formal_execution_attestation"
 )
+CANARY_LIVE_EXECUTION_ATTESTATION_SCHEMA = (
+    f"{VERSION}_live_source_free_canary_execution_attestation"
+)
 HIPPO_WORKER_MODULE = (
     "replication_runtime.ebmnlp_p1_official_v1.worker"
+)
+WORKER_CUDA_RECEIPT_SCHEMA = (
+    "ebmnlp_p1_official_hipporag_worker_v2_private_cuda_receipt"
 )
 
 MINILM_GENERIC_TREE_SHA256 = (
@@ -87,6 +99,7 @@ GPU_ASSIGNMENT = ("0", "1")
 MAXIMUM_HIPPO_PROCESSES = 2
 CPU_THREADS_PER_HIPPO_PROCESS = 1
 MAXIMUM_WORKER_OUTPUT_BYTES = 16 * 1024 * 1024
+MAXIMUM_WORKER_RUNTIME_RECEIPT_BYTES = 256 * 1024
 MAXIMUM_NETWORK_AUDIT_BYTES = 64 * 1024 * 1024
 CUBLAS_WORKSPACE_CONFIG = ":4096:8"
 FORMAL_CLEAN_ENVIRONMENT = {
@@ -121,7 +134,10 @@ _REQUIRED_IMPLEMENTATION_PATHS = frozenset(
         "assumption_agent/benchmarks/ebmnlp_p1_source_qualification_v1.py",
         "assumption_agent/benchmarks/ebmnlp_p1_typed_pico_core_v1.py",
         "manifests/ebmnlp_p1_implementation_clarification_v1.json",
+        "manifests/ebmnlp_p1_implementation_clarification_v2.json",
         "manifests/ebmnlp_p1_pre_source_clarification_v1.json",
+        "manifests/ebmnlp_p1_source_free_canary_unit_v2.service",
+        "manifests/ebmnlp_p1_source_free_canary_v1_failure_disposition.json",
         "manifests/ebmnlp_p1_source_custody_v1.json",
         "manifests/ebmnlp_p1_typed_pico_set_evaluator_study_design_v1.json",
         "manifests/qasper_minilm_runtime_asset_v1.json",
@@ -137,12 +153,17 @@ _REQUIRED_IMPLEMENTATION_PATHS = frozenset(
 )
 
 _HEX64 = re.compile(r"[0-9a-f]{64}\Z")
-_NETWORK_CALL = re.compile(
-    r"^(?:\[pid\s+\d+\]\s+)?[A-Za-z_][A-Za-z0-9_]*\("
+_STRACE_PID_PREFIX = re.compile(
+    r"^(?:(?P<numeric>\d+)|\[pid\s+(?P<bracket>\d+)\])\s+"
 )
+_NETWORK_CALL = re.compile(r"^(?P<name>socket|connect)\(")
 _NETWORK_RESUMED = re.compile(
-    r"^(?:\[pid\s+\d+\]\s+)?<\.\.\.\s+"
-    r"[A-Za-z_][A-Za-z0-9_]*\s+resumed>"
+    r"^<\.\.\.\s+(?P<name>socket|connect)\s+resumed>(?P<tail>.*)"
+)
+_NETWORK_TERMINAL_RESULT = re.compile(
+    r"\)\s+=\s+(?P<return>-?\d+)"
+    r"(?:\s+(?P<errno>[A-Z][A-Z0-9_]+)"
+    r"(?:\s+\([^\r\n]*\))?)?\s*\Z"
 )
 
 
@@ -802,6 +823,7 @@ def _verify_canary_receipt(
         "embedding_runtime_receipt_sha256",
         "external_network_call_count",
         "implementation_freeze_sha256",
+        "live_canary_execution_attestation_sha256",
         "online_or_api_evaluator_call_count",
         "provider_or_API_credential_read_count",
         "recipe_count",
@@ -828,6 +850,20 @@ def _verify_canary_receipt(
         != implementation_freeze_sha256
         or receipt.get("runtime_fingerprint_sha256")
         != runtime_fingerprint_sha256
+        or not isinstance(
+            receipt.get(
+                "live_canary_execution_attestation_sha256"
+            ),
+            str,
+        )
+        or _HEX64.fullmatch(
+            str(
+                receipt.get(
+                    "live_canary_execution_attestation_sha256"
+                )
+            )
+        )
+        is None
         or receipt.get("window_count") != 5
         or receipt.get("role_count") != len(core.ROLE_ORDER)
         or receipt.get("recipe_count") != len(core.RECIPE_IDS)
@@ -902,8 +938,10 @@ def _verify_canary_receipt(
             "external_network_call_count",
             "gpu_assignment",
             "index_destroyed_count",
+            "local_AF_UNIX_network_syscall_count",
             "maximum_process_count",
             "maximum_processes_per_gpu",
+            "network_isolation_mechanism",
             "observed_process_peak",
             "observed_process_peak_by_gpu",
             "online_or_api_evaluator_call_count",
@@ -913,6 +951,10 @@ def _verify_canary_receipt(
             "worker_attempt_count",
             "worker_completed_count",
             "worker_completed_count_by_gpu",
+            "worker_cuda_attested_count",
+            "worker_cuda_attested_count_by_gpu",
+            "worker_cuda_receipt_count",
+            "worker_cuda_receipt_set_sha256",
         }
         or hippo_runtime.get("schema") != HIPPO_RECEIPT_SCHEMA
         or hippo_runtime.get("status")
@@ -938,10 +980,40 @@ def _verify_canary_receipt(
             "HippoRAG_import_origin_verified_worker_count"
         )
         != 2
+        or hippo_runtime.get("worker_cuda_attested_count") != 2
+        or hippo_runtime.get("worker_cuda_attested_count_by_gpu")
+        != {"0": 1, "1": 1}
+        or hippo_runtime.get("worker_cuda_receipt_count") != 2
         or not isinstance(
-            hippo_runtime.get("attempted_network_syscall_count"), int
+            hippo_runtime.get("worker_cuda_receipt_set_sha256"), str
         )
+        or _HEX64.fullmatch(
+            str(hippo_runtime.get("worker_cuda_receipt_set_sha256"))
+        )
+        is None
+        or type(
+            hippo_runtime.get(
+                "local_AF_UNIX_network_syscall_count"
+            )
+        )
+        is not int
+        or hippo_runtime.get(
+            "local_AF_UNIX_network_syscall_count", -1
+        )
+        < 0
+        or hippo_runtime.get("network_isolation_mechanism")
+        != (
+            "outer_systemd_AF_UNIX_only_IPAddressDeny_any_plus_"
+            "passive_strace_socket_connect"
+        )
+        or type(
+            hippo_runtime.get("attempted_network_syscall_count")
+        )
+        is not int
         or hippo_runtime.get("attempted_network_syscall_count") < 0
+        or type(hippo_runtime.get("denied_network_syscall_count"))
+        is not int
+        or hippo_runtime.get("denied_network_syscall_count", -1) < 0
         or hippo_runtime.get("denied_network_syscall_count")
         != hippo_runtime.get("attempted_network_syscall_count")
         or hippo_runtime.get("external_network_call_count") != 0
@@ -972,7 +1044,7 @@ _FORMAL_SEMANTIC_CONFIG_KEYS = frozenset(
         "hipporag_source",
         "implementation_freeze_manifest",
         "implementation_freeze_sha256",
-        "live_attestation_output",
+        "formal_live_attestation_output",
         "minilm_asset_manifest",
         "minilm_model",
         "project_root",
@@ -1072,23 +1144,76 @@ def _systemd_timespan_microseconds(value: str) -> int:
     return int(match.group(1)) * scale
 
 
-def verify_live_formal_execution(
+def _probe_direct_ip_socket_denial() -> dict[str, object]:
+    denied: dict[str, str] = {}
+    for label, family in (
+        ("AF_INET", socket.AF_INET),
+        ("AF_INET6", socket.AF_INET6),
+    ):
+        handle = None
+        try:
+            handle = socket.socket(family, socket.SOCK_STREAM)
+        except OSError as exc:
+            if exc.errno not in {
+                errno.EPERM,
+                errno.EACCES,
+                errno.EAFNOSUPPORT,
+            }:
+                raise EbmNlpP1RuntimeError(
+                    "direct IP socket denial errno drifted"
+                ) from exc
+            denied[label] = {
+                errno.EPERM: "EPERM",
+                errno.EACCES: "EACCES",
+                errno.EAFNOSUPPORT: "EAFNOSUPPORT",
+            }.get(int(exc.errno), f"errno_{int(exc.errno)}")
+        else:
+            raise EbmNlpP1RuntimeError(
+                "direct IP socket creation was not denied"
+            )
+        finally:
+            if handle is not None:
+                handle.close()
+    if set(denied) != {"AF_INET", "AF_INET6"}:
+        raise EbmNlpP1RuntimeError(
+            "direct IP socket denial probe was incomplete"
+        )
+    return {
+        "AF_INET_socket_creation_denied": True,
+        "AF_INET6_socket_creation_denied": True,
+        "denial_errno_by_family": denied,
+        "external_network_call_count": 0,
+    }
+
+
+def _verify_live_execution(
     *,
     config: Mapping[str, object],
     config_path: Path,
     paths: "RuntimePaths",
+    mode: str,
+    expected_unit_name: str,
+    receipt_schema: str,
+    receipt_status: str,
     command_runner: Callable[..., Any] = subprocess.run,
 ) -> dict[str, object]:
     """Attest the executing service/cgroup/network envelope before source."""
 
-    unit_name = config.get("formal_unit_name")
-    if unit_name != "ebmnlp-p1-formal-v1.service":
-        raise EbmNlpP1RuntimeError("formal unit identity drifted")
-    hostname_hash = _required_hash(config, "formal_hostname_sha256")
+    if mode not in {"canary", "formal"}:
+        raise EbmNlpP1RuntimeError("live execution mode drifted")
+    unit_name_key = f"{mode}_unit_name"
+    hostname_key = f"{mode}_hostname_sha256"
+    unit_file_key = f"{mode}_unit_file"
+    unit_file_hash_key = f"{mode}_unit_file_sha256"
+    live_output_key = f"{mode}_live_attestation_output"
+    unit_name = config.get(unit_name_key)
+    if unit_name != expected_unit_name:
+        raise EbmNlpP1RuntimeError(f"{mode} unit identity drifted")
+    hostname_hash = _required_hash(config, hostname_key)
     if hashlib.sha256(
         os.uname().nodename.encode("utf-8")
     ).hexdigest() != hostname_hash:
-        raise EbmNlpP1RuntimeError("formal host identity drifted")
+        raise EbmNlpP1RuntimeError(f"{mode} host identity drifted")
     systemctl = _checked_executable(
         _required_path(config, "systemctl_executable"),
         "systemctl executable",
@@ -1098,13 +1223,13 @@ def verify_live_formal_execution(
     ):
         raise EbmNlpP1RuntimeError("systemctl executable drifted")
     unit_file = _checked_file(
-        _required_path(config, "formal_unit_file"),
-        "formal unit file",
+        _required_path(config, unit_file_key),
+        f"{mode} unit file",
     )
     if file_sha256(unit_file) != _required_hash(
-        config, "formal_unit_file_sha256"
+        config, unit_file_hash_key
     ):
-        raise EbmNlpP1RuntimeError("formal unit file drifted")
+        raise EbmNlpP1RuntimeError(f"{mode} unit file drifted")
     if Path(sys.executable).resolve(strict=True) != (
         paths.hippo_python.resolve(strict=True)
     ):
@@ -1138,7 +1263,7 @@ def verify_live_formal_execution(
     expected_tail = [
         "-m",
         "assumption_agent.benchmarks.ebmnlp_p1_runtime_v1",
-        "formal",
+        mode,
         "--config",
         str(Path(config_path).expanduser().absolute()),
     ]
@@ -1261,16 +1386,15 @@ def verify_live_formal_execution(
         raise EbmNlpP1RuntimeError(
             "live formal systemd envelope drifted"
         )
+    direct_ip_probe = _probe_direct_ip_socket_denial()
     body = {
-        "schema": LIVE_EXECUTION_ATTESTATION_SCHEMA,
-        "status": (
-            "verified_effective_service_cgroup_and_network_before_source"
-        ),
+        "schema": receipt_schema,
+        "status": receipt_status,
         "study_id": core.STUDY_ID,
-        "formal_unit_name": unit_name,
+        f"{mode}_unit_name": unit_name,
         "hostname_sha256": hostname_hash,
         "unit_file_sha256": str(
-            config["formal_unit_file_sha256"]
+            config[unit_file_hash_key]
         ),
         "systemctl_executable_sha256": str(
             config["systemctl_executable_sha256"]
@@ -1288,6 +1412,7 @@ def verify_live_formal_execution(
         "Restart": properties["Restart"],
         "RestrictAddressFamilies": ["AF_UNIX"],
         "IPAddressDeny": "any",
+        "direct_IP_socket_denial_probe": direct_ip_probe,
         "CUBLAS_WORKSPACE_CONFIG": CUBLAS_WORKSPACE_CONFIG,
         "gpu_assignment": ["0", "1"],
         "clean_environment_key_count": len(
@@ -1299,10 +1424,53 @@ def verify_live_formal_execution(
     }
     receipt = self_hashed(body)
     _write_receipt(
-        _required_path(config, "live_attestation_output"),
+        _required_path(config, live_output_key),
         receipt,
     )
     return receipt
+
+
+def verify_live_source_free_canary_execution(
+    *,
+    config: Mapping[str, object],
+    config_path: Path,
+    paths: "RuntimePaths",
+    command_runner: Callable[..., Any] = subprocess.run,
+) -> dict[str, object]:
+    return _verify_live_execution(
+        config=config,
+        config_path=config_path,
+        paths=paths,
+        mode="canary",
+        expected_unit_name="ebmnlp-p1-canary-v2.service",
+        receipt_schema=CANARY_LIVE_EXECUTION_ATTESTATION_SCHEMA,
+        receipt_status=(
+            "verified_effective_source_free_canary_service_cgroup_"
+            "and_network_before_model_inference"
+        ),
+        command_runner=command_runner,
+    )
+
+
+def verify_live_formal_execution(
+    *,
+    config: Mapping[str, object],
+    config_path: Path,
+    paths: "RuntimePaths",
+    command_runner: Callable[..., Any] = subprocess.run,
+) -> dict[str, object]:
+    return _verify_live_execution(
+        config=config,
+        config_path=config_path,
+        paths=paths,
+        mode="formal",
+        expected_unit_name="ebmnlp-p1-formal-v2.service",
+        receipt_schema=LIVE_EXECUTION_ATTESTATION_SCHEMA,
+        receipt_status=(
+            "verified_effective_service_cgroup_and_network_before_source"
+        ),
+        command_runner=command_runner,
+    )
 
 
 @dataclass(frozen=True)
@@ -1639,6 +1807,12 @@ class OfficialHippoBatchLauncher:
         self._index_destroyed_count = 0
         self._attempted_network = 0
         self._denied_network = 0
+        self._local_af_unix_network = 0
+        self._cuda_attested_count = 0
+        self._cuda_attested_by_gpu = {
+            gpu: 0 for gpu in GPU_ASSIGNMENT
+        }
+        self._cuda_receipt_hashes: set[str] = set()
 
     @staticmethod
     def _canonical_payload(
@@ -1699,45 +1873,287 @@ class OfficialHippoBatchLauncher:
             ) from exc
         attempted = 0
         denied = 0
+        local_unix = 0
+        pending: dict[str, tuple[str, str]] = {}
         for line in lines:
             text = line.strip()
             if not text:
                 continue
+            pid = "main"
+            prefix = _STRACE_PID_PREFIX.match(text)
+            if prefix is not None:
+                pid = str(
+                    prefix.group("numeric") or prefix.group("bracket")
+                )
+                text = text[prefix.end() :].lstrip()
             if text.startswith("strace:"):
                 raise EbmNlpP1RuntimeError(
-                    "strace reported an injection failure"
+                    "strace reported a tracing failure"
                 )
             if text.startswith("+++") or text.startswith("---"):
                 continue
-            if "<unfinished ...>" in text:
-                if _NETWORK_CALL.match(text) is None:
+            resumed = _NETWORK_RESUMED.match(text)
+            if resumed is not None:
+                syscall = str(resumed.group("name"))
+                pending_row = pending.pop(pid, None)
+                if (
+                    pending_row is None
+                    or pending_row[0] != syscall
+                ):
                     raise EbmNlpP1RuntimeError(
-                        "network audit line drifted"
+                        "network audit resumed without a pending call"
                     )
-                continue
-            if _NETWORK_CALL.match(text) or _NETWORK_RESUMED.match(
-                text
-            ):
-                attempted += 1
-                if "= -1 EPERM" not in text:
+                text = pending_row[1] + str(resumed.group("tail"))
+            else:
+                call = _NETWORK_CALL.match(text)
+                if call is None:
                     raise EbmNlpP1RuntimeError(
-                        "a network syscall was not denied"
+                        "network audit contains an unknown line"
+                    )
+                syscall = str(call.group("name"))
+                if "<unfinished ...>" in text:
+                    if (
+                        not text.endswith("<unfinished ...>")
+                        or pid in pending
+                    ):
+                        raise EbmNlpP1RuntimeError(
+                            "network audit pending call collided"
+                        )
+                    pending[pid] = (
+                        syscall,
+                        text[: -len("<unfinished ...>")],
+                    )
+                    continue
+            call = _NETWORK_CALL.match(text)
+            if call is None:
+                raise EbmNlpP1RuntimeError(
+                    "network audit reconstructed call drifted"
+                )
+            syscall = str(call.group("name"))
+            terminal = _NETWORK_TERMINAL_RESULT.search(text)
+            if terminal is None:
+                raise EbmNlpP1RuntimeError(
+                    "network audit call has no complete terminal result"
+                )
+            if syscall == "socket":
+                family_match = re.match(
+                    r"^socket\(\s*(AF_[A-Za-z0-9_]+)", text
+                )
+            else:
+                family_match = re.search(
+                    r"\bsa_family=(AF_[A-Za-z0-9_]+)\b", text
+                )
+            family = (
+                family_match.group(1)
+                if family_match is not None
+                else "UNKNOWN"
+            )
+            if family in {"AF_UNIX", "AF_LOCAL"}:
+                local_unix += 1
+            else:
+                attempted += 1
+                if (
+                    terminal.group("return") != "-1"
+                    or terminal.group("errno")
+                    not in {"EPERM", "EACCES", "EAFNOSUPPORT"}
+                ):
+                    raise EbmNlpP1RuntimeError(
+                        "a non-AF_UNIX network syscall was not denied"
                     )
                 denied += 1
-                continue
-            raise EbmNlpP1RuntimeError(
-                "network audit contains an unknown line"
-            )
-        if denied != attempted:
+        if pending or denied != attempted:
             raise EbmNlpP1RuntimeError(
                 "network denial audit is incomplete"
             )
         return {
             "attempted_network_syscall_count": attempted,
             "denied_network_syscall_count": denied,
+            "local_AF_UNIX_network_syscall_count": local_unix,
             "external_network_call_count": 0,
+            "network_isolation_mechanism": (
+                "outer_systemd_AF_UNIX_only_IPAddressDeny_any_plus_"
+                "passive_strace_socket_connect"
+            ),
             "network_audit_file_sha256": hashlib.sha256(raw).hexdigest(),
         }
+
+    @staticmethod
+    def _load_worker_cuda_receipt(
+        path: Path,
+        *,
+        input_sha256: str,
+        output_file_sha256: str,
+        visible_gpu: str,
+    ) -> dict[str, object]:
+        raw = _read_regular(
+            path,
+            maximum_bytes=MAXIMUM_WORKER_RUNTIME_RECEIPT_BYTES,
+            expected_mode=0o600,
+        )
+        try:
+            value = json.loads(raw.decode("ascii"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise EbmNlpP1RuntimeError(
+                "worker CUDA receipt is invalid JSON"
+            ) from exc
+        if (
+            not isinstance(value, dict)
+            or canonical_json_bytes(value) != raw
+            or set(value)
+            != {
+                "input_sha256",
+                "output_file_sha256",
+                "post_inference",
+                "pre_inference",
+                "schema",
+                "self_sha256",
+                "status",
+            }
+        ):
+            raise EbmNlpP1RuntimeError(
+                "worker CUDA receipt shape drifted"
+            )
+        body = dict(value)
+        declared = body.pop("self_sha256", None)
+        if (
+            not isinstance(declared, str)
+            or _HEX64.fullmatch(declared) is None
+            or stable_hash(body) != declared
+            or value.get("schema") != WORKER_CUDA_RECEIPT_SCHEMA
+            or value.get("status")
+            != (
+                "complete_output_and_pre_post_inference_cuda_"
+                "residency_attested"
+            )
+            or value.get("input_sha256") != input_sha256
+            or value.get("output_file_sha256")
+            != output_file_sha256
+        ):
+            raise EbmNlpP1RuntimeError(
+                "worker CUDA receipt binding drifted"
+            )
+
+        expected_state_keys = {
+            "LLM",
+            "cuda_allocation_and_synchronize_succeeded",
+            "cuda_device_name_sha256",
+            "cuda_memory_allocated_bytes",
+            "embedding",
+            "logical_cuda_current_device",
+            "physical_visible_gpu_binding",
+            "torch_cuda_is_available",
+            "visible_cuda_device_count",
+        }
+        expected_module_keys = {
+            "cpu_disk_or_nonzero_gpu_offload_count",
+            "hf_device_map_entry_count",
+            "hf_device_map_present",
+            "parameter_count",
+            "parameter_device",
+            "parameter_dtype_counts",
+            "parameter_numel",
+        }
+
+        def validated_state(state: object) -> dict[str, object]:
+            if (
+                not isinstance(state, Mapping)
+                or set(state) != expected_state_keys
+                or state.get("torch_cuda_is_available") is not True
+                or state.get("visible_cuda_device_count") != 1
+                or state.get("logical_cuda_current_device") != 0
+                or state.get("physical_visible_gpu_binding")
+                != visible_gpu
+                or state.get(
+                    "cuda_allocation_and_synchronize_succeeded"
+                )
+                is not True
+                or not isinstance(
+                    state.get("cuda_device_name_sha256"), str
+                )
+                or _HEX64.fullmatch(
+                    str(state.get("cuda_device_name_sha256"))
+                )
+                is None
+                or type(state.get("cuda_memory_allocated_bytes"))
+                is not int
+                or state.get("cuda_memory_allocated_bytes", 0) <= 0
+            ):
+                raise EbmNlpP1RuntimeError(
+                    "worker CUDA state drifted"
+                )
+            result = dict(state)
+            for label in ("LLM", "embedding"):
+                module = state.get(label)
+                if (
+                    not isinstance(module, Mapping)
+                    or set(module) != expected_module_keys
+                    or type(module.get("parameter_count")) is not int
+                    or module.get("parameter_count", 0) <= 0
+                    or type(module.get("parameter_numel")) is not int
+                    or module.get("parameter_numel", 0) <= 0
+                    or module.get("parameter_device") != "cuda:0"
+                    or not isinstance(
+                        module.get("parameter_dtype_counts"), Mapping
+                    )
+                    or not module.get("parameter_dtype_counts")
+                    or any(
+                        not isinstance(dtype, str)
+                        or not dtype.startswith("torch.")
+                        or type(count) is not int
+                        or count <= 0
+                        for dtype, count in module[
+                            "parameter_dtype_counts"
+                        ].items()
+                    )
+                    or module.get(
+                        "cpu_disk_or_nonzero_gpu_offload_count"
+                    )
+                    != 0
+                    or type(module.get("hf_device_map_entry_count"))
+                    is not int
+                    or module.get("hf_device_map_entry_count", -1) < 0
+                ):
+                    raise EbmNlpP1RuntimeError(
+                        "worker model CUDA residency drifted"
+                    )
+                if label == "LLM" and (
+                    module.get("hf_device_map_present") is not True
+                    or module.get("hf_device_map_entry_count", 0) <= 0
+                ):
+                    raise EbmNlpP1RuntimeError(
+                        "worker LLM device map drifted"
+                    )
+                if label == "embedding" and not (
+                    (
+                        module.get("hf_device_map_present") is False
+                        and module.get("hf_device_map_entry_count") == 0
+                    )
+                    or (
+                        module.get("hf_device_map_present") is True
+                        and module.get(
+                            "hf_device_map_entry_count", 0
+                        )
+                        > 0
+                    )
+                ):
+                    raise EbmNlpP1RuntimeError(
+                        "worker embedding device map drifted"
+                    )
+            return result
+
+        pre = validated_state(value.get("pre_inference"))
+        post = validated_state(value.get("post_inference"))
+        for key in (
+            "cuda_device_name_sha256",
+            "physical_visible_gpu_binding",
+            "LLM",
+            "embedding",
+        ):
+            if pre[key] != post[key]:
+                raise EbmNlpP1RuntimeError(
+                    "worker CUDA residency changed during inference"
+                )
+        return value
 
     def _counter_enter(self, gpu: str) -> None:
         with self._lock:
@@ -1782,6 +2198,7 @@ class OfficialHippoBatchLauncher:
         _private_directory(directory, fresh=True)
         input_path = directory / "input.json"
         output_path = directory / "output.json"
+        worker_runtime_path = directory / "worker.runtime.json"
         index_root = directory / "index"
         audit_path = directory / "network.strace"
         _write_exclusive(input_path, raw_input)
@@ -1831,9 +2248,7 @@ class OfficialHippoBatchLauncher:
             "-f",
             "-qq",
             "-e",
-            "trace=%network",
-            "-e",
-            "inject=%network:error=EPERM",
+            "trace=socket,connect",
             "-o",
             str(audit_path),
             str(self.paths.env_executable),
@@ -1846,6 +2261,8 @@ class OfficialHippoBatchLauncher:
             str(input_path),
             "--output",
             str(output_path),
+            "--runtime-receipt",
+            str(worker_runtime_path),
             "--index-root",
             str(index_root),
             "--llm-model",
@@ -1869,6 +2286,7 @@ class OfficialHippoBatchLauncher:
                     stdin=subprocess.DEVNULL,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
+                    close_fds=True,
                     check=False,
                     timeout=None,
                 )
@@ -1905,6 +2323,14 @@ class OfficialHippoBatchLauncher:
                 raise EbmNlpP1RuntimeError(
                     "HippoRAG worker output binding drifted"
                 )
+            worker_runtime = self._load_worker_cuda_receipt(
+                worker_runtime_path,
+                input_sha256=input_sha256,
+                output_file_sha256=hashlib.sha256(
+                    raw_output
+                ).hexdigest(),
+                visible_gpu=gpu,
+            )
             network = self._audit_network(audit_path)
             if index_root.is_symlink() or not index_root.is_dir():
                 raise EbmNlpP1RuntimeError(
@@ -1934,6 +2360,9 @@ class OfficialHippoBatchLauncher:
                             "configured_cpu_threads": 1,
                             "index_destroyed": True,
                             "subprocess_environment_was_env_i": True,
+                            "worker_cuda_runtime_receipt_sha256": (
+                                worker_runtime["self_sha256"]
+                            ),
                             "retry_or_replay_count": 0,
                             **network,
                         }
@@ -1941,6 +2370,13 @@ class OfficialHippoBatchLauncher:
                 ),
             )
             with self._lock:
+                worker_runtime_sha256 = str(
+                    worker_runtime["self_sha256"]
+                )
+                if worker_runtime_sha256 in self._cuda_receipt_hashes:
+                    raise EbmNlpP1RuntimeError(
+                        "worker CUDA receipt was replayed"
+                    )
                 self._completed_count += 1
                 self._completed_by_gpu[gpu] += 1
                 self._index_destroyed_count += 1
@@ -1949,6 +2385,14 @@ class OfficialHippoBatchLauncher:
                 )
                 self._denied_network += int(
                     network["denied_network_syscall_count"]
+                )
+                self._local_af_unix_network += int(
+                    network["local_AF_UNIX_network_syscall_count"]
+                )
+                self._cuda_attested_count += 1
+                self._cuda_attested_by_gpu[gpu] += 1
+                self._cuda_receipt_hashes.add(
+                    worker_runtime_sha256
                 )
             return str(payload["abstract_work_id"]), output
         finally:
@@ -2094,6 +2538,25 @@ class OfficialHippoBatchLauncher:
                     self._attempted_network
                 ),
                 "denied_network_syscall_count": self._denied_network,
+                "local_AF_UNIX_network_syscall_count": (
+                    self._local_af_unix_network
+                ),
+                "network_isolation_mechanism": (
+                    "outer_systemd_AF_UNIX_only_IPAddressDeny_any_plus_"
+                    "passive_strace_socket_connect"
+                ),
+                "worker_cuda_attested_count": (
+                    self._cuda_attested_count
+                ),
+                "worker_cuda_attested_count_by_gpu": dict(
+                    self._cuda_attested_by_gpu
+                ),
+                "worker_cuda_receipt_count": len(
+                    self._cuda_receipt_hashes
+                ),
+                "worker_cuda_receipt_set_sha256": stable_hash(
+                    sorted(self._cuda_receipt_hashes)
+                ),
                 "external_network_call_count": 0,
                 "online_or_api_evaluator_call_count": 0,
                 "retry_or_replay_count": 0,
@@ -2247,12 +2710,17 @@ def run_source_free_full_path_canary(
     hippo_launcher: OfficialHippoBatchLauncher,
     implementation_freeze_sha256: str,
     runtime_fingerprint_sha256: str,
+    live_canary_execution_attestation_sha256: str,
 ) -> dict[str, object]:
     """Exercise MiniLM, typed probes/recipes/E0/E1, and official HippoRAG."""
 
     if (
         _HEX64.fullmatch(implementation_freeze_sha256) is None
         or _HEX64.fullmatch(runtime_fingerprint_sha256) is None
+        or _HEX64.fullmatch(
+            live_canary_execution_attestation_sha256
+        )
+        is None
     ):
         raise EbmNlpP1RuntimeError(
             "source-free canary prerequisite hash drifted"
@@ -2378,6 +2846,14 @@ def run_source_free_full_path_canary(
         or hippo_receipt["observed_process_peak"] != 2
         or hippo_receipt["observed_process_peak_by_gpu"]
         != {"0": 1, "1": 1}
+        or hippo_receipt["worker_cuda_attested_count"] != 2
+        or hippo_receipt["worker_cuda_attested_count_by_gpu"]
+        != {"0": 1, "1": 1}
+        or hippo_receipt["worker_cuda_receipt_count"] != 2
+        or _HEX64.fullmatch(
+            str(hippo_receipt["worker_cuda_receipt_set_sha256"])
+        )
+        is None
         or hippo_receipt["external_network_call_count"] != 0
         or embedding_receipt["external_network_call_count"] != 0
     ):
@@ -2392,6 +2868,9 @@ def run_source_free_full_path_canary(
             implementation_freeze_sha256
         ),
         "runtime_fingerprint_sha256": runtime_fingerprint_sha256,
+        "live_canary_execution_attestation_sha256": (
+            live_canary_execution_attestation_sha256
+        ),
         "window_count": len(windows),
         "role_count": len(core.ROLE_ORDER),
         "recipe_count": len(core.RECIPE_IDS),
@@ -2511,6 +2990,17 @@ _IMPLEMENTATION_CONFIG_KEYS = frozenset(
         "implementation_freeze_sha256",
     }
 )
+_CANARY_LIVE_CONFIG_KEYS = frozenset(
+    {
+        "canary_hostname_sha256",
+        "canary_live_attestation_output",
+        "canary_unit_file",
+        "canary_unit_file_sha256",
+        "canary_unit_name",
+        "systemctl_executable",
+        "systemctl_executable_sha256",
+    }
+)
 
 
 def _require_exact_config_keys(
@@ -2579,6 +3069,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             config,
             _RUNTIME_PATH_CONFIG_KEYS
             | _IMPLEMENTATION_CONFIG_KEYS
+            | _CANARY_LIVE_CONFIG_KEYS
             | {
                 "canary_runtime_root",
                 "runtime_fingerprint_receipt",
@@ -2594,6 +3085,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         paths = _paths_from_config(
             config, runtime_root_key="canary_runtime_root"
+        )
+        live_canary_attestation = (
+            verify_live_source_free_canary_execution(
+                config=config,
+                config_path=arguments.config,
+                paths=paths,
+            )
         )
         fingerprint = _verify_fingerprint_receipt(
             config,
@@ -2615,6 +3113,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             ),
             runtime_fingerprint_sha256=str(
                 fingerprint["self_sha256"]
+            ),
+            live_canary_execution_attestation_sha256=str(
+                live_canary_attestation["self_sha256"]
             ),
         )
         _write_receipt(arguments.output, receipt)
