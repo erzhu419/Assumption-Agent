@@ -2,6 +2,14 @@
 
 > - 初版日期：2026-07-11
 > - 本次复核：2026-07-26
+> - 最新 EBM-NLP P1 终态：全新本地 source 上的 v4 source-free canary 已一次完成 2/2 CUDA worker，
+>   0 API/network/retry；v1–v3 的 pre-model implementation failure 均未打开 source。GPU 空闲后 v4 formal
+>   只启动一次，实际 service cgroup、网络隔离与冻结绑定全部通过；唯一 source epoch 随后在 tar header 资格检查中命中
+>   `documents/` 命名空间的未覆盖成员。安全错误摘要精确匹配冻结代码中的
+>   `document member does not match the exact frozen path pattern`，但不公开成员名。任何 member payload、
+>   model inference、action、gold/label、score 与 online evaluator 均为 0；终态为
+>   **source-header schema qualification implementation-invalid / efficacy unknown / replay=false**。这不是 Agent
+>   相对 RAW/HippoRAG 的效果负结果；现实域三-family双基线稳定优势与 L5 仍同时缺失
 > - 最新 EntailmentBank G1/E1 终态：official Task2 TRAIN/DEV aggregate qualification 通过后，fresh v2 secret 一次形成
 >   G/A/F/A_hold/M=`60/36/30/30/30` 的三-family平衡 186-item cohort，F label 从未创建。v1 acquisition 因把同 ID
 >   多行变体误当非法而在 selection/action 前 fail-closed；v2 只事前增加私有 source-line identity，未改任何 efficacy contract。
@@ -4584,7 +4592,62 @@ Agent 对 RAW/HippoRAG 的负结果，也不改变既有证据；总目标仍同
 均稳定为正，以及 evaluator 在独立 A_hold 晋升后改善 untouched M_search。下一步只能使用全新 study/source/cohort，
 并优先选择已完整本地冻结、无需临时网络传输的 source artifact；不能把 P2 改名后补跑。
 
+### 12.47 2026-07-26 EBM-NLP P1：source-header schema qualification 终止
+
+MAUD P2 不重开。新 study `EBMNLP_P1_TYPED_PICO_SET_EVALUATOR_V1` 改用已完整驻留 311linux、固定
+SHA-256 `b7357503…a44e3f` 的 EBM-NLP 2.0 archive，避免把临时 API 或正式阶段网络容量继续混入效果检验。
+候选是 P/I/O 三个 role 的 typed evidence-set operator；A_form/F_search/A_hold/M_search、RAW、item-local official
+HippoRAG、E0/E1 promotion 与离线 exact-Fraction scoring 均在正式 source epoch 前冻结。E1 只有在独立 A_hold
+胜过 E0 才能打开 M_search；现实域 primary 仍要求 E1-Agent 对 RAW 与 official HippoRAG 的 aggregate 和三个
+role family 都为正。这里没有 fine-tune、在线 judge 或 Ruoli/API evaluator。
+
+v1–v3 的 source-free 尝试都在模型或 source 前暴露 implementation defect；每次都按各自 disposition 关闭，没有把
+失败能力冒充 passed canary。v4 改正后先形成 project/runtime fingerprint，再以两张 RTX 2080 上各一 worker 完成
+2/2 public-synthetic terminal 与 2/2 CUDA attestation；峰值只有两个 worker，external network、API credential、
+retry、replay 与 source access 均为 0。execution freeze `cfc32850…79bb1` 随后绑定 implementation、
+fingerprint、canary、formal config 与 exact systemd unit，才允许等待 GPU 空闲并启动正式服务一次。
+
+正式启动本身有效：live receipt 在 source 前观测到 `ActiveState=activating`、`SubState=start`，验证
+`IPAddressDeny=any`、仅 `AF_UNIX`、两张 GPU、`CPUQuota=800%`、`MemoryMax=40 GiB`、`TasksMax=64` 与
+0 provider/API credential；service 最终 `Result=success`、main exit 0、restart 0。这里的 systemd success
+只说明 fail-closed controller 正常写出安全终态，不代表 benchmark 成功。正式 source epoch 恰好消费一次，
+archive SHA、size 与 mode 在终止后仍与冻结身份一致。
+
+controller 在任何 member payload 打开前只检查 tar header topology。`documents/` 下有一个 regular member
+不符合冻结 grammar 允许的 numeric-PMID `.tokens`、`.text` 或 ancillary `.pos` 路径，因而抛出
+`EbmNlpP1SourceQualificationError`。终态中的 error-message SHA-256 `ca880135…adf6ad` 与已提交代码第 456 行的
+静态 literal `document member does not match the exact frozen path pattern` 精确相等；私有 member 名未输出、
+未回传、未写入公开 manifest。这已经足以定位为 frozen path grammar 与实际 public archive header topology
+不相容，不需要也不允许事后查看成员名来扩 allowlist。
+
+因此 v4 是 **protocol launch valid，但 source-schema qualification implementation-invalid**：member payload、
+block/cohort、MiniLM/official HippoRAG、typed action、gold/label、E0/E1、score receipt 与 stage archive 全部为 0，
+efficacy 为 unknown，`primary_evaluated=false`，`replay_permitted=false`。它既不是 Agent 的性能负结果，也不能支持
+Agent>RAW、Agent>official HippoRAG、现实域三-family primary、evaluator promotion、M_search improvement 或 L5。
+同一 epoch 不 retry、不 resample、不换模型/provider、不补 allowlist/gate。
+
+下一条有效路线不是重开 EBM-NLP P1，而是新 source/study/cohort：在 secret、cohort 和评分 formal 之前，用独立的
+public、non-scoring schema study 前瞻性资格化 archive topology，再一次冻结可执行 grammar。这样把公开文件格式
+兼容性从密封效果 epoch 中移出，是修正 study ordering，不是不断增加 efficacy gate。总目标仍同时缺少现实域三个
+relation family 对 RAW 与 official HippoRAG 的稳定净收益，以及 evaluator challenger 在独立 A_hold 晋升后改善
+untouched M_search 的 L5 证据。
+
 ## 附录 A：关键证据索引
+
+- EBM-NLP P1 v4 terminal chain（正式 source epoch 已消费；member payload/model/action/gold/score 均为 0）：
+  [`source custody`](../manifests/ebmnlp_p1_source_custody_v1.json)；
+  [`study design`](../manifests/ebmnlp_p1_typed_pico_set_evaluator_study_design_v1.json)；
+  [`v1 failure disposition`](../manifests/ebmnlp_p1_source_free_canary_v1_failure_disposition.json)；
+  [`v2 failure disposition`](../manifests/ebmnlp_p1_source_free_canary_v2_failure_disposition.json)；
+  [`v3 failure disposition`](../manifests/ebmnlp_p1_source_free_canary_v3_failure_disposition.json)；
+  [`implementation freeze v4`](../manifests/ebmnlp_p1_implementation_freeze_v4.json)；
+  [`runtime fingerprint v4`](../manifests/ebmnlp_p1_runtime_fingerprint_receipt_v4.json)；
+  [`source-free canary live`](../manifests/ebmnlp_p1_source_free_canary_live_receipt_v4.json)；
+  [`source-free canary`](../manifests/ebmnlp_p1_source_free_canary_receipt_v4.json)；
+  [`execution freeze`](../manifests/ebmnlp_p1_execution_freeze_v4.json)；
+  [`formal live receipt`](../manifests/ebmnlp_p1_formal_live_receipt_v4.json)；
+  [`safe terminal`](../manifests/ebmnlp_p1_formal_terminal_v4.json)；
+  [`aggregate result`](../manifests/ebmnlp_p1_formal_result_v4.json)
 
 - MAUD extraction P2 terminal chain（source JSON 未 parse；formal model/action/gold/score 均为 0）：
   [`source custody`](../manifests/maud_extraction_p2_source_custody_v1.json)；
