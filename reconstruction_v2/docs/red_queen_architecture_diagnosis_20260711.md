@@ -2,6 +2,13 @@
 
 > - 初版日期：2026-07-11
 > - 本次复核：2026-07-26
+> - 最新 AVeriTeC P1 终态：独立 official source/cohort、v4 source-free 双 GPU canary、execution/launch freeze
+>   与唯一 formal launch 均有效；systemd 为 success、`NRestarts=0`，全程 0 API/online evaluator、0 retry/replay。
+>   A_hold 上 E1 相对 E0/RAW 为 36/36 utility tie、净 0、exact tail 1；虽有 19/36 项实际换 recipe 且改变 top-5，
+>   仍未改变任何 qrel recall。E1 相对 official HippoRAG aggregate 净 `+3/2`、exact tail `3/32`，但 causal family
+>   为净 0，且这份 aggregate 差不能归因于 typed action，因为 E1 与 RAW 的逐项 utility 完全相同。故 evaluator
+>   不晋升、现实三-family双基线 primary=false，M_search 按冻结协议不执行，L5 未测。40 个远端私有 artifact、
+>   safe terminal 与 aggregate 已独立离线复算一致；这是 **valid negative**，不是 implementation/infrastructure-invalid
 > - 最新 EBM-NLP P1 终态：全新本地 source 上的 v4 source-free canary 已一次完成 2/2 CUDA worker，
 >   0 API/network/retry；v1–v3 的 pre-model implementation failure 均未打开 source。GPU 空闲后 v4 formal
 >   只启动一次，实际 service cgroup、网络隔离与冻结绑定全部通过；唯一 source epoch 随后在 tar header 资格检查中命中
@@ -2046,6 +2053,46 @@ support utility 的对齐，不是缺少更多 promotion gate。它仍不是 off
 若论文仍硬追 L5，下一研究对象必须同时改变 action family 与 evaluator mechanism，并在独立新领域/新 custody 上一次性
 预注册；若保持当前 action family，最诚实结论是三次 behavior-valid evaluator rejection 与零次 evaluator replacement。
 
+### 8.23 AVeriTeC typed QA-set evaluator 有效完成；typed action 未超过 RAW，L5 未获授权
+
+为同时检验现实域三臂优势与 L5，本轮没有重用 BRIGHT、QASC、EBM-NLP 或既有 scored cohort，而是建立
+`AVERITEC_P1_TYPED_QA_SET_EVALUATOR_V1`。official AVeriTeC source 固定在 commit
+`7c62d1ec…f81`；公开 P0 只资格化 archive/schema/topology，不评分。正式 projection 是 real-world fact-check
+claim 到同一封闭 cohort 内 question-answer evidence pair 的 retrieval，不声称 open-web AVeriTeC。三组所谓 family
+是 causal→quote→numerical priority-assigned native label strata，不是互斥 source family。A_form/F_search/A_hold/M_search
+分别冻结为 108/36/36/36 项；RAW 与 E0 都是同一 `R0_DIRECT_DENSE` action，official HippoRAG 是本地冻结、
+同 corpus/query 的 item-local comparator。
+
+候选空间一次固定为八个 typed QA-slot recipes，MiniLM 产生 DIRECT/CAUSE/EFFECT/QUOTE/SOURCE/NUMBER/COMPARE/CONTEXT
+坐标，stable greedy one-to-one assignment 形成 top-5；E1 只在 A_form qrel 于 action seal 后打开时拟合一次 ridge。
+F_search 不创建 qrel、永不参与 gate。v1–v3 source-free canary 暴露的 canonical JSON、dictionary-order 与 ephemeral-index
+错误均发生在 formal source/secret 为 0 时，各自关闭且不重放；v4 唯一通过两张 RTX 2080 的 production-isomorphic
+canary。随后 execution freeze、142-file checksum manifest 与 launch freeze 先提交，311linux 上唯一 formal service
+以 `CPUQuota=400%`、`MemoryMax=40 GiB`、`TasksMax=64`、`Restart=no`、`AF_UNIX`/IP deny 启动一次。
+终态为 systemd success、`NRestarts=0`、40 个私有 artifact 全部闭合、0 API/online evaluator、0 retry/replay/resample。
+
+A_hold 给出明确的有效负结果。E1−E0 与 E1−RAW 都是 0 gain / 0 harm / 36 tie，净 utility 0、exact tail 1。
+这不是 evaluator 没有动作：E1 在 19/36 项选择了非 R0 recipe，并在同样 19 项改变了 top-5；只是这些变化对 qrel
+recall 全部为零。E1−official HippoRAG aggregate 为 4 gain / 1 harm / 31 tie，净 `+3/2`、exact tail `3/32`；
+但 causal family 为 12/12 tie、净 0，numerical 与 quote 各净 `+3/4`、family tail 均为 `1/4`。更关键的是，
+E1 与 RAW 的逐项 utility 完全相同，所以 aggregate 的 HippoRAG 差同样属于 RAW，不能归因于 typed action。
+因此 `A_hold_evaluator_promoted=false`、现实三-family双基线 primary=false。formal controller 没有读取 M_search
+view/qrel，也没有创建 M_search action/executor/score；`M_search_L5_passed=null`，不是 false，更不是 L5 positive。
+
+安全 terminal 已从远端回传，并由 sealed action/qrel 独立离线重算；40 个私有文件的 canonical hash、mode、worker
+stdout/stderr、blocked-network audit 与 evidence binding 全部一致，原始 item/query/document/qrel/逐项 score 继续只留
+远端。证据见
+[`formal terminal`](../manifests/averitec_p1_formal_terminal_v1.json)、
+[`offline finalize`](../manifests/averitec_p1_offline_finalize_v1.json)、
+[`execution freeze`](../manifests/averitec_p1_execution_freeze_v1.json) 与
+[`launch freeze`](../manifests/averitec_p1_launch_freeze_v1.json)。
+
+这轮终止的是“给同一 dense corpus 增加 typed query prefix/slot assignment 就能产生 utility”的路线，而不是增加新 gate
+的理由。若继续总目标，下一独立 study 必须更换 source/cohort，并把 action family 改成会形成不同证据集合的
+decomposition→evidence-unit coverage→complementarity-aware set selection；evaluator 也必须评价 set-level marginal
+coverage，而不是继续在已消费 AVeriTeC anchor 上调整 ridge、recipe、alpha 或关键词。只有该新机制在独立 A_hold
+先真实超过 RAW 与 official HippoRAG、再晋升并改善预冻结 M_search，才能同时关闭现实三臂缺口和 L5。
+
 ## 九、下一步优先级与硬验收标准
 
 | 优先级 | 工作 | 硬验收标准 |
@@ -2060,12 +2107,13 @@ support utility 的对齐，不是缺少更多 promotion gate。它仍不是 off
 | 严格终止（MuSiQue residual portfolio A） | same-source residual two-Q evaluator test | `[96,264)` 在 row-zero preregistration 后一次 acquisition；A/F 各 4080/4080 terminal 并冻结 behavior-distinct actions；A_hold freeze 固定 288 路。正式调用消费 authorization、打开 48 项后，lazy-submit/early-result 的 committed ordering defect 使 barrier attempted=1/terminal=0；0 ranking/score/model/network。A_hold 烧毁、不 replay；无 promotion，M_search 永久未开；efficacy unknown，不追加同源 cohort |
 | 完成但未晋升（fresh 2Wiki fixed-action transfer） | 独立 fresh-item A_hold 与 agent/RAW/official HippoRAG 对照 | official archive + 历史 1000-row denylist + 三 split collision exclusion 在 selection 前固定；A_hold 48 项按四 type 均衡。384/384 terminal 后 incumbent/challenger/P/official/RAW 为 111/110/110/99/56（总 support=120）；challenger−incumbent=−1、exact p=1，不晋升，M_search 未开。incumbent−official=+12、16 gain/4 harm、descriptive exact p=1549/262144；claim 限 item-local retrieval |
 | 完成但未晋升（QASC direct-action evaluator） | 新领域的自动 recipe formation、A/F pair 与 RAW/P/official HippoRAG 对照 | 四块各 64 在 formation 前一次 acquisition；16 路 full-corpus BM25 两遍扫描 16,987,130 行，TEST 未开；A/F 2048 actions 后 pair behavior-distinct。A_hold incumbent/challenger support=67/66、U=90/84、净 U −6、exact p=1668987/2097152，不晋升；RAW/P/official support=19/38/103，official 44 complete、U=147。M_search 未授权未开，同源 QASC 终止 |
+| 完成但未晋升（AVeriTeC typed QA-set evaluator） | 独立现实 fact-check source 上一次检验 E1/RAW/official HippoRAG 与 evaluator→M lifecycle | A_form/F/A_hold/M=108/36/36/36；v4 source-free 双 GPU canary、142-file launch binding 与唯一 formal service 均通过。A_hold E1−E0/RAW 为 36 tie、净 0、tail 1；19/36 action/top-5 实际改变但 utility 全不变。E1−Hippo aggregate 净 +3/2、tail 3/32，但 causal family 净 0，且该差与 RAW 完全相同，故不能归因 typed action。promotion=false、reality primary=false，formal controller 未读/未执行 M，L5=null；0 API/online evaluator/retry |
 | 完成（窄 synthetic multiseed stability） | fresh 8-seed typed-graph Agent_R1 / RAW / official HippoRAG replication | 全新 v3 cohort 为 8×64=512；v5 单次 detached formal 完成 1536/1536 action，official/local 峰值并发 8/64，MiniLM 固定两段 8448。Agent/Hippo/RAW 总 U=1259/1232/1273；Agent−Hippo seed delta `[3,8,0,2,1,5,6,2]`，mean=3.375、7 positive/1 tie；Agent−RAW 总 U −14。+27 全在 DEF_TP1/TP2，其他 family 与 Hippo 完全相同。只支持固定 synthetic distribution 的窄机制稳定性，不是现实域 transfer、promotion、L4/L5 或总体优越性 |
 | 完成但未晋升（HoVer joint graph/evaluator） | 新现实 derived closed-corpus 上六 typed actions、RAW、official HippoRAG 与 A/F/A_hold/M lifecycle | TRAIN-only private-HMAC 一次形成 A_form/F/A_hold/M=48/36/30/30 与 609-doc corpus；A_hold E0/RAW/Hippo 均 U=487/12、72 hits、16 complete，30/30 item utility tie；E1−E0=−47/12、2 gain/10 harm/18 tie、exact p=3739/4096。primary=false、promotion=false，M_search 未打开；0 online/network evaluator。claim 不等同 official HoVer/open-domain/family-out |
 | 完成但 primary 未通过（BRIGHT fresh RESERVE） | 现实 reasoning-retrieval 上 retained P6 / RAW / candidate-restricted official HippoRAG core 三臂与 E1 counterfactual | fresh 45 项三 family 各 15；45/45 Qwen valid、135 intents 先于 join、45/45 HippoRAG terminal、单 launch 峰值并发 12、late label 仅开一次、0 external network。Agent/Hippo/RAW mean nDCG@10=`0.14538/0.13598/0.14874`；Agent−Hippo aggregate `+0.00939`，但 family delta=`−0.46468/+0.16826/+0.71916`（integer-sum scale）、7 gain/9 harm/29 tie，未跨 family 稳定；Agent−RAW=`−0.00336`。E1−P6=`−0.00495`，既有 non-promotion 被 fresh reserve 再次支持；不是 full-corpus BRIGHT、answer generation、SOTA 或 L5 positive |
 | 完成但 primary 未通过（BRIGHT P9 prospective C_confirm） | 固定 semantic P9 对剩余同源 RESERVE 的一次前瞻五臂确认 | 在打开剩余内容前固定每 family rank 15–25（0-based），共 33 项并保留 4 项 untouched；33/33 generation valid、66 external intents、1 cross-encoder + 12 HippoRAG 最大并发、33/33 HippoRAG terminal、late label 一次、0 external network。P9/Hippo/RAW mean=`0.12338/0.09218/0.11431`；P9−Hippo=`+1,029,664,470` 且 family 全正，7 gain/1 harm/25 tie；P9−RAW=`+299,424,557`，但 family=`−72,732,371/0/+372,156,928`，6/1/26，故预注册 primary=false。P9 含 RAW+Hippo+CE，结果只支持额外 ensemble 的同源增量，不支持等算力/SOTA/L5 |
 | implementation-invalid（BRIGHT P14→P17 all-remote） | P13 在 fresh Earth Science/Psychology/Sustainable Living complete cases 上相对 RAW 与 candidate-restricted HippoRAG 的方向性三臂确认 | P14 本地在 12 个 HippoRAG terminal 后因机器不可用被用户中止；P15 迁移 gpu1 后无 remote action result；P16 在 HMAC 前因 source capacity 失败。P17 在 311linux 完成 27/27 HippoRAG terminal 并 seal 24 个 action，0 external network/reuse；但实际 HippoRAG 峰值并发=9，违反冻结上限 8。偏差在 prelabel audit 发现，finalizer=0、gold/score=0、primary 未评价、efficacy unknown；禁止 replay/resample、改 candidate 或补 gate |
-| 当前剩余（不新增 gate、不重用已评分 cohort 调参） | 同时闭合现实域稳定三臂净收益与 evaluator→untouched-search 因果链 | P9 仍是该现实域分支最后一份有效评分结果：三个 family 都高于 candidate-restricted HippoRAG，但 Biology/Economics 未严格高于 RAW；P17 因执行契约失效没有增加 efficacy。当前 P13/all-remote cohort 停止，不以同 candidate 重启。只有全新 study ID、root、cohort 与事前修正的 runtime 才可能再次检验三臂问题；L5 仍需独立 evaluator mechanism、A_hold promotion 与预冻结 M_search。若不另立研究，就以“窄 L3/L4 positive、现实域无有效稳定三臂优势、L5 未达到”收束 |
+| 当前剩余（不新增 gate、不重用已评分 cohort 调参） | 同时闭合现实域稳定三臂净收益与 evaluator→untouched-search 因果链 | AVeriTeC P1 已把最后一次 infrastructure-unknown 更新为有效 efficacy negative：typed E1 对 RAW 为 36/36 tie，未晋升，M 未执行；P9 的三个 family 对 Hippo 正向但 Biology/Economics 未严格高于 RAW，仍是此前最接近现实三臂 primary 的结果。下一轮只能用全新 study/source/cohort，把 action 换成真正改变 evidence-set coverage 的机制，并一次冻结 A_hold promotion 与 M_search；不能在 AVeriTeC anchor 上调 ridge/recipe/alpha 或补 gate。若不另立研究，就以“窄 L3/L4 positive、现实域无稳定双基线优势、L5 未达到”收束 |
 | 完成（exact-domain L2/L3 instance） | Replication C promotion、controls disposition 与 one-shot sealed | development 8/8 gain、四 fold 各 +2；operator-only output 8/8 exact match；sealed 4/4 gain、8 路最大并发、8/8 network-none verifier receipts、0 retry/replay/online judge；两条盲化事件完整披露，claim 限于固定 SEC-13F treatment |
 | 完成 | 冻结 evaluator-owned promotion policy | 已由 protocol 绑定完整 spec；candidate 只能收紧；对抗测试通过 |
 | 完成 | 收紧外部 action/fallback contract | 4 类 prompt/self-check lowering；6 类 unsupported op fail closed；observed fallback 不再由字符串伪造 |
@@ -2549,7 +2597,7 @@ activation；held-out causal activation precision 的分母则是 evidence-valid
 | L2 validation learning | clean held-out validation 上有可晋级净收益 | **在 exact SEC-13F workstream 达到**：contract-derived candidate 的 Replication C development 为 8/8 valid gains、四 fold 各 +2、0 harm，并产生正式 promotion；旧 financial-4 与 parent period-out incomplete 只保留为历史诊断，不与本结果拼接 |
 | L3 prospective generalization | frozen incumbent 在 unseen instance/family 上保持收益 | **在多个窄 scope 达到**：SEC-13F frozen candidate 在 4 个预提交同域 sealed item 上 4/4 gain；只在 MuSiQue F1 形成的 P 在 12-item Hotpot cohort 为 21/24，相对 RAW +10、相对 official +1；随后 exact frozen actions 在 48-item fresh 2Wiki A_hold 上得到 incumbent/P/official/RAW=111/110/99/56（总 support=120），incumbent−official=+12、16 gain/4 harm、descriptive exact p=1549/262144。2Wiki family 历史上并非从未见过，所以最强表述是 fresh-item no-new-search transfer；全部 QA claim 都只覆盖 item-local retrieval，不覆盖 answer generation、full-corpus benchmark 或 broad Assumption-Agent transfer |
 | L4 self-evolution | 多代 retained improvement，且 recursion ablation 有因果贡献 | **在窄 Hotpot retrieval-only scope 达到**：fresh M_L4 上 P+Q=43/48、Q=40/48、P=36/48；P+Q−Q=+3、P+Q−P=+7，只有 1 个 P support 被遗忘。P/Q direct retrieval 与固定 RRF ablation 在同一 24-item cohort 完成 96/96 terminal 后才评分。Q 的 F_Q cross-fit 不稳定，故不能外推为广义自我演化或端到端 QA |
-| L5 evaluator co-evolution | anchor-guided evaluator replacement 与 selective erasure改善搜索 | **未达到**。Hotpot、2Wiki、QASC、HoVer、ERASER、MAVEN-ERE、EntailmentBank 与 BRIGHT 均给出有效 non-promotion 或 challenger degradation；BRIGHT A_hold 的 E1−P6 为 `−1,725,169,818` integer nDCG、未晋升，fresh RESERVE counterfactual 又为 `−222,856,829`。HybridQA 首次证明 promotion/authorization/M consumption wiring 可执行，但 promoted E2 在现实域 A_hold 相对 HippoRAG primary 未通过，untouched M 的预注册 L5 也为 false。故现有证据支持“evaluator 能拒绝无收益候选，且偶尔能晋升”，仍不支持“晋升后改善后续 untouched search” |
+| L5 evaluator co-evolution | anchor-guided evaluator replacement 与 selective erasure改善搜索 | **未达到**。Hotpot、2Wiki、QASC、AVeriTeC、HoVer、ERASER、MAVEN-ERE、EntailmentBank 与 BRIGHT 均给出有效 non-promotion 或 challenger degradation；AVeriTeC E1 虽在 19/36 项改变 top-5，但对 E0/RAW 为 36/36 utility tie，故 M_search 合规保持未执行。BRIGHT A_hold 的 E1−P6 为 `−1,725,169,818` integer nDCG、未晋升，fresh RESERVE counterfactual 又为 `−222,856,829`。HybridQA 首次证明 promotion/authorization/M consumption wiring 可执行，但 promoted E2 在现实域 A_hold 相对 HippoRAG primary 未通过，untouched M 的预注册 L5 也为 false。故现有证据支持“evaluator 能拒绝无收益候选，且偶尔能晋升”，仍不支持“晋升后改善后续 untouched search” |
 
 ## 十一、什么才算“真正自我提出并递归验证假设”
 
