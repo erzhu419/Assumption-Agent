@@ -4483,7 +4483,48 @@ symlink 的 `lstat/readlink/resolve/samefile` 与 target-tree identity、deploye
 module-origin 检查，以及 scratch 外 mode-0600 私有 stdout/stderr custody。完整证据见
 [`static postmortem`](../manifests/mmqa_p1_official_preflight_static_postmortem_v1.json)；它不修复、不重开 MMQA P1。
 
+### 12.46 2026-07-26 MAUD extraction P1：现实域三臂与 L5 的新 source/design freeze
+
+MMQA P1 不重开。新 study `MAUD_EXTRACTION_P1_TYPED_EVALUATOR_V1` 固定 official
+`The-Atticus-Project/maud-extraction` commit `89cc5f6ce210268f170aa019ea204ed4e608c604` 的三个独立
+TRAIN/DEV/TEST blob，总计 61,342,921 bytes；重复的 `train_and_dev` 永久禁止。该 supplementary extraction source
+并非与 primary MAUD 独立的血缘：论文明确说明 extraction spans 对应 primary main dataset 的 deal-point texts。因此公开
+viewer 自动展示过的 13 份合同与论文表格可定位的 3 份合同，均以 normalized title SHA-256 denylist 在三个 split 中按整份
+contract 全局排除；不公开 raw title，不替补、不重采样。此时三个 formal JSON 仍未下载或解析。
+
+正式 parser 不复用 upstream 首次缓存需至少 150 GB RAM、训练约需 22 GB GPU 的 baseline pipeline，也不继承它只训练第一条
+span 的已知 bug。新的 trusted streaming SQuAD2 parser 完整消费 `answers[]`，保存 exact raw-context character offsets；
+同一合同的 22 个 public-template queries 共用一个 gold-independent passage corpus。TRAIN 以 fresh HMAC 按合同分成
+A_form 4/5 与永久 label-free 的 F_search 1/5；DEV 是一次 A_hold，TEST 只有 A_hold promotion 后才能 parse 为 M_search。
+所有剩余合同的 22 个 query 均先执行，无答案 query 只报告数量，不进入 positive-evidence retrieval utility，也不产生
+abstention/no-answer claim。
+
+RAW 是 frozen cross-encoder；official HippoRAG comparator 只在同一合同的相同 passage corpus 上每合同建一次 index；
+Agent 的九个固定 recipe 均调用 definition/condition/exception/section-xref typed operator，不把纯 CE 或纯 fused ranking
+伪装成 Agent。E0 与 E1 都是同一个 `score(item, recipe) → fixed argmax` 接口；E1 只在所有 A_form actions 封存后，用
+recipe utility 相对 E0-selected utility 的 delta 拟合唯一 L2=1 ridge，之后不再重拟合。F_search 只封存 E0/E1 的
+recipe/behavior identity，相同也不是 gate。
+
+统计审计修正了同一合同 22 个 query 的伪重复风险：先在 `contract×family` 内求均值，再等权得到 contract utility；
+A_hold/M 的 reference tail 只对非零 paired contract deltas 做全部符号枚举，并如实称为 sign-flip reference tail，
+不冒充无条件 exact causal p-value。唯一 TEST opening rule 是 A_hold 上 E1−E0 contract net positive 且 tail≤0.10；
+family 条件与 RAW/HippoRAG 不混入 promotion。现实域 primary 独立要求 E1-Agent 对 RAW 与 official HippoRAG 的
+contract aggregate 均为正、各自 tail≤0.10，且三个事前 public type family 对两条 baseline 的净差全部严格为正。
+L5 则只在晋升后用完全冻结的 E1/E0 slate 检验 untouched TEST contracts；任何合法 non-promotion 或负结果都关闭本
+source epoch，不 rescue、不补 gate。
+
+311linux 重启后模型资产身份未漂移，两张 RTX 2080 与 driver `595.84` 已恢复；但 kernel/driver runtime identity 已变化，
+必须建立新的 source-free fingerprint。旧 HippoRAG tree hash 把可变 `.pyc` 纳入身份，因此本 study 改为绑定排除
+`__pycache__`/`.pyc` 的 60-file source tree `342505c3…27b1f`，同时设置 `PYTHONDONTWRITEBYTECODE=1`；模型只通过
+study-local `minilm`/`smollm2` 短别名传入，避免 MMQA 的 272-byte basename 冲突。执行上最多两条 GPU lane 与四个
+CPU worker，按 stage bulk-submit 后统一 join，全程离线评分、无 fine-tune、无 API/online evaluator。当前状态仍是
+**pre-source source/design frozen, implementation pending**，不是 efficacy 结果。
+
 ## 附录 A：关键证据索引
+
+- MAUD extraction P1 pre-source chain（formal source/action/score 仍为 0）：
+  [`source custody`](../manifests/maud_extraction_p1_source_custody_v1.json)；
+  [`study design`](../manifests/maud_extraction_p1_typed_evaluator_study_design_v1.json)
 
 - MMQA P1 pre-source frozen chain（formal source/model/action/score 仍为 0）：
   [`source custody`](../manifests/mmqa_p1_source_custody_v1.json)；
