@@ -4680,7 +4680,31 @@ public、non-scoring schema study 前瞻性资格化 archive topology，再一�
 relation family 对 RAW 与 official HippoRAG 的稳定净收益，以及 evaluator challenger 在独立 A_hold 晋升后改善
 untouched M_search 的 L5 证据。
 
+### 12.48 2026-07-26 AVeriTeC P1：正式执行有效，但 typed action 对 RAW 无效
+
+EBM-NLP 的 source-header 失败没有通过补 allowlist 重开；后续先用独立公开 P0 一次资格化 official AVeriTeC
+TRAIN/DEV 的 archive、schema、三类原生 claim type 容量和 collision topology，再建立
+`AVERITEC_P1_TYPED_QA_SET_EVALUATOR_V1`。source-free production canary、execution/launch freeze、142-file
+checksum closure 与 311linux 唯一正式 service 均通过；正式终态为 systemd success、restart 0、40 个私有 artifact
+完整、0 API/online evaluator/retry/replay/resample，因此这轮是有效 efficacy measurement，不是 implementation-invalid。
+
+A_hold 上 E1 在 19/36 项选择非 RAW recipe 并改变 top-5，但 E1−E0/RAW 仍为 36/36 utility tie、净 0、exact tail 1。
+E1−item-local official HippoRAG aggregate 虽为净 `+3/2`、tail `3/32`，causal family 却为净 0；而 E1 与 RAW
+逐项完全相同，所以该差不能归因于 typed action。promotion 与现实三-family双基线 primary 均为 false；formal
+controller 没有读取或执行预冻结 M_search，故 L5 为 `null`。这关闭的是“同一 dense corpus 上增加 query prefix/slot
+assignment 足以提高 evidence recall”的路线。下一 study 必须换 source/cohort，并让 operator 直接优化
+decomposition 后的 evidence-set marginal coverage 与互补性；不能在 AVeriTeC 上继续调 ridge、recipe、alpha 或补 gate。
+
 ## 附录 A：关键证据索引
+
+- AVeriTeC P1 valid-negative chain（M_search 未读取/未执行）：
+  [`public P0 design`](../manifests/averitec_p0_public_schema_qualification_design_v1.json)；
+  [`public P0 receipt`](../manifests/averitec_p0_public_schema_qualification_receipt_v1.json)；
+  [`P1 study design`](../manifests/averitec_p1_typed_qa_set_evaluator_design_v1.json)；
+  [`execution freeze`](../manifests/averitec_p1_execution_freeze_v1.json)；
+  [`launch freeze`](../manifests/averitec_p1_launch_freeze_v1.json)；
+  [`formal terminal`](../manifests/averitec_p1_formal_terminal_v1.json)；
+  [`offline finalize`](../manifests/averitec_p1_offline_finalize_v1.json)
 
 - EBM-NLP P1 v4 terminal chain（正式 source epoch 已消费；member payload/model/action/gold/score 均为 0）：
   [`source custody`](../manifests/ebmnlp_p1_source_custody_v1.json)；
