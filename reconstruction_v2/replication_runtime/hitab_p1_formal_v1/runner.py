@@ -34,7 +34,7 @@ from typing import Any, Callable, Mapping, Protocol, Sequence
 VERSION = "hitab_p1_production_runtime_v1"
 STUDY_ID = "HITAB_P1_DMC1_HIERARCHICAL_SET_EVALUATOR_V1"
 IMPLEMENTATION_REVISION = (
-    "direct_transformers_minilm_v3_child_cwd_sanitized"
+    "direct_transformers_minilm_v4_sealed_child_sys_path"
 )
 IMPLEMENTATION_FREEZE_SCHEMA = f"{VERSION}_implementation_freeze"
 ACQUISITION_FREEZE_SCHEMA = f"{VERSION}_source_acquisition_freeze"
@@ -144,6 +144,9 @@ REQUIRED_PROJECT_FILES: dict[str, str] = {
     "hitab_v3_implementation_addendum": (
         "manifests/hitab_p1_child_cwd_sanitization_addendum_v3.json"
     ),
+    "hitab_v4_implementation_addendum": (
+        "manifests/hitab_p1_sealed_child_sys_path_addendum_v4.json"
+    ),
     "hippo_contract": (
         "replication_runtime/birco_official_hipporag_v1/contract.py"
     ),
@@ -243,6 +246,9 @@ EXPECTED_V2_IMPLEMENTATION_ADDENDUM_SELF_SHA256 = (
 )
 EXPECTED_V3_IMPLEMENTATION_ADDENDUM_SELF_SHA256 = (
     "fe55b40f9612510751d6dc837ff35076159d68ca25dd7486f12a5e86a61ca506"
+)
+EXPECTED_V4_IMPLEMENTATION_ADDENDUM_SELF_SHA256 = (
+    "b15c6f807ac51f4f84c3ce58c8be68a4dda0ecdfc47ae75b58d919d1072c91c9"
 )
 EXPECTED_HIPPORAG_SOURCE_LEGACY_TREE_SHA256 = (
     "a644ab2811db2739db3cfbdc051561e2cfdf2ed87286f8ebd00a5971d189cdd5"
@@ -1561,7 +1567,7 @@ def load_implementation_freeze(path: Path) -> FrozenImplementation:
         != "hitab_p1_child_cwd_sanitization_implementation_addendum_v3"
         or v3_addendum.get("study_id") != STUDY_ID
         or v3_addendum.get("implementation_revision")
-        != IMPLEMENTATION_REVISION
+        != "direct_transformers_minilm_v3_child_cwd_sanitized"
         or v3_addendum.get("status")
         != (
             "implementation_addendum_frozen_before_any_HiTab_source_"
@@ -1570,6 +1576,44 @@ def load_implementation_freeze(path: Path) -> FrozenImplementation:
     ):
         raise HitabP1ProductionRuntimeError(
             "HiTab v3 implementation addendum drifted"
+        )
+    v4_addendum_path = files["hitab_v4_implementation_addendum"]
+    try:
+        v4_addendum = json.loads(
+            v4_addendum_path.read_bytes().decode("ascii")
+        )
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HitabP1ProductionRuntimeError(
+            "HiTab v4 implementation addendum is invalid"
+        ) from exc
+    if (
+        not isinstance(v4_addendum, dict)
+        or file_sha256(v4_addendum_path)
+        != file_hashes["hitab_v4_implementation_addendum"]
+    ):
+        raise HitabP1ProductionRuntimeError(
+            "HiTab v4 implementation addendum changed while read"
+        )
+    v4_addendum_self = _verify_self(
+        v4_addendum,
+        field="HiTab v4 implementation addendum self hash",
+    )
+    if (
+        v4_addendum_self
+        != EXPECTED_V4_IMPLEMENTATION_ADDENDUM_SELF_SHA256
+        or v4_addendum.get("schema")
+        != "hitab_p1_sealed_child_sys_path_implementation_addendum_v4"
+        or v4_addendum.get("study_id") != STUDY_ID
+        or v4_addendum.get("implementation_revision")
+        != IMPLEMENTATION_REVISION
+        or v4_addendum.get("status")
+        != (
+            "implementation_addendum_frozen_before_any_HiTab_source_"
+            "body_secret_action_qrel_or_score"
+        )
+    ):
+        raise HitabP1ProductionRuntimeError(
+            "HiTab v4 implementation addendum drifted"
         )
     hipporag_attestation = _validate_reusable_hipporag_attestation(
         files, file_hashes
@@ -1817,19 +1861,43 @@ def load_implementation_freeze(path: Path) -> FrozenImplementation:
     )
 
 
-_IMPORT_PROBE_SCRIPT = (
-    "import hashlib,importlib,importlib.metadata,json,os,sys,sysconfig\n"
+_SEAL_CHILD_SYS_PATH_SCRIPT = (
     "cwd=os.path.realpath(os.getcwd())\n"
     "sys.path[:]=[path for path in sys.path if path and "
     "os.path.isabs(path) and os.path.exists(path) and "
     "os.path.realpath(path)!=cwd]\n"
-    "if any((not os.path.isabs(path)) or "
-    "os.path.realpath(path)==cwd for path in sys.path):"
-    " raise RuntimeError('child cwd remained importable')\n"
-    "request=json.loads(sys.argv[1])\n"
+    "_frozen_child_sys_path=tuple(sys.path)\n"
+    "class _FrozenChildSysPath(list):\n"
+    " def _add(self,value):\n"
+    "  if not isinstance(value,str):"
+    " raise RuntimeError('non-string child import path')\n"
+    "  if (not value) or os.path.realpath(value)==cwd"
+    " or value in _frozen_child_sys_path: return\n"
+    "  raise RuntimeError('unfrozen child import path mutation')\n"
+    " def append(self,value): self._add(value)\n"
+    " def insert(self,index,value): self._add(value)\n"
+    " def extend(self,values):\n"
+    "  for value in values: self._add(value)\n"
+    " def __iadd__(self,values): self.extend(values); return self\n"
+    " def _immutable(self,*args,**kwargs):"
+    " raise RuntimeError('frozen child import path mutation')\n"
+    " __setitem__=__delitem__=__imul__=clear=pop=remove=reverse=sort="
+    "_immutable\n"
+    "sys.path=_FrozenChildSysPath(_frozen_child_sys_path)\n"
+    "_sealed_child_sys_path=sys.path\n"
+)
+
+
+_IMPORT_PROBE_SCRIPT = (
+    "import hashlib,importlib,importlib.metadata,json,os,sys,sysconfig\n"
+    + _SEAL_CHILD_SYS_PATH_SCRIPT
+    + "request=json.loads(sys.argv[1])\n"
     "rows={}\n"
     "for name in sorted(request):\n"
     " module=importlib.import_module(name)\n"
+    " if (sys.path is not _sealed_child_sys_path or "
+    "tuple(sys.path)!=_frozen_child_sys_path):"
+    " raise RuntimeError('child import path seal drifted')\n"
     " raw_origin=getattr(module,'__file__',None)\n"
     " if not isinstance(raw_origin,str): raise RuntimeError('origin absent')\n"
     " origin=os.path.realpath(raw_origin)\n"
@@ -1850,6 +1918,9 @@ _IMPORT_PROBE_SCRIPT = (
     " if isinstance(cached,str) and"
     " (not cached.startswith('/dev/null/') or os.path.exists(cached)):\n"
     "  invalid_cached.append(cached)\n"
+    "if (sys.path is not _sealed_child_sys_path or "
+    "tuple(sys.path)!=_frozen_child_sys_path):"
+    " raise RuntimeError('child import path seal drifted before output')\n"
     "value={'dont_write_bytecode':sys.dont_write_bytecode,"
     "'invalid_cached':sorted(set(invalid_cached)),"
     "'no_site':sys.flags.no_site,'python_version':"
@@ -2771,17 +2842,17 @@ _HIPPO_CHILD_BOOTSTRAP_SCRIPT = (
     " if '__pycache__' in dirs or any("
     "name.endswith(('.pyc','.pyo')) for name in dirs+files):"
     "  raise RuntimeError('unbound project bytecode')\n"
-    "cwd=os.path.realpath(os.getcwd())\n"
-    "sys.path[:]=[path for path in sys.path if path and "
-    "os.path.isabs(path) and os.path.exists(path) and "
-    "os.path.realpath(path)!=cwd]\n"
-    "if any((not os.path.isabs(path)) or "
-    "os.path.realpath(path)==cwd for path in sys.path):"
-    " raise RuntimeError('child cwd remained importable')\n"
-    "sys.argv=[module,*sys.argv[4:]]\n"
-    "if any(os.path.realpath(path)==cwd for path in sys.path):"
-    " raise RuntimeError('child cwd returned before module execution')\n"
-    "runpy.run_module(module,run_name='__main__')\n"
+    + _SEAL_CHILD_SYS_PATH_SCRIPT
+    + "sys.argv=[module,*sys.argv[4:]]\n"
+    "if (sys.path is not _sealed_child_sys_path or "
+    "tuple(sys.path)!=_frozen_child_sys_path):"
+    " raise RuntimeError('child import path seal drifted before module')\n"
+    "try:\n"
+    " runpy.run_module(module,run_name='__main__')\n"
+    "finally:\n"
+    " if (sys.path is not _sealed_child_sys_path or "
+    "tuple(sys.path)!=_frozen_child_sys_path):"
+    "  raise RuntimeError('child import path seal drifted after module')\n"
 )
 
 

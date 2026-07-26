@@ -9,11 +9,13 @@
 >   会从共享 `/tmp` 生成并执行 Python，已作为 implementation-invalid 永久关闭；事前 v2
 >   addendum 改用同一 content-addressed MiniLM 的 direct Transformers mean-pooling backend。v2
 >   live probe 又发现 Hippo child 保留 cwd 作为 Python import root，仍在 canary/source 前关闭；
->   v3 只移除该路径。最终 74/74 离线测试及独立终审通过；双 Python filesystem closure、source-free canary
+>   v3 的 pre-scrub 随后被 `litellm` 再次追加 cwd，亦在 canary/source 前关闭；最后的 v4
+>   对整个 child 生命周期封存 `sys.path`。74/74 离线测试及独立终审通过；双 Python filesystem closure、
+>   source-free canary
 >   的真实 GPU1-overlap→GPU0-formation→cache-release→GPU0-Hippo 顺序、每 GPU 最多一个
 >   Hippo process、canary/formal 一次性 claim、promotion 后才可首次 decode TEST，以及
 >   `CPUQuota=800% / MemoryMax=40G / TasksMax=64` 均已闭合。当前仍只是
->   **pre-source v3 implementation-ready**：v3 implementation freeze 与真实 canary 尚未生成/执行，
+>   **pre-source v4 implementation-ready**：v4 implementation freeze 与真实 canary 尚未生成/执行，
 >   HiTab 四个正式文件尚未下载，三臂
 >   measurement、evaluator promotion 与 L5 都尚未发生
 > - 最新 AVeriTeC P1 终态：独立 official source/cohort、v4 source-free 双 GPU canary、execution/launch freeze
@@ -4812,12 +4814,29 @@ model cwd 留作 Python import root。此时 v2 canary attempt、HiTab source、
 并证明相对模型路径语义不变。study、direct MiniLM、family、selection、DMC1、promotion、primary 与唯一
 production-isomorphic canary 均未改变，也没有新增 behavior/efficacy gate。
 
-当前 v3 source-free code、design、units 与 74/74 离线测试已通过独立终审；design self hash 为
-`9f060347…6dba`，v2/v3 addendum self hash 分别为 `b5cb382e…149`、`fe55b40f…ca506`。截至本节写入时，
-HiTab source body download/parse、secret、selected item、formal model inference、Hippo action、qrel open、
-score、API/online evaluator 均为 0。故这是一份 **v3 implementation-ready prospective amendment**，不是
-feasibility 或 efficacy positive。下一步只能按固定顺序生成并 live-verify v3 implementation freeze，运行唯一真实
-source-free canary，成功后才下载四个固定文件并形成 execution freeze，最后一次 formal；任何失败都终止 v3，
+v3 implementation freeze 的 file/self SHA-256 为 `40275c5d…da61` / `308c3bfd…5863`，但 unitlike
+child probe 仍 fail-closed。静态定位确认不是另一种 source 或模型问题：冻结的 LiteLLM 顶层导入
+`litellm.proxy.proxy_cli`，其第 21 行明确执行 `sys.path.append(os.getcwd())`，把已经移除的 cwd 在 import
+过程中重新加入。v3 canary attempt、HiTab source、model action、qrel 与 score 仍全为 0，因此 v3 同样只作为
+source-free implementation-invalid 保存。
+
+最后的 v4 不再按库名追加过滤项，而是把 child 的初始 exact path sequence 变成贯穿 import probe 与完整
+`runpy` worker 生命周期的 fail-closed list subclass：只对空/cwd alias 与 exact frozen duplicate 做 no-op，
+任何其他新增、删除、切片、`+=`/`*=`、重绑或顺序漂移均失败；probe 每次 import 后及输出前复验，
+worker 在 `runpy` 前和 `try/finally` 后复验，因此 `SystemExit(0)` 也不能绕过。合成 subprocess 已覆盖
+cwd absolute/`.`/symlink alias、unknown absolute path、destructive mutation、rebind、`*=` 与 SystemExit，
+并保持相对模型资产解析。这里的 closure claim 只针对已冻结、非对抗依赖使用的常规 `sys.path` API，不声称
+list subclass 是恶意 Python sandbox；整体重绑等旁路由紧邻检查点 fail-closed。v4 是同一个 pre-source
+import-closure defect 的最终结构性修复，不是新增 efficacy gate；
+若它失败，HiTab P1 直接结束，不再形成 v5/v6。
+
+当前 v4 source-free code、design、units 与 74/74 离线测试已通过独立终审；design self hash 为
+`9f060347…6dba`，v2/v3/v4 addendum self hash 分别为
+`b5cb382e…149`、`fe55b40f…ca506`、`b15c6f80…91c9`。截至本节写入时，HiTab source body
+download/parse、secret、selected item、formal model inference、Hippo action、qrel open、score、
+API/online evaluator 均为 0。故这是一份 **v4 implementation-ready prospective amendment**，不是
+feasibility 或 efficacy positive。下一步只能按固定顺序生成并 live-verify v4 implementation freeze，运行唯一真实
+source-free canary，成功后才下载四个固定文件并形成 execution freeze，最后一次 formal；任何失败都终止 HiTab P1，
 不 retry、resample、换模型、改 family、缩 quota 或补 gate。总目标的现实域双 baseline 稳定优势与 L5 在正式结果前
 仍保持未证明。
 
@@ -4828,6 +4847,7 @@ source-free canary，成功后才下载四个固定文件并形成 execution fre
   [`study design`](../manifests/hitab_p1_dmc1_hierarchical_set_evaluator_design_v1.json)；
   [`direct Transformers MiniLM v2 addendum`](../manifests/hitab_p1_direct_transformers_minilm_addendum_v2.json)；
   [`child cwd sanitization v3 addendum`](../manifests/hitab_p1_child_cwd_sanitization_addendum_v3.json)；
+  [`sealed child sys.path v4 addendum`](../manifests/hitab_p1_sealed_child_sys_path_addendum_v4.json)；
   [`DMC1 core`](../assumption_agent/benchmarks/hitab_p1_dmc1_core_v1.py)；
   [`runtime`](../assumption_agent/benchmarks/hitab_p1_runtime_v1.py)；
   [`source acquisition`](../assumption_agent/benchmarks/hitab_p1_source_acquisition_v1.py)；

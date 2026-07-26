@@ -856,9 +856,9 @@ def test_module_cache_scan_bypasses_lazy_module_getattr() -> None:
     ]
 
 
-def test_v3_outer_excludes_sentence_transformers_and_tmp_modules() -> None:
+def test_v4_outer_excludes_sentence_transformers_and_tmp_modules() -> None:
     assert runner.IMPLEMENTATION_REVISION == (
-        "direct_transformers_minilm_v3_child_cwd_sanitized"
+        "direct_transformers_minilm_v4_sealed_child_sys_path"
     )
     assert (
         "sentence_transformers"
@@ -888,6 +888,53 @@ def test_child_probe_and_bootstrap_remove_every_cwd_alias(
     model_cwd.mkdir()
     model_cwd_alias = tmp_path / "model-cwd-alias"
     model_cwd_alias.symlink_to(model_cwd, target_is_directory=True)
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "synthetic_path_mutator.py").write_text(
+        "import os,sys\n"
+        "sys.path.append(os.getcwd())\n"
+        "sys.path.insert(0,'.')\n"
+        "sys.path.extend([os.getcwd(),sys.path[0]])\n"
+        "sys.path += [os.getcwd()]\n",
+        encoding="ascii",
+    )
+    bad_path = tmp_path / "unfrozen-import-root"
+    bad_path.mkdir()
+    forbidden_mutators = {
+        "append": f"sys.path.append({str(bad_path)!r})",
+        "insert": f"sys.path.insert(0,{str(bad_path)!r})",
+        "extend": f"sys.path.extend([{str(bad_path)!r}])",
+        "iadd": f"sys.path += [{str(bad_path)!r}]",
+        "set_index": f"sys.path[0]={str(bad_path)!r}",
+        "set_slice": f"sys.path[:]=[{str(bad_path)!r}]",
+        "delete_index": "del sys.path[0]",
+        "delete_slice": "del sys.path[:]",
+        "clear": "sys.path.clear()",
+        "pop": "sys.path.pop()",
+        "remove": "sys.path.remove(sys.path[0])",
+        "reverse": "sys.path.reverse()",
+        "sort": "sys.path.sort()",
+        "multiply": "sys.path *= 1",
+    }
+    for label, operation in forbidden_mutators.items():
+        (project / f"synthetic_{label}_mutator.py").write_text(
+            f"import sys\n{operation}\n",
+            encoding="ascii",
+        )
+    (project / "synthetic_rebinding_mutator.py").write_text(
+        "import sys\nsys.path=list(sys.path)\n",
+        encoding="ascii",
+    )
+    (project / "synthetic_pre_output_rebinding.py").write_text(
+        "import sys,types\n"
+        "class RebindOnFile(types.ModuleType):\n"
+        " def __getattribute__(self,name):\n"
+        "  if name=='__file__': sys.path=list(sys.path)\n"
+        "  return super().__getattribute__(name)\n"
+        "sys.modules[__name__].__class__=RebindOnFile\n",
+        encoding="ascii",
+    )
+
     environment = dict(os.environ)
     environment.update(
         {
@@ -895,25 +942,36 @@ def test_child_probe_and_bootstrap_remove_every_cwd_alias(
             "PYTHONNOUSERSITE": "1",
             "PYTHONPYCACHEPREFIX": "/dev/null",
             "PYTHONPATH": os.pathsep.join(
-                [str(model_cwd), ".", str(model_cwd_alias)]
+                [
+                    str(project),
+                    str(model_cwd),
+                    ".",
+                    str(model_cwd_alias),
+                ]
             ),
         }
     )
-    completed = subprocess.run(
-        [
-            sys.executable,
-            "-S",
-            "-B",
-            "-c",
-            runner._IMPORT_PROBE_SCRIPT,
-            json.dumps({"json": None}, separators=(",", ":")),
-        ],
-        cwd=model_cwd,
-        check=False,
-        env=environment,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+
+    def run_probe(module: str) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.run(
+            [
+                sys.executable,
+                "-S",
+                "-B",
+                "-c",
+                runner._IMPORT_PROBE_SCRIPT,
+                json.dumps(
+                    {module: None}, separators=(",", ":")
+                ),
+            ],
+            cwd=model_cwd,
+            check=False,
+            env=environment,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+    completed = run_probe("synthetic_path_mutator")
     assert completed.returncode == 0, completed.stderr.decode(
         "utf-8", errors="replace"
     )
@@ -924,9 +982,46 @@ def test_child_probe_and_bootstrap_remove_every_cwd_alias(
         Path(path).resolve() != model_cwd.resolve()
         for path in probe_paths
     )
+    for label in forbidden_mutators:
+        module = f"synthetic_{label}_mutator"
+        rejected = run_probe(module)
+        assert rejected.returncode != 0
+        message = (
+            "unfrozen child import path mutation"
+            if label in {"append", "insert", "extend", "iadd"}
+            else "frozen child import path mutation"
+        )
+        assert message in rejected.stderr.decode(
+            "utf-8", errors="replace"
+        )
+    rejected = run_probe("synthetic_rebinding_mutator")
+    assert rejected.returncode != 0
+    assert "child import path seal drifted" in rejected.stderr.decode(
+        "utf-8", errors="replace"
+    )
+    rejected = run_probe("synthetic_pre_output_rebinding")
+    assert rejected.returncode != 0
+    assert (
+        "child import path seal drifted before output"
+        in rejected.stderr.decode("utf-8", errors="replace")
+    )
 
-    project = tmp_path / "project"
-    project.mkdir()
+    bootstrap_source = runner._HIPPO_CHILD_BOOTSTRAP_SCRIPT
+    seal_position = bootstrap_source.index(
+        "_sealed_child_sys_path=sys.path"
+    )
+    pre_runpy_position = bootstrap_source.index(
+        "child import path seal drifted before module"
+    )
+    runpy_position = bootstrap_source.index("runpy.run_module")
+    finally_position = bootstrap_source.index("finally:")
+    assert (
+        seal_position
+        < pre_runpy_position
+        < runpy_position
+        < finally_position
+    )
+
     asset = tmp_path / "asset"
     asset.mkdir()
     (model_cwd / "smollm2").symlink_to(
@@ -940,7 +1035,10 @@ def test_child_probe_and_bootstrap_remove_every_cwd_alias(
         "expected=Path(sys.argv[2]).resolve()\n"
         "if Path('smollm2').resolve()!=expected:"
         " raise RuntimeError('relative model path drifted')\n"
-        "output.write_text(json.dumps(sys.path),encoding='ascii')\n",
+        "sys.path.append(str(Path.cwd()))\n"
+        "sys.path.insert(0,'.')\n"
+        "output.write_text(json.dumps(sys.path),encoding='ascii')\n"
+        "raise SystemExit(0)\n",
         encoding="ascii",
     )
     environment["PYTHONPATH"] = os.pathsep.join(
@@ -974,6 +1072,34 @@ def test_child_probe_and_bootstrap_remove_every_cwd_alias(
     assert all(
         Path(path).resolve() != model_cwd.resolve()
         for path in bootstrap_paths
+    )
+
+    (project / "synthetic_rebinding_child.py").write_text(
+        "import sys\n"
+        "sys.path=list(sys.path)\n"
+        "raise SystemExit(0)\n",
+        encoding="ascii",
+    )
+    rejected = subprocess.run(
+        [
+            sys.executable,
+            "-S",
+            "-B",
+            "-c",
+            runner._HIPPO_CHILD_BOOTSTRAP_SCRIPT,
+            str(project),
+            str(Path(sysconfig.get_path("stdlib")).resolve()),
+            "synthetic_rebinding_child",
+        ],
+        cwd=model_cwd,
+        check=False,
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    assert rejected.returncode != 0
+    assert "child import path seal drifted after module" in (
+        rejected.stderr.decode("utf-8", errors="replace")
     )
 
 

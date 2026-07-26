@@ -489,3 +489,36 @@ def test_direct_minilm_v2_topology_and_addendum_are_frozen(
             sort_keys=True,
         ).encode("ascii")
     ).hexdigest()
+
+    v4_manifest_path = (
+        Path(runtime.__file__).resolve().parents[2]
+        / "manifests/hitab_p1_sealed_child_sys_path_addendum_v4.json"
+    )
+    v4_manifest = json.loads(
+        v4_manifest_path.read_text(encoding="utf-8")
+    )
+    v4_claimed = v4_manifest.pop("self_sha256")
+    assert v4_claimed == hashlib.sha256(
+        json.dumps(
+            v4_manifest,
+            allow_nan=False,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("ascii")
+    ).hexdigest()
+    disposition = v4_manifest["pre_source_disposition"]
+    assert disposition["v3_implementation_freeze"] == {
+        "file_sha256": (
+            "40275c5dfa772edcf198bc86fae55077a3f00e054d92dde92f065965376cda61"
+        ),
+        "self_sha256": (
+            "308c3bfd51623b9d4505256ae681fc5edf1fa300f19028e77a826e2fd5d45863"
+        ),
+        "status": "source_free_implementation_invalid",
+    }
+    assert disposition["v3_source_free_canary_attempt_count"] == 0
+    assert (
+        v4_manifest["terminal_policy"]["implementation_v3"]
+        == "closed_as_source_free_implementation_invalid"
+    )
