@@ -4852,7 +4852,52 @@ Agent 相对 RAW 或 official HippoRAG 的性能负结果。按 v4 事前停止�
 对 RAW 与 official HippoRAG 的稳定优势，以及 evaluator promotion 后改善 untouched M_search 的 L5。
 下一步只能换全新独立 study/source/cohort，并采用不依赖该 shared-temporary Python 行为的 runtime backend。
 
+### 12.51 2026-07-27 LoCoMo P0：公开 source topology 不满足冻结 contract，P1 未形成
+
+HiTab 关闭后没有在同源补 v5/v6。新的 `LOCOMO_P0_PUBLIC_SCHEMA_TOPOLOGY_V1` 选择 LoCoMo 固定
+commit `3eb6f2c5…b376`，事前把 category 4/1/2 固定为 SINGLE_HOP/MULTI_HOP/TEMPORAL，要求十个
+conversation 均在 qrel cardinality 1–5 后每 family 至少有 12 项，从而无内容选择地支持 conversation-group
+disjoint `2/4/4` formation/A_hold/M_search。P0 只允许一次公开、非评分 schema/topology/capacity 资格化；
+不允许生成 secret/cohort/action/evaluator/qrel archive/score，也不允许根据 aggregate 修改 parser、quota、
+family 或 partition。
+
+第一次 systemd launcher invocation 在 LoCoMo module import 前即因远端最小快照漏带已提交的
+`assumption_agent/models.py` 停止：`InvocationID=f54fbb5b…4354`、`NRestarts=0`、CPU 19,977,000 ns，
+且 `p0_work_v1`、pre-network attempt marker、source directory 和下载均不存在。它被单独记为
+pre-entrypoint implementation-invalid，不计 source attempt。补齐同一提交中 package import 与冻结 verifier
+已经绑定的 test 文件后，source-free import/verifier 才通过；unit、qualification module、source identity、
+family、quota 与 partition 没有改变。
+
+唯一真实 P0 attempt（`InvocationID=ee573f78…0ad`、`NRestarts=0`）随后下载并验证三份固定官方文件，
+data/README/LICENSE 的 size 与 Git blob 全部匹配，data SHA-256 为 `79fa87e9…8ff4`。strict JSON 只 decode
+一次，安全 aggregate 得到 10 conversations、5,882 turns、1,986 QA、2,815 evidence links，其中 2,806
+可映射。公开 category 总数与论文一致：single-hop 841、multi-hop 282、temporal 321、open-domain 96、
+adversarial 446。
+
+冻结资格没有通过。决定性的 capacity 反例是一个 conversation 在 qrel 1–5 后只有 11 个 eligible
+multi-hop，故 10 个 conversation 中只有 9 个满足 multi-hop quota=12；此外 strict schema 还记录 1,471
+个 aggregate anomaly，包括官方 multimodal turn 的额外/部分字段、空 optional value、一个缺失 session-date
+pair、9 个 evidence grammar/映射问题、一个重复 evidence，以及 6 个 category 1–4 非文本 answer。
+这些都是事前 contract 与 source 的不相容，不是 Agent/RAW/HippoRAG 性能结果。receipt 已写为
+`terminal_not_qualified_no_same_source_revision`，同源不 replay、不把 quota 改成 11、不为观察到的字段补
+allowlist，也不形成 LoCoMo P1；typed core 只保留为 source-agnostic implementation artifact，不能算效果证据。
+
+因此两个总缺口仍原样存在：现实域三个可辩护 family 对 RAW 与 official HippoRAG 的稳定优势尚未建立，
+L5 的独立 A_hold 晋升后改善 untouched M_search 也尚未建立。下一来源必须同时具备可冻结的公开 payload、
+原生或事前可辩护的 family、精确 retrieval qrel 与足够独立 cluster；不能继续以降低同源资格条件的方式寻找
+“通过”结果。
+
 ## 附录 A：关键证据索引
+
+- LoCoMo P0 public non-scoring terminal chain（无 P1/action/score）：
+  [`source custody`](../manifests/locomo_p0_public_source_custody_v1.json)；
+  [`qualification freeze`](../manifests/locomo_p0_public_schema_qualification_freeze_v1.json)；
+  [`qualification implementation`](../assumption_agent/benchmarks/locomo_p0_public_source_qualification_v1.py)；
+  [`typed source-agnostic core`](../assumption_agent/benchmarks/locomo_p1_typed_core_v1.py)；
+  [`pre-entrypoint disposition`](../manifests/locomo_p0_preentrypoint_deployment_failure_disposition_v1.json)；
+  [`snapshot correction addendum`](../manifests/locomo_p0_preentrypoint_deployment_correction_addendum_v2.json)；
+  [`safe qualification result`](../manifests/locomo_p0_public_source_qualification_result_v1.json)；
+  [`safe terminal`](../manifests/locomo_p0_public_source_qualification_terminal_v1.json)
 
 - HiTab P1 pre-source implementation chain（正式 source/model/action/score 均为 0）：
   [`public source custody`](../manifests/hitab_p1_public_source_custody_v1.json)；
