@@ -14,11 +14,11 @@
 >   source-free canary
 >   的真实 GPU1-overlap→GPU0-formation→cache-release→GPU0-Hippo 顺序、每 GPU 最多一个
 >   Hippo process、canary/formal 一次性 claim、promotion 后才可首次 decode TEST，以及
->   `CPUQuota=800% / MemoryMax=40G / TasksMax=64` 均已闭合。当前仍只是
->   **pre-source v4 implementation-frozen**：v4 implementation freeze 与双 runtime live verification
->   已通过；两张 311linux GPU 仍被无关任务占用，唯一真实 canary 尚未执行，
->   HiTab 四个正式文件尚未下载，三臂
->   measurement、evaluator promotion 与 L5 都尚未发生
+>   `CPUQuota=800% / MemoryMax=40G / TasksMax=64` 均已闭合。双卡空闲后唯一 v4 canary
+>   有效启动一次，但 direct MiniLM 在 AutoModel 加载后命中 shared-temporary Python guard，
+>   未进入 public item execution，qualified receipt 为 0。HiTab 四个正式文件始终未下载，
+>   source/cohort/Hippo action/qrel/score 均为 0；该 study 已按事前规则以
+>   **source-free implementation-invalid / efficacy unknown / no replay** 终止，不能支持三臂优势或 L5
 > - 最新 AVeriTeC P1 终态：独立 official source/cohort、v4 source-free 双 GPU canary、execution/launch freeze
 >   与唯一 formal launch 均有效；systemd 为 success、`NRestarts=0`，全程 0 API/online evaluator、0 retry/replay。
 >   A_hold 上 E1 相对 E0/RAW 为 36/36 utility tie、净 0、exact tail 1；虽有 19/36 项实际换 recipe 且改变 top-5，
@@ -4831,19 +4831,24 @@ list subclass 是恶意 Python sandbox；整体重绑等旁路由紧邻检查点
 import-closure defect 的最终结构性修复，不是新增 efficacy gate；
 若它失败，HiTab P1 直接结束，不再形成 v5/v6。
 
-当前 v4 source-free code、design、units 与 74/74 离线测试已通过独立终审；design self hash 为
+v4 source-free code、design、units 与 74/74 离线测试已通过独立终审；design self hash 为
 `9f060347…6dba`，v2/v3/v4 addendum self hash 分别为
-`b5cb382e…149`、`fe55b40f…ca506`、`b15c6f80…91c9`。截至本节写入时，HiTab source body
-download/parse、secret、selected item、formal model inference、Hippo action、qrel open、score、
-API/online evaluator 均为 0。远端唯一 v4 implementation freeze 的 file/self SHA-256 为
-`111bf7e6…fdfdc` / `d163f2b4…9cf0`，断网 unitlike 双 runtime live binding self SHA-256 为
-`b12321e7…d3c3`；真实冻结的 LiteLLM import 已通过，未产生 source/canary/action。故这是一份
-**v4 implementation-frozen prospective implementation**，不是 feasibility 或 efficacy positive。
-两张 311linux GPU 当前仍被无关 `scheduleurm-torch-bench` compute process 占用；不干预该任务。下一步只能等待
-两卡同时空闲后运行唯一真实
-source-free canary，成功后才下载四个固定文件并形成 execution freeze，最后一次 formal；任何失败都终止 HiTab P1，
-不 retry、resample、换模型、改 family、缩 quota 或补 gate。总目标的现实域双 baseline 稳定优势与 L5 在正式结果前
-仍保持未证明。
+`b5cb382e…149`、`fe55b40f…ca506`、`b15c6f80…91c9`。远端唯一 v4 implementation freeze 的
+file/self SHA-256 为 `111bf7e6…fdfdc` / `d163f2b4…9cf0`，断网 unitlike 双 runtime live binding
+self SHA-256 为 `b12321e7…d3c3`；真实冻结的 LiteLLM import 在这里已经通过。
+
+两张 GPU 空闲后，唯一 canary service 于 06:54:30 有效启动：`NRestarts=0`、40 GiB、8 CPU、
+仅 AF_UNIX，attempt file/self SHA-256 为 `c97c9133…c8a0` / `10b4b224…7b90`。Planner 与
+cross-encoder 加载后，direct Transformers MiniLM 完成 AutoModel 权重加载，但在 encoder 赋值和任何 public
+canary item execution 前，外层 guard 再次发现 shared-temporary Python path；静态错误 literal SHA-256 为
+`f7ac238d…dd51`。service 于 06:56:10 以 exit 1 fail-closed，qualified receipt、Hippo child launch、
+source acquisition freeze、四个 GET、HiTab decode/selection、qrel、score、API/online evaluator 均为 0。
+
+因此 HiTab P1 的终态是 **source-free implementation-invalid / efficacy unknown / primary=false**，不是
+Agent 相对 RAW 或 official HippoRAG 的性能负结果。按 v4 事前停止规则，不 retry、resample、换模型、
+改 family、补 allowlist/gate，也不形成 v5/v6；HiTab P1 永久结束。总目标仍同时缺少现实域三个 family
+对 RAW 与 official HippoRAG 的稳定优势，以及 evaluator promotion 后改善 untouched M_search 的 L5。
+下一步只能换全新独立 study/source/cohort，并采用不依赖该 shared-temporary Python 行为的 runtime backend。
 
 ## 附录 A：关键证据索引
 
@@ -4854,6 +4859,7 @@ source-free canary，成功后才下载四个固定文件并形成 execution fre
   [`child cwd sanitization v3 addendum`](../manifests/hitab_p1_child_cwd_sanitization_addendum_v3.json)；
   [`sealed child sys.path v4 addendum`](../manifests/hitab_p1_sealed_child_sys_path_addendum_v4.json)；
   [`v4 implementation freeze`](../manifests/hitab_p1_implementation_freeze_v1.json)；
+  [`v4 source-free failure disposition`](../manifests/hitab_p1_source_free_canary_v4_failure_disposition.json)；
   [`DMC1 core`](../assumption_agent/benchmarks/hitab_p1_dmc1_core_v1.py)；
   [`runtime`](../assumption_agent/benchmarks/hitab_p1_runtime_v1.py)；
   [`source acquisition`](../assumption_agent/benchmarks/hitab_p1_source_acquisition_v1.py)；
