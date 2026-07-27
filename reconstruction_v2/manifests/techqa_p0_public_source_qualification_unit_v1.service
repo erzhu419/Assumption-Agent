@@ -1,0 +1,16 @@
+[Unit]
+Description=TechQA P0 one-shot public non-scoring source qualification v1
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/techqa_p1_20260727
+UMask=0077
+ExecStartPre=/usr/bin/test ! -e %h/techqa_p1_20260727/p0_work_v1
+ExecStart=/usr/bin/env -i HOME=%h LANG=C.UTF-8 LC_ALL=C.UTF-8 PATH=/home/erzhu419/techqa_p1_20260727/source_runtime_v1/venv/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONHASHSEED=0 PYTHONNOUSERSITE=1 /home/erzhu419/techqa_p1_20260727/source_runtime_v1/venv/bin/python -I -B %h/techqa_p1_20260727/reconstruction_v2/assumption_agent/benchmarks/techqa_p0_public_source_qualification_v1.py acquire-and-qualify --work-root %h/techqa_p1_20260727/p0_work_v1 --hf-runtime-root /home/erzhu419/techqa_p1_20260727/source_runtime_v1/venv --hf-runtime-manifest /home/erzhu419/techqa_p1_20260727/source_runtime_v1/venv_files.sha256 --hf-runtime-manifest-sha256 d80843442b9840ffca8bbfacffd3263bb23aad9dc38150b7d432958d249ef745
+CPUQuota=400%
+MemoryMax=4G
+TasksMax=64
+KillMode=control-group
+Restart=no
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+TimeoutStartSec=infinity
