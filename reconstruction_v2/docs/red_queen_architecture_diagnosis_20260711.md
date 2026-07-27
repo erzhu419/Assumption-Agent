@@ -2,6 +2,16 @@
 
 > - 初版日期：2026-07-11
 > - 本次复核：2026-07-27
+> - 当前 BioASQ P1：独立 study `BIOASQ_P1_TYPED_QUESTION_EVIDENCE_EVALUATOR_L5_V1`
+>   已完成公开 P0、source-free coordinate canary、legacy official HippoRAG closure、formal execution
+>   freeze 与 311linux 唯一正式启动；311 未联网下载，所有模型均为既有 exact-hash 本地资产。正式
+>   source 只打开、哈希和 decode 一次，四块 cohort 与 2,900-passage corpus 已密封；随后 GPU1
+>   coordinate initial worker 与 GPU0 HippoRAG global build 各启动一次。17:11:47，最后一个登录
+>   session 关闭且 `Linger=no`，用户级 systemd manager 整体触发 `exit.target`，以 SIGTERM 同时停止
+>   parent formal service 和两个 child unit。中断前没有 coordinate/Hippo output、A_form action
+>   archive、qrel release、evaluator、A_hold、score 或 M_search；没有 outer success/failure terminal，
+>   restart/replay 均为 0。该 root 严格终止为 **post-source-selection infrastructure-invalid /
+>   efficacy unknown / no replay**，不能在启用 linger 后重启同一 source/study/cohort
 > - 当前 DSTC9 P1：全新 study `DSTC9_P1_HIERARCHICAL_KNOWLEDGE_EVALUATOR_L5_V1`
 >   已由本机 WSL 对 official fixed commit 完成一次 content-addressed 下载和哈希校验，再一次同步到不通
 >   外网的 311linux；311 未向 Hugging Face、GitHub 或其他外部 source 发请求。公开 P0 有效资格化
@@ -5006,7 +5016,71 @@ runtime closure 做一次 source-free import/version/entrypoint 资格化；这�
 不是新增 efficacy gate。总目标仍缺现实域至少三个可辩护 family 同时稳定胜过 RAW 与 official HippoRAG，
 以及 evaluator 在独立 A_hold 晋升后改善预冻结 untouched M_search 的 L5。
 
+### 12.55 2026-07-27 BioASQ P1：正式 source 已形成，但用户级 systemd manager 随登录会话退出
+
+DSTC9 的 parser dependency 终止后没有补装 `ijson` 重跑。新的 BioASQ study
+`BIOASQ_P1_TYPED_QUESTION_EVIDENCE_EVALUATOR_L5_V1` 固定本机已校验后中继到 311linux 的
+`training11b.json`（37,639,648 bytes，SHA-256 `6df65686…eac98`），先以公开非评分 P0
+证明 yesno/factoid/list/summary 四个 family 的 component capacity，再冻结
+`A_form/F_search/A_hold/M_search=96/32/48/48`、2,900-passage shared corpus、E0、四个 typed
+evidence-set recipe、RAW、official HippoRAG、A_form-only E1、A_hold promotion 与 conditional
+untouched M_search。评价完全离线；311 不通外网，正式所需 MiniLM、cross encoder、SmolLM2、
+HippoRAG source 和两个 Python runtime 均已驻留并逐项 exact-hash 通过，不需要 Hugging Face 或其他下载。
+
+source-free coordinate canary 只启动一次并成功：GPU1 对 2,900 synthetic passages 和一个 query 完成
+MiniLM/CE，constructor/formal encode count 为 2/1，formal source/action/evaluator/score/API/retry 均为
+0；同一时刻形成 BioASQ study ID 的 current-hardware receipt，并与旧 DSTC9 official HippoRAG
+canary hardware exact 一致。formal execution binding `42e29673…2998f`、freeze
+`07726a72…a8a4`、C2 commit `5588051d…f34a` 与 archive `1f31867d…9dc0` 随后封存。唯一 formal
+service 于 17:01:26 启动；preflight、source compiler 与 selection 均成功，source open/hash/decode
+各为 1，private cohort/corpus 已形成。controller 随后并行启动一次 GPU1 initial-176 coordinate
+worker 和一次 GPU0 HippoRAG global build。
+
+17:11:36，远端最后一个 SSH/login session 断开；当时 `loginctl show-user` 的冻结后诊断为
+`Linger=no`。17:11:47，用户级 systemd manager 激活 `exit.target`，先停止 default target、DBus
+与两个 transient child unit，再以 `status=15/TERM` 停止 formal parent。journal 的因果顺序和
+全 user-manager shutdown 证明这不是模型 OOM、provider、311 外网、candidate、source parser 或
+formal code 自行退出。service start=1、restart=0；中断时 coordinate score 与 Hippo build receipt
+均未写出，A_form action archive、A_form qrel、E1、F_search behavior、A_hold action/qrel、promotion、
+score、M_search 与 outer/controller terminal 全都不存在。M_search 从未由 controller materialize。
+
+由于 formal source 和 secret cohort 已消费，这个 root 不能在启用 linger 后恢复、restart 或 replay；
+其终态是 **post-source-selection infrastructure-invalid / efficacy unknown / no replay**，不是 Agent
+相对 RAW/HippoRAG 的效果负结果。下一次只能使用新的独立 source/study/cohort，而且在任何正式 source
+或 secret 前必须先完成与生产同构的持久化资格：`Linger=yes` 或 system-level service、主动关闭所有
+SSH session 后 user manager 仍存活、两个真实 child unit 持续运行并自然终止。它是执行容器资格，不是
+新增 efficacy gate。
+
+从 BIRCO P1 起按注册 study ID 严格计数，到本次 BioASQ 一共已经切换 **13 个 study**：
+BIRCO、MMQA、MAUD P1、MAUD P2、EBM-NLP、AVeriTeC、WiCE P0、HiTab、LoCoMo P0、TechQA P0、
+MultiDoc2Dial、DSTC9、BioASQ；其中 MAUD P1/P2 共用一个 source family，所以是 **12 个独立 source
+family**。若把紧邻 BIRCO 之前同一轮目标驱动的 FRAMES 与 FanOutQA 也计入，则是 **15 个 study /
+14 个 source family**。这 13 个 study 中，只有 AVeriTeC 完整进入有效 A_hold 三臂 efficacy scoring；
+BIRCO 停在 F_search identifiability，BioASQ 停在 action output 前，其余大多终止在 source/P0、
+source-free runtime、acquisition 或正式 source schema。这个比例说明当前主要损耗不是“科学假设被
+13 次否定”，而是 study ordering 与 production-envelope 资格不足；继续随机换数据集不会提高成功率。
+
+总目标在工程上仍可实现，但实证结论不能保证。已有证据分别证明了必要子链：HybridQA 已真实完成
+`A_hold evaluator promotion → authorization → untouched M_search`，只是 M_search 增益不显著；BRIGHT
+P9 在三个 family 都高于 HippoRAG，却没有在三个 family 都高于 RAW；Hotpot/2Wiki/EntailmentBank
+又证明 frozen Agent 在若干 fresh retrieval cohort 能明显高于 RAW，并可接近或高于 item-local
+HippoRAG。因此两个目标并非被逻辑或现有数据否定，但还没有在同一现实 study 中同时成立。真正的效果
+缺口是 action generator 必须产生 RAW top-5 之外的互补证据，并让 evaluator 在独立错误分布上选择
+这种真实增益；基础设施缺口则应一次解决，不再让它消耗新 cohort。下一路线应先暂停 efficacy study
+轮换，完成 persistent-service source-free soak，再只选择一个已公开 topology/schema、可本地完整
+资格化且 action 机制与 family 划分都有因果含义的新 source，一次冻结并执行。
+
 ## 附录 A：关键证据索引
+
+- BioASQ P1 source-free canary、formal freeze 与 post-source infrastructure interruption chain：
+  [`study design`](../manifests/bioasq_p1_typed_evidence_set_evaluator_study_design_v1.json)；
+  [`P0 aggregate receipt`](../manifests/bioasq_p0_public_source_qualification_receipt_v1.json)；
+  [`coordinate canary freeze`](../manifests/bioasq_p1_source_free_coordinate_canary_freeze_v1.json)；
+  [`coordinate canary receipt`](../manifests/bioasq_p1_source_free_coordinate_canary_receipt_v1.json)；
+  [`formal execution binding`](../manifests/bioasq_p1_formal_execution_binding_v1.json)；
+  [`formal execution freeze`](../manifests/bioasq_p1_execution_freeze_v1.json)；
+  [`formal runtime`](../replication_runtime/bioasq_p1_formal_v1/runner.py)；
+  [`infrastructure interruption disposition`](../manifests/bioasq_p1_formal_infrastructure_interruption_disposition_v1.json)
 
 - DSTC9 P0/source-free canary/formal terminal chain（formal action/qrel/score 均未进入）：
   [`public source custody`](../manifests/dstc9_p1_public_source_custody_v1.json)；
