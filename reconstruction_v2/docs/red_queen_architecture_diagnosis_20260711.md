@@ -4922,7 +4922,43 @@ TechQA 同源现已终止：不 retry/resume、不换 mirror/provider/revision/f
 study/cohort，并优先选择已经完整本地冻结或能由单一小型 content-addressed artifact 取得的来源，不能继续
 把临时大文件传输当作效果研究的前置不确定性。
 
+### 12.53 2026-07-27 MultiDoc2Dial P0：本机一次下载/中继成功，archive topology 资格终止
+
+TechQA 关闭后另立 `MULTIDOC2DIAL_P1_TYPED_DIALOGUE_RETRIEVAL_L5_V1`，没有复用其 source、cohort、
+family 或效果条件。official MultiDoc2Dial commit 固定为 `6b756598…ffe9e0`，唯一 archive Git blob 为
+`9d8dd4a2…191672`。由于 311linux 不通外网，获取路径按新的固定边界执行：本机 WSL 对 commit-addressed
+official GitHub raw URL 只下载一次，随后验证 size=`6,868,509`、Git blob 与 whole-file SHA-256
+`f0c034c2…1ce00`；同一字节流再只通过一次 SCP 中继到 311linux，远端 mode=`0600`，size/SHA-256
+复核一致。311linux 没有向 Hugging Face、GitHub 或其他外部 source 发请求。
+
+P0 在 source 打开前已提交 typed core、19 项 qualifier tests、systemd unit 与 execution freeze；P0+typed
+合计 28 项离线测试通过。唯一 service invocation 为 `be2f7961…58b2`，`NRestarts=0`。实现先验证完整
+archive size、SHA-256 与 Git blob，随后只打开一次 ZIP central directory，并在
+`_validate_topology` 立即以 `ZIP regular-member whitelist drifted` 终止。该分支位于任何
+`archive.open(member)` 之前，因此 document/TRAIN/VALIDATION/TEST payload open count 均为 0；
+`work` 目录为空，没有 private eligibility manifest、safe aggregate、secret/cohort、action、qrel、score
+或 evaluator 结果。准确分类是 **pre-efficacy source-topology-contract incompatible / efficacy unknown**，
+不是 Agent 输给 RAW/HippoRAG，也不是 L5 negative。
+
+冻结 terminal policy 现已执行：不在观察 central directory 后修改四-member whitelist，不重启、不重放、
+不换 revision/file/provider，也不进入同源 P1。MultiDoc2Dial 的 source-agnostic typed core 仅保留为实现
+artifact。下一独立来源将把公开 archive topology 身份验证放在 acquisition/custody 阶段一次完成，再冻结
+效果 study；这是把已知格式不确定性移出密封效果 epoch，不是新增可反复修改的 efficacy gate。外部 source
+仍只允许“本机 content-addressed 下载并校验 → 一次同步 311”，正式 action 与评分继续全离线。
+
+本终态不改变总目标的两个缺口：现实域三个可辩护 family 尚未同时稳定胜过 RAW 与 official HippoRAG；
+也仍没有 evaluator 在独立 A_hold 晋升后改善预冻结 untouched M_search。后续必须换独立
+source/study/cohort，不能用 MultiDoc2Dial topology 观察反向修同源候选。
+
 ## 附录 A：关键证据索引
+
+- MultiDoc2Dial P0 local-download/remote-relay terminal chain（member payload/P1/action/score 均为 0）：
+  [`source custody`](../manifests/multidoc2dial_p0_public_source_custody_v1.json)；
+  [`local acquisition and relay receipt`](../manifests/multidoc2dial_p0_public_source_acquisition_receipt_v1.json)；
+  [`source-agnostic typed core`](../assumption_agent/benchmarks/multidoc2dial_p1_typed_core_v1.py)；
+  [`public qualification implementation`](../assumption_agent/benchmarks/multidoc2dial_p0_public_source_qualification_v1.py)；
+  [`qualification freeze`](../manifests/multidoc2dial_p0_public_source_qualification_freeze_v1.json)；
+  [`terminal disposition`](../manifests/multidoc2dial_p0_public_source_qualification_disposition_v1.json)
 
 - TechQA P0 single-download terminal chain（archive payload/P1/action/score 均为 0）：
   [`source custody`](../manifests/techqa_p0_public_source_custody_v1.json)；
