@@ -67,6 +67,9 @@ SYSTEMD_NETWORK_PROPERTIES = (
 )
 CUDA_VISIBLE_DEVICES = "0"
 LOGICAL_CUDA_DEVICE = "cuda:0"
+LLM_MODEL_ALIAS = "smollm2"
+EMBEDDING_MODEL_ALIAS = "minilm"
+MODEL_ALIAS_DIRECTORY = "model_aliases"
 
 # The adapter executes ``env --ignore-environment`` inside the transient
 # service and supplies exactly this allowlist.
@@ -112,6 +115,9 @@ FROZEN_CORE_CONFIG: dict[str, Any] = {
     "llm_backend": "Transformers/local_asset",
     "logical_cuda_device": LOGICAL_CUDA_DEVICE,
     "logical_duplicate_expansion": DUPLICATE_EXPANSION_POLICY,
+    "model_path_binding": (
+        "exact_short_symlink_aliases_to_verified_P17_asset_roots_v1"
+    ),
     "max_new_tokens": 4,
     "max_retry_attempts": 0,
     "network_access": "denied_by_transient_unit",
@@ -1158,15 +1164,18 @@ __all__ = [
     "CorpusUnit",
     "DUPLICATE_EXPANSION_POLICY",
     "Dstc9OfficialHippoRAGError",
+    "EMBEDDING_MODEL_ALIAS",
     "FORMAL_QUERY_COUNT_POLICY",
     "FORMAL_QUERY_COUNT_UPPER_BOUND",
     "FROZEN_CORE_CONFIG",
     "IndexTreeSnapshot",
     "LOGICAL_CUDA_DEVICE",
+    "LLM_MODEL_ALIAS",
     "MAX_CORPUS_SIZE",
     "MAX_QUERY_BATCH",
     "MAX_QUERY_COUNT",
     "MIN_CORPUS_SIZE",
+    "MODEL_ALIAS_DIRECTORY",
     "OFFICIAL_HIPPORAG_COMMIT",
     "QUERY_INPUT_SCHEMA",
     "QUERY_SERIALIZATION",

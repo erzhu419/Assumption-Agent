@@ -13,9 +13,12 @@ from .contract import (
     BUILD_RECEIPT_SCHEMA,
     CORPUS_SIZE,
     CUDA_VISIBLE_DEVICES,
+    EMBEDDING_MODEL_ALIAS,
     FROZEN_CORE_CONFIG,
+    LLM_MODEL_ALIAS,
     LOGICAL_CUDA_DEVICE,
     MAX_QUERY_BATCH,
+    MODEL_ALIAS_DIRECTORY,
     RETRIEVAL_OUTPUT_SCHEMA,
     WORKER_ENVIRONMENT_KEYS,
     WORKER_FIXED_ENVIRONMENT_VALUES,
@@ -101,6 +104,67 @@ def _validate_logical_cuda0(torch_module: object | None = None) -> None:
         raise Dstc9OfficialHippoRAGError(
             "logical cuda:0 attestation failed"
         )
+
+
+def _bind_short_model_aliases(
+    *,
+    writable_root: Path,
+    llm_model: Path,
+    embedding_model: Path,
+) -> Path:
+    """Bind verified absolute assets to fixed short names for HippoRAG."""
+
+    writable_root = writable_root.absolute()
+    alias_root = writable_root / MODEL_ALIAS_DIRECTORY
+    if (
+        not writable_root.is_dir()
+        or writable_root.is_symlink()
+        or alias_root.exists()
+        or alias_root.is_symlink()
+    ):
+        raise Dstc9OfficialHippoRAGError(
+            "model alias root is not fresh"
+        )
+    targets = (
+        (LLM_MODEL_ALIAS, llm_model.absolute()),
+        (EMBEDDING_MODEL_ALIAS, embedding_model.absolute()),
+    )
+    for _alias, target in targets:
+        if (
+            not target.is_dir()
+            or target.is_symlink()
+            or target.resolve(strict=True) != target
+        ):
+            raise Dstc9OfficialHippoRAGError(
+                "model alias target drifted"
+            )
+    alias_root.mkdir(mode=0o700)
+    if alias_root.stat().st_mode & 0o777 != 0o700:
+        raise Dstc9OfficialHippoRAGError(
+            "model alias root mode drifted"
+        )
+    for alias, target in targets:
+        alias_path = alias_root / alias
+        os.symlink(str(target), alias_path, target_is_directory=True)
+        if (
+            not alias_path.is_symlink()
+            or os.readlink(alias_path) != str(target)
+            or alias_path.resolve(strict=True) != target
+        ):
+            raise Dstc9OfficialHippoRAGError(
+                "model alias binding drifted"
+            )
+    component = (
+        f"Transformers_{LLM_MODEL_ALIAS}_"
+        f"Transformers_{EMBEDDING_MODEL_ALIAS}"
+    )
+    if len(component.encode("utf-8")) > os.pathconf(
+        alias_root, "PC_NAME_MAX"
+    ):
+        raise Dstc9OfficialHippoRAGError(
+            "short model working component exceeds NAME_MAX"
+        )
+    return alias_root
 
 
 def build_index_with_core(
@@ -245,6 +309,15 @@ def _build_official_core(
     if type(corpus_count) is not int or corpus_count != CORPUS_SIZE:
         raise Dstc9OfficialHippoRAGError(
             "worker corpus count must remain exactly 2900"
+        )
+    if (
+        llm_model != Path(LLM_MODEL_ALIAS)
+        or embedding_model != Path(EMBEDDING_MODEL_ALIAS)
+        or llm_model.is_absolute()
+        or embedding_model.is_absolute()
+    ):
+        raise Dstc9OfficialHippoRAGError(
+            "worker short model alias binding drifted"
         )
     _validate_logical_cuda0()
     from hipporag import HippoRAG
@@ -407,6 +480,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise Dstc9OfficialHippoRAGError(
             "worker P17 closure/current hardware provenance failed"
         ) from exc
+    alias_root = _bind_short_model_aliases(
+        writable_root=arguments.index_root.parent,
+        llm_model=arguments.llm_model,
+        embedding_model=arguments.embedding_model,
+    )
+    os.chdir(alias_root)
+    arguments.llm_model = Path(LLM_MODEL_ALIAS)
+    arguments.embedding_model = Path(EMBEDDING_MODEL_ALIAS)
     status = (
         _run_build(arguments)
         if arguments.stage == "build"

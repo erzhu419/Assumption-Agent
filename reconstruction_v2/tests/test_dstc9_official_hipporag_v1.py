@@ -511,8 +511,8 @@ def test_official_core_config_is_gpu0_offline_fixed_and_never_resized(
 
     core = worker._build_official_core(
         save_dir=tmp_path / "index",
-        llm_model=tmp_path / "llm",
-        embedding_model=tmp_path / "embedding",
+        llm_model=Path(contract.LLM_MODEL_ALIAS),
+        embedding_model=Path(contract.EMBEDDING_MODEL_ALIAS),
         force_index_from_scratch=False,
         corpus_count=2900,
     )
@@ -522,9 +522,55 @@ def test_official_core_config_is_gpu0_offline_fixed_and_never_resized(
     assert config["qa_top_k"] == 5
     assert config["max_retry_attempts"] == 0
     assert config["force_index_from_scratch"] is False
-    assert str(config["llm_name"]).startswith("Transformers/")
-    assert str(config["embedding_model_name"]).startswith("Transformers/")
+    assert config["llm_name"] == (
+        f"Transformers/{contract.LLM_MODEL_ALIAS}"
+    )
+    assert config["embedding_model_name"] == (
+        f"Transformers/{contract.EMBEDDING_MODEL_ALIAS}"
+    )
     assert core.llm_model.llm_config.generate_params["max_tokens"] == 4
+
+
+def test_worker_binds_exact_short_model_aliases_below_name_max(
+    tmp_path: Path,
+) -> None:
+    writable_root = tmp_path / "work"
+    llm_root = tmp_path / "verified-smollm-root"
+    embedding_root = tmp_path / "verified-minilm-root"
+    writable_root.mkdir()
+    llm_root.mkdir()
+    embedding_root.mkdir()
+
+    alias_root = worker._bind_short_model_aliases(
+        writable_root=writable_root,
+        llm_model=llm_root,
+        embedding_model=embedding_root,
+    )
+
+    assert alias_root == writable_root / contract.MODEL_ALIAS_DIRECTORY
+    assert (alias_root.stat().st_mode & 0o777) == 0o700
+    assert (alias_root / contract.LLM_MODEL_ALIAS).is_symlink()
+    assert (alias_root / contract.LLM_MODEL_ALIAS).readlink() == llm_root
+    assert (alias_root / contract.EMBEDDING_MODEL_ALIAS).is_symlink()
+    assert (
+        alias_root / contract.EMBEDDING_MODEL_ALIAS
+    ).readlink() == embedding_root
+    component = (
+        f"Transformers_{contract.LLM_MODEL_ALIAS}_"
+        f"Transformers_{contract.EMBEDDING_MODEL_ALIAS}"
+    )
+    assert len(component.encode("utf-8")) <= os.pathconf(
+        alias_root, "PC_NAME_MAX"
+    )
+    with pytest.raises(
+        contract.Dstc9OfficialHippoRAGError,
+        match="not fresh",
+    ):
+        worker._bind_short_model_aliases(
+            writable_root=writable_root,
+            llm_model=llm_root,
+            embedding_model=embedding_root,
+        )
 
 
 def test_adapter_uses_only_the_p17_reused_closure_binding(
@@ -1209,6 +1255,99 @@ def test_worker_binding_failure_precedes_build_or_model_action(
     assert events == ["binding"]
 
 
+def test_worker_binds_absolute_provenance_before_using_short_aliases(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    events: list[tuple[str, object]] = []
+    work_root = tmp_path / "work"
+    llm_root = tmp_path / "exact-llm"
+    embedding_root = tmp_path / "exact-embedding"
+    work_root.mkdir()
+    llm_root.mkdir()
+    embedding_root.mkdir()
+    monkeypatch.setattr(
+        worker, "_validate_effective_environment", lambda: None
+    )
+
+    def _verify(**kwargs: object) -> dict[str, object]:
+        events.append(("binding", dict(kwargs)))
+        return {}
+
+    def _build(arguments: object) -> dict[str, object]:
+        events.append(
+            (
+                "build",
+                {
+                    "cwd": Path.cwd(),
+                    "embedding_model": arguments.embedding_model,
+                    "llm_model": arguments.llm_model,
+                },
+            )
+        )
+        return {
+            "corpus_count": 2900,
+            "index_call_count": 1,
+            "stage": "build",
+            "status": "passed",
+        }
+
+    monkeypatch.setattr(
+        worker, "verify_worker_runtime_provenance", _verify
+    )
+    monkeypatch.setattr(worker, "_run_build", _build)
+    original_cwd = Path.cwd()
+    try:
+        assert (
+            worker.main(
+                [
+                    "--stage",
+                    "build",
+                    "--study-id",
+                    STUDY_ID,
+                    "--p17-project-root",
+                    str(tmp_path / "p17-project"),
+                    "--worker-project-root",
+                    str(tmp_path / "formal-project"),
+                    "--current-hardware-binding",
+                    str(tmp_path / "hardware.json"),
+                    "--runtime-python",
+                    str(tmp_path / "python"),
+                    "--runtime-fingerprint",
+                    str(tmp_path / "fingerprint.json"),
+                    "--runtime-binding-receipt",
+                    str(tmp_path / "binding.json"),
+                    "--runtime-binding-receipt-sha256",
+                    "a" * 64,
+                    "--corpus-input",
+                    str(tmp_path / "corpus.json"),
+                    "--output",
+                    str(tmp_path / "output.json"),
+                    "--index-root",
+                    str(work_root / "index"),
+                    "--llm-model",
+                    str(llm_root),
+                    "--embedding-model",
+                    str(embedding_root),
+                ]
+            )
+            == 0
+        )
+    finally:
+        os.chdir(original_cwd)
+
+    assert [event[0] for event in events] == ["binding", "build"]
+    provenance = events[0][1]
+    assert isinstance(provenance, dict)
+    assert provenance["local_llm_model"] == llm_root
+    assert provenance["local_embedding_model"] == embedding_root
+    build = events[1][1]
+    assert build == {
+        "cwd": work_root / contract.MODEL_ALIAS_DIRECTORY,
+        "embedding_model": Path(contract.EMBEDDING_MODEL_ALIAS),
+        "llm_model": Path(contract.LLM_MODEL_ALIAS),
+    }
+
+
 def test_adapter_worker_command_clears_environment_denies_network_and_binds_gpu0(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1290,6 +1429,14 @@ def test_adapter_worker_command_clears_environment_denies_network_and_binds_gpu0
     assert "--runtime-binding-receipt" in command
     assert "--runtime-binding-receipt-sha256" in command
     assert "--runtime-attestation-receipt-sha256" not in command
+    assert command[command.index("--llm-model") + 1] == str(
+        tmp_path / "llm"
+    )
+    assert command[command.index("--embedding-model") + 1] == str(
+        tmp_path / "embedding"
+    )
+    assert contract.LLM_MODEL_ALIAS not in command
+    assert contract.EMBEDDING_MODEL_ALIAS not in command
     assert "OPENAI_API_KEY" not in joined
     assert "ANTHROPIC_API_KEY" not in joined
     launcher_environment = kwargs["env"]
