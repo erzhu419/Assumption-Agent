@@ -687,6 +687,23 @@ def test_hipporag_source_tree_binds_only_normative_files_and_diagnoses_pyc(
         binding._hipporag_source_tree_receipt()
 
 
+def test_tree_rows_use_relative_posix_string_order(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    package_file = source_root / "hipporag/HippoRAG.py"
+    metadata_file = source_root / "hipporag.egg-info/PKG-INFO"
+    package_file.parent.mkdir(parents=True)
+    metadata_file.parent.mkdir(parents=True)
+    package_file.write_bytes(b"package")
+    metadata_file.write_bytes(b"metadata")
+
+    rows = binding._tree_rows(source_root, "synthetic source")
+
+    assert [row["path"] for row in rows] == [
+        "hipporag.egg-info/PKG-INFO",
+        "hipporag/HippoRAG.py",
+    ]
+
+
 def test_runtime_identity_excludes_only_source_bytecode_diagnostic() -> None:
     source = {
         "historical_P17_aggregate_lineage": {

@@ -125,8 +125,10 @@ EXPECTED_ASSET_TREES: dict[str, dict[str, object]] = {
 HIPPORAG_SOURCE_NORMATIVE_TREE: dict[str, object] = {
     "file_count": 60,
     "size_bytes": 332_110,
+    # Canonical order is the relative POSIX-path string order emitted by
+    # _tree_rows(), not pathlib's component-wise Path ordering.
     "tree_sha256": (
-        "06065e20f70282e01be4b1e89d41e8031dc2ccadfa9a6d8b17480636678049c3"
+        "342505c3aaa8dc5e57718e8ac695ac28f60aa66837ba717f52d6f7b536527b1f"
     ),
 }
 EXPECTED_RUNTIME_INVENTORY: dict[str, object] = {
