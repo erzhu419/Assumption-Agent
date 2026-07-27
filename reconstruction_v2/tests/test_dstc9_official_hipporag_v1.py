@@ -1,0 +1,537 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+import json
+import os
+from pathlib import Path
+import sys
+from types import ModuleType, SimpleNamespace
+
+import pytest
+
+import replication_runtime.dstc9_official_hipporag_v1.adapter as adapter
+import replication_runtime.dstc9_official_hipporag_v1.contract as contract
+import replication_runtime.dstc9_official_hipporag_v1.worker as worker
+
+
+STUDY_ID = "DSTC9_TRACK1_SYNTHETIC_SOURCE_FREE_V1"
+
+
+def _units(count: int = contract.CORPUS_SIZE) -> list[dict[str, object]]:
+    return [
+        {
+            "ordinal": ordinal,
+            "text": (
+                f"Synthetic DSTC9 FAQ snippet {ordinal}. "
+                f"Unique offline token D9-{ordinal}."
+            ),
+        }
+        for ordinal in range(count)
+    ]
+
+
+def _queries(count: int = 17) -> list[dict[str, object]]:
+    return [
+        {
+            "ordinal": ordinal,
+            "query_text": f"Exact synthetic dialogue query {ordinal}?",
+            "work_id": f"opaque-work-{ordinal:04d}",
+        }
+        for ordinal in range(count)
+    ]
+
+
+def _corpus_input(
+    units: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    return contract.make_corpus_input(
+        study_id=STUDY_ID,
+        units=_units() if units is None else units,
+    )
+
+
+def _query_input(count: int = 17) -> dict[str, object]:
+    return contract.make_query_input(
+        study_id=STUDY_ID,
+        queries=_queries(count),
+    )
+
+
+def _recompute_self_hash(payload: dict[str, object]) -> None:
+    body = dict(payload)
+    body.pop("self_sha256", None)
+    payload["self_sha256"] = contract.stable_hash(body)
+
+
+def _exact_worker_environment(root: Path) -> dict[str, str]:
+    return {
+        "CUDA_VISIBLE_DEVICES": "0",
+        "HOME": str(root / "home"),
+        "HF_HOME": str(root / "cache"),
+        "HF_HUB_OFFLINE": "1",
+        "LANG": "C.UTF-8",
+        "PATH": f"{Path(sys.executable).parent}:/usr/bin:/bin",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONNOUSERSITE": "1",
+        "PYTHONPATH": str(Path(__file__).parents[1]),
+        "TEMP": str(root / "tmp"),
+        "TMP": str(root / "tmp"),
+        "TMPDIR": str(root / "tmp"),
+        "TOKENIZERS_PARALLELISM": "false",
+        "TRANSFORMERS_OFFLINE": "1",
+    }
+
+
+@dataclass
+class _Store:
+    documents: list[str] | None = None
+    index_calls: int = 0
+    index_root: Path | None = None
+
+
+class _FakeCore:
+    def __init__(self, store: _Store, *, build_mode: bool) -> None:
+        self.store = store
+        self.build_mode = build_mode
+        self.retrieve_calls: list[tuple[tuple[str, ...], int]] = []
+
+    def index(self, documents: list[str]) -> None:
+        if not self.build_mode:
+            raise AssertionError("reopened core must never index")
+        self.store.index_calls += 1
+        self.store.documents = list(documents)
+        assert self.store.index_root is not None
+        self.store.index_root.mkdir(parents=True, exist_ok=True)
+        (self.store.index_root / "synthetic.index").write_bytes(
+            b"synthetic source-free DSTC9 official index"
+        )
+
+    def retrieve(self, queries: list[str], *, num_to_retrieve: int) -> list[object]:
+        assert self.store.documents is not None
+        assert num_to_retrieve == contract.CORPUS_SIZE
+        self.retrieve_calls.append((tuple(queries), num_to_retrieve))
+        unique = list(reversed(tuple(dict.fromkeys(self.store.documents))))
+        scores = [1.0] * len(unique)
+        return [
+            SimpleNamespace(docs=list(unique), doc_scores=list(scores))
+            for _query in queries
+        ]
+
+
+def test_self_hashed_inputs_are_exact_source_free_projections() -> None:
+    corpus_payload = _corpus_input()
+    query_payload = _query_input(3)
+    corpus = contract.validate_corpus_input(corpus_payload)
+    queries = contract.validate_query_input(
+        query_payload, expected_study_id=STUDY_ID
+    )
+
+    assert set(corpus_payload) == contract.CORPUS_INPUT_KEYS
+    assert set(query_payload) == contract.QUERY_INPUT_KEYS
+    assert len(corpus.units) == contract.CORPUS_SIZE == 2900
+    assert len(queries.queries) == 3
+    assert contract.serialize_corpus(corpus.units)[7] == _units()[7]["text"]
+    assert contract.serialize_queries(queries.queries) == tuple(
+        row["query_text"] for row in _queries(3)
+    )
+    assert contract.corpus_input_projection(corpus) == corpus_payload
+    assert contract.query_input_projection(queries) == query_payload
+
+    tampered = dict(corpus_payload)
+    tampered["study_id"] = "A_DIFFERENT_STUDY"
+    with pytest.raises(contract.Dstc9OfficialHippoRAGError, match="self hash"):
+        contract.validate_corpus_input(tampered)
+
+    with pytest.raises(contract.Dstc9OfficialHippoRAGError, match="different study"):
+        contract.validate_query_input(
+            query_payload, expected_study_id="A_DIFFERENT_STUDY"
+        )
+
+
+@pytest.mark.parametrize(
+    ("container", "forbidden_key"),
+    [
+        ("unit", "domain"),
+        ("unit", "entity_id"),
+        ("unit", "doc_id"),
+        ("query", "family"),
+        ("query", "qrel"),
+        ("query", "answer"),
+        ("query", "score"),
+        ("query", "label"),
+    ],
+)
+def test_forbidden_source_label_and_score_fields_fail_closed(
+    container: str, forbidden_key: str
+) -> None:
+    if container == "unit":
+        payload = _corpus_input()
+        units = payload["units"]
+        assert isinstance(units, list)
+        assert isinstance(units[0], dict)
+        units[0][forbidden_key] = "forbidden"
+        _recompute_self_hash(payload)
+        validator = contract.validate_corpus_input
+    else:
+        payload = _query_input(1)
+        queries = payload["queries"]
+        assert isinstance(queries, list)
+        assert isinstance(queries[0], dict)
+        queries[0][forbidden_key] = "forbidden"
+        _recompute_self_hash(payload)
+        validator = contract.validate_query_input
+    with pytest.raises(
+        contract.Dstc9OfficialHippoRAGError, match="forbidden"
+    ):
+        validator(payload)
+
+
+def test_exact_cardinality_contiguous_ordinals_and_query_bound() -> None:
+    assert (
+        contract.MIN_CORPUS_SIZE
+        == contract.MAX_CORPUS_SIZE
+        == contract.CORPUS_SIZE
+        == 2900
+    )
+    for count in (2899, 2901):
+        with pytest.raises(
+            contract.Dstc9OfficialHippoRAGError, match="exactly 2900"
+        ):
+            contract.validate_corpus(_units(count))
+
+    bad_units = _units()
+    bad_units[7]["ordinal"] = 8
+    with pytest.raises(contract.Dstc9OfficialHippoRAGError, match="contiguous"):
+        contract.validate_corpus(bad_units)
+
+    assert len(contract.validate_queries(_queries(256))) == 256
+    with pytest.raises(contract.Dstc9OfficialHippoRAGError, match="1..256"):
+        contract.validate_queries(_queries(257))
+
+    bad_queries = _queries(2)
+    bad_queries[1]["ordinal"] = 0
+    with pytest.raises(contract.Dstc9OfficialHippoRAGError, match="contiguous"):
+        contract.validate_queries(bad_queries)
+    duplicate_work = _queries(2)
+    duplicate_work[1]["work_id"] = duplicate_work[0]["work_id"]
+    with pytest.raises(contract.Dstc9OfficialHippoRAGError, match="unique"):
+        contract.validate_queries(duplicate_work)
+
+
+def test_duplicate_text_expansion_ties_and_md5_collision_fail_before_index(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    duplicate_units = _units()
+    duplicate_units[-1]["text"] = duplicate_units[0]["text"]
+    corpus = contract.validate_corpus_input(_corpus_input(duplicate_units))
+    documents = contract.serialize_corpus(corpus.units)
+    mapping: dict[str, list[int]] = {}
+    for document, row in zip(documents, corpus.units):
+        mapping.setdefault(document, []).append(row.ordinal)
+    unique = list(reversed(tuple(mapping)))
+    scores = [2.0 if text == documents[0] else 1.0 for text in unique]
+    assert contract.stable_top_five_from_official_result(
+        retrieved_documents=unique,
+        retrieved_scores=scores,
+        document_to_ordinals=mapping,
+    ) == (0, contract.CORPUS_SIZE - 1, 1, 2, 3)
+
+    all_tied = contract.stable_top_five_from_official_result(
+        retrieved_documents=unique,
+        retrieved_scores=[1.0] * len(unique),
+        document_to_ordinals=mapping,
+    )
+    assert all_tied == (0, 1, 2, 3, 4)
+
+    class _CollidingMd5:
+        def hexdigest(self) -> str:
+            return "0" * 32
+
+    monkeypatch.setattr(
+        contract.hashlib, "md5", lambda _raw: _CollidingMd5()
+    )
+    index_root = tmp_path / "must-not-exist"
+    store = _Store(index_root=index_root)
+    with pytest.raises(
+        contract.Dstc9OfficialHippoRAGError,
+        match="distinct corpus texts collide",
+    ):
+        worker.build_index_with_core(
+            core=_FakeCore(store, build_mode=True),
+            corpus_input=_corpus_input(),
+            index_root=index_root,
+            runtime_attestation_receipt_sha256="a" * 64,
+        )
+    assert store.index_calls == 0
+    assert not index_root.exists()
+
+
+def test_build_once_reopen_retrieve_has_zero_retrieve_index_calls(
+    tmp_path: Path,
+) -> None:
+    corpus_payload = _corpus_input()
+    query_payload = _query_input(17)
+    index_root = tmp_path / "index"
+    store = _Store(index_root=index_root)
+    build_receipt = worker.build_index_with_core(
+        core=_FakeCore(store, build_mode=True),
+        corpus_input=corpus_payload,
+        index_root=index_root,
+        runtime_attestation_receipt_sha256="a" * 64,
+    )
+    assert store.index_calls == 1
+    assert len(store.documents or ()) == 2900
+    assert build_receipt["corpus_count"] == 2900
+    assert build_receipt["index_call_count"] == 1
+    assert build_receipt["retry_count"] == 0
+    assert build_receipt["dynamic_resize_count"] == 0
+    assert build_receipt["cuda_visible_devices"] == "0"
+    assert build_receipt["logical_cuda_device"] == "cuda:0"
+
+    reopened = _FakeCore(store, build_mode=False)
+    indices, batch_sizes = worker.retrieve_batches_with_core(
+        core=reopened,
+        corpus_input=corpus_payload,
+        query_input=query_payload,
+    )
+    assert indices == ((0, 1, 2, 3, 4),) * 17
+    assert batch_sizes == (8, 8, 1)
+    assert [len(call[0]) for call in reopened.retrieve_calls] == [8, 8, 1]
+    assert all(call[1] == 2900 for call in reopened.retrieve_calls)
+    assert store.index_calls == 1
+
+
+def test_output_is_canonical_ordinals_only_without_text_or_scores(
+    tmp_path: Path,
+) -> None:
+    corpus_payload = _corpus_input()
+    query_payload = _query_input(2)
+    corpus = contract.validate_corpus_input(corpus_payload)
+    queries = contract.validate_query_input(
+        query_payload, expected_study_id=STUDY_ID
+    )
+    index_root = tmp_path / "index"
+    index_root.mkdir()
+    (index_root / "index.bin").write_bytes(b"synthetic")
+    snapshot = contract.snapshot_index_tree(index_root)
+    build_receipt = contract.make_build_receipt(
+        corpus,
+        index_snapshot=snapshot,
+        runtime_attestation_receipt_sha256="a" * 64,
+    )
+    indices = ((0, 1, 2, 3, 4), (4, 3, 2, 1, 0))
+    retrieval_receipt = contract.make_retrieval_receipt(
+        corpus_input=corpus,
+        query_input=queries,
+        indices=indices,
+        batch_sizes=[2],
+        build_receipt=build_receipt,
+        index_snapshot_before=snapshot,
+        index_snapshot_after=snapshot,
+    )
+    output = {
+        "receipt": retrieval_receipt,
+        "retrieved_ordinals": [list(row) for row in indices],
+        "schema": contract.RETRIEVAL_OUTPUT_SCHEMA,
+    }
+    raw = contract.canonical_json_bytes(output)
+    parsed = contract.parse_retrieval_output(
+        raw,
+        query_input=queries,
+        expected_build_receipt=build_receipt,
+        expected_index_snapshot_after=snapshot,
+    )
+    assert parsed.indices == indices
+    assert b"Exact synthetic dialogue query" not in raw
+    assert b"opaque-work" not in raw
+    assert b"Synthetic DSTC9 FAQ snippet" not in raw
+    assert b'"score"' not in raw
+    assert b'"text"' not in raw
+
+    leaked = dict(output)
+    leaked["scores"] = [[1.0] * 5, [1.0] * 5]
+    with pytest.raises(
+        contract.Dstc9OfficialHippoRAGError, match="only ordinals"
+    ):
+        contract.parse_retrieval_output(
+            contract.canonical_json_bytes(leaked),
+            query_input=queries,
+            expected_build_receipt=build_receipt,
+            expected_index_snapshot_after=snapshot,
+        )
+
+    duplicate = json.loads(raw)
+    duplicate["retrieved_ordinals"][0] = [0, 0, 1, 2, 3]
+    with pytest.raises(contract.Dstc9OfficialHippoRAGError, match="duplicate"):
+        contract.parse_retrieval_output(
+            contract.canonical_json_bytes(duplicate),
+            query_input=queries,
+            expected_build_receipt=build_receipt,
+            expected_index_snapshot_after=snapshot,
+        )
+
+
+def test_worker_environment_and_logical_cuda0_attestation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    environment = _exact_worker_environment(tmp_path)
+    assert frozenset(environment) == contract.WORKER_ENVIRONMENT_KEYS
+    worker._validate_effective_environment(environment)
+
+    contaminated = dict(environment)
+    contaminated["OPENAI_API_KEY"] = "forbidden"
+    with pytest.raises(
+        contract.Dstc9OfficialHippoRAGError, match="environment contract"
+    ):
+        worker._validate_effective_environment(contaminated)
+    wrong_gpu = dict(environment)
+    wrong_gpu["CUDA_VISIBLE_DEVICES"] = "1"
+    with pytest.raises(
+        contract.Dstc9OfficialHippoRAGError, match="environment contract"
+    ):
+        worker._validate_effective_environment(wrong_gpu)
+
+    class _Cuda:
+        def __init__(self, count: int = 1) -> None:
+            self.count = count
+
+        @staticmethod
+        def is_available() -> bool:
+            return True
+
+        def device_count(self) -> int:
+            return self.count
+
+        @staticmethod
+        def set_device(_ordinal: int) -> None:
+            return None
+
+        @staticmethod
+        def current_device() -> int:
+            return 0
+
+    class _Torch:
+        def __init__(self, count: int = 1) -> None:
+            self.cuda = _Cuda(count)
+
+        @staticmethod
+        def empty(_count: int, *, device: str) -> object:
+            return SimpleNamespace(device=device)
+
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0")
+    worker._validate_logical_cuda0(_Torch())
+    with pytest.raises(
+        contract.Dstc9OfficialHippoRAGError, match="logical cuda:0"
+    ):
+        worker._validate_logical_cuda0(_Torch(count=2))
+
+
+def test_official_core_config_is_gpu0_offline_fixed_and_never_resized(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(
+        worker, "_validate_logical_cuda0", lambda: calls.append("cuda:0")
+    )
+
+    class _BaseConfig:
+        def __init__(self, **kwargs: object) -> None:
+            self.kwargs = kwargs
+
+    class _HippoRAG:
+        def __init__(self, *, global_config: _BaseConfig) -> None:
+            self.global_config = global_config
+            self.llm_model = SimpleNamespace(
+                llm_config=SimpleNamespace(generate_params={})
+            )
+
+    hipporag_module = ModuleType("hipporag")
+    hipporag_module.HippoRAG = _HippoRAG  # type: ignore[attr-defined]
+    utils_module = ModuleType("hipporag.utils")
+    config_module = ModuleType("hipporag.utils.config_utils")
+    config_module.BaseConfig = _BaseConfig  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "hipporag", hipporag_module)
+    monkeypatch.setitem(sys.modules, "hipporag.utils", utils_module)
+    monkeypatch.setitem(
+        sys.modules, "hipporag.utils.config_utils", config_module
+    )
+
+    core = worker._build_official_core(
+        save_dir=tmp_path / "index",
+        llm_model=tmp_path / "llm",
+        embedding_model=tmp_path / "embedding",
+        force_index_from_scratch=False,
+        corpus_count=2900,
+    )
+    assert calls == ["cuda:0"]
+    config = core.global_config.kwargs
+    assert config["retrieval_top_k"] == 2900
+    assert config["qa_top_k"] == 5
+    assert config["max_retry_attempts"] == 0
+    assert config["force_index_from_scratch"] is False
+    assert str(config["llm_name"]).startswith("Transformers/")
+    assert str(config["embedding_model_name"]).startswith("Transformers/")
+    assert core.llm_model.llm_config.generate_params["max_tokens"] == 4
+
+
+def test_adapter_worker_command_clears_environment_denies_network_and_binds_gpu0(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[tuple[list[str], dict[str, object]]] = []
+    monkeypatch.setattr(adapter, "_preflight_systemd_transport", lambda: None)
+    monkeypatch.setenv("OPENAI_API_KEY", "must-not-propagate")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "must-not-propagate")
+
+    def _run(command: list[str], **kwargs: object) -> object:
+        calls.append((list(command), dict(kwargs)))
+        terminal = {
+            "batch_count": 2,
+            "index_call_count": 0,
+            "query_count": 9,
+            "stage": "retrieve",
+            "status": "passed",
+        }
+        return SimpleNamespace(
+            returncode=0,
+            stdout=(json.dumps(terminal) + "\n").encode("ascii"),
+            stderr=b"",
+        )
+
+    monkeypatch.setattr(adapter.subprocess, "run", _run)
+    runtime_python = Path(sys.executable)
+    adapter._launch_worker(
+        stage="retrieve",
+        project_root=Path(__file__).parents[1],
+        runtime_python=runtime_python,
+        local_llm_model=tmp_path / "llm",
+        local_embedding_model=tmp_path / "embedding",
+        corpus_input=tmp_path / "corpus.json",
+        query_input=tmp_path / "queries.json",
+        build_receipt=tmp_path / "build.json",
+        output_path=tmp_path / "output.json",
+        index_root=tmp_path / "index",
+        writable_root=tmp_path / "work",
+        timeout_seconds=10,
+        runtime_attestation_receipt_sha256="a" * 64,
+        expected_corpus_count=2900,
+        expected_query_count=9,
+    )
+    assert len(calls) == 1
+    command, kwargs = calls[0]
+    joined = "\n".join(command)
+    assert "--ignore-environment" in command
+    assert "CUDA_VISIBLE_DEVICES=0" in command
+    assert "HF_HUB_OFFLINE=1" in command
+    assert "TRANSFORMERS_OFFLINE=1" in command
+    assert "TOKENIZERS_PARALLELISM=false" in command
+    assert "IPAddressDeny=any" in command
+    assert "RestrictAddressFamilies=AF_UNIX" in command
+    assert "replication_runtime.dstc9_official_hipporag_v1.worker" in command
+    assert "OPENAI_API_KEY" not in joined
+    assert "ANTHROPIC_API_KEY" not in joined
+    launcher_environment = kwargs["env"]
+    assert isinstance(launcher_environment, dict)
+    assert "OPENAI_API_KEY" not in launcher_environment
+    assert "ANTHROPIC_API_KEY" not in launcher_environment
+    assert "CUDA_VISIBLE_DEVICES" not in launcher_environment
+    assert kwargs["timeout"] == 10
