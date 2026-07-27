@@ -5176,6 +5176,19 @@ semantic payload open 全部为 0。因此 incident `86932b02…85d9` 将它定�
 `pre_attempt_launch_preparation_invalid`，不是资格化 retry。只允许创建 mode `0700` 的冻结父目录，
 随后用同一 commit、arguments 与 output leaf 消费仍剩的一次正式 P0；不得修改代码、source 或设计。
 
+父目录完成后，唯一正式 P0 于 10:41:48 UTC 写入 attempt `2de306fd…3a57`；控制流依次打开了四个
+授权 public member，随后在 schema capacity aggregation 前以 `RowContractError` 终止，没有
+`qualification.result.json`。只读 post-terminal 诊断定位到冻结 contract 的实质错误：BIRD
+`primary_keys` 同时包含 integer 与 composite-key list，而 parser 错误地要求每个 member 都是
+integer；非权威 mirror aggregate 中 TRAIN 为 338 integer + 127 list，DEV 为 66 + 6。该诊断没有
+打开 question/SQL/database value/score，也没有用于修改或重跑。
+
+terminal `468a5fa5…c9e40` 因此是 **implementation-invalid、capacity/efficacy unknown**，不是负效果。
+四个 member 已被正式打开，所以不得修 parser 后 replay、另立 BIRD P2 或再换第五个 source。
+`typed schema expansion` 这条路线按事前 hard stop 关闭；它没有增加现实域双基线优势或 L5 证据。
+下一步若继续总目标，必须先基于既有全部结果做 architecture-level stop/go 分析，不能立刻再开一轮
+source/gate/prompt study。
+
 ## 附录 A：关键证据索引
 
 - BIRD P1 typed schema-expansion source chain：
@@ -5185,6 +5198,7 @@ semantic payload open 全部为 0。因此 incident `86932b02…85d9` 将它定�
   [`sqlglot runtime asset`](../manifests/bird_p1_sqlglot_runtime_asset_v1.json)；
   [`P0 qualification freeze`](../manifests/bird_p0_public_source_qualification_freeze_v1.json)；
   [`pre-attempt parent incident`](../manifests/bird_p0_pre_attempt_parent_directory_incident_v1.json)；
+  [`P0 terminal`](../manifests/bird_p0_public_source_qualification_terminal_v1.json)；
   [`P0 qualifier`](../assumption_agent/benchmarks/bird_p0_public_source_qualification_v1.py)；
   [`remote ZIP topology inventory`](../scripts/inventory_remote_zip_members_v1.py)
 
