@@ -5189,7 +5189,75 @@ terminal `468a5fa5…c9e40` 因此是 **implementation-invalid、capacity/effica
 下一步若继续总目标，必须先基于既有全部结果做 architecture-level stop/go 分析，不能立刻再开一轮
 source/gate/prompt study。
 
+### 12.59 2026-07-27 architecture stop/go：typed candidate 有真实上界，边际 evaluator 不稳定
+
+BIRD 关闭后没有继续换 source。architecture decision `66040a27…a958` 先把 FRAMES→BIRD 的近期
+序列固定为 **17 个 study / 16 个独立 source family**，并把既有有效结果放在同一证据账本中：
+HybridQA 已经真实发生过 A_hold evaluator promotion，但 E2 在 A_hold 对 RAW 为 0、对 HippoRAG
+为 −1/2，untouched M_search 的 E2−E0 只有 +3/2、exact p=1/2；BRIGHT P9 三个 family 都高于
+HippoRAG，却对 RAW 分别负、平、正；EntailmentBank 对 RAW 三 family 都有大幅优势，却只在一个
+family 高于 HippoRAG。故当前不是“少跑一个数据集”，而是同一 study 中尚未出现稳定双基线优势，
+且 evaluator 的未来动作选择仍没有 L5。
+
+这也排除了把 HybridQA P6 再包装成新机制：P6 本来就保留 RAW top-3，再由 direct/path typed
+candidate 填两个 residual slot，并由一个 global recipe evaluator 选择。唯一允许的 retrospective
+meta-development 改为实质不同的 action space：对每题枚举所有 RAW top-5 外、由 query anchor 或至多
+两条 typed edge 可达的 candidate；每个 action 是替换一个仍在场的原始 RAW slot，显式 no-op 与其
+共同竞争，最多替换两个不同 slot。固定的无截距 λ=1 weighted ridge 学习每个具体 action 的边际
+utility，而不是选择一个全局 recipe。A_form/A_hold/M_search 三个均已消费且相互不交叠的 block
+只做 leave-one-block-out 描述性 cross-fit；它们不能重新成为 fresh efficacy evidence。事前 hard
+stop 要求 oracle 在每个 block/family 都正、learned 在每个 held block 和 pooled family 都正、
+learned pooled 高于旧 P6 path-2，且 learned−RAW exact p≤0.1；任何一项失败都停止，不改 feature、
+fold、λ、threshold、gate 或 prompt，也不再消耗独立 source。
+
+source-free runtime 先发现旧 QASPER CPU canary 在 311 上虽 repeat-exact，但 float/quantized hash
+分别为 `6b0a0498…509f` / `86a1a981…16f`，与原硬件冻结值不同。此时 HybridQA pack open=0。
+没有放宽成 tolerance，而是使用 311 上 P17 已资格化的同权重 GPU0 runtime：
+MiniLM model tree `1514beb6…cfdb`、torch 2.4.1+cu118，256-sentence 两次输出逐字节相同且
+hash `62fc4780…5f8c`；5 个 source-free pure test 全部通过。GPU runtime qualification
+`0031e086…db22` 因而在任何 pack open 前封存，这只是把已知跨硬件问题固定为同机数值身份，
+不改变 candidate、metric、fold 或判定线。
+
+第一次 service invocation 因部署时中间 parent `/formal_v1` 被 `install -d` 以 0755 创建，在
+`validate_output_parent` 即退出。`work/`、attempt、pack、model inference 与 action 均不存在，
+`NRestarts=0`；incident `0d354da4…13d1` 将它固定为 pre-attempt launch preparation invalid。
+只把该已冻结 parent 改为 0700 后，实际唯一 attempt 才开始；这不是 cohort retry。实际 invocation
+`338dcaac…aa21` 于 54.539 CPU seconds 后 success，`NRestarts=0`、memory peak 523.7M、swap 0，
+运行中采样 GPU memory 2,168 MiB。本次没有新 source、fresh selection、TEST、HippoRAG feature、
+API/online evaluator、retry/replay/resample。
+
+108 个已消费 item 的 aggregate 离线结果为：
+
+- RAW `781/6`、complete 56；旧固定 P6 path-2 `344/3`、complete 47；
+  cross-fit learned `811/6`、complete 60；oracle `202`、complete 101。
+- learned−P6 path-2 为 **+41/2**，14 正 / 1 负 / 93 平，exact p=`3/32768`。这证明逐题 action
+  scorer 比旧 global residual recipe 更合理。
+- learned−RAW 仅 **+5**，9 正 / 6 负 / 93 平，exact p=`3473/16384`，未达 0.1；
+  三个 held block 分别为 `+7/3, −11/6, +9/2`，A_hold 为负；三个 family 分别为
+  DUAL `+4`、PASSAGE `+3`、TABLE `−2`，TABLE_ONLY 为负。
+- oracle−RAW 为 **+431/6**，45 正 / 0 负 / 63 平，exact p=`1/35184372088832`，而且事前核验的
+  每个 block×family 都严格为正。
+
+因此 terminal `404737a0…b5a8` 与 result `78c88290…36f5` 的有效结论是
+**`STOP_CURRENT_ARCHITECTURE`**。关键定位已经从“typed grammar 找不到 RAW 外证据”推进为：
+RAW 外存在大量具有因果 utility 的 typed action，真正瓶颈是当前 additive marginal ridge evaluator
+不能跨 block、尤其不能在 TABLE_ONLY 上稳定识别它们。该结果同时解释了为何继续换 source、补 gate
+或微调 residual recipe 不会解决总目标。它不增加现实域 Agent−RAW−HippoRAG 或 L5 fresh evidence，
+也不授权独立 confirmatory study。若以后恢复研究，只能先提出能表达 candidate 交互与 set-level
+utility 的实质新 evaluator architecture，再另做一次全新的 architecture decision；当前主线按
+预注册停止，两个总目标缺口原样保留。
+
 ## 附录 A：关键证据索引
+
+- HybridQA marginal-replacement consumed-data architecture decision chain：
+  [`architecture stop/go`](../manifests/red_queen_architecture_stop_go_v1.json)；
+  [`GPU runtime qualification`](../manifests/hybridqa_marginal_replacement_gpu_runtime_qualification_v1.json)；
+  [`implementation freeze`](../manifests/hybridqa_marginal_replacement_meta_development_freeze_v1.json)；
+  [`pre-attempt parent-mode incident`](../manifests/hybridqa_marginal_replacement_pre_attempt_parent_mode_incident_v1.json)；
+  [`safe aggregate result`](../artifacts/hybridqa_marginal_replacement_meta_development_v1/result.safe.json)；
+  [`terminal`](../artifacts/hybridqa_marginal_replacement_meta_development_v1/terminal.json)；
+  [`result disposition`](../manifests/hybridqa_marginal_replacement_meta_development_result_v1.json)；
+  [`implementation`](../assumption_agent/benchmarks/hybridqa_marginal_replacement_meta_development_v1.py)。
 
 - BIRD P1 typed schema-expansion source chain：
   [`source custody`](../manifests/bird_p1_typed_schema_expansion_source_custody_v1.json)；
