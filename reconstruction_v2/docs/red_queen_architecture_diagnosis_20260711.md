@@ -1,7 +1,20 @@
 # Assumption Agent × Red Queen Gödel Machine：架构诊断与 Reconstruction V2 复核
 
 > - 初版日期：2026-07-11
-> - 本次复核：2026-07-26
+> - 本次复核：2026-07-27
+> - 当前 DSTC9 P1：全新 study `DSTC9_P1_HIERARCHICAL_KNOWLEDGE_EVALUATOR_L5_V1`
+>   已由本机 WSL 对 official fixed commit 完成一次 content-addressed 下载和哈希校验，再一次同步到不通
+>   外网的 311linux；311 未向 Hugging Face、GitHub 或其他外部 source 发请求。公开 P0 有效资格化
+>   2,900 条 knowledge、TRAIN/VALIDATION eligibility 与 hotel/restaurant/taxi/train 四个 family；
+>   v5 source-free 双 GPU canary 随后一次通过，GPU0 official HippoRAG build/reopen 与 GPU1 typed
+>   coordinate lane 均真实执行，formal source/API/retry 都为 0。唯一 formal invocation
+>   `c29ebcae…9b471` 在 `compile_formal_source_once` 失败：正式 typed venv 未包含 source compiler
+>   已冻结使用的 `ijson`。失败发生在 bundle identity/topology 与 knowledge member open 之后、任何
+>   action/model/qrel/score 前；safe terminal、空 action runtime 与 `NRestarts=0` 一致。由于 formal
+>   source capability 已消费，不能在补装依赖后重跑同一 source/study/cohort；终态为
+>   **formal-source runtime-dependency implementation/infrastructure-invalid / efficacy unknown / no replay**。
+>   这不是 311 无外网导致的下载失败，也不是 Agent 相对 RAW/HippoRAG 的效果负结果；现实域四-family
+>   双基线稳定优势与 A_hold 晋升后改善 untouched M_search 的 L5 仍都缺失
 > - 当前 HiTab P1：全新 study `HITAB_P1_DMC1_HIERARCHICAL_SET_EVALUATOR_V1` 已在任何
 >   HiTab source body、secret、cohort、model action 或 score 前完成 source custody、DMC1
 >   hierarchical evidence-set evaluator、late-qrel controller 与三阶段 production closure。
@@ -4950,7 +4963,63 @@ artifact。下一独立来源将把公开 archive topology 身份验证放在 ac
 也仍没有 evaluator 在独立 A_hold 晋升后改善预冻结 untouched M_search。后续必须换独立
 source/study/cohort，不能用 MultiDoc2Dial topology 观察反向修同源候选。
 
+### 12.54 2026-07-27 DSTC9 P1：P0 与双 GPU canary 通过，正式 source runtime 依赖终止
+
+MultiDoc2Dial 的 topology 终止后没有反向修改同源 whitelist。新 study
+`DSTC9_P1_HIERARCHICAL_KNOWLEDGE_EVALUATOR_L5_V1` 固定 official DSTC9 commit
+`7ebb4c76…cc0ae4` 的 TRAIN、VALIDATION 与 knowledge。311linux 不通外网，因此 source 获取严格采用
+“本机 WSL 下载 official commit-addressed bytes、逐文件验证 size/Git blob/SHA-256、形成 deterministic
+USTAR、只 SCP 一次、311 再验证 mode/size/SHA-256”的路径；远端 bundle 为
+`116,961,280` bytes、SHA-256 `6c3efa69…ffb83`。311 没有执行 Hugging Face、GitHub 或其他外部下载，
+后续 action 与评价也保持完全离线。
+
+一次公开、非评分 P0 有效通过：knowledge corpus 为 2,900 条，family 为
+hotel/restaurant/taxi/train；TRAIN/VALIDATION 最终 eligible rows 分别为 19,184/2,670，四个
+family 的 unique dialogue-group capacity 均高于冻结 quota。P0 只写 mode-0600 private eligibility
+manifest 与 safe aggregate receipt，没有形成 formal cohort、action 或 score。P1 随后冻结
+`A_form/F_search/A_hold/M_search=96/32/48/48`，E1 仅由 A_form 形成，A_hold 只以 E1−E0
+净正且 exact one-sided tail≤0.1 才晋升；M_search 只允许在晋升后 materialize。现实域 primary
+另要求 E1-Agent 在 A_hold 的 aggregate 及每个 family 都同时净胜 RAW 与 official HippoRAG。
+
+source-free implementation 经 v1/v2/v4 的确定性 infrastructure failure 与 v3 的 prelaunch canonical-order
+修正后，均在 formal source=0 时封存且从未 replay。v5 只将已经绝对路径验证的 P17 model roots 映射为
+HippoRAG 内部两个短 alias；唯一 v5 service 在 30 秒内 success，`NRestarts=0`，真实完成 GPU0
+official HippoRAG build→reopen retrieve、GPU1 coordinate worker 与 query-only MiniLM predictor，
+formal source/API/retry 均为 0。execution freeze `8af372cb…fe188`、formal config
+`5ff78dd0…d3f` 与 commit `3f28a6ad…f7d` 随后一次部署；preformal hardware/canary/runtime closure
+只读复验通过。
+
+唯一 formal service 于 13:31:45 启动，13:31:46 以 exit 1 终止，`NRestarts=0`。safe terminal
+`708bab6f…22d08` 固定失败阶段为 `compile_formal_source_once`；journal 与冻结调用顺序共同证明，
+P0 receipt/private manifest 已认证、whole-study secret selection 已形成、formal source counter 已递增，
+bundle identity/USTAR topology 已验证且 knowledge member 已打开，随后在第一个 streaming JSON event 前
+触发 `ModuleNotFoundError: ijson`。原因不是需要联网下载模型，而是 formal unit 使用的 typed venv
+没有包含 P0 source compiler 已冻结依赖的 `ijson`。source/action stage 的持久化条目分别为 0/0，
+没有 coordinate/Hippo worker、qrel、score、API 或 online evaluator；没有任何 item/query/document/qrel/
+action/per-item score 被公开。
+
+尽管 JSON payload 尚未产生一个 parser event，formal source capability 已按事前合同消费，因此不能把它
+重分类为 source-free canary，也不能安装 `ijson` 后重跑同一 DSTC9 source/study/cohort。该 root 永久记为
+**formal-source runtime-dependency implementation/infrastructure-invalid / efficacy unknown / no replay**。
+下一独立 study 必须在任何 private selection 和 formal source 解封前，对 source parser 的完整 Python
+runtime closure 做一次 source-free import/version/entrypoint 资格化；这属于把依赖身份移到正确的阶段，
+不是新增 efficacy gate。总目标仍缺现实域至少三个可辩护 family 同时稳定胜过 RAW 与 official HippoRAG，
+以及 evaluator 在独立 A_hold 晋升后改善预冻结 untouched M_search 的 L5。
+
 ## 附录 A：关键证据索引
+
+- DSTC9 P0/source-free canary/formal terminal chain（formal action/qrel/score 均未进入）：
+  [`public source custody`](../manifests/dstc9_p1_public_source_custody_v1.json)；
+  [`local acquisition and relay receipt`](../manifests/dstc9_p1_public_source_acquisition_receipt_v1.json)；
+  [`P0 qualification freeze`](../manifests/dstc9_p0_public_source_qualification_freeze_v1.json)；
+  [`P0 safe aggregate receipt`](../manifests/dstc9_p0_public_source_qualification_receipt_v1.json)；
+  [`v5 source-free canary binding`](../manifests/dstc9_p1_source_free_canary_binding_v5.json)；
+  [`formal execution freeze`](../manifests/dstc9_p1_execution_freeze_v1.json)；
+  [`formal config`](../manifests/dstc9_p1_formal_config_v1.json)；
+  [`formal runtime`](../replication_runtime/dstc9_p1_formal_v1/runner.py)；
+  [`formal source compiler`](../assumption_agent/benchmarks/dstc9_p1_formal_source_v1.py)；
+  [`formal controller`](../assumption_agent/benchmarks/dstc9_p1_formal_controller_v1.py)；
+  [`runtime-dependency terminal disposition`](../manifests/dstc9_p1_formal_runtime_dependency_failure_disposition_v1.json)
 
 - MultiDoc2Dial P0 local-download/remote-relay terminal chain（member payload/P1/action/score 均为 0）：
   [`source custody`](../manifests/multidoc2dial_p0_public_source_custody_v1.json)；
