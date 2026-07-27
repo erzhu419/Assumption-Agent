@@ -1457,13 +1457,17 @@ def _verify_runtime_tree(
                 observed_links[relative] = os.readlink(path)
             elif path.is_file():
                 observed_files.append(str(path))
-    observed_files.sort()
     if set(observed_files) != set(declared):
         raise TechqaP0QualificationError(
             "runtime regular-file set differs from its manifest"
         )
+    # The frozen path-list digest was recorded from the declared manifest
+    # order.  That order is already covered by the byte-exact manifest hash;
+    # re-sorting with Python's code-point order would silently substitute a
+    # different collation for the one used to create the frozen manifest.
+    declared_paths = list(declared)
     path_list_raw = (
-        "".join(path + "\n" for path in observed_files).encode("utf-8")
+        "".join(path + "\n" for path in declared_paths).encode("utf-8")
     )
     if (
         hashlib.sha256(path_list_raw).hexdigest()
@@ -1474,7 +1478,7 @@ def _verify_runtime_tree(
         )
     if observed_links != PINNED_HF_RUNTIME_SYMLINKS:
         raise TechqaP0QualificationError("runtime symlink topology drifted")
-    for raw_path in observed_files:
+    for raw_path in declared_paths:
         if _hash_file(Path(raw_path)) != declared[raw_path]:
             raise TechqaP0QualificationError(
                 "runtime regular-file byte identity drifted"

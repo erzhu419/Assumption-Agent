@@ -512,6 +512,49 @@ def test_acquisition_marker_precedes_the_only_download_invocation(
     assert (work / "p0_terminal.json").stat().st_mode & 0o777 == 0o600
 
 
+def test_runtime_path_list_uses_frozen_manifest_order(
+    posix_tmp: Path,
+) -> None:
+    runtime = posix_tmp / "runtime"
+    (runtime / "bin").mkdir(parents=True)
+    lower = runtime / "bin" / "python"
+    upper = runtime / "bin" / "Activate.ps1"
+    lower.write_bytes(b"python")
+    upper.write_bytes(b"activate")
+    # Deliberately differs from Python code-point sorting.  The manifest
+    # itself is byte-bound, so its declared order is the frozen order.
+    declared = (lower, upper)
+    manifest = posix_tmp / "venv_files.sha256"
+    manifest.write_text(
+        "".join(
+            f"{p0._hash_file(path)}  {path}\n" for path in declared
+        ),
+        encoding="utf-8",
+    )
+    path_list_sha256 = hashlib.sha256(
+        "".join(f"{path}\n" for path in declared).encode("utf-8")
+    ).hexdigest()
+    with (
+        mock.patch.object(
+            p0,
+            "PINNED_HF_RUNTIME_REGULAR_PATH_LIST_SHA256",
+            path_list_sha256,
+        ),
+        mock.patch.object(p0, "PINNED_HF_RUNTIME_SYMLINKS", {}),
+        mock.patch.object(
+            p0,
+            "PINNED_SYSTEM_PYTHON_RESOLVED",
+            str(lower),
+        ),
+        mock.patch.object(
+            p0,
+            "PINNED_SYSTEM_PYTHON_SHA256",
+            p0._hash_file(lower),
+        ),
+    ):
+        p0._verify_runtime_tree(runtime, manifest)
+
+
 def test_download_failure_is_terminal_and_never_retried(
     posix_tmp: Path,
 ) -> None:
