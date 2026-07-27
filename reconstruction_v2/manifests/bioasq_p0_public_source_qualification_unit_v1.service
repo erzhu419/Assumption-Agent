@@ -1,0 +1,19 @@
+[Unit]
+Description=BioASQ P0 one-shot public non-scoring source qualification v1
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/bioasq_p1_20260727/p0_v1
+UMask=0077
+ExecStartPre=/usr/bin/test ! -e %h/bioasq_p1_20260727/p0_v1/work
+ExecStartPre=/usr/bin/install -d -m 0700 %h/bioasq_p1_20260727/p0_v1/work
+ExecStartPre=/usr/bin/env -i HOME=%h LANG=C.UTF-8 LC_ALL=C.UTF-8 PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONHASHSEED=0 PYTHONNOUSERSITE=1 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 /usr/bin/python3 -I -B %h/bioasq_p1_20260727/p0_v1/reconstruction_v2/assumption_agent/benchmarks/bioasq_p0_public_source_qualification_v1.py --source-free-canary --safe-receipt %h/bioasq_p1_20260727/p0_v1/work/source_free_canary.safe.json
+ExecStart=/usr/bin/env -i HOME=%h LANG=C.UTF-8 LC_ALL=C.UTF-8 PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONHASHSEED=0 PYTHONNOUSERSITE=1 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 /usr/bin/python3 -I -B %h/bioasq_p1_20260727/p0_v1/reconstruction_v2/assumption_agent/benchmarks/bioasq_p0_public_source_qualification_v1.py --source %h/bioasq_p1_20260727/source_relay_v1/training11b.json --expected-size-bytes 37639648 --expected-sha256 6df656862ca860efc355c7805d07ddca700d64ecc3785c519a49afccaaeeac98 --private-manifest %h/bioasq_p1_20260727/p0_v1/work/eligibility.private.json --safe-receipt %h/bioasq_p1_20260727/p0_v1/work/qualification.safe.json
+CPUQuota=400%
+MemoryMax=4G
+TasksMax=16
+KillMode=control-group
+Restart=no
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+TimeoutStartSec=infinity
