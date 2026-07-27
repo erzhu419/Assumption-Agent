@@ -27,7 +27,7 @@ ADAPTER_VERSION = "dstc9_official_hipporag_global_retrieve_only_v1"
 BENCHMARK = "DSTC9_TRACK1"
 OFFICIAL_HIPPORAG_COMMIT = "ef2f14c4f254f11ac29f9395f262466ad1bb4d10"
 RUNTIME_TRUST_ROOT = (
-    "dstc9_p17_reused_closure_plus_current_hardware_binding_v2"
+    "dstc9_p17_reused_closure_plus_current_hardware_binding_v3"
 )
 
 TOP_K = 5
@@ -79,6 +79,7 @@ WORKER_ENVIRONMENT_KEYS = frozenset(
         "LANG",
         "PATH",
         "PYTHONDONTWRITEBYTECODE",
+        "PYTHONPYCACHEPREFIX",
         "PYTHONNOUSERSITE",
         "TEMP",
         "TMP",

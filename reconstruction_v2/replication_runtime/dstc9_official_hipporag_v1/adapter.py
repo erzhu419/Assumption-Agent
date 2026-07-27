@@ -31,6 +31,7 @@ from .contract import (
 )
 from .runtime_binding import (
     Dstc9P17RuntimeBindingError,
+    runtime_binding_acceptance_identity,
     verify_p17_reused_closure_binding,
 )
 
@@ -246,6 +247,7 @@ def _worker_environment(
         "LANG": "C.UTF-8",
         "PATH": f"{runtime_python.parent}:/usr/bin:/bin",
         "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONPYCACHEPREFIX": str(writable_root / "tmp" / "pycache"),
         "PYTHONNOUSERSITE": "1",
         "TEMP": str(writable_root / "tmp"),
         "TMP": str(writable_root / "tmp"),
@@ -302,6 +304,11 @@ def _launch_worker(
             str(runtime_python),
             "-I",
             "-B",
+            "-X",
+            (
+                "pycache_prefix="
+                f"{writable_root / 'tmp' / 'pycache'}"
+            ),
             "-c",
             WORKER_BOOTSTRAP_SCRIPT,
             str(worker_project_root),
@@ -442,6 +449,7 @@ def build_dstc9_official_hipporag_global_index_v1(
     try:
         for name in ("home", "cache", "tmp"):
             (stage_root / name).mkdir(mode=0o700)
+        (stage_root / "tmp" / "pycache").mkdir(mode=0o700)
         corpus_path = stage_root / CORPUS_INPUT_FILENAME
         build_receipt_path = stage_root / BUILD_RECEIPT_FILENAME
         runtime_receipt_path = stage_root / RUNTIME_RECEIPT_FILENAME
@@ -544,7 +552,16 @@ def retrieve_dstc9_official_hipporag_global_index_v1(
     persisted_runtime = _load_canonical_object(
         runtime_receipt_path, "runtime receipt"
     )
-    if persisted_runtime != runtime_receipt:
+    try:
+        same_runtime = (
+            runtime_binding_acceptance_identity(persisted_runtime)
+            == runtime_binding_acceptance_identity(runtime_receipt)
+        )
+    except Dstc9P17RuntimeBindingError as exc:
+        raise Dstc9OfficialHippoRAGError(
+            "runtime binding receipt validation failed"
+        ) from exc
+    if not same_runtime:
         raise Dstc9OfficialHippoRAGError(
             "reopen runtime differs from the exact build binding"
         )
@@ -577,6 +594,7 @@ def retrieve_dstc9_official_hipporag_global_index_v1(
         work_root.mkdir(mode=0o700)
         for name in ("home", "cache", "tmp"):
             (work_root / name).mkdir(mode=0o700)
+        (work_root / "tmp" / "pycache").mkdir(mode=0o700)
         working_index = work_root / "official_global_index.read_clone"
         shutil.copytree(index_root, working_index, copy_function=shutil.copy2)
         if snapshot_index_tree(working_index) != canonical_before:

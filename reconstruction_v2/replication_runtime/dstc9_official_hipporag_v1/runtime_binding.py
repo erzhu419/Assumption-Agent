@@ -25,7 +25,7 @@ import sys
 from typing import Any, Mapping, Sequence
 
 
-SCHEMA = "dstc9_p17_reused_closure_plus_current_hardware_binding_v2"
+SCHEMA = "dstc9_p17_reused_closure_plus_current_hardware_binding_v3"
 CURRENT_HARDWARE_SCHEMA = "dstc9_current_study_hardware_binding_v1"
 CURRENT_HARDWARE_STATUS = (
     "captured_immediately_before_source_free_canary_before_formal_source_open"
@@ -121,6 +121,13 @@ EXPECTED_ASSET_TREES: dict[str, dict[str, object]] = {
             "42d8d798e4f01e68d9bb10634b9c712de00f7f8495271636fd6311b2db58e506"
         ),
     },
+}
+HIPPORAG_SOURCE_NORMATIVE_TREE: dict[str, object] = {
+    "file_count": 60,
+    "size_bytes": 332_110,
+    "tree_sha256": (
+        "06065e20f70282e01be4b1e89d41e8031dc2ccadfa9a6d8b17480636678049c3"
+    ),
 }
 EXPECTED_RUNTIME_INVENTORY: dict[str, object] = {
     "distribution_count": 169,
@@ -374,6 +381,123 @@ def tree_receipt(root: Path, field_name: str) -> dict[str, object]:
         "size_bytes": sum(int(row["size_bytes"]) for row in rows),
         "tree_sha256": stable_hash(rows),
     }
+
+
+def _hipporag_source_tree_receipt() -> dict[str, object]:
+    """Bind source files while treating local bytecode as diagnostics only."""
+
+    rows = _tree_rows(
+        P17_HIPPORAG_SOURCE,
+        "repaired P17 HippoRAG source",
+    )
+    normative_rows: list[dict[str, object]] = []
+    bytecode_rows: list[dict[str, object]] = []
+    for row in rows:
+        relative = Path(str(row["path"]))
+        in_pycache = "__pycache__" in relative.parts
+        is_pyc = relative.suffix == ".pyc"
+        if not in_pycache and not is_pyc:
+            normative_rows.append(row)
+        elif in_pycache and is_pyc:
+            bytecode_rows.append(row)
+        else:
+            raise Dstc9P17RuntimeBindingError(
+                "P17 HippoRAG source contains non-normative "
+                "non-cache content"
+            )
+    normative = {
+        "file_count": len(normative_rows),
+        "size_bytes": sum(
+            int(row["size_bytes"]) for row in normative_rows
+        ),
+        "tree_sha256": stable_hash(normative_rows),
+    }
+    if normative != HIPPORAG_SOURCE_NORMATIVE_TREE:
+        raise Dstc9P17RuntimeBindingError(
+            "repaired P17 HippoRAG normative source tree drifted"
+        )
+    diagnostic = {
+        "acceptance_role": "diagnostic_only_not_live_identity",
+        "allowed_shape": "only___pycache___descendant_dot_pyc_v1",
+        "file_count": len(bytecode_rows),
+        "size_bytes": sum(
+            int(row["size_bytes"]) for row in bytecode_rows
+        ),
+        "tree_sha256": stable_hash(bytecode_rows),
+    }
+    return {
+        "historical_P17_aggregate_lineage": {
+            "acceptance_role": "lineage_only_not_live_identity",
+            **EXPECTED_ASSET_TREES["HippoRAG_source"],
+        },
+        "normative_tree": normative,
+        "source_local_bytecode_diagnostic": diagnostic,
+    }
+
+
+def runtime_binding_acceptance_identity(
+    value: Mapping[str, Any],
+) -> str:
+    """Return identity with the source-local bytecode diagnostic removed."""
+
+    if not isinstance(value, Mapping):
+        raise Dstc9P17RuntimeBindingError(
+            "runtime binding receipt is invalid"
+        )
+    declared = _verify_self_hash(
+        value,
+        field_name="runtime binding receipt",
+        self_field="self_sha256",
+    )
+    if value.get("schema") != SCHEMA or declared != value.get("self_sha256"):
+        raise Dstc9P17RuntimeBindingError(
+            "runtime binding receipt identity drifted"
+        )
+    body = dict(value)
+    body.pop("self_sha256")
+    assets = body.get("assets")
+    if not isinstance(assets, Mapping):
+        raise Dstc9P17RuntimeBindingError(
+            "runtime binding assets are invalid"
+        )
+    normalized_assets = dict(assets)
+    source = normalized_assets.get("HippoRAG_source")
+    if not isinstance(source, Mapping):
+        raise Dstc9P17RuntimeBindingError(
+            "runtime binding HippoRAG source is invalid"
+        )
+    normalized_source = dict(source)
+    diagnostic = normalized_source.pop(
+        "source_local_bytecode_diagnostic",
+        None,
+    )
+    if (
+        not isinstance(diagnostic, Mapping)
+        or set(diagnostic)
+        != {
+            "acceptance_role",
+            "allowed_shape",
+            "file_count",
+            "size_bytes",
+            "tree_sha256",
+        }
+        or diagnostic.get("acceptance_role")
+        != "diagnostic_only_not_live_identity"
+        or diagnostic.get("allowed_shape")
+        != "only___pycache___descendant_dot_pyc_v1"
+        or type(diagnostic.get("file_count")) is not int
+        or int(diagnostic["file_count"]) < 0
+        or type(diagnostic.get("size_bytes")) is not int
+        or int(diagnostic["size_bytes"]) < 0
+        or not isinstance(diagnostic.get("tree_sha256"), str)
+        or _HEX64.fullmatch(str(diagnostic["tree_sha256"])) is None
+    ):
+        raise Dstc9P17RuntimeBindingError(
+            "runtime binding bytecode diagnostic is invalid"
+        )
+    normalized_assets["HippoRAG_source"] = normalized_source
+    body["assets"] = normalized_assets
+    return stable_hash(body)
 
 
 def _load_exact_fingerprint(path: Path) -> dict[str, Any]:
@@ -977,13 +1101,9 @@ def verify_p17_reused_closure_binding(
             "P17 SmolLM tree drifted"
         )
     minilm_binding = _verify_minilm_manifest_and_tree()
-    source_tree = tree_receipt(
-        P17_HIPPORAG_SOURCE,
-        "repaired P17 HippoRAG source",
-    )
+    source_tree = _hipporag_source_tree_receipt()
     if (
-        source_tree != EXPECTED_ASSET_TREES["HippoRAG_source"]
-        or file_sha256(P17_REPAIRED_SOURCE_FILE)
+        file_sha256(P17_REPAIRED_SOURCE_FILE)
         != REPAIRED_SOURCE_FILE_SHA256
     ):
         raise Dstc9P17RuntimeBindingError(
@@ -1175,7 +1295,10 @@ def verify_worker_runtime_provenance(
         local_llm_model=local_llm_model,
         local_embedding_model=local_embedding_model,
     )
-    if persisted != live:
+    if (
+        runtime_binding_acceptance_identity(persisted)
+        != runtime_binding_acceptance_identity(live)
+    ):
         raise Dstc9P17RuntimeBindingError(
             "worker live runtime differs from binding receipt"
         )
@@ -1268,6 +1391,7 @@ __all__ = [
     "canonical_json_bytes",
     "file_sha256",
     "make_current_study_hardware_binding",
+    "runtime_binding_acceptance_identity",
     "stable_hash",
     "tree_receipt",
     "verify_current_study_hardware_binding",

@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import sys
 from typing import Any, Mapping, Sequence
 
 from .contract import (
@@ -55,6 +56,10 @@ def _validate_effective_environment(
             effective.get(key) != value
             for key, value in WORKER_FIXED_ENVIRONMENT_VALUES.items()
         )
+        or effective.get("PYTHONPYCACHEPREFIX")
+        != str(Path(str(effective.get("TMPDIR"))) / "pycache")
+        or sys.pycache_prefix
+        != effective.get("PYTHONPYCACHEPREFIX")
     ):
         raise Dstc9OfficialHippoRAGError(
             "worker environment contract failed"

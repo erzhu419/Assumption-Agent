@@ -75,6 +75,7 @@ def _exact_worker_environment(root: Path) -> dict[str, str]:
         "LANG": "C.UTF-8",
         "PATH": f"{Path(sys.executable).parent}:/usr/bin:/bin",
         "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONPYCACHEPREFIX": str(root / "tmp" / "pycache"),
         "PYTHONNOUSERSITE": "1",
         "TEMP": str(root / "tmp"),
         "TMP": str(root / "tmp"),
@@ -378,6 +379,11 @@ def test_worker_environment_and_logical_cuda0_attestation(
 ) -> None:
     environment = _exact_worker_environment(tmp_path)
     assert frozenset(environment) == contract.WORKER_ENVIRONMENT_KEYS
+    monkeypatch.setattr(
+        worker.sys,
+        "pycache_prefix",
+        environment["PYTHONPYCACHEPREFIX"],
+    )
     worker._validate_effective_environment(environment)
 
     contaminated = dict(environment)
@@ -392,6 +398,11 @@ def test_worker_environment_and_logical_cuda0_attestation(
         contract.Dstc9OfficialHippoRAGError, match="environment contract"
     ):
         worker._validate_effective_environment(wrong_gpu)
+    monkeypatch.setattr(worker.sys, "pycache_prefix", "/wrong/prefix")
+    with pytest.raises(
+        contract.Dstc9OfficialHippoRAGError, match="environment contract"
+    ):
+        worker._validate_effective_environment(environment)
 
     class _Cuda:
         def __init__(self, count: int = 1) -> None:
@@ -426,6 +437,46 @@ def test_worker_environment_and_logical_cuda0_attestation(
         contract.Dstc9OfficialHippoRAGError, match="logical cuda:0"
     ):
         worker._validate_logical_cuda0(_Torch(count=2))
+
+
+def test_isolated_xoption_overrides_ignored_pycache_environment(
+    tmp_path: Path,
+) -> None:
+    ignored = tmp_path / "ignored-by-isolated-mode"
+    bound = tmp_path / "fresh-work/tmp/pycache"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-B",
+            "-X",
+            f"pycache_prefix={bound}",
+            "-c",
+            (
+                "import json,os,sys;"
+                "print(json.dumps({"
+                "'env':os.environ['PYTHONPYCACHEPREFIX'],"
+                "'prefix':sys.pycache_prefix,"
+                "'write':sys.dont_write_bytecode"
+                "},sort_keys=True))"
+            ),
+        ],
+        check=False,
+        capture_output=True,
+        env={
+            "LANG": "C.UTF-8",
+            "PATH": "/usr/bin:/bin",
+            "PYTHONPYCACHEPREFIX": str(ignored),
+        },
+        text=True,
+    )
+    assert completed.returncode == 0
+    observed = json.loads(completed.stdout)
+    assert observed == {
+        "env": str(ignored),
+        "prefix": str(bound),
+        "write": True,
+    }
 
 
 def test_official_core_config_is_gpu0_offline_fixed_and_never_resized(
@@ -572,6 +623,120 @@ def test_committed_minilm_manifest_matches_without_reading_model_files(
     assert (
         receipt["normative_tree_sha256"]
         == binding.MINILM_NORMATIVE_TREE_SHA256
+    )
+
+
+def test_hipporag_source_tree_binds_only_normative_files_and_diagnoses_pyc(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source_root = tmp_path / "hipporag-source"
+    source_file = source_root / "hipporag/HippoRAG.py"
+    init_file = source_root / "hipporag/__init__.py"
+    cache_file = (
+        source_root
+        / "hipporag/__pycache__/HippoRAG.cpython-310.pyc"
+    )
+    cache_file.parent.mkdir(parents=True)
+    source_file.write_bytes(b"# synthetic repaired source\n")
+    init_file.write_bytes(b"# synthetic package\n")
+    cache_file.write_bytes(b"synthetic bytecode generation one")
+    normative_rows = [
+        row
+        for row in binding._tree_rows(source_root, "synthetic source")
+        if "__pycache__" not in Path(str(row["path"])).parts
+        and Path(str(row["path"])).suffix != ".pyc"
+    ]
+    normative = {
+        "file_count": len(normative_rows),
+        "size_bytes": sum(
+            int(row["size_bytes"]) for row in normative_rows
+        ),
+        "tree_sha256": binding.stable_hash(normative_rows),
+    }
+    monkeypatch.setattr(binding, "P17_HIPPORAG_SOURCE", source_root)
+    monkeypatch.setattr(
+        binding, "HIPPORAG_SOURCE_NORMATIVE_TREE", normative
+    )
+
+    first = binding._hipporag_source_tree_receipt()
+    assert first["normative_tree"] == normative
+    diagnostic = first["source_local_bytecode_diagnostic"]
+    assert diagnostic["file_count"] == 1
+    cache_file.write_bytes(b"synthetic bytecode generation two is larger")
+    second = binding._hipporag_source_tree_receipt()
+    assert second["normative_tree"] == normative
+    assert (
+        second["source_local_bytecode_diagnostic"]["tree_sha256"]
+        != diagnostic["tree_sha256"]
+    )
+
+    rogue_pyc = source_root / "hipporag/rogue.pyc"
+    rogue_pyc.write_bytes(b"not beneath pycache")
+    with pytest.raises(
+        binding.Dstc9P17RuntimeBindingError,
+        match="non-cache content",
+    ):
+        binding._hipporag_source_tree_receipt()
+    rogue_pyc.unlink()
+    rogue_cache_file = source_root / "hipporag/__pycache__/rogue.txt"
+    rogue_cache_file.write_bytes(b"not bytecode")
+    with pytest.raises(
+        binding.Dstc9P17RuntimeBindingError,
+        match="non-cache content",
+    ):
+        binding._hipporag_source_tree_receipt()
+
+
+def test_runtime_identity_excludes_only_source_bytecode_diagnostic() -> None:
+    source = {
+        "historical_P17_aggregate_lineage": {
+            "acceptance_role": "lineage_only_not_live_identity",
+            **binding.EXPECTED_ASSET_TREES["HippoRAG_source"],
+        },
+        "normative_tree": dict(binding.HIPPORAG_SOURCE_NORMATIVE_TREE),
+        "repaired_file_sha256": binding.REPAIRED_SOURCE_FILE_SHA256,
+        "source_local_bytecode_diagnostic": {
+            "acceptance_role": "diagnostic_only_not_live_identity",
+            "allowed_shape": "only___pycache___descendant_dot_pyc_v1",
+            "file_count": 36,
+            "size_bytes": 195_884,
+            "tree_sha256": "a" * 64,
+        },
+        "source_root": str(binding.P17_HIPPORAG_SOURCE),
+    }
+    body = {
+        "assets": {"HippoRAG_source": source},
+        "hardware": "bound",
+        "schema": binding.SCHEMA,
+    }
+    first = {**body, "self_sha256": binding.stable_hash(body)}
+    changed_body = json.loads(json.dumps(body))
+    changed_body["assets"]["HippoRAG_source"][
+        "source_local_bytecode_diagnostic"
+    ] = {
+        "acceptance_role": "diagnostic_only_not_live_identity",
+        "allowed_shape": "only___pycache___descendant_dot_pyc_v1",
+        "file_count": 37,
+        "size_bytes": 195_944,
+        "tree_sha256": "b" * 64,
+    }
+    changed = {
+        **changed_body,
+        "self_sha256": binding.stable_hash(changed_body),
+    }
+    assert (
+        binding.runtime_binding_acceptance_identity(first)
+        == binding.runtime_binding_acceptance_identity(changed)
+    )
+
+    changed_body["hardware"] = "drifted"
+    drifted = {
+        **changed_body,
+        "self_sha256": binding.stable_hash(changed_body),
+    }
+    assert (
+        binding.runtime_binding_acceptance_identity(first)
+        != binding.runtime_binding_acceptance_identity(drifted)
     )
 
 
@@ -847,6 +1012,11 @@ def test_worker_provenance_requires_all_exact_pth_roots(
         "verify_p17_reused_closure_binding",
         lambda **_kwargs: receipt,
     )
+    monkeypatch.setattr(
+        binding,
+        "runtime_binding_acceptance_identity",
+        lambda _value: "same-synthetic-runtime",
+    )
     with pytest.raises(
         binding.Dstc9P17RuntimeBindingError,
         match=r"required P17 base sys\.path provenance",
@@ -910,6 +1080,11 @@ def test_worker_attests_p17_base_sys_path_separately_from_formal_code(
         binding,
         "verify_p17_reused_closure_binding",
         lambda **_kwargs: receipt,
+    )
+    monkeypatch.setattr(
+        binding,
+        "runtime_binding_acceptance_identity",
+        lambda _value: "same-synthetic-runtime",
     )
     observed_inventory_paths: list[tuple[str, ...]] = []
 
@@ -1069,10 +1244,20 @@ def test_adapter_worker_command_clears_environment_denies_network_and_binds_gpu0
     joined = "\n".join(command)
     assert "--ignore-environment" in command
     assert "-I" in command
+    assert "-X" in command
+    assert (
+        f"pycache_prefix={tmp_path / 'work/tmp/pycache'}"
+        in command
+    )
+    assert command.index("-X") < command.index("-c")
     assert "-c" in command
     assert "-m" not in command
     assert "CUDA_VISIBLE_DEVICES=0" in command
     assert "HF_HUB_OFFLINE=1" in command
+    assert (
+        f"PYTHONPYCACHEPREFIX={tmp_path / 'work/tmp/pycache'}"
+        in command
+    )
     assert "TRANSFORMERS_OFFLINE=1" in command
     assert "TOKENIZERS_PARALLELISM=false" in command
     assert "IPAddressDeny=any" in command
