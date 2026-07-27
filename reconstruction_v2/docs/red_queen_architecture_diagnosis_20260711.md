@@ -5170,6 +5170,12 @@ central directory 不包含 local-header extra length，因此事前 transport a
 tests、保守 alias/table/column parser、四个 member 的唯一打开次序与一个不可 replay 的 output root。
 现在才允许唯一一次公开 P0。
 
+第一次 launcher invocation 因冻结 output root 的父目录不存在，在 `Path.mkdir` 即退出；控制流尚未写
+`qualification.attempt.json`、尚未进入 `qualify()`，四个 member 的 local-header/stream GET 和
+semantic payload open 全部为 0。因此 incident `86932b02…85d9` 将它定性为
+`pre_attempt_launch_preparation_invalid`，不是资格化 retry。只允许创建 mode `0700` 的冻结父目录，
+随后用同一 commit、arguments 与 output leaf 消费仍剩的一次正式 P0；不得修改代码、source 或设计。
+
 ## 附录 A：关键证据索引
 
 - BIRD P1 typed schema-expansion source chain：
@@ -5178,6 +5184,7 @@ tests、保守 alias/table/column parser、四个 member 的唯一打开次序�
   [`ZIP transport addendum`](../manifests/bird_p1_zip_member_transport_addendum_v1.json)；
   [`sqlglot runtime asset`](../manifests/bird_p1_sqlglot_runtime_asset_v1.json)；
   [`P0 qualification freeze`](../manifests/bird_p0_public_source_qualification_freeze_v1.json)；
+  [`pre-attempt parent incident`](../manifests/bird_p0_pre_attempt_parent_directory_incident_v1.json)；
   [`P0 qualifier`](../assumption_agent/benchmarks/bird_p0_public_source_qualification_v1.py)；
   [`remote ZIP topology inventory`](../scripts/inventory_remote_zip_members_v1.py)
 
