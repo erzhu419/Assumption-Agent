@@ -5124,11 +5124,25 @@ member。source-access receipt `bf53b034…379a` 形成时 archive member payloa
 `test.json/test_tables.json/test_database` 均未打开。下一步只允许在 committed qualifier 中读取
 TRAIN/DEV/tables 与对应 database aggregate。
 
+唯一 P0 随后合规终止，原因是 **未见 schema 的 DEV multi-FK family 容量不足**，不是 parser 或
+infrastructure failure。TRAIN 中三类分别有 1,823 / 127 / 1,134 个 eligible item，三个冻结 tier
+的 database-disjoint TRAIN allocation 全部可行；但 DEV 的 `MULTI_FOREIGN_KEY_PATH` 只有 10 items、
+3 databases，低于最小 floor 的 12 items、6 databases，而另外两类分别为 263/20 与 140/20。
+因此不能降低 quota、把 train row 填入 M、改变 family 或重跑。terminal
+`a98bc12b…f9a5` 记录 effect cohort/secret/action/RAW/HippoRAG/evaluator/score/model/GPU/API 均为
+0，TEST 与 SQLite payload 也仍未打开。
+
+这关闭的是 Spider 1.0 对当前跨-schema L5 设计的容量，不是 typed schema expansion 的效果负结果。
+机制只允许原样移植到一个独立、公开即可先证明 DEV multi-relation 容量的 source；若没有这样的来源，
+本路线应停止，不能继续 source roulette。
+
 ## 附录 A：关键证据索引
 
 - Spider P1 typed schema-expansion source chain：
   [`source custody`](../manifests/spider_p1_typed_schema_expansion_source_custody_v1.json)；
-  [`public source access`](../manifests/spider_p1_public_source_access_v1.json)
+  [`public source access`](../manifests/spider_p1_public_source_access_v1.json)；
+  [`P0 qualification freeze`](../manifests/spider_p0_public_source_qualification_freeze_v1.json)；
+  [`P0 terminal`](../manifests/spider_p0_public_source_qualification_terminal_v1.json)
 
 - persistent user-service source-free P0：
   [`qualification freeze`](../manifests/persistent_user_service_p0_qualification_freeze_v1.json)；
