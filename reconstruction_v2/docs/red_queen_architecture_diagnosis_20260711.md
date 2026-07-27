@@ -5156,10 +5156,18 @@ member。该动作只节省无关 8.9 GB 数据，不改变 source、split 或 c
 typed schema-expansion 路线，不再选择第五个同类 source；若通过，才允许冻结 A_form/F_search/A_hold
 与 untouched DEV M_search，并一次执行 Agent/RAW/official HippoRAG 和 L5。
 
+唯一 topology inventory 已完成，未下载 8.9 GB/346 MB 的完整 archive，也未解压任何 member。
+train/dev central directory 分别为 10/5 entries，均为 0 duplicate、0 unsafe path；四个授权 member
+的 central-directory size/CRC/local-header offset 已绑定。source-access receipt
+`3b6b70fd…f755` 形成时，semantic member payload、database values、selection/action/baseline/evaluator/
+score 的打开计数仍全部为 0。下一步只能用已提交的 acquisition/qualifier 各一次取得并解析这四个
+member，形成 aggregate P0 terminal。
+
 ## 附录 A：关键证据索引
 
 - BIRD P1 typed schema-expansion source chain：
   [`source custody`](../manifests/bird_p1_typed_schema_expansion_source_custody_v1.json)；
+  [`public source access`](../manifests/bird_p1_public_source_access_v1.json)；
   [`remote ZIP topology inventory`](../scripts/inventory_remote_zip_members_v1.py)
 
 - Spider P1 typed schema-expansion source chain：
