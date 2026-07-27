@@ -5163,11 +5163,22 @@ train/dev central directory 分别为 10/5 entries，均为 0 duplicate、0 unsa
 score 的打开计数仍全部为 0。下一步只能用已提交的 acquisition/qualifier 各一次取得并解析这四个
 member，形成 aggregate P0 terminal。
 
+central directory 不包含 local-header extra length，因此事前 transport addendum
+`59dcda4a…9d42` 仅把每个 member 的单次 combined GET 改为一次 30-byte local-header GET 加一次
+精确 filename/extra/compressed-stream GET；source/family/quota/metric/gate 均未改变。P0 freeze
+`b26ded14…37e4` 已绑定本机取得的 `sqlglot==30.13.0` wheel `08f87ff7…49b1`、5 个 source-free
+tests、保守 alias/table/column parser、四个 member 的唯一打开次序与一个不可 replay 的 output root。
+现在才允许唯一一次公开 P0。
+
 ## 附录 A：关键证据索引
 
 - BIRD P1 typed schema-expansion source chain：
   [`source custody`](../manifests/bird_p1_typed_schema_expansion_source_custody_v1.json)；
   [`public source access`](../manifests/bird_p1_public_source_access_v1.json)；
+  [`ZIP transport addendum`](../manifests/bird_p1_zip_member_transport_addendum_v1.json)；
+  [`sqlglot runtime asset`](../manifests/bird_p1_sqlglot_runtime_asset_v1.json)；
+  [`P0 qualification freeze`](../manifests/bird_p0_public_source_qualification_freeze_v1.json)；
+  [`P0 qualifier`](../assumption_agent/benchmarks/bird_p0_public_source_qualification_v1.py)；
   [`remote ZIP topology inventory`](../scripts/inventory_remote_zip_members_v1.py)
 
 - Spider P1 typed schema-expansion source chain：
