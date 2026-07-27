@@ -1,0 +1,18 @@
+[Unit]
+Description=DSTC9 P0 one-shot public non-scoring source qualification v1
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/dstc9_p1_20260727/p0_v1
+UMask=0077
+ExecStartPre=/usr/bin/test ! -e %h/dstc9_p1_20260727/p0_v1/work
+ExecStartPre=/usr/bin/install -d -m 0700 %h/dstc9_p1_20260727/p0_v1/work
+ExecStart=/usr/bin/env -i HOME=%h LANG=C.UTF-8 LC_ALL=C.UTF-8 PATH=/home/erzhu419/techqa_p1_20260727/source_runtime_v1/venv/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONHASHSEED=0 PYTHONNOUSERSITE=1 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 /home/erzhu419/techqa_p1_20260727/source_runtime_v1/venv/bin/python -I -B %h/dstc9_p1_20260727/p0_v1/reconstruction_v2/assumption_agent/benchmarks/dstc9_p0_public_source_qualification_v1.py --bundle %h/dstc9_p1_20260727/source_relay_v1/dstc9_train_val.bundle.tar --private-eligibility-manifest %h/dstc9_p1_20260727/p0_v1/work/eligibility.private.json --safe-terminal %h/dstc9_p1_20260727/p0_v1/work/qualification.safe.json
+CPUQuota=400%
+MemoryMax=16G
+TasksMax=32
+KillMode=control-group
+Restart=no
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+TimeoutStartSec=infinity
