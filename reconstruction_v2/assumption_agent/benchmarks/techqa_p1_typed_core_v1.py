@@ -34,6 +34,11 @@ SCALE = 1_000_000
 BM25_K1 = 1.2
 BM25_B = 0.75
 MIN_SIGNATURE_SUPPORT = 3
+MAX_QUERY_CHARACTERS = 4_000
+MAX_DOCUMENT_FIELD_CHARACTERS = 1_000_000
+MAX_NORMALIZED_INPUT_CHARACTERS = (
+    2 * MAX_DOCUMENT_FIELD_CHARACTERS + 2
+)
 QUERY_SERIALIZATION_SEPARATOR = "\n"
 DOCUMENT_SERIALIZATION_SEPARATOR = "\n\n"
 
@@ -198,7 +203,7 @@ def normalize_text(
     _checked_text(
         value,
         field=field,
-        maximum_length=200_000,
+        maximum_length=MAX_NORMALIZED_INPUT_CHARACTERS,
         allow_empty=allow_empty,
     )
     normalized = " ".join(unicodedata.normalize("NFKC", value).casefold().split())
@@ -217,12 +222,12 @@ def serialize_query_text(question_title: str, question_text: str) -> str:
     _checked_text(
         question_title,
         field="question_title",
-        maximum_length=20_000,
+        maximum_length=MAX_QUERY_CHARACTERS,
     )
     _checked_text(
         question_text,
         field="question_text",
-        maximum_length=100_000,
+        maximum_length=MAX_QUERY_CHARACTERS,
         allow_empty=True,
     )
     combined = (
@@ -230,6 +235,10 @@ def serialize_query_text(question_title: str, question_text: str) -> str:
         + QUERY_SERIALIZATION_SEPARATOR
         + question_text
     )
+    if len(combined) > MAX_QUERY_CHARACTERS:
+        raise TechqaP1TypedCoreError(
+            "serialized question exceeds the shared official-worker bound"
+        )
     if not _TOKEN_RE.search(normalize_text(combined)):
         raise TechqaP1TypedCoreError("serialized question has no lexical token")
     return combined
@@ -244,8 +253,16 @@ class Document:
     def __post_init__(self) -> None:
         if type(self.ordinal) is not int or self.ordinal < 0:
             raise TechqaP1TypedCoreError("document ordinal is invalid")
-        _checked_text(self.title, field="document title", maximum_length=20_000)
-        _checked_text(self.text, field="document text", maximum_length=200_000)
+        _checked_text(
+            self.title,
+            field="document title",
+            maximum_length=MAX_DOCUMENT_FIELD_CHARACTERS,
+        )
+        _checked_text(
+            self.text,
+            field="document text",
+            maximum_length=MAX_DOCUMENT_FIELD_CHARACTERS,
+        )
         lexical_tokens(
             self.title + DOCUMENT_SERIALIZATION_SEPARATOR + self.text
         )
@@ -865,6 +882,10 @@ class ActionSlate:
             ],
             "feature_names": list(FEATURE_NAMES),
             "features": [feature.payload() for feature in self.features],
+            "maximum_document_field_characters": (
+                MAX_DOCUMENT_FIELD_CHARACTERS
+            ),
+            "maximum_query_characters": MAX_QUERY_CHARACTERS,
             "forbidden_action_inputs": [
                 "answer_span",
                 "answerable",
@@ -1415,6 +1436,9 @@ __all__ = [
     "E1Model",
     "FEATURE_NAMES",
     "MIN_SIGNATURE_SUPPORT",
+    "MAX_DOCUMENT_FIELD_CHARACTERS",
+    "MAX_NORMALIZED_INPUT_CHARACTERS",
+    "MAX_QUERY_CHARACTERS",
     "POLICY_STAGES",
     "PUBLIC_DOCUMENT_FIELDS",
     "PolicyDecision",

@@ -203,6 +203,13 @@ def test_raw_is_full_unchanged_query_and_identical_document_bytes() -> None:
     ).encode("utf-8")
     assert core.QUERY_SERIALIZATION_SEPARATOR == "\n"
     assert core.DOCUMENT_SERIALIZATION_SEPARATOR == "\n\n"
+    assert core.MAX_QUERY_CHARACTERS == 4_000
+    assert core.MAX_DOCUMENT_FIELD_CHARACTERS == 1_000_000
+    with pytest.raises(
+        core.TechqaP1TypedCoreError,
+        match="official-worker bound",
+    ):
+        core.serialize_query_text("q" * 4_000, "x")
     slate = core.build_action_slate(
         QUESTION_TITLE,
         QUESTION_TEXT,
