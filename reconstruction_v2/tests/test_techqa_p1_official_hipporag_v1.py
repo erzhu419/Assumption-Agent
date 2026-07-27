@@ -15,6 +15,9 @@ from assumption_agent.benchmarks import (
     techqa_p1_official_hipporag_v1 as adapter,
 )
 from replication_runtime.averitec_p1_official_v1 import worker as inner
+from replication_runtime.morehopqa_official_hipporag_v1 import (
+    contract as inner_contract,
+)
 
 
 @pytest.fixture
@@ -233,6 +236,17 @@ def test_public_contract_round_trip_and_inner_surface_is_label_free() -> None:
     ]
     assert [row["idx"] for row in inner_payload["articles"]] == list(
         range(len(_documents()))
+    )
+    assert inner_contract.serialize_corpus(
+        inner_contract.validate_corpus(inner_payload["articles"])
+    ) == tuple(
+        adapter.serialize_document(row) for row in cluster.documents
+    )
+    assert adapter.DOCUMENT_SERIALIZATION == (
+        "title_utf8_then_two_lf_then_text_utf8_v1"
+    )
+    assert adapter.INNER_SERIALIZATION == (
+        "title_utf8_then_two_lf_then_body_utf8_v1"
     )
     keys = {key.casefold() for key in _all_keys(inner_payload)}
     assert not keys.intersection(adapter.FORBIDDEN_INPUT_KEYS)

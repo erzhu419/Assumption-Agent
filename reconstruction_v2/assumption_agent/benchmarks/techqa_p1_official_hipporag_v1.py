@@ -53,7 +53,7 @@ MIN_DOCUMENT_COUNT = inner_contract.MIN_CORPUS_SIZE
 MAX_DOCUMENT_COUNT = inner_contract.MAX_CORPUS_SIZE
 MAX_QUERY_COUNT = inner_worker.MAX_QUERY_COUNT
 QUERY_SERIALIZATION = "question_title_utf8_then_lf_then_question_text_utf8_v1"
-DOCUMENT_SERIALIZATION = "title_utf8_then_lf_then_text_utf8_v1"
+DOCUMENT_SERIALIZATION = "title_utf8_then_two_lf_then_text_utf8_v1"
 INNER_SERIALIZATION = inner_contract.SERIALIZATION
 TOP_K = inner_contract.TOP_K
 

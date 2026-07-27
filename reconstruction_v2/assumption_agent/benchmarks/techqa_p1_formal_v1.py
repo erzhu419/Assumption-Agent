@@ -249,9 +249,11 @@ class VerifiedDocument:
         return {
             "document_id": self.document_id,
             "serialized_sha256": hashlib.sha256(
-                (self.title + core.SERIALIZATION_SEPARATOR + self.text).encode(
-                    "utf-8"
-                )
+                (
+                    self.title
+                    + core.DOCUMENT_SERIALIZATION_SEPARATOR
+                    + self.text
+                ).encode("utf-8")
             ).hexdigest(),
         }
 

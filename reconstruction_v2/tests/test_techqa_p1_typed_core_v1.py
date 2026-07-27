@@ -199,8 +199,10 @@ def test_raw_is_full_unchanged_query_and_identical_document_bytes() -> None:
         == raw_query
     )
     assert core.serialize_document_bytes(documents[0]) == (
-        documents[0].title + "\n" + documents[0].text
+        documents[0].title + "\n\n" + documents[0].text
     ).encode("utf-8")
+    assert core.QUERY_SERIALIZATION_SEPARATOR == "\n"
+    assert core.DOCUMENT_SERIALIZATION_SEPARATOR == "\n\n"
     slate = core.build_action_slate(
         QUESTION_TITLE,
         QUESTION_TEXT,

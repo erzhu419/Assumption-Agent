@@ -7,7 +7,7 @@ answer-span, relevance-label, split, cluster, or document-identity entrypoint.
 
 RAW is deterministic BM25 over the complete, unchanged
 ``question_title + "\\n" + question_text`` string and the identical serialized
-``document.title + "\\n" + document.text`` bytes used by every recipe.  Five
+``document.title + "\\n\\n" + document.text`` bytes used by every recipe.  Five
 additional label-free recipes derive typed coordinates from those same public
 bytes.  E0 is the frozen typed cascade.  E1 is a conservative pairwise
 structural-signature table fitted only from exact A_form utilities; unseen,
@@ -34,7 +34,8 @@ SCALE = 1_000_000
 BM25_K1 = 1.2
 BM25_B = 0.75
 MIN_SIGNATURE_SUPPORT = 3
-SERIALIZATION_SEPARATOR = "\n"
+QUERY_SERIALIZATION_SEPARATOR = "\n"
+DOCUMENT_SERIALIZATION_SEPARATOR = "\n\n"
 
 R0_RAW_BM25 = "R0_RAW_BM25"
 R1_TITLE_FOCUSED = "R1_TITLE_FOCUSED"
@@ -224,7 +225,11 @@ def serialize_query_text(question_title: str, question_text: str) -> str:
         maximum_length=100_000,
         allow_empty=True,
     )
-    combined = question_title + SERIALIZATION_SEPARATOR + question_text
+    combined = (
+        question_title
+        + QUERY_SERIALIZATION_SEPARATOR
+        + question_text
+    )
     if not _TOKEN_RE.search(normalize_text(combined)):
         raise TechqaP1TypedCoreError("serialized question has no lexical token")
     return combined
@@ -241,7 +246,9 @@ class Document:
             raise TechqaP1TypedCoreError("document ordinal is invalid")
         _checked_text(self.title, field="document title", maximum_length=20_000)
         _checked_text(self.text, field="document text", maximum_length=200_000)
-        lexical_tokens(self.title + SERIALIZATION_SEPARATOR + self.text)
+        lexical_tokens(
+            self.title + DOCUMENT_SERIALIZATION_SEPARATOR + self.text
+        )
 
 
 def document_from_public_fields(value: object) -> Document:
@@ -276,7 +283,11 @@ def serialize_document_text(document: Document) -> str:
 
     if not isinstance(document, Document):
         raise TechqaP1TypedCoreError("document is not a public Document")
-    return document.title + SERIALIZATION_SEPARATOR + document.text
+    return (
+        document.title
+        + DOCUMENT_SERIALIZATION_SEPARATOR
+        + document.text
+    )
 
 
 def serialize_document_bytes(document: Document) -> bytes:
@@ -874,7 +885,12 @@ class ActionSlate:
             "raw_query_bytes_sha256": self.raw_query_bytes_sha256,
             "recipe_ids": list(RECIPE_IDS),
             "schema": f"{VERSION}_action_slate",
-            "serialization_separator": SERIALIZATION_SEPARATOR,
+            "document_serialization_separator": (
+                DOCUMENT_SERIALIZATION_SEPARATOR
+            ),
+            "query_serialization_separator": (
+                QUERY_SERIALIZATION_SEPARATOR
+            ),
             "serialized_document_set_sha256": (
                 self.serialized_document_set_sha256
             ),
@@ -1412,7 +1428,8 @@ __all__ = [
     "RECIPE_IDS",
     "RecipeAction",
     "SCALE",
-    "SERIALIZATION_SEPARATOR",
+    "DOCUMENT_SERIALIZATION_SEPARATOR",
+    "QUERY_SERIALIZATION_SEPARATOR",
     "SIGNATURE_FEATURE_NAMES",
     "SignatureRule",
     "STUDY_ID",
