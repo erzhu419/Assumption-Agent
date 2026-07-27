@@ -9,6 +9,7 @@ import math
 from numbers import Real
 import os
 from pathlib import Path
+import stat
 from typing import Mapping, Protocol, Sequence
 
 import numpy as np
@@ -47,6 +48,120 @@ class CrossEncoderScorer(Protocol):
     def __call__(
         self, pairs: Sequence[tuple[str, str]]
     ) -> Sequence[Real]: ...
+
+
+_CROSS_ENCODER_REQUIRED_FILES = (
+    (
+        "config.json",
+        794,
+        "380e02c93f431831be65d99a4e7e5f67c133985bf2e77d9d4eba46847190bacc",
+    ),
+    (
+        "model.safetensors",
+        90_870_598,
+        "821d1aa69520101d6e0737f78a042ae25b19e5cb9160701909d10434f4aeb0ae",
+    ),
+    (
+        "special_tokens_map.json",
+        132,
+        "3c3507f36dff57bce437223db3b3081d1e2b52ec3e56ee55438193ecb2c94dd6",
+    ),
+    (
+        "tokenizer.json",
+        711_396,
+        "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66",
+    ),
+    (
+        "tokenizer_config.json",
+        1_330,
+        "a5c2e5a7b1a29a0702cd28c08a399b5ecc110c263009d17f7e3b415f25905fd8",
+    ),
+    (
+        "vocab.txt",
+        231_508,
+        "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3",
+    ),
+)
+_CROSS_ENCODER_REQUIRED_TREE_SHA256 = (
+    "923d4371d5fe13534d7431895890c2142"
+    "a8552a441f09ec7b28d035aaae9120c"
+)
+
+
+def _verify_cross_encoder_model_tree(root: Path) -> str:
+    """Bind every normative CE byte before constructing the model."""
+
+    if not isinstance(root, Path) or not root.is_absolute():
+        raise BioasqCoordinateScorerError(
+            "cross-encoder model root must be absolute"
+        )
+    try:
+        metadata = root.lstat()
+        if root.is_symlink() or not stat.S_ISDIR(metadata.st_mode):
+            raise BioasqCoordinateScorerError(
+                "cross-encoder model root is unavailable"
+            )
+        children = tuple(root.iterdir())
+    except OSError as exc:
+        raise BioasqCoordinateScorerError(
+            "cross-encoder model root is unavailable"
+        ) from exc
+    required_names = {
+        name for name, _size, _sha256 in _CROSS_ENCODER_REQUIRED_FILES
+    }
+    observed_files = {
+        child.name for child in children if child.is_file()
+    }
+    observed_directories = {
+        child.name for child in children if child.is_dir()
+    }
+    if (
+        observed_files != required_names
+        or not observed_directories <= {".cache"}
+        or any(child.is_symlink() for child in children)
+        or any(
+            not child.is_file() and not child.is_dir()
+            for child in children
+        )
+    ):
+        raise BioasqCoordinateScorerError(
+            "cross-encoder model topology drifted"
+        )
+    rows: list[dict[str, object]] = []
+    for relative, expected_size, expected_sha256 in (
+        _CROSS_ENCODER_REQUIRED_FILES
+    ):
+        path = root / relative
+        try:
+            file_metadata = path.lstat()
+        except OSError as exc:
+            raise BioasqCoordinateScorerError(
+                "cross-encoder required model file is unavailable"
+            ) from exc
+        if (
+            path.is_symlink()
+            or not stat.S_ISREG(file_metadata.st_mode)
+            or file_metadata.st_nlink != 1
+            or file_metadata.st_size != expected_size
+            or _file_sha256(path, "cross-encoder required model file")
+            != expected_sha256
+        ):
+            raise BioasqCoordinateScorerError(
+                "cross-encoder required model file drifted"
+            )
+        rows.append(
+            {
+                "path": relative,
+                "sha256": expected_sha256,
+                "size": expected_size,
+            }
+        )
+    tree_sha256 = stable_hash(rows)
+    if tree_sha256 != _CROSS_ENCODER_REQUIRED_TREE_SHA256:
+        raise BioasqCoordinateScorerError(
+            "cross-encoder normative model tree drifted"
+        )
+    return tree_sha256
 
 
 def _validate_effective_environment(
@@ -346,6 +461,9 @@ def _build_production_dependencies(
     """Load each frozen local model exactly once on physical GPU1."""
 
     _validate_logical_cuda0()
+    cross_encoder_tree_sha256 = _verify_cross_encoder_model_tree(
+        cross_encoder_model_root
+    )
     from assumption_agent.benchmarks.hitab_p1_runtime_v1 import (
         BrightCrossEncoderProductionScorer,
     )
@@ -384,6 +502,9 @@ def _build_production_dependencies(
             "hitab_p1_runtime_v1.BrightCrossEncoderProductionScorer"
         ),
         "cross_encoder_model_root": str(cross_encoder_model_root),
+        "cross_encoder_required_tree_sha256": (
+            cross_encoder_tree_sha256
+        ),
         "cuda_visible_devices": CUDA_VISIBLE_DEVICES,
         "logical_cuda_device": LOGICAL_CUDA_DEVICE,
         "minilm_asset_manifest_sha256": _file_sha256(

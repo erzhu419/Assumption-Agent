@@ -386,6 +386,11 @@ def test_production_dependency_binds_two_constructor_canary_encodes(
     from replication_runtime.bright_minilm_v1 import encoder as minilm_module
 
     monkeypatch.setattr(worker, "_validate_logical_cuda0", lambda: None)
+    monkeypatch.setattr(
+        worker,
+        "_verify_cross_encoder_model_tree",
+        lambda _root: worker._CROSS_ENCODER_REQUIRED_TREE_SHA256,
+    )
 
     class _ProductionMiniLM:
         repeat_count = 2
@@ -430,6 +435,33 @@ def test_production_dependency_binds_two_constructor_canary_encodes(
             minilm_model_root=tmp_path,
             cross_encoder_model_root=tmp_path,
         )
+
+
+def test_cross_encoder_production_tree_is_byte_bound(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected_by_name: dict[str, str] = {}
+    for name, size, sha256 in worker._CROSS_ENCODER_REQUIRED_FILES:
+        path = tmp_path / name
+        with path.open("wb") as handle:
+            handle.truncate(size)
+        expected_by_name[name] = sha256
+    monkeypatch.setattr(
+        worker,
+        "_file_sha256",
+        lambda path, _field: expected_by_name[path.name],
+    )
+    assert worker._verify_cross_encoder_model_tree(tmp_path) == (
+        worker._CROSS_ENCODER_REQUIRED_TREE_SHA256
+    )
+    with (tmp_path / "config.json").open("ab") as handle:
+        handle.write(b"x")
+    with pytest.raises(
+        contract.BioasqCoordinateScorerError,
+        match="required model file drifted",
+    ):
+        worker._verify_cross_encoder_model_tree(tmp_path)
 
 
 def test_adapter_launches_one_network_denied_offline_worker(
