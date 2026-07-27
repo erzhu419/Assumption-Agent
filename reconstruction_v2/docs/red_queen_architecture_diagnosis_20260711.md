@@ -5070,7 +5070,28 @@ HippoRAG。因此两个目标并非被逻辑或现有数据否定，但还没有
 轮换，完成 persistent-service source-free soak，再只选择一个已公开 topology/schema、可本地完整
 资格化且 action 机制与 family 划分都有因果含义的新 source，一次冻结并执行。
 
+### 12.56 2026-07-27 persistent user-service P0：先冻结执行容器资格，不消费新 study
+
+BioASQ root 永久关闭后，operator 已在 311linux 单独执行 `loginctl enable-linger erzhu419`；
+只读复核得到 `Linger=yes`、user manager `running`。这不会授权恢复 BioASQ，也不改变其
+post-source infrastructure-invalid 终态。为避免第三次由登录会话生命周期烧毁 secret cohort，
+新的 `RQ_PERSISTENT_USER_SERVICE_P0_V1` 被明确注册为 **source-free infrastructure
+qualification，而不是 efficacy study**。
+
+freeze `eb4104e8…643a` 固定 311linux 的 Python 3.12、systemd 255 与
+`systemd-run/systemctl/loginctl` 字节身份；唯一 parent unit 必须启动两个独立 transient child
+unit，三者均为 `Type=exec / Restart=no / KillMode=control-group / AF_UNIX-only`。parent 与 children
+必须分别证明 AF_INET/AF_INET6 被拒绝；启动 SSH session 关闭后，新的 observer session 必须在冻结的
+15–55 秒窗口内观察同一 boot ID、同一 user-manager PID 以及三个 active unit，随后两个 child 必须
+自然终止，parent 才能形成 success terminal。整个资格的 source/item/query/document/label/qrel/action、
+model/GPU/provider/API/online-evaluator count 固定为 0；不得 restart、retry 或改窗口。只有本 P0
+通过，才允许为下一个独立效果 study 形成 source/cohort。
+
 ## 附录 A：关键证据索引
+
+- persistent user-service source-free P0：
+  [`qualification freeze`](../manifests/persistent_user_service_p0_qualification_freeze_v1.json)；
+  [`one-shot implementation`](../scripts/qualify_persistent_user_service_v1.py)
 
 - BioASQ P1 source-free canary、formal freeze 与 post-source infrastructure interruption chain：
   [`study design`](../manifests/bioasq_p1_typed_evidence_set_evaluator_study_design_v1.json)；
