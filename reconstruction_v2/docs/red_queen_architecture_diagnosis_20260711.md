@@ -5136,7 +5136,31 @@ infrastructure failure。TRAIN 中三类分别有 1,823 / 127 / 1,134 个 eligib
 机制只允许原样移植到一个独立、公开即可先证明 DEV multi-relation 容量的 source；若没有这样的来源，
 本路线应停止，不能继续 source roulette。
 
+### 12.58 2026-07-27 BIRD P1：最后一次 schema-expansion source 审计
+
+Spider P0 没有测到机制效果，因此允许把同一个 typed schema-expansion 机制原样移植一次，但不允许继续
+轮换来源。最后一个 source 固定为官方 BIRD train/dev，study ID 为
+`BIRD_P1_TYPED_SCHEMA_EXPANSION_EVALUATOR_L5_V1`。BIRD 与 Spider/BioASQ 及近期效果 roots 独立；
+action 仍固定为 `semantic schema top-5 seed → table membership → declared foreign-key path`，三类仍为
+`ONE_FOREIGN_KEY_EDGE / MULTI_FOREIGN_KEY_PATH / NESTED_OR_SET_RELATION`，没有换 quota、family、
+metric、gate 或 prompt。
+
+source custody `b7fbb94f…1449d` 已事前固定官方页面、CC-BY-SA-4.0、train/dev archive URL、HEAD
+byte length/ETag/Last-Modified、official code commits 与访问次数。由于官方 train archive 为
+8,919,543,554 bytes、dev archive 为 346,207,293 bytes，而资格化只需要公开 annotations 与
+`tables.json` schema graph，custody 禁止下载或打开无关数据库值，改为每个 archive 唯一一次 suffix
+Range GET 绑定完整 central directory；只有形成 source-access receipt 后，才允许各一次取得四个指定
+member。该动作只节省无关 8.9 GB 数据，不改变 source、split 或 cohort。
+
+这是本机制的硬停止点：若公开、非评分 P0 仍不能在 BIRD DEV 中满足同一 floor，则关闭
+typed schema-expansion 路线，不再选择第五个同类 source；若通过，才允许冻结 A_form/F_search/A_hold
+与 untouched DEV M_search，并一次执行 Agent/RAW/official HippoRAG 和 L5。
+
 ## 附录 A：关键证据索引
+
+- BIRD P1 typed schema-expansion source chain：
+  [`source custody`](../manifests/bird_p1_typed_schema_expansion_source_custody_v1.json)；
+  [`remote ZIP topology inventory`](../scripts/inventory_remote_zip_members_v1.py)
 
 - Spider P1 typed schema-expansion source chain：
   [`source custody`](../manifests/spider_p1_typed_schema_expansion_source_custody_v1.json)；
