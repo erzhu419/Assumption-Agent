@@ -36,6 +36,10 @@ from .contract import (
     validate_corpus_input,
     validate_query_input,
 )
+from .runtime_binding import (
+    Dstc9P17RuntimeBindingError,
+    verify_worker_runtime_provenance,
+)
 
 
 def _validate_effective_environment(
@@ -280,7 +284,7 @@ def _run_build(arguments: argparse.Namespace) -> dict[str, object]:
         corpus_input=corpus_input_projection(corpus),
         index_root=arguments.index_root,
         runtime_attestation_receipt_sha256=(
-            arguments.runtime_attestation_receipt_sha256
+            arguments.runtime_binding_receipt_sha256
         ),
     )
     _write_exclusive_json(arguments.output, receipt)
@@ -308,7 +312,7 @@ def _run_retrieve(arguments: argparse.Namespace) -> dict[str, object]:
         corpus_input=corpus,
         index_snapshot=before,
         runtime_attestation_receipt_sha256=(
-            arguments.runtime_attestation_receipt_sha256
+            arguments.runtime_binding_receipt_sha256
         ),
     )
     queries = _load_query_input(
@@ -357,6 +361,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     _validate_effective_environment()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--stage", choices=("build", "retrieve"), required=True)
+    parser.add_argument("--study-id", required=True)
+    parser.add_argument("--p17-project-root", required=True, type=Path)
+    parser.add_argument("--worker-project-root", required=True, type=Path)
+    parser.add_argument(
+        "--current-hardware-binding", required=True, type=Path
+    )
+    parser.add_argument("--runtime-python", required=True, type=Path)
+    parser.add_argument("--runtime-fingerprint", required=True, type=Path)
+    parser.add_argument("--runtime-binding-receipt", required=True, type=Path)
     parser.add_argument("--corpus-input", required=True, type=Path)
     parser.add_argument("--query-input", type=Path)
     parser.add_argument("--build-receipt", type=Path)
@@ -365,9 +378,30 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--llm-model", required=True, type=Path)
     parser.add_argument("--embedding-model", required=True, type=Path)
     parser.add_argument(
-        "--runtime-attestation-receipt-sha256", required=True
+        "--runtime-binding-receipt-sha256", required=True
     )
     arguments = parser.parse_args(argv)
+    try:
+        verify_worker_runtime_provenance(
+            binding_receipt_path=arguments.runtime_binding_receipt,
+            binding_receipt_file_sha256=(
+                arguments.runtime_binding_receipt_sha256
+            ),
+            p17_project_root=arguments.p17_project_root,
+            worker_project_root=arguments.worker_project_root,
+            current_hardware_binding_path=(
+                arguments.current_hardware_binding
+            ),
+            expected_study_id=arguments.study_id,
+            runtime_fingerprint_path=arguments.runtime_fingerprint,
+            runtime_python=arguments.runtime_python,
+            local_llm_model=arguments.llm_model,
+            local_embedding_model=arguments.embedding_model,
+        )
+    except Dstc9P17RuntimeBindingError as exc:
+        raise Dstc9OfficialHippoRAGError(
+            "worker P17 closure/current hardware provenance failed"
+        ) from exc
     status = (
         _run_build(arguments)
         if arguments.stage == "build"

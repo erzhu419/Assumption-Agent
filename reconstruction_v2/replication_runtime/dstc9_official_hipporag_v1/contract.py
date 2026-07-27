@@ -26,7 +26,9 @@ from typing import Any, Mapping, Sequence
 ADAPTER_VERSION = "dstc9_official_hipporag_global_retrieve_only_v1"
 BENCHMARK = "DSTC9_TRACK1"
 OFFICIAL_HIPPORAG_COMMIT = "ef2f14c4f254f11ac29f9395f262466ad1bb4d10"
-RUNTIME_TRUST_ROOT = "musique_official_hipporag_filesystem_attestation_v3"
+RUNTIME_TRUST_ROOT = (
+    "dstc9_p17_reused_closure_plus_current_hardware_binding_v2"
+)
 
 TOP_K = 5
 CORPUS_SIZE = 2900
@@ -78,7 +80,6 @@ WORKER_ENVIRONMENT_KEYS = frozenset(
         "PATH",
         "PYTHONDONTWRITEBYTECODE",
         "PYTHONNOUSERSITE",
-        "PYTHONPATH",
         "TEMP",
         "TMP",
         "TMPDIR",
@@ -808,7 +809,7 @@ def make_build_receipt(
     snapshot = _validate_index_snapshot(index_snapshot, "build index snapshot")
     runtime_hash = _required_sha256(
         runtime_attestation_receipt_sha256,
-        "runtime attestation receipt hash",
+        "runtime binding receipt hash",
     )
     documents = serialize_corpus(corpus_input.units)
     multiplicity = corpus_text_multiplicity(documents)
@@ -934,7 +935,7 @@ def make_retrieval_receipt(
     )
     runtime_hash = _required_sha256(
         build_receipt.get("runtime_attestation_receipt_sha256"),
-        "runtime attestation receipt hash",
+        "runtime binding receipt hash",
     )
     if (
         build_receipt.get("study_id") != corpus_input.study_id

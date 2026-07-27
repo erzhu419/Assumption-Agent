@@ -10,13 +10,6 @@ import shutil
 import subprocess
 from typing import Any, Mapping
 
-from replication_runtime.musique_official_hipporag_v1.contract import (
-    MuSiQueOfficialHippoRAGError,
-)
-from replication_runtime.musique_official_hipporag_v1.runtime_attestation_v3 import (
-    verify_formal_runtime_attestation_v3,
-)
-
 from .contract import (
     CORPUS_SIZE,
     CUDA_VISIBLE_DEVICES,
@@ -36,17 +29,31 @@ from .contract import (
     validate_corpus_input,
     validate_query_input,
 )
+from .runtime_binding import (
+    Dstc9P17RuntimeBindingError,
+    verify_p17_reused_closure_binding,
+)
 
 
 CORPUS_INPUT_FILENAME = "global_corpus.input.json"
 BUILD_RECEIPT_FILENAME = "global_index.build_receipt.json"
-RUNTIME_RECEIPT_FILENAME = "runtime.attestation_receipt.json"
+RUNTIME_RECEIPT_FILENAME = "runtime.closure_binding_receipt.json"
 INDEX_DIRECTORY_NAME = "official_global_index"
 QUERY_LOCK_FILENAME = ".retrieve.lock"
 SYSTEMD_RUN = Path("/usr/bin/systemd-run")
 ENV_EXECUTABLE = Path("/usr/bin/env")
 SYSTEMD_RUN_FLAGS = ("--user", "--wait", "--pipe", "--collect", "--quiet")
 SYSTEMD_PREFLIGHT_TIMEOUT_SECONDS = 30
+WORKER_MODULE = "replication_runtime.dstc9_official_hipporag_v1.worker"
+WORKER_BOOTSTRAP_SCRIPT = (
+    "import importlib,os,sys\n"
+    "root=os.path.abspath(sys.argv.pop(1))\n"
+    "if any(os.path.abspath(value)==root for value in sys.path if value):"
+    " raise SystemExit(70)\n"
+    "sys.path.insert(0,root)\n"
+    f"worker=importlib.import_module({WORKER_MODULE!r})\n"
+    "raise SystemExit(worker.main(sys.argv[1:]))\n"
+)
 SYSTEMD_PREFLIGHT_SCRIPT = (
     "import os,socket\n"
     "if set(os.environ)!={'LANG'} or os.environ.get('LANG')!='C.UTF-8':"
@@ -96,33 +103,37 @@ def _load_canonical_object(path: Path, field: str) -> dict[str, object]:
 
 def _validated_runtime(
     *,
+    expected_study_id: str,
+    worker_project_root: Path,
+    current_hardware_binding_path: Path,
     runtime_python: Path,
     local_llm_model: Path,
     local_embedding_model: Path,
-    base_binding_receipt_path: Path,
-    attestation_receipt_path: Path,
+    runtime_fingerprint_path: Path,
 ) -> tuple[Path, Path, Path, Path, dict[str, Any]]:
+    worker_project_root = worker_project_root.absolute()
+    current_hardware_binding_path = (
+        current_hardware_binding_path.absolute()
+    )
     runtime_python = runtime_python.absolute()
-    local_llm_model = local_llm_model.resolve(strict=True)
-    local_embedding_model = local_embedding_model.resolve(strict=True)
-    base_binding_receipt_path = base_binding_receipt_path.absolute()
-    attestation_receipt_path = attestation_receipt_path.absolute()
-    _assert_no_symlink_components(base_binding_receipt_path, "base binding receipt")
-    _assert_no_symlink_components(attestation_receipt_path, "attestation receipt")
-    project_root = base_binding_receipt_path.parent.parent
+    local_llm_model = local_llm_model.absolute()
+    local_embedding_model = local_embedding_model.absolute()
+    runtime_fingerprint_path = runtime_fingerprint_path.absolute()
     try:
-        safe_receipt = verify_formal_runtime_attestation_v3(
-            project_root=project_root,
-            attestation_receipt_path=attestation_receipt_path,
-            base_binding_receipt_path=base_binding_receipt_path,
+        safe_receipt = verify_p17_reused_closure_binding(
+            expected_study_id=expected_study_id,
+            worker_project_root=worker_project_root,
+            current_hardware_binding_path=current_hardware_binding_path,
+            runtime_fingerprint_path=runtime_fingerprint_path,
             runtime_python=runtime_python,
             local_llm_model=local_llm_model,
             local_embedding_model=local_embedding_model,
         )
-    except MuSiQueOfficialHippoRAGError as exc:
+    except Dstc9P17RuntimeBindingError as exc:
         raise Dstc9OfficialHippoRAGError(
-            "inherited official HippoRAG runtime attestation failed"
+            "P17 reused closure/current hardware binding failed"
         ) from exc
+    project_root = Path(str(safe_receipt["project_root"]))
     return (
         project_root,
         runtime_python,
@@ -225,7 +236,6 @@ def _preflight_systemd_transport() -> None:
 def _worker_environment(
     *,
     runtime_python: Path,
-    project_root: Path,
     writable_root: Path,
 ) -> dict[str, str]:
     environment = {
@@ -237,7 +247,6 @@ def _worker_environment(
         "PATH": f"{runtime_python.parent}:/usr/bin:/bin",
         "PYTHONDONTWRITEBYTECODE": "1",
         "PYTHONNOUSERSITE": "1",
-        "PYTHONPATH": str(project_root),
         "TEMP": str(writable_root / "tmp"),
         "TMP": str(writable_root / "tmp"),
         "TMPDIR": str(writable_root / "tmp"),
@@ -255,16 +264,21 @@ def _worker_environment(
 def _launch_worker(
     *,
     stage: str,
-    project_root: Path,
+    study_id: str,
+    p17_project_root: Path,
+    worker_project_root: Path,
+    current_hardware_binding_path: Path,
     runtime_python: Path,
     local_llm_model: Path,
     local_embedding_model: Path,
+    runtime_fingerprint_path: Path,
+    runtime_binding_receipt_path: Path,
     corpus_input: Path,
     output_path: Path,
     index_root: Path,
     writable_root: Path,
     timeout_seconds: int,
-    runtime_attestation_receipt_sha256: str,
+    runtime_binding_receipt_sha256: str,
     expected_corpus_count: int,
     expected_query_count: int | None = None,
     query_input: Path | None = None,
@@ -279,7 +293,6 @@ def _launch_worker(
     _preflight_systemd_transport()
     child_environment = _worker_environment(
         runtime_python=runtime_python,
-        project_root=project_root,
         writable_root=writable_root,
     )
     command = _systemd_command_prefix()
@@ -287,11 +300,23 @@ def _launch_worker(
     command.extend(
         [
             str(runtime_python),
+            "-I",
             "-B",
-            "-m",
-            "replication_runtime.dstc9_official_hipporag_v1.worker",
+            "-c",
+            WORKER_BOOTSTRAP_SCRIPT,
+            str(worker_project_root),
             "--stage",
             stage,
+            "--study-id",
+            study_id,
+            "--p17-project-root",
+            str(p17_project_root),
+            "--worker-project-root",
+            str(worker_project_root),
+            "--current-hardware-binding",
+            str(current_hardware_binding_path),
+            "--runtime-python",
+            str(runtime_python),
             "--corpus-input",
             str(corpus_input),
             "--output",
@@ -302,8 +327,12 @@ def _launch_worker(
             str(local_llm_model),
             "--embedding-model",
             str(local_embedding_model),
-            "--runtime-attestation-receipt-sha256",
-            runtime_attestation_receipt_sha256,
+            "--runtime-fingerprint",
+            str(runtime_fingerprint_path),
+            "--runtime-binding-receipt",
+            str(runtime_binding_receipt_path),
+            "--runtime-binding-receipt-sha256",
+            runtime_binding_receipt_sha256,
         ]
     )
     if stage == "retrieve":
@@ -370,11 +399,12 @@ def _launch_worker(
 def build_dstc9_official_hipporag_global_index_v1(
     *,
     corpus_input: object,
+    worker_project_root: Path,
+    current_hardware_binding_path: Path,
     runtime_python: Path,
     local_llm_model: Path,
     local_embedding_model: Path,
-    base_binding_receipt_path: Path,
-    attestation_receipt_path: Path,
+    runtime_fingerprint_path: Path,
     stage_root: Path,
     timeout_seconds: int = 7200,
 ) -> dict[str, Any]:
@@ -382,6 +412,11 @@ def build_dstc9_official_hipporag_global_index_v1(
 
     corpus = validate_corpus_input(corpus_input)
     timeout_seconds = _validate_timeout(timeout_seconds)
+    worker_project_root = worker_project_root.absolute()
+    current_hardware_binding_path = (
+        current_hardware_binding_path.absolute()
+    )
+    runtime_fingerprint_path = runtime_fingerprint_path.absolute()
     (
         project_root,
         runtime_python,
@@ -389,11 +424,13 @@ def build_dstc9_official_hipporag_global_index_v1(
         local_embedding_model,
         runtime_receipt,
     ) = _validated_runtime(
+        expected_study_id=corpus.study_id,
+        worker_project_root=worker_project_root,
+        current_hardware_binding_path=current_hardware_binding_path,
         runtime_python=runtime_python,
         local_llm_model=local_llm_model,
         local_embedding_model=local_embedding_model,
-        base_binding_receipt_path=base_binding_receipt_path,
-        attestation_receipt_path=attestation_receipt_path,
+        runtime_fingerprint_path=runtime_fingerprint_path,
     )
     stage_root = stage_root.absolute()
     _assert_no_symlink_components(stage_root.parent, "stage root parent")
@@ -414,16 +451,21 @@ def build_dstc9_official_hipporag_global_index_v1(
         runtime_file_hash = _sha256_bytes(runtime_receipt_path.read_bytes())
         _launch_worker(
             stage="build",
-            project_root=project_root,
+            study_id=corpus.study_id,
+            p17_project_root=project_root,
+            worker_project_root=worker_project_root,
+            current_hardware_binding_path=current_hardware_binding_path,
             runtime_python=runtime_python,
             local_llm_model=local_llm_model,
             local_embedding_model=local_embedding_model,
+            runtime_fingerprint_path=runtime_fingerprint_path,
+            runtime_binding_receipt_path=runtime_receipt_path,
             corpus_input=corpus_path,
             output_path=build_receipt_path,
             index_root=index_root,
             writable_root=stage_root,
             timeout_seconds=timeout_seconds,
-            runtime_attestation_receipt_sha256=runtime_file_hash,
+            runtime_binding_receipt_sha256=runtime_file_hash,
             expected_corpus_count=CORPUS_SIZE,
         )
         return validate_build_receipt(
@@ -440,11 +482,12 @@ def build_dstc9_official_hipporag_global_index_v1(
 def retrieve_dstc9_official_hipporag_global_index_v1(
     *,
     query_input: object,
+    worker_project_root: Path,
+    current_hardware_binding_path: Path,
     runtime_python: Path,
     local_llm_model: Path,
     local_embedding_model: Path,
-    base_binding_receipt_path: Path,
-    attestation_receipt_path: Path,
+    runtime_fingerprint_path: Path,
     stage_root: Path,
     work_root: Path,
     timeout_seconds: int = 3600,
@@ -452,6 +495,12 @@ def retrieve_dstc9_official_hipporag_global_index_v1(
     """Reopen the build index and retrieve once without indexing or retry."""
 
     timeout_seconds = _validate_timeout(timeout_seconds)
+    prevalidated_queries = validate_query_input(query_input)
+    worker_project_root = worker_project_root.absolute()
+    current_hardware_binding_path = (
+        current_hardware_binding_path.absolute()
+    )
+    runtime_fingerprint_path = runtime_fingerprint_path.absolute()
     (
         project_root,
         runtime_python,
@@ -459,11 +508,13 @@ def retrieve_dstc9_official_hipporag_global_index_v1(
         local_embedding_model,
         runtime_receipt,
     ) = _validated_runtime(
+        expected_study_id=prevalidated_queries.study_id,
+        worker_project_root=worker_project_root,
+        current_hardware_binding_path=current_hardware_binding_path,
         runtime_python=runtime_python,
         local_llm_model=local_llm_model,
         local_embedding_model=local_embedding_model,
-        base_binding_receipt_path=base_binding_receipt_path,
-        attestation_receipt_path=attestation_receipt_path,
+        runtime_fingerprint_path=runtime_fingerprint_path,
     )
     stage_root = stage_root.absolute()
     work_root = work_root.absolute()
@@ -495,7 +546,7 @@ def retrieve_dstc9_official_hipporag_global_index_v1(
     )
     if persisted_runtime != runtime_receipt:
         raise Dstc9OfficialHippoRAGError(
-            "reopen runtime differs from build attestation"
+            "reopen runtime differs from the exact build binding"
         )
     corpus = validate_corpus_input(
         _load_canonical_object(corpus_path, "corpus input")
@@ -537,10 +588,15 @@ def retrieve_dstc9_official_hipporag_global_index_v1(
         _write_exclusive(query_path, query_input_projection(queries))
         _launch_worker(
             stage="retrieve",
-            project_root=project_root,
+            study_id=corpus.study_id,
+            p17_project_root=project_root,
+            worker_project_root=worker_project_root,
+            current_hardware_binding_path=current_hardware_binding_path,
             runtime_python=runtime_python,
             local_llm_model=local_llm_model,
             local_embedding_model=local_embedding_model,
+            runtime_fingerprint_path=runtime_fingerprint_path,
+            runtime_binding_receipt_path=runtime_receipt_path,
             corpus_input=corpus_path,
             query_input=query_path,
             build_receipt=build_receipt_path,
@@ -548,7 +604,7 @@ def retrieve_dstc9_official_hipporag_global_index_v1(
             index_root=working_index,
             writable_root=work_root,
             timeout_seconds=timeout_seconds,
-            runtime_attestation_receipt_sha256=runtime_file_hash,
+            runtime_binding_receipt_sha256=runtime_file_hash,
             expected_corpus_count=CORPUS_SIZE,
             expected_query_count=len(queries.queries),
         )

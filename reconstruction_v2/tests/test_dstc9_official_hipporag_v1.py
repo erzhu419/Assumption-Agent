@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 from types import ModuleType, SimpleNamespace
 
@@ -11,6 +13,7 @@ import pytest
 
 import replication_runtime.dstc9_official_hipporag_v1.adapter as adapter
 import replication_runtime.dstc9_official_hipporag_v1.contract as contract
+import replication_runtime.dstc9_official_hipporag_v1.runtime_binding as binding
 import replication_runtime.dstc9_official_hipporag_v1.worker as worker
 
 
@@ -73,7 +76,6 @@ def _exact_worker_environment(root: Path) -> dict[str, str]:
         "PATH": f"{Path(sys.executable).parent}:/usr/bin:/bin",
         "PYTHONDONTWRITEBYTECODE": "1",
         "PYTHONNOUSERSITE": "1",
-        "PYTHONPATH": str(Path(__file__).parents[1]),
         "TEMP": str(root / "tmp"),
         "TMP": str(root / "tmp"),
         "TMPDIR": str(root / "tmp"),
@@ -474,6 +476,547 @@ def test_official_core_config_is_gpu0_offline_fixed_and_never_resized(
     assert core.llm_model.llm_config.generate_params["max_tokens"] == 4
 
 
+def test_adapter_uses_only_the_p17_reused_closure_binding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[dict[str, object]] = []
+    expected_receipt = {
+        "project_root": str(tmp_path / "exact-p17-project"),
+        "schema": binding.SCHEMA,
+    }
+
+    def _verify(**kwargs: object) -> dict[str, object]:
+        calls.append(dict(kwargs))
+        return expected_receipt
+
+    monkeypatch.setattr(
+        adapter, "verify_p17_reused_closure_binding", _verify
+    )
+    result = adapter._validated_runtime(
+        expected_study_id=STUDY_ID,
+        worker_project_root=tmp_path / "formal-project",
+        current_hardware_binding_path=tmp_path / "hardware.json",
+        runtime_python=tmp_path / "python",
+        local_llm_model=tmp_path / "smollm",
+        local_embedding_model=tmp_path / "minilm",
+        runtime_fingerprint_path=tmp_path / "fingerprint.json",
+    )
+
+    assert result[-1] == expected_receipt
+    assert result[0] == tmp_path / "exact-p17-project"
+    assert calls == [
+        {
+            "current_hardware_binding_path": (
+                tmp_path / "hardware.json"
+            ).absolute(),
+            "expected_study_id": STUDY_ID,
+            "local_embedding_model": (tmp_path / "minilm").absolute(),
+            "local_llm_model": (tmp_path / "smollm").absolute(),
+            "runtime_fingerprint_path": (
+                tmp_path / "fingerprint.json"
+            ).absolute(),
+            "runtime_python": (tmp_path / "python").absolute(),
+            "worker_project_root": (
+                tmp_path / "formal-project"
+            ).absolute(),
+        }
+    ]
+    adapter_source = Path(adapter.__file__).read_text(encoding="utf-8")
+    assert "verify_formal_runtime_attestation_v3" not in adapter_source
+    assert "musique_official_hipporag_v1" not in adapter_source
+    assert not hasattr(adapter, "verify_formal_runtime_attestation_v3")
+
+
+def test_committed_p17_fingerprint_matches_the_reused_closure_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fingerprint_path = (
+        Path(__file__).parents[1]
+        / "manifests/bright_p17_remote_runtime_fingerprint_v1.json"
+    )
+    monkeypatch.setattr(binding, "P17_FINGERPRINT_PATH", fingerprint_path)
+    fingerprint = binding._load_exact_fingerprint(fingerprint_path)
+    binding._verify_fingerprint_contract(fingerprint)
+    assert fingerprint["self_sha256"] == binding.FINGERPRINT_SELF_SHA256
+    assert (
+        fingerprint["runtime_inventory_receipt"]
+        == binding.EXPECTED_RUNTIME_INVENTORY
+    )
+
+
+def test_committed_minilm_manifest_matches_without_reading_model_files(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest_path = (
+        Path(__file__).parents[1]
+        / "manifests/qasper_minilm_runtime_asset_v1.json"
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="ascii"))
+    declared_rows = manifest["local_binding"]["snapshot_files"]
+    rows = [
+        {
+            "path": row["path"],
+            "sha256": row["sha256"],
+            "size_bytes": row["size"],
+        }
+        for row in declared_rows
+    ]
+    monkeypatch.setattr(binding, "P17_MINILM_MANIFEST", manifest_path)
+    monkeypatch.setattr(
+        binding,
+        "_tree_rows",
+        lambda _root, _field_name: rows,
+    )
+    receipt = binding._verify_minilm_manifest_and_tree()
+    assert receipt["generic_tree"] == binding.EXPECTED_ASSET_TREES["MiniLM"]
+    assert (
+        receipt["normative_tree_sha256"]
+        == binding.MINILM_NORMATIVE_TREE_SHA256
+    )
+
+
+def test_current_hardware_receipt_is_pre_canary_and_not_old_p17_host_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    worker_project_root = tmp_path / "formal/reconstruction_v2"
+    worker_project_root.mkdir(parents=True)
+    receipt_path = tmp_path / "formal/receipts/hardware.json"
+    receipt_path.parent.mkdir()
+    payload = binding.make_current_study_hardware_binding(
+        study_id="DSTC9_SYNTHETIC_V1",
+        capture_id="PRE_CANARY_HARDWARE_V1",
+        gpus=binding.EXPECTED_GPU_ROWS,
+        nvidia_driver_version="595.84",
+        kernel_release="7.0.0-28-generic",
+    )
+    receipt_path.write_bytes(binding.canonical_json_bytes(payload))
+    assert "source_free_canary_receipt_sha256" not in json.dumps(payload)
+    assert payload["status"] == binding.CURRENT_HARDWARE_STATUS
+    assert (
+        payload["source_free_boundary"]["formal_source_open_count"] == 0
+    )
+    assert (
+        payload["source_free_boundary"][
+            "old_P17_driver_or_kernel_used_as_requirement"
+        ]
+        is False
+    )
+    monkeypatch.setattr(
+        binding,
+        "_probe_current_hardware",
+        lambda: dict(payload["hardware"]),
+    )
+    verified = binding.verify_current_study_hardware_binding(
+        path=receipt_path,
+        worker_project_root=worker_project_root,
+        expected_study_id="DSTC9_SYNTHETIC_V1",
+    )
+    assert verified["hardware"] == payload["hardware"]
+
+    changed = dict(payload["hardware"])
+    changed["kernel_release"] = "a-different-current-kernel"
+    monkeypatch.setattr(
+        binding, "_probe_current_hardware", lambda: changed
+    )
+    with pytest.raises(
+        binding.Dstc9P17RuntimeBindingError,
+        match="no longer matches",
+    ):
+        binding.verify_current_study_hardware_binding(
+            path=receipt_path,
+            worker_project_root=worker_project_root,
+            expected_study_id="DSTC9_SYNTHETIC_V1",
+        )
+
+
+def test_worker_code_binding_uses_deployed_formal_root_not_p17() -> None:
+    worker_project_root = Path(__file__).parents[1]
+    receipt = binding._verify_worker_project_root(worker_project_root)
+    assert receipt["project_root"] == str(worker_project_root)
+    assert receipt["project_root"] != str(binding.P17_PROJECT_ROOT)
+    assert [row["path"] for row in receipt["files"]] == list(
+        binding.WORKER_CODE_RELATIVE_FILES
+    )
+
+
+def test_isolated_bootstrap_reaches_only_the_formal_worker_root(
+    tmp_path: Path,
+) -> None:
+    formal_root = tmp_path / "formal/reconstruction_v2"
+    package = (
+        formal_root
+        / "replication_runtime/dstc9_official_hipporag_v1"
+    )
+    package.mkdir(parents=True)
+    (formal_root / "replication_runtime/__init__.py").write_text(
+        "", encoding="utf-8"
+    )
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "worker.py").write_text(
+        "import json\n"
+        "def main(argv):\n"
+        " print(json.dumps({'argv':argv,'origin':__file__},sort_keys=True))\n"
+        " return 0\n",
+        encoding="utf-8",
+    )
+    empty_cwd = tmp_path / "empty"
+    empty_cwd.mkdir()
+    isolated_probe = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-B",
+            "-c",
+            (
+                "import importlib.util;"
+                "raise SystemExit(0 if "
+                "importlib.util.find_spec("
+                "'replication_runtime.dstc9_official_hipporag_v1.worker'"
+                ") is None else 9)"
+            ),
+        ],
+        check=False,
+        capture_output=True,
+        cwd=empty_cwd,
+        env={"LANG": "C.UTF-8", "PATH": "/usr/bin:/bin"},
+        text=True,
+    )
+    assert isolated_probe.returncode != 9
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-B",
+            "-c",
+            adapter.WORKER_BOOTSTRAP_SCRIPT,
+            str(formal_root),
+            "--synthetic",
+            "one",
+        ],
+        check=False,
+        capture_output=True,
+        cwd=empty_cwd,
+        env={"LANG": "C.UTF-8", "PATH": "/usr/bin:/bin"},
+        text=True,
+    )
+    assert completed.returncode == 0
+    terminal = json.loads(completed.stdout)
+    assert terminal["argv"] == ["--synthetic", "one"]
+    assert Path(terminal["origin"]) == package / "worker.py"
+
+
+def test_exact_fingerprint_path_and_file_hash_drift_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    remote_root = tmp_path / "p17"
+    fingerprint_path = (
+        remote_root
+        / "runtime/reconstruction_v2/manifests/"
+        "bright_p17_remote_runtime_fingerprint_v1.json"
+    )
+    fingerprint_path.parent.mkdir(parents=True)
+    body = {
+        "remote_root": str(remote_root),
+        "schema": binding.FINGERPRINT_SCHEMA,
+        "status": binding.FINGERPRINT_STATUS,
+    }
+    payload = {**body, "self_sha256": binding.stable_hash(body)}
+    raw = binding.canonical_json_bytes(payload)
+    fingerprint_path.write_bytes(raw)
+    monkeypatch.setattr(binding, "P17_REMOTE_ROOT", remote_root)
+    monkeypatch.setattr(binding, "P17_FINGERPRINT_PATH", fingerprint_path)
+    monkeypatch.setattr(
+        binding,
+        "FINGERPRINT_FILE_SHA256",
+        hashlib.sha256(raw).hexdigest(),
+    )
+    monkeypatch.setattr(
+        binding, "FINGERPRINT_SELF_SHA256", payload["self_sha256"]
+    )
+
+    assert binding._load_exact_fingerprint(fingerprint_path) == payload
+    with pytest.raises(
+        binding.Dstc9P17RuntimeBindingError,
+        match="fingerprint path drifted",
+    ):
+        binding._load_exact_fingerprint(tmp_path / "other.json")
+
+    fingerprint_path.write_bytes(raw.replace(b"p17", b"q17", 1))
+    with pytest.raises(
+        binding.Dstc9P17RuntimeBindingError,
+        match="file hash drifted",
+    ):
+        binding._load_exact_fingerprint(fingerprint_path)
+
+
+def test_runtime_python_and_pth_hash_drift_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert (
+        binding.stable_hash(binding.EXPECTED_PTH_ROWS)
+        == binding.EXPECTED_PTH_SET_SHA256
+    )
+    runtime_python = tmp_path / "venv/bin/python"
+    runtime_python.parent.mkdir(parents=True)
+    runtime_python.write_bytes(b"synthetic-p17-python")
+    runtime_python.chmod(0o700)
+    monkeypatch.setattr(binding, "P17_RUNTIME_PYTHON", runtime_python)
+    monkeypatch.setattr(
+        binding,
+        "RUNTIME_PYTHON_TARGET_SIZE",
+        runtime_python.stat().st_size,
+    )
+    monkeypatch.setattr(
+        binding,
+        "RUNTIME_PYTHON_TARGET_SHA256",
+        hashlib.sha256(runtime_python.read_bytes()).hexdigest(),
+    )
+    assert (
+        binding._verify_runtime_python(runtime_python)[
+            "resolved_target_size_bytes"
+        ]
+        == len(b"synthetic-p17-python")
+    )
+    with pytest.raises(
+        binding.Dstc9P17RuntimeBindingError,
+        match="lexical path drifted",
+    ):
+        binding._verify_runtime_python(tmp_path / "other-python")
+    runtime_python.write_bytes(b"synthetic-p17-pythoN")
+    with pytest.raises(
+        binding.Dstc9P17RuntimeBindingError,
+        match="target drifted",
+    ):
+        binding._verify_runtime_python(runtime_python)
+
+    site_packages = tmp_path / "site-packages"
+    site_packages.mkdir()
+    pth = site_packages / "exact.pth"
+    pth.write_bytes(b"/synthetic/P17/project\n")
+    rows = [
+        {
+            "name": pth.name,
+            "sha256": hashlib.sha256(pth.read_bytes()).hexdigest(),
+            "size_bytes": pth.stat().st_size,
+        }
+    ]
+    monkeypatch.setattr(binding, "P17_VENV_SITE_PACKAGES", site_packages)
+    monkeypatch.setattr(binding, "EXPECTED_PTH_ROWS", rows)
+    monkeypatch.setattr(
+        binding, "EXPECTED_PTH_SET_SHA256", binding.stable_hash(rows)
+    )
+    assert binding._verify_pth_topology() == rows
+    pth.write_bytes(b"/synthetic/P17/projecT\n")
+    with pytest.raises(
+        binding.Dstc9P17RuntimeBindingError,
+        match=r"\.pth binding drifted",
+    ):
+        binding._verify_pth_topology()
+
+
+def test_worker_provenance_requires_all_exact_pth_roots(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project_root = tmp_path / "project"
+    worker_project_root = tmp_path / "formal-project"
+    p16_site = tmp_path / "p16-site"
+    source_root = tmp_path / "hipporag-source"
+    for path in (
+        project_root,
+        worker_project_root,
+        p16_site,
+        source_root,
+    ):
+        path.mkdir()
+    receipt = {
+        "project_root": str(project_root),
+        "schema": binding.SCHEMA,
+    }
+    receipt_path = tmp_path / "binding.json"
+    receipt_raw = binding.canonical_json_bytes(receipt)
+    receipt_path.write_bytes(receipt_raw)
+    monkeypatch.setattr(binding, "P17_PROJECT_ROOT", project_root)
+    monkeypatch.setattr(binding, "P17_P16_SITE", p16_site)
+    monkeypatch.setattr(binding, "P17_HIPPORAG_SOURCE", source_root)
+    monkeypatch.setattr(
+        binding, "P17_RUNTIME_PYTHON", Path(sys.executable).absolute()
+    )
+    monkeypatch.setattr(
+        binding,
+        "verify_p17_reused_closure_binding",
+        lambda **_kwargs: receipt,
+    )
+    with pytest.raises(
+        binding.Dstc9P17RuntimeBindingError,
+        match=r"required P17 base sys\.path provenance",
+    ):
+        binding.verify_worker_runtime_provenance(
+            binding_receipt_path=receipt_path,
+            binding_receipt_file_sha256=hashlib.sha256(
+                receipt_raw
+            ).hexdigest(),
+            p17_project_root=project_root,
+            worker_project_root=worker_project_root,
+            current_hardware_binding_path=tmp_path / "hardware.json",
+            expected_study_id=STUDY_ID,
+            runtime_fingerprint_path=tmp_path / "fingerprint.json",
+            runtime_python=Path(sys.executable),
+            local_llm_model=tmp_path / "llm",
+            local_embedding_model=tmp_path / "embedding",
+            effective_sys_path=(str(worker_project_root),),
+        )
+
+
+def test_worker_attests_p17_base_sys_path_separately_from_formal_code(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project_root = tmp_path / "p17-project"
+    worker_project_root = tmp_path / "formal-project"
+    p16_site = tmp_path / "p16-site"
+    source_root = tmp_path / "hipporag-source"
+    hippo_init = source_root / "hipporag/__init__.py"
+    for path in (project_root, worker_project_root, p16_site):
+        path.mkdir(parents=True)
+    hippo_init.parent.mkdir(parents=True)
+    hippo_init.write_bytes(b"# synthetic hipporag package\n")
+    receipt = {
+        "current_hardware_binding": {
+            "hardware": {
+                "GPUs": binding.EXPECTED_GPU_ROWS,
+                "NVIDIA_driver_version": "595.84",
+                "kernel_release": "7.0.0-28-generic",
+            }
+        },
+        "project_root": str(project_root),
+        "schema": binding.SCHEMA,
+    }
+    receipt_path = tmp_path / "binding.json"
+    receipt_raw = binding.canonical_json_bytes(receipt)
+    receipt_path.write_bytes(receipt_raw)
+    monkeypatch.setattr(binding, "P17_PROJECT_ROOT", project_root)
+    monkeypatch.setattr(binding, "P17_P16_SITE", p16_site)
+    monkeypatch.setattr(binding, "P17_HIPPORAG_SOURCE", source_root)
+    monkeypatch.setattr(binding, "P17_HIPPORAG_INIT", hippo_init)
+    monkeypatch.setattr(
+        binding,
+        "HIPPORAG_INIT_FILE_SHA256",
+        hashlib.sha256(hippo_init.read_bytes()).hexdigest(),
+    )
+    monkeypatch.setattr(
+        binding, "P17_RUNTIME_PYTHON", Path(sys.executable).absolute()
+    )
+    monkeypatch.setattr(
+        binding,
+        "verify_p17_reused_closure_binding",
+        lambda **_kwargs: receipt,
+    )
+    observed_inventory_paths: list[tuple[str, ...]] = []
+
+    def _inventory(paths: object = None) -> dict[str, object]:
+        assert isinstance(paths, tuple)
+        observed_inventory_paths.append(paths)
+        return dict(binding.EXPECTED_RUNTIME_INVENTORY)
+
+    monkeypatch.setattr(binding, "_runtime_inventory_receipt", _inventory)
+    monkeypatch.setattr(
+        binding,
+        "_active_distribution_version",
+        lambda name, _paths: binding.EXPECTED_ACTIVE_DISTRIBUTIONS[name],
+    )
+    monkeypatch.setattr(
+        binding,
+        "_probe_current_hardware",
+        lambda: receipt["current_hardware_binding"]["hardware"],
+    )
+    monkeypatch.setattr(
+        binding.util,
+        "find_spec",
+        lambda _name: SimpleNamespace(origin=str(hippo_init)),
+    )
+    base_sys_path = (
+        str(project_root),
+        str(p16_site),
+        str(source_root),
+    )
+    result = binding.verify_worker_runtime_provenance(
+        binding_receipt_path=receipt_path,
+        binding_receipt_file_sha256=hashlib.sha256(
+            receipt_raw
+        ).hexdigest(),
+        p17_project_root=project_root,
+        worker_project_root=worker_project_root,
+        current_hardware_binding_path=tmp_path / "hardware.json",
+        expected_study_id=STUDY_ID,
+        runtime_fingerprint_path=tmp_path / "fingerprint.json",
+        runtime_python=Path(sys.executable),
+        local_llm_model=tmp_path / "llm",
+        local_embedding_model=tmp_path / "embedding",
+        effective_sys_path=(str(worker_project_root), *base_sys_path),
+    )
+    assert result == receipt
+    assert observed_inventory_paths == [base_sys_path]
+
+
+def test_worker_binding_failure_precedes_build_or_model_action(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    events: list[str] = []
+    monkeypatch.setattr(
+        worker, "_validate_effective_environment", lambda: None
+    )
+
+    def _fail_binding(**_kwargs: object) -> None:
+        events.append("binding")
+        raise binding.Dstc9P17RuntimeBindingError("synthetic drift")
+
+    def _unexpected_build(_arguments: object) -> dict[str, object]:
+        events.append("build")
+        return {}
+
+    monkeypatch.setattr(
+        worker, "verify_worker_runtime_provenance", _fail_binding
+    )
+    monkeypatch.setattr(worker, "_run_build", _unexpected_build)
+    with pytest.raises(
+        contract.Dstc9OfficialHippoRAGError,
+        match="provenance failed",
+    ):
+        worker.main(
+            [
+                "--stage",
+                "build",
+                "--study-id",
+                STUDY_ID,
+                "--p17-project-root",
+                str(tmp_path / "project"),
+                "--worker-project-root",
+                str(tmp_path / "formal-project"),
+                "--current-hardware-binding",
+                str(tmp_path / "hardware.json"),
+                "--runtime-python",
+                str(tmp_path / "python"),
+                "--runtime-fingerprint",
+                str(tmp_path / "fingerprint.json"),
+                "--runtime-binding-receipt",
+                str(tmp_path / "binding.json"),
+                "--runtime-binding-receipt-sha256",
+                "a" * 64,
+                "--corpus-input",
+                str(tmp_path / "corpus.json"),
+                "--output",
+                str(tmp_path / "output.json"),
+                "--index-root",
+                str(tmp_path / "index"),
+                "--llm-model",
+                str(tmp_path / "llm"),
+                "--embedding-model",
+                str(tmp_path / "embedding"),
+            ]
+        )
+    assert events == ["binding"]
+
+
 def test_adapter_worker_command_clears_environment_denies_network_and_binds_gpu0(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -501,10 +1044,15 @@ def test_adapter_worker_command_clears_environment_denies_network_and_binds_gpu0
     runtime_python = Path(sys.executable)
     adapter._launch_worker(
         stage="retrieve",
-        project_root=Path(__file__).parents[1],
+        study_id=STUDY_ID,
+        p17_project_root=tmp_path / "p17-project",
+        worker_project_root=Path(__file__).parents[1],
+        current_hardware_binding_path=tmp_path / "hardware.json",
         runtime_python=runtime_python,
         local_llm_model=tmp_path / "llm",
         local_embedding_model=tmp_path / "embedding",
+        runtime_fingerprint_path=tmp_path / "fingerprint.json",
+        runtime_binding_receipt_path=tmp_path / "binding.json",
         corpus_input=tmp_path / "corpus.json",
         query_input=tmp_path / "queries.json",
         build_receipt=tmp_path / "build.json",
@@ -512,7 +1060,7 @@ def test_adapter_worker_command_clears_environment_denies_network_and_binds_gpu0
         index_root=tmp_path / "index",
         writable_root=tmp_path / "work",
         timeout_seconds=10,
-        runtime_attestation_receipt_sha256="a" * 64,
+        runtime_binding_receipt_sha256="a" * 64,
         expected_corpus_count=2900,
         expected_query_count=9,
     )
@@ -520,13 +1068,26 @@ def test_adapter_worker_command_clears_environment_denies_network_and_binds_gpu0
     command, kwargs = calls[0]
     joined = "\n".join(command)
     assert "--ignore-environment" in command
+    assert "-I" in command
+    assert "-c" in command
+    assert "-m" not in command
     assert "CUDA_VISIBLE_DEVICES=0" in command
     assert "HF_HUB_OFFLINE=1" in command
     assert "TRANSFORMERS_OFFLINE=1" in command
     assert "TOKENIZERS_PARALLELISM=false" in command
     assert "IPAddressDeny=any" in command
     assert "RestrictAddressFamilies=AF_UNIX" in command
-    assert "replication_runtime.dstc9_official_hipporag_v1.worker" in command
+    assert (
+        "replication_runtime.dstc9_official_hipporag_v1.worker"
+        in joined
+    )
+    assert "--p17-project-root" in command
+    assert "--worker-project-root" in command
+    assert "--current-hardware-binding" in command
+    assert "--runtime-fingerprint" in command
+    assert "--runtime-binding-receipt" in command
+    assert "--runtime-binding-receipt-sha256" in command
+    assert "--runtime-attestation-receipt-sha256" not in command
     assert "OPENAI_API_KEY" not in joined
     assert "ANTHROPIC_API_KEY" not in joined
     launcher_environment = kwargs["env"]
