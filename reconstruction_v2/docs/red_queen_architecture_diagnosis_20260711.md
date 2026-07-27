@@ -5117,10 +5117,18 @@ schema aggregate，测量 `ONE_FOREIGN_KEY_EDGE / MULTI_FOREIGN_KEY_PATH / NESTE
 secret、item action、RAW/HippoRAG、evaluator 与 score 此时都保持未打开。只有 topology/capacity 真实通过
 后才冻结四块和效果执行，避免再次拿 secret cohort 做 parser canary。
 
+唯一 archive GET 与 official-repository clone 均已完成：archive 为 205,800,266 bytes、SHA-256
+`00636695…121b`，official code 为 commit `b7b5b8c8…ca7c` / tree `7687d1f7…3491`。central
+directory 有 2,625 entries、0 duplicate、0 unsafe path；TRAIN/DEV database 侧有 166 个 SQLite
+member。source-access receipt `bf53b034…379a` 形成时 archive member payload open 仍为 0，
+`test.json/test_tables.json/test_database` 均未打开。下一步只允许在 committed qualifier 中读取
+TRAIN/DEV/tables 与对应 database aggregate。
+
 ## 附录 A：关键证据索引
 
 - Spider P1 typed schema-expansion source chain：
-  [`source custody`](../manifests/spider_p1_typed_schema_expansion_source_custody_v1.json)
+  [`source custody`](../manifests/spider_p1_typed_schema_expansion_source_custody_v1.json)；
+  [`public source access`](../manifests/spider_p1_public_source_access_v1.json)
 
 - persistent user-service source-free P0：
   [`qualification freeze`](../manifests/persistent_user_service_p0_qualification_freeze_v1.json)；
