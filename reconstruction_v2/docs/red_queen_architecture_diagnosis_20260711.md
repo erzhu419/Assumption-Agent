@@ -4887,7 +4887,51 @@ L5 的独立 A_hold 晋升后改善 untouched M_search 也尚未建立。下一�
 原生或事前可辩护的 family、精确 retrieval qrel 与足够独立 cluster；不能继续以降低同源资格条件的方式寻找
 “通过”结果。
 
+### 12.52 2026-07-27 TechQA P0：唯一固定下载在零 payload 处终止
+
+LoCoMo 没有降低 quota 或重开。同日另立的 `TECHQA_P0_PUBLIC_SCHEMA_CAPACITY_V1` 固定 IBM TechQA
+repository commit `f0cf8ce1…6faf`、Hugging Face revision `60437bc7…365b` 与唯一
+`TechQA.tar.gz`，预期 size=`2,959,973,525`、SHA-256=`6b094ef9…118`。P0 只允许验证三个
+whitelisted member、官方 QA/corpus schema、50-document candidate set、gold span、共享 typed/official-HippoRAG
+字符边界与事前 operational INFORMATION/PROCEDURE/TROUBLESHOOT capacity；不生成 selection secret、
+cohort、action、qrel/evaluator 或 score。若 P0 通过，P1 才会一次冻结 TRAIN A_form/F_search、DEV
+A_hold/M_search、Agent/RAW/official HippoRAG 三臂以及 A_hold promotion→untouched M 的 L5 链。
+这些 family 是事前 operational query-intent strata，不是 TechQA 原生 gold relation label；即使成功，
+最终 claim 也必须保留这一边界。
+
+远端 source-free preflight 首先发现一处真实实现错误：runtime manifest 的 path-list digest 绑定其已冻结
+declared order，而 verifier 又用 Python code-point order 对同一集合重排。此时 unit 未安装/启动，
+`p0_work_v1`、attempt marker、HF network call 与 source byte 均为 0。该失败以
+[`preflight disposition`](../manifests/techqa_p0_public_source_preflight_disposition_v1.json) 单独封存；
+唯一修复只是按 byte-bound manifest declared order 重算 path-list，未改 source/parser/classifier/quota/
+provider/revision/file 或任何效果条件。修复后 311linux 的 3,249 个 regular runtime files、四个 symlink、
+resolved Python 与五个 pinned package version 的 source-free attestation 一次通过；66 项 P0/typed/formal/
+official-adapter tests 通过，refreeze self SHA-256=`f7e3db01…ab6b`。
+
+唯一 P0 service 于 09:08:35 启动，`NRestarts=0`，attempt marker 已在网络前 durable 写入。固定
+`hf download` invocation 在约 72 秒后 return code 1；archive payload file count=0，source member、
+qualification result 与 private eligibility manifest 均未形成。safe terminal 把阶段固定为
+`single_pinned_hf_download`、状态为 `implementation_source_or_infrastructure_invalid`，且明确
+`formal_P1_capability_consumed=false`。冻结实现只保存了 stderr SHA-256，没有保存原始 stderr，
+所以现有证据只能支持 **acquisition-infrastructure-invalid / exact transport subtype unknown**，不能把
+失败事后归因到具体 DNS/TLS/provider 子类型。
+
+TechQA 同源现已终止：不 retry/resume、不换 mirror/provider/revision/file，也不以已经完成的 P1 runtime
+打开其他 TechQA payload。它没有产生 Agent/RAW/HippoRAG 或 L5 性能样本。总目标仍缺现实域三-family
+对两条 baseline 的稳定净收益和 evaluator 晋升后改善 untouched M_search；下一实验必须使用独立 source/
+study/cohort，并优先选择已经完整本地冻结或能由单一小型 content-addressed artifact 取得的来源，不能继续
+把临时大文件传输当作效果研究的前置不确定性。
+
 ## 附录 A：关键证据索引
+
+- TechQA P0 single-download terminal chain（archive payload/P1/action/score 均为 0）：
+  [`source custody`](../manifests/techqa_p0_public_source_custody_v1.json)；
+  [`qualification freeze`](../manifests/techqa_p0_public_schema_qualification_freeze_v1.json)；
+  [`source-free preflight disposition`](../manifests/techqa_p0_public_source_preflight_disposition_v1.json)；
+  [`qualification implementation`](../assumption_agent/benchmarks/techqa_p0_public_source_qualification_v1.py)；
+  [`source-agnostic typed core`](../assumption_agent/benchmarks/techqa_p1_typed_core_v1.py)；
+  [`one-shot P1 runtime`](../assumption_agent/benchmarks/techqa_p1_runtime_v1.py)；
+  [`safe terminal result`](../manifests/techqa_p0_public_source_qualification_result_v1.json)
 
 - LoCoMo P0 public non-scoring terminal chain（无 P1/action/score）：
   [`source custody`](../manifests/locomo_p0_public_source_custody_v1.json)；
