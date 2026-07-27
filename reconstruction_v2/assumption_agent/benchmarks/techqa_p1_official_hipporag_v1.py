@@ -47,11 +47,11 @@ OUTER_BINDING_SCHEMA = f"{VERSION}_outer_binding_v1"
 INNER_QUERY_ID_SCHEMA = f"{VERSION}_inner_query_id_v1"
 INDEX_LIFECYCLE = "one_fresh_index_per_outer_cluster_destroy_never_reused_v1"
 INNER_BLOCK = inner_worker.FORMAL_BLOCK
-ALLOWED_STAGES = ("A_hold", "M_search")
+ALLOWED_STAGES = ("A_hold",)
 CLUSTER_COUNT_PER_STAGE = 4
-MIN_DOCUMENT_COUNT = inner_contract.MIN_CORPUS_SIZE
-MAX_DOCUMENT_COUNT = inner_contract.MAX_CORPUS_SIZE
-MAX_QUERY_COUNT = inner_worker.MAX_QUERY_COUNT
+EXPECTED_QUERY_COUNT = 9
+MIN_DOCUMENT_COUNT = 50
+MAX_DOCUMENT_COUNT = 450
 QUERY_SERIALIZATION = "question_title_utf8_then_lf_then_question_text_utf8_v1"
 DOCUMENT_SERIALIZATION = "title_utf8_then_two_lf_then_text_utf8_v1"
 INNER_SERIALIZATION = inner_contract.SERIALIZATION
@@ -378,7 +378,7 @@ def _validate_public_rows(
     if (
         isinstance(raw_queries, (str, bytes))
         or not isinstance(raw_queries, Sequence)
-        or not 1 <= len(raw_queries) <= MAX_QUERY_COUNT
+        or len(raw_queries) != EXPECTED_QUERY_COUNT
     ):
         raise TechqaP1OfficialHippoRAGError("query count is invalid")
     if (
@@ -1037,6 +1037,7 @@ __all__ = [
     "ALLOWED_STAGES",
     "CLUSTER_COUNT_PER_STAGE",
     "DOCUMENT_SERIALIZATION",
+    "EXPECTED_QUERY_COUNT",
     "INDEX_LIFECYCLE",
     "INNER_BLOCK",
     "INPUT_SCHEMA",

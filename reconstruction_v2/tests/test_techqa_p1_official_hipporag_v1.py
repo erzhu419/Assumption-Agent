@@ -34,19 +34,19 @@ def secure_tmp_path() -> Path:
 def _queries() -> list[dict[str, object]]:
     return [
         {
-            "ordinal": 0,
-            "question_text": "The service fails with error ZXQ-19.",
-            "question_title": "Why does the service fail?",
-        },
-        {
-            "ordinal": 1,
-            "question_text": "I need the exact supported procedure.",
-            "question_title": "How can I configure the service?",
-        },
+            "ordinal": ordinal,
+            "question_text": (
+                f"I need the exact support detail for case ZXQ-{ordinal}."
+            ),
+            "question_title": (
+                f"How can I configure service case {ordinal}?"
+            ),
+        }
+        for ordinal in range(adapter.EXPECTED_QUERY_COUNT)
     ]
 
 
-def _documents(count: int = 7) -> list[dict[str, object]]:
+def _documents(count: int = 50) -> list[dict[str, object]]:
     return [
         {
             "ordinal": ordinal,
@@ -164,7 +164,7 @@ class _FakeInner:
             observed_process_thread_peak=2,
         )
         assert core.index_calls == 1
-        assert core.retrieve_calls == 1
+        assert core.retrieve_calls == 2
         if self.mutation is not None:
             self.mutation(result)
         return result
@@ -292,14 +292,19 @@ def test_supplied_serialized_hash_mismatch_fails_closed(target: str) -> None:
         adapter.validate_input(value)
 
 
-def test_outer_stage_and_cluster_are_audit_only_and_inner_is_invariant(
+def test_cluster_is_audit_only_and_m_search_is_not_an_allowed_surface(
     secure_tmp_path: Path,
 ) -> None:
     ahold = _payload(stage="A_hold", cluster_ordinal=0)
-    msearch = _payload(stage="M_search", cluster_ordinal=3)
+    other_cluster = _payload(stage="A_hold", cluster_ordinal=3)
     assert adapter.inner_payload(adapter.validate_input(ahold)) == (
-        adapter.inner_payload(adapter.validate_input(msearch))
+        adapter.inner_payload(adapter.validate_input(other_cluster))
     )
+    with pytest.raises(
+        adapter.TechqaP1OfficialHippoRAGError,
+        match="identity drifted",
+    ):
+        _payload(stage="M_search", cluster_ordinal=3)
 
     first = _FakeInner()
     second = _FakeInner()
@@ -308,31 +313,31 @@ def test_outer_stage_and_cluster_are_audit_only_and_inner_is_invariant(
         work_root=secure_tmp_path / "A",
         inner_runner=first,
     )
-    output_m = adapter.execute_cluster_once(
-        msearch,
-        work_root=secure_tmp_path / "M",
+    output_other = adapter.execute_cluster_once(
+        other_cluster,
+        work_root=secure_tmp_path / "other",
         inner_runner=second,
     )
     assert first.inputs == second.inputs
-    assert output_a["rows"] == output_m["rows"]
-    assert output_a["inner_input_sha256"] == output_m[
+    assert output_a["rows"] == output_other["rows"]
+    assert output_a["inner_input_sha256"] == output_other[
         "inner_input_sha256"
     ]
-    assert output_a["inner_output_sha256"] == output_m[
+    assert output_a["inner_output_sha256"] == output_other[
         "inner_output_sha256"
     ]
-    assert output_a["query_serialized_sha256"] == output_m[
+    assert output_a["query_serialized_sha256"] == output_other[
         "query_serialized_sha256"
     ]
-    assert output_a["document_serialized_sha256"] == output_m[
+    assert output_a["document_serialized_sha256"] == output_other[
         "document_serialized_sha256"
     ]
-    assert output_a["outer_binding_sha256"] != output_m[
+    assert output_a["outer_binding_sha256"] != output_other[
         "outer_binding_sha256"
     ]
-    assert output_a["self_sha256"] != output_m["self_sha256"]
+    assert output_a["self_sha256"] != output_other["self_sha256"]
     assert output_a["stage"] == "A_hold"
-    assert output_m["stage"] == "M_search"
+    assert output_other["stage"] == "A_hold"
 
 
 def test_fresh_index_attempt_marker_and_no_retry(

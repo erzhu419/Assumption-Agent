@@ -8,9 +8,9 @@ projections.
 
 The scientific contract is fixed here:
 
-* one HMAC secret selects mutually disjoint TRAIN ``A_form``/``F_search`` and
-  DEV ``A_hold``/``M_search`` cohorts, stratified by a preregistered
-  operational query-intent classifier;
+* one HMAC secret selects question-ID/query-byte-disjoint TRAIN
+  ``A_form``/``F_search`` and DEV ``A_hold``/``M_search`` cohorts,
+  stratified by a preregistered operational query-intent classifier;
 * the original ``DOC_IDS`` order is erased.  Every search cluster receives
   one canonical document-id-sorted corpus shared byte-for-byte by RAW, Agent,
   and the externally executed official HippoRAG arm;
@@ -39,6 +39,7 @@ import re
 from typing import Mapping, Sequence
 
 from . import techqa_p1_typed_core_v1 as core
+from . import techqa_p1_official_hipporag_v1 as hippo_adapter
 
 
 VERSION = "techqa_p1_formal_v1"
@@ -456,10 +457,6 @@ class CohortSelection:
                 [row.question.normalized_query_sha256 for row in all_items],
                 "normalized query bytes",
             ),
-            (
-                [row.question.gold_document_id for row in all_items],
-                "gold document ID",
-            ),
             ([row.work_id for row in all_items], "work ID"),
         ):
             if len(set(values)) != len(values):
@@ -541,15 +538,49 @@ def _work_id(secret: bytes, *, split: str, question_id: str) -> str:
     return f"techqa-work-v1-{digest}"
 
 
-def select_private_cohorts(
-    source: VerifiedSource,
+def select_question_cohorts(
+    training_questions: Sequence[VerifiedQuestion],
+    dev_questions: Sequence[VerifiedQuestion],
     *,
     hmac_secret: bytes,
 ) -> CohortSelection:
-    """Perform the sole deterministic stratified constrained selection."""
+    """Select frozen cohorts from source-less verified question projections."""
 
-    if not isinstance(source, VerifiedSource):
-        raise TechqaP1FormalError("verified source is absent")
+    canonical_by_split: dict[str, tuple[VerifiedQuestion, ...]] = {}
+    for split, questions in (
+        ("TRAIN", training_questions),
+        ("DEV", dev_questions),
+    ):
+        if (
+            isinstance(questions, (str, bytes))
+            or not isinstance(questions, Sequence)
+        ):
+            raise TechqaP1FormalError(
+                f"{split} verified questions are not a sequence"
+            )
+        values = tuple(questions)
+        if (
+            not values
+            or any(
+                not isinstance(question, VerifiedQuestion)
+                for question in values
+            )
+        ):
+            raise TechqaP1FormalError(
+                f"{split} verified question projection drifted"
+            )
+        canonical_by_split[split] = tuple(
+            sorted(values, key=lambda row: row.question_id)
+        )
+    question_ids = [
+        question.question_id
+        for split in ("TRAIN", "DEV")
+        for question in canonical_by_split[split]
+    ]
+    if len(set(question_ids)) != len(question_ids):
+        raise TechqaP1FormalError(
+            "question IDs are not unique across verified splits"
+        )
     if (
         not isinstance(hmac_secret, bytes)
         or len(hmac_secret) != HMAC_SECRET_BYTES
@@ -558,13 +589,8 @@ def select_private_cohorts(
             "the single HMAC secret must be exactly 32 bytes"
         )
     secret_commitment = hashlib.sha256(hmac_secret).hexdigest()
-    by_split = {
-        "TRAIN": source.training_questions,
-        "DEV": source.dev_questions,
-    }
     used_question_ids: set[str] = set()
     used_query_hashes: set[str] = set()
-    used_gold_ids: set[str] = set()
     selected: dict[str, list[SelectedItem]] = {
         block: [] for block in BLOCKS
     }
@@ -584,7 +610,7 @@ def select_private_cohorts(
                         ),
                         question,
                     )
-                    for question in by_split[split]
+                    for question in canonical_by_split[split]
                     if operational_family(
                         question.question_title,
                         question.question_text,
@@ -604,7 +630,6 @@ def select_private_cohorts(
                         question.question_id in used_question_ids
                         or question.normalized_query_sha256
                         in used_query_hashes
-                        or question.gold_document_id in used_gold_ids
                     ):
                         continue
                     item = SelectedItem(
@@ -624,12 +649,11 @@ def select_private_cohorts(
                     used_query_hashes.add(
                         question.normalized_query_sha256
                     )
-                    used_gold_ids.add(question.gold_document_id)
                     accepted += 1
                 if accepted != quota:
                     raise TechqaP1FormalError(
                         f"{split}/{family}/{block} cannot satisfy the "
-                        "frozen quota under ID/query/gold disjointness"
+                        "frozen quota under ID/query-byte disjointness"
                     )
     blocks = tuple(
         CohortBlock(
@@ -657,6 +681,22 @@ def select_private_cohorts(
         blocks=blocks,
         secret_commitment_sha256=secret_commitment,
         selection_sha256=stable_hash(private),
+    )
+
+
+def select_private_cohorts(
+    source: VerifiedSource,
+    *,
+    hmac_secret: bytes,
+) -> CohortSelection:
+    """Delegate source-backed selection to the sole question-only selector."""
+
+    if not isinstance(source, VerifiedSource):
+        raise TechqaP1FormalError("verified source is absent")
+    return select_question_cohorts(
+        source.training_questions,
+        source.dev_questions,
+        hmac_secret=hmac_secret,
     )
 
 
@@ -740,13 +780,20 @@ class SearchCluster:
             raise TechqaP1FormalError("cluster corpus size drifted")
         document_ids = [row.document_id for row in self.documents]
         ordinals = [row.public_document.ordinal for row in self.documents]
+        serialized_hashes = [
+            hashlib.sha256(
+                core.serialize_document_bytes(row.public_document)
+            ).hexdigest()
+            for row in self.documents
+        ]
         if (
-            document_ids != sorted(document_ids)
-            or len(set(document_ids)) != len(document_ids)
+            len(set(document_ids)) != len(document_ids)
             or ordinals != list(range(len(self.documents)))
+            or serialized_hashes != sorted(serialized_hashes)
+            or len(set(serialized_hashes)) != len(serialized_hashes)
         ):
             raise TechqaP1FormalError(
-                "cluster corpus is not canonical document-id order"
+                "cluster corpus is not canonical unique public-byte order"
             )
         expected_ids = {
             document_id
@@ -817,20 +864,37 @@ def build_search_clusters(
                 )
                 for row in family_rows
             )
-        rows.sort(
-            key=lambda row: (
-                FAMILIES.index(row.selected.family),
-                row.selected.selection_hmac_sha256,
-                row.selected.work_id,
+        # Family is used only to take the frozen three-per-family slice.  The
+        # retrieval-facing query order is an opaque, label-independent HMAC
+        # work order.
+        rows.sort(key=lambda row: row.selected.work_id)
+        document_ids = {
+            document_id
+            for row in rows
+            for document_id in row.selected.question.document_ids
+        }
+        ordered_documents = sorted(
+            (
+                (
+                    hashlib.sha256(
+                        (
+                            document_by_id[document_id].title
+                            + core.DOCUMENT_SERIALIZATION_SEPARATOR
+                            + document_by_id[document_id].text
+                        ).encode("utf-8")
+                    ).hexdigest(),
+                    document_id,
+                )
+                for document_id in document_ids
+            ),
+            key=lambda row: (row[0], row[1]),
+        )
+        if len({row[0] for row in ordered_documents}) != len(
+            ordered_documents
+        ):
+            raise TechqaP1FormalError(
+                "cluster contains duplicate serialized document bytes"
             )
-        )
-        document_ids = sorted(
-            {
-                document_id
-                for row in rows
-                for document_id in row.selected.question.document_ids
-            }
-        )
         documents = tuple(
             ClusterDocument(
                 document_id=document_id,
@@ -840,7 +904,9 @@ def build_search_clusters(
                     text=document_by_id[document_id].text,
                 ),
             )
-            for ordinal, document_id in enumerate(document_ids)
+            for ordinal, (_serialized_hash, document_id) in enumerate(
+                ordered_documents
+            )
         )
         payload = [row.private_payload() for row in documents]
         clusters.append(
@@ -965,169 +1031,190 @@ class PrivateQrel:
 
 
 @dataclass(frozen=True, slots=True)
-class HippoRequest:
-    """Exact private bytes supplied to one official HippoRAG call."""
+class HippoQueryBinding:
+    """Private mapping from one public cluster ordinal to one opaque item."""
 
-    block: str
-    cluster_index: int
+    query_ordinal: int
     work_id: str
-    query_text: str
-    documents: tuple[Mapping[str, object], ...]
     query_bytes_sha256: str
-    serialized_document_set_sha256: str
-    input_sha256: str
 
     def __post_init__(self) -> None:
-        if self.block != A_HOLD:
-            raise TechqaP1FormalError(
-                "official Hippo request is outside frozen A_hold reality stage"
-            )
-        _identifier(self.work_id, field="Hippo work ID")
-        query_hash = hashlib.sha256(
-            self.query_text.encode("utf-8")
-        ).hexdigest()
-        if not hmac.compare_digest(
-            _hex64(self.query_bytes_sha256, field="Hippo query bytes"),
-            query_hash,
+        if (
+            type(self.query_ordinal) is not int
+            or not 0
+            <= self.query_ordinal
+            < hippo_adapter.EXPECTED_QUERY_COUNT
         ):
-            raise TechqaP1FormalError("Hippo query bytes hash drifted")
-        expected_documents: list[dict[str, object]] = []
-        for ordinal, value in enumerate(self.documents):
-            if (
-                not isinstance(value, Mapping)
-                or set(value)
-                != {
-                    "document_id",
-                    "ordinal",
-                    "serialized_text",
-                    "serialized_utf8_sha256",
-                }
-                or value.get("ordinal") != ordinal
-            ):
-                raise TechqaP1FormalError(
-                    "Hippo document byte manifest drifted"
-                )
-            document_id = _identifier(
-                value.get("document_id"), field="Hippo document ID"
-            )
-            serialized_text = value.get("serialized_text")
-            if not isinstance(serialized_text, str):
-                raise TechqaP1FormalError(
-                    "Hippo serialized document is not text"
-                )
-            serialized_hash = hashlib.sha256(
-                serialized_text.encode("utf-8")
-            ).hexdigest()
-            if not hmac.compare_digest(
-                _hex64(
-                    value.get("serialized_utf8_sha256"),
-                    field="Hippo serialized document",
-                ),
-                serialized_hash,
-            ):
-                raise TechqaP1FormalError(
-                    "Hippo serialized document bytes drifted"
-                )
-            expected_documents.append(
-                {
-                    "document_id": document_id,
-                    "ordinal": ordinal,
-                    "serialized_text": serialized_text,
-                    "serialized_utf8_sha256": serialized_hash,
-                }
-            )
-        set_hash = stable_hash(
-            [
-                {
-                    "ordinal": value["ordinal"],
-                    "serialized_sha256": value[
-                        "serialized_utf8_sha256"
-                    ],
-                }
-                for value in expected_documents
-            ]
-        )
-        if not hmac.compare_digest(
-            _hex64(
-                self.serialized_document_set_sha256,
-                field="Hippo document set",
-            ),
-            set_hash,
-        ):
-            raise TechqaP1FormalError("Hippo document set hash drifted")
-        expected_input = stable_hash(
-            {
-                "documents": expected_documents,
-                "query_text": self.query_text,
-            }
-        )
-        if not hmac.compare_digest(
-            _hex64(self.input_sha256, field="Hippo exact input"),
-            expected_input,
-        ):
-            raise TechqaP1FormalError("Hippo input binding drifted")
+            raise TechqaP1FormalError("Hippo query ordinal drifted")
+        _identifier(self.work_id, field="Hippo query work ID")
+        _hex64(self.query_bytes_sha256, field="Hippo query bytes")
 
     def private_payload(self) -> dict[str, object]:
         return {
-            "block": self.block,
-            "cluster_index": self.cluster_index,
-            "documents": [dict(row) for row in self.documents],
-            "input_sha256": self.input_sha256,
             "query_bytes_sha256": self.query_bytes_sha256,
-            "query_text": self.query_text,
-            "serialized_document_set_sha256": (
-                self.serialized_document_set_sha256
-            ),
+            "query_ordinal": self.query_ordinal,
             "work_id": self.work_id,
         }
 
 
-def _hippo_request(
-    cluster: SearchCluster,
-    item: ClusterItem,
-) -> HippoRequest:
-    query_text = core.serialize_query_text(
-        item.selected.question.question_title,
-        item.selected.question.question_text,
-    )
-    documents = tuple(
-        {
-            "document_id": row.document_id,
-            "ordinal": row.public_document.ordinal,
-            "serialized_text": core.serialize_document_text(
-                row.public_document
+@dataclass(frozen=True, slots=True)
+class HippoClusterRequest:
+    """One exact public adapter input and its private nine-item mapping."""
+
+    block: str
+    cluster_index: int
+    corpus_sha256: str
+    adapter_input: Mapping[str, object]
+    query_bindings: tuple[HippoQueryBinding, ...]
+    request_sha256: str
+
+    def __post_init__(self) -> None:
+        if (
+            self.block != A_HOLD
+            or type(self.cluster_index) is not int
+            or not 0 <= self.cluster_index < CLUSTER_COUNTS[A_HOLD]
+        ):
+            raise TechqaP1FormalError(
+                "official Hippo cluster request stage drifted"
+            )
+        _hex64(self.corpus_sha256, field="Hippo cluster corpus")
+        try:
+            canonical_input = json.loads(
+                hippo_adapter.canonical_bytes(
+                    self.adapter_input
+                ).decode("ascii")
+            )
+            cluster = hippo_adapter.validate_input(canonical_input)
+        except (
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+            hippo_adapter.TechqaP1OfficialHippoRAGError,
+        ) as exc:
+            raise TechqaP1FormalError(
+                "official Hippo adapter input drifted"
+            ) from exc
+        if (
+            cluster.stage != self.block
+            or cluster.cluster_ordinal != self.cluster_index
+        ):
+            raise TechqaP1FormalError(
+                "official Hippo adapter stage/index binding drifted"
+            )
+        bindings = tuple(self.query_bindings)
+        if (
+            len(bindings) != hippo_adapter.EXPECTED_QUERY_COUNT
+            or any(
+                not isinstance(row, HippoQueryBinding)
+                for row in bindings
+            )
+            or tuple(row.query_ordinal for row in bindings)
+            != tuple(range(hippo_adapter.EXPECTED_QUERY_COUNT))
+            or len({row.work_id for row in bindings}) != len(bindings)
+        ):
+            raise TechqaP1FormalError(
+                "official Hippo query binding registry drifted"
+            )
+        for binding, query in zip(
+            bindings, cluster.queries, strict=True
+        ):
+            expected_query_hash = hashlib.sha256(
+                hippo_adapter.serialize_query(query).encode("utf-8")
+            ).hexdigest()
+            if not hmac.compare_digest(
+                binding.query_bytes_sha256, expected_query_hash
+            ):
+                raise TechqaP1FormalError(
+                    "official Hippo query byte binding drifted"
+                )
+        object.__setattr__(self, "adapter_input", canonical_input)
+        object.__setattr__(self, "query_bindings", bindings)
+        expected_request = stable_hash(
+            self.private_payload(include_hash=False)
+        )
+        if not hmac.compare_digest(
+            _hex64(
+                self.request_sha256,
+                field="Hippo cluster request",
             ),
-            "serialized_utf8_sha256": hashlib.sha256(
-                core.serialize_document_bytes(row.public_document)
-            ).hexdigest(),
+            expected_request,
+        ):
+            raise TechqaP1FormalError(
+                "official Hippo cluster request hash drifted"
+            )
+
+    def private_payload(
+        self, *, include_hash: bool = True
+    ) -> dict[str, object]:
+        body: dict[str, object] = {
+            "adapter_input": dict(self.adapter_input),
+            "block": self.block,
+            "cluster_index": self.cluster_index,
+            "corpus_sha256": self.corpus_sha256,
+            "query_bindings": [
+                row.private_payload() for row in self.query_bindings
+            ],
+            "schema": f"{VERSION}_private_Hippo_cluster_request_v1",
+            "study_id": STUDY_ID,
         }
-        for row in cluster.documents
-    )
-    document_set_hash = stable_hash(
-        [
+        if include_hash:
+            body["self_sha256"] = self.request_sha256
+        return body
+
+
+def _hippo_cluster_request(
+    cluster: SearchCluster,
+) -> HippoClusterRequest:
+    if cluster.block != A_HOLD:
+        raise TechqaP1FormalError(
+            "official Hippo request formed outside A_hold"
+        )
+    adapter_input = hippo_adapter.input_payload(
+        stage=A_HOLD,
+        cluster_ordinal=cluster.cluster_index,
+        queries=[
             {
-                "ordinal": row["ordinal"],
-                "serialized_sha256": row["serialized_utf8_sha256"],
+                "ordinal": ordinal,
+                "question_text": item.selected.question.question_text,
+                "question_title": item.selected.question.question_title,
             }
-            for row in documents
-        ]
+            for ordinal, item in enumerate(cluster.items)
+        ],
+        documents=[
+            core.document_public_payload(row.public_document)
+            for row in cluster.documents
+        ],
     )
-    return HippoRequest(
-        block=cluster.block,
+    bindings = tuple(
+        HippoQueryBinding(
+            query_ordinal=ordinal,
+            work_id=item.selected.work_id,
+            query_bytes_sha256=hashlib.sha256(
+                core.serialize_query_text(
+                    item.selected.question.question_title,
+                    item.selected.question.question_text,
+                ).encode("utf-8")
+            ).hexdigest(),
+        )
+        for ordinal, item in enumerate(cluster.items)
+    )
+    provisional = {
+        "adapter_input": adapter_input,
+        "block": A_HOLD,
+        "cluster_index": cluster.cluster_index,
+        "corpus_sha256": cluster.corpus_sha256,
+        "query_bindings": [
+            row.private_payload() for row in bindings
+        ],
+        "schema": f"{VERSION}_private_Hippo_cluster_request_v1",
+        "study_id": STUDY_ID,
+    }
+    return HippoClusterRequest(
+        block=A_HOLD,
         cluster_index=cluster.cluster_index,
-        work_id=item.selected.work_id,
-        query_text=query_text,
-        documents=documents,
-        query_bytes_sha256=hashlib.sha256(
-            query_text.encode("utf-8")
-        ).hexdigest(),
-        serialized_document_set_sha256=document_set_hash,
-        input_sha256=stable_hash(
-            {
-                "documents": [dict(row) for row in documents],
-                "query_text": query_text,
-            }
-        ),
+        corpus_sha256=cluster.corpus_sha256,
+        adapter_input=adapter_input,
+        query_bindings=bindings,
+        request_sha256=stable_hash(provisional),
     )
 
 
@@ -1141,7 +1228,6 @@ class ActionRow:
     raw_top5_ordinals: tuple[int, ...]
     e0: core.PolicyDecision
     e1: core.PolicyDecision | None
-    hippo_request: HippoRequest | None
 
     def __post_init__(self) -> None:
         if self.block not in BLOCKS:
@@ -1164,9 +1250,9 @@ class ActionRow:
         if self.raw_top5_ordinals != expected_raw:
             raise TechqaP1FormalError("RAW is not frozen complete-query BM25")
         if self.block == A_FORM:
-            if self.e1 is not None or self.hippo_request is not None:
+            if self.e1 is not None:
                 raise TechqaP1FormalError(
-                    "A_form cannot contain fitted E1 or Hippo action"
+                    "A_form cannot contain fitted E1"
                 )
         else:
             if (
@@ -1175,12 +1261,6 @@ class ActionRow:
                 or self.e1.stage != self.block
             ):
                 raise TechqaP1FormalError("action row E1 binding drifted")
-            if (self.block == A_HOLD) != (
-                isinstance(self.hippo_request, HippoRequest)
-            ):
-                raise TechqaP1FormalError(
-                    "official Hippo request stage drifted"
-                )
 
     def private_payload(self) -> dict[str, object]:
         arms: dict[str, object] = {
@@ -1200,11 +1280,6 @@ class ActionRow:
             "block": self.block,
             "cluster_index": self.cluster_index,
             "corpus_sha256": self.corpus_sha256,
-            "hippo_request": (
-                self.hippo_request.private_payload()
-                if self.hippo_request is not None
-                else None
-            ),
             "work_id": self.work_id,
         }
 
@@ -1234,6 +1309,7 @@ class PreparedStage:
     clusters: tuple[SearchCluster, ...]
     actions: tuple[ActionRow, ...]
     qrels: tuple[PrivateQrel, ...]
+    hippo_cluster_requests: tuple[HippoClusterRequest, ...]
     action_archive_sha256: str
     qrel_archive_sha256: str
 
@@ -1257,6 +1333,44 @@ class PreparedStage:
             != {row.work_id for row in self.qrels}
         ):
             raise TechqaP1FormalError("prepared stage coverage drifted")
+        requests = tuple(self.hippo_cluster_requests)
+        if self.block == A_HOLD:
+            if (
+                len(requests) != CLUSTER_COUNTS[A_HOLD]
+                or any(
+                    not isinstance(row, HippoClusterRequest)
+                    for row in requests
+                )
+                or tuple(row.cluster_index for row in requests)
+                != tuple(range(CLUSTER_COUNTS[A_HOLD]))
+            ):
+                raise TechqaP1FormalError(
+                    "official Hippo cluster request coverage drifted"
+                )
+            for request, cluster in zip(
+                requests, self.clusters, strict=True
+            ):
+                if (
+                    request.block != self.block
+                    or request.cluster_index != cluster.cluster_index
+                    or request.corpus_sha256 != cluster.corpus_sha256
+                    or tuple(
+                        row.work_id for row in request.query_bindings
+                    )
+                    != tuple(
+                        row.selected.work_id for row in cluster.items
+                    )
+                ):
+                    raise TechqaP1FormalError(
+                        "official Hippo cluster request lineage drifted"
+                    )
+        elif requests:
+            raise TechqaP1FormalError(
+                "official Hippo request exists outside A_hold"
+            )
+        object.__setattr__(
+            self, "hippo_cluster_requests", requests
+        )
         action_body = self.private_action_payload(include_hash=False)
         qrel_body = self.private_qrel_payload(include_hash=False)
         if (
@@ -1286,12 +1400,13 @@ class PreparedStage:
         return {row.work_id: row for row in self.qrels}
 
     @property
-    def hippo_requests(self) -> tuple[HippoRequest, ...]:
-        return tuple(
-            row.hippo_request
-            for row in self.actions
-            if row.hippo_request is not None
-        )
+    def hippo_cluster_request_by_index(
+        self,
+    ) -> Mapping[int, HippoClusterRequest]:
+        return {
+            row.cluster_index: row
+            for row in self.hippo_cluster_requests
+        }
 
     def private_action_payload(
         self, *, include_hash: bool = True
@@ -1301,6 +1416,10 @@ class PreparedStage:
             "block": self.block,
             "cluster_corpora": [
                 row.private_payload() for row in self.clusters
+            ],
+            "official_HippoRAG_cluster_requests": [
+                row.private_payload()
+                for row in self.hippo_cluster_requests
             ],
             "qrel_values_present": False,
             "schema": f"{VERSION}_{self.block}_private_action_archive_v1",
@@ -1341,6 +1460,11 @@ def _form_stage(
             f"{block.block} requires the one frozen E1 model"
         )
     clusters = build_search_clusters(source, block)
+    hippo_cluster_requests = (
+        tuple(_hippo_cluster_request(cluster) for cluster in clusters)
+        if block.block == A_HOLD
+        else ()
+    )
     actions: list[ActionRow] = []
     qrels: list[PrivateQrel] = []
     for cluster in clusters:
@@ -1361,11 +1485,6 @@ def _form_stage(
                     stage=block.block,
                 )
             )
-            request = (
-                _hippo_request(cluster, item)
-                if block.block == A_HOLD
-                else None
-            )
             actions.append(
                 ActionRow(
                     block=block.block,
@@ -1378,7 +1497,6 @@ def _form_stage(
                     ).top5_document_ordinals,
                     e0=e0,
                     e1=e1,
-                    hippo_request=request,
                 )
             )
             gold = by_id[question.gold_document_id]
@@ -1401,6 +1519,9 @@ def _form_stage(
         "cluster_corpora": [
             row.private_payload() for row in clusters
         ],
+        "official_HippoRAG_cluster_requests": [
+            row.private_payload() for row in hippo_cluster_requests
+        ],
         "qrel_values_present": False,
         "schema": f"{VERSION}_{block.block}_private_action_archive_v1",
         "study_id": STUDY_ID,
@@ -1418,6 +1539,7 @@ def _form_stage(
         clusters=clusters,
         actions=tuple(actions),
         qrels=tuple(qrels),
+        hippo_cluster_requests=hippo_cluster_requests,
         action_archive_sha256=action_hash,
         qrel_archive_sha256=stable_hash(qrel_body),
     )
@@ -1797,8 +1919,8 @@ class PreparedStudy:
             )
 
     @property
-    def hippo_requests(self) -> tuple[HippoRequest, ...]:
-        return self.a_hold.hippo_requests
+    def hippo_cluster_requests(self) -> tuple[HippoClusterRequest, ...]:
+        return self.a_hold.hippo_cluster_requests
 
     def prepromotion_private_payload(
         self, *, include_hash: bool = True
@@ -1900,176 +2022,317 @@ def prepare_formal_study(
 
 
 @dataclass(frozen=True, slots=True)
-class OfficialHippoResult:
-    """Untrusted external result, accepted only under exact byte binding."""
+class OfficialHippoClusterRun:
+    """One canonical adapter input plus its validated safe cluster output."""
 
-    block: str
-    cluster_index: int
-    work_id: str
-    input_sha256: str
-    query_bytes_sha256: str
-    serialized_document_set_sha256: str
-    top5_ordinals: tuple[int, ...] | None = None
-    top5_document_ids: tuple[str, ...] | None = None
+    adapter_input: Mapping[str, object]
+    safe_output: Mapping[str, object]
 
     def __post_init__(self) -> None:
-        if self.block != A_HOLD or type(self.cluster_index) is not int:
-            raise TechqaP1FormalError("official Hippo result stage drifted")
-        _identifier(self.work_id, field="Hippo result work ID")
-        for field, value in (
-            ("Hippo result input", self.input_sha256),
-            ("Hippo result query", self.query_bytes_sha256),
-            (
-                "Hippo result document set",
-                self.serialized_document_set_sha256,
-            ),
-        ):
-            _hex64(value, field=field)
-        if self.top5_ordinals is None and self.top5_document_ids is None:
-            raise TechqaP1FormalError(
-                "Hippo result has neither ordinals nor document IDs"
+        try:
+            canonical_input = json.loads(
+                hippo_adapter.canonical_bytes(
+                    self.adapter_input
+                ).decode("ascii")
             )
-        if self.top5_ordinals is not None:
-            if (
-                len(self.top5_ordinals) != TOP_K
-                or len(set(self.top5_ordinals)) != TOP_K
-                or any(
-                    type(value) is not int or value < 0
-                    for value in self.top5_ordinals
-                )
-            ):
-                raise TechqaP1FormalError(
-                    "Hippo top5 ordinals are malformed"
-                )
-        if self.top5_document_ids is not None:
-            if (
-                len(self.top5_document_ids) != TOP_K
-                or len(set(self.top5_document_ids)) != TOP_K
-            ):
-                raise TechqaP1FormalError(
-                    "Hippo top5 document IDs are malformed"
-                )
-            for value in self.top5_document_ids:
-                _identifier(value, field="Hippo top5 document ID")
+            canonical_output = json.loads(
+                hippo_adapter.canonical_bytes(
+                    self.safe_output
+                ).decode("ascii")
+            )
+            cluster = hippo_adapter.validate_input(canonical_input)
+            checked_output = hippo_adapter.validate_output(
+                canonical_output,
+                expected_input=canonical_input,
+            )
+        except (
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+            hippo_adapter.TechqaP1OfficialHippoRAGError,
+        ) as exc:
+            raise TechqaP1FormalError(
+                "official Hippo cluster run validation failed"
+            ) from exc
+        if cluster.stage != A_HOLD:
+            raise TechqaP1FormalError(
+                "official Hippo cluster run is outside A_hold"
+            )
+        object.__setattr__(self, "adapter_input", canonical_input)
+        object.__setattr__(self, "safe_output", checked_output)
+
+    @property
+    def cluster_index(self) -> int:
+        return int(self.adapter_input["cluster_ordinal"])
+
+    def private_receipt_payload(self) -> dict[str, object]:
+        return {
+            "adapter_input_self_sha256": self.adapter_input[
+                "self_sha256"
+            ],
+            "adapter_output": dict(self.safe_output),
+            "cluster_index": self.cluster_index,
+            "schema": f"{VERSION}_verified_Hippo_cluster_run_v1",
+            "study_id": STUDY_ID,
+        }
 
 
 @dataclass(frozen=True, slots=True)
 class BoundHippoAction:
     work_id: str
+    cluster_index: int
+    query_ordinal: int
+    query_bytes_sha256: str
     top5_ordinals: tuple[int, ...]
     top5_document_ids: tuple[str, ...]
-    input_sha256: str
+    cluster_request_sha256: str
+    adapter_input_self_sha256: str
+    adapter_output_self_sha256: str
+    adapter_outer_binding_sha256: str
+    adapter_attempt_marker_self_sha256: str
+    adapter_attempt_marker_file_sha256: str
+    adapter_inner_receipt_sha256: str
+    adapter_inner_output_sha256: str
     output_binding_sha256: str
 
     def __post_init__(self) -> None:
         _identifier(self.work_id, field="bound Hippo work ID")
-        _hex64(self.input_sha256, field="bound Hippo input")
-        _hex64(self.output_binding_sha256, field="bound Hippo output")
+        if (
+            type(self.cluster_index) is not int
+            or not 0 <= self.cluster_index < CLUSTER_COUNTS[A_HOLD]
+            or type(self.query_ordinal) is not int
+            or not 0
+            <= self.query_ordinal
+            < hippo_adapter.EXPECTED_QUERY_COUNT
+        ):
+            raise TechqaP1FormalError(
+                "bound Hippo cluster/query ordinal drifted"
+            )
+        for field, value in (
+            ("bound Hippo query", self.query_bytes_sha256),
+            ("bound Hippo cluster request", self.cluster_request_sha256),
+            ("bound Hippo adapter input", self.adapter_input_self_sha256),
+            ("bound Hippo adapter output", self.adapter_output_self_sha256),
+            ("bound Hippo outer binding", self.adapter_outer_binding_sha256),
+            (
+                "bound Hippo attempt marker",
+                self.adapter_attempt_marker_self_sha256,
+            ),
+            (
+                "bound Hippo attempt marker file",
+                self.adapter_attempt_marker_file_sha256,
+            ),
+            ("bound Hippo inner receipt", self.adapter_inner_receipt_sha256),
+            ("bound Hippo inner output", self.adapter_inner_output_sha256),
+            ("bound Hippo output", self.output_binding_sha256),
+        ):
+            _hex64(value, field=field)
         if (
             len(self.top5_ordinals) != TOP_K
             or len(set(self.top5_ordinals)) != TOP_K
+            or any(
+                type(value) is not int or value < 0
+                for value in self.top5_ordinals
+            )
             or len(self.top5_document_ids) != TOP_K
             or len(set(self.top5_document_ids)) != TOP_K
         ):
             raise TechqaP1FormalError("bound Hippo top5 drifted")
+        for value in self.top5_document_ids:
+            _identifier(value, field="bound Hippo document ID")
 
     def private_payload(self) -> dict[str, object]:
         return {
-            "input_sha256": self.input_sha256,
+            "adapter_attempt_marker_file_sha256": (
+                self.adapter_attempt_marker_file_sha256
+            ),
+            "adapter_attempt_marker_self_sha256": (
+                self.adapter_attempt_marker_self_sha256
+            ),
+            "adapter_inner_output_sha256": (
+                self.adapter_inner_output_sha256
+            ),
+            "adapter_inner_receipt_sha256": (
+                self.adapter_inner_receipt_sha256
+            ),
+            "adapter_input_self_sha256": (
+                self.adapter_input_self_sha256
+            ),
+            "adapter_outer_binding_sha256": (
+                self.adapter_outer_binding_sha256
+            ),
+            "adapter_output_self_sha256": (
+                self.adapter_output_self_sha256
+            ),
+            "cluster_index": self.cluster_index,
+            "cluster_request_sha256": self.cluster_request_sha256,
             "output_binding_sha256": self.output_binding_sha256,
+            "query_bytes_sha256": self.query_bytes_sha256,
+            "query_ordinal": self.query_ordinal,
             "top5_document_ids": list(self.top5_document_ids),
             "top5_ordinals": list(self.top5_ordinals),
             "work_id": self.work_id,
         }
 
 
-def bind_official_hippo_results(
+def bind_official_hippo_cluster_runs(
     stage: PreparedStage,
-    results: Sequence[OfficialHippoResult],
+    runs: Sequence[OfficialHippoClusterRun],
 ) -> Mapping[str, BoundHippoAction]:
-    """Fail closed unless every official result matches exact shared bytes."""
+    """Validate four official cluster receipts, then bind all 36 actions."""
 
     if stage.block != A_HOLD:
         raise TechqaP1FormalError(
             "official Hippo binding is outside A_hold"
         )
-    checked = tuple(results)
-    if any(not isinstance(row, OfficialHippoResult) for row in checked):
-        raise TechqaP1FormalError("official Hippo result type drifted")
-    if len({row.work_id for row in checked}) != len(checked):
-        raise TechqaP1FormalError("official Hippo result work ID repeated")
-    by_work = {row.work_id: row for row in checked}
-    requests = {row.work_id: row for row in stage.hippo_requests}
-    if set(by_work) != set(requests):
+    checked = tuple(runs)
+    if (
+        len(checked) != CLUSTER_COUNTS[A_HOLD]
+        or any(
+            not isinstance(row, OfficialHippoClusterRun)
+            for row in checked
+        )
+        or len({row.cluster_index for row in checked}) != len(checked)
+    ):
         raise TechqaP1FormalError(
-            "official Hippo result coverage is not exact"
+            "official Hippo cluster run coverage is not exact"
+        )
+    by_cluster = {row.cluster_index: row for row in checked}
+    expected_indices = set(range(CLUSTER_COUNTS[A_HOLD]))
+    requests = stage.hippo_cluster_request_by_index
+    clusters = {
+        row.cluster_index: row for row in stage.clusters
+    }
+    if set(by_cluster) != expected_indices or set(requests) != expected_indices:
+        raise TechqaP1FormalError(
+            "official Hippo cluster index coverage drifted"
         )
     bound: dict[str, BoundHippoAction] = {}
-    for work_id in sorted(requests):
-        request = requests[work_id]
-        result = by_work[work_id]
+    for cluster_index in sorted(expected_indices):
+        run = by_cluster[cluster_index]
+        request = requests[cluster_index]
+        cluster = clusters[cluster_index]
+        if hippo_adapter.canonical_bytes(
+            run.adapter_input
+        ) != hippo_adapter.canonical_bytes(request.adapter_input):
+            raise TechqaP1FormalError(
+                "official Hippo exact adapter input mismatch"
+            )
+        try:
+            validated_cluster = hippo_adapter.validate_input(
+                run.adapter_input
+            )
+            output = hippo_adapter.validate_output(
+                run.safe_output,
+                expected_input=run.adapter_input,
+            )
+        except hippo_adapter.TechqaP1OfficialHippoRAGError as exc:
+            raise TechqaP1FormalError(
+                "official Hippo cluster receipt validation failed"
+            ) from exc
         if (
-            result.block != request.block
-            or result.cluster_index != request.cluster_index
-            or not hmac.compare_digest(
-                result.input_sha256, request.input_sha256
-            )
-            or not hmac.compare_digest(
-                result.query_bytes_sha256,
-                request.query_bytes_sha256,
-            )
-            or not hmac.compare_digest(
-                result.serialized_document_set_sha256,
-                request.serialized_document_set_sha256,
-            )
+            validated_cluster.stage != A_HOLD
+            or validated_cluster.cluster_ordinal != cluster_index
+            or output["stage"] != A_HOLD
+            or output["cluster_ordinal"] != cluster_index
+            or output["outer_input_self_sha256"]
+            != request.adapter_input["self_sha256"]
+            or output["outer_binding_sha256"]
+            != hippo_adapter.outer_binding(validated_cluster)
         ):
             raise TechqaP1FormalError(
-                "official Hippo exact byte binding mismatch"
+                "official Hippo stage/hash mapping drifted"
+            )
+        rows = output["rows"]
+        if not isinstance(rows, list):
+            raise TechqaP1FormalError(
+                "official Hippo cluster rows disappeared"
             )
         document_ids = tuple(
-            str(row["document_id"]) for row in request.documents
+            row.document_id for row in cluster.documents
         )
-        id_to_ordinal = {
-            document_id: ordinal
-            for ordinal, document_id in enumerate(document_ids)
-        }
-        if result.top5_ordinals is None:
-            assert result.top5_document_ids is not None
-            try:
-                ordinals = tuple(
-                    id_to_ordinal[value]
-                    for value in result.top5_document_ids
-                )
-            except KeyError as exc:
+        for binding, row in zip(
+            request.query_bindings, rows, strict=True
+        ):
+            if (
+                not isinstance(row, Mapping)
+                or row.get("query_ordinal") != binding.query_ordinal
+            ):
                 raise TechqaP1FormalError(
-                    "Hippo output document ID escaped the shared corpus"
-                ) from exc
-        else:
-            ordinals = result.top5_ordinals
+                    "official Hippo query ordinal mapping drifted"
+                )
+            raw_ordinals = row.get("top5_document_ordinals")
+            if not isinstance(raw_ordinals, list):
+                raise TechqaP1FormalError(
+                    "official Hippo top5 row disappeared"
+                )
+            ordinals = tuple(raw_ordinals)
             if any(value >= len(document_ids) for value in ordinals):
                 raise TechqaP1FormalError(
-                    "Hippo output ordinal escaped the shared corpus"
+                    "official Hippo output escaped the shared corpus"
                 )
-        resolved_ids = tuple(document_ids[value] for value in ordinals)
-        if (
-            result.top5_document_ids is not None
-            and result.top5_document_ids != resolved_ids
-        ):
-            raise TechqaP1FormalError(
-                "Hippo output ordinal/document-ID mapping disagrees"
+            resolved_ids = tuple(
+                document_ids[value] for value in ordinals
             )
-        output_body = {
-            "input_sha256": request.input_sha256,
-            "top5_document_ids": list(resolved_ids),
-            "top5_ordinals": list(ordinals),
-            "work_id": work_id,
-        }
-        bound[work_id] = BoundHippoAction(
-            work_id=work_id,
-            top5_ordinals=ordinals,
-            top5_document_ids=resolved_ids,
-            input_sha256=request.input_sha256,
-            output_binding_sha256=stable_hash(output_body),
+            output_body = {
+                "adapter_attempt_marker_file_sha256": output[
+                    "attempt_marker_file_sha256"
+                ],
+                "adapter_attempt_marker_self_sha256": output[
+                    "attempt_marker_self_sha256"
+                ],
+                "adapter_inner_output_sha256": output[
+                    "inner_output_sha256"
+                ],
+                "adapter_inner_receipt_sha256": output[
+                    "inner_receipt_sha256"
+                ],
+                "adapter_input_self_sha256": request.adapter_input[
+                    "self_sha256"
+                ],
+                "adapter_outer_binding_sha256": output[
+                    "outer_binding_sha256"
+                ],
+                "adapter_output_self_sha256": output["self_sha256"],
+                "cluster_index": cluster_index,
+                "cluster_request_sha256": request.request_sha256,
+                "query_bytes_sha256": binding.query_bytes_sha256,
+                "query_ordinal": binding.query_ordinal,
+                "top5_document_ids": list(resolved_ids),
+                "top5_ordinals": list(ordinals),
+                "work_id": binding.work_id,
+            }
+            bound[binding.work_id] = BoundHippoAction(
+                work_id=binding.work_id,
+                cluster_index=cluster_index,
+                query_ordinal=binding.query_ordinal,
+                query_bytes_sha256=binding.query_bytes_sha256,
+                top5_ordinals=ordinals,
+                top5_document_ids=resolved_ids,
+                cluster_request_sha256=request.request_sha256,
+                adapter_input_self_sha256=str(
+                    request.adapter_input["self_sha256"]
+                ),
+                adapter_output_self_sha256=str(output["self_sha256"]),
+                adapter_outer_binding_sha256=str(
+                    output["outer_binding_sha256"]
+                ),
+                adapter_attempt_marker_self_sha256=str(
+                    output["attempt_marker_self_sha256"]
+                ),
+                adapter_attempt_marker_file_sha256=str(
+                    output["attempt_marker_file_sha256"]
+                ),
+                adapter_inner_receipt_sha256=str(
+                    output["inner_receipt_sha256"]
+                ),
+                adapter_inner_output_sha256=str(
+                    output["inner_output_sha256"]
+                ),
+                output_binding_sha256=stable_hash(output_body),
+            )
+    if set(bound) != {row.work_id for row in stage.actions}:
+        raise TechqaP1FormalError(
+            "official Hippo item binding coverage drifted"
         )
     return bound
 
@@ -2270,6 +2533,20 @@ class FormalResult:
             )
             is not False
             or self.safe_terminal.get(
+                "cohort_question_and_normalized_query_disjoint"
+            )
+            is not True
+            or self.safe_terminal.get(
+                "cohort_gold_document_disjoint"
+            )
+            is not False
+            or self.safe_terminal.get(
+                "shared_corpus_and_gold_overlap_allowed"
+            )
+            is not True
+            or self.safe_terminal.get("M_search_untouched_scope")
+            != "query_and_action_not_document_disjoint"
+            or self.safe_terminal.get(
                 "online_or_API_evaluator_call_count"
             )
             != 0
@@ -2292,10 +2569,10 @@ def _safe_comparison(value: ExactComparison) -> dict[str, object]:
 
 def _finalize_once(
     prepared: PreparedStudy,
-    hippo_results: Sequence[OfficialHippoResult],
+    hippo_cluster_runs: Sequence[OfficialHippoClusterRun],
 ) -> FormalResult:
-    bound_hippo = bind_official_hippo_results(
-        prepared.a_hold, hippo_results
+    bound_hippo = bind_official_hippo_cluster_runs(
+        prepared.a_hold, hippo_cluster_runs
     )
     f_score = _score_stage(prepared.f_search)
     ahold_score = _score_stage(
@@ -2324,6 +2601,13 @@ def _finalize_once(
             else None
         ),
         "bound_official_HippoRAG_outputs": hippo_private,
+        "verified_official_HippoRAG_cluster_runs": {
+            str(run.cluster_index): run.private_receipt_payload()
+            for run in sorted(
+                hippo_cluster_runs,
+                key=lambda row: row.cluster_index,
+            )
+        },
         "prepromotion_archive": (
             prepared.prepromotion_private_payload()
         ),
@@ -2392,15 +2676,21 @@ def _finalize_once(
             },
             "aggregate_only_public_terminal": True,
             "candidate_original_order_used": False,
+            "cohort_gold_document_disjoint": False,
+            "cohort_question_and_normalized_query_disjoint": True,
             "cohort_selection_sha256": prepared.selection.selection_sha256,
             "e1_model_sha256": prepared.e1_model_sha256,
             "item_query_document_qrel_action_values_published": False,
+            "M_search_untouched_scope": (
+                "query_and_action_not_document_disjoint"
+            ),
             "online_or_API_evaluator_call_count": 0,
             "operational_strata_are_native_gold_relation_families": False,
             "primary_metric": "exact_singleton_DOCUMENT_recall_at_5",
             "private_archive_sha256": private_hash,
             "retry_replay_resample_model_provider_candidate_parser_family_quota_or_gate_change_count": 0,
             "schema": f"{VERSION}_safe_terminal_v1",
+            "shared_corpus_and_gold_overlap_allowed": True,
             "source_commitments": prepared.source.commitments.payload(),
             "status": (
                 "terminal_complete_after_A_hold_promotion_and_M_search"
@@ -2433,7 +2723,9 @@ class OneShotFormalController:
 
     def finalize(
         self,
-        official_hipporag_results: Sequence[OfficialHippoResult],
+        official_hipporag_cluster_runs: Sequence[
+            OfficialHippoClusterRun
+        ],
     ) -> FormalResult:
         if self._consumed:
             raise TechqaP1FormalError(
@@ -2443,7 +2735,7 @@ class OneShotFormalController:
         # formal result fails closed and cannot be retried through this object.
         self._consumed = True
         return _finalize_once(
-            self._prepared, official_hipporag_results
+            self._prepared, official_hipporag_cluster_runs
         )
 
 
@@ -2467,12 +2759,13 @@ __all__ = [
     "F_SEARCH",
     "FormalResult",
     "HMAC_SECRET_BYTES",
-    "HippoRequest",
+    "HippoClusterRequest",
+    "HippoQueryBinding",
     "INFORMATION",
     "ITEMS_PER_FAMILY_PER_CLUSTER",
     "M_SEARCH",
     "MAXIMUM_CLUSTER_DOCUMENT_COUNT",
-    "OfficialHippoResult",
+    "OfficialHippoClusterRun",
     "OneShotFormalController",
     "PROCEDURE",
     "PROCEDURE_INDICATORS",
@@ -2494,7 +2787,7 @@ __all__ = [
     "VerifiedQuestion",
     "VerifiedSource",
     "authorize_m_search",
-    "bind_official_hippo_results",
+    "bind_official_hippo_cluster_runs",
     "build_search_clusters",
     "canonical_bytes",
     "compare_exact_rows",
@@ -2505,6 +2798,7 @@ __all__ = [
     "public_action_projection",
     "reality_criterion",
     "select_private_cohorts",
+    "select_question_cohorts",
     "self_hashed",
     "stable_hash",
 ]
