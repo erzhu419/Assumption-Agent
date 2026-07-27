@@ -5099,7 +5099,28 @@ self SHA-256 为 `f6d32092…6098`，离线复核 8 份 canonical receipt、file
 本身没有消费效果 source/cohort，也没有增加现实域双基线优势或 L5 证据。BioASQ 及其他已关闭 root
 仍不得 replay。
 
+### 12.57 2026-07-27 Spider P1 custody：停止同类 QA 轮换，改测可执行 schema-graph action
+
+下一个候选不再是另一份 text/table QA prompt 变体。新 study
+`SPIDER_P1_TYPED_SCHEMA_EXPANSION_EVALUATOR_L5_V1` 选择官方 Spider 1.0 的现实跨域
+text-to-SQL schema-linking：公开 release 含 10,181 个人工问题、200 个多表数据库与 138 个 domain，
+`tables.json` 原生给出 table/column/type/primary-key/foreign-key graph。这里的 action 不依赖关键词
+或 prompt，而是从 RAW semantic top-5 schema seed 出发，执行可审计的
+`value anchor → column → table membership → foreign-key path` typed expansion；它会真正把 RAW top-5
+之外的 schema evidence 加入生成空间，而不是重新排序同一候选。
+
+source custody `f13ffd48…1021` 固定官方页面、CC-BY-SA-4.0 archive、Google Drive file ID、205,800,266-byte
+HEAD、official code commit `b7b5b8c8…ca7c` 与一次本机下载/clone 权限。下载后先只允许 central-directory
+inventory，再单独形成 source-access receipt；随后可以公开、非评分地解析 TRAIN/DEV、tables 与 SQLite
+schema aggregate，测量 `ONE_FOREIGN_KEY_EDGE / MULTI_FOREIGN_KEY_PATH / NESTED_OR_SET_RELATION`
+三类是否同时有足够、gold schema evidence 为 2–5 的 component-disjoint 容量。TEST payload、selection
+secret、item action、RAW/HippoRAG、evaluator 与 score 此时都保持未打开。只有 topology/capacity 真实通过
+后才冻结四块和效果执行，避免再次拿 secret cohort 做 parser canary。
+
 ## 附录 A：关键证据索引
+
+- Spider P1 typed schema-expansion source chain：
+  [`source custody`](../manifests/spider_p1_typed_schema_expansion_source_custody_v1.json)
 
 - persistent user-service source-free P0：
   [`qualification freeze`](../manifests/persistent_user_service_p0_qualification_freeze_v1.json)；
