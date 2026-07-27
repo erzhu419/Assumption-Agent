@@ -17,6 +17,11 @@ from assumption_agent.benchmarks import dstc9_p1_formal_source_v1 as source
 from assumption_agent.benchmarks import dstc9_p1_typed_core_v1 as core
 from replication_runtime.dstc9_official_hipporag_v1 import contract as hippo_contract
 from replication_runtime.dstc9_p1_formal_v1 import runner
+from replication_runtime.qasper_minilm_portable_v2.binding import (
+    PORTABLE_CANARY_SCHEMA,
+    PortableOfflineMiniLMEncoder,
+)
+from replication_runtime.qasper_minilm_v1 import binding as frozen_minilm_v1
 
 
 @pytest.fixture
@@ -146,6 +151,66 @@ def test_public_prototype_predictor_has_only_query_items_and_frozen_tie_break():
         "items",
         "return",
     )
+
+
+def test_predictor_factory_uses_portable_v2_and_not_v1_output_hash_oracle(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    calls: list[tuple[Path, Path]] = []
+
+    class FakePortable:
+        def __init__(self, *, asset_manifest_path, model_root):
+            calls.append(
+                (Path(asset_manifest_path), Path(model_root))
+            )
+
+        def encode(self, texts):
+            rows = tuple(texts)
+            matrix = np.zeros(
+                (len(rows), runner.EMBEDDING_DIMENSION),
+                dtype=np.float32,
+            )
+            for index in range(len(rows)):
+                matrix[index, index % len(runner.PREDICTOR_PROTOTYPES)] = 1.0
+            return matrix
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("v1 fixed-output oracle must not be invoked")
+
+    monkeypatch.setattr(
+        runner, "PortableOfflineMiniLMEncoder", FakePortable
+    )
+    monkeypatch.setattr(
+        frozen_minilm_v1, "OfflineMiniLMEncoder", forbidden
+    )
+    monkeypatch.setattr(
+        frozen_minilm_v1, "run_synthetic_canary", forbidden
+    )
+    predictor = runner.PublicPrototypeBucketPredictor.from_paths(
+        asset_manifest_path=tmp_path / "manifest.json",
+        model_root=tmp_path / "model",
+    )
+    assert isinstance(predictor, runner.PublicPrototypeBucketPredictor)
+    assert calls == [
+        (tmp_path / "manifest.json", tmp_path / "model")
+    ]
+    assert runner.__dict__.get("OfflineMiniLMEncoder") is None
+    assert PortableOfflineMiniLMEncoder.__module__.endswith(
+        "qasper_minilm_portable_v2.binding"
+    )
+    startup = runner.PREDICTOR_COMMITMENT_PAYLOAD[
+        "portable_startup_acceptance"
+    ]
+    assert startup["schema"] == PORTABLE_CANARY_SCHEMA
+    assert (
+        startup[
+            "expected_output_hash_or_allowlist_is_acceptance_oracle"
+        ]
+        is False
+    )
+    assert startup["observed_output_hashes_are_normative"] is False
+    assert startup["repeat_count"] == 2
 
 
 def test_coordinate_lane_primes_one_initial_batch_and_one_conditional_m_batch(

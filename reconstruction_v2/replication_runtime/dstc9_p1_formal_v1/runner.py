@@ -46,19 +46,22 @@ from replication_runtime.dstc9_coordinate_scorer_v1 import contract as coord_con
 from replication_runtime.dstc9_official_hipporag_v1 import adapter as hippo_adapter
 from replication_runtime.dstc9_official_hipporag_v1 import contract as hippo_contract
 from replication_runtime.dstc9_official_hipporag_v1 import runtime_binding
+from replication_runtime.qasper_minilm_portable_v2.binding import (
+    PORTABLE_CANARY_SCHEMA,
+    PortableOfflineMiniLMEncoder,
+)
 from replication_runtime.qasper_minilm_v1.binding import (
     EMBEDDING_DIMENSION,
-    OfflineMiniLMEncoder,
     quantized_cosine_similarity,
 )
 
 
 FORMAL_RUNTIME_VERSION = "dstc9_p1_formal_runtime_v1"
 FORMAL_CONFIG_SCHEMA = f"{FORMAL_RUNTIME_VERSION}_config_v1"
-CANARY_CONFIG_SCHEMA = f"{FORMAL_RUNTIME_VERSION}_source_free_canary_config_v1"
+CANARY_CONFIG_SCHEMA = "dstc9_p1_source_free_canary_config_v2"
 FORMAL_OUTER_TERMINAL_SCHEMA = f"{FORMAL_RUNTIME_VERSION}_safe_terminal_v1"
 FORMAL_FAILURE_SCHEMA = f"{FORMAL_RUNTIME_VERSION}_safe_failure_terminal_v1"
-CANARY_SCHEMA = f"{FORMAL_RUNTIME_VERSION}_source_free_canary_receipt_v1"
+CANARY_SCHEMA = "dstc9_p1_source_free_infrastructure_canary_receipt_v2"
 STUDY_ID = ctl.STUDY_ID
 
 OUTER_ATTEMPT_MARKER = "outer_formal_attempt.marker.json"
@@ -94,29 +97,48 @@ PREDICTOR_PROTOTYPES = (
     ),
 )
 
-PREDICTOR_COMMITMENT = ctl.stable_hash(
-    {
-        "bucket_order": list(core.PREDICTED_BUCKETS),
-        "embedding_runtime": "qasper_minilm_v1_OfflineMiniLMEncoder",
-        "input_contract": (
-            "typed_public_dialogue_history_serialized_model_query_only"
+PREDICTOR_COMMITMENT_PAYLOAD = {
+    "bucket_order": list(core.PREDICTED_BUCKETS),
+    "embedding_runtime": (
+        "qasper_minilm_portable_v2.PortableOfflineMiniLMEncoder"
+    ),
+    "frozen_model_and_execution": (
+        "unchanged_qasper_minilm_v1_asset_tree_CPU_float32_offline"
+    ),
+    "input_contract": (
+        "typed_public_dialogue_history_serialized_model_query_only"
+    ),
+    "model_input_exclusions": [
+        "corpus",
+        "domain",
+        "evaluator",
+        "family",
+        "label",
+        "qrel",
+        "score",
+        "source",
+        "split",
+    ],
+    "portable_startup_acceptance": {
+        "acceptance_basis": (
+            "public_synthetic_shape_dtype_finite_normalized_noncollapsed_"
+            "repeat_elementwise_and_byte_exact_only"
         ),
-        "model_input_exclusions": [
-            "corpus",
-            "domain",
-            "evaluator",
-            "family",
-            "label",
-            "qrel",
-            "score",
-            "source",
-            "split",
-        ],
-        "prototype_texts": list(PREDICTOR_PROTOTYPES),
-        "quantization": "qasper_minilm_v1_quantized_cosine_similarity",
-        "selection": "largest_quantized_cosine_then_smallest_bucket_v1",
-        "version": f"{FORMAL_RUNTIME_VERSION}_public_prototype_predictor_v1",
-    }
+        "expected_output_hash_or_allowlist_is_acceptance_oracle": False,
+        "observed_output_hashes_are_normative": False,
+        "repeat_count": 2,
+        "schema": PORTABLE_CANARY_SCHEMA,
+    },
+    "prototype_texts": list(PREDICTOR_PROTOTYPES),
+    "quantization": "qasper_minilm_v1_quantized_cosine_similarity",
+    "selection": "largest_quantized_cosine_then_smallest_bucket_v1",
+    "version": (
+        f"{FORMAL_RUNTIME_VERSION}_"
+        "public_prototype_predictor_portable_infrastructure_v2"
+    ),
+}
+PREDICTOR_COMMITMENT = ctl.stable_hash(
+    PREDICTOR_COMMITMENT_PAYLOAD
 )
 
 
@@ -492,7 +514,7 @@ class PublicPrototypeBucketPredictor:
         model_root: Path,
     ) -> "PublicPrototypeBucketPredictor":
         return cls(
-            OfflineMiniLMEncoder(
+            PortableOfflineMiniLMEncoder(
                 asset_manifest_path=asset_manifest_path,
                 model_root=model_root,
             )
@@ -1853,8 +1875,7 @@ def run_source_free_canary_once(
             "hardware_capture_id": config.hardware_capture_id,
             "retry_count": 0,
             "schema": (
-                f"{FORMAL_RUNTIME_VERSION}_"
-                "source_free_canary_attempt_marker_v1"
+                "dstc9_p1_source_free_canary_attempt_marker_v2"
             ),
             "study_id": STUDY_ID,
         }
@@ -1910,7 +1931,7 @@ def run_source_free_canary_once(
                 "formal_source_access_count": 0,
                 "online_or_API_evaluator_calls": 0,
                 "retry_count": 0,
-                "schema": f"{CANARY_SCHEMA}_failure_v1",
+                "schema": f"{CANARY_SCHEMA}_failure_v2",
                 "status": "failed_source_free_canary_no_retry",
                 "study_id": STUDY_ID,
             }
@@ -2013,7 +2034,7 @@ def run_source_free_canary_once(
                 "formal_source_access_count": 0,
                 "online_or_API_evaluator_calls": 0,
                 "retry_count": 0,
-                "schema": f"{CANARY_SCHEMA}_failure_v1",
+                "schema": f"{CANARY_SCHEMA}_failure_v2",
                 "status": "failed_source_free_canary_no_retry",
                 "study_id": STUDY_ID,
             }
@@ -2131,7 +2152,7 @@ def run_source_free_canary_once(
                 "formal_source_access_count": 0,
                 "online_or_API_evaluator_calls": 0,
                 "retry_count": 0,
-                "schema": f"{CANARY_SCHEMA}_failure_v1",
+                "schema": f"{CANARY_SCHEMA}_failure_v2",
                 "status": "failed_source_free_canary_no_retry",
                 "study_id": STUDY_ID,
             }
@@ -2198,6 +2219,7 @@ __all__ = [
     "FORMAL_CONFIG_SCHEMA",
     "FORMAL_RUNTIME_VERSION",
     "PREDICTOR_COMMITMENT",
+    "PREDICTOR_COMMITMENT_PAYLOAD",
     "PREDICTOR_PROTOTYPES",
     "CoordinateScorerLane",
     "Dstc9P1FormalRuntimeError",
