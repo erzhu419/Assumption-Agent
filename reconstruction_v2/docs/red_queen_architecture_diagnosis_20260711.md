@@ -5087,11 +5087,24 @@ unit，三者均为 `Type=exec / Restart=no / KillMode=control-group / AF_UNIX-o
 model/GPU/provider/API/online-evaluator count 固定为 0；不得 restart、retry 或改窗口。只有本 P0
 通过，才允许为下一个独立效果 study 形成 source/cohort。
 
+唯一执行已通过。parent 于 10:00:25 UTC 启动 coordinate/hipporag 两个 sibling transient service；
+原 launch session `13838` 随后关闭。28.31 秒时，新 observer session `13842` 观察到 boot ID 与
+user-manager PID 均未改变、parent 与两个 child 全部仍为 `active/running`，且三者均保持
+`Type=exec / Restart=no / KillMode=control-group`。两个 child 在 75 秒后自然完成；parent
+`Result=success / ExecMainStatus=0 / NRestarts=0`，stdout/stderr 为 0 bytes。terminal
+self SHA-256 为 `f6d32092…6098`，离线复核 8 份 canonical receipt、file/self commitment、mode
+`0600` 与所有零活动计数均通过。
+
+因此 **user-service 持久化缺口已经关闭**，可以为一个新的独立效果 study 形成设计；这项 P0
+本身没有消费效果 source/cohort，也没有增加现实域双基线优势或 L5 证据。BioASQ 及其他已关闭 root
+仍不得 replay。
+
 ## 附录 A：关键证据索引
 
 - persistent user-service source-free P0：
   [`qualification freeze`](../manifests/persistent_user_service_p0_qualification_freeze_v1.json)；
-  [`one-shot implementation`](../scripts/qualify_persistent_user_service_v1.py)
+  [`one-shot implementation`](../scripts/qualify_persistent_user_service_v1.py)；
+  [`qualification result`](../manifests/persistent_user_service_p0_qualification_result_v1.json)
 
 - BioASQ P1 source-free canary、formal freeze 与 post-source infrastructure interruption chain：
   [`study design`](../manifests/bioasq_p1_typed_evidence_set_evaluator_study_design_v1.json)；
