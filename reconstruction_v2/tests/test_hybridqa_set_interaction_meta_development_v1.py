@@ -127,6 +127,9 @@ def test_fixed_registry_and_complete_state_formula() -> None:
     assert subject.EXPECTED_LEGACY_FULL_PROJECTION_SHA256 == (
         "395f755517bd756bb16eb83c02dd15a6c9a46e10023561be2eaf89850fefe943"
     )
+    assert subject.EXPECTED_SET_ENERGY_NUMERIC_CANARY_SHA256 == (
+        "81e04ae053607c568c4b98885acbad1e5700ffe882eff7aeda26aa99aace6d7c"
+    )
 
 
 def test_source_free_numeric_canary_exercises_frozen_shape() -> None:
