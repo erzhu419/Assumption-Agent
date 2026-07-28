@@ -51,6 +51,7 @@ REQUIRED_IMPLEMENTATION_PATHS = frozenset(
         "replication_runtime/multihoprag_minilm_v1/adapter.py",
         "replication_runtime/qasper_minilm_v1/__init__.py",
         "replication_runtime/qasper_minilm_v1/binding.py",
+        "scripts/qualify_hybridqa_set_interaction_source_free_v1.py",
         "scripts/run_hybridqa_set_interaction_meta_development_v1.py",
         "tests/test_hybridqa_marginal_replacement_meta_development_v1.py",
         "tests/test_hybridqa_set_interaction_meta_development_v1.py",
