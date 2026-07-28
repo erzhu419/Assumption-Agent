@@ -74,6 +74,9 @@ _PROJECT_FILES = {
     "formal_acquisition_file_sha256": (
         "assumption_agent/benchmarks/quac_p1_formal_acquisition_v1.py"
     ),
+    "source_qualification_file_sha256": (
+        "assumption_agent/benchmarks/quac_p1_source_qualification_v1.py"
+    ),
     "formal_controller_file_sha256": (
         "assumption_agent/benchmarks/quac_p1_formal_controller_v1.py"
     ),

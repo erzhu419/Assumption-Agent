@@ -109,6 +109,7 @@ REQUIRED_IMPLEMENTATION_RELATIVE_PATHS = (
     "assumption_agent/benchmarks/__init__.py",
     "assumption_agent/benchmarks/quac_p1_action_adapter_v1.py",
     "assumption_agent/benchmarks/quac_p1_formal_acquisition_v1.py",
+    "assumption_agent/benchmarks/quac_p1_source_qualification_v1.py",
     "assumption_agent/benchmarks/quac_p1_formal_controller_v1.py",
     FORMAL_CORE_RELATIVE_PATH,
     "assumption_agent/benchmarks/quac_p1_runtime_v1.py",
