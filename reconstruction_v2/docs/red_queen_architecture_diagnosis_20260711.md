@@ -5247,7 +5247,72 @@ RAW 外存在大量具有因果 utility 的 typed action，真正瓶颈是当前
 utility 的实质新 evaluator architecture，再另做一次全新的 architecture decision；当前主线按
 预注册停止，两个总目标缺口原样保留。
 
+### 12.60 2026-07-28 whole-set interaction 资格化：aggregate 显著改善，但 TABLE_ONLY 终止晋级
+
+按 12.59 的唯一合法后续，没有换 source，也没有再补 gate。architecture decision
+`fe9bc18d…421` 事前固定了实质不同的 whole-set hypothesis class：对每题的 RAW top-5 与全部
+typed-reachable 外部 candidate，完整枚举 no-op、一次替换与两次替换的最终 top-5 set；48 个固定
+feature 同时表达 candidate-candidate、candidate-retained-RAW、typed connectivity、path
+complementarity、global coverage 与 deletion loss，再用无截距 λ=1、item/utility-stratum
+balanced 的单次 L2 solve，全局 argmax 选择最终 set。最大状态数为每题 20,481；没有 candidate
+pruning、sampling、顺序 policy、family label、HippoRAG feature、threshold 或 post-result repair。
+
+在打开既有 private pack 前，311linux 的 source-free numeric canary 已由两个独立进程逐字节复现，
+qualification self 为 `aef2539c…e8cce`；pack access、online/API evaluation 与正式 output 均为 0。
+实现 freeze `8f5a70fb…e462` 经 30/30 文件、runtime、service、acquisition commitment 与既有完整
+fold/family projection 双重校验后提交。正式 service 只启动一次：
+InvocationID `5ada9716…b47`，`NRestarts=0`、`Result=success`、CPU 1min 4.014s、
+memory peak 621.7M、swap 0；没有 retry/replay/resample、新 source、fresh selection、official
+TEST 或外部 evaluator。
+
+108 个已消费 item 的 pooled aggregate 为：
+
+- RAW `781/6`、complete 56；旧 P6 path-2 `344/3`、complete 47；旧 marginal-v1
+  `811/6`、complete 60；whole-set learned **153**、complete **74**；complete-set oracle
+  **202**、complete 101。
+- learned−RAW 为 **+137/6**，24 正 / 10 负 / 74 平，exact p=`70842161/17179869184`；
+  learned−marginal-v1 为 **+107/6**，22 正 / 12 负 / 74 平，
+  exact p=`397410689/17179869184`；learned−P6 为 **+115/3**。
+- 三个 held block 的 learned−RAW 均为正：A_form `+23/2`、A_hold `+16/3`、
+  M_search `+6`。这说明 whole-set interaction 确实消除了旧 marginal evaluator 的 block-level
+  负迁移。
+- 但 pooled family 只有 DUAL_TABLE_PASSAGE `+46/3` 与 PASSAGE_ONLY `+27/2`
+  为正；TABLE_ONLY 为 **−6**、complete `−3`。learned 选择了 210 次 replacement，而 oracle
+  只选择 51 次，显示当前 fixed linear set energy 仍严重 over-act，尤其不能在 TABLE_ONLY
+  保留 RAW。与此同时 oracle 在每个 block×family cell 仍严格为正，所以失败不是 candidate
+  state space 没有有益证据。
+
+九项实现级事前 requirement 中只有一项失败：
+`set_learned_positive_every_pooled_family=false`；其余包括每个 held block 为正、pooled exact
+p≤0.1、超过 P6、超过旧 marginal，以及 legacy full projection 精确复现均通过。由于规则是
+all-of-nine，terminal `57a1d1fc…5a7c` 合法给出
+**`STOP_SET_INTERACTION_ARCHITECTURE`**，result self 为 `aad912a0…8346`，后验 disposition
+为 `b049b407…81e2`。
+
+这是一个比 12.59 更强但仍不足以晋级的重要结果：set-level interaction 不是无效方向，它在已消费
+数据上大幅提高 aggregate、三个 held block 与两个 family；但预注册要求的是跨三个 family 的稳定
+无伤害，而非用 aggregate 掩盖 TABLE_ONLY 回退。因此不能事后加 TABLE switch、replacement
+penalty、family-specific expert、改 λ/stratum/feature，也不能据此打开独立 confirmatory source。
+本轮没有 official HippoRAG 三臂，也不是 fresh efficacy 或 L5 测量。
+
+故当前授权研究边界已经耗尽：同一 architecture/cohort/root 不得重跑，当前 architecture 下不得
+另换 source，confirmatory study 未获授权。总目标在逻辑上没有被否定，但实证仍缺两项：
+现实域至少三个事前 family 同时超过 RAW 与 official HippoRAG，以及 evaluator 在独立 A_hold 晋升
+后改善预冻结 untouched M_search 的 L5。若未来重新开放研究，必须先明确扩展 architecture-level
+研究边界，并在任何新效果数据前冻结一个不依赖本次 TABLE_ONLY 观察而形成的新训练/测量方案；
+不能把本次失败直接改成新 gate 后继续。
+
 ## 附录 A：关键证据索引
+
+- HybridQA whole-set interaction consumed-data architecture qualification：
+  [`architecture decision`](../manifests/red_queen_set_interaction_architecture_decision_v1.json)；
+  [`source-free numeric runtime qualification`](../manifests/hybridqa_set_interaction_numeric_runtime_qualification_v1.json)；
+  [`implementation freeze`](../manifests/hybridqa_set_interaction_meta_development_freeze_v1.json)；
+  [`attempt`](../artifacts/hybridqa_set_interaction_meta_development_v1/attempt.json)；
+  [`safe aggregate result`](../artifacts/hybridqa_set_interaction_meta_development_v1/result.safe.json)；
+  [`terminal`](../artifacts/hybridqa_set_interaction_meta_development_v1/terminal.json)；
+  [`result disposition`](../manifests/hybridqa_set_interaction_meta_development_result_v1.json)；
+  [`implementation`](../assumption_agent/benchmarks/hybridqa_set_interaction_meta_development_v1.py)。
 
 - HybridQA marginal-replacement consumed-data architecture decision chain：
   [`architecture stop/go`](../manifests/red_queen_architecture_stop_go_v1.json)；
