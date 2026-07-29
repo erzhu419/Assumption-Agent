@@ -183,6 +183,36 @@ def test_landlock_worker_environment_is_exact_and_secret_free(
     assert environment["TRANSFORMERS_OFFLINE"] == "1"
 
 
+def test_short_model_aliases_preserve_frozen_labels(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    llm = tmp_path / "models" / "llm-real"
+    embedding = tmp_path / "models" / "embed-real"
+    llm.mkdir(parents=True)
+    embedding.mkdir()
+    private_tmp = tmp_path / "private-tmp"
+    private_tmp.mkdir()
+    original_path = Path
+
+    class PrivateTmpPath(type(Path())):
+        def __new__(cls, value: object = ".") -> Path:
+            path = original_path(value)
+            if path == original_path("/tmp/models"):
+                path = private_tmp / "models"
+            return path
+
+    monkeypatch.setattr(repair_qualification, "Path", PrivateTmpPath)
+    llm_alias, embedding_alias = (
+        repair_qualification._prepare_short_model_aliases(
+            llm_model=llm, embedding_model=embedding
+        )
+    )
+    assert llm_alias.as_posix().endswith("/models/llm")
+    assert embedding_alias.as_posix().endswith("/models/embed")
+    assert llm_alias.resolve() == llm
+    assert embedding_alias.resolve() == embedding
+
+
 def test_canonical_json_rejects_nonfinite() -> None:
     with pytest.raises(qualification.HippoRAGTotalityQualificationError):
         qualification.canonical_json_bytes({"value": float("nan")})

@@ -76,6 +76,32 @@ def _prepare_writable_root(path: Path) -> None:
         (path / name).mkdir(mode=0o700)
 
 
+def _prepare_short_model_aliases(
+    *, llm_model: Path, embedding_model: Path
+) -> tuple[Path, Path]:
+    """Recreate the exact short model labels encoded in the frozen indexes."""
+
+    alias_root = Path("/tmp/models")
+    if alias_root.exists() or alias_root.is_symlink():
+        raise HippoRAGTotalityRepairQualificationError(
+            "private short model alias root is not fresh"
+        )
+    alias_root.mkdir(mode=0o700)
+    llm_alias = alias_root / "llm"
+    embedding_alias = alias_root / "embed"
+    llm_alias.symlink_to(llm_model, target_is_directory=True)
+    embedding_alias.symlink_to(embedding_model, target_is_directory=True)
+    if (
+        llm_alias.resolve(strict=True) != llm_model.resolve(strict=True)
+        or embedding_alias.resolve(strict=True)
+        != embedding_model.resolve(strict=True)
+    ):
+        raise HippoRAGTotalityRepairQualificationError(
+            "private short model alias binding failed"
+        )
+    return llm_alias, embedding_alias
+
+
 def _materialize_source(input_source: Path, root: Path) -> Mapping[str, Any]:
     raw = input_source.read_bytes()
     observed = hashlib.sha256(raw).hexdigest()
@@ -512,6 +538,9 @@ def run_canary(
         runtime_python=runtime_python,
     )
     artifact_binding = qualification.verify_frozen_artifact_sets(fixture_base)
+    llm_alias, embedding_alias = _prepare_short_model_aliases(
+        llm_model=llm_model, embedding_model=embedding_model
+    )
     scratch_root.mkdir(mode=0o700)
     source = _materialize_source(source_path, scratch_root)
     synthetic = _run_synthetic_landlock(
@@ -533,8 +562,8 @@ def run_canary(
             root=scratch_root,
             patched_import_root=source["patched_import_root"],
             runtime_root=runtime_root,
-            llm_model=llm_model,
-            embedding_model=embedding_model,
+            llm_model=llm_alias,
+            embedding_model=embedding_alias,
             runtime_python=runtime_python,
             source=success_source,
             ordinal=0,
@@ -545,8 +574,8 @@ def run_canary(
             root=scratch_root,
             patched_import_root=source["patched_import_root"],
             runtime_root=runtime_root,
-            llm_model=llm_model,
-            embedding_model=embedding_model,
+            llm_model=llm_alias,
+            embedding_model=embedding_alias,
             runtime_python=runtime_python,
             source=failure_source,
             ordinal=min(failure_source.failure_ordinals),
@@ -646,6 +675,9 @@ def run(
     )
     artifact_binding = qualification.verify_frozen_artifact_sets(fixture_base)
     canary = _verify_canary(canary_result, artifact_binding)
+    llm_alias, embedding_alias = _prepare_short_model_aliases(
+        llm_model=llm_model, embedding_model=embedding_model
+    )
     scratch_root.mkdir(mode=0o700)
     source = _materialize_source(source_path, scratch_root)
     synthetic = _run_synthetic_landlock(
@@ -659,8 +691,8 @@ def run(
         root=scratch_root,
         patched_import_root=source["patched_import_root"],
         runtime_root=runtime_root,
-        llm_model=llm_model,
-        embedding_model=embedding_model,
+        llm_model=llm_alias,
+        embedding_model=embedding_alias,
         runtime_python=runtime_python,
         process_concurrency=process_concurrency,
     )
