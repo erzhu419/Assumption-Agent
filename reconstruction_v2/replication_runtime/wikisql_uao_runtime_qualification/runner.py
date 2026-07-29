@@ -761,6 +761,7 @@ def _service_source_check(
 
 def _systemctl_properties(
     config: contract.QualificationConfig,
+    expected_invocation_id: str,
 ) -> Mapping[str, object]:
     runtime_root = Path(f"/run/user/{os.getuid()}")
     properties = (
@@ -834,8 +835,11 @@ def _systemctl_properties(
         raise QualificationRuntimeError(
             "live user-service property set drifted"
         )
+    live_invocation = contract.invocation_id_from_environment(
+        rows["InvocationID"]
+    )
     expected_invocation = contract.invocation_id_from_environment(
-        os.environ.get("INVOCATION_ID")
+        expected_invocation_id
     )
     expected_fragment = contract.INSTALLED_UNIT_PATH
     try:
@@ -846,7 +850,7 @@ def _systemctl_properties(
         ) from exc
     if (
         rows["NRestarts"] != "0"
-        or rows["InvocationID"] != expected_invocation
+        or live_invocation != expected_invocation
         or rows["ActiveState"] not in {"activating", "active"}
         or rows["SubState"] not in {"start", "running"}
         or Path(rows["FragmentPath"]) != expected_fragment
@@ -890,6 +894,45 @@ def _systemctl_properties(
         "nrestarts": 0,
         "shared_resource_caps_effective": True,
     }
+
+
+def _discover_systemd_invocation_id() -> str:
+    """Read the live InvocationID after ``env -i`` removed environment noise."""
+
+    runtime_root = Path(f"/run/user/{os.getuid()}")
+    try:
+        completed = subprocess.run(
+            [
+                "/usr/bin/systemctl",
+                "--user",
+                "show",
+                contract.UNIT_NAME,
+                "--no-pager",
+                "--property=InvocationID",
+                "--value",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=30,
+            env={
+                "DBUS_SESSION_BUS_ADDRESS": (
+                    f"unix:path={runtime_root / 'bus'}"
+                ),
+                "LANG": "C.UTF-8",
+                "LC_ALL": "C.UTF-8",
+                "PATH": "/usr/bin:/bin",
+                "XDG_RUNTIME_DIR": str(runtime_root),
+            },
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise QualificationRuntimeError(
+            "live systemd InvocationID query failed"
+        ) from exc
+    return contract.invocation_id_from_environment(
+        completed.stdout.strip()
+    )
 
 
 def _dev_null_check() -> Mapping[str, object]:
@@ -1086,7 +1129,9 @@ def static_checks(
             ),
             (
                 "systemd_effective_profile",
-                lambda: _systemctl_properties(config),
+                lambda: _systemctl_properties(
+                    config, paths.root.name[:32]
+                ),
             ),
             (
                 "landlock_abi",
@@ -1515,10 +1560,15 @@ def run_controller(
 ) -> Mapping[str, object]:
     """Run one iterative qualification attempt without scoring capability."""
 
-    invocation = contract.invocation_id_from_environment(
+    supplied_invocation = (
         invocation_id
         if invocation_id is not None
         else os.environ.get("INVOCATION_ID")
+    )
+    invocation = (
+        contract.invocation_id_from_environment(supplied_invocation)
+        if supplied_invocation is not None
+        else _discover_systemd_invocation_id()
     )
     if lock_factory is None:
         lock_factory = resource_admission.qualification_lock

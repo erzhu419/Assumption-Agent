@@ -340,6 +340,36 @@ def test_launcher_attempts_all_lanes_before_wait_even_if_first_fails(
     ]
 
 
+def test_controller_discovers_invocation_after_env_i_removed_it(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "stable-qualification"
+    config_path = root / contract.CONFIG_RELATIVE_PATH
+    _install_controller_fakes(root, config_path, monkeypatch)
+    monkeypatch.delenv("INVOCATION_ID", raising=False)
+    monkeypatch.setattr(
+        runner,
+        "_discover_systemd_invocation_id",
+        lambda: "7" * 32,
+    )
+
+    terminal = runner.run_controller(
+        config_path,
+        lock_factory=lambda _path: _Lock(),
+        admission_probe=lambda **_kwargs: _admission(
+            "DEFERRED_SHARED_RESOURCE"
+        ),
+        static_probe=lambda *_args: (),
+        outer_landlock=lambda *_args: None,
+        launcher=lambda _commands: (),
+    )
+
+    assert terminal["status"] == "DEFERRED_SHARED_RESOURCE"
+    assert terminal["effect_study_attempt_count"] == 0
+    assert not (root / "attempts").exists()
+
+
 class _Lock:
     def __enter__(self) -> bool:
         return True
