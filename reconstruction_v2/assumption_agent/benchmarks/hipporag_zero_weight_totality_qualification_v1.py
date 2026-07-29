@@ -558,7 +558,10 @@ def _bubblewrap_prefix(
 
 
 def _prepare_writable_root(path: Path) -> None:
-    path.mkdir(mode=0o700)
+    # Cached workers use ``cached/<source>/item_<ordinal>`` roots.  The
+    # source-level parent is intentionally not shared state, so materialize
+    # the full private path here before creating the per-worker subdirs.
+    path.mkdir(mode=0o700, parents=True)
     for name in ("home", "hf", "tmp"):
         (path / name).mkdir(mode=0o700)
 

@@ -128,6 +128,17 @@ def test_offline_runtime_accepts_resolved_venv_python_symlink() -> None:
     qualification.verify_offline_runtime_assets(BASE)
 
 
+def test_nested_cached_worker_root_materializes_source_parent(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "cached" / "source" / "item_000"
+    qualification._prepare_writable_root(root)
+    assert root.is_dir()
+    assert (root / "home").is_dir()
+    assert (root / "hf").is_dir()
+    assert (root / "tmp").is_dir()
+
+
 def test_canonical_json_rejects_nonfinite() -> None:
     with pytest.raises(qualification.HippoRAGTotalityQualificationError):
         qualification.canonical_json_bytes({"value": float("nan")})
