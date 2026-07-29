@@ -1,0 +1,186 @@
+"""WikiSQL UAO formal v4 with CUDA-compatible nested Landlock.
+
+The frozen efficacy contract is unchanged.  This isolated wrapper changes
+only runtime custody after the source-free v3 canary showed that CUDA needs
+to enumerate both physical NVIDIA device nodes and write Linux thread names
+through ``/proc/self/task`` before honoring ``CUDA_VISIBLE_DEVICES``.
+"""
+
+from __future__ import annotations
+
+from dataclasses import replace
+import importlib.util
+from pathlib import Path
+import sys
+from typing import Mapping, Sequence
+
+
+_SOURCE = (
+    Path(__file__).parents[1] / "wikisql_uao_formal_v1/runner.py"
+)
+_ISOLATED_NAME = (
+    "replication_runtime.wikisql_uao_formal_v4._isolated_formal_v1"
+)
+_SPEC = importlib.util.spec_from_file_location(_ISOLATED_NAME, _SOURCE)
+if _SPEC is None or _SPEC.loader is None:
+    raise ImportError("frozen formal v1 controller cannot be isolated")
+_base = importlib.util.module_from_spec(_SPEC)
+sys.modules[_ISOLATED_NAME] = _base
+_SPEC.loader.exec_module(_base)
+
+FORMAL_ROOT = Path("/home/erzhu419/wikisql_uao_p4_20260729/formal_v4")
+UNIT_NAME = "wikisql-uao-p4-formal-v4.service"
+INSTALLED_UNIT_PATH = (
+    Path("/home/erzhu419/.config/systemd/user") / UNIT_NAME
+)
+SERVICE_RELATIVE_PATH = Path(
+    "manifests/wikisql-uao-p4-formal-v4.service"
+)
+PYTHONHOME_ROOT = FORMAL_ROOT / "runtime_assets/python310_clean"
+MODULE = "replication_runtime.wikisql_uao_formal_v4.runner"
+
+_base.FORMAL_ROOT = FORMAL_ROOT
+_base.UNIT_NAME = UNIT_NAME
+_base.INSTALLED_UNIT_PATH = INSTALLED_UNIT_PATH
+_base.SERVICE_RELATIVE_PATH = SERVICE_RELATIVE_PATH
+
+_original_load_config = _base.load_config
+_original_lane_environment = _base._lane_environment
+_original_verify_service_profile = _base._verify_service_profile
+_original_action_commands = _base._production_action_commands
+
+
+def load_config(path: Path):
+    config = _original_load_config(path)
+    if config.tree("python_runtime_tree").path != PYTHONHOME_ROOT:
+        raise _base.WikiSQLUAOFormalError(
+            "private Python home binding drifted"
+        )
+    return config
+
+
+def _lane_environment(
+    config,
+    root: Path,
+    *,
+    cuda_visible_devices: str,
+) -> dict[str, str]:
+    environment = _original_lane_environment(
+        config,
+        root,
+        cuda_visible_devices=cuda_visible_devices,
+    )
+    environment["PYTHONHOME"] = str(PYTHONHOME_ROOT)
+    environment["VECLIB_MAXIMUM_THREADS"] = "1"
+    return environment
+
+
+def _verify_service_profile(raw: bytes, config) -> None:
+    required = f"PYTHONHOME={PYTHONHOME_ROOT}".encode("ascii")
+    module = MODULE.encode("ascii")
+    retired_modules = tuple(
+        (
+            "replication_runtime.wikisql_uao_formal_"
+            f"v{revision}.runner"
+        ).encode("ascii")
+        for revision in (1, 2, 3)
+    )
+    if (
+        required not in raw
+        or raw.count(module) != 1
+        or any(retired in raw for retired in retired_modules)
+    ):
+        raise _base.WikiSQLUAOFormalError(
+            "private Python home or v4 service module binding drifted"
+        )
+    rewritten = raw.replace(module, retired_modules[0])
+    _original_verify_service_profile(rewritten, config)
+
+
+def _service_probe(config):
+    return _base._systemctl_attestation(
+        config,
+        unit_name=UNIT_NAME,
+        installed_unit_path=INSTALLED_UNIT_PATH,
+    )
+
+
+def _all_gpu_device_paths() -> tuple[Path, ...]:
+    return tuple(
+        dict.fromkeys(
+            (
+                *_base._gpu_device_paths("0"),
+                *_base._gpu_device_paths("1"),
+            )
+        )
+    )
+
+
+def _outer_landlock(config, paths) -> None:
+    _base.apply_landlock(
+        read_paths=(
+            *_base._existing_system_read_paths(),
+            *(binding.path for binding in config.files.values()),
+            *(binding.path for binding in config.trees.values()),
+        ),
+        # The outer parent cannot bind /proc/self/task for future children:
+        # procfs resolves it to the parent's task-directory inode.  It admits
+        # /proc here; each child immediately narrows this to its own task tree.
+        write_paths=(
+            paths.root,
+            Path("/tmp"),
+            Path("/dev/null"),
+            Path("/proc"),
+        ),
+        device_paths=_all_gpu_device_paths(),
+    )
+
+
+def _action_commands(config, paths, source):
+    commands = dict(_original_action_commands(config, paths, source))
+    devices = _all_gpu_device_paths()
+    for lane in ("Agent", "HippoRAG"):
+        command = commands[lane]
+        commands[lane] = replace(
+            command,
+            write_paths=(
+                *command.write_paths,
+                Path("/proc/self/task"),
+            ),
+            # CUDA enumerates both physical nodes before applying the frozen
+            # CUDA_VISIBLE_DEVICES logical mapping.
+            device_paths=devices,
+        )
+    _base._validate_action_command_isolation(commands, paths)
+    return commands
+
+
+_base.load_config = load_config
+_base._lane_environment = _lane_environment
+_base._verify_service_profile = _verify_service_profile
+_base.PRODUCTION_DEPENDENCIES = replace(
+    _base.PRODUCTION_DEPENDENCIES,
+    service_probe=_service_probe,
+    outer_landlock=_outer_landlock,
+    action_commands=_action_commands,
+)
+
+CONFIG_SCHEMA = _base.CONFIG_SCHEMA
+STUDY_ID = _base.STUDY_ID
+WikiSQLUAOFormalError = _base.WikiSQLUAOFormalError
+
+
+def run_formal_production(config_path: Path) -> Mapping[str, object]:
+    return _base.run_formal_production(config_path)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    return _base.main(argv)
+
+
+def __getattr__(name: str):
+    return getattr(_base, name)
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())

@@ -5529,6 +5529,29 @@ outer Landlock 仅给 `/dev/null` 读权限，而 Python `subprocess.DEVNULL` �
 Popen 均返回 0，十组离线测试为 110/110。接下来只运行 v3 的唯一 canary；通过前仍不得下载
 WikiSQL source。
 
+v3 canary 随后以唯一 invocation `5a8998e1…fed1`、`NRestarts=0` 在
+`three_lane_launch` 关闭：三 lane 已全部真正启动，RAW 产生合法 safe receipt；Agent 与
+HippoRAG 非零退出。formal_v3 root 仍不存在，source access、API/在线评价与效果 study 消耗均为
+0。只读日志与 source-free `strace` 将 Agent 原因定位到两个 CUDA 初始化系统调用要求：
+驱动在兑现 `CUDA_VISIBLE_DEVICES` 前仍枚举两张物理卡，并写
+`/proc/self/task/<tid>/comm`；v3 child 只准入选定卡节点且 `/proc` 只读，因此得到
+`cudaGetDeviceCount error 304`。HippoRAG 则在进入 official core 前因 canary child 漏传
+冻结要求 `VECLIB_MAXIMUM_THREADS=1` 而 fail-closed。见
+[`v3 failure disposition`](../manifests/wikisql_uao_p4_canary_v3_failure_disposition_v1.json)。
+这些均是执行配置错误，不是模型、假设或得分阴性；v3 不得重启。
+
+fresh
+[`implementation freeze v4`](../manifests/wikisql_uao_p4_implementation_freeze_v4.json)
+只修这两个已观测故障：outer parent 先准入 `/proc`，GPU child 随即收窄到自身
+`/proc/self/task`；Agent/Hippo child 为驱动枚举准入两张物理 device node，再由冻结的
+`CUDA_VISIBLE_DEVICES=1/0` 与 canary 的 logical `device_count=1` 分别约束实际 GPU1/GPU0；
+同时补齐 native-thread 环境。该 freeze 明确仅 supersede 原 design 中“child 用 device-node
+Landlock 直接窄化到单卡”的 custody 句，不改变三臂 argv、模型、候选、source、cohort、
+EQ/GT/LT、metric、primary 或 stopping rule。forked Landlock probe 已证明 outer 只准入
+parent 的 `/proc/self/task` 仍会失败，而 outer `/proc` → child `/proc/self/task` 可完成真实
+CUDA allocation；十一组离线测试为 119/119，独立静态审计 no-blocker。下一步仍只有 v4 的一次
+source-free canary；它通过前不下载 WikiSQL source，失败则关闭本实现，绝不以补 gate 延续。
+
 ## 附录 A：关键证据索引
 
 - WikiSQL UAO P4 fresh reality study（正式 source 尚未打开）：
@@ -5538,12 +5561,14 @@ WikiSQL source。
   [`implementation freeze v2`](../manifests/wikisql_uao_p4_implementation_freeze_v2.json)；
   [`canary v2 failure disposition`](../manifests/wikisql_uao_p4_canary_v2_failure_disposition_v1.json)；
   [`implementation freeze v3`](../manifests/wikisql_uao_p4_implementation_freeze_v3.json)；
-  [`source-free canary v3 service`](../manifests/wikisql-uao-p4-source-free-canary-v3.service)；
-  [`source-free canary v3 runner`](../replication_runtime/wikisql_uao_source_free_canary_v3/runner.py)；
-  [`formal v3 service`](../manifests/wikisql-uao-p4-formal-v3.service)；
+  [`canary v3 failure disposition`](../manifests/wikisql_uao_p4_canary_v3_failure_disposition_v1.json)；
+  [`implementation freeze v4`](../manifests/wikisql_uao_p4_implementation_freeze_v4.json)；
+  [`source-free canary v4 service`](../manifests/wikisql-uao-p4-source-free-canary-v4.service)；
+  [`source-free canary v4 runner`](../replication_runtime/wikisql_uao_source_free_canary_v4/runner.py)；
+  [`formal v4 service`](../manifests/wikisql-uao-p4-formal-v4.service)；
   [`source compiler`](../assumption_agent/benchmarks/wikisql_uao_source_compiler_v1.py)；
   [`typed policy`](../assumption_agent/benchmarks/wikisql_uao_policy_v1.py)；
-  [`formal v3 wrapper`](../replication_runtime/wikisql_uao_formal_v3/runner.py)。
+  [`formal v4 wrapper`](../replication_runtime/wikisql_uao_formal_v4/runner.py)。
 - HybridQA whole-set interaction consumed-data architecture qualification：
   [`architecture decision`](../manifests/red_queen_set_interaction_architecture_decision_v1.json)；
   [`source-free numeric runtime qualification`](../manifests/hybridqa_set_interaction_numeric_runtime_qualification_v1.json)；
