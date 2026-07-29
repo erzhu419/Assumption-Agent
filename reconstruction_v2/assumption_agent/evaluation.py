@@ -39,7 +39,7 @@ class CounterfactualRunner:
         self.event_sink = event_sink or NullEventSink()
 
     def behavior_hash(self, program: HypothesisProgram) -> str:
-        return _program_behavior_hash(program)
+        return hypothesis_program_behavior_hash(program)
 
     def behavior_set_hash(
         self,
@@ -201,6 +201,12 @@ def _program_behavior_hash(program: HypothesisProgram) -> str:
     return stable_hash(payload)
 
 
+def hypothesis_program_behavior_hash(program: HypothesisProgram) -> str:
+    """Return the status- and lineage-invariant executable treatment hash."""
+
+    return _program_behavior_hash(program)
+
+
 def _canonical_program_bundle(
     programs: Sequence[HypothesisProgram],
 ) -> tuple[HypothesisProgram, ...]:
@@ -225,12 +231,27 @@ def _canonical_program_bundle(
 def counterfactual_program_set_behavior_hash(
     programs: Sequence[HypothesisProgram],
 ) -> str:
-    """Return an order-invariant executable-treatment identity for a bundle."""
+    """Return an order-invariant identity that preserves runtime order semantics.
+
+    ``PolicyRuntime`` applies a bundle in program-ID order.  IDs are therefore
+    executable for bundles even though they are irrelevant to a single
+    program's treatment body: renaming a program can change which conflicting
+    action is applied last.  Bind each status/lineage-independent body to its
+    ID and hash the exact runtime order.
+    """
 
     canonical = _canonical_program_bundle(programs)
     if not canonical:
         raise ValueError("program-set behavior hash requires at least one program")
-    return stable_hash(sorted(_program_behavior_hash(row) for row in canonical))
+    return stable_hash(
+        [
+            {
+                "program_id": row.id,
+                "program_behavior_hash": _program_behavior_hash(row),
+            }
+            for row in sorted(canonical, key=lambda item: item.id)
+        ]
+    )
 
 
 @dataclass(frozen=True)

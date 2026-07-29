@@ -1509,6 +1509,58 @@ def test_bundle_runtime_and_replay_identity_are_order_invariant_and_set_specific
     )
 
 
+def test_bundle_behavior_hash_binds_id_order_when_actions_conflict() -> None:
+    def setter(
+        hypothesis_id: str,
+        value: int,
+    ) -> HypothesisProgram:
+        payload = _program_dict(
+            hypothesis_id=hypothesis_id,
+            status="promoted",
+        )
+        payload["action_graph"] = [
+            {
+                "id": "set-conflict",
+                "operation": "set_parameter",
+                "target": "synthetic.conflict",
+                "value": value,
+            }
+        ]
+        return HypothesisProgram.from_dict(payload)
+
+    runtime = _runtime(MemoryEventSink())
+    task = _task("bundle-conflict")
+    first = setter("conflict-a", 1)
+    second = setter("conflict-b", 2)
+    renamed_first = replace(first, id="conflict-z")
+
+    original_plan = runtime.build_plan(task, (first, second))
+    renamed_plan = runtime.build_plan(task, (renamed_first, second))
+    assert original_plan.parameters["synthetic.conflict"] == 2
+    assert renamed_plan.parameters["synthetic.conflict"] == 1
+
+    runner = CounterfactualRunner(
+        runtime=runtime,
+        evaluator=TruthEvaluator(),
+    )
+    original_hash = runner.behavior_set_hash((first, second))
+    assert original_hash == runner.behavior_set_hash((second, first))
+    assert original_hash != runner.behavior_set_hash(
+        (renamed_first, second)
+    )
+
+    status_and_lineage_only = replace(
+        first,
+        status=HypothesisStatus.REJECTED,
+        parent_id="conflict-parent",
+        lineage=("conflict-parent",),
+        created_from_transition_ids=("conflict-transition",),
+    )
+    assert original_hash == runner.behavior_set_hash(
+        (status_and_lineage_only, second)
+    )
+
+
 def test_bundle_gate_aggregates_thresholds_and_archive_handles_both_outcomes() -> None:
     sink = MemoryEventSink()
     runner = CounterfactualRunner(
