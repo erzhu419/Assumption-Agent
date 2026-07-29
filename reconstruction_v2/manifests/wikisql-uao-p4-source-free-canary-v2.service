@@ -1,0 +1,24 @@
+[Unit]
+Description=WikiSQL UAO P4 one-shot source-free production canary v2
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/erzhu419/wikisql_uao_p4_20260729/source_free_canary_v2/reconstruction_v2
+UMask=0077
+ExecStart=/usr/bin/env -i HF_DATASETS_OFFLINE=1 HF_HUB_DISABLE_TELEMETRY=1 HF_HUB_OFFLINE=1 HOME=/home/erzhu419/wikisql_uao_p4_20260729/source_free_canary_v2/control/home LANG=C.UTF-8 LC_ALL=C.UTF-8 PYTHONDONTWRITEBYTECODE=1 PYTHONHASHSEED=0 PYTHONHOME=/home/erzhu419/wikisql_uao_p4_20260729/source_free_canary_v2/runtime_assets/python310_clean PYTHONNOUSERSITE=1 PYTHONPATH=/home/erzhu419/wikisql_uao_p4_20260729/source_free_canary_v2/reconstruction_v2:/home/erzhu419/p19_runtime_assets_20260723/typed_venv/lib/python3.10/site-packages:/home/erzhu419/wikisql_uao_p4_20260729/source_free_canary_v2/runtime_assets/babel_2_10_3_clean TEMP=/home/erzhu419/wikisql_uao_p4_20260729/source_free_canary_v2/control/tmp TMP=/home/erzhu419/wikisql_uao_p4_20260729/source_free_canary_v2/control/tmp TMPDIR=/home/erzhu419/wikisql_uao_p4_20260729/source_free_canary_v2/control/tmp TOKENIZERS_PARALLELISM=false TRANSFORMERS_OFFLINE=1 /home/erzhu419/p19_runtime_assets_20260723/typed_venv/bin/python -S -B -s -m replication_runtime.wikisql_uao_source_free_canary_v2.runner controller --config /home/erzhu419/wikisql_uao_p4_20260729/source_free_canary_v2/control/canary_config.json
+CPUQuota=700%
+MemoryMax=42949672960
+TasksMax=128
+KillMode=control-group
+Restart=no
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+NoNewPrivileges=yes
+PrivateTmp=yes
+StandardInput=null
+StandardOutput=null
+StandardError=journal
+TimeoutStartSec=infinity
+
+[Install]
+WantedBy=default.target
