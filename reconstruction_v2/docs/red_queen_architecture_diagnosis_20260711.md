@@ -12,6 +12,15 @@
 >   也都为正，但它是晋升后的 downstream search，不能反向替代事前指定的 A_hold primary。
 >   因此总目标尚未完成，不过缺口已从“两项”收敛为唯一一项：在新的预注册现实 A_hold 上同时取得
 >   三-family 对 RAW 与 official HippoRAG 的稳定正收益
+> - 最新 WikiSQL UAO P4 终态：共享节点 v5 implementation/execution freeze、official WikiSQL 1.1
+>   source custody、content-addressed deployment 与 source-free import/systemd 审计均已提交；唯一 formal
+>   invocation `a8d1c5c…d2319` 通过 `ADMITTED_SHARED_RESOURCE`，`NRestarts=0`，并在 durable attempt/live
+>   后首次打开正式 archive。source compiler 在生成 secret、选择 cohort 或写出任何 action/label pack 前，
+>   因冻结 registry 要求但 official archive 不含 `data/version.txt` 而 fail-closed；其安全 fingerprint
+>   精确映射到 `WikiSQLSourceCompilerError:source archive lacks authorized members:
+>   ['data/version.txt']`。三臂/scorer/online evaluator 均为 0，work root 为空，因此终态是
+>   **formal-source topology implementation-invalid / efficacy unknown / no replay**，不是
+>   Agent 相对 RAW/HippoRAG 的效果负结果。v5 已关闭；现实域三-family双基线的唯一总缺口仍未补上
 > - 当前 BioASQ P1：独立 study `BIOASQ_P1_TYPED_QUESTION_EVIDENCE_EVALUATOR_L5_V1`
 >   已完成公开 P0、source-free coordinate canary、legacy official HippoRAG closure、formal execution
 >   freeze 与 311linux 唯一正式启动；311 未联网下载，所有模型均为既有 exact-hash 本地资产。正式
@@ -2330,6 +2339,7 @@ Agent 胜 RAW/HippoRAG。安全证据见
 | infrastructure-invalid（UAO v1 source-free formal） | 22-template typed meta-assumption compiler 的唯一正式 source-free qualification | development 侧 10/10 identification、40/40 counterevidence、8/8 active differential、2/2 real no-op、32/32 wrong-operator harm、19/19 tamper、四类 metamorphic 各 10/10，116/116 离线测试；但唯一 user-service 在 controller 前以 218/CAPABILITIES 失败，InvocationID=`fada9479…f338`、restart=0、work/attempt=0。独立 `/usr/bin/true` diagnostic 证明 `PrivateDevices=yes` 是一个充分触发项；v2 后续证明它并非唯一不兼容 hardening。formal qualification/efficacy 均 unknown，当前 v1 不重启、不修补、不授权 reality source |
 | infrastructure-invalid（UAO v2 preformal canary） | infrastructure-only rebind 后唯一 production-isomorphic sandbox canary | scientific candidate 与 `6b02c7a9…b0ebc` receipt 未改；19-file commit `d958d004…a79e`、archive `dd3951f3…4ab3` 与远端 exact tree 均闭合。effective `PrivateDevices=no`，但唯一 canary 仍在 env/Python 前以 218/CAPABILITIES 失败，InvocationID=`387ec7cc…09bd`、restart=0、work/attempt/result=0；formal root/unit/attempt=0。`ProtectKernelModules` 的 bounding-set pruning 与无 `CAP_SETPCAP` 的 user manager 构成静态充分不兼容路径，但未重跑做最小单项隔离。v2 关闭，不启动 formal、不打开 source |
 | 完成但无 efficacy（UAO v3 source-free formal） | 最小已验证 user-service + in-process Landlock 下的 22-template compiler qualification | commit `ab9f2093…5457`、17-file tree 与唯一 formal service 全部闭合；InvocationID=`ecd2c7b2…2cf2`、result=success、status=0、restart=0。两个 worker byte-exact 回到 `6b02c7a9…b0ebc`；10/10 identification、40/40 counterevidence、8/8 active、2/2 no-op、32/32 harm、19/19 tamper、四类 metamorphic 10/10；Landlock/network/service binding 通过，所有 external access count=0。正式证明 mechanism 可执行，但不是现实 Agent−RAW/Hippo efficacy；只授权最多一个另行冻结的 fresh reality study |
+| implementation-invalid（WikiSQL UAO P4 formal v5） | shared-node 全栈通过后的唯一现实三臂效果 attempt | implementation/execution freeze、content-addressed deployment 与共享资源 admission 均成立；InvocationID=`a8d1c5c…d2319`、restart=0。durable attempt/live 后 source compiler 首次扫描 official archive，因缺少冻结 registry 要求的 `data/version.txt` 终止；精确 safe fingerprint 与静态控制流证明 secret/cohort/action/label/scorer 均为 0，work root 为空。当前 root no replay，Agent−RAW/Hippo efficacy unknown；暴露的是 source-free qualification 未覆盖真实 public archive member topology |
 | 完成（窄 synthetic multiseed stability） | fresh 8-seed typed-graph Agent_R1 / RAW / official HippoRAG replication | 全新 v3 cohort 为 8×64=512；v5 单次 detached formal 完成 1536/1536 action，official/local 峰值并发 8/64，MiniLM 固定两段 8448。Agent/Hippo/RAW 总 U=1259/1232/1273；Agent−Hippo seed delta `[3,8,0,2,1,5,6,2]`，mean=3.375、7 positive/1 tie；Agent−RAW 总 U −14。+27 全在 DEF_TP1/TP2，其他 family 与 Hippo 完全相同。只支持固定 synthetic distribution 的窄机制稳定性，不是现实域 transfer、promotion、L4/L5 或总体优越性 |
 | 完成但未晋升（HoVer joint graph/evaluator） | 新现实 derived closed-corpus 上六 typed actions、RAW、official HippoRAG 与 A/F/A_hold/M lifecycle | TRAIN-only private-HMAC 一次形成 A_form/F/A_hold/M=48/36/30/30 与 609-doc corpus；A_hold E0/RAW/Hippo 均 U=487/12、72 hits、16 complete，30/30 item utility tie；E1−E0=−47/12、2 gain/10 harm/18 tie、exact p=3739/4096。primary=false、promotion=false，M_search 未打开；0 online/network evaluator。claim 不等同 official HoVer/open-domain/family-out |
 | 完成但 primary 未通过（BRIGHT fresh RESERVE） | 现实 reasoning-retrieval 上 retained P6 / RAW / candidate-restricted official HippoRAG core 三臂与 E1 counterfactual | fresh 45 项三 family 各 15；45/45 Qwen valid、135 intents 先于 join、45/45 HippoRAG terminal、单 launch 峰值并发 12、late label 仅开一次、0 external network。Agent/Hippo/RAW mean nDCG@10=`0.14538/0.13598/0.14874`；Agent−Hippo aggregate `+0.00939`，但 family delta=`−0.46468/+0.16826/+0.71916`（integer-sum scale）、7 gain/9 harm/29 tie，未跨 family 稳定；Agent−RAW=`−0.00336`。E1−P6=`−0.00495`，既有 non-promotion 被 fresh reserve 再次支持；不是 full-corpus BRIGHT、answer generation、SOTA 或 L5 positive |
@@ -5615,9 +5625,48 @@ evaluation 仍全为 0。
 HippoRAG 效果结论；按照本轮边界，尚未建立、冻结或启动 v5。下一步若继续，只允许从这份全绿
 runtime 合同冻结一次正式实现并进行唯一离线评分效果实验，不增加效果 gate。
 
+### 12.63 WikiSQL formal v5：共享 runtime 合同成立，但 official archive topology 未被资格化
+
+在用户授权后，本轮从 12.62 的全绿合同冻结并提交
+[`implementation v5`](../manifests/wikisql_uao_p4_implementation_freeze_v5.json)、
+[`source custody`](../manifests/wikisql_uao_p4_source_custody_v1.json)、
+[`formal config`](../manifests/wikisql_uao_p4_formal_config_v5.json) 与
+[`execution freeze`](../manifests/wikisql_uao_p4_execution_freeze_v5.json)。v5 没有要求 311linux
+清空：resource admission 把外部进程数量只记为 telemetry，service 使用 CPU 400%、CPU/IO weight
+25、idle I/O、nice 10、MemoryHigh 24 GiB、MemoryMax 32 GiB、swap 0、TasksMax 96。部署前 exact
+import closure、systemd verify、35-file code tree、private Python/Babel tree 与模型/依赖 identity
+均通过；remote prepare 对 source 只做 mode/size 检查，没有在 attempt 前读取 payload。正式启动
+InvocationID=`a8d1c5c690e843ffb81c23561b0d2319`，共享资源 admission 合法通过，故此前 systemd、
+Landlock、CUDA、线程、短 alias、路径长度与并发启动问题确已闭合。
+
+唯一 invocation 随后建立 durable attempt/live，第一次正式哈希并扫描 official archive；在
+`compile_source_once` 终止。safe fingerprint
+`34fdddad…988f` 按冻结公式
+`sha256(type(error).__name__ + ":" + str(error))` 精确对应：
+`WikiSQLSourceCompilerError:source archive lacks authorized members: ['data/version.txt']`。
+控制流在 `read_authorized_archive` 返回前即失败，而 secret factory、table/query parse、SQLite
+derivation、cohort selection、A_form/A_hold pack、三臂 action 与 scorer 全在其后；远端 work root
+保持空，action child、barrier、label projection、scorer 与 API/online evaluator count 全为 0。
+安全终态和完整 disposition 分别见
+[`terminal`](../manifests/wikisql_uao_p4_formal_terminal_v5.safe.json) 与
+[`failure disposition`](../manifests/wikisql_uao_p4_formal_v5_failure_disposition_v1.json)。
+
+根因不是共享节点或新的效果 gate，而是 qualification coverage 缺了一层：12.62 的 harness
+有意 source-free，synthetic archive 自带 `data/version.txt`；后续 custody 只核验 official
+archive 的 size、SHA-256 与 Git blob，没有在 effect freeze 前做**公开 archive member topology**
+的非评分资格化。于是运行全栈通过，却没有验证 source compiler 对真实发布包的成员 registry。
+这是本轮流程错误，应透明记为 implementation-invalid，不能把它写成 UAO/Agent 阴性，也不能重启、
+修补或重放 v5。
+
+若继续总目标，必须先在不选择 item、不生成 secret、不打开 label、不评分的 qualification 层，
+用 public member headers 闭合 exact official topology；随后才可另立新 root/study ID 并重新
+预注册一次效果实验。不能直接形成“v6 修一个缺什么再跑”的链，也不允许根据本次失败增加任何
+效果 gate。QuAC 已成立的 L5 不变；总目标仍只缺现实域 A_hold 上三个 relation family 同时胜
+RAW 与 official HippoRAG。
+
 ## 附录 A：关键证据索引
 
-- WikiSQL UAO P4 fresh reality study（正式 source 尚未打开）：
+- WikiSQL UAO P4 fresh reality study（v5 已在 pre-secret source topology 阶段关闭）：
   [`study design`](../manifests/wikisql_uao_p4_study_design_v1.json)；
   [`implementation freeze v1`](../manifests/wikisql_uao_p4_implementation_freeze_v1.json)；
   [`pre-canary Python-runtime incident`](../manifests/wikisql_uao_p4_pre_canary_python_runtime_incident_v1.json)；
@@ -5633,6 +5682,15 @@ runtime 合同冻结一次正式实现并进行唯一离线评分效果实验，
   [`stable shared-node runtime qualification service`](../manifests/wikisql-uao-runtime-qualification.service)；
   [`stable runtime qualification implementation`](../replication_runtime/wikisql_uao_runtime_qualification/)；
   [`stable runtime qualification result`](../manifests/wikisql_uao_runtime_qualification_result_v1.json)；
+  [`implementation freeze v5`](../manifests/wikisql_uao_p4_implementation_freeze_v5.json)；
+  [`source custody`](../manifests/wikisql_uao_p4_source_custody_v1.json)；
+  [`deployment prepare`](../manifests/wikisql_uao_p4_deployment_prepare_v5.json)；
+  [`formal config v5`](../manifests/wikisql_uao_p4_formal_config_v5.json)；
+  [`execution freeze v5`](../manifests/wikisql_uao_p4_execution_freeze_v5.json)；
+  [`formal v5 service`](../manifests/wikisql-uao-p4-formal-v5.service)；
+  [`formal v5 wrapper`](../replication_runtime/wikisql_uao_formal_v5/runner.py)；
+  [`formal v5 safe terminal`](../manifests/wikisql_uao_p4_formal_terminal_v5.safe.json)；
+  [`formal v5 failure disposition`](../manifests/wikisql_uao_p4_formal_v5_failure_disposition_v1.json)；
   [`source compiler`](../assumption_agent/benchmarks/wikisql_uao_source_compiler_v1.py)；
   [`typed policy`](../assumption_agent/benchmarks/wikisql_uao_policy_v1.py)；
   [`formal v4 wrapper`](../replication_runtime/wikisql_uao_formal_v4/runner.py)。
