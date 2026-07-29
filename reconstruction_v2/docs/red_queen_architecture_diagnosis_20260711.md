@@ -2234,8 +2234,10 @@ effective unit prelaunch snapshot 与 Landlock ABI 8 canary 均闭合。311linux
 journal 明确为 `Failed to drop capabilities: Operation not permitted`。work entry count 仍为 0，
 `attempt.json`、worker receipt、result 与 formal terminal 均未形成。随后仅做的一次 source-free
 infrastructure diagnostic 用 `systemd-run --user -p PrivateDevices=yes /usr/bin/true` 独立复现相同
-218/CAPABILITIES，定位到此节点的 user-service `PrivateDevices=yes` capability-drop 不可执行，而不是
-compiler、receipt、Landlock、模型、source 或 evaluator 失败。
+218/CAPABILITIES，证明此节点的 user-service `PrivateDevices=yes` 本身就是一个充分触发项，而不是
+compiler、receipt、Landlock、模型、source 或 evaluator 失败。后续 UAO v2 进一步证明它并非冻结
+hardening 中唯一不兼容的 capability-pruning 指令；因此 v1 原始 disposition 保持不可改证据，但“唯一根因是
+PrivateDevices”的解释由 8.27 节纠正为“已独立复现的一个触发项”。
 
 本轮因此严格记为 `INFRASTRUCTURE_INVALID_PREEXEC_CAPABILITIES`：formal qualification 未测量，
 efficacy 未测量，所有 source/model/API/online evaluator/validation/test access count 都为 0，也没有
@@ -2246,6 +2248,38 @@ retry/replay/resample/repair。当前 UAO v1 root 不删除证据、不移除 ha
 [`infrastructure disposition`](../manifests/uao_source_free_qualification_infrastructure_disposition_v1.json)。
 若以后继续，必须另获明确授权建立 fresh UAO v2 边界，并在冻结前选择该节点可执行的 sandbox（例如不使用
 user-service `PrivateDevices`，或使用具备所需权限的 system service）；不能重启、修补或重标当前 v1。
+
+### 8.27 Fresh UAO v2 在唯一 production-isomorphic canary 的 systemd pre-exec 阶段再次 infrastructure-invalid
+
+用户明确授权后，本轮建立独立 `UAO_P2_SPARSE_RELATIONAL_DECISION_COMPILER_V2`，没有重启或修改 v1。
+v2 只做 infrastructure rebind：scientific candidate、22-template ontology、selector/compiler/runtime 与
+development receipt `6b02c7a9…b0ebc` 均保持不变；去掉 `PrivateDevices=yes`，加入独立、唯一一次
+production-isomorphic source-free sandbox canary。19-file implementation 以 commit
+`d958d004…a79e` 提交并推送；canary archive 为 `dd3951f3…4ab3`，远端 project exact hash match、
+symlink count 0、Python 3.12 identity、静态 unit verify、空 work root 与未部署 formal root/unit 均在启动前闭合。
+
+唯一 canary activation 的 InvocationID 为 `387ec7cc…09bd`。尽管 effective
+`PrivateDevices=no`，它仍在 `/usr/bin/env` 与 Python/canary script 之前以
+`ExecMainStatus=218/CAPABILITIES` 退出；journal 仍为
+`Failed to drop capabilities: Operation not permitted`，`NRestarts=0`。canary work entry count
+保持 0，attempt/result 均未形成；formal root、formal unit、formal attempt 与 reality source 全部未创建或打开。
+因此这不是 canary semantic failure，而是 preformal infrastructure-invalid，且 formal capability 未消费。
+
+只读证据把 v1 的诊断收窄为 capability-pruning profile 问题：该 user manager 的 effective/permitted
+capability mask 均为 `0000000800000000`，不含 `CAP_SETPCAP`；冻结 unit 中
+`ProtectKernelModules=yes` 按 systemd 本机文档会从 unit bounding set 移除 `CAP_SYS_MODULE`，已经构成一个
+静态充分的不兼容路径。为保持 one-shot 诚信，没有通过删掉该项再启动来实验性寻找“最小单项”，所以不能声称
+它是唯一不兼容项；可以确定的是，仅删除 `PrivateDevices` 不足以让 311linux 的该 user-service hardening
+可执行。
+
+v2 因而以 `INFRASTRUCTURE_INVALID_PREFORMAL_CANARY_PREEXEC_CAPABILITIES` 关闭：不 retry/restart/replay，
+不启动 v2 formal，不打开 reality source，不把未执行 canary 写成 PASS，也不新增 gate。所有
+source/model/API/online evaluator/validation/test access count 为 0，efficacy 仍未测量。安全证据见
+[`deployment receipt`](../manifests/uao_source_free_sandbox_canary_deployment_receipt_v2.json) 与
+[`infrastructure disposition`](../manifests/uao_source_free_sandbox_canary_infrastructure_disposition_v2.json)。
+若继续总目标，需要再次明确授权一个 fresh 边界，并在冻结前二选一：使用 311linux 已知可执行的最小
+user-service profile、把路径隔离完全交给进程内 Landlock；或使用具备 capability setup 权限的 system
+service。当前 v2 root/unit 保留证据且不得修补或重跑。
 
 ## 九、下一步优先级与硬验收标准
 
@@ -2263,13 +2297,14 @@ user-service `PrivateDevices`，或使用具备所需权限的 system service）
 | 完成但未晋升（QASC direct-action evaluator） | 新领域的自动 recipe formation、A/F pair 与 RAW/P/official HippoRAG 对照 | 四块各 64 在 formation 前一次 acquisition；16 路 full-corpus BM25 两遍扫描 16,987,130 行，TEST 未开；A/F 2048 actions 后 pair behavior-distinct。A_hold incumbent/challenger support=67/66、U=90/84、净 U −6、exact p=1668987/2097152，不晋升；RAW/P/official support=19/38/103，official 44 complete、U=147。M_search 未授权未开，同源 QASC 终止 |
 | 完成但未晋升（AVeriTeC typed QA-set evaluator） | 独立现实 fact-check source 上一次检验 E1/RAW/official HippoRAG 与 evaluator→M lifecycle | A_form/F/A_hold/M=108/36/36/36；v4 source-free 双 GPU canary、142-file launch binding 与唯一 formal service 均通过。A_hold E1−E0/RAW 为 36 tie、净 0、tail 1；19/36 action/top-5 实际改变但 utility 全不变。E1−Hippo aggregate 净 +3/2、tail 3/32，但 causal family 净 0，且该差与 RAW 完全相同，故不能归因 typed action。promotion=false、reality primary=false，formal controller 未读/未执行 M，L5=null；0 API/online evaluator/retry |
 | 完成且 L5 达到、现实 primary 未全过（QuAC RJMC） | set-level evaluator 晋升与 untouched M_search 因果链 | A_form/A_hold/M=192/96/96，A_hold/M 三 family 各 32；唯一 formal service success、restart=0，188 项只读复核与两块 sealed-action 离线重算通过。A_hold E1−E0=+51、exact 29467/33554432，promotion=true；E1−Hippo 三 family +17/+14/+23，但 E1−RAW 为 +13/−4/+2，故 reality primary=false。M_search 仅在 promotion 后打开，E1−E0=+29、exact 980/131072，L5=true；M 上对 RAW/Hippo 也均为三-family正向，但不能替代失败的 A_hold primary。0 API/online evaluator/retry/replay |
-| infrastructure-invalid（UAO v1 source-free formal） | 22-template typed meta-assumption compiler 的唯一正式 source-free qualification | development 侧 10/10 identification、40/40 counterevidence、8/8 active differential、2/2 real no-op、32/32 wrong-operator harm、19/19 tamper、四类 metamorphic 各 10/10，116/116 离线测试；但唯一 user-service 在 controller 前因 `PrivateDevices=yes` capability drop 以 218/CAPABILITIES 失败，InvocationID=`fada9479…f338`、restart=0、work/attempt=0。独立 `/usr/bin/true` diagnostic 复现。formal qualification/efficacy 均 unknown，当前 v1 不重启、不去 hardening 修补、不授权 reality source |
+| infrastructure-invalid（UAO v1 source-free formal） | 22-template typed meta-assumption compiler 的唯一正式 source-free qualification | development 侧 10/10 identification、40/40 counterevidence、8/8 active differential、2/2 real no-op、32/32 wrong-operator harm、19/19 tamper、四类 metamorphic 各 10/10，116/116 离线测试；但唯一 user-service 在 controller 前以 218/CAPABILITIES 失败，InvocationID=`fada9479…f338`、restart=0、work/attempt=0。独立 `/usr/bin/true` diagnostic 证明 `PrivateDevices=yes` 是一个充分触发项；v2 后续证明它并非唯一不兼容 hardening。formal qualification/efficacy 均 unknown，当前 v1 不重启、不修补、不授权 reality source |
+| infrastructure-invalid（UAO v2 preformal canary） | infrastructure-only rebind 后唯一 production-isomorphic sandbox canary | scientific candidate 与 `6b02c7a9…b0ebc` receipt 未改；19-file commit `d958d004…a79e`、archive `dd3951f3…4ab3` 与远端 exact tree 均闭合。effective `PrivateDevices=no`，但唯一 canary 仍在 env/Python 前以 218/CAPABILITIES 失败，InvocationID=`387ec7cc…09bd`、restart=0、work/attempt/result=0；formal root/unit/attempt=0。`ProtectKernelModules` 的 bounding-set pruning 与无 `CAP_SETPCAP` 的 user manager 构成静态充分不兼容路径，但未重跑做最小单项隔离。v2 关闭，不启动 formal、不打开 source |
 | 完成（窄 synthetic multiseed stability） | fresh 8-seed typed-graph Agent_R1 / RAW / official HippoRAG replication | 全新 v3 cohort 为 8×64=512；v5 单次 detached formal 完成 1536/1536 action，official/local 峰值并发 8/64，MiniLM 固定两段 8448。Agent/Hippo/RAW 总 U=1259/1232/1273；Agent−Hippo seed delta `[3,8,0,2,1,5,6,2]`，mean=3.375、7 positive/1 tie；Agent−RAW 总 U −14。+27 全在 DEF_TP1/TP2，其他 family 与 Hippo 完全相同。只支持固定 synthetic distribution 的窄机制稳定性，不是现实域 transfer、promotion、L4/L5 或总体优越性 |
 | 完成但未晋升（HoVer joint graph/evaluator） | 新现实 derived closed-corpus 上六 typed actions、RAW、official HippoRAG 与 A/F/A_hold/M lifecycle | TRAIN-only private-HMAC 一次形成 A_form/F/A_hold/M=48/36/30/30 与 609-doc corpus；A_hold E0/RAW/Hippo 均 U=487/12、72 hits、16 complete，30/30 item utility tie；E1−E0=−47/12、2 gain/10 harm/18 tie、exact p=3739/4096。primary=false、promotion=false，M_search 未打开；0 online/network evaluator。claim 不等同 official HoVer/open-domain/family-out |
 | 完成但 primary 未通过（BRIGHT fresh RESERVE） | 现实 reasoning-retrieval 上 retained P6 / RAW / candidate-restricted official HippoRAG core 三臂与 E1 counterfactual | fresh 45 项三 family 各 15；45/45 Qwen valid、135 intents 先于 join、45/45 HippoRAG terminal、单 launch 峰值并发 12、late label 仅开一次、0 external network。Agent/Hippo/RAW mean nDCG@10=`0.14538/0.13598/0.14874`；Agent−Hippo aggregate `+0.00939`，但 family delta=`−0.46468/+0.16826/+0.71916`（integer-sum scale）、7 gain/9 harm/29 tie，未跨 family 稳定；Agent−RAW=`−0.00336`。E1−P6=`−0.00495`，既有 non-promotion 被 fresh reserve 再次支持；不是 full-corpus BRIGHT、answer generation、SOTA 或 L5 positive |
 | 完成但 primary 未通过（BRIGHT P9 prospective C_confirm） | 固定 semantic P9 对剩余同源 RESERVE 的一次前瞻五臂确认 | 在打开剩余内容前固定每 family rank 15–25（0-based），共 33 项并保留 4 项 untouched；33/33 generation valid、66 external intents、1 cross-encoder + 12 HippoRAG 最大并发、33/33 HippoRAG terminal、late label 一次、0 external network。P9/Hippo/RAW mean=`0.12338/0.09218/0.11431`；P9−Hippo=`+1,029,664,470` 且 family 全正，7 gain/1 harm/25 tie；P9−RAW=`+299,424,557`，但 family=`−72,732,371/0/+372,156,928`，6/1/26，故预注册 primary=false。P9 含 RAW+Hippo+CE，结果只支持额外 ensemble 的同源增量，不支持等算力/SOTA/L5 |
 | implementation-invalid（BRIGHT P14→P17 all-remote） | P13 在 fresh Earth Science/Psychology/Sustainable Living complete cases 上相对 RAW 与 candidate-restricted HippoRAG 的方向性三臂确认 | P14 本地在 12 个 HippoRAG terminal 后因机器不可用被用户中止；P15 迁移 gpu1 后无 remote action result；P16 在 HMAC 前因 source capacity 失败。P17 在 311linux 完成 27/27 HippoRAG terminal 并 seal 24 个 action，0 external network/reuse；但实际 HippoRAG 峰值并发=9，违反冻结上限 8。偏差在 prelabel audit 发现，finalizer=0、gold/score=0、primary 未评价、efficacy unknown；禁止 replay/resample、改 candidate 或补 gate |
-| 当前唯一效果缺口（不新增 gate、不重用已评分 cohort 调参） | 闭合现实 A_hold 的三-family双基线稳定净收益 | QuAC P1 已给出真实 evaluator promotion 与 untouched M_search 改善，L5=true；但 A_hold E1−RAW aggregate exact tail 为 `374/2048≈0.1826>0.1`，且 FOLLOW family 为 −4，故预注册 reality primary=false、总目标仍未完成。UAO v1 又在 controller 前 infrastructure-invalid，不能用 development PASS 打开 reality source。若继续，须先明确授权 fresh UAO v2，并在任何 reality payload 前冻结可执行的 sandbox；其后仍只允许一个全新 study/source/cohort A_hold，要求 Agent 对 RAW 与 official HippoRAG 在全部 relation family 上均为正。不能重跑当前 root、修补已消费 unit、换候选或补 gate |
+| 当前唯一效果缺口（不新增 gate、不重用已评分 cohort 调参） | 闭合现实 A_hold 的三-family双基线稳定净收益 | QuAC P1 已给出真实 evaluator promotion 与 untouched M_search 改善，L5=true；但 A_hold E1−RAW aggregate exact tail 为 `374/2048≈0.1826>0.1`，且 FOLLOW family 为 −4，故预注册 reality primary=false、总目标仍未完成。UAO v1 formal 与 v2 preformal canary 均在 controller 前 infrastructure-invalid，不能用 development PASS 打开 reality source。若继续，须另获 fresh 边界授权并先冻结静态可支持的最小 user-service+Landlock 或 privileged system-service；其后仍只允许一个全新 study/source/cohort A_hold，要求 Agent 对 RAW 与 official HippoRAG 在全部 relation family 上均为正。不能重跑当前 root、修补已消费 unit、换候选或补 gate |
 | 完成（exact-domain L2/L3 instance） | Replication C promotion、controls disposition 与 one-shot sealed | development 8/8 gain、四 fold 各 +2；operator-only output 8/8 exact match；sealed 4/4 gain、8 路最大并发、8/8 network-none verifier receipts、0 retry/replay/online judge；两条盲化事件完整披露，claim 限于固定 SEC-13F treatment |
 | 完成 | 冻结 evaluator-owned promotion policy | 已由 protocol 绑定完整 spec；candidate 只能收紧；对抗测试通过 |
 | 完成 | 收紧外部 action/fallback contract | 4 类 prompt/self-check lowering；6 类 unsupported op fail closed；observed fallback 不再由字符串伪造 |
