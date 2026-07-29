@@ -79,7 +79,8 @@ def _bind_external_runtime(
 ) -> Path:
     source_repo = (
         runtime_root
-        / "reference/self_evo_continual_20260707/repos/HippoRAG"
+        / "reconstruction_v2/reference/"
+        "self_evo_continual_20260707/repos/HippoRAG"
     ).resolve(strict=True)
     source = (
         source_repo / qualification.BASELINE_SOURCE_WITHIN_REPO
