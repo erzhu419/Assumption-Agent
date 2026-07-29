@@ -5552,6 +5552,18 @@ parent 的 `/proc/self/task` 仍会失败，而 outer `/proc` → child `/proc/s
 CUDA allocation；十一组离线测试为 119/119，独立静态审计 no-blocker。下一步仍只有 v4 的一次
 source-free canary；它通过前不下载 WikiSQL source，失败则关闭本实现，绝不以补 gate 延续。
 
+v4 的唯一 canary `6ca2874f…64d9` 随后按该 stopping rule 关闭，`NRestarts=0`。本轮验证了
+v3 的两个修复：Agent 完成真实 GPU1 MiniLM encode，并与 RAW 一起生成合法 safe receipt；
+HippoRAG 也通过单 GPU、单线程与 CUDA 初始化，但在 official core constructor 创建 working
+directory 时以 `ENAMETOOLONG` 退出。直接原因不是推理或检索：pinned official HippoRAG 把两个
+absolute model path 拼成一个 272-byte 目录名，而 311linux 当前文件系统单 component
+`NAME_MAX=255`。因此仍是 source-free infrastructure-invalid；formal_v4 root 不存在，
+source/API/在线评价/effect study 消耗仍全为 0。见
+[`v4 failure disposition`](../manifests/wikisql_uao_p4_canary_v4_failure_disposition_v1.json)。
+v4 不得重启。若继续，只能经新授权建立 fresh implementation，以已经在 QuAC/MAUD qualified
+official path 使用的短本地 model alias 加 exact target/content 验证解决路径长度；不得改当前
+root、正式 source、candidate、metric 或 gate。
+
 ## 附录 A：关键证据索引
 
 - WikiSQL UAO P4 fresh reality study（正式 source 尚未打开）：
@@ -5563,6 +5575,7 @@ source-free canary；它通过前不下载 WikiSQL source，失败则关闭本�
   [`implementation freeze v3`](../manifests/wikisql_uao_p4_implementation_freeze_v3.json)；
   [`canary v3 failure disposition`](../manifests/wikisql_uao_p4_canary_v3_failure_disposition_v1.json)；
   [`implementation freeze v4`](../manifests/wikisql_uao_p4_implementation_freeze_v4.json)；
+  [`canary v4 failure disposition`](../manifests/wikisql_uao_p4_canary_v4_failure_disposition_v1.json)；
   [`source-free canary v4 service`](../manifests/wikisql-uao-p4-source-free-canary-v4.service)；
   [`source-free canary v4 runner`](../replication_runtime/wikisql_uao_source_free_canary_v4/runner.py)；
   [`formal v4 service`](../manifests/wikisql-uao-p4-formal-v4.service)；
