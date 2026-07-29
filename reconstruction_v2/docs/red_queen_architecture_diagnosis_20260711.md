@@ -5462,8 +5462,60 @@ penalty、family-specific expert、改 λ/stratum/feature，也不能据此打�
 研究边界，并在任何新效果数据前冻结一个不依赖本次 TABLE_ONLY 观察而形成的新训练/测量方案；
 不能把本次失败直接改成新 gate 后继续。
 
+### 12.61 2026-07-29 UAO v3 → WikiSQL P4：invalid 根因闭合并冻结唯一 fresh reality study
+
+UAO v1/v2 的 `invalid` 不是假设无效或 GPU/model 失败，而是 311linux 非特权 user manager
+在进入 Python/controller 前无法执行 systemd capability pruning。v1 的独立最小复现证明
+`PrivateDevices=yes` 足以触发 `status=218/CAPABILITIES`；v2 移除它后，仍由
+`ProtectKernelModules=yes` 请求 capability bounding-set / `CAP_SYS_MODULE` 变换，而该 user
+manager 没有 `CAP_SETPCAP`，再次 pre-exec `EPERM`。两次均为 controller=0、attempt=0、
+source/model=0，因此只能记为 infrastructure-invalid，不能写成 UAO efficacy negative，也不得
+修补或重跑旧 root。
+
+fresh UAO v3 已换成 311linux 上已知可运行的最小 user-service：
+`AF_UNIX` only、`IPAddressDeny=any`、`NoNewPrivileges=yes`、`PrivateTmp=yes`，删除全部 capability
+与 mount-namespace pruning，把文件隔离交给进程内 exact Landlock。其唯一 source-free formal
+qualification 已通过，故当前获授权的不是继续补 gate，而是一次全新 reality study：
+[`WikiSQL P4 design`](../manifests/wikisql_uao_p4_study_design_v1.json) 与
+[`implementation freeze`](../manifests/wikisql_uao_p4_implementation_freeze_v1.json)。
+
+这项 study 将 official WikiSQL 1.1 的单 WHERE `EQ/GT/LT` 固定为三个 native relation family，
+但明确只测 derived row-evidence retrieval，不冒充 text-to-SQL leaderboard。A_form 使用 train
+每 family 64 项、四个 sealed fold；A_hold 使用 test 每 family 24 项。UAO 从冻结的 22-template
+ontology 中只在 A_form 形成两个 typed claims，编译为“内容证据提取 → typed candidate
+interaction → top-5 set selection”的可执行 policy，并保留 byte-exact RAW no-op。A_hold 三臂是
+同一个 Agent、RAW 与 candidate-restricted official-core HippoRAG；整数 utility 为 top-5 gold
+hit 数加 complete indicator。primary 事前要求 Agent 对两个 baseline 都同时满足 aggregate 净正、
+one-sided exact magnitude sign-flip reference tail ≤0.1，并且 EQ/GT/LT 三 family 净值全部严格为正。
+任一合法阳性或阴性都关闭 study，不重试、重放、重采样、换 source/candidate/threshold/family/
+metric 或补 gate。QuAC 已成立的 L5 不重测；WikiSQL 只检验剩余 system-level reality 缺口，不把
+A_form labels 对 Agent 的训练优势解释成 UAO claim selection 的随机化因果效应。
+
+冻结前审计关闭了五类会把效果试验误判为 implementation-invalid 的问题：SQLite↔JSON 的 schema、
+rowid、物理行顺序与 normalized cell 逐值绑定；conditional expected utility 的完整条件化公式；
+整行 16k 上限与 shared schema-prefix round trip；production selector 与 public selector 的
+block/split-local HMAC 语义；以及 common/official 两套 `-S` Python dependency lane。进一步的
+deployment 审计又固定了 official Git blob SHA1、Agent model custody/semantic 双 hash、
+source payload 必须在 unique attempt 后才读取、safe aggregate exact schema，以及 systemd
+`DropInPaths` 与 effective ExecStart/资源/隔离属性。加 source-free canary 后，八组离线测试
+当前为 98/98，正式 WikiSQL source access 仍为 0。
+
+下一步不是效果 gate，而是唯一一次 exact source-free production canary：只用合成 11-row table
+验证两套解释器、Babel 2.10.3 origin、GPU1 MiniLM、GPU0 official HippoRAG、RAW、Landlock 与
+minimal user-service。只有它一次通过，才按冻结 Git blob 从本机下载、校验并同步 WikiSQL 到
+311linux，随后唯一一次启动 formal。若 canary 失败，本冻结实现直接关闭且不打开 source。
+
 ## 附录 A：关键证据索引
 
+- WikiSQL UAO P4 fresh reality study（正式 source 尚未打开）：
+  [`study design`](../manifests/wikisql_uao_p4_study_design_v1.json)；
+  [`implementation freeze`](../manifests/wikisql_uao_p4_implementation_freeze_v1.json)；
+  [`source-free canary service`](../manifests/wikisql-uao-p4-source-free-canary-v1.service)；
+  [`source-free canary runner`](../replication_runtime/wikisql_uao_source_free_canary_v1/runner.py)；
+  [`formal service`](../manifests/wikisql-uao-p4-formal-v1.service)；
+  [`source compiler`](../assumption_agent/benchmarks/wikisql_uao_source_compiler_v1.py)；
+  [`typed policy`](../assumption_agent/benchmarks/wikisql_uao_policy_v1.py)；
+  [`formal runner`](../replication_runtime/wikisql_uao_formal_v1/runner.py)。
 - HybridQA whole-set interaction consumed-data architecture qualification：
   [`architecture decision`](../manifests/red_queen_set_interaction_architecture_decision_v1.json)；
   [`source-free numeric runtime qualification`](../manifests/hybridqa_set_interaction_numeric_runtime_qualification_v1.json)；
