@@ -5564,6 +5564,57 @@ v4 不得重启。若继续，只能经新授权建立 fresh implementation，�
 official path 使用的短本地 model alias 加 exact target/content 验证解决路径长度；不得改当前
 root、正式 source、candidate、metric 或 gate。
 
+### 12.62 2026-07-29：用稳定、可迭代 qualification 层终止“基础设施失败就换版本”
+
+本轮**没有建立或运行 v5，也没有建立新效果 study**。v4 暴露的问题不再通过
+“新 root/unit/freeze → 唯一 canary → 再失败”的链条处理，而是移入独立于正式效果测量的
+`WIKISQL_UAO_RUNTIME_QUALIFICATION`。它固定使用
+`/home/erzhu419/wikisql_uao_runtime_qualification` 与
+`wikisql-uao-runtime-qualification.service`；每次 execution 只以 systemd InvocationID 和
+config hash 建立不可覆盖的 attempt/ledger。这里允许迭代修复 runtime，本身没有 source、
+label/qrel、score/evaluator、provider/API 或正式效果能力，因此不会消耗正式 study。
+
+此前要求的五点已经按一个统一合同闭合：
+
+1. **不再逐故障建版本。** stable root/unit 不变；基础设施错误写入独立 receipt 后可在同一
+   qualification 中修复。只有 harness 全绿后，才允许另行冻结一次正式实现。
+2. **不 fail-fast 隐藏后续错误。** 静态阶段一次执行并汇总 24 项检查，覆盖文件/目录 identity、
+   effective systemd、Landlock ABI、`/dev/null O_RDWR`、CUDA custody、五个 native-thread
+   变量、短模型 alias 的 exact target/content、实际 `NAME_MAX` 与三 lane argv。
+3. **验证真实全栈而非 import smoke。** Agent、RAW、official HippoRAG 三路先全部 submit 再
+   wait；分别执行 GPU1 MiniLM encode、CPU action，以及 official-core
+   construct/index/retrieve。单路 launch/exit 异常不会阻止收集另外两路证据。
+4. **效果合同与运行资格化分离。** config 硬编码
+   `formal_source_paths_bound=0`、`label_or_qrel_paths_bound=0`、
+   `evaluator_or_score_paths_bound=0`、`effect_study_attempt_count=0` 和
+   `API_or_online_evaluation_count=0`；资格化 PASS 不能被写成 efficacy。
+5. **311linux 按共享节点运行。** 外部 GPU process 只作为遥测，不是排除条件，也不要求清空
+   CPU/GPU；资源不足或已有 qualification 锁时返回 `DEFERRED_SHARED_RESOURCE`/75，且不创建
+   attempt。service 以 CPU 400%、CPU/IO weight 25、idle IO、nice 10、MemoryHigh 24 GiB、
+   MemoryMax 32 GiB、swap 0、TasksMax 96 限流；不得 kill、pause 或修改其他任务。
+
+本地 qualification 专项测试 31/31、全部 WikiSQL 回归 150/150。稳定 service 的第一次启动
+`1bd9229b…e1be` 在 controller bootstrap 前发现：`env -i` 正确清空了环境，但也清掉了 systemd
+提供的 `INVOCATION_ID`。该次 `NRestarts=0`、attempt/source/effect=0；修复只是在同一
+root/unit 内通过 sanitized `systemctl --user show` 发现并交叉核验 live InvocationID，提交
+`262a5505…f9e9`，没有创建 v5、新 study 或新 gate。这正是可迭代 qualification 要吸收的
+故障类型，而不再污染正式研究版本。
+
+修复后的共享节点 execution 使用 InvocationID `2197da41…5c14`，`NRestarts=0`、
+`Result=success`，terminal 为 **`PASSED_FULL_STACK`**。24/24 静态检查通过；三 lane 全部在
+wait 前提交，Agent/RAW/HippoRAG safe receipt 均通过；真实 GPU1 encode、RAW CPU action 与
+HippoRAG construct/index/retrieve 各执行一次；短 alias component 为 40 bytes。terminal self
+为 `5b5ccc13…f712`，完整安全结果见
+[`runtime qualification result`](../manifests/wikisql_uao_runtime_qualification_result_v1.json)。
+私有 synthetic action 留在 311，不回传；正式 source access、effect attempt 与 online/API
+evaluation 仍全为 0。
+
+因此，v1–v4 反复出现的 systemd、Landlock、CUDA、线程和路径基础设施缺口已经在一个可复用层
+内闭合。311linux 可以继续与其他任务共享；未来正式执行也必须继承相同的 admission/DEFERRED
+语义，而不能要求独占节点。当前只得到**正式实现可冻结**的资格，不得到任何 Agent−RAW/
+HippoRAG 效果结论；按照本轮边界，尚未建立、冻结或启动 v5。下一步若继续，只允许从这份全绿
+runtime 合同冻结一次正式实现并进行唯一离线评分效果实验，不增加效果 gate。
+
 ## 附录 A：关键证据索引
 
 - WikiSQL UAO P4 fresh reality study（正式 source 尚未打开）：
@@ -5579,6 +5630,9 @@ root、正式 source、candidate、metric 或 gate。
   [`source-free canary v4 service`](../manifests/wikisql-uao-p4-source-free-canary-v4.service)；
   [`source-free canary v4 runner`](../replication_runtime/wikisql_uao_source_free_canary_v4/runner.py)；
   [`formal v4 service`](../manifests/wikisql-uao-p4-formal-v4.service)；
+  [`stable shared-node runtime qualification service`](../manifests/wikisql-uao-runtime-qualification.service)；
+  [`stable runtime qualification implementation`](../replication_runtime/wikisql_uao_runtime_qualification/)；
+  [`stable runtime qualification result`](../manifests/wikisql_uao_runtime_qualification_result_v1.json)；
   [`source compiler`](../assumption_agent/benchmarks/wikisql_uao_source_compiler_v1.py)；
   [`typed policy`](../assumption_agent/benchmarks/wikisql_uao_policy_v1.py)；
   [`formal v4 wrapper`](../replication_runtime/wikisql_uao_formal_v4/runner.py)。
