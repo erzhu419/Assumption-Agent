@@ -2188,8 +2188,10 @@ one-sided exact sign-flip 为 `29467/33554432`。这是真实的 evaluator 晋�
 - E1−RAW aggregate 为 `+11`，exact `374/2048`，但三个 family 为 `+13/−4/+2`；
 - E1−official HippoRAG aggregate 为 `+54`，exact `14082/33554432`，三个 family 为 `+17/+14/+23`。
 
-也就是说，失败点只有 A_hold 的 FOLLOW family 相对 RAW 为负，而不是 Agent 没有超过 HippoRAG，也不是
-aggregate 无收益。按预注册定义，`A_hold_primary=false`，不能用 aggregate 阳性覆盖 family failure。
+也就是说，A_hold reality primary 有两个并列失败点：E1−RAW aggregate exact tail
+`374/2048≈0.1826` 未达到 `≤0.1`，且 FOLLOW family 相对 RAW 为 `−4`；这不是 Agent 没有超过
+HippoRAG，也不是 aggregate point estimate 无收益。按预注册定义，`A_hold_primary=false`，不能用
+aggregate 阳性覆盖 exact-tail 与 family failure。
 
 在 promotion 后的 untouched M_search，E1−E0 为 `+29`、三个 family `+3/+21/+5`、exact
 `980/131072`，因此 `M_search_L5=true`。两个非 primary downstream 对照也一致为正：E1−RAW=`+23`
@@ -2203,6 +2205,47 @@ evaluator 改善了预冻结的新搜索，并把 L5 缺口正式关闭；但 M_
 [`formal result`](../manifests/quac_p1_formal_result_v1.json)。当前 root 已消费，不重跑、不换候选、不补 gate。
 总目标现在只剩一个效果缺口：在新的、事前冻结的现实 A_hold 中，让同一 Agent action 对 RAW 和 official
 HippoRAG 都在全部 relation family 上取得正净收益；L5 不再是缺口。
+
+### 8.26 Universal Assumption Ontology v1 完成 source-free 实现资格化，但正式服务在 controller 前 infrastructure-invalid
+
+为避免继续围绕同一现实 cohort 增加关键词、RRF 或 gate，本轮把新方向收敛为一个可证伪的 meta-assumption
+compiler，而不是把 22 条假设当作 22 个 prompt。`universal_assumption_ontology_v1` 含 6 个 root、22 个 typed
+template 与 13 个 legacy alias；每个实例依次形成 TRAIN-only claim、固定预算 probe、trusted verifier 签发的
+content-addressed evidence receipt、harness-owned compilation receipt，以及真实 `HypothesisProgram` 或
+`PRESERVE_BASELINE` disposition。recipe 又绑定实际 `ActionNode` 语义与 status/lineage-independent behavior hash，
+所以“假设生效”必须表现为 runtime plan/answer 改变，而不能只靠 metadata 或自报字段。
+
+冻结的 hand-authored source-free qualification 使用同形整数 payload 表达 sparse、set-interaction、local、
+contamination 与 no-op 五类机制，每类两个显式非同构变体；selector、probe、compiler、runtime 与 numeric oracle
+都不读取 expected family。最终 development receipt self hash 为
+`6b02c7a9…b0ebc`：10/10 expected-template identification、50 条 probe matrix 中 40/40 wrong claims 有
+counterevidence、8/8 active runtime differential、2/2 no-op semantic equivalence、32/32 wrong-operator harm、
+19/19 exact-cause tamper rejection；claim order、probe rule order、world ID 与 expected-label relabel 四类
+metamorphic trial 各 10/10。13 个 aggregate 又由 disclosure-safe world/probe/tamper rows 纯重算。两次独立审计
+分别给出 P0=0/P1=0，最终相关离线 suite 为 116/116；这些仍只是工程、因果执行与可审计性资格，不是现实 efficacy。
+
+实现先以 commit `d12b2123…4287` 精确提交并推送；18-file frozen tree、archive
+`1dc2a7fc…4dbb`、freeze self `65cbdfa5…eb27`、Python 3.12 runtime、stdlib/ldd/package commitments、
+effective unit prelaunch snapshot 与 Landlock ABI 8 canary 均闭合。311linux 的 nonformal preflight
+`0a31b182…4f11` 通过，且 formal work root 在启动前为空。
+
+唯一正式 user-service activation 却在任何 Python/controller 指令前失败。InvocationID 为
+`fada9479…f338`，systemd 为 `Result=exit-code`、`ExecMainStatus=218/CAPABILITIES`、`NRestarts=0`；
+journal 明确为 `Failed to drop capabilities: Operation not permitted`。work entry count 仍为 0，
+`attempt.json`、worker receipt、result 与 formal terminal 均未形成。随后仅做的一次 source-free
+infrastructure diagnostic 用 `systemd-run --user -p PrivateDevices=yes /usr/bin/true` 独立复现相同
+218/CAPABILITIES，定位到此节点的 user-service `PrivateDevices=yes` capability-drop 不可执行，而不是
+compiler、receipt、Landlock、模型、source 或 evaluator 失败。
+
+本轮因此严格记为 `INFRASTRUCTURE_INVALID_PREEXEC_CAPABILITIES`：formal qualification 未测量，
+efficacy 未测量，所有 source/model/API/online evaluator/validation/test access count 都为 0，也没有
+retry/replay/resample/repair。当前 UAO v1 root 不删除证据、不移除 hardening 后重启、不把 development PASS
+冒充 formal PASS，也不据此打开 reality source。安全证据见
+[`deployment prelaunch receipt`](../manifests/uao_source_free_qualification_deployment_prelaunch_receipt_v1.json)
+与
+[`infrastructure disposition`](../manifests/uao_source_free_qualification_infrastructure_disposition_v1.json)。
+若以后继续，必须另获明确授权建立 fresh UAO v2 边界，并在冻结前选择该节点可执行的 sandbox（例如不使用
+user-service `PrivateDevices`，或使用具备所需权限的 system service）；不能重启、修补或重标当前 v1。
 
 ## 九、下一步优先级与硬验收标准
 
@@ -2220,12 +2263,13 @@ HippoRAG 都在全部 relation family 上取得正净收益；L5 不再是缺口
 | 完成但未晋升（QASC direct-action evaluator） | 新领域的自动 recipe formation、A/F pair 与 RAW/P/official HippoRAG 对照 | 四块各 64 在 formation 前一次 acquisition；16 路 full-corpus BM25 两遍扫描 16,987,130 行，TEST 未开；A/F 2048 actions 后 pair behavior-distinct。A_hold incumbent/challenger support=67/66、U=90/84、净 U −6、exact p=1668987/2097152，不晋升；RAW/P/official support=19/38/103，official 44 complete、U=147。M_search 未授权未开，同源 QASC 终止 |
 | 完成但未晋升（AVeriTeC typed QA-set evaluator） | 独立现实 fact-check source 上一次检验 E1/RAW/official HippoRAG 与 evaluator→M lifecycle | A_form/F/A_hold/M=108/36/36/36；v4 source-free 双 GPU canary、142-file launch binding 与唯一 formal service 均通过。A_hold E1−E0/RAW 为 36 tie、净 0、tail 1；19/36 action/top-5 实际改变但 utility 全不变。E1−Hippo aggregate 净 +3/2、tail 3/32，但 causal family 净 0，且该差与 RAW 完全相同，故不能归因 typed action。promotion=false、reality primary=false，formal controller 未读/未执行 M，L5=null；0 API/online evaluator/retry |
 | 完成且 L5 达到、现实 primary 未全过（QuAC RJMC） | set-level evaluator 晋升与 untouched M_search 因果链 | A_form/A_hold/M=192/96/96，A_hold/M 三 family 各 32；唯一 formal service success、restart=0，188 项只读复核与两块 sealed-action 离线重算通过。A_hold E1−E0=+51、exact 29467/33554432，promotion=true；E1−Hippo 三 family +17/+14/+23，但 E1−RAW 为 +13/−4/+2，故 reality primary=false。M_search 仅在 promotion 后打开，E1−E0=+29、exact 980/131072，L5=true；M 上对 RAW/Hippo 也均为三-family正向，但不能替代失败的 A_hold primary。0 API/online evaluator/retry/replay |
+| infrastructure-invalid（UAO v1 source-free formal） | 22-template typed meta-assumption compiler 的唯一正式 source-free qualification | development 侧 10/10 identification、40/40 counterevidence、8/8 active differential、2/2 real no-op、32/32 wrong-operator harm、19/19 tamper、四类 metamorphic 各 10/10，116/116 离线测试；但唯一 user-service 在 controller 前因 `PrivateDevices=yes` capability drop 以 218/CAPABILITIES 失败，InvocationID=`fada9479…f338`、restart=0、work/attempt=0。独立 `/usr/bin/true` diagnostic 复现。formal qualification/efficacy 均 unknown，当前 v1 不重启、不去 hardening 修补、不授权 reality source |
 | 完成（窄 synthetic multiseed stability） | fresh 8-seed typed-graph Agent_R1 / RAW / official HippoRAG replication | 全新 v3 cohort 为 8×64=512；v5 单次 detached formal 完成 1536/1536 action，official/local 峰值并发 8/64，MiniLM 固定两段 8448。Agent/Hippo/RAW 总 U=1259/1232/1273；Agent−Hippo seed delta `[3,8,0,2,1,5,6,2]`，mean=3.375、7 positive/1 tie；Agent−RAW 总 U −14。+27 全在 DEF_TP1/TP2，其他 family 与 Hippo 完全相同。只支持固定 synthetic distribution 的窄机制稳定性，不是现实域 transfer、promotion、L4/L5 或总体优越性 |
 | 完成但未晋升（HoVer joint graph/evaluator） | 新现实 derived closed-corpus 上六 typed actions、RAW、official HippoRAG 与 A/F/A_hold/M lifecycle | TRAIN-only private-HMAC 一次形成 A_form/F/A_hold/M=48/36/30/30 与 609-doc corpus；A_hold E0/RAW/Hippo 均 U=487/12、72 hits、16 complete，30/30 item utility tie；E1−E0=−47/12、2 gain/10 harm/18 tie、exact p=3739/4096。primary=false、promotion=false，M_search 未打开；0 online/network evaluator。claim 不等同 official HoVer/open-domain/family-out |
 | 完成但 primary 未通过（BRIGHT fresh RESERVE） | 现实 reasoning-retrieval 上 retained P6 / RAW / candidate-restricted official HippoRAG core 三臂与 E1 counterfactual | fresh 45 项三 family 各 15；45/45 Qwen valid、135 intents 先于 join、45/45 HippoRAG terminal、单 launch 峰值并发 12、late label 仅开一次、0 external network。Agent/Hippo/RAW mean nDCG@10=`0.14538/0.13598/0.14874`；Agent−Hippo aggregate `+0.00939`，但 family delta=`−0.46468/+0.16826/+0.71916`（integer-sum scale）、7 gain/9 harm/29 tie，未跨 family 稳定；Agent−RAW=`−0.00336`。E1−P6=`−0.00495`，既有 non-promotion 被 fresh reserve 再次支持；不是 full-corpus BRIGHT、answer generation、SOTA 或 L5 positive |
 | 完成但 primary 未通过（BRIGHT P9 prospective C_confirm） | 固定 semantic P9 对剩余同源 RESERVE 的一次前瞻五臂确认 | 在打开剩余内容前固定每 family rank 15–25（0-based），共 33 项并保留 4 项 untouched；33/33 generation valid、66 external intents、1 cross-encoder + 12 HippoRAG 最大并发、33/33 HippoRAG terminal、late label 一次、0 external network。P9/Hippo/RAW mean=`0.12338/0.09218/0.11431`；P9−Hippo=`+1,029,664,470` 且 family 全正，7 gain/1 harm/25 tie；P9−RAW=`+299,424,557`，但 family=`−72,732,371/0/+372,156,928`，6/1/26，故预注册 primary=false。P9 含 RAW+Hippo+CE，结果只支持额外 ensemble 的同源增量，不支持等算力/SOTA/L5 |
 | implementation-invalid（BRIGHT P14→P17 all-remote） | P13 在 fresh Earth Science/Psychology/Sustainable Living complete cases 上相对 RAW 与 candidate-restricted HippoRAG 的方向性三臂确认 | P14 本地在 12 个 HippoRAG terminal 后因机器不可用被用户中止；P15 迁移 gpu1 后无 remote action result；P16 在 HMAC 前因 source capacity 失败。P17 在 311linux 完成 27/27 HippoRAG terminal 并 seal 24 个 action，0 external network/reuse；但实际 HippoRAG 峰值并发=9，违反冻结上限 8。偏差在 prelabel audit 发现，finalizer=0、gold/score=0、primary 未评价、efficacy unknown；禁止 replay/resample、改 candidate 或补 gate |
-| 当前唯一剩余（不新增 gate、不重用已评分 cohort 调参） | 闭合现实 A_hold 的三-family双基线稳定净收益 | QuAC P1 已给出真实 evaluator promotion 与 untouched M_search 改善，L5=true；但 A_hold E1−RAW 的 FOLLOW family 为 −4，故预注册 reality primary=false、总目标仍未完成。下一轮若继续，只需用全新 study/source/cohort 事前冻结现实 A_hold，并要求 Agent 对 RAW 与 official HippoRAG 在全部 relation family 上均为正；不能用 QuAC M_search downstream 阳性替代 A_hold、不能重跑当前 root、换候选或补 gate。若不另立研究，就以“窄 L3/L4 positive、L5 achieved、现实域稳定双基线优势仍缺”收束 |
+| 当前唯一效果缺口（不新增 gate、不重用已评分 cohort 调参） | 闭合现实 A_hold 的三-family双基线稳定净收益 | QuAC P1 已给出真实 evaluator promotion 与 untouched M_search 改善，L5=true；但 A_hold E1−RAW aggregate exact tail 为 `374/2048≈0.1826>0.1`，且 FOLLOW family 为 −4，故预注册 reality primary=false、总目标仍未完成。UAO v1 又在 controller 前 infrastructure-invalid，不能用 development PASS 打开 reality source。若继续，须先明确授权 fresh UAO v2，并在任何 reality payload 前冻结可执行的 sandbox；其后仍只允许一个全新 study/source/cohort A_hold，要求 Agent 对 RAW 与 official HippoRAG 在全部 relation family 上均为正。不能重跑当前 root、修补已消费 unit、换候选或补 gate |
 | 完成（exact-domain L2/L3 instance） | Replication C promotion、controls disposition 与 one-shot sealed | development 8/8 gain、四 fold 各 +2；operator-only output 8/8 exact match；sealed 4/4 gain、8 路最大并发、8/8 network-none verifier receipts、0 retry/replay/online judge；两条盲化事件完整披露，claim 限于固定 SEC-13F treatment |
 | 完成 | 冻结 evaluator-owned promotion policy | 已由 protocol 绑定完整 spec；candidate 只能收紧；对抗测试通过 |
 | 完成 | 收紧外部 action/fallback contract | 4 类 prompt/self-check lowering；6 类 unsupported op fail closed；observed fallback 不再由字符串伪造 |
