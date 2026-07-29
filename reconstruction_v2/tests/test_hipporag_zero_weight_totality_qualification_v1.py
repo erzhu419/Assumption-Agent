@@ -17,6 +17,8 @@ from reconstruction_v2.replication_runtime.hipporag_upstream_hardening_v1 import
 )
 from reconstruction_v2.replication_runtime.hipporag_zero_weight_totality_v1 import (
     backport,
+    landlock_exec,
+    repair_qualification,
     synthetic_worker,
 )
 
@@ -137,6 +139,48 @@ def test_nested_cached_worker_root_materializes_source_parent(
     assert (root / "home").is_dir()
     assert (root / "hf").is_dir()
     assert (root / "tmp").is_dir()
+
+
+def test_repair_materializes_patched_shadow_import_tree(tmp_path: Path) -> None:
+    package = tmp_path / "source" / "hipporag"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text(
+        "from .HippoRAG import HippoRAG\n", encoding="utf-8"
+    )
+    qualified = upstream_hardening.apply_fixed_backport(SOURCE.read_bytes())
+    input_source = package / "HippoRAG.py"
+    input_source.write_bytes(qualified)
+    result = repair_qualification._materialize_source(
+        input_source, tmp_path / "work"
+    )
+    import_source = result["patched_import_root"] / "hipporag/HippoRAG.py"
+    assert import_source.read_bytes() == backport.apply_totality_hardening(
+        qualified
+    )
+    assert result["patched_source_sha256"] == backport.PATCHED_SOURCE_SHA256
+    assert result["patched_import_file_count"] == 2
+    public = repair_qualification._public_source_binding(result)
+    assert "patched_path" not in public
+    assert "patched_import_root" not in public
+
+
+def test_landlock_worker_environment_is_exact_and_secret_free(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("RUOLI_API_KEY", "must-not-propagate")
+    patched = tmp_path / "patched"
+    runtime = tmp_path / "runtime"
+    writable = tmp_path / "worker"
+    environment = repair_qualification._worker_environment(
+        writable_root=writable,
+        patched_import_root=patched,
+        runtime_root=runtime,
+    )
+    assert set(environment) == landlock_exec.ENVIRONMENT_KEYS
+    assert "RUOLI_API_KEY" not in environment
+    assert environment["CUDA_VISIBLE_DEVICES"] == ""
+    assert environment["PYTHONPATH"].split(":")[0] == str(patched)
+    assert environment["TRANSFORMERS_OFFLINE"] == "1"
 
 
 def test_canonical_json_rejects_nonfinite() -> None:
