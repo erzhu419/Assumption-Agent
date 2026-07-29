@@ -5516,7 +5516,18 @@ formal root/source 均仍为 0。故这不是 canary 阴性，更不是效果重
 [`implementation freeze v2`](../manifests/wikisql_uao_p4_implementation_freeze_v2.json)
 只增加 private symlink-free Python home 与新 root/unit；候选、source、cohort/selector、
 EQ/GT/LT、三臂、模型、metric、primary 和 stopping rule 均不变。九组离线测试为 104/104。
-接下来只运行 v2 的唯一 canary；通过前仍不得下载 WikiSQL source。
+v2 的唯一 canary 随后在 `three_lane_launch` 关闭，`NRestarts=0`、source=0、formal_v2 root
+仍不存在。独立的只读/非评分诊断证明完整 nested Agent Landlock layer 本身通过；实际故障是
+outer Landlock 仅给 `/dev/null` 读权限，而 Python `subprocess.DEVNULL` 在 child preexec 前以
+`O_RDWR` 打开它，故三个 Popen 都得到 `PermissionError(13)`。见
+[`v2 failure disposition`](../manifests/wikisql_uao_p4_canary_v2_failure_disposition_v1.json)。
+
+该问题不允许重启 v2。新的
+[`implementation freeze v3`](../manifests/wikisql_uao_p4_implementation_freeze_v3.json)
+只把 parent outer layer 的 `/dev/null` 权限改为可写；child Landlock、private Python home
+和全部效果合同不变。fresh source-free 资格化已证明 exact `true`、冻结 Python 与 wrapper
+Popen 均返回 0，十组离线测试为 110/110。接下来只运行 v3 的唯一 canary；通过前仍不得下载
+WikiSQL source。
 
 ## 附录 A：关键证据索引
 
@@ -5525,12 +5536,14 @@ EQ/GT/LT、三臂、模型、metric、primary 和 stopping rule 均不变。九�
   [`implementation freeze v1`](../manifests/wikisql_uao_p4_implementation_freeze_v1.json)；
   [`pre-canary Python-runtime incident`](../manifests/wikisql_uao_p4_pre_canary_python_runtime_incident_v1.json)；
   [`implementation freeze v2`](../manifests/wikisql_uao_p4_implementation_freeze_v2.json)；
-  [`source-free canary v2 service`](../manifests/wikisql-uao-p4-source-free-canary-v2.service)；
-  [`source-free canary v2 runner`](../replication_runtime/wikisql_uao_source_free_canary_v2/runner.py)；
-  [`formal v2 service`](../manifests/wikisql-uao-p4-formal-v2.service)；
+  [`canary v2 failure disposition`](../manifests/wikisql_uao_p4_canary_v2_failure_disposition_v1.json)；
+  [`implementation freeze v3`](../manifests/wikisql_uao_p4_implementation_freeze_v3.json)；
+  [`source-free canary v3 service`](../manifests/wikisql-uao-p4-source-free-canary-v3.service)；
+  [`source-free canary v3 runner`](../replication_runtime/wikisql_uao_source_free_canary_v3/runner.py)；
+  [`formal v3 service`](../manifests/wikisql-uao-p4-formal-v3.service)；
   [`source compiler`](../assumption_agent/benchmarks/wikisql_uao_source_compiler_v1.py)；
   [`typed policy`](../assumption_agent/benchmarks/wikisql_uao_policy_v1.py)；
-  [`formal v2 wrapper`](../replication_runtime/wikisql_uao_formal_v2/runner.py)。
+  [`formal v3 wrapper`](../replication_runtime/wikisql_uao_formal_v3/runner.py)。
 - HybridQA whole-set interaction consumed-data architecture qualification：
   [`architecture decision`](../manifests/red_queen_set_interaction_architecture_decision_v1.json)；
   [`source-free numeric runtime qualification`](../manifests/hybridqa_set_interaction_numeric_runtime_qualification_v1.json)；
