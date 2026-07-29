@@ -1,0 +1,34 @@
+[Unit]
+Description=WikiSQL UAO P4 same-v5 patched HippoRAG recovery and offline score
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/erzhu419/wikisql_uao_p4_20260729/formal_v5_repair_r1_hipporag_recovery/deployment
+UMask=0077
+ExecStart=/usr/bin/env -i CUBLAS_WORKSPACE_CONFIG=:4096:8 CUDA_MODULE_LOADING=LAZY HF_DATASETS_OFFLINE=1 HF_HUB_DISABLE_TELEMETRY=1 HF_HUB_OFFLINE=1 HOME=/home/erzhu419/wikisql_uao_p4_20260729/formal_v5_repair_r1_hipporag_recovery/control/home LANG=C.UTF-8 LC_ALL=C.UTF-8 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1 PYTHONHASHSEED=0 PYTHONHOME=/home/erzhu419/wikisql_uao_p4_20260729/formal_v5_repair_r1/runtime_assets/python310_clean PYTHONNOUSERSITE=1 TEMP=/home/erzhu419/wikisql_uao_p4_20260729/formal_v5_repair_r1_hipporag_recovery/control/tmp TMP=/home/erzhu419/wikisql_uao_p4_20260729/formal_v5_repair_r1_hipporag_recovery/control/tmp TMPDIR=/home/erzhu419/wikisql_uao_p4_20260729/formal_v5_repair_r1_hipporag_recovery/control/tmp TOKENIZERS_PARALLELISM=false TRANSFORMERS_OFFLINE=1 VECLIB_MAXIMUM_THREADS=1 /home/erzhu419/p17_all_remote_20260722/runtime/python310/bin/python3.10 -S -B -s /home/erzhu419/wikisql_uao_p4_20260729/formal_v5_repair_r1_hipporag_recovery/deployment/runner.py --config /home/erzhu419/wikisql_uao_p4_20260729/formal_v5_repair_r1_hipporag_recovery/control/recovery_config.json
+CPUQuota=400%
+CPUWeight=25
+IOWeight=25
+IOSchedulingClass=idle
+Nice=10
+MemoryHigh=25769803776
+MemoryMax=34359738368
+MemorySwapMax=0
+TasksMax=256
+CPUAccounting=yes
+IOAccounting=yes
+MemoryAccounting=yes
+TasksAccounting=yes
+KillMode=control-group
+Restart=no
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+NoNewPrivileges=yes
+PrivateTmp=yes
+StandardInput=null
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=8h
+
+[Install]
+WantedBy=default.target

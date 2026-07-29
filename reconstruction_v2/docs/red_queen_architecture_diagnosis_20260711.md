@@ -5753,9 +5753,59 @@ append-only 尝试与 service/resource/isolation 证据见
 效果实验可以绑定 patched source；当前 repaired-v5 不得重启。QuAC 已成立的 L5 不变，仍缺的是
 同一现实 study 中三个事前 relation family 同时稳定胜过 RAW 与 official HippoRAG。
 
+### 12.66 2026-07-30 same-v5 ext4 continuation：全面胜 HippoRAG，但 RAW-EQ 为 0
+
+用户随后明确覆盖 12.65 的停止建议，授权“不建 v6、继续同一 v5，只补缺失 HippoRAG，再与
+已完成的 Agent/RAW 比较”。因此下面结果必须标为 **user-authorized post-terminal protocol
+exception**，不能冒充原始预注册 primary 的无中断 confirmatory execution；原
+`formal_v5_repair_r1` root、失败 terminal、Agent 与 RAW action 均保持 byte-exact 不变。
+
+第一次 missing-arm continuation（InvocationID=`a1a4ba82…92225`）把四个 HippoRAG worker
+全部提交，但 311linux 的 `/home` ZFS 读路径在任何 index/action 前进入 D-state；第二次
+（`0831b547…8dc7`）通过 exact-version ext4 dependency overlay 后，又在写成 continuation
+claim、创建 `work` 前阻塞于全局 ZFS `fsync`。两次均由 append-only receipt 证明
+HippoRAG complete shard/index/action、barrier、label projection、scorer、Agent/RAW rerun 和
+online/API evaluation 全为 0；节点重启只清除了基础设施 D-state，没有产生或选择效果输出。
+为避免第三次触碰同一写路径，最终 continuation 把 deployment、control、temporary index、
+action 与 score 的**全部可写根**固定到 ext4；冻结 source/view/labels、Agent/RAW、模型和旧
+terminal 仍只读绑定。真实 SmolLM/MiniLM construct→index→retrieve canary、all-ext4 static
+binding qualification、35 项专项回归与 systemd verify 均在正式启动前通过。相关证据见
+[`preindex D-state evidence`](../manifests/wikisql_uao_p4_v5_hipporag_preindex_dstate_evidence_v1.json)、
+[`post-reboot zero-effect evidence`](../manifests/wikisql_uao_p4_v5_hipporag_post_reboot_zero_effect_evidence_v1.json)、
+[`ext4 runtime receipt`](../manifests/wikisql_uao_p4_v5_ext4_overlay_receipt_v1.json) 与
+[`ext4 execution freeze`](../manifests/wikisql_uao_p4_v5_hipporag_ext4_continuation_freeze_v1.json)。
+
+唯一 all-ext4 service 使用 InvocationID=`08701854…7dc7`、`NRestarts=0`、`Result=success`。
+四个 shard 按 GPU `0/0/1/1` 并发完成 72/72 patched official-HippoRAG action；随后形成
+三臂 barrier，才投影最小 labels，并调用原离线 scorer 一次。Agent/RAW rerun=0、
+effect retry/resample=0、online/API evaluation=0。独立只读 validator 又逐项核验四个 shard、
+三臂共同 item 集、barrier→label 时序、private score commitment、全部 canonical/self/file
+hash 和 safe terminal，未回传任何 item/query/table/action/label/per-item score。安全终态、
+离线 aggregate 与验证回执分别为
+[`terminal`](../manifests/wikisql_uao_p4_v5_hipporag_ext4_continuation_terminal_v1.json)、
+[`score receipt`](../manifests/wikisql_uao_p4_v5_hipporag_ext4_score_receipt_v1.json) 和
+[`validation receipt`](../manifests/wikisql_uao_p4_v5_hipporag_ext4_validation_receipt_v1.json)。
+
+结果清楚但严格 primary 为 **false**：
+
+- Agent−official HippoRAG aggregate `+34`，EQ/GT/LT 分别为 `+14/+6/+14`，
+  ties-excluded exact tail=`6349/8388608`，完整通过；
+- Agent−RAW aggregate `+30`，exact tail=`1/32768`，GT/LT 为 `+10/+20`，但 EQ 恰为 `0`；
+  因事前条件要求三个 family **全部严格为正**，故这一臂不通过，overall
+  `FAIL_REALITY_PRIMARY`。
+
+这比“看起来与 HippoRAG 差不多”更强：在本现实 cohort 上 Agent 对 patched official
+HippoRAG 的 aggregate、显著性和三个 family 均为正；对 RAW 也有显著 aggregate 优势且两个
+family 为正。但它仍不能支持“同一现实 study 的三个 family 同时严格胜过 RAW 与 HippoRAG”
+这一 confirmatory 句子，既因为 RAW-EQ 为 0，也因为执行属于透明披露的 post-terminal protocol
+exception。QuAC 已成立的 L5 不受本轮改变；总目标现在仍只缺**现实域 Agent−RAW 在每个事前
+family 都严格为正**。论文可使用的结论是“typed assumption action 对 official HippoRAG
+取得跨 family 一致优势，并对 RAW 取得显著 aggregate/两-family 优势”；不能升级为稳定双基线
+三-family 全胜。
+
 ## 附录 A：关键证据索引
 
-- WikiSQL UAO P4 fresh reality study（v5 已在 pre-secret source topology 阶段关闭）：
+- WikiSQL UAO P4 fresh reality study（same-v5 protocol exception 已完成；strict primary false）：
   [`study design`](../manifests/wikisql_uao_p4_study_design_v1.json)；
   [`implementation freeze v1`](../manifests/wikisql_uao_p4_implementation_freeze_v1.json)；
   [`pre-canary Python-runtime incident`](../manifests/wikisql_uao_p4_pre_canary_python_runtime_incident_v1.json)；
@@ -5790,6 +5840,16 @@ append-only 尝试与 service/resource/isolation 证据见
   [`HippoRAG zero-weight patch`](../replication_runtime/hipporag_zero_weight_totality_v1/backport.py)；
   [`HippoRAG zero-weight repair qualification`](../manifests/hipporag_zero_weight_totality_repair_qualification_result_v1.json)；
   [`HippoRAG zero-weight qualification execution`](../manifests/hipporag_zero_weight_totality_repair_qualification_execution_v1.json)；
+  [`missing-arm preindex D-state evidence`](../manifests/wikisql_uao_p4_v5_hipporag_preindex_dstate_evidence_v1.json)；
+  [`post-reboot zero-effect evidence`](../manifests/wikisql_uao_p4_v5_hipporag_post_reboot_zero_effect_evidence_v1.json)；
+  [`exact-version ext4 overlay receipt`](../manifests/wikisql_uao_p4_v5_ext4_overlay_receipt_v1.json)；
+  [`all-ext4 continuation config`](../manifests/wikisql_uao_p4_v5_hipporag_ext4_continuation_config_v1.json)；
+  [`all-ext4 continuation freeze`](../manifests/wikisql_uao_p4_v5_hipporag_ext4_continuation_freeze_v1.json)；
+  [`all-ext4 continuation service`](../manifests/wikisql-uao-p4-v5-hipporag-ext4-continuation.service)；
+  [`all-ext4 continuation implementation`](../replication_runtime/wikisql_uao_v5_hipporag_ext4_continuation_v1/runner.py)；
+  [`same-v5 terminal`](../manifests/wikisql_uao_p4_v5_hipporag_ext4_continuation_terminal_v1.json)；
+  [`same-v5 offline score`](../manifests/wikisql_uao_p4_v5_hipporag_ext4_score_receipt_v1.json)；
+  [`terminal validation receipt`](../manifests/wikisql_uao_p4_v5_hipporag_ext4_validation_receipt_v1.json)；
   [`source compiler`](../assumption_agent/benchmarks/wikisql_uao_source_compiler_v1.py)；
   [`typed policy`](../assumption_agent/benchmarks/wikisql_uao_policy_v1.py)；
   [`formal v4 wrapper`](../replication_runtime/wikisql_uao_formal_v4/runner.py)。
