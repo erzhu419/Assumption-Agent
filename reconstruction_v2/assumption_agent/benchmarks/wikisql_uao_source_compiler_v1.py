@@ -933,6 +933,17 @@ def _verify_sqlite_table_matches_json(
 def _sqlite_rowid_results(
     db_members: Mapping[str, bytes],
     requests: Sequence[SQLiteDerivationRequest],
+    *,
+    connection_verifier: Callable[
+        [Mapping[str, sqlite3.Connection]],
+        None,
+    ]
+    | None = None,
+    table_verifier: Callable[
+        [sqlite3.Connection, str, reality.WikiSQLTable],
+        None,
+    ]
+    | None = None,
 ) -> dict[str, tuple[int, ...]]:
     """Derive authoritative physical row ordinals in one DB-open session.
 
@@ -959,6 +970,15 @@ def _sqlite_rowid_results(
         and os.access(posix_tmp, os.W_OK | os.X_OK)
         else None
     )
+    verifier = table_verifier
+    if verifier is None:
+        verifier = lambda connection, table_name, table: (
+            _verify_sqlite_table_matches_json(
+                connection,
+                table_name=table_name,
+                table=table,
+            )
+        )
     with tempfile.TemporaryDirectory(
         prefix="wikisql-uao-sqlite-",
         dir=temporary_parent,
@@ -978,6 +998,8 @@ def _sqlite_rowid_results(
                 )
                 connection.execute("PRAGMA query_only=ON")
                 connections[split] = connection
+            if connection_verifier is not None:
+                connection_verifier(connections)
             for request in rows:
                 if request.split not in connections:
                     raise WikiSQLSourceCompilerError(
@@ -1009,11 +1031,7 @@ def _sqlite_rowid_results(
                 )
                 previous_table_sha256 = verified_tables.get(table_key)
                 if previous_table_sha256 is None:
-                    _verify_sqlite_table_matches_json(
-                        connection,
-                        table_name=table_name,
-                        table=request.table,
-                    )
+                    verifier(connection, table_name, request.table)
                     verified_tables[table_key] = table_sha256
                 elif previous_table_sha256 != table_sha256:
                     raise WikiSQLSourceCompilerError(
@@ -1043,15 +1061,42 @@ def _sqlite_rowid_results(
 def sqlite_rowid_derive(
     db_members: Mapping[str, bytes],
     requests: Sequence[SQLiteDerivationRequest],
+    *,
+    connection_verifier: Callable[
+        [Mapping[str, sqlite3.Connection]],
+        None,
+    ]
+    | None = None,
+    table_verifier: Callable[
+        [sqlite3.Connection, str, reality.WikiSQLTable],
+        None,
+    ]
+    | None = None,
 ) -> Mapping[str, tuple[int, ...]]:
     """Public injectable authority for pre-HMAC gold-row derivation."""
 
-    return _sqlite_rowid_results(db_members, requests)
+    return _sqlite_rowid_results(
+        db_members,
+        requests,
+        connection_verifier=connection_verifier,
+        table_verifier=table_verifier,
+    )
 
 
 def sqlite_rowid_cross_check(
     db_members: Mapping[str, bytes],
     requests: Sequence[SQLiteCrossCheckRequest],
+    *,
+    connection_verifier: Callable[
+        [Mapping[str, sqlite3.Connection]],
+        None,
+    ]
+    | None = None,
+    table_verifier: Callable[
+        [sqlite3.Connection, str, reality.WikiSQLTable],
+        None,
+    ]
+    | None = None,
 ) -> None:
     """Independently re-query selected items and assert exact consistency."""
 
@@ -1072,6 +1117,8 @@ def sqlite_rowid_cross_check(
             )
             for row in rows
         ),
+        connection_verifier=connection_verifier,
+        table_verifier=table_verifier,
     )
     if any(
         derived[row.item_commitment_sha256] != row.expected_gold_row_ids

@@ -5644,9 +5644,12 @@ Landlock、CUDA、线程、短 alias、路径长度与并发启动问题确已�
 `34fdddad…988f` 按冻结公式
 `sha256(type(error).__name__ + ":" + str(error))` 精确对应：
 `WikiSQLSourceCompilerError:source archive lacks authorized members: ['data/version.txt']`。
-控制流在 `read_authorized_archive` 返回前即失败，而 secret factory、table/query parse、SQLite
-derivation、cohort selection、A_form/A_hold pack、三臂 action 与 scorer 全在其后；远端 work root
-保持空，action child、barrier、label projection、scorer 与 API/online evaluator count 全为 0。
+需更正早先过于简化的“只看 topology/header”描述：`read_authorized_archive` 在末尾做 missing-set
+检查，因此该 invocation 已完整读取并哈希 train/test 六个 payload member，合计 166,318,957
+uncompressed bytes；但它尚未解析 JSON、打开 SQLite、生成 secret 或选择 cohort。secret factory、
+table/query parse、SQLite derivation、A_form/A_hold pack、三臂 action 与 scorer 仍全在失败点之后；
+远端 work root 保持空，action child、barrier、label projection、scorer 与 API/online evaluator
+count 全为 0。
 安全终态和完整 disposition 分别见
 [`terminal`](../manifests/wikisql_uao_p4_formal_terminal_v5.safe.json) 与
 [`failure disposition`](../manifests/wikisql_uao_p4_formal_v5_failure_disposition_v1.json)。
@@ -5663,6 +5666,45 @@ archive 的 size、SHA-256 与 Git blob，没有在 effect freeze 前做**公开
 预注册一次效果实验。不能直接形成“v6 修一个缺什么再跑”的链，也不允许根据本次失败增加任何
 效果 gate。QuAC 已成立的 L5 不变；总目标仍只缺现实域 A_hold 上三个 relation family 同时胜
 RAW 与 official HippoRAG。
+
+### 12.64 同一 v5 lineage 的 append-only repair：真实 public source 全量资格化通过
+
+用户随后明确授权“继续重启 v5，不开 v6”。本轮据此只对 12.63 的 post-failure stopping rule
+做一次公开、pre-secret 的 protocol exception；原 `/formal_v5` root、InvocationID、terminal 和
+disposition 永久不改不删。科学 study/source lineage 仍为一个，修复执行使用 sibling
+`/formal_v5_repair_r1`；若正式 admission 成立，physical admitted attempt 累计为 2，但修复前
+valid efficacy sample 仍为 0。完整边界见
+[`protocol amendment`](../manifests/wikisql_uao_p4_v5_repair_protocol_amendment_v1.json)。
+
+这次没有只补 `version.txt` 后盲目启动。先在可迭代、非效果 source qualification 层扫描真实
+official archive，连续发现并一次闭合四类公开 adapter 问题：
+
+1. release 由冻结的 size/SHA-256/Git blob/member hashes 绑定；真实 archive 为 `data/` 加
+   train/dev/test 各三文件，没有 `data/version.txt`；
+2. 23,815 个 table record 只允许真实发布包中出现的三种 metadata envelope，再投影核心字段；
+   train 104、test 27 个空 header table 仅进入 SQLite registry，且证明均未被 query 引用；
+3. SQLite `REAL` affinity 允许无法数值化的值以 lowercase TEXT 存储；numeric storage 仍按冻结
+   coercion 比较，gold 一律直接由 official SQLite rowid 查询；
+4. 原 selector 先给每表选跨-family winner，导致无 secret 保证 floor 在 train GT/LT 仅
+   40/27（quota 64），test 仅 13/14（quota 24）。因此 amendment 公开换成
+   HMAC-priority、capacity-preserving bipartite matching；source、quota、family、三臂、模型、
+   metric、primary gate 与 top-k 均不变。
+
+资格化第一次 invocation `c79e22f…db43` 在 SQLite numeric parse 路径发现 Babel 2.10.3 的
+`pytz` import closure 未闭合；这是非效果 harness 内的 runtime failure，effect attempt、secret、
+selection、action 与 score 均为 0。绑定已在原 runtime qualification config 中受哈希保护的
+official-base `pytz 2022.1` 后，同一个可迭代 qualification unit 的第二次 invocation
+`42fbc40…9911` 成功结束。真实全量结果为：9 个 regular member、23,815 张 SQLite table、
+24,328 次权威 gold derivation、23,802 次 exhaustive cross-check；train/test 的 EQ/GT/LT
+unique-table support 分别为 `7478/95/65` 与 `2147/28/27`，七个 Hall subset 条件全部满足
+64/24 配额。整个资格化固定
+`secret/HMAC/cohort/action/scorer/score/API = 0`；安全 aggregate receipt 见
+[`source qualification`](../manifests/wikisql_uao_p4_v5_repair_source_qualification_result_v1.json)。
+
+因此，真实 source adapter、SQLite authority、候选容量和 Babel/pytz runtime closure 已在
+效果 freeze 前完整执行通过，而不是等 formal 启动后逐层暴露。下一步是在这些 exact bytes 上
+冻结一次 repaired-v5 implementation/execution，并只启动一次 append-only effect attempt；共享
+资源不足仍只能在 attempt 前返回 75，admission 后不得 retry/replay/resample，评价仍为离线。
 
 ## 附录 A：关键证据索引
 
@@ -5691,6 +5733,11 @@ RAW 与 official HippoRAG。
   [`formal v5 wrapper`](../replication_runtime/wikisql_uao_formal_v5/runner.py)；
   [`formal v5 safe terminal`](../manifests/wikisql_uao_p4_formal_terminal_v5.safe.json)；
   [`formal v5 failure disposition`](../manifests/wikisql_uao_p4_formal_v5_failure_disposition_v1.json)；
+  [`v5 repair protocol amendment`](../manifests/wikisql_uao_p4_v5_repair_protocol_amendment_v1.json)；
+  [`v5 repair public-source qualification`](../manifests/wikisql_uao_p4_v5_repair_source_qualification_result_v1.json)；
+  [`v5 repair source compiler`](../assumption_agent/benchmarks/wikisql_uao_source_compiler_v5_repair.py)；
+  [`v5 repair formal wrapper`](../replication_runtime/wikisql_uao_formal_v5_repair_r1/runner.py)；
+  [`v5 repair formal service`](../manifests/wikisql-uao-p4-formal-v5-repair-r1.service)；
   [`source compiler`](../assumption_agent/benchmarks/wikisql_uao_source_compiler_v1.py)；
   [`typed policy`](../assumption_agent/benchmarks/wikisql_uao_policy_v1.py)；
   [`formal v4 wrapper`](../replication_runtime/wikisql_uao_formal_v4/runner.py)。
