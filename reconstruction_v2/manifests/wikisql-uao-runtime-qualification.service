@@ -1,0 +1,35 @@
+[Unit]
+Description=Iterative non-scoring WikiSQL UAO runtime qualification
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/erzhu419/wikisql_uao_runtime_qualification/reconstruction_v2
+UMask=0077
+ExecStart=/usr/bin/env -i CUBLAS_WORKSPACE_CONFIG=:4096:8 CUDA_MODULE_LOADING=LAZY HF_DATASETS_OFFLINE=1 HF_HUB_DISABLE_TELEMETRY=1 HF_HUB_OFFLINE=1 HOME=/home/erzhu419/wikisql_uao_runtime_qualification/control/home LANG=C.UTF-8 LC_ALL=C.UTF-8 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1 PYTHONHASHSEED=0 PYTHONHOME=/home/erzhu419/wikisql_uao_runtime_qualification/runtime_assets/python310_clean PYTHONNOUSERSITE=1 PYTHONPATH=/home/erzhu419/wikisql_uao_runtime_qualification/reconstruction_v2:/home/erzhu419/p19_runtime_assets_20260723/typed_venv/lib/python3.10/site-packages:/home/erzhu419/wikisql_uao_runtime_qualification/runtime_assets/babel_2_10_3_clean TEMP=/home/erzhu419/wikisql_uao_runtime_qualification/control/tmp TMP=/home/erzhu419/wikisql_uao_runtime_qualification/control/tmp TMPDIR=/home/erzhu419/wikisql_uao_runtime_qualification/control/tmp TOKENIZERS_PARALLELISM=false TRANSFORMERS_OFFLINE=1 VECLIB_MAXIMUM_THREADS=1 /home/erzhu419/p19_runtime_assets_20260723/typed_venv/bin/python -S -B -s -m replication_runtime.wikisql_uao_runtime_qualification.runner controller --config /home/erzhu419/wikisql_uao_runtime_qualification/control/runtime_config.json
+CPUQuota=400%
+CPUWeight=25
+Nice=10
+IOWeight=25
+IOSchedulingClass=idle
+MemoryHigh=25769803776
+MemoryMax=34359738368
+MemorySwapMax=0
+TasksMax=96
+CPUAccounting=yes
+IOAccounting=yes
+MemoryAccounting=yes
+TasksAccounting=yes
+KillMode=control-group
+Restart=no
+SuccessExitStatus=75
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+NoNewPrivileges=yes
+PrivateTmp=yes
+StandardInput=null
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=6h
+
+[Install]
+WantedBy=default.target
