@@ -5706,6 +5706,53 @@ unique-table support 分别为 `7478/95/65` 与 `2147/28/27`，七个 Hall subse
 冻结一次 repaired-v5 implementation/execution，并只启动一次 append-only effect attempt；共享
 资源不足仍只能在 attempt 前返回 75，admission 后不得 retry/replay/resample，评价仍为离线。
 
+### 12.65 repaired-v5 终态：HippoRAG zero-weight 断言失效；未来 comparator 修复已离线资格化
+
+12.64 的 prospective 状态现已被唯一 repaired-v5 effect attempt 取代。正式 service 于
+2026-07-29 19:36:17 CST 启动，InvocationID=`5bb9f979…20fa7`、`NRestarts=0`。source compiler、
+secret/cohort 与三路 action intent 均已真实进入，Agent、RAW、HippoRAG 三个 child 在 wait 前
+全部提交；Agent 与 RAW action artifact 已形成，但 HippoRAG 在 retrieve 阶段非零退出。outer
+terminal 因而停在 `launch_three_actions_concurrently`：action launch=3，barrier=0，
+A_hold label projection=0，scorer=0，API/online evaluation=0。故本次不是 Agent 输给 RAW 或
+HippoRAG，而是 **implementation-invalid / efficacy unknown**；当前 cohort 不得 replay、resume
+或补评分。安全终态与完整处置见
+[`repaired-v5 terminal`](../manifests/wikisql_uao_p4_formal_terminal_v5_repair_r1.safe.json) 和
+[`failure disposition`](../manifests/wikisql_uao_p4_formal_v5_repair_r1_failure_disposition_v1.json)。
+
+根因是 official HippoRAG source SHA-256
+`960561b0…e05` 的 `get_top_k_weights` 仍含旧 cardinality 断言：
+`np.count_nonzero(all_phrase_weights) == len(linking_score_map.keys())`。该等式把“被选中的 linking
+key 数”错误等同于“非零 phrase weight 数”；实际检索允许某个被选 key 合法对应 0 weight，
+因此 key totality 成立时该等式仍会失败。这不是 OOM、GPU、ZFS、共享节点或模型权重损坏。
+
+修复没有简单删除完整性检查。冻结的一处替换先拒绝任何 non-finite weight，再把
+`all_phrase_weights` 的实际非零 vertex-ID 集合与“已选且非零”的 vertex-ID 集合做严格相等；
+因此合法 selected-zero 被接受，而 unselected-nonzero 和 NaN 仍 fail-closed，原数组与 linking
+map 均不改写。输入、输出与 unified patch SHA-256 分别为
+`960561b0…e05`、`6d0938da…98b`、`a4a5584e…ce5`。
+
+该修复只在独立、无评分 qualification 中验证，没有重放 WikiSQL effect。311linux 的
+unprivileged bubblewrap 被 AppArmor 阻止，因此最终 worker 使用已在该机工作的 Landlock ABI 8，
+外层 service 固定 `AF_UNIX` only、`IPAddressDeny=any`、`NoNewPrivileges=yes`；child 使用
+secret-free 显式环境、CPU-only 和冻结 index 所需的 exact `/tmp/models/{llm,embed}` 短 alias。
+此前 wrong runtime path、bubblewrap denial、长 model label 及已存在 exact alias 都被保留为
+同一非效果 harness 的 append-only infrastructure evidence，没有新建效果 study/version，也没有
+读取 label/qrel 或增加 gate。
+
+最终 60 个冻结公开 fixture 以 6 路并发全部完成：58 个历史成功输出 byte-identical，FiQA DEV
+与 NanoBEIR 中 2 个历史 assertion failure 均变为结构合法的 10-document output；synthetic
+同时证明 selected-zero 通过、nonfinite 与 unselected-nonzero 被拒绝。运行峰值
+2,937,753,600 bytes、swap 0、GPU 0，network/API/online evaluator/label/qrel/performance score
+均为 0。安全 aggregate 结果见
+[`zero-weight totality repair qualification`](../manifests/hipporag_zero_weight_totality_repair_qualification_result_v1.json)，
+append-only 尝试与 service/resource/isolation 证据见
+[`qualification execution`](../manifests/hipporag_zero_weight_totality_repair_qualification_execution_v1.json)。
+
+因此，“HippoRAG 权重一致性断言”本身已经修好并获得 future-use 资格；但修复不能追溯性补全
+已经终止的 WikiSQL 三臂样本，也不是 comparator 性能证据。若继续总目标，新的、事前冻结的
+效果实验可以绑定 patched source；当前 repaired-v5 不得重启。QuAC 已成立的 L5 不变，仍缺的是
+同一现实 study 中三个事前 relation family 同时稳定胜过 RAW 与 official HippoRAG。
+
 ## 附录 A：关键证据索引
 
 - WikiSQL UAO P4 fresh reality study（v5 已在 pre-secret source topology 阶段关闭）：
@@ -5738,6 +5785,11 @@ unique-table support 分别为 `7478/95/65` 与 `2147/28/27`，七个 Hall subse
   [`v5 repair source compiler`](../assumption_agent/benchmarks/wikisql_uao_source_compiler_v5_repair.py)；
   [`v5 repair formal wrapper`](../replication_runtime/wikisql_uao_formal_v5_repair_r1/runner.py)；
   [`v5 repair formal service`](../manifests/wikisql-uao-p4-formal-v5-repair-r1.service)；
+  [`v5 repair safe terminal`](../manifests/wikisql_uao_p4_formal_terminal_v5_repair_r1.safe.json)；
+  [`v5 repair failure disposition`](../manifests/wikisql_uao_p4_formal_v5_repair_r1_failure_disposition_v1.json)；
+  [`HippoRAG zero-weight patch`](../replication_runtime/hipporag_zero_weight_totality_v1/backport.py)；
+  [`HippoRAG zero-weight repair qualification`](../manifests/hipporag_zero_weight_totality_repair_qualification_result_v1.json)；
+  [`HippoRAG zero-weight qualification execution`](../manifests/hipporag_zero_weight_totality_repair_qualification_execution_v1.json)；
   [`source compiler`](../assumption_agent/benchmarks/wikisql_uao_source_compiler_v1.py)；
   [`typed policy`](../assumption_agent/benchmarks/wikisql_uao_policy_v1.py)；
   [`formal v4 wrapper`](../replication_runtime/wikisql_uao_formal_v4/runner.py)。
