@@ -82,15 +82,27 @@ def _prepare_short_model_aliases(
     """Recreate the exact short model labels encoded in the frozen indexes."""
 
     alias_root = Path("/tmp/models")
-    if alias_root.exists() or alias_root.is_symlink():
-        raise HippoRAGTotalityRepairQualificationError(
-            "private short model alias root is not fresh"
-        )
-    alias_root.mkdir(mode=0o700)
     llm_alias = alias_root / "llm"
     embedding_alias = alias_root / "embed"
-    llm_alias.symlink_to(llm_model, target_is_directory=True)
-    embedding_alias.symlink_to(embedding_model, target_is_directory=True)
+    if not alias_root.exists() and not alias_root.is_symlink():
+        alias_root.mkdir(mode=0o700)
+        llm_alias.symlink_to(llm_model, target_is_directory=True)
+        embedding_alias.symlink_to(embedding_model, target_is_directory=True)
+    else:
+        metadata = alias_root.lstat()
+        entries = {path.name for path in alias_root.iterdir()}
+        if (
+            alias_root.is_symlink()
+            or not alias_root.is_dir()
+            or metadata.st_uid != os.getuid()
+            or metadata.st_mode & 0o777 != 0o700
+            or entries != {"embed", "llm"}
+            or not llm_alias.is_symlink()
+            or not embedding_alias.is_symlink()
+        ):
+            raise HippoRAGTotalityRepairQualificationError(
+                "shared short model alias root drifted"
+            )
     if (
         llm_alias.resolve(strict=True) != llm_model.resolve(strict=True)
         or embedding_alias.resolve(strict=True)
