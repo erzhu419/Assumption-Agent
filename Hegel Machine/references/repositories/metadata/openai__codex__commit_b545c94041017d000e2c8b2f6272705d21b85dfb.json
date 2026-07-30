@@ -1,0 +1,81 @@
+{
+  "sha": "b545c94041017d000e2c8b2f6272705d21b85dfb",
+  "node_id": "C_kwDOOYsS4doAKGI1NDVjOTQwNDEwMTdkMDAwZTJjOGIyZjYyNzI3MDVkMjFiODVkZmI",
+  "commit": {
+    "author": {
+      "name": "jif",
+      "email": "jif@openai.com",
+      "date": "2026-07-30T12:19:50Z"
+    },
+    "committer": {
+      "name": "copyberry",
+      "email": "copyberry@app.openai.com",
+      "date": "2026-07-30T12:28:58Z"
+    },
+    "message": "Strengthen session file change approval coverage (#36149)\n\n## Why\n\nThe notification helper buffers unrelated server requests, so the session-scoped\nfile change approval test could overlook an unexpected second approval request.\n\n## What changed\n\n- Consume approval resolution and file change completion events directly and\n  verify their request, thread, turn, and item identities.\n- Fail if the second patch requests approval after the first patch was accepted\n  for the session.\n- Shut down the app server gracefully and assert that it exits successfully.\n\nGitOrigin-RevId: 53a3f746940677043e097094862c28faf4db1a8d",
+    "tree": {
+      "sha": "eff852e653cbf24543a36306a1fbb2300bfb335e",
+      "url": "https://api.github.com/repos/openai/codex/git/trees/eff852e653cbf24543a36306a1fbb2300bfb335e"
+    },
+    "url": "https://api.github.com/repos/openai/codex/git/commits/b545c94041017d000e2c8b2f6272705d21b85dfb",
+    "comment_count": 0,
+    "verification": {
+      "verified": false,
+      "reason": "unsigned",
+      "signature": null,
+      "payload": null,
+      "verified_at": null
+    }
+  },
+  "url": "https://api.github.com/repos/openai/codex/commits/b545c94041017d000e2c8b2f6272705d21b85dfb",
+  "html_url": "https://github.com/openai/codex/commit/b545c94041017d000e2c8b2f6272705d21b85dfb",
+  "comments_url": "https://api.github.com/repos/openai/codex/commits/b545c94041017d000e2c8b2f6272705d21b85dfb/comments",
+  "author": {
+    "login": "jif-oai",
+    "id": 230027070,
+    "node_id": "U_kgDODbXvPg",
+    "avatar_url": "https://avatars.githubusercontent.com/u/230027070?v=4",
+    "gravatar_id": "",
+    "url": "https://api.github.com/users/jif-oai",
+    "html_url": "https://github.com/jif-oai",
+    "followers_url": "https://api.github.com/users/jif-oai/followers",
+    "following_url": "https://api.github.com/users/jif-oai/following{/other_user}",
+    "gists_url": "https://api.github.com/users/jif-oai/gists{/gist_id}",
+    "starred_url": "https://api.github.com/users/jif-oai/starred{/owner}{/repo}",
+    "subscriptions_url": "https://api.github.com/users/jif-oai/subscriptions",
+    "organizations_url": "https://api.github.com/users/jif-oai/orgs",
+    "repos_url": "https://api.github.com/users/jif-oai/repos",
+    "events_url": "https://api.github.com/users/jif-oai/events{/privacy}",
+    "received_events_url": "https://api.github.com/users/jif-oai/received_events",
+    "type": "User",
+    "user_view_type": "public",
+    "site_admin": false
+  },
+  "committer": null,
+  "parents": [
+    {
+      "sha": "25eecb071e7f551516d63fe41c922678d51889c2",
+      "url": "https://api.github.com/repos/openai/codex/commits/25eecb071e7f551516d63fe41c922678d51889c2",
+      "html_url": "https://github.com/openai/codex/commit/25eecb071e7f551516d63fe41c922678d51889c2"
+    }
+  ],
+  "stats": {
+    "total": 72,
+    "additions": 60,
+    "deletions": 12
+  },
+  "files": [
+    {
+      "sha": "f977003877f201bfd0373242c6d5467c6891fe77",
+      "filename": "codex-rs/app-server/tests/suite/v2/turn_start.rs",
+      "status": "modified",
+      "additions": 60,
+      "deletions": 12,
+      "changes": 72,
+      "blob_url": "https://github.com/openai/codex/blob/b545c94041017d000e2c8b2f6272705d21b85dfb/codex-rs%2Fapp-server%2Ftests%2Fsuite%2Fv2%2Fturn_start.rs",
+      "raw_url": "https://github.com/openai/codex/raw/b545c94041017d000e2c8b2f6272705d21b85dfb/codex-rs%2Fapp-server%2Ftests%2Fsuite%2Fv2%2Fturn_start.rs",
+      "contents_url": "https://api.github.com/repos/openai/codex/contents/codex-rs%2Fapp-server%2Ftests%2Fsuite%2Fv2%2Fturn_start.rs?ref=b545c94041017d000e2c8b2f6272705d21b85dfb",
+      "patch": "@@ -3779,6 +3779,7 @@ async fn turn_start_file_change_approval_accept_for_session_persists_v2() -> Res\n     assert_eq!(params.thread_id, thread.id);\n     assert_eq!(params.turn_id, turn_1.id);\n \n+    let resolved_request_id = request_id.clone();\n     mcp.send_response(\n         request_id,\n         serde_json::to_value(FileChangeRequestApprovalResponse {\n@@ -3787,11 +3788,36 @@ async fn turn_start_file_change_approval_accept_for_session_persists_v2() -> Res\n     )\n     .await?;\n \n-    timeout(\n-        DEFAULT_READ_TIMEOUT,\n-        mcp.read_stream_until_notification_message(\"item/completed\"),\n-    )\n-    .await??;\n+    let mut approval_resolved = false;\n+    let mut patch_completed = false;\n+    while !approval_resolved || !patch_completed {\n+        let message = timeout(DEFAULT_READ_TIMEOUT, mcp.read_next_message()).await??;\n+        let JSONRPCMessage::Notification(notification) = message else {\n+            continue;\n+        };\n+        match notification.method.as_str() {\n+            \"serverRequest/resolved\" => {\n+                let resolved: ServerRequestResolvedNotification = serde_json::from_value(\n+                    notification.params.expect(\"serverRequest/resolved params\"),\n+                )?;\n+                if resolved.request_id == resolved_request_id {\n+                    assert_eq!(resolved.thread_id, thread.id);\n+                    approval_resolved = true;\n+                }\n+            }\n+            \"item/completed\" => {\n+                let completed: ItemCompletedNotification =\n+                    serde_json::from_value(notification.params.expect(\"item/completed params\"))?;\n+                if matches!(completed.item, ThreadItem::FileChange { ref id, .. } if id == \"patch-call-1\")\n+                {\n+                    assert_eq!(completed.thread_id, thread.id);\n+                    assert_eq!(completed.turn_id, turn_1.id);\n+                    patch_completed = true;\n+                }\n+            }\n+            _ => {}\n+        }\n+    }\n     timeout(\n         DEFAULT_READ_TIMEOUT,\n         mcp.read_stream_until_notification_message(\"turn/completed\"),\n@@ -3802,7 +3828,7 @@ async fn turn_start_file_change_approval_accept_for_session_persists_v2() -> Res\n     assert_eq!(std::fs::read_to_string(&readme_path)?, \"new line\\n\");\n \n     // Second turn: apply a patch to the same file. Approval should be skipped due to AcceptForSession.\n-    let _: TurnStartResponse = mcp\n+    let TurnStartResponse { turn: turn_2 } = mcp\n         .request(|request_id| ClientRequest::TurnStart {\n             request_id,\n             params: TurnStartParams {\n@@ -3833,20 +3859,42 @@ async fn turn_start_file_change_approval_accept_for_session_persists_v2() -> Res\n     assert_eq!(id, \"patch-call-2\");\n     assert_eq!(status, PatchApplyStatus::InProgress);\n \n-    // If the server incorrectly emits FileChangeRequestApproval, the helper below will error\n-    // (it bails on unexpected JSONRPCMessage::Request), causing the test to fail.\n-    timeout(\n-        DEFAULT_READ_TIMEOUT,\n-        mcp.read_stream_until_notification_message(\"item/completed\"),\n-    )\n+    let completed_file_change = timeout(DEFAULT_READ_TIMEOUT, async {\n+        loop {\n+            match mcp.read_next_message().await? {\n+                JSONRPCMessage::Request(request) => {\n+                    anyhow::bail!(\"unexpected approval request for session-approved patch: {request:?}\");\n+                }\n+                JSONRPCMessage::Notification(notification)\n+                    if notification.method == \"item/completed\" =>\n+                {\n+                    let completed: ItemCompletedNotification = serde_json::from_value(\n+                        notification.params.expect(\"item/completed params\"),\n+                    )?;\n+                    if matches!(completed.item, ThreadItem::FileChange { ref id, .. } if id == \"patch-call-2\")\n+                    {\n+                        return Ok::<ItemCompletedNotification, anyhow::Error>(completed);\n+                    }\n+                }\n+                _ => {}\n+            }\n+        }\n+    })\n     .await??;\n+    assert_eq!(completed_file_change.thread_id, thread.id);\n+    assert_eq!(completed_file_change.turn_id, turn_2.id);\n     timeout(\n         DEFAULT_READ_TIMEOUT,\n         mcp.read_stream_until_notification_message(\"turn/completed\"),\n     )\n     .await??;\n \n     assert_eq!(std::fs::read_to_string(readme_path)?, \"updated line\\n\");\n+    let status = timeout(DEFAULT_READ_TIMEOUT, mcp.shutdown_gracefully()).await??;\n+    anyhow::ensure!(\n+        status.success(),\n+        \"app-server exited unsuccessfully: {status}\"\n+    );\n \n     Ok(())\n }"
+    }
+  ]
+}

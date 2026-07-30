@@ -1,0 +1,1025 @@
+
+<!--Author: Pranav Rajpurkar 2016-->
+<html>
+<head>
+<meta charset="utf-8">
+<title>
+Question Answering in Context</title>
+<meta name="description" content="Question Answering in Context (QuAC) is a dataset for modeling, understanding, and participating in information seeking dialog. Data instances consist of an interactive dialog between two crowd workers: (1) a student who poses a sequence of freeform questions to learn as much as possible about a hidden Wikipedia text, and (2) a teacher who answers the questions by providing short excerpts (spans) from the text. QuAC introduces challenges not found in existing machine comprehension datasets: its questions are often more open-ended, unanswerable, or only meaningful within the dialog context.">
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta property="og:image" content="/logo.png">
+<meta property="og:image" content="/donald.png">
+<link rel="image_src" type="image/png" href="logo.png">
+<link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+<link rel="icon" href="favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="bower_components/bootstrap/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="stylesheets/layout.css">
+<link rel="stylesheet" href="stylesheets/index.css">
+<script async defer src="https://buttons.github.io/buttons.js">
+</script>
+<script src="javascripts/analytics.js">
+</script>
+</head>
+<body>
+<div class="navbar navbar-default navbar-fixed-top" id="topNavbar" role="navigation">
+<div class="container clearfix" id="navContainer">
+<div class="rightNav">
+<div class="collapseDiv">
+<button class="navbar-toggle collapsed" type="button" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+<span class="glyphicon glyphicon-menu-hamburger">
+</span>
+</button>
+</div>
+<div class="collapse navbar-collapse" id="navbar">
+<ul class="nav navbar-nav navbar-right">
+<li>
+<a href="/">
+Home</a>
+</li>
+</ul>
+</div>
+</div>
+<div class="leftNav">
+<div class="brandDiv">
+<a class="navbar-brand" href="/">
+QuAC</a>
+</div>
+</div>
+</div>
+</div>
+<div class="cover" id="topCover">
+<div class="container">
+<div class="row">
+<div class="col-md-12">
+<h1 id="appTitle">
+ <img src="donald.png" width="7%">
+<span>
+QuAC</span>
+</h1>
+<h2 id="appSubtitle">
+Question Answering in Context</h2>
+</div>
+</div>
+</div>
+</div>
+<div class="cover" id="contentCover">
+<div class="container">
+<div class="row">
+<div class="col-md-5">
+<div class="infoCard">
+<div class="infoBody">
+<div class="infoHeadline">
+<h2>
+What is QuAC?</h2>
+</div>
+<p>
+ <span>
+<b>Qu</b>estion <b>A</b>nswering in <b>C</b>ontext </span> is a dataset for modeling, understanding, and participating in information seeking dialog.
+Data instances consist of an interactive dialog between two crowd workers: (1) a <i>
+student </i>
+ who poses a sequence of freeform questions to learn as much as possible about a hidden Wikipedia text, and (2) a <i>
+teacher </i>
+who answers the questions by providing short excerpts (spans) from the text. QuAC introduces challenges not found in existing machine comprehension datasets: its questions are often more open-ended, unanswerable, or only meaningful within the dialog context.</p>
+<hr>
+<p>
+<a class="btn actionBtn" href="https://arxiv.org/abs/1808.07036">
+QuAC paper</a>
+</p>
+<p>
+<a class="btn actionBtn" href="/quac_poster_pdf.pdf">
+QuAC poster</a>
+</p>
+<hr>
+<p>
+QuAC is meant to be an academic resource and has significant limitations. Please read our detailed datasheet before considering it for any practical application.</p>
+<hr>
+<p>
+<a class="btn actionBtn" href="/updated_datasheet.pdf">
+Datasheet</a>
+</p>
+<div class="infoHeadline">
+ <h2>
+Is QuAC exactly like SQuAD 2.0?</h2>
+</div>
+<p>
+No, QuAC shares many principles with <a href="https://rajpurkar.github.io/SQuAD-explorer/">
+SQuAD 2.0 </a>
+such as span based evaluation and unanswerable questions (including website design principles! Big thanks for sharing the code!) but incorporates a new dialog component. We expect models can be easily evaluated on both resources and have tried to make our evaluation protocol as similar as possible to their own.</p>
+<div class="infoHeadline">
+<h2>
+Getting Started</h2>
+</div>
+<p>
+Download a copy of the dataset (distributed under the  <a href="http://creativecommons.org/licenses/by-sa/4.0/legalcode">
+CC BY-SA 4.0</a>
+ license):<ul class="list-unstyled">
+<li>
+<a class="btn actionBtn inverseBtn" href="https://s3.amazonaws.com/my89public/quac/train_v0.2.json" download>
+Training Set</a>
+</li>
+<li>
+<a class="btn actionBtn inverseBtn" href="https://s3.amazonaws.com/my89public/quac/val_v0.2.json" download>
+Val Set</a>
+</li>
+</ul>
+</p>
+<p>
+To evaluate your models, we have also made available the evaluation script we will use for official evaluation, along with a sample prediction file that the script will take as input. To run the evaluation, use<br>
+<code>
+python scorer.py --val_file &lt;path_to_val&gt; --model_output &lt;path_to_predictions&gt --o eval.json;</code>
+.<ul class="list-unstyled">
+<li>
+<a class="btn actionBtn inverseBtn" href="https://s3.amazonaws.com/my89public/quac/scorer.py" download>
+Evaluation Script</a>
+</li>
+<li>
+<a class="btn actionBtn inverseBtn" href="https://s3.amazonaws.com/my89public/quac/example.json" download>
+Sample Prediction File (on Dev)</a>
+</li>
+</ul>
+</p>
+<p>
+Once you have a built a model that works to your expectations on the dev set, you submit it to get official scores on the dev and a hidden test set. To preserve the integrity of test results, we do not release the test set to the public. Instead, we require you to submit your model so that we can run it on the test set for you. The submission process is very similar to SQuaD 2.0 (Live!):</p>
+<a class="btn actionBtn inverseBtn" href="https://worksheets.codalab.org/worksheets/0x6c09e167a1884d359b171e13b80b95d3/">
+Submission Tutorial</a>
+<div class="infoHeadline">
+<h2>
+Baseline Models</h2>
+</div>
+<p>
+ All baseline models are available through AllenNLP. Specifically, model is <a href="https://github.com/allenai/allennlp/blob/master/allennlp/models/reading_comprehension/dialog_qa.py">
+here</a>
+ and the configuration is <a href="https://github.com/allenai/allennlp/blob/master/training_config/dialog_qa.jsonnet">
+here.</a>
+ <a class="btn actionBtn inverseBtn" href="https://github.com/allenai/allennlp">
+AllenNLP Model</a>
+</p>
+<div class="infoHeadline">
+<h2>
+How do I get the duck in my paper?</h2>
+</div>
+<p>
+ First, download the duck <a class="btn actionBtn inverseBtn" href="https://s3.amazonaws.com/my89public/quac/daffyhand.pdf" download>
+The Duck</a>
+Then, put this macro in your latex: <code>
+\newcommand{\daffy}[0]{\includegraphics[width=.04\textwidth]{path_to_daffy/daffyhand.pdf}}</code>
+<br>
+Finally, enjoy the command \daffy in your paper!</p>
+<div class="infoHeadline">
+<h2>
+Have Questions?</h2>
+</div>
+<p>
+ Ask us questions at our   <a href="https://groups.google.com/forum/#!forum/quac_ai">
+google group</a>
+ or at <a href="mailto:eunsol@cs.washington.edu">
+eunsol@cs.washington.edu </a>
+<a href="mailto:hehe@cs.stanford.edu">
+hehe@stanford.edu</a>
+<br>
+<a href="mailto:mohiti@cs.umass.edu">
+miyyer@cs.umass.edu </a>
+<a href="mailto:marky@allenai.org">
+marky@allenai.org</a>
+</p>
+</div>
+<div class="infoSubheadline">
+<a href="https://twitter.com/share" class="twitter-share-button" data-url="https://quac.ai" data-text="Question Answer in Context - A dataset of 15k information seeking dialogs with 100k questions and answers "  data-size="large" data-hashtags="QuAC">
+Tweet</a>
+ <script>
+!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+</div>
+</div>
+</div>
+<div class="col-md-7">
+<div class="infoCard">
+<div class="infoBody">
+<div class="infoHeadline">
+<h2>
+Leaderboard</h2>
+</div>
+<p>
+There can be only one duck.</p>
+<table class="table performanceTable">
+<tr>
+<th>
+Rank</th>
+<th>
+Model</th>
+<th>
+F1</th>
+<th>
+HEQQ</th>
+<th>
+HEQD</th>
+</tr>
+<tr class="human-row">
+<td>
+</td>
+<td>
+Human Performance<p class="institution">
+ </p>
+<a href="https://arxiv.org/pdf/1808.07036.pdf">
+(Choi et al. EMNLP '18)</a>
+</td>
+<td>
+81.1</td>
+<td>
+100</td>
+<td>
+100</td>
+</tr>
+
+<!--167.8-->
+<tr>
+<td>
+ <p>
+<img src="donald.png" width="10%"/>
+</p>
+<span class="date label label-default">
+Aug 24, 2022</span>
+</td>
+<td style="word-break:break-word;">
+CKT-QA (ensemble) 
+<p class="institution">Ant Group, ZhiXiaoBao &amp; Ada<a>
+</p>
+</td>
+<td>
+<b>76.3</b>
+</td>
+<td>
+<b>73.6</b>
+</td>
+<td>
+<b>17.9</b>
+</td>
+</tr>
+
+<!--164.8-->
+<tr>
+<td>
+ <p>
+2
+</p>
+<span class="date label label-default">
+Feb 2, 2022</span>
+</td>
+<td style="word-break:break-word;">
+CDQ-DeBERTa (single model) 
+<p class="institution">Anonymous<a>
+</p>
+</td>
+<td>
+75.8
+</td>
+<td>
+73.1
+</td>
+<td>
+15.9
+</td>
+</tr>
+
+
+<!--164.2-->
+<tr>
+<td>
+ <p>
+3
+</p>
+<span class="date label label-default">
+Nov 9, 2021</span>
+</td>
+<td style="word-break:break-word;">
+AERmodel (essemble) 
+<p class="institution"> <a href="https://www.protagolabs.ai/">Protago Labs AI<a>
+</p>
+</td>
+<td>
+75.2
+</td>
+<td>
+72.5
+</td>
+<td>
+16.5
+</td>
+</tr>
+
+
+
+
+<!--163.7-->
+<tr>
+<td>
+ <p>
+4</p>
+<span class="date label label-default">
+Jan 27, 2021</span>
+</td>
+<td style="word-break:break-word;">
+RoR (single model)
+<p class="institution"> JD AI Research
+</p>
+<p style="font-size:12px;">
+<a href="https://arxiv.org/abs/2109.04780">https://arxiv.org/abs/2109.04780</a>
+</p>
+</td>
+<td>
+74.9
+</td>
+<td>
+72.2
+</td>
+<td>
+16.4
+</td>
+</tr>
+
+
+
+<!--162.5-->
+<tr>
+<td>
+ <p>
+5
+</p>
+<span class="date label label-default">
+Sep 3, 2020</span>
+</td>
+<td style="word-break:break-word;">
+EL-QA (single model)
+<p class="institution"> JD AI Research
+</p>
+</td>
+<td>
+74.6
+</td>
+<td>
+71.6
+</td>
+<td>
+16.3
+</td>
+</tr>
+
+
+
+<!--159.6-->
+<tr>
+<td>
+ <p>
+6
+</p>
+<span class="date label label-default">
+Jul 29, 2020</span>
+</td>
+<td style="word-break:break-word;">
+HistoryQA (single model) 
+<p class="institution"> PAII Inc.
+</p>
+</td>
+<td>
+74.2
+</td>
+<td>
+71.5
+</td>
+<td>
+13.9
+</td>
+</tr>
+
+
+ 
+<!--159.3-->
+<tr>
+<td>
+ <p>
+7
+</p>
+<span class="date label label-default">
+Dec 16, 2019</span>
+</td>
+<td style="word-break:break-word;">
+TR-MT (ensemble) 
+<p class="institution"> WeChat AI
+</p>
+</td>
+<td>
+74.4
+</td>
+<td>
+71.3
+</td>
+<td>
+13.6
+</td>
+</tr>
+
+
+<!--157.8-->
+<tr>
+<td>
+ <p>
+8
+</p>
+<span class="date label label-default">
+Nov 11, 2019</span>
+</td>
+<td style="word-break:break-word;">
+RoBERTa + DA (ensemble)
+<p class="institution">
+ Microsoft Dynamics 365 AI
+</p>
+</td>
+<td>
+74.0
+</td>
+<td>
+70.7
+</td>
+<td>
+13.1
+</td>
+</tr>
+
+<!--157.3-->
+<tr>
+<td>
+ <p>
+9
+</p>
+<span class="date label label-default">
+Aug 9, 2022</span>
+</td>
+<td style="word-break:break-word;">
+GHR_ELECTRA (single model)
+<p class="institution">
+SUDA NLP & A*STAR
+</p>
+<p style="font-size:12px;">
+<a href="https://github.com/jaytsien/GHR"> https://github.com/jaytsien/GHR </a>
+</p>
+</td>
+<td>
+73.7
+</td>
+<td>
+69.9
+</td>
+<td>
+13.7
+</td>
+</tr>
+
+<!--157.2-->
+<tr>
+<td>
+ <p>
+10
+</p>
+<span class="date label label-default">
+June 22, 2022</span>
+</td>
+<td style="word-break:break-word;">
+MarCQAp (single model)
+<p class="institution">
+Technion - Israel Institute of Technology & Google Research
+</p>
+<p style="font-size:12px;">
+<a href="https://arxiv.org/abs/2206.14796#">https://arxiv.org/abs/2206.14796</a>
+</p>
+</td>
+<td>
+74.0
+</td>
+<td>
+70.7
+</td>
+<td>
+12.5
+</td>
+</tr>
+
+
+
+<!--156.2-->
+<tr>
+<td>
+ <p>
+11
+</p>
+<span class="date label label-default">
+Sep 15, 2019</span>
+</td>
+<td style="word-break:break-word;">
+History-Attentive-TransBERT (single model)
+<p class="institution">
+Alibaba AI Labs</p>
+</td>
+<td>
+72.9
+</td>
+<td>
+69.7
+</td>
+<td>
+13.6
+</td>
+</tr>
+
+
+<!--155.4-->
+<tr>
+<td>
+<p>
+12
+</p>
+<span class="date label label-default">
+Nov 11, 2019</span>
+</td>
+<td style="word-break:break-word;">
+RoBERTa + DA (single model)
+<p class="institution">
+ Microsoft Dynamics 365 AI</p>
+</td>
+<td>
+ 73.5
+</td>
+<td>
+69.8
+</td>
+<td>
+12.1
+</td>
+</tr>
+
+
+<!--154.8-->
+<tr>
+<td>
+ <p>
+13
+</p>
+<span class="date label label-default">
+Nov 25, 2019</span>
+</td>
+<td style="word-break:break-word;">
+ BertMT (ensemble)
+<p class="institution">WeChat AI
+</p>
+</td>
+<td>
+72.3
+</td>
+<td>
+69.4
+</td>
+<td>
+13.1
+</td>
+</tr>
+
+<!--150.5-->
+<tr>
+<td>
+ <p>
+14
+</p>
+<span class="date label label-default">
+Nov 1, 2019</span>
+</td>
+<td style="word-break:break-word;">
+XLNet + Augmentation (single model) 
+<p class="institution">
+ Xiaoming
+</p>
+</td>
+<td>
+ 71.2
+</td>
+<td>
+ 67.5
+</td>
+<td>11.8
+</td>
+</tr>
+
+<!--149.5-->
+<tr>
+<td>
+ <p>
+15
+</p>
+<span class="date label label-default">
+Aug 31, 2019</span>
+</td>
+<td style="word-break:break-word;">
+TransBERT (single model)
+<p class="institution">
+Anonymous</p>
+</td>
+<td>
+71.4
+</td>
+<td>
+68.1
+</td>
+<td>
+10.0
+</td>
+</tr>
+
+<!--145.2-->
+<tr>
+<td>
+ <p>
+16
+</p>
+<span class="date label label-default">
+Nov 22, 2019</span>
+</td>
+<td style="word-break:break-word;">
+ BertMT (single model)
+<p class="institution">WeChat AI
+</p>
+</td>
+<td>69.4
+</td>
+<td>66.0
+</td>
+<td>9.8
+</td>
+</tr>
+ 
+
+<!--143.4-->
+<tr>
+<td>
+ <p>
+17
+</p>
+<span class="date label label-default">
+June 13, 2019</span>
+</td>
+<td style="word-break:break-word;">
+Context-Aware-BERT <br/>(single model) 
+<p class="institution">
+Anonymous</p>
+</td>
+<td>
+69.6
+</td>
+<td>
+65.7
+</td>
+<td>8.1</td>
+</tr>
+
+
+<!--143.0-->
+<tr>
+<td>
+ <p>
+18
+</p>
+<span class="date label label-default">
+Sep 9, 2019</span>
+</td>
+<td style="word-break:break-word;">
+BertInfoFlow
+<br/>(single model)
+<p class="institution">PINGAN Omni-Sinitic</p>
+</td>
+<td>69.3</td>
+<td>65.2</td>
+<td>8.5</td>
+</tr>
+
+
+<!--140.6-->
+<tr>
+<td>
+ <p>
+19
+</p>
+<span class="date label label-default">
+Mar 14, 2019</span>
+</td>
+<td style="word-break:break-word;">
+ConvBERT (single model)
+<p class="institution">
+Joint Laboratory of HIT and iFLYTEK Research</p>
+</td>
+<td>
+68.0
+</td>
+<td>
+63.5
+</td>
+<td>
+9.1
+</td>
+</tr>
+
+<!--139.1-->
+<tr>
+<td>
+ <p>
+20
+</p>
+<span class="date label label-default">
+Aug 22, 2019</span>
+</td>
+<td style="word-break:break-word;">
+zhiboBERT (single model)
+<p class="institution">Anonymous</p>
+</td>
+<td>
+67.0
+</td>
+<td>
+63.5
+</td>
+<td>
+8.6
+</td>
+</tr>
+
+<!--133.9-->
+<tr>
+<td>
+ <p>
+21
+</p>
+<span class="date label label-default">
+May 21, 2019</span>
+</td>
+<td style="word-break:break-word;">
+HAM (single model)<p class="institution">
+UMass Amherst, Alibaba PAI, Rutgers University</p>
+<p style="font-size:12px;">
+<a href="https://arxiv.org/abs/1908.09456">https://arxiv.org/abs/1908.09456</a>
+</p>
+</td>
+<td>
+65.4</td>
+<td>
+61.8
+</td>
+<td>
+6.7
+</td>
+</tr>
+
+<!--133.4-->
+<tr>
+<td>
+ <p>
+22
+</p>
+<span class="date label label-default">
+Jan 10, 2020</span>
+</td>
+<td style="word-break:break-word;">
+Bert-FlowDelta (single model)  
+<p class="institution">National Taiwan University, MiuLab</p>
+<a href="https://arxiv.org/abs/1908.05117">https://arxiv.org/abs/1908.05117</a>
+</td>
+<td>
+65.5
+</td>
+<td>
+61.0
+</td>
+<td>
+6.9
+</td>
+</tr>
+
+<!--131.4-->
+<tr>
+<td>
+ <p>
+23
+</p>
+<span class="date label label-default">
+Dec 4, 2019</span>
+</td>
+<td style="word-break:break-word;">
+BERT w/ 4-conversation history (single)<p class="institution">
+Zhengzhou University<p style="font-size:12px;">
+</p>
+</td>
+<td>
+64.5
+</td>
+<td>
+60.2
+</td>
+<td>
+6.7
+</td>
+</tr>
+ 
+<!--131.2-->
+<tr>
+<td>
+ <p>
+24
+</p>
+<span class="date label label-default">
+Mar 7, 2019</span>
+</td>
+<td style="word-break:break-word;">
+BERT w/ 2-context <br>(single model) <p class="institution">
+NTT Media Intelligence Labs</p>
+</td>
+<td>
+64.9
+</td>
+<td>
+60.2
+</td>
+<td>
+6.1
+</td>
+</tr>
+
+<!--130.5-->
+<tr>
+<td>
+<p>
+25
+</p>
+<span class="date label label-default">
+Nov 27, 2019</span>
+</td>
+<td style="word-break:break-word;">AHBert (single)
+<p class="institution">
+ZZU</p>
+<p style="font-size:12px;">
+</p>
+</td>
+<td>
+64.0</td>
+<td>
+59.9</td>
+<td>
+6.6</td>
+</tr>
+
+<!--130.3-->
+<tr>
+<td>
+ <p>
+26
+</p>
+<span class="date label label-default">
+Feb 21, 2019</span>
+</td>
+<td style="word-break:break-word;">
+GraphFlow (single model)<p class="institution">
+RPI-IBM
+<p style="font-size:12px;">
+<a href="https://arxiv.org/abs/1908.00059">
+https://arxiv.org/abs/1908.00059</a>
+</p>
+</td>
+<td>
+64.9
+</td>
+<td>
+60.3
+</td>
+<td>
+5.1
+</td>
+</tr>
+
+
+<!--129.5-->
+<tr>
+<td>
+ <p>
+27
+</p>
+<span class="date label label-default">
+Sep 26, 2018</span>
+</td>
+<td style="word-break:break-word;">
+FlowQA (single model)
+<p class="institution">
+Allen Institute of AI</p>
+<p style="font-size:12px;">
+<a href="https://arxiv.org/abs/1810.06683">
+https://arxiv.org/abs/1810.06683</a>
+</p>
+</td>
+<td>
+64.1
+</td>
+<td>
+59.6
+</td>
+<td>
+5.8
+</td>
+</tr>
+
+<!--125.3-->
+<tr>
+<td>
+<p>
+28
+</p>
+<span class="date label label-default">
+Aug 20, 2018</span>
+</td>
+<td style="word-break:break-word;">
+BERT + History Answer Embedding (single model)<p class="institution">
+UMass Amherst, Alibaba PAI, Rutgers University</p>
+<p style="font-size:12px;">
+<a href="https://arxiv.org/abs/1905.05412">
+https://arxiv.org/abs/1905.05412</a>
+</p>
+</td>
+<td>
+62.4</td>
+<td>
+57.8</td>
+<td>
+5.1</td>
+</tr>
+
+<!--118.9-->
+<tr>
+<td>
+<p>
+29
+</p>
+<span class="date label label-default">
+Aug 20, 2018</span>
+</td>
+<td style="word-break:break-word;">
+BiDAF++ w/ 2-Context <br>(single model)<p class="institution">
+baseline</p>
+</td>
+<td>
+60.1</td>
+<td>
+54.8</td>
+<td>
+4.0</td>
+</tr>
+
+<!--95.7-->
+<tr>
+<td>
+<p>
+30
+</p>
+<span class="date label label-default">
+Aug 20, 2018</span>
+</td>
+<td style="word-break:break-word;">
+BiDAF++ (single model)<p class="institution">
+baseline</p>
+</td>
+<td>
+50.2</td>
+<td>
+43.3</td>
+<td>
+2.2</td>
+</tr>
+</table>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<nav class="navbar navbar-default navbar-static-bottom footer">
+<div class="container clearfix">
+<div class="rightNav">
+<div>
+<ul class="nav navbar-nav navbar-right">
+<li>
+<a href="/">
+QuAC</a>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</nav>
+<script src="/bower_components/jquery/dist/jquery.min.js">
+</script>
+<script src="/bower_components/bootstrap/dist/js/bootstrap.min.js">
+</script>
+</body>
+</html>
+

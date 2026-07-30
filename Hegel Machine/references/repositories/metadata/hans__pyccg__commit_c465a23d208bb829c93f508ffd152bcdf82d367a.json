@@ -1,0 +1,125 @@
+{
+  "sha": "c465a23d208bb829c93f508ffd152bcdf82d367a",
+  "node_id": "MDY6Q29tbWl0MTUyNzk3NTI5OmM0NjVhMjNkMjA4YmI4MjljOTNmNTA4ZmZkMTUyYmNkZjgyZDM2N2E=",
+  "commit": {
+    "author": {
+      "name": "Jon Gauthier",
+      "email": "jon@gauthiers.net",
+      "date": "2019-05-24T16:31:29Z"
+    },
+    "committer": {
+      "name": "Jon Gauthier",
+      "email": "jon@gauthiers.net",
+      "date": "2019-05-24T16:31:29Z"
+    },
+    "message": "predict_zero_shot: make specific type requests to greatly speed up expression enumeration",
+    "tree": {
+      "sha": "c09ecea68bdf3c2311fe4c00ff8d7e568edb0aee",
+      "url": "https://api.github.com/repos/hans/pyccg/git/trees/c09ecea68bdf3c2311fe4c00ff8d7e568edb0aee"
+    },
+    "url": "https://api.github.com/repos/hans/pyccg/git/commits/c465a23d208bb829c93f508ffd152bcdf82d367a",
+    "comment_count": 0,
+    "verification": {
+      "verified": false,
+      "reason": "unsigned",
+      "signature": null,
+      "payload": null,
+      "verified_at": null
+    }
+  },
+  "url": "https://api.github.com/repos/hans/pyccg/commits/c465a23d208bb829c93f508ffd152bcdf82d367a",
+  "html_url": "https://github.com/hans/pyccg/commit/c465a23d208bb829c93f508ffd152bcdf82d367a",
+  "comments_url": "https://api.github.com/repos/hans/pyccg/commits/c465a23d208bb829c93f508ffd152bcdf82d367a/comments",
+  "author": {
+    "login": "hans",
+    "id": 6968,
+    "node_id": "MDQ6VXNlcjY5Njg=",
+    "avatar_url": "https://avatars.githubusercontent.com/u/6968?v=4",
+    "gravatar_id": "",
+    "url": "https://api.github.com/users/hans",
+    "html_url": "https://github.com/hans",
+    "followers_url": "https://api.github.com/users/hans/followers",
+    "following_url": "https://api.github.com/users/hans/following{/other_user}",
+    "gists_url": "https://api.github.com/users/hans/gists{/gist_id}",
+    "starred_url": "https://api.github.com/users/hans/starred{/owner}{/repo}",
+    "subscriptions_url": "https://api.github.com/users/hans/subscriptions",
+    "organizations_url": "https://api.github.com/users/hans/orgs",
+    "repos_url": "https://api.github.com/users/hans/repos",
+    "events_url": "https://api.github.com/users/hans/events{/privacy}",
+    "received_events_url": "https://api.github.com/users/hans/received_events",
+    "type": "User",
+    "user_view_type": "public",
+    "site_admin": false
+  },
+  "committer": {
+    "login": "hans",
+    "id": 6968,
+    "node_id": "MDQ6VXNlcjY5Njg=",
+    "avatar_url": "https://avatars.githubusercontent.com/u/6968?v=4",
+    "gravatar_id": "",
+    "url": "https://api.github.com/users/hans",
+    "html_url": "https://github.com/hans",
+    "followers_url": "https://api.github.com/users/hans/followers",
+    "following_url": "https://api.github.com/users/hans/following{/other_user}",
+    "gists_url": "https://api.github.com/users/hans/gists{/gist_id}",
+    "starred_url": "https://api.github.com/users/hans/starred{/owner}{/repo}",
+    "subscriptions_url": "https://api.github.com/users/hans/subscriptions",
+    "organizations_url": "https://api.github.com/users/hans/orgs",
+    "repos_url": "https://api.github.com/users/hans/repos",
+    "events_url": "https://api.github.com/users/hans/events{/privacy}",
+    "received_events_url": "https://api.github.com/users/hans/received_events",
+    "type": "User",
+    "user_view_type": "public",
+    "site_admin": false
+  },
+  "parents": [
+    {
+      "sha": "017f54dc006932fb92d628bd3a11d9dba5d54c86",
+      "url": "https://api.github.com/repos/hans/pyccg/commits/017f54dc006932fb92d628bd3a11d9dba5d54c86",
+      "html_url": "https://github.com/hans/pyccg/commit/017f54dc006932fb92d628bd3a11d9dba5d54c86"
+    }
+  ],
+  "stats": {
+    "total": 103,
+    "additions": 85,
+    "deletions": 18
+  },
+  "files": [
+    {
+      "sha": "be255a89d04ef8b08aec09a472cb88397e750421",
+      "filename": "pyccg/combinator.py",
+      "status": "modified",
+      "additions": 7,
+      "deletions": 0,
+      "changes": 7,
+      "blob_url": "https://github.com/hans/pyccg/blob/c465a23d208bb829c93f508ffd152bcdf82d367a/pyccg%2Fcombinator.py",
+      "raw_url": "https://github.com/hans/pyccg/raw/c465a23d208bb829c93f508ffd152bcdf82d367a/pyccg%2Fcombinator.py",
+      "contents_url": "https://api.github.com/repos/hans/pyccg/contents/pyccg%2Fcombinator.py?ref=c465a23d208bb829c93f508ffd152bcdf82d367a",
+      "patch": "@@ -171,6 +171,13 @@ def combine(self, function, argument):\n     categ = function.categ().res().substitute(subs)\n     fsem, asem = function.semantics(), argument.semantics()\n     if fsem is not None and asem is not None:\n+      # if function's type is not set, do the best we can to infer.\n+      if self._ontology is not None \\\n+          and isinstance(fsem, l.FunctionVariableExpression) \\\n+          and (fsem.type is None or fsem.type == self._ontology.types.ANY_TYPE):\n+        fsem.variable.type = self._ontology.types[asem.type.flat + (\"e\",)]\n+        fsem.type = fsem.variable.type\n+\n       semantics = l.ApplicationExpression(function.semantics(), argument.semantics()).simplify()\n     else:\n       semantics = None"
+    },
+    {
+      "sha": "0ffc42c778a7fbd68b70f9b55a437c46388ea35c",
+      "filename": "pyccg/lexicon.py",
+      "status": "modified",
+      "additions": 43,
+      "deletions": 17,
+      "changes": 60,
+      "blob_url": "https://github.com/hans/pyccg/blob/c465a23d208bb829c93f508ffd152bcdf82d367a/pyccg%2Flexicon.py",
+      "raw_url": "https://github.com/hans/pyccg/raw/c465a23d208bb829c93f508ffd152bcdf82d367a/pyccg%2Flexicon.py",
+      "contents_url": "https://api.github.com/repos/hans/pyccg/contents/pyccg%2Flexicon.py?ref=c465a23d208bb829c93f508ffd152bcdf82d367a",
+      "patch": "@@ -3,7 +3,7 @@\n \"\"\"\n \n from collections import defaultdict, Counter\n-from copy import deepcopy\n+from copy import copy, deepcopy\n from functools import reduce\n import itertools\n import logging\n@@ -667,8 +667,11 @@ def attempt_candidate_parse(lexicon, tokens, candidate_categories,\n       or get_semantic_arity\n \n   # Prepare dummy variable which will be inserted into parse checks.\n-  sub_exprs = {token: l.FunctionVariableExpression(dummy_vars[token])\n-               for token in tokens}\n+  token_vars = {token: copy(dummy_vars[token])\n+                for token in tokens}\n+  var_to_token = {var.name: token for token, var in token_vars.items()}\n+  sub_exprs = {token: l.FunctionVariableExpression(token_var)\n+               for token, token_var in token_vars.items()}\n \n   lexicon = lexicon.clone()\n   for token, syntax in zip(tokens, candidate_categories):\n@@ -679,8 +682,29 @@ def attempt_candidate_parse(lexicon, tokens, candidate_categories,\n   # First attempt a parse with only function application rules.\n   results = chart.WeightedCCGChartParser(lexicon, ruleset=chart.ApplicationRuleSet) \\\n       .parse(sentence)\n-  if True:#results or not allow_composition:\n-    return results\n+\n+  for result in results:\n+    # Retrieve apparent types of each token's dummy var.\n+    apparent_types = defaultdict(list)\n+    def visit(expr):\n+      if isinstance(expr, l.FunctionVariableExpression):\n+        if expr.variable.name in var_to_token:\n+          apparent_types[var_to_token[expr.variable.name]].append(expr.type)\n+      elif isinstance(expr, l.ApplicationExpression):\n+        visit(expr.pred)\n+        for arg in expr.args:\n+          visit(arg)\n+      elif isinstance(expr, l.LambdaExpression):\n+        visit(expr.variable)\n+        visit(expr.term)\n+\n+    sem = result.label()[0].semantics()\n+    visit(sem)\n+\n+    # Make sure we inferred a type for every dummy var.\n+    assert(set(apparent_types.keys()) == set(token_vars.keys()))\n+\n+    yield result, apparent_types\n \n   # # Attempt to parse, allowing for function composition. In order to support\n   # # this we need to pass a dummy expression which is a lambda.\n@@ -896,18 +920,20 @@ def iter_expressions_for_category(cat):\n                                           syntax_comb,\n                                           sentence,\n                                           dummy_vars)\n+        results = list(results)\n         category_parse_results[syntax_comb] = results\n \n-        # Now enumerate semantic forms.\n-        candidate_exprs = tuple(list(iter_expressions_for_category(cat))\n-                                for cat in syntax_comb)\n-        n_expr_combs = np.prod(list(map(len, candidate_exprs)))\n-        for expr_comb in tqdm(itertools.product(*candidate_exprs),\n-                              total=n_expr_combs,\n-                              desc=\"Expressions\"):\n-          # Compute likelihood of this joint syntax--semantics assignment.\n-          likelihood = 0.0\n-          for result in results:\n+        for result, apparent_types in results:\n+          candidate_exprs = [list(ontology.iter_expressions(max_depth=3, type_request=apparent_types[token][0]))\n+                             for token in token_comb]\n+\n+          n_expr_combs = np.prod(list(map(len, candidate_exprs)))\n+          for expr_comb in tqdm(itertools.product(*candidate_exprs),\n+                                total=n_expr_combs,\n+                                desc=\"Expressions\"):\n+            # Compute likelihood of this joint syntax--semantics assignment.\n+            likelihood = 0.0\n+\n             # Swap in semantic values for each token.\n             sentence_semantics = result.label()[0].semantics()\n             for token, token_expr in zip(token_comb, expr_comb):\n@@ -925,8 +951,8 @@ def iter_expressions_for_category(cat):\n \n             # Compute p(meaning | syntax, sentence, parse)\n             logp = sum(likelihood_fn(token_comb, syntax_comb, expr_comb,\n-                                     sentence_semantics, model)\n-                       for likelihood_fn in likelihood_fns)\n+                                    sentence_semantics, model)\n+                      for likelihood_fn in likelihood_fns)\n             likelihood += np.exp(logp)\n \n             # Add category priors."
+    },
+    {
+      "sha": "8396fa896f5774a19475a919d4b5a5d1ab9bdc56",
+      "filename": "test/test_lexicon.py",
+      "status": "modified",
+      "additions": 35,
+      "deletions": 1,
+      "changes": 36,
+      "blob_url": "https://github.com/hans/pyccg/blob/c465a23d208bb829c93f508ffd152bcdf82d367a/test%2Ftest_lexicon.py",
+      "raw_url": "https://github.com/hans/pyccg/raw/c465a23d208bb829c93f508ffd152bcdf82d367a/test%2Ftest_lexicon.py",
+      "contents_url": "https://api.github.com/repos/hans/pyccg/contents/test%2Ftest_lexicon.py?ref=c465a23d208bb829c93f508ffd152bcdf82d367a",
+      "patch": "@@ -1,8 +1,11 @@\n+from unittest.mock import MagicMock\n+\n from nose.tools import *\n \n from pyccg.lexicon import *\n from pyccg import logic as l\n from pyccg.chart import WeightedCCGChartParser\n+from pyccg.util import Distribution\n \n from nltk.ccg.lexicon import FunctionalCategory, PrimitiveCategory, Direction\n \n@@ -314,7 +317,7 @@ def test_attempt_candidate_parse():\n                                     \"John sends Mark it\".split(),\n                                     dummy_vars)\n \n-  ok_(len(results) > 0)\n+  ok_(len(list(results)) > 0)\n \n \n def _make_simple_mock_ontology():\n@@ -388,3 +391,34 @@ def test_add_entry_typecheck_failure():\n   def should_raise():\n     lex.add_entry(\"bar\", lex.parse_category(\"S\"), l.Expression.fromstring(r\"\\x.and_(x,qux)\"))\n   assert_raises(l.TypeException, should_raise)\n+\n+\n+def test_zero_shot_type_request():\n+  \"\"\"\n+  predict_zero_shot should infer the types of missing semantic forms and use as\n+  specific a possible type request when invoking `Ontology.iter_expressions`\n+  \"\"\"\n+  ontology = _make_simple_mock_ontology()\n+  lex = Lexicon.fromstring(r\"\"\"\n+  :- S, N\n+  bar => N {baz}\n+  blah => S/N {baz}\n+  \"\"\", ontology=ontology, include_semantics=True)\n+\n+  # setup: we observe a sentence \"foo bar\". ground truth semantics for 'foo' is\n+  # \\x.and(x,baz)\n+\n+  # Mock ontology.predict_zero_shot\n+  mock = MagicMock(return_value=[])\n+  ontology.iter_expressions = mock\n+\n+  tokens = [\"foo\"]\n+  candidate_syntaxes = {\"foo\": Distribution.uniform([lex.parse_category(\"S/N\")])}\n+  sentence = \"foo bar\".split()\n+\n+  predict_zero_shot(lex, tokens, candidate_syntaxes, sentence, ontology,\n+                    model=None, likelihood_fns=[])\n+\n+  eq_(len(mock.call_args_list), 1)\n+  args, kwargs = mock.call_args\n+  eq_(kwargs[\"type_request\"], ontology.types[\"boolean\", \"e\"])"
+    }
+  ]
+}
