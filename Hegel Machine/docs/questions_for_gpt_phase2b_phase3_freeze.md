@@ -1,141 +1,309 @@
-# 交给网页端 GPT 的 Phase-2B / Phase-3 精确冻结问题
+# Phase-2B / Phase-3 冻结决策登记与待 machine-readable 消歧项
 
-以下问题不会阻塞合同和隔离基础设施施工，但会硬性阻止生成正式 Phase-2B
-holdout，或阻止 Phase-3 签发 outside-language certificate。请基于
-`answer_for_gpt_phase2_phase3.md` 给出可直接写入 JSON/schema 的唯一答案。
+原先九组实验设计问题已由
+`Hegel_Machine_Phase2B_Phase3_Exact_Freeze_Decisions.md` 回答。配额、target、value
+grids、typing、budgets、MDL 参数和高层证书路线继续冻结为
+`hegel-freeze-p2b-p3-v1.0.1`。v1.0.1 是 implementation-audit amendment：保留
+`411876909552964556` 作为 master/bootstrap seed，并把 sklearn `random_state` 冻结为
+domain-separated SHA-256 → uint32 的 `2611585425`；不可执行地把 64-bit seed 直接传给
+sklearn 的 v1.0.0 已被 supersede。独立实现审计同时发现：strict canonical AST/CBOR
+acceptance 与若干 certificate wire identities 没有被决定稿唯一确定。它们不能由实现
+自行猜测，也不能在看到 target outcome 后补写。
 
-## 1. 720 case table 与 margin strata 的 12-case 冲突
+本文件是对决定稿的 **implementation-audit amendment**。若旧文中的“已经完整冻结”可被
+读成 strict acceptance contract 也已完成，应以这里的机器状态为准：当前里程碑名为
+**Phase-3A Bounded Frozen-Closure Adequacy**，且只有 surface 参数冻结完成。
 
-当前每个 family × scale cell 的 60 例中，`insufficient / genuinely ambiguous`
-为 8 例，因此全体只有 96 例；但 15% ambiguous/insufficient margin stratum 要求
-108 例，相差 12 例。
-
-请在以下方向中选择并给出精确新表：
-
-1. 每个 family × scale cell 的 20 个 positive 中抽 1 个改为 admissible-scale-set
-   case，使最后一层增加 12 例；此时“20 个 unique answerable”应如何改名和计分？
-2. 保持 case type 表不变，把 margin strata 改为能对 720 整除且与 96 ambiguous
-   一致的比例；请给出四层的新整数计数。
-3. 把额外 12 个 admissible-set case 作为独立第七类，同时保持总数 720；请给出
-   从其他 case type 扣除的精确数量。
-
-同时请明确 admissible-set case 是否计入 answerable、scale-set accuracy、joint exact
-和 abstention specificity 的哪个分母。
-
-## 2. parity-like target 必须重新精确定义
-
-旧 DSL 允许：
-
-```text
-absolute(difference(x, y))
+```json
+{
+  "surface_parameter_freeze_complete": true,
+  "strict_acceptance_contract_complete": false,
+  "normative_parameter_freeze_complete": false
+}
 ```
 
-所以二元 XOR 已经在旧语言内；嵌套 absolute-difference 也能表达低元 parity。
-仅禁止名为 XOR/modulo/parity 的 token 不足以证明 language-outside。
+## 已解决决定
 
-请确认并冻结：
+1. Phase-2B main 为 720：每 cell 是 19 个 `unique_scale_answerable` + 1 个
+   `admissible_scale_set_answerable`，其余五类各 8，margin 为 `21/18/12/9`。
+2. 首个 target 是 `TARGET_P3A_GENERIC_ODD_REDUCTION_V1`，完整 universe 为 480 行，
+   split 为 `192/96/192`。二元 XOR 在 executable closure 前只算
+   `TARGET_DESIGN_SANITY_ONLY`。
+3. hidden sink 是 85-row observed omitted-channel control，不得是 latent sink。
+4. 50,000 计 extensional quotient 前的 syntactically canonical programs；
+   5,000,000 是 raw operator-application cap。这是预算语义，不是当前 closure 结果。
+5. `hegel-old-dsl-v1.0.0` 的 finite domains、registries、operator typing、bottom、
+   structural limits、support 和 shrink order 已完成 **surface-parameter freeze**；这不
+   等于 strict canonical acceptance 或 normative freeze 已完成。
+6. `hegel-mdl-prefix-v1.0.0` 的 code-table 参数、80-digit `log2`、Q32、整数比较和
+   invention split 已冻结。
+7. Phase-2B 正式规模是 720 main + 240 semantic-conflict challenge；derived suite
+   是 496 legal + 76 invalid = 572 pairs。baseline config、bootstrap、footprint、rerun
+   与 validation version policy 已确定。
+8. covert-channel 高层审计规范已冻结；在完整语义实现前 formal selector 只允许
+   `absolute_bound`，`standard_error = STANDARD_ERROR_UNSUPPORTED`。
+9. outside/MDL certificate 的高层路线是 canonical CBOR + RFC-6962 + Python/Rust
+   双完整 replay + 3/3 Ed25519，但下面列出的 strict schemas/identities 仍待消歧。
 
-- 首个 target 是否改为 size 5–8 bounded `EntitySet` 上的 generic parity reduction；
-- 精确集合大小、输入 universe、target truth table 和 train/validation/holdout 分布；
-- 在 operator semantics 和 executable DSL 尚未冻结前，二元 XOR 是否只记为
-  intended-numeric-semantics target-design sanity；冻结后由何种 executable witness
-  才能正式判 `IN_LANGUAGE`；
-- 若完整 frozen closure 找到等价表达，是否自动放弃该 target 并在看 hidden result
-  前按什么规则选择替代 target。
+正式 claim 只能是：
 
-## 3. hidden sink 的可观测性
+```text
+OUTSIDE_FROZEN_CLOSURE(
+  dsl_version,
+  bounded_universe_root,
+  target_truth_table_root,
+  equivalence = exact_extensional
+)
+```
 
-请确认 null control 的 sink 是：
+禁止简写为 `OUTSIDE_LANGUAGE`。
 
-> 已作为 opaque typed measurement 出现，但被初始 scope/aggregation 遗漏，旧
-> conservation + `aggregate_by` 或 scope refinement 可精确恢复。
+## 当前 capacity evidence 的准确状态
 
-而不是真正 latent/unobserved sink。请给出正确 old-DSL program、scope support
-下限、aggregation map 和 fail/no-false-invention 判据。
+```json
+{
+  "status": "CONDITIONAL_CAPACITY_LOWER_BOUND_EXCEEDS_BUDGET",
+  "constructive_candidate_ast_count": 64680,
+  "canonical_program_budget": 50000,
+  "diagnostic_representation": "tuple_ast_plus_canonical_json",
+  "strict_canonicalizer_acceptance_verified": false,
+  "formal_canonical_cbor_archive": false,
+  "executed_closure_status": "NOT_RUN",
+  "dsl_too_large_claim_allowed": false
+}
+```
 
-## 4. 50,000 search budget 的计数口径
+64,680 是 distinct、typed、limit-conforming **candidate AST** 的构造性下界，不是已
+接受的 canonical-program count。只有 strict canonicalizer 接受该子集且正式重放保持
+超过 50,000，才进入：
 
-请明确 50,000 是：
+```text
+DSL_TOO_LARGE
+  → new DSL version
+  → shrink step 1: remove mean_v1, min_v1, max_v1
+  → regenerate target/validation commitments
+```
 
-- syntactically canonical programs 的数量；还是
-- extensional equivalence representatives 的数量。
+## 当前已冻结的 receipt 结构边界（不是待消歧项）
 
-建议采用前者：先计 syntactic canonical programs，extensional quotient 只作有证据
-的优化；若完整 closure 超过 50,000 或枚举未闭合，只能
-`INCONCLUSIVE_BUDGET`。请确认 canonical traversal order、node-expansion 上限和
-独立 replay 要绑定的 Merkle/root 字段。
+`ClosureEnumerationReceipt` 当前只是 **untrusted replay-claim wire record**。它已要求绑定
+完整 `dsl_spec_id`、`operator_semantics_id`、`equivalence_contract_id`、enumerator 与
+50,000 search budget；`target_role` 还必须选择彼此独立的 diagnostic content IDs：
 
-## 5. 把 old DSL 真正变成 finite closure
+| `target_role` | universe binding | truth binding |
+| --- | --- | --- |
+| `outside_target` | 480-row `bounded_universe_diagnostic_id` | `target_table_diagnostic_id` |
+| `in_language_null_control` | 85-row `hidden_sink_universe_diagnostic_id` | `hidden_sink_target_table_diagnostic_id` |
 
-请给出唯一、完整的：
+两组 diagnostic IDs 不能复用或互换。wire 也能结构化表达第 50,001 个 witness：
 
-- rational grid；
-- `BoundedInt` 范围和 interval grid；
-- 各 primitive sort 的有限 cardinality；
-- quantity/context/task identifier vocabulary；
-- aggregate/transform catalog；
-- equivalence tolerance；
-- scope minimum support；
-- exact operator typing 与 undefined semantics。
+当前 preregistration/receipt 层使用 `dsl_spec_<hex>`、`bounded_universe_<hex>` 等
+canonical-JSON named content IDs，而 certificate record 使用 canonical-CBOR row leaves +
+RFC6962 Merkle 的 `sha256:<hex>` roots。两者连 preimage 和聚合算法都不同，不能换前缀或
+去前缀互转。正式 bridge 尚未冻结；这属于下方 `CERT_04`。
 
-如果完整 grammar 在这些参数下仍超过 50,000，请明确应缩小哪些 operator/arity/
-depth，而不是把截断搜索称为 outside proof。
+```json
+{
+  "closure_status": "DSL_TOO_LARGE",
+  "enumerated_canonical_program_count": 50000,
+  "first_out_of_budget_program_id": "<content-id-for-program-50001>",
+  "frontier_exhausted": false,
+  "all_type_buckets_closed": false,
+  "closure_cardinality": null,
+  "raw_expansion_limit_hit": false,
+  "wall_clock_abort_hit": false
+}
+```
 
-## 6. MDL code table
+这只是 fail-closed 的字段约束，不是当前执行证据。sealed verifier 尚未实现，调用者提供
+任何 receipt 都不能把当前 `executed_closure_status = NOT_RUN` 改成
+`DSL_TOO_LARGE`、`COMPLETE`、`IN_LANGUAGE` 或 `OUTSIDE_FROZEN_CLOSURE`。
 
-请冻结：
+## 待消歧 A：scope source alias
 
-- AST shape、arity、clause boundary 的 prefix code；
-- token class sizes；
-- identifier 到 Elias-delta 正整数 index 的 registry；
-- rational parameter code；
-- scope code；
-- new-symbol definition code；
-- `log2` 精度、舍入和边界比较规则；
-- MDL 的 train/validation invention split。
+决定稿 §3.3 使用 `control_volume_primary_only_v1`，§5.4 的四成员 catalog 只有
+`scope_primary_only_v1`。当前保守绑定是：
 
-`ΔL ≥ max(32 bits, 0.05 L(D|P_old))` 已冻结，但没有上述 code table 就不能产生
-可重放的 MDL certificate。
+```json
+{
+  "decision_id": "P3_SCOPE_BASELINE_ALIAS",
+  "status": "UNRESOLVED_CONFIRMATION",
+  "machine_scope_id": "scope_primary_only_v1",
+  "source_document_alias": "control_volume_primary_only_v1",
+  "scope_catalog_cardinality": 4,
+  "fifth_scope_added": false
+}
+```
 
-## 7. Phase-2B 剩余统计与运行细节
+请确认前者只是来源别名/笔误；若必须新增语义不同的第五个 scope，应发布新 DSL
+version，不能原地改写 v1。
 
-请一次性冻结：
+## 待消歧 B：strict canonical AST/CBOR acceptance
 
-- preservation transformation → law-family 适用矩阵和总 pair 数；
-- embedding model、LLM model/prompt、flat typed baseline、bootstrap seed/次数/
-  resampling unit；
-- semantic-conflict subset 是 720 内切片还是额外 challenge；
-- shared-footprint cell taxonomy 和“单一 measurement 承担 family discrimination
-  不超过 50%”的精确统计量；
-- answer reveal 前，哪些纯基础设施失败允许重跑以及最大次数；
-- validation 两轮都失败后怎样生成新 validation version。
+决定稿还有一个直接的 typing 冲突：§2.6 把 executable XOR witness 写为
+`absolute(difference(bit_at(0), bit_at(1)))`，但 §5.7–5.9 同时冻结
+`bit_at -> Bit`、`difference(RationalValue, RationalValue)`，并提供显式
+`bit_to_scalar(Bit) -> RationalValue`。当前机器合同不发明 implicit coercion，保存：
 
-## 8. public wire 的 covert-answer-channel 审计
+```json
+{
+  "decision_id": "P3_BIT_RATIONAL_COERCION",
+  "status": "UNRESOLVED",
+  "source_expression": "absolute(difference(bit_at(0), bit_at(1)))",
+  "source_expression_typechecks": false,
+  "type_explicit_expression": "absolute(difference(bit_to_scalar(bit_at(0)), bit_to_scalar(bit_at(1))))",
+  "implicit_bit_to_rational_coercion_frozen": false,
+  "formal_xor_language_verdict": null
+}
+```
 
-当前 allowlist 只能禁止显式 `law_family/gold/rank` 字段；合法 UUID、provenance hash、
-role-candidate 集合、missingness pattern 和 unused transform 仍可编码答案。请冻结：
+请唯一确认：采用类型显式表达式，还是在新 DSL version 中冻结隐式 coercion。建议保持
+v1 无隐式 coercion并把 §2.6 表达式视为漏写两个 `bit_to_scalar`；无论选择哪项，都要在
+strict canonicalizer/schema 冻结后再由 Python/Rust 完整 replay 判定 `IN_LANGUAGE`。
 
-- UUID/opaque ID 的独立随机生成、全局 shuffle、seed custody 和 collision policy；
-- 对所有允许字段分别做的 answer-correlation / mutual-information / permutation test，
-  显著性阈值和 multiple-testing correction；
-- consistent-renaming invariance 覆盖哪些 ID、至少多少次 permutation；
-- unused field/transform、序列顺序、JSON 长度和 missingness 的 side-channel 判据；
-- `standard_error` 转 closed interval 时的置信水平、分布假设与 multiple-comparison
-  correction；在这些语义未冻结时是否只允许 `absolute_bound` 进入 formal selector。
+请提供下列 amendment 的唯一 machine-readable 值：
 
-## 9. closure/MDL receipt 如何从自报记录升级为可信证书
+```json
+{
+  "amendment_id": "hegel-old-dsl-canonical-acceptance-v1",
+  "status": "UNRESOLVED",
+  "required_decisions": [
+    {
+      "id": "CANON_AST_NODE_CBOR_SCHEMA",
+      "must_specify": [
+        "node tag and field IDs for every leaf/unary/binary/ternary/AND node",
+        "array-versus-map representation",
+        "child and registry-reference representation",
+        "scope-extension and clause-boundary representation",
+        "root_operator_id extraction",
+        "decoder rejection rules",
+        "whether any implicit Bit-to-RationalValue coercion exists"
+      ]
+    },
+    {
+      "id": "SYNTACTIC_NORMALIZATION_AND_REWRITE",
+      "must_specify": [
+        "commutative child ordering",
+        "operator aliases",
+        "associative flattening",
+        "duplicate or idempotent clause removal",
+        "constant folding",
+        "greater_equal(a,b) versus less_equal(b,a)",
+        "approx_equal(a,b,0) versus equal_exact(a,b)",
+        "AND1(atom) versus atom",
+        "all permitted algebraic reductions"
+      ]
+    },
+    {
+      "id": "CANONICAL_COUNT_BOUNDARY",
+      "must_specify": [
+        "which syntactic rewrites occur before canonical-program counting",
+        "which transformations are archive-only after counting",
+        "explicit prohibition on extensional quotient as a completeness shortcut"
+      ]
+    },
+    {
+      "id": "AST_NODE_COUNTING",
+      "must_specify": [
+        "whether aggregate is one leaf or includes map/scope/quantity/extension nodes",
+        "whether tolerance is a child node or an inline parameter",
+        "whether top-level AND wrapper counts as a node",
+        "whether AND clause boundaries or scope clauses count as nodes"
+      ]
+    }
+  ]
+}
+```
 
-请给出可直接实现的唯一方案：
+在这些规则冻结前，diagnostic canonical JSON 不能替代 canonical CBOR，64,680 也
+不能升级为 `DSL_TOO_LARGE`。
 
-- closure archive 的逐 program record schema、canonical ordering、chunking 和 Merkle
-  root；target truth-table root 如何绑定 bounded universe；
-- independent evaluator 如何重放 canonicalizer/enumerator/operator semantics 并重算
-  closure cardinality、match set、closure root 与 target root；
-- complete enumeration 是双实现一致、proof-carrying enumeration，还是一个签名
-  custodian attestation；可信根、key rotation/revocation 和 replay policy 是什么；
-- provisional structural receipt 满足哪些机器条件后，才允许签发
-  `OUTSIDE_FROZEN_CLOSURE` certificate；
-- MDL scorer 如何从冻结 scoring partition、program AST 和 code table 重算四个长度，
-  而不是接受 caller-supplied `Fraction`；certificate 应绑定哪些 roots/IDs。
+## 待消歧 C：certificate / MDL strict wire（九组）
 
-回答时请优先给 machine-readable 表格、枚举值和公式，不要只给原则性描述。
+以下九组覆盖 certificate implementation audit 暴露的 specification blockers：
+
+```json
+{
+  "amendment_id": "hegel-p3-certificate-wire-v1",
+  "status": "UNRESOLVED",
+  "required_decision_groups": [
+    {
+      "id": "CERT_01_CANONICAL_CBOR_PROFILE",
+      "covers": [
+        "canonical CBOR backend and pinned version",
+        "exact encoder/decoder acceptance profile"
+      ]
+    },
+    {
+      "id": "CERT_02_CANONICAL_AST_IDENTITY",
+      "covers": [
+        "strict canonical AST schema",
+        "root operator extraction"
+      ]
+    },
+    {
+      "id": "CERT_03_PROGRAM_OUTPUT_ARCHIVE",
+      "covers": [
+        "program-output blob record and encoding",
+        "output archive and root schema"
+      ]
+    },
+    {
+      "id": "CERT_04_PROGRAM_ARCHIVE_ROOT_RELATIONS",
+      "covers": [
+        "canonical_program_archive_root versus program_archive_root naming",
+        "program archive root versus chunk_manifest_root relation",
+        "canonical-JSON content ID versus canonical-CBOR/RFC6962 root preimage and algorithm bridge",
+        "Merkle preimages for each root"
+      ]
+    },
+    {
+      "id": "CERT_05_MATCH_PROGRAM_HASH_IDENTITY",
+      "covers": [
+        "whether match_program_hash binds AST CBOR, AST hash, record hash, or output identity"
+      ]
+    },
+    {
+      "id": "CERT_06_EXHAUSTION_RECEIPT_ROOT",
+      "covers": [
+        "exhaustion receipt root preimage",
+        "self-field and signature-field exclusion rule"
+      ]
+    },
+    {
+      "id": "CERT_07_FINAL_ENVELOPE_AND_COMMIT",
+      "covers": [
+        "final certificate envelope and timestamp schema",
+        "repository_commit_sha hash algorithm and wire format"
+      ]
+    },
+    {
+      "id": "CERT_08_KEY_STATUS_AND_REVOCATION",
+      "covers": [
+        "latest key-status manifest discovery and trust anchor",
+        "Ed25519 public-key and signature encoding",
+        "exact key-revocation manifest fields"
+      ]
+    },
+    {
+      "id": "CERT_09_MDL_DUAL_REPLAY_WIRE",
+      "covers": [
+        "MDL AST and new-symbol canonical wire schema",
+        "literal 16-bit NEW_REDUCER_V1 header value",
+        "MDL dual-replay receipt and certificate envelope",
+        "cross-language Q32 log2 reference algorithm"
+      ]
+    }
+  ]
+}
+```
+
+## 已冻结但尚未执行
+
+- Phase-2B trusted wire builder/covert audit、720 + 240 generation、572 derived
+  pairs、baseline pins、custodian、recognizer、evaluator 和 durable ledger；
+- Phase-3 strict canonicalizer acceptance、完整 closure、program/output archives、
+  exhaustion receipt、Python/Rust 双 replay、3/3 certificate 和完整 MDL scorer replay；
+- 当前 receipt 虽已绑定完整 DSL/operator semantics 和按 `target_role` 分离的
+  universe/truth roots，仍是 untrusted wire；sealed replay 未执行，closure 保持 `NOT_RUN`；
+- Phase-2B/Phase-3 均保持 shadow-only，formal claim 与 ACTIVE promotion 为 NO-GO。

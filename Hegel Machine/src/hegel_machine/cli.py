@@ -25,6 +25,14 @@ from .phase3_contract import (
     DEFAULT_PHASE3_PREREGISTRATION,
     phase3_preregistration_report,
 )
+from .phase3_closure_preflight import (
+    CONDITIONAL_CAPACITY_STATUS,
+    phase3_closure_capacity_preflight_report,
+)
+from .phase3_dsl_v1 import (
+    OBSERVED_OMITTED_SINK_CONTROL,
+    ODD_REDUCTION_TARGET,
+)
 from .vertical_slice import run_controlled_vertical_slice
 
 
@@ -66,10 +74,17 @@ def command_demo() -> int:
         "phase3_ready_for_outside_certificate": (
             DEFAULT_PHASE3_PREREGISTRATION.ready_for_outside_certificate
         ),
+        "phase3_capacity_preflight_status": CONDITIONAL_CAPACITY_STATUS,
+        "phase3_executed_closure_status": "NOT_RUN",
+        "phase3_target_universe_rows": ODD_REDUCTION_TARGET.universe_rows,
+        "phase3_null_control_universe_rows": (
+            OBSERVED_OMITTED_SINK_CONTROL.universe_rows
+        ),
         "claim_boundary": (
             "Phase-2A controlled typed-selector mechanics plus Phase-2B/Phase-3 "
             "preregistration infrastructure; no raw extraction, formal Phase-2 "
-            "exit, outside-language certificate, or relation invention claim"
+            "exit, OUTSIDE_FROZEN_CLOSURE certificate, or relation invention "
+            "claim"
         ),
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
@@ -94,6 +109,14 @@ def command_phase2b_preregister(output: Path | None) -> int:
 
 def command_phase3_preregister(output: Path | None) -> int:
     report = phase3_preregistration_report()
+    if output is not None:
+        _write_json(output, report)
+    print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0
+
+
+def command_phase3_closure_preflight(output: Path | None) -> int:
+    report = phase3_closure_capacity_preflight_report(replay_subset=True)
     if output is not None:
         _write_json(output, report)
     print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
@@ -144,6 +167,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="emit the fail-closed old-DSL freeze/readiness artifact",
     )
     phase3.add_argument("--output", type=Path)
+    phase3_preflight = subparsers.add_parser(
+        "phase3-closure-preflight",
+        help=(
+            "replay the constructive old-DSL capacity subset; this cannot "
+            "issue an outside certificate"
+        ),
+    )
+    phase3_preflight.add_argument("--output", type=Path)
     vertical = subparsers.add_parser(
         "vertical-slice", help="run the controlled candidate/shadow-only slice"
     )
@@ -164,6 +195,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return command_phase2b_preregister(args.output)
     if args.command == "phase3-preregister":
         return command_phase3_preregister(args.output)
+    if args.command == "phase3-closure-preflight":
+        return command_phase3_closure_preflight(args.output)
     if args.command == "vertical-slice":
         return command_vertical_slice(args.output)
     raise AssertionError(f"unhandled command: {args.command}")

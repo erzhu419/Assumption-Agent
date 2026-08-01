@@ -1,8 +1,16 @@
 # Hegel Machine Phase 2 Exit 与 Phase 3 入口：冻结决策稿
 
-**文档性质**：normative design decision
+**文档性质**：superseded normative design source（历史保留）
 **适用对象**：`Hegel Machine` 当前 Phase-2 typed selector 轨道与即将开始的 bounded Phase-3 hidden-law synthesis
 **建议状态**：本稿确认后进入预注册；阈值如需修改，必须在 sealed holdout 生成之前完成并产生新版本号
+
+> **Superseded for Phase-2B/Phase-3 exact execution details**：本稿保留为设计来源，
+> 其 `outside-language` 等早期术语不再是可发布 claim。后续精确决定及 2026-08-01
+> implementation audit 优先；正式名称仅允许绑定具体 DSL、universe、target 与等价关系的
+> `OUTSIDE_FROZEN_CLOSURE(...)`。当前 overall contract 是
+> `hegel-freeze-p2b-p3-v1.0.1`，Phase-3A 里程碑是 **Bounded Frozen-Closure
+> Adequacy**；机器状态为 surface freeze 完成、strict acceptance 与 normative freeze
+> 未完成。未冻结的 strict schema 不得由本稿正文的历史 normative 标签覆盖。
 
 ---
 

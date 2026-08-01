@@ -44,8 +44,8 @@ PHASE2R: Final = MilestoneIdentity(
     name="Phase-2R Raw-Evidence Structuralization Qualification",
 )
 PHASE3A: Final = MilestoneIdentity(
-    machine_id="phase3a_bounded_language_adequacy_and_outside_language_detection",
-    name="Phase-3A Bounded Language-Adequacy and Outside-Language Detection",
+    machine_id="phase3a_bounded_frozen_closure_adequacy",
+    name="Phase-3A Bounded Frozen-Closure Adequacy",
 )
 PHASE3B: Final = MilestoneIdentity(
     machine_id="phase3b_bounded_meta_prior_synthesis_and_conservative_integration",

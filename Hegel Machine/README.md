@@ -24,21 +24,23 @@ L0 observations
   → conservative theory patch gate
   → immutable theory version
 
-Phase-2B formal track（尚未资格化）：
+Phase-2B formal track（精确协议已冻结，尚未资格化）：
 
-family-neutral-shaped typed evidence wire + independent side-channel audit
+720 main + 240 semantic-conflict + 572 derived pairs
+  → trusted typed-evidence wire + independent covert-channel audit [尚未执行]
   → internal role/scale hypothesis enumeration
-  → adapter-grid-committed interval selector with admissible scale sets
+  → absolute-bound-only interval selector with admissible scale sets
   → externally enforced untrusted OCI recognizer             [尚未可运行]
   → prediction commitment before answer reveal
   → one-shot independent-custodian scoring                    [目标，未实现]
 
-Phase-3 freeze track（尚未开始正式 hidden experiment）：
+Phase-3A **Bounded Frozen-Closure Adequacy**（surface 参数已冻结，normative complete=false）：
 
-partially frozen old DSL
-  → untrusted closure-receipt wire                             [未重放]
-  → sealed evaluator IN_LANGUAGE / OUTSIDE / INCONCLUSIVE     [尚未实现]
-  → exact Fraction MDL arithmetic precheck                    [formal gate 关闭]
+hegel-old-dsl-v1.0.0 + 480-row target + 85-row null control
+  → strict canonical AST/CBOR acceptance                      [尚未冻结]
+  → complete canonical closure enumeration                    [status=NOT_RUN]
+  → Python + Rust independent replay + 3/3 certificate        [尚未执行]
+  → Q32 MDL scorer replay                                     [formal gate 关闭]
   → shadow-only conservative integration
 ```
 
@@ -81,16 +83,36 @@ partially frozen old DSL
   candidate-grid commitment 的 interval selector core；缺任一 hypothesis、
   candidate metadata 漂移或任一结构 competitor 区间不确定时均 abstain，并支持
   unique structure + preregistered admissible scale set，而不是强迫 scale top-1；
-- Phase-2B 720-case 统计合同、95% one-sided Wilson LCB、family/scale marginal slice、
-  shared-footprint gate、三类 baseline registry 和 preservation 独立分母；
+- Phase-2B 精确冻结合同：720 个 main latent cases + 240 个独立 semantic-conflict
+  challenge，另有 496 个 legal preservation pairs + 76 个 invalid-transform controls
+  = 572 个 derived pairs；每 cell 的 positive 为 19 个 unique-scale + 1 个
+  admissible-scale-set，margin 为 21/18/12/9；family IDs、baseline config、10,000 次
+  paired-cluster bootstrap、footprint/importance、rerun 与 validation policy 均已固定。
+  overall freeze 是 `hegel-freeze-p2b-p3-v1.0.1`：v1.0.0 的不可执行 sklearn
+  64-bit `random_state` 已被 implementation-audit amendment supersede；
+  `411876909552964556` 保留为 master/bootstrap seed，sklearn 使用冻结的
+  domain-separated SHA-256 → uint32 值 `2611585425`；
+- covert-channel audit 的独立 shuffle/ID/padding keys、固定 envelope、Holm–Bonferroni
+  FWER=0.01、32 次 consistent renaming 等规范已冻结；在完整 standard-error 语义实现前，
+  formal selector 只允许 `absolute_bound`；这些审计尚未执行；
 - seal → prediction commitment → reveal → consumed 的 immutable lifecycle model、
   answer salted-commitment opening 校验和进程内原子防分叉 guard，以及 read-only
   input/root、no network、无 repo/generator/answer mount 的 OCI launch-spec contract；
   这些不等于跨进程持久 one-shot custodian 或可运行 recognizer；
-- Phase-3 old DSL 已决定部分的 content-addressed contract、50,000 program fail-closed
-  budget、四态 adequacy 类型、untrusted receipt schema、精确 Fraction MDL 算术预检，
-  以及按预期标准数值语义成立的 XOR2 target-design sanity；后两者都不是 formal gate
-  或 executable closure verdict。
+- Phase-3 已冻结 `hegel-old-dsl-v1.0.0` 的有限 domains、catalogs、typing、bottom、
+  exact equivalence、limits、50,000 canonical / 5,000,000 raw budget 和 shrink order；
+  首个 generic odd-cardinality target 是 480 行，observed omitted-channel null control
+  是 85 行，MDL 使用 `hegel-mdl-prefix-v1.0.0` 与 Q32；容量预检在 diagnostic AST /
+  canonical-JSON 表示下构造了 64,680 个 distinct、typed、limit-conforming candidate
+  AST，但只允许报告 `CONDITIONAL_CAPACITY_LOWER_BOUND_EXCEEDS_BUDGET`；executed closure
+  status 仍是 `NOT_RUN`。准确状态是 `surface_parameter_freeze_complete=true`、
+  `strict_acceptance_contract_complete=false`、`normative_parameter_freeze_complete=false`；
+- untrusted closure receipt 已能结构绑定完整 `dsl_spec_id`、`operator_semantics_id` 与
+  equivalence contract，并按 `target_role` 分别绑定 outside target 的 480-row
+  diagnostic universe/truth content IDs 或 null control 的 85-row diagnostic IDs；正式
+  canonical-CBOR/RFC6962 roots 仍为 `null`；它还能表示“已接受
+  50,000 个程序 + 第 50,001 个 witness”的 `DSL_TOO_LARGE` 记录，但字段尚未被 sealed
+  verifier 重算，不能改变当前 `NOT_RUN` 状态。
 
 明确未实现或未宣称：
 
@@ -118,21 +140,31 @@ partially frozen old DSL
 - Phase-2B typed evidence → executable verifier projection 的正式 compiler 和完整
   unsealed pipeline validation；当前只完成 wire、candidate enumeration、interval
   selector 与 runner/state-machine 合同；
-- 720-case secret holdout、独立 custodian、真实 OCI attestation、三套冻结外部
-  baseline 或 consumed score report；
+- 720-case main + 240-case challenge 的 sealed generation、572 个 derived pairs、独立
+  custodian、真实 OCI attestation、三套外部 baseline pins 或 consumed score report；
 - allowed UUID/provenance/role-candidate/missingness/transform 字段的 answer-correlation
-  与 side-channel audit、随机并全局 shuffle 的 ID 分配证明，以及把 standard error /
-  absolute bound 编译成闭区间的冻结 uncertainty semantics；
-- 专用 recognizer CLI、严格 720-bundle prediction archive evaluator、签名 SBOM /
+  与 covert-channel audit、随机并全局 shuffle 的 ID 分配证明；`standard_error` 在完整
+  语义和测试就绪前明确 unsupported，而不是可进入 formal selector 的待选模式；
+- 专用 recognizer CLI、严格 main/challenge prediction archive evaluator、签名 SBOM /
   runtime attestation 验证器和跨进程持久的 append-only CAS ledger；
-- Phase-3 outside certificate：当前协议仍缺 exact rational grid、bounded universe、
-  operator semantics、equivalence/canonicalizer/enumerator、MDL code table 和精确
-  high-arity parity/hidden-sink generator；
-- sealed closure archive replay/root recomputation verifier 与从冻结 partition/code table
-  重算长度的 MDL scorer；当前调用者自报 receipt 不能产生 semantic certificate；
+- Phase-3 strict canonical AST node CBOR schema、允许的 normalization/rewrite、operator
+  alias/algebraic reduction，以及 aggregate/tolerance/AND 的 node-counting semantics；
+  这些 acceptance rules 未冻结前，64,680 下界不能称为 `DSL_TOO_LARGE`；
+- Phase-3 完整 canonical closure 的 exhaustion、program/output archives 与 match set；
+  当前 480-row target 和 85-row null control 已冻结，但 executed closure 仍为 `NOT_RUN`；
+- 把结构合法的 caller-supplied closure receipt 当作可信执行证据；当前 receipt 即使携带
+  第 50,001 个 witness，也只能是 untrusted replay claim，不能自行签发状态或证书；
+- canonical-CBOR sealed certificate、Python/Rust 双完整 replay、3/3 Ed25519 签名与从
+  冻结 AST/partition/code table 重算长度的双 MDL scorer；调用者自报 receipt 不能产生
+  semantic certificate；正式 claim 必须完整写作
+  `OUTSIDE_FROZEN_CLOSURE(dsl_version, bounded_universe_root,
+  target_truth_table_root, equivalence = exact_extensional)`，禁止称
+  `OUTSIDE_LANGUAGE`；
 - 把“禁用 XOR/parity 名称”当作不可表达证明。旧 DSL 的
-  `absolute(difference(x,y))` 已能表达二元 XOR，因此最终 target 必须由完整 closure
-  的 extensional enumeration 决定。
+  standard numeric sanity 表明 absolute difference 可给出二元 XOR，但决定稿的
+  `difference(bit_at(...), bit_at(...))` 与冻结 typing 存在 Bit/Rational 冲突；当前另存
+  含显式 `bit_to_scalar` 的候选并等待消歧，最终 membership 必须由 strict canonicalizer
+  与完整双 replay 决定。
 
 ## 快速运行
 
@@ -149,6 +181,8 @@ PYTHONPATH=src python3 -m hegel_machine phase2b-preregister \
   --output artifacts/phase2b_preregistration_v1.json
 PYTHONPATH=src python3 -m hegel_machine phase3-preregister \
   --output artifacts/phase3_preregistration_v1.json
+PYTHONPATH=src python3 -m hegel_machine phase3-closure-preflight \
+  --output artifacts/phase3_closure_capacity_preflight_v1.json
 PYTHONPATH=src python3 -m hegel_machine vertical-slice \
   --output artifacts/controlled_vertical_slice_v1.json
 PYTHONPATH=src python3 -m hegel_machine demo
@@ -167,6 +201,6 @@ PYTHONPATH=src python3 -m hegel_machine demo
 [`docs/evidence_boundaries.md`](docs/evidence_boundaries.md)，Phase-2A development 协议见
 [`docs/phase2_exit_protocol.md`](docs/phase2_exit_protocol.md)。正式轨道施工边界见
 [`docs/phase2b_preregistration.md`](docs/phase2b_preregistration.md) 与
-[`docs/phase3_freeze_readiness.md`](docs/phase3_freeze_readiness.md)；待网页 GPT
-消歧的问题见
+[`docs/phase3_freeze_readiness.md`](docs/phase3_freeze_readiness.md)；已解决冻结项及尚待
+machine-readable 消歧的 canonicalization/certificate/scope 问题见
 [`docs/questions_for_gpt_phase2b_phase3_freeze.md`](docs/questions_for_gpt_phase2b_phase3_freeze.md)。

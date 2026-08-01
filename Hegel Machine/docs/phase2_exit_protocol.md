@@ -142,15 +142,34 @@ table，scale map 固定为 identity；两者都不从 selected output 事后拟
 
 ## Phase 3 入口
 
-在正式统计协议冻结后，下一工程切片是 bounded hidden-law synthesis：
+Phase-2B/Phase-3 overall contract 已由 implementation audit 修订为
+`hegel-freeze-p2b-p3-v1.0.1`：`411876909552964556` 保持 master/bootstrap seed，
+sklearn `random_state` 使用冻结的 domain-separated SHA-256 → uint32 值
+`2611585425`；不可执行的 v1.0.0 直接 64-bit 绑定已被 supersede。
 
-1. 冻结 `RelationLanguageSnapshot` 和允许的低阶 composition；
-2. 冻结 typed DSL、operator、arity、depth、search budget 与 MDL code；
-3. 先证明低元 parity 已在旧语言内，再冻结高元 bounded-EntitySet parity-like target
-   并做完整 closure expression / non-equivalence test；
+统计与 DSL surface 参数冻结后，下一工程切片的唯一里程碑名称是
+**Phase-3A Bounded Frozen-Closure Adequacy**。这里的状态是
+`surface_parameter_freeze_complete = true`、
+`strict_acceptance_contract_complete = false`、
+`normative_parameter_freeze_complete = false`；不是无边界 outside-language claim。
+
+1. 冻结 strict canonical AST node CBOR schema、允许的 normalization/rewrite 和精确
+   node-counting semantics；
+2. 用正式 canonicalizer 重放 64,680 个 diagnostic witnesses；若全部被接受，才报告
+   `DSL_TOO_LARGE`、发布新 DSL version 并执行 frozen shrink step 1；否则继续完整枚举；
+3. 在 executed closure 不再是 `NOT_RUN` 后，对 480-row generic odd-cardinality target
+   做完整 extensional membership test，
+   并对 85-row observed omitted-channel control 做 no-false-invention test；
 4. 保持 candidate/shadow-only，不提前打开 LANGUAGE compiler 或 ACTIVE graph。
 
-当前 precise freeze blockers 见
-[`phase3_freeze_readiness.md`](phase3_freeze_readiness.md)，交给网页 GPT 的下一轮
-问题见
+当前 untrusted receipt wire 已绑定完整 `dsl_spec_id`、`operator_semantics_id`、
+equivalence/enumerator/search-budget，并按 `target_role` 分别绑定 480-row outside target 与
+85-row null control 各自独立的 diagnostic universe/truth IDs。正式
+canonical-CBOR/RFC6962 roots 尚未冻结。wire 允许用“已接受 50,000 个 canonical
+program + 第 50,001 个 program ID”表达 `DSL_TOO_LARGE`，但 sealed verifier 尚未实现；
+因此当前 closure 仍是 `NOT_RUN`，任何调用者提供的 receipt 都不能升级 formal claim。
+
+当前 implementation / certificate blockers 见
+[`phase3_freeze_readiness.md`](phase3_freeze_readiness.md)，已解决决策与待 machine-readable
+消歧项见
 [`questions_for_gpt_phase2b_phase3_freeze.md`](questions_for_gpt_phase2b_phase3_freeze.md)。

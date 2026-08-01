@@ -120,6 +120,11 @@ structural correspondence。
 
 ## 6. Phase-2B 正式轨道边界
 
+overall contract 版本是 `hegel-freeze-p2b-p3-v1.0.1`。implementation audit 发现
+v1.0.0 把 64-bit seed 直接作为 sklearn `random_state`，因 API 不可执行而被 supersede；
+v1.0.1 保留 `411876909552964556` 为 master/bootstrap seed，并冻结
+domain-separated SHA-256 → uint32 的 sklearn 值 `2611585425`。
+
 Phase-2B 不会在 Phase-2A report 外包一层 `sealed=true`。它使用新的 public wire、
 进程和一次性状态边界：
 
@@ -147,7 +152,10 @@ family/binding/scale metadata 和 footprint commitment 对齐。自洽但截断�
 这里的 `family-neutral-shaped` 只表示 schema 没有显式 family/gold 字段。允许的 UUID、
 provenance hash、role candidates、missingness 和 unused transforms 仍可能成为 covert
 answer channel；正式 run 必须由独立 generator 随机化并全局 shuffle ID，再做重命名
-不变量及 allowed-field answer-correlation/side-channel audit。当前这些审计尚未实现。
+不变量及 allowed-field answer-correlation/side-channel audit。冻结审计使用彼此独立的
+shuffle/ID/padding keys、固定 65,536-byte envelope、10,000 次 stratified permutation、
+Holm–Bonferroni FWER=0.01 和 32 次 global consistent renaming；规范已经确定，但 wire
+builder 与审计尚未完成或执行。
 
 新 selector 使用 residual 和 tolerance 的闭区间。保守 normalized interval 为：
 
@@ -158,12 +166,18 @@ answer channel；正式 run 必须由独立 generator 随机化并全局 shuffle
 
 `upper ≤ 1` 才 PASS，`lower > 1` 才 FAIL，中间区间 fail-closed。选择结果可以是
 唯一 family+binding 下一个或多个 preregistered admissible scale；这与当前只在
-显式 scale-tagged projection 间选择的 Phase-2A 能力不同。
+显式 scale-tagged projection 间选择的 Phase-2A 能力不同。在 frozen Student-t、
+Bonferroni 和 outward-grid rounding 语义全部实现并测试前，formal selector 只允许
+`absolute_bound`；`standard_error` 返回 `STANDARD_ERROR_UNSUPPORTED`。
+
+正式样本合同是 720 个 main latent cases，加 240 个不进入主 accuracy 分母的 sealed
+semantic-conflict challenge。另有 496 个 legal preservation pairs 与 76 个
+invalid-transform controls，共 572 个 derived pairs；它们不是 720 的独立 case。
 
 Host runner 只生成 OCI launch-spec contract：read-only input/root、no network、drop all
 capabilities、no-new-privileges、ephemeral tmpfs、固定 image digest、资源上限，而且
 repo、generator 与 answer manifest 不挂载。该本地 contract 不证明 runtime 真被
-这样执行；冻结入口目前只是保留路径，专用 recognizer CLI、严格 720-output archive
+这样执行；冻结入口目前只是保留路径，专用 recognizer CLI、严格 main/challenge archive
 evaluator、签名 SBOM 与 external attestation verifier 均未实现。
 
 Seal lifecycle 是单向的：
@@ -178,8 +192,9 @@ PREREGISTERED
 answer manifest 只能在 prediction/audit archive hash 固定后 reveal，并校验 salted
 commitment opening。当前 guard 只在同一 Python custodian 进程内原子阻止 parent
 分叉；它不是跨重启持久的 append-only CAS ledger，也不是独立 custodian 证明。
-当前 720-case protocol 仍有机器可见的 freeze blockers，因此没有生成
-holdout，也没有完整 typed evidence → verifier projection compiler 或 pipeline result。
+quota、统计、baseline config、rerun 与 covert-audit 规则已经精确冻结；当前剩余的是
+实现和外部证据 blockers。因此没有生成 720 + 240 sealed artifacts，也没有执行 572
+derived pairs、完整 typed evidence → verifier projection compiler 或 formal pipeline。
 
 ## 7. 诊断与理论生长
 
@@ -228,23 +243,60 @@ receipt hashes、ledger、policy、reduction、epoch 和 proposed-child hash。
 `IdentifiabilityCertificate`、`RobustificationCandidate` 和
 `IdealizationContract` 已作为真实接口存在，但当前 benchmark 不以它们证明
 “已发明未知定律”。Phase 3 必须另建 hidden-law benchmark、冻结 validation
-并通过 expression/non-equivalence test 后才能提升 claim。
+并通过 expression/non-equivalence test 后才能提升 claim。当前 Phase-3A 里程碑名为
+**Bounded Frozen-Closure Adequacy**；它不是无边界的 outside-language detection。
 
-Phase-3 contract 已冻结决定稿中的 sorts、leaves、operators、arity/entity-set/AST/
-clause/composition/parameter/scope 上限与 50,000 program budget，但 rational grid、
-bounded universe、total semantics、equivalence/canonicalizer/enumerator、MDL code
-table 和 hidden generator 仍为空 content binding。任何缺项都会得到
-`INCONCLUSIVE_SEMANTICS`；枚举到 budget 仍未闭合则是 `INCONCLUSIVE_BUDGET`。
+Phase-3 的 DSL surface 已冻结为 `hegel-old-dsl-v1.0.0`：finite rational/interval/
+identifier domains、四 scope、六 aggregate、四个仅供 adapter/preservation 使用的
+transform、完整 typing、strict bottom、exact extensional equivalence 和所有结构上限。
+这里冻结的是 surface parameters：`surface_parameter_freeze_complete=true`；strict
+canonical acceptance 和完整 normative contract 尚未闭合，所以
+`strict_acceptance_contract_complete=false`、`normative_parameter_freeze_complete=false`。
+50,000 计 extensional quotient 前的 syntactically canonical programs；raw expansion
+cap 为 5,000,000。若正式 canonicalizer 接受并由 enumerator 产生第 50,001 个 canonical
+program，规则才给出 `DSL_TOO_LARGE`；未耗尽 frontier 而先触发 raw cap 则是
+`INCONCLUSIVE_BUDGET`。这两条是状态转换规则，不是当前执行结果。
 
-一个重要的 target-design sanity 是：按预期标准 bit/absolute-difference 数值语义，
-`absolute(difference(x,y))` 给出二元 XOR truth table。由于 operator semantics 尚未
-冻结、该表达式也未被 old-DSL parser/executor 重放，它不是 formal `IN_LANGUAGE`
-closure verdict；但足以说明仅禁用 `xor/parity` 名称不能作为不可表达证明。正式 target
-必须是冻结的高元 bounded-EntitySet parity-like relation，并由完整 extensional
-closure 证明；hidden sink 必须是“已有 opaque measurement、但 scope/aggregation
-遗漏”的 in-language null，而不能把真正 latent sink 事后称作旧语言 refinement。
+当前 capacity preflight 只在 diagnostic tuple-AST / canonical-JSON 表示下构造了
+64,680 个 distinct、typed、limit-conforming candidate AST。strict canonical AST node
+CBOR schema、operator alias 与 algebraic rewrite、以及 aggregate/tolerance/AND 的
+node-counting semantics 尚未冻结，所以该结果只能叫
+`CONDITIONAL_CAPACITY_LOWER_BOUND_EXCEEDS_BUDGET`；executed closure status 保持
+`NOT_RUN`。只有正式 canonicalizer 接受这 64,680 个 witness，才进入
+`DSL_TOO_LARGE → new DSL version → frozen shrink step 1`。
 
-所有 Phase-3 closure/MDL receipt 都是未受信 caller input。当前只实现 schema 与
-exact `Fraction` arithmetic precheck；sealed closure replay/root recomputation verifier
-和从冻结 partition/code table 重算长度的 MDL scorer 未实现，因此 formal outside / MDL
-gate 硬关闭。LANGUAGE compiler 和 ACTIVE append 也仍然关闭。
+`ClosureEnumerationReceipt` 是按单一 `target_role` 提交的 untrusted replay claim。
+每份 receipt 必须同时绑定完整 `dsl_spec_id`、`operator_semantics_id`、equivalence、
+enumerator 与 budget。outside target 使用自己的 480-row
+`bounded_universe_diagnostic_id` 和 `target_table_diagnostic_id`；in-language null control
+使用独立的 85-row `hidden_sink_universe_diagnostic_id` 和
+`hidden_sink_target_table_diagnostic_id`。这些是 canonical-JSON diagnostic content IDs，
+不是正式 canonical-CBOR/RFC6962 roots；两组 diagnostic IDs 也不得复用或互换。
+wire 允许 `DSL_TOO_LARGE` 精确表示为 50,000 个 accepted canonical programs 加一个非空
+`first_out_of_budget_program_id`（第 50,001 witness），且禁止同时声称 closed frontier、
+closure cardinality 或 raw abort。但 sealed verifier 尚未实现，caller-supplied receipt
+仍不可信；当前 executed closure status 继续是 `NOT_RUN`。
+
+首个正式 target 是 `TARGET_P3A_GENERIC_ODD_REDUCTION_V1`，在 size 5–8 的完整
+480-row universe 上定义，agent-facing split 为 192/96/192。hidden-sink null control
+是 `CONTROL_P3A_OBSERVED_OMITTED_SINK_V1`：四个通道全部 observed，仅 auxiliary 被
+初始 scope 遗漏，完整 universe 为 85 行。决定稿的 baseline label
+`control_volume_primary_only_v1` 不在四成员 scope catalog 中；机器合同暂用
+`scope_primary_only_v1` 并保留前者为来源别名，等待规范确认，而不擅自新增
+第五个 scope。
+
+二元 XOR 在 executable closure 完成前保持 `TARGET_DESIGN_SANITY_ONLY`；若完整旧 closure
+找到任一 480-row extensional match，generic target 自动降为 in-language control，并按
+预承诺 registry 选择替代目标。token blacklist 永远不能替代这个判断。
+
+MDL code table 已冻结为 `hegel-mdl-prefix-v1.0.0`，所有长度用向上取整 unsigned Q32，
+禁止 binary float；formal scorer 必须忽略 caller-supplied length/Fraction/gain 并从 AST、
+partition、prediction 与 code table 重算。certificate 的高层要求是 canonical CBOR、
+RFC-6962 Merkle、Python/Rust 双完整 replay 和 3/3 Ed25519，但 canonical CBOR backend /
+acceptance、AST/archive/hash/envelope/key/MDL wire 的若干 strict schema 仍需 machine-readable
+消歧。当前完整 closure、archive replay、Rust
+replay、3/3 certificate 和完整 MDL scorer replay 均未执行，因此 formal outside/MDL gate
+硬关闭。正式 claim 只能写
+`OUTSIDE_FROZEN_CLOSURE(dsl_version, bounded_universe_root,
+target_truth_table_root, equivalence = exact_extensional)`，禁止无边界的
+`OUTSIDE_LANGUAGE`。LANGUAGE compiler 和 ACTIVE append 也仍然关闭。

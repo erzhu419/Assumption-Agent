@@ -5,6 +5,10 @@ from pathlib import Path
 import pytest
 
 from hegel_machine.milestones import PHASE2B
+from hegel_machine.phase2b_freeze_v1 import (
+    PreservationTransform,
+    frozen_phase2b_exact_freeze,
+)
 from hegel_machine.phase2b_protocol import (
     BaselineKind,
     BaselineRegistration,
@@ -38,36 +42,44 @@ def test_phase2b_protocol_freezes_720_independent_latent_cases():
     assert protocol.cases_per_family_scale_cell == 60
     assert protocol.independent_latent_case_count == 720
     assert dict(protocol.case_type_totals) == {
-        "answerable_positive": 240,
+        "unique_scale_answerable": 228,
+        "admissible_scale_set_answerable": 12,
         "wrong_family_hard_negative": 96,
         "binding_counterfactual": 96,
         "scale_counterfactual": 96,
         "sign_or_invariant_break": 96,
-        "insufficient_or_ambiguous": 96,
+        "insufficient_or_nonidentifiable": 96,
     }
     assert protocol.separate_preservation_denominator is True
     assert protocol.holdout_run_limit == 1
 
 
-def test_margin_quota_conflict_is_machine_visible_and_blocks_generation():
+def test_exact_margin_quota_resolves_conflict_but_implementation_blocks_generation():
     protocol = frozen_phase2b_protocol()
+    assert dict(protocol.margin_stratum_per_cell) == {
+        "clear_interior": 21,
+        "moderate": 18,
+        "near_boundary_identifiable": 12,
+        "nonunique_or_insufficient": 9,
+    }
     assert dict(protocol.margin_stratum_totals) == {
         "clear_interior": 252,
         "moderate": 216,
         "near_boundary_identifiable": 144,
-        "ambiguous_or_insufficient": 108,
+        "nonunique_or_insufficient": 108,
     }
     assert (
         "margin_strata_require_108_ambiguous_or_admissible_cases_but_case_table_allocates_96"
-        in protocol.unresolved_freeze_questions
+        not in protocol.unresolved_freeze_questions
     )
+    assert protocol.unresolved_freeze_questions == ()
     assert (
-        "allowed_field_side_channel_and_identifier_randomization_audit_not_frozen"
-        in protocol.unresolved_freeze_questions
+        "formal_wire_builder_and_covert_channel_auditor_not_implemented"
+        in protocol.implementation_blockers
     )
     assert (
         "functional_recognizer_cli_signed_minimal_image_and_archive_evaluator_not_implemented"
-        in protocol.unresolved_freeze_questions
+        in protocol.implementation_blockers
     )
     assert protocol.ready_for_holdout_generation is False
 
@@ -159,11 +171,29 @@ def test_shared_footprint_requires_real_nonconstant_shared_measurements():
     )
     assert not evaluate_shared_footprint(correct, private_competitor).passed
 
+    mismatched_kinds = CandidateFootprint(
+        "candidate_c",
+        (
+            MeasurementUse("m1", "order"),
+            MeasurementUse("m2", "numeric"),
+            MeasurementUse("m4", "context"),
+        ),
+    )
+    mismatch_result = evaluate_shared_footprint(correct, mismatched_kinds)
+    assert mismatch_result.shared_measurement_count == 0
+    assert mismatch_result.passed is False
+
 
 def _freeze_manifest():
+    exact_freeze = frozen_phase2b_exact_freeze()
+    spec_id_by_kind = {
+        BaselineKind(spec.baseline_id): spec.content_id
+        for spec in exact_freeze.baselines
+    }
     baselines = tuple(
         BaselineRegistration(
             kind,
+            baseline_spec_id=spec_id_by_kind[kind],
             implementation_id=f"baseline_{kind.value}_v1",
             artifact_sha256=digest,
             frozen_before_holdout_generation=True,
@@ -173,6 +203,7 @@ def _freeze_manifest():
     protocol = frozen_phase2b_protocol()
     return ExecutionFreezeManifest(
         protocol_id=protocol.protocol_id,
+        exact_freeze_id=exact_freeze.freeze_id,
         git_commit="1" * 40,
         recognizer_image_digest="sha256:" + SHA_A,
         configuration_sha256=SHA_B,
@@ -188,8 +219,21 @@ def _freeze_manifest():
 def test_execution_freeze_requires_all_three_pinned_baselines():
     manifest = _freeze_manifest()
     assert manifest.manifest_id.startswith("phase2b_execution_freeze_")
+    with pytest.raises(ValueError, match="exact freeze"):
+        replace(manifest, exact_freeze_id="phase2b_exact_freeze_" + SHA_D)
     with pytest.raises(ValueError, match="all three baseline"):
         replace(manifest, baseline_registrations=manifest.baseline_registrations[:2])
+    with pytest.raises(ValueError, match="BaselineSpec"):
+        replace(
+            manifest,
+            baseline_registrations=(
+                replace(
+                    manifest.baseline_registrations[0],
+                    baseline_spec_id="phase2b_baseline_spec_" + SHA_D,
+                ),
+                *manifest.baseline_registrations[1:],
+            ),
+        )
     with pytest.raises(ValueError, match="before holdout"):
         replace(
             manifest,
@@ -298,6 +342,11 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     report = phase2b_preregistration_report()
     assert report["artifact"] == "phase2b_preregistration_readiness_v1"
     assert report["formal_phase2b_exit_claim"] is False
+    assert report["status"] == "exact_parameter_freeze_with_implementation_blockers"
+    assert report["normative_parameter_freeze_complete"] is True
+    assert report["formal_holdout_generation_authorized"] is False
+    assert report["unresolved_freeze_questions"] == []
+    assert report["implementation_blockers"]
     assert report["sealed_holdout_generated"] is False
     assert report["sealed_holdout_consumed"] is False
     assert report["process_local_ledger_fork_guard_implemented"] is True
@@ -333,8 +382,31 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     }
     assert report["ready_for_holdout_generation"] is False
     assert report["independent_latent_case_count"] == 720
+    assert report["legal_preservation_pair_count"] == 496
+    assert report["invalid_transform_control_count"] == 76
+    assert report["total_preservation_sensitivity_pair_count"] == 572
+    assert report["semantic_conflict_challenge_case_count"] == 240
+    assert report["validation_attempts_per_version"] == 2
+    assert report["maximum_validation_versions_before_no_go"] == 2
+    assert "maximum_validation_protocol_runs" not in report
+    assert report["baseline_specs_frozen"] is True
+    assert report["exact_baseline_revisions_registered"] is False
+    assert report["covert_channel_audit_frozen"] is True
+    assert report["covert_channel_audit_implemented"] is False
+    assert report["formal_uncertainty_models_allowed"] == ["absolute_bound"]
     assert report["preservation_pairs_counted_in_720"] is False
     assert report["active_promotion_enabled"] is False
+
+
+def test_protocol_preservation_transform_ids_match_the_exact_freeze():
+    protocol_ids = tuple(
+        requirement.transform
+        for requirement in frozen_phase2b_protocol().preservation_requirements
+    )
+    freeze_ids = tuple(
+        rule.transform for rule in frozen_phase2b_exact_freeze().preservation_rules
+    )
+    assert protocol_ids == freeze_ids == tuple(PreservationTransform)
 
 
 def test_checked_in_phase2b_preregistration_artifact_matches_runtime():

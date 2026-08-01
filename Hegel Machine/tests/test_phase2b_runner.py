@@ -2,6 +2,7 @@ from dataclasses import replace
 
 import pytest
 
+from hegel_machine.phase2b_freeze_v1 import frozen_phase2b_exact_freeze
 from hegel_machine.phase2b_protocol import (
     BaselineKind,
     BaselineRegistration,
@@ -24,26 +25,33 @@ SHA_D = "d" * 64
 
 def _freeze_manifest():
     protocol = frozen_phase2b_protocol()
+    exact_freeze = frozen_phase2b_exact_freeze()
+    spec_id_by_kind = {
+        BaselineKind(spec.baseline_id): spec.content_id
+        for spec in exact_freeze.baselines
+    }
     baselines = tuple(
         BaselineRegistration(
-            kind,
-            f"baseline_{kind.value}",
-            digest,
-            True,
+            kind=kind,
+            baseline_spec_id=spec_id_by_kind[kind],
+            implementation_id=f"baseline_{kind.value}",
+            artifact_sha256=digest,
+            frozen_before_holdout_generation=True,
         )
         for kind, digest in zip(BaselineKind, (SHA_A, SHA_B, SHA_C), strict=True)
     )
     return ExecutionFreezeManifest(
-        protocol.protocol_id,
-        "1" * 40,
-        "sha256:" + SHA_A,
-        SHA_B,
-        "theory_v1",
-        SHA_C,
-        SHA_D,
-        SHA_A,
-        baselines,
-        protocol.isolation_profile.profile_id,
+        protocol_id=protocol.protocol_id,
+        exact_freeze_id=exact_freeze.freeze_id,
+        git_commit="1" * 40,
+        recognizer_image_digest="sha256:" + SHA_A,
+        configuration_sha256=SHA_B,
+        theory_version_id="theory_v1",
+        adapter_implementation_sha256=SHA_C,
+        selector_implementation_sha256=SHA_D,
+        verifier_registry_sha256=SHA_A,
+        baseline_registrations=baselines,
+        isolation_profile_id=protocol.isolation_profile.profile_id,
     )
 
 

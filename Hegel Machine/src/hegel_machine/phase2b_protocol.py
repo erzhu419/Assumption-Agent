@@ -22,6 +22,11 @@ from typing import Final
 
 from .hashing import stable_hash
 from .milestones import PHASE2B, PHASE2B_FORMAL_CLAIM_NAME
+from .phase2b_freeze_v1 import (
+    PHASE2B_EXACT_FREEZE_VERSION,
+    PreservationTransform,
+    frozen_phase2b_exact_freeze,
+)
 from .schema import LawKind, require_tuple
 
 
@@ -33,19 +38,20 @@ ONE_SIDED_Z_95: Final = NormalDist().inv_cdf(ONE_SIDED_CONFIDENCE)
 
 
 class Phase2BCaseType(str, Enum):
-    ANSWERABLE_POSITIVE = "answerable_positive"
+    UNIQUE_SCALE_ANSWERABLE = "unique_scale_answerable"
+    ADMISSIBLE_SCALE_SET_ANSWERABLE = "admissible_scale_set_answerable"
     WRONG_FAMILY_HARD_NEGATIVE = "wrong_family_hard_negative"
     BINDING_COUNTERFACTUAL = "binding_counterfactual"
     SCALE_COUNTERFACTUAL = "scale_counterfactual"
     SIGN_OR_INVARIANT_BREAK = "sign_or_invariant_break"
-    INSUFFICIENT_OR_AMBIGUOUS = "insufficient_or_ambiguous"
+    INSUFFICIENT_OR_NONIDENTIFIABLE = "insufficient_or_nonidentifiable"
 
 
 class MarginStratum(str, Enum):
     CLEAR_INTERIOR = "clear_interior"
     MODERATE = "moderate"
     NEAR_BOUNDARY_IDENTIFIABLE = "near_boundary_identifiable"
-    AMBIGUOUS_OR_INSUFFICIENT = "ambiguous_or_insufficient"
+    NONUNIQUE_OR_INSUFFICIENT = "nonunique_or_insufficient"
 
 
 class BaselineKind(str, Enum):
@@ -167,14 +173,16 @@ class ScalarUpperGate:
 
 @dataclass(frozen=True, slots=True)
 class PreservationRequirement:
-    transform: str
+    transform: PreservationTransform
     applicability: str
     minimum_pairs_per_family_scale: int = 0
     minimum_pairs_per_family: int = 0
     mode: PreservationMode = PreservationMode.EXACT_INVARIANCE
 
     def __post_init__(self) -> None:
-        if not self.transform or not self.applicability:
+        if not isinstance(self.transform, PreservationTransform):
+            raise TypeError("preservation transform must use PreservationTransform")
+        if not self.applicability:
             raise ValueError("preservation transform and applicability are required")
         counts = (
             self.minimum_pairs_per_family_scale,
@@ -234,11 +242,19 @@ class IsolationProfile:
 @dataclass(frozen=True, slots=True)
 class BaselineRegistration:
     kind: BaselineKind
+    baseline_spec_id: str
     implementation_id: str
     artifact_sha256: str
     frozen_before_holdout_generation: bool
 
     def __post_init__(self) -> None:
+        if not isinstance(self.kind, BaselineKind):
+            raise TypeError("baseline kind must use BaselineKind")
+        if re.fullmatch(
+            r"phase2b_baseline_spec_[0-9a-f]{64}",
+            self.baseline_spec_id,
+        ) is None:
+            raise ValueError("baseline registration needs a BaselineSpec content ID")
         if not self.implementation_id:
             raise ValueError("baseline implementation ID is required")
         _require_sha256(self.artifact_sha256, "baseline artifact SHA-256")
@@ -250,6 +266,7 @@ class BaselineRegistration:
 class Phase2BProtocol:
     schema_version: str
     protocol_version: str
+    exact_freeze_version: str
     milestone_id: str
     milestone_name: str
     formal_claim_name: str
@@ -269,8 +286,10 @@ class Phase2BProtocol:
     shadow_only: bool
     active_promotion_enabled: bool
     holdout_run_limit: int
-    maximum_validation_protocol_runs: int
+    validation_attempts_per_version: int
+    maximum_validation_versions_before_no_go: int
     unresolved_freeze_questions: tuple[str, ...]
+    implementation_blockers: tuple[str, ...]
 
     def __post_init__(self) -> None:
         for name in (
@@ -281,6 +300,7 @@ class Phase2BProtocol:
             "slice_gates",
             "preservation_requirements",
             "unresolved_freeze_questions",
+            "implementation_blockers",
         ):
             require_tuple(getattr(self, name), f"Phase-2B {name}")
         if (self.schema_version, self.protocol_version) != (
@@ -288,6 +308,8 @@ class Phase2BProtocol:
             PHASE2B_PROTOCOL_VERSION,
         ):
             raise ValueError("Phase-2B protocol version drift")
+        if self.exact_freeze_version != PHASE2B_EXACT_FREEZE_VERSION:
+            raise ValueError("Phase-2B exact freeze version drift")
         if (self.milestone_id, self.milestone_name) != (
             PHASE2B.machine_id,
             PHASE2B.name,
@@ -320,11 +342,36 @@ class Phase2BProtocol:
         if numerator != _least_common_share_denominator(self.margin_allocations):
             raise ValueError("Phase-2B margin shares must sum exactly to one")
         if any(
-            self.independent_latent_case_count * item.share_numerator
+            self.cases_per_family_scale_cell * item.share_numerator
             % item.share_denominator
             for item in self.margin_allocations
         ):
-            raise ValueError("Phase-2B margin shares must yield integer case counts")
+            raise ValueError("Phase-2B margin shares must yield integer per-cell counts")
+        exact_freeze = frozen_phase2b_exact_freeze()
+        if dict(self.case_type_totals) != dict(exact_freeze.case_type_totals):
+            raise ValueError("Phase-2B case quotas drift from the exact freeze")
+        if dict(self.margin_stratum_totals) != dict(
+            exact_freeze.margin_stratum_totals
+        ):
+            raise ValueError("Phase-2B margin quotas drift from the exact freeze")
+        expected_preservation_counts = tuple(
+            (
+                rule.transform,
+                rule.legal_pairs_per_family_scale,
+                rule.legal_pairs_per_family,
+            )
+            for rule in exact_freeze.preservation_rules
+        )
+        actual_preservation_counts = tuple(
+            (
+                requirement.transform,
+                requirement.minimum_pairs_per_family_scale,
+                requirement.minimum_pairs_per_family,
+            )
+            for requirement in self.preservation_requirements
+        )
+        if actual_preservation_counts != expected_preservation_counts:
+            raise ValueError("Phase-2B preservation IDs or pair quotas drift")
         if not self.isolation_profile.contract_complete:
             raise ValueError("Phase-2B isolation profile omits a required control")
         for name in (
@@ -349,8 +396,11 @@ class Phase2BProtocol:
             raise ValueError("Phase 2-3 must remain shadow-only")
         if self.holdout_run_limit != 1:
             raise ValueError("the sealed holdout is one-shot")
-        if self.maximum_validation_protocol_runs != 2:
-            raise ValueError("validation permits at most two full protocol runs")
+        if (
+            self.validation_attempts_per_version,
+            self.maximum_validation_versions_before_no_go,
+        ) != (2, 2):
+            raise ValueError("validation attempts and version limits drift")
 
     @property
     def cases_per_family_scale_cell(self) -> int:
@@ -388,8 +438,20 @@ class Phase2BProtocol:
         )
 
     @property
+    def margin_stratum_per_cell(self) -> tuple[tuple[str, int], ...]:
+        return tuple(
+            (
+                allocation.stratum.value,
+                self.cases_per_family_scale_cell
+                * allocation.share_numerator
+                // allocation.share_denominator,
+            )
+            for allocation in self.margin_allocations
+        )
+
+    @property
     def ready_for_holdout_generation(self) -> bool:
-        return not self.unresolved_freeze_questions
+        return not self.unresolved_freeze_questions and not self.implementation_blockers
 
     @property
     def protocol_id(self) -> str:
@@ -423,17 +485,19 @@ def _require_prefixed_sha256(value: str, name: str) -> None:
 def frozen_phase2b_protocol() -> Phase2BProtocol:
     """Return the immutable public preregistration candidate.
 
-    Decided fields are frozen.  The remaining questions are machine-visible so
-    an external custodian cannot generate a formal holdout prematurely.
+    All normative parameter questions are frozen.  Unimplemented external
+    prerequisites remain machine-visible so an external custodian cannot
+    generate a formal holdout prematurely.
     """
 
     allocations = (
-        CaseAllocation(Phase2BCaseType.ANSWERABLE_POSITIVE, 20),
+        CaseAllocation(Phase2BCaseType.UNIQUE_SCALE_ANSWERABLE, 19),
+        CaseAllocation(Phase2BCaseType.ADMISSIBLE_SCALE_SET_ANSWERABLE, 1),
         CaseAllocation(Phase2BCaseType.WRONG_FAMILY_HARD_NEGATIVE, 8),
         CaseAllocation(Phase2BCaseType.BINDING_COUNTERFACTUAL, 8),
         CaseAllocation(Phase2BCaseType.SCALE_COUNTERFACTUAL, 8),
         CaseAllocation(Phase2BCaseType.SIGN_OR_INVARIANT_BREAK, 8),
-        CaseAllocation(Phase2BCaseType.INSUFFICIENT_OR_AMBIGUOUS, 8),
+        CaseAllocation(Phase2BCaseType.INSUFFICIENT_OR_NONIDENTIFIABLE, 8),
     )
     margins = (
         MarginAllocation(
@@ -461,7 +525,7 @@ def frozen_phase2b_protocol() -> Phase2BProtocol:
             "identifiable_without_forced_top1",
         ),
         MarginAllocation(
-            MarginStratum.AMBIGUOUS_OR_INSUFFICIENT,
+            MarginStratum.NONUNIQUE_OR_INSUFFICIENT,
             3,
             20,
             None,
@@ -492,29 +556,45 @@ def frozen_phase2b_protocol() -> Phase2BProtocol:
         BinaryGateThreshold("abstention_specificity", 0.85, 0.75, "scale"),
     )
     preservation = (
-        PreservationRequirement("entity_alpha_renaming", "all", 6),
-        PreservationRequirement("observation_reorder", "order_invariant", 6),
-        PreservationRequirement("irrelevant_entity_augmentation", "scoped", 6),
-        PreservationRequirement("unit_conversion", "numeric", 8),
         PreservationRequirement(
-            "coordinate_translation_or_scaling",
+            PreservationTransform.ENTITY_ALPHA_RENAMING,
+            "all",
+            6,
+        ),
+        PreservationRequirement(
+            PreservationTransform.OBSERVATION_REORDER,
+            "order_invariant",
+            6,
+        ),
+        PreservationRequirement(
+            PreservationTransform.IRRELEVANT_ENTITY_AUGMENTATION,
+            "scoped",
+            6,
+        ),
+        PreservationRequirement(
+            PreservationTransform.UNIT_CONVERSION,
+            "numeric",
+            8,
+        ),
+        PreservationRequirement(
+            PreservationTransform.COORDINATE_AFFINE_TRANSFORM,
             "invariant_or_equivariant",
             8,
             mode=PreservationMode.APPROXIMATE_EQUIVARIANCE,
         ),
         PreservationRequirement(
-            "equivalent_aggregation_split_merge",
+            PreservationTransform.EQUIVALENT_AGGREGATION_SPLIT_MERGE,
             "conservation_additivity_coverage",
             8,
         ),
         PreservationRequirement(
-            "nontrivial_scale_map",
+            PreservationTransform.NONTRIVIAL_SCALE_MAP,
             "cross_scale_stable",
             minimum_pairs_per_family=10,
             mode=PreservationMode.APPROXIMATE_EQUIVARIANCE,
         ),
         PreservationRequirement(
-            "sign_convention_reparameterization",
+            PreservationTransform.SIGN_CONVENTION_REPARAMETERIZATION,
             "direction_or_sign",
             6,
         ),
@@ -539,6 +619,7 @@ def frozen_phase2b_protocol() -> Phase2BProtocol:
     return Phase2BProtocol(
         schema_version=PHASE2B_PROTOCOL_SCHEMA,
         protocol_version=PHASE2B_PROTOCOL_VERSION,
+        exact_freeze_version=PHASE2B_EXACT_FREEZE_VERSION,
         milestone_id=PHASE2B.machine_id,
         milestone_name=PHASE2B.name,
         formal_claim_name=PHASE2B_FORMAL_CLAIM_NAME,
@@ -562,17 +643,13 @@ def frozen_phase2b_protocol() -> Phase2BProtocol:
         shadow_only=True,
         active_promotion_enabled=False,
         holdout_run_limit=1,
-        maximum_validation_protocol_runs=2,
-        unresolved_freeze_questions=(
-            "margin_strata_require_108_ambiguous_or_admissible_cases_but_case_table_allocates_96",
-            "preservation_applicability_matrix_and_total_pair_count_not_frozen",
-            "embedding_llm_and_flat_typed_baseline_artifacts_not_pinned",
-            "bootstrap_resampling_unit_seed_and_iteration_count_not_frozen",
-            "infrastructure_failure_retry_policy_before_answer_reveal_not_frozen",
-            "shared_footprint_cell_taxonomy_and_family_discrimination_statistic_not_frozen",
-            "semantic_conflict_subset_membership_in_or_beyond_720_not_frozen",
-            "allowed_field_side_channel_and_identifier_randomization_audit_not_frozen",
-            "uncertainty_model_to_interval_semantics_not_frozen",
+        validation_attempts_per_version=2,
+        maximum_validation_versions_before_no_go=2,
+        unresolved_freeze_questions=(),
+        implementation_blockers=(
+            "formal_wire_builder_and_covert_channel_auditor_not_implemented",
+            "exact_baseline_revisions_and_artifact_hashes_not_registered",
+            "independent_holdout_generator_and_validation_artifacts_not_implemented",
             "functional_recognizer_cli_signed_minimal_image_and_archive_evaluator_not_implemented",
             "durable_signed_custodian_cas_ledger_not_implemented",
         ),
@@ -698,7 +775,14 @@ def evaluate_shared_footprint(
         for item in strongest_competitor.measurements
         if item.nonconstant and not item.candidate_private
     }
-    shared_ids = set(correct_public).intersection(competitor_public)
+    shared_ids = {
+        measurement_id
+        for measurement_id in set(correct_public).intersection(competitor_public)
+        if (
+            correct_public[measurement_id].witness_kind
+            == competitor_public[measurement_id].witness_kind
+        )
+    }
     correct_fraction = (
         len(shared_ids) / len(correct_public) if correct_public else 0.0
     )
@@ -710,9 +794,7 @@ def evaluate_shared_footprint(
     ratio = larger / smaller if smaller else float("inf")
     shared_kinds = {
         correct_public[item_id].witness_kind for item_id in shared_ids
-    }.intersection(
-        competitor_public[item_id].witness_kind for item_id in shared_ids
-    )
+    }
     structural = bool(shared_kinds.intersection({"numeric", "order", "sign"}))
     private_count = sum(
         item.candidate_private
@@ -741,6 +823,7 @@ def evaluate_shared_footprint(
 @dataclass(frozen=True, slots=True)
 class ExecutionFreezeManifest:
     protocol_id: str
+    exact_freeze_id: str
     git_commit: str
     recognizer_image_digest: str
     configuration_sha256: str
@@ -754,8 +837,11 @@ class ExecutionFreezeManifest:
     def __post_init__(self) -> None:
         require_tuple(self.baseline_registrations, "baseline registrations")
         protocol = frozen_phase2b_protocol()
+        exact_freeze = frozen_phase2b_exact_freeze()
         if self.protocol_id != protocol.protocol_id:
             raise ValueError("execution manifest does not bind the frozen protocol")
+        if self.exact_freeze_id != exact_freeze.freeze_id:
+            raise ValueError("execution manifest does not bind the exact freeze")
         if re.fullmatch(r"[0-9a-f]{40}", self.git_commit) is None:
             raise ValueError("execution manifest needs a full Git commit")
         _require_prefixed_sha256(
@@ -773,8 +859,24 @@ class ExecutionFreezeManifest:
             raise ValueError("execution manifest needs a theory version")
         if self.isolation_profile_id != protocol.isolation_profile.profile_id:
             raise ValueError("execution manifest isolation profile drift")
-        if {item.kind for item in self.baseline_registrations} != set(BaselineKind):
+        if (
+            len(self.baseline_registrations) != len(BaselineKind)
+            or {item.kind for item in self.baseline_registrations}
+            != set(BaselineKind)
+        ):
             raise ValueError("all three baseline classes must be registered")
+        expected_baseline_spec_ids = {
+            BaselineKind(spec.baseline_id): spec.content_id
+            for spec in exact_freeze.baselines
+        }
+        for registration in self.baseline_registrations:
+            if (
+                registration.baseline_spec_id
+                != expected_baseline_spec_ids[registration.kind]
+            ):
+                raise ValueError(
+                    "baseline registration does not bind its frozen BaselineSpec"
+                )
         if not all(
             item.frozen_before_holdout_generation
             for item in self.baseline_registrations
@@ -1042,6 +1144,7 @@ def phase2b_preregistration_report() -> dict[str, object]:
     from . import phase2b_adapter, phase2b_runner, phase2b_selector, phase2b_wire
 
     protocol = frozen_phase2b_protocol()
+    exact_freeze = frozen_phase2b_exact_freeze()
     implementation_id = (
         "phase2b_protocol_source_sha256_"
         + hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
@@ -1050,12 +1153,16 @@ def phase2b_preregistration_report() -> dict[str, object]:
         "artifact": PHASE2B_REPORT_NAME,
         "schema_version": protocol.schema_version,
         "protocol_version": protocol.protocol_version,
+        "exact_freeze_version": protocol.exact_freeze_version,
+        "exact_freeze_id": exact_freeze.freeze_id,
         "protocol_id": protocol.protocol_id,
         "implementation_id": implementation_id,
         "milestone_id": protocol.milestone_id,
         "milestone_name": protocol.milestone_name,
         "formal_claim_name_reserved_until_exit": protocol.formal_claim_name,
-        "status": "preregistration_candidate_with_open_freeze_questions",
+        "status": "exact_parameter_freeze_with_implementation_blockers",
+        "normative_parameter_freeze_complete": True,
+        "formal_holdout_generation_authorized": False,
         "formal_phase2b_exit_claim": False,
         "sealed_holdout_generated": False,
         "sealed_holdout_consumed": False,
@@ -1103,13 +1210,81 @@ def phase2b_preregistration_report() -> dict[str, object]:
         "independent_latent_case_count": protocol.independent_latent_case_count,
         "preservation_pairs_counted_in_720": False,
         "law_family_count": len(protocol.law_families),
+        "canonical_family_mapping": {
+            law_kind.value: family_id.value
+            for law_kind, family_id in exact_freeze.family_mapping
+        },
         "scale_cell_count": protocol.scale_cell_count,
         "cases_per_family_scale_cell": protocol.cases_per_family_scale_cell,
         "case_type_totals": dict(protocol.case_type_totals),
+        "case_type_quota_per_cell": dict(exact_freeze.holdout.case_quota_per_cell),
         "margin_stratum_totals": dict(protocol.margin_stratum_totals),
+        "margin_quota_per_cell": dict(protocol.margin_stratum_per_cell),
+        "margin_case_joint_quota_per_cell": [
+            {
+                "margin_stratum": margin,
+                "case_type": case_type,
+                "count": count,
+            }
+            for margin, case_type, count in (
+                exact_freeze.holdout.margin_case_joint_quota_per_cell
+            )
+        ],
+        "metric_denominators": {
+            item.metric: {
+                "case_types": list(item.included_case_types),
+                "count": item.expected_count,
+                "separately_reported": item.separately_reported,
+            }
+            for item in exact_freeze.holdout.metric_denominators
+        },
+        "semantic_conflict_challenge_case_count": (
+            exact_freeze.semantic_conflict.case_count
+        ),
+        "semantic_conflict_in_main_accuracy_denominator": False,
+        "legal_preservation_pair_count": (
+            exact_freeze.legal_preservation_pair_count
+        ),
+        "invalid_transform_control_count": (
+            exact_freeze.invalid_transform_control_count
+        ),
+        "total_preservation_sensitivity_pair_count": (
+            exact_freeze.total_preservation_sensitivity_pair_count
+        ),
+        "bootstrap": {
+            "method": exact_freeze.bootstrap.method,
+            "replicates": exact_freeze.bootstrap.replicates,
+            "master_seed": exact_freeze.bootstrap.seed,
+            "uint32_derivation_id": exact_freeze.bootstrap.seed_derivation_id,
+            "derived_uint32_seed": exact_freeze.bootstrap.derived_uint32_seed,
+            "resampling_unit": exact_freeze.bootstrap.resampling_unit,
+            "interval": exact_freeze.bootstrap.interval,
+        },
+        "baseline_specs_frozen": True,
+        "baseline_spec_ids": {
+            item.baseline_id: item.content_id for item in exact_freeze.baselines
+        },
+        "exact_baseline_revisions_registered": False,
+        "rerun_policy_frozen": True,
+        "maximum_reexecutions_before_answer_reveal": (
+            exact_freeze.rerun_policy.maximum_reexecutions
+        ),
+        "validation_version_policy_frozen": True,
+        "covert_channel_audit_frozen": True,
+        "covert_channel_audit_implemented": False,
+        "global_consistent_renamings_required": (
+            exact_freeze.covert_channel_audit.global_consistent_renamings
+        ),
+        "formal_uncertainty_models_allowed": [
+            item.value for item in exact_freeze.uncertainty_policy.allowed_kinds
+        ],
+        "standard_error_formal_selector_status": (
+            exact_freeze.uncertainty_policy.standard_error_status
+        ),
         "holdout_run_limit": protocol.holdout_run_limit,
-        "maximum_validation_protocol_runs": (
-            protocol.maximum_validation_protocol_runs
+        "validation_attempts_per_version": protocol.validation_attempts_per_version,
+        "maximum_validation_versions_before_no_go": (
+            protocol.maximum_validation_versions_before_no_go
         ),
         "shadow_only": protocol.shadow_only,
         "active_promotion_enabled": protocol.active_promotion_enabled,
@@ -1147,6 +1322,7 @@ def phase2b_preregistration_report() -> dict[str, object]:
             for item in protocol.slice_gates
         ],
         "unresolved_freeze_questions": list(protocol.unresolved_freeze_questions),
+        "implementation_blockers": list(protocol.implementation_blockers),
         "ready_for_holdout_generation": protocol.ready_for_holdout_generation,
         "claim_boundary": (
             "Public protocol, immutable lifecycle records, and a process-local "

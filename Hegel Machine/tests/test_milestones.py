@@ -57,7 +57,7 @@ def test_formal_tracks_are_distinct_from_current_phase2a():
     assert tuple(track.name for track in FORMAL_TRACKS) == (
         "Phase-2B Sealed Typed-Evidence Structural Identification Qualification",
         "Phase-2R Raw-Evidence Structuralization Qualification",
-        "Phase-3A Bounded Language-Adequacy and Outside-Language Detection",
+        "Phase-3A Bounded Frozen-Closure Adequacy",
         "Phase-3B Bounded Meta-Prior Synthesis and Conservative Integration",
         "Phase-3C Raw-Evidence End-to-End Qualification",
     )

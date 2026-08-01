@@ -35,10 +35,31 @@ manifest 结构检查通过，当前版本也没有外部签名可信根，不�
 role/scale candidate enumeration、绑定完整 adapter grid 的 interval selector core、
 统计协议、immutable lifecycle record/进程内防分叉 guard 和 OCI launch-spec contract。
 这些是正式轨道的实现基础，不是效果证据，也不证明允许字段无 oracle side channel、
-跨进程 one-shot 或 runtime 隔离。当前 artifact
-准确状态是 `preregistration_candidate_with_open_freeze_questions`，并显式记录
-holdout 未生成、custodian/runtime 未 attested、projection compiler 和完整 pipeline
-尚未实现。
+跨进程 one-shot 或 runtime 隔离。Phase-2B 精确合同已冻结为 720 个 main cases +
+240 个独立 semantic-conflict challenge，以及 496 legal + 76 invalid = 572 个 derived
+pairs；case/margin 配额、baseline config、bootstrap、rerun、footprint 与 covert-audit
+规则均不再是 open question。overall contract 是 `hegel-freeze-p2b-p3-v1.0.1`；它以
+`2611585425` 作为 domain-separated SHA-256 → uint32 的 sklearn `random_state`，并
+保留 `411876909552964556` 作为 master/bootstrap seed。不可执行的 v1.0.0 直接 64-bit
+sklearn 绑定已被 implementation-audit amendment supersede。在完整 standard-error
+语义实现前，formal selector 只允许
+`absolute_bound`。这些数字和限制是 preregistration，不是已生成、已审计或已通过的
+holdout evidence；custodian/runtime 未 attested，covert audit 未执行，projection compiler
+与完整 pipeline 仍未完成。
+
+此外可以说：Phase-3 的 `hegel-old-dsl-v1.0.0` finite domains、typing、bottom、exact
+equivalence、limits、50,000/5,000,000 budgets 和 shrink order 参数已经冻结；首个 generic
+odd-cardinality target 的 universe 是 480 行，observed omitted-channel null control 是
+85 行，MDL table 是 `hegel-mdl-prefix-v1.0.0`/Q32。capacity preflight 还可以准确报告：
+diagnostic tuple-AST/canonical-JSON 表示下有 64,680 个 distinct、typed、limit-conforming
+candidate AST，状态为 `CONDITIONAL_CAPACITY_LOWER_BOUND_EXCEEDS_BUDGET`。strict canonical
+AST/CBOR acceptance 未冻结，所以 executed closure status 仍为 `NOT_RUN`。这叫
+**Phase-3A Bounded Frozen-Closure Adequacy** 的 surface-parameter freeze：
+`surface_parameter_freeze_complete=true`，但
+`strict_acceptance_contract_complete=false`、`normative_parameter_freeze_complete=false`。
+可以说 untrusted receipt wire 会绑定 DSL spec/operator semantics，并依据 target role
+分别选择 480-row outside-target roots 或 85-row null-control roots；不能说这些 roots 已由
+sealed replay 重算。
 
 ## 当前不能说什么
 
@@ -62,11 +83,33 @@ holdout 未生成、custodian/runtime 未 attested、projection compiler 和完�
 - 不能把 isolation argv/dataclass 当作真实隔离证明，也不能把一次性状态机对象当作
   独立 custodian attestation。
 - 不能说 Phase-2B 已通过：没有 secret 720-case holdout、外部 baselines、prediction-
-  before-reveal 时间证据、consumed score report 或第三方 replay。
+  before-reveal 时间证据、consumed score report 或第三方 replay；额外 240 challenge
+  和 572 derived pairs 也没有正式运行证据。
 - 不能说 Phase-3A 已开始正式实验或 parity 已证明 outside。旧 DSL 的
   intended standard numeric semantics 下，`absolute(difference(x,y))` 给出 binary XOR
-  truth table；这只是 target-design sanity，不是 executable closure verdict。高元 target、
-  完整 finite closure、sealed replay verifier 和 MDL scorer 尚未冻结/实现。
+  truth table；但决定稿把 `Bit` 直接传给要求 `RationalValue` 的 `difference`，是否漏写
+  `bit_to_scalar` 仍待消歧。在 executable closure 前它只算
+  `TARGET_DESIGN_SANITY_ONLY`。480-row target 与 85-row null control 已冻结，但完整
+  finite closure、canonical archives、Python/Rust 双 replay、3/3 signatures 和 MDL
+  scorer replay 尚未完成或执行。
+- 不能把 64,680 candidate-AST 容量下界称为 `DSL_TOO_LARGE`。它尚未通过 strict
+  canonical AST node CBOR schema、normalization/rewrite 和 node-counting rules 的正式
+  acceptance；diagnostic canonical JSON 不能替代 canonical CBOR。只有该子集被正式
+  canonicalizer 接受，才进入 `DSL_TOO_LARGE → new DSL version → shrink step 1`。
+- 不能把 caller-supplied `ClosureEnumerationReceipt` 当执行证明。即使它结构合法地记录
+  50,000 个 accepted programs 和第 50,001 个 witness，当前仍是 untrusted claim，不能
+  把 executed closure 从 `NOT_RUN` 改成 `DSL_TOO_LARGE`。receipt 必须绑定完整
+  `dsl_spec_id`/`operator_semantics_id`，并为 outside target 与 null control 选择各自独立的
+  diagnostic universe/truth content IDs；跨 role 复用 IDs 必须 fail closed。正式
+  canonical-CBOR/RFC6962 roots 的 preimage/tree bridge 尚未冻结，不能从 diagnostic ID
+  换前缀得到。
+- 不能说 certificate wire 已完全冻结。program/output archive root identity、match hash、
+  exhaustion preimage、certificate/key/revocation envelope 和 MDL cross-language wire 等
+  machine-readable schema 仍待消歧。
+- 不能把任何 bounded outside result 简写成 `OUTSIDE_LANGUAGE`。若未来满足全部条件，
+  claim 也只能是
+  `OUTSIDE_FROZEN_CLOSURE(dsl_version, bounded_universe_root,
+  target_truth_table_root, equivalence = exact_extensional)`。
 
 ## 权力与数据隔离
 

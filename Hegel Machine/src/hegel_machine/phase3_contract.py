@@ -1,15 +1,16 @@
 """Fail-closed preregistration contracts for bounded Phase-3 work.
 
-This module freezes only the parts of the old-language experiment that have
-already been decided.  It deliberately does *not* pretend that the rational
-grid, bounded universe, executable semantics, MDL code table, or hidden task
-specifications have been frozen.  Those missing content bindings remain
-machine-readable readiness blockers, so the default contract cannot issue an
-outside-language certificate.
+This module binds the frozen old-language surface tables, target, control, and
+MDL parameters from ``hegel-freeze-p2b-p3-v1.0.1``.  A surface-parameter
+freeze is not a complete strict-schema freeze or execution: the canonical-AST
+schema, complete enumerators, program-output replay, independent Rust
+implementation, trusted key-status path, and formal MDL scorer remain
+machine-readable blockers.
 
 The module is independent of the Phase-2 selector and does not authorize an
-ACTIVE theory mutation.  A future sealed run may fill the content bindings,
-but an independently replaying evaluator must also be implemented before
+ACTIVE theory mutation.  A future strict-schema amendment may fill the formal
+Merkle-root and implementation bindings, but an independently replaying
+evaluator must also be implemented before
 ``OUTSIDE_FROZEN_CLOSURE`` can be issued.  Self-declared receipt fields are
 never treated as a certificate.
 """
@@ -24,6 +25,52 @@ import hashlib
 import re
 
 from .hashing import stable_hash
+from .phase3_certificate_v1 import (
+    AST_SHAPE_PREFIXES,
+    BINARY_TOKEN_CODES,
+    CANONICAL_AST_SCHEMA_IMPLEMENTED,
+    FIXED_POINT_PRECISION_ID,
+    FREEZE_VERSION as PHASE3_OVERALL_FREEZE_VERSION,
+    FORMAL_MDL_AST_SCORER_IMPLEMENTED,
+    FORMAL_OUTSIDE_CERTIFICATE_ISSUANCE_IMPLEMENTED,
+    LATEST_KEY_STATUS_RESOLVER_IMPLEMENTED,
+    LEAF_CLASS_CODES,
+    MDL_DECIMAL_PRECISION,
+    MDL_CODE_TABLE_ID,
+    PROGRAM_OUTPUT_ARCHIVE_REPLAY_IMPLEMENTED,
+    PYTHON_CLOSURE_REPLAY_IMPLEMENTED,
+    RATIONAL_PARAMETER_CODES,
+    RUST_CLOSURE_REPLAY_IMPLEMENTED,
+    SCOPE_CLAUSE_COUNT_CODES,
+    SPECIFICATION_RESOLUTION_BLOCKERS,
+    TERNARY_TOKEN_CODES,
+    TOLERANCE_CODES,
+    UNARY_TOKEN_CODES,
+)
+from .phase3_closure_preflight import (
+    CAPACITY_PROOF,
+    CONDITIONAL_CAPACITY_STATUS,
+)
+from .phase3_dsl_v1 import (
+    AGGREGATE_CATALOG,
+    BINARY_OPERATORS,
+    BINARY_XOR_SANITY,
+    BOOLEAN_COMPOSITION,
+    BOTTOM_AND_EQUIVALENCE,
+    CLOSURE_BUDGET,
+    FORBIDDEN_FORMS,
+    HIDDEN_TARGET_REGISTRY,
+    LEAF_EXPRESSIONS,
+    OBSERVED_OMITTED_SINK_CONTROL,
+    ODD_REDUCTION_TARGET,
+    ODD_REDUCTION_UNIVERSE,
+    OLD_DSL_V1,
+    PRIMITIVE_SORT_IDS,
+    SHRINK_ORDER,
+    STRUCTURAL_LIMITS,
+    TERNARY_OPERATORS,
+    UNARY_OPERATORS,
+)
 
 
 PHASE3_CONTRACT_SCHEMA_VERSION = "hegel-machine-phase3-preregistration/1"
@@ -32,75 +79,113 @@ PHASE3_CONTRACT_SCHEMA_VERSION = "hegel-machine-phase3-preregistration/1"
 # constructor inputs a caller could set.  The current module defines wire
 # contracts and arithmetic only; it does not replay closure archives or MDL
 # partitions under a trusted evaluator.
-SEALED_CLOSURE_VERIFIER_IMPLEMENTED = False
-SEALED_MDL_SCORER_IMPLEMENTED = False
+SEALED_CLOSURE_VERIFIER_IMPLEMENTED = (
+    FORMAL_OUTSIDE_CERTIFICATE_ISSUANCE_IMPLEMENTED
+)
+SEALED_MDL_SCORER_IMPLEMENTED = FORMAL_MDL_AST_SCORER_IMPLEMENTED
 
 
-FROZEN_SORTS = (
-    "Entity",
-    "Role",
-    "Observation",
-    "Event",
-    "Index",
-    "ScaleContext",
-    "EntitySet",
-    "Bool",
-    "Sign",
-    "BoundedInt",
-    "RationalScalar",
-    "IntervalScalar",
-    "OrderedCategory",
+FROZEN_SORTS = PRIMITIVE_SORT_IDS
+FROZEN_LEAVES = tuple(spec.expression_id for spec in LEAF_EXPRESSIONS)
+FROZEN_OPERATORS = tuple(
+    spec.expression_id
+    for spec in (
+        UNARY_OPERATORS
+        + BINARY_OPERATORS
+        + TERNARY_OPERATORS
+        + BOOLEAN_COMPOSITION
+    )
+)
+FROZEN_FORBIDDEN_SYMBOLS = FORBIDDEN_FORMS
+
+FROZEN_RATIONAL_GRID_ID = OLD_DSL_V1.rational_grid_id
+FROZEN_DSL_SPEC_ID = OLD_DSL_V1.content_id
+FROZEN_BOUNDED_UNIVERSE_DIAGNOSTIC_ID = (
+    ODD_REDUCTION_TARGET.diagnostic_universe_content_id
+)
+FROZEN_TARGET_TABLE_DIAGNOSTIC_ID = (
+    ODD_REDUCTION_TARGET.diagnostic_target_table_content_id
+)
+FROZEN_OPERATOR_SEMANTICS_ID = OLD_DSL_V1.operator_semantics_id
+FROZEN_EQUIVALENCE_CONTRACT_ID = stable_hash(
+    BOTTOM_AND_EQUIVALENCE,
+    prefix="equivalence_contract_",
+)
+FROZEN_MDL_CODE_TABLE_ID = stable_hash(
+    {
+        "code_table_id": MDL_CODE_TABLE_ID,
+        "fixed_point_precision_id": FIXED_POINT_PRECISION_ID,
+        "ast_shape_prefixes": AST_SHAPE_PREFIXES,
+        "leaf_class_codes": LEAF_CLASS_CODES,
+        "unary_token_codes": UNARY_TOKEN_CODES,
+        "binary_token_codes": BINARY_TOKEN_CODES,
+        "ternary_token_codes": TERNARY_TOKEN_CODES,
+        "rational_parameter_codes": RATIONAL_PARAMETER_CODES,
+        "tolerance_codes": TOLERANCE_CODES,
+        "scope_clause_count_codes": SCOPE_CLAUSE_COUNT_CODES,
+        "identifier_code": "Elias-delta over one-based frozen registry index",
+        "aggregate_leaf_fields": (
+            "AggregateMapId:3",
+            "ScopeId:2",
+            "QuantityId:1",
+            "scope_extension_code",
+        ),
+        "new_reducer_definition": (
+            "NEW_REDUCER_V1 header:16 (literal bits unresolved)",
+            "arity:Elias-delta",
+            "input_sort_ids:4_each",
+            "output_sort_id:4",
+            "reduction_scheme:1",
+            "identity_parameter:3",
+            "combiner_ast:ordinary_prefix",
+            "maximum_set_size:4",
+            "scope_code",
+            "verifier_hash_reference:256",
+        ),
+        "binary_data_code": "log2(n+1)+log2(comb(n,k))",
+        "minimum_gain": "max(32_bits,ceil_Q32(0.05*old_data_length))",
+        "invention_split_rows": (192, 96, 192, 480),
+        "decimal_precision": MDL_DECIMAL_PRECISION,
+        "rounding": "ceil_to_unsigned_Q32",
+    },
+    prefix="mdl_code_table_",
+)
+FROZEN_PARITY_TARGET_ID = ODD_REDUCTION_TARGET.content_id
+FROZEN_HIDDEN_SINK_CONTROL_ID = OBSERVED_OMITTED_SINK_CONTROL.content_id
+FROZEN_HIDDEN_SINK_UNIVERSE_DIAGNOSTIC_ID = (
+    OBSERVED_OMITTED_SINK_CONTROL.diagnostic_universe_content_id
+)
+FROZEN_HIDDEN_SINK_TARGET_TABLE_DIAGNOSTIC_ID = (
+    OBSERVED_OMITTED_SINK_CONTROL.diagnostic_target_table_content_id
+)
+FROZEN_HIDDEN_GENERATOR_SPEC_ID = stable_hash(
+    {
+        "target": ODD_REDUCTION_TARGET,
+        "universe": ODD_REDUCTION_UNIVERSE,
+        "fallback_registry": HIDDEN_TARGET_REGISTRY,
+        "sink_control": OBSERVED_OMITTED_SINK_CONTROL,
+    },
+    prefix="hidden_generator_spec_",
 )
 
-FROZEN_LEAVES = (
-    "measurement(entity,quantity_id)",
-    "event_value(event,quantity_id)",
-    "time_index(event)",
-    "space_index(entity)",
-    "membership(entity,entity_set)",
-    "context_flag(context_id)",
-    "task_target(target_id)",
-    "uncertainty_interval(measurement)",
+FROZEN_OUTSIDE_CERTIFICATE_IMPLEMENTATION_BLOCKERS = (
+    "formal_outside_certificate_issuance_unimplemented",
+    "canonical_cbor_backend_not_declared_as_project_dependency",
+    "canonical_ast_schema_unimplemented",
+    "program_output_archive_replay_unimplemented",
+    "python_closure_replay_unimplemented",
+    "rust_closure_replay_unimplemented",
+    "latest_key_status_resolver_unimplemented",
+    "ed25519_wire_and_trust_anchor_unfrozen",
 )
-
-FROZEN_OPERATORS = (
-    "identity",
-    "difference",
-    "absolute",
-    "sign",
-    "sum",
-    "mean",
-    "count",
-    "min",
-    "max",
-    "affine_combination",
-    "same_entity",
-    "same_role",
-    "before",
-    "adjacent",
-    "subset",
-    "aggregate_by",
-    "transform_by",
-    "approx_equal",
-    "less_equal",
-    "greater_equal",
-    "same_sign",
-    "opposite_sign",
-    "invariant_equal",
-    "within_interval",
-    "top_level_conjunction",
-)
-
-FROZEN_FORBIDDEN_SYMBOLS = (
-    "or",
-    "xor",
-    "modulo",
-    "parity",
-    "compound_negation",
-    "arbitrary_truth_table_lookup",
-    "unbounded_recursion",
-    "learned_neural_predicate",
-    "case_id_dependent_branch",
+FROZEN_FORMAL_MDL_IMPLEMENTATION_BLOCKERS = (
+    "canonical_cbor_backend_not_declared_as_project_dependency",
+    "canonical_ast_schema_unimplemented",
+    "formal_mdl_ast_scorer_unimplemented",
+    "python_mdl_replay_unimplemented",
+    "rust_mdl_replay_unimplemented",
+    "mdl_ast_and_new_symbol_wire_schema_unfrozen",
+    "cross_language_q32_log2_reference_algorithm_unfrozen",
 )
 
 
@@ -137,16 +222,20 @@ def _fraction_payload(value: Fraction) -> tuple[int, int]:
 
 @dataclass(frozen=True, slots=True)
 class DslLimits:
-    """The already-decided finite old-language bounds."""
+    """The exact finite old-language structural and search bounds."""
 
     maximum_relation_arity: int = 3
     maximum_entity_set_size: int = 8
     maximum_ast_depth: int = 4
+    maximum_ast_node_count: int = 7
     maximum_top_level_clauses: int = 3
+    maximum_distinct_bit_slots: int = 4
+    maximum_aggregate_leaves: int = 1
     maximum_composition_depth: int = 2
     maximum_fitted_parameters: int = 3
     maximum_scope_clauses: int = 2
     maximum_canonical_programs: int = 50_000
+    maximum_raw_operator_applications: int = 5_000_000
 
     def __post_init__(self) -> None:
         for name in self.__slots__:
@@ -161,10 +250,33 @@ class DslLimits:
 
 FROZEN_DSL_LIMITS = DslLimits()
 
+if FROZEN_DSL_LIMITS != DslLimits(
+    maximum_relation_arity=3,
+    maximum_entity_set_size=8,
+    maximum_ast_depth=STRUCTURAL_LIMITS.max_total_ast_depth,
+    maximum_ast_node_count=STRUCTURAL_LIMITS.max_total_node_count,
+    maximum_top_level_clauses=STRUCTURAL_LIMITS.max_top_level_clauses,
+    maximum_distinct_bit_slots=STRUCTURAL_LIMITS.max_distinct_bit_slots,
+    maximum_aggregate_leaves=STRUCTURAL_LIMITS.max_aggregate_leaves,
+    maximum_composition_depth=STRUCTURAL_LIMITS.max_old_law_composition_depth,
+    maximum_fitted_parameters=STRUCTURAL_LIMITS.max_fitted_scalar_parameters,
+    maximum_scope_clauses=STRUCTURAL_LIMITS.max_scope_clauses,
+    maximum_canonical_programs=CLOSURE_BUDGET.max_canonical_program_count,
+    maximum_raw_operator_applications=(
+        CLOSURE_BUDGET.max_raw_operator_applications
+    ),
+):
+    raise AssertionError("Phase-3 contract limits drifted from old DSL v1")
+
 
 class ReadinessBlocker(str, Enum):
+    # Specification bindings retained for backwards-compatible wire values.
+    # The surface-freeze default resolves these fields; custom missing bindings
+    # still fail closed.
     RATIONAL_GRID = "rational_grid_not_frozen"
-    BOUNDED_UNIVERSE = "bounded_universe_not_frozen"
+    DSL_SPEC = "dsl_spec_not_frozen"
+    BOUNDED_UNIVERSE = "bounded_universe_diagnostic_id_not_frozen"
+    TARGET_TRUTH_TABLE = "target_table_diagnostic_id_not_frozen"
     OPERATOR_SEMANTICS = "operator_semantics_not_frozen"
     EQUIVALENCE_CONTRACT = "equivalence_contract_not_frozen"
     CANONICALIZER = "canonicalizer_not_frozen"
@@ -172,13 +284,31 @@ class ReadinessBlocker(str, Enum):
     MDL_CODE_TABLE = "mdl_code_table_not_frozen"
     PARITY_TARGET = "parity_target_not_frozen"
     HIDDEN_SINK_CONTROL = "hidden_sink_control_not_frozen"
+    HIDDEN_SINK_UNIVERSE = "hidden_sink_universe_diagnostic_id_not_frozen"
+    HIDDEN_SINK_TRUTH_TABLE = "hidden_sink_target_table_diagnostic_id_not_frozen"
     HIDDEN_GENERATOR = "hidden_generator_not_frozen"
+    CANONICAL_AST_SCHEMA = "canonical_ast_strict_schema_not_frozen"
+    PROGRAM_OUTPUT_ARCHIVE = "program_output_archive_replay_not_implemented"
+    PYTHON_CLOSURE_REPLAY = "python_complete_closure_replay_not_implemented"
+    RUST_CLOSURE_REPLAY = "rust_complete_closure_replay_not_implemented"
+    LATEST_KEY_STATUS = "latest_key_status_resolver_not_implemented"
+    FORMAL_MERKLE_ROOTS = (
+        "formal_cbor_rfc6962_universe_and_truth_roots_not_frozen"
+    )
+    CAPACITY_CLASSIFICATION = (
+        "conditional_capacity_lower_bound_requires_formal_canonicalizer"
+    )
     SEALED_CLOSURE_VERIFIER = "sealed_closure_verifier_not_implemented"
 
 
 _BLOCKER_FIELDS = (
     (ReadinessBlocker.RATIONAL_GRID, "rational_grid_id"),
-    (ReadinessBlocker.BOUNDED_UNIVERSE, "bounded_universe_id"),
+    (ReadinessBlocker.DSL_SPEC, "dsl_spec_id"),
+    (
+        ReadinessBlocker.BOUNDED_UNIVERSE,
+        "bounded_universe_diagnostic_id",
+    ),
+    (ReadinessBlocker.TARGET_TRUTH_TABLE, "target_table_diagnostic_id"),
     (ReadinessBlocker.OPERATOR_SEMANTICS, "operator_semantics_id"),
     (ReadinessBlocker.EQUIVALENCE_CONTRACT, "equivalence_contract_id"),
     (ReadinessBlocker.CANONICALIZER, "canonicalizer_implementation_id"),
@@ -186,6 +316,14 @@ _BLOCKER_FIELDS = (
     (ReadinessBlocker.MDL_CODE_TABLE, "mdl_code_table_id"),
     (ReadinessBlocker.PARITY_TARGET, "parity_target_id"),
     (ReadinessBlocker.HIDDEN_SINK_CONTROL, "hidden_sink_control_id"),
+    (
+        ReadinessBlocker.HIDDEN_SINK_UNIVERSE,
+        "hidden_sink_universe_diagnostic_id",
+    ),
+    (
+        ReadinessBlocker.HIDDEN_SINK_TRUTH_TABLE,
+        "hidden_sink_target_table_diagnostic_id",
+    ),
     (ReadinessBlocker.HIDDEN_GENERATOR, "hidden_generator_spec_id"),
 )
 
@@ -194,26 +332,38 @@ _BLOCKER_FIELDS = (
 class Phase3PrerequisiteContract:
     """Content-addressed freeze manifest for the Phase-3 preregistration.
 
-    Optional ids are intentionally unresolved in the default instance.  Merely
-    naming a primitive or banning the word ``parity`` does not fill them.
+    Surface and diagnostic IDs are resolved in the default instance.  Formal
+    CBOR/Merkle roots and executable implementation IDs remain unresolved;
+    merely naming a primitive or banning ``parity`` cannot fill them.
     """
 
     schema_version: str = PHASE3_CONTRACT_SCHEMA_VERSION
+    freeze_version: str = PHASE3_OVERALL_FREEZE_VERSION
     sorts: tuple[str, ...] = FROZEN_SORTS
     leaves: tuple[str, ...] = FROZEN_LEAVES
     operators: tuple[str, ...] = FROZEN_OPERATORS
     forbidden_symbols: tuple[str, ...] = FROZEN_FORBIDDEN_SYMBOLS
     limits: DslLimits = FROZEN_DSL_LIMITS
-    rational_grid_id: str | None = None
-    bounded_universe_id: str | None = None
-    operator_semantics_id: str | None = None
-    equivalence_contract_id: str | None = None
+    rational_grid_id: str | None = FROZEN_RATIONAL_GRID_ID
+    dsl_spec_id: str | None = FROZEN_DSL_SPEC_ID
+    bounded_universe_diagnostic_id: str | None = (
+        FROZEN_BOUNDED_UNIVERSE_DIAGNOSTIC_ID
+    )
+    target_table_diagnostic_id: str | None = FROZEN_TARGET_TABLE_DIAGNOSTIC_ID
+    operator_semantics_id: str | None = FROZEN_OPERATOR_SEMANTICS_ID
+    equivalence_contract_id: str | None = FROZEN_EQUIVALENCE_CONTRACT_ID
     canonicalizer_implementation_id: str | None = None
     enumerator_implementation_id: str | None = None
-    mdl_code_table_id: str | None = None
-    parity_target_id: str | None = None
-    hidden_sink_control_id: str | None = None
-    hidden_generator_spec_id: str | None = None
+    mdl_code_table_id: str | None = FROZEN_MDL_CODE_TABLE_ID
+    parity_target_id: str | None = FROZEN_PARITY_TARGET_ID
+    hidden_sink_control_id: str | None = FROZEN_HIDDEN_SINK_CONTROL_ID
+    hidden_sink_universe_diagnostic_id: str | None = (
+        FROZEN_HIDDEN_SINK_UNIVERSE_DIAGNOSTIC_ID
+    )
+    hidden_sink_target_table_diagnostic_id: str | None = (
+        FROZEN_HIDDEN_SINK_TARGET_TABLE_DIAGNOSTIC_ID
+    )
+    hidden_generator_spec_id: str | None = FROZEN_HIDDEN_GENERATOR_SPEC_ID
     shadow_only: bool = True
     active_promotion_authorized: bool = False
 
@@ -222,6 +372,8 @@ class Phase3PrerequisiteContract:
             _require_tuple(getattr(self, name), f"Phase-3 {name}")
         if self.schema_version != PHASE3_CONTRACT_SCHEMA_VERSION:
             raise ValueError("unknown Phase-3 preregistration schema version")
+        if self.freeze_version != PHASE3_OVERALL_FREEZE_VERSION:
+            raise ValueError("overall Phase-2B/Phase-3 freeze version drift")
         frozen_fields = (
             ("sorts", self.sorts, FROZEN_SORTS),
             ("leaves", self.leaves, FROZEN_LEAVES),
@@ -236,6 +388,55 @@ class Phase3PrerequisiteContract:
         for name, actual, expected in frozen_fields:
             if actual != expected:
                 raise ValueError(f"{name} differ from the frozen Phase-3 decision")
+        frozen_bindings = (
+            ("rational grid", self.rational_grid_id, FROZEN_RATIONAL_GRID_ID),
+            ("DSL spec", self.dsl_spec_id, FROZEN_DSL_SPEC_ID),
+            (
+                "bounded universe",
+                self.bounded_universe_diagnostic_id,
+                FROZEN_BOUNDED_UNIVERSE_DIAGNOSTIC_ID,
+            ),
+            (
+                "target truth table diagnostic content",
+                self.target_table_diagnostic_id,
+                FROZEN_TARGET_TABLE_DIAGNOSTIC_ID,
+            ),
+            (
+                "operator semantics",
+                self.operator_semantics_id,
+                FROZEN_OPERATOR_SEMANTICS_ID,
+            ),
+            (
+                "equivalence contract",
+                self.equivalence_contract_id,
+                FROZEN_EQUIVALENCE_CONTRACT_ID,
+            ),
+            ("MDL code table", self.mdl_code_table_id, FROZEN_MDL_CODE_TABLE_ID),
+            ("odd target", self.parity_target_id, FROZEN_PARITY_TARGET_ID),
+            (
+                "hidden-sink control",
+                self.hidden_sink_control_id,
+                FROZEN_HIDDEN_SINK_CONTROL_ID,
+            ),
+            (
+                "hidden-sink universe",
+                self.hidden_sink_universe_diagnostic_id,
+                FROZEN_HIDDEN_SINK_UNIVERSE_DIAGNOSTIC_ID,
+            ),
+            (
+                "hidden-sink truth table diagnostic content",
+                self.hidden_sink_target_table_diagnostic_id,
+                FROZEN_HIDDEN_SINK_TARGET_TABLE_DIAGNOSTIC_ID,
+            ),
+            (
+                "hidden generator spec",
+                self.hidden_generator_spec_id,
+                FROZEN_HIDDEN_GENERATOR_SPEC_ID,
+            ),
+        )
+        for name, actual, expected in frozen_bindings:
+            if actual != expected:
+                raise ValueError(f"{name} differs from the frozen Phase-3 surface")
         if len(set(self.sorts)) != len(self.sorts):
             raise ValueError("Phase-3 sorts must be unique")
         if len(set(self.leaves)) != len(self.leaves):
@@ -265,6 +466,19 @@ class Phase3PrerequisiteContract:
             for blocker, field_name in _BLOCKER_FIELDS
             if getattr(self, field_name) is None
         )
+        if not CANONICAL_AST_SCHEMA_IMPLEMENTED:
+            blockers += (ReadinessBlocker.CANONICAL_AST_SCHEMA,)
+        if not PROGRAM_OUTPUT_ARCHIVE_REPLAY_IMPLEMENTED:
+            blockers += (ReadinessBlocker.PROGRAM_OUTPUT_ARCHIVE,)
+        if not PYTHON_CLOSURE_REPLAY_IMPLEMENTED:
+            blockers += (ReadinessBlocker.PYTHON_CLOSURE_REPLAY,)
+        if not RUST_CLOSURE_REPLAY_IMPLEMENTED:
+            blockers += (ReadinessBlocker.RUST_CLOSURE_REPLAY,)
+        if not LATEST_KEY_STATUS_RESOLVER_IMPLEMENTED:
+            blockers += (ReadinessBlocker.LATEST_KEY_STATUS,)
+        blockers += (ReadinessBlocker.FORMAL_MERKLE_ROOTS,)
+        if CAPACITY_PROOF.capacity_status == CONDITIONAL_CAPACITY_STATUS:
+            blockers += (ReadinessBlocker.CAPACITY_CLASSIFICATION,)
         if not SEALED_CLOSURE_VERIFIER_IMPLEMENTED:
             blockers += (ReadinessBlocker.SEALED_CLOSURE_VERIFIER,)
         return blockers
@@ -293,6 +507,13 @@ class TargetRole(str, Enum):
     IN_LANGUAGE_NULL = "in_language_null_control"
 
 
+class ClosureRunStatus(str, Enum):
+    COMPLETE = "COMPLETE"
+    DSL_TOO_LARGE = "DSL_TOO_LARGE"
+    INCONCLUSIVE_BUDGET = "INCONCLUSIVE_BUDGET"
+    INCONCLUSIVE_SEMANTICS = "INCONCLUSIVE_SEMANTICS"
+
+
 @dataclass(frozen=True, slots=True)
 class ClosureEnumerationReceipt:
     """Untrusted replay-claim wire record for one target.
@@ -303,34 +524,45 @@ class ClosureEnumerationReceipt:
     """
 
     contract_id: str
+    dsl_spec_id: str
     target_id: str
     target_role: TargetRole
-    bounded_universe_id: str
+    bounded_universe_diagnostic_id: str
+    operator_semantics_id: str
     equivalence_contract_id: str
     enumerator_implementation_id: str
     search_budget: int
     enumerated_canonical_program_count: int
+    raw_operator_application_count: int
     closure_cardinality: int | None
-    complete: bool
-    budget_exhausted: bool
+    closure_status: ClosureRunStatus
+    frontier_exhausted: bool
+    all_type_buckets_closed: bool
+    raw_expansion_limit_hit: bool
+    wall_clock_abort_hit: bool
+    first_out_of_budget_program_id: str | None
     semantics_total: bool
     extensional_match_program_ids: tuple[str, ...]
     closure_root: str
-    target_truth_table_root: str
+    target_table_diagnostic_id: str
 
     def __post_init__(self) -> None:
         for name in (
             "contract_id",
+            "dsl_spec_id",
             "target_id",
-            "bounded_universe_id",
+            "bounded_universe_diagnostic_id",
+            "operator_semantics_id",
             "equivalence_contract_id",
             "enumerator_implementation_id",
             "closure_root",
-            "target_truth_table_root",
+            "target_table_diagnostic_id",
         ):
             _require_content_id(getattr(self, name), name, optional=False)
         if not isinstance(self.target_role, TargetRole):
             raise TypeError("target_role must be a TargetRole")
+        if not isinstance(self.closure_status, ClosureRunStatus):
+            raise TypeError("closure_status must be a ClosureRunStatus")
         if self.search_budget != FROZEN_DSL_LIMITS.maximum_canonical_programs:
             raise ValueError("closure receipt changed the frozen search budget")
         if (
@@ -339,13 +571,31 @@ class ClosureEnumerationReceipt:
             or self.enumerated_canonical_program_count > self.search_budget
         ):
             raise ValueError("enumerated program count is outside the frozen budget")
+        if (
+            type(self.raw_operator_application_count) is not int
+            or self.raw_operator_application_count < 0
+            or self.raw_operator_application_count
+            > FROZEN_DSL_LIMITS.maximum_raw_operator_applications
+        ):
+            raise ValueError("raw operator application count is outside the frozen budget")
         if self.closure_cardinality is not None and (
             type(self.closure_cardinality) is not int
             or self.closure_cardinality < 0
         ):
             raise ValueError("closure cardinality must be a nonnegative integer")
-        for name in ("complete", "budget_exhausted", "semantics_total"):
+        for name in (
+            "frontier_exhausted",
+            "all_type_buckets_closed",
+            "raw_expansion_limit_hit",
+            "wall_clock_abort_hit",
+            "semantics_total",
+        ):
             _require_bool(getattr(self, name), name)
+        _require_content_id(
+            self.first_out_of_budget_program_id,
+            "first out-of-budget program id",
+            optional=True,
+        )
         _require_tuple(
             self.extensional_match_program_ids,
             "extensional match program ids",
@@ -360,17 +610,66 @@ class ClosureEnumerationReceipt:
             sorted(self.extensional_match_program_ids)
         ):
             raise ValueError("extensional match ids must use canonical order")
-        if self.complete:
-            if self.budget_exhausted:
-                raise ValueError("a complete closure cannot be budget exhausted")
+        if self.closure_status is ClosureRunStatus.COMPLETE:
+            if not self.semantics_total:
+                raise ValueError("COMPLETE requires total semantics")
+            if not self.frontier_exhausted or not self.all_type_buckets_closed:
+                raise ValueError("COMPLETE requires an exhausted, closed frontier")
+            if self.raw_expansion_limit_hit or self.wall_clock_abort_hit:
+                raise ValueError("COMPLETE cannot carry an execution abort")
             if self.closure_cardinality != self.enumerated_canonical_program_count:
                 raise ValueError("complete receipt must bind the full closure cardinality")
-        elif self.closure_cardinality is not None:
-            raise ValueError("an incomplete receipt cannot claim closure cardinality")
-        if self.budget_exhausted and (
-            self.enumerated_canonical_program_count != self.search_budget
-        ):
-            raise ValueError("budget exhaustion requires consuming the full budget")
+            if self.first_out_of_budget_program_id is not None:
+                raise ValueError("COMPLETE cannot carry an out-of-budget witness")
+        elif self.closure_status is ClosureRunStatus.DSL_TOO_LARGE:
+            if not self.semantics_total:
+                raise ValueError("DSL_TOO_LARGE requires total admitted-program semantics")
+            if self.enumerated_canonical_program_count != self.search_budget:
+                raise ValueError("DSL_TOO_LARGE requires 50,000 accepted programs")
+            if self.first_out_of_budget_program_id is None:
+                raise ValueError("DSL_TOO_LARGE requires the 50,001st program id")
+            if self.frontier_exhausted or self.all_type_buckets_closed:
+                raise ValueError("DSL_TOO_LARGE cannot claim a closed frontier")
+            if self.raw_expansion_limit_hit or self.wall_clock_abort_hit:
+                raise ValueError("DSL_TOO_LARGE is distinct from execution abort")
+            if self.closure_cardinality is not None:
+                raise ValueError("DSL_TOO_LARGE cannot claim closure cardinality")
+        elif self.closure_status is ClosureRunStatus.INCONCLUSIVE_BUDGET:
+            if not self.semantics_total:
+                raise ValueError(
+                    "semantic failure must use INCONCLUSIVE_SEMANTICS"
+                )
+            if not (self.raw_expansion_limit_hit or self.wall_clock_abort_hit):
+                raise ValueError("INCONCLUSIVE_BUDGET requires a frozen budget abort")
+            if (
+                self.raw_expansion_limit_hit
+                and self.raw_operator_application_count
+                != FROZEN_DSL_LIMITS.maximum_raw_operator_applications
+            ):
+                raise ValueError(
+                    "raw expansion limit requires exactly 5,000,000 applications"
+                )
+            if self.frontier_exhausted or self.all_type_buckets_closed:
+                raise ValueError("INCONCLUSIVE_BUDGET cannot claim a closed frontier")
+            if self.first_out_of_budget_program_id is not None:
+                raise ValueError("raw-budget failure cannot claim DSL_TOO_LARGE")
+            if self.closure_cardinality is not None:
+                raise ValueError("incomplete receipt cannot claim closure cardinality")
+        else:
+            if self.semantics_total:
+                raise ValueError("INCONCLUSIVE_SEMANTICS requires partial semantics")
+            if self.frontier_exhausted or self.all_type_buckets_closed:
+                raise ValueError(
+                    "INCONCLUSIVE_SEMANTICS cannot claim a closed frontier"
+                )
+            if self.raw_expansion_limit_hit or self.wall_clock_abort_hit:
+                raise ValueError(
+                    "semantic failure cannot also claim a budget abort"
+                )
+            if self.closure_cardinality is not None:
+                raise ValueError("semantic failure cannot claim closure cardinality")
+            if self.first_out_of_budget_program_id is not None:
+                raise ValueError("semantic failure cannot claim DSL_TOO_LARGE")
 
     @property
     def content_id(self) -> str:
@@ -400,8 +699,10 @@ class ClosureAssessment:
             optional=True,
         )
         if self.verdict is AdequacyVerdict.OUTSIDE_FROZEN_CLOSURE:
-            if self.outside_certificate_id is None:
-                raise ValueError("outside verdict needs a content-bound certificate")
+            raise RuntimeError(
+                "formal outside assessments cannot be directly constructed; "
+                "sealed certificate issuance is not implemented"
+            )
         elif self.outside_certificate_id is not None:
             raise ValueError("only an outside verdict may carry an outside certificate")
         if not self.shadow_only or self.active_promotion_authorized:
@@ -443,9 +744,34 @@ def assess_closure(
     replay the archive and recompute the program and target roots.
     """
 
+    expected_universe = (
+        contract.bounded_universe_diagnostic_id
+        if receipt.target_role is TargetRole.OUTSIDE_TARGET
+        else contract.hidden_sink_universe_diagnostic_id
+    )
+    expected_truth_table = (
+        contract.target_table_diagnostic_id
+        if receipt.target_role is TargetRole.OUTSIDE_TARGET
+        else contract.hidden_sink_target_table_diagnostic_id
+    )
     bindings = (
         ("contract", receipt.contract_id, contract.content_id),
-        ("bounded_universe", receipt.bounded_universe_id, contract.bounded_universe_id),
+        ("dsl_spec", receipt.dsl_spec_id, contract.dsl_spec_id),
+        (
+            "bounded_universe",
+            receipt.bounded_universe_diagnostic_id,
+            expected_universe,
+        ),
+        (
+            "target_truth_table",
+            receipt.target_table_diagnostic_id,
+            expected_truth_table,
+        ),
+        (
+            "operator_semantics",
+            receipt.operator_semantics_id,
+            contract.operator_semantics_id,
+        ),
         (
             "equivalence_contract",
             receipt.equivalence_contract_id,
@@ -500,23 +826,33 @@ def assess_closure(
             AdequacyVerdict.INCONCLUSIVE_SEMANTICS,
             "target_or_program_semantics_are_partial",
         )
+    if receipt.closure_status is ClosureRunStatus.DSL_TOO_LARGE:
+        return _assessment(
+            contract,
+            receipt,
+            AdequacyVerdict.INCONCLUSIVE_BUDGET,
+            "dsl_too_large_requires_new_dsl_version",
+        )
+    if receipt.closure_status is ClosureRunStatus.INCONCLUSIVE_BUDGET:
+        return _assessment(
+            contract,
+            receipt,
+            AdequacyVerdict.INCONCLUSIVE_BUDGET,
+            "frozen_raw_expansion_or_wall_clock_budget_exhausted",
+        )
+    if receipt.closure_status is ClosureRunStatus.INCONCLUSIVE_SEMANTICS:
+        return _assessment(
+            contract,
+            receipt,
+            AdequacyVerdict.INCONCLUSIVE_SEMANTICS,
+            "closure_run_reported_partial_semantics",
+        )
     if receipt.extensional_match_program_ids:
         return _assessment(
             contract,
             receipt,
             AdequacyVerdict.IN_LANGUAGE,
             "full_bounded_truth_table_has_an_old_language_match",
-        )
-    if not receipt.complete:
-        return _assessment(
-            contract,
-            receipt,
-            AdequacyVerdict.INCONCLUSIVE_BUDGET,
-            (
-                "frozen_search_budget_exhausted"
-                if receipt.budget_exhausted
-                else "closure_enumeration_incomplete"
-            ),
         )
     if receipt.target_role is TargetRole.IN_LANGUAGE_NULL:
         return _assessment(
@@ -643,9 +979,10 @@ def xor2_via_absolute_difference(left: int, right: int) -> int:
 class Xor2SanityWitness:
     """Mathematical target-design sanity under intended numeric semantics.
 
-    This is not a parsed old-DSL AST and does not use the still-unfrozen
-    operator-semantics contract.  It therefore cannot serve as an executable
-    closure witness or a formal ``IN_LANGUAGE`` receipt.
+    The operator truth conditions are frozen, but this witness has not been
+    admitted by the strict canonicalizer or replayed by both complete closure
+    implementations.  It therefore cannot serve as a formal ``IN_LANGUAGE``
+    receipt.
     """
 
     expression: str
@@ -677,10 +1014,8 @@ class Xor2SanityWitness:
 
 
 XOR2_ABSOLUTE_DIFFERENCE_WITNESS = Xor2SanityWitness(
-    expression=(
-        "approx_equal(task_target," "absolute(difference(bit_left,bit_right)))"
-    ),
-    operator_ids=("difference", "absolute", "approx_equal"),
+    expression=BINARY_XOR_SANITY.type_explicit_candidate_old_dsl_program,
+    operator_ids=("bit_to_scalar", "difference", "absolute"),
     truth_table=tuple(
         (left, right, xor2_via_absolute_difference(left, right))
         for left in (0, 1)
@@ -697,13 +1032,20 @@ def phase3_preregistration_report() -> dict[str, object]:
         "artifact": "phase3_preregistration_readiness_v1",
         "schema_version": contract.schema_version,
         "contract_id": contract.content_id,
+        "overall_freeze_version": contract.freeze_version,
         "implementation_id": (
             "phase3_contract_source_sha256_"
             + hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
         ),
-        "status": "decided_limits_frozen_verifiers_and_contract_fields_blocked",
+        "status": "surface_parameter_freeze_with_execution_and_schema_blockers",
         "formal_phase3a_claim": False,
-        "outside_language_certificate_issued": False,
+        "unbounded_outside_language_certificate_issued": False,
+        "outside_frozen_closure_certificate_issued": False,
+        "unbounded_outside_language_claim_prohibited": True,
+        "only_authorized_future_claim": (
+            "OUTSIDE_FROZEN_CLOSURE(dsl_version, bounded_universe_root, "
+            "target_truth_table_root, equivalence=exact_extensional)"
+        ),
         "ready_for_outside_certificate": contract.ready_for_outside_certificate,
         "closure_receipt_semantics_replayed": False,
         "sealed_closure_verifier_implemented": (
@@ -711,15 +1053,60 @@ def phase3_preregistration_report() -> dict[str, object]:
         ),
         "mdl_numeric_threshold_is_formal_gate": False,
         "sealed_mdl_scorer_implemented": SEALED_MDL_SCORER_IMPLEMENTED,
+        "surface_parameter_freeze_complete": True,
+        "strict_acceptance_contract_complete": False,
+        "normative_parameter_freeze_complete": False,
+        "specification_resolution_blockers": list(
+            SPECIFICATION_RESOLUTION_BLOCKERS
+        ),
+        "outside_certificate_capability_blockers": list(
+            FROZEN_OUTSIDE_CERTIFICATE_IMPLEMENTATION_BLOCKERS
+        ),
+        "formal_mdl_capability_blockers": list(
+            FROZEN_FORMAL_MDL_IMPLEMENTATION_BLOCKERS
+        ),
         "readiness_blockers": [
             blocker.value for blocker in contract.readiness_blockers
         ],
+        "resolved_content_bindings": {
+            "rational_grid_id": contract.rational_grid_id,
+            "dsl_spec_id": contract.dsl_spec_id,
+            "bounded_universe_diagnostic_id": (
+                contract.bounded_universe_diagnostic_id
+            ),
+            "target_table_diagnostic_id": contract.target_table_diagnostic_id,
+            "operator_semantics_id": contract.operator_semantics_id,
+            "equivalence_contract_id": contract.equivalence_contract_id,
+            "mdl_code_table_id": contract.mdl_code_table_id,
+            "odd_reduction_target_id": contract.parity_target_id,
+            "hidden_sink_control_id": contract.hidden_sink_control_id,
+            "hidden_sink_universe_diagnostic_id": (
+                contract.hidden_sink_universe_diagnostic_id
+            ),
+            "hidden_sink_target_table_diagnostic_id": (
+                contract.hidden_sink_target_table_diagnostic_id
+            ),
+            "hidden_generator_spec_id": contract.hidden_generator_spec_id,
+        },
+        "unresolved_implementation_bindings": {
+            "canonicalizer_implementation_id": (
+                contract.canonicalizer_implementation_id
+            ),
+            "enumerator_implementation_id": contract.enumerator_implementation_id,
+        },
         "frozen_limits": {
             "maximum_relation_arity": contract.limits.maximum_relation_arity,
             "maximum_entity_set_size": contract.limits.maximum_entity_set_size,
             "maximum_ast_depth": contract.limits.maximum_ast_depth,
+            "maximum_ast_node_count": contract.limits.maximum_ast_node_count,
             "maximum_top_level_clauses": (
                 contract.limits.maximum_top_level_clauses
+            ),
+            "maximum_distinct_bit_slots": (
+                contract.limits.maximum_distinct_bit_slots
+            ),
+            "maximum_aggregate_leaves": (
+                contract.limits.maximum_aggregate_leaves
             ),
             "maximum_composition_depth": (
                 contract.limits.maximum_composition_depth
@@ -731,32 +1118,134 @@ def phase3_preregistration_report() -> dict[str, object]:
             "maximum_canonical_programs": (
                 contract.limits.maximum_canonical_programs
             ),
+            "maximum_raw_operator_applications": (
+                contract.limits.maximum_raw_operator_applications
+            ),
+        },
+        "old_dsl_freeze": {
+            "dsl_version": OLD_DSL_V1.dsl_version,
+            "dsl_spec_id": OLD_DSL_V1.content_id,
+            "primitive_sort_count": len(OLD_DSL_V1.primitive_domains),
+            "rational_value_cardinality": 663,
+            "scope_count": len(OLD_DSL_V1.scope_catalog),
+            "aggregate_count": len(AGGREGATE_CATALOG),
+            "transform_count": len(OLD_DSL_V1.transform_catalog),
+            "equivalence": "exact_extensional",
+            "bottom_is_observable": False,
+            "shrink_order": [step.operation for step in SHRINK_ORDER],
+        },
+        "closure_capacity_preflight": {
+            "status": CONDITIONAL_CAPACITY_STATUS,
+            "executed_closure_status": "NOT_RUN",
+            "candidate_ast_lower_bound": (
+                CAPACITY_PROOF.witness_candidate_ast_count
+            ),
+            "canonical_program_budget": CAPACITY_PROOF.canonical_program_budget,
+            "strict_canonicalizer_acceptance_verified": False,
+            "formal_canonical_cbor_replay_complete": False,
+            "conclusion": (
+                "If the strict canonicalizer accepts the diagnostic subset "
+                "without extra algebraic reductions, the DSL is DSL_TOO_LARGE; "
+                "that implication is not yet a formal closure result."
+            ),
+        },
+        "target_freeze": {
+            "target_id": ODD_REDUCTION_TARGET.target_id,
+            "target_spec_id": ODD_REDUCTION_TARGET.content_id,
+            "diagnostic_universe_content_id": (
+                ODD_REDUCTION_TARGET.diagnostic_universe_content_id
+            ),
+            "diagnostic_target_table_content_id": (
+                ODD_REDUCTION_TARGET.diagnostic_target_table_content_id
+            ),
+            "formal_bounded_universe_root": None,
+            "formal_target_truth_table_root": None,
+            "universe_rows": ODD_REDUCTION_TARGET.universe_rows,
+            "set_sizes": list(ODD_REDUCTION_TARGET.set_sizes),
+            "discovery_rows": sum(
+                split.discovery_train for split in ODD_REDUCTION_TARGET.splits
+            ),
+            "validation_rows": sum(
+                split.validation for split in ODD_REDUCTION_TARGET.splits
+            ),
+            "sealed_prediction_rows": sum(
+                split.sealed_prediction for split in ODD_REDUCTION_TARGET.splits
+            ),
+            "fallback_registry_size": len(HIDDEN_TARGET_REGISTRY),
+            "formal_closure_verdict": None,
         },
         "xor2_sanity": {
-            "status": "intended_numeric_semantics_sanity_only",
+            "status": BINARY_XOR_SANITY.status.value,
             "formal_closure_verdict": None,
             "dsl_ast_executed": False,
-            "operator_semantics_frozen": False,
+            "operator_semantics_frozen": True,
             "witness_id": XOR2_ABSOLUTE_DIFFERENCE_WITNESS.content_id,
             "expression": XOR2_ABSOLUTE_DIFFERENCE_WITNESS.expression,
+            "source_document_expression": (
+                BINARY_XOR_SANITY.candidate_old_dsl_program
+            ),
+            "source_expression_typechecks_under_frozen_typing": (
+                BINARY_XOR_SANITY.source_candidate_typechecks_under_frozen_typing
+            ),
+            "implicit_bit_to_rational_coercion_frozen": (
+                BINARY_XOR_SANITY.implicit_bit_to_rational_coercion_frozen
+            ),
             "truth_table": [
                 list(row) for row in XOR2_ABSOLUTE_DIFFERENCE_WITNESS.truth_table
             ],
             "conclusion": (
                 "Under standard bit and absolute-difference arithmetic, banning "
                 "XOR/parity symbol names does not ban XOR2 semantics. This is a "
-                "target-design sanity only; the higher-arity target still needs "
-                "frozen executable semantics and sealed closure replay."
+                "target-design sanity only; any old-language membership verdict "
+                "still needs strict canonical admission and dual closure replay."
             ),
         },
         "hidden_sink_role": "in_language_null_control_only",
+        "hidden_sink_control": {
+            "control_id": OBSERVED_OMITTED_SINK_CONTROL.control_id,
+            "control_spec_id": OBSERVED_OMITTED_SINK_CONTROL.content_id,
+            "diagnostic_universe_content_id": (
+                OBSERVED_OMITTED_SINK_CONTROL.diagnostic_universe_content_id
+            ),
+            "diagnostic_target_table_content_id": (
+                OBSERVED_OMITTED_SINK_CONTROL.diagnostic_target_table_content_id
+            ),
+            "formal_bounded_universe_root": None,
+            "formal_target_truth_table_root": None,
+            "universe_rows": OBSERVED_OMITTED_SINK_CONTROL.universe_rows,
+            "all_channels_observed": (
+                OBSERVED_OMITTED_SINK_CONTROL.all_channels_present_in_public_typed_evidence
+            ),
+            "latent_sink_allowed": (
+                OBSERVED_OMITTED_SINK_CONTROL.latent_sink_allowed
+            ),
+            "baseline_scope_id": (
+                OBSERVED_OMITTED_SINK_CONTROL.baseline_scope_id
+            ),
+            "source_document_baseline_alias": (
+                OBSERVED_OMITTED_SINK_CONTROL.source_document_baseline_label
+            ),
+            "scope_alias_confirmation_pending": True,
+            "formal_control_run_complete": False,
+        },
+        "mdl_freeze": {
+            "code_table_version": MDL_CODE_TABLE_ID,
+            "code_table_content_id": FROZEN_MDL_CODE_TABLE_ID,
+            "fixed_point_precision": FIXED_POINT_PRECISION_ID,
+            "formal_scorer_status": "HARD_DISABLED",
+            "caller_supplied_lengths_are_formal_evidence": False,
+        },
         "shadow_only": contract.shadow_only,
         "active_promotion_authorized": contract.active_promotion_authorized,
         "claim_boundary": (
-            "This artifact freezes decided surface limits, untrusted receipt wire "
-            "schemas, and an exact MDL arithmetic precheck. It is not a replayed "
-            "old-DSL closure, parity outside proof, hidden-sink result, formal MDL "
-            "gate, or sealed Phase-3A result."
+            "This artifact binds the frozen surface tables for the DSL, target, "
+            "null control, closure budget, certificate, and MDL code table, plus "
+            "diagnostic canonical-JSON content IDs. Formal canonical-CBOR/RFC6962 "
+            "roots, strict acceptance, and wire schemas remain unresolved. It is "
+            "not a complete "
+            "closure, a DSL_TOO_LARGE result, an extensional target verdict, a "
+            "hidden-sink result, an outside certificate, a formal MDL gate, or "
+            "a sealed Phase-3A result."
         ),
     }
     payload["report_id"] = stable_hash(payload, prefix="phase3_prereg_report_")
