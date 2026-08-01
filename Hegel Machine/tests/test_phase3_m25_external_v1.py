@@ -10,7 +10,9 @@ import pytest
 
 from hegel_machine.cli import main
 from hegel_machine.phase3_m25_external_v1 import (
-    EXACT_ERRATA_BLOCKERS,
+    DualGoldenVerification,
+    EXACT_ERRATA_PREREQUISITES,
+    EXTERNAL_GENESIS_START_GUARD_FIELDS,
     ExternalGenesisPreflightError,
     FAIL_ACTOR_KEY_ID_COLLISION,
     FAIL_M25_EXACT_ERRATA_REQUIRED,
@@ -25,15 +27,19 @@ from hegel_machine.phase3_m25_external_v1 import (
     FAIL_SECRET_STATE_PERMISSIONS,
     FAIL_SPLIT_SEED_ALREADY_INSTANTIATED,
     FAIL_SPLIT_SEED_PENDING_EXTERNAL_RECOVERY_REQUIRED,
+    GATE24_NAME,
     MarkerSnapshot,
+    RUN_OUTPUT_SLOT_NAMES,
     assert_external_genesis_start_allowed,
     assert_marker_does_not_require_external_recovery,
     assert_public_payload_contains_no_secret_fields,
     assert_seed_instantiation_marker_absent,
     external_genesis_preflight_report,
+    external_genesis_start_guard_report,
     validate_calculator_process_result,
     validate_commit_b_changed_paths,
     validate_distinct_actor_key_ids,
+    validate_dual_golden_verification,
     validate_external_genesis_preflight_report,
     validate_marker_snapshot,
     validate_secret_fd_number,
@@ -44,11 +50,19 @@ from hegel_machine.phase3_m25_external_v1 import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CHECKED_IN = ROOT / "artifacts" / "phase3_m25_external_preflight_v1.json"
+HISTORICAL_CHECKED_IN_V1 = (
+    ROOT / "artifacts" / "phase3_m25_external_preflight_v1.json"
+)
 
 
 def _assert_code(error: pytest.ExceptionInfo[ExternalGenesisPreflightError], code: str) -> None:
     assert error.value.code == code
+
+
+def _passing_dual_golden_verification() -> DualGoldenVerification:
+    return DualGoldenVerification(
+        *(True for _ in EXTERNAL_GENESIS_START_GUARD_FIELDS)
+    )
 
 
 @pytest.fixture
@@ -59,21 +73,52 @@ def posix_tmp_path() -> Path:
         yield Path(value)
 
 
-def test_preflight_keeps_exact_12_blockers_and_14_of_24_not_run() -> None:
+def test_v2_preflight_has_12_resolved_prerequisites_and_14_of_24_not_run() -> None:
     report = external_genesis_preflight_report()
     validate_external_genesis_preflight_report(report)
 
-    assert len(EXACT_ERRATA_BLOCKERS) == 12
-    assert [blocker.blocker_id.split("_", 1)[0] for blocker in EXACT_ERRATA_BLOCKERS] == [
-        f"E{index}" for index in range(1, 13)
-    ]
-    assert report["exact_errata_blocker_count"] == 12
+    assert len(EXACT_ERRATA_PREREQUISITES) == 12
+    assert [
+        prerequisite.decision_id.split("_", 1)[0]
+        for prerequisite in EXACT_ERRATA_PREREQUISITES
+    ] == [f"E{index}" for index in range(1, 13)]
+    assert all(
+        prerequisite.selected_option_id.endswith(
+            (
+                "EXACTLY_15",
+                "REORDER_EXECUTION_BEFORE_SIGNATURES",
+                "STATEMENT_PLUS_THREE_ENVELOPES",
+                "DOMAIN_SEPARATED_CONTENT_HASH",
+                "PURPOSE1_IS_CUSTODIAN_IDENTITY",
+                "CALCULATORS_INSIDE_CUSTODIAN_BOUNDARY",
+                "VERSIONED_AUDIT_BUNDLE",
+                "M3STATE0_NEW_TARGET_ROLE_ENUM",
+                "FORMAL_PREIMAGE_AND_ALIAS_REGISTRY",
+                "FORMAL_APPEND_ONLY_REGISTRY_ROOT",
+                "USE_TARGET_SPEC_AND_BUNDLE_FIELDS",
+                "SIGN_FOUR_CUSTODIAN_OBJECTS",
+            )
+        )
+        for prerequisite in EXACT_ERRATA_PREREQUISITES
+    )
+    assert report["schema_version"] == "hegel-phase3-m25-external-preflight/2"
+    assert report["exact_errata_resolved"] is True
+    assert report["unresolved_specification_blockers"] == []
+    assert report["resolved_errata_prerequisite_count"] == 12
+    assert all(
+        prerequisite["resolved"] is True
+        for prerequisite in report["resolved_errata_prerequisites"]
+    )
     assert report["m3_gates_satisfied"] == 14
     assert report["m3_gates_total"] == 24
     assert report["child_state"] == "NOT_RUN"
     assert report["m3_entry_allowed"] is False
     assert report["m3_run_started"] is False
     assert report["external_genesis_start_allowed"] is False
+    guard = report["external_genesis_start_guard"]
+    assert guard["required_check_count"] == 10
+    assert guard["passed_check_count"] == 0
+    assert guard["all_required_checks_pass"] is False
     assert report["diagnostic_report_id"].startswith("phase3_m25_external_preflight_")
 
     effects = report["authority_side_effects"]
@@ -81,24 +126,37 @@ def test_preflight_keeps_exact_12_blockers_and_14_of_24_not_run() -> None:
     assert effects and all(value is False for value in effects.values())
 
 
-def test_checked_in_external_preflight_is_current() -> None:
-    report = json.loads(CHECKED_IN.read_text(encoding="utf-8"))
-    validate_external_genesis_preflight_report(report)
+def test_checked_in_external_preflight_v1_remains_historical() -> None:
+    report = json.loads(HISTORICAL_CHECKED_IN_V1.read_text(encoding="utf-8"))
+    assert report["artifact"] == "phase3_m25_external_preflight_v1"
+    assert report["status"] == "EXACT_ERRATA_REQUIRED_EXTERNAL_GENESIS_BLOCKED"
+    with pytest.raises(ExternalGenesisPreflightError) as error:
+        validate_external_genesis_preflight_report(report)
+    _assert_code(error, FAIL_M25_EXACT_ERRATA_REQUIRED)
 
 
 def test_external_preflight_cli_publishes_stop_without_starting_genesis(
     tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     output = tmp_path / "external-preflight.json"
     assert main(["phase3-m25-external-preflight", "--output", str(output)]) == 0
+    printed = json.loads(capsys.readouterr().out)
     report = json.loads(output.read_text(encoding="utf-8"))
-    assert report["status"] == "EXACT_ERRATA_REQUIRED_EXTERNAL_GENESIS_BLOCKED"
+    assert printed == report
+    assert report["artifact"] == "phase3_m25_external_preflight_v2"
+    assert report["status"] == (
+        "EXACT_ERRATA_RESOLVED_DUAL_GOLDEN_VERIFICATION_REQUIRED"
+    )
     assert report["external_genesis_start_allowed"] is False
     assert all(value is False for value in report["authority_side_effects"].values())
 
 
-def test_errata_registry_explicitly_covers_slot_topology_and_path_alias_details() -> None:
-    by_id = {blocker.blocker_id: blocker for blocker in EXACT_ERRATA_BLOCKERS}
+def test_resolved_registry_covers_slot_topology_and_path_alias_details() -> None:
+    by_id = {
+        prerequisite.decision_id: prerequisite
+        for prerequisite in EXACT_ERRATA_PREREQUISITES
+    }
     assert "15 output slots" in by_id[
         "E1_M3_RUN_GENESIS_SLOT_CARDINALITY"
     ].title
@@ -123,6 +181,7 @@ def test_errata_registry_explicitly_covers_slot_topology_and_path_alias_details(
         "split_contract_numeric_rule_registry",
         "traversal_and_bucket_field_id_registries",
     }.issubset(e9.required_machine_fields)
+    assert all(item.to_dict()["resolved"] is True for item in by_id.values())
 
 
 def test_preflight_report_rejects_self_consistent_authority_escalation() -> None:
@@ -151,7 +210,7 @@ def test_preflight_rejects_json_numeric_type_confusion(
     _assert_code(error, FAIL_M25_EXACT_ERRATA_REQUIRED)
 
 
-def test_external_start_guard_fails_before_csprng_or_marker(
+def test_unverified_external_start_guard_fails_before_csprng_or_marker(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[str] = []
@@ -171,6 +230,102 @@ def test_external_start_guard_fails_before_csprng_or_marker(
         assert_external_genesis_start_allowed()
     _assert_code(error, FAIL_M25_EXACT_ERRATA_REQUIRED)
     assert calls == []
+
+
+def test_external_start_guard_requires_every_exact_field() -> None:
+    passing = _passing_dual_golden_verification().to_dict()
+    for field_name in EXTERNAL_GENESIS_START_GUARD_FIELDS:
+        incomplete = dict(passing)
+        incomplete[field_name] = False
+        with pytest.raises(ExternalGenesisPreflightError) as error:
+            assert_external_genesis_start_allowed(incomplete)
+        _assert_code(error, FAIL_M25_EXACT_ERRATA_REQUIRED)
+
+    malformed = dict(passing)
+    malformed[EXTERNAL_GENESIS_START_GUARD_FIELDS[0]] = 1
+    with pytest.raises(ExternalGenesisPreflightError) as error:
+        validate_dual_golden_verification(malformed)
+    _assert_code(error, FAIL_M25_EXACT_ERRATA_REQUIRED)
+
+    extra = dict(passing)
+    extra["override"] = True
+    with pytest.raises(ExternalGenesisPreflightError) as error:
+        validate_dual_golden_verification(extra)
+    _assert_code(error, FAIL_M25_EXACT_ERRATA_REQUIRED)
+
+
+def test_10_of_10_guard_returns_only_side_effect_free_authorization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    monkeypatch.setattr(
+        os,
+        "urandom",
+        lambda _length: calls.append("csprng") or bytes(32),
+    )
+    monkeypatch.setattr(
+        os,
+        "open",
+        lambda *_args, **_kwargs: calls.append("marker") or 3,
+    )
+
+    verification = _passing_dual_golden_verification()
+    guard = external_genesis_start_guard_report(verification)
+    assert guard["required_check_count"] == 10
+    assert guard["passed_check_count"] == 10
+    assert guard["all_required_checks_pass"] is True
+    assert guard["external_genesis_start_allowed"] is True
+    assert guard["gate_effect"] == "NONE"
+
+    authorization = assert_external_genesis_start_allowed(verification)
+    assert authorization.external_genesis_start_allowed is True
+    assert authorization.authorization_is_side_effect_free is True
+    assert authorization.m3_gates_satisfied == 14
+    assert authorization.child_state == "NOT_RUN"
+    assert authorization.gate24_qualified is False
+    assert authorization.m3_entry_allowed is False
+    assert authorization.m3_run_started is False
+    assert authorization.phase3_m3_start_authorized is False
+    assert authorization.publication_commit_may_substitute is False
+    assert calls == []
+
+
+def test_gate24_and_separate_m3_start_contract_are_exact_but_not_executed() -> None:
+    report = external_genesis_preflight_report()
+    gate24 = report["gate24_contract"]
+    assert gate24["gate_name"] == GATE24_NAME
+    assert gate24["ordered_run_output_slot_names"] == list(RUN_OUTPUT_SLOT_NAMES)
+    assert gate24["pass_predicate"] == {
+        "m3_execution_manifest_v2_root_non_null": True,
+        "m3_run_genesis_v1_root_non_null": True,
+        "m3_run_genesis_initial_state": "M3StateId.NOT_RUN = 0",
+        "run_output_slot_count": 15,
+        "all_run_output_slots_null": True,
+        "run_id_registered_in_bound_opaque_id_snapshot": True,
+        "bridge_envelope_count": 3,
+        "bridge_signer_purposes_exactly": [1, 2, 3],
+    }
+    assert gate24["gate24_passed"] is False
+    assert gate24["qualification_effect_if_passed"] == {
+        "m3_entry_qualified": True,
+        "m3_entry_allowed": True,
+        "m3_run_started": False,
+        "child_state": "NOT_RUN",
+    }
+    assert tuple(report["run_output_slots"]) == RUN_OUTPUT_SLOT_NAMES
+    assert all(value is None for value in report["run_output_slots"].values())
+
+    start = report["phase3_m3_start_contract"]
+    assert start["action_id"] == "phase3-m3-start"
+    assert start["only_transition"] == (
+        "NOT_RUN/NONE -> RUNNING/CANONICAL_ENUMERATION"
+    )
+    assert start["transition_index"] == 0
+    assert start["previous_state_record_root"] is None
+    assert start["transition_reason"] == "ENTRY_GATES_24_OF_24"
+    assert start["triggering_receipt_root"] is None
+    assert start["start_record_created"] is False
 
 
 def test_secret_state_directory_must_be_external_nonsymlink_0700(

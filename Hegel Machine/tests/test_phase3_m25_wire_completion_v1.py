@@ -93,7 +93,7 @@ def test_id_digest_is_bit_exact_and_never_normalizes() -> None:
     assert _error_code(id_digest_v1, "a" * 257) == "REJECT_MACHINE_ID_LENGTH"
     assert _error_code(id_digest_v1, "Hegel Machine/docs/x") == "REJECT_MACHINE_ID_SYNTAX"
     assert _error_code(id_digest_v1, "黑格尔") == "REJECT_MACHINE_ID_NON_ASCII"
-    assert "NormativeDocumentPathMachineId" in AUTHORITATIVE_BLOCKING_GAPS
+    assert OBJECT_TAGS["RepositoryPathAliasRecordV1"] == 0x3213
 
 
 def test_timestamp_and_opaque_id_profiles_fail_closed() -> None:
@@ -164,7 +164,7 @@ def test_numeric_enum_registry_is_complete_and_context_strict() -> None:
 
 
 def test_v112_tag_and_schema_registry_contains_every_addition() -> None:
-    assert len(OBJECT_TAGS) == 58
+    assert len(OBJECT_TAGS) == 81
     expected = {
         "NormativeDocumentBlobV1": 0x3001,
         "ExecutionEnvironmentSpecV1": 0x3016,
@@ -437,26 +437,15 @@ def test_m3_genesis_carries_exactly_15_null_slots_but_gate24_remains_blocked() -
     assert len(candidate_content_root("M3RunGenesisV1", fields)) == 32
     fields["canonical_program_archive_root_or_null"] = ROOT
     assert _error_code(build_formal_object, "M3RunGenesisV1", fields) == "FAIL_M3_OUTPUT_ROOT_PREPOPULATED"
-    assert "M3RunGenesisOutputSlotCount" in AUTHORITATIVE_BLOCKING_GAPS
+    assert set(AUTHORITATIVE_BLOCKING_GAPS) == {"ExternalActorEvidence"}
 
 
-def test_unresolved_state_dual_domain_and_witness_conflicts_stay_explicit() -> None:
-    assert _error_code(build_formal_object, "M3RunStateRecordV1", {}) == FAIL_M25_NORMATIVE_GAP
-    assert _error_code(build_formal_object, "M3DualReplayAgreementV1", {}) == FAIL_M25_NORMATIVE_GAP
-    assert {
-        "NormativeDocumentPathMachineId",
-        "OutsideTargetClaimLevel",
-        "SplitContractRuleIds",
-        "ContractFieldIdRegistries",
-        "StateMachineLegalTransitionRow",
-        "InputSignatureStaticRoleMetadata",
-        "MismatchKindId",
-        "M3RunStateRecordV1",
-        "M3DualReplayAgreementV1",
-        "SinkWitnessBinding",
-        "M3RunGenesisOutputSlotCount",
-        "ExternalActorEvidence",
-    } == set(AUTHORITATIVE_BLOCKING_GAPS)
+def test_errata_resolves_state_dual_domain_and_witness_field_conflicts() -> None:
+    assert FORMAL_SCHEMA_REGISTRY["M3RunStateRecordV1"].fields[0] == "run_id"
+    assert FORMAL_SCHEMA_REGISTRY["M3DualReplayAgreementV1"].hash_domain == (
+        "HEGEL/M3_DUAL_REPLAY_AGREEMENT/V1"
+    )
+    assert set(AUTHORITATIVE_BLOCKING_GAPS) == {"ExternalActorEvidence"}
     assert "required_witness_ast_hash" not in FORMAL_SCHEMA_REGISTRY["DslRoleBindingManifestV1"].fields
 
 

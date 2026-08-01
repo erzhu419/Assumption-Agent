@@ -163,7 +163,7 @@ def _enumeration_receipt_fields() -> dict[str, object]:
 
 
 def test_tag_registry_matches_all_frozen_tags_and_marks_known_gaps() -> None:
-    assert len(OBJECT_TAGS) == 58
+    assert len(OBJECT_TAGS) == 81
     assert OBJECT_TAGS["M3DualReplayAgreementV1"] == 0x3304
     assert FORMAL_SCHEMA_REGISTRY["DiagnosticFormalBridgeRecordV1"].ordering_fields == (
         "artifact_role_id",
@@ -171,7 +171,7 @@ def test_tag_registry_matches_all_frozen_tags_and_marks_known_gaps() -> None:
         "diagnostic_digest",
     )
     assert FORMAL_SCHEMA_REGISTRY["BucketAccountingRecordV1"].wire_gap is None
-    assert "M3DualReplayAgreementV1" in AUTHORITATIVE_BLOCKING_GAPS
+    assert set(AUTHORITATIVE_BLOCKING_GAPS) == {"ExternalActorEvidence"}
 
 
 def test_run_output_slots_are_the_exact_unique_frozen_15_tuple() -> None:
@@ -304,19 +304,23 @@ def test_parent_provenance_xor_is_fail_closed() -> None:
     build_formal_object("DslRoleBindingManifestV1", fields)
 
 
-@pytest.mark.parametrize(
-    "object_name",
-    [
-        "M3RunStateRecordV1",
-        "M3DualReplayAgreementV1",
-    ],
-)
-def test_unfrozen_wire_or_domain_paths_raise_one_normative_gap_code(
-    object_name: str,
-) -> None:
-    with pytest.raises(M25WireError) as error:
-        build_formal_object(object_name, {})
-    assert error.value.code == FAIL_M25_NORMATIVE_GAP
+def test_errata_freezes_run_state_fields_and_dual_agreement_domain() -> None:
+    assert FORMAL_SCHEMA_REGISTRY["M3RunStateRecordV1"].fields == (
+        "run_id",
+        "transition_index",
+        "previous_state_record_root_or_null",
+        "from_state_id",
+        "from_phase_id",
+        "to_state_id",
+        "to_phase_id",
+        "transition_reason_id",
+        "execution_manifest_root",
+        "triggering_receipt_root_or_null",
+        "recorded_at_unix_seconds",
+    )
+    assert FORMAL_SCHEMA_REGISTRY["M3DualReplayAgreementV1"].hash_domain == (
+        "HEGEL/M3_DUAL_REPLAY_AGREEMENT/V1"
+    )
 
 
 def test_no_content_hash_domain_is_not_guessed_for_record_objects() -> None:
@@ -350,7 +354,7 @@ def test_signed_custodian_objects_require_one_sorted_signature() -> None:
         "enclosed_object_tag": 0x3103,
         "enclosed_manifest_root": ROOT,
         "created_at_unix_seconds": 1,
-        "custodian_key_epoch": 0,
+        "signer_key_epoch": 0,
         "signatures": ((bytes(16), bytes(64)),),
     }
     build_formal_object("SignedManifestEnvelopeV1", fields)
@@ -375,7 +379,7 @@ def test_envelope_rejects_unallocated_or_noninteger_object_tag() -> None:
         "enclosed_object_tag": 0x3103,
         "enclosed_manifest_root": ROOT,
         "created_at_unix_seconds": 1,
-        "custodian_key_epoch": 0,
+        "signer_key_epoch": 0,
         "signatures": ((bytes(16), bytes(64)),),
     }
     for invalid in (0x9999, "0x3103", True):

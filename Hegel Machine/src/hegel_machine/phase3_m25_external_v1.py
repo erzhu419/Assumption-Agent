@@ -1,20 +1,20 @@
-"""Fail-closed external-genesis preflight for Phase-3A M2.5.
+"""Side-effect-free external-genesis qualification for Phase-3A M2.5.
+
+The v1.1.2 E1--E12 ambiguities are resolved deterministic prerequisites.  They
+are no longer specification blockers.  External genesis is nevertheless
+fail-closed until all ten committed Python/Rust errata-golden checks pass.
 
 This module is deliberately incapable of generating randomness, creating an
-Ed25519 key, writing an instantiation marker, signing a root, or advancing an
-M3 gate.  It records the exact v1.1.2 errata that still change formal bytes,
-root identity, actor authority, or state.  The guard
-:func:`assert_external_genesis_start_allowed` therefore fails before a future
-external workflow may call an OS CSPRNG or create its ``O_EXCL`` marker.
-
-The storage, FD-3, marker, actor-ID, and publication helpers are read-only or
-pure validators.  They support synthetic fault-injection tests without
-weakening the external-actor boundary.
+Ed25519 key, writing an instantiation marker, signing a root, minting a formal
+root, advancing an M3 gate, or starting M3.  The start guard returns only a
+frozen, side-effect-free authorization value.  The storage, FD-3, marker,
+actor-ID, and publication helpers remain read-only or pure validators.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import os
 from pathlib import Path
 import stat
@@ -26,12 +26,59 @@ from .hashing import stable_hash
 
 MACHINE_FREEZE_ID: Final = "hegel-freeze-p2b-p3-v1.1.2"
 CHILD_DSL_ID: Final = "hegel-old-dsl-v1.1.0"
-ARTIFACT_NAME: Final = "phase3_m25_external_preflight_v1"
+PROJECT_ROOT: Final = Path(__file__).resolve().parents[2]
+ERRATA_RESOLUTION_DOCUMENT: Final = (
+    PROJECT_ROOT
+    / "docs"
+    / "Hegel_Machine_Phase3A_M25_Exact_Wire_Errata_Resolution.md"
+)
+IMPLEMENTATION_ADDENDUM_DOCUMENT: Final = (
+    PROJECT_ROOT
+    / "docs"
+    / "Hegel_Machine_Phase3A_M25_Implementation_Closure_Addendum_v1.md"
+)
+
+ARTIFACT_NAME: Final = "phase3_m25_external_preflight_v2"
+REPORT_SCHEMA: Final = "hegel-phase3-m25-external-preflight/2"
 ARTIFACT_KIND: Final = "DIAGNOSTIC_NON_AUTHORITATIVE"
-CURRENT_STATUS: Final = "EXACT_ERRATA_REQUIRED_EXTERNAL_GENESIS_BLOCKED"
+CURRENT_STATUS: Final = "EXACT_ERRATA_RESOLVED_DUAL_GOLDEN_VERIFICATION_REQUIRED"
 CURRENT_CHILD_STATE: Final = "NOT_RUN"
 M3_GATES_SATISFIED: Final = 14
 M3_GATES_TOTAL: Final = 24
+
+GATE24_NAME: Final = (
+    "M3_EXECUTION_MANIFEST_ROOT_NON_NULL_AND_15_OUTPUT_ROOTS_NULL"
+)
+RUN_OUTPUT_SLOT_NAMES: Final = (
+    "canonical_program_archive_root_or_null",
+    "program_chunk_manifest_root_or_null",
+    "bucket_accounting_root_or_null",
+    "outside_program_output_archive_root_or_null",
+    "outside_output_chunk_manifest_root_or_null",
+    "outside_match_set_root_or_null",
+    "outside_role_evaluation_receipt_root_or_null",
+    "null_program_output_archive_root_or_null",
+    "null_output_chunk_manifest_root_or_null",
+    "null_match_set_root_or_null",
+    "null_role_evaluation_receipt_root_or_null",
+    "python_enumeration_receipt_root_or_null",
+    "rust_enumeration_receipt_root_or_null",
+    "dual_replay_agreement_root_or_null",
+    "final_state_record_root_or_null",
+)
+
+EXTERNAL_GENESIS_START_GUARD_FIELDS: Final = (
+    "errata_document_in_commit_A",
+    "python_errata_vectors_pass",
+    "rust_errata_vectors_pass",
+    "python_rust_canonical_bytes_equal",
+    "python_rust_error_codes_equal",
+    "actor_trust_genesis_schema_frozen",
+    "append_only_id_registry_schema_frozen",
+    "parent_audit_bundle_schema_frozen",
+    "bridge_statement_and_execution_v2_schema_frozen",
+    "secrets_absent_from_repository",
+)
 
 FAIL_M25_EXACT_ERRATA_REQUIRED: Final = "FAIL_M25_EXACT_ERRATA_REQUIRED"
 FAIL_SECRET_STATE_PATH_INVALID: Final = "FAIL_SECRET_STATE_PATH_INVALID"
@@ -67,6 +114,10 @@ def _fail(code: str, detail: str) -> NoReturn:
     raise ExternalGenesisPreflightError(code, detail)
 
 
+def _sha256_file(path: Path) -> str:
+    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def _json_type_strict_equal(left: object, right: object) -> bool:
     """Compare diagnostic JSON without bool/int or int/float coercion."""
 
@@ -86,7 +137,7 @@ def _json_type_strict_equal(left: object, right: object) -> bool:
 
 @dataclass(frozen=True)
 class ErrataOption:
-    """One mutually exclusive normative choice for an exact blocker."""
+    """One mutually exclusive normative choice for an exact decision."""
 
     option_id: str
     decision: str
@@ -101,38 +152,38 @@ class ErrataOption:
 
 
 @dataclass(frozen=True)
-class ExactErrataBlocker:
-    """One unresolved choice that changes bytes, roots, authority, or state."""
+class ResolvedErrataPrerequisite:
+    """One owner-resolved deterministic decision required before dual replay."""
 
-    blocker_id: str
+    decision_id: str
     title: str
     evidence: tuple[str, ...]
     options: tuple[ErrataOption, ...]
-    recommended_option_id: str
+    selected_option_id: str
     required_machine_fields: tuple[str, ...]
 
     def __post_init__(self) -> None:
         option_ids = tuple(option.option_id for option in self.options)
         if len(option_ids) < 2 or len(option_ids) != len(set(option_ids)):
-            raise ValueError("errata blocker options must be unique and nontrivial")
-        if self.recommended_option_id not in option_ids:
-            raise ValueError("recommended option must be one of the frozen choices")
+            raise ValueError("errata decision options must be unique and nontrivial")
+        if self.selected_option_id not in option_ids:
+            raise ValueError("selected option must be one of the frozen choices")
 
     def to_dict(self) -> dict[str, object]:
         return {
-            "blocker_id": self.blocker_id,
+            "decision_id": self.decision_id,
             "title": self.title,
             "evidence": list(self.evidence),
             "options": [option.to_dict() for option in self.options],
-            "recommended_option_id": self.recommended_option_id,
+            "selected_option_id": self.selected_option_id,
             "required_machine_fields": list(self.required_machine_fields),
-            "resolved": False,
+            "resolved": True,
         }
 
 
-EXACT_ERRATA_BLOCKERS: Final = (
-    ExactErrataBlocker(
-        blocker_id="E1_M3_RUN_GENESIS_SLOT_CARDINALITY",
+EXACT_ERRATA_PREREQUISITES: Final = (
+    ResolvedErrataPrerequisite(
+        decision_id="E1_M3_RUN_GENESIS_SLOT_CARDINALITY",
         title="M3RunGenesis lists 15 output slots while Gate 24 says 16",
         evidence=(
             "The M3RunGenesisV1 array names exactly 15 run-produced root slots.",
@@ -151,15 +202,15 @@ EXACT_ERRATA_BLOCKERS: Final = (
                 "Changes M3RunGenesis bytes and requires new vectors/schema versioning.",
             ),
         ),
-        recommended_option_id="E1_A_EXACTLY_15",
+        selected_option_id="E1_A_EXACTLY_15",
         required_machine_fields=(
             "run_output_slot_count",
             "ordered_run_output_slot_names",
             "m3_run_genesis_schema_id",
         ),
     ),
-    ExactErrataBlocker(
-        blocker_id="E2_BRIDGE_TOPOLOGY_ORDER",
+    ResolvedErrataPrerequisite(
+        decision_id="E2_BRIDGE_TOPOLOGY_ORDER",
         title="Bridge signatures precede the execution root they sign",
         evidence=(
             "The bridge signature preimage contains execution_manifest_candidate_root.",
@@ -178,15 +229,15 @@ EXACT_ERRATA_BLOCKERS: Final = (
                 "Weakens execution-specific replay protection and changes the signature preimage.",
             ),
         ),
-        recommended_option_id="E2_A_REORDER_EXECUTION_BEFORE_SIGNATURES",
+        selected_option_id="E2_A_REORDER_EXECUTION_BEFORE_SIGNATURES",
         required_machine_fields=(
             "ordered_root_dag_steps",
             "run_id_registration_step",
             "bridge_signature_preimage_fields",
         ),
     ),
-    ExactErrataBlocker(
-        blocker_id="E3_BRIDGE_ENVELOPE_AND_IDENTITY_BINDING",
+    ResolvedErrataPrerequisite(
+        decision_id="E3_BRIDGE_ENVELOPE_AND_IDENTITY_BINDING",
         title="The 3-of-3 bridge statement has no unique envelope identity",
         evidence=(
             "SignedManifestEnvelopeV1 carries one enclosed root but the bridge signature covers two roots.",
@@ -205,7 +256,7 @@ EXACT_ERRATA_BLOCKERS: Final = (
                 "Requires envelope schema/version changes and a single epoch policy.",
             ),
         ),
-        recommended_option_id="E3_A_STATEMENT_PLUS_THREE_ENVELOPES",
+        selected_option_id="E3_A_STATEMENT_PLUS_THREE_ENVELOPES",
         required_machine_fields=(
             "bridge_statement_tag",
             "bridge_statement_schema_id",
@@ -214,8 +265,8 @@ EXACT_ERRATA_BLOCKERS: Final = (
             "bridge_attestation_bundle_binding_location",
         ),
     ),
-    ExactErrataBlocker(
-        blocker_id="E4_MISSING_HASH_DOMAINS",
+    ResolvedErrataPrerequisite(
+        decision_id="E4_MISSING_HASH_DOMAINS",
         title="Required envelope and agreement roots lack hash domains",
         evidence=(
             "SignedManifestEnvelopeV1 is referenced by signed_envelope_root but has no root formula/domain.",
@@ -234,7 +285,7 @@ EXACT_ERRATA_BLOCKERS: Final = (
                 "Creates a policy exception and must be explicitly frozen.",
             ),
         ),
-        recommended_option_id="E4_A_DOMAIN_SEPARATED_CONTENT_HASH",
+        selected_option_id="E4_A_DOMAIN_SEPARATED_CONTENT_HASH",
         required_machine_fields=(
             "signed_manifest_envelope_root_formula",
             "signed_manifest_envelope_hash_domain",
@@ -242,8 +293,8 @@ EXACT_ERRATA_BLOCKERS: Final = (
             "m3_dual_replay_agreement_hash_domain",
         ),
     ),
-    ExactErrataBlocker(
-        blocker_id="E5_ACTOR_KEY_TRUST_AND_PURPOSE",
+    ResolvedErrataPrerequisite(
+        decision_id="E5_ACTOR_KEY_TRUST_AND_PURPOSE",
         title="Actor key roots and signer purposes are not anchored",
         evidence=(
             "ActorKeyManifestV1 roots are not transitively bound by execution/genesis identity.",
@@ -263,7 +314,7 @@ EXACT_ERRATA_BLOCKERS: Final = (
                 "Adds a fifth M2.5 actor key and new purpose registry entry.",
             ),
         ),
-        recommended_option_id="E5_A_PURPOSE1_IS_CUSTODIAN_IDENTITY",
+        selected_option_id="E5_A_PURPOSE1_IS_CUSTODIAN_IDENTITY",
         required_machine_fields=(
             "actor_key_root_binding_object",
             "pinned_genesis_trust_anchor",
@@ -271,8 +322,8 @@ EXACT_ERRATA_BLOCKERS: Final = (
             "noncustodian_envelope_epoch_semantics",
         ),
     ),
-    ExactErrataBlocker(
-        blocker_id="E6_LEDGER_CALCULATOR_ACTOR_BOUNDARY",
+    ResolvedErrataPrerequisite(
+        decision_id="E6_LEDGER_CALCULATOR_ACTOR_BOUNDARY",
         title="FD-3 split replay conflicts with a genesis-only hidden ledger",
         evidence=(
             "Gate 16 requires one genesis record and no access/reveal event.",
@@ -291,7 +342,7 @@ EXACT_ERRATA_BLOCKERS: Final = (
                 "Changes ledger roots, gate semantics, and execution inputs.",
             ),
         ),
-        recommended_option_id="E6_A_CALCULATORS_INSIDE_CUSTODIAN_BOUNDARY",
+        selected_option_id="E6_A_CALCULATORS_INSIDE_CUSTODIAN_BOUNDARY",
         required_machine_fields=(
             "calculator_actor_boundary",
             "fd3_access_event_required",
@@ -299,8 +350,8 @@ EXACT_ERRATA_BLOCKERS: Final = (
             "gate16_required_head_rule",
         ),
     ),
-    ExactErrataBlocker(
-        blocker_id="E7_PARENT_ABSENCE_AUDIT_WIRE",
+    ResolvedErrataPrerequisite(
+        decision_id="E7_PARENT_ABSENCE_AUDIT_WIRE",
         title="Parent-history and two legacy sources lack one auditable wire",
         evidence=(
             "AuditedPathBlobRecordV1 tag 0x3210 is absent from the tag registry.",
@@ -320,7 +371,7 @@ EXACT_ERRATA_BLOCKERS: Final = (
                 "Avoids a new top-level object but requires exact heterogeneous row tagging.",
             ),
         ),
-        recommended_option_id="E7_A_VERSIONED_AUDIT_BUNDLE",
+        selected_option_id="E7_A_VERSIONED_AUDIT_BUNDLE",
         required_machine_fields=(
             "audited_path_blob_tag_registry_entry",
             "audited_path_set_row_schema",
@@ -330,8 +381,8 @@ EXACT_ERRATA_BLOCKERS: Final = (
             "legacy_parent_payload_source_ids",
         ),
     ),
-    ExactErrataBlocker(
-        blocker_id="E8_ROLE_AND_INITIAL_STATE_ENUMS",
+    ResolvedErrataPrerequisite(
+        decision_id="E8_ROLE_AND_INITIAL_STATE_ENUMS",
         title="Target role and M3RunGenesis initial-state bytes are ambiguous",
         evidence=(
             "M3StateId.NOT_RUN is 0 while ChildInitialStateId.NOT_RUN is 1.",
@@ -351,7 +402,7 @@ EXACT_ERRATA_BLOCKERS: Final = (
                 "Avoids an enum but couples unrelated namespaces.",
             ),
         ),
-        recommended_option_id="E8_A_M3STATE0_NEW_TARGET_ROLE_ENUM",
+        selected_option_id="E8_A_M3STATE0_NEW_TARGET_ROLE_ENUM",
         required_machine_fields=(
             "m3_run_genesis_initial_state_registry",
             "m3_run_genesis_initial_state_value",
@@ -359,8 +410,8 @@ EXACT_ERRATA_BLOCKERS: Final = (
             "role_id_field_registry_map",
         ),
     ),
-    ExactErrataBlocker(
-        blocker_id="E9_ROOT_PREIMAGES_INSTANCE_IDS_AND_PATH_ALIAS",
+    ResolvedErrataPrerequisite(
+        decision_id="E9_ROOT_PREIMAGES_INSTANCE_IDS_AND_PATH_ALIAS",
         title="Several named roots and machine-ID instances still lack exact preimages",
         evidence=(
             "HiddenArtifactScope has prose/YAML but no formal schema/domain.",
@@ -386,7 +437,7 @@ EXACT_ERRATA_BLOCKERS: Final = (
                 "Requires field/schema changes and explicit role-to-document mapping.",
             ),
         ),
-        recommended_option_id="E9_A_FORMAL_PREIMAGE_AND_ALIAS_REGISTRY",
+        selected_option_id="E9_A_FORMAL_PREIMAGE_AND_ALIAS_REGISTRY",
         required_machine_fields=(
             "formal_root_preimage_registry",
             "instance_machine_id_catalog",
@@ -402,8 +453,8 @@ EXACT_ERRATA_BLOCKERS: Final = (
             "traversal_and_bucket_field_id_registries",
         ),
     ),
-    ExactErrataBlocker(
-        blocker_id="E10_OPAQUE_ID_REGISTRY_EVIDENCE",
+    ResolvedErrataPrerequisite(
+        decision_id="E10_OPAQUE_ID_REGISTRY_EVIDENCE",
         title="Fresh run/ledger IDs have no replayable registry evidence",
         evidence=(
             "AppendOnlyOpaqueIdRegistryV1 is named but has no file/wire/root definition.",
@@ -422,7 +473,7 @@ EXACT_ERRATA_BLOCKERS: Final = (
                 "Provides operational safety but needs an exact evidence receipt for Gate 24.",
             ),
         ),
-        recommended_option_id="E10_A_FORMAL_APPEND_ONLY_REGISTRY_ROOT",
+        selected_option_id="E10_A_FORMAL_APPEND_ONLY_REGISTRY_ROOT",
         required_machine_fields=(
             "opaque_id_registry_record_schema",
             "opaque_id_registry_ordering",
@@ -431,8 +482,8 @@ EXACT_ERRATA_BLOCKERS: Final = (
             "duplicate_scope_verification_rule",
         ),
     ),
-    ExactErrataBlocker(
-        blocker_id="E11_NULL_WITNESS_BINDING_FIELD",
+    ResolvedErrataPrerequisite(
+        decision_id="E11_NULL_WITNESS_BINDING_FIELD",
         title="The sink witness is assigned to a nonexistent role-binding field",
         evidence=(
             "Section 4.6 names DslRoleBindingManifestV1.required_witness_ast_hash.",
@@ -451,14 +502,14 @@ EXACT_ERRATA_BLOCKERS: Final = (
                 "Changes role-binding roots and downstream execution identity.",
             ),
         ),
-        recommended_option_id="E11_A_USE_TARGET_SPEC_AND_BUNDLE_FIELDS",
+        selected_option_id="E11_A_USE_TARGET_SPEC_AND_BUNDLE_FIELDS",
         required_machine_fields=(
             "authoritative_witness_binding_fields",
             "dsl_role_binding_schema_change_required",
         ),
     ),
-    ExactErrataBlocker(
-        blocker_id="E12_CUSTODIAN_ENVELOPE_COVERAGE",
+    ResolvedErrataPrerequisite(
+        decision_id="E12_CUSTODIAN_ENVELOPE_COVERAGE",
         title="The topology and signature guard disagree on signed custodian objects",
         evidence=(
             "The DAG requires final CustodianBindingManifestV1 plus a signature envelope.",
@@ -477,7 +528,7 @@ EXACT_ERRATA_BLOCKERS: Final = (
                 "Leaves final custodian binding authenticated only transitively/self-consistently.",
             ),
         ),
-        recommended_option_id="E12_A_SIGN_FOUR_CUSTODIAN_OBJECTS",
+        selected_option_id="E12_A_SIGN_FOUR_CUSTODIAN_OBJECTS",
         required_machine_fields=(
             "custodian_signed_object_tags",
             "custodian_signature_domain_by_tag",
@@ -488,31 +539,208 @@ EXACT_ERRATA_BLOCKERS: Final = (
 )
 
 EXACT_ERRATA_BY_ID: Final = MappingProxyType(
-    {blocker.blocker_id: blocker for blocker in EXACT_ERRATA_BLOCKERS}
+    {
+        prerequisite.decision_id: prerequisite
+        for prerequisite in EXACT_ERRATA_PREREQUISITES
+    }
 )
 
 
-def external_genesis_preflight_report() -> dict[str, object]:
-    """Return a deterministic diagnostic report that cannot authorize genesis."""
+@dataclass(frozen=True)
+class DualGoldenVerification:
+    """The ten exact, side-effect-free preconditions from errata section 3."""
 
+    errata_document_in_commit_A: bool
+    python_errata_vectors_pass: bool
+    rust_errata_vectors_pass: bool
+    python_rust_canonical_bytes_equal: bool
+    python_rust_error_codes_equal: bool
+    actor_trust_genesis_schema_frozen: bool
+    append_only_id_registry_schema_frozen: bool
+    parent_audit_bundle_schema_frozen: bool
+    bridge_statement_and_execution_v2_schema_frozen: bool
+    secrets_absent_from_repository: bool
+
+    def __post_init__(self) -> None:
+        for field_name in EXTERNAL_GENESIS_START_GUARD_FIELDS:
+            if type(getattr(self, field_name)) is not bool:
+                raise TypeError(f"{field_name} must be bool")
+
+    @classmethod
+    def unverified(cls) -> "DualGoldenVerification":
+        return cls(*(False for _ in EXTERNAL_GENESIS_START_GUARD_FIELDS))
+
+    def to_dict(self) -> dict[str, bool]:
+        return {
+            field_name: getattr(self, field_name)
+            for field_name in EXTERNAL_GENESIS_START_GUARD_FIELDS
+        }
+
+    @property
+    def all_required_checks_pass(self) -> bool:
+        return all(self.to_dict().values())
+
+
+@dataclass(frozen=True)
+class ExternalGenesisStartAuthorization:
+    """Pure authorization result; possession performs and proves no side effect."""
+
+    machine_freeze_id: str
+    child_dsl_id: str
+    external_genesis_start_allowed: bool
+    authorization_is_side_effect_free: bool
+    m3_gates_satisfied: int
+    m3_gates_total: int
+    child_state: str
+    gate24_qualified: bool
+    m3_entry_allowed: bool
+    m3_run_started: bool
+    phase3_m3_start_authorized: bool
+    external_object_repository_commit_rule: str
+    publication_commit_may_substitute: bool
+
+
+def validate_dual_golden_verification(
+    verification: DualGoldenVerification | Mapping[str, object],
+) -> DualGoldenVerification:
+    """Validate the exact ten-field guard input without granting authority."""
+
+    if isinstance(verification, DualGoldenVerification):
+        return verification
+    if not isinstance(verification, Mapping):
+        raise TypeError("dual-golden verification must be a mapping or frozen record")
+    if set(verification) != set(EXTERNAL_GENESIS_START_GUARD_FIELDS):
+        _fail(
+            FAIL_M25_EXACT_ERRATA_REQUIRED,
+            "dual-golden external-start guard field-set mismatch",
+        )
+    values: list[bool] = []
+    for field_name in EXTERNAL_GENESIS_START_GUARD_FIELDS:
+        value = verification[field_name]
+        if type(value) is not bool:
+            _fail(
+                FAIL_M25_EXACT_ERRATA_REQUIRED,
+                f"dual-golden guard field {field_name} must be bool",
+            )
+        values.append(value)
+    return DualGoldenVerification(*values)
+
+
+def external_genesis_start_guard_report(
+    verification: DualGoldenVerification | Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    """Evaluate the ten prerequisites without CSPRNG, marker, signature, or root."""
+
+    snapshot = validate_dual_golden_verification(
+        DualGoldenVerification.unverified() if verification is None else verification
+    )
+    checks = snapshot.to_dict()
+    passed = sum(value is True for value in checks.values())
+    return {
+        "required_check_count": len(EXTERNAL_GENESIS_START_GUARD_FIELDS),
+        "passed_check_count": passed,
+        "checks": checks,
+        "all_required_checks_pass": snapshot.all_required_checks_pass,
+        "external_genesis_start_allowed": snapshot.all_required_checks_pass,
+        "guard_evaluation_is_side_effect_free": True,
+        "commit_A_binding_required": True,
+        "commit_A_check_semantics": (
+            "The committed normative bundle contains the base amendment, errata "
+            "resolution, and implementation addendum and binds the deterministic "
+            "implementation basis commit."
+        ),
+        "gate_effect": "NONE",
+        "child_state_effect": "NONE",
+    }
+
+
+def external_genesis_preflight_report() -> dict[str, object]:
+    """Return current v2 readiness: errata resolved, dual evidence not yet bound."""
+
+    guard = external_genesis_start_guard_report()
     payload: dict[str, object] = {
         "artifact": ARTIFACT_NAME,
+        "schema_version": REPORT_SCHEMA,
         "artifact_kind": ARTIFACT_KIND,
         "machine_freeze_id": MACHINE_FREEZE_ID,
         "child_dsl_id": CHILD_DSL_ID,
         "status": CURRENT_STATUS,
+        "errata_resolution_document_sha256": _sha256_file(
+            ERRATA_RESOLUTION_DOCUMENT
+        ),
+        "implementation_addendum_document_sha256": _sha256_file(
+            IMPLEMENTATION_ADDENDUM_DOCUMENT
+        ),
         "child_state": CURRENT_CHILD_STATE,
         "m3_gates_satisfied": M3_GATES_SATISFIED,
         "m3_gates_total": M3_GATES_TOTAL,
         "m3_entry_allowed": False,
         "m3_entry_qualified": False,
         "m3_run_started": False,
-        "external_genesis_start_allowed": False,
-        "exact_errata_required": True,
-        "exact_errata_blocker_count": len(EXACT_ERRATA_BLOCKERS),
-        "exact_errata_blockers": [
-            blocker.to_dict() for blocker in EXACT_ERRATA_BLOCKERS
+        "external_genesis_start_allowed": guard[
+            "external_genesis_start_allowed"
         ],
+        "exact_errata_resolved": True,
+        "unresolved_specification_blockers": [],
+        "resolved_errata_prerequisite_count": len(EXACT_ERRATA_PREREQUISITES),
+        "resolved_errata_prerequisites": [
+            prerequisite.to_dict()
+            for prerequisite in EXACT_ERRATA_PREREQUISITES
+        ],
+        "external_genesis_start_guard": guard,
+        "commit_A_binding_semantics": {
+            "normative_document_bundle_roles": [
+                "BASE_AMENDMENT",
+                "ERRATA_RESOLUTION",
+                "IMPLEMENTATION_CLOSURE_ADDENDUM",
+            ],
+            "repository_commit_role": "DETERMINISTIC_IMPLEMENTATION_BASIS_COMMIT_A",
+            "publication_commit_may_substitute": False,
+        },
+        "gate24_contract": {
+            "gate_name": GATE24_NAME,
+            "current_status": "NOT_EVALUATED_EXTERNAL_INPUTS_ABSENT",
+            "ordered_run_output_slot_names": list(RUN_OUTPUT_SLOT_NAMES),
+            "pass_predicate": {
+                "m3_execution_manifest_v2_root_non_null": True,
+                "m3_run_genesis_v1_root_non_null": True,
+                "m3_run_genesis_initial_state": "M3StateId.NOT_RUN = 0",
+                "run_output_slot_count": len(RUN_OUTPUT_SLOT_NAMES),
+                "all_run_output_slots_null": True,
+                "run_id_registered_in_bound_opaque_id_snapshot": True,
+                "bridge_envelope_count": 3,
+                "bridge_signer_purposes_exactly": [1, 2, 3],
+            },
+            "current_evidence": {
+                "m3_execution_manifest_v2_root_non_null": False,
+                "m3_run_genesis_v1_root_non_null": False,
+                "run_id_registered_in_bound_opaque_id_snapshot": False,
+                "bridge_envelope_count": 0,
+                "bridge_signer_purposes": [],
+            },
+            "gate24_passed": False,
+            "qualification_effect_if_passed": {
+                "m3_entry_qualified": True,
+                "m3_entry_allowed": True,
+                "m3_run_started": False,
+                "child_state": "NOT_RUN",
+            },
+        },
+        "run_output_slots": {name: None for name in RUN_OUTPUT_SLOT_NAMES},
+        "phase3_m3_start_contract": {
+            "action_id": "phase3-m3-start",
+            "implementation_status": "SEMANTICS_FROZEN_NOT_INVOKED",
+            "requires_complete_24_of_24_replay": True,
+            "requires_bound_opaque_id_snapshot": True,
+            "only_transition": (
+                "NOT_RUN/NONE -> RUNNING/CANONICAL_ENUMERATION"
+            ),
+            "transition_index": 0,
+            "previous_state_record_root": None,
+            "transition_reason": "ENTRY_GATES_24_OF_24",
+            "triggering_receipt_root": None,
+            "start_record_created": False,
+        },
         "authority_side_effects": {
             "os_csprng_called": False,
             "instantiation_marker_created": False,
@@ -524,14 +752,17 @@ def external_genesis_preflight_report() -> dict[str, object]:
         },
         "allowed_current_scope": [
             "deterministic_schema_and_enum_implementation",
+            "dual_errata_golden_qualification",
             "public_typed_row_and_root_replay",
             "synthetic_split_and_signature_fault_injection",
             "read_only_storage_fd3_marker_policy_validation",
         ],
         "claim_boundary": (
-            "This is a diagnostic exact-errata preflight. It performs no CSPRNG "
-            "call, marker creation, seed/key generation, signature, authoritative "
-            "formal-root generation, M3 gate advancement, or state transition."
+            "E1--E12 are resolved deterministic prerequisites, but the committed "
+            "dual-golden evidence and external actors are not yet bound. This v2 "
+            "diagnostic performs no CSPRNG call, marker creation, seed/key "
+            "generation, signature, authoritative formal-root generation, M3 "
+            "gate advancement, Gate-24 qualification, or state transition."
         ),
     }
     payload["diagnostic_report_id"] = stable_hash(
@@ -542,7 +773,7 @@ def external_genesis_preflight_report() -> dict[str, object]:
 
 
 def validate_external_genesis_preflight_report(report: Mapping[str, object]) -> None:
-    """Reject any tampering that weakens the mandatory pre-CSPRNG stop."""
+    """Reject stale v1 data, unresolved prerequisites, or authority escalation."""
 
     if not isinstance(report, Mapping):
         raise TypeError("external genesis preflight report must be a mapping")
@@ -550,26 +781,43 @@ def validate_external_genesis_preflight_report(report: Mapping[str, object]) -> 
     if not _json_type_strict_equal(dict(report), expected):
         _fail(
             FAIL_M25_EXACT_ERRATA_REQUIRED,
-            "external genesis preflight differs from the frozen blocked report",
+            "external genesis v2 preflight differs from current resolved state",
         )
 
 
 def assert_external_genesis_start_allowed(
-    report: Mapping[str, object] | None = None,
-) -> NoReturn:
-    """Fail before any CSPRNG call or marker creation can be attempted.
+    verification: DualGoldenVerification | Mapping[str, object] | None = None,
+) -> ExternalGenesisStartAuthorization:
+    """Return pure authorization only after all ten committed checks pass."""
 
-    There is intentionally no override flag.  A future normative amendment
-    must replace this function/module version after all E1--E12 decisions are
-    frozen and independently implemented.
-    """
-
-    candidate = external_genesis_preflight_report() if report is None else report
-    validate_external_genesis_preflight_report(candidate)
-    unresolved = ",".join(blocker.blocker_id for blocker in EXACT_ERRATA_BLOCKERS)
-    _fail(
-        FAIL_M25_EXACT_ERRATA_REQUIRED,
-        f"external genesis is blocked before CSPRNG/marker by {unresolved}",
+    snapshot = validate_dual_golden_verification(
+        DualGoldenVerification.unverified() if verification is None else verification
+    )
+    failed = [
+        field_name
+        for field_name, passed in snapshot.to_dict().items()
+        if passed is not True
+    ]
+    if failed:
+        _fail(
+            FAIL_M25_EXACT_ERRATA_REQUIRED,
+            "external genesis is blocked before CSPRNG/marker by dual-golden "
+            "guard fields: " + ",".join(failed),
+        )
+    return ExternalGenesisStartAuthorization(
+        machine_freeze_id=MACHINE_FREEZE_ID,
+        child_dsl_id=CHILD_DSL_ID,
+        external_genesis_start_allowed=True,
+        authorization_is_side_effect_free=True,
+        m3_gates_satisfied=M3_GATES_SATISFIED,
+        m3_gates_total=M3_GATES_TOTAL,
+        child_state=CURRENT_CHILD_STATE,
+        gate24_qualified=False,
+        m3_entry_allowed=False,
+        m3_run_started=False,
+        phase3_m3_start_authorized=False,
+        external_object_repository_commit_rule="USE_DETERMINISTIC_BASIS_COMMIT_A",
+        publication_commit_may_substitute=False,
     )
 
 
@@ -814,8 +1062,8 @@ def validate_calculator_process_result(
     """Require clean exit and reject known secret-bearing public field names.
 
     This syntactic lint is not evidence that an arbitrary value is non-secret;
-    an eventual authoritative calculator output needs an exact allowlisted
-    schema after E3/E5/E6/E9 are resolved.
+    a future trusted calculator output still needs an exact allowlisted
+    executable digest plus signed external-genesis evidence.
     """
 
     if type(exit_code) is not int or exit_code != 0:
@@ -861,9 +1109,12 @@ __all__ = [
     "CHILD_DSL_ID",
     "CURRENT_CHILD_STATE",
     "CURRENT_STATUS",
-    "EXACT_ERRATA_BLOCKERS",
+    "DualGoldenVerification",
+    "ERRATA_RESOLUTION_DOCUMENT",
+    "EXACT_ERRATA_PREREQUISITES",
     "EXACT_ERRATA_BY_ID",
-    "ExactErrataBlocker",
+    "EXTERNAL_GENESIS_START_GUARD_FIELDS",
+    "ExternalGenesisStartAuthorization",
     "ExternalGenesisPreflightError",
     "FAIL_ACTOR_KEY_ID_COLLISION",
     "FAIL_M25_EXACT_ERRATA_REQUIRED",
@@ -878,18 +1129,24 @@ __all__ = [
     "FAIL_SECRET_STATE_PERMISSIONS",
     "FAIL_SPLIT_SEED_ALREADY_INSTANTIATED",
     "FAIL_SPLIT_SEED_PENDING_EXTERNAL_RECOVERY_REQUIRED",
+    "GATE24_NAME",
+    "IMPLEMENTATION_ADDENDUM_DOCUMENT",
     "M3_GATES_SATISFIED",
     "M3_GATES_TOTAL",
     "MACHINE_FREEZE_ID",
     "MarkerSnapshot",
+    "REPORT_SCHEMA",
+    "RUN_OUTPUT_SLOT_NAMES",
     "assert_external_genesis_start_allowed",
     "assert_marker_does_not_require_external_recovery",
     "assert_public_payload_contains_no_secret_fields",
     "assert_seed_instantiation_marker_absent",
     "external_genesis_preflight_report",
+    "external_genesis_start_guard_report",
     "validate_calculator_process_result",
     "validate_commit_b_changed_paths",
     "validate_distinct_actor_key_ids",
+    "validate_dual_golden_verification",
     "validate_external_genesis_preflight_report",
     "validate_marker_snapshot",
     "validate_secret_fd_number",

@@ -1,8 +1,8 @@
 use hegel_formal_bridge_m25::{
     canonical_input_hash_v1, content_hash, decode_strict_cbor, derive_split_role_key,
-    encode_canonical_cbor, generate_typed_role_report_v1, hex_decode, hex_encode,
-    id_digest_preimage_v1, id_digest_v1, rfc6962_canonical_record_root, split_row_rank,
-    split_seed_commitment, typed_input_signature_id, CborValue, FormalWireError,
+    encode_canonical_cbor, generate_errata_vector_report_v1, generate_typed_role_report_v1,
+    hex_decode, hex_encode, id_digest_preimage_v1, id_digest_v1, rfc6962_canonical_record_root,
+    split_row_rank, split_seed_commitment, typed_input_signature_id, CborValue, FormalWireError,
 };
 use serde_json::{json, Value};
 use std::io::{self, Read};
@@ -137,6 +137,57 @@ fn typed_role_report_json(report: hegel_formal_bridge_m25::TypedRoleReport) -> V
     })
 }
 
+fn errata_vector_report_json(report: hegel_formal_bridge_m25::ErrataVectorReport) -> Value {
+    let objects = report
+        .objects
+        .into_iter()
+        .map(|vector| {
+            json!({
+                "name": vector.name,
+                "schema_name": vector.schema_name,
+                "tag": vector.tag,
+                "status": vector.status,
+                "bytes_hex": vector.bytes.map(|value| hex_encode(&value)),
+                "candidate_root_hex": vector.candidate_root.map(|value| hex_encode(&value)),
+                "error_code": vector.error_code,
+            })
+        })
+        .collect::<Vec<_>>();
+    let record_trees = report
+        .record_trees
+        .into_iter()
+        .map(|vector| {
+            json!({
+                "name": vector.name,
+                "schema_name": vector.schema_name,
+                "tag": vector.tag,
+                "status": vector.status,
+                "record_count": vector.record_count,
+                "first_record_cbor_hex": vector.first_record_cbor.map(|value| hex_encode(&value)),
+                "root_hex": vector.root.map(|value| hex_encode(&value)),
+                "error_code": vector.error_code,
+            })
+        })
+        .collect::<Vec<_>>();
+    let guard_errors = report
+        .guard_errors
+        .into_iter()
+        .map(|vector| {
+            json!({
+                "vector_id": vector.vector_id,
+                "error_code": vector.error_code,
+            })
+        })
+        .collect::<Vec<_>>();
+    json!({
+        "machine_freeze_id": report.machine_freeze_id,
+        "vector_schema": report.vector_schema,
+        "objects": objects,
+        "record_trees": record_trees,
+        "guard_errors": guard_errors,
+    })
+}
+
 fn execute(request: &Value) -> Result<Value, FormalWireError> {
     let object = request
         .as_object()
@@ -262,6 +313,21 @@ fn execute(request: &Value) -> Result<Value, FormalWireError> {
             rendered_object.insert("op".to_owned(), json!(operation));
             Ok(rendered)
         }
+        "errata_vectors" => {
+            if object.len() != 1 {
+                return Err(request_error(
+                    "errata_vectors request must contain exactly the op field",
+                ));
+            }
+            let report = generate_errata_vector_report_v1()?;
+            let mut rendered = errata_vector_report_json(report);
+            let rendered_object = rendered
+                .as_object_mut()
+                .expect("errata vector report JSON is an object");
+            rendered_object.insert("ok".to_owned(), json!(true));
+            rendered_object.insert("op".to_owned(), json!(operation));
+            Ok(rendered)
+        }
         _ => Err(request_error(format!(
             "unsupported operation {operation:?}"
         ))),
@@ -298,5 +364,46 @@ fn main() {
             );
             std::process::exit(2);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sha2::{Digest, Sha256};
+
+    #[test]
+    fn errata_replay_has_exact_request_and_response_contract() {
+        let response = execute(&json!({"op": "errata_vectors"})).unwrap();
+        let object = response.as_object().unwrap();
+        let mut keys = object.keys().map(String::as_str).collect::<Vec<_>>();
+        keys.sort_unstable();
+        assert_eq!(
+            keys,
+            [
+                "guard_errors",
+                "machine_freeze_id",
+                "objects",
+                "ok",
+                "op",
+                "record_trees",
+                "vector_schema",
+            ]
+        );
+        assert_eq!(object["ok"], json!(true));
+        assert_eq!(object["op"], json!("errata_vectors"));
+        assert_eq!(object["objects"].as_array().unwrap().len(), 21);
+        assert_eq!(object["record_trees"].as_array().unwrap().len(), 8);
+        assert_eq!(object["guard_errors"].as_array().unwrap().len(), 15);
+
+        let compact = serde_json::to_vec(&response).unwrap();
+        assert_eq!(compact.len(), 20_308);
+        assert_eq!(
+            hex_encode(&Sha256::digest(&compact)),
+            "9c855290ad9f9a6e3e523107e0162e6e3c363afec09224245c5e35075ad8ab4c"
+        );
+
+        let error = execute(&json!({"op": "errata_vectors", "extra": 1})).unwrap_err();
+        assert_eq!(error.code, REQUEST_ERROR);
     }
 }

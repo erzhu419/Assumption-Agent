@@ -11,6 +11,10 @@ Qualification**。一般能力称为 **Explicit-Projection Typed Structural Sele
 verifier、Phase-2A development qualification，以及正在施工的 Phase-2B/Phase-3
 正式轨道合同：
 
+本项目把网页端 GPT 输出视为方向建议或审阅输入；具体 wire、实现和状态声明由仓库、
+双实现 replay 与测试裁决。完整优先级和 material override 留痕要求见
+[engineering decision authority](docs/engineering_decision_authority.md)。
+
 ```text
 L0 observations
   → uniform verifier-ready synthetic witness bundle with anonymous labels

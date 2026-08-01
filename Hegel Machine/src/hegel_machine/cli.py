@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
+import tempfile
 from typing import Sequence
 
 from .benchmark import run_phase2_benchmark
@@ -70,6 +72,10 @@ from .phase3_m25_qualification_v112 import (
     dual_typed_rows_qualification_report,
     validate_dual_typed_rows_qualification_report,
 )
+from .phase3_m25_errata_qualification_v1 import (
+    dual_errata_qualification_report,
+    validate_errata_qualification_output_path,
+)
 from .vertical_slice import run_controlled_vertical_slice
 
 
@@ -79,6 +85,29 @@ def _write_json(path: Path, payload: object) -> None:
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+
+
+def _write_json_atomic(path: Path, payload: object) -> None:
+    """Write one public evidence artifact with same-directory atomic replace."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        dir=path.parent,
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temporary, 0o644)
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
 
 
 def command_benchmark(output: Path | None) -> int:
@@ -282,6 +311,21 @@ def command_phase3_m25_external_preflight(output: Path | None) -> int:
     return 0
 
 
+def command_phase3_m25_errata_qualify(
+    output: Path | None,
+) -> int:
+    validated_output = (
+        None
+        if output is None
+        else validate_errata_qualification_output_path(output)
+    )
+    report = dual_errata_qualification_report()
+    if validated_output is not None:
+        _write_json_atomic(validated_output, report)
+    print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if report["status"] == "DUAL_EXACT_WIRE_ERRATA_GOLDEN_PASS" else 1
+
+
 def command_vertical_slice(output: Path | None) -> int:
     report = run_controlled_vertical_slice()
     if output is not None:
@@ -432,6 +476,14 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     m25_external.add_argument("--output", type=Path)
+    m25_errata = subparsers.add_parser(
+        "phase3-m25-errata-qualify",
+        help=(
+            "independently replay the Python/Rust E1-E12 exact-wire vectors; "
+            "a pass only authorizes the separate external-genesis workflow"
+        ),
+    )
+    m25_errata.add_argument("--output", type=Path)
     vertical = subparsers.add_parser(
         "vertical-slice", help="run the controlled candidate/shadow-only slice"
     )
@@ -477,6 +529,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return command_phase3_m25_v112_qualify(args.output, args.rust_binary)
     if args.command == "phase3-m25-external-preflight":
         return command_phase3_m25_external_preflight(args.output)
+    if args.command == "phase3-m25-errata-qualify":
+        return command_phase3_m25_errata_qualify(args.output)
     if args.command == "vertical-slice":
         return command_vertical_slice(args.output)
     raise AssertionError(f"unhandled command: {args.command}")

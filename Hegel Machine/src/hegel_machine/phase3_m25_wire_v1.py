@@ -38,6 +38,28 @@ CANONICAL_INPUT_DOMAIN: Final = "HEGEL/CANONICAL_INPUT/V1"
 AUTHORITATIVE_MIN_TIMESTAMP: Final = 1_704_067_200
 MAX_TIMESTAMP: Final = 253_402_300_799
 MAX_AUTHORITATIVE_FUTURE_SKEW_SECONDS: Final = 300
+BRIDGE_ATTESTATION_SIGNATURE_DOMAIN: Final = "HEGEL/BRIDGE_ATTESTATION_SIGNATURE/V1"
+PARENT_AUDITOR_SIGNATURE_DOMAIN: Final = "HEGEL/PARENT_ABSENCE_AUDITOR_SIGNATURE/V2"
+M3_RUN_OUTPUT_SLOT_COUNT: Final = 15
+AUDITED_PARENT_COMMIT_SHA1: Final = bytes.fromhex(
+    "fb3a3ee4865a140c558821017ddd3e9a6a99de48"
+)
+
+CUSTODIAN_SIGNATURE_DOMAIN_BY_TAG: Final = MappingProxyType(
+    {
+        0x3103: "HEGEL/CUSTODIAN_SPLIT_SEED_COMMITMENT_SIGNATURE/V1",
+        0x3105: "HEGEL/CUSTODIAN_BINDING_SIGNATURE/V1",
+        0x3106: "HEGEL/CUSTODIAN_SEED_CONTINUITY_SIGNATURE/V1",
+        0x3108: "HEGEL/CUSTODIAN_LEDGER_GENESIS_SIGNATURE/V1",
+    }
+)
+EXTERNAL_INPUT_SIGNED_TAG_PURPOSES: Final = (
+    (1, 0x3103),
+    (1, 0x3105),
+    (1, 0x3106),
+    (1, 0x3108),
+    (4, 0x3114),
+)
 
 _MACHINE_ID_RE: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$")
 
@@ -56,6 +78,18 @@ def id_digest_v1(machine_id: str) -> bytes:
     if _MACHINE_ID_RE.fullmatch(machine_id) is None:
         _fail("REJECT_MACHINE_ID_SYNTAX", "machine ID violates IdDigestV1 syntax")
     return hashlib.sha256(ID_DIGEST_DOMAIN + b"\x00" + raw).digest()
+
+
+LEGACY_PARENT_SOURCE_IDS: Final = (
+    "target_spec_b491c0a9719fb0279fe02798ede026e440c17a539965514145a7818b15387ac3",
+    "sink_control_spec_7fd6f9a6e2b4c6eda0c7e1545ad42cb19666743ede8ed87f40d82c0ef46198a0",
+)
+_LEGACY_PARENT_SOURCE_EXPECTATIONS: Final = MappingProxyType(
+    {
+        1: (1, bytes.fromhex(LEGACY_PARENT_SOURCE_IDS[0].split("_", 2)[-1])),
+        2: (2, bytes.fromhex(LEGACY_PARENT_SOURCE_IDS[1].rsplit("_", 1)[-1])),
+    }
+)
 
 
 def validate_timestamp_v1(
@@ -263,14 +297,109 @@ NUMERIC_ENUM_REGISTRIES: Final = MappingProxyType(
             "RoleAgreementStatusId", ("NOT_APPLICABLE", "AGREED", "DISAGREED"), zero_is_valid=True
         ),
         "ActorPurposeId": _enum(
-            "ActorPurposeId", ("CUSTODIAN_BRIDGE_ATTESTER", "PYTHON_BRIDGE_ATTESTER", "RUST_BRIDGE_ATTESTER", "AUDITOR", "FINAL_CERTIFICATE_SIGNER"), start=1
+            "ActorPurposeId",
+            (
+                "CUSTODIAN_IDENTITY_AND_BRIDGE_ATTESTER",
+                "PYTHON_BRIDGE_ATTESTER",
+                "RUST_BRIDGE_ATTESTER",
+                "PARENT_ABSENCE_AUDITOR",
+                "FINAL_CERTIFICATE_SIGNER_RESERVED_FOR_M4",
+            ),
+            start=1,
         ),
         "ClaimLevelId": _enum(
-            "ClaimLevelId", ("FALSE_INVENTION_NULL_ONLY", "MECHANISM_SPECIFIC_RECOVERY"), start=1
+            "ClaimLevelId",
+            (
+                "FALSE_INVENTION_NULL_ONLY",
+                "MECHANISM_SPECIFIC_RECOVERY",
+                "OUTSIDE_TARGET_CANDIDATE",
+            ),
+            start=1,
+        ),
+        "TargetRoleId": _enum(
+            "TargetRoleId", ("OUTSIDE_TARGET", "IN_LANGUAGE_NULL"), start=1
+        ),
+        "MismatchKindId": _enum(
+            "MismatchKindId",
+            (
+                "CANONICAL_PROGRAM_COUNT",
+                "CANONICAL_PROGRAM_ARCHIVE_ROOT",
+                "PROGRAM_OUTPUT_ARCHIVE_ROOT",
+                "BUCKET_ACCOUNTING_ROOT",
+                "FIRST_OUT_OF_BUDGET_WITNESS",
+                "ROLE_MATCH_SET",
+                "RECEIPT_FIELD_PRESENCE",
+                "EXECUTION_ENVIRONMENT_BINDING",
+            ),
+            start=1,
+        ),
+        "AssignmentOrderingRuleId": _enum(
+            "AssignmentOrderingRuleId",
+            ("PER_STRATUM_RANK_THEN_QUOTA", "UNIVERSE_INDEX_WITHIN_PARTITION"),
+            start=1,
+        ),
+        "FallbackSplitPolicyId": _enum(
+            "FallbackSplitPolicyId",
+            ("NEW_TARGET_NEW_SPLIT_FIRST_INSTANTIATION",),
+            start=1,
+        ),
+        "RankTieBreakRuleId": _enum(
+            "RankTieBreakRuleId", ("RANK_DIGEST_THEN_CANONICAL_INPUT_HASH",), start=1
+        ),
+        "TraversalFieldId": _enum(
+            "TraversalFieldId",
+            (
+                "AST_DEPTH",
+                "AST_NODE_COUNT",
+                "OUTPUT_SORT_ID",
+                "ROOT_OPERATOR_ID",
+                "CANONICAL_AST_CBOR_BYTES",
+            ),
+            start=1,
+        ),
+        "BucketFieldId": _enum(
+            "BucketFieldId", ("OUTPUT_SORT_ID", "AST_DEPTH", "AST_NODE_COUNT"), start=1
+        ),
+        "AccountingCounterFieldId": _enum(
+            "AccountingCounterFieldId",
+            (
+                "RAW_OPERATOR_APPLICATIONS",
+                "ACCEPTED_CANONICAL_PROGRAMS",
+                "SYNTACTIC_DUPLICATES",
+                "TYPE_REJECTIONS",
+                "STRUCTURAL_LIMIT_REJECTIONS",
+                "REWRITE_COLLAPSES",
+            ),
+            start=1,
+        ),
+        "AccountingInvariantId": _enum(
+            "AccountingInvariantId",
+            (
+                "SUM_ACCEPTED_EQUALS_RECEIPT_CANONICAL_PROGRAM_COUNT",
+                "SUM_RAW_APPLICATIONS_EQUALS_RECEIPT_RAW_APPLICATION_COUNT",
+                "NONNULL_PROGRAM_INDEX_RANGE_SIZE_EQUALS_ACCEPTED_COUNT",
+            ),
+            start=1,
+        ),
+        "OpaqueIdKindId": _enum(
+            "OpaqueIdKindId", ("RUN_ID", "LEDGER_ID"), start=1
+        ),
+        "NormativeDocumentRoleId": _enum(
+            "NormativeDocumentRoleId",
+            ("BASE_AMENDMENT", "ERRATA_RESOLUTION", "IMPLEMENTATION_CLOSURE_ADDENDUM"),
+            start=1,
+        ),
+        "DependencyEcosystemId": _enum(
+            "DependencyEcosystemId", ("PYTHON", "RUST", "SYSTEM"), start=1
+        ),
+        "GitObjectAlgorithmId": _enum(
+            "GitObjectAlgorithmId", ("SHA1",), start=1
         ),
         "SeedStateId": _enum(
             "SeedStateId", ("SPEC_FROZEN_SEED_NOT_INSTANTIATED", "SEED_INSTANTIATED", "COMPROMISED_REQUIRES_NEW_VERSION"), start=1
         ),
+        # Retained as a construction-API compatibility alias only.  Errata E8
+        # maps every target execution role field to TargetRoleId.
         "DslRoleId": _enum("DslRoleId", ("OUTSIDE_TARGET", "IN_LANGUAGE_NULL"), start=1),
         "ApprovalStatusId": _enum("ApprovalStatusId", ("APPROVED", "REJECTED", "SUPERSEDED"), start=1),
         "ApprovalMethodId": _enum(
@@ -373,6 +502,13 @@ OBJECT_TAGS: Final = MappingProxyType(
         "TargetSpecFormalV1": 0x3014,
         "SplitAlgorithmSpecV1": 0x3015,
         "ExecutionEnvironmentSpecV1": 0x3016,
+        "NormativeDocumentBundleV1": 0x3018,
+        "CanonicalAstProfileSpecV1": 0x3019,
+        "CanonicalCborProfileSpecV1": 0x301A,
+        "Phase2BContractSpecV1": 0x301B,
+        "MdlCodeTableSpecV1": 0x301C,
+        "StaticRoleMetadataV1": 0x301D,
+        "HiddenArtifactScopeV1": 0x301E,
         "NormativeApprovalManifestV1": 0x3101,
         "DslRoleBindingManifestV1": 0x3102,
         "SplitSeedCommitmentManifestV1": 0x3103,
@@ -386,6 +522,14 @@ OBJECT_TAGS: Final = MappingProxyType(
         "CustodianBindingCoreV1": 0x310B,
         "ActorKeyManifestV1": 0x310C,
         "AttestationBundleV1": 0x310D,
+        "BridgeReplayStatementV1": 0x310E,
+        "M3ExecutionCandidateV1": 0x310F,
+        "M3ExecutionManifestV2": 0x3110,
+        "ActorTrustGenesisV1": 0x3111,
+        "OpaqueIdRegistrySnapshotV1": 0x3112,
+        "ParentAbsenceAuditBundleV1": 0x3113,
+        "ParentManifestAbsenceAttestationV2": 0x3114,
+        "OpaqueIdRegistrationIntentV1": 0x3115,
         "SignedManifestEnvelopeV1": 0x31FF,
         "BoundedUniverseRowV1": 0x3201,
         "TargetTruthRowV1": 0x3202,
@@ -401,6 +545,14 @@ OBJECT_TAGS: Final = MappingProxyType(
         "BucketAccountingRecordV1": 0x320C,
         "MismatchRecordV1": 0x320D,
         "PartialDiagnosticBundleV1": 0x320E,
+        "AuditedPathBlobRecordV1": 0x3210,
+        "AuditedHistoryRowV1": 0x3211,
+        "LegacyParentSourceRowV1": 0x3212,
+        "RepositoryPathAliasRecordV1": 0x3213,
+        "SourceFileRecordV1": 0x3215,
+        "DependencyLockRecordV1": 0x3216,
+        "LegalTransitionRowV1": 0x3217,
+        "OpaqueIdRegistryRecordV1": 0x3218,
         "M3RunGenesisV1": 0x3300,
         "M3RunStateRecordV1": 0x3301,
         "M3ImplementationEnumerationReceiptV1": 0x3302,
@@ -754,6 +906,97 @@ _SCHEMAS = (
         hash_domain="HEGEL/EXECUTION_ENVIRONMENT_SPEC/V1",
     ),
     _schema(
+        "NormativeDocumentBundleV1",
+        0x3018,
+        "hegel-normative-document-bundle/1",
+        ("bundle_id_digest", "document_entries", "repository_commit_id"),
+        hash_domain="HEGEL/NORMATIVE_DOCUMENT_BUNDLE/V1",
+    ),
+    _schema(
+        "CanonicalAstProfileSpecV1",
+        0x3019,
+        "hegel-canonical-ast-profile/1",
+        (
+            "profile_id_digest",
+            "governing_normative_document_root",
+            "section_selector_id_digest",
+            "section_blob_sha256",
+            "section_byte_length",
+            "repository_commit_id",
+        ),
+        hash_domain="HEGEL/CANONICAL_AST_PROFILE/V1",
+    ),
+    _schema(
+        "CanonicalCborProfileSpecV1",
+        0x301A,
+        "hegel-canonical-cbor-profile/1",
+        (
+            "profile_id_digest",
+            "governing_normative_document_root",
+            "section_selector_id_digest",
+            "section_blob_sha256",
+            "section_byte_length",
+            "repository_commit_id",
+        ),
+        hash_domain="HEGEL/CANONICAL_CBOR_PROFILE/V1",
+    ),
+    _schema(
+        "Phase2BContractSpecV1",
+        0x301B,
+        "hegel-phase2b-contract/1",
+        (
+            "contract_id_digest",
+            "governing_normative_document_root",
+            "section_selector_id_digest",
+            "section_blob_sha256",
+            "section_byte_length",
+            "repository_commit_id",
+        ),
+        hash_domain="HEGEL/PHASE2B_CONTRACT/V1",
+    ),
+    _schema(
+        "MdlCodeTableSpecV1",
+        0x301C,
+        "hegel-mdl-code-table/1",
+        (
+            "table_id_digest",
+            "governing_normative_document_root",
+            "section_selector_id_digest",
+            "section_blob_sha256",
+            "section_byte_length",
+            "repository_commit_id",
+        ),
+        hash_domain="HEGEL/MDL_CODE_TABLE/V1",
+    ),
+    _schema(
+        "StaticRoleMetadataV1",
+        0x301D,
+        "hegel-static-role-metadata/1",
+        (
+            "input_signature_id",
+            "role_ids",
+            "quantity_ids",
+            "scope_ids",
+            "signed_orientations",
+            "metadata_rule_id_digest",
+        ),
+        hash_domain="HEGEL/STATIC_ROLE_METADATA/V1",
+    ),
+    _schema(
+        "HiddenArtifactScopeV1",
+        0x301E,
+        "hegel-hidden-artifact-scope/1",
+        (
+            "policy_id_digest",
+            "governing_normative_document_root",
+            "section_selector_id_digest",
+            "section_blob_sha256",
+            "section_byte_length",
+            "repository_commit_id",
+        ),
+        hash_domain="HEGEL/HIDDEN_ARTIFACT_SCOPE/V1",
+    ),
+    _schema(
         "NormativeApprovalManifestV1",
         0x3101,
         "hegel-normative-approval-manifest/1",
@@ -1029,6 +1272,158 @@ _SCHEMAS = (
         hash_domain="HEGEL/ATTESTATION_BUNDLE/V1",
     ),
     _schema(
+        "BridgeReplayStatementV1",
+        0x310E,
+        "hegel-bridge-replay-statement/1",
+        (
+            "run_id",
+            "diagnostic_formal_bridge_root",
+            "m3_execution_candidate_root",
+            "child_dsl_spec_root",
+            "child_freeze_root",
+            "actor_trust_genesis_root",
+            "opaque_id_registry_snapshot_root",
+        ),
+        hash_domain="HEGEL/BRIDGE_REPLAY_STATEMENT/V1",
+    ),
+    _schema(
+        "M3ExecutionCandidateV1",
+        0x310F,
+        "hegel-m3-execution-candidate/1",
+        (
+            "run_id",
+            "child_dsl_spec_root",
+            "child_freeze_root",
+            "approval_manifest_root",
+            "shrink_transition_root",
+            "operator_semantics_root",
+            "identifier_registry_root",
+            "canonical_ast_schema_root",
+            "canonical_cbor_profile_root",
+            "diagnostic_formal_bridge_root",
+            "outside_target_binding_manifest_root",
+            "null_control_binding_manifest_root",
+            "split_binding_manifest_root",
+            "custodian_binding_manifest_root",
+            "seed_continuity_manifest_root",
+            "custodian_attestation_bundle_root",
+            "parent_absence_attestation_root",
+            "hidden_access_ledger_genesis_root",
+            "hidden_access_ledger_head_root",
+            "opaque_id_registry_snapshot_root",
+            "actor_trust_genesis_root",
+            "outside_target_universe_root",
+            "outside_target_truth_root",
+            "null_control_universe_root",
+            "null_control_truth_root",
+            "outside_discovery_split_root",
+            "outside_validation_split_root",
+            "outside_sealed_split_root",
+            "null_discovery_split_root",
+            "null_validation_split_root",
+            "null_sealed_split_root",
+            "canonical_program_budget",
+            "raw_operator_application_cap",
+            "records_per_chunk",
+            "equivalence_mode_id",
+            "python_implementation_binding_root",
+            "rust_implementation_binding_root",
+            "traversal_contract_root",
+            "bucket_accounting_contract_root",
+            "program_archive_contract_root",
+            "output_archive_contract_root",
+            "state_machine_contract_root",
+            "created_at_unix_seconds",
+            "repository_commit_id",
+        ),
+        hash_domain="HEGEL/M3_EXECUTION_CANDIDATE/V1",
+    ),
+    _schema(
+        "M3ExecutionManifestV2",
+        0x3110,
+        "hegel-m3-execution-manifest/2",
+        (
+            "run_id",
+            "m3_execution_candidate_root",
+            "bridge_replay_statement_root",
+            "bridge_attestation_bundle_root",
+            "actor_trust_genesis_root",
+            "opaque_id_registry_snapshot_root",
+            "created_at_unix_seconds",
+            "repository_commit_id",
+        ),
+        hash_domain="HEGEL/M3_EXECUTION_MANIFEST/V2",
+    ),
+    _schema(
+        "ActorTrustGenesisV1",
+        0x3111,
+        "hegel-actor-trust-genesis/1",
+        (
+            "trust_genesis_id_16_bytes",
+            "purpose_key_entries",
+            "purpose_key_policy_root",
+            "created_at_unix_seconds",
+            "repository_commit_id",
+        ),
+        hash_domain="HEGEL/ACTOR_TRUST_GENESIS/V1",
+    ),
+    _schema(
+        "OpaqueIdRegistrySnapshotV1",
+        0x3112,
+        "hegel-opaque-id-registry-snapshot/1",
+        (
+            "previous_snapshot_root_or_null",
+            "registry_tree_root",
+            "record_count",
+            "added_record_root",
+            "repository_commit_id",
+        ),
+        hash_domain="HEGEL/OPAQUE_ID_REGISTRY_SNAPSHOT/V1",
+    ),
+    _schema(
+        "ParentAbsenceAuditBundleV1",
+        0x3113,
+        "hegel-parent-absence-audit-bundle/1",
+        (
+            "audited_parent_repository_commit_id",
+            "audited_path_tree_root",
+            "audited_history_tree_root",
+            "legacy_source_tree_root",
+            "audited_path_count",
+            "audited_history_row_count",
+            "legacy_source_count",
+        ),
+        hash_domain="HEGEL/PARENT_ABSENCE_AUDIT_BUNDLE/V1",
+    ),
+    _schema(
+        "ParentManifestAbsenceAttestationV2",
+        0x3114,
+        "hegel-parent-manifest-absence-attestation/2",
+        (
+            "parent_dsl_version_digest",
+            "parent_freeze_version_digest",
+            "parent_repository_commit_id",
+            "audit_bundle_root",
+            "absence_reason_bitmask",
+            "auditor_key_id",
+            "audited_at_unix_seconds",
+        ),
+        hash_domain="HEGEL/PARENT_MANIFEST_ABSENCE_ATTESTATION/V2",
+    ),
+    _schema(
+        "OpaqueIdRegistrationIntentV1",
+        0x3115,
+        "hegel-opaque-id-registration-intent/1",
+        (
+            "opaque_id_kind_id",
+            "opaque_id_16_bytes",
+            "registration_context_root",
+            "created_at_unix_seconds",
+            "repository_commit_id",
+        ),
+        hash_domain="HEGEL/OPAQUE_ID_REGISTRATION_INTENT/V1",
+    ),
+    _schema(
         "SignedManifestEnvelopeV1",
         0x31FF,
         "hegel-signed-manifest-envelope/1",
@@ -1036,9 +1431,10 @@ _SCHEMAS = (
             "enclosed_object_tag",
             "enclosed_manifest_root",
             "created_at_unix_seconds",
-            "custodian_key_epoch",
+            "signer_key_epoch",
             "signatures",
         ),
+        hash_domain="HEGEL/SIGNED_MANIFEST_ENVELOPE/V1",
     ),
     _schema(
         "OddInputV1",
@@ -1278,6 +1674,122 @@ _SCHEMAS = (
         hash_domain="HEGEL/PARTIAL_DIAGNOSTIC_BUNDLE/V1",
     ),
     _schema(
+        "AuditedPathBlobRecordV1",
+        0x3210,
+        "hegel-audited-path-blob-record/1",
+        (
+            "repository_path_alias_id_digest",
+            "raw_repository_path_utf8_bytes",
+            "git_object_algorithm_id",
+            "git_blob_digest",
+            "file_mode",
+            "byte_length",
+        ),
+        rfc6962_records=True,
+        ordering_fields=(
+            "raw_repository_path_utf8_bytes",
+            "repository_path_alias_id_digest",
+            "git_blob_digest",
+        ),
+    ),
+    _schema(
+        "AuditedHistoryRowV1",
+        0x3211,
+        "hegel-audited-history-row/1",
+        (
+            "commit_generation",
+            "repository_commit_id",
+            "ordered_parent_commit_ids",
+            "touched_path_set_root",
+        ),
+        rfc6962_records=True,
+        ordering_fields=("commit_generation", "repository_commit_id"),
+    ),
+    _schema(
+        "LegacyParentSourceRowV1",
+        0x3212,
+        "hegel-legacy-parent-source-row/1",
+        (
+            "target_role_id",
+            "legacy_parent_payload_source_id_digest",
+            "diagnostic_namespace_id",
+            "diagnostic_digest",
+            "source_repository_commit_id",
+        ),
+        rfc6962_records=True,
+        ordering_fields=("target_role_id",),
+    ),
+    _schema(
+        "RepositoryPathAliasRecordV1",
+        0x3213,
+        "hegel-repository-path-alias-record/1",
+        (
+            "path_alias_id_digest",
+            "raw_repository_path_utf8_bytes",
+            "repository_commit_id",
+        ),
+        rfc6962_records=True,
+        ordering_fields=("path_alias_id_digest",),
+    ),
+    _schema(
+        "SourceFileRecordV1",
+        0x3215,
+        "hegel-source-file-record/1",
+        (
+            "path_alias_id_digest",
+            "raw_path_bytes",
+            "git_blob_algorithm_id",
+            "git_blob_digest",
+            "file_mode",
+            "byte_length",
+        ),
+        rfc6962_records=True,
+        ordering_fields=("raw_path_bytes",),
+    ),
+    _schema(
+        "DependencyLockRecordV1",
+        0x3216,
+        "hegel-dependency-lock-record/1",
+        (
+            "ecosystem_id",
+            "package_name_id_digest",
+            "version_id_digest",
+            "source_id_digest",
+            "lock_entry_digest",
+        ),
+        rfc6962_records=True,
+        ordering_fields=("ecosystem_id", "package_name_id_digest", "version_id_digest"),
+    ),
+    _schema(
+        "LegalTransitionRowV1",
+        0x3217,
+        "hegel-legal-transition-row/1",
+        (
+            "from_state_id",
+            "from_phase_id",
+            "to_state_id",
+            "to_phase_id",
+            "allowed_reason_ids",
+        ),
+        rfc6962_records=True,
+        ordering_fields=("from_state_id", "from_phase_id", "to_state_id", "to_phase_id"),
+    ),
+    _schema(
+        "OpaqueIdRegistryRecordV1",
+        0x3218,
+        "hegel-opaque-id-registry-record/1",
+        (
+            "registry_sequence_number",
+            "opaque_id_kind_id",
+            "opaque_id_16_bytes",
+            "first_seen_object_root",
+            "first_seen_repository_commit_id",
+            "created_at_unix_seconds",
+        ),
+        rfc6962_records=True,
+        ordering_fields=("registry_sequence_number",),
+    ),
+    _schema(
         "M3RunGenesisV1",
         0x3300,
         "hegel-m3-run-genesis/1",
@@ -1309,9 +1821,20 @@ _SCHEMAS = (
         "M3RunStateRecordV1",
         0x3301,
         "hegel-m3-run-state-record/1",
-        (),
+        (
+            "run_id",
+            "transition_index",
+            "previous_state_record_root_or_null",
+            "from_state_id",
+            "from_phase_id",
+            "to_state_id",
+            "to_phase_id",
+            "transition_reason_id",
+            "execution_manifest_root",
+            "triggering_receipt_root_or_null",
+            "recorded_at_unix_seconds",
+        ),
         hash_domain="HEGEL/M3_RUN_STATE_RECORD/V1",
-        wire_gap="the M3 run-state record prefix interpretation is unresolved",
     ),
     _schema(
         "M3ImplementationEnumerationReceiptV1",
@@ -1395,7 +1918,7 @@ _SCHEMAS = (
             "mismatch_record_root_or_null",
             "created_at_unix_seconds",
         ),
-        wire_gap="the ContentHash domain for M3DualReplayAgreementV1 is absent",
+        hash_domain="HEGEL/M3_DUAL_REPLAY_AGREEMENT/V1",
     ),
     _schema(
         "M3RoleAgreementEntryV1",
@@ -1429,38 +1952,9 @@ _SCHEMA_BY_IDENTITY: Final = MappingProxyType(
 # data, not TODO comments, so callers can expose the exact fail-closed reason.
 AUTHORITATIVE_BLOCKING_GAPS: Final = MappingProxyType(
     {
-        "NormativeDocumentPathMachineId": (
-            "repository_relative_path_id_digest requires IdDigestV1, but the real "
-            "repository path contains a space and no valid machine-ID alias is frozen"
-        ),
-        "OutsideTargetClaimLevel": (
-            "TargetSpecFormalV1.claim_level_id has only null-control meanings; the "
-            "outside odd-target value is not frozen"
-        ),
-        "SplitContractRuleIds": (
-            "assignment_ordering_rule_id and fallback_split_policy_id have no numeric registry"
-        ),
-        "ContractFieldIdRegistries": (
-            "traversal/bucket field-ID arrays and accounting invariant row schemas are absent"
-        ),
-        "StateMachineLegalTransitionRow": (
-            "StateMachineContractV1.legal_transition_table has no nested row schema"
-        ),
-        "InputSignatureStaticRoleMetadata": (
-            "InputSignatureSpecV1.static_role_metadata has no canonical payload schema"
-        ),
-        "MismatchKindId": "MismatchRecordV1.mismatch_kind_id has no numeric enum registry",
-        "M3RunStateRecordV1": "record-prefix interpretation remains unresolved",
-        "M3DualReplayAgreementV1": "ContentHash domain is absent",
-        "SinkWitnessBinding": (
-            "the amendment names a DslRoleBindingManifestV1 witness field that is not "
-            "present in the inherited schema"
-        ),
-        "M3RunGenesisOutputSlotCount": (
-            "M3RunGenesisV1 contains 15 output slots while gate 24 says 16"
-        ),
         "ExternalActorEvidence": (
-            "authoritative custody, audit, signatures, and first seed genesis are external"
+            "authoritative custody, audit replay, append-only opaque-ID persistence, "
+            "signatures, and first seed genesis are external"
         ),
     }
 )
@@ -1512,12 +2006,25 @@ _ARRAY_FIELDS: Final = frozenset(
         "terminal_state_ids",
         "static_role_metadata",
         "attestations",
+        "document_entries",
+        "purpose_key_entries",
+        "role_ids",
+        "quantity_ids",
+        "scope_ids",
+        "signed_orientations",
+        "ordered_parent_commit_ids",
+        "allowed_reason_ids",
         "bits",
     }
 )
 
 _VARIABLE_BYTES_FIELDS: Final = frozenset(
-    {"raw_git_blob_bytes", "canonical_ast_cbor_bytes"}
+    {
+        "raw_git_blob_bytes",
+        "canonical_ast_cbor_bytes",
+        "raw_repository_path_utf8_bytes",
+        "raw_path_bytes",
+    }
 )
 
 _EXACT_ODD_QUOTAS: Final = (
@@ -1571,8 +2078,16 @@ _FIELD_ENUM_REGISTRY: Final = MappingProxyType(
         "purpose_id": "ActorPurposeId",
         "claim_level_id": "ClaimLevelId",
         "null_control_claim_level_id": "ClaimLevelId",
+        "mismatch_kind_id": "MismatchKindId",
+        "assignment_ordering_rule_id": "AssignmentOrderingRuleId",
+        "fallback_split_policy_id": "FallbackSplitPolicyId",
+        "opaque_id_kind_id": "OpaqueIdKindId",
+        "target_role_id": "TargetRoleId",
+        "ecosystem_id": "DependencyEcosystemId",
+        "git_object_algorithm_id": "GitObjectAlgorithmId",
+        "git_blob_algorithm_id": "GitObjectAlgorithmId",
         "seed_state_id": "SeedStateId",
-        "role_id": "DslRoleId",
+        "role_id": "TargetRoleId",
         "approval_status_id": "ApprovalStatusId",
         "approval_method_id": "ApprovalMethodId",
         "split_instantiation_status_id": "SplitInstantiationStatusId",
@@ -1603,6 +2118,12 @@ def _validate_repository_commit(value: object, field: str) -> None:
     _require_bytes(value[1], 20, field)
 
 
+def _repository_commit_digest(value: object, field: str) -> bytes:
+    _validate_repository_commit(value, field)
+    assert isinstance(value, (tuple, list)) and isinstance(value[1], bytes)
+    return value[1]
+
+
 def _validate_signature_records(value: object) -> None:
     if not isinstance(value, (tuple, list)):
         _fail("REJECT_M25_FIELD_TYPE", "signatures must be an array")
@@ -1625,7 +2146,7 @@ def _validate_field(field: str, value: object) -> None:
     if enum_name is not None:
         NUMERIC_ENUM_REGISTRIES[enum_name].validate(value, field=field)
         return
-    if base_field in {"run_id", "ledger_id"}:
+    if base_field in {"run_id", "ledger_id", "opaque_id_16_bytes", "trust_genesis_id_16_bytes"}:
         validate_opaque_id128_v1(value)
         return
     if base_field.endswith("key_id") or base_field in {
@@ -1665,10 +2186,19 @@ def _validate_field(field: str, value: object) -> None:
             "required_counter_field_ids",
         } and any(type(item) is not int or item < 0 for item in value):
             _fail("REJECT_M25_FIELD_TYPE", f"{field} must contain unsigned integer IDs")
+        if base_field == "ordered_parent_commit_ids":
+            for item in value:
+                _validate_repository_commit(item, "ordered_parent_commit_ids item")
         return
     if base_field in _BOOL_FIELDS:
         if type(value) is not bool:
             _fail("REJECT_M25_FIELD_TYPE", f"{field} must be a CBOR boolean")
+        return
+    if base_field == "git_blob_digest":
+        _require_bytes(value, 20, field)
+        return
+    if base_field == "section_blob_sha256":
+        _require_bytes(value, 32, field)
         return
     if (
         base_field.endswith("_root")
@@ -1681,6 +2211,14 @@ def _validate_field(field: str, value: object) -> None:
     if base_field in _VARIABLE_BYTES_FIELDS:
         if type(value) is not bytes:
             _fail("REJECT_M25_FIELD_TYPE", f"{field} must be a byte string")
+        if base_field in {"raw_repository_path_utf8_bytes", "raw_path_bytes"}:
+            if not value or b"\x00" in value:
+                _fail("REJECT_M25_FIELD_VALUE", f"{field} must be a nonempty NUL-free path")
+        if base_field == "raw_repository_path_utf8_bytes":
+            try:
+                value.decode("utf-8")
+            except UnicodeDecodeError:
+                _fail("REJECT_M25_FIELD_VALUE", f"{field} must contain exact UTF-8 bytes")
         return
     if base_field == "canonical_input_object":
         if not isinstance(value, (tuple, list)):
@@ -1734,6 +2272,9 @@ def _validate_field(field: str, value: object) -> None:
             "type_rejections",
             "structural_limit_rejections",
             "rewrite_collapses",
+            "file_mode",
+            "commit_generation",
+            "registry_sequence_number",
         }
     ):
         if type(value) is not int or value < 0:
@@ -1824,7 +2365,7 @@ def _validate_formal_nested_object(
     value: object,
     expected_name: str,
     field: str,
-) -> None:
+) -> Mapping[str, object]:
     nested = _require_array(value, field)
     schema = _require_schema(expected_name)
     if tuple(nested[:3]) != schema.prefix or len(nested) != 3 + len(schema.fields):
@@ -1833,12 +2374,58 @@ def _validate_formal_nested_object(
     for nested_field, nested_value in nested_fields.items():
         _validate_field(nested_field, nested_value)
     _validate_cross_field_guards(expected_name, nested_fields)
+    return MappingProxyType(nested_fields)
+
+
+def _validate_sorted_unique_enum_array(
+    value: object,
+    enum_name: str,
+    field: str,
+) -> tuple[int, ...]:
+    items = _require_array(value, field)
+    normalized = tuple(
+        NUMERIC_ENUM_REGISTRIES[enum_name].validate(item, field=field) for item in items
+    )
+    if normalized != tuple(sorted(set(normalized))):
+        _fail("REJECT_M25_FIELD_VALUE", f"{field} must be unique and ascending")
+    return normalized
 
 
 def _validate_cross_field_guards(name: str, fields: Mapping[str, object]) -> None:
     """Apply schema-specific guards stated exactly by the frozen documents."""
 
-    if name == "NormativeApprovalManifestV1":
+    if name == "NormativeDocumentBundleV1":
+        entries = _require_array(fields["document_entries"], "document_entries")
+        normalized: list[tuple[int, bytes]] = []
+        for index, raw_entry in enumerate(entries):
+            entry = _require_array(raw_entry, f"document_entries[{index}]")
+            if len(entry) != 2:
+                _fail("REJECT_M25_FIELD_VALUE", "document bundle entry must have two fields")
+            role_id = NUMERIC_ENUM_REGISTRIES["NormativeDocumentRoleId"].validate(
+                entry[0], field="document role_id"
+            )
+            _require_bytes(entry[1], 32, "normative document root")
+            normalized.append((role_id, entry[1]))  # type: ignore[arg-type]
+        if tuple(role for role, _ in normalized) != (1, 2, 3):
+            _fail(
+                "REJECT_M25_FIELD_VALUE",
+                "normative document bundle must contain ordered roles 1,2,3 exactly once",
+            )
+    elif name == "StaticRoleMetadataV1":
+        role_ids = _require_array(fields["role_ids"], "role_ids")
+        quantity_ids = _require_array(fields["quantity_ids"], "quantity_ids")
+        scope_ids = _require_array(fields["scope_ids"], "scope_ids")
+        orientations = _require_array(fields["signed_orientations"], "signed_orientations")
+        profile = (tuple(role_ids), tuple(quantity_ids), tuple(scope_ids), tuple(orientations))
+        expected = {
+            1: ((), (), (), ()),
+            2: ((0, 1, 2, 3), (0,), (3,), (1, 1, -1, -1)),
+        }[fields["input_signature_id"]]  # type: ignore[index]
+        if profile != expected:
+            _fail("REJECT_M25_FIELD_VALUE", "static role metadata differs from the frozen profile")
+        if any(type(item) is not int for array in profile for item in array):
+            _fail("REJECT_M25_FIELD_TYPE", "static role metadata IDs/orientations must be integers")
+    elif name == "NormativeApprovalManifestV1":
         if fields["child_dsl_spec_root_or_null"] is None:
             _fail("REJECT_M25_FIELD_NULL", "approved child DSL root must be non-null")
     elif name == "DslRoleBindingManifestV1":
@@ -1927,6 +2514,29 @@ def _validate_cross_field_guards(name: str, fields: Mapping[str, object]) -> Non
                 _require_bytes(entry[2], 32, "fallback target_spec_root")
         if priorities != sorted(priorities) or len(priorities) != len(set(priorities)):
             _fail("REJECT_M25_FIELD_VALUE", "fallback priorities must be unique and ascending")
+    elif name == "TraversalContractV1":
+        _validate_sorted_unique_enum_array(
+            fields["bucket_key_field_ids"], "TraversalFieldId", "bucket_key_field_ids"
+        )
+        _validate_sorted_unique_enum_array(
+            fields["canonical_sort_key_field_ids"],
+            "TraversalFieldId",
+            "canonical_sort_key_field_ids",
+        )
+    elif name == "BucketAccountingContractV1":
+        _validate_sorted_unique_enum_array(
+            fields["bucket_key_field_ids"], "BucketFieldId", "bucket_key_field_ids"
+        )
+        _validate_sorted_unique_enum_array(
+            fields["required_counter_field_ids"],
+            "AccountingCounterFieldId",
+            "required_counter_field_ids",
+        )
+        _validate_sorted_unique_enum_array(
+            fields["accounting_sum_invariants"],
+            "AccountingInvariantId",
+            "accounting_sum_invariants",
+        )
     elif name == "ProgramArchiveContractV1":
         if fields["chunk_blob_codec_id"] != 0 or fields["target_independent"] is not True:
             _fail("REJECT_M25_FIELD_VALUE", "program archive must use IDENTITY_V1 and be target-independent")
@@ -1941,22 +2551,45 @@ def _validate_cross_field_guards(name: str, fields: Mapping[str, object]) -> Non
             NUMERIC_ENUM_REGISTRIES["M3StateId"].validate(state_id, field="terminal_state_ids")
         if tuple(terminal) != (2, 3, 4, 5, 6):
             _fail("REJECT_M25_FIELD_VALUE", "terminal state registry must equal 2..6")
+        transitions: list[tuple[object, ...]] = []
         for index, raw_transition in enumerate(
             _require_array(fields["legal_transition_table"], "legal_transition_table")
         ):
-            transition = _require_array(raw_transition, f"legal_transition_table[{index}]")
-            if not transition or any(type(item) is not int for item in transition):
-                _fail("REJECT_M25_FIELD_TYPE", "state transition rows must be numeric arrays")
+            _validate_formal_nested_object(
+                raw_transition, "LegalTransitionRowV1", f"legal_transition_table[{index}]"
+            )
+            transitions.append(tuple(_require_array(raw_transition, "legal transition row")))
+        if transitions != sorted(transitions, key=lambda row: row[3:7]):
+            _fail("FAIL_ROW_ORDERING", "legal transition rows are not canonically ordered")
     elif name == "InputSignatureSpecV1":
         expected_tag = {1: 0x3401, 2: 0x3402}[fields["input_signature_id"]]  # type: ignore[index]
         if fields["input_object_tag"] != expected_tag:
             _fail("FAIL_INPUT_SIGNATURE_MISMATCH", "input signature and input-object tag differ")
+        metadata = _validate_formal_nested_object(
+            fields["static_role_metadata"], "StaticRoleMetadataV1", "static_role_metadata"
+        )
+        if metadata["input_signature_id"] != fields["input_signature_id"]:
+            _fail(
+                "FAIL_INPUT_SIGNATURE_MISMATCH",
+                "input signature and static-role metadata profile differ",
+            )
     elif name == "TargetSpecFormalV1":
         if fields["output_sort_id"] != 2:
             _fail("REJECT_M25_FIELD_VALUE", "odd and sink targets must output SortId.BIT")
-        if fields["role_id"] == 2 and fields["claim_level_id"] == 1:
+        if fields["role_id"] == 1:
+            if fields["claim_level_id"] != 3:
+                _fail("REJECT_M25_FIELD_VALUE", "outside target must use OUTSIDE_TARGET_CANDIDATE")
+            if fields["required_witness_ast_hash_or_null"] is not None:
+                _fail("REJECT_M25_FIELD_VALUE", "outside target has no designated null witness")
+            if fields["universe_row_count"] != 480 or fields["target_output_cardinality"] != 2:
+                _fail("REJECT_M25_FIELD_VALUE", "outside target requires 480 rows and two outputs")
+        if fields["role_id"] == 2:
+            if fields["claim_level_id"] != 1:
+                _fail("REJECT_M25_FIELD_VALUE", "current sink control is false-invention null only")
             if fields["required_witness_ast_hash_or_null"] is None:
                 _fail("REJECT_M25_FIELD_NULL", "false-invention sink control requires its witness hash")
+            if fields["universe_row_count"] != 85 or fields["target_output_cardinality"] != 1:
+                _fail("REJECT_M25_FIELD_VALUE", "sink null requires 85 rows and one output")
     elif name == "SplitAlgorithmSpecV1":
         if fields["exhaustive_partition_required"] is not True:
             _fail("REJECT_M25_FIELD_VALUE", "split algorithm must require exhaustive partitioning")
@@ -1975,6 +2608,62 @@ def _validate_cross_field_guards(name: str, fields: Mapping[str, object]) -> Non
             validate_timestamp_ordering_v1(
                 fields["valid_from_unix_seconds"],  # type: ignore[arg-type]
                 fields["valid_until_unix_seconds_or_null"],  # type: ignore[arg-type]
+            )
+    elif name == "ActorTrustGenesisV1":
+        entries = _require_array(fields["purpose_key_entries"], "purpose_key_entries")
+        normalized: list[tuple[int, bytes]] = []
+        for index, raw_entry in enumerate(entries):
+            entry = _require_array(raw_entry, f"purpose_key_entries[{index}]")
+            if len(entry) != 2:
+                _fail("REJECT_M25_FIELD_VALUE", "purpose-key entry must have two fields")
+            purpose_id = NUMERIC_ENUM_REGISTRIES["ActorPurposeId"].validate(
+                entry[0], field="purpose-key purpose_id"
+            )
+            _require_bytes(entry[1], 32, "actor_key_manifest_root")
+            normalized.append((purpose_id, entry[1]))  # type: ignore[arg-type]
+        if tuple(purpose for purpose, _ in normalized) != (1, 2, 3, 4):
+            _fail(
+                "REJECT_M25_FIELD_VALUE",
+                "pre-M4 trust genesis must bind ordered purposes 1,2,3,4 exactly once",
+            )
+    elif name == "OpaqueIdRegistrySnapshotV1":
+        count = fields["record_count"]
+        assert isinstance(count, int)
+        if count < 1:
+            _fail("REJECT_M25_FIELD_VALUE", "opaque-ID snapshot must contain at least one record")
+        if fields["previous_snapshot_root_or_null"] is None and count != 1:
+            _fail(
+                "REJECT_M25_FIELD_VALUE",
+                "opaque-ID genesis snapshot must have null predecessor and record_count 1",
+            )
+        if fields["previous_snapshot_root_or_null"] is not None and count < 2:
+            _fail(
+                "REJECT_M25_FIELD_VALUE",
+                "non-genesis opaque-ID snapshot must have record_count at least 2",
+            )
+    elif name == "ParentAbsenceAuditBundleV1":
+        if _repository_commit_digest(
+            fields["audited_parent_repository_commit_id"],
+            "audited_parent_repository_commit_id",
+        ) != AUDITED_PARENT_COMMIT_SHA1:
+            _fail("REJECT_M25_FIELD_VALUE", "parent audit binds the wrong frozen parent commit")
+        if fields["legacy_source_count"] != 2:
+            _fail("REJECT_M25_FIELD_VALUE", "parent audit must bind exactly two legacy sources")
+    elif name == "ParentManifestAbsenceAttestationV2":
+        if _repository_commit_digest(
+            fields["parent_repository_commit_id"], "parent_repository_commit_id"
+        ) != AUDITED_PARENT_COMMIT_SHA1:
+            _fail("REJECT_M25_FIELD_VALUE", "parent attestation binds the wrong frozen parent commit")
+        if fields["absence_reason_bitmask"] != 0b1111:
+            _fail(
+                "REJECT_M25_FIELD_VALUE",
+                "parent-manifest absence reason bitmask must equal 0b1111",
+            )
+    elif name == "M3ExecutionCandidateV1":
+        if fields["hidden_access_ledger_head_root"] != fields["hidden_access_ledger_genesis_root"]:
+            _fail(
+                "FAIL_M3_LEDGER_HEAD_NOT_GENESIS",
+                "pre-M3 execution candidate requires ledger head equal to genesis",
             )
     elif name == "AttestationBundleV1":
         attestations = _require_array(fields["attestations"], "attestations")
@@ -2017,29 +2706,76 @@ def _validate_cross_field_guards(name: str, fields: Mapping[str, object]) -> Non
             role_id == 2 and stratum_id not in range(9, 14)
         ):
             _fail("REJECT_M25_FIELD_VALUE", "role and split stratum are incompatible")
+    elif name == "AuditedHistoryRowV1":
+        parents = _require_array(fields["ordered_parent_commit_ids"], "ordered_parent_commit_ids")
+        parent_digests = tuple(
+            _repository_commit_digest(parent, "ordered_parent_commit_ids item") for parent in parents
+        )
+        if len(parent_digests) != len(set(parent_digests)):
+            _fail("REJECT_M25_FIELD_VALUE", "history row contains a duplicate parent commit")
+    elif name == "LegacyParentSourceRowV1":
+        role_id = fields["target_role_id"]
+        assert isinstance(role_id, int)
+        namespace_id, diagnostic_digest = _LEGACY_PARENT_SOURCE_EXPECTATIONS[role_id]
+        expected_source_id = LEGACY_PARENT_SOURCE_IDS[role_id - 1]
+        expected_values = {
+            "legacy_parent_payload_source_id_digest": id_digest_v1(expected_source_id),
+            "diagnostic_namespace_id": namespace_id,
+            "diagnostic_digest": diagnostic_digest,
+            "source_repository_commit_id": AUDITED_PARENT_COMMIT_SHA1,
+        }
+        if fields["legacy_parent_payload_source_id_digest"] != expected_values[
+            "legacy_parent_payload_source_id_digest"
+        ]:
+            _fail("REJECT_M25_FIELD_VALUE", "legacy source ID does not match its target role")
+        if fields["diagnostic_namespace_id"] != expected_values["diagnostic_namespace_id"]:
+            _fail("REJECT_M25_FIELD_VALUE", "legacy diagnostic namespace does not match its role")
+        if fields["diagnostic_digest"] != expected_values["diagnostic_digest"]:
+            _fail("REJECT_M25_FIELD_VALUE", "legacy diagnostic digest does not match its source ID")
+        if _repository_commit_digest(
+            fields["source_repository_commit_id"], "source_repository_commit_id"
+        ) != expected_values["source_repository_commit_id"]:
+            _fail("REJECT_M25_FIELD_VALUE", "legacy source row binds the wrong parent commit")
+    elif name == "LegalTransitionRowV1":
+        reasons = _validate_sorted_unique_enum_array(
+            fields["allowed_reason_ids"], "M3TransitionReasonId", "allowed_reason_ids"
+        )
+        if not reasons:
+            _fail("REJECT_M25_FIELD_VALUE", "legal transition must allow at least one reason")
+        validate_m3_state_transition(
+            fields["from_state_id"],  # type: ignore[arg-type]
+            fields["from_phase_id"],  # type: ignore[arg-type]
+            fields["to_state_id"],  # type: ignore[arg-type]
+            fields["to_phase_id"],  # type: ignore[arg-type]
+        )
+    elif name == "M3RunStateRecordV1":
+        validate_m3_state_transition(
+            fields["from_state_id"],  # type: ignore[arg-type]
+            fields["from_phase_id"],  # type: ignore[arg-type]
+            fields["to_state_id"],  # type: ignore[arg-type]
+            fields["to_phase_id"],  # type: ignore[arg-type]
+        )
+        if fields["transition_index"] == 0:
+            expected_start = {
+                "previous_state_record_root_or_null": None,
+                "from_state_id": 0,
+                "from_phase_id": 0,
+                "to_state_id": 1,
+                "to_phase_id": 1,
+                "transition_reason_id": 1,
+                "triggering_receipt_root_or_null": None,
+            }
+            if any(fields[field] != value for field, value in expected_start.items()):
+                _fail("FAIL_ILLEGAL_M3_STATE_TRANSITION", "transition index 0 is not the exact start record")
+        elif fields["previous_state_record_root_or_null"] is None:
+            _fail("FAIL_M3_STATE_CHAIN_BREAK", "noninitial transition requires a previous state root")
     elif name == "PartialDiagnosticBundleV1":
         if fields["authoritative_claim_allowed"] is not False:
             _fail("REJECT_M25_FIELD_VALUE", "partial diagnostic bundle cannot make an authoritative claim")
     elif name == "M3RunGenesisV1":
         if fields["initial_state_id"] != 0:
             _fail("REJECT_M25_FIELD_VALUE", "M3 genesis initial state must be NOT_RUN")
-        output_fields = (
-            "canonical_program_archive_root_or_null",
-            "program_chunk_manifest_root_or_null",
-            "bucket_accounting_root_or_null",
-            "outside_program_output_archive_root_or_null",
-            "outside_output_chunk_manifest_root_or_null",
-            "outside_match_set_root_or_null",
-            "outside_role_evaluation_receipt_root_or_null",
-            "null_program_output_archive_root_or_null",
-            "null_output_chunk_manifest_root_or_null",
-            "null_match_set_root_or_null",
-            "null_role_evaluation_receipt_root_or_null",
-            "python_enumeration_receipt_root_or_null",
-            "rust_enumeration_receipt_root_or_null",
-            "dual_replay_agreement_root_or_null",
-            "final_state_record_root_or_null",
-        )
+        output_fields = tuple(f"{output_name}_or_null" for output_name in M3_RUN_OUTPUT_ROOTS)
         if any(fields[field] is not None for field in output_fields):
             _fail("FAIL_M3_OUTPUT_ROOT_PREPOPULATED", "M3 genesis output root is prepopulated")
     elif name == "ParentManifestAbsenceAttestationV1":
@@ -2057,12 +2793,10 @@ def _validate_cross_field_guards(name: str, fields: Mapping[str, object]) -> Non
                 "REJECT_M25_SIGNATURE_ORDER",
                 "signature records must have unique ascending key IDs",
             )
-        if fields["enclosed_object_tag"] in {0x3103, 0x3106, 0x3108} and len(
-            signatures
-        ) != 1:
+        if len(signatures) != 1:
             _fail(
                 "REJECT_M25_SIGNATURE_COUNT",
-                "seed commitment, seed continuity, and ledger genesis require one signature",
+                "every external SignedManifestEnvelopeV1 contains exactly one signature",
             )
     if name in {"M3ImplementationEnumerationReceiptV1", "M3RoleEvaluationReceiptV1"}:
         validate_timestamp_ordering_v1(
@@ -2165,6 +2899,33 @@ def synthetic_record_tree_root(
                 "FAIL_UNIVERSE_INDEX_GAP",
                 f"{name} universe_index values must be contiguous from zero",
             )
+    elif name == "OpaqueIdRegistryRecordV1":
+        sequences = [record["registry_sequence_number"] for record in records]
+        if sequences != list(range(len(sequences))):
+            _fail(
+                "FAIL_OPAQUE_ID_REGISTRY_SEQUENCE",
+                "opaque-ID registry sequence numbers must be contiguous from zero",
+            )
+        raw_ids = [record["opaque_id_16_bytes"] for record in records]
+        if len(raw_ids) != len(set(raw_ids)):
+            _fail(
+                "FAIL_OPAQUE_ID_ALREADY_USED",
+                "raw opaque ID is reused across registry kinds",
+            )
+    elif name == "RepositoryPathAliasRecordV1":
+        alias_ids = [record["path_alias_id_digest"] for record in records]
+        raw_paths = [record["raw_repository_path_utf8_bytes"] for record in records]
+        if len(alias_ids) != len(set(alias_ids)) or len(raw_paths) != len(set(raw_paths)):
+            _fail(
+                "FAIL_REPOSITORY_PATH_ALIAS_DUPLICATE",
+                "path alias digests and raw path bytes must both be unique",
+            )
+    elif name == "LegacyParentSourceRowV1":
+        if [record["target_role_id"] for record in records] != [1, 2]:
+            _fail(
+                "FAIL_PARENT_AUDIT_LEGACY_SOURCE_SET",
+                "legacy source tree must contain target roles 1 and 2 exactly once",
+            )
     if schema.ordering_fields:
         keys = [tuple(record[field] for field in schema.ordering_fields) for record in records]
         if any(left > right for left, right in zip(keys, keys[1:])):
@@ -2193,6 +2954,400 @@ def candidate_record_tree_root(
     """
 
     return synthetic_record_tree_root(name, records)
+
+
+def external_signature_preimage_v1(
+    enclosed_object_tag: int,
+    enclosed_object_root: bytes,
+    signer_purpose_id: int,
+    signer_key_epoch: int,
+) -> bytes:
+    """Build the owner-authorized purpose/epoch-bound external signature bytes."""
+
+    if type(enclosed_object_tag) is not int:
+        _fail("REJECT_M25_FIELD_TYPE", "enclosed object tag must be an integer")
+    _require_bytes(enclosed_object_root, 32, "enclosed_object_root")
+    purpose_id = NUMERIC_ENUM_REGISTRIES["ActorPurposeId"].validate(
+        signer_purpose_id, field="signer_purpose_id"
+    )
+    if type(signer_key_epoch) is not int or not 0 <= signer_key_epoch <= (1 << 64) - 1:
+        _fail("REJECT_M25_FIELD_TYPE", "signer_key_epoch must be a uint64")
+
+    if enclosed_object_tag == 0x310E:
+        if purpose_id not in {1, 2, 3}:
+            _fail("REJECT_M25_FIELD_VALUE", "bridge statement signer purpose must be 1, 2, or 3")
+        domain = BRIDGE_ATTESTATION_SIGNATURE_DOMAIN
+    elif enclosed_object_tag in CUSTODIAN_SIGNATURE_DOMAIN_BY_TAG:
+        if purpose_id != 1:
+            _fail("REJECT_M25_FIELD_VALUE", "custodian object signer purpose must be 1")
+        domain = CUSTODIAN_SIGNATURE_DOMAIN_BY_TAG[enclosed_object_tag]
+    elif enclosed_object_tag == 0x3114:
+        if purpose_id != 4:
+            _fail("REJECT_M25_FIELD_VALUE", "parent absence signer purpose must be 4")
+        domain = PARENT_AUDITOR_SIGNATURE_DOMAIN
+    else:
+        _fail("REJECT_M25_FIELD_VALUE", "object tag has no frozen external signature domain")
+
+    return (
+        domain.encode("utf-8")
+        + b"\x00"
+        + enclosed_object_root
+        + purpose_id.to_bytes(2, "big")
+        + signer_key_epoch.to_bytes(8, "big")
+    )
+
+
+def bridge_attestation_signature_preimage_v1(
+    bridge_replay_statement_root: bytes,
+    signer_purpose_id: int,
+    signer_key_epoch: int,
+) -> bytes:
+    """Build the exact E2/E3 bridge signature preimage."""
+
+    return external_signature_preimage_v1(
+        0x310E,
+        bridge_replay_statement_root,
+        signer_purpose_id,
+        signer_key_epoch,
+    )
+
+
+def validate_source_section_profile_v1(
+    name: str,
+    fields: Mapping[str, object],
+    exact_section_bytes: bytes,
+) -> bytes:
+    """Recompute one addendum-defined source-section profile candidate root."""
+
+    if name not in {
+        "CanonicalAstProfileSpecV1",
+        "CanonicalCborProfileSpecV1",
+        "Phase2BContractSpecV1",
+        "MdlCodeTableSpecV1",
+        "HiddenArtifactScopeV1",
+    }:
+        _fail("REJECT_M25_FIELD_VALUE", "object is not a source-section profile")
+    if type(exact_section_bytes) is not bytes:
+        _fail("REJECT_M25_FIELD_TYPE", "exact_section_bytes must be bytes")
+    if fields["section_blob_sha256"] != hashlib.sha256(exact_section_bytes).digest():
+        _fail("FAIL_SOURCE_SECTION_HASH_MISMATCH", "section SHA-256 does not match exact bytes")
+    if fields["section_byte_length"] != len(exact_section_bytes):
+        _fail("FAIL_SOURCE_SECTION_LENGTH_MISMATCH", "section byte length does not match")
+    return candidate_content_root(name, fields)
+
+
+def validate_null_witness_binding_v1(
+    target_spec_fields: Mapping[str, object],
+    target_bundle_fields: Mapping[str, object],
+) -> None:
+    """Require the two E11 sink-witness fields to be non-null and byte-identical."""
+
+    build_formal_object("TargetSpecFormalV1", target_spec_fields)
+    build_formal_object("TargetBundleV1", target_bundle_fields)
+    if target_spec_fields["role_id"] != 2:
+        _fail("REJECT_M25_FIELD_VALUE", "witness binding validator requires the null-control spec")
+    spec_witness = target_spec_fields["required_witness_ast_hash_or_null"]
+    bundle_witness = target_bundle_fields["null_control_required_witness_ast_hash_or_null"]
+    if spec_witness is None or bundle_witness is None or spec_witness != bundle_witness:
+        _fail("FAIL_NULL_WITNESS_BINDING_MISMATCH", "sink witness hashes are absent or unequal")
+
+
+def validate_actor_trust_bindings_v1(
+    trust_genesis_fields: Mapping[str, object],
+    actor_key_manifests: Sequence[Mapping[str, object]],
+    replacement_policy_fields: Mapping[str, object],
+) -> bytes:
+    """Replay trust entries, policy root, and cross-purpose key separation."""
+
+    if len(actor_key_manifests) != 4:
+        _fail("FAIL_ACTOR_TRUST_PURPOSE_SET", "pre-M4 actor trust requires four key manifests")
+    normalized: list[tuple[int, bytes]] = []
+    key_ids: list[bytes] = []
+    public_keys: list[bytes] = []
+    for manifest in actor_key_manifests:
+        build_formal_object("ActorKeyManifestV1", manifest)
+        purpose_id = manifest["purpose_id"]
+        assert isinstance(purpose_id, int)
+        normalized.append((purpose_id, candidate_content_root("ActorKeyManifestV1", manifest)))
+        key_ids.append(manifest["key_id"])  # type: ignore[arg-type]
+        public_keys.append(manifest["public_key_32_bytes"])  # type: ignore[arg-type]
+    normalized.sort()
+    if tuple(purpose for purpose, _ in normalized) != (1, 2, 3, 4):
+        _fail("FAIL_ACTOR_TRUST_PURPOSE_SET", "actor key purposes must be exactly 1,2,3,4")
+    if len(key_ids) != len(set(key_ids)) or len(public_keys) != len(set(public_keys)):
+        _fail("FAIL_ACTOR_KEY_CROSS_PURPOSE_REUSE", "key IDs and public keys must be pairwise distinct")
+    expected_policy_root = candidate_content_root("ReplacementPolicyV1", replacement_policy_fields)
+    if trust_genesis_fields["purpose_key_policy_root"] != expected_policy_root:
+        _fail("FAIL_ACTOR_TRUST_POLICY_MISMATCH", "trust genesis does not bind ReplacementPolicyV1")
+    if tuple(tuple(entry) for entry in trust_genesis_fields["purpose_key_entries"]) != tuple(normalized):  # type: ignore[union-attr]
+        _fail("FAIL_ACTOR_TRUST_KEY_ROOT_MISMATCH", "trust entries do not match actor key manifests")
+    return candidate_content_root("ActorTrustGenesisV1", trust_genesis_fields)
+
+
+def _candidate_attestation_rows(
+    purpose_envelopes: Sequence[tuple[int, Mapping[str, object]]],
+) -> tuple[tuple[int, bytes, bytes], ...]:
+    rows: list[tuple[int, bytes, bytes]] = []
+    for purpose_id, envelope in purpose_envelopes:
+        NUMERIC_ENUM_REGISTRIES["ActorPurposeId"].validate(
+            purpose_id, field="attestation purpose_id"
+        )
+        build_formal_object("SignedManifestEnvelopeV1", envelope)
+        rows.append(
+            (
+                purpose_id,
+                envelope["enclosed_manifest_root"],  # type: ignore[arg-type]
+                candidate_content_root("SignedManifestEnvelopeV1", envelope),
+            )
+        )
+    return tuple(sorted(rows))
+
+
+def validate_external_input_attestation_bundle_v1(
+    bundle_fields: Mapping[str, object],
+    purpose_envelopes: Sequence[tuple[int, Mapping[str, object]]],
+) -> bytes:
+    """Validate the addendum's four custodian plus one auditor envelopes."""
+
+    actual_tag_purposes = sorted(
+        (purpose, envelope["enclosed_object_tag"]) for purpose, envelope in purpose_envelopes
+    )
+    if actual_tag_purposes != sorted(EXTERNAL_INPUT_SIGNED_TAG_PURPOSES):
+        _fail("FAIL_EXTERNAL_INPUT_ATTESTATION_COVERAGE", "external-input envelope coverage differs")
+    expected_rows = _candidate_attestation_rows(purpose_envelopes)
+    if tuple(tuple(row) for row in bundle_fields["attestations"]) != expected_rows:  # type: ignore[union-attr]
+        _fail("FAIL_EXTERNAL_INPUT_ATTESTATION_COVERAGE", "bundle rows do not bind the supplied envelopes")
+    return candidate_content_root("AttestationBundleV1", bundle_fields)
+
+
+def validate_bridge_attestation_bundle_v1(
+    bridge_statement_root: bytes,
+    bundle_fields: Mapping[str, object],
+    purpose_envelopes: Sequence[tuple[int, Mapping[str, object]]],
+) -> bytes:
+    """Validate three purpose-specific envelopes over one bridge statement root."""
+
+    _require_bytes(bridge_statement_root, 32, "bridge_statement_root")
+    if sorted(purpose for purpose, _ in purpose_envelopes) != [1, 2, 3]:
+        _fail("FAIL_BRIDGE_ATTESTATION_PURPOSE_SET", "bridge purposes must be exactly 1,2,3")
+    for _, envelope in purpose_envelopes:
+        if envelope["enclosed_object_tag"] != 0x310E or envelope[
+            "enclosed_manifest_root"
+        ] != bridge_statement_root:
+            _fail("FAIL_BRIDGE_ATTESTATION_BINDING", "bridge envelope binds the wrong statement")
+    expected_rows = _candidate_attestation_rows(purpose_envelopes)
+    if tuple(tuple(row) for row in bundle_fields["attestations"]) != expected_rows:  # type: ignore[union-attr]
+        _fail("FAIL_BRIDGE_ATTESTATION_BINDING", "bridge bundle rows do not bind the envelopes")
+    return candidate_content_root("AttestationBundleV1", bundle_fields)
+
+
+def validate_opaque_id_registry_append_v1(
+    registration_intents: Sequence[Mapping[str, object]],
+    records: Sequence[Mapping[str, object]],
+    snapshot_fields: Mapping[str, object],
+    *,
+    previous_snapshot_fields: Mapping[str, object] | None = None,
+) -> bytes:
+    """Replay one exact append-only opaque-ID snapshot transition."""
+
+    if not records or len(registration_intents) != len(records):
+        _fail(
+            "FAIL_OPAQUE_ID_REGISTRY_SNAPSHOT",
+            "one registration intent is required for every nonempty registry record set",
+        )
+    intent_roots: list[bytes] = []
+    for intent, record in zip(registration_intents, records, strict=True):
+        build_formal_object("OpaqueIdRegistrationIntentV1", intent)
+        build_formal_object("OpaqueIdRegistryRecordV1", record)
+        if intent["opaque_id_kind_id"] != record["opaque_id_kind_id"] or intent[
+            "opaque_id_16_bytes"
+        ] != record["opaque_id_16_bytes"]:
+            _fail("FAIL_OPAQUE_ID_INTENT_MISMATCH", "registry record differs from its intent")
+        intent_root = candidate_content_root("OpaqueIdRegistrationIntentV1", intent)
+        if record["first_seen_object_root"] != intent_root:
+            _fail("FAIL_OPAQUE_ID_INTENT_MISMATCH", "first_seen_object_root is not the intent root")
+        if _repository_commit_digest(
+            intent["repository_commit_id"], "intent repository_commit_id"
+        ) != _repository_commit_digest(
+            record["first_seen_repository_commit_id"], "record first_seen_repository_commit_id"
+        ):
+            _fail("FAIL_OPAQUE_ID_INTENT_MISMATCH", "intent and record commits differ")
+        intent_roots.append(intent_root)
+
+    registry_root = candidate_record_tree_root("OpaqueIdRegistryRecordV1", records)
+    build_formal_object("OpaqueIdRegistrySnapshotV1", snapshot_fields)
+    if snapshot_fields["record_count"] != len(records) or snapshot_fields[
+        "registry_tree_root"
+    ] != registry_root:
+        _fail("FAIL_OPAQUE_ID_REGISTRY_SNAPSHOT", "snapshot count/tree root differs from records")
+    added_record_root = rfc6962_root(
+        [build_formal_object("OpaqueIdRegistryRecordV1", records[-1])]
+    )
+    if snapshot_fields["added_record_root"] != added_record_root:
+        _fail("FAIL_OPAQUE_ID_REGISTRY_SNAPSHOT", "added_record_root is not the singleton record root")
+
+    if previous_snapshot_fields is None:
+        if snapshot_fields["previous_snapshot_root_or_null"] is not None or len(records) != 1:
+            _fail("FAIL_OPAQUE_ID_REGISTRY_SNAPSHOT", "genesis snapshot shape is invalid")
+    else:
+        build_formal_object("OpaqueIdRegistrySnapshotV1", previous_snapshot_fields)
+        previous_root = candidate_content_root(
+            "OpaqueIdRegistrySnapshotV1", previous_snapshot_fields
+        )
+        if snapshot_fields["previous_snapshot_root_or_null"] != previous_root:
+            _fail("FAIL_OPAQUE_ID_REGISTRY_SNAPSHOT", "snapshot predecessor root differs")
+        if snapshot_fields["record_count"] != previous_snapshot_fields["record_count"] + 1:  # type: ignore[operator]
+            _fail("FAIL_OPAQUE_ID_REGISTRY_SNAPSHOT", "snapshot count did not increase by one")
+        expected_previous_tree = candidate_record_tree_root(
+            "OpaqueIdRegistryRecordV1", records[:-1]
+        )
+        if previous_snapshot_fields["registry_tree_root"] != expected_previous_tree:
+            _fail("FAIL_OPAQUE_ID_REGISTRY_SNAPSHOT", "previous snapshot tree is not the record prefix")
+    return candidate_content_root("OpaqueIdRegistrySnapshotV1", snapshot_fields)
+
+
+def validate_parent_absence_audit_bundle_v1(
+    top_level_path_rows: Sequence[Mapping[str, object]],
+    history_rows: Sequence[Mapping[str, object]],
+    touched_path_rows_by_history_row: Sequence[Sequence[Mapping[str, object]]],
+    legacy_source_rows: Sequence[Mapping[str, object]],
+    audit_bundle_fields: Mapping[str, object],
+) -> bytes:
+    """Replay the addendum's reachable-history, touched-path, and legacy-source roots."""
+
+    if len(history_rows) != len(touched_path_rows_by_history_row):
+        _fail("FAIL_PARENT_AUDIT_HISTORY", "every history row needs its touched-path rows")
+    history_by_digest: dict[bytes, Mapping[str, object]] = {}
+    union_rows_by_cbor: dict[bytes, Mapping[str, object]] = {}
+    for history_row, touched_rows in zip(
+        history_rows, touched_path_rows_by_history_row, strict=True
+    ):
+        build_formal_object("AuditedHistoryRowV1", history_row)
+        commit_digest = _repository_commit_digest(
+            history_row["repository_commit_id"], "history repository_commit_id"
+        )
+        if commit_digest in history_by_digest:
+            _fail("FAIL_PARENT_AUDIT_HISTORY", "history contains a duplicate commit")
+        history_by_digest[commit_digest] = history_row
+        touched_root = candidate_record_tree_root("AuditedPathBlobRecordV1", touched_rows)
+        if history_row["touched_path_set_root"] != touched_root:
+            _fail("FAIL_PARENT_AUDIT_TOUCHED_PATH_ROOT", "history touched-path root differs")
+        for row in touched_rows:
+            encoded = encode_formal_object("AuditedPathBlobRecordV1", row)
+            union_rows_by_cbor[encoded] = row
+
+    for commit_digest, history_row in history_by_digest.items():
+        parent_digests = tuple(
+            _repository_commit_digest(parent, "history parent commit")
+            for parent in history_row["ordered_parent_commit_ids"]  # type: ignore[union-attr]
+        )
+        if any(parent not in history_by_digest for parent in parent_digests):
+            _fail("FAIL_PARENT_AUDIT_HISTORY", "reachable parent commit is absent")
+        expected_generation = (
+            0
+            if not parent_digests
+            else 1
+            + max(
+                history_by_digest[parent]["commit_generation"]  # type: ignore[type-var]
+                for parent in parent_digests
+            )
+        )
+        if history_row["commit_generation"] != expected_generation:
+            _fail("FAIL_PARENT_AUDIT_HISTORY", f"commit generation is wrong for {commit_digest.hex()}")
+    if AUDITED_PARENT_COMMIT_SHA1 not in history_by_digest:
+        _fail("FAIL_PARENT_AUDIT_HISTORY", "frozen audited parent commit is absent")
+
+    expected_union = sorted(
+        union_rows_by_cbor.values(),
+        key=lambda row: (
+            row["raw_repository_path_utf8_bytes"],
+            row["repository_path_alias_id_digest"],
+            row["git_blob_digest"],
+        ),
+    )
+    if [encode_formal_object("AuditedPathBlobRecordV1", row) for row in top_level_path_rows] != [
+        encode_formal_object("AuditedPathBlobRecordV1", row) for row in expected_union
+    ]:
+        _fail("FAIL_PARENT_AUDIT_PATH_UNION", "top-level path rows are not the deduplicated union")
+
+    path_root = candidate_record_tree_root("AuditedPathBlobRecordV1", top_level_path_rows)
+    history_root = candidate_record_tree_root("AuditedHistoryRowV1", history_rows)
+    legacy_root = candidate_record_tree_root("LegacyParentSourceRowV1", legacy_source_rows)
+    build_formal_object("ParentAbsenceAuditBundleV1", audit_bundle_fields)
+    expected_fields = {
+        "audited_path_tree_root": path_root,
+        "audited_history_tree_root": history_root,
+        "legacy_source_tree_root": legacy_root,
+        "audited_path_count": len(top_level_path_rows),
+        "audited_history_row_count": len(history_rows),
+        "legacy_source_count": len(legacy_source_rows),
+    }
+    if any(audit_bundle_fields[field] != value for field, value in expected_fields.items()):
+        _fail("FAIL_PARENT_AUDIT_BUNDLE_MISMATCH", "audit bundle fields differ from replayed rows")
+    return candidate_content_root("ParentAbsenceAuditBundleV1", audit_bundle_fields)
+
+
+def validate_execution_identity_linkage_v1(
+    execution_candidate_fields: Mapping[str, object],
+    bridge_statement_fields: Mapping[str, object],
+    bridge_bundle_fields: Mapping[str, object],
+    execution_manifest_fields: Mapping[str, object],
+    run_genesis_fields: Mapping[str, object],
+) -> tuple[bytes, bytes, bytes]:
+    """Replay the acyclic candidate -> statement -> manifest -> genesis linkage."""
+
+    candidate_root = candidate_content_root("M3ExecutionCandidateV1", execution_candidate_fields)
+    statement_root = candidate_content_root("BridgeReplayStatementV1", bridge_statement_fields)
+    bridge_bundle_root = candidate_content_root("AttestationBundleV1", bridge_bundle_fields)
+    manifest_root = candidate_content_root("M3ExecutionManifestV2", execution_manifest_fields)
+    build_formal_object("M3RunGenesisV1", run_genesis_fields)
+
+    run_id = execution_candidate_fields["run_id"]
+    if any(
+        fields["run_id"] != run_id
+        for fields in (bridge_statement_fields, execution_manifest_fields, run_genesis_fields)
+    ):
+        _fail("FAIL_M3_EXECUTION_IDENTITY_LINKAGE", "run IDs differ across execution objects")
+    statement_links = {
+        "m3_execution_candidate_root": candidate_root,
+        "diagnostic_formal_bridge_root": execution_candidate_fields["diagnostic_formal_bridge_root"],
+        "child_dsl_spec_root": execution_candidate_fields["child_dsl_spec_root"],
+        "child_freeze_root": execution_candidate_fields["child_freeze_root"],
+        "actor_trust_genesis_root": execution_candidate_fields["actor_trust_genesis_root"],
+        "opaque_id_registry_snapshot_root": execution_candidate_fields[
+            "opaque_id_registry_snapshot_root"
+        ],
+    }
+    if any(bridge_statement_fields[field] != value for field, value in statement_links.items()):
+        _fail("FAIL_M3_EXECUTION_IDENTITY_LINKAGE", "bridge statement links differ")
+    manifest_links = {
+        "m3_execution_candidate_root": candidate_root,
+        "bridge_replay_statement_root": statement_root,
+        "bridge_attestation_bundle_root": bridge_bundle_root,
+        "actor_trust_genesis_root": execution_candidate_fields["actor_trust_genesis_root"],
+        "opaque_id_registry_snapshot_root": execution_candidate_fields[
+            "opaque_id_registry_snapshot_root"
+        ],
+    }
+    if any(execution_manifest_fields[field] != value for field, value in manifest_links.items()):
+        _fail("FAIL_M3_EXECUTION_IDENTITY_LINKAGE", "execution manifest links differ")
+    if run_genesis_fields["execution_manifest_root"] != manifest_root:
+        _fail("FAIL_M3_EXECUTION_IDENTITY_LINKAGE", "run genesis does not bind manifest V2")
+    validate_timestamp_ordering_v1(
+        execution_candidate_fields["created_at_unix_seconds"],  # type: ignore[arg-type]
+        execution_manifest_fields["created_at_unix_seconds"],  # type: ignore[arg-type]
+    )
+    validate_timestamp_ordering_v1(
+        execution_manifest_fields["created_at_unix_seconds"],  # type: ignore[arg-type]
+        run_genesis_fields["created_at_unix_seconds"],  # type: ignore[arg-type]
+    )
+    candidate_commit = _repository_commit_digest(
+        execution_candidate_fields["repository_commit_id"], "candidate repository_commit_id"
+    )
+    for fields in (execution_manifest_fields, run_genesis_fields):
+        if _repository_commit_digest(fields["repository_commit_id"], "repository_commit_id") != candidate_commit:
+            _fail("FAIL_M3_EXECUTION_IDENTITY_LINKAGE", "execution objects bind different commits")
+    return candidate_root, statement_root, manifest_root
 
 
 def formal_content_root(name: str, fields: Mapping[str, object]) -> bytes:
@@ -2267,6 +3422,9 @@ M3_RUN_OUTPUT_ROOTS: Final = (
     "dual_replay_agreement_root",
     "final_state_record_root",
 )
+
+if len(M3_RUN_OUTPUT_ROOTS) != M3_RUN_OUTPUT_SLOT_COUNT:
+    raise RuntimeError("M3RunGenesisV1 output-slot registry is not exactly fifteen fields")
 
 
 def validate_m3_input_roots(input_roots: Mapping[str, object]) -> None:
@@ -2494,10 +3652,14 @@ def assert_authoritative_m25_ready() -> "None":
 
 
 __all__ = [
+    "AUDITED_PARENT_COMMIT_SHA1",
     "AUTHORITATIVE_MIN_TIMESTAMP",
     "AUTHORITATIVE_BLOCKING_GAPS",
+    "BRIDGE_ATTESTATION_SIGNATURE_DOMAIN",
     "CANONICAL_INPUT_DOMAIN",
+    "CUSTODIAN_SIGNATURE_DOMAIN_BY_TAG",
     "DecodedFormalObject",
+    "EXTERNAL_INPUT_SIGNED_TAG_PURPOSES",
     "FAIL_M25_NORMATIVE_GAP",
     "FORMAL_SCHEMA_REGISTRY",
     "FormalSchema",
@@ -2509,25 +3671,38 @@ __all__ = [
     "M25WireError",
     "M3_REQUIRED_INPUT_ROOTS",
     "M3_RUN_OUTPUT_ROOTS",
+    "M3_RUN_OUTPUT_SLOT_COUNT",
     "M3_TERMINAL_STATES",
     "M3RunningPhase",
     "M3State",
     "NUMERIC_ENUM_REGISTRIES",
     "NumericEnumRegistry",
     "OBJECT_TAGS",
+    "PARENT_AUDITOR_SIGNATURE_DOMAIN",
+    "LEGACY_PARENT_SOURCE_IDS",
     "assert_authoritative_m25_ready",
+    "bridge_attestation_signature_preimage_v1",
     "build_formal_object",
     "candidate_content_root",
     "candidate_record_tree_root",
     "decode_formal_object",
     "encode_formal_object",
+    "external_signature_preimage_v1",
     "formal_content_root",
     "formal_record_tree_root",
     "git_sha1_commit_id",
     "id_digest_v1",
     "synthetic_content_root",
     "synthetic_record_tree_root",
+    "validate_actor_trust_bindings_v1",
+    "validate_bridge_attestation_bundle_v1",
+    "validate_execution_identity_linkage_v1",
+    "validate_external_input_attestation_bundle_v1",
+    "validate_null_witness_binding_v1",
+    "validate_opaque_id_registry_append_v1",
     "validate_opaque_id128_v1",
+    "validate_parent_absence_audit_bundle_v1",
+    "validate_source_section_profile_v1",
     "validate_timestamp_ordering_v1",
     "validate_timestamp_v1",
     "validate_m3_input_roots",
