@@ -585,3 +585,23 @@ def test_module_has_no_source_label_secret_or_scorer_capability() -> None:
         "validate_scar_cssm_pack_binding_v1",
     ):
         assert forbidden not in source_text
+
+
+def test_python_runtime_roots_include_declared_venv_base(
+    tmp_path: Path,
+) -> None:
+    runtime = tmp_path / "runtime"
+    environment = runtime / "typed_venv"
+    executable = environment / "bin/python"
+    base_bin = runtime / "python310/bin"
+    executable.parent.mkdir(parents=True)
+    base_bin.mkdir(parents=True)
+    executable.write_bytes(b"python")
+    (environment / "pyvenv.cfg").write_text(
+        f"home = {base_bin}\ninclude-system-site-packages = false\n",
+        encoding="utf-8",
+    )
+
+    assert qualification._python_runtime_read_roots(  # noqa: SLF001
+        executable
+    ) == (environment, runtime / "python310")

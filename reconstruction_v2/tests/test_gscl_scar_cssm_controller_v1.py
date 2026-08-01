@@ -788,3 +788,23 @@ def test_canonical_worker_record_roundtrip_is_accepted_by_frozen_scorer() -> Non
         expected_ambiguous_count=1,
     )
     assert result.safe_aggregate["status"] == "SCORED_OFFLINE_ONCE"
+
+
+def test_python_runtime_roots_include_declared_venv_base(
+    linux_tmp_path: Path,
+) -> None:
+    runtime = linux_tmp_path / "runtime"
+    environment = runtime / "typed_venv"
+    executable = environment / "bin/python"
+    base_bin = runtime / "python310/bin"
+    executable.parent.mkdir(parents=True)
+    base_bin.mkdir(parents=True)
+    executable.write_bytes(b"python")
+    (environment / "pyvenv.cfg").write_text(
+        f"home = {base_bin}\ninclude-system-site-packages = false\n",
+        encoding="utf-8",
+    )
+
+    assert controller._python_runtime_read_roots(  # noqa: SLF001
+        executable
+    ) == (environment, runtime / "python310")

@@ -619,6 +619,46 @@ def _landlock_rights(abi: int) -> int:
     return rights
 
 
+def _python_runtime_read_roots(executable: Path) -> tuple[Path, ...]:
+    """Return the venv and its declared base runtime without widening to /var."""
+
+    try:
+        environment_root = executable.resolve(strict=True).parent.parent
+        pyvenv = environment_root / "pyvenv.cfg"
+        roots = [environment_root]
+        if pyvenv.exists():
+            metadata = pyvenv.lstat()
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or stat.S_ISLNK(metadata.st_mode)
+                or metadata.st_uid != os.getuid()
+                or metadata.st_size > 16 * 1024
+            ):
+                raise ValueError("invalid pyvenv.cfg metadata")
+            home_values = [
+                line.partition("=")[2].strip()
+                for line in pyvenv.read_text(
+                    encoding="utf-8", errors="strict"
+                ).splitlines()
+                if line.partition("=")[0].strip().lower() == "home"
+            ]
+            if len(home_values) != 1:
+                raise ValueError("pyvenv.cfg home is not unique")
+            home = Path(home_values[0])
+            if not home.is_absolute():
+                raise ValueError("pyvenv.cfg home is not absolute")
+            home = home.resolve(strict=True)
+            base_root = home.parent if home.name == "bin" else home
+            if not base_root.is_dir():
+                raise ValueError("pyvenv.cfg base runtime is not a directory")
+            roots.append(base_root)
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise ScarCssmQualificationError(
+            "QUALIFICATION_PYTHON_RUNTIME_TOPOLOGY_INVALID"
+        ) from exc
+    return tuple(dict.fromkeys(roots))
+
+
 def _apply_landlock(
     *,
     read_paths: Sequence[Path],
@@ -728,7 +768,9 @@ def _landlock_paths(
         Path("/dev/null"),
         Path("/dev/urandom"),
     )
-    python_runtime = config.python_executable.resolve(strict=True).parent.parent
+    python_runtime_roots = _python_runtime_read_roots(
+        config.python_executable
+    )
     read_paths = tuple(
         path
         for path in (
@@ -736,7 +778,7 @@ def _landlock_paths(
             config.project_root,
             config.qwen_model_root,
             config.minilm_model_root,
-            python_runtime,
+            *python_runtime_roots,
             paths.action_pack,
             paths.sandbox_receipt,
             config.qwen_manifest_path,
