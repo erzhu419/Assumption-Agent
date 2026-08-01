@@ -111,17 +111,21 @@ def _receipt(
     preregistration_id: str | None = None,
 ) -> EvidenceReceipt:
     passed = value >= threshold if higher_is_better else value <= threshold
+    probe_id = (
+        "probe_hard_negative"
+        if metric == "hard_negative_rejection"
+        else "probe_exact_residual"
+    )
+    registered_probes = {probe.probe_id: probe for probe in parent.probes}
+    if probe_id not in registered_probes:
+        raise ValueError(f"vertical-slice probe is not registered: {probe_id}")
     return EvidenceReceipt(
         receipt_id=f"receipt_{metric}",
         theory_version_id=parent.version_id,
         candidate_id=CANDIDATE_ID,
         evaluator_epoch=parent.evaluator.epoch,
-        probe_id=(
-            "probe_hard_negative"
-            if metric == "hard_negative_rejection"
-            else "probe_exact_residual"
-        ),
-        probe_version="1",
+        probe_id=probe_id,
+        probe_version=registered_probes[probe_id].version,
         data_cutoff=parent.data_cutoff,
         split=split,
         kind=EvidenceKind.EXECUTABLE_TEST,

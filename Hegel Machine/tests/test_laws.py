@@ -38,6 +38,55 @@ def test_unobserved_conservation_boundary_abstains():
     assert result.residual is None
 
 
+def test_numeric_sequences_reject_boolean_values():
+    result = evaluate_law(
+        LawKind.SYMMETRY,
+        {
+            "forward": (True, 2.0),
+            "transformed": (1.0, 2.0),
+            "common_codomains": True,
+        },
+    )
+    assert result.abstained
+    assert not result.passed
+    assert "not numeric" in result.reason
+
+
+@pytest.mark.parametrize(
+    "invalid_sequence",
+    (
+        pytest.param({1.0: "ignored", 2.0: "ignored"}, id="mapping"),
+        pytest.param({1.0, 2.0}, id="set"),
+        pytest.param(iter((1.0, 2.0)), id="generator"),
+    ),
+)
+def test_numeric_sequences_reject_non_list_tuple_iterables(invalid_sequence):
+    result = evaluate_law(
+        LawKind.SYMMETRY,
+        {
+            "forward": invalid_sequence,
+            "transformed": (1.0, 2.0),
+            "common_codomains": True,
+        },
+    )
+    assert result.abstained
+    assert not result.passed
+    assert "list or tuple" in result.reason
+
+
+def test_numeric_sequences_accept_explicit_lists():
+    result = evaluate_law(
+        LawKind.SYMMETRY,
+        {
+            "forward": [1.0, 2.0],
+            "transformed": [1.0, 2.0],
+            "common_codomains": True,
+        },
+    )
+    assert result.passed
+    assert not result.abstained
+
+
 def test_negative_feedback_requires_temporal_order():
     result = evaluate_law(
         LawKind.NEGATIVE_FEEDBACK,

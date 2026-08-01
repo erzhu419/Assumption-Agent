@@ -33,7 +33,7 @@ UNIVERSAL_ASSUMPTIONS: tuple[AssumptionTemplate, ...] = (
     AssumptionTemplate("T14", "invariance", "world", "symmetry/invariance/equivariance", "symmetry_verifier"),
     AssumptionTemplate("T15", "invariance", "world", "conservation/balance/flow", "balance_verifier"),
     AssumptionTemplate("T16", "invariance", "world", "topological_persistence", "topology_probe"),
-    AssumptionTemplate("T17", "shape", "world", "monotonicity/order/diminishing_returns", "order_verifier"),
+    AssumptionTemplate("T17", "invariance", "world", "monotonicity/order/diminishing_returns", "order_verifier"),
     AssumptionTemplate("T18", "uncertainty", "world", "typical_rule/sparse_exceptions", "contamination_model"),
     AssumptionTemplate("T19", "uncertainty", "governance", "maximum_entropy/minimum_commitment", "abstention_policy"),
     AssumptionTemplate("T20", "governance", "governance", "falsifiability/active_discrimination", "falsifier"),
@@ -246,16 +246,93 @@ ACTIVE_LAWS: tuple[RelationLaw, ...] = (
 )
 
 
-def validate_registry() -> None:
-    if len(UNIVERSAL_ASSUMPTIONS) != 22:
-        raise AssertionError("the universal ontology must contain exactly 22 leaves")
-    if len({item.template_id for item in UNIVERSAL_ASSUMPTIONS}) != 22:
-        raise AssertionError("universal ontology identifiers are not unique")
-    if {law.kind for law in ACTIVE_LAWS} != set(LawKind):
-        raise AssertionError("the active Phase-2 law library is incomplete")
-    functional_ids = {item.functional_id for item in ACTIVE_FUNCTIONALS}
-    if any(law.violation_functional_id not in functional_ids for law in ACTIVE_LAWS):
-        raise AssertionError("an active law lacks its violation functional")
+FROZEN_ROOTS: tuple[str, ...] = (
+    "compression",
+    "decomposition",
+    "dynamics",
+    "invariance",
+    "uncertainty",
+    "governance",
+)
+FROZEN_LEAF_IDS: tuple[str, ...] = tuple(f"T{index:02d}" for index in range(1, 23))
+FROZEN_LAW_FUNCTIONAL_BINDINGS: tuple[tuple[str, LawKind, str], ...] = (
+    ("law_symmetry_v1", LawKind.SYMMETRY, "vf_symmetry_v1"),
+    ("law_monotonicity_v1", LawKind.MONOTONICITY, "vf_monotonicity_v1"),
+    ("law_conservation_v1", LawKind.CONSERVATION, "vf_conservation_v1"),
+    (
+        "law_complementarity_v1",
+        LawKind.COMPLEMENTARITY,
+        "vf_complementarity_v1",
+    ),
+    (
+        "law_negative_feedback_v1",
+        LawKind.NEGATIVE_FEEDBACK,
+        "vf_negative_feedback_v1",
+    ),
+    ("law_locality_v1", LawKind.LOCALITY, "vf_locality_v1"),
+)
+FROZEN_ACTIVE_LAW_IDS: tuple[str, ...] = tuple(
+    law_id for law_id, _, _ in FROZEN_LAW_FUNCTIONAL_BINDINGS
+)
+
+
+def validate_registry(
+    assumptions: tuple[AssumptionTemplate, ...] | None = None,
+    laws: tuple[RelationLaw, ...] | None = None,
+    functionals: tuple[ViolationFunctionalSpec, ...] | None = None,
+) -> None:
+    """Validate the in-code copy of the frozen ontology configuration.
+
+    The frozen contract is deliberately represented by constants rather than a
+    path relative to the process working directory.  Optional arguments make
+    fail-closed behavior directly testable without mutating module globals.
+    """
+
+    assumptions = UNIVERSAL_ASSUMPTIONS if assumptions is None else assumptions
+    laws = ACTIVE_LAWS if laws is None else laws
+    functionals = ACTIVE_FUNCTIONALS if functionals is None else functionals
+
+    leaf_ids = tuple(item.template_id for item in assumptions)
+    if leaf_ids != FROZEN_LEAF_IDS:
+        raise AssertionError(
+            "universal ontology leaves differ from the frozen 22-leaf config"
+        )
+    roots = {item.root for item in assumptions}
+    if roots != set(FROZEN_ROOTS):
+        raise AssertionError(
+            "universal ontology roots differ from the frozen six-root config"
+        )
+    t17 = next(item for item in assumptions if item.template_id == "T17")
+    if t17.root != "invariance":
+        raise AssertionError("T17 primary root must remain invariance")
+
+    law_ids = tuple(law.law_id for law in laws)
+    if law_ids != FROZEN_ACTIVE_LAW_IDS:
+        raise AssertionError("active laws differ from the frozen Phase-2 config")
+    if tuple(law.kind for law in laws) != tuple(LawKind):
+        raise AssertionError("the active Phase-2 law kinds are incomplete or reordered")
+
+    functional_ids = tuple(item.functional_id for item in functionals)
+    expected_functional_ids = tuple(
+        functional_id for _, _, functional_id in FROZEN_LAW_FUNCTIONAL_BINDINGS
+    )
+    if functional_ids != expected_functional_ids:
+        raise AssertionError("active functionals differ from the frozen Phase-2 config")
+
+    laws_by_id = {law.law_id: law for law in laws}
+    functionals_by_id = {item.functional_id: item for item in functionals}
+    for law_id, expected_kind, functional_id in FROZEN_LAW_FUNCTIONAL_BINDINGS:
+        law = laws_by_id[law_id]
+        functional = functionals_by_id[functional_id]
+        if (
+            law.kind is not expected_kind
+            or functional.law_kind is not expected_kind
+        ):
+            raise AssertionError("active law and functional kinds are misaligned")
+        if law.violation_functional_id != functional_id:
+            raise AssertionError("active law points to the wrong violation functional")
+        if law.required_observables != functional.required_observables:
+            raise AssertionError("active law and functional observables are misaligned")
 
 
 validate_registry()

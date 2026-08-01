@@ -7,11 +7,15 @@ from hegel_machine.hashing import stable_hash
 from hegel_machine.governance import (
     BranchRecord,
     ConservativeExtensionCertificate,
+    DEFAULT_GATE_POLICY,
     DEFAULT_GATE_THRESHOLDS,
     EvidenceLedger,
     EvaluationRecord,
+    GatePolicySpec,
     GateCheck,
+    METRIC_POLICIES,
     PromotionDecision,
+    SEALED_METRIC_SPLITS,
     SealedHoldoutManifest,
     TheoryVersionGraph,
     authorize_promotion,
@@ -147,14 +151,24 @@ def receipt(
     passed = value >= threshold if higher else value <= threshold
     hard_negative = metric == "hard_negative_rejection"
     receipt_cutoff = cutoff or parent.data_cutoff
+    selected_probe_id = probe_id or (
+        "probe_hard_negative" if hard_negative else "probe_exact_residual"
+    )
+    selected_probe_version = next(
+        (
+            probe.version
+            for probe in parent.probes
+            if probe.probe_id == selected_probe_id
+        ),
+        "unregistered",
+    )
     return EvidenceReceipt(
         receipt_id=f"receipt_{metric}_{value}",
         theory_version_id=parent.version_id,
         candidate_id=CANDIDATE,
         evaluator_epoch=epoch or parent.evaluator.epoch,
-        probe_id=probe_id
-        or ("probe_hard_negative" if hard_negative else "probe_exact_residual"),
-        probe_version="1",
+        probe_id=selected_probe_id,
+        probe_version=selected_probe_version,
         data_cutoff=receipt_cutoff,
         split=split,
         kind=kind,
@@ -412,6 +426,293 @@ def branch_graph(
             ),
         ),
     )
+
+
+def changed_gate_policy(rule):
+    base = DEFAULT_GATE_POLICY
+    metric_policies = dict(base.metric_policies)
+    sealed_metric_splits = dict(base.sealed_metric_splits)
+    thresholds = base.thresholds
+    claim_evidence_kinds = base.claim_evidence_kinds
+    semantic_metrics = base.semantic_metrics
+    semantic_evidence_kind = base.semantic_evidence_kind
+    semantic_actor_role = base.semantic_actor_role
+    semantic_allowed_splits = base.semantic_allowed_splits
+    empirical_execution_required_metrics = (
+        base.empirical_execution_required_metrics
+    )
+    empirical_forbidden_evidence_kinds = (
+        base.empirical_forbidden_evidence_kinds
+    )
+    schema_version = base.schema_version
+    policy_version = base.policy_version
+
+    target_name = "residual_explanation"
+    target = metric_policies[target_name]
+    if rule == "schema_version":
+        schema_version += ".changed"
+    elif rule == "policy_version":
+        policy_version += ".changed"
+    elif rule == "threshold":
+        thresholds = replace(thresholds, residual_explanation=0.76)
+    elif rule == "actor":
+        metric_policies[target_name] = replace(
+            target,
+            actor_role=AuthorityRole.FORMALIZER,
+        )
+    elif rule == "split":
+        metric_policies[target_name] = replace(
+            target,
+            splits=frozenset({EvidenceSplit.VALIDATION}),
+        )
+    elif rule == "probe":
+        metric_policies[target_name] = replace(
+            target,
+            probe_ids=target.probe_ids | {"probe_second_residual"},
+        )
+    elif rule == "direction":
+        metric_policies[target_name] = replace(
+            target,
+            higher_is_better=not target.higher_is_better,
+        )
+    elif rule == "independence":
+        metric_policies[target_name] = replace(
+            target,
+            require_independent=not target.require_independent,
+        )
+    elif rule == "sealed_mapping":
+        sealed_metric_splits[target_name] = EvidenceSplit.TRAIN
+    elif rule == "semantic_exclusion":
+        semantic_metrics = semantic_metrics | {"policy_test_semantic_metric"}
+    elif rule == "semantic_actor":
+        semantic_actor_role = AuthorityRole.FORMALIZER
+    elif rule == "semantic_split":
+        semantic_allowed_splits = semantic_allowed_splits | {
+            EvidenceSplit.VALIDATION
+        }
+    elif rule == "semantic_evidence_kind":
+        semantic_evidence_kind = EvidenceKind.INDEPENDENT_LLM
+        claim_evidence_kinds = claim_evidence_kinds - {
+            EvidenceKind.INDEPENDENT_LLM
+        }
+    elif rule == "allowed_evidence_kind":
+        claim_evidence_kinds = claim_evidence_kinds - {
+            EvidenceKind.HELDOUT_HUMAN
+        }
+    elif rule == "forbidden_evidence_kind":
+        empirical_forbidden_evidence_kinds = (
+            empirical_forbidden_evidence_kinds
+            | {EvidenceKind.INDEPENDENT_LLM}
+        )
+    elif rule == "empirical_metric_rule":
+        empirical_execution_required_metrics = (
+            empirical_execution_required_metrics
+            - {"hard_negative_rejection"}
+        )
+    else:
+        raise AssertionError(f"unknown policy mutation: {rule}")
+
+    return GatePolicySpec.from_components(
+        thresholds=thresholds,
+        metric_policies=metric_policies,
+        sealed_metric_splits=sealed_metric_splits,
+        claim_evidence_kinds=claim_evidence_kinds,
+        semantic_metrics=semantic_metrics,
+        semantic_evidence_kind=semantic_evidence_kind,
+        semantic_actor_role=semantic_actor_role,
+        semantic_allowed_splits=semantic_allowed_splits,
+        empirical_execution_required_metrics=(
+            empirical_execution_required_metrics
+        ),
+        empirical_forbidden_evidence_kinds=(
+            empirical_forbidden_evidence_kinds
+        ),
+        schema_version=schema_version,
+        policy_version=policy_version,
+    )
+
+
+@pytest.mark.parametrize(
+    "rule",
+    (
+        "schema_version",
+        "policy_version",
+        "threshold",
+        "actor",
+        "split",
+        "probe",
+        "direction",
+        "independence",
+        "sealed_mapping",
+        "semantic_exclusion",
+        "semantic_actor",
+        "semantic_split",
+        "semantic_evidence_kind",
+        "allowed_evidence_kind",
+        "forbidden_evidence_kind",
+        "empirical_metric_rule",
+    ),
+)
+def test_gate_policy_id_binds_every_rule_family(rule):
+    assert changed_gate_policy(rule).policy_id != DEFAULT_GATE_POLICY.policy_id
+
+
+def test_gate_policy_normalizes_mapping_order_and_preserves_threshold_api():
+    reversed_metrics = dict(reversed(DEFAULT_GATE_POLICY.metric_policies))
+    reversed_splits = dict(reversed(DEFAULT_GATE_POLICY.sealed_metric_splits))
+    reordered = GatePolicySpec.from_components(
+        thresholds=DEFAULT_GATE_THRESHOLDS,
+        metric_policies=reversed_metrics,
+        sealed_metric_splits=reversed_splits,
+    )
+    assert reordered == DEFAULT_GATE_POLICY
+    assert reordered.policy_id == DEFAULT_GATE_POLICY.policy_id
+    assert DEFAULT_GATE_THRESHOLDS.policy_id == DEFAULT_GATE_POLICY.policy_id
+    with pytest.raises((AttributeError, TypeError)):
+        reordered.policy_version = "mutated"
+
+
+def test_default_gate_policy_globals_are_immutable_and_ids_are_stable():
+    default_id = DEFAULT_GATE_POLICY.policy_id
+    threshold_policy_id = DEFAULT_GATE_THRESHOLDS.policy_id
+    with pytest.raises(TypeError):
+        METRIC_POLICIES["residual_explanation"] = replace(
+            METRIC_POLICIES["residual_explanation"],
+            require_independent=False,
+        )
+    with pytest.raises(TypeError):
+        SEALED_METRIC_SPLITS["residual_explanation"] = EvidenceSplit.TRAIN
+    assert DEFAULT_GATE_POLICY.policy_id == default_id
+    assert DEFAULT_GATE_THRESHOLDS.policy_id == threshold_policy_id == default_id
+
+    custom_thresholds = replace(
+        DEFAULT_GATE_THRESHOLDS,
+        residual_explanation=0.76,
+    )
+    assert custom_thresholds.policy_id == custom_thresholds.policy_id
+    assert custom_thresholds.policy_id != default_id
+
+
+def test_gate_thresholds_reject_boolean_and_nonfinite_values():
+    with pytest.raises(ValueError, match="finite"):
+        replace(DEFAULT_GATE_THRESHOLDS, residual_explanation=True)
+    with pytest.raises(ValueError, match="finite"):
+        replace(DEFAULT_GATE_THRESHOLDS, residual_explanation=float("nan"))
+
+
+def test_gate_policy_rejects_unexecutable_partition_and_semantic_contracts():
+    with pytest.raises(ValueError, match="fixed five-partition"):
+        GatePolicySpec.from_components(
+            thresholds=DEFAULT_GATE_THRESHOLDS,
+            sealed_partition_splits=(
+                DEFAULT_GATE_POLICY.sealed_partition_splits
+                | {EvidenceSplit.COUNTERFACTUAL}
+            ),
+        )
+
+    counterfactual_mapping = dict(DEFAULT_GATE_POLICY.sealed_metric_splits)
+    counterfactual_mapping["residual_explanation"] = EvidenceSplit.COUNTERFACTUAL
+    with pytest.raises(ValueError, match="five-partition"):
+        GatePolicySpec.from_components(
+            thresholds=DEFAULT_GATE_THRESHOLDS,
+            sealed_metric_splits=counterfactual_mapping,
+        )
+
+    disallowed_mapping = dict(DEFAULT_GATE_POLICY.sealed_metric_splits)
+    disallowed_mapping["old_success_preservation"] = EvidenceSplit.VALIDATION
+    with pytest.raises(ValueError, match="not allowed"):
+        GatePolicySpec.from_components(
+            thresholds=DEFAULT_GATE_THRESHOLDS,
+            sealed_metric_splits=disallowed_mapping,
+        )
+
+    with pytest.raises(ValueError, match="must be disjoint"):
+        GatePolicySpec.from_components(
+            thresholds=DEFAULT_GATE_THRESHOLDS,
+            semantic_metrics=(
+                DEFAULT_GATE_POLICY.semantic_metrics
+                | {"residual_explanation"}
+            ),
+        )
+
+    unseen_policies = dict(DEFAULT_GATE_POLICY.metric_policies)
+    unseen_policies["unseen_prediction_success"] = replace(
+        unseen_policies["unseen_prediction_success"],
+        require_independent=False,
+    )
+    with pytest.raises(ValueError, match="independent sealed holdout"):
+        GatePolicySpec.from_components(
+            thresholds=DEFAULT_GATE_THRESHOLDS,
+            metric_policies=unseen_policies,
+        )
+
+
+def test_custom_policy_controls_execution_and_is_replayed_from_record():
+    parent = initial_theory()
+    candidate_patch = patch(parent)
+    receipts = list(passing_receipts(parent, candidate_patch))
+    receipts[0] = replace(receipts[0], independent=False)
+    evidence = ledger(parent, candidate_patch, tuple(receipts), sealed=False)
+
+    metric_policies = dict(DEFAULT_GATE_POLICY.metric_policies)
+    metric_policies["residual_explanation"] = replace(
+        metric_policies["residual_explanation"],
+        require_independent=False,
+    )
+    custom_policy = GatePolicySpec.from_components(
+        thresholds=DEFAULT_GATE_THRESHOLDS,
+        metric_policies=metric_policies,
+        policy_version="1.0.0-test-relaxed-residual-independence",
+    )
+    default_cert = evaluate_conservative_extension(
+        parent=parent,
+        patch=candidate_patch,
+        ledger=evidence,
+        reduction_map=reduction(parent),
+    )
+    custom_cert = evaluate_conservative_extension(
+        parent=parent,
+        patch=candidate_patch,
+        ledger=evidence,
+        reduction_map=reduction(parent),
+        policy=custom_policy,
+    )
+    assert default_cert.decision is PromotionDecision.BRANCH_ONLY
+    assert custom_cert.decision is PromotionDecision.CANDIDATE
+    assert custom_cert.gate_policy_id == custom_policy.policy_id
+
+    graph = branch_graph(parent, candidate_patch).record_evaluation(
+        branch_id="branch_1",
+        parent=parent,
+        patch=candidate_patch,
+        ledger=evidence,
+        reduction_map=reduction(parent),
+        policy=custom_policy,
+    )
+    assert graph.evaluation_records[0].gate_policy == custom_policy
+    assert graph.evaluation_records[0].certificate == custom_cert
+    replayed = TheoryVersionGraph(
+        states=graph.states,
+        branches=graph.branches,
+        evaluation_records=graph.evaluation_records,
+    )
+    assert replayed == graph
+
+
+def test_manifest_and_certificate_bind_the_complete_gate_policy():
+    parent = initial_theory()
+    candidate_patch = patch(parent)
+    receipts = passing_receipts(parent, candidate_patch)
+    evidence = ledger(parent, candidate_patch, receipts)
+    cert = evaluate_conservative_extension(
+        parent=parent,
+        patch=candidate_patch,
+        ledger=evidence,
+        reduction_map=reduction(parent),
+    )
+    assert evidence.holdout_manifest is not None
+    assert evidence.holdout_manifest.gate_policy_id == DEFAULT_GATE_POLICY.policy_id
+    assert cert.gate_policy_id == DEFAULT_GATE_POLICY.policy_id
 
 
 def test_structurally_sealed_receipts_stop_without_external_trust_root():

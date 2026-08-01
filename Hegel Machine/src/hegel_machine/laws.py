@@ -6,10 +6,17 @@ Natural-language labels are deliberately absent from every verifier input.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hashlib import sha256
 from math import isfinite
+from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
 from .schema import LawKind
+
+
+VERIFIER_REGISTRY_ID = (
+    "verifier_registry_sha256_" + sha256(Path(__file__).read_bytes()).hexdigest()
+)
 
 
 class InsufficientObservables(ValueError):
@@ -68,12 +75,20 @@ def _number(episode: Mapping[str, Any], key: str) -> float:
 
 
 def _numbers(episode: Mapping[str, Any], key: str) -> tuple[float, ...]:
-    if key not in episode or isinstance(episode[key], (str, bytes)):
+    if key not in episode:
         raise InsufficientObservables(f"missing numeric sequence: {key}")
-    try:
-        result = tuple(float(item) for item in episode[key])
-    except (TypeError, ValueError) as exc:
-        raise InsufficientObservables(f"observable {key} is not numeric") from exc
+    raw_values = episode[key]
+    if not isinstance(raw_values, (list, tuple)):
+        raise InsufficientObservables(
+            f"observable {key} must be a list or tuple of numbers"
+        )
+    values = tuple(raw_values)
+    if any(
+        isinstance(item, bool) or not isinstance(item, (int, float))
+        for item in values
+    ):
+        raise InsufficientObservables(f"observable {key} is not numeric")
+    result = tuple(float(item) for item in values)
     if any(not isfinite(item) for item in result):
         raise InsufficientObservables(f"observable {key} contains non-finite values")
     return result

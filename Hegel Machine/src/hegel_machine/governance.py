@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, fields, replace
 from datetime import datetime
 from math import isfinite
 import re
+from types import MappingProxyType
 
 from .hashing import stable_hash
 from .schema import (
@@ -25,7 +27,14 @@ from .schema import (
 )
 
 
-SEMANTIC_METRICS = {"semantic_retrieval_score", "embedding_similarity"}
+SEMANTIC_METRICS = frozenset(
+    {
+        "semantic_retrieval_score",
+        "embedding_similarity",
+        "llm_self_reported_confidence",
+        "legacy_fixture_pass",
+    }
+)
 CLAIM_EVIDENCE_KINDS = frozenset(
     {
         EvidenceKind.PROOF,
@@ -34,6 +43,15 @@ CLAIM_EVIDENCE_KINDS = frozenset(
         EvidenceKind.HELDOUT_HUMAN,
     }
 )
+SEMANTIC_EVIDENCE_KIND = EvidenceKind.SEMANTIC_RETRIEVAL
+SEMANTIC_ACTOR_ROLE = AuthorityRole.GENERATOR
+SEMANTIC_ALLOWED_SPLITS = frozenset({EvidenceSplit.TRAIN})
+EMPIRICAL_EXECUTION_REQUIRED_METRICS = frozenset(
+    {"unseen_prediction_success", "hard_negative_rejection"}
+)
+EMPIRICAL_FORBIDDEN_EVIDENCE_KINDS = frozenset({EvidenceKind.PROOF})
+GATE_POLICY_SCHEMA_VERSION = "hegel-machine-gate-policy/1"
+GATE_POLICY_VERSION = "1.0.0"
 
 
 @dataclass(frozen=True, slots=True)
@@ -238,14 +256,21 @@ class GateThresholds:
     def __post_init__(self) -> None:
         for item in fields(self):
             value = getattr(self, item.name)
-            if not isfinite(value) or not 0 <= value <= 1:
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not isfinite(value)
+                or not 0 <= value <= 1
+            ):
                 raise ValueError(
                     f"gate threshold {item.name} must be finite and in [0, 1]"
                 )
 
     @property
     def policy_id(self) -> str:
-        return stable_hash(self, prefix="gate_policy_")
+        """Return the complete policy id while preserving the v0.1 API."""
+
+        return _policy_with_thresholds(self).policy_id
 
 
 DEFAULT_GATE_THRESHOLDS = GateThresholds()
@@ -259,8 +284,29 @@ class MetricPolicy:
     higher_is_better: bool
     require_independent: bool = True
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.splits, frozenset) or not isinstance(
+            self.probe_ids, frozenset
+        ):
+            raise TypeError("metric policy splits and probes must be frozensets")
+        if not self.splits or not self.probe_ids:
+            raise ValueError("metric policy needs allowed splits and probes")
+        if any(not isinstance(split, EvidenceSplit) for split in self.splits):
+            raise TypeError("metric policy contains a non-EvidenceSplit value")
+        if not isinstance(self.actor_role, AuthorityRole):
+            raise TypeError("metric policy actor must be an AuthorityRole")
+        if any(
+            not isinstance(probe_id, str) or not probe_id
+            for probe_id in self.probe_ids
+        ):
+            raise TypeError("metric policy probe ids must be nonempty strings")
+        if not isinstance(self.higher_is_better, bool) or not isinstance(
+            self.require_independent, bool
+        ):
+            raise TypeError("metric policy flags must be booleans")
 
-METRIC_POLICIES: dict[str, MetricPolicy] = {
+
+METRIC_POLICIES: Mapping[str, MetricPolicy] = MappingProxyType({
     "residual_explanation": MetricPolicy(
         frozenset({EvidenceSplit.TRAIN, EvidenceSplit.VALIDATION}),
         AuthorityRole.EVALUATOR,
@@ -315,9 +361,9 @@ METRIC_POLICIES: dict[str, MetricPolicy] = {
         frozenset({"probe_exact_residual"}),
         False,
     ),
-}
+})
 
-SEALED_METRIC_SPLITS: dict[str, EvidenceSplit] = {
+SEALED_METRIC_SPLITS: Mapping[str, EvidenceSplit] = MappingProxyType({
     "residual_explanation": EvidenceSplit.VALIDATION,
     "old_success_preservation": EvidenceSplit.OLD_SUCCESS,
     "limiting_case_reduction": EvidenceSplit.OLD_SUCCESS,
@@ -327,7 +373,258 @@ SEALED_METRIC_SPLITS: dict[str, EvidenceSplit] = {
     "hard_negative_rejection": EvidenceSplit.HARD_NEGATIVE,
     "regression_cost": EvidenceSplit.OLD_SUCCESS,
     "complexity_cost": EvidenceSplit.VALIDATION,
-}
+})
+SEALED_PARTITION_SPLITS = frozenset(
+    {
+        EvidenceSplit.TRAIN,
+        EvidenceSplit.VALIDATION,
+        EvidenceSplit.OLD_SUCCESS,
+        EvidenceSplit.HOLDOUT,
+        EvidenceSplit.HARD_NEGATIVE,
+    }
+)
+
+
+@dataclass(frozen=True, slots=True)
+class GatePolicySpec:
+    """Canonical, immutable description of every promotion-gate rule.
+
+    A sealed manifest binds this object rather than only the numeric thresholds.
+    All mapping-like inputs are normalized into sorted immutable tuples before
+    hashing so rule order cannot change the identifier.
+    """
+
+    schema_version: str
+    policy_version: str
+    thresholds: GateThresholds
+    metric_policies: tuple[tuple[str, MetricPolicy], ...]
+    sealed_metric_splits: tuple[tuple[str, EvidenceSplit], ...]
+    sealed_partition_splits: frozenset[EvidenceSplit]
+    claim_evidence_kinds: frozenset[EvidenceKind]
+    semantic_metrics: frozenset[str]
+    semantic_evidence_kind: EvidenceKind
+    semantic_actor_role: AuthorityRole
+    semantic_allowed_splits: frozenset[EvidenceSplit]
+    empirical_execution_required_metrics: frozenset[str]
+    empirical_forbidden_evidence_kinds: frozenset[EvidenceKind]
+
+    def __post_init__(self) -> None:
+        require_tuple(self.metric_policies, "gate policy metric policies")
+        require_tuple(
+            self.sealed_metric_splits,
+            "gate policy sealed metric splits",
+        )
+        if not self.schema_version or not self.policy_version:
+            raise ValueError("gate policy needs schema and policy versions")
+        if not isinstance(self.thresholds, GateThresholds):
+            raise TypeError("gate policy thresholds must be GateThresholds")
+        for name in (
+            "claim_evidence_kinds",
+            "sealed_partition_splits",
+            "semantic_metrics",
+            "semantic_allowed_splits",
+            "empirical_execution_required_metrics",
+            "empirical_forbidden_evidence_kinds",
+        ):
+            if not isinstance(getattr(self, name), frozenset):
+                raise TypeError(f"gate policy {name} must be a frozenset")
+        if not isinstance(self.semantic_evidence_kind, EvidenceKind):
+            raise TypeError("semantic evidence kind must be an EvidenceKind")
+        if not isinstance(self.semantic_actor_role, AuthorityRole):
+            raise TypeError("semantic actor role must be an AuthorityRole")
+        metric_names = tuple(name for name, _ in self.metric_policies)
+        if not metric_names or len(metric_names) != len(set(metric_names)):
+            raise ValueError("gate policy metric names must be unique and nonempty")
+        if self.metric_policies != tuple(sorted(self.metric_policies)):
+            raise ValueError("gate policy metric policies must be canonicalized")
+        if any(
+            not isinstance(name, str)
+            or not name
+            or not isinstance(metric_policy, MetricPolicy)
+            for name, metric_policy in self.metric_policies
+        ):
+            raise TypeError("gate policy contains an invalid metric policy")
+        sealed_names = tuple(name for name, _ in self.sealed_metric_splits)
+        if (
+            len(sealed_names) != len(set(sealed_names))
+            or self.sealed_metric_splits != tuple(sorted(self.sealed_metric_splits))
+        ):
+            raise ValueError("sealed metric splits must be canonical and unique")
+        if any(
+            not isinstance(name, str)
+            or not name
+            or not isinstance(split, EvidenceSplit)
+            for name, split in self.sealed_metric_splits
+        ):
+            raise TypeError("gate policy contains an invalid sealed split")
+        threshold_names = {item.name for item in fields(self.thresholds)}
+        if set(metric_names) != threshold_names or set(sealed_names) != threshold_names:
+            raise ValueError(
+                "thresholds, metric policies, and sealed splits must cover one schema"
+            )
+        metric_policy_map = dict(self.metric_policies)
+        if self.sealed_partition_splits != SEALED_PARTITION_SPLITS:
+            raise ValueError(
+                "gate policy must bind the fixed five-partition manifest schema"
+            )
+        if self.semantic_metrics.intersection(metric_names):
+            raise ValueError("semantic metrics and promotion metrics must be disjoint")
+        for metric, split in self.sealed_metric_splits:
+            if split not in self.sealed_partition_splits:
+                raise ValueError(
+                    "sealed metric split is absent from the five-partition manifest"
+                )
+            if split not in metric_policy_map[metric].splits:
+                raise ValueError(
+                    "sealed metric split is not allowed by its metric policy"
+                )
+        unseen_policy = metric_policy_map["unseen_prediction_success"]
+        if (
+            unseen_policy.splits != frozenset({EvidenceSplit.HOLDOUT})
+            or not unseen_policy.require_independent
+            or dict(self.sealed_metric_splits)["unseen_prediction_success"]
+            is not EvidenceSplit.HOLDOUT
+        ):
+            raise ValueError(
+                "unseen prediction evidence must be independent sealed holdout"
+            )
+        if (
+            not self.claim_evidence_kinds
+            or any(
+                not isinstance(kind, EvidenceKind)
+                for kind in self.claim_evidence_kinds
+            )
+            or self.semantic_evidence_kind in self.claim_evidence_kinds
+        ):
+            raise ValueError("claim and semantic evidence kinds must be disjoint")
+        if not self.semantic_metrics or any(
+            not isinstance(metric, str) or not metric
+            for metric in self.semantic_metrics
+        ):
+            raise ValueError("semantic metric exclusions must be nonempty names")
+        if not self.semantic_allowed_splits or any(
+            not isinstance(split, EvidenceSplit)
+            for split in self.semantic_allowed_splits
+        ):
+            raise ValueError("semantic evidence needs explicit allowed splits")
+        if not self.empirical_execution_required_metrics.issubset(
+            set(metric_names)
+        ):
+            raise ValueError("empirical execution rules cite an unknown metric")
+        if not self.empirical_forbidden_evidence_kinds or any(
+            not isinstance(kind, EvidenceKind)
+            for kind in self.empirical_forbidden_evidence_kinds
+        ):
+            raise ValueError("empirical evidence-kind exclusions are invalid")
+        # Force canonical serialization at construction time.
+        stable_hash(self)
+
+    @classmethod
+    def from_components(
+        cls,
+        *,
+        thresholds: GateThresholds,
+        metric_policies: Mapping[str, MetricPolicy] | None = None,
+        sealed_metric_splits: Mapping[str, EvidenceSplit] | None = None,
+        sealed_partition_splits: frozenset[EvidenceSplit] = (
+            SEALED_PARTITION_SPLITS
+        ),
+        claim_evidence_kinds: frozenset[EvidenceKind] = CLAIM_EVIDENCE_KINDS,
+        semantic_metrics: frozenset[str] = SEMANTIC_METRICS,
+        semantic_evidence_kind: EvidenceKind = SEMANTIC_EVIDENCE_KIND,
+        semantic_actor_role: AuthorityRole = SEMANTIC_ACTOR_ROLE,
+        semantic_allowed_splits: frozenset[EvidenceSplit] = SEMANTIC_ALLOWED_SPLITS,
+        empirical_execution_required_metrics: frozenset[str] = (
+            EMPIRICAL_EXECUTION_REQUIRED_METRICS
+        ),
+        empirical_forbidden_evidence_kinds: frozenset[EvidenceKind] = (
+            EMPIRICAL_FORBIDDEN_EVIDENCE_KINDS
+        ),
+        schema_version: str = GATE_POLICY_SCHEMA_VERSION,
+        policy_version: str = GATE_POLICY_VERSION,
+    ) -> "GatePolicySpec":
+        metric_policies = (
+            METRIC_POLICIES if metric_policies is None else metric_policies
+        )
+        sealed_metric_splits = (
+            SEALED_METRIC_SPLITS
+            if sealed_metric_splits is None
+            else sealed_metric_splits
+        )
+        return cls(
+            schema_version=schema_version,
+            policy_version=policy_version,
+            thresholds=thresholds,
+            metric_policies=tuple(sorted(metric_policies.items())),
+            sealed_metric_splits=tuple(sorted(sealed_metric_splits.items())),
+            sealed_partition_splits=frozenset(sealed_partition_splits),
+            claim_evidence_kinds=frozenset(claim_evidence_kinds),
+            semantic_metrics=frozenset(semantic_metrics),
+            semantic_evidence_kind=semantic_evidence_kind,
+            semantic_actor_role=semantic_actor_role,
+            semantic_allowed_splits=frozenset(semantic_allowed_splits),
+            empirical_execution_required_metrics=frozenset(
+                empirical_execution_required_metrics
+            ),
+            empirical_forbidden_evidence_kinds=frozenset(
+                empirical_forbidden_evidence_kinds
+            ),
+        )
+
+    @property
+    def metric_policy_map(self) -> dict[str, MetricPolicy]:
+        return dict(self.metric_policies)
+
+    @property
+    def sealed_metric_split_map(self) -> dict[str, EvidenceSplit]:
+        return dict(self.sealed_metric_splits)
+
+    @property
+    def policy_id(self) -> str:
+        return stable_hash(self, prefix="gate_policy_")
+
+
+DEFAULT_GATE_POLICY = GatePolicySpec.from_components(
+    thresholds=DEFAULT_GATE_THRESHOLDS
+)
+
+
+def _policy_with_thresholds(thresholds: GateThresholds) -> GatePolicySpec:
+    if thresholds == DEFAULT_GATE_POLICY.thresholds:
+        return DEFAULT_GATE_POLICY
+    return replace(DEFAULT_GATE_POLICY, thresholds=thresholds)
+
+
+def _policy_measured(
+    ledger: EvidenceLedger,
+    metric: str,
+    policy: GatePolicySpec,
+) -> tuple[EvidenceReceipt, ...]:
+    if metric in policy.semantic_metrics:
+        raise ValueError("semantic scores cannot be queried by the promotion gate")
+    return tuple(
+        receipt
+        for receipt in ledger.receipts
+        if receipt.metric == metric
+        and receipt.kind is not policy.semantic_evidence_kind
+    )
+
+
+def _policy_conservative_value(
+    ledger: EvidenceLedger,
+    metric: str,
+    policy: GatePolicySpec,
+) -> float:
+    metric_policy = policy.metric_policy_map[metric]
+    receipts = _policy_measured(ledger, metric, policy)
+    if not receipts:
+        raise KeyError(f"missing measured gate evidence: {metric}")
+    values = [receipt.value for receipt in receipts]
+    return (
+        min(values)
+        if metric_policy.higher_is_better
+        else max(values)
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -456,8 +753,10 @@ def _evidence_contract_checks(
     parent: TheoryState,
     patch: TheoryPatch,
     ledger: EvidenceLedger,
-    thresholds: GateThresholds,
+    policy: GatePolicySpec,
 ) -> tuple[GateCheck, ...]:
+    thresholds = policy.thresholds
+    metric_policies = policy.metric_policy_map
     registered_probes = {
         (probe.probe_id, probe.version): probe for probe in parent.probes
     }
@@ -471,42 +770,45 @@ def _evidence_contract_checks(
             failures.append(f"{receipt.receipt_id}:unregistered_probe")
         if receipt.data_cutoff != parent.data_cutoff:
             failures.append(f"{receipt.receipt_id}:cutoff_mismatch")
-        if receipt.kind is EvidenceKind.SEMANTIC_RETRIEVAL:
-            if receipt.actor_id != actors[AuthorityRole.GENERATOR]:
+        if receipt.kind is policy.semantic_evidence_kind:
+            if receipt.actor_id != actors[policy.semantic_actor_role]:
                 failures.append(f"{receipt.receipt_id}:semantic_actor")
-            if receipt.split is not EvidenceSplit.TRAIN:
+            if receipt.split not in policy.semantic_allowed_splits:
                 failures.append(f"{receipt.receipt_id}:semantic_holdout_access")
             continue
-        policy = METRIC_POLICIES.get(receipt.metric)
-        if policy is None:
+        metric_policy = metric_policies.get(receipt.metric)
+        if metric_policy is None:
             failures.append(f"{receipt.receipt_id}:unknown_claim_metric")
             continue
         if not 0 <= receipt.value <= 1:
             failures.append(f"{receipt.receipt_id}:metric_out_of_unit_range")
-        if receipt.split not in policy.splits:
+        if receipt.split not in metric_policy.splits:
             failures.append(f"{receipt.receipt_id}:wrong_split")
-        if receipt.kind not in CLAIM_EVIDENCE_KINDS:
+        if receipt.kind not in policy.claim_evidence_kinds:
             failures.append(f"{receipt.receipt_id}:wrong_evidence_kind")
-        if policy.require_independent and not receipt.independent:
+        if metric_policy.require_independent and not receipt.independent:
             failures.append(f"{receipt.receipt_id}:not_independent")
-        if receipt.actor_id != actors[policy.actor_role]:
+        if receipt.actor_id != actors[metric_policy.actor_role]:
             failures.append(f"{receipt.receipt_id}:wrong_authority")
-        if receipt.kind is EvidenceKind.PROOF and receipt.metric in {
-            "unseen_prediction_success",
-            "hard_negative_rejection",
-        }:
+        if receipt.kind in policy.empirical_forbidden_evidence_kinds and (
+            receipt.metric in policy.empirical_execution_required_metrics
+        ):
             failures.append(f"{receipt.receipt_id}:empirical_metric_requires_execution")
-        if receipt.probe_id not in policy.probe_ids:
+        if receipt.probe_id not in metric_policy.probe_ids:
             failures.append(f"{receipt.receipt_id}:wrong_probe")
         expected_threshold = getattr(thresholds, receipt.metric)
-        if receipt.higher_is_better is not policy.higher_is_better:
+        if receipt.higher_is_better is not metric_policy.higher_is_better:
             failures.append(f"{receipt.receipt_id}:wrong_metric_direction")
         if receipt.threshold != expected_threshold:
             failures.append(f"{receipt.receipt_id}:wrong_receipt_threshold")
         if not receipt.passed:
             failures.append(f"{receipt.receipt_id}:failed_receipt")
 
-    hard_negative_receipts = ledger.measured("hard_negative_rejection")
+    hard_negative_receipts = _policy_measured(
+        ledger,
+        "hard_negative_rejection",
+        policy,
+    )
     covered_negatives = {
         observation_id
         for receipt in hard_negative_receipts
@@ -520,12 +822,20 @@ def _evidence_contract_checks(
     predictions = {prediction.content_id: prediction for prediction in patch.predictions}
     evaluated_prediction_ids = {
         receipt.preregistration_id
-        for receipt in ledger.measured("unseen_prediction_success")
+        for receipt in _policy_measured(
+            ledger,
+            "unseen_prediction_success",
+            policy,
+        )
         if receipt.preregistration_id is not None
     }
     if evaluated_prediction_ids != set(patch.prediction_ids):
         failures.append("incomplete_preregistered_prediction_coverage")
-    for receipt in ledger.measured("unseen_prediction_success"):
+    for receipt in _policy_measured(
+        ledger,
+        "unseen_prediction_success",
+        policy,
+    ):
         prediction = predictions.get(receipt.preregistration_id or "")
         if prediction is None:
             failures.append(f"{receipt.receipt_id}:unknown_preregistration")
@@ -548,7 +858,7 @@ def _evidence_contract_checks(
             and manifest.patch_content_id == patch.content_id
             and manifest.evaluator_epoch == parent.evaluator.epoch
             and manifest.evaluator_version == parent.evaluator.version
-            and manifest.gate_policy_id == thresholds.policy_id
+            and manifest.gate_policy_id == policy.policy_id
             and manifest.probe_registry_id
             == stable_hash(parent.probes, prefix="probe_registry_")
         )
@@ -563,7 +873,11 @@ def _evidence_contract_checks(
             failures.append("holdout_custodian_is_an_assigned_authority")
         observed_holdout = {
             observation_id
-            for receipt in ledger.measured("unseen_prediction_success")
+            for receipt in _policy_measured(
+                ledger,
+                "unseen_prediction_success",
+                policy,
+            )
             for observation_id in receipt.observation_ids
         }
         if observed_holdout != set(manifest.holdout_observation_ids):
@@ -602,10 +916,10 @@ def _evidence_contract_checks(
                 continue
             if observed_by_split[split] != expected_ids:
                 failures.append(f"incomplete_sealed_partition:{split.value}")
-        for metric, required_split in SEALED_METRIC_SPLITS.items():
+        for metric, required_split in policy.sealed_metric_splits:
             metric_observation_ids = {
                 observation_id
-                for receipt in ledger.measured(metric)
+                for receipt in _policy_measured(ledger, metric, policy)
                 for observation_id in receipt.observation_ids
             }
             if metric_observation_ids != partition_ids[required_split]:
@@ -629,12 +943,13 @@ def _measured_check(
     name: str,
     threshold: float,
     *,
-    higher_is_better: bool,
+    policy: GatePolicySpec,
 ) -> GateCheck:
     try:
-        value = ledger.conservative_value(name, higher_is_better=higher_is_better)
+        value = _policy_conservative_value(ledger, name, policy)
     except KeyError as exc:
         return GateCheck(name, None, threshold, False, str(exc))
+    higher_is_better = policy.metric_policy_map[name].higher_is_better
     passed = value >= threshold if higher_is_better else value <= threshold
     return GateCheck(
         name,
@@ -652,9 +967,20 @@ def evaluate_conservative_extension(
     ledger: EvidenceLedger,
     reduction_map: ReductionMap,
     thresholds: GateThresholds = DEFAULT_GATE_THRESHOLDS,
+    policy: GatePolicySpec | None = None,
 ) -> ConservativeExtensionCertificate:
     """Build a bound certificate from registered, independently measured receipts."""
 
+    if policy is None:
+        gate_policy = _policy_with_thresholds(thresholds)
+    else:
+        if (
+            thresholds != DEFAULT_GATE_THRESHOLDS
+            and thresholds != policy.thresholds
+        ):
+            raise ValueError("explicit gate policy and thresholds disagree")
+        gate_policy = policy
+    thresholds = gate_policy.thresholds
     try:
         proposed_child = compile_patch(parent, patch)
         compiler_ok = True
@@ -722,7 +1048,7 @@ def evaluate_conservative_extension(
             parent=parent,
             patch=patch,
             ledger=ledger,
-            thresholds=thresholds,
+            policy=gate_policy,
         )
     )
     structural.append(
@@ -751,62 +1077,70 @@ def evaluate_conservative_extension(
             ledger,
             "residual_explanation",
             thresholds.residual_explanation,
-            higher_is_better=True,
+            policy=gate_policy,
         ),
         _measured_check(
             ledger,
             "old_success_preservation",
             thresholds.old_success_preservation,
-            higher_is_better=True,
+            policy=gate_policy,
         ),
         _measured_check(
             ledger,
             "limiting_case_reduction",
             thresholds.limiting_case_reduction,
-            higher_is_better=True,
+            policy=gate_policy,
         ),
         _measured_check(
             ledger,
             "expressivity_gain",
             thresholds.expressivity_gain,
-            higher_is_better=True,
+            policy=gate_policy,
         ),
         _measured_check(
             ledger,
             "compression_gain",
             thresholds.compression_gain,
-            higher_is_better=True,
+            policy=gate_policy,
         ),
         _measured_check(
             ledger,
             "unseen_prediction_success",
             thresholds.unseen_prediction_success,
-            higher_is_better=True,
+            policy=gate_policy,
         ),
         _measured_check(
             ledger,
             "hard_negative_rejection",
             thresholds.hard_negative_rejection,
-            higher_is_better=True,
+            policy=gate_policy,
         ),
         _measured_check(
             ledger,
             "regression_cost",
             thresholds.regression_cost,
-            higher_is_better=False,
+            policy=gate_policy,
         ),
         _measured_check(
             ledger,
             "complexity_cost",
             thresholds.complexity_cost,
-            higher_is_better=False,
+            policy=gate_policy,
         ),
     ]
 
-    unseen = ledger.measured("unseen_prediction_success")
+    unseen = _policy_measured(
+        ledger,
+        "unseen_prediction_success",
+        gate_policy,
+    )
+    unseen_policy = gate_policy.metric_policy_map["unseen_prediction_success"]
+    unseen_split = gate_policy.sealed_metric_split_map[
+        "unseen_prediction_success"
+    ]
     preregistered_holdout = bool(unseen) and all(
-        receipt.split is EvidenceSplit.HOLDOUT
-        and receipt.independent
+        receipt.split is unseen_split
+        and (not unseen_policy.require_independent or receipt.independent)
         and receipt.preregistration_id in patch.prediction_ids
         for receipt in unseen
     )
@@ -871,7 +1205,7 @@ def evaluate_conservative_extension(
         sorted(
             receipt.content_id
             for receipt in ledger.receipts
-            if receipt.kind is not EvidenceKind.SEMANTIC_RETRIEVAL
+            if receipt.kind is not gate_policy.semantic_evidence_kind
         )
     )
     return ConservativeExtensionCertificate(
@@ -884,7 +1218,7 @@ def evaluate_conservative_extension(
         reduction_map_content_id=reduction_map.content_id,
         receipt_ids=receipt_ids,
         evidence_ledger_id=ledger.ledger_id,
-        gate_policy_id=thresholds.policy_id,
+        gate_policy_id=gate_policy.policy_id,
         proposed_child_version_id=(
             proposed_child.version_id if proposed_child is not None else None
         ),
@@ -968,6 +1302,7 @@ class EvaluationRecord:
     ledger: EvidenceLedger
     reduction_map: ReductionMap
     certificate: ConservativeExtensionCertificate
+    gate_policy: GatePolicySpec = DEFAULT_GATE_POLICY
 
     def __post_init__(self) -> None:
         if not self.branch_id:
@@ -1053,7 +1388,7 @@ class TheoryVersionGraph:
                     patch=record.patch,
                     ledger=record.ledger,
                     reduction_map=record.reduction_map,
-                    thresholds=DEFAULT_GATE_THRESHOLDS,
+                    policy=record.gate_policy,
                 )
                 if recomputed != record.certificate:
                     raise ValueError("stored certificate fails deterministic replay")
@@ -1095,7 +1430,7 @@ class TheoryVersionGraph:
             negatives.update(record.patch.hard_negative_ids)
             for receipt in record.ledger.receipts:
                 if (
-                    receipt.kind is not EvidenceKind.SEMANTIC_RETRIEVAL
+                    receipt.kind is not record.gate_policy.semantic_evidence_kind
                     and not receipt.passed
                 ):
                     negatives.update(receipt.observation_ids)
@@ -1120,6 +1455,7 @@ class TheoryVersionGraph:
         patch: TheoryPatch,
         ledger: EvidenceLedger,
         reduction_map: ReductionMap,
+        policy: GatePolicySpec = DEFAULT_GATE_POLICY,
     ) -> "TheoryVersionGraph":
         """Recompute and retain a non-active decision with replay inputs.
 
@@ -1143,7 +1479,7 @@ class TheoryVersionGraph:
             patch=patch,
             ledger=ledger,
             reduction_map=reduction_map,
-            thresholds=DEFAULT_GATE_THRESHOLDS,
+            policy=policy,
         )
         if certificate.decision is PromotionDecision.ACTIVE_SCOPED:
             raise ValueError("active decisions require an external trust-root adapter")
@@ -1168,6 +1504,7 @@ class TheoryVersionGraph:
             ledger,
             reduction_map,
             certificate,
+            policy,
         )
         return replace(
             self,
@@ -1192,6 +1529,7 @@ def authorize_promotion(
     ledger: EvidenceLedger,
     reduction_map: ReductionMap,
     promoter_actor_id: str,
+    policy: GatePolicySpec = DEFAULT_GATE_POLICY,
 ) -> PromotionResult:
     """Reject active writes until an external signature trust root exists."""
 
@@ -1221,7 +1559,7 @@ def authorize_promotion(
         patch=patch,
         ledger=ledger,
         reduction_map=reduction_map,
-        thresholds=DEFAULT_GATE_THRESHOLDS,
+        policy=policy,
     )
     if certificate.decision is not PromotionDecision.ACTIVE_SCOPED:
         raise ValueError(

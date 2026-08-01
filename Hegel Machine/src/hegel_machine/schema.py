@@ -523,6 +523,8 @@ class TheoryState:
     schema_version: str
     parent_version_id: str | None
     signature: tuple[str, ...]
+    ontology_registry_id: str
+    verifier_registry_id: str
     model_classes: tuple[str, ...]
     representations: tuple[str, ...]
     relation_laws: tuple[RelationLaw, ...]
@@ -556,14 +558,68 @@ class TheoryState:
             require_tuple(getattr(self, name), f"theory {name}")
         for equivalence in self.observational_equivalences:
             require_tuple(equivalence, "observational equivalence class")
+        if not self.ontology_registry_id:
+            raise ValueError("theory must bind a content-addressed ontology registry")
+        if not self.verifier_registry_id:
+            raise ValueError("theory must bind a content-addressed verifier registry")
         law_ids = [law.law_id for law in self.relation_laws]
         probe_ids = [probe.probe_id for probe in self.probes]
-        if len(law_ids) != len(set(law_ids)) or len(probe_ids) != len(set(probe_ids)):
-            raise ValueError("theory law and probe identifiers must be unique")
+        functional_ids = [
+            functional.functional_id for functional in self.violation_functionals
+        ]
+        scale_ids = [scale.scale_id for scale in self.scales]
+        identifiers = (
+            ("law", law_ids),
+            ("probe", probe_ids),
+            ("functional", functional_ids),
+            ("scale", scale_ids),
+        )
+        for name, values in identifiers:
+            if len(values) != len(set(values)):
+                raise ValueError(f"theory {name} identifiers must be unique")
+        functionals_by_id = {
+            functional.functional_id: functional
+            for functional in self.violation_functionals
+        }
+        registered_scale_ids = set(scale_ids)
+        if any(
+            not law.scale_ids
+            or not set(law.scale_ids).issubset(registered_scale_ids)
+            for law in self.relation_laws
+        ):
+            raise ValueError("every theory law must bind only registered scales")
+        for law in self.relation_laws:
+            functional = functionals_by_id.get(law.violation_functional_id)
+            if functional is None:
+                raise ValueError(
+                    "theory law lacks its registered violation functional"
+                )
+            if functional.law_kind is not law.kind:
+                raise ValueError("theory law and violation functional kinds disagree")
+            if functional.required_observables != law.required_observables:
+                raise ValueError(
+                    "theory law and violation functional observables disagree"
+                )
+        used_functional_ids = {
+            law.violation_functional_id for law in self.relation_laws
+        }
+        if set(functional_ids) != used_functional_ids:
+            raise ValueError("every theory violation functional must be used by a law")
         if any(probe.evaluator_epoch != self.evaluator.epoch for probe in self.probes):
             raise ValueError("all active probes must belong to the evaluator epoch")
+        if any(probe.anchor_ids != self.evaluator.anchor_ids for probe in self.probes):
+            raise ValueError("all active probe anchors must match evaluator anchors")
+        scale_task_ids = {scale.task_id for scale in self.scales}
+        if any(
+            not probe.task_ids
+            or not set(probe.task_ids).issubset(scale_task_ids)
+            for probe in self.probes
+        ):
+            raise ValueError("all active probe tasks must exist in registered scales")
         if not self.data_cutoff:
             raise ValueError("theory data cutoff is required")
+        if any(probe.data_cutoff != self.data_cutoff for probe in self.probes):
+            raise ValueError("all active probes must match the theory data cutoff")
         require_finite(
             self.conditional_description_length,
             "theory conditional description length",

@@ -1,4 +1,4 @@
-"""Command-line interface for the offline v0.1 kernel."""
+"""CLI for the offline Hegel Machine v0.2 qualification kernel."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from typing import Sequence
 
 from .benchmark import run_phase2_benchmark
 from .bootstrap import initial_theory
+from .phase2_exit import run_phase2_exit_benchmark
 from .vertical_slice import run_controlled_vertical_slice
 
 
@@ -39,11 +40,20 @@ def command_demo() -> int:
         "probe_count": len(theory.probes),
         "evaluator_epoch": theory.evaluator.epoch,
         "claim_boundary": (
-            "known-law structural verification only; no relation invention claim"
+            "known-law verification plus synthetic controlled selection/replay; "
+            "no raw extraction, formal Phase-2 exit, or relation invention claim"
         ),
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
     return 0
+
+
+def command_phase2_exit(output: Path | None) -> int:
+    report = run_phase2_exit_benchmark()
+    if output is not None:
+        _write_json(output, report)
+    print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if report["status"] == "controlled_api_selector_qualified" else 1
 
 
 def command_vertical_slice(output: Path | None) -> int:
@@ -55,14 +65,28 @@ def command_vertical_slice(output: Path | None) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="hegel-machine")
+    parser = argparse.ArgumentParser(
+        prog="hegel-machine",
+        description=(
+            "Offline v0.2 verifier and synthetic controlled selection/replay "
+            "qualification; no raw-extraction or formal Phase-2 exit claim."
+        ),
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
     benchmark = subparsers.add_parser(
-        "benchmark", help="run the controlled Phase-2 benchmark"
+        "benchmark", help="run the provided-binding verifier qualification"
     )
     benchmark.add_argument("--output", type=Path)
+    phase2_exit = subparsers.add_parser(
+        "phase2-exit",
+        help=(
+            "run the synthetic controlled API-blinded selection/replay qualification "
+            "(not a formal Phase-2 exit)"
+        ),
+    )
+    phase2_exit.add_argument("--output", type=Path)
     vertical = subparsers.add_parser(
-        "vertical-slice", help="run the controlled end-to-end qualification"
+        "vertical-slice", help="run the controlled candidate/shadow-only slice"
     )
     vertical.add_argument("--output", type=Path)
     subparsers.add_parser("demo", help="print the frozen initial theory")
@@ -75,6 +99,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return command_benchmark(args.output)
     if args.command == "demo":
         return command_demo()
+    if args.command == "phase2-exit":
+        return command_phase2_exit(args.output)
     if args.command == "vertical-slice":
         return command_vertical_slice(args.output)
     raise AssertionError(f"unhandled command: {args.command}")

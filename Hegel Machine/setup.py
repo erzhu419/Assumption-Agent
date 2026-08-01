@@ -5,7 +5,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="hegel-machine",
-    version="0.1.0",
+    version="0.2.0",
     description=(
         "A bounded, auditable kernel for structural-law recognition "
         "and conservative theory evolution."

@@ -1,4 +1,4 @@
-# Architecture v0.1
+# Architecture v0.2
 
 ## 1. 一个状态，而不是三套互斥公式
 
@@ -72,10 +72,12 @@ probe | language | evaluator | revision
 
 ```text
 candidate retrieval (semantic allowed)
-  → typed role binding
+  → uniform verifier-ready synthetic witness bundle with anonymous labels
+  → frozen adapter replay of the complete family/binding/scale grid
   → required-observable and scale checks
   → deterministic law residual
-  → hard-negative / role-swap / sign-flip checks
+  → hard-negative / binding-counterfactual / scale-counterfactual / sign-flip checks
+  → tolerance-normalized boundary-margin selection or policy-bound abstention
   → falsifier receipt
   → evaluator receipt in frozen epoch
   → verified typed law match
@@ -90,11 +92,31 @@ Phase-2 范围新增的 prototype。feedback 只有在系统诱发响应、严�
 时序、同一受控量和局部稳定窗口均可观测时才运行；locality 需要绑定
 Markov blanket 和外部上下文。
 
-当前 benchmark 的 observable schema 一一暴露候选 law family，纵切直接提供
-typed binding；测的是 executable verification 和反语义控制，不是从同构
-observable schema 中盲选 family。
-跨 episode/domain 的 preservation witness 尚未实现，因此对象命名为
-`VerifiedLawMatch`，不称 functor 或 structural correspondence。
+v0.1 benchmark 的 observable schema 一一暴露候选 law family，纵切直接提供
+typed binding；它只测 executable verification 和反语义控制。v0.2 新增
+`SharedEvidenceBundle`、`FrozenProjectionAdapter` 与 `UnboundStructuralEpisode`：
+43 个 case 都先形成统一的 verifier-ready synthetic witness bundle，再确定性重放
+六族 × 两种 binding × 两种
+scale 的 24 个 projections。measurement key 只绑定实际见证该 observable 的角色
+实体，因此未变角色的 measurement 会被两个 binding 竞争项共同消费；bundle 拒绝
+重复 witness key，adapter 内容同时绑定 theory version、verifier registry 与
+evaluator epoch。六族均跨两种 scale；24 个 case 可回答、19 个应 abstain。运行
+路径不接收 answer key，并要求唯一 PASS、完整 family coverage、目标 binding/scale
+competitor 均完成计算，以及冻结的 tolerance-normalized boundary margin，否则
+abstain。
+
+上述结果只资格化 synthetic controlled adapter replay 与候选选择。它没有测 raw
+text/table/trajectory extraction、一次性 sealed holdout、正式 Phase-2 exit 或
+open-world family discovery。人工 semantic-only control 只做 metadata-invariance
+诊断；它的 decoy accuracy 和 structural gap 不进入 exit gate，但“替换 semantic
+metadata 后结构决策不变”本身是 anti-leak 硬检查。
+
+`PreservationWitness` 现已检查两个具体 recognition decision 的 law、role map、
+scale、evaluator epoch 和 residual drift。当前 24 个 answerable case 构成 12 个
+family × scale 的原例/实体改名 pair。entity correspondence 来自 recognition 前已
+冻结的 evaluator answer table，scale correspondence 是预注册 identity map，不从
+selected output 事后生成。它只是 bounded metamorphic witness，不称 functor 或通用
+structural correspondence。
 
 ## 6. 诊断与理论生长
 

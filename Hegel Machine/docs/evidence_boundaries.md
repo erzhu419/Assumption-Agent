@@ -2,17 +2,32 @@
 
 ## 当前可以说什么
 
-当前实现和测试支持：
+当前实现和测试支持两个递进层级：
 
 > 在一个冻结的有限定律库和受控离线样例中，系统能够在已提供 typed law
 > binding 的条件下，不用语义相似度作为接受依据，计算 structural residual，
 > 拒绝缺观测、虚构实体、角色交换、符号翻转和尺度不兼容，并把测得的证据送入
 > 不可变、受 evaluator epoch 约束的保守候选评估流程。
 
-这叫 verifier/integration qualification，不叫 law-family discovery，也不是
-Phase-2 exit evidence。当前 controlled holdout 只是代码内合成重放，manifest
-未 sealed，因此 gate 输出 `candidate_framework`，不授权 active graph mutation。
-即使 manifest 结构检查通过，当前版本也没有外部签名可信根，不会晋升 ACTIVE。
+以及：
+
+> 在统一 outer schema、冻结且完整的 family/role/scale projection 集合中，系统在
+> 不接收 answer key、不读取 semantic metadata 的条件下，能够从统一的
+> verifier-ready synthetic witness bundle 经 frozen adapter 重放 24 个候选，并
+> 选择唯一通过的 family–binding–scale 组合；目标 binding/scale counterfactual 必须完成计算，
+> 不同 family 的距离按 verifier tolerance 归一化后才比较。遇到多解、缺证据、
+> competitor 未完成或全部违反时按冻结 policy abstain，并生成绑定 law、role map、
+> scale、epoch 和 residual drift 的跨 episode witness。
+
+第一层叫 verifier/integration qualification；第二层叫 controlled API-blinded
+selector qualification。它们都不叫 raw-evidence law-family discovery，也不是
+正式 Phase-2 exit evidence。v0.2 corpus 有 43 个 synthetic case（24 个
+answerable、19 个应 abstain），每例 24 个 projections，六族均跨两种 scale；
+24 个正例形成 12 个 preservation pair。当前 controlled data 只是代码内合成与
+adapter replay。Phase-2 selector 报告没有 sealed manifest，输出的是内部工程标签
+`controlled_api_selector_qualified`；另一个 governance vertical slice 才输出
+`candidate_framework`。两者都不授权 active graph mutation。即使 governance
+manifest 结构检查通过，当前版本也没有外部签名可信根，不会晋升 ACTIVE。
 
 ## 当前不能说什么
 
@@ -22,8 +37,17 @@ Phase-2 exit evidence。当前 controlled holdout 只是代码内合成重放，
 - v2 的 GSCL controlled corpus 是合成 qualification，不是 downstream efficacy。
 - ARN 已被用于实现后验诊断，不能再叫 untouched。
 - 文献或 repo 被归档不等于其结论已在本项目复现。
-- benchmark 中反向构造的 semantic-only baseline 只证明验收路径没有读该分数，
-  不能作为与真实 embedding 系统的效果比较。
+- benchmark 中反向构造的 semantic-only control 只诊断验收路径没有读该分数；
+  其 decoy accuracy/gap 不参与 exit gate，不能作为与真实 embedding 系统的效果
+  比较；semantic metadata replacement invariance 则是 anti-leak 硬检查。
+- API-blinded selector 的 projection 由冻结 adapter 提供；尚未测从 raw text、table
+  或 trajectory 生成完整候选集合。
+- 当前结果不是 sealed holdout、正式 Phase-2 exit 或 open-world discovery 证据；
+  `controlled_api_selector_qualified` 只是受控机械闭环报告中的状态标签。
+- blinded 仅表示 recognizer API 不接收 answer key，并通过一致 ID 重命名不变量；
+  source-visible generator 的 case schedule 可被重建，公开 ID 不是保密边界。
+- fixture 值由 evaluator case spec 反向构造；family/binding/scale accuracy 是 selector
+  mechanics 的功能测试，不是独立 raw evidence 上的能力估计。
 
 ## 权力与数据隔离
 
