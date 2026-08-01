@@ -450,7 +450,7 @@ def _validate_config(config: QualificationConfig) -> None:
         config.project_root,
         config.qwen_model_root,
         config.minilm_model_root,
-        config.python_executable.resolve(strict=True).parent.parent,
+        *_python_runtime_read_roots(config.python_executable),
     ):
         try:
             root.relative_to(readable_root.resolve(strict=True))
@@ -833,10 +833,12 @@ def _child_environment(
         path.mkdir(mode=0o700, parents=True, exist_ok=True)
         os.chmod(path, 0o700)
     return {
+        "CUBLAS_WORKSPACE_CONFIG": ":4096:8",
         "CUDA_DEVICE_ORDER": "PCI_BUS_ID",
         "CUDA_VISIBLE_DEVICES": config.gpu_uuids[shard],
         "HF_DATASETS_OFFLINE": "1",
         "HF_HOME": str(cache / "huggingface"),
+        "HF_HUB_DISABLE_TELEMETRY": "1",
         "HF_HUB_OFFLINE": "1",
         "HOME": str(home),
         "LANG": "C.UTF-8",
@@ -849,6 +851,7 @@ def _child_environment(
         "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "PYTHONDONTWRITEBYTECODE": "1",
         "PYTHONHASHSEED": "0",
+        "PYTHONNOUSERSITE": "1",
         "PYTHONPATH": str(config.project_root),
         "TEMP": str(temporary),
         "TMP": str(temporary),
@@ -1005,7 +1008,10 @@ def _validate_runtime_receipt(
         or gpu.get("logical_current_device") != 0
         or gpu.get("parameter_devices") != ["cuda:0"]
         or type(execution) is not dict
+        or execution.get("cublas_workspace_config") != ":4096:8"
         or execution.get("hf_hub_offline") != "1"
+        or execution.get("hf_hub_disable_telemetry") != "1"
+        or execution.get("python_no_user_site") != "1"
         or execution.get("transformers_offline") != "1"
         or execution.get("tokenizers_parallelism") not in {"false", "False"}
         or execution.get("cuda_runtime_available") is not True

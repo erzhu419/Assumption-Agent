@@ -770,6 +770,9 @@ def _runtime_receipt(
         import torch
 
         execution = {
+            "cublas_workspace_config": os.environ.get(
+                "CUBLAS_WORKSPACE_CONFIG"
+            ),
             "cudnn_version": torch.backends.cudnn.version(),
             "cuda_build_version": torch.version.cuda,
             "cuda_runtime_available": torch.cuda.is_available(),
@@ -779,8 +782,12 @@ def _runtime_receipt(
                 torch.are_deterministic_algorithms_enabled()
             ),
             "hf_hub_offline": os.environ.get("HF_HUB_OFFLINE"),
+            "hf_hub_disable_telemetry": os.environ.get(
+                "HF_HUB_DISABLE_TELEMETRY"
+            ),
             "matmul_tf32": torch.backends.cuda.matmul.allow_tf32,
             "python": dict(_python_runtime_receipt()),
+            "python_no_user_site": os.environ.get("PYTHONNOUSERSITE"),
             "tokenizers_parallelism": os.environ.get(
                 "TOKENIZERS_PARALLELISM"
             ),
@@ -794,7 +801,10 @@ def _runtime_receipt(
             raise
         raise ScarCssmWorkerError("WORKER_RUNTIME_RECEIPT_INVALID") from exc
     if (
-        execution["hf_hub_offline"] != "1"
+        execution["cublas_workspace_config"] != ":4096:8"
+        or execution["hf_hub_offline"] != "1"
+        or execution["hf_hub_disable_telemetry"] != "1"
+        or execution["python_no_user_site"] != "1"
         or execution["transformers_offline"] != "1"
         or execution["tokenizers_parallelism"] not in {"false", "False"}
         or execution["deterministic_algorithms"] is not True

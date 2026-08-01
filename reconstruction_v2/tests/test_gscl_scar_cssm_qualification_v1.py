@@ -83,12 +83,15 @@ def _runtime_receipt(
 ) -> dict[str, Any]:
     body = {
         "execution": {
+            "cublas_workspace_config": ":4096:8",
             "cuda_runtime_available": True,
             "cudnn_benchmark": False,
             "cudnn_tf32": False,
             "deterministic_algorithms": True,
             "hf_hub_offline": "1",
+            "hf_hub_disable_telemetry": "1",
             "matmul_tf32": False,
+            "python_no_user_site": "1",
             "tokenizers_parallelism": "false",
             "transformers_offline": "1",
         },
@@ -535,6 +538,10 @@ def test_two_worker_release_records_barrier_and_safe_receipt(
             config.gpu_uuids[launch["shard"]]
         )
         assert launch["kwargs"]["env"]["HF_HUB_OFFLINE"] == "1"
+        assert launch["kwargs"]["env"]["CUBLAS_WORKSPACE_CONFIG"] == (
+            ":4096:8"
+        )
+        assert launch["kwargs"]["env"]["PYTHONNOUSERSITE"] == "1"
         assert callable(launch["kwargs"]["preexec_fn"])
     safe_encoded = json.dumps(receipt, sort_keys=True)
     for forbidden in (

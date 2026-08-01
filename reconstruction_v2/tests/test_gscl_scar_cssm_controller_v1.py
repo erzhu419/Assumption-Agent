@@ -274,16 +274,19 @@ class _FakePopenFactory:
         sandbox = json.loads(self.config.sandbox_receipt_path.read_text(encoding="ascii"))
         runtime_body = {
             "execution": {
+                "cublas_workspace_config": ":4096:8",
                 "cudnn_benchmark": False,
                 "cudnn_tf32": False,
                 "deterministic_algorithms": True,
                 "hf_hub_offline": "1",
+                "hf_hub_disable_telemetry": "1",
                 "matmul_tf32": False,
                 "python": {
                     "executable_sha256": self.config.bindings[
                         "python_executable_file_sha256"
                     ]
                 },
+                "python_no_user_site": "1",
                 "transformers_offline": "1",
             },
             "execution_freeze_sha256": EXECUTION_FREEZE,
@@ -576,6 +579,10 @@ def test_formal_lifecycle_is_two_shard_label_late_and_exactly_once(
         zip(popen.launches, GPU_UUIDS, strict=True)
     ):
         assert launch["kwargs"]["env"]["CUDA_VISIBLE_DEVICES"] == gpu
+        assert launch["kwargs"]["env"]["HF_HUB_OFFLINE"] == "1"
+        assert launch["kwargs"]["env"]["CUBLAS_WORKSPACE_CONFIG"] == (
+            ":4096:8"
+        )
         assert launch["kwargs"]["env"]["TRANSFORMERS_OFFLINE"] == "1"
         assert callable(launch["kwargs"]["preexec_fn"])
         argv = launch["argv"]

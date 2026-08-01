@@ -1088,10 +1088,13 @@ def _child_environment(config: FormalConfig, paths: ControllerPaths, shard: int)
     for path in (private_home, temporary, cache):
         path.mkdir(mode=0o700, parents=True, exist_ok=False)
     return {
+        "CUBLAS_WORKSPACE_CONFIG": ":4096:8",
         "CUDA_DEVICE_ORDER": "PCI_BUS_ID",
         "CUDA_VISIBLE_DEVICES": config.gpu_uuids[shard],
         "HF_DATASETS_OFFLINE": "1",
         "HF_HOME": str(cache / "huggingface"),
+        "HF_HUB_DISABLE_TELEMETRY": "1",
+        "HF_HUB_OFFLINE": "1",
         "HOME": str(private_home),
         "LANG": "C.UTF-8",
         "LC_ALL": "C.UTF-8",
@@ -1103,6 +1106,7 @@ def _child_environment(config: FormalConfig, paths: ControllerPaths, shard: int)
         "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "PYTHONDONTWRITEBYTECODE": "1",
         "PYTHONHASHSEED": "0",
+        "PYTHONNOUSERSITE": "1",
         "PYTHONPATH": str(config.project_root),
         "TEMP": str(temporary),
         "TMP": str(temporary),
@@ -1317,7 +1321,10 @@ def _load_runtime_receipt(
         or label_canary.get("open_denied") is not True
         or label_canary.get("read_count") != 0
         or type(execution) is not dict
+        or execution.get("cublas_workspace_config") != ":4096:8"
         or execution.get("hf_hub_offline") != "1"
+        or execution.get("hf_hub_disable_telemetry") != "1"
+        or execution.get("python_no_user_site") != "1"
         or execution.get("transformers_offline") != "1"
         or execution.get("deterministic_algorithms") is not True
         or execution.get("matmul_tf32") is not False
