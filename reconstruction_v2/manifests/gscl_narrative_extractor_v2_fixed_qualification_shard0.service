@@ -1,0 +1,57 @@
+[Unit]
+Description=GSCL narrative extractor v2 fixed public qualification shard 0/2
+After=default.target
+ConditionPathIsDirectory=@QWEN_MODEL_ROOT@
+ConditionPathExists=@QWEN_MODEL_MANIFEST@
+ConditionPathIsDirectory=@QUALIFICATION_ROOT@/shard0/tmp
+
+[Service]
+Type=oneshot
+WorkingDirectory=@RECONSTRUCTION_ROOT@
+ExecStart=@RUNTIME_PYTHON@ -m replication_runtime.gscl_narrative_extractor_v2.fixed_public_qualification --model-root @QWEN_MODEL_ROOT@ --model-manifest @QWEN_MODEL_MANIFEST@ --output-root @QUALIFICATION_ROOT@/shard0 --shard-index 0 --shard-count 2
+Environment=CUDA_VISIBLE_DEVICES=0
+Environment=CUBLAS_WORKSPACE_CONFIG=:4096:8
+Environment=HF_HUB_OFFLINE=1
+Environment=TRANSFORMERS_OFFLINE=1
+Environment=HF_DATASETS_OFFLINE=1
+Environment=TOKENIZERS_PARALLELISM=false
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONNOUSERSITE=1
+Environment=PYTHONPATH=@RECONSTRUCTION_ROOT@
+Environment=TMPDIR=@QUALIFICATION_ROOT@/shard0/tmp
+Environment=HOME=@QUALIFICATION_ROOT@/shard0/home
+Environment=XDG_CACHE_HOME=@QUALIFICATION_ROOT@/shard0/cache
+Environment=HF_HOME=@QUALIFICATION_ROOT@/shard0/hf
+Environment=TORCH_HOME=@QUALIFICATION_ROOT@/shard0/torch
+CPUQuota=200%
+CPUWeight=20
+IOWeight=20
+IOSchedulingClass=idle
+MemoryHigh=12G
+MemoryMax=16G
+MemorySwapMax=0
+TasksMax=64
+Nice=10
+NoNewPrivileges=yes
+# Unprivileged user services on jtl311linux cannot traverse "/" under the
+# strict mount namespace, while the verified reader deliberately opens from
+# the filesystem root.  The qualification is source-free; custody is enforced
+# by exact hashes, read-only snapshot permissions, and the in-process reader.
+ProtectSystem=no
+# ProtectHome also makes "/" non-traversable for this unprivileged user
+# manager.  HOME is rebound to the isolated qualification root instead.
+ProtectHome=no
+PrivateTmp=no
+# Any non-empty ReadWritePaths also requests an unprivileged mount namespace
+# on this host and makes "/" non-traversable.  The source-free runner itself
+# restricts writes to its exact output root.
+ReadWritePaths=
+IPAddressDeny=any
+RestrictAddressFamilies=AF_UNIX
+KillMode=control-group
+Restart=no
+TimeoutStartSec=infinity
+UMask=0077
+
+[Install]
+WantedBy=default.target

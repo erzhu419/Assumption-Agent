@@ -1,0 +1,36 @@
+[Unit]
+Description=GSCL v2 fixed label-blind ARN input compatibility aggregate
+After=gscl_narrative_extractor_v2_fixed_arn_compatibility_shard0.service gscl_narrative_extractor_v2_fixed_arn_compatibility_shard1.service
+ConditionPathExists=@COMPATIBILITY_ROOT@/shard0/compatibility.shard.safe.json
+ConditionPathExists=@COMPATIBILITY_ROOT@/shard1/compatibility.shard.safe.json
+ConditionPathIsDirectory=@COMPATIBILITY_ROOT@/aggregate/tmp
+
+[Service]
+Type=oneshot
+WorkingDirectory=@RECONSTRUCTION_ROOT@
+ExecStart=@RUNTIME_PYTHON@ -m replication_runtime.gscl_narrative_extractor_v2.fixed_arn_input_compatibility aggregate --shard-0-receipt @COMPATIBILITY_ROOT@/shard0/compatibility.shard.safe.json --shard-1-receipt @COMPATIBILITY_ROOT@/shard1/compatibility.shard.safe.json --output-root @COMPATIBILITY_ROOT@/aggregate
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONNOUSERSITE=1
+Environment=PYTHONPATH=@RECONSTRUCTION_ROOT@
+Environment=TMPDIR=@COMPATIBILITY_ROOT@/aggregate/tmp
+Environment=HOME=@COMPATIBILITY_ROOT@/aggregate/home
+CPUQuota=100%
+CPUWeight=20
+IOWeight=20
+IOSchedulingClass=idle
+MemoryHigh=1G
+MemoryMax=2G
+MemorySwapMax=0
+TasksMax=32
+Nice=10
+NoNewPrivileges=yes
+ProtectSystem=no
+ProtectHome=no
+PrivateTmp=no
+ReadWritePaths=
+IPAddressDeny=any
+RestrictAddressFamilies=AF_UNIX
+KillMode=control-group
+Restart=no
+TimeoutStartSec=infinity
+UMask=0077

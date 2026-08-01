@@ -1,0 +1,41 @@
+[Unit]
+Description=GSCL narrative extractor v2 pure-offline qualification aggregate
+After=gscl_narrative_extractor_v2_fixed_qualification_shard0.service gscl_narrative_extractor_v2_fixed_qualification_shard1.service
+Requires=gscl_narrative_extractor_v2_fixed_qualification_shard0.service gscl_narrative_extractor_v2_fixed_qualification_shard1.service
+ConditionPathExists=@QUALIFICATION_ROOT@/shard0/qualification.safe.json
+ConditionPathExists=@QUALIFICATION_ROOT@/shard1/qualification.safe.json
+ConditionPathIsDirectory=@QUALIFICATION_ROOT@/aggregate/tmp
+
+[Service]
+Type=oneshot
+WorkingDirectory=@RECONSTRUCTION_ROOT@
+ExecStart=@RUNTIME_PYTHON@ -m replication_runtime.gscl_narrative_extractor_v2.fixed_public_qualification_aggregate --shard-0-receipt @QUALIFICATION_ROOT@/shard0/qualification.safe.json --shard-1-receipt @QUALIFICATION_ROOT@/shard1/qualification.safe.json --output-root @QUALIFICATION_ROOT@/aggregate
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONNOUSERSITE=1
+Environment=PYTHONPATH=@RECONSTRUCTION_ROOT@
+Environment=TMPDIR=@QUALIFICATION_ROOT@/aggregate/tmp
+Environment=HOME=@QUALIFICATION_ROOT@/aggregate/home
+Environment=XDG_CACHE_HOME=@QUALIFICATION_ROOT@/aggregate/cache
+CPUQuota=50%
+CPUWeight=10
+IOWeight=10
+MemoryMax=1G
+MemorySwapMax=0
+TasksMax=16
+Nice=10
+NoNewPrivileges=yes
+# The aggregate re-opens canonical shard receipts from absolute paths.  Keep
+# the already-qualified minimum user-service mount contract on jtl311linux.
+ProtectSystem=no
+ProtectHome=no
+PrivateTmp=no
+ReadWritePaths=
+IPAddressDeny=any
+RestrictAddressFamilies=AF_UNIX
+KillMode=control-group
+Restart=no
+TimeoutStartSec=300
+UMask=0077
+
+[Install]
+WantedBy=default.target

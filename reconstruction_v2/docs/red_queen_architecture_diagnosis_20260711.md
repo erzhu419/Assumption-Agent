@@ -1,7 +1,7 @@
 # Assumption Agent × Red Queen Gödel Machine：架构诊断与 Reconstruction V2 复核
 
 > - 初版日期：2026-07-11
-> - 本次复核：2026-07-29
+> - 本次复核：2026-08-01
 > - 最新 QuAC P1 终态：独立 study `QUAC_P1_RJMC_DIALOGUE_EVIDENCE_L5_V1` 已在
 >   311linux 唯一一次正式执行完成；systemd success、`NRestarts=0`，A_form/A_hold/M_search
 >   各只执行一次，全程 0 API/online evaluator、0 retry/replay/resample。A_hold 上冻结的 E1
@@ -12,7 +12,24 @@
 >   也都为正，但它是晋升后的 downstream search，不能反向替代事前指定的 A_hold primary。
 >   因此总目标尚未完成，不过缺口已从“两项”收敛为唯一一项：在新的预注册现实 A_hold 上同时取得
 >   三-family 对 RAW 与 official HippoRAG 的稳定正收益
-> - 最新 WikiSQL UAO P4 终态：共享节点 v5 implementation/execution freeze、official WikiSQL 1.1
+> - 最新 WikiSQL UAO P4 same-v5 continuation：在保留原 Agent/RAW、不重放效果的前提下，
+>   patched official HippoRAG 缺失臂已在 all-ext4 continuation 完成。Agent−HippoRAG aggregate
+>   `+34`，EQ/GT/LT=`+14/+6/+14`；Agent−RAW aggregate `+30`，GT/LT=`+10/+20`，但 EQ=`0`。
+>   因预注册要求三 family 全部严格为正，strict primary 仍为 false；QuAC L5 已成立不变，总目标只缺
+>   fresh reality A_hold 中对 RAW 与 official HippoRAG 的三-family 双基线全正
+> - 最新 GSCL/“广义对位关系”施工：Phase 0 exact-rational kernel 已通过；ARN v1 正式尝试因
+>   32-token/单-generator grammar 定性为 implementation-invalid、labels 未打开。随后仍在同一个
+>   非评分 harness 内完成层级句级 v2 extractor、answer-position-only Qwen scorer、exclusive
+>   typed unit 与 polynomial unit mapper。固定公开 17/33/64/128/175-token suite 为 5/5 success；
+>   三段公开输入的四臂集成资格化也已通过。旧 ARN predictor-only pack 的一次 label-blind
+>   compatibility r0 随后完整处理 871 rows/2,613 narratives：2,550 success、63 typed abstention、
+>   0 typed/untyped error，coverage=`97.589%`。63 次均由事前固定 catalog 的长度边界触发（61 sentence、
+>   2 document），所以这是有效的非评分 compatibility negative，不是基础设施失败，也不是效果负结果；
+>   labels/linkage/scorer/API/online evaluator 均未打开。当前 v2 因未达到事前要求的 100% representability，
+>   不能原样冻结 fresh intrinsic measurement。下一步只能在 source-free 非评分 harness 中形成
+>   length-total 的 typed segmentation/recomposition 机制，然后直接去全新 source/cohort；不得重放旧 ARN、
+>   按 63 个失败项补关键词/gate，或把本轮写成 efficacy 证据
+> - WikiSQL UAO P4 初始 v5 终态（后续 continuation 见上）：共享节点 v5 implementation/execution freeze、official WikiSQL 1.1
 >   source custody、content-addressed deployment 与 source-free import/systemd 审计均已提交；唯一 formal
 >   invocation `a8d1c5c…d2319` 通过 `ADMITTED_SHARED_RESOURCE`，`NRestarts=0`，并在 durable attempt/live
 >   后首次打开正式 archive。source compiler 在生成 secret、选择 cohort 或写出任何 action/label pack 前，
@@ -5802,6 +5819,294 @@ exception。QuAC 已成立的 L5 不受本轮改变；总目标现在仍只缺**
 family 都严格为正**。论文可使用的结论是“typed assumption action 对 official HippoRAG
 取得跨 family 一致优势，并对 RAW 取得显著 aggregate/两-family 优势”；不能升级为稳定双基线
 三-family 全胜。
+
+### 12.67 2026-07-30 GSCL Phase 0：从相似关系扩展到可执行结构对位
+
+用户提出的“广义对位关系”方向不是在 WikiSQL 已消费 EQ cohort 上追加规则，而是把假设形成层
+前移：语义相似只负责召回，22 条 UAO 中可世界化的定律负责规定对象、状态、路径或多个量之间
+可证伪的对位关系。经文献与现有代码审计后，首批范围固定为 T14 equivariance、T17
+monotonicity、T15 balance、T09 path composition 与 T05 pair interaction；T01/T02 仍只作
+复杂度/稀疏先验，T19/T20/T22 仍只作 abstention、证伪与 decision governance，不能声称
+“已经使用全部 22 条”。规范性方案、完整可行性回答和参考归档分别见
+[`GSCL specification`](../markdown/广义对位关系.md)、
+[`feasibility assessment`](../markdown/广义对位关系_可行性评估_20260730.md) 与
+[`reference bundle manifest`](gscl_reference_bundle_manifest_20260730.md)。
+
+第一次代码审计发现三项证据链阻断：residual 输入可来自 binding 之外、receipt 可自报伪造
+`SATISFIED`、canonical signature 没有保持 quantity owner 与完整 `O/M/H/C` incidence。
+第一次修正后的 receipt 随后又被第二次独立 adversarial audit 推翻：`O/M/H/C` 与 residual
+observable ledger 虽共同被 hash，却没有 law-specific semantic linkage，所以 T17 quantity
+与 pair 可互相矛盾、PartialOrder 可反向、T15 可引用未绑定 boundary；frozen registry 仍有
+入口绕过，receipt builder 仍可签发 caller-supplied evaluation。继续修复后，第三次审计又发现
+hard-negative 只冻结字符串 ID，任意会产生 violation 的 payload 可冒充不同 operator。
+因此旧 self=`d689d8f8…a1d` 及其 5/5、10/10、issue=0 只保留为
+**historical receipt invalidated by independent audit**，不得用于论文。
+
+所有修复都发生在同一 Phase 0 可迭代 harness 内，没有新建 formal study/version 或效果 gate。
+当前 sidecar 包含 inferred-field provenance、n 元 hyperrelation、executable constraint、typed
+observable ledger、五类 residual-critical role/observable coherence、冻结 registry/ontology
+与 verifier semantic contract、role-inclusive evaluation input hash、builder 内部 primary/
+contrastive recomputation、hard-negative ID→canonical operator commitment，以及公开合成
+fixture 的 safe/private payload 分离。既有 UAO v1、`meta_assumption.py`、`HypothesisClaim`、
+旧 receipt 序列化和所有正式证据 hash 均未修改。
+
+统一离线 harness 随后在同一进程做两次 byte-exact replay，一次 collect-all 报告五类 law：
+
+```text
+status                                  PASS_PHASE0_KERNEL_ONLY
+law primary satisfied                   5 / 5
+canonical hard-negative operator        10 / 10 violated
+entity-renamed correspondence accepted  5 / 5
+preregistered semantic attacks rejected  5 / 5
+missing / applicability abstention       5 / 5
+issue count                              0
+declared external capability surface     all false
+runtime access audited                   false
+formal_result                            false
+efficacy_evidence                        false
+full_qualification_ready                 false
+```
+
+内容地址为 ontology=`7c7beb7d7066bc445ac4dfc2be104039f7dbd9cc9dbf571e43251b1f028f7e7c`、
+registry=`aa5a776ffdac05b0ec40c6804b421079808bdb16c1723bc398c703693ccbdbb4`、
+kernel semantic contract=`de07693ba02ba55999eaff8f8e136f0ffc85d166e26250801993930be7a6119b`、
+qualification contract=`a0dc32e20da4c1ef25291a7ebff8cb118583b87e509541876a44f099aa768a5c`、
+safe receipt self=`87c1fefe4b9158d651e79e8eed058b29653bbc14a9a11472c1f03d6545042891`、
+receipt file SHA-256=`8b7b7c8fdc73e12e71df2551f9f38ac5f157e70ff705f27cc8f23572b25eda65`。
+新增 GSCL 专项测试 45/45 通过，原 UAO/meta-assumption 兼容性测试 42/42 通过。可重放入口为
+[`qualification runner`](../scripts/qualify_gscl_phase0_offline_v1.py)，内核与 harness 分别为
+[`GSCL contracts`](../assumption_agent/generalized_structural_correspondence_v1.py)、
+[`residual kernels`](../assumption_agent/structural_law_residuals_v1.py) 与
+[`offline qualification`](../assumption_agent/benchmarks/gscl_phase0_offline_qualification_v1.py)。
+
+capability 字段只表示合成 qualification 模块没有暴露外部 benchmark source/model/network/
+API/online-evaluator 调用通道，不是 OS 级实际访问审计；safe payload 也只对公开合成 fixture
+可共享。这个结果不是现实效果阳性，也没有缩短当前唯一 reality primary 缺口；它只关闭了五类
+手工 exact fixture 上的 bounded kernel executability。当前 bridge 只覆盖 residual-critical
+incidence/value 子集；T14 output action、T15 flow rows、T09 path carrier 和 T05 utility-ledger
+内容仍缺 raw-evidence denotation，不得写成完整 O/M/H/C 已绑定。下一步必须继续扩展**同一个**
+非评分 harness，资格化 `raw evidence → StructuralEpisode` 的 extractor/binder，并加入
+paraphrase/serialization、high-overlap negative、low-overlap positive、legacy-keyword、
+semantic-only 与 flat-label/no-verifier 对照。完整 qualification 成立后才能做一次公开
+intrinsic measurement；只有 intrinsic 机制成立，才允许另行冻结唯一 fresh downstream study。
+不得把每次 extractor 失败改写成新 study，也不得回到已消费 WikiSQL EQ 上补 gate。
+
+### 12.68 2026-07-30 GSCL extractor 资格化与 ARN intrinsic attempt：基础设施全绿，但结构语法 implementation-invalid
+
+12.67 之后没有另建效果 gate。相同的可迭代、非评分 harness 被继续扩展为完整
+`raw evidence → StructuralEpisode → four intrinsic arms` 路径，并加入
+`semantic_only`、`legacy_keyword`、`flat_label_no_verifier` 与 `full_gscl`
+四臂。两张 RTX 2080 上的 Qwen closed-choice extractor、CPU MiniLM、内部 item
+factory、Landlock、三路并发、路径长度、四臂封存和 scorer-before-label 隔离都先在公开合成
+输入上执行。最终 source-free qualification 的 safe terminal 为
+[`outer terminal`](../artifacts/gscl_arn_internal_factory_qualification_ext4_repair_r4/outer_terminal.safe.json)，
+status=`PASS_FIXED_SOURCE_FREE_INTERNAL_FACTORY_QUALIFICATION`，file SHA-256
+`71d2aedee5880f35015bb2f0d6d611bafc4da3689d046016eba2d6b43bcb84c9`，
+self=`1301e10c242f65cf3e3a515f3ed59824a02dd8aab66399fdbac8fe5279707513`。
+它证明 2 个公开合成 item、6 个 closed-choice selection、4 个 arm 的 exact runtime
+可执行，且 formal source、label、scorer、网络/API 访问计数均为 0；它仍不是效果证据。
+
+随后冻结的 ARN public intrinsic measurement 于 311linux 唯一启动：
+
+```text
+unit          gscl-arn-formal-measurement-v1.service
+start         2026-07-30 21:21:51 CST
+InvocationID  4697c5feb3be48898dcf6f48dbc92d26
+NRestarts     0
+one-shot key  0e3f0e75f6574462ae5295bab553602952a384e8d8395f16cd548bbc78883274
+```
+
+两路 Qwen 完成全部 42 个 batch 后，item factory 也以 Landlock exit=0 生成绑定输出；
+但 supervisor 在 seal prediction packs 之前以
+`minilm_runtime_changed_after_qualification` fail-closed。安全失败终态保存在
+[`failed outer terminal`](../artifacts/gscl_arn_intrinsic_formal_v1/outer_terminal.failed.safe.json)，
+file SHA-256=`3fa594762c42aaf410ae07e3c1917f9906b0e8d93a904e4c94e07ac5f901b62f`，
+self=`f093048fce56af1e71ca5641571ad1721d87dbf6889945eefac2f4f2fb6c9afa`。
+四臂 prediction pack、barrier、label-open claim 和 score receipt 均不存在，scorer
+目录为空；因此 label 保持未打开，offline scorer 调用计数为 0，不能把本轮写成已完成的
+intrinsic measurement。下述无 label 聚合审计另封存在
+[`post-stop implementation disposition`](../artifacts/gscl_arn_intrinsic_formal_v1/post_stop_implementation_invalid.safe.json)，
+self=`535c82b9385e095e4c603db29a44ae6a0d0d46ba37cf847b10759bc98afd1513`。
+
+只读、无 label 的 post-stop audit 证明该 MiniLM 报错不是实际 runtime drift：
+qualification 与 formal binding 的 encoder type、model tree、weights、interpreter、
+critical distribution closure、canary bytes、observed embedding hashes 和 target
+manifest bytes 全部相同；唯一差异是 runtime receipt 中的
+`target_manifest_path` 分别指向 qualification root 与 formal root。两份 target
+文件的 file SHA-256 都是 `ea405454…9d0e`，self 都是 `bd555bd3…9dd7`。因此第一层
+失败属于把位置身份误当内容身份的 path-sensitive comparator 缺陷。
+
+但这不是唯一、也不是主要缺陷。对已生成 factory output 的 label-blind aggregate
+审计得到：
+
+```text
+official ARN items                         871
+story decisions                            2,613
+closed-choice valid decisions                 41
+closed-choice invalid decisions            2,572
+items with all three StructuralEpisodes        0
+item factory error_item_count                871
+semantic_only ERROR                          871 / 871
+legacy_keyword ERROR                         871 / 871
+flat_label_no_verifier ERROR                 871 / 871
+full_gscl ERROR                              871 / 871
+```
+
+其中 2,539 个 story 在模型前即触发
+`story_span_catalog_lexical_count_invalid`：v1 grammar 把 lexical token 上限硬编码为
+32，而 ARN 三类叙事的长度范围实际覆盖约 17–175 词。余下能建立 catalog 的 story 中，
+抽样复现的后模型错误为
+`completion_parser_rejected → sentence_generator_coverage_incomplete`：v1 wire 永远只表达
+1 个 generator 和 2 个 objects，无法满足多句叙事“每句都有 generator/object”的独立 parser
+合同。故本轮即使做 append-only scorer，也只会得到四臂共同全错、paired difference=0；
+打开 labels 不能增加任何科学信息。正式结论必须是：
+
+> **GSCL ARN v1 implementation-invalid / intrinsic efficacy unknown。**
+
+这次失败揭示的是 extractor 表达空间错误，不应靠抬高一个 token cap、放宽 parser、增加
+fallback 或补效果 gate 修复。下一步仍留在同一个非评分 harness，要求同时完成：
+
+1. 用确定性层级分块/句级 episode 建立有资源上界的长叙事候选空间，而不是枚举全部
+   1–4 gram；
+2. program-owned wire 支持多个 sentence-grounded generators/objects，并保持模型只能在
+   有限 typed choices 中排序；
+3. teacher-forced runtime 只物化答案位置所需 logits，避免 full-vocabulary × full-context
+   的显存放大；
+4. 保留具体、非内容的 error taxonomy，不再把 catalog、tokenizer、parser 与 CUDA 错误全部
+   压成 `MODEL_RUNTIME_ERROR`；
+5. MiniLM 资格化比较绑定内容身份，绝对路径只作位置证明；
+6. 在长文本、多句、role swap、sign flip、high-overlap negative、low-overlap positive 和
+   四臂对照全部 source-free 全绿后，先做不打开 ARN labels 的公开输入兼容性诊断。由于 ARN
+   输入分布已用于本次 implementation postmortem，它不得再被称为 untouched 效果 cohort。
+
+311linux 的 GPU1 在正式 Qwen 阶段最高达到 88°C 并出现 software thermal slowdown，但无
+hardware thermal slowdown、Xid、OOM 或 batch 丢失；两路 42/42 batch 均完成，所以温度不是
+871/871 ERROR 的原因。原失败 root 与所有证据保持只读，不 restart/replay/resample。
+
+### 12.69 2026-07-31 GSCL v2：层级 extractor 与四臂集成资格化全绿
+
+没有重启或修改 12.68 的 ARN formal root，也没有建立新的效果 study。修复只发生在同一个
+source-free、非评分 qualification harness 中，并同时关闭 v1 暴露的六个实现缺口：
+
+1. 17–175 lexical tokens、1–21 句先作确定性 sentence/episode partition；
+2. 每句在固定 `NO/ONE/TWO` 有限选项中形成多个 relation unit，anchor/object0/object1 分开
+   作 group/head/width closed choice，object degree 固定为 1；
+3. exact Qwen runtime 将 context 上限提升到 v2 的 2,048，而非错误继承 v1 的 512；
+4. teacher forcing 只物化 answer prediction positions，长答案按固定 sparse chunk 分批；
+5. query unit 到 candidate unit 的映射改为八个固定 operator 上的
+   Lawler/Murty k-best + Hungarian，最多 4 个 assignment/operator，不再作指数 DFS；
+6. MiniLM/content comparator 的位置与内容身份分离；本轮集成资格化不加载 MiniLM、labels
+   或 benchmark scorer。
+
+公开固定 extractor suite 已在两张 GPU 并行完成，17/33/64/128/175-token 五个 fixture
+全部 success、abstention/error 均为 0、每个 fixture 两次 byte-exact。aggregate file
+SHA-256=`3fb1c34301a2fe97e1d3f395b417f56423d54c72032ca2c7ce4b9e39685ad815`，
+self=`7e2fa63650b2ec3316511bb93d7c7f6ea2d71d4783b2093846c412b280ee0428`，
+implementation closure=`bc44b53dbaa2fdaed1e5b505cfc722e77fe6ac3ea697287094cfa11971378b42`。
+该 aggregate 已在本地纯离线重算并得到相同 canonical bytes/file hash。
+
+随后固定 `PUBLIC_FIXTURES[0]` 为 query、`[1:3]` 为两个 candidates，把实际 v2 提取结果送入
+四臂而非 mock：
+
+```text
+service              gscl-narrative-extractor-v2-fixed-integrated-r0.service
+start / finish       2026-07-31 00:02:31 / 00:03:20 CST
+InvocationID         1efd7c219fe8455dbc3447cfcc27c6b1
+NRestarts            0
+systemd result       success
+query/candidate U    1 / 2 / 5
+extractor repeat     byte-exact
+arm repeat           byte-exact
+candidate receipts   complete / complete
+flat=full proposals  true / true
+full checker calls   2 candidates
+```
+
+safe receipt 为
+[`integrated qualification`](../artifacts/gscl_v2_fixed_public_integrated_qualification_20260730/r0/integrated_qualification.safe.json)，
+file SHA-256=`730dd8bd4559748e9cf3c976fc5069b18d114714ab8e080b7fe567b1ef2d4f7f`，
+self=`57d71f7a05dbcc7ccf54d83035e93a66e7ff48c0cde85b1d5d32289cbaff4b97`，
+implementation closure=`e6ff1b3ceacf9133cf934975ac33a3a89d1a473f8d86d4c10620a313ac9ad3c5`。
+本地独立检查重新验证 canonical JSON、self、closure、upstream/model/runtime binding、
+四臂顺序、两份 shared proposal-set receipt 与所有 0-access counters。
+
+四臂 disposition 为：
+
+```text
+semantic_only          predicted
+legacy_keyword         predicted
+flat_label_no_verifier predicted
+full_gscl              abstain (full_candidate_abstained)
+```
+
+full abstain 不被伪装成成功预测，也不触发调阈值、换 fixture 或修改 verifier。资格化的事前
+成功条件是四臂可执行、两个 structural candidate 都形成 complete/shared proposal set、
+full checker 真正调用以及重复确定性，而不是某臂必须预测或胜出；因此本轮在 executability
+层面为 green，但仍不是 efficacy 阳性。它同时给下一次 intrinsic measurement 提供一个必须
+公开报告的指标：full-GSCL prediction coverage/typed abstention rate。
+
+下一步只把 12.68 已消费的 ARN predictor input 用作 **label-blind compatibility diagnostic**：
+不得打开旧 labels、不得调用 scorer、不得把兼容性计数写成 untouched effect。通过后才冻结
+一个不同来源/新 cohort 的一次性 public intrinsic measurement，比较 semantic-only、
+legacy、flat 与 full，并同时报告 accuracy、hard-negative rejection 与 abstention coverage。
+
+### 12.70 2026-07-31 至 2026-08-01：旧 ARN label-blind compatibility 完成，覆盖率 97.589%，未达到全量资格线
+
+按 12.69 的顺序，compatibility r0 只接收已经封存的 predictor-only pack；函数入口没有
+label、linkage、answer、scorer 或 online-evaluator 参数。两个 manual-only user service 在
+311linux 两张卡上各唯一启动一次，固定 ordinal-mod-two 分片；每片在读取 predictor pack 前先以
+`O_EXCL` 写入 attempt sentinel，任何人工二次启动都会在再次读取 source 前失败。两个 shard 与
+pure aggregate 均为 systemd success、`NRestarts=0`：
+
+```text
+service / shard       InvocationID                       rows   narratives   success   abstain
+shard0                1523d433a0b84161bd655e169c60d781   436    1308         1277      31
+shard1                8536928d3145423a92a151b7a6268d93   435    1305         1273      32
+pure aggregate        dac4e38fb9d9489fb607636251a823e1   871    2613         2550      63
+```
+
+aggregate 的 `typed_error=0`、`untyped_error=0`；63 次均为确定性 typed abstention：
+
+```text
+V2_CATALOG_SENTENCE_TOKEN_COUNT_UNSUPPORTED   61
+V2_CATALOG_DOCUMENT_TOKEN_COUNT_UNSUPPORTED    2
+```
+
+因此 narrative representability 为 `2550/2613 = 97.588978...%`，typed-abstention rate 为
+`63/2613 = 2.411022...%`。两片都覆盖了预期 row/story 数且 receipt 合同、canonical bytes、self、
+implementation/upstream/model/runtime/predictor binding、sentinel binding 与 `0600` mode 全部通过；
+但事前资格条件要求 2,613/2,613 success，所以两片与 aggregate 的
+`qualification_passed=false`。这是一项**有效完成的非评分 compatibility negative**，不是 crash、
+OOM、热降频、网络、systemd 或其他 infrastructure-invalid，也不能解释成 accuracy/utility 负结果。
+
+安全证据为：
+
+- [`shard0 attempt sentinel`](../artifacts/gscl_v2_fixed_arn_input_compatibility_20260731/r0/shard0/attempt.started.safe.json)，
+  file SHA-256=`a4da10c87f9f041ff5084c47331db20015c21ccfded867640772b9172af3da5c`；
+- [`shard0 receipt`](../artifacts/gscl_v2_fixed_arn_input_compatibility_20260731/r0/shard0/compatibility.shard.safe.json)，
+  file SHA-256=`f3204ad3cd4b1a6d43c67809abd32d57ee0d26c86758caf853b8ff4318cd56bf`，
+  self=`9236465fb4bcc287fe5e0768272dfc1d60b93f44a972ac25fc6451f4755b2d40`；
+- [`shard1 attempt sentinel`](../artifacts/gscl_v2_fixed_arn_input_compatibility_20260731/r0/shard1/attempt.started.safe.json)，
+  file SHA-256=`2777802860f17fe5ecd249487eef755b8f975259bb3ef4acedd755d6685b91bf`；
+- [`shard1 receipt`](../artifacts/gscl_v2_fixed_arn_input_compatibility_20260731/r0/shard1/compatibility.shard.safe.json)，
+  file SHA-256=`af9aa30d4649f02fc2655a4bde2d50ac273dd468024dbd9fd0cef0aeedd7415e`，
+  self=`04242b02387a304fd8098d4df5e7be29613a3f324c5bc1e711a9c538b38e0833`；
+- [`aggregate receipt`](../artifacts/gscl_v2_fixed_arn_input_compatibility_20260731/r0/aggregate/compatibility.aggregate.safe.json)，
+  file SHA-256=`e0c9f8e78e79f2a94ba26b233741f6c292a96517a4a6c64639608f9f4a6ccc1f`，
+  self=`6ec3259f283a2c23eef839cd83d1cfb8bb8ba7460dd21b14f2bcd15caa2dbdd5`，
+  implementation closure=`7e47d069b4bcfbe40eea36eff157aa8ee2ed310475c59dd501c3892d3336cc74`。
+
+aggregate access counters 为 predictor/source `2/2`（两片各一次），raw source、label、scorer、
+API、network、online evaluator 与 free-form generation 全为 0。这里的“label-blind”只能严格表述为：
+exact predictor-only code path 没有接收或读取 labels/linkage；当前 user-service mount namespace 没有提供
+OS-level label-inaccessibility 证明，不能把代码路径隔离夸大成操作系统强制隔离。
+
+本轮已经消费，禁止重启、重放或查看 63 个 item 的内容后定向修规则。也不应把长度上限继续当成
+一个可追加的效果 gate。合理的后续机制只有一个：在同一**非评分、source-free、可迭代** harness
+中把 extractor 改成对模型 context 内文本 length-total 的 typed segmentation/recomposition，并用公开
+合成长文本覆盖边界；实现合同闭合后，直接冻结全新 source/cohort 的 intrinsic measurement。旧 ARN
+只保留为 97.589% compatibility 证据，不能再次充当资格集或效果集。总论文目标的现实域三-family
+双基线缺口也没有因本轮改变。
 
 ## 附录 A：关键证据索引
 
