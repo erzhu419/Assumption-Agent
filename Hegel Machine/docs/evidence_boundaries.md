@@ -75,12 +75,46 @@ Target/control source binding manifests 已生成，但因历史 split seed comm
 binding manifest、custodian continuity attestation 和 hidden-access ledger 不存在，M3
 commitment gates fail-closed。formal roots 全部仍为 null。
 
+v1.1.1 已授权进入 M2.5 wire/seed/bridge 施工，仓库可以实现并测试不接触真实 secret 的
+Python/Rust strict wire 与 split-crypto 纯函数。这类 synthetic qualification 不是 gate
+pass：当前 7 个正例原语加 13 个 strict-CBOR 拒绝/优先级例（共 20 个 shared vectors）的双端
+对照只证明公开 test inputs 上 CBOR/hash/HKDF/HMAC bytes 与拒绝码一致，gate delta 明确为
+0。现稿尚未唯一冻结全部 ID/enums/root preimages、
+sink split、custodian core、bucket/
+agreement/state wire，独立 custodian 与 auditor 也尚未提供外部事实。因此权威计数仍是
+14/24，seed 未实例化、signature/ledger/absence claims 均为 false，M3 execution manifest
+与 run outputs 均为 null，child 继续 `NOT_RUN`。不得由 Codex、自签 test key 或固定 test
+seed 冒充独立 custody。完整待决问题见
+[`questions_for_gpt_phase3_m25_wire_completion.md`](questions_for_gpt_phase3_m25_wire_completion.md)。
+
+## v2 SCAR 后续正式负结果
+
+Hegel legacy snapshot 冻结后，Assumption Agent commit `4861b2d8` 记录了一个
+protocol-valid SCAR negative：冻结的 fixed extractor/binder、hard structural eligibility
+与 length-2 composition arm 显著低于 semantic-only，且主要失败机制是 coverage collapse
+与结构信号噪声。该后续证据已由
+[`v2_scar_negative_evidence_binding_v1.json`](../artifacts/v2_scar_negative_evidence_binding_v1.json)
+append-only 绑定，影响分析见
+[`v2_scar_negative_impact_assessment.md`](v2_scar_negative_impact_assessment.md)。
+
+它不推进或阻塞 M2.5/M3 formal gates，不改变第一次 split seed 实例化，也不继承为 v3
+effect evidence。它约束的是更强的 Phase-3B/3C 解释：在 old-law competence、recognizer/
+extractor 故障隔离和 conservative soft integration controls 通过前，不得把结构前端失败诊断为
+`ONTOLOGY_DEFECT`。Phase-3A 的 outside claim 继续只绑定明确版本和 universe 的 frozen
+bounded DSL。
+
 ## 当前不能说什么
 
 - 没有新关系发现、开放世界本体演化或现实科学发现的效果证据。
 - v1 的 framework-growth 分数含公式化 fixture；它们只提供 schema/threshold
   原型，不是 v3 的 PASS 证据。
 - v2 的 GSCL controlled corpus 是合成 qualification，不是 downstream efficacy。
+- 不能把 `4861b2d8` 的 SCAR operationalization negative 写成“22 条 UAO 或 13 条 legacy
+  aliases 已被整体证伪”；SCAR formal arm 没有逐条执行 T01–T22，13 条也不是独立的第二套
+  ontology。
+- 不能把 SCAR 与 WikiSQL same-v5 的效果大小直接比较成先验优劣。WikiSQL 只开放四个手写
+  recipe、选择 T05/T18，overall primary 仍为 false，且 missing-arm completion 是公开披露的
+  post-terminal protocol exception；两项结果只能用于形成后续 matched control 的设计动机。
 - ARN 已被用于实现后验诊断，不能再叫 untouched。
 - 文献或 repo 被归档不等于其结论已在本项目复现。
 - benchmark 中反向构造的 semantic-only control 只诊断验收路径没有读该分数；

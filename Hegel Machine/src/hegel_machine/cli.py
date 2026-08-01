@@ -51,6 +51,16 @@ from .phase3_shrink1_registry_v1 import (
     DSL_VERSION as SHRINK1_DSL_VERSION,
     FREEZE_VERSION as SHRINK1_FREEZE_VERSION,
 )
+from .phase3_m25_readiness_v1 import (
+    MACHINE_FREEZE_ID as M25_FREEZE_VERSION,
+    phase3_m25_readiness_report,
+    validate_phase3_m25_readiness_report,
+)
+from .phase3_m25_replay_v1 import (
+    DEFAULT_RUST_BINARY as DEFAULT_M25_RUST_BINARY,
+    dual_synthetic_replay_report,
+    validate_dual_synthetic_replay_report,
+)
 from .vertical_slice import run_controlled_vertical_slice
 
 
@@ -96,13 +106,14 @@ def command_demo() -> int:
         "phase3_parent_dsl_version": "hegel-old-dsl-v1.0.0",
         "phase3_child_dsl_version": SHRINK1_DSL_VERSION,
         "phase3_child_freeze_version": SHRINK1_FREEZE_VERSION,
+        "phase3_m25_freeze_version": M25_FREEZE_VERSION,
         "phase3_child_subset_status": "VERIFIED_WITHIN_BUDGET",
         "phase3_child_subset_accepted_unique_count": 25_872,
         "phase3_executed_closure_status": "NOT_RUN",
         "phase3_complete_closure_enumerated": False,
-        "phase3_required_next_action": (
-            "CUSTODIAN_CONTINUITY_AND_DUAL_FORMAL_ROOT_GENERATION"
-        ),
+        "phase3_m25_gates_satisfied": 14,
+        "phase3_m25_gates_total": 24,
+        "phase3_required_next_action": "M25_NORMATIVE_COMPLETION_AND_EXTERNAL_ACTORS",
         "phase3_target_universe_rows": ODD_REDUCTION_TARGET.universe_rows,
         "phase3_null_control_universe_rows": (
             OBSERVED_OMITTED_SINK_CONTROL.universe_rows
@@ -217,6 +228,27 @@ def command_phase3_shrink1_transition(output: Path | None) -> int:
     return 0 if report["child_initial_state"] == "NOT_RUN" else 1
 
 
+def command_phase3_m25_readiness(output: Path | None) -> int:
+    report = phase3_m25_readiness_report()
+    validate_phase3_m25_readiness_report(report)
+    if output is not None:
+        _write_json(output, report)
+    print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0
+
+
+def command_phase3_m25_synthetic_replay(
+    output: Path | None,
+    rust_binary: Path,
+) -> int:
+    report = dual_synthetic_replay_report(rust_binary.resolve())
+    validate_dual_synthetic_replay_report(report)
+    if output is not None:
+        _write_json(output, report)
+    print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if report["status"] == "SYNTHETIC_FOUNDATION_DUAL_REPLAY_PASS" else 1
+
+
 def command_vertical_slice(output: Path | None) -> int:
     report = run_controlled_vertical_slice()
     if output is not None:
@@ -325,6 +357,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="emit the post-subset diagnostic DSL shrink transition record",
     )
     shrink1_transition.add_argument("--output", type=Path)
+    m25_readiness = subparsers.add_parser(
+        "phase3-m25-readiness",
+        help=(
+            "emit fail-closed M2.5 foundation/specification/custody readiness; "
+            "this never instantiates a seed or formal root"
+        ),
+    )
+    m25_readiness.add_argument("--output", type=Path)
+    m25_replay = subparsers.add_parser(
+        "phase3-m25-synthetic-replay",
+        help=(
+            "dual-replay public M2.5 primitive vectors; this never creates "
+            "an authoritative root, seed, signature, or gate pass"
+        ),
+    )
+    m25_replay.add_argument("--output", type=Path)
+    m25_replay.add_argument(
+        "--rust-binary",
+        type=Path,
+        default=DEFAULT_M25_RUST_BINARY,
+    )
     vertical = subparsers.add_parser(
         "vertical-slice", help="run the controlled candidate/shadow-only slice"
     )
@@ -362,6 +415,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return command_phase3_shrink1_publish(args.output)
     if args.command == "phase3-shrink1-transition":
         return command_phase3_shrink1_transition(args.output)
+    if args.command == "phase3-m25-readiness":
+        return command_phase3_m25_readiness(args.output)
+    if args.command == "phase3-m25-synthetic-replay":
+        return command_phase3_m25_synthetic_replay(args.output, args.rust_binary)
     if args.command == "vertical-slice":
         return command_vertical_slice(args.output)
     raise AssertionError(f"unhandled command: {args.command}")

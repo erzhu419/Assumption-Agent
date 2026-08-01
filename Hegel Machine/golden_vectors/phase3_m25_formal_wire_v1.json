@@ -1,0 +1,277 @@
+{
+  "schema_version": "hegel-phase3-m25-formal-wire-golden/1",
+  "artifact_kind": "SYNTHETIC_NON_AUTHORITATIVE",
+  "machine_freeze_id": "hegel-freeze-p2b-p3-v1.1.1",
+  "cbor_profile_id": "hegel-cbor-det-v1",
+  "hash_algorithm": "SHA-256",
+  "authority_boundary": {
+    "gate_effect": "NONE",
+    "m3_gates_before": 14,
+    "m3_gates_after": 14,
+    "child_state": "NOT_RUN",
+    "contains_real_secret_material": false,
+    "authoritative_root_generation": false,
+    "seed_genesis_performed": false,
+    "custodian_signature_claim": false
+  },
+  "synthetic_material_notice": "All byte strings in this fixture are public deterministic test inputs. They are not a split seed, custodian key, signature, formal commitment, or M3 evidence.",
+  "vectors": [
+    {
+      "name": "deterministic_cbor_mixed_array",
+      "op": "encode",
+      "input": {
+        "value": [
+          1,
+          12547,
+          {
+            "bytes_hex": "736368656d612f31"
+          },
+          -1,
+          true,
+          null
+        ]
+      },
+      "expected": {
+        "cbor_hex": "860119310348736368656d612f3120f5f6"
+      }
+    },
+    {
+      "name": "strict_cbor_decode_round_trip",
+      "op": "decode",
+      "input": {
+        "cbor_hex": "860119310348736368656d612f3120f5f6"
+      },
+      "expected": {
+        "canonical_cbor_hex": "860119310348736368656d612f3120f5f6",
+        "value": [
+          1,
+          12547,
+          {
+            "bytes_hex": "736368656d612f31"
+          },
+          -1,
+          true,
+          null
+        ]
+      }
+    },
+    {
+      "name": "domain_separated_content_hash",
+      "op": "content_hash",
+      "input": {
+        "domain": "HEGEL/EXAMPLE/V1",
+        "value": [
+          1,
+          {
+            "bytes_hex": "00"
+          }
+        ]
+      },
+      "expected": {
+        "cbor_hex": "82014100",
+        "digest_hex": "7a10e8d1625e1e2723d78c6142e7f6af1c9ed47b477b1f8251508a796edf9e7b"
+      }
+    },
+    {
+      "name": "rfc6962_three_formal_records",
+      "op": "rfc6962_root",
+      "input": {
+        "records": [
+          [
+            1,
+            0
+          ],
+          [
+            1,
+            1
+          ],
+          [
+            1,
+            2
+          ]
+        ]
+      },
+      "expected": {
+        "leaf_count": 3,
+        "root_hex": "dc40076051b08b7998cda3f81d7eb49a930ecad1f4b04ec9cdceec7f0c071b09"
+      }
+    },
+    {
+      "name": "hkdf_role_key_public_test_input",
+      "op": "derive_role_key",
+      "input": {
+        "synthetic_public_test_input_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "role_id": 4660
+      },
+      "expected": {
+        "role_key_hex": "63bdfca4c160ef660732b34bb2ed31d74a796aa904eebb68236842b5f1433b79"
+      }
+    },
+    {
+      "name": "split_rank_public_test_input",
+      "op": "row_rank",
+      "input": {
+        "role_key_hex": "63bdfca4c160ef660732b34bb2ed31d74a796aa904eebb68236842b5f1433b79",
+        "role_id": 4660,
+        "stratum_id": 255,
+        "canonical_input_hash_hex": "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5"
+      },
+      "expected": {
+        "rank_hex": "ad30d61d2fc75190038c8d11f2012b1e4df3d8b5edd5bec31f43b1fc4119c98b"
+      }
+    },
+    {
+      "name": "seed_commitment_public_test_input",
+      "op": "seed_commitment",
+      "input": {
+        "synthetic_public_test_input_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+      },
+      "expected": {
+        "commitment_hex": "3126668b3227a5e6ab711bcaa66f9d573a7e8bf8b1d1c6cabbb07a96ccf566ba"
+      }
+    },
+    {
+      "name": "reject_empty_cbor",
+      "op": "reject_decode",
+      "input": {
+        "cbor_hex": ""
+      },
+      "expected": {
+        "accepted": false,
+        "error_code": "REJECT_TRUNCATED_CBOR"
+      }
+    },
+    {
+      "name": "reject_truncated_byte_string",
+      "op": "reject_decode",
+      "input": {
+        "cbor_hex": "42aa"
+      },
+      "expected": {
+        "accepted": false,
+        "error_code": "REJECT_TRUNCATED_CBOR"
+      }
+    },
+    {
+      "name": "reject_nonshortest_integer",
+      "op": "reject_decode",
+      "input": {
+        "cbor_hex": "1817"
+      },
+      "expected": {
+        "accepted": false,
+        "error_code": "REJECT_NONCANONICAL_CBOR"
+      }
+    },
+    {
+      "name": "reject_text_string",
+      "op": "reject_decode",
+      "input": {
+        "cbor_hex": "6161"
+      },
+      "expected": {
+        "accepted": false,
+        "error_code": "REJECT_CBOR_TEXT"
+      }
+    },
+    {
+      "name": "reject_map",
+      "op": "reject_decode",
+      "input": {
+        "cbor_hex": "a0"
+      },
+      "expected": {
+        "accepted": false,
+        "error_code": "REJECT_CBOR_MAP"
+      }
+    },
+    {
+      "name": "reject_tag",
+      "op": "reject_decode",
+      "input": {
+        "cbor_hex": "c000"
+      },
+      "expected": {
+        "accepted": false,
+        "error_code": "REJECT_CBOR_TAG"
+      }
+    },
+    {
+      "name": "reject_float",
+      "op": "reject_decode",
+      "input": {
+        "cbor_hex": "f90000"
+      },
+      "expected": {
+        "accepted": false,
+        "error_code": "REJECT_CBOR_FLOAT"
+      }
+    },
+    {
+      "name": "reject_indefinite_array",
+      "op": "reject_decode",
+      "input": {
+        "cbor_hex": "9fff"
+      },
+      "expected": {
+        "accepted": false,
+        "error_code": "REJECT_INDEFINITE_CBOR"
+      }
+    },
+    {
+      "name": "reject_trailing_item",
+      "op": "reject_decode",
+      "input": {
+        "cbor_hex": "0000"
+      },
+      "expected": {
+        "accepted": false,
+        "error_code": "REJECT_TRAILING_CBOR"
+      }
+    },
+    {
+      "name": "reject_undefined",
+      "op": "reject_decode",
+      "input": {
+        "cbor_hex": "f7"
+      },
+      "expected": {
+        "accepted": false,
+        "error_code": "REJECT_CBOR_UNDEFINED"
+      }
+    },
+    {
+      "name": "reject_reserved_additional_information",
+      "op": "reject_decode",
+      "input": {
+        "cbor_hex": "1c"
+      },
+      "expected": {
+        "accepted": false,
+        "error_code": "REJECT_RESERVED_CBOR"
+      }
+    },
+    {
+      "name": "reject_unapproved_simple_value",
+      "op": "reject_decode",
+      "input": {
+        "cbor_hex": "f818"
+      },
+      "expected": {
+        "accepted": false,
+        "error_code": "REJECT_CBOR_SIMPLE"
+      }
+    },
+    {
+      "name": "reject_array_child_error_precedence",
+      "op": "reject_decode",
+      "input": {
+        "cbor_hex": "82a0"
+      },
+      "expected": {
+        "accepted": false,
+        "error_code": "REJECT_CBOR_MAP"
+      }
+    }
+  ]
+}

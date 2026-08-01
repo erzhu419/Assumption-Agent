@@ -47,7 +47,8 @@ hegel-old-dsl-v1.0.0 + 480-row target + 85-row null control
   → shrink-1 25,872-source constructive subset                 [25,872 unique each]
   → child closure state                                         [NOT_RUN; not COMPLETE]
   → target/split/custodian bindings                             [source manifests emitted; custodian evidence missing]
-  → formal binding roots                                        [null; NEXT HARD GATE]
+  → M2.5 formal-wire/crypto foundations                         [20/20 synthetic dual replay; gate delta 0]
+  → formal binding roots                                        [null; completion amendment + external actors required]
   → rerun closure; only COMPLETE may enter target/null evaluation
   → outside certificate                                       [formal gate 关闭]
   → relation synthesis + Q32 MDL scorer replay                [formal gate 关闭]
@@ -92,6 +93,25 @@ formal RFC6962 root，后者不是 closure cardinality 或 target-match 证据�
 它只满足 24 个 M3 gates 中前 14 个；仓库中没有可重放的旧 split seed commitment、
 parent binding manifest、custodian continuity attestation 或 hidden-access ledger，故
 bindings fail-closed，formal roots 继续为 `null`，child state 保持 `NOT_RUN`。
+
+新提供的 `hegel-freeze-p2b-p3-v1.1.1` 已把下一子阶段命名为 **Phase-3A M2.5 —
+Formal Commitment, Seed Genesis and Bridge Qualification**。本仓库据此开始实现 Python/Rust
+strict wire、ContentHash/RFC6962 与 split-crypto 纯函数基础，但实现审计发现若干仍会改变
+canonical bytes 的缺口：`CustodianBindingCoreV1`/bucket wire 不完整、ID/enums/root preimage
+未完全冻结、sink 85 行没有穷尽 split quota、state/dual-agreement wire 有冲突，并且真实
+seed、custodian signature 与 parent-absence audit 必须来自独立 actor。因此当前仍是 14/24，
+不能用 synthetic seed/key 填补 gate，也不能进入 `RUNNING`。待网页 GPT 定案的问题见
+[M2.5 bit-exact completion questions](docs/questions_for_gpt_phase3_m25_wire_completion.md)，
+机器可读 fail-closed 状态见
+[M2.5 readiness artifact](artifacts/phase3_m25_readiness_v1.json)，7 个正例原语和 13 个
+strict-CBOR 拒绝例的 Python/Rust 非权威对照结果见
+[M2.5 synthetic dual replay](artifacts/phase3_m25_synthetic_dual_replay_v1.json)。
+
+v2 commit `4861b2d8` 的 SCAR 结果是某个 frozen hard-selector operationalization 的
+protocol-valid negative，不是 22/13 条先验逐项失败，也不阻塞 M2.5 identity 或 M3 closure。
+它已作为 append-only counterevidence 归档；后续 Phase-3B 必须用 no-prior、frozen-v2、
+semantic-only 与 Hegel-invented matched arms 隔离 ontology、extractor、recognizer 和 hard
+integration failure，不能把 v2 hard eligibility 当成已验证正先验。
 
 已实现或已冻结：
 
@@ -259,6 +279,15 @@ PYTHONPATH=src python3 -m hegel_machine phase3-shrink1-publish \
   --output artifacts/phase3_shrink1_publication_v1.json
 PYTHONPATH=src python3 -m hegel_machine phase3-shrink1-transition \
   --output artifacts/phase3_dsl_shrink_transition_v1.json
+cargo fmt --manifest-path rust/formal_bridge_m25/Cargo.toml -- --check
+cargo test --locked --manifest-path rust/formal_bridge_m25/Cargo.toml
+cargo clippy --locked --manifest-path rust/formal_bridge_m25/Cargo.toml \
+  --all-targets -- -D warnings
+PYTHONPATH=src python3 -m hegel_machine phase3-m25-synthetic-replay \
+  --rust-binary rust/formal_bridge_m25/target/debug/hegel-formal-bridge-m25 \
+  --output artifacts/phase3_m25_synthetic_dual_replay_v1.json
+PYTHONPATH=src python3 -m hegel_machine phase3-m25-readiness \
+  --output artifacts/phase3_m25_readiness_v1.json
 PYTHONPATH=src python3 -m pytest -q -s
 PYTHONPATH=src python3 -m hegel_machine benchmark \
   --output artifacts/phase2_benchmark.json
@@ -289,5 +318,7 @@ canonicalization / CBOR / certificate bridge 决策见
 [`docs/Hegel_Machine_Strict_Canonical_AST_CBOR_Certificate_Bridge_Freeze_v1.0.2.md`](docs/Hegel_Machine_Strict_Canonical_AST_CBOR_Certificate_Bridge_Freeze_v1.0.2.md)；下一版 shrink
 step 1 决策已由
 [`docs/Hegel_Machine_Phase3_Shrink_Step1_Freeze_Decisions.md`](docs/Hegel_Machine_Phase3_Shrink_Step1_Freeze_Decisions.md)
-接管。下一硬门中仍需 GPT / 用户定案或提供外部证据的问题见
-[`docs/questions_for_gpt_phase3_formal_bridge_and_seed_continuity.md`](docs/questions_for_gpt_phase3_formal_bridge_and_seed_continuity.md)。
+接管；M2.5 的新 wire/seed/state 决策稿见
+[`docs/Hegel_Machine_Phase3_Formal_Bridge_Seed_Genesis_M3_Wire_Freeze.md`](docs/Hegel_Machine_Phase3_Formal_Bridge_Seed_Genesis_M3_Wire_Freeze.md)。
+该稿在实现审计后仍需补齐的 bit-exact 决策与外部 actor 流程见
+[`docs/questions_for_gpt_phase3_m25_wire_completion.md`](docs/questions_for_gpt_phase3_m25_wire_completion.md)。
