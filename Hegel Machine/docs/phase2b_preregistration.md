@@ -13,12 +13,16 @@ Mechanics Qualification**; Phase-2B is shadow-only preregistration and
 implementation infrastructure.
 
 The exact protocol choices are no longer open questions. They are frozen by
-`Hegel_Machine_Phase2B_Phase3_Exact_Freeze_Decisions.md` under
-`hegel-freeze-p2b-p3-v1.0.1`. This implementation-audit amendment supersedes
-v1.0.0: `411876909552964556` remains the master/bootstrap seed, while sklearn's
-executable `random_state` is the frozen domain-separated SHA-256-to-uint32 value
-`2611585425`. This freezes a contract; it does not generate,
-seal, run, audit, score, or consume a holdout. The following states therefore
+`Hegel_Machine_Phase2B_Phase3_Exact_Freeze_Decisions.md` plus the
+[v1.0.2 strict canonical/certificate amendment](Hegel_Machine_Strict_Canonical_AST_CBOR_Certificate_Bridge_Freeze_v1.0.2.md)
+under `hegel-freeze-p2b-p3-v1.0.2`. v1.0.2 inherits the v1.0.1 seed correction:
+`411876909552964556` remains the master/bootstrap seed, while sklearn's
+executable `random_state` remains the domain-separated SHA-256-to-uint32 value
+`2611585425`. It additionally completes the Phase-3 strict acceptance and
+certificate specification. The subsequent M1 artifact verifies both strict
+implementations against the shared vectors, and M2 establishes a bounded
+`DSL_TOO_LARGE` status for the old DSL; neither result generates, seals, runs,
+audits, scores, or consumes a Phase-2B holdout. The following states therefore
 remain false:
 
 ```text
@@ -32,6 +36,36 @@ recognizer_image_built_from_allowlist
 recognizer_entrypoint_implemented
 formal_recognizer_run_runnable
 ```
+
+The Phase-3 distinction must not be reused as Phase-2B evidence:
+
+```text
+strict specification frozen                         = true
+strict Python/Rust shared vectors                    = 48/48 PASS each
+accepted strict canonical count                     = 64,680 unique each
+hegel-old-dsl-v1.0.0 under 50,000 syntactic budget  = DSL_TOO_LARGE
+complete closure / extensional target verdict       = false / unavailable
+formal roots                                        = null
+hidden-sink formal verdict                          = false
+outside or MDL certificate issued                   = false
+Phase-2B sealed qualification                       = false
+ACTIVE promotion                                    = false
+```
+
+The Phase-3 evidence is the
+[dual strict gate](../artifacts/phase3_dual_strict_gate_v1.json) and
+[dual strict capacity replay](../artifacts/phase3_dual_strict_capacity_replay_v1.json).
+Both implementations produced diagnostic set commitment
+`sha256:c1a02a66a8d6d8f75204cb3daf03ab0b01c2b3b8e486d0ab3d481ee3be43c930`;
+the ordinal-50,001 AST hash is
+`sha256:7c7f786c2cc57d31506b3c61d162d175c7f69a2878a089c72c9d053694cba948`.
+Neither value is a formal archive root or an extensional target verdict.
+Its required next action is to publish a new old-DSL version, apply frozen
+shrink step 1 by removing `mean_v1`, `min_v1`, and `max_v1`, regenerate target
+and validation commitments, and restart the new version from `NOT_RUN`; see the
+[readiness resolution](Hegel_Machine_Phase3_Freeze_Readiness_Resolution.md).
+Phase-2B formal exit remains an independent NO-GO until the sealed-data,
+custodian, runtime, covert-audit, baseline and statistical gates below pass.
 
 ## Exact sample freeze
 

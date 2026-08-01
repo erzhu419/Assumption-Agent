@@ -26,12 +26,17 @@ from .phase3_contract import (
     phase3_preregistration_report,
 )
 from .phase3_closure_preflight import (
-    CONDITIONAL_CAPACITY_STATUS,
+    DSL_TOO_LARGE_STATUS,
     phase3_closure_capacity_preflight_report,
 )
 from .phase3_dsl_v1 import (
     OBSERVED_OMITTED_SINK_CONTROL,
     ODD_REDUCTION_TARGET,
+)
+from .phase3_strict_replay_v1 import (
+    DEFAULT_RUST_BINARY,
+    dual_capacity_replay_report,
+    dual_strict_gate_report,
 )
 from .vertical_slice import run_controlled_vertical_slice
 
@@ -74,17 +79,22 @@ def command_demo() -> int:
         "phase3_ready_for_outside_certificate": (
             DEFAULT_PHASE3_PREREGISTRATION.ready_for_outside_certificate
         ),
-        "phase3_capacity_preflight_status": CONDITIONAL_CAPACITY_STATUS,
-        "phase3_executed_closure_status": "NOT_RUN",
+        "phase3_capacity_preflight_status": DSL_TOO_LARGE_STATUS,
+        "phase3_executed_closure_status": DSL_TOO_LARGE_STATUS,
+        "phase3_complete_closure_enumerated": False,
+        "phase3_required_next_action": (
+            "PUBLISH_SHRUNK_OLD_DSL_VERSION_USING_FROZEN_STEP_1"
+        ),
         "phase3_target_universe_rows": ODD_REDUCTION_TARGET.universe_rows,
         "phase3_null_control_universe_rows": (
             OBSERVED_OMITTED_SINK_CONTROL.universe_rows
         ),
         "claim_boundary": (
             "Phase-2A controlled typed-selector mechanics plus Phase-2B/Phase-3 "
-            "preregistration infrastructure; no raw extraction, formal Phase-2 "
-            "exit, OUTSIDE_FROZEN_CLOSURE certificate, or relation invention "
-            "claim"
+            "preregistration infrastructure and a bounded old-DSL DSL_TOO_LARGE "
+            "result that is not COMPLETE; no raw extraction, formal Phase-2 "
+            "exit, extensional target verdict, OUTSIDE_FROZEN_CLOSURE "
+            "certificate, or relation invention claim"
         ),
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
@@ -121,6 +131,28 @@ def command_phase3_closure_preflight(output: Path | None) -> int:
         _write_json(output, report)
     print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
     return 0
+
+
+def command_phase3_strict_gate(
+    output: Path | None,
+    rust_binary: Path,
+) -> int:
+    report = dual_strict_gate_report(rust_binary.resolve())
+    if output is not None:
+        _write_json(output, report)
+    print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if report["status"] == "VERIFIED" else 1
+
+
+def command_phase3_strict_capacity_replay(
+    output: Path | None,
+    rust_binary: Path,
+) -> int:
+    report = dual_capacity_replay_report(rust_binary.resolve())
+    if output is not None:
+        _write_json(output, report)
+    print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if report["executed_closure_status"] == "DSL_TOO_LARGE" else 1
 
 
 def command_vertical_slice(output: Path | None) -> int:
@@ -175,6 +207,29 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     phase3_preflight.add_argument("--output", type=Path)
+    strict_gate = subparsers.add_parser(
+        "phase3-strict-gate",
+        help="verify Python/Rust strict AST, CBOR, and RFC6962 golden vectors",
+    )
+    strict_gate.add_argument("--output", type=Path)
+    strict_gate.add_argument(
+        "--rust-binary",
+        type=Path,
+        default=DEFAULT_RUST_BINARY,
+    )
+    strict_capacity = subparsers.add_parser(
+        "phase3-strict-capacity-replay",
+        help=(
+            "dual-replay the 64,680 strict capacity subset after the golden "
+            "gate; this cannot issue an outside certificate"
+        ),
+    )
+    strict_capacity.add_argument("--output", type=Path)
+    strict_capacity.add_argument(
+        "--rust-binary",
+        type=Path,
+        default=DEFAULT_RUST_BINARY,
+    )
     vertical = subparsers.add_parser(
         "vertical-slice", help="run the controlled candidate/shadow-only slice"
     )
@@ -197,6 +252,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         return command_phase3_preregister(args.output)
     if args.command == "phase3-closure-preflight":
         return command_phase3_closure_preflight(args.output)
+    if args.command == "phase3-strict-gate":
+        return command_phase3_strict_gate(args.output, args.rust_binary)
+    if args.command == "phase3-strict-capacity-replay":
+        return command_phase3_strict_capacity_replay(
+            args.output,
+            args.rust_binary,
+        )
     if args.command == "vertical-slice":
         return command_vertical_slice(args.output)
     raise AssertionError(f"unhandled command: {args.command}")

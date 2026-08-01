@@ -1,7 +1,13 @@
-"""Exact, fail-closed contracts for Phase-3 closure and MDL certificates.
+"""Legacy fail-closed certificate scaffolding plus reusable audit helpers.
 
-This module implements the byte-independent parts of the frozen
-``hegel-freeze-p2b-p3-v1.0.1`` implementation-audit amendment:
+The map-shaped records in this module implement byte-independent pieces of the
+historical ``hegel-freeze-p2b-p3-v1.0.1`` implementation audit.  They are not
+the numeric-array formal wire frozen by v1.0.2.  The current strict AST/CBOR
+implementation lives in :mod:`strict_ast_v1` and :mod:`strict_cbor_v1`; formal
+certificate-array, bridge, archive, key-status, and MDL receipt execution
+remain disabled.
+
+The still-useful legacy pieces include:
 
 * strict record schemas;
 * RFC-6962 Merkle tree hashing (including non-power-of-two trees);
@@ -10,11 +16,9 @@ This module implements the byte-independent parts of the frozen
 * Ed25519 role and threshold verification when ``cryptography`` is present;
 * the frozen prefix-code and unsigned-Q32 MDL arithmetic helpers.
 
-It deliberately does not issue a formal certificate.  The workspace has no
-canonical-CBOR dependency, Rust replay implementation, output-archive replay,
-trusted latest-key-status resolver, or complete MDL AST scorer.  JSON is never
-substituted for canonical CBOR, and caller-supplied code lengths are never
-accepted as formal scores.
+This module deliberately cannot issue a formal certificate.  JSON is never
+substituted for the v1.0.2 formal CBOR wire, and caller-supplied code lengths
+are never accepted as formal scores.
 """
 
 from __future__ import annotations
@@ -44,7 +48,11 @@ except ImportError:  # pragma: no cover - availability is environment-specific.
     _Ed25519PublicKey = None
 
 
-FREEZE_VERSION: Final = "hegel-freeze-p2b-p3-v1.0.1"
+LEGACY_FREEZE_VERSION: Final = "hegel-freeze-p2b-p3-v1.0.1"
+CURRENT_FREEZE_VERSION: Final = "hegel-freeze-p2b-p3-v1.0.2"
+# Existing map-shaped dataclasses are historical v1.0.1 records.  Keep their
+# version binding explicit instead of silently relabeling them as v1.0.2 wire.
+FREEZE_VERSION: Final = LEGACY_FREEZE_VERSION
 DSL_VERSION: Final = "hegel-old-dsl-v1.0.0"
 MDL_CODE_TABLE_ID: Final = "hegel-mdl-prefix-v1.0.0"
 FIXED_POINT_PRECISION_ID: Final = "unsigned-q32-2^-32-bit"
@@ -68,6 +76,10 @@ MDL_DECIMAL_PRECISION: Final = 80
 CANONICAL_CBOR_ENCODER_IMPLEMENTED: Final = _cbor2 is not None
 ED25519_VERIFIER_IMPLEMENTED: Final = _Ed25519PublicKey is not None
 CANONICAL_AST_SCHEMA_IMPLEMENTED: Final = False
+STRICT_CANONICAL_AST_IMPLEMENTATION_VERIFIED: Final = True
+FORMAL_CERTIFICATE_ARRAY_WIRE_IMPLEMENTED: Final = False
+FORMAL_MDL_RECEIPT_ARRAY_WIRE_IMPLEMENTED: Final = False
+Q32_MPFR_DUAL_REPLAY_IMPLEMENTED: Final = False
 PROGRAM_OUTPUT_ARCHIVE_REPLAY_IMPLEMENTED: Final = False
 PYTHON_CLOSURE_REPLAY_IMPLEMENTED: Final = False
 RUST_CLOSURE_REPLAY_IMPLEMENTED: Final = False
@@ -78,7 +90,7 @@ PYTHON_MDL_REPLAY_IMPLEMENTED: Final = False
 RUST_MDL_REPLAY_IMPLEMENTED: Final = False
 
 
-SPECIFICATION_RESOLUTION_BLOCKERS: Final = (
+LEGACY_SPECIFICATION_RESOLUTION_BLOCKERS: Final = (
     "canonical_cbor_backend_not_declared_as_project_dependency",
     "canonical_ast_strict_schema_and_root_operator_extraction_not_frozen",
     "program_output_blob_archive_record_and_root_schema_not_frozen",
@@ -97,6 +109,9 @@ SPECIFICATION_RESOLUTION_BLOCKERS: Final = (
     "cross_language_q32_log2_reference_algorithm_not_frozen",
     "repository_commit_sha_hash_algorithm_and_wire_format_not_frozen",
 )
+# v1.0.2 resolves the normative questions above.  They remain here only as the
+# audit trail explaining why the v1.0.1 map wire was superseded.
+SPECIFICATION_RESOLUTION_BLOCKERS: Final = ()
 
 
 class CapabilityUnavailable(RuntimeError):
@@ -1512,8 +1527,10 @@ def outside_certificate_capability_failures() -> tuple[str, ...]:
             FORMAL_OUTSIDE_CERTIFICATE_ISSUANCE_IMPLEMENTED,
             "formal_outside_certificate_issuance_unimplemented",
         ),
-        (CANONICAL_CBOR_ENCODER_IMPLEMENTED, "canonical_cbor_unavailable"),
-        (CANONICAL_AST_SCHEMA_IMPLEMENTED, "canonical_ast_schema_unimplemented"),
+        (
+            FORMAL_CERTIFICATE_ARRAY_WIRE_IMPLEMENTED,
+            "v1_0_2_certificate_array_wire_unimplemented",
+        ),
         (
             PROGRAM_OUTPUT_ARCHIVE_REPLAY_IMPLEMENTED,
             "program_output_archive_replay_unimplemented",
@@ -1996,19 +2013,16 @@ class FormalMdlAssessment:
 
 def formal_mdl_capability_failures() -> tuple[str, ...]:
     checks = (
-        (CANONICAL_CBOR_ENCODER_IMPLEMENTED, "canonical_cbor_unavailable"),
-        (CANONICAL_AST_SCHEMA_IMPLEMENTED, "canonical_ast_schema_unimplemented"),
+        (
+            FORMAL_MDL_RECEIPT_ARRAY_WIRE_IMPLEMENTED,
+            "v1_0_2_mdl_receipt_array_wire_unimplemented",
+        ),
         (FORMAL_MDL_AST_SCORER_IMPLEMENTED, "formal_mdl_ast_scorer_unimplemented"),
         (PYTHON_MDL_REPLAY_IMPLEMENTED, "python_mdl_replay_unimplemented"),
         (RUST_MDL_REPLAY_IMPLEMENTED, "rust_mdl_replay_unimplemented"),
+        (Q32_MPFR_DUAL_REPLAY_IMPLEMENTED, "q32_mpfr_dual_replay_unimplemented"),
     )
     failures = [reason for implemented, reason in checks if not implemented]
-    failures.extend(
-        (
-            "mdl_ast_and_new_symbol_wire_schema_unfrozen",
-            "cross_language_q32_log2_reference_algorithm_unfrozen",
-        )
-    )
     return tuple(dict.fromkeys(failures))
 
 
@@ -2060,6 +2074,7 @@ __all__ = [
     "BINARY_TOKEN_CODES",
     "BucketCount",
     "CANONICAL_CBOR_ENCODER_IMPLEMENTED",
+    "CURRENT_FREEZE_VERSION",
     "CapabilityUnavailable",
     "ChunkManifest",
     "DetachedSignature",
@@ -2067,6 +2082,8 @@ __all__ = [
     "Ed25519PublicKeyRecord",
     "ExhaustionReceipt",
     "FORMAL_CERTIFICATE_ROLES",
+    "FORMAL_CERTIFICATE_ARRAY_WIRE_IMPLEMENTED",
+    "FORMAL_MDL_RECEIPT_ARRAY_WIRE_IMPLEMENTED",
     "FORMAL_OUTSIDE_CERTIFICATE_ISSUANCE_IMPLEMENTED",
     "FIXED_POINT_PRECISION_ID",
     "FormalMdlAssessment",
@@ -2075,6 +2092,8 @@ __all__ = [
     "KeyRevocationManifest",
     "KeyRole",
     "LEAF_CLASS_CODES",
+    "LEGACY_FREEZE_VERSION",
+    "LEGACY_SPECIFICATION_RESOLUTION_BLOCKERS",
     "MAX_CANONICAL_PROGRAM_COUNT",
     "MAX_RAW_OPERATOR_APPLICATIONS",
     "MDL_CODE_TABLE_ID",
@@ -2088,6 +2107,7 @@ __all__ = [
     "OutsideFrozenClosureClaim",
     "ProgramRecord",
     "Q32_SCALE",
+    "Q32_MPFR_DUAL_REPLAY_IMPLEMENTED",
     "RATIONAL_PARAMETER_CODES",
     "RECORDS_PER_CHUNK",
     "ReplayAgreement",
@@ -2096,6 +2116,7 @@ __all__ = [
     "ReplayStatus",
     "ReplaySummary",
     "SPECIFICATION_RESOLUTION_BLOCKERS",
+    "STRICT_CANONICAL_AST_IMPLEMENTATION_VERIFIED",
     "SignatureVerification",
     "TOLERANCE_CODES",
     "TERNARY_TOKEN_CODES",

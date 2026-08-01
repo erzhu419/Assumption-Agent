@@ -1,4 +1,76 @@
-# Phase-2B / Phase-3 冻结决策登记与待 machine-readable 消歧项
+# Phase-2B / Phase-3 冻结问题记录（historical pre-v1.0.2）
+
+> **STATUS: `SUPERSEDED_FOR_NORMATIVE_DECISIONS`**
+>
+> 本文件保留 target outcome 之前发现 specification gaps 的审计轨迹。所有旧待消歧项已由
+> [v1.0.2 strict canonical / certificate bridge freeze](Hegel_Machine_Strict_Canonical_AST_CBOR_Certificate_Bridge_Freeze_v1.0.2.md)
+> 在规范层解决；当前 go/no-go 以
+> [Phase-3 readiness resolution](Hegel_Machine_Phase3_Freeze_Readiness_Resolution.md)
+> 为准。下方旧问题正文不是当前 normative truth。
+
+## M1/M2 执行后的权威状态
+
+| 层级 | 状态 |
+|---|---|
+| surface + strict acceptance/certificate specification | 已冻结 |
+| Python/Rust strict implementation + shared golden vectors | 两端各 **48/48 PASS** |
+| bounded strict capacity replay | `hegel-old-dsl-v1.0.0` 在 50,000 syntactic budget 下为 `DSL_TOO_LARGE`；两端各接受 64,680，且全部 unique |
+| complete closure / extensional target verdict | 未得到；当前不是 `COMPLETE` |
+| formal roots | `null` |
+| outside / MDL certificate | 未签发 |
+
+```json
+{
+  "freeze_version": "hegel-freeze-p2b-p3-v1.0.2",
+  "surface_parameter_freeze_complete": true,
+  "strict_acceptance_contract_complete": true,
+  "normative_parameter_freeze_complete": true,
+  "strict_acceptance_implementation_verified": true,
+  "python_shared_vectors_passed": "48/48",
+  "rust_shared_vectors_passed": "48/48",
+  "accepted_strict_canonical_count_python": 64680,
+  "accepted_strict_canonical_count_rust": 64680,
+  "accepted_unique_count_python": 64680,
+  "accepted_unique_count_rust": 64680,
+  "diagnostic_set_commitment": "sha256:c1a02a66a8d6d8f75204cb3daf03ab0b01c2b3b8e486d0ab3d481ee3be43c930",
+  "first_out_of_budget_ordinal": 50001,
+  "first_out_of_budget_ast_hash": "sha256:7c7f786c2cc57d31506b3c61d162d175c7f69a2878a089c72c9d053694cba948",
+  "executed_closure_status": "DSL_TOO_LARGE",
+  "complete_closure_enumerated": false,
+  "extensional_target_verdict": null,
+  "formal_roots": null,
+  "hidden_sink_formal_verdict_allowed": false,
+  "outside_certificate_issued": false,
+  "mdl_certificate_allowed": false,
+  "phase2b_formal_exit": false,
+  "active_promotion_allowed": false,
+  "required_next_action": "PUBLISH_SHRUNK_OLD_DSL_VERSION_USING_FROZEN_STEP_1"
+}
+```
+
+旧问题的规范结论现为：`control_volume_primary_only_v1` 只是 deprecated source alias，
+唯一 machine ID 是 `scope_primary_only_v1`，strict canonicalizer 必须拒绝 alias；v1 不存在
+implicit Bit coercion，XOR sanity witness 必须显式使用两个 `bit_to_scalar`；strict AST/CBOR、
+normalization/count boundary、九组 certificate/MDL wire 均为 `RESOLVED_IN_SPEC`。其中
+strict parser/typechecker/canonicalizer 已通过 M1 双实现验证；certificate/MDL 的正式
+archive、bridge、trust chain 与 replay 仍未执行。binary XOR 的正式 language verdict
+仍为 `null`，因为 M2 只证明 syntactic budget overflow，没有执行 extensional target replay。
+
+证据见
+[dual strict gate artifact](../artifacts/phase3_dual_strict_gate_v1.json) 与
+[dual strict capacity replay artifact](../artifacts/phase3_dual_strict_capacity_replay_v1.json)。
+共同的 diagnostic set commitment 不是 formal RFC6962 root；第 50,001 个 hash 只证明
+50,000 syntactic budget overflow，不证明完整 closure cardinality。
+
+下一动作是 `PUBLISH_SHRUNK_OLD_DSL_VERSION_USING_FROZEN_STEP_1`：发布新 DSL version，
+删除 `mean_v1`、`min_v1`、`max_v1`，重建 target/validation commitments，并让新版本从
+`NOT_RUN` 开始。当前仍为 NO-GO 的是 extensional target verdict、target synthesis、
+hidden-sink formal verdict、outside/MDL certificate、Phase-2B formal exit 与 ACTIVE；
+formal roots 必须保持 `null`。
+
+---
+
+## 历史问题记录（pre-v1.0.2）
 
 原先九组实验设计问题已由
 `Hegel_Machine_Phase2B_Phase3_Exact_Freeze_Decisions.md` 回答。配额、target、value
@@ -119,7 +191,7 @@ RFC6962 Merkle 的 `sha256:<hex>` roots。两者连 preimage 和聚合算法都�
 任何 receipt 都不能把当前 `executed_closure_status = NOT_RUN` 改成
 `DSL_TOO_LARGE`、`COMPLETE`、`IN_LANGUAGE` 或 `OUTSIDE_FROZEN_CLOSURE`。
 
-## 待消歧 A：scope source alias
+## 历史待消歧 A：scope source alias（v1.0.2 已在规范层解决）
 
 决定稿 §3.3 使用 `control_volume_primary_only_v1`，§5.4 的四成员 catalog 只有
 `scope_primary_only_v1`。当前保守绑定是：
@@ -138,7 +210,7 @@ RFC6962 Merkle 的 `sha256:<hex>` roots。两者连 preimage 和聚合算法都�
 请确认前者只是来源别名/笔误；若必须新增语义不同的第五个 scope，应发布新 DSL
 version，不能原地改写 v1。
 
-## 待消歧 B：strict canonical AST/CBOR acceptance
+## 历史待消歧 B：strict canonical AST/CBOR acceptance（v1.0.2 已在规范层解决）
 
 决定稿还有一个直接的 typing 冲突：§2.6 把 executable XOR witness 写为
 `absolute(difference(bit_at(0), bit_at(1)))`，但 §5.7–5.9 同时冻结
@@ -218,7 +290,7 @@ strict canonicalizer/schema 冻结后再由 Python/Rust 完整 replay 判定 `IN
 在这些规则冻结前，diagnostic canonical JSON 不能替代 canonical CBOR，64,680 也
 不能升级为 `DSL_TOO_LARGE`。
 
-## 待消歧 C：certificate / MDL strict wire（九组）
+## 历史待消歧 C：certificate / MDL strict wire（v1.0.2 已在规范层解决）
 
 以下九组覆盖 certificate implementation audit 暴露的 specification blockers：
 
@@ -298,7 +370,7 @@ strict canonicalizer/schema 冻结后再由 Python/Rust 完整 replay 判定 `IN
 }
 ```
 
-## 已冻结但尚未执行
+## 历史快照中已冻结但尚未执行
 
 - Phase-2B trusted wire builder/covert audit、720 + 240 generation、572 derived
   pairs、baseline pins、custodian、recognizer、evaluator 和 durable ledger；

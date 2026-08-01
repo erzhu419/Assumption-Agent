@@ -257,7 +257,7 @@ def test_freeze_is_content_addressed_but_explicitly_not_a_closure_result():
     assert OLD_DSL_V1.rational_grid_id.startswith("rational_grid_")
     assert len(OLD_DSL_V1.content_id.rsplit("_", 1)[1]) == 64
     assert DSL_EXECUTION_STATE.surface_parameter_tables_frozen
-    assert not DSL_EXECUTION_STATE.strict_canonical_ast_schema_frozen
+    assert DSL_EXECUTION_STATE.strict_canonical_ast_schema_frozen
     assert not DSL_EXECUTION_STATE.canonicalizer_implemented
     assert not DSL_EXECUTION_STATE.python_complete_enumerator_implemented
     assert not DSL_EXECUTION_STATE.rust_complete_enumerator_implemented

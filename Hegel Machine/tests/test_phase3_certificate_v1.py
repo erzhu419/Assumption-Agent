@@ -313,7 +313,7 @@ def test_exhaustion_receipt_recomputes_bucket_totals_and_has_no_fake_root_rule()
     with pytest.raises(ValueError, match="accepted counts"):
         replace(valid, canonical_program_count=3)
     assert "exhaustion_receipt_root_preimage_exclusion_rule_not_frozen" in (
-        cert.SPECIFICATION_RESOLUTION_BLOCKERS
+        cert.LEGACY_SPECIFICATION_RESOLUTION_BLOCKERS
     )
 
 
@@ -683,13 +683,20 @@ def test_mdl_request_rejects_unrelated_unknown_fields_and_bad_precision():
         cert.MdlCertificateBindings.from_mapping(bindings)
 
 
-def test_unresolved_spec_items_are_machine_readable_and_formal_paths_fail_closed():
-    blockers = set(cert.SPECIFICATION_RESOLUTION_BLOCKERS)
-    assert "canonical_cbor_backend_not_declared_as_project_dependency" in blockers
-    assert "program_output_blob_archive_record_and_root_schema_not_frozen" in blockers
-    assert "final_certificate_envelope_and_timestamp_schema_not_frozen" in blockers
-    assert "latest_key_status_manifest_discovery_and_trust_anchor_not_frozen" in blockers
-    assert "cross_language_q32_log2_reference_algorithm_not_frozen" in blockers
+def test_v102_resolves_spec_questions_but_formal_execution_paths_fail_closed():
+    assert cert.SPECIFICATION_RESOLUTION_BLOCKERS == ()
+    legacy = set(cert.LEGACY_SPECIFICATION_RESOLUTION_BLOCKERS)
+    assert "canonical_cbor_backend_not_declared_as_project_dependency" in legacy
+    assert "program_output_blob_archive_record_and_root_schema_not_frozen" in legacy
+    assert "final_certificate_envelope_and_timestamp_schema_not_frozen" in legacy
+    assert "latest_key_status_manifest_discovery_and_trust_anchor_not_frozen" in legacy
+    assert "cross_language_q32_log2_reference_algorithm_not_frozen" in legacy
+    assert cert.STRICT_CANONICAL_AST_IMPLEMENTATION_VERIFIED
+    assert not cert.FORMAL_CERTIFICATE_ARRAY_WIRE_IMPLEMENTED
     assert not cert.FORMAL_OUTSIDE_CERTIFICATE_ISSUANCE_IMPLEMENTED
-    assert cert.outside_certificate_capability_failures()
-    assert cert.formal_mdl_capability_failures()
+    assert "v1_0_2_certificate_array_wire_unimplemented" in (
+        cert.outside_certificate_capability_failures()
+    )
+    assert "v1_0_2_mdl_receipt_array_wire_unimplemented" in (
+        cert.formal_mdl_capability_failures()
+    )

@@ -2,27 +2,34 @@
 
 This module does not enumerate the complete extensional closure.  Instead it
 constructs a deliberately small, type-correct subset of diagnostic candidate
-ASTs.  The subset exceeds the frozen 50,000-program limit, but the result is
-conditional until the strict canonical-AST schema and canonical-CBOR
-canonicalizer accept the same structures as canonical programs.  It cannot set the
-executed closure status to ``DSL_TOO_LARGE`` by itself.
+ASTs.  The subset exceeds the frozen 50,000-program limit.  The v1.0.2 strict
+canonical-AST/CBOR acceptance rules have now passed the independent
+Python/Rust golden-vector gate, and both implementations accepted the same
+64,680 unique canonical ASTs.  The verified 50,001st witness discharges the
+former conditional capacity result and sets the bounded old-DSL execution
+status to ``DSL_TOO_LARGE``.
 
 The proof excludes ``greater_equal`` and every nested arithmetic operator, so
-it is a conservative lower bound rather than an estimate of the full grammar.
-It also keeps the formal trust boundary explicit: there is no Rust replay,
-sealed archive, or bounded frozen-closure certificate here.
+it remains a conservative subset rather than an estimate of the full grammar.
+The verified Rust replay is bound below, but there is no sealed full-closure
+archive or bounded frozen-closure certificate here.  The cross-language set
+commitment is diagnostic and is not a formal RFC6962 root.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
-from itertools import combinations_with_replacement, product
 from pathlib import Path
 import hashlib
-from typing import Final, Iterator
+from typing import Final
 
 from .hashing import canonical_json, stable_hash
+from .phase3_capacity_witness_v1 import (
+    DiagnosticCandidateAst,
+    canonical_commutative_children,
+    iter_capacity_witness_candidate_asts,
+)
 from .phase3_dsl_v1 import (
     AGGREGATE_CATALOG,
     BINARY_OPERATORS,
@@ -38,136 +45,57 @@ from .phase3_dsl_v1 import (
 
 
 PREFLIGHT_SCHEMA_VERSION: Final = "hegel-phase3-closure-capacity-preflight/1.0.0"
+FREEZE_VERSION: Final = "hegel-freeze-p2b-p3-v1.0.2"
+CANONICAL_CBOR_PROFILE_ID: Final = "hegel-cbor-det-v1"
+CANONICAL_AST_SCHEMA_ID: Final = "hegel-canonical-ast-v1"
 CONDITIONAL_CAPACITY_STATUS: Final = (
     "CONDITIONAL_CAPACITY_LOWER_BOUND_EXCEEDS_BUDGET"
 )
-
-DiagnosticCandidateAst = tuple[object, ...]
-
-
-def _diagnostic_hash(ast: DiagnosticCandidateAst) -> str:
-    return stable_hash(ast)
-
-
-def _commutative_children(
-    left: DiagnosticCandidateAst,
-    right: DiagnosticCandidateAst,
-) -> tuple[DiagnosticCandidateAst, DiagnosticCandidateAst]:
-    """Apply the frozen child-hash order with a deterministic tie break."""
-
-    return tuple(  # type: ignore[return-value]
-        sorted(
-            (left, right),
-            key=lambda child: (_diagnostic_hash(child), canonical_json(child)),
-        )
-    )
-
-
-def _scalar_const(parameter: RationalAtom) -> DiagnosticCandidateAst:
-    return ("scalar_const", parameter.numerator, parameter.denominator)
-
-
-def _aggregate(
-    aggregate_map_id: str,
-    scope_id: str,
-    quantity_id: str,
-) -> DiagnosticCandidateAst:
-    # The proof uses the zero-extension scope form, so it consumes no context
-    # clauses while still binding every frozen aggregate identifier.
-    return (
-        "aggregate",
-        aggregate_map_id,
-        scope_id,
-        quantity_id,
-        "scope_extensions",
-        (),
-    )
+DSL_TOO_LARGE_STATUS: Final = "DSL_TOO_LARGE"
+DUAL_STRICT_GATE_STATUS: Final = "VERIFIED"
+# Frozen evidence bindings copied from the separately generated, checked-in
+# dual strict gate and capacity replay artifacts.  This module does not rerun
+# Rust or reinterpret their diagnostic commitments as formal archive roots.
+DUAL_STRICT_GATE_REPORT_ID: Final = (
+    "phase3_dual_strict_gate_"
+    "06eae23f68536e3f7e80badb46a5b15e0665072f65477608a3f688e54adefad6"
+)
+DUAL_STRICT_CAPACITY_REPLAY_REPORT_ID: Final = (
+    "phase3_dual_strict_capacity_replay_"
+    "f75214e75f5fc3812d7375463ba72c347c9c08bc7bae3b68c87a63b484c4e414"
+)
+STRICT_CAPACITY_SET_COMMITMENT: Final = (
+    "sha256:c1a02a66a8d6d8f75204cb3daf03ab0b01c2b3b8e486d0ab3d481ee3be43c930"
+)
+FIRST_OUT_OF_BUDGET_AST_HASH: Final = (
+    "sha256:7c7f786c2cc57d31506b3c61d162d175c7f69a2878a089c72c9d053694cba948"
+)
+FIRST_OUT_OF_BUDGET_CBOR_HEX: Final = (
+    "820182048284020383000002830000048402038600030000008083000000"
+)
+PROJECT_ROOT: Final = Path(__file__).resolve().parents[2]
+PREFLIGHT_SOURCE_PATHS: Final = (
+    Path(__file__),
+    PROJECT_ROOT / "src" / "hegel_machine" / "phase3_capacity_witness_v1.py",
+    PROJECT_ROOT / "src" / "hegel_machine" / "phase3_dsl_v1.py",
+    PROJECT_ROOT / "src" / "hegel_machine" / "hashing.py",
+)
 
 
-def _equal_exact(
-    left: DiagnosticCandidateAst,
-    right: DiagnosticCandidateAst,
-) -> DiagnosticCandidateAst:
-    first, second = _commutative_children(left, right)
-    return ("equal_exact", first, second)
-
-
-def _less_equal(
-    left: DiagnosticCandidateAst,
-    right: DiagnosticCandidateAst,
-) -> DiagnosticCandidateAst:
-    return ("less_equal", left, right)
-
-
-def _top_level_and(
-    left: DiagnosticCandidateAst,
-    right: DiagnosticCandidateAst,
-) -> DiagnosticCandidateAst:
-    first, second = _commutative_children(left, right)
-    return ("top_level_AND", first, second)
-
-
-def _constant_leaves() -> tuple[DiagnosticCandidateAst, ...]:
-    return tuple(_scalar_const(parameter) for parameter in RATIONAL_PARAMETER_GRID)
-
-
-def _rational_aggregate_leaves() -> tuple[DiagnosticCandidateAst, ...]:
-    rational_maps = tuple(
-        spec.map_id
-        for spec in AGGREGATE_CATALOG
-        if spec.output_sort == "RationalValue"
-    )
-    return tuple(
-        _aggregate(map_id, scope_id, quantity_id)
-        for map_id, scope_id, quantity_id in product(
-            rational_maps,
-            SCOPE_IDS,
-            QUANTITY_IDS,
-        )
-    )
-
-
-def _constant_only_atoms() -> tuple[DiagnosticCandidateAst, ...]:
-    constants = _constant_leaves()
-    equal_atoms = tuple(
-        _equal_exact(left, right)
-        for left, right in combinations_with_replacement(constants, 2)
-    )
-    ordered_atoms = tuple(
-        _less_equal(left, right) for left, right in product(constants, repeat=2)
-    )
-    return equal_atoms + ordered_atoms
-
-
-def _one_aggregate_atoms() -> tuple[DiagnosticCandidateAst, ...]:
-    constants = _constant_leaves()
-    aggregates = _rational_aggregate_leaves()
-    equal_atoms = tuple(
-        _equal_exact(constant, aggregate)
-        for constant, aggregate in product(constants, aggregates)
-    )
-    ordered_atoms = tuple(
-        atom
-        for constant, aggregate in product(constants, aggregates)
-        for atom in (
-            _less_equal(constant, aggregate),
-            _less_equal(aggregate, constant),
-        )
-    )
-    return equal_atoms + ordered_atoms
-
-
-def iter_capacity_witness_candidate_asts() -> Iterator[DiagnosticCandidateAst]:
-    """Yield the conservative diagnostic AST subset used by the preflight."""
-
-    constant_atoms = _constant_only_atoms()
-    aggregate_atoms = _one_aggregate_atoms()
-    for constant_atom, aggregate_atom in product(
-        constant_atoms,
-        aggregate_atoms,
+def _preflight_source_root() -> str:
+    digest = hashlib.sha256()
+    digest.update(b"HEGEL/PREFLIGHT_SOURCE_SET/V1\x00")
+    for path in sorted(
+        PREFLIGHT_SOURCE_PATHS,
+        key=lambda item: item.relative_to(PROJECT_ROOT).as_posix(),
     ):
-        yield _top_level_and(constant_atom, aggregate_atom)
-
+        relative = path.relative_to(PROJECT_ROOT).as_posix().encode("utf-8")
+        payload = path.read_bytes()
+        digest.update(len(relative).to_bytes(8, "big"))
+        digest.update(relative)
+        digest.update(len(payload).to_bytes(8, "big"))
+        digest.update(payload)
+    return digest.hexdigest()
 
 @dataclass(frozen=True, slots=True)
 class WitnessAstStats:
@@ -206,9 +134,9 @@ def _diagnostic_ast_stats(ast: DiagnosticCandidateAst) -> WitnessAstStats:
             "RationalValue", 0, 1, 1, 0, frozenset(), 0, 0, 0
         )
     if tag == "aggregate":
-        if len(ast) != 6 or ast[4] != "scope_extensions":
+        if len(ast) != 5:
             raise AssertionError("aggregate diagnostic arity drift")
-        map_id, scope_id, quantity_id, extensions = ast[1], ast[2], ast[3], ast[5]
+        map_id, scope_id, quantity_id, extensions = ast[1], ast[2], ast[3], ast[4]
         rational_maps = {
             spec.map_id
             for spec in AGGREGATE_CATALOG
@@ -237,7 +165,9 @@ def _diagnostic_ast_stats(ast: DiagnosticCandidateAst) -> WitnessAstStats:
         if any(child.output_sort != "RationalValue" for child in children):
             raise AssertionError(f"{tag} received a non-rational child")
         if tag == "equal_exact":
-            ordered = _commutative_children(ast[1], ast[2])  # type: ignore[arg-type]
+            ordered = canonical_commutative_children(  # type: ignore[arg-type]
+                ast[1], ast[2]
+            )
             if ast[1:] != ordered:
                 raise AssertionError("equal_exact diagnostic child order drift")
         return WitnessAstStats(
@@ -269,7 +199,9 @@ def _diagnostic_ast_stats(ast: DiagnosticCandidateAst) -> WitnessAstStats:
         children = tuple(_diagnostic_ast_stats(child) for child in ast[1:])
         if any(child.output_sort != "Bool" for child in children):
             raise AssertionError("top-level AND received a non-boolean child")
-        ordered = _commutative_children(ast[1], ast[2])  # type: ignore[arg-type]
+        ordered = canonical_commutative_children(  # type: ignore[arg-type]
+            ast[1], ast[2]
+        )
         if ast[1:] != ordered:
             raise AssertionError("top-level AND diagnostic child order drift")
         return WitnessAstStats(
@@ -299,6 +231,7 @@ class ConstructiveCandidateAstCapacityProof:
     """Exact combinatorial lower bound for typed, limit-conforming candidate ASTs."""
 
     schema_version: str = PREFLIGHT_SCHEMA_VERSION
+    freeze_version: str = FREEZE_VERSION
     dsl_version: str = OLD_DSL_V1.dsl_version
     dsl_spec_id: str = OLD_DSL_V1.content_id
     scalar_constant_leaf_count: int = 7
@@ -335,6 +268,8 @@ class ConstructiveCandidateAstCapacityProof:
     def __post_init__(self) -> None:
         if self.schema_version != PREFLIGHT_SCHEMA_VERSION:
             raise ValueError("unknown closure-capacity preflight schema")
+        if self.freeze_version != FREEZE_VERSION:
+            raise ValueError("capacity proof freeze version drift")
         if self.dsl_version != OLD_DSL_V1.dsl_version:
             raise ValueError("capacity proof is bound to the frozen DSL version")
         if self.dsl_spec_id != OLD_DSL_V1.content_id:
@@ -412,7 +347,7 @@ class ConstructiveCandidateAstCapacityProof:
 
     @property
     def capacity_status(self) -> str:
-        return CONDITIONAL_CAPACITY_STATUS
+        return DSL_TOO_LARGE_STATUS
 
     @property
     def content_id(self) -> str:
@@ -500,19 +435,34 @@ def phase3_closure_capacity_preflight_report(
     payload: dict[str, object] = {
         "artifact": "phase3_closure_capacity_preflight_v1",
         "schema_version": PREFLIGHT_SCHEMA_VERSION,
+        "freeze_version": proof.freeze_version,
         "implementation_id": (
-            "phase3_closure_preflight_source_sha256_"
-            + hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+            "phase3_closure_preflight_source_root_sha256_"
+            + _preflight_source_root()
         ),
         "dsl_version": proof.dsl_version,
         "dsl_spec_id": proof.dsl_spec_id,
         "proof_id": proof.content_id,
         "status": proof.capacity_status,
-        "executed_closure_status": "NOT_RUN",
-        "status_basis": "conditional_candidate_ast_subset_lower_bound",
+        "executed_closure_status": DSL_TOO_LARGE_STATUS,
+        "status_basis": "dual_verified_strict_capacity_replay",
+        "capacity_condition_discharged": True,
         "canonical_program_budget": proof.canonical_program_budget,
         "constructive_candidate_ast_count": proof.witness_candidate_ast_count,
         "first_out_of_budget_ordinal": proof.first_out_of_budget_ordinal,
+        "strict_acceptance_specification_complete": True,
+        "strict_acceptance_implementation_verified": True,
+        "strict_rewrite_application_pending": False,
+        "dual_strict_gate_status": DUAL_STRICT_GATE_STATUS,
+        "dual_strict_gate_report_id": DUAL_STRICT_GATE_REPORT_ID,
+        "dual_strict_capacity_replay_report_id": (
+            DUAL_STRICT_CAPACITY_REPLAY_REPORT_ID
+        ),
+        "canonical_cbor_profile_id": CANONICAL_CBOR_PROFILE_ID,
+        "canonical_ast_schema_id": CANONICAL_AST_SCHEMA_ID,
+        "formal_root_generation_allowed": False,
+        "formal_roots": None,
+        "dsl_too_large_claim_allowed": True,
         "proof_counts": {
             "scalar_constant_leaves": proof.scalar_constant_leaf_count,
             "rational_aggregate_leaves": proof.rational_aggregate_leaf_count,
@@ -539,29 +489,59 @@ def phase3_closure_capacity_preflight_report(
             ),
         },
         "diagnostic_python_subset_replay": replay,
+        "strict_capacity_replay": {
+            "source_candidate_count": proof.witness_candidate_ast_count,
+            "type_rejected_count": 0,
+            "limit_rejected_count": 0,
+            "other_rejected_count": 0,
+            "rewrite_collapsed_count": 0,
+            "accepted_strict_canonical_count": proof.witness_candidate_ast_count,
+            "first_accepted_out_of_budget_ordinal": (
+                proof.first_out_of_budget_ordinal
+            ),
+            "first_accepted_out_of_budget_ast_hash": (
+                FIRST_OUT_OF_BUDGET_AST_HASH
+            ),
+            "first_accepted_out_of_budget_cbor_hex": (
+                FIRST_OUT_OF_BUDGET_CBOR_HEX
+            ),
+            "python_accepted_set_commitment": STRICT_CAPACITY_SET_COMMITMENT,
+            "rust_accepted_set_commitment": STRICT_CAPACITY_SET_COMMITMENT,
+            "accepted_set_commitment_is_formal_root": False,
+            "dual_replay_equal": True,
+        },
         "complete_closure_enumerated": False,
         "extensional_quotient_computed": False,
-        "formal_canonicalizer_implemented": False,
+        "formal_canonicalizer_implemented": True,
         "python_complete_enumerator_implemented": False,
         "rust_complete_enumerator_implemented": False,
+        "outside_certificate_allowed": False,
         "outside_frozen_closure_certificate_issued": False,
         "unbounded_outside_language_claim_issued": False,
+        "target_synthesis_allowed": False,
+        "hidden_sink_formal_verdict_allowed": False,
+        "mdl_certificate_allowed": False,
+        "active_promotion_allowed": False,
+        "phase2b_formal_exit": False,
         "required_next_action": {
-            "freeze_strict_canonical_ast_schema_and_acceptance_rules": True,
-            "replay_with_formal_canonical_cbor": True,
-            "publish_new_dsl_version_if_witnesses_are_accepted": True,
-            "conditional_first_frozen_shrink_step": (
+            "freeze_strict_canonical_ast_schema_and_acceptance_rules": False,
+            "implement_python_strict_acceptance": False,
+            "implement_rust_strict_acceptance": False,
+            "verify_cross_language_golden_vectors": False,
+            "replay_64680_with_strict_canonical_cbor": False,
+            "action": "PUBLISH_SHRUNK_OLD_DSL_VERSION_USING_FROZEN_STEP_1",
+            "frozen_shrink_step": (
                 OLD_DSL_V1.shrink_order[0].operation
             ),
             "regenerate_target_commitments_after_version_change": True,
         },
         "claim_boundary": (
-            "The diagnostic representation contains 64,680 distinct, typed, "
-            "limit-conforming candidate ASTs. If the still-unimplemented strict "
-            "canonicalizer accepts them without additional algebraic reduction, "
-            "the frozen 50,000 syntactic-program limit is exceeded. Executed "
-            "closure status remains NOT_RUN; this is neither DSL_TOO_LARGE yet "
-            "nor an extensional target comparison or outside certificate."
+            "Independent Python and Rust strict replay accepted the same 64,680 "
+            "unique canonical ASTs and the same 50,001st witness, so the frozen "
+            "50,000 syntactic-program budget is exceeded and bounded old-DSL "
+            "status is DSL_TOO_LARGE. This is not COMPLETE, a full closure "
+            "cardinality, an extensional target verdict, a formal RFC6962 root, "
+            "or an outside certificate."
         ),
     }
     payload["report_id"] = stable_hash(

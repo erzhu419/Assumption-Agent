@@ -806,7 +806,7 @@ CLOSURE_BUDGET: Final = ClosureBudgetAndTraversal()
 @dataclass(frozen=True, slots=True)
 class DslExecutionState:
     surface_parameter_tables_frozen: bool = True
-    strict_canonical_ast_schema_frozen: bool = False
+    strict_canonical_ast_schema_frozen: bool = True
     scalar_reference_semantics_present: bool = True
     canonicalizer_implemented: bool = False
     python_complete_enumerator_implemented: bool = False
@@ -817,11 +817,11 @@ class DslExecutionState:
     def __post_init__(self) -> None:
         if (
             not self.surface_parameter_tables_frozen
-            or self.strict_canonical_ast_schema_frozen
+            or not self.strict_canonical_ast_schema_frozen
             or not self.scalar_reference_semantics_present
         ):
             raise ValueError(
-                "the v1 surface tables are frozen but the strict AST schema is not"
+                "the v1 surface tables and v1.0.2 strict AST schema are frozen"
             )
         if (
             self.canonicalizer_implemented

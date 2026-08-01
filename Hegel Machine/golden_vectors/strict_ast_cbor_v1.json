@@ -1,0 +1,191 @@
+{
+  "schema_version": "hegel-strict-golden-v1",
+  "freeze_version": "hegel-freeze-p2b-p3-v1.0.2",
+  "cbor_profile_id": "hegel-cbor-det-v1",
+  "ast_schema_id": "hegel-canonical-ast-v1",
+  "cbor_encode_vectors": [
+    {"name": "uint_0", "value": 0, "expected_cbor_hex": "00"},
+    {"name": "uint_23", "value": 23, "expected_cbor_hex": "17"},
+    {"name": "uint_24", "value": 24, "expected_cbor_hex": "1818"},
+    {"name": "uint_255", "value": 255, "expected_cbor_hex": "18ff"},
+    {"name": "uint_256", "value": 256, "expected_cbor_hex": "190100"},
+    {"name": "negative_1", "value": -1, "expected_cbor_hex": "20"},
+    {"name": "negative_24", "value": -24, "expected_cbor_hex": "37"},
+    {"name": "negative_25", "value": -25, "expected_cbor_hex": "3818"},
+    {"name": "negative_256", "value": -256, "expected_cbor_hex": "38ff"},
+    {"name": "negative_257", "value": -257, "expected_cbor_hex": "390100"},
+    {"name": "false", "value": false, "expected_cbor_hex": "f4"},
+    {"name": "true", "value": true, "expected_cbor_hex": "f5"},
+    {"name": "null", "value": null, "expected_cbor_hex": "f6"},
+    {"name": "array", "value": [1, -1, false, true, null], "expected_cbor_hex": "850120f4f5f6"},
+    {
+      "name": "bytes_length_23",
+      "byte_string_hex": "000102030405060708090a0b0c0d0e0f10111213141516",
+      "expected_cbor_hex": "57000102030405060708090a0b0c0d0e0f10111213141516"
+    },
+    {
+      "name": "bytes_length_24",
+      "byte_string_hex": "000102030405060708090a0b0c0d0e0f1011121314151617",
+      "expected_cbor_hex": "5818000102030405060708090a0b0c0d0e0f1011121314151617"
+    }
+  ],
+  "cbor_reject_vectors": [
+    {"name": "forbidden_float", "encoded_hex": "f90000", "error_code": "REJECT_CBOR_FLOAT"},
+    {"name": "forbidden_text", "encoded_hex": "6161", "error_code": "REJECT_CBOR_TEXT"},
+    {"name": "forbidden_map", "encoded_hex": "a0", "error_code": "REJECT_CBOR_MAP"},
+    {"name": "forbidden_tag", "encoded_hex": "c000", "error_code": "REJECT_CBOR_TAG"},
+    {"name": "indefinite_array", "encoded_hex": "9fff", "error_code": "REJECT_INDEFINITE_CBOR"},
+    {"name": "trailing_byte", "encoded_hex": "0000", "error_code": "REJECT_TRAILING_CBOR"},
+    {"name": "nonshortest_zero", "encoded_hex": "1800", "error_code": "REJECT_NONCANONICAL_CBOR"}
+  ],
+  "ast_accept_vectors": [
+    {
+      "name": "explicit_bit_coercion",
+      "source_ast": ["absolute", ["difference", ["bit_to_scalar", ["bit_at", 0]], ["bit_to_scalar", ["bit_at", 1]]]],
+      "canonical_cbor_hex": "82018301028402018301008300010083010083000101",
+      "canonical_ast_hash": "sha256:f7c711a40296b0cab0fd0dbfc682f0b95cf7253abc884c01d55e2a9f14091a6f",
+      "root_operator_id": 258,
+      "output_sort": "RationalValue",
+      "depth": 3,
+      "node_count": 6
+    },
+    {
+      "name": "greater_equal_rewrite",
+      "source_ast": ["greater_equal", ["scalar_const", -1, 1], ["scalar_const", 1, 1]],
+      "canonical_cbor_hex": "82018402038300000583000001",
+      "canonical_ast_hash": "sha256:09f2ec40fdbde0b5f25c35445dcbedeb003e11965bce66a503493e9b5869bfae",
+      "root_operator_id": 515,
+      "output_sort": "Bool",
+      "depth": 1,
+      "node_count": 3
+    },
+    {
+      "name": "approx_zero_rewrite",
+      "source_ast": ["approx_equal", ["scalar_const", -1, 1], ["scalar_const", 1, 1], 0],
+      "canonical_cbor_hex": "82018402028300000183000005",
+      "canonical_ast_hash": "sha256:f1645b247547bc8aeca9b75605c3eeb45d05b2266a5c699ea426f32cca370468",
+      "root_operator_id": 514,
+      "output_sort": "Bool",
+      "depth": 1,
+      "node_count": 3
+    },
+    {
+      "name": "commutative_reorder",
+      "source_ast": ["equal_exact", ["scalar_const", 1, 1], ["scalar_const", -1, 1]],
+      "canonical_cbor_hex": "82018402028300000183000005",
+      "canonical_ast_hash": "sha256:f1645b247547bc8aeca9b75605c3eeb45d05b2266a5c699ea426f32cca370468",
+      "root_operator_id": 514,
+      "output_sort": "Bool",
+      "depth": 1,
+      "node_count": 3
+    },
+    {
+      "name": "add_flatten_right_associate",
+      "source_ast": ["add", ["add", ["bit_to_scalar", ["bit_at", 0]], ["scalar_const", 1, 2]], ["bit_to_scalar", ["bit_at", 1]]],
+      "canonical_cbor_hex": "8201840200830100830001018402008300000483010083000100",
+      "canonical_ast_hash": "sha256:6336f0a7c87c2f3872a161af5348535db88dd45a155d1047a57bd498c31d7e78",
+      "root_operator_id": 512,
+      "output_sort": "RationalValue",
+      "depth": 3,
+      "node_count": 7
+    },
+    {
+      "name": "duplicate_and_removal",
+      "source_ast": ["top_level_AND", ["equal_exact", ["scalar_const", -1, 1], ["scalar_const", 1, 1]], ["equal_exact", ["scalar_const", 1, 1], ["scalar_const", -1, 1]]],
+      "canonical_cbor_hex": "82018402028300000183000005",
+      "canonical_ast_hash": "sha256:f1645b247547bc8aeca9b75605c3eeb45d05b2266a5c699ea426f32cca370468",
+      "root_operator_id": 514,
+      "output_sort": "Bool",
+      "depth": 1,
+      "node_count": 3
+    },
+    {
+      "name": "and1_removal",
+      "source_ast": ["top_level_AND", ["context_flag", "c0"]],
+      "canonical_cbor_hex": "820183000400",
+      "canonical_ast_hash": "sha256:1fa550f43fc20edca4c5896249a0e84304a418ea366e6797de16f0206840ff9b",
+      "root_operator_id": 4,
+      "output_sort": "Bool",
+      "depth": 0,
+      "node_count": 1
+    },
+    {
+      "name": "scope_clause_sorting",
+      "source_ast": ["aggregate", "sum_v1", "scope_primary_only_v1", "q0", [["c1", false], ["c0", true]]],
+      "canonical_cbor_hex": "8201860003000100828200f58201f4",
+      "canonical_ast_hash": "sha256:48cef1e5ef8922c8b6d43b33b45f5f89dcd46c7d4b74fed30e9bd4441e4839d2",
+      "root_operator_id": 3,
+      "output_sort": "RationalValue",
+      "depth": 0,
+      "node_count": 1
+    },
+    {
+      "name": "aggregate_one_node",
+      "source_ast": ["aggregate", "signed_balance_v1", "control_volume_all_observed_v1", "q1", []],
+      "canonical_cbor_hex": "820186000305030180",
+      "canonical_ast_hash": "sha256:e35153f2bdd1a6e25d629ed3ab9afb178bb45ecd163efba4960a2a69db40ce2c",
+      "root_operator_id": 3,
+      "output_sort": "RationalValue",
+      "depth": 0,
+      "node_count": 1
+    },
+    {
+      "name": "approx_tolerance_inline",
+      "source_ast": ["approx_equal", ["scalar_const", -1, 1], ["scalar_const", 1, 1], 1],
+      "canonical_cbor_hex": "8201850300830000018300000501",
+      "canonical_ast_hash": "sha256:f3aea86d4e605a3918b856e19eee2acf1cf06e018ec4ede008664c3932b0bfd2",
+      "root_operator_id": 768,
+      "output_sort": "Bool",
+      "depth": 1,
+      "node_count": 3
+    },
+    {
+      "name": "conjunction_node",
+      "source_ast": ["top_level_AND", ["task_flag", "t0"], ["context_flag", "c0"]],
+      "canonical_cbor_hex": "82018204828300040083000500",
+      "canonical_ast_hash": "sha256:1ade05f6d868addaa1c46917b650aff7c180f33e8431e19cc9daff0680c8e2ab",
+      "root_operator_id": 1024,
+      "output_sort": "Bool",
+      "depth": 1,
+      "node_count": 3
+    }
+  ],
+  "ast_reject_vectors": [
+    {
+      "name": "implicit_bit_coercion",
+      "source_ast": ["difference", ["bit_at", 0], ["bit_at", 1]],
+      "error_code": "REJECT_IMPLICIT_COERCION"
+    },
+    {
+      "name": "scope_alias_at_formal_boundary",
+      "source_ast": ["aggregate", "sum_v1", "control_volume_primary_only_v1", "q0", []],
+      "error_code": "REJECT_NONCANONICAL_SCOPE_ALIAS"
+    },
+    {
+      "name": "new_symbol_in_old_dsl",
+      "source_ast": ["new_symbol_call", 0],
+      "error_code": "REJECT_NEW_SYMBOL_IN_OLD_DSL"
+    },
+    {
+      "name": "four_clause_conjunction",
+      "source_ast": ["top_level_AND", ["context_flag", "c0"], ["context_flag", "c1"], ["context_flag", "c2"], ["context_flag", "c3"]],
+      "error_code": "REJECT_STRUCTURAL_LIMIT"
+    },
+    {
+      "name": "unknown_expression",
+      "source_ast": ["parity", ["bit_at", 0]],
+      "error_code": "REJECT_UNKNOWN_EXPRESSION"
+    }
+  ],
+  "rfc6962_vectors": [
+    {"name": "records_0", "leaf_count": 0, "record_rule": "schema1_index", "expected_root": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+    {"name": "records_1", "leaf_count": 1, "record_rule": "schema1_index", "expected_root": "104a497cc8d5ab0a833783fe2a9fb3ce5ef54dc8197c29863f30e3d35a620521"},
+    {"name": "records_2", "leaf_count": 2, "record_rule": "schema1_index", "expected_root": "ec9b42c9aee5790eac831e26a9d06cfb062a0c167ce080d185f6fc3ca401dd4d"},
+    {"name": "records_3", "leaf_count": 3, "record_rule": "schema1_index", "expected_root": "dc40076051b08b7998cda3f81d7eb49a930ecad1f4b04ec9cdceec7f0c071b09"},
+    {"name": "records_4", "leaf_count": 4, "record_rule": "schema1_index", "expected_root": "be64f5552e36b0211e5576c796056e116ad58bb19b720d7551502b996b455976"},
+    {"name": "records_5", "leaf_count": 5, "record_rule": "schema1_index", "expected_root": "3d58d6cd64ceb3e5cdee86613b3879480115573ad34a25b822143c373c2f12cf"},
+    {"name": "records_4095", "leaf_count": 4095, "record_rule": "schema1_index", "expected_root": "a26edea583da28fd7a9bcb64f97a94fa17f9645b33953c82c0f3efb22a193d24"},
+    {"name": "records_4096", "leaf_count": 4096, "record_rule": "schema1_index", "expected_root": "bc6d142c76156b1b18d4686516f102b290706986b8dd05508a3214bfd52033c4"},
+    {"name": "records_4097", "leaf_count": 4097, "record_rule": "schema1_index", "expected_root": "04a0a2bc0c19f917e76b2c98ec33bbcbad488153260199dce02648f2304f190d"}
+  ]
+}

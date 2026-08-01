@@ -4,13 +4,27 @@
 **适用对象**：`Hegel Machine` 当前 Phase-2 typed selector 轨道与即将开始的 bounded Phase-3 hidden-law synthesis
 **建议状态**：本稿确认后进入预注册；阈值如需修改，必须在 sealed holdout 生成之前完成并产生新版本号
 
-> **Superseded for Phase-2B/Phase-3 exact execution details**：本稿保留为设计来源，
-> 其 `outside-language` 等早期术语不再是可发布 claim。后续精确决定及 2026-08-01
-> implementation audit 优先；正式名称仅允许绑定具体 DSL、universe、target 与等价关系的
-> `OUTSIDE_FROZEN_CLOSURE(...)`。当前 overall contract 是
-> `hegel-freeze-p2b-p3-v1.0.1`，Phase-3A 里程碑是 **Bounded Frozen-Closure
-> Adequacy**；机器状态为 surface freeze 完成、strict acceptance 与 normative freeze
-> 未完成。未冻结的 strict schema 不得由本稿正文的历史 normative 标签覆盖。
+> **STATUS: `SUPERSEDED_HISTORICAL_DESIGN_SOURCE`**
+>
+> 本稿正文与其中所有“下一步/施工顺序”保留为历史设计来源，不再是当前执行指令。
+> v1.0.2 规范见
+> [strict canonical/certificate freeze](Hegel_Machine_Strict_Canonical_AST_CBOR_Certificate_Bridge_Freeze_v1.0.2.md)，
+> readiness 见
+> [Phase-3 resolution](Hegel_Machine_Phase3_Freeze_Readiness_Resolution.md)。
+>
+> 当前 M1 Python/Rust shared vectors 各 48/48 PASS；M2 两端均接受 64,680 个 unique
+> strict canonical AST，并得到相同 diagnostic set commitment
+> `sha256:c1a02a66a8d6d8f75204cb3daf03ab0b01c2b3b8e486d0ab3d481ee3be43c930` 与
+> ordinal-50,001 hash
+> `sha256:7c7f786c2cc57d31506b3c61d162d175c7f69a2878a089c72c9d053694cba948`。证据为
+> [dual strict gate](../artifacts/phase3_dual_strict_gate_v1.json) 和
+> [dual strict capacity replay](../artifacts/phase3_dual_strict_capacity_replay_v1.json)。
+>
+> `hegel-old-dsl-v1.0.0` 在 50,000 syntactic budget 下的 bounded status 是
+> `DSL_TOO_LARGE`，不是 `COMPLETE`，没有 extensional target/hidden-sink verdict、formal
+> roots、outside/MDL certificate 或 ACTIVE authorization。当前唯一 next action 是发布新
+> old-DSL version，按 frozen shrink step 1 删除 `mean_v1`/`min_v1`/`max_v1`，并重建
+> target/validation commitments；不得从本稿正文恢复旧施工顺序。
 
 ---
 

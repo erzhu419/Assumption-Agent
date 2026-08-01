@@ -126,7 +126,7 @@ def mdl_receipt(
 
 def test_decided_old_dsl_surface_and_limits_are_frozen():
     contract = DEFAULT_PHASE3_PREREGISTRATION
-    assert contract.freeze_version == "hegel-freeze-p2b-p3-v1.0.1"
+    assert contract.freeze_version == "hegel-freeze-p2b-p3-v1.0.2"
     assert contract.sorts == FROZEN_SORTS
     assert contract.leaves == FROZEN_LEAVES
     assert contract.operators == FROZEN_OPERATORS
@@ -188,29 +188,27 @@ def test_exact_bindings_are_resolved_and_implementations_remain_blocked():
         ReadinessBlocker.PARITY_TARGET,
         ReadinessBlocker.HIDDEN_SINK_CONTROL,
         ReadinessBlocker.HIDDEN_GENERATOR,
+        ReadinessBlocker.CANONICALIZER,
+        ReadinessBlocker.CANONICAL_AST_SCHEMA,
+        ReadinessBlocker.CAPACITY_CLASSIFICATION,
     ):
         assert blocker not in contract.readiness_blockers
     assert contract.readiness_blockers == (
-        ReadinessBlocker.CANONICALIZER,
         ReadinessBlocker.ENUMERATOR,
-        ReadinessBlocker.CANONICAL_AST_SCHEMA,
         ReadinessBlocker.PROGRAM_OUTPUT_ARCHIVE,
         ReadinessBlocker.PYTHON_CLOSURE_REPLAY,
         ReadinessBlocker.RUST_CLOSURE_REPLAY,
         ReadinessBlocker.LATEST_KEY_STATUS,
         ReadinessBlocker.FORMAL_MERKLE_ROOTS,
-        ReadinessBlocker.CAPACITY_CLASSIFICATION,
         ReadinessBlocker.SEALED_CLOSURE_VERIFIER,
     )
     assert not contract.ready_for_outside_certificate
     assert ready_contract().readiness_blockers == (
-        ReadinessBlocker.CANONICAL_AST_SCHEMA,
         ReadinessBlocker.PROGRAM_OUTPUT_ARCHIVE,
         ReadinessBlocker.PYTHON_CLOSURE_REPLAY,
         ReadinessBlocker.RUST_CLOSURE_REPLAY,
         ReadinessBlocker.LATEST_KEY_STATUS,
         ReadinessBlocker.FORMAL_MERKLE_ROOTS,
-        ReadinessBlocker.CAPACITY_CLASSIFICATION,
         ReadinessBlocker.SEALED_CLOSURE_VERIFIER,
     )
     assert not ready_contract().ready_for_outside_certificate
@@ -553,19 +551,60 @@ def test_phase3_readiness_report_never_claims_an_outside_result():
     )
     assert report["hidden_sink_role"] == "in_language_null_control_only"
     assert report["surface_parameter_freeze_complete"] is True
-    assert report["strict_acceptance_contract_complete"] is False
-    assert report["normative_parameter_freeze_complete"] is False
+    assert report["strict_acceptance_contract_complete"] is True
+    assert report["strict_acceptance_specification_complete"] is True
+    assert report["normative_parameter_freeze_complete"] is True
+    assert report["strict_acceptance_implementation_verified"] is True
+    assert report["formal_root_generation_allowed"] is False
+    assert report["specification_resolution_blockers"] == []
+    assert report["certificate_specification_ready"] is True
+    assert report["certificate_implementation_ready"] is False
+    assert report["certificate_issuance_ready"] is False
     assert (
         report["closure_capacity_preflight"]["status"]
-        == "CONDITIONAL_CAPACITY_LOWER_BOUND_EXCEEDS_BUDGET"
+        == "DSL_TOO_LARGE"
     )
-    assert report["closure_capacity_preflight"]["executed_closure_status"] == "NOT_RUN"
+    assert report["closure_capacity_preflight"]["executed_closure_status"] == (
+        "DSL_TOO_LARGE"
+    )
+    assert report["closure_capacity_preflight"]["capacity_condition_discharged"] is True
+    assert report["closure_capacity_preflight"][
+        "accepted_unique_canonical_ast_count"
+    ] == 64_680
+    assert report["closure_capacity_preflight"]["dsl_too_large_claim_allowed"] is True
+    assert report["closure_capacity_preflight"]["complete_closure_enumerated"] is False
+    assert report["closure_capacity_preflight"]["formal_archive_roots_generated"] is False
     assert report["target_freeze"]["universe_rows"] == 480
     assert report["target_freeze"]["formal_bounded_universe_root"] is None
     assert report["target_freeze"]["formal_target_truth_table_root"] is None
     assert report["hidden_sink_control"]["universe_rows"] == 85
     assert report["hidden_sink_control"]["formal_bounded_universe_root"] is None
     assert report["hidden_sink_control"]["formal_target_truth_table_root"] is None
+    assert report["hidden_sink_control"]["scope_alias_confirmation_pending"] is False
+    assert report["hidden_sink_control"]["scope_alias_status"] == (
+        "RESOLVED_SOURCE_ONLY"
+    )
+    assert report["hidden_sink_control"]["baseline_scope_id"] == (
+        "scope_primary_only_v1"
+    )
+    assert report["hidden_sink_control"][
+        "formal_canonicalizer_accepts_source_alias"
+    ] is False
+    assert report["hidden_sink_control"]["formal_in_language_verdict_allowed"] is False
+    assert report["xor2_sanity"]["implicit_bit_to_rational_coercion_frozen"] is False
+    assert report["formal_roots"] is None
+    assert report["executed_closure_status"] == "DSL_TOO_LARGE"
+    assert report["dsl_too_large_claim_allowed"] is True
+    assert report["target_synthesis_allowed"] is False
+    assert report["outside_certificate_allowed"] is False
+    assert report["mdl_certificate_allowed"] is False
+    assert report["phase2b_formal_exit"] is False
+    assert report["next_gate"] == (
+        "PUBLISH_SHRUNK_OLD_DSL_VERSION_USING_FROZEN_STEP_1"
+    )
+    assert report["next_frozen_shrink_step"] == (
+        "remove mean_v1, min_v1, max_v1"
+    )
     assert report["unbounded_outside_language_claim_prohibited"] is True
     assert report["shadow_only"] is True
     assert report["active_promotion_authorized"] is False

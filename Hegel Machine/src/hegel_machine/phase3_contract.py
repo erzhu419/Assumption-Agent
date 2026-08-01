@@ -1,16 +1,17 @@
 """Fail-closed preregistration contracts for bounded Phase-3 work.
 
 This module binds the frozen old-language surface tables, target, control, and
-MDL parameters from ``hegel-freeze-p2b-p3-v1.0.1``.  A surface-parameter
-freeze is not a complete strict-schema freeze or execution: the canonical-AST
-schema, complete enumerators, program-output replay, independent Rust
-implementation, trusted key-status path, and formal MDL scorer remain
-machine-readable blockers.
+MDL parameters through ``hegel-freeze-p2b-p3-v1.0.2``.  The strict canonical
+AST/CBOR, certificate bridge, and MDL wire are complete as specifications, but
+the strict acceptance implementations have now passed the independent
+Python/Rust golden vectors and the 64,680-program capacity replay.  Complete
+enumerators, program-output replay, trusted key-status execution, and the
+formal MDL scorer remain machine-readable implementation blockers.
 
 The module is independent of the Phase-2 selector and does not authorize an
-ACTIVE theory mutation.  A future strict-schema amendment may fill the formal
-Merkle-root and implementation bindings, but an independently replaying
-evaluator must also be implemented before
+ACTIVE theory mutation.  The verified capacity replay establishes only
+``DSL_TOO_LARGE`` for the bounded old DSL; formal Merkle roots remain null and
+an independently replaying complete evaluator must still be implemented before
 ``OUTSIDE_FROZEN_CLOSURE`` can be issued.  Self-declared receipt fields are
 never treated as a certificate.
 """
@@ -28,9 +29,8 @@ from .hashing import stable_hash
 from .phase3_certificate_v1 import (
     AST_SHAPE_PREFIXES,
     BINARY_TOKEN_CODES,
-    CANONICAL_AST_SCHEMA_IMPLEMENTED,
     FIXED_POINT_PRECISION_ID,
-    FREEZE_VERSION as PHASE3_OVERALL_FREEZE_VERSION,
+    FREEZE_VERSION as PHASE3_INHERITED_SURFACE_FREEZE_VERSION,
     FORMAL_MDL_AST_SCORER_IMPLEMENTED,
     FORMAL_OUTSIDE_CERTIFICATE_ISSUANCE_IMPLEMENTED,
     LATEST_KEY_STATUS_RESOLVER_IMPLEMENTED,
@@ -42,14 +42,17 @@ from .phase3_certificate_v1 import (
     RATIONAL_PARAMETER_CODES,
     RUST_CLOSURE_REPLAY_IMPLEMENTED,
     SCOPE_CLAUSE_COUNT_CODES,
-    SPECIFICATION_RESOLUTION_BLOCKERS,
     TERNARY_TOKEN_CODES,
     TOLERANCE_CODES,
     UNARY_TOKEN_CODES,
 )
 from .phase3_closure_preflight import (
     CAPACITY_PROOF,
-    CONDITIONAL_CAPACITY_STATUS,
+    DSL_TOO_LARGE_STATUS,
+    DUAL_STRICT_CAPACITY_REPLAY_REPORT_ID,
+    DUAL_STRICT_GATE_REPORT_ID,
+    FIRST_OUT_OF_BUDGET_AST_HASH,
+    STRICT_CAPACITY_SET_COMMITMENT,
 )
 from .phase3_dsl_v1 import (
     AGGREGATE_CATALOG,
@@ -74,6 +77,25 @@ from .phase3_dsl_v1 import (
 
 
 PHASE3_CONTRACT_SCHEMA_VERSION = "hegel-machine-phase3-preregistration/1"
+PHASE3_OVERALL_FREEZE_VERSION = "hegel-freeze-p2b-p3-v1.0.2"
+CANONICAL_CBOR_PROFILE_ID = "hegel-cbor-det-v1"
+CANONICAL_AST_SCHEMA_ID = "hegel-canonical-ast-v1"
+Q32_REFERENCE_ALGORITHM_ID = "hegel-mpfr-log2-q32-v1"
+NEW_REDUCER_V1_HEADER = 0x4852
+
+SURFACE_PARAMETER_FREEZE_COMPLETE = True
+STRICT_ACCEPTANCE_CONTRACT_COMPLETE = True
+NORMATIVE_PARAMETER_FREEZE_COMPLETE = True
+STRICT_ACCEPTANCE_IMPLEMENTATION_VERIFIED = True
+FORMAL_ROOT_GENERATION_ALLOWED = False
+TARGET_SYNTHESIS_ALLOWED = False
+OUTSIDE_CERTIFICATE_ALLOWED = False
+MDL_CERTIFICATE_ALLOWED = False
+PHASE2B_FORMAL_EXIT = False
+ACTIVE_PROMOTION_ALLOWED = False
+
+if PHASE3_INHERITED_SURFACE_FREEZE_VERSION != "hegel-freeze-p2b-p3-v1.0.1":
+    raise AssertionError("v1.0.2 must inherit the frozen v1.0.1 surface")
 
 # These are deliberately hard-disabled implementation facts, rather than
 # constructor inputs a caller could set.  The current module defines wire
@@ -130,8 +152,9 @@ FROZEN_MDL_CODE_TABLE_ID = stable_hash(
             "QuantityId:1",
             "scope_extension_code",
         ),
+        "canonical_ast_schema_id": CANONICAL_AST_SCHEMA_ID,
         "new_reducer_definition": (
-            "NEW_REDUCER_V1 header:16 (literal bits unresolved)",
+            f"NEW_REDUCER_V1 header:16 value=0x{NEW_REDUCER_V1_HEADER:04X}",
             "arity:Elias-delta",
             "input_sort_ids:4_each",
             "output_sort_id:4",
@@ -147,6 +170,7 @@ FROZEN_MDL_CODE_TABLE_ID = stable_hash(
         "invention_split_rows": (192, 96, 192, 480),
         "decimal_precision": MDL_DECIMAL_PRECISION,
         "rounding": "ceil_to_unsigned_Q32",
+        "q32_reference_algorithm_id": Q32_REFERENCE_ALGORITHM_ID,
     },
     prefix="mdl_code_table_",
 )
@@ -167,25 +191,23 @@ FROZEN_HIDDEN_GENERATOR_SPEC_ID = stable_hash(
     },
     prefix="hidden_generator_spec_",
 )
+FROZEN_STRICT_ACCEPTANCE_GATE_ID = DUAL_STRICT_GATE_REPORT_ID
 
 FROZEN_OUTSIDE_CERTIFICATE_IMPLEMENTATION_BLOCKERS = (
     "formal_outside_certificate_issuance_unimplemented",
-    "canonical_cbor_backend_not_declared_as_project_dependency",
-    "canonical_ast_schema_unimplemented",
+    "diagnostic_formal_bridge_unimplemented",
     "program_output_archive_replay_unimplemented",
     "python_closure_replay_unimplemented",
     "rust_closure_replay_unimplemented",
     "latest_key_status_resolver_unimplemented",
-    "ed25519_wire_and_trust_anchor_unfrozen",
+    "ed25519_three_of_three_envelope_not_issued",
 )
 FROZEN_FORMAL_MDL_IMPLEMENTATION_BLOCKERS = (
-    "canonical_cbor_backend_not_declared_as_project_dependency",
-    "canonical_ast_schema_unimplemented",
     "formal_mdl_ast_scorer_unimplemented",
     "python_mdl_replay_unimplemented",
     "rust_mdl_replay_unimplemented",
-    "mdl_ast_and_new_symbol_wire_schema_unfrozen",
-    "cross_language_q32_log2_reference_algorithm_unfrozen",
+    "mdl_ast_and_new_symbol_wire_replay_unverified",
+    "cross_language_q32_log2_replay_unverified",
 )
 
 
@@ -279,24 +301,26 @@ class ReadinessBlocker(str, Enum):
     TARGET_TRUTH_TABLE = "target_table_diagnostic_id_not_frozen"
     OPERATOR_SEMANTICS = "operator_semantics_not_frozen"
     EQUIVALENCE_CONTRACT = "equivalence_contract_not_frozen"
-    CANONICALIZER = "canonicalizer_not_frozen"
-    ENUMERATOR = "enumerator_not_frozen"
+    CANONICALIZER = "canonicalizer_implementation_not_bound"
+    ENUMERATOR = "enumerator_implementation_not_bound"
     MDL_CODE_TABLE = "mdl_code_table_not_frozen"
     PARITY_TARGET = "parity_target_not_frozen"
     HIDDEN_SINK_CONTROL = "hidden_sink_control_not_frozen"
     HIDDEN_SINK_UNIVERSE = "hidden_sink_universe_diagnostic_id_not_frozen"
     HIDDEN_SINK_TRUTH_TABLE = "hidden_sink_target_table_diagnostic_id_not_frozen"
     HIDDEN_GENERATOR = "hidden_generator_not_frozen"
-    CANONICAL_AST_SCHEMA = "canonical_ast_strict_schema_not_frozen"
+    CANONICAL_AST_SCHEMA = (
+        "strict_acceptance_implementation_not_dual_verified"
+    )
     PROGRAM_OUTPUT_ARCHIVE = "program_output_archive_replay_not_implemented"
     PYTHON_CLOSURE_REPLAY = "python_complete_closure_replay_not_implemented"
     RUST_CLOSURE_REPLAY = "rust_complete_closure_replay_not_implemented"
     LATEST_KEY_STATUS = "latest_key_status_resolver_not_implemented"
     FORMAL_MERKLE_ROOTS = (
-        "formal_cbor_rfc6962_universe_and_truth_roots_not_frozen"
+        "formal_cbor_rfc6962_universe_and_truth_roots_not_generated"
     )
     CAPACITY_CLASSIFICATION = (
-        "conditional_capacity_lower_bound_requires_formal_canonicalizer"
+        "conditional_capacity_lower_bound_requires_strict_dual_replay"
     )
     SEALED_CLOSURE_VERIFIER = "sealed_closure_verifier_not_implemented"
 
@@ -332,9 +356,10 @@ _BLOCKER_FIELDS = (
 class Phase3PrerequisiteContract:
     """Content-addressed freeze manifest for the Phase-3 preregistration.
 
-    Surface and diagnostic IDs are resolved in the default instance.  Formal
-    CBOR/Merkle roots and executable implementation IDs remain unresolved;
-    merely naming a primitive or banning ``parity`` cannot fill them.
+    Surface, diagnostic, and strict-canonicalizer gate IDs are resolved in the
+    default instance.  Formal CBOR/Merkle roots and the complete-enumerator
+    implementation ID remain unresolved; merely naming a primitive or banning
+    ``parity`` cannot fill them.
     """
 
     schema_version: str = PHASE3_CONTRACT_SCHEMA_VERSION
@@ -352,7 +377,7 @@ class Phase3PrerequisiteContract:
     target_table_diagnostic_id: str | None = FROZEN_TARGET_TABLE_DIAGNOSTIC_ID
     operator_semantics_id: str | None = FROZEN_OPERATOR_SEMANTICS_ID
     equivalence_contract_id: str | None = FROZEN_EQUIVALENCE_CONTRACT_ID
-    canonicalizer_implementation_id: str | None = None
+    canonicalizer_implementation_id: str | None = FROZEN_STRICT_ACCEPTANCE_GATE_ID
     enumerator_implementation_id: str | None = None
     mdl_code_table_id: str | None = FROZEN_MDL_CODE_TABLE_ID
     parity_target_id: str | None = FROZEN_PARITY_TARGET_ID
@@ -466,7 +491,7 @@ class Phase3PrerequisiteContract:
             for blocker, field_name in _BLOCKER_FIELDS
             if getattr(self, field_name) is None
         )
-        if not CANONICAL_AST_SCHEMA_IMPLEMENTED:
+        if not STRICT_ACCEPTANCE_IMPLEMENTATION_VERIFIED:
             blockers += (ReadinessBlocker.CANONICAL_AST_SCHEMA,)
         if not PROGRAM_OUTPUT_ARCHIVE_REPLAY_IMPLEMENTED:
             blockers += (ReadinessBlocker.PROGRAM_OUTPUT_ARCHIVE,)
@@ -477,8 +502,6 @@ class Phase3PrerequisiteContract:
         if not LATEST_KEY_STATUS_RESOLVER_IMPLEMENTED:
             blockers += (ReadinessBlocker.LATEST_KEY_STATUS,)
         blockers += (ReadinessBlocker.FORMAL_MERKLE_ROOTS,)
-        if CAPACITY_PROOF.capacity_status == CONDITIONAL_CAPACITY_STATUS:
-            blockers += (ReadinessBlocker.CAPACITY_CLASSIFICATION,)
         if not SEALED_CLOSURE_VERIFIER_IMPLEMENTED:
             blockers += (ReadinessBlocker.SEALED_CLOSURE_VERIFIER,)
         return blockers
@@ -1037,14 +1060,26 @@ def phase3_preregistration_report() -> dict[str, object]:
             "phase3_contract_source_sha256_"
             + hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
         ),
-        "status": "surface_parameter_freeze_with_execution_and_schema_blockers",
+        "status": "STRICT_GATE_VERIFIED_DSL_TOO_LARGE_SHRINK_REQUIRED",
+        "inherited_surface_freeze_version": (
+            PHASE3_INHERITED_SURFACE_FREEZE_VERSION
+        ),
         "formal_phase3a_claim": False,
+        "executed_closure_status": DSL_TOO_LARGE_STATUS,
+        "formal_roots": None,
+        "formal_cbor_archive": False,
+        "dsl_too_large_claim_allowed": True,
+        "target_synthesis_allowed": TARGET_SYNTHESIS_ALLOWED,
+        "outside_certificate_allowed": OUTSIDE_CERTIFICATE_ALLOWED,
+        "mdl_certificate_allowed": MDL_CERTIFICATE_ALLOWED,
+        "phase2b_formal_exit": PHASE2B_FORMAL_EXIT,
+        "active_promotion_allowed": ACTIVE_PROMOTION_ALLOWED,
         "unbounded_outside_language_certificate_issued": False,
         "outside_frozen_closure_certificate_issued": False,
         "unbounded_outside_language_claim_prohibited": True,
         "only_authorized_future_claim": (
-            "OUTSIDE_FROZEN_CLOSURE(dsl_version, bounded_universe_root, "
-            "target_truth_table_root, equivalence=exact_extensional)"
+            "OUTSIDE_FROZEN_CLOSURE(dsl_version, universe_root, target_root, "
+            "exact_extensional)"
         ),
         "ready_for_outside_certificate": contract.ready_for_outside_certificate,
         "closure_receipt_semantics_replayed": False,
@@ -1053,12 +1088,39 @@ def phase3_preregistration_report() -> dict[str, object]:
         ),
         "mdl_numeric_threshold_is_formal_gate": False,
         "sealed_mdl_scorer_implemented": SEALED_MDL_SCORER_IMPLEMENTED,
-        "surface_parameter_freeze_complete": True,
-        "strict_acceptance_contract_complete": False,
-        "normative_parameter_freeze_complete": False,
-        "specification_resolution_blockers": list(
-            SPECIFICATION_RESOLUTION_BLOCKERS
+        "surface_parameter_freeze_complete": SURFACE_PARAMETER_FREEZE_COMPLETE,
+        "strict_acceptance_contract_complete": (
+            STRICT_ACCEPTANCE_CONTRACT_COMPLETE
         ),
+        "strict_acceptance_specification_complete": (
+            STRICT_ACCEPTANCE_CONTRACT_COMPLETE
+        ),
+        "normative_parameter_freeze_complete": (
+            NORMATIVE_PARAMETER_FREEZE_COMPLETE
+        ),
+        "strict_acceptance_implementation_verified": (
+            STRICT_ACCEPTANCE_IMPLEMENTATION_VERIFIED
+        ),
+        "formal_root_generation_allowed": FORMAL_ROOT_GENERATION_ALLOWED,
+        "specification_resolution_blockers": [],
+        "strict_acceptance_specification": {
+            "canonical_cbor_profile_id": CANONICAL_CBOR_PROFILE_ID,
+            "canonical_ast_schema_id": CANONICAL_AST_SCHEMA_ID,
+            "normative_backend": "PROJECT_MINIMAL_ENCODER",
+            "implicit_bit_to_rational_coercion": False,
+            "scope_alias_is_source_only": True,
+            "certificate_groups_resolved_in_spec": [
+                f"CERT_{index:02d}" for index in range(1, 10)
+            ],
+            "implementation_verified": True,
+            "gate_status": "VERIFIED",
+            "gate_report_id": DUAL_STRICT_GATE_REPORT_ID,
+            "python_golden_vectors_passed": 48,
+            "rust_golden_vectors_passed": 48,
+        },
+        "certificate_specification_ready": True,
+        "certificate_implementation_ready": False,
+        "certificate_issuance_ready": False,
         "outside_certificate_capability_blockers": list(
             FROZEN_OUTSIDE_CERTIFICATE_IMPLEMENTATION_BLOCKERS
         ),
@@ -1087,11 +1149,11 @@ def phase3_preregistration_report() -> dict[str, object]:
                 contract.hidden_sink_target_table_diagnostic_id
             ),
             "hidden_generator_spec_id": contract.hidden_generator_spec_id,
+            "strict_acceptance_gate_report_id": (
+                FROZEN_STRICT_ACCEPTANCE_GATE_ID
+            ),
         },
         "unresolved_implementation_bindings": {
-            "canonicalizer_implementation_id": (
-                contract.canonicalizer_implementation_id
-            ),
             "enumerator_implementation_id": contract.enumerator_implementation_id,
         },
         "frozen_limits": {
@@ -1135,18 +1197,33 @@ def phase3_preregistration_report() -> dict[str, object]:
             "shrink_order": [step.operation for step in SHRINK_ORDER],
         },
         "closure_capacity_preflight": {
-            "status": CONDITIONAL_CAPACITY_STATUS,
-            "executed_closure_status": "NOT_RUN",
+            "status": DSL_TOO_LARGE_STATUS,
+            "executed_closure_status": DSL_TOO_LARGE_STATUS,
+            "capacity_condition_discharged": True,
             "candidate_ast_lower_bound": (
                 CAPACITY_PROOF.witness_candidate_ast_count
             ),
+            "accepted_unique_canonical_ast_count": (
+                CAPACITY_PROOF.witness_candidate_ast_count
+            ),
             "canonical_program_budget": CAPACITY_PROOF.canonical_program_budget,
-            "strict_canonicalizer_acceptance_verified": False,
-            "formal_canonical_cbor_replay_complete": False,
+            "strict_rewrite_application_pending": False,
+            "strict_canonicalizer_acceptance_verified": True,
+            "dual_strict_capacity_replay_complete": True,
+            "dual_strict_capacity_replay_report_id": (
+                DUAL_STRICT_CAPACITY_REPLAY_REPORT_ID
+            ),
+            "accepted_set_commitment": STRICT_CAPACITY_SET_COMMITMENT,
+            "accepted_set_commitment_is_formal_root": False,
+            "first_out_of_budget_ordinal": 50_001,
+            "first_out_of_budget_ast_hash": FIRST_OUT_OF_BUDGET_AST_HASH,
+            "complete_closure_enumerated": False,
+            "formal_archive_roots_generated": False,
+            "dsl_too_large_claim_allowed": True,
             "conclusion": (
-                "If the strict canonicalizer accepts the diagnostic subset "
-                "without extra algebraic reductions, the DSL is DSL_TOO_LARGE; "
-                "that implication is not yet a formal closure result."
+                "Independent Python and Rust strict replay accepted the same "
+                "64,680 unique canonical ASTs and the same 50,001st witness. "
+                "The bounded old DSL is DSL_TOO_LARGE, not COMPLETE."
             ),
         },
         "target_freeze": {
@@ -1225,27 +1302,41 @@ def phase3_preregistration_report() -> dict[str, object]:
             "source_document_baseline_alias": (
                 OBSERVED_OMITTED_SINK_CONTROL.source_document_baseline_label
             ),
-            "scope_alias_confirmation_pending": True,
+            "scope_alias_confirmation_pending": False,
+            "scope_alias_status": "RESOLVED_SOURCE_ONLY",
+            "scope_alias_semantic_identity": True,
+            "fifth_scope_added": False,
+            "formal_canonicalizer_accepts_source_alias": False,
+            "legacy_migration_adapter_may_rewrite_alias": True,
             "formal_control_run_complete": False,
+            "formal_in_language_verdict_allowed": False,
         },
         "mdl_freeze": {
             "code_table_version": MDL_CODE_TABLE_ID,
             "code_table_content_id": FROZEN_MDL_CODE_TABLE_ID,
             "fixed_point_precision": FIXED_POINT_PRECISION_ID,
+            "canonical_ast_wire_frozen": True,
+            "new_symbol_wire_frozen": True,
+            "new_reducer_v1_header_uint": NEW_REDUCER_V1_HEADER,
+            "q32_reference_algorithm_id": Q32_REFERENCE_ALGORITHM_ID,
+            "q32_reference_algorithm_frozen": True,
             "formal_scorer_status": "HARD_DISABLED",
             "caller_supplied_lengths_are_formal_evidence": False,
         },
         "shadow_only": contract.shadow_only,
         "active_promotion_authorized": contract.active_promotion_authorized,
+        "next_gate": "PUBLISH_SHRUNK_OLD_DSL_VERSION_USING_FROZEN_STEP_1",
+        "next_frozen_shrink_step": SHRINK_ORDER[0].operation,
         "claim_boundary": (
             "This artifact binds the frozen surface tables for the DSL, target, "
             "null control, closure budget, certificate, and MDL code table, plus "
-            "diagnostic canonical-JSON content IDs. Formal canonical-CBOR/RFC6962 "
-            "roots, strict acceptance, and wire schemas remain unresolved. It is "
-            "not a complete "
-            "closure, a DSL_TOO_LARGE result, an extensional target verdict, a "
-            "hidden-sink result, an outside certificate, a formal MDL gate, or "
-            "a sealed Phase-3A result."
+            "the v1.0.2 strict canonical-AST/CBOR, bridge, certificate, and MDL "
+            "specifications. Independent strict implementations and the 64,680 "
+            "capacity subset are verified, establishing DSL_TOO_LARGE for this "
+            "bounded old DSL. This is not COMPLETE; all formal roots remain "
+            "null, and it is not an extensional target verdict, a hidden-sink "
+            "verdict, an outside certificate, a formal MDL gate, or a sealed "
+            "Phase-3A result."
         ),
     }
     payload["report_id"] = stable_hash(payload, prefix="phase3_prereg_report_")

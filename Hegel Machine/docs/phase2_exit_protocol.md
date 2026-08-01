@@ -143,33 +143,47 @@ table，scale map 固定为 identity；两者都不从 selected output 事后拟
 ## Phase 3 入口
 
 Phase-2B/Phase-3 overall contract 已由 implementation audit 修订为
-`hegel-freeze-p2b-p3-v1.0.1`：`411876909552964556` 保持 master/bootstrap seed，
+`hegel-freeze-p2b-p3-v1.0.2`：`411876909552964556` 保持 master/bootstrap seed，
 sklearn `random_state` 使用冻结的 domain-separated SHA-256 → uint32 值
-`2611585425`；不可执行的 v1.0.0 直接 64-bit 绑定已被 supersede。
+`2611585425`；v1.0.2 还冻结 strict AST/CBOR 与 certificate bridge 规范。
 
-统计与 DSL surface 参数冻结后，下一工程切片的唯一里程碑名称是
+下一工程切片的唯一里程碑名称是
 **Phase-3A Bounded Frozen-Closure Adequacy**。这里的状态是
 `surface_parameter_freeze_complete = true`、
-`strict_acceptance_contract_complete = false`、
-`normative_parameter_freeze_complete = false`；不是无边界 outside-language claim。
+`strict_acceptance_contract_complete = true`、
+`normative_parameter_freeze_complete = true`、
+`strict_acceptance_implementation_verified = true`。
 
-1. 冻结 strict canonical AST node CBOR schema、允许的 normalization/rewrite 和精确
-   node-counting semantics；
-2. 用正式 canonicalizer 重放 64,680 个 diagnostic witnesses；若全部被接受，才报告
-   `DSL_TOO_LARGE`、发布新 DSL version 并执行 frozen shrink step 1；否则继续完整枚举；
-3. 在 executed closure 不再是 `NOT_RUN` 后，对 480-row generic odd-cardinality target
-   做完整 extensional membership test，
-   并对 85-row observed omitted-channel control 做 no-false-invention test；
-4. 保持 candidate/shadow-only，不提前打开 LANGUAGE compiler 或 ACTIVE graph。
+M1 的 Python/Rust shared vectors 各 48/48 PASS。M2 两端均接受 64,680 个 source
+candidates，得到 64,680 个 unique strict canonical AST；共同 diagnostic commitment 为
+`sha256:c1a02a66a8d6d8f75204cb3daf03ab0b01c2b3b8e486d0ab3d481ee3be43c930`，ordinal
+50,001 的 AST hash 为
+`sha256:7c7f786c2cc57d31506b3c61d162d175c7f69a2878a089c72c9d053694cba948`。因此
+`hegel-old-dsl-v1.0.0` 在 50,000 syntactic budget 下的 bounded status 是
+`DSL_TOO_LARGE`。证据见
+[dual strict gate](../artifacts/phase3_dual_strict_gate_v1.json) 和
+[dual strict capacity replay](../artifacts/phase3_dual_strict_capacity_replay_v1.json)。
+
+这不是 `COMPLETE`，没有 extensional target verdict、hidden-sink formal verdict、formal
+roots、outside/MDL certificate 或 ACTIVE authorization。下一施工顺序已由 frozen transition
+决定：
+
+1. 发布新的 old-DSL version；
+2. 执行 shrink step 1，删除 `mean_v1`、`min_v1`、`max_v1`；
+3. 重建 target/validation commitments，让新版本 closure 从 `NOT_RUN` 开始；
+4. 只有新版本未来得到 `COMPLETE`，才允许做 target extensional membership 与
+   hidden-sink formal test；
+5. 始终保持 candidate/shadow-only，不提前打开 LANGUAGE compiler 或 ACTIVE graph。
 
 当前 untrusted receipt wire 已绑定完整 `dsl_spec_id`、`operator_semantics_id`、
 equivalence/enumerator/search-budget，并按 `target_role` 分别绑定 480-row outside target 与
-85-row null control 各自独立的 diagnostic universe/truth IDs。正式
-canonical-CBOR/RFC6962 roots 尚未冻结。wire 允许用“已接受 50,000 个 canonical
-program + 第 50,001 个 program ID”表达 `DSL_TOO_LARGE`，但 sealed verifier 尚未实现；
-因此当前 closure 仍是 `NOT_RUN`，任何调用者提供的 receipt 都不能升级 formal claim。
+85-row null control 各自独立的 diagnostic universe/truth IDs。v1.0.2 已冻结 formal bridge
+schema，但 M2 set commitment 不是 canonical-CBOR/RFC6962 root，正式 roots 仍为 `null`。
+caller-supplied receipt 仍不能升级 claim；当前 bounded transition 来自双实现 artifact，也只
+授权 shrink，不授权 adequacy 或 certificate。
 
-当前 implementation / certificate blockers 见
-[`phase3_freeze_readiness.md`](phase3_freeze_readiness.md)，已解决决策与待 machine-readable
-消歧项见
-[`questions_for_gpt_phase2b_phase3_freeze.md`](questions_for_gpt_phase2b_phase3_freeze.md)。
+v1.0.2 规范见
+[`Hegel_Machine_Strict_Canonical_AST_CBOR_Certificate_Bridge_Freeze_v1.0.2.md`](Hegel_Machine_Strict_Canonical_AST_CBOR_Certificate_Bridge_Freeze_v1.0.2.md)，
+当前 readiness 决议见
+[`Hegel_Machine_Phase3_Freeze_Readiness_Resolution.md`](Hegel_Machine_Phase3_Freeze_Readiness_Resolution.md)。
+旧 readiness/questions 文件保留为带 superseded banner 的审计快照。

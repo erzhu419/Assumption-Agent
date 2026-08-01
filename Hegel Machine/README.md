@@ -34,17 +34,54 @@ Phase-2B formal track（精确协议已冻结，尚未资格化）：
   → prediction commitment before answer reveal
   → one-shot independent-custodian scoring                    [目标，未实现]
 
-Phase-3A **Bounded Frozen-Closure Adequacy**（surface 参数已冻结，normative complete=false）：
+Phase-3A **Bounded Frozen-Closure Adequacy**（M1/M2 已执行，bounded overflow）：
 
 hegel-old-dsl-v1.0.0 + 480-row target + 85-row null control
-  → strict canonical AST/CBOR acceptance                      [尚未冻结]
-  → complete canonical closure enumeration                    [status=NOT_RUN]
-  → Python + Rust independent replay + 3/3 certificate        [尚未执行]
-  → Q32 MDL scorer replay                                     [formal gate 关闭]
+  → strict canonical AST/CBOR + certificate bridge spec       [已冻结]
+  → Python/Rust shared strict vectors                          [48/48 PASS each]
+  → 64,680 strict capacity replay                             [64,680 unique each]
+  → bounded syntactic-budget status                            [DSL_TOO_LARGE]
+  → complete closure / extensional target verdict              [NOT AVAILABLE]
+  → formal archives + 3/3 certificate                          [未生成/未签发]
+  → new DSL version + frozen shrink step 1                     [NEXT ACTION]
+  → regenerate commitments; new version starts at NOT_RUN
+  → rerun closure; only COMPLETE may enter target/null evaluation
+  → outside certificate                                       [formal gate 关闭]
+  → relation synthesis + Q32 MDL scorer replay                [formal gate 关闭]
   → shadow-only conservative integration
 ```
 
-已实现：
+Phase-3 的 M1/M2 证据见
+[dual strict gate artifact](artifacts/phase3_dual_strict_gate_v1.json) 与
+[dual strict capacity replay artifact](artifacts/phase3_dual_strict_capacity_replay_v1.json)。
+规范层决定见
+[v1.0.2 strict canonical/certificate freeze](docs/Hegel_Machine_Strict_Canonical_AST_CBOR_Certificate_Bridge_Freeze_v1.0.2.md)，
+当前准入状态见
+[Phase-3 readiness resolution](docs/Hegel_Machine_Phase3_Freeze_Readiness_Resolution.md)。
+
+```text
+strict specification frozen = true
+strict implementation verified = true (Python 48/48; Rust 48/48)
+accepted strict canonical count = 64,680 unique on each implementation
+executed bounded status = DSL_TOO_LARGE
+complete closure enumerated = false
+extensional target verdict = null
+formal roots = null
+outside / MDL certificate issued = false
+```
+
+共同 diagnostic set commitment 是
+`sha256:c1a02a66a8d6d8f75204cb3daf03ab0b01c2b3b8e486d0ab3d481ee3be43c930`；ordinal
+50,001 的 strict AST hash 是
+`sha256:7c7f786c2cc57d31506b3c61d162d175c7f69a2878a089c72c9d053694cba948`。前者不是
+formal RFC6962 root，后者不是 closure cardinality 或 target-match 证据。
+
+下一动作是发布新 old-DSL version，按 frozen shrink step 1 删除 `mean_v1`、`min_v1`、
+`max_v1`，重建 target/validation commitments，并让新版本从 `NOT_RUN` 开始。当前
+NO-GO 包括：把当前状态写成 `COMPLETE`、extensional target verdict、target synthesis、
+hidden-sink formal verdict、outside/MDL certificate、Phase-2B formal exit 与 ACTIVE。
+
+已实现或已冻结：
 
 - 统一、不可变、内容寻址的 `TheoryState`；
 - observation / probe / scale / law / candidate / theory patch / evidence schema；
@@ -88,10 +125,11 @@ hegel-old-dsl-v1.0.0 + 480-row target + 85-row null control
   = 572 个 derived pairs；每 cell 的 positive 为 19 个 unique-scale + 1 个
   admissible-scale-set，margin 为 21/18/12/9；family IDs、baseline config、10,000 次
   paired-cluster bootstrap、footprint/importance、rerun 与 validation policy 均已固定。
-  overall freeze 是 `hegel-freeze-p2b-p3-v1.0.1`：v1.0.0 的不可执行 sklearn
-  64-bit `random_state` 已被 implementation-audit amendment supersede；
+  overall freeze 已推进为 `hegel-freeze-p2b-p3-v1.0.2`；它继承 v1.0.1 对 v1.0.0
+  不可执行 sklearn 64-bit `random_state` 的修正，
   `411876909552964556` 保留为 master/bootstrap seed，sklearn 使用冻结的
-  domain-separated SHA-256 → uint32 值 `2611585425`；
+  domain-separated SHA-256 → uint32 值 `2611585425`，并新增 Phase-3 strict
+  acceptance/certificate bridge 的完整规范冻结；
 - covert-channel audit 的独立 shuffle/ID/padding keys、固定 envelope、Holm–Bonferroni
   FWER=0.01、32 次 consistent renaming 等规范已冻结；在完整 standard-error 语义实现前，
   formal selector 只允许 `absolute_bound`；这些审计尚未执行；
@@ -102,17 +140,21 @@ hegel-old-dsl-v1.0.0 + 480-row target + 85-row null control
 - Phase-3 已冻结 `hegel-old-dsl-v1.0.0` 的有限 domains、catalogs、typing、bottom、
   exact equivalence、limits、50,000 canonical / 5,000,000 raw budget 和 shrink order；
   首个 generic odd-cardinality target 是 480 行，observed omitted-channel null control
-  是 85 行，MDL 使用 `hegel-mdl-prefix-v1.0.0` 与 Q32；容量预检在 diagnostic AST /
-  canonical-JSON 表示下构造了 64,680 个 distinct、typed、limit-conforming candidate
-  AST，但只允许报告 `CONDITIONAL_CAPACITY_LOWER_BOUND_EXCEEDS_BUDGET`；executed closure
-  status 仍是 `NOT_RUN`。准确状态是 `surface_parameter_freeze_complete=true`、
-  `strict_acceptance_contract_complete=false`、`normative_parameter_freeze_complete=false`；
+  是 85 行，MDL 使用 `hegel-mdl-prefix-v1.0.0` 与 Q32；M1 的 Python/Rust shared vectors
+  各 48/48 PASS，M2 两端都把 64,680 个 source candidates 接受为 64,680 个 unique strict
+  canonical AST，并给出相同 diagnostic commitment 与 ordinal-50,001 witness。因此
+  `hegel-old-dsl-v1.0.0` 在 50,000 syntactic budget 下的 bounded status 已是
+  `DSL_TOO_LARGE`，但不是 `COMPLETE`，也没有 extensional target verdict。准确状态是
+  `surface_parameter_freeze_complete=true`、
+  `strict_acceptance_contract_complete=true`、`normative_parameter_freeze_complete=true`，
+  `strict_acceptance_implementation_verified=true`，formal roots 仍为 `null`；
 - untrusted closure receipt 已能结构绑定完整 `dsl_spec_id`、`operator_semantics_id` 与
   equivalence contract，并按 `target_role` 分别绑定 outside target 的 480-row
-  diagnostic universe/truth content IDs 或 null control 的 85-row diagnostic IDs；正式
-  canonical-CBOR/RFC6962 roots 仍为 `null`；它还能表示“已接受
-  50,000 个程序 + 第 50,001 个 witness”的 `DSL_TOO_LARGE` 记录，但字段尚未被 sealed
-  verifier 重算，不能改变当前 `NOT_RUN` 状态。
+  diagnostic universe/truth content IDs 或 null control 的 85-row diagnostic IDs；v1.0.2
+  已冻结 diagnostic-to-formal bridge 与 canonical-CBOR/RFC6962 root schema；M1/M2 已完成
+  strict identity 与 bounded capacity 双 replay，但尚未生成正式 archive roots，正式 roots
+  仍为 `null`。实际 `DSL_TOO_LARGE` artifact 只授权 frozen shrink transition，不授权
+  target adequacy、certificate 或 ACTIVE。
 
 明确未实现或未宣称：
 
@@ -147,24 +189,22 @@ hegel-old-dsl-v1.0.0 + 480-row target + 85-row null control
   语义和测试就绪前明确 unsupported，而不是可进入 formal selector 的待选模式；
 - 专用 recognizer CLI、严格 main/challenge prediction archive evaluator、签名 SBOM /
   runtime attestation 验证器和跨进程持久的 append-only CAS ledger；
-- Phase-3 strict canonical AST node CBOR schema、允许的 normalization/rewrite、operator
-  alias/algebraic reduction，以及 aggregate/tolerance/AND 的 node-counting semantics；
-  这些 acceptance rules 未冻结前，64,680 下界不能称为 `DSL_TOO_LARGE`；
-- Phase-3 完整 canonical closure 的 exhaustion、program/output archives 与 match set；
-  当前 480-row target 和 85-row null control 已冻结，但 executed closure 仍为 `NOT_RUN`；
+- Phase-3 M1/M2 已证明 strict identity 一致与 bounded syntactic overflow，但没有完整
+  canonical closure exhaustion、program/output archives、match set 或 extensional target
+  verdict；当前 `DSL_TOO_LARGE` 绝不能改写为 `COMPLETE`；
 - 把结构合法的 caller-supplied closure receipt 当作可信执行证据；当前 receipt 即使携带
   第 50,001 个 witness，也只能是 untrusted replay claim，不能自行签发状态或证书；
-- canonical-CBOR sealed certificate、Python/Rust 双完整 replay、3/3 Ed25519 签名与从
-  冻结 AST/partition/code table 重算长度的双 MDL scorer；调用者自报 receipt 不能产生
+- canonical-CBOR certificate 的 wire 已冻结，但正式 archives/roots、Python/Rust 双完整
+  closure replay、key-status trust chain、3/3 Ed25519 签名与从冻结 AST/partition/code table 重算
+  长度的双 MDL scorer 均未执行；调用者自报 receipt 不能产生
   semantic certificate；正式 claim 必须完整写作
   `OUTSIDE_FROZEN_CLOSURE(dsl_version, bounded_universe_root,
   target_truth_table_root, equivalence = exact_extensional)`，禁止称
   `OUTSIDE_LANGUAGE`；
-- 把“禁用 XOR/parity 名称”当作不可表达证明。旧 DSL 的
-  standard numeric sanity 表明 absolute difference 可给出二元 XOR，但决定稿的
-  `difference(bit_at(...), bit_at(...))` 与冻结 typing 存在 Bit/Rational 冲突；当前另存
-  含显式 `bit_to_scalar` 的候选并等待消歧，最终 membership 必须由 strict canonicalizer
-  与完整双 replay 决定。
+- 把“禁用 XOR/parity 名称”当作不可表达证明。v1.0.2 已决定 v1 不存在 implicit
+  Bit coercion；唯一合法 sanity witness 显式包含两个 `bit_to_scalar`，原 shorthand
+  type-reject。binary XOR 的 formal language verdict 仍为 `null`，最终 membership 必须
+  由 strict canonicalizer 与完整双 replay 决定。
 
 ## 快速运行
 
@@ -172,6 +212,22 @@ hegel-old-dsl-v1.0.0 + 480-row target + 85-row null control
 
 ```bash
 cd "Hegel Machine"
+cargo fmt --manifest-path rust/strict_canonicalizer/Cargo.toml -- --check
+cargo test --locked --manifest-path rust/strict_canonicalizer/Cargo.toml
+cargo clippy --locked --manifest-path rust/strict_canonicalizer/Cargo.toml \
+  --all-targets -- -D warnings
+cargo build --locked --release \
+  --manifest-path rust/strict_canonicalizer/Cargo.toml
+PYTHONPATH=src python3 -m hegel_machine phase3-strict-gate \
+  --rust-binary rust/strict_canonicalizer/target/release/hegel-strict-canonicalizer \
+  --output artifacts/phase3_dual_strict_gate_v1.json
+PYTHONPATH=src python3 -m hegel_machine phase3-strict-capacity-replay \
+  --rust-binary rust/strict_canonicalizer/target/release/hegel-strict-canonicalizer \
+  --output artifacts/phase3_dual_strict_capacity_replay_v1.json
+PYTHONPATH=src python3 -m hegel_machine phase3-preregister \
+  --output artifacts/phase3_preregistration_v1.json
+PYTHONPATH=src python3 -m hegel_machine phase3-closure-preflight \
+  --output artifacts/phase3_closure_capacity_preflight_v1.json
 PYTHONPATH=src python3 -m pytest -q -s
 PYTHONPATH=src python3 -m hegel_machine benchmark \
   --output artifacts/phase2_benchmark.json
@@ -179,10 +235,6 @@ PYTHONPATH=src python3 -m hegel_machine phase2-exit \
   --output artifacts/phase2_exit_benchmark_v2.json
 PYTHONPATH=src python3 -m hegel_machine phase2b-preregister \
   --output artifacts/phase2b_preregistration_v1.json
-PYTHONPATH=src python3 -m hegel_machine phase3-preregister \
-  --output artifacts/phase3_preregistration_v1.json
-PYTHONPATH=src python3 -m hegel_machine phase3-closure-preflight \
-  --output artifacts/phase3_closure_capacity_preflight_v1.json
 PYTHONPATH=src python3 -m hegel_machine vertical-slice \
   --output artifacts/controlled_vertical_slice_v1.json
 PYTHONPATH=src python3 -m hegel_machine demo
@@ -201,6 +253,8 @@ PYTHONPATH=src python3 -m hegel_machine demo
 [`docs/evidence_boundaries.md`](docs/evidence_boundaries.md)，Phase-2A development 协议见
 [`docs/phase2_exit_protocol.md`](docs/phase2_exit_protocol.md)。正式轨道施工边界见
 [`docs/phase2b_preregistration.md`](docs/phase2b_preregistration.md) 与
-[`docs/phase3_freeze_readiness.md`](docs/phase3_freeze_readiness.md)；已解决冻结项及尚待
-machine-readable 消歧的 canonicalization/certificate/scope 问题见
-[`docs/questions_for_gpt_phase2b_phase3_freeze.md`](docs/questions_for_gpt_phase2b_phase3_freeze.md)。
+[`docs/phase3_freeze_readiness.md`](docs/phase3_freeze_readiness.md)。v1.0.2 已解决的 strict
+canonicalization / CBOR / certificate bridge 决策见
+[`docs/Hegel_Machine_Strict_Canonical_AST_CBOR_Certificate_Bridge_Freeze_v1.0.2.md`](docs/Hegel_Machine_Strict_Canonical_AST_CBOR_Certificate_Bridge_Freeze_v1.0.2.md)；下一版 shrink
+step 1 中仍需 GPT / 用户定案的 machine IDs、registry tombstone 与 M3 准入问题见
+[`docs/questions_for_gpt_phase3_shrink_step1.md`](docs/questions_for_gpt_phase3_shrink_step1.md)。

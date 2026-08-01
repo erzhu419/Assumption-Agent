@@ -20,6 +20,11 @@ from .phase3_dsl_v1 import (
     ODD_REDUCTION_TARGET,
     OLD_DSL_V1,
 )
+from .phase3_strict_replay_v1 import (
+    dual_capacity_replay_report,
+    dual_strict_gate_report,
+)
+from .strict_ast_v1 import CanonicalAst, canonicalize_source_ast, decode_canonical_ast
 
 from .recognition import (
     RecognitionDecision,
@@ -67,6 +72,11 @@ __all__ = [
     "CandidateEvaluation",
     "CandidateGridCommitment",
     "CandidateGridCell",
+    "CanonicalAst",
+    "canonicalize_source_ast",
+    "decode_canonical_ast",
+    "dual_capacity_replay_report",
+    "dual_strict_gate_report",
     "recognize_structural_law",
     "replay_recognition_decision",
     "select_typed_candidate_evaluations",

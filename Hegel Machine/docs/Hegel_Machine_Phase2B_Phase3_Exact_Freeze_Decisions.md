@@ -1,5 +1,28 @@
 # Hegel Machine Phase-2B / Phase-3 精确冻结决策
 
+> **STATUS: `HISTORICAL_V1_0_1_DECISION_SOURCE`**
+>
+> 本文件的 v1.0.1 正文、状态字段和施工顺序按原样保留，用于审计 v1.0.2 之前的决策；
+> 它们不再描述当前 operational state。当前规范由
+> [v1.0.2 strict canonical/certificate amendment](Hegel_Machine_Strict_Canonical_AST_CBOR_Certificate_Bridge_Freeze_v1.0.2.md)
+> 与 [Phase-3 readiness resolution](Hegel_Machine_Phase3_Freeze_Readiness_Resolution.md)
+> supersede。
+>
+> M1 Python/Rust shared vectors 各 48/48 PASS。M2 两端都把 64,680 个 source candidates
+> 接受为 64,680 个 unique strict canonical AST；共同 diagnostic set commitment 是
+> `sha256:c1a02a66a8d6d8f75204cb3daf03ab0b01c2b3b8e486d0ab3d481ee3be43c930`，ordinal
+> 50,001 AST hash 是
+> `sha256:7c7f786c2cc57d31506b3c61d162d175c7f69a2878a089c72c9d053694cba948`。执行证据见
+> [dual strict gate](../artifacts/phase3_dual_strict_gate_v1.json) 与
+> [dual strict capacity replay](../artifacts/phase3_dual_strict_capacity_replay_v1.json)。
+>
+> 因此 `hegel-old-dsl-v1.0.0` 在 50,000 syntactic budget 下的 bounded status 已是
+> `DSL_TOO_LARGE`，但不是 `COMPLETE`；没有 extensional target/hidden-sink verdict，formal
+> roots 仍为 `null`，没有 outside/MDL certificate 或 ACTIVE authorization。当前唯一后继是
+> 发布新 old-DSL version，按 frozen shrink step 1 删除 `mean_v1`、`min_v1`、`max_v1`，
+> 重建 target/validation commitments，并让新版本从 `NOT_RUN` 开始。下方 v1.0.1 正文
+> 中的旧 `NOT_RUN`、conditional capacity 与 next-step 表述必须按历史语境阅读。
+
 **文档类型**：Normative freeze decision<br>
 **适用范围**：Phase-2B sealed typed-evidence qualification、Phase-3A frozen-language inadequacy、Phase-3B bounded meta-prior synthesis<br>
 **版本**：`hegel-freeze-p2b-p3-v1.0.1`<br>

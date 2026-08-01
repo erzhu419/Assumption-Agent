@@ -1,6 +1,78 @@
-# Phase-3 old-language freeze readiness
+# Phase-3 old-language freeze readiness（historical pre-v1.0.2 snapshot）
 
-## Frozen surface, unresolved canonical acceptance
+> **STATUS: `SUPERSEDED_FOR_NORMATIVE_DECISIONS`**
+>
+> **SUPERSEDED BY:**
+> [`hegel-freeze-p2b-p3-v1.0.2`](Hegel_Machine_Strict_Canonical_AST_CBOR_Certificate_Bridge_Freeze_v1.0.2.md)
+> and the
+> [Phase-3 readiness resolution](Hegel_Machine_Phase3_Freeze_Readiness_Resolution.md).
+>
+> **HISTORICAL VALUE:** this file preserves the implementation-audit state that
+> exposed the strict-identity gaps before target outcomes were observed. The
+> historical snapshot beginning after the M1/M2 overlay below is not the
+> current normative truth.
+
+## Current authoritative state after M1/M2 execution
+
+| Layer | Current state |
+|---|---|
+| surface and strict specification | **FROZEN** in v1.0.2 |
+| Python/Rust strict implementation and shared golden vectors | **VERIFIED: 48/48 each** |
+| bounded M2 capacity replay | **`DSL_TOO_LARGE`** for `hegel-old-dsl-v1.0.0` under the 50,000 syntactic budget |
+| complete closure / extensional target verdict | **NOT AVAILABLE**; this status is not `COMPLETE` |
+| formal roots / outside or MDL certificate | **NOT GENERATED / NOT ISSUED** |
+
+```json
+{
+  "freeze_version": "hegel-freeze-p2b-p3-v1.0.2",
+  "surface_parameter_freeze_complete": true,
+  "strict_acceptance_contract_complete": true,
+  "normative_parameter_freeze_complete": true,
+  "strict_acceptance_implementation_verified": true,
+  "python_shared_vectors_passed": "48/48",
+  "rust_shared_vectors_passed": "48/48",
+  "accepted_strict_canonical_count_python": 64680,
+  "accepted_strict_canonical_count_rust": 64680,
+  "accepted_unique_count_python": 64680,
+  "accepted_unique_count_rust": 64680,
+  "diagnostic_set_commitment": "sha256:c1a02a66a8d6d8f75204cb3daf03ab0b01c2b3b8e486d0ab3d481ee3be43c930",
+  "first_out_of_budget_ordinal": 50001,
+  "first_out_of_budget_ast_hash": "sha256:7c7f786c2cc57d31506b3c61d162d175c7f69a2878a089c72c9d053694cba948",
+  "executed_closure_status": "DSL_TOO_LARGE",
+  "complete_closure_enumerated": false,
+  "extensional_target_verdict": null,
+  "formal_archive_roots_generated": false,
+  "formal_roots": null,
+  "hidden_sink_formal_verdict_allowed": false,
+  "outside_certificate_issued": false,
+  "mdl_certificate_allowed": false,
+  "phase2b_formal_exit": false,
+  "active_promotion_allowed": false,
+  "required_next_action": "PUBLISH_SHRUNK_OLD_DSL_VERSION_USING_FROZEN_STEP_1"
+}
+```
+
+The evidence is recorded in the
+[dual strict gate artifact](../artifacts/phase3_dual_strict_gate_v1.json) and
+[dual strict capacity replay artifact](../artifacts/phase3_dual_strict_capacity_replay_v1.json).
+Both implementations accepted all 64,680 source candidates as 64,680 unique
+strict canonical ASTs. The shared set commitment is diagnostic, not a formal
+RFC6962 archive root. The ordinal-50,001 hash is an overflow witness, not a
+closure cardinality or target match result.
+
+The frozen next action is
+`PUBLISH_SHRUNK_OLD_DSL_VERSION_USING_FROZEN_STEP_1`: publish a new old-DSL
+version, remove `mean_v1`, `min_v1`, and `max_v1`, regenerate all target and
+validation commitments, and start the new version's closure state from
+`NOT_RUN`. The current v1.0.0 result must never be rewritten to `COMPLETE`.
+
+Current NO-GO items are an extensional target verdict, target synthesis, a
+hidden-sink formal verdict, outside/MDL certificate issuance, Phase-2B formal
+exit, and ACTIVE promotion. Formal roots remain `null`.
+
+---
+
+## Historical snapshot: frozen surface, unresolved canonical acceptance
 
 The overall audited contract is `hegel-freeze-p2b-p3-v1.0.1`; it supersedes
 v1.0.0 because the original 64-bit sklearn `random_state` was not executable.
@@ -224,7 +296,7 @@ these acceptance questions. No complete Python closure replay, independent
 Rust replay, trusted key-status path, 3/3 certificate, or complete formal MDL
 AST scorer replay has run.
 
-## Current go/no-go
+## Historical go/no-go (pre-v1.0.2)
 
 | Work item | Status |
 |---|---|
@@ -238,7 +310,7 @@ AST scorer replay has run.
 | shadow candidate records | GO |
 | ACTIVE promotion | NO-GO |
 
-The next decision point is canonical acceptance, not target outcome. Only after
-that acceptance is frozen may the capacity witness trigger the prescribed new
-DSL version and first shrink step, or may enumeration continue toward a
-complete bounded closure.
+At this historical snapshot the next decision point was canonical acceptance,
+not target outcome. v1.0.2 later froze that specification and M1/M2 later
+executed it; the current shrink-step next action is recorded in the overlay at
+the top of this file.
