@@ -1,0 +1,401 @@
+{
+  "allowed_current_scope": [
+    "deterministic_schema_and_enum_implementation",
+    "public_typed_row_and_root_replay",
+    "synthetic_split_and_signature_fault_injection",
+    "read_only_storage_fd3_marker_policy_validation"
+  ],
+  "artifact": "phase3_m25_external_preflight_v1",
+  "artifact_kind": "DIAGNOSTIC_NON_AUTHORITATIVE",
+  "authority_side_effects": {
+    "formal_root_claimed": false,
+    "gate_15_24_advanced": false,
+    "instantiation_marker_created": false,
+    "os_csprng_called": false,
+    "real_private_key_generated": false,
+    "real_seed_generated": false,
+    "real_signature_generated": false
+  },
+  "child_dsl_id": "hegel-old-dsl-v1.1.0",
+  "child_state": "NOT_RUN",
+  "claim_boundary": "This is a diagnostic exact-errata preflight. It performs no CSPRNG call, marker creation, seed/key generation, signature, authoritative formal-root generation, M3 gate advancement, or state transition.",
+  "diagnostic_report_id": "phase3_m25_external_preflight_cf9e4e1fc3b967a6f4894d3ee2a10c8fad4d53ee530d76e787c5d1413095f3c2",
+  "exact_errata_blocker_count": 12,
+  "exact_errata_blockers": [
+    {
+      "blocker_id": "E1_M3_RUN_GENESIS_SLOT_CARDINALITY",
+      "evidence": [
+        "The M3RunGenesisV1 array names exactly 15 run-produced root slots.",
+        "Section 14.2 requires all 16 run-produced output slots to be null.",
+        "The existing implementation and regression test also enumerate 15."
+      ],
+      "options": [
+        {
+          "decision": "Declare the listed 15 slots authoritative and correct the prose count.",
+          "impact": "No wire field is added; existing listed order remains stable.",
+          "option_id": "E1_A_EXACTLY_15"
+        },
+        {
+          "decision": "Name, type, position, and semantics of a sixteenth slot.",
+          "impact": "Changes M3RunGenesis bytes and requires new vectors/schema versioning.",
+          "option_id": "E1_B_DEFINE_16TH_SLOT"
+        }
+      ],
+      "recommended_option_id": "E1_A_EXACTLY_15",
+      "required_machine_fields": [
+        "run_output_slot_count",
+        "ordered_run_output_slot_names",
+        "m3_run_genesis_schema_id"
+      ],
+      "resolved": false,
+      "title": "M3RunGenesis lists 15 output slots while Gate 24 says 16"
+    },
+    {
+      "blocker_id": "E2_BRIDGE_TOPOLOGY_ORDER",
+      "evidence": [
+        "The bridge signature preimage contains execution_manifest_candidate_root.",
+        "The published DAG places bridge attestations at step 25 and the execution manifest at step 30.",
+        "M3ExecutionManifestV1 itself contains run_id and roots produced in steps 26-29."
+      ],
+      "options": [
+        {
+          "decision": "Generate/register run_id, build the execution candidate, then collect bridge signatures.",
+          "impact": "Preserves the stronger two-root signature message and removes the impossible dependency order.",
+          "option_id": "E2_A_REORDER_EXECUTION_BEFORE_SIGNATURES"
+        },
+        {
+          "decision": "Sign only diagnostic_formal_bridge_root.",
+          "impact": "Weakens execution-specific replay protection and changes the signature preimage.",
+          "option_id": "E2_B_REMOVE_EXECUTION_ROOT_FROM_SIGNATURE"
+        }
+      ],
+      "recommended_option_id": "E2_A_REORDER_EXECUTION_BEFORE_SIGNATURES",
+      "required_machine_fields": [
+        "ordered_root_dag_steps",
+        "run_id_registration_step",
+        "bridge_signature_preimage_fields"
+      ],
+      "resolved": false,
+      "title": "Bridge signatures precede the execution root they sign"
+    },
+    {
+      "blocker_id": "E3_BRIDGE_ENVELOPE_AND_IDENTITY_BINDING",
+      "evidence": [
+        "SignedManifestEnvelopeV1 carries one enclosed root but the bridge signature covers two roots.",
+        "The text does not choose one three-signature envelope versus three one-signature envelopes.",
+        "Neither M3ExecutionManifestV1 nor M3RunGenesisV1 binds the bridge attestation bundle root."
+      ],
+      "options": [
+        {
+          "decision": "Add a bridge-statement object containing both roots, use three purpose-specific one-signature envelopes, and bind their bundle into run identity.",
+          "impact": "Makes every signature and key purpose independently replayable.",
+          "option_id": "E3_A_STATEMENT_PLUS_THREE_ENVELOPES"
+        },
+        {
+          "decision": "Extend SignedManifestEnvelopeV1 to carry both roots and exactly three signatures.",
+          "impact": "Requires envelope schema/version changes and a single epoch policy.",
+          "option_id": "E3_B_EXTEND_EXISTING_ENVELOPE"
+        }
+      ],
+      "recommended_option_id": "E3_A_STATEMENT_PLUS_THREE_ENVELOPES",
+      "required_machine_fields": [
+        "bridge_statement_tag",
+        "bridge_statement_schema_id",
+        "bridge_statement_hash_domain",
+        "bridge_envelope_cardinality",
+        "bridge_attestation_bundle_binding_location"
+      ],
+      "resolved": false,
+      "title": "The 3-of-3 bridge statement has no unique envelope identity"
+    },
+    {
+      "blocker_id": "E4_MISSING_HASH_DOMAINS",
+      "evidence": [
+        "SignedManifestEnvelopeV1 is referenced by signed_envelope_root but has no root formula/domain.",
+        "M3DualReplayAgreementV1 has a schema but no ContentHash domain.",
+        "A raw SHA-256 guess would violate the project's domain-separated identity policy."
+      ],
+      "options": [
+        {
+          "decision": "Assign explicit ContentHash domains to both formal objects.",
+          "impact": "Matches the existing formal identity convention.",
+          "option_id": "E4_A_DOMAIN_SEPARATED_CONTENT_HASH"
+        },
+        {
+          "decision": "Use SHA-256 over canonical CBOR without a domain.",
+          "impact": "Creates a policy exception and must be explicitly frozen.",
+          "option_id": "E4_B_UNDOMAINED_SHA256"
+        }
+      ],
+      "recommended_option_id": "E4_A_DOMAIN_SEPARATED_CONTENT_HASH",
+      "required_machine_fields": [
+        "signed_manifest_envelope_root_formula",
+        "signed_manifest_envelope_hash_domain",
+        "m3_dual_replay_agreement_root_formula",
+        "m3_dual_replay_agreement_hash_domain"
+      ],
+      "resolved": false,
+      "title": "Required envelope and agreement roots lack hash domains"
+    },
+    {
+      "blocker_id": "E5_ACTOR_KEY_TRUST_AND_PURPOSE",
+      "evidence": [
+        "ActorKeyManifestV1 roots are not transitively bound by execution/genesis identity.",
+        "The pinned custodian and bridge attester trust-anchor source is unspecified.",
+        "It is unclear whether the custodian manifest signer is the purpose-1 bridge key.",
+        "SignedManifestEnvelopeV1 names custodian_key_epoch even for auditor/attester use."
+      ],
+      "options": [
+        {
+          "decision": "Treat purpose 1 as the same custodian identity for domain-separated manifest and bridge signatures; bind all actor-key roots in a trust-genesis bundle.",
+          "impact": "Uses one custodian key without cross-numeric-purpose reuse.",
+          "option_id": "E5_A_PURPOSE1_IS_CUSTODIAN_IDENTITY"
+        },
+        {
+          "decision": "Add a distinct custodian-manifest-signer purpose/key and bind it beside the bridge key.",
+          "impact": "Adds a fifth M2.5 actor key and new purpose registry entry.",
+          "option_id": "E5_B_SEPARATE_CUSTODY_SIGNER_PURPOSE"
+        }
+      ],
+      "recommended_option_id": "E5_A_PURPOSE1_IS_CUSTODIAN_IDENTITY",
+      "required_machine_fields": [
+        "actor_key_root_binding_object",
+        "pinned_genesis_trust_anchor",
+        "custodian_manifest_signer_purpose_id",
+        "noncustodian_envelope_epoch_semantics"
+      ],
+      "resolved": false,
+      "title": "Actor key roots and signer purposes are not anchored"
+    },
+    {
+      "blocker_id": "E6_LEDGER_CALCULATOR_ACTOR_BOUNDARY",
+      "evidence": [
+        "Gate 16 requires one genesis record and no access/reveal event.",
+        "The custodian must provide the raw seed to Python and Rust calculators via FD 3.",
+        "The hidden-artifact registry classifies raw-seed access as event type 2."
+      ],
+      "options": [
+        {
+          "decision": "Define the two calculators as constrained custodian subprocesses rather than independent ledger actors.",
+          "impact": "Preserves genesis-only Gate 16 while retaining implementation diversity.",
+          "option_id": "E6_A_CALCULATORS_INSIDE_CUSTODIAN_BOUNDARY"
+        },
+        {
+          "decision": "Append two authorized access events and change Gate 16/head predicates.",
+          "impact": "Changes ledger roots, gate semantics, and execution inputs.",
+          "option_id": "E6_B_RECORD_CALCULATOR_ACCESS"
+        }
+      ],
+      "recommended_option_id": "E6_A_CALCULATORS_INSIDE_CUSTODIAN_BOUNDARY",
+      "required_machine_fields": [
+        "calculator_actor_boundary",
+        "fd3_access_event_required",
+        "gate16_required_ledger_count",
+        "gate16_required_head_rule"
+      ],
+      "resolved": false,
+      "title": "FD-3 split replay conflicts with a genesis-only hidden ledger"
+    },
+    {
+      "blocker_id": "E7_PARENT_ABSENCE_AUDIT_WIRE",
+      "evidence": [
+        "AuditedPathBlobRecordV1 tag 0x3210 is absent from the tag registry.",
+        "audited_path_set_root and history records have no complete row schemas/order/root rules.",
+        "The described history root has no field in ParentManifestAbsenceAttestationV1.",
+        "The attestation has one legacy source digest while odd and sink currently have distinct legacy source IDs."
+      ],
+      "options": [
+        {
+          "decision": "Define path, history, and legacy-source rows plus a versioned audit-bundle root referenced by a revised absence attestation.",
+          "impact": "Binds the complete audit without overloading existing root meanings.",
+          "option_id": "E7_A_VERSIONED_AUDIT_BUNDLE"
+        },
+        {
+          "decision": "Define audited_source_tree_root/audited_path_set_root as composite trees that include history and both source IDs.",
+          "impact": "Avoids a new top-level object but requires exact heterogeneous row tagging.",
+          "option_id": "E7_B_COMPOSITE_EXISTING_ROOTS"
+        }
+      ],
+      "recommended_option_id": "E7_A_VERSIONED_AUDIT_BUNDLE",
+      "required_machine_fields": [
+        "audited_path_blob_tag_registry_entry",
+        "audited_path_set_row_schema",
+        "audited_history_row_schema",
+        "audit_tree_ordering",
+        "audit_root_binding_field",
+        "legacy_parent_payload_source_ids"
+      ],
+      "resolved": false,
+      "title": "Parent-history and two legacy sources lack one auditable wire"
+    },
+    {
+      "blocker_id": "E8_ROLE_AND_INITIAL_STATE_ENUMS",
+      "evidence": [
+        "M3StateId.NOT_RUN is 0 while ChildInitialStateId.NOT_RUN is 1.",
+        "M3RunGenesisV1.initial_state_id does not name which registry applies.",
+        "role_id appears in split, target, role-binding, and receipts without a TargetRoleId registry.",
+        "ArtifactRoleId describes artifact classes and cannot safely be assumed to be target roles."
+      ],
+      "options": [
+        {
+          "decision": "Bind M3RunGenesis.initial_state_id to M3StateId and add TargetRoleId {OUTSIDE=1,NULL=2}.",
+          "impact": "Separates execution roles from artifact-role IDs.",
+          "option_id": "E8_A_M3STATE0_NEW_TARGET_ROLE_ENUM"
+        },
+        {
+          "decision": "Use ChildInitialStateId and reuse selected ArtifactRoleId values for target roles.",
+          "impact": "Avoids an enum but couples unrelated namespaces.",
+          "option_id": "E8_B_CHILDSTATE1_ARTIFACT_ROLE_REUSE"
+        }
+      ],
+      "recommended_option_id": "E8_A_M3STATE0_NEW_TARGET_ROLE_ENUM",
+      "required_machine_fields": [
+        "m3_run_genesis_initial_state_registry",
+        "m3_run_genesis_initial_state_value",
+        "target_role_enum_registry",
+        "role_id_field_registry_map"
+      ],
+      "resolved": false,
+      "title": "Target role and M3RunGenesis initial-state bytes are ambiguous"
+    },
+    {
+      "blocker_id": "E9_ROOT_PREIMAGES_INSTANCE_IDS_AND_PATH_ALIAS",
+      "evidence": [
+        "HiddenArtifactScope has prose/YAML but no formal schema/domain.",
+        "Canonical AST/CBOR profile, Phase-2B contract, and MDL table roots lack a unique preimage object.",
+        "Implementation source/dependency roots and StateMachineContract legal-transition rows are incomplete.",
+        "The inherited M3RunState example conflicts with the common [version, tag, schema_id] prefix.",
+        "InputSignatureSpec.static_role_metadata has no nested payload schema.",
+        "TraversalContract and BucketAccountingContract field IDs/invariants have no registries or nested schemas.",
+        "TargetSpecFormal.claim_level_id and MismatchRecord.mismatch_kind_id have no enum registries.",
+        "SplitContract.assignment_ordering_rule_id and fallback_split_policy_id have no numeric registry.",
+        "Many profile/order/fallback *_id_digest values lack one exact machine-ID catalog.",
+        "The literal repository path 'Hegel Machine/...' contains a space forbidden by IdDigestV1 syntax."
+      ],
+      "options": [
+        {
+          "decision": "Add formal preimage schemas plus one machine-ID/path-alias registry; bind a legal ASCII alias to raw repository path bytes.",
+          "impact": "Preserves IdDigestV1 and makes every named root replayable.",
+          "option_id": "E9_A_FORMAL_PREIMAGE_AND_ALIAS_REGISTRY"
+        },
+        {
+          "decision": "Use raw path byte strings for path fields and explicitly reuse normative-document roots for named profile roots.",
+          "impact": "Requires field/schema changes and explicit role-to-document mapping.",
+          "option_id": "E9_B_PATH_BYTES_AND_DOCUMENT_ROOTS"
+        }
+      ],
+      "recommended_option_id": "E9_A_FORMAL_PREIMAGE_AND_ALIAS_REGISTRY",
+      "required_machine_fields": [
+        "formal_root_preimage_registry",
+        "instance_machine_id_catalog",
+        "repository_path_alias_rule",
+        "amendment_document_path_alias",
+        "source_and_dependency_root_row_schemas",
+        "state_machine_nested_row_schemas",
+        "m3_run_state_exact_prefix",
+        "input_signature_static_role_metadata_schema",
+        "target_claim_level_enum_registry",
+        "mismatch_kind_enum_registry",
+        "split_contract_numeric_rule_registry",
+        "traversal_and_bucket_field_id_registries"
+      ],
+      "resolved": false,
+      "title": "Several named roots and machine-ID instances still lack exact preimages"
+    },
+    {
+      "blocker_id": "E10_OPAQUE_ID_REGISTRY_EVIDENCE",
+      "evidence": [
+        "AppendOnlyOpaqueIdRegistryV1 is named but has no file/wire/root definition.",
+        "Gate 24 requires the run ID to be fresh and registered.",
+        "No execution/genesis field binds evidence for the project-wide duplicate scope."
+      ],
+      "options": [
+        {
+          "decision": "Define registry rows/root and bind the current registry root into genesis qualification.",
+          "impact": "Makes freshness independently replayable.",
+          "option_id": "E10_A_FORMAL_APPEND_ONLY_REGISTRY_ROOT"
+        },
+        {
+          "decision": "Freeze an external one-file-per-ID O_EXCL registry and a verifier scan over published identities.",
+          "impact": "Provides operational safety but needs an exact evidence receipt for Gate 24.",
+          "option_id": "E10_B_OPERATIONAL_OEXCL_REGISTRY"
+        }
+      ],
+      "recommended_option_id": "E10_A_FORMAL_APPEND_ONLY_REGISTRY_ROOT",
+      "required_machine_fields": [
+        "opaque_id_registry_record_schema",
+        "opaque_id_registry_ordering",
+        "opaque_id_registry_root_formula",
+        "opaque_id_registry_binding_location",
+        "duplicate_scope_verification_rule"
+      ],
+      "resolved": false,
+      "title": "Fresh run/ledger IDs have no replayable registry evidence"
+    },
+    {
+      "blocker_id": "E11_NULL_WITNESS_BINDING_FIELD",
+      "evidence": [
+        "Section 4.6 names DslRoleBindingManifestV1.required_witness_ast_hash.",
+        "DslRoleBindingManifestV1 has no such field.",
+        "TargetSpecFormalV1 and TargetBundleV1 already contain witness-hash slots."
+      ],
+      "options": [
+        {
+          "decision": "Correct the prose to bind the witness in the two existing target fields.",
+          "impact": "No wire change; role binding reaches it through semantic_spec_formal_root.",
+          "option_id": "E11_A_USE_TARGET_SPEC_AND_BUNDLE_FIELDS"
+        },
+        {
+          "decision": "Add required_witness_ast_hash to a new DslRoleBinding schema version.",
+          "impact": "Changes role-binding roots and downstream execution identity.",
+          "option_id": "E11_B_ADD_ROLE_BINDING_FIELD"
+        }
+      ],
+      "recommended_option_id": "E11_A_USE_TARGET_SPEC_AND_BUNDLE_FIELDS",
+      "required_machine_fields": [
+        "authoritative_witness_binding_fields",
+        "dsl_role_binding_schema_change_required"
+      ],
+      "resolved": false,
+      "title": "The sink witness is assigned to a nonexistent role-binding field"
+    },
+    {
+      "blocker_id": "E12_CUSTODIAN_ENVELOPE_COVERAGE",
+      "evidence": [
+        "The DAG requires final CustodianBindingManifestV1 plus a signature envelope.",
+        "The inherited exact one-signature guard names only seed commitment, seed continuity, and ledger genesis.",
+        "Envelope-root binding locations for all custodian signatures remain incomplete."
+      ],
+      "options": [
+        {
+          "decision": "Require one pinned custodian signature for tags 0x3103, 0x3105, 0x3106, and 0x3108 and bind all envelope roots.",
+          "impact": "Matches the published topology and makes final custody replayable.",
+          "option_id": "E12_A_SIGN_FOUR_CUSTODIAN_OBJECTS"
+        },
+        {
+          "decision": "Keep signatures only on the inherited three objects and correct the topology.",
+          "impact": "Leaves final custodian binding authenticated only transitively/self-consistently.",
+          "option_id": "E12_B_REMOVE_FINAL_BINDING_SIGNATURE"
+        }
+      ],
+      "recommended_option_id": "E12_A_SIGN_FOUR_CUSTODIAN_OBJECTS",
+      "required_machine_fields": [
+        "custodian_signed_object_tags",
+        "custodian_signature_domain_by_tag",
+        "custodian_envelope_root_binding_locations",
+        "required_signature_count_by_tag"
+      ],
+      "resolved": false,
+      "title": "The topology and signature guard disagree on signed custodian objects"
+    }
+  ],
+  "exact_errata_required": true,
+  "external_genesis_start_allowed": false,
+  "m3_entry_allowed": false,
+  "m3_entry_qualified": false,
+  "m3_gates_satisfied": 14,
+  "m3_gates_total": 24,
+  "m3_run_started": false,
+  "machine_freeze_id": "hegel-freeze-p2b-p3-v1.1.2",
+  "status": "EXACT_ERRATA_REQUIRED_EXTERNAL_GENESIS_BLOCKED"
+}

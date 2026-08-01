@@ -321,14 +321,19 @@ fail-closed。formal roots 仍为 null，child state 为 `NOT_RUN`。当前下�
 seed continuity（或取得其规范性替代决定），再执行 Python/Rust formal bridge root
 generation；此前不得启动 formal M3。
 
-v1.1.1 把这段工作命名为 **Phase-3A M2.5 Formal Commitment, Seed Genesis and Bridge
-Qualification**，并给出 numeric-tag array 的主要轮廓。施工架构严格分层：Python/Rust
-先独立实现 strict CBOR、ContentHash/RFC6962、HKDF/HMAC rank 与 state/output-null guards；
-真实 seed/key/signature 不在 import、test 或普通 build 中生成。实现审计同时发现现稿仍缺
-若干 bit-exact 决策（ID/enums/root preimages、`CustodianBindingCoreV1`、bucket record、
-sink exhaustive split、agreement DAG 与 output-null container）。因此 synthetic golden
-qualification 与 authoritative gate 被明确拆开：前者可以继续，后者保持 14/24、formal
-roots null、`NOT_RUN`，直到 completion amendment 和独立 custodian/auditor 都到位。
+v1.1.2 已把这段工作接管为 **Phase-3A M2.5 Formal Commitment, Seed Genesis
+and Bridge Qualification** 的 bit-exact completion amendment。实现依旧严格分层：
+Python/Rust 实现 strict CBOR、ContentHash/RFC6962、typed odd/sink rows、HKDF/HMAC rank
+与 state/output-null guards；真实 seed/key/signature 不在 import、test 或普通 build 中生成。
+
+当前 deterministic layer 已覆盖 58 个 tags/schemas，两端生成 480 个 odd rows 和
+85 个 sink rows，并重现 amendment 的四个 candidate roots。但 authoritative DAG 审计
+又发现 12 组 exact 冲突：output-slot cardinality、bridge topology/envelopes/domains、
+actor trust/ledger boundary、absence audit、role/state enums、nested root preimages/ID registry、sink
+witness 字段与 custodian signature coverage。因此 candidate replay 与 authoritative gate 仍然
+分开：前者已经过资格化，后者在 CSPRNG/marker 之前 fail-closed，保持
+`14/24`、formal roots `null`、`NOT_RUN`。待决字段见
+[`questions_for_gpt_phase3_m25_wire_completion_errata.md`](questions_for_gpt_phase3_m25_wire_completion_errata.md)。
 
 v2/SCAR commit `4861b2d8` 的 protocol-valid negative 不进入上述 identity/root DAG，故不
 改变 M2.5 或 M3 closure gate；它作为 Phase-3B/3C 的 design-risk input 单独绑定。后续

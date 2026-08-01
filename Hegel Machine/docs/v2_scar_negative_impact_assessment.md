@@ -17,9 +17,10 @@ v3 的通过或失败证据。
 ## 1. 结论
 
 `4861b2d8` **不构成 Phase-3A M2.5 或 M3 formal closure 的 blocker**。M2.5
-可以继续施工已经 bit-exact 的 strict CBOR / crypto 纯函数部分；但独立于 v2 结果，v1.1.1
-实现审计还发现若干规范缺口与外部 actor blockers，故当前仍必须保持 14/24 和 `NOT_RUN`。
-这些缺口由 completion amendment 补齐、再满足 24/24 gates 后，M3 才可按冻结合同执行。
+已继续实现 v1.1.2 的 strict CBOR、typed rows、candidate roots 和 split-crypto 纯函数；
+但独立于 v2 结果，v1.1.2 authoritative DAG 审计发现 12 组 exact-wire 勘误与
+外部 actor blockers，故当前仍必须保持 `14/24` 和 `NOT_RUN`。勘误补齐并取得
+独立 actor evidence 后，`24/24` 也只表示 ready-but-`NOT_RUN`；M3 仍需单独显式启动。
 
 但该结果对后续 claim 有实质约束：在证明旧语言识别正常之前，不得把抽取、绑定、识别或
 hard integration 的失败诊断成 `ONTOLOGY_DEFECT`，也不得把它包装成“现有 22 条先验不足，
@@ -130,7 +131,7 @@ candidate construction、fallback 和统计合同均不同。它们可以共同�
 
 | 阶段 | 是否 blocker | 影响 |
 |---|---|---|
-| Phase-3A M2.5 formal commitment/seed/bridge | 否 | 10 个剩余 gate 都是 seed、ledger、CBOR、root、state/receipt wire 身份问题；v2 efficacy 不参与这些 gate |
+| Phase-3A M2.5 formal commitment/seed/bridge | 否 | gates 15–24 都是 seed、ledger、CBOR、root、state/receipt wire 身份与外部 actor 问题；v2 efficacy 不参与这些 gate |
 | Phase-3A M3 complete closure | 否 | M3 回答 frozen bounded DSL 的 extensional closure；继续要求 odd target 与 sink control 分角色重放 |
 | Phase-3A claim interpretation | 有边界影响 | 只能称 `OUTSIDE_FROZEN_CLOSURE(...)`，不能称“全部 22 条先验不足”或无边界 `OUTSIDE_LANGUAGE` |
 | Phase-3B bounded synthesis | 条件影响 | v2 不增加新的 formal blocker；synthesis execution 仍须等待既有的 M3 COMPLETE/outside 前置条件，且在发明 claim 前必须排除 old-law recognizer/extractor/integration failure |
@@ -230,8 +231,8 @@ GPT 定案的问题。推荐原则是：先证明系统能在 matched conditions
 
 ## 8. 最终施工决定
 
-1. 继续 Phase-3A M2.5 的无歧义 foundation，并先取得 bit-exact completion amendment 与
-   独立 custodian/auditor；不得按现稿猜测缺失 wire 来凑成 24/24；
+1. 保留已通过的 v1.1.2 deterministic candidate foundation，先就 E1–E12 取得新的
+   bit-exact errata amendment，再由独立 custodian/auditor 执行；不得按现稿猜测缺失 wire 来凑成 24/24；
 2. gates 完成后可执行 M3 complete closure，不因 `4861b2d8` 暂停或重抽 seed；
 3. 不把 M3 outside certificate 解释为“22/13 全部失败”；
 4. Phase-3B 施工前加入 §6–7 的 old-language competence 与 conservative-integration controls；

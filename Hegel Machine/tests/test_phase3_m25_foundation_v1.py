@@ -32,6 +32,7 @@ from hegel_machine.phase3_m25_wire_v1 import (
     OBJECT_TAGS,
     assert_authoritative_m25_ready,
     build_formal_object,
+    candidate_content_root,
     decode_formal_object,
     encode_formal_object,
     formal_content_root,
@@ -58,7 +59,7 @@ def _approval_fields() -> dict[str, object]:
         "amendment_document_root": ROOT,
         "parent_freeze_root": OTHER_ROOT,
         "child_freeze_root": ROOT,
-        "child_dsl_spec_root_or_null": None,
+        "child_dsl_spec_root_or_null": ROOT,
         "approval_status_id": 1,
         "approval_method_id": 1,
         "approval_evidence_root": OTHER_ROOT,
@@ -162,15 +163,15 @@ def _enumeration_receipt_fields() -> dict[str, object]:
 
 
 def test_tag_registry_matches_all_frozen_tags_and_marks_known_gaps() -> None:
-    assert len(OBJECT_TAGS) == 28
+    assert len(OBJECT_TAGS) == 58
     assert OBJECT_TAGS["M3DualReplayAgreementV1"] == 0x3304
     assert FORMAL_SCHEMA_REGISTRY["DiagnosticFormalBridgeRecordV1"].ordering_fields == (
         "artifact_role_id",
         "diagnostic_namespace_id",
         "diagnostic_digest",
     )
-    assert FORMAL_SCHEMA_REGISTRY["BucketAccountingRecordV1"].wire_gap is not None
-    assert "CustodianBindingCoreV1" in AUTHORITATIVE_BLOCKING_GAPS
+    assert FORMAL_SCHEMA_REGISTRY["BucketAccountingRecordV1"].wire_gap is None
+    assert "M3DualReplayAgreementV1" in AUTHORITATIVE_BLOCKING_GAPS
 
 
 def test_run_output_slots_are_the_exact_unique_frozen_15_tuple() -> None:
@@ -215,42 +216,52 @@ def test_numeric_array_round_trip_preserves_field_order_and_exact_bytes() -> Non
     assert encode_formal_object(decoded.schema.name, decoded.fields) == encoded
 
 
-def test_formal_content_root_uses_exact_domain_zero_separator_and_cbor() -> None:
+def test_candidate_content_root_uses_exact_domain_zero_separator_and_cbor() -> None:
     fields = _approval_fields()
     encoded = encode_formal_object("NormativeApprovalManifestV1", fields)
     expected = hashlib.sha256(
         b"HEGEL/NORMATIVE_APPROVAL_MANIFEST/V1\x00" + encoded
     ).digest()
     assert synthetic_content_root("NormativeApprovalManifestV1", fields) == expected
+    assert candidate_content_root("NormativeApprovalManifestV1", fields) == expected
 
 
 def test_synthetic_record_has_stable_cbor_and_rfc6962_root() -> None:
+    odd = build_formal_object(
+        "OddInputV1",
+        {"set_size": 5, "bits": (0, 0, 0, 0, 0)},
+    )
     row = {
-        "universe_index": 7,
-        "input_signature_id": 3,
-        "canonical_input_object": (1, (False, True)),
+        "universe_index": 0,
+        "input_signature_id": 1,
+        "canonical_input_object": odd,
     }
     assert encode_formal_object("BoundedUniverseRowV1", row).hex() == (
         "8601193201581c686567656c2d626f756e6465642d756e6976657273652d"
-        "726f772f310703820182f4f5"
+        "726f772f310001850119340151686567656c2d6f64642d696e7075742f"
+        "3105850000000000"
     )
     assert synthetic_record_tree_root("BoundedUniverseRowV1", [row]).hex() == (
-        "b141278a3d8c00115177f08514fd9eb003cfacb63af00d5b7b9598a902da3aad"
+        "82d372f5c01c3cb6acbc296e7499bf66c9d69fa96f01dc214a14399ea40300c3"
     )
 
 
 def test_record_tree_rejects_wrong_order() -> None:
+    odd = build_formal_object(
+        "OddInputV1",
+        {"set_size": 5, "bits": (0, 0, 0, 0, 0)},
+    )
     rows = [
         {
             "universe_index": index,
-            "input_signature_id": 3,
-            "canonical_input_object": (index,),
+            "input_signature_id": 1,
+            "canonical_input_object": odd,
         }
-        for index in (2, 1)
+        for index in (1, 0)
     ]
-    with pytest.raises(M25WireError, match="REJECT_M25_RECORD_ORDER") as error:
+    with pytest.raises(M25WireError, match="FAIL_ROW_ORDERING") as error:
         synthetic_record_tree_root("BoundedUniverseRowV1", rows)
-    assert error.value.code == "REJECT_M25_RECORD_ORDER"
+    assert error.value.code == "FAIL_ROW_ORDERING"
 
 
 def test_formal_object_rejects_maps_text_float_and_wrong_field_set() -> None:
@@ -265,8 +276,9 @@ def test_formal_object_rejects_maps_text_float_and_wrong_field_set() -> None:
         "input_signature_id": 1,
         "canonical_input_object": {"forbidden": "map"},
     }
-    with pytest.raises(ValueError, match="REJECT_CBOR_MAP"):
+    with pytest.raises(M25WireError) as error:
         encode_formal_object("BoundedUniverseRowV1", row)
+    assert error.value.code == "REJECT_M25_FIELD_TYPE"
 
 
 def test_decode_rejects_trailing_and_wrong_expected_schema() -> None:
@@ -295,10 +307,8 @@ def test_parent_provenance_xor_is_fail_closed() -> None:
 @pytest.mark.parametrize(
     "object_name",
     [
-        "BucketAccountingRecordV1",
         "M3RunStateRecordV1",
         "M3DualReplayAgreementV1",
-        "CustodianBindingCoreV1",
     ],
 )
 def test_unfrozen_wire_or_domain_paths_raise_one_normative_gap_code(
@@ -382,12 +392,12 @@ def test_parent_absence_attestation_requires_exact_frozen_reason_mask() -> None:
         "audited_source_tree_root": ROOT,
         "audited_path_set_root": ROOT,
         "legacy_parent_payload_source_id_digest": ROOT,
-        "absence_reason_bitmask": 0b11,
+        "absence_reason_bitmask": 0b1111,
         "auditor_key_id": bytes(16),
         "audited_at_unix_seconds": 1,
     }
     build_formal_object("ParentManifestAbsenceAttestationV1", fields)
-    fields["absence_reason_bitmask"] = 1
+    fields["absence_reason_bitmask"] = 0b11
     with pytest.raises(M25WireError) as error:
         build_formal_object("ParentManifestAbsenceAttestationV1", fields)
     assert error.value.code == "REJECT_M25_FIELD_VALUE"
@@ -577,7 +587,7 @@ def test_uint16_rejects_out_of_range_or_non_exact_integer(value: object) -> None
 def test_authoritative_paths_never_generate_seed_key_signature_or_gate_claim() -> None:
     with pytest.raises(M25WireError) as error:
         assert_authoritative_seed_genesis_available()
-    assert error.value.code == FAIL_M25_NORMATIVE_GAP
+    assert error.value.code == "FAIL_CUSTODIAN_KEY_MISSING"
 
     with pytest.raises(M25WireError) as error:
         assert_authoritative_m25_ready()

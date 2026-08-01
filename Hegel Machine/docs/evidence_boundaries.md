@@ -75,17 +75,20 @@ Target/control source binding manifests 已生成，但因历史 split seed comm
 binding manifest、custodian continuity attestation 和 hidden-access ledger 不存在，M3
 commitment gates fail-closed。formal roots 全部仍为 null。
 
-v1.1.1 已授权进入 M2.5 wire/seed/bridge 施工，仓库可以实现并测试不接触真实 secret 的
-Python/Rust strict wire 与 split-crypto 纯函数。这类 synthetic qualification 不是 gate
-pass：当前 7 个正例原语加 13 个 strict-CBOR 拒绝/优先级例（共 20 个 shared vectors）的双端
-对照只证明公开 test inputs 上 CBOR/hash/HKDF/HMAC bytes 与拒绝码一致，gate delta 明确为
-0。现稿尚未唯一冻结全部 ID/enums/root preimages、
-sink split、custodian core、bucket/
-agreement/state wire，独立 custodian 与 auditor 也尚未提供外部事实。因此权威计数仍是
-14/24，seed 未实例化、signature/ledger/absence claims 均为 false，M3 execution manifest
-与 run outputs 均为 null，child 继续 `NOT_RUN`。不得由 Codex、自签 test key 或固定 test
-seed 冒充独立 custody。完整待决问题见
-[`questions_for_gpt_phase3_m25_wire_completion.md`](questions_for_gpt_phase3_m25_wire_completion.md)。
+v1.1.2 已允许继续 M2.5 deterministic wire/seed/bridge 施工。当前 Python/Rust 已
+重现 odd 480 行、sink 85 行以及 amendment 列出的四个 RFC6962 candidate values；
+odd `192/96/192` 和 sink `39/20/26` quota allocation 也已实现为不接触真实
+secret 的纯函数。Rust 诊断报告绑定实际运行 binary 的 SHA-256，但明确
+`binary_source_binding_claim=false`；它不是 ImplementationBinding 或 build attestation。
+
+这类 candidate qualification 仍不是 gate pass。authoritative DAG 实现审计发现 12 组
+exact 冲突，涵盖 output-slot count、bridge topology/envelope/domain、actor trust、FD-3/ledger
+boundary、absence-audit wire、role/state IDs、nested root preimages、opaque-ID evidence、sink witness
+和 signature coverage。外部 start guard 因此必定在 CSPRNG 和 marker 前失败。权威计数
+仍是 `14/24`，seed 未实例化，signature/ledger/absence claims 均为 false，formal roots、
+M3 execution manifest 与 run outputs 均为 null，child 继续 `NOT_RUN`。不得由
+Codex、自签 test key 或固定 test seed 冒充独立 custody。完整待决问题见
+[`questions_for_gpt_phase3_m25_wire_completion_errata.md`](questions_for_gpt_phase3_m25_wire_completion_errata.md)。
 
 ## v2 SCAR 后续正式负结果
 

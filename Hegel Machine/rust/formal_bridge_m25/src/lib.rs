@@ -16,6 +16,20 @@ pub const SPLIT_HKDF_SALT: &[u8] = b"HEGEL/SPLIT/HKDF/SALT/V1";
 pub const SPLIT_ROLE_INFO_PREFIX: &[u8] = b"HEGEL/SPLIT/ROLE/V1";
 pub const SPLIT_RANK_PREFIX: &[u8] = b"HEGEL/SPLIT/RANK/V1";
 pub const SPLIT_SEED_COMMITMENT_DOMAIN: &[u8] = b"HEGEL/SPLIT_MASTER_SEED_COMMITMENT/V1";
+pub const ID_DIGEST_PREFIX: &[u8] = b"HEGEL/ID_DIGEST/V1\0";
+pub const CANONICAL_INPUT_DOMAIN: &str = "HEGEL/CANONICAL_INPUT/V1";
+
+pub const ODD_INPUT_TAG: u64 = 0x3401;
+pub const SINK_INPUT_TAG: u64 = 0x3402;
+pub const UNIVERSE_ROW_TAG: u64 = 0x3201;
+pub const TRUTH_ROW_TAG: u64 = 0x3202;
+pub const ODD_INPUT_SIGNATURE_ID: u16 = 1;
+pub const SINK_INPUT_SIGNATURE_ID: u16 = 2;
+
+pub const ODD_INPUT_SCHEMA_ID: &[u8] = b"hegel-odd-input/1";
+pub const SINK_INPUT_SCHEMA_ID: &[u8] = b"hegel-sink-input/1";
+pub const UNIVERSE_ROW_SCHEMA_ID: &[u8] = b"hegel-bounded-universe-row/1";
+pub const TRUTH_ROW_SCHEMA_ID: &[u8] = b"hegel-target-truth-row/1";
 
 pub const REJECT_NONCANONICAL_CBOR: &str = "REJECT_NONCANONICAL_CBOR";
 pub const REJECT_TRUNCATED_CBOR: &str = "REJECT_TRUNCATED_CBOR";
@@ -32,6 +46,23 @@ pub const REJECT_CBOR_SIMPLE: &str = "REJECT_CBOR_SIMPLE";
 pub const REJECT_INVALID_LENGTH: &str = "REJECT_INVALID_LENGTH";
 pub const REJECT_HKDF_LENGTH: &str = "REJECT_HKDF_LENGTH";
 pub const REJECT_HASH_DOMAIN: &str = "REJECT_HASH_DOMAIN";
+pub const REJECT_MACHINE_ID_NON_ASCII: &str = "REJECT_MACHINE_ID_NON_ASCII";
+pub const REJECT_MACHINE_ID_SYNTAX: &str = "REJECT_MACHINE_ID_SYNTAX";
+pub const REJECT_MACHINE_ID_LENGTH: &str = "REJECT_MACHINE_ID_LENGTH";
+pub const REJECT_TYPED_INPUT_PREFIX: &str = "REJECT_TYPED_INPUT_PREFIX";
+pub const REJECT_ODD_SET_SIZE: &str = "REJECT_ODD_SET_SIZE";
+pub const REJECT_ODD_BIT_COUNT: &str = "REJECT_ODD_BIT_COUNT";
+pub const REJECT_ODD_BIT_TYPE: &str = "REJECT_ODD_BIT_TYPE";
+pub const REJECT_SINK_VALUE: &str = "REJECT_SINK_VALUE";
+pub const REJECT_SINK_BALANCE: &str = "REJECT_SINK_BALANCE";
+pub const REJECT_UNIVERSE_ROW_SCHEMA: &str = "REJECT_UNIVERSE_ROW_SCHEMA";
+pub const REJECT_TRUTH_ROW_SCHEMA: &str = "REJECT_TRUTH_ROW_SCHEMA";
+pub const FAIL_UNIVERSE_INDEX_DUPLICATE: &str = "FAIL_UNIVERSE_INDEX_DUPLICATE";
+pub const FAIL_UNIVERSE_INDEX_GAP: &str = "FAIL_UNIVERSE_INDEX_GAP";
+pub const FAIL_CANONICAL_INPUT_HASH_MISMATCH: &str = "FAIL_CANONICAL_INPUT_HASH_MISMATCH";
+pub const FAIL_TARGET_OUTPUT_TYPE: &str = "FAIL_TARGET_OUTPUT_TYPE";
+pub const FAIL_INPUT_SIGNATURE_MISMATCH: &str = "FAIL_INPUT_SIGNATURE_MISMATCH";
+pub const FAIL_ROW_ORDERING: &str = "FAIL_ROW_ORDERING";
 
 const MAX_CBOR_NESTING: usize = 64;
 
@@ -373,6 +404,567 @@ pub fn rfc6962_canonical_record_root(
     Ok(rfc6962_root(canonical_records))
 }
 
+/// Exact bytes hashed by the v1.1.2 ``IdDigestV1`` profile.
+pub fn id_digest_preimage_v1(machine_id: &str) -> Result<Vec<u8>, FormalWireError> {
+    if !machine_id.is_ascii() {
+        return Err(FormalWireError::new(
+            REJECT_MACHINE_ID_NON_ASCII,
+            "machine ID must contain ASCII only",
+        ));
+    }
+    let bytes = machine_id.as_bytes();
+    if bytes.len() > 256 {
+        return Err(FormalWireError::new(
+            REJECT_MACHINE_ID_LENGTH,
+            "machine ID exceeds 256 ASCII bytes",
+        ));
+    }
+    let allowed_tail =
+        |byte: u8| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b':' | b'/' | b'-');
+    if bytes.is_empty()
+        || !bytes[0].is_ascii_alphanumeric()
+        || !bytes[1..].iter().copied().all(allowed_tail)
+    {
+        return Err(FormalWireError::new(
+            REJECT_MACHINE_ID_SYNTAX,
+            "machine ID violates the frozen syntax",
+        ));
+    }
+    let mut preimage = Vec::with_capacity(ID_DIGEST_PREFIX.len() + bytes.len());
+    preimage.extend_from_slice(ID_DIGEST_PREFIX);
+    preimage.extend_from_slice(bytes);
+    Ok(preimage)
+}
+
+/// ``SHA-256(IdDigestV1 preimage)``.
+pub fn id_digest_v1(machine_id: &str) -> Result<[u8; 32], FormalWireError> {
+    let preimage = id_digest_preimage_v1(machine_id)?;
+    Ok(sha256(&[&preimage]))
+}
+
+fn unsigned(value: u64) -> CborValue {
+    CborValue::Unsigned(value)
+}
+
+fn bytes_value(value: &[u8]) -> CborValue {
+    CborValue::Bytes(value.to_vec())
+}
+
+fn array(value: &CborValue) -> Result<&[CborValue], FormalWireError> {
+    match value {
+        CborValue::Array(values) => Ok(values),
+        _ => Err(FormalWireError::new(
+            REJECT_TYPED_INPUT_PREFIX,
+            "typed input must be a CBOR array",
+        )),
+    }
+}
+
+fn exact_prefix(values: &[CborValue], tag: u64, schema_id: &[u8]) -> bool {
+    values.len() >= 3
+        && values[0] == unsigned(1)
+        && values[1] == unsigned(tag)
+        && values[2] == bytes_value(schema_id)
+}
+
+fn is_uint_bit(value: &CborValue) -> bool {
+    matches!(value, CborValue::Unsigned(bit) if *bit <= 1)
+}
+
+/// Strictly validate one decoded ``OddInputV1`` object.
+pub fn validate_odd_input_v1(value: &CborValue) -> Result<(), FormalWireError> {
+    let values = array(value)?;
+    if values.len() != 5 || !exact_prefix(values, ODD_INPUT_TAG, ODD_INPUT_SCHEMA_ID) {
+        return Err(FormalWireError::new(
+            REJECT_TYPED_INPUT_PREFIX,
+            "OddInputV1 prefix or arity mismatch",
+        ));
+    }
+    let set_size = match &values[3] {
+        CborValue::Unsigned(value) if (5..=8).contains(value) => *value as usize,
+        _ => {
+            return Err(FormalWireError::new(
+                REJECT_ODD_SET_SIZE,
+                "odd set_size must be one of 5, 6, 7, 8",
+            ))
+        }
+    };
+    let bits = match &values[4] {
+        CborValue::Array(bits) => bits,
+        _ => {
+            return Err(FormalWireError::new(
+                REJECT_ODD_BIT_COUNT,
+                "odd bits must be an array",
+            ))
+        }
+    };
+    if bits.len() != set_size {
+        return Err(FormalWireError::new(
+            REJECT_ODD_BIT_COUNT,
+            "odd bit count must equal set_size",
+        ));
+    }
+    if bits.iter().any(|bit| !is_uint_bit(bit)) {
+        return Err(FormalWireError::new(
+            REJECT_ODD_BIT_TYPE,
+            "odd bits must be CBOR uint 0 or 1",
+        ));
+    }
+    Ok(())
+}
+
+/// Construct one strict ``OddInputV1`` object.
+pub fn odd_input_v1(set_size: u64, bits: &[u8]) -> Result<CborValue, FormalWireError> {
+    let value = CborValue::Array(vec![
+        unsigned(1),
+        unsigned(ODD_INPUT_TAG),
+        bytes_value(ODD_INPUT_SCHEMA_ID),
+        unsigned(set_size),
+        CborValue::Array(
+            bits.iter()
+                .copied()
+                .map(|bit| unsigned(bit as u64))
+                .collect(),
+        ),
+    ]);
+    validate_odd_input_v1(&value)?;
+    Ok(value)
+}
+
+/// Strictly validate one decoded ``SinkInputV1`` object.
+pub fn validate_sink_input_v1(value: &CborValue) -> Result<(), FormalWireError> {
+    let values = array(value)?;
+    if values.len() != 7 || !exact_prefix(values, SINK_INPUT_TAG, SINK_INPUT_SCHEMA_ID) {
+        return Err(FormalWireError::new(
+            REJECT_TYPED_INPUT_PREFIX,
+            "SinkInputV1 prefix or arity mismatch",
+        ));
+    }
+    let mut fields = [0_i64; 4];
+    for (target, value) in fields.iter_mut().zip(&values[3..]) {
+        match value {
+            CborValue::Unsigned(value @ 0..=4) => *target = *value as i64,
+            _ => {
+                return Err(FormalWireError::new(
+                    REJECT_SINK_VALUE,
+                    "sink a, b, c, d must be CBOR uint in [0, 4]",
+                ))
+            }
+        }
+    }
+    if fields[3] != fields[0] + fields[1] - fields[2] {
+        return Err(FormalWireError::new(
+            REJECT_SINK_BALANCE,
+            "sink input must satisfy d = a + b - c",
+        ));
+    }
+    Ok(())
+}
+
+/// Construct one strict ``SinkInputV1`` object.
+pub fn sink_input_v1(a: u64, b: u64, c: u64, d: u64) -> Result<CborValue, FormalWireError> {
+    let value = CborValue::Array(vec![
+        unsigned(1),
+        unsigned(SINK_INPUT_TAG),
+        bytes_value(SINK_INPUT_SCHEMA_ID),
+        unsigned(a),
+        unsigned(b),
+        unsigned(c),
+        unsigned(d),
+    ]);
+    validate_sink_input_v1(&value)?;
+    Ok(value)
+}
+
+/// Validate a typed input and return its frozen ``InputSignatureId``.
+pub fn typed_input_signature_id(value: &CborValue) -> Result<u16, FormalWireError> {
+    let values = array(value)?;
+    match values.get(1) {
+        Some(CborValue::Unsigned(ODD_INPUT_TAG)) => {
+            validate_odd_input_v1(value)?;
+            Ok(ODD_INPUT_SIGNATURE_ID)
+        }
+        Some(CborValue::Unsigned(SINK_INPUT_TAG)) => {
+            validate_sink_input_v1(value)?;
+            Ok(SINK_INPUT_SIGNATURE_ID)
+        }
+        _ => Err(FormalWireError::new(
+            REJECT_TYPED_INPUT_PREFIX,
+            "unknown typed input tag",
+        )),
+    }
+}
+
+/// ContentHash for one already typed odd/sink input.
+pub fn canonical_input_hash_v1(value: &CborValue) -> Result<[u8; 32], FormalWireError> {
+    typed_input_signature_id(value)?;
+    content_hash(CANONICAL_INPUT_DOMAIN, value)
+}
+
+/// Construct one typed bounded-universe row.
+pub fn bounded_universe_row_v1(
+    universe_index: u64,
+    input_signature_id: u16,
+    canonical_input: &CborValue,
+) -> Result<CborValue, FormalWireError> {
+    let actual_signature = typed_input_signature_id(canonical_input)?;
+    if input_signature_id != actual_signature {
+        return Err(FormalWireError::new(
+            FAIL_INPUT_SIGNATURE_MISMATCH,
+            "row InputSignatureId does not match the canonical input tag",
+        ));
+    }
+    Ok(CborValue::Array(vec![
+        unsigned(1),
+        unsigned(UNIVERSE_ROW_TAG),
+        bytes_value(UNIVERSE_ROW_SCHEMA_ID),
+        unsigned(universe_index),
+        unsigned(input_signature_id as u64),
+        canonical_input.clone(),
+    ]))
+}
+
+/// Construct one typed truth row; bool and integers outside ``0/1`` fail.
+pub fn target_truth_row_v1(
+    universe_index: u64,
+    canonical_input_hash: &[u8],
+    target_output: &CborValue,
+) -> Result<CborValue, FormalWireError> {
+    if canonical_input_hash.len() != 32 {
+        return Err(FormalWireError::new(
+            FAIL_CANONICAL_INPUT_HASH_MISMATCH,
+            "canonical_input_hash must be exactly 32 bytes",
+        ));
+    }
+    if !is_uint_bit(target_output) {
+        return Err(FormalWireError::new(
+            FAIL_TARGET_OUTPUT_TYPE,
+            "target_output must be CBOR uint Bit 0 or 1",
+        ));
+    }
+    Ok(CborValue::Array(vec![
+        unsigned(1),
+        unsigned(TRUTH_ROW_TAG),
+        bytes_value(TRUTH_ROW_SCHEMA_ID),
+        unsigned(universe_index),
+        CborValue::Bytes(canonical_input_hash.to_vec()),
+        target_output.clone(),
+    ]))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TypedRoleRows {
+    pub role_name: &'static str,
+    pub input_signature_id: u16,
+    pub universe_rows: Vec<CborValue>,
+    pub truth_rows: Vec<CborValue>,
+}
+
+fn parse_universe_row(row: &CborValue) -> Result<(u64, u16, &CborValue), FormalWireError> {
+    let values = match row {
+        CborValue::Array(values) => values,
+        _ => {
+            return Err(FormalWireError::new(
+                REJECT_UNIVERSE_ROW_SCHEMA,
+                "universe row must be an array",
+            ))
+        }
+    };
+    if values.len() != 6 || !exact_prefix(values, UNIVERSE_ROW_TAG, UNIVERSE_ROW_SCHEMA_ID) {
+        return Err(FormalWireError::new(
+            REJECT_UNIVERSE_ROW_SCHEMA,
+            "universe row schema mismatch",
+        ));
+    }
+    let index = match &values[3] {
+        CborValue::Unsigned(index) => *index,
+        _ => {
+            return Err(FormalWireError::new(
+                REJECT_UNIVERSE_ROW_SCHEMA,
+                "universe index must be uint",
+            ))
+        }
+    };
+    let signature = match &values[4] {
+        CborValue::Unsigned(value) => u16::try_from(*value).map_err(|_| {
+            FormalWireError::new(
+                FAIL_INPUT_SIGNATURE_MISMATCH,
+                "InputSignatureId exceeds uint16",
+            )
+        })?,
+        _ => {
+            return Err(FormalWireError::new(
+                FAIL_INPUT_SIGNATURE_MISMATCH,
+                "InputSignatureId must be uint",
+            ))
+        }
+    };
+    let actual_signature = typed_input_signature_id(&values[5])?;
+    if signature != actual_signature {
+        return Err(FormalWireError::new(
+            FAIL_INPUT_SIGNATURE_MISMATCH,
+            "universe row signature mismatch",
+        ));
+    }
+    Ok((index, signature, &values[5]))
+}
+
+fn parse_truth_row(row: &CborValue) -> Result<(u64, [u8; 32], u8), FormalWireError> {
+    let values = match row {
+        CborValue::Array(values) => values,
+        _ => {
+            return Err(FormalWireError::new(
+                REJECT_TRUTH_ROW_SCHEMA,
+                "truth row must be an array",
+            ))
+        }
+    };
+    if values.len() != 6 || !exact_prefix(values, TRUTH_ROW_TAG, TRUTH_ROW_SCHEMA_ID) {
+        return Err(FormalWireError::new(
+            REJECT_TRUTH_ROW_SCHEMA,
+            "truth row schema mismatch",
+        ));
+    }
+    let index = match &values[3] {
+        CborValue::Unsigned(index) => *index,
+        _ => {
+            return Err(FormalWireError::new(
+                REJECT_TRUTH_ROW_SCHEMA,
+                "truth index must be uint",
+            ))
+        }
+    };
+    let input_hash: [u8; 32] = match &values[4] {
+        CborValue::Bytes(bytes) => bytes.as_slice().try_into().map_err(|_| {
+            FormalWireError::new(
+                FAIL_CANONICAL_INPUT_HASH_MISMATCH,
+                "truth-row canonical input hash must be 32 bytes",
+            )
+        })?,
+        _ => {
+            return Err(FormalWireError::new(
+                FAIL_CANONICAL_INPUT_HASH_MISMATCH,
+                "truth-row canonical input hash must be bytes",
+            ))
+        }
+    };
+    let output = match &values[5] {
+        CborValue::Unsigned(output) if *output <= 1 => *output as u8,
+        _ => {
+            return Err(FormalWireError::new(
+                FAIL_TARGET_OUTPUT_TYPE,
+                "truth output must be CBOR uint Bit 0 or 1",
+            ))
+        }
+    };
+    Ok((index, input_hash, output))
+}
+
+fn validate_indices(indices: &[u64]) -> Result<(), FormalWireError> {
+    let mut sorted = indices.to_vec();
+    sorted.sort_unstable();
+    sorted.dedup();
+    if sorted.len() != indices.len() {
+        return Err(FormalWireError::new(
+            FAIL_UNIVERSE_INDEX_DUPLICATE,
+            "universe indices must be unique",
+        ));
+    }
+    if indices.windows(2).any(|pair| pair[0] >= pair[1]) {
+        return Err(FormalWireError::new(
+            FAIL_ROW_ORDERING,
+            "rows must be ordered by ascending universe_index",
+        ));
+    }
+    if indices
+        .iter()
+        .enumerate()
+        .any(|(expected, actual)| *actual != expected as u64)
+    {
+        return Err(FormalWireError::new(
+            FAIL_UNIVERSE_INDEX_GAP,
+            "universe indices must be contiguous from zero",
+        ));
+    }
+    Ok(())
+}
+
+/// Validate index, signature, hash and Bit-output binding for one role.
+pub fn validate_typed_role_rows(rows: &TypedRoleRows) -> Result<(), FormalWireError> {
+    let universe = rows
+        .universe_rows
+        .iter()
+        .map(parse_universe_row)
+        .collect::<Result<Vec<_>, _>>()?;
+    let truth = rows
+        .truth_rows
+        .iter()
+        .map(parse_truth_row)
+        .collect::<Result<Vec<_>, _>>()?;
+    let universe_indices: Vec<u64> = universe.iter().map(|row| row.0).collect();
+    let truth_indices: Vec<u64> = truth.iter().map(|row| row.0).collect();
+    validate_indices(&universe_indices)?;
+    validate_indices(&truth_indices)?;
+    if universe_indices != truth_indices {
+        return Err(FormalWireError::new(
+            FAIL_UNIVERSE_INDEX_GAP,
+            "universe and truth indices differ",
+        ));
+    }
+    for ((_, signature, input), (_, input_hash, _)) in universe.iter().zip(&truth) {
+        if *signature != rows.input_signature_id {
+            return Err(FormalWireError::new(
+                FAIL_INPUT_SIGNATURE_MISMATCH,
+                "role InputSignatureId mismatch",
+            ));
+        }
+        if canonical_input_hash_v1(input)? != *input_hash {
+            return Err(FormalWireError::new(
+                FAIL_CANONICAL_INPUT_HASH_MISMATCH,
+                "truth row does not bind its canonical input",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn build_role_rows(
+    role_name: &'static str,
+    input_signature_id: u16,
+    inputs_and_outputs: Vec<(CborValue, u8)>,
+) -> Result<TypedRoleRows, FormalWireError> {
+    let mut universe_rows = Vec::with_capacity(inputs_and_outputs.len());
+    let mut truth_rows = Vec::with_capacity(inputs_and_outputs.len());
+    for (index, (input, output)) in inputs_and_outputs.into_iter().enumerate() {
+        let input_hash = canonical_input_hash_v1(&input)?;
+        universe_rows.push(bounded_universe_row_v1(
+            index as u64,
+            input_signature_id,
+            &input,
+        )?);
+        truth_rows.push(target_truth_row_v1(
+            index as u64,
+            &input_hash,
+            &unsigned(output as u64),
+        )?);
+    }
+    let rows = TypedRoleRows {
+        role_name,
+        input_signature_id,
+        universe_rows,
+        truth_rows,
+    };
+    validate_typed_role_rows(&rows)?;
+    Ok(rows)
+}
+
+/// Independently generate all 480 odd-role rows in MSB-first numeric order.
+pub fn generate_odd_role_rows_v1() -> Result<TypedRoleRows, FormalWireError> {
+    let mut inputs = Vec::with_capacity(480);
+    for set_size in 5_u64..=8 {
+        for numeric_value in 0_u64..(1_u64 << set_size) {
+            let bits: Vec<u8> = (0..set_size)
+                .map(|offset| ((numeric_value >> (set_size - 1 - offset)) & 1) as u8)
+                .collect();
+            let output = (bits.iter().copied().map(u16::from).sum::<u16>() % 2) as u8;
+            inputs.push((odd_input_v1(set_size, &bits)?, output));
+        }
+    }
+    let rows = build_role_rows("odd", ODD_INPUT_SIGNATURE_ID, inputs)?;
+    debug_assert_eq!(rows.universe_rows.len(), 480);
+    Ok(rows)
+}
+
+/// Independently generate all 85 legal sink-role rows in lexicographic order.
+pub fn generate_sink_role_rows_v1() -> Result<TypedRoleRows, FormalWireError> {
+    let mut inputs = Vec::with_capacity(85);
+    for a in 0_u64..=4 {
+        for b in 0_u64..=4 {
+            for c in 0_u64..=4 {
+                for d in 0_u64..=4 {
+                    if d as i64 == a as i64 + b as i64 - c as i64 {
+                        inputs.push((sink_input_v1(a, b, c, d)?, 1));
+                    }
+                }
+            }
+        }
+    }
+    let rows = build_role_rows("sink", SINK_INPUT_SIGNATURE_ID, inputs)?;
+    debug_assert_eq!(rows.universe_rows.len(), 85);
+    Ok(rows)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TypedRowSample {
+    pub universe_index: u64,
+    pub input_cbor: Vec<u8>,
+    pub canonical_input_hash: [u8; 32],
+    pub universe_row_cbor: Vec<u8>,
+    pub universe_leaf_hash: [u8; 32],
+    pub truth_row_cbor: Vec<u8>,
+    pub truth_leaf_hash: [u8; 32],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TypedRoleReport {
+    pub role_name: &'static str,
+    pub input_signature_id: u16,
+    pub row_count: usize,
+    pub samples: Vec<TypedRowSample>,
+    pub universe_two_row_root: [u8; 32],
+    pub truth_two_row_root: [u8; 32],
+    pub universe_root: [u8; 32],
+    pub truth_root: [u8; 32],
+}
+
+fn encode_records(records: &[CborValue]) -> Result<Vec<Vec<u8>>, FormalWireError> {
+    records.iter().map(encode_canonical_cbor).collect()
+}
+
+/// Produce the complete independent typed-row report used by the Rust CLI.
+pub fn typed_role_report_v1(rows: &TypedRoleRows) -> Result<TypedRoleReport, FormalWireError> {
+    validate_typed_role_rows(rows)?;
+    let universe_encoded = encode_records(&rows.universe_rows)?;
+    let truth_encoded = encode_records(&rows.truth_rows)?;
+    let mut samples = Vec::with_capacity(2);
+    for index in 0..2 {
+        let (_, _, input) = parse_universe_row(&rows.universe_rows[index])?;
+        let input_cbor = encode_canonical_cbor(input)?;
+        samples.push(TypedRowSample {
+            universe_index: index as u64,
+            input_cbor,
+            canonical_input_hash: canonical_input_hash_v1(input)?,
+            universe_row_cbor: universe_encoded[index].clone(),
+            universe_leaf_hash: rfc6962_leaf_hash(&universe_encoded[index]),
+            truth_row_cbor: truth_encoded[index].clone(),
+            truth_leaf_hash: rfc6962_leaf_hash(&truth_encoded[index]),
+        });
+    }
+    Ok(TypedRoleReport {
+        role_name: rows.role_name,
+        input_signature_id: rows.input_signature_id,
+        row_count: rows.universe_rows.len(),
+        samples,
+        universe_two_row_root: rfc6962_root(&universe_encoded[..2]),
+        truth_two_row_root: rfc6962_root(&truth_encoded[..2]),
+        universe_root: rfc6962_root(&universe_encoded),
+        truth_root: rfc6962_root(&truth_encoded),
+    })
+}
+
+pub fn generate_typed_role_report_v1(
+    input_signature_id: u16,
+) -> Result<TypedRoleReport, FormalWireError> {
+    match input_signature_id {
+        ODD_INPUT_SIGNATURE_ID => typed_role_report_v1(&generate_odd_role_rows_v1()?),
+        SINK_INPUT_SIGNATURE_ID => typed_role_report_v1(&generate_sink_role_rows_v1()?),
+        _ => Err(FormalWireError::new(
+            FAIL_INPUT_SIGNATURE_MISMATCH,
+            "typed-row report role must be InputSignatureId 1 or 2",
+        )),
+    }
+}
+
 fn hmac_sha256(key: &[u8], message_parts: &[&[u8]]) -> [u8; 32] {
     let mut mac = <HmacSha256 as Mac>::new_from_slice(key)
         .expect("HMAC-SHA256 accepts keys of every byte length");
@@ -459,7 +1051,7 @@ pub fn hex_encode(bytes: &[u8]) -> String {
 }
 
 pub fn hex_decode(value: &str) -> Result<Vec<u8>, FormalWireError> {
-    if value.len() % 2 != 0 {
+    if value.len() & 1 != 0 {
         return Err(FormalWireError::new(
             REJECT_INVALID_LENGTH,
             "hexadecimal input has odd length",
@@ -620,5 +1212,209 @@ mod tests {
     fn hkdf_rejects_too_long_output() {
         let error = hkdf_expand_sha256(&[0; 32], b"", 255 * 32 + 1).unwrap_err();
         assert_eq!(error.code, REJECT_HKDF_LENGTH);
+    }
+
+    #[test]
+    fn id_digest_v1_matches_the_v112_golden_and_rejects_invalid_ids() {
+        let machine_id = "hegel-old-dsl-v1.1.0";
+        assert_eq!(
+            hex_encode(&id_digest_preimage_v1(machine_id).unwrap()),
+            "484547454c2f49445f4449474553542f563100686567656c2d6f6c642d64736c2d76312e312e30"
+        );
+        assert_eq!(
+            hex_encode(&id_digest_v1(machine_id).unwrap()),
+            "49022ed9fa53522e10dd60ce5da983a4ac0be2d7bc8c7737f6d5ae1dc88c4703"
+        );
+        assert_eq!(
+            id_digest_v1("é").unwrap_err().code,
+            REJECT_MACHINE_ID_NON_ASCII
+        );
+        assert_eq!(
+            id_digest_v1(&"a".repeat(257)).unwrap_err().code,
+            REJECT_MACHINE_ID_LENGTH
+        );
+        for invalid in ["", " leading", "bad?character"] {
+            assert_eq!(
+                id_digest_v1(invalid).unwrap_err().code,
+                REJECT_MACHINE_ID_SYNTAX
+            );
+        }
+    }
+
+    #[test]
+    fn typed_input_negative_codes_do_not_coerce_bool_or_invalid_uints() {
+        assert_eq!(
+            odd_input_v1(4, &[0; 4]).unwrap_err().code,
+            REJECT_ODD_SET_SIZE
+        );
+        assert_eq!(
+            odd_input_v1(5, &[0; 4]).unwrap_err().code,
+            REJECT_ODD_BIT_COUNT
+        );
+        assert_eq!(
+            odd_input_v1(5, &[0, 0, 0, 0, 2]).unwrap_err().code,
+            REJECT_ODD_BIT_TYPE
+        );
+        let bool_bit = CborValue::Array(vec![
+            unsigned(1),
+            unsigned(ODD_INPUT_TAG),
+            bytes_value(ODD_INPUT_SCHEMA_ID),
+            unsigned(5),
+            CborValue::Array(vec![
+                unsigned(0),
+                unsigned(0),
+                unsigned(0),
+                unsigned(0),
+                CborValue::Bool(true),
+            ]),
+        ]);
+        assert_eq!(
+            validate_odd_input_v1(&bool_bit).unwrap_err().code,
+            REJECT_ODD_BIT_TYPE
+        );
+        assert_eq!(
+            sink_input_v1(0, 0, 0, 5).unwrap_err().code,
+            REJECT_SINK_VALUE
+        );
+        assert_eq!(
+            sink_input_v1(0, 1, 0, 0).unwrap_err().code,
+            REJECT_SINK_BALANCE
+        );
+    }
+
+    #[test]
+    fn odd_and_sink_generators_match_all_v112_golden_roots() {
+        let odd = typed_role_report_v1(&generate_odd_role_rows_v1().unwrap()).unwrap();
+        assert_eq!(odd.row_count, 480);
+        assert_eq!(
+            hex_encode(&odd.universe_two_row_root),
+            "a10e24853c11986ceec4a7167c8dca3a7587261dbc0fcd5df0dfc9f7604acf24"
+        );
+        assert_eq!(
+            hex_encode(&odd.truth_two_row_root),
+            "b6e2a6d9808cb9c0542a0bcf5cd4af398a419e275221733736045fe3de960fd6"
+        );
+        assert_eq!(
+            hex_encode(&odd.universe_root),
+            "b7e6eed1174ceee1944bd540cbb0ace4c5c7fc0dffea79dd956a51f7a2410a05"
+        );
+        assert_eq!(
+            hex_encode(&odd.truth_root),
+            "f5bbdc26bec62f9966e5ef31eaa800190ed52dedc73ee61545e0f9c122a1a506"
+        );
+        assert_eq!(
+            hex_encode(&odd.samples[0].universe_leaf_hash),
+            "82d372f5c01c3cb6acbc296e7499bf66c9d69fa96f01dc214a14399ea40300c3"
+        );
+
+        let sink = typed_role_report_v1(&generate_sink_role_rows_v1().unwrap()).unwrap();
+        assert_eq!(sink.row_count, 85);
+        assert_eq!(
+            hex_encode(&sink.universe_two_row_root),
+            "2d06e5870c0ea2a67468f814647f8b11b6cd60243ff4c399d7031d99c33a9b13"
+        );
+        assert_eq!(
+            hex_encode(&sink.truth_two_row_root),
+            "bac8bb909d6bf86b097c9a97e3656173cadcda3b1c6a8e7184fc5be256118c32"
+        );
+        assert_eq!(
+            hex_encode(&sink.universe_root),
+            "1a46f9967ad48df6ec1d9be609de701413ce86171fb0f92495a982bef0f40ff5"
+        );
+        assert_eq!(
+            hex_encode(&sink.truth_root),
+            "9c0f5d75ea3c31f6cb1ea9917346a7a3f480ae9ce0ac0cb3bb21aac9d3bd7808"
+        );
+        assert_eq!(
+            hex_encode(&sink.samples[1].truth_leaf_hash),
+            "188092325daf0ac152753b9518df3358f30cc112ac0249827202069708bf6591"
+        );
+    }
+
+    #[test]
+    fn typed_rows_reject_signature_output_hash_and_index_failures_exactly() {
+        let odd_input = odd_input_v1(5, &[0; 5]).unwrap();
+        assert_eq!(
+            bounded_universe_row_v1(0, SINK_INPUT_SIGNATURE_ID, &odd_input)
+                .unwrap_err()
+                .code,
+            FAIL_INPUT_SIGNATURE_MISMATCH
+        );
+        assert_eq!(
+            target_truth_row_v1(0, &[0; 32], &CborValue::Bool(true))
+                .unwrap_err()
+                .code,
+            FAIL_TARGET_OUTPUT_TYPE
+        );
+        assert_eq!(
+            target_truth_row_v1(0, &[0; 32], &unsigned(2))
+                .unwrap_err()
+                .code,
+            FAIL_TARGET_OUTPUT_TYPE
+        );
+        assert_eq!(
+            target_truth_row_v1(0, &[0; 31], &unsigned(0))
+                .unwrap_err()
+                .code,
+            FAIL_CANONICAL_INPUT_HASH_MISMATCH
+        );
+
+        let source = generate_odd_role_rows_v1().unwrap();
+        let mut duplicate = TypedRoleRows {
+            role_name: source.role_name,
+            input_signature_id: source.input_signature_id,
+            universe_rows: source.universe_rows[..3].to_vec(),
+            truth_rows: source.truth_rows[..3].to_vec(),
+        };
+        if let CborValue::Array(fields) = &mut duplicate.universe_rows[1] {
+            fields[3] = unsigned(0);
+        }
+        assert_eq!(
+            validate_typed_role_rows(&duplicate).unwrap_err().code,
+            FAIL_UNIVERSE_INDEX_DUPLICATE
+        );
+
+        let mut gap = TypedRoleRows {
+            role_name: source.role_name,
+            input_signature_id: source.input_signature_id,
+            universe_rows: source.universe_rows[..3].to_vec(),
+            truth_rows: source.truth_rows[..3].to_vec(),
+        };
+        if let CborValue::Array(fields) = &mut gap.universe_rows[1] {
+            fields[3] = unsigned(2);
+        }
+        if let CborValue::Array(fields) = &mut gap.universe_rows[2] {
+            fields[3] = unsigned(3);
+        }
+        assert_eq!(
+            validate_typed_role_rows(&gap).unwrap_err().code,
+            FAIL_UNIVERSE_INDEX_GAP
+        );
+
+        let mut wrong_order = TypedRoleRows {
+            role_name: source.role_name,
+            input_signature_id: source.input_signature_id,
+            universe_rows: source.universe_rows[..3].to_vec(),
+            truth_rows: source.truth_rows[..3].to_vec(),
+        };
+        wrong_order.universe_rows.swap(1, 2);
+        assert_eq!(
+            validate_typed_role_rows(&wrong_order).unwrap_err().code,
+            FAIL_ROW_ORDERING
+        );
+
+        let mut wrong_hash = TypedRoleRows {
+            role_name: source.role_name,
+            input_signature_id: source.input_signature_id,
+            universe_rows: source.universe_rows[..3].to_vec(),
+            truth_rows: source.truth_rows[..3].to_vec(),
+        };
+        if let CborValue::Array(fields) = &mut wrong_hash.truth_rows[0] {
+            fields[4] = CborValue::Bytes(vec![0xff; 32]);
+        }
+        assert_eq!(
+            validate_typed_role_rows(&wrong_hash).unwrap_err().code,
+            FAIL_CANONICAL_INPUT_HASH_MISMATCH
+        );
     }
 }

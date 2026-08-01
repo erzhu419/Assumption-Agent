@@ -1,11 +1,9 @@
-"""Fail-closed Phase-3A M2.5 implementation/readiness publication.
+"""Fail-closed Phase-3A M2.5 v1.1.2 readiness publication.
 
-The v1.1.1 amendment authorizes work on formal wire and custody, but a source
-audit found byte-identity decisions that are still missing from the normative
-text.  This module records that distinction explicitly: deterministic wire and
-cryptographic *foundations* may be implemented and tested with synthetic data,
-while authoritative roots, actors, seed material, signatures, and M3 state
-transitions remain unavailable.
+The deterministic typed-row and candidate-root layer is implemented, while
+the exact E1--E12 errata and independent external actors remain unavailable.
+This module records that distinction without turning candidate roots into
+formal roots or authorizing external genesis.
 
 This report is diagnostic JSON.  It is not a formal CBOR manifest, custodian
 attestation, gate signature, or substitute for any root named by the freeze.
@@ -18,6 +16,7 @@ from pathlib import Path
 from typing import Final
 
 from .hashing import stable_hash
+from .phase3_m25_external_v1 import EXACT_ERRATA_BLOCKERS
 from .phase3_shrink1_publication_v1 import M3_REQUIRED_GATES as SHRINK1_GATES
 
 
@@ -25,22 +24,20 @@ PROJECT_ROOT: Final = Path(__file__).resolve().parents[2]
 NORMATIVE_DOCUMENT: Final = (
     PROJECT_ROOT
     / "docs"
-    / "Hegel_Machine_Phase3_Formal_Bridge_Seed_Genesis_M3_Wire_Freeze.md"
+    / "Hegel_Machine_Phase3A_M25_Bit_Exact_Wire_Completion_Amendment.md"
 )
 OPEN_QUESTIONS_DOCUMENT: Final = (
-    PROJECT_ROOT / "docs" / "questions_for_gpt_phase3_m25_wire_completion.md"
+    PROJECT_ROOT / "docs" / "questions_for_gpt_phase3_m25_wire_completion_errata.md"
 )
 
-MACHINE_FREEZE_ID: Final = "hegel-freeze-p2b-p3-v1.1.1"
+MACHINE_FREEZE_ID: Final = "hegel-freeze-p2b-p3-v1.1.2"
 CHILD_DSL_ID: Final = "hegel-old-dsl-v1.1.0"
 M25_PHASE_ID: Final = (
     "PHASE_3A_M2_5_FORMAL_COMMITMENT_SEED_GENESIS_BRIDGE_QUALIFICATION"
 )
-CURRENT_STATUS: Final = "M25_FOUNDATION_IMPLEMENTED_NORMATIVE_COMPLETION_REQUIRED"
+CURRENT_STATUS: Final = "EXACT_ERRATA_REQUIRED_EXTERNAL_GENESIS_BLOCKED"
 CURRENT_CHILD_STATE: Final = "NOT_RUN"
-PARENT_IMPLEMENTATION_COMMIT: Final = (
-    "405ab52534c3e23eb7ab1025705310f57b217ba4"
-)
+PARENT_IMPLEMENTATION_COMMIT: Final = "d772b844e7c92b20f1e370244cc88202581fc72a"
 V2_NEGATIVE_BINDING_ID: Final = (
     "v2_scar_negative_binding_"
     "3a40657c6d683da9ff74cfdade38fcced448ffe2909b13e14c684fae672b815b"
@@ -61,21 +58,8 @@ M25_REMAINING_GATES: Final = (
 
 M3_GATES: Final = SHRINK1_GATES[:14] + M25_REMAINING_GATES
 
-SPECIFICATION_BLOCKERS: Final = (
-    "ID_DIGEST_PROFILE_UNFROZEN",
-    "NUMERIC_ENUM_REGISTRY_INCOMPLETE",
-    "FORMAL_ROOT_PREIMAGE_SCHEMAS_UNFROZEN",
-    "CANONICAL_ODD_SINK_INPUT_ROW_WIRE_UNFROZEN",
-    "SINK_85_ROW_SPLIT_CONTRACT_UNFROZEN",
-    "CUSTODIAN_BINDING_CORE_WIRE_UNDEFINED",
-    "PARENT_ABSENCE_ATTESTATION_SIGNATURE_WIRE_UNDEFINED",
-    "DIAGNOSTIC_BRIDGE_AGGREGATION_AND_SIGNATURE_POLICY_UNFROZEN",
-    "BUCKET_ACCOUNTING_AND_IMPLEMENTATION_CONTRACT_WIRES_UNDEFINED",
-    "M3_STATE_PREFIX_AND_TRANSITION_REASON_WIRE_UNFROZEN",
-    "ENUMERATION_ROLE_AGREEMENT_CONSTRUCTION_CYCLE",
-    "M3_OUTPUT_NULL_SLOT_CONTAINER_UNDEFINED",
-    "HIDDEN_ARTIFACT_SCOPE_UNFROZEN",
-    "PRE_RUN_IMPLEMENTATION_QUALIFICATION_GATES_NOT_PRESERVED",
+SPECIFICATION_BLOCKERS: Final = tuple(
+    blocker.blocker_id for blocker in EXACT_ERRATA_BLOCKERS
 )
 
 EXTERNAL_ACTOR_BLOCKERS: Final = (
@@ -83,6 +67,7 @@ EXTERNAL_ACTOR_BLOCKERS: Final = (
     "SPLIT_SEED_FIRST_INSTANTIATION_NOT_PERFORMED",
     "CUSTODIAN_SIGNATURES_NOT_AVAILABLE",
     "INDEPENDENT_PARENT_ABSENCE_AUDIT_NOT_ATTESTED",
+    "PYTHON_RUST_BRIDGE_ATTESTER_KEYS_NOT_PROVISIONED",
 )
 
 RUN_OUTPUT_ROOT_NAMES: Final = (
@@ -108,11 +93,29 @@ def _sha256_file(path: Path) -> str:
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _json_type_strict_equal(left: object, right: object) -> bool:
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, dict):
+        return set(left) == set(right) and all(
+            _json_type_strict_equal(left[key], right[key]) for key in left
+        )
+    if isinstance(left, list):
+        return len(left) == len(right) and all(
+            _json_type_strict_equal(left_item, right_item)
+            for left_item, right_item in zip(left, right, strict=True)
+        )
+    return left == right
+
+
 def _source_bindings() -> dict[str, str | None]:
     paths = (
         "src/hegel_machine/strict_cbor_v1.py",
         "src/hegel_machine/phase3_m25_wire_v1.py",
         "src/hegel_machine/phase3_m25_split_v1.py",
+        "src/hegel_machine/phase3_m25_rows_v1.py",
+        "src/hegel_machine/phase3_m25_qualification_v112.py",
+        "src/hegel_machine/phase3_m25_external_v1.py",
         "src/hegel_machine/phase3_m25_replay_v1.py",
         "src/hegel_machine/phase3_m25_readiness_v1.py",
         "src/hegel_machine/cli.py",
@@ -121,6 +124,9 @@ def _source_bindings() -> dict[str, str | None]:
         "rust/formal_bridge_m25/src/lib.rs",
         "rust/formal_bridge_m25/src/main.rs",
         "golden_vectors/phase3_m25_formal_wire_v1.json",
+        "golden_vectors/phase3_m25_typed_rows_v1.json",
+        "artifacts/phase3_m25_wire_completion_qualification_v112.json",
+        "artifacts/phase3_m25_external_preflight_v1.json",
     )
     result: dict[str, str | None] = {}
     for relative in paths:
@@ -135,12 +141,9 @@ def _gate_records() -> list[dict[str, object]]:
         if index <= 14:
             status = "SATISFIED_BY_SHRINK1_QUALIFICATION"
             blockers: list[str] = []
-        elif index in {15, 16, 17, 22}:
-            status = "BLOCKED_SPECIFICATION_AND_EXTERNAL_ACTOR"
-            blockers = list(SPECIFICATION_BLOCKERS + EXTERNAL_ACTOR_BLOCKERS)
         else:
-            status = "BLOCKED_SPECIFICATION"
-            blockers = list(SPECIFICATION_BLOCKERS)
+            status = "BLOCKED_EXACT_ERRATA_AND_EXTERNAL_ACTOR"
+            blockers = list(SPECIFICATION_BLOCKERS + EXTERNAL_ACTOR_BLOCKERS)
         records.append(
             {
                 "gate_number": index,
@@ -160,7 +163,7 @@ def phase3_m25_readiness_report() -> dict[str, object]:
     source_bindings = _source_bindings()
     foundation_files_present = all(value is not None for value in source_bindings.values())
     payload: dict[str, object] = {
-        "artifact": "phase3_m25_readiness_v1",
+        "artifact": "phase3_m25_readiness_v112_diagnostic",
         "artifact_kind": "DIAGNOSTIC_NON_AUTHORITATIVE",
         "machine_freeze_id": MACHINE_FREEZE_ID,
         "child_dsl_id": CHILD_DSL_ID,
@@ -174,9 +177,12 @@ def phase3_m25_readiness_report() -> dict[str, object]:
         "foundation_source_bindings": source_bindings,
         "foundation_files_present": foundation_files_present,
         "foundation_scope": {
-            "python_formal_wire": "SYNTHETIC_QUALIFICATION_ONLY",
+            "python_formal_wire": "DETERMINISTIC_CANDIDATE_IMPLEMENTED",
+            "python_typed_rows": "CHECKED_ARTIFACT_REPORTS_480_ODD_PLUS_85_SINK",
             "python_split_crypto": "PURE_FUNCTION_QUALIFICATION_ONLY",
-            "rust_formal_wire": "SYNTHETIC_QUALIFICATION_ONLY",
+            "rust_formal_wire": "CHECKED_ARTIFACT_CALLER_SUPPLIED_UNATTESTED_REPLAY",
+            "rust_binary_source_binding_claim": False,
+            "readiness_command_reexecutes_rust_replay": False,
             "authoritative_root_generation": False,
             "real_seed_or_key_generation": False,
         },
@@ -203,8 +209,10 @@ def phase3_m25_readiness_report() -> dict[str, object]:
             "transfer_v2_thresholds_as_verified_positive_priors": False,
         },
         "claim_boundary": (
-            "M2.5 deterministic foundations are under qualification, but no "
-            "authoritative formal root, seed genesis, actor attestation, M3 "
+            "Checked-in M2.5 v1.1.2 diagnostic evidence reports that typed rows "
+            "and candidate roots reproduce the public amendment values, but no "
+            "authoritative formal root, "
+            "seed genesis, actor attestation, M3 "
             "execution identity, closure verdict, outside certificate, or "
             "relation-invention claim exists."
         ),
@@ -256,7 +264,7 @@ def validate_phase3_m25_readiness_report(report: dict[str, object]) -> None:
 
     gates = report.get("m3_gates")
     expected_gates = _gate_records()
-    if gates != expected_gates:
+    if not _json_type_strict_equal(gates, expected_gates):
         raise AssertionError("M2.5 gate names, order, status, or blockers drifted")
     if report.get("specification_blockers") != list(SPECIFICATION_BLOCKERS):
         raise AssertionError("M2.5 specification blocker registry drifted")
@@ -274,7 +282,7 @@ def validate_phase3_m25_readiness_report(report: dict[str, object]) -> None:
         raise AssertionError("M2.5 diagnostic report self-ID mismatch")
 
     expected_report = phase3_m25_readiness_report()
-    if report != expected_report:
+    if not _json_type_strict_equal(dict(report), expected_report):
         raise AssertionError("M2.5 readiness report differs from current bound sources")
 
 

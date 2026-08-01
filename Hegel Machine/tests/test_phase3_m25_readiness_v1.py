@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 import json
+from pathlib import Path
 
 import pytest
 
@@ -9,10 +10,15 @@ from hegel_machine.phase3_m25_readiness_v1 import (
     M25_REMAINING_GATES,
     M3_GATES,
     RUN_OUTPUT_ROOT_NAMES,
+    SPECIFICATION_BLOCKERS,
     phase3_m25_readiness_report,
     validate_phase3_m25_readiness_report,
 )
 from hegel_machine.cli import main
+
+
+ROOT = Path(__file__).resolve().parents[1]
+HISTORICAL_CHECKED_IN = ROOT / "artifacts" / "phase3_m25_readiness_v1.json"
 
 
 def test_m25_report_preserves_not_run_and_exact_gate_lineage() -> None:
@@ -27,6 +33,9 @@ def test_m25_report_preserves_not_run_and_exact_gate_lineage() -> None:
     assert report["not_run_to_running_transition_allowed"] is False
     assert report["formal_input_roots"] is None
     assert report["m3_execution_manifest_root"] is None
+    assert report["machine_freeze_id"] == "hegel-freeze-p2b-p3-v1.1.2"
+    assert report["status"] == "EXACT_ERRATA_REQUIRED_EXTERNAL_GENESIS_BLOCKED"
+    assert len(SPECIFICATION_BLOCKERS) == 12
 
     gates = report["m3_gates"]
     assert isinstance(gates, list)
@@ -40,6 +49,16 @@ def test_m25_report_has_all_null_run_output_slots() -> None:
     assert isinstance(outputs, dict)
     assert tuple(outputs) == RUN_OUTPUT_ROOT_NAMES
     assert all(root is None for root in outputs.values())
+
+
+def test_checked_in_v111_readiness_remains_historical() -> None:
+    historical = json.loads(HISTORICAL_CHECKED_IN.read_text(encoding="utf-8"))
+    assert historical["machine_freeze_id"] == "hegel-freeze-p2b-p3-v1.1.1"
+    assert phase3_m25_readiness_report()["machine_freeze_id"] == (
+        "hegel-freeze-p2b-p3-v1.1.2"
+    )
+    with pytest.raises(AssertionError):
+        validate_phase3_m25_readiness_report(historical)
 
 
 @pytest.mark.parametrize(

@@ -32,6 +32,11 @@ DEFAULT_RUST_BINARY: Final = (
 CHECKED_IN_REPORT_PATH: Final = (
     PROJECT_ROOT / "artifacts" / "phase3_m25_synthetic_dual_replay_v1.json"
 )
+HISTORICAL_CHECKED_IN_REPORT_ID: Final = (
+    "phase3_m25_synthetic_dual_replay_"
+    "2ecdda87155ac648fa4dee91bd56fcbae488f423b4ca9699e0d145f5d675706a"
+)
+HISTORICAL_CHECKED_IN_COMMIT: Final = "d772b844"
 
 MACHINE_FREEZE_ID: Final = "hegel-freeze-p2b-p3-v1.1.1"
 GOLDEN_SCHEMA: Final = "hegel-phase3-m25-formal-wire-golden/1"
@@ -530,6 +535,7 @@ def _validate_endpoint_report(
     *,
     implementation: str,
     vectors: Sequence[object],
+    require_current_sources: bool = True,
 ) -> None:
     """Validate all portable endpoint claims against current sources/fixture."""
 
@@ -563,10 +569,29 @@ def _validate_endpoint_report(
         raise AssertionError(f"{implementation} endpoint expected-match count mismatch")
     if report.get("all_expected_outputs_match") is not True:
         raise AssertionError(f"{implementation} endpoint must match every expected output")
-    if report.get("source_hashes") != _source_hashes(source_files):
-        raise AssertionError(f"{implementation} endpoint source hashes are stale or forged")
-    if report.get("source_set_sha256") != _source_set_hash(source_files):
-        raise AssertionError(f"{implementation} endpoint source-set hash mismatch")
+    if require_current_sources:
+        if report.get("source_hashes") != _source_hashes(source_files):
+            raise AssertionError(
+                f"{implementation} endpoint source hashes are stale or forged"
+            )
+        if report.get("source_set_sha256") != _source_set_hash(source_files):
+            raise AssertionError(f"{implementation} endpoint source-set hash mismatch")
+    else:
+        source_hashes = report.get("source_hashes")
+        expected_paths = {_relative(path) for path in source_files}
+        if not isinstance(source_hashes, Mapping) or set(source_hashes) != expected_paths:
+            raise AssertionError(f"{implementation} historical source paths mismatch")
+        digests = tuple(source_hashes.values()) + (report.get("source_set_sha256"),)
+        if any(
+            not isinstance(digest, str)
+            or len(digest) != 71
+            or not digest.startswith("sha256:")
+            or any(character not in "0123456789abcdef" for character in digest[7:])
+            for digest in digests
+        ):
+            raise AssertionError(
+                f"{implementation} historical source digest syntax mismatch"
+            )
 
     results = report.get("results")
     if not isinstance(results, list) or len(results) != len(vectors):
@@ -606,8 +631,12 @@ def _validate_endpoint_report(
             raise AssertionError("Rust binary digest must be canonical sha256 hexadecimal")
 
 
-def validate_dual_synthetic_replay_report(report: Mapping[str, object]) -> None:
-    """Validate source binding, exact replay results, and non-authority state."""
+def _validate_dual_synthetic_replay_report(
+    report: Mapping[str, object],
+    *,
+    require_current_sources: bool,
+) -> None:
+    """Validate exact replay results and a current or pinned source boundary."""
 
     if not isinstance(report, Mapping):
         raise TypeError("M2.5 dual replay report must be a mapping")
@@ -679,8 +708,18 @@ def validate_dual_synthetic_replay_report(report: Mapping[str, object]) -> None:
         raise AssertionError("synthetic dual replay mismatch list must be empty")
     python = _require_mapping(report.get("python"), "python endpoint report")
     rust = _require_mapping(report.get("rust"), "rust endpoint report")
-    _validate_endpoint_report(python, implementation="python", vectors=vectors)
-    _validate_endpoint_report(rust, implementation="rust", vectors=vectors)
+    _validate_endpoint_report(
+        python,
+        implementation="python",
+        vectors=vectors,
+        require_current_sources=require_current_sources,
+    )
+    _validate_endpoint_report(
+        rust,
+        implementation="rust",
+        vectors=vectors,
+        require_current_sources=require_current_sources,
+    )
     if not _json_type_strict_equal(_actual_index(python), _actual_index(rust)):
         raise AssertionError("synthetic dual replay endpoint outputs differ")
 
@@ -695,6 +734,35 @@ def validate_dual_synthetic_replay_report(report: Mapping[str, object]) -> None:
         raise AssertionError("synthetic dual replay diagnostic report ID mismatch")
 
 
+def validate_dual_synthetic_replay_report(report: Mapping[str, object]) -> None:
+    """Validate a replay against the current Python and Rust source bytes."""
+
+    _validate_dual_synthetic_replay_report(
+        report,
+        require_current_sources=True,
+    )
+
+
+def validate_historical_dual_synthetic_replay_report(
+    report: Mapping[str, object],
+) -> None:
+    """Validate the immutable d772 evidence without calling it current.
+
+    The historical source bytes are no longer present at HEAD. The portable
+    replay and non-authority fields are checked, then the exact d772 diagnostic
+    report ID is required; this API never claims current source binding.
+    """
+
+    _validate_dual_synthetic_replay_report(
+        report,
+        require_current_sources=False,
+    )
+    if report.get("diagnostic_report_id") != HISTORICAL_CHECKED_IN_REPORT_ID:
+        raise AssertionError(
+            "historical synthetic dual replay diagnostic report ID mismatch"
+        )
+
+
 __all__ = [
     "ARTIFACT_KIND",
     "BINARY_PROVENANCE",
@@ -702,6 +770,8 @@ __all__ = [
     "CLAIM_BOUNDARY",
     "DEFAULT_RUST_BINARY",
     "GOLDEN_VECTOR_PATH",
+    "HISTORICAL_CHECKED_IN_COMMIT",
+    "HISTORICAL_CHECKED_IN_REPORT_ID",
     "PYTHON_SOURCE_FILES",
     "RUST_CRATE_ROOT",
     "RUST_SOURCE_FILES",
@@ -711,4 +781,5 @@ __all__ = [
     "python_synthetic_replay",
     "rust_synthetic_replay",
     "validate_dual_synthetic_replay_report",
+    "validate_historical_dual_synthetic_replay_report",
 ]

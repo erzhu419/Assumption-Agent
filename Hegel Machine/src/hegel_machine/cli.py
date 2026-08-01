@@ -61,6 +61,15 @@ from .phase3_m25_replay_v1 import (
     dual_synthetic_replay_report,
     validate_dual_synthetic_replay_report,
 )
+from .phase3_m25_external_v1 import (
+    external_genesis_preflight_report,
+    validate_external_genesis_preflight_report,
+)
+from .phase3_m25_qualification_v112 import (
+    DEFAULT_RUST_BINARY as DEFAULT_M25_V112_RUST_BINARY,
+    dual_typed_rows_qualification_report,
+    validate_dual_typed_rows_qualification_report,
+)
 from .vertical_slice import run_controlled_vertical_slice
 
 
@@ -106,6 +115,7 @@ def command_demo() -> int:
         "phase3_parent_dsl_version": "hegel-old-dsl-v1.0.0",
         "phase3_child_dsl_version": SHRINK1_DSL_VERSION,
         "phase3_child_freeze_version": SHRINK1_FREEZE_VERSION,
+        "phase3_m25_parent_freeze_version": "hegel-freeze-p2b-p3-v1.1.1",
         "phase3_m25_freeze_version": M25_FREEZE_VERSION,
         "phase3_child_subset_status": "VERIFIED_WITHIN_BUDGET",
         "phase3_child_subset_accepted_unique_count": 25_872,
@@ -113,7 +123,9 @@ def command_demo() -> int:
         "phase3_complete_closure_enumerated": False,
         "phase3_m25_gates_satisfied": 14,
         "phase3_m25_gates_total": 24,
-        "phase3_required_next_action": "M25_NORMATIVE_COMPLETION_AND_EXTERNAL_ACTORS",
+        "phase3_required_next_action": (
+            "M25_EXACT_ERRATA_THEN_INDEPENDENT_EXTERNAL_GENESIS"
+        ),
         "phase3_target_universe_rows": ODD_REDUCTION_TARGET.universe_rows,
         "phase3_null_control_universe_rows": (
             OBSERVED_OMITTED_SINK_CONTROL.universe_rows
@@ -249,6 +261,27 @@ def command_phase3_m25_synthetic_replay(
     return 0 if report["status"] == "SYNTHETIC_FOUNDATION_DUAL_REPLAY_PASS" else 1
 
 
+def command_phase3_m25_v112_qualify(
+    output: Path | None,
+    rust_binary: Path,
+) -> int:
+    report = dual_typed_rows_qualification_report(rust_binary.resolve())
+    validate_dual_typed_rows_qualification_report(report, rust_binary.resolve())
+    if output is not None:
+        _write_json(output, report)
+    print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if report["status"] == "DUAL_TYPED_ROWS_AND_ROOTS_CANDIDATE_PASS" else 1
+
+
+def command_phase3_m25_external_preflight(output: Path | None) -> int:
+    report = external_genesis_preflight_report()
+    validate_external_genesis_preflight_report(report)
+    if output is not None:
+        _write_json(output, report)
+    print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0
+
+
 def command_vertical_slice(output: Path | None) -> int:
     report = run_controlled_vertical_slice()
     if output is not None:
@@ -378,6 +411,27 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=DEFAULT_M25_RUST_BINARY,
     )
+    m25_v112 = subparsers.add_parser(
+        "phase3-m25-v112-qualify",
+        help=(
+            "independently replay v1.1.2 typed rows and candidate roots in "
+            "Python/Rust; this cannot claim formal roots or advance a gate"
+        ),
+    )
+    m25_v112.add_argument("--output", type=Path)
+    m25_v112.add_argument(
+        "--rust-binary",
+        type=Path,
+        default=DEFAULT_M25_V112_RUST_BINARY,
+    )
+    m25_external = subparsers.add_parser(
+        "phase3-m25-external-preflight",
+        help=(
+            "emit the exact-errata external-genesis stop report; this performs "
+            "no CSPRNG call, marker creation, signing, or state transition"
+        ),
+    )
+    m25_external.add_argument("--output", type=Path)
     vertical = subparsers.add_parser(
         "vertical-slice", help="run the controlled candidate/shadow-only slice"
     )
@@ -419,6 +473,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return command_phase3_m25_readiness(args.output)
     if args.command == "phase3-m25-synthetic-replay":
         return command_phase3_m25_synthetic_replay(args.output, args.rust_binary)
+    if args.command == "phase3-m25-v112-qualify":
+        return command_phase3_m25_v112_qualify(args.output, args.rust_binary)
+    if args.command == "phase3-m25-external-preflight":
+        return command_phase3_m25_external_preflight(args.output)
     if args.command == "vertical-slice":
         return command_vertical_slice(args.output)
     raise AssertionError(f"unhandled command: {args.command}")

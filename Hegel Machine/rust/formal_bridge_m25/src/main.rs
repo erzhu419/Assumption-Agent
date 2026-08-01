@@ -1,7 +1,8 @@
 use hegel_formal_bridge_m25::{
-    content_hash, decode_strict_cbor, derive_split_role_key, encode_canonical_cbor, hex_decode,
-    hex_encode, rfc6962_canonical_record_root, split_row_rank, split_seed_commitment, CborValue,
-    FormalWireError,
+    canonical_input_hash_v1, content_hash, decode_strict_cbor, derive_split_role_key,
+    encode_canonical_cbor, generate_typed_role_report_v1, hex_decode, hex_encode,
+    id_digest_preimage_v1, id_digest_v1, rfc6962_canonical_record_root, split_row_rank,
+    split_seed_commitment, typed_input_signature_id, CborValue, FormalWireError,
 };
 use serde_json::{json, Value};
 use std::io::{self, Read};
@@ -101,11 +102,39 @@ fn cbor_to_transport(value: &CborValue) -> Value {
                 json!({"negative_argument": argument.to_string()})
             }
         }
-        CborValue::Bytes(bytes) => json!({"bytes_hex": hex_encode(bytes)}),
+        CborValue::Bytes(bytes) => json!({ "bytes_hex": hex_encode(bytes) }),
         CborValue::Array(values) => Value::Array(values.iter().map(cbor_to_transport).collect()),
         CborValue::Bool(value) => json!(value),
         CborValue::Null => Value::Null,
     }
+}
+
+fn typed_role_report_json(report: hegel_formal_bridge_m25::TypedRoleReport) -> Value {
+    let samples: Vec<Value> = report
+        .samples
+        .into_iter()
+        .map(|sample| {
+            json!({
+                "universe_index": sample.universe_index,
+                "input_cbor_hex": hex_encode(&sample.input_cbor),
+                "canonical_input_hash_hex": hex_encode(&sample.canonical_input_hash),
+                "universe_row_cbor_hex": hex_encode(&sample.universe_row_cbor),
+                "universe_leaf_hash_hex": hex_encode(&sample.universe_leaf_hash),
+                "truth_row_cbor_hex": hex_encode(&sample.truth_row_cbor),
+                "truth_leaf_hash_hex": hex_encode(&sample.truth_leaf_hash),
+            })
+        })
+        .collect();
+    json!({
+        "role_name": report.role_name,
+        "input_signature_id": report.input_signature_id,
+        "row_count": report.row_count,
+        "samples": samples,
+        "universe_two_row_root_hex": hex_encode(&report.universe_two_row_root),
+        "truth_two_row_root_hex": hex_encode(&report.truth_two_row_root),
+        "universe_root_hex": hex_encode(&report.universe_root),
+        "truth_root_hex": hex_encode(&report.truth_root),
+    })
 }
 
 fn execute(request: &Value) -> Result<Value, FormalWireError> {
@@ -199,6 +228,39 @@ fn execute(request: &Value) -> Result<Value, FormalWireError> {
                 "op": operation,
                 "commitment_hex": hex_encode(&split_seed_commitment(&seed))
             }))
+        }
+        "id_digest" => {
+            let machine_id = string_field(object, "machine_id")?;
+            Ok(json!({
+                "ok": true,
+                "op": operation,
+                "machine_id": machine_id,
+                "preimage_hex": hex_encode(&id_digest_preimage_v1(machine_id)?),
+                "digest_hex": hex_encode(&id_digest_v1(machine_id)?),
+            }))
+        }
+        "validate_typed_input" => {
+            let encoded = hex_decode(string_field(object, "cbor_hex")?)?;
+            let value = decode_strict_cbor(&encoded)?;
+            let input_signature_id = typed_input_signature_id(&value)?;
+            Ok(json!({
+                "ok": true,
+                "op": operation,
+                "input_signature_id": input_signature_id,
+                "canonical_cbor_hex": hex_encode(&encoded),
+                "canonical_input_hash_hex": hex_encode(&canonical_input_hash_v1(&value)?),
+            }))
+        }
+        "typed_rows" => {
+            let role_id = u16_field(object, "role_id")?;
+            let report = generate_typed_role_report_v1(role_id)?;
+            let mut rendered = typed_role_report_json(report);
+            let rendered_object = rendered
+                .as_object_mut()
+                .expect("typed role report JSON is an object");
+            rendered_object.insert("ok".to_owned(), json!(true));
+            rendered_object.insert("op".to_owned(), json!(operation));
+            Ok(rendered)
         }
         _ => Err(request_error(format!(
             "unsupported operation {operation:?}"

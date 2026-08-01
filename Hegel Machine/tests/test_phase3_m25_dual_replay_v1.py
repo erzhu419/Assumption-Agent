@@ -21,6 +21,7 @@ from hegel_machine.phase3_m25_replay_v1 import (
     load_golden_vectors,
     python_synthetic_replay,
     validate_dual_synthetic_replay_report,
+    validate_historical_dual_synthetic_replay_report,
 )
 from hegel_machine.cli import main
 from hegel_machine.hashing import stable_hash
@@ -39,6 +40,8 @@ def m25_rust_binary() -> Path:
             "build",
             "--quiet",
             "--locked",
+            "--target-dir",
+            str(RUST_CRATE_ROOT / "target"),
             "--manifest-path",
             str(RUST_CRATE_ROOT / "Cargo.toml"),
         ],
@@ -103,9 +106,11 @@ def test_python_replay_matches_every_checked_in_expected_value() -> None:
     assert report["source_set_sha256"].startswith("sha256:")
 
 
-def test_checked_in_dual_report_is_current_and_valid_without_cargo() -> None:
+def test_checked_in_dual_report_is_pinned_historical_not_current() -> None:
     checked_in = json.loads(CHECKED_IN_REPORT_PATH.read_text(encoding="utf-8"))
-    validate_dual_synthetic_replay_report(checked_in)
+    validate_historical_dual_synthetic_replay_report(checked_in)
+    with pytest.raises(AssertionError, match="source hashes are stale"):
+        validate_dual_synthetic_replay_report(checked_in)
 
 
 def test_dual_replay_matches_expected_and_each_other_without_advancing_authority(
@@ -157,18 +162,9 @@ def test_dual_replay_matches_expected_and_each_other_without_advancing_authority
     assert report["formal_roots_generated"] is False
 
     checked_in = json.loads(CHECKED_IN_REPORT_PATH.read_text(encoding="utf-8"))
-    validate_dual_synthetic_replay_report(checked_in)
-
-    # A debug executable digest is useful local provenance but is not expected
-    # to reproduce across build paths, platforms, or Rust toolchains.  Every
-    # portable input, source digest, vector result, and authority boundary must
-    # still reproduce exactly.
-    checked_portable = deepcopy(checked_in)
-    replay_portable = deepcopy(report)
-    for candidate in (checked_portable, replay_portable):
-        candidate.pop("diagnostic_report_id")
-        candidate["rust"].pop("binary_sha256")
-    assert checked_portable == replay_portable
+    validate_historical_dual_synthetic_replay_report(checked_in)
+    assert checked_in["python"]["results"] == report["python"]["results"]
+    assert checked_in["rust"]["results"] == report["rust"]["results"]
 
 
 def test_authority_boundary_tamper_is_rejected_before_replay(tmp_path: Path) -> None:
@@ -185,12 +181,12 @@ def test_dual_report_rejects_authority_or_self_id_tampering() -> None:
     report = deepcopy(checked_in)
     report["m3_gate_delta"] = 1
     with pytest.raises(AssertionError, match="m3_gate_delta"):
-        validate_dual_synthetic_replay_report(report)
+        validate_historical_dual_synthetic_replay_report(report)
 
     report = deepcopy(checked_in)
     report["diagnostic_report_id"] = "phase3_m25_synthetic_dual_replay_" + "00" * 32
     with pytest.raises(AssertionError, match="report ID mismatch"):
-        validate_dual_synthetic_replay_report(report)
+        validate_historical_dual_synthetic_replay_report(report)
 
 
 @pytest.mark.parametrize(
@@ -214,7 +210,7 @@ def test_dual_report_rejects_self_consistent_nested_forgery(
         prefix="phase3_m25_synthetic_dual_replay_",
     )
     with pytest.raises(AssertionError, match=message):
-        validate_dual_synthetic_replay_report(report)
+        validate_historical_dual_synthetic_replay_report(report)
 
 
 def test_dual_report_rejects_bool_integer_type_confusion_with_valid_self_id() -> None:
@@ -233,7 +229,7 @@ def test_dual_report_rejects_bool_integer_type_confusion_with_valid_self_id() ->
         prefix="phase3_m25_synthetic_dual_replay_",
     )
     with pytest.raises(AssertionError, match="stale or forged"):
-        validate_dual_synthetic_replay_report(report)
+        validate_historical_dual_synthetic_replay_report(report)
 
 
 def test_dual_replay_cli_emits_non_authoritative_artifact(
