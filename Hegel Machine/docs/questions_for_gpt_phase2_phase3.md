@@ -1,9 +1,15 @@
 # 交给网页端 GPT 的方案问题：Phase 2 exit 与 Phase 3 入口
 
+> 状态：已回答。规范性回答归档在
+> [`answer_for_gpt_phase2_phase3.md`](answer_for_gpt_phase2_phase3.md)。实现审计后发现的
+> 精确冻结冲突与下一轮问题见
+> [`questions_for_gpt_phase2b_phase3_freeze.md`](questions_for_gpt_phase2b_phase3_freeze.md)。
+
 这些问题不会阻塞当前施工。当前已完成的是 verifier-ready synthetic witness 上的
-Phase-2 controlled API-blinded selector mechanics qualification，并保持
-shadow-only / fail-closed；family-neutral typed measurements 仍是待讨论的正式
-exit 输入边界。
+**Phase-2A Controlled Typed-Selector Mechanics Qualification**；其 API-blinded /
+source-visible 边界保持 shadow-only / fail-closed；family-neutral typed
+measurements 在本问题提出时仍是待讨论的正式 exit 输入边界，现已由上方归档回答
+冻结为 Phase-2B 方向。
 
 ## 1. Phase-2 正式 exit 的输入边界
 

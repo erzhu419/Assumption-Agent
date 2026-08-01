@@ -19,8 +19,10 @@
 > competitor 未完成或全部违反时按冻结 policy abstain，并生成绑定 law、role map、
 > scale、epoch 和 residual drift 的跨 episode witness。
 
-第一层叫 verifier/integration qualification；第二层叫 controlled API-blinded
-selector qualification。它们都不叫 raw-evidence law-family discovery，也不是
+第一层叫 verifier/integration qualification；第二层的唯一里程碑名称是
+**Phase-2A Controlled Typed-Selector Mechanics Qualification**，一般能力名为
+**Explicit-Projection Typed Structural Selection**，scale 子能力名为
+**Scale-Indexed Candidate Projection Selection**。它们都不叫 raw-evidence law-family discovery，也不是
 正式 Phase-2 exit evidence。v0.2 corpus 有 43 个 synthetic case（24 个
 answerable、19 个应 abstain），每例 24 个 projections，六族均跨两种 scale；
 24 个正例形成 12 个 preservation pair。当前 controlled data 只是代码内合成与
@@ -28,6 +30,15 @@ adapter replay。Phase-2 selector 报告没有 sealed manifest，输出的是内
 `controlled_api_selector_qualified`；另一个 governance vertical slice 才输出
 `candidate_framework`。两者都不授权 active graph mutation。即使 governance
 manifest 结构检查通过，当前版本也没有外部签名可信根，不会晋升 ACTIVE。
+
+此外可以说：Phase-2B 已有 family-neutral-shaped field-allowlisted wire、内部
+role/scale candidate enumeration、绑定完整 adapter grid 的 interval selector core、
+统计协议、immutable lifecycle record/进程内防分叉 guard 和 OCI launch-spec contract。
+这些是正式轨道的实现基础，不是效果证据，也不证明允许字段无 oracle side channel、
+跨进程 one-shot 或 runtime 隔离。当前 artifact
+准确状态是 `preregistration_candidate_with_open_freeze_questions`，并显式记录
+holdout 未生成、custodian/runtime 未 attested、projection compiler 和完整 pipeline
+尚未实现。
 
 ## 当前不能说什么
 
@@ -48,6 +59,14 @@ manifest 结构检查通过，当前版本也没有外部签名可信根，不�
   source-visible generator 的 case schedule 可被重建，公开 ID 不是保密边界。
 - fixture 值由 evaluator case spec 反向构造；family/binding/scale accuracy 是 selector
   mechanics 的功能测试，不是独立 raw evidence 上的能力估计。
+- 不能把 isolation argv/dataclass 当作真实隔离证明，也不能把一次性状态机对象当作
+  独立 custodian attestation。
+- 不能说 Phase-2B 已通过：没有 secret 720-case holdout、外部 baselines、prediction-
+  before-reveal 时间证据、consumed score report 或第三方 replay。
+- 不能说 Phase-3A 已开始正式实验或 parity 已证明 outside。旧 DSL 的
+  intended standard numeric semantics 下，`absolute(difference(x,y))` 给出 binary XOR
+  truth table；这只是 target-design sanity，不是 executable closure verdict。高元 target、
+  完整 finite closure、sealed replay verifier 和 MDL scorer 尚未冻结/实现。
 
 ## 权力与数据隔离
 

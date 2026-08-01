@@ -4,8 +4,12 @@
 v2 是广义对位/GSCL；本目录冻结它们中需要复用的对象与算法，但活动代码不
 反向 import 旧目录，也不继承旧实验的效果分数。
 
-当前活动实现是 v0.2.0。它不是“自动发明哲学”的演示，而是可运行的
-Phase 1–2 verifier 与 synthetic controlled selector/replay qualification：
+当前已完成里程碑的唯一名称是 **Phase-2A Controlled Typed-Selector Mechanics
+Qualification**。一般能力称为 **Explicit-Projection Typed Structural Selection**，
+其中 scale 子能力只能称为 **Scale-Indexed Candidate Projection Selection**。
+活动包版本仍是 v0.2.0；它不是“自动发明哲学”的演示，而是可运行的 Phase 1–2
+verifier、Phase-2A development qualification，以及正在施工的 Phase-2B/Phase-3
+正式轨道合同：
 
 ```text
 L0 observations
@@ -19,6 +23,23 @@ L0 observations
   → measured evidence receipts
   → conservative theory patch gate
   → immutable theory version
+
+Phase-2B formal track（尚未资格化）：
+
+family-neutral-shaped typed evidence wire + independent side-channel audit
+  → internal role/scale hypothesis enumeration
+  → adapter-grid-committed interval selector with admissible scale sets
+  → externally enforced untrusted OCI recognizer             [尚未可运行]
+  → prediction commitment before answer reveal
+  → one-shot independent-custodian scoring                    [目标，未实现]
+
+Phase-3 freeze track（尚未开始正式 hidden experiment）：
+
+partially frozen old DSL
+  → untrusted closure-receipt wire                             [未重放]
+  → sealed evaluator IN_LANGUAGE / OUTSIDE / INCONCLUSIVE     [尚未实现]
+  → exact Fraction MDL arithmetic precheck                    [formal gate 关闭]
+  → shadow-only conservative integration
 ```
 
 已实现：
@@ -50,6 +71,26 @@ L0 observations
   决定唯一选择或 abstention；measurement 按 observable 的 witness-role footprint
   绑定，未改变角色的底层值必须由相互竞争的 binding 共同复用；12 对跨 episode
   preservation witness 覆盖 family × scale。
+- Phase-2B family-neutral-shaped public wire allowlist：公开 ID 具有 UUIDv4 语法，typed value /
+  interval、单位、时空 support、不确定性、来源 hash、aggregation graph、transform
+  catalog 和 missingness 全部规范化；oracle、candidate-private、family-specific 和
+  unknown fields 一律 fail-closed；这只证明字段形状，不证明允许字段没有编码答案；
+- 从 public bundle 内部枚举完整 role binding 与 scale hypothesis 的 adapter，超预算、
+  registry 漂移或非唯一 transform path 时不返回部分候选；
+- public API 从 evidence bundle + frozen registry 重新运行 adapter，并绑定其完整
+  candidate-grid commitment 的 interval selector core；缺任一 hypothesis、
+  candidate metadata 漂移或任一结构 competitor 区间不确定时均 abstain，并支持
+  unique structure + preregistered admissible scale set，而不是强迫 scale top-1；
+- Phase-2B 720-case 统计合同、95% one-sided Wilson LCB、family/scale marginal slice、
+  shared-footprint gate、三类 baseline registry 和 preservation 独立分母；
+- seal → prediction commitment → reveal → consumed 的 immutable lifecycle model、
+  answer salted-commitment opening 校验和进程内原子防分叉 guard，以及 read-only
+  input/root、no network、无 repo/generator/answer mount 的 OCI launch-spec contract；
+  这些不等于跨进程持久 one-shot custodian 或可运行 recognizer；
+- Phase-3 old DSL 已决定部分的 content-addressed contract、50,000 program fail-closed
+  budget、四态 adequacy 类型、untrusted receipt schema、精确 Fraction MDL 算术预检，
+  以及按预期标准数值语义成立的 XOR2 target-design sanity；后两者都不是 formal gate
+  或 executable closure verdict。
 
 明确未实现或未宣称：
 
@@ -74,6 +115,24 @@ L0 observations
   manifest，在独立 custodian 签名验证器实现前也只到
   `candidate_framework`，不会写入 active theory graph；当前 lifecycle 只是
   本地非权威 shadow ledger，writer 签名接入前不产生不可逆全局 REJECT。
+- Phase-2B typed evidence → executable verifier projection 的正式 compiler 和完整
+  unsealed pipeline validation；当前只完成 wire、candidate enumeration、interval
+  selector 与 runner/state-machine 合同；
+- 720-case secret holdout、独立 custodian、真实 OCI attestation、三套冻结外部
+  baseline 或 consumed score report；
+- allowed UUID/provenance/role-candidate/missingness/transform 字段的 answer-correlation
+  与 side-channel audit、随机并全局 shuffle 的 ID 分配证明，以及把 standard error /
+  absolute bound 编译成闭区间的冻结 uncertainty semantics；
+- 专用 recognizer CLI、严格 720-bundle prediction archive evaluator、签名 SBOM /
+  runtime attestation 验证器和跨进程持久的 append-only CAS ledger；
+- Phase-3 outside certificate：当前协议仍缺 exact rational grid、bounded universe、
+  operator semantics、equivalence/canonicalizer/enumerator、MDL code table 和精确
+  high-arity parity/hidden-sink generator；
+- sealed closure archive replay/root recomputation verifier 与从冻结 partition/code table
+  重算长度的 MDL scorer；当前调用者自报 receipt 不能产生 semantic certificate；
+- 把“禁用 XOR/parity 名称”当作不可表达证明。旧 DSL 的
+  `absolute(difference(x,y))` 已能表达二元 XOR，因此最终 target 必须由完整 closure
+  的 extensional enumeration 决定。
 
 ## 快速运行
 
@@ -86,6 +145,10 @@ PYTHONPATH=src python3 -m hegel_machine benchmark \
   --output artifacts/phase2_benchmark.json
 PYTHONPATH=src python3 -m hegel_machine phase2-exit \
   --output artifacts/phase2_exit_benchmark_v2.json
+PYTHONPATH=src python3 -m hegel_machine phase2b-preregister \
+  --output artifacts/phase2b_preregistration_v1.json
+PYTHONPATH=src python3 -m hegel_machine phase3-preregister \
+  --output artifacts/phase3_preregistration_v1.json
 PYTHONPATH=src python3 -m hegel_machine vertical-slice \
   --output artifacts/controlled_vertical_slice_v1.json
 PYTHONPATH=src python3 -m hegel_machine demo
@@ -101,5 +164,9 @@ PYTHONPATH=src python3 -m hegel_machine demo
 - `docs/`：架构、证据边界、迁移映射和来源说明。
 
 更严格的 claim 边界见
-[`docs/evidence_boundaries.md`](docs/evidence_boundaries.md)，Phase-2 exit 协议见
-[`docs/phase2_exit_protocol.md`](docs/phase2_exit_protocol.md)。
+[`docs/evidence_boundaries.md`](docs/evidence_boundaries.md)，Phase-2A development 协议见
+[`docs/phase2_exit_protocol.md`](docs/phase2_exit_protocol.md)。正式轨道施工边界见
+[`docs/phase2b_preregistration.md`](docs/phase2b_preregistration.md) 与
+[`docs/phase3_freeze_readiness.md`](docs/phase3_freeze_readiness.md)；待网页 GPT
+消歧的问题见
+[`docs/questions_for_gpt_phase2b_phase3_freeze.md`](docs/questions_for_gpt_phase2b_phase3_freeze.md)。

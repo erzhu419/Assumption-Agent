@@ -1,4 +1,8 @@
-# Phase-2 API-blinded recognition protocol v0.2
+# Phase-2A Controlled Typed-Selector Mechanics Qualification
+
+当前一般能力的冻结名称是 **Explicit-Projection Typed Structural Selection**；
+其中 scale 子能力只能称为 **Scale-Indexed Candidate Projection Selection**。
+本文档描述 development fixture 协议，不是正式 Phase-2 exit 协议。
 
 ## 目的
 
@@ -101,7 +105,9 @@ family × scale 组成 12 个原例/实体改名 preservation pair。
 
 ## Exit 判定
 
-当前 artifact 的状态标签是 `controlled_api_selector_qualified`，但它不是正式 Phase-2 exit：
+当前里程碑的唯一名称是 **Phase-2A Controlled Typed-Selector Mechanics
+Qualification**。Artifact 为兼容已有机器消费者，仍保留内部状态标签
+`controlled_api_selector_qualified`，但它不是正式 Phase-2 exit：
 
 - synthetic；
 - validation split，未 sealed；
@@ -111,10 +117,13 @@ family × scale 组成 12 个原例/实体改名 preservation pair。
   不测 family-neutral raw evidence 或 raw extractor；
 - 没有真实 embedding / learned structural model baseline。
 
-因此它支持“API-blinded selector 的工程资格化”，不支持“Phase 2 已以外部证据完成”或
+因此它支持“受控 typed-selector mechanics 工程资格化”，不支持“Phase 2 已以外部证据完成”或
 “系统已经发现未知关系”。它也不是 sealed-holdout 结果、raw extraction
 qualification 或 open-world discovery。正式 exit 的样本量、置信阈值和
 raw-evidence 边界需在 holdout 打开前预注册。
+
+当前从两个显式 scale-tagged projections 中选择的能力不得写成 context-inferred
+scale、autonomous scale discovery 或 scale abstraction learning。
 
 ## 重放
 
@@ -137,8 +146,11 @@ table，scale map 固定为 identity；两者都不从 selected output 事后拟
 
 1. 冻结 `RelationLanguageSnapshot` 和允许的低阶 composition；
 2. 冻结 typed DSL、operator、arity、depth、search budget 与 MDL code；
-3. 先做 parity-like hidden relation 的 expression / non-equivalence test；
+3. 先证明低元 parity 已在旧语言内，再冻结高元 bounded-EntitySet parity-like target
+   并做完整 closure expression / non-equivalence test；
 4. 保持 candidate/shadow-only，不提前打开 LANGUAGE compiler 或 ACTIVE graph。
 
-尚需方向讨论的条目见
-[`questions_for_gpt_phase2_phase3.md`](questions_for_gpt_phase2_phase3.md)。
+当前 precise freeze blockers 见
+[`phase3_freeze_readiness.md`](phase3_freeze_readiness.md)，交给网页 GPT 的下一轮
+问题见
+[`questions_for_gpt_phase2b_phase3_freeze.md`](questions_for_gpt_phase2b_phase3_freeze.md)。

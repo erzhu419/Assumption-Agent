@@ -1,4 +1,4 @@
-# Architecture v0.2
+# Architecture v0.2 + formal-track contracts
 
 ## 1. 一个状态，而不是三套互斥公式
 
@@ -68,7 +68,7 @@ probe | language | evaluator | revision
 这实现理论坐标下降：冻结其余主要组件，以最小扩展定位究竟是哪一层不足。
 语言扩展只有在本体不足证书通过后才可提出。
 
-## 5. Phase-2 数据流
+## 5. Phase-2A development 数据流
 
 ```text
 candidate retrieval (semantic allowed)
@@ -118,7 +118,70 @@ family × scale 的原例/实体改名 pair。entity correspondence 来自 recog
 selected output 事后生成。它只是 bounded metamorphic witness，不称 functor 或通用
 structural correspondence。
 
-## 6. 诊断与理论生长
+## 6. Phase-2B 正式轨道边界
+
+Phase-2B 不会在 Phase-2A report 外包一层 `sealed=true`。它使用新的 public wire、
+进程和一次性状态边界：
+
+```text
+PublicEvidenceBundle (family-neutral-shaped, UUIDv4 syntax, field allowlist)
+  → Phase2BAdapterRegistry
+  → complete internal family × injective role binding × scale-path hypotheses
+  → verifier projection compiler                         [尚未实现]
+  → interval residual / heterogeneous tolerance
+  → unique family+binding and admissible scale set, or abstain
+  → PredictionBundle commitment
+```
+
+`phase2b_wire.py` 不 import law/verifier、generator、evaluator 或 Phase-2A fixture；
+它严格拒绝 law/gold/PASS/rank/margin/candidate-private fields。Adapter 内部才持有
+opaque quantity/role/family registry，调用者不能传 projection grid。枚举超过冻结
+budget、缺 role/quantity registry、或 scale DAG 到同一节点有多条未消歧 path 时，
+adapter 不返回部分 grid。
+
+Public selector 同样不接受 caller-provided grid commitment；它从输入 bundle 与
+frozen registry 确定性重跑 adapter，再将每项 evaluation 与完整 hypothesis ID、
+family/binding/scale metadata 和 footprint commitment 对齐。自洽但截断的子网格
+不能给自己签发“complete”声明。
+
+这里的 `family-neutral-shaped` 只表示 schema 没有显式 family/gold 字段。允许的 UUID、
+provenance hash、role candidates、missingness 和 unused transforms 仍可能成为 covert
+answer channel；正式 run 必须由独立 generator 随机化并全局 shuffle ID，再做重命名
+不变量及 allowed-field answer-correlation/side-channel audit。当前这些审计尚未实现。
+
+新 selector 使用 residual 和 tolerance 的闭区间。保守 normalized interval 为：
+
+```text
+[residual.lower / tolerance.upper,
+ residual.upper / tolerance.lower]
+```
+
+`upper ≤ 1` 才 PASS，`lower > 1` 才 FAIL，中间区间 fail-closed。选择结果可以是
+唯一 family+binding 下一个或多个 preregistered admissible scale；这与当前只在
+显式 scale-tagged projection 间选择的 Phase-2A 能力不同。
+
+Host runner 只生成 OCI launch-spec contract：read-only input/root、no network、drop all
+capabilities、no-new-privileges、ephemeral tmpfs、固定 image digest、资源上限，而且
+repo、generator 与 answer manifest 不挂载。该本地 contract 不证明 runtime 真被
+这样执行；冻结入口目前只是保留路径，专用 recognizer CLI、严格 720-output archive
+evaluator、签名 SBOM 与 external attestation verifier 均未实现。
+
+Seal lifecycle 是单向的：
+
+```text
+PREREGISTERED
+  → GENERATED_SEALED
+  → PREDICTIONS_COMMITTED
+  → CONSUMED
+```
+
+answer manifest 只能在 prediction/audit archive hash 固定后 reveal，并校验 salted
+commitment opening。当前 guard 只在同一 Python custodian 进程内原子阻止 parent
+分叉；它不是跨重启持久的 append-only CAS ledger，也不是独立 custodian 证明。
+当前 720-case protocol 仍有机器可见的 freeze blockers，因此没有生成
+holdout，也没有完整 typed evidence → verifier projection compiler 或 pipeline result。
+
+## 7. 诊断与理论生长
 
 固定诊断顺序：
 
@@ -159,10 +222,29 @@ receipt hashes、ledger、policy、reduction、epoch 和 proposed-child hash。
 非活动 lifecycle 写入也保存完整 replay inputs 并重新计算 certificate；
 `authorize_promotion` 当前只执行校验后拒绝，直到外部可信根接入。
 
-## 7. Phase-3 之后的接口
+## 8. Phase-3 freeze 与之后的接口
 
 `OntologyInadequacyReport`、`TheoryPatch(language)`、`ReductionMap`、
 `IdentifiabilityCertificate`、`RobustificationCandidate` 和
 `IdealizationContract` 已作为真实接口存在，但当前 benchmark 不以它们证明
 “已发明未知定律”。Phase 3 必须另建 hidden-law benchmark、冻结 validation
 并通过 expression/non-equivalence test 后才能提升 claim。
+
+Phase-3 contract 已冻结决定稿中的 sorts、leaves、operators、arity/entity-set/AST/
+clause/composition/parameter/scope 上限与 50,000 program budget，但 rational grid、
+bounded universe、total semantics、equivalence/canonicalizer/enumerator、MDL code
+table 和 hidden generator 仍为空 content binding。任何缺项都会得到
+`INCONCLUSIVE_SEMANTICS`；枚举到 budget 仍未闭合则是 `INCONCLUSIVE_BUDGET`。
+
+一个重要的 target-design sanity 是：按预期标准 bit/absolute-difference 数值语义，
+`absolute(difference(x,y))` 给出二元 XOR truth table。由于 operator semantics 尚未
+冻结、该表达式也未被 old-DSL parser/executor 重放，它不是 formal `IN_LANGUAGE`
+closure verdict；但足以说明仅禁用 `xor/parity` 名称不能作为不可表达证明。正式 target
+必须是冻结的高元 bounded-EntitySet parity-like relation，并由完整 extensional
+closure 证明；hidden sink 必须是“已有 opaque measurement、但 scope/aggregation
+遗漏”的 in-language null，而不能把真正 latent sink 事后称作旧语言 refinement。
+
+所有 Phase-3 closure/MDL receipt 都是未受信 caller input。当前只实现 schema 与
+exact `Fraction` arithmetic precheck；sealed closure replay/root recomputation verifier
+和从冻结 partition/code table 重算长度的 MDL scorer 未实现，因此 formal outside / MDL
+gate 硬关闭。LANGUAGE compiler 和 ACTIVE append 也仍然关闭。

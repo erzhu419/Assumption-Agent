@@ -8,6 +8,11 @@ import pytest
 
 import hegel_machine.phase2_exit as phase2_exit_module
 from hegel_machine.hashing import canonical_json
+from hegel_machine.milestones import (
+    CURRENT_SCALE_CAPABILITY_NAME,
+    CURRENT_TYPED_SELECTION_CAPABILITY_NAME,
+    PHASE2A,
+)
 from hegel_machine.phase2_exit import (
     EXIT_SCALES,
     PHASE2_EXIT_RECOGNITION_POLICY,
@@ -283,10 +288,16 @@ def test_detached_answer_object_is_not_a_recognizer_parameter():
 def test_phase2_exit_report_measures_every_required_control():
     report = run_phase2_exit_benchmark()
     assert report["benchmark"] == "phase2_api_blinded_selector_mechanics_v2"
+    assert report["milestone_id"] == PHASE2A.machine_id
+    assert report["milestone_name"] == PHASE2A.name
+    assert report["capability_name"] == CURRENT_TYPED_SELECTION_CAPABILITY_NAME
+    assert report["scale_capability_name"] == CURRENT_SCALE_CAPABILITY_NAME
     assert report["synthetic"] is True
+    assert report["development_fixture_only"] is True
     assert report["source_visible_generator"] is True
     assert report["sealed_holdout"] is False
     assert report["formal_phase2_exit_claim"] is False
+    assert report["context_conditioned_scale_inference_qualified"] is False
     assert report["status"] == "controlled_api_selector_qualified"
     assert report["recognizer_receives_answer_key"] is False
     assert report["fixture_values_conditioned_on_evaluator_case_spec"] is True

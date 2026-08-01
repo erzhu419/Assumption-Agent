@@ -1,4 +1,4 @@
-"""Controlled API-blinded recognition qualification for the Phase-2 exit gate.
+"""Phase-2A controlled typed-selector mechanics qualification.
 
 The recognizer receives a uniform envelope of frozen family/role/scale
 projections.  The answer key lives only in this benchmark evaluator.  Raw
@@ -17,6 +17,12 @@ from typing import Any, Mapping
 
 from .bootstrap import initial_theory
 from .hashing import canonical_json, stable_hash
+from .milestones import (
+    CURRENT_SCALE_CAPABILITY_NAME,
+    CURRENT_TYPED_SELECTION_CAPABILITY_NAME,
+    PHASE2A,
+    PHASE2A_LEGACY_REPORT_STATUS,
+)
 from .recognition import (
     RecognitionDecision,
     RecognitionDisposition,
@@ -1466,12 +1472,18 @@ def run_phase2_exit_benchmark(
     report: dict[str, Any] = {
         "benchmark": "phase2_api_blinded_selector_mechanics_v2",
         "schema_version": "hegel-machine-phase2-exit/0.2",
+        "milestone_id": PHASE2A.machine_id,
+        "milestone_name": PHASE2A.name,
+        "capability_name": CURRENT_TYPED_SELECTION_CAPABILITY_NAME,
+        "scale_capability_name": CURRENT_SCALE_CAPABILITY_NAME,
         "synthetic": True,
+        "development_fixture_only": True,
         "source_visible_generator": True,
         "sealed_holdout": False,
         "formal_phase2_exit_claim": False,
+        "context_conditioned_scale_inference_qualified": False,
         "status": (
-            "controlled_api_selector_qualified"
+            PHASE2A_LEGACY_REPORT_STATUS
             if all(exit_checks.values())
             else "engineering_qualification_failed"
         ),
