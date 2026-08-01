@@ -29,10 +29,16 @@
 >   但后续已在同一 source-free 非评分 harness 中新增独立的 bounded byte-outcome-total document-envelope
 >   ABI：旧 v2 leaf 与 parser 完全不改，0–16-token 原句显式记为 context-only，17–175-token 原句调用
 >   原 leaf，长句作 exact-byte balanced split，并在 root 上重算 UTF-8 grounding、global occurrence 与
->   ownership。30 项公开 adversarial tests 与扩展后的 451 项 GSCL 回归均通过。该层明确只证明
->   caller-bound orchestration consistency，`formal_leaf_authority_established=false`、
->   `downstream_eligible=false`；尚需固定真实 Qwen public fixtures 以及 bounded set-level consumer
->   qualification，之后才可直接去全新 source/cohort。旧 ARN 仍不得重放，也不得按 63 项补关键词/gate
+>   ownership。随后固定真实 Qwen 对 176/351/mixed Unicode-punctuation/1,024-token 四个公开文档
+>   各执行两次，4/4 无 typed failure、全部 byte-exact；两片及手工 pure aggregate 均唯一启动、
+>   systemd success、`NRestarts=0`，model tree 后验 exact。独立 bounded set consumer 也已闭合：它把
+>   exact `NarrativeDocumentEnvelopeV1` 映射为 mention-local categorical relation set，typed failure
+>   阻断全部 partial，不把 context/NO_RELATION 伪造成负边，也不发明 quantity、constraint、observable
+>   或 law binding。四个相关公开 suite 合计 77/77 passed。当前证据是“真实 Qwen envelope runtime”与
+>   “确定性 consumer exact-ABI”两项模块化组合；冻结运行并未实际把四个 Qwen 输出送进后加入的
+>   consumer，因此 `empirical_real_qwen_consumer_execution=false`，不能夸大为端到端效果证据。机制前置
+>   资格项已闭合，下一步可直接冻结全新 untouched public intrinsic measurement。旧 ARN 仍不得重放，
+>   也不得按 63 项补关键词/gate
 > - WikiSQL UAO P4 初始 v5 终态（后续 continuation 见上）：共享节点 v5 implementation/execution freeze、official WikiSQL 1.1
 >   source custody、content-addressed deployment 与 source-free import/systemd 审计均已提交；唯一 formal
 >   invocation `a8d1c5c…d2319` 通过 `ADMITTED_SHARED_RESOURCE`，`NRestarts=0`，并在 durable attempt/live
@@ -6190,8 +6196,75 @@ punctuation/Unicode 与 1,024-token 四个公开 fixture 做一次固定 executa
 measurement，不回到旧 ARN，也不继续追加 gate。总论文目标的唯一效果缺口——fresh reality A_hold
 三-family 同时严格胜 RAW 与 official HippoRAG——仍未因本轮 source-free 机制施工而改变。
 
+### 12.72 2026-08-01：真实 Qwen document-envelope 与 bounded set consumer 的模块化资格项闭合
+
+12.71 的两个机制资格项都已完成，但证据边界分成两层，不能合并夸大。第一层是事前冻结的真实
+Qwen executable qualification。execution freeze self 为
+`fe98bc59cc172b7ed8ff57dfaf37c1798c43f72e93d784cd5334318c06aecbe5`，implementation commit 为
+`9972860e799bfe7ca78aa4dba4a85dca3ee8256c`。311linux 上两个 GPU shard 与手工 pure aggregate
+各只启动一次，均 `NRestarts=0`、systemd success：
+
+```text
+unit / role        InvocationID                       receipt status
+shard0             80206c707ffa46e8a12f9538a9501f6f   PASS
+shard1             b541d808fc8a4721a8c8fb349eb8714b   PASS
+pure aggregate     aa17bf94d0304f5985080369ddc8153f   PASS
+```
+
+176、351、mixed punctuation/Unicode 与 1,024 lexical-token 四个固定公开文档全部
+`EXECUTED_WITHOUT_TYPED_FAILURE`，teacher-forced canary、两次 byte-exact repeat 与四份
+extracted-branch coverage 均通过；typed failure、repeat mismatch 和 branch-not-exercised 都为 0。
+aggregate file SHA-256=`226032a86d0fa7c15511c0c31c48b2f0794a1521e93a47d361638ae8e6a33261`，
+self=`5c1dce6611f71760395a9be9f9b43750e7271696380ba6ab1911e4d48fd33d29`。观测到的最大
+root 为 1,024 tokens、6 segments、6 leaf calls、379 candidates、114 forward batches；单进程
+max RSS 为 6,993,808 KiB，CUDA allocated/reserved peak 为 5,154,886,656 / 6,010,437,632 bytes。
+后验重新扫描的冻结 model tree 与 manifest exact 一致：22 files、4 directories、0 symlink，文件/目录
+mode 分别全部为 `0444/0555`。labels、source、network、API、scorer、online evaluator 与 free-form
+generation 计数均为 0。完整安全汇总见
+[`document-envelope qualification result`](../manifests/gscl_document_envelope_fixed_qualification_result_v1.json)。
+
+第二层是新加入的
+[`bounded_set_consumer.py`](../replication_runtime/gscl_narrative_extractor_v2/bounded_set_consumer.py)。它只接受
+exact `NarrativeDocumentEnvelopeV1`，逐条把已经 grounded 的 extracted relation 投影为 mention-local
+categorical unit 与 `StructuralEpisode`：endpoint 只能叫 positional `slot0/slot1`，不能伪称有向
+source/target；相同 quote 跨 segment 也不作 coreference。context-only 与 NO_RELATION 只进入 coverage，
+不制造 relation；任一 upstream typed failure 阻断所有 partial projection。semantic signature 是
+rename-invariant categorical multiset，evidence binding 另行绑定原始 UTF-8 spans。consumer 不产生
+quantity、constraint、observable 或 `LawBinding`，五类 law readiness 只能是 missing/partial/inconclusive；
+单个 unit 也没有独立 authority，只有 enclosing result 的全量重算才可验证。
+
+最终四个相关公开 suite 为 77/77 passed：generalized structural kernel 12、document envelope 34、
+fixed real-runtime qualifier contract 20、bounded consumer 11。测试覆盖 exact-type/subclass 拒绝、
+一对一投影、rename invariance、evidence non-invariance、repeated quote、context/NO_RELATION、typed-failure
+blocking、capacity、receipt/episode/registry tamper 与 positional endpoint 语义。consumer contract SHA-256 为
+`3f182e67c5770ab87407d0f2137db47fd1444f47a4552f0132357d97c0ad25f4`。
+
+这里采用的是保守的**模块化 composition qualification**：真实 Qwen 运行证明 exact envelope ABI 在四个
+长文档边界可执行；确定性 consumer 测试证明同一个 exact ABI 可安全消费。consumer 是在本次 Qwen
+execution freeze 后加入的，因此没有修改或重放已消费的 Qwen run，也不能声称那四份真实输出已经实际
+经过 consumer。对应 receipt 明确固定
+`empirical_real_qwen_consumer_execution=false`、`formal_effect_evidence=false` 与
+`downstream_effect_authority=false`，见
+[`bounded-consumer composition receipt`](../manifests/gscl_document_envelope_bounded_consumer_composition_receipt_v1.json)。
+如果未来论文必须主张这一条端到端 runtime fact，应在独立的非评分 append-only integration qualifier
+中执行，而不能改写本轮；但它不是进入 fresh intrinsic measurement 的必要新 gate，因为 fresh measurement
+本身会直接执行冻结后的 envelope→consumer 路径。
+
+因此同一 harness 的机制施工到这里停止，不再继续补 gate。下一项是一次**全新 untouched public
+intrinsic measurement**：预先冻结 source/cohort、四臂与 abstention-aware 指标，真实执行
+envelope→consumer→set-level correspondence，并一次离线统一评分。它检验“广义对位关系”是否真实改善
+hard-negative rejection / coverage / accuracy；它仍不会自动填补论文总目标最后的现实域 A_hold
+三-family 双基线严格全正，后者必须由后续独立 reality study 给出。
+
 ## 附录 A：关键证据索引
 
+- GSCL / 广义对位机制施工（非评分、非总目标效果证据）：
+  [`generalized structural kernel`](../assumption_agent/generalized_structural_correspondence_v1.py)；
+  [`document envelope`](../replication_runtime/gscl_narrative_extractor_v2/document_envelope.py)；
+  [`bounded set consumer`](../replication_runtime/gscl_narrative_extractor_v2/bounded_set_consumer.py)；
+  [`real-Qwen execution freeze`](../manifests/gscl_document_envelope_fixed_qualification_execution_freeze_v1.json)；
+  [`real-Qwen qualification result`](../manifests/gscl_document_envelope_fixed_qualification_result_v1.json)；
+  [`modular composition receipt`](../manifests/gscl_document_envelope_bounded_consumer_composition_receipt_v1.json)
 - WikiSQL UAO P4 fresh reality study（same-v5 protocol exception 已完成；strict primary false）：
   [`study design`](../manifests/wikisql_uao_p4_study_design_v1.json)；
   [`implementation freeze v1`](../manifests/wikisql_uao_p4_implementation_freeze_v1.json)；
