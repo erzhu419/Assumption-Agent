@@ -1,12 +1,16 @@
 # Phase-3 Shrink Step 1 发布前待 GPT / 用户定案的问题
 
-**文档状态**：`DRAFT_FOR_DECISION`<br>
+**文档状态**：`RESOLVED_AND_SUPERSEDED`<br>
 **用途**：只收集发布 shrink step 1 前仍会改变 wire identity、commitment 或 M3 运行合同的实质决策。<br>
 **非规范声明**：本文中的所有“建议默认”均为 **NON-NORMATIVE DEFAULT**；只有 GPT 给出明确方案并经用户批准、随后写入新的 normative amendment 后才生效。<br>
 **依据规范**：
 
 - `Hegel_Machine_Strict_Canonical_AST_CBOR_Certificate_Bridge_Freeze_v1.0.2.md`
 - `Hegel_Machine_Phase3_Freeze_Readiness_Resolution.md`
+
+> **RESOLUTION:** 本文问题已由
+> `Hegel_Machine_Phase3_Shrink_Step1_Freeze_Decisions.md` 完整回答并经用户批准。
+> 下文保留为决策来源审计记录，不再是当前施工 blocker。
 
 ---
 
@@ -488,4 +492,6 @@ decision_6_m3_entry:
   certificate_signatures_are_m3_entry_gate: true|false
 ```
 
-在 GPT 回答且用户批准前，仓库只能准备实现草案；不得发布 `hegel-old-dsl-v1.1.0`、生成非 null formal roots、启动 M3 run 或开放 target synthesis。
+该历史限制已经由正式决策稿解除到 shrink-step-1 publication / dual subset replay
+为止。它没有解除 formal roots、M3 run、target synthesis、certificate 或 ACTIVE 的门禁；
+当前剩余问题转入 `questions_for_gpt_phase3_formal_bridge_and_seed_continuity.md`。

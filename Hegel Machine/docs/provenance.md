@@ -41,3 +41,21 @@ v3 提供新的独立 package，把这条结构识别链与 v1 的 theory-growth
 2. source hash 和语义差异可审计；
 3. 新测试使用测得的 receipts，而非旧生成式得分；
 4. claim 重新从当前 benchmark 产生。
+
+## Phase-3 DSL lineage
+
+`hegel-old-dsl-v1.0.0` 的 Python/Rust implementation、golden vectors 与 64,680 replay
+artifacts 保持原样，用于父版本历史重放。Shrink step 1 没有原地修改父 canonicalizer：
+
+- Python child admission 位于 `strict_ast_shrink1_v1.py`；
+- Rust child admission 位于独立 sibling crate
+  `rust/strict_canonicalizer_shrink1/`；
+- child generator 位于 `phase3_shrink1_capacity_v1.py`，不包含 report ID，避免 source-root
+  自引用；
+- surviving numeric AST bytes/hash 继续使用 `hegel-canonical-ast-v1`、
+  `hegel-cbor-det-v1` 与 `HEGEL/AST/V1`；
+- semantic/admission identity 必须另绑定 child DSL、registry 与 semantics roots。
+
+Target/control row payload未改变，因此 diagnostic content IDs 保持不变；这不允许复用父
+archive、receipt 或 certificate。Child binding manifests 明确记录 parent typed manifest
+与 split/custodian evidence 缺失，并保持 M3 关闭。

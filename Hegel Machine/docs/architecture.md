@@ -246,7 +246,7 @@ receipt hashes、ledger、policy、reduction、epoch 和 proposed-child hash。
 并通过 expression/non-equivalence test 后才能提升 claim。当前 Phase-3A 里程碑名为
 **Bounded Frozen-Closure Adequacy**；它不是无边界的 outside-language detection。
 
-Phase-3 的 DSL surface 仍是 `hegel-old-dsl-v1.0.0`：finite rational/interval/
+Phase-3 的父 DSL surface 是 `hegel-old-dsl-v1.0.0`：finite rational/interval/
 identifier domains、四 scope、六 aggregate、完整 typing、strict bottom、exact
 extensional equivalence 和结构上限。v1.0.2 已冻结 strict AST/CBOR、rewrite/count、
 archive/bridge、certificate/key/MDL wire；当前
@@ -303,6 +303,20 @@ hidden-sink formal verdict 或 outside/MDL certificate，ACTIVE 也关闭。正�
 target_truth_table_root, equivalence = exact_extensional)`，禁止无边界的
 `OUTSIDE_LANGUAGE`。
 
-当前唯一后继动作是发布新的 old-DSL version，按 frozen shrink step 1 删除 `mean_v1`、
-`min_v1`、`max_v1`，重建 target/validation commitments，并让新版本从 `NOT_RUN` 开始；
-不得把 v1.0.0 的 `DSL_TOO_LARGE` 原地改写为 `COMPLETE`。
+该后继动作现已执行到 diagnostic publication：child
+`hegel-old-dsl-v1.1.0` 使用 sparse-preserving AggregateMapId registry，active IDs
+为 0/1/5，2/3/4 永久 tombstone，并在 source/formal acceptance 统一返回
+`REJECT_REMOVED_AGGREGATE_MAP`。父 Python/Rust 实现保持不变；child admission 由新的
+Python layer 与 Rust sibling crate 独立实现，因此 surviving AST bytes/hash 与父版本一致。
+
+Child 的 23 个 strict vectors 双实现一致。预注册 25,872-source subset 在两端均得到
+25,872 unique、零拒绝、零 collapse，diagnostic set commitment 为
+`sha256:653fcb9428684cfed11c3f2345ac95ed98ded6e31564c9eeabf97c57ee71a7e9`，且无
+out-of-budget witness。这只满足 M3 24 gates 的前 14 个，不是 closure exhaustion。
+
+Target/control payload diagnostic IDs 保持内容稳定，并生成新的 child binding manifests；
+但旧版本从未物化 split seed commitment、parent binding manifest、custodian continuity
+attestation 或 hidden-access ledger。实现没有回溯伪造这些对象，所有相关 gate 保持
+fail-closed。formal roots 仍为 null，child state 为 `NOT_RUN`。当前下一硬门是补齐可信
+seed continuity（或取得其规范性替代决定），再执行 Python/Rust formal bridge root
+generation；此前不得启动 formal M3。

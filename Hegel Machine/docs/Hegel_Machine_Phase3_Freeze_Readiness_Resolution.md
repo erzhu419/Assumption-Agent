@@ -29,6 +29,17 @@
 > 发布新 DSL version，执行 frozen shrink step 1（删除 `mean_v1`、`min_v1`、
 > `max_v1`），重建 commitments，并让新版本从 `NOT_RUN` 重新运行 closure。
 
+> **POST-SHRINK-1 EXECUTION ADDENDUM（2026-08-01）**
+>
+> 上述下一动作已执行到 child diagnostic publication。新 IDs 为
+> `hegel-old-dsl-v1.1.0` / `hegel-freeze-p2b-p3-v1.1.0`；Python/Rust 对 child
+> vectors 与 25,872-source subset 完全一致，subset commitment 为
+> `sha256:653fcb9428684cfed11c3f2345ac95ed98ded6e31564c9eeabf97c57ee71a7e9`。
+> 该结果没有 50,001 witness，但也不是 full closure。Child execution state 仍为
+> `NOT_RUN`，formal roots 仍为 null。由于 parent split seed/binding/custodian evidence
+> 未曾物化，M3 entry fail-closed；当前下一硬门是 seed continuity 决策/证据与 dual
+> formal bridge root generation。
+
 ---
 
 # 0. 结论

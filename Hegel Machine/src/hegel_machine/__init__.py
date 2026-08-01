@@ -24,6 +24,15 @@ from .phase3_strict_replay_v1 import (
     dual_capacity_replay_report,
     dual_strict_gate_report,
 )
+from .phase3_shrink1_publication_v1 import shrink1_publication_report
+from .phase3_shrink1_replay_v1 import (
+    dual_shrink1_capacity_replay_report,
+    dual_shrink1_strict_gate_report,
+)
+from .strict_ast_shrink1_v1 import (
+    canonicalize_shrink1_source_ast,
+    decode_shrink1_canonical_ast,
+)
 from .strict_ast_v1 import CanonicalAst, canonicalize_source_ast, decode_canonical_ast
 
 from .recognition import (
@@ -77,11 +86,16 @@ __all__ = [
     "decode_canonical_ast",
     "dual_capacity_replay_report",
     "dual_strict_gate_report",
+    "dual_shrink1_capacity_replay_report",
+    "dual_shrink1_strict_gate_report",
+    "canonicalize_shrink1_source_ast",
+    "decode_shrink1_canonical_ast",
     "recognize_structural_law",
     "replay_recognition_decision",
     "select_typed_candidate_evaluations",
     "frozen_phase2b_exact_freeze",
     "phase3_closure_capacity_preflight_report",
+    "shrink1_publication_report",
 ]
 
 __version__ = "0.2.0"

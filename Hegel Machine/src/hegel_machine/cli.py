@@ -38,6 +38,19 @@ from .phase3_strict_replay_v1 import (
     dual_capacity_replay_report,
     dual_strict_gate_report,
 )
+from .phase3_shrink1_publication_v1 import (
+    shrink1_publication_report,
+    shrink_transition_report,
+)
+from .phase3_shrink1_replay_v1 import (
+    DEFAULT_RUST_BINARY as DEFAULT_SHRINK1_RUST_BINARY,
+    dual_shrink1_capacity_replay_report,
+    dual_shrink1_strict_gate_report,
+)
+from .phase3_shrink1_registry_v1 import (
+    DSL_VERSION as SHRINK1_DSL_VERSION,
+    FREEZE_VERSION as SHRINK1_FREEZE_VERSION,
+)
 from .vertical_slice import run_controlled_vertical_slice
 
 
@@ -79,11 +92,16 @@ def command_demo() -> int:
         "phase3_ready_for_outside_certificate": (
             DEFAULT_PHASE3_PREREGISTRATION.ready_for_outside_certificate
         ),
-        "phase3_capacity_preflight_status": DSL_TOO_LARGE_STATUS,
-        "phase3_executed_closure_status": DSL_TOO_LARGE_STATUS,
+        "phase3_parent_capacity_status": DSL_TOO_LARGE_STATUS,
+        "phase3_parent_dsl_version": "hegel-old-dsl-v1.0.0",
+        "phase3_child_dsl_version": SHRINK1_DSL_VERSION,
+        "phase3_child_freeze_version": SHRINK1_FREEZE_VERSION,
+        "phase3_child_subset_status": "VERIFIED_WITHIN_BUDGET",
+        "phase3_child_subset_accepted_unique_count": 25_872,
+        "phase3_executed_closure_status": "NOT_RUN",
         "phase3_complete_closure_enumerated": False,
         "phase3_required_next_action": (
-            "PUBLISH_SHRUNK_OLD_DSL_VERSION_USING_FROZEN_STEP_1"
+            "CUSTODIAN_CONTINUITY_AND_DUAL_FORMAL_ROOT_GENERATION"
         ),
         "phase3_target_universe_rows": ODD_REDUCTION_TARGET.universe_rows,
         "phase3_null_control_universe_rows": (
@@ -91,8 +109,9 @@ def command_demo() -> int:
         ),
         "claim_boundary": (
             "Phase-2A controlled typed-selector mechanics plus Phase-2B/Phase-3 "
-            "preregistration infrastructure and a bounded old-DSL DSL_TOO_LARGE "
-            "result that is not COMPLETE; no raw extraction, formal Phase-2 "
+            "preregistration infrastructure, a bounded parent-DSL DSL_TOO_LARGE "
+            "result, and a child shrink-1 subset qualification that is not "
+            "COMPLETE; no raw extraction, formal Phase-2 "
             "exit, extensional target verdict, OUTSIDE_FROZEN_CLOSURE "
             "certificate, or relation invention claim"
         ),
@@ -153,6 +172,49 @@ def command_phase3_strict_capacity_replay(
         _write_json(output, report)
     print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
     return 0 if report["executed_closure_status"] == "DSL_TOO_LARGE" else 1
+
+
+def command_phase3_shrink1_strict_gate(
+    output: Path | None,
+    rust_binary: Path,
+) -> int:
+    report = dual_shrink1_strict_gate_report(rust_binary.resolve())
+    if output is not None:
+        _write_json(output, report)
+    print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if report["status"] == "VERIFIED" else 1
+
+
+def command_phase3_shrink1_subset_replay(
+    output: Path | None,
+    rust_binary: Path,
+) -> int:
+    report = dual_shrink1_capacity_replay_report(rust_binary.resolve())
+    if output is not None:
+        _write_json(output, report)
+    print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if report["status"] == "VERIFIED_WITHIN_BUDGET" else 1
+
+
+def command_phase3_shrink1_publish(output: Path | None) -> int:
+    report = shrink1_publication_report()
+    if output is not None:
+        _write_json(output, report)
+    print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    expected = (
+        report["status"] == "SHRINK1_SUBSET_QUALIFIED_M3_BLOCKED"
+        and report["child_execution_state"] == "NOT_RUN"
+        and report["complete_closure_enumerated"] is False
+    )
+    return 0 if expected else 1
+
+
+def command_phase3_shrink1_transition(output: Path | None) -> int:
+    report = shrink_transition_report()
+    if output is not None:
+        _write_json(output, report)
+    print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if report["child_initial_state"] == "NOT_RUN" else 1
 
 
 def command_vertical_slice(output: Path | None) -> int:
@@ -230,6 +292,39 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=DEFAULT_RUST_BINARY,
     )
+    shrink1_gate = subparsers.add_parser(
+        "phase3-shrink1-strict-gate",
+        help="verify child sparse-registry admission with Python and Rust",
+    )
+    shrink1_gate.add_argument("--output", type=Path)
+    shrink1_gate.add_argument(
+        "--rust-binary",
+        type=Path,
+        default=DEFAULT_SHRINK1_RUST_BINARY,
+    )
+    shrink1_subset = subparsers.add_parser(
+        "phase3-shrink1-subset-replay",
+        help=(
+            "dual-replay the 25,872-source shrink-1 subset; this is never a "
+            "complete-closure claim"
+        ),
+    )
+    shrink1_subset.add_argument("--output", type=Path)
+    shrink1_subset.add_argument(
+        "--rust-binary",
+        type=Path,
+        default=DEFAULT_SHRINK1_RUST_BINARY,
+    )
+    shrink1_publish = subparsers.add_parser(
+        "phase3-shrink1-publish",
+        help="emit child publication, binding, null-root, and M3 gate state",
+    )
+    shrink1_publish.add_argument("--output", type=Path)
+    shrink1_transition = subparsers.add_parser(
+        "phase3-shrink1-transition",
+        help="emit the post-subset diagnostic DSL shrink transition record",
+    )
+    shrink1_transition.add_argument("--output", type=Path)
     vertical = subparsers.add_parser(
         "vertical-slice", help="run the controlled candidate/shadow-only slice"
     )
@@ -259,6 +354,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.output,
             args.rust_binary,
         )
+    if args.command == "phase3-shrink1-strict-gate":
+        return command_phase3_shrink1_strict_gate(args.output, args.rust_binary)
+    if args.command == "phase3-shrink1-subset-replay":
+        return command_phase3_shrink1_subset_replay(args.output, args.rust_binary)
+    if args.command == "phase3-shrink1-publish":
+        return command_phase3_shrink1_publish(args.output)
+    if args.command == "phase3-shrink1-transition":
+        return command_phase3_shrink1_transition(args.output)
     if args.command == "vertical-slice":
         return command_vertical_slice(args.output)
     raise AssertionError(f"unhandled command: {args.command}")

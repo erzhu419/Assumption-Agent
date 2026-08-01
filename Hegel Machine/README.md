@@ -34,7 +34,7 @@ Phase-2B formal track（精确协议已冻结，尚未资格化）：
   → prediction commitment before answer reveal
   → one-shot independent-custodian scoring                    [目标，未实现]
 
-Phase-3A **Bounded Frozen-Closure Adequacy**（M1/M2 已执行，bounded overflow）：
+Phase-3A **Bounded Frozen-Closure Adequacy**（父 DSL overflow；shrink-1 subset 已验证）：
 
 hegel-old-dsl-v1.0.0 + 480-row target + 85-row null control
   → strict canonical AST/CBOR + certificate bridge spec       [已冻结]
@@ -43,21 +43,29 @@ hegel-old-dsl-v1.0.0 + 480-row target + 85-row null control
   → bounded syntactic-budget status                            [DSL_TOO_LARGE]
   → complete closure / extensional target verdict              [NOT AVAILABLE]
   → formal archives + 3/3 certificate                          [未生成/未签发]
-  → new DSL version + frozen shrink step 1                     [NEXT ACTION]
-  → regenerate commitments; new version starts at NOT_RUN
+  → hegel-old-dsl-v1.1.0 sparse/tombstone admission             [双实现 VERIFIED]
+  → shrink-1 25,872-source constructive subset                 [25,872 unique each]
+  → child closure state                                         [NOT_RUN; not COMPLETE]
+  → target/split/custodian bindings                             [source manifests emitted; custodian evidence missing]
+  → formal binding roots                                        [null; NEXT HARD GATE]
   → rerun closure; only COMPLETE may enter target/null evaluation
   → outside certificate                                       [formal gate 关闭]
   → relation synthesis + Q32 MDL scorer replay                [formal gate 关闭]
   → shadow-only conservative integration
 ```
 
-Phase-3 的 M1/M2 证据见
+Phase-3 父 DSL 的 M1/M2 证据见
 [dual strict gate artifact](artifacts/phase3_dual_strict_gate_v1.json) 与
 [dual strict capacity replay artifact](artifacts/phase3_dual_strict_capacity_replay_v1.json)。
 规范层决定见
 [v1.0.2 strict canonical/certificate freeze](docs/Hegel_Machine_Strict_Canonical_AST_CBOR_Certificate_Bridge_Freeze_v1.0.2.md)，
 当前准入状态见
 [Phase-3 readiness resolution](docs/Hegel_Machine_Phase3_Freeze_Readiness_Resolution.md)。
+Shrink-step-1 的规范与执行证据见
+[v1.1.0 shrink decision](docs/Hegel_Machine_Phase3_Shrink_Step1_Freeze_Decisions.md)、
+[dual child gate](artifacts/phase3_shrink1_dual_strict_gate_v1.json)、
+[25,872 subset replay](artifacts/phase3_shrink1_dual_capacity_replay_v1.json) 与
+[child publication](artifacts/phase3_shrink1_publication_v1.json)。
 
 ```text
 strict specification frozen = true
@@ -76,10 +84,14 @@ outside / MDL certificate issued = false
 `sha256:7c7f786c2cc57d31506b3c61d162d175c7f69a2878a089c72c9d053694cba948`。前者不是
 formal RFC6962 root，后者不是 closure cardinality 或 target-match 证据。
 
-下一动作是发布新 old-DSL version，按 frozen shrink step 1 删除 `mean_v1`、`min_v1`、
-`max_v1`，重建 target/validation commitments，并让新版本从 `NOT_RUN` 开始。当前
-NO-GO 包括：把当前状态写成 `COMPLETE`、extensional target verdict、target synthesis、
-hidden-sink formal verdict、outside/MDL certificate、Phase-2B formal exit 与 ACTIVE。
+已发布的 child diagnostic freeze 是 `hegel-old-dsl-v1.1.0` /
+`hegel-freeze-p2b-p3-v1.1.0`：AggregateMapId 保持 sparse，active IDs 为 `0,1,5`，
+`2,3,4` 永久 tombstone。Python/Rust 对 23 个 child vectors 与 25,872-source subset
+完全一致；subset commitment 是
+`sha256:653fcb9428684cfed11c3f2345ac95ed98ded6e31564c9eeabf97c57ee71a7e9`。
+它只满足 24 个 M3 gates 中前 14 个；仓库中没有可重放的旧 split seed commitment、
+parent binding manifest、custodian continuity attestation 或 hidden-access ledger，故
+bindings fail-closed，formal roots 继续为 `null`，child state 保持 `NOT_RUN`。
 
 已实现或已冻结：
 
@@ -192,6 +204,9 @@ hidden-sink formal verdict、outside/MDL certificate、Phase-2B formal exit 与 
 - Phase-3 M1/M2 已证明 strict identity 一致与 bounded syntactic overflow，但没有完整
   canonical closure exhaustion、program/output archives、match set 或 extensional target
   verdict；当前 `DSL_TOO_LARGE` 绝不能改写为 `COMPLETE`；
+- shrink-step-1 的 25,872 subset 已双实现验证且低于 budget，但它不是完整 grammar
+  closure，也没有 closure cardinality；在 split/custodian continuity 与 dual formal
+  roots 补齐前，`hegel-old-dsl-v1.1.0` 不能从 `NOT_RUN` 进入 M3；
 - 把结构合法的 caller-supplied closure receipt 当作可信执行证据；当前 receipt 即使携带
   第 50,001 个 witness，也只能是 untrusted replay claim，不能自行签发状态或证书；
 - canonical-CBOR certificate 的 wire 已冻结，但正式 archives/roots、Python/Rust 双完整
@@ -228,6 +243,22 @@ PYTHONPATH=src python3 -m hegel_machine phase3-preregister \
   --output artifacts/phase3_preregistration_v1.json
 PYTHONPATH=src python3 -m hegel_machine phase3-closure-preflight \
   --output artifacts/phase3_closure_capacity_preflight_v1.json
+cargo fmt --manifest-path rust/strict_canonicalizer_shrink1/Cargo.toml -- --check
+cargo test --locked --manifest-path rust/strict_canonicalizer_shrink1/Cargo.toml
+cargo clippy --locked --manifest-path rust/strict_canonicalizer_shrink1/Cargo.toml \
+  --all-targets -- -D warnings
+cargo build --locked --release \
+  --manifest-path rust/strict_canonicalizer_shrink1/Cargo.toml
+PYTHONPATH=src python3 -m hegel_machine phase3-shrink1-strict-gate \
+  --rust-binary rust/strict_canonicalizer_shrink1/target/release/hegel-strict-canonicalizer-shrink1 \
+  --output artifacts/phase3_shrink1_dual_strict_gate_v1.json
+PYTHONPATH=src python3 -m hegel_machine phase3-shrink1-subset-replay \
+  --rust-binary rust/strict_canonicalizer_shrink1/target/release/hegel-strict-canonicalizer-shrink1 \
+  --output artifacts/phase3_shrink1_dual_capacity_replay_v1.json
+PYTHONPATH=src python3 -m hegel_machine phase3-shrink1-publish \
+  --output artifacts/phase3_shrink1_publication_v1.json
+PYTHONPATH=src python3 -m hegel_machine phase3-shrink1-transition \
+  --output artifacts/phase3_dsl_shrink_transition_v1.json
 PYTHONPATH=src python3 -m pytest -q -s
 PYTHONPATH=src python3 -m hegel_machine benchmark \
   --output artifacts/phase2_benchmark.json
@@ -256,5 +287,7 @@ PYTHONPATH=src python3 -m hegel_machine demo
 [`docs/phase3_freeze_readiness.md`](docs/phase3_freeze_readiness.md)。v1.0.2 已解决的 strict
 canonicalization / CBOR / certificate bridge 决策见
 [`docs/Hegel_Machine_Strict_Canonical_AST_CBOR_Certificate_Bridge_Freeze_v1.0.2.md`](docs/Hegel_Machine_Strict_Canonical_AST_CBOR_Certificate_Bridge_Freeze_v1.0.2.md)；下一版 shrink
-step 1 中仍需 GPT / 用户定案的 machine IDs、registry tombstone 与 M3 准入问题见
-[`docs/questions_for_gpt_phase3_shrink_step1.md`](docs/questions_for_gpt_phase3_shrink_step1.md)。
+step 1 决策已由
+[`docs/Hegel_Machine_Phase3_Shrink_Step1_Freeze_Decisions.md`](docs/Hegel_Machine_Phase3_Shrink_Step1_Freeze_Decisions.md)
+接管。下一硬门中仍需 GPT / 用户定案或提供外部证据的问题见
+[`docs/questions_for_gpt_phase3_formal_bridge_and_seed_continuity.md`](docs/questions_for_gpt_phase3_formal_bridge_and_seed_continuity.md)。

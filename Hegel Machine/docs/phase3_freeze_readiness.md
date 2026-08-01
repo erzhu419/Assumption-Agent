@@ -14,6 +14,13 @@
 
 ## Current authoritative state after M1/M2 execution
 
+> **POST-SHRINK-1 UPDATE:** `hegel-old-dsl-v1.1.0` 与
+> `hegel-freeze-p2b-p3-v1.1.0` 已按批准的 sparse registry 实现。Python/Rust child
+> vectors 完全一致，25,872-source subset 均得到 25,872 unique，且无 50,001 witness。
+> 这不是 `COMPLETE`；child 仍为 `NOT_RUN`。publication artifacts 显式保留全部 formal
+> roots 为 null，并因旧 split seed/custodian continuity evidence 缺失而拒绝 M3 entry。
+> 当前状态见 `../artifacts/phase3_shrink1_publication_v1.json`。
+
 | Layer | Current state |
 |---|---|
 | surface and strict specification | **FROZEN** in v1.0.2 |

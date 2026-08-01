@@ -61,9 +61,19 @@ status 为 `DSL_TOO_LARGE`。证据见
 
 这个状态不是 `COMPLETE`，也不是 extensional target verdict。diagnostic commitment 不是
 formal RFC6962 root；formal roots 仍为 `null`，没有 hidden-sink formal verdict、outside/MDL
-certificate 或 ACTIVE authorization。唯一冻结后继是发布新 old-DSL version，按 shrink
-step 1 删除 `mean_v1`、`min_v1`、`max_v1`，重建 target/validation commitments，并让新版本
-从 `NOT_RUN` 开始。
+certificate 或 ACTIVE authorization。
+
+此外现在可以说：批准的 shrink step 1 已创建 `hegel-old-dsl-v1.1.0` /
+`hegel-freeze-p2b-p3-v1.1.0` diagnostic child freeze。它只删除 mean/min/max admission，
+保留 numeric IDs 0/1/5，tombstone 2/3/4。Python/Rust child vectors 一致，25,872-source
+constructive subset 均产生 25,872 unique AST，commitment 为
+`sha256:653fcb9428684cfed11c3f2345ac95ed98ded6e31564c9eeabf97c57ee71a7e9`，无 50,001
+witness。准确称谓是 `SHRINK1_SUBSET_QUALIFIED_M3_BLOCKED`；child closure state 是
+`NOT_RUN`，不是 `COMPLETE`。
+
+Target/control source binding manifests 已生成，但因历史 split seed commitment、parent
+binding manifest、custodian continuity attestation 和 hidden-access ledger 不存在，M3
+commitment gates fail-closed。formal roots 全部仍为 null。
 
 ## 当前不能说什么
 
@@ -102,6 +112,10 @@ step 1 删除 `mean_v1`、`min_v1`、`max_v1`，重建 target/validation commitm
   diagnostic universe/truth content IDs；跨 role 复用 IDs 必须 fail closed。正式
   canonical-CBOR/RFC6962 bridge schema 已冻结但未执行，不能从 diagnostic ID 换前缀得到
   formal root。
+- 不能把 shrink-1 的 25,872 accepted unique 写成 child closure cardinality 或
+  `COMPLETE`；它只是一个预注册 constructive subset，完整 grammar 仍可能超过 budget。
+- 不能声称旧 split seed 已复用或未泄漏。仓库没有可验证的 seed commitment、custodian
+  attestation 或 access ledger；当前 manifest 的 null 字段是 blocker，不是证明。
 - 不能把“certificate wire 已冻结”写成 certificate 已生成或签发。program/output archives、
   formal roots、complete dual closure replay、key-status trust chain、3/3 signature 与 MDL
   dual replay 仍未完成。
