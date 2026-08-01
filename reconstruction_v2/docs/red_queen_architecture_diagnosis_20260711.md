@@ -1,7 +1,7 @@
 # Assumption Agent × Red Queen Gödel Machine：架构诊断与 Reconstruction V2 复核
 
 > - 初版日期：2026-07-11
-> - 本次复核：2026-08-01
+> - 本次复核：2026-08-02
 > - 最新 QuAC P1 终态：独立 study `QUAC_P1_RJMC_DIALOGUE_EVIDENCE_L5_V1` 已在
 >   311linux 唯一一次正式执行完成；systemd success、`NRestarts=0`，A_form/A_hold/M_search
 >   各只执行一次，全程 0 API/online evaluator、0 retry/replay/resample。A_hold 上冻结的 E1
@@ -29,8 +29,15 @@
 >   flat-structural coverage `0.9986`，F1 也只有 `0.4875`，仍低于 semantic-only；composition 相对
 >   no-composition 无正增益，target-color shuffle 差异的 CI 也跨 0。结论是这套冻结的 SCAR
 >   “硬结构资格 + 严格组合”实现没有生效；它不否定全部 13/22 条 meta-prior 或抽象广义对位思想，
->   但不能支持“广义对位优于语义相似”或现实域双基线优势。总目标仍只缺 fresh reality A_hold
->   对 RAW 与 official HippoRAG 的三-family 同时严格全正；QuAC L5 已成立不变
+>   但不能支持“广义对位优于语义相似”或现实域双基线优势。随后在**同一 study、同一已消费 cohort**
+>   完成了固定的 append-only repair：第一次 attempt 只暴露 gold list-order parser bug，确认 effect
+>   execution 为 0 后封存；唯一 parser continuation 的无评分资格化 PASS，正式 systemd execution
+>   success、`NRestarts=0`。baseline-preserving residual 确实消除了 coverage collapse，但
+>   `U1−S0` observed/lower-bound 为 `−1/724 / −3/724`，361 次 no-op 外唯一一次 override 是负向，
+>   `U1−null=0`。相反，固定候选池 oracle headroom 为 `33289/130320`，下界
+>   `13537/60816`：候选中存在大量潜在收益，冻结的 16 维结构表示却无法识别它们。依据 stop rule，
+>   同 cohort 不再补 feature/threshold/k/gate。总目标仍只缺 fresh reality A_hold 对 RAW 与 official
+>   HippoRAG 的三-family 同时严格全正；QuAC L5 已成立不变
 > - WikiSQL UAO P4 初始 v5 终态（后续 continuation 见上）：共享节点 v5 implementation/execution freeze、official WikiSQL 1.1
 >   source custody、content-addressed deployment 与 source-free import/systemd 审计均已提交；唯一 formal
 >   invocation `a8d1c5c…d2319` 通过 `ADMITTED_SHARED_RESOURCE`，`NRestarts=0`，并在 durable attempt/live
@@ -6318,6 +6325,71 @@ file/self SHA-256 为 `63642f76…00c0` / `edec1749…bb8`，safe score file/sel
 的 oracle ladder、conservative no-op 和 stop rules，见
 [`GSCL/SCAR v2 负结果根因与恢复路线`](gscl_scar_cssm_intrinsic_negative_postmortem_and_recovery_plan_20260801.md)。
 
+### 12.74 2026-08-02：同 study repair 修复了 coverage，但 selector 仍未把 oracle headroom 转化为收益
+
+用户要求不再为同一套已能运行的基础设施另立 study，因此恢复路线严格复用
+`GSCL_SCAR_CSSM_INTRINSIC_FORMAL_V1` 的 source、391-item cohort、Qwen/MiniLM prediction archive、
+official mapping labels 和冻结候选池；旧 formal negative 不变，只允许向独立 output root 追加一次
+post-hoc development。第 11 节的 12 个决策被落实为三份独立 spec、统一 binding、固定 16 维 feature、
+float64 ridge、nested grouped cross-fit、baseline-preserving no-op、null package、mapping oracle 与固定
+bootstrap，不再补效果 gate。
+
+第一次 `same_study_repair_v2` 没有形成效果结果。它在首个 primary 的 gold parser 处退出：旧 validator
+错误地要求 official gold pair 列表按 slot wire order 排列。独立审计证明 362/362 个 base gold 都是
+合法的 set-bijection，362/362 个 swap 都是其精确逆，但只有 base 51/362、swap 57/362 恰好同序。
+因此该 attempt 被永久封存为 `implementation-invalid / zero-effect`：在失败前 pair-F1、fit、OOF、
+threshold、bootstrap、result 均为 0，不能解释成第二个负效果。
+
+经明确授权后，只追加 `parser continuation r1`，唯一机械改动是把 **gold** validator 改为无序集合双射；
+prediction wire order、candidate、feature、model、fold、threshold、metric、seed、bootstrap 和 verdict
+全部保持。正式前同一 runner 的 private-schema-only CLI 资格化为 `PASS`，两份 pack 各读一次，
+没有 effect target、pair-F1、fold、fit、oracle、bootstrap、attempt 或 output。唯一正式 invocation
+`f9b07d1abc3f47ccb900e3d23b95dc07` 于 `06:48:26.837489–06:49:51.921148 CST` 完成；
+systemd success、`NRestarts=0`、`ExecMainStatus=0`，CPU `1min 25.056s`、memory peak `565.9M`、
+swap peak `0B`。远端 root exact-only 三文件与三份 self-seal 均通过离线复核；私有 362 records 不回传。
+
+固定 post-hoc primary 的安全汇总如下：
+
+| 项目 | exact 值 | 含义 |
+|---|---:|---|
+| `S0` | `308807/456120 = 0.677030` | semantic baseline |
+| `U0` / overrides | `308807/456120` / `0` | union + semantic rerank 全部 no-op |
+| `U1` / overrides | `308177/456120` / `1` | 唯一 override 降分 |
+| `U1−S0` observed | `−1/724 = −0.001381` | 方向为负 |
+| one-sided 95% lower bound | `−3/724 = −0.004144` | 未达到冻结的 `>0.01` |
+| positive / negative / zero switches | `0 / 1 / 361` | 无有益 switch |
+| old-success preservation | `435/436 = 0.997706` | 通过 `0.98` floor |
+| `U1−U1_NULL_PACKAGE` | `0` | 无 package-level 结构增量证据 |
+| mapping-oracle headroom | `33289/130320 = 0.255440` | 候选池有上限空间 |
+| oracle headroom lower bound | `13537/60816 = 0.222589` | headroom 不是抽样噪声 |
+
+不应把该表解释成“除 primary 外所有 guardrail 都通过”：方向净增益本身为 FAIL；family-stratified
+coverage/utility 未进入 safe verdict；冻结设计报告的是整体 null package，并未分别运行三种 shuffle arm。
+primary FAIL 已足以关闭 selector，未报告的 secondary 项不能反向改变终态，但属于论文必须披露的边界。
+
+这次结果真正修掉了 v1 的主导工程故障：coverage 与 S0 相同，361 个 no-op byte-exact，base/swap
+consistency 362/362，failure 0，old-success preservation 通过。它也同时否定了“只要把 hard gate
+放软就能产生收益”这一修复假设：在防止大面积伤害以后，冻结 selector 仍只做出一次错误 override。
+`U0` 不动、`U1−null=0` 说明 candidate expansion 和当前通用 structural package 都没有被 selector
+可靠利用；而 oracle mean F1 达 `850637/912240 = 0.932471`，说明正确候选并非不存在。
+
+因此现阶段的最窄根因是 **representation/credit assignment**：generic incidence、binder quality、
+operator bits 与图统计不足以指出“哪一个结构候选在这个 item 上应替代 S0”。这仍不是 T01–T22 或
+13 个 alias 的逐 law 反证，因为当前 SCAR archive 对 T05/T09/T14/T15/T17 都缺少形成真实 residual
+所需的 observables，`formal_law_binding_count` 仍为 0。论文可以报告“安全 residual 修复成功、
+候选 oracle headroom 明确、当前 selector 转化失败”的完整机制负结果；不能报告 law-aware 正增益。
+
+依据预先冻结的 stop rule，本 362-item cohort 到此关闭：不得再按结果改 feature、threshold、k、gate
+或重跑。若继续广义对位方向，必须在 untouched data 上先构造有实际可观测量的 law-specific residual，
+使正确候选在生成/表示空间中可识别；不能把同 cohort 的下一轮 selector 调参包装成新证据。此后验
+intrinsic 结果也不改变项目总目标：QuAC L5 已成立，唯一缺口仍是新的现实 A_hold 上三个 family 同时
+严格胜 RAW 与 official HippoRAG。
+
+安全终态见
+[`same-study parser-continuation result`](../manifests/gscl_scar_cssm_same_study_repair_parser_continuation_r1_result_v2.json)；
+完整边界与 12 项冻结答案见
+[`negative postmortem and executed recovery`](gscl_scar_cssm_intrinsic_negative_postmortem_and_recovery_plan_20260801.md)。
+
 ## 附录 A：关键证据索引
 
 - GSCL / 广义对位机制施工与 SCAR intrinsic 正式终态（不构成现实域总目标证据）：
@@ -6330,7 +6402,15 @@ file/self SHA-256 为 `63642f76…00c0` / `edec1749…bb8`，safe score file/sel
   [`SCAR design freeze`](../manifests/gscl_scar_cssm_intrinsic_formal_design_freeze_v1.json)；
   [`same-v1 representation recovery amendment`](../manifests/gscl_scar_cssm_intrinsic_representation_recovery_protocol_amendment_v1.json)；
   [`SCAR protocol-valid negative result`](../manifests/gscl_scar_cssm_intrinsic_formal_result_v1.json)；
-  [`SCAR negative-result postmortem and successor recovery plan`](gscl_scar_cssm_intrinsic_negative_postmortem_and_recovery_plan_20260801.md)
+  [`SCAR negative-result postmortem and executed recovery`](gscl_scar_cssm_intrinsic_negative_postmortem_and_recovery_plan_20260801.md)；
+  [`repair contract`](../assumption_agent/gscl_scar_cssm_repair_contract_v2.py)；
+  [`repair mechanisms`](../assumption_agent/gscl_scar_cssm_repair_mechanisms_v2.py)；
+  [`repair arm spec`](../manifests/gscl_scar_cssm_same_study_repair_arm_spec_v2.json)；
+  [`repair analysis spec`](../manifests/gscl_scar_cssm_same_study_repair_development_analysis_spec_v2.json)；
+  [`repair oracle spec`](../manifests/gscl_scar_cssm_same_study_repair_oracle_diagnostic_v2.json)；
+  [`parser-continuation amendment`](../manifests/gscl_scar_cssm_same_study_repair_parser_continuation_amendment_r1_v2.json)；
+  [`parser-continuation binding`](../manifests/gscl_scar_cssm_same_study_repair_parser_continuation_r1_binding_v2.json)；
+  [`parser-continuation result`](../manifests/gscl_scar_cssm_same_study_repair_parser_continuation_r1_result_v2.json)
 - WikiSQL UAO P4 fresh reality study（same-v5 protocol exception 已完成；strict primary false）：
   [`study design`](../manifests/wikisql_uao_p4_study_design_v1.json)；
   [`implementation freeze v1`](../manifests/wikisql_uao_p4_implementation_freeze_v1.json)；

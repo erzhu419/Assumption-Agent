@@ -1,0 +1,238 @@
+{
+  "analysis_population": {
+    "ambiguous_robustness_only": {
+      "item_count": 29,
+      "may_affect_fit_threshold_or_primary_development_objective": false,
+      "variant_count": 58
+    },
+    "arity_census": {
+      "10": 1,
+      "2": 31,
+      "3": 187,
+      "4": 77,
+      "5": 32,
+      "6": 12,
+      "7": 12,
+      "8": 8,
+      "9": 2
+    },
+    "base_and_system_swap_are_one_item_group": true,
+    "complete_primary_item_count": 362,
+    "complete_primary_variant_count": 724,
+    "cohort_rule": "use_the_full_existing_complete_primary_census_without_sampling",
+    "domain_relation_census": {
+      "cross_domain": 254,
+      "intra_domain": 108
+    },
+    "fresh_or_sealed_item_count": 0
+  },
+  "arm_binding": {
+    "relative_path": "manifests/gscl_scar_cssm_same_study_repair_arm_spec_v2.json",
+    "self_sha256": "54c472e73f5c19bcc9a1d80d22686e7adfdaad36846c3c683ec31a19853f18ff"
+  },
+  "authority": "POSTHOC_DEVELOPMENT_ONLY",
+  "crossfit_contract": {
+    "fold_assignment": {
+      "arity_bucket_function": {
+        "2": "ARITY_2",
+        "3": "ARITY_3",
+        "4": "ARITY_4",
+        "5_or_more": "ARITY_5_PLUS"
+      },
+      "fold_count": 5,
+      "group_key": "canonical_item_id_with_base_and_system_swap_together",
+      "hash_payload": {
+        "body_fields": [
+          "hash_domain",
+          "formal_result_self_sha256",
+          "canonical_item_id"
+        ],
+        "formal_result_self_sha256": "a5f5411545e8d98386889be606dc6b21db04be606fbf2d258f879b54cc49340b",
+        "hash": "strict_content_hash_of_the_body_object",
+        "hash_domain": "ASSUMPTION_AGENT/GSCL_SCAR_CSSM/SAME_STUDY_REPAIR_FOLD_ASSIGNMENT/V2",
+        "sort": "ascending_hash_then_ascending_canonical_item_id"
+      },
+      "stratum": "domain_relation_cross_or_intra_cartesian_product_with_arity_bucket",
+      "within_stratum_assignment": "zero_based_sorted_position_modulo_5"
+    },
+    "outer_fold_procedure": [
+      "hold_out_exactly_one_of_the_five_fixed_item_group_folds",
+      "use_the_other_four_folds_for_nested_threshold_selection",
+      "for_each_of_those_four_folds_fit_on_the_other_three_and_predict_the_inner_held_out_fold",
+      "select_one_threshold_from_the_pooled_inner_OOF_predictions",
+      "refit_one_estimator_on_all_four_outer_training_folds",
+      "apply_the_refit_estimator_and_selected_threshold_once_to_the_outer_held_out_fold"
+    ],
+    "outer_oof_aggregation": "concatenate_each_items_unique_outer_held_out_prediction_and_average_item_level_outcomes_over_all_362_items",
+    "threshold_grid_low_to_high": [
+      {
+        "denominator": 1,
+        "numerator": 0
+      },
+      {
+        "denominator": 32,
+        "numerator": 1
+      },
+      {
+        "denominator": 16,
+        "numerator": 1
+      },
+      {
+        "denominator": 8,
+        "numerator": 1
+      },
+      {
+        "denominator": 4,
+        "numerator": 1
+      },
+      {
+        "kind": "ALL_NOOP"
+      }
+    ],
+    "threshold_selection": {
+      "candidate_action": "for_each_item_choose_the_alternative_with_largest_clipped_predicted_delta_then_higher_semantic_score_then_lexicographically_smaller_proposal_hash_and_override_only_if_that_delta_is_strictly_greater_than_the_threshold",
+      "eligibility_floor": {
+        "denominator": 100,
+        "metric": "fraction_of_inner_OOF_items_where_S0_is_strict_exact_on_both_variants_and_the_thresholded_action_is_also_strict_exact_on_both_variants",
+        "numerator": 99
+      },
+      "failure_or_no_strict_gain": "ALL_NOOP",
+      "objective": "maximize_exact_inner_OOF_sum_of_item_macro_pair_f1_deltas",
+      "required_objective_sign": "STRICTLY_GREATER_THAN_ZERO",
+      "tie_break": "choose_the_numerically_higher_threshold_with_ALL_NOOP_highest"
+    }
+  },
+  "estimator_contract": {
+    "candidate_row_weight": "one_divided_by_the_number_of_fixed_alternative_candidates_for_that_item_so_each_item_with_alternatives_has_total_weight_one",
+    "feature_order": "exact_feature_contract_order_in_bound_arm_spec",
+    "fit_intercept": true,
+    "floating_point": "IEEE754_BINARY64",
+    "intercept_penalized": false,
+    "linear_solver": "deterministic_SVD_solution_of_the_weighted_ridge_least_squares_system",
+    "model_family": "linear_ridge_regression",
+    "model_or_solver_seed": "NONE_DETERMINISTIC_CLOSED_FORM",
+    "prediction_clipping": {
+      "maximum": {
+        "denominator": 1,
+        "numerator": 1
+      },
+      "minimum": {
+        "denominator": 1,
+        "numerator": -1
+      },
+      "stage": "after_raw_ridge_prediction_before_candidate_ranking_and_thresholding"
+    },
+    "regularization_alpha": {
+      "denominator": 1,
+      "numerator": 1
+    },
+    "sample_unit": "fixed_alternative_candidate_with_item_balanced_weight",
+    "standardization": {
+      "fit_scope": "training_rows_only_for_each_fit",
+      "mean": "candidate_row_weighted_population_mean",
+      "scale": "square_root_of_candidate_row_weighted_population_variance",
+      "zero_variance_feature": "emit_standardized_value_zero_for_all_rows"
+    },
+    "svd_relative_cutoff": {
+      "denominator": 1000000000000,
+      "numerator": 1
+    },
+    "target": "candidate_base_pair_f1_minus_S0_base_pair_f1",
+    "target_definition": "score_each_fixed_alternative_and_S0_against_the_official_base_direction_mapping_only",
+    "training_failure_behavior": "record_failure_and_make_every_item_in_that_application_scope_BYTE_EXACT_S0_NO_OP"
+  },
+  "full_data_development_artifact": {
+    "authority": "POSTHOC_DEVELOPMENT_ONLY",
+    "estimator_fit": "fit_once_on_all_fixed_candidate_rows_from_all_362_items_after_development_reporting",
+    "sealed_or_confirmatory_use_allowed": false,
+    "threshold_fit": "use_one_five_fold_OOF_prediction_per_item_with_each_fold_model_fit_on_the_other_four_then_apply_the_identical_threshold_grid_floor_objective_and_tie_break",
+    "threshold_failure_behavior": "ALL_NOOP"
+  },
+  "hash_domain": "ASSUMPTION_AGENT/GSCL_SCAR_CSSM/SAME_STUDY_REPAIR_DEVELOPMENT_ANALYSIS_SPEC/V2",
+  "joint_verdict_contract": {
+    "implementation_valid_requires": [
+      "all_362_primary_items_present_exactly_once_in_outer_OOF",
+      "zero_nonfinite_schema_hash_or_commitment_failures",
+      "zero_ERROR_items",
+      "zero_access_or_old_root_mutation_violations",
+      "U1_answer_coverage_equals_S0_for_every_variant",
+      "every_declared_no_op_output_is_byte_exact_S0",
+      "every_system_swap_output_is_the_exact_inverse_of_the_jointly_selected_base_mapping"
+    ],
+    "null_package_enters_joint_verdict": false,
+    "old_success_preservation_floor": {
+      "denominator": 100,
+      "numerator": 98
+    },
+    "old_success_preservation_metric": "over_all_gold_pairs_present_in_S0_outputs_across_all_724_variants_count_the_fraction_still_present_in_U1_outputs",
+    "priority": [
+      {
+        "condition": "implementation_valid_is_false",
+        "verdict": "REPAIR_DEVELOPMENT_IMPLEMENTATION_INVALID"
+      },
+      {
+        "condition": "pair_level_old_success_preservation_is_strictly_less_than_98_over_100",
+        "verdict": "REPAIR_DEVELOPMENT_UNSAFE_OLD_SUCCESS_REGRESSION"
+      },
+      {
+        "condition": "primary_one_sided_lower_bound_is_less_than_or_equal_to_1_over_100",
+        "verdict": "REPAIR_DEVELOPMENT_NO_PRACTICALLY_IMPORTANT_GAIN"
+      },
+      {
+        "condition": "all_prior_conditions_are_false",
+        "verdict": "POSTHOC_REPAIR_DEVELOPMENT_QUALIFIED"
+      }
+    ],
+    "secondary_U0_common_input_v1_or_subgroup_diagnostics_enter_joint_verdict": false
+  },
+  "null_package_analysis": {
+    "comparison": "outer_OOF_U1_CONSERVATIVE_SOFT_STRUCTURAL_minus_outer_OOF_U1_NULL_PACKAGE",
+    "multiplicity": "one_indivisible_package_level_comparison_no_per_transform_hypotheses",
+    "null_feature_fit_allowed": false,
+    "null_threshold_retuning_allowed": false,
+    "procedure": "apply_each_outer_fold_actual_feature_estimator_scaler_and_threshold_to_the_null_mean_feature_vector",
+    "transform_specific_results": "descriptive_only"
+  },
+  "outcome_contract": {
+    "alpha": {
+      "denominator": 100,
+      "numerator": 5
+    },
+    "bootstrap": {
+      "fixed_input": "the_362_fixed_outer_OOF_item_deltas_without_model_or_threshold_refit",
+      "item_cluster_sampling": "for_each_replicate_draw_362_item_indices_with_replacement_using_Python_random_Random_MT19937_randrange_362",
+      "one_sided_lower_bound_zero_based_sorted_index": 4999,
+      "replicate_count": 100000,
+      "seed": 18391702929142623763
+    },
+    "confidence_bound": "one_sided_95_percent_lower_bound",
+    "error_and_no_alternative": "emit_BYTE_EXACT_S0_NO_OP_and_keep_item_in_denominator;_any_ERROR_also_forces_implementation_invalid",
+    "item_endpoint": "arithmetic_mean_of_base_and_system_swap_pair_f1",
+    "main_development_contrast": "outer_OOF_U1_CONSERVATIVE_SOFT_STRUCTURAL_minus_S0_SEMANTIC_ONLY",
+    "minimum_important_difference": {
+      "denominator": 100,
+      "numerator": 1
+    },
+    "multiplicity_correction": "NONE_ONE_PRIMARY",
+    "no_confirmatory_pass_or_promotion_disposition": true,
+    "primary_success_inequality": "one_sided_lower_bound_strictly_greater_than_1_over_100",
+    "report": [
+      "mean_item_macro_pair_f1_by_arm",
+      "paired_mean_difference",
+      "posthoc_crossfit_one_sided_95_percent_lower_bound",
+      "override_item_count_and_rate",
+      "positive_negative_and_zero_switch_counts",
+      "pair_level_old_success_preservation",
+      "item_and_family_preservation_descriptive_only",
+      "byte_exact_no_op_count",
+      "base_system_swap_consistency",
+      "failure_count"
+    ],
+    "role": "posthoc_crossfit_development_interval_only"
+  },
+  "schema": "gscl_scar_cssm_same_study_repair_development_analysis_spec_v2",
+  "self_sha256": "44fc3f34a836526502ceab4491a3571082eb66ea517f2e5ff8a5389e3356ca01",
+  "status": "FROZEN_SAME_STUDY_APPEND_ONLY_POSTHOC_DEVELOPMENT_ANALYSIS_SPEC",
+  "study_id": "GSCL_SCAR_CSSM_INTRINSIC_FORMAL_V1",
+  "version": "v2"
+}
