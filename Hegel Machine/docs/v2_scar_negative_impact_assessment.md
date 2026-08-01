@@ -7,6 +7,8 @@
 
 对应的机器可读绑定记录是
 [`v2_scar_negative_evidence_binding_v1.json`](../artifacts/v2_scar_negative_evidence_binding_v1.json)。
+v2 本体中的完整代码级根因、可恢复信号、component oracle ladder 与 fresh recovery study 方案见
+[`GSCL/SCAR v2 负结果：根因审计与恢复路线`](../../reconstruction_v2/docs/gscl_scar_cssm_intrinsic_negative_postmortem_and_recovery_plan_20260801.md)。
 本文件是后续证据评估，不修改
 [`legacy/source_git_head.txt`](../legacy/source_git_head.txt) 中冻结于
 `ae8eb7f6733be38eab2a1e03d3ffa1f8d175e009` 的历史快照，也不把 v2 的结果继承为

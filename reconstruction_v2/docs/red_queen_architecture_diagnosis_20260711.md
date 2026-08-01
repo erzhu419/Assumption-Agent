@@ -6314,6 +6314,10 @@ fresh reality A_hold，在三个 relation family 上同时严格胜 RAW 与 offi
 file/self SHA-256 为 `63642f76…00c0` / `edec1749…bb8`，safe score file/self SHA-256 为
 `ff3cf793…32e0` / `0429ad93…c8ed`。
 
+对“为何失败、哪些层级可修、为何不能解释成 22/13 条先验整体失败”以及 fresh successor study
+的 oracle ladder、conservative no-op 和 stop rules，见
+[`GSCL/SCAR v2 负结果根因与恢复路线`](gscl_scar_cssm_intrinsic_negative_postmortem_and_recovery_plan_20260801.md)。
+
 ## 附录 A：关键证据索引
 
 - GSCL / 广义对位机制施工与 SCAR intrinsic 正式终态（不构成现实域总目标证据）：
@@ -6325,7 +6329,8 @@ file/self SHA-256 为 `63642f76…00c0` / `edec1749…bb8`，safe score file/sel
   [`modular composition receipt`](../manifests/gscl_document_envelope_bounded_consumer_composition_receipt_v1.json)；
   [`SCAR design freeze`](../manifests/gscl_scar_cssm_intrinsic_formal_design_freeze_v1.json)；
   [`same-v1 representation recovery amendment`](../manifests/gscl_scar_cssm_intrinsic_representation_recovery_protocol_amendment_v1.json)；
-  [`SCAR protocol-valid negative result`](../manifests/gscl_scar_cssm_intrinsic_formal_result_v1.json)
+  [`SCAR protocol-valid negative result`](../manifests/gscl_scar_cssm_intrinsic_formal_result_v1.json)；
+  [`SCAR negative-result postmortem and successor recovery plan`](gscl_scar_cssm_intrinsic_negative_postmortem_and_recovery_plan_20260801.md)
 - WikiSQL UAO P4 fresh reality study（same-v5 protocol exception 已完成；strict primary false）：
   [`study design`](../manifests/wikisql_uao_p4_study_design_v1.json)；
   [`implementation freeze v1`](../manifests/wikisql_uao_p4_implementation_freeze_v1.json)；
