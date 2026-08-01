@@ -1,0 +1,35 @@
+[Unit]
+Description=GSCL fixed public document-envelope pure-offline aggregate
+After=default.target
+ConditionPathExists=@QUALIFICATION_ROOT@/shard0/document_envelope.shard.safe.json
+ConditionPathExists=@QUALIFICATION_ROOT@/shard1/document_envelope.shard.safe.json
+ConditionPathIsDirectory=@QUALIFICATION_ROOT@/aggregate/tmp
+
+[Service]
+Type=oneshot
+WorkingDirectory=@RECONSTRUCTION_ROOT@
+ExecStart=@RUNTIME_PYTHON@ -m replication_runtime.gscl_narrative_extractor_v2.fixed_document_envelope_qualification aggregate --shard-0-receipt @QUALIFICATION_ROOT@/shard0/document_envelope.shard.safe.json --shard-1-receipt @QUALIFICATION_ROOT@/shard1/document_envelope.shard.safe.json --output-root @QUALIFICATION_ROOT@/aggregate
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONNOUSERSITE=1
+Environment=PYTHONPATH=@RECONSTRUCTION_ROOT@
+Environment=TMPDIR=@QUALIFICATION_ROOT@/aggregate/tmp
+Environment=HOME=@QUALIFICATION_ROOT@/aggregate/home
+Environment=XDG_CACHE_HOME=@QUALIFICATION_ROOT@/aggregate/cache
+CPUQuota=50%
+CPUWeight=10
+IOWeight=10
+MemoryMax=1G
+MemorySwapMax=0
+TasksMax=16
+Nice=10
+NoNewPrivileges=yes
+ProtectSystem=no
+ProtectHome=no
+PrivateTmp=no
+ReadWritePaths=
+IPAddressDeny=any
+RestrictAddressFamilies=AF_UNIX
+KillMode=control-group
+Restart=no
+TimeoutStartSec=300
+UMask=0077

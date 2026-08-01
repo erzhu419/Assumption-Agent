@@ -442,6 +442,47 @@ def test_self_consistent_noncanonical_plan_is_rejected() -> None:
     )
 
 
+def test_boolean_cannot_impersonate_zero_byte_offset() -> None:
+    result = envelope.select_document_qualification_only(
+        _tokens(17), leaf_selector=_LeafSelector()
+    )
+    forged = replace(
+        result.segments[0],
+        plan=replace(result.segments[0].plan, core_start_byte=False),
+    )
+    with pytest.raises(envelope.DocumentEnvelopeError) as observed:
+        _rebuild_with_segments(result, (forged,))
+    assert observed.value.issue_id == (
+        "DOCUMENT_SEGMENT_TOPOLOGY_INVALID"
+    )
+
+
+def test_boolean_cannot_impersonate_zero_occurrence() -> None:
+    result = envelope.select_document_qualification_only(
+        _tokens(17), leaf_selector=_LeafSelector()
+    )
+    assert result.mentions[0].occurrence == 0
+    mentions = (
+        replace(result.mentions[0], occurrence=False),
+        *result.mentions[1:],
+    )
+    receipt = envelope._receipt_bytes(
+        source_text=result.source_text,
+        outcomes=result.segments,
+        mentions=mentions,
+        relations=result.relations,
+    )
+    with pytest.raises(envelope.DocumentEnvelopeError) as observed:
+        envelope.NarrativeDocumentEnvelopeV1(
+            source_text=result.source_text,
+            segments=result.segments,
+            mentions=mentions,
+            relations=result.relations,
+            receipt_bytes=receipt,
+        )
+    assert observed.value.issue_id == "DOCUMENT_GLOBAL_GROUNDING_INVALID"
+
+
 def test_outcome_must_account_for_every_segment_projection() -> None:
     result = envelope.select_document_qualification_only(
         _tokens(17), leaf_selector=_LeafSelector()
@@ -578,6 +619,54 @@ def test_two_runs_are_byte_exact_and_resources_obey_global_bounds() -> None:
         <= resource["declared_forward_batch_call_bound"]
         <= envelope.MAXIMUM_DECLARED_FORWARD_BATCH_CALLS
     )
+
+
+def test_complete_pre_access_capacity_matrix() -> None:
+    at_byte_cap = "A" + " " * (envelope.MAXIMUM_ROOT_BYTES - 1)
+    plans = envelope.plan_document_segments(at_byte_cap)
+    assert len(plans) == 1
+    assert plans[0].lexical_token_count == 1
+    with pytest.raises(envelope.DocumentEnvelopeError) as bytes_error:
+        envelope.plan_document_segments(at_byte_cap + " ")
+    assert bytes_error.value.issue_id == "DOCUMENT_ROOT_INVALID"
+
+    exactly_128 = "".join(f"x{index}." for index in range(128))
+    assert len(envelope.plan_document_segments(exactly_128)) == 128
+    with pytest.raises(envelope.DocumentEnvelopeError) as segments_error:
+        envelope.plan_document_segments(exactly_128 + "overflow.")
+    assert segments_error.value.issue_id == (
+        "DOCUMENT_SEGMENT_CAPACITY_UNSUPPORTED"
+    )
+
+    exactly_32_eligible = " ".join(
+        _sentence(17, index) for index in range(32)
+    )
+    assert sum(
+        row.leaf_eligible
+        for row in envelope.plan_document_segments(exactly_32_eligible)
+    ) == 32
+    with pytest.raises(envelope.DocumentEnvelopeError) as eligible_error:
+        envelope.plan_document_segments(
+            exactly_32_eligible + " " + _sentence(17, 32)
+        )
+    assert eligible_error.value.issue_id == (
+        "DOCUMENT_EXTRACTABLE_SEGMENT_CAPACITY_UNSUPPORTED"
+    )
+
+    with pytest.raises(envelope.DocumentEnvelopeError) as unicode_error:
+        envelope.plan_document_segments("\ud800")
+    assert unicode_error.value.issue_id == "DOCUMENT_ROOT_INVALID"
+
+
+def test_boundary_runs_and_outer_whitespace_remain_byte_total() -> None:
+    story = "  ...！？  " + _tokens(17, prefix="Boundary") + "  "
+    plans = envelope.plan_document_segments(story)
+    _assert_exact_byte_partition(story, plans)
+    assert sum(row.lexical_token_count for row in plans) == 17
+    result = envelope.select_document_qualification_only(
+        story, leaf_selector=_LeafSelector()
+    )
+    assert result.receipt["byte_outcome_coverage_complete"] is True
 
 
 def test_public_surface_has_no_old_arn_private_or_evaluator_access() -> None:

@@ -446,7 +446,22 @@ def _validate_plan(raw: bytes, plans: tuple[SegmentPlan, ...]) -> None:
     parent_chunks: dict[str, list[SegmentPlan]] = {}
     for index, plan in enumerate(plans):
         if (
-            not isinstance(plan, SegmentPlan)
+            type(plan) is not SegmentPlan
+            or not isinstance(plan.segment_id, str)
+            or not isinstance(plan.parent_sentence_id, str)
+            or any(
+                type(value) is not int
+                for value in (
+                    plan.parent_start_byte,
+                    plan.parent_end_byte,
+                    plan.core_start_byte,
+                    plan.core_end_byte,
+                    plan.lexical_token_count,
+                    plan.chunk_index,
+                    plan.chunk_count,
+                )
+            )
+            or type(plan.leaf_eligible) is not bool
             or plan.segment_id != f"seg{index:03d}"
             or plan.core_start_byte != previous_end
             or not 0 <= plan.parent_start_byte <= plan.core_start_byte
@@ -1024,7 +1039,18 @@ def _validate_envelope(envelope: NarrativeDocumentEnvelopeV1) -> None:
                 "DOCUMENT_GLOBAL_GROUNDING_INVALID"
             ) from exc
         if (
-            not isinstance(mention, ProjectedMention)
+            type(mention) is not ProjectedMention
+            or not isinstance(mention.mention_id, str)
+            or not isinstance(mention.segment_id, str)
+            or not isinstance(mention.parent_sentence_id, str)
+            or not isinstance(mention.kind, str)
+            or not isinstance(mention.quote, str)
+            or not isinstance(mention.quote_sha256, str)
+            or not isinstance(mention.leaf_mention_id, str)
+            or type(mention.occurrence) is not int
+            or mention.occurrence < 0
+            or type(mention.start_byte) is not int
+            or type(mention.end_byte) is not int
             or mention.mention_id in mention_by_id
             or mention.segment_id not in plan_by_id
             or not 0 <= mention.start_byte < mention.end_byte <= len(raw)
@@ -1079,7 +1105,21 @@ def _validate_envelope(envelope: NarrativeDocumentEnvelopeV1) -> None:
             *relation.slot_mention_ids,
         )
         if (
-            not isinstance(relation, ProjectedRelation)
+            type(relation) is not ProjectedRelation
+            or not isinstance(relation.relation_id, str)
+            or not isinstance(relation.segment_id, str)
+            or not isinstance(relation.parent_sentence_id, str)
+            or not isinstance(relation.anchor_mention_id, str)
+            or type(relation.slot_mention_ids) is not tuple
+            or any(
+                not isinstance(value, str)
+                for value in relation.slot_mention_ids
+            )
+            or not isinstance(relation.generator_kind, str)
+            or not isinstance(relation.polarity, str)
+            or not isinstance(relation.temporal_orientation, str)
+            or not isinstance(relation.causal_orientation, str)
+            or not isinstance(relation.leaf_generator_id, str)
             or relation.relation_id in relation_by_id
             or len(set(refs)) != 3
             or any(ref not in mention_by_id for ref in refs)
