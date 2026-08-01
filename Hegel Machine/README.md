@@ -4,8 +4,8 @@
 v2 是广义对位/GSCL；本目录冻结它们中需要复用的对象与算法，但活动代码不
 反向 import 旧目录，也不继承旧实验的效果分数。
 
-当前已完成里程碑的唯一名称是 **Phase-2A Controlled Typed-Selector Mechanics
-Qualification**。一般能力称为 **Explicit-Projection Typed Structural Selection**，
+当前已完成的 capability/effect 里程碑唯一名称是 **Phase-2A Controlled
+Typed-Selector Mechanics Qualification**。一般能力称为 **Explicit-Projection Typed Structural Selection**，
 其中 scale 子能力只能称为 **Scale-Indexed Candidate Projection Selection**。
 活动包版本仍是 v0.2.0；它不是“自动发明哲学”的演示，而是可运行的 Phase 1–2
 verifier、Phase-2A development qualification，以及正在施工的 Phase-2B/Phase-3
@@ -51,9 +51,11 @@ hegel-old-dsl-v1.0.0 + 480-row target + 85-row null control
   → shrink-1 25,872-source constructive subset                 [25,872 unique each]
   → child closure state                                         [NOT_RUN; not COMPLETE]
   → target/split/custodian bindings                             [source manifests emitted; custodian evidence missing]
-  → M2.5 v1.1.2 typed rows/candidate roots                       [565 rows; Python/Rust exact replay; gate delta 0]
-  → external-genesis preflight                                  [blocked before CSPRNG by exact E1–E12 errata]
-  → formal binding roots                                        [null; repaired amendment + external actors required]
+  → M2.5 v1.1.2 exact-wire registry                              [81 tags/schemas]
+  → Python/Rust/golden errata replay                             [21 objects + 8 trees + 15 guards; exact]
+  → detached Commit-A qualification                              [PASS; fresh replay required for use]
+  → external-genesis workflow                                   [authorized to begin; NOT_EXECUTED]
+  → formal binding roots                                        [null; external actors required]
   → rerun closure; only COMPLETE may enter target/null evaluation
   → outside certificate                                       [formal gate 关闭]
   → relation synthesis + Q32 MDL scorer replay                [formal gate 关闭]
@@ -100,24 +102,33 @@ parent binding manifest、custodian continuity attestation 或 hidden-access led
 bindings fail-closed，formal roots 继续为 `null`，child state 保持 `NOT_RUN`。
 
 `hegel-freeze-p2b-p3-v1.1.2` 已接管 **Phase-3A M2.5 — Formal Commitment,
-Seed Genesis and Bridge Qualification** 的 deterministic wire。仓库现有 58 个唯一
-formal tags/schemas，并由 Python 和 Rust 完整生成 odd 480 行与 sink 85 行；
-565 行、typed input/row bytes、samples 与 amendment 列出的四个 RFC6962 值全部一致。
-这些只是 deterministic candidate roots；诊断报告绑定 caller-supplied Rust binary 的
-SHA-256，但明确 `binary_source_binding_claim=false`，不把 source hashes 冒充 build
-attestation。
+Seed Genesis and Bridge Qualification** 的 deterministic wire。E1–E12 已由
+[exact-wire resolution](docs/Hegel_Machine_Phase3A_M25_Exact_Wire_Errata_Resolution.md)
+和 [implementation closure addendum](docs/Hegel_Machine_Phase3A_M25_Implementation_Closure_Addendum_v1.md)
+逐项解决；当前 registry 有 81 个唯一 numeric tags/schemas。Python 与 Rust 从冻结输入
+独立构造 21 个 candidate objects、8 个 candidate record trees 和 15 个 production-validator
+negative guards，compact report 完全一致，golden fixture SHA-256 为
+`a0e8ce77f3655d484fdc40506f81034fd4d103b458af3ce9f586fe42cc369ae1`；含 `ok/op`
+envelope 的 compact sorted response 为 20,308 bytes，SHA-256 为
+`9c855290ad9f9a6e3e523107e0162e6e3c363afec09224245c5e35075ad8ab4c`。
 
-继续按 authoritative DAG 施工时发现 v1.1.2 仍有 12 组会改变 bytes/root/trust/state
-的 exact 冲突，包括 15/16 output slots、bridge 拓扑、envelope/hash domains、actor-key
-trust anchor、ledger/FD-3 actor boundary、absence-audit wire、role/state enums、nested root preimages、
-opaque-ID registry、sink witness 字段与 custodian signature coverage。因此 external start guard
-必定在 CSPRNG/marker 前返回 `FAIL_M25_EXACT_ERRATA_REQUIRED`；真实 seed/key/signature 均未
-生成，当前保持 `14/24 / NOT_RUN`。可直接交给网页 GPT 的定案文档见
-[M2.5 exact-wire errata](docs/questions_for_gpt_phase3_m25_wire_completion_errata.md)，实现与 claim
-边界见 [M2.5 current status](docs/phase3_m25_implementation_status.md)，当前诊断证据见
+Commit `d293507048d39323462e5c9033905b352ae07cb2` 的 private detached snapshot 已完成
+fresh Python replay 与 fresh isolated Rust build；Cargo 只从 `Cargo.lock` 校验过的 `.crate`
+归档重新解包，caller 不能指定工具链，approved toolchain、source snapshot、同一 open binary
+inode 的 hash/exec 和前后输入稳定性均已核验。冻结 secret-policy 对 Commit A 及全部 ancestors
+扫描为零发现；该结论只覆盖项目冻结的 filename/header/non-null JSON-key classes，不是万能
+secret 检测证明。结果准确称为 `DUAL_EXACT_WIRE_ERRATA_GOLDEN_PASS`，artifact kind 为
+`DETERMINISTIC_CANDIDATE_NON_AUTHORITATIVE`。
+
+这次 fresh qualification 只给出无副作用的 external-genesis start authorization；流程尚未执行，
+checked JSON 单独不能授权，操作员每次必须 fresh replay 或取得后来真实的 external attestation。
+真实 seed/key/signature/marker、formal roots 和 M3 execution identity 均未生成，状态保持
+`14/24 / NOT_RUN`。当前证据见
+[exact-wire qualification](artifacts/phase3_m25_errata_qualification_v1.json)，操作边界见
+[external-genesis runbook](docs/phase3_m25_external_genesis_operator_runbook.md)，较早的
 [v1.1.2 typed-row qualification](artifacts/phase3_m25_wire_completion_qualification_v112.json)
-与 [external-genesis preflight](artifacts/phase3_m25_external_preflight_v1.json)。原 v1.1.1 20-vector
-artifact 保留为 commit `d772b844` 的历史 source-bound evidence，不再冒充当前 HEAD。
+仅保留为 caller-supplied/unattested candidate-row replay。原 v1.1.1 20-vector artifact 保留为
+commit `d772b844` 的历史 source-bound evidence，不再冒充当前状态。
 
 v2 commit `4861b2d8` 的 SCAR 结果是某个 frozen hard-selector operationalization 的
 protocol-valid negative，不是 22/13 条先验逐项失败，也不阻塞 M2.5 identity 或 M3 closure。
@@ -300,8 +311,10 @@ PYTHONPATH=src python3 -m hegel_machine phase3-m25-synthetic-replay \
 PYTHONPATH=src python3 -m hegel_machine phase3-m25-v112-qualify \
   --rust-binary rust/formal_bridge_m25/target/debug/hegel-formal-bridge-m25 \
   --output artifacts/phase3_m25_wire_completion_qualification_v112.json
+PYTHONPATH=src python3 -m hegel_machine phase3-m25-errata-qualify \
+  --output artifacts/phase3_m25_errata_qualification_v1.json
 PYTHONPATH=src python3 -m hegel_machine phase3-m25-external-preflight \
-  --output artifacts/phase3_m25_external_preflight_v1.json
+  --output artifacts/phase3_m25_external_preflight_v2.json
 PYTHONPATH=src python3 -m pytest -q -s
 PYTHONPATH=src python3 -m hegel_machine benchmark \
   --output artifacts/phase2_benchmark.json
@@ -336,5 +349,9 @@ step 1 决策已由
 [`docs/Hegel_Machine_Phase3_Formal_Bridge_Seed_Genesis_M3_Wire_Freeze.md`](docs/Hegel_Machine_Phase3_Formal_Bridge_Seed_Genesis_M3_Wire_Freeze.md)。
 v1.1.2 completion amendment 见
 [`docs/Hegel_Machine_Phase3A_M25_Bit_Exact_Wire_Completion_Amendment.md`](docs/Hegel_Machine_Phase3A_M25_Bit_Exact_Wire_Completion_Amendment.md)；
-其实现级 exact-wire 勘误与外部 actor 流程待决问题见
-[`docs/questions_for_gpt_phase3_m25_wire_completion_errata.md`](docs/questions_for_gpt_phase3_m25_wire_completion_errata.md)。
+实现级定案、闭包补充和外部 actor 操作边界分别见
+[`docs/Hegel_Machine_Phase3A_M25_Exact_Wire_Errata_Resolution.md`](docs/Hegel_Machine_Phase3A_M25_Exact_Wire_Errata_Resolution.md)、
+[`docs/Hegel_Machine_Phase3A_M25_Implementation_Closure_Addendum_v1.md`](docs/Hegel_Machine_Phase3A_M25_Implementation_Closure_Addendum_v1.md)
+与
+[`docs/phase3_m25_external_genesis_operator_runbook.md`](docs/phase3_m25_external_genesis_operator_runbook.md)。
+原 questions 文档只保留为历史审阅输入，不再是当前 normative 状态。

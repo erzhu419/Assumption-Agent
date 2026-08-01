@@ -71,24 +71,27 @@ constructive subset 均产生 25,872 unique AST，commitment 为
 witness。准确称谓是 `SHRINK1_SUBSET_QUALIFIED_M3_BLOCKED`；child closure state 是
 `NOT_RUN`，不是 `COMPLETE`。
 
-Target/control source binding manifests 已生成，但因历史 split seed commitment、parent
-binding manifest、custodian continuity attestation 和 hidden-access ledger 不存在，M3
-commitment gates fail-closed。formal roots 全部仍为 null。
+Target/control source binding manifests 已生成。`parent_binding_manifest_root = null` 是冻结的
+规范替代方案，由 legacy payload IDs、absence attestation V2 和完整历史 audit 支撑；当前
+缺的是外部 auditor 的真实 audit/attestation，不是待定 wire 选择。split seed commitment、
+custodian continuity attestation 和 hidden-access ledger 仍不存在，因此 formal roots 全部为
+null。
 
-v1.1.2 已允许继续 M2.5 deterministic wire/seed/bridge 施工。当前 Python/Rust 已
-重现 odd 480 行、sink 85 行以及 amendment 列出的四个 RFC6962 candidate values；
-odd `192/96/192` 和 sink `39/20/26` quota allocation 也已实现为不接触真实
-secret 的纯函数。Rust 诊断报告绑定实际运行 binary 的 SHA-256，但明确
-`binary_source_binding_claim=false`；它不是 ImplementationBinding 或 build attestation。
+Phase-3A M2.5 deterministic wire 现有 81 个唯一 tags/schemas。Python 与 Rust 从 detached
+Commit-A snapshot 精确重放 21 个 candidate objects、8 个 candidate record trees 和 15 个
+production-validator errors，并与 golden 完全一致。准确状态是
+`DUAL_EXACT_WIRE_ERRATA_GOLDEN_PASS`，artifact kind 为
+`DETERMINISTIC_CANDIDATE_NON_AUTHORITATIVE`。它只允许开始独立 external-genesis 流程；
+该流程尚未执行，stored JSON/self-hash 单独不能授权。
 
-这类 candidate qualification 仍不是 gate pass。authoritative DAG 实现审计发现 12 组
-exact 冲突，涵盖 output-slot count、bridge topology/envelope/domain、actor trust、FD-3/ledger
-boundary、absence-audit wire、role/state IDs、nested root preimages、opaque-ID evidence、sink witness
-和 signature coverage。外部 start guard 因此必定在 CSPRNG 和 marker 前失败。权威计数
-仍是 `14/24`，seed 未实例化，signature/ledger/absence claims 均为 false，formal roots、
-M3 execution manifest 与 run outputs 均为 null，child 继续 `NOT_RUN`。不得由
-Codex、自签 test key 或固定 test seed 冒充独立 custody。完整待决问题见
-[`questions_for_gpt_phase3_m25_wire_completion_errata.md`](questions_for_gpt_phase3_m25_wire_completion_errata.md)。
+这次 qualification 没有创建 seed、key、signature、marker、external audit claim、formal root、
+Gate 15–24 pass 或 M3 identity。权威计数仍是 `14/24`，formal roots、M3 execution manifest
+与 run outputs 均为 null，child 继续 `NOT_RUN`。不得由 Codex、自签 test key 或固定 test
+seed 冒充独立 custody。定案与操作边界见
+[`Hegel_Machine_Phase3A_M25_Exact_Wire_Errata_Resolution.md`](Hegel_Machine_Phase3A_M25_Exact_Wire_Errata_Resolution.md)、
+[`Hegel_Machine_Phase3A_M25_Implementation_Closure_Addendum_v1.md`](Hegel_Machine_Phase3A_M25_Implementation_Closure_Addendum_v1.md)
+和
+[`phase3_m25_external_genesis_operator_runbook.md`](phase3_m25_external_genesis_operator_runbook.md)。
 
 ## v2 SCAR 后续正式负结果
 
@@ -147,8 +150,8 @@ bounded DSL。
   receipt 必须绑定完整
   `dsl_spec_id`/`operator_semantics_id`，并为 outside target 与 null control 选择各自独立的
   diagnostic universe/truth content IDs；跨 role 复用 IDs 必须 fail closed。正式
-  canonical-CBOR/RFC6962 bridge schema 已冻结但未执行，不能从 diagnostic ID 换前缀得到
-  formal root。
+  canonical-CBOR/RFC6962 candidate wire 已双实现资格化，但 formal roots 仍未实例化；不能
+  从 diagnostic ID 换前缀或重命名 candidate root 得到 formal root。
 - 不能把 shrink-1 的 25,872 accepted unique 写成 child closure cardinality 或
   `COMPLETE`；它只是一个预注册 constructive subset，完整 grammar 仍可能超过 budget。
 - 不能声称旧 split seed 已复用或未泄漏。仓库没有可验证的 seed commitment、custodian

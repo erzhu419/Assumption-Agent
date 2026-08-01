@@ -295,8 +295,9 @@ generic target 的 formal language verdict 都仍为 `null`，token blacklist �
 
 MDL code table 已冻结为 `hegel-mdl-prefix-v1.0.0`，所有长度用向上取整 unsigned Q32，
 禁止 binary float；formal scorer 必须忽略 caller-supplied length/Fraction/gain 并从 AST、
-partition、prediction 与 code table 重算。certificate wire 已由 v1.0.2 冻结，但正式
-program/output archives、diagnostic-formal bridge roots、完整 closure replay、key-status
+partition、prediction 与 code table 重算。certificate wire 已由 v1.0.2 冻结；synthetic/candidate
+bridge wire 已双实现资格化，但 externally instantiated formal bridge roots、正式
+program/output archives、完整 closure replay、key-status
 chain、3/3 certificate 和 MDL dual replay 均未执行。因此没有 extensional target verdict、
 hidden-sink formal verdict 或 outside/MDL certificate，ACTIVE 也关闭。正式 claim 只能写
 `OUTSIDE_FROZEN_CLOSURE(dsl_version, bounded_universe_root,
@@ -314,26 +315,33 @@ Child 的 23 个 strict vectors 双实现一致。预注册 25,872-source subset
 `sha256:653fcb9428684cfed11c3f2345ac95ed98ded6e31564c9eeabf97c57ee71a7e9`，且无
 out-of-budget witness。这只满足 M3 24 gates 的前 14 个，不是 closure exhaustion。
 
-Target/control payload diagnostic IDs 保持内容稳定，并生成新的 child binding manifests；
-但旧版本从未物化 split seed commitment、parent binding manifest、custodian continuity
-attestation 或 hidden-access ledger。实现没有回溯伪造这些对象，所有相关 gate 保持
-fail-closed。formal roots 仍为 null，child state 为 `NOT_RUN`。当前下一硬门是补齐可信
-seed continuity（或取得其规范性替代决定），再执行 Python/Rust formal bridge root
-generation；此前不得启动 formal M3。
+Target/control payload diagnostic IDs 保持内容稳定，并生成新的 child binding manifests。
+冻结方案明确令 `parent_binding_manifest_root = null`，以 legacy payload IDs、versioned
+absence attestation V2 和完整历史 audit 替代，不追造 retrospective parent manifest。
+旧版本从未物化 split seed commitment、custodian continuity attestation 或 hidden-access
+ledger；规范替代虽已解决，真实外部 evidence 仍不存在。formal roots 继续为 null，child
+state 为 `NOT_RUN`。
 
 v1.1.2 已把这段工作接管为 **Phase-3A M2.5 Formal Commitment, Seed Genesis
 and Bridge Qualification** 的 bit-exact completion amendment。实现依旧严格分层：
 Python/Rust 实现 strict CBOR、ContentHash/RFC6962、typed odd/sink rows、HKDF/HMAC rank
 与 state/output-null guards；真实 seed/key/signature 不在 import、test 或普通 build 中生成。
 
-当前 deterministic layer 已覆盖 58 个 tags/schemas，两端生成 480 个 odd rows 和
-85 个 sink rows，并重现 amendment 的四个 candidate roots。但 authoritative DAG 审计
-又发现 12 组 exact 冲突：output-slot cardinality、bridge topology/envelopes/domains、
-actor trust/ledger boundary、absence audit、role/state enums、nested root preimages/ID registry、sink
-witness 字段与 custodian signature coverage。因此 candidate replay 与 authoritative gate 仍然
-分开：前者已经过资格化，后者在 CSPRNG/marker 之前 fail-closed，保持
-`14/24`、formal roots `null`、`NOT_RUN`。待决字段见
-[`questions_for_gpt_phase3_m25_wire_completion_errata.md`](questions_for_gpt_phase3_m25_wire_completion_errata.md)。
+当前 deterministic layer 已覆盖 81 个唯一 tags/schemas。E1–E12 的 output-slot、bridge
+topology/envelope/domain、actor trust/ledger、absence audit、role/state、nested preimage、
+opaque-ID、sink witness 与 signature-coverage 冲突已由 exact-wire resolution 和
+implementation addendum 解决。Commit A 的 fresh detached Python/Rust replay 对 21 个
+candidate objects、8 个 candidate record trees 和 15 个 negative guard codes 完全一致。
+这准确称为 `DUAL_EXACT_WIRE_ERRATA_GOLDEN_PASS`，但仍是 non-authoritative candidate
+evidence；checked JSON 单独不能授权 operational use。
+
+因此下一硬门不再是规范选择，而是 fresh qualification 之后的独立 external genesis、
+parent-history audit、opaque-ID persistence 和 purpose-separated signatures。该流程尚未
+执行，状态保持 `14/24`、formal roots `null`、`NOT_RUN`。定案和操作边界见
+[`Hegel_Machine_Phase3A_M25_Exact_Wire_Errata_Resolution.md`](Hegel_Machine_Phase3A_M25_Exact_Wire_Errata_Resolution.md)、
+[`Hegel_Machine_Phase3A_M25_Implementation_Closure_Addendum_v1.md`](Hegel_Machine_Phase3A_M25_Implementation_Closure_Addendum_v1.md)
+与
+[`phase3_m25_external_genesis_operator_runbook.md`](phase3_m25_external_genesis_operator_runbook.md)。
 
 v2/SCAR commit `4861b2d8` 的 protocol-valid negative 不进入上述 identity/root DAG，故不
 改变 M2.5 或 M3 closure gate；它作为 Phase-3B/3C 的 design-risk input 单独绑定。后续
