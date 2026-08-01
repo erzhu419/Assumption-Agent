@@ -31,6 +31,9 @@ import time
 from typing import Any, Callable, Mapping, Protocol, Sequence
 
 from replication_runtime.gscl_scar_cssm_v1 import worker
+from replication_runtime.gscl_narrative_extractor_v1 import (
+    contract as narrative_contract,
+)
 
 
 VERSION = "gscl_scar_cssm_qualification_v1"
@@ -672,6 +675,7 @@ def _apply_landlock(
     read_paths: Sequence[Path],
     write_paths: Sequence[Path],
     device_paths: Sequence[Path],
+    read_directory_paths: Sequence[Path] = (),
     write_file_paths: Sequence[Path] = (),
 ) -> None:
     abi = _landlock_abi_version()
@@ -739,6 +743,10 @@ def _apply_landlock(
         read_rights = _LL_EXECUTE | _LL_READ_FILE | _LL_READ_DIR
         for path in dict.fromkeys(read_paths):
             add(path, read_rights)
+        for path in dict.fromkeys(read_directory_paths):
+            # Permit an O_DIRECTORY dirfd for a securely bound child file,
+            # without granting READ_FILE to any sibling beneath the parent.
+            add(path, _LL_READ_DIR)
         for path in dict.fromkeys(write_paths):
             add(path, handled)
         for path in dict.fromkeys(write_file_paths):
@@ -833,6 +841,17 @@ def _apply_child_landlock(
         read_paths=read_paths,
         write_paths=write_paths,
         device_paths=devices,
+        read_directory_paths=tuple(
+            dict.fromkeys(
+                (
+                    config.qwen_manifest_path.parent,
+                    config.minilm_manifest_path.parent,
+                    paths.action_pack.parent,
+                    paths.sandbox_receipt.parent,
+                    paths.action_release.parent,
+                )
+            )
+        ),
         # libcuda names its native helper threads through
         # /proc/self/task/<tid>/comm during cudaGetDeviceCount().  Grant only
         # WRITE_FILE/TRUNCATE below that process-local subtree; the broader
@@ -874,6 +893,11 @@ def _child_environment(
         "PYTHONHASHSEED": "0",
         "PYTHONNOUSERSITE": "1",
         "PYTHONPATH": str(config.project_root),
+        narrative_contract.
+        SUPERVISOR_LANDLOCK_DIRECT_PARENT_ENVIRONMENT_KEY: (
+            narrative_contract.
+            SUPERVISOR_LANDLOCK_DIRECT_PARENT_AUTHORITY
+        ),
         "TEMP": str(temporary),
         "TMP": str(temporary),
         "TMPDIR": str(temporary),
@@ -1033,6 +1057,8 @@ def _validate_runtime_receipt(
         or execution.get("hf_hub_offline") != "1"
         or execution.get("hf_hub_disable_telemetry") != "1"
         or execution.get("python_no_user_site") != "1"
+        or execution.get("supervisor_landlock_direct_parent_authority")
+        != narrative_contract.SUPERVISOR_LANDLOCK_DIRECT_PARENT_AUTHORITY
         or execution.get("transformers_offline") != "1"
         or execution.get("tokenizers_parallelism") not in {"false", "False"}
         or execution.get("cuda_runtime_available") is not True

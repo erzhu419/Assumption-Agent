@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from types import SimpleNamespace
 import unicodedata
 from typing import Any
 
@@ -93,6 +94,9 @@ def _runtime_receipt(
             "hf_hub_disable_telemetry": "1",
             "matmul_tf32": False,
             "python_no_user_site": "1",
+            "supervisor_landlock_direct_parent_authority": (
+                "97ff3a77c33a3113712a4c11a9fd347902a12b45f76935023d2ac66377936c35"
+            ),
             "tokenizers_parallelism": "false",
             "transformers_offline": "1",
         },
@@ -543,6 +547,11 @@ def test_two_worker_release_records_barrier_and_safe_receipt(
             ":4096:8"
         )
         assert launch["kwargs"]["env"]["PYTHONNOUSERSITE"] == "1"
+        assert launch["kwargs"]["env"][
+            "GSCL_SUPERVISOR_LANDLOCK_DIRECT_PARENT_AUTHORITY_V1"
+        ] == (
+            "97ff3a77c33a3113712a4c11a9fd347902a12b45f76935023d2ac66377936c35"
+        )
         assert callable(launch["kwargs"]["preexec_fn"])
     safe_encoded = json.dumps(receipt, sort_keys=True)
     for forbidden in (
@@ -630,12 +639,26 @@ def test_child_landlock_grants_only_process_local_cuda_thread_metadata_write(
         lambda **kwargs: captured.update(kwargs),
     )
 
-    qualification._apply_child_landlock(None, None, 0)  # type: ignore[arg-type]
+    config = SimpleNamespace(
+        qwen_manifest_path=Path("/assets/qwen.json"),
+        minilm_manifest_path=Path("/assets/minilm.json"),
+    )
+    paths = SimpleNamespace(
+        action_pack=Path("/inputs/action.json"),
+        sandbox_receipt=Path("/inputs/sandbox.json"),
+        action_release=Path("/release/action.json"),
+    )
+    qualification._apply_child_landlock(config, paths, 0)
 
     assert captured == {
         "read_paths": (),
         "write_paths": (),
         "device_paths": (),
+        "read_directory_paths": (
+            Path("/assets"),
+            Path("/inputs"),
+            Path("/release"),
+        ),
         "write_file_paths": (Path("/proc/self/task"),),
     }
     assert qualification._landlock_write_file_rights(2) == (  # noqa: SLF001
@@ -655,6 +678,8 @@ def test_landlock_allows_future_thread_comm_write_but_denies_sibling_file(
     forbidden = tmp_path / "forbidden"
     allowed.write_bytes(b"allowed")
     forbidden.write_bytes(b"forbidden")
+    allowed.chmod(0o600)
+    forbidden.chmod(0o600)
     project_root = Path(qualification.__file__).parents[2]
     script = r"""
 import os
@@ -662,13 +687,18 @@ from pathlib import Path
 import sys
 import threading
 from replication_runtime.gscl_scar_cssm_v1 import qualification
+from replication_runtime.gscl_narrative_extractor_v1 import contract
 
 allowed = Path(sys.argv[1])
 forbidden = Path(sys.argv[2])
+os.environ[contract.SUPERVISOR_LANDLOCK_DIRECT_PARENT_ENVIRONMENT_KEY] = (
+    contract.SUPERVISOR_LANDLOCK_DIRECT_PARENT_AUTHORITY
+)
 qualification._apply_landlock(
     read_paths=(Path("/proc"), allowed),
     write_paths=(),
     device_paths=(),
+    read_directory_paths=(allowed.parent,),
     write_file_paths=(Path("/proc/self/task"),),
 )
 ready = threading.Event()
@@ -692,7 +722,8 @@ finally:
     os.close(descriptor)
 release.set()
 thread.join(5)
-if thread.is_alive() or allowed.read_bytes() != b"allowed":
+secure = contract.secure_read_file(allowed, maximum=1024)
+if thread.is_alive() or secure.raw != b"allowed":
     raise RuntimeError("allowed operations failed")
 try:
     forbidden.read_bytes()

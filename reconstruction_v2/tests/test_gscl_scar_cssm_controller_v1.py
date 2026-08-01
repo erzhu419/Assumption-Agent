@@ -287,6 +287,9 @@ class _FakePopenFactory:
                     ]
                 },
                 "python_no_user_site": "1",
+                "supervisor_landlock_direct_parent_authority": (
+                    "97ff3a77c33a3113712a4c11a9fd347902a12b45f76935023d2ac66377936c35"
+                ),
                 "transformers_offline": "1",
             },
             "execution_freeze_sha256": EXECUTION_FREEZE,
@@ -583,6 +586,11 @@ def test_formal_lifecycle_is_two_shard_label_late_and_exactly_once(
         assert launch["kwargs"]["env"]["CUBLAS_WORKSPACE_CONFIG"] == (
             ":4096:8"
         )
+        assert launch["kwargs"]["env"][
+            "GSCL_SUPERVISOR_LANDLOCK_DIRECT_PARENT_AUTHORITY_V1"
+        ] == (
+            "97ff3a77c33a3113712a4c11a9fd347902a12b45f76935023d2ac66377936c35"
+        )
         assert launch["kwargs"]["env"]["TRANSFORMERS_OFFLINE"] == "1"
         assert callable(launch["kwargs"]["preexec_fn"])
         argv = launch["argv"]
@@ -757,12 +765,26 @@ def test_action_landlock_grants_only_process_local_cuda_thread_metadata_write(
         lambda **kwargs: captured.update(kwargs),
     )
 
-    controller._apply_action_landlock(None, None, 0)  # type: ignore[arg-type]
+    config = SimpleNamespace(
+        qwen_manifest_path=Path("/assets/qwen.json"),
+        minilm_manifest_path=Path("/minilm/minilm.json"),
+        action_pack_path=Path("/inputs/action.json"),
+        sandbox_receipt_path=Path("/sandbox/sandbox.json"),
+    )
+    paths = SimpleNamespace(control=Path("/control"))
+    controller._apply_action_landlock(config, paths, 0)
 
     assert captured == {
         "read_paths": (),
         "write_paths": (),
         "device_paths": (),
+        "read_directory_paths": (
+            Path("/assets"),
+            Path("/minilm"),
+            Path("/inputs"),
+            Path("/sandbox"),
+            Path("/control"),
+        ),
         "write_file_paths": (Path("/proc/self/task"),),
     }
     assert controller._landlock_write_file_rights(2) == (  # noqa: SLF001

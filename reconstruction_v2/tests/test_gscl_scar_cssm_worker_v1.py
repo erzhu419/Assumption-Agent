@@ -5,7 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import sys
-from types import SimpleNamespace
+from types import MappingProxyType, SimpleNamespace
 
 import pytest
 
@@ -256,6 +256,14 @@ def test_private_reader_binds_inode_mode_link_count_and_hash(
     alias.symlink_to(path)
     with pytest.raises(worker.ScarCssmWorkerError):
         worker._regular_private_file(alias, maximum_bytes=4)
+
+
+def test_canonical_transport_materializes_nested_read_only_mappings() -> None:
+    value = MappingProxyType(
+        {"outer": MappingProxyType({"z": 2, "a": 1})}
+    )
+
+    assert worker._canonical_bytes(value) == b'{"outer":{"a":1,"z":2}}'
 
 
 def test_premodel_failure_has_zero_mechanism_resources() -> None:

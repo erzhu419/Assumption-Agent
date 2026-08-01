@@ -26,6 +26,9 @@ from typing import Any, Mapping, Sequence
 from assumption_agent.benchmarks import gscl_scar_cssm_action_v1 as action
 from assumption_agent.benchmarks import gscl_scar_cssm_source_v1 as source
 from replication_runtime.gscl_narrative_extractor_v1 import worker as qwen_assets
+from replication_runtime.gscl_narrative_extractor_v1 import (
+    contract as narrative_contract,
+)
 from replication_runtime.gscl_narrative_extractor_v2 import (
     document_envelope,
     fixed_document_envelope_qualification as document_qualification,
@@ -112,6 +115,13 @@ class ScarCssmWorkerError(RuntimeError):
 
 
 def _canonical_bytes(value: Any) -> bytes:
+    def materialize_mapping(child: object) -> object:
+        if isinstance(child, Mapping):
+            return dict(child)
+        raise TypeError(
+            f"Object of type {type(child).__name__} is not JSON serializable"
+        )
+
     try:
         return json.dumps(
             value,
@@ -119,6 +129,7 @@ def _canonical_bytes(value: Any) -> bytes:
             sort_keys=True,
             separators=(",", ":"),
             allow_nan=False,
+            default=materialize_mapping,
         ).encode("ascii")
     except (TypeError, ValueError, UnicodeError) as exc:
         raise ScarCssmWorkerError("WORKER_CANONICAL_JSON_INVALID") from exc
@@ -788,6 +799,10 @@ def _runtime_receipt(
             "matmul_tf32": torch.backends.cuda.matmul.allow_tf32,
             "python": dict(_python_runtime_receipt()),
             "python_no_user_site": os.environ.get("PYTHONNOUSERSITE"),
+            "supervisor_landlock_direct_parent_authority": os.environ.get(
+                narrative_contract.
+                SUPERVISOR_LANDLOCK_DIRECT_PARENT_ENVIRONMENT_KEY
+            ),
             "tokenizers_parallelism": os.environ.get(
                 "TOKENIZERS_PARALLELISM"
             ),
@@ -805,6 +820,8 @@ def _runtime_receipt(
         or execution["hf_hub_offline"] != "1"
         or execution["hf_hub_disable_telemetry"] != "1"
         or execution["python_no_user_site"] != "1"
+        or execution["supervisor_landlock_direct_parent_authority"]
+        != narrative_contract.SUPERVISOR_LANDLOCK_DIRECT_PARENT_AUTHORITY
         or execution["transformers_offline"] != "1"
         or execution["tokenizers_parallelism"] not in {"false", "False"}
         or execution["deterministic_algorithms"] is not True
