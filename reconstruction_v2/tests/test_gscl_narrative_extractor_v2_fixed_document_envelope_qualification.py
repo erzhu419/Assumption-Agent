@@ -92,8 +92,11 @@ def _parser(story: str, completion: str) -> NarrativeExtraction:
 
 
 class _LeafSelector:
-    def __init__(self, *, no_relation: bool = False) -> None:
+    def __init__(
+        self, *, no_relation: bool = False, typed_failure: bool = False
+    ) -> None:
         self.no_relation = no_relation
+        self.typed_failure = typed_failure
 
     def select_story(self, story_text: str) -> leaf_v2.ClosedChoiceV2Decision:
         if self.no_relation:
@@ -101,6 +104,8 @@ class _LeafSelector:
                 "V2_PLAN_NO_RELATION_SELECTED",
                 before_model_forward=False,
             )
+        if self.typed_failure:
+            raise RuntimeError("private runtime failure must not enter receipt")
         return leaf_v2.select_hierarchical_qualification_only(
             story_text,
             backend=_Backend(),
@@ -347,6 +352,10 @@ def test_two_shards_execute_repeat_exact_and_aggregate_offline(
         assert receipt["repeat_byte_exact"] is True
         assert receipt["formal_effect_evidence"] is False
         assert receipt["downstream_eligible"] is False
+        assert receipt["effect_quality_gate_added"] is False
+        assert receipt["functional_extracted_branch_coverage_required"] is True
+        assert receipt["counters"]["external_fixture_source_access_count"] == 0
+        assert receipt["counters"]["external_evaluator_scorer_access_count"] == 0
         assert receipt["teacher_forced_canary"][
             "long_repeat_byte_exact"
         ] is True
@@ -363,6 +372,9 @@ def test_two_shards_execute_repeat_exact_and_aggregate_offline(
     assert aggregate["qualification_passed"] is True
     assert aggregate["outcome_status_counts"] == {
         "executed_without_typed_failure": 4,
+        "functional_extracted_branch_not_exercised": 0,
+        "not_executed_after_canary_failure": 0,
+        "repeat_mismatch": 0,
         "typed_failure": 0,
     }
     assert aggregate["formal_effect_evidence"] is False
@@ -376,7 +388,7 @@ def test_two_shards_execute_repeat_exact_and_aggregate_offline(
     assert "Mixed2Token0100" not in nested
 
 
-def test_relation_bearing_suite_rejects_zero_projection(
+def test_relation_bearing_suite_returns_safe_negative_for_zero_projection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -388,15 +400,224 @@ def test_relation_bearing_suite_rejects_zero_projection(
             )
         ),
     )
-    with pytest.raises(
-        qualification.FixedDocumentEnvelopeQualificationError,
-        match="projection_not_exercised",
-    ):
-        qualification._run_document_once(
-            runtime=_Runtime(),
-            runtime_commitment=_RUNTIME_COMMITMENT,
-            fixture=qualification.PUBLIC_DOCUMENT_FIXTURES[0],
+    outcome = qualification._run_document_once(
+        runtime=_Runtime(),
+        runtime_commitment=_RUNTIME_COMMITMENT,
+        fixture=qualification.PUBLIC_DOCUMENT_FIXTURES[0],
+    )
+    assert outcome["status"] == qualification._NO_RELATION_STATUS
+    assert outcome["failure_code"] == (
+        "DOCUMENT_FUNCTIONAL_EXTRACTED_BRANCH_NOT_EXERCISED"
+    )
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected_status", "expected_code"),
+    (
+        (
+            "no_relation",
+            qualification._NO_RELATION_STATUS,
+            "DOCUMENT_FUNCTIONAL_EXTRACTED_BRANCH_NOT_EXERCISED",
+        ),
+        (
+            "typed_failure",
+            qualification._TYPED_FAILURE_STATUS,
+            "DOCUMENT_TYPED_FAILURE_REPORTED",
+        ),
+        (
+            "repeat_mismatch",
+            qualification._REPEAT_MISMATCH_STATUS,
+            "DOCUMENT_REPEAT_BYTE_MISMATCH",
+        ),
+        (
+            "canary_failure",
+            qualification._CANARY_NOT_EXECUTED_STATUS,
+            "DOCUMENT_TEACHER_FORCED_CANARY_FAILED",
+        ),
+    ),
+)
+def test_legal_negative_qualification_publishes_content_free_shard_terminal(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    mode: str,
+    expected_status: str,
+    expected_code: str,
+) -> None:
+    manifest = _manifest()
+    upstream = _write_upstream(tmp_path / "upstream.safe.json", manifest)
+    _install_runtime_fakes(monkeypatch, manifest)
+    if mode in {"no_relation", "typed_failure"}:
+        selector = _LeafSelector(
+            no_relation=mode == "no_relation",
+            typed_failure=mode == "typed_failure",
         )
+        monkeypatch.setattr(
+            qualification,
+            "_select_document",
+            lambda *, runtime, story_text: (
+                document_envelope.select_document_qualification_only(
+                    story_text, leaf_selector=selector
+                )
+            ),
+        )
+    elif mode == "repeat_mismatch":
+        original = qualification._run_document_once
+        calls = 0
+
+        def alternating(**kwargs: object) -> dict[str, object]:
+            nonlocal calls
+            calls += 1
+            row = original(**kwargs)  # type: ignore[arg-type]
+            if calls % 2 == 0:
+                row["projection_commitment"] = "f" * 64
+            return row
+
+        monkeypatch.setattr(qualification, "_run_document_once", alternating)
+    else:
+        def fail_canary(_runtime: object) -> Mapping[str, object]:
+            raise RuntimeError("private canary failure must not enter receipt")
+
+        monkeypatch.setattr(
+            leaf_qualification,
+            "_run_fixed_teacher_forced_canary",
+            fail_canary,
+        )
+    root = tmp_path / "negative-shard"
+    receipt = dict(
+        qualification.run_fixed_document_envelope_qualification_shard(
+            model_root=tmp_path / "model",
+            manifest=manifest,  # type: ignore[arg-type]
+            upstream_aggregate_receipt=upstream,
+            output_root=root,
+            shard_index=0,
+            shard_count=2,
+        )
+    )
+    terminal = root / qualification.SHARD_OUTPUT_NAME
+    assert terminal.is_file()
+    assert receipt["schema"] == qualification.SHARD_RECEIPT_SCHEMA
+    assert receipt["qualification_passed"] is False
+    assert receipt["qualification_failure_codes"] == [expected_code]
+    assert receipt["outcomes"][0]["status"] == expected_status
+    assert receipt["outcomes"][0]["failure_code"] == expected_code
+    qualification._validate_shard_receipt(receipt)
+    serialized = terminal.read_text(encoding="ascii")
+    assert "private canary failure" not in serialized
+    assert "private runtime failure" not in serialized
+    assert "D1024Token0500" not in serialized
+
+
+def test_resource_peak_failure_publishes_content_free_negative_terminal(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    manifest = _manifest()
+    upstream = _write_upstream(tmp_path / "upstream.safe.json", manifest)
+    _install_runtime_fakes(monkeypatch, manifest)
+
+    def fail_resource_peaks(
+        _outcomes: object,
+    ) -> dict[str, int]:
+        raise RuntimeError("private resource failure must not enter receipt")
+
+    monkeypatch.setattr(qualification, "_resource_peaks", fail_resource_peaks)
+    root = tmp_path / "resource-negative-shard"
+    receipt = dict(
+        qualification.run_fixed_document_envelope_qualification_shard(
+            model_root=tmp_path / "model",
+            manifest=manifest,  # type: ignore[arg-type]
+            upstream_aggregate_receipt=upstream,
+            output_root=root,
+            shard_index=0,
+            shard_count=2,
+        )
+    )
+    terminal = root / qualification.SHARD_OUTPUT_NAME
+    assert terminal.is_file()
+    assert receipt["qualification_passed"] is False
+    assert receipt["qualification_failure_codes"] == [
+        qualification._RESOURCE_PEAK_FAILURE_CODE
+    ]
+    assert receipt["resource_peaks"] == {
+        **{
+            key: 0
+            for key in qualification._RESOURCE_PEAK_FIELDS
+            if key != "process_max_rss_kib"
+        },
+        "process_max_rss_kib": receipt["resource_peaks"][
+            "process_max_rss_kib"
+        ],
+    }
+    assert receipt["resource_peaks"]["process_max_rss_kib"] > 0
+    qualification._validate_shard_receipt(receipt)
+    assert "private resource failure" not in terminal.read_text(
+        encoding="ascii"
+    )
+
+
+def test_aggregate_accepts_positive_and_negative_shards_and_publishes_negative(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    manifest = _manifest()
+    upstream = _write_upstream(tmp_path / "upstream.safe.json", manifest)
+    _install_runtime_fakes(monkeypatch, manifest)
+    monkeypatch.setattr(
+        qualification,
+        "_select_document",
+        lambda *, runtime, story_text: (
+            document_envelope.select_document_qualification_only(
+                story_text, leaf_selector=_LeafSelector(no_relation=True)
+            )
+        ),
+    )
+    root0 = tmp_path / "shard0"
+    qualification.run_fixed_document_envelope_qualification_shard(
+        model_root=tmp_path / "model",
+        manifest=manifest,  # type: ignore[arg-type]
+        upstream_aggregate_receipt=upstream,
+        output_root=root0,
+        shard_index=0,
+        shard_count=2,
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_select_document",
+        lambda *, runtime, story_text: (
+            document_envelope.select_document_qualification_only(
+                story_text, leaf_selector=_LeafSelector()
+            )
+        ),
+    )
+    root1 = tmp_path / "shard1"
+    qualification.run_fixed_document_envelope_qualification_shard(
+        model_root=tmp_path / "model",
+        manifest=manifest,  # type: ignore[arg-type]
+        upstream_aggregate_receipt=upstream,
+        output_root=root1,
+        shard_index=1,
+        shard_count=2,
+    )
+    aggregate_root = tmp_path / "aggregate"
+    aggregate = dict(
+        qualification.aggregate_fixed_document_envelope_qualification(
+            shard_receipts=(
+                root0 / qualification.SHARD_OUTPUT_NAME,
+                root1 / qualification.SHARD_OUTPUT_NAME,
+            ),
+            output_root=aggregate_root,
+        )
+    )
+    assert aggregate["qualification_passed"] is False
+    assert aggregate["qualification_failure_codes"] == [
+        "DOCUMENT_FUNCTIONAL_EXTRACTED_BRANCH_NOT_EXERCISED"
+    ]
+    assert aggregate["outcome_status_counts"] == {
+        "executed_without_typed_failure": 3,
+        "functional_extracted_branch_not_exercised": 1,
+        "not_executed_after_canary_failure": 0,
+        "repeat_mismatch": 0,
+        "typed_failure": 0,
+    }
+    assert (aggregate_root / qualification.AGGREGATE_OUTPUT_NAME).is_file()
 
 
 def test_qualification_fake_runtime_is_not_exact_authority() -> None:

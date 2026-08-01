@@ -48,6 +48,23 @@ SHARD_FIXTURE_ORDINALS = ((3,), (0, 1, 2))
 MAXIMUM_SAFE_RECEIPT_BYTES = 2 * 1024 * 1024
 MAXIMUM_IMPLEMENTATION_FILE_BYTES = 4 * 1024 * 1024
 _HEX64 = re.compile(r"[0-9a-f]{64}\Z")
+_SUCCESS_STATUS = "EXECUTED_WITHOUT_TYPED_FAILURE"
+_NO_RELATION_STATUS = "FUNCTIONAL_EXTRACTED_BRANCH_NOT_EXERCISED"
+_TYPED_FAILURE_STATUS = "TYPED_FAILURE"
+_REPEAT_MISMATCH_STATUS = "REPEAT_MISMATCH"
+_CANARY_NOT_EXECUTED_STATUS = "NOT_EXECUTED_AFTER_CANARY_FAILURE"
+_OUTCOME_FAILURE_CODES = frozenset(
+    {
+        "DOCUMENT_FUNCTIONAL_EXTRACTED_BRANCH_NOT_EXERCISED",
+        "DOCUMENT_REPEAT_BYTE_MISMATCH",
+        "DOCUMENT_TEACHER_FORCED_CANARY_FAILED",
+        "DOCUMENT_TYPED_FAILURE_REPORTED",
+    }
+)
+_RESOURCE_PEAK_FAILURE_CODE = "DOCUMENT_RESOURCE_PEAK_COLLECTION_FAILED"
+_QUALIFICATION_FAILURE_CODES = (
+    _OUTCOME_FAILURE_CODES | {_RESOURCE_PEAK_FAILURE_CODE}
+)
 
 
 class FixedDocumentEnvelopeQualificationError(RuntimeError):
@@ -374,12 +391,12 @@ def _implementation_closure() -> dict[str, str]:
 def _zero_counters(*, aggregate: bool = False) -> dict[str, int]:
     return {
         "api_access_count": 0,
-        "fixture_source_access_count": 0,
+        "external_evaluator_scorer_access_count": 0,
+        "external_fixture_source_access_count": 0,
         "free_form_generation_count": 0,
         "label_access_count": 0,
         "network_access_count": 0,
         "online_evaluator_access_count": 0,
-        "scorer_access_count": 0,
         "external_source_access_count": 0,
         "shard_receipt_access_count": 2 if aggregate else 0,
     }
@@ -594,6 +611,45 @@ def _safe_segment_topology(
     ]
 
 
+def _minimal_negative_outcome(
+    *,
+    fixture: PublicDocumentFixture,
+    status: str,
+    failure_code: str,
+) -> dict[str, object]:
+    """Return a content-free outcome when no stable envelope may be retained."""
+
+    if (
+        status not in {_REPEAT_MISMATCH_STATUS, _CANARY_NOT_EXECUTED_STATUS}
+        or failure_code not in _OUTCOME_FAILURE_CODES
+    ):
+        raise FixedDocumentEnvelopeQualificationError(
+            "document_negative_outcome_arguments_invalid"
+        )
+    return {
+        "disposition_counts": None,
+        "document_envelope_receipt_sha256": None,
+        "document_envelope_self_sha256": None,
+        "exact_runtime_binding_observed_on_extracted_leaves": False,
+        "extracted_leaf_count": 0,
+        "failure_code": failure_code,
+        "fixture_commitment": fixture.fixture_commitment,
+        "fixture_id": fixture.fixture_id,
+        "input_sha256": fixture.input_sha256,
+        "ordinal": fixture.ordinal,
+        "partial_projection_available": False,
+        "projection_commitment": None,
+        "repeat_byte_exact": False,
+        "repeat_count": REPEAT_COUNT,
+        "repeat_outcome_sha256": None,
+        "resource_summary": None,
+        "segment_topology": None,
+        "segment_topology_sha256": None,
+        "segments_commitment": None,
+        "status": status,
+    }
+
+
 def _run_document_once(
     *,
     runtime: object,
@@ -617,7 +673,13 @@ def _run_document_once(
         document_envelope.SegmentDisposition.EXTRACTED,
         document_envelope.SegmentDisposition.NO_RELATION,
         document_envelope.SegmentDisposition.CONTEXT_ONLY_SHORT_SENTENCE,
+        document_envelope.SegmentDisposition.TYPED_FAILURE,
     }
+    observed_leaf_call_count = sum(row.leaf_called for row in result.segments)
+    typed_failure_count = sum(
+        row.disposition is document_envelope.SegmentDisposition.TYPED_FAILURE
+        for row in result.segments
+    )
     if (
         observed_counts != fixture.expected_segment_token_counts
         or resource_summary.get("root_lexical_token_count")
@@ -626,12 +688,11 @@ def _run_document_once(
         or receipt.get("segmentation_policy_sha256")
         != document_envelope.SEGMENTATION_POLICY_SHA256
         or receipt.get("byte_outcome_coverage_complete") is not True
-        or receipt.get("typed_failure_count") != 0
+        or receipt.get("typed_failure_count") != typed_failure_count
         or receipt.get("formal_leaf_authority_established") is not False
         or receipt.get("downstream_eligible") is not False
         or any(row.disposition not in allowed for row in result.segments)
-        or sum(row.leaf_called for row in result.segments)
-        != fixture.expected_leaf_call_count
+        or observed_leaf_call_count > fixture.expected_leaf_call_count
         or any(
             row.disposition
             is document_envelope.SegmentDisposition.CONTEXT_ONLY_SHORT_SENTENCE
@@ -639,7 +700,7 @@ def _run_document_once(
             for row in result.segments
         )
         or resource_summary.get("leaf_call_count")
-        != fixture.expected_leaf_call_count
+        != observed_leaf_call_count
     ):
         raise FixedDocumentEnvelopeQualificationError(
             "document_execution_contract_invalid"
@@ -659,10 +720,17 @@ def _run_document_once(
         row.disposition is document_envelope.SegmentDisposition.EXTRACTED
         for row in result.segments
     )
-    if extracted_leaf_count < fixture.minimum_extracted_leaf_count:
-        raise FixedDocumentEnvelopeQualificationError(
-            "document_relation_bearing_projection_not_exercised"
+    if typed_failure_count:
+        status = _TYPED_FAILURE_STATUS
+        failure_code: str | None = "DOCUMENT_TYPED_FAILURE_REPORTED"
+    elif extracted_leaf_count < fixture.minimum_extracted_leaf_count:
+        status = _NO_RELATION_STATUS
+        failure_code = (
+            "DOCUMENT_FUNCTIONAL_EXTRACTED_BRANCH_NOT_EXERCISED"
         )
+    else:
+        status = _SUCCESS_STATUS
+        failure_code = None
     topology = _safe_segment_topology(result)
     body: dict[str, object] = {
         "disposition_counts": dict(receipt["disposition_counts"]),
@@ -677,6 +745,7 @@ def _run_document_once(
             leaf_runtime_commitments
         ),
         "extracted_leaf_count": extracted_leaf_count,
+        "failure_code": failure_code,
         "fixture_commitment": fixture.fixture_commitment,
         "fixture_id": fixture.fixture_id,
         "input_sha256": fixture.input_sha256,
@@ -695,7 +764,7 @@ def _run_document_once(
             receipt.get("segments_commitment"),
             "document_segments_hash_invalid",
         ),
-        "status": "EXECUTED_WITHOUT_TYPED_FAILURE",
+        "status": status,
     }
     return body
 
@@ -719,8 +788,10 @@ def _run_document_twice(
     first_raw = _canonical_bytes(first)
     second_raw = _canonical_bytes(second)
     if first_raw != second_raw:
-        raise FixedDocumentEnvelopeQualificationError(
-            "document_repeat_byte_mismatch"
+        return _minimal_negative_outcome(
+            fixture=fixture,
+            status=_REPEAT_MISMATCH_STATUS,
+            failure_code="DOCUMENT_REPEAT_BYTE_MISMATCH",
         )
     return {
         **first,
@@ -798,6 +869,71 @@ def _resource_peaks(outcomes: Sequence[Mapping[str, object]]) -> dict[str, int]:
     }
 
 
+def _negative_resource_peaks() -> dict[str, int]:
+    """Bounded, content-free resource terminal when detailed rows are absent."""
+
+    try:
+        process_max_rss_kib = max(
+            1, int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+        )
+    except Exception:
+        process_max_rss_kib = 1
+    return {
+        "cuda_max_memory_allocated_bytes": 0,
+        "cuda_max_memory_reserved_bytes": 0,
+        "max_leaf_call_count": 0,
+        "max_projected_relation_count": 0,
+        "max_reported_success_candidate_count": 0,
+        "max_reported_success_forward_batch_count": 0,
+        "max_root_lexical_token_count": 0,
+        "max_segment_count": 0,
+        "process_max_rss_kib": process_max_rss_kib,
+    }
+
+
+def _validate_success_canary(value: object) -> None:
+    if type(value) is not dict:
+        raise FixedDocumentEnvelopeQualificationError(
+            "document_teacher_forced_canary_contract_invalid"
+        )
+    supplied = value.get("self_sha256")
+    if (
+        _HEX64.fullmatch(supplied) is None
+        if isinstance(supplied, str)
+        else True
+    ):
+        raise FixedDocumentEnvelopeQualificationError(
+            "document_teacher_forced_canary_contract_invalid"
+        )
+    if (
+        supplied
+        != _safe_hash(
+            {
+                key: child
+                for key, child in value.items()
+                if key != "self_sha256"
+            }
+        )
+        or value.get("short_strategy_vs_full_reference_exact") is not True
+        or value.get("long_repeat_byte_exact") is not True
+        or value.get("fallback_independent_full_reference_passed") is not True
+        or value.get("free_form_generation_count") != 0
+        or value.get("schema") != memory_safe_qwen.FIXED_CANARY_SCHEMA
+        or value.get("short_pair_sha256")
+        != memory_safe_qwen.FIXED_SHORT_CANARY_PAIR_SHA256
+        or value.get("long_pair_sha256")
+        != memory_safe_qwen.FIXED_LONG_CANARY_PAIR_SHA256
+        or value.get("strategy")
+        not in {
+            memory_safe_qwen.SPARSE_STRATEGY,
+            memory_safe_qwen.FALLBACK_STRATEGY,
+        }
+    ):
+        raise FixedDocumentEnvelopeQualificationError(
+            "document_teacher_forced_canary_contract_invalid"
+        )
+
+
 def run_fixed_document_envelope_qualification_shard(
     *,
     model_root: Path,
@@ -840,37 +976,73 @@ def run_fixed_document_envelope_qualification_shard(
         raise FixedDocumentEnvelopeQualificationError(
             "document_upstream_runtime_mismatch"
         )
-    _reset_cuda_peaks()
-    try:
-        canary = dict(
-            leaf_qualification._run_fixed_teacher_forced_canary(runtime)
-        )
-    except Exception as exc:
-        raise FixedDocumentEnvelopeQualificationError(
-            "document_teacher_forced_canary_failed"
-        ) from exc
     fixtures = tuple(
         PUBLIC_DOCUMENT_FIXTURES[ordinal]
         for ordinal in SHARD_FIXTURE_ORDINALS[shard_index]
     )
-    outcomes = [
-        _run_document_twice(
-            runtime=runtime,
-            runtime_commitment=runtime_commitment,
-            fixture=fixture,
+    canary: dict[str, object] | None
+    canary_failure_code: str | None = None
+    try:
+        _reset_cuda_peaks()
+        canary = dict(
+            leaf_qualification._run_fixed_teacher_forced_canary(runtime)
         )
-        for fixture in fixtures
-    ]
-    passed = all(
-        row["status"] == "EXECUTED_WITHOUT_TYPED_FAILURE"
-        and row["repeat_byte_exact"] is True
-        for row in outcomes
+        _validate_success_canary(canary)
+    except Exception:
+        canary = None
+        canary_failure_code = "DOCUMENT_TEACHER_FORCED_CANARY_FAILED"
+    if canary_failure_code is None:
+        outcomes = [
+            _run_document_twice(
+                runtime=runtime,
+                runtime_commitment=runtime_commitment,
+                fixture=fixture,
+            )
+            for fixture in fixtures
+        ]
+    else:
+        outcomes = [
+            _minimal_negative_outcome(
+                fixture=fixture,
+                status=_CANARY_NOT_EXECUTED_STATUS,
+                failure_code=canary_failure_code,
+            )
+            for fixture in fixtures
+        ]
+    failure_codes = sorted(
+        {
+            row["failure_code"]
+            for row in outcomes
+            if row["failure_code"] is not None
+        }
+    )
+    if canary is not None and all(
+        type(row["resource_summary"]) is dict for row in outcomes
+    ):
+        try:
+            resource_peaks = _resource_peaks(outcomes)
+        except Exception:
+            resource_peaks = _negative_resource_peaks()
+            failure_codes = sorted(
+                {*failure_codes, _RESOURCE_PEAK_FAILURE_CODE}
+            )
+    else:
+        resource_peaks = _negative_resource_peaks()
+    passed = (
+        canary is not None
+        and not failure_codes
+        and all(
+            row["status"] == _SUCCESS_STATUS
+            and row["repeat_byte_exact"] is True
+            for row in outcomes
+        )
     )
     body: dict[str, object] = {
         "claim_scope": "fixed_public_non_scoring_document_envelope_runtime_compatibility_only",
+        "canary_passed": canary is not None,
         "counters": _zero_counters(),
         "downstream_eligible": False,
-        "effect_gate_added": False,
+        "effect_quality_gate_added": False,
         "effect_or_quality_measurement": False,
         "fixture_commitments": {
             row.fixture_id: row.fixture_commitment for row in fixtures
@@ -880,6 +1052,7 @@ def run_fixed_document_envelope_qualification_shard(
         "fixture_suite_sha256": FIXTURE_SUITE_SHA256,
         "formal_effect_evidence": False,
         "formal_leaf_authority_established_by_generic_envelope": False,
+        "functional_extracted_branch_coverage_required": True,
         "in_process_private_leaf_consistency_validation": True,
         "implementation_closure": implementation,
         "implementation_closure_sha256": _safe_hash(implementation),
@@ -887,12 +1060,13 @@ def run_fixed_document_envelope_qualification_shard(
         "outcomes": outcomes,
         "outcomes_commitment": _safe_hash(outcomes),
         "qualification_passed": passed,
+        "qualification_failure_codes": failure_codes,
         "private_leaf_evidence_retained": False,
         "repeat_byte_exact": all(
             row["repeat_byte_exact"] is True for row in outcomes
         ),
         "repeat_count": REPEAT_COUNT,
-        "resource_peaks": _resource_peaks(outcomes),
+        "resource_peaks": resource_peaks,
         "runtime_commitment": runtime_commitment,
         "schema": SHARD_RECEIPT_SCHEMA,
         "segmentation_policy_sha256": (
@@ -901,7 +1075,9 @@ def run_fixed_document_envelope_qualification_shard(
         "shard_count": SHARD_COUNT,
         "shard_index": shard_index,
         "teacher_forced_canary": canary,
-        "teacher_forced_canary_self_sha256": canary["self_sha256"],
+        "teacher_forced_canary_self_sha256": (
+            None if canary is None else canary["self_sha256"]
+        ),
         "upstream_leaf_aggregate_file_sha256": upstream["_file_sha256"],
         "upstream_leaf_aggregate_self_sha256": upstream["self_sha256"],
         "version": VERSION,
@@ -961,6 +1137,7 @@ _OUTCOME_FIELDS = {
     "document_envelope_self_sha256",
     "exact_runtime_binding_observed_on_extracted_leaves",
     "extracted_leaf_count",
+    "failure_code",
     "fixture_commitment",
     "fixture_id",
     "input_sha256",
@@ -1023,6 +1200,58 @@ def _validate_safe_outcome(
         raise FixedDocumentEnvelopeQualificationError(
             "document_safe_outcome_fields_invalid"
         )
+    if (
+        value.get("fixture_id") != fixture.fixture_id
+        or value.get("fixture_commitment") != fixture.fixture_commitment
+        or value.get("input_sha256") != fixture.input_sha256
+        or value.get("ordinal") != fixture.ordinal
+        or isinstance(value.get("ordinal"), bool)
+        or value.get("repeat_count") != REPEAT_COUNT
+    ):
+        raise FixedDocumentEnvelopeQualificationError(
+            "document_safe_outcome_contract_invalid"
+        )
+    status = value.get("status")
+    if status in {_REPEAT_MISMATCH_STATUS, _CANARY_NOT_EXECUTED_STATUS}:
+        expected_code = (
+            "DOCUMENT_REPEAT_BYTE_MISMATCH"
+            if status == _REPEAT_MISMATCH_STATUS
+            else "DOCUMENT_TEACHER_FORCED_CANARY_FAILED"
+        )
+        if (
+            value.get("failure_code") != expected_code
+            or value.get("repeat_byte_exact") is not False
+            or value.get("exact_runtime_binding_observed_on_extracted_leaves")
+            is not False
+            or value.get("extracted_leaf_count") != 0
+            or value.get("partial_projection_available") is not False
+            or value.get("disposition_counts") is not None
+            or value.get("resource_summary") is not None
+            or value.get("segment_topology") is not None
+            or any(
+                value.get(field) is not None
+                for field in (
+                    "document_envelope_receipt_sha256",
+                    "document_envelope_self_sha256",
+                    "projection_commitment",
+                    "repeat_outcome_sha256",
+                    "segment_topology_sha256",
+                    "segments_commitment",
+                )
+            )
+        ):
+            raise FixedDocumentEnvelopeQualificationError(
+                "document_safe_negative_outcome_invalid"
+            )
+        return
+    if status not in {
+        _SUCCESS_STATUS,
+        _NO_RELATION_STATUS,
+        _TYPED_FAILURE_STATUS,
+    }:
+        raise FixedDocumentEnvelopeQualificationError(
+            "document_safe_outcome_status_invalid"
+        )
     for field in (
         "document_envelope_receipt_sha256",
         "document_envelope_self_sha256",
@@ -1034,23 +1263,9 @@ def _validate_safe_outcome(
         "segments_commitment",
     ):
         _require_hex64(value.get(field), "document_safe_outcome_hash_invalid")
-    if (
-        value.get("fixture_id") != fixture.fixture_id
-        or value.get("fixture_commitment") != fixture.fixture_commitment
-        or value.get("input_sha256") != fixture.input_sha256
-        or value.get("ordinal") != fixture.ordinal
-        or isinstance(value.get("ordinal"), bool)
-        or value.get("status") != "EXECUTED_WITHOUT_TYPED_FAILURE"
-        or value.get("repeat_count") != REPEAT_COUNT
-        or value.get("repeat_byte_exact") is not True
-        or value.get("partial_projection_available") is not True
-        or value.get("exact_runtime_binding_observed_on_extracted_leaves")
-        is not True
-        or value.get("extracted_leaf_count")
-        != fixture.expected_leaf_call_count
-    ):
+    if value.get("repeat_byte_exact") is not True:
         raise FixedDocumentEnvelopeQualificationError(
-            "document_safe_outcome_contract_invalid"
+            "document_safe_outcome_repeat_invalid"
         )
     topology = value.get("segment_topology")
     plans = document_envelope.plan_document_segments(fixture.story_text)
@@ -1059,11 +1274,7 @@ def _validate_safe_outcome(
             "document_safe_topology_invalid"
         )
     for observed, plan in zip(topology, plans, strict=True):
-        expected_disposition = (
-            document_envelope.SegmentDisposition.EXTRACTED.value
-            if plan.leaf_eligible
-            else document_envelope.SegmentDisposition.CONTEXT_ONLY_SHORT_SENTENCE.value
-        )
+        disposition = observed.get("disposition") if type(observed) is dict else None
         if (
             type(observed) is not dict
             or set(observed) != _SEGMENT_TOPOLOGY_FIELDS
@@ -1077,8 +1288,31 @@ def _validate_safe_outcome(
             != plan.lexical_token_count
             or isinstance(observed.get("lexical_token_count"), bool)
             or observed.get("leaf_eligible") is not plan.leaf_eligible
-            or observed.get("leaf_called") is not plan.leaf_eligible
-            or observed.get("disposition") != expected_disposition
+            or (
+                not plan.leaf_eligible
+                and (
+                    observed.get("leaf_called") is not False
+                    or disposition
+                    != document_envelope.SegmentDisposition.CONTEXT_ONLY_SHORT_SENTENCE.value
+                )
+            )
+            or (
+                plan.leaf_eligible
+                and (
+                    disposition
+                    not in {
+                        document_envelope.SegmentDisposition.EXTRACTED.value,
+                        document_envelope.SegmentDisposition.NO_RELATION.value,
+                        document_envelope.SegmentDisposition.TYPED_FAILURE.value,
+                    }
+                    or (
+                        observed.get("leaf_called") is False
+                        and disposition
+                        != document_envelope.SegmentDisposition.TYPED_FAILURE.value
+                    )
+                    or not isinstance(observed.get("leaf_called"), bool)
+                )
+            )
         ):
             raise FixedDocumentEnvelopeQualificationError(
                 "document_safe_topology_invalid"
@@ -1088,59 +1322,121 @@ def _validate_safe_outcome(
             "document_safe_topology_hash_mismatch"
         )
     expected_dispositions = {
-        "CONTEXT_ONLY_SHORT_SENTENCE": sum(not row.leaf_eligible for row in plans),
-        "EXTRACTED": fixture.expected_leaf_call_count,
-        "NO_RELATION": 0,
-        "TYPED_FAILURE": 0,
+        disposition.value: sum(
+            row["disposition"] == disposition.value for row in topology
+        )
+        for disposition in document_envelope.SegmentDisposition
     }
     if value.get("disposition_counts") != expected_dispositions:
         raise FixedDocumentEnvelopeQualificationError(
             "document_safe_disposition_counts_invalid"
         )
     summary = value.get("resource_summary")
+    extracted_count = expected_dispositions[
+        document_envelope.SegmentDisposition.EXTRACTED.value
+    ]
+    typed_count = expected_dispositions[
+        document_envelope.SegmentDisposition.TYPED_FAILURE.value
+    ]
+    no_relation_count = expected_dispositions[
+        document_envelope.SegmentDisposition.NO_RELATION.value
+    ]
+    observed_leaf_calls = sum(bool(row["leaf_called"]) for row in topology)
     if (
         type(summary) is not dict
         or set(summary) != _DOCUMENT_RESOURCE_FIELDS
         or any(not _is_nonnegative_int(row) for row in summary.values())
         or summary["declared_candidate_bound"]
-        != fixture.expected_leaf_call_count
+        != observed_leaf_calls
         * document_envelope.MAXIMUM_CANDIDATES_PER_SINGLE_SENTENCE_LEAF
         or summary["declared_forward_batch_call_bound"]
-        != fixture.expected_leaf_call_count
+        != observed_leaf_calls
         * document_envelope.MAXIMUM_FORWARD_BATCH_CALLS_PER_SINGLE_SENTENCE_LEAF
         or summary["declared_leaf_batch_capacity"]
         != document_envelope.SCORING_BATCH_SIZE
-        or summary["leaf_call_count"] != fixture.expected_leaf_call_count
+        or summary["leaf_call_count"] != observed_leaf_calls
         or summary["root_byte_count"]
         != len(fixture.story_text.encode("utf-8"))
         or summary["root_lexical_token_count"] != fixture.lexical_token_count
         or summary["segment_count"] != len(plans)
-        or summary["projected_relation_count"]
-        < fixture.expected_leaf_call_count
+        or summary["projected_relation_count"] < extracted_count
         or summary["projected_relation_count"]
         > document_envelope.MAXIMUM_PROJECTED_RELATIONS
         or summary["projected_mention_count"]
         != 3 * summary["projected_relation_count"]
-        or not 0 < summary["reported_success_candidate_count"]
+        or not 0 <= summary["reported_success_candidate_count"]
         <= summary["declared_candidate_bound"]
-        or not 0 < summary["reported_success_forward_batch_count"]
+        or not 0 <= summary["reported_success_forward_batch_count"]
         <= summary["declared_forward_batch_call_bound"]
     ):
         raise FixedDocumentEnvelopeQualificationError(
             "document_safe_resource_summary_invalid"
         )
+    if (
+        value.get("extracted_leaf_count") != extracted_count
+        or value.get("exact_runtime_binding_observed_on_extracted_leaves")
+        is not (extracted_count > 0)
+        or value.get("partial_projection_available")
+        is not (typed_count == 0 and summary["projected_relation_count"] > 0)
+        or (
+            status == _SUCCESS_STATUS
+            and (
+                value.get("failure_code") is not None
+                or typed_count != 0
+                or no_relation_count != 0
+                or extracted_count != fixture.expected_leaf_call_count
+            )
+        )
+        or (
+            status == _NO_RELATION_STATUS
+            and (
+                value.get("failure_code")
+                != "DOCUMENT_FUNCTIONAL_EXTRACTED_BRANCH_NOT_EXERCISED"
+                or typed_count != 0
+                or no_relation_count == 0
+                or extracted_count >= fixture.minimum_extracted_leaf_count
+            )
+        )
+        or (
+            status == _TYPED_FAILURE_STATUS
+            and (
+                value.get("failure_code")
+                != "DOCUMENT_TYPED_FAILURE_REPORTED"
+                or typed_count == 0
+            )
+        )
+    ):
+        raise FixedDocumentEnvelopeQualificationError(
+            "document_safe_outcome_semantics_invalid"
+        )
 
 
 def _validate_resource_peaks(
-    value: object, outcomes: Sequence[Mapping[str, object]]
+    value: object,
+    outcomes: Sequence[Mapping[str, object]],
+    *,
+    collection_failed: bool,
 ) -> None:
     if (
         type(value) is not dict
         or set(value) != _RESOURCE_PEAK_FIELDS
         or any(not _is_nonnegative_int(row) for row in value.values())
-        or value["cuda_max_memory_allocated_bytes"] <= 0
-        or value["cuda_max_memory_reserved_bytes"] <= 0
         or value["process_max_rss_kib"] <= 0
+    ):
+        raise FixedDocumentEnvelopeQualificationError(
+            "document_resource_peaks_invalid"
+        )
+    if collection_failed or any(
+        row.get("resource_summary") is None for row in outcomes
+    ):
+        if any(value[key] != 0 for key in _RESOURCE_PEAK_FIELDS - {"process_max_rss_kib"}):
+            raise FixedDocumentEnvelopeQualificationError(
+                "document_negative_resource_peaks_invalid"
+            )
+        return
+    if (
+        value["cuda_max_memory_allocated_bytes"] <= 0
+        or value["cuda_max_memory_reserved_bytes"] <= 0
     ):
         raise FixedDocumentEnvelopeQualificationError(
             "document_resource_peaks_invalid"
@@ -1173,9 +1469,10 @@ def _validate_shard_receipt(value: Mapping[str, object]) -> None:
     index = value.get("shard_index")
     expected_root_fields = {
         "claim_scope",
+        "canary_passed",
         "counters",
         "downstream_eligible",
-        "effect_gate_added",
+        "effect_quality_gate_added",
         "effect_or_quality_measurement",
         "fixture_commitments",
         "fixture_count",
@@ -1183,6 +1480,7 @@ def _validate_shard_receipt(value: Mapping[str, object]) -> None:
         "fixture_suite_sha256",
         "formal_effect_evidence",
         "formal_leaf_authority_established_by_generic_envelope",
+        "functional_extracted_branch_coverage_required",
         "implementation_closure",
         "implementation_closure_sha256",
         "in_process_private_leaf_consistency_validation",
@@ -1191,6 +1489,7 @@ def _validate_shard_receipt(value: Mapping[str, object]) -> None:
         "outcomes_commitment",
         "private_leaf_evidence_retained",
         "qualification_passed",
+        "qualification_failure_codes",
         "repeat_byte_exact",
         "repeat_count",
         "resource_peaks",
@@ -1231,45 +1530,22 @@ def _validate_shard_receipt(value: Mapping[str, object]) -> None:
         != "fixed_public_non_scoring_document_envelope_runtime_compatibility_only"
         or value.get("downstream_eligible") is not False
         or value.get("formal_effect_evidence") is not False
-        or value.get("effect_gate_added") is not False
+        or value.get("effect_quality_gate_added") is not False
         or value.get("effect_or_quality_measurement") is not False
         or value.get("formal_leaf_authority_established_by_generic_envelope")
         is not False
+        or value.get("functional_extracted_branch_coverage_required")
+        is not True
         or value.get("in_process_private_leaf_consistency_validation")
         is not True
         or value.get("private_leaf_evidence_retained") is not False
         or value.get("counters") != _zero_counters()
         or value.get("repeat_count") != REPEAT_COUNT
-        or value.get("repeat_byte_exact") is not True
-        or value.get("qualification_passed") is not True
+        or not isinstance(value.get("repeat_byte_exact"), bool)
+        or not isinstance(value.get("qualification_passed"), bool)
+        or not isinstance(value.get("canary_passed"), bool)
         or value.get("segmentation_policy_sha256")
         != document_envelope.SEGMENTATION_POLICY_SHA256
-        or type(canary) is not dict
-        or canary.get("self_sha256")
-        != value.get("teacher_forced_canary_self_sha256")
-        or canary.get("self_sha256")
-        != _safe_hash(
-            {
-                key: child
-                for key, child in canary.items()
-                if key != "self_sha256"
-            }
-        )
-        or canary.get("short_strategy_vs_full_reference_exact") is not True
-        or canary.get("long_repeat_byte_exact") is not True
-        or canary.get("fallback_independent_full_reference_passed")
-        is not True
-        or canary.get("free_form_generation_count") != 0
-        or canary.get("schema") != memory_safe_qwen.FIXED_CANARY_SCHEMA
-        or canary.get("short_pair_sha256")
-        != memory_safe_qwen.FIXED_SHORT_CANARY_PAIR_SHA256
-        or canary.get("long_pair_sha256")
-        != memory_safe_qwen.FIXED_LONG_CANARY_PAIR_SHA256
-        or canary.get("strategy")
-        not in {
-            memory_safe_qwen.SPARSE_STRATEGY,
-            memory_safe_qwen.FALLBACK_STRATEGY,
-        }
         or type(implementation) is not dict
         or value.get("implementation_closure_sha256")
         != _safe_hash(implementation)
@@ -1288,7 +1564,81 @@ def _validate_shard_receipt(value: Mapping[str, object]) -> None:
                 "document_safe_outcome_fields_invalid"
             )
         _validate_safe_outcome(row, fixture)
-    _validate_resource_peaks(value.get("resource_peaks"), outcomes)
+    outcome_failure_codes = sorted(
+        {
+            row["failure_code"]
+            for row in outcomes
+            if row["failure_code"] is not None
+        }
+    )
+    supplied_failure_codes = value.get("qualification_failure_codes")
+    if (
+        type(supplied_failure_codes) is not list
+        or supplied_failure_codes != sorted(set(supplied_failure_codes))
+        or any(
+            not isinstance(code, str)
+            or code not in _QUALIFICATION_FAILURE_CODES
+            for code in supplied_failure_codes
+        )
+        or any(
+            code not in supplied_failure_codes
+            for code in outcome_failure_codes
+        )
+        or any(
+            code not in outcome_failure_codes
+            and code != _RESOURCE_PEAK_FAILURE_CODE
+            for code in supplied_failure_codes
+        )
+    ):
+        raise FixedDocumentEnvelopeQualificationError(
+            "document_shard_failure_codes_invalid"
+        )
+    resource_peak_collection_failed = (
+        _RESOURCE_PEAK_FAILURE_CODE in supplied_failure_codes
+    )
+    canary_passed = value["canary_passed"]
+    if canary_passed:
+        _validate_success_canary(canary)
+        if value.get("teacher_forced_canary_self_sha256") != canary.get(
+            "self_sha256"
+        ):
+            raise FixedDocumentEnvelopeQualificationError(
+                "document_teacher_forced_canary_binding_invalid"
+            )
+    elif (
+        canary is not None
+        or value.get("teacher_forced_canary_self_sha256") is not None
+        or outcome_failure_codes
+        != ["DOCUMENT_TEACHER_FORCED_CANARY_FAILED"]
+        or any(
+            row["status"] != _CANARY_NOT_EXECUTED_STATUS for row in outcomes
+        )
+    ):
+        raise FixedDocumentEnvelopeQualificationError(
+            "document_teacher_forced_canary_negative_invalid"
+        )
+    expected_passed = (
+        canary_passed
+        and not supplied_failure_codes
+        and all(
+            row["status"] == _SUCCESS_STATUS
+            and row["repeat_byte_exact"] is True
+            for row in outcomes
+        )
+    )
+    if (
+        value.get("qualification_passed") is not expected_passed
+        or value.get("repeat_byte_exact")
+        is not all(row["repeat_byte_exact"] is True for row in outcomes)
+    ):
+        raise FixedDocumentEnvelopeQualificationError(
+            "document_shard_qualification_semantics_invalid"
+        )
+    _validate_resource_peaks(
+        value.get("resource_peaks"),
+        outcomes,
+        collection_failed=resource_peak_collection_failed,
+    )
     for field in (
         "runtime_commitment",
         "upstream_leaf_aggregate_file_sha256",
@@ -1345,8 +1695,6 @@ def aggregate_fixed_document_envelope_qualification(
         "manifest_commitments",
         "runtime_commitment",
         "segmentation_policy_sha256",
-        "teacher_forced_canary",
-        "teacher_forced_canary_self_sha256",
         "upstream_leaf_aggregate_file_sha256",
         "upstream_leaf_aggregate_self_sha256",
         "version",
@@ -1354,6 +1702,19 @@ def aggregate_fixed_document_envelope_qualification(
     if any(rows[0][field] != rows[1][field] for field in consistency):
         raise FixedDocumentEnvelopeQualificationError(
             "document_aggregate_binding_mismatch"
+        )
+    if (
+        rows[0]["canary_passed"] is True
+        and rows[1]["canary_passed"] is True
+        and (
+            rows[0]["teacher_forced_canary"]
+            != rows[1]["teacher_forced_canary"]
+            or rows[0]["teacher_forced_canary_self_sha256"]
+            != rows[1]["teacher_forced_canary_self_sha256"]
+        )
+    ):
+        raise FixedDocumentEnvelopeQualificationError(
+            "document_aggregate_canary_mismatch"
         )
     current_implementation = _implementation_closure()
     if (
@@ -1383,11 +1744,24 @@ def aggregate_fixed_document_envelope_qualification(
         key: max(int(row["resource_peaks"][key]) for row in rows)
         for key in resource_keys
     }
+    aggregate_passed = all(
+        row["qualification_passed"] is True for row in rows
+    )
+    aggregate_canary_passed = all(row["canary_passed"] is True for row in rows)
+    failure_codes = sorted(
+        {
+            code
+            for row in rows
+            for code in row["qualification_failure_codes"]
+        }
+    )
+    aggregate_canary = rows[0]["teacher_forced_canary"] if aggregate_canary_passed else None
     body: dict[str, object] = {
         "claim_scope": "fixed_public_non_scoring_document_envelope_runtime_compatibility_only",
+        "canary_passed": aggregate_canary_passed,
         "counters": _zero_counters(aggregate=True),
         "downstream_eligible": False,
-        "effect_gate_added": False,
+        "effect_quality_gate_added": False,
         "effect_or_quality_measurement": False,
         "fixture_commitments": dict(FIXTURE_COMMITMENTS),
         "fixture_count": len(PUBLIC_DOCUMENT_FIXTURES),
@@ -1395,24 +1769,33 @@ def aggregate_fixed_document_envelope_qualification(
         "fixture_suite_sha256": FIXTURE_SUITE_SHA256,
         "formal_effect_evidence": False,
         "formal_leaf_authority_established_by_generic_envelope": False,
+        "functional_extracted_branch_coverage_required": True,
         "in_process_private_leaf_consistency_validation": True,
         "implementation_closure": current_implementation,
         "implementation_closure_sha256": _safe_hash(current_implementation),
         "manifest_commitments": rows[0]["manifest_commitments"],
         "outcome_status_counts": {
             "executed_without_typed_failure": sum(
-                row["status"] == "EXECUTED_WITHOUT_TYPED_FAILURE"
+                row["status"] == _SUCCESS_STATUS
                 for row in outcomes
             ),
-            "typed_failure": sum(
-                row["status"] != "EXECUTED_WITHOUT_TYPED_FAILURE"
+            "functional_extracted_branch_not_exercised": sum(
+                row["status"] == _NO_RELATION_STATUS for row in outcomes
+            ),
+            "not_executed_after_canary_failure": sum(
+                row["status"] == _CANARY_NOT_EXECUTED_STATUS
                 for row in outcomes
+            ),
+            "repeat_mismatch": sum(
+                row["status"] == _REPEAT_MISMATCH_STATUS for row in outcomes
+            ),
+            "typed_failure": sum(
+                row["status"] == _TYPED_FAILURE_STATUS for row in outcomes
             ),
         },
         "outcomes_commitment": _safe_hash(outcomes),
-        "qualification_passed": all(
-            row["qualification_passed"] is True for row in rows
-        ),
+        "qualification_passed": aggregate_passed,
+        "qualification_failure_codes": failure_codes,
         "private_leaf_evidence_retained": False,
         "repeat_byte_exact": all(
             row["repeat_byte_exact"] is True for row in rows
@@ -1428,10 +1811,12 @@ def aggregate_fixed_document_envelope_qualification(
         "shard_receipt_self_sha256": {
             str(row["shard_index"]): row["self_sha256"] for row in rows
         },
-        "teacher_forced_canary": rows[0]["teacher_forced_canary"],
-        "teacher_forced_canary_self_sha256": rows[0][
-            "teacher_forced_canary_self_sha256"
-        ],
+        "teacher_forced_canary": aggregate_canary,
+        "teacher_forced_canary_self_sha256": (
+            rows[0]["teacher_forced_canary_self_sha256"]
+            if aggregate_canary_passed
+            else None
+        ),
         "upstream_leaf_aggregate_file_sha256": rows[0][
             "upstream_leaf_aggregate_file_sha256"
         ],
