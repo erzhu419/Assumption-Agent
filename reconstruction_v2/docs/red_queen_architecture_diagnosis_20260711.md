@@ -25,10 +25,14 @@
 >   compatibility r0 随后完整处理 871 rows/2,613 narratives：2,550 success、63 typed abstention、
 >   0 typed/untyped error，coverage=`97.589%`。63 次均由事前固定 catalog 的长度边界触发（61 sentence、
 >   2 document），所以这是有效的非评分 compatibility negative，不是基础设施失败，也不是效果负结果；
->   labels/linkage/scorer/API/online evaluator 均未打开。当前 v2 因未达到事前要求的 100% representability，
->   不能原样冻结 fresh intrinsic measurement。下一步只能在 source-free 非评分 harness 中形成
->   length-total 的 typed segmentation/recomposition 机制，然后直接去全新 source/cohort；不得重放旧 ARN、
->   按 63 个失败项补关键词/gate，或把本轮写成 efficacy 证据
+>   labels/linkage/scorer/API/online evaluator 均未打开。当前 v2 不能原样冻结 fresh intrinsic measurement；
+>   但后续已在同一 source-free 非评分 harness 中新增独立的 bounded byte-outcome-total document-envelope
+>   ABI：旧 v2 leaf 与 parser 完全不改，0–16-token 原句显式记为 context-only，17–175-token 原句调用
+>   原 leaf，长句作 exact-byte balanced split，并在 root 上重算 UTF-8 grounding、global occurrence 与
+>   ownership。30 项公开 adversarial tests 与扩展后的 451 项 GSCL 回归均通过。该层明确只证明
+>   caller-bound orchestration consistency，`formal_leaf_authority_established=false`、
+>   `downstream_eligible=false`；尚需固定真实 Qwen public fixtures 以及 bounded set-level consumer
+>   qualification，之后才可直接去全新 source/cohort。旧 ARN 仍不得重放，也不得按 63 项补关键词/gate
 > - WikiSQL UAO P4 初始 v5 终态（后续 continuation 见上）：共享节点 v5 implementation/execution freeze、official WikiSQL 1.1
 >   source custody、content-addressed deployment 与 source-free import/systemd 审计均已提交；唯一 formal
 >   invocation `a8d1c5c…d2319` 通过 `ADMITTED_SHARED_RESOURCE`，`NRestarts=0`，并在 durable attempt/live
@@ -6102,11 +6106,89 @@ exact predictor-only code path 没有接收或读取 labels/linkage；当前 use
 OS-level label-inaccessibility 证明，不能把代码路径隔离夸大成操作系统强制隔离。
 
 本轮已经消费，禁止重启、重放或查看 63 个 item 的内容后定向修规则。也不应把长度上限继续当成
-一个可追加的效果 gate。合理的后续机制只有一个：在同一**非评分、source-free、可迭代** harness
-中把 extractor 改成对模型 context 内文本 length-total 的 typed segmentation/recomposition，并用公开
-合成长文本覆盖边界；实现合同闭合后，直接冻结全新 source/cohort 的 intrinsic measurement。旧 ARN
-只保留为 97.589% compatibility 证据，不能再次充当资格集或效果集。总论文目标的现实域三-family
-双基线缺口也没有因本轮改变。
+一个可追加的效果 gate。后续只允许在同一**非评分、source-free、可迭代** harness 中建立机制上
+独立的 typed segmentation/recomposition，并用公开合成长文本覆盖边界；旧 ARN 只保留为 97.589%
+compatibility 证据，不能再次充当资格集或效果集。总论文目标的现实域三-family 双基线缺口也没有
+因本轮改变。
+
+### 12.71 2026-08-01：bounded byte-outcome-total document envelope 完成 source-free 合同闭合
+
+对 12.70 的错误码语义与旧 ABI 重新审计后，不能把 63 次 abstention 简化成“把 175 上限调大”：
+
+- `V2_CATALOG_SENTENCE_TOKEN_COUNT_UNSUPPORTED` 的 61 次表示旧 punctuation-delimited segment
+  少于 3 个 lexical token；旧 leaf 每条 relation 必须有 3 个互斥 grounded endpoint，而旧 parser 又要求
+  每个 `.?!\n` sentence 至少有 generator 与 object，所以 1–2-token sentence 在该语义下数学上不可表示；
+- 两次 `V2_CATALOG_DOCUMENT_TOKEN_COUNT_UNSUPPORTED` 只说明全文不在旧 `17..175` 域；安全 aggregate
+  没有公开它们位于下界还是上界，不能后验猜测；
+- 直接放大 token/sentence 常量会同时破坏 model context、`MAX_MENTIONS=64`、21-relation parser 上界和
+  既有 prompt/receipt closure；把字符、标点或空白伪装成 endpoint 虽可能骗过 parser，却是语义造假。
+
+因此没有修改 [`closed_choice.py`](../replication_runtime/gscl_narrative_extractor_v2/closed_choice.py)、
+[`memory_safe_qwen.py`](../replication_runtime/gscl_narrative_extractor_v2/memory_safe_qwen.py) 或旧 parser，
+而是新增独立的
+[`document_envelope.py`](../replication_runtime/gscl_narrative_extractor_v2/document_envelope.py)。它把旧 v2
+保留为 leaf ABI，并事前固定以下**有限适用域**：root 最多 131,072 UTF-8 bytes、1,024 lexical tokens、
+128 个 segment，其中最多 32 个 extractable leaf；每个 leaf 仍严格落在旧 `17..175` lexical-token 域。
+ASCII `.?!\n` 与 CJK `。！？` 只作为程序拥有的 partition boundary；连续无空格中文仍会被当前
+`[^\W_]+` tokenizer 视为一个 token，所以这里只证明 CJK/UTF-8 边界安全，**不宣称中文语义分词完备**。
+
+确定性 disposition 为：
+
+```text
+0..16 lexical tokens       CONTEXT_ONLY_SHORT_SENTENCE（不造 endpoint）
+17..175 lexical tokens     调用冻结的 v2 leaf
+>175 within root cap       按 lexical boundary balanced split 后逐 leaf 调用
+leaf NO_RELATION           只结束该 leaf，不终止全文
+其他 leaf failure          TYPED_FAILURE，并阻断后续 eligible leaf 与 downstream
+```
+
+例如 176 tokens 固定为 `88+88`，351 固定为 `117+117+117`，1,024 固定为
+`171+171+171+171+170+170`；1,025 tokens 在任何 leaf access 前 typed reject。所有 segment 的 byte core
+按序、无缝、无重叠覆盖 root；对每个 extracted leaf，document layer 在原 root bytes 上重新验证 quote、
+local→global UTF-8 byte offset、overlap-aware global occurrence、relation endpoint ownership 与 parent sentence，
+并用 segment namespace 消除 leaf-local `e00/r00` 冲突。它不把多 leaf 伪装成旧 `NarrativeExtraction`，
+最多保留 64 个 projected relation / 192 mentions；声明的总资源上界为 3,872 candidates 与 1,120
+forward batches。
+
+新 envelope 的 outcome union 是 `EXTRACTED`、`NO_RELATION`、`CONTEXT_ONLY_SHORT_SENTENCE` 与
+`TYPED_FAILURE`。这里的“total”只表示**在声明有限域内每个 root byte 都有显式 typed outcome**，不表示
+relation recall total；只要有可用 relation 且无 typed failure，receipt 也只记
+`partial_projection_available=true`。在 bounded set-level envelope consumer 单独资格化之前，
+`downstream_eligible` 固定为 false。
+
+三轮 adversarial audit 还暴露并修正了三个最初会被自洽重签绕过的完整性缺口：validator 现在必须
+重新运行 canonical planner，而不是只检查自报 partition 内部连续；每个 segment outcome 的 IDs 必须与
+该 segment 的全部 global projections 双向 exact-set 相等；内存中的 private leaf decision 必须重算
+story/canonical/wire/receipt/parser/resource/projection commitments。对应的 forged lexical count、漏报
+projection 与替换 outer leaf hash 测试均 fail closed。与此同时，当前公开
+`ClosedChoiceV2Decision` 本身并不是不可伪造 authority receipt，完整 ranked-step evidence 也不在 safe
+decision 中；所以本层 receipt 明确写入：
+
+```text
+claim_scope = caller_bound_document_orchestration_consistency_only
+formal_leaf_authority_established = false
+private_leaf_evidence_required_for_validation = true
+downstream_eligible = false
+```
+
+这意味着它可以作为同一非评分 harness 的机制实现与 qualification contract 提交，但**不能单独作为
+formal/effect 证据**。未来 fixed formal wrapper 必须先绑定不可重签的 private leaf archive、attempt custody、
+exact runtime/model closure，再离线校验；不能靠 outer self-hash 把 caller-supplied decision 升格为 authority。
+
+公开 source-free adversarial suite 为
+[`test_gscl_narrative_extractor_v2_document_envelope.py`](../tests/test_gscl_narrative_extractor_v2_document_envelope.py)：
+30/30 passed，覆盖 0/1/2/3/16/17/175/176/351/1,024/1,025 boundaries、超过 21 句、33 个 eligible
+leaf 的 pre-access capacity rejection、101 个 context-only short segments、短尾、ASCII/CJK/Unicode/NFD、
+repeated quote/global occurrence、local NO_RELATION、typed failure、partition/ownership/commitment tamper、
+byte-exact determinism 与资源上界。扩展后的 GSCL/广义对位相关回归为 451/451 passed。所有 fixture
+均为公开合成文本；没有读取或重放旧 ARN/private data，没有 label/scorer/API/network/online evaluator，
+也没有新增效果 gate。
+
+下一步仍在同一非评分 harness 内，但只剩两个机制资格项：用真实冻结 Qwen 对 176、351、mixed
+punctuation/Unicode 与 1,024-token 四个公开 fixture 做一次固定 executable qualification；随后建立并
+资格化 bounded set-level envelope consumer。两项全绿后直接冻结**全新 source/cohort** 的 intrinsic
+measurement，不回到旧 ARN，也不继续追加 gate。总论文目标的唯一效果缺口——fresh reality A_hold
+三-family 同时严格胜 RAW 与 official HippoRAG——仍未因本轮 source-free 机制施工而改变。
 
 ## 附录 A：关键证据索引
 
