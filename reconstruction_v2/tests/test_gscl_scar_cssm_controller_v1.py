@@ -221,12 +221,35 @@ def _action_row(item: dict[str, Any], *, corrupt: bool = False) -> dict[str, Any
             "structural_status": "EXECUTED_WITHOUT_TYPED_FAILURE",
         }
     )
+    variants = {
+        variant_name: {"arms": {arm_id: {} for arm_id in controller.ARM_IDS}}
+        for variant_name in controller.VARIANT_NAMES
+    }
+    diagnostics = {
+        variant_name: {
+            "arms": {arm_id: {} for arm_id in controller.ARM_IDS},
+            "left_binder": None,
+            "left_graph_receipt_sha256": None,
+            "mapping_receipt_sha256_by_arm": {
+                arm_id: None for arm_id in controller.ARM_IDS
+            },
+            "right_binder": None,
+            "right_graph_receipt_sha256": None,
+            "structural_diagnostics_available": False,
+            "target_color_shuffle_effective": None,
+        }
+        for variant_name in controller.VARIANT_NAMES
+    }
+    pools = {
+        variant_name: {"semantic_kbest": [], "structure_kbest": []}
+        for variant_name in controller.VARIANT_NAMES
+    }
     return {
-        "diagnostics": {},
+        "diagnostics": diagnostics,
         "execution": execution,
         "item_token": item["item_token"],
-        "proposal_pools": {},
-        "variants": {},
+        "proposal_pools": pools,
+        "variants": variants,
     }
 
 
@@ -356,7 +379,14 @@ class _FakePopenFactory:
                             if prediction["execution"]["structural_status"]
                             == "TYPED_FAILURE"
                             else "COMPLETE"
-                        )
+                        ),
+                        "error_code": prediction["execution"]["error_code"],
+                        "semantic_matrix": None,
+                        "sides": {"left": None, "right": None},
+                        "variants": {
+                            variant_name: None
+                            for variant_name in controller.VARIANT_NAMES
+                        },
                     }
                     record_body = {
                         "evidence": evidence,
@@ -703,3 +733,58 @@ os.write(1, b"allowed_and_denied" if allowed_ok and denied else b"sandbox_failed
         "utf-8", errors="replace"
     )
     assert completed.stdout == b"allowed_and_denied"
+
+
+def test_canonical_worker_record_roundtrip_is_accepted_by_frozen_scorer() -> None:
+    from assumption_agent.benchmarks import gscl_scar_cssm_score_v1 as scorer
+    from tests import test_gscl_scar_cssm_score_v1 as score_fixture
+
+    action_pack, label_pack, sealed_fixture = score_fixture._fixture()
+    original_rows = sealed_fixture["items"]
+    restored_rows: list[dict[str, Any]] = []
+    for ordinal, original in enumerate(original_rows):
+        prediction = {
+            key: value
+            for key, value in original.items()
+            if key != "private_mechanism_receipts"
+        }
+        body = {
+            "evidence": original["private_mechanism_receipts"],
+            "item_token": original["item_token"],
+            "ordinal_within_shard": ordinal,
+            "prediction": prediction,
+        }
+        worker_record = {**body, "self_sha256": _hash(body)}
+        decoded = controller._strict_json(
+            _canonical(worker_record), field="CONTROLLER_TEST_WORKER_RECORD"
+        )
+        # Canonical JSON transport alphabetizes ARM_IDS and reproduces the
+        # exact production incompatibility this regression guards.
+        assert tuple(
+            decoded["prediction"]["variants"]["base"]["arms"]
+        ) != scorer.ARM_IDS
+        restored = controller._restore_scorer_wire_order(
+            decoded["prediction"], decoded["evidence"]
+        )
+        assert tuple(restored["variants"]["base"]["arms"]) == scorer.ARM_IDS
+        assert tuple(
+            restored["diagnostics"]["base"]["mapping_receipt_sha256_by_arm"]
+        ) == scorer.ARM_IDS
+        assert tuple(restored["diagnostics"]["base"]["arms"]) == scorer.ARM_IDS
+        restored_rows.append(restored)
+
+    prediction_pack = controller._prediction_pack(
+        action_commitment=action_pack["action_commitment_sha256"],
+        rows=restored_rows,
+        study_id=score_fixture._STUDY_ID,
+    )
+    result = scorer._score_scar_cssm_fixture_v1(
+        action_pack,
+        label_pack,
+        prediction_pack,
+        secret=score_fixture._SECRET,
+        study_id=score_fixture._STUDY_ID,
+        expected_primary_count=1,
+        expected_ambiguous_count=1,
+    )
+    assert result.safe_aggregate["status"] == "SCORED_OFFLINE_ONCE"

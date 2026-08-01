@@ -1441,6 +1441,126 @@ def _validate_execution_row(row: Mapping[str, Any], *, collision: bool) -> tuple
     return expected["document_call_count"], int(collision)
 
 
+def _restore_scorer_wire_order(
+    prediction: Mapping[str, Any], evidence: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Rebuild order-sensitive scorer mappings after canonical JSON transport.
+
+    Worker records are canonical JSON, so every object is serialized with
+    lexicographically sorted keys.  The frozen scorer deliberately requires
+    semantic order for variant and arm mappings.  JSON decoding therefore
+    cannot be passed through verbatim even when its values and key sets are
+    otherwise exact.
+    """
+
+    variants = prediction.get("variants")
+    pools = prediction.get("proposal_pools")
+    diagnostics = prediction.get("diagnostics")
+    if (
+        type(variants) is not dict
+        or set(variants) != set(VARIANT_NAMES)
+        or type(pools) is not dict
+        or set(pools) != set(VARIANT_NAMES)
+        or type(diagnostics) is not dict
+        or set(diagnostics) != set(VARIANT_NAMES)
+    ):
+        raise ScarCssmControllerError("CONTROLLER_SCORER_WIRE_ORDER_INVALID")
+
+    ordered_variants: dict[str, Any] = {}
+    ordered_pools: dict[str, Any] = {}
+    ordered_diagnostics: dict[str, Any] = {}
+    diagnostic_keys = {
+        "arms",
+        "left_binder",
+        "left_graph_receipt_sha256",
+        "mapping_receipt_sha256_by_arm",
+        "right_binder",
+        "right_graph_receipt_sha256",
+        "structural_diagnostics_available",
+        "target_color_shuffle_effective",
+    }
+    for variant_name in VARIANT_NAMES:
+        variant = variants[variant_name]
+        pool = pools[variant_name]
+        diagnostic = diagnostics[variant_name]
+        if (
+            type(variant) is not dict
+            or set(variant) != {"arms"}
+            or type(variant["arms"]) is not dict
+            or set(variant["arms"]) != set(ARM_IDS)
+            or type(pool) is not dict
+            or set(pool) != {"semantic_kbest", "structure_kbest"}
+            or type(diagnostic) is not dict
+            or set(diagnostic) != diagnostic_keys
+            or type(diagnostic["mapping_receipt_sha256_by_arm"]) is not dict
+            or set(diagnostic["mapping_receipt_sha256_by_arm"]) != set(ARM_IDS)
+            or type(diagnostic["arms"]) is not dict
+            or set(diagnostic["arms"]) != set(ARM_IDS)
+        ):
+            raise ScarCssmControllerError("CONTROLLER_SCORER_WIRE_ORDER_INVALID")
+        ordered_variants[variant_name] = {
+            "arms": {arm_id: variant["arms"][arm_id] for arm_id in ARM_IDS}
+        }
+        ordered_pools[variant_name] = {
+            "semantic_kbest": pool["semantic_kbest"],
+            "structure_kbest": pool["structure_kbest"],
+        }
+        ordered_diagnostics[variant_name] = {
+            "structural_diagnostics_available": diagnostic[
+                "structural_diagnostics_available"
+            ],
+            "target_color_shuffle_effective": diagnostic[
+                "target_color_shuffle_effective"
+            ],
+            "left_binder": diagnostic["left_binder"],
+            "right_binder": diagnostic["right_binder"],
+            "left_graph_receipt_sha256": diagnostic[
+                "left_graph_receipt_sha256"
+            ],
+            "right_graph_receipt_sha256": diagnostic[
+                "right_graph_receipt_sha256"
+            ],
+            "mapping_receipt_sha256_by_arm": {
+                arm_id: diagnostic["mapping_receipt_sha256_by_arm"][arm_id]
+                for arm_id in ARM_IDS
+            },
+            "arms": {
+                arm_id: diagnostic["arms"][arm_id] for arm_id in ARM_IDS
+            },
+        }
+
+    private_variants = evidence.get("variants")
+    private_sides = evidence.get("sides")
+    if (
+        type(evidence) is not dict
+        or set(evidence)
+        != {"availability", "error_code", "semantic_matrix", "sides", "variants"}
+        or type(private_sides) is not dict
+        or set(private_sides) != {"left", "right"}
+        or type(private_variants) is not dict
+        or set(private_variants) != set(VARIANT_NAMES)
+    ):
+        raise ScarCssmControllerError("CONTROLLER_SCORER_WIRE_ORDER_INVALID")
+    ordered_evidence = {
+        "availability": evidence["availability"],
+        "error_code": evidence["error_code"],
+        "semantic_matrix": evidence["semantic_matrix"],
+        "sides": {side: private_sides[side] for side in ("left", "right")},
+        "variants": {
+            variant_name: private_variants[variant_name]
+            for variant_name in VARIANT_NAMES
+        },
+    }
+    return {
+        "item_token": prediction["item_token"],
+        "variants": ordered_variants,
+        "proposal_pools": ordered_pools,
+        "execution": prediction["execution"],
+        "diagnostics": ordered_diagnostics,
+        "private_mechanism_receipts": ordered_evidence,
+    }
+
+
 def _verify_shard_closure(
     config: FormalConfig,
     paths: ControllerPaths,
@@ -1591,7 +1711,7 @@ def _verify_shard_closure(
                 raise ScarCssmControllerError("CONTROLLER_SHARD_RECORD_INVALID")
             if "private_mechanism_receipts" in prediction:
                 raise ScarCssmControllerError("CONTROLLER_SHARD_RECORD_INVALID")
-            rows.append({**prediction, "private_mechanism_receipts": evidence})
+            rows.append(_restore_scorer_wire_order(prediction, evidence))
         if [row.get("item_token") for row in rows] != expected_tokens:
             raise ScarCssmControllerError("CONTROLLER_SHARD_PARTITION_INVALID")
         shard_calls = shard_failures = 0
