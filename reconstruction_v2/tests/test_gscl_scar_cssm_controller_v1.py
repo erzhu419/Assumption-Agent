@@ -742,6 +742,38 @@ os.write(1, b"allowed_and_denied" if allowed_ok and denied else b"sandbox_failed
     assert completed.stdout == b"allowed_and_denied"
 
 
+def test_action_landlock_grants_only_process_local_cuda_thread_metadata_write(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        controller,
+        "_action_landlock_paths",
+        lambda _config, _paths, _shard: ((), (), ()),
+    )
+    monkeypatch.setattr(
+        controller,
+        "_apply_landlock",
+        lambda **kwargs: captured.update(kwargs),
+    )
+
+    controller._apply_action_landlock(None, None, 0)  # type: ignore[arg-type]
+
+    assert captured == {
+        "read_paths": (),
+        "write_paths": (),
+        "device_paths": (),
+        "write_file_paths": (Path("/proc/self/task"),),
+    }
+    assert controller._landlock_write_file_rights(2) == (  # noqa: SLF001
+        controller._LL_WRITE_FILE  # noqa: SLF001
+    )
+    assert controller._landlock_write_file_rights(3) == (  # noqa: SLF001
+        controller._LL_WRITE_FILE  # noqa: SLF001
+        | controller._LL_TRUNCATE  # noqa: SLF001
+    )
+
+
 def test_canonical_worker_record_roundtrip_is_accepted_by_frozen_scorer() -> None:
     from assumption_agent.benchmarks import gscl_scar_cssm_score_v1 as scorer
     from tests import test_gscl_scar_cssm_score_v1 as score_fixture

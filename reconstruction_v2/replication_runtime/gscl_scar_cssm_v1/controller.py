@@ -110,6 +110,7 @@ _LL_BASE = (
     | _LL_MAKE_BLOCK
     | _LL_MAKE_SYM
 )
+_CUDA_THREAD_METADATA_ROOT = Path("/proc/self/task")
 
 
 class _RulesetAttr(ctypes.Structure):
@@ -876,11 +877,19 @@ def _landlock_rights(abi: int) -> int:
     return rights
 
 
+def _landlock_write_file_rights(abi: int) -> int:
+    rights = _LL_WRITE_FILE
+    if abi >= 3:
+        rights |= _LL_TRUNCATE
+    return rights
+
+
 def _apply_landlock(
     *,
     read_paths: Sequence[Path],
     write_paths: Sequence[Path],
     device_paths: Sequence[Path],
+    write_file_paths: Sequence[Path] = (),
 ) -> None:
     abi = _landlock_abi_version()
     handled = _landlock_rights(abi)
@@ -947,6 +956,13 @@ def _apply_landlock(
             add(path, read_rights)
         for path in dict.fromkeys(write_paths):
             add(path, handled)
+        for path in dict.fromkeys(write_file_paths):
+            # CUDA opens /proc/self/task/<tid>/comm with O_TRUNC.  Landlock
+            # ABI 3+ checks TRUNCATE separately from WRITE_FILE.
+            add(
+                path,
+                _landlock_write_file_rights(abi),
+            )
         for path in dict.fromkeys(device_paths):
             add(path, _LL_READ_FILE | _LL_WRITE_FILE)
         if libc.prctl(_PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0:
@@ -1078,6 +1094,10 @@ def _apply_action_landlock(
         read_paths=read_paths,
         write_paths=write_paths,
         device_paths=device_paths,
+        # CUDA initializes native helper threads by writing their comm names
+        # below this process-local procfs subtree.  Limit the added authority
+        # to WRITE_FILE/TRUNCATE so labels, secrets, and host paths stay denied.
+        write_file_paths=(_CUDA_THREAD_METADATA_ROOT,),
     )
 
 

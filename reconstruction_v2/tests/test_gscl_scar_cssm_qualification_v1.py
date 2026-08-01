@@ -6,6 +6,7 @@ import inspect
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 import unicodedata
 from typing import Any
@@ -612,3 +613,106 @@ def test_python_runtime_roots_include_declared_venv_base(
     assert qualification._python_runtime_read_roots(  # noqa: SLF001
         executable
     ) == (environment, runtime / "python310")
+
+
+def test_child_landlock_grants_only_process_local_cuda_thread_metadata_write(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        qualification,
+        "_landlock_paths",
+        lambda _config, _paths, _shard: ((), (), ()),
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_apply_landlock",
+        lambda **kwargs: captured.update(kwargs),
+    )
+
+    qualification._apply_child_landlock(None, None, 0)  # type: ignore[arg-type]
+
+    assert captured == {
+        "read_paths": (),
+        "write_paths": (),
+        "device_paths": (),
+        "write_file_paths": (Path("/proc/self/task"),),
+    }
+    assert qualification._landlock_write_file_rights(2) == (  # noqa: SLF001
+        qualification._LL_WRITE_FILE  # noqa: SLF001
+    )
+    assert qualification._landlock_write_file_rights(3) == (  # noqa: SLF001
+        qualification._LL_WRITE_FILE  # noqa: SLF001
+        | qualification._LL_TRUNCATE  # noqa: SLF001
+    )
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Landlock is Linux-only")
+def test_landlock_allows_future_thread_comm_write_but_denies_sibling_file(
+    tmp_path: Path,
+) -> None:
+    allowed = tmp_path / "allowed"
+    forbidden = tmp_path / "forbidden"
+    allowed.write_bytes(b"allowed")
+    forbidden.write_bytes(b"forbidden")
+    project_root = Path(qualification.__file__).parents[2]
+    script = r"""
+import os
+from pathlib import Path
+import sys
+import threading
+from replication_runtime.gscl_scar_cssm_v1 import qualification
+
+allowed = Path(sys.argv[1])
+forbidden = Path(sys.argv[2])
+qualification._apply_landlock(
+    read_paths=(Path("/proc"), allowed),
+    write_paths=(),
+    device_paths=(),
+    write_file_paths=(Path("/proc/self/task"),),
+)
+ready = threading.Event()
+release = threading.Event()
+native_id = []
+def wait_for_comm_write():
+    native_id.append(threading.get_native_id())
+    ready.set()
+    release.wait(5)
+thread = threading.Thread(target=wait_for_comm_write)
+thread.start()
+if not ready.wait(5):
+    raise RuntimeError("thread did not start")
+descriptor = os.open(
+    f"/proc/self/task/{native_id[0]}/comm",
+    os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+)
+try:
+    os.write(descriptor, b"gscl-cuda-test\n")
+finally:
+    os.close(descriptor)
+release.set()
+thread.join(5)
+if thread.is_alive() or allowed.read_bytes() != b"allowed":
+    raise RuntimeError("allowed operations failed")
+try:
+    forbidden.read_bytes()
+except PermissionError:
+    denied = True
+else:
+    denied = False
+os.write(1, b"comm_written_and_denied" if denied else b"sandbox_failed")
+"""
+    environment = dict(os.environ)
+    environment["PYTHONPATH"] = str(project_root)
+    completed = subprocess.run(
+        [sys.executable, "-c", script, str(allowed), str(forbidden)],
+        cwd=project_root,
+        env=environment,
+        check=False,
+        capture_output=True,
+        timeout=30,
+    )
+    assert completed.returncode == 0, completed.stderr.decode(
+        "utf-8", errors="replace"
+    )
+    assert completed.stdout == b"comm_written_and_denied"
