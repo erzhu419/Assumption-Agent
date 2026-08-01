@@ -17,28 +17,20 @@
 >   `+34`，EQ/GT/LT=`+14/+6/+14`；Agent−RAW aggregate `+30`，GT/LT=`+10/+20`，但 EQ=`0`。
 >   因预注册要求三 family 全部严格为正，strict primary 仍为 false；QuAC L5 已成立不变，总目标只缺
 >   fresh reality A_hold 中对 RAW 与 official HippoRAG 的三-family 双基线全正
-> - 最新 GSCL/“广义对位关系”施工：Phase 0 exact-rational kernel 已通过；ARN v1 正式尝试因
->   32-token/单-generator grammar 定性为 implementation-invalid、labels 未打开。随后仍在同一个
->   非评分 harness 内完成层级句级 v2 extractor、answer-position-only Qwen scorer、exclusive
->   typed unit 与 polynomial unit mapper。固定公开 17/33/64/128/175-token suite 为 5/5 success；
->   三段公开输入的四臂集成资格化也已通过。旧 ARN predictor-only pack 的一次 label-blind
->   compatibility r0 随后完整处理 871 rows/2,613 narratives：2,550 success、63 typed abstention、
->   0 typed/untyped error，coverage=`97.589%`。63 次均由事前固定 catalog 的长度边界触发（61 sentence、
->   2 document），所以这是有效的非评分 compatibility negative，不是基础设施失败，也不是效果负结果；
->   labels/linkage/scorer/API/online evaluator 均未打开。当前 v2 不能原样冻结 fresh intrinsic measurement；
->   但后续已在同一 source-free 非评分 harness 中新增独立的 bounded byte-outcome-total document-envelope
->   ABI：旧 v2 leaf 与 parser 完全不改，0–16-token 原句显式记为 context-only，17–175-token 原句调用
->   原 leaf，长句作 exact-byte balanced split，并在 root 上重算 UTF-8 grounding、global occurrence 与
->   ownership。随后固定真实 Qwen 对 176/351/mixed Unicode-punctuation/1,024-token 四个公开文档
->   各执行两次，4/4 无 typed failure、全部 byte-exact；两片及手工 pure aggregate 均唯一启动、
->   systemd success、`NRestarts=0`，model tree 后验 exact。独立 bounded set consumer 也已闭合：它把
->   exact `NarrativeDocumentEnvelopeV1` 映射为 mention-local categorical relation set，typed failure
->   阻断全部 partial，不把 context/NO_RELATION 伪造成负边，也不发明 quantity、constraint、observable
->   或 law binding。四个相关公开 suite 合计 77/77 passed。当前证据是“真实 Qwen envelope runtime”与
->   “确定性 consumer exact-ABI”两项模块化组合；冻结运行并未实际把四个 Qwen 输出送进后加入的
->   consumer，因此 `empirical_real_qwen_consumer_execution=false`，不能夸大为端到端效果证据。机制前置
->   资格项已闭合，下一步可直接冻结全新 untouched public intrinsic measurement。旧 ARN 仍不得重放，
->   也不得按 63 项补关键词/gate
+> - 最新 GSCL/“广义对位关系”正式结果：`GSCL_SCAR_CSSM_INTRINSIC_FORMAL_V1` 已在 311linux
+>   按冻结合同完成同一 v1 血统的唯一有效效果执行；systemd success、`NRestarts=0`，两 action shard
+>   先于 barrier 完成，labels/secret 仅在 barrier 后各打开一次，离线 scorer 仅调用一次，API/online
+>   evaluator 与 retry/replay/resample 均为 0。主检验
+>   `full_with_length2_composition - semantic_only` 的 pair-F1 差为 `-0.6728865`，
+>   95% bootstrap CI=`[-0.7095085,-0.6358875]`，所以是协议有效且明确的 **FAIL**，不是
+>   implementation/infrastructure-invalid。semantic-only coverage/F1 为 `1.000/0.6770`，完整结构组合臂
+>   仅为 `0.00691/0.00414`；它只在 724 个 variant 中选择 5 个，虽然这 5 个的 typed incidence、
+>   structure 与 length-2 path 校验全为 1，但 hard eligibility 造成灾难性 coverage collapse。
+>   flat-structural coverage `0.9986`，F1 也只有 `0.4875`，仍低于 semantic-only；composition 相对
+>   no-composition 无正增益，target-color shuffle 差异的 CI 也跨 0。结论是这套冻结的 SCAR
+>   “硬结构资格 + 严格组合”实现没有生效；它不否定全部 13/22 条 meta-prior 或抽象广义对位思想，
+>   但不能支持“广义对位优于语义相似”或现实域双基线优势。总目标仍只缺 fresh reality A_hold
+>   对 RAW 与 official HippoRAG 的三-family 同时严格全正；QuAC L5 已成立不变
 > - WikiSQL UAO P4 初始 v5 终态（后续 continuation 见上）：共享节点 v5 implementation/execution freeze、official WikiSQL 1.1
 >   source custody、content-addressed deployment 与 source-free import/systemd 审计均已提交；唯一 formal
 >   invocation `a8d1c5c…d2319` 通过 `ADMITTED_SHARED_RESOURCE`，`NRestarts=0`，并在 durable attempt/live
@@ -6256,15 +6248,84 @@ envelope→consumer→set-level correspondence，并一次离线统一评分。�
 hard-negative rejection / coverage / accuracy；它仍不会自动填补论文总目标最后的现实域 A_hold
 三-family 双基线严格全正，后者必须由后续独立 reality study 给出。
 
+### 12.73 2026-08-01：SCAR intrinsic formal 协议有效完成，但“硬结构组合”主假设明确失败
+
+全新 untouched public SCAR cohort 的正式测量现已终止，不再是 12.72 的非评分资格证据。正式链路中有
+两次必须透明区分的 pre-effect 表示/部署事件：
+
+1. 原 prepare user service 在进入 Python 前因 `PrivateDevices=yes` 与当前 user-manager capability
+   组合返回 status 218/CAPABILITIES；只把该项改为 `no` 后，同一冻结 compiler 唯一成功进入，
+   compiler source open 为 1。custody/hash transport verification 实际为 2，已在 prepared-input
+   receipt 中披露，未把第二次 hash read 伪称成 source compile。
+2. 首个 formal entry 在 action/model/label/secret/scorer 全为 0 时发现 sandbox receipt 是 pretty JSON，
+   而 controller 要求 canonical JSON bytes。原 root 与失败终态只读保留；same-v1 append-only
+   representation recovery 只把**同一 decoded object、同一 self hash**改写为 canonical serialization，
+   未改 candidate、source、cohort、model、parser、arm、quota、metric、seed、threshold 或 gate。
+
+恢复后的唯一正式 invocation 为 `07cc8e9eee264a1b966601f63e1e7d6f`，启动/结束于
+`18:21:26/19:24:23 CST`，`NRestarts=0`、systemd success。两份 runtime receipt、release、barrier、
+private/safe score 与 terminal 的 hash/self-hash、mode/owner/nlink 和时间顺序均在远端重算通过；
+最终 validator 为 `PASS_ALL_COMMITMENTS_AND_ORDERING`。两 action shard 先完成，随后才各打开一次
+label pack 与 HMAC secret，冻结 offline scorer 仅调用一次；网络、API、online evaluator 和
+retry/replay/resample 均为 0。391 个正式 item 中，29 个 ambiguous item 在 model 前 typed failure，
+事前指定 primary cohort 为其余 362 item、724 个 base/system-swap variant。私有 item/system/slot/
+mapping/action/label/per-item score 与 9,386 份 receipt 继续只留 311linux，只在仓库中记录 aggregate
+commitment。
+
+唯一 confirmatory primary 是 `full_with_length2_composition - semantic_only`，endpoint 为 item 内先平均
+base/system-swap pair-F1、再作 paired bootstrap（10,000 samples，seed `20260801`），成功条件为 95% CI
+下界严格大于 0。结果不是“证据不足”，而是方向和幅度都明确相反：
+
+| arm | answer coverage | item-macro pair-F1 | pair-micro accuracy | strict exact |
+|---|---:|---:|---:|---:|
+| semantic-only | 1.000000 | 0.677030 | 0.651232 | 0.505525 |
+| flat-structural | 0.998619 | 0.487495 | 0.443988 | 0.303867 |
+| full no-composition | 0.011050 | 0.006183 | 0.005975 | 0 |
+| full + length-2 composition | 0.006906 | 0.004144 | 0.004108 | 0 |
+| full + composition + target-color shuffle | 0.009669 | 0.003453 | 0.002987 | 0 |
+
+主效应为 `-0.6728865211`，95% CI=`[-0.7095084627,-0.6358874857]`，正式 disposition
+为 **FAIL**。secondary mechanism diagnostics 与同一结论一致：full−flat 为 `-0.4833508726`
+（CI `[-0.5216927563,-0.4452956459]`）；full−no-composition 为 `-0.0020389371`
+（CI `[-0.0054590897,0]`）；full−target-color-shuffle 为 `+0.0006906077`
+（CI `[-0.0023020258,+0.0046040516]`）。后两者分别说明 length-2 composition 没有正增量，
+target-color relation 也没有可识别贡献。
+
+因果诊断也不支持把失败归咎于“结构类型没有执行”：完整组合臂选中的 5/724 variant 上，
+typed-incidence、structural-origin 与 length-2 path verification 均为 1；问题是冻结的 hard eligibility/
+selection 把 coverage 压到 `0.6906%`。semantic pool 的 complete-reference mapping recall 为
+`0.798343`，structure pool 为 `0.639503`，structure-only added pool 仅 `0.052486`。而取消严格
+eligibility 的 flat-structural 虽覆盖 723/724，却仍比 semantic-only 低约 0.190 F1。因此本轮同时排除了
+两个过强解释：不是“只差再放宽一个 gate”，也不是“结构关系单独就能替代语义相似”；当前结构信号既
+稀疏又有噪声，作为 hard selector 会把有用的 semantic mapping 一并删除。
+
+本轮能支持的论文结论是一个有价值的负向/机制结论：typed generalized counterpoint 可以被实现为
+可执行、可审计、可组合的有限算子，但这套冻结的 SCAR operationalization（closed arm construction、
+strict eligibility/selection、固定 extractor/binder）在该 frozen cohort 上显著劣于 semantic similarity。
+它**不**逻辑否定 13/22 条具体规律、范畴论式广义对位或未来的 soft residual/set-level 用法；但当前
+结果不能写成“广义对位提升检索”，也不能外推到现实域 Agent−RAW/HippoRAG、population
+generalization 或 SOTA。若不新增 study，论文可以诚实形成“可执行框架 + decisive negative +
+coverage-risk 机制解释”的结论；不能形成正向性能论文主张。
+
+这次 intrinsic formal 也没有改变总目标的判定：QuAC 已给出有效 L5；唯一剩余缺口仍是独立、预注册的
+fresh reality A_hold，在三个 relation family 上同时严格胜 RAW 与 official HippoRAG。当前 SCAR root
+已经终止，禁止重放、改 gate 或按结果定向修候选。安全汇总见
+[`SCAR formal result`](../manifests/gscl_scar_cssm_intrinsic_formal_result_v1.json)，其 formal safe terminal
+file/self SHA-256 为 `63642f76…00c0` / `edec1749…bb8`，safe score file/self SHA-256 为
+`ff3cf793…32e0` / `0429ad93…c8ed`。
+
 ## 附录 A：关键证据索引
 
-- GSCL / 广义对位机制施工（非评分、非总目标效果证据）：
+- GSCL / 广义对位机制施工与 SCAR intrinsic 正式终态（不构成现实域总目标证据）：
   [`generalized structural kernel`](../assumption_agent/generalized_structural_correspondence_v1.py)；
   [`document envelope`](../replication_runtime/gscl_narrative_extractor_v2/document_envelope.py)；
   [`bounded set consumer`](../replication_runtime/gscl_narrative_extractor_v2/bounded_set_consumer.py)；
   [`real-Qwen execution freeze`](../manifests/gscl_document_envelope_fixed_qualification_execution_freeze_v1.json)；
   [`real-Qwen qualification result`](../manifests/gscl_document_envelope_fixed_qualification_result_v1.json)；
-  [`modular composition receipt`](../manifests/gscl_document_envelope_bounded_consumer_composition_receipt_v1.json)
+  [`modular composition receipt`](../manifests/gscl_document_envelope_bounded_consumer_composition_receipt_v1.json)；
+  [`SCAR design freeze`](../manifests/gscl_scar_cssm_intrinsic_formal_design_freeze_v1.json)；
+  [`same-v1 representation recovery amendment`](../manifests/gscl_scar_cssm_intrinsic_representation_recovery_protocol_amendment_v1.json)；
+  [`SCAR protocol-valid negative result`](../manifests/gscl_scar_cssm_intrinsic_formal_result_v1.json)
 - WikiSQL UAO P4 fresh reality study（same-v5 protocol exception 已完成；strict primary false）：
   [`study design`](../manifests/wikisql_uao_p4_study_design_v1.json)；
   [`implementation freeze v1`](../manifests/wikisql_uao_p4_implementation_freeze_v1.json)；
