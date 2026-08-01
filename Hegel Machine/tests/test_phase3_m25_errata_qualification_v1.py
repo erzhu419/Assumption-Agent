@@ -90,6 +90,8 @@ def test_dual_errata_qualification_matches_golden_and_only_authorizes_external_s
         is True
     )
     assert report["python_execution"]["working_tree_executed"] is False
+    assert report["python_execution"]["minimal_module_closure"] is True
+    assert report["python_execution"]["package_init_executed"] is False
     assert report["repository_secret_absence_receipt"]["pass"] is True
 
 

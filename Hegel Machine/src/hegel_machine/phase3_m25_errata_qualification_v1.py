@@ -727,14 +727,19 @@ def _snapshot_python_report(
     environment: Mapping[str, str],
 ) -> tuple[dict[str, object], dict[str, object]]:
     python = str(Path(sys.executable).resolve(strict=True))
-    script = (
-        "import json,sys;"
-        "sys.path.insert(0,sys.argv[1]);"
-        "from hegel_machine.phase3_m25_errata_vectors_v1 import "
-        "generate_errata_vector_report_v1;"
-        "print(json.dumps(generate_errata_vector_report_v1(),"
-        "sort_keys=True,separators=(',',':')))"
-    )
+    script = """
+import json
+import sys
+import types
+
+package = types.ModuleType("hegel_machine")
+package.__package__ = "hegel_machine"
+package.__path__ = [sys.argv[1] + "/hegel_machine"]
+sys.modules["hegel_machine"] = package
+from hegel_machine.phase3_m25_errata_vectors_v1 import generate_errata_vector_report_v1
+
+print(json.dumps(generate_errata_vector_report_v1(), sort_keys=True, separators=(",", ":")))
+"""
     completed = subprocess.run(
         [python, "-I", "-c", script, str(snapshot_project / "src")],
         cwd=snapshot_project,
@@ -777,6 +782,8 @@ def _snapshot_python_report(
         ),
         "python_executable_sha256": _sha256_file(Path(python)),
         "isolated_mode": True,
+        "minimal_module_closure": True,
+        "package_init_executed": False,
         "source_blobs_from_git_archive": True,
         "working_tree_executed": False,
         "execution_receipt_is_external_attestation": False,
@@ -1413,6 +1420,8 @@ def _validate_report_envelope(report: Mapping[str, object]) -> None:
         "python_version",
         "python_executable_sha256",
         "isolated_mode",
+        "minimal_module_closure",
+        "package_init_executed",
         "source_blobs_from_git_archive",
         "working_tree_executed",
         "execution_receipt_is_external_attestation",
@@ -1423,6 +1432,8 @@ def _validate_report_envelope(report: Mapping[str, object]) -> None:
         "execution_mode": "DETACHED_COMMIT_A_SOURCE_REPLAY",
         "source_commit": commit,
         "isolated_mode": True,
+        "minimal_module_closure": True,
+        "package_init_executed": False,
         "source_blobs_from_git_archive": True,
         "working_tree_executed": False,
         "execution_receipt_is_external_attestation": False,

@@ -68,6 +68,8 @@ launcher、实际 cargo/rustc binaries、版本和完整 selected-toolchain dire
 必须匹配 Commit A 中的 approved-local-toolchain policy。随后必须对同一 open binary
 inode 完成 hash 和 exec。调用者提供的任意
 binary、stored JSON/self-hash、工作树结果或口头确认都不能替代 fresh replay。
+Python replay 只装载 exact-wire generator 的显式最小模块闭包，不执行宽泛的 package
+`__init__`；receipt 必须把这两点分别记录为 true/false，禁止隐式扩大输入闭包。
 
 任一项缺失、类型不为 `bool` 或为 `false`，立即返回：
 

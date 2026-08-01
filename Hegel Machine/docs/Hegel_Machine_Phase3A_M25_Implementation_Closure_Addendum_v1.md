@@ -298,7 +298,9 @@ from Commit A. The qualification runner must:
    Git-archive snapshot;
 3. run Python from that detached snapshot and build Rust there in a newly
    created empty target directory; neither endpoint may execute source from
-   the live worktree;
+   the live worktree; the Python endpoint uses an explicit minimal module
+   closure for the exact-wire generator and does not execute the broad package
+   `__init__`, with both facts recorded in its execution receipt;
 4. use an isolated Cargo home containing only the offline registry index and
    the exact `.crate` archives whose SHA-256 values match Commit A's
    `Cargo.lock`; do not copy ambient already-unpacked dependency sources, and
