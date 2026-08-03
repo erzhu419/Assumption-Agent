@@ -273,10 +273,13 @@ Machine`:
 PYTHONPATH=src python3 -m \
   hegel_machine.phase3_m3_implementation_qualification_cli_v1 \
   --basis-commit "$(git rev-parse HEAD)" \
-  --output /an/external/public/path/phase3_m3_implementation_qualification_v1.json
+  --output artifacts/phase3_m25_external/phase3_m3_implementation_qualification_v1.json
 ```
 
-The output path is exclusive-create.  This command performs only offline
+This fixed repository artifact slot is the only standalone receipt path read
+by readiness and formal execute; do not publish elsewhere and copy it into
+place. The output path is exclusive-create and the producer forces mode
+`0644` independently of the caller's umask. This command performs only offline
 build/replay qualification.  It does not invoke the ceremony executor.  Once
 the receipt validates, the qualified in-memory static basis sets
 `m3_execution_implementation_bindings_ready=true` and removes only
@@ -307,10 +310,16 @@ explicit `phase3-m3-start` action remain independent later steps.
 ## 10. Independent receipt repeatability
 
 The standalone M3 qualification and the independently executed live-protocol
-qualification must produce byte-identical M3 implementation receipts. This is
+qualification must produce identical canonical receipt objects, typed CBOR,
+and receipt roots. Outer standalone/live JSON container framing is not the
+identity. This is
 a repeatability invariant, not permission to copy or project one report into
 the other. Cargo's ordinary success message contains elapsed wall time; binding
 that message made an otherwise identical binary produce different receipt
 roots. The frozen quiet-success invariant removes only that nondeterministic
 success log while retaining the existing raw-stream digest semantics and the
 complete failure diagnostic path.
+
+The exact correction is frozen by
+[`Hegel_Machine_Phase3A_M25_Deterministic_Cargo_Transcript_Amendment_v1.md`](Hegel_Machine_Phase3A_M25_Deterministic_Cargo_Transcript_Amendment_v1.md),
+which is itself a required commit-bound qualification input.

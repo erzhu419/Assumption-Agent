@@ -32,6 +32,10 @@ def _exclusive_write(path: Path, payload: bytes) -> None:
         0o644,
     )
     try:
+        # ``mode`` passed to os.open is filtered by the caller's umask.  The
+        # formal consumer requires one exact public-artifact mode, so publish
+        # that mode explicitly instead of inheriting ambient process policy.
+        os.fchmod(descriptor, 0o644)
         view = memoryview(payload)
         while view:
             written = os.write(descriptor, view)

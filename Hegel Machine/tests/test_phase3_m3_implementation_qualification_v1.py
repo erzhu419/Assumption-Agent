@@ -13,6 +13,7 @@ from types import SimpleNamespace
 import pytest
 
 import hegel_machine.phase3_m3_implementation_qualification_v1 as qualification
+import hegel_machine.phase3_m3_implementation_qualification_cli_v1 as qualification_cli
 import hegel_machine.phase3_dsl_v1 as full_dsl
 import hegel_machine.phase3_m3_dsl_core_v1 as m3_dsl_core
 import hegel_machine.phase3_m3_shrink1_core_v1 as m3_shrink_core
@@ -28,6 +29,19 @@ from hegel_machine.phase3_m3_bounded_enumerator_v1 import (
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY_ROOT = PROJECT_ROOT.parent
+
+
+def test_standalone_receipt_publisher_forces_mode_0644_under_restrictive_umask(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "phase3_m3_implementation_qualification_v1.json"
+    previous = os.umask(0o077)
+    try:
+        qualification_cli._exclusive_write(output, b"{}\n")
+    finally:
+        os.umask(previous)
+    assert stat.S_IMODE(output.stat().st_mode) == 0o644
+    assert output.read_bytes() == b"{}\n"
 
 
 def _working_blob(_repository: Path, _commit: str, path: str) -> bytes:
@@ -173,6 +187,15 @@ def test_target_free_python_and_rust_source_closures_are_exact(monkeypatch) -> N
     assert set(rust) == set(qualification.RUST_SOURCE_PATHS)
     assert all(b"ODD_REDUCTION_UNIVERSE" not in payload for payload in python.values())
     assert all(b"formal_bridge_m25" not in payload for payload in rust.values())
+
+
+def test_deterministic_cargo_amendment_is_commit_bound() -> None:
+    assert qualification.DETERMINISTIC_CARGO_TRANSCRIPT_AMENDMENT_PATH in (
+        qualification.REQUIRED_QUALIFICATION_BASIS_PATHS
+    )
+    assert qualification.ENGINEERING_DOCUMENT_PATH in (
+        qualification.REQUIRED_QUALIFICATION_BASIS_PATHS
+    )
 
 
 def test_target_free_core_is_exact_projection_of_frozen_full_dsl() -> None:

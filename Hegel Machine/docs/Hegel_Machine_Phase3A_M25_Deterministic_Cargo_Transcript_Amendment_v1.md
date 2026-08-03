@@ -52,8 +52,19 @@ required. Actor, errata, M3, bridge, live-protocol, execution-status, and
 readiness artifacts must all be regenerated.
 
 The standalone M3 receipt and the independently generated live-protocol
-embedded receipt must then be byte-identical. Copying or extracting one into
+embedded receipt must then have identical canonical objects, typed CBOR, and
+receipt roots; their outer JSON container framing is not compared. Copying or extracting one into
 the other's publication slot is expressly not an independent replay. Formal
 execution remains forbidden until this equality and all other pre-genesis
 guards pass. The allowed endpoint remains `24/24 + NOT_RUN`; the separate
 `phase3-m3-start` action is not authorized by this amendment.
+
+The amendment path itself is a required Commit-A qualification input. Formal
+readiness compares the standalone receipt object with both the fresh basis and
+the archived live-protocol embedded receipt. Formal execute reads the fixed
+standalone slot through a symlink-free anchored reader, compares the
+same-process live admission, and reopens the fixed slot at the final
+pre-irreversible boundary before allocating a formal ceremony run or ledger
+ID, reserving a transaction, starting formal actors, generating a real seed,
+or creating a formal key. Any mismatch returns
+`FAIL_M25_M3_QUALIFICATION_RECEIPT_MISMATCH` and leaves the ceremony unstarted.

@@ -75,6 +75,18 @@ binary、stored JSON/self-hash、工作树结果或口头确认都不能替代 f
 Python replay 只装载 exact-wire generator 的显式最小模块闭包，不执行宽泛的 package
 `__init__`；receipt 必须把这两点分别记录为 true/false，禁止隐式扩大输入闭包。
 
+quiet-success 修正及 pre-seed receipt equality guard 的权威补充见
+[`Hegel_Machine_Phase3A_M25_Deterministic_Cargo_Transcript_Amendment_v1.md`](Hegel_Machine_Phase3A_M25_Deterministic_Cargo_Transcript_Amendment_v1.md)。
+readiness 与 execute 都必须在正式 actor/key/seed/transaction 副作用前比较 standalone、
+fresh basis 与 archived live receipt；execute 还必须比较 same-process live receipt。
+该 receipt guard 独立失败时必须返回：
+
+```text
+FAIL_M25_M3_QUALIFICATION_RECEIPT_MISMATCH
+```
+
+下面的 failure code 只适用于本节前述 exact-errata 字段检查，不适用于 receipt equality：
+
 任一项缺失、类型不为 `bool` 或为 `false`，立即返回：
 
 ```text

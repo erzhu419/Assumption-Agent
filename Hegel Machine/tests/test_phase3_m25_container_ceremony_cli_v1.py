@@ -38,7 +38,12 @@ def test_execution_status_reports_ready_basis_without_stale_blocker(
     monkeypatch.setattr(
         executor,
         "load_actor_protocol_archive_qualification_v1",
-        lambda _value: object(),
+        lambda _value: SimpleNamespace(report={}),
+    )
+    monkeypatch.setattr(
+        executor,
+        "require_m3_qualification_receipt_alignment_v1",
+        lambda *_args, **_kwargs: {},
     )
 
     assert cli.main(
@@ -109,3 +114,41 @@ def test_execution_status_transports_exact_basis_specific_blockers(
         "FAIL_ONE",
         "FAIL_TWO",
     ]
+
+
+def test_execute_preserves_m3_receipt_mismatch_failure_code(
+    tmp_path: Path, monkeypatch, capsys,
+) -> None:
+    basis_commit = "56" * 20
+    monkeypatch.setattr(
+        cli,
+        "inspect_formal_ceremony_readiness_v1",
+        lambda value: CeremonyReadinessV1(
+            basis_commit=value,
+            ready=False,
+            blockers=(executor.FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH,),
+        ),
+    )
+    arguments = [
+        "execute",
+        "--basis-commit",
+        basis_commit,
+        "--actor-qualification",
+        str(tmp_path / "actor.json"),
+        "--errata-qualification",
+        str(tmp_path / "errata.json"),
+        "--custody-directory",
+        str(tmp_path / "custody"),
+        "--qualification-custody-directory",
+        str(tmp_path / "qualification-custody"),
+        "--rust-formal-replay-binary",
+        str(tmp_path / "rust-replay"),
+        "--public-evidence-output",
+        str(tmp_path / "evidence.json"),
+        "--promotion-output",
+        str(tmp_path / "promotion.json"),
+    ]
+
+    assert cli.main(arguments) == 2
+    error = json.loads(capsys.readouterr().err)
+    assert error["error_code"] == executor.FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH

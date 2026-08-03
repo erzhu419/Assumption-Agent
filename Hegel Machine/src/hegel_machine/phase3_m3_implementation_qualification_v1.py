@@ -93,6 +93,10 @@ LOCAL_RUNTIME_PATH: Final = (
 ENGINEERING_DOCUMENT_PATH: Final = (
     "Hegel Machine/docs/Hegel_Machine_Phase3A_M3_Implementation_Binding_Qualification_Engineering_v1.md"
 )
+DETERMINISTIC_CARGO_TRANSCRIPT_AMENDMENT_PATH: Final = (
+    "Hegel Machine/docs/"
+    "Hegel_Machine_Phase3A_M25_Deterministic_Cargo_Transcript_Amendment_v1.md"
+)
 BOOTSTRAP_RECORD_PATH: Final = (
     "Hegel Machine/artifacts/phase3_m3_cargo_offline_bootstrap_record_v1.json"
 )
@@ -139,6 +143,16 @@ RUST_BUILD_ENVIRONMENT: Final = MappingProxyType(
 BUILD_SECCOMP_PATH: Final = PROJECT_ROOT / "config/phase3_m3_offline_build_seccomp_v1.json"
 BUILD_SECCOMP_REPOSITORY_PATH: Final = (
     "Hegel Machine/config/phase3_m3_offline_build_seccomp_v1.json"
+)
+REQUIRED_QUALIFICATION_BASIS_PATHS: Final = (
+    INTEGRATION_PATH,
+    QUALIFICATION_CLI_PATH,
+    LOCAL_RUNTIME_PATH,
+    ENGINEERING_DOCUMENT_PATH,
+    DETERMINISTIC_CARGO_TRANSCRIPT_AMENDMENT_PATH,
+    GOLDEN_PATH,
+    BUILD_SECCOMP_REPOSITORY_PATH,
+    BOOTSTRAP_RECORD_PATH,
 )
 
 FAIL_COMMIT = "FAIL_M3_IMPLEMENTATION_QUALIFICATION_COMMIT"
@@ -2743,15 +2757,7 @@ def build_qualified_formal_static_basis_v1(
         basis_commit,
         repository_root=repository_root,
     )
-    for required_path in (
-        INTEGRATION_PATH,
-        QUALIFICATION_CLI_PATH,
-        LOCAL_RUNTIME_PATH,
-        ENGINEERING_DOCUMENT_PATH,
-        GOLDEN_PATH,
-        BUILD_SECCOMP_REPOSITORY_PATH,
-        BOOTSTRAP_RECORD_PATH,
-    ):
+    for required_path in REQUIRED_QUALIFICATION_BASIS_PATHS:
         _git_blob(repository_root, basis_commit, required_path)
     python_blobs = validate_python_source_closure_v1(repository_root, basis_commit)
     rust_blobs = validate_rust_source_closure_v1(repository_root, basis_commit)

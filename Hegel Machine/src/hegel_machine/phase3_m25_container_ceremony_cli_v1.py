@@ -26,6 +26,8 @@ from .phase3_m25_container_ceremony_v1 import (
 )
 from .phase3_m25_formal_container_executor_v1 import (
     DockerCeremonyActorsV1,
+    FAIL_EXECUTION_BINDINGS,
+    FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH,
     FormalContainerExecutorError,
     execute_formal_container_ceremony_v1,
     inspect_formal_ceremony_readiness_v1,
@@ -221,9 +223,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             # still stops before actor key/marker/seed side effects.
             readiness = inspect_formal_ceremony_readiness_v1(args.basis_commit)
             if not readiness.ready:
-                from .phase3_m25_formal_container_executor_v1 import FAIL_EXECUTION_BINDINGS
+                failure_code = (
+                    FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH
+                    if FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH
+                    in readiness.blockers
+                    else FAIL_EXECUTION_BINDINGS
+                )
                 raise FormalContainerExecutorError(
-                    FAIL_EXECUTION_BINDINGS, ",".join(readiness.blockers)
+                    failure_code, ",".join(readiness.blockers)
                 )
             actor_report = json.loads(
                 args.actor_qualification.read_text(encoding="ascii")

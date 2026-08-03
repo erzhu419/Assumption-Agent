@@ -253,8 +253,9 @@ considered. It does not execute that action and does not itself advance any
 gate.
 
 The live run independently rebuilds the M3 implementation qualification. Its
-embedded receipt must equal the separately generated standalone receipt
-byte-for-byte. The Cargo build therefore uses the frozen quiet-success rule:
+embedded canonical receipt object, typed CBOR, and receipt root must equal the
+separately generated standalone receipt; the two outer JSON containers need
+not share formatting. The Cargo build therefore uses the frozen quiet-success rule:
 successful stdout and stderr are both exactly empty and their raw SHA-256
 digests remain bound. Equality is evidence of repeatability; extracting the
 embedded object into the standalone publication slot is not a substitute.

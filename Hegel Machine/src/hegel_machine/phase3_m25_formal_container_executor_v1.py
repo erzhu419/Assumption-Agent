@@ -163,6 +163,12 @@ LIVE_ACTOR_PROTOCOL_QUALIFICATION_REPORT_PATH: Final = (
     / "artifacts/phase3_m25_external/"
     "phase3_m25_live_actor_protocol_qualification_v1.json"
 )
+M3_IMPLEMENTATION_QUALIFICATION_REPORT_PATH: Final = (
+    PROJECT_ROOT
+    / "artifacts/phase3_m25_external/"
+    "phase3_m3_implementation_qualification_v1.json"
+)
+MAX_M3_IMPLEMENTATION_QUALIFICATION_REPORT_BYTES: Final = 4 * 1024 * 1024
 
 PURPOSE4_RUNTIME_SOURCE_SPECS: Final = (
     (
@@ -332,6 +338,9 @@ FAIL_BRIDGE_REPLAY_UNRESOLVED = "FAIL_M25_BRIDGE_FULL_DAG_REPLAY_NOT_IMPLEMENTED
 FAIL_ACTOR_LIVE_PROBE_UNRESOLVED = "FAIL_M25_SIGNER_ACTOR_LIVE_PROBE_NOT_BOUND"
 FAIL_ACTOR_PROTOCOL_QUALIFICATION_UNRESOLVED = (
     "FAIL_M25_LIVE_ACTOR_PROTOCOL_QUALIFICATION_NOT_READY"
+)
+FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH = (
+    "FAIL_M25_M3_QUALIFICATION_RECEIPT_MISMATCH"
 )
 FAIL_POST_STAGE_RECOVERY_UNRESOLVED = (
     "FAIL_M25_POST_STAGE_TRANSACTION_RECOVERY_NOT_FROZEN"
@@ -1161,6 +1170,276 @@ def load_live_actor_protocol_qualification_id_v1(basis_commit: str) -> bytes:
     return load_actor_protocol_archive_qualification_v1(basis_commit).bundle_content_id
 
 
+def load_standalone_m3_qualification_receipt_v1(
+    basis_commit: str,
+) -> Mapping[str, object]:
+    """Load the fixed receipt through a stable, symlink-free parent anchor."""
+
+    commit = _commit(basis_commit)
+    path = Path(
+        os.path.abspath(os.fspath(M3_IMPLEMENTATION_QUALIFICATION_REPORT_PATH))
+    )
+    if not path.name or path.name in {".", ".."}:
+        _fail(
+            FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH,
+            "standalone M3 qualification receipt path is invalid",
+        )
+    try:
+        _reject_caller_symlink_chain_v1(
+            path,
+            "standalone M3 qualification receipt path",
+        )
+    except FormalContainerExecutorError as exc:
+        _fail(
+            FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH,
+            "standalone M3 qualification receipt path chain is not direct "
+            f"({exc.code})",
+        )
+
+    directory_flags = (
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+    )
+    file_flags = (
+        os.O_RDONLY
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+    )
+    descriptors: list[int] = []
+    primary_error: BaseException | None = None
+    try:
+        parent_descriptor = os.open(path.parent, directory_flags)
+        descriptors.append(parent_descriptor)
+        parent_path_before = path.parent.lstat()
+        parent_open_before = os.fstat(parent_descriptor)
+        if (
+            stat.S_ISLNK(parent_path_before.st_mode)
+            or not stat.S_ISDIR(parent_path_before.st_mode)
+            or not stat.S_ISDIR(parent_open_before.st_mode)
+            or (parent_path_before.st_dev, parent_path_before.st_ino)
+            != (parent_open_before.st_dev, parent_open_before.st_ino)
+        ):
+            raise OSError("standalone receipt parent identity differs")
+
+        descriptor = os.open(path.name, file_flags, dir_fd=parent_descriptor)
+        descriptors.append(descriptor)
+        path_before = os.stat(
+            path.name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        metadata = os.fstat(descriptor)
+        stable_file_snapshot = (
+            metadata.st_dev,
+            metadata.st_ino,
+            metadata.st_mode,
+            metadata.st_uid,
+            metadata.st_gid,
+            metadata.st_nlink,
+            metadata.st_size,
+            metadata.st_mtime_ns,
+            metadata.st_ctime_ns,
+        )
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or stat.S_IMODE(metadata.st_mode) != 0o644
+            or metadata.st_size <= 0
+            or metadata.st_size > MAX_M3_IMPLEMENTATION_QUALIFICATION_REPORT_BYTES
+            or (
+                path_before.st_dev,
+                path_before.st_ino,
+                path_before.st_mode,
+                path_before.st_uid,
+                path_before.st_gid,
+                path_before.st_nlink,
+                path_before.st_size,
+                path_before.st_mtime_ns,
+                path_before.st_ctime_ns,
+            )
+            != stable_file_snapshot
+        ):
+            _fail(
+                FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH,
+                "standalone M3 qualification receipt file policy differs",
+            )
+        chunks: list[bytes] = []
+        remaining = metadata.st_size
+        while remaining:
+            chunk = os.read(descriptor, min(remaining, 1024 * 1024))
+            if not chunk:
+                _fail(
+                    FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH,
+                    "standalone M3 qualification receipt read was short",
+                )
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        if os.read(descriptor, 1) != b"":
+            _fail(
+                FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH,
+                "standalone M3 qualification receipt grew during read",
+            )
+        metadata_after = os.fstat(descriptor)
+        path_after = os.stat(
+            path.name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        parent_path_after = path.parent.lstat()
+        parent_open_after = os.fstat(parent_descriptor)
+        if (
+            (
+                metadata_after.st_dev,
+                metadata_after.st_ino,
+                metadata_after.st_mode,
+                metadata_after.st_uid,
+                metadata_after.st_gid,
+                metadata_after.st_nlink,
+                metadata_after.st_size,
+                metadata_after.st_mtime_ns,
+                metadata_after.st_ctime_ns,
+            )
+            != stable_file_snapshot
+            or (
+                path_after.st_dev,
+                path_after.st_ino,
+                path_after.st_mode,
+                path_after.st_uid,
+                path_after.st_gid,
+                path_after.st_nlink,
+                path_after.st_size,
+                path_after.st_mtime_ns,
+                path_after.st_ctime_ns,
+            )
+            != stable_file_snapshot
+            or stat.S_ISLNK(parent_path_after.st_mode)
+            or not stat.S_ISDIR(parent_path_after.st_mode)
+            or not stat.S_ISDIR(parent_open_after.st_mode)
+            or (parent_path_after.st_dev, parent_path_after.st_ino)
+            != (parent_open_after.st_dev, parent_open_after.st_ino)
+            or (parent_open_after.st_dev, parent_open_after.st_ino)
+            != (parent_open_before.st_dev, parent_open_before.st_ino)
+        ):
+            _fail(
+                FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH,
+                "standalone M3 qualification receipt identity changed during read",
+            )
+        try:
+            _reject_caller_symlink_chain_v1(
+                path,
+                "standalone M3 qualification receipt path",
+            )
+        except FormalContainerExecutorError as exc:
+            _fail(
+                FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH,
+                "standalone M3 qualification receipt path chain changed "
+                f"({exc.code})",
+            )
+        payload = b"".join(chunks)
+    except BaseException as exc:
+        primary_error = exc
+        if isinstance(exc, FormalContainerExecutorError):
+            raise
+        if isinstance(exc, (OSError, ValueError)):
+            _fail(
+                FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH,
+                "standalone M3 qualification receipt stable read failed: "
+                f"{type(exc).__name__}",
+            )
+        raise
+    finally:
+        close_errors: list[OSError] = []
+        for open_descriptor in reversed(descriptors):
+            try:
+                os.close(open_descriptor)
+            except OSError as exc:
+                close_errors.append(exc)
+        if close_errors and primary_error is None:
+            _fail(
+                FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH,
+                "standalone M3 qualification receipt descriptor close failed",
+            )
+    try:
+        value = json.loads(payload)
+        expected = (
+            json.dumps(value, ensure_ascii=True, sort_keys=True, indent=2) + "\n"
+        ).encode("ascii")
+    except (
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+        UnicodeEncodeError,
+        TypeError,
+        ValueError,
+        RecursionError,
+    ) as exc:
+        _fail(
+            FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH,
+            f"standalone M3 qualification receipt is invalid JSON: {exc}",
+        )
+    if (
+        type(value) is not dict
+        or payload != expected
+        or value.get("basis_commit") != commit
+    ):
+        _fail(
+            FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH,
+            "standalone M3 qualification receipt framing or basis differs",
+        )
+    return MappingProxyType(value)
+
+
+def require_m3_qualification_receipt_alignment_v1(
+    basis: FormalStaticBasisV1,
+    protocol_reports: Sequence[Mapping[str, object]],
+) -> Mapping[str, object]:
+    """Require independent standalone/fresh/live receipt identity pre-seed."""
+
+    basis_receipt_raw = basis.implementation_inputs.get(
+        "m3_implementation_qualification_receipt"
+    )
+    if not isinstance(basis_receipt_raw, Mapping):
+        _fail(
+            FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH,
+            "fresh formal basis lacks its M3 qualification receipt",
+        )
+    basis_receipt = dict(basis_receipt_raw)
+    selected = load_standalone_m3_qualification_receipt_v1(basis.basis_commit)
+    if not isinstance(selected, Mapping):
+        _fail(
+            FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH,
+            "standalone M3 qualification receipt object is absent",
+        )
+    selected_receipt = dict(selected)
+    expected_bytes = _canonical_json(basis_receipt)
+    if (
+        selected_receipt != basis_receipt
+        or _canonical_json(selected_receipt) != expected_bytes
+    ):
+        _fail(
+            FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH,
+            "standalone and fresh-basis M3 qualification receipts differ",
+        )
+    for index, report in enumerate(protocol_reports):
+        bindings = report.get("implementation_bindings")
+        if not isinstance(bindings, Mapping):
+            _fail(
+                FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH,
+                f"protocol report {index} lacks implementation bindings",
+            )
+        embedded = bindings.get("m3_implementation_qualification_receipt")
+        if (
+            type(embedded) is not dict
+            or embedded != basis_receipt
+            or _canonical_json(embedded) != expected_bytes
+        ):
+            _fail(
+                FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH,
+                f"protocol report {index} M3 qualification receipt differs",
+            )
+    return MappingProxyType(selected_receipt)
+
+
 def inspect_formal_ceremony_readiness_v1(basis_commit: str) -> CeremonyReadinessV1:
     """Qualify the basis and stop before actor/key/seed/marker side effects.
 
@@ -1205,9 +1484,16 @@ def inspect_formal_ceremony_readiness_v1(basis_commit: str) -> CeremonyReadiness
         except (OSError, BridgeDagBinaryQualificationError):
             blockers.append(FAIL_BRIDGE_REPLAY_UNRESOLVED)
     try:
-        load_actor_protocol_archive_qualification_v1(commit)
+        archived_protocol = load_actor_protocol_archive_qualification_v1(commit)
+        require_m3_qualification_receipt_alignment_v1(
+            basis,
+            (archived_protocol.report,),
+        )
     except FormalContainerExecutorError as exc:
-        if exc.code == FAIL_ACTOR_PROTOCOL_QUALIFICATION_UNRESOLVED:
+        if exc.code in {
+            FAIL_ACTOR_PROTOCOL_QUALIFICATION_UNRESOLVED,
+            FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH,
+        }:
             blockers.append(exc.code)
         else:
             raise
@@ -10922,6 +11208,11 @@ def execute_formal_container_ceremony_v1(
         _fail(FAIL_CUSTODY, "real execute requires an existing empty external custody directory")
     if (custody_directory.stat().st_mode & 0o777) != 0o700:
         _fail(FAIL_CUSTODY, "external custody directory must be mode 0700")
+    archived_actor_protocol = load_actor_protocol_archive_qualification_v1(commit)
+    require_m3_qualification_receipt_alignment_v1(
+        basis,
+        (archived_actor_protocol.report,),
+    )
     live_actor_protocol = qualify_live_actor_protocol_admission_v1(
         basis_commit=commit,
         custody_directory=qualification_custody,
@@ -10931,6 +11222,10 @@ def execute_formal_container_ceremony_v1(
             FAIL_CUSTODY,
             "live actor protocol admission did not restore empty qualification custody",
         )
+    require_m3_qualification_receipt_alignment_v1(
+        basis,
+        (archived_actor_protocol.report, live_actor_protocol.report),
+    )
     validate_commit_b_output_names_v1(public_evidence_path, public_promotion_path)
     python_receipt = build_python_static_replay_receipt_v1(basis)
     static_control_plane, static_daemon_binding = (
@@ -10943,6 +11238,14 @@ def execute_formal_container_ceremony_v1(
     )
     parent = generate_parent_absence_audit_v1(REPOSITORY_ROOT)
     replay_parent_absence_audit_v1(parent, repository=REPOSITORY_ROOT)
+    # Re-open the fixed slot through the anchored reader at the last
+    # pre-irreversible boundary.  The same-process qualification can be long;
+    # a cached object must never authorize IDs, reservation, keys or seed after
+    # the public receipt path has drifted in the meantime.
+    require_m3_qualification_receipt_alignment_v1(
+        basis,
+        (archived_actor_protocol.report, live_actor_protocol.report),
+    )
     timestamp_value = getattr(actors, "timestamp", None)
     timestamp = timestamp_value if type(timestamp_value) is int else int(time.time())
     run_id = secrets.token_bytes(16)
@@ -11089,6 +11392,7 @@ __all__ = [
     "FormalCeremonyTransactionV1",
     "PendingCeremonyRecoveryV1",
     "FAIL_EXECUTION_BINDINGS",
+    "FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH",
     "FAIL_POST_STAGE_RECOVERY_UNRESOLVED",
     "FAIL_SYNTHETIC_PROMOTION",
     "FormalContainerExecutorError",
@@ -11102,9 +11406,11 @@ __all__ = [
     "continue_post_stage_transaction_recovery_v1",
     "execute_formal_container_ceremony_v1",
     "inspect_formal_ceremony_readiness_v1",
+    "load_standalone_m3_qualification_receipt_v1",
     "load_gate_evidence_inputs_v1",
     "replay_public_gate_evidence_v1",
     "resume_pending_split_calculators_v1",
     "require_formal_ceremony_ready_v1",
+    "require_m3_qualification_receipt_alignment_v1",
     "serialize_gate_evidence_inputs_v1",
 ]

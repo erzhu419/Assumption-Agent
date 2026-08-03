@@ -40,6 +40,10 @@ def _basis(*, ready: bool):
                 if ready
                 else None
             ),
+            "m3_implementation_qualification_receipt": {
+                "basis_commit": "12" * 20,
+                "receipt_root": "ab" * 32,
+            },
         },
         blocking_gaps=() if ready else ("M3_EXECUTION_IMPLEMENTATION_BINDINGS_NOT_READY",),
     )
@@ -142,6 +146,11 @@ def test_readiness_requires_post_commit_rust_bridge_qualification(monkeypatch) -
     )
     monkeypatch.setattr(
         executor,
+        "require_m3_qualification_receipt_alignment_v1",
+        lambda *_args, **_kwargs: MappingProxyType({}),
+    )
+    monkeypatch.setattr(
+        executor,
         "load_qualified_rust_bridge_dag_binary_binding_v1",
         lambda **_kwargs: (_ for _ in ()).throw(
             executor.BridgeDagBinaryQualificationError("TEST", "absent")
@@ -159,6 +168,325 @@ def test_readiness_requires_post_commit_rust_bridge_qualification(monkeypatch) -
     ready = executor.inspect_formal_ceremony_readiness_v1("12" * 20)
     assert ready.ready is True
     assert ready.blockers == ()
+
+
+def test_readiness_and_preseed_guard_reject_m3_receipt_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    basis = _basis(ready=True)
+    receipt = basis.implementation_inputs["m3_implementation_qualification_receipt"]
+    report = {
+        "implementation_bindings": {
+            "m3_implementation_qualification_receipt": dict(receipt)
+        }
+    }
+    standalone = tmp_path / "phase3_m3_implementation_qualification_v1.json"
+    standalone.write_text(
+        json.dumps(dict(receipt), ensure_ascii=True, sort_keys=True, indent=2) + "\n",
+        encoding="ascii",
+    )
+    standalone.chmod(0o644)
+    monkeypatch.setattr(
+        executor, "M3_IMPLEMENTATION_QUALIFICATION_REPORT_PATH", standalone
+    )
+
+    aligned = executor.require_m3_qualification_receipt_alignment_v1(
+        basis, (report,)
+    )
+    assert dict(aligned) == receipt
+
+    drifted = json.loads(json.dumps(report))
+    drifted["implementation_bindings"][
+        "m3_implementation_qualification_receipt"
+    ]["receipt_root"] = "cd" * 32
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        executor.require_m3_qualification_receipt_alignment_v1(
+            basis, (drifted,)
+        )
+    assert captured.value.code == executor.FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH
+
+    monkeypatch.setattr(executor, "UNRESOLVED_AUTHORITATIVE_BLOCKERS", ())
+    monkeypatch.setattr(executor, "_PRESTAGE_RECOVERY_IMPLEMENTED", True)
+    monkeypatch.setattr(
+        executor, "build_qualified_formal_static_basis_v1", lambda _commit: basis
+    )
+    monkeypatch.setattr(
+        executor,
+        "load_qualified_rust_bridge_dag_binary_binding_v1",
+        lambda **_kwargs: ({}, "sha256:" + "11" * 32),
+    )
+    monkeypatch.setattr(
+        executor,
+        "load_actor_protocol_archive_qualification_v1",
+        lambda _commit: executor.ArchivedActorProtocolQualificationBindingV1(
+            "12" * 20,
+            b"v" * 32,
+            MappingProxyType(
+                {purpose: bytes([purpose]) * 16 for purpose in (1, 2, 3, 4)}
+            ),
+            MappingProxyType(drifted),
+        ),
+    )
+    readiness = executor.inspect_formal_ceremony_readiness_v1("12" * 20)
+    assert readiness.ready is False
+    assert executor.FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH in readiness.blockers
+
+
+def test_standalone_m3_receipt_loader_rejects_symlinked_ancestor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    receipt = dict(
+        _basis(ready=True).implementation_inputs[
+            "m3_implementation_qualification_receipt"
+        ]
+    )
+    real_parent = tmp_path / "real"
+    real_parent.mkdir()
+    receipt_path = real_parent / "phase3_m3_implementation_qualification_v1.json"
+    receipt_path.write_text(
+        json.dumps(receipt, ensure_ascii=True, sort_keys=True, indent=2) + "\n",
+        encoding="ascii",
+    )
+    receipt_path.chmod(0o644)
+    linked_parent = tmp_path / "linked"
+    linked_parent.symlink_to(real_parent, target_is_directory=True)
+    monkeypatch.setattr(
+        executor,
+        "M3_IMPLEMENTATION_QUALIFICATION_REPORT_PATH",
+        linked_parent / receipt_path.name,
+    )
+
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        executor.load_standalone_m3_qualification_receipt_v1("12" * 20)
+    assert captured.value.code == executor.FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH
+
+
+def test_standalone_m3_receipt_loader_detects_path_replacement_during_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    receipt = dict(
+        _basis(ready=True).implementation_inputs[
+            "m3_implementation_qualification_receipt"
+        ]
+    )
+    receipt_path = tmp_path / "phase3_m3_implementation_qualification_v1.json"
+    payload = (
+        json.dumps(receipt, ensure_ascii=True, sort_keys=True, indent=2) + "\n"
+    ).encode("ascii")
+    receipt_path.write_bytes(payload)
+    receipt_path.chmod(0o644)
+    monkeypatch.setattr(
+        executor, "M3_IMPLEMENTATION_QUALIFICATION_REPORT_PATH", receipt_path
+    )
+    original_read = os.read
+    replaced = False
+
+    def replace_after_read(descriptor: int, size: int) -> bytes:
+        nonlocal replaced
+        result = original_read(descriptor, size)
+        if not replaced and result:
+            replaced = True
+            replacement = tmp_path / "replacement.json"
+            replacement.write_bytes(payload)
+            replacement.chmod(0o644)
+            os.replace(replacement, receipt_path)
+        return result
+
+    monkeypatch.setattr(executor.os, "read", replace_after_read)
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        executor.load_standalone_m3_qualification_receipt_v1("12" * 20)
+    assert captured.value.code == executor.FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH
+
+
+def test_standalone_m3_receipt_loader_normalizes_io_and_recursive_json_failures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    receipt = dict(
+        _basis(ready=True).implementation_inputs[
+            "m3_implementation_qualification_receipt"
+        ]
+    )
+    receipt_path = tmp_path / "phase3_m3_implementation_qualification_v1.json"
+    receipt_path.write_text(
+        json.dumps(receipt, ensure_ascii=True, sort_keys=True, indent=2) + "\n",
+        encoding="ascii",
+    )
+    receipt_path.chmod(0o644)
+    monkeypatch.setattr(
+        executor, "M3_IMPLEMENTATION_QUALIFICATION_REPORT_PATH", receipt_path
+    )
+    original_fstat = os.fstat
+    monkeypatch.setattr(
+        executor.os,
+        "fstat",
+        lambda _descriptor: (_ for _ in ()).throw(OSError("synthetic fstat")),
+    )
+    with pytest.raises(executor.FormalContainerExecutorError) as captured_io:
+        executor.load_standalone_m3_qualification_receipt_v1("12" * 20)
+    assert captured_io.value.code == executor.FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH
+
+    monkeypatch.setattr(executor.os, "fstat", original_fstat)
+    monkeypatch.setattr(
+        executor.json,
+        "loads",
+        lambda _payload: (_ for _ in ()).throw(RecursionError("synthetic JSON")),
+    )
+    with pytest.raises(executor.FormalContainerExecutorError) as captured_json:
+        executor.load_standalone_m3_qualification_receipt_v1("12" * 20)
+    assert captured_json.value.code == executor.FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH
+
+
+@pytest.mark.parametrize("drift_source", ("standalone_slot", "same_process_live"))
+def test_execute_rejects_post_live_receipt_drift_before_any_formal_side_effect(
+    drift_source: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    basis = _basis(ready=True)
+    receipt = dict(
+        basis.implementation_inputs["m3_implementation_qualification_receipt"]
+    )
+    protocol_report = {
+        "implementation_bindings": {
+            "m3_implementation_qualification_receipt": dict(receipt)
+        }
+    }
+    standalone = tmp_path / "phase3_m3_implementation_qualification_v1.json"
+
+    def publish(value: dict[str, object]) -> None:
+        standalone.write_text(
+            json.dumps(value, ensure_ascii=True, sort_keys=True, indent=2) + "\n",
+            encoding="ascii",
+        )
+        standalone.chmod(0o644)
+
+    publish(receipt)
+    monkeypatch.setattr(
+        executor, "M3_IMPLEMENTATION_QUALIFICATION_REPORT_PATH", standalone
+    )
+    monkeypatch.setattr(
+        executor, "build_qualified_formal_static_basis_v1", lambda _commit: basis
+    )
+    monkeypatch.setattr(
+        executor,
+        "require_formal_ceremony_ready_v1",
+        lambda _basis_value: MappingProxyType(
+            dict(
+                basis.implementation_inputs[
+                    "m3_execution_implementation_binding_roots"
+                ]
+            )
+        ),
+    )
+    monkeypatch.setattr(executor, "validate_ceremony_admission_v1", lambda **_kwargs: {})
+    monkeypatch.setattr(executor, "_PRESTAGE_RECOVERY_IMPLEMENTED", True)
+    monkeypatch.setattr(
+        executor, "_validate_prestage_runtime_bindings_v1", lambda value: value
+    )
+    monkeypatch.setattr(
+        executor,
+        "load_actor_protocol_archive_qualification_v1",
+        lambda _commit: SimpleNamespace(report=protocol_report),
+    )
+
+    formal_custody = tmp_path / "formal-custody"
+    qualification_custody = tmp_path / "qualification-custody"
+    formal_custody.mkdir(mode=0o700)
+    qualification_custody.mkdir(mode=0o700)
+    actors = executor.DockerCeremonyActorsV1(
+        basis_commit="12" * 20,
+        custody_directory=formal_custody,
+        rust_formal_replay_binary=tmp_path / "rust-replay",
+        timestamp=1,
+    )
+    monkeypatch.setattr(actors, "validate_rust_replay_binding", lambda _basis: b"r" * 32)
+    monkeypatch.setattr(actors, "validate_rust_bridge_dag_binding", lambda: b"b" * 32)
+    monkeypatch.setattr(actors, "unresolved_formal_blockers", lambda: ())
+    monkeypatch.setattr(actors, "bridge_qualification_report_id_v1", lambda: b"q" * 32)
+    monkeypatch.setattr(
+        actors,
+        "prestage_runtime_binding_fields_v1",
+        lambda _roots: MappingProxyType({}),
+    )
+
+    def qualify_and_replace_receipt(**_kwargs):
+        replacement = dict(receipt)
+        replacement["receipt_root"] = "cd" * 32
+        if drift_source == "same_process_live":
+            live_report = {
+                "implementation_bindings": {
+                    "m3_implementation_qualification_receipt": replacement
+                }
+            }
+        else:
+            live_report = protocol_report
+        return SimpleNamespace(report=live_report)
+
+    monkeypatch.setattr(
+        executor,
+        "qualify_live_actor_protocol_admission_v1",
+        qualify_and_replace_receipt,
+    )
+    monkeypatch.setattr(
+        executor, "build_python_static_replay_receipt_v1", lambda _basis: {}
+    )
+    monkeypatch.setattr(
+        actors,
+        "static_replay_control_plane_v1",
+        lambda: (None, b"d" * 32),
+    )
+    monkeypatch.setattr(
+        executor,
+        "run_rust_static_replay_receipt_v1",
+        lambda *_args, **_kwargs: {},
+    )
+    parent_audit = SimpleNamespace(test_only=True)
+    monkeypatch.setattr(
+        executor, "generate_parent_absence_audit_v1", lambda _repository: parent_audit
+    )
+
+    def replay_parent_and_replace_slot(value, **_kwargs) -> None:
+        assert value is parent_audit
+        if drift_source == "standalone_slot":
+            replacement = dict(receipt)
+            replacement["receipt_root"] = "cd" * 32
+            publish(replacement)
+
+    monkeypatch.setattr(
+        executor, "replay_parent_absence_audit_v1", replay_parent_and_replace_slot
+    )
+    irreversible_calls: list[str] = []
+
+    def forbidden(label: str):
+        def fail(*_args, **_kwargs):
+            irreversible_calls.append(label)
+            raise AssertionError(f"irreversible boundary reached: {label}")
+
+        return fail
+
+    monkeypatch.setattr(executor.secrets, "token_bytes", forbidden("token_bytes"))
+    monkeypatch.setattr(
+        executor.FormalCeremonyTransactionV1,
+        "reserve",
+        forbidden("transaction.reserve"),
+    )
+    monkeypatch.setattr(actors, "start", forbidden("actors.start"))
+    monkeypatch.setattr(actors, "keygen", forbidden("actors.keygen"))
+    monkeypatch.setattr(actors, "seed_split", forbidden("actors.seed_split"))
+
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        executor.execute_formal_container_ceremony_v1(
+            basis_commit="12" * 20,
+            actor_qualification_report={},
+            errata_qualification_report={},
+            custody_directory=formal_custody,
+            qualification_custody_directory=qualification_custody,
+            public_evidence_path=tmp_path / executor.COMMIT_B_EVIDENCE_BASENAME,
+            public_promotion_path=tmp_path / executor.COMMIT_B_PROMOTION_BASENAME,
+            actors=actors,
+        )
+    assert captured.value.code == executor.FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH
+    assert irreversible_calls == []
+    assert list(formal_custody.iterdir()) == []
+    assert list(qualification_custody.iterdir()) == []
 
 
 def test_authoritative_backend_no_longer_advertises_post_stage_recovery_blocker(
