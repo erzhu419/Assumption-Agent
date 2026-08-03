@@ -127,6 +127,7 @@ from .phase3_m25_wire_v1 import (
     LEGACY_PARENT_SOURCE_IDS,
     M3_RUN_OUTPUT_ROOTS,
     OBJECT_TAGS,
+    build_formal_object,
     bridge_attestation_signature_preimage_v1,
     candidate_content_root,
     candidate_record_tree_root,
@@ -348,6 +349,7 @@ FAIL_POST_STAGE_RECOVERY_UNRESOLVED = (
 FAIL_PRESTAGE_RECOVERY_UNRESOLVED = (
     "FAIL_M25_PRESTAGE_TRANSACTION_RECOVERY_NOT_FROZEN"
 )
+FAIL_RECOVERY_SOURCE_ADMISSION = "FAIL_M25_RECOVERY_SOURCE_ADMISSION"
 
 # Source-level controls are implemented.  The Docker backend still advertises
 # ``FAIL_BRIDGE_REPLAY_UNRESOLVED`` dynamically until an exact, post-Commit-A
@@ -4256,12 +4258,16 @@ def _acquire_host_recovery_anchor_v1(
         )
         current_owner = (custody_metadata.st_uid, custody_metadata.st_gid)
         if current_owner == handoff_owner:
-            if type(actors) is not DockerCeremonyActorsV1 or not actors.authoritative:
+            if not isinstance(actors, DockerCeremonyActorsV1) or not actors.authoritative:
                 _fail(
                     FAIL_CUSTODY,
                     "65534-owned recovery requires the sealed Docker reclaim actor",
                 )
-            actors.reclaim_pending_custody_from_anchor_v1(anchor)
+            # A recovery-only subclass may narrow binding validation, but it
+            # may not replace the sealed custody reclaim implementation.
+            DockerCeremonyActorsV1.reclaim_pending_custody_from_anchor_v1(
+                actors, anchor
+            )
         elif current_owner != before_owner:
             _fail(FAIL_CUSTODY, "host recovery custody owner differs from anchor")
         identity._acquire_custody_directory_lock_v1()
@@ -5827,6 +5833,11 @@ def _continue_pre_stage_pending_recovery_core_v1(
     actors: "CeremonyActorsV1",
     replay: Callable[[Mapping[str, object]], Mapping[str, object]] = replay_public_gate_evidence_v1,
     fault_injector: Callable[[str], None] | None = None,
+    source_admission_guard: (
+        Callable[[PendingCeremonyRecoveryV1], Mapping[str, object]] | None
+    ) = None,
+    complete_seed_resume_only: bool = False,
+    static_rust_binary_path: Path | None = None,
 ) -> tuple[dict[str, object], dict[str, object]]:
     """Finish a PENDING transaction by exact same-key/same-preimage replay.
 
@@ -5845,6 +5856,41 @@ def _continue_pre_stage_pending_recovery_core_v1(
         _fail(FAIL_TRANSACTION_LOCK, "pending prestage recovery lock is not held")
     if not actors.authoritative:
         _fail(FAIL_SYNTHETIC_PROMOTION, "synthetic actors cannot recover formal evidence")
+    if source_admission_guard is not None:
+        admission = source_admission_guard(recovery)
+        if (
+            not isinstance(admission, Mapping)
+            or admission.get("schema")
+            != "hegel-phase3-m25-a8-r1-source-admission/1"
+            or admission.get("basis_commit") != recovery.basis_commit
+            or admission.get("run_id_hex") != recovery.run_id.hex()
+            or admission.get("ledger_id_hex") != recovery.ledger_id.hex()
+            or admission.get("cross_basis_recovery_authorized") is not True
+            or admission.get("formal_identity_entropy_draw_count") != 0
+            or admission.get("complete_seed_resume_only") is not True
+            or not isinstance(admission.get("unchanged_a8_input_sha256"), Mapping)
+            or not admission.get("unchanged_a8_input_sha256")
+            or admission.get("unchanged_a8_input_sha256_root")
+            != hashlib.sha256(
+                _canonical_json(admission.get("unchanged_a8_input_sha256"))
+            ).hexdigest()
+        ):
+            _fail(
+                FAIL_RECOVERY_SOURCE_ADMISSION,
+                "recovery-only source admission callback returned a differing scope",
+            )
+    elif complete_seed_resume_only:
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "complete-only recovery requires an explicit source admission callback",
+        )
+    if static_rust_binary_path is not None and (
+        source_admission_guard is None or not complete_seed_resume_only
+    ):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "alternate static Rust path is restricted to admitted complete-only recovery",
+        )
     if not _PRESTAGE_RECOVERY_IMPLEMENTED:
         _fail(
             FAIL_PRESTAGE_RECOVERY_UNRESOLVED,
@@ -5885,14 +5931,22 @@ def _continue_pre_stage_pending_recovery_core_v1(
         intent
     )
 
-    basis = build_qualified_formal_static_basis_v1(recovery.basis_commit)
-    implementation_roots = require_formal_ceremony_ready_v1(basis)
-    validate_ceremony_admission_v1(
-        actor_qualification_report=actor_report,
-        errata_qualification_report=errata_report,
-        basis_commit=recovery.basis_commit,
-        committed_input_paths=REQUIRED_COMMIT_A_INPUTS,
+    basis = build_qualified_formal_static_basis_v1(
+        recovery.basis_commit,
+        **(
+            {}
+            if static_rust_binary_path is None
+            else {"static_rust_binary_path": static_rust_binary_path}
+        ),
     )
+    implementation_roots = require_formal_ceremony_ready_v1(basis)
+    if source_admission_guard is None:
+        validate_ceremony_admission_v1(
+            actor_qualification_report=actor_report,
+            errata_qualification_report=errata_report,
+            basis_commit=recovery.basis_commit,
+            committed_input_paths=REQUIRED_COMMIT_A_INPUTS,
+        )
     live_protocol = replay_transaction_local_actor_protocol_bundle_v1(
         basis_commit=recovery.basis_commit,
         bundle=transaction_local_bundle,
@@ -5995,7 +6049,10 @@ def _continue_pre_stage_pending_recovery_core_v1(
         if recovery.marker_snapshot != expected_pending:
             _fail(FAIL_CUSTODY, "PENDING marker differs from frozen trust checkpoint")
 
-        python_frame, rust_frame = actors.resume_pending_seed_split()
+        if complete_seed_resume_only:
+            python_frame, rust_frame = actors.resume_post_stage_seed_split()
+        else:
+            python_frame, rust_frame = actors.resume_pending_seed_split()
         require_full_split_response_agreement_v2(python_frame, rust_frame)
         transaction._fault("after_recovery_seed_split_frames")
 
@@ -6098,6 +6155,26 @@ def continue_pre_stage_pending_recovery_v1(
 ) -> tuple[dict[str, object], dict[str, object]]:
     """Public formal recovery boundary; only the sealed Docker backend enters."""
 
+    completed = subprocess.run(
+        [str(FORMAL_GIT_EXECUTABLE), "rev-parse", "--verify", "HEAD^{commit}"],
+        cwd=REPOSITORY_ROOT,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+        timeout=30,
+        env=formal_git_environment_v1(),
+    )
+    if (
+        completed.returncode != 0
+        or completed.stderr
+        or completed.stdout.decode("ascii", "strict").strip()
+        != recovery.basis_commit
+    ):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "ordinary recovery requires HEAD to equal the formal basis commit",
+        )
     if not actors.authoritative:
         _fail(FAIL_SYNTHETIC_PROMOTION, "synthetic actors cannot recover formal evidence")
     if type(actors) is not DockerCeremonyActorsV1:
@@ -6324,7 +6401,9 @@ def _opaque_registry(
         "repository_commit_id": commit_wire,
     }
     second_tree = candidate_record_tree_root("OpaqueIdRegistryRecordV1", records)
-    last_single = rfc6962_root([encode_formal_object("OpaqueIdRegistryRecordV1", records[1])])
+    last_single = rfc6962_root(
+        [build_formal_object("OpaqueIdRegistryRecordV1", records[1])]
+    )
     second = {
         "previous_snapshot_root_or_null": candidate_content_root("OpaqueIdRegistrySnapshotV1", first),
         "registry_tree_root": second_tree,

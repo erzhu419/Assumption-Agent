@@ -25,6 +25,82 @@ from hegel_machine.phase3_m25_container_ceremony_v1 import (
     encode_split_calculator_public_frame_v2,
 )
 from hegel_machine.phase3_m25_external_v1 import MarkerSnapshot
+from hegel_machine.phase3_m25_wire_v1 import (
+    build_formal_object,
+    validate_opaque_id_registry_append_v1,
+)
+from hegel_machine.strict_cbor_v1 import rfc6962_root
+
+
+def test_opaque_registry_second_append_uses_single_canonical_record_leaf() -> None:
+    intents, records, snapshots = executor._opaque_registry(
+        run_id=bytes.fromhex("e4af9f57c38fb298462ec628c4ed8a03"),
+        ledger_id=bytes.fromhex("ec849e2f1e2e1163cfc450370b25b484"),
+        seed_root=b"s" * 32,
+        trust_root=b"t" * 32,
+        timestamp=1785779288,
+        commit_wire=(1, bytes.fromhex("0af65964235390ce2bebefea7379eaa9c50eda24")),
+    )
+
+    validate_opaque_id_registry_append_v1(
+        intents[:1], records[:1], snapshots[0]
+    )
+    validate_opaque_id_registry_append_v1(
+        intents, records, snapshots[1], previous_snapshot_fields=snapshots[0]
+    )
+    assert snapshots[1]["added_record_root"] == rfc6962_root(
+        [build_formal_object("OpaqueIdRegistryRecordV1", records[1])]
+    )
+
+
+def test_ordinary_prestage_recovery_rejects_cross_basis_head(monkeypatch) -> None:
+    monkeypatch.setattr(
+        executor.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=0, stdout=("34" * 20 + "\n").encode(), stderr=b""
+        ),
+    )
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        executor.continue_pre_stage_pending_recovery_v1(
+            recovery=SimpleNamespace(basis_commit="12" * 20),
+            actors=SimpleNamespace(authoritative=True),
+        )
+    assert captured.value.code == executor.FAIL_RECOVERY_SOURCE_ADMISSION
+
+
+def test_complete_only_recovery_requires_exact_admission_before_actor_use(tmp_path: Path) -> None:
+    recovery = executor.PendingCeremonyRecoveryV1(
+        basis_commit="12" * 20,
+        run_id=b"r" * 16,
+        ledger_id=b"l" * 16,
+        marker_snapshot=MarkerSnapshot("PENDING", b"s" * 32, None, b"k" * 16, 7),
+        journal_state="RESERVED",
+        stage_directory=tmp_path / "stage",
+        custody_directory=tmp_path / "custody",
+        public_evidence_path=tmp_path / "evidence.json",
+        public_promotion_path=tmp_path / "promotion.json",
+        prestage_intent_fields=MappingProxyType({}),
+        prestage_intent_sha256="00" * 32,
+        actor_trust_checkpoint_fields=MappingProxyType({}),
+        lock_descriptor=1,
+    )
+    actors = SimpleNamespace(authoritative=True)
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        executor._continue_pre_stage_pending_recovery_core_v1(
+            recovery=recovery,
+            actors=actors,
+            source_admission_guard=lambda _value: {
+                "basis_commit": "12" * 20,
+                "run_id_hex": (b"x" * 16).hex(),
+                "ledger_id_hex": (b"l" * 16).hex(),
+                "cross_basis_recovery_authorized": True,
+                "formal_identity_entropy_draw_count": 0,
+                "complete_seed_resume_only": True,
+            },
+            complete_seed_resume_only=True,
+        )
+    assert captured.value.code == executor.FAIL_RECOVERY_SOURCE_ADMISSION
 
 
 def _basis(*, ready: bool):
@@ -3656,15 +3732,20 @@ def test_anchor_routes_65534_owned_pending_tree_through_exact_docker_reclaimer(
             return os.stat_result(values)
         return metadata
 
-    def fake_reclaim(anchor_fields):
+    def fake_reclaim(self, anchor_fields):
         nonlocal handed_off, reclaim_calls
+        assert self is backend
         assert anchor_fields["custody_st_ino"] == original_lstat(custody).st_ino
         reclaim_calls += 1
         handed_off = False
         return MappingProxyType({"raw_seed_bytes_read": False})
 
     monkeypatch.setattr(Path, "lstat", fake_lstat)
-    monkeypatch.setattr(backend, "reclaim_pending_custody_from_anchor_v1", fake_reclaim)
+    monkeypatch.setattr(
+        executor.DockerCeremonyActorsV1,
+        "reclaim_pending_custody_from_anchor_v1",
+        fake_reclaim,
+    )
     with executor.acquire_pending_ceremony_recovery_v1(
         custody_directory=custody,
         public_evidence_path=transaction.public_evidence_path,
@@ -3673,6 +3754,65 @@ def test_anchor_routes_65534_owned_pending_tree_through_exact_docker_reclaimer(
     ) as recovery:
         assert recovery.marker_snapshot.state == "PENDING"
         assert reclaim_calls == 1
+        assert handed_off is False
+
+
+def test_anchor_allows_narrow_recovery_subclass_but_uses_base_reclaimer(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    transaction, actor_trust = _reserved_prestage_transaction(tmp_path)
+    executor.create_pending_marker_v1(
+        secret_state_directory=tmp_path / "custody",
+        split_version_digest=executor.SPLIT_VERSION_DIGEST,
+        custodian_key_id=actor_trust.key_ids[1],
+        created_at_unix_seconds=7,
+    )
+    transaction.close_lock()
+    custody = transaction.custody_directory
+
+    class NarrowRecoveryActors(executor.DockerCeremonyActorsV1):
+        def reclaim_pending_custody_from_anchor_v1(self, _anchor):
+            raise AssertionError("subclass override must not enter sealed reclaim")
+
+    backend = NarrowRecoveryActors(
+        basis_commit="12" * 20,
+        custody_directory=custody,
+        rust_formal_replay_binary=tmp_path / "rust-replay",
+        timestamp=7,
+    )
+    original_lstat = Path.lstat
+    handed_off = True
+    base_calls = 0
+
+    def fake_lstat(path: Path):
+        metadata = original_lstat(path)
+        if handed_off and path == custody:
+            values = list(metadata)
+            values[4] = 65534
+            values[5] = 65534
+            return os.stat_result(values)
+        return metadata
+
+    def fake_base_reclaim(self, _anchor_fields):
+        nonlocal handed_off, base_calls
+        assert self is backend
+        base_calls += 1
+        handed_off = False
+        return MappingProxyType({"raw_seed_bytes_read": False})
+
+    monkeypatch.setattr(Path, "lstat", fake_lstat)
+    monkeypatch.setattr(
+        executor.DockerCeremonyActorsV1,
+        "reclaim_pending_custody_from_anchor_v1",
+        fake_base_reclaim,
+    )
+    with executor.acquire_pending_ceremony_recovery_v1(
+        custody_directory=custody,
+        public_evidence_path=transaction.public_evidence_path,
+        public_promotion_path=transaction.public_promotion_path,
+        actors=backend,
+    ):
+        assert base_calls == 1
         assert handed_off is False
 
 
@@ -3715,13 +3855,18 @@ def test_anchor_reclaims_every_exact_pending_seed_creation_prefix(
             return os.stat_result(values)
         return metadata
 
-    def fake_reclaim(_anchor_fields):
+    def fake_reclaim(self, _anchor_fields):
         nonlocal handed_off
+        assert self is backend
         handed_off = False
         return MappingProxyType({"raw_seed_bytes_read": False})
 
     monkeypatch.setattr(Path, "lstat", fake_lstat)
-    monkeypatch.setattr(backend, "reclaim_pending_custody_from_anchor_v1", fake_reclaim)
+    monkeypatch.setattr(
+        executor.DockerCeremonyActorsV1,
+        "reclaim_pending_custody_from_anchor_v1",
+        fake_reclaim,
+    )
     with executor.acquire_pending_ceremony_recovery_v1(
         custody_directory=custody,
         public_evidence_path=transaction.public_evidence_path,
@@ -3760,14 +3905,19 @@ def test_post_stage_rehydration_reclaims_65534_tree_via_host_anchor(
             return os.stat_result(values)
         return metadata
 
-    def fake_reclaim(_anchor_fields):
+    def fake_reclaim(self, _anchor_fields):
         nonlocal handed_off, reclaim_calls
+        assert self is backend
         reclaim_calls += 1
         handed_off = False
         return MappingProxyType({"raw_seed_bytes_read": False})
 
     monkeypatch.setattr(Path, "lstat", fake_lstat)
-    monkeypatch.setattr(backend, "reclaim_pending_custody_from_anchor_v1", fake_reclaim)
+    monkeypatch.setattr(
+        executor.DockerCeremonyActorsV1,
+        "reclaim_pending_custody_from_anchor_v1",
+        fake_reclaim,
+    )
     recovered = executor.FormalCeremonyTransactionV1.rehydrate_post_stage_v1(
         custody_directory=custody,
         public_evidence_path=transaction.public_evidence_path,

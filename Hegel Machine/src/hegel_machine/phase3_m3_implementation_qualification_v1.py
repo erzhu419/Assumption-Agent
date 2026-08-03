@@ -2749,6 +2749,7 @@ def build_qualified_formal_static_basis_v1(
     basis_commit: str,
     *,
     repository_root: Path = REPOSITORY_ROOT,
+    static_rust_binary_path: Path | None = None,
 ) -> FormalStaticBasisV1:
     """Run the full offline dual qualification and return a ready static basis."""
 
@@ -2756,6 +2757,11 @@ def build_qualified_formal_static_basis_v1(
     basis = build_formal_static_basis_v1(
         basis_commit,
         repository_root=repository_root,
+        **(
+            {}
+            if static_rust_binary_path is None
+            else {"rust_binary_path": static_rust_binary_path}
+        ),
     )
     for required_path in REQUIRED_QUALIFICATION_BASIS_PATHS:
         _git_blob(repository_root, basis_commit, required_path)

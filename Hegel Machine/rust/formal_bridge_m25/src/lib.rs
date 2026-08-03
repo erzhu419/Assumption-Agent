@@ -1634,10 +1634,8 @@ pub fn validate_opaque_snapshot_append(
         ));
     }
     let tree_root = errata_record_tree_root("OpaqueIdRegistryRecordV1", records_through_snapshot)?;
-    let added_root = errata_record_tree_root(
-        "OpaqueIdRegistryRecordV1",
-        &records_through_snapshot[expected_count - 1..expected_count],
-    )?;
+    let added_record = encode_canonical_cbor(&records_through_snapshot[expected_count - 1])?;
+    let added_root = rfc6962_root(&[added_record]);
     if require_exact_bytes(&values[4], 32, "registry_tree_root")? != tree_root
         || require_exact_bytes(&values[6], 32, "added_record_root")? != added_root
     {
@@ -3583,6 +3581,81 @@ mod tests {
 
     fn bytes(hex: &str) -> Vec<u8> {
         hex_decode(hex).expect("valid test vector")
+    }
+
+    #[test]
+    fn opaque_registry_second_append_keeps_sequence_one_in_singleton_leaf() {
+        let commit = vector_git_commit();
+        let records = vec![
+            schema_value(
+                "OpaqueIdRegistryRecordV1",
+                vec![
+                    CborValue::Unsigned(0),
+                    CborValue::Unsigned(1),
+                    CborValue::Bytes([0x11; 16].to_vec()),
+                    CborValue::Bytes([0x22; 32].to_vec()),
+                    commit.clone(),
+                    CborValue::Unsigned(7),
+                ],
+            )
+            .unwrap(),
+            schema_value(
+                "OpaqueIdRegistryRecordV1",
+                vec![
+                    CborValue::Unsigned(1),
+                    CborValue::Unsigned(2),
+                    CborValue::Bytes([0x33; 16].to_vec()),
+                    CborValue::Bytes([0x44; 32].to_vec()),
+                    commit.clone(),
+                    CborValue::Unsigned(7),
+                ],
+            )
+            .unwrap(),
+        ];
+        let first_tree = errata_record_tree_root(
+            "OpaqueIdRegistryRecordV1",
+            &records[..1],
+        )
+        .unwrap();
+        let first_snapshot = schema_value(
+            "OpaqueIdRegistrySnapshotV1",
+            vec![
+                CborValue::Null,
+                CborValue::Bytes(first_tree.to_vec()),
+                CborValue::Unsigned(1),
+                CborValue::Bytes(first_tree.to_vec()),
+                commit.clone(),
+            ],
+        )
+        .unwrap();
+        validate_opaque_snapshot_append(&first_snapshot, None, 0, &records[..1]).unwrap();
+
+        let previous_root = errata_candidate_content_root(
+            "OpaqueIdRegistrySnapshotV1",
+            &first_snapshot,
+        )
+        .unwrap();
+        let full_tree = errata_record_tree_root("OpaqueIdRegistryRecordV1", &records).unwrap();
+        let second_record_bytes = encode_canonical_cbor(&records[1]).unwrap();
+        let added_root = rfc6962_root(&[second_record_bytes]);
+        let second_snapshot = schema_value(
+            "OpaqueIdRegistrySnapshotV1",
+            vec![
+                CborValue::Bytes(previous_root.to_vec()),
+                CborValue::Bytes(full_tree.to_vec()),
+                CborValue::Unsigned(2),
+                CborValue::Bytes(added_root.to_vec()),
+                commit,
+            ],
+        )
+        .unwrap();
+        validate_opaque_snapshot_append(
+            &second_snapshot,
+            Some(&previous_root),
+            1,
+            &records,
+        )
+        .unwrap();
     }
 
     #[test]
