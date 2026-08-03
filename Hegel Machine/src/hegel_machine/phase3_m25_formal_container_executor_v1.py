@@ -23,7 +23,9 @@ not generic signing oracles.
 from __future__ import annotations
 
 from contextlib import AbstractContextManager
+import ctypes
 from dataclasses import dataclass, fields as dataclass_fields
+import errno
 import fcntl
 import hashlib
 import json
@@ -71,11 +73,13 @@ from .phase3_m25_parent_absence_audit_v1 import (
     replay_parent_absence_audit_v1,
 )
 from .phase3_m25_purpose4_detached_audit_v1 import (
+    DetachedParentSnapshotV1,
     Purpose4DetachedAuditError,
     _runtime_inventory as _purpose4_runtime_inventory_v1,
     _runtime_source_bindings_v1 as _purpose4_runtime_source_bindings_v1,
     _set_snapshot_read_only as _set_purpose4_snapshot_read_only_v1,
     prepare_detached_parent_snapshot_v1,
+    validate_detached_parent_snapshot_v1,
 )
 from .phase3_m25_purpose4_keybearing_detached_v1 import (
     MAX_RESPONSE_BYTES as PURPOSE4_KEYBEARING_MAX_RESPONSE_BYTES,
@@ -6286,6 +6290,508 @@ class CeremonyActorsV1:
         raise NotImplementedError
 
 
+def _renameat2_noreplace_v1(
+    source_parent_fd: int,
+    source_name: str,
+    destination_parent_fd: int,
+    destination_name: str,
+) -> None:
+    """Linux ``renameat2(RENAME_NOREPLACE)`` with no weaker fallback."""
+
+    if (
+        os.name != "posix"
+        or not hasattr(os, "uname")
+        or os.uname().sysname != "Linux"
+        or type(source_parent_fd) is not int
+        or type(destination_parent_fd) is not int
+        or type(source_name) is not str
+        or type(destination_name) is not str
+        or not source_name
+        or not destination_name
+        or "/" in source_name
+        or "/" in destination_name
+        or "\0" in source_name
+        or "\0" in destination_name
+    ):
+        raise OSError(
+            errno.ENOSYS,
+            "purpose-4 atomic no-replace adoption requires Linux renameat2",
+        )
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+        renameat2 = libc.renameat2
+    except (AttributeError, OSError) as exc:
+        raise OSError(
+            errno.ENOSYS,
+            "purpose-4 atomic no-replace adoption has no renameat2 runtime",
+        ) from exc
+    renameat2.argtypes = (
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_uint,
+    )
+    renameat2.restype = ctypes.c_int
+    ctypes.set_errno(0)
+    result = renameat2(
+        source_parent_fd,
+        os.fsencode(source_name),
+        destination_parent_fd,
+        os.fsencode(destination_name),
+        1,  # RENAME_NOREPLACE from linux/fs.h.
+    )
+    if result != 0:
+        error_number = ctypes.get_errno() or errno.EIO
+        raise OSError(
+            error_number,
+            "purpose-4 atomic no-replace snapshot adoption failed: "
+            + os.strerror(error_number),
+        )
+
+
+def _record_cleanup_error_v1(
+    primary: BaseException,
+    label: str,
+    cleanup: BaseException,
+) -> None:
+    """Attach cleanup diagnostics without replacing the primary exception."""
+
+    existing = getattr(primary, "_hegel_cleanup_error_chain", ())
+    setattr(
+        primary,
+        "_hegel_cleanup_error_chain",
+        (*existing, (label, type(cleanup).__name__, str(cleanup))),
+    )
+
+
+def _require_exact_owned_directory_identity_v1(
+    path: Path,
+    expected_identity: tuple[int, int],
+) -> os.stat_result:
+    """Return nofollow metadata only for the exact caller-owned directory."""
+
+    metadata = path.lstat()
+    if (
+        stat.S_ISLNK(metadata.st_mode)
+        or not stat.S_ISDIR(metadata.st_mode)
+        or metadata.st_uid != os.geteuid()
+        or (metadata.st_dev, metadata.st_ino) != expected_identity
+    ):
+        raise OSError("purpose-4 cleanup directory identity differs")
+    return metadata
+
+
+def _remove_exact_owned_purpose4_tree_v1(
+    path: Path,
+    expected_identity: tuple[int, int],
+    *,
+    record_quarantine_path: Callable[[Path], None] | None = None,
+) -> None:
+    """Atomically claim and descriptor-purge only the exact directory inode."""
+
+    def purge_directory_fd(directory_fd: int) -> None:
+        opened = os.fstat(directory_fd)
+        if (
+            not stat.S_ISDIR(opened.st_mode)
+            or opened.st_uid != os.geteuid()
+        ):
+            raise OSError("purpose-4 cleanup opened a non-owned directory")
+        os.fchmod(directory_fd, 0o700)
+        for name in sorted(os.listdir(directory_fd)):
+            if not name or name in {".", ".."} or "/" in name or "\0" in name:
+                raise OSError("purpose-4 cleanup entry name is invalid")
+            entry = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+            identity = entry.st_dev, entry.st_ino
+            if stat.S_ISDIR(entry.st_mode):
+                child_fd = os.open(
+                    name,
+                    os.O_RDONLY
+                    | getattr(os, "O_DIRECTORY", 0)
+                    | getattr(os, "O_NOFOLLOW", 0)
+                    | getattr(os, "O_CLOEXEC", 0),
+                    dir_fd=directory_fd,
+                )
+                try:
+                    child_open = os.fstat(child_fd)
+                    if (
+                        (child_open.st_dev, child_open.st_ino) != identity
+                        or not stat.S_ISDIR(child_open.st_mode)
+                    ):
+                        raise OSError(
+                            "purpose-4 cleanup child directory identity changed"
+                        )
+                    purge_directory_fd(child_fd)
+                    child_path = os.stat(
+                        name,
+                        dir_fd=directory_fd,
+                        follow_symlinks=False,
+                    )
+                    if (
+                        (child_path.st_dev, child_path.st_ino) != identity
+                        or not stat.S_ISDIR(child_path.st_mode)
+                    ):
+                        raise OSError(
+                            "purpose-4 cleanup child path identity changed"
+                        )
+                    os.rmdir(name, dir_fd=directory_fd)
+                finally:
+                    os.close(child_fd)
+            elif stat.S_ISREG(entry.st_mode):
+                current = os.stat(
+                    name,
+                    dir_fd=directory_fd,
+                    follow_symlinks=False,
+                )
+                if (
+                    (current.st_dev, current.st_ino) != identity
+                    or not stat.S_ISREG(current.st_mode)
+                ):
+                    raise OSError("purpose-4 cleanup file identity changed")
+                os.unlink(name, dir_fd=directory_fd)
+            else:
+                # In particular, never chmod, open through, or unlink a
+                # symlink introduced into the cleanup quarantine.
+                raise OSError("purpose-4 cleanup refuses a non-regular entry")
+        os.fsync(directory_fd)
+
+    parent = path.parent
+    if (
+        not path.name
+        or path.name in {".", ".."}
+        or parent.resolve(strict=True) != parent
+    ):
+        raise OSError("purpose-4 cleanup path is not canonical")
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+    )
+    descriptors: list[int] = []
+    primary_error: BaseException | None = None
+    removal_completed = False
+    try:
+        parent_fd = os.open(parent, flags)
+        descriptors.append(parent_fd)
+        root_fd = os.open(path.name, flags, dir_fd=parent_fd)
+        descriptors.append(root_fd)
+        parent_path = parent.lstat()
+        parent_open = os.fstat(parent_fd)
+        root_path = path.lstat()
+        root_open = os.fstat(root_fd)
+        if (
+            stat.S_ISLNK(parent_path.st_mode)
+            or not stat.S_ISDIR(parent_path.st_mode)
+            or not stat.S_ISDIR(parent_open.st_mode)
+            or stat.S_ISLNK(root_path.st_mode)
+            or not stat.S_ISDIR(root_path.st_mode)
+            or not stat.S_ISDIR(root_open.st_mode)
+            or parent_open.st_uid != os.geteuid()
+            or root_open.st_uid != os.geteuid()
+            or (parent_path.st_dev, parent_path.st_ino)
+            != (parent_open.st_dev, parent_open.st_ino)
+            or (root_path.st_dev, root_path.st_ino) != expected_identity
+            or (root_open.st_dev, root_open.st_ino) != expected_identity
+            or root_open.st_dev != parent_open.st_dev
+        ):
+            raise OSError("purpose-4 cleanup root identity differs")
+
+        quarantine_name = ".hegel-purpose4-cleanup-" + secrets.token_hex(16)
+        _renameat2_noreplace_v1(
+            parent_fd,
+            path.name,
+            parent_fd,
+            quarantine_name,
+        )
+        quarantined = os.stat(
+            quarantine_name,
+            dir_fd=parent_fd,
+            follow_symlinks=False,
+        )
+        if (
+            (quarantined.st_dev, quarantined.st_ino) != expected_identity
+            or not stat.S_ISDIR(quarantined.st_mode)
+        ):
+            restore_error: BaseException | None = None
+            try:
+                _renameat2_noreplace_v1(
+                    parent_fd,
+                    quarantine_name,
+                    parent_fd,
+                    path.name,
+                )
+            except BaseException as exc:
+                restore_error = exc
+            mismatch = OSError(
+                "purpose-4 cleanup quarantine captured a replacement inode"
+            )
+            if restore_error is not None:
+                _record_cleanup_error_v1(
+                    mismatch,
+                    "replacement-restore",
+                    restore_error,
+                )
+                raise mismatch from restore_error
+            raise mismatch
+
+        quarantine = parent / quarantine_name
+        if record_quarantine_path is not None:
+            record_quarantine_path(quarantine)
+        purge_directory_fd(root_fd)
+        final = os.stat(
+            quarantine_name,
+            dir_fd=parent_fd,
+            follow_symlinks=False,
+        )
+        if (
+            (final.st_dev, final.st_ino) != expected_identity
+            or not stat.S_ISDIR(final.st_mode)
+        ):
+            raise OSError("purpose-4 cleanup quarantine identity changed")
+        os.rmdir(quarantine_name, dir_fd=parent_fd)
+        os.fsync(parent_fd)
+        removal_completed = True
+    except BaseException as exc:
+        primary_error = exc
+        raise
+    finally:
+        close_failures: list[OSError] = []
+        for descriptor in reversed(descriptors):
+            try:
+                os.close(descriptor)
+            except OSError as exc:
+                close_failures.append(exc)
+        if close_failures:
+            detail = ",".join(type(exc).__name__ for exc in close_failures)
+            if primary_error is not None:
+                for close_failure in close_failures:
+                    _record_cleanup_error_v1(
+                        primary_error,
+                        "cleanup-descriptor-close",
+                        close_failure,
+                    )
+            elif not removal_completed:
+                raise OSError(
+                    "purpose-4 cleanup descriptor close failed: " + detail
+                ) from close_failures[0]
+
+
+def _adopt_read_only_purpose4_snapshot_v1(
+    snapshot: DetachedParentSnapshotV1,
+    destination: Path,
+    *,
+    expected_basis_commit: str,
+    record_adopted_identity: Callable[[tuple[int, int]], None] | None = None,
+) -> None:
+    """Atomically adopt one frozen snapshot without copying its object store.
+
+    Linux requires write permission on a directory moved between different
+    parents because its ``..`` entry changes.  The detached builder freezes
+    the snapshot root at 0555, so the adoption grants owner-write to that one
+    held inode only for ``renameat2(RENAME_NOREPLACE)``.  All descendants
+    remain read-only.  Held directory descriptors bind every identity check,
+    the source and destination must be on one filesystem, and the complete
+    detached manifest is replayed after the root has been restored to 0555.
+    """
+
+    source = snapshot.root
+    source_parent = source.parent
+    destination_parent = destination.parent
+    if (
+        not source.name
+        or not destination.name
+        or source.name in {".", ".."}
+        or destination.name in {".", ".."}
+        or source_parent.resolve(strict=True) != source_parent
+        or destination_parent.resolve(strict=True) != destination_parent
+    ):
+        raise OSError("purpose-4 snapshot adoption path is not canonical")
+
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+    )
+    descriptors: list[int] = []
+    primary_error: BaseException | None = None
+    try:
+        source_parent_fd = os.open(source_parent, flags)
+        descriptors.append(source_parent_fd)
+        destination_parent_fd = os.open(destination_parent, flags)
+        descriptors.append(destination_parent_fd)
+        source_fd = os.open(source.name, flags, dir_fd=source_parent_fd)
+        descriptors.append(source_fd)
+
+        source_parent_path = source_parent.lstat()
+        destination_parent_path = destination_parent.lstat()
+        source_path = source.lstat()
+        source_parent_open = os.fstat(source_parent_fd)
+        destination_parent_open = os.fstat(destination_parent_fd)
+        source_open = os.fstat(source_fd)
+        if any(
+            not stat.S_ISDIR(item.st_mode)
+            for item in (
+                source_parent_path,
+                destination_parent_path,
+                source_path,
+                source_parent_open,
+                destination_parent_open,
+                source_open,
+            )
+        ):
+            raise OSError("purpose-4 snapshot adoption paths must be directories")
+        if (
+            (source_parent_path.st_dev, source_parent_path.st_ino)
+            != (source_parent_open.st_dev, source_parent_open.st_ino)
+            or (destination_parent_path.st_dev, destination_parent_path.st_ino)
+            != (destination_parent_open.st_dev, destination_parent_open.st_ino)
+            or (source_path.st_dev, source_path.st_ino)
+            != (source_open.st_dev, source_open.st_ino)
+        ):
+            raise OSError("purpose-4 snapshot adoption path identity changed")
+        if (
+            source_open.st_uid != os.geteuid()
+            or source_parent_open.st_uid != os.geteuid()
+            or destination_parent_open.st_uid != os.geteuid()
+            or stat.S_IMODE(source_open.st_mode) != 0o555
+            or stat.S_IMODE(source_parent_open.st_mode) & 0o300 != 0o300
+            or stat.S_IMODE(destination_parent_open.st_mode) & 0o300 != 0o300
+        ):
+            raise OSError(
+                "purpose-4 snapshot adoption requires owned writable parents "
+                "and an exact mode-0555 source root"
+            )
+        if len({
+            source_open.st_dev,
+            source_parent_open.st_dev,
+            destination_parent_open.st_dev,
+        }) != 1:
+            raise OSError("purpose-4 snapshot adoption crossed a filesystem")
+        try:
+            os.stat(
+                destination.name,
+                dir_fd=destination_parent_fd,
+                follow_symlinks=False,
+            )
+        except FileNotFoundError:
+            pass
+        else:
+            raise OSError("purpose-4 snapshot adoption destination already exists")
+
+        os.fchmod(source_fd, 0o755)
+        adoption_error: BaseException | None = None
+        try:
+            if stat.S_IMODE(os.fstat(source_fd).st_mode) != 0o755:
+                raise OSError("purpose-4 snapshot root did not enter adoption mode")
+            _renameat2_noreplace_v1(
+                source_parent_fd,
+                source.name,
+                destination_parent_fd,
+                destination.name,
+            )
+            # From this instruction onward every failure path must clean the
+            # adopted destination, not the now-absent temporary source path.
+            snapshot.root = destination
+            if record_adopted_identity is not None:
+                record_adopted_identity((source_open.st_dev, source_open.st_ino))
+        except BaseException as exc:
+            adoption_error = exc
+        try:
+            os.fchmod(source_fd, 0o555)
+        except BaseException as restore_error:
+            if adoption_error is not None:
+                _record_cleanup_error_v1(
+                    adoption_error,
+                    "snapshot-root-mode-restore",
+                    restore_error,
+                )
+                raise adoption_error from restore_error
+            raise
+        if adoption_error is not None:
+            raise adoption_error
+
+        adopted_open = os.fstat(source_fd)
+        adopted_path = os.stat(
+            destination.name,
+            dir_fd=destination_parent_fd,
+            follow_symlinks=False,
+        )
+        try:
+            os.stat(source.name, dir_fd=source_parent_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            pass
+        else:
+            raise OSError("purpose-4 snapshot source name survived adoption")
+        if (
+            (adopted_open.st_dev, adopted_open.st_ino)
+            != (source_open.st_dev, source_open.st_ino)
+            or (adopted_path.st_dev, adopted_path.st_ino)
+            != (source_open.st_dev, source_open.st_ino)
+            or not stat.S_ISDIR(adopted_path.st_mode)
+            or stat.S_IMODE(adopted_open.st_mode) != 0o555
+            or stat.S_IMODE(adopted_path.st_mode) != 0o555
+        ):
+            raise OSError("purpose-4 snapshot adoption identity or mode differs")
+        os.fsync(source_fd)
+        os.fsync(source_parent_fd)
+        if (
+            destination_parent_open.st_dev,
+            destination_parent_open.st_ino,
+        ) != (
+            source_parent_open.st_dev,
+            source_parent_open.st_ino,
+        ):
+            os.fsync(destination_parent_fd)
+
+        replayed = validate_detached_parent_snapshot_v1(
+            destination,
+            snapshot.manifest,
+            git_executable=snapshot.git_executable,
+            require_frozen_parent=True,
+            expected_basis_commit=expected_basis_commit,
+        )
+        if dict(replayed) != dict(snapshot.manifest):
+            raise OSError("purpose-4 adopted snapshot manifest differs")
+        final_path = os.stat(
+            destination.name,
+            dir_fd=destination_parent_fd,
+            follow_symlinks=False,
+        )
+        final_open = os.fstat(source_fd)
+        if (
+            (final_path.st_dev, final_path.st_ino)
+            != (source_open.st_dev, source_open.st_ino)
+            or (final_open.st_dev, final_open.st_ino)
+            != (source_open.st_dev, source_open.st_ino)
+            or not stat.S_ISDIR(final_path.st_mode)
+            or stat.S_IMODE(final_path.st_mode) != 0o555
+            or stat.S_IMODE(final_open.st_mode) != 0o555
+        ):
+            raise OSError("purpose-4 adopted snapshot changed during replay")
+    except BaseException as exc:
+        primary_error = exc
+        raise
+    finally:
+        close_failure: OSError | None = None
+        for descriptor in reversed(descriptors):
+            try:
+                os.close(descriptor)
+            except OSError as exc:
+                if close_failure is None:
+                    close_failure = exc
+        if close_failure is not None:
+            if primary_error is not None:
+                _record_cleanup_error_v1(
+                    primary_error,
+                    "snapshot-descriptor-close",
+                    close_failure,
+                )
+            else:
+                raise close_failure
+
+
 class DockerCeremonyActorsV1(CeremonyActorsV1, AbstractContextManager["DockerCeremonyActorsV1"]):
     """Four simultaneously-live, offline, digest-pinned purpose containers."""
 
@@ -6348,7 +6854,29 @@ class DockerCeremonyActorsV1(CeremonyActorsV1, AbstractContextManager["DockerCer
         self._purpose4_snapshot_manifest: Mapping[str, object] | None = None
         self._purpose4_runtime_bundle: Mapping[str, object] | None = None
         self._purpose4_snapshot_path: Path | None = None
+        self._purpose4_snapshot_identity: tuple[int, int] | None = None
+        self._purpose4_snapshot_owner: DetachedParentSnapshotV1 | None = None
+        self._purpose4_snapshot_tree_removed = False
         self._purpose4_runtime_path: Path | None = None
+        self._purpose4_runtime_identity: tuple[int, int] | None = None
+        self._purpose4_foreign_entries: dict[
+            Path, tuple[int, int] | None
+        ] = {}
+        self._purpose4_vacated_paths: set[Path] = set()
+
+    def _refresh_purpose4_foreign_entries_v1(self) -> None:
+        """Record every object that reappears at a vacated cleanup name."""
+
+        for path in self._purpose4_vacated_paths:
+            try:
+                metadata = path.lstat()
+            except FileNotFoundError:
+                continue
+            except OSError:
+                identity = None
+            else:
+                identity = metadata.st_dev, metadata.st_ino
+            self._purpose4_foreign_entries[path] = identity
 
     def unresolved_formal_blockers(self) -> tuple[str, ...]:
         blockers = list(UNRESOLVED_AUTHORITATIVE_BLOCKERS)
@@ -6823,12 +7351,20 @@ class DockerCeremonyActorsV1(CeremonyActorsV1, AbstractContextManager["DockerCer
         input_directory = self._root / "purpose-4/input"
         snapshot_destination = input_directory / "detached-parent-snapshot"
         runtime_root = input_directory / "runtime"
-        if (
-            snapshot_destination.exists()
-            or snapshot_destination.is_symlink()
-            or runtime_root.exists()
-            or runtime_root.is_symlink()
-        ):
+        existing_destinations = tuple(
+            path
+            for path in (snapshot_destination, runtime_root)
+            if path.exists() or path.is_symlink()
+        )
+        for path in existing_destinations:
+            try:
+                metadata = path.lstat()
+            except OSError:
+                identity = None
+            else:
+                identity = metadata.st_dev, metadata.st_ino
+            self._purpose4_foreign_entries[path] = identity
+        if existing_destinations:
             _fail(FAIL_CONTAINER, "purpose-4 detached input destination already exists")
 
         snapshot = None
@@ -6838,22 +7374,55 @@ class DockerCeremonyActorsV1(CeremonyActorsV1, AbstractContextManager["DockerCer
                 basis_commit=self.basis_commit,
                 temporary_parent=self._root,
             )
-            # Both paths are below the same Linux-local ceremony root.  Rename
-            # adoption therefore cannot silently degrade into a copy and the
-            # snapshot remains immutable throughout the handoff.
+            self._purpose4_snapshot_owner = snapshot
+            source_metadata = snapshot.root.lstat()
+            if (
+                stat.S_ISLNK(source_metadata.st_mode)
+                or not stat.S_ISDIR(source_metadata.st_mode)
+                or source_metadata.st_uid != os.geteuid()
+            ):
+                raise OSError("purpose-4 prepared snapshot identity is invalid")
+            self._purpose4_snapshot_identity = (
+                source_metadata.st_dev,
+                source_metadata.st_ino,
+            )
+            prepared_source_path = snapshot.root
             temporary = snapshot._temporary
-            os.replace(snapshot.root, snapshot_destination)
-            snapshot.root = snapshot_destination
-            snapshot._temporary = None
-            self._purpose4_snapshot_path = snapshot_destination
+
+            def record_adopted_identity(identity: tuple[int, int]) -> None:
+                if identity != self._purpose4_snapshot_identity:
+                    raise OSError("purpose-4 adopted snapshot identity changed")
+                self._purpose4_snapshot_path = snapshot_destination
+                self._purpose4_vacated_paths.add(prepared_source_path)
+
+            # The helper uses held inodes and renameat2(RENAME_NOREPLACE)
+            # only; it cannot degrade into a copy or replace a raced target.
+            _adopt_read_only_purpose4_snapshot_v1(
+                snapshot,
+                snapshot_destination,
+                expected_basis_commit=self.basis_commit,
+                record_adopted_identity=record_adopted_identity,
+            )
             self._purpose4_snapshot_manifest = MappingProxyType(
                 dict(snapshot.manifest)
             )
+            self._refresh_purpose4_foreign_entries_v1()
+            if self._purpose4_foreign_entries:
+                raise OSError(
+                    "purpose-4 adoption left a foreign object at a vacated path"
+                )
             if temporary is not None:
                 temporary.cleanup()
+            snapshot._temporary = None
+            self._purpose4_snapshot_owner = None
 
             runtime_root.mkdir(parents=True, mode=0o700)
             self._purpose4_runtime_path = runtime_root
+            runtime_metadata = runtime_root.lstat()
+            self._purpose4_runtime_identity = (
+                runtime_metadata.st_dev,
+                runtime_metadata.st_ino,
+            )
             source_specs = tuple(
                 (REPOSITORY_ROOT / repository_path, runtime_path)
                 for repository_path, runtime_path in PURPOSE4_RUNTIME_SOURCE_SPECS
@@ -6898,28 +7467,195 @@ class DockerCeremonyActorsV1(CeremonyActorsV1, AbstractContextManager["DockerCer
                 "runtime_source_bindings": source_bindings,
             })
         except (OSError, Purpose4DetachedAuditError) as exc:
-            if snapshot is not None:
-                try:
-                    snapshot.close()
-                except Exception:
-                    pass
             unwind_failures: list[str] = []
-            for label, path in (
-                ("snapshot", self._purpose4_snapshot_path),
-                ("runtime", self._purpose4_runtime_path),
-            ):
-                if path is None or not path.exists():
-                    continue
+            if self._purpose4_snapshot_path is None:
                 try:
-                    _set_purpose4_snapshot_read_only_v1(path, False)
-                    shutil.rmtree(path)
+                    foreign_metadata = snapshot_destination.lstat()
+                except FileNotFoundError:
+                    foreign_present = False
+                    foreign_identity = None
+                except OSError:
+                    foreign_present = True
+                    foreign_identity = None
+                else:
+                    foreign_present = True
+                    foreign_identity = (
+                        foreign_metadata.st_dev,
+                        foreign_metadata.st_ino,
+                    )
+                if foreign_present:
+                    self._purpose4_foreign_entries[
+                        snapshot_destination
+                    ] = foreign_identity
+                    unwind_failures.append("snapshot-foreign-entry-retained")
+            owner = self._purpose4_snapshot_owner
+            if owner is not None:
+                if not self._purpose4_snapshot_tree_removed:
+                    owner_path_was_adopted = self._purpose4_snapshot_path is not None
+                    owner_path = (
+                        self._purpose4_snapshot_path
+                        if owner_path_was_adopted
+                        else owner.root
+                    )
+
+                    def record_owner_quarantine(quarantine: Path) -> None:
+                        owner.root = quarantine
+                        self._purpose4_vacated_paths.add(owner_path)
+                        if owner_path_was_adopted:
+                            self._purpose4_snapshot_path = quarantine
+
+                    try:
+                        if self._purpose4_snapshot_identity is None:
+                            raise OSError(
+                                "purpose-4 snapshot cleanup identity is absent"
+                            )
+                        _remove_exact_owned_purpose4_tree_v1(
+                            owner_path,
+                            self._purpose4_snapshot_identity,
+                            record_quarantine_path=record_owner_quarantine,
+                        )
+                    except Exception as cleanup:
+                        unwind_failures.append(
+                            "snapshot-owner-exact-remove:"
+                            + type(cleanup).__name__
+                        )
+                    else:
+                        self._purpose4_snapshot_tree_removed = True
+                        if owner_path.exists() or owner_path.is_symlink():
+                            foreign = owner_path.lstat()
+                            self._purpose4_foreign_entries[owner_path] = (
+                                foreign.st_dev,
+                                foreign.st_ino,
+                            )
+                            unwind_failures.append(
+                                "snapshot-owner-post-quarantine-foreign-"
+                                "entry-retained"
+                            )
+
+                self._refresh_purpose4_foreign_entries_v1()
+                if (
+                    self._purpose4_snapshot_tree_removed
+                    and not self._purpose4_foreign_entries
+                ):
+                    try:
+                        detached_temporary = owner._temporary
+                        if detached_temporary is not None:
+                            detached_temporary.cleanup()
+                        owner._temporary = None
+                    except Exception as cleanup:
+                        unwind_failures.append(
+                            "snapshot-owner-close:" + type(cleanup).__name__
+                        )
+                    else:
+                        self._purpose4_snapshot_owner = None
+                        self._purpose4_snapshot_path = None
+                        self._purpose4_snapshot_identity = None
+                        self._purpose4_snapshot_manifest = None
+                        self._purpose4_snapshot_tree_removed = False
+                elif (
+                    self._purpose4_snapshot_tree_removed
+                    and self._purpose4_foreign_entries
+                    and not any(
+                        item.startswith("snapshot-foreign-entry-retained")
+                        for item in unwind_failures
+                    )
+                ):
+                    unwind_failures.append(
+                        "snapshot-owner-foreign-entry-retained"
+                    )
+
+            snapshot_removed = self._purpose4_snapshot_owner is None
+            if (
+                self._purpose4_snapshot_owner is None
+                and self._purpose4_snapshot_path is not None
+            ):
+                original_snapshot_path = self._purpose4_snapshot_path
+
+                def record_snapshot_quarantine(quarantine: Path) -> None:
+                    self._purpose4_vacated_paths.add(original_snapshot_path)
+                    self._purpose4_snapshot_path = quarantine
+
+                try:
+                    if self._purpose4_snapshot_identity is None:
+                        raise OSError("purpose-4 snapshot cleanup identity is absent")
+                    _remove_exact_owned_purpose4_tree_v1(
+                        self._purpose4_snapshot_path,
+                        self._purpose4_snapshot_identity,
+                        record_quarantine_path=record_snapshot_quarantine,
+                    )
                 except Exception as cleanup:
-                    unwind_failures.append(f"{label}:{type(cleanup).__name__}")
-            if not unwind_failures:
+                    unwind_failures.append(
+                        "snapshot-exact-remove:" + type(cleanup).__name__
+                    )
+                else:
+                    snapshot_removed = True
+                    self._purpose4_snapshot_path = None
+                    self._purpose4_snapshot_identity = None
+                    self._purpose4_snapshot_manifest = None
+                    if (
+                        original_snapshot_path.exists()
+                        or original_snapshot_path.is_symlink()
+                    ):
+                        foreign = original_snapshot_path.lstat()
+                        self._purpose4_foreign_entries[
+                            original_snapshot_path
+                        ] = (foreign.st_dev, foreign.st_ino)
+                        unwind_failures.append(
+                            "snapshot-post-quarantine-foreign-entry-retained"
+                        )
+            elif (
+                self._purpose4_snapshot_path is None
+                and self._purpose4_snapshot_owner is None
+            ):
+                self._purpose4_snapshot_identity = None
+
+            runtime_removed = self._purpose4_runtime_path is None
+            if self._purpose4_runtime_path is not None:
+                original_runtime_path = self._purpose4_runtime_path
+
+                def record_runtime_quarantine(quarantine: Path) -> None:
+                    self._purpose4_vacated_paths.add(original_runtime_path)
+                    self._purpose4_runtime_path = quarantine
+
+                try:
+                    if self._purpose4_runtime_identity is None:
+                        raise OSError("purpose-4 runtime cleanup identity is absent")
+                    _remove_exact_owned_purpose4_tree_v1(
+                        self._purpose4_runtime_path,
+                        self._purpose4_runtime_identity,
+                        record_quarantine_path=record_runtime_quarantine,
+                    )
+                except Exception as cleanup:
+                    unwind_failures.append("runtime:" + type(cleanup).__name__)
+                else:
+                    runtime_removed = True
+                    self._purpose4_runtime_path = None
+                    self._purpose4_runtime_identity = None
+                    self._purpose4_runtime_bundle = None
+                    if (
+                        original_runtime_path.exists()
+                        or original_runtime_path.is_symlink()
+                    ):
+                        foreign = original_runtime_path.lstat()
+                        self._purpose4_foreign_entries[
+                            original_runtime_path
+                        ] = (foreign.st_dev, foreign.st_ino)
+                        unwind_failures.append(
+                            "runtime-post-quarantine-foreign-entry-retained"
+                        )
+            self._refresh_purpose4_foreign_entries_v1()
+            if self._purpose4_foreign_entries and not any(
+                "foreign-entry-retained" in item for item in unwind_failures
+            ):
+                unwind_failures.append("vacated-path-foreign-entry-retained")
+            if not unwind_failures and snapshot_removed and runtime_removed:
                 self._purpose4_snapshot_manifest = None
                 self._purpose4_runtime_bundle = None
                 self._purpose4_snapshot_path = None
+                self._purpose4_snapshot_identity = None
+                self._purpose4_snapshot_owner = None
                 self._purpose4_runtime_path = None
+                self._purpose4_runtime_identity = None
             suffix = (
                 ""
                 if not unwind_failures
@@ -7760,46 +8496,205 @@ class DockerCeremonyActorsV1(CeremonyActorsV1, AbstractContextManager["DockerCer
     def _cleanup_local_runtime(self) -> None:
         temporary = self._temporary
         failures: list[str] = []
-        purpose4_paths = (
-            ("detached-snapshot", self._purpose4_snapshot_path),
-            ("committed-runtime", self._purpose4_runtime_path),
-        )
-        for label, path in purpose4_paths:
-            if path is None or not path.exists():
-                continue
+        cleanup_blocked = False
+        if self._purpose4_foreign_entries:
+            for path, expected_identity in self._purpose4_foreign_entries.items():
+                try:
+                    metadata = path.lstat()
+                except OSError as exc:
+                    observed = "absent-or-unreadable:" + type(exc).__name__
+                else:
+                    identity = metadata.st_dev, metadata.st_ino
+                    observed = (
+                        "same-identity"
+                        if expected_identity is not None
+                        and identity == expected_identity
+                        else "identity-changed"
+                    )
+                failures.append(
+                    "purpose4-foreign-entry-retained:"
+                    + path.name
+                    + ":"
+                    + observed
+                )
+            cleanup_blocked = True
+        owner = self._purpose4_snapshot_owner
+        if owner is not None:
+            owner_foreign = False
+            if not self._purpose4_snapshot_tree_removed:
+                owner_path_was_adopted = self._purpose4_snapshot_path is not None
+                owner_path = (
+                    self._purpose4_snapshot_path
+                    if owner_path_was_adopted
+                    else owner.root
+                )
+
+                def record_owner_quarantine(quarantine: Path) -> None:
+                    owner.root = quarantine
+                    self._purpose4_vacated_paths.add(owner_path)
+                    if owner_path_was_adopted:
+                        self._purpose4_snapshot_path = quarantine
+
+                try:
+                    if self._purpose4_snapshot_identity is None:
+                        raise OSError(
+                            "purpose-4 snapshot cleanup identity is absent"
+                        )
+                    _remove_exact_owned_purpose4_tree_v1(
+                        owner_path,
+                        self._purpose4_snapshot_identity,
+                        record_quarantine_path=record_owner_quarantine,
+                    )
+                except Exception as exc:
+                    failures.append(
+                        "purpose4-detached-owner-exact-remove:"
+                        + type(exc).__name__
+                    )
+                    cleanup_blocked = True
+                else:
+                    self._purpose4_snapshot_tree_removed = True
+                    if owner_path.exists() or owner_path.is_symlink():
+                        foreign = owner_path.lstat()
+                        self._purpose4_foreign_entries[owner_path] = (
+                            foreign.st_dev,
+                            foreign.st_ino,
+                        )
+                        failures.append(
+                            "purpose4-detached-owner-post-quarantine-foreign-"
+                            "entry-retained"
+                        )
+                        cleanup_blocked = True
+                        owner_foreign = True
+            self._refresh_purpose4_foreign_entries_v1()
+            if self._purpose4_foreign_entries:
+                cleanup_blocked = True
+            if (
+                self._purpose4_snapshot_tree_removed
+                and not owner_foreign
+                and not cleanup_blocked
+            ):
+                try:
+                    detached_temporary = owner._temporary
+                    if detached_temporary is not None:
+                        detached_temporary.cleanup()
+                    owner._temporary = None
+                except Exception as exc:
+                    failures.append(
+                        "purpose4-detached-owner-close:" + type(exc).__name__
+                    )
+                    cleanup_blocked = True
+                else:
+                    self._purpose4_snapshot_owner = None
+                    self._purpose4_snapshot_path = None
+                    self._purpose4_snapshot_identity = None
+                    self._purpose4_snapshot_manifest = None
+                    self._purpose4_snapshot_tree_removed = False
+
+        if (
+            self._purpose4_snapshot_owner is None
+            and self._purpose4_snapshot_path is not None
+        ):
+            original_snapshot_path = self._purpose4_snapshot_path
+
+            def record_snapshot_quarantine(quarantine: Path) -> None:
+                self._purpose4_vacated_paths.add(original_snapshot_path)
+                self._purpose4_snapshot_path = quarantine
+
             try:
-                _set_purpose4_snapshot_read_only_v1(path, False)
+                if self._purpose4_snapshot_identity is None:
+                    raise OSError("purpose-4 snapshot cleanup identity is absent")
+                _remove_exact_owned_purpose4_tree_v1(
+                    self._purpose4_snapshot_path,
+                    self._purpose4_snapshot_identity,
+                    record_quarantine_path=record_snapshot_quarantine,
+                )
             except Exception as exc:
                 failures.append(
-                    f"purpose4-{label}-permission-release:{type(exc).__name__}"
+                    "purpose4-detached-snapshot-exact-remove:"
+                    + type(exc).__name__
                 )
-        cleanup_completed = temporary is None
-        if temporary is not None:
+                cleanup_blocked = True
+            else:
+                self._purpose4_snapshot_path = None
+                self._purpose4_snapshot_identity = None
+                self._purpose4_snapshot_manifest = None
+                if (
+                    original_snapshot_path.exists()
+                    or original_snapshot_path.is_symlink()
+                ):
+                    foreign = original_snapshot_path.lstat()
+                    self._purpose4_foreign_entries[
+                        original_snapshot_path
+                    ] = (foreign.st_dev, foreign.st_ino)
+                    failures.append(
+                        "purpose4-detached-snapshot-post-quarantine-foreign-"
+                        "entry-retained"
+                    )
+                    cleanup_blocked = True
+
+        if self._purpose4_runtime_path is not None:
+            original_runtime_path = self._purpose4_runtime_path
+
+            def record_runtime_quarantine(quarantine: Path) -> None:
+                self._purpose4_vacated_paths.add(original_runtime_path)
+                self._purpose4_runtime_path = quarantine
+
+            try:
+                if self._purpose4_runtime_identity is None:
+                    raise OSError("purpose-4 runtime cleanup identity is absent")
+                _remove_exact_owned_purpose4_tree_v1(
+                    self._purpose4_runtime_path,
+                    self._purpose4_runtime_identity,
+                    record_quarantine_path=record_runtime_quarantine,
+                )
+            except Exception as exc:
+                failures.append(
+                    "purpose4-committed-runtime-exact-remove:"
+                    + type(exc).__name__
+                )
+                cleanup_blocked = True
+            else:
+                self._purpose4_runtime_path = None
+                self._purpose4_runtime_identity = None
+                self._purpose4_runtime_bundle = None
+                if original_runtime_path.exists() or original_runtime_path.is_symlink():
+                    foreign = original_runtime_path.lstat()
+                    self._purpose4_foreign_entries[
+                        original_runtime_path
+                    ] = (foreign.st_dev, foreign.st_ino)
+                    failures.append(
+                        "purpose4-committed-runtime-post-quarantine-foreign-"
+                        "entry-retained"
+                    )
+                    cleanup_blocked = True
+
+        self._refresh_purpose4_foreign_entries_v1()
+        if self._purpose4_foreign_entries:
+            cleanup_blocked = True
+            if not any(
+                item.startswith("purpose4-foreign-entry-retained:")
+                for item in failures
+            ):
+                failures.append("purpose4-vacated-path-foreign-entry-retained")
+        cleanup_completed = temporary is None and not cleanup_blocked
+        if temporary is not None and not cleanup_blocked:
             try:
                 temporary.cleanup()
                 cleanup_completed = True
             except Exception as exc:
                 failures.append(f"actor-temporary-cleanup:{type(exc).__name__}")
-        elif temporary is None:
-            # Test adapters may install a caller-owned fake root without a
-            # LinuxLocalTemporaryDirectory owner.  Remove only the two exact
-            # purpose-4 trees and leave the caller's root intact.
-            for _label, path in purpose4_paths:
-                if path is not None and path.exists():
-                    try:
-                        shutil.rmtree(path)
-                    except Exception as exc:
-                        failures.append(
-                            f"purpose4-explicit-cleanup:{type(exc).__name__}"
-                        )
-            cleanup_completed = all(
-                path is None or not path.exists() for _label, path in purpose4_paths
-            )
+                cleanup_blocked = True
         if cleanup_completed:
             self._purpose4_snapshot_manifest = None
             self._purpose4_runtime_bundle = None
             self._purpose4_snapshot_path = None
+            self._purpose4_snapshot_identity = None
+            self._purpose4_snapshot_owner = None
+            self._purpose4_snapshot_tree_removed = False
             self._purpose4_runtime_path = None
+            self._purpose4_runtime_identity = None
+            self._purpose4_foreign_entries.clear()
+            self._purpose4_vacated_paths.clear()
             self._docker_control_plane = None
             self._runtime_seccomp_path = None
             self._build_seccomp_path = None

@@ -158,6 +158,46 @@ later integration must:
    audit rows, or host-built attestation CBOR into purpose 4;
 10. preserve fail-closed recovery and cleanup semantics.
 
+The integrated executor adopts the builder's mode-0555 snapshot with one
+Linux-specific, descriptor-bound rename transaction.  A directory moved
+between different parents needs owner-write while Linux updates its `..`
+entry, even though rename ordinarily depends on parent permissions.  The
+executor therefore opens and pins the source root and both parents, proves
+their inode identities, ownership and common filesystem, checks that the
+destination is absent, and grants owner-write only to the held snapshot-root
+inode.  Descendant directories and files remain read-only.  It then performs
+one dirfd-relative Linux `renameat2(RENAME_NOREPLACE)`, restores the held root
+to 0555, fsyncs the root and both parents, and replays the complete detached
+manifest and file/object inventories at the destination.  An `EEXIST` race
+fails closed and the raced target is not registered for cleanup.  No ordinary
+rename, replacement, or copy fallback is permitted.  Any failed identity,
+permission, filesystem, durability, or replay check unwinds only the exact
+adopted inode before the container can start.
+
+The executor persists the adopted `(st_dev, st_ino)` and the detached
+temporary-directory owner before validation begins.  Every unwind and later
+local-runtime cleanup first uses nofollow descriptors and atomically moves the
+bound inode, with no replacement, to a private quarantine name.  Permission
+changes and traversal are descriptor-relative; symlinks and identity changes
+fail closed.  Every vacated canonical or quarantine name remains registered
+until full cleanup, and any object reappearing there becomes a persistent
+foreign-entry blocker before either detached-owner or ceremony-wide temporary
+cleanup.  A failed detached-owner or temporary cleanup retains the exact
+identity, current quarantine path, ceremony root, and retry handles.
+
+This is an owner-accepted trusted-host boundary with the complete disclosure:
+`same_admin_controller=true`, `organizational_independence=false`,
+`independent_human_actors=false`, `technical_role_independence=true`,
+`owner_accepted_threat_model=true`, `remote_attestation=false`, and
+`hardware_key_nonexportability=false`.  The host orchestrator and same-UID
+administrator are therefore trusted not to run a continuously adversarial
+rename/unlink loop inside the private ceremony directory.  The implementation
+prevents actor-originated traversal, ordinary filesystem races, symlink
+following, stale-name cleanup, and deletion of a replacement observed at the
+guard/action boundary.  It does not claim a POSIX unlink-by-handle primitive
+or protection from a malicious same-UID controller that keeps mutating names
+after the quarantine has been successfully claimed.
+
 In particular, replacing the old `sign_parent(...)` transport is mandatory:
 the host may consume the new actor's result but may not choose or supply what
 the purpose-4 private key signs.

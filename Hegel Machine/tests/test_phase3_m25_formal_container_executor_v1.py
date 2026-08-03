@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import fields, replace
+import errno
 import hashlib
 import importlib.util
 import json
@@ -536,7 +537,14 @@ def test_purpose4_preparation_failure_unwinds_adopted_snapshot_and_runtime(
     backend._root = tmp_path / "ceremony"
     (backend._root / "purpose-4/input").mkdir(parents=True)
     source_root = tmp_path / "snapshot-source"
-    (source_root / ".git").mkdir(parents=True)
+    git_directory = source_root / ".git"
+    git_directory.mkdir(parents=True)
+    frozen_payload = git_directory / "frozen-object"
+    frozen_payload.write_bytes(b"detached-parent-object-bytes")
+    frozen_payload.chmod(0o444)
+    git_directory.chmod(0o555)
+    source_root.chmod(0o555)
+    frozen_source_inode = source_root.stat().st_ino
 
     class TemporaryOwner:
         cleaned = False
@@ -562,6 +570,33 @@ def test_purpose4_preparation_failure_unwinds_adopted_snapshot_and_runtime(
         "prepare_detached_parent_snapshot_v1",
         lambda *_args, **_kwargs: snapshot,
     )
+
+    def validate_adopted_snapshot(
+        path: Path,
+        manifest,
+        **kwargs,
+    ):
+        assert path == backend._root / "purpose-4/input/detached-parent-snapshot"
+        assert not source_root.exists()
+        assert path.stat().st_ino == frozen_source_inode
+        assert stat.S_IMODE(path.stat().st_mode) == 0o555
+        assert stat.S_IMODE((path / ".git").stat().st_mode) == 0o555
+        assert stat.S_IMODE((path / ".git/frozen-object").stat().st_mode) == 0o444
+        assert (path / ".git/frozen-object").read_bytes() == (
+            b"detached-parent-object-bytes"
+        )
+        assert kwargs == {
+            "git_executable": Path("/usr/bin/git"),
+            "require_frozen_parent": True,
+            "expected_basis_commit": "12" * 20,
+        }
+        return dict(manifest)
+
+    monkeypatch.setattr(
+        executor,
+        "validate_detached_parent_snapshot_v1",
+        validate_adopted_snapshot,
+    )
     monkeypatch.setattr(
         executor,
         "_purpose4_runtime_source_bindings_v1",
@@ -572,11 +607,648 @@ def test_purpose4_preparation_failure_unwinds_adopted_snapshot_and_runtime(
     assert captured.value.code == executor.FAIL_CONTAINER
     assert backend._purpose4_snapshot_path is None
     assert backend._purpose4_runtime_path is None
+    assert snapshot._temporary is None
+    assert not source_root.exists()
     assert not (backend._root / "purpose-4/input/detached-parent-snapshot").exists()
     assert not (backend._root / "purpose-4/input/runtime").exists()
 
 
-def test_local_runtime_cleanup_attempts_all_steps_and_keeps_retry_handles(
+def test_purpose4_read_only_snapshot_failed_rename_restores_source_without_copy(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    source_parent = tmp_path / "source-parent"
+    destination_parent = tmp_path / "destination-parent"
+    source_parent.mkdir(mode=0o700)
+    destination_parent.mkdir(mode=0o700)
+    source = source_parent / "snapshot"
+    (source / ".git").mkdir(parents=True)
+    payload = source / ".git/frozen-object"
+    payload.write_bytes(b"frozen-object-bytes")
+    payload.chmod(0o444)
+    (source / ".git").chmod(0o555)
+    source.chmod(0o555)
+    source_inode = source.stat().st_ino
+    destination = destination_parent / "adopted"
+    snapshot = SimpleNamespace(
+        root=source,
+        manifest={"schema": "test-only"},
+        git_executable=Path("/usr/bin/git"),
+    )
+
+    def fail_rename(*_args, **_kwargs) -> None:
+        assert stat.S_IMODE(source.stat().st_mode) == 0o755
+        assert source.stat().st_ino == source_inode
+        assert payload.read_bytes() == b"frozen-object-bytes"
+        assert not destination.exists()
+        raise PermissionError("injected rename failure")
+
+    monkeypatch.setattr(executor, "_renameat2_noreplace_v1", fail_rename)
+    with pytest.raises(PermissionError, match="injected rename failure"):
+        executor._adopt_read_only_purpose4_snapshot_v1(
+            snapshot,  # type: ignore[arg-type]
+            destination,
+            expected_basis_commit="12" * 20,
+        )
+    assert source.exists()
+    assert source.stat().st_ino == source_inode
+    assert stat.S_IMODE(source.stat().st_mode) == 0o555
+    assert stat.S_IMODE((source / ".git").stat().st_mode) == 0o555
+    assert stat.S_IMODE(payload.stat().st_mode) == 0o444
+    assert payload.read_bytes() == b"frozen-object-bytes"
+    assert not destination.exists()
+
+
+def test_purpose4_exact_cleanup_restores_guard_action_replacement_without_touching_it(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    parent = tmp_path / "private-parent"
+    parent.mkdir(mode=0o700)
+    owned = parent / "owned-tree"
+    (owned / "nested").mkdir(parents=True)
+    exact_payload = owned / "nested/exact"
+    exact_payload.write_bytes(b"exact-owned-bytes")
+    exact_payload.chmod(0o444)
+    (owned / "nested").chmod(0o555)
+    owned.chmod(0o555)
+    exact_identity = owned.stat().st_dev, owned.stat().st_ino
+    moved_exact = parent / "moved-exact"
+    replacement_identity: tuple[int, int] | None = None
+    actual_renameat2 = executor._renameat2_noreplace_v1
+    injected = False
+
+    def replace_between_guard_and_quarantine(
+        source_parent_fd: int,
+        source_name: str,
+        destination_parent_fd: int,
+        destination_name: str,
+    ) -> None:
+        nonlocal injected, replacement_identity
+        if not injected and source_name == owned.name:
+            injected = True
+            os.rename(owned, moved_exact)
+            owned.mkdir(mode=0o700)
+            (owned / "replacement-sentinel").write_bytes(b"preserve-replacement")
+            replacement = owned.lstat()
+            replacement_identity = replacement.st_dev, replacement.st_ino
+        actual_renameat2(
+            source_parent_fd,
+            source_name,
+            destination_parent_fd,
+            destination_name,
+        )
+
+    monkeypatch.setattr(
+        executor,
+        "_renameat2_noreplace_v1",
+        replace_between_guard_and_quarantine,
+    )
+    recorded: list[Path] = []
+    with pytest.raises(OSError, match="captured a replacement inode"):
+        executor._remove_exact_owned_purpose4_tree_v1(
+            owned,
+            exact_identity,
+            record_quarantine_path=recorded.append,
+        )
+    assert recorded == []
+    assert replacement_identity is not None
+    assert (owned.stat().st_dev, owned.stat().st_ino) == replacement_identity
+    assert (owned / "replacement-sentinel").read_bytes() == b"preserve-replacement"
+    assert (moved_exact.stat().st_dev, moved_exact.stat().st_ino) == exact_identity
+    assert stat.S_IMODE(moved_exact.stat().st_mode) == 0o555
+    assert (moved_exact / "nested/exact").read_bytes() == b"exact-owned-bytes"
+
+
+def test_purpose4_completed_exact_cleanup_is_not_lost_to_fd_close_diagnostic(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    parent = tmp_path / "private-parent"
+    parent.mkdir(mode=0o700)
+    owned = parent / "owned-tree"
+    owned.mkdir(mode=0o555)
+    expected_identity = owned.stat().st_dev, owned.stat().st_ino
+    actual_close = executor.os.close
+    close_failure_pending = True
+
+    def close_then_report_error(descriptor: int) -> None:
+        nonlocal close_failure_pending
+        actual_close(descriptor)
+        if close_failure_pending:
+            close_failure_pending = False
+            raise OSError("injected post-removal close error")
+
+    monkeypatch.setattr(executor.os, "close", close_then_report_error)
+    recorded: list[Path] = []
+    executor._remove_exact_owned_purpose4_tree_v1(
+        owned,
+        expected_identity,
+        record_quarantine_path=recorded.append,
+    )
+    assert len(recorded) == 1
+    assert not owned.exists()
+    assert not recorded[0].exists()
+
+
+def test_purpose4_eexist_survives_restore_and_close_errors_and_blocks_cleanup(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    backend = executor.DockerCeremonyActorsV1(
+        basis_commit="12" * 20,
+        custody_directory=tmp_path,
+        rust_formal_replay_binary=tmp_path / "rust-replay",
+        timestamp=1,
+    )
+    backend._root = tmp_path / "ceremony"
+    input_directory = backend._root / "purpose-4/input"
+    input_directory.mkdir(parents=True)
+    source_owner = tmp_path / "snapshot-owner"
+    source_owner.mkdir(mode=0o700)
+    source = source_owner / "snapshot"
+    (source / ".git").mkdir(parents=True)
+    (source / ".git/frozen").write_bytes(b"source")
+    (source / ".git/frozen").chmod(0o444)
+    (source / ".git").chmod(0o555)
+    source.chmod(0o555)
+
+    class TemporaryOwner:
+        calls = 0
+
+        def cleanup(self) -> None:
+            self.calls += 1
+
+    temporary_owner = TemporaryOwner()
+    snapshot = SimpleNamespace(
+        root=source,
+        manifest={"schema": "test-only"},
+        git_executable=Path("/usr/bin/git"),
+        _temporary=temporary_owner,
+    )
+    monkeypatch.setattr(
+        executor,
+        "prepare_detached_parent_snapshot_v1",
+        lambda *_args, **_kwargs: snapshot,
+    )
+    destination = input_directory / "detached-parent-snapshot"
+    actual_renameat2 = executor._renameat2_noreplace_v1
+    raced_identity: tuple[int, int] | None = None
+
+    def inject_eexist(
+        source_parent_fd: int,
+        source_name: str,
+        destination_parent_fd: int,
+        destination_name: str,
+    ) -> None:
+        nonlocal raced_identity
+        if raced_identity is None:
+            os.mkdir(destination_name, mode=0o700, dir_fd=destination_parent_fd)
+            raced = os.stat(
+                destination_name,
+                dir_fd=destination_parent_fd,
+                follow_symlinks=False,
+            )
+            raced_identity = raced.st_dev, raced.st_ino
+        actual_renameat2(
+            source_parent_fd,
+            source_name,
+            destination_parent_fd,
+            destination_name,
+        )
+
+    monkeypatch.setattr(executor, "_renameat2_noreplace_v1", inject_eexist)
+    actual_fchmod = executor.os.fchmod
+    restore_failure_pending = True
+
+    def fail_first_restore(descriptor: int, mode: int) -> None:
+        nonlocal restore_failure_pending
+        if mode == 0o555 and restore_failure_pending:
+            restore_failure_pending = False
+            raise OSError("injected restore failure")
+        actual_fchmod(descriptor, mode)
+
+    monkeypatch.setattr(executor.os, "fchmod", fail_first_restore)
+    actual_close = executor.os.close
+    close_failure_pending = True
+
+    def fail_first_close(descriptor: int) -> None:
+        nonlocal close_failure_pending
+        actual_close(descriptor)
+        if close_failure_pending:
+            close_failure_pending = False
+            raise OSError("injected close failure")
+
+    monkeypatch.setattr(executor.os, "close", fail_first_close)
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        backend._prepare_purpose4_detached_inputs()
+    assert captured.value.code == executor.FAIL_CONTAINER
+    assert "File exists" in captured.value.detail
+    primary = captured.value.__context__
+    assert isinstance(primary, FileExistsError)
+    assert primary.errno == errno.EEXIST
+    cleanup_errors = getattr(primary, "_hegel_cleanup_error_chain", ())
+    assert any(row[0] == "snapshot-root-mode-restore" for row in cleanup_errors)
+    assert any(row[0] == "snapshot-descriptor-close" for row in cleanup_errors)
+    assert raced_identity is not None
+    assert (destination.stat().st_dev, destination.stat().st_ino) == raced_identity
+    assert backend._purpose4_foreign_entries[destination] == raced_identity
+    assert backend._purpose4_snapshot_owner is snapshot
+    assert backend._purpose4_snapshot_tree_removed is True
+    assert temporary_owner.calls == 0
+
+
+def test_purpose4_raced_empty_destination_is_preserved_and_source_is_unwound(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    backend = executor.DockerCeremonyActorsV1(
+        basis_commit="12" * 20,
+        custody_directory=tmp_path,
+        rust_formal_replay_binary=tmp_path / "rust-replay",
+        timestamp=1,
+    )
+    backend._root = tmp_path / "ceremony"
+    input_directory = backend._root / "purpose-4/input"
+    input_directory.mkdir(parents=True)
+    source_owner = tmp_path / "snapshot-owner"
+    source_owner.mkdir(mode=0o700)
+    source = source_owner / "snapshot"
+    (source / ".git").mkdir(parents=True)
+    payload = source / ".git/frozen-object"
+    payload.write_bytes(b"raced-adoption-source")
+    payload.chmod(0o444)
+    (source / ".git").chmod(0o555)
+    source.chmod(0o555)
+    source_inode = source.stat().st_ino
+    destination = input_directory / "detached-parent-snapshot"
+
+    class TemporaryOwner:
+        cleaned = False
+
+        def cleanup(self) -> None:
+            self.cleaned = True
+            if source_owner.exists():
+                shutil.rmtree(source_owner)
+
+    temporary_owner = TemporaryOwner()
+
+    class Snapshot:
+        def __init__(self) -> None:
+            self.root = source
+            self.manifest = {"schema": "test-only"}
+            self.git_executable = Path("/usr/bin/git")
+            self._temporary = temporary_owner
+            self.close_saw_restored_source = False
+
+        def close(self) -> None:
+            assert self.root == source
+            assert self.root.stat().st_ino == source_inode
+            assert stat.S_IMODE(self.root.stat().st_mode) == 0o555
+            assert payload.read_bytes() == b"raced-adoption-source"
+            assert not destination.samefile(self.root)
+            self.close_saw_restored_source = True
+            executor._set_purpose4_snapshot_read_only_v1(self.root, False)
+            self._temporary.cleanup()
+            self._temporary = None
+
+    snapshot = Snapshot()
+    monkeypatch.setattr(
+        executor,
+        "prepare_detached_parent_snapshot_v1",
+        lambda *_args, **_kwargs: snapshot,
+    )
+    actual_renameat2 = executor._renameat2_noreplace_v1
+    raced_identity: tuple[int, int] | None = None
+
+    def inject_empty_destination(
+        source_parent_fd: int,
+        source_name: str,
+        destination_parent_fd: int,
+        destination_name: str,
+    ) -> None:
+        nonlocal raced_identity
+        if raced_identity is None:
+            os.mkdir(destination_name, mode=0o700, dir_fd=destination_parent_fd)
+            raced = os.stat(
+                destination_name,
+                dir_fd=destination_parent_fd,
+                follow_symlinks=False,
+            )
+            raced_identity = raced.st_dev, raced.st_ino
+        actual_renameat2(
+            source_parent_fd,
+            source_name,
+            destination_parent_fd,
+            destination_name,
+        )
+
+    monkeypatch.setattr(
+        executor,
+        "_renameat2_noreplace_v1",
+        inject_empty_destination,
+    )
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        backend._prepare_purpose4_detached_inputs()
+    assert captured.value.code == executor.FAIL_CONTAINER
+    assert "File exists" in captured.value.detail
+    assert "snapshot-foreign-entry-retained" in captured.value.detail
+    assert snapshot.close_saw_restored_source is False
+    assert temporary_owner.cleaned is False
+    assert source_owner.exists()
+    assert not source.exists()
+    assert raced_identity is not None
+    raced = destination.lstat()
+    assert (raced.st_dev, raced.st_ino) == raced_identity
+    assert stat.S_ISDIR(raced.st_mode)
+    assert not any(destination.iterdir())
+    assert backend._purpose4_snapshot_path is None
+    assert backend._purpose4_runtime_path is None
+    assert backend._purpose4_foreign_entries[destination] == raced_identity
+    assert backend._purpose4_snapshot_owner is snapshot
+    assert backend._purpose4_snapshot_tree_removed is True
+
+    with pytest.raises(executor.FormalContainerExecutorError) as cleanup:
+        backend._cleanup_local_runtime()
+    assert cleanup.value.code == executor.FAIL_CONTAINER
+    assert "purpose4-foreign-entry-retained" in cleanup.value.detail
+    raced_after_cleanup = destination.lstat()
+    assert (raced_after_cleanup.st_dev, raced_after_cleanup.st_ino) == raced_identity
+    assert not any(destination.iterdir())
+    assert backend._root == tmp_path / "ceremony"
+
+
+def test_purpose4_postrename_replacement_is_never_touched_and_state_is_retained(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    backend = executor.DockerCeremonyActorsV1(
+        basis_commit="12" * 20,
+        custody_directory=tmp_path,
+        rust_formal_replay_binary=tmp_path / "rust-replay",
+        timestamp=1,
+    )
+    backend._root = tmp_path / "ceremony"
+    input_directory = backend._root / "purpose-4/input"
+    input_directory.mkdir(parents=True)
+    source_owner = backend._root / "detached-owner"
+    source_owner.mkdir(mode=0o700)
+    source = source_owner / "snapshot"
+    (source / ".git").mkdir(parents=True)
+    frozen = source / ".git/frozen-object"
+    frozen.write_bytes(b"exact-adopted-inode")
+    frozen.chmod(0o444)
+    (source / ".git").chmod(0o555)
+    source.chmod(0o555)
+
+    class TemporaryOwner:
+        calls = 0
+
+        def cleanup(self) -> None:
+            self.calls += 1
+
+    temporary_owner = TemporaryOwner()
+
+    class Snapshot:
+        def __init__(self) -> None:
+            self.root = source
+            self.manifest = {"schema": "test-only"}
+            self.git_executable = Path("/usr/bin/git")
+            self._temporary = temporary_owner
+            self.close_calls = 0
+
+        def close(self) -> None:
+            self.close_calls += 1
+            raise AssertionError("replacement path must never reach snapshot.close")
+
+    snapshot = Snapshot()
+    monkeypatch.setattr(
+        executor,
+        "prepare_detached_parent_snapshot_v1",
+        lambda *_args, **_kwargs: snapshot,
+    )
+    destination = input_directory / "detached-parent-snapshot"
+    quarantined = input_directory / "exact-adopted-inode-quarantine"
+    replacement_identity: tuple[int, int] | None = None
+
+    def replace_during_validation(_path: Path, _manifest, **_kwargs):
+        nonlocal replacement_identity
+        os.rename(destination, quarantined)
+        destination.mkdir(mode=0o700)
+        (destination / "replacement-sentinel").write_bytes(b"do-not-touch")
+        replacement = destination.lstat()
+        replacement_identity = replacement.st_dev, replacement.st_ino
+        raise OSError("injected post-rename validation failure")
+
+    monkeypatch.setattr(
+        executor,
+        "validate_detached_parent_snapshot_v1",
+        replace_during_validation,
+    )
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        backend._prepare_purpose4_detached_inputs()
+    assert captured.value.code == executor.FAIL_CONTAINER
+    assert "snapshot-owner-exact-remove:OSError" in captured.value.detail
+    assert replacement_identity is not None
+    replacement = destination.lstat()
+    assert (replacement.st_dev, replacement.st_ino) == replacement_identity
+    assert (destination / "replacement-sentinel").read_bytes() == b"do-not-touch"
+    adopted = quarantined.lstat()
+    assert (adopted.st_dev, adopted.st_ino) == backend._purpose4_snapshot_identity
+    assert stat.S_IMODE(adopted.st_mode) == 0o555
+    assert snapshot.close_calls == 0
+    assert temporary_owner.calls == 0
+    assert backend._purpose4_snapshot_path == destination
+    assert backend._purpose4_snapshot_owner is snapshot
+
+    with pytest.raises(executor.FormalContainerExecutorError) as cleanup:
+        backend._cleanup_local_runtime()
+    assert cleanup.value.code == executor.FAIL_CONTAINER
+    assert "purpose4-detached-owner-exact-remove:OSError" in cleanup.value.detail
+    assert (destination.lstat().st_dev, destination.lstat().st_ino) == (
+        replacement_identity
+    )
+    assert (destination / "replacement-sentinel").read_bytes() == b"do-not-touch"
+    assert backend._root == tmp_path / "ceremony"
+    assert backend._purpose4_snapshot_path == destination
+    assert backend._purpose4_snapshot_owner is snapshot
+    assert snapshot.close_calls == 0
+
+
+def test_purpose4_preexisting_destination_blocks_broad_runtime_cleanup(
+    tmp_path: Path,
+) -> None:
+    backend = executor.DockerCeremonyActorsV1(
+        basis_commit="12" * 20,
+        custody_directory=tmp_path,
+        rust_formal_replay_binary=tmp_path / "rust-replay",
+        timestamp=1,
+    )
+    backend._root = tmp_path / "ceremony"
+    destination = backend._root / "purpose-4/input/detached-parent-snapshot"
+    destination.mkdir(parents=True)
+    (destination / "foreign-sentinel").write_bytes(b"preserve-me")
+    foreign_identity = destination.stat().st_dev, destination.stat().st_ino
+
+    class BroadTemporary:
+        calls = 0
+
+        def cleanup(self) -> None:
+            self.calls += 1
+            shutil.rmtree(backend._root)
+
+    temporary = BroadTemporary()
+    backend._temporary = temporary  # type: ignore[assignment]
+    with pytest.raises(executor.FormalContainerExecutorError) as prepared:
+        backend._prepare_purpose4_detached_inputs()
+    assert prepared.value.code == executor.FAIL_CONTAINER
+    assert backend._purpose4_foreign_entries[destination] == foreign_identity
+
+    with pytest.raises(executor.FormalContainerExecutorError) as cleanup:
+        backend._cleanup_local_runtime()
+    assert cleanup.value.code == executor.FAIL_CONTAINER
+    assert "purpose4-foreign-entry-retained" in cleanup.value.detail
+    assert temporary.calls == 0
+    assert (destination.stat().st_dev, destination.stat().st_ino) == foreign_identity
+    assert (destination / "foreign-sentinel").read_bytes() == b"preserve-me"
+    assert backend._temporary is temporary
+    assert backend._root == tmp_path / "ceremony"
+
+
+def test_purpose4_snapshot_owner_close_failure_is_reported_and_retained(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    backend = executor.DockerCeremonyActorsV1(
+        basis_commit="12" * 20,
+        custody_directory=tmp_path,
+        rust_formal_replay_binary=tmp_path / "rust-replay",
+        timestamp=1,
+    )
+    backend._root = tmp_path / "ceremony"
+    input_directory = backend._root / "purpose-4/input"
+    input_directory.mkdir(parents=True)
+    source_owner = backend._root / "detached-owner"
+    source_owner.mkdir(mode=0o700)
+    source = source_owner / "snapshot"
+    (source / ".git").mkdir(parents=True)
+    frozen = source / ".git/frozen-object"
+    frozen.write_bytes(b"retry-owned-snapshot")
+    frozen.chmod(0o444)
+    (source / ".git").chmod(0o555)
+    source.chmod(0o555)
+
+    class FailingTemporaryOwner:
+        calls = 0
+
+        def cleanup(self) -> None:
+            self.calls += 1
+            raise OSError("injected detached-owner cleanup failure")
+
+    temporary_owner = FailingTemporaryOwner()
+
+    class Snapshot:
+        def __init__(self) -> None:
+            self.root = source
+            self.manifest = {"schema": "test-only"}
+            self.git_executable = Path("/usr/bin/git")
+            self._temporary = temporary_owner
+            self.close_calls = 0
+
+        def close(self) -> None:
+            self.close_calls += 1
+            executor._set_purpose4_snapshot_read_only_v1(self.root, False)
+            self._temporary.cleanup()
+            self._temporary = None
+
+    snapshot = Snapshot()
+    monkeypatch.setattr(
+        executor,
+        "prepare_detached_parent_snapshot_v1",
+        lambda *_args, **_kwargs: snapshot,
+    )
+
+    def validate_adopted(path: Path, manifest, **_kwargs):
+        assert stat.S_IMODE(path.stat().st_mode) == 0o555
+        return dict(manifest)
+
+    monkeypatch.setattr(
+        executor,
+        "validate_detached_parent_snapshot_v1",
+        validate_adopted,
+    )
+    destination = input_directory / "detached-parent-snapshot"
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        backend._prepare_purpose4_detached_inputs()
+    assert captured.value.code == executor.FAIL_CONTAINER
+    assert "snapshot-owner-close:OSError" in captured.value.detail
+    assert temporary_owner.calls == 2
+    assert snapshot.close_calls == 0
+    assert backend._purpose4_snapshot_owner is snapshot
+    assert backend._purpose4_snapshot_tree_removed is True
+    assert backend._purpose4_snapshot_path is not None
+    assert not backend._purpose4_snapshot_path.exists()
+    assert not destination.exists()
+
+    destination.mkdir(mode=0o700)
+    (destination / "foreign-after-owner-remove").write_bytes(b"preserve")
+    foreign_identity = destination.stat().st_dev, destination.stat().st_ino
+    with pytest.raises(executor.FormalContainerExecutorError) as cleanup:
+        backend._cleanup_local_runtime()
+    assert cleanup.value.code == executor.FAIL_CONTAINER
+    assert "foreign-entry-retained" in cleanup.value.detail
+    assert temporary_owner.calls == 2
+    assert (destination.stat().st_dev, destination.stat().st_ino) == foreign_identity
+    assert (destination / "foreign-after-owner-remove").read_bytes() == b"preserve"
+    assert backend._purpose4_snapshot_owner is snapshot
+
+
+def test_purpose4_purge_failure_tracks_first_vacated_name_across_retry(
+    tmp_path: Path,
+) -> None:
+    backend = executor.DockerCeremonyActorsV1(
+        basis_commit="12" * 20,
+        custody_directory=tmp_path,
+        rust_formal_replay_binary=tmp_path / "rust-replay",
+        timestamp=1,
+    )
+    backend._root = tmp_path / "ceremony"
+    snapshot = backend._root / "purpose-4/input/detached-parent-snapshot"
+    snapshot.mkdir(parents=True)
+    os.symlink("/nonexistent", snapshot / "forbidden-link")
+    snapshot.chmod(0o555)
+    backend._purpose4_snapshot_path = snapshot
+    backend._purpose4_snapshot_identity = (
+        snapshot.stat().st_dev,
+        snapshot.stat().st_ino,
+    )
+
+    class BroadTemporary:
+        calls = 0
+
+        def cleanup(self) -> None:
+            self.calls += 1
+            shutil.rmtree(backend._root)
+
+    temporary = BroadTemporary()
+    backend._temporary = temporary  # type: ignore[assignment]
+    with pytest.raises(executor.FormalContainerExecutorError) as first:
+        backend._cleanup_local_runtime()
+    assert first.value.code == executor.FAIL_CONTAINER
+    quarantine = backend._purpose4_snapshot_path
+    assert quarantine is not None and quarantine != snapshot
+    assert quarantine.exists()
+    assert snapshot in backend._purpose4_vacated_paths
+    assert temporary.calls == 0
+
+    (quarantine / "forbidden-link").unlink()
+    snapshot.mkdir(mode=0o700)
+    (snapshot / "foreign-after-purge-failure").write_bytes(b"preserve")
+    foreign_identity = snapshot.stat().st_dev, snapshot.stat().st_ino
+    with pytest.raises(executor.FormalContainerExecutorError) as second:
+        backend._cleanup_local_runtime()
+    assert second.value.code == executor.FAIL_CONTAINER
+    assert "foreign-entry-retained" in second.value.detail
+    assert temporary.calls == 0
+    assert backend._purpose4_snapshot_path is None
+    assert (snapshot.stat().st_dev, snapshot.stat().st_ino) == foreign_identity
+    assert (snapshot / "foreign-after-purge-failure").read_bytes() == b"preserve"
+
+
+def test_local_runtime_cleanup_failure_keeps_retry_handles_and_skips_broad_remove(
     tmp_path: Path, monkeypatch,
 ) -> None:
     backend = executor.DockerCeremonyActorsV1(
@@ -591,8 +1263,15 @@ def test_local_runtime_cleanup_attempts_all_steps_and_keeps_retry_handles(
     snapshot.mkdir(parents=True)
     runtime.mkdir()
     backend._purpose4_snapshot_path = snapshot
+    backend._purpose4_snapshot_identity = (
+        snapshot.stat().st_dev,
+        snapshot.stat().st_ino,
+    )
     backend._purpose4_runtime_path = runtime
-    permission_attempts: list[Path] = []
+    backend._purpose4_runtime_identity = (
+        runtime.stat().st_dev,
+        runtime.stat().st_ino,
+    )
 
     class FailingTemporary:
         calls = 0
@@ -604,20 +1283,14 @@ def test_local_runtime_cleanup_attempts_all_steps_and_keeps_retry_handles(
     temporary = FailingTemporary()
     backend._temporary = temporary  # type: ignore[assignment]
 
-    def fail_permissions(path: Path, _read_only: bool) -> None:
-        permission_attempts.append(path)
-        raise OSError("injected chmod failure")
-
-    monkeypatch.setattr(
-        executor, "_set_purpose4_snapshot_read_only_v1", fail_permissions
-    )
     with pytest.raises(executor.FormalContainerExecutorError) as captured:
         backend._cleanup_local_runtime()
     assert captured.value.code == executor.FAIL_CONTAINER
-    assert permission_attempts == [snapshot, runtime]
     assert temporary.calls == 1
     assert backend._temporary is temporary
     assert backend._root == tmp_path / "ceremony"
+    assert backend._purpose4_snapshot_path is None
+    assert backend._purpose4_runtime_path is None
 
 
 def test_bridge_signer_receives_only_full_dag_package(
