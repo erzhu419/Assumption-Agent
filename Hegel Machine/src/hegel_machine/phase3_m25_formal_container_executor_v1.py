@@ -9292,6 +9292,7 @@ class DockerCeremonyActorsV1(CeremonyActorsV1, AbstractContextManager["DockerCer
         }
         body = dict(receipt)
         claimed_hash = body.pop("receipt_sha256", None)
+        identity = receipt.get("identity")
         if (
             set(receipt) != expected_keys
             or receipt.get("schema") != OPERATION_PROBE_SCHEMA
@@ -9301,6 +9302,10 @@ class DockerCeremonyActorsV1(CeremonyActorsV1, AbstractContextManager["DockerCer
             or receipt.get("operation_nonce_hex") != nonce.hex()
             or receipt.get("operation_request_sha256") != request_digest.hex()
             or receipt.get("purpose_id") != purpose
+            or not isinstance(identity, Mapping)
+            or set(identity) != {"uid", "gid", "pid", "ppid"}
+            or type(identity.get("ppid")) is not int
+            or identity["ppid"] < 0
             or receipt.get("operation_environment") != dict(expected_environment)
             or receipt.get("pid1_environment")
             != {key: expected_environment[key] for key in _ACTOR_BASE_ENVIRONMENT_KEYS}

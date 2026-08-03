@@ -104,6 +104,16 @@ disabled.  This ownership exception changes neither the frozen snapshot nor
 the audit's formal rows; it only permits the already digest-bound Git runtime
 to read the exact bound object store across the actor UID boundary.
 
+The operation probe records the worker's kernel-reported PID and PPID without
+normalization.  Linux returns PPID `0` when the direct `docker exec` worker's
+parent is outside the container PID namespace; this is a valid observed value,
+not missing evidence.  Acceptance therefore requires an exact four-field
+identity, a worker PID greater than one, and a nonnegative integer PPID.  PPID
+is diagnostic rather than a same-process proof.  Same-process authority comes
+from the in-process probe call, exact receipt equality, operation nonce/request
+binding, and unchanged host-inspected container identity before and after the
+operation.
+
 ## 3. Private-key and temporary-file contract
 
 `/state` must be a non-symlink directory owned by the actor with mode 0700.

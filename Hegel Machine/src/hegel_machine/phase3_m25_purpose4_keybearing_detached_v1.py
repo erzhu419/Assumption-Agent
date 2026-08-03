@@ -443,7 +443,10 @@ def _validate_operation_probe(value: object, request: Mapping[str, object]) -> M
         or type(identity.get("pid")) is not int
         or identity["pid"] <= 1
         or type(identity.get("ppid")) is not int
-        or identity["ppid"] <= 0
+        # Linux reports zero when the worker's parent is outside this PID
+        # namespace, which is the normal direct-docker-exec topology.  PPID is
+        # retained as an observation, not treated as same-process authority.
+        or identity["ppid"] < 0
         or not isinstance(status, Mapping)
         or set(status)
         != {"CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb", "NoNewPrivs", "Seccomp"}

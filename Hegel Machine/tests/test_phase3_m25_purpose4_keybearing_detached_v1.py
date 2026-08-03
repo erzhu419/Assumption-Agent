@@ -268,7 +268,9 @@ def _operation_probe(request: dict[str, object]) -> dict[str, object]:
         "operation_nonce_hex": "64" * 16,
         "operation_request_sha256": request["request_sha256"],
         "purpose_id": 4,
-        "identity": {"uid": 65534, "gid": 65534, "pid": 2, "ppid": 1},
+        # A direct docker-exec worker normally observes PPID 0 because its
+        # parent lives outside the container PID namespace.
+        "identity": {"uid": 65534, "gid": 65534, "pid": 2, "ppid": 0},
         "proc_status": {
             "CapInh": "0000000000000000",
             "CapPrm": "0000000000000000",
@@ -422,6 +424,16 @@ def _redigest(response: dict[str, object]) -> None:
     ).hexdigest()
 
 
+def _redigest_probe_and_response(response: dict[str, object]) -> None:
+    probe = response["operation_probe_receipt"]
+    assert isinstance(probe, dict)
+    probe.pop("receipt_sha256", None)
+    probe["receipt_sha256"] = hashlib.sha256(
+        canonical_json_v1(probe)
+    ).hexdigest()
+    _redigest(response)
+
+
 def test_request_is_identity_only_and_forbids_host_oracle_material() -> None:
     request = _request(bytes.fromhex("78" * 16))
     validated = validate_purpose4_keybearing_request_v1(request)
@@ -462,6 +474,47 @@ def test_signed_actor_response_replays_but_remains_non_authoritative() -> None:
     assert result.attestation_root.hex() == response["attestation_root_hex"]
     assert result.signature.hex() == response["signature_hex"]
     assert result.authoritative is False
+
+
+@pytest.mark.parametrize("ppid", [0, 1])
+def test_operation_probe_accepts_nonnegative_pid_namespace_ppid(ppid: int) -> None:
+    request, response, verifier = _fixture()
+    response["operation_probe_receipt"]["identity"]["ppid"] = ppid
+    _redigest_probe_and_response(response)
+    result = validate_purpose4_keybearing_response_v1(
+        response, request=request, signature_verifier=verifier
+    )
+    assert result.authoritative is False
+
+
+@pytest.mark.parametrize("ppid", [-1, True, "0", None])
+def test_operation_probe_rejects_invalid_pid_namespace_ppid(ppid: object) -> None:
+    request, response, verifier = _fixture()
+    response["operation_probe_receipt"]["identity"]["ppid"] = ppid
+    _redigest_probe_and_response(response)
+    with pytest.raises(Purpose4KeyBearingError) as caught:
+        validate_purpose4_keybearing_response_v1(
+            response, request=request, signature_verifier=verifier
+        )
+    assert caught.value.code == FAIL_PROBE
+
+
+@pytest.mark.parametrize("mutation", ["missing_ppid", "extra_identity", "pid_one"])
+def test_operation_probe_rejects_noncanonical_process_identity(mutation: str) -> None:
+    request, response, verifier = _fixture()
+    identity = response["operation_probe_receipt"]["identity"]
+    if mutation == "missing_ppid":
+        identity.pop("ppid")
+    elif mutation == "extra_identity":
+        identity["sid"] = 0
+    else:
+        identity["pid"] = 1
+    _redigest_probe_and_response(response)
+    with pytest.raises(Purpose4KeyBearingError) as caught:
+        validate_purpose4_keybearing_response_v1(
+            response, request=request, signature_verifier=verifier
+        )
+    assert caught.value.code == FAIL_PROBE
 
 
 @pytest.mark.parametrize(
