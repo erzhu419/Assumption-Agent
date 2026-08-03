@@ -312,9 +312,10 @@ from Commit A. The qualification runner must:
    `rustc -vV` probe, exact `env -i` runtime/build environments, and separate
    runtime/build seccomp digests;
 6. build from the detached source and vendor mounts into a fresh Linux-local
-   target using `--release --locked --offline --jobs=1`, with Docker
+   target using `--quiet --release --locked --offline --jobs=1`, with Docker
    `--pull=never --network=none --read-only --cap-drop=ALL` and no inherited
-   proxy or registry configuration;
+   proxy or registry configuration; successful stdout and stderr must both be
+   exactly empty and their raw empty-stream digests remain receipt-bound;
 7. hash the private fresh binary before and after isolated execution, require
    Python/Rust/golden exact equality, then atomically persist those already
    validated bytes to the repository's `DEFAULT_RUST_BINARY` path and replay
@@ -352,3 +353,7 @@ This is an exact project-policy audit, not a general proof that arbitrary
 bytes cannot conceal a secret. A caller-supplied binary plus an informal
 repository inspection is at most a candidate dual replay and must leave the
 external-genesis guard below 10/10.
+
+The standalone and live-protocol M3 qualification receipts must be generated
+independently and compare byte-for-byte equal. Selecting or copying an embedded
+receipt is not an independent replay and cannot repair a receipt mismatch.

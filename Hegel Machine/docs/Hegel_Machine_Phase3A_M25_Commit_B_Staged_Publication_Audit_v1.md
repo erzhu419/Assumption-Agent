@@ -127,3 +127,10 @@ role isolation accepted by the owner, no remote attestation and no hardware
 non-exportability. It does not claim that a third party could not forge a
 self-consistent transcript. Neither audit phase changes a
 formal gate, creates a key/seed/signature/root/marker, or starts M3.
+
+The standalone M3 qualification receipt and the live-protocol embedded receipt
+must be byte-identical outputs of independent qualification runs. Commit-B
+rejects elapsed-time or other successful-build stream drift; it also rejects
+making the standalone role a projection of the live archive. The frozen Cargo
+quiet-success invariant keeps both raw build-stream digests equal to the empty
+stream SHA-256 while preserving nonzero-exit diagnostics.

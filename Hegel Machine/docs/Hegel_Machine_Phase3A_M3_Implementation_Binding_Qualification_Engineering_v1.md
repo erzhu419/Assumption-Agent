@@ -40,7 +40,11 @@ Both execution images are digest pinned:
 - Rust: `rust@sha256:38bc5a86d998772d4aec2348656ed21438d20fcdce2795b56ca434cf21430d89`
 
 Every build/replay uses `--pull=never` and `--network=none`. Cargo additionally
-uses `--locked --offline` and `CARGO_NET_OFFLINE=true`. The build container is
+uses `--quiet --locked --offline` and `CARGO_NET_OFFLINE=true`. A successful
+Cargo build must emit exactly zero stdout bytes and zero stderr bytes; both
+receipt fields therefore bind the raw empty stream SHA-256 rather than a
+normalized transcript. Any successful non-empty stream fails closed, while a
+nonzero Cargo exit retains its bounded raw stderr diagnostic. The build container is
 never given `~/.cargo`, a registry index, or the host Cargo cache. The host
 parses the committed `Cargo.lock`, verifies every selected `.crate` SHA-256,
 extracts the exact 21-package set into a run-private mode-0700 vendor snapshot,
@@ -299,3 +303,14 @@ formal M3 output roots = absent
 
 The remaining external-genesis/custody/signature gates and the separate
 explicit `phase3-m3-start` action remain independent later steps.
+
+## 10. Independent receipt repeatability
+
+The standalone M3 qualification and the independently executed live-protocol
+qualification must produce byte-identical M3 implementation receipts. This is
+a repeatability invariant, not permission to copy or project one report into
+the other. Cargo's ordinary success message contains elapsed wall time; binding
+that message made an otherwise identical binary produce different receipt
+roots. The frozen quiet-success invariant removes only that nondeterministic
+success log while retaining the existing raw-stream digest semantics and the
+complete failure diagnostic path.

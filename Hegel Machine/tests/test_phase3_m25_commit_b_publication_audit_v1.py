@@ -408,6 +408,25 @@ def test_commit_only_live_replay_disables_local_binding_reads(
         "verify_local_implementation_bindings": False,
     }
 
+    drifted = json.loads(json.dumps(report))
+    drifted_receipt = drifted["implementation_bindings"][
+        "m3_implementation_qualification_receipt"
+    ]
+    drifted_receipt["rust"]["build_stderr_sha256_or_null"] = "4" * 64
+    drifted["implementation_bindings"][
+        "m3_implementation_qualification_receipt_sha256"
+    ] = audit._prefixed_sha256_v1(audit.canonical_json_v1(drifted_receipt))
+    with pytest.raises(audit.CommitBPublicationAuditError) as captured:
+        audit._validate_live_report_public_only_v1(
+            drifted,
+            repository=repository,
+            basis_commit=basis,
+            m3_receipt=m3_receipt,
+            bridge_report=bridge_report,
+            bridge_binary_digest=bridge_binary_digest,
+        )
+    assert captured.value.code == audit.FAIL_FORMAL_REPLAY
+
 
 def test_status_renderer_rejects_symlinked_input_ancestor(tmp_path: Path) -> None:
     repository, basis = _repository(tmp_path)

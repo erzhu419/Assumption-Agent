@@ -58,8 +58,9 @@ Commit A 运行 fresh dual qualification，并确认十项 guard 全部为严格
 9. `bridge_statement_and_execution_v2_schema_frozen`；
 10. `secrets_absent_from_repository`。
 
-准入必须来自 Commit A 自身的 committed sources：fresh empty target、locked/offline
-Rust build、构建前后 Commit-A blob equality、Python/Rust exact report equality 和
+准入必须来自 Commit A 自身的 committed sources：fresh empty target、quiet-success
+locked/offline Rust build（成功 stdout/stderr 均为 exact 0 bytes）、构建前后 Commit-A
+blob equality、Python/Rust exact report equality 和
 repository secret-absence receipt 都必须成立。构建和 Python replay 必须来自私有的
 detached Commit-A snapshot，而不是 live worktree。Rust 端必须使用 Commit A 绑定的
 digest-pinned OCI image、`env -i` whitelist、独立 runtime/build seccomp，以及

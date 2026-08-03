@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import json
 import io
 import os
@@ -147,8 +148,12 @@ def _implementation_receipt(
         "canonical_program_records_stream_sha256": "ad" * 32,
         "program_chunk_manifests_stream_sha256": "ae" * 32,
         "bucket_accounting_records_stream_sha256": "af" * 32,
-        "build_stdout_sha256_or_null": None if implementation_id == 1 else "bb" * 32,
-        "build_stderr_sha256_or_null": None if implementation_id == 1 else "cc" * 32,
+        "build_stdout_sha256_or_null": (
+            None if implementation_id == 1 else hashlib.sha256(b"").hexdigest()
+        ),
+        "build_stderr_sha256_or_null": (
+            None if implementation_id == 1 else hashlib.sha256(b"").hexdigest()
+        ),
         "input_snapshot_target_free": True,
         "archive_file_set_verified": True,
         "host_strict_archive_replay_verified": True,
@@ -305,6 +310,8 @@ def test_receipt_is_typed_exact_field_and_non_authoritative() -> None:
         ("python", "source_file_count", -7),
         ("python", "image_ref", "not-even-an-image"),
         ("rust", "dependency_snapshot_file_count", 0),
+        ("rust", "build_stdout_sha256_or_null", "bb" * 32),
+        ("rust", "build_stderr_sha256_or_null", "cc" * 32),
     ],
 )
 def test_receipt_rejects_semantically_invalid_rehashed_rows(
@@ -427,7 +434,9 @@ def test_rust_build_mounts_only_private_vendor_snapshot_and_local_control_plane(
             *arguments,
         ],
     )
-    monkeypatch.setattr(qualification, "_build_cargo_dependency_snapshot", fake_snapshot)
+    monkeypatch.setattr(
+        qualification, "_build_cargo_dependency_snapshot", fake_snapshot
+    )
     monkeypatch.setattr(qualification, "_run", fake_run)
     binary, _, _, snapshot_root, file_count = qualification._build_rust(
         control,
@@ -445,10 +454,91 @@ def test_rust_build_mounts_only_private_vendor_snapshot_and_local_control_plane(
     ]
     assert "--pull=never" in command and "--network=none" in command
     assert "--offline" in command and "/vendor" in " ".join(command)
+    assert command.count("--quiet") == 1
     assert ".cargo/registry" not in " ".join(command)
     assert not any(key.endswith("_PROXY") for key in captured["environment"])
     assert binary.read_bytes() == b"test-rust-binary"
     assert snapshot_root == b"v" * 32 and file_count == 7
+
+
+@pytest.mark.parametrize(
+    ("stdout", "stderr"),
+    [(b"unexpected cargo stdout\n", b""), (b"", b"unexpected cargo stderr\n")],
+)
+def test_quiet_cargo_success_with_output_fails_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    stdout: bytes,
+    stderr: bytes,
+) -> None:
+    source = tmp_path / "source"
+    crate = source / "Hegel Machine/rust/m3_closure_enumerator"
+    crate.mkdir(parents=True)
+    (crate / "Cargo.lock").write_bytes(b"version = 4\n")
+    persisted = tmp_path / "persist"
+    (persisted / "rust/m3_closure_enumerator").mkdir(parents=True)
+    monkeypatch.setattr(qualification, "PROJECT_ROOT", persisted)
+
+    def fake_snapshot(_lock_payload: bytes, vendor: Path):
+        vendor.mkdir(mode=0o700)
+        return b"v" * 32, 7
+
+    def fake_run(command, *, code, timeout, environment):
+        return qualification.subprocess.CompletedProcess(command, 0, stdout, stderr)
+
+    control = SimpleNamespace(
+        environment={
+            "DOCKER_CONFIG": "/tmp/private-config",
+            "DOCKER_HOST": "unix:///var/run/docker.sock",
+            "HOME": "/tmp/private-home",
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/usr/bin:/bin",
+        },
+        command=lambda *arguments: [
+            "/usr/bin/docker",
+            "--host=unix:///var/run/docker.sock",
+            *arguments,
+        ],
+    )
+    monkeypatch.setattr(qualification, "_build_cargo_dependency_snapshot", fake_snapshot)
+    monkeypatch.setattr(qualification, "_run", fake_run)
+
+    with pytest.raises(qualification.M3ImplementationQualificationError) as captured:
+        qualification._build_rust(
+            control,
+            "rust@sha256:" + "66" * 32,
+            source,
+            seccomp_path=PROJECT_ROOT / "config/phase3_m3_offline_build_seccomp_v1.json",
+            basis_commit="12" * 20,
+            repository_root=REPOSITORY_ROOT,
+        )
+    assert captured.value.code == qualification.FAIL_BUILD
+    assert "successful quiet offline Cargo build emitted output" in captured.value.detail
+
+
+def test_failed_quiet_cargo_build_preserves_stderr(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    completed = qualification.subprocess.CompletedProcess(
+        ["cargo", "build", "--quiet"],
+        101,
+        b"",
+        b"error: expected expression\ncould not compile `hegel`\n",
+    )
+    monkeypatch.setattr(
+        qualification.subprocess, "run", lambda *_args, **_kwargs: completed
+    )
+    with pytest.raises(qualification.M3ImplementationQualificationError) as captured:
+        qualification._run(
+            completed.args,
+            code=qualification.FAIL_BUILD,
+            timeout=1,
+            environment={"PATH": "/usr/bin:/bin"},
+        )
+    assert captured.value.code == qualification.FAIL_BUILD
+    assert "expected expression" in captured.value.detail
+    assert "could not compile" in captured.value.detail
 
 
 def test_host_replay_decodes_every_record_and_rejects_stream_tampering(

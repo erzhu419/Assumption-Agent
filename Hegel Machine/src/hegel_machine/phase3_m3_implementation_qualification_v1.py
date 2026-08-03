@@ -101,6 +101,7 @@ RUST_ENTRYPOINT_ID: Final = "entrypoint:rust-m3-bounded-enumerator-v1"
 DOCKER_POLICY_ID: Final = "hegel-m3-dual-offline-qualification-docker-v1"
 RUNTIME_DOCKER_POLICY_ID: Final = "hegel-m3-enumerator-runtime-docker-v1"
 RUST_BUILD_DOCKER_POLICY_ID: Final = "hegel-m3-rust-offline-build-docker-v1"
+EMPTY_BUILD_STREAM_SHA256: Final = hashlib.sha256(b"").digest()
 RUST_TOOLCHAIN_BIN: Final = (
     "/usr/local/rustup/toolchains/1.88.0-x86_64-unknown-linux-gnu/bin"
 )
@@ -1667,6 +1668,7 @@ def _build_rust(
                     "--config",
                     'source.vendored-sources.directory="/vendor"',
                     "build",
+                    "--quiet",
                     "--release",
                     "--locked",
                     "--offline",
@@ -1682,6 +1684,11 @@ def _build_rust(
             timeout=300,
             environment=control_plane.environment,
         )
+        if completed.stdout != b"" or completed.stderr != b"":
+            _fail(
+                FAIL_BUILD,
+                "successful quiet offline Cargo build emitted output",
+            )
         built = target / "release/hegel-m3-closure-enumerator"
         if not built.is_file():
             _fail(FAIL_BUILD, "offline Cargo build produced no release binary")
@@ -2472,16 +2479,24 @@ def validate_qualification_receipt_v1(
                 code=FAIL_RECEIPT,
                 minimum=1,
             )
-            _hex32(
+            build_stdout_digest = _hex32(
                 implementation["build_stdout_sha256_or_null"],
                 label="receipt Rust build stdout",
                 code=FAIL_RECEIPT,
             )
-            _hex32(
+            build_stderr_digest = _hex32(
                 implementation["build_stderr_sha256_or_null"],
                 label="receipt Rust build stderr",
                 code=FAIL_RECEIPT,
             )
+            if (
+                build_stdout_digest != EMPTY_BUILD_STREAM_SHA256
+                or build_stderr_digest != EMPTY_BUILD_STREAM_SHA256
+            ):
+                _fail(
+                    FAIL_RECEIPT,
+                    "Rust quiet-build success streams are not canonically empty",
+                )
             if _hex32(
                 implementation["build_container_environment_sha256_or_null"],
                 label="receipt Rust build container environment digest",
