@@ -260,11 +260,7 @@ def _file_binding(path: Path, basis_commit: str) -> dict[str, object]:
     }
 
 
-def _load_profile() -> dict[str, object]:
-    try:
-        value = json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        _fail(FAIL_INPUT_BINDING, f"profile is unreadable: {exc}")
+def _validate_profile_value(value: object) -> dict[str, object]:
     if type(value) is not dict or value.get("profile_id") != PROFILE_ID:
         _fail(FAIL_INPUT_BINDING, "unexpected profile ID or representation")
     if not _is_exact_technical_actor_disclosure(value.get("authority_disclosure")):
@@ -280,7 +276,15 @@ def _load_profile() -> dict[str, object]:
         "pull_policy": "never",
     }:
         _fail(FAIL_INPUT_BINDING, "profile does not freeze the offline network policy")
-    return value
+    return dict(value)
+
+
+def _load_profile() -> dict[str, object]:
+    try:
+        value = json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        _fail(FAIL_INPUT_BINDING, f"profile is unreadable: {exc}")
+    return _validate_profile_value(value)
 
 
 def _docker_version(
@@ -1040,8 +1044,17 @@ def _validate_probe_shape_strict(value: object, context: str) -> dict[str, objec
     return probe
 
 
-def validate_qualification_report(value: object) -> dict[str, object]:
-    """Strictly validate and return a defensive copy of a qualification report."""
+def validate_qualification_report(
+    value: object,
+    *,
+    profile_override: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    """Strictly validate and return a defensive copy of a qualification report.
+
+    ``profile_override`` is reserved for a caller that already obtained strict
+    profile bytes from a specific Git tree.  The default preserves the live
+    qualification validator's worktree binding.
+    """
 
     report = _require_exact_keys(
         value,
@@ -1170,7 +1183,11 @@ def validate_qualification_report(value: object) -> dict[str, object]:
     except Phase3LocalRuntimeError as exc:
         _fail(FAIL_REPORT_INVALID, f"Docker control-plane receipt is invalid: {exc.code}")
 
-    profile = _load_profile()
+    profile = (
+        _load_profile()
+        if profile_override is None
+        else _validate_profile_value(dict(profile_override))
+    )
     images = profile["images"]
     assert isinstance(images, dict)
     image_bindings = _require_exact_keys(

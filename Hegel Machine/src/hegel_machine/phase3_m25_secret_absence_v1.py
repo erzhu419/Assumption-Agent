@@ -16,6 +16,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -28,8 +29,8 @@ PROJECT_ROOT: Final = Path(__file__).resolve().parents[2]
 REPOSITORY_SCOPE_PREFIX: Final = "Hegel Machine/"
 MACHINE_FREEZE_ID: Final = "hegel-freeze-p2b-p3-v1.1.2"
 ARTIFACT_NAME: Final = "phase3_m25_repository_genesis_secret_absence_v1"
-REPORT_SCHEMA: Final = "hegel-phase3-m25-repository-genesis-secret-absence/1"
-POLICY_ID: Final = "hegel-m25-frozen-genesis-secret-artifact-policy-v1"
+REPORT_SCHEMA: Final = "hegel-phase3-m25-repository-genesis-secret-absence/2"
+POLICY_ID: Final = "hegel-m25-frozen-genesis-secret-artifact-policy-v2"
 ARTIFACT_KIND: Final = "DIAGNOSTIC_NON_AUTHORITATIVE"
 PASS_STATUS: Final = "FROZEN_GENESIS_SECRET_ARTIFACTS_ABSENT"
 FAIL_STATUS: Final = "FROZEN_GENESIS_SECRET_ARTIFACTS_DETECTED"
@@ -103,6 +104,23 @@ PRIVATE_KEY_MAGIC_HEADERS: Final = {
     "PUTTY_PRIVATE_KEY": b"PuTTY-User-" + b"Key-File-",
     "RSA_PEM": _PEM_BEGIN + b"RSA" + _PEM_PRIVATE_END,
 }
+
+# A record-start header is sufficient for every class above.  In addition,
+# complete PEM/OpenPGP blocks are findings even when serialized inside a JSON,
+# YAML, Markdown, or source-code string.  The non-PEM formats have no matching
+# footer, so their identifying magic is forbidden at every byte offset.
+PRIVATE_KEY_MAGIC_FOOTERS: Final = {
+    "DSA_PEM": b"-----END " + b"DSA PRIVATE KEY-----",
+    "EC_PEM": b"-----END " + b"EC PRIVATE KEY-----",
+    "ENCRYPTED_PKCS8_PEM": b"-----END " + b"ENCRYPTED PRIVATE KEY-----",
+    "OPENPGP_PRIVATE_PEM": b"-----END " + b"PGP PRIVATE KEY BLOCK-----",
+    "OPENSSH_PEM": b"-----END " + b"OPENSSH PRIVATE KEY-----",
+    "PKCS8_PEM": b"-----END " + b"PRIVATE KEY-----",
+    "RSA_PEM": b"-----END " + b"RSA PRIVATE KEY-----",
+}
+PRIVATE_KEY_ANY_OFFSET_IDS: Final = frozenset(
+    {"AGE_SECRET_KEY", "OPENSSH_BINARY", "PUTTY_PRIVATE_KEY"}
+)
 
 FORBIDDEN_JSON_SECRET_KEYS: Final = frozenset(
     {
@@ -195,6 +213,42 @@ def _repository_root() -> Path:
     return root
 
 
+def _validated_repository_scope_v1(
+    repository_root: Path, project_root: Path
+) -> tuple[Path, Path]:
+    """Validate an explicit Git toplevel and its lexical Hegel scope."""
+
+    if not isinstance(repository_root, Path) or not isinstance(project_root, Path):
+        raise TypeError("repository_root and project_root must be pathlib.Path")
+    try:
+        requested_repository = Path(os.path.abspath(os.fspath(repository_root)))
+        requested_project = Path(os.path.abspath(os.fspath(project_root)))
+        repository = requested_repository.resolve(strict=True)
+        project = requested_project.resolve(strict=True)
+    except OSError as exc:
+        raise GenesisSecretAbsenceError(
+            "explicit repository/project scope is unavailable"
+        ) from exc
+    if (
+        repository != requested_repository
+        or project != requested_project
+        or not repository.is_dir()
+        or not project.is_dir()
+        or project != repository / REPOSITORY_SCOPE_PREFIX.rstrip("/")
+    ):
+        raise GenesisSecretAbsenceError(
+            "explicit repository/project scope is aliased or mismatched"
+        )
+    top = _git_bytes(repository, ["rev-parse", "--show-toplevel"], timeout=30)
+    try:
+        top_path = Path(top.decode("utf-8", "strict").strip()).resolve(strict=True)
+    except (UnicodeDecodeError, OSError) as exc:
+        raise GenesisSecretAbsenceError("explicit Git toplevel is invalid") from exc
+    if top_path != repository:
+        raise GenesisSecretAbsenceError("explicit repository is not the Git toplevel")
+    return repository, project
+
+
 def _git_bytes(repository_root: Path, arguments: list[str], *, timeout: int = 120) -> bytes:
     completed = subprocess.run(
         ["/usr/bin/git", *arguments],
@@ -224,6 +278,149 @@ def _git_bytes(repository_root: Path, arguments: list[str], *, timeout: int = 12
         command = " ".join(arguments[:2])
         raise GenesisSecretAbsenceError(f"Git audit command failed: {command}")
     return completed.stdout
+
+
+def _git_path(repository_root: Path, name: str) -> Path:
+    """Resolve one Git administrative path without accepting an empty alias."""
+
+    raw = _git_bytes(repository_root, ["rev-parse", "--git-path", name], timeout=30)
+    try:
+        text = raw.decode("utf-8", "strict").strip()
+    except UnicodeDecodeError as exc:
+        raise GenesisSecretAbsenceError("Git administrative path is not UTF-8") from exc
+    if not text or "\x00" in text:
+        raise GenesisSecretAbsenceError("Git administrative path is malformed")
+    candidate = Path(text)
+    if not candidate.is_absolute():
+        candidate = repository_root / candidate
+    return candidate
+
+
+def _reject_incomplete_or_rewritten_history(repository_root: Path) -> None:
+    """Reject metadata that can truncate or externally rewrite history.
+
+    Parent traversal below reads raw commit-object headers and is therefore
+    immune to graft semantics.  These checks additionally make the receipt's
+    object-completeness boundary explicit and fail closed for shallow,
+    promisor, alternate-object, graft, or replace-ref repositories.
+    """
+
+    shallow = _git_bytes(
+        repository_root, ["rev-parse", "--is-shallow-repository"], timeout=30
+    )
+    if shallow != b"false\n":
+        raise GenesisSecretAbsenceError(
+            "history-complete audit rejects a shallow repository"
+        )
+
+    local_config = _git_bytes(
+        repository_root, ["config", "--local", "--null", "--list"], timeout=30
+    ).lower()
+    if b"promisor" in local_config or b"partialclone" in local_config:
+        raise GenesisSecretAbsenceError(
+            "history-complete audit rejects promisor or partial-clone config"
+        )
+
+    forbidden_admin_paths = (
+        _git_path(repository_root, "objects/info/alternates"),
+        _git_path(repository_root, "objects/info/http-alternates"),
+        _git_path(repository_root, "info/grafts"),
+    )
+    if any(path.exists() or path.is_symlink() for path in forbidden_admin_paths):
+        raise GenesisSecretAbsenceError(
+            "history-complete audit rejects alternate-object or graft metadata"
+        )
+
+    object_directory = _git_path(repository_root, "objects")
+    pack_directory = object_directory / "pack"
+    try:
+        if pack_directory.is_dir() and any(pack_directory.glob("*.promisor")):
+            raise GenesisSecretAbsenceError(
+                "history-complete audit rejects promisor object packs"
+            )
+    except OSError as exc:
+        raise GenesisSecretAbsenceError(
+            "history-complete audit cannot inspect the object pack directory"
+        ) from exc
+
+    replace_refs = _git_bytes(
+        repository_root,
+        ["for-each-ref", "--format=%(refname)", "refs/replace"],
+        timeout=30,
+    )
+    if replace_refs:
+        raise GenesisSecretAbsenceError(
+            "history-complete audit rejects replacement refs"
+        )
+
+
+def _raw_commit_identity(
+    repository_root: Path, commit_id: str
+) -> tuple[str, tuple[str, ...]]:
+    """Return the raw tree and parents encoded by one commit object."""
+
+    commit = _require_commit_id(commit_id)
+    raw = _git_bytes(repository_root, ["cat-file", "commit", commit])
+    if b"\x00" in raw or b"\r" in raw or b"\n\n" not in raw:
+        raise GenesisSecretAbsenceError("raw commit object framing is malformed")
+    header, _message = raw.split(b"\n\n", 1)
+    trees: list[str] = []
+    parents: list[str] = []
+    saw_header = False
+    for line in header.split(b"\n"):
+        if line.startswith(b" "):
+            if not saw_header:
+                raise GenesisSecretAbsenceError(
+                    "raw commit object has an orphan continuation"
+                )
+            continue
+        try:
+            key, value = line.split(b" ", 1)
+        except ValueError as exc:
+            raise GenesisSecretAbsenceError("raw commit header is malformed") from exc
+        if re.fullmatch(rb"[a-z][a-z0-9-]*", key) is None or not value:
+            raise GenesisSecretAbsenceError("raw commit header key/value is malformed")
+        saw_header = True
+        if key not in {b"tree", b"parent"}:
+            continue
+        try:
+            object_id = value.decode("ascii", "strict")
+        except UnicodeDecodeError as exc:
+            raise GenesisSecretAbsenceError(
+                "raw commit tree/parent is not ASCII"
+            ) from exc
+        _require_commit_id(object_id)
+        if key == b"tree":
+            trees.append(object_id)
+        else:
+            parents.append(object_id)
+    if len(trees) != 1 or len(set(parents)) != len(parents):
+        raise GenesisSecretAbsenceError(
+            "raw commit must encode exactly one tree and unique parent rows"
+        )
+    _git_bytes(repository_root, ["cat-file", "-e", f"{trees[0]}^{{tree}}"])
+    return trees[0], tuple(parents)
+
+
+def _raw_ancestor_trees(
+    repository_root: Path, commit_id: str
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Traverse every raw parent edge and require every object to be local."""
+
+    pending = [commit_id]
+    seen: set[str] = set()
+    trees: set[str] = set()
+    while pending:
+        current = pending.pop()
+        if current in seen:
+            continue
+        tree, parents = _raw_commit_identity(repository_root, current)
+        seen.add(current)
+        trees.add(tree)
+        pending.extend(reversed(parents))
+    if commit_id not in seen or not seen or not trees:
+        raise GenesisSecretAbsenceError("raw ancestor traversal is empty")
+    return tuple(sorted(seen)), tuple(sorted(trees))
 
 
 def _normalize_json_key(key: str) -> str:
@@ -326,14 +523,52 @@ def _filename_policy_token(path_bytes: bytes) -> str | None:
     return None
 
 
+def _magic_header_starts_record(blob: bytes, header: bytes) -> bool:
+    """Return whether ``header`` starts a CR/LF-delimited logical record.
+
+    Private-key headers are serialized record headers, not arbitrary byte
+    substrings.  Anchoring the match prevents source-code assertions and other
+    quoted examples from becoming findings merely because they mention a
+    header in the middle of a line.  The loop deliberately continues past a
+    mid-record occurrence because the same blob may contain a later, genuine
+    record-start occurrence.
+    """
+
+    offset = blob.find(header)
+    while offset >= 0:
+        line_start = max(blob.rfind(b"\n", 0, offset), blob.rfind(b"\r", 0, offset)) + 1
+        if all(byte in (0x09, 0x20) for byte in blob[line_start:offset]):
+            return True
+        offset = blob.find(header, offset + 1)
+    return False
+
+
+def _private_key_magic_hit(blob: bytes, header_id: str, header: bytes) -> bool:
+    """Match a record header, a complete embedded block, or non-PEM magic."""
+
+    if _magic_header_starts_record(blob, header):
+        return True
+    if header_id in PRIVATE_KEY_ANY_OFFSET_IDS:
+        return header in blob
+    footer = PRIVATE_KEY_MAGIC_FOOTERS.get(header_id)
+    if footer is None:
+        raise AssertionError(f"private-key footer registry is incomplete: {header_id}")
+    offset = blob.find(header)
+    while offset >= 0:
+        if blob.find(footer, offset + len(header)) >= 0:
+            return True
+        offset = blob.find(header, offset + 1)
+    return False
+
+
 def _tree_blob_paths(
     repository_root: Path,
-    commit_ids: tuple[str, ...],
+    tree_ids: tuple[str, ...],
 ) -> tuple[dict[str, set[bytes]], int, int]:
     paths_by_blob: dict[str, set[bytes]] = {}
     observation_count = 0
     non_blob_entry_count = 0
-    for commit_id in commit_ids:
+    for tree_id in tree_ids:
         output = _git_bytes(
             repository_root,
             [
@@ -341,7 +576,7 @@ def _tree_blob_paths(
                 "-r",
                 "-z",
                 "--full-tree",
-                commit_id,
+                tree_id,
                 "--",
                 REPOSITORY_SCOPE_PREFIX.rstrip("/"),
             ],
@@ -371,6 +606,29 @@ def _policy_payload() -> dict[str, object]:
         "forbidden_env_filename_rule": "basename == .env OR basename starts .env.",
         "forbidden_extensions": sorted(FORBIDDEN_EXTENSIONS),
         "private_key_magic_header_ids": sorted(PRIVATE_KEY_MAGIC_HEADERS),
+        "private_key_magic_header_match_rule": (
+            "header begins at byte offset zero or after CR or LF plus optional "
+            "horizontal ASCII whitespace; an isolated mid-record PEM/OpenPGP "
+            "header is not a finding under this record-only rule"
+        ),
+        "private_key_complete_block_match_rule": (
+            "a PEM/OpenPGP header followed by its matching footer is a finding "
+            "at any byte offsets, including escaped structured-text strings; "
+            "age, PuTTY, and binary OpenSSH magic are findings at any offset"
+        ),
+        "private_key_magic_header_residual_boundary": (
+            "an isolated inline PEM/OpenPGP header example without a matching "
+            "footer is outside the header/block rules unless another frozen "
+            "filename or JSON-key rule independently matches"
+        ),
+        "history_enumeration_rule": (
+            "raw cat-file commit parent traversal plus every unique raw ancestor "
+            "tree; revision-walk graft semantics are not consulted"
+        ),
+        "history_completeness_rule": (
+            "reject shallow, promisor, partial-clone, alternate-object, graft, "
+            "and replace-ref metadata; every raw parent/tree/blob must exist locally"
+        ),
         "forbidden_json_secret_keys": sorted(FORBIDDEN_JSON_SECRET_KEYS),
         "json_key_normalization": (
             "ASCII camel-boundary insertion; Unicode casefold; non-[a-z0-9] "
@@ -394,32 +652,11 @@ def _policy_payload() -> dict[str, object]:
     }
 
 
-def _scan_once(commit_id: str) -> dict[str, object]:
-    repository_root = _repository_root()
-    _git_bytes(repository_root, ["cat-file", "-e", f"{commit_id}^{{commit}}"])
-    ancestor_ids = tuple(
-        line.decode("ascii")
-        for line in _git_bytes(repository_root, ["rev-list", commit_id]).splitlines()
-        if line
-    )
-    relevant_ids = {
-        line.decode("ascii")
-        for line in _git_bytes(
-            repository_root,
-            [
-                "rev-list",
-                "--full-history",
-                commit_id,
-                "--",
-                REPOSITORY_SCOPE_PREFIX.rstrip("/"),
-            ],
-        ).splitlines()
-        if line
-    }
-    relevant_ids.add(commit_id)
-    path_state_commits = tuple(sorted(relevant_ids))
+def _scan_once(commit_id: str, *, repository_root: Path) -> dict[str, object]:
+    _reject_incomplete_or_rewritten_history(repository_root)
+    ancestor_ids, ancestor_tree_ids = _raw_ancestor_trees(repository_root, commit_id)
     paths_by_blob, observations, non_blob_entries = _tree_blob_paths(
-        repository_root, path_state_commits
+        repository_root, ancestor_tree_ids
     )
 
     findings: list[dict[str, object]] = []
@@ -484,7 +721,7 @@ def _scan_once(commit_id: str) -> dict[str, object]:
             )
 
         for header_id, header in sorted(PRIVATE_KEY_MAGIC_HEADERS.items()):
-            if header in blob:
+            if _private_key_magic_hit(blob, header_id, header):
                 findings.append(
                     {
                         "finding_code": "PRIVATE_KEY_MAGIC_HEADER",
@@ -541,7 +778,7 @@ def _scan_once(commit_id: str) -> dict[str, object]:
     }
     return {
         "ancestor_commit_count": len(ancestor_ids),
-        "path_state_commit_count": len(path_state_commits),
+        "path_state_commit_count": len(ancestor_tree_ids),
         "tree_entry_observation_count": observations,
         "unique_blob_count": len(paths_by_blob),
         "unique_blob_path_association_count": sum(
@@ -557,14 +794,12 @@ def _scan_once(commit_id: str) -> dict[str, object]:
     }
 
 
-def repository_genesis_secret_absence_report(
-    commit_id: str,
+def _repository_genesis_secret_absence_report_v1(
+    commit_id: str, *, repository_root: Path
 ) -> dict[str, object]:
-    """Audit one commit plus all ancestors and return a replay-stable receipt."""
-
     audited_commit = _require_commit_id(commit_id)
-    first = _scan_once(audited_commit)
-    second = _scan_once(audited_commit)
+    first = _scan_once(audited_commit, repository_root=repository_root)
+    second = _scan_once(audited_commit, repository_root=repository_root)
     if not _strict_json_equal(first, second):
         raise GenesisSecretAbsenceError(
             "repository genesis-secret audit changed across immediate replay"
@@ -609,6 +844,36 @@ def repository_genesis_secret_absence_report(
     return payload
 
 
+def repository_genesis_secret_absence_report(
+    commit_id: str,
+) -> dict[str, object]:
+    """Audit the configured repository commit plus every raw ancestor."""
+
+    return _repository_genesis_secret_absence_report_v1(
+        commit_id, repository_root=_repository_root()
+    )
+
+
+def repository_genesis_secret_absence_report_for_repository_v1(
+    repository_root: Path,
+    project_root: Path,
+    commit_id: str,
+) -> dict[str, object]:
+    """Replay the receipt against an explicitly supplied repository.
+
+    This entry point exists for Commit-B post-commit verification.  It never
+    consults this module's configured worktree and returns the same path-free
+    receipt bytes as the default wrapper for the same Git object graph.
+    """
+
+    repository, _project = _validated_repository_scope_v1(
+        repository_root, project_root
+    )
+    return _repository_genesis_secret_absence_report_v1(
+        commit_id, repository_root=repository
+    )
+
+
 def validate_repository_genesis_secret_absence_report(
     report: Mapping[str, object],
     *,
@@ -648,5 +913,6 @@ __all__ = [
     "REPORT_SCHEMA",
     "REPOSITORY_SCOPE_PREFIX",
     "repository_genesis_secret_absence_report",
+    "repository_genesis_secret_absence_report_for_repository_v1",
     "validate_repository_genesis_secret_absence_report",
 ]

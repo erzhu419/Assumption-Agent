@@ -122,20 +122,23 @@ negative guards，compact report 完全一致，golden fixture SHA-256 为
 envelope 的 compact sorted response 为 20,308 bytes，SHA-256 为
 `9c855290ad9f9a6e3e523107e0162e6e3c363afec09224245c5e35075ad8ab4c`。
 
-Commit `d293507048d39323462e5c9033905b352ae07cb2` 的 private detached snapshot 已完成
+Commit `d293507048d39323462e5c9033905b352ae07cb2` 的 private detached snapshot 曾完成
 fresh Python replay 与 fresh isolated Rust build；Cargo 只从 `Cargo.lock` 校验过的 `.crate`
 归档重新解包，caller 不能指定工具链，approved toolchain、source snapshot、同一 open binary
 inode 的 hash/exec 和前后输入稳定性均已核验。冻结 secret-policy 对 Commit A 及全部 ancestors
 扫描为零发现；该结论只覆盖项目冻结的 filename/header/non-null JSON-key classes，不是万能
 secret 检测证明。结果准确称为 `DUAL_EXACT_WIRE_ERRATA_GOLDEN_PASS`，artifact kind 为
-`DETERMINISTIC_CANDIDATE_NON_AUTHORITATIVE`。
+`DETERMINISTIC_CANDIDATE_NON_AUTHORITATIVE`；它现为历史资格化证据，不是后续 genesis
+的 implementation basis。
 
 这次 fresh qualification 只给出无副作用的 external-genesis start authorization；流程尚未执行，
 checked JSON 单独不能授权，操作员每次必须 fresh replay 或取得后来由合格隔离 technical
 actor 生成的 live attestation。这里不要求独立真人/组织，但不能用同进程测试签名代替 actor evidence。
 真实 seed/key/signature/marker、formal roots 和 M3 execution identity 均未生成，状态保持
-`14/24 / NOT_RUN`。当前证据见
-[exact-wire qualification](artifacts/phase3_m25_errata_qualification_v1.json)，操作边界见
+`14/24 / NOT_RUN`。历史 direct artifact 见
+[exact-wire qualification](artifacts/phase3_m25_errata_qualification_v1.json)；A2 提交后必须
+在 `artifacts/phase3_m25_external/phase3_m25_errata_qualification_v1.json` 重新生成并绑定
+新的 implementation-basis commit，旧 artifact 不得作为执行输入。操作边界见
 [external-genesis runbook](docs/phase3_m25_external_genesis_operator_runbook.md) 与
 [owner amendment](docs/Hegel_Machine_Owner_Accepted_Container_Technical_Actor_Eligibility_Amendment_v1.md)，较早的
 [v1.1.2 typed-row qualification](artifacts/phase3_m25_wire_completion_qualification_v112.json)
@@ -324,7 +327,7 @@ PYTHONPATH=src python3 -m hegel_machine phase3-m25-v112-qualify \
   --rust-binary rust/formal_bridge_m25/target/debug/hegel-formal-bridge-m25 \
   --output artifacts/phase3_m25_wire_completion_qualification_v112.json
 PYTHONPATH=src python3 -m hegel_machine phase3-m25-errata-qualify \
-  --output artifacts/phase3_m25_errata_qualification_v1.json
+  --output artifacts/phase3_m25_external/phase3_m25_errata_qualification_v1.json
 PYTHONPATH=src python3 -m hegel_machine phase3-m25-external-preflight \
   --output artifacts/phase3_m25_external_preflight_v2.json
 PYTHONPATH=src python3 -m pytest -q -s

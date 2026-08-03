@@ -2917,7 +2917,22 @@ def validate_actor_protocol_qualification_report_v1(
     report: Mapping[str, object],
     *,
     expected_basis_commit: str | None = None,
+    verify_commit_sources: bool = True,
+    verify_local_implementation_bindings: bool = True,
 ) -> ReplayedActorProtocolQualificationV1:
+    """Replay a qualification archive.
+
+    The two verification switches exist for the Commit-B public-tree verifier,
+    which independently checks the same source and implementation bindings
+    against Git blobs supplied by its caller.  Ordinary qualification callers
+    retain the stronger defaults and therefore still require the live
+    worktree, persisted Rust binaries, and local qualification report.
+    """
+
+    if type(verify_commit_sources) is not bool or type(
+        verify_local_implementation_bindings
+    ) is not bool:
+        _fail(FAIL_REPORT, "qualification replay verification switches are not booleans")
     if not isinstance(report, Mapping):
         _fail(FAIL_REPORT, "diagnostic archive is not an object")
     value = dict(report)
@@ -2945,17 +2960,19 @@ def validate_actor_protocol_qualification_report_v1(
     ):
         _fail(FAIL_REPORT, "qualification archive status/authority differs")
     _require_sha256(value["commit_a_source_set_sha256"], "source set")
-    expected_source_digest, expected_source_count = (
-        _commit_source_set_digest_from_git_v1(basis_commit)
-    )
-    if (
-        value["commit_a_source_set_sha256"] != expected_source_digest
-        or value["commit_a_source_file_count"] != expected_source_count
-    ):
-        _fail(FAIL_REPORT, "qualification source set differs from Commit A")
-    _validate_implementation_bindings_v1(
-        value["implementation_bindings"], basis_commit=basis_commit
-    )
+    if verify_commit_sources:
+        expected_source_digest, expected_source_count = (
+            _commit_source_set_digest_from_git_v1(basis_commit)
+        )
+        if (
+            value["commit_a_source_set_sha256"] != expected_source_digest
+            or value["commit_a_source_file_count"] != expected_source_count
+        ):
+            _fail(FAIL_REPORT, "qualification source set differs from Commit A")
+    if verify_local_implementation_bindings:
+        _validate_implementation_bindings_v1(
+            value["implementation_bindings"], basis_commit=basis_commit
+        )
     evidence = value["evidence_bundle"]
     evidence_content_id = _validate_evidence_v1(evidence, basis_commit=basis_commit)
     assert isinstance(evidence, Mapping)

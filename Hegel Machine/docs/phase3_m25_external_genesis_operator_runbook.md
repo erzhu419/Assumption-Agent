@@ -607,6 +607,16 @@ compromise/recovery policy 明确决定；绝不能自动重抽。
 - 没有声称 `COMPLETE`、`DSL_TOO_LARGE`、outside verdict、sink verdict、certificate 或
   ACTIVE promotion。
 
+可执行入口与两阶段自引用处理见
+`Hegel_Machine_Phase3A_M25_Commit_B_Staged_Publication_Audit_v1.md`：先用
+`render-status` 从其余十项公开角色确定性生成唯一 status（随后仍以 index 为权威），
+再用 `prepare` 审计除唯一 audit receipt 之外的完整 Git index 候选；暂存该 receipt 后，
+必须再用 fresh purpose-4 actor 重放 receipt-excluded 候选并逐字节匹配 staged receipt，
+然后由另一 fresh actor 执行 receipt-inclusive `finalize-index`；最终 receipt 只能写到 repo 外
+或 stdout。Commit B 生成后再执行只读 `verify-commit` parent/tree replay。这三步均不
+新增 formal gate，也不启动 M3。该证据边界是 owner-controlled self-consistent
+transcript，不是 remote attestation，也不主张对同一管理员不可伪造。
+
 ## 12. Fail-closed operator checklist
 
 ### 12.1 handoff 前

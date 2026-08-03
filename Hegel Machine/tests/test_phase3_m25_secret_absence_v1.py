@@ -83,6 +83,12 @@ def test_clean_history_passes_twice_and_ignores_dirty_worktree(
     # Dirty bytes are deliberately outside the committed-object audit scope.
     (project / "untracked_private.key").write_text("not committed", encoding="utf-8")
     report = repository_genesis_secret_absence_report(commit_id)
+    explicit_report = (
+        absence.repository_genesis_secret_absence_report_for_repository_v1(
+            repository, project, commit_id
+        )
+    )
+    assert explicit_report == report
     validate_repository_genesis_secret_absence_report(
         report, expected_commit_id=commit_id
     )
@@ -160,6 +166,173 @@ def test_deleted_ancestor_artifacts_remain_findings_and_values_are_not_disclosed
         }
         for finding in report["findings"]
     )
+
+
+def test_side_parent_only_secret_remains_a_merge_history_finding(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, project = _repository(tmp_path)
+    (project / "public.txt").write_text("base\n", encoding="utf-8")
+    _commit(repository, "base")
+
+    _git(repository, "checkout", "-q", "-b", "side-secret")
+    secret_path = project / "side-only-private.pem"
+    secret_path.write_bytes(b"-----BEGIN " + b"PRIVATE KEY-----\n")
+    _commit(repository, "side parent contains key material")
+    secret_path.unlink()
+    _commit(repository, "side parent removes key material")
+
+    _git(repository, "checkout", "-q", "master")
+    (project / "public.txt").write_text("main\n", encoding="utf-8")
+    _commit(repository, "main diverges")
+    _git(repository, "merge", "--no-ff", "-q", "side-secret", "-m", "merge side")
+    merge_commit = _git(repository, "rev-parse", "HEAD")
+    assert not secret_path.exists()
+    monkeypatch.setattr(absence, "PROJECT_ROOT", project)
+
+    report = repository_genesis_secret_absence_report(merge_commit)
+
+    assert report["pass"] is False
+    findings = [
+        finding
+        for finding in report["findings"]
+        if finding["finding_code"] == "PRIVATE_KEY_MAGIC_HEADER"
+    ]
+    assert len(findings) == 1
+    assert findings[0]["repository_paths"] == [
+        "Hegel Machine/side-only-private.pem"
+    ]
+    assert report["counts"]["ancestor_commit_count"] >= 5
+
+
+def test_private_key_magic_header_is_record_anchored_not_a_midline_literal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, project = _repository(tmp_path)
+    private_header = b"-----BEGIN " + b"PRIVATE KEY-----"
+    (project / "source_example.py").write_bytes(
+        b'assert encoded.startswith(b"' + private_header + b'")\n'
+    )
+    literal_commit = _commit(repository, "midline source literal")
+    monkeypatch.setattr(absence, "PROJECT_ROOT", project)
+
+    literal_report = repository_genesis_secret_absence_report(literal_commit)
+    assert literal_report["pass"] is True
+    assert literal_report["findings"] == []
+    assert literal_report["policy"]["private_key_magic_header_match_rule"] == (
+        "header begins at byte offset zero or after CR or LF plus optional "
+        "horizontal ASCII whitespace; an isolated mid-record PEM/OpenPGP "
+        "header is not a finding under this record-only rule"
+    )
+    assert literal_report["policy"]["private_key_complete_block_match_rule"] == (
+        "a PEM/OpenPGP header followed by its matching footer is a finding "
+        "at any byte offsets, including escaped structured-text strings; "
+        "age, PuTTY, and binary OpenSSH magic are findings at any offset"
+    )
+    assert literal_report["policy"]["private_key_magic_header_residual_boundary"] == (
+        "an isolated inline PEM/OpenPGP header example without a matching "
+        "footer is outside the header/block rules unless another frozen "
+        "filename or JSON-key rule independently matches"
+    )
+
+    # The first mention is still mid-record.  The second starts a CR-delimited
+    # record and must be detected, proving that matching continues after a
+    # harmless earlier occurrence in the same blob.
+    (project / "key_material.txt").write_bytes(
+        b"quoted=" + private_header + b"\r\t  " + private_header + b"\n"
+    )
+    key_commit = _commit(repository, "record-start private key header")
+    key_report = repository_genesis_secret_absence_report(key_commit)
+
+    assert key_report["pass"] is False
+    header_findings = [
+        finding
+        for finding in key_report["findings"]
+        if finding["finding_code"] == "PRIVATE_KEY_MAGIC_HEADER"
+    ]
+    assert len(header_findings) == 1
+    assert header_findings[0]["policy_token"] == "PKCS8_PEM"
+    assert header_findings[0]["repository_paths"] == [
+        "Hegel Machine/key_material.txt"
+    ]
+
+
+def test_complete_private_key_blocks_are_detected_inside_structured_text(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, project = _repository(tmp_path)
+    header = b"-----BEGIN " + b"PRIVATE KEY-----"
+    footer = b"-----END " + b"PRIVATE KEY-----"
+    embedded = header + b"\\nTEST-BODY\\n" + footer
+    (project / "public.json").write_text(
+        json.dumps({"data": embedded.decode("ascii")}), encoding="utf-8"
+    )
+    (project / "public.yaml").write_bytes(b'payload: "' + embedded + b'"\n')
+    (project / "public.md").write_bytes(b"inline `" + embedded + b"`\n")
+    commit_id = _commit(repository, "embedded complete key blocks")
+    monkeypatch.setattr(absence, "PROJECT_ROOT", project)
+
+    report = repository_genesis_secret_absence_report(commit_id)
+
+    assert report["pass"] is False
+    header_findings = [
+        finding
+        for finding in report["findings"]
+        if finding["finding_code"] == "PRIVATE_KEY_MAGIC_HEADER"
+    ]
+    assert len(header_findings) == 3
+    assert {
+        tuple(finding["repository_paths"]) for finding in header_findings
+    } == {
+        ("Hegel Machine/public.json",),
+        ("Hegel Machine/public.md",),
+        ("Hegel Machine/public.yaml",),
+    }
+
+
+def test_history_audit_rejects_graft_metadata_instead_of_truncating_parents(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, project = _repository(tmp_path)
+    secret = project / "ancestor.pem"
+    secret.write_bytes(b"-----BEGIN " + b"PRIVATE KEY-----\n")
+    _commit(repository, "secret ancestor")
+    secret.unlink()
+    (project / "clean.txt").write_text("clean\n", encoding="utf-8")
+    head = _commit(repository, "clean child")
+    grafts = repository / ".git/info/grafts"
+    grafts.parent.mkdir(parents=True, exist_ok=True)
+    grafts.write_text(head + "\n", encoding="ascii")
+    monkeypatch.setattr(absence, "PROJECT_ROOT", project)
+
+    with pytest.raises(GenesisSecretAbsenceError, match="graft metadata"):
+        repository_genesis_secret_absence_report(head)
+
+
+def test_history_audit_rejects_shallow_and_promisor_boundaries(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, project = _repository(tmp_path)
+    (project / "base.txt").write_text("base\n", encoding="utf-8")
+    _commit(repository, "base")
+    (project / "child.txt").write_text("child\n", encoding="utf-8")
+    head = _commit(repository, "child")
+    monkeypatch.setattr(absence, "PROJECT_ROOT", project)
+
+    shallow = repository / ".git/shallow"
+    shallow.write_text(head + "\n", encoding="ascii")
+    with pytest.raises(GenesisSecretAbsenceError, match="shallow repository"):
+        repository_genesis_secret_absence_report(head)
+    shallow.unlink()
+
+    _git(repository, "config", "extensions.partialClone", "origin")
+    with pytest.raises(GenesisSecretAbsenceError, match="promisor or partial-clone"):
+        repository_genesis_secret_absence_report(head)
 
 
 def test_invalid_json_is_fail_closed(

@@ -92,9 +92,14 @@ Shadow admission 使用独立的 `12/12` registry。不得写成 `24/24-INTERNAL
 formal Gate 15–24 的名称或 pass bit。状态展示必须采用：
 
 ```yaml
-formal: "14/24 / NOT_RUN"
+formal_baseline: "FROZEN_PRE_GENESIS_BASELINE_14_OF_24_NOT_RUN"
 shadow: "<n>/12 / <ShadowStateId name>"
 ```
+
+这里的 formal 值是每次 admission/start 都必须重新验证仍适用的 pre-genesis
+eligibility baseline，不是从历史常量推断出的 live formal-state authority。若 formal
+evidence、promotion 或 publication receipt 已提交，shadow wire v1 必须 fail closed；后续
+状态需要新版本动态 formal-state binding。
 
 ---
 
@@ -408,21 +413,24 @@ known_diagnostic_incident:
 的 admission evidence，也不产生 run ID、key、seed、formal root 或 state record。第一次
 qualifying shadow admission probe set 必须在每个 receipt 中以 count/digest 透明绑定该
 incident；此后 fresh run 只需保留同一 incident collection digest，不重复计数为新事件。它
-不改变 formal `14/24 / NOT_RUN`，也不把 shadow 从 `NOT_ADMITTED` 推进到其他 state。
+不改变 frozen pre-genesis `14/24 / NOT_RUN` baseline，也不把 shadow 从
+`NOT_ADMITTED` 推进到其他 state。
 
 ### 4.4 Read-only basis Commit snapshot
 
 Shadow run 必须绑定一个已提交的 40-hex SHA-1 `basis_commit_id`：
 
-1. basis commit 必须是当前 repository HEAD 的 ancestor；
-2. 从 Git objects materialize 私有 detached snapshot；
-3. snapshot 不含 `.git`、live worktree bind mount 或 uncommitted bytes；
-4. 所有 bound source、tests、golden、DSL/freeze docs 和 dependency locks 都进入
+1. basis commit 必须精确等于当前 repository HEAD，不能使用 reachable old ancestor；
+2. `Hegel Machine` worktree 必须 clean，且 formal evidence、promotion、publication
+   receipt 均尚未进入 basis tree；
+3. 从 Git objects materialize 私有 detached snapshot；
+4. snapshot 不含 `.git`、live worktree bind mount 或 uncommitted bytes；
+5. 所有 bound source、tests、golden、DSL/freeze docs 和 dependency locks 都进入
    `snapshot_manifest_digest`；
-5. 四个 worker 只读挂载同一 bytes-equivalent snapshot；
-6. 每个 worker 的 snapshot manifest 必须相同；
-7. start 前、每个 phase 后和 terminal packaging 前重新计算；
-8. pre/post digest 不同即进入 `ABORTED_POLICY_VIOLATION`。
+6. 四个 worker 只读挂载同一 bytes-equivalent snapshot；
+7. 每个 worker 的 snapshot manifest 必须相同；
+8. runtime probe/ceremony 前后重新验证 exact HEAD、clean worktree 与 formal baseline；
+9. pre/post digest 不同即进入 `ABORTED_POLICY_VIOLATION`。
 
 Worker 可以拥有 purpose-private tmpfs，但不得拥有 snapshot 内写权限。任何 live worktree
 path 可见即返回 `FAIL_SHADOW_LIVE_WORKTREE_VISIBLE`。
@@ -653,7 +661,8 @@ Genesis 时十项必须全部 `null`；最后字段 `formal_run_genesis_claim` �
 ]
 ```
 
-后三项在每次 transition 中重申 formal `14/24 / NOT_RUN`。
+后三项在每次 transition 中重申 frozen pre-genesis `14/24 / NOT_RUN`
+eligibility baseline；它们不自行读取或推断后续 live formal state。
 
 ### 5.8 `ShadowEnumerationReceiptV1` — `0x7A07`
 
@@ -866,10 +875,10 @@ Shadow gate registry 与 formal gates 无关。只有以下 12 项全部通过�
 | Gate | Exact name | Pass predicate | Failure |
 |---:|---|---|---|
 | 1 | `SHADOW_OWNER_POLICY_BOUND` | 本 amendment 的 committed Git blob 和 policy digest 已绑定 | `FAIL_SHADOW_POLICY_NOT_BOUND` |
-| 2 | `SHADOW_BASIS_COMMIT_PINNED` | basis SHA-1 committed、reachable、source equality pass | `FAIL_SHADOW_BASIS_COMMIT_MISMATCH` |
+| 2 | `SHADOW_BASIS_COMMIT_PINNED` | basis SHA-1 等于 exact HEAD、worktree clean、source equality pass | `FAIL_SHADOW_BASIS_COMMIT_MISMATCH` |
 | 3 | `SHADOW_READ_ONLY_SNAPSHOT_VERIFIED` | detached snapshot pre-hash pass 且 live worktree不可见 | `FAIL_SHADOW_SNAPSHOT_NOT_READ_ONLY` |
 | 4 | `SHADOW_DETERMINISTIC_DUAL_BASELINE_PASS` | Commit-basis Python/Rust strict qualification pass | `FAIL_SHADOW_BASELINE_DUAL_MISMATCH` |
-| 5 | `FORMAL_TRACK_INVARIANTS_UNCHANGED` | exact `14/24 / NOT_RUN / roots null` | `FAIL_SHADOW_FORMAL_STATE_MUTATION` |
+| 5 | `FORMAL_TRACK_INVARIANTS_UNCHANGED` | frozen pre-genesis `14/24 / NOT_RUN / roots null` 仍适用；任何 committed formal promotion 均 fail closed | `FAIL_SHADOW_FORMAL_STATE_MUTATION` |
 | 6 | `SHADOW_TAG_AND_DOMAIN_SEPARATION_PASS` | shadow/formal cross-decoder negative tests pass | `FAIL_SHADOW_DOMAIN_COLLISION` |
 | 7 | `FOUR_PURPOSE_LAUNCH_PLAN_EXACT` | purposes exactly `[1,2,3,4]`，worker plans distinct | `FAIL_SHADOW_PURPOSE_SET` |
 | 8 | `LOCAL_NAMESPACE_AND_SECCOMP_ISOLATION_AVAILABLE` | §4.2 18-bit profile + §4.3 four-purpose live seccomp probes pass；Landlock gap透明披露 | `FAIL_SHADOW_ISOLATION_PROFILE_UNAVAILABLE` |
@@ -1051,7 +1060,7 @@ secret state。不得通过 retry、删 ledger 或重写 report 把 state 9 变�
 - admission/isolation/state/enumeration/role/dual receipts；
 - aggregate counts、candidate digests、failure codes；
 - disclosure ledger metadata；
-- explicit formal `14/24 / NOT_RUN` snapshot。
+- explicit frozen pre-genesis `14/24 / NOT_RUN` eligibility snapshot。
 
 禁止写入：
 
@@ -1073,7 +1082,7 @@ Hegel Machine/artifacts/phase3_internal_shadow/
 
 ```yaml
 artifact_kind: INTERNAL_PURPOSE_SEPARATED_NON_AUTHORITATIVE
-formal_track_status: "14/24 / NOT_RUN"
+formal_track_status: "FROZEN_PRE_GENESIS_BASELINE_14_OF_24_NOT_RUN"
 external_independence_claim: false
 formal_evidence_claim: false
 ```

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from copy import deepcopy
+import hashlib
 import json
 from pathlib import Path
+import subprocess
 from typing import Iterator
 
 import pytest
@@ -134,8 +136,9 @@ def _fake_detached(
 
 
 def _patch_admission_inputs(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(admission, "_assert_basis_reachable", lambda _basis: None)
-    monkeypatch.setattr(admission, "_assert_hegel_worktree_clean", lambda: None)
+    monkeypatch.setattr(
+        admission, "_assert_shadow_execution_basis_stable", lambda _basis: None
+    )
     monkeypatch.setattr(
         admission,
         "_artifact_blob_and_bindings",
@@ -162,6 +165,161 @@ def _patch_admission_inputs(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(admission, "_detached_readonly_inputs", _fake_detached)
     monkeypatch.setattr(admission, "_call_runtime_probe", lambda **_kwargs: _probe_report())
     monkeypatch.setattr(admission, "_validate_runtime_probe_report", lambda _report: None)
+
+
+def test_checked_errata_uses_post_commit_path_and_rejects_later_source_drift(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "repository"
+    project = repository / "Hegel Machine"
+    source = project / "src/bound.py"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"basis-v1\n")
+    subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
+    subprocess.run(
+        ["git", "config", "user.name", "Shadow Test"], cwd=repository, check=True
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "shadow@example.invalid"],
+        cwd=repository,
+        check=True,
+    )
+    subprocess.run(["git", "add", "--all"], cwd=repository, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "implementation basis"], cwd=repository, check=True)
+    implementation_basis = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    post_relative = (
+        "artifacts/phase3_m25_external/"
+        "phase3_m25_errata_qualification_v1.json"
+    )
+    post_path = project / post_relative
+    post_path.parent.mkdir(parents=True)
+    report = {
+        "implementation_basis_commit": implementation_basis,
+        "source_bindings": {
+            "src/bound.py": "sha256:" + hashlib.sha256(source.read_bytes()).hexdigest()
+        },
+        "authority_boundary": {
+            "m3_gates_before": 14,
+            "m3_gates_after": 14,
+            "child_state": "NOT_RUN",
+            "formal_roots_generated": False,
+            "m3_run_started": False,
+        },
+        "diagnostic_report_id": "post-commit-report",
+        "status": "DUAL_EXACT_WIRE_ERRATA_GOLDEN_PASS",
+    }
+    post_path.write_text(json.dumps(report, sort_keys=True), encoding="utf-8")
+    historical = project / "artifacts/phase3_m25_errata_qualification_v1.json"
+    historical.write_text("{\"status\":\"HISTORICAL_MUST_NOT_BE_READ\"}\n", encoding="utf-8")
+    subprocess.run(["git", "add", "--all"], cwd=repository, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "publish report"], cwd=repository, check=True)
+    publication_basis = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    monkeypatch.setattr(admission, "REPOSITORY_ROOT", repository)
+    monkeypatch.setattr(admission, "PROJECT_ROOT", project)
+    monkeypatch.setattr(admission, "CHECKED_REPORT_RELATIVE_PATH", post_relative)
+    monkeypatch.setattr(admission, "CHECKED_REPORT_PATH", post_path)
+    monkeypatch.setattr(
+        admission, "validate_checked_errata_qualification_report", lambda _value: None
+    )
+
+    loaded, summary = admission._artifact_blob_and_bindings(publication_basis)
+    assert loaded["diagnostic_report_id"] == "post-commit-report"
+    assert summary["path"] == post_relative
+    assert summary["implementation_basis_commit"] == implementation_basis
+
+    source.write_bytes(b"basis-v2\n")
+    subprocess.run(["git", "add", "--all"], cwd=repository, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "source drift"], cwd=repository, check=True)
+    drift_basis = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    with pytest.raises(admission.ShadowAdmissionError) as captured:
+        admission._artifact_blob_and_bindings(drift_basis)
+    assert captured.value.code == "FAIL_SHADOW_BASIS_COMMIT_MISMATCH"
+
+
+def test_shadow_execution_requires_exact_clean_head_and_unsuperseded_formal_baseline(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "repository"
+    project = repository / "Hegel Machine"
+    runtime = project / "src/hegel_machine/phase3_m3_shadow_runtime_v1.py"
+    runtime.parent.mkdir(parents=True)
+    runtime.write_text("RUNTIME_VERSION = 1\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
+    subprocess.run(
+        ["git", "config", "user.name", "Shadow Guard Test"],
+        cwd=repository,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "shadow-guard@example.invalid"],
+        cwd=repository,
+        check=True,
+    )
+
+    def commit(message: str) -> str:
+        subprocess.run(["git", "add", "--all"], cwd=repository, check=True)
+        subprocess.run(
+            ["git", "commit", "-q", "-m", message], cwd=repository, check=True
+        )
+        return subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repository,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    old_basis = commit("old runtime basis")
+    (project / "docs/note.md").parent.mkdir(parents=True)
+    (project / "docs/note.md").write_text("current\n", encoding="utf-8")
+    current_basis = commit("current runtime basis")
+    monkeypatch.setattr(admission, "REPOSITORY_ROOT", repository)
+    monkeypatch.setattr(admission, "PROJECT_ROOT", project)
+
+    with pytest.raises(admission.ShadowAdmissionError) as old_error:
+        admission._assert_shadow_execution_basis_stable(old_basis)
+    assert old_error.value.code == "FAIL_SHADOW_BASIS_COMMIT_MISMATCH"
+    admission._assert_shadow_execution_basis_stable(current_basis)
+
+    runtime.write_text("RUNTIME_VERSION = 2\n", encoding="utf-8")
+    with pytest.raises(admission.ShadowAdmissionError) as dirty_error:
+        admission._assert_shadow_execution_basis_stable(current_basis)
+    assert dirty_error.value.code == "FAIL_SHADOW_BASIS_COMMIT_MISMATCH"
+    runtime.write_text("RUNTIME_VERSION = 1\n", encoding="utf-8")
+    admission._assert_shadow_execution_basis_stable(current_basis)
+
+    promotion = (
+        project
+        / "artifacts/phase3_m25_external/phase3_m25_gate_promotion_v1.json"
+    )
+    promotion.parent.mkdir(parents=True)
+    promotion.write_text("{}\n", encoding="utf-8")
+    promoted_basis = commit("formal promotion supersedes shadow v1")
+    with pytest.raises(admission.ShadowAdmissionError) as promoted_error:
+        admission._assert_shadow_execution_basis_stable(promoted_basis)
+    assert promoted_error.value.code == "FAIL_SHADOW_FORMAL_STATE_MUTATION"
 
 
 def _admitted(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
@@ -240,7 +398,9 @@ def test_admission_is_exact_12_of_12_and_has_no_formal_effect(
     report = _admitted(monkeypatch)
     admission.validate_admission_artifact(report)
     assert report["formal_track"] == dict(FORMAL_TRACK_SNAPSHOT)
-    assert report["formal_track_status"] == "14/24 / NOT_RUN"
+    assert report["formal_track_status"] == (
+        "FROZEN_PRE_GENESIS_BASELINE_14_OF_24_NOT_RUN"
+    )
     assert report["shadow_track"]["state"] == "ADMITTED_NOT_STARTED"
     assert len(report["gate_results"]) == 12
     assert len(report["security_probe_wire_receipts"]) == 4
@@ -329,7 +489,7 @@ def test_dedicated_cli_publishes_without_touching_formal_cli(
 ) -> None:
     report = {
         "artifact_kind": SHADOW_ARTIFACT_KIND,
-        "formal_track_status": "14/24 / NOT_RUN",
+        "formal_track_status": "FROZEN_PRE_GENESIS_BASELINE_14_OF_24_NOT_RUN",
         "shadow_run_id": RUN_ID.hex(),
         "shadow_track": {"state": "ADMITTED_NOT_STARTED"},
     }

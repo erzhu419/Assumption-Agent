@@ -1174,22 +1174,52 @@ def _actor_key_by_purpose(
     return result
 
 
-def _validate_report_basis(inputs: GateEvidenceInputsV1) -> None:
-    actor = validate_qualification_report(inputs.actor_qualification_report)
+def _validate_report_basis(
+    inputs: GateEvidenceInputsV1,
+    *,
+    prevalidated_actor_report: Mapping[str, object] | None = None,
+    prevalidated_errata_report: Mapping[str, object] | None = None,
+) -> None:
+    if (prevalidated_actor_report is None) is not (
+        prevalidated_errata_report is None
+    ):
+        _fail(FAIL_GATE_EVIDENCE, "prevalidated report basis is incomplete")
+    if prevalidated_actor_report is None:
+        actor = validate_qualification_report(inputs.actor_qualification_report)
+        try:
+            validate_dual_errata_qualification_report(
+                inputs.errata_qualification_report
+            )
+        except Exception as exc:
+            _fail(FAIL_GATE_EVIDENCE, f"errata qualification is invalid: {exc}")
+        errata = inputs.errata_qualification_report
+    else:
+        assert prevalidated_errata_report is not None
+        actor = dict(prevalidated_actor_report)
+        errata = dict(prevalidated_errata_report)
+        if (
+            _canonical_json_bytes(actor)
+            != _canonical_json_bytes(inputs.actor_qualification_report)
+            or _canonical_json_bytes(errata)
+            != _canonical_json_bytes(inputs.errata_qualification_report)
+        ):
+            _fail(
+                FAIL_GATE_EVIDENCE,
+                "prevalidated report basis differs from gate evidence inputs",
+            )
     if actor["technical_actor_eligible"] is not True:
         _fail(FAIL_CEREMONY_ELIGIBILITY, "actor qualification is not eligible")
     if actor["basis_commit"] != inputs.basis_commit:
         _fail(FAIL_CEREMONY_BASIS_COMMIT, "actor report basis differs")
-    try:
-        validate_dual_errata_qualification_report(inputs.errata_qualification_report)
-    except Exception as exc:
-        _fail(FAIL_GATE_EVIDENCE, f"errata qualification is invalid: {exc}")
-    if inputs.errata_qualification_report.get("implementation_basis_commit") != inputs.basis_commit:
+    if errata.get("implementation_basis_commit") != inputs.basis_commit:
         _fail(FAIL_CEREMONY_BASIS_COMMIT, "errata report basis differs")
 
 
-def evaluate_gates_15_24_v1(
+def _evaluate_gates_15_24_impl_v1(
     inputs: GateEvidenceInputsV1,
+    *,
+    prevalidated_actor_report: Mapping[str, object] | None = None,
+    prevalidated_errata_report: Mapping[str, object] | None = None,
 ) -> QualifiedGateEvidenceV1:
     """Replay and require every Gate 15--24 predicate.
 
@@ -1203,7 +1233,11 @@ def evaluate_gates_15_24_v1(
     assert_public_payload_contains_no_secret_fields(
         {field.name: getattr(inputs, field.name) for field in dataclass_fields(inputs)}
     )
-    _validate_report_basis(inputs)
+    _validate_report_basis(
+        inputs,
+        prevalidated_actor_report=prevalidated_actor_report,
+        prevalidated_errata_report=prevalidated_errata_report,
+    )
     commit_wire = git_sha1_commit_id(bytes.fromhex(inputs.basis_commit))
     validate_marker_snapshot(inputs.marker_snapshot)
     keys = _actor_key_by_purpose(inputs.actor_key_manifests)
@@ -1444,6 +1478,34 @@ def evaluate_gates_15_24_v1(
         gate_report=MappingProxyType(report),
         formal_roots=MappingProxyType(formal_roots),
         _seal=_PROMOTION_SEAL,
+    )
+
+
+def evaluate_gates_15_24_v1(
+    inputs: GateEvidenceInputsV1,
+) -> QualifiedGateEvidenceV1:
+    """Replay Gate 15--24 with the live qualification validators."""
+
+    return _evaluate_gates_15_24_impl_v1(inputs)
+
+
+def _evaluate_gates_15_24_with_prevalidated_report_basis_v1(
+    inputs: GateEvidenceInputsV1,
+    *,
+    actor_report: Mapping[str, object],
+    errata_report: Mapping[str, object],
+) -> QualifiedGateEvidenceV1:
+    """Internal replay after a caller-specific pure report-basis validation.
+
+    The injected copies must be byte-for-byte equal to those embedded in
+    ``inputs``.  This private entry point exists for a supplied-repository
+    post-commit verifier; normal ceremony callers retain the live validators.
+    """
+
+    return _evaluate_gates_15_24_impl_v1(
+        inputs,
+        prevalidated_actor_report=actor_report,
+        prevalidated_errata_report=errata_report,
     )
 
 

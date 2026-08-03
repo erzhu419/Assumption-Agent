@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
-import tempfile
 from typing import Sequence
 
 from .benchmark import run_phase2_benchmark
@@ -74,6 +72,7 @@ from .phase3_m25_qualification_v112 import (
 )
 from .phase3_m25_errata_qualification_v1 import (
     dual_errata_qualification_report,
+    publish_errata_qualification_report_v1,
     validate_errata_qualification_output_path,
 )
 from .vertical_slice import run_controlled_vertical_slice
@@ -85,29 +84,6 @@ def _write_json(path: Path, payload: object) -> None:
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-
-
-def _write_json_atomic(path: Path, payload: object) -> None:
-    """Write one public evidence artifact with same-directory atomic replace."""
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{path.name}.",
-        suffix=".tmp",
-        dir=path.parent,
-    )
-    temporary = Path(temporary_name)
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, ensure_ascii=False, indent=2, sort_keys=True)
-            handle.write("\n")
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.chmod(temporary, 0o644)
-        os.replace(temporary, path)
-    finally:
-        if temporary.exists():
-            temporary.unlink()
 
 
 def command_benchmark(output: Path | None) -> int:
@@ -321,7 +297,9 @@ def command_phase3_m25_errata_qualify(
     )
     report = dual_errata_qualification_report()
     if validated_output is not None:
-        _write_json_atomic(validated_output, report)
+        # The publisher repeats validation and holds the parent dirfd during
+        # O_EXCL install, closing the qualification-time substitution window.
+        publish_errata_qualification_report_v1(validated_output, report)
     print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
     return 0 if report["status"] == "DUAL_EXACT_WIRE_ERRATA_GOLDEN_PASS" else 1
 

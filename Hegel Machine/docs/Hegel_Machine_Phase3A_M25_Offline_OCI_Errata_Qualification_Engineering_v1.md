@@ -91,3 +91,41 @@ guard relaxation. After Commit A, those tests must run rather than skip, the
 fresh qualification report must be regenerated under schema
 `hegel-phase3-m25-exact-wire-errata-qualification/2`, and the checked artifact
 must validate before any later ceremony step uses it.
+
+## Post-commit qualification corrections
+
+The fresh report is a Commit-B public-evidence object. Its only in-repository
+output path is
+`artifacts/phase3_m25_external/phase3_m25_errata_qualification_v1.json`; the
+direct `artifacts/phase3_m25_errata_qualification_v1.json` file is retained as
+a historical pre-Commit-A diagnostic and is not overwritten.
+
+The history-complete secret-absence policy is version 2. Private-key magic
+headers match only at the start of a blob or a CR/LF-delimited record, after
+optional horizontal ASCII whitespace. Complete PEM/OpenPGP header-to-footer
+blocks are additionally findings at any offsets, including JSON/YAML/Markdown
+escaped strings; age, PuTTY and binary OpenSSH magic are findings at any
+offset. Only an isolated inline PEM/OpenPGP header example without a footer is
+outside these two rules unless the filename/JSON-key rules independently
+match.
+
+History enumeration does not use `rev-list` parent semantics. It traverses
+the raw parent headers returned by `cat-file commit`, requires every parent,
+tree and blob locally, and scans every unique raw ancestor tree. Shallow,
+promisor/partial-clone, alternate-object, graft and replace-ref metadata fail
+closed. This keeps a local graft or shallow boundary from turning a deleted
+ancestor finding into a false absence receipt. The exact match and history
+rules are included in the public policy payload and report identity.
+
+Output publication is guarded against the entire Git toplevel, not only the
+`Hegel Machine` subtree. The only allowed in-repository lexical path is the
+Commit-B evidence path above. Every parent is opened by a dirfd walk with
+`O_DIRECTORY|O_NOFOLLOW`; the validation dirfd is the same held parent used
+for `O_EXCL` creation. The created fd remains open through fsync and replay.
+A second lexical walk must reach the same parent inode and the reopened file
+must retain the same regular-file inode, owner, mode, link count, size and
+exact bytes; the original fd is reread once more before success. Failure
+cleanup unlinks only the inode created through the held parent. The tracked
+`artifacts/phase3_m25_external/README.md` makes the unique parent available in
+a clean clone without runtime directory creation. The publisher never
+overwrites the historical diagnostic or another repository path.

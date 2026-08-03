@@ -56,7 +56,8 @@ def _parser() -> argparse.ArgumentParser:
         prog="phase3-m3-shadow",
         description=(
             "Run the internal purpose-separated, non-authoritative shadow "
-            "admission/start track. Formal status remains 14/24 / NOT_RUN."
+            "admission/start track only while the frozen pre-genesis "
+            "14/24 / NOT_RUN baseline still applies."
         ),
     )
     subcommands = parser.add_subparsers(dest="command", required=True)
@@ -66,7 +67,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     admit.add_argument(
         "--basis-commit",
-        help="reachable committed basis (default: current HEAD)",
+        help="exact current HEAD basis (default: current HEAD)",
     )
     admit.add_argument(
         "--output",

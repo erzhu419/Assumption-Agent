@@ -24,7 +24,7 @@ from hegel_machine.phase3_m25_errata_vectors_v1 import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CHECKED_IN = ROOT / "artifacts" / "phase3_m25_errata_qualification_v1.json"
+CHECKED_IN = qualification.POST_COMMIT_REPORT_PATH
 
 
 @pytest.fixture(scope="session")
@@ -120,7 +120,7 @@ def test_dual_errata_qualification_matches_golden_and_only_authorizes_external_s
     assert report["repository_secret_absence_receipt"]["pass"] is True
 
 
-def test_checked_in_errata_qualification_is_current() -> None:
+def test_post_commit_errata_qualification_is_current_when_published() -> None:
     if not CHECKED_IN.is_file():
         pytest.skip("qualification artifact is emitted only after Commit A")
     try:
@@ -197,6 +197,145 @@ def test_qualification_output_cannot_overwrite_a_bound_input() -> None:
         qualification.validate_errata_qualification_output_path(
             qualification.GOLDEN_VECTOR_PATH
         )
+
+
+def test_qualification_output_uses_commit_b_allowlisted_path() -> None:
+    assert qualification.validate_errata_qualification_output_path(
+        qualification.POST_COMMIT_REPORT_PATH
+    ) == qualification.POST_COMMIT_REPORT_PATH.resolve(strict=False)
+    with pytest.raises(M25ErrataQualificationError):
+        qualification.validate_errata_qualification_output_path(
+            qualification.CHECKED_REPORT_PATH
+        )
+
+
+def test_qualification_output_rejects_other_git_repository_paths() -> None:
+    repository = ROOT.parent
+    for forbidden in (repository / ".git/config", repository / "README.md"):
+        with pytest.raises(M25ErrataQualificationError):
+            qualification.validate_errata_qualification_output_path(forbidden)
+
+
+def test_qualification_output_rejects_symlinked_allowlist_ancestor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "repository"
+    project = repository / "Hegel Machine"
+    artifacts = project / "artifacts"
+    artifacts.mkdir(parents=True)
+    (artifacts / "phase3_m25_external").symlink_to(artifacts, target_is_directory=True)
+    expected = (
+        artifacts
+        / "phase3_m25_external"
+        / "phase3_m25_errata_qualification_v1.json"
+    )
+    monkeypatch.setattr(qualification, "POST_COMMIT_REPORT_PATH", expected)
+    monkeypatch.setattr(qualification, "_repository_root", lambda: repository)
+
+    with pytest.raises(M25ErrataQualificationError):
+        qualification.validate_errata_qualification_output_path(expected)
+
+
+def test_qualification_publication_is_exclusive_and_dirfd_bound(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    external = tmp_path / "external"
+    external.mkdir()
+    target = external / "report.json"
+    monkeypatch.setattr(qualification, "_repository_root", lambda: repository)
+
+    published = qualification.publish_errata_qualification_report_v1(
+        target, {"schema": "test", "pass": True}
+    )
+    original = target.read_bytes()
+    assert published == target
+    assert json.loads(original) == {"pass": True, "schema": "test"}
+    assert target.stat().st_mode & 0o777 == 0o644
+
+    with pytest.raises(M25ErrataQualificationError):
+        qualification.publish_errata_qualification_report_v1(
+            target, {"schema": "substitution", "pass": False}
+        )
+    assert target.read_bytes() == original
+
+
+def test_qualification_publication_rejects_same_inode_same_size_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    external = tmp_path / "external"
+    external.mkdir()
+    target = external / "report.json"
+    monkeypatch.setattr(qualification, "_repository_root", lambda: repository)
+    real_validate = qualification._validated_output_parent_v1
+    calls = 0
+
+    def mutate_before_reopen(path: Path) -> tuple[Path, int]:
+        nonlocal calls
+        validated, descriptor = real_validate(path)
+        calls += 1
+        if calls == 2:
+            original = validated.read_bytes()
+            with validated.open("r+b") as handle:
+                handle.write(b"X" * len(original))
+                handle.flush()
+        return validated, descriptor
+
+    monkeypatch.setattr(
+        qualification, "_validated_output_parent_v1", mutate_before_reopen
+    )
+    with pytest.raises(M25ErrataQualificationError, match="identity or bytes"):
+        qualification.publish_errata_qualification_report_v1(
+            target, {"schema": "test", "pass": True}
+        )
+    assert not target.exists()
+
+
+def test_qualification_publication_rejects_ancestor_directory_substitution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    external = tmp_path / "external"
+    external.mkdir()
+    displaced = tmp_path / "displaced"
+    target = external / "report.json"
+    monkeypatch.setattr(qualification, "_repository_root", lambda: repository)
+    real_validate = qualification._validated_output_parent_v1
+    calls = 0
+
+    def substitute_before_reopen(path: Path) -> tuple[Path, int]:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            external.rename(displaced)
+            external.mkdir()
+            # Preserve the file inode and size so a file-only identity check
+            # cannot hide the ancestor replacement.
+            (external / target.name).hardlink_to(displaced / target.name)
+        return real_validate(path)
+
+    monkeypatch.setattr(
+        qualification, "_validated_output_parent_v1", substitute_before_reopen
+    )
+    with pytest.raises(M25ErrataQualificationError, match="changed during publication"):
+        qualification.publish_errata_qualification_report_v1(
+            target, {"schema": "test", "pass": True}
+        )
+    assert not (displaced / target.name).exists()
+
+
+def test_commit_b_external_evidence_parent_is_present_in_the_source_tree() -> None:
+    marker = qualification.POST_COMMIT_REPORT_PATH.parent / "README.md"
+    assert marker.is_file()
+    assert "NOT_RUN" in marker.read_text(encoding="utf-8")
 
 
 def test_public_qualification_api_rejects_caller_supplied_toolchain() -> None:

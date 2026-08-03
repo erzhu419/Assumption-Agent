@@ -95,6 +95,14 @@ GOLDEN_VECTOR_PATH: Final = (
 CHECKED_REPORT_PATH: Final = (
     PROJECT_ROOT / "artifacts" / "phase3_m25_errata_qualification_v1.json"
 )
+# The direct artifact above is a historical, pre-Commit-A diagnostic only.  A
+# fresh report necessarily binds a Git commit that predates the report itself,
+# so its publication path must live in the Commit-B allowlist rather than
+# masquerade as a Commit-A input.
+POST_COMMIT_REPORT_PATH: Final = (
+    PROJECT_ROOT
+    / "artifacts/phase3_m25_external/phase3_m25_errata_qualification_v1.json"
+)
 RUST_CRATE_ROOT: Final = PROJECT_ROOT / "rust" / "formal_bridge_m25"
 APPROVED_TOOLCHAIN_POLICY_PATH: Final = (
     PROJECT_ROOT / "config" / "phase3_m25_approved_local_rust_toolchain_v1.json"
@@ -308,20 +316,16 @@ def repository_head_commit() -> str:
 
 
 def validate_errata_qualification_output_path(path: Path) -> Path:
-    """Allow in-repository publication only at the dedicated artifact path."""
+    """Allow Git-repository publication only at the Commit-B evidence path.
 
-    if not isinstance(path, Path):
-        raise TypeError("qualification output path must be pathlib.Path")
-    resolved = path.resolve(strict=False)
-    try:
-        resolved.relative_to(PROJECT_ROOT.resolve())
-    except ValueError:
-        return resolved
-    if resolved != CHECKED_REPORT_PATH.resolve(strict=False):
-        raise M25ErrataQualificationError(
-            "in-repository qualification output must use the dedicated artifact path"
-        )
-    return resolved
+    Comparison is deliberately lexical. Resolving both sides first would let
+    a substituted allowlist ancestor redirect the expected path onto a
+    historical input.
+    """
+
+    target, parent_descriptor = _validated_output_parent_v1(path)
+    os.close(parent_descriptor)
+    return target
 
 
 def _repository_root() -> Path:
@@ -331,6 +335,252 @@ def _repository_root() -> Path:
     if completed.returncode != 0:
         raise M25ErrataQualificationError("cannot resolve repository root")
     return Path(completed.stdout.decode("utf-8", "strict").strip()).resolve()
+
+
+def _open_real_directory_chain_v1(path: Path) -> int:
+    """Open an absolute directory through a no-symlink dirfd walk."""
+
+    absolute = Path(os.path.abspath(os.fspath(path)))
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    descriptor: int | None = None
+    try:
+        descriptor = os.open("/", flags)
+        for component in absolute.parts[1:]:
+            next_descriptor = os.open(component, flags, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = next_descriptor
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISDIR(metadata.st_mode):
+            raise OSError("directory-chain endpoint is not a directory")
+        return descriptor
+    except OSError as exc:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+        raise M25ErrataQualificationError(
+            f"qualification output parent is not a real directory chain: {exc}"
+        ) from exc
+
+
+def _open_directory_components_v1(anchor_descriptor: int, parts: tuple[str, ...]) -> int:
+    """Walk real directory components below an already-open anchor."""
+
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    descriptor = os.dup(anchor_descriptor)
+    try:
+        for component in parts:
+            if component in {"", ".", ".."} or "/" in component:
+                raise OSError("non-canonical directory component")
+            following = os.open(component, flags, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = following
+        if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
+            raise OSError("directory-chain endpoint is not a directory")
+        return descriptor
+    except OSError as exc:
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+        raise M25ErrataQualificationError(
+            f"qualification output parent is not a real directory chain: {exc}"
+        ) from exc
+
+
+def _validated_output_parent_v1(path: Path) -> tuple[Path, int]:
+    """Validate one output and return its held, no-symlink parent dirfd."""
+
+    if not isinstance(path, Path):
+        raise TypeError("qualification output path must be pathlib.Path")
+    if any(part == ".." for part in path.parts):
+        raise M25ErrataQualificationError(
+            "qualification output path must not contain parent traversal"
+        )
+    absolute = Path(os.path.abspath(os.fspath(path)))
+    if absolute.name in {"", ".", ".."}:
+        raise M25ErrataQualificationError("qualification output basename is invalid")
+    repository_root = Path(os.path.abspath(os.fspath(_repository_root())))
+    expected = Path(os.path.abspath(os.fspath(POST_COMMIT_REPORT_PATH)))
+    try:
+        relative = absolute.relative_to(repository_root)
+    except ValueError:
+        return absolute, _open_real_directory_chain_v1(absolute.parent)
+    if absolute != expected:
+        raise M25ErrataQualificationError(
+            "in-repository qualification output must use the Commit-B evidence path"
+        )
+    repository_descriptor = _open_real_directory_chain_v1(repository_root)
+    try:
+        parent = _open_directory_components_v1(
+            repository_descriptor, tuple(relative.parent.parts)
+        )
+    finally:
+        os.close(repository_descriptor)
+    return absolute, parent
+
+
+def _read_open_regular_file_v1(descriptor: int, *, maximum: int) -> bytes:
+    """Read an open regular file from offset zero with a strict size bound."""
+
+    metadata = os.fstat(descriptor)
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > maximum:
+        raise OSError("qualification output type or size differs")
+    os.lseek(descriptor, 0, os.SEEK_SET)
+    chunks: list[bytes] = []
+    remaining = maximum + 1
+    while remaining:
+        chunk = os.read(descriptor, min(65536, remaining))
+        if not chunk:
+            break
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    payload = b"".join(chunks)
+    if len(payload) != metadata.st_size or len(payload) > maximum:
+        raise OSError("qualification output changed or exceeded its size bound")
+    return payload
+
+
+def publish_errata_qualification_report_v1(
+    path: Path, report: Mapping[str, object]
+) -> Path:
+    """Publish one report by held dirfd, without overwrite or symlink follow."""
+
+    payload = (
+        json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    # This validation walk is the one used for creation.  The earlier CLI
+    # preflight is intentionally repeated here after the long qualification
+    # replay, but no validate-close-reopen gap remains at publication time.
+    target, parent_descriptor = _validated_output_parent_v1(path)
+    created = False
+    descriptor: int | None = None
+    created_identity: tuple[int, int] | None = None
+
+    def cleanup_created() -> None:
+        if created_identity is None:
+            return
+        try:
+            observed = os.stat(
+                target.name, dir_fd=parent_descriptor, follow_symlinks=False
+            )
+            if (observed.st_dev, observed.st_ino) == created_identity:
+                os.unlink(target.name, dir_fd=parent_descriptor)
+                os.fsync(parent_descriptor)
+        except OSError:
+            pass
+
+    try:
+        flags = (
+            os.O_RDWR
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_NOFOLLOW", 0)
+        )
+        try:
+            descriptor = os.open(
+                target.name, flags, 0o644, dir_fd=parent_descriptor
+            )
+        except OSError as exc:
+            raise M25ErrataQualificationError(
+                f"qualification output exclusive publication failed: {exc}"
+            ) from exc
+        created = True
+        opened_metadata = os.fstat(descriptor)
+        created_identity = (opened_metadata.st_dev, opened_metadata.st_ino)
+        os.fchmod(descriptor, 0o644)
+        view = memoryview(payload)
+        while view:
+            written = os.write(descriptor, view)
+            if written <= 0:
+                raise OSError("short qualification output write")
+            view = view[written:]
+        os.fsync(descriptor)
+        created_metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(created_metadata.st_mode)
+            or stat.S_IMODE(created_metadata.st_mode) != 0o644
+            or created_metadata.st_uid != os.geteuid()
+            or created_metadata.st_nlink != 1
+            or created_metadata.st_size != len(payload)
+            or _read_open_regular_file_v1(descriptor, maximum=len(payload)) != payload
+        ):
+            raise OSError("qualification output differs on its created descriptor")
+        os.fsync(parent_descriptor)
+
+        # Reopen through a second fully validated lexical walk.  Parent
+        # identity, inode metadata, and exact bytes must all remain stable.
+        replay_target, verification_parent = _validated_output_parent_v1(target)
+        try:
+            if replay_target != target:
+                raise OSError("qualification output lexical identity changed")
+            held_parent = os.fstat(parent_descriptor)
+            reopened_parent = os.fstat(verification_parent)
+            if (held_parent.st_dev, held_parent.st_ino) != (
+                reopened_parent.st_dev,
+                reopened_parent.st_ino,
+            ):
+                raise OSError("qualification output parent identity changed")
+            verification = os.open(
+                target.name,
+                os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+                dir_fd=verification_parent,
+            )
+            try:
+                verified_metadata = os.fstat(verification)
+                verified_payload = _read_open_regular_file_v1(
+                    verification, maximum=len(payload)
+                )
+            finally:
+                os.close(verification)
+        finally:
+            os.close(verification_parent)
+        if (
+            not stat.S_ISREG(verified_metadata.st_mode)
+            or stat.S_IMODE(verified_metadata.st_mode) != 0o644
+            or verified_metadata.st_uid != os.geteuid()
+            or verified_metadata.st_nlink != 1
+            or (
+                created_metadata.st_dev,
+                created_metadata.st_ino,
+                created_metadata.st_size,
+            )
+            != (
+                verified_metadata.st_dev,
+                verified_metadata.st_ino,
+                verified_metadata.st_size,
+            )
+            or verified_payload != payload
+            or _read_open_regular_file_v1(descriptor, maximum=len(payload)) != payload
+        ):
+            raise M25ErrataQualificationError(
+                "qualification output identity or bytes changed during publication"
+            )
+        created = False
+        return target
+    except M25ErrataQualificationError:
+        if created:
+            cleanup_created()
+        raise
+    except OSError as exc:
+        if created:
+            cleanup_created()
+        raise M25ErrataQualificationError(
+            f"qualification output changed during publication: {exc}"
+        ) from exc
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+        os.close(parent_descriptor)
 
 
 def _assert_sources_match_commit(commit_id: str) -> None:
@@ -1694,7 +1944,12 @@ def dual_errata_qualification_report(
     return payload
 
 
-def _validate_report_envelope(report: Mapping[str, object]) -> None:
+def _validate_report_envelope(
+    report: Mapping[str, object],
+    *,
+    toolchain_policy_override: Mapping[str, object] | None = None,
+    approved_toolchain_policy_sha256_override: str | None = None,
+) -> None:
     expected_fields = {
         "artifact",
         "schema_version",
@@ -1895,7 +2150,28 @@ def _validate_report_envelope(report: Mapping[str, object]) -> None:
         raise M25ErrataQualificationError("Rust Commit-A source binding is absent")
     if rust_execution.get("listed_rust_sources_are_build_attestation") is not False:
         raise M25ErrataQualificationError("source hashes are not a build attestation")
-    toolchain_policy = _load_approved_toolchain_policy()
+    if (toolchain_policy_override is None) is not (
+        approved_toolchain_policy_sha256_override is None
+    ):
+        raise M25ErrataQualificationError(
+            "archived toolchain policy override is incomplete"
+        )
+    if toolchain_policy_override is None:
+        toolchain_policy = _load_approved_toolchain_policy()
+        approved_toolchain_policy_sha256 = _sha256_file(
+            APPROVED_TOOLCHAIN_POLICY_PATH
+        )
+    else:
+        toolchain_policy = dict(toolchain_policy_override)
+        approved_toolchain_policy_sha256 = approved_toolchain_policy_sha256_override
+        if (
+            type(approved_toolchain_policy_sha256) is not str
+            or re.fullmatch(r"sha256:[0-9a-f]{64}", approved_toolchain_policy_sha256)
+            is None
+        ):
+            raise M25ErrataQualificationError(
+                "archived toolchain policy digest is malformed"
+            )
     expected_build_values = {
         "build_receipt_is_external_attestation": False,
         "source_commit": commit,
@@ -1910,9 +2186,7 @@ def _validate_report_envelope(report: Mapping[str, object]) -> None:
         "cargo_incremental": False,
         "cargo_version": toolchain_policy["cargo_version"],
         "rustc_version": toolchain_policy["rustc_version"],
-        "approved_toolchain_policy_sha256": _sha256_file(
-            APPROVED_TOOLCHAIN_POLICY_PATH
-        ),
+        "approved_toolchain_policy_sha256": approved_toolchain_policy_sha256,
         "approved_toolchain_policy_bound": True,
         "caller_supplied_toolchain_allowed": False,
         "cargo_lock_sha256": toolchain_policy["cargo_lock_sha256"],
@@ -2054,6 +2328,28 @@ def _validate_report_envelope(report: Mapping[str, object]) -> None:
         raise M25ErrataQualificationError("errata qualification self-ID mismatch")
 
 
+def validate_archived_errata_qualification_report_v1(
+    report: Mapping[str, object],
+    *,
+    toolchain_policy: Mapping[str, object],
+    approved_toolchain_policy_sha256: str,
+) -> dict[str, object]:
+    """Validate an archived report without worktree, Docker, or binary replay.
+
+    The caller must independently bind ``toolchain_policy`` and the report's
+    source/document/golden digests to its selected Git tree.
+    """
+
+    _validate_report_envelope(
+        report,
+        toolchain_policy_override=toolchain_policy,
+        approved_toolchain_policy_sha256_override=(
+            approved_toolchain_policy_sha256
+        ),
+    )
+    return dict(report)
+
+
 def validate_checked_errata_qualification_report(
     report: Mapping[str, object],
 ) -> None:
@@ -2116,6 +2412,7 @@ def validate_dual_errata_qualification_report(
 __all__ = [
     "ARTIFACT_KIND",
     "CHECKED_REPORT_PATH",
+    "POST_COMMIT_REPORT_PATH",
     "CLAIM_BOUNDARY",
     "EXPECTED_VECTOR_COUNTS",
     "GOLDEN_VECTOR_PATH",
@@ -2123,8 +2420,10 @@ __all__ = [
     "MACHINE_FREEZE_ID",
     "STATUS",
     "dual_errata_qualification_report",
+    "publish_errata_qualification_report_v1",
     "repository_head_commit",
     "validate_checked_errata_qualification_report",
+    "validate_archived_errata_qualification_report_v1",
     "validate_dual_errata_qualification_report",
     "validate_errata_qualification_output_path",
 ]

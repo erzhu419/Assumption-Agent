@@ -26,7 +26,7 @@ import time
 from typing import Final, Iterator, Mapping, NoReturn, Sequence
 
 from .phase3_m25_errata_qualification_v1 import (
-    CHECKED_REPORT_PATH,
+    POST_COMMIT_REPORT_PATH,
     validate_checked_errata_qualification_report,
 )
 from .phase3_m3_shadow_wire_v1 import (
@@ -68,14 +68,16 @@ SCHEMA_VERSION: Final = "hegel-phase3-m3-shadow-admission/1"
 START_SCHEMA_VERSION: Final = "hegel-phase3-m3-shadow-start/1"
 ARTIFACT_KIND_ID: Final = SHADOW_ARTIFACT_KIND_ID
 ARTIFACT_KIND: Final = SHADOW_ARTIFACT_KIND
-FORMAL_TRACK_STATUS: Final = "14/24 / NOT_RUN"
+FORMAL_TRACK_STATUS: Final = "FROZEN_PRE_GENESIS_BASELINE_14_OF_24_NOT_RUN"
 FORMAL_FOLLOW_ON_RECOMMENDATION: Final = (
     "SEPARATE_OWNER_AMENDED_HARDENED_OFFLINE_CONTAINER_CEREMONY_REQUIRED"
 )
 CLAIM_BOUNDARY: Final = (
     "A 12/12 result qualifies internal isolation mechanics only. It does not "
     "advance formal Gate 15-24 and may only feed a separate owner-amended "
-    "hardened offline-container ceremony."
+    "hardened offline-container ceremony. The embedded 14/24 / NOT_RUN value "
+    "is a revalidated pre-genesis eligibility baseline, not a historical "
+    "snapshot presented as live formal-state authority."
 )
 MACHINE_FREEZE_ID: Final = FORMAL_MACHINE_FREEZE_ID
 CHILD_DSL_ID: Final = FORMAL_CHILD_DSL_ID
@@ -86,8 +88,9 @@ AMENDMENT_RELATIVE_PATH: Final = (
     "docs/Hegel_Machine_Phase3A_Internal_Shadow_Execution_Amendment_v1.md"
 )
 CHECKED_REPORT_RELATIVE_PATH: Final = (
-    "artifacts/phase3_m25_errata_qualification_v1.json"
+    "artifacts/phase3_m25_external/phase3_m25_errata_qualification_v1.json"
 )
+CHECKED_REPORT_PATH: Final = POST_COMMIT_REPORT_PATH
 DEFAULT_ADMISSION_ARTIFACT_PATH: Final = (
     PROJECT_ROOT
     / "artifacts"
@@ -121,6 +124,16 @@ SHADOW_BASIS_PATHS: Final = (
     "tests/test_phase3_m3_shadow_admission_v1.py",
 )
 
+# The v1 shadow wire encodes the pre-genesis 14/24 / NOT_RUN baseline.  Once a
+# formal promotion is committed, v1 must stop rather than mislabel 24/24 (or a
+# later M3 state) with those frozen counters.  A future dynamic formal-state
+# binding requires a versioned shadow wire.
+FORMAL_BASELINE_SUPERSEDING_PATHS: Final = (
+    "artifacts/phase3_m25_external/phase3_m25_formal_gate_evidence_v1.json",
+    "artifacts/phase3_m25_external/phase3_m25_gate_promotion_v1.json",
+    "artifacts/phase3_m25_external/phase3_m25_gate_promotion_v1.json.publication-receipt.json",
+)
+
 FORMAL_TRACK: Final = dict(FORMAL_TRACK_SNAPSHOT)
 
 _COMMIT_RE: Final = re.compile(r"^[0-9a-f]{40}$")
@@ -142,7 +155,7 @@ def _fail(code: str, detail: str) -> NoReturn:
 
 
 def formal_track_snapshot() -> dict[str, object]:
-    """Return a fresh exact copy of the immutable formal status."""
+    """Return the frozen pre-genesis eligibility baseline, not a live query."""
 
     return dict(FORMAL_TRACK)
 
@@ -209,20 +222,44 @@ def _git_blob(commit_id: str, project_relative_path: str) -> bytes:
 
 
 def _assert_basis_reachable(commit_id: str) -> None:
-    completed = subprocess.run(
-        ["/usr/bin/git", "merge-base", "--is-ancestor", commit_id, "HEAD"],
-        cwd=REPOSITORY_ROOT,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
-        check=False,
-        timeout=30,
-        env=_git_environment(),
-    )
-    if completed.returncode != 0:
+    """Require the execution basis to be the exact current HEAD.
+
+    The historical implementation accepted any reachable ancestor while
+    importing the runtime from the current worktree.  That mixed two source
+    identities.  Exact HEAD plus the clean/stability checks below makes the
+    runtime and claimed snapshot one basis.
+    """
+
+    if repository_head_commit() != commit_id:
         _fail(
             "FAIL_SHADOW_BASIS_COMMIT_MISMATCH",
-            "basis commit is not reachable from the current HEAD",
+            "basis commit must equal the current repository HEAD",
         )
+
+
+def _assert_frozen_formal_baseline_current(commit_id: str) -> None:
+    """Fail once committed formal evidence supersedes shadow-wire v1."""
+
+    _assert_basis_reachable(commit_id)
+    rows = _git(
+        "ls-tree",
+        "-z",
+        commit_id,
+        "--",
+        *(_repo_relative(path) for path in FORMAL_BASELINE_SUPERSEDING_PATHS),
+    )
+    if rows:
+        _fail(
+            "FAIL_SHADOW_FORMAL_STATE_MUTATION",
+            "shadow wire v1 is inapplicable after formal evidence/promotion is committed",
+        )
+
+
+def _assert_shadow_execution_basis_stable(commit_id: str) -> None:
+    """Recheck HEAD, clean Hegel bytes, and the v1 formal baseline guard."""
+
+    _assert_frozen_formal_baseline_current(commit_id)
+    _assert_hegel_worktree_clean()
 
 
 def _assert_hegel_worktree_clean() -> None:
@@ -1047,8 +1084,7 @@ def admit_internal_shadow(
         if basis_commit_id is None
         else _require_commit_id(basis_commit_id)
     )
-    _assert_basis_reachable(basis)
-    _assert_hegel_worktree_clean()
+    _assert_shadow_execution_basis_stable(basis)
     checked, checked_summary = _artifact_blob_and_bindings(basis)
     snapshot, bound_paths = _snapshot_receipt(basis, checked)
     amendment_blob = _git_blob(basis, AMENDMENT_RELATIVE_PATH)
@@ -1069,6 +1105,7 @@ def admit_internal_shadow(
             python_calculator_path=Path(python_calculator_path),
             rust_calculator_path=Path(rust_calculator_path),
         )
+    _assert_shadow_execution_basis_stable(basis)
     _probe_pass_and_digest(probe_report, run_id.hex(), basis)
     timestamp = int(time.time()) if admitted_at_unix_seconds is None else admitted_at_unix_seconds
     if type(timestamp) is not int or timestamp < 0:
@@ -1142,6 +1179,7 @@ def admit_internal_shadow(
         },
     }
     validate_admission_artifact(artifact)
+    _assert_shadow_execution_basis_stable(basis)
     return artifact
 
 
@@ -1462,12 +1500,11 @@ def start_internal_shadow(
     rust_calculator_path: Path | str,
     started_at_unix_seconds: int | None = None,
 ) -> dict[str, object]:
-    """Explicitly enter shadow canonical enumeration; formal remains NOT_RUN."""
+    """Enter shadow enumeration only while the v1 formal baseline still applies."""
 
     validate_admission_artifact(admission_artifact)
     basis = _require_commit_id(admission_artifact["basis_commit_id"])
-    _assert_basis_reachable(basis)
-    _assert_hegel_worktree_clean()
+    _assert_shadow_execution_basis_stable(basis)
     checked, _ = _artifact_blob_and_bindings(basis)
     snapshot, bound_paths = _snapshot_receipt(basis, checked)
     if snapshot != admission_artifact["snapshot"]:
@@ -1482,6 +1519,7 @@ def start_internal_shadow(
             python_calculator_path=Path(python_calculator_path),
             rust_calculator_path=Path(rust_calculator_path),
         )
+    _assert_shadow_execution_basis_stable(basis)
     _probe_pass_and_digest(probe, run_id.hex(), basis)
     admitted_probe = admission_artifact["probe_report"]
     assert isinstance(admitted_probe, dict)
@@ -1500,6 +1538,7 @@ def start_internal_shadow(
             python_calculator_path=Path(python_calculator_path),
             rust_calculator_path=Path(rust_calculator_path),
         )
+    _assert_shadow_execution_basis_stable(basis)
     timestamp = int(time.time()) if started_at_unix_seconds is None else started_at_unix_seconds
     if type(timestamp) is not int or timestamp < 0:
         _fail("FAIL_SHADOW_OUTPUT_NOT_ALLOWLISTED", "start timestamp differs")
@@ -1582,6 +1621,7 @@ def start_internal_shadow(
         },
     }
     validate_start_artifact(artifact)
+    _assert_shadow_execution_basis_stable(basis)
     return artifact
 
 

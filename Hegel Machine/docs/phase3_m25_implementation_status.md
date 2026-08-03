@@ -6,7 +6,13 @@ Machine freeze: `hegel-freeze-p2b-p3-v1.1.2`
 
 Child DSL: `hegel-old-dsl-v1.1.0`
 
-State: `DUAL_EXACT_WIRE_ERRATA_GOLDEN_PASS / EXTERNAL_GENESIS_NOT_EXECUTED / 14/24 / NOT_RUN`
+Historical snapshot state: `DUAL_EXACT_WIRE_ERRATA_GOLDEN_PASS / EXTERNAL_GENESIS_NOT_EXECUTED / 14/24 / NOT_RUN`
+
+This document records the pre-A2 qualification snapshot. It is not the live
+implementation-basis selector. After A2, the only executable input is a fresh
+report at
+`artifacts/phase3_m25_external/phase3_m25_errata_qualification_v1.json` whose
+`implementation_basis_commit` exactly equals the ceremony basis.
 
 M2.5 purpose 1–4 的当前 authority class 是
 `OWNER_ACCEPTED_CONTAINER_TECHNICAL_ACTORS_V1`。它要求 purpose-separated、离线、live-probed
@@ -32,7 +38,7 @@ blockers. The exact-wire layer now has:
   worktree or caller-supplied executable;
 - a frozen repository secret-policy audit with zero findings.
 
-The implementation-basis Commit A is
+The historical implementation-basis Commit A was
 `d293507048d39323462e5c9033905b352ae07cb2`. Python executed the explicit
 minimal exact-wire module closure from its private Git-archive snapshot and
 did not execute the broad package `__init__`. Rust used a fresh empty target,
@@ -42,7 +48,7 @@ and a committed approved-toolchain policy. The runner hashed and executed the
 same open output-binary inode and verified source, registry and toolchain
 stability after replay.
 
-The resulting artifact is
+The historical artifact is
 [phase3_m25_errata_qualification_v1.json](../artifacts/phase3_m25_errata_qualification_v1.json):
 
 - status: `DUAL_EXACT_WIRE_ERRATA_GOLDEN_PASS`;
