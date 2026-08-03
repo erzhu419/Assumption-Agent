@@ -448,6 +448,32 @@ def test_manifest_reads_every_dynamic_allowlisted_index_blob(tmp_path: Path) -> 
     )
 
 
+def test_host_and_worker_freeze_the_same_fresh_formal_public_parent() -> None:
+    worker_path = (
+        Path(__file__).resolve().parents[1]
+        / "tools/phase3_m25_commit_b_publication_audit_worker_v1.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "commit_b_worker_path_freeze_test", worker_path
+    )
+    assert spec is not None and spec.loader is not None
+    worker = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(worker)
+
+    expected_parent = (
+        "Hegel Machine/artifacts/phase3_m25_external/formal_genesis_v2"
+    )
+    assert audit.FORMAL_PUBLIC_PARENT_REPOSITORY_PATH == expected_parent
+    assert worker.FORMAL_PUBLIC_PARENT_PATH == expected_parent
+    assert audit.FORMAL_EVIDENCE_REPOSITORY_PATH == worker.FORMAL_EVIDENCE_PATH
+    assert audit.FORMAL_PROMOTION_REPOSITORY_PATH == worker.FORMAL_PROMOTION_PATH
+    assert (
+        audit.FORMAL_TRANSACTION_RECEIPT_REPOSITORY_PATH
+        == worker.FORMAL_TRANSACTION_RECEIPT_PATH
+    )
+    assert audit.PUBLICATION_ROLE_REGISTRY == worker.PUBLICATION_ROLE_REGISTRY
+
+
 def test_manifest_rejects_nonallowlisted_executable_and_unstaged_drift(
     tmp_path: Path,
 ) -> None:

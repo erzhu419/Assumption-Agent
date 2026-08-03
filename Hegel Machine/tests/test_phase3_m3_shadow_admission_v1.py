@@ -312,7 +312,8 @@ def test_shadow_execution_requires_exact_clean_head_and_unsuperseded_formal_base
 
     promotion = (
         project
-        / "artifacts/phase3_m25_external/phase3_m25_gate_promotion_v1.json"
+        / "artifacts/phase3_m25_external/formal_genesis_v2/"
+        "phase3_m25_gate_promotion_v1.json"
     )
     promotion.parent.mkdir(parents=True)
     promotion.write_text("{}\n", encoding="utf-8")

@@ -322,6 +322,106 @@ def test_backend_protocol_blockers_do_not_require_its_not_yet_generated_self_rep
     assert backend.unresolved_formal_blockers() == ()
 
 
+def test_static_replay_runtime_preparation_allows_exactly_one_actor_start(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = executor.DockerCeremonyActorsV1(
+        basis_commit="12" * 20,
+        custody_directory=tmp_path,
+        rust_formal_replay_binary=tmp_path / "rust-replay",
+        timestamp=1,
+    )
+    runtime = object()
+
+    def prepare_runtime() -> None:
+        backend._temporary = runtime  # type: ignore[assignment]
+        backend._docker_control_plane = SimpleNamespace(command=lambda *args: list(args))
+        backend._docker_daemon_binding = b"d" * 32
+
+    monkeypatch.setattr(backend, "_ensure_local_runtime", prepare_runtime)
+    monkeypatch.setattr(backend, "_start_with_local_runtime", lambda: backend)
+
+    control_plane, daemon_binding = backend.static_replay_control_plane_v1()
+    assert control_plane is backend._docker_control_plane
+    assert daemon_binding == b"d" * 32
+    assert backend.start() is backend
+    # Cleanup may erase every runtime handle, but it must never reopen the
+    # one-shot actor-start boundary on this backend object.
+    backend._temporary = None
+    backend._docker_control_plane = None
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        backend.start()
+    assert captured.value.code == executor.FAIL_CONTAINER
+
+
+def test_failed_actor_start_attempt_cannot_be_retried_on_same_backend(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = executor.DockerCeremonyActorsV1(
+        basis_commit="12" * 20,
+        custody_directory=tmp_path,
+        rust_formal_replay_binary=tmp_path / "rust-replay",
+        timestamp=1,
+    )
+    cleanup_calls = 0
+
+    def prepare_runtime() -> None:
+        backend._temporary = object()  # type: ignore[assignment]
+
+    def cleanup() -> None:
+        nonlocal cleanup_calls
+        cleanup_calls += 1
+        backend._temporary = None
+
+    monkeypatch.setattr(backend, "_ensure_local_runtime", prepare_runtime)
+    monkeypatch.setattr(backend, "close", cleanup)
+    monkeypatch.setattr(
+        backend,
+        "_start_with_local_runtime",
+        lambda: (_ for _ in ()).throw(RuntimeError("start failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="start failed"):
+        backend.start()
+    assert cleanup_calls == 1
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        backend.start()
+    assert captured.value.code == executor.FAIL_CONTAINER
+    assert cleanup_calls == 1
+
+
+def test_second_start_does_not_cleanup_the_live_actor_set(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = executor.DockerCeremonyActorsV1(
+        basis_commit="12" * 20,
+        custody_directory=tmp_path,
+        rust_formal_replay_binary=tmp_path / "rust-replay",
+        timestamp=1,
+    )
+    live_containers = {purpose: str(purpose) * 64 for purpose in (1, 2, 3, 4)}
+    cleanup_calls = 0
+
+    def start_live_actors() -> executor.DockerCeremonyActorsV1:
+        backend._containers = dict(live_containers)
+        return backend
+
+    def cleanup() -> None:
+        nonlocal cleanup_calls
+        cleanup_calls += 1
+
+    monkeypatch.setattr(backend, "_ensure_local_runtime", lambda: None)
+    monkeypatch.setattr(backend, "_start_with_local_runtime", start_live_actors)
+    monkeypatch.setattr(backend, "close", cleanup)
+
+    assert backend.start() is backend
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        backend.start()
+    assert captured.value.code == executor.FAIL_CONTAINER
+    assert cleanup_calls == 0
+    assert backend._containers == live_containers
+
+
 def test_operation_request_digest_override_is_narrowly_purpose4_only(
     tmp_path: Path,
 ) -> None:
@@ -3474,6 +3574,15 @@ def _preseed_abort_fixture(
     return transaction
 
 
+def _preseed_abort_before_checkpoint_fixture(
+    tmp_path: Path, *, fault_injector=None,
+) -> executor.FormalCeremonyTransactionV1:
+    transaction = _transaction(tmp_path, fault_injector=fault_injector)
+    transaction.reserve()
+    transaction.close_lock()
+    return transaction
+
+
 def _run_preseed_abort_fixture(
     transaction: executor.FormalCeremonyTransactionV1,
     actors: _PreseedAbortActors,
@@ -3525,41 +3634,141 @@ def test_preseed_abort_uses_exact_plan_and_leaves_no_transaction_residue(
         assert json.loads(marker.read_bytes())["retired_output_path"] == str(output)
 
 
-_PRESEED_ABORT_FAULT_POINTS = (
-    "after_preseed_abort_actor_absence",
-    "before_stage_next_write_preseed_abort_actor_absence",
-    "after_stage_next_fsync_preseed_abort_actor_absence",
-    "after_stage_rename_before_dir_fsync_preseed_abort_actor_absence",
-    "after_stage_dir_fsync_preseed_abort_actor_absence",
-    "after_preseed_abort_actor_absence_receipt_durable",
-    "before_stage_next_write_preseed_abort_plan",
-    "after_stage_next_fsync_preseed_abort_plan",
-    "after_stage_rename_before_dir_fsync_preseed_abort_plan",
-    "after_stage_dir_fsync_preseed_abort_plan",
-    "after_preseed_abort_plan_durable",
-    "before_stage_next_write_preseed_abort_terminal_tombstone",
-    "after_stage_next_fsync_preseed_abort_terminal_tombstone",
-    "after_stage_rename_before_dir_fsync_preseed_abort_terminal_tombstone",
-    "after_stage_dir_fsync_preseed_abort_terminal_tombstone",
-    "after_preseed_abort_terminal_tombstone_durable",
-    *(
-        point
-        for role in ("evidence", "promotion", "publication_receipt")
-        for point in (
-            f"before_stage_next_write_preseed_abort_retirement_{role}",
-            f"after_stage_next_fsync_preseed_abort_retirement_{role}",
-            f"after_stage_rename_before_dir_fsync_preseed_abort_retirement_{role}",
-            f"after_stage_dir_fsync_preseed_abort_retirement_{role}",
-            f"after_preseed_abort_retirement_marker_durable_{role}",
+def test_preseed_abort_accepts_reserved_transaction_before_trust_checkpoint(
+    tmp_path: Path,
+) -> None:
+    transaction = _preseed_abort_before_checkpoint_fixture(tmp_path)
+    stage = (
+        transaction.public_evidence_path.parent
+        / (".hegel-m25-stage-" + transaction.run_id.hex())
+    )
+    assert not (stage / executor._ACTOR_TRUST_CHECKPOINT_FILENAME).exists()
+    assert not (
+        stage / (executor._ACTOR_TRUST_CHECKPOINT_FILENAME + ".next")
+    ).exists()
+
+    actors = _PreseedAbortActors()
+    _run_preseed_abort_fixture(transaction, actors)
+
+    assert actors.calls == 1
+    assert list(transaction.custody_directory.iterdir()) == []
+    assert not stage.exists()
+    for output in (
+        transaction.public_evidence_path,
+        transaction.public_promotion_path,
+        transaction.publication_receipt_path,
+    ):
+        assert executor._preseed_abort_retirement_marker_path_v1(output).is_file()
+
+
+def test_preseed_abort_accepts_checkpoint_next_as_the_only_checkpoint_inode(
+    tmp_path: Path,
+) -> None:
+    transaction = _preseed_abort_fixture(tmp_path)
+    stage = (
+        transaction.public_evidence_path.parent
+        / (".hegel-m25-stage-" + transaction.run_id.hex())
+    )
+    checkpoint = stage / executor._ACTOR_TRUST_CHECKPOINT_FILENAME
+    checkpoint.rename(checkpoint.with_name(checkpoint.name + ".next"))
+
+    _run_preseed_abort_fixture(transaction, _PreseedAbortActors())
+
+    assert list(transaction.custody_directory.iterdir()) == []
+    assert not stage.exists()
+
+
+@pytest.mark.parametrize("unexpected", ("both_checkpoints", "unknown_stage_file"))
+def test_preseed_abort_rejects_ambiguous_or_unknown_checkpoint_stage_state(
+    tmp_path: Path, unexpected: str,
+) -> None:
+    transaction = _preseed_abort_fixture(tmp_path)
+    stage = (
+        transaction.public_evidence_path.parent
+        / (".hegel-m25-stage-" + transaction.run_id.hex())
+    )
+    checkpoint = stage / executor._ACTOR_TRUST_CHECKPOINT_FILENAME
+    if unexpected == "both_checkpoints":
+        extra = checkpoint.with_name(checkpoint.name + ".next")
+        extra.write_bytes(checkpoint.read_bytes())
+    else:
+        extra = stage / "unexpected-checkpoint-state.json"
+        extra.write_bytes(b"{}\n")
+    extra.chmod(0o600)
+    actors = _PreseedAbortActors()
+
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        _run_preseed_abort_fixture(transaction, actors)
+
+    assert captured.value.code == executor.FAIL_TRANSACTION_LOCK
+    assert actors.calls == 0
+
+
+def _preseed_abort_fault_points(row_count: int) -> tuple[str, ...]:
+    return (
+        "after_preseed_abort_actor_absence",
+        "before_stage_next_write_preseed_abort_actor_absence",
+        "after_stage_next_fsync_preseed_abort_actor_absence",
+        "after_stage_rename_before_dir_fsync_preseed_abort_actor_absence",
+        "after_stage_dir_fsync_preseed_abort_actor_absence",
+        "after_preseed_abort_actor_absence_receipt_durable",
+        "before_stage_next_write_preseed_abort_plan",
+        "after_stage_next_fsync_preseed_abort_plan",
+        "after_stage_rename_before_dir_fsync_preseed_abort_plan",
+        "after_stage_dir_fsync_preseed_abort_plan",
+        "after_preseed_abort_plan_durable",
+        "before_stage_next_write_preseed_abort_terminal_tombstone",
+        "after_stage_next_fsync_preseed_abort_terminal_tombstone",
+        "after_stage_rename_before_dir_fsync_preseed_abort_terminal_tombstone",
+        "after_stage_dir_fsync_preseed_abort_terminal_tombstone",
+        "after_preseed_abort_terminal_tombstone_durable",
+        *(
+            point
+            for role in ("evidence", "promotion", "publication_receipt")
+            for point in (
+                f"before_stage_next_write_preseed_abort_retirement_{role}",
+                f"after_stage_next_fsync_preseed_abort_retirement_{role}",
+                f"after_stage_rename_before_dir_fsync_preseed_abort_retirement_{role}",
+                f"after_stage_dir_fsync_preseed_abort_retirement_{role}",
+                f"after_preseed_abort_retirement_marker_durable_{role}",
+            )
+        ),
+        *(f"before_preseed_abort_delete_{index}" for index in range(row_count)),
+        *(
+            f"after_preseed_abort_delete_{index}_before_parent_fsync"
+            for index in range(row_count)
+        ),
+        *(
+            f"after_preseed_abort_delete_{index}_parent_fsync"
+            for index in range(row_count)
+        ),
+    )
+
+
+@pytest.mark.parametrize("fault_point", _preseed_abort_fault_points(14))
+def test_precheckpoint_preseed_abort_resumes_full_fault_matrix(
+    tmp_path: Path, fault_point: str,
+) -> None:
+    transaction = _preseed_abort_before_checkpoint_fixture(tmp_path)
+    actors = _PreseedAbortActors()
+    raised = False
+
+    def inject(point: str) -> None:
+        nonlocal raised
+        if point == fault_point and not raised:
+            raised = True
+            raise RuntimeError(point)
+
+    with pytest.raises(RuntimeError, match=fault_point):
+        _run_preseed_abort_fixture(
+            transaction, actors, fault_injector=inject
         )
-    ),
-    *(f"before_preseed_abort_delete_{index}" for index in range(15)),
-    *(
-        f"after_preseed_abort_delete_{index}_before_parent_fsync"
-        for index in range(15)
-    ),
-    *(f"after_preseed_abort_delete_{index}_parent_fsync" for index in range(15)),
-)
+    assert raised is True
+    _run_preseed_abort_fixture(transaction, actors)
+    assert list(transaction.custody_directory.iterdir()) == []
+
+
+_PRESEED_ABORT_FAULT_POINTS = _preseed_abort_fault_points(15)
 
 
 @pytest.mark.parametrize("fault_point", _PRESEED_ABORT_FAULT_POINTS)
@@ -3612,6 +3821,43 @@ def test_preseed_abort_terminal_lock_unlink_before_fsync_recovers_from_tombstone
             and not second_raised
         ):
             second_raised = True
+            raise RuntimeError(point)
+
+    with pytest.raises(RuntimeError, match="terminal_lock"):
+        _run_preseed_abort_fixture(
+            transaction, actors, fault_injector=stop_after_terminal_unlink
+        )
+    _run_preseed_abort_fixture(transaction, actors)
+    assert list(transaction.custody_directory.iterdir()) == []
+    assert actors.calls == 3
+
+
+def test_precheckpoint_abort_terminal_lock_recovery_uses_shorter_exact_plan(
+    tmp_path: Path,
+) -> None:
+    transaction = _preseed_abort_before_checkpoint_fixture(tmp_path)
+    actors = _PreseedAbortActors()
+    plan_deleted = False
+
+    def stop_after_plan_delete(point: str) -> None:
+        nonlocal plan_deleted
+        if point == "after_preseed_abort_delete_12_parent_fsync" and not plan_deleted:
+            plan_deleted = True
+            raise RuntimeError(point)
+
+    with pytest.raises(RuntimeError, match="delete_12"):
+        _run_preseed_abort_fixture(
+            transaction, actors, fault_injector=stop_after_plan_delete
+        )
+    terminal_unlinked = False
+
+    def stop_after_terminal_unlink(point: str) -> None:
+        nonlocal terminal_unlinked
+        if (
+            point == "after_preseed_abort_delete_terminal_lock_before_parent_fsync"
+            and not terminal_unlinked
+        ):
+            terminal_unlinked = True
             raise RuntimeError(point)
 
     with pytest.raises(RuntimeError, match="terminal_lock"):

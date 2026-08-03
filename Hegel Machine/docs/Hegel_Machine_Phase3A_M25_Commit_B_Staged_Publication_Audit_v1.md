@@ -20,9 +20,11 @@ once (and accepts no aliases or additional files):
 - `phase3_m25_gate_promotion_v1.json.publication-receipt.json`
 - `Hegel Machine/docs/phase3_m25_external_status.md`
 
-The JSON files above live under
-`Hegel Machine/artifacts/phase3_m25_external/`. Finalize requires the same set
-plus exactly one
+The seven qualification JSON files and the publication-audit receipt live
+directly under `Hegel Machine/artifacts/phase3_m25_external/`. The three formal
+transaction outputs live under the frozen fresh parent
+`Hegel Machine/artifacts/phase3_m25_external/formal_genesis_v2/`; their
+basenames remain unchanged. Finalize requires the same set plus exactly one
 `phase3_m25_commit_b_publication_audit_receipt_v1.json`. The manifest binds
 each exact path to its unique role ID and cardinality one. An unknown JSON,
 even under the public prefix, fails closed.

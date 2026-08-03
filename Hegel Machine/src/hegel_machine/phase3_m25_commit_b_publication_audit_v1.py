@@ -91,12 +91,16 @@ AUDIT_RECEIPT_REPOSITORY_PATH: Final = (
     "Hegel Machine/artifacts/phase3_m25_external/"
     "phase3_m25_commit_b_publication_audit_receipt_v1.json"
 )
+FORMAL_PUBLIC_PARENT_REPOSITORY_PATH: Final = (
+    "Hegel Machine/artifacts/phase3_m25_external/formal_genesis_v2"
+)
 FORMAL_EVIDENCE_REPOSITORY_PATH: Final = (
-    "Hegel Machine/artifacts/phase3_m25_external/"
-    "phase3_m25_formal_gate_evidence_v1.json"
+    FORMAL_PUBLIC_PARENT_REPOSITORY_PATH
+    + "/phase3_m25_formal_gate_evidence_v1.json"
 )
 FORMAL_PROMOTION_REPOSITORY_PATH: Final = (
-    "Hegel Machine/artifacts/phase3_m25_external/phase3_m25_gate_promotion_v1.json"
+    FORMAL_PUBLIC_PARENT_REPOSITORY_PATH
+    + "/phase3_m25_gate_promotion_v1.json"
 )
 FORMAL_TRANSACTION_RECEIPT_REPOSITORY_PATH: Final = (
     FORMAL_PROMOTION_REPOSITORY_PATH + ".publication-receipt.json"

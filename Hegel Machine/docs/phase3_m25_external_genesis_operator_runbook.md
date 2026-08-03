@@ -580,6 +580,19 @@ executable_prefixes:
 - `Hegel Machine/artifacts/phase3_m25_external/` 下经过审计的公开 evidence；
 - 唯一状态交接文档 `Hegel Machine/docs/phase3_m25_external_status.md`。
 
+本次 A5 precheckpoint terminal abort 已永久退休旧父目录中的三个 formal transaction
+output paths。后续正式三件套只允许位于冻结的新父目录：
+
+```text
+Hegel Machine/artifacts/phase3_m25_external/formal_genesis_v2/
+  phase3_m25_formal_gate_evidence_v1.json
+  phase3_m25_gate_promotion_v1.json
+  phase3_m25_gate_promotion_v1.json.publication-receipt.json
+```
+
+三个 basename 不变；只有父目录更新。Host publication audit、隔离 worker 和 shadow
+baseline-supersession guard 必须绑定这三个相同的完整路径。
+
 其他路径一律不在 allowlist。尤其不得在 Commit B 修改 Python/Rust implementation、
 tests、golden、normative documents、operator scripts 或依赖锁文件。若出现任何 executable
 change 或非 allowlisted path，返回：

@@ -129,9 +129,18 @@ SHADOW_BASIS_PATHS: Final = (
 # later M3 state) with those frozen counters.  A future dynamic formal-state
 # binding requires a versioned shadow wire.
 FORMAL_BASELINE_SUPERSEDING_PATHS: Final = (
-    "artifacts/phase3_m25_external/phase3_m25_formal_gate_evidence_v1.json",
-    "artifacts/phase3_m25_external/phase3_m25_gate_promotion_v1.json",
-    "artifacts/phase3_m25_external/phase3_m25_gate_promotion_v1.json.publication-receipt.json",
+    (
+        "artifacts/phase3_m25_external/formal_genesis_v2/"
+        "phase3_m25_formal_gate_evidence_v1.json"
+    ),
+    (
+        "artifacts/phase3_m25_external/formal_genesis_v2/"
+        "phase3_m25_gate_promotion_v1.json"
+    ),
+    (
+        "artifacts/phase3_m25_external/formal_genesis_v2/"
+        "phase3_m25_gate_promotion_v1.json.publication-receipt.json"
+    ),
 )
 
 FORMAL_TRACK: Final = dict(FORMAL_TRACK_SNAPSHOT)

@@ -32,11 +32,14 @@ EXECUTABLE_PREFIXES = [
     "Hegel Machine/src", "Hegel Machine/rust", "Hegel Machine/tests",
     "Hegel Machine/tools",
 ]
+FORMAL_PUBLIC_PARENT_PATH = (
+    "Hegel Machine/artifacts/phase3_m25_external/formal_genesis_v2"
+)
 FORMAL_EVIDENCE_PATH = (
-    "Hegel Machine/artifacts/phase3_m25_external/phase3_m25_formal_gate_evidence_v1.json"
+    FORMAL_PUBLIC_PARENT_PATH + "/phase3_m25_formal_gate_evidence_v1.json"
 )
 FORMAL_PROMOTION_PATH = (
-    "Hegel Machine/artifacts/phase3_m25_external/phase3_m25_gate_promotion_v1.json"
+    FORMAL_PUBLIC_PARENT_PATH + "/phase3_m25_gate_promotion_v1.json"
 )
 FORMAL_TRANSACTION_RECEIPT_PATH = FORMAL_PROMOTION_PATH + ".publication-receipt.json"
 CANONICAL_JSON_REQUIRED_PATHS = {

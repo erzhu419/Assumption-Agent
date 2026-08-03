@@ -5027,10 +5027,11 @@ def _abort_preseed_reserved_transaction_core_v1(
                 _ACTOR_TRUST_CHECKPOINT_FILENAME + ".next",
             }
             stage_entries = {path.name for path in stage.iterdir()}
+            checkpoint_entries = stage_entries & checkpoint_variants
             if (
                 not required_stage <= stage_entries
-                or len(stage_entries & checkpoint_variants) != 1
-                or stage_entries != required_stage | (stage_entries & checkpoint_variants)
+                or len(checkpoint_entries) > 1
+                or stage_entries != required_stage | checkpoint_entries
             ):
                 _fail(FAIL_TRANSACTION_LOCK, "preseed abort stage path set differs")
             _journal_payload, journal = FormalCeremonyTransactionV1._read_canonical_regular_file(
@@ -5225,6 +5226,7 @@ def _abort_preseed_reserved_transaction_core_v1(
             _ACTOR_TRUST_CHECKPOINT_FILENAME,
             _ACTOR_TRUST_CHECKPOINT_FILENAME + ".next",
         }
+        checkpoint_stage_names = stage_names & checkpoint_variants
         expected_tail = (
             stage, run_reservation, ledger_reservation, absence_path, plan_path, lock_path
         )
@@ -5232,8 +5234,8 @@ def _abort_preseed_reserved_transaction_core_v1(
             row_paths[:3] != output_reservations
             or any(path.parent != stage for path in row_paths[3:stage_index])
             or not required_stage <= stage_names
-            or len(stage_names & checkpoint_variants) != 1
-            or stage_names != required_stage | (stage_names & checkpoint_variants)
+            or len(checkpoint_stage_names) > 1
+            or stage_names != required_stage | checkpoint_stage_names
             or row_paths[stage_index:] != expected_tail
             or len(row_paths) != len(set(row_paths))
         ):
@@ -6821,6 +6823,13 @@ class DockerCeremonyActorsV1(CeremonyActorsV1, AbstractContextManager["DockerCer
         ).resolve()
         self.timestamp = timestamp
         self._temporary: LinuxLocalTemporaryDirectoryV1 | None = None
+        # Preparing the local Docker control plane is not an actor start.  The
+        # formal path deliberately performs static Rust replay on that control
+        # plane before launching any actor.  Track the irreversible start
+        # boundary independently so a prepared runtime may enter it exactly
+        # once, while a failed or completed start can never be retried on the
+        # same backend object.
+        self._actor_start_attempted = False
         self._root: Path | None = None
         self._docker_control_plane: LocalDockerControlPlaneV1 | None = None
         self._docker_daemon_receipt: Mapping[str, object] | None = None
@@ -8347,10 +8356,13 @@ class DockerCeremonyActorsV1(CeremonyActorsV1, AbstractContextManager["DockerCer
         self.recover_complete_private_state_and_verify_absent(run_id, marker)
 
     def start(self) -> "DockerCeremonyActorsV1":
-        if self._containers or self._temporary is not None:
+        if self._actor_start_attempted:
             _fail(FAIL_CONTAINER, "Docker ceremony actors may be started only once")
-        self._ensure_local_runtime()
+        self._actor_start_attempted = True
+        if self._containers or self._state_volumes or self._public_keys or self._key_ids:
+            _fail(FAIL_CONTAINER, "Docker ceremony actor pre-start state is not empty")
         try:
+            self._ensure_local_runtime()
             return self._start_with_local_runtime()
         except BaseException as original:
             if self._temporary is not None or self._containers:
