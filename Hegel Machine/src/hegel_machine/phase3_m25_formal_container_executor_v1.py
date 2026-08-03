@@ -2997,7 +2997,11 @@ class FormalCeremonyTransactionV1:
             type(expected_bundle) is not dict
             or type(expected_sha256) is not bytes
             or len(expected_sha256) != 32
-            or bundle != expected_bundle
+            # The intent decoder deliberately restores every JSON array as a
+            # tuple, whereas the independently persisted JSON bundle decodes
+            # to lists.  Compare in the canonical transport domain; direct
+            # Python container equality would reject identical frozen bytes.
+            or bundle != _transport(expected_bundle)
             or payload != _canonical_json(expected_bundle)
             or hashlib.sha256(payload).digest() != expected_sha256
         ):
@@ -5827,6 +5831,75 @@ def resume_pending_split_calculators_v1(
             backend.stop_for_recovery_and_verify_absent()
 
 
+def _validate_recovery_source_admission_v1(
+    admission: object,
+    *,
+    basis_commit: str,
+    run_id: bytes,
+    ledger_id: bytes,
+) -> Mapping[str, object]:
+    """Accept only the frozen R1 or attempt-2 R2 recovery provenance scope."""
+
+    if not isinstance(admission, Mapping):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "recovery-only source admission callback returned a non-mapping",
+        )
+    schema = admission.get("schema")
+    if (
+        schema
+        not in {
+            "hegel-phase3-m25-a8-r1-source-admission/1",
+            "hegel-phase3-m25-a8-r2-source-admission/1",
+        }
+        or admission.get("basis_commit") != basis_commit
+        or admission.get("run_id_hex") != run_id.hex()
+        or admission.get("ledger_id_hex") != ledger_id.hex()
+        or admission.get("cross_basis_recovery_authorized") is not True
+        or admission.get("formal_identity_entropy_draw_count") != 0
+        or admission.get("complete_seed_resume_only") is not True
+        or not isinstance(admission.get("unchanged_a8_input_sha256"), Mapping)
+        or not admission.get("unchanged_a8_input_sha256")
+        or admission.get("unchanged_a8_input_sha256_root")
+        != hashlib.sha256(
+            _canonical_json(admission.get("unchanged_a8_input_sha256"))
+        ).hexdigest()
+    ):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "recovery-only source admission callback returned a differing scope",
+        )
+    if schema == "hegel-phase3-m25-a8-r2-source-admission/1" and (
+        admission.get("r1_amendment_commit")
+        != "0349131599a688470c15eded51f942eefeded392"
+        or type(admission.get("r2_amendment_commit")) is not str
+        or re.fullmatch(
+            r"[0-9a-f]{40}", str(admission.get("r2_amendment_commit"))
+        )
+        is None
+        or admission.get("r2_amendment_commit")
+        in {
+            basis_commit,
+            "0349131599a688470c15eded51f942eefeded392",
+        }
+        or admission.get("recovery_attempt_ordinal") != 2
+        or admission.get("continuation_action")
+        != "CODE_AMENDMENT_RECOVERY_CONTINUATION"
+        or admission.get("r1_failure_raw_sha256")
+        != "d4b7be4432b4101de5aab1693e37ae5769d1587155d634b4e746fee60109168a"
+        or type(admission.get("incident_diagnostic_sha256")) is not str
+        or re.fullmatch(
+            r"[0-9a-f]{64}", str(admission.get("incident_diagnostic_sha256"))
+        )
+        is None
+    ):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "attempt-2 recovery source admission provenance differs",
+        )
+    return admission
+
+
 def _continue_pre_stage_pending_recovery_core_v1(
     *,
     recovery: PendingCeremonyRecoveryV1,
@@ -5858,27 +5931,12 @@ def _continue_pre_stage_pending_recovery_core_v1(
         _fail(FAIL_SYNTHETIC_PROMOTION, "synthetic actors cannot recover formal evidence")
     if source_admission_guard is not None:
         admission = source_admission_guard(recovery)
-        if (
-            not isinstance(admission, Mapping)
-            or admission.get("schema")
-            != "hegel-phase3-m25-a8-r1-source-admission/1"
-            or admission.get("basis_commit") != recovery.basis_commit
-            or admission.get("run_id_hex") != recovery.run_id.hex()
-            or admission.get("ledger_id_hex") != recovery.ledger_id.hex()
-            or admission.get("cross_basis_recovery_authorized") is not True
-            or admission.get("formal_identity_entropy_draw_count") != 0
-            or admission.get("complete_seed_resume_only") is not True
-            or not isinstance(admission.get("unchanged_a8_input_sha256"), Mapping)
-            or not admission.get("unchanged_a8_input_sha256")
-            or admission.get("unchanged_a8_input_sha256_root")
-            != hashlib.sha256(
-                _canonical_json(admission.get("unchanged_a8_input_sha256"))
-            ).hexdigest()
-        ):
-            _fail(
-                FAIL_RECOVERY_SOURCE_ADMISSION,
-                "recovery-only source admission callback returned a differing scope",
-            )
+        _validate_recovery_source_admission_v1(
+            admission,
+            basis_commit=recovery.basis_commit,
+            run_id=recovery.run_id,
+            ledger_id=recovery.ledger_id,
+        )
     elif complete_seed_resume_only:
         _fail(
             FAIL_RECOVERY_SOURCE_ADMISSION,

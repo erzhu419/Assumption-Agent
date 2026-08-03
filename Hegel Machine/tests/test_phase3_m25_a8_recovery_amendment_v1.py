@@ -292,3 +292,56 @@ def test_wrapper_closes_actor_backend_when_acquire_fails(
         )
     assert close_calls == 1
     assert (audit / "failure.json").exists()
+
+
+@pytest.mark.parametrize("terminal_name", ("failure.json", "finalize.json"))
+def test_r1_terminal_audit_cannot_be_retried_before_actor_construction(
+    tmp_path: Path, monkeypatch, terminal_name: str,
+) -> None:
+    audit = tmp_path / "audit"
+    audit.mkdir(mode=0o700)
+    audit.chmod(0o700)
+    if audit.stat().st_mode & 0o777 != 0o700:
+        pytest.skip("test temporary filesystem does not enforce POSIX mode 0700")
+    (audit / terminal_name).write_bytes(b"terminal\n")
+    (audit / terminal_name).chmod(0o600)
+    monkeypatch.setattr(amendment, "FIXED_AUDIT_DIRECTORY", audit)
+
+    def actor_constructor_must_not_run(**_kwargs):
+        raise AssertionError("actor backend was constructed for a terminal R1 audit")
+
+    monkeypatch.setattr(
+        amendment, "A8R1RecoveryDockerActorsV1", actor_constructor_must_not_run
+    )
+    with pytest.raises(amendment.A8RecoveryAmendmentError, match="terminal"):
+        amendment.execute_fixed_a8_r1_recovery_v1(
+            custody_directory=tmp_path / "missing-custody",
+            rust_formal_replay_binary=tmp_path / "formal",
+            rust_bridge_dag_replay_binary=tmp_path / "bridge",
+            rust_bridge_dag_qualification_report=tmp_path / "report",
+            public_evidence_path=tmp_path / "evidence.json",
+            public_promotion_path=tmp_path / "promotion.json",
+            audit_directory=audit,
+        )
+
+
+def test_r1_dangling_terminal_receipt_cannot_be_retried(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    audit = tmp_path / "audit"
+    audit.mkdir(mode=0o700)
+    audit.chmod(0o700)
+    if audit.stat().st_mode & 0o777 != 0o700:
+        pytest.skip("test temporary filesystem does not enforce POSIX mode 0700")
+    (audit / "failure.json").symlink_to(audit / "absent-target")
+    monkeypatch.setattr(amendment, "FIXED_AUDIT_DIRECTORY", audit)
+    with pytest.raises(amendment.A8RecoveryAmendmentError, match="terminal"):
+        amendment.execute_fixed_a8_r1_recovery_v1(
+            custody_directory=tmp_path / "missing-custody",
+            rust_formal_replay_binary=tmp_path / "formal",
+            rust_bridge_dag_replay_binary=tmp_path / "bridge",
+            rust_bridge_dag_qualification_report=tmp_path / "report",
+            public_evidence_path=tmp_path / "evidence.json",
+            public_promotion_path=tmp_path / "promotion.json",
+            audit_directory=audit,
+        )

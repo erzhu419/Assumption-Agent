@@ -103,6 +103,89 @@ def test_complete_only_recovery_requires_exact_admission_before_actor_use(tmp_pa
     assert captured.value.code == executor.FAIL_RECOVERY_SOURCE_ADMISSION
 
 
+def _recovery_source_admission(schema: str) -> dict[str, object]:
+    input_sha256 = {"Hegel Machine/source.py": "12" * 32}
+    admission: dict[str, object] = {
+        "schema": schema,
+        "basis_commit": "12" * 20,
+        "run_id_hex": (b"r" * 16).hex(),
+        "ledger_id_hex": (b"l" * 16).hex(),
+        "cross_basis_recovery_authorized": True,
+        "formal_identity_entropy_draw_count": 0,
+        "complete_seed_resume_only": True,
+        "unchanged_a8_input_sha256": input_sha256,
+        "unchanged_a8_input_sha256_root": hashlib.sha256(
+            executor._canonical_json(input_sha256)
+        ).hexdigest(),
+    }
+    if schema == "hegel-phase3-m25-a8-r2-source-admission/1":
+        admission.update(
+            {
+                "r1_amendment_commit": (
+                    "0349131599a688470c15eded51f942eefeded392"
+                ),
+                "r2_amendment_commit": "34" * 20,
+                "recovery_attempt_ordinal": 2,
+                "continuation_action": "CODE_AMENDMENT_RECOVERY_CONTINUATION",
+                "r1_failure_raw_sha256": (
+                    "d4b7be4432b4101de5aab1693e37ae5769d1587155d634b4e746fee60109168a"
+                ),
+                "incident_diagnostic_sha256": "56" * 32,
+            }
+        )
+    return admission
+
+
+@pytest.mark.parametrize(
+    "schema",
+    (
+        "hegel-phase3-m25-a8-r1-source-admission/1",
+        "hegel-phase3-m25-a8-r2-source-admission/1",
+    ),
+)
+def test_recovery_source_admission_accepts_only_frozen_r1_or_r2_scope(
+    schema: str,
+) -> None:
+    admission = _recovery_source_admission(schema)
+    assert (
+        executor._validate_recovery_source_admission_v1(
+            admission,
+            basis_commit="12" * 20,
+            run_id=b"r" * 16,
+            ledger_id=b"l" * 16,
+        )
+        is admission
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("r1_amendment_commit", "00" * 20),
+        ("r2_amendment_commit", "0349131599a688470c15eded51f942eefeded392"),
+        ("recovery_attempt_ordinal", 3),
+        ("continuation_action", "RETRY"),
+        ("r1_failure_raw_sha256", "00" * 32),
+        ("incident_diagnostic_sha256", "not-a-digest"),
+    ),
+)
+def test_attempt2_source_admission_rejects_provenance_drift(
+    field: str, value: object,
+) -> None:
+    admission = _recovery_source_admission(
+        "hegel-phase3-m25-a8-r2-source-admission/1"
+    )
+    admission[field] = value
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        executor._validate_recovery_source_admission_v1(
+            admission,
+            basis_commit="12" * 20,
+            run_id=b"r" * 16,
+            ledger_id=b"l" * 16,
+        )
+    assert captured.value.code == executor.FAIL_RECOVERY_SOURCE_ADMISSION
+
+
 def _basis(*, ready: bool):
     return SimpleNamespace(
         basis_commit="12" * 20,
@@ -2461,13 +2544,18 @@ def _public_replay_stub(_payload):
     return {"qualified": True, "state": "NOT_RUN"}
 
 
-def _transaction(tmp_path: Path, fault_injector=None):
+def _transaction(tmp_path: Path, fault_injector=None, *, live_bundle=None):
     custody = tmp_path / "custody"
     custody.mkdir(mode=0o700)
     os.chmod(custody, 0o700)
     public = tmp_path / "public"
     public.mkdir()
     actor_trust = _test_actor_trust()
+    frozen_live_bundle = (
+        {"synthetic_test_bundle": True}
+        if live_bundle is None
+        else live_bundle
+    )
     intent = executor.build_prestage_intent_fields_v1(
         basis_commit="12" * 20,
         run_id=b"r" * 16,
@@ -2481,9 +2569,9 @@ def _transaction(tmp_path: Path, fault_injector=None):
         qualification_only_key_ids={
             purpose: bytes([purpose]) * 16 for purpose in (1, 2, 3, 4)
         },
-        live_actor_protocol_qualification_bundle={"synthetic_test_bundle": True},
+        live_actor_protocol_qualification_bundle=frozen_live_bundle,
         live_actor_protocol_qualification_canonical_bundle_bytes=(
-            executor._canonical_json({"synthetic_test_bundle": True})
+            executor._canonical_json(frozen_live_bundle)
         ),
         live_actor_protocol_daemon_receipt_binding=b"d" * 32,
         runtime_binding_fields=_test_runtime_binding_fields(),
@@ -2822,6 +2910,66 @@ def test_transaction_local_qualification_bundle_tamper_is_rejected(
         / executor._LIVE_QUALIFICATION_BUNDLE_FILENAME
     )
     bundle_path.write_bytes(executor._canonical_json({"synthetic_test_bundle": False}))
+    bundle_path.chmod(0o600)
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        executor.FormalCeremonyTransactionV1.rehydrate_reservation_bootstrap_v1(
+            custody_directory=transaction.custody_directory,
+            public_evidence_path=transaction.public_evidence_path,
+            public_promotion_path=transaction.public_promotion_path,
+        )
+    assert captured.value.code == executor.FAIL_TRANSACTION_LOCK
+
+
+def test_transaction_local_qualification_bundle_accepts_transport_equivalent_sequences(
+    tmp_path: Path,
+) -> None:
+    live_bundle = {
+        "actor_rows": [
+            {"purpose_id": 1, "probe_rows": [True, False]},
+            {"purpose_id": 2, "probe_rows": []},
+        ],
+        "binding": b"b" * 32,
+    }
+    transaction = _transaction(tmp_path, live_bundle=live_bundle)
+    transaction.reserve()
+    transaction.close_lock()
+    recovered = executor.FormalCeremonyTransactionV1.rehydrate_reservation_bootstrap_v1(
+        custody_directory=transaction.custody_directory,
+        public_evidence_path=transaction.public_evidence_path,
+        public_promotion_path=transaction.public_promotion_path,
+    )
+    try:
+        assert recovered.state == "RESERVED"
+        expected = recovered._prestage_intent_fields[
+            "live_actor_protocol_qualification_bundle"
+        ]
+        assert isinstance(expected["actor_rows"], tuple)
+        assert executor._transport(expected) == executor._transport(live_bundle)
+    finally:
+        recovered.close_lock()
+
+
+@pytest.mark.parametrize(
+    "tampered_bundle",
+    (
+        {"actor_rows": [{"purpose_id": 2}, {"purpose_id": 1}]},
+        {"actor_rows": [{"purpose_id": 1}]},
+        {"actor_rows": [{"purpose_id": 1}, {"purpose_id": 2}], "extra": True},
+    ),
+)
+def test_transaction_local_transport_comparison_rejects_semantic_drift(
+    tmp_path: Path, tampered_bundle: dict[str, object],
+) -> None:
+    original = {"actor_rows": [{"purpose_id": 1}, {"purpose_id": 2}]}
+    transaction = _transaction(tmp_path, live_bundle=original)
+    transaction.reserve()
+    transaction.close_lock()
+    bundle_path = (
+        transaction.public_evidence_path.parent
+        / (".hegel-m25-stage-" + transaction.run_id.hex())
+        / executor._LIVE_QUALIFICATION_BUNDLE_FILENAME
+    )
+    bundle_path.write_bytes(executor._canonical_json(tampered_bundle))
     bundle_path.chmod(0o600)
     with pytest.raises(executor.FormalContainerExecutorError) as captured:
         executor.FormalCeremonyTransactionV1.rehydrate_reservation_bootstrap_v1(

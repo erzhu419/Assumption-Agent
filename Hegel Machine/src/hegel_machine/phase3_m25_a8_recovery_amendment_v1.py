@@ -582,6 +582,16 @@ def execute_fixed_a8_r1_recovery_v1(
     """Resume the one fixed A8 transaction; never execute, redraw, abort or start M3."""
 
     audit = _prepare_audit_directory(audit_directory, repository_root)
+    terminal_receipts = tuple(
+        name
+        for name in ("failure.json", "finalize.json")
+        if (audit / name).exists() or (audit / name).is_symlink()
+    )
+    if terminal_receipts:
+        _fail(
+            "R1 recovery audit is terminal and may not be retried: "
+            + ",".join(terminal_receipts)
+        )
     protected_paths = (
         custody_directory.resolve(strict=True),
         public_evidence_path.parent.resolve(strict=True),
