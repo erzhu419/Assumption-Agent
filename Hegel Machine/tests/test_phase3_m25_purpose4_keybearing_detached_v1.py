@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import copy
 import hashlib
 import importlib.util
@@ -591,3 +592,39 @@ def test_worker_source_has_no_legacy_host_signature_oracle_path() -> None:
         "genpkey",
     ):
         assert forbidden not in source
+
+
+@pytest.mark.parametrize(
+    "worker_name,required_calls",
+    [
+        (
+            "phase3_m25_purpose4_keybearing_detached_worker_v1.py",
+            {"generate_parent_absence_audit_v1", "replay_parent_absence_audit_v1"},
+        ),
+        (
+            "phase3_m25_purpose4_detached_audit_worker_v1.py",
+            {"generate_parent_absence_audit_v1", "replay_parent_absence_audit_v1"},
+        ),
+    ],
+)
+def test_purpose4_workers_forward_the_verified_runtime_git(
+    worker_name: str,
+    required_calls: set[str],
+) -> None:
+    worker_path = Path(__file__).resolve().parents[1] / "tools" / worker_name
+    tree = ast.parse(worker_path.read_text(encoding="utf-8"))
+    observed: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+            continue
+        if node.func.id not in required_calls:
+            continue
+        keyword = next(
+            (item for item in node.keywords if item.arg == "git_executable"),
+            None,
+        )
+        assert keyword is not None
+        assert isinstance(keyword.value, ast.Name)
+        assert keyword.value.id == "git_binary"
+        observed.add(node.func.id)
+    assert observed == required_calls

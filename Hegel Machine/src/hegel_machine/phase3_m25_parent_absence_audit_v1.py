@@ -44,6 +44,7 @@ CONTENT_PREDICATE_PROFILE_ID: Final = (
     "legacy-parent-formal-artifact-unique-blob-content-absence-v1"
 )
 PUBLIC_RECEIPT_SCHEMA_ID: Final = "hegel-parent-absence-audit-receipt/1"
+DEFAULT_GIT_EXECUTABLE: Final = Path("/usr/bin/git")
 
 FAIL_GIT_AUDIT: Final = "FAIL_PARENT_AUDIT_GIT_PLUMBING"
 FAIL_GIT_OBJECT_FORMAT: Final = "FAIL_PARENT_AUDIT_GIT_OBJECT_FORMAT"
@@ -185,53 +186,124 @@ def _git_environment() -> dict[str, str]:
     }
 
 
+def _resolve_git_executable(git_executable: str | Path) -> Path:
+    try:
+        executable = Path(git_executable).resolve(strict=True)
+    except (OSError, TypeError, ValueError) as error:
+        _fail(
+            FAIL_GIT_AUDIT,
+            f"Git executable cannot be resolved: {type(error).__name__}",
+        )
+    if not executable.is_absolute() or not executable.is_file() or not os.access(
+        executable, os.X_OK
+    ):
+        _fail(FAIL_GIT_AUDIT, "Git executable is not an executable regular file")
+    return executable
+
+
+def _git_command(
+    git_executable: str | Path,
+    repository: Path,
+    arguments: Sequence[str],
+) -> tuple[Path, list[str]]:
+    executable = _resolve_git_executable(git_executable)
+    try:
+        safe_repository = repository.resolve(strict=True)
+    except OSError as error:
+        _fail(
+            FAIL_GIT_AUDIT,
+            f"Git repository cannot be resolved: {type(error).__name__}",
+        )
+    return safe_repository, [
+        str(executable),
+        "-c",
+        "core.quotePath=false",
+        "-c",
+        f"safe.directory={safe_repository}",
+        *arguments,
+    ]
+
+
 def _run_git(
     repository: Path,
     arguments: Sequence[str],
     *,
     input_bytes: bytes | None = None,
+    git_executable: str | Path = DEFAULT_GIT_EXECUTABLE,
 ) -> bytes:
-    command = ["/usr/bin/git", "-c", "core.quotePath=false", *arguments]
-    completed = subprocess.run(
-        command,
-        cwd=repository,
-        env=_git_environment(),
-        input=input_bytes,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
+    safe_repository, command = _git_command(
+        git_executable, repository, arguments
     )
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=safe_repository,
+            env=_git_environment(),
+            input=input_bytes,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+    except OSError as error:
+        _fail(
+            FAIL_GIT_AUDIT,
+            f"Git command could not start: {type(error).__name__}",
+        )
     if completed.returncode != 0:
         detail = completed.stderr.decode("utf-8", "backslashreplace").strip()
         _fail(FAIL_GIT_AUDIT, f"{' '.join(command)} failed: {detail}")
     return completed.stdout
 
 
-def _resolve_repository(repository: str | Path) -> Path:
+def _resolve_repository(
+    repository: str | Path,
+    *,
+    git_executable: str | Path = DEFAULT_GIT_EXECUTABLE,
+) -> Path:
     candidate = Path(repository).resolve()
-    raw_root = _run_git(candidate, ("rev-parse", "--show-toplevel")).rstrip(b"\n")
+    raw_root = _run_git(
+        candidate,
+        ("rev-parse", "--show-toplevel"),
+        git_executable=git_executable,
+    ).rstrip(b"\n")
     try:
         root = Path(os.fsdecode(raw_root)).resolve()
     except (UnicodeError, ValueError) as error:
         _fail(FAIL_GIT_AUDIT, f"repository root cannot be represented: {error}")
-    object_format = _run_git(root, ("rev-parse", "--show-object-format")).strip()
+    object_format = _run_git(
+        root,
+        ("rev-parse", "--show-object-format"),
+        git_executable=git_executable,
+    ).strip()
     if object_format != b"sha1":
         _fail(FAIL_GIT_OBJECT_FORMAT, f"expected sha1, found {object_format!r}")
-    shallow = _run_git(root, ("rev-parse", "--is-shallow-repository")).strip()
+    shallow = _run_git(
+        root,
+        ("rev-parse", "--is-shallow-repository"),
+        git_executable=git_executable,
+    ).strip()
     if shallow != b"false":
         _fail(FAIL_GIT_SHALLOW, "reachable-history replay requires a complete repository")
     return root
 
 
 def _batch_cat_file(
-    repository: Path, object_digests: Sequence[bytes]
+    repository: Path,
+    object_digests: Sequence[bytes],
+    *,
+    git_executable: str | Path = DEFAULT_GIT_EXECUTABLE,
 ) -> dict[bytes, tuple[bytes, bytes]]:
     """Return object type and payload for exact raw SHA-1 object IDs."""
 
     if not object_digests:
         return {}
     payload = b"".join(digest.hex().encode("ascii") + b"\n" for digest in object_digests)
-    output = _run_git(repository, ("cat-file", "--batch"), input_bytes=payload)
+    output = _run_git(
+        repository,
+        ("cat-file", "--batch"),
+        input_bytes=payload,
+        git_executable=git_executable,
+    )
     offset = 0
     result: dict[bytes, tuple[bytes, bytes]] = {}
     for requested in object_digests:
@@ -259,7 +331,12 @@ def _batch_cat_file(
     return result
 
 
-def _batch_blob_sizes(repository: Path, blob_digests: Sequence[bytes]) -> dict[bytes, int]:
+def _batch_blob_sizes(
+    repository: Path,
+    blob_digests: Sequence[bytes],
+    *,
+    git_executable: str | Path = DEFAULT_GIT_EXECUTABLE,
+) -> dict[bytes, int]:
     if not blob_digests:
         return {}
     ordered = tuple(sorted(set(blob_digests)))
@@ -268,6 +345,7 @@ def _batch_blob_sizes(repository: Path, blob_digests: Sequence[bytes]) -> dict[b
         repository,
         ("cat-file", "--batch-check=%(objectname) %(objecttype) %(objectsize)"),
         input_bytes=payload,
+        git_executable=git_executable,
     )
     lines = output.splitlines()
     if len(lines) != len(ordered):
@@ -362,21 +440,33 @@ def _scan_unique_blob_contents(
     repository: Path,
     sizes: Mapping[bytes, int],
     top_level_rows: Sequence[Mapping[str, object]],
+    *,
+    git_executable: str | Path = DEFAULT_GIT_EXECUTABLE,
 ) -> Mapping[str, object]:
     """Stream every bound unique blob, proving object identity and predicates."""
 
     signatures = _all_content_signatures()
     occurrence_totals = {signature: 0 for signature in signatures}
     matching_blobs = {signature: set() for signature in signatures}
-    command = ["/usr/bin/git", "-c", "core.quotePath=false", "cat-file", "--batch"]
-    process = subprocess.Popen(
-        command,
-        cwd=repository,
-        env=_git_environment(),
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+    safe_repository, command = _git_command(
+        git_executable,
+        repository,
+        ("cat-file", "--batch"),
     )
+    try:
+        process = subprocess.Popen(
+            command,
+            cwd=safe_repository,
+            env=_git_environment(),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except OSError as error:
+        _fail(
+            FAIL_GIT_AUDIT,
+            f"streaming Git command could not start: {type(error).__name__}",
+        )
     assert process.stdin is not None
     assert process.stdout is not None
     assert process.stderr is not None
@@ -545,9 +635,15 @@ def _parse_commit_parents(commit_digest: bytes, payload: bytes) -> tuple[bytes, 
 
 def _reachable_commit_graph(
     repository: Path,
+    *,
+    git_executable: str | Path = DEFAULT_GIT_EXECUTABLE,
 ) -> tuple[tuple[bytes, ...], Mapping[bytes, tuple[bytes, ...]], Mapping[bytes, int]]:
     parent_hex = AUDITED_PARENT_COMMIT_SHA1.hex()
-    lines = _run_git(repository, ("rev-list", parent_hex)).splitlines()
+    lines = _run_git(
+        repository,
+        ("rev-list", parent_hex),
+        git_executable=git_executable,
+    ).splitlines()
     try:
         commits = tuple(bytes.fromhex(line.decode("ascii")) for line in lines)
     except (UnicodeError, ValueError) as error:
@@ -557,7 +653,11 @@ def _reachable_commit_graph(
     if len(commits) != len(set(commits)) or any(len(item) != 20 for item in commits):
         _fail(FAIL_GIT_REACHABILITY, "rev-list contains duplicate or non-SHA1 IDs")
 
-    objects = _batch_cat_file(repository, commits)
+    objects = _batch_cat_file(
+        repository,
+        commits,
+        git_executable=git_executable,
+    )
     parent_map: dict[bytes, tuple[bytes, ...]] = {}
     for commit in commits:
         object_type, payload = objects[commit]
@@ -605,10 +705,16 @@ def _validate_raw_path(raw_path: bytes) -> None:
         _fail(FAIL_GIT_PATH_ENCODING, f"repository path is not UTF-8: {error}")
 
 
-def _root_blob_refs(repository: Path, commit: bytes) -> tuple[_BlobRef, ...]:
+def _root_blob_refs(
+    repository: Path,
+    commit: bytes,
+    *,
+    git_executable: str | Path = DEFAULT_GIT_EXECUTABLE,
+) -> tuple[_BlobRef, ...]:
     output = _run_git(
         repository,
         ("ls-tree", "-r", "-z", "--full-tree", commit.hex()),
+        git_executable=git_executable,
     )
     refs: list[_BlobRef] = []
     for record in output.split(b"\x00"):
@@ -632,7 +738,11 @@ def _root_blob_refs(repository: Path, commit: bytes) -> tuple[_BlobRef, ...]:
 
 
 def _parse_parent_diff(
-    repository: Path, parent: bytes, commit: bytes
+    repository: Path,
+    parent: bytes,
+    commit: bytes,
+    *,
+    git_executable: str | Path = DEFAULT_GIT_EXECUTABLE,
 ) -> tuple[tuple[_BlobRef, ...], tuple[_BlobRef, ...]]:
     output = _run_git(
         repository,
@@ -649,6 +759,7 @@ def _parse_parent_diff(
             parent.hex(),
             commit.hex(),
         ),
+        git_executable=git_executable,
     )
     parts = output.split(b"\x00")
     if parts and parts[-1] == b"":
@@ -694,13 +805,24 @@ def _commit_touched_refs(
     repository: Path,
     commit: bytes,
     parents: tuple[bytes, ...],
+    *,
+    git_executable: str | Path = DEFAULT_GIT_EXECUTABLE,
 ) -> tuple[_BlobRef, ...]:
     if not parents:
-        return _root_blob_refs(repository, commit)
+        return _root_blob_refs(
+            repository,
+            commit,
+            git_executable=git_executable,
+        )
     resulting_by_path: dict[bytes, _BlobRef] = {}
     deleted_by_record: dict[tuple[bytes, bytes, int], _BlobRef] = {}
     for parent in parents:  # commit-object parent order is intentionally preserved
-        resulting, deleted = _parse_parent_diff(repository, parent, commit)
+        resulting, deleted = _parse_parent_diff(
+            repository,
+            parent,
+            commit,
+            git_executable=git_executable,
+        )
         for ref in resulting:
             previous = resulting_by_path.get(ref.path)
             if previous is not None and previous != ref:
@@ -823,19 +945,34 @@ def _path_name_receipt(
 
 def generate_parent_absence_audit_v1(
     repository: str | Path,
+    *,
+    git_executable: str | Path = DEFAULT_GIT_EXECUTABLE,
 ) -> ParentAbsenceAuditEvidence:
     """Generate the complete unsigned Gate-17 evidence from Git objects."""
 
-    repo = _resolve_repository(repository)
-    ordered_commits, parent_map, generations = _reachable_commit_graph(repo)
+    executable = _resolve_git_executable(git_executable)
+    repo = _resolve_repository(repository, git_executable=executable)
+    ordered_commits, parent_map, generations = _reachable_commit_graph(
+        repo,
+        git_executable=executable,
+    )
 
     touched_refs_by_commit: dict[bytes, tuple[_BlobRef, ...]] = {}
     all_blob_digests: list[bytes] = []
     for commit in ordered_commits:
-        refs = _commit_touched_refs(repo, commit, parent_map[commit])
+        refs = _commit_touched_refs(
+            repo,
+            commit,
+            parent_map[commit],
+            git_executable=executable,
+        )
         touched_refs_by_commit[commit] = refs
         all_blob_digests.extend(ref.digest for ref in refs)
-    sizes = _batch_blob_sizes(repo, all_blob_digests)
+    sizes = _batch_blob_sizes(
+        repo,
+        all_blob_digests,
+        git_executable=executable,
+    )
 
     history_rows: list[Mapping[str, object]] = []
     touched_rows_by_history: list[tuple[Mapping[str, object], ...]] = []
@@ -867,7 +1004,12 @@ def generate_parent_absence_audit_v1(
     top_level_rows = tuple(
         sorted(union_by_cbor.values(), key=_formal_path_order)
     )
-    content_blob_audit = _scan_unique_blob_contents(repo, sizes, top_level_rows)
+    content_blob_audit = _scan_unique_blob_contents(
+        repo,
+        sizes,
+        top_level_rows,
+        git_executable=executable,
+    )
     legacy_rows = _legacy_source_rows()
     path_root = candidate_record_tree_root("AuditedPathBlobRecordV1", top_level_rows)
     history_root = candidate_record_tree_root("AuditedHistoryRowV1", history_rows)
@@ -1084,6 +1226,7 @@ def replay_parent_absence_audit_v1(
     evidence: ParentAbsenceAuditEvidence,
     *,
     repository: str | Path | None = None,
+    git_executable: str | Path = DEFAULT_GIT_EXECUTABLE,
 ) -> bytes:
     """Replay formal roots and, when supplied, the exact Git-object derivation."""
 
@@ -1118,7 +1261,10 @@ def replay_parent_absence_audit_v1(
     if dict(evidence.path_name_receipt) != dict(expected_receipt):
         _fail(FAIL_REPLAY_MISMATCH, "path-name diagnostic receipt differs")
     if repository is not None:
-        regenerated = generate_parent_absence_audit_v1(repository)
+        regenerated = generate_parent_absence_audit_v1(
+            repository,
+            git_executable=git_executable,
+        )
         if _evidence_identity(evidence) != _evidence_identity(regenerated):
             _fail(FAIL_REPLAY_MISMATCH, "evidence differs from Git-object regeneration")
     return root

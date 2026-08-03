@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import stat
 import subprocess
 
@@ -75,6 +76,120 @@ def _snapshot(tmp_path: Path) -> detached.DetachedParentSnapshotV1:
 
 def _unseal(snapshot: detached.DetachedParentSnapshotV1) -> None:
     detached._set_snapshot_read_only(snapshot.root, False)
+
+
+def test_detached_git_uses_only_exact_canonical_safe_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "detached snapshot with spaces"
+    repository.mkdir()
+    executable = tmp_path / "bound-git"
+    executable.write_bytes(b"test-only")
+    captured: dict[str, object] = {}
+
+    def fake_run(command, **kwargs):
+        captured["command"] = list(command)
+        captured["cwd"] = kwargs["cwd"]
+        return subprocess.CompletedProcess(command, 0, b"ok\n", b"")
+
+    monkeypatch.setattr(detached.subprocess, "run", fake_run)
+    assert detached._run_git(
+        executable,
+        repository,
+        ("status", "--porcelain"),
+    ) == b"ok\n"
+    safe_repository = repository.resolve(strict=True)
+    assert captured["cwd"] == safe_repository
+    assert captured["command"] == [
+        str(executable),
+        "-c",
+        "core.quotePath=false",
+        "-c",
+        f"safe.directory={safe_repository}",
+        "status",
+        "--porcelain",
+    ]
+    assert "safe.directory=*" not in captured["command"]
+
+
+@pytest.mark.skipif(
+    not Path("/usr/bin/docker").is_file()
+    or not Path("/var/run/docker.sock").exists(),
+    reason="local offline Docker is unavailable",
+)
+def test_exact_safe_directory_allows_copied_git_across_actor_uid(
+    tmp_path: Path,
+) -> None:
+    repository, head = _tiny_repository(tmp_path)
+    if repository.stat().st_uid == 65534:
+        pytest.skip("test repository owner unexpectedly equals actor uid")
+    copied_git = tmp_path / "runtime-git"
+    shutil.copyfile("/usr/bin/git", copied_git)
+    copied_git.chmod(0o555)
+    profile = json.loads(detached.PROFILE_PATH.read_text(encoding="utf-8"))
+    image = profile["images"][detached.PYTHON_IMAGE_KEY]
+    control = [
+        "/usr/bin/docker",
+        "--host=unix:///var/run/docker.sock",
+    ]
+    available = subprocess.run(
+        [*control, "image", "inspect", image],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if available.returncode != 0:
+        pytest.skip("digest-pinned actor image is not already local")
+    common = [
+        *control,
+        "run",
+        "--rm",
+        "--pull=never",
+        "--network=none",
+        "--read-only",
+        "--user=65534:65534",
+        "--env=HOME=/nonexistent",
+        "--env=GIT_CONFIG_NOSYSTEM=1",
+        "--env=GIT_CONFIG_GLOBAL=/dev/null",
+        "--env=GIT_CONFIG_SYSTEM=/dev/null",
+        f"--mount=type=bind,src={repository.resolve()},dst=/snapshot,readonly",
+        f"--mount=type=bind,src={copied_git.resolve()},dst=/runtime/bin/git,readonly",
+        "--entrypoint=/runtime/bin/git",
+        image,
+    ]
+    rejected = subprocess.run(
+        [*common, "-C", "/snapshot", "rev-parse", "HEAD"],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+        timeout=60,
+    )
+    assert rejected.returncode != 0
+    assert b"dubious ownership" in rejected.stderr
+
+    accepted = subprocess.run(
+        [
+            *common,
+            "-c",
+            "core.quotePath=false",
+            "-c",
+            "safe.directory=/snapshot",
+            "-C",
+            "/snapshot",
+            "rev-parse",
+            "HEAD",
+        ],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+        timeout=60,
+    )
+    assert accepted.returncode == 0, accepted.stderr.decode("utf-8", "replace")
+    assert accepted.stdout.strip() == head.hex().encode("ascii")
 
 
 def test_detached_snapshot_contains_exact_parent_closure_and_cleans_up(tmp_path: Path) -> None:

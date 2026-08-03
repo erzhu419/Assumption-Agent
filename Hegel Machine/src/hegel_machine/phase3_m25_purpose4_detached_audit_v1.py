@@ -170,9 +170,23 @@ def _run_git(
     timeout: int = 300,
 ) -> bytes:
     try:
+        safe_repository = repository.resolve(strict=True)
+    except OSError as exc:
+        _fail(
+            FAIL_SNAPSHOT_BUILD,
+            f"Git repository cannot be resolved: {type(exc).__name__}",
+        )
+    try:
         result = subprocess.run(
-            [str(git_executable), "-c", "core.quotePath=false", *arguments],
-            cwd=repository,
+            [
+                str(git_executable),
+                "-c",
+                "core.quotePath=false",
+                "-c",
+                f"safe.directory={safe_repository}",
+                *arguments,
+            ],
+            cwd=safe_repository,
             env=_git_environment(git_executable),
             input=input_bytes,
             stdout=subprocess.PIPE,

@@ -350,18 +350,18 @@ def _run_keybearing_replay() -> None:
         expected_basis_commit=str(request["basis_commit_sha1"]),
     )
 
-    # The audit module invokes ``git`` by name.  Limit that resolution to the
-    # immutable runtime copy for both generation and independent regeneration.
-    original_path = os.environ.get("PATH")
-    os.environ["PATH"] = f"{RUNTIME / 'bin'}:/usr/bin:/bin"
-    try:
-        evidence = generate_parent_absence_audit_v1(SNAPSHOT)
-        replay_parent_absence_audit_v1(evidence, repository=SNAPSHOT)
-    finally:
-        if original_path is None:
-            os.environ.pop("PATH", None)
-        else:
-            os.environ["PATH"] = original_path
+    # Every Git child is explicitly bound to the immutable runtime copy.  The
+    # audit API applies an exact safe.directory for this one canonical snapshot;
+    # it never relies on PATH, a wildcard, or a mutable Git config file.
+    evidence = generate_parent_absence_audit_v1(
+        SNAPSHOT,
+        git_executable=git_binary,
+    )
+    replay_parent_absence_audit_v1(
+        evidence,
+        repository=SNAPSHOT,
+        git_executable=git_binary,
+    )
 
     audit_cbor = encode_formal_object(
         "ParentAbsenceAuditBundleV1", evidence.audit_bundle_fields

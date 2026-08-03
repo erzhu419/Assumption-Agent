@@ -92,6 +92,18 @@ frozen logical binding and separately verifies the actual
 `/input/runtime/bin/git` length and SHA-256 before use.  This does not rewrite
 the prior snapshot manifest identity.
 
+Every parent-audit Git subprocess is invoked through that resolved immutable
+executable path.  Each invocation carries an argv-local
+`safe.directory=<canonical detached snapshot path>` setting because the
+host-built, read-only snapshot and the UID-65534 actor intentionally have
+different owners.  The exception is restricted to that one canonical path:
+`safe.directory=*`, persistent configuration, global configuration, and
+caller-selected repository paths are forbidden.  System/global Git config,
+replace objects, lazy fetch, prompting, SSH, and protocol-from-user remain
+disabled.  This ownership exception changes neither the frozen snapshot nor
+the audit's formal rows; it only permits the already digest-bound Git runtime
+to read the exact bound object store across the actor UID boundary.
+
 ## 3. Private-key and temporary-file contract
 
 `/state` must be a non-symlink directory owned by the actor with mode 0700.

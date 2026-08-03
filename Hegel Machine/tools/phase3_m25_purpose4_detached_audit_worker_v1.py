@@ -281,8 +281,14 @@ def main() -> int:
         # The host inventory is not an audit result.  The actor starts from
         # the object database and independently regenerates all formal rows,
         # blob identity checks, path predicates, and content predicates.
-        evidence = generate_parent_absence_audit_v1(snapshot)
-        replay_parent_absence_audit_v1(evidence)
+        evidence = generate_parent_absence_audit_v1(
+            snapshot,
+            git_executable=git_binary,
+        )
+        replay_parent_absence_audit_v1(
+            evidence,
+            git_executable=git_binary,
+        )
         receipt = parent_absence_public_receipt_v1(evidence)
         auditor_key_id = bytes.fromhex(str(request["auditor_key_id_hex"]))
         fields = build_parent_absence_attestation_fields_v2(

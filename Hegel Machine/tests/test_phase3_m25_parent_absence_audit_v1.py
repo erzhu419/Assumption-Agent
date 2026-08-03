@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import io
 import json
 import os
 from pathlib import Path
@@ -8,6 +9,7 @@ import subprocess
 
 import pytest
 
+import hegel_machine.phase3_m25_parent_absence_audit_v1 as parent_absence
 from hegel_machine.phase3_m25_parent_absence_audit_v1 import (
     CONTENT_PREDICATE_PROFILE_ID,
     PARENT_DSL_VERSION,
@@ -52,6 +54,97 @@ def _git(repository: Path, *arguments: str) -> bytes:
 
 def _write(path: Path, payload: str) -> None:
     path.write_text(payload, encoding="utf-8")
+
+
+def test_nondefault_git_and_exact_safe_directory_cover_run_and_streaming(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "repository with spaces"
+    repository.mkdir()
+    executable = tmp_path / "bound-git"
+    executable.write_bytes(b"#!/bin/sh\nexit 99\n")
+    executable.chmod(0o755)
+    commands: list[list[str]] = []
+
+    def fake_run(command, **kwargs):
+        commands.append(list(command))
+        assert kwargs["cwd"] == repository.resolve(strict=True)
+        return subprocess.CompletedProcess(command, 0, b"ok\n", b"")
+
+    class FakePopen:
+        def __init__(self, command, **kwargs) -> None:
+            commands.append(list(command))
+            assert kwargs["cwd"] == repository.resolve(strict=True)
+            self.stdin = io.BytesIO()
+            self.stdout = io.BytesIO()
+            self.stderr = io.BytesIO()
+
+        def wait(self) -> int:
+            return 0
+
+        def poll(self) -> int:
+            return 0
+
+    monkeypatch.setattr(parent_absence.subprocess, "run", fake_run)
+    monkeypatch.setattr(parent_absence.subprocess, "Popen", FakePopen)
+    monkeypatch.setattr(parent_absence, "LEGACY_PARENT_SOURCE_IDS", ())
+
+    assert parent_absence._run_git(
+        repository,
+        ("status", "--porcelain"),
+        git_executable=executable,
+    ) == b"ok\n"
+    streamed = parent_absence._scan_unique_blob_contents(
+        repository,
+        {},
+        (),
+        git_executable=executable,
+    )
+    assert streamed["inspected_unique_blob_count"] == 0
+    assert len(commands) == 2
+    for command in commands:
+        assert command[0] == str(executable.resolve(strict=True))
+        assert command[1:5] == [
+            "-c",
+            "core.quotePath=false",
+            "-c",
+            f"safe.directory={repository.resolve(strict=True)}",
+        ]
+        assert "safe.directory=*" not in command
+
+
+def test_repository_replay_forwards_nondefault_git(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    evidence = _synthetic_evidence()
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    executable = tmp_path / "bound-git"
+    executable.write_bytes(b"#!/bin/sh\nexit 99\n")
+    executable.chmod(0o755)
+    observed: dict[str, object] = {}
+
+    def regenerate(path, *, git_executable):
+        observed["repository"] = path
+        observed["git_executable"] = git_executable
+        return evidence
+
+    monkeypatch.setattr(
+        parent_absence,
+        "generate_parent_absence_audit_v1",
+        regenerate,
+    )
+    assert parent_absence.replay_parent_absence_audit_v1(
+        evidence,
+        repository=repository,
+        git_executable=executable,
+    ) == evidence.audit_bundle_root
+    assert observed == {
+        "repository": repository,
+        "git_executable": executable,
+    }
 
 
 def _commit(repository: Path, message: str) -> bytes:
