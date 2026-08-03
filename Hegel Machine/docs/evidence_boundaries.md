@@ -73,21 +73,32 @@ witness。准确称谓是 `SHRINK1_SUBSET_QUALIFIED_M3_BLOCKED`；child closure 
 
 Target/control source binding manifests 已生成。`parent_binding_manifest_root = null` 是冻结的
 规范替代方案，由 legacy payload IDs、absence attestation V2 和完整历史 audit 支撑；当前
-缺的是外部 auditor 的真实 audit/attestation，不是待定 wire 选择。split seed commitment、
+缺的是 purpose-4 隔离 technical actor 的 live audit/attestation，不是待定 wire 选择。split seed commitment、
 custodian continuity attestation 和 hidden-access ledger 仍不存在，因此 formal roots 全部为
 null。
+
+Phase-3A M2.5 的 “external actor” 已由
+[`Hegel_Machine_Owner_Accepted_Container_Technical_Actor_Eligibility_Amendment_v1.md`](Hegel_Machine_Owner_Accepted_Container_Technical_Actor_Eligibility_Amendment_v1.md)
+精确定义为仓库构建/编排进程之外、purpose-separated 的离线 Docker technical actor；它不要求
+独立真人或组织。所有相关 publication 必须完整披露
+`same_admin_controller=true`、`organizational_independence=false`、
+`independent_human_actors=false`、`technical_role_independence=true`、
+`owner_accepted_threat_model=true`、`remote_attestation=false` 和
+`hardware_key_nonexportability=false`。这只是 M2.5 threat-model/eligibility 决定，不把容器
+说成组织独立，也不修改 formal wire 或 Phase-2B sealed-holdout custody 要求。
 
 Phase-3A M2.5 deterministic wire 现有 81 个唯一 tags/schemas。Python 与 Rust 从 detached
 Commit-A snapshot 精确重放 21 个 candidate objects、8 个 candidate record trees 和 15 个
 production-validator errors，并与 golden 完全一致。准确状态是
 `DUAL_EXACT_WIRE_ERRATA_GOLDEN_PASS`，artifact kind 为
-`DETERMINISTIC_CANDIDATE_NON_AUTHORITATIVE`。它只允许开始独立 external-genesis 流程；
+`DETERMINISTIC_CANDIDATE_NON_AUTHORITATIVE`。它只允许开始 owner-accepted technical-actor
+external-genesis 流程；
 该流程尚未执行，stored JSON/self-hash 单独不能授权。
 
 这次 qualification 没有创建 seed、key、signature、marker、external audit claim、formal root、
 Gate 15–24 pass 或 M3 identity。权威计数仍是 `14/24`，formal roots、M3 execution manifest
-与 run outputs 均为 null，child 继续 `NOT_RUN`。不得由 Codex、自签 test key 或固定 test
-seed 冒充独立 custody。定案与操作边界见
+与 run outputs 均为 null，child 继续 `NOT_RUN`。Codex 可以编排冻结流程，但不得用编排进程
+内的自签 test key、固定 test seed 或伪造 receipt 代替隔离 actor 的 live evidence。定案与操作边界见
 [`Hegel_Machine_Phase3A_M25_Exact_Wire_Errata_Resolution.md`](Hegel_Machine_Phase3A_M25_Exact_Wire_Errata_Resolution.md)、
 [`Hegel_Machine_Phase3A_M25_Implementation_Closure_Addendum_v1.md`](Hegel_Machine_Phase3A_M25_Implementation_Closure_Addendum_v1.md)
 和

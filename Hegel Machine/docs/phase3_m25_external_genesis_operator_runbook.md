@@ -7,8 +7,9 @@
 **当前 child state**：`NOT_RUN`
 **当前 M3 gates**：执行前仍为 `14/24`
 
-本 runbook 只说明：Commit A 的 checked dual qualification 真正通过后，独立
-custodian、Python bridge attester、Rust bridge attester 和 parent-absence auditor
+本 runbook 只说明：Commit A 的 checked dual qualification 真正通过后，四个隔离的
+technical actors（custodian、Python bridge attester、Rust bridge attester 和
+parent-absence auditor）
 应如何完成首次 external genesis，并把仅含公开材料的结果交给 Commit B 发布。
 
 本文档的创建没有、也不得：
@@ -60,13 +61,15 @@ Commit A 运行 fresh dual qualification，并确认十项 guard 全部为严格
 准入必须来自 Commit A 自身的 committed sources：fresh empty target、locked/offline
 Rust build、构建前后 Commit-A blob equality、Python/Rust exact report equality 和
 repository secret-absence receipt 都必须成立。构建和 Python replay 必须来自私有的
-detached Commit-A snapshot，而不是 live worktree；Rust 必须使用隔离 Cargo home、
-whitelist environment；隔离 Cargo home 只复制与 `Cargo.lock` SHA-256 完全匹配的
-`.crate` archives 和 offline index，不复制 ambient unpacked source，并验证所有可见
-ancestor/Cargo-home config 均不存在。Cargo/Rust 路径不得由调用者指定；rustup
-launcher、实际 cargo/rustc binaries、版本和完整 selected-toolchain directory manifest
-必须匹配 Commit A 中的 approved-local-toolchain policy。随后必须对同一 open binary
-inode 完成 hash 和 exec。调用者提供的任意
+detached Commit-A snapshot，而不是 live worktree。Rust 端必须使用 Commit A 绑定的
+digest-pinned OCI image、`env -i` whitelist、独立 runtime/build seccomp，以及
+`--pull=never --network=none`。宿主 Cargo cache 只允许作为一次性只读取材来源：每个
+`.crate` 必须先与 `Cargo.lock` checksum 比较，再安全解包为 run-private vendor
+snapshot；host Cargo home、registry cache/index 和 unpacked source 均不得 mount 进
+container。Cargo/Rust 路径不得由调用者指定；container 内 cargo/rustc binaries、版本、
+full compiler probe、OCI manifest/image ID、vendor root 和 environment roots 必须匹配
+approved OCI-toolchain policy。fresh binary 必须先通过 Python/Rust/golden exact replay，
+才能原子写入 `DEFAULT_RUST_BINARY`，并从该持久化路径再次离线重放。调用者提供的任意
 binary、stored JSON/self-hash、工作树结果或口头确认都不能替代 fresh replay。
 Python replay 只装载 exact-wire generator 的显式最小模块闭包，不执行宽泛的 package
 `__init__`；receipt 必须把这两点分别记录为 true/false，禁止隐式扩大输入闭包。
@@ -99,20 +102,31 @@ AUDITED_PARENT_SHA1 = fb3a3ee4865a140c558821017ddd3e9a6a99de48
 `HEAD`、未来 Commit B 或 audited parent commit。Commit B 只由 publication receipt
 和 Git history 绑定，不能让 formal object 自引用 Commit B。
 
-## 3. 人员、进程与四个 purpose
+## 3. 隔离进程与四个 purpose
 
 ### 3.1 独立性
 
-Codex 自动运行环境和 repo-building agent 不得充当 independent custodian 或
-independent auditor。最低可接受安排是：
+> **Owner policy amendment (2026-08-02).** 早期版本的 human-only 最低安排已由
+> `Hegel_Machine_Owner_Accepted_Container_Technical_Actor_Eligibility_Amendment_v1.md`
+> 接管。满足该 amendment 全部 live probes 的四个离线、digest-pinned container purpose
+> actors，可作为本项目 Gate 15–24 的正式 technical actors。它们必须披露同一 admin
+> controller 与不存在组织/真人独立性；单纯换 key、启动普通 Docker 或只声明 launch flags
+> 仍不合格。Formal wire、purpose IDs、signatures 与 gates 不变。旧版要求不同真人参与的
+> 段落属于历史安排，不再是 Gate 15–24 的准入条件。
 
-- 用户本人在隔离的 one-shot process/OS account 中担任 custodian；或
-- 用户指定外部人员担任 custodian；
-- parent-absence auditor 由不同人员独立执行；
-- Python/Rust bridge attester 分别重放同一公开 statement，再使用各自 purpose key
-  签名。
+正式安排是四个同时存活、purpose-private 的 Docker actors。它们由同一 owner/Codex
+orchestrator 启动，但分别拥有不同 container ID、PID/mount/network/IPC/UTS namespaces、
+只读输入快照、公开输出目录和 daemon-managed local key volume。每次 keygen、seed、签名
+或 marker 操作前，同一 worker process（Rust 为实际执行签名命令的 parent shell）必须产生
+fresh operation-bound receipt，绑定 purpose-local 递增序号、16-byte nonce、完整请求输入
+摘要、container/daemon/profile/run identity；host 必须 strict-JSON 重放 receipt 并重新核对
+Docker inspect。四个 actor 的 `qualify-only` receipt 全部通过之前，任何敏感操作均被拒绝。
 
-只换一把 key、但仍由同一自动 agent 自我审计，不构成 independent auditor claim。
+该安排的权威披露固定为：`same_admin_controller=true`、
+`organizational_independence=false`、`independent_human_actors=false`、
+`technical_role_independence=true`、`owner_accepted_threat_model=true`、
+`remote_attestation=false`、`hardware_key_nonexportability=false`。人工复核可以作为可选治理层，但不得成为 Gate 15–24
+或后续恢复流程的阻塞依赖。
 
 ### 3.2 冻结的 purpose registry
 
@@ -165,14 +179,18 @@ anchor。项目 owner 应在 repo 外独立保存该 anchor；公开副本由 Co
 
 ### 4.1 目录和文件
 
-选择一个真实、非 symlink、位于 repository 之外且不在 cloud-sync 下的目录。开始前用
-只读 validator 验证：
+选择一个真实、非 symlink、位于 repository 之外且不在 cloud-sync 下的持久目录。它
+不得位于 `/tmp`、DrvFS/9p、NFS/CIFS/FUSE 或 `/mnt/c`；建议位于
+`$HOME/.local/state/hegel-machine/` 下的 Linux-local durable filesystem。开始前 validator
+必须执行 ownership/mode、effective mount、file fsync、atomic rename 和 directory fsync
+探针。与之相反，container input snapshots、offline Rust build 和 Docker client config
+只允许放入经过验证的 Linux-local `/tmp` 私有目录：
 
 ```text
 secret-state directory: mode 0700
-every private-key file: regular file, inside secret-state, mode 0600
+every private-key file: regular file, inside its purpose-private Docker volume, mode 0600
 split-seed file: regular file, inside secret-state, mode 0600, exactly 32 bytes
-marker/lock state containing custody metadata: mode 0600
+marker/lock/intent/completion/reservation state containing custody metadata: mode 0600
 ```
 
 必须同时满足 OS account-level access control。推荐 OS key store 或 hardware token，
@@ -220,13 +238,103 @@ state = COMPLETE
 seed_commitment_manifest_root = exact non-null 32-byte root
 ```
 
-然后再次 fsync file 和 directory。`PENDING` 状态下发生中断时，不得删除 marker、自动
-重试 CSPRNG 或重抽 seed；必须返回
-`FAIL_SPLIT_SEED_PENDING_EXTERNAL_RECOVERY_REQUIRED`，等待单独批准的 external
-recovery procedure。本文不发明该 recovery procedure。
+然后再次 fsync file 和 directory。`PENDING` 状态下发生中断时，不得删除 marker、由
+普通 `execute` 自动重试或重抽 seed。恢复只能走独立的 explicit recovery API：它必须
+先重开并锁定 canonical mode-0600 persistent lock，核验同一 run/ledger reservation、三个
+output reservation、transaction journal、PENDING marker，以及 run/purpose/basis/profile/
+image labels 完全相等的四个 purpose-private volumes；purpose-1 key 不存在时立即终止，
+不得重新生成。
+
+Seed recovery 三态冻结为：
+
+1. `PENDING` 已 durable，但 intent、seed inode 和 completion receipt 三者全不存在：这证明
+   worker 尚未进入 CSPRNG boundary；**仅 explicit recovery** 可先 durable 写 intent、预建并
+   fsync zero-length seed inode，然后进行唯一一次 `getrandom(32)`，报告
+   `REAL_FIRST_GENESIS_AFTER_PENDING_NO_INTENT`；
+2. exact intent + mode-0600 exact-32 seed + exact mode-0600 completion receipt：只重放两个
+   calculators，CSPRNG 调用数为零，报告 `REAL_PENDING_RESUME`；
+3. intent 已存在而 completion 缺失/无效，或 seed 缺失、zero/partial/oversized、symlink、
+   wrong-mode/wrong-content：永久 `FAIL_M25_SPLIT_SEED_UNRECOVERABLE_NO_REDRAW`，不得
+   修补、删除或 redraw。
+
+`split_seed_generation.complete` 只有在 seed file 与 directory 均 fsync 后才以 `O_EXCL`
+创建；它绑定 schema、attempt=1、intent SHA-256、seed length 与 domain-separated seed
+commitment。Exact 32-byte seed 本身不够，没有 valid completion receipt 就不得恢复。
 
 `COMPLETE` 也永久阻止第二次实例化。Marker 防止 redraw，不是 seed 本身，也不能进入
 Commit B。
+
+### 4.3 purpose-private volume 生命周期
+
+四把 private keys 分别保存在四个 persistent local Docker volumes；volume name 与 labels
+绑定 run ID、purpose ID、Commit A、actor-profile SHA-256 与 pinned-image SHA-256。新建
+volume 先由同一 pinned local image 的一次性 root helper 在 `--pull=never`、
+`--network=none`、read-only root、frozen seccomp 下，以 exactly `CAP_CHOWN` 设置
+`65534:65534/0700`；随后由 cap-zero 的 `65534:65534` helper 完成 stat/write/remove live
+probe。初始化 receipt 是公开元数据，不含 key。
+
+Cleanup 冻结为：marker absent 时 destroy-and-verify（尚无不可逆 seed choice）；PENDING
+时 retain-and-verify；marker malformed/unreadable 时 retain-and-fail；COMPLETE 只有在 public
+evidence 已 durable stage、从磁盘 reload 并 prospective replay 一致后才可
+destroy-and-verify。这里销毁的对象严格只是四个 actor key volumes；purpose-1 custody
+中的 raw split seed、intent、completion receipt 与 COMPLETE marker 按 seed continuity
+policy 保留，直到另一个明确冻结的 continuity destruction gate。实现和文档不得声称
+“全部 private state 已销毁”。任何 container/labelled descendant/key volume 未消失都
+必须使 publication 失败。
+
+### 4.4 post-stage fresh-process 恢复
+
+普通 `execute` 永不自动猜测恢复。只要 custody 中已经存在 transaction lock，operator
+必须保留原 custody、public output directory 和 Docker volumes，并显式调用：
+
+1. 以 `with FormalCeremonyTransactionV1.rehydrate_post_stage_v1(...) as transaction`
+   获取并保证释放同一 persistent lock；
+2. 核对 `transaction.recovery_phase`；
+3. 使用同一 Commit-A、同一 bound Rust binary 构造 authoritative Docker actors；
+4. 在该 context 内调用 `continue_post_stage_transaction_recovery_v1(...)`。
+
+Lock v4 绑定三个 absolute output paths 和 stage directory；三个 reservation 各自绑定
+output kind/path。恢复只接受原 run/ledger reservations，绝不生成第二组 opaque IDs。
+Stage 中 evidence、promotion、receipt、journal 必须全部是 canonical exact bytes；最终输出若
+已存在，只能是 stage bytes 的 write-order prefix。任何 alternate path、extra stage file、
+missing reservation、非 prefix publication、marker/receipt/opaque-ID drift 都终止恢复。
+
+允许的 phase 与 action 是：
+
+| `recovery_phase` | 唯一允许动作 |
+|---|---|
+| `STAGED_PENDING` | 要求完整 intent/seed-inode/completion；恢复已有 purpose-1 key；只允许 `REAL_PENDING_RESUME`；FD-5 frames 与 stage 完全相等后完成 marker |
+| `MARKER_COMPLETE_CLEANUP_STATUS_UNKNOWN` | 不再启动 signer；校验并删除仍存在的 exact run-labelled actor/volume subset，证明全部 absent |
+| `ACTORS_ABSENT` | 再次证明 actor/volume absent，然后开始 publication |
+| `PARTIAL_PUBLICATION` | 校验 existing prefix exact，只以 `O_EXCL` 补齐缺失文件 |
+| `ALL_PUBLIC_OUTPUTS_UNJOURNALED` | 校验三文件 exact，清理剩余 exact reservations，fsync 后 journal `PUBLISHED` |
+| `PUBLISHED` | 再次 replay exact public bytes；不修改 M3 state |
+
+Post-stage PENDING 不允许 `REAL_FIRST_GENESIS_AFTER_PENDING_NO_INTENT`，也不允许重新 keygen
+或重新签名。恢复完成仍然只是 `24/24 / NOT_RUN`；不会隐式执行 `phase3-m3-start`。
+
+### 4.5 pre-seed exact abort 与 output-path retirement
+
+只有 exact `RESERVED`、marker/intent/raw-seed/completion/final-output 全部不存在时，operator
+才可显式调用 `abort_preseed_reserved_transaction_v1(...)`。实现先取得 host recovery-anchor、
+custody-directory、public-parent 与 persistent-lock 的 liveness locks，然后 durable 安装一个
+canonical immutable abort plan；plan 绑定 Commit-A、run/ledger、daemon/profile/audit roots、
+全部绝对路径、父目录与目标 inode identity、payload hash、唯一删除顺序和 forbidden seed
+state。任何 POSIX 删除都不得先于 plan。
+
+plan durable 后才允许 sealed Docker backend 对 exact run-labelled containers/volumes 执行
+inspect/remove/inspect，并 durable 写入 actor-absence receipt。每次重入都重新执行 live
+absence 检查。删除进度只可由“已缺失的 exact prefix + 仍精确存在的 suffix”推断；每一步只
+使用 plan 内的单路径 `unlink`/`rmdir`，随后立即 fsync parent。Abort plan 倒数第二删除，
+persistent lock 最后删除，禁止 glob、递归删除或进度 counter。
+
+在开始删除前，public output parent 会永久保留 mode-0600 canonical terminal tombstone，绑定
+run/ledger、plan hash、actor-absence hash 和原 output paths。即使进程在最后 lock unlink 与
+parent fsync 之间退出，重入仍可从 tombstone 恢复 identity、重新核对 Docker absence 并完成
+fsync。与此同时，evidence、promotion 与 derived publication-receipt 三个物理路径各自具有
+role-independent deterministic retirement marker；任一旧路径即使在新组合中改作另一角色也
+必须 fail closed。后续正式运行必须选择全新的三路径；不得删除/归档 tombstone 或 marker 后
+偷偷复用旧路径。它们不是 formal evidence、不会提升 gate，也不含 seed/key/signature。
 
 ## 5. FD 3 split-calculator 运行
 
@@ -253,7 +361,7 @@ marker 转为 `COMPLETE`、不得发布 Commit B。
 
 ## 6. Parent-absence auditor
 
-独立 auditor 使用 purpose-4 key 对固定 parent commit
+隔离的 purpose-4 technical auditor 使用自己的 purpose-4 key 对固定 parent commit
 `fb3a3ee4865a140c558821017ddd3e9a6a99de48` 做完整 replay：
 
 1. 遍历该 commit 可达的全部 Git history；
@@ -271,7 +379,7 @@ marker 转为 `COMPLETE`、不得发布 Commit B。
    `SignedManifestEnvelopeV1`。
 
 Purpose-4 envelope 必须恰好包含一个签名。Auditor 不得接触 raw split seed 或
-purpose-1 private key；custodian 不得代替 auditor 自签 parent-absence claim。
+purpose-1 private key；custodian 不得代替 purpose-4 actor 自签 parent-absence claim。
 
 ## 7. 五个 external-input envelopes
 
@@ -415,7 +523,7 @@ m3_run_started = false
 
 ## 11. Commit B public-only publication
 
-### 11.1 发布前 secret lint 与人工审计
+### 11.1 发布前 secret lint 与隔离重放
 
 Commit B 只可包含公开 manifests、public keys、key IDs、roots、receipts、signed
 envelopes 和 readiness/status artifacts。以下材料永远不得进入 Commit B：
@@ -446,8 +554,10 @@ pre_final_match_set
 pre_final_output_archive
 ```
 
-该字段 lint 不是“任意字节绝无秘密”的证明；发布前仍须独立人工审计、检查 private-key
-headers、路径、权限、Git staged blob 和生成日志。
+该字段 lint 不是“任意字节绝无秘密”的证明。发布前的强制检查由不持有 raw seed/key 的
+purpose-4 isolated actor 与 host strict replay 共同完成：检查 private-key headers、路径、
+权限、Git staged blobs、changed paths 和生成日志；host 还必须重放 public payload 的
+canonical bytes/self-hash。人工复核是可选治理复核，不是 formal gate blocker。
 
 ### 11.2 A→B changed-path allowlist
 
@@ -484,7 +594,8 @@ compromise/recovery policy 明确决定；绝不能自动重抽。
 
 ### 11.3 Commit B 最终检查
 
-发布前由不持有 raw seed/private keys 的 reviewer 确认：
+发布前由不持有 raw seed/private keys 的 purpose-4 isolated actor 生成审计 receipt，host
+对 receipt 与公开输入做独立 strict replay，确认：
 
 - staged diff 只含上述 allowlist；
 - every external formal object 的 `repository_commit_id` 仍为 Commit A；
@@ -503,7 +614,8 @@ compromise/recovery policy 明确决定；绝不能自动重抽。
 - [ ] Commit A SHA-1 来自 checked qualification，而不是未提交工作树。
 - [ ] 十项 external-genesis start guard 全为严格 boolean `true`。
 - [ ] secret-absence receipt 与 dual report 都从 Commit A 重放。
-- [ ] custodian 与 auditor 身份独立。
+- [ ] 四个 purpose actors 已按 owner amendment 在不同容器/命名空间中通过 live
+  技术隔离资格化；报告如实披露同一 admin controller 且无组织/真人独立性。
 - [ ] 已准备 repo 外、非 symlink、非 cloud-sync、`0700` secret-state directory。
 - [ ] 尚未调用真实 key/seed CSPRNG，尚未创建 marker。
 
@@ -512,12 +624,16 @@ compromise/recovery policy 明确决定；绝不能自动重抽。
 - [ ] 四把真实 Ed25519 keys 独立生成，epoch 为 0，ID/public key 两两不同。
 - [ ] 所有 private-key files 为 `0600`，未进入 argv/env/stdout/stderr/history。
 - [ ] exclusive lock 已持有，marker 以 `O_CREAT|O_EXCL` 创建并 fsync 为 `PENDING`。
-- [ ] split seed 仅首次生成一次，exactly 32 bytes，文件为 `0600`。
+- [ ] intent 与 zero-length seed inode 在唯一 CSPRNG 前已 durable；seed exactly 32 bytes、
+  mode `0600`，completion receipt 在 seed+directory fsync 后创建并验证。
 - [ ] Python/Rust calculators 仅通过 FD 3 接收 exactly 32 bytes 后 EOF。
 - [ ] calculators 无网络、无 repo 写权限、无 secret output，且公开结果一致。
 - [ ] purpose-4 auditor 独立完成固定 parent commit 的完整历史审计。
 - [ ] 四个 purpose-1 envelopes、一个 purpose-4 envelope 均为真实单签名。
-- [ ] marker 仅在 commitment evidence 完整后原子替换、fsync 为 `COMPLETE`。
+- [ ] public evidence 已 serialized、durable staged、从磁盘 reload 并 prospective replay
+  一致；marker 仅在此后原子替换、fsync 为 `COMPLETE`。
+- [ ] COMPLETE 后四个 actor containers/labelled descendants/private volumes 全部删除并
+  验证 absent，才开始 final publication。
 
 ### 12.3 execution identity 与发布
 
@@ -527,7 +643,8 @@ compromise/recovery policy 明确决定；绝不能自动重抽。
 - [ ] final manifest V2 和 `M3RunGenesisV1` 已重放，15 output slots 全为 `null`。
 - [ ] 24/24 只产生 qualified `NOT_RUN`，没有 start transition。
 - [ ] Commit B changed paths 严格落在 allowlist，executable paths 零变化。
-- [ ] staged public payload 通过 secret-field lint 和独立人工审计。
+- [ ] staged public payload 通过 secret-field lint、purpose-4 isolated audit 与 host strict
+  public-payload/changed-path replay；人工复核如有，仅作可选治理层。
 - [ ] Commit B 中没有任何测试 key/seed 冒充真实 external evidence。
 
 ## 13. 当前交接结论
@@ -536,9 +653,16 @@ compromise/recovery policy 明确决定；绝不能自动重抽。
 runbook 产生的真实 seed、private key、external signature、PENDING/COMPLETE marker、
 formal root、Commit B public bundle 或 M3 state transition。
 
-下一动作不是让 Codex 代为生成 secret，而是由项目 owner：
+下一动作由项目 owner 已授权的离线容器技术角色流程执行：
 
 1. 固定并核验真正的 Commit A checked dual qualification；
-2. 指定独立 custodian、purpose-2/3 attesters 和 independent auditor；
-3. 在 repo 外、经过单独安全审查的 one-shot 环境中按本 runbook 执行；
-4. 只把 allowlisted、可重放、无 secret 的公开 evidence 交回 Commit B review。
+2. 对 purposes 1–4 运行 digest-pinned、`--pull=never`、`--network=none` 的 live
+   隔离资格化，并绑定定制 seccomp 与全部负向探针；
+3. 在 repo 外 `0700` secret state 与 purpose-private persistent-volume 容器内执行首次
+   seed/key genesis、独立 replay 与签名；
+4. 只把 allowlisted、可重放、无 secret 的公开 evidence 交回 purpose-4 + host strict
+   Commit B publication replay；可再做非阻塞的人工治理复核。
+
+该流程允许 Codex 作为 owner-authorized orchestrator 启动容器，但 orchestrator
+本身不持有 purpose 签名密钥、不读取 raw split seed，也不能以自身输出
+代替容器内可重放证据。

@@ -16,7 +16,7 @@ from fractions import Fraction
 from hashlib import sha256
 from typing import Final, Iterable, Sequence
 
-from .phase3_dsl_v1 import (
+from .phase3_m3_dsl_core_v1 import (
     AGGREGATE_MAP_IDS,
     CONTEXT_IDS,
     QUANTITY_IDS,

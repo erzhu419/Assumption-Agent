@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .phase3_shrink1_registry_v1 import (
+from .phase3_m3_shrink1_core_v1 import (
     ACTIVE_AGGREGATE_IDS,
     DSL_VERSION,
     REGISTRY_WIDTH,

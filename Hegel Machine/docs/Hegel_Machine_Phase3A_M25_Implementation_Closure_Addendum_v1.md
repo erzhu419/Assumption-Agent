@@ -301,29 +301,34 @@ from Commit A. The qualification runner must:
    the live worktree; the Python endpoint uses an explicit minimal module
    closure for the exact-wire generator and does not execute the broad package
    `__init__`, with both facts recorded in its execution receipt;
-4. use an isolated Cargo home containing only the offline registry index and
-   the exact `.crate` archives whose SHA-256 values match Commit A's
-   `Cargo.lock`; do not copy ambient already-unpacked dependency sources, and
-   require Cargo to unpack them inside the private replay directory; also use
-   a whitelist environment, locked dependency resolution, verified absence of
-   every visible ancestor/Cargo-home config, no wrappers, and disabled
-   incremental compilation;
-5. reject caller-supplied Cargo/Rust paths; require the committed local
-   toolchain policy to match the rustup launcher, the actual cargo and rustc
-   binaries, their versions, and the content manifest of the complete selected
-   toolchain directory; record those bindings together with the source/registry
-   manifests, output-binary SHA-256, interpreter, normalized command, and
-   Commit A ID;
-6. hash and execute the same open Rust binary inode, verify the detached source
-   and tool inputs remained stable, and repeat the Commit-A blob comparison
-   before granting the guard.
+4. read the host Cargo cache only as a bootstrap source, verify every selected
+   `.crate` byte against Commit A's `Cargo.lock`, safely extract those bytes to
+   a run-private sparse vendor snapshot, and bind the exact package/file root;
+   neither the host Cargo home, registry index, cache, nor unpacked registry
+   source may be mounted into the build container;
+5. reject caller-supplied Cargo/Rust paths; require the committed OCI-toolchain
+   policy to match a digest-pinned local Rust image, OCI manifest/image ID,
+   container-internal cargo/rustc paths and hashes, cargo version, full
+   `rustc -vV` probe, exact `env -i` runtime/build environments, and separate
+   runtime/build seccomp digests;
+6. build from the detached source and vendor mounts into a fresh Linux-local
+   target using `--release --locked --offline --jobs=1`, with Docker
+   `--pull=never --network=none --read-only --cap-drop=ALL` and no inherited
+   proxy or registry configuration;
+7. hash the private fresh binary before and after isolated execution, require
+   Python/Rust/golden exact equality, then atomically persist those already
+   validated bytes to the repository's `DEFAULT_RUST_BINARY` path and replay
+   that persisted binary in the same offline OCI boundary; finally verify the
+   detached source, vendor snapshot, seccomp inputs and Commit-A blobs remained
+   stable before granting the guard.
 
 This local build receipt establishes which committed source bytes were built.
 It is not an external build attestation and cannot substitute for the Python,
 Rust, custodian, or auditor signatures required later in M2.5.
-Because ephemeral debug build paths may change binary bytes, the stored binary
-digest is an execution-instance identity rather than a cross-build
-reproducibility claim. A checked JSON artifact is archival evidence only; an
+The persisted release binary digest is an execution-instance identity rather
+than a cross-build reproducibility claim. It is made available to the later
+static-basis and ceremony code only after exact replay succeeds. A checked JSON
+artifact is archival evidence only; an
 external custodian must require a fresh dual replay (or later external
 attestation) and may not authorize genesis from public fields plus a
 self-generated diagnostic hash alone.

@@ -64,6 +64,8 @@ PYTHON_STRICT_SOURCES: Final = (
     PROJECT_ROOT / "src" / "hegel_machine" / "strict_cbor_v1.py",
     PROJECT_ROOT / "src" / "hegel_machine" / "strict_ast_v1.py",
     PROJECT_ROOT / "src" / "hegel_machine" / "strict_ast_shrink1_v1.py",
+    PROJECT_ROOT / "src" / "hegel_machine" / "phase3_m3_dsl_core_v1.py",
+    PROJECT_ROOT / "src" / "hegel_machine" / "phase3_m3_shrink1_core_v1.py",
     PROJECT_ROOT / "src" / "hegel_machine" / "phase3_dsl_v1.py",
     PROJECT_ROOT / "src" / "hegel_machine" / "phase3_shrink1_registry_v1.py",
     PROJECT_ROOT / "src" / "hegel_machine" / "phase3_shrink1_capacity_v1.py",

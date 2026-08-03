@@ -15,6 +15,16 @@ verifier、Phase-2A development qualification，以及正在施工的 Phase-2B/P
 双实现 replay 与测试裁决。完整优先级和 material override 留痕要求见
 [engineering decision authority](docs/engineering_decision_authority.md)。
 
+Phase-3A M2.5 的 purpose 1–4 采用 owner-accepted、purpose-separated、离线 Docker
+technical actors；这里的 “external actor” 指仓库构建/编排进程之外的冻结隔离 runtime，
+不要求不同真人或组织。该决定只接管 M2.5 actor eligibility，不改 Phase-2B sealed-holdout
+的 custodian 要求，也不改 formal CBOR、hash domain 或 Gate 15–24。所有 M2.5 publication
+必须完整披露：`same_admin_controller=true`、`organizational_independence=false`、
+`independent_human_actors=false`、`technical_role_independence=true`、
+`owner_accepted_threat_model=true`、`remote_attestation=false`、
+`hardware_key_nonexportability=false`。权威定义见
+[owner-accepted technical-actor amendment](docs/Hegel_Machine_Owner_Accepted_Container_Technical_Actor_Eligibility_Amendment_v1.md)。
+
 ```text
 L0 observations
   → uniform verifier-ready synthetic witness bundle with anonymous labels
@@ -54,8 +64,8 @@ hegel-old-dsl-v1.0.0 + 480-row target + 85-row null control
   → M2.5 v1.1.2 exact-wire registry                              [81 tags/schemas]
   → Python/Rust/golden errata replay                             [21 objects + 8 trees + 15 guards; exact]
   → detached Commit-A qualification                              [PASS; fresh replay required for use]
-  → external-genesis workflow                                   [authorized to begin; NOT_EXECUTED]
-  → formal binding roots                                        [null; external actors required]
+  → owner-accepted technical-actor genesis                       [authorized to begin; NOT_EXECUTED]
+  → formal binding roots                                         [null; live isolated actor evidence required]
   → rerun closure; only COMPLETE may enter target/null evaluation
   → outside certificate                                       [formal gate 关闭]
   → relation synthesis + Q32 MDL scorer replay                [formal gate 关闭]
@@ -121,11 +131,13 @@ secret 检测证明。结果准确称为 `DUAL_EXACT_WIRE_ERRATA_GOLDEN_PASS`，
 `DETERMINISTIC_CANDIDATE_NON_AUTHORITATIVE`。
 
 这次 fresh qualification 只给出无副作用的 external-genesis start authorization；流程尚未执行，
-checked JSON 单独不能授权，操作员每次必须 fresh replay 或取得后来真实的 external attestation。
+checked JSON 单独不能授权，操作员每次必须 fresh replay 或取得后来由合格隔离 technical
+actor 生成的 live attestation。这里不要求独立真人/组织，但不能用同进程测试签名代替 actor evidence。
 真实 seed/key/signature/marker、formal roots 和 M3 execution identity 均未生成，状态保持
 `14/24 / NOT_RUN`。当前证据见
 [exact-wire qualification](artifacts/phase3_m25_errata_qualification_v1.json)，操作边界见
-[external-genesis runbook](docs/phase3_m25_external_genesis_operator_runbook.md)，较早的
+[external-genesis runbook](docs/phase3_m25_external_genesis_operator_runbook.md) 与
+[owner amendment](docs/Hegel_Machine_Owner_Accepted_Container_Technical_Actor_Eligibility_Amendment_v1.md)，较早的
 [v1.1.2 typed-row qualification](artifacts/phase3_m25_wire_completion_qualification_v112.json)
 仅保留为 caller-supplied/unattested candidate-row replay。原 v1.1.1 20-vector artifact 保留为
 commit `d772b844` 的历史 source-bound evidence，不再冒充当前状态。

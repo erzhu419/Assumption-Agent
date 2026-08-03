@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 import hashlib
 import json
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -27,11 +28,26 @@ CHECKED_IN = ROOT / "artifacts" / "phase3_m25_errata_qualification_v1.json"
 
 
 @pytest.fixture(scope="session")
-def m25_errata_report() -> dict[str, object]:
+def m25_commit_a_ready() -> None:
     try:
-        qualification._approved_rust_toolchain()
-    except M25ErrataQualificationError as exc:
-        pytest.skip(f"approved local Rust toolchain is required: {exc}")
+        qualification._assert_sources_match_commit(
+            qualification.repository_head_commit()
+        )
+        with qualification.LinuxLocalTemporaryDirectoryV1(
+            prefix="hegel-m25-test-preflight-",
+            repository_root=qualification.PROJECT_ROOT.parent,
+        ) as raw:
+            control_plane = qualification.prepare_local_docker_control_plane_v1(
+                Path(raw),
+                repository_root=qualification.PROJECT_ROOT.parent,
+            )
+            qualification._approved_rust_toolchain(control_plane)
+    except (M25ErrataQualificationError, qualification.Phase3LocalRuntimeError) as exc:
+        pytest.skip(f"Commit-A OCI qualification preflight is not ready: {exc}")
+
+
+@pytest.fixture(scope="session")
+def m25_errata_report(m25_commit_a_ready: None) -> dict[str, object]:
     return dual_errata_qualification_report()
 
 
@@ -82,13 +98,22 @@ def test_dual_errata_qualification_matches_golden_and_only_authorizes_external_s
     assert report["rust_execution"]["fresh_target_directory"] is True
     assert report["rust_execution"]["working_tree_built"] is False
     assert report["rust_execution"]["inherited_environment_allowed"] is False
-    assert report["rust_execution"]["binary_hash_and_exec_same_open_inode"] is True
-    assert report["rust_execution"]["cargo_lock_registry_archives_verified"] is True
-    assert report["rust_execution"]["cargo_lock_registry_archive_count"] > 0
+    assert report["rust_execution"]["binary_hash_and_exec_same_open_inode"] is False
     assert (
-        report["rust_execution"]["ancestor_cargo_config_absence_verified"]
+        report["rust_execution"][
+            "binary_private_snapshot_digest_stable_during_exec"
+        ]
         is True
     )
+    assert report["rust_execution"]["persisted_binary_replay_equal"] is True
+    assert (
+        report["rust_execution"]["host_cargo_registry_mounted_into_build_container"]
+        is False
+    )
+    assert report["rust_execution"]["docker_pull_policy"] == "never"
+    assert report["rust_execution"]["docker_network_mode"] == "none"
+    assert report["rust_execution"]["cargo_lock_registry_archives_verified"] is True
+    assert report["rust_execution"]["cargo_lock_registry_archive_count"] > 0
     assert report["python_execution"]["working_tree_executed"] is False
     assert report["python_execution"]["minimal_module_closure"] is True
     assert report["python_execution"]["package_init_executed"] is False
@@ -98,6 +123,12 @@ def test_dual_errata_qualification_matches_golden_and_only_authorizes_external_s
 def test_checked_in_errata_qualification_is_current() -> None:
     if not CHECKED_IN.is_file():
         pytest.skip("qualification artifact is emitted only after Commit A")
+    try:
+        qualification._assert_sources_match_commit(
+            qualification.repository_head_commit()
+        )
+    except M25ErrataQualificationError as exc:
+        pytest.skip(f"new qualification sources are awaiting Commit A: {exc}")
     report = json.loads(CHECKED_IN.read_text(encoding="utf-8"))
     validate_checked_errata_qualification_report(report)
 
@@ -178,57 +209,54 @@ def test_public_qualification_api_rejects_caller_supplied_toolchain() -> None:
         )
 
 
-def test_isolated_registry_copies_only_lock_verified_archives(
+def _synthetic_crate_archive(path: Path, *, payload: bytes) -> str:
+    source = path.parent / "Cargo.toml"
+    source.write_bytes(payload)
+    with tarfile.open(path, mode="w:gz") as archive:
+        archive.add(source, arcname="demo-1.2.3/Cargo.toml")
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def test_checksum_exact_vendor_snapshot_uses_only_locked_archives(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    payload = b"synthetic crate archive"
-    checksum = hashlib.sha256(payload).hexdigest()
-    source_home = tmp_path / "source-cargo"
-    cache = source_home / "registry" / "cache" / "synthetic-index"
-    index = source_home / "registry" / "index" / "synthetic-index"
+    cache = tmp_path / "cache" / "synthetic-index"
     cache.mkdir(parents=True)
-    index.mkdir(parents=True)
-    (cache / "demo-1.2.3.crate").write_bytes(payload)
+    archive = cache / "demo-1.2.3.crate"
+    checksum = _synthetic_crate_archive(
+        archive,
+        payload=b'[package]\nname = "demo"\nversion = "1.2.3"\n',
+    )
     lock = tmp_path / "Cargo.lock"
     lock.write_text(
         "version = 3\n\n"
         "[[package]]\n"
         'name = "demo"\n'
         'version = "1.2.3"\n'
-        'source = "registry+https://example.invalid/index"\n'
+        'source = "registry+https://github.com/rust-lang/crates.io-index"\n'
         f'checksum = "{checksum}"\n',
         encoding="utf-8",
     )
-    monkeypatch.setenv("CARGO_HOME", str(source_home))
-    destination = tmp_path / "isolated-cargo"
-    manifest, count = qualification._copy_offline_cargo_registry(
-        destination,
-        cargo_lock=lock,
+    monkeypatch.setattr(qualification, "CARGO_ARCHIVE_CACHE_ROOT", tmp_path / "cache")
+    destination = tmp_path / "vendor"
+    root, file_count, package_count = qualification._build_cargo_dependency_snapshot(
+        lock, destination
     )
-    assert count == 1
-    assert manifest == qualification._cargo_registry_input_manifest(
-        destination / "registry"
-    )
-    assert not (destination / "registry" / "src").exists()
-    assert (
-        destination
-        / "registry"
-        / "cache"
-        / "synthetic-index"
-        / "demo-1.2.3.crate"
-    ).read_bytes() == payload
+    assert root.startswith("sha256:")
+    assert file_count == 2
+    assert package_count == 1
+    assert not (destination / "registry").exists()
+    assert (destination / "demo-1.2.3" / "Cargo.toml").is_file()
+    assert (destination / "demo-1.2.3" / ".cargo-checksum.json").is_file()
 
 
 def test_isolated_registry_rejects_archive_checksum_drift(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    source_home = tmp_path / "source-cargo"
-    cache = source_home / "registry" / "cache" / "synthetic-index"
-    index = source_home / "registry" / "index" / "synthetic-index"
+    cache = tmp_path / "cache" / "synthetic-index"
     cache.mkdir(parents=True)
-    index.mkdir(parents=True)
     (cache / "demo-1.2.3.crate").write_bytes(b"tampered")
     lock = tmp_path / "Cargo.lock"
     lock.write_text(
@@ -236,33 +264,94 @@ def test_isolated_registry_rejects_archive_checksum_drift(
         "[[package]]\n"
         'name = "demo"\n'
         'version = "1.2.3"\n'
-        'source = "registry+https://example.invalid/index"\n'
+        'source = "registry+https://github.com/rust-lang/crates.io-index"\n'
         f'checksum = "{hashlib.sha256(b"expected").hexdigest()}"\n',
         encoding="utf-8",
     )
-    monkeypatch.setenv("CARGO_HOME", str(source_home))
+    monkeypatch.setattr(qualification, "CARGO_ARCHIVE_CACHE_ROOT", tmp_path / "cache")
     with pytest.raises(M25ErrataQualificationError):
-        qualification._copy_offline_cargo_registry(
-            tmp_path / "isolated-cargo",
-            cargo_lock=lock,
+        qualification._build_cargo_dependency_snapshot(
+            lock,
+            tmp_path / "vendor",
         )
 
 
-def test_qualification_rejects_visible_ancestor_cargo_config(tmp_path: Path) -> None:
-    cwd = tmp_path / "snapshot" / "project"
-    cargo_home = tmp_path / "cargo-home"
-    cwd.mkdir(parents=True)
-    cargo_home.mkdir()
-    qualification._assert_no_cargo_config(cwd, cargo_home)
-    config = tmp_path / "snapshot" / ".cargo" / "config.toml"
-    config.parent.mkdir()
-    config.write_text("[net]\noffline = false\n", encoding="utf-8")
-    with pytest.raises(M25ErrataQualificationError):
-        qualification._assert_no_cargo_config(cwd, cargo_home)
+def test_approved_policy_binds_offline_oci_and_vendor_snapshot() -> None:
+    policy = qualification._load_approved_toolchain_policy()
+    assert policy["schema_version"] == (
+        "hegel-phase3-m25-approved-local-rust-oci-toolchain/2"
+    )
+    assert policy["image_ref"] == qualification.RUST_IMAGE_REF
+    assert policy["host_cargo_cache_mounted_into_container"] is False
+    assert policy["dependency_snapshot_domain"] == qualification.CARGO_SNAPSHOT_DOMAIN
+    assert policy["cargo_lock_registry_package_count"] == 23
+    assert policy["dependency_snapshot_file_count"] == 1088
+    assert policy["required_docker_flags"] == [
+        "--pull=never",
+        "--network=none",
+        "--read-only",
+        "--cap-drop=ALL",
+        "--security-opt=no-new-privileges",
+    ]
+
+
+def test_docker_command_uses_exact_offline_env_i_boundary(tmp_path: Path) -> None:
+    control_plane = qualification.LocalDockerControlPlaneV1(
+        executable=Path("/usr/bin/docker"),
+        socket_path=Path("/var/run/docker.sock"),
+        config_directory=tmp_path,
+        environment={},
+        binding={},
+    )
+    command = qualification._docker_command(
+        control_plane,
+        qualification.RUST_IMAGE_REF,
+        ("-v", "/private/vendor:/vendor:ro"),
+        (qualification.RUST_CARGO_PATH, "--version"),
+        seccomp_path=qualification.BUILD_SECCOMP_PATH,
+        container_environment=qualification.RUST_BUILD_ENVIRONMENT,
+    )
+    assert command[:3] == [
+        "/usr/bin/docker",
+        "--host=unix:///var/run/docker.sock",
+        "run",
+    ]
+    assert "--pull=never" in command
+    assert "--network=none" in command
+    assert "--entrypoint=/usr/bin/env" in command
+    assert command.count("-i") == 1
+    assert not any(".cargo/registry" in value for value in command)
+    assert not any("CARGO_HOME=/usr/local/cargo" in value for value in command)
+
+
+def test_validated_binary_is_atomically_persisted_to_default_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    crate = tmp_path / "formal_bridge_m25"
+    destination = crate / "target" / "debug" / "hegel-formal-bridge-m25"
+    monkeypatch.setattr(qualification, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(qualification, "RUST_CRATE_ROOT", crate)
+    monkeypatch.setattr(qualification, "DEFAULT_RUST_BINARY", destination)
+    payload = b"validated synthetic Rust binary"
+    digest = "sha256:" + hashlib.sha256(payload).hexdigest()
+    receipt = qualification._persist_validated_rust_binary(payload, digest)
+    assert destination.read_bytes() == payload
+    assert destination.stat().st_mode & 0o777 == 0o755
+    assert receipt == {
+        "default_rust_binary_repository_path": destination.relative_to(
+            qualification.PROJECT_ROOT
+        ).as_posix(),
+        "persisted_binary_sha256": digest,
+        "persisted_binary_mode_octal": "0755",
+        "persisted_binary_atomic_replace": True,
+        "persisted_binary_is_symlink": False,
+    }
 
 
 def test_errata_qualification_cli_emits_non_authoritative_evidence(
     tmp_path: Path,
+    m25_commit_a_ready: None,
 ) -> None:
     output = tmp_path / "errata-qualification.json"
     assert main(

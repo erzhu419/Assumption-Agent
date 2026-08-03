@@ -319,13 +319,24 @@ Target/control payload diagnostic IDs 保持内容稳定，并生成新的 child
 冻结方案明确令 `parent_binding_manifest_root = null`，以 legacy payload IDs、versioned
 absence attestation V2 和完整历史 audit 替代，不追造 retrospective parent manifest。
 旧版本从未物化 split seed commitment、custodian continuity attestation 或 hidden-access
-ledger；规范替代虽已解决，真实外部 evidence 仍不存在。formal roots 继续为 null，child
+ledger；规范替代虽已解决，合格隔离 technical-actor live evidence 尚未生成。formal roots
+继续为 null，child
 state 为 `NOT_RUN`。
 
 v1.1.2 已把这段工作接管为 **Phase-3A M2.5 Formal Commitment, Seed Genesis
 and Bridge Qualification** 的 bit-exact completion amendment。实现依旧严格分层：
 Python/Rust 实现 strict CBOR、ContentHash/RFC6962、typed odd/sink rows、HKDF/HMAC rank
 与 state/output-null guards；真实 seed/key/signature 不在 import、test 或普通 build 中生成。
+
+M2.5 purpose 1–4 的 actor eligibility 由
+[`Hegel_Machine_Owner_Accepted_Container_Technical_Actor_Eligibility_Amendment_v1.md`](Hegel_Machine_Owner_Accepted_Container_Technical_Actor_Eligibility_Amendment_v1.md)
+接管：四个 purpose-separated、离线、live-probed Docker runtime 构成
+`OWNER_ACCEPTED_CONTAINER_TECHNICAL_ACTORS_V1`，不要求不同真人或组织。该模型必须披露
+`same_admin_controller=true`、`organizational_independence=false`、
+`independent_human_actors=false`、`technical_role_independence=true`、
+`owner_accepted_threat_model=true`、`remote_attestation=false`、
+`hardware_key_nonexportability=false`。它不改变 formal CBOR/root DAG，也不改变 Phase-2B
+sealed-holdout 的 custody 合同。
 
 当前 deterministic layer 已覆盖 81 个唯一 tags/schemas。E1–E12 的 output-slot、bridge
 topology/envelope/domain、actor trust/ledger、absence audit、role/state、nested preimage、
@@ -335,8 +346,9 @@ candidate objects、8 个 candidate record trees 和 15 个 negative guard codes
 这准确称为 `DUAL_EXACT_WIRE_ERRATA_GOLDEN_PASS`，但仍是 non-authoritative candidate
 evidence；checked JSON 单独不能授权 operational use。
 
-因此下一硬门不再是规范选择，而是 fresh qualification 之后的独立 external genesis、
-parent-history audit、opaque-ID persistence 和 purpose-separated signatures。该流程尚未
+因此下一硬门不再是规范选择，而是 fresh qualification 之后由上述 owner-accepted
+technical actors 执行 genesis、parent-history audit、opaque-ID persistence 和
+purpose-separated signatures。该流程尚未
 执行，状态保持 `14/24`、formal roots `null`、`NOT_RUN`。定案和操作边界见
 [`Hegel_Machine_Phase3A_M25_Exact_Wire_Errata_Resolution.md`](Hegel_Machine_Phase3A_M25_Exact_Wire_Errata_Resolution.md)、
 [`Hegel_Machine_Phase3A_M25_Implementation_Closure_Addendum_v1.md`](Hegel_Machine_Phase3A_M25_Implementation_Closure_Addendum_v1.md)

@@ -14,14 +14,14 @@ import hashlib
 import io
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
-import shutil
 import stat
 import subprocess
 import sys
 import tarfile
 import tempfile
+from types import MappingProxyType
 from typing import Final
 
 from .hashing import stable_hash
@@ -37,6 +37,16 @@ from .phase3_m25_secret_absence_v1 import (
     repository_genesis_secret_absence_report,
     validate_repository_genesis_secret_absence_report,
 )
+from .phase3_local_runtime_v1 import (
+    LinuxLocalTemporaryDirectoryV1,
+    LocalDockerControlPlaneV1,
+    Phase3LocalRuntimeError,
+    build_local_docker_daemon_identity_receipt_v1,
+    local_docker_daemon_receipt_binding_v1,
+    prepare_local_docker_control_plane_v1,
+)
+from .phase3_m25_replay_v1 import DEFAULT_RUST_BINARY
+from .strict_cbor_v1 import content_hash
 
 
 PROJECT_ROOT: Final = Path(__file__).resolve().parents[2]
@@ -44,17 +54,20 @@ MACHINE_FREEZE_ID: Final = "hegel-freeze-p2b-p3-v1.1.2"
 CHILD_DSL_ID: Final = "hegel-old-dsl-v1.1.0"
 VECTOR_SCHEMA: Final = "hegel-phase3-m25-exact-wire-errata-vectors/1"
 GOLDEN_SCHEMA: Final = "hegel-phase3-m25-exact-wire-errata-golden/1"
-REPORT_SCHEMA: Final = "hegel-phase3-m25-exact-wire-errata-qualification/1"
+REPORT_SCHEMA: Final = "hegel-phase3-m25-exact-wire-errata-qualification/2"
 ARTIFACT_KIND: Final = "DETERMINISTIC_CANDIDATE_NON_AUTHORITATIVE"
 STATUS: Final = "DUAL_EXACT_WIRE_ERRATA_GOLDEN_PASS"
-BINARY_PROVENANCE: Final = "DETACHED_COMMIT_A_FRESH_ISOLATED_SOURCE_BUILD"
+BINARY_PROVENANCE: Final = "DETACHED_COMMIT_A_PINNED_OFFLINE_OCI_SOURCE_BUILD"
 IMPLEMENTATION_COMMIT_ROLE: Final = "DETERMINISTIC_IMPLEMENTATION_BASIS_COMMIT_A"
 CLAIM_BOUNDARY: Final = (
-    "Python and Rust, executed from a detached Commit-A source snapshot with "
-    "a fresh isolated Rust target, reproduce the checked public E1-E12 "
+    "Python and Rust, with Rust built and executed from a detached Commit-A "
+    "source snapshot in a digest-pinned, network-disabled OCI image and a "
+    "fresh Linux-local target, reproduce the checked public E1-E12 "
     "exact-wire vectors, candidate roots, record-tree roots, and negative "
     "error codes. The locally recorded toolchain receipt is not an external "
-    "build attestation. A successful fresh replay permits an independent "
+    "build attestation. The checksum-exact dependency snapshot and persisted "
+    "default Rust binary are diagnostic implementation inputs only. A "
+    "successful fresh replay permits an independently isolated "
     "external custodian to begin the separately governed genesis workflow; a "
     "stored artifact alone does not. No seed, key, signature, instantiation "
     "marker, formal root, Gate 15-24 pass, M3 execution identity, closure "
@@ -86,6 +99,47 @@ RUST_CRATE_ROOT: Final = PROJECT_ROOT / "rust" / "formal_bridge_m25"
 APPROVED_TOOLCHAIN_POLICY_PATH: Final = (
     PROJECT_ROOT / "config" / "phase3_m25_approved_local_rust_toolchain_v1.json"
 )
+RUNTIME_SECCOMP_PATH: Final = (
+    PROJECT_ROOT / "config" / "phase3_internal_actor_seccomp_v1.json"
+)
+BUILD_SECCOMP_PATH: Final = (
+    PROJECT_ROOT / "config" / "phase3_m3_offline_build_seccomp_v1.json"
+)
+RUST_IMAGE_REF: Final = (
+    "rust@sha256:38bc5a86d998772d4aec2348656ed21438d20fcdce2795b56ca434cf21430d89"
+)
+RUST_TOOLCHAIN_BIN: Final = (
+    "/usr/local/rustup/toolchains/1.88.0-x86_64-unknown-linux-gnu/bin"
+)
+RUST_CARGO_PATH: Final = f"{RUST_TOOLCHAIN_BIN}/cargo"
+RUSTC_PATH: Final = f"{RUST_TOOLCHAIN_BIN}/rustc"
+CARGO_SNAPSHOT_DOMAIN: Final = "HEGEL/M25/CARGO_DEPENDENCY_SNAPSHOT/V1"
+CARGO_ARCHIVE_CACHE_ROOT: Final = Path.home() / ".cargo" / "registry" / "cache"
+RUNTIME_DOCKER_POLICY_ID: Final = "hegel-m25-errata-rust-runtime-docker-v1"
+BUILD_DOCKER_POLICY_ID: Final = "hegel-m25-errata-rust-offline-build-docker-v1"
+RUST_RUNTIME_ENVIRONMENT: Final = MappingProxyType(
+    {
+        "HOME": "/tmp",
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "PATH": f"{RUST_TOOLCHAIN_BIN}:/usr/bin:/bin",
+        "TZ": "UTC",
+    }
+)
+RUST_BUILD_ENVIRONMENT: Final = MappingProxyType(
+    {
+        **RUST_RUNTIME_ENVIRONMENT,
+        "CARGO_BUILD_JOBS": "1",
+        "CARGO_HOME": "/tmp/cargo-home",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "1",
+        "CARGO_TARGET_DIR": "/output",
+        "RUSTC": RUSTC_PATH,
+        "RUSTDOC": f"{RUST_TOOLCHAIN_BIN}/rustdoc",
+        "SOURCE_DATE_EPOCH": "0",
+    }
+)
 
 SOURCE_PATHS: Final = (
     "src/hegel_machine/__init__.py",
@@ -95,10 +149,14 @@ SOURCE_PATHS: Final = (
     "src/hegel_machine/phase3_m25_errata_vectors_v1.py",
     "src/hegel_machine/phase3_m25_external_v1.py",
     "src/hegel_machine/phase3_m25_readiness_v1.py",
+    "src/hegel_machine/phase3_m25_replay_v1.py",
     "src/hegel_machine/phase3_m25_secret_absence_v1.py",
+    "src/hegel_machine/phase3_local_runtime_v1.py",
     "src/hegel_machine/phase3_m25_errata_qualification_v1.py",
     "src/hegel_machine/cli.py",
     "config/phase3_m25_approved_local_rust_toolchain_v1.json",
+    "config/phase3_internal_actor_seccomp_v1.json",
+    "config/phase3_m3_offline_build_seccomp_v1.json",
     "rust/formal_bridge_m25/Cargo.toml",
     "rust/formal_bridge_m25/Cargo.lock",
     "rust/formal_bridge_m25/src/lib.rs",
@@ -107,6 +165,7 @@ SOURCE_PATHS: Final = (
     "docs/Hegel_Machine_Phase3A_M25_Bit_Exact_Wire_Completion_Amendment.md",
     "docs/Hegel_Machine_Phase3A_M25_Exact_Wire_Errata_Resolution.md",
     "docs/Hegel_Machine_Phase3A_M25_Implementation_Closure_Addendum_v1.md",
+    "docs/Hegel_Machine_Phase3A_M25_Offline_OCI_Errata_Qualification_Engineering_v1.md",
     "tests/test_phase3_m25_errata_wire_v1.py",
     "tests/test_phase3_m25_errata_vectors_v1.py",
     "tests/test_phase3_m25_errata_qualification_v1.py",
@@ -200,20 +259,52 @@ def _require_commit_id(value: str) -> str:
     return value
 
 
+def _git_completed(
+    repository_root: Path,
+    arguments: list[str],
+    *,
+    timeout: int = 120,
+) -> subprocess.CompletedProcess[bytes]:
+    """Run a Git read with no ambient config, object, or replace injection."""
+
+    try:
+        return subprocess.run(
+            ["/usr/bin/git", *arguments],
+            cwd=repository_root,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=timeout,
+            env={
+                "GIT_CONFIG_NOSYSTEM": "1",
+                "GIT_CONFIG_GLOBAL": "/dev/null",
+                "GIT_CONFIG_SYSTEM": "/dev/null",
+                "GIT_NO_REPLACE_OBJECTS": "1",
+                "GIT_NO_LAZY_FETCH": "1",
+                "GIT_OPTIONAL_LOCKS": "0",
+                "GIT_PROTOCOL_FROM_USER": "0",
+                "GIT_SSH_COMMAND": "false",
+                "GIT_TERMINAL_PROMPT": "0",
+                "HOME": "/nonexistent",
+                "LANG": "C",
+                "LC_ALL": "C",
+                "PATH": "/usr/bin:/bin",
+            },
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise M25ErrataQualificationError(
+            f"Git read failed to execute: {type(exc).__name__}"
+        ) from exc
+
+
 def repository_head_commit() -> str:
-    completed = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=PROJECT_ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-        timeout=30,
-    )
+    completed = _git_completed(PROJECT_ROOT.parent, ["rev-parse", "HEAD"], timeout=30)
     if completed.returncode != 0:
         raise M25ErrataQualificationError(
             "cannot resolve deterministic implementation basis commit"
         )
-    return _require_commit_id(completed.stdout.strip())
+    return _require_commit_id(completed.stdout.decode("ascii", "strict").strip())
 
 
 def validate_errata_qualification_output_path(path: Path) -> Path:
@@ -234,17 +325,12 @@ def validate_errata_qualification_output_path(path: Path) -> Path:
 
 
 def _repository_root() -> Path:
-    completed = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"],
-        cwd=PROJECT_ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-        timeout=30,
+    completed = _git_completed(
+        PROJECT_ROOT.parent, ["rev-parse", "--show-toplevel"], timeout=30
     )
     if completed.returncode != 0:
         raise M25ErrataQualificationError("cannot resolve repository root")
-    return Path(completed.stdout.strip()).resolve()
+    return Path(completed.stdout.decode("utf-8", "strict").strip()).resolve()
 
 
 def _assert_sources_match_commit(commit_id: str) -> None:
@@ -256,11 +342,9 @@ def _assert_sources_match_commit(commit_id: str) -> None:
     """
 
     repository_root = _repository_root()
-    ancestry = subprocess.run(
-        ["git", "merge-base", "--is-ancestor", commit_id, "HEAD"],
-        cwd=repository_root,
-        capture_output=True,
-        check=False,
+    ancestry = _git_completed(
+        repository_root,
+        ["merge-base", "--is-ancestor", commit_id, "HEAD"],
         timeout=30,
     )
     if ancestry.returncode != 0:
@@ -276,11 +360,9 @@ def _assert_sources_match_commit(commit_id: str) -> None:
             raise M25ErrataQualificationError(
                 f"qualification source escapes repository: {relative}"
             ) from exc
-        completed = subprocess.run(
-            ["git", "show", f"{commit_id}:{repository_relative.as_posix()}"],
-            cwd=repository_root,
-            capture_output=True,
-            check=False,
+        completed = _git_completed(
+            repository_root,
+            ["show", f"{commit_id}:{repository_relative.as_posix()}"],
             timeout=30,
         )
         if completed.returncode != 0:
@@ -317,159 +399,357 @@ def _tool_version(
     return version
 
 
-def _resolve_tool(executable: str | Path, label: str) -> str:
-    raw = os.fspath(executable)
-    resolved = shutil.which(raw)
-    if resolved is None:
-        raise M25ErrataQualificationError(f"{label} executable is unavailable: {raw}")
-    # Preserve the discovered launcher path; its resolved file digest is checked.
-    return str(Path(resolved).absolute())
+def _container_environment_sha256(environment: Mapping[str, str]) -> str:
+    if not environment or any(
+        type(key) is not str
+        or re.fullmatch(r"[A-Z][A-Z0-9_]*", key) is None
+        or type(value) is not str
+        or "\x00" in value
+        for key, value in environment.items()
+    ):
+        raise M25ErrataQualificationError("container environment is malformed")
+    payload = json.dumps(
+        dict(environment),
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("ascii")
+    return "sha256:" + hashlib.sha256(payload).hexdigest()
 
 
-def _sha256_resolved_executable(executable: str) -> str:
-    path = Path(executable).resolve(strict=True)
-    if not path.is_file():
-        raise M25ErrataQualificationError(f"tool target is not a file: {executable}")
-    return _sha256_file(path)
+def _require_sha256(value: object, label: str) -> str:
+    if (
+        type(value) is not str
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", value) is None
+    ):
+        raise M25ErrataQualificationError(f"{label} is not an exact SHA-256")
+    return value
 
 
-def _load_approved_toolchain_policy() -> dict[str, str]:
+def _load_approved_toolchain_policy() -> dict[str, object]:
     policy = dict(
         _mapping(
             json.loads(APPROVED_TOOLCHAIN_POLICY_PATH.read_text(encoding="utf-8")),
-            "approved local Rust toolchain policy",
+            "approved local Rust OCI toolchain policy",
         )
     )
     expected_fields = {
         "schema_version",
         "authority_boundary",
-        "rustup_toolchain_id",
-        "rustup_launcher_sha256",
+        "image_ref",
+        "oci_manifest_digest",
+        "image_id",
+        "operating_system",
+        "architecture",
+        "cargo_binary_path",
         "cargo_binary_sha256",
-        "rustc_binary_sha256",
+        "cargo_version_stdout_sha256",
         "cargo_version",
+        "rustc_binary_path",
+        "rustc_binary_sha256",
         "rustc_version",
-        "toolchain_directory_manifest_sha256",
+        "rustc_verbose_version_stdout_sha256",
+        "runtime_environment_sha256",
+        "build_environment_sha256",
+        "runtime_seccomp_sha256",
+        "build_seccomp_sha256",
+        "cargo_lock_sha256",
+        "cargo_lock_registry_package_count",
+        "dependency_snapshot_domain",
+        "dependency_snapshot_root",
+        "dependency_snapshot_file_count",
+        "host_cargo_cache_mounted_into_container",
+        "required_docker_flags",
     }
-    if set(policy) != expected_fields or not all(
-        isinstance(value, str) for value in policy.values()
-    ):
+    if set(policy) != expected_fields:
         raise M25ErrataQualificationError(
-            "approved local Rust toolchain policy field-set drift"
+            "approved local Rust OCI toolchain policy field-set drift"
         )
     if (
         policy["schema_version"]
-        != "hegel-phase3-m25-approved-local-rust-toolchain/1"
+        != "hegel-phase3-m25-approved-local-rust-oci-toolchain/2"
         or policy["authority_boundary"]
         != "LOCAL_DETERMINISTIC_BUILD_POLICY_NOT_EXTERNAL_ATTESTATION"
-        or re.fullmatch(
-            r"[A-Za-z0-9_.-]+-[A-Za-z0-9_.-]+",
-            policy["rustup_toolchain_id"],
-        )
-        is None
+        or policy["image_ref"] != RUST_IMAGE_REF
+        or policy["oci_manifest_digest"] != RUST_IMAGE_REF.rsplit("@", 1)[1]
+        or policy["operating_system"] != "linux"
+        or policy["architecture"] != "amd64"
+        or policy["cargo_binary_path"] != RUST_CARGO_PATH
+        or policy["rustc_binary_path"] != RUSTC_PATH
+        or policy["dependency_snapshot_domain"] != CARGO_SNAPSHOT_DOMAIN
+        or policy["host_cargo_cache_mounted_into_container"] is not False
+        or policy["required_docker_flags"]
+        != [
+            "--pull=never",
+            "--network=none",
+            "--read-only",
+            "--cap-drop=ALL",
+            "--security-opt=no-new-privileges",
+        ]
     ):
         raise M25ErrataQualificationError(
-            "approved local Rust toolchain policy identity drift"
+            "approved local Rust OCI toolchain policy identity drift"
         )
     for field in (
-        "rustup_launcher_sha256",
+        "oci_manifest_digest",
+        "image_id",
         "cargo_binary_sha256",
+        "cargo_version_stdout_sha256",
         "rustc_binary_sha256",
-        "toolchain_directory_manifest_sha256",
+        "rustc_verbose_version_stdout_sha256",
+        "runtime_environment_sha256",
+        "build_environment_sha256",
+        "runtime_seccomp_sha256",
+        "build_seccomp_sha256",
+        "cargo_lock_sha256",
+        "dependency_snapshot_root",
     ):
-        value = policy[field]
-        if (
-            len(value) != 71
-            or not value.startswith("sha256:")
-            or re.fullmatch(r"[0-9a-f]{64}", value[7:]) is None
-        ):
-            raise M25ErrataQualificationError(
-                f"approved local Rust toolchain {field} drift"
-            )
+        _require_sha256(policy[field], f"approved Rust OCI policy {field}")
     for field in ("cargo_version", "rustc_version"):
-        if not policy[field] or "\n" in policy[field]:
+        if type(policy[field]) is not str or not policy[field] or "\n" in policy[field]:
             raise M25ErrataQualificationError(
-                f"approved local Rust toolchain {field} drift"
+                f"approved local Rust OCI toolchain {field} drift"
             )
+    for field in (
+        "cargo_lock_registry_package_count",
+        "dependency_snapshot_file_count",
+    ):
+        if type(policy[field]) is not int or int(policy[field]) <= 0:
+            raise M25ErrataQualificationError(
+                f"approved local Rust OCI toolchain {field} drift"
+            )
+    if policy["runtime_environment_sha256"] != _container_environment_sha256(
+        RUST_RUNTIME_ENVIRONMENT
+    ) or policy["build_environment_sha256"] != _container_environment_sha256(
+        RUST_BUILD_ENVIRONMENT
+    ):
+        raise M25ErrataQualificationError("approved container environment drift")
+    if policy["runtime_seccomp_sha256"] != _sha256_file(
+        RUNTIME_SECCOMP_PATH
+    ) or policy["build_seccomp_sha256"] != _sha256_file(BUILD_SECCOMP_PATH):
+        raise M25ErrataQualificationError("approved container seccomp policy drift")
     return policy
 
 
-def _rustup_discovery_environment(rustup_home: Path, toolchain_id: str) -> dict[str, str]:
-    return {
-        "PATH": "/usr/bin:/bin",
-        "HOME": "/nonexistent-hegel-m25-toolchain-home",
-        "RUSTUP_HOME": str(rustup_home),
-        "RUSTUP_TOOLCHAIN": toolchain_id,
-        "LANG": "C.UTF-8",
-        "LC_ALL": "C.UTF-8",
-    }
+def _docker_command(
+    control_plane: LocalDockerControlPlaneV1,
+    image: str,
+    options: tuple[str, ...],
+    command: tuple[str, ...],
+    *,
+    seccomp_path: Path,
+    container_environment: Mapping[str, str],
+    user: str = "65534:65534",
+) -> list[str]:
+    try:
+        user_id, group_id = user.split(":", 1)
+        int(user_id)
+        int(group_id)
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise M25ErrataQualificationError("container user must be numeric uid:gid") from exc
+    _container_environment_sha256(container_environment)
+    exact_environment = tuple(
+        f"{key}={container_environment[key]}" for key in sorted(container_environment)
+    )
+    return control_plane.command(
+        "run",
+        "--rm",
+        "--pull=never",
+        "--network=none",
+        "--read-only",
+        "--cap-drop=ALL",
+        "--security-opt=no-new-privileges",
+        f"--security-opt=seccomp={seccomp_path}",
+        "--user=" + user,
+        "--pids-limit=64",
+        "--memory=512m",
+        "--memory-swap=512m",
+        "--ulimit=nofile=128:128",
+        "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=64m,"
+        f"uid={user_id},gid={group_id},mode=0700",
+        *options,
+        "--entrypoint=/usr/bin/env",
+        image,
+        "-i",
+        *exact_environment,
+        *command,
+    )
 
 
-def _approved_rust_toolchain() -> tuple[dict[str, str], str, str, Path, str]:
-    """Resolve only the Commit-A-pinned local Rust toolchain.
+def _run_bytes(
+    command: list[str],
+    *,
+    environment: Mapping[str, str],
+    timeout: int,
+    input_payload: bytes | None = None,
+    label: str,
+) -> subprocess.CompletedProcess[bytes]:
+    try:
+        completed = subprocess.run(
+            command,
+            input=input_payload,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=timeout,
+            env=dict(environment),
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise M25ErrataQualificationError(f"{label} failed: {exc}") from exc
+    if completed.returncode != 0:
+        detail = completed.stderr.decode("utf-8", "replace")[-2000:]
+        raise M25ErrataQualificationError(f"{label} failed: {detail}")
+    return completed
 
-    The public qualification API deliberately accepts no executable path.  A
-    rustup launcher, both real toolchain binaries, and the entire toolchain
-    directory must match the committed policy before any guard can pass.
-    """
+
+def _qualify_local_docker_control_plane(
+    control_plane: LocalDockerControlPlaneV1,
+) -> tuple[dict[str, object], str]:
+    version = _run_bytes(
+        control_plane.command("version", "--format", "{{json .}}"),
+        environment=control_plane.environment,
+        timeout=30,
+        label="local Docker version probe",
+    )
+    info = _run_bytes(
+        control_plane.command("info", "--format", "{{json .}}"),
+        environment=control_plane.environment,
+        timeout=30,
+        label="local Docker daemon probe",
+    )
+    try:
+        version_value = _mapping(json.loads(version.stdout), "Docker version identity")
+        info_value = _mapping(json.loads(info.stdout), "Docker daemon identity")
+        receipt = build_local_docker_daemon_identity_receipt_v1(
+            control_plane,
+            version_payload=version_value,
+            info_payload=info_value,
+            repository_root=PROJECT_ROOT.parent,
+        )
+        binding = local_docker_daemon_receipt_binding_v1(receipt).hex()
+    except (json.JSONDecodeError, Phase3LocalRuntimeError) as exc:
+        raise M25ErrataQualificationError(
+            f"local Docker control-plane qualification failed: {exc}"
+        ) from exc
+    return receipt, binding
+
+
+def _approved_rust_toolchain(
+    control_plane: LocalDockerControlPlaneV1,
+) -> tuple[dict[str, object], dict[str, object]]:
+    """Qualify the digest-pinned Rust OCI toolchain without host Rust."""
 
     policy = _load_approved_toolchain_policy()
-    rustup = _resolve_tool("rustup", "rustup")
-    if _sha256_resolved_executable(rustup) != policy["rustup_launcher_sha256"]:
-        raise M25ErrataQualificationError(
-            "rustup launcher is not the Commit-A-approved local launcher"
-        )
-    rustup_home = Path(
-        os.environ.get("RUSTUP_HOME", str(Path.home() / ".rustup"))
-    ).resolve()
-    discovery_environment = _rustup_discovery_environment(
-        rustup_home,
-        policy["rustup_toolchain_id"],
+    inspect = _run_bytes(
+        control_plane.command("image", "inspect", RUST_IMAGE_REF, "--format", "{{json .}}"),
+        environment=control_plane.environment,
+        timeout=30,
+        label="approved Rust OCI image inspection",
     )
-    tools: dict[str, str] = {}
-    for name in ("cargo", "rustc"):
-        completed = subprocess.run(
-            [
-                rustup,
-                "which",
-                "--toolchain",
-                policy["rustup_toolchain_id"],
-                name,
-            ],
-            cwd=PROJECT_ROOT,
-            text=True,
-            capture_output=True,
-            check=False,
-            timeout=30,
-            env=discovery_environment,
-        )
-        if completed.returncode != 0 or not completed.stdout.strip():
-            raise M25ErrataQualificationError(
-                f"cannot resolve approved Rust toolchain {name}"
-            )
-        candidate = Path(completed.stdout.strip()).resolve(strict=True)
-        if not candidate.is_file() or candidate.name != name:
-            raise M25ErrataQualificationError(
-                f"approved Rust toolchain {name} path drift"
-            )
-        tools[name] = str(candidate)
-    cargo_path = Path(tools["cargo"])
-    rustc_path = Path(tools["rustc"])
-    if cargo_path.parent != rustc_path.parent or cargo_path.parent.name != "bin":
-        raise M25ErrataQualificationError(
-            "approved cargo and rustc do not share one toolchain bin directory"
-        )
-    toolchain_root = cargo_path.parent.parent
-    if _sha256_file(cargo_path) != policy["cargo_binary_sha256"]:
-        raise M25ErrataQualificationError("approved cargo binary digest drift")
-    if _sha256_file(rustc_path) != policy["rustc_binary_sha256"]:
-        raise M25ErrataQualificationError("approved rustc binary digest drift")
-    toolchain_manifest = _sha256_directory_manifest(toolchain_root)
-    if toolchain_manifest != policy["toolchain_directory_manifest_sha256"]:
-        raise M25ErrataQualificationError(
-            "approved Rust toolchain directory manifest drift"
-        )
-    return policy, tools["cargo"], tools["rustc"], toolchain_root, toolchain_manifest
+    try:
+        image = dict(_mapping(json.loads(inspect.stdout), "Rust OCI image inspection"))
+    except json.JSONDecodeError as exc:
+        raise M25ErrataQualificationError("Rust OCI image inspection is not JSON") from exc
+    descriptor = image.get("Descriptor")
+    if not isinstance(descriptor, Mapping):
+        raise M25ErrataQualificationError("Rust OCI descriptor is absent")
+    repo_digests = image.get("RepoDigests")
+    if (
+        image.get("Id") != policy["image_id"]
+        or image.get("Os") != policy["operating_system"]
+        or image.get("Architecture") != policy["architecture"]
+        or descriptor.get("digest") != policy["oci_manifest_digest"]
+        or not isinstance(repo_digests, list)
+        or RUST_IMAGE_REF not in repo_digests
+    ):
+        raise M25ErrataQualificationError("approved Rust OCI image identity drift")
+
+    hashes = _run_bytes(
+        _docker_command(
+            control_plane,
+            RUST_IMAGE_REF,
+            (),
+            ("/usr/bin/sha256sum", RUST_CARGO_PATH, RUSTC_PATH),
+            seccomp_path=RUNTIME_SECCOMP_PATH,
+            container_environment=RUST_RUNTIME_ENVIRONMENT,
+        ),
+        environment=control_plane.environment,
+        timeout=60,
+        label="Rust OCI binary digest probe",
+    ).stdout.decode("ascii")
+    digest_rows: dict[str, str] = {}
+    for line in hashes.splitlines():
+        digest, separator, path = line.partition("  ")
+        if not separator or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+            raise M25ErrataQualificationError("Rust OCI binary digest output drift")
+        digest_rows[path] = "sha256:" + digest
+    if digest_rows != {
+        RUST_CARGO_PATH: policy["cargo_binary_sha256"],
+        RUSTC_PATH: policy["rustc_binary_sha256"],
+    }:
+        raise M25ErrataQualificationError("Rust OCI tool binary digest drift")
+
+    cargo_probe = _run_bytes(
+        _docker_command(
+            control_plane,
+            RUST_IMAGE_REF,
+            (),
+            (RUST_CARGO_PATH, "--version"),
+            seccomp_path=RUNTIME_SECCOMP_PATH,
+            container_environment=RUST_RUNTIME_ENVIRONMENT,
+        ),
+        environment=control_plane.environment,
+        timeout=60,
+        label="Rust OCI cargo version probe",
+    ).stdout
+    rustc_probe = _run_bytes(
+        _docker_command(
+            control_plane,
+            RUST_IMAGE_REF,
+            (),
+            (RUSTC_PATH, "-vV"),
+            seccomp_path=RUNTIME_SECCOMP_PATH,
+            container_environment=RUST_RUNTIME_ENVIRONMENT,
+        ),
+        environment=control_plane.environment,
+        timeout=60,
+        label="Rust OCI compiler probe",
+    ).stdout
+    if (
+        cargo_probe.decode("utf-8").strip() != policy["cargo_version"]
+        or rustc_probe.decode("utf-8").splitlines()[0] != policy["rustc_version"]
+        or "host: x86_64-unknown-linux-gnu\n" not in rustc_probe.decode("utf-8")
+        or "release: 1.88.0\n" not in rustc_probe.decode("utf-8")
+        or "sha256:" + hashlib.sha256(cargo_probe).hexdigest()
+        != policy["cargo_version_stdout_sha256"]
+        or "sha256:" + hashlib.sha256(rustc_probe).hexdigest()
+        != policy["rustc_verbose_version_stdout_sha256"]
+    ):
+        raise M25ErrataQualificationError("Rust OCI compiler probe drift")
+    receipt = {
+        "image_ref": RUST_IMAGE_REF,
+        "image_id": image["Id"],
+        "oci_manifest_digest": descriptor["digest"],
+        "operating_system": image["Os"],
+        "architecture": image["Architecture"],
+        "cargo_binary_path": RUST_CARGO_PATH,
+        "cargo_binary_sha256": digest_rows[RUST_CARGO_PATH],
+        "cargo_version": cargo_probe.decode("utf-8").strip(),
+        "cargo_version_stdout_sha256": "sha256:" + hashlib.sha256(cargo_probe).hexdigest(),
+        "rustc_binary_path": RUSTC_PATH,
+        "rustc_binary_sha256": digest_rows[RUSTC_PATH],
+        "rustc_version": rustc_probe.decode("utf-8").splitlines()[0],
+        "rustc_verbose_version_stdout_sha256": "sha256:" + hashlib.sha256(rustc_probe).hexdigest(),
+        "runtime_environment_sha256": _container_environment_sha256(RUST_RUNTIME_ENVIRONMENT),
+        "build_environment_sha256": _container_environment_sha256(RUST_BUILD_ENVIRONMENT),
+        "runtime_seccomp_sha256": _sha256_file(RUNTIME_SECCOMP_PATH),
+        "build_seccomp_sha256": _sha256_file(BUILD_SECCOMP_PATH),
+        "image_config_environment_ignored": True,
+        "pull_policy": "never",
+        "network_mode": "none",
+        "toolchain_receipt_is_external_attestation": False,
+    }
+    return policy, receipt
 
 
 def _archive_commit_a_sources(commit_id: str, destination: Path) -> Path:
@@ -482,11 +762,9 @@ def _archive_commit_a_sources(commit_id: str, destination: Path) -> Path:
         (project_relative / relative).as_posix()
         for relative in dict.fromkeys(SOURCE_PATHS)
     ]
-    completed = subprocess.run(
-        ["git", "archive", "--format=tar", commit_id, "--", *repository_paths],
-        cwd=repository_root,
-        capture_output=True,
-        check=False,
+    completed = _git_completed(
+        repository_root,
+        ["archive", "--format=tar", commit_id, "--", *repository_paths],
         timeout=120,
     )
     if completed.returncode != 0:
@@ -529,6 +807,7 @@ def _cargo_lock_registry_packages(cargo_lock: Path) -> tuple[tuple[str, str, str
 
     text = cargo_lock.read_text(encoding="utf-8")
     packages: list[tuple[str, str, str]] = []
+    identities: set[tuple[str, str]] = set()
     for section in text.split("[[package]]")[1:]:
         fields: dict[str, str] = {}
         for field in ("name", "version", "source", "checksum"):
@@ -538,7 +817,7 @@ def _cargo_lock_registry_packages(cargo_lock: Path) -> tuple[tuple[str, str, str
         source = fields.get("source")
         if source is None:
             continue
-        if not source.startswith("registry+"):
+        if source != "registry+https://github.com/rust-lang/crates.io-index":
             raise M25ErrataQualificationError(
                 "Cargo.lock contains an unsupported non-registry dependency"
             )
@@ -556,6 +835,12 @@ def _cargo_lock_registry_packages(cargo_lock: Path) -> tuple[tuple[str, str, str
             raise M25ErrataQualificationError(
                 "Cargo.lock registry package identity is not exact"
             )
+        identity = (name, version)
+        if identity in identities:
+            raise M25ErrataQualificationError(
+                f"Cargo.lock repeats registry package identity {name} {version}"
+            )
+        identities.add(identity)
         packages.append((name, version, checksum))
     result = tuple(sorted(packages))
     if not result or len(result) != len(set(result)):
@@ -565,96 +850,166 @@ def _cargo_lock_registry_packages(cargo_lock: Path) -> tuple[tuple[str, str, str
     return result
 
 
-def _cargo_registry_input_manifest(registry: Path) -> str:
-    digest = hashlib.sha256()
-    digest.update(b"HEGEL/M25/CARGO_REGISTRY_INPUT/V1\x00")
-    for name in ("cache", "index"):
-        subtree = registry / name
-        subtree_digest = _sha256_directory_manifest(subtree).encode("ascii")
-        digest.update(len(name).to_bytes(8, "big"))
-        digest.update(name.encode("ascii"))
-        digest.update(len(subtree_digest).to_bytes(8, "big"))
-        digest.update(subtree_digest)
-    return "sha256:" + digest.hexdigest()
+def _cached_crate_path(name: str, version: str, checksum: str) -> Path:
+    """Resolve one byte-exact archive without exposing Cargo home to Docker."""
+
+    cache_root = CARGO_ARCHIVE_CACHE_ROOT
+    if not cache_root.is_dir():
+        raise M25ErrataQualificationError("offline Cargo crate cache is unavailable")
+    candidates = sorted(cache_root.glob(f"*/{name}-{version}.crate"))
+    matching = [
+        candidate
+        for candidate in candidates
+        if candidate.is_file()
+        and not candidate.is_symlink()
+        and hashlib.sha256(candidate.read_bytes()).hexdigest() == checksum
+    ]
+    if not matching:
+        raise M25ErrataQualificationError(
+            f"no checksum-exact offline crate for {name} {version}"
+        )
+    return matching[0]
 
 
-def _copy_offline_cargo_registry(
-    destination_cargo_home: Path,
+def _extract_locked_crate(
+    archive_path: Path,
+    vendor_root: Path,
     *,
+    name: str,
+    version: str,
+    package_checksum: str,
+) -> tuple[tuple[object, ...], ...]:
+    top = f"{name}-{version}"
+    destination_root = vendor_root / top
+    destination_root.mkdir(mode=0o700, exist_ok=False)
+    rows: list[tuple[object, ...]] = []
+    seen: set[str] = set()
+    total_size = 0
+    try:
+        archive = tarfile.open(archive_path, mode="r:gz")
+    except (OSError, tarfile.TarError) as exc:
+        raise M25ErrataQualificationError(
+            f"cannot open cached crate {name} {version}: {exc}"
+        ) from exc
+    with archive:
+        for member in archive.getmembers():
+            path = PurePosixPath(member.name)
+            if (
+                path.is_absolute()
+                or not path.parts
+                or path.parts[0] != top
+                or any(part in {"", ".", ".."} for part in path.parts)
+            ):
+                raise M25ErrataQualificationError(
+                    f"unsafe crate archive path: {member.name!r}"
+                )
+            relative = PurePosixPath(*path.parts[1:])
+            relative_text = relative.as_posix()
+            if not relative_text or relative_text in seen:
+                raise M25ErrataQualificationError(
+                    f"duplicate or empty crate archive path in {top}"
+                )
+            seen.add(relative_text)
+            destination = destination_root.joinpath(*relative.parts)
+            if member.isdir():
+                destination.mkdir(parents=True, mode=0o700, exist_ok=True)
+                continue
+            if not member.isfile() or member.size < 0 or member.size > 16 * 1024 * 1024:
+                raise M25ErrataQualificationError(
+                    f"unsupported crate archive member: {member.name!r}"
+                )
+            total_size += member.size
+            if total_size > 128 * 1024 * 1024:
+                raise M25ErrataQualificationError(f"cached crate {top} is too large")
+            source = archive.extractfile(member)
+            if source is None:
+                raise M25ErrataQualificationError(
+                    f"cannot extract crate archive member: {member.name!r}"
+                )
+            payload = source.read(member.size + 1)
+            if len(payload) != member.size:
+                raise M25ErrataQualificationError(
+                    f"crate archive member length drift: {member.name!r}"
+                )
+            destination.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+            with destination.open("xb") as handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+            executable = bool(member.mode & 0o111)
+            destination.chmod(0o555 if executable else 0o444)
+            rows.append(
+                (
+                    name.encode("utf-8"),
+                    version.encode("ascii"),
+                    bytes.fromhex(package_checksum),
+                    relative_text.encode("utf-8"),
+                    hashlib.sha256(payload).digest(),
+                    len(payload),
+                    executable,
+                )
+            )
+    file_checksums = {
+        row[3].decode("utf-8"): row[4].hex()
+        for row in rows
+        if row[3] != b".cargo-checksum.json"
+    }
+    checksum_payload = json.dumps(
+        {"files": file_checksums, "package": package_checksum},
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("ascii")
+    checksum_path = destination_root / ".cargo-checksum.json"
+    if checksum_path.exists():
+        checksum_path.chmod(0o600)
+        checksum_path.unlink()
+        rows = [row for row in rows if row[3] != b".cargo-checksum.json"]
+    with checksum_path.open("xb") as handle:
+        handle.write(checksum_payload)
+        handle.flush()
+        os.fsync(handle.fileno())
+    checksum_path.chmod(0o444)
+    rows.append(
+        (
+            name.encode("utf-8"),
+            version.encode("ascii"),
+            bytes.fromhex(package_checksum),
+            b".cargo-checksum.json",
+            hashlib.sha256(checksum_payload).digest(),
+            len(checksum_payload),
+            False,
+        )
+    )
+    for directory, _, _ in os.walk(destination_root, topdown=False):
+        Path(directory).chmod(0o555)
+    return tuple(sorted(rows, key=lambda row: row[3]))
+
+
+def _build_cargo_dependency_snapshot(
     cargo_lock: Path,
-) -> tuple[str, int]:
-    """Copy only lock-checksummed crate archives plus the offline index.
-
-    Already-unpacked registry source is intentionally excluded.  Cargo must
-    unpack every dependency inside the private replay directory from a
-    ``.crate`` archive whose SHA-256 is fixed by Commit A's Cargo.lock.
-    """
-
-    source_home = Path(
-        os.environ.get("CARGO_HOME", str(Path.home() / ".cargo"))
-    ).resolve()
-    source_registry = source_home / "registry"
-    source_cache = source_registry / "cache"
-    source_index = source_registry / "index"
-    if not source_cache.is_dir() or not source_index.is_dir():
-        raise M25ErrataQualificationError(
-            "offline Cargo registry cache is unavailable"
-        )
-    destination_cargo_home.mkdir(parents=True, exist_ok=False)
-    destination_registry = destination_cargo_home / "registry"
-    destination_cache = destination_registry / "cache"
-    shutil.copytree(source_index, destination_registry / "index")
-    archive_count = 0
-    locked_packages = _cargo_lock_registry_packages(cargo_lock)
-    for name, version, checksum in locked_packages:
-        archive_name = f"{name}-{version}.crate"
-        candidates = sorted(source_cache.glob(f"*/{archive_name}"))
-        if len(candidates) > 1:
-            raise M25ErrataQualificationError(
-                f"offline Cargo archive is ambiguous: {archive_name}"
+    vendor_root: Path,
+) -> tuple[str, int, int]:
+    vendor_root.mkdir(mode=0o700, parents=True, exist_ok=False)
+    packages = _cargo_lock_registry_packages(cargo_lock)
+    rows: list[tuple[object, ...]] = []
+    for name, version, checksum in packages:
+        rows.extend(
+            _extract_locked_crate(
+                _cached_crate_path(name, version, checksum),
+                vendor_root,
+                name=name,
+                version=version,
+                package_checksum=checksum,
             )
-        if not candidates:
-            # Cargo.lock can retain target-specific packages not selected for
-            # this host.  A required missing archive will make the later
-            # --offline build fail closed; no unchecked archive is copied.
-            continue
-        archive = candidates[0]
-        actual = hashlib.sha256(archive.read_bytes()).hexdigest()
-        if actual != checksum:
-            raise M25ErrataQualificationError(
-                f"offline Cargo archive differs from Cargo.lock: {archive_name}"
-            )
-        relative = archive.relative_to(source_cache)
-        target = destination_cache / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(archive, target)
-        if hashlib.sha256(target.read_bytes()).hexdigest() != checksum:
-            raise M25ErrataQualificationError(
-                f"copied Cargo archive checksum drift: {archive_name}"
-            )
-        archive_count += 1
-    _make_snapshot_read_only(destination_registry / "cache")
-    _make_snapshot_read_only(destination_registry / "index")
-    if archive_count <= 0:
-        raise M25ErrataQualificationError(
-            "offline Cargo registry contains no lock-verified archives"
         )
-    return _cargo_registry_input_manifest(destination_registry), archive_count
-
-
-def _assert_no_cargo_config(cwd: Path, cargo_home: Path) -> None:
-    """Reject every Cargo config search location visible to this replay."""
-
-    candidates = [cargo_home / "config", cargo_home / "config.toml"]
-    current = cwd.resolve()
-    for parent in (current, *current.parents):
-        candidates.extend(
-            (parent / ".cargo" / "config", parent / ".cargo" / "config.toml")
-        )
-    if any(path.exists() or path.is_symlink() for path in candidates):
-        raise M25ErrataQualificationError(
-            "ambient or ancestor Cargo configuration is visible to replay"
-        )
+    vendor_root.chmod(0o700)
+    typed_packages = tuple(
+        (name.encode("utf-8"), version.encode("ascii"), bytes.fromhex(checksum))
+        for name, version, checksum in packages
+    )
+    root = content_hash(CARGO_SNAPSHOT_DOMAIN, (1, typed_packages, tuple(rows)))
+    return "sha256:" + root.hex(), len(rows), len(packages)
 
 
 def _sha256_directory_manifest(root: Path) -> str:
@@ -681,44 +1036,6 @@ def _make_snapshot_read_only(root: Path) -> None:
     ):
         path.chmod(0o555)
     root.chmod(0o555)
-
-
-def _controlled_build_environment(
-    temporary_root: Path,
-    *,
-    cargo: str,
-    rustc: str,
-    cargo_home: Path,
-) -> dict[str, str]:
-    home = temporary_root / "isolated-home"
-    temp = temporary_root / "process-tmp"
-    home.mkdir()
-    temp.mkdir()
-    path_entries = tuple(
-        dict.fromkeys(
-            [
-                str(Path(cargo).parent),
-                str(Path(rustc).parent),
-                "/usr/bin",
-                "/bin",
-            ]
-        )
-    )
-    environment = {
-        "PATH": os.pathsep.join(path_entries),
-        "HOME": str(home),
-        "CARGO_HOME": str(cargo_home),
-        "CARGO_INCREMENTAL": "0",
-        "CARGO_NET_OFFLINE": "true",
-        "RUSTC": rustc,
-        "LANG": "C.UTF-8",
-        "LC_ALL": "C.UTF-8",
-        "TMPDIR": str(temp),
-        "PYTHONDONTWRITEBYTECODE": "1",
-        "PYTHONHASHSEED": "0",
-        "SOURCE_DATE_EPOCH": "0",
-    }
-    return environment
 
 
 def _snapshot_python_report(
@@ -791,6 +1108,117 @@ print(json.dumps(generate_errata_vector_report_v1(), sort_keys=True, separators=
     return report, execution
 
 
+def _controlled_python_environment(temporary_root: Path) -> dict[str, str]:
+    home = temporary_root / "python-home"
+    process_temp = temporary_root / "python-tmp"
+    home.mkdir(mode=0o700)
+    process_temp.mkdir(mode=0o700)
+    return {
+        "HOME": str(home),
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "PATH": "/usr/bin:/bin",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONHASHSEED": "0",
+        "SOURCE_DATE_EPOCH": "0",
+        "TMPDIR": str(process_temp),
+        "TZ": "UTC",
+    }
+
+
+def _run_rust_report_in_container(
+    control_plane: LocalDockerControlPlaneV1,
+    rust_binary: Path,
+) -> tuple[dict[str, object], str]:
+    try:
+        metadata = rust_binary.lstat()
+    except OSError as exc:
+        raise M25ErrataQualificationError(f"Rust replay binary is absent: {exc}") from exc
+    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+        raise M25ErrataQualificationError("Rust replay binary is not a regular file")
+    before = _sha256_file(rust_binary)
+    completed = _run_bytes(
+        _docker_command(
+            control_plane,
+            RUST_IMAGE_REF,
+            (
+                "--interactive",
+                "-v",
+                f"{rust_binary}:/opt/hegel-formal-bridge-m25:ro",
+            ),
+            ("/opt/hegel-formal-bridge-m25",),
+            seccomp_path=RUNTIME_SECCOMP_PATH,
+            container_environment=RUST_RUNTIME_ENVIRONMENT,
+        ),
+        environment=control_plane.environment,
+        timeout=120,
+        input_payload=b'{"op":"errata_vectors"}',
+        label="isolated Rust errata replay",
+    )
+    after = _sha256_file(rust_binary)
+    if before != after:
+        raise M25ErrataQualificationError("Rust replay binary changed during execution")
+    return (
+        _parse_rust_report(
+            stdout=completed.stdout.decode("utf-8"),
+            stderr=completed.stderr.decode("utf-8", "replace"),
+            returncode=completed.returncode,
+        ),
+        before,
+    )
+
+
+def _persist_validated_rust_binary(payload: bytes, expected_digest: str) -> dict[str, object]:
+    """Atomically publish only already golden-validated binary bytes."""
+
+    actual = "sha256:" + hashlib.sha256(payload).hexdigest()
+    if actual != expected_digest:
+        raise M25ErrataQualificationError("validated Rust binary payload digest drift")
+    destination = DEFAULT_RUST_BINARY.absolute()
+    try:
+        destination.relative_to(RUST_CRATE_ROOT.absolute())
+    except ValueError as exc:
+        raise M25ErrataQualificationError("default Rust binary escapes crate root") from exc
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.parent.resolve(strict=True) != destination.parent:
+        raise M25ErrataQualificationError("default Rust binary parent contains a symlink")
+    if destination.is_symlink():
+        raise M25ErrataQualificationError("default Rust binary is a symlink")
+    descriptor, pending_name = tempfile.mkstemp(
+        prefix=".hegel-formal-bridge-m25.pending-",
+        dir=destination.parent,
+    )
+    pending = Path(pending_name)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        pending.chmod(0o755)
+        if _sha256_file(pending) != expected_digest:
+            raise M25ErrataQualificationError("pending Rust binary digest drift")
+        os.replace(pending, destination)
+        directory_fd = os.open(destination.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    finally:
+        if pending.exists():
+            pending.unlink()
+    if destination.is_symlink() or _sha256_file(destination) != expected_digest:
+        raise M25ErrataQualificationError("persisted Rust binary digest drift")
+    if stat.S_IMODE(destination.stat().st_mode) != 0o755:
+        raise M25ErrataQualificationError("persisted Rust binary mode drift")
+    return {
+        "default_rust_binary_repository_path": destination.relative_to(PROJECT_ROOT).as_posix(),
+        "persisted_binary_sha256": expected_digest,
+        "persisted_binary_mode_octal": "0755",
+        "persisted_binary_atomic_replace": True,
+        "persisted_binary_is_symlink": False,
+    }
+
+
 def _fresh_commit_a_rust_replay(
     commit_id: str,
 ) -> tuple[
@@ -802,64 +1230,57 @@ def _fresh_commit_a_rust_replay(
 ]:
     """Replay both endpoints from one detached Commit-A source snapshot."""
 
-    (
-        toolchain_policy,
-        cargo,
-        rustc,
-        toolchain_root,
-        toolchain_manifest_sha256,
-    ) = _approved_rust_toolchain()
     toolchain_policy_sha256 = _sha256_file(APPROVED_TOOLCHAIN_POLICY_PATH)
     _assert_sources_match_commit(commit_id)
-    with tempfile.TemporaryDirectory(
-        prefix="hegel-m25-commit-a-build-", dir="/tmp"
-    ) as temporary:
+    try:
+        temporary_owner = LinuxLocalTemporaryDirectoryV1(
+            prefix="hegel-m25-commit-a-build-",
+            repository_root=PROJECT_ROOT.parent,
+        )
+    except Phase3LocalRuntimeError as exc:
+        raise M25ErrataQualificationError(str(exc)) from exc
+    with temporary_owner as temporary:
         temporary_root = Path(temporary)
+        try:
+            control_plane = prepare_local_docker_control_plane_v1(
+                temporary_root,
+                repository_root=PROJECT_ROOT.parent,
+            )
+        except Phase3LocalRuntimeError as exc:
+            raise M25ErrataQualificationError(str(exc)) from exc
+        daemon_receipt, daemon_receipt_binding = (
+            _qualify_local_docker_control_plane(control_plane)
+        )
+        toolchain_policy, toolchain_receipt = _approved_rust_toolchain(control_plane)
         snapshot_project = _archive_commit_a_sources(
             commit_id, temporary_root / "snapshot"
         )
-        cargo_home = temporary_root / "isolated-cargo-home"
-        registry_manifest_sha256, registry_archive_count = (
-            _copy_offline_cargo_registry(
-                cargo_home,
-                cargo_lock=(
-                    snapshot_project / "rust" / "formal_bridge_m25" / "Cargo.lock"
-                ),
-            )
-        )
-        environment = _controlled_build_environment(
-            temporary_root,
-            cargo=cargo,
-            rustc=rustc,
-            cargo_home=cargo_home,
-        )
-        _assert_no_cargo_config(snapshot_project, cargo_home)
-        snapshot_manifest_sha256 = _sha256_directory_manifest(snapshot_project)
-        _make_snapshot_read_only(snapshot_project)
-        cargo_binary_sha256 = _sha256_file(Path(cargo))
-        rustc_binary_sha256 = _sha256_file(Path(rustc))
-        cargo_version = _tool_version(
-            cargo,
-            "cargo",
-            environment=environment,
-            cwd=snapshot_project,
-        )
-        rustc_version = _tool_version(
-            rustc,
-            "rustc",
-            environment=environment,
-            cwd=snapshot_project,
-        )
+        cargo_lock = snapshot_project / "rust" / "formal_bridge_m25" / "Cargo.lock"
+        if _sha256_file(cargo_lock) != toolchain_policy["cargo_lock_sha256"]:
+            raise M25ErrataQualificationError("Commit-A Cargo.lock policy binding drift")
+        vendor = temporary_root / "vendor-snapshot"
+        (
+            dependency_snapshot_root,
+            dependency_snapshot_file_count,
+            registry_package_count,
+        ) = _build_cargo_dependency_snapshot(cargo_lock, vendor)
         if (
-            cargo_version != toolchain_policy["cargo_version"]
-            or rustc_version != toolchain_policy["rustc_version"]
+            dependency_snapshot_root != toolchain_policy["dependency_snapshot_root"]
+            or dependency_snapshot_file_count
+            != toolchain_policy["dependency_snapshot_file_count"]
+            or registry_package_count
+            != toolchain_policy["cargo_lock_registry_package_count"]
         ):
             raise M25ErrataQualificationError(
-                "approved Rust toolchain version drift"
+                "checksum-exact Cargo dependency snapshot policy drift"
             )
+        vendor_manifest_sha256 = _sha256_directory_manifest(vendor)
+        python_environment = _controlled_python_environment(temporary_root)
+        snapshot_manifest_sha256 = _sha256_directory_manifest(snapshot_project)
+        _make_snapshot_read_only(snapshot_project)
         python_report, python_execution = _snapshot_python_report(
             snapshot_project,
-            environment=environment,
+            environment=python_environment,
         )
         python_execution["source_commit"] = commit_id
         snapshot_golden = dict(
@@ -874,72 +1295,84 @@ def _fresh_commit_a_rust_replay(
         )
 
         target = temporary_root / "fresh-target"
-        if target.exists():
-            raise M25ErrataQualificationError("fresh Rust target unexpectedly exists")
-        manifest = snapshot_project / "rust" / "formal_bridge_m25" / "Cargo.toml"
-        command = [
-            cargo,
+        target.mkdir(mode=0o700)
+        build_options = (
+            "-v",
+            f"{snapshot_project}:/input:ro",
+            "-v",
+            f"{vendor}:/vendor:ro",
+            "-v",
+            f"{target}:/output:rw",
+            "-w",
+            "/input/rust/formal_bridge_m25",
+        )
+        build_command = (
+            RUST_CARGO_PATH,
+            "--config",
+            'source.crates-io.replace-with="vendored-sources"',
+            "--config",
+            'source.vendored-sources.directory="/vendor"',
             "build",
+            "--release",
             "--locked",
             "--offline",
+            "--jobs=1",
             "--manifest-path",
-            str(manifest),
-            "--target-dir",
-            str(target),
-        ]
-        completed = subprocess.run(
-            command,
-            cwd=snapshot_project,
-            text=True,
-            capture_output=True,
-            check=False,
+            "Cargo.toml",
+        )
+        _run_bytes(
+            _docker_command(
+                control_plane,
+                RUST_IMAGE_REF,
+                build_options,
+                build_command,
+                seccomp_path=BUILD_SECCOMP_PATH,
+                container_environment=RUST_BUILD_ENVIRONMENT,
+                user=f"{os.getuid()}:{os.getgid()}",
+            ),
+            environment=control_plane.environment,
             timeout=300,
-            env=environment,
+            label="fresh Commit-A offline Rust OCI build",
         )
-        if completed.returncode != 0:
-            raise M25ErrataQualificationError(
-                "fresh Commit-A Rust build failed: " + completed.stderr
-            )
-        binary = target / "debug" / "hegel-formal-bridge-m25"
-        rust_report, binary_digest = _rust_report_open_inode(
+        binary = target / "release" / "hegel-formal-bridge-m25"
+        rust_report, binary_digest = _run_rust_report_in_container(
+            control_plane,
             binary,
-            environment=environment,
         )
+        golden_report = _validate_vector_report(
+            snapshot_golden["report"], "detached golden report before publication"
+        )
+        if not _json_type_strict_equal(python_report, golden_report) or not (
+            _json_type_strict_equal(rust_report, golden_report)
+        ):
+            raise M25ErrataQualificationError(
+                "fresh detached reports did not validate before binary publication"
+            )
+        binary_payload = binary.read_bytes()
+        persistence = _persist_validated_rust_binary(binary_payload, binary_digest)
+        persisted_report, persisted_digest = _run_rust_report_in_container(
+            control_plane,
+            DEFAULT_RUST_BINARY,
+        )
+        if (
+            persisted_digest != binary_digest
+            or not _json_type_strict_equal(persisted_report, rust_report)
+        ):
+            raise M25ErrataQualificationError(
+                "persisted default Rust binary replay differs from fresh replay"
+            )
         if _sha256_directory_manifest(snapshot_project) != snapshot_manifest_sha256:
             raise M25ErrataQualificationError(
                 "detached Commit-A source snapshot changed during replay"
             )
-        if (
-            _cargo_registry_input_manifest(cargo_home / "registry")
-            != registry_manifest_sha256
-        ):
+        if _sha256_directory_manifest(vendor) != vendor_manifest_sha256:
             raise M25ErrataQualificationError(
-                "offline Cargo registry inputs changed during replay"
+                "offline Cargo vendor snapshot changed during replay"
             )
-        _assert_no_cargo_config(snapshot_project, cargo_home)
-        if (
-            _sha256_file(Path(cargo)) != cargo_binary_sha256
-            or _sha256_file(Path(rustc)) != rustc_binary_sha256
-            or _sha256_directory_manifest(toolchain_root)
-            != toolchain_manifest_sha256
-            or _tool_version(
-                cargo,
-                "cargo",
-                environment=environment,
-                cwd=snapshot_project,
-            )
-            != cargo_version
-            or _tool_version(
-                rustc,
-                "rustc",
-                environment=environment,
-                cwd=snapshot_project,
-            )
-            != rustc_version
+        if _sha256_file(RUNTIME_SECCOMP_PATH) != toolchain_policy["runtime_seccomp_sha256"] or (
+            _sha256_file(BUILD_SECCOMP_PATH) != toolchain_policy["build_seccomp_sha256"]
         ):
-            raise M25ErrataQualificationError(
-                "approved toolchain binary, directory, or version changed during replay"
-            )
+            raise M25ErrataQualificationError("container seccomp policy changed during replay")
         _assert_sources_match_commit(commit_id)
         build_receipt = {
             "binary_sha256": binary_digest,
@@ -958,39 +1391,48 @@ def _fresh_commit_a_rust_replay(
             "cargo_locked": True,
             "cargo_offline": True,
             "cargo_incremental": False,
-            "cargo_version": cargo_version,
-            "rustc_version": rustc_version,
-            "rustup_toolchain_id": toolchain_policy["rustup_toolchain_id"],
-            "rustup_launcher_sha256": toolchain_policy[
-                "rustup_launcher_sha256"
-            ],
-            "cargo_toolchain_binary_sha256": cargo_binary_sha256,
-            "rustc_toolchain_binary_sha256": rustc_binary_sha256,
-            "toolchain_directory_manifest_sha256": (
-                toolchain_manifest_sha256
-            ),
+            "cargo_version": toolchain_receipt["cargo_version"],
+            "rustc_version": toolchain_receipt["rustc_version"],
+            "rust_oci_toolchain": toolchain_receipt,
             "approved_toolchain_policy_sha256": toolchain_policy_sha256,
             "approved_toolchain_policy_bound": True,
             "caller_supplied_toolchain_allowed": False,
-            "offline_registry_input_manifest_sha256": registry_manifest_sha256,
-            "cargo_lock_registry_archive_count": registry_archive_count,
+            "cargo_lock_sha256": toolchain_policy["cargo_lock_sha256"],
+            "cargo_lock_registry_archive_count": registry_package_count,
             "cargo_lock_registry_archives_verified": True,
-            "environment_profile": "HEGEL_M25_ISOLATED_BUILD_ENV_V1",
+            "dependency_snapshot_domain": CARGO_SNAPSHOT_DOMAIN,
+            "dependency_snapshot_root": dependency_snapshot_root,
+            "dependency_snapshot_file_count": dependency_snapshot_file_count,
+            "vendor_directory_manifest_sha256": vendor_manifest_sha256,
+            "host_cargo_registry_mounted_into_build_container": False,
+            "environment_profile": "HEGEL_M25_OFFLINE_OCI_BUILD_ENV_V2",
+            "runtime_docker_policy_id": RUNTIME_DOCKER_POLICY_ID,
+            "build_docker_policy_id": BUILD_DOCKER_POLICY_ID,
             "inherited_environment_allowed": False,
             "rustc_wrapper_allowed": False,
-            "ancestor_cargo_config_loaded": False,
-            "ancestor_cargo_config_absence_verified": True,
-            "binary_hash_and_exec_same_open_inode": True,
+            "binary_hash_and_exec_same_open_inode": False,
+            "binary_private_snapshot_digest_stable_during_exec": True,
+            "persisted_binary_replay_equal": True,
             "binary_reproducible_across_ephemeral_build_paths": False,
+            "local_docker_control_plane_binding": dict(control_plane.binding),
+            "local_docker_daemon_identity_receipt": daemon_receipt,
+            "local_docker_daemon_receipt_binding": daemon_receipt_binding,
+            "docker_pull_policy": "never",
+            "docker_network_mode": "none",
+            **persistence,
             "normalized_command": [
-                "cargo",
+                RUST_CARGO_PATH,
+                "--config",
+                'source.crates-io.replace-with="vendored-sources"',
+                "--config",
+                'source.vendored-sources.directory="/vendor"',
                 "build",
+                "--release",
                 "--locked",
                 "--offline",
+                "--jobs=1",
                 "--manifest-path",
-                "rust/formal_bridge_m25/Cargo.toml",
-                "--target-dir",
-                "<FRESH_EPHEMERAL_TARGET>",
+                "Cargo.toml",
             ],
         }
     return (
@@ -1097,60 +1539,6 @@ def _parse_rust_report(
         {field: response[field] for field in REPORT_CORE_FIELDS},
         "Rust errata report",
     )
-
-
-def _rust_report_open_inode(
-    rust_binary: Path,
-    *,
-    environment: Mapping[str, str],
-) -> tuple[dict[str, object], str]:
-    """Hash and execute the same already-open binary inode via procfs."""
-
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-    try:
-        descriptor = os.open(rust_binary, flags)
-    except OSError as exc:
-        raise M25ErrataQualificationError(
-            f"cannot open Rust executable without following links: {exc}"
-        ) from exc
-    try:
-        metadata = os.fstat(descriptor)
-        if not stat.S_ISREG(metadata.st_mode):
-            raise M25ErrataQualificationError("Rust executable is not a regular file")
-        digest = hashlib.sha256()
-        while True:
-            chunk = os.read(descriptor, 1024 * 1024)
-            if not chunk:
-                break
-            digest.update(chunk)
-        os.lseek(descriptor, 0, os.SEEK_SET)
-        proc_path = f"/proc/self/fd/{descriptor}"
-        completed = subprocess.run(
-            [proc_path],
-            input='{"op":"errata_vectors"}',
-            text=True,
-            capture_output=True,
-            check=False,
-            timeout=120,
-            env=dict(environment),
-            pass_fds=(descriptor,),
-        )
-        report = _parse_rust_report(
-            stdout=completed.stdout,
-            stderr=completed.stderr,
-            returncode=completed.returncode,
-        )
-        return report, "sha256:" + digest.hexdigest()
-    finally:
-        os.close(descriptor)
-
-
-def _rust_report(rust_binary: Path) -> dict[str, object]:
-    report, _ = _rust_report_open_inode(
-        rust_binary,
-        environment=os.environ,
-    )
-    return report
 
 
 def _python_report() -> dict[str, object]:
@@ -1466,24 +1854,37 @@ def _validate_report_envelope(report: Mapping[str, object]) -> None:
         "cargo_incremental",
         "cargo_version",
         "rustc_version",
-        "rustup_toolchain_id",
-        "rustup_launcher_sha256",
-        "cargo_toolchain_binary_sha256",
-        "rustc_toolchain_binary_sha256",
-        "toolchain_directory_manifest_sha256",
+        "rust_oci_toolchain",
         "approved_toolchain_policy_sha256",
         "approved_toolchain_policy_bound",
         "caller_supplied_toolchain_allowed",
-        "offline_registry_input_manifest_sha256",
+        "cargo_lock_sha256",
         "cargo_lock_registry_archive_count",
         "cargo_lock_registry_archives_verified",
+        "dependency_snapshot_domain",
+        "dependency_snapshot_root",
+        "dependency_snapshot_file_count",
+        "vendor_directory_manifest_sha256",
+        "host_cargo_registry_mounted_into_build_container",
         "environment_profile",
+        "runtime_docker_policy_id",
+        "build_docker_policy_id",
         "inherited_environment_allowed",
         "rustc_wrapper_allowed",
-        "ancestor_cargo_config_loaded",
-        "ancestor_cargo_config_absence_verified",
         "binary_hash_and_exec_same_open_inode",
+        "binary_private_snapshot_digest_stable_during_exec",
+        "persisted_binary_replay_equal",
         "binary_reproducible_across_ephemeral_build_paths",
+        "local_docker_control_plane_binding",
+        "local_docker_daemon_identity_receipt",
+        "local_docker_daemon_receipt_binding",
+        "docker_pull_policy",
+        "docker_network_mode",
+        "default_rust_binary_repository_path",
+        "persisted_binary_sha256",
+        "persisted_binary_mode_octal",
+        "persisted_binary_atomic_replace",
+        "persisted_binary_is_symlink",
         "normalized_command",
     }
     if set(rust_execution) != expected_rust_fields:
@@ -1509,39 +1910,52 @@ def _validate_report_envelope(report: Mapping[str, object]) -> None:
         "cargo_incremental": False,
         "cargo_version": toolchain_policy["cargo_version"],
         "rustc_version": toolchain_policy["rustc_version"],
-        "rustup_toolchain_id": toolchain_policy["rustup_toolchain_id"],
-        "rustup_launcher_sha256": toolchain_policy["rustup_launcher_sha256"],
-        "cargo_toolchain_binary_sha256": toolchain_policy[
-            "cargo_binary_sha256"
-        ],
-        "rustc_toolchain_binary_sha256": toolchain_policy[
-            "rustc_binary_sha256"
-        ],
-        "toolchain_directory_manifest_sha256": toolchain_policy[
-            "toolchain_directory_manifest_sha256"
-        ],
         "approved_toolchain_policy_sha256": _sha256_file(
             APPROVED_TOOLCHAIN_POLICY_PATH
         ),
         "approved_toolchain_policy_bound": True,
         "caller_supplied_toolchain_allowed": False,
-        "environment_profile": "HEGEL_M25_ISOLATED_BUILD_ENV_V1",
+        "cargo_lock_sha256": toolchain_policy["cargo_lock_sha256"],
+        "cargo_lock_registry_archive_count": toolchain_policy[
+            "cargo_lock_registry_package_count"
+        ],
+        "dependency_snapshot_domain": CARGO_SNAPSHOT_DOMAIN,
+        "dependency_snapshot_root": toolchain_policy["dependency_snapshot_root"],
+        "dependency_snapshot_file_count": toolchain_policy[
+            "dependency_snapshot_file_count"
+        ],
+        "host_cargo_registry_mounted_into_build_container": False,
+        "environment_profile": "HEGEL_M25_OFFLINE_OCI_BUILD_ENV_V2",
+        "runtime_docker_policy_id": RUNTIME_DOCKER_POLICY_ID,
+        "build_docker_policy_id": BUILD_DOCKER_POLICY_ID,
         "inherited_environment_allowed": False,
         "rustc_wrapper_allowed": False,
-        "ancestor_cargo_config_loaded": False,
-        "ancestor_cargo_config_absence_verified": True,
         "cargo_lock_registry_archives_verified": True,
-        "binary_hash_and_exec_same_open_inode": True,
+        "binary_hash_and_exec_same_open_inode": False,
+        "binary_private_snapshot_digest_stable_during_exec": True,
+        "persisted_binary_replay_equal": True,
         "binary_reproducible_across_ephemeral_build_paths": False,
+        "docker_pull_policy": "never",
+        "docker_network_mode": "none",
+        "default_rust_binary_repository_path": DEFAULT_RUST_BINARY.relative_to(
+            PROJECT_ROOT
+        ).as_posix(),
+        "persisted_binary_mode_octal": "0755",
+        "persisted_binary_atomic_replace": True,
+        "persisted_binary_is_symlink": False,
         "normalized_command": [
-            "cargo",
+            RUST_CARGO_PATH,
+            "--config",
+            'source.crates-io.replace-with="vendored-sources"',
+            "--config",
+            'source.vendored-sources.directory="/vendor"',
             "build",
+            "--release",
             "--locked",
             "--offline",
+            "--jobs=1",
             "--manifest-path",
-            "rust/formal_bridge_m25/Cargo.toml",
-            "--target-dir",
-            "<FRESH_EPHEMERAL_TARGET>",
+            "Cargo.toml",
         ],
     }
     for field, expected in expected_build_values.items():
@@ -1550,21 +1964,25 @@ def _validate_report_envelope(report: Mapping[str, object]) -> None:
     for field in (
         "cargo_version",
         "rustc_version",
-        "rustup_launcher_sha256",
-        "cargo_toolchain_binary_sha256",
-        "rustc_toolchain_binary_sha256",
-        "toolchain_directory_manifest_sha256",
         "approved_toolchain_policy_sha256",
-        "offline_registry_input_manifest_sha256",
+        "cargo_lock_sha256",
+        "dependency_snapshot_root",
+        "vendor_directory_manifest_sha256",
         "source_snapshot_manifest_sha256",
     ):
         value = rust_execution.get(field)
         if not isinstance(value, str) or not value or "\n" in value:
             raise M25ErrataQualificationError(f"Rust build receipt {field} drift")
     archive_count = rust_execution.get("cargo_lock_registry_archive_count")
-    if type(archive_count) is not int or archive_count <= 0:
+    snapshot_file_count = rust_execution.get("dependency_snapshot_file_count")
+    if (
+        type(archive_count) is not int
+        or archive_count <= 0
+        or type(snapshot_file_count) is not int
+        or snapshot_file_count <= 0
+    ):
         raise M25ErrataQualificationError(
-            "Rust build receipt Cargo archive count drift"
+            "Rust build receipt Cargo snapshot count drift"
         )
     binary_digest = rust_execution.get("binary_sha256")
     if (
@@ -1574,6 +1992,58 @@ def _validate_report_envelope(report: Mapping[str, object]) -> None:
         or any(character not in "0123456789abcdef" for character in binary_digest[7:])
     ):
         raise M25ErrataQualificationError("Rust binary digest syntax drift")
+    if rust_execution.get("persisted_binary_sha256") != binary_digest:
+        raise M25ErrataQualificationError("persisted Rust binary digest binding drift")
+
+    expected_toolchain_receipt = {
+        "image_ref": toolchain_policy["image_ref"],
+        "image_id": toolchain_policy["image_id"],
+        "oci_manifest_digest": toolchain_policy["oci_manifest_digest"],
+        "operating_system": toolchain_policy["operating_system"],
+        "architecture": toolchain_policy["architecture"],
+        "cargo_binary_path": toolchain_policy["cargo_binary_path"],
+        "cargo_binary_sha256": toolchain_policy["cargo_binary_sha256"],
+        "cargo_version": toolchain_policy["cargo_version"],
+        "cargo_version_stdout_sha256": toolchain_policy[
+            "cargo_version_stdout_sha256"
+        ],
+        "rustc_binary_path": toolchain_policy["rustc_binary_path"],
+        "rustc_binary_sha256": toolchain_policy["rustc_binary_sha256"],
+        "rustc_version": toolchain_policy["rustc_version"],
+        "rustc_verbose_version_stdout_sha256": toolchain_policy[
+            "rustc_verbose_version_stdout_sha256"
+        ],
+        "runtime_environment_sha256": toolchain_policy[
+            "runtime_environment_sha256"
+        ],
+        "build_environment_sha256": toolchain_policy["build_environment_sha256"],
+        "runtime_seccomp_sha256": toolchain_policy["runtime_seccomp_sha256"],
+        "build_seccomp_sha256": toolchain_policy["build_seccomp_sha256"],
+        "image_config_environment_ignored": True,
+        "pull_policy": "never",
+        "network_mode": "none",
+        "toolchain_receipt_is_external_attestation": False,
+    }
+    if not _json_type_strict_equal(
+        rust_execution.get("rust_oci_toolchain"), expected_toolchain_receipt
+    ):
+        raise M25ErrataQualificationError("Rust OCI toolchain receipt drift")
+    daemon_receipt = _mapping(
+        rust_execution.get("local_docker_daemon_identity_receipt"),
+        "local Docker daemon receipt",
+    )
+    try:
+        daemon_binding = local_docker_daemon_receipt_binding_v1(daemon_receipt).hex()
+    except Phase3LocalRuntimeError as exc:
+        raise M25ErrataQualificationError(
+            f"local Docker daemon receipt drift: {exc}"
+        ) from exc
+    if (
+        rust_execution.get("local_docker_daemon_receipt_binding") != daemon_binding
+        or rust_execution.get("local_docker_control_plane_binding")
+        != daemon_receipt.get("control_plane_binding")
+    ):
+        raise M25ErrataQualificationError("local Docker control-plane binding drift")
 
     provided_id = report.get("diagnostic_report_id")
     body = dict(report)
@@ -1627,7 +2097,10 @@ def validate_dual_errata_qualification_report(
     supplied = dict(report)
     expected_rust = dict(_mapping(expected["rust_execution"], "fresh Rust execution"))
     supplied_rust = dict(_mapping(supplied["rust_execution"], "stored Rust execution"))
-    for nondeterministic_build_field in ("binary_sha256",):
+    for nondeterministic_build_field in (
+        "binary_sha256",
+        "persisted_binary_sha256",
+    ):
         expected_rust.pop(nondeterministic_build_field)
         supplied_rust.pop(nondeterministic_build_field)
     expected["rust_execution"] = expected_rust

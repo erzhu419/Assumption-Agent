@@ -1,0 +1,141 @@
+{
+  "profile_id": "hegel-owner-accepted-container-technical-actors-v1",
+  "network_policy": {
+    "allow_registry_access": false,
+    "allow_runtime_network": false,
+    "docker_network": "none",
+    "pull_policy": "never"
+  },
+  "docker_control_plane_policy": {
+    "executable": "/usr/bin/docker",
+    "explicit_host_argument": "--host=unix:///var/run/docker.sock",
+    "socket": "/var/run/docker.sock",
+    "client_config": "empty-private-config-json",
+    "host_environment_keys_exact": [
+      "DOCKER_CONFIG",
+      "DOCKER_HOST",
+      "HOME",
+      "LANG",
+      "LC_ALL",
+      "PATH"
+    ],
+    "ambient_proxy_or_docker_variables_allowed": false,
+    "live_local_linux_daemon_identity_receipt_required": true
+  },
+  "images": {
+    "custodian": "python@sha256:e031123e3d85762b141ad1cbc56452ba69c6e722ebf2f042cc0dc86c47c0d8b3",
+    "python_attester": "python@sha256:e031123e3d85762b141ad1cbc56452ba69c6e722ebf2f042cc0dc86c47c0d8b3",
+    "rust_attester": "rust@sha256:38bc5a86d998772d4aec2348656ed21438d20fcdce2795b56ca434cf21430d89",
+    "policy_auditor": "python@sha256:e031123e3d85762b141ad1cbc56452ba69c6e722ebf2f042cc0dc86c47c0d8b3"
+  },
+  "required_runtime_flags": [
+    "--pull=never",
+    "--network=none",
+    "--read-only",
+    "--cap-drop=ALL",
+    "--security-opt=no-new-privileges",
+    "--user=65534:65534",
+    "--pids-limit=64"
+  ],
+  "resource_limits": {
+    "memory": "512m",
+    "pids": 64,
+    "tmpfs": "/tmp:rw,noexec,nosuid,nodev,size=64m,uid=65534,gid=65534,mode=0700"
+  },
+  "private_state_volume_policy": {
+    "storage": "local-docker-volume",
+    "purpose_private": true,
+    "name_template": "hegel-m25-state-{run_id_hex}-p{purpose_id}",
+    "required_label_keys": [
+      "hegel.m25.state",
+      "hegel.m25.run",
+      "hegel.m25.purpose",
+      "hegel.m25.basis",
+      "hegel.m25.profile_sha256",
+      "hegel.m25.image_sha256",
+      "hegel.m25.daemon_receipt_sha256"
+    ],
+    "driver": "local",
+    "scope": "local",
+    "options": null,
+    "daemon_managed_mountpoint_required": true,
+    "bind_nfs_or_plugin_volume_allowed": false,
+    "container_mount": "/state",
+    "owner_uid": 65534,
+    "owner_gid": 65534,
+    "mode_octal": "0700",
+    "initializer": {
+      "pull_policy": "never",
+      "network": "none",
+      "root_filesystem_read_only": true,
+      "uid_gid": "0:0",
+      "capabilities_exactly": [
+        "CHOWN"
+      ],
+      "nonroot_write_stat_remove_probe_required": true
+    },
+    "lifecycle": {
+      "marker_absent": "destroy-and-verify",
+      "marker_pending": "retain-for-explicit-recovery-and-verify",
+      "marker_complete_before_durable_stage_authorization": "retain-and-verify",
+      "marker_complete_after_durable_stage_authorization": "destroy-and-verify",
+      "marker_invalid_or_unreadable": "retain-and-fail"
+    }
+  },
+  "seccomp_profile": "config/phase3_internal_actor_seccomp_v1.json",
+  "offline_build_seccomp_profile": "config/phase3_m3_offline_build_seccomp_v1.json",
+  "host_path_policy": {
+    "ephemeral_runtime_build_and_snapshot_parent": "/tmp",
+    "ephemeral_inputs_linux_local_required": true,
+    "custody_kind": "durable-repository-external-linux-local",
+    "custody_under_tmp_allowed": false,
+    "custody_symlink_allowed": false,
+    "custody_mode_octal": "0700",
+    "custody_file_and_directory_fsync_probe_required": true,
+    "custody_atomic_rename_probe_required": true
+  },
+  "required_live_probe": {
+    "execution_timing": "before-keygen-and-every-sensitive-operation",
+    "same_worker_or_parent_worker_receipt_required": true,
+    "purpose_local_monotonic_sequence_required": true,
+    "fresh_nonce_bytes": 16,
+    "exact_operation_request_digest_required": true,
+    "host_strict_json_and_docker_inspect_replay_required": true,
+    "capability_sets_all_zero": true,
+    "no_new_privileges": 1,
+    "seccomp_mode": 2,
+    "network_interfaces": [
+      "lo"
+    ],
+    "blocked_syscall_errno": "EPERM",
+    "blocked_syscalls": [
+      "socket(AF_INET, SOCK_STREAM)",
+      "socket(AF_INET6, SOCK_STREAM)",
+      "mount",
+      "ptrace(PTRACE_TRACEME)",
+      "bpf(BPF_MAP_CREATE)",
+      "perf_event_open"
+    ],
+    "purpose1_custody_write_operations_exact": [
+      "seed-split-real",
+      "seed-split-resume",
+      "seed-split-synthetic",
+      "complete-marker"
+    ]
+  },
+  "complete_cleanup_policy": {
+    "destroy_exactly": "four-purpose-actor-key-volumes",
+    "raw_custodian_seed_destroyed": false,
+    "raw_custodian_seed_retained_until_separate_frozen_continuity_gate": true,
+    "claim_all_private_state_destroyed_allowed": false
+  },
+  "authority_disclosure": {
+    "same_admin_controller": true,
+    "organizational_independence": false,
+    "independent_human_actors": false,
+    "technical_role_independence": true,
+    "owner_accepted_threat_model": true,
+    "remote_attestation": false,
+    "hardware_key_nonexportability": false
+  }
+}

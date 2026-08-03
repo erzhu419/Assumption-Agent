@@ -1,12 +1,21 @@
 # Phase-3A M2.5 implementation status
 
-Date: 2026-08-02
+Date: 2026-08-03
 
 Machine freeze: `hegel-freeze-p2b-p3-v1.1.2`
 
 Child DSL: `hegel-old-dsl-v1.1.0`
 
 State: `DUAL_EXACT_WIRE_ERRATA_GOLDEN_PASS / EXTERNAL_GENESIS_NOT_EXECUTED / 14/24 / NOT_RUN`
+
+M2.5 purpose 1–4 的当前 authority class 是
+`OWNER_ACCEPTED_CONTAINER_TECHNICAL_ACTORS_V1`。它要求 purpose-separated、离线、live-probed
+Docker technical actors，不要求不同真人或组织；所有 publication 必须完整披露：
+`same_admin_controller=true`、`organizational_independence=false`、
+`independent_human_actors=false`、`technical_role_independence=true`、
+`owner_accepted_threat_model=true`、`remote_attestation=false`、
+`hardware_key_nonexportability=false`。该 owner amendment 不改 formal wire，也不接管
+Phase-2B sealed-holdout 的 custodian 要求。
 
 ## Outcome
 
@@ -77,7 +86,7 @@ and signatures.
 | Gates | State | Reason |
 |---:|---|---|
 | 1–14 | satisfied | unchanged shrink-1 qualification |
-| 15–24 | blocked | deterministic errata qualified; authoritative external-actor evidence absent |
+| 15–24 | blocked | deterministic errata qualified; live owner-accepted technical-actor evidence absent |
 
 `24/24` would mean ready but still `NOT_RUN`. It would not automatically start
 closure; `NOT_RUN -> RUNNING/CANONICAL_ENUMERATION` remains a separate action.
@@ -95,15 +104,35 @@ externally instantiated bridge roots have not been generated.
 ## External actor boundary and next hard gate
 
 A successful fresh Commit-A replay may return a side-effect-free authorization
-to begin the independent external-genesis workflow. A checked/stored JSON
+to begin the owner-accepted technical-actor external-genesis workflow. A checked/stored JSON
 artifact, its self-hash, or the earlier caller-supplied binary cannot authorize
 that workflow by itself. The exact operator sequence is frozen in
-[the external-genesis runbook](phase3_m25_external_genesis_operator_runbook.md).
+[the external-genesis runbook](phase3_m25_external_genesis_operator_runbook.md), as superseded
+for actor eligibility by the
+[owner amendment](Hegel_Machine_Owner_Accepted_Container_Technical_Actor_Eligibility_Amendment_v1.md).
 
-The next hard gate is independent custodian/auditor execution: one-shot seed
-genesis, purpose-separated actor keys, parent-history audit, opaque-ID
+The next hard gate is live execution by the four qualified, purpose-separated container actors:
+one-shot seed genesis, purpose-separated actor keys, parent-history audit, opaque-ID
 persistence, formal roots and the required envelopes. That work has not been
-executed in this repository.
+executed in this repository. This is technical-role independence under the disclosed same-admin
+threat model, not organizational or independent-human custody.
+
+The source-level admission path is no longer permanently blocked by an
+unfinished pre-stage recovery flag. Its intent/checkpoint continuation,
+host-readable recovery anchor, exact UID-65534 reclaim, keyless retained-seed
+verification and immutable-plan pre-seed abort matrices have passed, so a fresh
+qualified execution attempt may proceed. This is only implementation
+eligibility: no real seed/key/signature/formal root was produced by that test
+work, and the recorded external state therefore remains `14/24 / NOT_RUN`.
+
+An exact pre-seed abort leaves a canonical terminal tombstone derived from the
+evidence path. It preserves run/ledger and Docker-absence identity across a
+crash after the last lock unlink. Three deterministic, role-independent
+retirement markers permanently retire the original evidence, promotion and
+derived publication-receipt physical paths. A later attempt must choose a
+completely fresh output triple; changing roles or combining any retired path
+with fresh paths cannot bypass retirement. The tombstone and markers are
+diagnostic recovery evidence, not formal gate artifacts.
 
 ## v2 counterevidence
 
@@ -122,7 +151,7 @@ Allowed claim:
 > A fresh detached Commit-A Python/Rust replay reproduced 21 candidate objects,
 > 8 candidate record trees and 15 negative guard codes over the 81-schema
 > registry. This deterministic, non-authoritative result permits only the
-> separately governed external-genesis workflow; that workflow has not run.
+> separately governed owner-accepted technical-actor genesis workflow; that workflow has not run.
 
 Not allowed: external genesis completed, formal M2.5 completion, Gates 15–24
 passed, `24/24`, M3 started, complete closure, odd outside verdict, sink

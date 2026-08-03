@@ -186,17 +186,10 @@ def _require_commit_id(value: str) -> str:
 
 
 def _repository_root() -> Path:
-    completed = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"],
-        cwd=PROJECT_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=30,
+    output = _git_bytes(
+        PROJECT_ROOT.parent, ["rev-parse", "--show-toplevel"], timeout=30
     )
-    if completed.returncode != 0:
-        raise GenesisSecretAbsenceError("cannot resolve repository root")
-    root = Path(completed.stdout.strip()).resolve()
+    root = Path(output.decode("utf-8", "strict").strip()).resolve()
     if (root / REPOSITORY_SCOPE_PREFIX.rstrip("/")).resolve() != PROJECT_ROOT.resolve():
         raise GenesisSecretAbsenceError("Hegel Machine project root/scope mismatch")
     return root
@@ -204,11 +197,28 @@ def _repository_root() -> Path:
 
 def _git_bytes(repository_root: Path, arguments: list[str], *, timeout: int = 120) -> bytes:
     completed = subprocess.run(
-        ["git", *arguments],
+        ["/usr/bin/git", *arguments],
         cwd=repository_root,
-        capture_output=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         check=False,
         timeout=timeout,
+        env={
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_GLOBAL": "/dev/null",
+            "GIT_CONFIG_SYSTEM": "/dev/null",
+            "GIT_NO_REPLACE_OBJECTS": "1",
+            "GIT_NO_LAZY_FETCH": "1",
+            "GIT_OPTIONAL_LOCKS": "0",
+            "GIT_PROTOCOL_FROM_USER": "0",
+            "GIT_SSH_COMMAND": "false",
+            "GIT_TERMINAL_PROMPT": "0",
+            "HOME": "/nonexistent",
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/usr/bin:/bin",
+        },
     )
     if completed.returncode != 0:
         command = " ".join(arguments[:2])
