@@ -258,6 +258,108 @@ def test_prepare_record_install_is_exact_and_crash_resumable(tmp_path: Path) -> 
         amendment._install_prepare_record_v1(path, b'{"ok":false}\n')
 
 
+def test_exact_audit_installer_accepts_canonical_runtime_tuple_shape(
+    tmp_path: Path,
+) -> None:
+    audit = tmp_path / "audit"
+    audit.mkdir(mode=0o700)
+    path = audit / "attempt-start.json"
+    runtime_artifact_metadata = (
+        {
+            "diagnostic_sha256_or_null": None,
+            "mode_octal": "0755",
+            "path": "/fixed/hegel-formal-bridge-m25",
+            "sha256": "11" * 32,
+        },
+        {
+            "diagnostic_sha256_or_null": None,
+            "mode_octal": "0755",
+            "path": "/fixed/hegel-m25-bridge-dag-replay",
+            "sha256": "22" * 32,
+        },
+        {
+            "diagnostic_sha256_or_null": "33" * 32,
+            "mode_octal": "0644",
+            "path": "/fixed/bridge-qualification.json",
+            "sha256": "44" * 32,
+        },
+    )
+    expected, raw = amendment._build_exact_audit_record_v1(
+        {
+            "schema": "test-attempt-start/1",
+            "recovery_attempt_ordinal": 3,
+            "runtime_artifact_metadata": runtime_artifact_metadata,
+            "nested_tuple_fixture": (
+                {"attester_roles": ("custodian", "python", "rust")},
+            ),
+        }
+    )
+    decoded = json.loads(raw)
+    assert decoded != expected
+    assert type(decoded["runtime_artifact_metadata"]) is list
+    assert type(decoded["nested_tuple_fixture"][0]["attester_roles"]) is list
+
+    amendment._install_exact_audit_record_v1(path, expected, raw)
+
+    observed, observed_raw = amendment._r2._read_canonical_audit(path)
+    assert observed != expected
+    assert observed_raw == raw
+    assert path.read_bytes() == raw
+
+
+@pytest.mark.parametrize("mutation", ["content", "extra-byte"])
+def test_exact_audit_installer_rejects_nonexact_raw_bytes(
+    mutation: str, tmp_path: Path
+) -> None:
+    audit = tmp_path / "audit"
+    audit.mkdir(mode=0o700)
+    path = audit / "attempt-start.json"
+    expected, raw = amendment._build_exact_audit_record_v1(
+        {
+            "schema": "test-attempt-start/1",
+            "recovery_attempt_ordinal": 3,
+            "runtime_artifact_metadata": (
+                {
+                    "diagnostic_sha256_or_null": None,
+                    "mode_octal": "0755",
+                    "path": "/fixed/hegel-formal-bridge-m25",
+                    "sha256": "11" * 32,
+                },
+            ),
+        }
+    )
+    if mutation == "content":
+        candidate = raw.replace(b'"0755"', b'"0644"', 1)
+        assert candidate != raw
+    else:
+        candidate = raw + b" "
+
+    with pytest.raises(amendment.A8R3RecoveryAmendmentError):
+        amendment._install_exact_audit_record_v1(path, expected, candidate)
+    assert not path.exists()
+    assert not (audit / ".attempt-start.json.next").exists()
+
+
+def test_exact_audit_installer_rejects_existing_different_record(
+    tmp_path: Path,
+) -> None:
+    audit = tmp_path / "audit"
+    audit.mkdir(mode=0o700)
+    path = audit / "attempt-start.json"
+    existing, existing_raw = amendment._build_exact_audit_record_v1(
+        {"schema": "test-attempt-start/1", "record_version": "old"}
+    )
+    desired, desired_raw = amendment._build_exact_audit_record_v1(
+        {"schema": "test-attempt-start/1", "record_version": "new"}
+    )
+    amendment._install_exact_audit_record_v1(path, existing, existing_raw)
+
+    with pytest.raises(amendment.A8R3RecoveryAmendmentError):
+        amendment._install_exact_audit_record_v1(path, desired, desired_raw)
+    assert path.read_bytes() == existing_raw
+    assert not (audit / ".attempt-start.json.next").exists()
+
+
 @pytest.mark.parametrize("failure_call", [2, 3])
 def test_attempt_record_publication_is_atomic_across_fsync_fault(
     failure_call: int,

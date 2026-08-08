@@ -5888,6 +5888,35 @@ _FIXED_A8_R3_LEDGER_ID: Final = bytes.fromhex("ec849e2f1e2e1163cfc450370b25b484"
 _FIXED_A8_R3_PARENT_AMENDMENT_COMMIT: Final = (
     "52a4a61934a73c70dc09b919cae377db166eaedf"
 )
+_FIXED_A8_R4_PARENT_AMENDMENT_COMMIT: Final = (
+    "6c1b73064d292d57d5a9c35fd83c75caff57c300"
+)
+_FIXED_A8_R4_SOURCE_ADMISSION_SCHEMA: Final = (
+    "hegel-phase3-m25-a8-r4-source-admission/1"
+)
+_FIXED_A8_R31_TERMINAL_CHAIN_ROOT_SHA256: Final = (
+    "d4bb2c5984405d127537bde1e973f175b630a16bcaa8ec4fe15617e665400093"
+)
+_FIXED_A8_R31_ATTEMPT_START_RAW_SHA256: Final = (
+    "09bbc99ad2b33930a043b0178bc5c1ebc3f71dfb09b025a412fbb00224493312"
+)
+_FIXED_A8_R31_FAILURE_RAW_SHA256: Final = (
+    "90c176985d83780440007d2111577c0dc5ffbae5430eae523919653b7b6b0153"
+)
+_FIXED_A8_R31_FAILURE_RECEIPT_SHA256: Final = (
+    "0eae7fa631bd7df2d6e446a220d78783387eb92a18b77c0c062e99957a6b883d"
+)
+_FIXED_A8_R3_PREATTEMPT_PREFIX_ROOT_SHA256: Final = (
+    "9771b20bf63f1095456618d3ccd4c9db0c54c693307314b8aea72afa18249999"
+)
+_FIXED_A8_R31_ATTEMPT_START_RECEIPT_SHA256: Final = (
+    "92c127b3961e277b6f1f0a7ca34eeb04b420f5b801260f76406cb6b2c0aeb50f"
+)
+_FIXED_A8_R31_FAILURE_CODE: Final = "FAIL_M25_A8_R31_RECOVERY_AMENDMENT"
+_FIXED_A8_R31_FAILURE_PHASE: Final = "ATTEMPT_START_DURABILITY"
+_FIXED_A8_R31_FAILURE_DETAIL_SHA256: Final = (
+    "82a96d8a342b0ae22668763f738cea241d7c4ed34a00ed71b6dacd5193f694b2"
+)
 _FIXED_A8_R3_FORMAL_REPOSITORY_ROOT: Final = (
     "/home/erzhu419/mine_code/Asumption Agent"
 )
@@ -5957,7 +5986,7 @@ _FIXED_A8_R3_PREVALIDATED_SEAL = object()
 
 @dataclass(frozen=True, slots=True)
 class _FixedA8R3PrevalidatedBasisV1:
-    """Executor-created capability for one exact A8 attempt-3 public basis."""
+    """Executor-created capability for one exact admitted A8 recovery basis."""
 
     basis_commit: str
     run_id: bytes
@@ -6002,7 +6031,7 @@ def _fixed_a8_r3_git_blob_v1(commit: str, repository_path: str) -> bytes:
     if completed.returncode != 0 or completed.stderr:
         _fail(
             FAIL_RECOVERY_SOURCE_ADMISSION,
-            "attempt-3 committed validator blob cannot be resolved",
+            "prevalidated recovery committed validator blob cannot be resolved",
         )
     return completed.stdout
 
@@ -6016,7 +6045,7 @@ def _fixed_a8_r3_python_identity_v1() -> tuple[Path, str]:
     except OSError as exc:
         _fail(
             FAIL_RECOVERY_SOURCE_ADMISSION,
-            f"attempt-3 isolated Python identity cannot be read: {exc}",
+            f"prevalidated recovery isolated Python identity cannot be read: {exc}",
         )
     if (
         not stat.S_ISREG(metadata.st_mode)
@@ -6028,19 +6057,23 @@ def _fixed_a8_r3_python_identity_v1() -> tuple[Path, str]:
     ):
         _fail(
             FAIL_RECOVERY_SOURCE_ADMISSION,
-            "attempt-3 isolated Python executable identity differs",
+            "prevalidated recovery isolated Python executable identity differs",
         )
     return resolved, digest
 
 
-def _validate_fixed_a8_r3_commit_context_v1(
+def _validate_fixed_a8_recovery_commit_context_v1(
     source_admission: Mapping[str, object],
+    *,
+    commit_field: str,
+    parent_amendment_commit: str,
+    attempt_ordinal: int,
 ) -> bytes:
-    r3_commit = source_admission.get("r3_amendment_commit")
-    if type(r3_commit) is not str:
+    amendment_commit = source_admission.get(commit_field)
+    if type(amendment_commit) is not str:
         _fail(
             FAIL_RECOVERY_SOURCE_ADMISSION,
-            "attempt-3 amendment commit is malformed",
+            f"attempt-{attempt_ordinal} amendment commit is malformed",
         )
     head = subprocess.run(
         [str(FORMAL_GIT_EXECUTABLE), "rev-parse", "--verify", "HEAD^{commit}"],
@@ -6053,7 +6086,14 @@ def _validate_fixed_a8_r3_commit_context_v1(
         env=formal_git_environment_v1(),
     )
     parents = subprocess.run(
-        [str(FORMAL_GIT_EXECUTABLE), "rev-list", "--parents", "-n", "1", r3_commit],
+        [
+            str(FORMAL_GIT_EXECUTABLE),
+            "rev-list",
+            "--parents",
+            "-n",
+            "1",
+            amendment_commit,
+        ],
         cwd=REPOSITORY_ROOT,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
@@ -6066,7 +6106,7 @@ def _validate_fixed_a8_r3_commit_context_v1(
         [
             str(FORMAL_GIT_EXECUTABLE),
             "ls-tree",
-            r3_commit,
+            amendment_commit,
             "--",
             _FIXED_A8_R3_VALIDATOR_REPOSITORY_PATH,
         ],
@@ -6079,12 +6119,12 @@ def _validate_fixed_a8_r3_commit_context_v1(
         env=formal_git_environment_v1(),
     )
     expected_parent_row = (
-        r3_commit + " " + _FIXED_A8_R3_PARENT_AMENDMENT_COMMIT + "\n"
+        amendment_commit + " " + parent_amendment_commit + "\n"
     ).encode("ascii")
     if (
         head.returncode != 0
         or head.stderr
-        or head.stdout != (r3_commit + "\n").encode("ascii")
+        or head.stdout != (amendment_commit + "\n").encode("ascii")
         or parents.returncode != 0
         or parents.stderr
         or parents.stdout != expected_parent_row
@@ -6099,10 +6139,33 @@ def _validate_fixed_a8_r3_commit_context_v1(
     ):
         _fail(
             FAIL_RECOVERY_SOURCE_ADMISSION,
-            "attempt-3 HEAD, sole parent, or validator tree identity differs",
+            f"attempt-{attempt_ordinal} HEAD, sole parent, or validator tree "
+            "identity differs",
         )
     return _fixed_a8_r3_git_blob_v1(
-        r3_commit, _FIXED_A8_R3_VALIDATOR_REPOSITORY_PATH
+        amendment_commit, _FIXED_A8_R3_VALIDATOR_REPOSITORY_PATH
+    )
+
+
+def _validate_fixed_a8_r3_commit_context_v1(
+    source_admission: Mapping[str, object],
+) -> bytes:
+    return _validate_fixed_a8_recovery_commit_context_v1(
+        source_admission,
+        commit_field="r3_amendment_commit",
+        parent_amendment_commit=_FIXED_A8_R3_PARENT_AMENDMENT_COMMIT,
+        attempt_ordinal=3,
+    )
+
+
+def _validate_fixed_a8_r4_commit_context_v1(
+    source_admission: Mapping[str, object],
+) -> bytes:
+    return _validate_fixed_a8_recovery_commit_context_v1(
+        source_admission,
+        commit_field="r4_amendment_commit",
+        parent_amendment_commit=_FIXED_A8_R4_PARENT_AMENDMENT_COMMIT,
+        attempt_ordinal=4,
     )
 
 
@@ -6117,17 +6180,17 @@ def _build_fixed_a8_r3_validation_request_v1(
     actor = _copy_json_transport_document_v1(
         actor_report,
         code=FAIL_RECOVERY_SOURCE_ADMISSION,
-        label="attempt-3 actor report",
+        label="prevalidated recovery actor report",
     )
     errata = _copy_json_transport_document_v1(
         errata_report,
         code=FAIL_RECOVERY_SOURCE_ADMISSION,
-        label="attempt-3 errata report",
+        label="prevalidated recovery errata report",
     )
     bundle = _copy_json_transport_document_v1(
         transaction_bundle,
         code=FAIL_RECOVERY_SOURCE_ADMISSION,
-        label="attempt-3 transaction-local protocol bundle",
+        label="prevalidated recovery transaction-local protocol bundle",
     )
     if (
         type(protocol_bundle_content_id) is not bytes
@@ -6142,7 +6205,7 @@ def _build_fixed_a8_r3_validation_request_v1(
     ):
         _fail(
             FAIL_RECOVERY_SOURCE_ADMISSION,
-            "attempt-3 actor-protocol identity is malformed",
+            "prevalidated recovery actor-protocol identity is malformed",
         )
     digests = {
         "actor_report_sha256": hashlib.sha256(_canonical_json(actor)).hexdigest(),
@@ -6185,7 +6248,7 @@ def _run_fixed_a8_r3_validator_v1(
     protocol_bundle_content_id: bytes,
     qualification_key_ids: Mapping[int, bytes],
 ) -> _FixedA8R3PrevalidatedBasisV1:
-    """Create the R3 exception internally through the committed A8 child."""
+    """Create the R3/R4 exception internally through the admitted child."""
 
     request, digests = _build_fixed_a8_r3_validation_request_v1(
         actor_report=actor_report,
@@ -6197,11 +6260,12 @@ def _run_fixed_a8_r3_validator_v1(
     if any(source_admission.get(name) != digest for name, digest in digests.items()):
         _fail(
             FAIL_RECOVERY_SOURCE_ADMISSION,
-            "attempt-3 diagnostic report or bundle digest differs from admission",
+            "prevalidated recovery diagnostic report or bundle digest differs "
+            "from admission",
         )
     unchanged = _strict_sha256_map_v1(
         source_admission.get("unchanged_a8_input_sha256"),
-        label="attempt-3 unchanged A8 input map",
+        label="prevalidated recovery unchanged A8 input map",
     )
     if (
         len(unchanged) != _FIXED_A8_R3_UNCHANGED_INPUT_COUNT
@@ -6212,7 +6276,8 @@ def _run_fixed_a8_r3_validator_v1(
     ):
         _fail(
             FAIL_RECOVERY_SOURCE_ADMISSION,
-            "attempt-3 unchanged A8 input map is not the frozen exact map",
+            "prevalidated recovery unchanged A8 input map is not the frozen "
+            "exact map",
         )
 
     tool = _FIXED_A8_R3_VALIDATOR_PATH
@@ -6222,9 +6287,22 @@ def _run_fixed_a8_r3_validator_v1(
     except OSError as exc:
         _fail(
             FAIL_RECOVERY_SOURCE_ADMISSION,
-            f"attempt-3 fixed validator cannot be read: {exc}",
+            f"prevalidated recovery fixed validator cannot be read: {exc}",
         )
-    committed_tool_bytes = _validate_fixed_a8_r3_commit_context_v1(source_admission)
+    source_admission_schema = source_admission.get("schema")
+    if source_admission_schema == "hegel-phase3-m25-a8-r3-source-admission/1":
+        committed_tool_bytes = _validate_fixed_a8_r3_commit_context_v1(
+            source_admission
+        )
+    elif source_admission_schema == _FIXED_A8_R4_SOURCE_ADMISSION_SCHEMA:
+        committed_tool_bytes = _validate_fixed_a8_r4_commit_context_v1(
+            source_admission
+        )
+    else:
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "fixed A8 validator source-admission schema differs",
+        )
     if (
         tool.is_symlink()
         or not stat.S_ISREG(tool_metadata_before.st_mode)
@@ -6233,7 +6311,7 @@ def _run_fixed_a8_r3_validator_v1(
     ):
         _fail(
             FAIL_RECOVERY_SOURCE_ADMISSION,
-            "attempt-3 fixed validator differs from its committed blob",
+            "prevalidated recovery fixed validator differs from its committed blob",
         )
     python_resolved, python_sha256 = _fixed_a8_r3_python_identity_v1()
     environment = {
@@ -6275,7 +6353,7 @@ def _run_fixed_a8_r3_validator_v1(
     except OSError as exc:
         _fail(
             FAIL_RECOVERY_SOURCE_ADMISSION,
-            f"attempt-3 fixed validator changed during execution: {exc}",
+            f"prevalidated recovery fixed validator changed during execution: {exc}",
         )
     if (
         (tool_metadata_after.st_dev, tool_metadata_after.st_ino)
@@ -6289,31 +6367,32 @@ def _run_fixed_a8_r3_validator_v1(
     ):
         _fail(
             FAIL_RECOVERY_SOURCE_ADMISSION,
-            "attempt-3 isolated A8 validator failed or changed identity",
+            "prevalidated recovery isolated A8 validator failed or changed identity",
         )
     try:
         receipt_raw = json.loads(completed.stdout)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         _fail(
             FAIL_RECOVERY_SOURCE_ADMISSION,
-            f"attempt-3 isolated A8 receipt is invalid: {type(exc).__name__}",
+            "prevalidated recovery isolated A8 receipt is invalid: "
+            f"{type(exc).__name__}",
         )
     if type(receipt_raw) is not dict or completed.stdout != _canonical_json(receipt_raw):
         _fail(
             FAIL_RECOVERY_SOURCE_ADMISSION,
-            "attempt-3 isolated A8 receipt is not canonical JSON",
+            "prevalidated recovery isolated A8 receipt is not canonical JSON",
         )
     receipt = _copy_json_transport_document_v1(
         receipt_raw,
         code=FAIL_RECOVERY_SOURCE_ADMISSION,
-        label="attempt-3 isolated A8 receipt",
+        label="prevalidated recovery isolated A8 receipt",
     )
     body = dict(receipt)
     self_hash = body.pop("receipt_sha256", None)
     full_hash = hashlib.sha256(completed.stdout).hexdigest()
     input_map = _strict_sha256_map_v1(
         receipt.get("commit_a_input_sha256"),
-        label="attempt-3 receipt Commit-A input map",
+        label="prevalidated recovery receipt Commit-A input map",
     )
     expected_key_rows = request["expected_qualification_key_id_rows"]
     if (
@@ -6368,7 +6447,7 @@ def _run_fixed_a8_r3_validator_v1(
     ):
         _fail(
             FAIL_RECOVERY_SOURCE_ADMISSION,
-            "attempt-3 isolated A8 validation receipt fields differ",
+            "prevalidated recovery isolated A8 validation receipt fields differ",
         )
     actor = request["actor_qualification_report"]
     errata = request["errata_qualification_report"]
@@ -6383,7 +6462,7 @@ def _run_fixed_a8_r3_validator_v1(
     if type(live_protocol) is not ArchivedActorProtocolQualificationBindingV1:
         _fail(
             FAIL_RECOVERY_SOURCE_ADMISSION,
-            "attempt-3 internal actor-protocol binding type differs",
+            "prevalidated recovery internal actor-protocol binding type differs",
         )
     return _FixedA8R3PrevalidatedBasisV1(
         basis_commit=_FIXED_A8_R3_BASIS_COMMIT,
@@ -6407,13 +6486,14 @@ def _replay_public_gate_evidence_with_fixed_a8_r3_capability_v1(
     ):
         _fail(
             FAIL_RECOVERY_SOURCE_ADMISSION,
-            "attempt-3 prevalidated replay capability is not executor-created",
+            "prevalidated recovery replay capability is not executor-created",
         )
     inputs = load_gate_evidence_inputs_v1(payload)
     if inputs.basis_commit != capability.basis_commit:
         _fail(
             FAIL_RECOVERY_SOURCE_ADMISSION,
-            "attempt-3 public replay basis differs from the fixed capability",
+            "prevalidated recovery public replay basis differs from the fixed "
+            "capability",
         )
     qualified = _evaluate_gates_15_24_with_prevalidated_report_basis_v1(
         inputs,
@@ -6462,7 +6542,7 @@ def _replay_public_gate_evidence_with_fixed_a8_r3_basis_v1(
     ):
         _fail(
             FAIL_RECOVERY_SOURCE_ADMISSION,
-            "attempt-3 public replay prestage intent is incomplete",
+            "prevalidated recovery public replay prestage intent is incomplete",
         )
     key_ids = _qualification_only_key_ids_from_intent_v1(intent)
     capability = _run_fixed_a8_r3_validator_v1(
@@ -6485,7 +6565,7 @@ def _validate_recovery_source_admission_v1(
     run_id: bytes,
     ledger_id: bytes,
 ) -> Mapping[str, object]:
-    """Accept only the frozen R1/R2/R3 recovery provenance scopes."""
+    """Accept only the frozen R1/R2/R3/R4 recovery provenance scopes."""
 
     if not isinstance(admission, Mapping):
         _fail(
@@ -6499,6 +6579,7 @@ def _validate_recovery_source_admission_v1(
             "hegel-phase3-m25-a8-r1-source-admission/1",
             "hegel-phase3-m25-a8-r2-source-admission/1",
             "hegel-phase3-m25-a8-r3-source-admission/1",
+            _FIXED_A8_R4_SOURCE_ADMISSION_SCHEMA,
         }
         or admission.get("basis_commit") != basis_commit
         or admission.get("run_id_hex") != run_id.hex()
@@ -6642,6 +6723,140 @@ def _validate_recovery_source_admission_v1(
                 FAIL_RECOVERY_SOURCE_ADMISSION,
                 "attempt-3 recovery source admission provenance differs",
             )
+    if schema == _FIXED_A8_R4_SOURCE_ADMISSION_SCHEMA:
+        expected_keys = {
+            "schema",
+            "basis_commit",
+            "r1_amendment_commit",
+            "r2_amendment_commit",
+            "r3_amendment_commit",
+            "r31_amendment_commit",
+            "r4_amendment_commit",
+            "run_id_hex",
+            "ledger_id_hex",
+            "recovery_attempt_ordinal",
+            "continuation_action",
+            "r1_failure_raw_sha256",
+            "r1_failure_receipt_sha256",
+            "r2_terminal_chain_root_sha256",
+            "r2_attempt_start_raw_sha256",
+            "r2_failure_raw_sha256",
+            "r2_failure_receipt_sha256",
+            "r2_admission_sha256_or_null",
+            "r3_preattempt_prefix_root_sha256",
+            "r31_terminal_chain_root_sha256",
+            "r31_attempt_start_raw_sha256",
+            "r31_attempt_start_receipt_sha256",
+            "r31_failure_raw_sha256",
+            "r31_failure_receipt_sha256",
+            "r31_admission_sha256_or_null",
+            "r31_failure_code",
+            "r31_failure_phase",
+            "r31_failure_detail_sha256",
+            "incident_diagnostic_sha256",
+            "a8_validation_receipt_sha256",
+            "cross_basis_recovery_authorized",
+            "formal_identity_entropy_draw_count",
+            "complete_seed_resume_only",
+            "ordinary_execute_allowed",
+            "redraw_allowed",
+            "m3_start_allowed",
+            "prevalidated_report_basis",
+            "prevalidated_transaction_bundle",
+            "unchanged_a8_input_sha256",
+            "unchanged_a8_input_sha256_root",
+            "actor_report_sha256",
+            "errata_report_sha256",
+            "live_bundle_sha256",
+        }
+        r4_commit = admission.get("r4_amendment_commit")
+        formatted_digest_fields = (
+            "incident_diagnostic_sha256",
+            "a8_validation_receipt_sha256",
+            "actor_report_sha256",
+            "errata_report_sha256",
+            "live_bundle_sha256",
+        )
+        fixed_ancestor_commits = {
+            basis_commit,
+            "0349131599a688470c15eded51f942eefeded392",
+            "ec7c04cf62190558c72448639d7e3cd13a5b6903",
+            "52a4a61934a73c70dc09b919cae377db166eaedf",
+            _FIXED_A8_R4_PARENT_AMENDMENT_COMMIT,
+        }
+        if (
+            set(admission) != expected_keys
+            or basis_commit != _FIXED_A8_R3_BASIS_COMMIT
+            or run_id != _FIXED_A8_R3_RUN_ID
+            or ledger_id != _FIXED_A8_R3_LEDGER_ID
+            or admission.get("cross_basis_recovery_authorized") is not True
+            or admission.get("formal_identity_entropy_draw_count") != 0
+            or admission.get("complete_seed_resume_only") is not True
+            or len(dict(admission["unchanged_a8_input_sha256"]))
+            != _FIXED_A8_R3_UNCHANGED_INPUT_COUNT
+            or admission.get("unchanged_a8_input_sha256_root")
+            != _FIXED_A8_R3_UNCHANGED_INPUT_ROOT
+            or admission.get("r1_amendment_commit")
+            != "0349131599a688470c15eded51f942eefeded392"
+            or admission.get("r2_amendment_commit")
+            != "ec7c04cf62190558c72448639d7e3cd13a5b6903"
+            or admission.get("r3_amendment_commit")
+            != "52a4a61934a73c70dc09b919cae377db166eaedf"
+            or admission.get("r31_amendment_commit")
+            != _FIXED_A8_R4_PARENT_AMENDMENT_COMMIT
+            or type(r4_commit) is not str
+            or re.fullmatch(r"[0-9a-f]{40}", r4_commit) is None
+            or r4_commit in fixed_ancestor_commits
+            or admission.get("recovery_attempt_ordinal") != 4
+            or admission.get("continuation_action")
+            != "CODE_AMENDMENT_RECOVERY_CONTINUATION"
+            or admission.get("r1_failure_raw_sha256")
+            != "d4b7be4432b4101de5aab1693e37ae5769d1587155d634b4e746fee60109168a"
+            or admission.get("r1_failure_receipt_sha256")
+            != "ce8948da791a1c42d934ec4a3752ba4bbe5484f96add28f9df5e094444ecb658"
+            or admission.get("r2_terminal_chain_root_sha256")
+            != "76379650dbb142f791d26ca50b24cf308d7deb04bed6eae2e4d84aae4171ac0b"
+            or admission.get("r2_attempt_start_raw_sha256")
+            != "b4b817878d84c6506739f30adc4f38689791c37e3ee786e5c855b86df4a4f0e0"
+            or admission.get("r2_failure_raw_sha256")
+            != "bd64cfa99885dd60750615fcb23abd960aed78ef676a0d2d4d8ed942e5395d56"
+            or admission.get("r2_failure_receipt_sha256")
+            != "87b400cf0070efdb3e2f9d7b37dc09675258c5b0341ce629b7c7b6c5431f3f58"
+            or admission.get("r2_admission_sha256_or_null") is not None
+            or admission.get("r3_preattempt_prefix_root_sha256")
+            != _FIXED_A8_R3_PREATTEMPT_PREFIX_ROOT_SHA256
+            or admission.get("r31_terminal_chain_root_sha256")
+            != _FIXED_A8_R31_TERMINAL_CHAIN_ROOT_SHA256
+            or admission.get("r31_attempt_start_raw_sha256")
+            != _FIXED_A8_R31_ATTEMPT_START_RAW_SHA256
+            or admission.get("r31_attempt_start_receipt_sha256")
+            != _FIXED_A8_R31_ATTEMPT_START_RECEIPT_SHA256
+            or admission.get("r31_failure_raw_sha256")
+            != _FIXED_A8_R31_FAILURE_RAW_SHA256
+            or admission.get("r31_failure_receipt_sha256")
+            != _FIXED_A8_R31_FAILURE_RECEIPT_SHA256
+            or admission.get("r31_admission_sha256_or_null") is not None
+            or admission.get("r31_failure_code")
+            != _FIXED_A8_R31_FAILURE_CODE
+            or admission.get("r31_failure_phase")
+            != _FIXED_A8_R31_FAILURE_PHASE
+            or admission.get("r31_failure_detail_sha256")
+            != _FIXED_A8_R31_FAILURE_DETAIL_SHA256
+            or any(
+                type(admission.get(name)) is not str
+                or re.fullmatch(r"[0-9a-f]{64}", str(admission.get(name))) is None
+                for name in formatted_digest_fields
+            )
+            or admission.get("ordinary_execute_allowed") is not False
+            or admission.get("redraw_allowed") is not False
+            or admission.get("m3_start_allowed") is not False
+            or admission.get("prevalidated_report_basis") is not True
+            or admission.get("prevalidated_transaction_bundle") is not True
+        ):
+            _fail(
+                FAIL_RECOVERY_SOURCE_ADMISSION,
+                "attempt-4 recovery source admission provenance differs",
+            )
     return admission
 
 
@@ -6694,12 +6909,15 @@ def _continue_pre_stage_pending_recovery_core_v1(
             FAIL_RECOVERY_SOURCE_ADMISSION,
             "alternate static Rust path is restricted to admitted complete-only recovery",
         )
-    r3_admitted = (
+    prevalidated_recovery_admitted = (
         admission is not None
         and admission.get("schema")
-        == "hegel-phase3-m25-a8-r3-source-admission/1"
+        in {
+            "hegel-phase3-m25-a8-r3-source-admission/1",
+            _FIXED_A8_R4_SOURCE_ADMISSION_SCHEMA,
+        }
     )
-    if r3_admitted and (
+    if prevalidated_recovery_admitted and (
         not complete_seed_resume_only
         or replay is not replay_public_gate_evidence_v1
         or recovery.basis_commit != _FIXED_A8_R3_BASIS_COMMIT
@@ -6708,7 +6926,7 @@ def _continue_pre_stage_pending_recovery_core_v1(
     ):
         _fail(
             FAIL_RECOVERY_SOURCE_ADMISSION,
-            "attempt-3 recovery identity or caller replay differs",
+            "prevalidated recovery identity or caller replay differs",
         )
     if not _PRESTAGE_RECOVERY_IMPLEMENTED:
         _fail(
@@ -6749,10 +6967,10 @@ def _continue_pre_stage_pending_recovery_core_v1(
     expected_qualification_key_ids = _qualification_only_key_ids_from_intent_v1(
         intent
     )
-    r3_capability: _FixedA8R3PrevalidatedBasisV1 | None = None
-    if r3_admitted:
+    prevalidated_capability: _FixedA8R3PrevalidatedBasisV1 | None = None
+    if prevalidated_recovery_admitted:
         assert admission is not None
-        r3_capability = _run_fixed_a8_r3_validator_v1(
+        prevalidated_capability = _run_fixed_a8_r3_validator_v1(
             source_admission=admission,
             actor_report=actor_report,
             errata_report=errata_report,
@@ -6763,10 +6981,10 @@ def _continue_pre_stage_pending_recovery_core_v1(
     effective_replay: Callable[
         [Mapping[str, object]], Mapping[str, object]
     ] = replay
-    if r3_capability is not None:
+    if prevalidated_capability is not None:
         effective_replay = lambda payload: (
             _replay_public_gate_evidence_with_fixed_a8_r3_capability_v1(
-                payload, r3_capability
+                payload, prevalidated_capability
             )
         )
 
@@ -6791,8 +7009,8 @@ def _continue_pre_stage_pending_recovery_core_v1(
             basis_commit=recovery.basis_commit,
             bundle=transaction_local_bundle,
         )
-        if r3_capability is None
-        else r3_capability.live_protocol
+        if prevalidated_capability is None
+        else prevalidated_capability.live_protocol
     )
     if type(live_protocol) is not ArchivedActorProtocolQualificationBindingV1:
         _fail(

@@ -181,6 +181,8 @@ R3_RUNTIME_EXCEPTION_PATHS: Final = frozenset(
         *_r2.R2_RUNTIME_EXCEPTION_PATHS,
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_amendment_r3_v1.py",
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r3_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_amendment_r4_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r4_v1.py",
     }
 )
 _HEX_40 = re.compile(r"[0-9a-f]{40}")
@@ -793,8 +795,11 @@ def _install_exact_audit_record_v1(
             # so the caller terminalizes instead of continuing silently.
             _install_prepare_record_v1(path, raw)
         raise
-    observed, observed_raw = _r2._read_canonical_audit(path)
-    if observed != dict(expected) or observed_raw != raw:
+    # The reader independently enforces canonical JSON and the self-receipt.
+    # Compare its authoritative bytes, not Python container shapes: JSON arrays
+    # deserialize as lists even when a typed builder supplied tuples.
+    _observed, observed_raw = _r2._read_canonical_audit(path)
+    if observed_raw != raw:
         _fail(f"R3 installed audit record differs: {path.name}")
 
 

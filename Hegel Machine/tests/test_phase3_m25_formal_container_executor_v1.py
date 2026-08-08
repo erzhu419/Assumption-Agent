@@ -114,6 +114,8 @@ def _fixed_r3_unchanged_input_rows() -> tuple[tuple[str, str], ...]:
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r2_v1.py",
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_amendment_r3_v1.py",
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r3_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_amendment_r4_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r4_v1.py",
         "Hegel Machine/src/hegel_machine/phase3_m3_implementation_qualification_v1.py",
         "Hegel Machine/rust/formal_bridge_m25/src/lib.rs",
     }
@@ -136,7 +138,10 @@ def _fixed_r3_unchanged_input_rows() -> tuple[tuple[str, str], ...]:
 
 
 def _recovery_source_admission(schema: str) -> dict[str, object]:
-    if schema == "hegel-phase3-m25-a8-r3-source-admission/1":
+    if schema in {
+        "hegel-phase3-m25-a8-r3-source-admission/1",
+        executor._FIXED_A8_R4_SOURCE_ADMISSION_SCHEMA,
+    }:
         input_sha256 = dict(_fixed_r3_unchanged_input_rows())
         basis_commit = executor._FIXED_A8_R3_BASIS_COMMIT
         run_id = executor._FIXED_A8_R3_RUN_ID
@@ -217,6 +222,79 @@ def _recovery_source_admission(schema: str) -> dict[str, object]:
                 "live_bundle_sha256": "6b" * 32,
             }
         )
+    elif schema == executor._FIXED_A8_R4_SOURCE_ADMISSION_SCHEMA:
+        admission.update(
+            {
+                "r1_amendment_commit": (
+                    "0349131599a688470c15eded51f942eefeded392"
+                ),
+                "r2_amendment_commit": (
+                    "ec7c04cf62190558c72448639d7e3cd13a5b6903"
+                ),
+                "r3_amendment_commit": (
+                    "52a4a61934a73c70dc09b919cae377db166eaedf"
+                ),
+                "r31_amendment_commit": (
+                    "6c1b73064d292d57d5a9c35fd83c75caff57c300"
+                ),
+                "r4_amendment_commit": "78" * 20,
+                "recovery_attempt_ordinal": 4,
+                "continuation_action": "CODE_AMENDMENT_RECOVERY_CONTINUATION",
+                "r1_failure_raw_sha256": (
+                    "d4b7be4432b4101de5aab1693e37ae5769d1587155d634b4e746fee60109168a"
+                ),
+                "r1_failure_receipt_sha256": (
+                    "ce8948da791a1c42d934ec4a3752ba4bbe5484f96add28f9df5e094444ecb658"
+                ),
+                "r2_terminal_chain_root_sha256": (
+                    "76379650dbb142f791d26ca50b24cf308d7deb04bed6eae2e4d84aae4171ac0b"
+                ),
+                "r2_attempt_start_raw_sha256": (
+                    "b4b817878d84c6506739f30adc4f38689791c37e3ee786e5c855b86df4a4f0e0"
+                ),
+                "r2_failure_raw_sha256": (
+                    "bd64cfa99885dd60750615fcb23abd960aed78ef676a0d2d4d8ed942e5395d56"
+                ),
+                "r2_failure_receipt_sha256": (
+                    "87b400cf0070efdb3e2f9d7b37dc09675258c5b0341ce629b7c7b6c5431f3f58"
+                ),
+                "r2_admission_sha256_or_null": None,
+                "r3_preattempt_prefix_root_sha256": (
+                    executor._FIXED_A8_R3_PREATTEMPT_PREFIX_ROOT_SHA256
+                ),
+                "r31_terminal_chain_root_sha256": (
+                    executor._FIXED_A8_R31_TERMINAL_CHAIN_ROOT_SHA256
+                ),
+                "r31_attempt_start_raw_sha256": (
+                    executor._FIXED_A8_R31_ATTEMPT_START_RAW_SHA256
+                ),
+                "r31_attempt_start_receipt_sha256": (
+                    executor._FIXED_A8_R31_ATTEMPT_START_RECEIPT_SHA256
+                ),
+                "r31_failure_raw_sha256": (
+                    executor._FIXED_A8_R31_FAILURE_RAW_SHA256
+                ),
+                "r31_failure_receipt_sha256": (
+                    executor._FIXED_A8_R31_FAILURE_RECEIPT_SHA256
+                ),
+                "r31_admission_sha256_or_null": None,
+                "r31_failure_code": executor._FIXED_A8_R31_FAILURE_CODE,
+                "r31_failure_phase": executor._FIXED_A8_R31_FAILURE_PHASE,
+                "r31_failure_detail_sha256": (
+                    executor._FIXED_A8_R31_FAILURE_DETAIL_SHA256
+                ),
+                "incident_diagnostic_sha256": "67" * 32,
+                "a8_validation_receipt_sha256": "68" * 32,
+                "ordinary_execute_allowed": False,
+                "redraw_allowed": False,
+                "m3_start_allowed": False,
+                "prevalidated_report_basis": True,
+                "prevalidated_transaction_bundle": True,
+                "actor_report_sha256": "69" * 32,
+                "errata_report_sha256": "6a" * 32,
+                "live_bundle_sha256": "6b" * 32,
+            }
+        )
     return admission
 
 
@@ -226,9 +304,10 @@ def _recovery_source_admission(schema: str) -> dict[str, object]:
         "hegel-phase3-m25-a8-r1-source-admission/1",
         "hegel-phase3-m25-a8-r2-source-admission/1",
         "hegel-phase3-m25-a8-r3-source-admission/1",
+        executor._FIXED_A8_R4_SOURCE_ADMISSION_SCHEMA,
     ),
 )
-def test_recovery_source_admission_accepts_only_frozen_r1_r2_or_r3_scope(
+def test_recovery_source_admission_accepts_only_frozen_r1_r2_r3_or_r4_scope(
     schema: str,
 ) -> None:
     admission = _recovery_source_admission(schema)
@@ -321,6 +400,74 @@ def test_attempt3_source_admission_rejects_extension_field() -> None:
     assert captured.value.code == executor.FAIL_RECOVERY_SOURCE_ADMISSION
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("r3_amendment_commit", "00" * 20),
+        ("r31_amendment_commit", "00" * 20),
+        (
+            "r4_amendment_commit",
+            "6c1b73064d292d57d5a9c35fd83c75caff57c300",
+        ),
+        ("recovery_attempt_ordinal", 3),
+        ("continuation_action", "RETRY"),
+        ("r3_preattempt_prefix_root_sha256", "00" * 32),
+        ("r31_terminal_chain_root_sha256", "00" * 32),
+        ("r31_attempt_start_raw_sha256", "00" * 32),
+        ("r31_attempt_start_receipt_sha256", "00" * 32),
+        ("r31_failure_raw_sha256", "00" * 32),
+        ("r31_failure_receipt_sha256", "00" * 32),
+        ("r31_admission_sha256_or_null", "00" * 32),
+        ("r31_failure_code", "FAIL_WRONG"),
+        ("r31_failure_phase", "WRONG_PHASE"),
+        ("r31_failure_detail_sha256", "00" * 32),
+        ("a8_validation_receipt_sha256", "not-a-digest"),
+        ("ordinary_execute_allowed", True),
+        ("redraw_allowed", True),
+        ("m3_start_allowed", True),
+        ("prevalidated_report_basis", False),
+        ("prevalidated_transaction_bundle", False),
+    ),
+)
+def test_attempt4_source_admission_rejects_parent_ordinal_hash_or_authority_drift(
+    field: str,
+    value: object,
+) -> None:
+    admission = _recovery_source_admission(
+        executor._FIXED_A8_R4_SOURCE_ADMISSION_SCHEMA
+    )
+    admission[field] = value
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        executor._validate_recovery_source_admission_v1(
+            admission,
+            basis_commit=str(admission["basis_commit"]),
+            run_id=bytes.fromhex(str(admission["run_id_hex"])),
+            ledger_id=bytes.fromhex(str(admission["ledger_id_hex"])),
+        )
+    assert captured.value.code == executor.FAIL_RECOVERY_SOURCE_ADMISSION
+
+
+@pytest.mark.parametrize("mutation", ("extension", "missing"))
+def test_attempt4_source_admission_rejects_wrong_exact_key_set(
+    mutation: str,
+) -> None:
+    admission = _recovery_source_admission(
+        executor._FIXED_A8_R4_SOURCE_ADMISSION_SCHEMA
+    )
+    if mutation == "extension":
+        admission["unfrozen_extension"] = True
+    else:
+        del admission["r31_failure_receipt_sha256"]
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        executor._validate_recovery_source_admission_v1(
+            admission,
+            basis_commit=str(admission["basis_commit"]),
+            run_id=bytes.fromhex(str(admission["run_id_hex"])),
+            ledger_id=bytes.fromhex(str(admission["ledger_id_hex"])),
+        )
+    assert captured.value.code == executor.FAIL_RECOVERY_SOURCE_ADMISSION
+
+
 def test_r31_commit_context_requires_current_head_as_sole_child_of_r3(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -369,6 +516,151 @@ def test_r31_commit_context_requires_current_head_as_sole_child_of_r3(
     assert captured.value.code == executor.FAIL_RECOVERY_SOURCE_ADMISSION
 
 
+@pytest.mark.parametrize("fault", ("head", "parent", "validator_tree"))
+def test_r4_commit_context_requires_current_head_as_sole_child_of_r31(
+    fault: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert executor._FIXED_A8_R4_PARENT_AMENDMENT_COMMIT == (
+        "6c1b73064d292d57d5a9c35fd83c75caff57c300"
+    )
+    r4_commit = "78" * 20
+    admission = {"r4_amendment_commit": r4_commit}
+
+    def fake_run(arguments: list[str], **_kwargs: object) -> SimpleNamespace:
+        if arguments[1:3] == ["rev-parse", "--verify"]:
+            head = "00" * 20 if fault == "head" else r4_commit
+            stdout = (head + "\n").encode("ascii")
+        elif arguments[1:4] == ["rev-list", "--parents", "-n"]:
+            parent = (
+                "00" * 20
+                if fault == "parent"
+                else executor._FIXED_A8_R4_PARENT_AMENDMENT_COMMIT
+            )
+            stdout = (r4_commit + " " + parent + "\n").encode("ascii")
+        elif arguments[1] == "ls-tree":
+            mode = "100755" if fault == "validator_tree" else "100644"
+            stdout = (
+                mode
+                + " blob "
+                + "11" * 20
+                + "\t"
+                + executor._FIXED_A8_R3_VALIDATOR_REPOSITORY_PATH
+                + "\n"
+            ).encode("utf-8")
+        else:
+            raise AssertionError(arguments)
+        return SimpleNamespace(returncode=0, stdout=stdout, stderr=b"")
+
+    monkeypatch.setattr(executor.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        executor,
+        "_fixed_a8_r3_git_blob_v1",
+        lambda _commit, _path: b"validator",
+    )
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        executor._validate_fixed_a8_r4_commit_context_v1(admission)
+    assert captured.value.code == executor.FAIL_RECOVERY_SOURCE_ADMISSION
+
+
+def test_r4_commit_context_accepts_exact_current_child_and_validator_blob(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    r4_commit = "78" * 20
+    admission = {"r4_amendment_commit": r4_commit}
+
+    def fake_run(arguments: list[str], **_kwargs: object) -> SimpleNamespace:
+        if arguments[1:3] == ["rev-parse", "--verify"]:
+            stdout = (r4_commit + "\n").encode("ascii")
+        elif arguments[1:4] == ["rev-list", "--parents", "-n"]:
+            stdout = (
+                r4_commit
+                + " "
+                + executor._FIXED_A8_R4_PARENT_AMENDMENT_COMMIT
+                + "\n"
+            ).encode("ascii")
+        elif arguments[1] == "ls-tree":
+            stdout = (
+                "100644 blob "
+                + "11" * 20
+                + "\t"
+                + executor._FIXED_A8_R3_VALIDATOR_REPOSITORY_PATH
+                + "\n"
+            ).encode("utf-8")
+        else:
+            raise AssertionError(arguments)
+        return SimpleNamespace(returncode=0, stdout=stdout, stderr=b"")
+
+    monkeypatch.setattr(executor.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        executor,
+        "_fixed_a8_r3_git_blob_v1",
+        lambda _commit, _path: b"r4-validator",
+    )
+    assert executor._validate_fixed_a8_r4_commit_context_v1(admission) == (
+        b"r4-validator"
+    )
+
+
+def test_fixed_a8_validator_dispatches_r4_schema_to_r4_commit_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class R4ContextSelected(RuntimeError):
+        pass
+
+    actor_report = {"actor_reports": []}
+    errata_report = {"status": "PASS"}
+    transaction_bundle = {"bundle": "fixed"}
+    unchanged = {"Hegel Machine/frozen.py": "11" * 32}
+    unchanged_root = hashlib.sha256(
+        executor._canonical_json(unchanged)
+    ).hexdigest()
+    admission = {
+        "schema": executor._FIXED_A8_R4_SOURCE_ADMISSION_SCHEMA,
+        "actor_report_sha256": hashlib.sha256(
+            executor._canonical_json(actor_report)
+        ).hexdigest(),
+        "errata_report_sha256": hashlib.sha256(
+            executor._canonical_json(errata_report)
+        ).hexdigest(),
+        "live_bundle_sha256": hashlib.sha256(
+            executor._canonical_json(transaction_bundle)
+        ).hexdigest(),
+        "unchanged_a8_input_sha256": unchanged,
+        "unchanged_a8_input_sha256_root": unchanged_root,
+    }
+    monkeypatch.setattr(executor, "_FIXED_A8_R3_UNCHANGED_INPUT_COUNT", 1)
+    monkeypatch.setattr(
+        executor, "_FIXED_A8_R3_UNCHANGED_INPUT_ROOT", unchanged_root
+    )
+    monkeypatch.setattr(
+        executor,
+        "_validate_fixed_a8_r3_commit_context_v1",
+        lambda _admission: (_ for _ in ()).throw(
+            AssertionError("R3 context selected for R4 schema")
+        ),
+    )
+    monkeypatch.setattr(
+        executor,
+        "_validate_fixed_a8_r4_commit_context_v1",
+        lambda _admission: (_ for _ in ()).throw(R4ContextSelected()),
+    )
+    with pytest.raises(R4ContextSelected):
+        executor._run_fixed_a8_r3_validator_v1(
+            source_admission=admission,
+            actor_report=actor_report,
+            errata_report=errata_report,
+            transaction_bundle=transaction_bundle,
+            protocol_bundle_content_id=b"b" * 32,
+            qualification_key_ids={
+                1: b"1" * 16,
+                2: b"2" * 16,
+                3: b"3" * 16,
+                4: b"4" * 16,
+            },
+        )
+
+
 def _minimal_pending_recovery_for_r3_replay_guard(
     tmp_path: Path,
 ) -> executor.PendingCeremonyRecoveryV1:
@@ -389,13 +681,19 @@ def _minimal_pending_recovery_for_r3_replay_guard(
     )
 
 
-def test_attempt3_rejects_arbitrary_public_replay_before_validator_or_staging(
+@pytest.mark.parametrize(
+    "schema",
+    (
+        "hegel-phase3-m25-a8-r3-source-admission/1",
+        executor._FIXED_A8_R4_SOURCE_ADMISSION_SCHEMA,
+    ),
+)
+def test_prevalidated_recovery_rejects_arbitrary_public_replay_before_validator_or_staging(
+    schema: str,
     tmp_path: Path,
 ) -> None:
     recovery = _minimal_pending_recovery_for_r3_replay_guard(tmp_path)
-    admission = _recovery_source_admission(
-        "hegel-phase3-m25-a8-r3-source-admission/1"
-    )
+    admission = _recovery_source_admission(schema)
     with pytest.raises(executor.FormalContainerExecutorError) as captured:
         executor._continue_pre_stage_pending_recovery_core_v1(
             recovery=recovery,
