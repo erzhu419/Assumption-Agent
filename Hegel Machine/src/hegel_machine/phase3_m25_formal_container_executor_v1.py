@@ -49,6 +49,7 @@ from .phase3_m25_container_ceremony_v1 import (
     build_single_signature_envelope_fields_v1,
     complete_marker_v1,
     create_pending_marker_v1,
+    _evaluate_gates_15_24_with_prevalidated_report_basis_v1,
     evaluate_gates_15_24_v1,
     parse_ed25519_spki_der_v1,
     promote_gate_evidence_v1,
@@ -581,6 +582,36 @@ def _restore(value: object) -> object:
     return value
 
 
+def _copy_json_transport_document_v1(
+    value: object, *, code: str, label: str
+) -> dict[str, object]:
+    """Copy one embedded JSON document without restoring arrays to tuples.
+
+    The surrounding diagnostic transport also carries typed formal values:
+    byte wrappers become ``bytes`` and arrays become tuples under ``_restore``.
+    Qualification reports and the transaction-local protocol bundle are
+    different: their validators operate in the strict JSON type domain, where
+    an array must remain a list.  Keep that boundary explicit instead of
+    weakening the typed formal decoder or silently accepting tuple/list drift.
+    """
+
+    def copy_json(item: object) -> object:
+        if type(item) is dict:
+            if any(type(key) is not str for key in item):
+                _fail(code, f"{label} contains a non-text JSON object key")
+            return {key: copy_json(child) for key, child in item.items()}
+        if type(item) is list:
+            return [copy_json(child) for child in item]
+        if item is None or type(item) in {bool, int, str}:
+            return item
+        _fail(code, f"{label} contains a non-JSON transport value")
+
+    copied = copy_json(value)
+    if type(copied) is not dict:
+        _fail(code, f"{label} is not a JSON object")
+    return copied
+
+
 def _canonical_json(value: object) -> bytes:
     return (
         json.dumps(_transport(value), ensure_ascii=True, separators=(",", ":"), sort_keys=True)
@@ -802,6 +833,19 @@ def validate_prestage_intent_fields_v1(
     restored = _restore(dict(fields))
     if type(restored) is not dict:
         _fail(FAIL_TRANSACTION_LOCK, "prestage intent transport is invalid")
+    # These three values are self-contained JSON evidence documents.  Restore
+    # typed formal fields around them, but preserve their JSON array identity.
+    for name, label in (
+        ("actor_qualification_report", "actor qualification report"),
+        ("errata_qualification_report", "errata qualification report"),
+        (
+            "live_actor_protocol_qualification_bundle",
+            "live actor protocol qualification bundle",
+        ),
+    ):
+        restored[name] = _copy_json_transport_document_v1(
+            fields.get(name), code=FAIL_TRANSACTION_LOCK, label=label
+        )
     actor_report = restored.get("actor_qualification_report")
     errata_report = restored.get("errata_qualification_report")
     trust_hex = restored.get("trust_genesis_id_hex")
@@ -1568,8 +1612,9 @@ def load_gate_evidence_inputs_v1(payload: Mapping[str, object]) -> GateEvidenceI
     body.pop("payload_sha256", None)
     if type(expected_hash) is not str or hashlib.sha256(_canonical_json(body)).hexdigest() != expected_hash:
         _fail(FAIL_PUBLICATION, "public replay bundle digest differs")
+    transported_inputs = payload.get("gate_evidence_inputs")
     try:
-        raw = _restore(payload.get("gate_evidence_inputs"))
+        raw = _restore(transported_inputs)
     except (TypeError, ValueError) as exc:
         _fail(FAIL_PUBLICATION, f"public replay transport encoding is invalid: {exc}")
     if not isinstance(raw, Mapping):
@@ -1577,6 +1622,22 @@ def load_gate_evidence_inputs_v1(payload: Mapping[str, object]) -> GateEvidenceI
     names = {field.name for field in dataclass_fields(GateEvidenceInputsV1)}
     if set(raw) != names:
         _fail(FAIL_PUBLICATION, "GateEvidenceInputsV1 public field set differs")
+    # GateEvidenceInputsV1 is otherwise a typed formal object graph.  Its two
+    # embedded qualification reports remain strict JSON documents and must not
+    # inherit tuple semantics from the formal transport decoder.
+    for name, label in (
+        ("actor_qualification_report", "public actor qualification report"),
+        ("errata_qualification_report", "public errata qualification report"),
+    ):
+        raw[name] = _copy_json_transport_document_v1(
+            (
+                transported_inputs.get(name)
+                if type(transported_inputs) is dict
+                else None
+            ),
+            code=FAIL_PUBLICATION,
+            label=label,
+        )
     marker_raw = raw["marker_snapshot"]
     marker_fields = {
         "state",
@@ -2997,11 +3058,7 @@ class FormalCeremonyTransactionV1:
             type(expected_bundle) is not dict
             or type(expected_sha256) is not bytes
             or len(expected_sha256) != 32
-            # The intent decoder deliberately restores every JSON array as a
-            # tuple, whereas the independently persisted JSON bundle decodes
-            # to lists.  Compare in the canonical transport domain; direct
-            # Python container equality would reject identical frozen bytes.
-            or bundle != _transport(expected_bundle)
+            or bundle != expected_bundle
             or payload != _canonical_json(expected_bundle)
             or hashlib.sha256(payload).digest() != expected_sha256
         ):
@@ -3039,15 +3096,13 @@ class FormalCeremonyTransactionV1:
         try:
             run_id = bytes.fromhex(str(lock_fields["run_id_hex"]))
             ledger_id = bytes.fromhex(str(lock_fields["ledger_id_hex"]))
-            restored_intent = _restore(
-                lock_fields["prestage_intent_transport_or_null"]
-            )
+            transported_intent = lock_fields["prestage_intent_transport_or_null"]
         except (KeyError, TypeError, ValueError) as exc:
             _fail(
                 FAIL_TRANSACTION_LOCK,
                 f"reservation bootstrap identity cannot be restored: {exc}",
             )
-        if type(restored_intent) is not dict:
+        if type(transported_intent) is not dict:
             _fail(FAIL_TRANSACTION_LOCK, "reservation bootstrap intent is absent")
         transaction = cls(
             basis_commit=lock_fields.get("basis_commit"),  # type: ignore[arg-type]
@@ -3056,7 +3111,7 @@ class FormalCeremonyTransactionV1:
             public_promotion_path=public_promotion_path,
             run_id=run_id,
             ledger_id=ledger_id,
-            prestage_intent_fields=restored_intent,
+            prestage_intent_fields=transported_intent,
             fault_injector=fault_injector,
         )
         if lock_fields != transaction._lock_fields():
@@ -5124,11 +5179,7 @@ def _abort_preseed_reserved_transaction_core_v1(
         except (KeyError, TypeError, ValueError) as exc:
             _fail(FAIL_TRANSACTION_LOCK, f"preseed abort identity is invalid: {exc}")
         transported_intent = lock_fields.get("prestage_intent_transport_or_null")
-        try:
-            restored_intent = _restore(transported_intent)
-        except (TypeError, ValueError) as exc:
-            _fail(FAIL_TRANSACTION_LOCK, f"preseed abort intent transport is invalid: {exc}")
-        if type(restored_intent) is not dict:
+        if type(transported_intent) is not dict:
             _fail(FAIL_TRANSACTION_LOCK, "preseed abort intent transport is absent")
         identity = FormalCeremonyTransactionV1(
             basis_commit=lock_fields.get("basis_commit"),  # type: ignore[arg-type]
@@ -5137,7 +5188,7 @@ def _abort_preseed_reserved_transaction_core_v1(
             public_promotion_path=promotion,
             run_id=run_id,
             ledger_id=ledger_id,
-            prestage_intent_fields=restored_intent,
+            prestage_intent_fields=transported_intent,
         )
         if (
             len(run_id) != 16
@@ -5831,6 +5882,600 @@ def resume_pending_split_calculators_v1(
             backend.stop_for_recovery_and_verify_absent()
 
 
+_FIXED_A8_R3_BASIS_COMMIT: Final = "0af65964235390ce2bebefea7379eaa9c50eda24"
+_FIXED_A8_R3_RUN_ID: Final = bytes.fromhex("e4af9f57c38fb298462ec628c4ed8a03")
+_FIXED_A8_R3_LEDGER_ID: Final = bytes.fromhex("ec849e2f1e2e1163cfc450370b25b484")
+_FIXED_A8_R3_FORMAL_REPOSITORY_ROOT: Final = (
+    "/home/erzhu419/mine_code/Asumption Agent"
+)
+_FIXED_A8_R3_FORMAL_REPOSITORY_PATH_SHA256: Final = (
+    "9cb0ad4207c5ca1b745dec124c1be8b45308d84f61ea8646f051fde1ae669c5e"
+)
+_FIXED_A8_R3_IMPORT_CLOSURE_ROOT: Final = (
+    "d071923c4f926104d78ef082f36aec66ff33221a530ad68a9bdf7cfe3f644d77"
+)
+_FIXED_A8_R3_DEPENDENCY_CLOSURE_ROOT: Final = (
+    "f39b2f922af5723ee50374b4f04be5c6525a58a87e19de9376d2525a108d1dc7"
+)
+_FIXED_A8_R3_VALIDATION_RECEIPT_RAW_SHA256: Final = (
+    "ef18694aa41a78389cef2265eb121174f2e68548928f89f7fcad3f55fb261ee4"
+)
+_FIXED_A8_R3_UNCHANGED_INPUT_COUNT: Final = 95
+_FIXED_A8_R3_UNCHANGED_INPUT_ROOT: Final = (
+    "51b71d2da5d593d9b208f0119b619761a50b1b8823635df0698965723abf5d40"
+)
+_FIXED_A8_R3_VALIDATOR_PATH: Final = (
+    PROJECT_ROOT / "tools/phase3_m25_a8_recovery_report_validator_r3_v1.py"
+)
+_FIXED_A8_R3_VALIDATOR_REPOSITORY_PATH: Final = (
+    "Hegel Machine/tools/phase3_m25_a8_recovery_report_validator_r3_v1.py"
+)
+_FIXED_A8_R3_RECEIPT_SCHEMA: Final = (
+    "hegel-phase3-m25-a8-r3-a8-validation-receipt/1"
+)
+_FIXED_A8_R3_RECEIPT_KEYS: Final = frozenset(
+    {
+        "schema",
+        "formal_repository_root",
+        "formal_repository_path_sha256",
+        "formal_repository_commit",
+        "python_executable",
+        "python_executable_sha256",
+        "python_isolated",
+        "python_no_site",
+        "python_bytecode_disabled",
+        "python_pycache_prefix",
+        "a8_import_closure_sha256_root",
+        "a8_validator_dependency_closure_sha256_root",
+        "run_id_hex",
+        "ledger_id_hex",
+        "actor_report_sha256",
+        "errata_report_sha256",
+        "live_bundle_sha256",
+        "live_bundle_content_id_hex",
+        "qualification_key_id_rows",
+        "commit_a_input_sha256",
+        "commit_a_input_sha256_root",
+        "commit_a_input_count",
+        "actor_technical_eligible",
+        "errata_status",
+        "transaction_bundle_replay_passed",
+        "formal_identity_entropy_draw_count",
+        "contains_raw_seed",
+        "contains_private_key",
+        "raw_seed_bytes_read",
+        "raw_seed_sha256_computed",
+        "m3_start_invoked",
+        "receipt_sha256",
+    }
+)
+_FIXED_A8_R3_PREVALIDATED_SEAL = object()
+
+
+@dataclass(frozen=True, slots=True)
+class _FixedA8R3PrevalidatedBasisV1:
+    """Executor-created capability for one exact A8 attempt-3 public basis."""
+
+    basis_commit: str
+    run_id: bytes
+    ledger_id: bytes
+    actor_report: Mapping[str, object]
+    errata_report: Mapping[str, object]
+    live_protocol: ArchivedActorProtocolQualificationBindingV1
+    validation_receipt: Mapping[str, object]
+    _seal: object
+
+
+def _strict_sha256_map_v1(value: object, *, label: str) -> dict[str, str]:
+    if type(value) is not dict or not value:
+        _fail(FAIL_RECOVERY_SOURCE_ADMISSION, f"{label} is not a JSON object")
+    result: dict[str, str] = {}
+    for key, digest in value.items():
+        if (
+            type(key) is not str
+            or not key
+            or type(digest) is not str
+            or re.fullmatch(r"[0-9a-f]{64}", digest) is None
+        ):
+            _fail(
+                FAIL_RECOVERY_SOURCE_ADMISSION,
+                f"{label} contains a malformed path or digest",
+            )
+        result[key] = digest
+    return dict(sorted(result.items()))
+
+
+def _fixed_a8_r3_git_blob_v1(commit: str, repository_path: str) -> bytes:
+    completed = subprocess.run(
+        [str(FORMAL_GIT_EXECUTABLE), "show", f"{commit}:{repository_path}"],
+        cwd=REPOSITORY_ROOT,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+        timeout=30,
+        env=formal_git_environment_v1(),
+    )
+    if completed.returncode != 0 or completed.stderr:
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "attempt-3 committed validator blob cannot be resolved",
+        )
+    return completed.stdout
+
+
+def _fixed_a8_r3_python_identity_v1() -> tuple[Path, str]:
+    invoked = Path("/usr/bin/python3.10")
+    try:
+        metadata = invoked.lstat()
+        resolved = invoked.resolve(strict=True)
+        digest = hashlib.sha256(invoked.read_bytes()).hexdigest()
+    except OSError as exc:
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            f"attempt-3 isolated Python identity cannot be read: {exc}",
+        )
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or resolved != invoked
+        or stat.S_IMODE(metadata.st_mode) != 0o755
+        or (metadata.st_uid, metadata.st_gid) != (0, 0)
+        or digest
+        != "7d51cd6b48b521277f5caa4610a82126e315fa2be4df069823a8b1eeb5bd4a86"
+    ):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "attempt-3 isolated Python executable identity differs",
+        )
+    return resolved, digest
+
+
+def _validate_fixed_a8_r3_commit_context_v1(
+    source_admission: Mapping[str, object],
+) -> bytes:
+    r3_commit = source_admission.get("r3_amendment_commit")
+    if type(r3_commit) is not str:
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "attempt-3 amendment commit is malformed",
+        )
+    head = subprocess.run(
+        [str(FORMAL_GIT_EXECUTABLE), "rev-parse", "--verify", "HEAD^{commit}"],
+        cwd=REPOSITORY_ROOT,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+        timeout=30,
+        env=formal_git_environment_v1(),
+    )
+    parents = subprocess.run(
+        [str(FORMAL_GIT_EXECUTABLE), "rev-list", "--parents", "-n", "1", r3_commit],
+        cwd=REPOSITORY_ROOT,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+        timeout=30,
+        env=formal_git_environment_v1(),
+    )
+    tree_row = subprocess.run(
+        [
+            str(FORMAL_GIT_EXECUTABLE),
+            "ls-tree",
+            r3_commit,
+            "--",
+            _FIXED_A8_R3_VALIDATOR_REPOSITORY_PATH,
+        ],
+        cwd=REPOSITORY_ROOT,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+        timeout=30,
+        env=formal_git_environment_v1(),
+    )
+    expected_parent_row = (
+        r3_commit
+        + " ec7c04cf62190558c72448639d7e3cd13a5b6903\n"
+    ).encode("ascii")
+    if (
+        head.returncode != 0
+        or head.stderr
+        or head.stdout != (r3_commit + "\n").encode("ascii")
+        or parents.returncode != 0
+        or parents.stderr
+        or parents.stdout != expected_parent_row
+        or tree_row.returncode != 0
+        or tree_row.stderr
+        or not tree_row.stdout.startswith(b"100644 blob ")
+        or not tree_row.stdout.endswith(
+            ("\t" + _FIXED_A8_R3_VALIDATOR_REPOSITORY_PATH + "\n").encode(
+                "utf-8"
+            )
+        )
+    ):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "attempt-3 HEAD, sole parent, or validator tree identity differs",
+        )
+    return _fixed_a8_r3_git_blob_v1(
+        r3_commit, _FIXED_A8_R3_VALIDATOR_REPOSITORY_PATH
+    )
+
+
+def _build_fixed_a8_r3_validation_request_v1(
+    *,
+    actor_report: Mapping[str, object],
+    errata_report: Mapping[str, object],
+    transaction_bundle: Mapping[str, object],
+    protocol_bundle_content_id: bytes,
+    qualification_key_ids: Mapping[int, bytes],
+) -> tuple[dict[str, object], dict[str, str]]:
+    actor = _copy_json_transport_document_v1(
+        actor_report,
+        code=FAIL_RECOVERY_SOURCE_ADMISSION,
+        label="attempt-3 actor report",
+    )
+    errata = _copy_json_transport_document_v1(
+        errata_report,
+        code=FAIL_RECOVERY_SOURCE_ADMISSION,
+        label="attempt-3 errata report",
+    )
+    bundle = _copy_json_transport_document_v1(
+        transaction_bundle,
+        code=FAIL_RECOVERY_SOURCE_ADMISSION,
+        label="attempt-3 transaction-local protocol bundle",
+    )
+    if (
+        type(protocol_bundle_content_id) is not bytes
+        or len(protocol_bundle_content_id) != 32
+        or type(qualification_key_ids) is not dict
+        or set(qualification_key_ids) != {1, 2, 3, 4}
+        or any(
+            type(value) is not bytes or len(value) != 16
+            for value in qualification_key_ids.values()
+        )
+        or len(set(qualification_key_ids.values())) != 4
+    ):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "attempt-3 actor-protocol identity is malformed",
+        )
+    digests = {
+        "actor_report_sha256": hashlib.sha256(_canonical_json(actor)).hexdigest(),
+        "errata_report_sha256": hashlib.sha256(_canonical_json(errata)).hexdigest(),
+        "live_bundle_sha256": hashlib.sha256(_canonical_json(bundle)).hexdigest(),
+    }
+    key_rows = [
+        {
+            "purpose_id": purpose,
+            "qualification_only_key_id_hex": qualification_key_ids[purpose].hex(),
+        }
+        for purpose in (1, 2, 3, 4)
+    ]
+    request = {
+        "schema": "hegel-phase3-m25-a8-r3-validation-request/1",
+        "basis_commit": _FIXED_A8_R3_BASIS_COMMIT,
+        "run_id_hex": _FIXED_A8_R3_RUN_ID.hex(),
+        "ledger_id_hex": _FIXED_A8_R3_LEDGER_ID.hex(),
+        "actor_qualification_report": actor,
+        "actor_report_sha256": digests["actor_report_sha256"],
+        "errata_qualification_report": errata,
+        "errata_report_sha256": digests["errata_report_sha256"],
+        "live_actor_protocol_qualification_bundle": bundle,
+        "live_bundle_sha256": digests["live_bundle_sha256"],
+        "expected_live_bundle_content_id_hex": protocol_bundle_content_id.hex(),
+        "expected_qualification_key_id_rows": key_rows,
+        "contains_raw_seed": False,
+        "contains_private_key": False,
+        "m3_start_allowed": False,
+    }
+    return request, digests
+
+
+def _run_fixed_a8_r3_validator_v1(
+    *,
+    source_admission: Mapping[str, object],
+    actor_report: Mapping[str, object],
+    errata_report: Mapping[str, object],
+    transaction_bundle: Mapping[str, object],
+    protocol_bundle_content_id: bytes,
+    qualification_key_ids: Mapping[int, bytes],
+) -> _FixedA8R3PrevalidatedBasisV1:
+    """Create the R3 exception internally through the committed A8 child."""
+
+    request, digests = _build_fixed_a8_r3_validation_request_v1(
+        actor_report=actor_report,
+        errata_report=errata_report,
+        transaction_bundle=transaction_bundle,
+        protocol_bundle_content_id=protocol_bundle_content_id,
+        qualification_key_ids=qualification_key_ids,
+    )
+    if any(source_admission.get(name) != digest for name, digest in digests.items()):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "attempt-3 diagnostic report or bundle digest differs from admission",
+        )
+    unchanged = _strict_sha256_map_v1(
+        source_admission.get("unchanged_a8_input_sha256"),
+        label="attempt-3 unchanged A8 input map",
+    )
+    if (
+        len(unchanged) != _FIXED_A8_R3_UNCHANGED_INPUT_COUNT
+        or hashlib.sha256(_canonical_json(unchanged)).hexdigest()
+        != _FIXED_A8_R3_UNCHANGED_INPUT_ROOT
+        or source_admission.get("unchanged_a8_input_sha256_root")
+        != _FIXED_A8_R3_UNCHANGED_INPUT_ROOT
+    ):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "attempt-3 unchanged A8 input map is not the frozen exact map",
+        )
+
+    tool = _FIXED_A8_R3_VALIDATOR_PATH
+    try:
+        tool_metadata_before = tool.lstat()
+        tool_bytes_before = tool.read_bytes()
+    except OSError as exc:
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            f"attempt-3 fixed validator cannot be read: {exc}",
+        )
+    committed_tool_bytes = _validate_fixed_a8_r3_commit_context_v1(source_admission)
+    if (
+        tool.is_symlink()
+        or not stat.S_ISREG(tool_metadata_before.st_mode)
+        or stat.S_IMODE(tool_metadata_before.st_mode) != 0o644
+        or tool_bytes_before != committed_tool_bytes
+    ):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "attempt-3 fixed validator differs from its committed blob",
+        )
+    python_resolved, python_sha256 = _fixed_a8_r3_python_identity_v1()
+    environment = {
+        "PATH": "/usr/bin:/bin",
+        "LANG": "C",
+        "LC_ALL": "C",
+        "TZ": "UTC",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": "/dev/null",
+        "GIT_CONFIG_SYSTEM": "/dev/null",
+        "GIT_NO_LAZY_FETCH": "1",
+        "GIT_NO_REPLACE_OBJECTS": "1",
+        "GIT_OPTIONAL_LOCKS": "0",
+        "GIT_PROTOCOL_FROM_USER": "0",
+        "GIT_TERMINAL_PROMPT": "0",
+    }
+    completed = subprocess.run(
+        [
+            python_resolved.as_posix(),
+            "-I",
+            "-S",
+            "-B",
+            "-X",
+            "pycache_prefix=/nonexistent/hegel-r3-pycache",
+            tool.as_posix(),
+        ],
+        cwd=PROJECT_ROOT,
+        input=_canonical_json(request),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+        timeout=300,
+        env=environment,
+    )
+    try:
+        tool_metadata_after = tool.lstat()
+        tool_bytes_after = tool.read_bytes()
+    except OSError as exc:
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            f"attempt-3 fixed validator changed during execution: {exc}",
+        )
+    if (
+        (tool_metadata_after.st_dev, tool_metadata_after.st_ino)
+        != (tool_metadata_before.st_dev, tool_metadata_before.st_ino)
+        or tool_bytes_after != tool_bytes_before
+        or tool_bytes_after != committed_tool_bytes
+        or completed.returncode != 0
+        or completed.stderr
+        or not completed.stdout
+        or len(completed.stdout) > 4 * 1024 * 1024
+    ):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "attempt-3 isolated A8 validator failed or changed identity",
+        )
+    try:
+        receipt_raw = json.loads(completed.stdout)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            f"attempt-3 isolated A8 receipt is invalid: {type(exc).__name__}",
+        )
+    if type(receipt_raw) is not dict or completed.stdout != _canonical_json(receipt_raw):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "attempt-3 isolated A8 receipt is not canonical JSON",
+        )
+    receipt = _copy_json_transport_document_v1(
+        receipt_raw,
+        code=FAIL_RECOVERY_SOURCE_ADMISSION,
+        label="attempt-3 isolated A8 receipt",
+    )
+    body = dict(receipt)
+    self_hash = body.pop("receipt_sha256", None)
+    full_hash = hashlib.sha256(completed.stdout).hexdigest()
+    input_map = _strict_sha256_map_v1(
+        receipt.get("commit_a_input_sha256"),
+        label="attempt-3 receipt Commit-A input map",
+    )
+    expected_key_rows = request["expected_qualification_key_id_rows"]
+    if (
+        set(receipt) != _FIXED_A8_R3_RECEIPT_KEYS
+        or type(self_hash) is not str
+        or self_hash != hashlib.sha256(_canonical_json(body)).hexdigest()
+        or full_hash != _FIXED_A8_R3_VALIDATION_RECEIPT_RAW_SHA256
+        or source_admission.get("a8_validation_receipt_sha256") != full_hash
+        or receipt.get("schema") != _FIXED_A8_R3_RECEIPT_SCHEMA
+        or receipt.get("formal_repository_root")
+        != _FIXED_A8_R3_FORMAL_REPOSITORY_ROOT
+        or receipt.get("formal_repository_path_sha256")
+        != _FIXED_A8_R3_FORMAL_REPOSITORY_PATH_SHA256
+        or receipt.get("formal_repository_commit") != _FIXED_A8_R3_BASIS_COMMIT
+        or receipt.get("python_executable") != "/usr/bin/python3.10"
+        or receipt.get("python_executable_sha256") != python_sha256
+        or receipt.get("python_isolated") is not True
+        or receipt.get("python_no_site") is not True
+        or receipt.get("python_bytecode_disabled") is not True
+        or receipt.get("python_pycache_prefix")
+        != "/nonexistent/hegel-r3-pycache"
+        or receipt.get("a8_import_closure_sha256_root")
+        != _FIXED_A8_R3_IMPORT_CLOSURE_ROOT
+        or receipt.get("a8_validator_dependency_closure_sha256_root")
+        != _FIXED_A8_R3_DEPENDENCY_CLOSURE_ROOT
+        or receipt.get("run_id_hex") != _FIXED_A8_R3_RUN_ID.hex()
+        or receipt.get("ledger_id_hex") != _FIXED_A8_R3_LEDGER_ID.hex()
+        or any(receipt.get(name) != digest for name, digest in digests.items())
+        or receipt.get("live_bundle_content_id_hex")
+        != request["expected_live_bundle_content_id_hex"]
+        or receipt.get("qualification_key_id_rows") != expected_key_rows
+        or receipt.get("commit_a_input_count") != 98
+        or len(input_map) != 98
+        or receipt.get("commit_a_input_sha256") != input_map
+        or receipt.get("commit_a_input_sha256_root")
+        != hashlib.sha256(_canonical_json(input_map)).hexdigest()
+        or any(input_map.get(path) != digest for path, digest in unchanged.items())
+        or receipt.get("actor_technical_eligible") is not True
+        or receipt.get("errata_status") != errata_report.get("status")
+        or receipt.get("transaction_bundle_replay_passed") is not True
+        or receipt.get("formal_identity_entropy_draw_count") != 0
+        or any(
+            receipt.get(name) is not False
+            for name in (
+                "contains_raw_seed",
+                "contains_private_key",
+                "raw_seed_bytes_read",
+                "raw_seed_sha256_computed",
+                "m3_start_invoked",
+            )
+        )
+    ):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "attempt-3 isolated A8 validation receipt fields differ",
+        )
+    actor = request["actor_qualification_report"]
+    errata = request["errata_qualification_report"]
+    bundle = request["live_actor_protocol_qualification_bundle"]
+    assert type(actor) is dict and type(errata) is dict and type(bundle) is dict
+    live_protocol = ArchivedActorProtocolQualificationBindingV1(
+        basis_commit=_FIXED_A8_R3_BASIS_COMMIT,
+        bundle_content_id=protocol_bundle_content_id,
+        qualification_key_ids=MappingProxyType(dict(qualification_key_ids)),
+        report=MappingProxyType(bundle),
+    )
+    if type(live_protocol) is not ArchivedActorProtocolQualificationBindingV1:
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "attempt-3 internal actor-protocol binding type differs",
+        )
+    return _FixedA8R3PrevalidatedBasisV1(
+        basis_commit=_FIXED_A8_R3_BASIS_COMMIT,
+        run_id=_FIXED_A8_R3_RUN_ID,
+        ledger_id=_FIXED_A8_R3_LEDGER_ID,
+        actor_report=MappingProxyType(actor),
+        errata_report=MappingProxyType(errata),
+        live_protocol=live_protocol,
+        validation_receipt=MappingProxyType(receipt),
+        _seal=_FIXED_A8_R3_PREVALIDATED_SEAL,
+    )
+
+
+def _replay_public_gate_evidence_with_fixed_a8_r3_capability_v1(
+    payload: Mapping[str, object],
+    capability: _FixedA8R3PrevalidatedBasisV1,
+) -> dict[str, object]:
+    if (
+        type(capability) is not _FixedA8R3PrevalidatedBasisV1
+        or capability._seal is not _FIXED_A8_R3_PREVALIDATED_SEAL
+    ):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "attempt-3 prevalidated replay capability is not executor-created",
+        )
+    inputs = load_gate_evidence_inputs_v1(payload)
+    if inputs.basis_commit != capability.basis_commit:
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "attempt-3 public replay basis differs from the fixed capability",
+        )
+    qualified = _evaluate_gates_15_24_with_prevalidated_report_basis_v1(
+        inputs,
+        actor_report=capability.actor_report,
+        errata_report=capability.errata_report,
+    )
+    return promote_gate_evidence_v1(qualified)
+
+
+def _replay_public_gate_evidence_with_fixed_a8_r3_basis_v1(
+    payload: Mapping[str, object],
+    *,
+    source_admission: Mapping[str, object],
+    prestage_intent_fields: Mapping[str, object],
+) -> dict[str, object]:
+    """Independently replay public R3 evidence through the same fixed child.
+
+    This public-only verifier grants no recovery or signing capability.  It
+    reconstructs the executor-private seal from the complete frozen prestage
+    intent and a fresh run of the committed isolated A8 validator, then replays
+    the serialized Gate 15--24 inputs with the exact validated report bytes.
+    """
+
+    admission = _validate_recovery_source_admission_v1(
+        source_admission,
+        basis_commit=_FIXED_A8_R3_BASIS_COMMIT,
+        run_id=_FIXED_A8_R3_RUN_ID,
+        ledger_id=_FIXED_A8_R3_LEDGER_ID,
+    )
+    intent = validate_prestage_intent_fields_v1(
+        dict(prestage_intent_fields),
+        basis_commit=_FIXED_A8_R3_BASIS_COMMIT,
+        run_id=_FIXED_A8_R3_RUN_ID,
+        ledger_id=_FIXED_A8_R3_LEDGER_ID,
+    )
+    actor = intent.get("actor_qualification_report")
+    errata = intent.get("errata_qualification_report")
+    bundle = intent.get("live_actor_protocol_qualification_bundle")
+    bundle_id = intent.get("live_actor_protocol_qualification_bundle_content_id")
+    if (
+        type(actor) is not dict
+        or type(errata) is not dict
+        or type(bundle) is not dict
+        or type(bundle_id) is not bytes
+        or len(bundle_id) != 32
+    ):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "attempt-3 public replay prestage intent is incomplete",
+        )
+    key_ids = _qualification_only_key_ids_from_intent_v1(intent)
+    capability = _run_fixed_a8_r3_validator_v1(
+        source_admission=admission,
+        actor_report=actor,
+        errata_report=errata,
+        transaction_bundle=bundle,
+        protocol_bundle_content_id=bundle_id,
+        qualification_key_ids=dict(key_ids),
+    )
+    return _replay_public_gate_evidence_with_fixed_a8_r3_capability_v1(
+        payload, capability
+    )
+
+
 def _validate_recovery_source_admission_v1(
     admission: object,
     *,
@@ -5838,7 +6483,7 @@ def _validate_recovery_source_admission_v1(
     run_id: bytes,
     ledger_id: bytes,
 ) -> Mapping[str, object]:
-    """Accept only the frozen R1 or attempt-2 R2 recovery provenance scope."""
+    """Accept only the frozen R1/R2/R3 recovery provenance scopes."""
 
     if not isinstance(admission, Mapping):
         _fail(
@@ -5851,6 +6496,7 @@ def _validate_recovery_source_admission_v1(
         not in {
             "hegel-phase3-m25-a8-r1-source-admission/1",
             "hegel-phase3-m25-a8-r2-source-admission/1",
+            "hegel-phase3-m25-a8-r3-source-admission/1",
         }
         or admission.get("basis_commit") != basis_commit
         or admission.get("run_id_hex") != run_id.hex()
@@ -5897,6 +6543,103 @@ def _validate_recovery_source_admission_v1(
             FAIL_RECOVERY_SOURCE_ADMISSION,
             "attempt-2 recovery source admission provenance differs",
         )
+    if schema == "hegel-phase3-m25-a8-r3-source-admission/1":
+        expected_keys = {
+            "schema",
+            "basis_commit",
+            "r1_amendment_commit",
+            "r2_amendment_commit",
+            "r3_amendment_commit",
+            "run_id_hex",
+            "ledger_id_hex",
+            "recovery_attempt_ordinal",
+            "continuation_action",
+            "r1_failure_raw_sha256",
+            "r1_failure_receipt_sha256",
+            "r2_terminal_chain_root_sha256",
+            "r2_attempt_start_raw_sha256",
+            "r2_failure_raw_sha256",
+            "r2_failure_receipt_sha256",
+            "r2_admission_sha256_or_null",
+            "incident_diagnostic_sha256",
+            "a8_validation_receipt_sha256",
+            "cross_basis_recovery_authorized",
+            "formal_identity_entropy_draw_count",
+            "complete_seed_resume_only",
+            "ordinary_execute_allowed",
+            "redraw_allowed",
+            "m3_start_allowed",
+            "prevalidated_report_basis",
+            "prevalidated_transaction_bundle",
+            "unchanged_a8_input_sha256",
+            "unchanged_a8_input_sha256_root",
+            "actor_report_sha256",
+            "errata_report_sha256",
+            "live_bundle_sha256",
+        }
+        r3_commit = admission.get("r3_amendment_commit")
+        formatted_digest_fields = (
+            "incident_diagnostic_sha256",
+            "a8_validation_receipt_sha256",
+            "actor_report_sha256",
+            "errata_report_sha256",
+            "live_bundle_sha256",
+        )
+        if (
+            set(admission) != expected_keys
+            or basis_commit != _FIXED_A8_R3_BASIS_COMMIT
+            or run_id != _FIXED_A8_R3_RUN_ID
+            or ledger_id != _FIXED_A8_R3_LEDGER_ID
+            or admission.get("cross_basis_recovery_authorized") is not True
+            or admission.get("formal_identity_entropy_draw_count") != 0
+            or admission.get("complete_seed_resume_only") is not True
+            or len(dict(admission["unchanged_a8_input_sha256"]))
+            != _FIXED_A8_R3_UNCHANGED_INPUT_COUNT
+            or admission.get("unchanged_a8_input_sha256_root")
+            != _FIXED_A8_R3_UNCHANGED_INPUT_ROOT
+            or admission.get("r1_amendment_commit")
+            != "0349131599a688470c15eded51f942eefeded392"
+            or admission.get("r2_amendment_commit")
+            != "ec7c04cf62190558c72448639d7e3cd13a5b6903"
+            or type(r3_commit) is not str
+            or re.fullmatch(r"[0-9a-f]{40}", r3_commit) is None
+            or r3_commit
+            in {
+                basis_commit,
+                "0349131599a688470c15eded51f942eefeded392",
+                "ec7c04cf62190558c72448639d7e3cd13a5b6903",
+            }
+            or admission.get("recovery_attempt_ordinal") != 3
+            or admission.get("continuation_action")
+            != "CODE_AMENDMENT_RECOVERY_CONTINUATION"
+            or admission.get("r1_failure_raw_sha256")
+            != "d4b7be4432b4101de5aab1693e37ae5769d1587155d634b4e746fee60109168a"
+            or admission.get("r1_failure_receipt_sha256")
+            != "ce8948da791a1c42d934ec4a3752ba4bbe5484f96add28f9df5e094444ecb658"
+            or admission.get("r2_terminal_chain_root_sha256")
+            != "76379650dbb142f791d26ca50b24cf308d7deb04bed6eae2e4d84aae4171ac0b"
+            or admission.get("r2_attempt_start_raw_sha256")
+            != "b4b817878d84c6506739f30adc4f38689791c37e3ee786e5c855b86df4a4f0e0"
+            or admission.get("r2_failure_raw_sha256")
+            != "bd64cfa99885dd60750615fcb23abd960aed78ef676a0d2d4d8ed942e5395d56"
+            or admission.get("r2_failure_receipt_sha256")
+            != "87b400cf0070efdb3e2f9d7b37dc09675258c5b0341ce629b7c7b6c5431f3f58"
+            or admission.get("r2_admission_sha256_or_null") is not None
+            or any(
+                type(admission.get(name)) is not str
+                or re.fullmatch(r"[0-9a-f]{64}", str(admission.get(name))) is None
+                for name in formatted_digest_fields
+            )
+            or admission.get("ordinary_execute_allowed") is not False
+            or admission.get("redraw_allowed") is not False
+            or admission.get("m3_start_allowed") is not False
+            or admission.get("prevalidated_report_basis") is not True
+            or admission.get("prevalidated_transaction_bundle") is not True
+        ):
+            _fail(
+                FAIL_RECOVERY_SOURCE_ADMISSION,
+                "attempt-3 recovery source admission provenance differs",
+            )
     return admission
 
 
@@ -5929,10 +6672,10 @@ def _continue_pre_stage_pending_recovery_core_v1(
         _fail(FAIL_TRANSACTION_LOCK, "pending prestage recovery lock is not held")
     if not actors.authoritative:
         _fail(FAIL_SYNTHETIC_PROMOTION, "synthetic actors cannot recover formal evidence")
+    admission: Mapping[str, object] | None = None
     if source_admission_guard is not None:
-        admission = source_admission_guard(recovery)
-        _validate_recovery_source_admission_v1(
-            admission,
+        admission = _validate_recovery_source_admission_v1(
+            source_admission_guard(recovery),
             basis_commit=recovery.basis_commit,
             run_id=recovery.run_id,
             ledger_id=recovery.ledger_id,
@@ -5948,6 +6691,22 @@ def _continue_pre_stage_pending_recovery_core_v1(
         _fail(
             FAIL_RECOVERY_SOURCE_ADMISSION,
             "alternate static Rust path is restricted to admitted complete-only recovery",
+        )
+    r3_admitted = (
+        admission is not None
+        and admission.get("schema")
+        == "hegel-phase3-m25-a8-r3-source-admission/1"
+    )
+    if r3_admitted and (
+        not complete_seed_resume_only
+        or replay is not replay_public_gate_evidence_v1
+        or recovery.basis_commit != _FIXED_A8_R3_BASIS_COMMIT
+        or recovery.run_id != _FIXED_A8_R3_RUN_ID
+        or recovery.ledger_id != _FIXED_A8_R3_LEDGER_ID
+    ):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "attempt-3 recovery identity or caller replay differs",
         )
     if not _PRESTAGE_RECOVERY_IMPLEMENTED:
         _fail(
@@ -5988,6 +6747,26 @@ def _continue_pre_stage_pending_recovery_core_v1(
     expected_qualification_key_ids = _qualification_only_key_ids_from_intent_v1(
         intent
     )
+    r3_capability: _FixedA8R3PrevalidatedBasisV1 | None = None
+    if r3_admitted:
+        assert admission is not None
+        r3_capability = _run_fixed_a8_r3_validator_v1(
+            source_admission=admission,
+            actor_report=actor_report,
+            errata_report=errata_report,
+            transaction_bundle=transaction_local_bundle,
+            protocol_bundle_content_id=protocol_bundle_id,
+            qualification_key_ids=dict(expected_qualification_key_ids),
+        )
+    effective_replay: Callable[
+        [Mapping[str, object]], Mapping[str, object]
+    ] = replay
+    if r3_capability is not None:
+        effective_replay = lambda payload: (
+            _replay_public_gate_evidence_with_fixed_a8_r3_capability_v1(
+                payload, r3_capability
+            )
+        )
 
     basis = build_qualified_formal_static_basis_v1(
         recovery.basis_commit,
@@ -6005,14 +6784,26 @@ def _continue_pre_stage_pending_recovery_core_v1(
             basis_commit=recovery.basis_commit,
             committed_input_paths=REQUIRED_COMMIT_A_INPUTS,
         )
-    live_protocol = replay_transaction_local_actor_protocol_bundle_v1(
-        basis_commit=recovery.basis_commit,
-        bundle=transaction_local_bundle,
+    live_protocol = (
+        replay_transaction_local_actor_protocol_bundle_v1(
+            basis_commit=recovery.basis_commit,
+            bundle=transaction_local_bundle,
+        )
+        if r3_capability is None
+        else r3_capability.live_protocol
     )
+    if type(live_protocol) is not ArchivedActorProtocolQualificationBindingV1:
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "transaction-local actor protocol replay returned a differing binding type",
+        )
     if (
-        live_protocol.bundle_content_id != protocol_bundle_id
+        live_protocol.basis_commit != recovery.basis_commit
+        or live_protocol.bundle_content_id != protocol_bundle_id
         or dict(live_protocol.qualification_key_ids)
         != dict(expected_qualification_key_ids)
+        or _canonical_json(live_protocol.report)
+        != _canonical_json(transaction_local_bundle)
     ):
         _fail(
             FAIL_PREFLIGHT,
@@ -6144,17 +6935,17 @@ def _continue_pre_stage_pending_recovery_core_v1(
                 fault_injector=transaction._fault,
             )
             replay_payload = serialize_gate_evidence_inputs_v1(inputs)
-            prospective_promotion = promote_gate_evidence_v1(
-                evaluate_gates_15_24_v1(inputs)
-            )
+            prospective_promotion = dict(effective_replay(replay_payload))
             transaction.stage_and_prospectively_replay(
-                replay_payload, prospective_promotion, replay=replay
+                replay_payload, prospective_promotion, replay=effective_replay
             )
         elif transaction._state in {
             "STAGED_PROSPECTIVE_REPLAY_PASSED",
             "SEED_CUSTODY_VERIFIED",
         }:
-            inputs, _expected_marker = transaction._load_and_verify_stage(replay=replay)
+            inputs, _expected_marker = transaction._load_and_verify_stage(
+                replay=effective_replay
+            )
             if (
                 inputs.python_split_frame != python_frame
                 or inputs.rust_split_frame != rust_frame
@@ -6182,9 +6973,9 @@ def _continue_pre_stage_pending_recovery_core_v1(
         actors.destroy_actor_key_volumes_and_verify_absent()
         actors_absent = True
         transaction.record_actors_absent()
-        transaction.publish(replay=replay)
+        transaction.publish(replay=effective_replay)
         published_payload = json.loads(transaction.public_evidence_path.read_bytes())
-        published_promotion = replay(published_payload)
+        published_promotion = effective_replay(published_payload)
         if _canonical_json(published_promotion) != transaction.public_promotion_path.read_bytes():
             _fail(FAIL_PUBLICATION, "recovered evidence/promotion replay differs")
         return published_payload, dict(published_promotion)

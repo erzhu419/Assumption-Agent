@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import fields, replace
 import errno
+from functools import lru_cache
 import hashlib
 import importlib.util
 import json
@@ -103,13 +104,53 @@ def test_complete_only_recovery_requires_exact_admission_before_actor_use(tmp_pa
     assert captured.value.code == executor.FAIL_RECOVERY_SOURCE_ADMISSION
 
 
+@lru_cache(maxsize=1)
+def _fixed_r3_unchanged_input_rows() -> tuple[tuple[str, str], ...]:
+    exceptions = {
+        "Hegel Machine/src/hegel_machine/phase3_m25_formal_container_executor_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_amendment_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_amendment_r2_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r2_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_amendment_r3_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r3_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m3_implementation_qualification_v1.py",
+        "Hegel Machine/rust/formal_bridge_m25/src/lib.rs",
+    }
+    rows: dict[str, str] = {}
+    for path in executor.REQUIRED_COMMIT_A_INPUTS:
+        relative = path.relative_to(executor.REPOSITORY_ROOT).as_posix()
+        if relative in exceptions:
+            continue
+        rows[relative] = hashlib.sha256(
+            executor._fixed_a8_r3_git_blob_v1(
+                executor._FIXED_A8_R3_BASIS_COMMIT, relative
+            )
+        ).hexdigest()
+    assert len(rows) == executor._FIXED_A8_R3_UNCHANGED_INPUT_COUNT
+    assert (
+        hashlib.sha256(executor._canonical_json(rows)).hexdigest()
+        == executor._FIXED_A8_R3_UNCHANGED_INPUT_ROOT
+    )
+    return tuple(sorted(rows.items()))
+
+
 def _recovery_source_admission(schema: str) -> dict[str, object]:
-    input_sha256 = {"Hegel Machine/source.py": "12" * 32}
+    if schema == "hegel-phase3-m25-a8-r3-source-admission/1":
+        input_sha256 = dict(_fixed_r3_unchanged_input_rows())
+        basis_commit = executor._FIXED_A8_R3_BASIS_COMMIT
+        run_id = executor._FIXED_A8_R3_RUN_ID
+        ledger_id = executor._FIXED_A8_R3_LEDGER_ID
+    else:
+        input_sha256 = {"Hegel Machine/source.py": "12" * 32}
+        basis_commit = "12" * 20
+        run_id = b"r" * 16
+        ledger_id = b"l" * 16
     admission: dict[str, object] = {
         "schema": schema,
-        "basis_commit": "12" * 20,
-        "run_id_hex": (b"r" * 16).hex(),
-        "ledger_id_hex": (b"l" * 16).hex(),
+        "basis_commit": basis_commit,
+        "run_id_hex": run_id.hex(),
+        "ledger_id_hex": ledger_id.hex(),
         "cross_basis_recovery_authorized": True,
         "formal_identity_entropy_draw_count": 0,
         "complete_seed_resume_only": True,
@@ -133,6 +174,49 @@ def _recovery_source_admission(schema: str) -> dict[str, object]:
                 "incident_diagnostic_sha256": "56" * 32,
             }
         )
+    elif schema == "hegel-phase3-m25-a8-r3-source-admission/1":
+        admission.update(
+            {
+                "r1_amendment_commit": (
+                    "0349131599a688470c15eded51f942eefeded392"
+                ),
+                "r2_amendment_commit": (
+                    "ec7c04cf62190558c72448639d7e3cd13a5b6903"
+                ),
+                "r3_amendment_commit": "56" * 20,
+                "recovery_attempt_ordinal": 3,
+                "continuation_action": "CODE_AMENDMENT_RECOVERY_CONTINUATION",
+                "r1_failure_raw_sha256": (
+                    "d4b7be4432b4101de5aab1693e37ae5769d1587155d634b4e746fee60109168a"
+                ),
+                "r1_failure_receipt_sha256": (
+                    "ce8948da791a1c42d934ec4a3752ba4bbe5484f96add28f9df5e094444ecb658"
+                ),
+                "r2_terminal_chain_root_sha256": (
+                    "76379650dbb142f791d26ca50b24cf308d7deb04bed6eae2e4d84aae4171ac0b"
+                ),
+                "r2_attempt_start_raw_sha256": (
+                    "b4b817878d84c6506739f30adc4f38689791c37e3ee786e5c855b86df4a4f0e0"
+                ),
+                "r2_failure_raw_sha256": (
+                    "bd64cfa99885dd60750615fcb23abd960aed78ef676a0d2d4d8ed942e5395d56"
+                ),
+                "r2_failure_receipt_sha256": (
+                    "87b400cf0070efdb3e2f9d7b37dc09675258c5b0341ce629b7c7b6c5431f3f58"
+                ),
+                "r2_admission_sha256_or_null": None,
+                "incident_diagnostic_sha256": "67" * 32,
+                "a8_validation_receipt_sha256": "68" * 32,
+                "ordinary_execute_allowed": False,
+                "redraw_allowed": False,
+                "m3_start_allowed": False,
+                "prevalidated_report_basis": True,
+                "prevalidated_transaction_bundle": True,
+                "actor_report_sha256": "69" * 32,
+                "errata_report_sha256": "6a" * 32,
+                "live_bundle_sha256": "6b" * 32,
+            }
+        )
     return admission
 
 
@@ -141,18 +225,19 @@ def _recovery_source_admission(schema: str) -> dict[str, object]:
     (
         "hegel-phase3-m25-a8-r1-source-admission/1",
         "hegel-phase3-m25-a8-r2-source-admission/1",
+        "hegel-phase3-m25-a8-r3-source-admission/1",
     ),
 )
-def test_recovery_source_admission_accepts_only_frozen_r1_or_r2_scope(
+def test_recovery_source_admission_accepts_only_frozen_r1_r2_or_r3_scope(
     schema: str,
 ) -> None:
     admission = _recovery_source_admission(schema)
     assert (
         executor._validate_recovery_source_admission_v1(
             admission,
-            basis_commit="12" * 20,
-            run_id=b"r" * 16,
-            ledger_id=b"l" * 16,
+            basis_commit=str(admission["basis_commit"]),
+            run_id=bytes.fromhex(str(admission["run_id_hex"])),
+            ledger_id=bytes.fromhex(str(admission["ledger_id_hex"])),
         )
         is admission
     )
@@ -179,11 +264,109 @@ def test_attempt2_source_admission_rejects_provenance_drift(
     with pytest.raises(executor.FormalContainerExecutorError) as captured:
         executor._validate_recovery_source_admission_v1(
             admission,
-            basis_commit="12" * 20,
-            run_id=b"r" * 16,
-            ledger_id=b"l" * 16,
+            basis_commit=str(admission["basis_commit"]),
+            run_id=bytes.fromhex(str(admission["run_id_hex"])),
+            ledger_id=bytes.fromhex(str(admission["ledger_id_hex"])),
         )
     assert captured.value.code == executor.FAIL_RECOVERY_SOURCE_ADMISSION
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("r2_amendment_commit", "00" * 20),
+        ("r3_amendment_commit", "ec7c04cf62190558c72448639d7e3cd13a5b6903"),
+        ("recovery_attempt_ordinal", 2),
+        ("continuation_action", "RETRY"),
+        ("r2_terminal_chain_root_sha256", "00" * 32),
+        ("r2_failure_raw_sha256", "00" * 32),
+        ("r2_admission_sha256_or_null", "00" * 32),
+        ("a8_validation_receipt_sha256", "not-a-digest"),
+        ("ordinary_execute_allowed", True),
+        ("redraw_allowed", True),
+        ("m3_start_allowed", True),
+        ("prevalidated_report_basis", False),
+        ("prevalidated_transaction_bundle", False),
+    ),
+)
+def test_attempt3_source_admission_rejects_provenance_or_authority_drift(
+    field: str, value: object,
+) -> None:
+    admission = _recovery_source_admission(
+        "hegel-phase3-m25-a8-r3-source-admission/1"
+    )
+    admission[field] = value
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        executor._validate_recovery_source_admission_v1(
+            admission,
+            basis_commit=str(admission["basis_commit"]),
+            run_id=bytes.fromhex(str(admission["run_id_hex"])),
+            ledger_id=bytes.fromhex(str(admission["ledger_id_hex"])),
+        )
+    assert captured.value.code == executor.FAIL_RECOVERY_SOURCE_ADMISSION
+
+
+def test_attempt3_source_admission_rejects_extension_field() -> None:
+    admission = _recovery_source_admission(
+        "hegel-phase3-m25-a8-r3-source-admission/1"
+    )
+    admission["unfrozen_extension"] = True
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        executor._validate_recovery_source_admission_v1(
+            admission,
+            basis_commit=str(admission["basis_commit"]),
+            run_id=bytes.fromhex(str(admission["run_id_hex"])),
+            ledger_id=bytes.fromhex(str(admission["ledger_id_hex"])),
+        )
+    assert captured.value.code == executor.FAIL_RECOVERY_SOURCE_ADMISSION
+
+
+def _minimal_pending_recovery_for_r3_replay_guard(
+    tmp_path: Path,
+) -> executor.PendingCeremonyRecoveryV1:
+    return executor.PendingCeremonyRecoveryV1(
+        basis_commit=executor._FIXED_A8_R3_BASIS_COMMIT,
+        run_id=executor._FIXED_A8_R3_RUN_ID,
+        ledger_id=executor._FIXED_A8_R3_LEDGER_ID,
+        marker_snapshot=MarkerSnapshot("PENDING", b"s" * 32, None, b"k" * 16, 7),
+        journal_state="RESERVED",
+        stage_directory=tmp_path / "stage",
+        custody_directory=tmp_path / "custody",
+        public_evidence_path=tmp_path / "evidence.json",
+        public_promotion_path=tmp_path / "promotion.json",
+        prestage_intent_fields=MappingProxyType({}),
+        prestage_intent_sha256="00" * 32,
+        actor_trust_checkpoint_fields=MappingProxyType({}),
+        lock_descriptor=99,
+    )
+
+
+def test_attempt3_rejects_arbitrary_public_replay_before_validator_or_staging(
+    tmp_path: Path,
+) -> None:
+    recovery = _minimal_pending_recovery_for_r3_replay_guard(tmp_path)
+    admission = _recovery_source_admission(
+        "hegel-phase3-m25-a8-r3-source-admission/1"
+    )
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        executor._continue_pre_stage_pending_recovery_core_v1(
+            recovery=recovery,
+            actors=SimpleNamespace(authoritative=True),
+            replay=lambda _payload: {"forged": True},
+            source_admission_guard=lambda _recovery: admission,
+            complete_seed_resume_only=True,
+        )
+    assert captured.value.code == executor.FAIL_RECOVERY_SOURCE_ADMISSION
+    assert not recovery.stage_directory.exists()
+
+
+def test_attempt3_core_exposes_no_caller_prevalidated_bypass_parameters() -> None:
+    parameter_names = set(
+        executor._continue_pre_stage_pending_recovery_core_v1.__annotations__
+    )
+    assert "prevalidated_actor_report" not in parameter_names
+    assert "prevalidated_errata_report" not in parameter_names
+    assert "transaction_local_bundle_replay_v1" not in parameter_names
 
 
 def _basis(*, ready: bool):
@@ -1984,6 +2167,16 @@ def _dummy_gate_inputs() -> GateEvidenceInputsV1:
     for field in fields(GateEvidenceInputsV1):
         if field.name == "basis_commit":
             values[field.name] = "34" * 20
+        elif field.name == "actor_qualification_report":
+            values[field.name] = {
+                "actor_reports": [
+                    {"observed_repo_digests": ["python@sha256:" + "12" * 32]}
+                ]
+            }
+        elif field.name == "errata_qualification_report":
+            values[field.name] = {
+                "python_report": {"objects": [{"tag": 1}], "guard_errors": []}
+            }
         elif field.name == "marker_snapshot":
             values[field.name] = MarkerSnapshot(
                 "COMPLETE", b"s" * 32, b"m" * 32, b"k" * 16, 1
@@ -2016,6 +2209,12 @@ def test_public_gate_evidence_round_trip_contains_every_replay_input() -> None:
     payload = executor.serialize_gate_evidence_inputs_v1(original)
     restored = executor.load_gate_evidence_inputs_v1(payload)
     assert restored == original
+    assert isinstance(restored.actor_qualification_report["actor_reports"], list)
+    assert isinstance(
+        restored.errata_qualification_report["python_report"]["objects"], list
+    )
+    assert isinstance(restored.actor_key_manifests, tuple)
+    assert isinstance(restored.python_split_frame, bytes)
     assert payload["contains_private_key"] is False
     assert payload["contains_raw_split_seed"] is False
     assert payload["contains_split_assignment_rows"] is False
@@ -2605,6 +2804,102 @@ def _test_runtime_binding_fields() -> dict[str, object]:
     }
 
 
+def test_prestage_decoder_preserves_embedded_json_documents_only() -> None:
+    actor_report = {
+        "image_bindings": {
+            "custodian": {
+                "observed_repo_digests": ["python@sha256:" + "12" * 32]
+            }
+        },
+        "actor_reports": [{"purpose_id": 1}],
+    }
+    errata_report = {
+        "python_report": {"objects": [{"tag": 1}], "guard_errors": []},
+        "rust_execution": {"normalized_command": ["cargo", "--offline"]},
+    }
+    live_bundle = {
+        "qualification_key_manifests": [{"purpose_id": 1}],
+        "evidence_bundle": {"actor_runtime_rows": [{"purpose_id": 1}]},
+    }
+    original = executor.build_prestage_intent_fields_v1(
+        basis_commit="12" * 20,
+        run_id=b"r" * 16,
+        ledger_id=b"l" * 16,
+        created_at_unix_seconds=7,
+        trust_genesis_id=b"t" * 16,
+        actor_qualification_report=actor_report,
+        errata_qualification_report=errata_report,
+        rust_bridge_dag_qualification_report_sha256=b"q" * 32,
+        live_actor_protocol_qualification_bundle_content_id=b"v" * 32,
+        qualification_only_key_ids={
+            purpose: bytes([purpose]) * 16 for purpose in (1, 2, 3, 4)
+        },
+        live_actor_protocol_qualification_bundle=live_bundle,
+        live_actor_protocol_qualification_canonical_bundle_bytes=(
+            executor._canonical_json(live_bundle)
+        ),
+        live_actor_protocol_daemon_receipt_binding=b"d" * 32,
+        runtime_binding_fields=_test_runtime_binding_fields(),
+    )
+    transported = executor._transport(original)
+    assert isinstance(transported, dict)
+    restored = executor.validate_prestage_intent_fields_v1(
+        transported,
+        basis_commit="12" * 20,
+        run_id=b"r" * 16,
+        ledger_id=b"l" * 16,
+    )
+
+    assert isinstance(restored["actor_qualification_report"]["actor_reports"], list)
+    assert isinstance(
+        restored["errata_qualification_report"]["python_report"]["objects"], list
+    )
+    assert isinstance(
+        restored["live_actor_protocol_qualification_bundle"]
+        ["qualification_key_manifests"],
+        list,
+    )
+    assert isinstance(restored["qualification_only_key_id_rows"], tuple)
+    assert isinstance(
+        restored["qualification_only_key_id_rows"][0]
+        ["qualification_only_key_id_16_bytes"],
+        bytes,
+    )
+    assert isinstance(
+        restored["runtime_binding_fields"]["formal_rust_replay_binary_sha256"],
+        bytes,
+    )
+    assert executor._canonical_json(restored) == executor._canonical_json(original)
+    assert executor._canonical_json(restored) == executor._canonical_json(transported)
+
+    mutated = json.loads(executor._canonical_json(transported))
+    mutated["actor_qualification_report"]["actor_reports"].append(
+        {"purpose_id": 2}
+    )
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        executor.validate_prestage_intent_fields_v1(
+            mutated,
+            basis_commit="12" * 20,
+            run_id=b"r" * 16,
+            ledger_id=b"l" * 16,
+        )
+    assert captured.value.code == executor.FAIL_TRANSACTION_LOCK
+
+    for non_json_value in (({"purpose_id": 1},), b"not-json"):
+        invalid_transport = dict(transported)
+        invalid_transport["actor_qualification_report"] = {
+            "actor_reports": non_json_value
+        }
+        with pytest.raises(executor.FormalContainerExecutorError) as captured:
+            executor.validate_prestage_intent_fields_v1(
+                invalid_transport,
+                basis_commit="12" * 20,
+                run_id=b"r" * 16,
+                ledger_id=b"l" * 16,
+            )
+        assert captured.value.code == executor.FAIL_TRANSACTION_LOCK
+
+
 @pytest.mark.parametrize("colliding_trust", (b"r" * 16, b"l" * 16))
 def test_prestage_intent_rejects_run_ledger_trust_identity_collision(
     colliding_trust: bytes,
@@ -2928,7 +3223,7 @@ def test_transaction_local_qualification_bundle_accepts_transport_equivalent_seq
             {"purpose_id": 1, "probe_rows": [True, False]},
             {"purpose_id": 2, "probe_rows": []},
         ],
-        "binding": b"b" * 32,
+        "binding_sha256": "62" * 32,
     }
     transaction = _transaction(tmp_path, live_bundle=live_bundle)
     transaction.reserve()
@@ -2943,7 +3238,7 @@ def test_transaction_local_qualification_bundle_accepts_transport_equivalent_seq
         expected = recovered._prestage_intent_fields[
             "live_actor_protocol_qualification_bundle"
         ]
-        assert isinstance(expected["actor_rows"], tuple)
+        assert isinstance(expected["actor_rows"], list)
         assert executor._transport(expected) == executor._transport(live_bundle)
     finally:
         recovered.close_lock()

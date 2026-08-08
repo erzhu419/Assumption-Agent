@@ -25,7 +25,7 @@ from hegel_machine.phase3_m25_wire_v1 import (
 
 PROJECT = Path(__file__).resolve().parents[1]
 REPOSITORY = PROJECT.parent
-PARENT_RECEIPT = PROJECT / "artifacts/phase3_m25_parent_absence_audit_receipt_v1.json"
+PARENT_RECEIPT = PROJECT / "tests/fixtures/phase3_m25_parent_absence_audit_receipt_v1.json"
 
 
 def _git(repository: Path, *args: str) -> str:
