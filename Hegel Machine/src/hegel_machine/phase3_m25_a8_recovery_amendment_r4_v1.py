@@ -75,6 +75,11 @@ FIXED_R4_AUDIT_DIRECTORY: Final = Path(
     "recovery-audit-r4-e4af9f57c38fb298462ec628c4ed8a03-"
     "attempt-4-revision-2"
 )
+FROZEN_R4_VALIDATOR_TOOL: Final = Path(
+    "/home/erzhu419/.local/state/hegel-machine/"
+    "a8-recovery-amendment-r4r2-worktree/Hegel Machine/tools/"
+    "phase3_m25_a8_recovery_report_validator_r3_v1.py"
+)
 MANIFEST_SCHEMA: Final = (
     "hegel-phase3-m25-a8-recovery-amendment-r4-revision-2/1"
 )
@@ -178,6 +183,8 @@ R4_RUNTIME_EXCEPTION_PATHS: Final = frozenset(
         *_r31.R3_RUNTIME_EXCEPTION_PATHS,
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_amendment_r4_v1.py",
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r4_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_amendment_r5_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r5_v1.py",
     }
 )
 _HEX_40 = re.compile(r"[0-9a-f]{40}")
@@ -266,7 +273,7 @@ def _load_manifest(path: Path) -> tuple[dict[str, object], bytes]:
         "validator_dependency_closure_sha256_root": (
             _r31.EXPECTED_A8_VALIDATOR_DEPENDENCY_CLOSURE_SHA256_ROOT
         ),
-        "tool_path": _r31.A8_VALIDATOR_TOOL.as_posix(),
+        "tool_path": FROZEN_R4_VALIDATOR_TOOL.as_posix(),
         "formal_repository_root": _r31.FIXED_FORMAL_REPOSITORY_ROOT.as_posix(),
         "formal_repository_commit": A8_BASIS_COMMIT,
     }

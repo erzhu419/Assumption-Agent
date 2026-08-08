@@ -474,6 +474,154 @@ class FormalContainerExecutorError(RuntimeError):
         self.detail = detail
 
 
+class FormalContainerCompositeError(FormalContainerExecutorError):
+    """Preserve a primary failure and a later cleanup failure as one error.
+
+    Cleanup is a fail-closed requirement, but it must never erase the error
+    that caused cleanup to run.  The two original exception objects remain
+    available to the recovery audit layer; ``formal_failure_evidence_v1``
+    provides the bounded, recursively structured representation that may be
+    persisted without copying arbitrary non-formal exception text.
+    """
+
+    def __init__(
+        self,
+        primary: BaseException,
+        cleanup: BaseException,
+        *,
+        phase: str,
+    ) -> None:
+        if re.fullmatch(r"[A-Z][A-Z0-9_]*", phase) is None:
+            raise ValueError("composite failure phase is not a machine ID")
+        self.combination_phase = phase
+        self.primary_error = primary
+        self.cleanup_error = cleanup
+        primary_code = (
+            primary.code
+            if isinstance(primary, FormalContainerExecutorError)
+            else type(primary).__name__
+        )
+        cleanup_code = (
+            cleanup.code
+            if isinstance(cleanup, FormalContainerExecutorError)
+            else type(cleanup).__name__
+        )
+        super().__init__(
+            FAIL_CONTAINER,
+            f"{phase}: primary={primary_code}; cleanup={cleanup_code}",
+        )
+
+
+def combine_formal_failures_v1(
+    primary: BaseException,
+    cleanup: BaseException,
+    *,
+    phase: str,
+) -> FormalContainerCompositeError:
+    """Return a typed composite without raising or discarding either cause."""
+
+    return FormalContainerCompositeError(primary, cleanup, phase=phase)
+
+
+_FORMAL_FAILURE_EVIDENCE_SCHEMA: Final = (
+    "hegel-phase3-m25-formal-failure-evidence/1"
+)
+_FORMAL_FAILURE_EVIDENCE_MAX_DEPTH: Final = 32
+_FORMAL_FAILURE_EVIDENCE_MAX_NODES: Final = 256
+
+
+def formal_failure_evidence_v1(error: BaseException) -> dict[str, object]:
+    """Build bounded JSON evidence for one possibly nested formal failure."""
+
+    seen: set[int] = set()
+
+    def exception_type_for(candidate: BaseException) -> str:
+        raw_exception_type = type(candidate).__name__
+        return (
+            raw_exception_type
+            if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,127}", raw_exception_type)
+            is not None
+            else "UNEXPECTED_EXCEPTION_TYPE"
+        )
+
+    def terminal(candidate: BaseException, reason: str) -> dict[str, object]:
+        return {
+            "schema": _FORMAL_FAILURE_EVIDENCE_SCHEMA,
+            "kind": "ERROR_GRAPH_TERMINAL",
+            "reason": reason,
+            "exception_type": exception_type_for(candidate),
+        }
+
+    def build(
+        candidate: BaseException,
+        depth: int,
+        budget: int,
+    ) -> tuple[dict[str, object], int]:
+        if depth >= _FORMAL_FAILURE_EVIDENCE_MAX_DEPTH:
+            return terminal(candidate, "MAX_DEPTH"), 1
+        identity = id(candidate)
+        if identity in seen:
+            return terminal(candidate, "REPEATED_NODE"), 1
+        if isinstance(candidate, FormalContainerCompositeError) and budget < 3:
+            return terminal(candidate, "MAX_NODES"), 1
+        seen.add(identity)
+        exception_type = exception_type_for(candidate)
+        if isinstance(candidate, FormalContainerCompositeError):
+            # Reserve one row for cleanup before allowing primary to consume
+            # the remaining budget.  This makes the serialized evidence tree,
+            # including terminal rows, strictly bounded by MAX_NODES.
+            primary, primary_used = build(
+                candidate.primary_error,
+                depth + 1,
+                budget - 2,
+            )
+            cleanup, cleanup_used = build(
+                candidate.cleanup_error,
+                depth + 1,
+                budget - 1 - primary_used,
+            )
+            return (
+                {
+                    "schema": _FORMAL_FAILURE_EVIDENCE_SCHEMA,
+                    "kind": "PRIMARY_AND_CLEANUP",
+                    "combination_phase": candidate.combination_phase,
+                    "primary": primary,
+                    "cleanup": cleanup,
+                },
+                1 + primary_used + cleanup_used,
+            )
+        if isinstance(candidate, FormalContainerExecutorError):
+            code = (
+                candidate.code
+                if type(candidate.code) is str
+                and re.fullmatch(r"[A-Z][A-Z0-9_]{0,127}", candidate.code)
+                is not None
+                else "INVALID_FORMAL_ERROR_CODE"
+            )
+            detail = candidate.detail
+        else:
+            # Non-formal exceptions are untrusted: neither an arbitrary
+            # ``code`` attribute nor ``__str__`` may impersonate a frozen
+            # formal failure or execute while evidence is being built.
+            code = exception_type
+            detail = f"unexpected exception type {exception_type}"
+        return (
+            {
+                "schema": _FORMAL_FAILURE_EVIDENCE_SCHEMA,
+                "kind": "SINGLE",
+                "exception_type": exception_type,
+                "code": code,
+                "detail_sha256": hashlib.sha256(
+                    detail.encode("utf-8", "replace")
+                ).hexdigest(),
+            },
+            1,
+        )
+
+    evidence, _used = build(error, 0, _FORMAL_FAILURE_EVIDENCE_MAX_NODES)
+    return evidence
+
+
 def _fail(code: str, detail: str) -> NoReturn:
     raise FormalContainerExecutorError(code, detail)
 
@@ -3724,10 +3872,8 @@ class FormalCeremonyTransactionV1:
                 or completion.get("seed_length_bytes") != 32
             ):
                 _fail(FAIL_CUSTODY, "seed completion receipt differs from staged commitment")
-            if seed_path.is_symlink():
-                _fail(FAIL_CUSTODY, "raw seed path may not be a symlink")
             try:
-                seed_metadata = seed_path.stat()
+                seed_metadata = seed_path.lstat()
             except OSError as exc:
                 _fail(FAIL_CUSTODY, f"raw seed metadata cannot be read: {exc}")
             if (
@@ -4204,7 +4350,16 @@ class PendingCeremonyRecoveryV1(AbstractContextManager["PendingCeremonyRecoveryV
         return self
 
     def __exit__(self, exc_type, exc, traceback) -> bool:
-        self.close()
+        try:
+            self.close()
+        except BaseException as cleanup:
+            if isinstance(exc, BaseException):
+                raise combine_formal_failures_v1(
+                    exc,
+                    cleanup,
+                    phase="PENDING_RECOVERY_CONTEXT_CLOSE",
+                ) from exc
+            raise
         return False
 
 
@@ -4334,16 +4489,34 @@ def _acquire_host_recovery_anchor_v1(
         # prestage bytes after the caller loads them below.
         return identity, anchor
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        if identity is not None:
-            identity.close_lock()
-        elif descriptor >= 0:
-            os.close(descriptor)
-        _fail(FAIL_TRANSACTION_LOCK, f"host recovery anchor cannot be acquired: {exc}")
-    except BaseException:
-        if identity is not None:
-            identity.close_lock()
-        elif descriptor >= 0:
-            os.close(descriptor)
+        primary = FormalContainerExecutorError(
+            FAIL_TRANSACTION_LOCK,
+            f"host recovery anchor cannot be acquired: {exc}",
+        )
+        try:
+            if identity is not None:
+                identity.close_lock()
+            elif descriptor >= 0:
+                os.close(descriptor)
+        except BaseException as cleanup:
+            raise combine_formal_failures_v1(
+                primary,
+                cleanup,
+                phase="HOST_RECOVERY_ANCHOR_ACQUISITION_CLOSE",
+            ) from primary
+        raise primary from exc
+    except BaseException as original:
+        try:
+            if identity is not None:
+                identity.close_lock()
+            elif descriptor >= 0:
+                os.close(descriptor)
+        except BaseException as cleanup:
+            raise combine_formal_failures_v1(
+                original,
+                cleanup,
+                phase="HOST_RECOVERY_ANCHOR_ACQUISITION_CLOSE",
+            ) from original
         raise
 
 
@@ -4367,8 +4540,15 @@ def acquire_pending_ceremony_recovery_v1(
             public_evidence_path=public_evidence_path,
             public_promotion_path=public_promotion_path,
         )
-    except BaseException:
-        anchor_identity.close_lock()
+    except BaseException as original:
+        try:
+            anchor_identity.close_lock()
+        except BaseException as cleanup:
+            raise combine_formal_failures_v1(
+                original,
+                cleanup,
+                phase="PENDING_RECOVERY_ACQUISITION_CLOSE",
+            ) from original
         raise
 
 
@@ -4391,7 +4571,6 @@ def _acquire_pending_ceremony_recovery_core_v1(
 
     custody = anchor_identity.custody_directory
     if not custody.is_dir() or (custody.stat().st_mode & 0o777) != 0o700:
-        anchor_identity.close_lock()
         _fail(FAIL_CUSTODY, "pending recovery custody directory is invalid")
     lock_path = custody / "phase3_m25_ceremony.lock"
     if lock_path.is_symlink():
@@ -4443,7 +4622,6 @@ def _acquire_pending_ceremony_recovery_core_v1(
         or run_id != anchor_identity.run_id
         or ledger_id != anchor_identity.ledger_id
     ):
-        anchor_identity.close_lock()
         _fail(FAIL_TRANSACTION_LOCK, "internal lock differs from host recovery anchor")
     evidence = public_evidence_path.resolve()
     promotion = public_promotion_path.resolve()
@@ -4491,8 +4669,19 @@ def _acquire_pending_ceremony_recovery_core_v1(
     try:
         fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError as exc:
-        os.close(descriptor)
-        _fail(FAIL_TRANSACTION_LOCK, f"another ceremony/recovery holds the lock: {exc}")
+        primary = FormalContainerExecutorError(
+            FAIL_TRANSACTION_LOCK,
+            f"another ceremony/recovery holds the lock: {exc}",
+        )
+        try:
+            os.close(descriptor)
+        except BaseException as cleanup:
+            raise combine_formal_failures_v1(
+                primary,
+                cleanup,
+                phase="PENDING_RECOVERY_LOCK_FLOCK_CLOSE",
+            ) from primary
+        raise primary from exc
     try:
         marker = read_marker_snapshot_v1(custody / "split_seed_instantiation.marker")
         if marker.state != "PENDING":
@@ -4543,10 +4732,8 @@ def _acquire_pending_ceremony_recovery_core_v1(
             intent_payload = b""
         if len(present_seed_prefix) >= 2:
             seed_path = custody / seed_prefix[1]
-            if seed_path.is_symlink():
-                _fail(FAIL_CUSTODY, "pending raw seed path may not be a symlink")
             try:
-                seed_metadata = seed_path.stat()
+                seed_metadata = seed_path.lstat()
             except OSError as exc:
                 _fail(FAIL_CUSTODY, f"pending raw seed metadata cannot be read: {exc}")
             if (
@@ -4759,9 +4946,28 @@ def _acquire_pending_ceremony_recovery_core_v1(
         identity._anchor_descriptor = None
         identity._directory_descriptor = None
         return recovery
-    except BaseException:
-        fcntl.flock(descriptor, fcntl.LOCK_UN)
-        os.close(descriptor)
+    except BaseException as original:
+        cleanup_failure: BaseException | None = None
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+        except BaseException as cleanup:
+            cleanup_failure = cleanup
+        try:
+            os.close(descriptor)
+        except BaseException as cleanup:
+            if cleanup_failure is not None:
+                cleanup = combine_formal_failures_v1(
+                    cleanup_failure,
+                    cleanup,
+                    phase="PENDING_RECOVERY_CORE_UNLOCK_AND_CLOSE",
+                )
+            cleanup_failure = cleanup
+        if cleanup_failure is not None:
+            raise combine_formal_failures_v1(
+                original,
+                cleanup_failure,
+                phase="PENDING_RECOVERY_CORE_DESCRIPTOR_CLOSE",
+            ) from original
         raise
 
 
@@ -5894,6 +6100,55 @@ _FIXED_A8_R4_PARENT_AMENDMENT_COMMIT: Final = (
 _FIXED_A8_R4_SOURCE_ADMISSION_SCHEMA: Final = (
     "hegel-phase3-m25-a8-r4-source-admission/1"
 )
+_FIXED_A8_R5_PARENT_AMENDMENT_COMMIT: Final = (
+    "f24bae3c4fd1f4480e0aa9ecba69ac945779828d"
+)
+_FIXED_A8_R5_SOURCE_ADMISSION_SCHEMA: Final = (
+    "hegel-phase3-m25-a8-r5-source-admission/1"
+)
+_FIXED_A8_R4_TERMINAL_CHAIN_ROOT_SHA256: Final = (
+    "9c0c0b8f05e97ec6b87c0ac9b4a36823f5338ce69053f442e9b1cbf1137f00d5"
+)
+_FIXED_A8_R4_TERMINAL_RAW_SHA256: Final[Mapping[str, str]] = MappingProxyType({
+    "preflight": "70c0eb68ea1012abfbebb09976b2f013a973396b50765366851d8259deb39d88",
+    "incident_diagnostic": "8d7ab9b7f42346b6d4dc74dcf471d424dca897c0cd5e1238ae53f386829b387c",
+    "a8_validation": "ef18694aa41a78389cef2265eb121174f2e68548928f89f7fcad3f55fb261ee4",
+    "authorization_request": "28c4c66a3af948de64a76da69fcd841b6b0b61f5433469b2ed0dcd2126d07552",
+    "authorization": "8b8045c8dd0825ed72463a11f3991b8cb0867782c9f33accef32523b472bfacb",
+    "attempt_start": "fbd2b8c3d9b9168fe97a9b08fde1d65467e0b2a07e6c3cf84645c44cb868dc52",
+    "admission": "c4fe711ad4fce230a3a34fe0eb4511e1560c12b789f69b48d5df1798f907b89f",
+    "failure": "b02b61161b3a083953ff687b0168aa0d1b545ae495d971100d25f38cbbd550d5",
+})
+_FIXED_A8_R4_TERMINAL_RECEIPT_SHA256: Final[Mapping[str, str]] = MappingProxyType({
+    "preflight": "fc9bc903aab8388e1f232c66a565a714227ff07fba28767f8ca4b6f0e773ec5d",
+    "incident_diagnostic": "825fff41c912db2069aec220f5e82f99c4f83743f8b09be3901cb80246073230",
+    "a8_validation": "83b1ad690914d9dfd5cd402d5c734a1250a3b450c9e0b3ecf4655cfb97c6ba47",
+    "authorization_request": "a8e415fb0f9b58966f90470c334884e47120ebe4b43338a24629a700b4a12332",
+    "authorization": "b2d455dfdc8c6de2353624edf190b4cdf08f63833ea8e7af88202045ff94f3ad",
+    "attempt_start": "4644fdfb423a992bcea156141f9f689636b7c223742233bb7779fdb3f127461e",
+    "admission": "752ef70b901d5238b7c7c23033e42af4047a729356b74f2dae760442fafd54e9",
+    "failure": "2f3b2cc21e0cd88ead075c840b54864572311cb83d87f4af60b4866ffa3cc22e",
+})
+_FIXED_A8_R4_FAILURE_CODE: Final = "FAIL_M25_FORMAL_CONTAINER_RUNTIME"
+_FIXED_A8_R4_FAILURE_PHASE: Final = "COMPLETE_ONLY_FORMAL_CORE"
+_FIXED_A8_R4_FAILURE_DETAIL_SHA256: Final = (
+    "8b0d1b49ee29954a00f06e36aef9b3dc585e2079ccfb16c116b89a7b027c3ac2"
+)
+if (
+    set(_FIXED_A8_R4_TERMINAL_RAW_SHA256)
+    != set(_FIXED_A8_R4_TERMINAL_RECEIPT_SHA256)
+    or len(_FIXED_A8_R4_TERMINAL_RAW_SHA256) != 8
+    or any(
+        re.fullmatch(r"[0-9a-f]{64}", digest) is None
+        for digest in (
+            *_FIXED_A8_R4_TERMINAL_RAW_SHA256.values(),
+            *_FIXED_A8_R4_TERMINAL_RECEIPT_SHA256.values(),
+            _FIXED_A8_R4_TERMINAL_CHAIN_ROOT_SHA256,
+            _FIXED_A8_R4_FAILURE_DETAIL_SHA256,
+        )
+    )
+):
+    raise RuntimeError("fixed R4 terminal digest registry is malformed")
 _FIXED_A8_R31_TERMINAL_CHAIN_ROOT_SHA256: Final = (
     "d4bb2c5984405d127537bde1e973f175b630a16bcaa8ec4fe15617e665400093"
 )
@@ -6169,6 +6424,17 @@ def _validate_fixed_a8_r4_commit_context_v1(
     )
 
 
+def _validate_fixed_a8_r5_commit_context_v1(
+    source_admission: Mapping[str, object],
+) -> bytes:
+    return _validate_fixed_a8_recovery_commit_context_v1(
+        source_admission,
+        commit_field="r5_amendment_commit",
+        parent_amendment_commit=_FIXED_A8_R5_PARENT_AMENDMENT_COMMIT,
+        attempt_ordinal=5,
+    )
+
+
 def _build_fixed_a8_r3_validation_request_v1(
     *,
     actor_report: Mapping[str, object],
@@ -6296,6 +6562,10 @@ def _run_fixed_a8_r3_validator_v1(
         )
     elif source_admission_schema == _FIXED_A8_R4_SOURCE_ADMISSION_SCHEMA:
         committed_tool_bytes = _validate_fixed_a8_r4_commit_context_v1(
+            source_admission
+        )
+    elif source_admission_schema == _FIXED_A8_R5_SOURCE_ADMISSION_SCHEMA:
+        committed_tool_bytes = _validate_fixed_a8_r5_commit_context_v1(
             source_admission
         )
     else:
@@ -6565,7 +6835,7 @@ def _validate_recovery_source_admission_v1(
     run_id: bytes,
     ledger_id: bytes,
 ) -> Mapping[str, object]:
-    """Accept only the frozen R1/R2/R3/R4 recovery provenance scopes."""
+    """Accept only the frozen R1/R2/R3/R4/R5 recovery provenance scopes."""
 
     if not isinstance(admission, Mapping):
         _fail(
@@ -6580,6 +6850,7 @@ def _validate_recovery_source_admission_v1(
             "hegel-phase3-m25-a8-r2-source-admission/1",
             "hegel-phase3-m25-a8-r3-source-admission/1",
             _FIXED_A8_R4_SOURCE_ADMISSION_SCHEMA,
+            _FIXED_A8_R5_SOURCE_ADMISSION_SCHEMA,
         }
         or admission.get("basis_commit") != basis_commit
         or admission.get("run_id_hex") != run_id.hex()
@@ -6857,6 +7128,167 @@ def _validate_recovery_source_admission_v1(
                 FAIL_RECOVERY_SOURCE_ADMISSION,
                 "attempt-4 recovery source admission provenance differs",
             )
+    if schema == _FIXED_A8_R5_SOURCE_ADMISSION_SCHEMA:
+        expected_keys = {
+            "schema",
+            "basis_commit",
+            "parent_r4_amendment_commit",
+            "r5_amendment_commit",
+            "run_id_hex",
+            "ledger_id_hex",
+            "recovery_attempt_ordinal",
+            "continuation_action",
+            "incident_diagnostic_sha256",
+            "a8_validation_receipt_sha256",
+            "cross_basis_recovery_authorized",
+            "formal_identity_entropy_draw_count",
+            "complete_seed_resume_only",
+            "ordinary_execute_allowed",
+            "redraw_allowed",
+            "m3_start_allowed",
+            "prevalidated_report_basis",
+            "prevalidated_transaction_bundle",
+            "unchanged_a8_input_sha256",
+            "unchanged_a8_input_sha256_root",
+            "actor_report_sha256",
+            "errata_report_sha256",
+            "live_bundle_sha256",
+            "r4_terminal_chain_root_sha256",
+            "r4_preflight_raw_sha256",
+            "r4_preflight_receipt_sha256",
+            "r4_incident_diagnostic_raw_sha256",
+            "r4_incident_diagnostic_receipt_sha256",
+            "r4_a8_validation_raw_sha256",
+            "r4_a8_validation_receipt_sha256",
+            "r4_authorization_request_raw_sha256",
+            "r4_authorization_request_receipt_sha256",
+            "r4_authorization_raw_sha256",
+            "r4_authorization_receipt_sha256",
+            "r4_attempt_start_raw_sha256",
+            "r4_attempt_start_receipt_sha256",
+            "r4_admission_raw_sha256",
+            "r4_admission_receipt_sha256",
+            "r4_failure_raw_sha256",
+            "r4_failure_receipt_sha256",
+            "r4_failure_code",
+            "r4_failure_phase",
+            "r4_failure_detail_sha256",
+        }
+        expected_r4_fields = {
+            "r4_terminal_chain_root_sha256": (
+                _FIXED_A8_R4_TERMINAL_CHAIN_ROOT_SHA256
+            ),
+            "r4_preflight_raw_sha256": (
+                _FIXED_A8_R4_TERMINAL_RAW_SHA256["preflight"]
+            ),
+            "r4_preflight_receipt_sha256": (
+                _FIXED_A8_R4_TERMINAL_RECEIPT_SHA256["preflight"]
+            ),
+            "r4_incident_diagnostic_raw_sha256": (
+                _FIXED_A8_R4_TERMINAL_RAW_SHA256["incident_diagnostic"]
+            ),
+            "r4_incident_diagnostic_receipt_sha256": (
+                _FIXED_A8_R4_TERMINAL_RECEIPT_SHA256["incident_diagnostic"]
+            ),
+            "r4_a8_validation_raw_sha256": (
+                _FIXED_A8_R4_TERMINAL_RAW_SHA256["a8_validation"]
+            ),
+            "r4_a8_validation_receipt_sha256": (
+                _FIXED_A8_R4_TERMINAL_RECEIPT_SHA256["a8_validation"]
+            ),
+            "r4_authorization_request_raw_sha256": (
+                _FIXED_A8_R4_TERMINAL_RAW_SHA256["authorization_request"]
+            ),
+            "r4_authorization_request_receipt_sha256": (
+                _FIXED_A8_R4_TERMINAL_RECEIPT_SHA256[
+                    "authorization_request"
+                ]
+            ),
+            "r4_authorization_raw_sha256": (
+                _FIXED_A8_R4_TERMINAL_RAW_SHA256["authorization"]
+            ),
+            "r4_authorization_receipt_sha256": (
+                _FIXED_A8_R4_TERMINAL_RECEIPT_SHA256["authorization"]
+            ),
+            "r4_attempt_start_raw_sha256": (
+                _FIXED_A8_R4_TERMINAL_RAW_SHA256["attempt_start"]
+            ),
+            "r4_attempt_start_receipt_sha256": (
+                _FIXED_A8_R4_TERMINAL_RECEIPT_SHA256["attempt_start"]
+            ),
+            "r4_admission_raw_sha256": (
+                _FIXED_A8_R4_TERMINAL_RAW_SHA256["admission"]
+            ),
+            "r4_admission_receipt_sha256": (
+                _FIXED_A8_R4_TERMINAL_RECEIPT_SHA256["admission"]
+            ),
+            "r4_failure_raw_sha256": (
+                _FIXED_A8_R4_TERMINAL_RAW_SHA256["failure"]
+            ),
+            "r4_failure_receipt_sha256": (
+                _FIXED_A8_R4_TERMINAL_RECEIPT_SHA256["failure"]
+            ),
+            "r4_failure_code": _FIXED_A8_R4_FAILURE_CODE,
+            "r4_failure_phase": _FIXED_A8_R4_FAILURE_PHASE,
+            "r4_failure_detail_sha256": _FIXED_A8_R4_FAILURE_DETAIL_SHA256,
+        }
+        formatted_digest_fields = (
+            "incident_diagnostic_sha256",
+            "a8_validation_receipt_sha256",
+            "actor_report_sha256",
+            "errata_report_sha256",
+            "live_bundle_sha256",
+        )
+        r5_commit = admission.get("r5_amendment_commit")
+        if (
+            len(expected_keys) != 43
+            or set(admission) != expected_keys
+            or basis_commit != _FIXED_A8_R3_BASIS_COMMIT
+            or run_id != _FIXED_A8_R3_RUN_ID
+            or ledger_id != _FIXED_A8_R3_LEDGER_ID
+            or admission.get("parent_r4_amendment_commit")
+            != _FIXED_A8_R5_PARENT_AMENDMENT_COMMIT
+            or type(r5_commit) is not str
+            or re.fullmatch(r"[0-9a-f]{40}", r5_commit) is None
+            or r5_commit
+            in {
+                basis_commit,
+                "0349131599a688470c15eded51f942eefeded392",
+                "ec7c04cf62190558c72448639d7e3cd13a5b6903",
+                "52a4a61934a73c70dc09b919cae377db166eaedf",
+                _FIXED_A8_R4_PARENT_AMENDMENT_COMMIT,
+                _FIXED_A8_R5_PARENT_AMENDMENT_COMMIT,
+            }
+            or admission.get("recovery_attempt_ordinal") != 5
+            or admission.get("continuation_action")
+            != "CODE_AMENDMENT_RECOVERY_CONTINUATION"
+            or admission.get("cross_basis_recovery_authorized") is not True
+            or admission.get("formal_identity_entropy_draw_count") != 0
+            or admission.get("complete_seed_resume_only") is not True
+            or admission.get("ordinary_execute_allowed") is not False
+            or admission.get("redraw_allowed") is not False
+            or admission.get("m3_start_allowed") is not False
+            or admission.get("prevalidated_report_basis") is not True
+            or admission.get("prevalidated_transaction_bundle") is not True
+            or len(dict(admission["unchanged_a8_input_sha256"]))
+            != _FIXED_A8_R3_UNCHANGED_INPUT_COUNT
+            or admission.get("unchanged_a8_input_sha256_root")
+            != _FIXED_A8_R3_UNCHANGED_INPUT_ROOT
+            or any(
+                type(admission.get(name)) is not str
+                or re.fullmatch(r"[0-9a-f]{64}", str(admission.get(name)))
+                is None
+                for name in formatted_digest_fields
+            )
+            or any(
+                admission.get(name) != value
+                for name, value in expected_r4_fields.items()
+            )
+        ):
+            _fail(
+                FAIL_RECOVERY_SOURCE_ADMISSION,
+                "attempt-5 recovery source admission provenance differs",
+            )
     return admission
 
 
@@ -6915,6 +7347,7 @@ def _continue_pre_stage_pending_recovery_core_v1(
         in {
             "hegel-phase3-m25-a8-r3-source-admission/1",
             _FIXED_A8_R4_SOURCE_ADMISSION_SCHEMA,
+            _FIXED_A8_R5_SOURCE_ADMISSION_SCHEMA,
         }
     )
     if prevalidated_recovery_admitted and (
@@ -7079,6 +7512,7 @@ def _continue_pre_stage_pending_recovery_core_v1(
     actors_started = False
     actors_absent = False
     destruction_authorized = False
+    transaction_close_primary: BaseException | None = None
     try:
         actors.prepare_pending_recovery(recovery.run_id)
         actors.start()
@@ -7200,6 +7634,7 @@ def _continue_pre_stage_pending_recovery_core_v1(
             _fail(FAIL_PUBLICATION, "recovered evidence/promotion replay differs")
         return published_payload, dict(published_promotion)
     except BaseException as original:
+        transaction_close_primary = original
         if actors_started and not actors_absent:
             try:
                 if destruction_authorized:
@@ -7207,12 +7642,25 @@ def _continue_pre_stage_pending_recovery_core_v1(
                 else:
                     actors.stop_for_recovery_and_verify_absent()
             except BaseException as cleanup:
-                if isinstance(cleanup, FormalContainerExecutorError):
-                    raise cleanup from original
-                _fail(FAIL_CONTAINER, f"prestage recovery cleanup raised {type(cleanup).__name__}")
+                actor_cleanup_primary = combine_formal_failures_v1(
+                    original,
+                    cleanup,
+                    phase="PRESTAGE_RECOVERY_ACTOR_CLEANUP",
+                )
+                transaction_close_primary = actor_cleanup_primary
+                raise actor_cleanup_primary from original
         raise
     finally:
-        transaction.close_lock()
+        try:
+            transaction.close_lock()
+        except BaseException as cleanup:
+            if transaction_close_primary is not None:
+                raise combine_formal_failures_v1(
+                    transaction_close_primary,
+                    cleanup,
+                    phase="PRESTAGE_RECOVERY_TRANSACTION_LOCK_CLOSE",
+                ) from transaction_close_primary
+            raise
 
 
 def continue_pre_stage_pending_recovery_v1(
@@ -7356,9 +7804,11 @@ def _continue_post_stage_transaction_recovery_core_v1(
                     else:
                         actors.stop_for_recovery_and_verify_absent()
                 except BaseException as cleanup:
-                    if isinstance(cleanup, FormalContainerExecutorError):
-                        raise cleanup from original
-                    _fail(FAIL_CONTAINER, f"post-stage actor cleanup raised {type(cleanup).__name__}")
+                    raise combine_formal_failures_v1(
+                        original,
+                        cleanup,
+                        phase="POST_STAGE_RECOVERY_ACTOR_CLEANUP",
+                    ) from original
             raise
     else:
         if marker != expected_marker:
@@ -9803,17 +10253,37 @@ class DockerCeremonyActorsV1(CeremonyActorsV1, AbstractContextManager["DockerCer
                 try:
                     self.close()
                 except BaseException as cleanup:
-                    raise cleanup from original
+                    raise combine_formal_failures_v1(
+                        original,
+                        cleanup,
+                        phase="DOCKER_ACTOR_START_CLEANUP",
+                    ) from original
             raise
 
     def _start_with_local_runtime(self) -> "DockerCeremonyActorsV1":
         if self._recovery_mode:
             self._load_committed_profile()
-            # A host power loss may leave the 0700 custody tree owned by the
-            # container UID.  This administrative step handles only metadata
-            # ownership and never reads the seed.
-            self._custody_handed_off = True
-            self._reclaim_custody_from_actor()
+            # Recovery acquisition owns the sole 65534 -> host transition.
+            # Its anchor-bound reclaimer prepares the exact committed seccomp
+            # snapshot before CAP_CHOWN is used.  Actor start must neither
+            # repeat that mutation nor attempt an unanchored reclaim before
+            # ``_prepare_inputs`` has established its runtime snapshots.
+            try:
+                recovered_custody = self.custody_directory.lstat()
+            except OSError as exc:
+                _fail(FAIL_CUSTODY, f"recovery custody root is absent: {exc}")
+            if (
+                not stat.S_ISDIR(recovered_custody.st_mode)
+                or stat.S_IMODE(recovered_custody.st_mode) != 0o700
+                or recovered_custody.st_uid != os.geteuid()
+                or recovered_custody.st_gid != os.getegid()
+            ):
+                _fail(
+                    FAIL_CUSTODY,
+                    "recovery custody must be anchor-reclaimed to the exact "
+                    "host owner before actor start",
+                )
+            self._custody_handed_off = False
         try:
             self._custody_durability_receipt = MappingProxyType(
                 validate_linux_local_durable_custody_v1(
@@ -9932,7 +10402,11 @@ class DockerCeremonyActorsV1(CeremonyActorsV1, AbstractContextManager["DockerCer
             try:
                 self.close()
             except BaseException as cleanup:
-                raise cleanup from original
+                raise combine_formal_failures_v1(
+                    original,
+                    cleanup,
+                    phase="DOCKER_ACTOR_LIVE_SET_CLEANUP",
+                ) from original
             raise
         return self
 
@@ -10236,22 +10710,42 @@ class DockerCeremonyActorsV1(CeremonyActorsV1, AbstractContextManager["DockerCer
             )
             if listed.returncode != 0 or listed.stdout.strip():
                 failures.append("actor-or-labelled-descendant-remains")
+        custody_reclaim_error: FormalContainerExecutorError | None = None
         try:
             self._reclaim_custody_from_actor()
-        except FormalContainerExecutorError:
+        except FormalContainerExecutorError as exc:
+            custody_reclaim_error = exc
             failures.append("custody-reclaim-failed")
         marker_path = self.custody_directory / "split_seed_instantiation.marker"
         marker_error: str | None = None
         marker_state = "ABSENT"
-        if marker_path.exists() or marker_path.is_symlink():
+        if custody_reclaim_error is not None:
+            # A 0700 tree may still belong to the actor UID.  Probing with
+            # ``Path.exists`` would collapse EACCES into false and could
+            # misclassify a PENDING seed as ABSENT, authorizing volume erasure.
+            marker_state = "INVALID_RETAIN"
+            marker_error = "CUSTODY_RECLAIM_FAILED"
+        else:
             try:
-                marker_state = read_marker_snapshot_v1(marker_path).state
-            except Exception as exc:
-                # Malformed/unreadable marker state can conceal an irreversible
-                # seed choice.  Retain the private volumes and make cleanup
-                # fatal; never infer ABSENT from a parse or permission error.
+                marker_path.lstat()
+            except FileNotFoundError:
+                pass
+            except OSError as exc:
                 marker_state = "INVALID_RETAIN"
                 marker_error = type(exc).__name__
+            else:
+                try:
+                    marker_state = read_marker_snapshot_v1(marker_path).state
+                except Exception as exc:
+                    # Malformed/unreadable marker state can conceal an
+                    # irreversible seed choice.  Retain the private volumes
+                    # and make cleanup fatal; never infer ABSENT from a parse
+                    # or permission error.
+                    marker_state = "INVALID_RETAIN"
+                    marker_error = type(exc).__name__
+        if marker_state == "INVALID_RETAIN" and marker_error is None:
+            # Defensive totality: every invalid state carries a stable reason.
+            marker_error = "UNKNOWN_MARKER_ERROR"
 
         destroy_volumes = marker_state == "ABSENT" or (
             marker_state == "COMPLETE" and self._marker_completed_after_staging
@@ -10323,7 +10817,20 @@ class DockerCeremonyActorsV1(CeremonyActorsV1, AbstractContextManager["DockerCer
             except FormalContainerExecutorError:
                 failures.append("complete-custody-retention-verification-failed")
         if failures:
-            _fail(FAIL_CONTAINER, "container cleanup verification failed: " + ",".join(failures))
+            if failures == ["custody-reclaim-failed"]:
+                assert custody_reclaim_error is not None
+                raise custody_reclaim_error
+            aggregate = FormalContainerExecutorError(
+                FAIL_CONTAINER,
+                "container cleanup verification failed: " + ",".join(failures),
+            )
+            if custody_reclaim_error is not None:
+                raise combine_formal_failures_v1(
+                    custody_reclaim_error,
+                    aggregate,
+                    phase="DOCKER_ACTOR_CLOSE_RECLAIM",
+                ) from custody_reclaim_error
+            raise aggregate
         self._containers.clear()
         self._container_names.clear()
         self._live_actor_set_qualified = False
@@ -12440,6 +12947,7 @@ def execute_formal_container_ceremony_v1(
     actors_started = False
     actors_absent = False
     private_state_destruction_authorized = False
+    transaction_close_primary: BaseException | None = None
     try:
         transaction.reserve()
         actors.start()
@@ -12517,6 +13025,7 @@ def execute_formal_container_ceremony_v1(
             _fail(FAIL_PUBLICATION, "published evidence/promotion replay differs")
         return published_payload, published_promotion
     except BaseException as original:
+        transaction_close_primary = original
         if actors_started and not actors_absent:
             try:
                 if private_state_destruction_authorized:
@@ -12524,12 +13033,25 @@ def execute_formal_container_ceremony_v1(
                 else:
                     actors.stop_for_recovery_and_verify_absent()
             except BaseException as cleanup:
-                if isinstance(cleanup, FormalContainerExecutorError):
-                    raise cleanup from original
-                _fail(FAIL_CONTAINER, f"actor cleanup raised {type(cleanup).__name__}")
+                actor_cleanup_primary = combine_formal_failures_v1(
+                    original,
+                    cleanup,
+                    phase="FORMAL_CEREMONY_ACTOR_CLEANUP",
+                )
+                transaction_close_primary = actor_cleanup_primary
+                raise actor_cleanup_primary from original
         raise
     finally:
-        transaction.close_lock()
+        try:
+            transaction.close_lock()
+        except BaseException as cleanup:
+            if transaction_close_primary is not None:
+                raise combine_formal_failures_v1(
+                    transaction_close_primary,
+                    cleanup,
+                    phase="FORMAL_CEREMONY_TRANSACTION_LOCK_CLOSE",
+                ) from transaction_close_primary
+            raise
 
 
 __all__ = [
@@ -12543,16 +13065,19 @@ __all__ = [
     "FAIL_M3_QUALIFICATION_RECEIPT_MISMATCH",
     "FAIL_POST_STAGE_RECOVERY_UNRESOLVED",
     "FAIL_SYNTHETIC_PROMOTION",
+    "FormalContainerCompositeError",
     "FormalContainerExecutorError",
     "PUBLIC_REPLAY_SCHEMA",
     "SYNTHETIC_SCHEMA",
     "SyntheticCeremonyActorsV1",
     "build_actor_trust_v1",
+    "combine_formal_failures_v1",
     "acquire_pending_ceremony_recovery_v1",
     "abort_preseed_reserved_transaction_v1",
     "continue_pre_stage_pending_recovery_v1",
     "continue_post_stage_transaction_recovery_v1",
     "execute_formal_container_ceremony_v1",
+    "formal_failure_evidence_v1",
     "inspect_formal_ceremony_readiness_v1",
     "load_standalone_m3_qualification_receipt_v1",
     "load_gate_evidence_inputs_v1",

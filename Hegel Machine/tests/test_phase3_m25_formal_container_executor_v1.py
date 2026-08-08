@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from dataclasses import fields, replace
 import errno
+import fcntl
 from functools import lru_cache
 import hashlib
 import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import stat
 import subprocess
@@ -116,6 +118,8 @@ def _fixed_r3_unchanged_input_rows() -> tuple[tuple[str, str], ...]:
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r3_v1.py",
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_amendment_r4_v1.py",
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r4_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_amendment_r5_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r5_v1.py",
         "Hegel Machine/src/hegel_machine/phase3_m3_implementation_qualification_v1.py",
         "Hegel Machine/rust/formal_bridge_m25/src/lib.rs",
     }
@@ -141,6 +145,7 @@ def _recovery_source_admission(schema: str) -> dict[str, object]:
     if schema in {
         "hegel-phase3-m25-a8-r3-source-admission/1",
         executor._FIXED_A8_R4_SOURCE_ADMISSION_SCHEMA,
+        executor._FIXED_A8_R5_SOURCE_ADMISSION_SCHEMA,
     }:
         input_sha256 = dict(_fixed_r3_unchanged_input_rows())
         basis_commit = executor._FIXED_A8_R3_BASIS_COMMIT
@@ -295,6 +300,105 @@ def _recovery_source_admission(schema: str) -> dict[str, object]:
                 "live_bundle_sha256": "6b" * 32,
             }
         )
+    elif schema == executor._FIXED_A8_R5_SOURCE_ADMISSION_SCHEMA:
+        admission.update(
+            {
+                "parent_r4_amendment_commit": (
+                    executor._FIXED_A8_R5_PARENT_AMENDMENT_COMMIT
+                ),
+                "r5_amendment_commit": "9a" * 20,
+                "recovery_attempt_ordinal": 5,
+                "continuation_action": "CODE_AMENDMENT_RECOVERY_CONTINUATION",
+                "incident_diagnostic_sha256": "67" * 32,
+                "a8_validation_receipt_sha256": "68" * 32,
+                "ordinary_execute_allowed": False,
+                "redraw_allowed": False,
+                "m3_start_allowed": False,
+                "prevalidated_report_basis": True,
+                "prevalidated_transaction_bundle": True,
+                "actor_report_sha256": "69" * 32,
+                "errata_report_sha256": "6a" * 32,
+                "live_bundle_sha256": "6b" * 32,
+                "r4_terminal_chain_root_sha256": (
+                    executor._FIXED_A8_R4_TERMINAL_CHAIN_ROOT_SHA256
+                ),
+                "r4_preflight_raw_sha256": (
+                    executor._FIXED_A8_R4_TERMINAL_RAW_SHA256["preflight"]
+                ),
+                "r4_preflight_receipt_sha256": (
+                    executor._FIXED_A8_R4_TERMINAL_RECEIPT_SHA256[
+                        "preflight"
+                    ]
+                ),
+                "r4_incident_diagnostic_raw_sha256": (
+                    executor._FIXED_A8_R4_TERMINAL_RAW_SHA256[
+                        "incident_diagnostic"
+                    ]
+                ),
+                "r4_incident_diagnostic_receipt_sha256": (
+                    executor._FIXED_A8_R4_TERMINAL_RECEIPT_SHA256[
+                        "incident_diagnostic"
+                    ]
+                ),
+                "r4_a8_validation_raw_sha256": (
+                    executor._FIXED_A8_R4_TERMINAL_RAW_SHA256[
+                        "a8_validation"
+                    ]
+                ),
+                "r4_a8_validation_receipt_sha256": (
+                    executor._FIXED_A8_R4_TERMINAL_RECEIPT_SHA256[
+                        "a8_validation"
+                    ]
+                ),
+                "r4_authorization_request_raw_sha256": (
+                    executor._FIXED_A8_R4_TERMINAL_RAW_SHA256[
+                        "authorization_request"
+                    ]
+                ),
+                "r4_authorization_request_receipt_sha256": (
+                    executor._FIXED_A8_R4_TERMINAL_RECEIPT_SHA256[
+                        "authorization_request"
+                    ]
+                ),
+                "r4_authorization_raw_sha256": (
+                    executor._FIXED_A8_R4_TERMINAL_RAW_SHA256[
+                        "authorization"
+                    ]
+                ),
+                "r4_authorization_receipt_sha256": (
+                    executor._FIXED_A8_R4_TERMINAL_RECEIPT_SHA256[
+                        "authorization"
+                    ]
+                ),
+                "r4_attempt_start_raw_sha256": (
+                    executor._FIXED_A8_R4_TERMINAL_RAW_SHA256["attempt_start"]
+                ),
+                "r4_attempt_start_receipt_sha256": (
+                    executor._FIXED_A8_R4_TERMINAL_RECEIPT_SHA256[
+                        "attempt_start"
+                    ]
+                ),
+                "r4_admission_raw_sha256": (
+                    executor._FIXED_A8_R4_TERMINAL_RAW_SHA256["admission"]
+                ),
+                "r4_admission_receipt_sha256": (
+                    executor._FIXED_A8_R4_TERMINAL_RECEIPT_SHA256[
+                        "admission"
+                    ]
+                ),
+                "r4_failure_raw_sha256": (
+                    executor._FIXED_A8_R4_TERMINAL_RAW_SHA256["failure"]
+                ),
+                "r4_failure_receipt_sha256": (
+                    executor._FIXED_A8_R4_TERMINAL_RECEIPT_SHA256["failure"]
+                ),
+                "r4_failure_code": executor._FIXED_A8_R4_FAILURE_CODE,
+                "r4_failure_phase": executor._FIXED_A8_R4_FAILURE_PHASE,
+                "r4_failure_detail_sha256": (
+                    executor._FIXED_A8_R4_FAILURE_DETAIL_SHA256
+                ),
+            }
+        )
     return admission
 
 
@@ -305,9 +409,10 @@ def _recovery_source_admission(schema: str) -> dict[str, object]:
         "hegel-phase3-m25-a8-r2-source-admission/1",
         "hegel-phase3-m25-a8-r3-source-admission/1",
         executor._FIXED_A8_R4_SOURCE_ADMISSION_SCHEMA,
+        executor._FIXED_A8_R5_SOURCE_ADMISSION_SCHEMA,
     ),
 )
-def test_recovery_source_admission_accepts_only_frozen_r1_r2_r3_or_r4_scope(
+def test_recovery_source_admission_accepts_only_frozen_scopes(
     schema: str,
 ) -> None:
     admission = _recovery_source_admission(schema)
@@ -468,6 +573,80 @@ def test_attempt4_source_admission_rejects_wrong_exact_key_set(
     assert captured.value.code == executor.FAIL_RECOVERY_SOURCE_ADMISSION
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("parent_r4_amendment_commit", "00" * 20),
+        ("r5_amendment_commit", executor._FIXED_A8_R5_PARENT_AMENDMENT_COMMIT),
+        ("recovery_attempt_ordinal", 4),
+        ("continuation_action", "RETRY"),
+        ("r4_terminal_chain_root_sha256", "00" * 32),
+        ("r4_attempt_start_raw_sha256", "00" * 32),
+        ("r4_admission_receipt_sha256", "00" * 32),
+        ("r4_failure_code", "FAIL_WRONG"),
+        ("r4_failure_phase", "WRONG_PHASE"),
+        ("r4_failure_detail_sha256", "00" * 32),
+        ("ordinary_execute_allowed", True),
+        ("redraw_allowed", True),
+        ("m3_start_allowed", True),
+    ),
+)
+def test_attempt5_source_admission_rejects_terminal_or_authority_drift(
+    field: str,
+    value: object,
+) -> None:
+    admission = _recovery_source_admission(
+        executor._FIXED_A8_R5_SOURCE_ADMISSION_SCHEMA
+    )
+    assert len(admission) == 43
+    admission[field] = value
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        executor._validate_recovery_source_admission_v1(
+            admission,
+            basis_commit=str(admission["basis_commit"]),
+            run_id=bytes.fromhex(str(admission["run_id_hex"])),
+            ledger_id=bytes.fromhex(str(admission["ledger_id_hex"])),
+        )
+    assert captured.value.code == executor.FAIL_RECOVERY_SOURCE_ADMISSION
+
+
+@pytest.mark.parametrize("mutation", ("extension", "missing"))
+def test_attempt5_source_admission_is_exactly_43_keys(mutation: str) -> None:
+    admission = _recovery_source_admission(
+        executor._FIXED_A8_R5_SOURCE_ADMISSION_SCHEMA
+    )
+    assert len(admission) == 43
+    if mutation == "extension":
+        admission["unfrozen_extension"] = True
+    else:
+        del admission["r4_authorization_receipt_sha256"]
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        executor._validate_recovery_source_admission_v1(
+            admission,
+            basis_commit=str(admission["basis_commit"]),
+            run_id=bytes.fromhex(str(admission["run_id_hex"])),
+            ledger_id=bytes.fromhex(str(admission["ledger_id_hex"])),
+        )
+    assert captured.value.code == executor.FAIL_RECOVERY_SOURCE_ADMISSION
+
+
+def test_attempt5_fixed_r4_terminal_digest_registry_is_exact_64_hex() -> None:
+    assert set(executor._FIXED_A8_R4_TERMINAL_RAW_SHA256) == set(
+        executor._FIXED_A8_R4_TERMINAL_RECEIPT_SHA256
+    )
+    assert len(executor._FIXED_A8_R4_TERMINAL_RAW_SHA256) == 8
+    digests = (
+        *executor._FIXED_A8_R4_TERMINAL_RAW_SHA256.values(),
+        *executor._FIXED_A8_R4_TERMINAL_RECEIPT_SHA256.values(),
+        executor._FIXED_A8_R4_TERMINAL_CHAIN_ROOT_SHA256,
+        executor._FIXED_A8_R4_FAILURE_DETAIL_SHA256,
+    )
+    assert all(
+        len(digest) == 64 and re.fullmatch(r"[0-9a-f]{64}", digest)
+        for digest in digests
+    )
+
+
 def test_r31_commit_context_requires_current_head_as_sole_child_of_r3(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -602,6 +781,89 @@ def test_r4_commit_context_accepts_exact_current_child_and_validator_blob(
     )
 
 
+@pytest.mark.parametrize("fault", ("head", "parent", "validator_tree"))
+def test_r5_commit_context_requires_current_head_as_sole_child_of_r4(
+    fault: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    r5_commit = "9a" * 20
+    admission = {"r5_amendment_commit": r5_commit}
+
+    def fake_run(arguments: list[str], **_kwargs: object) -> SimpleNamespace:
+        if arguments[1:3] == ["rev-parse", "--verify"]:
+            head = "00" * 20 if fault == "head" else r5_commit
+            stdout = (head + "\n").encode("ascii")
+        elif arguments[1:4] == ["rev-list", "--parents", "-n"]:
+            parent = (
+                "00" * 20
+                if fault == "parent"
+                else executor._FIXED_A8_R5_PARENT_AMENDMENT_COMMIT
+            )
+            stdout = (r5_commit + " " + parent + "\n").encode("ascii")
+        elif arguments[1] == "ls-tree":
+            mode = "100755" if fault == "validator_tree" else "100644"
+            stdout = (
+                mode
+                + " blob "
+                + "11" * 20
+                + "\t"
+                + executor._FIXED_A8_R3_VALIDATOR_REPOSITORY_PATH
+                + "\n"
+            ).encode("utf-8")
+        else:
+            raise AssertionError(arguments)
+        return SimpleNamespace(returncode=0, stdout=stdout, stderr=b"")
+
+    monkeypatch.setattr(executor.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        executor,
+        "_fixed_a8_r3_git_blob_v1",
+        lambda _commit, _path: b"validator",
+    )
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        executor._validate_fixed_a8_r5_commit_context_v1(admission)
+    assert captured.value.code == executor.FAIL_RECOVERY_SOURCE_ADMISSION
+
+
+def test_r5_commit_context_accepts_exact_current_child_and_validator_blob(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    r5_commit = "9a" * 20
+    admission = {"r5_amendment_commit": r5_commit}
+
+    def fake_run(arguments: list[str], **_kwargs: object) -> SimpleNamespace:
+        if arguments[1:3] == ["rev-parse", "--verify"]:
+            stdout = (r5_commit + "\n").encode("ascii")
+        elif arguments[1:4] == ["rev-list", "--parents", "-n"]:
+            stdout = (
+                r5_commit
+                + " "
+                + executor._FIXED_A8_R5_PARENT_AMENDMENT_COMMIT
+                + "\n"
+            ).encode("ascii")
+        elif arguments[1] == "ls-tree":
+            stdout = (
+                "100644 blob "
+                + "11" * 20
+                + "\t"
+                + executor._FIXED_A8_R3_VALIDATOR_REPOSITORY_PATH
+                + "\n"
+            ).encode("utf-8")
+        else:
+            raise AssertionError(arguments)
+        return SimpleNamespace(returncode=0, stdout=stdout, stderr=b"")
+
+    monkeypatch.setattr(executor.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        executor,
+        "_fixed_a8_r3_git_blob_v1",
+        lambda _commit, _path: b"r5-validator",
+    )
+    assert executor._validate_fixed_a8_r5_commit_context_v1(admission) == (
+        b"r5-validator"
+    )
+
+
 def test_fixed_a8_validator_dispatches_r4_schema_to_r4_commit_context(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -661,6 +923,65 @@ def test_fixed_a8_validator_dispatches_r4_schema_to_r4_commit_context(
         )
 
 
+def test_fixed_a8_validator_dispatches_r5_schema_to_r5_commit_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class R5ContextSelected(RuntimeError):
+        pass
+
+    actor_report = {"actor_reports": []}
+    errata_report = {"status": "PASS"}
+    transaction_bundle = {"bundle": "fixed"}
+    unchanged = {"Hegel Machine/frozen.py": "11" * 32}
+    unchanged_root = hashlib.sha256(
+        executor._canonical_json(unchanged)
+    ).hexdigest()
+    admission = {
+        "schema": executor._FIXED_A8_R5_SOURCE_ADMISSION_SCHEMA,
+        "actor_report_sha256": hashlib.sha256(
+            executor._canonical_json(actor_report)
+        ).hexdigest(),
+        "errata_report_sha256": hashlib.sha256(
+            executor._canonical_json(errata_report)
+        ).hexdigest(),
+        "live_bundle_sha256": hashlib.sha256(
+            executor._canonical_json(transaction_bundle)
+        ).hexdigest(),
+        "unchanged_a8_input_sha256": unchanged,
+        "unchanged_a8_input_sha256_root": unchanged_root,
+    }
+    monkeypatch.setattr(executor, "_FIXED_A8_R3_UNCHANGED_INPUT_COUNT", 1)
+    monkeypatch.setattr(
+        executor, "_FIXED_A8_R3_UNCHANGED_INPUT_ROOT", unchanged_root
+    )
+    monkeypatch.setattr(
+        executor,
+        "_validate_fixed_a8_r4_commit_context_v1",
+        lambda _admission: (_ for _ in ()).throw(
+            AssertionError("R4 context selected for R5 schema")
+        ),
+    )
+    monkeypatch.setattr(
+        executor,
+        "_validate_fixed_a8_r5_commit_context_v1",
+        lambda _admission: (_ for _ in ()).throw(R5ContextSelected()),
+    )
+    with pytest.raises(R5ContextSelected):
+        executor._run_fixed_a8_r3_validator_v1(
+            source_admission=admission,
+            actor_report=actor_report,
+            errata_report=errata_report,
+            transaction_bundle=transaction_bundle,
+            protocol_bundle_content_id=b"b" * 32,
+            qualification_key_ids={
+                1: b"1" * 16,
+                2: b"2" * 16,
+                3: b"3" * 16,
+                4: b"4" * 16,
+            },
+        )
+
+
 def _minimal_pending_recovery_for_r3_replay_guard(
     tmp_path: Path,
 ) -> executor.PendingCeremonyRecoveryV1:
@@ -686,6 +1007,7 @@ def _minimal_pending_recovery_for_r3_replay_guard(
     (
         "hegel-phase3-m25-a8-r3-source-admission/1",
         executor._FIXED_A8_R4_SOURCE_ADMISSION_SCHEMA,
+        executor._FIXED_A8_R5_SOURCE_ADMISSION_SCHEMA,
     ),
 )
 def test_prevalidated_recovery_rejects_arbitrary_public_replay_before_validator_or_staging(
@@ -791,6 +1113,24 @@ def _configure_fake_actor_identity(
     if backend._transaction_run_id is None:
         backend._transaction_run_id = b"r" * 16
     _install_fake_docker_boundary(backend, root)
+
+
+def _install_exact_pending_recovery_custody_v1(custody: Path) -> Path:
+    custody.mkdir(mode=0o700)
+    rows = {
+        "phase3_m25_ceremony.lock": b"lock\n",
+        f"opaque-run-{'12' * 16}.reserved": b"run\n",
+        f"opaque-ledger-{'34' * 16}.reserved": b"ledger\n",
+        "split_seed_instantiation.marker": b"pending-marker\n",
+        "split_seed_generation.intent": b"seed-intent\n",
+        "split_seed_generation.complete": b"seed-complete\n",
+        "split_master_seed.bin": b"s" * 32,
+    }
+    for name, payload in rows.items():
+        path = custody / name
+        path.write_bytes(payload)
+        path.chmod(0o600)
+    return custody / "split_master_seed.bin"
 
 
 def test_readiness_rejects_static_replayers_as_execution_bindings(monkeypatch) -> None:
@@ -1404,6 +1744,582 @@ def test_failed_actor_start_attempt_cannot_be_retried_on_same_backend(
         backend.start()
     assert captured.value.code == executor.FAIL_CONTAINER
     assert cleanup_calls == 1
+
+
+def test_anchor_reclaimed_host_owned_recovery_start_never_reclaims_or_reads_seed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    custody = tmp_path / "custody"
+    seed = _install_exact_pending_recovery_custody_v1(custody)
+    backend = executor.DockerCeremonyActorsV1(
+        basis_commit="12" * 20,
+        custody_directory=custody,
+        rust_formal_replay_binary=tmp_path / "rust-replay",
+        timestamp=1,
+    )
+    backend._recovery_mode = True
+    _install_fake_docker_boundary(backend, tmp_path)
+    monkeypatch.setattr(backend, "_load_committed_profile", lambda: None)
+    monkeypatch.setattr(
+        executor,
+        "validate_linux_local_durable_custody_v1",
+        lambda *_args, **_kwargs: {"schema": "test-only"},
+    )
+    monkeypatch.setattr(
+        backend,
+        "_reclaim_custody_from_actor",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("actor start repeated anchor-bound reclaim")
+        ),
+    )
+
+    class ReachedPrepareInputs(RuntimeError):
+        pass
+
+    monkeypatch.setattr(
+        backend,
+        "_prepare_inputs",
+        lambda: (_ for _ in ()).throw(ReachedPrepareInputs()),
+    )
+    monkeypatch.setattr(backend, "close", lambda: None)
+    original_read_bytes = Path.read_bytes
+
+    def guarded_read_bytes(path: Path) -> bytes:
+        if path == seed:
+            raise AssertionError("recovery start read the raw seed")
+        return original_read_bytes(path)
+
+    monkeypatch.setattr(Path, "read_bytes", guarded_read_bytes)
+    with pytest.raises(ReachedPrepareInputs):
+        backend._start_with_local_runtime()
+    assert backend._custody_handed_off is False
+    assert backend._containers == {}
+
+
+def test_recovery_start_rejects_65534_owner_without_anchor_before_actor_creation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    custody = tmp_path / "custody"
+    _install_exact_pending_recovery_custody_v1(custody)
+    backend = executor.DockerCeremonyActorsV1(
+        basis_commit="12" * 20,
+        custody_directory=custody,
+        rust_formal_replay_binary=tmp_path / "rust-replay",
+        timestamp=1,
+    )
+    backend._recovery_mode = True
+    _install_fake_docker_boundary(backend, tmp_path)
+    monkeypatch.setattr(backend, "_load_committed_profile", lambda: None)
+    original_lstat = Path.lstat
+
+    def handed_off_lstat(path: Path):
+        metadata = original_lstat(path)
+        if path == custody:
+            values = list(metadata)
+            values[4] = 65534
+            values[5] = 65534
+            return os.stat_result(values)
+        return metadata
+
+    prepare_called = False
+
+    def forbidden_prepare() -> None:
+        nonlocal prepare_called
+        prepare_called = True
+
+    monkeypatch.setattr(Path, "lstat", handed_off_lstat)
+    monkeypatch.setattr(backend, "_prepare_inputs", forbidden_prepare)
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        backend._start_with_local_runtime()
+    assert captured.value.code == executor.FAIL_CUSTODY
+    assert "anchor-reclaimed" in captured.value.detail
+    assert prepare_called is False
+    assert backend._containers == {}
+
+
+def test_structured_cleanup_failure_preserves_both_causes_without_raw_details(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = executor.DockerCeremonyActorsV1(
+        basis_commit="12" * 20,
+        custody_directory=tmp_path,
+        rust_formal_replay_binary=tmp_path / "rust-replay",
+        timestamp=1,
+    )
+    primary = executor.FormalContainerExecutorError(
+        executor.FAIL_CONTAINER,
+        "frozen runtime seccomp snapshot is absent",
+    )
+    cleanup = executor.FormalContainerExecutorError(
+        executor.FAIL_CONTAINER,
+        "cleanup detail must be hashed",
+    )
+
+    def prepare_runtime() -> None:
+        backend._temporary = object()  # type: ignore[assignment]
+
+    monkeypatch.setattr(backend, "_ensure_local_runtime", prepare_runtime)
+    monkeypatch.setattr(
+        backend,
+        "_start_with_local_runtime",
+        lambda: (_ for _ in ()).throw(primary),
+    )
+    monkeypatch.setattr(
+        backend,
+        "close",
+        lambda: (_ for _ in ()).throw(cleanup),
+    )
+    with pytest.raises(executor.FormalContainerCompositeError) as captured:
+        backend.start()
+    composite = captured.value
+    assert composite.primary_error is primary
+    assert composite.cleanup_error is cleanup
+    assert composite.combination_phase == "DOCKER_ACTOR_START_CLEANUP"
+    evidence = executor.formal_failure_evidence_v1(composite)
+    assert evidence["kind"] == "PRIMARY_AND_CLEANUP"
+    assert evidence["primary"] == {
+        "schema": "hegel-phase3-m25-formal-failure-evidence/1",
+        "kind": "SINGLE",
+        "exception_type": "FormalContainerExecutorError",
+        "code": executor.FAIL_CONTAINER,
+        "detail_sha256": hashlib.sha256(primary.detail.encode()).hexdigest(),
+    }
+    serialized = executor._canonical_json(evidence)
+    assert primary.detail.encode() not in serialized
+    assert cleanup.detail.encode() not in serialized
+
+
+def test_formal_failure_evidence_has_fixed_depth_and_node_caps() -> None:
+    leaf: BaseException = executor.FormalContainerExecutorError(
+        executor.FAIL_CONTAINER,
+        "deep leaf",
+    )
+    deep = leaf
+    for _ in range(executor._FORMAL_FAILURE_EVIDENCE_MAX_DEPTH + 5):
+        deep = executor.combine_formal_failures_v1(
+            deep,
+            executor.FormalContainerExecutorError(
+                executor.FAIL_CONTAINER,
+                "cleanup leaf",
+            ),
+            phase="DEPTH_TEST",
+        )
+    deep_evidence = executor.formal_failure_evidence_v1(deep)
+
+    def evidence_rows(row: dict[str, object]) -> list[dict[str, object]]:
+        rows = [row]
+        if row.get("kind") == "PRIMARY_AND_CLEANUP":
+            rows.extend(evidence_rows(row["primary"]))  # type: ignore[arg-type]
+            rows.extend(evidence_rows(row["cleanup"]))  # type: ignore[arg-type]
+        return rows
+
+    deep_rows = evidence_rows(deep_evidence)
+    assert any(
+        row.get("kind") == "ERROR_GRAPH_TERMINAL"
+        and row.get("reason") == "MAX_DEPTH"
+        for row in deep_rows
+    )
+    assert len(deep_rows) <= executor._FORMAL_FAILURE_EVIDENCE_MAX_NODES
+
+    def full_tree(depth: int) -> BaseException:
+        if depth == 0:
+            return executor.FormalContainerExecutorError(
+                executor.FAIL_CONTAINER,
+                "wide leaf",
+            )
+        return executor.combine_formal_failures_v1(
+            full_tree(depth - 1),
+            full_tree(depth - 1),
+            phase="NODE_TEST",
+        )
+
+    wide_rows = evidence_rows(executor.formal_failure_evidence_v1(full_tree(9)))
+    assert any(
+        row.get("kind") == "ERROR_GRAPH_TERMINAL"
+        and row.get("reason") == "MAX_NODES"
+        for row in wide_rows
+    )
+    assert len(wide_rows) <= executor._FORMAL_FAILURE_EVIDENCE_MAX_NODES
+
+
+def test_formal_failure_evidence_collapses_shared_graph_deterministically() -> None:
+    shared = executor.FormalContainerExecutorError(
+        executor.FAIL_CONTAINER,
+        "shared detail",
+    )
+    graph = executor.combine_formal_failures_v1(
+        shared,
+        shared,
+        phase="SHARED_GRAPH_TEST",
+    )
+    evidence = executor.formal_failure_evidence_v1(graph)
+    assert evidence["primary"]["kind"] == "SINGLE"  # type: ignore[index]
+    assert evidence["cleanup"] == {  # type: ignore[index]
+        "schema": "hegel-phase3-m25-formal-failure-evidence/1",
+        "kind": "ERROR_GRAPH_TERMINAL",
+        "reason": "REPEATED_NODE",
+        "exception_type": "FormalContainerExecutorError",
+    }
+
+
+def test_nonformal_failure_evidence_cannot_spoof_code_or_run_str() -> None:
+    class WrapperError(RuntimeError):
+        code = "FAIL_SPOOFED_FORMAL_CODE"
+
+        def __str__(self) -> str:
+            raise AssertionError("untrusted __str__ was called")
+
+    wrapped = WrapperError("wrapper-only recovery detail")
+    fixed_detail = "unexpected exception type WrapperError"
+    evidence = executor.formal_failure_evidence_v1(wrapped)
+    assert evidence == {
+        "schema": "hegel-phase3-m25-formal-failure-evidence/1",
+        "kind": "SINGLE",
+        "exception_type": "WrapperError",
+        "code": "WrapperError",
+        "detail_sha256": hashlib.sha256(fixed_detail.encode()).hexdigest(),
+    }
+    assert b"FAIL_SPOOFED_FORMAL_CODE" not in executor._canonical_json(evidence)
+
+
+def test_pending_recovery_context_preserves_body_and_close_failures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recovery = executor.PendingCeremonyRecoveryV1(
+        basis_commit="12" * 20,
+        run_id=b"r" * 16,
+        ledger_id=b"l" * 16,
+        marker_snapshot=MarkerSnapshot("PENDING", b"s" * 32, None, b"k" * 16, 7),
+        journal_state="RESERVED",
+        stage_directory=tmp_path / "stage",
+        custody_directory=tmp_path / "custody",
+        public_evidence_path=tmp_path / "evidence.json",
+        public_promotion_path=tmp_path / "promotion.json",
+        prestage_intent_fields=MappingProxyType({}),
+        prestage_intent_sha256="00" * 32,
+        actor_trust_checkpoint_fields=MappingProxyType({}),
+        lock_descriptor=-1,
+    )
+    primary = executor.FormalContainerExecutorError(
+        executor.FAIL_CUSTODY, "body primary"
+    )
+    cleanup = executor.FormalContainerExecutorError(
+        executor.FAIL_TRANSACTION_LOCK, "context close cleanup"
+    )
+    monkeypatch.setattr(
+        executor.PendingCeremonyRecoveryV1,
+        "close",
+        lambda _self: (_ for _ in ()).throw(cleanup),
+    )
+    with pytest.raises(executor.FormalContainerCompositeError) as captured:
+        with recovery:
+            raise primary
+    assert captured.value.combination_phase == "PENDING_RECOVERY_CONTEXT_CLOSE"
+    assert captured.value.primary_error is primary
+    assert captured.value.cleanup_error is cleanup
+
+
+def test_host_anchor_acquisition_preserves_primary_and_descriptor_close_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    evidence = (tmp_path / "evidence.json").resolve()
+    reservation = {
+        "schema": executor.OUTPUT_RESERVATION_SCHEMA,
+        "basis_commit": "12" * 20,
+        "run_id_hex": "72" * 16,
+        "output_kind": "evidence",
+        "output_path": str(evidence),
+        "state": "RESERVED_NOT_PUBLIC",
+    }
+    monkeypatch.setattr(executor, "_reject_caller_symlink_chain_v1", lambda *_a: None)
+    monkeypatch.setattr(
+        executor.FormalCeremonyTransactionV1,
+        "_read_canonical_regular_file",
+        lambda *_a, **_k: (executor._canonical_json(reservation), reservation),
+    )
+    monkeypatch.setattr(executor, "_commit", lambda value: value)
+    descriptor = 987654
+    monkeypatch.setattr(executor.os, "open", lambda *_a, **_k: descriptor)
+    primary = executor.FormalContainerExecutorError(
+        executor.FAIL_TRANSACTION_LOCK, "anchor flock primary"
+    )
+    cleanup = executor.FormalContainerExecutorError(
+        executor.FAIL_TRANSACTION_LOCK, "anchor descriptor close cleanup"
+    )
+    monkeypatch.setattr(
+        executor.fcntl,
+        "flock",
+        lambda *_a, **_k: (_ for _ in ()).throw(primary),
+    )
+    monkeypatch.setattr(
+        executor.os,
+        "close",
+        lambda value: (_ for _ in ()).throw(cleanup)
+        if value == descriptor
+        else None,
+    )
+    with pytest.raises(executor.FormalContainerCompositeError) as captured:
+        executor._acquire_host_recovery_anchor_v1(
+            custody_directory=tmp_path / "custody",
+            public_evidence_path=evidence,
+            public_promotion_path=tmp_path / "promotion.json",
+            actors=None,
+        )
+    assert captured.value.combination_phase == "HOST_RECOVERY_ANCHOR_ACQUISITION_CLOSE"
+    assert captured.value.primary_error is primary
+    assert captured.value.cleanup_error is cleanup
+
+
+def test_pending_recovery_acquisition_preserves_core_and_anchor_close_failures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    primary = executor.FormalContainerExecutorError(
+        executor.FAIL_CUSTODY, "pending acquisition primary"
+    )
+    cleanup = executor.FormalContainerExecutorError(
+        executor.FAIL_TRANSACTION_LOCK, "anchor close cleanup"
+    )
+    anchor = SimpleNamespace(
+        close_lock=lambda: (_ for _ in ()).throw(cleanup)
+    )
+    monkeypatch.setattr(
+        executor,
+        "_acquire_host_recovery_anchor_v1",
+        lambda **_kwargs: (anchor, {}),
+    )
+    monkeypatch.setattr(
+        executor,
+        "_acquire_pending_ceremony_recovery_core_v1",
+        lambda **_kwargs: (_ for _ in ()).throw(primary),
+    )
+    with pytest.raises(executor.FormalContainerCompositeError) as captured:
+        executor.acquire_pending_ceremony_recovery_v1(
+            custody_directory=tmp_path / "custody",
+            public_evidence_path=tmp_path / "evidence.json",
+            public_promotion_path=tmp_path / "promotion.json",
+        )
+    assert captured.value.combination_phase == "PENDING_RECOVERY_ACQUISITION_CLOSE"
+    assert captured.value.primary_error is primary
+    assert captured.value.cleanup_error is cleanup
+
+
+def test_prestage_recovery_preserves_actor_cleanup_then_transaction_close_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key_ids = {purpose: bytes([purpose]) * 16 for purpose in (1, 2, 3, 4)}
+    live_bundle = {"synthetic_test_bundle": True}
+    runtime_bindings = {"synthetic_runtime_binding": True}
+    recovery = executor.PendingCeremonyRecoveryV1(
+        basis_commit="12" * 20,
+        run_id=b"r" * 16,
+        ledger_id=b"l" * 16,
+        marker_snapshot=MarkerSnapshot("PENDING", b"s" * 32, None, b"k" * 16, 7),
+        journal_state="RESERVED",
+        stage_directory=tmp_path / "stage",
+        custody_directory=tmp_path / "custody",
+        public_evidence_path=tmp_path / "evidence.json",
+        public_promotion_path=tmp_path / "promotion.json",
+        prestage_intent_fields=MappingProxyType(
+            {
+                "created_at_unix_seconds": 7,
+                "trust_genesis_id_hex": "74" * 16,
+                "actor_qualification_report": {},
+                "errata_qualification_report": {},
+                "rust_bridge_dag_qualification_report_sha256": "71" * 32,
+                "live_actor_protocol_qualification_bundle_content_id": b"v" * 32,
+                "live_actor_protocol_qualification_bundle": live_bundle,
+                "live_actor_protocol_daemon_receipt_binding": b"d" * 32,
+                "runtime_binding_fields": runtime_bindings,
+            }
+        ),
+        prestage_intent_sha256="00" * 32,
+        actor_trust_checkpoint_fields=MappingProxyType({}),
+        lock_descriptor=41,
+    )
+    protocol = executor.ArchivedActorProtocolQualificationBindingV1(
+        "12" * 20,
+        b"v" * 32,
+        MappingProxyType(key_ids),
+        MappingProxyType(live_bundle),
+    )
+    monkeypatch.setattr(executor, "_PRESTAGE_RECOVERY_IMPLEMENTED", True)
+    monkeypatch.setattr(
+        executor, "_qualification_only_key_ids_from_intent_v1", lambda _intent: key_ids
+    )
+    monkeypatch.setattr(
+        executor, "build_qualified_formal_static_basis_v1", lambda *_a, **_k: object()
+    )
+    monkeypatch.setattr(executor, "require_formal_ceremony_ready_v1", lambda _b: {})
+    monkeypatch.setattr(executor, "validate_ceremony_admission_v1", lambda **_k: None)
+    monkeypatch.setattr(
+        executor,
+        "replay_transaction_local_actor_protocol_bundle_v1",
+        lambda **_k: protocol,
+    )
+    body_primary = executor.FormalContainerExecutorError(
+        executor.FAIL_CONTAINER, "post-start body primary"
+    )
+    actor_cleanup = executor.FormalContainerExecutorError(
+        executor.FAIL_CONTAINER, "actor cleanup failure"
+    )
+    lock_cleanup = executor.FormalContainerExecutorError(
+        executor.FAIL_TRANSACTION_LOCK, "transaction close failure"
+    )
+
+    class Actors:
+        authoritative = True
+
+        def unresolved_formal_blockers(self):
+            return ()
+
+        def bridge_qualification_report_id_v1(self):
+            return b"q" * 32
+
+        def prestage_runtime_binding_fields_v1(self, _roots):
+            return runtime_bindings
+
+        def prepare_pending_recovery(self, _run_id):
+            return None
+
+        def start(self):
+            return self
+
+        def validate_frozen_daemon_receipt_binding_v1(self, _binding):
+            raise body_primary
+
+        def stop_for_recovery_and_verify_absent(self):
+            raise actor_cleanup
+
+    transaction = SimpleNamespace(
+        close_lock=lambda: (_ for _ in ()).throw(lock_cleanup)
+    )
+    monkeypatch.setattr(
+        executor, "FormalCeremonyTransactionV1", lambda **_kwargs: transaction
+    )
+    with pytest.raises(executor.FormalContainerCompositeError) as captured:
+        executor._continue_pre_stage_pending_recovery_core_v1(
+            recovery=recovery,
+            actors=Actors(),
+        )
+    outer = captured.value
+    assert outer.combination_phase == "PRESTAGE_RECOVERY_TRANSACTION_LOCK_CLOSE"
+    assert outer.cleanup_error is lock_cleanup
+    inner = outer.primary_error
+    assert isinstance(inner, executor.FormalContainerCompositeError)
+    assert inner.combination_phase == "PRESTAGE_RECOVERY_ACTOR_CLEANUP"
+    assert inner.primary_error is body_primary
+    assert inner.cleanup_error is actor_cleanup
+
+
+def test_ordinary_execute_preserves_actor_cleanup_then_transaction_close_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commit = "12" * 20
+    formal_custody = tmp_path / "formal-custody"
+    qualification_custody = tmp_path / "qualification-custody"
+    formal_custody.mkdir(mode=0o700)
+    qualification_custody.mkdir(mode=0o700)
+    actors = executor.DockerCeremonyActorsV1(
+        basis_commit=commit,
+        custody_directory=formal_custody,
+        rust_formal_replay_binary=tmp_path / "rust-replay",
+        timestamp=7,
+    )
+    monkeypatch.setattr(executor, "_commit", lambda value: value)
+    monkeypatch.setattr(
+        executor, "build_qualified_formal_static_basis_v1", lambda _commit: object()
+    )
+    monkeypatch.setattr(executor, "require_formal_ceremony_ready_v1", lambda _b: {})
+    monkeypatch.setattr(executor, "validate_ceremony_admission_v1", lambda **_k: None)
+    monkeypatch.setattr(executor, "_PRESTAGE_RECOVERY_IMPLEMENTED", True)
+    monkeypatch.setattr(actors, "validate_rust_replay_binding", lambda _b: None)
+    monkeypatch.setattr(actors, "validate_rust_bridge_dag_binding", lambda: None)
+    monkeypatch.setattr(actors, "unresolved_formal_blockers", lambda: ())
+    monkeypatch.setattr(actors, "bridge_qualification_report_id_v1", lambda: b"q" * 32)
+    monkeypatch.setattr(
+        actors, "prestage_runtime_binding_fields_v1", lambda _roots: {}
+    )
+    monkeypatch.setattr(
+        executor, "_validate_prestage_runtime_bindings_v1", lambda value: value
+    )
+    monkeypatch.setattr(
+        executor,
+        "load_actor_protocol_archive_qualification_v1",
+        lambda _commit: SimpleNamespace(report={}),
+    )
+    monkeypatch.setattr(
+        executor, "require_m3_qualification_receipt_alignment_v1", lambda *_a: {}
+    )
+    live_protocol = SimpleNamespace(
+        report={},
+        bundle_content_id=b"v" * 32,
+        qualification_key_ids={
+            purpose: bytes([purpose]) * 16 for purpose in (1, 2, 3, 4)
+        },
+        canonical_bundle_bytes=b"{}",
+        daemon_receipt_binding=b"d" * 32,
+    )
+    monkeypatch.setattr(
+        executor, "qualify_live_actor_protocol_admission_v1", lambda **_k: live_protocol
+    )
+    monkeypatch.setattr(executor, "validate_commit_b_output_names_v1", lambda *_a: None)
+    monkeypatch.setattr(executor, "build_python_static_replay_receipt_v1", lambda _b: {})
+    monkeypatch.setattr(actors, "static_replay_control_plane_v1", lambda: (None, b"d" * 32))
+    monkeypatch.setattr(executor, "run_rust_static_replay_receipt_v1", lambda *_a, **_k: {})
+    monkeypatch.setattr(executor, "generate_parent_absence_audit_v1", lambda _r: object())
+    monkeypatch.setattr(executor, "replay_parent_absence_audit_v1", lambda *_a, **_k: None)
+    monkeypatch.setattr(executor.secrets, "token_bytes", lambda size: b"x" * size)
+    monkeypatch.setattr(executor, "build_prestage_intent_fields_v1", lambda **_k: {})
+    monkeypatch.setattr(actors, "bind_transaction_identity", lambda _run: None)
+    body_primary = executor.FormalContainerExecutorError(
+        executor.FAIL_CONTAINER, "ordinary body primary"
+    )
+    actor_cleanup = executor.FormalContainerExecutorError(
+        executor.FAIL_CONTAINER, "ordinary actor cleanup"
+    )
+    lock_cleanup = executor.FormalContainerExecutorError(
+        executor.FAIL_TRANSACTION_LOCK, "ordinary transaction close"
+    )
+    monkeypatch.setattr(actors, "start", lambda: actors)
+    monkeypatch.setattr(
+        actors,
+        "validate_frozen_daemon_receipt_binding_v1",
+        lambda _binding: (_ for _ in ()).throw(body_primary),
+    )
+    monkeypatch.setattr(
+        actors,
+        "stop_for_recovery_and_verify_absent",
+        lambda: (_ for _ in ()).throw(actor_cleanup),
+    )
+    transaction = SimpleNamespace(
+        reserve=lambda: None,
+        close_lock=lambda: (_ for _ in ()).throw(lock_cleanup),
+    )
+    monkeypatch.setattr(
+        executor, "FormalCeremonyTransactionV1", lambda **_kwargs: transaction
+    )
+    with pytest.raises(executor.FormalContainerCompositeError) as captured:
+        executor.execute_formal_container_ceremony_v1(
+            basis_commit=commit,
+            actor_qualification_report={},
+            errata_qualification_report={},
+            custody_directory=formal_custody,
+            qualification_custody_directory=qualification_custody,
+            public_evidence_path=tmp_path / "evidence.json",
+            public_promotion_path=tmp_path / "promotion.json",
+            actors=actors,
+        )
+    outer = captured.value
+    assert outer.combination_phase == "FORMAL_CEREMONY_TRANSACTION_LOCK_CLOSE"
+    assert outer.cleanup_error is lock_cleanup
+    inner = outer.primary_error
+    assert isinstance(inner, executor.FormalContainerCompositeError)
+    assert inner.combination_phase == "FORMAL_CEREMONY_ACTOR_CLEANUP"
+    assert inner.primary_error is body_primary
+    assert inner.cleanup_error is actor_cleanup
 
 
 def test_second_start_does_not_cleanup_the_live_actor_set(
@@ -4467,6 +5383,51 @@ def test_explicit_pending_recovery_reopens_exact_persistent_transaction(
         assert captured.value.code == executor.FAIL_TRANSACTION_LOCK
 
 
+def test_pending_recovery_core_preserves_primary_when_descriptor_close_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transaction, actor_trust = _reserved_prestage_transaction(tmp_path)
+    executor.create_pending_marker_v1(
+        secret_state_directory=tmp_path / "custody",
+        split_version_digest=executor.SPLIT_VERSION_DIGEST,
+        custodian_key_id=actor_trust.key_ids[1],
+        created_at_unix_seconds=7,
+    )
+    transaction.close_lock()
+    primary = executor.FormalContainerExecutorError(
+        executor.FAIL_CUSTODY, "marker read primary"
+    )
+    cleanup = executor.FormalContainerExecutorError(
+        executor.FAIL_TRANSACTION_LOCK, "internal descriptor close cleanup"
+    )
+    monkeypatch.setattr(
+        executor,
+        "read_marker_snapshot_v1",
+        lambda _path: (_ for _ in ()).throw(primary),
+    )
+    real_close = os.close
+    close_calls = 0
+
+    def fail_first_close(descriptor: int) -> None:
+        nonlocal close_calls
+        close_calls += 1
+        if close_calls == 1:
+            real_close(descriptor)
+            raise cleanup
+        real_close(descriptor)
+
+    monkeypatch.setattr(executor.os, "close", fail_first_close)
+    with pytest.raises(executor.FormalContainerCompositeError) as captured:
+        executor.acquire_pending_ceremony_recovery_v1(
+            custody_directory=transaction.custody_directory,
+            public_evidence_path=transaction.public_evidence_path,
+            public_promotion_path=transaction.public_promotion_path,
+        )
+    assert captured.value.combination_phase == "PENDING_RECOVERY_CORE_DESCRIPTOR_CLOSE"
+    assert captured.value.primary_error is primary
+    assert captured.value.cleanup_error is cleanup
+
+
 def test_live_original_anchor_lock_forbids_concurrent_pending_reclaim(
     tmp_path: Path,
 ) -> None:
@@ -4727,6 +5688,7 @@ def test_post_stage_rehydration_reclaims_65534_tree_via_host_anchor(
 
 def test_real_offline_cap_chown_helper_round_trips_0700_nobody_owned_tree(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     docker = Path("/usr/bin/docker")
     image = "python@sha256:e031123e3d85762b141ad1cbc56452ba69c6e722ebf2f042cc0dc86c47c0d8b3"
@@ -4757,15 +5719,13 @@ def test_real_offline_cap_chown_helper_round_trips_0700_nobody_owned_tree(
     if daemon.returncode != 0 or image_probe.returncode != 0:
         pytest.skip("offline daemon or pinned custodian image is unavailable")
     custody = tmp_path / "real-cap-chown-custody"
-    custody.mkdir(mode=0o700)
-    retained_paths = (
-        custody / "phase3_m25_ceremony.lock",
-        custody / f"opaque-run-{'12' * 16}.reserved",
-        custody / f"opaque-ledger-{'34' * 16}.reserved",
-    )
-    for index, retained in enumerate(retained_paths):
-        retained.write_bytes(f"metadata-only-{index}".encode("ascii"))
-        retained.chmod(0o600)
+    seed = _install_exact_pending_recovery_custody_v1(custody)
+    retained_paths = tuple(sorted(custody.iterdir()))
+    assert len(retained_paths) == 7
+    lock_path = custody / "phase3_m25_ceremony.lock"
+    lock_descriptor = os.open(lock_path, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
+    fcntl.flock(lock_descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    lock_identity = (os.fstat(lock_descriptor).st_dev, os.fstat(lock_descriptor).st_ino)
     backend = executor.DockerCeremonyActorsV1(
         basis_commit="12" * 20,
         custody_directory=custody,
@@ -4782,6 +5742,14 @@ def test_real_offline_cap_chown_helper_round_trips_0700_nobody_owned_tree(
             Path(runtime), repository_root=executor.REPOSITORY_ROOT
         )
         backend._runtime_seccomp_path = executor.SECCOMP_PATH
+        commands: list[tuple[str, ...]] = []
+        original_run = executor._run
+
+        def recorded_run(command, **kwargs):
+            commands.append(tuple(command))
+            return original_run(command, **kwargs)
+
+        monkeypatch.setattr(executor, "_run", recorded_run)
         try:
             backend._set_custody_owner(65534, 65534)
             handed = custody.lstat()
@@ -4794,15 +5762,29 @@ def test_real_offline_cap_chown_helper_round_trips_0700_nobody_owned_tree(
                 os.geteuid(),
                 os.getegid(),
             )
-            assert [path.read_bytes() for path in retained_paths] == [
-                b"metadata-only-0",
-                b"metadata-only-1",
-                b"metadata-only-2",
-            ]
+            assert stat.S_IMODE(reclaimed.st_mode) == 0o700
+            assert all(
+                stat.S_IMODE(path.lstat().st_mode) == 0o600
+                and (path.lstat().st_uid, path.lstat().st_gid)
+                == (os.geteuid(), os.getegid())
+                for path in retained_paths
+            )
+            assert seed.lstat().st_size == 32
+            assert (os.fstat(lock_descriptor).st_dev, os.fstat(lock_descriptor).st_ino) == (
+                lock_identity
+            )
+            docker_runs = [command for command in commands if "run" in command]
+            assert docker_runs
+            assert all(
+                "--pull=never" in command and "--network=none" in command
+                for command in docker_runs
+            )
         finally:
             if custody.lstat().st_uid == 65534:
                 backend._custody_handed_off = True
                 backend._reclaim_custody_from_actor()
+            fcntl.flock(lock_descriptor, fcntl.LOCK_UN)
+            os.close(lock_descriptor)
 
 
 class _PreseedAbortActors(executor.CeremonyActorsV1):
@@ -6036,6 +7018,68 @@ def test_pending_cleanup_retains_and_verifies_private_state_volumes(
     assert backend._state_volumes == {1: "volume-1", 2: "volume-2"}
     assert not any(command[:3] == ("docker", "volume", "rm") for command in commands)
     assert sum(command[:3] == ("docker", "volume", "inspect") for command in commands) == 2
+
+
+def test_reclaim_failure_never_probes_marker_or_destroys_pending_volume(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    custody = tmp_path / "custody"
+    custody.mkdir(mode=0o700)
+    backend = executor.DockerCeremonyActorsV1(
+        basis_commit="12" * 20,
+        custody_directory=custody,
+        rust_formal_replay_binary=tmp_path / "rust-replay",
+        timestamp=1,
+    )
+    backend._state_volumes = {1: "volume-1"}
+    backend._custody_handed_off = True
+    _configure_fake_actor_identity(backend, tmp_path)
+    reclaim = executor.FormalContainerExecutorError(
+        executor.FAIL_CONTAINER,
+        "frozen runtime seccomp snapshot is absent",
+    )
+    monkeypatch.setattr(
+        backend,
+        "_reclaim_custody_from_actor",
+        lambda: (_ for _ in ()).throw(reclaim),
+    )
+    marker_path = custody / "split_seed_instantiation.marker"
+    original_lstat = Path.lstat
+
+    def inaccessible_marker_lstat(path: Path):
+        if path == marker_path:
+            raise AssertionError("marker was probed after custody reclaim failed")
+        return original_lstat(path)
+
+    monkeypatch.setattr(Path, "lstat", inaccessible_marker_lstat)
+    commands: list[tuple[str, ...]] = []
+
+    def fake_run(command, **_kwargs):
+        commands.append(tuple(command))
+        if command[1:3] == ["volume", "inspect"]:
+            return SimpleNamespace(
+                returncode=0,
+                stdout=json.dumps(
+                    [_fake_volume_row(backend, 1, command[3])]
+                ).encode(),
+                stderr=b"",
+            )
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+
+    monkeypatch.setattr(executor, "_run", fake_run)
+    with pytest.raises(executor.FormalContainerCompositeError) as captured:
+        backend.stop_for_recovery_and_verify_absent()
+    evidence = executor.formal_failure_evidence_v1(captured.value)
+    assert evidence["primary"] == {
+        "schema": "hegel-phase3-m25-formal-failure-evidence/1",
+        "kind": "SINGLE",
+        "exception_type": "FormalContainerExecutorError",
+        "code": executor.FAIL_CONTAINER,
+        "detail_sha256": hashlib.sha256(reclaim.detail.encode()).hexdigest(),
+    }
+    assert backend._state_volumes == {1: "volume-1"}
+    assert not any(command[1:3] == ("volume", "rm") for command in commands)
 
 
 def test_marker_absent_cleanup_destroys_new_private_state_volumes(

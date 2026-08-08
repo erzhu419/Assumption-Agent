@@ -639,11 +639,16 @@ def test_prepare_and_authorize_are_exact_prefix_resumable(
 
 
 def test_current_runtime_closure_has_exact_95_unchanged_a8_inputs() -> None:
+    later_r5 = {
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_amendment_r5_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r5_v1.py",
+    }
     bindings = amendment._unchanged_a8_input_bindings_v1()
     assert len(bindings) == amendment.EXPECTED_UNCHANGED_A8_INPUT_COUNT
     assert hashlib.sha256(
         amendment._executor_canonical_json(bindings)
     ).hexdigest() == amendment.EXPECTED_UNCHANGED_A8_INPUT_ROOT
+    assert later_r5.issubset(amendment.R3_RUNTIME_EXCEPTION_PATHS)
 
 
 def test_r3_sources_do_not_expose_seed_or_m3_start_entrypoint() -> None:
