@@ -1,0 +1,21 @@
+# Phase-3A M2.5 external genesis status
+
+- basis_commit_sha1: `0af65964235390ce2bebefea7379eaa9c50eda24`
+- formal_gates: `24/24`
+- child_state: `NOT_RUN`
+- m3_run_started: `false`
+- publication_state: `COMMIT_B_CANDIDATE`
+- audit_receipt_scope: `EXCLUDED_SELF_OUTPUT_UNTIL_PREPARE`
+- actor_qualification_sha256: `94172fc5153751892eb906dbadefc6c2a46facbe7ab8d7baf9f8cbeb28385c74`
+- errata_qualification_sha256: `5b40abcf107fdf052d968e7235d250725d3f733095b5ddf375b7787d9bf1110b`
+- m3_implementation_qualification_sha256: `63336fe7410ac5b0255d097a9fdd59388414cf72b4019649572c51121528f4b9`
+- bridge_qualification_sha256: `5997beef28ac4edfd462361b1552cd7682d1e95f431e4986f845aa680bc213c9`
+- live_protocol_qualification_sha256: `9fee163e2a0c405eaa436ea784f46d13bf1e6955e2e36ea056a4fbc658dc38fd`
+- pre_genesis_execution_status_sha256: `f0e8b824ffa1bb70f71afa28d12dafa50bbebf90f378fa04aabb67f233e0de7e`
+- pre_genesis_readiness_sha256: `94be9bdb272211052083557edf13d76151ce05c2d0dd702a740495c12101dc9c`
+- formal_gate_evidence_sha256: `ba2195cf83ca9bd26164a3e64b3b18a367965079af9c5f0e382259d0b115091e`
+- formal_gate_promotion_sha256: `ad33c293ea1d5e97425ce51403c914ee900fa78c255299556565cb19797cfce4`
+- formal_transaction_receipt_sha256: `e2b201eae0bd50cde6ed79b31203df26c5c0ab9f009ddfcb163228aaaf9f65a9`
+- formal_gate_delta_from_publication_audit: `0`
+- phase3_m3_start_required_separately: `true`
+- authority_effect: `NONE`
