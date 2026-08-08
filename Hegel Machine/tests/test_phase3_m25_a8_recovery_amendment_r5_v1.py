@@ -643,10 +643,12 @@ def test_r5_concurrent_existing_failure_must_be_exact(
     assert ("conflict" in failure) is (existing == "conflict")
 
 
-def test_later_r5_artifacts_are_excluded_from_historical_runtime_closure() -> None:
+def test_later_recovery_artifacts_are_excluded_from_historical_runtime_closure() -> None:
     required = {
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_amendment_r5_v1.py",
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r5_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_amendment_r6_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r6_v1.py",
     }
     assert required.issubset(amendment.R5_RUNTIME_EXCEPTION_PATHS)
     assert required.issubset(amendment._r4._r31.R3_RUNTIME_EXCEPTION_PATHS)

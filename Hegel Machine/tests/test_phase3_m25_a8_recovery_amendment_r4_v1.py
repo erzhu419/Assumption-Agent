@@ -794,9 +794,11 @@ def test_r4_source_admission_is_exact_ordinal4_and_enters_executor_guard(
 
 
 def test_r4_runtime_exceptions_preserve_exact_95_input_a8_closure() -> None:
-    later_r5 = {
+    later_recovery_sources = {
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_amendment_r5_v1.py",
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r5_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_amendment_r6_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r6_v1.py",
     }
     bindings = amendment._unchanged_a8_input_bindings_v1()
     assert len(bindings) == amendment._r31.EXPECTED_UNCHANGED_A8_INPUT_COUNT
@@ -804,7 +806,7 @@ def test_r4_runtime_exceptions_preserve_exact_95_input_a8_closure() -> None:
         amendment._executor_canonical_json(bindings)
     ).hexdigest() == amendment._r31.EXPECTED_UNCHANGED_A8_INPUT_ROOT
     assert all(path not in bindings for path in amendment.R4_RUNTIME_EXCEPTION_PATHS)
-    assert later_r5.issubset(amendment.R4_RUNTIME_EXCEPTION_PATHS)
+    assert later_recovery_sources.issubset(amendment.R4_RUNTIME_EXCEPTION_PATHS)
 
 
 def test_prepare_and_authorize_r4_prefix_is_resumable(

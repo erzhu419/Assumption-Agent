@@ -60,6 +60,7 @@ from .phase3_m25_container_ceremony_v1 import (
 from .phase3_m25_external_v1 import MarkerSnapshot, assert_public_payload_contains_no_secret_fields
 from .phase3_m25_formal_static_basis_v1 import (
     FORMAL_GIT_EXECUTABLE,
+    FormalStaticBasisError,
     FormalStaticBasisV1,
     build_formal_static_basis_v1,
     build_python_static_replay_receipt_v1,
@@ -591,6 +592,15 @@ def formal_failure_evidence_v1(error: BaseException) -> dict[str, object]:
                 1 + primary_used + cleanup_used,
             )
         if isinstance(candidate, FormalContainerExecutorError):
+            code = (
+                candidate.code
+                if type(candidate.code) is str
+                and re.fullmatch(r"[A-Z][A-Z0-9_]{0,127}", candidate.code)
+                is not None
+                else "INVALID_FORMAL_ERROR_CODE"
+            )
+            detail = candidate.detail
+        elif isinstance(candidate, FormalStaticBasisError):
             code = (
                 candidate.code
                 if type(candidate.code) is str
@@ -6106,6 +6116,12 @@ _FIXED_A8_R5_PARENT_AMENDMENT_COMMIT: Final = (
 _FIXED_A8_R5_SOURCE_ADMISSION_SCHEMA: Final = (
     "hegel-phase3-m25-a8-r5-source-admission/1"
 )
+_FIXED_A8_R6_PARENT_AMENDMENT_COMMIT: Final = (
+    "0024f8117f6ad20bd004f1a6024987d923f2b7ad"
+)
+_FIXED_A8_R6_SOURCE_ADMISSION_SCHEMA: Final = (
+    "hegel-phase3-m25-a8-r6-source-admission/1"
+)
 _FIXED_A8_R4_TERMINAL_CHAIN_ROOT_SHA256: Final = (
     "9c0c0b8f05e97ec6b87c0ac9b4a36823f5338ce69053f442e9b1cbf1137f00d5"
 )
@@ -6129,6 +6145,43 @@ _FIXED_A8_R4_TERMINAL_RECEIPT_SHA256: Final[Mapping[str, str]] = MappingProxyTyp
     "admission": "752ef70b901d5238b7c7c23033e42af4047a729356b74f2dae760442fafd54e9",
     "failure": "2f3b2cc21e0cd88ead075c840b54864572311cb83d87f4af60b4866ffa3cc22e",
 })
+_FIXED_A8_R5_TERMINAL_CHAIN_ROOT_SHA256: Final = (
+    "bcbe5e09f843b71e7448159307a02f698ace61fdccdff80767f3c826b6fb245b"
+)
+_FIXED_A8_R5_TERMINAL_RAW_SHA256: Final[Mapping[str, str]] = MappingProxyType({
+    "preflight": "93618b7c41dfc171a2fe7805ec391d70d032b079264bf3afc107da9bd4b9ffa8",
+    "incident_diagnostic": "176e4b180a2d63aa8277527c5463102bf1fae2bb5ac6da50e0125a0f861727e0",
+    "a8_validation": "ef18694aa41a78389cef2265eb121174f2e68548928f89f7fcad3f55fb261ee4",
+    "authorization_request": "998f82945a2f6b23a929c227bf98715b6f8684d624827a19458b3a916c905139",
+    "authorization": "bd48b5acbb212963393f040143f1d9679a16245e7bbb6a15abce8cf0633b37c2",
+    "attempt_start": "eb748aba5c9c6abff9344aa91f4c670b68b2bac0a7675a24a0754181a808829a",
+    "admission": "aff16f8c4a4ace64d44685530ad10cdee2d2d97104495e8fc05b36e9bff99dd9",
+    "failure": "3ae5164908a41ebf1b32b255bf3d0c73e821b843c17251f8e79ff7879f49ae4c",
+})
+_FIXED_A8_R5_TERMINAL_RECEIPT_SHA256: Final[Mapping[str, str]] = MappingProxyType({
+    "preflight": "42c570bbb27c18ad8a6443ed9e74994c58013c2f57168db03d6b871a9a9727db",
+    "incident_diagnostic": "5448340b35fb04730de8a2dc3278283ea15f3b24a11bda6028d3c5ffeebd5145",
+    "a8_validation": "83b1ad690914d9dfd5cd402d5c734a1250a3b450c9e0b3ecf4655cfb97c6ba47",
+    "authorization_request": "ac1340b0539e5a70f478d0723b298c2d27c282049f0fb9e66e27805fb0680b97",
+    "authorization": "19be355f31a2bc42af9c4695e73757c93584d404c28f92700057aa54a09c0c7a",
+    "attempt_start": "9a1d28fa48f7f1961668d041a9bd322b536d2a288a39ea9d24b95047ed069873",
+    "admission": "ad77e0e3441367470bb17c5983337eb092b279d06c2765d71c649dee254441ad",
+    "failure": "ece0e9f5eba90cad6a685849fea03463f932ad997f0e75fadce98b7aceabd3f6",
+})
+_FIXED_A8_R5_FAILURE_CODE: Final = "FormalStaticBasisError"
+_FIXED_A8_R5_FAILURE_PHASE: Final = "COMPLETE_ONLY_FORMAL_CORE"
+_FIXED_A8_R5_FAILURE_DETAIL_SHA256: Final = (
+    "b93bf9270ba596c2a92134501c790dfea1a8ec535e86863fb18ff3487ca4eece"
+)
+_FIXED_A8_R5_FORMAL_FAILURE_EVIDENCE_SHA256: Final = (
+    "a64aed1283957993fb2fdd8eda72e4beceb29d9f5f90dc9cf5b6c82f4b234c37"
+)
+_FIXED_A8_R5_FINAL_CLOSE_FAILURE_CODE: Final = (
+    "FAIL_M25_FORMAL_CONTAINER_RUNTIME"
+)
+_FIXED_A8_R5_FINAL_CLOSE_FAILURE_DETAIL_SHA256: Final = (
+    "3faf8cd39fb25c1fe439ecaef0bb15cfb02f535a09b79e00d0c90f8f10abdd8b"
+)
 _FIXED_A8_R4_FAILURE_CODE: Final = "FAIL_M25_FORMAL_CONTAINER_RUNTIME"
 _FIXED_A8_R4_FAILURE_PHASE: Final = "COMPLETE_ONLY_FORMAL_CORE"
 _FIXED_A8_R4_FAILURE_DETAIL_SHA256: Final = (
@@ -6435,6 +6488,17 @@ def _validate_fixed_a8_r5_commit_context_v1(
     )
 
 
+def _validate_fixed_a8_r6_commit_context_v1(
+    source_admission: Mapping[str, object],
+) -> bytes:
+    return _validate_fixed_a8_recovery_commit_context_v1(
+        source_admission,
+        commit_field="r6_amendment_commit",
+        parent_amendment_commit=_FIXED_A8_R6_PARENT_AMENDMENT_COMMIT,
+        attempt_ordinal=6,
+    )
+
+
 def _build_fixed_a8_r3_validation_request_v1(
     *,
     actor_report: Mapping[str, object],
@@ -6514,7 +6578,7 @@ def _run_fixed_a8_r3_validator_v1(
     protocol_bundle_content_id: bytes,
     qualification_key_ids: Mapping[int, bytes],
 ) -> _FixedA8R3PrevalidatedBasisV1:
-    """Create the R3/R4 exception internally through the admitted child."""
+    """Create the R3--R6 exception internally through the admitted child."""
 
     request, digests = _build_fixed_a8_r3_validation_request_v1(
         actor_report=actor_report,
@@ -6566,6 +6630,10 @@ def _run_fixed_a8_r3_validator_v1(
         )
     elif source_admission_schema == _FIXED_A8_R5_SOURCE_ADMISSION_SCHEMA:
         committed_tool_bytes = _validate_fixed_a8_r5_commit_context_v1(
+            source_admission
+        )
+    elif source_admission_schema == _FIXED_A8_R6_SOURCE_ADMISSION_SCHEMA:
+        committed_tool_bytes = _validate_fixed_a8_r6_commit_context_v1(
             source_admission
         )
     else:
@@ -6746,6 +6814,62 @@ def _run_fixed_a8_r3_validator_v1(
     )
 
 
+def _prevalidate_fixed_a8_recovery_capability_v1(
+    *,
+    recovery: PendingCeremonyRecoveryV1,
+    source_admission: Mapping[str, object],
+) -> _FixedA8R3PrevalidatedBasisV1:
+    """Qualify the exact admitted recovery capability without actors or seed.
+
+    Recovery amendments call this while holding the PENDING transaction lock
+    and before making an attempt-start record durable.  The formal core calls
+    it again as a last drift check.  Both paths therefore exercise the same
+    schema, commit-context and isolated-validator boundary.
+    """
+
+    if not isinstance(recovery, PendingCeremonyRecoveryV1):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "prevalidated recovery object type differs",
+        )
+    admission = _validate_recovery_source_admission_v1(
+        source_admission,
+        basis_commit=recovery.basis_commit,
+        run_id=recovery.run_id,
+        ledger_id=recovery.ledger_id,
+    )
+    intent = validate_prestage_intent_fields_v1(
+        dict(recovery.prestage_intent_fields),
+        basis_commit=recovery.basis_commit,
+        run_id=recovery.run_id,
+        ledger_id=recovery.ledger_id,
+    )
+    actor = intent.get("actor_qualification_report")
+    errata = intent.get("errata_qualification_report")
+    bundle = intent.get("live_actor_protocol_qualification_bundle")
+    bundle_id = intent.get("live_actor_protocol_qualification_bundle_content_id")
+    if (
+        type(actor) is not dict
+        or type(errata) is not dict
+        or type(bundle) is not dict
+        or type(bundle_id) is not bytes
+        or len(bundle_id) != 32
+    ):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "prevalidated recovery prestage intent is incomplete",
+        )
+    key_ids = _qualification_only_key_ids_from_intent_v1(intent)
+    return _run_fixed_a8_r3_validator_v1(
+        source_admission=admission,
+        actor_report=actor,
+        errata_report=errata,
+        transaction_bundle=bundle,
+        protocol_bundle_content_id=bundle_id,
+        qualification_key_ids=dict(key_ids),
+    )
+
+
 def _replay_public_gate_evidence_with_fixed_a8_r3_capability_v1(
     payload: Mapping[str, object],
     capability: _FixedA8R3PrevalidatedBasisV1,
@@ -6835,7 +6959,7 @@ def _validate_recovery_source_admission_v1(
     run_id: bytes,
     ledger_id: bytes,
 ) -> Mapping[str, object]:
-    """Accept only the frozen R1/R2/R3/R4/R5 recovery provenance scopes."""
+    """Accept only the frozen R1/R2/R3/R4/R5/R6 recovery provenance scopes."""
 
     if not isinstance(admission, Mapping):
         _fail(
@@ -6851,6 +6975,7 @@ def _validate_recovery_source_admission_v1(
             "hegel-phase3-m25-a8-r3-source-admission/1",
             _FIXED_A8_R4_SOURCE_ADMISSION_SCHEMA,
             _FIXED_A8_R5_SOURCE_ADMISSION_SCHEMA,
+            _FIXED_A8_R6_SOURCE_ADMISSION_SCHEMA,
         }
         or admission.get("basis_commit") != basis_commit
         or admission.get("run_id_hex") != run_id.hex()
@@ -7289,7 +7414,406 @@ def _validate_recovery_source_admission_v1(
                 FAIL_RECOVERY_SOURCE_ADMISSION,
                 "attempt-5 recovery source admission provenance differs",
             )
+    if schema == _FIXED_A8_R6_SOURCE_ADMISSION_SCHEMA:
+        expected_keys = {
+            "schema",
+            "basis_commit",
+            "parent_r5_amendment_commit",
+            "r6_amendment_commit",
+            "run_id_hex",
+            "ledger_id_hex",
+            "recovery_attempt_ordinal",
+            "continuation_action",
+            "incident_diagnostic_sha256",
+            "a8_validation_receipt_sha256",
+            "static_preconsumption_qualification_sha256",
+            "cross_basis_recovery_authorized",
+            "formal_identity_entropy_draw_count",
+            "complete_seed_resume_only",
+            "ordinary_execute_allowed",
+            "redraw_allowed",
+            "m3_start_allowed",
+            "prevalidated_report_basis",
+            "prevalidated_transaction_bundle",
+            "unchanged_a8_input_sha256",
+            "unchanged_a8_input_sha256_root",
+            "actor_report_sha256",
+            "errata_report_sha256",
+            "live_bundle_sha256",
+            "r5_terminal_chain_root_sha256",
+            "r5_preflight_raw_sha256",
+            "r5_preflight_receipt_sha256",
+            "r5_incident_diagnostic_raw_sha256",
+            "r5_incident_diagnostic_receipt_sha256",
+            "r5_a8_validation_raw_sha256",
+            "r5_a8_validation_receipt_sha256",
+            "r5_authorization_request_raw_sha256",
+            "r5_authorization_request_receipt_sha256",
+            "r5_authorization_raw_sha256",
+            "r5_authorization_receipt_sha256",
+            "r5_attempt_start_raw_sha256",
+            "r5_attempt_start_receipt_sha256",
+            "r5_admission_raw_sha256",
+            "r5_admission_receipt_sha256",
+            "r5_failure_raw_sha256",
+            "r5_failure_receipt_sha256",
+            "r5_failure_code",
+            "r5_failure_phase",
+            "r5_failure_detail_sha256",
+            "r5_formal_failure_evidence_sha256",
+            "r5_final_close_failure_code",
+            "r5_final_close_failure_detail_sha256",
+        }
+        expected_r5_fields = {
+            "r5_terminal_chain_root_sha256": (
+                _FIXED_A8_R5_TERMINAL_CHAIN_ROOT_SHA256
+            ),
+            "r5_preflight_raw_sha256": _FIXED_A8_R5_TERMINAL_RAW_SHA256["preflight"],
+            "r5_preflight_receipt_sha256": _FIXED_A8_R5_TERMINAL_RECEIPT_SHA256["preflight"],
+            "r5_incident_diagnostic_raw_sha256": _FIXED_A8_R5_TERMINAL_RAW_SHA256["incident_diagnostic"],
+            "r5_incident_diagnostic_receipt_sha256": _FIXED_A8_R5_TERMINAL_RECEIPT_SHA256["incident_diagnostic"],
+            "r5_a8_validation_raw_sha256": _FIXED_A8_R5_TERMINAL_RAW_SHA256["a8_validation"],
+            "r5_a8_validation_receipt_sha256": _FIXED_A8_R5_TERMINAL_RECEIPT_SHA256["a8_validation"],
+            "r5_authorization_request_raw_sha256": _FIXED_A8_R5_TERMINAL_RAW_SHA256["authorization_request"],
+            "r5_authorization_request_receipt_sha256": _FIXED_A8_R5_TERMINAL_RECEIPT_SHA256["authorization_request"],
+            "r5_authorization_raw_sha256": _FIXED_A8_R5_TERMINAL_RAW_SHA256["authorization"],
+            "r5_authorization_receipt_sha256": _FIXED_A8_R5_TERMINAL_RECEIPT_SHA256["authorization"],
+            "r5_attempt_start_raw_sha256": _FIXED_A8_R5_TERMINAL_RAW_SHA256["attempt_start"],
+            "r5_attempt_start_receipt_sha256": _FIXED_A8_R5_TERMINAL_RECEIPT_SHA256["attempt_start"],
+            "r5_admission_raw_sha256": _FIXED_A8_R5_TERMINAL_RAW_SHA256["admission"],
+            "r5_admission_receipt_sha256": _FIXED_A8_R5_TERMINAL_RECEIPT_SHA256["admission"],
+            "r5_failure_raw_sha256": _FIXED_A8_R5_TERMINAL_RAW_SHA256["failure"],
+            "r5_failure_receipt_sha256": _FIXED_A8_R5_TERMINAL_RECEIPT_SHA256["failure"],
+            "r5_failure_code": _FIXED_A8_R5_FAILURE_CODE,
+            "r5_failure_phase": _FIXED_A8_R5_FAILURE_PHASE,
+            "r5_failure_detail_sha256": _FIXED_A8_R5_FAILURE_DETAIL_SHA256,
+            "r5_formal_failure_evidence_sha256": (
+                _FIXED_A8_R5_FORMAL_FAILURE_EVIDENCE_SHA256
+            ),
+            "r5_final_close_failure_code": _FIXED_A8_R5_FINAL_CLOSE_FAILURE_CODE,
+            "r5_final_close_failure_detail_sha256": (
+                _FIXED_A8_R5_FINAL_CLOSE_FAILURE_DETAIL_SHA256
+            ),
+        }
+        formatted_digest_fields = (
+            "incident_diagnostic_sha256",
+            "a8_validation_receipt_sha256",
+            "static_preconsumption_qualification_sha256",
+            "actor_report_sha256",
+            "errata_report_sha256",
+            "live_bundle_sha256",
+        )
+        r6_commit = admission.get("r6_amendment_commit")
+        if (
+            len(expected_keys) != 47
+            or set(admission) != expected_keys
+            or basis_commit != _FIXED_A8_R3_BASIS_COMMIT
+            or run_id != _FIXED_A8_R3_RUN_ID
+            or ledger_id != _FIXED_A8_R3_LEDGER_ID
+            or admission.get("parent_r5_amendment_commit")
+            != _FIXED_A8_R6_PARENT_AMENDMENT_COMMIT
+            or type(r6_commit) is not str
+            or re.fullmatch(r"[0-9a-f]{40}", r6_commit) is None
+            or r6_commit
+            in {
+                basis_commit,
+                "0349131599a688470c15eded51f942eefeded392",
+                "ec7c04cf62190558c72448639d7e3cd13a5b6903",
+                "52a4a61934a73c70dc09b919cae377db166eaedf",
+                _FIXED_A8_R4_PARENT_AMENDMENT_COMMIT,
+                _FIXED_A8_R5_PARENT_AMENDMENT_COMMIT,
+                _FIXED_A8_R6_PARENT_AMENDMENT_COMMIT,
+            }
+            or type(admission.get("recovery_attempt_ordinal")) is not int
+            or admission.get("recovery_attempt_ordinal") != 6
+            or admission.get("continuation_action")
+            != "CODE_AMENDMENT_RECOVERY_CONTINUATION"
+            or admission.get("cross_basis_recovery_authorized") is not True
+            or type(admission.get("formal_identity_entropy_draw_count")) is not int
+            or admission.get("formal_identity_entropy_draw_count") != 0
+            or admission.get("complete_seed_resume_only") is not True
+            or admission.get("ordinary_execute_allowed") is not False
+            or admission.get("redraw_allowed") is not False
+            or admission.get("m3_start_allowed") is not False
+            or admission.get("prevalidated_report_basis") is not True
+            or admission.get("prevalidated_transaction_bundle") is not True
+            or len(dict(admission["unchanged_a8_input_sha256"]))
+            != _FIXED_A8_R3_UNCHANGED_INPUT_COUNT
+            or admission.get("unchanged_a8_input_sha256_root")
+            != _FIXED_A8_R3_UNCHANGED_INPUT_ROOT
+            or any(
+                type(admission.get(name)) is not str
+                or re.fullmatch(r"[0-9a-f]{64}", str(admission.get(name)))
+                is None
+                for name in formatted_digest_fields
+            )
+            or any(
+                admission.get(name) != value
+                for name, value in expected_r5_fields.items()
+            )
+        ):
+            _fail(
+                FAIL_RECOVERY_SOURCE_ADMISSION,
+                "attempt-6 recovery source admission provenance differs",
+            )
     return admission
+
+
+_PREVALIDATED_PENDING_STATIC_DUAL_SEAL = object()
+_PREVALIDATED_PENDING_FORMAL_PREFIX_SEAL = object()
+
+
+@dataclass(frozen=True, slots=True)
+class _PrevalidatedPendingRecoveryStaticDualV1:
+    """Seed-free static prefix qualified while the recovery lock is held."""
+
+    recovery: PendingCeremonyRecoveryV1
+    actors: "CeremonyActorsV1"
+    basis: FormalStaticBasisV1
+    implementation_roots: Mapping[str, bytes]
+    python_receipt: Mapping[str, object]
+    python_receipt_bytes: bytes
+    rust_receipt: Mapping[str, object]
+    rust_receipt_bytes: bytes
+    static_roots: Mapping[str, bytes]
+    parent_absence: ParentAbsenceAuditEvidence
+    frozen_daemon_binding: bytes
+    static_daemon_binding: bytes
+    prestage_intent_sha256: str
+    _seal: object
+
+
+@dataclass(slots=True)
+class _PrevalidatedPendingRecoveryFormalPrefixV1:
+    """Same-process, one-shot capability for one admitted formal recovery."""
+
+    recovery: PendingCeremonyRecoveryV1
+    actors: "CeremonyActorsV1"
+    source_admission_bytes: bytes
+    static_dual: _PrevalidatedPendingRecoveryStaticDualV1
+    fixed_capability: _FixedA8R3PrevalidatedBasisV1
+    _seal: object
+    consumed: bool = False
+
+
+def _prevalidate_pending_recovery_static_dual_v1(
+    *,
+    recovery: PendingCeremonyRecoveryV1,
+    actors: "CeremonyActorsV1",
+    static_rust_binary_path: Path,
+) -> _PrevalidatedPendingRecoveryStaticDualV1:
+    """Qualify basis, daemon, dual receipts and parent before attempt use."""
+
+    if (
+        not isinstance(recovery, PendingCeremonyRecoveryV1)
+        or recovery.lock_descriptor < 0
+        or recovery.marker_snapshot.state != "PENDING"
+        or recovery.journal_state != "RESERVED"
+        or not isinstance(actors, DockerCeremonyActorsV1)
+        or not actors.authoritative
+        or getattr(actors, "_actor_start_attempted", None) is not False
+        or bool(getattr(actors, "_containers", ()))
+        or bool(getattr(actors, "_state_volumes", ()))
+    ):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "pending static prevalidation scope differs",
+        )
+    intent = validate_prestage_intent_fields_v1(
+        dict(recovery.prestage_intent_fields),
+        basis_commit=recovery.basis_commit,
+        run_id=recovery.run_id,
+        ledger_id=recovery.ledger_id,
+    )
+    frozen_daemon_binding = intent.get(
+        "live_actor_protocol_daemon_receipt_binding"
+    )
+    bridge_report_hex = intent.get(
+        "rust_bridge_dag_qualification_report_sha256"
+    )
+    frozen_runtime_bindings = intent.get("runtime_binding_fields")
+    if (
+        type(frozen_daemon_binding) is not bytes
+        or len(frozen_daemon_binding) != 32
+        or type(bridge_report_hex) is not str
+        or re.fullmatch(r"[0-9a-f]{64}", bridge_report_hex) is None
+        or type(frozen_runtime_bindings) is not dict
+    ):
+        _fail(FAIL_PREFLIGHT, "pending static prestage bindings differ")
+    try:
+        basis = build_qualified_formal_static_basis_v1(
+            recovery.basis_commit,
+            static_rust_binary_path=static_rust_binary_path,
+        )
+        implementation_roots = require_formal_ceremony_ready_v1(basis)
+        actors.validate_rust_replay_binding(basis)
+        actors.validate_rust_bridge_dag_binding()
+        blockers = tuple(actors.unresolved_formal_blockers())
+        if blockers:
+            _fail(
+                FAIL_PREFLIGHT,
+                "pending static prevalidation retains blockers: "
+                + ",".join(blockers),
+            )
+        if actors.bridge_qualification_report_id_v1() != bytes.fromhex(
+            bridge_report_hex
+        ):
+            _fail(
+                FAIL_PREFLIGHT,
+                "pending static bridge qualification identity differs",
+            )
+        runtime_bindings = actors.prestage_runtime_binding_fields_v1(
+            implementation_roots
+        )
+        if (
+            not isinstance(runtime_bindings, Mapping)
+            or dict(runtime_bindings) != frozen_runtime_bindings
+            or _canonical_json(dict(runtime_bindings))
+            != _canonical_json(frozen_runtime_bindings)
+        ):
+            _fail(
+                FAIL_PREFLIGHT,
+                "pending static runtime/implementation binding differs",
+            )
+        actors.validate_frozen_daemon_receipt_binding_v1(
+            frozen_daemon_binding
+        )
+        python_receipt = build_python_static_replay_receipt_v1(basis)
+        control_plane, static_daemon_binding = (
+            actors.static_replay_control_plane_v1()
+        )
+        if static_daemon_binding != frozen_daemon_binding:
+            _fail(FAIL_PREFLIGHT, "pending static daemon binding drifted")
+        rust_receipt = run_rust_static_replay_receipt_v1(
+            basis,
+            control_plane=control_plane,
+            daemon_receipt_binding=static_daemon_binding,
+            rust_binary=Path(str(basis.implementation_inputs["rust_binary_path"])),
+        )
+        static_roots = validate_dual_static_replay_receipts_v1(
+            basis, python_receipt, rust_receipt
+        )
+        parent = generate_parent_absence_audit_v1(REPOSITORY_ROOT)
+        replay_parent_absence_audit_v1(parent, repository=REPOSITORY_ROOT)
+    except FormalStaticBasisError as exc:
+        raise FormalContainerExecutorError(exc.code, exc.detail) from exc
+    if (
+        actors._actor_start_attempted
+        or actors._containers
+        or actors._state_volumes
+    ):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "pending static prevalidation created purpose-actor state",
+        )
+    return _PrevalidatedPendingRecoveryStaticDualV1(
+        recovery=recovery,
+        actors=actors,
+        basis=basis,
+        implementation_roots=MappingProxyType(dict(implementation_roots)),
+        python_receipt=MappingProxyType(dict(python_receipt)),
+        python_receipt_bytes=_canonical_json(python_receipt),
+        rust_receipt=MappingProxyType(dict(rust_receipt)),
+        rust_receipt_bytes=_canonical_json(rust_receipt),
+        static_roots=MappingProxyType(dict(static_roots)),
+        parent_absence=parent,
+        frozen_daemon_binding=frozen_daemon_binding,
+        static_daemon_binding=static_daemon_binding,
+        prestage_intent_sha256=recovery.prestage_intent_sha256,
+        _seal=_PREVALIDATED_PENDING_STATIC_DUAL_SEAL,
+    )
+
+
+def _prevalidate_pending_recovery_formal_prefix_v1(
+    *,
+    recovery: PendingCeremonyRecoveryV1,
+    actors: "CeremonyActorsV1",
+    source_admission: Mapping[str, object],
+    static_dual: _PrevalidatedPendingRecoveryStaticDualV1,
+) -> _PrevalidatedPendingRecoveryFormalPrefixV1:
+    """Add exact source-admission capability to a sealed static prefix."""
+
+    if (
+        type(static_dual) is not _PrevalidatedPendingRecoveryStaticDualV1
+        or static_dual._seal is not _PREVALIDATED_PENDING_STATIC_DUAL_SEAL
+        or static_dual.recovery is not recovery
+        or static_dual.actors is not actors
+        or static_dual.prestage_intent_sha256
+        != recovery.prestage_intent_sha256
+        or recovery.lock_descriptor < 0
+    ):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "pending formal-prefix static capability differs",
+        )
+    capability = _prevalidate_fixed_a8_recovery_capability_v1(
+        recovery=recovery,
+        source_admission=source_admission,
+    )
+    return _PrevalidatedPendingRecoveryFormalPrefixV1(
+        recovery=recovery,
+        actors=actors,
+        source_admission_bytes=_canonical_json(source_admission),
+        static_dual=static_dual,
+        fixed_capability=capability,
+        _seal=_PREVALIDATED_PENDING_FORMAL_PREFIX_SEAL,
+    )
+
+
+def _consume_prevalidated_pending_recovery_formal_prefix_v1(
+    *,
+    recovery: PendingCeremonyRecoveryV1,
+    actors: "CeremonyActorsV1",
+    source_admission: Mapping[str, object],
+    static_rust_binary_path: Path,
+    prefix: _PrevalidatedPendingRecoveryFormalPrefixV1,
+) -> tuple[
+    _PrevalidatedPendingRecoveryStaticDualV1,
+    _FixedA8R3PrevalidatedBasisV1,
+]:
+    """Consume one same-process prefix exactly once before actor operations."""
+
+    if (
+        type(prefix) is not _PrevalidatedPendingRecoveryFormalPrefixV1
+        or prefix._seal is not _PREVALIDATED_PENDING_FORMAL_PREFIX_SEAL
+        or prefix.consumed
+        or prefix.recovery is not recovery
+        or prefix.actors is not actors
+        or prefix.source_admission_bytes != _canonical_json(source_admission)
+        or prefix.static_dual.recovery is not recovery
+        or prefix.static_dual.actors is not actors
+        or prefix.static_dual.prestage_intent_sha256
+        != recovery.prestage_intent_sha256
+        or _canonical_json(prefix.static_dual.python_receipt)
+        != prefix.static_dual.python_receipt_bytes
+        or _canonical_json(prefix.static_dual.rust_receipt)
+        != prefix.static_dual.rust_receipt_bytes
+        or prefix.fixed_capability._seal is not _FIXED_A8_R3_PREVALIDATED_SEAL
+        or prefix.fixed_capability.basis_commit != recovery.basis_commit
+        or prefix.fixed_capability.run_id != recovery.run_id
+        or prefix.fixed_capability.ledger_id != recovery.ledger_id
+    ):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "prevalidated formal prefix differs or was already consumed",
+        )
+    try:
+        requested_static_path = static_rust_binary_path.resolve(strict=True)
+        bound_static_path = Path(
+            str(prefix.static_dual.basis.implementation_inputs["rust_binary_path"])
+        ).resolve(strict=True)
+    except OSError as exc:
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            f"prevalidated Rust path cannot be resolved: {exc}",
+        )
+    if requested_static_path != bound_static_path:
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "prevalidated Rust path differs",
+        )
+    prefix.consumed = True
+    return prefix.static_dual, prefix.fixed_capability
 
 
 def _continue_pre_stage_pending_recovery_core_v1(
@@ -7303,6 +7827,9 @@ def _continue_pre_stage_pending_recovery_core_v1(
     ) = None,
     complete_seed_resume_only: bool = False,
     static_rust_binary_path: Path | None = None,
+    prevalidated_formal_prefix: (
+        _PrevalidatedPendingRecoveryFormalPrefixV1 | None
+    ) = None,
 ) -> tuple[dict[str, object], dict[str, object]]:
     """Finish a PENDING transaction by exact same-key/same-preimage replay.
 
@@ -7322,7 +7849,38 @@ def _continue_pre_stage_pending_recovery_core_v1(
     if not actors.authoritative:
         _fail(FAIL_SYNTHETIC_PROMOTION, "synthetic actors cannot recover formal evidence")
     admission: Mapping[str, object] | None = None
-    if source_admission_guard is not None:
+    if prevalidated_formal_prefix is not None:
+        if (
+            type(prevalidated_formal_prefix)
+            is not _PrevalidatedPendingRecoveryFormalPrefixV1
+            or prevalidated_formal_prefix._seal
+            is not _PREVALIDATED_PENDING_FORMAL_PREFIX_SEAL
+            or source_admission_guard is not None
+        ):
+            _fail(
+                FAIL_RECOVERY_SOURCE_ADMISSION,
+                "attempt-6 sealed formal prefix or callback scope differs",
+            )
+        try:
+            sealed_admission = json.loads(
+                prevalidated_formal_prefix.source_admission_bytes
+            )
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            _fail(
+                FAIL_RECOVERY_SOURCE_ADMISSION,
+                f"attempt-6 sealed source admission is invalid JSON: {exc}",
+            )
+        if (
+            type(sealed_admission) is not dict
+            or _canonical_json(sealed_admission)
+            != prevalidated_formal_prefix.source_admission_bytes
+        ):
+            _fail(
+                FAIL_RECOVERY_SOURCE_ADMISSION,
+                "attempt-6 sealed source admission is not canonical exact JSON",
+            )
+        admission = sealed_admission
+    elif source_admission_guard is not None:
         admission = _validate_recovery_source_admission_v1(
             source_admission_guard(recovery),
             basis_commit=recovery.basis_commit,
@@ -7335,7 +7893,11 @@ def _continue_pre_stage_pending_recovery_core_v1(
             "complete-only recovery requires an explicit source admission callback",
         )
     if static_rust_binary_path is not None and (
-        source_admission_guard is None or not complete_seed_resume_only
+        not complete_seed_resume_only
+        or (
+            source_admission_guard is None
+            and prevalidated_formal_prefix is None
+        )
     ):
         _fail(
             FAIL_RECOVERY_SOURCE_ADMISSION,
@@ -7348,8 +7910,20 @@ def _continue_pre_stage_pending_recovery_core_v1(
             "hegel-phase3-m25-a8-r3-source-admission/1",
             _FIXED_A8_R4_SOURCE_ADMISSION_SCHEMA,
             _FIXED_A8_R5_SOURCE_ADMISSION_SCHEMA,
+            _FIXED_A8_R6_SOURCE_ADMISSION_SCHEMA,
         }
     )
+    r6_prevalidated_recovery_admitted = (
+        admission is not None
+        and admission.get("schema") == _FIXED_A8_R6_SOURCE_ADMISSION_SCHEMA
+    )
+    if r6_prevalidated_recovery_admitted != (
+        prevalidated_formal_prefix is not None
+    ):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "attempt-6 requires exactly one prevalidated formal prefix",
+        )
     if prevalidated_recovery_admitted and (
         not complete_seed_resume_only
         or replay is not replay_public_gate_evidence_v1
@@ -7401,15 +7975,28 @@ def _continue_pre_stage_pending_recovery_core_v1(
         intent
     )
     prevalidated_capability: _FixedA8R3PrevalidatedBasisV1 | None = None
-    if prevalidated_recovery_admitted:
+    static_dual: _PrevalidatedPendingRecoveryStaticDualV1 | None = None
+    if prevalidated_formal_prefix is not None:
         assert admission is not None
-        prevalidated_capability = _run_fixed_a8_r3_validator_v1(
+        if static_rust_binary_path is None:
+            _fail(
+                FAIL_RECOVERY_SOURCE_ADMISSION,
+                "attempt-6 prevalidated formal prefix lacks its Rust path",
+            )
+        static_dual, prevalidated_capability = (
+            _consume_prevalidated_pending_recovery_formal_prefix_v1(
+                recovery=recovery,
+                actors=actors,
+                source_admission=admission,
+                static_rust_binary_path=static_rust_binary_path,
+                prefix=prevalidated_formal_prefix,
+            )
+        )
+    elif prevalidated_recovery_admitted:
+        assert admission is not None
+        prevalidated_capability = _prevalidate_fixed_a8_recovery_capability_v1(
+            recovery=recovery,
             source_admission=admission,
-            actor_report=actor_report,
-            errata_report=errata_report,
-            transaction_bundle=transaction_local_bundle,
-            protocol_bundle_content_id=protocol_bundle_id,
-            qualification_key_ids=dict(expected_qualification_key_ids),
         )
     effective_replay: Callable[
         [Mapping[str, object]], Mapping[str, object]
@@ -7421,16 +8008,26 @@ def _continue_pre_stage_pending_recovery_core_v1(
             )
         )
 
-    basis = build_qualified_formal_static_basis_v1(
-        recovery.basis_commit,
-        **(
-            {}
-            if static_rust_binary_path is None
-            else {"static_rust_binary_path": static_rust_binary_path}
-        ),
-    )
-    implementation_roots = require_formal_ceremony_ready_v1(basis)
-    if source_admission_guard is None:
+    if static_dual is None:
+        try:
+            basis = build_qualified_formal_static_basis_v1(
+                recovery.basis_commit,
+                **(
+                    {}
+                    if static_rust_binary_path is None
+                    else {"static_rust_binary_path": static_rust_binary_path}
+                ),
+            )
+            implementation_roots = require_formal_ceremony_ready_v1(basis)
+        except FormalStaticBasisError as exc:
+            raise FormalContainerExecutorError(exc.code, exc.detail) from exc
+    else:
+        basis = static_dual.basis
+        implementation_roots = static_dual.implementation_roots
+    if (
+        source_admission_guard is None
+        and prevalidated_formal_prefix is None
+    ):
         validate_ceremony_admission_v1(
             actor_qualification_report=actor_report,
             errata_qualification_report=errata_report,
@@ -7462,29 +8059,71 @@ def _continue_pre_stage_pending_recovery_core_v1(
             FAIL_PREFLIGHT,
             "recovery signed actor-protocol bundle/key identity differs",
         )
-    if isinstance(actors, DockerCeremonyActorsV1):
-        actors.validate_rust_replay_binding(basis)
-        actors.validate_rust_bridge_dag_binding()
-    actor_blockers = tuple(actors.unresolved_formal_blockers())
-    if actor_blockers:
-        _fail(
-            FAIL_PREFLIGHT,
-            "authoritative recovery remains fail-closed: " + ",".join(actor_blockers),
+    if static_dual is None:
+        if isinstance(actors, DockerCeremonyActorsV1):
+            actors.validate_rust_replay_binding(basis)
+            actors.validate_rust_bridge_dag_binding()
+        actor_blockers = tuple(actors.unresolved_formal_blockers())
+        if actor_blockers:
+            _fail(
+                FAIL_PREFLIGHT,
+                "authoritative recovery remains fail-closed: "
+                + ",".join(actor_blockers),
+            )
+        if actors.bridge_qualification_report_id_v1() != expected_bridge_report_id:
+            _fail(
+                FAIL_PREFLIGHT,
+                "recovery bridge qualification report identity differs",
+            )
+        recovered_runtime_bindings = actors.prestage_runtime_binding_fields_v1(
+            implementation_roots
         )
-    if actors.bridge_qualification_report_id_v1() != expected_bridge_report_id:
-        _fail(FAIL_PREFLIGHT, "recovery bridge qualification report identity differs")
-    recovered_runtime_bindings = actors.prestage_runtime_binding_fields_v1(
-        implementation_roots
-    )
-    frozen_runtime_bindings = intent.get("runtime_binding_fields")
-    if (
-        not isinstance(recovered_runtime_bindings, Mapping)
-        or type(frozen_runtime_bindings) is not dict
-        or dict(recovered_runtime_bindings) != frozen_runtime_bindings
-        or _canonical_json(dict(recovered_runtime_bindings))
-        != _canonical_json(frozen_runtime_bindings)
-    ):
-        _fail(FAIL_PREFLIGHT, "recovery runtime/implementation binding differs")
+        frozen_runtime_bindings = intent.get("runtime_binding_fields")
+        if (
+            not isinstance(recovered_runtime_bindings, Mapping)
+            or type(frozen_runtime_bindings) is not dict
+            or dict(recovered_runtime_bindings) != frozen_runtime_bindings
+            or _canonical_json(dict(recovered_runtime_bindings))
+            != _canonical_json(frozen_runtime_bindings)
+        ):
+            _fail(
+                FAIL_PREFLIGHT,
+                "recovery runtime/implementation binding differs",
+            )
+
+    # Static basis qualification is seed-free and requires no live purpose
+    # actor.  In particular, a path/digest/replay-policy failure must happen
+    # before key restoration or seed-split replay.  The R6 pre-consumption
+    # qualification runs the same boundary once before owner authorization;
+    # this in-core replay is the last fail-closed check against runtime drift.
+    python_receipt: Mapping[str, object] | None = None
+    rust_receipt: Mapping[str, object] | None = None
+    parent: ParentAbsenceAuditEvidence | None = None
+    if static_dual is not None:
+        python_receipt = static_dual.python_receipt
+        rust_receipt = static_dual.rust_receipt
+        parent = static_dual.parent_absence
+    elif recovery.journal_state == "RESERVED":
+        try:
+            python_receipt = build_python_static_replay_receipt_v1(basis)
+            actors.validate_frozen_daemon_receipt_binding_v1(
+                frozen_daemon_binding
+            )
+            static_control_plane, static_daemon_binding = (
+                actors.static_replay_control_plane_v1()
+            )
+            rust_receipt = run_rust_static_replay_receipt_v1(
+                basis,
+                control_plane=static_control_plane,
+                daemon_receipt_binding=static_daemon_binding,
+                rust_binary=Path(
+                    str(basis.implementation_inputs["rust_binary_path"])
+                ),
+            )
+        except FormalStaticBasisError as exc:
+            raise FormalContainerExecutorError(exc.code, exc.detail) from exc
+        parent = generate_parent_absence_audit_v1(REPOSITORY_ROOT)
+        replay_parent_absence_audit_v1(parent, repository=REPOSITORY_ROOT)
 
     transaction = FormalCeremonyTransactionV1(
         basis_commit=recovery.basis_commit,
@@ -7560,34 +8199,36 @@ def _continue_pre_stage_pending_recovery_core_v1(
         transaction._fault("after_recovery_seed_split_frames")
 
         if transaction._state == "RESERVED":
-            python_receipt = build_python_static_replay_receipt_v1(basis)
-            static_control_plane, static_daemon_binding = (
-                actors.static_replay_control_plane_v1()
-            )
-            rust_receipt = run_rust_static_replay_receipt_v1(
-                basis,
-                control_plane=static_control_plane,
-                daemon_receipt_binding=static_daemon_binding,
-            )
-            parent = generate_parent_absence_audit_v1(REPOSITORY_ROOT)
-            replay_parent_absence_audit_v1(parent, repository=REPOSITORY_ROOT)
-            inputs = _build_gate_inputs_and_sign_v1(
-                basis=basis,
-                parent=parent,
-                actor_report=actor_report,
-                errata_report=errata_report,
-                python_static_receipt=python_receipt,
-                rust_static_receipt=rust_receipt,
-                execution_binding_roots=implementation_roots,
-                actors=actors,
-                timestamp=timestamp,
-                run_id=recovery.run_id,
-                ledger_id=recovery.ledger_id,
-                trust_id=trust_id,
-                frozen_actor_trust=actor_trust,
-                frozen_split_frames=(python_frame, rust_frame),
-                fault_injector=transaction._fault,
-            )
+            if (
+                python_receipt is None
+                or rust_receipt is None
+                or parent is None
+            ):
+                _fail(
+                    FAIL_PREFLIGHT,
+                    "seed-free static qualification was not completed before actor start",
+                )
+            try:
+                inputs = _build_gate_inputs_and_sign_v1(
+                    basis=basis,
+                    parent=parent,
+                    actor_report=actor_report,
+                    errata_report=errata_report,
+                    python_static_receipt=python_receipt,
+                    rust_static_receipt=rust_receipt,
+                    execution_binding_roots=implementation_roots,
+                    actors=actors,
+                    timestamp=timestamp,
+                    run_id=recovery.run_id,
+                    ledger_id=recovery.ledger_id,
+                    trust_id=trust_id,
+                    frozen_actor_trust=actor_trust,
+                    frozen_split_frames=(python_frame, rust_frame),
+                    prevalidated_static_dual=static_dual,
+                    fault_injector=transaction._fault,
+                )
+            except FormalStaticBasisError as exc:
+                raise FormalContainerExecutorError(exc.code, exc.detail) from exc
             replay_payload = serialize_gate_evidence_inputs_v1(inputs)
             prospective_promotion = dict(effective_replay(replay_payload))
             transaction.stage_and_prospectively_replay(
@@ -12384,13 +13025,36 @@ def _build_gate_inputs_and_sign_v1(
     timestamp: int, run_id: bytes, ledger_id: bytes, trust_id: bytes,
     frozen_actor_trust: ActorPublicKeysV1 | None = None,
     frozen_split_frames: tuple[bytes, bytes] | None = None,
+    prevalidated_static_dual: (
+        _PrevalidatedPendingRecoveryStaticDualV1 | None
+    ) = None,
     fault_injector: Callable[[str], None] | None = None,
 ) -> GateEvidenceInputsV1:
     """Construct the frozen DAG and obtain only purpose-authorized signatures."""
 
-    static_roots = validate_dual_static_replay_receipts_v1(
-        basis, python_static_receipt, rust_static_receipt
-    )
+    if prevalidated_static_dual is None:
+        static_roots = validate_dual_static_replay_receipts_v1(
+            basis, python_static_receipt, rust_static_receipt
+        )
+    elif (
+        type(prevalidated_static_dual)
+        is not _PrevalidatedPendingRecoveryStaticDualV1
+        or prevalidated_static_dual._seal
+        is not _PREVALIDATED_PENDING_STATIC_DUAL_SEAL
+        or prevalidated_static_dual.basis is not basis
+        or prevalidated_static_dual.python_receipt is not python_static_receipt
+        or prevalidated_static_dual.rust_receipt is not rust_static_receipt
+        or _canonical_json(prevalidated_static_dual.python_receipt)
+        != prevalidated_static_dual.python_receipt_bytes
+        or _canonical_json(prevalidated_static_dual.rust_receipt)
+        != prevalidated_static_dual.rust_receipt_bytes
+    ):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "prevalidated static dual capability differs during DAG construction",
+        )
+    else:
+        static_roots = prevalidated_static_dual.static_roots
     if frozen_actor_trust is None:
         public_keys = {purpose: actors.keygen(purpose) for purpose in (1, 2, 3, 4)}
         actor_trust = build_actor_trust_v1(
@@ -12890,6 +13554,7 @@ def execute_formal_container_ceremony_v1(
         basis,
         control_plane=static_control_plane,
         daemon_receipt_binding=static_daemon_binding,
+        rust_binary=Path(str(basis.implementation_inputs["rust_binary_path"])),
     )
     parent = generate_parent_absence_audit_v1(REPOSITORY_ROOT)
     replay_parent_absence_audit_v1(parent, repository=REPOSITORY_ROOT)

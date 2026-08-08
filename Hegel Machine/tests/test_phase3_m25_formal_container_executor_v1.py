@@ -120,6 +120,8 @@ def _fixed_r3_unchanged_input_rows() -> tuple[tuple[str, str], ...]:
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r4_v1.py",
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_amendment_r5_v1.py",
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r5_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_amendment_r6_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r6_v1.py",
         "Hegel Machine/src/hegel_machine/phase3_m3_implementation_qualification_v1.py",
         "Hegel Machine/rust/formal_bridge_m25/src/lib.rs",
     }
@@ -1369,6 +1371,7 @@ def test_execute_rejects_post_live_receipt_drift_before_any_formal_side_effect(
     drift_source: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     basis = _basis(ready=True)
+    basis.implementation_inputs["rust_binary_path"] = str(tmp_path / "rust-replay")
     receipt = dict(
         basis.implementation_inputs["m3_implementation_qualification_receipt"]
     )
@@ -2149,8 +2152,13 @@ def test_prestage_recovery_preserves_actor_cleanup_then_transaction_close_failur
     monkeypatch.setattr(
         executor, "_qualification_only_key_ids_from_intent_v1", lambda _intent: key_ids
     )
+    basis = SimpleNamespace(
+        implementation_inputs={"rust_binary_path": str(tmp_path / "rust-replay")}
+    )
     monkeypatch.setattr(
-        executor, "build_qualified_formal_static_basis_v1", lambda *_a, **_k: object()
+        executor,
+        "build_qualified_formal_static_basis_v1",
+        lambda *_a, **_k: basis,
     )
     monkeypatch.setattr(executor, "require_formal_ceremony_ready_v1", lambda _b: {})
     monkeypatch.setattr(executor, "validate_ceremony_admission_v1", lambda **_k: None)
@@ -2172,6 +2180,9 @@ def test_prestage_recovery_preserves_actor_cleanup_then_transaction_close_failur
     class Actors:
         authoritative = True
 
+        def __init__(self):
+            self.started = False
+
         def unresolved_formal_blockers(self):
             return ()
 
@@ -2185,10 +2196,15 @@ def test_prestage_recovery_preserves_actor_cleanup_then_transaction_close_failur
             return None
 
         def start(self):
+            self.started = True
             return self
 
         def validate_frozen_daemon_receipt_binding_v1(self, _binding):
-            raise body_primary
+            if self.started:
+                raise body_primary
+
+        def static_replay_control_plane_v1(self):
+            return object(), b"d" * 32
 
         def stop_for_recovery_and_verify_absent(self):
             raise actor_cleanup
@@ -2198,6 +2214,18 @@ def test_prestage_recovery_preserves_actor_cleanup_then_transaction_close_failur
     )
     monkeypatch.setattr(
         executor, "FormalCeremonyTransactionV1", lambda **_kwargs: transaction
+    )
+    monkeypatch.setattr(
+        executor, "build_python_static_replay_receipt_v1", lambda _basis: {}
+    )
+    monkeypatch.setattr(
+        executor, "run_rust_static_replay_receipt_v1", lambda *_a, **_k: {}
+    )
+    monkeypatch.setattr(
+        executor, "generate_parent_absence_audit_v1", lambda _root: object()
+    )
+    monkeypatch.setattr(
+        executor, "replay_parent_absence_audit_v1", lambda *_a, **_k: None
     )
     with pytest.raises(executor.FormalContainerCompositeError) as captured:
         executor._continue_pre_stage_pending_recovery_core_v1(
@@ -2229,8 +2257,11 @@ def test_ordinary_execute_preserves_actor_cleanup_then_transaction_close_failure
         timestamp=7,
     )
     monkeypatch.setattr(executor, "_commit", lambda value: value)
+    basis = SimpleNamespace(
+        implementation_inputs={"rust_binary_path": str(tmp_path / "rust-replay")}
+    )
     monkeypatch.setattr(
-        executor, "build_qualified_formal_static_basis_v1", lambda _commit: object()
+        executor, "build_qualified_formal_static_basis_v1", lambda _commit: basis
     )
     monkeypatch.setattr(executor, "require_formal_ceremony_ready_v1", lambda _b: {})
     monkeypatch.setattr(executor, "validate_ceremony_admission_v1", lambda **_k: None)

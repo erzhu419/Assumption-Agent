@@ -159,6 +159,8 @@ R5_RUNTIME_EXCEPTION_PATHS: Final = frozenset(
         *_r4.R4_RUNTIME_EXCEPTION_PATHS,
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_amendment_r5_v1.py",
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r5_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_amendment_r6_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r6_v1.py",
     }
 )
 _HEX_40 = re.compile(r"[0-9a-f]{40}")
@@ -442,8 +444,8 @@ def inspect_r5_source_preflight_v1(
     runtime_exception_bindings = _runtime_exception_source_bindings_v1(
         repository_root=repository_root, head=head
     )
-    if len(runtime_exception_bindings) != 13:
-        _fail("R5 runtime-exception source registry is not the frozen 13 paths")
+    if len(runtime_exception_bindings) != 15:
+        _fail("R5 runtime-exception source registry is not the current 15 paths")
     return {
         "schema": f"{AUDIT_SCHEMA_PREFIX}-preflight/1",
         "amendment_commit": head,

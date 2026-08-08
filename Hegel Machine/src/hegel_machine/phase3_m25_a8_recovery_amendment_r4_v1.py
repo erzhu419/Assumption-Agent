@@ -185,6 +185,8 @@ R4_RUNTIME_EXCEPTION_PATHS: Final = frozenset(
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r4_v1.py",
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_amendment_r5_v1.py",
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r5_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_amendment_r6_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r6_v1.py",
     }
 )
 _HEX_40 = re.compile(r"[0-9a-f]{40}")
