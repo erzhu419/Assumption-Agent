@@ -1,4 +1,4 @@
-"""Dedicated CLI for the fixed A8 -> R1 -> R2 -> R3 recovery chain."""
+"""Dedicated CLI for the fixed A8 -> R1 -> R2 -> R3 -> R3.1 chain."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ def _add_transaction_paths(parser: argparse.ArgumentParser) -> None:
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="phase3-m25-a8-r3-recovery-v1")
+    parser = argparse.ArgumentParser(prog="phase3-m25-a8-r31-recovery-v1")
     commands = parser.add_subparsers(dest="operation", required=True)
     preflight = commands.add_parser("preflight")
     preflight.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST_PATH)
@@ -43,8 +43,9 @@ def _parser() -> argparse.ArgumentParser:
     recover = commands.add_parser(
         "recover-fixed-complete-seed",
         help=(
-            "consume recovery attempt 3 exactly once and resume only the fixed "
-            "A8 run/ledger with REAL_PENDING_RESUME"
+            "consume still-unconsumed recovery attempt 3 exactly once under "
+            "R3.1 canonical-byte admission and resume only the fixed A8 "
+            "run/ledger with REAL_PENDING_RESUME"
         ),
     )
     recover.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST_PATH)
@@ -113,7 +114,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         OSError,
         ValueError,
     ) as exc:
-        code = getattr(exc, "code", "FAIL_M25_A8_R3_RECOVERY_CLI")
+        code = getattr(exc, "code", "FAIL_M25_A8_R31_RECOVERY_CLI")
         detail = getattr(exc, "detail", str(exc))
         sys.stderr.write(
             json.dumps(
@@ -125,7 +126,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             + "\n"
         )
         return 2
-    raise AssertionError("unreachable R3 recovery CLI operation")
+    raise AssertionError("unreachable R3.1 recovery CLI operation")
 
 
 if __name__ == "__main__":

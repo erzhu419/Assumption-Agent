@@ -321,6 +321,54 @@ def test_attempt3_source_admission_rejects_extension_field() -> None:
     assert captured.value.code == executor.FAIL_RECOVERY_SOURCE_ADMISSION
 
 
+def test_r31_commit_context_requires_current_head_as_sole_child_of_r3(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert executor._FIXED_A8_R3_PARENT_AMENDMENT_COMMIT == (
+        "52a4a61934a73c70dc09b919cae377db166eaedf"
+    )
+    r31_commit = "56" * 20
+    admission = {"r3_amendment_commit": r31_commit}
+    wrong_parent = False
+
+    def fake_run(arguments: list[str], **_kwargs: object) -> SimpleNamespace:
+        nonlocal wrong_parent
+        if arguments[1:3] == ["rev-parse", "--verify"]:
+            stdout = (r31_commit + "\n").encode("ascii")
+        elif arguments[1:4] == ["rev-list", "--parents", "-n"]:
+            parent = (
+                "00" * 20
+                if wrong_parent
+                else executor._FIXED_A8_R3_PARENT_AMENDMENT_COMMIT
+            )
+            stdout = (r31_commit + " " + parent + "\n").encode("ascii")
+        elif arguments[1] == "ls-tree":
+            stdout = (
+                "100644 blob "
+                + "11" * 20
+                + "\t"
+                + executor._FIXED_A8_R3_VALIDATOR_REPOSITORY_PATH
+                + "\n"
+            ).encode("utf-8")
+        else:
+            raise AssertionError(arguments)
+        return SimpleNamespace(returncode=0, stdout=stdout, stderr=b"")
+
+    monkeypatch.setattr(executor.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        executor,
+        "_fixed_a8_r3_git_blob_v1",
+        lambda _commit, _path: b"validator",
+    )
+    assert executor._validate_fixed_a8_r3_commit_context_v1(admission) == (
+        b"validator"
+    )
+    wrong_parent = True
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        executor._validate_fixed_a8_r3_commit_context_v1(admission)
+    assert captured.value.code == executor.FAIL_RECOVERY_SOURCE_ADMISSION
+
+
 def _minimal_pending_recovery_for_r3_replay_guard(
     tmp_path: Path,
 ) -> executor.PendingCeremonyRecoveryV1:

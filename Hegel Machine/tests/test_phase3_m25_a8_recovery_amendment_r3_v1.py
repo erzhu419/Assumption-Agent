@@ -18,8 +18,11 @@ def _canonical(value: object) -> bytes:
     ).encode("ascii")
 
 
-def test_r3_frozen_parent_and_terminal_r2_identity() -> None:
+def test_r31_frozen_parent_revision_and_terminal_r2_identity() -> None:
     assert amendment.R2_AMENDMENT_COMMIT == "ec7c04cf62190558c72448639d7e3cd13a5b6903"
+    assert amendment.R3_AMENDMENT_COMMIT == (
+        "52a4a61934a73c70dc09b919cae377db166eaedf"
+    )
     assert amendment.R2_AUDIT_RAW_SHA256["attempt-start.json"] == (
         "b4b817878d84c6506739f30adc4f38689791c37e3ee786e5c855b86df4a4f0e0"
     )
@@ -30,7 +33,14 @@ def test_r3_frozen_parent_and_terminal_r2_identity() -> None:
         "87b400cf0070efdb3e2f9d7b37dc09675258c5b0341ce629b7c7b6c5431f3f58"
     )
     assert amendment.OWNER_CONFIRMATION == (
-        "AUTHORIZE_A8_R3_ATTEMPT_3_COMPLETE_ONLY_REAL_PENDING_RESUME"
+        "AUTHORIZE_A8_R31_ATTEMPT_3_REVISION_1_CANONICAL_BYTES_"
+        "COMPLETE_ONLY_REAL_PENDING_RESUME"
+    )
+    assert amendment.AUTHORIZATION_REVISION_ID == (
+        "R31_CANONICAL_INCIDENT_BYTES_V1"
+    )
+    assert amendment.FIXED_R3_AUDIT_DIRECTORY != (
+        amendment.R3_PREATTEMPT_AUDIT_DIRECTORY
     )
 
 
@@ -49,6 +59,118 @@ def test_live_r2_terminal_chain_is_exact_and_has_no_admission() -> None:
     )
     assert not (amendment.R2_AUDIT_DIRECTORY / "admission.json").exists()
     assert not (amendment.R2_AUDIT_DIRECTORY / "finalize.json").exists()
+
+
+def test_live_r3_preattempt_prefix_is_exact_and_attempt3_is_unconsumed() -> None:
+    rows = amendment._r3_preattempt_prefix_snapshot_v1()
+    assert [row["name"] for row in rows] == [
+        "preflight.json",
+        "incident-diagnostic.json",
+        "a8-validation-receipt.json",
+        "authorization-request.json",
+        "authorization.json",
+    ]
+    assert hashlib.sha256(amendment._canonical_json(rows)).hexdigest() == (
+        amendment.R3_PREATTEMPT_PREFIX_ROOT_SHA256
+    )
+    assert amendment.R3_PREATTEMPT_PREFIX_ROOT_SHA256 == (
+        "9771b20bf63f1095456618d3ccd4c9db0c54c693307314b8aea72afa18249999"
+    )
+    assert not any(
+        (
+            amendment.R3_PREATTEMPT_AUDIT_DIRECTORY / name
+        ).exists()
+        for name in (
+            "attempt-start.json",
+            "admission.json",
+            "failure.json",
+            "finalize.json",
+        )
+    )
+    assert not any(
+        path.name.endswith(".next")
+        for path in amendment.R3_PREATTEMPT_AUDIT_DIRECTORY.iterdir()
+    )
+
+
+def test_r31_incident_authority_is_canonical_bytes_not_python_shapes() -> None:
+    rebuilt = {
+        "schema": "test-r31-incident/1",
+        "r1_failure_chain": ({"name": "one"},),
+        "docker_state": {
+            "fixed_key_volume_names": ("p1", "p2"),
+            "run_labelled_container_names": (),
+        },
+    }
+    stored_raw = amendment._receipt_record_bytes_v1(rebuilt)
+    stored = json.loads(stored_raw)
+    assert stored != amendment._r2._with_receipt_sha256(rebuilt)
+    assert amendment._incident_receipt_bytes_equal_v1(stored_raw, rebuilt)
+
+    changed = dict(rebuilt)
+    changed["r1_failure_chain"] = ({"name": "two"},)
+    assert not amendment._incident_receipt_bytes_equal_v1(stored_raw, changed)
+    assert not amendment._incident_receipt_bytes_equal_v1(
+        stored_raw + b" ", rebuilt
+    )
+
+
+def test_r31_source_binding_paths_reject_duplicate_omission_and_reorder() -> None:
+    expected = ("Hegel Machine/a.py", "Hegel Machine/b.py")
+    first = {"path": expected[0]}
+    second = {"path": expected[1]}
+    assert amendment._source_binding_paths_are_exact_v1(
+        [first, second], expected
+    )
+    assert not amendment._source_binding_paths_are_exact_v1(
+        [first, first], expected
+    )
+    assert not amendment._source_binding_paths_are_exact_v1(
+        [second, first], expected
+    )
+    assert not amendment._source_binding_paths_are_exact_v1([first], expected)
+    assert not amendment._source_binding_paths_are_exact_v1(
+        [first, second, {"path": "Hegel Machine/c.py"}], expected
+    )
+    assert not amendment._source_binding_paths_are_exact_v1(
+        [first, "Hegel Machine/b.py"], expected
+    )
+
+
+def test_r31_representation_mismatch_set_is_exactly_the_frozen_nine() -> None:
+    stored = {
+        "additional_stage_continuity_metadata": [],
+        "docker_state": {
+            "fixed_key_volume_label_rows": [],
+            "fixed_key_volume_names": [],
+            "run_labelled_container_names": [],
+            "unchanged": True,
+        },
+        "fixed_stage_inventory": [],
+        "public_reservation_metadata": [],
+        "r1_failure_chain": [],
+        "r2_terminal_chain": [],
+        "seed_prefix_metadata": [],
+        "unchanged": {"value": True},
+    }
+    rebuilt = {
+        **stored,
+        "additional_stage_continuity_metadata": (),
+        "docker_state": {
+            "fixed_key_volume_label_rows": (),
+            "fixed_key_volume_names": (),
+            "run_labelled_container_names": (),
+            "unchanged": True,
+        },
+        "fixed_stage_inventory": (),
+        "public_reservation_metadata": (),
+        "r1_failure_chain": (),
+        "r2_terminal_chain": (),
+        "seed_prefix_metadata": (),
+    }
+    assert amendment._r3_preattempt_representation_mismatch_fields_v1(
+        stored, rebuilt
+    ) == amendment.R3_PREATTEMPT_REPRESENTATION_MISMATCH_FIELDS
 
 
 def test_real_intent_request_normalizes_only_diagnostic_json() -> None:
@@ -105,6 +227,9 @@ def test_source_admission_is_exact_ordinal3_and_fail_closed(
     assert admission["prevalidated_report_basis"] is True
     assert admission["prevalidated_transaction_bundle"] is True
     assert admission["formal_identity_entropy_draw_count"] == 0
+    assert admission["continuation_action"] == (
+        amendment.SOURCE_ADMISSION_CONTINUATION_ACTION
+    )
     assert admission["r2_failure_raw_sha256"] == (
         amendment.R2_AUDIT_RAW_SHA256["failure.json"]
     )
@@ -337,7 +462,7 @@ def test_prepare_and_authorize_are_exact_prefix_resumable(
     preflight = {
         "schema": f"{amendment.AUDIT_SCHEMA_PREFIX}-preflight/1",
         "amendment_commit": "66" * 20,
-        "sole_parent_commit": amendment.R2_AMENDMENT_COMMIT,
+        "sole_parent_commit": amendment.R3_AMENDMENT_COMMIT,
         "formal_repository_commit": amendment.A8_BASIS_COMMIT,
         "run_id_hex": amendment.FIXED_RUN_ID_HEX,
         "ledger_id_hex": amendment.FIXED_LEDGER_ID_HEX,
@@ -447,6 +572,14 @@ def test_r3_isolated_validator_manifest_basis_is_exact() -> None:
     assert manifest["expected_a8_validation_receipt_sha256"] == (
         amendment.EXPECTED_A8_VALIDATION_RECEIPT_RAW_SHA256
     )
+    assert manifest["sole_parent_commit"] == amendment.R3_AMENDMENT_COMMIT
+    assert manifest["authorization_revision_id"] == (
+        amendment.AUTHORIZATION_REVISION_ID
+    )
+    assert manifest["r3_preattempt_prefix_root_sha256"] == (
+        amendment.R3_PREATTEMPT_PREFIX_ROOT_SHA256
+    )
+    assert manifest["recovery_attempt_ordinal"] == 3
 
 
 @pytest.mark.skipif(

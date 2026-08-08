@@ -7,6 +7,12 @@ A8 worktree, while the parent binds that deterministic receipt to the fixed
 R1/R2 provenance, runtime artifacts, and the complete-only recovery core.  No
 entry point in this module starts M3, redraws a seed, or opens/hashes the raw
 seed.
+
+R3.1 is a pre-attempt verifier erratum layered on the pushed R3 amendment.
+The original R3 authorization prefix is preserved and bound as an immutable,
+unconsumed superseded prefix.  Attempt ordinal 3 remains unconsumed because
+the old prefix contains no ``attempt-start.json``.  R3.1 admits only exact
+canonical incident bytes; it never coerces diagnostic Python representations.
 """
 
 from __future__ import annotations
@@ -50,7 +56,7 @@ from .phase3_m25_wire_v1 import M3_RUN_OUTPUT_ROOTS
 PROJECT_ROOT: Final = Path(__file__).resolve().parents[2]
 REPOSITORY_ROOT: Final = PROJECT_ROOT.parent
 DEFAULT_MANIFEST_PATH: Final = (
-    PROJECT_ROOT / "config/phase3_m25_a8_recovery_amendment_r3_v1.json"
+    PROJECT_ROOT / "config/phase3_m25_a8_recovery_amendment_r31_v1.json"
 )
 A8_VALIDATOR_TOOL: Final = (
     PROJECT_ROOT / "tools/phase3_m25_a8_recovery_report_validator_r3_v1.py"
@@ -75,24 +81,73 @@ FIXED_FORMAL_REPOSITORY_ROOT: Final = Path(
 A8_BASIS_COMMIT: Final = _r2.A8_BASIS_COMMIT
 R1_AMENDMENT_COMMIT: Final = _r2.R1_AMENDMENT_COMMIT
 R2_AMENDMENT_COMMIT: Final = "ec7c04cf62190558c72448639d7e3cd13a5b6903"
+R3_AMENDMENT_COMMIT: Final = "52a4a61934a73c70dc09b919cae377db166eaedf"
 FIXED_RUN_ID_HEX: Final = _r2.FIXED_RUN_ID_HEX
 FIXED_LEDGER_ID_HEX: Final = _r2.FIXED_LEDGER_ID_HEX
 FIXED_RUN_ID: Final = _r2.FIXED_RUN_ID
 FIXED_LEDGER_ID: Final = _r2.FIXED_LEDGER_ID
 R1_AUDIT_DIRECTORY: Final = _r2.R1_AUDIT_DIRECTORY
 R2_AUDIT_DIRECTORY: Final = _r2.FIXED_R2_AUDIT_DIRECTORY
-FIXED_R3_AUDIT_DIRECTORY: Final = Path(
+R3_PREATTEMPT_AUDIT_DIRECTORY: Final = Path(
     "/home/erzhu419/.local/state/hegel-machine/"
     "phase3-m25-0af65964235390ce2bebefea7379eaa9c50eda24/"
     "recovery-audit-r3-e4af9f57c38fb298462ec628c4ed8a03-attempt-3"
 )
-MANIFEST_SCHEMA: Final = "hegel-phase3-m25-a8-recovery-amendment-r3/1"
-AUDIT_SCHEMA_PREFIX: Final = "hegel-phase3-m25-a8-r3-recovery-audit"
-FAIL_AMENDMENT: Final = "FAIL_M25_A8_R3_RECOVERY_AMENDMENT"
-OWNER_CONFIRMATION: Final = (
-    "AUTHORIZE_A8_R3_ATTEMPT_3_COMPLETE_ONLY_REAL_PENDING_RESUME"
+FIXED_R3_AUDIT_DIRECTORY: Final = Path(
+    "/home/erzhu419/.local/state/hegel-machine/"
+    "phase3-m25-0af65964235390ce2bebefea7379eaa9c50eda24/"
+    "recovery-audit-r31-e4af9f57c38fb298462ec628c4ed8a03-"
+    "attempt-3-revision-1"
 )
-CONTINUATION_ACTION: Final = "CODE_AMENDMENT_RECOVERY_CONTINUATION"
+MANIFEST_SCHEMA: Final = "hegel-phase3-m25-a8-recovery-amendment-r31/1"
+AUDIT_SCHEMA_PREFIX: Final = "hegel-phase3-m25-a8-r31-recovery-audit"
+R3_PREATTEMPT_AUDIT_SCHEMA_PREFIX: Final = (
+    "hegel-phase3-m25-a8-r3-recovery-audit"
+)
+FAIL_AMENDMENT: Final = "FAIL_M25_A8_R31_RECOVERY_AMENDMENT"
+OWNER_CONFIRMATION: Final = (
+    "AUTHORIZE_A8_R31_ATTEMPT_3_REVISION_1_CANONICAL_BYTES_"
+    "COMPLETE_ONLY_REAL_PENDING_RESUME"
+)
+CONTINUATION_ACTION: Final = "PRE_ATTEMPT_VERIFIER_ERRATUM_CONTINUATION"
+SOURCE_ADMISSION_CONTINUATION_ACTION: Final = (
+    "CODE_AMENDMENT_RECOVERY_CONTINUATION"
+)
+AUTHORIZATION_REVISION_ID: Final = "R31_CANONICAL_INCIDENT_BYTES_V1"
+PRE_ATTEMPT_DEFECT_CODE: Final = (
+    "PRE_ATTEMPT_SUPERSEDED_IMPLEMENTATION_DEFECT_LIST_TUPLE_EQUALITY"
+)
+R3_PREATTEMPT_AUDIT_RAW_SHA256: Final = {
+    "preflight.json": "3e6820c0f76e8a8b77de3f3888bb5f072e59a2e4fb95b79533ce6bf80f685b5a",
+    "incident-diagnostic.json": "d0b27d5c7f1f00a74873bac2394f05fb6666a29e07fdbf9886999f0dddbebc21",
+    "a8-validation-receipt.json": "ef18694aa41a78389cef2265eb121174f2e68548928f89f7fcad3f55fb261ee4",
+    "authorization-request.json": "28fb786ab5d0017c295b4ac5efee1ff26deabf9dbb024c732ebc565a4048c28d",
+    "authorization.json": "c6d5c04ee1cc499b8a697e2a4359144f713a3711cad578fc953e3b203f1b7721",
+}
+R3_PREATTEMPT_AUDIT_RECEIPT_SHA256: Final = {
+    "preflight.json": "a058b0f18eb53cfd58e720041c4d9a7b9985532360c410959be1140855d38f98",
+    "incident-diagnostic.json": "73060741d5f78efdc27c8273285a4c967954c72c234c2956a074270981cf5ee9",
+    "a8-validation-receipt.json": "83b1ad690914d9dfd5cd402d5c734a1250a3b450c9e0b3ecf4655cfb97c6ba47",
+    "authorization-request.json": "f133d0dd69e1a61c9c3ca89b3465433406d367c1a4b16c59e1065f9a104e6209",
+    "authorization.json": "1cdfd80310184da56052df4445db8795148f8c9db50eef7595608fe79b9853b0",
+}
+R3_PREATTEMPT_PREFIX_ROOT_SHA256: Final = (
+    "9771b20bf63f1095456618d3ccd4c9db0c54c693307314b8aea72afa18249999"
+)
+R3_PREATTEMPT_MANIFEST_SHA256: Final = (
+    "2f6a9f6b100e6881f24072ad1a07b675d2831c27d756574deea2fc0a6f217178"
+)
+R3_PREATTEMPT_REPRESENTATION_MISMATCH_FIELDS: Final = (
+    "additional_stage_continuity_metadata",
+    "docker_state.fixed_key_volume_label_rows",
+    "docker_state.fixed_key_volume_names",
+    "docker_state.run_labelled_container_names",
+    "fixed_stage_inventory",
+    "public_reservation_metadata",
+    "r1_failure_chain",
+    "r2_terminal_chain",
+    "seed_prefix_metadata",
+)
 R2_AUDIT_RAW_SHA256: Final = {
     "preflight.json": "549e2f2654e8d4b334ae63d33314083c2b9a44c2c16914b31a95549af84a6afe",
     "incident-diagnostic.json": "a2eaeb9534c519bc94f2c687d5d6529d86795bc52d4812736040fdbe3ad0a0c0",
@@ -217,13 +272,18 @@ def _load_manifest(path: Path) -> tuple[dict[str, object], bytes]:
         "complete_seed_resume_only", "formal_identity_entropy_draw_count",
         "ephemeral_container_nonce_allowed", "ordinary_execute_allowed",
         "ordinary_recovery_cross_basis_allowed", "fixed_r1_audit_directory",
-        "fixed_r2_audit_directory", "fixed_r3_audit_directory",
+        "fixed_r2_audit_directory", "fixed_r3_preattempt_audit_directory",
+        "fixed_r31_audit_directory", "parent_amendment_commit",
         "r1_audit_raw_sha256", "r1_failure_receipt_sha256",
         "r2_audit_raw_sha256", "r2_audit_receipt_sha256",
         "r2_terminal_chain_root_sha256", "expected_live_bundle_sha256",
         "expected_a8_validation_receipt_sha256",
         "fixed_continuity_sha256", "continuation_action", "owner_confirmation",
         "fixed_runtime_artifacts", "a8_validator_execution",
+        "r3_preattempt_audit_raw_sha256",
+        "r3_preattempt_audit_receipt_sha256",
+        "r3_preattempt_prefix_root_sha256", "authorization_revision_id",
+        "pre_attempt_defect_code",
     }
     expected_validator = {
         "python_executable": FIXED_PYTHON_EXECUTABLE.as_posix(),
@@ -246,7 +306,8 @@ def _load_manifest(path: Path) -> tuple[dict[str, object], bytes]:
     if (
         value.get("schema") != MANIFEST_SCHEMA
         or value.get("source_commit_selector") != "HEAD"
-        or value.get("sole_parent_commit") != R2_AMENDMENT_COMMIT
+        or value.get("sole_parent_commit") != R3_AMENDMENT_COMMIT
+        or value.get("parent_amendment_commit") != R3_AMENDMENT_COMMIT
         or value.get("formal_repository_commit") != A8_BASIS_COMMIT
         or value.get("fixed_run_id_hex") != FIXED_RUN_ID_HEX
         or value.get("fixed_ledger_id_hex") != FIXED_LEDGER_ID_HEX
@@ -258,24 +319,35 @@ def _load_manifest(path: Path) -> tuple[dict[str, object], bytes]:
         or value.get("ordinary_recovery_cross_basis_allowed") is not False
         or value.get("fixed_r1_audit_directory") != R1_AUDIT_DIRECTORY.as_posix()
         or value.get("fixed_r2_audit_directory") != R2_AUDIT_DIRECTORY.as_posix()
-        or value.get("fixed_r3_audit_directory") != FIXED_R3_AUDIT_DIRECTORY.as_posix()
+        or value.get("fixed_r3_preattempt_audit_directory")
+        != R3_PREATTEMPT_AUDIT_DIRECTORY.as_posix()
+        or value.get("fixed_r31_audit_directory")
+        != FIXED_R3_AUDIT_DIRECTORY.as_posix()
         or value.get("r1_audit_raw_sha256") != _r2.R1_AUDIT_RAW_SHA256
         or value.get("r1_failure_receipt_sha256") != _r2.R1_FAILURE_RECEIPT_SHA256
         or value.get("r2_audit_raw_sha256") != R2_AUDIT_RAW_SHA256
         or value.get("r2_audit_receipt_sha256") != R2_AUDIT_RECEIPT_SHA256
         or value.get("r2_terminal_chain_root_sha256")
         != R2_TERMINAL_CHAIN_ROOT_SHA256
+        or value.get("r3_preattempt_audit_raw_sha256")
+        != R3_PREATTEMPT_AUDIT_RAW_SHA256
+        or value.get("r3_preattempt_audit_receipt_sha256")
+        != R3_PREATTEMPT_AUDIT_RECEIPT_SHA256
+        or value.get("r3_preattempt_prefix_root_sha256")
+        != R3_PREATTEMPT_PREFIX_ROOT_SHA256
         or value.get("expected_live_bundle_sha256")
         != _r2.EXPECTED_LIVE_BUNDLE_SHA256
         or value.get("expected_a8_validation_receipt_sha256")
         != EXPECTED_A8_VALIDATION_RECEIPT_RAW_SHA256
         or value.get("fixed_continuity_sha256") != FIXED_CONTINUITY_SHA256
         or value.get("continuation_action") != CONTINUATION_ACTION
+        or value.get("authorization_revision_id") != AUTHORIZATION_REVISION_ID
+        or value.get("pre_attempt_defect_code") != PRE_ATTEMPT_DEFECT_CODE
         or value.get("owner_confirmation") != OWNER_CONFIRMATION
         or tuple(value.get("fixed_runtime_artifacts", ())) != FIXED_RUNTIME_ARTIFACTS
         or value.get("a8_validator_execution") != expected_validator
     ):
-        _fail("R3 amendment manifest fixed policy differs")
+        _fail("R3.1 amendment manifest fixed policy differs")
     return value, raw
 
 
@@ -381,6 +453,21 @@ def _verify_changed_index_flags_v1(
         _fail("R3 changed-path index set differs")
 
 
+def _source_binding_paths_are_exact_v1(
+    bindings: object, expected_paths: Sequence[str]
+) -> bool:
+    """Require one ordinary JSON row per changed source, in Git diff order."""
+
+    if type(bindings) is not list or len(bindings) != len(expected_paths):
+        return False
+    observed: list[str] = []
+    for row in bindings:
+        if type(row) is not dict or type(row.get("path")) is not str:
+            return False
+        observed.append(row["path"])
+    return tuple(observed) == tuple(expected_paths)
+
+
 def inspect_r3_source_preflight_v1(
     *,
     repository_root: Path = REPOSITORY_ROOT,
@@ -393,15 +480,15 @@ def inspect_r3_source_preflight_v1(
     parents = _git(repository_root, ("show", "-s", "--format=%P", head)).decode(
         "ascii"
     ).strip().split()
-    if _HEX_40.fullmatch(head) is None or parents != [R2_AMENDMENT_COMMIT]:
-        _fail("R3 must be one committed sole child of the frozen R2 amendment")
+    if _HEX_40.fullmatch(head) is None or parents != [R3_AMENDMENT_COMMIT]:
+        _fail("R3.1 must be one committed sole child of the frozen R3 amendment")
     if _git(repository_root, ("status", "--porcelain=v1", "--untracked-files=all")):
         _fail("R3 repository tree/index is not clean")
     changed_lines = _git(
         repository_root,
         (
             "diff-tree", "--no-commit-id", "--name-status", "-r",
-            "--no-renames", R2_AMENDMENT_COMMIT, head,
+            "--no-renames", R3_AMENDMENT_COMMIT, head,
         ),
     ).decode("utf-8", "strict").splitlines()
     actual = tuple(
@@ -425,19 +512,24 @@ def inspect_r3_source_preflight_v1(
         expected_sha256=hashlib.sha256(manifest_raw).hexdigest(),
     )
     bindings = manifest.get("source_bindings")
-    if type(bindings) is not list or {
-        str(row.get("path")) for row in bindings if isinstance(row, Mapping)
-    } != changed_paths - {manifest_relative}:
+    expected_binding_paths = tuple(
+        str(row["path"])
+        for row in actual
+        if str(row["path"]) != manifest_relative
+    )
+    if not _source_binding_paths_are_exact_v1(
+        bindings, expected_binding_paths
+    ):
         _fail("R3 source bindings do not equal changed paths minus manifest")
     verified: list[dict[str, object]] = []
     for row in bindings:
         if type(row) is not dict or set(row) != {
-            "path", "r2_sha256_or_null", "r3_sha256"
+            "path", "parent_sha256_or_null", "r31_sha256"
         }:
             _fail("R3 source-binding row differs")
         path = row.get("path")
-        old_hash = row.get("r2_sha256_or_null")
-        new_hash = row.get("r3_sha256")
+        old_hash = row.get("parent_sha256_or_null")
+        new_hash = row.get("r31_sha256")
         if (
             type(path) is not str
             or not path
@@ -458,7 +550,7 @@ def inspect_r3_source_preflight_v1(
         )
         if old_hash is None:
             probe = subprocess.run(
-                [str(FORMAL_GIT_EXECUTABLE), "cat-file", "-e", f"{R2_AMENDMENT_COMMIT}:{path}"],
+                [str(FORMAL_GIT_EXECUTABLE), "cat-file", "-e", f"{R3_AMENDMENT_COMMIT}:{path}"],
                 cwd=repository_root.resolve(strict=True),
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
@@ -468,20 +560,23 @@ def inspect_r3_source_preflight_v1(
                 env=dict(FORMAL_GIT_ENVIRONMENT_V1),
             )
             if probe.returncode == 0:
-                _fail(f"R3 source unexpectedly existed in R2: {path}")
+                _fail(f"R3.1 source unexpectedly existed in parent R3: {path}")
         elif hashlib.sha256(
-            _git(repository_root, ("show", f"{R2_AMENDMENT_COMMIT}:{path}"))
+            _git(repository_root, ("show", f"{R3_AMENDMENT_COMMIT}:{path}"))
         ).hexdigest() != old_hash:
-            _fail(f"R2 source blob hash differs: {path}")
+            _fail(f"parent R3 source blob hash differs: {path}")
         verified.append(dict(row))
     return {
         "schema": f"{AUDIT_SCHEMA_PREFIX}-preflight/1",
         "amendment_commit": head,
-        "sole_parent_commit": R2_AMENDMENT_COMMIT,
+        "sole_parent_commit": R3_AMENDMENT_COMMIT,
+        "parent_amendment_commit": R3_AMENDMENT_COMMIT,
         "formal_repository_commit": A8_BASIS_COMMIT,
         "run_id_hex": FIXED_RUN_ID_HEX,
         "ledger_id_hex": FIXED_LEDGER_ID_HEX,
         "recovery_attempt_ordinal": 3,
+        "authorization_revision_id": AUTHORIZATION_REVISION_ID,
+        "r3_preattempt_prefix_root_sha256": R3_PREATTEMPT_PREFIX_ROOT_SHA256,
         "manifest_sha256": hashlib.sha256(manifest_raw).hexdigest(),
         "source_bindings": verified,
         "repository_clean": True,
@@ -664,6 +759,16 @@ def _receipt_record_bytes_v1(fields: Mapping[str, object]) -> bytes:
     return _canonical_json(_r2._with_receipt_sha256(fields))
 
 
+def _incident_receipt_bytes_equal_v1(
+    stored_raw: object, rebuilt_fields: Mapping[str, object]
+) -> bool:
+    """Compare the authoritative canonical incident bytes, never Python shapes."""
+
+    return type(stored_raw) is bytes and stored_raw == _receipt_record_bytes_v1(
+        rebuilt_fields
+    )
+
+
 def _build_exact_audit_record_v1(
     fields: Mapping[str, object],
 ) -> tuple[dict[str, object], bytes]:
@@ -792,6 +897,140 @@ def _r2_terminal_chain_snapshot_v1() -> tuple[dict[str, object], ...]:
     return tuple(rows)
 
 
+def _r3_preattempt_prefix_snapshot_v1() -> tuple[dict[str, object], ...]:
+    """Bind the immutable R3 preparation prefix that never consumed attempt 3."""
+
+    audit = R3_PREATTEMPT_AUDIT_DIRECTORY
+    if audit.is_symlink():
+        _fail("R3 pre-attempt audit directory may not be a symlink")
+    metadata = audit.stat()
+    order = (
+        "preflight.json",
+        "incident-diagnostic.json",
+        "a8-validation-receipt.json",
+        "authorization-request.json",
+        "authorization.json",
+    )
+    if (
+        not stat.S_ISDIR(metadata.st_mode)
+        or stat.S_IMODE(metadata.st_mode) != 0o700
+        or metadata.st_uid != os.getuid()
+        or metadata.st_gid != os.getgid()
+        or {path.name for path in audit.iterdir()} != set(order)
+    ):
+        _fail("R3 pre-attempt audit is not the exact five-record prefix")
+    records: dict[str, dict[str, object]] = {}
+    rows: list[dict[str, object]] = []
+    for name in order:
+        path = audit / name
+        value, raw = _r2._read_canonical_audit(path)
+        digest = hashlib.sha256(raw).hexdigest()
+        item = path.stat()
+        if (
+            digest != R3_PREATTEMPT_AUDIT_RAW_SHA256[name]
+            or value.get("receipt_sha256")
+            != R3_PREATTEMPT_AUDIT_RECEIPT_SHA256[name]
+            or stat.S_IMODE(item.st_mode) != 0o600
+            or item.st_uid != os.getuid()
+            or item.st_gid != os.getgid()
+            or item.st_nlink != 1
+        ):
+            _fail(f"R3 pre-attempt audit identity differs: {name}")
+        rows.append(
+            {
+                "name": name,
+                "raw_sha256": digest,
+                "receipt_sha256": value["receipt_sha256"],
+                "size_bytes": item.st_size,
+                "mode_octal": "0600",
+            }
+        )
+        records[name] = value
+    preflight = records["preflight.json"]
+    incident = records["incident-diagnostic.json"]
+    validation = records["a8-validation-receipt.json"]
+    request = records["authorization-request.json"]
+    authorization = records["authorization.json"]
+    common = {
+        "formal_repository_commit": A8_BASIS_COMMIT,
+        "run_id_hex": FIXED_RUN_ID_HEX,
+        "ledger_id_hex": FIXED_LEDGER_ID_HEX,
+    }
+    if (
+        any(
+            any(record.get(key) != expected for key, expected in common.items())
+            for record in records.values()
+        )
+        or
+        preflight.get("schema")
+        != f"{R3_PREATTEMPT_AUDIT_SCHEMA_PREFIX}-preflight/1"
+        or preflight.get("amendment_commit") != R3_AMENDMENT_COMMIT
+        or preflight.get("sole_parent_commit") != R2_AMENDMENT_COMMIT
+        or preflight.get("manifest_sha256") != R3_PREATTEMPT_MANIFEST_SHA256
+        or preflight.get("recovery_attempt_ordinal") != 3
+        or incident.get("schema")
+        != f"{R3_PREATTEMPT_AUDIT_SCHEMA_PREFIX}-incident-diagnostic/1"
+        or incident.get("recovery_attempt_ordinal") != 3
+        or validation.get("schema")
+        != "hegel-phase3-m25-a8-r3-a8-validation-receipt/1"
+        or request.get("schema")
+        != f"{R3_PREATTEMPT_AUDIT_SCHEMA_PREFIX}-authorization-request/1"
+        or request.get("amendment_commit") != R3_AMENDMENT_COMMIT
+        or request.get("recovery_attempt_ordinal") != 3
+        or request.get("preflight_sha256")
+        != R3_PREATTEMPT_AUDIT_RAW_SHA256["preflight.json"]
+        or request.get("incident_diagnostic_sha256")
+        != R3_PREATTEMPT_AUDIT_RAW_SHA256["incident-diagnostic.json"]
+        or request.get("a8_validation_receipt_sha256")
+        != R3_PREATTEMPT_AUDIT_RAW_SHA256["a8-validation-receipt.json"]
+        or authorization.get("schema")
+        != f"{R3_PREATTEMPT_AUDIT_SCHEMA_PREFIX}-authorization/1"
+        or authorization.get("amendment_commit") != R3_AMENDMENT_COMMIT
+        or authorization.get("recovery_attempt_ordinal") != 3
+        or authorization.get("authorization_request_sha256")
+        != R3_PREATTEMPT_AUDIT_RAW_SHA256["authorization-request.json"]
+        or authorization.get("preflight_sha256")
+        != R3_PREATTEMPT_AUDIT_RAW_SHA256["preflight.json"]
+        or authorization.get("incident_diagnostic_sha256")
+        != R3_PREATTEMPT_AUDIT_RAW_SHA256["incident-diagnostic.json"]
+        or authorization.get("a8_validation_receipt_sha256")
+        != R3_PREATTEMPT_AUDIT_RAW_SHA256["a8-validation-receipt.json"]
+        or authorization.get("authorization_actor") != "PROJECT_OWNER"
+        or authorization.get("owner_authorized_fixed_transaction_only") is not True
+    ):
+        _fail("R3 pre-attempt audit provenance links differ")
+    if hashlib.sha256(_canonical_json(rows)).hexdigest() != (
+        R3_PREATTEMPT_PREFIX_ROOT_SHA256
+    ):
+        _fail("R3 pre-attempt audit prefix root differs")
+    return tuple(rows)
+
+
+def _r3_preattempt_representation_mismatch_fields_v1(
+    stored: Mapping[str, object], rebuilt: Mapping[str, object]
+) -> tuple[str, ...]:
+    """Locate the old list/tuple mismatch without normalizing either record."""
+
+    missing = object()
+    observed: list[str] = []
+    for key in sorted(set(stored) | set(rebuilt)):
+        stored_value = stored.get(key, missing)
+        rebuilt_value = rebuilt.get(key, missing)
+        if (
+            key == "docker_state"
+            and isinstance(stored_value, Mapping)
+            and isinstance(rebuilt_value, Mapping)
+        ):
+            for nested in sorted(set(stored_value) | set(rebuilt_value)):
+                if stored_value.get(nested, missing) != rebuilt_value.get(
+                    nested, missing
+                ):
+                    observed.append(f"docker_state.{nested}")
+        elif stored_value != rebuilt_value:
+            observed.append(key)
+    return tuple(observed)
+
+
 def _build_incident_diagnostic_v1(
     *, custody_directory: Path, public_evidence_path: Path, public_promotion_path: Path
 ) -> dict[str, object]:
@@ -806,7 +1045,11 @@ def _build_incident_diagnostic_v1(
     except _r2.A8R2RecoveryAmendmentError as exc:
         _fail("R2 continuity verifier rejected R3 incident: " + exc.detail)
     r2_rows = _r2_terminal_chain_snapshot_v1()
-    base["schema"] = f"{AUDIT_SCHEMA_PREFIX}-incident-diagnostic/1"
+    # First reproduce the superseded R3 incident exactly.  Its bytes were
+    # correct; only the old direct Python list/tuple equality was defective.
+    base["schema"] = (
+        f"{R3_PREATTEMPT_AUDIT_SCHEMA_PREFIX}-incident-diagnostic/1"
+    )
     base["r2_amendment_commit"] = R2_AMENDMENT_COMMIT
     base["recovery_attempt_ordinal"] = 3
     base["r2_terminal_chain"] = r2_rows
@@ -817,6 +1060,47 @@ def _build_incident_diagnostic_v1(
     base["r2_admission_sha256_or_null"] = None
     base.pop("raw_seed_bytes_read_by_r2_orchestrator", None)
     base["raw_seed_bytes_read_by_r3_orchestrator"] = False
+    legacy_stored, legacy_raw = _r2._read_canonical_audit(
+        R3_PREATTEMPT_AUDIT_DIRECTORY / "incident-diagnostic.json"
+    )
+    legacy_expected = _r2._with_receipt_sha256(base)
+    legacy_expected_raw = _canonical_json(legacy_expected)
+    mismatch_fields = _r3_preattempt_representation_mismatch_fields_v1(
+        legacy_stored, legacy_expected
+    )
+    if (
+        legacy_raw != legacy_expected_raw
+        or hashlib.sha256(legacy_raw).hexdigest()
+        != R3_PREATTEMPT_AUDIT_RAW_SHA256["incident-diagnostic.json"]
+        or legacy_stored == legacy_expected
+        or mismatch_fields != R3_PREATTEMPT_REPRESENTATION_MISMATCH_FIELDS
+    ):
+        _fail("R3 pre-attempt incident defect evidence differs")
+    preattempt_rows = _r3_preattempt_prefix_snapshot_v1()
+    base["schema"] = f"{AUDIT_SCHEMA_PREFIX}-incident-diagnostic/1"
+    base["continuation_action"] = CONTINUATION_ACTION
+    base["r3_preattempt_audit_directory"] = (
+        R3_PREATTEMPT_AUDIT_DIRECTORY.as_posix()
+    )
+    base["r3_preattempt_prefix"] = preattempt_rows
+    base["r3_preattempt_prefix_root_sha256"] = (
+        R3_PREATTEMPT_PREFIX_ROOT_SHA256
+    )
+    base["r3_preattempt_state"] = (
+        "PRE_ATTEMPT_SUPERSEDED_IMPLEMENTATION_DEFECT"
+    )
+    base["r3_preattempt_attempt_start_sha256_or_null"] = None
+    base["pre_attempt_defect_code"] = PRE_ATTEMPT_DEFECT_CODE
+    base["pre_attempt_stored_incident_raw_sha256"] = hashlib.sha256(
+        legacy_raw
+    ).hexdigest()
+    base["pre_attempt_rebuilt_incident_raw_sha256"] = hashlib.sha256(
+        legacy_expected_raw
+    ).hexdigest()
+    base["pre_attempt_canonical_bytes_equal"] = True
+    base["pre_attempt_python_object_equality"] = False
+    base["pre_attempt_representation_mismatch_fields"] = mismatch_fields
+    base["authorization_revision_id"] = AUTHORIZATION_REVISION_ID
     return base
 
 
@@ -1062,7 +1346,7 @@ def _build_source_admission_v1(
         "run_id_hex": FIXED_RUN_ID_HEX,
         "ledger_id_hex": FIXED_LEDGER_ID_HEX,
         "recovery_attempt_ordinal": 3,
-        "continuation_action": CONTINUATION_ACTION,
+        "continuation_action": SOURCE_ADMISSION_CONTINUATION_ACTION,
         "r1_failure_raw_sha256": _r2.R1_AUDIT_RAW_SHA256["failure.json"],
         "r1_failure_receipt_sha256": _r2.R1_FAILURE_RECEIPT_SHA256,
         "r2_terminal_chain_root_sha256": R2_TERMINAL_CHAIN_ROOT_SHA256,
@@ -1099,6 +1383,10 @@ def _authorization_request_fields(
         "run_id_hex": FIXED_RUN_ID_HEX,
         "ledger_id_hex": FIXED_LEDGER_ID_HEX,
         "recovery_attempt_ordinal": 3,
+        "authorization_revision_id": AUTHORIZATION_REVISION_ID,
+        "r3_preattempt_prefix_root_sha256": R3_PREATTEMPT_PREFIX_ROOT_SHA256,
+        "r3_preattempt_attempt_start_sha256_or_null": None,
+        "pre_attempt_defect_code": PRE_ATTEMPT_DEFECT_CODE,
         "continuation_action": CONTINUATION_ACTION,
         "preflight_sha256": hashlib.sha256(preflight_raw).hexdigest(),
         "incident_diagnostic_sha256": hashlib.sha256(incident_raw).hexdigest(),
@@ -1179,6 +1467,10 @@ def _expected_authorization_fields(
         "run_id_hex": FIXED_RUN_ID_HEX,
         "ledger_id_hex": FIXED_LEDGER_ID_HEX,
         "recovery_attempt_ordinal": 3,
+        "authorization_revision_id": AUTHORIZATION_REVISION_ID,
+        "r3_preattempt_prefix_root_sha256": R3_PREATTEMPT_PREFIX_ROOT_SHA256,
+        "r3_preattempt_attempt_start_sha256_or_null": None,
+        "pre_attempt_defect_code": PRE_ATTEMPT_DEFECT_CODE,
         "continuation_action": CONTINUATION_ACTION,
         "preflight_sha256": hashlib.sha256(preflight_raw).hexdigest(),
         "incident_diagnostic_sha256": hashlib.sha256(incident_raw).hexdigest(),
@@ -1389,7 +1681,11 @@ def execute_fixed_a8_r3_recovery_v1(
         public_evidence_path=public_evidence_path,
         public_promotion_path=public_promotion_path,
     )
-    if incident != _r2._with_receipt_sha256(incident_now):
+    # Canonical bytes are the authority. JSON arrays intentionally deserialize
+    # as lists while the deterministic builder uses typed tuples in nine
+    # diagnostic fields; direct Python object equality caused the superseded
+    # R3 pre-attempt rejection despite byte-identical receipts.
+    if not _incident_receipt_bytes_equal_v1(incident_raw, incident_now):
         _fail("stored R3 incident differs before attempt")
     validation_request, actor_report, errata_report, _expected_bundle = (
         _validation_request_from_incident_v1(incident_now)
@@ -1478,6 +1774,12 @@ def execute_fixed_a8_r3_recovery_v1(
                     "run_id_hex": FIXED_RUN_ID_HEX,
                     "ledger_id_hex": FIXED_LEDGER_ID_HEX,
                     "recovery_attempt_ordinal": 3,
+                    "authorization_revision_id": AUTHORIZATION_REVISION_ID,
+                    "r3_preattempt_prefix_root_sha256": (
+                        R3_PREATTEMPT_PREFIX_ROOT_SHA256
+                    ),
+                    "r3_preattempt_attempt_start_sha256_or_null": None,
+                    "pre_attempt_defect_code": PRE_ATTEMPT_DEFECT_CODE,
                     "continuation_action": CONTINUATION_ACTION,
                     "authorization_sha256": hashlib.sha256(authorization_raw).hexdigest(),
                     "a8_validation_receipt_sha256": hashlib.sha256(validation_raw).hexdigest(),
@@ -1505,6 +1807,11 @@ def execute_fixed_a8_r3_recovery_v1(
                     "run_id_hex": FIXED_RUN_ID_HEX,
                     "ledger_id_hex": FIXED_LEDGER_ID_HEX,
                     "recovery_attempt_ordinal": 3,
+                    "authorization_revision_id": AUTHORIZATION_REVISION_ID,
+                    "r3_preattempt_prefix_root_sha256": (
+                        R3_PREATTEMPT_PREFIX_ROOT_SHA256
+                    ),
+                    "r3_preattempt_attempt_start_sha256_or_null": None,
                     "attempt_start_sha256": hashlib.sha256(attempt_start_raw).hexdigest(),
                     "authorization_sha256": hashlib.sha256(authorization_raw).hexdigest(),
                     "a8_validation_receipt_sha256": hashlib.sha256(validation_raw).hexdigest(),
@@ -1567,6 +1874,11 @@ def execute_fixed_a8_r3_recovery_v1(
                 "run_id_hex": FIXED_RUN_ID_HEX,
                 "ledger_id_hex": FIXED_LEDGER_ID_HEX,
                 "recovery_attempt_ordinal": 3,
+                "authorization_revision_id": AUTHORIZATION_REVISION_ID,
+                "r3_preattempt_prefix_root_sha256": (
+                    R3_PREATTEMPT_PREFIX_ROOT_SHA256
+                ),
+                "r3_preattempt_attempt_start_sha256_or_null": None,
                 "r2_failure_raw_sha256": R2_AUDIT_RAW_SHA256["failure.json"],
                 "r2_failure_receipt_sha256": R2_AUDIT_RECEIPT_SHA256["failure.json"],
                 "attempt_start_sha256": hashlib.sha256(attempt_start_raw).hexdigest(),
@@ -1635,6 +1947,11 @@ def execute_fixed_a8_r3_recovery_v1(
                         "run_id_hex": FIXED_RUN_ID_HEX,
                         "ledger_id_hex": FIXED_LEDGER_ID_HEX,
                         "recovery_attempt_ordinal": 3,
+                        "authorization_revision_id": AUTHORIZATION_REVISION_ID,
+                        "r3_preattempt_prefix_root_sha256": (
+                            R3_PREATTEMPT_PREFIX_ROOT_SHA256
+                        ),
+                        "r3_preattempt_attempt_start_sha256_or_null": None,
                         "r2_failure_raw_sha256": R2_AUDIT_RAW_SHA256["failure.json"],
                         "r2_failure_receipt_sha256": R2_AUDIT_RECEIPT_SHA256["failure.json"],
                         "attempt_start_sha256": hashlib.sha256(attempt_start_raw).hexdigest(),

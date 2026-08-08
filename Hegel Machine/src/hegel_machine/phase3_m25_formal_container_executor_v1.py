@@ -5885,6 +5885,9 @@ def resume_pending_split_calculators_v1(
 _FIXED_A8_R3_BASIS_COMMIT: Final = "0af65964235390ce2bebefea7379eaa9c50eda24"
 _FIXED_A8_R3_RUN_ID: Final = bytes.fromhex("e4af9f57c38fb298462ec628c4ed8a03")
 _FIXED_A8_R3_LEDGER_ID: Final = bytes.fromhex("ec849e2f1e2e1163cfc450370b25b484")
+_FIXED_A8_R3_PARENT_AMENDMENT_COMMIT: Final = (
+    "52a4a61934a73c70dc09b919cae377db166eaedf"
+)
 _FIXED_A8_R3_FORMAL_REPOSITORY_ROOT: Final = (
     "/home/erzhu419/mine_code/Asumption Agent"
 )
@@ -6076,8 +6079,7 @@ def _validate_fixed_a8_r3_commit_context_v1(
         env=formal_git_environment_v1(),
     )
     expected_parent_row = (
-        r3_commit
-        + " ec7c04cf62190558c72448639d7e3cd13a5b6903\n"
+        r3_commit + " " + _FIXED_A8_R3_PARENT_AMENDMENT_COMMIT + "\n"
     ).encode("ascii")
     if (
         head.returncode != 0
