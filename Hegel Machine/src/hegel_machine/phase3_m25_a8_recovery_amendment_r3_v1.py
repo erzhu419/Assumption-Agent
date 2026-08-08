@@ -61,6 +61,11 @@ DEFAULT_MANIFEST_PATH: Final = (
 A8_VALIDATOR_TOOL: Final = (
     PROJECT_ROOT / "tools/phase3_m25_a8_recovery_report_validator_r3_v1.py"
 )
+R31_HISTORICAL_A8_VALIDATOR_TOOL: Final = Path(
+    "/home/erzhu419/.local/state/hegel-machine/"
+    "a8-recovery-amendment-worktree/Hegel Machine/tools/"
+    "phase3_m25_a8_recovery_report_validator_r3_v1.py"
+)
 FIXED_PYTHON_EXECUTABLE: Final = Path("/usr/bin/python3.10")
 FIXED_PYTHON_EXECUTABLE_SHA256: Final = (
     "7d51cd6b48b521277f5caa4610a82126e315fa2be4df069823a8b1eeb5bd4a86"
@@ -181,6 +186,8 @@ R3_RUNTIME_EXCEPTION_PATHS: Final = frozenset(
         *_r2.R2_RUNTIME_EXCEPTION_PATHS,
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_amendment_r3_v1.py",
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r3_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_amendment_r4_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r4_v1.py",
     }
 )
 _HEX_40 = re.compile(r"[0-9a-f]{40}")
@@ -297,7 +304,11 @@ def _load_manifest(path: Path) -> tuple[dict[str, object], bytes]:
         "validator_dependency_closure_sha256_root": (
             EXPECTED_A8_VALIDATOR_DEPENDENCY_CLOSURE_SHA256_ROOT
         ),
-        "tool_path": A8_VALIDATOR_TOOL.as_posix(),
+        # This manifest is immutable evidence for the already-terminal R3.1
+        # commit.  Its historical worktree path must not be rewritten merely
+        # because a later sole-child recovery uses a new clean worktree.  R4
+        # binds its current validator path in its own manifest.
+        "tool_path": R31_HISTORICAL_A8_VALIDATOR_TOOL.as_posix(),
         "formal_repository_root": FIXED_FORMAL_REPOSITORY_ROOT.as_posix(),
         "formal_repository_commit": A8_BASIS_COMMIT,
     }
@@ -793,8 +804,11 @@ def _install_exact_audit_record_v1(
             # so the caller terminalizes instead of continuing silently.
             _install_prepare_record_v1(path, raw)
         raise
-    observed, observed_raw = _r2._read_canonical_audit(path)
-    if observed != dict(expected) or observed_raw != raw:
+    # The reader independently enforces canonical JSON and the self-receipt.
+    # Compare its authoritative bytes, not Python container shapes: JSON arrays
+    # deserialize as lists even when a typed builder supplied tuples.
+    _observed, observed_raw = _r2._read_canonical_audit(path)
+    if observed_raw != raw:
         _fail(f"R3 installed audit record differs: {path.name}")
 
 
