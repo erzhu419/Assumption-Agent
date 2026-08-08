@@ -12,6 +12,17 @@ from hegel_machine import phase3_m25_a8_recovery_cli_r6_v1 as recovery_cli
 from hegel_machine import phase3_m25_formal_container_executor_v1 as executor
 
 
+@pytest.fixture(autouse=True)
+def _freeze_pre_r7_required_input_view(monkeypatch: pytest.MonkeyPatch) -> None:
+    future = {"phase3_m25_a8_recovery_amendment_r7_v1.py", "phase3_m25_a8_recovery_cli_r7_v1.py"}
+    r3 = amendment._r4._r31
+    monkeypatch.setattr(
+        r3,
+        "REQUIRED_COMMIT_A_INPUTS",
+        tuple(path for path in r3.REQUIRED_COMMIT_A_INPUTS if path.name not in future),
+    )
+
+
 def test_r6_freezes_exact_r5_terminal_chain_and_failure_graph() -> None:
     rows = amendment._r5_terminal_chain_snapshot_v1()
     assert len(rows) == 8

@@ -6122,6 +6122,9 @@ _FIXED_A8_R6_PARENT_AMENDMENT_COMMIT: Final = (
 _FIXED_A8_R6_SOURCE_ADMISSION_SCHEMA: Final = (
     "hegel-phase3-m25-a8-r6-source-admission/1"
 )
+_FIXED_A8_R6_HISTORICAL_SOURCE_ADMISSION_SHA256: Final = (
+    "c2003bcc77db04c2672d59d1aada6e45baeb4275df6f8a3f8304c68f8ef26828"
+)
 _FIXED_A8_R4_TERMINAL_CHAIN_ROOT_SHA256: Final = (
     "9c0c0b8f05e97ec6b87c0ac9b4a36823f5338ce69053f442e9b1cbf1137f00d5"
 )
@@ -6376,6 +6379,8 @@ def _validate_fixed_a8_recovery_commit_context_v1(
     commit_field: str,
     parent_amendment_commit: str,
     attempt_ordinal: int,
+    historical_direct_child_commit: str | None = None,
+    historical_source_admission_sha256: str | None = None,
 ) -> bytes:
     amendment_commit = source_admission.get(commit_field)
     if type(amendment_commit) is not str:
@@ -6383,6 +6388,32 @@ def _validate_fixed_a8_recovery_commit_context_v1(
             FAIL_RECOVERY_SOURCE_ADMISSION,
             f"attempt-{attempt_ordinal} amendment commit is malformed",
         )
+    historical_replay = historical_direct_child_commit is not None
+    if historical_replay != (historical_source_admission_sha256 is not None):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            f"attempt-{attempt_ordinal} historical replay scope is incomplete",
+        )
+    if historical_replay and (
+        attempt_ordinal != 6
+        or type(historical_direct_child_commit) is not str
+        or re.fullmatch(r"[0-9a-f]{40}", historical_direct_child_commit) is None
+        or historical_direct_child_commit == amendment_commit
+        or type(historical_source_admission_sha256) is not str
+        or re.fullmatch(r"[0-9a-f]{64}", historical_source_admission_sha256)
+        is None
+        or hashlib.sha256(_canonical_json(source_admission)).hexdigest()
+        != historical_source_admission_sha256
+    ):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "attempt-6 historical direct-child admission identity differs",
+        )
+    expected_head_commit = (
+        historical_direct_child_commit
+        if historical_direct_child_commit is not None
+        else amendment_commit
+    )
     head = subprocess.run(
         [str(FORMAL_GIT_EXECUTABLE), "rev-parse", "--verify", "HEAD^{commit}"],
         cwd=REPOSITORY_ROOT,
@@ -6426,13 +6457,52 @@ def _validate_fixed_a8_recovery_commit_context_v1(
         timeout=30,
         env=formal_git_environment_v1(),
     )
+    child_parents = None
+    child_tree_row = None
+    if historical_replay:
+        child_parents = subprocess.run(
+            [
+                str(FORMAL_GIT_EXECUTABLE),
+                "rev-list",
+                "--parents",
+                "-n",
+                "1",
+                expected_head_commit,
+            ],
+            cwd=REPOSITORY_ROOT,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=30,
+            env=formal_git_environment_v1(),
+        )
+        child_tree_row = subprocess.run(
+            [
+                str(FORMAL_GIT_EXECUTABLE),
+                "ls-tree",
+                expected_head_commit,
+                "--",
+                _FIXED_A8_R3_VALIDATOR_REPOSITORY_PATH,
+            ],
+            cwd=REPOSITORY_ROOT,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=30,
+            env=formal_git_environment_v1(),
+        )
     expected_parent_row = (
         amendment_commit + " " + parent_amendment_commit + "\n"
+    ).encode("ascii")
+    expected_child_parent_row = (
+        expected_head_commit + " " + amendment_commit + "\n"
     ).encode("ascii")
     if (
         head.returncode != 0
         or head.stderr
-        or head.stdout != (amendment_commit + "\n").encode("ascii")
+        or head.stdout != (expected_head_commit + "\n").encode("ascii")
         or parents.returncode != 0
         or parents.stderr
         or parents.stdout != expected_parent_row
@@ -6442,6 +6512,19 @@ def _validate_fixed_a8_recovery_commit_context_v1(
         or not tree_row.stdout.endswith(
             ("\t" + _FIXED_A8_R3_VALIDATOR_REPOSITORY_PATH + "\n").encode(
                 "utf-8"
+            )
+        )
+        or (
+            historical_replay
+            and (
+                child_parents is None
+                or child_parents.returncode != 0
+                or child_parents.stderr
+                or child_parents.stdout != expected_child_parent_row
+                or child_tree_row is None
+                or child_tree_row.returncode != 0
+                or child_tree_row.stderr
+                or child_tree_row.stdout != tree_row.stdout
             )
         )
     ):
@@ -6490,12 +6573,20 @@ def _validate_fixed_a8_r5_commit_context_v1(
 
 def _validate_fixed_a8_r6_commit_context_v1(
     source_admission: Mapping[str, object],
+    *,
+    historical_direct_child_commit: str | None = None,
 ) -> bytes:
     return _validate_fixed_a8_recovery_commit_context_v1(
         source_admission,
         commit_field="r6_amendment_commit",
         parent_amendment_commit=_FIXED_A8_R6_PARENT_AMENDMENT_COMMIT,
         attempt_ordinal=6,
+        historical_direct_child_commit=historical_direct_child_commit,
+        historical_source_admission_sha256=(
+            _FIXED_A8_R6_HISTORICAL_SOURCE_ADMISSION_SHA256
+            if historical_direct_child_commit is not None
+            else None
+        ),
     )
 
 
@@ -6577,6 +6668,7 @@ def _run_fixed_a8_r3_validator_v1(
     transaction_bundle: Mapping[str, object],
     protocol_bundle_content_id: bytes,
     qualification_key_ids: Mapping[int, bytes],
+    r6_historical_direct_child_commit: str | None = None,
 ) -> _FixedA8R3PrevalidatedBasisV1:
     """Create the R3--R6 exception internally through the admitted child."""
 
@@ -6620,6 +6712,14 @@ def _run_fixed_a8_r3_validator_v1(
             f"prevalidated recovery fixed validator cannot be read: {exc}",
         )
     source_admission_schema = source_admission.get("schema")
+    if (
+        r6_historical_direct_child_commit is not None
+        and source_admission_schema != _FIXED_A8_R6_SOURCE_ADMISSION_SCHEMA
+    ):
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "historical direct-child replay is restricted to the exact R6 scope",
+        )
     if source_admission_schema == "hegel-phase3-m25-a8-r3-source-admission/1":
         committed_tool_bytes = _validate_fixed_a8_r3_commit_context_v1(
             source_admission
@@ -6634,7 +6734,8 @@ def _run_fixed_a8_r3_validator_v1(
         )
     elif source_admission_schema == _FIXED_A8_R6_SOURCE_ADMISSION_SCHEMA:
         committed_tool_bytes = _validate_fixed_a8_r6_commit_context_v1(
-            source_admission
+            source_admission,
+            historical_direct_child_commit=r6_historical_direct_child_commit,
         )
     else:
         _fail(
@@ -6897,11 +6998,12 @@ def _replay_public_gate_evidence_with_fixed_a8_r3_capability_v1(
     return promote_gate_evidence_v1(qualified)
 
 
-def _replay_public_gate_evidence_with_fixed_a8_r3_basis_v1(
+def _replay_public_gate_evidence_with_fixed_a8_r3_basis_core_v1(
     payload: Mapping[str, object],
     *,
     source_admission: Mapping[str, object],
     prestage_intent_fields: Mapping[str, object],
+    r6_historical_direct_child_commit: str | None,
 ) -> dict[str, object]:
     """Independently replay public R3 evidence through the same fixed child.
 
@@ -6946,9 +7048,54 @@ def _replay_public_gate_evidence_with_fixed_a8_r3_basis_v1(
         transaction_bundle=bundle,
         protocol_bundle_content_id=bundle_id,
         qualification_key_ids=dict(key_ids),
+        r6_historical_direct_child_commit=r6_historical_direct_child_commit,
     )
     return _replay_public_gate_evidence_with_fixed_a8_r3_capability_v1(
         payload, capability
+    )
+
+
+def _replay_public_gate_evidence_with_fixed_a8_r3_basis_v1(
+    payload: Mapping[str, object],
+    *,
+    source_admission: Mapping[str, object],
+    prestage_intent_fields: Mapping[str, object],
+) -> dict[str, object]:
+    """Replay at the admitted recovery commit; no descendant exception."""
+
+    return _replay_public_gate_evidence_with_fixed_a8_r3_basis_core_v1(
+        payload,
+        source_admission=source_admission,
+        prestage_intent_fields=prestage_intent_fields,
+        r6_historical_direct_child_commit=None,
+    )
+
+
+def _replay_public_gate_evidence_with_fixed_a8_r6_direct_child_basis_v1(
+    payload: Mapping[str, object],
+    *,
+    source_admission: Mapping[str, object],
+    prestage_intent_fields: Mapping[str, object],
+    historical_direct_child_commit: str,
+) -> dict[str, object]:
+    """Replay exact R6 evidence from one explicitly admitted direct child.
+
+    This public-only exception is purpose-specific for post-terminal R6
+    continuation.  The commit-context validator binds the canonical R6
+    admission hash, the named current HEAD, its sole R6 parent, and an exact
+    unchanged validator tree row before the isolated validator can run.
+    """
+
+    if source_admission.get("schema") != _FIXED_A8_R6_SOURCE_ADMISSION_SCHEMA:
+        _fail(
+            FAIL_RECOVERY_SOURCE_ADMISSION,
+            "historical direct-child replay requires the exact R6 schema",
+        )
+    return _replay_public_gate_evidence_with_fixed_a8_r3_basis_core_v1(
+        payload,
+        source_admission=source_admission,
+        prestage_intent_fields=prestage_intent_fields,
+        r6_historical_direct_child_commit=historical_direct_child_commit,
     )
 
 
@@ -8252,8 +8399,10 @@ def _continue_pre_stage_pending_recovery_core_v1(
         staged_seed_commitment = transaction._staged_seed_commitment
         if type(staged_seed_commitment) is not bytes or len(staged_seed_commitment) != 32:
             _fail(FAIL_CUSTODY, "durable staged seed commitment is absent")
-        seed_verification_receipt = actors.verify_seed_custody_commitment_v1(
-            staged_seed_commitment
+        seed_verification_receipt = (
+            actors.verify_pending_seed_custody_commitment_v1(
+                staged_seed_commitment
+            )
         )
         transaction.record_seed_custody_verification_v1(
             seed_verification_receipt
@@ -8422,8 +8571,10 @@ def _continue_post_stage_transaction_recovery_core_v1(
                 or len(staged_seed_commitment) != 32
             ):
                 _fail(FAIL_CUSTODY, "durable staged seed commitment is absent")
-            seed_verification_receipt = actors.verify_seed_custody_commitment_v1(
-                staged_seed_commitment
+            seed_verification_receipt = (
+                actors.verify_pending_seed_custody_commitment_v1(
+                    staged_seed_commitment
+                )
             )
             transaction.record_seed_custody_verification_v1(
                 seed_verification_receipt
@@ -8750,6 +8901,18 @@ class CeremonyActorsV1:
         self, expected_commitment: bytes
     ) -> Mapping[str, object]:  # pragma: no cover - interface
         raise NotImplementedError
+
+    def verify_pending_seed_custody_commitment_v1(
+        self, expected_commitment: bytes
+    ) -> Mapping[str, object]:
+        """Verify PENDING custody before a backend-specific actor resumes.
+
+        Backends without an ownership boundary retain the original verifier
+        contract.  The Docker backend overrides this method because its
+        purpose-1 actor owns the mode-0700 custody tree while it is live.
+        """
+
+        return self.verify_seed_custody_commitment_v1(expected_commitment)
 
     def resume_pending_seed_split(self) -> tuple[bytes, bytes]:  # pragma: no cover
         raise NotImplementedError
@@ -9370,6 +9533,7 @@ class DockerCeremonyActorsV1(CeremonyActorsV1, AbstractContextManager["DockerCer
         self._pending_marker: MarkerSnapshot | None = None
         self._ceremony_token: str | None = None
         self._custody_handed_off = False
+        self._custody_reclaim_required = False
         self._bound_rust_replay_digest: bytes | None = None
         self._bound_rust_bridge_dag_digest: bytes | None = None
         self._bound_rust_bridge_dag_report_sha256: bytes | None = None
@@ -9554,6 +9718,7 @@ class DockerCeremonyActorsV1(CeremonyActorsV1, AbstractContextManager["DockerCer
         ):
             _fail(FAIL_CUSTODY, "pending custody reclaim source inode differs")
         self._custody_handed_off = True
+        self._custody_reclaim_required = True
         self._reclaim_custody_from_actor()
         after = self.custody_directory.lstat()
         if (
@@ -10719,6 +10884,7 @@ class DockerCeremonyActorsV1(CeremonyActorsV1, AbstractContextManager["DockerCer
         owner_uid = self._custody_durability_receipt.get("owner_uid")
         if owner_uid == 65534:
             self._custody_handed_off = True
+            self._custody_reclaim_required = True
             self._reclaim_custody_from_actor()
         elif owner_uid != os.geteuid():
             _fail(FAIL_CUSTODY, "complete recovery custody owner differs")
@@ -10925,6 +11091,7 @@ class DockerCeremonyActorsV1(CeremonyActorsV1, AbstractContextManager["DockerCer
                     "host owner before actor start",
                 )
             self._custody_handed_off = False
+            self._custody_reclaim_required = False
         try:
             self._custody_durability_receipt = MappingProxyType(
                 validate_linux_local_durable_custody_v1(
@@ -12163,7 +12330,11 @@ class DockerCeremonyActorsV1(CeremonyActorsV1, AbstractContextManager["DockerCer
         self._key_ids[purpose] = key_id
         return public
 
-    def _set_custody_owner(self, uid: int, gid: int) -> None:
+    def _list_custody_ownership_rows_v1(
+        self, *, list_uid: int, list_gid: int
+    ) -> tuple[dict[str, object], ...]:
+        """List custody metadata without reading any retained file payload."""
+
         images = self._profile["images"]
         assert isinstance(images, Mapping)
         image = images["custodian"]
@@ -12172,6 +12343,174 @@ class DockerCeremonyActorsV1(CeremonyActorsV1, AbstractContextManager["DockerCer
         if self._runtime_seccomp_path is None:
             _fail(FAIL_CONTAINER, "frozen runtime seccomp snapshot is absent")
         assert self._docker_control_plane is not None
+        metadata_program = (
+            "import json,os,stat;rows=[];"
+            "entries=sorted(os.scandir('/custody'),key=lambda x:x.name);"
+            "[(lambda s,e:rows.append({'name':e.name,'kind':'regular' if "
+            "stat.S_ISREG(s.st_mode) else 'other','mode_octal':format(stat.S_IMODE(s.st_mode),'04o'),"
+            "'st_dev':s.st_dev,'st_ino':s.st_ino,'uid':s.st_uid,'gid':s.st_gid}))"
+            "(e.stat(follow_symlinks=False),e) for e in entries];"
+            "print(json.dumps(rows,sort_keys=True,separators=(',',':')))"
+        )
+        command = self._docker_command(
+            "run", "--rm", "--pull=never", "--network=none",
+            "--ipc=private", "--read-only", "--cap-drop=ALL",
+            "--security-opt=no-new-privileges",
+            f"--security-opt=seccomp={self._runtime_seccomp_path}",
+            f"--user={list_uid}:{list_gid}", "--pids-limit=16",
+            "--memory=64m", "--memory-swap=64m", "--ulimit=nofile=32:32",
+            (
+                "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=4m,"
+                f"uid={list_uid},gid={list_gid},mode=0700"
+            ),
+            (
+                f"--mount=type=bind,src={self.custody_directory},"
+                "dst=/custody,readonly,bind-propagation=rprivate"
+            ),
+            "--entrypoint=/usr/local/bin/python3", str(image),
+            "-I", "-B", "-c", metadata_program,
+        )
+        completed = _run(
+            command,
+            environment=self._docker_control_plane.environment,
+            check=False,
+            timeout=60,
+        )
+        if (
+            completed.returncode != 0
+            or completed.stderr
+            or len(completed.stdout) > 16 * 1024
+        ):
+            _fail(FAIL_CONTAINER, "custody metadata-only lister failed")
+        try:
+            rows = json.loads(completed.stdout)
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            _fail(FAIL_CONTAINER, f"custody metadata listing is invalid: {exc}")
+        if type(rows) is not list or any(type(row) is not dict for row in rows):
+            _fail(FAIL_CONTAINER, "custody metadata listing is not an object array")
+        return tuple(dict(row) for row in rows)
+
+    def _run_custody_chown_helper_v1(
+        self,
+        *,
+        root_metadata: os.stat_result,
+        rows: tuple[Mapping[str, object], ...],
+        allowed_root_owners: frozenset[tuple[int, int]],
+        allowed_row_owners: Mapping[str, frozenset[tuple[int, int]]],
+        target_root_owner: tuple[int, int],
+        target_row_owners: Mapping[str, tuple[int, int]],
+        operation: str,
+    ) -> None:
+        """Change exact bound inodes with only root identity and CAP_CHOWN."""
+
+        if operation not in {"TRANSFER", "ROLLBACK"}:
+            _fail(FAIL_CONTAINER, "custody chown helper operation is invalid")
+        names = tuple(row.get("name") for row in rows)
+        if (
+            any(type(name) is not str for name in names)
+            or set(allowed_row_owners) != set(names)
+            or set(target_row_owners) != set(names)
+            or not allowed_root_owners
+        ):
+            _fail(FAIL_CONTAINER, "custody chown helper path ownership map differs")
+        images = self._profile["images"]
+        assert isinstance(images, Mapping)
+        image = images["custodian"]
+        if type(image) is not str or "@sha256:" not in image:
+            _fail(FAIL_CONTAINER, "custodian image is not digest pinned")
+        if self._runtime_seccomp_path is None:
+            _fail(FAIL_CONTAINER, "frozen runtime seccomp snapshot is absent")
+        assert self._docker_control_plane is not None
+        helper_rows: list[dict[str, object]] = []
+        command_parts: list[str] = [
+            "run", "--rm", "--pull=never", "--network=none", "--ipc=private",
+            "--read-only", "--cap-drop=ALL", "--cap-add=CHOWN",
+            "--security-opt=no-new-privileges",
+            f"--security-opt=seccomp={self._runtime_seccomp_path}",
+            "--user=0:0", "--pids-limit=16", "--memory=64m", "--memory-swap=64m",
+            "--ulimit=nofile=32:32",
+        ]
+        for index, row in enumerate(rows):
+            name = row["name"]
+            assert isinstance(name, str)
+            target_path = f"/targets/item-{index}"
+            command_parts.append(
+                f"--mount=type=bind,src={self.custody_directory / name},"
+                f"dst={target_path},bind-propagation=rprivate"
+            )
+            target_owner = target_row_owners[name]
+            helper_rows.append({
+                "path": target_path,
+                "kind": "regular",
+                "mode_octal": row["mode_octal"],
+                "st_dev": row["st_dev"],
+                "st_ino": row["st_ino"],
+                "allowed_owner_pairs": [
+                    list(owner) for owner in sorted(allowed_row_owners[name])
+                ],
+                "target_uid": target_owner[0],
+                "target_gid": target_owner[1],
+            })
+        command_parts.append(
+            f"--mount=type=bind,src={self.custody_directory},"
+            "dst=/target-root,bind-propagation=rprivate"
+        )
+        helper_rows.append({
+            "path": "/target-root",
+            "kind": "directory",
+            "mode_octal": "0700",
+            "st_dev": root_metadata.st_dev,
+            "st_ino": root_metadata.st_ino,
+            "allowed_owner_pairs": [
+                list(owner) for owner in sorted(allowed_root_owners)
+            ],
+            "target_uid": target_root_owner[0],
+            "target_gid": target_root_owner[1],
+        })
+        helper_spec = {
+            "schema": "hegel-phase3-m25-custody-cap-chown-helper/1",
+            "operation": operation,
+            "rows": helper_rows,
+        }
+        helper_program = """import json, os, stat, sys
+spec = json.loads(sys.argv[1])
+if spec.get("schema") != "hegel-phase3-m25-custody-cap-chown-helper/1":
+    raise SystemExit(71)
+rows = spec.get("rows")
+if not isinstance(rows, list) or not rows:
+    raise SystemExit(72)
+def check(row, after):
+    metadata = os.lstat(row["path"])
+    kind_ok = (stat.S_ISDIR(metadata.st_mode) if row["kind"] == "directory" else stat.S_ISREG(metadata.st_mode))
+    owner = [metadata.st_uid, metadata.st_gid]
+    owner_ok = owner == [row["target_uid"], row["target_gid"]] if after else owner in row["allowed_owner_pairs"]
+    if not (kind_ok and format(stat.S_IMODE(metadata.st_mode), "04o") == row["mode_octal"] and metadata.st_dev == row["st_dev"] and metadata.st_ino == row["st_ino"] and owner_ok):
+        raise SystemExit(73 if not after else 74)
+for row in rows:
+    check(row, False)
+for row in rows:
+    os.chown(row["path"], row["target_uid"], row["target_gid"], follow_symlinks=False)
+for row in rows:
+    check(row, True)
+"""
+        command_parts.extend((
+            "--entrypoint=/usr/local/bin/python3", str(image),
+            "-I", "-B", "-c", helper_program,
+            _canonical_json(helper_spec).decode("ascii"),
+        ))
+        _run(
+            self._docker_command(*command_parts),
+            environment=self._docker_control_plane.environment,
+            timeout=60,
+        )
+
+    def _set_custody_owner(self, uid: int, gid: int) -> None:
+        host_owner = (os.geteuid(), os.getegid())
+        nobody_owner = (65534, 65534)
+        target_owner = (uid, gid)
+        permitted_owners = frozenset({host_owner, nobody_owner})
+        if target_owner not in permitted_owners:
+            _fail(FAIL_CONTAINER, "custody ownership target is outside policy")
         try:
             source_metadata = self.custody_directory.lstat()
         except OSError as exc:
@@ -12179,58 +12518,14 @@ class DockerCeremonyActorsV1(CeremonyActorsV1, AbstractContextManager["DockerCer
         if (
             not stat.S_ISDIR(source_metadata.st_mode)
             or stat.S_IMODE(source_metadata.st_mode) != 0o700
+            or (source_metadata.st_uid, source_metadata.st_gid)
+            not in permitted_owners
         ):
             _fail(FAIL_CONTAINER, "custody ownership source inode differs")
-        source_uid, source_gid = source_metadata.st_uid, source_metadata.st_gid
-        metadata_program = (
-            "import json,os,stat;rows=[];"
-            "entries=sorted(os.scandir('/custody'),key=lambda x:x.name);"
-            "[(lambda s,e:rows.append({'name':e.name,'kind':'regular' if "
-            "stat.S_ISREG(s.st_mode) else 'other','mode_octal':format(stat.S_IMODE(s.st_mode),'04o'),"
-            "'uid':s.st_uid,'gid':s.st_gid}))(e.stat(follow_symlinks=False),e) for e in entries];"
-            "print(json.dumps(rows,sort_keys=True,separators=(',',':')))"
+        source_root_owner = (source_metadata.st_uid, source_metadata.st_gid)
+        rows = self._list_custody_ownership_rows_v1(
+            list_uid=source_root_owner[0], list_gid=source_root_owner[1]
         )
-
-        def list_metadata(list_uid: int, list_gid: int) -> list[dict[str, object]]:
-            command = self._docker_command(
-                "run", "--rm", "--pull=never", "--network=none",
-                "--ipc=private", "--read-only", "--cap-drop=ALL",
-                "--security-opt=no-new-privileges",
-                f"--security-opt=seccomp={self._runtime_seccomp_path}",
-                f"--user={list_uid}:{list_gid}", "--pids-limit=16",
-                "--memory=64m", "--memory-swap=64m", "--ulimit=nofile=32:32",
-                (
-                    "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=4m,"
-                    f"uid={list_uid},gid={list_gid},mode=0700"
-                ),
-                (
-                    f"--mount=type=bind,src={self.custody_directory},"
-                    "dst=/custody,readonly,bind-propagation=rprivate"
-                ),
-                "--entrypoint=/usr/local/bin/python3", str(image),
-                "-c", metadata_program,
-            )
-            completed = _run(
-                command,
-                environment=self._docker_control_plane.environment,
-                check=False,
-                timeout=60,
-            )
-            if (
-                completed.returncode != 0
-                or completed.stderr
-                or len(completed.stdout) > 16 * 1024
-            ):
-                _fail(FAIL_CONTAINER, "custody metadata-only lister failed")
-            try:
-                rows = json.loads(completed.stdout)
-            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-                _fail(FAIL_CONTAINER, f"custody metadata listing is invalid: {exc}")
-            if type(rows) is not list:
-                _fail(FAIL_CONTAINER, "custody metadata listing is not an array")
-            return rows
-
-        rows = list_metadata(source_uid, source_gid)
         allowed_names = {
             "phase3_m25_ceremony.lock",
             "split_seed_instantiation.marker",
@@ -12244,7 +12539,9 @@ class DockerCeremonyActorsV1(CeremonyActorsV1, AbstractContextManager["DockerCer
             name = None if not isinstance(row, Mapping) else row.get("name")
             if (
                 type(row) is not dict
-                or set(row) != {"name", "kind", "mode_octal", "uid", "gid"}
+                or set(row) != {
+                    "name", "kind", "mode_octal", "st_dev", "st_ino", "uid", "gid"
+                }
                 or type(name) is not str
                 or (
                     name not in allowed_names
@@ -12255,8 +12552,13 @@ class DockerCeremonyActorsV1(CeremonyActorsV1, AbstractContextManager["DockerCer
                 )
                 or row.get("kind") != "regular"
                 or row.get("mode_octal") != "0600"
-                or row.get("uid") != source_uid
-                or row.get("gid") != source_gid
+                or type(row.get("st_dev")) is not int
+                or row["st_dev"] < 0
+                or type(row.get("st_ino")) is not int
+                or row["st_ino"] <= 0
+                or type(row.get("uid")) is not int
+                or type(row.get("gid")) is not int
+                or (row["uid"], row["gid"]) not in permitted_owners
             ):
                 _fail(FAIL_CONTAINER, "custody metadata row differs before ownership transfer")
             names.append(name)
@@ -12266,70 +12568,106 @@ class DockerCeremonyActorsV1(CeremonyActorsV1, AbstractContextManager["DockerCer
             or "phase3_m25_ceremony.lock" not in names
             or len([name for name in names if name.startswith("opaque-run-")]) != 1
             or len([name for name in names if name.startswith("opaque-ledger-")]) != 1
+            or len({(row["st_dev"], row["st_ino"]) for row in rows}) != len(rows)
         ):
             _fail(FAIL_CONTAINER, "custody ownership transfer path set differs")
+        source_row_owners = {
+            str(row["name"]): (int(row["uid"]), int(row["gid"])) for row in rows
+        }
+        target_row_owners = {name: target_owner for name in names}
 
-        command_parts: list[str] = [
-            "run", "--rm", "--pull=never", "--network=none", "--ipc=private",
-            "--read-only", "--cap-drop=ALL", "--cap-add=CHOWN",
-            "--security-opt=no-new-privileges",
-            f"--security-opt=seccomp={self._runtime_seccomp_path}",
-            "--user=0:0", "--pids-limit=16", "--memory=64m", "--memory-swap=64m",
-            "--ulimit=nofile=32:32",
-        ]
-        target_paths: list[str] = []
-        for index, name in enumerate(names):
-            target = f"/targets/item-{index}"
-            command_parts.append(
-                f"--mount=type=bind,src={self.custody_directory / name},dst={target},bind-propagation=rprivate"
+        def require_exact_state(
+            *,
+            root_owner: tuple[int, int],
+            row_owners: Mapping[str, tuple[int, int]],
+            label: str,
+        ) -> None:
+            try:
+                metadata = self.custody_directory.lstat()
+            except OSError as exc:
+                _fail(FAIL_CONTAINER, f"custody ownership {label} root is absent: {exc}")
+            if (
+                not stat.S_ISDIR(metadata.st_mode)
+                or stat.S_IMODE(metadata.st_mode) != 0o700
+                or (metadata.st_uid, metadata.st_gid) != root_owner
+                or (metadata.st_dev, metadata.st_ino)
+                != (source_metadata.st_dev, source_metadata.st_ino)
+            ):
+                _fail(FAIL_CONTAINER, f"custody ownership {label} root differs")
+            actual_rows = self._list_custody_ownership_rows_v1(
+                list_uid=root_owner[0], list_gid=root_owner[1]
             )
-            target_paths.append(target)
-        command_parts.append(
-            f"--mount=type=bind,src={self.custody_directory},dst=/target-root,bind-propagation=rprivate"
-        )
-        command_parts.extend((
-            "--entrypoint=/usr/bin/env", str(image), "-i",
-            "PATH=/usr/local/bin:/usr/bin:/bin", "/bin/chown",
-            f"{uid}:{gid}", *target_paths, "/target-root",
-        ))
-        _run(
-            self._docker_command(*command_parts),
-            environment=self._docker_control_plane.environment,
-        )
-        metadata = self.custody_directory.lstat()
-        if (
-            not stat.S_ISDIR(metadata.st_mode)
-            or stat.S_IMODE(metadata.st_mode) != 0o700
-            or metadata.st_uid != uid
-            or metadata.st_gid != gid
-            or (metadata.st_dev, metadata.st_ino)
-            != (source_metadata.st_dev, source_metadata.st_ino)
-        ):
-            _fail(FAIL_CONTAINER, "custody ownership transfer did not take effect")
-        after_rows = list_metadata(uid, gid)
-        if (
-            [row.get("name") for row in after_rows if isinstance(row, Mapping)]
-            != names
-            or any(
-                type(row) is not dict
-                or row.get("uid") != uid
-                or row.get("gid") != gid
-                or row.get("kind") != "regular"
-                or row.get("mode_octal") != "0600"
-                for row in after_rows
+            expected_rows = tuple({
+                **dict(row),
+                "uid": row_owners[str(row["name"])][0],
+                "gid": row_owners[str(row["name"])][1],
+            } for row in rows)
+            if actual_rows != expected_rows:
+                _fail(FAIL_CONTAINER, f"custody ownership {label} rows differ")
+
+        try:
+            self._run_custody_chown_helper_v1(
+                root_metadata=source_metadata,
+                rows=rows,
+                allowed_root_owners=frozenset({source_root_owner}),
+                allowed_row_owners={
+                    name: frozenset({owner})
+                    for name, owner in source_row_owners.items()
+                },
+                target_root_owner=target_owner,
+                target_row_owners=target_row_owners,
+                operation="TRANSFER",
             )
-        ):
-            _fail(FAIL_CONTAINER, "custody ownership transfer metadata differs")
+            require_exact_state(
+                root_owner=target_owner,
+                row_owners=target_row_owners,
+                label="transfer",
+            )
+        except BaseException as original:
+            try:
+                self._run_custody_chown_helper_v1(
+                    root_metadata=source_metadata,
+                    rows=rows,
+                    allowed_root_owners=frozenset(
+                        {source_root_owner, target_owner}
+                    ),
+                    allowed_row_owners={
+                        name: frozenset({owner, target_owner})
+                        for name, owner in source_row_owners.items()
+                    },
+                    target_root_owner=source_root_owner,
+                    target_row_owners=source_row_owners,
+                    operation="ROLLBACK",
+                )
+                require_exact_state(
+                    root_owner=source_root_owner,
+                    row_owners=source_row_owners,
+                    label="rollback",
+                )
+            except BaseException as rollback:
+                # Mixed or unknown ownership after a failed rollback must be
+                # treated exactly like actor custody.  The outer cleanup path
+                # will retry a full host reclaim and must never infer ABSENT.
+                self._custody_handed_off = True
+                self._custody_reclaim_required = True
+                raise combine_formal_failures_v1(
+                    original,
+                    rollback,
+                    phase="CUSTODY_OWNERSHIP_TRANSFER_ROLLBACK",
+                ) from original
+            raise
 
     def _handoff_custody_to_actor(self) -> None:
         self._set_custody_owner(65534, 65534)
         self._custody_handed_off = True
+        self._custody_reclaim_required = True
 
     def _reclaim_custody_from_actor(self) -> None:
-        if not self._custody_handed_off:
+        if not self._custody_handed_off and not self._custody_reclaim_required:
             return
-        self._set_custody_owner(os.getuid(), os.getgid())
+        self._set_custody_owner(os.geteuid(), os.getegid())
         self._custody_handed_off = False
+        self._custody_reclaim_required = False
 
     def seed_split(self) -> tuple[bytes, bytes]:
         if 1 not in self._key_ids:
@@ -12646,6 +12984,28 @@ class DockerCeremonyActorsV1(CeremonyActorsV1, AbstractContextManager["DockerCer
         ).hexdigest()
         assert_public_payload_contains_no_secret_fields(receipt)
         return MappingProxyType(receipt)
+
+    def verify_pending_seed_custody_commitment_v1(
+        self, expected_commitment: bytes
+    ) -> Mapping[str, object]:
+        """Reclaim PENDING custody, verify it, then restore actor ownership.
+
+        Verification failure deliberately leaves custody host-owned so its
+        evidence remains traversable for recovery.  Re-handoff must complete
+        before the receipt escapes this method; therefore callers cannot
+        durably record verification or complete the marker after a failed
+        ownership transfer.
+        """
+
+        if not self._custody_handed_off:
+            _fail(
+                FAIL_CUSTODY,
+                "PENDING custody verification requires actor-owned custody",
+            )
+        self._reclaim_custody_from_actor()
+        receipt = self.verify_seed_custody_commitment_v1(expected_commitment)
+        self._handoff_custody_to_actor()
+        return receipt
 
     def prospective_complete_marker(self, seed_manifest_root: bytes) -> MarkerSnapshot:
         pending = self._pending_marker
@@ -13665,8 +14025,10 @@ def execute_formal_container_ceremony_v1(
         staged_seed_commitment = transaction._staged_seed_commitment
         if type(staged_seed_commitment) is not bytes or len(staged_seed_commitment) != 32:
             _fail(FAIL_CUSTODY, "durable staged seed commitment is absent")
-        seed_verification_receipt = actors.verify_seed_custody_commitment_v1(
-            staged_seed_commitment
+        seed_verification_receipt = (
+            actors.verify_pending_seed_custody_commitment_v1(
+                staged_seed_commitment
+            )
         )
         transaction.record_seed_custody_verification_v1(
             seed_verification_receipt

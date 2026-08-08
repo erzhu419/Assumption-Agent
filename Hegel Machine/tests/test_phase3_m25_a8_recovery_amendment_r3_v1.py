@@ -11,6 +11,16 @@ import pytest
 from hegel_machine import phase3_m25_a8_recovery_amendment_r3_v1 as amendment
 
 
+@pytest.fixture(autouse=True)
+def _freeze_pre_r7_required_input_view(monkeypatch: pytest.MonkeyPatch) -> None:
+    future = {"phase3_m25_a8_recovery_amendment_r7_v1.py", "phase3_m25_a8_recovery_cli_r7_v1.py"}
+    monkeypatch.setattr(
+        amendment,
+        "REQUIRED_COMMIT_A_INPUTS",
+        tuple(path for path in amendment.REQUIRED_COMMIT_A_INPUTS if path.name not in future),
+    )
+
+
 def _canonical(value: object) -> bytes:
     return (
         json.dumps(value, ensure_ascii=True, separators=(",", ":"), sort_keys=True)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import fields, replace
 import errno
 import fcntl
@@ -122,6 +123,8 @@ def _fixed_r3_unchanged_input_rows() -> tuple[tuple[str, str], ...]:
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r5_v1.py",
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_amendment_r6_v1.py",
         "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r6_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_amendment_r7_v1.py",
+        "Hegel Machine/src/hegel_machine/phase3_m25_a8_recovery_cli_r7_v1.py",
         "Hegel Machine/src/hegel_machine/phase3_m3_implementation_qualification_v1.py",
         "Hegel Machine/rust/formal_bridge_m25/src/lib.rs",
     }
@@ -864,6 +867,134 @@ def test_r5_commit_context_accepts_exact_current_child_and_validator_blob(
     assert executor._validate_fixed_a8_r5_commit_context_v1(admission) == (
         b"r5-validator"
     )
+
+
+def test_r6_commit_context_keeps_current_head_rule_and_adds_exact_child_bridge(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    r6_commit = "ab" * 20
+    child_commit = "cd" * 20
+    admission = {"r6_amendment_commit": r6_commit}
+    current_head = r6_commit
+
+    def fake_run(arguments: list[str], **_kwargs: object) -> SimpleNamespace:
+        if arguments[1:3] == ["rev-parse", "--verify"]:
+            stdout = (current_head + "\n").encode("ascii")
+        elif arguments[1:4] == ["rev-list", "--parents", "-n"]:
+            commit = arguments[5]
+            parent = (
+                executor._FIXED_A8_R6_PARENT_AMENDMENT_COMMIT
+                if commit == r6_commit
+                else r6_commit
+            )
+            stdout = (commit + " " + parent + "\n").encode("ascii")
+        elif arguments[1] == "ls-tree":
+            stdout = (
+                "100644 blob "
+                + "11" * 20
+                + "\t"
+                + executor._FIXED_A8_R3_VALIDATOR_REPOSITORY_PATH
+                + "\n"
+            ).encode("utf-8")
+        else:
+            raise AssertionError(arguments)
+        return SimpleNamespace(returncode=0, stdout=stdout, stderr=b"")
+
+    monkeypatch.setattr(executor.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        executor,
+        "_fixed_a8_r3_git_blob_v1",
+        lambda _commit, _path: b"r6-validator",
+    )
+    monkeypatch.setattr(
+        executor,
+        "_FIXED_A8_R6_HISTORICAL_SOURCE_ADMISSION_SHA256",
+        hashlib.sha256(executor._canonical_json(admission)).hexdigest(),
+    )
+    assert executor._validate_fixed_a8_r6_commit_context_v1(admission) == (
+        b"r6-validator"
+    )
+    current_head = child_commit
+    with pytest.raises(executor.FormalContainerExecutorError):
+        executor._validate_fixed_a8_r6_commit_context_v1(admission)
+    assert executor._validate_fixed_a8_r6_commit_context_v1(
+        admission,
+        historical_direct_child_commit=child_commit,
+    ) == b"r6-validator"
+
+
+@pytest.mark.parametrize(
+    "fault",
+    (
+        "admission_hash",
+        "expected_child",
+        "sibling_parent",
+        "merge_child",
+        "r6_parent",
+        "r6_tree_mode",
+        "child_tree_blob",
+        "child_tree_path",
+    ),
+)
+def test_r6_historical_direct_child_bridge_rejects_identity_or_tree_drift(
+    fault: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    r6_commit = "ab" * 20
+    child_commit = "cd" * 20
+    expected_child = "ef" * 20 if fault == "expected_child" else child_commit
+    admission: dict[str, object] = {"r6_amendment_commit": r6_commit}
+    exact_hash = hashlib.sha256(executor._canonical_json(admission)).hexdigest()
+    if fault == "admission_hash":
+        admission["drift"] = True
+
+    def tree_row(*, child: bool) -> bytes:
+        mode = "100755" if fault == "r6_tree_mode" and not child else "100644"
+        blob = "22" * 20 if fault == "child_tree_blob" and child else "11" * 20
+        path = executor._FIXED_A8_R3_VALIDATOR_REPOSITORY_PATH
+        if fault == "child_tree_path" and child:
+            path += ".drift"
+        return f"{mode} blob {blob}\t{path}\n".encode("utf-8")
+
+    def fake_run(arguments: list[str], **_kwargs: object) -> SimpleNamespace:
+        if arguments[1:3] == ["rev-parse", "--verify"]:
+            stdout = (child_commit + "\n").encode("ascii")
+        elif arguments[1:4] == ["rev-list", "--parents", "-n"]:
+            commit = arguments[5]
+            if commit == r6_commit:
+                parent = (
+                    "00" * 20
+                    if fault == "r6_parent"
+                    else executor._FIXED_A8_R6_PARENT_AMENDMENT_COMMIT
+                )
+                stdout = (commit + " " + parent + "\n").encode("ascii")
+            else:
+                parent = "00" * 20 if fault == "sibling_parent" else r6_commit
+                suffix = " " + "33" * 20 if fault == "merge_child" else ""
+                stdout = (commit + " " + parent + suffix + "\n").encode("ascii")
+        elif arguments[1] == "ls-tree":
+            stdout = tree_row(child=arguments[2] != r6_commit)
+        else:
+            raise AssertionError(arguments)
+        return SimpleNamespace(returncode=0, stdout=stdout, stderr=b"")
+
+    monkeypatch.setattr(executor.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        executor,
+        "_fixed_a8_r3_git_blob_v1",
+        lambda _commit, _path: b"validator",
+    )
+    monkeypatch.setattr(
+        executor,
+        "_FIXED_A8_R6_HISTORICAL_SOURCE_ADMISSION_SHA256",
+        exact_hash,
+    )
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        executor._validate_fixed_a8_r6_commit_context_v1(
+            admission,
+            historical_direct_child_commit=expected_child,
+        )
+    assert captured.value.code == executor.FAIL_RECOVERY_SOURCE_ADMISSION
 
 
 def test_fixed_a8_validator_dispatches_r4_schema_to_r4_commit_context(
@@ -4935,6 +5066,467 @@ def test_docker_keyless_verifier_runs_as_exact_current_custody_owner(
     assert not any("dst=/state" in value for value in observed_command)
 
 
+def test_every_pending_orchestration_path_uses_ownership_round_trip_api() -> None:
+    pending_api = "verify_pending_seed_custody_commitment_v1"
+    direct_api = "verify_seed_custody_commitment_v1"
+    prestage_names = set(
+        executor._continue_pre_stage_pending_recovery_core_v1.__code__.co_names
+    )
+    poststage_names = set(
+        executor._continue_post_stage_transaction_recovery_core_v1.__code__.co_names
+    )
+    fresh_names = set(executor.execute_formal_container_ceremony_v1.__code__.co_names)
+    assert pending_api in prestage_names
+    assert pending_api in poststage_names
+    assert pending_api in fresh_names
+    assert direct_api not in prestage_names
+    assert direct_api in poststage_names  # COMPLETE-marker recovery remains host-only.
+    assert direct_api not in fresh_names
+
+
+def test_pending_verification_api_preserves_non_ownership_backend_compatibility() -> None:
+    calls: list[bytes] = []
+    expected_receipt = MappingProxyType({"verified": True})
+
+    class ExistingSyntheticBackend(executor.CeremonyActorsV1):
+        def verify_seed_custody_commitment_v1(self, expected_commitment: bytes):
+            calls.append(expected_commitment)
+            return expected_receipt
+
+    backend = ExistingSyntheticBackend()
+    actual = backend.verify_pending_seed_custody_commitment_v1(
+        _RECOVERY_SEED_COMMITMENT
+    )
+    assert actual is expected_receipt
+    assert calls == [_RECOVERY_SEED_COMMITMENT]
+
+
+def test_docker_pending_verification_reclaims_before_host_traverse_and_rehands_off(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    custody = tmp_path / "custody"
+    custody.mkdir(mode=0o700)
+    _write_post_stage_seed_state(custody)
+    backend = executor.DockerCeremonyActorsV1(
+        basis_commit="12" * 20,
+        custody_directory=custody,
+        rust_formal_replay_binary=tmp_path / "rust-replay",
+        timestamp=1,
+    )
+    backend._custody_handed_off = True
+    owner = "actor"
+    events: list[str] = []
+    seed_path = custody / "split_master_seed.bin"
+    original_lstat = Path.lstat
+
+    def permission_aware_lstat(path: Path):
+        if owner == "actor" and path == seed_path:
+            raise PermissionError(errno.EACCES, "host cannot traverse actor custody")
+        return original_lstat(path)
+
+    def reclaim() -> None:
+        nonlocal owner
+        events.append("reclaim-host")
+        owner = "host"
+        backend._custody_handed_off = False
+
+    def verify(expected_commitment: bytes):
+        events.append("verify-host")
+        seed_path.lstat()
+        assert expected_commitment == _RECOVERY_SEED_COMMITMENT
+        return MappingProxyType({"verified": True})
+
+    def handoff() -> None:
+        nonlocal owner
+        events.append("rehandoff-actor")
+        owner = "actor"
+        backend._custody_handed_off = True
+
+    monkeypatch.setattr(Path, "lstat", permission_aware_lstat)
+    monkeypatch.setattr(backend, "_reclaim_custody_from_actor", reclaim)
+    monkeypatch.setattr(backend, "verify_seed_custody_commitment_v1", verify)
+    monkeypatch.setattr(backend, "_handoff_custody_to_actor", handoff)
+
+    with pytest.raises(PermissionError) as direct:
+        backend.verify_seed_custody_commitment_v1(_RECOVERY_SEED_COMMITMENT)
+    assert direct.value.errno == errno.EACCES
+    events.clear()
+
+    receipt = backend.verify_pending_seed_custody_commitment_v1(
+        _RECOVERY_SEED_COMMITMENT
+    )
+    assert receipt == {"verified": True}
+    assert events == ["reclaim-host", "verify-host", "rehandoff-actor"]
+    assert owner == "actor"
+    assert backend._custody_handed_off is True
+
+
+def test_docker_pending_verification_failure_retains_host_ownership(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = executor.DockerCeremonyActorsV1(
+        basis_commit="12" * 20,
+        custody_directory=tmp_path / "custody",
+        rust_formal_replay_binary=tmp_path / "rust-replay",
+        timestamp=1,
+    )
+    backend._custody_handed_off = True
+    owner = "actor"
+    events: list[str] = []
+    verification_failure = executor.FormalContainerExecutorError(
+        executor.FAIL_CUSTODY, "retained seed differs"
+    )
+
+    def reclaim() -> None:
+        nonlocal owner
+        events.append("reclaim-host")
+        owner = "host"
+        backend._custody_handed_off = False
+
+    def fail_verify(_expected_commitment: bytes):
+        events.append("verify-host-failed")
+        raise verification_failure
+
+    monkeypatch.setattr(backend, "_reclaim_custody_from_actor", reclaim)
+    monkeypatch.setattr(backend, "verify_seed_custody_commitment_v1", fail_verify)
+    monkeypatch.setattr(
+        backend,
+        "_handoff_custody_to_actor",
+        lambda: pytest.fail("failed verification must not re-handoff custody"),
+    )
+
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        backend.verify_pending_seed_custody_commitment_v1(
+            _RECOVERY_SEED_COMMITMENT
+        )
+    assert captured.value is verification_failure
+    assert events == ["reclaim-host", "verify-host-failed"]
+    assert owner == "host"
+    assert backend._custody_handed_off is False
+
+
+def test_docker_pending_verification_does_not_release_receipt_if_rehandoff_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = executor.DockerCeremonyActorsV1(
+        basis_commit="12" * 20,
+        custody_directory=tmp_path / "custody",
+        rust_formal_replay_binary=tmp_path / "rust-replay",
+        timestamp=1,
+    )
+    backend._custody_handed_off = True
+    owner = "actor"
+    events: list[str] = []
+    escaped_receipt: MappingProxyType | None = None
+    rehandoff_failure = executor.FormalContainerExecutorError(
+        executor.FAIL_CONTAINER, "custody re-handoff failed"
+    )
+
+    def reclaim() -> None:
+        nonlocal owner
+        events.append("reclaim-host")
+        owner = "host"
+        backend._custody_handed_off = False
+
+    def verify(_expected_commitment: bytes):
+        events.append("verify-host")
+        return MappingProxyType({"verified": True})
+
+    def fail_handoff() -> None:
+        events.append("rehandoff-actor-failed")
+        raise rehandoff_failure
+
+    monkeypatch.setattr(backend, "_reclaim_custody_from_actor", reclaim)
+    monkeypatch.setattr(backend, "verify_seed_custody_commitment_v1", verify)
+    monkeypatch.setattr(backend, "_handoff_custody_to_actor", fail_handoff)
+
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        escaped_receipt = backend.verify_pending_seed_custody_commitment_v1(
+            _RECOVERY_SEED_COMMITMENT
+        )
+    assert captured.value is rehandoff_failure
+    assert escaped_receipt is None
+    assert events == [
+        "reclaim-host",
+        "verify-host",
+        "rehandoff-actor-failed",
+    ]
+    assert owner == "host"
+    assert backend._custody_handed_off is False
+
+
+def _simulated_custody_ownership_backend(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> tuple[
+    executor.DockerCeremonyActorsV1,
+    dict[str, tuple[int, int]],
+    tuple[str, ...],
+]:
+    custody = tmp_path / "custody"
+    _install_exact_pending_recovery_custody_v1(custody)
+    backend = executor.DockerCeremonyActorsV1(
+        basis_commit="12" * 20,
+        custody_directory=custody,
+        rust_formal_replay_binary=tmp_path / "rust-replay",
+        timestamp=1,
+    )
+    _configure_fake_actor_identity(backend, tmp_path)
+    host_owner = (os.geteuid(), os.getegid())
+    names = tuple(sorted(path.name for path in custody.iterdir()))
+    owners = {name: host_owner for name in (".", *names)}
+    original_lstat = Path.lstat
+    root_metadata = original_lstat(custody)
+    row_metadata = {name: original_lstat(custody / name) for name in names}
+
+    def ownership_lstat(path: Path):
+        metadata = original_lstat(path)
+        key = "." if path == custody else path.name if path.parent == custody else None
+        if key in owners:
+            values = list(metadata)
+            values[4], values[5] = owners[key]
+            return os.stat_result(values)
+        return metadata
+
+    def metadata_rows(*, list_uid: int, list_gid: int):
+        assert owners["."] == (list_uid, list_gid)
+        return tuple(
+            {
+                "name": name,
+                "kind": "regular",
+                "mode_octal": "0600",
+                "st_dev": row_metadata[name].st_dev,
+                "st_ino": row_metadata[name].st_ino,
+                "uid": owners[name][0],
+                "gid": owners[name][1],
+            }
+            for name in names
+        )
+
+    monkeypatch.setattr(Path, "lstat", ownership_lstat)
+    monkeypatch.setattr(
+        backend, "_list_custody_ownership_rows_v1", metadata_rows
+    )
+    assert (root_metadata.st_dev, root_metadata.st_ino) == (
+        ownership_lstat(custody).st_dev,
+        ownership_lstat(custody).st_ino,
+    )
+    return backend, owners, names
+
+
+def _apply_simulated_chown_targets(
+    owners: dict[str, tuple[int, int]],
+    names: tuple[str, ...],
+    call: Mapping[str, object],
+) -> None:
+    target_rows = call["target_row_owners"]
+    assert isinstance(target_rows, Mapping)
+    for name in names:
+        allowed = call["allowed_row_owners"]
+        assert isinstance(allowed, Mapping)
+        assert owners[name] in allowed[name]
+        owners[name] = target_rows[name]
+    allowed_root = call["allowed_root_owners"]
+    assert isinstance(allowed_root, frozenset)
+    assert owners["."] in allowed_root
+    owners["."] = call["target_root_owner"]
+
+
+def test_custody_chown_primitive_is_exact_root_cap_chown_only_helper(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend, owners, names = _simulated_custody_ownership_backend(
+        tmp_path, monkeypatch
+    )
+    rows = backend._list_custody_ownership_rows_v1(
+        list_uid=owners["."][0], list_gid=owners["."][1]
+    )
+    root_metadata = backend.custody_directory.lstat()
+    host_owner = (os.geteuid(), os.getegid())
+    nobody_owner = (65534, 65534)
+    observed: tuple[str, ...] | None = None
+
+    def capture(command, **_kwargs):
+        nonlocal observed
+        observed = tuple(command)
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+
+    monkeypatch.setattr(executor, "_run", capture)
+    backend._run_custody_chown_helper_v1(
+        root_metadata=root_metadata,
+        rows=rows,
+        allowed_root_owners=frozenset({host_owner}),
+        allowed_row_owners={
+            name: frozenset({host_owner}) for name in names
+        },
+        target_root_owner=nobody_owner,
+        target_row_owners={name: nobody_owner for name in names},
+        operation="TRANSFER",
+    )
+    assert observed is not None
+    assert "--user=0:0" in observed
+    assert "--cap-drop=ALL" in observed
+    assert "--cap-add=CHOWN" in observed
+    assert "--network=none" in observed
+    assert "--pull=never" in observed
+    assert not any(value.startswith("--cap-add=") and value != "--cap-add=CHOWN" for value in observed)
+    assert sum(value.startswith("--mount=type=bind") for value in observed) == (
+        len(rows) + 1
+    )
+    spec = json.loads(observed[-1])
+    assert spec["operation"] == "TRANSFER"
+    assert len(spec["rows"]) == len(rows) + 1
+    assert spec["rows"][-1] == {
+        "path": "/target-root",
+        "kind": "directory",
+        "mode_octal": "0700",
+        "st_dev": root_metadata.st_dev,
+        "st_ino": root_metadata.st_ino,
+        "allowed_owner_pairs": [list(host_owner)],
+        "target_uid": 65534,
+        "target_gid": 65534,
+    }
+    assert all(
+        row["st_dev"] >= 0
+        and row["st_ino"] > 0
+        and row["mode_octal"] == "0600"
+        for row in spec["rows"][:-1]
+    )
+
+
+def test_partial_primitive_chown_failure_rolls_back_exact_mixed_path_set(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend, owners, names = _simulated_custody_ownership_backend(
+        tmp_path, monkeypatch
+    )
+    host_owner = (os.geteuid(), os.getegid())
+    nobody_owner = (65534, 65534)
+    primary = executor.FormalContainerExecutorError(
+        executor.FAIL_CONTAINER, "injected primitive partial chown"
+    )
+    operations: list[str] = []
+
+    def partial_then_rollback(**call) -> None:
+        operation = call["operation"]
+        operations.append(operation)
+        if operation == "TRANSFER":
+            first = names[0]
+            assert owners[first] in call["allowed_row_owners"][first]
+            owners[first] = call["target_row_owners"][first]
+            assert owners[first] == nobody_owner
+            assert any(owners[name] == host_owner for name in names[1:])
+            raise primary
+        _apply_simulated_chown_targets(owners, names, call)
+
+    monkeypatch.setattr(
+        backend, "_run_custody_chown_helper_v1", partial_then_rollback
+    )
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        backend._set_custody_owner(*nobody_owner)
+    assert captured.value is primary
+    assert operations == ["TRANSFER", "ROLLBACK"]
+    assert set(owners.values()) == {host_owner}
+    assert backend._custody_handed_off is False
+    assert backend._custody_reclaim_required is False
+
+
+def test_post_validation_failure_rolls_back_exact_completed_transfer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend, owners, names = _simulated_custody_ownership_backend(
+        tmp_path, monkeypatch
+    )
+    host_owner = (os.geteuid(), os.getegid())
+    nobody_owner = (65534, 65534)
+    post_validation = executor.FormalContainerExecutorError(
+        executor.FAIL_CONTAINER, "injected transfer post-validation failure"
+    )
+    operations: list[str] = []
+    original_rows = backend._list_custody_ownership_rows_v1
+    list_calls = 0
+
+    def fail_transfer_post_validation(*, list_uid: int, list_gid: int):
+        nonlocal list_calls
+        list_calls += 1
+        if list_calls == 2:
+            assert set(owners.values()) == {nobody_owner}
+            raise post_validation
+        return original_rows(list_uid=list_uid, list_gid=list_gid)
+
+    def complete_helper(**call) -> None:
+        operations.append(call["operation"])
+        _apply_simulated_chown_targets(owners, names, call)
+
+    monkeypatch.setattr(
+        backend,
+        "_list_custody_ownership_rows_v1",
+        fail_transfer_post_validation,
+    )
+    monkeypatch.setattr(
+        backend, "_run_custody_chown_helper_v1", complete_helper
+    )
+    with pytest.raises(executor.FormalContainerExecutorError) as captured:
+        backend._set_custody_owner(*nobody_owner)
+    assert captured.value is post_validation
+    assert operations == ["TRANSFER", "ROLLBACK"]
+    assert list_calls == 3
+    assert set(owners.values()) == {host_owner}
+    assert backend._custody_handed_off is False
+    assert backend._custody_reclaim_required is False
+
+
+def test_rollback_failure_preserves_both_errors_and_reclaim_retry_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend, owners, names = _simulated_custody_ownership_backend(
+        tmp_path, monkeypatch
+    )
+    host_owner = (os.geteuid(), os.getegid())
+    nobody_owner = (65534, 65534)
+    primary = executor.FormalContainerExecutorError(
+        executor.FAIL_CONTAINER, "injected primitive partial chown"
+    )
+    rollback = executor.FormalContainerExecutorError(
+        executor.FAIL_CONTAINER, "injected rollback helper failure"
+    )
+
+    def fail_transfer_and_rollback(**call) -> None:
+        if call["operation"] == "TRANSFER":
+            owners[names[0]] = nobody_owner
+            raise primary
+        raise rollback
+
+    monkeypatch.setattr(
+        backend, "_run_custody_chown_helper_v1", fail_transfer_and_rollback
+    )
+    with pytest.raises(executor.FormalContainerCompositeError) as captured:
+        backend._set_custody_owner(*nobody_owner)
+    assert captured.value.combination_phase == (
+        "CUSTODY_OWNERSHIP_TRANSFER_ROLLBACK"
+    )
+    assert captured.value.primary_error is primary
+    assert captured.value.cleanup_error is rollback
+    assert backend._custody_handed_off is True
+    assert backend._custody_reclaim_required is True
+    assert owners[names[0]] == nobody_owner
+    assert owners["."] == host_owner
+
+    retry_operations: list[str] = []
+
+    def successful_reclaim(**call) -> None:
+        retry_operations.append(call["operation"])
+        _apply_simulated_chown_targets(owners, names, call)
+
+    monkeypatch.setattr(
+        backend, "_run_custody_chown_helper_v1", successful_reclaim
+    )
+    backend._reclaim_custody_from_actor()
+    assert retry_operations == ["TRANSFER"]
+    assert set(owners.values()) == {host_owner}
+    assert backend._custody_handed_off is False
+    assert backend._custody_reclaim_required is False
+
+
 def test_executor_git_blob_uses_absolute_sanitized_offline_read(
     tmp_path: Path, monkeypatch,
 ) -> None:
@@ -5751,6 +6343,7 @@ def test_real_offline_cap_chown_helper_round_trips_0700_nobody_owned_tree(
         pytest.skip("offline daemon or pinned custodian image is unavailable")
     custody = tmp_path / "real-cap-chown-custody"
     seed = _install_exact_pending_recovery_custody_v1(custody)
+    _write_post_stage_seed_state(custody)
     retained_paths = tuple(sorted(custody.iterdir()))
     assert len(retained_paths) == 7
     lock_path = custody / "phase3_m25_ceremony.lock"
@@ -5772,7 +6365,11 @@ def test_real_offline_cap_chown_helper_round_trips_0700_nobody_owned_tree(
         backend._docker_control_plane = executor.prepare_local_docker_control_plane_v1(
             Path(runtime), repository_root=executor.REPOSITORY_ROOT
         )
+        backend._root = Path(runtime)
         backend._runtime_seccomp_path = executor.SECCOMP_PATH
+        backend._docker_daemon_binding = b"d" * 32
+        verifier_source = executor.SEED_CUSTODY_VERIFIER_PATH.read_bytes()
+        monkeypatch.setattr(backend, "_git_blob", lambda _relative: verifier_source)
         commands: list[tuple[str, ...]] = []
         original_run = executor._run
 
@@ -5786,7 +6383,22 @@ def test_real_offline_cap_chown_helper_round_trips_0700_nobody_owned_tree(
             handed = custody.lstat()
             assert (handed.st_uid, handed.st_gid) == (65534, 65534)
             assert stat.S_IMODE(handed.st_mode) == 0o700
+            with pytest.raises(PermissionError):
+                seed.lstat()
             backend._custody_handed_off = True
+            receipt = backend.verify_pending_seed_custody_commitment_v1(
+                _RECOVERY_SEED_COMMITMENT
+            )
+            assert receipt["verified"] is True
+            assert receipt["seed_commitment_hex"] == (
+                _RECOVERY_SEED_COMMITMENT.hex()
+            )
+            rehanded = custody.lstat()
+            assert (rehanded.st_uid, rehanded.st_gid) == (65534, 65534)
+            assert stat.S_IMODE(rehanded.st_mode) == 0o700
+            assert backend._custody_handed_off is True
+            with pytest.raises(PermissionError):
+                seed.lstat()
             backend._reclaim_custody_from_actor()
             reclaimed = custody.lstat()
             assert (reclaimed.st_uid, reclaimed.st_gid) == (
@@ -6421,6 +7033,123 @@ def test_fresh_process_staged_pending_continuation_reuses_ids_seed_and_key(
             f"opaque-run-{(b'r' * 16).hex()}.reserved",
             f"opaque-ledger-{(b'l' * 16).hex()}.reserved",
         }
+        assert recovered.state == "PUBLISHED"
+    finally:
+        recovered.close_lock()
+
+
+def test_post_stage_pending_rehandoff_failure_records_nothing_and_keeps_marker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transaction, _inputs = _durable_post_stage_transaction(tmp_path)
+    transaction.close_lock()
+    recovered = _rehydrate_post_stage(transaction)
+    actors = _PostStageRecoveryActors(
+        transaction.custody_directory, private_state_present=True
+    )
+    events: list[str] = []
+    rehandoff_failure = executor.FormalContainerExecutorError(
+        executor.FAIL_CONTAINER, "custody re-handoff failed"
+    )
+
+    def fail_pending_verification(_expected_commitment: bytes):
+        events.append("pending-verification-rehandoff-failed")
+        raise rehandoff_failure
+
+    def forbidden(label: str):
+        def fail(*_args, **_kwargs):
+            events.append(label)
+            raise AssertionError(f"forbidden after re-handoff failure: {label}")
+
+        return fail
+
+    monkeypatch.setattr(
+        actors,
+        "verify_pending_seed_custody_commitment_v1",
+        fail_pending_verification,
+    )
+    monkeypatch.setattr(
+        recovered,
+        "record_seed_custody_verification_v1",
+        forbidden("record-verification"),
+    )
+    monkeypatch.setattr(actors, "complete_marker", forbidden("complete-marker"))
+    monkeypatch.setattr(
+        actors,
+        "authorize_actor_key_volume_destruction",
+        forbidden("authorize-destruction"),
+    )
+    monkeypatch.setattr(
+        actors,
+        "destroy_actor_key_volumes_and_verify_absent",
+        forbidden("destroy-private-state"),
+    )
+    try:
+        with pytest.raises(executor.FormalContainerExecutorError) as captured:
+            executor._continue_post_stage_transaction_recovery_core_v1(
+                transaction=recovered,
+                actors=actors,
+                replay=_public_replay_stub,
+            )
+        assert captured.value is rehandoff_failure
+        assert events == ["pending-verification-rehandoff-failed"]
+        marker = executor.read_marker_snapshot_v1(
+            recovered.custody_directory / "split_seed_instantiation.marker"
+        )
+        assert marker.state == "PENDING"
+        assert actors.private_state_present is True
+        assert actors.started is False
+        assert not recovered.public_evidence_path.exists()
+        assert not recovered.public_promotion_path.exists()
+        assert not recovered.publication_receipt_path.exists()
+    finally:
+        recovered.close_lock()
+
+
+def test_complete_marker_recovery_keeps_direct_verifier_without_rehandoff(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transaction, inputs = _durable_post_stage_transaction(tmp_path)
+    executor.complete_marker_v1(
+        marker_path=(
+            transaction.custody_directory / "split_seed_instantiation.marker"
+        ),
+        seed_commitment_manifest_root=(
+            inputs.marker_snapshot.seed_commitment_manifest_root
+        ),
+    )
+    transaction.close_lock()
+    recovered = _rehydrate_post_stage(transaction)
+    actors = _PostStageRecoveryActors(
+        transaction.custody_directory, private_state_present=False
+    )
+    direct_verify = actors.verify_seed_custody_commitment_v1
+    direct_calls = 0
+
+    def counted_direct(expected_commitment: bytes):
+        nonlocal direct_calls
+        direct_calls += 1
+        return direct_verify(expected_commitment)
+
+    monkeypatch.setattr(
+        actors,
+        "verify_seed_custody_commitment_v1",
+        counted_direct,
+    )
+    monkeypatch.setattr(
+        actors,
+        "verify_pending_seed_custody_commitment_v1",
+        lambda _expected: pytest.fail(
+            "COMPLETE-marker recovery must not re-handoff custody"
+        ),
+    )
+    try:
+        executor._continue_post_stage_transaction_recovery_core_v1(
+            transaction=recovered,
+            actors=actors,
+            replay=_public_replay_stub,
+        )
+        assert direct_calls == 1
         assert recovered.state == "PUBLISHED"
     finally:
         recovered.close_lock()
