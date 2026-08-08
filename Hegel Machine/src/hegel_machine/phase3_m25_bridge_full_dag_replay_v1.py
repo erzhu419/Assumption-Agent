@@ -75,6 +75,12 @@ FAIL_SIGNATURE_PHASE: Final = "FAIL_M25_BRIDGE_REPLAY_SIGNATURE_PHASE"
 FAIL_SIGNATURE: Final = "FAIL_M25_BRIDGE_REPLAY_PURPOSE1_SIGNATURE"
 FAIL_ACTOR_RECEIPT: Final = "FAIL_M25_BRIDGE_REPLAY_ACTOR_RECEIPT"
 
+OPENSSL_EXECUTABLE: Final = Path("/usr/bin/openssl")
+OPENSSL_EXECUTABLE_SHA256: Final = (
+    "a55e3085b6a1df8887722f6cee7fc32c861d11d5fb584a63837d32d29602c65b"
+)
+_MAX_OPENSSL_EXECUTABLE_BYTES: Final = 16 * 1024 * 1024
+
 Ed25519VerifierV1 = Callable[[bytes, bytes, bytes], None]
 
 
@@ -584,10 +590,88 @@ def _write_private_exclusive(path: Path, payload: bytes) -> None:
         os.close(descriptor)
 
 
+def _require_exact_openssl_executable_v1(openssl_path: Path) -> Path:
+    """Pin the sole qualified OpenSSL verifier executable by inode and bytes."""
+
+    if (
+        not isinstance(openssl_path, Path)
+        or not openssl_path.is_absolute()
+        or openssl_path != OPENSSL_EXECUTABLE
+    ):
+        _fail(
+            FAIL_SIGNATURE,
+            "OpenSSL verifier executable must be exactly /usr/bin/openssl",
+        )
+    descriptor: int | None = None
+    try:
+        lexical_before = openssl_path.lstat()
+        if openssl_path.resolve(strict=True) != openssl_path:
+            _fail(FAIL_SIGNATURE, "OpenSSL verifier executable path is not real")
+        descriptor = os.open(
+            openssl_path,
+            os.O_RDONLY
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0),
+        )
+        before = os.fstat(descriptor)
+        if (
+            stat.S_ISLNK(lexical_before.st_mode)
+            or not stat.S_ISREG(before.st_mode)
+            or (lexical_before.st_dev, lexical_before.st_ino)
+            != (before.st_dev, before.st_ino)
+            or before.st_uid != 0
+            or stat.S_IMODE(before.st_mode) != 0o755
+            or before.st_size < 1
+            or before.st_size > _MAX_OPENSSL_EXECUTABLE_BYTES
+        ):
+            _fail(FAIL_SIGNATURE, "OpenSSL verifier executable metadata differs")
+        digest = hashlib.sha256()
+        remaining = before.st_size
+        while remaining:
+            chunk = os.read(descriptor, min(remaining, 1_048_576))
+            if not chunk:
+                _fail(FAIL_SIGNATURE, "OpenSSL verifier executable read was short")
+            digest.update(chunk)
+            remaining -= len(chunk)
+        if os.read(descriptor, 1):
+            _fail(FAIL_SIGNATURE, "OpenSSL verifier executable grew while read")
+        after = os.fstat(descriptor)
+        lexical_after = openssl_path.lstat()
+        stable_fields = (
+            "st_dev",
+            "st_ino",
+            "st_mode",
+            "st_uid",
+            "st_nlink",
+            "st_size",
+            "st_mtime_ns",
+            "st_ctime_ns",
+        )
+        if any(
+            getattr(before, field) != getattr(after, field)
+            or getattr(after, field) != getattr(lexical_after, field)
+            for field in stable_fields
+        ):
+            _fail(FAIL_SIGNATURE, "OpenSSL verifier executable changed while read")
+        if digest.hexdigest() != OPENSSL_EXECUTABLE_SHA256:
+            _fail(FAIL_SIGNATURE, "OpenSSL verifier executable SHA-256 differs")
+        return openssl_path
+    except BridgeDagReplayError:
+        raise
+    except OSError as exc:
+        _fail(
+            FAIL_SIGNATURE,
+            f"OpenSSL verifier executable identity failed: {type(exc).__name__}",
+        )
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+
+
 def make_openssl_ed25519_verifier_v1(
     private_temp_directory: Path,
     *,
-    openssl_path: Path = Path("/usr/bin/openssl"),
+    openssl_path: Path = OPENSSL_EXECUTABLE,
 ) -> Ed25519VerifierV1:
     """Return a no-network verifier using an explicit private directory.
 
@@ -598,18 +682,20 @@ def make_openssl_ed25519_verifier_v1(
     """
 
     directory = private_temp_directory.resolve(strict=True)
-    metadata = directory.stat()
+    metadata = directory.lstat()
     if (
-        private_temp_directory.is_symlink()
+        not private_temp_directory.is_absolute()
+        or private_temp_directory.is_symlink()
+        or directory != private_temp_directory
         or not stat.S_ISDIR(metadata.st_mode)
+        or metadata.st_uid != os.geteuid()
         or stat.S_IMODE(metadata.st_mode) != 0o700
     ):
-        _fail(FAIL_SIGNATURE, "OpenSSL verifier directory must be a non-symlink mode-0700 directory")
-    executable = openssl_path
-    if not executable.is_absolute() or executable != Path("/usr/bin/openssl"):
-        _fail(FAIL_SIGNATURE, "OpenSSL verifier executable must be exactly /usr/bin/openssl")
-    if not executable.is_file():
-        _fail(FAIL_SIGNATURE, "/usr/bin/openssl is absent")
+        _fail(
+            FAIL_SIGNATURE,
+            "OpenSSL verifier directory must be an owned real mode-0700 directory",
+        )
+    executable = _require_exact_openssl_executable_v1(openssl_path)
 
     counter = 0
 
@@ -652,7 +738,12 @@ def make_openssl_ed25519_verifier_v1(
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                env={"LC_ALL": "C", "LANG": "C"},
+                env={
+                    "LANG": "C",
+                    "LC_ALL": "C",
+                    "OPENSSL_CONF": "/dev/null",
+                    "PATH": "/usr/bin:/bin",
+                },
                 timeout=30,
                 check=False,
             )

@@ -27,10 +27,7 @@ import shutil
 import stat
 import subprocess
 import tarfile
-try:
-    import tomllib
-except ModuleNotFoundError:  # Python 3.10 project runtime.
-    import tomli as tomllib  # type: ignore[no-redef]
+from ._vendor import tomli as tomllib
 from types import MappingProxyType
 from typing import Final, Mapping, NoReturn, Sequence
 
@@ -1836,19 +1833,66 @@ _OUTPUT_SORT_IDS: Final = {
 
 
 def _read_regular_file(path: Path, *, maximum_bytes: int, label: str) -> bytes:
+    descriptor: int | None = None
     try:
-        metadata = path.lstat()
+        lexical = path.lstat()
+        descriptor = os.open(
+            path,
+            os.O_RDONLY
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0),
+        )
+        before = os.fstat(descriptor)
     except OSError as error:
-        _fail(FAIL_REPORT, f"cannot stat {label}: {error}")
-    if path.is_symlink() or not path.is_file() or metadata.st_size > maximum_bytes:
-        _fail(FAIL_REPORT, f"{label} is not a bounded regular file")
+        if descriptor is not None:
+            os.close(descriptor)
+        _fail(FAIL_REPORT, f"cannot open {label} safely: {error}")
     try:
-        payload = path.read_bytes()
+        if (
+            stat.S_ISLNK(lexical.st_mode)
+            or not stat.S_ISREG(before.st_mode)
+            or (lexical.st_dev, lexical.st_ino) != (before.st_dev, before.st_ino)
+            or before.st_size > maximum_bytes
+        ):
+            _fail(FAIL_REPORT, f"{label} is not a bounded regular file")
+        chunks: list[bytes] = []
+        remaining = before.st_size
+        while remaining:
+            chunk = os.read(descriptor, min(remaining, 1_048_576))
+            if not chunk:
+                _fail(FAIL_REPORT, f"{label} ended before its recorded size")
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        if os.read(descriptor, 1):
+            _fail(FAIL_REPORT, f"{label} grew while being read")
+        after = os.fstat(descriptor)
+        namespace = path.lstat()
     except OSError as error:
         _fail(FAIL_REPORT, f"cannot read {label}: {error}")
-    if len(payload) != metadata.st_size:
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+    if (
+        (
+            before.st_dev,
+            before.st_ino,
+            before.st_mode,
+            before.st_size,
+            before.st_mtime_ns,
+            before.st_ctime_ns,
+        )
+        != (
+            after.st_dev,
+            after.st_ino,
+            after.st_mode,
+            after.st_size,
+            after.st_mtime_ns,
+            after.st_ctime_ns,
+        )
+        or (namespace.st_dev, namespace.st_ino) != (after.st_dev, after.st_ino)
+    ):
         _fail(FAIL_REPORT, f"{label} changed while being read")
-    return payload
+    return b"".join(chunks)
 
 
 def _decode_framed_stream(

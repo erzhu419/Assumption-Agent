@@ -196,17 +196,28 @@ def test_pending_marker_is_o_excl_and_complete_is_atomic(tmp_path: Path) -> None
 
 
 def test_real_ed25519_envelope_signature_replays() -> None:
-    cryptography = pytest.importorskip("cryptography.hazmat.primitives.asymmetric.ed25519")
-    serialization = pytest.importorskip("cryptography.hazmat.primitives.serialization")
-    private = cryptography.Ed25519PrivateKey.generate()
-    public = private.public_key().public_bytes(
-        encoding=serialization.Encoding.Raw,
-        format=serialization.PublicFormat.Raw,
+    # Fixed signature from the private seed 0x42 * 32.  The private seed is not
+    # needed at replay time, so this test also proves the runtime path has no
+    # Python ``cryptography`` dependency.
+    public = bytes.fromhex(
+        "2152f8d19b791d24453242e15f2eab6c"
+        "b7cffa7b6a5ed30097960e069881db12"
+    )
+    signature = bytes.fromhex(
+        "6faf8cbf3d6f2cbcdf9ecd10b0424de6"
+        "3b8c70242a695f13b3b83a3ab993b0ea"
+        "0d86db52d80185e1b75a102861ad8faa"
+        "0a067dde9134dc82784832850273c80c"
     )
     key_id = ed25519_key_id(public)
     enclosed_root = bytes.fromhex("ab" * 32)
     tag = OBJECT_TAGS["SplitSeedCommitmentManifestV1"]
-    signature = private.sign(external_signature_preimage_v1(tag, enclosed_root, 1, 0))
+    assert external_signature_preimage_v1(tag, enclosed_root, 1, 0).hex() == (
+        "484547454c2f435553544f4449414e5f53504c49545f534545445f434f4d4d"
+        "49544d454e545f5349474e41545552452f563100"
+        + "ab" * 32
+        + "00010000000000000000"
+    )
     envelope = {
         "enclosed_object_tag": tag,
         "enclosed_manifest_root": enclosed_root,

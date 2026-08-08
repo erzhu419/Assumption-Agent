@@ -23,10 +23,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-try:
-    import tomllib
-except ModuleNotFoundError:  # Python 3.10 is the frozen project interpreter.
-    import tomli as tomllib  # type: ignore[no-redef]
+from ._vendor import tomli as tomllib
 from types import MappingProxyType
 from typing import Final, Mapping, NoReturn, Sequence
 

@@ -32,9 +32,13 @@ from pathlib import Path
 import re
 import stat
 import subprocess
+import tempfile
 from types import MappingProxyType
 from typing import Final, Mapping, NoReturn, Sequence
 
+from .phase3_m25_bridge_full_dag_replay_v1 import (
+    make_openssl_ed25519_verifier_v1,
+)
 from .phase3_container_actor_runtime_v1 import validate_qualification_report
 from .phase3_m25_errata_qualification_v1 import (
     validate_dual_errata_qualification_report,
@@ -1057,11 +1061,13 @@ def _verify_ed25519(public_key: bytes, signature: bytes, message: bytes) -> None
     if type(message) is not bytes:
         _fail(FAIL_SIGNATURE_INVALID, "signature message must be bytes")
     try:
-        from cryptography.hazmat.primitives.asymmetric.ed25519 import (
-            Ed25519PublicKey,
-        )
-
-        Ed25519PublicKey.from_public_bytes(public_key).verify(signature, message)
+        with tempfile.TemporaryDirectory(
+            prefix="hegel-m25-ed25519-", dir="/tmp"
+        ) as raw_private_directory:
+            private_directory = Path(raw_private_directory)
+            private_directory.chmod(0o700)
+            verifier = make_openssl_ed25519_verifier_v1(private_directory)
+            verifier(public_key, signature, message)
     except Exception as exc:
         _fail(FAIL_SIGNATURE_INVALID, f"Ed25519 verification failed: {exc}")
 

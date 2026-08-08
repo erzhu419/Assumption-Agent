@@ -12,6 +12,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+import hegel_machine.phase3_m25_bridge_full_dag_replay_v1 as replay_module
 from hegel_machine.phase3_m25_bridge_full_dag_replay_v1 import (
     BridgeDagReplayError,
     FAIL_ACTOR_RECEIPT,
@@ -286,6 +287,30 @@ def test_openssl_verifier_uses_explicit_private_tmp_and_cleans(tmp_path: Path) -
         package, _ = _fixture(3)
         verifier = make_openssl_ed25519_verifier_v1(private)
         assert replay_bridge_dag_package_v1(package, signature_verifier=verifier).purpose1_signature_verified
+        assert list(private.iterdir()) == []
+    finally:
+        private.rmdir()
+
+
+def test_openssl_verifier_rejects_wrong_executable_digest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    private = Path("/tmp") / (
+        "hegel-m25-openssl-identity-test-"
+        + hashlib.sha256(str(tmp_path).encode()).hexdigest()[:16]
+    )
+    private.mkdir(mode=0o700)
+    private.chmod(0o700)
+    try:
+        monkeypatch.setattr(
+            replay_module,
+            "OPENSSL_EXECUTABLE_SHA256",
+            "00" * 32,
+        )
+        with pytest.raises(BridgeDagReplayError) as caught:
+            make_openssl_ed25519_verifier_v1(private)
+        assert caught.value.code == FAIL_SIGNATURE
+        assert "SHA-256 differs" in caught.value.detail
         assert list(private.iterdir()) == []
     finally:
         private.rmdir()

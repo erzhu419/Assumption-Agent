@@ -1,5 +1,25 @@
 """Hegel Machine: bounded structural recognition and theory evolution."""
 
+import sys as _sys
+
+
+_FORMAL_M3_DIRECT_ONLY_MODULES = {
+    "hegel_machine.phase3_m3_start_cli_v1",
+    "hegel_machine.phase3_m3_formal_execution_cli_v1",
+}
+try:
+    _module_switch = _sys.orig_argv.index("-m")
+except ValueError:
+    _module_switch = -1
+if (
+    _module_switch >= 0
+    and len(_sys.orig_argv) > _module_switch + 1
+    and _sys.orig_argv[_module_switch + 1] in _FORMAL_M3_DIRECT_ONLY_MODULES
+):
+    raise RuntimeError(
+        "formal M3 commands require their committed direct entrypoints"
+    )
+
 from .milestones import PHASE2A, PHASE2B, PHASE2R, PHASE3A, PHASE3B, PHASE3C
 from .phase2b_selector import (
     CandidateEvaluation,
