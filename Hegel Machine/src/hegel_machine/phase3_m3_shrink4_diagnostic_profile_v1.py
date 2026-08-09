@@ -65,7 +65,26 @@ PARENT_DIAGNOSTIC_EVIDENCE_RECORD_ID: Final = (
     "phase3_shrink3_dual_complete_enumeration_diagnostic_"
     "3030ad10f2cd4f767a8397597be1ab3ed6cac7cd71975d69f59cc5abec6a4f5a"
 )
-SEALED_DUAL_STRICT_OUTCOME_REPLAY_STATUS: Final = "NOT_RUN"
+STRICT_QUALIFICATION_SOURCE_COMMIT: Final = (
+    "cd2c32bd3a27004b40f4550229f33afd73647433"
+)
+STRICT_QUALIFICATION_EVIDENCE_COMMIT: Final = (
+    "c78e19b44ca85645d20790d7aefe1d8137b4e2bb"
+)
+STRICT_QUALIFICATION_STATUS: Final = (
+    "SEALED_DUAL_STRICT_OUTCOME_REPLAY_PASS"
+)
+STRICT_QUALIFICATION_ARTIFACT_PATH: Final = (
+    "Hegel Machine/artifacts/phase3_m3_runtime/"
+    "phase3_shrink4_sealed_dual_strict_qualification_v1.json"
+)
+STRICT_QUALIFICATION_ARTIFACT_SHA256: Final = (
+    "41fdea5fd9b16ab436386ef7794412ffa46e17e68efc6b8448deed17c7f99aae"
+)
+STRICT_QUALIFICATION_DIAGNOSTIC_REPORT_HASH: Final = (
+    "sha256:44b4e0c0a2b79f6afb67ace348c1b3726e0ba64058c97c4c61be0c111ef6acec"
+)
+DUAL_COMPLETE_ENUMERATION_STATUS: Final = "NOT_RUN"
 
 
 def diagnostic_root_hex_v1() -> dict[str, str]:

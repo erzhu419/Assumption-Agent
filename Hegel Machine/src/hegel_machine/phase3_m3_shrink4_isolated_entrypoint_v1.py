@@ -184,6 +184,22 @@ def _augment_report(
             "implementation_machine_id": (
                 "hegel-python-m3-shrink4-complete-closure-diagnostic-v1"
             ),
+            "strict_qualification_source_commit": (
+                _profile.STRICT_QUALIFICATION_SOURCE_COMMIT
+            ),
+            "strict_qualification_evidence_commit": (
+                _profile.STRICT_QUALIFICATION_EVIDENCE_COMMIT
+            ),
+            "strict_qualification_artifact_path": (
+                _profile.STRICT_QUALIFICATION_ARTIFACT_PATH
+            ),
+            "strict_qualification_artifact_sha256": (
+                _profile.STRICT_QUALIFICATION_ARTIFACT_SHA256
+            ),
+            "strict_qualification_diagnostic_report_hash": (
+                _profile.STRICT_QUALIFICATION_DIAGNOSTIC_REPORT_HASH
+            ),
+            "strict_qualification_status": _profile.STRICT_QUALIFICATION_STATUS,
             "canonicalizer_profile": "hegel-canonical-ast-v1",
             "mdl_code_table_id": "hegel-mdl-prefix-v1.0.0",
             "closure_status_id": (
@@ -249,7 +265,25 @@ def _self_check_report(loaded: tuple[str, ...]) -> dict[str, object]:
         "formal_roots_generated": False,
         "formal_roots": None,
         "complete_closure_enumerated": False,
+        "strict_qualification_source_commit": (
+            _profile.STRICT_QUALIFICATION_SOURCE_COMMIT
+        ),
+        "strict_qualification_evidence_commit": (
+            _profile.STRICT_QUALIFICATION_EVIDENCE_COMMIT
+        ),
+        "strict_qualification_artifact_path": (
+            _profile.STRICT_QUALIFICATION_ARTIFACT_PATH
+        ),
+        "strict_qualification_artifact_sha256": (
+            _profile.STRICT_QUALIFICATION_ARTIFACT_SHA256
+        ),
+        "strict_qualification_diagnostic_report_hash": (
+            _profile.STRICT_QUALIFICATION_DIAGNOSTIC_REPORT_HASH
+        ),
+        "strict_qualification_status": _profile.STRICT_QUALIFICATION_STATUS,
         "maximum_top_level_clauses": 2,
+        "and3_generator_attempts_allowed": False,
+        "and3_raw_operator_application_count": 0,
         "loaded_hegel_modules": list(loaded),
         "target_free_isolation_verified": True,
         "target_or_split_modules_loaded": False,
