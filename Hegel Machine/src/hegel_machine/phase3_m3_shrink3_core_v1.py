@@ -1,0 +1,159 @@
+"""Target-free sparse binary-operator metadata for M3 shrink step 3.
+
+The child keeps every ``BinaryOperatorId/v1`` code point allocated by the
+parent DSL.  Shrink step 3 changes admission only: ``add`` (numeric ID 0)
+becomes a permanent tombstone while ``difference`` (numeric ID 1) remains
+active.  No operator is renumbered, reused, rewritten into a replacement, or
+migrated across the version boundary.
+
+ID 4 (``greater_equal``) remains an admitted source alias whose canonical
+rewrite is the inherited ``less_equal`` ID 3 with swapped children.  It is
+therefore active at the source boundary but is not a formal-canonical operator
+ID.  Code point 7 remains reserved in the three-bit code space.
+"""
+
+from __future__ import annotations
+
+from typing import Final
+
+from .phase3_m3_shrink2_core_v1 import (
+    ACTIVE_AGGREGATE_IDS,
+    ACTIVE_RATIONAL_PARAMETER_IDS,
+    REMOVED_AGGREGATE_ERROR,
+    REMOVED_RATIONAL_PARAMETER_ERROR,
+    RESERVED_RATIONAL_PARAMETER_IDS,
+    TOMBSTONED_AGGREGATE_IDS,
+    TOMBSTONED_RATIONAL_PARAMETER_IDS,
+)
+
+
+PARENT_DSL_VERSION: Final = "hegel-old-dsl-v1.2.0"
+PARENT_FREEZE_VERSION: Final = "hegel-freeze-p2b-p3-v1.2.0"
+PARENT_DIAGNOSTIC_RESULT_COMMIT: Final = (
+    "d9334589343554841d9f9fd30456a7402bcc7d33"
+)
+PARENT_DIAGNOSTIC_IMPLEMENTATION_BASIS: Final = (
+    "f94cf1fb27c6734f24d4510efba0ca3726132706"
+)
+PARENT_DIAGNOSTIC_EVIDENCE_RECORD_ID: Final = (
+    "phase3_shrink2_dual_complete_enumeration_diagnostic_"
+    "e118f3809b2f5eef0ebd1c97936da746472a4188e0cc3feecc3e01688922b966"
+)
+PARENT_DIAGNOSTIC_STATUS: Final = "DUAL_DSL_TOO_LARGE_HOST_REPLAY_PASS"
+PARENT_DIAGNOSTIC_CLAIM_LEVEL: Final = "NON_FORMAL_DUAL_CHILD_DIAGNOSTIC"
+DSL_VERSION: Final = "hegel-old-dsl-v1.3.0"
+FREEZE_VERSION: Final = "hegel-freeze-p2b-p3-v1.3.0"
+HUMAN_AMENDMENT_ID: Final = "hegel-freeze-p2b-p3-v1.3.0-shrink-step3"
+SHRINK_STEP_ID: Final = "SHRINK_STEP_3_REMOVE_ADD_RETAIN_DIFFERENCE"
+SEALED_DUAL_STRICT_OUTCOME_REPLAY_STATUS: Final = "NOT_RUN"
+
+BINARY_OPERATOR_REGISTRY_NAMESPACE: Final = "BinaryOperatorId/v1"
+BINARY_OPERATOR_CODE_WIDTH_BITS: Final = 3
+BINARY_OPERATOR_ALLOCATED_ID_COUNT: Final = 7
+BINARY_OPERATOR_CODE_SPACE_SIZE: Final = 8
+BINARY_OPERATOR_NAMES: Final = (
+    "add",
+    "difference",
+    "equal_exact",
+    "less_equal",
+    "greater_equal",
+    "same_sign",
+    "opposite_sign",
+)
+
+# Registry-active means source-admitted.  ID 4 is deliberately excluded from
+# formal-canonical admission because it is the frozen greater_equal source
+# alias and rewrites to less_equal (ID 3) with swapped children.
+ACTIVE_SOURCE_BINARY_OPERATOR_IDS: Final = (1, 2, 3, 4, 5, 6)
+ACTIVE_BINARY_OPERATOR_IDS: Final = ACTIVE_SOURCE_BINARY_OPERATOR_IDS
+ACTIVE_FORMAL_BINARY_OPERATOR_IDS: Final = (1, 2, 3, 5, 6)
+ACTIVE_FORMAL_CANONICAL_BINARY_OPERATOR_IDS: Final = (
+    ACTIVE_FORMAL_BINARY_OPERATOR_IDS
+)
+FORMAL_CANONICAL_BINARY_OPERATOR_IDS: Final = ACTIVE_FORMAL_BINARY_OPERATOR_IDS
+SOURCE_ALIAS_BINARY_OPERATOR_IDS: Final = (4,)
+TOMBSTONED_BINARY_OPERATOR_IDS: Final = (0,)
+RESERVED_BINARY_OPERATOR_IDS: Final = (7,)
+ACTIVE_SOURCE_BINARY_OPERATOR_NAMES: Final = tuple(
+    BINARY_OPERATOR_NAMES[numeric_id]
+    for numeric_id in ACTIVE_SOURCE_BINARY_OPERATOR_IDS
+)
+ACTIVE_FORMAL_BINARY_OPERATOR_NAMES: Final = tuple(
+    BINARY_OPERATOR_NAMES[numeric_id]
+    for numeric_id in ACTIVE_FORMAL_BINARY_OPERATOR_IDS
+)
+SOURCE_ALIAS_BINARY_OPERATOR_NAMES: Final = ("greater_equal",)
+TOMBSTONED_BINARY_OPERATOR_NAMES: Final = ("add",)
+
+REMOVED_BINARY_OPERATOR_ERROR: Final = "REJECT_REMOVED_BINARY_OPERATOR"
+UNALLOCATED_BINARY_OPERATOR_REGISTRY_ERROR: Final = (
+    "REJECT_REGISTRY_INDEX_OUT_OF_RANGE"
+)
+UNKNOWN_SOURCE_OPERATOR_NAME_ERROR: Final = "REJECT_UNKNOWN_EXPRESSION"
+RESERVED_FORMAL_BINARY_OPERATOR_ERROR: Final = "REJECT_NONCANONICAL_AST"
+
+# Rejection is performed only after generic CBOR/source structure, parent
+# typing, and parent registry/range validation.  Once a structurally legal AST
+# exists, inherited tombstones keep their lineage order before the new one.
+PRE_TOMBSTONE_VALIDATION_STAGES: Final = (
+    "CBOR_OR_SOURCE_SYNTAX",
+    "AST_STRUCTURE_AND_ARITY",
+    "PARENT_TYPING",
+    "PARENT_REGISTRY_AND_RANGE",
+)
+LEGAL_AST_TOMBSTONE_PRIORITY: Final = (
+    "AggregateMapId/v1",
+    "RationalParameterId/v1",
+    "BinaryOperatorId/v1",
+)
+POST_TOMBSTONE_VALIDATION_STAGES: Final = (
+    "NORMALIZATION_AND_STRUCTURAL_LIMITS",
+    "NONCANONICAL_REWRITE_OR_REENCODING",
+)
+
+
+__all__ = [
+    "ACTIVE_AGGREGATE_IDS",
+    "ACTIVE_BINARY_OPERATOR_IDS",
+    "ACTIVE_FORMAL_BINARY_OPERATOR_NAMES",
+    "ACTIVE_FORMAL_CANONICAL_BINARY_OPERATOR_IDS",
+    "ACTIVE_FORMAL_BINARY_OPERATOR_IDS",
+    "ACTIVE_RATIONAL_PARAMETER_IDS",
+    "ACTIVE_SOURCE_BINARY_OPERATOR_IDS",
+    "ACTIVE_SOURCE_BINARY_OPERATOR_NAMES",
+    "BINARY_OPERATOR_ALLOCATED_ID_COUNT",
+    "BINARY_OPERATOR_CODE_SPACE_SIZE",
+    "BINARY_OPERATOR_CODE_WIDTH_BITS",
+    "BINARY_OPERATOR_NAMES",
+    "BINARY_OPERATOR_REGISTRY_NAMESPACE",
+    "DSL_VERSION",
+    "FORMAL_CANONICAL_BINARY_OPERATOR_IDS",
+    "FREEZE_VERSION",
+    "HUMAN_AMENDMENT_ID",
+    "LEGAL_AST_TOMBSTONE_PRIORITY",
+    "PARENT_DSL_VERSION",
+    "PARENT_DIAGNOSTIC_CLAIM_LEVEL",
+    "PARENT_DIAGNOSTIC_EVIDENCE_RECORD_ID",
+    "PARENT_DIAGNOSTIC_IMPLEMENTATION_BASIS",
+    "PARENT_DIAGNOSTIC_RESULT_COMMIT",
+    "PARENT_DIAGNOSTIC_STATUS",
+    "PARENT_FREEZE_VERSION",
+    "POST_TOMBSTONE_VALIDATION_STAGES",
+    "PRE_TOMBSTONE_VALIDATION_STAGES",
+    "REMOVED_AGGREGATE_ERROR",
+    "REMOVED_BINARY_OPERATOR_ERROR",
+    "REMOVED_RATIONAL_PARAMETER_ERROR",
+    "RESERVED_BINARY_OPERATOR_IDS",
+    "RESERVED_FORMAL_BINARY_OPERATOR_ERROR",
+    "RESERVED_RATIONAL_PARAMETER_IDS",
+    "SHRINK_STEP_ID",
+    "SEALED_DUAL_STRICT_OUTCOME_REPLAY_STATUS",
+    "SOURCE_ALIAS_BINARY_OPERATOR_IDS",
+    "SOURCE_ALIAS_BINARY_OPERATOR_NAMES",
+    "TOMBSTONED_AGGREGATE_IDS",
+    "TOMBSTONED_BINARY_OPERATOR_IDS",
+    "TOMBSTONED_BINARY_OPERATOR_NAMES",
+    "TOMBSTONED_RATIONAL_PARAMETER_IDS",
+    "UNALLOCATED_BINARY_OPERATOR_REGISTRY_ERROR",
+    "UNKNOWN_SOURCE_OPERATOR_NAME_ERROR",
+]
