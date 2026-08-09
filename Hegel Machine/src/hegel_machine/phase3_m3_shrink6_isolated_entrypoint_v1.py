@@ -296,6 +296,19 @@ def _self_check_report(loaded: tuple[str, ...]) -> dict[str, object]:
         "maximum_ast_depth": 3,
         "maximum_ast_node_count": 6,
         "maximum_top_level_clauses": 2,
+        "formal_bucket_count": 120,
+        "prefix_preservation_expectation_id": (
+            _profile.PREFIX_PRESERVATION_EXPECTATION_ID
+        ),
+        "prefix_preservation_expectation_status": (
+            _profile.PREFIX_PRESERVATION_EXPECTATION_STATUS
+        ),
+        "preregistered_shrink_order_total_steps": 6,
+        "preregistered_shrink_order_consumed_through_step": 6,
+        "next_preregistered_shrink_step_or_null": None,
+        "budget_change_authorized": False,
+        "additional_shrink_authorized": False,
+        "new_dsl_version_authorized": False,
         "and3_generator_attempts_allowed": False,
         "and3_raw_operator_application_count": 0,
         "loaded_hegel_modules": list(loaded),

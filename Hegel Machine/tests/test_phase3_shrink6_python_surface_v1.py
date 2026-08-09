@@ -31,6 +31,8 @@ from hegel_machine.phase3_m3_shrink6_diagnostic_profile_v1 import (
     STRICT_QUALIFICATION_EVIDENCE_COMMIT,
     STRICT_QUALIFICATION_SOURCE_COMMIT,
     STRICT_QUALIFICATION_STATUS,
+    PREFIX_PRESERVATION_EXPECTATION_ID,
+    PREFIX_PRESERVATION_EXPECTATION_STATUS,
 )
 from hegel_machine.phase3_shrink6_golden_vectors_v1 import (
     STRICT_GOLDEN_VECTORS_V1,
@@ -123,12 +125,32 @@ def test_machine_ids_parent_evidence_and_not_run_state_are_exact() -> None:
     )
     payload = (_PROJECT_ROOT.parent / PARENT_DIAGNOSTIC_ARTIFACT_PATH).read_bytes()
     assert sha256(payload).hexdigest() == PARENT_DIAGNOSTIC_ARTIFACT_SHA256
-    assert STRICT_QUALIFICATION_STATUS == "NOT_RUN"
-    assert STRICT_QUALIFICATION_SOURCE_COMMIT is None
-    assert STRICT_QUALIFICATION_EVIDENCE_COMMIT is None
-    assert STRICT_QUALIFICATION_ARTIFACT_PATH is None
-    assert STRICT_QUALIFICATION_ARTIFACT_SHA256 is None
-    assert STRICT_QUALIFICATION_DIAGNOSTIC_REPORT_HASH is None
+    assert STRICT_QUALIFICATION_STATUS == "SEALED_DUAL_STRICT_OUTCOME_REPLAY_PASS"
+    assert STRICT_QUALIFICATION_SOURCE_COMMIT == (
+        "a69bf6d9746e302a07019f122047ac0bc74aa1c1"
+    )
+    assert STRICT_QUALIFICATION_EVIDENCE_COMMIT == (
+        "f9218e28740953c9ac15a2ada70a8616e92c378b"
+    )
+    assert STRICT_QUALIFICATION_ARTIFACT_PATH == (
+        "Hegel Machine/artifacts/phase3_m3_runtime/"
+        "phase3_shrink6_sealed_dual_strict_qualification_v1.json"
+    )
+    strict_payload = (_PROJECT_ROOT.parent / STRICT_QUALIFICATION_ARTIFACT_PATH).read_bytes()
+    assert sha256(strict_payload).hexdigest() == STRICT_QUALIFICATION_ARTIFACT_SHA256 == (
+        "d5417639c651ea5d8dfbc224c79b0af56f1eb9d8705ee244f19dc9d95e6f2d08"
+    )
+    strict_report = json.loads(strict_payload)
+    assert strict_report["status"] == STRICT_QUALIFICATION_STATUS
+    assert strict_report["diagnostic_report_hash"] == (
+        STRICT_QUALIFICATION_DIAGNOSTIC_REPORT_HASH
+    )
+    assert strict_report["repository_binding"]["qualification_basis_commit"] == (
+        STRICT_QUALIFICATION_SOURCE_COMMIT
+    )
+    assert STRICT_QUALIFICATION_DIAGNOSTIC_REPORT_HASH == (
+        "sha256:3d2a6f06daa47b34aa56ae0d318cc818ba211859063d7a6b81271bc6bf1f8287"
+    )
 
 
 def test_registry_freezes_only_depth_four_to_three() -> None:
@@ -218,8 +240,25 @@ def test_direct_strict_and_isolated_self_check_are_target_free() -> None:
         "--target-free-self-check",
     )
     assert self_check["maximum_ast_depth"] == 3
-    assert self_check["strict_qualification_status"] == "NOT_RUN"
-    assert self_check["strict_qualification_source_commit"] is None
+    assert self_check["strict_qualification_status"] == (
+        "SEALED_DUAL_STRICT_OUTCOME_REPLAY_PASS"
+    )
+    assert self_check["strict_qualification_source_commit"] == (
+        "a69bf6d9746e302a07019f122047ac0bc74aa1c1"
+    )
+    assert self_check["prefix_preservation_expectation_id"] == (
+        PREFIX_PRESERVATION_EXPECTATION_ID
+    )
+    assert self_check["prefix_preservation_expectation_status"] == (
+        PREFIX_PRESERVATION_EXPECTATION_STATUS
+    )
+    assert self_check["formal_bucket_count"] == 120
+    assert self_check["preregistered_shrink_order_total_steps"] == 6
+    assert self_check["preregistered_shrink_order_consumed_through_step"] == 6
+    assert self_check["next_preregistered_shrink_step_or_null"] is None
+    assert self_check["budget_change_authorized"] is False
+    assert self_check["additional_shrink_authorized"] is False
+    assert self_check["new_dsl_version_authorized"] is False
     assert self_check["execution_state"] == "NOT_RUN"
     assert self_check["formal_roots"] is None
     assert self_check["target_or_split_modules_loaded"] is False
