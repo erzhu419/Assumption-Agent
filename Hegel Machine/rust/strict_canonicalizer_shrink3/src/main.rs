@@ -64,7 +64,10 @@ fn parse_args() -> Result<(Mode, bool), String> {
     Ok((mode.ok_or_else(|| usage().to_owned())?, pretty))
 }
 
-fn program_json(program: &hegel_strict_canonicalizer::CanonicalProgram) -> Value {
+fn program_json(
+    program: &hegel_strict_canonicalizer::CanonicalProgram,
+    boundary: &'static str,
+) -> Value {
     json!({
         "schema_version": REPLAY_SCHEMA_VERSION,
         "implementation": "rust",
@@ -72,6 +75,7 @@ fn program_json(program: &hegel_strict_canonicalizer::CanonicalProgram) -> Value
         "parent_freeze_version": PARENT_FREEZE_VERSION,
         "dsl_version": DSL_VERSION,
         "freeze_version": FREEZE_VERSION,
+        "boundary": boundary,
         "cbor_profile_id": CBOR_PROFILE_ID,
         "ast_schema_id": AST_SCHEMA_ID,
         "ast_hash_domain": AST_HASH_DOMAIN,
@@ -83,10 +87,11 @@ fn program_json(program: &hegel_strict_canonicalizer::CanonicalProgram) -> Value
         "depth": program.depth,
         "node_count": program.node_count,
         "scalar_parameter_occurrence_count": program.scalar_parameter_occurrence_count,
+        "target_or_split_modules_loaded": false,
     })
 }
 
-fn error_json(error: &Shrink3Error) -> Value {
+fn error_json(error: &Shrink3Error, boundary: &'static str) -> Value {
     json!({
         "schema_version": REPLAY_SCHEMA_VERSION,
         "implementation": "rust",
@@ -94,12 +99,14 @@ fn error_json(error: &Shrink3Error) -> Value {
         "parent_freeze_version": PARENT_FREEZE_VERSION,
         "dsl_version": DSL_VERSION,
         "freeze_version": FREEZE_VERSION,
+        "boundary": boundary,
         "cbor_profile_id": CBOR_PROFILE_ID,
         "ast_schema_id": AST_SCHEMA_ID,
         "ast_hash_domain": AST_HASH_DOMAIN,
         "status": "REJECTED",
         "error_code": error.code,
         "error_message": error.message,
+        "target_or_split_modules_loaded": false,
     })
 }
 
@@ -110,8 +117,16 @@ fn run() -> Result<(Value, u8, bool), String> {
             let value: Value = serde_json::from_str(&source)
                 .map_err(|error| format!("invalid --ast-json: {error}"))?;
             match canonicalize_shrink3_source_json(&value) {
-                Ok(program) => Ok((program_json(&program), 0, pretty)),
-                Err(error) => Ok((error_json(&error), 1, pretty)),
+                Ok(program) => Ok((
+                    program_json(&program, "SOURCE_JSON"),
+                    0,
+                    pretty,
+                )),
+                Err(error) => Ok((
+                    error_json(&error, "SOURCE_JSON"),
+                    1,
+                    pretty,
+                )),
             }
         }
         Mode::DecodeCborHex(source) => {
@@ -119,12 +134,12 @@ fn run() -> Result<(Value, u8, bool), String> {
             let generic_cbor_parse = validate_strict_cbor(&bytes).is_ok();
             match decode_shrink3_canonical_ast(&bytes) {
                 Ok(program) => {
-                    let mut report = program_json(&program);
+                    let mut report = program_json(&program, "FORMAL_CBOR");
                     report["generic_cbor_parse"] = json!(generic_cbor_parse);
                     Ok((report, 0, pretty))
                 }
                 Err(error) => {
-                    let mut report = error_json(&error);
+                    let mut report = error_json(&error, "FORMAL_CBOR");
                     report["generic_cbor_parse"] = json!(generic_cbor_parse);
                     Ok((report, 1, pretty))
                 }

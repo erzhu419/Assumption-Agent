@@ -28,6 +28,12 @@ removed after its syntax and types have been validated.
 
 ## Replays
 
+The single-vector CLI emits the exact boundary (`SOURCE_JSON` or
+`FORMAL_CBOR`) and `target_or_split_modules_loaded=false` on both accepted and
+rejected outcomes. These fields let the external sealed supervisor reject a
+boundary substitution or target/split visibility claim before normalizing an
+outcome.
+
 `--golden-replay` runs the shared Python/Rust 36-vector acceptance profile:
 
 - 8 surviving byte/hash identity checks;
