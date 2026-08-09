@@ -168,9 +168,15 @@ def _write_artifacts(
     _exclusive_write(
         directory / "report.json",
         (
-            json.dumps(report, sort_keys=True, indent=2, separators=(",", ": "))
+            json.dumps(
+                report,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=True,
+                allow_nan=False,
+            )
             + "\n"
-        ).encode("utf-8"),
+        ).encode("ascii"),
     )
 
 
@@ -187,28 +193,22 @@ def _augment_report(
             "implementation_machine_id": (
                 "hegel-python-m3-shrink5-complete-closure-diagnostic-v1"
             ),
-            "parent_diagnostic_result_commit": (
-                _profile.PARENT_DIAGNOSTIC_RESULT_COMMIT
+            "strict_qualification_source_commit": (
+                _profile.STRICT_QUALIFICATION_SOURCE_COMMIT
             ),
-            "parent_diagnostic_implementation_basis": (
-                _profile.PARENT_DIAGNOSTIC_IMPLEMENTATION_BASIS
+            "strict_qualification_evidence_commit": (
+                _profile.STRICT_QUALIFICATION_EVIDENCE_COMMIT
             ),
-            "parent_diagnostic_evidence_record_id": (
-                _profile.PARENT_DIAGNOSTIC_EVIDENCE_RECORD_ID
+            "strict_qualification_artifact_path": (
+                _profile.STRICT_QUALIFICATION_ARTIFACT_PATH
             ),
-            "parent_diagnostic_artifact_path": (
-                _profile.PARENT_DIAGNOSTIC_ARTIFACT_PATH
+            "strict_qualification_artifact_sha256": (
+                _profile.STRICT_QUALIFICATION_ARTIFACT_SHA256
             ),
-            "parent_diagnostic_artifact_sha256": (
-                _profile.PARENT_DIAGNOSTIC_ARTIFACT_SHA256
+            "strict_qualification_diagnostic_report_hash": (
+                _profile.STRICT_QUALIFICATION_DIAGNOSTIC_REPORT_HASH
             ),
-            "parent_diagnostic_status": _profile.PARENT_DIAGNOSTIC_STATUS,
-            "parent_diagnostic_claim_level": (
-                _profile.PARENT_DIAGNOSTIC_CLAIM_LEVEL
-            ),
-            "sealed_dual_strict_outcome_replay_status": (
-                _profile.SEALED_DUAL_STRICT_OUTCOME_REPLAY_STATUS
-            ),
+            "strict_qualification_status": _profile.STRICT_QUALIFICATION_STATUS,
             "canonicalizer_profile": "hegel-canonical-ast-v1",
             "mdl_code_table_id": "hegel-mdl-prefix-v1.0.0",
             "closure_status_id": (
@@ -274,22 +274,22 @@ def _self_check_report(loaded: tuple[str, ...]) -> dict[str, object]:
         "formal_roots_generated": False,
         "formal_roots": None,
         "complete_closure_enumerated": False,
-        "parent_diagnostic_result_commit": _profile.PARENT_DIAGNOSTIC_RESULT_COMMIT,
-        "parent_diagnostic_implementation_basis": (
-            _profile.PARENT_DIAGNOSTIC_IMPLEMENTATION_BASIS
+        "strict_qualification_source_commit": (
+            _profile.STRICT_QUALIFICATION_SOURCE_COMMIT
         ),
-        "parent_diagnostic_evidence_record_id": (
-            _profile.PARENT_DIAGNOSTIC_EVIDENCE_RECORD_ID
+        "strict_qualification_evidence_commit": (
+            _profile.STRICT_QUALIFICATION_EVIDENCE_COMMIT
         ),
-        "parent_diagnostic_artifact_path": _profile.PARENT_DIAGNOSTIC_ARTIFACT_PATH,
-        "parent_diagnostic_artifact_sha256": (
-            _profile.PARENT_DIAGNOSTIC_ARTIFACT_SHA256
+        "strict_qualification_artifact_path": (
+            _profile.STRICT_QUALIFICATION_ARTIFACT_PATH
         ),
-        "parent_diagnostic_status": _profile.PARENT_DIAGNOSTIC_STATUS,
-        "parent_diagnostic_claim_level": _profile.PARENT_DIAGNOSTIC_CLAIM_LEVEL,
-        "sealed_dual_strict_outcome_replay_status": (
-            _profile.SEALED_DUAL_STRICT_OUTCOME_REPLAY_STATUS
+        "strict_qualification_artifact_sha256": (
+            _profile.STRICT_QUALIFICATION_ARTIFACT_SHA256
         ),
+        "strict_qualification_diagnostic_report_hash": (
+            _profile.STRICT_QUALIFICATION_DIAGNOSTIC_REPORT_HASH
+        ),
+        "strict_qualification_status": _profile.STRICT_QUALIFICATION_STATUS,
         "maximum_ast_node_count": 6,
         "maximum_top_level_clauses": 2,
         "and3_generator_attempts_allowed": False,
@@ -344,7 +344,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         _write_artifacts(args.output_directory, result, report)
     if _assert_module_closure() != loaded_before:
         _fail("project dependency closure changed before report publication")
-    sys.stdout.write(json.dumps(report, sort_keys=True, separators=(",", ":")))
+    sys.stdout.write(
+        json.dumps(
+            report,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+            allow_nan=False,
+        )
+    )
     sys.stdout.write("\n")
     return 0
 

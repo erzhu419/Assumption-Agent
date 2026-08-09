@@ -34,6 +34,12 @@ from hegel_machine.phase3_m3_shrink5_diagnostic_profile_v1 import (
     PARENT_DIAGNOSTIC_ARTIFACT_SHA256 as PROFILE_PARENT_ARTIFACT_SHA256,
     PARENT_DIAGNOSTIC_EVIDENCE_RECORD_ID as PROFILE_PARENT_RECORD_ID,
     PARENT_DIAGNOSTIC_RESULT_COMMIT as PROFILE_PARENT_RESULT_COMMIT,
+    STRICT_QUALIFICATION_ARTIFACT_PATH,
+    STRICT_QUALIFICATION_ARTIFACT_SHA256,
+    STRICT_QUALIFICATION_DIAGNOSTIC_REPORT_HASH,
+    STRICT_QUALIFICATION_EVIDENCE_COMMIT,
+    STRICT_QUALIFICATION_SOURCE_COMMIT,
+    STRICT_QUALIFICATION_STATUS,
     diagnostic_root_hex_v1,
 )
 from hegel_machine.phase3_shrink5_capacity_v1 import (
@@ -351,15 +357,26 @@ def test_profile_roots_and_isolated_self_check_are_exact() -> None:
     )
     assert report["maximum_ast_node_count"] == 6
     assert report["maximum_top_level_clauses"] == 2
-    assert report["sealed_dual_strict_outcome_replay_status"] == "NOT_RUN"
-    assert report["parent_diagnostic_claim_level"] == (
-        "NON_FORMAL_DUAL_CHILD_DIAGNOSTIC"
+    assert report["strict_qualification_source_commit"] == (
+        STRICT_QUALIFICATION_SOURCE_COMMIT
     )
+    assert report["strict_qualification_evidence_commit"] == (
+        STRICT_QUALIFICATION_EVIDENCE_COMMIT
+    )
+    assert report["strict_qualification_artifact_path"] == (
+        STRICT_QUALIFICATION_ARTIFACT_PATH
+    )
+    assert report["strict_qualification_artifact_sha256"] == (
+        STRICT_QUALIFICATION_ARTIFACT_SHA256
+    )
+    assert report["strict_qualification_diagnostic_report_hash"] == (
+        STRICT_QUALIFICATION_DIAGNOSTIC_REPORT_HASH
+    )
+    assert report["strict_qualification_status"] == STRICT_QUALIFICATION_STATUS
     assert report["execution_state"] == "NOT_RUN"
     assert report["formal_roots"] is None
     assert len(report["loaded_hegel_modules"]) == 20
     assert {key: report[key] for key in expected} == expected
-    assert not any(key.startswith("strict_qualification_") for key in report)
 
 
 def test_strict_accepted_and_rejected_reports_bind_both_maximums() -> None:
