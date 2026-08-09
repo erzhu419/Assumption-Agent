@@ -1,0 +1,33 @@
+{
+  "profile_id": "hegel-shrink3-enumerator-offline-build-v1",
+  "purpose": "build-only target-free shrink3 complete-closure diagnostic enumerator",
+  "authority": "engineering diagnostic only; M3 remains NOT_RUN",
+  "image": "rust@sha256:38bc5a86d998772d4aec2348656ed21438d20fcdce2795b56ca434cf21430d89",
+  "network": "none",
+  "pull_policy": "never",
+  "root_filesystem_read_only": true,
+  "user": "0:0",
+  "capabilities_dropped": "ALL",
+  "no_new_privileges": true,
+  "pids_limit": 64,
+  "memory": "512m",
+  "memory_swap": "512m",
+  "nofile_ulimit": "128:128",
+  "tmpfs": "/tmp:rw,noexec,nosuid,nodev,size=64m,uid=0,gid=0,mode=0700",
+  "seccomp_profile": "config/phase3_m3_offline_build_seccomp_v1.json",
+  "source_mount": "read-only committed git archive snapshot",
+  "cargo_registry_mount": "two exact read-only reverified snapshot mounts: cache and index; registry root and preexisting src excluded",
+  "cargo_home": "fresh tmpfs; crates re-unpacked after Cargo.lock checksum verification",
+  "cargo_dependency_seed_file_set_root_required": true,
+  "target_mount": "fresh local-driver docker volume, build rw then runtime ro",
+  "crate": "m3_closure_enumerator_shrink3",
+  "release_binary": "/cargo-target/release/hegel-m3-closure-enumerator-shrink3",
+  "cargo_flags": [
+    "--release",
+    "--locked",
+    "--offline"
+  ],
+  "parallel_endpoint_count": 2,
+  "target_or_split_inputs_allowed": false,
+  "seed_key_signature_or_formal_root_access_allowed": false
+}
