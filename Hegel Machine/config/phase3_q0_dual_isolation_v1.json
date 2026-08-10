@@ -1,0 +1,87 @@
+{
+  "schema_version": "hegel-phase3a-q0-dual-isolation/1",
+  "profile_id": "hegel-phase3a-q0-dual-isolated-qualification-v1",
+  "claim_scope": "Q0_DUAL_ENGINEERING_QUALIFICATION_ONLY",
+  "images": {
+    "python": "python@sha256:e031123e3d85762b141ad1cbc56452ba69c6e722ebf2f042cc0dc86c47c0d8b3",
+    "rust": "rust@sha256:38bc5a86d998772d4aec2348656ed21438d20fcdce2795b56ca434cf21430d89"
+  },
+  "docker": {
+    "executable": "/usr/bin/docker",
+    "host": "unix:///var/run/docker.sock",
+    "pull_policy": "never",
+    "network": "none",
+    "root_filesystem_read_only": true,
+    "source_mount_read_only": true,
+    "cap_drop": "ALL",
+    "no_new_privileges": true,
+    "memory": "512m",
+    "memory_swap": "512m",
+    "pids_limit": 64,
+    "nofile_ulimit": "128:128",
+    "tmpfs": "/tmp:rw,exec,nosuid,nodev,size=512m,mode=1777"
+  },
+  "python": {
+    "flags": ["-I", "-S", "-B"],
+    "entrypoint": "tools/phase3_q0_python_oracle_entrypoint_v1.py",
+    "source_manifest_domain": "HEGEL/Q0/PYTHON_IMPLEMENTATION_MANIFEST/V1"
+  },
+  "rust": {
+    "crate": "rust/q0_quotient_oracle",
+    "cargo_flags": ["run", "--locked", "--offline", "--quiet"],
+    "cargo_build_jobs": 1,
+    "target_triple": "x86_64-unknown-linux-gnu",
+    "source_manifest_domain": "HEGEL/Q0/RUST_IMPLEMENTATION_MANIFEST/V1",
+    "cargo_cache_access": "ro-offline-dependency-cache",
+    "cargo_cache_is_implementation_identity": true,
+    "locked_registry_dependency_manifest_is_implementation_identity": true
+  },
+  "isolation": {
+    "distinct_source_snapshots": true,
+    "endpoint_output_exchange": false,
+    "target_truth_split_sources_present": false,
+    "host_replay_after_both_endpoints": true,
+    "same_admin_controller": true,
+    "organizational_independence": false,
+    "technical_process_and_filesystem_independence": true
+  },
+  "host_role": {
+    "trusted_issuer": true,
+    "third_independent_endpoint": false,
+    "filesystem_hard_isolation": false,
+    "target_blind_import_manifest_required": true
+  },
+  "isolation_prerequisites": [
+    [1, "PINNED_LOCAL_IMAGES"],
+    [2, "NO_NETWORK_AND_NO_PULL"],
+    [3, "DISTINCT_READ_ONLY_SOURCE_SNAPSHOTS"],
+    [4, "CAPABILITY_AND_PRIVILEGE_ISOLATION"],
+    [5, "RESOURCE_LIMITS_ACTIVE"],
+    [6, "COMMIT_TREE_SOURCE_BINDING"],
+    [7, "SEALED_CARGO_HOME_IDENTITY"]
+  ],
+  "readiness_gates": [
+    [1, "NORMATIVE_DIRECTION_BYTES_BOUND"],
+    [2, "V16_DSL_TYPING_AND_REGISTRY_ROOTS_QUALIFIED"],
+    [3, "INPUT_SIGNATURE_OBSERVATION_ADAPTERS_QUALIFIED"],
+    [4, "BEHAVIOR_AND_BOTTOM_CODEC_QUALIFIED"],
+    [5, "UNIVERSE_ONLY_BINDINGS_QUALIFIED"],
+    [6, "EXACT_EQUIVALENCE_CONTRACT_QUALIFIED"],
+    [7, "CONSTRUCTION_SIGNATURE_QUALIFIED"],
+    [8, "PARETO_DOMINANCE_AND_MDL_QUALIFIED"],
+    [9, "PER_OPERATOR_CONGRUENCE_QUALIFIED"],
+    [10, "STRUCTURAL_INDUCTION_COMPLETENESS_QUALIFIED"],
+    [11, "EXHAUSTIVE_MICRO_ORACLE_EQUALITY_QUALIFIED"],
+    [12, "COLLISION_BOTTOM_SORT_ADVERSARIAL_VECTORS_PASS"],
+    [13, "TARGET_TRUTH_AND_SPLIT_INPUT_ISOLATION_PASS"],
+    [14, "DUAL_HOST_AGREEMENT_Q1_OUTPUTS_NULL_NOT_RUN"]
+  ],
+  "downstream_state": {
+    "q1_status_id": 0,
+    "q1_output_root": null,
+    "q2_status_id": 0,
+    "role_evaluation_performed": false,
+    "m3_formal_roots": null,
+    "outside_certificate_issued": false
+  }
+}
