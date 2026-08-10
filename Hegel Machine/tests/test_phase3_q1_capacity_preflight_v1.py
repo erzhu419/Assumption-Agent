@@ -264,6 +264,93 @@ def test_input_signature_is_type_exact_and_closed_to_one_or_two(value) -> None:
     assert caught.value.code == preflight.REJECT_PREFLIGHT_INPUT_SIGNATURE
 
 
+def test_full_node6_public_preflight_requires_future_admission() -> None:
+    for call in (
+        lambda: preflight.run_q1_partition_capacity_preflight_v1(1),
+        lambda: preflight.run_q1_partition_capacity_preflight_v1(
+            1,
+            limits=preflight.PreflightLimitsV1(),
+        ),
+        lambda: preflight.run_q1_capacity_preflight_v1(),
+        lambda: preflight.immutable_candidate_applications_v1(
+            (),
+            limits=preflight.PreflightLimitsV1(),
+        ),
+    ):
+        with pytest.raises(preflight.Q1CapacityPreflightError) as caught:
+            call()
+        assert caught.value.code == (
+            preflight.REJECT_FULL_NODE6_PREFLIGHT_NOT_AUTHORIZED
+        )
+
+
+def test_immutable_candidate_semantics_fail_closed() -> None:
+    with pytest.raises(preflight.Q1CapacityPreflightError) as caught:
+        preflight.Q1ImmutableCandidateApplicationV1(
+            0,
+            0,
+            (),
+            (),
+            b"not-cbor",
+            b"\x00" * 32,
+            False,
+        )
+    assert caught.value.code == preflight.FAIL_PREFLIGHT_AST_IDENTITY
+
+    leaf = preflight._frozen_leaf_asts_v1(raw_cap=preflight.LEAF_COUNT)[0]
+    for candidate in (
+        preflight.Q1ImmutableCandidateApplicationV1,
+    ):
+        with pytest.raises(preflight.Q1CapacityPreflightError):
+            candidate(0, 0, (1,), (leaf.cbor_bytes,), leaf.cbor_bytes, leaf.digest, True)
+        with pytest.raises(preflight.Q1CapacityPreflightError):
+            candidate(
+                1,
+                0x2001,
+                (),
+                (leaf.cbor_bytes,),
+                leaf.cbor_bytes,
+                leaf.digest,
+                False,
+            )
+        with pytest.raises(preflight.Q1CapacityPreflightError) as caught:
+            candidate(0, 0, (), (), leaf.cbor_bytes, b"\x00" * 32, False)
+        assert caught.value.code == preflight.FAIL_PREFLIGHT_AST_IDENTITY
+
+    rational = tuple(
+        ast
+        for ast in preflight._frozen_leaf_asts_v1(raw_cap=preflight.LEAF_COUNT)
+        if ast.metrics.output_sort == "RationalValue"
+    )[:2]
+    ordered = tuple(
+        sorted(
+            rational,
+            key=lambda ast: (
+                sha256(preflight.canonical_cbor_encode(ast.value[1])).digest(),
+                preflight.canonical_cbor_encode(ast.value[1]),
+            ),
+        )
+    )
+    reversed_children = tuple(reversed(ordered))
+    source = (
+        "equal_exact",
+        preflight._canonical_node_to_source(reversed_children[0].value[1]),
+        preflight._canonical_node_to_source(reversed_children[1].value[1]),
+    )
+    canonical = preflight.canonicalize_shrink6_source_ast(source)
+    with pytest.raises(preflight.Q1CapacityPreflightError) as caught:
+        preflight.Q1ImmutableCandidateApplicationV1(
+            1,
+            0x2002,
+            (),
+            tuple(ast.cbor_bytes for ast in reversed_children),
+            canonical.cbor_bytes,
+            canonical.digest,
+            True,
+        )
+    assert caught.value.code == preflight.FAIL_PREFLIGHT_STRICT_BOUNDARY
+
+
 def test_guard_registry_and_internal_guard_mapping_are_preregistered() -> None:
     assert preflight.RESOURCE_GUARD_REGISTRY == (
         (1, "RAW_OPERATOR_APPLICATIONS"),

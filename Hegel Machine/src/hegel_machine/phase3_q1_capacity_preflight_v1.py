@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from fractions import Fraction
+from functools import lru_cache
 from hashlib import sha256
 from itertools import combinations, combinations_with_replacement, product
 import json
@@ -56,6 +57,9 @@ PREFLIGHT_CLOSED: Final = PREFLIGHT_SATURATED_DIAGNOSTIC_ONLY
 INCONCLUSIVE_RESOURCE_LIMIT: Final = PREFLIGHT_CAPACITY_GUARD_HIT
 
 REJECT_PREFLIGHT_INPUT_SIGNATURE: Final = "REJECT_PREFLIGHT_INPUT_SIGNATURE"
+REJECT_FULL_NODE6_PREFLIGHT_NOT_AUTHORIZED: Final = (
+    "REJECT_FULL_NODE6_PREFLIGHT_NOT_AUTHORIZED"
+)
 
 RESOURCE_GUARD_REGISTRY: Final = (
     (1, "RAW_OPERATOR_APPLICATIONS"),
@@ -134,6 +138,22 @@ class _ResourceLimit(Q1CapacityPreflightError):
 
 def _fail(code: str, detail: str) -> NoReturn:
     raise Q1CapacityPreflightError(code, detail)
+
+
+def _require_explicit_nonfull_limits_v1(
+    limits: PreflightLimitsV1 | None,
+) -> PreflightLimitsV1:
+    if type(limits) is not PreflightLimitsV1:
+        _fail(
+            REJECT_FULL_NODE6_PREFLIGHT_NOT_AUTHORIZED,
+            "an explicit non-formal subset limit is required",
+        )
+    if limits.maximum_ast_depth == 3 and limits.maximum_ast_node_count == 6:
+        _fail(
+            REJECT_FULL_NODE6_PREFLIGHT_NOT_AUTHORIZED,
+            "full depth-3/node-6 preflight requires the future admission token",
+        )
+    return limits
 
 
 @dataclass(frozen=True, slots=True)
@@ -255,6 +275,167 @@ class Q1CapacityPreflightResultV1:
 
 
 @dataclass(frozen=True, slots=True)
+class Q1ImmutableCandidateApplicationV1:
+    construction_depth: int
+    coverage_code: int
+    operator_parameters: tuple[object, ...]
+    ordered_child_canonical_ast_cbors: tuple[bytes, ...]
+    canonical_ast_cbor: bytes
+    canonical_ast_hash: bytes
+    rewrite_collapsed: bool
+
+    def __post_init__(self) -> None:
+        if type(self.construction_depth) is not int or not 0 <= self.construction_depth <= 3:
+            raise TypeError("construction_depth must be exact int in 0..3")
+        if type(self.coverage_code) is not int or not 0 <= self.coverage_code <= 0xFFFF:
+            raise TypeError("coverage_code must be exact uint16")
+        if type(self.operator_parameters) is not tuple:
+            raise TypeError("operator_parameters must be exact tuple")
+        if type(self.ordered_child_canonical_ast_cbors) is not tuple or any(
+            type(value) is not bytes or not value
+            for value in self.ordered_child_canonical_ast_cbors
+        ):
+            raise TypeError("ordered child ASTs must be non-empty byte tuples")
+        if type(self.canonical_ast_cbor) is not bytes or not self.canonical_ast_cbor:
+            raise TypeError("canonical_ast_cbor must be non-empty bytes")
+        if type(self.canonical_ast_hash) is not bytes or len(self.canonical_ast_hash) != 32:
+            raise TypeError("canonical_ast_hash must be 32 bytes")
+        if type(self.rewrite_collapsed) is not bool:
+            raise TypeError("rewrite_collapsed must be exact bool")
+        try:
+            output_ast = decode_shrink6_canonical_ast(self.canonical_ast_cbor)
+        except (StrictAstError, ValueError) as error:
+            _fail(FAIL_PREFLIGHT_AST_IDENTITY, f"candidate output AST: {error}")
+        if (
+            output_ast.cbor_bytes != self.canonical_ast_cbor
+            or output_ast.digest != self.canonical_ast_hash
+        ):
+            _fail(FAIL_PREFLIGHT_AST_IDENTITY, "candidate output AST identity differs")
+
+        if self.construction_depth == 0:
+            if (
+                not 0 <= self.coverage_code < LEAF_COUNT
+                or self.operator_parameters
+                or self.ordered_child_canonical_ast_cbors
+                or self.rewrite_collapsed
+            ):
+                _fail(FAIL_PREFLIGHT_STRICT_BOUNDARY, "leaf candidate wire differs")
+            leaf = _frozen_leaf_asts_v1(raw_cap=LEAF_COUNT)[self.coverage_code]
+            if leaf.cbor_bytes != self.canonical_ast_cbor:
+                _fail(FAIL_PREFLIGHT_AST_IDENTITY, "leaf manifest index differs")
+            return
+
+        child_asts: list[CanonicalAst] = []
+        for child_cbor in self.ordered_child_canonical_ast_cbors:
+            try:
+                child = decode_shrink6_canonical_ast(child_cbor)
+            except (StrictAstError, ValueError) as error:
+                _fail(FAIL_PREFLIGHT_AST_IDENTITY, f"candidate child AST: {error}")
+            if child.cbor_bytes != child_cbor:
+                _fail(FAIL_PREFLIGHT_AST_IDENTITY, "candidate child replay differs")
+            child_asts.append(child)
+        children = tuple(child_asts)
+        if not children or self.construction_depth != 1 + max(
+            child.metrics.depth for child in children
+        ):
+            _fail(FAIL_PREFLIGHT_STRICT_BOUNDARY, "candidate construction depth differs")
+
+        if self.coverage_code in (0x1000, 0x1001, 0x1002, 0x1003):
+            if len(children) != 1 or self.operator_parameters:
+                _fail(FAIL_PREFLIGHT_STRICT_BOUNDARY, "unary candidate arity differs")
+            expected_node = (
+                1,
+                self.coverage_code - 0x1000,
+                children[0].value[1],
+            )
+        elif self.coverage_code in (0x2001, 0x2002, 0x2003, 0x2005, 0x2006):
+            if len(children) != 2 or self.operator_parameters:
+                _fail(FAIL_PREFLIGHT_STRICT_BOUNDARY, "binary candidate arity differs")
+            if self.coverage_code in (0x2002, 0x2005, 0x2006):
+                commutative_keys = tuple(
+                    (
+                        sha256(canonical_cbor_encode(child.value[1])).digest(),
+                        canonical_cbor_encode(child.value[1]),
+                    )
+                    for child in children
+                )
+                if commutative_keys != tuple(sorted(commutative_keys)):
+                    _fail(
+                        FAIL_PREFLIGHT_STRICT_BOUNDARY,
+                        "commutative child order differs",
+                    )
+            expected_node = (
+                2,
+                self.coverage_code - 0x2000,
+                children[0].value[1],
+                children[1].value[1],
+            )
+        elif self.coverage_code in (0x3001, 0x3002):
+            tolerance = self.coverage_code - 0x3000
+            if len(children) != 2 or self.operator_parameters != (tolerance,):
+                _fail(FAIL_PREFLIGHT_STRICT_BOUNDARY, "approx candidate wire differs")
+            commutative_keys = tuple(
+                (
+                    sha256(canonical_cbor_encode(child.value[1])).digest(),
+                    canonical_cbor_encode(child.value[1]),
+                )
+                for child in children
+            )
+            if commutative_keys != tuple(sorted(commutative_keys)):
+                _fail(FAIL_PREFLIGHT_STRICT_BOUNDARY, "approx child order differs")
+            expected_node = (
+                3,
+                0,
+                children[0].value[1],
+                children[1].value[1],
+                tolerance,
+            )
+        elif self.coverage_code == 0x4002:
+            if len(children) != 2 or self.operator_parameters:
+                _fail(FAIL_PREFLIGHT_STRICT_BOUNDARY, "AND2 candidate wire differs")
+            if (
+                children[0].cbor_bytes == children[1].cbor_bytes
+                or any(child.value[1][0] == 4 for child in children)
+                or tuple(
+                    (
+                        child.metrics.depth,
+                        child.metrics.node_count,
+                        OUTPUT_SORT_IDS[child.metrics.output_sort],
+                        child.root_operator_id,
+                        child.cbor_bytes,
+                    )
+                    for child in children
+                )
+                != tuple(
+                    sorted(
+                        (
+                            child.metrics.depth,
+                            child.metrics.node_count,
+                            OUTPUT_SORT_IDS[child.metrics.output_sort],
+                            child.root_operator_id,
+                            child.cbor_bytes,
+                        )
+                        for child in children
+                    )
+                )
+            ):
+                _fail(FAIL_PREFLIGHT_STRICT_BOUNDARY, "AND2 child order differs")
+            expected_node = (4, tuple(child.value[1] for child in children))
+        else:
+            _fail(FAIL_PREFLIGHT_STRICT_BOUNDARY, "candidate coverage code is unknown")
+        try:
+            expected_ast = canonicalize_shrink6_source_ast(
+                _canonical_node_to_source(expected_node)
+            )
+        except (StrictAstError, ValueError) as error:
+            _fail(FAIL_PREFLIGHT_STRICT_BOUNDARY, f"candidate reconstruction: {error}")
+        if expected_ast.cbor_bytes != self.canonical_ast_cbor:
+            _fail(FAIL_PREFLIGHT_AST_IDENTITY, "candidate output differs from children")
+        if self.rewrite_collapsed != (expected_ast.value[1] != expected_node):
+            _fail(FAIL_PREFLIGHT_STRICT_BOUNDARY, "rewrite-collapse flag differs")
+
+
+@dataclass(frozen=True, slots=True)
 class _Program:
     ast: CanonicalAst
     behavior: tuple[object, ...]
@@ -304,6 +485,26 @@ class _Cohort:
 class _BehaviorClass:
     behavior: tuple[object, ...]
     cohorts: dict[bytes, _Cohort]
+
+
+@dataclass(frozen=True, slots=True)
+class _SnapshotRepresentativeMaterialV1:
+    canonical_ast_cbor: bytes
+    canonical_ast_hash: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class _SnapshotCohortMaterialV1:
+    signature: _q1_contract.FutureAdmissibilitySignatureV1
+    representatives: tuple[_SnapshotRepresentativeMaterialV1, ...]
+    visible_frontier_member: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _SnapshotClassMaterialV1:
+    behavior_key: bytes
+    behavior: tuple[object, ...]
+    cohorts: tuple[_SnapshotCohortMaterialV1, ...]
 
 
 def _canonical_cell(value: object) -> tuple[object, ...]:
@@ -510,6 +711,99 @@ def _operator_candidates(
         )
 
 
+@lru_cache(maxsize=None)
+def _frozen_leaf_asts_v1(*, raw_cap: int) -> tuple[CanonicalAst, ...]:
+    enumerator = _Shrink6Enumerator(raw_cap=max(LEAF_COUNT, raw_cap))
+    for sort_id in range(1, 6):
+        enumerator.leaves(sort_id)
+    leaves = tuple(
+        sorted(
+            (program.ast for programs in enumerator.groups.values() for program in programs),
+            key=lambda ast: (
+                OUTPUT_SORT_IDS[ast.metrics.output_sort],
+                ast.root_operator_id,
+                ast.cbor_bytes,
+            ),
+        )
+    )
+    if len(leaves) != LEAF_COUNT or len({ast.cbor_bytes for ast in leaves}) != LEAF_COUNT:
+        _fail(FAIL_PREFLIGHT_STRICT_BOUNDARY, "full v1.6 leaf manifest is not 810")
+    return leaves
+
+
+def immutable_candidate_applications_v1(
+    continuation_bank_canonical_ast_cbors: tuple[bytes, ...],
+    *,
+    limits: PreflightLimitsV1,
+) -> tuple[Q1ImmutableCandidateApplicationV1, ...]:
+    """Export the unique target-blind candidate semantics as immutable views."""
+
+    if type(continuation_bank_canonical_ast_cbors) is not tuple or any(
+        type(value) is not bytes or not value
+        for value in continuation_bank_canonical_ast_cbors
+    ):
+        raise TypeError("continuation bank ASTs must be an exact byte tuple")
+    if len(set(continuation_bank_canonical_ast_cbors)) != len(
+        continuation_bank_canonical_ast_cbors
+    ):
+        _fail(FAIL_PREFLIGHT_AST_IDENTITY, "continuation bank contains duplicate AST")
+    _require_explicit_nonfull_limits_v1(limits)
+
+    output: list[Q1ImmutableCandidateApplicationV1] = []
+    for coverage_code, ast in enumerate(_frozen_leaf_asts_v1(raw_cap=LEAF_COUNT)):
+        output.append(
+            Q1ImmutableCandidateApplicationV1(
+                construction_depth=0,
+                coverage_code=coverage_code,
+                operator_parameters=(),
+                ordered_child_canonical_ast_cbors=(),
+                canonical_ast_cbor=ast.cbor_bytes,
+                canonical_ast_hash=ast.digest,
+                rewrite_collapsed=False,
+            )
+        )
+
+    programs: list[_Program] = []
+    for ast_cbor in sorted(continuation_bank_canonical_ast_cbors):
+        ast = decode_shrink6_canonical_ast(ast_cbor)
+        if ast.cbor_bytes != ast_cbor:
+            _fail(FAIL_PREFLIGHT_AST_IDENTITY, "continuation AST replay differs")
+        programs.append(_Program(ast=ast, behavior=(), behavior_key=b""))
+    program_tuple = tuple(programs)
+    for depth in range(1, limits.maximum_ast_depth + 1):
+        for candidate in _operator_candidates(
+            program_tuple,
+            target_depth=depth,
+            limits=limits,
+        ):
+            try:
+                ast = canonicalize_shrink6_source_ast(candidate.source_ast)
+                replay = decode_shrink6_canonical_ast(ast.cbor_bytes)
+            except StrictAstError as error:
+                _fail(FAIL_PREFLIGHT_STRICT_BOUNDARY, str(error))
+            if replay.cbor_bytes != ast.cbor_bytes or replay.digest != ast.digest:
+                _fail(FAIL_PREFLIGHT_AST_IDENTITY, "candidate strict replay differs")
+            parameters: tuple[object, ...] = (
+                (candidate.operator_code - 0x3000,)
+                if candidate.operator_code in (0x3001, 0x3002)
+                else ()
+            )
+            output.append(
+                Q1ImmutableCandidateApplicationV1(
+                    construction_depth=depth,
+                    coverage_code=candidate.operator_code,
+                    operator_parameters=parameters,
+                    ordered_child_canonical_ast_cbors=tuple(
+                        child.ast.cbor_bytes for child in candidate.children
+                    ),
+                    canonical_ast_cbor=ast.cbor_bytes,
+                    canonical_ast_hash=ast.digest,
+                    rewrite_collapsed=ast.value[1] != candidate.expected_node,
+                )
+            )
+    return tuple(output)
+
+
 def _bottom(value: object) -> bool:
     return value is _adapter.BOTTOM
 
@@ -630,17 +924,24 @@ class _State:
     @staticmethod
     def _visible_frontier_count(item: _BehaviorClass) -> int:
         material = tuple(item.cohorts.values())
-        count = 0
-        for index, cohort in enumerate(material):
-            dominated = any(
-                other.signature.dominates(cohort.signature)
-                and len(other.representatives) >= len(cohort.representatives)
-                for other_index, other in enumerate(material)
-                if other_index != index
-            )
-            if not dominated:
-                count += len(cohort.representatives)
-        return count
+        return sum(
+            len(cohort.representatives)
+            for index, cohort in enumerate(material)
+            if _State._cohort_is_visible(material, index)
+        )
+
+    @staticmethod
+    def _cohort_is_visible(
+        material: tuple[_Cohort, ...],
+        index: int,
+    ) -> bool:
+        cohort = material[index]
+        return not any(
+            other.signature.dominates(cohort.signature)
+            and len(other.representatives) >= len(cohort.representatives)
+            for other_index, other in enumerate(material)
+            if other_index != index
+        )
 
     def _guard_state(self) -> tuple[int, int, int, int, int, int]:
         classes, cohorts, bank, frontier, max_bank, max_frontier = self._counts()
@@ -767,7 +1068,7 @@ class _State:
             self.classes[key] = item
             class_delta = 1
         elif item.behavior != behavior:
-            _fail(FAIL_PREFLIGHT_BEHAVIOR, "behavior key collision changed preimage")
+            _fail(FAIL_PREFLIGHT_BEHAVIOR, "behavior key alias changed value")
 
         signature = _q1_contract.future_signature_from_ast_v1(ast)
         signature_key = canonical_cbor_encode(signature.canonical_object())
@@ -779,7 +1080,7 @@ class _State:
             item.cohorts[signature_key] = cohort
             cohort_delta = 1
         elif cohort.signature != signature:
-            _fail(FAIL_PREFLIGHT_AST_IDENTITY, "signature key collision changed preimage")
+            _fail(FAIL_PREFLIGHT_AST_IDENTITY, "signature key alias changed value")
 
         prior_representatives = dict(cohort.representatives)
         before = tuple(sorted(prior_representatives))
@@ -824,6 +1125,52 @@ class _State:
                     values[program.ast.cbor_bytes] = program
         return tuple(sorted(values.values(), key=lambda program: program.global_key))
 
+    def immutable_snapshot_material(
+        self,
+    ) -> tuple[_SnapshotClassMaterialV1, ...]:
+        """Copy the complete quotient state into canonical immutable rows."""
+
+        output: list[_SnapshotClassMaterialV1] = []
+        for behavior_key in sorted(self.classes):
+            item = self.classes[behavior_key]
+            cohort_rows = tuple(
+                sorted(
+                    item.cohorts.items(),
+                    key=lambda row: row[0],
+                )
+            )
+            material = tuple(cohort for _, cohort in cohort_rows)
+            cohorts: list[_SnapshotCohortMaterialV1] = []
+            for index, (_signature_key, cohort) in enumerate(cohort_rows):
+                representatives = tuple(
+                    _SnapshotRepresentativeMaterialV1(
+                        canonical_ast_cbor=program.ast.cbor_bytes,
+                        canonical_ast_hash=program.ast.digest,
+                    )
+                    for program in sorted(
+                        cohort.representatives.values(),
+                        key=lambda value: value.ast.cbor_bytes,
+                    )
+                )
+                cohorts.append(
+                    _SnapshotCohortMaterialV1(
+                        signature=cohort.signature,
+                        representatives=representatives,
+                        visible_frontier_member=self._cohort_is_visible(
+                            material,
+                            index,
+                        ),
+                    )
+                )
+            output.append(
+                _SnapshotClassMaterialV1(
+                    behavior_key=behavior_key,
+                    behavior=tuple(item.behavior),
+                    cohorts=tuple(cohorts),
+                )
+            )
+        return tuple(output)
+
     def candidate_vector(self, candidate: _Candidate) -> tuple[object, ...]:
         key = self._candidate_vector_key(candidate)
         cached = self.vector_cache.get(key)
@@ -857,23 +1204,9 @@ class _State:
             )
         self.current_barrier_raw_count = 0
         before = self._counts()
-        enumerator = _Shrink6Enumerator(
-            raw_cap=max(LEAF_COUNT, self.limits.maximum_raw_operator_applications)
+        leaves = _frozen_leaf_asts_v1(
+            raw_cap=self.limits.maximum_raw_operator_applications
         )
-        for sort_id in range(1, 6):
-            enumerator.leaves(sort_id)
-        leaves = tuple(
-            sorted(
-                (program.ast for programs in enumerator.groups.values() for program in programs),
-                key=lambda ast: (
-                    OUTPUT_SORT_IDS[ast.metrics.output_sort],
-                    ast.root_operator_id,
-                    ast.cbor_bytes,
-                ),
-            )
-        )
-        if len(leaves) != LEAF_COUNT or len({ast.cbor_bytes for ast in leaves}) != LEAF_COUNT:
-            _fail(FAIL_PREFLIGHT_STRICT_BOUNDARY, "full v1.6 leaf manifest is not 810")
         environments = self.universe.observation_environments()
         bank_delta = 0
         for ast in leaves:
@@ -1087,12 +1420,11 @@ def _result_from_state(
     )
 
 
-def run_q1_partition_capacity_preflight_v1(
+def _execute_q1_partition_capacity_preflight_state_v1(
     input_signature_id: int,
     *,
     limits: PreflightLimitsV1 | None = None,
-) -> Q1PartitionCapacityResultV1:
-    """Run one target-blind input-signature preflight to a depth barrier."""
+) -> tuple[Q1PartitionCapacityResultV1, _State]:
 
     active_limits = PreflightLimitsV1() if limits is None else limits
     if type(input_signature_id) is not int or input_signature_id not in (1, 2):
@@ -1109,28 +1441,72 @@ def run_q1_partition_capacity_preflight_v1(
             state.expand_depth(depth)
         state.close_structural_boundary()
     except _ResourceLimit as error:
-        return _result_from_state(
+        return (
+            _result_from_state(
+                state,
+                terminal_status=INCONCLUSIVE_RESOURCE_LIMIT,
+                resource_guard_id=error.resource_guard_id,
+                resource_guard_name=error.resource_guard_name,
+                traversal_closed=False,
+            ),
             state,
-            terminal_status=INCONCLUSIVE_RESOURCE_LIMIT,
-            resource_guard_id=error.resource_guard_id,
-            resource_guard_name=error.resource_guard_name,
-            traversal_closed=False,
         )
     full_v16_structural_limits = (
         active_limits.maximum_ast_depth == 3
         and active_limits.maximum_ast_node_count == 6
     )
-    return _result_from_state(
-        state,
-        terminal_status=(
-            PREFLIGHT_SATURATED_DIAGNOSTIC_ONLY
-            if full_v16_structural_limits
-            else LOCAL_PROTOTYPE_SUBSET_TRAVERSAL_CLOSED
+    return (
+        _result_from_state(
+            state,
+            terminal_status=(
+                PREFLIGHT_SATURATED_DIAGNOSTIC_ONLY
+                if full_v16_structural_limits
+                else LOCAL_PROTOTYPE_SUBSET_TRAVERSAL_CLOSED
+            ),
+            resource_guard_id=None,
+            resource_guard_name=None,
+            traversal_closed=True,
         ),
-        resource_guard_id=None,
-        resource_guard_name=None,
-        traversal_closed=True,
+        state,
     )
+
+
+def run_q1_partition_capacity_preflight_v1(
+    input_signature_id: int,
+    *,
+    limits: PreflightLimitsV1 | None = None,
+) -> Q1PartitionCapacityResultV1:
+    """Run one target-blind input-signature preflight to a depth barrier."""
+
+    if type(input_signature_id) is not int or input_signature_id not in (1, 2):
+        _fail(
+            REJECT_PREFLIGHT_INPUT_SIGNATURE,
+            "input_signature_id must be the exact integer 1 or 2",
+        )
+    active_limits = _require_explicit_nonfull_limits_v1(limits)
+
+    result, _state = _execute_q1_partition_capacity_preflight_state_v1(
+        input_signature_id,
+        limits=active_limits,
+    )
+    return result
+
+
+def _run_q1_partition_snapshot_material_v1(
+    input_signature_id: int,
+    *,
+    limits: PreflightLimitsV1 | None = None,
+) -> tuple[
+    Q1PartitionCapacityResultV1,
+    tuple[_SnapshotClassMaterialV1, ...],
+]:
+    """Internal immutable export used only by the target-blind Q0.5a layer."""
+
+    result, state = _execute_q1_partition_capacity_preflight_state_v1(
+        input_signature_id,
+        limits=limits,
+    )
+    return result, state.immutable_snapshot_material()
 
 
 def run_q1_capacity_preflight_v1(
@@ -1139,7 +1515,7 @@ def run_q1_capacity_preflight_v1(
 ) -> Q1CapacityPreflightResultV1:
     """Run both production signatures without creating a formal Q1 result."""
 
-    active_limits = PreflightLimitsV1() if limits is None else limits
+    active_limits = _require_explicit_nonfull_limits_v1(limits)
     partitions = tuple(
         run_q1_partition_capacity_preflight_v1(
             input_signature_id,
@@ -1361,12 +1737,15 @@ __all__ = [
     "PreflightLimitsV1",
     "Q1CapacityPreflightError",
     "Q1CapacityPreflightResultV1",
+    "Q1ImmutableCandidateApplicationV1",
     "Q1PartitionCapacityResultV1",
+    "REJECT_FULL_NODE6_PREFLIGHT_NOT_AUTHORIZED",
     "REJECT_PREFLIGHT_INPUT_SIGNATURE",
     "RESOURCE_GUARD_REGISTRY",
     "SCHEMA_VERSION",
     "canonical_capacity_preflight_json_bytes_v1",
     "capacity_preflight_diagnostic_object_v1",
+    "immutable_candidate_applications_v1",
     "run_q1_capacity_preflight_v1",
     "run_q1_partition_capacity_preflight_v1",
 ]
