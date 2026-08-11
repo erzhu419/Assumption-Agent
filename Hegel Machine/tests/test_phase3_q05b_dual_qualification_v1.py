@@ -12257,8 +12257,10 @@ def test_concrete_backend_stage4_through_stage7_mock_causal_wiring(
     payloads = (b"leaf", b"odd", b"sink", b"sidecar", b"golden")
     output_identities: dict[Path, dict[str, object]] = {}
     replay_partition = SimpleNamespace(scratch_ledger_roots=(b"s" * 32,) * 4)
-    def replay_actor(host_replay_root: bytes) -> SimpleNamespace:
+
+    def replay_actor(actor_id: str, host_replay_root: bytes) -> SimpleNamespace:
         return SimpleNamespace(
+            actor_id=actor_id,
             payloads=payloads,
             leaf_manifest=SimpleNamespace(manifest_root=b"a" * 32),
             partitions=(
@@ -12272,15 +12274,24 @@ def test_concrete_backend_stage4_through_stage7_mock_causal_wiring(
             partition_replays=(replay_partition, replay_partition),
         )
 
-    python_replay_actor = replay_actor(b"g" * 32)
-    rust_replay_actor = replay_actor(b"r" * 32)
-    dual = SimpleNamespace(
+    python_replay_actor = replay_actor("PYTHON_ENDPOINT", b"g" * 32)
+    rust_replay_actor = replay_actor("RUST_ENDPOINT", b"r" * 32)
+    dual = HOST.DualHostReplayV1(
         python=python_replay_actor,
         rust=rust_replay_actor,
-        dual_replay_root=b"h" * 32,
+        neutral_manifest_bytes=payloads[4],
+        host_neutral_raw_sha256=b"n" * 32,
+        stdout_manifest_raw_sha256=b"m" * 32,
+        host_source_identity_root=b"u" * 32,
+        host_runtime_identity_root=b"v" * 32,
+        shadow_assembler_root=b"f" * 32,
+        predicate_evidence_rows=tuple(
+            (predicate_id, bytes([predicate_id]) * 32)
+            for predicate_id in (6, 7, 8, 12, 14, 15, 17)
+        ),
         predicate11_semantic_component_root=b"i" * 32,
-        predicate_evidence_rows=((6, b"j" * 32), (7, b"k" * 32)),
-        shadow_assembler=SimpleNamespace(root=b"f" * 32),
+        pending_predicate_ids=(11, 13, 16, 18, 19),
+        dual_replay_root=b"h" * 32,
     )
     witness = b'{"witness":"mock"}\n'
 
@@ -12535,6 +12546,10 @@ def test_concrete_backend_stage4_through_stage7_mock_causal_wiring(
         for replay in stage7["evidence"]["three_actor_live_mount_replays"]
     )
     assert stage6["evidence"]["pending_predicate_ids"] == [11, 19]
+    assert not hasattr(dual, "shadow_assembler")
+    assert stage7["evidence"][
+        "shadow_assembler_root"
+    ] == dual.shadow_assembler_root.hex()
     assert stage7["evidence"]["qualification_receipt"] is None
 
 

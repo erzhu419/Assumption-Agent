@@ -14154,7 +14154,7 @@ class ConcreteQ05BActualBackendV1:
                 [predicate_id, root.hex()]
                 for predicate_id, root in replay.predicate_evidence_rows
             ],
-            "shadow_assembler_root": replay.shadow_assembler.root.hex(),
+            "shadow_assembler_root": replay.shadow_assembler_root.hex(),
             "host_witness_root": witness_value["witness_root"],
             "host_loaded_module_rows": host_control["loaded_module_rows"],
             "host_loaded_module_root": host_control["loaded_module_root"],
