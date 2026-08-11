@@ -49,6 +49,13 @@ from hegel_machine.phase2b_trusted_wire_typed_replay_v1 import (
     TYPED_TRUSTED_WIRE_REPLAY_POLICY_ID,
     TYPED_TRUSTED_WIRE_REPLAY_VERSION,
 )
+from hegel_machine.phase2b_recognizer_input_archive_v1 import (
+    PUBLIC_RECOGNIZER_FAMILY_ALIAS_POLICY_ID,
+    PUBLIC_RECOGNIZER_REGISTRY_SCHEMA_ID,
+    PUBLIC_RECOGNIZER_REGISTRY_SCHEMA_VERSION,
+    RECOGNIZER_INPUT_ARCHIVE_POLICY_ID,
+    TRUSTED_RECOGNIZER_INPUT_ARCHIVE_VERSION,
+)
 from hegel_machine.phase2b_protocol import (
     BaselineKind,
     BaselineRegistration,
@@ -602,6 +609,50 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         report["source_order_bound_stage_b_secret_replay_receipt_implemented"]
         is True
     )
+    assert report["public_recognizer_registry_schema_version"] == (
+        PUBLIC_RECOGNIZER_REGISTRY_SCHEMA_VERSION
+    )
+    assert report["public_recognizer_registry_schema_id"] == (
+        PUBLIC_RECOGNIZER_REGISTRY_SCHEMA_ID
+    )
+    assert report["public_recognizer_family_alias_policy_id"] == (
+        PUBLIC_RECOGNIZER_FAMILY_ALIAS_POLICY_ID
+    )
+    assert report["trusted_recognizer_input_archive_version"] == (
+        TRUSTED_RECOGNIZER_INPUT_ARCHIVE_VERSION
+    )
+    assert report["recognizer_input_archive_policy_id"] == (
+        RECOGNIZER_INPUT_ARCHIVE_POLICY_ID
+    )
+    assert report["recognizer_input_archive_claim_level"] == (
+        TRUSTED_WIRE_CLAIM_LEVEL
+    )
+    for field_name in (
+        "strict_public_recognizer_registry_codec_mechanics_implemented",
+        "live_post_hmac_recognizer_registry_projection_mechanics_implemented",
+        "registry_envelope_exact_scope_bijection_replay_implemented",
+        "global_source_public_uuid_disjointness_gate_implemented",
+        (
+            "whole_batch_atomic_custodian_gated_recognizer_input_archive_"
+            "issuer_mechanics_implemented"
+        ),
+        "public_recognizer_input_archive_structural_decode_replay_implemented",
+        "recognizer_input_archive_success_is_false_claim_public_decode",
+    ):
+        assert report[field_name] is True
+    for field_name in (
+        "durable_trusted_recognizer_input_archive_receipt_implemented",
+        "recognizer_input_archive_batch_policy_membership_verified",
+        "recognizer_input_archive_source_registry_projection_verified",
+        "recognizer_input_archive_secret_custodian_replay_verified",
+        "recognizer_input_archive_origin_authenticated",
+        "recognizer_input_archive_formal_covert_audit",
+        "recognizer_input_archive_sealed_holdout_eligible",
+        "recognizer_input_archive_recognizer_executed",
+        "recognizer_input_archive_prediction_archive_evaluated",
+        "recognizer_input_archive_c1_exit_evidence",
+    ):
+        assert report[field_name] is False
     assert report["pairwise_distinct_key_source_contract_implemented"] is True
     assert report["key_source_statistical_independence_attested"] is False
     assert report["whole_batch_unbiased_fisher_yates_mechanics_implemented"] is True
@@ -658,6 +709,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "exact_bridge",
         "exact_transform_semantics",
         "projection_compiler",
+        "recognizer_input_archive_mechanics",
         "runner",
         "selector",
         "trusted_wire_keyed_batch_mechanics",

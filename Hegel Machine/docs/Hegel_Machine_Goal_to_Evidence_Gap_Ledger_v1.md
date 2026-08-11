@@ -234,6 +234,24 @@ formal UUID/field audit, formal covert audit, sealed execution and C1 exit remai
 The 1..1024 authority cap is enforced, but the 1024-authority worst-case wall-time/RSS
 has not been qualified.
 
+The post-Stage-C recognizer-input archive slice now derives each public registry
+read-only from the same live Stage-B HMAC allocation as its adjacent envelope.  It
+requires one exact frozen-theory source registry (6 laws/15 roles/35 observables),
+separates fixed public bridge-family UUID aliases from F01--F06, replays exact
+registry/envelope task scope, and rejects any global source/public or cross-row
+authority UUID overlap.  No old IDs, source indices, per-case source-authority
+roots or authorities, maps, permutations or keys enter the public archive.  The
+sole exception is one global opaque `source_registry_id` commitment in metadata;
+it cannot establish source projection or trust.  Exact top-level type misuse
+raises `TypeError`; all other gate drift yields atomic `ABSTAIN` with no partial
+archive.
+
+This closes only an input-adapter/archive mechanics gap.  A successful issuer still
+returns the public `DecodedRecognizerInputArchiveV1` whose batch-membership,
+source-projection, secret-custodian, origin, formal-covert, sealed, recognizer,
+prediction-evaluation and C1 claims are all false.  Opaque commitments are not a
+durable trusted receipt, and no recognizer execution or effect evidence follows.
+
 Accordingly these narrow flags are true:
 
 ```text
@@ -275,6 +293,13 @@ direct_payload_authority_exact_transform_complete_replay_implemented
 whole_batch_atomic_typed_replay_mechanics_implemented
 source_order_bound_stage_b_secret_replay_receipt_implemented
 typed_trusted_wire_authority_decode_replay_implemented
+strict_public_recognizer_registry_codec_mechanics_implemented
+live_post_hmac_recognizer_registry_projection_mechanics_implemented
+registry_envelope_exact_scope_bijection_replay_implemented
+global_source_public_uuid_disjointness_gate_implemented
+whole_batch_atomic_custodian_gated_recognizer_input_archive_issuer_mechanics_implemented
+public_recognizer_input_archive_structural_decode_replay_implemented
+recognizer_input_archive_success_is_false_claim_public_decode
 ```
 
 while the broad flags below remain false:
@@ -299,6 +324,16 @@ trusted_wire_origin_authenticated
 key_source_statistical_independence_attested
 trusted_wire_1024_authority_capacity_qualified
 formal_recognizer_run_runnable
+durable_trusted_recognizer_input_archive_receipt_implemented
+recognizer_input_archive_batch_policy_membership_verified
+recognizer_input_archive_source_registry_projection_verified
+recognizer_input_archive_secret_custodian_replay_verified
+recognizer_input_archive_origin_authenticated
+recognizer_input_archive_formal_covert_audit
+recognizer_input_archive_sealed_holdout_eligible
+recognizer_input_archive_recognizer_executed
+recognizer_input_archive_prediction_archive_evaluated
+recognizer_input_archive_c1_exit_evidence
 covert_channel_audit_implemented
 ready_for_holdout_generation
 formal_phase2b_exit_claim
@@ -324,9 +359,10 @@ Archive Evaluator v1**. The strict CLI must accept only the frozen public input 
 emit a closed main/challenge prediction archive without answer access; the evaluator
 must validate archive completeness, duplicates, ordering, roots, abstentions and
 challenge/preservation partitions before any score path. Then an unsealed end-to-end
-run must connect the current typed whole-batch replay to recognizer output and archive
-evaluation while keeping all origin, isolation, one-shot custody, covert-audit and
-sealed-C1 claims false. Malformed or partial archives must fail closed. Small
+run must connect the current typed whole-batch replay and public recognizer-input
+archive to recognizer output and prediction-archive evaluation while keeping all
+origin, isolation, one-shot custody, covert-audit and sealed-C1 claims false.
+Malformed or partial prediction archives must fail closed. Small
 deterministic/tamper vectors and an unsealed run remain mechanics evidence only;
 formal 720+240 audit, independent labels and sealed execution are later gates.
 

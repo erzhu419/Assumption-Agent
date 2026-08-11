@@ -20,7 +20,8 @@ import hmac
 import math
 import re
 import struct
-from typing import Final
+from types import MappingProxyType
+from typing import Callable, Final, Mapping
 
 from .phase2b_exact_transform_semantics_v1 import (
     EXACT_TRANSFORM_POLICY_ID,
@@ -1570,17 +1571,29 @@ def _preflight(
     return None
 
 
-def build_trusted_wire_batch_v1(
+def _build_trusted_wire_batch_core_v1(
     *,
     authorities: tuple[PublicTransformEvidenceBundleV2, ...],
     run_id: bytes,
     key_sources: TrustedWireKeySourcesV1,
-) -> TrustedWireBatchV1 | TrustedWireBatchPreflightV1:
-    """Build one all-or-nothing secret-padded, shuffled trusted-wire batch."""
+    per_case_projection_compiler: Callable[
+        [
+            int,
+            Mapping[tuple[str, str], str],
+            PublicTransformEvidenceBundleV2,
+        ],
+        object,
+    ]
+    | None,
+) -> tuple[
+    TrustedWireBatchV1 | TrustedWireBatchPreflightV1,
+    tuple[object, ...],
+]:
+    """Build the batch and optionally compile safe live per-case projections."""
 
     rejection = _preflight(authorities, run_id, key_sources)
     if rejection is not None:
-        return rejection
+        return rejection, ()
     compilations: list[TrustedWireProfileCompilationV1] = []
     for authority in authorities:
         compilation = compile_transform_authority_profile_mechanics_v1(authority)
@@ -1589,10 +1602,13 @@ def build_trusted_wire_batch_v1(
             or compilation.disposition is not ProfileDisposition.COMPLETE
         ):
             reason = getattr(compilation, "reason", "profile_not_complete")
-            return TrustedWireBatchPreflightV1(
-                TrustedWireBatchDisposition.ABSTAIN,
-                "authority_profile_rejected:" + str(reason),
-                len(authorities),
+            return (
+                TrustedWireBatchPreflightV1(
+                    TrustedWireBatchDisposition.ABSTAIN,
+                    "authority_profile_rejected:" + str(reason),
+                    len(authorities),
+                ),
+                (),
             )
         compilations.append(compilation)
 
@@ -1600,24 +1616,32 @@ def build_trusted_wire_batch_v1(
         shuffle_key, id_key, padding_key = _derive_keys(run_id, key_sources)
         order = _shuffle_indices(len(compilations), shuffle_key, run_id)
     except (OverflowError, TypeError, ValueError):
-        return TrustedWireBatchPreflightV1(
-            TrustedWireBatchDisposition.ABSTAIN,
-            "key_schedule_or_shuffle_failed",
-            len(authorities),
+        return (
+            TrustedWireBatchPreflightV1(
+                TrustedWireBatchDisposition.ABSTAIN,
+                "key_schedule_or_shuffle_failed",
+                len(authorities),
+            ),
+            (),
         )
     counters = {namespace: 0 for namespace in _NAMESPACES}
     allocated: set[str] = set()
     collision_retries = [0]
     envelope_rows: list[TrustedWireEnvelopeV1] = []
-    for original_index in order:
-        compilation = compilations[original_index]
+    public_projections: list[object] = []
+    for source_index in order:
+        compilation = compilations[source_index]
         decoded = decode_phase2b_jcs_profile_v1(compilation.payload)
         if type(decoded) is not dict or type(decoded.get("authority")) is not dict:
-            return TrustedWireBatchPreflightV1(
-                TrustedWireBatchDisposition.ABSTAIN,
-                "authority_profile_payload_drift",
-                len(authorities),
+            return (
+                TrustedWireBatchPreflightV1(
+                    TrustedWireBatchDisposition.ABSTAIN,
+                    "authority_profile_payload_drift",
+                    len(authorities),
+                ),
+                (),
             )
+        renamings: dict[tuple[str, str], str] = {}
         try:
             authority_mapping = _rename_authority_ids(
                 decoded["authority"],
@@ -1626,7 +1650,7 @@ def build_trusted_wire_batch_v1(
                 run_id,
                 counters,
                 allocated,
-                {},
+                renamings,
                 collision_retries,
             )
             _canonicalize_public_authority(authority_mapping)
@@ -1638,6 +1662,37 @@ def build_trusted_wire_batch_v1(
                 != authority_mapping
             ):
                 raise ValueError("native typed authority profile roundtrip drift")
+            projection: object | None = None
+            if per_case_projection_compiler is not None:
+                state_before = (
+                    tuple(sorted(counters.items())),
+                    len(allocated),
+                    tuple(sorted(renamings.items())),
+                    collision_retries[0],
+                )
+                typed_profile_before = (
+                    encode_typed_transform_authority_profile_v1(typed_authority)
+                )
+                projection = per_case_projection_compiler(
+                    source_index,
+                    MappingProxyType(renamings),
+                    typed_authority,
+                )
+                state_after = (
+                    tuple(sorted(counters.items())),
+                    len(allocated),
+                    tuple(sorted(renamings.items())),
+                    collision_retries[0],
+                )
+                if (
+                    projection is None
+                    or state_after != state_before
+                    or encode_typed_transform_authority_profile_v1(
+                        typed_authority
+                    )
+                    != typed_profile_before
+                ):
+                    raise ValueError("private registry projection mutated allocation")
             audit = audit_namespace_paths_v1(authority_mapping)
             payload_value = {
                 "authority": authority_mapping,
@@ -1655,16 +1710,22 @@ def build_trusted_wire_batch_v1(
             envelope = _frame_secret_payload(payload, padding_key, run_id)
             public_receipt = decode_and_audit_trusted_envelope_v1(envelope)
         except (AttributeError, KeyError, TypeError, ValueError):
-            return TrustedWireBatchPreflightV1(
-                TrustedWireBatchDisposition.ABSTAIN,
-                "renamed_authority_or_provenance_replay_failed",
-                len(authorities),
+            return (
+                TrustedWireBatchPreflightV1(
+                    TrustedWireBatchDisposition.ABSTAIN,
+                    "renamed_authority_or_provenance_replay_failed",
+                    len(authorities),
+                ),
+                (),
             )
         if public_receipt.namespace_audit != audit:
-            return TrustedWireBatchPreflightV1(
-                TrustedWireBatchDisposition.ABSTAIN,
-                "renamed_namespace_audit_drift",
-                len(authorities),
+            return (
+                TrustedWireBatchPreflightV1(
+                    TrustedWireBatchDisposition.ABSTAIN,
+                    "renamed_namespace_audit_drift",
+                    len(authorities),
+                ),
+                (),
             )
         envelope_rows.append(
             TrustedWireEnvelopeV1(
@@ -1684,9 +1745,11 @@ def build_trusted_wire_batch_v1(
                 ),
             )
         )
+        if per_case_projection_compiler is not None:
+            public_projections.append(projection)
     rows = tuple(envelope_rows)
     commitment = _run_commitment(run_id)
-    return TrustedWireBatchV1._issue(
+    batch = TrustedWireBatchV1._issue(
         _BATCH_ISSUE_TOKEN,
         run_id_commitment=commitment,
         envelopes=rows,
@@ -1694,6 +1757,28 @@ def build_trusted_wire_batch_v1(
         uuid_collision_retry_count=collision_retries[0],
         uuid_collision_warning=collision_retries[0] > 0,
     )
+    return batch, tuple(public_projections)
+
+
+def build_trusted_wire_batch_v1(
+    *,
+    authorities: tuple[PublicTransformEvidenceBundleV2, ...],
+    run_id: bytes,
+    key_sources: TrustedWireKeySourcesV1,
+) -> TrustedWireBatchV1 | TrustedWireBatchPreflightV1:
+    """Build one all-or-nothing secret-padded, shuffled trusted-wire batch."""
+
+    batch, projections = _build_trusted_wire_batch_core_v1(
+        authorities=authorities,
+        run_id=run_id,
+        key_sources=key_sources,
+        per_case_projection_compiler=None,
+    )
+    if projections:
+        raise RuntimeError(
+            "public trusted-wire builder retained private registry projections"
+        )
+    return batch
 
 
 def verify_trusted_wire_batch_replay_v1(

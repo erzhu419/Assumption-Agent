@@ -1157,6 +1157,7 @@ def phase2b_preregistration_report() -> dict[str, object]:
         phase2b_projection_compiler,
         phase2b_runner,
         phase2b_selector,
+        phase2b_recognizer_input_archive_v1,
         phase2b_trusted_wire_batch_v1,
         phase2b_trusted_wire_typed_authority_v1,
         phase2b_trusted_wire_typed_replay_v1,
@@ -1332,6 +1333,44 @@ def phase2b_preregistration_report() -> dict[str, object]:
         "direct_payload_authority_exact_transform_complete_replay_implemented": True,
         "whole_batch_atomic_typed_replay_mechanics_implemented": True,
         "source_order_bound_stage_b_secret_replay_receipt_implemented": True,
+        "public_recognizer_registry_schema_version": (
+            phase2b_recognizer_input_archive_v1.PUBLIC_RECOGNIZER_REGISTRY_SCHEMA_VERSION
+        ),
+        "public_recognizer_registry_schema_id": (
+            phase2b_recognizer_input_archive_v1.PUBLIC_RECOGNIZER_REGISTRY_SCHEMA_ID
+        ),
+        "public_recognizer_family_alias_policy_id": (
+            phase2b_recognizer_input_archive_v1.PUBLIC_RECOGNIZER_FAMILY_ALIAS_POLICY_ID
+        ),
+        "trusted_recognizer_input_archive_version": (
+            phase2b_recognizer_input_archive_v1.TRUSTED_RECOGNIZER_INPUT_ARCHIVE_VERSION
+        ),
+        "recognizer_input_archive_policy_id": (
+            phase2b_recognizer_input_archive_v1.RECOGNIZER_INPUT_ARCHIVE_POLICY_ID
+        ),
+        "recognizer_input_archive_claim_level": (
+            phase2b_trusted_wire_v1.NON_AUTHORITATIVE_CLAIM_LEVEL
+        ),
+        "strict_public_recognizer_registry_codec_mechanics_implemented": True,
+        "live_post_hmac_recognizer_registry_projection_mechanics_implemented": True,
+        "registry_envelope_exact_scope_bijection_replay_implemented": True,
+        "global_source_public_uuid_disjointness_gate_implemented": True,
+        (
+            "whole_batch_atomic_custodian_gated_recognizer_input_archive_"
+            "issuer_mechanics_implemented"
+        ): True,
+        "public_recognizer_input_archive_structural_decode_replay_implemented": True,
+        "recognizer_input_archive_success_is_false_claim_public_decode": True,
+        "durable_trusted_recognizer_input_archive_receipt_implemented": False,
+        "recognizer_input_archive_batch_policy_membership_verified": False,
+        "recognizer_input_archive_source_registry_projection_verified": False,
+        "recognizer_input_archive_secret_custodian_replay_verified": False,
+        "recognizer_input_archive_origin_authenticated": False,
+        "recognizer_input_archive_formal_covert_audit": False,
+        "recognizer_input_archive_sealed_holdout_eligible": False,
+        "recognizer_input_archive_recognizer_executed": False,
+        "recognizer_input_archive_prediction_archive_evaluated": False,
+        "recognizer_input_archive_c1_exit_evidence": False,
         "pairwise_distinct_key_source_contract_implemented": True,
         "key_source_statistical_independence_attested": False,
         "whole_batch_unbiased_fisher_yates_mechanics_implemented": True,
@@ -1382,6 +1421,10 @@ def phase2b_preregistration_report() -> dict[str, object]:
                 ("projection_compiler", phase2b_projection_compiler),
                 ("runner", phase2b_runner),
                 ("selector", phase2b_selector),
+                (
+                    "recognizer_input_archive_mechanics",
+                    phase2b_recognizer_input_archive_v1,
+                ),
                 (
                     "trusted_wire_keyed_batch_mechanics",
                     phase2b_trusted_wire_batch_v1,

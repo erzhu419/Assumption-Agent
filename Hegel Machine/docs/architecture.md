@@ -144,6 +144,7 @@ Both bounded profiles
   → keyed batch shuffle/ID/recanonicalization/native-provenance/secret-padding
                                                     [mechanics only]
   → strict typed authority codec + direct/whole-batch replay [mechanics only]
+  → post-rename public recognizer-input archive             [mechanics only]
   → recognizer CLI + prediction archive evaluator            [not implemented]
   → unique family+binding and admissible scale set, or abstain
   → PredictionBundle commitment                         [not implemented]
@@ -236,6 +237,26 @@ certificate、binary64 与 exact rational 做 lossless decode/re-encode。
 source-authority order、supplied-secret receipt 与每个 transform result。在 exact top-level
 API types 合法的前提下，batch/custodian/typed semantic drift 只返回整批 `ABSTAIN`、无
 partial roots；顶层 type-contract 违规在 replay 前抛 `TypeError`。
+
+`phase2b_recognizer_input_archive_v1.py` 接在 Stage C 之后，但还不是 recognizer。
+custodian-gated issuer 在同一次 Stage-B shuffle/HMAC allocation 的 live renamings 上只读编译
+每行 `PublicRecognizerRegistryV1`，不重跑或近似分配器，也不保留 allocation sidecar。六个
+bridge family 采用冻结公共 UUID alias，并分别绑定 F01..F06；source registry 必须 exact
+重建 frozen theory 的 6 laws/15 roles/35 observables/50,000 cap。每个 registry 必须与相邻
+envelope strict typed authority 的 entity/role/quantity task scope 精确相等，全批 source UUID
+与 public UUID 必须不相交，public rows 之间除固定 family vocabulary 外也不得复用 authority
+UUID。archive 不携带 old IDs、source indices、per-case source authority roots/authorities、
+renaming maps、permutation 或 keys；唯一例外是 metadata 中一个全局 opaque
+`source_registry_id` commitment，它不能推出 source-registry projection 或 trust。顶层 API
+type 违规在任何 archive root 前抛 `TypeError`；其余 source/custodian/semantic drift 原子
+`ABSTAIN`，不返回 partial archive。
+
+成功发行仍只返回 raw decoder 同型的 `DecodedRecognizerInputArchiveV1`：它可以重证 bounded
+framing、closed registry schema、registry/envelope bijection 与 direct payload exact-transform
+replay，但 batch membership、source-registry projection、secret replay、origin、formal covert
+audit、sealed eligibility、recognizer execution、prediction evaluation 与 C1 flags 全部为 false。
+metadata 中的 opaque commitments 不构成 durable trusted receipt；当前没有这种公开 receipt，
+也没有 recognizer 效果证据。
 
 这些 receipts 仍恒为 `NON_AUTHORITATIVE_MECHANICS_ONLY`。pairwise distinct 不证明 IKM
 独立性；raw-envelope diagnostic 不验证 batch membership 或 secret padding；supplied-secret

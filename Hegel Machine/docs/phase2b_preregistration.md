@@ -185,6 +185,32 @@ top-level API types, batch/custodian/typed semantic drift returns one batch `ABS
 with no partial roots; a top-level type-contract violation raises `TypeError` before
 replay.
 
+The post-Stage-C recognizer-input archive mechanics are not a recognizer.  A
+custodian-gated issuer compiles each `PublicRecognizerRegistryV1` read-only from
+the same live Stage-B shuffle/HMAC allocation that emits its adjacent envelope;
+it neither reruns an approximate allocator nor retains a private allocation
+sidecar.  The source registry must exactly rebuild the frozen six-law,
+15-role, 35-observable theory with the 50,000 candidate cap.  Fixed public
+bridge-family UUID aliases remain distinct from the F01--F06 canonical family
+identities.  Registry entity/role/quantity scope must exactly match the strict
+typed payload authority, all source UUIDs must be disjoint from all public UUIDs,
+and public rows may not reuse authority UUIDs.  The archive exposes no old IDs,
+source indices, per-case source-authority roots or authorities, renaming maps,
+permutations, or keys.  The sole exception is one global opaque
+`source_registry_id` commitment in metadata; it does not establish source
+projection or trust.  Exact top-level type misuse raises `TypeError` before any
+archive root; other source, custodian, or semantic drift returns one atomic
+`ABSTAIN` with no partial archive.
+
+Successful issuance still returns only `DecodedRecognizerInputArchiveV1`, the
+same false-secret-claim type produced by the public decoder.  It replays bounded
+framing, the closed registry schema, registry/envelope scope bijection, and direct
+payload exact-transform completion.  It does not verify batch membership, source
+projection, secret custody, origin, formal covert audit, sealed eligibility,
+recognizer execution, prediction evaluation, or C1 exit.  Opaque commitments are
+not a durable self-verifying trusted receipt; no such public receipt or recognizer
+effect evidence is implemented.
+
 Pairwise distinct IKM values do not attest independent generation. The raw-envelope
 diagnostic verifies typed payload identity and direct transform replay but not batch
 membership or secret padding; supplied-secret replay proves only that the supplied

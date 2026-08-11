@@ -222,7 +222,20 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
   `ABSTAIN` 且不泄露 partial rows；顶层 type-contract 违规在 replay 前抛 `TypeError`。
   raw-envelope 入口只是 `NON_AUTHORITATIVE_MECHANICS_ONLY` diagnostic，
   整批 receipt 也不升级其 evidence authority：IKM 独立性没有外部 attestation，raw decoder
-  不验证 batch membership 或 secret padding；origin authentication、完整 trusted RFC-8785
+  不验证 batch membership 或 secret padding。post-Stage-C 的
+  `phase2b_recognizer_input_archive_v1.py` 在同一次 Stage-B live allocation 中只读投影
+  recognizer registry：六个 bridge family 使用固定公共 UUID alias 并另绑 F01..F06，15 个
+  role 与 35 个 observable 的 opaque ID 直接来自本次 HMAC renaming；source registry 必须
+  exact 重建 frozen theory，registry/envelope 必须与 typed authority 的完整 task scope 一致，
+  且全批 source/public UUID 集合必须不相交。公开 archive 不含 old ID、old→new map、source
+  index、permutation、key 或 source authority；任一 gate drift 都原子 `ABSTAIN` 且无 partial
+  archive，顶层 type-contract 违规在 gate 前抛 `TypeError`。
+
+  这个 issuer 即使成功也只返回所有 batch/source/secret/origin/formal claims 为 false 的
+  `DecodedRecognizerInputArchiveV1`。它没有可持久化的 trusted receipt，opaque receipt/registry
+  commitment 不等于公开可重证的 custodian authority，也没有运行 recognizer 或评估 prediction
+  archive。因此它仍只是 `NON_AUTHORITATIVE_MECHANICS_ONLY`，不构成 recognizer 效果、sealed
+  holdout 或 C1 exit 证据。origin authentication、完整 trusted RFC-8785
   builder、formal namespace/covert audit 与 formal corpus 执行仍缺失；1024-authority
   worst-case wall-time/RSS 也尚未资格化。下一刀是 recognizer CLI + strict main/challenge
   prediction archive evaluator，再做 unsealed end-to-end replay；在完整
@@ -277,8 +290,8 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
   unsealed pipeline validation；当前已完成 wire、candidate enumeration、exact
   uncertainty/root-identity selector、typed transform kernels、derived witness bridge、
   non-authoritative fixed-envelope covert mechanics、Stage-A accepted-JCS/namespace/envelope
-  mechanics、Stage-B native-provenance keyed framing 与 Stage-C strict typed whole-batch replay，
-  以及 runner/state-machine 合同，但这些
+  mechanics、Stage-B native-provenance keyed framing、Stage-C strict typed whole-batch replay
+  与 post-rename public recognizer-input archive，以及 runner/state-machine 合同，但这些
   窄 mechanics 尚未组成 formal pipeline 或效果证据；
 - 720-case main + 240-case challenge 的 sealed generation、572 个 derived pairs、独立
   custodian、真实 OCI attestation、三套外部 baseline pins 或 consumed score report；

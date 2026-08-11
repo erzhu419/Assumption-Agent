@@ -81,6 +81,22 @@ transform result。在 exact top-level API types 合法的前提下，batch/cust
 drift 只返回整批 `ABSTAIN` 且不返回 partial roots；顶层 type-contract 违规在 replay 前抛
 `TypeError`。
 
+post-Stage-C recognizer-input archive mechanics 只是在同一次 live Stage-B HMAC allocation
+中生成安全 public registry projection，并把它与相邻 envelope 一一绑定。source registry
+必须 exact 对应 frozen theory 的 6 laws/15 roles/35 observables；固定 bridge UUID aliases 与
+F01..F06 分开记录；registry task scope 必须与 decoded typed authority 精确相等；全批
+source/public UUID 集合必须不相交。公开 archive 不包含 old ID、map、source index、
+per-case source authority root/authority、permutation 或 key；唯一例外是 metadata 中的全局
+opaque `source_registry_id` commitment，它不能推出 source projection 或 trust。exact
+top-level type 违规在任何 root 前抛 `TypeError`，其余 projection/custodian/semantic drift
+只产生无 partial 的原子 `ABSTAIN`。
+
+必须特别限制其证据解释：成功 issuer 返回的是 `DecodedRecognizerInputArchiveV1`，与 public
+raw decoder 相同；batch membership、source projection、secret custodian replay、origin、
+formal covert audit、sealed eligibility、recognizer execution、prediction evaluation 和 C1
+claim 均恒为 false。opaque commitments 不是可公开自验的 durable trusted receipt；当前没有
+这种 receipt，也没有 recognizer 执行或效果证据。
+
 这些不是 trust/effect evidence：pairwise distinct 不证明独立 custodian key generation，public
 raw-envelope diagnostic 不验证 batch membership 或 secret padding，supplied-secret replay 只说明
 给定 authorities/run/IKM 可重建同一 bytes。所有 typed replay receipts 仍明确是
