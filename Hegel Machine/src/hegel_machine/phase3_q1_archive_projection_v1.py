@@ -1,19 +1,23 @@
-"""Bounded local Q1 archive-wire materializer for Q0.5a golden qualification.
+"""Bounded local Q1 archive-wire projection for Q0.5 qualification.
 
-This prototype intentionally retains framed bytes so tests can tamper and replay
-every preimage.  It is not the future full-node6 streaming counting/discard
-endpoint and cannot populate a formal Q1 output slot.
+The materialized path intentionally retains framed bytes so tests can tamper and
+replay every preimage.  A separate bounded-node3 counting/discard path replays
+the same frozen wire without retaining framed blobs and can be compared against
+the materializer.  Neither path is the future admitted full-node6 endpoint and
+neither can populate a formal Q1 output slot.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from fractions import Fraction
+from hashlib import sha256
 from typing import Callable, Final, Iterable, NoReturn, Sequence, TypeVar
 
 from . import phase3_q0_input_adapter_v1 as _adapter
 from .phase3_q0_evaluator_v1 import evaluate_canonical_ast_on_environments_v1
 from .phase3_q1_formal_archive_contract_v1 import (
+    ARCHIVE_CHUNK_MANIFEST_SCHEMA_ID,
     ArchiveStreamKindId,
     BEHAVIOR_ID_DOMAIN,
     BEHAVIOR_BLOB_SCHEMA_ID,
@@ -24,6 +28,8 @@ from .phase3_q1_formal_archive_contract_v1 import (
     CONSTRUCTION_SIGNATURE_SCHEMA_ID,
     CONTINUATION_COHORT_SCHEMA_ID,
     COVERAGE_RECORD_ID_DOMAIN,
+    FRAMED_BLOB_HASH_DOMAIN,
+    FRAME_LENGTH_BYTES,
     MAX_CHUNK_FRAMED_BYTES,
     MAX_RECORDS_PER_CHUNK,
     PROGRAM_ID_DOMAIN,
@@ -32,6 +38,7 @@ from .phase3_q1_formal_archive_contract_v1 import (
     REPRESENTATIVE_PROGRAM_SCHEMA_ID,
     SEMANTIC_COVERAGE_SCHEMA_ID,
     Q1_BEHAVIOR_BLOB_TAG,
+    Q1_ARCHIVE_CHUNK_MANIFEST_TAG,
     Q1_CONSTRUCTION_SIGNATURE_TAG,
     Q1_CONTINUATION_COHORT_TAG,
     Q1_QUOTIENT_CLASS_TAG,
@@ -46,6 +53,7 @@ from .phase3_q1_formal_archive_contract_v1 import (
     Q1RepresentativeProgramRecordV1,
     Q1SemanticCoverageRecordV1,
     Q1StreamDescriptorV1,
+    STREAM_DESCRIPTOR_SCHEMA_ID,
     archive_root_v1,
     canonical_archive_order_v1,
     construction_signature_object_v1,
@@ -54,6 +62,7 @@ from .phase3_q1_formal_archive_contract_v1 import (
     replay_framed_records_v1,
 )
 from .phase3_q1_external_sort_profile_v1 import (
+    EXTERNAL_SORT_PROJECTION_SCHEMA_ID,
     Q1ExternalSortProjectionV1,
     project_external_sort_v1,
 )
@@ -73,6 +82,9 @@ from .strict_cbor_v1 import canonical_cbor_encode, content_hash, rfc6962_root
 
 
 PROJECTED_STREAM_SCHEMA_ID: Final = b"hegel-q1-projected-record-stream/1"
+COUNTING_DISCARD_STREAM_SCHEMA_ID: Final = (
+    b"hegel-q05b-counting-discard-record-stream/1"
+)
 SNAPSHOT_RECORD_SET_SCHEMA_ID: Final = b"hegel-q1-snapshot-record-set/1"
 PROJECTED_STREAM_ROOT_DOMAIN: Final = "HEGEL/Q1/PREFLIGHT/PROJECTED_STREAM/V1"
 SNAPSHOT_RECORD_SET_ROOT_DOMAIN: Final = (
@@ -803,6 +815,138 @@ class Q1ProjectedStreamV1:
 
 
 @dataclass(frozen=True, slots=True)
+class Q1CountingDiscardStreamV1:
+    """Qualification-only stream projection that retains no framed blobs.
+
+    This object commits the counters and metadata produced by the independent
+    bounded-node3 counting sink.  Its comparison with ``Q1ProjectedStreamV1``
+    is deliberately explicit; construction of either object alone is not
+    evidence that the two encoder sinks agree.
+    """
+
+    input_signature_id: int
+    universe_root: bytes
+    stream_kind_id: ArchiveStreamKindId
+    canonical_record_payload_bytes: int
+    descriptor: Q1StreamDescriptorV1
+    chunk_manifests: tuple[Q1ArchiveChunkManifestV1, ...]
+    external_sort_projection: Q1ExternalSortProjectionV1
+    diagnostic_commitment: bytes
+
+    def __post_init__(self) -> None:
+        if type(self.input_signature_id) is not int or self.input_signature_id not in (
+            1,
+            2,
+        ):
+            _fail("REJECT_Q1_COUNTING_DISCARD", "input signature differs")
+        expected_universe_root = production_universe_v1(
+            self.input_signature_id
+        ).universe_root
+        if type(self.universe_root) is not bytes or self.universe_root != expected_universe_root:
+            _fail("REJECT_Q1_COUNTING_DISCARD", "universe binding differs")
+        if not isinstance(self.stream_kind_id, ArchiveStreamKindId):
+            _fail("REJECT_Q1_COUNTING_DISCARD", "stream kind differs")
+        if (
+            type(self.canonical_record_payload_bytes) is not int
+            or self.canonical_record_payload_bytes < 1
+        ):
+            _fail(
+                "REJECT_Q1_COUNTING_DISCARD",
+                "canonical record payload byte count differs",
+            )
+        if type(self.descriptor) is not Q1StreamDescriptorV1:
+            _fail("REJECT_Q1_COUNTING_DISCARD", "descriptor type differs")
+        self.descriptor.canonical_object()
+        if type(self.chunk_manifests) is not tuple or not self.chunk_manifests:
+            _fail("REJECT_Q1_COUNTING_DISCARD", "chunk manifests differ")
+        if any(
+            type(manifest) is not Q1ArchiveChunkManifestV1
+            for manifest in self.chunk_manifests
+        ):
+            _fail("REJECT_Q1_COUNTING_DISCARD", "chunk manifest type differs")
+        if type(self.external_sort_projection) is not Q1ExternalSortProjectionV1:
+            _fail("REJECT_Q1_COUNTING_DISCARD", "external sort type differs")
+        self.external_sort_projection.canonical_object()
+        if type(self.diagnostic_commitment) is not bytes or len(
+            self.diagnostic_commitment
+        ) != 32:
+            _fail("REJECT_Q1_COUNTING_DISCARD", "diagnostic commitment differs")
+
+        if self.descriptor.stream_kind_id is not self.stream_kind_id:
+            _fail("REJECT_Q1_COUNTING_DISCARD", "descriptor kind differs")
+        if (
+            self.external_sort_projection.input_signature_id
+            != self.input_signature_id
+            or self.external_sort_projection.stream_kind_id is not self.stream_kind_id
+            or self.external_sort_projection.record_count
+            != self.descriptor.record_count
+        ):
+            _fail("REJECT_Q1_COUNTING_DISCARD", "external sort binding differs")
+        next_record_index = 0
+        for chunk_index, manifest in enumerate(self.chunk_manifests):
+            if (
+                manifest.input_signature_id != self.input_signature_id
+                or manifest.universe_root != self.universe_root
+                or manifest.stream_kind_id is not self.stream_kind_id
+                or manifest.chunk_index != chunk_index
+                or manifest.first_record_index != next_record_index
+            ):
+                _fail("REJECT_Q1_COUNTING_DISCARD", "chunk binding/order differs")
+            next_record_index += manifest.record_count
+        manifest_objects = tuple(
+            manifest.canonical_object() for manifest in self.chunk_manifests
+        )
+        if (
+            next_record_index != self.descriptor.record_count
+            or self.descriptor.framed_stream_bytes
+            != sum(manifest.framed_blob_length for manifest in self.chunk_manifests)
+            or self.descriptor.chunk_count != len(self.chunk_manifests)
+            or self.descriptor.chunk_manifest_subtree_root
+            != rfc6962_root(manifest_objects)
+        ):
+            _fail("REJECT_Q1_COUNTING_DISCARD", "descriptor counter replay differs")
+        expected_commitment = content_hash(
+            PROJECTED_STREAM_ROOT_DOMAIN,
+            (
+                1,
+                PROJECTED_STREAM_SCHEMA_ID,
+                self.input_signature_id,
+                self.universe_root,
+                int(self.stream_kind_id),
+                self.descriptor.canonical_object(),
+                manifest_objects,
+                self.external_sort_projection.canonical_object(),
+            ),
+        )
+        if self.diagnostic_commitment != expected_commitment:
+            _fail(
+                "REJECT_Q1_COUNTING_DISCARD",
+                "projected-stream commitment replay differs",
+            )
+
+    def canonical_object(self) -> tuple[object, ...]:
+        return (
+            1,
+            COUNTING_DISCARD_STREAM_SCHEMA_ID,
+            self.input_signature_id,
+            self.universe_root,
+            int(self.stream_kind_id),
+            self.descriptor.record_count,
+            self.canonical_record_payload_bytes,
+            self.descriptor.framed_stream_bytes,
+            self.descriptor.chunk_count,
+            self.descriptor.canonical_object(),
+            tuple(
+                manifest.canonical_object() for manifest in self.chunk_manifests
+            ),
+            self.external_sort_projection.canonical_object(),
+            self.diagnostic_commitment,
+            0,  # retained framed blob count
+            0,  # retained framed blob bytes
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class Q1SnapshotRecordSetV1:
     input_signature_id: int
     universe_root: bytes
@@ -1149,6 +1293,203 @@ def chunk_canonical_records_v1(
     return Q1ChunkProjectionV1(tuple(manifests), tuple(blobs))
 
 
+def _canonical_cbor_bstr_header_v1(length: int) -> bytes:
+    if type(length) is not int or length < 0 or length > 0xFFFFFFFF:
+        _fail("REJECT_Q1_COUNTING_DISCARD", "byte-string length is outside u32")
+    if length <= 23:
+        return bytes((0x40 + length,))
+    if length <= 0xFF:
+        return b"\x58" + length.to_bytes(1, "big")
+    if length <= 0xFFFF:
+        return b"\x59" + length.to_bytes(2, "big")
+    return b"\x5a" + length.to_bytes(4, "big")
+
+
+def _counting_framed_blob_hash_v1(
+    objects: tuple[tuple[object, ...], ...],
+) -> tuple[bytes, int]:
+    """Hash one chunk as ``framed_blob_hash_v1`` without joining its frames."""
+
+    encoded_lengths = tuple(len(canonical_cbor_encode(item)) for item in objects)
+    framed_length = sum(FRAME_LENGTH_BYTES + length for length in encoded_lengths)
+    digest = sha256()
+    digest.update(FRAMED_BLOB_HASH_DOMAIN.encode("utf-8"))
+    digest.update(b"\x00")
+    digest.update(b"\x81")  # canonical one-item array containing the blob
+    digest.update(_canonical_cbor_bstr_header_v1(framed_length))
+    for item, encoded_length in zip(objects, encoded_lengths, strict=True):
+        payload = canonical_cbor_encode(item)
+        if len(payload) != encoded_length:
+            raise AssertionError("canonical Q1 record encoding changed within one pass")
+        digest.update(encoded_length.to_bytes(FRAME_LENGTH_BYTES, "big"))
+        digest.update(payload)
+    return digest.digest(), framed_length
+
+
+def counting_discard_record_stream_v1(
+    records: Iterable[object],
+    *,
+    input_signature_id: int,
+    universe_root: bytes,
+    stream_kind_id: ArchiveStreamKindId,
+) -> Q1CountingDiscardStreamV1:
+    """Run the independent bounded-node3 counting sink.
+
+    The sink re-encodes records while hashing each chunk incrementally.  It
+    returns manifests and counters, but never constructs or retains a framed
+    archive blob.  Formal Q1 authority remains outside this diagnostic API.
+    """
+
+    if type(input_signature_id) is not int or input_signature_id not in (1, 2):
+        _fail("REJECT_Q1_COUNTING_DISCARD", "input signature differs")
+    if (
+        type(universe_root) is not bytes
+        or universe_root != production_universe_v1(input_signature_id).universe_root
+    ):
+        _fail("REJECT_Q1_COUNTING_DISCARD", "universe binding differs")
+    material = canonical_archive_order_v1(records, stream_kind_id=stream_kind_id)
+    if not material:
+        _fail("REJECT_Q1_COUNTING_DISCARD", "record stream must be nonempty")
+    if any(
+        record.input_signature_id != input_signature_id  # type: ignore[attr-defined]
+        or record.universe_root != universe_root  # type: ignore[attr-defined]
+        for record in material
+    ):
+        _fail("REJECT_Q1_COUNTING_DISCARD", "record/stream binding differs")
+    objects = tuple(record.canonical_object() for record in material)  # type: ignore[attr-defined]
+    ids = tuple(
+        _canonical_record_identity_and_sort_key_v1(obj, stream_kind_id)[0]
+        for obj in objects
+    )
+    record_id_preimages: dict[bytes, bytes] = {}
+    for record, record_id in zip(objects, ids, strict=True):
+        _register_unique_digest_preimage_v1(
+            record_id_preimages,
+            digest=record_id,
+            preimage=canonical_cbor_encode(record),
+            duplicate_code="REJECT_Q1_COUNTING_DISCARD",
+            label="formal record ID",
+        )
+
+    encoded_lengths = tuple(len(canonical_cbor_encode(item)) for item in objects)
+    frame_lengths = tuple(FRAME_LENGTH_BYTES + length for length in encoded_lengths)
+    if any(length > MAX_CHUNK_FRAMED_BYTES for length in frame_lengths):
+        _fail("INCONCLUSIVE_RESOURCE_LIMIT", "OUTPUT_BYTES: one record exceeds chunk")
+    ranges: list[tuple[int, int]] = []
+    start = 0
+    while start < len(objects):
+        end = start
+        payload_bytes = 0
+        while end < len(objects):
+            next_size = frame_lengths[end]
+            if end > start and (
+                end - start + 1 > MAX_RECORDS_PER_CHUNK
+                or payload_bytes + next_size > MAX_CHUNK_FRAMED_BYTES
+            ):
+                break
+            payload_bytes += next_size
+            end += 1
+            if end - start == MAX_RECORDS_PER_CHUNK:
+                break
+        ranges.append((start, end))
+        start = end
+
+    manifests: list[Q1ArchiveChunkManifestV1] = []
+    for chunk_index, (start, end) in enumerate(ranges):
+        subset = objects[start:end]
+        framed_blob_hash, framed_blob_length = _counting_framed_blob_hash_v1(subset)
+        manifests.append(
+            Q1ArchiveChunkManifestV1(
+                input_signature_id,
+                universe_root,
+                stream_kind_id,
+                chunk_index,
+                start,
+                end - start,
+                ids[start],
+                ids[end - 1],
+                rfc6962_root(subset),
+                framed_blob_hash,
+                framed_blob_length,
+            )
+        )
+    manifest_objects = tuple(item.canonical_object() for item in manifests)
+    descriptor = Q1StreamDescriptorV1(
+        stream_kind_id,
+        len(objects),
+        archive_root_v1(objects),
+        sum(item.framed_blob_length for item in manifests),
+        len(manifests),
+        rfc6962_root(manifest_objects),
+    )
+    sort_rows = tuple(
+        (_stream_sort_key(record, stream_kind_id), canonical_cbor_encode(obj))
+        for record, obj in zip(material, objects, strict=True)
+    )
+    sort_projection = project_external_sort_v1(
+        sort_rows,
+        input_signature_id=input_signature_id,
+        stream_kind_id=stream_kind_id,
+    )
+    commitment = content_hash(
+        PROJECTED_STREAM_ROOT_DOMAIN,
+        (
+            1,
+            PROJECTED_STREAM_SCHEMA_ID,
+            input_signature_id,
+            universe_root,
+            int(stream_kind_id),
+            descriptor.canonical_object(),
+            manifest_objects,
+            sort_projection.canonical_object(),
+        ),
+    )
+    return Q1CountingDiscardStreamV1(
+        input_signature_id,
+        universe_root,
+        stream_kind_id,
+        sum(encoded_lengths),
+        descriptor,
+        tuple(manifests),
+        sort_projection,
+        commitment,
+    )
+
+
+def validate_counting_discard_matches_materialized_v1(
+    counting: Q1CountingDiscardStreamV1,
+    materialized: Q1ProjectedStreamV1,
+) -> None:
+    if type(counting) is not Q1CountingDiscardStreamV1:
+        _fail("REJECT_Q1_DUAL_ENCODER", "counting projection type differs")
+    if type(materialized) is not Q1ProjectedStreamV1:
+        _fail("REJECT_Q1_DUAL_ENCODER", "materialized projection type differs")
+    counting.canonical_object()
+    materialized_object = materialized.canonical_diagnostic_object()
+    records = tuple(
+        record
+        for blob in materialized.chunks.framed_blobs
+        for record in replay_framed_records_v1(blob)
+    )
+    if (
+        counting.input_signature_id != materialized.input_signature_id
+        or counting.universe_root != materialized.universe_root
+        or counting.stream_kind_id is not materialized.stream_kind_id
+        or counting.descriptor.canonical_object() != materialized_object[5]
+        or tuple(item.canonical_object() for item in counting.chunk_manifests)
+        != materialized_object[6]
+        or counting.external_sort_projection.canonical_object()
+        != materialized_object[7]
+        or counting.diagnostic_commitment != materialized_object[8]
+        or counting.canonical_record_payload_bytes
+        != sum(len(canonical_cbor_encode(record)) for record in records)
+    ):
+        _fail(
+            "REJECT_Q1_DUAL_ENCODER",
+            "counting/discard and materialized encoder projections differ",
+        )
+
+
 def project_record_stream_v1(
     records: Iterable[object],
     *,
@@ -1394,12 +1735,16 @@ def records_from_partition_snapshot_v1(
 
 
 __all__ = [
+    "COUNTING_DISCARD_STREAM_SCHEMA_ID",
     "PROJECTED_STREAM_SCHEMA_ID",
     "Q1ArchiveProjectionError",
     "Q1ChunkProjectionV1",
+    "Q1CountingDiscardStreamV1",
     "Q1ProjectedStreamV1",
     "Q1SnapshotRecordSetV1",
     "chunk_canonical_records_v1",
+    "counting_discard_record_stream_v1",
     "project_record_stream_v1",
     "records_from_partition_snapshot_v1",
+    "validate_counting_discard_matches_materialized_v1",
 ]

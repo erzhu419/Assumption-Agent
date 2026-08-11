@@ -21,6 +21,7 @@ from .strict_cbor_v1 import content_hash, rfc6962_root
 EXTERNAL_SORT_PROJECTION_SCHEMA_ID: Final = (
     b"hegel-q1-external-sort-projection/1"
 )
+EXTERNAL_SORT_TRACE_SCHEMA_ID: Final = b"hegel-q1-external-sort-trace/1"
 SCRATCH_EVENT_SCHEMA_ID: Final = b"hegel-q1-scratch-event/1"
 RUN_MANIFEST_SCHEMA_ID: Final = b"hegel-q1-external-sort-run/1"
 SORTED_STREAM_ROOT_DOMAIN: Final = "HEGEL/Q1/PREFLIGHT/SORTED_STREAM/V1"
@@ -376,6 +377,249 @@ class Q1ExternalSortProjectionV1:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class Q1ExternalSortTraceV1:
+    """Immutable locally materialized preimages for actor/host replay."""
+
+    projection: Q1ExternalSortProjectionV1
+    ordered_rows: tuple[tuple[bytes, bytes], ...]
+    run_manifests: tuple[tuple[object, ...], ...]
+    scratch_events: tuple[ScratchEventV1, ...]
+
+    def __post_init__(self) -> None:
+        if type(self.projection) is not Q1ExternalSortProjectionV1:
+            _fail("REJECT_Q1_SORT_TRACE", "projection has wrong exact type")
+        self.projection.canonical_object()
+        if type(self.ordered_rows) is not tuple or any(
+            type(row) is not tuple or len(row) != 2
+            for row in self.ordered_rows
+        ):
+            _fail("REJECT_Q1_SORT_TRACE", "ordered rows are malformed")
+        for row in self.ordered_rows:
+            external_sort_row_bytes_v1(row[0], row[1])
+        if self.ordered_rows != tuple(
+            sorted(self.ordered_rows, key=lambda row: (row[0], row[1]))
+        ) or len({row[0] for row in self.ordered_rows}) != len(self.ordered_rows):
+            _fail("REJECT_Q1_SORT_TRACE", "ordered rows are not canonical")
+        projection = self.projection
+        if (
+            projection.record_count != len(self.ordered_rows)
+            or projection.input_payload_bytes
+            != sum(len(external_sort_row_bytes_v1(*row)) for row in self.ordered_rows)
+            or projection.sorted_stream_root
+            != content_hash(SORTED_STREAM_ROOT_DOMAIN, self.ordered_rows)
+        ):
+            _fail("REJECT_Q1_SORT_TRACE", "ordered-row projection replay differs")
+
+        # Reconstruct every run and scratch event from the ordered input.  The
+        # trace is used across an actor boundary, so merely checking that the
+        # supplied manifest/event roots hash back to the projection would be
+        # insufficient: arbitrary but self-consistent preimages must not pass.
+        expected_initial: list[_Run] = []
+        pending: list[tuple[bytes, bytes]] = []
+        pending_bytes = 0
+        for row in self.ordered_rows:
+            encoded_length = len(external_sort_row_bytes_v1(*row))
+            if encoded_length > EXTERNAL_SORT_RUN_PAYLOAD_LIMIT_BYTES:
+                _fail("REJECT_Q1_SORT_TRACE", "one row exceeds frozen run limit")
+            if (
+                pending
+                and pending_bytes + encoded_length
+                > EXTERNAL_SORT_RUN_PAYLOAD_LIMIT_BYTES
+            ):
+                expected_initial.append(
+                    _Run(0, len(expected_initial), tuple(pending))
+                )
+                pending = []
+                pending_bytes = 0
+            pending.append(row)
+            pending_bytes += encoded_length
+        if pending:
+            expected_initial.append(_Run(0, len(expected_initial), tuple(pending)))
+
+        expected_ledger = _ScratchLedger()
+        expected_manifests: list[tuple[object, ...]] = []
+
+        def append_expected_run(run: _Run) -> None:
+            expected_ledger.allocate(run.file_id)
+            expected_ledger.grow(run.file_id, run.size)
+            expected_ledger.seal(run.file_id)
+            expected_manifests.append(
+                run.manifest_object(
+                    projection.input_signature_id,
+                    projection.stream_kind_id,
+                )
+            )
+
+        for run in expected_initial:
+            append_expected_run(run)
+        expected_current = tuple(expected_initial)
+        expected_level = 0
+        while len(expected_current) > 1:
+            expected_level += 1
+            expected_output: list[_Run] = []
+            for start in range(0, len(expected_current), EXTERNAL_SORT_MERGE_FAN_IN):
+                group = expected_current[
+                    start : start + EXTERNAL_SORT_MERGE_FAN_IN
+                ]
+                merged_rows = tuple(
+                    sorted(
+                        (row for child in group for row in child.rows),
+                        key=lambda row: (row[0], row[1]),
+                    )
+                )
+                merged = _Run(expected_level, len(expected_output), merged_rows)
+                append_expected_run(merged)
+                for child in group:
+                    expected_ledger.free(child.file_id)
+                expected_output.append(merged)
+            expected_current = tuple(expected_output)
+        if expected_current:
+            expected_ledger.free(expected_current[0].file_id)
+        if expected_ledger.live:
+            raise AssertionError("Q1 reconstructed scratch ledger did not close")
+        if self.run_manifests != tuple(expected_manifests):
+            _fail("REJECT_Q1_SORT_TRACE", "run manifests differ from exact replay")
+        if self.scratch_events != tuple(expected_ledger.events):
+            _fail("REJECT_Q1_SORT_TRACE", "scratch events differ from exact replay")
+
+        if type(self.run_manifests) is not tuple:
+            _fail("REJECT_Q1_SORT_TRACE", "run manifests must be exact tuple")
+        shape = external_sort_merge_shape_v1(projection.initial_run_count)
+        expected_run_coordinates = tuple(
+            (level, index)
+            for level, count in enumerate(shape)
+            for index in range(count)
+        )
+        manifest_coordinates: list[tuple[int, int]] = []
+        manifest_sizes: dict[bytes, int] = {}
+        for manifest in self.run_manifests:
+            if (
+                type(manifest) is not tuple
+                or len(manifest) != 9
+                or manifest[:2] != (1, RUN_MANIFEST_SCHEMA_ID)
+                or type(manifest[2]) is not int
+                or manifest[2] != projection.input_signature_id
+                or type(manifest[3]) is not int
+                or manifest[3] != int(projection.stream_kind_id)
+                or any(type(manifest[index]) is not int for index in range(4, 8))
+                or any(manifest[index] < 0 for index in range(4, 8))
+                or type(manifest[8]) is not bytes
+                or len(manifest[8]) != 32
+            ):
+                _fail("REJECT_Q1_SORT_TRACE", "run manifest wire differs")
+            level = manifest[4]
+            index = manifest[5]
+            record_count = manifest[6]
+            payload_bytes = manifest[7]
+            file_id = f"level-{level:04d}-run-{index:08d}".encode("ascii")
+            if file_id in manifest_sizes:
+                _fail("REJECT_Q1_SORT_TRACE", "run manifest file repeats")
+            manifest_coordinates.append((level, index))
+            manifest_sizes[file_id] = EXTERNAL_SORT_RUN_HEADER_BYTES + payload_bytes
+            if record_count < 1 or payload_bytes < record_count * 10:
+                _fail("REJECT_Q1_SORT_TRACE", "run manifest cardinality differs")
+        if tuple(manifest_coordinates) != expected_run_coordinates:
+            _fail("REJECT_Q1_SORT_TRACE", "run manifest merge shape differs")
+        for level, count in enumerate(shape):
+            if count and sum(
+                manifest[6]
+                for manifest in self.run_manifests
+                if manifest[4] == level
+            ) != len(self.ordered_rows):
+                _fail("REJECT_Q1_SORT_TRACE", "run level record total differs")
+        if (
+            projection.run_manifest_archive_root
+            != rfc6962_root(self.run_manifests)
+            or projection.initial_run_count != (shape[0] if shape != (0,) else 0)
+            or projection.merge_level_count != (len(shape) - 1)
+        ):
+            _fail("REJECT_Q1_SORT_TRACE", "run manifest projection replay differs")
+        expected_final_bytes = (
+            manifest_sizes[
+                f"level-{len(shape) - 1:04d}-run-{0:08d}".encode("ascii")
+            ]
+            if self.ordered_rows
+            else 0
+        )
+        if projection.final_run_bytes != expected_final_bytes:
+            _fail("REJECT_Q1_SORT_TRACE", "final run byte count differs")
+
+        if type(self.scratch_events) is not tuple or any(
+            type(event) is not ScratchEventV1 for event in self.scratch_events
+        ):
+            _fail("REJECT_Q1_SORT_TRACE", "scratch events are malformed")
+        live: dict[bytes, int] = {}
+        action_counts: dict[tuple[bytes, int], int] = {}
+        logical_high_water = 0
+        charged_high_water = 0
+        for sequence, event in enumerate(self.scratch_events):
+            event.canonical_object()
+            if event.sequence != sequence:
+                _fail("REJECT_Q1_SORT_TRACE", "scratch event sequence differs")
+            prior = live.get(event.file_id)
+            if event.action_id == ScratchActionId.ALLOC:
+                if prior is not None or event.prior_size != 0 or event.new_size != EXTERNAL_SORT_RUN_HEADER_BYTES:
+                    _fail("REJECT_Q1_SORT_TRACE", "scratch allocation differs")
+                live[event.file_id] = event.new_size
+            elif event.action_id == ScratchActionId.GROW:
+                if prior is None or event.prior_size != prior or event.new_size != manifest_sizes.get(event.file_id):
+                    _fail("REJECT_Q1_SORT_TRACE", "scratch growth differs")
+                live[event.file_id] = event.new_size
+            elif event.action_id == ScratchActionId.SEAL:
+                if prior is None or event.prior_size != prior or event.new_size != prior:
+                    _fail("REJECT_Q1_SORT_TRACE", "scratch seal differs")
+            elif event.action_id == ScratchActionId.FREE:
+                if prior is None or event.prior_size != prior or event.new_size != 0:
+                    _fail("REJECT_Q1_SORT_TRACE", "scratch free differs")
+                del live[event.file_id]
+            else:
+                _fail("REJECT_Q1_SORT_TRACE", "scratch action is unregistered")
+            logical = sum(live.values())
+            charged = sum(_charged_file_bytes(size) for size in live.values())
+            if (
+                event.live_logical_bytes_after != logical
+                or event.live_charged_bytes_after != charged
+            ):
+                _fail("REJECT_Q1_SORT_TRACE", "scratch high-water preimage differs")
+            logical_high_water = max(logical_high_water, logical)
+            charged_high_water = max(charged_high_water, charged)
+            key = (event.file_id, event.action_id)
+            action_counts[key] = action_counts.get(key, 0) + 1
+        if live:
+            _fail("REJECT_Q1_SORT_TRACE", "scratch trace leaves live files")
+        if any(
+            action_counts.get((file_id, action), 0) != 1
+            for file_id in manifest_sizes
+            for action in (
+                ScratchActionId.ALLOC,
+                ScratchActionId.GROW,
+                ScratchActionId.SEAL,
+                ScratchActionId.FREE,
+            )
+        ) or len(action_counts) != 4 * len(manifest_sizes):
+            _fail("REJECT_Q1_SORT_TRACE", "scratch lifecycle is incomplete")
+        event_objects = tuple(event.canonical_object() for event in self.scratch_events)
+        if (
+            projection.scratch_event_count != len(self.scratch_events)
+            or projection.scratch_event_ledger_root
+            != content_hash(SCRATCH_LEDGER_ROOT_DOMAIN, event_objects)
+            or projection.logical_scratch_high_water_bytes != logical_high_water
+            or projection.charged_scratch_high_water_bytes != charged_high_water
+        ):
+            _fail("REJECT_Q1_SORT_TRACE", "scratch projection replay differs")
+
+    def canonical_object(self) -> tuple[object, ...]:
+        return (
+            1,
+            EXTERNAL_SORT_TRACE_SCHEMA_ID,
+            self.projection.canonical_object(),
+            self.ordered_rows,
+            self.run_manifests,
+            tuple(event.canonical_object() for event in self.scratch_events),
+        )
+
+
 class _ScratchLedger:
     def __init__(self) -> None:
         self.live: dict[bytes, int] = {}
@@ -426,12 +670,12 @@ class _ScratchLedger:
         self._append(ScratchActionId.FREE, file_id, prior, 0)
 
 
-def project_external_sort_v1(
+def _project_external_sort_trace_v1(
     rows: Iterable[tuple[bytes, bytes]],
     *,
     input_signature_id: int,
     stream_kind_id: ArchiveStreamKindId,
-) -> Q1ExternalSortProjectionV1:
+) -> Q1ExternalSortTraceV1:
     if type(input_signature_id) is not int or input_signature_id not in (1, 2):
         _fail("REJECT_Q1_SORT_INPUT", "input signature must be exact int 1 or 2")
     if not isinstance(stream_kind_id, ArchiveStreamKindId):
@@ -538,18 +782,54 @@ def project_external_sort_v1(
     )
     if ledger.live:
         raise AssertionError("Q1 scratch ledger did not release all run files")
-    return projection
+    return Q1ExternalSortTraceV1(
+        projection,
+        ordered,
+        tuple(manifests),
+        tuple(ledger.events),
+    )
+
+
+def project_external_sort_trace_v1(
+    rows: Iterable[tuple[bytes, bytes]],
+    *,
+    input_signature_id: int,
+    stream_kind_id: ArchiveStreamKindId,
+) -> Q1ExternalSortTraceV1:
+    """Project one stream and expose immutable preimages for host replay."""
+
+    return _project_external_sort_trace_v1(
+        rows,
+        input_signature_id=input_signature_id,
+        stream_kind_id=stream_kind_id,
+    )
+
+
+def project_external_sort_v1(
+    rows: Iterable[tuple[bytes, bytes]],
+    *,
+    input_signature_id: int,
+    stream_kind_id: ArchiveStreamKindId,
+) -> Q1ExternalSortProjectionV1:
+    return project_external_sort_trace_v1(
+        rows,
+        input_signature_id=input_signature_id,
+        stream_kind_id=stream_kind_id,
+    ).projection
 
 
 __all__ = [
     "EXTERNAL_SORT_PROJECTION_SCHEMA_ID",
+    "EXTERNAL_SORT_TRACE_SCHEMA_ID",
     "Q1ExternalSortError",
     "Q1ExternalSortProjectionV1",
+    "Q1ExternalSortTraceV1",
     "ScratchActionId",
     "ScratchEventV1",
     "external_sort_row_bytes_v1",
     "external_sort_merge_shape_v1",
     "project_external_sort_v1",
+    "project_external_sort_trace_v1",
     "replay_run_file_v1",
     "run_header_v1",
 ]

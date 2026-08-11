@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import importlib
 from pathlib import Path
 import random
@@ -139,13 +140,48 @@ def test_projection_rejects_duplicate_key_and_bool_signature_alias() -> None:
 def test_projection_replays_every_created_run_before_free(monkeypatch) -> None:
     monkeypatch.setattr(profile, "EXTERNAL_SORT_RUN_PAYLOAD_LIMIT_BYTES", 32)
     rows = tuple((bytes((index,)), b"r" * 8) for index in range(20))
-    projection = profile.project_external_sort_v1(
+    trace = profile.project_external_sort_trace_v1(
         rows,
         input_signature_id=1,
         stream_kind_id=contract.ArchiveStreamKindId.PROGRAM,
     )
+    projection = trace.projection
     assert projection.initial_run_count > 1
     assert projection.merge_level_count > 0
     assert projection.scratch_event_count == 4 * sum(
         profile.external_sort_merge_shape_v1(projection.initial_run_count)
     )
+    assert len(trace.run_manifests) == sum(
+        profile.external_sort_merge_shape_v1(projection.initial_run_count)
+    )
+    assert len(trace.scratch_events) == projection.scratch_event_count
+    assert profile.project_external_sort_v1(
+        rows,
+        input_signature_id=1,
+        stream_kind_id=contract.ArchiveStreamKindId.PROGRAM,
+    ) == projection
+
+    first_manifest = trace.run_manifests[0]
+    tampered_manifest = first_manifest[:-1] + (b"\x00" * 32,)
+    with pytest.raises(profile.Q1ExternalSortError) as caught:
+        replace(
+            trace,
+            run_manifests=(tampered_manifest,) + trace.run_manifests[1:],
+        )
+    assert caught.value.code == "REJECT_Q1_SORT_TRACE"
+
+    first_event = trace.scratch_events[0]
+    with pytest.raises(profile.Q1ExternalSortError) as caught:
+        replace(
+            trace,
+            scratch_events=(
+                replace(
+                    first_event,
+                    live_logical_bytes_after=(
+                        first_event.live_logical_bytes_after + 1
+                    ),
+                ),
+            )
+            + trace.scratch_events[1:],
+        )
+    assert caught.value.code == "REJECT_Q1_SORT_TRACE"

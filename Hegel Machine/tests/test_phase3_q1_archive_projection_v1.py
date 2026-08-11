@@ -161,6 +161,80 @@ def test_snapshot_conversion_preserves_complete_bank_bijection(node3_record_sets
             replace(records, diagnostic_root=b"\x00" * 32)
 
 
+def test_counting_discard_encoder_matches_materialized_without_using_chunk_sink(
+    node3_record_sets,
+    monkeypatch,
+) -> None:
+    snapshot, records = node3_record_sets[0]
+    selected = records.program_records
+    materialized = projection.project_record_stream_v1(
+        selected,
+        input_signature_id=1,
+        universe_root=snapshot.universe_root,
+        stream_kind_id=contract.ArchiveStreamKindId.PROGRAM,
+    )
+
+    def forbidden_materialized_chunker(*_args, **_kwargs):
+        raise AssertionError("counting/discard called the materialized chunk sink")
+
+    monkeypatch.setattr(
+        projection,
+        "chunk_canonical_records_v1",
+        forbidden_materialized_chunker,
+    )
+    counting = projection.counting_discard_record_stream_v1(
+        selected,
+        input_signature_id=1,
+        universe_root=snapshot.universe_root,
+        stream_kind_id=contract.ArchiveStreamKindId.PROGRAM,
+    )
+    projection.validate_counting_discard_matches_materialized_v1(
+        counting,
+        materialized,
+    )
+    value = counting.canonical_object()
+    assert len(value) == 15
+    assert value[-2:] == (0, 0)
+    assert value[9] == materialized.descriptor.canonical_object()
+    assert value[10] == tuple(
+        manifest.canonical_object() for manifest in materialized.chunks.manifests
+    )
+    assert value[11] == materialized.external_sort_projection.canonical_object()
+    assert value[12] == materialized.diagnostic_commitment
+
+
+def test_counting_discard_rejects_counter_drift(node3_record_sets) -> None:
+    snapshot, records = node3_record_sets[1]
+    materialized = projection.project_record_stream_v1(
+        records.class_records,
+        input_signature_id=2,
+        universe_root=snapshot.universe_root,
+        stream_kind_id=contract.ArchiveStreamKindId.CLASS,
+    )
+    counting = projection.counting_discard_record_stream_v1(
+        records.class_records,
+        input_signature_id=2,
+        universe_root=snapshot.universe_root,
+        stream_kind_id=contract.ArchiveStreamKindId.CLASS,
+    )
+    projection.validate_counting_discard_matches_materialized_v1(
+        counting,
+        materialized,
+    )
+    drifted = replace(
+        counting,
+        canonical_record_payload_bytes=(
+            counting.canonical_record_payload_bytes + 1
+        )
+    )
+    with pytest.raises(projection.Q1ArchiveProjectionError) as caught:
+        projection.validate_counting_discard_matches_materialized_v1(
+            drifted,
+            materialized,
+        )
+    assert caught.value.code == "REJECT_Q1_DUAL_ENCODER"
+
+
 def test_record_set_replays_behavior_cohort_identity_and_pareto_visibility(
     node3_record_sets,
 ) -> None:
