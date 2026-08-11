@@ -155,10 +155,18 @@ root/identity scale path 做 Boolean 与 binary64 `absolute_bound` 的 outward i
 envelope。只有无量纲、temporal/spatial support 精确对齐、且落在保守 binary64
 算术安全域内的退化 point envelope 才进入六类 verifier；非退化 interval 不能只靠
 角点声称得到非线性 residual 的保守界，因此在完整 grid 上显式成为 error cell。
-`standard_error` 在 bundle preflight 即整体拒绝；非 identity transform、缺失/歧义
-witness 或 shape drift 同样 fail-closed，selector 必须 abstain。它没有冻结
-跨量纲、support 变换、coarse-graining 等语义、非退化 residual interval 算法，也没有完成
-exact RationalValue-grid uncertainty compiler，因此 `projection_compiler_implemented`、
+非 identity transform、缺失/歧义 witness 或 shape drift 同样 fail-closed，selector
+必须 abstain。
+
+`phase2b_uncertainty_compiler.py` 现在提供独立的、bundle-atomic exact receipt：它把
+wire 已规范化的 binary64 用 `Fraction.from_float` 精确提升，对 `NumericValue` 使用
+`x +/- radius`、对 `NumericInterval` 使用 `[lower - radius, upper + radius]`，再向
+literal-pinned 663 点 RationalValue grid 向外取整。任何 `standard_error` 或越界端点
+都拒绝整包且不返回 partial siblings；Boolean 与 missing 保持 typed。输出保留
+RationalAtom/Fraction，不导入或转换到现有 float selector interval。因而窄旗标
+`formal_rational_grid_uncertainty_compiler_implemented` 为 true，但跨量纲、support、
+transform 语义、非退化 exact residual/tolerance/verifier bridge、compiler receipt 到
+selector 的 provenance binding 都未完成；`projection_compiler_implemented`、宽泛
 `uncertainty_semantics_compiler_implemented` 和完整 pipeline 状态仍为 false。
 
 这里的 `family-neutral-shaped` 只表示 schema 没有显式 family/gold 字段。允许的 UUID、

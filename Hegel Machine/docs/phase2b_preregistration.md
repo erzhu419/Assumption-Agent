@@ -178,18 +178,25 @@ standard_error = STANDARD_ERROR_UNSUPPORTED
 
 This is an execution restriction, not merely a documentation preference.
 
+The implemented exact compiler enforces it at the whole-bundle boundary: one
+`standard_error` observation or one endpoint outside the literal-pinned 663-point
+RationalValue grid yields an abstaining receipt with no partial compiled rows.
+For `absolute_bound`, all arithmetic starts from exact `Fraction.from_float`
+representations of the wire's normalized binary64 values and rounds only outward.
+The exact receipt is not converted to the existing float selector interval.
+
 ## Real blockers after the exact freeze
 
 `ready_for_holdout_generation` and formal exit remain false because
 implementation and external-evidence blockers remain:
 
 - a bounded-binary64, dimensionless, support-aligned root/identity projection
-  mechanics slice is implemented, but non-degenerate residual intervals fail closed;
-  complete transform semantics,
-  conservative residual interval semantics and exact frozen-RationalValue-grid
-  uncertainty compilation are not implemented.  Consequently the formal
-  projection compiler and typed evidence-to-prediction pipeline remain
-  incomplete;
+  mechanics slice and a separate bundle-atomic exact RationalValue-grid
+  `absolute_bound` compiler are implemented, but the exact receipt is not yet
+  connected to conservative residual/tolerance/verifier intervals.  Non-degenerate
+  residual intervals therefore still fail closed; complete transform semantics,
+  receipt provenance binding and the formal typed evidence-to-prediction pipeline
+  remain incomplete;
 - trusted wire builder and the full covert-channel auditor are not implemented
   or executed;
 - exact 40-hex external baseline revisions, image/SBOM digests, and artifact

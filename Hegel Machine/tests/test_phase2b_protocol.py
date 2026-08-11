@@ -24,6 +24,10 @@ from hegel_machine.phase2b_protocol import (
     phase2b_preregistration_report,
     salted_answer_commitment_sha256,
 )
+from hegel_machine.phase2b_uncertainty_compiler import (
+    DEFAULT_EXACT_UNCERTAINTY_POLICY,
+    FROZEN_RATIONAL_GRID_ID,
+)
 
 
 SHA_A = "a" * 64
@@ -368,8 +372,30 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         report["binary64_absolute_bound_envelope_mechanics_implemented"] is True
     )
     assert (
-        report["formal_rational_grid_uncertainty_compiler_implemented"] is False
+        report["formal_rational_grid_uncertainty_compiler_implemented"] is True
     )
+    assert (
+        report["absolute_bound_uncertainty_semantics_compiler_implemented"]
+        is True
+    )
+    assert (
+        report["standard_error_uncertainty_semantics_compiler_implemented"]
+        is False
+    )
+    assert report["bundle_atomic_exact_uncertainty_receipt_implemented"] is True
+    assert report["exact_uncertainty_compiler_policy_id"] == (
+        DEFAULT_EXACT_UNCERTAINTY_POLICY.policy_id
+    )
+    assert report["formal_rational_grid_id"] == FROZEN_RATIONAL_GRID_ID
+    assert (
+        report["exact_uncertainty_receipt_consumed_by_projection_compiler"]
+        is False
+    )
+    assert (
+        report["exact_rational_residual_interval_semantics_implemented"]
+        is False
+    )
+    assert report["exact_rational_selector_bridge_implemented"] is False
     assert report["prediction_archive_evaluator_implemented"] is False
     assert report["public_wire_contract_implemented"] is True
     assert report["public_wire_is_family_neutral_shaped_only"] is True
@@ -392,6 +418,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "projection_compiler",
         "runner",
         "selector",
+        "uncertainty_compiler",
         "wire",
     }
     assert report["ready_for_holdout_generation"] is False

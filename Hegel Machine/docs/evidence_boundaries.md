@@ -43,12 +43,16 @@ v1.0.1 的 seed 修正，以 `2611585425` 作为 domain-separated SHA-256 → ui
 `random_state`，并保留 `411876909552964556` 作为 master/bootstrap seed。在完整 standard-error
 语义实现前，formal selector 只允许
 `absolute_bound`。这些数字和限制是 preregistration，不是已生成、已审计或已通过的
-holdout evidence；custodian/runtime 未 attested，covert audit 未执行。当前只有
-root/identity + binary64 absolute-bound envelope mechanics；只有退化 point envelope
-且所有输入无量纲、temporal/spatial support 精确对齐并通过保守 binary64 算术安全域
-时才会进入 verifier；非退化 interval、量纲、support 或安全域漂移明确 fail-closed。
-完整 transform 语义、保守 residual interval、exact RationalValue-grid uncertainty
-compiler 与 formal pipeline 仍未完成。
+holdout evidence；custodian/runtime 未 attested，covert audit 未执行。当前已有
+root/identity + binary64 absolute-bound envelope mechanics，以及一个独立的
+bundle-atomic exact RationalValue-grid uncertainty receipt。后者用
+`Fraction.from_float` 绑定 wire 的 binary64 语义，对 numeric bounds 精确扩张并向冻结的
+663 点 grid 向外取整；任何 `standard_error` 或 grid 越界整包拒绝、绝不返回部分结果，
+也绝不降回 float selector interval。这仍没有把 exact intervals 接入 residual、tolerance、
+verifier 或 normalized selector。当前只有退化 point envelope 且所有输入无量纲、
+temporal/spatial support 精确对齐并通过保守 binary64 算术安全域时才进入旧 verifier；
+非退化 interval、量纲、support 或安全域漂移明确 fail-closed。完整 transform 语义、
+保守 exact residual interval bridge 与 formal pipeline 仍未完成。
 
 此外可以说：Phase-3A 的 v1.0.2 strict specification 已冻结，Python/Rust shared vectors
 各 48/48 PASS。M2 两端都接受 64,680 个 source candidates，并得到 64,680 个 unique strict

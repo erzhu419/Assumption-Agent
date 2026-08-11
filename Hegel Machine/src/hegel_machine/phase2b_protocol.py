@@ -1146,6 +1146,7 @@ def phase2b_preregistration_report() -> dict[str, object]:
         phase2b_projection_compiler,
         phase2b_runner,
         phase2b_selector,
+        phase2b_uncertainty_compiler,
         phase2b_wire,
     )
 
@@ -1190,7 +1191,19 @@ def phase2b_preregistration_report() -> dict[str, object]:
             "projection_mechanics_implemented"
         ): True,
         "binary64_absolute_bound_envelope_mechanics_implemented": True,
-        "formal_rational_grid_uncertainty_compiler_implemented": False,
+        "formal_rational_grid_uncertainty_compiler_implemented": True,
+        "absolute_bound_uncertainty_semantics_compiler_implemented": True,
+        "standard_error_uncertainty_semantics_compiler_implemented": False,
+        "bundle_atomic_exact_uncertainty_receipt_implemented": True,
+        "exact_uncertainty_compiler_policy_id": (
+            phase2b_uncertainty_compiler.DEFAULT_EXACT_UNCERTAINTY_POLICY.policy_id
+        ),
+        "formal_rational_grid_id": (
+            phase2b_uncertainty_compiler.FROZEN_RATIONAL_GRID_ID
+        ),
+        "exact_uncertainty_receipt_consumed_by_projection_compiler": False,
+        "exact_rational_residual_interval_semantics_implemented": False,
+        "exact_rational_selector_bridge_implemented": False,
         "prediction_archive_evaluator_implemented": False,
         "public_wire_contract_implemented": True,
         "public_wire_is_family_neutral_shaped_only": True,
@@ -1212,6 +1225,7 @@ def phase2b_preregistration_report() -> dict[str, object]:
                 ("projection_compiler", phase2b_projection_compiler),
                 ("runner", phase2b_runner),
                 ("selector", phase2b_selector),
+                ("uncertainty_compiler", phase2b_uncertainty_compiler),
                 ("wire", phase2b_wire),
             )
         },

@@ -91,9 +91,10 @@ without semantic acceptance**.  The dependency order is:
 
 1. **Projection mechanics** — deterministic public evidence -> complete
    family/binding/scale grid -> verifier evaluations; no caller-signed subset.
-2. **Formal numeric semantics** — exact RationalValue-grid outward intervals;
-   only `absolute_bound`; `standard_error` remains unsupported until its full
-   Student-t/Bonferroni contract exists.
+2. **Formal numeric semantics** — bundle-atomic exact RationalValue-grid outward
+   uncertainty receipts are implemented for `absolute_bound`; the still-missing
+   edge is exact residual/tolerance/verifier propagation.  `standard_error`
+   remains unsupported until its full Student-t/Bonferroni contract exists.
 3. **Complete transform semantics** — temporal/spatial aggregation, sampling,
    unit conversion, affine coordinates, split/merge and coarse graining must
    have frozen executable meanings and preservation controls.
@@ -109,7 +110,7 @@ without semantic acceptance**.  The dependency order is:
 8. **Formal C1 exit** — consumed sealed report passes overall and family/scale
    slice thresholds.  Only then may C2 relation invention open.
 
-## 6. Implementation delta in this commit
+## 6. Implemented mechanics deltas
 
 `phase2b_projection_compiler.py` implements a deliberately narrow first item:
 
@@ -128,13 +129,40 @@ without semantic acceptance**.  The dependency order is:
 - represents missing/ambiguous witnesses, shape drift, unsupported transforms
   and verifier abstention as fail-closed outcomes without a partial grid.
 
-The preregistration artifact therefore records two narrow mechanics flags as
-true, while all of the following remain false:
+`phase2b_uncertainty_compiler.py` adds the next narrow edge without weakening
+that boundary:
+
+- compiles the complete `PublicEvidenceBundle` atomically, not a caller-selected
+  favorable subset;
+- treats each normalized binary64 as the exact value returned by
+  `Fraction.from_float`, rather than reconstructing a lost JSON decimal lexeme;
+- expands point and interval `absolute_bound` values exactly and rounds lower
+  bounds down / upper bounds up to the literal-pinned 663-point RationalValue
+  grid;
+- preserves Boolean and missing observations as typed rows;
+- rejects any `standard_error` or out-of-grid endpoint for the whole bundle,
+  returning no compiled siblings;
+- binds bundle, observation, exact-freeze, grid and policy identities into
+  immutable result roots; exact-type checks reject subclass commitment spoofing;
+- contains no selector/projection import and no float interval bridge.
+
+Accordingly these narrow flags are true:
+
+```text
+formal_rational_grid_uncertainty_compiler_implemented
+absolute_bound_uncertainty_semantics_compiler_implemented
+bundle_atomic_exact_uncertainty_receipt_implemented
+```
+
+while the broad flags below remain false:
 
 ```text
 projection_compiler_implemented
-formal_rational_grid_uncertainty_compiler_implemented
 uncertainty_semantics_compiler_implemented
+standard_error_uncertainty_semantics_compiler_implemented
+exact_uncertainty_receipt_consumed_by_projection_compiler
+exact_rational_residual_interval_semantics_implemented
+exact_rational_selector_bridge_implemented
 typed_evidence_to_prediction_pipeline_complete
 formal_recognizer_run_runnable
 covert_channel_audit_implemented
@@ -145,21 +173,26 @@ active_promotion_enabled
 
 This is implementation progress, not sealed C1 evidence.
 
-The compiler result is not yet a sealed selector input: the current public
+Neither mechanics result is yet a sealed selector input: the current public
 selector still consumes caller-supplied evaluation objects and only replays
-their grid identities.  Binding evaluation provenance to the compiler receipt
-is therefore an additional formal-pipeline blocker.  The mechanics slice also
-does not yet prove that `task_target` and every unused observation have complete
-projection coverage; that belongs to the trusted wire/coverage contract.
+their grid identities, while the exact uncertainty receipt is not consumed by
+the projection compiler.  Binding exact receipt and evaluation provenance to
+the complete grid is therefore an additional formal-pipeline blocker.  The
+mechanics slice also does not yet prove that `task_target` and every unused
+observation have complete projection coverage; that belongs to the trusted
+wire/coverage contract.
 
 ## 7. Next authorized construction slice
 
-The next non-actual commit should implement a bundle-atomic exact
-`absolute_bound` compiler over the frozen RationalValue grid and keep exact
-fractions through the projection boundary.  It must not convert back to the
-existing float selector interval without a separately proved directed-rounding
-bridge.  After that, transform semantics can be added one operation at a time,
-each with legal preservation and invalid-transform tests.
+The next non-actual commit is **Phase-2B Root/Identity Exact Rational
+Residual-Tolerance-Selector Bridge v1**.  It should carry the exact RationalValue
+intervals through an exact residual/tolerance/verifier result type and bind that
+receipt to the complete adapter grid and selector input.  It must prove
+conservative arithmetic for each supported law and normalized interval operation;
+it must not convert the receipt back to the existing float `ClosedInterval`.
+Unsupported nonlinear or transform cases remain full-grid abstentions.  After
+that bridge is replayable, transform semantics can be added one operation at a
+time, each with legal preservation and invalid-transform tests.
 
 No Q0.5b actual rerun, Docker execution, holdout generation, or ACTIVE mutation
 is authorized by this ledger.
