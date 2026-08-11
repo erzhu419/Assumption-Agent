@@ -32,6 +32,15 @@ FRAME_A = uid(307)
 FRAME_B = uid(308)
 
 
+def test_public_transform_policy_identity_is_the_runtime_default() -> None:
+    result = tx.run_exact_transform_semantics(identity_authority())
+    assert result.disposition is tx.TransformCompilationDisposition.COMPLETE
+    assert result.transform_policy_id == tx.EXACT_TRANSFORM_POLICY_ID
+    assert tx.EXACT_TRANSFORM_POLICY_ID.startswith(
+        "phase2b_exact_transform_policy_"
+    )
+
+
 def _observation_mapping(index: int, spec: dict[str, object]) -> dict[str, object]:
     values = list(spec.get("values", [float(index + 1)]))
     temporal = spec.get("temporal")

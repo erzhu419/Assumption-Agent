@@ -955,6 +955,7 @@ class _ExactTransformPolicy:
 
 
 _DEFAULT_POLICY: Final = _ExactTransformPolicy()
+EXACT_TRANSFORM_POLICY_ID: Final = _DEFAULT_POLICY.policy_id
 
 
 class _ResourceLimit(RuntimeError):
@@ -3877,6 +3878,7 @@ __all__ = [
     "ComponentValueRole",
     "CoordinateAffineCertificate",
     "DerivedObservationDescriptor",
+    "EXACT_TRANSFORM_POLICY_ID",
     "EXACT_TRANSFORM_SEMANTICS_VERSION",
     "EquivalentSplitMergeCertificate",
     "ExactDiscreteMapping",

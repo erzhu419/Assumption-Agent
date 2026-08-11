@@ -68,14 +68,21 @@ exact sparse/discrete kernel mechanics，以及从 transformed observation 重�
 preservation pairs 尚未生成或执行。
 
 固定 65,536-byte envelope 的 feature/statistics/32-32-16 invariance mechanics 也已实现，
-但 receipt 恒为 non-authoritative。另有 Stage A accepted-JCS profile mechanics：binary64/rational
-先转成 schema-closed 字符串表示，显式记录 frozen-10 与 V2-extension-6 namespace/path，
-并用 80-byte header + 公开 test padding 构造可重放的 65,536-byte envelope。它没有 batch
-shuffle、HMAC UUIDv4、provenance 重绑、secret padding、typed decode 或 origin authentication；
-因此 trusted RFC8785 batch builder、formal 字段/UUID namespace 全覆盖审计、
+但 receipt 恒为 non-authoritative。Stage A accepted-JCS profile mechanics 把 binary64/rational
+转成 schema-closed 字符串表示，显式记录 frozen-10 与 V2-extension-6 namespace/path，并用
+80-byte header + 公开 test padding 构造可重放的 65,536-byte envelope。Stage B keyed batch
+mechanics 进一步实施三份 pairwise-distinct 32-byte IKM 的 purpose separation、unbiased
+whole-batch shuffle、case-local HMAC UUIDv4、rename 后 recanonicalization、wire-only public
+provenance、secret HMAC padding、原子 batch 与 supplied-secret custodian replay。
+
+这些不是 trust/effect evidence：pairwise distinct 不证明独立 custodian key generation，public
+decoder 不验证 secret padding，replay 只说明给定 authorities/run/IKM 可重建同一 bytes，且
+wire-only provenance 不能由现有 V2 typed validator 重放。因此 strict typed authority decode、
+origin authentication、完整 trusted RFC8785 builder、formal 字段/UUID namespace 审计、
 720+240 formal 资源合同、recognizer CLI、archive evaluator、sealed data、runtime/custodian 和
-C1 exit 仍缺失；所以宽泛 projection compiler、完整 typed pipeline、formal covert audit 与
-formal holdout 状态继续为 false。
+C1 exit 仍缺失；宽泛 projection compiler、完整 typed pipeline、formal covert audit 与 formal
+holdout 状态继续为 false。入口虽冻结 1..1024 authority cap，最大规模的 wall-time/RSS 尚未
+资格化，不能据小批次 mechanics 回归推断 formal-corpus capacity。
 
 此外可以说：Phase-3A 的 v1.0.2 strict specification 已冻结，Python/Rust shared vectors
 各 48/48 PASS。M2 两端都接受 64,680 个 source candidates，并得到 64,680 个 unique strict

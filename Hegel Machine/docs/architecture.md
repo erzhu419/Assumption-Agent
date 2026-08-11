@@ -141,7 +141,9 @@ PublicEvidenceBundle + TheoryState + Phase2BAdapterRegistry
 
 Both bounded profiles
   → schema-closed accepted-JCS profile + public-test envelope [mechanics only]
-  → keyed batch shuffle/ID/provenance/padding + CLI/archive   [not implemented]
+  → keyed batch shuffle/ID/recanonicalization/wire-provenance/secret-padding
+                                                    [mechanics only]
+  → strict typed authority decode/replay + CLI/archive       [not implemented]
   → unique family+binding and admissible scale set, or abstain
   → PredictionBundle commitment                         [not implemented]
 ```
@@ -204,20 +206,35 @@ distinct-point scalar subselection，split/merge 只覆盖 extensive 值的一�
 coarse-graining 只核声明的 sparse matrix equality，forest 也不支持 multi-root merge。
 derived verifier 仍拒绝有量纲 witness；八种 wire operation 与八类 formal
 `PreservationTransform` 不是同一 taxonomy，更不等于 496 legal + 76 invalid pairs 已执行。
-recognizer CLI、trusted wire、formal covert audit、archive evaluator、sealed data、
+recognizer CLI、complete typed trusted wire、formal covert audit、archive evaluator、sealed data、
 runtime/custodian 证据都未完成。因此 `projection_compiler_implemented`、宽泛
 `exact_rational_residual_interval_semantics_implemented`、
 `uncertainty_semantics_compiler_implemented` 和完整 typed pipeline 状态仍为 false。
 
-`phase2b_trusted_wire_v1.py` 现只完成 trusted-wire 的 Stage A mechanics：ASCII/safe-integer
+`phase2b_trusted_wire_v1.py` 完成 trusted-wire Stage A mechanics：ASCII/safe-integer
 schema-closed accepted-JCS 子集把 binary64 编为 `f64be` 字符串、把 exact rational 编为
 规范十进制字符串对；显式 manifest 区分 frozen 10 个 minimum namespace 与 V2 schema
 实际新增的 6 个 namespace；80-byte header 和 65,536-byte envelope 可做 canonical/hash
-重放。该 envelope 使用公开 deterministic test padding。模块不做全 batch shuffle、HMAC
-UUIDv4、public provenance 重绑、secret padding、typed authority decode 或 origin authentication，
-所有 receipt 恒为 `NON_AUTHORITATIVE_MECHANICS_ONLY`，formal namespace/covert audit 与
-`trusted_rfc8785_wire_builder_implemented` 仍为 false。下一刀是 keyed batch builder/replay，
-而不是生成或消费 holdout。
+重放，Stage-A envelope 使用公开 deterministic test padding。
+
+`phase2b_trusted_wire_batch_v1.py` 新增 Stage B keyed batch mechanics：只接受 exact V2
+authority tuple、exact run ID 与三份 pairwise-distinct 32-byte IKM；内部做 purpose-separated
+HKDF-SHA256、带冻结 rejection cap 的 unbiased whole-batch Fisher–Yates、shuffle 后的
+case-local HMAC UUIDv4 分配、rename 后 schema-aware set/ref/row recanonicalization、wire-only
+base/derived public provenance 重绑、secret HMAC padding、65,536-byte 原子 batch emission，
+并允许 custodian 用原 authorities/run/IKM 做 byte-exact replay。ID counters、碰撞集合与 warning
+是 batch-global，但同一 latent UUID 不跨 case 复用 public ID；public receipts 不包含 key、
+permutation 或 old→new map。content-bound policy 同时绑定实际 domain/header、accepted-JCS/
+manifest、transform-validator identity 与全部 acceptance caps。
+
+这些 receipts 仍恒为 `NON_AUTHORITATIVE_MECHANICS_ONLY`。pairwise distinct 不证明 IKM
+独立性；public decoder 只重放 framing/hash/JCS/path/canonical order/wire provenance，不验证
+secret padding；custodian replay 只证明 supplied secrets 可重建同一 bytes。wire-only provenance
+尚不兼容现有 V2 derived-provenance validator，所以 typed authority decode/replay、origin
+authentication、formal namespace/covert audit 与 `trusted_rfc8785_wire_builder_implemented`
+继续为 false。1..1024 的输入 cap 已冻结并在入口 fail-closed，但 1024-authority worst-case
+wall-time/RSS 尚未资格化。下一刀是 strict typed authority decode/replay，而不是生成或消费
+holdout。
 
 这里的 `family-neutral-shaped` 只表示 schema 没有显式 family/gold 字段。允许的 UUID、
 provenance hash、role candidates、missingness 和 unused transforms 仍可能成为 covert
@@ -226,9 +243,11 @@ answer channel；正式 run 必须由独立 generator 随机化并全局 shuffle
 shuffle/ID/padding keys、固定 65,536-byte envelope、10,000 次 stratified permutation、
 Holm–Bonferroni FWER=0.01 和 32 次 global consistent renaming。当前已有固定 envelope 的
 prefix/suffix feature、NMI/LOO balanced-accuracy、单一全局 Holm 和 32/32/16 invariance
-mechanics；receipt 恒为 `NON_AUTHORITATIVE_MECHANICS_ONLY`。它没有 trusted RFC-8785
-builder，且未在 formal corpus 上执行。Stage A 的显式 UUID path manifest 也不等于 typed
-authority decoder 或 formal namespace audit，所以正式 covert audit 仍未实现或通过。
+mechanics；receipt 恒为 `NON_AUTHORITATIVE_MECHANICS_ONLY`。Stage B keyed batch mechanics
+已消除原始 case order/UUID/padding 的直接透传，并提供 supplied-secret replay，但这不是
+independent-label answer-correlation audit，也没有在 formal corpus 上执行。显式 UUID path
+manifest 与 keyed renaming 都不等于 typed authority decoder 或 formal namespace audit，
+所以正式 covert audit 仍未实现或通过。
 
 新 selector 使用 residual 和 tolerance 的闭区间。保守 normalized interval 为：
 

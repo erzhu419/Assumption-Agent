@@ -19,6 +19,7 @@ import struct
 from typing import Final
 
 from .phase2b_exact_transform_semantics_v1 import (
+    EXACT_TRANSFORM_POLICY_ID,
     ExactTransformAtom,
     ExactTransformCompilation,
     PublicTransformEvidenceBundleV2,
@@ -812,6 +813,7 @@ class TrustedWireProfileCompilationV1:
     jcs_profile_id: str
     field_manifest_id: str
     payload_schema_version: str
+    transform_policy_id: str
     payload: bytes
     payload_sha256: str
     payload_id: str
@@ -838,6 +840,7 @@ class TrustedWireProfileCompilationV1:
             or self.jcs_profile_id != JCS_PROFILE_ID
             or self.field_manifest_id != FIELD_MANIFEST_ID
             or self.payload_schema_version != TRUSTED_WIRE_PAYLOAD_SCHEMA_VERSION
+            or self.transform_policy_id != EXACT_TRANSFORM_POLICY_ID
         ):
             raise ValueError("profile compilation identity drift")
         if type(self.payload) is not bytes:
@@ -935,6 +938,7 @@ def compile_transform_authority_profile_mechanics_v1(
         jcs_profile_id=JCS_PROFILE_ID,
         field_manifest_id=FIELD_MANIFEST_ID,
         payload_schema_version=TRUSTED_WIRE_PAYLOAD_SCHEMA_VERSION,
+        transform_policy_id=EXACT_TRANSFORM_POLICY_ID,
         payload=payload,
         payload_sha256=hashlib.sha256(payload).hexdigest(),
         payload_id=_sha_id(_PAYLOAD_DOMAIN, payload, "phase2b_wire_payload_"),

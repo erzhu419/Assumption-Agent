@@ -208,12 +208,19 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
 - covert-channel audit 的独立 shuffle/ID/padding keys、固定 envelope、Holm–Bonferroni
   FWER=0.01、32 次 consistent renaming 等规范已冻结；固定 65,536-byte envelope 的
   prefix/suffix feature、NMI/LOO、10,000 permutation、单一全局 Holm 与 32/32/16
-  invariance mechanics 已实现，但恒为 non-authoritative。Stage A 另实现了 schema-closed
-  accepted-JCS profile、frozen-10 + V2-extension-6 显式 UUID path manifest，以及使用公开
-  test padding 的 65,536-byte framing/hash replay；它尚无 batch shuffle、HMAC UUID、
-  provenance 重绑、secret padding、typed decode 或 origin authentication。trusted RFC-8785
-  batch builder、formal namespace audit 与 formal corpus 执行仍缺失；在完整 standard-error
-  语义实现前，formal selector 只允许 `absolute_bound`；
+  invariance mechanics 已实现，但恒为 non-authoritative。trusted-wire Stage A 已实现
+  schema-closed accepted-JCS profile、frozen-10 + V2-extension-6 显式 UUID path manifest，
+  以及使用公开 test padding 的 65,536-byte framing/hash replay；Stage B 又实现了三份
+  pairwise-distinct 32-byte IKM 的 purpose-separated HKDF、unbiased whole-batch shuffle、
+  case-local latent→public HMAC UUIDv4 分配（counter/碰撞集合为 batch-global）、rename 后
+  schema recanonicalization、wire-only public provenance 重绑、secret HMAC padding、原子
+  batch emission 与 supplied-secret custodian replay。这些仍只是
+  `NON_AUTHORITATIVE_MECHANICS_ONLY`：IKM 独立性没有外部 attestation，public decoder 不验证
+  secret padding，wire-only provenance 也尚不能重建可由 V2 transform authority 消费的 typed
+  object；origin authentication、完整 trusted RFC-8785 builder、formal namespace/covert audit
+  与 formal corpus 执行仍缺失；1024-authority worst-case wall-time/RSS 也尚未资格化。
+  下一刀是 strict typed authority decode/replay；在完整
+  standard-error 语义实现前，formal selector 只允许 `absolute_bound`；
 - seal → prediction commitment → reveal → consumed 的 immutable lifecycle model、
   answer salted-commitment opening 校验和进程内原子防分叉 guard，以及 read-only
   input/root、no network、无 repo/generator/answer mount 的 OCI launch-spec contract；

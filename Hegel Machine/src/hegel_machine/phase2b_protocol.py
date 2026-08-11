@@ -1157,6 +1157,7 @@ def phase2b_preregistration_report() -> dict[str, object]:
         phase2b_projection_compiler,
         phase2b_runner,
         phase2b_selector,
+        phase2b_trusted_wire_batch_v1,
         phase2b_trusted_wire_v1,
         phase2b_uncertainty_compiler,
         phase2b_wire,
@@ -1245,6 +1246,9 @@ def phase2b_preregistration_report() -> dict[str, object]:
         "exact_transform_semantics_version": (
             phase2b_exact_transform_semantics_v1.EXACT_TRANSFORM_SEMANTICS_VERSION
         ),
+        "exact_transform_policy_id": (
+            phase2b_exact_transform_semantics_v1.EXACT_TRANSFORM_POLICY_ID
+        ),
         "eight_wire_transform_operation_exact_kernel_mechanics_implemented": True,
         "bundle_atomic_exact_transform_receipt_implemented": True,
         "exact_transform_recomputes_uncertainty_internally": True,
@@ -1284,6 +1288,34 @@ def phase2b_preregistration_report() -> dict[str, object]:
         "trusted_wire_profile_claim_level": (
             phase2b_trusted_wire_v1.NON_AUTHORITATIVE_CLAIM_LEVEL
         ),
+        "trusted_wire_profile_transform_policy_id": (
+            phase2b_exact_transform_semantics_v1.EXACT_TRANSFORM_POLICY_ID
+        ),
+        "keyed_trusted_wire_batch_mechanics_implemented": True,
+        "trusted_wire_batch_policy_id": (
+            phase2b_trusted_wire_batch_v1.TRUSTED_WIRE_BATCH_POLICY_ID
+        ),
+        "trusted_wire_key_schedule_version": (
+            phase2b_trusted_wire_batch_v1.TRUSTED_WIRE_KEY_SCHEDULE_VERSION
+        ),
+        "trusted_wire_public_provenance_version": (
+            phase2b_trusted_wire_batch_v1.TRUSTED_WIRE_PUBLIC_PROVENANCE_VERSION
+        ),
+        "trusted_wire_exact_transform_validator_policy_id": (
+            phase2b_trusted_wire_batch_v1.EXACT_TRANSFORM_VALIDATOR_POLICY_ID
+        ),
+        "pairwise_distinct_key_source_contract_implemented": True,
+        "key_source_statistical_independence_attested": False,
+        "whole_batch_unbiased_fisher_yates_mechanics_implemented": True,
+        "post_shuffle_namespace_hmac_uuidv4_mechanics_implemented": True,
+        "case_local_latent_id_anti_link_allocation_implemented": True,
+        "renamed_authority_schema_recanonicalization_implemented": True,
+        "wire_only_public_provenance_rebinding_mechanics_implemented": True,
+        "secret_hmac_padding_custodian_replay_mechanics_implemented": True,
+        "batch_atomic_keyed_trusted_wire_mechanics_implemented": True,
+        "uuid_collision_retry_warning_mechanics_implemented": True,
+        "trusted_wire_custodian_secret_replay_mechanics_implemented": True,
+        "trusted_wire_1024_authority_capacity_qualified": False,
         "global_batch_shuffle_implemented": False,
         "post_shuffle_hmac_uuidv4_assignment_implemented": False,
         "provenance_rebound_to_public_payload_implemented": False,
@@ -1319,6 +1351,10 @@ def phase2b_preregistration_report() -> dict[str, object]:
                 ("projection_compiler", phase2b_projection_compiler),
                 ("runner", phase2b_runner),
                 ("selector", phase2b_selector),
+                (
+                    "trusted_wire_keyed_batch_mechanics",
+                    phase2b_trusted_wire_batch_v1,
+                ),
                 ("trusted_wire_profile_mechanics", phase2b_trusted_wire_v1),
                 ("uncertainty_compiler", phase2b_uncertainty_compiler),
                 ("wire", phase2b_wire),

@@ -338,7 +338,13 @@ def _compilation(
     )
     assert type(result) is trusted.TrustedWireProfileCompilationV1
     assert result.disposition is trusted.ProfileDisposition.COMPLETE
+    assert result.transform_policy_id == tx.EXACT_TRANSFORM_POLICY_ID
     return result
+
+
+def test_profile_compilation_rejects_transform_policy_identity_drift() -> None:
+    with pytest.raises(ValueError, match="identity drift"):
+        replace(_compilation(), transform_policy_id="drift")
 
 
 def test_accepted_jcs_golden_sorts_keys_and_uses_short_escapes() -> None:

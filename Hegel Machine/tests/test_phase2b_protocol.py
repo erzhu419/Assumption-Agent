@@ -23,6 +23,7 @@ from hegel_machine.phase2b_exact_derived_witness_bridge_v1 import (
     EXACT_DERIVED_WITNESS_MATCHER_VERSION,
 )
 from hegel_machine.phase2b_exact_transform_semantics_v1 import (
+    EXACT_TRANSFORM_POLICY_ID,
     EXACT_TRANSFORM_SEMANTICS_VERSION,
     PUBLIC_TRANSFORM_EVIDENCE_SCHEMA_VERSION,
 )
@@ -30,6 +31,12 @@ from hegel_machine.phase2b_trusted_wire_v1 import (
     FIELD_MANIFEST_ID as TRUSTED_WIRE_FIELD_MANIFEST_ID,
     JCS_PROFILE_ID as TRUSTED_WIRE_JCS_PROFILE_ID,
     NON_AUTHORITATIVE_CLAIM_LEVEL as TRUSTED_WIRE_CLAIM_LEVEL,
+)
+from hegel_machine.phase2b_trusted_wire_batch_v1 import (
+    EXACT_TRANSFORM_VALIDATOR_POLICY_ID,
+    TRUSTED_WIRE_BATCH_POLICY_ID,
+    TRUSTED_WIRE_KEY_SCHEDULE_VERSION,
+    TRUSTED_WIRE_PUBLIC_PROVENANCE_VERSION,
 )
 from hegel_machine.phase2b_protocol import (
     BaselineKind,
@@ -471,6 +478,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     assert report["exact_transform_semantics_version"] == (
         EXACT_TRANSFORM_SEMANTICS_VERSION
     )
+    assert report["exact_transform_policy_id"] == EXACT_TRANSFORM_POLICY_ID
     assert (
         report[
             "eight_wire_transform_operation_exact_kernel_mechanics_implemented"
@@ -538,6 +546,42 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         is True
     )
     assert report["trusted_wire_profile_claim_level"] == TRUSTED_WIRE_CLAIM_LEVEL
+    assert (
+        report["trusted_wire_profile_transform_policy_id"]
+        == EXACT_TRANSFORM_POLICY_ID
+    )
+    assert report["keyed_trusted_wire_batch_mechanics_implemented"] is True
+    assert report["trusted_wire_batch_policy_id"] == TRUSTED_WIRE_BATCH_POLICY_ID
+    assert report["trusted_wire_key_schedule_version"] == (
+        TRUSTED_WIRE_KEY_SCHEDULE_VERSION
+    )
+    assert report["trusted_wire_public_provenance_version"] == (
+        TRUSTED_WIRE_PUBLIC_PROVENANCE_VERSION
+    )
+    assert report["trusted_wire_exact_transform_validator_policy_id"] == (
+        EXACT_TRANSFORM_VALIDATOR_POLICY_ID
+    )
+    assert report["pairwise_distinct_key_source_contract_implemented"] is True
+    assert report["key_source_statistical_independence_attested"] is False
+    assert report["whole_batch_unbiased_fisher_yates_mechanics_implemented"] is True
+    assert report["post_shuffle_namespace_hmac_uuidv4_mechanics_implemented"] is True
+    assert report["case_local_latent_id_anti_link_allocation_implemented"] is True
+    assert report["renamed_authority_schema_recanonicalization_implemented"] is True
+    assert (
+        report["wire_only_public_provenance_rebinding_mechanics_implemented"]
+        is True
+    )
+    assert (
+        report["secret_hmac_padding_custodian_replay_mechanics_implemented"]
+        is True
+    )
+    assert report["batch_atomic_keyed_trusted_wire_mechanics_implemented"] is True
+    assert report["uuid_collision_retry_warning_mechanics_implemented"] is True
+    assert (
+        report["trusted_wire_custodian_secret_replay_mechanics_implemented"]
+        is True
+    )
+    assert report["trusted_wire_1024_authority_capacity_qualified"] is False
     assert report["global_batch_shuffle_implemented"] is False
     assert report["post_shuffle_hmac_uuidv4_assignment_implemented"] is False
     assert report["provenance_rebound_to_public_payload_implemented"] is False
@@ -571,6 +615,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "projection_compiler",
         "runner",
         "selector",
+        "trusted_wire_keyed_batch_mechanics",
         "trusted_wire_profile_mechanics",
         "uncertainty_compiler",
         "wire",

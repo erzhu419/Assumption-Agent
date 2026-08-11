@@ -207,13 +207,24 @@ stratified permutations, one global Holm family and 32/32/16 invariance receipts
 Every receipt is permanently `NON_AUTHORITATIVE_MECHANICS_ONLY`; there is no trusted
 RFC-8785 builder, namespace-aware field/UUID extraction or formal-corpus execution.
 
-`phase2b_trusted_wire_v1.py` now adds only Stage-A profile mechanics: a
-schema-closed accepted-JCS subset, an explicit frozen-10 plus V2-extension-6 UUID
-path manifest, and an 80-byte-header/65,536-byte envelope with public deterministic
-test padding. It deliberately leaves global shuffle, post-shuffle HMAC UUIDv4,
-public provenance rebinding, secret padding, typed authority decoding and origin
-authentication unimplemented. Its receipts remain non-authoritative and do not
-close the trusted-wire or formal-audit row.
+`phase2b_trusted_wire_v1.py` provides Stage-A profile mechanics: a schema-closed
+accepted-JCS subset, an explicit frozen-10 plus V2-extension-6 UUID path manifest,
+and an 80-byte-header/65,536-byte envelope with public deterministic test padding.
+`phase2b_trusted_wire_batch_v1.py` now adds Stage-B keyed batch mechanics:
+pairwise-distinct 32-byte IKM inputs, purpose-separated HKDF keys, unbiased
+whole-batch shuffle, case-local post-shuffle HMAC UUIDv4 with batch-global counters
+and collision warning, schema-aware recanonicalization, wire-only public provenance
+rebinding, secret HMAC padding, atomic batch emission and supplied-secret custodian
+replay. The content-bound batch policy covers algorithm domains/header identities,
+accepted-JCS/manifest/transform-validator identities and all acceptance caps.
+
+These receipts remain non-authoritative. Pairwise distinct does not attest IKM
+independence; public decoding does not verify secret padding; custodian replay proves
+only deterministic reproduction from supplied secrets; wire-only provenance cannot
+yet reconstruct a V2 authority accepted by the typed transform validator. Origin,
+formal UUID/field audit, formal covert audit, sealed execution and C1 exit remain open.
+The 1..1024 authority cap is enforced, but the 1024-authority worst-case wall-time/RSS
+has not been qualified.
 
 Accordingly these narrow flags are true:
 
@@ -239,6 +250,17 @@ fixed_envelope_covert_statistics_mechanics_implemented
 schema_closed_accepted_jcs_profile_mechanics_implemented
 explicit_v2_uuid_namespace_path_manifest_mechanics_implemented
 fixed_65536_public_padding_envelope_mechanics_implemented
+keyed_trusted_wire_batch_mechanics_implemented
+pairwise_distinct_key_source_contract_implemented
+whole_batch_unbiased_fisher_yates_mechanics_implemented
+post_shuffle_namespace_hmac_uuidv4_mechanics_implemented
+case_local_latent_id_anti_link_allocation_implemented
+renamed_authority_schema_recanonicalization_implemented
+wire_only_public_provenance_rebinding_mechanics_implemented
+secret_hmac_padding_custodian_replay_mechanics_implemented
+batch_atomic_keyed_trusted_wire_mechanics_implemented
+uuid_collision_retry_warning_mechanics_implemented
+trusted_wire_custodian_secret_replay_mechanics_implemented
 ```
 
 while the broad flags below remain false:
@@ -259,6 +281,10 @@ post_shuffle_hmac_uuidv4_assignment_implemented
 provenance_rebound_to_public_payload_implemented
 secret_padding_replay_implemented
 batch_atomic_trusted_wire_builder_implemented
+typed_trusted_wire_authority_decode_replay_implemented
+trusted_wire_origin_authenticated
+key_source_statistical_independence_attested
+trusted_wire_1024_authority_capacity_qualified
 formal_recognizer_run_runnable
 covert_channel_audit_implemented
 ready_for_holdout_generation
@@ -273,21 +299,25 @@ recognizer CLI or a sealed selector execution. The older binary64 projection com
 still does not consume
 the exact receipt, and its broad completion flag therefore remains false. The
 derived bridge closes strict `task_target` and unused-observation coverage for its
-bounded profile, but complete physical transform/preservation semantics, trusted
-wire, formal covert-channel audit, archive evaluator, signed image/runtime evidence
-and durable one-shot custody remain formal-pipeline blockers.
+bounded profile, but complete physical transform/preservation semantics, strict
+typed trusted-wire decode/replay, formal covert-channel audit, archive evaluator,
+signed image/runtime evidence and durable one-shot custody remain formal-pipeline
+blockers.
 
 ## 7. Next authorized construction slice
 
-The next non-actual construction slice is **Phase-2B Keyed Trusted-Wire Batch Builder
-+ Custodian Replay v1**. Stage A already binds the accepted-JCS mapping, explicit
-namespace paths and public-test envelope mechanics. Stage B must add independent
-shuffle/ID/padding key domains, unbiased whole-batch shuffle, post-shuffle HMAC-derived
-UUIDv4 values, provenance rebinding, secret padding and atomic custodian replay.
-Unknown, duplicate or missing namespaces, non-canonical bytes, root drift and
-padding/length drift must fail closed.
-Small deterministic/tamper vectors are mechanics evidence only; formal 720+240 audit,
-independent labels and sealed execution remain later gates.
+The next non-actual construction slice is **Phase-2B Strict Typed Authority
+Decode/Replay v1**. Stage A binds the accepted-JCS mapping, explicit namespace paths
+and public-test envelope mechanics; Stage B supplies keyed shuffle/ID/
+recanonicalization/wire-provenance/secret-padding and atomic supplied-secret replay.
+The next slice must strictly decode binary64 bits, rational decimal pairs, all eight
+certificate discriminators and every closed mapping into exact V2 public types;
+rebuild V2-compatible public base/derived provenance without a private helper; rerun
+the exact transform/uncertainty validator; and bind reconstructed authority,
+transform-policy/result and replay roots atomically. Unknown fields, malformed
+discriminators, non-canonical arrays, provenance/root drift or partial reconstruction
+must fail closed. Small deterministic/tamper vectors remain mechanics evidence only;
+formal 720+240 audit, independent labels and sealed execution are later gates.
 
 No Q0.5b actual rerun, Docker execution, holdout generation, or ACTIVE mutation
 is authorized by this ledger.

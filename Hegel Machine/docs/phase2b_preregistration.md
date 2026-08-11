@@ -169,11 +169,25 @@ NMI/LOO balanced-accuracy statistics, one global Holm family, and 32/32/16
 invariance mechanics now have a deterministic non-authoritative implementation.
 Stage-A wire mechanics also provide a schema-closed accepted-JCS profile, an
 explicit frozen-10 plus V2-extension-6 UUID path manifest, and a replayable
-65,536-byte envelope with public test padding. They do not perform a batch
-shuffle, HMAC UUID assignment, provenance rebinding, secret padding replay,
-typed authority decoding, or origin authentication. Consequently this is not a
-trusted RFC-8785 batch builder or a formal namespace/covert audit, and it has not
-run on the formal corpus. No audit-pass claim is available.
+65,536-byte envelope with public test padding. Stage-B mechanics now accept only
+an exact authority tuple, exact run ID, and three pairwise-distinct 32-byte IKM
+values; derive purpose-separated shuffle/ID/padding keys; perform unbiased
+whole-batch Fisher–Yates; assign case-local post-shuffle HMAC UUIDv4 values with
+batch-global counters/collision accounting; recanonicalize the renamed schema;
+rebind wire-only public provenance; emit secret-HMAC-padded envelopes atomically;
+and support byte-exact replay from the supplied custodian inputs.
+
+Pairwise distinct IKM values do not attest independent generation. The public
+decoder verifies structural hashes, accepted-JCS, paths, canonical order, and
+wire-only provenance but not secret padding; custodian replay proves only that
+the supplied authorities/run/IKM reproduce the bytes. The wire-only provenance
+profile cannot yet be decoded into a V2 authority accepted by the existing typed
+transform validator. Consequently this is still not the complete trusted
+RFC-8785 builder or a formal namespace/covert audit, it has no origin or one-shot
+custody attestation, and it has not run on the formal corpus. No audit-pass claim
+is available. The 1..1024 authority cap is enforced, but the 1024-authority
+worst-case wall-time/RSS has not been qualified. The next construction slice is
+strict typed authority decode/replay.
 
 Until all frozen `standard_error` semantics and Student-t/Bonferroni conversion
 rules are implemented and tested, formal selector input is strictly:
@@ -234,9 +248,11 @@ implementation and external-evidence blockers remain:
   their outputs, but the narrow operation contracts, dimensionless verifier boundary,
   incomplete transform-to-law coverage and unexecuted formal preservation suite keep
   the broad projection compiler and typed evidence-to-prediction pipeline incomplete;
-- fixed-envelope feature/statistics/invariance mechanics are implemented only as a
-  non-authoritative receipt. A trusted RFC-8785 wire builder, namespace-aware
-  field/UUID auditor, formal-corpus resource contract and independent formal audit
+- fixed-envelope feature/statistics/invariance and keyed batch shuffle/ID/
+  recanonicalization/wire-provenance/secret-padding/replay mechanics are implemented
+  only as non-authoritative receipts. Strict typed authority decode, origin
+  authentication, a complete trusted RFC-8785 builder, formal namespace-aware
+  field/UUID audit, formal-corpus resource execution and independent formal audit
   are not implemented or executed;
 - exact 40-hex external baseline revisions, image/SBOM digests, and artifact
   hashes are not registered;
