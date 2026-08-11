@@ -1141,7 +1141,13 @@ class SealedRunLedger:
 def phase2b_preregistration_report() -> dict[str, object]:
     """Emit the checked-in, non-qualification preregistration artifact."""
 
-    from . import phase2b_adapter, phase2b_runner, phase2b_selector, phase2b_wire
+    from . import (
+        phase2b_adapter,
+        phase2b_projection_compiler,
+        phase2b_runner,
+        phase2b_selector,
+        phase2b_wire,
+    )
 
     protocol = frozen_phase2b_protocol()
     exact_freeze = frozen_phase2b_exact_freeze()
@@ -1179,6 +1185,12 @@ def phase2b_preregistration_report() -> dict[str, object]:
         "unsealed_pipeline_validation_run": False,
         "typed_evidence_to_prediction_pipeline_complete": False,
         "projection_compiler_implemented": False,
+        (
+            "bounded_binary64_dimensionless_point_root_identity_"
+            "projection_mechanics_implemented"
+        ): True,
+        "binary64_absolute_bound_envelope_mechanics_implemented": True,
+        "formal_rational_grid_uncertainty_compiler_implemented": False,
         "prediction_archive_evaluator_implemented": False,
         "public_wire_contract_implemented": True,
         "public_wire_is_family_neutral_shaped_only": True,
@@ -1197,6 +1209,7 @@ def phase2b_preregistration_report() -> dict[str, object]:
             + hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest()
             for name, module in (
                 ("adapter", phase2b_adapter),
+                ("projection_compiler", phase2b_projection_compiler),
                 ("runner", phase2b_runner),
                 ("selector", phase2b_selector),
                 ("wire", phase2b_wire),

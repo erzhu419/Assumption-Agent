@@ -183,6 +183,13 @@ This is an execution restriction, not merely a documentation preference.
 `ready_for_holdout_generation` and formal exit remain false because
 implementation and external-evidence blockers remain:
 
+- a bounded-binary64, dimensionless, support-aligned root/identity projection
+  mechanics slice is implemented, but non-degenerate residual intervals fail closed;
+  complete transform semantics,
+  conservative residual interval semantics and exact frozen-RationalValue-grid
+  uncertainty compilation are not implemented.  Consequently the formal
+  projection compiler and typed evidence-to-prediction pipeline remain
+  incomplete;
 - trusted wire builder and the full covert-channel auditor are not implemented
   or executed;
 - exact 40-hex external baseline revisions, image/SBOM digests, and artifact

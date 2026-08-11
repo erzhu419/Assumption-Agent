@@ -132,7 +132,7 @@ Phase-2B 不会在 Phase-2A report 外包一层 `sealed=true`。它使用新的 
 PublicEvidenceBundle (family-neutral-shaped, UUIDv4 syntax, field allowlist)
   → Phase2BAdapterRegistry
   → complete internal family × injective role binding × scale-path hypotheses
-  → verifier projection compiler                         [尚未实现]
+  → verifier projection compiler                         [root/identity mechanics only]
   → interval residual / heterogeneous tolerance
   → unique family+binding and admissible scale set, or abstain
   → PredictionBundle commitment
@@ -148,6 +148,18 @@ Public selector 同样不接受 caller-provided grid commitment；它从输入 b
 frozen registry 确定性重跑 adapter，再将每项 evaluation 与完整 hypothesis ID、
 family/binding/scale metadata 和 footprint commitment 对齐。自洽但截断的子网格
 不能给自己签发“complete”声明。
+
+当前 `phase2b_projection_compiler.py` 已把这一边界推进到一个窄而可执行的
+mechanics slice：严格匹配 quantity、role/entity witness 和完整 adapter grid；对
+root/identity scale path 做 Boolean 与 binary64 `absolute_bound` 的 outward interval
+envelope。只有无量纲、temporal/spatial support 精确对齐、且落在保守 binary64
+算术安全域内的退化 point envelope 才进入六类 verifier；非退化 interval 不能只靠
+角点声称得到非线性 residual 的保守界，因此在完整 grid 上显式成为 error cell。
+`standard_error` 在 bundle preflight 即整体拒绝；非 identity transform、缺失/歧义
+witness 或 shape drift 同样 fail-closed，selector 必须 abstain。它没有冻结
+跨量纲、support 变换、coarse-graining 等语义、非退化 residual interval 算法，也没有完成
+exact RationalValue-grid uncertainty compiler，因此 `projection_compiler_implemented`、
+`uncertainty_semantics_compiler_implemented` 和完整 pipeline 状态仍为 false。
 
 这里的 `family-neutral-shaped` 只表示 schema 没有显式 family/gold 字段。允许的 UUID、
 provenance hash、role candidates、missingness 和 unused transforms 仍可能成为 covert

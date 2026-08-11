@@ -357,6 +357,19 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     assert report["unsealed_pipeline_validation_run"] is False
     assert report["typed_evidence_to_prediction_pipeline_complete"] is False
     assert report["projection_compiler_implemented"] is False
+    assert (
+        report[
+            "bounded_binary64_dimensionless_point_root_identity_"
+            "projection_mechanics_implemented"
+        ]
+        is True
+    )
+    assert (
+        report["binary64_absolute_bound_envelope_mechanics_implemented"] is True
+    )
+    assert (
+        report["formal_rational_grid_uncertainty_compiler_implemented"] is False
+    )
     assert report["prediction_archive_evaluator_implemented"] is False
     assert report["public_wire_contract_implemented"] is True
     assert report["public_wire_is_family_neutral_shaped_only"] is True
@@ -376,6 +389,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     assert report["oci_isolation_launch_contract_implemented"] is True
     assert set(report["component_source_ids"]) == {
         "adapter",
+        "projection_compiler",
         "runner",
         "selector",
         "wire",
