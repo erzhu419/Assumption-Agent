@@ -1157,6 +1157,7 @@ def phase2b_preregistration_report() -> dict[str, object]:
         phase2b_projection_compiler,
         phase2b_runner,
         phase2b_selector,
+        phase2b_trusted_wire_v1,
         phase2b_uncertainty_compiler,
         phase2b_wire,
     )
@@ -1273,6 +1274,23 @@ def phase2b_preregistration_report() -> dict[str, object]:
         "public_wire_is_family_neutral_shaped_only": True,
         "semantic_family_neutrality_audited": False,
         "allowed_field_answer_correlation_audit_implemented": False,
+        "schema_closed_accepted_jcs_profile_mechanics_implemented": True,
+        "accepted_jcs_profile_id": phase2b_trusted_wire_v1.JCS_PROFILE_ID,
+        "explicit_v2_uuid_namespace_path_manifest_mechanics_implemented": True,
+        "uuid_namespace_path_manifest_id": (
+            phase2b_trusted_wire_v1.FIELD_MANIFEST_ID
+        ),
+        "fixed_65536_public_padding_envelope_mechanics_implemented": True,
+        "trusted_wire_profile_claim_level": (
+            phase2b_trusted_wire_v1.NON_AUTHORITATIVE_CLAIM_LEVEL
+        ),
+        "global_batch_shuffle_implemented": False,
+        "post_shuffle_hmac_uuidv4_assignment_implemented": False,
+        "provenance_rebound_to_public_payload_implemented": False,
+        "secret_padding_replay_implemented": False,
+        "batch_atomic_trusted_wire_builder_implemented": False,
+        "typed_trusted_wire_authority_decode_replay_implemented": False,
+        "trusted_wire_origin_authenticated": False,
         "trusted_rfc8785_wire_builder_implemented": False,
         "formal_uuid_namespace_field_audit_implemented": False,
         "randomized_identifier_assignment_attested": False,
@@ -1301,6 +1319,7 @@ def phase2b_preregistration_report() -> dict[str, object]:
                 ("projection_compiler", phase2b_projection_compiler),
                 ("runner", phase2b_runner),
                 ("selector", phase2b_selector),
+                ("trusted_wire_profile_mechanics", phase2b_trusted_wire_v1),
                 ("uncertainty_compiler", phase2b_uncertainty_compiler),
                 ("wire", phase2b_wire),
             )

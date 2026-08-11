@@ -167,8 +167,13 @@ consistent global renamings; 32 case-order permutations; and 16 within-case
 observation-order permutations. Fixed-envelope prefix/suffix feature extraction,
 NMI/LOO balanced-accuracy statistics, one global Holm family, and 32/32/16
 invariance mechanics now have a deterministic non-authoritative implementation.
-It is not a trusted RFC-8785 builder or a namespace-aware field extractor, and it
-has not run on the formal corpus. No audit-pass claim is available.
+Stage-A wire mechanics also provide a schema-closed accepted-JCS profile, an
+explicit frozen-10 plus V2-extension-6 UUID path manifest, and a replayable
+65,536-byte envelope with public test padding. They do not perform a batch
+shuffle, HMAC UUID assignment, provenance rebinding, secret padding replay,
+typed authority decoding, or origin authentication. Consequently this is not a
+trusted RFC-8785 batch builder or a formal namespace/covert audit, and it has not
+run on the formal corpus. No audit-pass claim is available.
 
 Until all frozen `standard_error` semantics and Student-t/Bonferroni conversion
 rules are implemented and tested, formal selector input is strictly:

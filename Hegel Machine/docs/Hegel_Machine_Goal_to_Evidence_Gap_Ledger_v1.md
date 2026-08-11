@@ -207,6 +207,14 @@ stratified permutations, one global Holm family and 32/32/16 invariance receipts
 Every receipt is permanently `NON_AUTHORITATIVE_MECHANICS_ONLY`; there is no trusted
 RFC-8785 builder, namespace-aware field/UUID extraction or formal-corpus execution.
 
+`phase2b_trusted_wire_v1.py` now adds only Stage-A profile mechanics: a
+schema-closed accepted-JCS subset, an explicit frozen-10 plus V2-extension-6 UUID
+path manifest, and an 80-byte-header/65,536-byte envelope with public deterministic
+test padding. It deliberately leaves global shuffle, post-shuffle HMAC UUIDv4,
+public provenance rebinding, secret padding, typed authority decoding and origin
+authentication unimplemented. Its receipts remain non-authoritative and do not
+close the trusted-wire or formal-audit row.
+
 Accordingly these narrow flags are true:
 
 ```text
@@ -228,6 +236,9 @@ strict_scope_complete_law_binding_scale_support_slice_grid_implemented
 scale_selector_aggregates_exact_support_slices_before_selection
 fixed_envelope_covert_audit_mechanics_implemented
 fixed_envelope_covert_statistics_mechanics_implemented
+schema_closed_accepted_jcs_profile_mechanics_implemented
+explicit_v2_uuid_namespace_path_manifest_mechanics_implemented
+fixed_65536_public_padding_envelope_mechanics_implemented
 ```
 
 while the broad flags below remain false:
@@ -243,6 +254,11 @@ complete_transform_semantics_implemented
 formal_preservation_transform_suite_implemented
 trusted_rfc8785_wire_builder_implemented
 formal_uuid_namespace_field_audit_implemented
+global_batch_shuffle_implemented
+post_shuffle_hmac_uuidv4_assignment_implemented
+provenance_rebound_to_public_payload_implemented
+secret_padding_replay_implemented
+batch_atomic_trusted_wire_builder_implemented
 formal_recognizer_run_runnable
 covert_channel_audit_implemented
 ready_for_holdout_generation
@@ -263,12 +279,13 @@ and durable one-shot custody remain formal-pipeline blockers.
 
 ## 7. Next authorized construction slice
 
-The next non-actual construction slice is **Phase-2B Trusted RFC-8785 Wire Builder
-+ Namespace-Aware UUID/Allowed-Field Auditor v1**. It must bind a schema-closed
-canonical mapping, independent shuffle/ID/padding key domains, post-shuffle
-HMAC-derived UUIDv4 values, a fixed 65,536-byte envelope, deterministic padding and
-complete schema-path/namespace coverage. Unknown, duplicate or missing namespaces,
-non-canonical bytes, offset/root drift and padding/length drift must fail closed.
+The next non-actual construction slice is **Phase-2B Keyed Trusted-Wire Batch Builder
++ Custodian Replay v1**. Stage A already binds the accepted-JCS mapping, explicit
+namespace paths and public-test envelope mechanics. Stage B must add independent
+shuffle/ID/padding key domains, unbiased whole-batch shuffle, post-shuffle HMAC-derived
+UUIDv4 values, provenance rebinding, secret padding and atomic custodian replay.
+Unknown, duplicate or missing namespaces, non-canonical bytes, root drift and
+padding/length drift must fail closed.
 Small deterministic/tamper vectors are mechanics evidence only; formal 720+240 audit,
 independent labels and sealed execution remain later gates.
 

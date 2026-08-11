@@ -26,6 +26,11 @@ from hegel_machine.phase2b_exact_transform_semantics_v1 import (
     EXACT_TRANSFORM_SEMANTICS_VERSION,
     PUBLIC_TRANSFORM_EVIDENCE_SCHEMA_VERSION,
 )
+from hegel_machine.phase2b_trusted_wire_v1 import (
+    FIELD_MANIFEST_ID as TRUSTED_WIRE_FIELD_MANIFEST_ID,
+    JCS_PROFILE_ID as TRUSTED_WIRE_JCS_PROFILE_ID,
+    NON_AUTHORITATIVE_CLAIM_LEVEL as TRUSTED_WIRE_CLAIM_LEVEL,
+)
 from hegel_machine.phase2b_protocol import (
     BaselineKind,
     BaselineRegistration,
@@ -518,6 +523,31 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     assert report["public_wire_is_family_neutral_shaped_only"] is True
     assert report["semantic_family_neutrality_audited"] is False
     assert report["allowed_field_answer_correlation_audit_implemented"] is False
+    assert report["schema_closed_accepted_jcs_profile_mechanics_implemented"] is True
+    assert report["accepted_jcs_profile_id"] == TRUSTED_WIRE_JCS_PROFILE_ID
+    assert (
+        report["explicit_v2_uuid_namespace_path_manifest_mechanics_implemented"]
+        is True
+    )
+    assert (
+        report["uuid_namespace_path_manifest_id"]
+        == TRUSTED_WIRE_FIELD_MANIFEST_ID
+    )
+    assert (
+        report["fixed_65536_public_padding_envelope_mechanics_implemented"]
+        is True
+    )
+    assert report["trusted_wire_profile_claim_level"] == TRUSTED_WIRE_CLAIM_LEVEL
+    assert report["global_batch_shuffle_implemented"] is False
+    assert report["post_shuffle_hmac_uuidv4_assignment_implemented"] is False
+    assert report["provenance_rebound_to_public_payload_implemented"] is False
+    assert report["secret_padding_replay_implemented"] is False
+    assert report["batch_atomic_trusted_wire_builder_implemented"] is False
+    assert (
+        report["typed_trusted_wire_authority_decode_replay_implemented"]
+        is False
+    )
+    assert report["trusted_wire_origin_authenticated"] is False
     assert report["trusted_rfc8785_wire_builder_implemented"] is False
     assert report["formal_uuid_namespace_field_audit_implemented"] is False
     assert report["randomized_identifier_assignment_attested"] is False
@@ -541,6 +571,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "projection_compiler",
         "runner",
         "selector",
+        "trusted_wire_profile_mechanics",
         "uncertainty_compiler",
         "wire",
     }

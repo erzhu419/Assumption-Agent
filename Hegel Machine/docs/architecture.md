@@ -140,7 +140,8 @@ PublicEvidenceBundle + TheoryState + Phase2BAdapterRegistry
          → per-scale conservative hull + exact selector
 
 Both bounded profiles
-  → trusted RFC-8785 wire / CLI / archive                [not implemented]
+  → schema-closed accepted-JCS profile + public-test envelope [mechanics only]
+  → keyed batch shuffle/ID/provenance/padding + CLI/archive   [not implemented]
   → unique family+binding and admissible scale set, or abstain
   → PredictionBundle commitment                         [not implemented]
 ```
@@ -206,9 +207,17 @@ derived verifier 仍拒绝有量纲 witness；八种 wire operation 与八类 fo
 recognizer CLI、trusted wire、formal covert audit、archive evaluator、sealed data、
 runtime/custodian 证据都未完成。因此 `projection_compiler_implemented`、宽泛
 `exact_rational_residual_interval_semantics_implemented`、
-`uncertainty_semantics_compiler_implemented` 和完整 typed pipeline 状态仍为 false；下一刀
-是 trusted RFC-8785 wire builder 与 namespace-aware field/UUID auditor，而不是生成或消费
-holdout。
+`uncertainty_semantics_compiler_implemented` 和完整 typed pipeline 状态仍为 false。
+
+`phase2b_trusted_wire_v1.py` 现只完成 trusted-wire 的 Stage A mechanics：ASCII/safe-integer
+schema-closed accepted-JCS 子集把 binary64 编为 `f64be` 字符串、把 exact rational 编为
+规范十进制字符串对；显式 manifest 区分 frozen 10 个 minimum namespace 与 V2 schema
+实际新增的 6 个 namespace；80-byte header 和 65,536-byte envelope 可做 canonical/hash
+重放。该 envelope 使用公开 deterministic test padding。模块不做全 batch shuffle、HMAC
+UUIDv4、public provenance 重绑、secret padding、typed authority decode 或 origin authentication，
+所有 receipt 恒为 `NON_AUTHORITATIVE_MECHANICS_ONLY`，formal namespace/covert audit 与
+`trusted_rfc8785_wire_builder_implemented` 仍为 false。下一刀是 keyed batch builder/replay，
+而不是生成或消费 holdout。
 
 这里的 `family-neutral-shaped` 只表示 schema 没有显式 family/gold 字段。允许的 UUID、
 provenance hash、role candidates、missingness 和 unused transforms 仍可能成为 covert
@@ -218,8 +227,8 @@ shuffle/ID/padding keys、固定 65,536-byte envelope、10,000 次 stratified pe
 Holm–Bonferroni FWER=0.01 和 32 次 global consistent renaming。当前已有固定 envelope 的
 prefix/suffix feature、NMI/LOO balanced-accuracy、单一全局 Holm 和 32/32/16 invariance
 mechanics；receipt 恒为 `NON_AUTHORITATIVE_MECHANICS_ONLY`。它没有 trusted RFC-8785
-builder 或 namespace-aware field extractor，且未在 formal corpus 上执行，所以正式 covert
-audit 仍未实现或通过。
+builder，且未在 formal corpus 上执行。Stage A 的显式 UUID path manifest 也不等于 typed
+authority decoder 或 formal namespace audit，所以正式 covert audit 仍未实现或通过。
 
 新 selector 使用 residual 和 tolerance 的闭区间。保守 normalized interval 为：
 

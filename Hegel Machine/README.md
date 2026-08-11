@@ -208,8 +208,11 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
 - covert-channel audit 的独立 shuffle/ID/padding keys、固定 envelope、Holm–Bonferroni
   FWER=0.01、32 次 consistent renaming 等规范已冻结；固定 65,536-byte envelope 的
   prefix/suffix feature、NMI/LOO、10,000 permutation、单一全局 Holm 与 32/32/16
-  invariance mechanics 已实现，但恒为 non-authoritative。trusted RFC-8785 builder、
-  namespace-aware field/UUID audit 与 formal corpus 执行仍缺失；在完整 standard-error
+  invariance mechanics 已实现，但恒为 non-authoritative。Stage A 另实现了 schema-closed
+  accepted-JCS profile、frozen-10 + V2-extension-6 显式 UUID path manifest，以及使用公开
+  test padding 的 65,536-byte framing/hash replay；它尚无 batch shuffle、HMAC UUID、
+  provenance 重绑、secret padding、typed decode 或 origin authentication。trusted RFC-8785
+  batch builder、formal namespace audit 与 formal corpus 执行仍缺失；在完整 standard-error
   语义实现前，formal selector 只允许 `absolute_bound`；
 - seal → prediction commitment → reveal → consumed 的 immutable lifecycle model、
   answer salted-commitment opening 校验和进程内原子防分叉 guard，以及 read-only
@@ -260,7 +263,8 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
 - Phase-2B typed evidence → executable verifier projection 的正式 compiler 和完整
   unsealed pipeline validation；当前已完成 wire、candidate enumeration、exact
   uncertainty/root-identity selector、typed transform kernels、derived witness bridge、
-  non-authoritative fixed-envelope covert mechanics 与 runner/state-machine 合同，但这些
+  non-authoritative fixed-envelope covert mechanics、Stage-A accepted-JCS/namespace/envelope
+  mechanics 与 runner/state-machine 合同，但这些
   窄 mechanics 尚未组成 formal pipeline 或效果证据；
 - 720-case main + 240-case challenge 的 sealed generation、572 个 derived pairs、独立
   custodian、真实 OCI attestation、三套外部 baseline pins 或 consumed score report；

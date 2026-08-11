@@ -68,7 +68,11 @@ exact sparse/discrete kernel mechanics，以及从 transformed observation 重�
 preservation pairs 尚未生成或执行。
 
 固定 65,536-byte envelope 的 feature/statistics/32-32-16 invariance mechanics 也已实现，
-但 receipt 恒为 non-authoritative。trusted RFC-8785 builder、字段/UUID namespace 全覆盖审计、
+但 receipt 恒为 non-authoritative。另有 Stage A accepted-JCS profile mechanics：binary64/rational
+先转成 schema-closed 字符串表示，显式记录 frozen-10 与 V2-extension-6 namespace/path，
+并用 80-byte header + 公开 test padding 构造可重放的 65,536-byte envelope。它没有 batch
+shuffle、HMAC UUIDv4、provenance 重绑、secret padding、typed decode 或 origin authentication；
+因此 trusted RFC8785 batch builder、formal 字段/UUID namespace 全覆盖审计、
 720+240 formal 资源合同、recognizer CLI、archive evaluator、sealed data、runtime/custodian 和
 C1 exit 仍缺失；所以宽泛 projection compiler、完整 typed pipeline、formal covert audit 与
 formal holdout 状态继续为 false。
