@@ -190,6 +190,11 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
   candidate-grid commitment 的 interval selector core；缺任一 hypothesis、
   candidate metadata 漂移或任一结构 competitor 区间不确定时均 abstain，并支持
   unique structure + preregistered admissible scale set，而不是强迫 scale top-1；
+- `PublicTransformEvidenceBundleV2` 的八种 wire operation 已有各自 typed certificate、
+  exact sparse/discrete kernel 与原子 receipt；derived bridge 只接 authority/theory/registry，
+  内部重算 uncertainty/transform，重建完整 law × binding × scale × support-slice grid，并在
+  selector 前保守合并同 scale 的全部 slice hull。它仍是窄 mechanics：不是八类 formal
+  preservation taxonomy、不是 572-pair 执行证据，也不是 sealed C1 效果；
 - Phase-2B 精确冻结合同：720 个 main latent cases + 240 个独立 semantic-conflict
   challenge，另有 496 个 legal preservation pairs + 76 个 invalid-transform controls
   = 572 个 derived pairs；每 cell 的 positive 为 19 个 unique-scale + 1 个
@@ -201,8 +206,11 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
   domain-separated SHA-256 → uint32 值 `2611585425`，并新增 Phase-3 strict
   acceptance/certificate bridge 的完整规范冻结；
 - covert-channel audit 的独立 shuffle/ID/padding keys、固定 envelope、Holm–Bonferroni
-  FWER=0.01、32 次 consistent renaming 等规范已冻结；在完整 standard-error 语义实现前，
-  formal selector 只允许 `absolute_bound`；这些审计尚未执行；
+  FWER=0.01、32 次 consistent renaming 等规范已冻结；固定 65,536-byte envelope 的
+  prefix/suffix feature、NMI/LOO、10,000 permutation、单一全局 Holm 与 32/32/16
+  invariance mechanics 已实现，但恒为 non-authoritative。trusted RFC-8785 builder、
+  namespace-aware field/UUID audit 与 formal corpus 执行仍缺失；在完整 standard-error
+  语义实现前，formal selector 只允许 `absolute_bound`；
 - seal → prediction commitment → reveal → consumed 的 immutable lifecycle model、
   answer salted-commitment opening 校验和进程内原子防分叉 guard，以及 read-only
   input/root、no network、无 repo/generator/answer mount 的 OCI launch-spec contract；
@@ -250,8 +258,10 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
   `candidate_framework`，不会写入 active theory graph；当前 lifecycle 只是
   本地非权威 shadow ledger，writer 签名接入前不产生不可逆全局 REJECT。
 - Phase-2B typed evidence → executable verifier projection 的正式 compiler 和完整
-  unsealed pipeline validation；当前只完成 wire、candidate enumeration、interval
-  selector 与 runner/state-machine 合同；
+  unsealed pipeline validation；当前已完成 wire、candidate enumeration、exact
+  uncertainty/root-identity selector、typed transform kernels、derived witness bridge、
+  non-authoritative fixed-envelope covert mechanics 与 runner/state-machine 合同，但这些
+  窄 mechanics 尚未组成 formal pipeline 或效果证据；
 - 720-case main + 240-case challenge 的 sealed generation、572 个 derived pairs、独立
   custodian、真实 OCI attestation、三套外部 baseline pins 或 consumed score report；
 - allowed UUID/provenance/role-candidate/missingness/transform 字段的 answer-correlation

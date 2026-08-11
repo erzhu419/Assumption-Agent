@@ -93,12 +93,15 @@ without semantic acceptance**.  The dependency order is:
    family/binding/scale grid -> verifier evaluations; no caller-signed subset.
 2. **Formal numeric semantics** — bundle-atomic exact RationalValue-grid outward
    uncertainty receipts and exact residual/tolerance/normalized-interval/margin
-   propagation are implemented for all six laws, but only through the
-   root/identity, dimensionless, support-aligned bridge.  `standard_error`
-   remains unsupported until its full Student-t/Bonferroni contract exists.
-3. **Complete transform semantics** — temporal/spatial aggregation, sampling,
-   unit conversion, affine coordinates, split/merge and coarse graining must
-   have frozen executable meanings and preservation controls.
+   propagation are implemented for all six laws. The original bridge is
+   root/identity-only; the derived bridge consumes the bounded typed-transform
+   profile, but still requires dimensionless verifier inputs and explicit support
+   slices. `standard_error` remains unsupported until its full
+   Student-t/Bonferroni contract exists.
+3. **Typed transform mechanics** — eight wire operations now have typed exact
+   kernels and a derived-witness bridge. Their narrow contracts, incomplete
+   transform-to-verifier coverage and unexecuted formal preservation suite still
+   prevent a complete-transform claim.
 4. **Recognizer and archive** — strict CLI, complete prediction archive,
    challenge/preservation evaluator and deterministic replay.
 5. **Trusted wire and anti-leak audit** — independent shuffle/ID/padding keys,
@@ -174,6 +177,36 @@ that boundary:
   non-identity transforms, dimensioned observations, support mismatch and
   uncertain verifier preconditions fail-closed.
 
+`phase2b_exact_transform_semantics_v1.py` and
+`phase2b_exact_derived_witness_bridge_v1.py` add the next bounded edge:
+
+- a content-addressed V2 authority binds every root/derived observation component
+  to scale, unit, frame, support, provenance and one of eight distinct typed
+  transform certificates;
+- exact sparse affine or discrete kernels cover all eight wire operations without
+  name-based inference or unknown-to-identity fallback;
+- the derived bridge accepts only authority, theory and registry, internally
+  recomputes uncertainty and transform receipts, reconstructs a complete
+  law × binding × scale × support-slice grid and conservatively hulls all slices
+  before scale selection;
+- unique-witness consumption, unused-observation rejection, per-source uncertainty
+  lineage, transform paths, candidate/evaluation/aggregate roots and bounded replay
+  budgets are checked before a decision; canonical group sorting is included in that
+  bound, and any failure is atomic and non-partial.
+
+These are narrow mechanics. Unit ratios and aggregation weights remain caller-declared
+under typed certificates; sampling is scalar distinct-point subselection; split/merge
+is an extensive one-sided inverse; coarse-graining checks a declared sparse equality;
+dimensioned verifier inputs and multi-root merge remain unsupported. The eight wire
+operations are not the eight formal preservation categories, and no 572-pair formal
+preservation evidence exists.
+
+`phase2b_covert_audit_v1.py` separately implements fixed 65,536-byte envelope
+feature/statistics/invariance mechanics: 324 features, five targets, 10,000
+stratified permutations, one global Holm family and 32/32/16 invariance receipts.
+Every receipt is permanently `NON_AUTHORITATIVE_MECHANICS_ONLY`; there is no trusted
+RFC-8785 builder, namespace-aware field/UUID extraction or formal-corpus execution.
+
 Accordingly these narrow flags are true:
 
 ```text
@@ -186,6 +219,15 @@ authoritative_exact_bridge_recomputes_uncertainty_and_adapter_internally
 exact_uncertainty_receipt_consumed_by_root_identity_bridge
 oversized_bundle_theory_or_registry_rejected_before_content_hash
 nested_authority_exact_type_enforced_before_content_hash
+public_transform_evidence_v2_authority_implemented
+eight_wire_transform_operation_exact_kernel_mechanics_implemented
+bundle_atomic_exact_transform_receipt_implemented
+exact_derived_observation_witness_bridge_implemented
+authoritative_derived_witness_bridge_recomputes_transform_internally
+strict_scope_complete_law_binding_scale_support_slice_grid_implemented
+scale_selector_aggregates_exact_support_slices_before_selection
+fixed_envelope_covert_audit_mechanics_implemented
+fixed_envelope_covert_statistics_mechanics_implemented
 ```
 
 while the broad flags below remain false:
@@ -197,6 +239,10 @@ standard_error_uncertainty_semantics_compiler_implemented
 exact_uncertainty_receipt_consumed_by_projection_compiler
 exact_rational_residual_interval_semantics_implemented
 typed_evidence_to_prediction_pipeline_complete
+complete_transform_semantics_implemented
+formal_preservation_transform_suite_implemented
+trusted_rfc8785_wire_builder_implemented
+formal_uuid_namespace_field_audit_implemented
 formal_recognizer_run_runnable
 covert_channel_audit_implemented
 ready_for_holdout_generation
@@ -204,25 +250,27 @@ formal_phase2b_exit_claim
 active_promotion_enabled
 ```
 
-This is implementation progress, not sealed C1 evidence. The new exact bridge is
-an internal root/identity recognizer core, not the frozen recognizer CLI or a sealed
-selector execution. The older binary64 projection compiler still does not consume
-the exact receipt, and its broad completion flag therefore remains false. Full
-transform semantics, `task_target`/unused-observation coverage, trusted wire,
-covert-channel audit, archive evaluator, signed image/runtime evidence and durable
-one-shot custody remain formal-pipeline blockers.
+This is implementation progress, not sealed C1 evidence.
+`phase2b_exact_bridge_v1.py` is an internal root/identity recognizer core, while the
+new derived bridge is a separate bounded transform profile; neither is the frozen
+recognizer CLI or a sealed selector execution. The older binary64 projection compiler
+still does not consume
+the exact receipt, and its broad completion flag therefore remains false. The
+derived bridge closes strict `task_target` and unused-observation coverage for its
+bounded profile, but complete physical transform/preservation semantics, trusted
+wire, formal covert-channel audit, archive evaluator, signed image/runtime evidence
+and durable one-shot custody remain formal-pipeline blockers.
 
 ## 7. Next authorized construction slice
 
-The next non-actual construction slice is **Phase-2B Complete Transform Semantics
-v1**. Add one frozen executable operation at a time—unit conversion, coordinate
-affine, temporal/spatial aggregation, sampling resolution, equivalent split/merge
-and coarse-graining—with exact interval propagation, dimensional/support contracts,
-legal-preservation pairs and invalid-transform controls. No operation may be
-inferred from its name or silently treated as identity. In parallel, the runner
-inventory and recognizer CLI still need to include the exact bridge, but CLI/image,
-trusted wire and archive-evaluator work must remain separate from claims about
-transform correctness or sealed execution.
+The next non-actual construction slice is **Phase-2B Trusted RFC-8785 Wire Builder
++ Namespace-Aware UUID/Allowed-Field Auditor v1**. It must bind a schema-closed
+canonical mapping, independent shuffle/ID/padding key domains, post-shuffle
+HMAC-derived UUIDv4 values, a fixed 65,536-byte envelope, deterministic padding and
+complete schema-path/namespace coverage. Unknown, duplicate or missing namespaces,
+non-canonical bytes, offset/root drift and padding/length drift must fail closed.
+Small deterministic/tamper vectors are mechanics evidence only; formal 720+240 audit,
+independent labels and sealed execution remain later gates.
 
 No Q0.5b actual rerun, Docker execution, holdout generation, or ACTIVE mutation
 is authorized by this ledger.

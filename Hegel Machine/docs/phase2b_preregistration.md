@@ -164,9 +164,11 @@ The frozen covert-channel audit requires independent `K_shuffle`, `K_id`, and
 feature tests; 10,000 stratified label permutations; Holm–Bonferroni
 `FWER = 0.01`; `NMI <= 0.02`; balanced-accuracy advantage `<= 0.05`; 32
 consistent global renamings; 32 case-order permutations; and 16 within-case
-observation-order permutations. This specification is frozen, but the trusted
-wire builder and audit have **not been executed**. No audit-pass claim is
-available.
+observation-order permutations. Fixed-envelope prefix/suffix feature extraction,
+NMI/LOO balanced-accuracy statistics, one global Holm family, and 32/32/16
+invariance mechanics now have a deterministic non-authoritative implementation.
+It is not a trusted RFC-8785 builder or a namespace-aware field extractor, and it
+has not run on the formal corpus. No audit-pass claim is available.
 
 Until all frozen `standard_error` semantics and Student-t/Bonferroni conversion
 rules are implemented and tested, formal selector input is strictly:
@@ -199,6 +201,22 @@ occurs before authority content hashing and
 receives no content root, run ID, or committed downstream receipt; only a
 post-preflight compilation and decision carry complete provenance.
 
+The next mechanics layer uses a content-addressed
+`PublicTransformEvidenceBundleV2`. Eight distinct wire-operation certificate types
+drive exact sparse interval or discrete kernels; no unknown operation is inferred
+from its name or silently treated as identity. A separate authoritative derived
+witness bridge reruns uncertainty and transform compilation internally, reconstructs
+the complete strict-scope law-by-binding-by-scale-by-support-slice grid, and takes a
+conservative hull over every slice at a scale before selection. Missing, ambiguous,
+unused, or provenance-inconsistent observations fail closed without a partial grid.
+
+This is not a complete preservation implementation. Declared unit ratios, weights,
+sampling points, split/merge inverses, and coarse sparse matrices are checked only
+under their narrow typed contracts; dimensioned derived verifier semantics and
+multi-root merge are unsupported. The eight wire operations are not the same
+taxonomy as the eight formal `PreservationTransform` classes, and no 496+76
+preservation suite has been executed.
+
 ## Real blockers after the exact freeze
 
 `ready_for_holdout_generation` and formal exit remain false because
@@ -206,13 +224,15 @@ implementation and external-evidence blockers remain:
 
 - a bounded-binary64 projection mechanics slice, bundle-atomic exact
   RationalValue-grid `absolute_bound` compiler, and a provenance-bound six-law
-  exact rational residual/tolerance/selector bridge are implemented for
-  dimensionless, support-aligned root/identity paths. Complete executable semantics
-  for unit/coordinate/aggregation/sampling/split-merge/coarse-graining transforms
-  remain absent, so the broad projection compiler and formal typed
-  evidence-to-prediction pipeline remain incomplete;
-- trusted wire builder and the full covert-channel auditor are not implemented
-  or executed;
+  exact rational residual/tolerance/selector bridge are implemented. Typed exact
+  kernels now cover all eight wire operations and a derived witness bridge consumes
+  their outputs, but the narrow operation contracts, dimensionless verifier boundary,
+  incomplete transform-to-law coverage and unexecuted formal preservation suite keep
+  the broad projection compiler and typed evidence-to-prediction pipeline incomplete;
+- fixed-envelope feature/statistics/invariance mechanics are implemented only as a
+  non-authoritative receipt. A trusted RFC-8785 wire builder, namespace-aware
+  field/UUID auditor, formal-corpus resource contract and independent formal audit
+  are not implemented or executed;
 - exact 40-hex external baseline revisions, image/SBOM digests, and artifact
   hashes are not registered;
 - an independent latent generator has not produced validated 720 + 240 sealed

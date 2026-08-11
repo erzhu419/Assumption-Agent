@@ -129,15 +129,20 @@ Phase-2B 不会在 Phase-2A report 外包一层 `sealed=true`。它使用新的 
 进程和一次性状态边界：
 
 ```text
-PublicEvidenceBundle (family-neutral-shaped, UUIDv4 syntax, field allowlist)
-  → Phase2BAdapterRegistry
-  → complete internal family × injective role binding × scale-path hypotheses
-  → exact uncertainty receipt + authoritative adapter replay
-  → six-law exact rational verifier bridge              [root/identity only]
-  → exact interval selector                              [root/identity only]
-  → complete transforms / CLI / trusted wire / archive  [not implemented]
+PublicEvidenceBundle + TheoryState + Phase2BAdapterRegistry
+  ├─ root/identity profile:
+  │    exact uncertainty + authoritative adapter replay
+  │      → six-law exact rational verifier + exact selector
+  └─ transform profile:
+       PublicTransformEvidenceBundleV2 authority
+         → internally recomputed uncertainty + typed exact transform kernels
+         → derived witness inventory + complete support-slice grid
+         → per-scale conservative hull + exact selector
+
+Both bounded profiles
+  → trusted RFC-8785 wire / CLI / archive                [not implemented]
   → unique family+binding and admissible scale set, or abstain
-  → PredictionBundle commitment
+  → PredictionBundle commitment                         [not implemented]
 ```
 
 `phase2b_wire.py` 不 import law/verifier、generator、evaluator 或 Phase-2A fixture；
@@ -183,21 +188,38 @@ negative-feedback 的离散分支只在整段输入上可判定时执行，跨�
 margin 也不降回 binary64。exact-operation 与 Fraction bit-length 另有执行中预算；
 unused/missing transform catalog 项、非唯一 path 或任何定义域不确定性均 fail-closed。
 
-这一窄 bridge 仍只允许 identity transform、无量纲 observation 和 temporal/spatial
-support 精确对齐。完整 unit/coordinate/aggregation/split-merge/coarse-graining 语义、
-recognizer CLI、trusted wire/covert audit、archive evaluator、sealed data、runtime/custodian
-证据都未完成。因此 `projection_compiler_implemented`、宽泛
+`phase2b_exact_transform_semantics_v1.py` 新增了 content-addressed
+`PublicTransformEvidenceBundleV2`、逐 observation/component 的 scale/unit/frame/support
+metadata、八类不同的 typed certificate，以及 exact sparse interval/discrete kernels。
+`phase2b_exact_derived_witness_bridge_v1.py` 只接收 transform authority、theory 与 registry，
+内部重算 uncertainty 和 transform receipt，再重建完整 strict-scope
+law × binding × scale × support-slice grid。selector 先把同一 scale 的所有 slice 做保守
+normalized hull，禁止挑选有利 slice。缺失、歧义、unused observation、lineage/root 漂移或
+任一 error cell 都原子 abstain。
+
+这仍是窄 mechanics：unit conversion 只核声明的正比例及逆，coordinate affine 只给
+axis-aligned box hull，aggregation 只核声明权重，sampling v1 仅 single-series
+distinct-point scalar subselection，split/merge 只覆盖 extensive 值的一侧代数逆，
+coarse-graining 只核声明的 sparse matrix equality，forest 也不支持 multi-root merge。
+derived verifier 仍拒绝有量纲 witness；八种 wire operation 与八类 formal
+`PreservationTransform` 不是同一 taxonomy，更不等于 496 legal + 76 invalid pairs 已执行。
+recognizer CLI、trusted wire、formal covert audit、archive evaluator、sealed data、
+runtime/custodian 证据都未完成。因此 `projection_compiler_implemented`、宽泛
 `exact_rational_residual_interval_semantics_implemented`、
 `uncertainty_semantics_compiler_implemented` 和完整 typed pipeline 状态仍为 false；下一刀
-是逐项冻结并实现 complete transform semantics，而不是生成或消费 holdout。
+是 trusted RFC-8785 wire builder 与 namespace-aware field/UUID auditor，而不是生成或消费
+holdout。
 
 这里的 `family-neutral-shaped` 只表示 schema 没有显式 family/gold 字段。允许的 UUID、
 provenance hash、role candidates、missingness 和 unused transforms 仍可能成为 covert
 answer channel；正式 run 必须由独立 generator 随机化并全局 shuffle ID，再做重命名
 不变量及 allowed-field answer-correlation/side-channel audit。冻结审计使用彼此独立的
 shuffle/ID/padding keys、固定 65,536-byte envelope、10,000 次 stratified permutation、
-Holm–Bonferroni FWER=0.01 和 32 次 global consistent renaming；规范已经确定，但 wire
-builder 与审计尚未完成或执行。
+Holm–Bonferroni FWER=0.01 和 32 次 global consistent renaming。当前已有固定 envelope 的
+prefix/suffix feature、NMI/LOO balanced-accuracy、单一全局 Holm 和 32/32/16 invariance
+mechanics；receipt 恒为 `NON_AUTHORITATIVE_MECHANICS_ONLY`。它没有 trusted RFC-8785
+builder 或 namespace-aware field extractor，且未在 formal corpus 上执行，所以正式 covert
+audit 仍未实现或通过。
 
 新 selector 使用 residual 和 tolerance 的闭区间。保守 normalized interval 为：
 

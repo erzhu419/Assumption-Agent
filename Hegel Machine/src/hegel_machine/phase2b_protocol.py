@@ -647,7 +647,14 @@ def frozen_phase2b_protocol() -> Phase2BProtocol:
         maximum_validation_versions_before_no_go=2,
         unresolved_freeze_questions=(),
         implementation_blockers=(
-            "formal_wire_builder_and_covert_channel_auditor_not_implemented",
+            (
+                "trusted_rfc8785_wire_builder_and_namespace_aware_formal_"
+                "covert_auditor_not_implemented"
+            ),
+            (
+                "formal_preservation_pair_generator_evaluator_and_complete_"
+                "transform_to_verifier_coverage_not_implemented"
+            ),
             "exact_baseline_revisions_and_artifact_hashes_not_registered",
             "independent_holdout_generator_and_validation_artifacts_not_implemented",
             "functional_recognizer_cli_signed_minimal_image_and_archive_evaluator_not_implemented",
@@ -1143,7 +1150,10 @@ def phase2b_preregistration_report() -> dict[str, object]:
 
     from . import (
         phase2b_adapter,
+        phase2b_covert_audit_v1,
+        phase2b_exact_derived_witness_bridge_v1,
         phase2b_exact_bridge_v1,
+        phase2b_exact_transform_semantics_v1,
         phase2b_projection_compiler,
         phase2b_runner,
         phase2b_selector,
@@ -1227,11 +1237,44 @@ def phase2b_preregistration_report() -> dict[str, object]:
         "exact_verifier_semantics_id": (
             phase2b_exact_bridge_v1.DEFAULT_EXACT_BRIDGE_POLICY.verifier_semantics_id
         ),
+        "public_transform_evidence_v2_authority_implemented": True,
+        "public_transform_evidence_schema_version": (
+            phase2b_exact_transform_semantics_v1.PUBLIC_TRANSFORM_EVIDENCE_SCHEMA_VERSION
+        ),
+        "exact_transform_semantics_version": (
+            phase2b_exact_transform_semantics_v1.EXACT_TRANSFORM_SEMANTICS_VERSION
+        ),
+        "eight_wire_transform_operation_exact_kernel_mechanics_implemented": True,
+        "bundle_atomic_exact_transform_receipt_implemented": True,
+        "exact_transform_recomputes_uncertainty_internally": True,
+        "complete_transform_semantics_implemented": False,
+        "formal_preservation_transform_suite_implemented": False,
+        "exact_derived_observation_witness_bridge_implemented": True,
+        "exact_derived_witness_bridge_version": (
+            phase2b_exact_derived_witness_bridge_v1.EXACT_DERIVED_WITNESS_BRIDGE_VERSION
+        ),
+        "exact_derived_witness_matcher_version": (
+            phase2b_exact_derived_witness_bridge_v1.EXACT_DERIVED_WITNESS_MATCHER_VERSION
+        ),
+        (
+            "authoritative_derived_witness_bridge_recomputes_transform_"
+            "internally"
+        ): True,
+        (
+            "strict_scope_complete_law_binding_scale_support_slice_grid_"
+            "implemented"
+        ): True,
+        "scale_selector_aggregates_exact_support_slices_before_selection": True,
+        "exact_transform_receipt_consumed_by_derived_witness_bridge": True,
+        "all_eight_transform_operations_covered_by_derived_six_law_bridge": False,
+        "nondimensionless_derived_verifier_semantics_implemented": False,
         "prediction_archive_evaluator_implemented": False,
         "public_wire_contract_implemented": True,
         "public_wire_is_family_neutral_shaped_only": True,
         "semantic_family_neutrality_audited": False,
         "allowed_field_answer_correlation_audit_implemented": False,
+        "trusted_rfc8785_wire_builder_implemented": False,
+        "formal_uuid_namespace_field_audit_implemented": False,
         "randomized_identifier_assignment_attested": False,
         "uncertainty_semantics_compiler_implemented": False,
         "internal_candidate_enumeration_implemented": True,
@@ -1245,7 +1288,16 @@ def phase2b_preregistration_report() -> dict[str, object]:
             + hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest()
             for name, module in (
                 ("adapter", phase2b_adapter),
+                ("covert_audit_mechanics", phase2b_covert_audit_v1),
+                (
+                    "exact_derived_witness_bridge",
+                    phase2b_exact_derived_witness_bridge_v1,
+                ),
                 ("exact_bridge", phase2b_exact_bridge_v1),
+                (
+                    "exact_transform_semantics",
+                    phase2b_exact_transform_semantics_v1,
+                ),
                 ("projection_compiler", phase2b_projection_compiler),
                 ("runner", phase2b_runner),
                 ("selector", phase2b_selector),
@@ -1322,7 +1374,20 @@ def phase2b_preregistration_report() -> dict[str, object]:
         ),
         "validation_version_policy_frozen": True,
         "covert_channel_audit_frozen": True,
+        "fixed_envelope_covert_audit_mechanics_implemented": True,
+        "fixed_envelope_covert_statistics_mechanics_implemented": True,
+        "fixed_envelope_covert_audit_semantics_id": (
+            phase2b_covert_audit_v1.SEMANTICS_ID
+        ),
+        "fixed_envelope_covert_audit_policy_id": (
+            phase2b_covert_audit_v1.DEFAULT_COVERT_AUDIT_POLICY.policy_id
+        ),
+        "fixed_envelope_covert_audit_claim_level": (
+            phase2b_covert_audit_v1.NON_AUTHORITATIVE_CLAIM_LEVEL
+        ),
         "covert_channel_audit_implemented": False,
+        "formal_covert_channel_audit_passed": False,
+        "covert_channel_audit_executed": False,
         "global_consistent_renamings_required": (
             exact_freeze.covert_channel_audit.global_consistent_renamings
         ),

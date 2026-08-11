@@ -59,11 +59,19 @@ bundle ID、schema/registry-theory version 与冻结 policy IDs；它不携带�
 不能作为证据或下游 receipt。通过 preflight 后的执行错误才绑定完整 provenance 并整案
 abstain。
 
-这个实现范围仍只有 identity transform、无量纲输入及 temporal/spatial support 精确对齐；
-完整 unit conversion、coordinate affine、temporal/spatial aggregation、sampling、
-split/merge 与 coarse-graining 语义仍未实现。trusted wire、covert audit、recognizer CLI、
-archive evaluator、sealed data、runtime/custodian 和 C1 exit 也仍缺失，所以宽泛 projection
-compiler、完整 typed pipeline 与 formal holdout 状态继续为 false。
+当前还实现了 `PublicTransformEvidenceBundleV2` 的八种 wire-operation typed certificate 与
+exact sparse/discrete kernel mechanics，以及从 transformed observation 重建 witness inventory、
+完整 strict-scope law × binding × scale × support-slice grid、先按 scale 合并所有 slice hull
+再选择的 derived bridge。它们不是完整物理语义：unit/aggregation/sampling/split/coarse 各有
+明确的窄合同，derived verifier 仍拒绝有量纲 witness，forest 也不支持 multi-root merge。
+八种 wire operation 与八类 formal preservation transform 不是一一对应；572 个
+preservation pairs 尚未生成或执行。
+
+固定 65,536-byte envelope 的 feature/statistics/32-32-16 invariance mechanics 也已实现，
+但 receipt 恒为 non-authoritative。trusted RFC-8785 builder、字段/UUID namespace 全覆盖审计、
+720+240 formal 资源合同、recognizer CLI、archive evaluator、sealed data、runtime/custodian 和
+C1 exit 仍缺失；所以宽泛 projection compiler、完整 typed pipeline、formal covert audit 与
+formal holdout 状态继续为 false。
 
 此外可以说：Phase-3A 的 v1.0.2 strict specification 已冻结，Python/Rust shared vectors
 各 48/48 PASS。M2 两端都接受 64,680 个 source candidates，并得到 64,680 个 unique strict

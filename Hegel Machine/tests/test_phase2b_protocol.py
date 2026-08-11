@@ -13,6 +13,19 @@ from hegel_machine.phase2b_exact_bridge_v1 import (
     DEFAULT_EXACT_BRIDGE_POLICY,
     DEFAULT_EXACT_SELECTION_POLICY,
 )
+from hegel_machine.phase2b_covert_audit_v1 import (
+    DEFAULT_COVERT_AUDIT_POLICY,
+    NON_AUTHORITATIVE_CLAIM_LEVEL,
+    SEMANTICS_ID as COVERT_AUDIT_SEMANTICS_ID,
+)
+from hegel_machine.phase2b_exact_derived_witness_bridge_v1 import (
+    EXACT_DERIVED_WITNESS_BRIDGE_VERSION,
+    EXACT_DERIVED_WITNESS_MATCHER_VERSION,
+)
+from hegel_machine.phase2b_exact_transform_semantics_v1 import (
+    EXACT_TRANSFORM_SEMANTICS_VERSION,
+    PUBLIC_TRANSFORM_EVIDENCE_SCHEMA_VERSION,
+)
 from hegel_machine.phase2b_protocol import (
     BaselineKind,
     BaselineRegistration,
@@ -32,6 +45,7 @@ from hegel_machine.phase2b_uncertainty_compiler import (
     DEFAULT_EXACT_UNCERTAINTY_POLICY,
     FROZEN_RATIONAL_GRID_ID,
 )
+from hegel_machine.phase2b_wire import TransformOperation
 
 
 SHA_A = "a" * 64
@@ -82,8 +96,16 @@ def test_exact_margin_quota_resolves_conflict_but_implementation_blocks_generati
     )
     assert protocol.unresolved_freeze_questions == ()
     assert (
+        "trusted_rfc8785_wire_builder_and_namespace_aware_formal_"
+        "covert_auditor_not_implemented"
+    ) in protocol.implementation_blockers
+    assert (
+        "formal_preservation_pair_generator_evaluator_and_complete_"
+        "transform_to_verifier_coverage_not_implemented"
+    ) in protocol.implementation_blockers
+    assert (
         "formal_wire_builder_and_covert_channel_auditor_not_implemented"
-        in protocol.implementation_blockers
+        not in protocol.implementation_blockers
     )
     assert (
         "functional_recognizer_cli_signed_minimal_image_and_archive_evaluator_not_implemented"
@@ -437,11 +459,67 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     assert report["exact_verifier_semantics_id"] == (
         DEFAULT_EXACT_BRIDGE_POLICY.verifier_semantics_id
     )
+    assert report["public_transform_evidence_v2_authority_implemented"] is True
+    assert report["public_transform_evidence_schema_version"] == (
+        PUBLIC_TRANSFORM_EVIDENCE_SCHEMA_VERSION
+    )
+    assert report["exact_transform_semantics_version"] == (
+        EXACT_TRANSFORM_SEMANTICS_VERSION
+    )
+    assert (
+        report[
+            "eight_wire_transform_operation_exact_kernel_mechanics_implemented"
+        ]
+        is True
+    )
+    assert report["bundle_atomic_exact_transform_receipt_implemented"] is True
+    assert report["exact_transform_recomputes_uncertainty_internally"] is True
+    assert report["complete_transform_semantics_implemented"] is False
+    assert report["formal_preservation_transform_suite_implemented"] is False
+    assert report["exact_derived_observation_witness_bridge_implemented"] is True
+    assert report["exact_derived_witness_bridge_version"] == (
+        EXACT_DERIVED_WITNESS_BRIDGE_VERSION
+    )
+    assert report["exact_derived_witness_matcher_version"] == (
+        EXACT_DERIVED_WITNESS_MATCHER_VERSION
+    )
+    assert (
+        report[
+            "authoritative_derived_witness_bridge_recomputes_transform_"
+            "internally"
+        ]
+        is True
+    )
+    assert (
+        report[
+            "strict_scope_complete_law_binding_scale_support_slice_grid_"
+            "implemented"
+        ]
+        is True
+    )
+    assert (
+        report["scale_selector_aggregates_exact_support_slices_before_selection"]
+        is True
+    )
+    assert (
+        report["exact_transform_receipt_consumed_by_derived_witness_bridge"]
+        is True
+    )
+    assert (
+        report["all_eight_transform_operations_covered_by_derived_six_law_bridge"]
+        is False
+    )
+    assert (
+        report["nondimensionless_derived_verifier_semantics_implemented"]
+        is False
+    )
     assert report["prediction_archive_evaluator_implemented"] is False
     assert report["public_wire_contract_implemented"] is True
     assert report["public_wire_is_family_neutral_shaped_only"] is True
     assert report["semantic_family_neutrality_audited"] is False
     assert report["allowed_field_answer_correlation_audit_implemented"] is False
+    assert report["trusted_rfc8785_wire_builder_implemented"] is False
+    assert report["formal_uuid_namespace_field_audit_implemented"] is False
     assert report["randomized_identifier_assignment_attested"] is False
     assert report["uncertainty_semantics_compiler_implemented"] is False
     assert report["recognizer_entrypoint_implemented"] is False
@@ -456,7 +534,10 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     assert report["oci_isolation_launch_contract_implemented"] is True
     assert set(report["component_source_ids"]) == {
         "adapter",
+        "covert_audit_mechanics",
+        "exact_derived_witness_bridge",
         "exact_bridge",
+        "exact_transform_semantics",
         "projection_compiler",
         "runner",
         "selector",
@@ -475,7 +556,23 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     assert report["baseline_specs_frozen"] is True
     assert report["exact_baseline_revisions_registered"] is False
     assert report["covert_channel_audit_frozen"] is True
+    assert report["fixed_envelope_covert_audit_mechanics_implemented"] is True
+    assert (
+        report["fixed_envelope_covert_statistics_mechanics_implemented"]
+        is True
+    )
+    assert report["fixed_envelope_covert_audit_semantics_id"] == (
+        COVERT_AUDIT_SEMANTICS_ID
+    )
+    assert report["fixed_envelope_covert_audit_policy_id"] == (
+        DEFAULT_COVERT_AUDIT_POLICY.policy_id
+    )
+    assert report["fixed_envelope_covert_audit_claim_level"] == (
+        NON_AUTHORITATIVE_CLAIM_LEVEL
+    )
     assert report["covert_channel_audit_implemented"] is False
+    assert report["formal_covert_channel_audit_passed"] is False
+    assert report["covert_channel_audit_executed"] is False
     assert report["formal_uncertainty_models_allowed"] == ["absolute_bound"]
     assert report["preservation_pairs_counted_in_720"] is False
     assert report["active_promotion_enabled"] is False
@@ -490,6 +587,14 @@ def test_protocol_preservation_transform_ids_match_the_exact_freeze():
         rule.transform for rule in frozen_phase2b_exact_freeze().preservation_rules
     )
     assert protocol_ids == freeze_ids == tuple(PreservationTransform)
+
+
+def test_wire_operations_are_not_the_formal_preservation_taxonomy():
+    wire_operations = {item.value for item in TransformOperation}
+    preservation_transforms = {item.value for item in PreservationTransform}
+    assert len(wire_operations) == len(preservation_transforms) == 8
+    assert wire_operations != preservation_transforms
+    assert wire_operations & preservation_transforms == {"unit_conversion"}
 
 
 def test_checked_in_phase2b_preregistration_artifact_matches_runtime():
