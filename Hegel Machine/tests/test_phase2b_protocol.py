@@ -23,6 +23,8 @@ from hegel_machine.phase2b_exact_derived_witness_bridge_v1 import (
     EXACT_DERIVED_WITNESS_MATCHER_VERSION,
 )
 from hegel_machine.phase2b_exact_transform_semantics_v1 import (
+    EXACT_TRANSFORM_PROVENANCE_COMPILER_POLICY_ID,
+    EXACT_TRANSFORM_PROVENANCE_COMPILER_VERSION,
     EXACT_TRANSFORM_POLICY_ID,
     EXACT_TRANSFORM_SEMANTICS_VERSION,
     PUBLIC_TRANSFORM_EVIDENCE_SCHEMA_VERSION,
@@ -37,6 +39,15 @@ from hegel_machine.phase2b_trusted_wire_batch_v1 import (
     TRUSTED_WIRE_BATCH_POLICY_ID,
     TRUSTED_WIRE_KEY_SCHEDULE_VERSION,
     TRUSTED_WIRE_PUBLIC_PROVENANCE_VERSION,
+)
+from hegel_machine.phase2b_trusted_wire_typed_authority_v1 import (
+    TYPED_AUTHORITY_CODEC_POLICY_ID,
+    TYPED_AUTHORITY_CODEC_VERSION,
+    TYPED_AUTHORITY_SCHEMA_ID,
+)
+from hegel_machine.phase2b_trusted_wire_typed_replay_v1 import (
+    TYPED_TRUSTED_WIRE_REPLAY_POLICY_ID,
+    TYPED_TRUSTED_WIRE_REPLAY_VERSION,
 )
 from hegel_machine.phase2b_protocol import (
     BaselineKind,
@@ -561,6 +572,36 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     assert report["trusted_wire_exact_transform_validator_policy_id"] == (
         EXACT_TRANSFORM_VALIDATOR_POLICY_ID
     )
+    assert report["typed_authority_codec_version"] == TYPED_AUTHORITY_CODEC_VERSION
+    assert report["typed_authority_schema_id"] == TYPED_AUTHORITY_SCHEMA_ID
+    assert report["typed_authority_codec_policy_id"] == (
+        TYPED_AUTHORITY_CODEC_POLICY_ID
+    )
+    assert report["strict_closed_typed_authority_codec_mechanics_implemented"] is True
+    assert report["exact_transform_provenance_compiler_version"] == (
+        EXACT_TRANSFORM_PROVENANCE_COMPILER_VERSION
+    )
+    assert report["exact_transform_provenance_compiler_policy_id"] == (
+        EXACT_TRANSFORM_PROVENANCE_COMPILER_POLICY_ID
+    )
+    assert report["native_v2_provenance_compile_before_framing_implemented"] is True
+    assert report["typed_trusted_wire_replay_version"] == (
+        TYPED_TRUSTED_WIRE_REPLAY_VERSION
+    )
+    assert report["typed_trusted_wire_replay_policy_id"] == (
+        TYPED_TRUSTED_WIRE_REPLAY_POLICY_ID
+    )
+    assert (
+        report[
+            "direct_payload_authority_exact_transform_complete_replay_implemented"
+        ]
+        is True
+    )
+    assert report["whole_batch_atomic_typed_replay_mechanics_implemented"] is True
+    assert (
+        report["source_order_bound_stage_b_secret_replay_receipt_implemented"]
+        is True
+    )
     assert report["pairwise_distinct_key_source_contract_implemented"] is True
     assert report["key_source_statistical_independence_attested"] is False
     assert report["whole_batch_unbiased_fisher_yates_mechanics_implemented"] is True
@@ -589,7 +630,11 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     assert report["batch_atomic_trusted_wire_builder_implemented"] is False
     assert (
         report["typed_trusted_wire_authority_decode_replay_implemented"]
-        is False
+        is True
+    )
+    assert (
+        report["typed_trusted_wire_authority_decode_replay_claim_level"]
+        == TRUSTED_WIRE_CLAIM_LEVEL
     )
     assert report["trusted_wire_origin_authenticated"] is False
     assert report["trusted_rfc8785_wire_builder_implemented"] is False
@@ -617,6 +662,8 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "selector",
         "trusted_wire_keyed_batch_mechanics",
         "trusted_wire_profile_mechanics",
+        "trusted_wire_typed_authority_codec",
+        "trusted_wire_typed_replay_mechanics",
         "uncertainty_compiler",
         "wire",
     }

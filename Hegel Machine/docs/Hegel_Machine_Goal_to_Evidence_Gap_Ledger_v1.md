@@ -213,15 +213,23 @@ and an 80-byte-header/65,536-byte envelope with public deterministic test paddin
 `phase2b_trusted_wire_batch_v1.py` now adds Stage-B keyed batch mechanics:
 pairwise-distinct 32-byte IKM inputs, purpose-separated HKDF keys, unbiased
 whole-batch shuffle, case-local post-shuffle HMAC UUIDv4 with batch-global counters
-and collision warning, schema-aware recanonicalization, wire-only public provenance
-rebinding, secret HMAC padding, atomic batch emission and supplied-secret custodian
+and collision warning, schema-aware recanonicalization, public base provenance binding
+followed by shared exact-validator-native derived-provenance compilation
+before framing, secret HMAC padding, atomic batch emission and supplied-secret custodian
 replay. The content-bound batch policy covers algorithm domains/header identities,
-accepted-JCS/manifest/transform-validator identities and all acceptance caps.
+accepted-JCS/manifest/typed-codec/provenance-compiler/transform-validator identities and
+all acceptance caps. Stage C adds a strict closed typed codec and replay: every emitted
+payload losslessly reconstructs the exact V2 authority and directly produces an
+exact-transform `COMPLETE` result without post-decode mutation. Whole-batch replay also
+binds membership, source-authority order, the Stage-B secret receipt and every transform
+result. Given exact top-level API types, batch/custodian/typed semantic drift yields
+only batch `ABSTAIN`, with no partial roots; a top-level type-contract violation raises
+`TypeError` before replay.
 
 These receipts remain non-authoritative. Pairwise distinct does not attest IKM
-independence; public decoding does not verify secret padding; custodian replay proves
-only deterministic reproduction from supplied secrets; wire-only provenance cannot
-yet reconstruct a V2 authority accepted by the typed transform validator. Origin,
+independence; raw-envelope typed decoding does not verify batch membership or secret
+padding; supplied-secret replay proves only deterministic reproduction from supplied
+authorities/run/IKM. Origin,
 formal UUID/field audit, formal covert audit, sealed execution and C1 exit remain open.
 The 1..1024 authority cap is enforced, but the 1024-authority worst-case wall-time/RSS
 has not been qualified.
@@ -261,6 +269,12 @@ secret_hmac_padding_custodian_replay_mechanics_implemented
 batch_atomic_keyed_trusted_wire_mechanics_implemented
 uuid_collision_retry_warning_mechanics_implemented
 trusted_wire_custodian_secret_replay_mechanics_implemented
+strict_closed_typed_authority_codec_mechanics_implemented
+native_v2_provenance_compile_before_framing_implemented
+direct_payload_authority_exact_transform_complete_replay_implemented
+whole_batch_atomic_typed_replay_mechanics_implemented
+source_order_bound_stage_b_secret_replay_receipt_implemented
+typed_trusted_wire_authority_decode_replay_implemented
 ```
 
 while the broad flags below remain false:
@@ -281,7 +295,6 @@ post_shuffle_hmac_uuidv4_assignment_implemented
 provenance_rebound_to_public_payload_implemented
 secret_padding_replay_implemented
 batch_atomic_trusted_wire_builder_implemented
-typed_trusted_wire_authority_decode_replay_implemented
 trusted_wire_origin_authenticated
 key_source_statistical_independence_attested
 trusted_wire_1024_authority_capacity_qualified
@@ -299,24 +312,22 @@ recognizer CLI or a sealed selector execution. The older binary64 projection com
 still does not consume
 the exact receipt, and its broad completion flag therefore remains false. The
 derived bridge closes strict `task_target` and unused-observation coverage for its
-bounded profile, but complete physical transform/preservation semantics, strict
-typed trusted-wire decode/replay, formal covert-channel audit, archive evaluator,
+bounded profile, but complete physical transform/preservation semantics, formal
+covert-channel audit, recognizer CLI, prediction archive evaluator,
 signed image/runtime evidence and durable one-shot custody remain formal-pipeline
 blockers.
 
 ## 7. Next authorized construction slice
 
-The next non-actual construction slice is **Phase-2B Strict Typed Authority
-Decode/Replay v1**. Stage A binds the accepted-JCS mapping, explicit namespace paths
-and public-test envelope mechanics; Stage B supplies keyed shuffle/ID/
-recanonicalization/wire-provenance/secret-padding and atomic supplied-secret replay.
-The next slice must strictly decode binary64 bits, rational decimal pairs, all eight
-certificate discriminators and every closed mapping into exact V2 public types;
-rebuild V2-compatible public base/derived provenance without a private helper; rerun
-the exact transform/uncertainty validator; and bind reconstructed authority,
-transform-policy/result and replay roots atomically. Unknown fields, malformed
-discriminators, non-canonical arrays, provenance/root drift or partial reconstruction
-must fail closed. Small deterministic/tamper vectors remain mechanics evidence only;
+The next non-actual construction slice is **Phase-2B Recognizer CLI + Prediction
+Archive Evaluator v1**. The strict CLI must accept only the frozen public input and
+emit a closed main/challenge prediction archive without answer access; the evaluator
+must validate archive completeness, duplicates, ordering, roots, abstentions and
+challenge/preservation partitions before any score path. Then an unsealed end-to-end
+run must connect the current typed whole-batch replay to recognizer output and archive
+evaluation while keeping all origin, isolation, one-shot custody, covert-audit and
+sealed-C1 claims false. Malformed or partial archives must fail closed. Small
+deterministic/tamper vectors and an unsealed run remain mechanics evidence only;
 formal 720+240 audit, independent labels and sealed execution are later gates.
 
 No Q0.5b actual rerun, Docker execution, holdout generation, or ACTIVE mutation

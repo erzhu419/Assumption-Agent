@@ -547,11 +547,43 @@ def test_batch_envelope_decoded_and_replay_receipts_reject_spoof_or_pollution(
         key_sources=_keys(),
         authorities=inputs,
     )
+    assert replay.source_authority_content_ids == tuple(
+        authority.content_id for authority in inputs
+    )
+    assert replay.replay_receipt_id.startswith(
+        "phase2b_trusted_wire_secret_replay_"
+    )
     with pytest.raises(TypeError, match="issued only"):
         batch_wire.TrustedWireReplayReceiptV1()
     object.__setattr__(replay, "replay_verified", False)
     with pytest.raises(ValueError, match="claim boundary"):
         replay._validate()  # noqa: SLF001 - deliberate post-issue pollution audit
+
+
+def test_secret_replay_receipt_binds_source_order_and_exact_boolean_claims(
+    authorities: dict[str, PublicTransformEvidenceBundleV2],
+) -> None:
+    inputs = (authorities["identity"], authorities["unit_conversion"])
+    result = _build(inputs)
+    replay = batch_wire.verify_trusted_wire_batch_replay_v1(
+        batch=result,
+        run_id=RUN_ID,
+        key_sources=_keys(),
+        authorities=inputs,
+    )
+    wrong_order = deepcopy(replay)
+    object.__setattr__(
+        wrong_order,
+        "source_authority_content_ids",
+        tuple(reversed(replay.source_authority_content_ids)),
+    )
+    with pytest.raises(ValueError, match="receipt root drift"):
+        wrong_order._validate()  # noqa: SLF001 - deliberate pollution audit
+
+    bool_pollution = deepcopy(replay)
+    object.__setattr__(bool_pollution, "replay_verified", 1)
+    with pytest.raises(TypeError, match="exact bool"):
+        bool_pollution._validate()  # noqa: SLF001 - deliberate pollution audit
 
 
 def test_second_authority_failure_abstains_atomically_without_first_envelope(
@@ -633,7 +665,7 @@ def test_frozen_policy_id_is_public_content_bound_and_carried_end_to_end(
 ) -> None:
     expected = (
         "phase2b_trusted_wire_batch_policy_"
-        "b50927c5ec9a39af98d1e4674e9d8d365560f2f8c6c9ca59c90c40c65c45d290"
+        "26aa3ae0ec8c3f646ef4cebd9cb3334f9bd6a5fbc49697cd999a17b21bd56b86"
     )
     assert batch_wire.TRUSTED_WIRE_BATCH_POLICY_ID == expected
     assert batch_wire.DEFAULT_TRUSTED_WIRE_BATCH_POLICY.policy_id == expected
@@ -652,12 +684,35 @@ def test_frozen_policy_id_is_public_content_bound_and_carried_end_to_end(
 def test_frozen_policy_exposes_every_resource_cap_at_exact_defaults() -> None:
     policy = batch_wire.DEFAULT_TRUSTED_WIRE_BATCH_POLICY
     expected = {
-        "schema_version": "hegel-machine-phase2b-trusted-wire-batch-mechanics/1",
+        "schema_version": "hegel-machine-phase2b-trusted-wire-batch-mechanics/2",
+        "payload_schema_version": (
+            "hegel-machine-phase2b-trusted-wire-batch-payload/2"
+        ),
         "key_schedule_version": "hegel-machine-phase2b-trusted-wire-hkdf-sha256/1",
-        "public_provenance_version": "hegel-machine-phase2b-trusted-wire-public-provenance/1",
+        "public_provenance_version": (
+            "hegel-machine-phase2b-trusted-wire-public-provenance/2"
+        ),
+        "typed_authority_schema_id": (
+            "phase2b_trusted_wire_typed_authority_schema_"
+            "9429e96b9192db4546b92b011779e99352decb051a023d8883682539c804b730"
+        ),
+        "typed_authority_codec_version": (
+            "hegel-machine-phase2b-trusted-wire-typed-authority-codec/1"
+        ),
+        "typed_authority_codec_policy_id": (
+            "phase2b_trusted_wire_typed_authority_codec_policy_"
+            "8fc5714399f0e31c43bf8fa3c818c4cc8afb8b4c49b57ae8af309821abfcc4b3"
+        ),
         "exact_transform_validator_policy_id": (
             "phase2b_exact_transform_policy_"
-            "ac34bd085a24ee6656fc09401ba8df307d60522dc7598bc60e4b7689c59ba834"
+            "c49a74a45af3e272d800fece85f6862ae557f0c3b071dded04f6b6c2b8a7862e"
+        ),
+        "exact_transform_provenance_compiler_version": (
+            "hegel-machine-phase2b-exact-transform-provenance-compiler/1"
+        ),
+        "exact_transform_provenance_compiler_policy_id": (
+            "phase2b_exact_transform_provenance_compiler_policy_"
+            "36fee587bcb02e1f447c29d7b68f525f449088c43aab3b76623295a041146087"
         ),
         "maximum_authorities": 1_024,
         "run_id_bytes": 32,
@@ -714,9 +769,15 @@ def test_frozen_policy_exposes_every_resource_cap_at_exact_defaults() -> None:
     ("field", "value"),
     (
         ("schema_version", "drift"),
+        ("payload_schema_version", "drift"),
         ("key_schedule_version", "drift"),
         ("public_provenance_version", "drift"),
+        ("typed_authority_schema_id", "drift"),
+        ("typed_authority_codec_version", "drift"),
+        ("typed_authority_codec_policy_id", "drift"),
         ("exact_transform_validator_policy_id", "drift"),
+        ("exact_transform_provenance_compiler_version", "drift"),
+        ("exact_transform_provenance_compiler_policy_id", "drift"),
         ("maximum_authorities", 1_023),
         ("run_id_bytes", 31),
         ("ikm_bytes", 31),
@@ -794,17 +855,17 @@ def test_frozen_identity_batch_cryptographic_vector(
     )
     assert result.batch_id == (
         "phase2b_trusted_wire_batch_"
-        "ded7751a58efaaf0faa3a76379bd054fe78534c971e195964ff625d2e8ffe129"
+        "0b558bbe6484e75635909e1a4bbd914db5fa58e5d77c9a7b62ec4a883f1e1d2b"
     )
     assert row.payload_sha256 == (
-        "6f06739a04f7ca254b8bc03594fc1ead6b0c75c5ee199f9b10d88afb3b9b846b"
+        "01a1c2bd289abcfd263c3f6dacf38d47d8e049d79efd897ee8be1fea1e36a61f"
     )
     assert row.padding_sha256 == (
-        "a89781e7943f929f57ac56ac3bd64b2522bcc998e934b45e5b1471d14f09567b"
+        "5f37627a6f9d416c95e03f4264a8354535ed58474d8dbb0b5f2f88aafe792214"
     )
     assert row.envelope_id == (
         "phase2b_trusted_envelope_"
-        "caff4e5cff8428a73fbbfef6339cbad56b1a5dadb4fd98f3bcef872985b7dd4b"
+        "9008e222d08bcf21aa70942db5b06c40dbed36994da9324f88ea094df9d56e4c"
     )
     decoded = batch_wire.decode_and_audit_trusted_envelope_v1(row.envelope)
     first_by_namespace: dict[str, str] = {}

@@ -1158,6 +1158,8 @@ def phase2b_preregistration_report() -> dict[str, object]:
         phase2b_runner,
         phase2b_selector,
         phase2b_trusted_wire_batch_v1,
+        phase2b_trusted_wire_typed_authority_v1,
+        phase2b_trusted_wire_typed_replay_v1,
         phase2b_trusted_wire_v1,
         phase2b_uncertainty_compiler,
         phase2b_wire,
@@ -1304,6 +1306,32 @@ def phase2b_preregistration_report() -> dict[str, object]:
         "trusted_wire_exact_transform_validator_policy_id": (
             phase2b_trusted_wire_batch_v1.EXACT_TRANSFORM_VALIDATOR_POLICY_ID
         ),
+        "typed_authority_codec_version": (
+            phase2b_trusted_wire_typed_authority_v1.TYPED_AUTHORITY_CODEC_VERSION
+        ),
+        "typed_authority_schema_id": (
+            phase2b_trusted_wire_typed_authority_v1.TYPED_AUTHORITY_SCHEMA_ID
+        ),
+        "typed_authority_codec_policy_id": (
+            phase2b_trusted_wire_typed_authority_v1.TYPED_AUTHORITY_CODEC_POLICY_ID
+        ),
+        "strict_closed_typed_authority_codec_mechanics_implemented": True,
+        "exact_transform_provenance_compiler_version": (
+            phase2b_exact_transform_semantics_v1.EXACT_TRANSFORM_PROVENANCE_COMPILER_VERSION
+        ),
+        "exact_transform_provenance_compiler_policy_id": (
+            phase2b_exact_transform_semantics_v1.EXACT_TRANSFORM_PROVENANCE_COMPILER_POLICY_ID
+        ),
+        "native_v2_provenance_compile_before_framing_implemented": True,
+        "typed_trusted_wire_replay_version": (
+            phase2b_trusted_wire_typed_replay_v1.TYPED_TRUSTED_WIRE_REPLAY_VERSION
+        ),
+        "typed_trusted_wire_replay_policy_id": (
+            phase2b_trusted_wire_typed_replay_v1.TYPED_TRUSTED_WIRE_REPLAY_POLICY_ID
+        ),
+        "direct_payload_authority_exact_transform_complete_replay_implemented": True,
+        "whole_batch_atomic_typed_replay_mechanics_implemented": True,
+        "source_order_bound_stage_b_secret_replay_receipt_implemented": True,
         "pairwise_distinct_key_source_contract_implemented": True,
         "key_source_statistical_independence_attested": False,
         "whole_batch_unbiased_fisher_yates_mechanics_implemented": True,
@@ -1321,7 +1349,10 @@ def phase2b_preregistration_report() -> dict[str, object]:
         "provenance_rebound_to_public_payload_implemented": False,
         "secret_padding_replay_implemented": False,
         "batch_atomic_trusted_wire_builder_implemented": False,
-        "typed_trusted_wire_authority_decode_replay_implemented": False,
+        "typed_trusted_wire_authority_decode_replay_implemented": True,
+        "typed_trusted_wire_authority_decode_replay_claim_level": (
+            phase2b_trusted_wire_v1.NON_AUTHORITATIVE_CLAIM_LEVEL
+        ),
         "trusted_wire_origin_authenticated": False,
         "trusted_rfc8785_wire_builder_implemented": False,
         "formal_uuid_namespace_field_audit_implemented": False,
@@ -1356,6 +1387,14 @@ def phase2b_preregistration_report() -> dict[str, object]:
                     phase2b_trusted_wire_batch_v1,
                 ),
                 ("trusted_wire_profile_mechanics", phase2b_trusted_wire_v1),
+                (
+                    "trusted_wire_typed_authority_codec",
+                    phase2b_trusted_wire_typed_authority_v1,
+                ),
+                (
+                    "trusted_wire_typed_replay_mechanics",
+                    phase2b_trusted_wire_typed_replay_v1,
+                ),
                 ("uncertainty_compiler", phase2b_uncertainty_compiler),
                 ("wire", phase2b_wire),
             )

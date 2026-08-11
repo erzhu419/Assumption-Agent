@@ -174,20 +174,28 @@ an exact authority tuple, exact run ID, and three pairwise-distinct 32-byte IKM
 values; derive purpose-separated shuffle/ID/padding keys; perform unbiased
 whole-batch Fisher–Yates; assign case-local post-shuffle HMAC UUIDv4 values with
 batch-global counters/collision accounting; recanonicalize the renamed schema;
-rebind wire-only public provenance; emit secret-HMAC-padded envelopes atomically;
-and support byte-exact replay from the supplied custodian inputs.
+compile public base provenance plus shared exact-validator-native derived provenance
+before framing; emit secret-HMAC-padded envelopes atomically; and support byte-exact
+replay from the supplied custodian inputs. The Stage-C closed typed codec losslessly
+decodes/re-encodes all eight certificate profiles, binary64 atoms, and exact rationals.
+Each emitted payload authority directly obtains exact-transform `COMPLETE` without
+post-decode mutation. Its whole-batch replay also binds Stage-B membership, source
+authority order, the supplied-secret receipt, and every transform result. Given exact
+top-level API types, batch/custodian/typed semantic drift returns one batch `ABSTAIN`
+with no partial roots; a top-level type-contract violation raises `TypeError` before
+replay.
 
-Pairwise distinct IKM values do not attest independent generation. The public
-decoder verifies structural hashes, accepted-JCS, paths, canonical order, and
-wire-only provenance but not secret padding; custodian replay proves only that
-the supplied authorities/run/IKM reproduce the bytes. The wire-only provenance
-profile cannot yet be decoded into a V2 authority accepted by the existing typed
-transform validator. Consequently this is still not the complete trusted
+Pairwise distinct IKM values do not attest independent generation. The raw-envelope
+diagnostic verifies typed payload identity and direct transform replay but not batch
+membership or secret padding; supplied-secret replay proves only that the supplied
+authorities/run/IKM reproduce the bytes. All of these receipts remain
+`NON_AUTHORITATIVE_MECHANICS_ONLY`. Consequently this is still not the complete trusted
 RFC-8785 builder or a formal namespace/covert audit, it has no origin or one-shot
 custody attestation, and it has not run on the formal corpus. No audit-pass claim
 is available. The 1..1024 authority cap is enforced, but the 1024-authority
 worst-case wall-time/RSS has not been qualified. The next construction slice is
-strict typed authority decode/replay.
+the recognizer CLI plus prediction archive evaluator, followed by unsealed
+end-to-end replay.
 
 Until all frozen `standard_error` semantics and Student-t/Bonferroni conversion
 rules are implemented and tested, formal selector input is strictly:
@@ -248,10 +256,10 @@ implementation and external-evidence blockers remain:
   their outputs, but the narrow operation contracts, dimensionless verifier boundary,
   incomplete transform-to-law coverage and unexecuted formal preservation suite keep
   the broad projection compiler and typed evidence-to-prediction pipeline incomplete;
-- fixed-envelope feature/statistics/invariance and keyed batch shuffle/ID/
-  recanonicalization/wire-provenance/secret-padding/replay mechanics are implemented
-  only as non-authoritative receipts. Strict typed authority decode, origin
-  authentication, a complete trusted RFC-8785 builder, formal namespace-aware
+- fixed-envelope feature/statistics/invariance, keyed batch shuffle/ID/
+  recanonicalization/native-provenance/secret-padding/replay, and strict typed
+  direct/whole-batch replay mechanics are implemented only as non-authoritative
+  receipts. Origin authentication, a complete trusted RFC-8785 builder, formal namespace-aware
   field/UUID audit, formal-corpus resource execution and independent formal audit
   are not implemented or executed;
 - exact 40-hex external baseline revisions, image/SBOM digests, and artifact

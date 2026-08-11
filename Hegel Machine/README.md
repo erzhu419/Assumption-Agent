@@ -213,13 +213,19 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
   以及使用公开 test padding 的 65,536-byte framing/hash replay；Stage B 又实现了三份
   pairwise-distinct 32-byte IKM 的 purpose-separated HKDF、unbiased whole-batch shuffle、
   case-local latent→public HMAC UUIDv4 分配（counter/碰撞集合为 batch-global）、rename 后
-  schema recanonicalization、wire-only public provenance 重绑、secret HMAC padding、原子
-  batch emission 与 supplied-secret custodian replay。这些仍只是
-  `NON_AUTHORITATIVE_MECHANICS_ONLY`：IKM 独立性没有外部 attestation，public decoder 不验证
-  secret padding，wire-only provenance 也尚不能重建可由 V2 transform authority 消费的 typed
-  object；origin authentication、完整 trusted RFC-8785 builder、formal namespace/covert audit
-  与 formal corpus 执行仍缺失；1024-authority worst-case wall-time/RSS 也尚未资格化。
-  下一刀是 strict typed authority decode/replay；在完整
+  schema recanonicalization、public base provenance 与 shared exact-validator-native derived
+  provenance 的 framing 前编译、secret HMAC padding、原子 batch emission 与 supplied-secret
+  custodian replay。Stage C 另以 closed typed schema lossless decode/re-encode payload；每个实际
+  payload authority 都可直接得到 exact-transform `COMPLETE`，整批 replay 只有在 membership、
+  source order、Stage-B secret receipt 与每个 transform result 全部复算一致时才原子返回。在
+  exact top-level API types 合法的前提下，batch/custodian/typed semantic drift 只返回整批
+  `ABSTAIN` 且不泄露 partial rows；顶层 type-contract 违规在 replay 前抛 `TypeError`。
+  raw-envelope 入口只是 `NON_AUTHORITATIVE_MECHANICS_ONLY` diagnostic，
+  整批 receipt 也不升级其 evidence authority：IKM 独立性没有外部 attestation，raw decoder
+  不验证 batch membership 或 secret padding；origin authentication、完整 trusted RFC-8785
+  builder、formal namespace/covert audit 与 formal corpus 执行仍缺失；1024-authority
+  worst-case wall-time/RSS 也尚未资格化。下一刀是 recognizer CLI + strict main/challenge
+  prediction archive evaluator，再做 unsealed end-to-end replay；在完整
   standard-error 语义实现前，formal selector 只允许 `absolute_bound`；
 - seal → prediction commitment → reveal → consumed 的 immutable lifecycle model、
   answer salted-commitment opening 校验和进程内原子防分叉 guard，以及 read-only
@@ -271,7 +277,8 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
   unsealed pipeline validation；当前已完成 wire、candidate enumeration、exact
   uncertainty/root-identity selector、typed transform kernels、derived witness bridge、
   non-authoritative fixed-envelope covert mechanics、Stage-A accepted-JCS/namespace/envelope
-  mechanics 与 runner/state-machine 合同，但这些
+  mechanics、Stage-B native-provenance keyed framing 与 Stage-C strict typed whole-batch replay，
+  以及 runner/state-machine 合同，但这些
   窄 mechanics 尚未组成 formal pipeline 或效果证据；
 - 720-case main + 240-case challenge 的 sealed generation、572 个 derived pairs、独立
   custodian、真实 OCI attestation、三套外部 baseline pins 或 consumed score report；

@@ -17,7 +17,7 @@ the frozen preservation-pair or Phase-2B exit claims.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from enum import Enum
 from fractions import Fraction
 from typing import Final, TypeAlias
@@ -60,6 +60,9 @@ PUBLIC_TRANSFORM_EVIDENCE_SCHEMA_VERSION: Final = (
 )
 EXACT_TRANSFORM_SEMANTICS_VERSION: Final = (
     "hegel-machine-phase2b-exact-sparse-transform-semantics/1"
+)
+EXACT_TRANSFORM_PROVENANCE_COMPILER_VERSION: Final = (
+    "hegel-machine-phase2b-exact-transform-provenance-compiler/1"
 )
 def _uuid4(value: str, name: str) -> str:
     try:
@@ -841,6 +844,9 @@ class _ExactTransformPolicy:
     uncertainty_policy_id: str = DEFAULT_EXACT_UNCERTAINTY_POLICY.policy_id
     phase2b_exact_freeze_id: str = FROZEN_PHASE2B_EXACT_FREEZE_ID
     rational_grid_id: str = FROZEN_RATIONAL_GRID_ID
+    sampling_pairing_contract: str = (
+        "grid_sorted_selected_input_pairs_independent_of_output_uuid_order"
+    )
     maximum_observations: int = 4_096
     maximum_components_per_observation: int = 256
     maximum_total_root_components: int = 65_536
@@ -871,12 +877,14 @@ class _ExactTransformPolicy:
             self.uncertainty_policy_id,
             self.phase2b_exact_freeze_id,
             self.rational_grid_id,
+            self.sampling_pairing_contract,
         ) != (
             PUBLIC_TRANSFORM_EVIDENCE_SCHEMA_VERSION,
             EXACT_TRANSFORM_SEMANTICS_VERSION,
             DEFAULT_EXACT_UNCERTAINTY_POLICY.policy_id,
             FROZEN_PHASE2B_EXACT_FREEZE_ID,
             FROZEN_RATIONAL_GRID_ID,
+            "grid_sorted_selected_input_pairs_independent_of_output_uuid_order",
         ):
             raise ValueError("exact transform semantic identity drift")
         if (
@@ -943,7 +951,7 @@ class _ExactTransformPolicy:
                 "legacy_nonidentity_parameters_must_be_empty",
                 "forest_unique_root_path_only",
                 "derived_observation_shapes_are_operation_specific",
-                "sampling_v1_single_series_distinct_points_scalar_outputs",
+                "sampling_v1_grid_sorted_input_pairs_independent_of_output_uuid_order",
                 "exact_sparse_affine_interval_enclosure",
             ),
             prefix="phase2b_exact_transform_semantics_",
@@ -956,6 +964,41 @@ class _ExactTransformPolicy:
 
 _DEFAULT_POLICY: Final = _ExactTransformPolicy()
 EXACT_TRANSFORM_POLICY_ID: Final = _DEFAULT_POLICY.policy_id
+EXACT_TRANSFORM_PROVENANCE_COMPILER_POLICY_ID: Final = stable_hash(
+    {
+        "atomicity": "all_contracts_compiled_or_no_authority_returned",
+        "base_observation_provenance": "preserved_verbatim",
+        "derived_observation_formula": {
+            "hash_prefix": "",
+            "input_observation_fields": (
+                "descriptor_id",
+                "provenance_sha256",
+                "source_observation_ids",
+            ),
+            "input_observation_selection": (
+                "unique_by_observation_id_then_serialized_by_descriptor_id"
+            ),
+            "input_uncertainty_compilation_ids": "sorted_unique",
+            "mapping_keys": (
+                "contract_semantics_without_provenance_id",
+                "input_observation_descriptors",
+                "input_uncertainty_compilation_ids",
+                "ordered_contract_semantics_ids",
+                "ordered_transform_path_ids",
+                "output_observation",
+            ),
+            "output_observation": "all_descriptor_fields_except_provenance_sha256",
+            "path_order": "root_to_current_edge",
+        },
+        "execution": (
+            "exact_policy_preflight_forest_root_states_contract_apply_atomic"
+        ),
+        "resource_policy": "same_exact_transform_policy_no_caller_override",
+        "transform_policy_id": EXACT_TRANSFORM_POLICY_ID,
+        "version": EXACT_TRANSFORM_PROVENANCE_COMPILER_VERSION,
+    },
+    prefix="phase2b_exact_transform_provenance_compiler_policy_",
+)
 
 
 class _ResourceLimit(RuntimeError):
@@ -2353,6 +2396,102 @@ def _descriptor_without_provenance(
     }
 
 
+def expected_derived_observation_provenance_v1(
+    *,
+    descriptor: DerivedObservationDescriptor,
+    input_observations: tuple[DerivedObservationDescriptor, ...],
+    input_uncertainty_compilation_ids: tuple[str, ...],
+    contract_semantics_id: str,
+    ordered_transform_path_ids: tuple[str, ...],
+    ordered_contract_semantics_ids: tuple[str, ...],
+) -> str:
+    """Return the frozen V2 derived-observation provenance digest.
+
+    This is the public, pure form of the provenance rule used by the exact
+    transform validator.  It deliberately accepts already-resolved immediate
+    input observations and uncertainty roots; it does not traverse a graph,
+    select a policy, or validate a transform contract on the caller's behalf.
+    """
+
+    if type(descriptor) is not DerivedObservationDescriptor:
+        raise TypeError("derived provenance output descriptor has wrong type")
+    require_tuple(input_observations, "derived provenance input observations")
+    if not input_observations or any(
+        type(value) is not DerivedObservationDescriptor
+        for value in input_observations
+    ):
+        raise TypeError(
+            "derived provenance needs exact nonempty input observations"
+        )
+    if input_observations != tuple(
+        sorted(input_observations, key=lambda value: value.observation_id)
+    ):
+        raise ValueError("derived provenance input observations are not canonical")
+    observation_ids = tuple(value.observation_id for value in input_observations)
+    if len(observation_ids) != len(set(observation_ids)):
+        raise ValueError("derived provenance repeats an input observation")
+    require_tuple(
+        input_uncertainty_compilation_ids,
+        "derived provenance uncertainty compilation IDs",
+    )
+    if (
+        not input_uncertainty_compilation_ids
+        or input_uncertainty_compilation_ids
+        != tuple(sorted(input_uncertainty_compilation_ids))
+        or len(input_uncertainty_compilation_ids)
+        != len(set(input_uncertainty_compilation_ids))
+        or any(
+            type(value) is not str or not value
+            for value in input_uncertainty_compilation_ids
+        )
+    ):
+        raise ValueError(
+            "derived provenance uncertainty compilation IDs are not canonical"
+        )
+    require_tuple(
+        ordered_transform_path_ids,
+        "derived provenance ordered transform path IDs",
+    )
+    require_tuple(
+        ordered_contract_semantics_ids,
+        "derived provenance ordered contract semantics IDs",
+    )
+    if len(ordered_transform_path_ids) != len(
+        ordered_contract_semantics_ids
+    ) or any(
+        type(value) is not str or not value
+        for value in (
+            contract_semantics_id,
+            *ordered_transform_path_ids,
+            *ordered_contract_semantics_ids,
+        )
+    ):
+        raise ValueError("derived provenance semantic path is invalid")
+    return stable_hash(
+        {
+            "input_observation_descriptors": tuple(
+                (
+                    observation.descriptor_id,
+                    observation.provenance_sha256,
+                    observation.source_observation_ids,
+                )
+                for observation in sorted(
+                    input_observations,
+                    key=lambda value: value.descriptor_id,
+                )
+            ),
+            "input_uncertainty_compilation_ids": (
+                input_uncertainty_compilation_ids
+            ),
+            "contract_semantics_without_provenance_id": contract_semantics_id,
+            "ordered_transform_path_ids": ordered_transform_path_ids,
+            "ordered_contract_semantics_ids": ordered_contract_semantics_ids,
+            "output_observation": _descriptor_without_provenance(descriptor),
+        },
+        prefix="",
+    )
+
+
 def _expected_derived_provenance(
     descriptor: DerivedObservationDescriptor,
     source_states: tuple[_ComponentState, ...],
@@ -2371,31 +2510,27 @@ def _expected_derived_provenance(
         source_observation_roots[observation_id]
         for observation_id in sorted(observation_ids)
     )
-    return stable_hash(
-        {
-            "input_observation_descriptors": tuple(
-                (
-                    descriptor_id,
-                    observation.provenance_sha256,
-                    observation.source_observation_ids,
-                )
-                for descriptor_id, observation in sorted(observations)
-            ),
-            "input_uncertainty_compilation_ids": tuple(
-                sorted(
-                    {
-                        compilation_id
-                        for state in source_states
-                        for compilation_id in state.uncertainty_compilation_ids
-                    }
-                )
-            ),
-            "contract_semantics_without_provenance_id": contract_semantics_id,
-            "ordered_transform_path_ids": ordered_transform_path_ids,
-            "ordered_contract_semantics_ids": ordered_contract_semantics_ids,
-            "output_observation": _descriptor_without_provenance(descriptor),
-        },
-        prefix="",
+    return expected_derived_observation_provenance_v1(
+        descriptor=descriptor,
+        input_observations=tuple(
+            observation
+            for _, observation in sorted(
+                observations,
+                key=lambda value: value[1].observation_id,
+            )
+        ),
+        input_uncertainty_compilation_ids=tuple(
+            sorted(
+                {
+                    compilation_id
+                    for state in source_states
+                    for compilation_id in state.uncertainty_compilation_ids
+                }
+            )
+        ),
+        contract_semantics_id=contract_semantics_id,
+        ordered_transform_path_ids=ordered_transform_path_ids,
+        ordered_contract_semantics_ids=ordered_contract_semantics_ids,
     )
 
 
@@ -3226,19 +3361,26 @@ def _validate_sampling(
     ):
         return "sampling_output_count_mismatch"
     outputs = {item.ref: item for item in contract.output_components}
-    for row, input_ref, grid_point in zip(
-        rows,
-        certificate.selected_inputs,
-        certificate.grid_points,
-        strict=True,
-    ):
+    grid_point_by_input = dict(
+        zip(
+            certificate.selected_inputs,
+            certificate.grid_points,
+            strict=True,
+        )
+    )
+    seen_selected_inputs: set[ComponentRef] = set()
+    for row in rows:
         if (
             len(row.terms) != 1
-            or row.terms[0].input_ref != input_ref
             or row.terms[0].coefficient != ONE
             or row.offset != ZERO
         ):
             return "sampling_kernel_is_not_exact_subselection"
+        input_ref = row.terms[0].input_ref
+        grid_point = grid_point_by_input.get(input_ref)
+        if grid_point is None or input_ref in seen_selected_inputs:
+            return "sampling_kernel_selected_input_pairing_mismatch"
+        seen_selected_inputs.add(input_ref)
         left = source[input_ref].descriptor
         right = outputs[row.output_ref]
         if left.axis is not certificate.axis or not _metadata_equal_except_ref(
@@ -3266,6 +3408,8 @@ def _validate_sampling(
                 return "sampling_spatial_grid_not_source_point"
         if source_points[input_ref] != grid_point:
             return "sampling_certificate_grid_point_mismatch"
+    if seen_selected_inputs != set(certificate.selected_inputs):
+        return "sampling_kernel_selected_input_coverage_mismatch"
     return None
 
 
@@ -3596,6 +3740,169 @@ def _apply_contract(
     return target, contract.output_observations, None
 
 
+def _contract_with_expected_output_provenance(
+    contract: ExactTransformContract,
+    source: dict[ComponentRef, _ComponentState],
+    *,
+    contract_semantics_id: str,
+    ordered_transform_path_ids: tuple[str, ...],
+    ordered_contract_semantics_ids: tuple[str, ...],
+) -> ExactTransformContract:
+    input_refs_by_output = _output_input_refs(contract)
+    rebuilt: list[DerivedObservationDescriptor] = []
+    for descriptor in contract.output_observations:
+        contributing_refs = tuple(
+            input_ref
+            for output_ref in descriptor.component_refs
+            for input_ref in input_refs_by_output[output_ref]
+        )
+        contributing_states = tuple(source[ref] for ref in contributing_refs)
+        observations_by_id: dict[str, DerivedObservationDescriptor] = {}
+        for state in contributing_states:
+            observation = state.observation
+            prior = observations_by_id.setdefault(
+                observation.observation_id,
+                observation,
+            )
+            if prior != observation:
+                raise ValueError(
+                    "source observation ID has conflicting typed descriptors"
+                )
+        input_observations = tuple(
+            observations_by_id[value] for value in sorted(observations_by_id)
+        )
+        uncertainty_ids = tuple(
+            sorted(
+                {
+                    compilation_id
+                    for state in contributing_states
+                    for compilation_id in state.uncertainty_compilation_ids
+                }
+            )
+        )
+        rebuilt.append(
+            replace(
+                descriptor,
+                provenance_sha256=expected_derived_observation_provenance_v1(
+                    descriptor=descriptor,
+                    input_observations=input_observations,
+                    input_uncertainty_compilation_ids=uncertainty_ids,
+                    contract_semantics_id=contract_semantics_id,
+                    ordered_transform_path_ids=ordered_transform_path_ids,
+                    ordered_contract_semantics_ids=(
+                        ordered_contract_semantics_ids
+                    ),
+                ),
+            )
+        )
+    return replace(contract, output_observations=tuple(rebuilt))
+
+
+def compile_exact_transform_provenance_v1(
+    authority: PublicTransformEvidenceBundleV2,
+) -> PublicTransformEvidenceBundleV2:
+    """Compile derived provenance with the validator's frozen V2 rule.
+
+    Base-observation provenance remains untouched.  The function reuses the
+    exact validator's policy, preflights, forest plan, root states, contract
+    semantics, kernel application, and lineage propagation.  It raises rather
+    than returning a partially compiled authority.
+    """
+
+    if type(authority) is not PublicTransformEvidenceBundleV2:
+        raise TypeError(
+            "provenance compiler requires PublicTransformEvidenceBundleV2"
+        )
+    policy = _DEFAULT_POLICY
+    try:
+        error = _shallow_preflight(authority, policy)
+        if error is None:
+            _AuthorityTreeBudget(policy).visit(authority)
+            error = _detailed_resource_preflight(authority, policy)
+        if error is None:
+            error = _validate_metadata(authority)
+        if error is None:
+            error = _validate_contract_index(authority, policy)
+        ordered_edges: tuple[AggregationEdge, ...] = ()
+        transform_paths: dict[str, tuple[str, ...]] = {}
+        if error is None:
+            error, ordered_edges, transform_paths = _forest_plan(
+                authority,
+                policy,
+            )
+    except _ResourceLimit as exc:
+        error = str(exc)
+    except (AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise ValueError("exact provenance compiler preflight failed") from exc
+    if error is not None:
+        raise ValueError("exact provenance compiler rejected: " + error)
+
+    uncertainty_receipt = compile_bundle_uncertainty(authority.base_bundle)
+    if uncertainty_receipt.disposition is not BundleUncertaintyDisposition.COMPLETE:
+        raise ValueError("exact provenance compiler uncertainty is not complete")
+    try:
+        states_by_scale, _ = _build_root_states(authority, uncertainty_receipt)
+    except (IndexError, KeyError, TypeError, ValueError) as exc:
+        raise ValueError("exact provenance compiler root construction failed") from exc
+    contracts_by_id = {
+        contract.transform_id: contract for contract in authority.transform_contracts
+    }
+    semantics_ids = {
+        contract.transform_id: contract.semantics_id
+        for contract in authority.transform_contracts
+    }
+    semantic_paths: dict[str, tuple[str, ...]] = {
+        root: ()
+        for root in authority.base_bundle.aggregation_graph.root_scale_ids
+    }
+    rebuilt_by_id: dict[str, ExactTransformContract] = {}
+    budget = _KernelBudget(policy)
+    try:
+        for edge in ordered_edges:
+            original = contracts_by_id[edge.transform_id]
+            source = states_by_scale[edge.source_scale_id]
+            semantic_path = (
+                *semantic_paths[edge.source_scale_id],
+                semantics_ids[edge.transform_id],
+            )
+            rebuilt = _contract_with_expected_output_provenance(
+                original,
+                source,
+                contract_semantics_id=semantics_ids[edge.transform_id],
+                ordered_transform_path_ids=transform_paths[edge.target_scale_id],
+                ordered_contract_semantics_ids=semantic_path,
+            )
+            target, _, apply_error = _apply_contract(
+                rebuilt,
+                source,
+                budget,
+                contract_semantics_id=semantics_ids[edge.transform_id],
+                ordered_transform_path_ids=transform_paths[edge.target_scale_id],
+                ordered_contract_semantics_ids=semantic_path,
+            )
+            if apply_error is not None or target is None:
+                raise ValueError(
+                    "exact provenance compiler contract rejected: "
+                    + (apply_error or "target_not_constructed")
+                )
+            rebuilt_by_id[rebuilt.transform_id] = rebuilt
+            states_by_scale[edge.target_scale_id] = target
+            semantic_paths[edge.target_scale_id] = semantic_path
+    except _ResourceLimit as exc:
+        raise ValueError("exact provenance compiler resource limit: " + str(exc)) from exc
+    except (IndexError, KeyError, TypeError) as exc:
+        raise ValueError("exact provenance compiler graph replay failed") from exc
+    if len(rebuilt_by_id) != len(authority.transform_contracts):
+        raise ValueError("exact provenance compiler did not cover every contract")
+    return replace(
+        authority,
+        transform_contracts=tuple(
+            rebuilt_by_id[contract.transform_id]
+            for contract in authority.transform_contracts
+        ),
+    )
+
+
 def _contract_commitment(
     contracts: tuple[ExactTransformContract, ...],
     semantics_ids: dict[str, str],
@@ -3879,6 +4186,8 @@ __all__ = [
     "CoordinateAffineCertificate",
     "DerivedObservationDescriptor",
     "EXACT_TRANSFORM_POLICY_ID",
+    "EXACT_TRANSFORM_PROVENANCE_COMPILER_POLICY_ID",
+    "EXACT_TRANSFORM_PROVENANCE_COMPILER_VERSION",
     "EXACT_TRANSFORM_SEMANTICS_VERSION",
     "EquivalentSplitMergeCertificate",
     "ExactDiscreteMapping",
@@ -3906,5 +4215,7 @@ __all__ = [
     "TemporalAggregationCertificate",
     "TransformCompilationDisposition",
     "UnitConversionCertificate",
+    "expected_derived_observation_provenance_v1",
+    "compile_exact_transform_provenance_v1",
     "run_exact_transform_semantics",
 ]

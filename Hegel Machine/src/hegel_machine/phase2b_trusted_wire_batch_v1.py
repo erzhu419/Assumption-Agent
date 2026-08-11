@@ -15,7 +15,6 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass, field, fields, is_dataclass
 from enum import Enum
-from fractions import Fraction
 import hashlib
 import hmac
 import math
@@ -25,8 +24,21 @@ from typing import Final
 
 from .phase2b_exact_transform_semantics_v1 import (
     EXACT_TRANSFORM_POLICY_ID,
+    EXACT_TRANSFORM_PROVENANCE_COMPILER_POLICY_ID,
+    EXACT_TRANSFORM_PROVENANCE_COMPILER_VERSION,
     ExactTransformAtom,
+    ExactTransformCompilation,
     PublicTransformEvidenceBundleV2,
+    TransformCompilationDisposition,
+    compile_exact_transform_provenance_v1,
+    run_exact_transform_semantics,
+)
+from .phase2b_trusted_wire_typed_authority_v1 import (
+    TYPED_AUTHORITY_CODEC_POLICY_ID,
+    TYPED_AUTHORITY_CODEC_VERSION,
+    TYPED_AUTHORITY_SCHEMA_ID,
+    decode_typed_transform_authority_profile_v1,
+    encode_typed_transform_authority_profile_v1,
 )
 from .phase2b_trusted_wire_v1 import (
     ENVELOPE_BYTES,
@@ -46,7 +58,6 @@ from .phase2b_trusted_wire_v1 import (
     MINIMUM_PADDING_BYTES,
     NON_AUTHORITATIVE_CLAIM_LEVEL,
     TRUSTED_WIRE_ENVELOPE_VERSION,
-    TRUSTED_WIRE_PAYLOAD_SCHEMA_VERSION,
     NamespaceFieldAuditV1,
     ProfileDisposition,
     TrustedWireProfileCompilationV1,
@@ -58,13 +69,24 @@ from .phase2b_trusted_wire_v1 import (
 
 
 TRUSTED_WIRE_BATCH_SCHEMA_VERSION: Final = (
-    "hegel-machine-phase2b-trusted-wire-batch-mechanics/1"
+    "hegel-machine-phase2b-trusted-wire-batch-mechanics/2"
+)
+TRUSTED_WIRE_BATCH_PAYLOAD_SCHEMA_VERSION: Final = (
+    "hegel-machine-phase2b-trusted-wire-batch-payload/2"
 )
 TRUSTED_WIRE_KEY_SCHEDULE_VERSION: Final = (
     "hegel-machine-phase2b-trusted-wire-hkdf-sha256/1"
 )
 TRUSTED_WIRE_PUBLIC_PROVENANCE_VERSION: Final = (
-    "hegel-machine-phase2b-trusted-wire-public-provenance/1"
+    "hegel-machine-phase2b-trusted-wire-public-provenance/2"
+)
+TRUSTED_WIRE_BATCH_PAYLOAD_FIELDS: Final = (
+    "authority",
+    "field_manifest_id",
+    "jcs_profile_id",
+    "public_provenance_version",
+    "schema_version",
+    "typed_authority_schema_id",
 )
 EXACT_TRANSFORM_VALIDATOR_POLICY_ID: Final = EXACT_TRANSFORM_POLICY_ID
 
@@ -89,13 +111,13 @@ _PADDING_DOMAIN: Final = b"HEGEL/PHASE2B/TRUSTED_WIRE/PADDING/V1"
 _BASE_PROVENANCE_DOMAIN: Final = (
     b"HEGEL/PHASE2B/TRUSTED_WIRE/BASE_PROVENANCE/V1\x00"
 )
-_DERIVED_PROVENANCE_DOMAIN: Final = (
-    b"HEGEL/PHASE2B/TRUSTED_WIRE/DERIVED_PROVENANCE/V1\x00"
-)
 _BATCH_DOMAIN: Final = b"HEGEL/PHASE2B/TRUSTED_WIRE/BATCH/V1\x00"
 _POLICY_DOMAIN: Final = b"HEGEL/PHASE2B/TRUSTED_WIRE/POLICY/V1\x00"
 _RUN_COMMITMENT_DOMAIN: Final = b"HEGEL/PHASE2B/TRUSTED_WIRE/RUN_COMMITMENT/V1\x00"
 _ENVELOPE_ID_DOMAIN: Final = b"HEGEL/PHASE2B/TRUSTED_WIRE/ENVELOPE_ID/V1\x00"
+_SECRET_REPLAY_RECEIPT_DOMAIN: Final = (
+    b"HEGEL/PHASE2B/TRUSTED_WIRE/SECRET_REPLAY_RECEIPT/V1\x00"
+)
 _HEADER: Final = struct.Struct(">8sHHI32s32s")
 _UUID4_TEXT: Final = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-"
@@ -128,7 +150,20 @@ _ALGORITHM_PROFILE: Final = (
     "uuid_schedule=post_shuffle_case_local_map_namespace_then_old_uuid_sort_batch_global_counters",
     "padding=hmac_sha256(domain||run_id||payload_sha256||u32be_block)",
     "header=8s_u16be_u16be_u32be_sha256_sha256_80_bytes",
-    "provenance=public_base_then_topological_derived_rebind_after_recanonicalization",
+    "provenance=public_base_then_exact_validator_native_derived_compiler_before_framing",
+    "typed_authority=closed_profile_decode_reencode_then_direct_exact_transform_complete",
+)
+_BASE_PROVENANCE_FORMULA: Final = (
+    "sha256",
+    "base_provenance_domain_then_accepted_jcs_observation_without_provenance",
+    "lowercase_hex_no_prefix",
+)
+_SECRET_REPLAY_RECEIPT_FIELDS: Final = (
+    "authority_count",
+    "batch_id",
+    "policy_id",
+    "run_id_commitment",
+    "source_authority_content_ids",
 )
 
 
@@ -144,6 +179,11 @@ def _require_digest(value: object, prefix: str, name: str) -> str:
     if len(suffix) != 64 or any(item not in "0123456789abcdef" for item in suffix):
         raise ValueError(f"{name} must end in lowercase SHA-256")
     return value
+
+
+def _require_exact_bool_claims(*values: object) -> None:
+    if any(type(value) is not bool for value in values):
+        raise TypeError("trusted-wire claim fields must use exact bool values")
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,9 +209,19 @@ class TrustedWireKeySourcesV1:
 @dataclass(frozen=True, slots=True)
 class TrustedWireBatchPolicyV1:
     schema_version: str = TRUSTED_WIRE_BATCH_SCHEMA_VERSION
+    payload_schema_version: str = TRUSTED_WIRE_BATCH_PAYLOAD_SCHEMA_VERSION
     key_schedule_version: str = TRUSTED_WIRE_KEY_SCHEDULE_VERSION
     public_provenance_version: str = TRUSTED_WIRE_PUBLIC_PROVENANCE_VERSION
+    typed_authority_schema_id: str = TYPED_AUTHORITY_SCHEMA_ID
+    typed_authority_codec_version: str = TYPED_AUTHORITY_CODEC_VERSION
+    typed_authority_codec_policy_id: str = TYPED_AUTHORITY_CODEC_POLICY_ID
     exact_transform_validator_policy_id: str = EXACT_TRANSFORM_VALIDATOR_POLICY_ID
+    exact_transform_provenance_compiler_version: str = (
+        EXACT_TRANSFORM_PROVENANCE_COMPILER_VERSION
+    )
+    exact_transform_provenance_compiler_policy_id: str = (
+        EXACT_TRANSFORM_PROVENANCE_COMPILER_POLICY_ID
+    )
     maximum_authorities: int = MAXIMUM_BATCH_AUTHORITIES
     run_id_bytes: int = RUN_ID_BYTES
     ikm_bytes: int = IKM_BYTES
@@ -201,9 +251,15 @@ class TrustedWireBatchPolicyV1:
             raise TypeError("trusted-wire batch policy must use the exact type")
         if (
             self.schema_version,
+            self.payload_schema_version,
             self.key_schedule_version,
             self.public_provenance_version,
+            self.typed_authority_schema_id,
+            self.typed_authority_codec_version,
+            self.typed_authority_codec_policy_id,
             self.exact_transform_validator_policy_id,
+            self.exact_transform_provenance_compiler_version,
+            self.exact_transform_provenance_compiler_policy_id,
             self.maximum_authorities,
             self.run_id_bytes,
             self.ikm_bytes,
@@ -229,9 +285,15 @@ class TrustedWireBatchPolicyV1:
             self.namespaces,
         ) != (
             TRUSTED_WIRE_BATCH_SCHEMA_VERSION,
+            TRUSTED_WIRE_BATCH_PAYLOAD_SCHEMA_VERSION,
             TRUSTED_WIRE_KEY_SCHEDULE_VERSION,
             TRUSTED_WIRE_PUBLIC_PROVENANCE_VERSION,
+            TYPED_AUTHORITY_SCHEMA_ID,
+            TYPED_AUTHORITY_CODEC_VERSION,
+            TYPED_AUTHORITY_CODEC_POLICY_ID,
             EXACT_TRANSFORM_VALIDATOR_POLICY_ID,
+            EXACT_TRANSFORM_PROVENANCE_COMPILER_VERSION,
+            EXACT_TRANSFORM_PROVENANCE_COMPILER_POLICY_ID,
             MAXIMUM_BATCH_AUTHORITIES,
             RUN_ID_BYTES,
             IKM_BYTES,
@@ -262,10 +324,11 @@ class TrustedWireBatchPolicyV1:
     def policy_id(self) -> str:
         value = {
             "algorithm_profile": list(_ALGORITHM_PROFILE),
+            "base_provenance_formula": list(_BASE_PROVENANCE_FORMULA),
+            "claim_boolean_contract": "all_receipt_claim_fields_exact_bool",
             "domain_hex": {
                 "base_provenance": _BASE_PROVENANCE_DOMAIN.hex(),
                 "batch": _BATCH_DOMAIN.hex(),
-                "derived_provenance": _DERIVED_PROVENANCE_DOMAIN.hex(),
                 "envelope_id": _ENVELOPE_ID_DOMAIN.hex(),
                 "hkdf_info_id": _HKDF_INFO_ID.hex(),
                 "hkdf_info_padding": _HKDF_INFO_PADDING.hex(),
@@ -273,6 +336,7 @@ class TrustedWireBatchPolicyV1:
                 "padding": _PADDING_DOMAIN.hex(),
                 "run": _RUN_DOMAIN.hex(),
                 "run_commitment": _RUN_COMMITMENT_DOMAIN.hex(),
+                "secret_replay_receipt": _SECRET_REPLAY_RECEIPT_DOMAIN.hex(),
                 "shuffle": _SHUFFLE_DOMAIN.hex(),
                 "uuid": _UUID_DOMAIN.hex(),
             },
@@ -280,6 +344,8 @@ class TrustedWireBatchPolicyV1:
             "envelope_magic_hex": ENVELOPE_MAGIC.hex(),
             "envelope_version": TRUSTED_WIRE_ENVELOPE_VERSION,
             "exact_transform_validator_policy_id": self.exact_transform_validator_policy_id,
+            "exact_transform_provenance_compiler_policy_id": self.exact_transform_provenance_compiler_policy_id,
+            "exact_transform_provenance_compiler_version": self.exact_transform_provenance_compiler_version,
             "field_manifest_id": FIELD_MANIFEST_ID,
             "header_struct_format": _HEADER.format,
             "header_bytes": self.header_bytes,
@@ -305,10 +371,21 @@ class TrustedWireBatchPolicyV1:
             "minimum_padding_bytes": self.minimum_padding_bytes,
             "namespaces": list(self.namespaces),
             "public_provenance_version": self.public_provenance_version,
-            "payload_schema_version": TRUSTED_WIRE_PAYLOAD_SCHEMA_VERSION,
+            "secret_replay_receipt_contract": {
+                "fields": list(_SECRET_REPLAY_RECEIPT_FIELDS),
+                "ordered_source_authority_roots": True,
+                "stored_id_recomputed_on_validation": True,
+            },
+            "payload_schema_version": self.payload_schema_version,
+            "payload_top_level_fields": list(
+                TRUSTED_WIRE_BATCH_PAYLOAD_FIELDS
+            ),
             "run_id_bytes": self.run_id_bytes,
             "schema_version": self.schema_version,
             "total_string_budget_multiplier": self.total_string_budget_multiplier,
+            "typed_authority_codec_policy_id": self.typed_authority_codec_policy_id,
+            "typed_authority_codec_version": self.typed_authority_codec_version,
+            "typed_authority_schema_id": self.typed_authority_schema_id,
         }
         return "phase2b_trusted_wire_batch_policy_" + hashlib.sha256(
             _POLICY_DOMAIN + encode_phase2b_jcs_profile_v1(value)
@@ -317,6 +394,27 @@ class TrustedWireBatchPolicyV1:
 
 DEFAULT_TRUSTED_WIRE_BATCH_POLICY: Final = TrustedWireBatchPolicyV1()
 TRUSTED_WIRE_BATCH_POLICY_ID: Final = DEFAULT_TRUSTED_WIRE_BATCH_POLICY.policy_id
+
+
+def _secret_replay_receipt_id(
+    *,
+    batch_id: str,
+    run_id_commitment: str,
+    authority_count: int,
+    source_authority_content_ids: tuple[str, ...],
+) -> str:
+    payload = encode_phase2b_jcs_profile_v1(
+        {
+            "authority_count": authority_count,
+            "batch_id": batch_id,
+            "policy_id": TRUSTED_WIRE_BATCH_POLICY_ID,
+            "run_id_commitment": run_id_commitment,
+            "source_authority_content_ids": list(source_authority_content_ids),
+        }
+    )
+    return "phase2b_trusted_wire_secret_replay_" + hashlib.sha256(
+        _SECRET_REPLAY_RECEIPT_DOMAIN + payload
+    ).hexdigest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -354,6 +452,9 @@ class TrustedWireEnvelopeV1:
     payload_bytes: int
     padding_bytes: int
     namespace_audit_id: str
+    payload_schema_version: str
+    public_provenance_version: str
+    typed_authority_schema_id: str
     public_provenance_verified: bool = True
     structural_hashes_verified: bool = True
     secret_padding_replay_verified: bool = False
@@ -372,8 +473,21 @@ class TrustedWireEnvelopeV1:
             or self.payload_bytes != decoded.payload_bytes
             or self.padding_bytes != decoded.padding_bytes
             or self.namespace_audit_id != decoded.namespace_audit.audit_id
+            or self.payload_schema_version != decoded.payload_schema_version
+            or self.public_provenance_version
+            != decoded.public_provenance_version
+            or self.typed_authority_schema_id
+            != decoded.typed_authority_schema_id
         ):
             raise ValueError("trusted envelope receipt drifts from its bytes")
+        _require_exact_bool_claims(
+            self.public_provenance_verified,
+            self.structural_hashes_verified,
+            self.secret_padding_replay_verified,
+            self.typed_authority_decode_replay_implemented,
+            self.origin_authenticated,
+            self.formal_covert_audit,
+        )
         if not self.public_provenance_verified or not self.structural_hashes_verified:
             raise ValueError("trusted envelope must pass public structural replay")
         if any(
@@ -396,6 +510,9 @@ class DecodedTrustedEnvelopeV1:
     payload_bytes: int
     padding_bytes: int
     namespace_audit: NamespaceFieldAuditV1
+    payload_schema_version: str
+    public_provenance_version: str
+    typed_authority_schema_id: str
     public_provenance_verified: bool = True
     structural_hashes_verified: bool = True
     secret_padding_replay_verified: bool = False
@@ -422,6 +539,14 @@ class DecodedTrustedEnvelopeV1:
             raise ValueError("decoded trusted envelope padding is too short")
         if type(self.namespace_audit) is not NamespaceFieldAuditV1:
             raise TypeError("decoded trusted envelope needs exact namespace audit")
+        if (
+            self.payload_schema_version
+            != TRUSTED_WIRE_BATCH_PAYLOAD_SCHEMA_VERSION
+            or self.public_provenance_version
+            != TRUSTED_WIRE_PUBLIC_PROVENANCE_VERSION
+            or self.typed_authority_schema_id != TYPED_AUTHORITY_SCHEMA_ID
+        ):
+            raise ValueError("decoded trusted envelope typed identity drift")
         expected_id = "phase2b_trusted_envelope_" + hashlib.sha256(
             _ENVELOPE_ID_DOMAIN + self.envelope
         ).hexdigest()
@@ -434,6 +559,14 @@ class DecodedTrustedEnvelopeV1:
             or self.namespace_audit != audit
         ):
             raise ValueError("decoded trusted envelope receipt drifts from its bytes")
+        _require_exact_bool_claims(
+            self.public_provenance_verified,
+            self.structural_hashes_verified,
+            self.secret_padding_replay_verified,
+            self.typed_authority_decode_replay_implemented,
+            self.origin_authenticated,
+            self.formal_covert_audit,
+        )
         if not self.public_provenance_verified or not self.structural_hashes_verified:
             raise ValueError("decoded trusted envelope lacks structural evidence")
         if any(
@@ -454,8 +587,12 @@ _BATCH_ISSUE_TOKEN: Final = object()
 class TrustedWireBatchV1:
     disposition: TrustedWireBatchDisposition
     schema_version: str
+    payload_schema_version: str
     key_schedule_version: str
     public_provenance_version: str
+    typed_authority_schema_id: str
+    typed_authority_codec_policy_id: str
+    exact_transform_provenance_compiler_policy_id: str
     jcs_profile_id: str
     field_manifest_id: str
     policy_id: str
@@ -496,10 +633,23 @@ class TrustedWireBatchV1:
         frozen_values: tuple[tuple[str, object], ...] = (
             ("disposition", TrustedWireBatchDisposition.COMPLETE),
             ("schema_version", TRUSTED_WIRE_BATCH_SCHEMA_VERSION),
+            (
+                "payload_schema_version",
+                TRUSTED_WIRE_BATCH_PAYLOAD_SCHEMA_VERSION,
+            ),
             ("key_schedule_version", TRUSTED_WIRE_KEY_SCHEDULE_VERSION),
             (
                 "public_provenance_version",
                 TRUSTED_WIRE_PUBLIC_PROVENANCE_VERSION,
+            ),
+            ("typed_authority_schema_id", TYPED_AUTHORITY_SCHEMA_ID),
+            (
+                "typed_authority_codec_policy_id",
+                TYPED_AUTHORITY_CODEC_POLICY_ID,
+            ),
+            (
+                "exact_transform_provenance_compiler_policy_id",
+                EXACT_TRANSFORM_PROVENANCE_COMPILER_POLICY_ID,
             ),
             ("jcs_profile_id", JCS_PROFILE_ID),
             ("field_manifest_id", FIELD_MANIFEST_ID),
@@ -533,9 +683,16 @@ class TrustedWireBatchV1:
             raise ValueError("trusted-wire batch must be complete")
         if (
             self.schema_version != TRUSTED_WIRE_BATCH_SCHEMA_VERSION
+            or self.payload_schema_version
+            != TRUSTED_WIRE_BATCH_PAYLOAD_SCHEMA_VERSION
             or self.key_schedule_version != TRUSTED_WIRE_KEY_SCHEDULE_VERSION
             or self.public_provenance_version
             != TRUSTED_WIRE_PUBLIC_PROVENANCE_VERSION
+            or self.typed_authority_schema_id != TYPED_AUTHORITY_SCHEMA_ID
+            or self.typed_authority_codec_policy_id
+            != TYPED_AUTHORITY_CODEC_POLICY_ID
+            or self.exact_transform_provenance_compiler_policy_id
+            != EXACT_TRANSFORM_PROVENANCE_COMPILER_POLICY_ID
             or self.jcs_profile_id != JCS_PROFILE_ID
             or self.field_manifest_id != FIELD_MANIFEST_ID
             or self.policy_id != TRUSTED_WIRE_BATCH_POLICY_ID
@@ -572,6 +729,18 @@ class TrustedWireBatchV1:
             raise ValueError("trusted-wire batch root drift")
         if self.claim_level != NON_AUTHORITATIVE_CLAIM_LEVEL:
             raise ValueError("trusted-wire batch cannot issue formal evidence")
+        _require_exact_bool_claims(
+            self.whole_batch_shuffle_applied,
+            self.purpose_separated_keys_applied,
+            self.post_shuffle_hmac_uuidv4_applied,
+            self.secret_hmac_padding_applied,
+            self.atomic_batch_emission,
+            self.typed_authority_decode_replay_implemented,
+            self.formal_uuid_audit,
+            self.formal_covert_audit,
+            self.sealed_holdout_eligible,
+            self.c1_exit_evidence,
+        )
         if not all(
             (
                 self.whole_batch_shuffle_applied,
@@ -600,7 +769,9 @@ class TrustedWireReplayReceiptV1:
     batch_id: str
     run_id_commitment: str
     authority_count: int
+    source_authority_content_ids: tuple[str, ...]
     policy_id: str
+    replay_receipt_id: str
     replay_verified: bool = True
     secret_key_schedule_replayed: bool = True
     secret_padding_replayed: bool = True
@@ -623,6 +794,7 @@ class TrustedWireReplayReceiptV1:
         batch_id: str,
         run_id_commitment: str,
         authority_count: int,
+        source_authority_content_ids: tuple[str, ...],
     ) -> "TrustedWireReplayReceiptV1":
         if token is not _REPLAY_ISSUE_TOKEN:
             raise TypeError("trusted-wire replay issuer token mismatch")
@@ -630,7 +802,22 @@ class TrustedWireReplayReceiptV1:
         object.__setattr__(value, "batch_id", batch_id)
         object.__setattr__(value, "run_id_commitment", run_id_commitment)
         object.__setattr__(value, "authority_count", authority_count)
+        object.__setattr__(
+            value,
+            "source_authority_content_ids",
+            source_authority_content_ids,
+        )
         object.__setattr__(value, "policy_id", TRUSTED_WIRE_BATCH_POLICY_ID)
+        object.__setattr__(
+            value,
+            "replay_receipt_id",
+            _secret_replay_receipt_id(
+                batch_id=batch_id,
+                run_id_commitment=run_id_commitment,
+                authority_count=authority_count,
+                source_authority_content_ids=source_authority_content_ids,
+            ),
+        )
         object.__setattr__(value, "replay_verified", True)
         object.__setattr__(value, "secret_key_schedule_replayed", True)
         object.__setattr__(value, "secret_padding_replayed", True)
@@ -651,12 +838,50 @@ class TrustedWireReplayReceiptV1:
             "phase2b_trusted_wire_run_",
             "run ID commitment",
         )
+        _require_digest(
+            self.policy_id,
+            "phase2b_trusted_wire_batch_policy_",
+            "trusted-wire replay policy ID",
+        )
         if self.policy_id != TRUSTED_WIRE_BATCH_POLICY_ID:
             raise ValueError("trusted-wire replay policy drift")
         if type(self.authority_count) is not int or not (
             1 <= self.authority_count <= MAXIMUM_BATCH_AUTHORITIES
         ):
             raise ValueError("trusted-wire replay authority count is invalid")
+        if (
+            type(self.source_authority_content_ids) is not tuple
+            or len(self.source_authority_content_ids) != self.authority_count
+        ):
+            raise TypeError("trusted-wire replay needs every ordered source root")
+        for item in self.source_authority_content_ids:
+            _require_digest(
+                item,
+                "phase2b_public_transform_evidence_",
+                "source authority content ID",
+            )
+        _require_digest(
+            self.replay_receipt_id,
+            "phase2b_trusted_wire_secret_replay_",
+            "secret replay receipt ID",
+        )
+        if self.replay_receipt_id != _secret_replay_receipt_id(
+            batch_id=self.batch_id,
+            run_id_commitment=self.run_id_commitment,
+            authority_count=self.authority_count,
+            source_authority_content_ids=self.source_authority_content_ids,
+        ):
+            raise ValueError("trusted-wire secret replay receipt root drift")
+        _require_exact_bool_claims(
+            self.replay_verified,
+            self.secret_key_schedule_replayed,
+            self.secret_padding_replayed,
+            self.shuffle_and_uuid_assignment_replayed,
+            self.typed_authority_decode_replay_implemented,
+            self.origin_authenticated,
+            self.formal_covert_audit,
+            self.sealed_holdout_eligible,
+        )
         if not all(
             (
                 self.replay_verified,
@@ -881,7 +1106,10 @@ def _group_key(group: object) -> tuple[object, ...]:
     )
 
 
-def _canonicalize_certificate(certificate: object, operation: object) -> None:
+def _canonicalize_certificate(
+    certificate: object,
+    operation: object,
+) -> None:
     if type(certificate) is not dict:
         raise ValueError("transform certificate is malformed")
     for name in (
@@ -925,37 +1153,11 @@ def _canonicalize_certificate(certificate: object, operation: object) -> None:
             selected
         ) != len(grid_points):
             raise ValueError("sampling selected-input/grid pairing is malformed")
-        paired_points = sorted(
-            zip(selected, grid_points, strict=True),
-            key=lambda item: _grid_point_key(item[1]),
-        )
-        selected[:] = [item[0] for item in paired_points]
-        grid_points[:] = [item[1] for item in paired_points]
+        if len({_ref_key(input_ref) for input_ref in selected}) != len(selected):
+            raise ValueError("sampling selected inputs repeat")
     discarded = certificate.get("discarded_inputs")
     if discarded is not None:
         _sort_ref_array(discarded)
-
-
-def _grid_point_key(point: object) -> tuple[Fraction, ...]:
-    if type(point) is not list:
-        raise ValueError("sampling grid point is malformed")
-    result: list[Fraction] = []
-    for atom in point:
-        if type(atom) is not dict or set(atom) != {
-            "denominator_decimal",
-            "numerator_decimal",
-        }:
-            raise ValueError("sampling grid atom is malformed")
-        try:
-            result.append(
-                Fraction(
-                    int(atom["numerator_decimal"]),
-                    int(atom["denominator_decimal"]),
-                )
-            )
-        except (TypeError, ValueError, ZeroDivisionError) as exc:
-            raise ValueError("sampling grid atom is not an exact rational") from exc
-    return tuple(result)
 
 
 def _canonicalize_public_authority(authority: dict[str, object]) -> None:
@@ -1046,88 +1248,46 @@ def _public_digest(domain: bytes, value: object) -> str:
     return hashlib.sha256(domain + encode_phase2b_jcs_profile_v1(value)).hexdigest()
 
 
-def _contract_public_semantics(contract: dict[str, object]) -> dict[str, object]:
-    result = deepcopy(contract)
-    outputs = result.get("output_observations")
-    if type(outputs) is not list:
-        raise ValueError("transform contract output observations are malformed")
-    for output in outputs:
-        if type(output) is not dict:
-            raise ValueError("transform output observation is malformed")
-        output.pop("provenance_sha256", None)
-    return result
-
-
-def _rebind_public_provenance(authority: dict[str, object]) -> None:
+def _compile_native_public_provenance(
+    authority: dict[str, object],
+) -> PublicTransformEvidenceBundleV2:
     base = authority.get("base_bundle")
-    contracts = authority.get("transform_contracts")
-    if type(base) is not dict or type(contracts) is not list:
+    if type(base) is not dict:
         raise ValueError("authority profile has malformed provenance containers")
     observations = base.get("observations")
     if type(observations) is not list:
         raise ValueError("base observation table is malformed")
-    provenance_by_observation: dict[str, str] = {}
+    seen_observations: set[str] = set()
     for observation in observations:
         if type(observation) is not dict:
             raise ValueError("base observation is malformed")
         observation_id = observation.get("observation_id")
         if type(observation_id) is not str:
             raise ValueError("base observation ID is malformed")
+        if observation_id in seen_observations:
+            raise ValueError("base observation ID repeats during provenance replay")
+        seen_observations.add(observation_id)
         provenance = _public_digest(
             _BASE_PROVENANCE_DOMAIN,
             _without_provenance(observation),
         )
         observation["provenance_sha256"] = provenance
-        if observation_id in provenance_by_observation:
-            raise ValueError("base observation ID repeats during provenance replay")
-        provenance_by_observation[observation_id] = provenance
-
-    pending: list[tuple[dict[str, object], dict[str, object]]] = []
-    for contract in contracts:
-        if type(contract) is not dict:
-            raise ValueError("transform contract is malformed")
-        outputs = contract.get("output_observations")
-        if type(outputs) is not list:
-            raise ValueError("transform output table is malformed")
-        for output in outputs:
-            if type(output) is not dict:
-                raise ValueError("derived observation is malformed")
-            pending.append((contract, output))
-
-    while pending:
-        progressed = False
-        next_pending: list[tuple[dict[str, object], dict[str, object]]] = []
-        for contract, output in pending:
-            source_ids = output.get("source_observation_ids")
-            observation_id = output.get("observation_id")
-            if type(source_ids) is not list or type(observation_id) is not str or any(
-                type(value) is not str for value in source_ids
-            ):
-                raise ValueError("derived observation lineage is malformed")
-            if any(value not in provenance_by_observation for value in source_ids):
-                next_pending.append((contract, output))
-                continue
-            public_value = {
-                "contract": _contract_public_semantics(contract),
-                "output_observation": _without_provenance(output),
-                "source_provenance": [
-                    {
-                        "observation_id": source_id,
-                        "provenance_sha256": provenance_by_observation[source_id],
-                    }
-                    for source_id in sorted(source_ids)
-                ],
-                "version": TRUSTED_WIRE_PUBLIC_PROVENANCE_VERSION,
-            }
-            provenance = _public_digest(_DERIVED_PROVENANCE_DOMAIN, public_value)
-            output["provenance_sha256"] = provenance
-            prior = provenance_by_observation.setdefault(observation_id, provenance)
-            if prior != provenance:
-                raise ValueError("derived observation ID has conflicting provenance")
-            progressed = True
-        if not progressed and next_pending:
-            raise ValueError("derived provenance graph is cyclic or incomplete")
-        pending = next_pending
+    typed = decode_typed_transform_authority_profile_v1(authority)
+    compiled = compile_exact_transform_provenance_v1(typed)
+    compiled_profile = encode_typed_transform_authority_profile_v1(compiled)
+    authority.clear()
+    authority.update(compiled_profile)
+    decoded = decode_typed_transform_authority_profile_v1(authority)
+    if decoded != compiled:
+        raise ValueError("native provenance typed roundtrip drift")
+    result = run_exact_transform_semantics(decoded)
+    if (
+        type(result) is not ExactTransformCompilation
+        or result.disposition is not TransformCompilationDisposition.COMPLETE
+    ):
+        reason = getattr(result, "reason", "transform_not_complete")
+        raise ValueError("native provenance direct transform replay failed:" + reason)
+    return decoded
 
 
 def _audit_public_provenance(authority: dict[str, object]) -> None:
@@ -1135,7 +1295,7 @@ def _audit_public_provenance(authority: dict[str, object]) -> None:
     _canonicalize_public_authority(replay)
     if replay != authority:
         raise ValueError("renamed authority set-like arrays are not canonical")
-    _rebind_public_provenance(replay)
+    _compile_native_public_provenance(replay)
     base_actual = authority["base_bundle"]
     base_replay = replay["base_bundle"]
     contracts_actual = authority["transform_contracts"]
@@ -1211,17 +1371,17 @@ def _decode_structural_envelope(
     if hashlib.sha256(padding).digest() != padding_hash:
         raise ValueError("trusted envelope padding hash drift")
     decoded = decode_phase2b_jcs_profile_v1(payload)
-    if type(decoded) is not dict or set(decoded) != {
-        "authority",
-        "field_manifest_id",
-        "jcs_profile_id",
-        "schema_version",
-    }:
+    if type(decoded) is not dict or frozenset(decoded) != frozenset(
+        TRUSTED_WIRE_BATCH_PAYLOAD_FIELDS
+    ):
         raise ValueError("trusted envelope payload schema drift")
     if (
-        decoded["schema_version"] != TRUSTED_WIRE_PAYLOAD_SCHEMA_VERSION
+        decoded["schema_version"] != TRUSTED_WIRE_BATCH_PAYLOAD_SCHEMA_VERSION
         or decoded["jcs_profile_id"] != JCS_PROFILE_ID
         or decoded["field_manifest_id"] != FIELD_MANIFEST_ID
+        or decoded["public_provenance_version"]
+        != TRUSTED_WIRE_PUBLIC_PROVENANCE_VERSION
+        or decoded["typed_authority_schema_id"] != TYPED_AUTHORITY_SCHEMA_ID
         or type(decoded["authority"]) is not dict
     ):
         raise ValueError("trusted envelope payload identity drift")
@@ -1233,7 +1393,7 @@ def _decode_structural_envelope(
 def decode_and_audit_trusted_envelope_v1(envelope: bytes) -> DecodedTrustedEnvelopeV1:
     """Replay public framing, hashes, accepted-JCS, paths, and provenance only."""
 
-    payload, padding, _, audit = _decode_structural_envelope(envelope)
+    payload, padding, decoded, audit = _decode_structural_envelope(envelope)
     return DecodedTrustedEnvelopeV1(
         envelope=envelope,
         envelope_id="phase2b_trusted_envelope_"
@@ -1243,6 +1403,9 @@ def decode_and_audit_trusted_envelope_v1(envelope: bytes) -> DecodedTrustedEnvel
         payload_bytes=len(payload),
         padding_bytes=len(padding),
         namespace_audit=audit,
+        payload_schema_version=decoded["schema_version"],  # type: ignore[arg-type]
+        public_provenance_version=decoded["public_provenance_version"],  # type: ignore[arg-type]
+        typed_authority_schema_id=decoded["typed_authority_schema_id"],  # type: ignore[arg-type]
     )
 
 
@@ -1256,8 +1419,11 @@ def _batch_id(
         "field_manifest_id": FIELD_MANIFEST_ID,
         "jcs_profile_id": JCS_PROFILE_ID,
         "policy_id": TRUSTED_WIRE_BATCH_POLICY_ID,
+        "payload_schema_version": TRUSTED_WIRE_BATCH_PAYLOAD_SCHEMA_VERSION,
+        "public_provenance_version": TRUSTED_WIRE_PUBLIC_PROVENANCE_VERSION,
         "run_id_commitment": run_id_commitment,
         "schema_version": TRUSTED_WIRE_BATCH_SCHEMA_VERSION,
+        "typed_authority_schema_id": TYPED_AUTHORITY_SCHEMA_ID,
         "uuid_collision_retry_count": uuid_collision_retry_count,
     }
     return "phase2b_trusted_wire_batch_" + hashlib.sha256(
@@ -1464,16 +1630,28 @@ def build_trusted_wire_batch_v1(
                 collision_retries,
             )
             _canonicalize_public_authority(authority_mapping)
-            _rebind_public_provenance(authority_mapping)
-            audit = audit_namespace_paths_v1(authority_mapping)
-            payload = encode_phase2b_jcs_profile_v1(
-                {
-                    "authority": authority_mapping,
-                    "field_manifest_id": FIELD_MANIFEST_ID,
-                    "jcs_profile_id": JCS_PROFILE_ID,
-                    "schema_version": TRUSTED_WIRE_PAYLOAD_SCHEMA_VERSION,
-                }
+            typed_authority = _compile_native_public_provenance(
+                authority_mapping
             )
+            if (
+                encode_typed_transform_authority_profile_v1(typed_authority)
+                != authority_mapping
+            ):
+                raise ValueError("native typed authority profile roundtrip drift")
+            audit = audit_namespace_paths_v1(authority_mapping)
+            payload_value = {
+                "authority": authority_mapping,
+                "field_manifest_id": FIELD_MANIFEST_ID,
+                "jcs_profile_id": JCS_PROFILE_ID,
+                "public_provenance_version": (
+                    TRUSTED_WIRE_PUBLIC_PROVENANCE_VERSION
+                ),
+                "schema_version": TRUSTED_WIRE_BATCH_PAYLOAD_SCHEMA_VERSION,
+                "typed_authority_schema_id": TYPED_AUTHORITY_SCHEMA_ID,
+            }
+            if tuple(sorted(payload_value)) != TRUSTED_WIRE_BATCH_PAYLOAD_FIELDS:
+                raise RuntimeError("trusted-wire payload field manifest drift")
+            payload = encode_phase2b_jcs_profile_v1(payload_value)
             envelope = _frame_secret_payload(payload, padding_key, run_id)
             public_receipt = decode_and_audit_trusted_envelope_v1(envelope)
         except (AttributeError, KeyError, TypeError, ValueError):
@@ -1497,6 +1675,13 @@ def build_trusted_wire_batch_v1(
                 payload_bytes=public_receipt.payload_bytes,
                 padding_bytes=public_receipt.padding_bytes,
                 namespace_audit_id=public_receipt.namespace_audit.audit_id,
+                payload_schema_version=public_receipt.payload_schema_version,
+                public_provenance_version=(
+                    public_receipt.public_provenance_version
+                ),
+                typed_authority_schema_id=(
+                    public_receipt.typed_authority_schema_id
+                ),
             )
         )
     rows = tuple(envelope_rows)
@@ -1535,6 +1720,9 @@ def verify_trusted_wire_batch_replay_v1(
         batch_id=batch.batch_id,
         run_id_commitment=batch.run_id_commitment,
         authority_count=len(batch.envelopes),
+        source_authority_content_ids=tuple(
+            authority.content_id for authority in authorities
+        ),
     )
 
 
@@ -1554,6 +1742,8 @@ __all__ = (
     "TRUSTED_WIRE_BATCH_SCHEMA_VERSION",
     "TRUSTED_WIRE_KEY_SCHEDULE_VERSION",
     "TRUSTED_WIRE_BATCH_POLICY_ID",
+    "TRUSTED_WIRE_BATCH_PAYLOAD_FIELDS",
+    "TRUSTED_WIRE_BATCH_PAYLOAD_SCHEMA_VERSION",
     "TRUSTED_WIRE_PUBLIC_PROVENANCE_VERSION",
     "TrustedWireBatchDisposition",
     "TrustedWireBatchPolicyV1",

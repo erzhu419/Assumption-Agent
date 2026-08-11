@@ -72,17 +72,25 @@ preservation pairs 尚未生成或执行。
 转成 schema-closed 字符串表示，显式记录 frozen-10 与 V2-extension-6 namespace/path，并用
 80-byte header + 公开 test padding 构造可重放的 65,536-byte envelope。Stage B keyed batch
 mechanics 进一步实施三份 pairwise-distinct 32-byte IKM 的 purpose separation、unbiased
-whole-batch shuffle、case-local HMAC UUIDv4、rename 后 recanonicalization、wire-only public
-provenance、secret HMAC padding、原子 batch 与 supplied-secret custodian replay。
+whole-batch shuffle、case-local HMAC UUIDv4、rename 后 recanonicalization、public base
+provenance、shared exact-validator-native derived provenance 的 framing 前编译、secret
+HMAC padding、原子 batch 与 supplied-secret custodian replay。Stage C 的 strict closed typed
+codec lossless 重建 V2 authority；真实 payload 可不经 decode 后改写直接得到 exact-transform
+`COMPLETE`。整批 replay 还绑定 Stage-B membership/source order/secret receipt 与逐 row
+transform result。在 exact top-level API types 合法的前提下，batch/custodian/typed semantic
+drift 只返回整批 `ABSTAIN` 且不返回 partial roots；顶层 type-contract 违规在 replay 前抛
+`TypeError`。
 
 这些不是 trust/effect evidence：pairwise distinct 不证明独立 custodian key generation，public
-decoder 不验证 secret padding，replay 只说明给定 authorities/run/IKM 可重建同一 bytes，且
-wire-only provenance 不能由现有 V2 typed validator 重放。因此 strict typed authority decode、
-origin authentication、完整 trusted RFC8785 builder、formal 字段/UUID namespace 审计、
+raw-envelope diagnostic 不验证 batch membership 或 secret padding，supplied-secret replay 只说明
+给定 authorities/run/IKM 可重建同一 bytes。所有 typed replay receipts 仍明确是
+`NON_AUTHORITATIVE_MECHANICS_ONLY`。因此 origin authentication、完整 trusted RFC8785 builder、
+formal 字段/UUID namespace 审计、
 720+240 formal 资源合同、recognizer CLI、archive evaluator、sealed data、runtime/custodian 和
 C1 exit 仍缺失；宽泛 projection compiler、完整 typed pipeline、formal covert audit 与 formal
 holdout 状态继续为 false。入口虽冻结 1..1024 authority cap，最大规模的 wall-time/RSS 尚未
-资格化，不能据小批次 mechanics 回归推断 formal-corpus capacity。
+资格化，不能据小批次 mechanics 回归推断 formal-corpus capacity。下一施工切片是 recognizer
+CLI + prediction archive evaluator，再进行 unsealed end-to-end replay。
 
 此外可以说：Phase-3A 的 v1.0.2 strict specification 已冻结，Python/Rust shared vectors
 各 48/48 PASS。M2 两端都接受 64,680 个 source candidates，并得到 64,680 个 unique strict

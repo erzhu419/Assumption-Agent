@@ -141,9 +141,10 @@ PublicEvidenceBundle + TheoryState + Phase2BAdapterRegistry
 
 Both bounded profiles
   → schema-closed accepted-JCS profile + public-test envelope [mechanics only]
-  → keyed batch shuffle/ID/recanonicalization/wire-provenance/secret-padding
+  → keyed batch shuffle/ID/recanonicalization/native-provenance/secret-padding
                                                     [mechanics only]
-  → strict typed authority decode/replay + CLI/archive       [not implemented]
+  → strict typed authority codec + direct/whole-batch replay [mechanics only]
+  → recognizer CLI + prediction archive evaluator            [not implemented]
   → unique family+binding and admissible scale set, or abstain
   → PredictionBundle commitment                         [not implemented]
 ```
@@ -206,7 +207,7 @@ distinct-point scalar subselection，split/merge 只覆盖 extensive 值的一�
 coarse-graining 只核声明的 sparse matrix equality，forest 也不支持 multi-root merge。
 derived verifier 仍拒绝有量纲 witness；八种 wire operation 与八类 formal
 `PreservationTransform` 不是同一 taxonomy，更不等于 496 legal + 76 invalid pairs 已执行。
-recognizer CLI、complete typed trusted wire、formal covert audit、archive evaluator、sealed data、
+recognizer CLI、prediction archive evaluator、formal covert audit、sealed data、
 runtime/custodian 证据都未完成。因此 `projection_compiler_implemented`、宽泛
 `exact_rational_residual_interval_semantics_implemented`、
 `uncertainty_semantics_compiler_implemented` 和完整 typed pipeline 状态仍为 false。
@@ -220,21 +221,29 @@ schema-closed accepted-JCS 子集把 binary64 编为 `f64be` 字符串、把 exa
 `phase2b_trusted_wire_batch_v1.py` 新增 Stage B keyed batch mechanics：只接受 exact V2
 authority tuple、exact run ID 与三份 pairwise-distinct 32-byte IKM；内部做 purpose-separated
 HKDF-SHA256、带冻结 rejection cap 的 unbiased whole-batch Fisher–Yates、shuffle 后的
-case-local HMAC UUIDv4 分配、rename 后 schema-aware set/ref/row recanonicalization、wire-only
-base/derived public provenance 重绑、secret HMAC padding、65,536-byte 原子 batch emission，
+case-local HMAC UUIDv4 分配、rename 后 schema-aware set/ref/row recanonicalization、public base
+provenance 与 shared exact-validator-native derived provenance 的 framing 前编译、secret HMAC
+padding、65,536-byte 原子 batch emission，
 并允许 custodian 用原 authorities/run/IKM 做 byte-exact replay。ID counters、碰撞集合与 warning
 是 batch-global，但同一 latent UUID 不跨 case 复用 public ID；public receipts 不包含 key、
 permutation 或 old→new map。content-bound policy 同时绑定实际 domain/header、accepted-JCS/
 manifest、transform-validator identity 与全部 acceptance caps。
 
+`phase2b_trusted_wire_typed_authority_v1.py` 冻结 closed typed profile grammar/caps，并对八类
+certificate、binary64 与 exact rational 做 lossless decode/re-encode。
+`phase2b_trusted_wire_typed_replay_v1.py` 的 raw-envelope diagnostic 可证明该 payload authority
+不经 decode 后改写就直接通过 exact-transform `COMPLETE`；整批入口还重放 Stage-B membership、
+source-authority order、supplied-secret receipt 与每个 transform result。在 exact top-level
+API types 合法的前提下，batch/custodian/typed semantic drift 只返回整批 `ABSTAIN`、无
+partial roots；顶层 type-contract 违规在 replay 前抛 `TypeError`。
+
 这些 receipts 仍恒为 `NON_AUTHORITATIVE_MECHANICS_ONLY`。pairwise distinct 不证明 IKM
-独立性；public decoder 只重放 framing/hash/JCS/path/canonical order/wire provenance，不验证
-secret padding；custodian replay 只证明 supplied secrets 可重建同一 bytes。wire-only provenance
-尚不兼容现有 V2 derived-provenance validator，所以 typed authority decode/replay、origin
-authentication、formal namespace/covert audit 与 `trusted_rfc8785_wire_builder_implemented`
-继续为 false。1..1024 的输入 cap 已冻结并在入口 fail-closed，但 1024-authority worst-case
-wall-time/RSS 尚未资格化。下一刀是 strict typed authority decode/replay，而不是生成或消费
-holdout。
+独立性；raw-envelope diagnostic 不验证 batch membership 或 secret padding；supplied-secret
+replay 只证明调用方给出的 authorities/run/IKM 可重建同一 bytes。origin authentication、
+formal namespace/covert audit 与 `trusted_rfc8785_wire_builder_implemented` 继续为 false。
+1..1024 的输入 cap 已冻结并在入口 fail-closed，但 1024-authority worst-case wall-time/RSS
+尚未资格化。下一刀是 recognizer CLI + prediction archive evaluator，随后执行 unsealed
+end-to-end replay，而不是生成或消费 holdout。
 
 这里的 `family-neutral-shaped` 只表示 schema 没有显式 family/gold 字段。允许的 UUID、
 provenance hash、role candidates、missingness 和 unused transforms 仍可能成为 covert
