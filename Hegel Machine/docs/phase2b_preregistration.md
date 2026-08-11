@@ -183,20 +183,34 @@ The implemented exact compiler enforces it at the whole-bundle boundary: one
 RationalValue grid yields an abstaining receipt with no partial compiled rows.
 For `absolute_bound`, all arithmetic starts from exact `Fraction.from_float`
 representations of the wire's normalized binary64 values and rounds only outward.
-The exact receipt is not converted to the existing float selector interval.
+The root/identity exact bridge consumes that receipt without converting it to the
+existing float selector interval. Its authoritative entrypoint accepts only the raw
+bundle, theory, and adapter registry, then recomputes both the uncertainty receipt
+and complete candidate grid internally. All six law families use conservative
+natural rational intervals for residuals, tolerances, normalized scores, and the
+structural margin. Explicit entity/role/quantity/channel/membership, transform,
+observation, scale, edge, vector-width, total-component, candidate, adapter-scan,
+exact-operation, and fraction-bit-length budgets fail closed before or during
+evaluation. Before those hashes, a bounded recursive walk also requires every
+nested bundle/theory/registry dataclass, enum, tuple, and primitive to have its exact
+frozen type; subclasses cannot split compiled values from committed mappings, and
+tree nodes, text, and integer bit lengths are capped. Every preflight rejection
+occurs before authority content hashing and
+receives no content root, run ID, or committed downstream receipt; only a
+post-preflight compilation and decision carry complete provenance.
 
 ## Real blockers after the exact freeze
 
 `ready_for_holdout_generation` and formal exit remain false because
 implementation and external-evidence blockers remain:
 
-- a bounded-binary64, dimensionless, support-aligned root/identity projection
-  mechanics slice and a separate bundle-atomic exact RationalValue-grid
-  `absolute_bound` compiler are implemented, but the exact receipt is not yet
-  connected to conservative residual/tolerance/verifier intervals.  Non-degenerate
-  residual intervals therefore still fail closed; complete transform semantics,
-  receipt provenance binding and the formal typed evidence-to-prediction pipeline
-  remain incomplete;
+- a bounded-binary64 projection mechanics slice, bundle-atomic exact
+  RationalValue-grid `absolute_bound` compiler, and a provenance-bound six-law
+  exact rational residual/tolerance/selector bridge are implemented for
+  dimensionless, support-aligned root/identity paths. Complete executable semantics
+  for unit/coordinate/aggregation/sampling/split-merge/coarse-graining transforms
+  remain absent, so the broad projection compiler and formal typed
+  evidence-to-prediction pipeline remain incomplete;
 - trusted wire builder and the full covert-channel auditor are not implemented
   or executed;
 - exact 40-hex external baseline revisions, image/SBOM digests, and artifact

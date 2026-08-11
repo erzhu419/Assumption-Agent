@@ -1143,6 +1143,7 @@ def phase2b_preregistration_report() -> dict[str, object]:
 
     from . import (
         phase2b_adapter,
+        phase2b_exact_bridge_v1,
         phase2b_projection_compiler,
         phase2b_runner,
         phase2b_selector,
@@ -1203,7 +1204,29 @@ def phase2b_preregistration_report() -> dict[str, object]:
         ),
         "exact_uncertainty_receipt_consumed_by_projection_compiler": False,
         "exact_rational_residual_interval_semantics_implemented": False,
-        "exact_rational_selector_bridge_implemented": False,
+        (
+            "root_identity_six_law_exact_rational_residual_interval_"
+            "semantics_implemented"
+        ): True,
+        "exact_rational_selector_bridge_implemented": True,
+        (
+            "authoritative_exact_bridge_recomputes_uncertainty_and_"
+            "adapter_internally"
+        ): True,
+        (
+            "oversized_bundle_theory_or_registry_rejected_before_content_hash"
+        ): True,
+        "nested_authority_exact_type_enforced_before_content_hash": True,
+        "exact_uncertainty_receipt_consumed_by_root_identity_bridge": True,
+        "exact_bridge_policy_id": (
+            phase2b_exact_bridge_v1.DEFAULT_EXACT_BRIDGE_POLICY.policy_id
+        ),
+        "exact_selector_policy_id": (
+            phase2b_exact_bridge_v1.DEFAULT_EXACT_SELECTION_POLICY.policy_id
+        ),
+        "exact_verifier_semantics_id": (
+            phase2b_exact_bridge_v1.DEFAULT_EXACT_BRIDGE_POLICY.verifier_semantics_id
+        ),
         "prediction_archive_evaluator_implemented": False,
         "public_wire_contract_implemented": True,
         "public_wire_is_family_neutral_shaped_only": True,
@@ -1222,6 +1245,7 @@ def phase2b_preregistration_report() -> dict[str, object]:
             + hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest()
             for name, module in (
                 ("adapter", phase2b_adapter),
+                ("exact_bridge", phase2b_exact_bridge_v1),
                 ("projection_compiler", phase2b_projection_compiler),
                 ("runner", phase2b_runner),
                 ("selector", phase2b_selector),

@@ -9,6 +9,10 @@ from hegel_machine.phase2b_freeze_v1 import (
     PreservationTransform,
     frozen_phase2b_exact_freeze,
 )
+from hegel_machine.phase2b_exact_bridge_v1 import (
+    DEFAULT_EXACT_BRIDGE_POLICY,
+    DEFAULT_EXACT_SELECTION_POLICY,
+)
 from hegel_machine.phase2b_protocol import (
     BaselineKind,
     BaselineRegistration,
@@ -395,7 +399,44 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         report["exact_rational_residual_interval_semantics_implemented"]
         is False
     )
-    assert report["exact_rational_selector_bridge_implemented"] is False
+    assert (
+        report[
+            "root_identity_six_law_exact_rational_residual_interval_"
+            "semantics_implemented"
+        ]
+        is True
+    )
+    assert report["exact_rational_selector_bridge_implemented"] is True
+    assert (
+        report[
+            "authoritative_exact_bridge_recomputes_uncertainty_and_"
+            "adapter_internally"
+        ]
+        is True
+    )
+    assert (
+        report[
+            "oversized_bundle_theory_or_registry_rejected_before_content_hash"
+        ]
+        is True
+    )
+    assert (
+        report["nested_authority_exact_type_enforced_before_content_hash"]
+        is True
+    )
+    assert (
+        report["exact_uncertainty_receipt_consumed_by_root_identity_bridge"]
+        is True
+    )
+    assert report["exact_bridge_policy_id"] == (
+        DEFAULT_EXACT_BRIDGE_POLICY.policy_id
+    )
+    assert report["exact_selector_policy_id"] == (
+        DEFAULT_EXACT_SELECTION_POLICY.policy_id
+    )
+    assert report["exact_verifier_semantics_id"] == (
+        DEFAULT_EXACT_BRIDGE_POLICY.verifier_semantics_id
+    )
     assert report["prediction_archive_evaluator_implemented"] is False
     assert report["public_wire_contract_implemented"] is True
     assert report["public_wire_is_family_neutral_shaped_only"] is True
@@ -415,6 +456,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     assert report["oci_isolation_launch_contract_implemented"] is True
     assert set(report["component_source_ids"]) == {
         "adapter",
+        "exact_bridge",
         "projection_compiler",
         "runner",
         "selector",

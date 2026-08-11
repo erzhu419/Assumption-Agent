@@ -132,8 +132,10 @@ Phase-2B 不会在 Phase-2A report 外包一层 `sealed=true`。它使用新的 
 PublicEvidenceBundle (family-neutral-shaped, UUIDv4 syntax, field allowlist)
   → Phase2BAdapterRegistry
   → complete internal family × injective role binding × scale-path hypotheses
-  → verifier projection compiler                         [root/identity mechanics only]
-  → interval residual / heterogeneous tolerance
+  → exact uncertainty receipt + authoritative adapter replay
+  → six-law exact rational verifier bridge              [root/identity only]
+  → exact interval selector                              [root/identity only]
+  → complete transforms / CLI / trusted wire / archive  [not implemented]
   → unique family+binding and admissible scale set, or abstain
   → PredictionBundle commitment
 ```
@@ -158,16 +160,36 @@ envelope。只有无量纲、temporal/spatial support 精确对齐、且落在�
 非 identity transform、缺失/歧义 witness 或 shape drift 同样 fail-closed，selector
 必须 abstain。
 
-`phase2b_uncertainty_compiler.py` 现在提供独立的、bundle-atomic exact receipt：它把
-wire 已规范化的 binary64 用 `Fraction.from_float` 精确提升，对 `NumericValue` 使用
+`phase2b_uncertainty_compiler.py` 提供独立的、bundle-atomic exact receipt：它把 wire
+已规范化的 binary64 用 `Fraction.from_float` 精确提升，对 `NumericValue` 使用
 `x +/- radius`、对 `NumericInterval` 使用 `[lower - radius, upper + radius]`，再向
 literal-pinned 663 点 RationalValue grid 向外取整。任何 `standard_error` 或越界端点
-都拒绝整包且不返回 partial siblings；Boolean 与 missing 保持 typed。输出保留
-RationalAtom/Fraction，不导入或转换到现有 float selector interval。因而窄旗标
-`formal_rational_grid_uncertainty_compiler_implemented` 为 true，但跨量纲、support、
-transform 语义、非退化 exact residual/tolerance/verifier bridge、compiler receipt 到
-selector 的 provenance binding 都未完成；`projection_compiler_implemented`、宽泛
-`uncertainty_semantics_compiler_implemented` 和完整 pipeline 状态仍为 false。
+都拒绝整包且不返回 partial siblings；Boolean 与 missing 保持 typed。
+
+`phase2b_exact_bridge_v1.py` 现在消费这份 receipt，但只声明一个明确受限的
+root/identity bridge。权威入口只接收原始 bundle、theory 与 adapter registry；调用者
+不能注入 receipt、candidate grid、evaluation、selection 或 policy。入口在任何 bundle、
+theory 或 registry 内容根计算前，先递归要求整棵 authority tree 使用 exact frozen
+dataclass、enum、tuple 与 primitive 类型，并施加节点数、文本量和整数 bit-length 预算；
+再执行 entity/role/quantity/channel/membership、transform、
+observation/scale/edge、vector width、总 component、candidate 与 adapter-scan 预算，并
+同时检查 transform catalog/path 的 preflight 语义。任何 preflight rejection 都只携
+bundle ID、schema/registry-theory version 与冻结 policy IDs；它无内容根、无 run ID，
+不可作为证据或进入 selector。通过 preflight 的输入随后再计算 provenance，并在内部
+确定性重算 uncertainty receipt 和完整 adapter grid。六类 law residual
+均以 `RationalAtom`/`Fraction` 自然区间运算保守包络：加减乘、绝对值、max 与正分母除法；
+negative-feedback 的离散分支只在整段输入上可判定时执行，跨过 zero-branch boundary
+则生成 error cell 并令 selector abstain。tolerance、normalized interval 和 structural
+margin 也不降回 binary64。exact-operation 与 Fraction bit-length 另有执行中预算；
+unused/missing transform catalog 项、非唯一 path 或任何定义域不确定性均 fail-closed。
+
+这一窄 bridge 仍只允许 identity transform、无量纲 observation 和 temporal/spatial
+support 精确对齐。完整 unit/coordinate/aggregation/split-merge/coarse-graining 语义、
+recognizer CLI、trusted wire/covert audit、archive evaluator、sealed data、runtime/custodian
+证据都未完成。因此 `projection_compiler_implemented`、宽泛
+`exact_rational_residual_interval_semantics_implemented`、
+`uncertainty_semantics_compiler_implemented` 和完整 typed pipeline 状态仍为 false；下一刀
+是逐项冻结并实现 complete transform semantics，而不是生成或消费 holdout。
 
 这里的 `family-neutral-shaped` 只表示 schema 没有显式 family/gold 字段。允许的 UUID、
 provenance hash、role candidates、missingness 和 unused transforms 仍可能成为 covert

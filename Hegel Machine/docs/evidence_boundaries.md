@@ -44,15 +44,26 @@ v1.0.1 的 seed 修正，以 `2611585425` 作为 domain-separated SHA-256 → ui
 语义实现前，formal selector 只允许
 `absolute_bound`。这些数字和限制是 preregistration，不是已生成、已审计或已通过的
 holdout evidence；custodian/runtime 未 attested，covert audit 未执行。当前已有
-root/identity + binary64 absolute-bound envelope mechanics，以及一个独立的
-bundle-atomic exact RationalValue-grid uncertainty receipt。后者用
-`Fraction.from_float` 绑定 wire 的 binary64 语义，对 numeric bounds 精确扩张并向冻结的
-663 点 grid 向外取整；任何 `standard_error` 或 grid 越界整包拒绝、绝不返回部分结果，
-也绝不降回 float selector interval。这仍没有把 exact intervals 接入 residual、tolerance、
-verifier 或 normalized selector。当前只有退化 point envelope 且所有输入无量纲、
-temporal/spatial support 精确对齐并通过保守 binary64 算术安全域时才进入旧 verifier；
-非退化 interval、量纲、support 或安全域漂移明确 fail-closed。完整 transform 语义、
-保守 exact residual interval bridge 与 formal pipeline 仍未完成。
+root/identity + binary64 absolute-bound envelope mechanics、独立的 bundle-atomic exact
+RationalValue-grid uncertainty receipt，以及一个受限的 root/identity exact bridge。
+receipt 用 `Fraction.from_float` 绑定 wire 的 binary64 语义，对 numeric bounds 精确扩张并
+向冻结的 663 点 grid 向外取整；任何 `standard_error` 或 grid 越界整包拒绝、绝不返回
+部分结果。权威 bridge 内部重算该 receipt 与完整 adapter grid，用 exact 自然区间对六类
+law 的 residual、tolerance、normalized interval 和 structural margin 作保守包络，不降回
+float selector。它还冻结 entity/role/quantity/channel/membership、transform、
+observation/scale/edge/vector/component/candidate、adapter-scan、exact-operation 与 Fraction
+bit-length 预算，并在哈希前递归拒绝任意嵌套 authority dataclass/enum/tuple/primitive
+子类，同时限制 theory 与整棵 authority tree 的节点数、文本量和整数 bit-length。所有
+preflight rejection 都发生在任何 authority 内容哈希前，只携带
+bundle ID、schema/registry-theory version 与冻结 policy IDs；它不携带内容根或 run ID，
+不能作为证据或下游 receipt。通过 preflight 后的执行错误才绑定完整 provenance 并整案
+abstain。
+
+这个实现范围仍只有 identity transform、无量纲输入及 temporal/spatial support 精确对齐；
+完整 unit conversion、coordinate affine、temporal/spatial aggregation、sampling、
+split/merge 与 coarse-graining 语义仍未实现。trusted wire、covert audit、recognizer CLI、
+archive evaluator、sealed data、runtime/custodian 和 C1 exit 也仍缺失，所以宽泛 projection
+compiler、完整 typed pipeline 与 formal holdout 状态继续为 false。
 
 此外可以说：Phase-3A 的 v1.0.2 strict specification 已冻结，Python/Rust shared vectors
 各 48/48 PASS。M2 两端都接受 64,680 个 source candidates，并得到 64,680 个 unique strict

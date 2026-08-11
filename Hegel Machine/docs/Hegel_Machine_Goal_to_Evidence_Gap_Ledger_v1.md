@@ -92,8 +92,9 @@ without semantic acceptance**.  The dependency order is:
 1. **Projection mechanics** — deterministic public evidence -> complete
    family/binding/scale grid -> verifier evaluations; no caller-signed subset.
 2. **Formal numeric semantics** — bundle-atomic exact RationalValue-grid outward
-   uncertainty receipts are implemented for `absolute_bound`; the still-missing
-   edge is exact residual/tolerance/verifier propagation.  `standard_error`
+   uncertainty receipts and exact residual/tolerance/normalized-interval/margin
+   propagation are implemented for all six laws, but only through the
+   root/identity, dimensionless, support-aligned bridge.  `standard_error`
    remains unsupported until its full Student-t/Bonferroni contract exists.
 3. **Complete transform semantics** — temporal/spatial aggregation, sampling,
    unit conversion, affine coordinates, split/merge and coarse graining must
@@ -146,12 +147,45 @@ that boundary:
   immutable result roots; exact-type checks reject subclass commitment spoofing;
 - contains no selector/projection import and no float interval bridge.
 
+`phase2b_exact_bridge_v1.py` now closes the next root/identity-only edge:
+
+- its authoritative API accepts only the raw `PublicEvidenceBundle`, theory and
+  adapter registry, then recomputes the exact uncertainty receipt and complete
+  adapter grid internally; callers cannot inject receipts, grids, evaluations or
+  selections;
+- binds bundle, observation-compilation, uncertainty, adapter, bridge-policy,
+  exact-verifier and exact-selector identities through every post-preflight
+  compilation and decision; an uncommitted preflight rejection has no content
+  root or run ID and cannot enter the selector;
+- implements conservative natural rational intervals for all six frozen law
+  residuals using exact add/subtract/multiply/absolute/max/positive-division and
+  fail-closed discrete-branch checks, without corner enumeration or conversion
+  to float; a negative-feedback interval crossing the zero branch is an error
+  cell rather than an invented continuous interpolation;
+- keeps tolerance, normalized intervals and structural-margin decisions exact;
+- freezes entity/role/quantity/channel/membership, transform,
+  observation/scale/edge/vector-width/total-component/candidate, adapter-scan,
+  operation-count, Fraction bit-length, theory/tree-node, authority-text and
+  integer-bit-length resource budgets; a bounded recursive exact-type walk
+  prevents nested schema subclasses from separating compiled values from
+  committed mappings. Rejected authorities stop before content hashing and
+  receive no committed downstream receipt;
+- rejects unused or missing transform-catalog entries, nonunique paths,
+  non-identity transforms, dimensioned observations, support mismatch and
+  uncertain verifier preconditions fail-closed.
+
 Accordingly these narrow flags are true:
 
 ```text
 formal_rational_grid_uncertainty_compiler_implemented
 absolute_bound_uncertainty_semantics_compiler_implemented
 bundle_atomic_exact_uncertainty_receipt_implemented
+root_identity_six_law_exact_rational_residual_interval_semantics_implemented
+exact_rational_selector_bridge_implemented
+authoritative_exact_bridge_recomputes_uncertainty_and_adapter_internally
+exact_uncertainty_receipt_consumed_by_root_identity_bridge
+oversized_bundle_theory_or_registry_rejected_before_content_hash
+nested_authority_exact_type_enforced_before_content_hash
 ```
 
 while the broad flags below remain false:
@@ -162,7 +196,6 @@ uncertainty_semantics_compiler_implemented
 standard_error_uncertainty_semantics_compiler_implemented
 exact_uncertainty_receipt_consumed_by_projection_compiler
 exact_rational_residual_interval_semantics_implemented
-exact_rational_selector_bridge_implemented
 typed_evidence_to_prediction_pipeline_complete
 formal_recognizer_run_runnable
 covert_channel_audit_implemented
@@ -171,28 +204,25 @@ formal_phase2b_exit_claim
 active_promotion_enabled
 ```
 
-This is implementation progress, not sealed C1 evidence.
-
-Neither mechanics result is yet a sealed selector input: the current public
-selector still consumes caller-supplied evaluation objects and only replays
-their grid identities, while the exact uncertainty receipt is not consumed by
-the projection compiler.  Binding exact receipt and evaluation provenance to
-the complete grid is therefore an additional formal-pipeline blocker.  The
-mechanics slice also does not yet prove that `task_target` and every unused
-observation have complete projection coverage; that belongs to the trusted
-wire/coverage contract.
+This is implementation progress, not sealed C1 evidence. The new exact bridge is
+an internal root/identity recognizer core, not the frozen recognizer CLI or a sealed
+selector execution. The older binary64 projection compiler still does not consume
+the exact receipt, and its broad completion flag therefore remains false. Full
+transform semantics, `task_target`/unused-observation coverage, trusted wire,
+covert-channel audit, archive evaluator, signed image/runtime evidence and durable
+one-shot custody remain formal-pipeline blockers.
 
 ## 7. Next authorized construction slice
 
-The next non-actual commit is **Phase-2B Root/Identity Exact Rational
-Residual-Tolerance-Selector Bridge v1**.  It should carry the exact RationalValue
-intervals through an exact residual/tolerance/verifier result type and bind that
-receipt to the complete adapter grid and selector input.  It must prove
-conservative arithmetic for each supported law and normalized interval operation;
-it must not convert the receipt back to the existing float `ClosedInterval`.
-Unsupported nonlinear or transform cases remain full-grid abstentions.  After
-that bridge is replayable, transform semantics can be added one operation at a
-time, each with legal preservation and invalid-transform tests.
+The next non-actual construction slice is **Phase-2B Complete Transform Semantics
+v1**. Add one frozen executable operation at a time—unit conversion, coordinate
+affine, temporal/spatial aggregation, sampling resolution, equivalent split/merge
+and coarse-graining—with exact interval propagation, dimensional/support contracts,
+legal-preservation pairs and invalid-transform controls. No operation may be
+inferred from its name or silently treated as identity. In parallel, the runner
+inventory and recognizer CLI still need to include the exact bridge, but CLI/image,
+trusted wire and archive-evaluator work must remain separate from claims about
+transform correctness or sealed execution.
 
 No Q0.5b actual rerun, Docker execution, holdout generation, or ACTIVE mutation
 is authorized by this ledger.
