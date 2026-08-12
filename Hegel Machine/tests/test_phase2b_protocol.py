@@ -56,6 +56,13 @@ from hegel_machine.phase2b_recognizer_input_archive_v1 import (
     RECOGNIZER_INPUT_ARCHIVE_POLICY_ID,
     TRUSTED_RECOGNIZER_INPUT_ARCHIVE_VERSION,
 )
+from hegel_machine.phase2b_recognizer_input_archive_v2 import (
+    PUBLIC_RECOGNIZER_FAMILY_ALIAS_POLICY_ID_V2,
+    PUBLIC_RECOGNIZER_REGISTRY_SCHEMA_ID_V2,
+    PUBLIC_RECOGNIZER_REGISTRY_V2_SCHEMA_VERSION,
+    RECOGNIZER_INPUT_ARCHIVE_POLICY_ID_V2,
+    TRUSTED_RECOGNIZER_INPUT_ARCHIVE_V2_VERSION,
+)
 from hegel_machine.phase2b_recognizer_prediction_archive_v1 import (
     PUBLIC_RECOGNIZER_PREDICTION_RECORD_SCHEMA_ID,
     PUBLIC_RECOGNIZER_PREDICTION_RECORD_SCHEMA_VERSION,
@@ -68,6 +75,22 @@ from hegel_machine.phase2b_runner import TOTAL_RECOGNIZER_CASE_COUNT
 from hegel_machine.phase2b_unsealed_prediction_evaluator_v1 import (
     UNSEALED_PREDICTION_EVALUATOR_POLICY_ID,
     UNSEALED_PREDICTION_EVALUATOR_VERSION,
+)
+from hegel_machine.phase2b_trusted_wire_batch_v2 import (
+    TRUSTED_WIRE_BATCH_V2_PAYLOAD_SCHEMA_VERSION,
+    TRUSTED_WIRE_BATCH_V2_POLICY_ID,
+    TRUSTED_WIRE_BATCH_V2_SCHEMA_VERSION,
+    TRUSTED_WIRE_ENVELOPE_V2_MAGIC,
+    TRUSTED_WIRE_ENVELOPE_V2_VERSION,
+)
+from hegel_machine.phase2b_trusted_wire_typed_authority_v2 import (
+    COMPACT_TYPED_AUTHORITY_CODEC_POLICY_ID,
+    COMPACT_TYPED_AUTHORITY_CODEC_VERSION,
+    COMPACT_TYPED_AUTHORITY_SCHEMA_ID,
+)
+from hegel_machine.phase2b_trusted_wire_typed_replay_v2 import (
+    TYPED_TRUSTED_WIRE_REPLAY_V2_POLICY_ID,
+    TYPED_TRUSTED_WIRE_REPLAY_V2_VERSION,
 )
 from hegel_machine.phase2b_protocol import (
     BaselineKind,
@@ -714,9 +737,117 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     assert report["minimum_constructed_positive_typed_profile_bytes"] == 125_582
     assert report["trusted_wire_maximum_payload_bytes"] == 65_424
     assert report["real_positive_typed_profile_fits_trusted_wire"] is False
+    assert report["compact_typed_authority_codec_v2_version"] == (
+        COMPACT_TYPED_AUTHORITY_CODEC_VERSION
+    )
+    assert report["compact_typed_authority_schema_id_v2"] == (
+        COMPACT_TYPED_AUTHORITY_SCHEMA_ID
+    )
+    assert report["compact_typed_authority_codec_policy_id_v2"] == (
+        COMPACT_TYPED_AUTHORITY_CODEC_POLICY_ID
+    )
+    assert report["trusted_wire_batch_v2_schema_version"] == (
+        TRUSTED_WIRE_BATCH_V2_SCHEMA_VERSION
+    )
+    assert report["trusted_wire_batch_v2_payload_schema_version"] == (
+        TRUSTED_WIRE_BATCH_V2_PAYLOAD_SCHEMA_VERSION
+    )
+    assert report["trusted_wire_envelope_v2_version"] == (
+        TRUSTED_WIRE_ENVELOPE_V2_VERSION
+    )
+    assert report["trusted_wire_envelope_v2_magic_hex"] == (
+        TRUSTED_WIRE_ENVELOPE_V2_MAGIC.hex()
+    )
+    assert TRUSTED_WIRE_ENVELOPE_V2_MAGIC.hex() == "4847503242573200"
+    assert report["trusted_wire_batch_v2_policy_id"] == (
+        TRUSTED_WIRE_BATCH_V2_POLICY_ID
+    )
+    assert report["typed_trusted_wire_replay_v2_version"] == (
+        TYPED_TRUSTED_WIRE_REPLAY_V2_VERSION
+    )
+    assert report["typed_trusted_wire_replay_v2_policy_id"] == (
+        TYPED_TRUSTED_WIRE_REPLAY_V2_POLICY_ID
+    )
+    assert report["public_recognizer_registry_v2_schema_version"] == (
+        PUBLIC_RECOGNIZER_REGISTRY_V2_SCHEMA_VERSION
+    )
+    assert report["public_recognizer_registry_v2_schema_id"] == (
+        PUBLIC_RECOGNIZER_REGISTRY_SCHEMA_ID_V2
+    )
+    assert report["public_recognizer_family_alias_policy_id_v2"] == (
+        PUBLIC_RECOGNIZER_FAMILY_ALIAS_POLICY_ID_V2
+    )
+    assert report["trusted_recognizer_input_archive_v2_version"] == (
+        TRUSTED_RECOGNIZER_INPUT_ARCHIVE_V2_VERSION
+    )
+    assert report["recognizer_input_archive_v2_policy_id"] == (
+        RECOGNIZER_INPUT_ARCHIVE_POLICY_ID_V2
+    )
+    assert report["recognizer_input_archive_v2_claim_level"] == (
+        TRUSTED_WIRE_CLAIM_LEVEL
+    )
+    for field_name in (
+        "lossless_compact_typed_authority_codec_v2_mechanics_implemented",
+        "compact_v2_fixed_65536_envelope_mechanics_implemented",
+        "public_typed_trusted_wire_v2_replay_mechanics_implemented",
+        "typed_trusted_wire_replay_v2_batch_policy_membership_mechanics_implemented",
+        "typed_trusted_wire_replay_v2_whole_batch_atomic_mechanics_implemented",
+        "typed_trusted_wire_replay_v2_compact_authority_canonical_mechanics_implemented",
+        "typed_trusted_wire_replay_v2_public_provenance_mechanics_implemented",
+        "typed_trusted_wire_replay_v2_direct_exact_transform_mechanics_implemented",
+        "recognizer_input_archive_v2_structural_archive_mechanics_implemented",
+        "recognizer_input_archive_v2_row_bijection_mechanics_implemented",
+        "recognizer_input_archive_v2_registry_schema_mechanics_implemented",
+        "recognizer_input_archive_v2_registry_authority_exact_scope_mechanics_implemented",
+        "recognizer_input_archive_v2_compact_typed_replay_mechanics_implemented",
+        "recognizer_input_archive_v2_direct_payload_transform_replay_mechanics_implemented",
+        "recognizer_input_archive_v2_cross_row_unlinkable_public_uuid_disjoint_mechanics_implemented",
+        "recognizer_input_archive_v2_private_single_live_allocation_gate_mechanics_implemented",
+        "recognizer_input_archive_v2_private_source_public_uuid_disjointness_gate_mechanics_implemented",
+        "real_positive_compact_v2_payload_fits_trusted_wire",
+        "single_constructed_positive_compact_v2_mechanics_verified",
+        "real_positive_compact_v2_exact_transform_replay_implemented",
+        "real_positive_compact_v2_recognizer_input_archive_replay_implemented",
+        "real_positive_compact_v2_derived_bridge_compilation_parity_implemented",
+        "real_positive_compact_v2_derived_bridge_decision_parity_implemented",
+    ):
+        assert report[field_name] is True
+    assert report["real_positive_expanded_typed_profile_bytes"] == 125_582
+    assert report["real_positive_compact_v2_payload_bytes"] == 50_255
+    assert report["real_positive_compact_v2_payload_cap_headroom_bytes"] == 15_169
+    assert report["real_positive_compact_v2_secret_padding_bytes"] == 15_201
+    assert report["real_positive_compact_v2_fixed_envelope_bytes"] == 65_536
+    for field_name in (
+        "typed_trusted_wire_replay_v2_secret_custodian_replay_verified",
+        "typed_trusted_wire_replay_v2_whole_batch_shuffle_publicly_verified",
+        "typed_trusted_wire_replay_v2_purpose_separated_keys_publicly_verified",
+        "typed_trusted_wire_replay_v2_post_shuffle_hmac_uuidv4_publicly_verified",
+        "typed_trusted_wire_replay_v2_secret_hmac_padding_publicly_verified",
+        "typed_trusted_wire_replay_v2_source_authority_binding_verified",
+        "typed_trusted_wire_replay_v2_live_allocation_schedule_verified",
+        "typed_trusted_wire_replay_v2_recognizer_capacity_evidence",
+        "typed_trusted_wire_replay_v2_origin_authenticated",
+        "typed_trusted_wire_replay_v2_formal_uuid_audit",
+        "typed_trusted_wire_replay_v2_formal_covert_audit",
+        "typed_trusted_wire_replay_v2_sealed_holdout_eligible",
+        "typed_trusted_wire_replay_v2_c1_exit_evidence",
+        "recognizer_input_archive_v2_batch_policy_membership_verified",
+        "recognizer_input_archive_v2_source_registry_projection_verified",
+        "recognizer_input_archive_v2_source_public_disjoint_verified",
+        "recognizer_input_archive_v2_single_live_allocation_verified",
+        "recognizer_input_archive_v2_secret_custodian_replay_verified",
+        "recognizer_input_archive_v2_origin_authenticated",
+        "recognizer_input_archive_v2_formal_uuid_audit",
+        "recognizer_input_archive_v2_formal_covert_audit",
+        "recognizer_input_archive_v2_sealed_holdout_eligible",
+        "recognizer_input_archive_v2_recognizer_executed",
+        "recognizer_input_archive_v2_prediction_archive_evaluated",
+        "recognizer_input_archive_v2_capacity_evidence",
+        "recognizer_input_archive_v2_c1_exit_evidence",
+    ):
+        assert report[field_name] is False
     assert report["next_phase2b_construction_slice"] == (
-        "lossless_compact_typed_authority_codec_v2_with_trusted_wire_"
-        "payload_schema_v3"
+        "recognizer_prediction_v2_row_mapping_integration"
     )
     for field_name in (
         "real_positive_prediction_end_to_end_replay_implemented",
@@ -791,13 +922,17 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "exact_transform_semantics",
         "projection_compiler",
         "recognizer_input_archive_mechanics",
+        "recognizer_input_archive_mechanics_v2",
         "recognizer_prediction_archive_mechanics",
         "runner",
         "selector",
         "trusted_wire_keyed_batch_mechanics",
+        "trusted_wire_keyed_batch_mechanics_v2",
         "trusted_wire_profile_mechanics",
+        "trusted_wire_compact_typed_authority_codec_v2",
         "trusted_wire_typed_authority_codec",
         "trusted_wire_typed_replay_mechanics",
+        "trusted_wire_typed_replay_mechanics_v2",
         "uncertainty_compiler",
         "unsealed_prediction_structural_evaluator",
         "wire",

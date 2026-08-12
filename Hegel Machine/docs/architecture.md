@@ -145,8 +145,11 @@ Both bounded profiles
                                                     [mechanics only]
   → strict typed authority codec + direct/whole-batch replay [mechanics only]
   → post-rename public recognizer-input archive             [mechanics only]
+  └─ compact V2 codec + batch `/3` + public replay + V2 input archive
+                                                            [one-case mechanics]
   → frozen derived bridge → PredictionBundle mapping gate    [mechanics only]
-  → run context + 960 independently framed prediction rows   [mechanics only]
+  → run context + 960 independently framed V1 prediction rows[mechanics only]
+  → V2 prediction row mapping                                [not implemented]
   → unsealed 720/240 structural evaluator                    [not scored]
   → recognizer CLI + formal scoring/sealed evaluator          [not implemented]
 ```
@@ -259,6 +262,18 @@ audit、sealed eligibility、recognizer execution、prediction evaluation 与 C1
 metadata 中的 opaque commitments 不构成 durable trusted receipt；当前没有这种公开 receipt，
 也没有 recognizer 效果证据。
 
+compact V2 保留上述 V1 identities 与 wire 历史，不做跨版本适配。它新增独立的 lossless
+typed-authority codec schema/policy、batch `/3` payload schema、V2 envelope magic/policy、public
+typed replay policy，以及 V2 registry/archive schemas 和 content-ID domains。V2 archive issuer
+只在私有发行路径内通过一次 live allocation 取得只读 registry projection，并执行全批
+source UUID 与全部 public UUID（含 fixed aliases）互斥 gate；public decoder 不接收
+builder、run ID、keys 或 source cases，
+只重放 bounded archive/row/registry、registry-authority exact scope、compact typed authority、
+direct exact transform，以及跨行 unlinkable public UUID（authority + registry role/quantity，
+排除允许重复的 fixed aliases）互斥 mechanics。因而 private gate 已实现不等于 durable
+public claim：batch/source projection、single allocation、secret custody、origin、formal audit、
+sealed eligibility、recognizer execution、prediction/capacity 和 C1 仍为 false。
+
 `phase2b_recognizer_prediction_archive_v1.py` 冻结的 `PublicRunContextV1` 只从 exact decoded
 input archive 与 exact `ExecutionFreezeManifest` 构造，绑定 input archive ID/SHA、当前 protocol
 ID、manifest ID、ordered 960 input-row root 与 expected count=960。每个 prediction record 独立
@@ -279,13 +294,15 @@ exhaustive 且与同一 960 root 相等，成功也只返回
 `STRUCTURALLY_COMPLETE_NOT_SCORED`，无 scorer/metrics/effect。runner 公开的只是从 exact freeze
 导出的 total=960 contract，没有 recognizer entrypoint 或 runtime evidence。
 
-这里存在先于 CLI 的 architecture P0：当前冻结结构下已构造的最小 positive witness typed
-profile 是 125,582 bytes，Stage-B 可用 payload cap 是 65,424 bytes，即
-`125,582 > 65,424`。所以当前真实 under-cap row 只能闭合 `ABSTAIN`，synthetic 960 framing 也
-不是 positive E2E 或 capacity evidence。下一刀必须是 lossless compact typed-authority codec v2
-与 trusted-wire payload schema `/3`，其 decoder 恢复 exact authority 并直接通过 exact transform +
-derived replay；不得扩 envelope cap 或伪造 recognizer run。compact path 闭合后才轮到 CLI、
-formal scoring 与 actual unsealed 960 run。
+历史 V1 verbose profile 的 architecture P0 是 `125,582 > 65,424`。compact V2 对同一 exact
+logical authority 的 one-case regression 得到 50,255-byte payload、15,169-byte payload-cap
+headroom、15,201-byte secret padding 和固定 65,536-byte envelope，并重放 exact transform、V2 input
+archive 以及 derived-bridge compilation/decision parity。因此旧 payload-size P0 已在该单例
+mechanics 上闭合，但不能外推为 recognizer/prediction E2E 或 capacity：V1 prediction archive
+严格拒绝 V2 input archive 的 type/policy，V2 prediction mapping、runtime、actual 960、scoring、
+effect 与 C1 均未实现或未执行。下一刀是直接消费 `TrustedRecognizerInputRowV2` 的 V2
+prediction row mapping，随后才是独立 V2 960 prediction archive、CLI、formal scoring 与 actual
+unsealed run。
 
 这些 receipts 仍恒为 `NON_AUTHORITATIVE_MECHANICS_ONLY`。pairwise distinct 不证明 IKM
 独立性；raw-envelope diagnostic 不验证 batch membership 或 secret padding；supplied-secret

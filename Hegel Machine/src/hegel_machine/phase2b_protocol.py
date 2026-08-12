@@ -1162,9 +1162,13 @@ def phase2b_preregistration_report() -> dict[str, object]:
         phase2b_runner,
         phase2b_selector,
         phase2b_recognizer_input_archive_v1,
+        phase2b_recognizer_input_archive_v2,
         phase2b_trusted_wire_batch_v1,
+        phase2b_trusted_wire_batch_v2,
         phase2b_trusted_wire_typed_authority_v1,
+        phase2b_trusted_wire_typed_authority_v2,
         phase2b_trusted_wire_typed_replay_v1,
+        phase2b_trusted_wire_typed_replay_v2,
         phase2b_trusted_wire_v1,
         phase2b_uncertainty_compiler,
         phase2b_unsealed_prediction_evaluator_v1,
@@ -1424,9 +1428,110 @@ def phase2b_preregistration_report() -> dict[str, object]:
             phase2b_trusted_wire_v1.MAXIMUM_PAYLOAD_BYTES
         ),
         "real_positive_typed_profile_fits_trusted_wire": False,
+        "compact_typed_authority_codec_v2_version": (
+            phase2b_trusted_wire_typed_authority_v2.COMPACT_TYPED_AUTHORITY_CODEC_VERSION
+        ),
+        "compact_typed_authority_schema_id_v2": (
+            phase2b_trusted_wire_typed_authority_v2.COMPACT_TYPED_AUTHORITY_SCHEMA_ID
+        ),
+        "compact_typed_authority_codec_policy_id_v2": (
+            phase2b_trusted_wire_typed_authority_v2.COMPACT_TYPED_AUTHORITY_CODEC_POLICY_ID
+        ),
+        "lossless_compact_typed_authority_codec_v2_mechanics_implemented": True,
+        "trusted_wire_batch_v2_schema_version": (
+            phase2b_trusted_wire_batch_v2.TRUSTED_WIRE_BATCH_V2_SCHEMA_VERSION
+        ),
+        "trusted_wire_batch_v2_payload_schema_version": (
+            phase2b_trusted_wire_batch_v2.TRUSTED_WIRE_BATCH_V2_PAYLOAD_SCHEMA_VERSION
+        ),
+        "trusted_wire_envelope_v2_version": (
+            phase2b_trusted_wire_batch_v2.TRUSTED_WIRE_ENVELOPE_V2_VERSION
+        ),
+        "trusted_wire_envelope_v2_magic_hex": (
+            phase2b_trusted_wire_batch_v2.TRUSTED_WIRE_ENVELOPE_V2_MAGIC.hex()
+        ),
+        "trusted_wire_batch_v2_policy_id": (
+            phase2b_trusted_wire_batch_v2.TRUSTED_WIRE_BATCH_V2_POLICY_ID
+        ),
+        "compact_v2_fixed_65536_envelope_mechanics_implemented": True,
+        "typed_trusted_wire_replay_v2_version": (
+            phase2b_trusted_wire_typed_replay_v2.TYPED_TRUSTED_WIRE_REPLAY_V2_VERSION
+        ),
+        "typed_trusted_wire_replay_v2_policy_id": (
+            phase2b_trusted_wire_typed_replay_v2.TYPED_TRUSTED_WIRE_REPLAY_V2_POLICY_ID
+        ),
+        "public_typed_trusted_wire_v2_replay_mechanics_implemented": True,
+        "typed_trusted_wire_replay_v2_batch_policy_membership_mechanics_implemented": True,
+        "typed_trusted_wire_replay_v2_whole_batch_atomic_mechanics_implemented": True,
+        "typed_trusted_wire_replay_v2_compact_authority_canonical_mechanics_implemented": True,
+        "typed_trusted_wire_replay_v2_public_provenance_mechanics_implemented": True,
+        "typed_trusted_wire_replay_v2_direct_exact_transform_mechanics_implemented": True,
+        "typed_trusted_wire_replay_v2_secret_custodian_replay_verified": False,
+        "typed_trusted_wire_replay_v2_whole_batch_shuffle_publicly_verified": False,
+        "typed_trusted_wire_replay_v2_purpose_separated_keys_publicly_verified": False,
+        "typed_trusted_wire_replay_v2_post_shuffle_hmac_uuidv4_publicly_verified": False,
+        "typed_trusted_wire_replay_v2_secret_hmac_padding_publicly_verified": False,
+        "typed_trusted_wire_replay_v2_source_authority_binding_verified": False,
+        "typed_trusted_wire_replay_v2_live_allocation_schedule_verified": False,
+        "typed_trusted_wire_replay_v2_recognizer_capacity_evidence": False,
+        "typed_trusted_wire_replay_v2_origin_authenticated": False,
+        "typed_trusted_wire_replay_v2_formal_uuid_audit": False,
+        "typed_trusted_wire_replay_v2_formal_covert_audit": False,
+        "typed_trusted_wire_replay_v2_sealed_holdout_eligible": False,
+        "typed_trusted_wire_replay_v2_c1_exit_evidence": False,
+        "public_recognizer_registry_v2_schema_version": (
+            phase2b_recognizer_input_archive_v2.PUBLIC_RECOGNIZER_REGISTRY_V2_SCHEMA_VERSION
+        ),
+        "public_recognizer_registry_v2_schema_id": (
+            phase2b_recognizer_input_archive_v2.PUBLIC_RECOGNIZER_REGISTRY_SCHEMA_ID_V2
+        ),
+        "public_recognizer_family_alias_policy_id_v2": (
+            phase2b_recognizer_input_archive_v2.PUBLIC_RECOGNIZER_FAMILY_ALIAS_POLICY_ID_V2
+        ),
+        "trusted_recognizer_input_archive_v2_version": (
+            phase2b_recognizer_input_archive_v2.TRUSTED_RECOGNIZER_INPUT_ARCHIVE_V2_VERSION
+        ),
+        "recognizer_input_archive_v2_policy_id": (
+            phase2b_recognizer_input_archive_v2.RECOGNIZER_INPUT_ARCHIVE_POLICY_ID_V2
+        ),
+        "recognizer_input_archive_v2_claim_level": (
+            phase2b_trusted_wire_v1.NON_AUTHORITATIVE_CLAIM_LEVEL
+        ),
+        "recognizer_input_archive_v2_structural_archive_mechanics_implemented": True,
+        "recognizer_input_archive_v2_row_bijection_mechanics_implemented": True,
+        "recognizer_input_archive_v2_registry_schema_mechanics_implemented": True,
+        "recognizer_input_archive_v2_registry_authority_exact_scope_mechanics_implemented": True,
+        "recognizer_input_archive_v2_compact_typed_replay_mechanics_implemented": True,
+        "recognizer_input_archive_v2_direct_payload_transform_replay_mechanics_implemented": True,
+        "recognizer_input_archive_v2_cross_row_unlinkable_public_uuid_disjoint_mechanics_implemented": True,
+        "recognizer_input_archive_v2_private_single_live_allocation_gate_mechanics_implemented": True,
+        "recognizer_input_archive_v2_private_source_public_uuid_disjointness_gate_mechanics_implemented": True,
+        "real_positive_expanded_typed_profile_bytes": 125_582,
+        "real_positive_compact_v2_payload_bytes": 50_255,
+        "real_positive_compact_v2_payload_cap_headroom_bytes": 15_169,
+        "real_positive_compact_v2_secret_padding_bytes": 15_201,
+        "real_positive_compact_v2_fixed_envelope_bytes": 65_536,
+        "real_positive_compact_v2_payload_fits_trusted_wire": True,
+        "single_constructed_positive_compact_v2_mechanics_verified": True,
+        "real_positive_compact_v2_exact_transform_replay_implemented": True,
+        "real_positive_compact_v2_recognizer_input_archive_replay_implemented": True,
+        "real_positive_compact_v2_derived_bridge_compilation_parity_implemented": True,
+        "real_positive_compact_v2_derived_bridge_decision_parity_implemented": True,
+        "recognizer_input_archive_v2_batch_policy_membership_verified": False,
+        "recognizer_input_archive_v2_source_registry_projection_verified": False,
+        "recognizer_input_archive_v2_source_public_disjoint_verified": False,
+        "recognizer_input_archive_v2_single_live_allocation_verified": False,
+        "recognizer_input_archive_v2_secret_custodian_replay_verified": False,
+        "recognizer_input_archive_v2_origin_authenticated": False,
+        "recognizer_input_archive_v2_formal_uuid_audit": False,
+        "recognizer_input_archive_v2_formal_covert_audit": False,
+        "recognizer_input_archive_v2_sealed_holdout_eligible": False,
+        "recognizer_input_archive_v2_recognizer_executed": False,
+        "recognizer_input_archive_v2_prediction_archive_evaluated": False,
+        "recognizer_input_archive_v2_capacity_evidence": False,
+        "recognizer_input_archive_v2_c1_exit_evidence": False,
         "next_phase2b_construction_slice": (
-            "lossless_compact_typed_authority_codec_v2_with_trusted_wire_"
-            "payload_schema_v3"
+            "recognizer_prediction_v2_row_mapping_integration"
         ),
         "real_positive_prediction_end_to_end_replay_implemented": False,
         "recognizer_prediction_capacity_evidence": False,
@@ -1496,6 +1601,10 @@ def phase2b_preregistration_report() -> dict[str, object]:
                     phase2b_recognizer_input_archive_v1,
                 ),
                 (
+                    "recognizer_input_archive_mechanics_v2",
+                    phase2b_recognizer_input_archive_v2,
+                ),
+                (
                     "recognizer_prediction_archive_mechanics",
                     phase2b_recognizer_prediction_archive_v1,
                 ),
@@ -1503,14 +1612,26 @@ def phase2b_preregistration_report() -> dict[str, object]:
                     "trusted_wire_keyed_batch_mechanics",
                     phase2b_trusted_wire_batch_v1,
                 ),
+                (
+                    "trusted_wire_keyed_batch_mechanics_v2",
+                    phase2b_trusted_wire_batch_v2,
+                ),
                 ("trusted_wire_profile_mechanics", phase2b_trusted_wire_v1),
                 (
                     "trusted_wire_typed_authority_codec",
                     phase2b_trusted_wire_typed_authority_v1,
                 ),
                 (
+                    "trusted_wire_compact_typed_authority_codec_v2",
+                    phase2b_trusted_wire_typed_authority_v2,
+                ),
+                (
                     "trusted_wire_typed_replay_mechanics",
                     phase2b_trusted_wire_typed_replay_v1,
+                ),
+                (
+                    "trusted_wire_typed_replay_mechanics_v2",
+                    phase2b_trusted_wire_typed_replay_v2,
                 ),
                 ("uncertainty_compiler", phase2b_uncertainty_compiler),
                 (

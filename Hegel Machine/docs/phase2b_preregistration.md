@@ -211,6 +211,20 @@ recognizer execution, prediction evaluation, or C1 exit.  Opaque commitments are
 not a durable self-verifying trusted receipt; no such public receipt or recognizer
 effect evidence is implemented.
 
+Those V1 identities and conclusions remain frozen. The compact V2 path has an
+independent lossless codec schema and policy, batch `/3` payload schema, V2 envelope
+magic and policy, public typed-replay policy, and V2 registry/archive schemas and
+content-ID domains. Its private issuer observes one live allocation and requires all
+global source UUIDs to be disjoint from all public UUIDs, including fixed aliases;
+that private gate is not a durable public claim.
+The public V2 decoder replays only bounded archive and row structure, registry schema
+and authority scope, compact typed authority, direct exact-transform semantics, and
+cross-row disjointness only for unlinkable public UUIDs (authority plus registry
+role/quantity UUIDs, excluding fixed aliases that may repeat). Batch/source
+projection, source-public and single-allocation verification, secret custody, origin,
+formal audit, sealed eligibility, recognizer/prediction execution, capacity, and C1
+remain false.
+
 The next prediction-archive slice remains non-authoritative mechanics. An exact
 `PublicRunContextV1` binds the decoded input archive ID/SHA, current protocol ID,
 exact execution-freeze-manifest commitment, ordered input-row root, and expected
@@ -233,16 +247,18 @@ score callback, metrics, effect claim, recognizer runtime, or capacity evidence.
 The runner similarly freezes only the exact total of 960, not an executable
 recognizer entrypoint or an actual 960-case run.
 
-There is a blocking architecture P0 before a real positive end-to-end run: under
-the current frozen structure, the smallest constructed positive-witness typed
-profile is 125,582 bytes while the Stage-B payload cap is 65,424 bytes
-(`125,582 > 65,424`). Current real under-cap rows close only as `ABSTAIN`; synthetic
-960 framing is mechanics, not capacity evidence. The next construction slice is
-therefore a lossless compact typed-authority codec v2 plus trusted-wire payload
-schema `/3`, whose decoder restores the exact authority and directly replays exact
-transform plus the derived bridge. The cap must not be widened and synthetic
-outcomes must not be reported as real E2E. Recognizer CLI, formal scoring, and
-actual unsealed 960 replay follow only after that compact path closes.
+The historical V1 verbose-profile size gate was `125,582 > 65,424`. In one
+constructed positive regression, compact V2 represents the same exact logical
+authority in a 50,255-byte payload with 15,169 bytes of payload-cap headroom and
+15,201 bytes of secret padding in the unchanged 65,536-byte fixed envelope. That row
+replays the exact transform and V2 recognizer-input archive and preserves derived-bridge compilation
+and decision parity. This closes the old payload-size P0 for one mechanics case only;
+it is not prediction E2E or capacity evidence. The V1 prediction archive rejects a
+V2 input archive by exact type and policy, and there is no V2 prediction mapping,
+recognizer runtime, actual 960-case execution, scoring, or effect. The next slice is
+V2 prediction row-mapping integration over `TrustedRecognizerInputRowV2`, followed
+later by an independent V2 960-row prediction archive, CLI, formal scoring, and
+actual unsealed replay.
 
 Pairwise distinct IKM values do not attest independent generation. The raw-envelope
 diagnostic verifies typed payload identity and direct transform replay but not batch

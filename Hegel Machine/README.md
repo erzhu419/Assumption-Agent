@@ -233,7 +233,15 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
 
   这个 issuer 即使成功也只返回所有 batch/source/secret/origin/formal claims 为 false 的
   `DecodedRecognizerInputArchiveV1`。它没有可持久化的 trusted receipt，opaque receipt/registry
-  commitment 不等于公开可重证的 custodian authority。其后的
+  commitment 不等于公开可重证的 custodian authority。该 V1 路径及其 identities 保留为历史
+  合同。新增的 compact V2 路径使用独立 codec schema/policy、batch `/3` payload 与 V2 envelope
+  magic、public typed replay policy、registry/archive schema 和 content-ID domains；它不把 V2
+  对象适配回 V1 类型。V2 archive issuer 只在私有发行 gate 内观察一次 live allocation，并执行
+  全批 source UUID 与全部 public UUID（含 fixed aliases）互斥；公开 decoder 只重放结构、
+  registry-authority scope、compact authority、direct exact transform，以及跨行 unlinkable
+  public UUID（authority + registry
+  role/quantity，排除允许重复的 fixed aliases）互斥 mechanics，相关 source/allocation/
+  secret/origin/formal claims 仍为 false。其后的
   `phase2b_recognizer_prediction_archive_v1.py` 冻结了绑定 input archive ID/SHA、当前 protocol、
   exact execution-freeze manifest commitment 和总数 960 的 `PublicRunContextV1`，并把 960 个
   prediction records 分别做 bounded accepted-JCS length framing，再绑定 ordered row/record roots。
@@ -249,16 +257,22 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
   sorted、disjoint、exhaustive；成功 disposition 是
   `STRUCTURALLY_COMPLETE_NOT_SCORED`，没有 scorer、metrics 或效果 claim。runner 只新增由 exact
   freeze 导出的 total=960 contract，未提供 recognizer entrypoint，也没有执行 actual 960-case
-  run。当前冻结结构下已构造的最小 positive witness typed profile 为 125,582 bytes，而 Stage-B
-  payload 上限为 65,424 bytes；`125,582 > 65,424` 是阻断真实 positive E2E/capacity 的
-  architecture P0，under-cap 的真实路径目前只能闭合 `ABSTAIN`。因此这些仍只是
-  `NON_AUTHORITATIVE_MECHANICS_ONLY`，不构成 recognizer 效果、sealed holdout 或 C1 exit 证据。
+  run。历史 V1 verbose positive witness typed profile 是 125,582 bytes，超过 65,424-byte
+  payload cap；compact V2 已把同一 exact logical authority 编成 50,255-byte payload，保留
+  15,169-byte payload-cap headroom，并在 65,536-byte fixed envelope 中产生 15,201-byte
+  secret padding。单一 constructed positive regression 已重放 exact transform、V2
+  recognizer-input archive，并保持
+  derived-bridge compilation 与 decision parity。因此旧的 V1 payload-size P0 已在这一例
+  mechanics 上闭合，但这不是 prediction E2E 或 capacity evidence：现有 prediction archive V1
+  以 exact input type/policy 拒绝 Archive V2，尚无 V2 prediction mapping、recognizer runtime、
+  actual 960、scoring 或 effect。所有这些仍只是 `NON_AUTHORITATIVE_MECHANICS_ONLY`，不构成
+  recognizer 效果、sealed holdout 或 C1 exit 证据。
   origin authentication、完整 trusted RFC-8785
   builder、formal namespace/covert audit 与 formal corpus 执行仍缺失；1024-authority
-  worst-case wall-time/RSS 也尚未资格化。下一刀是 lossless compact typed-authority codec v2 +
-  trusted-wire payload schema `/3`：必须解码恢复 exact authority，并直接重放 exact transform +
-  derived bridge，不能扩张 envelope cap 或用 synthetic outcome 冒充真实 E2E。recognizer CLI、
-  formal scoring evaluator 与 actual unsealed 960-case replay 要等 compact path 闭合后再施工；在完整
+  worst-case wall-time/RSS 也尚未资格化。下一刀是 V2 prediction row mapping integration；它必须
+  直接消费 `TrustedRecognizerInputRowV2` 并保持 V1/V2 identity 边界，不能把单例 mechanics 或
+  synthetic outcome 冒充真实 E2E。完整 V2 prediction archive、recognizer CLI、formal scoring
+  evaluator 与 actual unsealed 960-case replay 仍在其后；在完整
   standard-error 语义实现前，formal selector 只允许 `absolute_bound`；
 - seal → prediction commitment → reveal → consumed 的 immutable lifecycle model、
   answer salted-commitment opening 校验和进程内原子防分叉 guard，以及 read-only
@@ -310,8 +324,9 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
   unsealed pipeline validation；当前已完成 wire、candidate enumeration、exact
   uncertainty/root-identity selector、typed transform kernels、derived witness bridge、
   non-authoritative fixed-envelope covert mechanics、Stage-A accepted-JCS/namespace/envelope
-  mechanics、Stage-B native-provenance keyed framing、Stage-C strict typed whole-batch replay
-  与 post-rename public recognizer-input archive、960-row prediction archive structural codec、
+  mechanics、Stage-B native-provenance keyed framing、Stage-C strict typed whole-batch replay、
+  compact V2 codec/batch/public replay/input archive one-case mechanics、post-rename public
+  recognizer-input archive、960-row V1 prediction archive structural codec、
   unsealed 720/240 structural evaluator 以及 runner total/state-machine 合同，但这些窄
   mechanics 尚未组成 formal pipeline 或效果证据；
 - 720-case main + 240-case challenge 的 sealed generation、572 个 derived pairs、独立

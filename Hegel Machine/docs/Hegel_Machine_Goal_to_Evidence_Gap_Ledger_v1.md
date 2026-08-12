@@ -61,7 +61,7 @@ a pass from one bounded invention fixture.
 | G0 claim/evidence boundary | OBSERVED / strong | frozen schemas, content IDs, replay records, explicit non-claims, fail-closed receipts | one canonical cross-generation status ledger was missing; this file starts it |
 | G1 theory/governance kernel | MECHANICS | `TheoryState`, typed observations, laws, probes, patches, reduction maps, separated governance decisions, branch/version scaffolds | independent promotion trust root and real lifecycle evidence |
 | G2 initial language/geometry | MECHANICS | 22 assumption templates, six executable active laws, task-relative probes/quotients and scale contracts | one first-class relation-language snapshot manifest; complete executable 22-leaf library; identifiability/gauge intervention evidence |
-| C1 known-law identification | PARTIAL | Phase-2A controlled grid plus non-authoritative Phase-2B typed-transform, recognizer-input, prediction-record/archive and unsealed 720/240 structural mechanics | real positive typed E2E within the wire cap, recognizer runtime/scoring, sealed independent data, covert audit, baselines, custody and statistical exit |
+| C1 known-law identification | PARTIAL | Phase-2A controlled grid plus non-authoritative Phase-2B typed-transform, compact V2 one-case input mechanics, V1 prediction-record/archive and unsealed 720/240 structural mechanics | V2 prediction integration, recognizer runtime/scoring, actual 960, sealed independent data, covert audit, baselines, custody and statistical exit |
 | G4 inadequacy diagnosis | MECHANICS | ordered refit/noise/scope/mixture/composition diagnosis and robustification/idealization evaluator prototypes | diagnosis derived from real residual clusters; executable probe-addition and operator-selection evidence |
 | C2 bounded relation invention | MISSING effect | strict DSL/certificate and bounded-enumeration infrastructure; old DSL reached `DSL_TOO_LARGE` under its budget | incomplete-ontology benchmark, at least three outside-library relations, non-equivalence/MDL, hard negatives, counterfactuals and unseen predictions |
 | C3 conservative multigeneration | MISSING effect | certificate and version-graph schemas | real old-success preservation, limiting cases, reduction maps, demotion/rollback, negative memory and multigeneration survival |
@@ -104,9 +104,10 @@ without semantic acceptance**.  The dependency order is:
    prevent a complete-transform claim.
 4. **Recognizer and archive** — context/record/960 archive framing and an
    unsealed 720/240 structural evaluator now exist as non-authoritative
-   mechanics. A lossless compact typed-authority path, strict CLI, real positive
-   execution, formal scoring/challenge/preservation evaluation and deterministic
-   runtime replay remain missing.
+   mechanics. A compact V2 path now crosses one constructed positive authority,
+   V2 batch/public replay/input archive, and derived-bridge parity; V2 prediction
+   integration, strict CLI, actual 960 execution, formal scoring/challenge/
+   preservation evaluation and deterministic runtime replay remain missing.
 5. **Trusted wire and anti-leak audit** — independent shuffle/ID/padding keys,
    fixed 65,536-byte envelopes, global renaming/order invariance, NMI and
    stratified permutation/Holm-Bonferroni gates.
@@ -277,14 +278,15 @@ archive. Its strongest disposition is
 claim. The runner exposes only the exact-freeze-derived total=960 contract, not a
 recognizer entrypoint or actual run.
 
-An architecture P0 blocks real positive E2E before CLI work: under the current
-frozen structure, the smallest constructed positive-witness typed profile is
-125,582 bytes, above the 65,424-byte Stage-B payload cap
-(`125,582 > 65,424`). Real under-cap fixtures currently close only as `ABSTAIN`;
-synthetic 960 framing is not capacity evidence. The next slice must therefore be a
-lossless compact typed-authority codec v2 plus trusted-wire payload schema `/3`
-whose decoder restores the exact authority and directly replays exact transform +
-derived bridge. It must not widen the envelope or fabricate an E2E result.
+The historical V1 architecture P0 was a 125,582-byte verbose positive profile above
+the 65,424-byte payload cap. Compact V2 now encodes the same exact logical authority
+in 50,255 payload bytes, leaving 15,169 bytes of payload-cap headroom and 15,201 bytes
+of secret padding in the unchanged 65,536-byte fixed envelope. A single constructed positive
+regression replays exact transform and the V2 recognizer-input archive and preserves
+derived-bridge compilation/decision parity. This closes only the old payload-size
+mechanics P0; it is not prediction E2E or capacity evidence. Prediction archive V1
+rejects Archive V2 by exact type/policy, so V2 prediction integration, runtime,
+actual 960, scoring and effect remain missing.
 
 Accordingly these narrow flags are true:
 
@@ -327,6 +329,29 @@ direct_payload_authority_exact_transform_complete_replay_implemented
 whole_batch_atomic_typed_replay_mechanics_implemented
 source_order_bound_stage_b_secret_replay_receipt_implemented
 typed_trusted_wire_authority_decode_replay_implemented
+lossless_compact_typed_authority_codec_v2_mechanics_implemented
+compact_v2_fixed_65536_envelope_mechanics_implemented
+public_typed_trusted_wire_v2_replay_mechanics_implemented
+typed_trusted_wire_replay_v2_batch_policy_membership_mechanics_implemented
+typed_trusted_wire_replay_v2_whole_batch_atomic_mechanics_implemented
+typed_trusted_wire_replay_v2_compact_authority_canonical_mechanics_implemented
+typed_trusted_wire_replay_v2_public_provenance_mechanics_implemented
+typed_trusted_wire_replay_v2_direct_exact_transform_mechanics_implemented
+recognizer_input_archive_v2_structural_archive_mechanics_implemented
+recognizer_input_archive_v2_row_bijection_mechanics_implemented
+recognizer_input_archive_v2_registry_schema_mechanics_implemented
+recognizer_input_archive_v2_registry_authority_exact_scope_mechanics_implemented
+recognizer_input_archive_v2_compact_typed_replay_mechanics_implemented
+recognizer_input_archive_v2_direct_payload_transform_replay_mechanics_implemented
+recognizer_input_archive_v2_cross_row_unlinkable_public_uuid_disjoint_mechanics_implemented
+recognizer_input_archive_v2_private_single_live_allocation_gate_mechanics_implemented
+recognizer_input_archive_v2_private_source_public_uuid_disjointness_gate_mechanics_implemented
+real_positive_compact_v2_payload_fits_trusted_wire
+single_constructed_positive_compact_v2_mechanics_verified
+real_positive_compact_v2_exact_transform_replay_implemented
+real_positive_compact_v2_recognizer_input_archive_replay_implemented
+real_positive_compact_v2_derived_bridge_compilation_parity_implemented
+real_positive_compact_v2_derived_bridge_decision_parity_implemented
 strict_public_recognizer_registry_codec_mechanics_implemented
 live_post_hmac_recognizer_registry_projection_mechanics_implemented
 registry_envelope_exact_scope_bijection_replay_implemented
@@ -364,6 +389,19 @@ batch_atomic_trusted_wire_builder_implemented
 trusted_wire_origin_authenticated
 key_source_statistical_independence_attested
 trusted_wire_1024_authority_capacity_qualified
+typed_trusted_wire_replay_v2_secret_custodian_replay_verified
+typed_trusted_wire_replay_v2_whole_batch_shuffle_publicly_verified
+typed_trusted_wire_replay_v2_purpose_separated_keys_publicly_verified
+typed_trusted_wire_replay_v2_post_shuffle_hmac_uuidv4_publicly_verified
+typed_trusted_wire_replay_v2_secret_hmac_padding_publicly_verified
+typed_trusted_wire_replay_v2_source_authority_binding_verified
+typed_trusted_wire_replay_v2_live_allocation_schedule_verified
+typed_trusted_wire_replay_v2_recognizer_capacity_evidence
+typed_trusted_wire_replay_v2_origin_authenticated
+typed_trusted_wire_replay_v2_formal_uuid_audit
+typed_trusted_wire_replay_v2_formal_covert_audit
+typed_trusted_wire_replay_v2_sealed_holdout_eligible
+typed_trusted_wire_replay_v2_c1_exit_evidence
 formal_recognizer_run_runnable
 durable_trusted_recognizer_input_archive_receipt_implemented
 recognizer_input_archive_batch_policy_membership_verified
@@ -375,6 +413,19 @@ recognizer_input_archive_sealed_holdout_eligible
 recognizer_input_archive_recognizer_executed
 recognizer_input_archive_prediction_archive_evaluated
 recognizer_input_archive_c1_exit_evidence
+recognizer_input_archive_v2_batch_policy_membership_verified
+recognizer_input_archive_v2_source_registry_projection_verified
+recognizer_input_archive_v2_source_public_disjoint_verified
+recognizer_input_archive_v2_single_live_allocation_verified
+recognizer_input_archive_v2_secret_custodian_replay_verified
+recognizer_input_archive_v2_origin_authenticated
+recognizer_input_archive_v2_formal_uuid_audit
+recognizer_input_archive_v2_formal_covert_audit
+recognizer_input_archive_v2_sealed_holdout_eligible
+recognizer_input_archive_v2_recognizer_executed
+recognizer_input_archive_v2_prediction_archive_evaluated
+recognizer_input_archive_v2_capacity_evidence
+recognizer_input_archive_v2_c1_exit_evidence
 real_positive_typed_profile_fits_trusted_wire
 real_positive_prediction_end_to_end_replay_implemented
 recognizer_prediction_capacity_evidence
@@ -403,25 +454,24 @@ still does not consume
 the exact receipt, and its broad completion flag therefore remains false. The
 derived bridge closes strict `task_target` and unused-observation coverage for its
 bounded profile, but complete physical transform/preservation semantics, formal
-covert-channel audit, compact positive typed authority, recognizer CLI, formal scoring,
-signed image/runtime evidence and durable one-shot custody remain formal-pipeline
-blockers.
+covert-channel audit, V2 prediction integration and full V2 prediction archive,
+recognizer CLI, formal scoring, signed image/runtime evidence and durable one-shot
+custody remain formal-pipeline blockers.
 
 ## 7. Next authorized construction slice
 
-The next non-actual construction slice is **Phase-2B Lossless Compact Typed-Authority
-Codec v2 + Trusted-Wire Payload Schema `/3`**. It must encode the same exact V2
-authority below the existing payload cap, restore that authority losslessly, and
-directly pass the existing exact-transform and derived-bridge replay without
-post-decode mutation. It may not widen the envelope, split one authority into a
-semantically weaker multi-envelope approximation, or use synthetic predictions as
-positive E2E evidence.
+The next non-actual construction slice is **Phase-2B V2 prediction row mapping
+integration**. It must consume an exact `TrustedRecognizerInputRowV2`, rerun the frozen
+derived semantics, and emit an independently typed V2 prediction outcome without
+adapting V2 input into V1 archive types. A full V2 prediction archive remains a later,
+independent framing/policy slice. Neither slice may use the single constructed witness
+or synthetic predictions as actual-960, scoring, effect, capacity or C1 evidence.
 
-Only after that architecture P0 is closed should a strict recognizer CLI and formal
-scoring evaluator connect the current input/prediction archives in an actual unsealed
-960-case run. That later run must still keep origin, isolation, one-shot custody,
-covert-audit, capacity and sealed-C1 claims false until their independent gates pass.
-Formal 720+240 audit, independent labels and sealed execution remain later gates.
+Only after those V2 prediction mechanics close should a strict recognizer CLI and
+formal scoring evaluator connect the archives in an actual unsealed 960-case run.
+That later run must still keep origin, isolation, one-shot custody, covert-audit,
+capacity and sealed-C1 claims false until their independent gates pass. Formal
+720+240 audit, independent labels and sealed execution remain later gates.
 
 No Q0.5b actual rerun, Docker execution, holdout generation, or ACTIVE mutation
 is authorized by this ledger.
