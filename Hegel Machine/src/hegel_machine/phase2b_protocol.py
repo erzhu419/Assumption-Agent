@@ -657,7 +657,10 @@ def frozen_phase2b_protocol() -> Phase2BProtocol:
             ),
             "exact_baseline_revisions_and_artifact_hashes_not_registered",
             "independent_holdout_generator_and_validation_artifacts_not_implemented",
-            "functional_recognizer_cli_signed_minimal_image_and_archive_evaluator_not_implemented",
+            (
+                "functional_recognizer_cli_signed_minimal_image_and_formal_"
+                "scoring_evaluator_not_implemented"
+            ),
             "durable_signed_custodian_cas_ledger_not_implemented",
         ),
     )
@@ -1155,6 +1158,7 @@ def phase2b_preregistration_report() -> dict[str, object]:
         phase2b_exact_bridge_v1,
         phase2b_exact_transform_semantics_v1,
         phase2b_projection_compiler,
+        phase2b_recognizer_prediction_archive_v1,
         phase2b_runner,
         phase2b_selector,
         phase2b_recognizer_input_archive_v1,
@@ -1163,6 +1167,7 @@ def phase2b_preregistration_report() -> dict[str, object]:
         phase2b_trusted_wire_typed_replay_v1,
         phase2b_trusted_wire_v1,
         phase2b_uncertainty_compiler,
+        phase2b_unsealed_prediction_evaluator_v1,
         phase2b_wire,
     )
 
@@ -1371,6 +1376,71 @@ def phase2b_preregistration_report() -> dict[str, object]:
         "recognizer_input_archive_recognizer_executed": False,
         "recognizer_input_archive_prediction_archive_evaluated": False,
         "recognizer_input_archive_c1_exit_evidence": False,
+        "public_run_context_schema_version": (
+            phase2b_recognizer_prediction_archive_v1.PUBLIC_RUN_CONTEXT_SCHEMA_VERSION
+        ),
+        "public_run_context_schema_id": (
+            phase2b_recognizer_prediction_archive_v1.PUBLIC_RUN_CONTEXT_SCHEMA_ID
+        ),
+        "public_recognizer_prediction_record_schema_version": (
+            phase2b_recognizer_prediction_archive_v1.PUBLIC_RECOGNIZER_PREDICTION_RECORD_SCHEMA_VERSION
+        ),
+        "public_recognizer_prediction_record_schema_id": (
+            phase2b_recognizer_prediction_archive_v1.PUBLIC_RECOGNIZER_PREDICTION_RECORD_SCHEMA_ID
+        ),
+        "recognizer_prediction_archive_schema_version": (
+            phase2b_recognizer_prediction_archive_v1.RECOGNIZER_PREDICTION_ARCHIVE_SCHEMA_VERSION
+        ),
+        "recognizer_prediction_archive_policy_id": (
+            phase2b_recognizer_prediction_archive_v1.RECOGNIZER_PREDICTION_ARCHIVE_POLICY_ID
+        ),
+        "recognizer_prediction_archive_claim_level": (
+            phase2b_trusted_wire_v1.NON_AUTHORITATIVE_CLAIM_LEVEL
+        ),
+        "public_run_context_structural_schema_mechanics_implemented": True,
+        "closed_public_prediction_record_schema_mechanics_implemented": True,
+        (
+            "record_framed_exact_960_prediction_archive_structural_codec_"
+            "mechanics_implemented"
+        ): True,
+        "internal_derived_to_prediction_mapping_gate_mechanics_implemented": True,
+        "decoded_prediction_semantic_fields_exclude_split_gold_index_labels": True,
+        "unsealed_prediction_evaluator_version": (
+            phase2b_unsealed_prediction_evaluator_v1.UNSEALED_PREDICTION_EVALUATOR_VERSION
+        ),
+        "unsealed_prediction_evaluator_policy_id": (
+            phase2b_unsealed_prediction_evaluator_v1.UNSEALED_PREDICTION_EVALUATOR_POLICY_ID
+        ),
+        (
+            "unsealed_720_240_sorted_disjoint_exhaustive_structural_"
+            "evaluator_implemented"
+        ): True,
+        "recognizer_runner_total_case_count": (
+            phase2b_runner.TOTAL_RECOGNIZER_CASE_COUNT
+        ),
+        "recognizer_runner_total_960_contract_implemented": True,
+        "minimum_constructed_positive_typed_profile_bytes": 125_582,
+        "trusted_wire_maximum_payload_bytes": (
+            phase2b_trusted_wire_v1.MAXIMUM_PAYLOAD_BYTES
+        ),
+        "real_positive_typed_profile_fits_trusted_wire": False,
+        "next_phase2b_construction_slice": (
+            "lossless_compact_typed_authority_codec_v2_with_trusted_wire_"
+            "payload_schema_v3"
+        ),
+        "real_positive_prediction_end_to_end_replay_implemented": False,
+        "recognizer_prediction_capacity_evidence": False,
+        "prediction_scoring_implemented": False,
+        "prediction_effect_evidence": False,
+        "actual_960_case_prediction_archive_run": False,
+        "recognizer_runtime_executed": False,
+        "prediction_archive_input_membership_verified": False,
+        "prediction_archive_execution_manifest_authority_verified": False,
+        "prediction_archive_derived_mapping_verified_by_public_decode": False,
+        "prediction_archive_origin_authenticated": False,
+        "prediction_archive_formal_covert_audit": False,
+        "prediction_archive_sealed_holdout_eligible": False,
+        "prediction_archive_c1_exit_evidence": False,
         "pairwise_distinct_key_source_contract_implemented": True,
         "key_source_statistical_independence_attested": False,
         "whole_batch_unbiased_fisher_yates_mechanics_implemented": True,
@@ -1426,6 +1496,10 @@ def phase2b_preregistration_report() -> dict[str, object]:
                     phase2b_recognizer_input_archive_v1,
                 ),
                 (
+                    "recognizer_prediction_archive_mechanics",
+                    phase2b_recognizer_prediction_archive_v1,
+                ),
+                (
                     "trusted_wire_keyed_batch_mechanics",
                     phase2b_trusted_wire_batch_v1,
                 ),
@@ -1439,6 +1513,10 @@ def phase2b_preregistration_report() -> dict[str, object]:
                     phase2b_trusted_wire_typed_replay_v1,
                 ),
                 ("uncertainty_compiler", phase2b_uncertainty_compiler),
+                (
+                    "unsealed_prediction_structural_evaluator",
+                    phase2b_unsealed_prediction_evaluator_v1,
+                ),
                 ("wire", phase2b_wire),
             )
         },

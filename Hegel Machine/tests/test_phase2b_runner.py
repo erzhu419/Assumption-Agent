@@ -136,7 +136,7 @@ def test_external_attestation_is_bound_to_run_and_fails_closed():
         freeze_manifest_id=spec.freeze_manifest_id,
         protocol_id=spec.protocol_id,
         input_manifest_sha256=spec.input_manifest_sha256,
-        prediction_case_count=720,
+        prediction_case_count=960,
         exit_code=0,
         timed_out=False,
         output_size_bytes=1024,
@@ -152,7 +152,7 @@ def test_external_attestation_is_bound_to_run_and_fails_closed():
         replace(attestation, exit_code=1).validate(spec)
     with pytest.raises(ValueError, match="different run"):
         replace(attestation, run_spec_id="wrong").validate(spec)
-    with pytest.raises(ValueError, match="exactly 720"):
-        replace(attestation, prediction_case_count=0).validate(spec)
+    with pytest.raises(ValueError, match="exactly 960"):
+        replace(attestation, prediction_case_count=720).validate(spec)
     with pytest.raises(ValueError, match="empty output"):
         replace(attestation, output_size_bytes=0).validate(spec)

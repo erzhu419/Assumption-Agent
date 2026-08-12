@@ -97,16 +97,36 @@ formal covert audit、sealed eligibility、recognizer execution、prediction eva
 claim 均恒为 false。opaque commitments 不是可公开自验的 durable trusted receipt；当前没有
 这种 receipt，也没有 recognizer 执行或效果证据。
 
+post-input-archive 的 prediction slice 也只能按同样窄的边界解释。`PublicRunContextV1` 绑定
+input archive ID/SHA、当前 protocol、exact execution-freeze manifest commitment、ordered input
+row root 和 expected count=960；960 个 prediction records 使用 bounded accepted-JCS 独立 framing，
+archive 绑定 canonical row/record roots。issuer 内部重跑 frozen theory + row public registry +
+exact derived bridge 作为 derived→prediction gate，但 public decoder 不重证这个 gate。它的 true
+claims 仅是 structural archive、canonical framing、closed record schema 与 row-root coverage；
+input membership、manifest authority、derived mapping、runtime、capacity、origin、sealed/formal
+audit、scoring、effect 和 C1 全为 false。recognizer-facing decoded semantic fields/values 没有
+split/gold/index/ordinal/case-position labels；不能据此声称任意 raw binary hash substring 不含这些
+字节序列。
+
+unsealed evaluator 位于 recognizer wire 之外，只验证 evaluator-side 720/240 row-ID lists 与同一
+960 archive root sorted、disjoint、exhaustive。`STRUCTURALLY_COMPLETE_NOT_SCORED` 不含 score、
+metric 或 effect；runner 的 total=960 合同也不证明 recognizer entrypoint、runtime 或 actual 960
+执行。当前冻结结构下已构造的最小 positive witness typed profile 为 125,582 bytes，而 Stage-B
+payload cap 为 65,424 bytes，故 `125,582 > 65,424` 是真实 positive E2E 的 architecture P0；
+under-cap 真实 fixture 只产生 `ABSTAIN`，synthetic 960 mechanics 不是 capacity evidence。
+
 这些不是 trust/effect evidence：pairwise distinct 不证明独立 custodian key generation，public
 raw-envelope diagnostic 不验证 batch membership 或 secret padding，supplied-secret replay 只说明
 给定 authorities/run/IKM 可重建同一 bytes。所有 typed replay receipts 仍明确是
 `NON_AUTHORITATIVE_MECHANICS_ONLY`。因此 origin authentication、完整 trusted RFC8785 builder、
 formal 字段/UUID namespace 审计、
-720+240 formal 资源合同、recognizer CLI、archive evaluator、sealed data、runtime/custodian 和
+720+240 formal 资源合同、recognizer CLI、formal scoring evaluator、sealed data、runtime/custodian 和
 C1 exit 仍缺失；宽泛 projection compiler、完整 typed pipeline、formal covert audit 与 formal
 holdout 状态继续为 false。入口虽冻结 1..1024 authority cap，最大规模的 wall-time/RSS 尚未
-资格化，不能据小批次 mechanics 回归推断 formal-corpus capacity。下一施工切片是 recognizer
-CLI + prediction archive evaluator，再进行 unsealed end-to-end replay。
+资格化，不能据小批次 mechanics 回归推断 formal-corpus capacity。下一施工切片是 lossless
+compact typed-authority codec v2 + trusted-wire payload schema `/3`：decoder 必须恢复 exact
+authority，并直接重放 exact transform + derived bridge；不得扩大 envelope cap 或以 synthetic
+output 冒充 E2E。CLI、formal scoring 和 actual unsealed 960 replay 均在其后。
 
 此外可以说：Phase-3A 的 v1.0.2 strict specification 已冻结，Python/Rust shared vectors
 各 48/48 PASS。M2 两端都接受 64,680 个 source candidates，并得到 64,680 个 unique strict

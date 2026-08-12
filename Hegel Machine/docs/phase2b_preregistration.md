@@ -211,6 +211,39 @@ recognizer execution, prediction evaluation, or C1 exit.  Opaque commitments are
 not a durable self-verifying trusted receipt; no such public receipt or recognizer
 effect evidence is implemented.
 
+The next prediction-archive slice remains non-authoritative mechanics. An exact
+`PublicRunContextV1` binds the decoded input archive ID/SHA, current protocol ID,
+exact execution-freeze-manifest commitment, ordered input-row root, and expected
+count 960. Each of the 960 public prediction records is independently length-
+framed bounded accepted-JCS; the manifest binds canonical input-row and record
+roots, while each record transitively binds its prediction-content root. The issuer
+reruns `initial_theory()`, the adjacent public registry, and the exact derived
+bridge as an internal derived-to-prediction gate.
+The durable public decoder does not re-prove that gate: it verifies only structural
+archive, canonical framing, closed record schema, and row-root coverage. Input
+membership, manifest authority, derived mapping, runtime, capacity, origin, sealed/
+formal audit, scoring, effect, and C1 claims remain false. Recognizer-facing decoded
+semantic fields and values contain no split, gold, index, ordinal, or case-position
+labels; this is not a claim about arbitrary substrings in binary hash bytes.
+
+The separate unsealed evaluator is evaluator-side only. It proves that exact 720
+and 240 row-ID lists are sorted, disjoint, exhaustive, and rooted in the same 960
+prediction archive, then returns only `STRUCTURALLY_COMPLETE_NOT_SCORED`. It has no
+score callback, metrics, effect claim, recognizer runtime, or capacity evidence.
+The runner similarly freezes only the exact total of 960, not an executable
+recognizer entrypoint or an actual 960-case run.
+
+There is a blocking architecture P0 before a real positive end-to-end run: under
+the current frozen structure, the smallest constructed positive-witness typed
+profile is 125,582 bytes while the Stage-B payload cap is 65,424 bytes
+(`125,582 > 65,424`). Current real under-cap rows close only as `ABSTAIN`; synthetic
+960 framing is mechanics, not capacity evidence. The next construction slice is
+therefore a lossless compact typed-authority codec v2 plus trusted-wire payload
+schema `/3`, whose decoder restores the exact authority and directly replays exact
+transform plus the derived bridge. The cap must not be widened and synthetic
+outcomes must not be reported as real E2E. Recognizer CLI, formal scoring, and
+actual unsealed 960 replay follow only after that compact path closes.
+
 Pairwise distinct IKM values do not attest independent generation. The raw-envelope
 diagnostic verifies typed payload identity and direct transform replay but not batch
 membership or secret padding; supplied-secret replay proves only that the supplied
@@ -219,9 +252,7 @@ authorities/run/IKM reproduce the bytes. All of these receipts remain
 RFC-8785 builder or a formal namespace/covert audit, it has no origin or one-shot
 custody attestation, and it has not run on the formal corpus. No audit-pass claim
 is available. The 1..1024 authority cap is enforced, but the 1024-authority
-worst-case wall-time/RSS has not been qualified. The next construction slice is
-the recognizer CLI plus prediction archive evaluator, followed by unsealed
-end-to-end replay.
+worst-case wall-time/RSS has not been qualified.
 
 Until all frozen `standard_error` semantics and Student-t/Bonferroni conversion
 rules are implemented and tested, formal selector input is strictly:
@@ -292,7 +323,7 @@ implementation and external-evidence blockers remain:
   hashes are not registered;
 - an independent latent generator has not produced validated 720 + 240 sealed
   artifacts or the 572 derived pairs;
-- a functional recognizer CLI, signed minimal image, strict archive evaluator,
+- a functional recognizer CLI, signed minimal image, formal scoring/sealed evaluator,
   and detached isolation attestation do not exist as completed evidence;
 - no durable signed append-only custodian/CAS ledger enforces one-shot use
   across processes and restarts;

@@ -233,12 +233,32 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
 
   这个 issuer 即使成功也只返回所有 batch/source/secret/origin/formal claims 为 false 的
   `DecodedRecognizerInputArchiveV1`。它没有可持久化的 trusted receipt，opaque receipt/registry
-  commitment 不等于公开可重证的 custodian authority，也没有运行 recognizer 或评估 prediction
-  archive。因此它仍只是 `NON_AUTHORITATIVE_MECHANICS_ONLY`，不构成 recognizer 效果、sealed
-  holdout 或 C1 exit 证据。origin authentication、完整 trusted RFC-8785
+  commitment 不等于公开可重证的 custodian authority。其后的
+  `phase2b_recognizer_prediction_archive_v1.py` 冻结了绑定 input archive ID/SHA、当前 protocol、
+  exact execution-freeze manifest commitment 和总数 960 的 `PublicRunContextV1`，并把 960 个
+  prediction records 分别做 bounded accepted-JCS length framing，再绑定 ordered row/record roots。
+  issuer 内部以 frozen theory、每行 public registry 和 exact derived bridge 重跑
+  derived→prediction mapping 作为发行 gate；公开 raw decoder 只能重证 context/record/archive
+  的 closed schema、canonical framing 和 row-root coverage。recognizer-facing archive 的 decoded
+  semantic fields/values 不含 split、gold、index、ordinal 或 case-position labels；这不是对任意
+  binary hash substring 的声明。成功对象仍把 input membership、execution-manifest authority、
+  derived mapping、runtime、capacity、origin、sealed/formal audit、scoring、effect 与 C1 claims
+  全部固定为 false。
+
+  独立的 unsealed evaluator 只核 evaluator-side 720/240 manifest 与同一 960 row roots 是否
+  sorted、disjoint、exhaustive；成功 disposition 是
+  `STRUCTURALLY_COMPLETE_NOT_SCORED`，没有 scorer、metrics 或效果 claim。runner 只新增由 exact
+  freeze 导出的 total=960 contract，未提供 recognizer entrypoint，也没有执行 actual 960-case
+  run。当前冻结结构下已构造的最小 positive witness typed profile 为 125,582 bytes，而 Stage-B
+  payload 上限为 65,424 bytes；`125,582 > 65,424` 是阻断真实 positive E2E/capacity 的
+  architecture P0，under-cap 的真实路径目前只能闭合 `ABSTAIN`。因此这些仍只是
+  `NON_AUTHORITATIVE_MECHANICS_ONLY`，不构成 recognizer 效果、sealed holdout 或 C1 exit 证据。
+  origin authentication、完整 trusted RFC-8785
   builder、formal namespace/covert audit 与 formal corpus 执行仍缺失；1024-authority
-  worst-case wall-time/RSS 也尚未资格化。下一刀是 recognizer CLI + strict main/challenge
-  prediction archive evaluator，再做 unsealed end-to-end replay；在完整
+  worst-case wall-time/RSS 也尚未资格化。下一刀是 lossless compact typed-authority codec v2 +
+  trusted-wire payload schema `/3`：必须解码恢复 exact authority，并直接重放 exact transform +
+  derived bridge，不能扩张 envelope cap 或用 synthetic outcome 冒充真实 E2E。recognizer CLI、
+  formal scoring evaluator 与 actual unsealed 960-case replay 要等 compact path 闭合后再施工；在完整
   standard-error 语义实现前，formal selector 只允许 `absolute_bound`；
 - seal → prediction commitment → reveal → consumed 的 immutable lifecycle model、
   answer salted-commitment opening 校验和进程内原子防分叉 guard，以及 read-only
@@ -291,14 +311,15 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
   uncertainty/root-identity selector、typed transform kernels、derived witness bridge、
   non-authoritative fixed-envelope covert mechanics、Stage-A accepted-JCS/namespace/envelope
   mechanics、Stage-B native-provenance keyed framing、Stage-C strict typed whole-batch replay
-  与 post-rename public recognizer-input archive，以及 runner/state-machine 合同，但这些
-  窄 mechanics 尚未组成 formal pipeline 或效果证据；
+  与 post-rename public recognizer-input archive、960-row prediction archive structural codec、
+  unsealed 720/240 structural evaluator 以及 runner total/state-machine 合同，但这些窄
+  mechanics 尚未组成 formal pipeline 或效果证据；
 - 720-case main + 240-case challenge 的 sealed generation、572 个 derived pairs、独立
   custodian、真实 OCI attestation、三套外部 baseline pins 或 consumed score report；
 - allowed UUID/provenance/role-candidate/missingness/transform 字段的 answer-correlation
   与 covert-channel audit、随机并全局 shuffle 的 ID 分配证明；`standard_error` 在完整
   语义和测试就绪前明确 unsupported，而不是可进入 formal selector 的待选模式；
-- 专用 recognizer CLI、严格 main/challenge prediction archive evaluator、签名 SBOM /
+- 专用 recognizer CLI、formal scoring/sealed prediction evaluator、签名 SBOM /
   runtime attestation 验证器和跨进程持久的 append-only CAS ledger；
 - Phase-3 M1/M2 已证明 strict identity 一致与 bounded syntactic overflow，但没有完整
   canonical closure exhaustion、program/output archives、match set 或 extensional target

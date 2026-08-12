@@ -164,6 +164,13 @@ _DEFAULT_POLICY_ID: Final = _DEFAULT_POLICY.policy_id
 _DEFAULT_MATCHER_SEMANTICS_ID: Final = _DEFAULT_POLICY.matcher_semantics_id
 _DEFAULT_SELECTION_POLICY_ID: Final = DEFAULT_EXACT_SELECTION_POLICY.policy_id
 
+# Public, read-only bindings for downstream artifacts that replay this exact
+# bridge.  The implementation continues to use the private defaults above;
+# these aliases expose only their content IDs, never a caller-selectable policy.
+EXACT_DERIVED_BRIDGE_POLICY_ID: Final = _DEFAULT_POLICY_ID
+EXACT_DERIVED_MATCHER_SEMANTICS_ID: Final = _DEFAULT_MATCHER_SEMANTICS_ID
+EXACT_DERIVED_SELECTION_POLICY_ID: Final = _DEFAULT_SELECTION_POLICY_ID
+
 
 @dataclass(frozen=True, slots=True)
 class ExactSupportSlice:
@@ -2615,4 +2622,9 @@ def run_exact_derived_witness_bridge(
     )
 
 
-__all__ = ("run_exact_derived_witness_bridge",)
+__all__ = (
+    "EXACT_DERIVED_BRIDGE_POLICY_ID",
+    "EXACT_DERIVED_MATCHER_SEMANTICS_ID",
+    "EXACT_DERIVED_SELECTION_POLICY_ID",
+    "run_exact_derived_witness_bridge",
+)

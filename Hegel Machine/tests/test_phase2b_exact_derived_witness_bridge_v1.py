@@ -1510,8 +1510,36 @@ def test_uncertainty_lineage_is_bound_per_source_observation_not_only_by_union(
     _assert_atomic_bridge_abstention(run)
 
 
-def test_only_the_authoritative_entrypoint_is_exported():
-    assert bridge.__all__ == ("run_exact_derived_witness_bridge",)
+def test_only_authoritative_entrypoint_and_read_only_policy_ids_are_exported():
+    assert bridge.__all__ == (
+        "EXACT_DERIVED_BRIDGE_POLICY_ID",
+        "EXACT_DERIVED_MATCHER_SEMANTICS_ID",
+        "EXACT_DERIVED_SELECTION_POLICY_ID",
+        "run_exact_derived_witness_bridge",
+    )
+    for public_name, private_name, prefix in (
+        (
+            "EXACT_DERIVED_BRIDGE_POLICY_ID",
+            "_DEFAULT_POLICY_ID",
+            "phase2b_exact_derived_bridge_policy_",
+        ),
+        (
+            "EXACT_DERIVED_MATCHER_SEMANTICS_ID",
+            "_DEFAULT_MATCHER_SEMANTICS_ID",
+            "phase2b_exact_derived_matcher_",
+        ),
+        (
+            "EXACT_DERIVED_SELECTION_POLICY_ID",
+            "_DEFAULT_SELECTION_POLICY_ID",
+            "phase2b_exact_selector_policy_",
+        ),
+    ):
+        public_value = getattr(bridge, public_name)
+        assert public_value == getattr(bridge, private_name)
+        assert type(public_value) is str and public_value.startswith(prefix)
+        suffix = public_value.removeprefix(prefix)
+        assert len(suffix) == 64
+        assert all(character in "0123456789abcdef" for character in suffix)
 
 
 def test_aggregate_replay_index_has_two_bounded_scans_and_canonical_sort():

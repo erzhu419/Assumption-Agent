@@ -14,6 +14,7 @@ import re
 from typing import Final
 
 from .hashing import stable_hash
+from .phase2b_freeze_v1 import frozen_phase2b_exact_freeze
 from .phase2b_protocol import ExecutionFreezeManifest, frozen_phase2b_protocol
 
 
@@ -46,6 +47,29 @@ FORBIDDEN_RECOGNIZER_MODULE_PREFIXES: Final = (
     "hegel_machine.phase2b_evaluator",
     "hegel_machine.vertical_slice",
 )
+
+# The recognizer receives one split-blind archive containing both frozen
+# cohorts.  Only the derived total is public here; the component counts remain
+# host-internal and are never placed in the recognizer run specification.
+_RUNNER_EXACT_FREEZE: Final = frozen_phase2b_exact_freeze()
+_MAIN_RECOGNIZER_CASE_COUNT: Final = (
+    _RUNNER_EXACT_FREEZE.holdout.independent_latent_case_count
+)
+_CHALLENGE_RECOGNIZER_CASE_COUNT: Final = (
+    _RUNNER_EXACT_FREEZE.semantic_conflict.case_count
+)
+if (
+    type(_MAIN_RECOGNIZER_CASE_COUNT) is not int
+    or _MAIN_RECOGNIZER_CASE_COUNT != 720
+    or type(_CHALLENGE_RECOGNIZER_CASE_COUNT) is not int
+    or _CHALLENGE_RECOGNIZER_CASE_COUNT != 240
+):
+    raise RuntimeError("recognizer case-count exact-freeze drift")
+TOTAL_RECOGNIZER_CASE_COUNT: Final = (
+    _MAIN_RECOGNIZER_CASE_COUNT + _CHALLENGE_RECOGNIZER_CASE_COUNT
+)
+if TOTAL_RECOGNIZER_CASE_COUNT != 960:
+    raise RuntimeError("recognizer total case-count drift")
 
 
 def _require_sha256(value: str, name: str) -> None:
@@ -129,8 +153,11 @@ class OciRecognizerRunSpec:
             raise ValueError("formal run directories must be outside the repository")
         if _is_within(input_path, output_path) or _is_within(output_path, input_path):
             raise ValueError("formal input and output directories cannot overlap")
-        if self.expected_case_count != 720:
-            raise ValueError("formal recognizer run requires exactly 720 cases")
+        if (
+            type(self.expected_case_count) is not int
+            or self.expected_case_count != TOTAL_RECOGNIZER_CASE_COUNT
+        ):
+            raise ValueError("recognizer run requires exactly 960 split-blind cases")
         if not isinstance(self.entrypoint, tuple) or not self.entrypoint:
             raise TypeError("recognizer entrypoint must be a nonempty tuple")
         if any(not isinstance(item, str) or not item for item in self.entrypoint):
@@ -208,7 +235,7 @@ def build_oci_run_spec(
         output_host_directory=output_host_directory,
         repository_host_directory=repository_host_directory,
         input_manifest_sha256=input_manifest_sha256,
-        expected_case_count=720,
+        expected_case_count=TOTAL_RECOGNIZER_CASE_COUNT,
         entrypoint=FROZEN_RECOGNIZER_ENTRYPOINT,
         limits=limits,
     )
@@ -339,7 +366,7 @@ class ExternalRuntimeAttestation:
         if self.output_size_bytes == 0:
             raise ValueError("untrusted recognizer produced an empty output archive")
         if self.prediction_case_count != spec.expected_case_count:
-            raise ValueError("untrusted recognizer did not emit exactly 720 predictions")
+            raise ValueError("untrusted recognizer did not emit exactly 960 predictions")
         if not all(
             (
                 self.observed_network_disabled,
@@ -361,6 +388,7 @@ __all__ = (
     "RECOGNIZER_OUTPUT_MOUNT",
     "REQUIRED_RECOGNIZER_MODULES",
     "RuntimeLimits",
+    "TOTAL_RECOGNIZER_CASE_COUNT",
     "audit_recognizer_image_modules",
     "build_oci_run_spec",
 )

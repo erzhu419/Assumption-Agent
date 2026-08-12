@@ -61,7 +61,7 @@ a pass from one bounded invention fixture.
 | G0 claim/evidence boundary | OBSERVED / strong | frozen schemas, content IDs, replay records, explicit non-claims, fail-closed receipts | one canonical cross-generation status ledger was missing; this file starts it |
 | G1 theory/governance kernel | MECHANICS | `TheoryState`, typed observations, laws, probes, patches, reduction maps, separated governance decisions, branch/version scaffolds | independent promotion trust root and real lifecycle evidence |
 | G2 initial language/geometry | MECHANICS | 22 assumption templates, six executable active laws, task-relative probes/quotients and scale contracts | one first-class relation-language snapshot manifest; complete executable 22-leaf library; identifiability/gauge intervention evidence |
-| C1 known-law identification | PARTIAL | Phase-2A: six verifier families, 43 synthetic cases, 24 answerable/19 abstain, complete 24-projection controlled grid, semantic fields excluded from acceptance | formal Phase-2B typed-evidence projection, sealed independent data, covert audit, baselines, custodian/runtime evidence and statistical exit |
+| C1 known-law identification | PARTIAL | Phase-2A controlled grid plus non-authoritative Phase-2B typed-transform, recognizer-input, prediction-record/archive and unsealed 720/240 structural mechanics | real positive typed E2E within the wire cap, recognizer runtime/scoring, sealed independent data, covert audit, baselines, custody and statistical exit |
 | G4 inadequacy diagnosis | MECHANICS | ordered refit/noise/scope/mixture/composition diagnosis and robustification/idealization evaluator prototypes | diagnosis derived from real residual clusters; executable probe-addition and operator-selection evidence |
 | C2 bounded relation invention | MISSING effect | strict DSL/certificate and bounded-enumeration infrastructure; old DSL reached `DSL_TOO_LARGE` under its budget | incomplete-ontology benchmark, at least three outside-library relations, non-equivalence/MDL, hard negatives, counterfactuals and unseen predictions |
 | C3 conservative multigeneration | MISSING effect | certificate and version-graph schemas | real old-success preservation, limiting cases, reduction maps, demotion/rollback, negative memory and multigeneration survival |
@@ -102,8 +102,11 @@ without semantic acceptance**.  The dependency order is:
    kernels and a derived-witness bridge. Their narrow contracts, incomplete
    transform-to-verifier coverage and unexecuted formal preservation suite still
    prevent a complete-transform claim.
-4. **Recognizer and archive** — strict CLI, complete prediction archive,
-   challenge/preservation evaluator and deterministic replay.
+4. **Recognizer and archive** — context/record/960 archive framing and an
+   unsealed 720/240 structural evaluator now exist as non-authoritative
+   mechanics. A lossless compact typed-authority path, strict CLI, real positive
+   execution, formal scoring/challenge/preservation evaluation and deterministic
+   runtime replay remain missing.
 5. **Trusted wire and anti-leak audit** — independent shuffle/ID/padding keys,
    fixed 65,536-byte envelopes, global renaming/order invariance, NMI and
    stratified permutation/Holm-Bonferroni gates.
@@ -252,6 +255,37 @@ source-projection, secret-custodian, origin, formal-covert, sealed, recognizer,
 prediction-evaluation and C1 claims are all false.  Opaque commitments are not a
 durable trusted receipt, and no recognizer execution or effect evidence follows.
 
+`phase2b_recognizer_prediction_archive_v1.py` adds a second, still
+non-authoritative archive layer. `PublicRunContextV1` binds the exact decoded input
+archive ID/SHA, current protocol, execution-freeze-manifest commitment, ordered
+input-row root and total 960. Each prediction record is independently bounded and
+length-framed; the manifest binds canonical row and record roots, while each record
+transitively binds its prediction-content root. The archive
+rejects 959/961, duplicates, order/root drift or unknown bridge reasons atomically.
+The issuer internally reruns frozen theory + adjacent public registry + exact
+derived bridge as its mapping gate, but a durable raw decode does not re-prove that
+gate. Its only true claims are structural archive, canonical framing, closed record
+schema and row-root coverage. Membership, manifest authority, derived mapping,
+runtime, capacity, origin, sealed/formal audit, scoring, effect and C1 are false.
+Recognizer-facing decoded semantic fields/values exclude split, gold, index,
+ordinal and case-position labels; this is not a raw-binary substring claim.
+
+`phase2b_unsealed_prediction_evaluator_v1.py` separately checks that evaluator-side
+720/240 row-ID sets are sorted, disjoint, exhaustive and rooted in the same 960
+archive. Its strongest disposition is
+`STRUCTURALLY_COMPLETE_NOT_SCORED`; there is no scorer, metric, effect or capacity
+claim. The runner exposes only the exact-freeze-derived total=960 contract, not a
+recognizer entrypoint or actual run.
+
+An architecture P0 blocks real positive E2E before CLI work: under the current
+frozen structure, the smallest constructed positive-witness typed profile is
+125,582 bytes, above the 65,424-byte Stage-B payload cap
+(`125,582 > 65,424`). Real under-cap fixtures currently close only as `ABSTAIN`;
+synthetic 960 framing is not capacity evidence. The next slice must therefore be a
+lossless compact typed-authority codec v2 plus trusted-wire payload schema `/3`
+whose decoder restores the exact authority and directly replays exact transform +
+derived bridge. It must not widen the envelope or fabricate an E2E result.
+
 Accordingly these narrow flags are true:
 
 ```text
@@ -300,6 +334,13 @@ global_source_public_uuid_disjointness_gate_implemented
 whole_batch_atomic_custodian_gated_recognizer_input_archive_issuer_mechanics_implemented
 public_recognizer_input_archive_structural_decode_replay_implemented
 recognizer_input_archive_success_is_false_claim_public_decode
+public_run_context_structural_schema_mechanics_implemented
+closed_public_prediction_record_schema_mechanics_implemented
+record_framed_exact_960_prediction_archive_structural_codec_mechanics_implemented
+internal_derived_to_prediction_mapping_gate_mechanics_implemented
+decoded_prediction_semantic_fields_exclude_split_gold_index_labels
+unsealed_720_240_sorted_disjoint_exhaustive_structural_evaluator_implemented
+recognizer_runner_total_960_contract_implemented
 ```
 
 while the broad flags below remain false:
@@ -334,6 +375,20 @@ recognizer_input_archive_sealed_holdout_eligible
 recognizer_input_archive_recognizer_executed
 recognizer_input_archive_prediction_archive_evaluated
 recognizer_input_archive_c1_exit_evidence
+real_positive_typed_profile_fits_trusted_wire
+real_positive_prediction_end_to_end_replay_implemented
+recognizer_prediction_capacity_evidence
+prediction_scoring_implemented
+prediction_effect_evidence
+actual_960_case_prediction_archive_run
+recognizer_runtime_executed
+prediction_archive_input_membership_verified
+prediction_archive_execution_manifest_authority_verified
+prediction_archive_derived_mapping_verified_by_public_decode
+prediction_archive_origin_authenticated
+prediction_archive_formal_covert_audit
+prediction_archive_sealed_holdout_eligible
+prediction_archive_c1_exit_evidence
 covert_channel_audit_implemented
 ready_for_holdout_generation
 formal_phase2b_exit_claim
@@ -348,23 +403,25 @@ still does not consume
 the exact receipt, and its broad completion flag therefore remains false. The
 derived bridge closes strict `task_target` and unused-observation coverage for its
 bounded profile, but complete physical transform/preservation semantics, formal
-covert-channel audit, recognizer CLI, prediction archive evaluator,
+covert-channel audit, compact positive typed authority, recognizer CLI, formal scoring,
 signed image/runtime evidence and durable one-shot custody remain formal-pipeline
 blockers.
 
 ## 7. Next authorized construction slice
 
-The next non-actual construction slice is **Phase-2B Recognizer CLI + Prediction
-Archive Evaluator v1**. The strict CLI must accept only the frozen public input and
-emit a closed main/challenge prediction archive without answer access; the evaluator
-must validate archive completeness, duplicates, ordering, roots, abstentions and
-challenge/preservation partitions before any score path. Then an unsealed end-to-end
-run must connect the current typed whole-batch replay and public recognizer-input
-archive to recognizer output and prediction-archive evaluation while keeping all
-origin, isolation, one-shot custody, covert-audit and sealed-C1 claims false.
-Malformed or partial prediction archives must fail closed. Small
-deterministic/tamper vectors and an unsealed run remain mechanics evidence only;
-formal 720+240 audit, independent labels and sealed execution are later gates.
+The next non-actual construction slice is **Phase-2B Lossless Compact Typed-Authority
+Codec v2 + Trusted-Wire Payload Schema `/3`**. It must encode the same exact V2
+authority below the existing payload cap, restore that authority losslessly, and
+directly pass the existing exact-transform and derived-bridge replay without
+post-decode mutation. It may not widen the envelope, split one authority into a
+semantically weaker multi-envelope approximation, or use synthetic predictions as
+positive E2E evidence.
+
+Only after that architecture P0 is closed should a strict recognizer CLI and formal
+scoring evaluator connect the current input/prediction archives in an actual unsealed
+960-case run. That later run must still keep origin, isolation, one-shot custody,
+covert-audit, capacity and sealed-C1 claims false until their independent gates pass.
+Formal 720+240 audit, independent labels and sealed execution remain later gates.
 
 No Q0.5b actual rerun, Docker execution, holdout generation, or ACTIVE mutation
 is authorized by this ledger.

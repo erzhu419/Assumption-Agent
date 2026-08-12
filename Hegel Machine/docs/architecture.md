@@ -145,9 +145,10 @@ Both bounded profiles
                                                     [mechanics only]
   → strict typed authority codec + direct/whole-batch replay [mechanics only]
   → post-rename public recognizer-input archive             [mechanics only]
-  → recognizer CLI + prediction archive evaluator            [not implemented]
-  → unique family+binding and admissible scale set, or abstain
-  → PredictionBundle commitment                         [not implemented]
+  → frozen derived bridge → PredictionBundle mapping gate    [mechanics only]
+  → run context + 960 independently framed prediction rows   [mechanics only]
+  → unsealed 720/240 structural evaluator                    [not scored]
+  → recognizer CLI + formal scoring/sealed evaluator          [not implemented]
 ```
 
 `phase2b_wire.py` 不 import law/verifier、generator、evaluator 或 Phase-2A fixture；
@@ -208,7 +209,7 @@ distinct-point scalar subselection，split/merge 只覆盖 extensive 值的一�
 coarse-graining 只核声明的 sparse matrix equality，forest 也不支持 multi-root merge。
 derived verifier 仍拒绝有量纲 witness；八种 wire operation 与八类 formal
 `PreservationTransform` 不是同一 taxonomy，更不等于 496 legal + 76 invalid pairs 已执行。
-recognizer CLI、prediction archive evaluator、formal covert audit、sealed data、
+recognizer CLI、formal scoring prediction evaluator、formal covert audit、sealed data、
 runtime/custodian 证据都未完成。因此 `projection_compiler_implemented`、宽泛
 `exact_rational_residual_interval_semantics_implemented`、
 `uncertainty_semantics_compiler_implemented` 和完整 typed pipeline 状态仍为 false。
@@ -258,13 +259,40 @@ audit、sealed eligibility、recognizer execution、prediction evaluation 与 C1
 metadata 中的 opaque commitments 不构成 durable trusted receipt；当前没有这种公开 receipt，
 也没有 recognizer 效果证据。
 
+`phase2b_recognizer_prediction_archive_v1.py` 冻结的 `PublicRunContextV1` 只从 exact decoded
+input archive 与 exact `ExecutionFreezeManifest` 构造，绑定 input archive ID/SHA、当前 protocol
+ID、manifest ID、ordered 960 input-row root 与 expected count=960。每个 prediction record 独立
+length-frame 为 bounded accepted-JCS，archive manifest 再绑定 ordered record/root commitments；
+959/961、重复 ID、顺序/root 漂移或未知 bridge reason 都整档拒绝。issuer 内部使用
+`initial_theory()`、相邻 public registry 和 exact derived bridge 重跑 derived→prediction
+mapping 作为发行 gate；它不接受 caller theory/registry/policy/bridge receipt。one-scale 与
+multi-scale 分别映射为 `unique_identification` 与 `admissible_scale_set`，family 的 bridge UUID
+和外层 F01..F06 双向绑定。
+
+耐久的 `DecodedRecognizerPredictionArchiveV1` 仍只证明 bytes 可重放的 structural/canonical/
+schema/row-root mechanics；input membership、execution-manifest authority、derived mapping、runtime、
+capacity、origin、sealed/formal audit、scoring、effect 和 C1 均为 false。recognizer-facing decoded
+semantic fields/values 不携 split、gold、index、ordinal 或 case-position labels；不能把这句话扩大
+为对任意二进制 hash substring 的断言。`phase2b_unsealed_prediction_evaluator_v1.py` 位于
+recognizer wire 之外，只核 evaluator-side 的 720/240 row-ID partitions 是否 sorted、disjoint、
+exhaustive 且与同一 960 root 相等，成功也只返回
+`STRUCTURALLY_COMPLETE_NOT_SCORED`，无 scorer/metrics/effect。runner 公开的只是从 exact freeze
+导出的 total=960 contract，没有 recognizer entrypoint 或 runtime evidence。
+
+这里存在先于 CLI 的 architecture P0：当前冻结结构下已构造的最小 positive witness typed
+profile 是 125,582 bytes，Stage-B 可用 payload cap 是 65,424 bytes，即
+`125,582 > 65,424`。所以当前真实 under-cap row 只能闭合 `ABSTAIN`，synthetic 960 framing 也
+不是 positive E2E 或 capacity evidence。下一刀必须是 lossless compact typed-authority codec v2
+与 trusted-wire payload schema `/3`，其 decoder 恢复 exact authority 并直接通过 exact transform +
+derived replay；不得扩 envelope cap 或伪造 recognizer run。compact path 闭合后才轮到 CLI、
+formal scoring 与 actual unsealed 960 run。
+
 这些 receipts 仍恒为 `NON_AUTHORITATIVE_MECHANICS_ONLY`。pairwise distinct 不证明 IKM
 独立性；raw-envelope diagnostic 不验证 batch membership 或 secret padding；supplied-secret
 replay 只证明调用方给出的 authorities/run/IKM 可重建同一 bytes。origin authentication、
 formal namespace/covert audit 与 `trusted_rfc8785_wire_builder_implemented` 继续为 false。
 1..1024 的输入 cap 已冻结并在入口 fail-closed，但 1024-authority worst-case wall-time/RSS
-尚未资格化。下一刀是 recognizer CLI + prediction archive evaluator，随后执行 unsealed
-end-to-end replay，而不是生成或消费 holdout。
+尚未资格化。
 
 这里的 `family-neutral-shaped` 只表示 schema 没有显式 family/gold 字段。允许的 UUID、
 provenance hash、role candidates、missingness 和 unused transforms 仍可能成为 covert
@@ -299,8 +327,9 @@ invalid-transform controls，共 572 个 derived pairs；它们不是 720 的独
 Host runner 只生成 OCI launch-spec contract：read-only input/root、no network、drop all
 capabilities、no-new-privileges、ephemeral tmpfs、固定 image digest、资源上限，而且
 repo、generator 与 answer manifest 不挂载。该本地 contract 不证明 runtime 真被
-这样执行；冻结入口目前只是保留路径，专用 recognizer CLI、严格 main/challenge archive
-evaluator、签名 SBOM 与 external attestation verifier 均未实现。
+这样执行；runner 现在只额外冻结 exact total=960。unsealed 720/240 evaluator 仅检查结构，
+专用 recognizer CLI、formal scoring/sealed evaluator、签名 SBOM 与 external attestation verifier
+仍未实现。
 
 Seal lifecycle 是单向的：
 

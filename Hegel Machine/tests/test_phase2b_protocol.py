@@ -56,6 +56,19 @@ from hegel_machine.phase2b_recognizer_input_archive_v1 import (
     RECOGNIZER_INPUT_ARCHIVE_POLICY_ID,
     TRUSTED_RECOGNIZER_INPUT_ARCHIVE_VERSION,
 )
+from hegel_machine.phase2b_recognizer_prediction_archive_v1 import (
+    PUBLIC_RECOGNIZER_PREDICTION_RECORD_SCHEMA_ID,
+    PUBLIC_RECOGNIZER_PREDICTION_RECORD_SCHEMA_VERSION,
+    PUBLIC_RUN_CONTEXT_SCHEMA_ID,
+    PUBLIC_RUN_CONTEXT_SCHEMA_VERSION,
+    RECOGNIZER_PREDICTION_ARCHIVE_POLICY_ID,
+    RECOGNIZER_PREDICTION_ARCHIVE_SCHEMA_VERSION,
+)
+from hegel_machine.phase2b_runner import TOTAL_RECOGNIZER_CASE_COUNT
+from hegel_machine.phase2b_unsealed_prediction_evaluator_v1 import (
+    UNSEALED_PREDICTION_EVALUATOR_POLICY_ID,
+    UNSEALED_PREDICTION_EVALUATOR_VERSION,
+)
 from hegel_machine.phase2b_protocol import (
     BaselineKind,
     BaselineRegistration,
@@ -138,7 +151,8 @@ def test_exact_margin_quota_resolves_conflict_but_implementation_blocks_generati
         not in protocol.implementation_blockers
     )
     assert (
-        "functional_recognizer_cli_signed_minimal_image_and_archive_evaluator_not_implemented"
+        "functional_recognizer_cli_signed_minimal_image_and_formal_"
+        "scoring_evaluator_not_implemented"
         in protocol.implementation_blockers
     )
     assert protocol.ready_for_holdout_generation is False
@@ -653,6 +667,73 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "recognizer_input_archive_c1_exit_evidence",
     ):
         assert report[field_name] is False
+    assert report["public_run_context_schema_version"] == (
+        PUBLIC_RUN_CONTEXT_SCHEMA_VERSION
+    )
+    assert report["public_run_context_schema_id"] == PUBLIC_RUN_CONTEXT_SCHEMA_ID
+    assert report["public_recognizer_prediction_record_schema_version"] == (
+        PUBLIC_RECOGNIZER_PREDICTION_RECORD_SCHEMA_VERSION
+    )
+    assert report["public_recognizer_prediction_record_schema_id"] == (
+        PUBLIC_RECOGNIZER_PREDICTION_RECORD_SCHEMA_ID
+    )
+    assert report["recognizer_prediction_archive_schema_version"] == (
+        RECOGNIZER_PREDICTION_ARCHIVE_SCHEMA_VERSION
+    )
+    assert report["recognizer_prediction_archive_policy_id"] == (
+        RECOGNIZER_PREDICTION_ARCHIVE_POLICY_ID
+    )
+    assert report["recognizer_prediction_archive_claim_level"] == (
+        TRUSTED_WIRE_CLAIM_LEVEL
+    )
+    assert report["unsealed_prediction_evaluator_version"] == (
+        UNSEALED_PREDICTION_EVALUATOR_VERSION
+    )
+    assert report["unsealed_prediction_evaluator_policy_id"] == (
+        UNSEALED_PREDICTION_EVALUATOR_POLICY_ID
+    )
+    assert report["recognizer_runner_total_case_count"] == (
+        TOTAL_RECOGNIZER_CASE_COUNT
+    )
+    for field_name in (
+        "public_run_context_structural_schema_mechanics_implemented",
+        "closed_public_prediction_record_schema_mechanics_implemented",
+        (
+            "record_framed_exact_960_prediction_archive_structural_codec_"
+            "mechanics_implemented"
+        ),
+        "internal_derived_to_prediction_mapping_gate_mechanics_implemented",
+        "decoded_prediction_semantic_fields_exclude_split_gold_index_labels",
+        (
+            "unsealed_720_240_sorted_disjoint_exhaustive_structural_"
+            "evaluator_implemented"
+        ),
+        "recognizer_runner_total_960_contract_implemented",
+    ):
+        assert report[field_name] is True
+    assert report["minimum_constructed_positive_typed_profile_bytes"] == 125_582
+    assert report["trusted_wire_maximum_payload_bytes"] == 65_424
+    assert report["real_positive_typed_profile_fits_trusted_wire"] is False
+    assert report["next_phase2b_construction_slice"] == (
+        "lossless_compact_typed_authority_codec_v2_with_trusted_wire_"
+        "payload_schema_v3"
+    )
+    for field_name in (
+        "real_positive_prediction_end_to_end_replay_implemented",
+        "recognizer_prediction_capacity_evidence",
+        "prediction_scoring_implemented",
+        "prediction_effect_evidence",
+        "actual_960_case_prediction_archive_run",
+        "recognizer_runtime_executed",
+        "prediction_archive_input_membership_verified",
+        "prediction_archive_execution_manifest_authority_verified",
+        "prediction_archive_derived_mapping_verified_by_public_decode",
+        "prediction_archive_origin_authenticated",
+        "prediction_archive_formal_covert_audit",
+        "prediction_archive_sealed_holdout_eligible",
+        "prediction_archive_c1_exit_evidence",
+    ):
+        assert report[field_name] is False
     assert report["pairwise_distinct_key_source_contract_implemented"] is True
     assert report["key_source_statistical_independence_attested"] is False
     assert report["whole_batch_unbiased_fisher_yates_mechanics_implemented"] is True
@@ -710,6 +791,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "exact_transform_semantics",
         "projection_compiler",
         "recognizer_input_archive_mechanics",
+        "recognizer_prediction_archive_mechanics",
         "runner",
         "selector",
         "trusted_wire_keyed_batch_mechanics",
@@ -717,6 +799,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "trusted_wire_typed_authority_codec",
         "trusted_wire_typed_replay_mechanics",
         "uncertainty_compiler",
+        "unsealed_prediction_structural_evaluator",
         "wire",
     }
     assert report["ready_for_holdout_generation"] is False
