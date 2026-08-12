@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import sys
 from typing import Sequence
 
 from .benchmark import run_phase2_benchmark
@@ -471,7 +472,16 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    raw_argv = tuple(sys.argv[1:] if argv is None else argv)
+    if (
+        raw_argv
+        and type(raw_argv[0]) is str
+        and raw_argv[0] == "phase2b-verify-v2-structure"
+    ):
+        from .phase2b_strict_recognizer_cli_v2 import main as strict_v2_main
+
+        return strict_v2_main(raw_argv[1:])
+    args = build_parser().parse_args(raw_argv)
     if args.command == "benchmark":
         return command_benchmark(args.output)
     if args.command == "demo":
