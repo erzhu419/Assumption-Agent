@@ -260,11 +260,26 @@ then uses compact typed replay, the adjacent public-registry adapter, the frozen
 derived bridge, and a closed decision/reason map to return a privately issued,
 process-local, ephemeral V2 outcome plus the generic `PredictionBundle`. V1 types are
 rejected fail-closed. The same constructed positive regression preserves decision,
-bundle identity, family/binding/scales, and input/protocol/freeze-root parity. There
-is still no durable V2 prediction receipt, full V2 960-row archive, recognizer runtime,
-actual 960-case execution, scoring, or effect. The next slice is an independent
-exact-960 V2 prediction-archive structural codec, followed later by CLI, formal
-scoring, and actual unsealed replay.
+bundle identity, family/binding/scales, and input/protocol/freeze-root parity. The
+single-row mapping remains ephemeral and the structural archive is not a
+durable trusted receipt. There is still no backed actual-960 production run,
+recognizer runtime, scoring, or effect.
+
+The independent V2 prediction-archive codec now freezes V2-only run-context,
+record, archive, policy, and content identities under `HGP2PA2\0`. Its closed
+16-field manifest binds the context, ordered input-row root, and ordered record
+root; exactly 960 bounded accepted-JCS prediction records are length-framed in
+input-archive wire order. The builder invokes the committed V2 row mapper in that
+order and abstains atomically on contract-covered validation, mapping, encoding,
+or public-decoding failures. Public decode verifies only structural
+archive, canonical framing, closed record schema, and ordered row-root coverage.
+The synthetic 1 ANSWER + 1 ANSWER_SET + 958 ABSTAIN fixture is structural codec
+evidence, not an actual 960-case execution. Input membership, batch membership,
+source projection/disjointness, single allocation, secret custody, execution-
+manifest authority, derived mapping, runtime, capacity, origin/formal audit,
+sealed eligibility, scoring, effect, and C1 remain false. The next slice is
+`unsealed_prediction_evaluator_v2_structural_720_240_partition_replay`, followed
+later by CLI, formal scoring, and actual unsealed replay.
 
 Pairwise distinct IKM values do not attest independent generation. The raw-envelope
 diagnostic verifies typed payload identity and direct transform replay but not batch

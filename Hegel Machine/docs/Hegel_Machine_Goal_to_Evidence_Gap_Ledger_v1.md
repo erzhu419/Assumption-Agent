@@ -61,7 +61,7 @@ a pass from one bounded invention fixture.
 | G0 claim/evidence boundary | OBSERVED / strong | frozen schemas, content IDs, replay records, explicit non-claims, fail-closed receipts | one canonical cross-generation status ledger was missing; this file starts it |
 | G1 theory/governance kernel | MECHANICS | `TheoryState`, typed observations, laws, probes, patches, reduction maps, separated governance decisions, branch/version scaffolds | independent promotion trust root and real lifecycle evidence |
 | G2 initial language/geometry | MECHANICS | 22 assumption templates, six executable active laws, task-relative probes/quotients and scale contracts | one first-class relation-language snapshot manifest; complete executable 22-leaf library; identifiability/gauge intervention evidence |
-| C1 known-law identification | PARTIAL | Phase-2A controlled grid plus non-authoritative Phase-2B typed-transform, compact V2 one-case input and ephemeral single-row prediction mechanics, V1 prediction-record/archive and unsealed 720/240 structural mechanics | full V2 960 prediction archive, recognizer runtime/scoring, actual 960, sealed independent data, covert audit, baselines, custody and statistical exit |
+| C1 known-law identification | PARTIAL | Phase-2A controlled grid plus non-authoritative Phase-2B typed-transform, compact V2 one-case input, ephemeral single-row mapping, exact-960 V2 prediction-archive structural mechanics, and V1 unsealed 720/240 structural mechanics | V2 720/240 structural evaluator, recognizer runtime/scoring, actual 960, sealed independent data, covert audit, baselines, custody and statistical exit |
 | G4 inadequacy diagnosis | MECHANICS | ordered refit/noise/scope/mixture/composition diagnosis and robustification/idealization evaluator prototypes | diagnosis derived from real residual clusters; executable probe-addition and operator-selection evidence |
 | C2 bounded relation invention | MISSING effect | strict DSL/certificate and bounded-enumeration infrastructure; old DSL reached `DSL_TOO_LARGE` under its budget | incomplete-ontology benchmark, at least three outside-library relations, non-equivalence/MDL, hard negatives, counterfactuals and unseen predictions |
 | C3 conservative multigeneration | MISSING effect | certificate and version-graph schemas | real old-success preservation, limiting cases, reduction maps, demotion/rollback, negative memory and multigeneration survival |
@@ -107,9 +107,10 @@ without semantic acceptance**.  The dependency order is:
    mechanics. A compact V2 path now crosses one constructed positive authority,
    V2 batch/public replay/input archive, derived-bridge parity, and an ephemeral
    exact single-row prediction outcome with decision/bundle/family/binding/scale and
-   input/protocol/freeze-root parity. The full V2 960 prediction archive, strict CLI,
-   actual 960 execution, formal scoring/challenge/preservation evaluation and
-   deterministic runtime replay remain missing.
+   input/protocol/freeze-root parity, then frames an independently identified exact-960
+   V2 prediction archive. Its synthetic structural fixture is not an actual run. The V2
+   720/240 structural evaluator, strict CLI, actual 960 execution, formal scoring/
+   challenge/preservation evaluation and deterministic runtime replay remain missing.
 5. **Trusted wire and anti-leak audit** — independent shuffle/ID/padding keys,
    fixed 65,536-byte envelopes, global renaming/order invariance, NMI and
    stratified permutation/Holm-Bonferroni gates.
@@ -290,10 +291,15 @@ exact V2 row and current execution freeze and returns only a privately issued,
 process-local, ephemeral outcome after compact replay, public-registry adaptation, the
 frozen exact derived bridge and a closed reason map. The same regression preserves
 prediction decision, bundle identity, family/binding/scales and input/protocol/freeze
-roots. This closes only the old payload-size P0 and the single-row mapping mechanics
-gap; it is not prediction E2E or capacity evidence. Prediction archive V1 still rejects
-Archive V2 by exact type/policy, and full V2 960 archive, runtime, actual 960, scoring
-and effect remain missing.
+roots. The independent V2 archive codec uses V2-only context/record/archive identities,
+`HGP2PA2\0` magic, a closed 16-field manifest, and exactly 960 bounded accepted-JCS
+length-framed records in input wire order. Its builder is atomic and its public decoder
+proves only structural archive, canonical framing, closed record schema and ordered
+row-root coverage. A synthetic 1 ANSWER + 1 ANSWER_SET + 958 ABSTAIN fixture verifies
+those codec mechanics, not an actual run. This closes the old payload-size P0,
+single-row mapping and exact-960 archive structural gaps; it is not prediction E2E or
+capacity evidence. Input membership, execution-manifest authority, derived mapping,
+runtime, actual 960, scoring and effect remain missing or unverified.
 
 Accordingly these narrow flags are true:
 
@@ -380,6 +386,16 @@ real_positive_compact_v2_prediction_decision_parity_implemented
 real_positive_compact_v2_prediction_bundle_identity_parity_implemented
 real_positive_compact_v2_prediction_family_binding_scale_parity_implemented
 real_positive_compact_v2_prediction_input_protocol_freeze_root_parity_implemented
+v2_full_960_prediction_archive_structural_codec_implemented
+recognizer_prediction_archive_v2_independent_identity_mechanics_implemented
+recognizer_prediction_archive_v2_closed_context_schema_mechanics_implemented
+recognizer_prediction_archive_v2_closed_record_schema_mechanics_implemented
+recognizer_prediction_archive_v2_bounded_canonical_framing_mechanics_implemented
+recognizer_prediction_archive_v2_ordered_row_root_coverage_mechanics_implemented
+recognizer_prediction_archive_v2_exact_960_count_gate_mechanics_implemented
+recognizer_prediction_archive_v2_atomic_fail_closed_builder_mechanics_implemented
+recognizer_prediction_archive_v2_cross_version_rejection_mechanics_implemented
+synthetic_exact_960_prediction_archive_v2_structural_mechanics_verified
 public_run_context_structural_schema_mechanics_implemented
 closed_public_prediction_record_schema_mechanics_implemented
 record_framed_exact_960_prediction_archive_structural_codec_mechanics_implemented
@@ -461,7 +477,25 @@ recognizer_prediction_row_v2_formal_uuid_audit
 recognizer_prediction_row_v2_formal_covert_audit
 recognizer_prediction_row_v2_sealed_holdout_eligible
 recognizer_prediction_row_v2_c1_exit_evidence
-v2_full_960_prediction_archive_structural_codec_implemented
+recognizer_prediction_archive_v2_input_archive_membership_verified
+recognizer_prediction_archive_v2_batch_policy_membership_verified
+recognizer_prediction_archive_v2_source_registry_projection_verified
+recognizer_prediction_archive_v2_source_public_disjoint_verified
+recognizer_prediction_archive_v2_single_live_allocation_verified
+recognizer_prediction_archive_v2_secret_custodian_replay_verified
+recognizer_prediction_archive_v2_execution_manifest_authority_verified
+recognizer_prediction_archive_v2_derived_mapping_verified
+recognizer_prediction_archive_v2_recognizer_executed
+recognizer_prediction_archive_v2_runtime_executed
+recognizer_prediction_archive_v2_actual_960_case_run_verified
+recognizer_prediction_archive_v2_recognizer_capacity_evidence
+recognizer_prediction_archive_v2_origin_authenticated
+recognizer_prediction_archive_v2_formal_uuid_audit
+recognizer_prediction_archive_v2_formal_covert_audit
+recognizer_prediction_archive_v2_sealed_holdout_eligible
+recognizer_prediction_archive_v2_prediction_scored
+recognizer_prediction_archive_v2_effect_evidence
+recognizer_prediction_archive_v2_c1_exit_evidence
 v2_unsealed_prediction_evaluator_implemented
 real_positive_typed_profile_fits_trusted_wire
 real_positive_prediction_end_to_end_replay_implemented
@@ -491,19 +525,20 @@ still does not consume
 the exact receipt, and its broad completion flag therefore remains false. The
 derived bridge closes strict `task_target` and unused-observation coverage for its
 bounded profile, but complete physical transform/preservation semantics, formal
-covert-channel audit, full V2 prediction archive,
+covert-channel audit, the V2 structural evaluator,
 recognizer CLI, formal scoring, signed image/runtime evidence and durable one-shot
 custody remain formal-pipeline blockers.
 
 ## 7. Next authorized construction slice
 
-The next non-actual construction slice is the **Phase-2B exact-960 V2 prediction
-archive structural codec**. It must preserve the V1/V2 type and policy boundary and
-frame independently typed V2 outcomes without treating process-local single-row
-objects as durable receipts. It may not use the single constructed witness or
-synthetic predictions as actual-960, scoring, effect, capacity or C1 evidence.
+The next non-actual construction slice is
+**`unsealed_prediction_evaluator_v2_structural_720_240_partition_replay`**. It must
+consume exact V2 archive identities, keep evaluator-side partition labels outside
+recognizer-facing bytes, and prove only sorted/disjoint/exhaustive structural coverage.
+It may not use the synthetic exact-960 codec fixture as actual-960, scoring, effect,
+capacity or C1 evidence.
 
-Only after those V2 archive mechanics close should a strict recognizer CLI and
+Only after those V2 evaluator mechanics close should a strict recognizer CLI and
 formal scoring evaluator connect the archives in an actual unsealed 960-case run.
 That later run must still keep origin, isolation, one-shot custody, covert-audit,
 capacity and sealed-C1 claims false until their independent gates pass. Formal

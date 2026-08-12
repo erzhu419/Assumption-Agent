@@ -133,8 +133,13 @@ type/policy 不接受 V2 archive。独立的 V2 单行 mapping 现已直接消�
 adapter、冻结 exact derived bridge 和封闭 reason map，产生 privately issued、process-local、
 ephemeral outcome 与通用 `PredictionBundle`；它 fail-closed 拒绝 V1 类型。单一 constructed
 positive regression 保持 decision、bundle identity、family/binding/scales 与
-input/protocol/freeze roots parity，但没有 durable receipt、完整 V2 960 archive、runtime、actual
-960、scoring 或 effect。
+input/protocol/freeze roots parity。独立 V2 prediction archive codec 现以 V2-only identities、
+`HGP2PA2\0` magic、封闭 context/record/manifest schemas 和 960 个 bounded accepted-JCS
+length-framed records 绑定 ordered input-row/record roots；builder 保持 input wire order 并整档
+fail-closed。public decoder 仅重证 structural archive、canonical framing、closed record schema
+和 ordered row-root coverage。其 synthetic 1 ANSWER + 1 ANSWER_SET + 958 ABSTAIN fixture 不等于
+actual 960 run，public decode 也不重证 input membership、execution-manifest authority 或 derived
+mapping，更没有 runtime、capacity、scoring 或 effect。
 
 这些不是 trust/effect evidence：pairwise distinct 不证明独立 custodian key generation，public
 raw-envelope diagnostic 不验证 batch membership 或 secret padding，supplied-secret replay 只说明
@@ -144,10 +149,10 @@ formal 字段/UUID namespace 审计、
 720+240 formal 资源合同、recognizer CLI、formal scoring evaluator、sealed data、runtime/custodian 和
 C1 exit 仍缺失；宽泛 projection compiler、完整 typed pipeline、formal covert audit 与 formal
 holdout 状态继续为 false。入口虽冻结 1..1024 authority cap，最大规模的 wall-time/RSS 尚未
-资格化，不能据单例 mechanics 回归推断 formal-corpus capacity。下一施工切片是独立的
-exact-960 V2 prediction archive structural codec；它必须保持 V1/V2 identity 边界，不能把
-ephemeral single-row outcome 当作 archive receipt。CLI、formal scoring 和 actual unsealed 960
-replay 均在其后。
+资格化，不能据单例或 synthetic exact-960 mechanics 回归推断 formal-corpus capacity。下一施工
+切片是 `unsealed_prediction_evaluator_v2_structural_720_240_partition_replay`；它必须保持
+V1/V2 identity 边界和 evaluator-side label separation，不能把结构完整冒充 score 或 effect。
+CLI、formal scoring 和 actual unsealed 960 replay 均在其后。
 
 此外可以说：Phase-3A 的 v1.0.2 strict specification 已冻结，Python/Rust shared vectors
 各 48/48 PASS。M2 两端都接受 64,680 个 source candidates，并得到 64,680 个 unique strict

@@ -268,17 +268,26 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
   exact derived bridge，并以封闭 reason map 产生 privately issued、process-local、ephemeral
   V2 outcome 与通用 `PredictionBundle`；V1 input/prediction 类型被 fail-closed 拒绝。单一
   constructed positive regression 进一步保持 decision、bundle identity、family/binding/scales
-  以及 input/protocol/freeze roots parity。因此旧的 V1 payload-size P0 与 V2 单行 prediction
-  mapping mechanics 已在这一例闭合，但这不是 prediction E2E 或 capacity evidence：尚无
-  durable V2 prediction receipt、完整 V2 960-row archive、recognizer runtime、actual 960、
-  scoring 或 effect。所有这些仍只是 `NON_AUTHORITATIVE_MECHANICS_ONLY`，不构成 recognizer
-  效果、sealed holdout 或 C1 exit 证据。
+  以及 input/protocol/freeze roots parity。独立的
+  `phase2b_recognizer_prediction_archive_v2.py` 现以 V2-only schema/policy/content domains 与
+  `HGP2PA2\0` magic，把 exact 960 个 V2 outcome 分别做 bounded accepted-JCS length framing，
+  并用封闭 16-field manifest 绑定 context、ordered input-row root 与 ordered record root。builder
+  保持 input archive wire order、逐行调用 committed V2 mapper，并在合同覆盖的 validation、
+  mapping、encoding 或 public-decoding 失败时整档 abstain；public
+  decoder 只重证 structural archive、canonical framing、closed record schema 与 ordered row-root
+  coverage。synthetic 1 ANSWER + 1 ANSWER_SET + 958 ABSTAIN fixture 验证的是结构 codec，不是
+  actual run。因此旧的 V1 payload-size P0、V2 单行 mapping 和 exact-960 structural codec mechanics
+  已闭合，但这仍不是 prediction E2E 或 capacity evidence：input membership、execution-manifest
+  authority、derived mapping、recognizer runtime、actual 960、scoring 与 effect 仍未验证或未执行。
+  所有这些仍只是 `NON_AUTHORITATIVE_MECHANICS_ONLY`，不构成 recognizer 效果、sealed holdout
+  或 C1 exit 证据。
   origin authentication、完整 trusted RFC-8785
   builder、formal namespace/covert audit 与 formal corpus 执行仍缺失；1024-authority
-  worst-case wall-time/RSS 也尚未资格化。下一刀是独立的 V2 exact-960 prediction archive
-  structural codec；它必须保持 V1/V2 identity 边界，不能把单例 mechanics 或 synthetic
-  outcome 冒充真实 E2E。recognizer CLI、formal scoring evaluator 与 actual unsealed
-  960-case replay 仍在其后；在完整
+  worst-case wall-time/RSS 也尚未资格化。下一刀是
+  `unsealed_prediction_evaluator_v2_structural_720_240_partition_replay`；
+  它必须消费 V2 archive identity 并保持 evaluator-side labels 与 recognizer wire 分离，不能把
+  synthetic exact-960 codec fixture 冒充 actual run、score 或效果。recognizer CLI、formal
+  scoring evaluator 与 actual unsealed 960-case replay 仍在其后；在完整
   standard-error 语义实现前，formal selector 只允许 `absolute_bound`；
 - seal → prediction commitment → reveal → consumed 的 immutable lifecycle model、
   answer salted-commitment opening 校验和进程内原子防分叉 guard，以及 read-only

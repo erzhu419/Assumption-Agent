@@ -1159,6 +1159,7 @@ def phase2b_preregistration_report() -> dict[str, object]:
         phase2b_exact_transform_semantics_v1,
         phase2b_projection_compiler,
         phase2b_recognizer_prediction_archive_v1,
+        phase2b_recognizer_prediction_archive_v2,
         phase2b_recognizer_prediction_v2,
         phase2b_runner,
         phase2b_selector,
@@ -1571,10 +1572,65 @@ def phase2b_preregistration_report() -> dict[str, object]:
         "recognizer_prediction_row_v2_formal_covert_audit": False,
         "recognizer_prediction_row_v2_sealed_holdout_eligible": False,
         "recognizer_prediction_row_v2_c1_exit_evidence": False,
-        "v2_full_960_prediction_archive_structural_codec_implemented": False,
+        "public_prediction_run_context_v2_schema_version": (
+            phase2b_recognizer_prediction_archive_v2.PUBLIC_PREDICTION_RUN_CONTEXT_V2_SCHEMA_VERSION
+        ),
+        "public_prediction_run_context_v2_schema_id": (
+            phase2b_recognizer_prediction_archive_v2.PUBLIC_PREDICTION_RUN_CONTEXT_V2_SCHEMA_ID
+        ),
+        "public_recognizer_prediction_record_v2_schema_version": (
+            phase2b_recognizer_prediction_archive_v2.PUBLIC_RECOGNIZER_PREDICTION_RECORD_V2_SCHEMA_VERSION
+        ),
+        "public_recognizer_prediction_record_v2_schema_id": (
+            phase2b_recognizer_prediction_archive_v2.PUBLIC_RECOGNIZER_PREDICTION_RECORD_V2_SCHEMA_ID
+        ),
+        "recognizer_prediction_archive_v2_version": (
+            phase2b_recognizer_prediction_archive_v2.RECOGNIZER_PREDICTION_ARCHIVE_V2_VERSION
+        ),
+        "recognizer_prediction_archive_v2_policy_id": (
+            phase2b_recognizer_prediction_archive_v2.RECOGNIZER_PREDICTION_ARCHIVE_POLICY_ID_V2
+        ),
+        "recognizer_prediction_archive_v2_wire_version": (
+            phase2b_recognizer_prediction_archive_v2.PREDICTION_ARCHIVE_WIRE_VERSION_V2
+        ),
+        "recognizer_prediction_archive_v2_magic_hex": (
+            phase2b_recognizer_prediction_archive_v2.PREDICTION_ARCHIVE_MAGIC_V2.hex()
+        ),
+        "recognizer_prediction_archive_v2_claim_level": (
+            phase2b_trusted_wire_v1.NON_AUTHORITATIVE_CLAIM_LEVEL
+        ),
+        "v2_full_960_prediction_archive_structural_codec_implemented": True,
+        "recognizer_prediction_archive_v2_independent_identity_mechanics_implemented": True,
+        "recognizer_prediction_archive_v2_closed_context_schema_mechanics_implemented": True,
+        "recognizer_prediction_archive_v2_closed_record_schema_mechanics_implemented": True,
+        "recognizer_prediction_archive_v2_bounded_canonical_framing_mechanics_implemented": True,
+        "recognizer_prediction_archive_v2_ordered_row_root_coverage_mechanics_implemented": True,
+        "recognizer_prediction_archive_v2_exact_960_count_gate_mechanics_implemented": True,
+        "recognizer_prediction_archive_v2_atomic_fail_closed_builder_mechanics_implemented": True,
+        "recognizer_prediction_archive_v2_cross_version_rejection_mechanics_implemented": True,
+        "synthetic_exact_960_prediction_archive_v2_structural_mechanics_verified": True,
+        "recognizer_prediction_archive_v2_input_archive_membership_verified": False,
+        "recognizer_prediction_archive_v2_batch_policy_membership_verified": False,
+        "recognizer_prediction_archive_v2_source_registry_projection_verified": False,
+        "recognizer_prediction_archive_v2_source_public_disjoint_verified": False,
+        "recognizer_prediction_archive_v2_single_live_allocation_verified": False,
+        "recognizer_prediction_archive_v2_secret_custodian_replay_verified": False,
+        "recognizer_prediction_archive_v2_execution_manifest_authority_verified": False,
+        "recognizer_prediction_archive_v2_derived_mapping_verified": False,
+        "recognizer_prediction_archive_v2_recognizer_executed": False,
+        "recognizer_prediction_archive_v2_runtime_executed": False,
+        "recognizer_prediction_archive_v2_actual_960_case_run_verified": False,
+        "recognizer_prediction_archive_v2_recognizer_capacity_evidence": False,
+        "recognizer_prediction_archive_v2_origin_authenticated": False,
+        "recognizer_prediction_archive_v2_formal_uuid_audit": False,
+        "recognizer_prediction_archive_v2_formal_covert_audit": False,
+        "recognizer_prediction_archive_v2_sealed_holdout_eligible": False,
+        "recognizer_prediction_archive_v2_prediction_scored": False,
+        "recognizer_prediction_archive_v2_effect_evidence": False,
+        "recognizer_prediction_archive_v2_c1_exit_evidence": False,
         "v2_unsealed_prediction_evaluator_implemented": False,
         "next_phase2b_construction_slice": (
-            "recognizer_prediction_archive_v2_exact_960_structural_codec"
+            "unsealed_prediction_evaluator_v2_structural_720_240_partition_replay"
         ),
         "real_positive_prediction_end_to_end_replay_implemented": False,
         "recognizer_prediction_capacity_evidence": False,
@@ -1650,6 +1706,10 @@ def phase2b_preregistration_report() -> dict[str, object]:
                 (
                     "recognizer_prediction_archive_mechanics",
                     phase2b_recognizer_prediction_archive_v1,
+                ),
+                (
+                    "recognizer_prediction_archive_mechanics_v2",
+                    phase2b_recognizer_prediction_archive_v2,
                 ),
                 (
                     "recognizer_prediction_row_mapping_mechanics_v2",

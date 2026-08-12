@@ -154,7 +154,7 @@ Both bounded profiles
     │   └─ V1 unsealed 720/240 structural evaluator          [not scored]
     └─ exact V2 input-row path
         → ephemeral V2 prediction outcome                    [one-case mechanics]
-        → exact-960 V2 prediction archive structural codec   [not implemented]
+        → exact-960 V2 prediction archive structural codec   [mechanics only]
         └─ V2 unsealed prediction evaluator                  [not implemented]
   → recognizer CLI + formal scoring/sealed evaluator          [not implemented]
 ```
@@ -307,10 +307,18 @@ archive 以及 derived-bridge compilation/decision parity。`phase2b_recognizer_
 typed replay、public registry adapter、冻结 exact derived bridge 和封闭 decision/reason map，
 返回 privately issued、process-local、ephemeral V2 outcome 与通用 `PredictionBundle`。V1 类型
 被 fail-closed 拒绝；单一 constructed positive regression 保持 decision、bundle identity、
-family/binding/scales 与 input/protocol/freeze roots parity。因此旧 payload-size P0 和 V2 单行
-mapping mechanics 已在该单例闭合，但不能外推为 recognizer/prediction E2E 或 capacity；durable
-receipt、完整 V2 960 prediction archive、runtime、actual 960、scoring、effect 与 C1 均未实现或
-未执行。下一刀是独立的 exact-960 V2 prediction archive structural codec，随后才是 CLI、formal
+family/binding/scales 与 input/protocol/freeze roots parity。独立的
+`phase2b_recognizer_prediction_archive_v2.py` 使用 V2-only context/record/archive identities、
+`HGP2PA2\0` magic、封闭 16-field manifest 和 960 个 bounded accepted-JCS length-framed records；
+ordered input-row/record roots 与 input archive wire order 被绑定；builder 在合同覆盖的 validation、
+mapping、encoding 或 public-decoding 失败时整档 abstain。
+public decoder 的最强结论仅是 structural archive、canonical record framing、closed record schema
+与 ordered row-root coverage。1 ANSWER + 1 ANSWER_SET + 958 ABSTAIN 的 synthetic fixture 只验证
+结构 codec，不是 actual 960 run。因此旧 payload-size P0、V2 单行 mapping 和 exact-960 archive
+structural mechanics 已闭合，但不能外推为 recognizer/prediction E2E 或 capacity；input
+membership、manifest authority、derived mapping、runtime、actual 960、scoring、effect 与 C1 均未
+验证或执行。下一刀是
+`unsealed_prediction_evaluator_v2_structural_720_240_partition_replay`，随后才是 CLI、formal
 scoring 与 actual unsealed run。
 
 这些 receipts 仍恒为 `NON_AUTHORITATIVE_MECHANICS_ONLY`。pairwise distinct 不证明 IKM

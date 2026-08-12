@@ -71,6 +71,16 @@ from hegel_machine.phase2b_recognizer_prediction_archive_v1 import (
     RECOGNIZER_PREDICTION_ARCHIVE_POLICY_ID,
     RECOGNIZER_PREDICTION_ARCHIVE_SCHEMA_VERSION,
 )
+from hegel_machine.phase2b_recognizer_prediction_archive_v2 import (
+    PREDICTION_ARCHIVE_MAGIC_V2,
+    PREDICTION_ARCHIVE_WIRE_VERSION_V2,
+    PUBLIC_PREDICTION_RUN_CONTEXT_V2_SCHEMA_ID,
+    PUBLIC_PREDICTION_RUN_CONTEXT_V2_SCHEMA_VERSION,
+    PUBLIC_RECOGNIZER_PREDICTION_RECORD_V2_SCHEMA_ID,
+    PUBLIC_RECOGNIZER_PREDICTION_RECORD_V2_SCHEMA_VERSION,
+    RECOGNIZER_PREDICTION_ARCHIVE_POLICY_ID_V2,
+    RECOGNIZER_PREDICTION_ARCHIVE_V2_VERSION,
+)
 from hegel_machine.phase2b_recognizer_prediction_v2 import (
     PUBLIC_RECOGNIZER_PREDICTION_OUTCOME_V2_SCHEMA_ID,
     PUBLIC_RECOGNIZER_PREDICTION_OUTCOME_V2_SCHEMA_VERSION,
@@ -895,12 +905,74 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "recognizer_prediction_row_v2_formal_covert_audit",
         "recognizer_prediction_row_v2_sealed_holdout_eligible",
         "recognizer_prediction_row_v2_c1_exit_evidence",
-        "v2_full_960_prediction_archive_structural_codec_implemented",
         "v2_unsealed_prediction_evaluator_implemented",
     ):
         assert report[field_name] is False
+    assert report["public_prediction_run_context_v2_schema_version"] == (
+        PUBLIC_PREDICTION_RUN_CONTEXT_V2_SCHEMA_VERSION
+    )
+    assert report["public_prediction_run_context_v2_schema_id"] == (
+        PUBLIC_PREDICTION_RUN_CONTEXT_V2_SCHEMA_ID
+    )
+    assert report["public_recognizer_prediction_record_v2_schema_version"] == (
+        PUBLIC_RECOGNIZER_PREDICTION_RECORD_V2_SCHEMA_VERSION
+    )
+    assert report["public_recognizer_prediction_record_v2_schema_id"] == (
+        PUBLIC_RECOGNIZER_PREDICTION_RECORD_V2_SCHEMA_ID
+    )
+    assert report["recognizer_prediction_archive_v2_version"] == (
+        RECOGNIZER_PREDICTION_ARCHIVE_V2_VERSION
+    )
+    assert report["recognizer_prediction_archive_v2_policy_id"] == (
+        RECOGNIZER_PREDICTION_ARCHIVE_POLICY_ID_V2
+    )
+    assert report["recognizer_prediction_archive_v2_wire_version"] == (
+        PREDICTION_ARCHIVE_WIRE_VERSION_V2
+    )
+    assert report["recognizer_prediction_archive_v2_magic_hex"] == (
+        PREDICTION_ARCHIVE_MAGIC_V2.hex()
+    )
+    assert PREDICTION_ARCHIVE_MAGIC_V2.hex() == "4847503250413200"
+    assert report["recognizer_prediction_archive_v2_claim_level"] == (
+        TRUSTED_WIRE_CLAIM_LEVEL
+    )
+    for field_name in (
+        "v2_full_960_prediction_archive_structural_codec_implemented",
+        "recognizer_prediction_archive_v2_independent_identity_mechanics_implemented",
+        "recognizer_prediction_archive_v2_closed_context_schema_mechanics_implemented",
+        "recognizer_prediction_archive_v2_closed_record_schema_mechanics_implemented",
+        "recognizer_prediction_archive_v2_bounded_canonical_framing_mechanics_implemented",
+        "recognizer_prediction_archive_v2_ordered_row_root_coverage_mechanics_implemented",
+        "recognizer_prediction_archive_v2_exact_960_count_gate_mechanics_implemented",
+        "recognizer_prediction_archive_v2_atomic_fail_closed_builder_mechanics_implemented",
+        "recognizer_prediction_archive_v2_cross_version_rejection_mechanics_implemented",
+        "synthetic_exact_960_prediction_archive_v2_structural_mechanics_verified",
+    ):
+        assert report[field_name] is True
+    for field_name in (
+        "recognizer_prediction_archive_v2_input_archive_membership_verified",
+        "recognizer_prediction_archive_v2_batch_policy_membership_verified",
+        "recognizer_prediction_archive_v2_source_registry_projection_verified",
+        "recognizer_prediction_archive_v2_source_public_disjoint_verified",
+        "recognizer_prediction_archive_v2_single_live_allocation_verified",
+        "recognizer_prediction_archive_v2_secret_custodian_replay_verified",
+        "recognizer_prediction_archive_v2_execution_manifest_authority_verified",
+        "recognizer_prediction_archive_v2_derived_mapping_verified",
+        "recognizer_prediction_archive_v2_recognizer_executed",
+        "recognizer_prediction_archive_v2_runtime_executed",
+        "recognizer_prediction_archive_v2_actual_960_case_run_verified",
+        "recognizer_prediction_archive_v2_recognizer_capacity_evidence",
+        "recognizer_prediction_archive_v2_origin_authenticated",
+        "recognizer_prediction_archive_v2_formal_uuid_audit",
+        "recognizer_prediction_archive_v2_formal_covert_audit",
+        "recognizer_prediction_archive_v2_sealed_holdout_eligible",
+        "recognizer_prediction_archive_v2_prediction_scored",
+        "recognizer_prediction_archive_v2_effect_evidence",
+        "recognizer_prediction_archive_v2_c1_exit_evidence",
+    ):
+        assert report[field_name] is False
     assert report["next_phase2b_construction_slice"] == (
-        "recognizer_prediction_archive_v2_exact_960_structural_codec"
+        "unsealed_prediction_evaluator_v2_structural_720_240_partition_replay"
     )
     for field_name in (
         "real_positive_prediction_end_to_end_replay_implemented",
@@ -977,6 +1049,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "recognizer_input_archive_mechanics",
         "recognizer_input_archive_mechanics_v2",
         "recognizer_prediction_archive_mechanics",
+        "recognizer_prediction_archive_mechanics_v2",
         "recognizer_prediction_row_mapping_mechanics_v2",
         "runner",
         "selector",
@@ -991,6 +1064,12 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "unsealed_prediction_structural_evaluator",
         "wire",
     }
+    assert report["component_source_ids"][
+        "recognizer_prediction_archive_mechanics_v2"
+    ] == (
+        "sha256:"
+        "ecfe3ff599f10deae845a32cb979209d0591727bd36ef98583194412d74cb04a"
+    )
     assert report["component_source_ids"][
         "recognizer_prediction_row_mapping_mechanics_v2"
     ] == (
