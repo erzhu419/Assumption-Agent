@@ -262,17 +262,23 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
   15,169-byte payload-cap headroom，并在 65,536-byte fixed envelope 中产生 15,201-byte
   secret padding。单一 constructed positive regression 已重放 exact transform、V2
   recognizer-input archive，并保持
-  derived-bridge compilation 与 decision parity。因此旧的 V1 payload-size P0 已在这一例
-  mechanics 上闭合，但这不是 prediction E2E 或 capacity evidence：现有 prediction archive V1
-  以 exact input type/policy 拒绝 Archive V2，尚无 V2 prediction mapping、recognizer runtime、
-  actual 960、scoring 或 effect。所有这些仍只是 `NON_AUTHORITATIVE_MECHANICS_ONLY`，不构成
-  recognizer 效果、sealed holdout 或 C1 exit 证据。
+  derived-bridge compilation 与 decision parity。新增的
+  `phase2b_recognizer_prediction_v2.py` 直接消费 exact `TrustedRecognizerInputRowV2` 与当前
+  `ExecutionFreezeManifest`，重放 compact typed authority、投影 public registry、调用冻结的
+  exact derived bridge，并以封闭 reason map 产生 privately issued、process-local、ephemeral
+  V2 outcome 与通用 `PredictionBundle`；V1 input/prediction 类型被 fail-closed 拒绝。单一
+  constructed positive regression 进一步保持 decision、bundle identity、family/binding/scales
+  以及 input/protocol/freeze roots parity。因此旧的 V1 payload-size P0 与 V2 单行 prediction
+  mapping mechanics 已在这一例闭合，但这不是 prediction E2E 或 capacity evidence：尚无
+  durable V2 prediction receipt、完整 V2 960-row archive、recognizer runtime、actual 960、
+  scoring 或 effect。所有这些仍只是 `NON_AUTHORITATIVE_MECHANICS_ONLY`，不构成 recognizer
+  效果、sealed holdout 或 C1 exit 证据。
   origin authentication、完整 trusted RFC-8785
   builder、formal namespace/covert audit 与 formal corpus 执行仍缺失；1024-authority
-  worst-case wall-time/RSS 也尚未资格化。下一刀是 V2 prediction row mapping integration；它必须
-  直接消费 `TrustedRecognizerInputRowV2` 并保持 V1/V2 identity 边界，不能把单例 mechanics 或
-  synthetic outcome 冒充真实 E2E。完整 V2 prediction archive、recognizer CLI、formal scoring
-  evaluator 与 actual unsealed 960-case replay 仍在其后；在完整
+  worst-case wall-time/RSS 也尚未资格化。下一刀是独立的 V2 exact-960 prediction archive
+  structural codec；它必须保持 V1/V2 identity 边界，不能把单例 mechanics 或 synthetic
+  outcome 冒充真实 E2E。recognizer CLI、formal scoring evaluator 与 actual unsealed
+  960-case replay 仍在其后；在完整
   standard-error 语义实现前，formal selector 只允许 `absolute_bound`；
 - seal → prediction commitment → reveal → consumed 的 immutable lifecycle model、
   answer salted-commitment opening 校验和进程内原子防分叉 guard，以及 read-only

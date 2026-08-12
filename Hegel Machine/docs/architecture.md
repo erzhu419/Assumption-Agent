@@ -148,9 +148,14 @@ Both bounded profiles
   └─ compact V2 codec + batch `/3` + public replay + V2 input archive
                                                             [one-case mechanics]
   → frozen derived bridge → PredictionBundle mapping gate    [mechanics only]
-  → run context + 960 independently framed V1 prediction rows[mechanics only]
-  → V2 prediction row mapping                                [not implemented]
-  → unsealed 720/240 structural evaluator                    [not scored]
+    ├─ V1 input/archive path
+    │   → run context + 960 independently framed V1 prediction rows
+    │                                                       [mechanics only]
+    │   └─ V1 unsealed 720/240 structural evaluator          [not scored]
+    └─ exact V2 input-row path
+        → ephemeral V2 prediction outcome                    [one-case mechanics]
+        → exact-960 V2 prediction archive structural codec   [not implemented]
+        └─ V2 unsealed prediction evaluator                  [not implemented]
   → recognizer CLI + formal scoring/sealed evaluator          [not implemented]
 ```
 
@@ -297,12 +302,16 @@ exhaustive 且与同一 960 root 相等，成功也只返回
 历史 V1 verbose profile 的 architecture P0 是 `125,582 > 65,424`。compact V2 对同一 exact
 logical authority 的 one-case regression 得到 50,255-byte payload、15,169-byte payload-cap
 headroom、15,201-byte secret padding 和固定 65,536-byte envelope，并重放 exact transform、V2 input
-archive 以及 derived-bridge compilation/decision parity。因此旧 payload-size P0 已在该单例
-mechanics 上闭合，但不能外推为 recognizer/prediction E2E 或 capacity：V1 prediction archive
-严格拒绝 V2 input archive 的 type/policy，V2 prediction mapping、runtime、actual 960、scoring、
-effect 与 C1 均未实现或未执行。下一刀是直接消费 `TrustedRecognizerInputRowV2` 的 V2
-prediction row mapping，随后才是独立 V2 960 prediction archive、CLI、formal scoring 与 actual
-unsealed run。
+archive 以及 derived-bridge compilation/decision parity。`phase2b_recognizer_prediction_v2.py`
+现已直接消费 exact `TrustedRecognizerInputRowV2` 与当前 `ExecutionFreezeManifest`，经 compact
+typed replay、public registry adapter、冻结 exact derived bridge 和封闭 decision/reason map，
+返回 privately issued、process-local、ephemeral V2 outcome 与通用 `PredictionBundle`。V1 类型
+被 fail-closed 拒绝；单一 constructed positive regression 保持 decision、bundle identity、
+family/binding/scales 与 input/protocol/freeze roots parity。因此旧 payload-size P0 和 V2 单行
+mapping mechanics 已在该单例闭合，但不能外推为 recognizer/prediction E2E 或 capacity；durable
+receipt、完整 V2 960 prediction archive、runtime、actual 960、scoring、effect 与 C1 均未实现或
+未执行。下一刀是独立的 exact-960 V2 prediction archive structural codec，随后才是 CLI、formal
+scoring 与 actual unsealed run。
 
 这些 receipts 仍恒为 `NON_AUTHORITATIVE_MECHANICS_ONLY`。pairwise distinct 不证明 IKM
 独立性；raw-envelope diagnostic 不验证 batch membership 或 secret padding；supplied-secret

@@ -225,7 +225,7 @@ projection, source-public and single-allocation verification, secret custody, or
 formal audit, sealed eligibility, recognizer/prediction execution, capacity, and C1
 remain false.
 
-The next prediction-archive slice remains non-authoritative mechanics. An exact
+The V1 prediction-archive slice remains non-authoritative mechanics. An exact
 `PublicRunContextV1` binds the decoded input archive ID/SHA, current protocol ID,
 exact execution-freeze-manifest commitment, ordered input-row root, and expected
 count 960. Each of the 960 public prediction records is independently length-
@@ -254,11 +254,17 @@ authority in a 50,255-byte payload with 15,169 bytes of payload-cap headroom and
 replays the exact transform and V2 recognizer-input archive and preserves derived-bridge compilation
 and decision parity. This closes the old payload-size P0 for one mechanics case only;
 it is not prediction E2E or capacity evidence. The V1 prediction archive rejects a
-V2 input archive by exact type and policy, and there is no V2 prediction mapping,
-recognizer runtime, actual 960-case execution, scoring, or effect. The next slice is
-V2 prediction row-mapping integration over `TrustedRecognizerInputRowV2`, followed
-later by an independent V2 960-row prediction archive, CLI, formal scoring, and
-actual unsealed replay.
+V2 input archive by exact type and policy. The independent V2 single-row mapper now
+consumes an exact `TrustedRecognizerInputRowV2` and current execution-freeze manifest,
+then uses compact typed replay, the adjacent public-registry adapter, the frozen exact
+derived bridge, and a closed decision/reason map to return a privately issued,
+process-local, ephemeral V2 outcome plus the generic `PredictionBundle`. V1 types are
+rejected fail-closed. The same constructed positive regression preserves decision,
+bundle identity, family/binding/scales, and input/protocol/freeze-root parity. There
+is still no durable V2 prediction receipt, full V2 960-row archive, recognizer runtime,
+actual 960-case execution, scoring, or effect. The next slice is an independent
+exact-960 V2 prediction-archive structural codec, followed later by CLI, formal
+scoring, and actual unsealed replay.
 
 Pairwise distinct IKM values do not attest independent generation. The raw-envelope
 diagnostic verifies typed payload identity and direct transform replay but not batch

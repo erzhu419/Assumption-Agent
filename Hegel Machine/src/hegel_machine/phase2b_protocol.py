@@ -1159,6 +1159,7 @@ def phase2b_preregistration_report() -> dict[str, object]:
         phase2b_exact_transform_semantics_v1,
         phase2b_projection_compiler,
         phase2b_recognizer_prediction_archive_v1,
+        phase2b_recognizer_prediction_v2,
         phase2b_runner,
         phase2b_selector,
         phase2b_recognizer_input_archive_v1,
@@ -1530,8 +1531,50 @@ def phase2b_preregistration_report() -> dict[str, object]:
         "recognizer_input_archive_v2_prediction_archive_evaluated": False,
         "recognizer_input_archive_v2_capacity_evidence": False,
         "recognizer_input_archive_v2_c1_exit_evidence": False,
+        "public_recognizer_prediction_outcome_v2_schema_version": (
+            phase2b_recognizer_prediction_v2.PUBLIC_RECOGNIZER_PREDICTION_OUTCOME_V2_SCHEMA_VERSION
+        ),
+        "public_recognizer_prediction_outcome_v2_schema_id": (
+            phase2b_recognizer_prediction_v2.PUBLIC_RECOGNIZER_PREDICTION_OUTCOME_V2_SCHEMA_ID
+        ),
+        "recognizer_prediction_row_v2_policy_id": (
+            phase2b_recognizer_prediction_v2.RECOGNIZER_PREDICTION_ROW_POLICY_ID_V2
+        ),
+        "recognizer_prediction_row_v2_claim_level": (
+            phase2b_trusted_wire_v1.NON_AUTHORITATIVE_CLAIM_LEVEL
+        ),
+        "public_recognizer_prediction_outcome_v2_ephemeral_schema_mechanics_implemented": True,
+        "v2_single_row_prediction_mapping_mechanics_implemented": True,
+        "recognizer_prediction_row_v2_exact_input_and_freeze_binding_mechanics_implemented": True,
+        "recognizer_prediction_row_v2_compact_typed_replay_mechanics_implemented": True,
+        "recognizer_prediction_row_v2_public_registry_adapter_mechanics_implemented": True,
+        "recognizer_prediction_row_v2_exact_derived_bridge_mechanics_implemented": True,
+        "recognizer_prediction_row_v2_closed_decision_reason_mapping_mechanics_implemented": True,
+        "recognizer_prediction_row_v2_cross_version_rejection_mechanics_implemented": True,
+        "recognizer_prediction_row_v2_private_ephemeral_issue_mechanics_implemented": True,
+        "real_positive_compact_v2_single_row_prediction_mapping_mechanics_verified": True,
+        "real_positive_compact_v2_prediction_decision_parity_implemented": True,
+        "real_positive_compact_v2_prediction_bundle_identity_parity_implemented": True,
+        "real_positive_compact_v2_prediction_family_binding_scale_parity_implemented": True,
+        "real_positive_compact_v2_prediction_input_protocol_freeze_root_parity_implemented": True,
+        "recognizer_prediction_row_v2_durable_receipt_implemented": False,
+        "recognizer_prediction_row_v2_input_archive_membership_verified": False,
+        "recognizer_prediction_row_v2_batch_policy_membership_verified": False,
+        "recognizer_prediction_row_v2_execution_manifest_authority_verified": False,
+        "recognizer_prediction_row_v2_recognizer_executed": False,
+        "recognizer_prediction_row_v2_runtime_executed": False,
+        "recognizer_prediction_row_v2_capacity_evidence": False,
+        "recognizer_prediction_row_v2_prediction_scoring_implemented": False,
+        "recognizer_prediction_row_v2_effect_evidence": False,
+        "recognizer_prediction_row_v2_origin_authenticated": False,
+        "recognizer_prediction_row_v2_formal_uuid_audit": False,
+        "recognizer_prediction_row_v2_formal_covert_audit": False,
+        "recognizer_prediction_row_v2_sealed_holdout_eligible": False,
+        "recognizer_prediction_row_v2_c1_exit_evidence": False,
+        "v2_full_960_prediction_archive_structural_codec_implemented": False,
+        "v2_unsealed_prediction_evaluator_implemented": False,
         "next_phase2b_construction_slice": (
-            "recognizer_prediction_v2_row_mapping_integration"
+            "recognizer_prediction_archive_v2_exact_960_structural_codec"
         ),
         "real_positive_prediction_end_to_end_replay_implemented": False,
         "recognizer_prediction_capacity_evidence": False,
@@ -1607,6 +1650,10 @@ def phase2b_preregistration_report() -> dict[str, object]:
                 (
                     "recognizer_prediction_archive_mechanics",
                     phase2b_recognizer_prediction_archive_v1,
+                ),
+                (
+                    "recognizer_prediction_row_mapping_mechanics_v2",
+                    phase2b_recognizer_prediction_v2,
                 ),
                 (
                     "trusted_wire_keyed_batch_mechanics",
