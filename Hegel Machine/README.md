@@ -287,9 +287,15 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
   manifest 接收 sorted-unique 720/240 labels，验证 disjoint 与 set-exhaustive coverage，并分别
   绑定 partition roots 和 V2 archive 的 ordered root；每次成功路径只以一次 public V2 replay
   的 canonical result 为权威。它只返回 `STRUCTURALLY_COMPLETE_NOT_SCORED`，synthetic replay
-  不是 actual 960、runtime、capacity、score 或效果证据。下一刀是
-  `strict_recognizer_cli_v2_structural_input_output_contract`；formal scoring evaluator 与 actual
-  unsealed 960-case replay 仍在其后；在完整
+  不是 actual 960、runtime、capacity、score 或效果证据。顶层
+  `phase2b-verify-v2-structure` 已实现为只读 structural verifier：它只接收两个 canonical
+  absolute、no-follow、single-link regular files，以 bounded stable FD read 在任何 decode 前读完
+  两档，然后分别且仅一次调用 public V2 input/prediction archive decoder，并绑定 context archive
+  ID/SHA/batch/policy、ordered row IDs 与七个逐位置 input roots。成功只输出一行 canonical compact
+  JSON，失败只输出 generic atomic JSON 并以 exit 2 结束；它不生成 output artifact，也不是
+  functional recognizer entrypoint。membership/authority/custody、derived mapping、recognizer/runtime、
+  actual 960、capacity、scoring、effect 与 C1 全部仍为 false。下一刀是
+  `formal_unsealed_prediction_scoring_contract_v2`；actual unsealed 960-case replay 仍在其后；在完整
   standard-error 语义实现前，formal selector 只允许 `absolute_bound`；
 - seal → prediction commitment → reveal → consumed 的 immutable lifecycle model、
   answer salted-commitment opening 校验和进程内原子防分叉 guard，以及 read-only

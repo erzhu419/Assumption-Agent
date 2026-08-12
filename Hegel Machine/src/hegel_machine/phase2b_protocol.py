@@ -1163,6 +1163,7 @@ def phase2b_preregistration_report() -> dict[str, object]:
         phase2b_recognizer_prediction_v2,
         phase2b_runner,
         phase2b_selector,
+        phase2b_strict_recognizer_cli_v2,
         phase2b_recognizer_input_archive_v1,
         phase2b_recognizer_input_archive_v2,
         phase2b_trusted_wire_batch_v1,
@@ -1672,8 +1673,54 @@ def phase2b_preregistration_report() -> dict[str, object]:
         "unsealed_prediction_evaluator_v2_prediction_scored": False,
         "unsealed_prediction_evaluator_v2_effect_evidence": False,
         "unsealed_prediction_evaluator_v2_c1_exit_evidence": False,
+        "strict_recognizer_cli_v2_command": (
+            phase2b_strict_recognizer_cli_v2.STRICT_RECOGNIZER_CLI_V2_COMMAND
+        ),
+        "strict_recognizer_cli_v2_schema_version": (
+            phase2b_strict_recognizer_cli_v2.STRICT_RECOGNIZER_CLI_V2_SCHEMA_VERSION
+        ),
+        "strict_recognizer_cli_v2_schema_id": (
+            phase2b_strict_recognizer_cli_v2.STRICT_RECOGNIZER_CLI_V2_SCHEMA_ID
+        ),
+        "strict_recognizer_cli_v2_policy_id": (
+            phase2b_strict_recognizer_cli_v2.STRICT_RECOGNIZER_CLI_V2_POLICY_ID
+        ),
+        "strict_recognizer_cli_v2_claim_level": (
+            phase2b_trusted_wire_v1.NON_AUTHORITATIVE_CLAIM_LEVEL
+        ),
+        "strict_recognizer_cli_v2_structural_input_output_contract_implemented": True,
+        "strict_recognizer_cli_v2_read_only_no_output_artifact_mechanics_implemented": True,
+        "strict_recognizer_cli_v2_canonical_absolute_nofollow_single_link_regular_file_mechanics_implemented": True,
+        "strict_recognizer_cli_v2_bounded_stable_fd_read_before_decode_mechanics_implemented": True,
+        "strict_recognizer_cli_v2_single_public_v2_input_archive_replay_mechanics_implemented": True,
+        "strict_recognizer_cli_v2_single_public_v2_prediction_archive_replay_mechanics_implemented": True,
+        "strict_recognizer_cli_v2_cross_archive_context_binding_mechanics_implemented": True,
+        "strict_recognizer_cli_v2_ordered_row_identity_binding_mechanics_implemented": True,
+        "strict_recognizer_cli_v2_seven_input_root_columns_positional_binding_mechanics_implemented": True,
+        "strict_recognizer_cli_v2_generic_atomic_fail_closed_json_mechanics_implemented": True,
+        "strict_recognizer_cli_v2_input_archive_membership_verified": False,
+        "strict_recognizer_cli_v2_batch_policy_membership_verified": False,
+        "strict_recognizer_cli_v2_source_registry_projection_verified": False,
+        "strict_recognizer_cli_v2_source_public_disjoint_verified": False,
+        "strict_recognizer_cli_v2_single_live_allocation_verified": False,
+        "strict_recognizer_cli_v2_secret_custodian_replay_verified": False,
+        "strict_recognizer_cli_v2_execution_manifest_authority_verified": False,
+        "strict_recognizer_cli_v2_partition_manifest_authority_verified": False,
+        "strict_recognizer_cli_v2_derived_mapping_verified": False,
+        "strict_recognizer_cli_v2_recognizer_executed": False,
+        "strict_recognizer_cli_v2_runtime_executed": False,
+        "strict_recognizer_cli_v2_actual_960_case_run_verified": False,
+        "strict_recognizer_cli_v2_recognizer_capacity_evidence": False,
+        "strict_recognizer_cli_v2_origin_authenticated": False,
+        "strict_recognizer_cli_v2_formal_uuid_audit": False,
+        "strict_recognizer_cli_v2_formal_covert_audit": False,
+        "strict_recognizer_cli_v2_sealed_holdout_eligible": False,
+        "strict_recognizer_cli_v2_scoring_performed": False,
+        "strict_recognizer_cli_v2_prediction_scored": False,
+        "strict_recognizer_cli_v2_effect_evidence": False,
+        "strict_recognizer_cli_v2_c1_exit_evidence": False,
         "next_phase2b_construction_slice": (
-            "strict_recognizer_cli_v2_structural_input_output_contract"
+            "formal_unsealed_prediction_scoring_contract_v2"
         ),
         "real_positive_prediction_end_to_end_replay_implemented": False,
         "recognizer_prediction_capacity_evidence": False,
@@ -1757,6 +1804,10 @@ def phase2b_preregistration_report() -> dict[str, object]:
                 (
                     "recognizer_prediction_row_mapping_mechanics_v2",
                     phase2b_recognizer_prediction_v2,
+                ),
+                (
+                    "strict_recognizer_cli_v2_structural_verifier",
+                    phase2b_strict_recognizer_cli_v2,
                 ),
                 (
                     "trusted_wire_keyed_batch_mechanics",

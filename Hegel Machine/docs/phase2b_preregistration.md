@@ -288,9 +288,18 @@ evaluation uses one public V2 archive replay and treats that canonical replay as
 authoritative. Success is only `STRUCTURALLY_COMPLETE_NOT_SCORED`. The synthetic
 partition replay does not authenticate the partition manifest and does not
 evidence membership, runtime, an actual 960-case run, capacity, scoring, effect,
-or C1. The next slice is
-`strict_recognizer_cli_v2_structural_input_output_contract`, followed later by
-formal scoring and actual unsealed replay.
+or C1. The top-level `phase2b-verify-v2-structure` command is now a read-only
+structural verifier. It accepts exactly two canonical absolute, no-follow,
+single-link regular files; completes bounded stable FD reads for both before any
+decode; invokes each public V2 input/prediction archive decoder exactly once; and
+binds context archive ID/SHA/batch/policy, ordered row IDs, and the seven input-root
+columns positionally. Success is one canonical compact JSON line; failure is one
+generic atomic stderr JSON line with exit 2. It creates no output artifact and is
+not a functional recognizer entrypoint. Membership/authority/custody, derived
+mapping, recognizer/runtime execution, actual 960, capacity, scoring, effect, and
+C1 claims remain false. The next slice is
+`formal_unsealed_prediction_scoring_contract_v2`, followed later by actual
+unsealed replay.
 
 Pairwise distinct IKM values do not attest independent generation. The raw-envelope
 diagnostic verifies typed payload identity and direct transform replay but not batch

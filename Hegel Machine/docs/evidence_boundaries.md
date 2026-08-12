@@ -146,17 +146,21 @@ raw-envelope diagnostic 不验证 batch membership 或 secret padding，supplied
 给定 authorities/run/IKM 可重建同一 bytes。所有 typed replay receipts 仍明确是
 `NON_AUTHORITATIVE_MECHANICS_ONLY`。因此 origin authentication、完整 trusted RFC8785 builder、
 formal 字段/UUID namespace 审计、
-720+240 formal 资源合同、recognizer CLI、formal scoring evaluator、sealed data、runtime/custodian 和
-C1 exit 仍缺失；宽泛 projection compiler、完整 typed pipeline、formal covert audit 与 formal
-holdout 状态继续为 false。入口虽冻结 1..1024 authority cap，最大规模的 wall-time/RSS 尚未
+720+240 formal 资源合同、functional recognizer entrypoint、formal scoring evaluator、sealed data、
+runtime/custodian 和 C1 exit 仍缺失；宽泛 projection compiler、完整 typed pipeline、formal covert
+audit 与 formal holdout 状态继续为 false。入口虽冻结 1..1024 authority cap，最大规模的 wall-time/RSS 尚未
 资格化，不能据单例或 synthetic exact-960 mechanics 回归推断 formal-corpus capacity。V2
 unsealed evaluator 现仅在 evaluator-side manifest 中接收 sorted-unique 720/240 labels，验证
 disjoint + set-exhaustive coverage，并把 partition roots 与 archive ordered root 分开绑定；一次
 public V2 replay 的 canonical result 是唯一权威。它的 synthetic success 仅为
 `STRUCTURALLY_COMPLETE_NOT_SCORED`，partition authority、actual 960、runtime、capacity、scoring、
-effect 与 C1 继续为 false。下一施工切片是
-`strict_recognizer_cli_v2_structural_input_output_contract`；formal scoring 和 actual unsealed 960
-replay 均在其后。
+effect 与 C1 继续为 false。`phase2b-verify-v2-structure` 只把两个 canonical absolute、no-follow、
+single-link regular files 做 bounded stable FD read，在任何 decode 前完成两档读取，再各调用一次
+public V2 decoder；它只绑定 context archive ID/SHA/batch/policy、ordered row IDs 与七个逐位置
+input roots。其单行 canonical compact JSON success 与 generic atomic stderr JSON/exit 2 failure
+仅证明只读 structural I/O mechanics，不生成 artifact，也不执行 recognizer/runtime/actual 960，
+更不建立 membership、authority、custody、capacity、scoring、effect 或 C1。下一施工切片是
+`formal_unsealed_prediction_scoring_contract_v2`；actual unsealed 960 replay 仍在其后。
 
 此外可以说：Phase-3A 的 v1.0.2 strict specification 已冻结，Python/Rust shared vectors
 各 48/48 PASS。M2 两端都接受 64,680 个 source candidates，并得到 64,680 个 unique strict

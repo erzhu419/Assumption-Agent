@@ -87,6 +87,12 @@ from hegel_machine.phase2b_recognizer_prediction_v2 import (
     RECOGNIZER_PREDICTION_ROW_POLICY_ID_V2,
 )
 from hegel_machine.phase2b_runner import TOTAL_RECOGNIZER_CASE_COUNT
+from hegel_machine.phase2b_strict_recognizer_cli_v2 import (
+    STRICT_RECOGNIZER_CLI_V2_COMMAND,
+    STRICT_RECOGNIZER_CLI_V2_POLICY_ID,
+    STRICT_RECOGNIZER_CLI_V2_SCHEMA_ID,
+    STRICT_RECOGNIZER_CLI_V2_SCHEMA_VERSION,
+)
 from hegel_machine.phase2b_unsealed_prediction_evaluator_v1 import (
     UNSEALED_PREDICTION_EVALUATOR_POLICY_ID,
     UNSEALED_PREDICTION_EVALUATOR_VERSION,
@@ -138,6 +144,56 @@ SHA_B = "b" * 64
 SHA_C = "c" * 64
 SHA_D = "d" * 64
 ANSWER_SALT = "sealed-answer-salt-" + "x" * 32
+
+STRICT_RECOGNIZER_CLI_V2_IDENTITY_FIELDS = frozenset(
+    {
+        "strict_recognizer_cli_v2_command",
+        "strict_recognizer_cli_v2_schema_version",
+        "strict_recognizer_cli_v2_schema_id",
+        "strict_recognizer_cli_v2_policy_id",
+        "strict_recognizer_cli_v2_claim_level",
+    }
+)
+STRICT_RECOGNIZER_CLI_V2_TRUE_FIELDS = (
+    "strict_recognizer_cli_v2_structural_input_output_contract_implemented",
+    "strict_recognizer_cli_v2_read_only_no_output_artifact_mechanics_implemented",
+    "strict_recognizer_cli_v2_canonical_absolute_nofollow_single_link_regular_file_mechanics_implemented",
+    "strict_recognizer_cli_v2_bounded_stable_fd_read_before_decode_mechanics_implemented",
+    "strict_recognizer_cli_v2_single_public_v2_input_archive_replay_mechanics_implemented",
+    "strict_recognizer_cli_v2_single_public_v2_prediction_archive_replay_mechanics_implemented",
+    "strict_recognizer_cli_v2_cross_archive_context_binding_mechanics_implemented",
+    "strict_recognizer_cli_v2_ordered_row_identity_binding_mechanics_implemented",
+    "strict_recognizer_cli_v2_seven_input_root_columns_positional_binding_mechanics_implemented",
+    "strict_recognizer_cli_v2_generic_atomic_fail_closed_json_mechanics_implemented",
+)
+STRICT_RECOGNIZER_CLI_V2_FALSE_FIELDS = (
+    "strict_recognizer_cli_v2_input_archive_membership_verified",
+    "strict_recognizer_cli_v2_batch_policy_membership_verified",
+    "strict_recognizer_cli_v2_source_registry_projection_verified",
+    "strict_recognizer_cli_v2_source_public_disjoint_verified",
+    "strict_recognizer_cli_v2_single_live_allocation_verified",
+    "strict_recognizer_cli_v2_secret_custodian_replay_verified",
+    "strict_recognizer_cli_v2_execution_manifest_authority_verified",
+    "strict_recognizer_cli_v2_partition_manifest_authority_verified",
+    "strict_recognizer_cli_v2_derived_mapping_verified",
+    "strict_recognizer_cli_v2_recognizer_executed",
+    "strict_recognizer_cli_v2_runtime_executed",
+    "strict_recognizer_cli_v2_actual_960_case_run_verified",
+    "strict_recognizer_cli_v2_recognizer_capacity_evidence",
+    "strict_recognizer_cli_v2_origin_authenticated",
+    "strict_recognizer_cli_v2_formal_uuid_audit",
+    "strict_recognizer_cli_v2_formal_covert_audit",
+    "strict_recognizer_cli_v2_sealed_holdout_eligible",
+    "strict_recognizer_cli_v2_scoring_performed",
+    "strict_recognizer_cli_v2_prediction_scored",
+    "strict_recognizer_cli_v2_effect_evidence",
+    "strict_recognizer_cli_v2_c1_exit_evidence",
+)
+STRICT_RECOGNIZER_CLI_V2_REPORT_FIELDS = (
+    STRICT_RECOGNIZER_CLI_V2_IDENTITY_FIELDS
+    | frozenset(STRICT_RECOGNIZER_CLI_V2_TRUE_FIELDS)
+    | frozenset(STRICT_RECOGNIZER_CLI_V2_FALSE_FIELDS)
+)
 
 
 def test_phase2b_protocol_freezes_720_independent_latent_cases():
@@ -456,6 +512,10 @@ def test_sealed_ledger_rejects_direct_terminal_construction_and_bad_reveal():
 
 def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     report = phase2b_preregistration_report()
+    assert report["implementation_id"] == (
+        "phase2b_protocol_source_sha256_"
+        "185da0e62f63514300520697becffb6ed10248d0ed871342b9a4bc1306a355f1"
+    )
     assert report["artifact"] == "phase2b_preregistration_readiness_v1"
     assert report["formal_phase2b_exit_claim"] is False
     assert report["status"] == "exact_parameter_freeze_with_implementation_blockers"
@@ -960,6 +1020,38 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "unsealed_prediction_evaluator_v2_c1_exit_evidence",
     ):
         assert report[field_name] is False
+    assert report["strict_recognizer_cli_v2_command"] == (
+        STRICT_RECOGNIZER_CLI_V2_COMMAND
+    )
+    assert report["strict_recognizer_cli_v2_schema_version"] == (
+        STRICT_RECOGNIZER_CLI_V2_SCHEMA_VERSION
+    )
+    assert report["strict_recognizer_cli_v2_schema_id"] == (
+        STRICT_RECOGNIZER_CLI_V2_SCHEMA_ID
+    )
+    assert report["strict_recognizer_cli_v2_policy_id"] == (
+        STRICT_RECOGNIZER_CLI_V2_POLICY_ID
+    )
+    assert report["strict_recognizer_cli_v2_claim_level"] == (
+        TRUSTED_WIRE_CLAIM_LEVEL
+    )
+    assert report["strict_recognizer_cli_v2_schema_id"] == (
+        "phase2b_strict_recognizer_cli_schema_v2_"
+        "b5c47e3a850e47ca5b35adb8fd2dcd2b520962e51d63be47ebc0d87f4749ef42"
+    )
+    assert report["strict_recognizer_cli_v2_policy_id"] == (
+        "phase2b_strict_recognizer_cli_policy_v2_"
+        "b1f611259a8aa747b7c7beda7fad5f47bf9f751788f3eb80806915aaa24d623e"
+    )
+    for field_name in STRICT_RECOGNIZER_CLI_V2_TRUE_FIELDS:
+        assert report[field_name] is True
+    for field_name in STRICT_RECOGNIZER_CLI_V2_FALSE_FIELDS:
+        assert report[field_name] is False
+    assert {
+        field_name
+        for field_name in report
+        if field_name.startswith("strict_recognizer_cli_v2_")
+    } == STRICT_RECOGNIZER_CLI_V2_REPORT_FIELDS
     assert report["public_prediction_run_context_v2_schema_version"] == (
         PUBLIC_PREDICTION_RUN_CONTEXT_V2_SCHEMA_VERSION
     )
@@ -1024,7 +1116,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     ):
         assert report[field_name] is False
     assert report["next_phase2b_construction_slice"] == (
-        "strict_recognizer_cli_v2_structural_input_output_contract"
+        "formal_unsealed_prediction_scoring_contract_v2"
     )
     for field_name in (
         "real_positive_prediction_end_to_end_replay_implemented",
@@ -1105,6 +1197,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "recognizer_prediction_row_mapping_mechanics_v2",
         "runner",
         "selector",
+        "strict_recognizer_cli_v2_structural_verifier",
         "trusted_wire_keyed_batch_mechanics",
         "trusted_wire_keyed_batch_mechanics_v2",
         "trusted_wire_profile_mechanics",
@@ -1128,6 +1221,12 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     ] == (
         "sha256:"
         "f7c1e98fe3e354047e0e76d75f699ee6f3f98493a52fde3f9724f4acce5858e5"
+    )
+    assert report["component_source_ids"][
+        "strict_recognizer_cli_v2_structural_verifier"
+    ] == (
+        "sha256:"
+        "167e3492683e56599d541ce91c9534fcefb01ba5ab702cef0803947e1cd6a1bb"
     )
     assert report["component_source_ids"][
         "recognizer_prediction_row_mapping_mechanics_v2"
@@ -1196,3 +1295,29 @@ def test_checked_in_phase2b_preregistration_artifact_matches_runtime():
     )
     artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
     assert artifact == phase2b_preregistration_report()
+
+
+def test_strict_cli_report_artifact_refresh_transition_is_exact():
+    artifact_path = (
+        Path(__file__).resolve().parents[1]
+        / "artifacts"
+        / "phase2b_preregistration_v1.json"
+    )
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    report = phase2b_preregistration_report()
+    assert len(report) == 448
+    if artifact == report:
+        return
+    assert len(artifact) == 412
+    assert set(report) - set(artifact) == STRICT_RECOGNIZER_CLI_V2_REPORT_FIELDS
+    assert set(artifact) - set(report) == set()
+    assert {
+        field_name
+        for field_name in artifact.keys() & report.keys()
+        if artifact[field_name] != report[field_name]
+    } == {
+        "component_source_ids",
+        "implementation_id",
+        "next_phase2b_construction_slice",
+        "report_id",
+    }

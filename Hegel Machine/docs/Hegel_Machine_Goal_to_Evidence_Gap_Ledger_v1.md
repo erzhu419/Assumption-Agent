@@ -61,7 +61,7 @@ a pass from one bounded invention fixture.
 | G0 claim/evidence boundary | OBSERVED / strong | frozen schemas, content IDs, replay records, explicit non-claims, fail-closed receipts | one canonical cross-generation status ledger was missing; this file starts it |
 | G1 theory/governance kernel | MECHANICS | `TheoryState`, typed observations, laws, probes, patches, reduction maps, separated governance decisions, branch/version scaffolds | independent promotion trust root and real lifecycle evidence |
 | G2 initial language/geometry | MECHANICS | 22 assumption templates, six executable active laws, task-relative probes/quotients and scale contracts | one first-class relation-language snapshot manifest; complete executable 22-leaf library; identifiability/gauge intervention evidence |
-| C1 known-law identification | PARTIAL | Phase-2A controlled grid plus non-authoritative Phase-2B typed-transform, compact V2 one-case input, ephemeral single-row mapping, exact-960 V2 prediction-archive structural mechanics, and V1/V2 unsealed 720/240 structural mechanics | strict recognizer CLI, recognizer runtime/scoring, actual 960, sealed independent data, covert audit, baselines, custody and statistical exit |
+| C1 known-law identification | PARTIAL | Phase-2A controlled grid plus non-authoritative Phase-2B typed-transform, compact V2 one-case input, ephemeral single-row mapping, exact-960 V2 prediction-archive structural mechanics, V1/V2 unsealed 720/240 structural mechanics, and a read-only strict V2 structural-verifier CLI | functional recognizer entrypoint, recognizer runtime/scoring, actual 960, sealed independent data, covert audit, baselines, custody and statistical exit |
 | G4 inadequacy diagnosis | MECHANICS | ordered refit/noise/scope/mixture/composition diagnosis and robustification/idealization evaluator prototypes | diagnosis derived from real residual clusters; executable probe-addition and operator-selection evidence |
 | C2 bounded relation invention | MISSING effect | strict DSL/certificate and bounded-enumeration infrastructure; old DSL reached `DSL_TOO_LARGE` under its budget | incomplete-ontology benchmark, at least three outside-library relations, non-equivalence/MDL, hard negatives, counterfactuals and unseen predictions |
 | C3 conservative multigeneration | MISSING effect | certificate and version-graph schemas | real old-success preservation, limiting cases, reduction maps, demotion/rollback, negative memory and multigeneration survival |
@@ -111,7 +111,9 @@ without semantic acceptance**.  The dependency order is:
    V2 prediction archive. Its synthetic structural fixture is not an actual run. The V2
    evaluator now checks only sorted-unique, disjoint and set-exhaustive evaluator-side
    720/240 partitions while binding their roots separately from the archive's ordered row
-   root; success remains `STRUCTURALLY_COMPLETE_NOT_SCORED`. A strict CLI, actual 960 execution, formal scoring/
+   root; success remains `STRUCTURALLY_COMPLETE_NOT_SCORED`. A strict read-only V2
+   structural-verifier CLI now binds both archives but does not execute a recognizer.
+   A functional recognizer entrypoint, actual 960 execution, formal scoring/
    challenge/preservation evaluation and deterministic runtime replay remain missing.
 5. **Trusted wire and anti-leak audit** — independent shuffle/ID/padding keys,
    fixed 65,536-byte envelopes, global renaming/order invariance, NMI and
@@ -303,6 +305,20 @@ single-row mapping and exact-960 archive structural gaps; it is not prediction E
 capacity evidence. Input membership, execution-manifest authority, derived mapping,
 runtime, actual 960, scoring and effect remain missing or unverified.
 
+`phase2b-verify-v2-structure` now provides only a read-only strict V2 structural
+I/O boundary. It requires two canonical absolute, no-follow, single-link regular
+files; finishes both bounded stable FD reads before decoding either; calls each
+public V2 input/prediction archive decoder exactly once; and binds context archive
+ID/SHA/batch/policy, ordered row IDs, and seven positional input-root columns.
+Success is one canonical compact JSON line and failure is one generic atomic stderr
+JSON line with exit 2; neither path creates an output artifact. The five report
+identity keys are exactly `strict_recognizer_cli_v2_command`,
+`strict_recognizer_cli_v2_schema_version`, `strict_recognizer_cli_v2_schema_id`,
+`strict_recognizer_cli_v2_policy_id`, and `strict_recognizer_cli_v2_claim_level`.
+This remains `NON_AUTHORITATIVE_MECHANICS_ONLY`, not a functional recognizer
+entrypoint or evidence of membership, authority, custody, runtime, actual 960,
+capacity, scoring, effect, or C1 exit.
+
 Accordingly these narrow flags are true:
 
 ```text
@@ -417,6 +433,16 @@ internal_derived_to_prediction_mapping_gate_mechanics_implemented
 decoded_prediction_semantic_fields_exclude_split_gold_index_labels
 unsealed_720_240_sorted_disjoint_exhaustive_structural_evaluator_implemented
 recognizer_runner_total_960_contract_implemented
+strict_recognizer_cli_v2_structural_input_output_contract_implemented
+strict_recognizer_cli_v2_read_only_no_output_artifact_mechanics_implemented
+strict_recognizer_cli_v2_canonical_absolute_nofollow_single_link_regular_file_mechanics_implemented
+strict_recognizer_cli_v2_bounded_stable_fd_read_before_decode_mechanics_implemented
+strict_recognizer_cli_v2_single_public_v2_input_archive_replay_mechanics_implemented
+strict_recognizer_cli_v2_single_public_v2_prediction_archive_replay_mechanics_implemented
+strict_recognizer_cli_v2_cross_archive_context_binding_mechanics_implemented
+strict_recognizer_cli_v2_ordered_row_identity_binding_mechanics_implemented
+strict_recognizer_cli_v2_seven_input_root_columns_positional_binding_mechanics_implemented
+strict_recognizer_cli_v2_generic_atomic_fail_closed_json_mechanics_implemented
 ```
 
 while the broad flags below remain false:
@@ -532,6 +558,27 @@ unsealed_prediction_evaluator_v2_scoring_performed
 unsealed_prediction_evaluator_v2_prediction_scored
 unsealed_prediction_evaluator_v2_effect_evidence
 unsealed_prediction_evaluator_v2_c1_exit_evidence
+strict_recognizer_cli_v2_input_archive_membership_verified
+strict_recognizer_cli_v2_batch_policy_membership_verified
+strict_recognizer_cli_v2_source_registry_projection_verified
+strict_recognizer_cli_v2_source_public_disjoint_verified
+strict_recognizer_cli_v2_single_live_allocation_verified
+strict_recognizer_cli_v2_secret_custodian_replay_verified
+strict_recognizer_cli_v2_execution_manifest_authority_verified
+strict_recognizer_cli_v2_partition_manifest_authority_verified
+strict_recognizer_cli_v2_derived_mapping_verified
+strict_recognizer_cli_v2_recognizer_executed
+strict_recognizer_cli_v2_runtime_executed
+strict_recognizer_cli_v2_actual_960_case_run_verified
+strict_recognizer_cli_v2_recognizer_capacity_evidence
+strict_recognizer_cli_v2_origin_authenticated
+strict_recognizer_cli_v2_formal_uuid_audit
+strict_recognizer_cli_v2_formal_covert_audit
+strict_recognizer_cli_v2_sealed_holdout_eligible
+strict_recognizer_cli_v2_scoring_performed
+strict_recognizer_cli_v2_prediction_scored
+strict_recognizer_cli_v2_effect_evidence
+strict_recognizer_cli_v2_c1_exit_evidence
 real_positive_typed_profile_fits_trusted_wire
 real_positive_prediction_end_to_end_replay_implemented
 recognizer_prediction_capacity_evidence
@@ -554,26 +601,27 @@ active_promotion_enabled
 
 This is implementation progress, not sealed C1 evidence.
 `phase2b_exact_bridge_v1.py` is an internal root/identity recognizer core, while the
-new derived bridge is a separate bounded transform profile; neither is the frozen
-recognizer CLI or a sealed selector execution. The older binary64 projection compiler
+new derived bridge is a separate bounded transform profile; neither is a functional
+recognizer entrypoint or a sealed selector execution. The strict V2 CLI is only a
+structural verifier. The older binary64 projection compiler
 still does not consume
 the exact receipt, and its broad completion flag therefore remains false. The
 derived bridge closes strict `task_target` and unused-observation coverage for its
 bounded profile, but complete physical transform/preservation semantics, formal
-covert-channel audit, recognizer CLI, formal scoring, signed image/runtime evidence and durable one-shot
+covert-channel audit, functional recognizer execution, formal scoring, signed image/runtime evidence and durable one-shot
 custody remain formal-pipeline blockers.
 
 ## 7. Next authorized construction slice
 
 The next non-actual construction slice is
-**`strict_recognizer_cli_v2_structural_input_output_contract`**. The completed V2
-evaluator keeps partition labels outside recognizer-facing bytes and proves only
-sorted/disjoint/exhaustive structural coverage. Its synthetic exact 720/240 replay is
-not actual-960, scoring, effect, capacity or C1 evidence.
+**`formal_unsealed_prediction_scoring_contract_v2`**. It may consume the completed
+strict V2 structural receipt, but must not promote that receipt into membership,
+authority, custody, recognizer/runtime execution, actual-960, capacity, effect, or C1
+evidence. The completed evaluator and CLI prove only structural coverage and binding.
 
-Only after the strict recognizer CLI contract closes should a formal scoring evaluator
-connect the archives in an actual unsealed 960-case run.
-That later run must still keep origin, isolation, one-shot custody, covert-audit,
+Only after the formal scoring contract closes may an actual unsealed 960-case run
+connect execution and scoring. That later run must still keep origin, isolation,
+one-shot custody, covert-audit,
 capacity and sealed-C1 claims false until their independent gates pass. Formal
 720+240 audit, independent labels and sealed execution remain later gates.
 
