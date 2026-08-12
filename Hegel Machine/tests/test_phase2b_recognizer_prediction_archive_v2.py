@@ -25,6 +25,8 @@ import hegel_machine.phase2b_recognizer_prediction_archive_v2 as archive_v2
 import hegel_machine.phase2b_recognizer_prediction_v2 as prediction_v2
 import hegel_machine.phase2b_protocol as phase2b_protocol
 import hegel_machine.phase2b_runner as runner
+import hegel_machine.phase2b_unsealed_prediction_evaluator_v1 as evaluator_v1
+import hegel_machine.phase2b_unsealed_prediction_evaluator_v2 as evaluator_v2
 from hegel_machine.phase2b_protocol import ExecutionFreezeManifest
 from hegel_machine.phase2b_trusted_wire_v1 import (
     NON_AUTHORITATIVE_CLAIM_LEVEL,
@@ -2215,3 +2217,1076 @@ def test_record_and_manifest_shape_caps_reject_before_semantic_scanner(
         archive_v2._validate_manifest_v2(bad_manifest_count)
     with pytest.raises(ValueError, match="prefixed SHA-256"):
         archive_v2._validate_manifest_v2(bad_manifest_oversized)
+
+
+# The evaluator tests deliberately reuse the single module-scoped synthetic
+# archive above.  Nothing below is an actual 960-case recognizer run, a score,
+# capacity evidence, an authenticated partition, an effect estimate, or C1
+# evidence.  The evaluator-side 720/240 labels exist only in these local
+# manifest objects and never enter the recognizer-facing V2 archive bytes.
+EVALUATOR_V2_MANIFEST_FIELDS = (
+    "prediction_archive_id",
+    "prediction_archive_schema_version",
+    "prediction_archive_policy_id",
+    "exact_freeze_id",
+    "evaluator_policy_id",
+    "main_row_ids",
+    "semantic_conflict_row_ids",
+    "main_row_ids_root",
+    "semantic_conflict_row_ids_root",
+    "partition_union_row_ids_root",
+    "ordered_archive_input_row_ids_root",
+    "manifest_id",
+)
+EVALUATOR_V2_FALSE_CLAIMS = (
+    "challenge_in_main_denominator",
+    "input_archive_membership_verified",
+    "batch_policy_membership_verified",
+    "source_registry_projection_verified",
+    "source_public_disjoint_verified",
+    "single_live_allocation_verified",
+    "secret_custodian_replay_verified",
+    "execution_manifest_authority_verified",
+    "partition_manifest_authority_verified",
+    "derived_mapping_verified",
+    "recognizer_executed",
+    "runtime_executed",
+    "actual_960_case_run_verified",
+    "recognizer_capacity_evidence",
+    "origin_authenticated",
+    "formal_uuid_audit",
+    "formal_covert_audit",
+    "sealed_holdout_eligible",
+    "scoring_performed",
+    "prediction_scored",
+    "effect_evidence",
+    "c1_exit_evidence",
+)
+EVALUATOR_V2_EVALUATION_FIELDS = (
+    "disposition",
+    "reason",
+    "prediction_archive_id",
+    "prediction_archive_schema_version",
+    "prediction_archive_policy_id",
+    "partition_manifest_id",
+    "exact_freeze_id",
+    "evaluator_policy_id",
+    "main_count",
+    "semantic_conflict_count",
+    "total_count",
+    "main_row_ids_root",
+    "semantic_conflict_row_ids_root",
+    "partition_union_row_ids_root",
+    "ordered_archive_input_row_ids_root",
+    "claim_level",
+    "structural_completeness_verified",
+    *EVALUATOR_V2_FALSE_CLAIMS,
+    "metric_results",
+    "scored_rows",
+)
+EVALUATOR_V2_REJECTION_FIELDS = (
+    "disposition",
+    "reason",
+    "prediction_archive_id",
+    "partition_manifest_id",
+    "metric_results",
+    "scored_rows",
+    "structural_completeness_verified",
+    "scoring_performed",
+    "runtime_executed",
+    "actual_960_case_run_verified",
+    "recognizer_capacity_evidence",
+    "effect_evidence",
+    "c1_exit_evidence",
+)
+
+
+def _evaluator_v2_rows(
+    prediction_archive: archive_v2.DecodedRecognizerPredictionArchiveV2,
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Make arbitrary synthetic labels without changing archive wire order."""
+
+    assert prediction_archive.input_row_ids != tuple(
+        sorted(prediction_archive.input_row_ids)
+    )
+    return (
+        tuple(sorted(prediction_archive.input_row_ids[:720])),
+        tuple(sorted(prediction_archive.input_row_ids[720:])),
+    )
+
+
+def _evaluator_v2_manifest(
+    prediction_archive: archive_v2.DecodedRecognizerPredictionArchiveV2,
+) -> evaluator_v2.UnsealedPredictionPartitionManifestV2:
+    main_rows, conflict_rows = _evaluator_v2_rows(prediction_archive)
+    return evaluator_v2.build_unsealed_prediction_partition_manifest_v2(
+        prediction_archive=prediction_archive,
+        main_row_ids=main_rows,
+        semantic_conflict_row_ids=conflict_rows,
+    )
+
+
+def _assert_evaluator_v2_atomic_rejection(value: object) -> None:
+    assert type(value) is evaluator_v2.UnsealedPredictionEvaluationRejectionV2
+    assert value.disposition is (
+        evaluator_v2.UnsealedPredictionEvaluationDispositionV2.ABSTAIN
+    )
+    assert type(value.metric_results) is tuple and value.metric_results == ()
+    assert type(value.scored_rows) is tuple and value.scored_rows == ()
+    assert value.structural_completeness_verified is False
+    for name in EVALUATOR_V2_FALSE_CLAIMS:
+        if hasattr(value, name):
+            assert getattr(value, name) is False
+
+
+def test_unsealed_evaluator_v2_public_surface_and_exact_manifest_contract() -> None:
+    assert evaluator_v2.__all__ == (
+        "UNSEALED_PREDICTION_EVALUATOR_POLICY_ID_V2",
+        "UNSEALED_PREDICTION_EVALUATOR_V2_VERSION",
+        "UnsealedPredictionEvaluationDispositionV2",
+        "UnsealedPredictionEvaluationRejectionV2",
+        "UnsealedPredictionPartitionManifestV2",
+        "UnsealedPredictionStructuralEvaluationV2",
+        "build_unsealed_prediction_partition_manifest_v2",
+        "evaluate_unsealed_prediction_archive_structure_v2",
+    )
+    build = inspect.signature(
+        evaluator_v2.build_unsealed_prediction_partition_manifest_v2
+    )
+    evaluate = inspect.signature(
+        evaluator_v2.evaluate_unsealed_prediction_archive_structure_v2
+    )
+    assert tuple(build.parameters) == (
+        "prediction_archive",
+        "main_row_ids",
+        "semantic_conflict_row_ids",
+    )
+    assert tuple(evaluate.parameters) == (
+        "prediction_archive",
+        "partition_manifest",
+    )
+    assert all(
+        item.kind is inspect.Parameter.KEYWORD_ONLY
+        for signature in (build, evaluate)
+        for item in signature.parameters.values()
+    )
+    assert tuple(
+        item.name
+        for item in fields(evaluator_v2.UnsealedPredictionPartitionManifestV2)
+    ) == EVALUATOR_V2_MANIFEST_FIELDS
+    assert tuple(
+        item.name
+        for item in fields(evaluator_v2.UnsealedPredictionStructuralEvaluationV2)
+    ) == EVALUATOR_V2_EVALUATION_FIELDS
+    assert tuple(
+        item.name
+        for item in fields(evaluator_v2.UnsealedPredictionEvaluationRejectionV2)
+    ) == EVALUATOR_V2_REJECTION_FIELDS
+    assert evaluator_v2._MANIFEST_FIELDS_V2 == EVALUATOR_V2_MANIFEST_FIELDS
+    assert evaluator_v2._EVALUATION_FIELDS_V2 == EVALUATOR_V2_EVALUATION_FIELDS
+    assert evaluator_v2._REJECTION_FIELDS_V2 == EVALUATOR_V2_REJECTION_FIELDS
+    assert evaluator_v2._FALSE_EVALUATION_CLAIMS_V2 == EVALUATOR_V2_FALSE_CLAIMS
+    assert evaluator_v2.UNSEALED_PREDICTION_EVALUATOR_V2_VERSION == (
+        "hegel-machine-phase2b-unsealed-prediction-evaluator/2"
+    )
+    assert evaluator_v2.UNSEALED_PREDICTION_EVALUATOR_POLICY_ID_V2 == (
+        "phase2b_unsealed_prediction_evaluator_policy_v2_"
+        "377d0d2a761af9a4b539e5c2466044eb8e08c7d6178276376080831b5646b116"
+    )
+    assert evaluator_v2._EVALUATOR_POLICY_VALUE_V2[
+        "context_dependency_bindings"
+    ] == {
+        "public_prediction_run_context_schema_version": (
+            archive_v2.PUBLIC_PREDICTION_RUN_CONTEXT_V2_SCHEMA_VERSION
+        ),
+        "public_prediction_run_context_schema_id": (
+            archive_v2.PUBLIC_PREDICTION_RUN_CONTEXT_V2_SCHEMA_ID
+        ),
+        "trusted_wire_batch_policy_id": archive_v2.TRUSTED_WIRE_BATCH_V2_POLICY_ID,
+        "recognizer_input_archive_policy_id": input_v2.RECOGNIZER_INPUT_ARCHIVE_POLICY_ID_V2,
+        "recognizer_input_archive_version": input_v2.TRUSTED_RECOGNIZER_INPUT_ARCHIVE_V2_VERSION,
+    }
+    assert evaluator_v2._EVALUATOR_POLICY_VALUE_V2[
+        "prediction_archive_wire_caps"
+    ] == {
+        "minimum_archive_bytes": archive_v2.PREDICTION_ARCHIVE_HEADER_BYTES_V2,
+        "maximum_archive_bytes": archive_v2.MAXIMUM_PREDICTION_ARCHIVE_BYTES_V2,
+    }
+
+
+def test_unsealed_evaluator_v2_synthetic_720_240_structure_is_not_a_score(
+    synthetic_archive: _SyntheticArchiveFixtureV2,
+) -> None:
+    decoded = synthetic_archive.decoded
+    manifest = _evaluator_v2_manifest(decoded)
+    result = evaluator_v2.evaluate_unsealed_prediction_archive_structure_v2(
+        prediction_archive=decoded,
+        partition_manifest=manifest,
+    )
+    assert type(result) is evaluator_v2.UnsealedPredictionStructuralEvaluationV2
+    assert result.disposition is (
+        evaluator_v2.UnsealedPredictionEvaluationDispositionV2
+        .STRUCTURALLY_COMPLETE_NOT_SCORED
+    )
+    assert (result.main_count, result.semantic_conflict_count, result.total_count) == (
+        720,
+        240,
+        COUNT,
+    )
+    assert result.prediction_archive_id == decoded.archive_id
+    assert result.partition_manifest_id == manifest.manifest_id
+    assert result.prediction_archive_schema_version == decoded.schema_version
+    assert result.prediction_archive_policy_id == decoded.policy_id
+    assert manifest.prediction_archive_schema_version == decoded.schema_version
+    assert manifest.prediction_archive_policy_id == decoded.policy_id
+    assert result.main_row_ids_root == manifest.main_row_ids_root
+    assert (
+        result.semantic_conflict_row_ids_root
+        == manifest.semantic_conflict_row_ids_root
+    )
+    assert (
+        result.partition_union_row_ids_root
+        == manifest.partition_union_row_ids_root
+    )
+    assert (
+        result.ordered_archive_input_row_ids_root
+        == manifest.ordered_archive_input_row_ids_root
+        == decoded.context.input_row_ids_root
+    )
+    assert result.structural_completeness_verified is True
+    assert result.claim_level == NON_AUTHORITATIVE_CLAIM_LEVEL
+    assert type(result.metric_results) is tuple and result.metric_results == ()
+    assert type(result.scored_rows) is tuple and result.scored_rows == ()
+    for name in EVALUATOR_V2_FALSE_CLAIMS:
+        assert type(getattr(result, name)) is bool
+        assert getattr(result, name) is False
+
+
+def test_unsealed_evaluator_v2_labels_remain_out_of_recognizer_archive(
+    synthetic_archive: _SyntheticArchiveFixtureV2,
+) -> None:
+    archive_before = synthetic_archive.archive
+    manifest_payload, record_payloads = _split_frames(archive_before)
+    mappings = [
+        decode_phase2b_jcs_profile_v1(manifest_payload),
+        *(decode_phase2b_jcs_profile_v1(item) for item in record_payloads),
+    ]
+    semantic_strings = tuple(
+        item.casefold()
+        for mapping in mappings
+        for item in _walk_semantic_strings(mapping)
+    )
+    for forbidden in (
+        "main_row_ids",
+        "semantic_conflict_row_ids",
+        "partition_union_row_ids_root",
+    ):
+        assert forbidden not in semantic_strings
+    manifest = _evaluator_v2_manifest(synthetic_archive.decoded)
+    assert len(manifest.main_row_ids) == 720
+    assert len(manifest.semantic_conflict_row_ids) == 240
+    assert synthetic_archive.archive == archive_before
+
+
+def test_unsealed_evaluator_v2_uses_set_exhaustiveness_and_separate_wire_root(
+    synthetic_archive: _SyntheticArchiveFixtureV2,
+) -> None:
+    decoded = synthetic_archive.decoded
+    main_rows, conflict_rows = _evaluator_v2_rows(decoded)
+    assert tuple(sorted((*main_rows, *conflict_rows))) != decoded.input_row_ids
+    manifest = evaluator_v2.build_unsealed_prediction_partition_manifest_v2(
+        prediction_archive=decoded,
+        main_row_ids=main_rows,
+        semantic_conflict_row_ids=conflict_rows,
+    )
+    assert set(main_rows).isdisjoint(conflict_rows)
+    assert set(main_rows) | set(conflict_rows) == set(decoded.input_row_ids)
+    assert (
+        manifest.ordered_archive_input_row_ids_root
+        == decoded.context.input_row_ids_root
+    )
+    # A different evaluator-side labelling is still structurally complete.  It
+    # changes partition roots but not the union or archive-order root, and it
+    # remains explicitly unauthenticated/non-scoring.
+    relabelled_main = tuple(sorted((*main_rows[1:], conflict_rows[0])))
+    relabelled_conflict = tuple(sorted((main_rows[0], *conflict_rows[1:])))
+    relabelled = evaluator_v2.build_unsealed_prediction_partition_manifest_v2(
+        prediction_archive=decoded,
+        main_row_ids=relabelled_main,
+        semantic_conflict_row_ids=relabelled_conflict,
+    )
+    assert relabelled.main_row_ids_root != manifest.main_row_ids_root
+    assert (
+        relabelled.semantic_conflict_row_ids_root
+        != manifest.semantic_conflict_row_ids_root
+    )
+    assert relabelled.partition_union_row_ids_root == manifest.partition_union_row_ids_root
+    assert (
+        relabelled.ordered_archive_input_row_ids_root
+        == manifest.ordered_archive_input_row_ids_root
+    )
+    result = evaluator_v2.evaluate_unsealed_prediction_archive_structure_v2(
+        prediction_archive=decoded,
+        partition_manifest=relabelled,
+    )
+    assert type(result) is evaluator_v2.UnsealedPredictionStructuralEvaluationV2
+    assert result.partition_manifest_authority_verified is False
+    assert result.scoring_performed is False
+
+
+def test_unsealed_evaluator_v2_canonical_replay_is_deterministic(
+    synthetic_archive: _SyntheticArchiveFixtureV2,
+) -> None:
+    first_archive = synthetic_archive.decoded
+    replayed_archive = archive_v2.decode_public_recognizer_prediction_archive_v2(
+        synthetic_archive.archive
+    )
+    first_manifest = _evaluator_v2_manifest(first_archive)
+    replayed_manifest = _evaluator_v2_manifest(replayed_archive)
+    assert replayed_archive == first_archive
+    assert replayed_manifest == first_manifest
+    first_result = evaluator_v2.evaluate_unsealed_prediction_archive_structure_v2(
+        prediction_archive=first_archive,
+        partition_manifest=first_manifest,
+    )
+    replayed_result = evaluator_v2.evaluate_unsealed_prediction_archive_structure_v2(
+        prediction_archive=replayed_archive,
+        partition_manifest=replayed_manifest,
+    )
+    assert replayed_result == first_result
+
+
+def test_unsealed_evaluator_v2_build_and_evaluate_each_use_one_public_v2_replay(
+    monkeypatch: pytest.MonkeyPatch,
+    synthetic_archive: _SyntheticArchiveFixtureV2,
+) -> None:
+    """Each API independently self-decodes once; the combined flow decodes twice."""
+
+    decoded = synthetic_archive.decoded
+    main_rows, conflict_rows = _evaluator_v2_rows(decoded)
+    original_decode = archive_v2.decode_public_recognizer_prediction_archive_v2
+    canonical = original_decode(decoded.archive)
+    assert canonical == decoded
+    assert canonical is not decoded
+    calls: list[bytes] = []
+
+    def counted_decode(archive: bytes) -> archive_v2.DecodedRecognizerPredictionArchiveV2:
+        assert type(archive) is bytes
+        assert archive is decoded.archive
+        calls.append(archive)
+        return canonical
+
+    def forbidden(*args: object, **kwargs: object) -> object:
+        raise AssertionError("V2 evaluator reached a V1 or private archive helper")
+
+    monkeypatch.setattr(
+        evaluator_v2,
+        "decode_public_recognizer_prediction_archive_v2",
+        counted_decode,
+    )
+    monkeypatch.setattr(
+        archive_v1,
+        "decode_public_recognizer_prediction_archive_v1",
+        forbidden,
+    )
+    for name in (
+        "_parse_prediction_archive_v2",
+        "_encode_prediction_archive_v2",
+        "_archive_id_v2",
+    ):
+        monkeypatch.setattr(archive_v2, name, forbidden)
+    monkeypatch.setattr(
+        archive_v2.DecodedRecognizerPredictionArchiveV2,
+        "_validate",
+        forbidden,
+    )
+
+    manifest = evaluator_v2.build_unsealed_prediction_partition_manifest_v2(
+        prediction_archive=decoded,
+        main_row_ids=main_rows,
+        semantic_conflict_row_ids=conflict_rows,
+    )
+    assert calls == [decoded.archive]
+    calls.clear()
+    result = evaluator_v2.evaluate_unsealed_prediction_archive_structure_v2(
+        prediction_archive=decoded,
+        partition_manifest=manifest,
+    )
+    assert type(result) is evaluator_v2.UnsealedPredictionStructuralEvaluationV2
+    assert calls == [decoded.archive]
+
+
+def test_unsealed_evaluator_v2_ignores_nonroot_caller_record_pollution(
+    monkeypatch: pytest.MonkeyPatch,
+    synthetic_archive: _SyntheticArchiveFixtureV2,
+) -> None:
+    """Only canonical bytes, not non-root caller record fields, drive receipts."""
+
+    decoded = synthetic_archive.decoded
+    main_rows, conflict_rows = _evaluator_v2_rows(decoded)
+    canonical = archive_v2.decode_public_recognizer_prediction_archive_v2(
+        decoded.archive
+    )
+    baseline_manifest = evaluator_v2.build_unsealed_prediction_partition_manifest_v2(
+        prediction_archive=decoded,
+        main_row_ids=main_rows,
+        semantic_conflict_row_ids=conflict_rows,
+    )
+    baseline_result = evaluator_v2.evaluate_unsealed_prediction_archive_structure_v2(
+        prediction_archive=decoded,
+        partition_manifest=baseline_manifest,
+    )
+    first = decoded.records[0]
+    polluted_first = _copy_with_pollution(
+        first,
+        decision=object(),
+        input_payload_sha256="caller-only-nonroot-pollution",
+    )
+    assert polluted_first.record_id == first.record_id
+    assert polluted_first.input_row_id == first.input_row_id
+    assert polluted_first.prediction_content_id == first.prediction_content_id
+    assert polluted_first.run_context_id == first.run_context_id
+    polluted_archive = _copy_with_pollution(
+        decoded,
+        records=(polluted_first, *decoded.records[1:]),
+    )
+    calls: list[bytes] = []
+
+    def counted_decode(archive: bytes) -> archive_v2.DecodedRecognizerPredictionArchiveV2:
+        assert archive is decoded.archive
+        calls.append(archive)
+        return canonical
+
+    monkeypatch.setattr(
+        evaluator_v2,
+        "decode_public_recognizer_prediction_archive_v2",
+        counted_decode,
+    )
+    manifest = evaluator_v2.build_unsealed_prediction_partition_manifest_v2(
+        prediction_archive=polluted_archive,
+        main_row_ids=main_rows,
+        semantic_conflict_row_ids=conflict_rows,
+    )
+    assert calls == [decoded.archive]
+    assert manifest == baseline_manifest
+    calls.clear()
+    result = evaluator_v2.evaluate_unsealed_prediction_archive_structure_v2(
+        prediction_archive=polluted_archive,
+        partition_manifest=manifest,
+    )
+    assert calls == [decoded.archive]
+    assert result == baseline_result
+    assert evaluator_v2._EVALUATOR_POLICY_VALUE_V2["contract"][
+        "supplied_record_nonroot_fields"
+    ] == "ignored_non_authoritative_canonical_decoder_records_exclusively_used"
+
+
+@pytest.mark.parametrize(
+    ("field_name", "polluted_value"),
+    (
+        ("schema_version", "wrong-schema"),
+        ("policy_id", "wrong-policy"),
+        ("claim_level", "wrong-claim"),
+        ("structural_archive_verified", False),
+        ("runtime_executed", True),
+        ("context", object()),
+        ("records", ()),
+        ("input_row_ids", ()),
+        ("prediction_record_ids", ()),
+        ("prediction_content_ids", ()),
+    ),
+)
+def test_unsealed_evaluator_v2_supplied_wrapper_preflight_precedes_public_decode(
+    monkeypatch: pytest.MonkeyPatch,
+    synthetic_archive: _SyntheticArchiveFixtureV2,
+    field_name: str,
+    polluted_value: object,
+) -> None:
+    decoded = synthetic_archive.decoded
+    main_rows, conflict_rows = _evaluator_v2_rows(decoded)
+    polluted = _copy_with_pollution(decoded, **{field_name: polluted_value})
+
+    def forbidden(*args: object, **kwargs: object) -> object:
+        raise AssertionError("invalid supplied wrapper reached public V2 decoder")
+
+    monkeypatch.setattr(
+        evaluator_v2,
+        "decode_public_recognizer_prediction_archive_v2",
+        forbidden,
+    )
+    with pytest.raises((TypeError, ValueError)):
+        evaluator_v2.build_unsealed_prediction_partition_manifest_v2(
+            prediction_archive=polluted,
+            main_row_ids=main_rows,
+            semantic_conflict_row_ids=conflict_rows,
+        )
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    ("input_row_ids", "prediction_record_ids", "prediction_content_ids"),
+)
+def test_unsealed_evaluator_v2_supplied_column_item_subclass_precedes_decode(
+    monkeypatch: pytest.MonkeyPatch,
+    synthetic_archive: _SyntheticArchiveFixtureV2,
+    field_name: str,
+) -> None:
+    class StringSubclass(str):
+        pass
+
+    decoded = synthetic_archive.decoded
+    main_rows, conflict_rows = _evaluator_v2_rows(decoded)
+    column = getattr(decoded, field_name)
+    polluted = _copy_with_pollution(
+        decoded,
+        **{field_name: (StringSubclass(column[0]), *column[1:])},
+    )
+
+    def forbidden(*args: object, **kwargs: object) -> object:
+        raise AssertionError("invalid supplied root item reached public V2 decoder")
+
+    monkeypatch.setattr(
+        evaluator_v2,
+        "decode_public_recognizer_prediction_archive_v2",
+        forbidden,
+    )
+    with pytest.raises((TypeError, ValueError)):
+        evaluator_v2.build_unsealed_prediction_partition_manifest_v2(
+            prediction_archive=polluted,
+            main_row_ids=main_rows,
+            semantic_conflict_row_ids=conflict_rows,
+        )
+
+
+@pytest.mark.parametrize("pollution", ("empty_bytes", "bytes_subclass"))
+def test_unsealed_evaluator_v2_supplied_archive_byte_caps_precede_decode(
+    monkeypatch: pytest.MonkeyPatch,
+    synthetic_archive: _SyntheticArchiveFixtureV2,
+    pollution: str,
+) -> None:
+    class BytesSubclass(bytes):
+        pass
+
+    decoded = synthetic_archive.decoded
+    main_rows, conflict_rows = _evaluator_v2_rows(decoded)
+    bad_archive: bytes = (
+        b"" if pollution == "empty_bytes" else BytesSubclass(decoded.archive)
+    )
+    polluted = _copy_with_pollution(decoded, archive=bad_archive)
+
+    def forbidden(*args: object, **kwargs: object) -> object:
+        raise AssertionError("invalid supplied archive bytes reached public decoder")
+
+    monkeypatch.setattr(
+        evaluator_v2,
+        "decode_public_recognizer_prediction_archive_v2",
+        forbidden,
+    )
+    with pytest.raises((TypeError, ValueError)):
+        evaluator_v2.build_unsealed_prediction_partition_manifest_v2(
+            prediction_archive=polluted,
+            main_row_ids=main_rows,
+            semantic_conflict_row_ids=conflict_rows,
+        )
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    ("batch_policy_id", "input_archive_policy_id", "input_archive_version"),
+)
+@pytest.mark.parametrize("pollution", ("string_subclass", "object"))
+def test_unsealed_evaluator_v2_context_scalar_pollution_precedes_decode(
+    monkeypatch: pytest.MonkeyPatch,
+    synthetic_archive: _SyntheticArchiveFixtureV2,
+    field_name: str,
+    pollution: str,
+) -> None:
+    class HostileString(str):
+        def __eq__(self, other: object) -> bool:
+            raise AssertionError("hostile supplied context scalar reached replay")
+
+    decoded = synthetic_archive.decoded
+    main_rows, conflict_rows = _evaluator_v2_rows(decoded)
+    polluted_value: object = (
+        HostileString(getattr(decoded.context, field_name))
+        if pollution == "string_subclass"
+        else object()
+    )
+    polluted_context = _copy_with_pollution(
+        decoded.context,
+        **{field_name: polluted_value},
+    )
+    polluted = _copy_with_pollution(decoded, context=polluted_context)
+
+    def forbidden(*args: object, **kwargs: object) -> object:
+        raise AssertionError("invalid supplied context reached public V2 decoder")
+
+    monkeypatch.setattr(
+        evaluator_v2,
+        "decode_public_recognizer_prediction_archive_v2",
+        forbidden,
+    )
+    with pytest.raises((TypeError, ValueError)):
+        evaluator_v2.build_unsealed_prediction_partition_manifest_v2(
+            prediction_archive=polluted,
+            main_row_ids=main_rows,
+            semantic_conflict_row_ids=conflict_rows,
+        )
+
+
+@pytest.mark.parametrize(
+    "pollution",
+    (
+        "main_count",
+        "conflict_count",
+        "main_reordered",
+        "conflict_reordered",
+        "main_duplicate",
+        "missing_foreign",
+    ),
+)
+def test_unsealed_evaluator_v2_builder_rejects_nonpartition_inputs(
+    synthetic_archive: _SyntheticArchiveFixtureV2,
+    pollution: str,
+) -> None:
+    decoded = synthetic_archive.decoded
+    main_rows, conflict_rows = _evaluator_v2_rows(decoded)
+    if pollution == "main_count":
+        main_rows = main_rows[:-1]
+    elif pollution == "conflict_count":
+        conflict_rows = conflict_rows[:-1]
+    elif pollution == "main_reordered":
+        main_rows = (main_rows[1], main_rows[0], *main_rows[2:])
+    elif pollution == "conflict_reordered":
+        conflict_rows = (
+            conflict_rows[1],
+            conflict_rows[0],
+            *conflict_rows[2:],
+        )
+    elif pollution == "main_duplicate":
+        main_rows = (main_rows[0], main_rows[0], *main_rows[2:])
+    else:
+        conflict_rows = tuple(
+            sorted(
+                (
+                    _hex_id("phase2b_recognizer_input_row_v2_", 999_999),
+                    *conflict_rows[1:],
+                )
+            )
+        )
+    with pytest.raises((TypeError, ValueError)):
+        evaluator_v2.build_unsealed_prediction_partition_manifest_v2(
+            prediction_archive=decoded,
+            main_row_ids=main_rows,
+            semantic_conflict_row_ids=conflict_rows,
+        )
+
+
+def test_unsealed_evaluator_v2_rejects_container_and_item_subclasses(
+    synthetic_archive: _SyntheticArchiveFixtureV2,
+) -> None:
+    class TupleSubclass(tuple):
+        pass
+
+    class StringSubclass(str):
+        pass
+
+    decoded = synthetic_archive.decoded
+    main_rows, conflict_rows = _evaluator_v2_rows(decoded)
+    for polluted_main, polluted_conflict in (
+        (list(main_rows), conflict_rows),
+        (TupleSubclass(main_rows), conflict_rows),
+        ((StringSubclass(main_rows[0]), *main_rows[1:]), conflict_rows),
+        (main_rows, TupleSubclass(conflict_rows)),
+    ):
+        with pytest.raises((TypeError, ValueError)):
+            evaluator_v2.build_unsealed_prediction_partition_manifest_v2(
+                prediction_archive=decoded,
+                main_row_ids=polluted_main,  # type: ignore[arg-type]
+                semantic_conflict_row_ids=polluted_conflict,
+            )
+
+
+def test_unsealed_evaluator_v2_count_and_type_gates_precede_partition_hash(
+    monkeypatch: pytest.MonkeyPatch,
+    synthetic_archive: _SyntheticArchiveFixtureV2,
+) -> None:
+    class TupleSubclass(tuple):
+        pass
+
+    decoded = synthetic_archive.decoded
+    main_rows, conflict_rows = _evaluator_v2_rows(decoded)
+
+    def forbidden_hash(*args: object, **kwargs: object) -> object:
+        raise AssertionError("invalid partition reached SHA-256")
+
+    monkeypatch.setattr(evaluator_v2.hashlib, "sha256", forbidden_hash)
+    for polluted_main in (main_rows[:-1], TupleSubclass(main_rows)):
+        with pytest.raises((TypeError, ValueError)):
+            evaluator_v2.build_unsealed_prediction_partition_manifest_v2(
+                prediction_archive=decoded,
+                main_row_ids=polluted_main,
+                semantic_conflict_row_ids=conflict_rows,
+            )
+
+
+@pytest.mark.parametrize(
+    "pollution",
+    ("bad_item", "item_subclass", "reordered", "duplicate", "overlap"),
+)
+def test_unsealed_evaluator_v2_local_partition_closure_precedes_decode_and_hash(
+    monkeypatch: pytest.MonkeyPatch,
+    synthetic_archive: _SyntheticArchiveFixtureV2,
+    pollution: str,
+) -> None:
+    """A locally invalid 720/240 proposal must not inspect archive bytes."""
+
+    class StringSubclass(str):
+        pass
+
+    decoded = synthetic_archive.decoded
+    main_rows, conflict_rows = _evaluator_v2_rows(decoded)
+    if pollution == "bad_item":
+        main_rows = tuple(
+            sorted(
+                (
+                    _hex_id("phase2b_recognizer_input_row_v2_bad_", 1),
+                    *main_rows[1:],
+                )
+            )
+        )
+    elif pollution == "item_subclass":
+        main_rows = (
+            StringSubclass(main_rows[0]),
+            *main_rows[1:],
+        )
+    elif pollution == "reordered":
+        main_rows = (main_rows[1], main_rows[0], *main_rows[2:])
+    elif pollution == "duplicate":
+        main_rows = (main_rows[0], main_rows[0], *main_rows[2:])
+    else:
+        conflict_rows = tuple(sorted((main_rows[0], *conflict_rows[1:])))
+
+    def forbidden(*args: object, **kwargs: object) -> object:
+        raise AssertionError("invalid local partition reached decode or SHA-256")
+
+    monkeypatch.setattr(
+        evaluator_v2,
+        "decode_public_recognizer_prediction_archive_v2",
+        forbidden,
+    )
+    monkeypatch.setattr(evaluator_v2.hashlib, "sha256", forbidden)
+    with pytest.raises((TypeError, ValueError)):
+        evaluator_v2.build_unsealed_prediction_partition_manifest_v2(
+            prediction_archive=decoded,
+            main_row_ids=main_rows,
+            semantic_conflict_row_ids=conflict_rows,
+        )
+
+
+@pytest.mark.parametrize(
+    "pollution",
+    ("item_subclass", "reordered", "duplicate", "overlap"),
+)
+def test_unsealed_evaluator_v2_polluted_manifest_rejects_before_archive_replay(
+    monkeypatch: pytest.MonkeyPatch,
+    synthetic_archive: _SyntheticArchiveFixtureV2,
+    pollution: str,
+) -> None:
+    class StringSubclass(str):
+        pass
+
+    decoded = synthetic_archive.decoded
+    manifest = _evaluator_v2_manifest(decoded)
+    if pollution == "item_subclass":
+        manifest = _copy_with_pollution(
+            manifest,
+            main_row_ids=(
+                StringSubclass(manifest.main_row_ids[0]),
+                *manifest.main_row_ids[1:],
+            ),
+        )
+    elif pollution == "reordered":
+        manifest = _copy_with_pollution(
+            manifest,
+            main_row_ids=(
+                manifest.main_row_ids[1],
+                manifest.main_row_ids[0],
+                *manifest.main_row_ids[2:],
+            ),
+        )
+    elif pollution == "duplicate":
+        manifest = _copy_with_pollution(
+            manifest,
+            main_row_ids=(
+                manifest.main_row_ids[0],
+                manifest.main_row_ids[0],
+                *manifest.main_row_ids[2:],
+            ),
+        )
+    else:
+        manifest = _copy_with_pollution(
+            manifest,
+            semantic_conflict_row_ids=tuple(
+                sorted(
+                    (
+                        manifest.main_row_ids[0],
+                        *manifest.semantic_conflict_row_ids[1:],
+                    )
+                )
+            ),
+        )
+
+    def forbidden(*args: object, **kwargs: object) -> object:
+        raise AssertionError("polluted manifest reached public archive replay")
+
+    monkeypatch.setattr(
+        evaluator_v2,
+        "decode_public_recognizer_prediction_archive_v2",
+        forbidden,
+    )
+    result = evaluator_v2.evaluate_unsealed_prediction_archive_structure_v2(
+        prediction_archive=decoded,
+        partition_manifest=manifest,
+    )
+    _assert_evaluator_v2_atomic_rejection(result)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "polluted_value"),
+    (
+        ("reason", "hostile_string"),
+        ("main_count", True),
+        ("runtime_executed", 0),
+        ("metric_results", ("partial",)),
+        ("main_row_ids_root", "hostile_string"),
+        (
+            "prediction_archive_id",
+            _hex_id("phase2b_recognizer_prediction_archive_v2_", 970_001),
+        ),
+        (
+            "prediction_archive_policy_id",
+            _hex_id("phase2b_recognizer_prediction_archive_policy_v2_", 970_002),
+        ),
+        (
+            "partition_manifest_id",
+            _hex_id("phase2b_unsealed_prediction_partition_v2_", 970_003),
+        ),
+        ("exact_freeze_id", _hex_id("phase2b_exact_freeze_", 970_004)),
+        (
+            "evaluator_policy_id",
+            _hex_id("phase2b_unsealed_prediction_evaluator_policy_v2_", 970_005),
+        ),
+        (
+            "main_row_ids_root",
+            _hex_id("phase2b_unsealed_main_rows_v2_", 970_006),
+        ),
+        (
+            "semantic_conflict_row_ids_root",
+            _hex_id(
+                "phase2b_unsealed_semantic_conflict_rows_v2_",
+                970_007,
+            ),
+        ),
+        (
+            "partition_union_row_ids_root",
+            _hex_id("phase2b_unsealed_partition_union_rows_v2_", 970_008),
+        ),
+        (
+            "ordered_archive_input_row_ids_root",
+            _hex_id("phase2b_prediction_input_rows_v2_", 970_009),
+        ),
+    ),
+)
+def test_unsealed_evaluator_v2_polluted_success_rejects_before_deep_replay(
+    monkeypatch: pytest.MonkeyPatch,
+    synthetic_archive: _SyntheticArchiveFixtureV2,
+    field_name: str,
+    polluted_value: object,
+) -> None:
+    class HostileString(str):
+        def __eq__(self, other: object) -> bool:
+            raise AssertionError("hostile success scalar reached equality")
+
+    decoded = synthetic_archive.decoded
+    manifest = _evaluator_v2_manifest(decoded)
+    result = evaluator_v2.evaluate_unsealed_prediction_archive_structure_v2(
+        prediction_archive=decoded,
+        partition_manifest=manifest,
+    )
+    assert type(result) is evaluator_v2.UnsealedPredictionStructuralEvaluationV2
+    if polluted_value == "hostile_string":
+        polluted_value = HostileString(getattr(result, field_name))
+    polluted = _copy_with_pollution(result, **{field_name: polluted_value})
+
+    def forbidden(*args: object, **kwargs: object) -> object:
+        raise AssertionError("polluted success object reached public archive replay")
+
+    monkeypatch.setattr(
+        evaluator_v2,
+        "decode_public_recognizer_prediction_archive_v2",
+        forbidden,
+    )
+    with pytest.raises((TypeError, ValueError)):
+        polluted._validate(
+            prediction_archive=decoded,
+            partition_manifest=manifest,
+        )
+
+
+def test_unsealed_evaluator_v2_rejects_root_and_record_drift_atomically(
+    synthetic_archive: _SyntheticArchiveFixtureV2,
+) -> None:
+    decoded = synthetic_archive.decoded
+    manifest = _evaluator_v2_manifest(decoded)
+    polluted_values = (
+        (
+            _copy_with_pollution(
+                decoded,
+                input_row_ids=(
+                    decoded.input_row_ids[1],
+                    decoded.input_row_ids[0],
+                    *decoded.input_row_ids[2:],
+                ),
+            ),
+            manifest,
+        ),
+        (
+            _copy_with_pollution(
+                decoded,
+                records=(decoded.records[1], decoded.records[0], *decoded.records[2:]),
+            ),
+            manifest,
+        ),
+        (
+            decoded,
+            _copy_with_pollution(
+                manifest,
+                ordered_archive_input_row_ids_root=_hex_id(
+                    "phase2b_prediction_input_rows_v2_", 999_001
+                ),
+            ),
+        ),
+        (
+            decoded,
+            _copy_with_pollution(
+                manifest,
+                partition_union_row_ids_root=_hex_id(
+                    "phase2b_unsealed_partition_union_rows_v2_", 999_002
+                ),
+            ),
+        ),
+    )
+    for polluted_archive, polluted_manifest in polluted_values:
+        result = evaluator_v2.evaluate_unsealed_prediction_archive_structure_v2(
+            prediction_archive=polluted_archive,
+            partition_manifest=polluted_manifest,
+        )
+        _assert_evaluator_v2_atomic_rejection(result)
+
+
+def test_unsealed_evaluator_v2_success_claims_require_exact_bool(
+    synthetic_archive: _SyntheticArchiveFixtureV2,
+) -> None:
+    decoded = synthetic_archive.decoded
+    manifest = _evaluator_v2_manifest(decoded)
+    result = evaluator_v2.evaluate_unsealed_prediction_archive_structure_v2(
+        prediction_archive=decoded,
+        partition_manifest=manifest,
+    )
+    assert type(result) is evaluator_v2.UnsealedPredictionStructuralEvaluationV2
+    assert type(result.structural_completeness_verified) is bool
+    for name in EVALUATOR_V2_FALSE_CLAIMS:
+        assert type(getattr(result, name)) is bool
+    for name, polluted_value in (
+        ("structural_completeness_verified", 1),
+        ("runtime_executed", 0),
+        ("prediction_scored", True),
+        ("effect_evidence", True),
+        ("c1_exit_evidence", True),
+    ):
+        polluted = _copy_with_pollution(result, **{name: polluted_value})
+        with pytest.raises((TypeError, ValueError)):
+            polluted._validate(
+                prediction_archive=decoded,
+                partition_manifest=manifest,
+            )
+
+
+def test_unsealed_evaluator_v2_has_no_scorer_answer_or_runtime_inputs() -> None:
+    signature = inspect.signature(
+        evaluator_v2.evaluate_unsealed_prediction_archive_structure_v2
+    )
+    assert tuple(signature.parameters) == (
+        "prediction_archive",
+        "partition_manifest",
+    )
+    folded = " ".join(signature.parameters).casefold()
+    for forbidden in ("answer", "gold", "metric", "runtime", "score"):
+        assert forbidden not in folded
+
+
+def test_unsealed_evaluator_v1_v2_types_and_identities_cross_reject(
+    synthetic_archive: _SyntheticArchiveFixtureV2,
+) -> None:
+    decoded = synthetic_archive.decoded
+    manifest = _evaluator_v2_manifest(decoded)
+    assert (
+        evaluator_v2.UNSEALED_PREDICTION_EVALUATOR_V2_VERSION
+        != evaluator_v1.UNSEALED_PREDICTION_EVALUATOR_VERSION
+    )
+    assert (
+        evaluator_v2.UNSEALED_PREDICTION_EVALUATOR_POLICY_ID_V2
+        != evaluator_v1.UNSEALED_PREDICTION_EVALUATOR_POLICY_ID
+    )
+    with pytest.raises(TypeError):
+        evaluator_v1.build_unsealed_prediction_partition_manifest_v1(
+            prediction_archive=decoded,  # type: ignore[arg-type]
+            main_row_ids=manifest.main_row_ids,
+            semantic_conflict_row_ids=manifest.semantic_conflict_row_ids,
+        )
+    fake_v1_archive = object.__new__(archive_v1.DecodedRecognizerPredictionArchiveV1)
+    with pytest.raises(TypeError):
+        evaluator_v2.build_unsealed_prediction_partition_manifest_v2(
+            prediction_archive=fake_v1_archive,  # type: ignore[arg-type]
+            main_row_ids=manifest.main_row_ids,
+            semantic_conflict_row_ids=manifest.semantic_conflict_row_ids,
+        )
+    fake_v1_manifest = object.__new__(
+        evaluator_v1.UnsealedPredictionPartitionManifestV1
+    )
+    with pytest.raises(TypeError):
+        evaluator_v2.evaluate_unsealed_prediction_archive_structure_v2(
+            prediction_archive=decoded,
+            partition_manifest=fake_v1_manifest,  # type: ignore[arg-type]
+        )
+
+
+def test_unsealed_evaluator_v2_private_types_and_rejection_are_fail_closed(
+    synthetic_archive: _SyntheticArchiveFixtureV2,
+) -> None:
+    for type_ in (
+        evaluator_v2.UnsealedPredictionPartitionManifestV2,
+        evaluator_v2.UnsealedPredictionStructuralEvaluationV2,
+    ):
+        with pytest.raises(TypeError, match="privately issued"):
+            type_()
+    decoded = synthetic_archive.decoded
+    manifest = _evaluator_v2_manifest(decoded)
+    polluted = _copy_with_pollution(
+        manifest,
+        main_row_ids=manifest.main_row_ids[:-1],
+    )
+    result = evaluator_v2.evaluate_unsealed_prediction_archive_structure_v2(
+        prediction_archive=decoded,
+        partition_manifest=polluted,
+    )
+    _assert_evaluator_v2_atomic_rejection(result)
+    with pytest.raises((TypeError, ValueError)):
+        evaluator_v2.UnsealedPredictionEvaluationRejectionV2(
+            disposition=evaluator_v2.UnsealedPredictionEvaluationDispositionV2.ABSTAIN,
+            reason="polluted",
+            prediction_archive_id=decoded.archive_id,
+            partition_manifest_id=manifest.manifest_id,
+            metric_results=("partial",),
+        )
