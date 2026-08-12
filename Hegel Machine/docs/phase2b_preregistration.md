@@ -277,9 +277,20 @@ The synthetic 1 ANSWER + 1 ANSWER_SET + 958 ABSTAIN fixture is structural codec
 evidence, not an actual 960-case execution. Input membership, batch membership,
 source projection/disjointness, single allocation, secret custody, execution-
 manifest authority, derived mapping, runtime, capacity, origin/formal audit,
-sealed eligibility, scoring, effect, and C1 remain false. The next slice is
-`unsealed_prediction_evaluator_v2_structural_720_240_partition_replay`, followed
-later by CLI, formal scoring, and actual unsealed replay.
+sealed eligibility, scoring, effect, and C1 remain false.
+
+The independent V2 unsealed structural evaluator accepts partition labels only
+in its evaluator-side manifest, never in recognizer-facing archive bytes. It
+requires exact sorted-unique 720/240 partitions, checks disjointness and set
+exhaustiveness against the canonical V2 archive, and binds their sorted roots
+separately from the archive's ordered input-row root. Each successful build or
+evaluation uses one public V2 archive replay and treats that canonical replay as
+authoritative. Success is only `STRUCTURALLY_COMPLETE_NOT_SCORED`. The synthetic
+partition replay does not authenticate the partition manifest and does not
+evidence membership, runtime, an actual 960-case run, capacity, scoring, effect,
+or C1. The next slice is
+`strict_recognizer_cli_v2_structural_input_output_contract`, followed later by
+formal scoring and actual unsealed replay.
 
 Pairwise distinct IKM values do not attest independent generation. The raw-envelope
 diagnostic verifies typed payload identity and direct transform replay but not batch

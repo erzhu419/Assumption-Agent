@@ -283,11 +283,13 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
   或 C1 exit 证据。
   origin authentication、完整 trusted RFC-8785
   builder、formal namespace/covert audit 与 formal corpus 执行仍缺失；1024-authority
-  worst-case wall-time/RSS 也尚未资格化。下一刀是
-  `unsealed_prediction_evaluator_v2_structural_720_240_partition_replay`；
-  它必须消费 V2 archive identity 并保持 evaluator-side labels 与 recognizer wire 分离，不能把
-  synthetic exact-960 codec fixture 冒充 actual run、score 或效果。recognizer CLI、formal
-  scoring evaluator 与 actual unsealed 960-case replay 仍在其后；在完整
+  worst-case wall-time/RSS 也尚未资格化。独立 V2 unsealed evaluator 只从 evaluator-side
+  manifest 接收 sorted-unique 720/240 labels，验证 disjoint 与 set-exhaustive coverage，并分别
+  绑定 partition roots 和 V2 archive 的 ordered root；每次成功路径只以一次 public V2 replay
+  的 canonical result 为权威。它只返回 `STRUCTURALLY_COMPLETE_NOT_SCORED`，synthetic replay
+  不是 actual 960、runtime、capacity、score 或效果证据。下一刀是
+  `strict_recognizer_cli_v2_structural_input_output_contract`；formal scoring evaluator 与 actual
+  unsealed 960-case replay 仍在其后；在完整
   standard-error 语义实现前，formal selector 只允许 `absolute_bound`；
 - seal → prediction commitment → reveal → consumed 的 immutable lifecycle model、
   answer salted-commitment opening 校验和进程内原子防分叉 guard，以及 read-only

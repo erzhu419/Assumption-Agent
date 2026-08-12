@@ -91,6 +91,10 @@ from hegel_machine.phase2b_unsealed_prediction_evaluator_v1 import (
     UNSEALED_PREDICTION_EVALUATOR_POLICY_ID,
     UNSEALED_PREDICTION_EVALUATOR_VERSION,
 )
+from hegel_machine.phase2b_unsealed_prediction_evaluator_v2 import (
+    UNSEALED_PREDICTION_EVALUATOR_POLICY_ID_V2,
+    UNSEALED_PREDICTION_EVALUATOR_V2_VERSION,
+)
 from hegel_machine.phase2b_trusted_wire_batch_v2 import (
     TRUSTED_WIRE_BATCH_V2_PAYLOAD_SCHEMA_VERSION,
     TRUSTED_WIRE_BATCH_V2_POLICY_ID,
@@ -905,7 +909,55 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "recognizer_prediction_row_v2_formal_covert_audit",
         "recognizer_prediction_row_v2_sealed_holdout_eligible",
         "recognizer_prediction_row_v2_c1_exit_evidence",
+    ):
+        assert report[field_name] is False
+    assert report["unsealed_prediction_evaluator_v2_version"] == (
+        UNSEALED_PREDICTION_EVALUATOR_V2_VERSION
+    )
+    assert report["unsealed_prediction_evaluator_v2_policy_id"] == (
+        UNSEALED_PREDICTION_EVALUATOR_POLICY_ID_V2
+    )
+    assert report["unsealed_prediction_evaluator_v2_claim_level"] == (
+        TRUSTED_WIRE_CLAIM_LEVEL
+    )
+    for field_name in (
         "v2_unsealed_prediction_evaluator_implemented",
+        "unsealed_prediction_evaluator_v2_independent_identity_mechanics_implemented",
+        "unsealed_prediction_evaluator_v2_evaluator_side_partition_label_separation_mechanics_implemented",
+        "unsealed_prediction_evaluator_v2_exact_720_240_count_gate_mechanics_implemented",
+        "unsealed_prediction_evaluator_v2_sorted_unique_partition_mechanics_implemented",
+        "unsealed_prediction_evaluator_v2_disjoint_set_exhaustive_partition_mechanics_implemented",
+        "unsealed_prediction_evaluator_v2_partition_root_binding_mechanics_implemented",
+        "unsealed_prediction_evaluator_v2_ordered_archive_row_root_binding_mechanics_implemented",
+        "unsealed_prediction_evaluator_v2_single_public_v2_archive_replay_mechanics_implemented",
+        "unsealed_prediction_evaluator_v2_atomic_fail_closed_mechanics_implemented",
+        "unsealed_prediction_evaluator_v2_cross_version_rejection_mechanics_implemented",
+        "synthetic_exact_720_240_unsealed_prediction_evaluator_v2_structural_replay_verified",
+    ):
+        assert report[field_name] is True
+    for field_name in (
+        "unsealed_prediction_evaluator_v2_challenge_in_main_denominator",
+        "unsealed_prediction_evaluator_v2_input_archive_membership_verified",
+        "unsealed_prediction_evaluator_v2_batch_policy_membership_verified",
+        "unsealed_prediction_evaluator_v2_source_registry_projection_verified",
+        "unsealed_prediction_evaluator_v2_source_public_disjoint_verified",
+        "unsealed_prediction_evaluator_v2_single_live_allocation_verified",
+        "unsealed_prediction_evaluator_v2_secret_custodian_replay_verified",
+        "unsealed_prediction_evaluator_v2_execution_manifest_authority_verified",
+        "unsealed_prediction_evaluator_v2_partition_manifest_authority_verified",
+        "unsealed_prediction_evaluator_v2_derived_mapping_verified",
+        "unsealed_prediction_evaluator_v2_recognizer_executed",
+        "unsealed_prediction_evaluator_v2_runtime_executed",
+        "unsealed_prediction_evaluator_v2_actual_960_case_run_verified",
+        "unsealed_prediction_evaluator_v2_recognizer_capacity_evidence",
+        "unsealed_prediction_evaluator_v2_origin_authenticated",
+        "unsealed_prediction_evaluator_v2_formal_uuid_audit",
+        "unsealed_prediction_evaluator_v2_formal_covert_audit",
+        "unsealed_prediction_evaluator_v2_sealed_holdout_eligible",
+        "unsealed_prediction_evaluator_v2_scoring_performed",
+        "unsealed_prediction_evaluator_v2_prediction_scored",
+        "unsealed_prediction_evaluator_v2_effect_evidence",
+        "unsealed_prediction_evaluator_v2_c1_exit_evidence",
     ):
         assert report[field_name] is False
     assert report["public_prediction_run_context_v2_schema_version"] == (
@@ -972,7 +1024,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     ):
         assert report[field_name] is False
     assert report["next_phase2b_construction_slice"] == (
-        "unsealed_prediction_evaluator_v2_structural_720_240_partition_replay"
+        "strict_recognizer_cli_v2_structural_input_output_contract"
     )
     for field_name in (
         "real_positive_prediction_end_to_end_replay_implemented",
@@ -1062,6 +1114,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "trusted_wire_typed_replay_mechanics_v2",
         "uncertainty_compiler",
         "unsealed_prediction_structural_evaluator",
+        "unsealed_prediction_structural_evaluator_v2",
         "wire",
     }
     assert report["component_source_ids"][
@@ -1069,6 +1122,12 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     ] == (
         "sha256:"
         "ecfe3ff599f10deae845a32cb979209d0591727bd36ef98583194412d74cb04a"
+    )
+    assert report["component_source_ids"][
+        "unsealed_prediction_structural_evaluator_v2"
+    ] == (
+        "sha256:"
+        "f7c1e98fe3e354047e0e76d75f699ee6f3f98493a52fde3f9724f4acce5858e5"
     )
     assert report["component_source_ids"][
         "recognizer_prediction_row_mapping_mechanics_v2"

@@ -317,9 +317,15 @@ public decoder 的最强结论仅是 structural archive、canonical record frami
 结构 codec，不是 actual 960 run。因此旧 payload-size P0、V2 单行 mapping 和 exact-960 archive
 structural mechanics 已闭合，但不能外推为 recognizer/prediction E2E 或 capacity；input
 membership、manifest authority、derived mapping、runtime、actual 960、scoring、effect 与 C1 均未
-验证或执行。下一刀是
-`unsealed_prediction_evaluator_v2_structural_720_240_partition_replay`，随后才是 CLI、formal
-scoring 与 actual unsealed run。
+验证或执行。独立的 V2 unsealed evaluator 已把 720/240 labels 严格留在 evaluator-side
+manifest：两组 row ID 必须分别 sorted unique，并在相互 disjoint 后以 set 方式穷尽 canonical
+V2 archive 的 960 个 row ID；partition sorted roots 与 archive wire-order root 分开绑定，不再
+错误假设 V2 archive 本身按 row ID 排序。每次成功 build/evaluate 只调用一次 public V2 decoder，
+并只以 canonical replay 为权威；成功 disposition 仍只是
+`STRUCTURALLY_COMPLETE_NOT_SCORED`。synthetic 720/240 replay 不认证 partition labels，也不证明
+actual 960、runtime、capacity、scoring、effect 或 C1。下一刀是
+`strict_recognizer_cli_v2_structural_input_output_contract`，随后才是 formal scoring 与 actual
+unsealed run。
 
 这些 receipts 仍恒为 `NON_AUTHORITATIVE_MECHANICS_ONLY`。pairwise distinct 不证明 IKM
 独立性；raw-envelope diagnostic 不验证 batch membership 或 secret padding；supplied-secret

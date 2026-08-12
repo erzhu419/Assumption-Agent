@@ -149,10 +149,14 @@ formal 字段/UUID namespace 审计、
 720+240 formal 资源合同、recognizer CLI、formal scoring evaluator、sealed data、runtime/custodian 和
 C1 exit 仍缺失；宽泛 projection compiler、完整 typed pipeline、formal covert audit 与 formal
 holdout 状态继续为 false。入口虽冻结 1..1024 authority cap，最大规模的 wall-time/RSS 尚未
-资格化，不能据单例或 synthetic exact-960 mechanics 回归推断 formal-corpus capacity。下一施工
-切片是 `unsealed_prediction_evaluator_v2_structural_720_240_partition_replay`；它必须保持
-V1/V2 identity 边界和 evaluator-side label separation，不能把结构完整冒充 score 或 effect。
-CLI、formal scoring 和 actual unsealed 960 replay 均在其后。
+资格化，不能据单例或 synthetic exact-960 mechanics 回归推断 formal-corpus capacity。V2
+unsealed evaluator 现仅在 evaluator-side manifest 中接收 sorted-unique 720/240 labels，验证
+disjoint + set-exhaustive coverage，并把 partition roots 与 archive ordered root 分开绑定；一次
+public V2 replay 的 canonical result 是唯一权威。它的 synthetic success 仅为
+`STRUCTURALLY_COMPLETE_NOT_SCORED`，partition authority、actual 960、runtime、capacity、scoring、
+effect 与 C1 继续为 false。下一施工切片是
+`strict_recognizer_cli_v2_structural_input_output_contract`；formal scoring 和 actual unsealed 960
+replay 均在其后。
 
 此外可以说：Phase-3A 的 v1.0.2 strict specification 已冻结，Python/Rust shared vectors
 各 48/48 PASS。M2 两端都接受 64,680 个 source candidates，并得到 64,680 个 unique strict

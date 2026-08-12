@@ -1174,6 +1174,7 @@ def phase2b_preregistration_report() -> dict[str, object]:
         phase2b_trusted_wire_v1,
         phase2b_uncertainty_compiler,
         phase2b_unsealed_prediction_evaluator_v1,
+        phase2b_unsealed_prediction_evaluator_v2,
         phase2b_wire,
     )
 
@@ -1628,9 +1629,51 @@ def phase2b_preregistration_report() -> dict[str, object]:
         "recognizer_prediction_archive_v2_prediction_scored": False,
         "recognizer_prediction_archive_v2_effect_evidence": False,
         "recognizer_prediction_archive_v2_c1_exit_evidence": False,
-        "v2_unsealed_prediction_evaluator_implemented": False,
+        "unsealed_prediction_evaluator_v2_version": (
+            phase2b_unsealed_prediction_evaluator_v2.UNSEALED_PREDICTION_EVALUATOR_V2_VERSION
+        ),
+        "unsealed_prediction_evaluator_v2_policy_id": (
+            phase2b_unsealed_prediction_evaluator_v2.UNSEALED_PREDICTION_EVALUATOR_POLICY_ID_V2
+        ),
+        "unsealed_prediction_evaluator_v2_claim_level": (
+            phase2b_trusted_wire_v1.NON_AUTHORITATIVE_CLAIM_LEVEL
+        ),
+        "v2_unsealed_prediction_evaluator_implemented": True,
+        "unsealed_prediction_evaluator_v2_independent_identity_mechanics_implemented": True,
+        "unsealed_prediction_evaluator_v2_evaluator_side_partition_label_separation_mechanics_implemented": True,
+        "unsealed_prediction_evaluator_v2_exact_720_240_count_gate_mechanics_implemented": True,
+        "unsealed_prediction_evaluator_v2_sorted_unique_partition_mechanics_implemented": True,
+        "unsealed_prediction_evaluator_v2_disjoint_set_exhaustive_partition_mechanics_implemented": True,
+        "unsealed_prediction_evaluator_v2_partition_root_binding_mechanics_implemented": True,
+        "unsealed_prediction_evaluator_v2_ordered_archive_row_root_binding_mechanics_implemented": True,
+        "unsealed_prediction_evaluator_v2_single_public_v2_archive_replay_mechanics_implemented": True,
+        "unsealed_prediction_evaluator_v2_atomic_fail_closed_mechanics_implemented": True,
+        "unsealed_prediction_evaluator_v2_cross_version_rejection_mechanics_implemented": True,
+        "synthetic_exact_720_240_unsealed_prediction_evaluator_v2_structural_replay_verified": True,
+        "unsealed_prediction_evaluator_v2_challenge_in_main_denominator": False,
+        "unsealed_prediction_evaluator_v2_input_archive_membership_verified": False,
+        "unsealed_prediction_evaluator_v2_batch_policy_membership_verified": False,
+        "unsealed_prediction_evaluator_v2_source_registry_projection_verified": False,
+        "unsealed_prediction_evaluator_v2_source_public_disjoint_verified": False,
+        "unsealed_prediction_evaluator_v2_single_live_allocation_verified": False,
+        "unsealed_prediction_evaluator_v2_secret_custodian_replay_verified": False,
+        "unsealed_prediction_evaluator_v2_execution_manifest_authority_verified": False,
+        "unsealed_prediction_evaluator_v2_partition_manifest_authority_verified": False,
+        "unsealed_prediction_evaluator_v2_derived_mapping_verified": False,
+        "unsealed_prediction_evaluator_v2_recognizer_executed": False,
+        "unsealed_prediction_evaluator_v2_runtime_executed": False,
+        "unsealed_prediction_evaluator_v2_actual_960_case_run_verified": False,
+        "unsealed_prediction_evaluator_v2_recognizer_capacity_evidence": False,
+        "unsealed_prediction_evaluator_v2_origin_authenticated": False,
+        "unsealed_prediction_evaluator_v2_formal_uuid_audit": False,
+        "unsealed_prediction_evaluator_v2_formal_covert_audit": False,
+        "unsealed_prediction_evaluator_v2_sealed_holdout_eligible": False,
+        "unsealed_prediction_evaluator_v2_scoring_performed": False,
+        "unsealed_prediction_evaluator_v2_prediction_scored": False,
+        "unsealed_prediction_evaluator_v2_effect_evidence": False,
+        "unsealed_prediction_evaluator_v2_c1_exit_evidence": False,
         "next_phase2b_construction_slice": (
-            "unsealed_prediction_evaluator_v2_structural_720_240_partition_replay"
+            "strict_recognizer_cli_v2_structural_input_output_contract"
         ),
         "real_positive_prediction_end_to_end_replay_implemented": False,
         "recognizer_prediction_capacity_evidence": False,
@@ -1744,6 +1787,10 @@ def phase2b_preregistration_report() -> dict[str, object]:
                 (
                     "unsealed_prediction_structural_evaluator",
                     phase2b_unsealed_prediction_evaluator_v1,
+                ),
+                (
+                    "unsealed_prediction_structural_evaluator_v2",
+                    phase2b_unsealed_prediction_evaluator_v2,
                 ),
                 ("wire", phase2b_wire),
             )
