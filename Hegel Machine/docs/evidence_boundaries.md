@@ -159,8 +159,14 @@ single-link regular files 做 bounded stable FD read，在任何 decode 前完�
 public V2 decoder；它只绑定 context archive ID/SHA/batch/policy、ordered row IDs 与七个逐位置
 input roots。其单行 canonical compact JSON success 与 generic atomic stderr JSON/exit 2 failure
 仅证明只读 structural I/O mechanics，不生成 artifact，也不执行 recognizer/runtime/actual 960，
-更不建立 membership、authority、custody、capacity、scoring、effect 或 C1。下一施工切片是
-`formal_unsealed_prediction_scoring_contract_v2`；actual unsealed 960 replay 仍在其后。
+更不建立 membership、authority、custody、capacity、scoring、effect 或 C1。独立 formal unsealed
+V2 scoring contract 现只冻结 evaluator-side 用于预承诺的 exact-720 answer rows/case-type quota、九个
+metric definitions、main denominator 排除 240 challenge rows、调用方提供的 commitment opening，
+以及 strict receipt/evaluation/partition cross-binding。threshold、Wilson 与 paired bootstrap 仅引用、
+不执行；成功仍只是 `CONTRACT_BINDING_COMPLETE_NOT_SCORED`，metric/scored-row/gate results 为空。
+它不认证 answer authority 或 pre-reveal timing，不读取 prediction，也不执行 score、gate、runtime、
+actual 960、effect 或 C1。下一施工切片是
+`actual_unsealed_960_case_prediction_scoring_replay_v2`。
 
 此外可以说：Phase-3A 的 v1.0.2 strict specification 已冻结，Python/Rust shared vectors
 各 48/48 PASS。M2 两端都接受 64,680 个 source candidates，并得到 64,680 个 unique strict

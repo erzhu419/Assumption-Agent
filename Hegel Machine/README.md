@@ -294,8 +294,14 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
   ID/SHA/batch/policy、ordered row IDs 与七个逐位置 input roots。成功只输出一行 canonical compact
   JSON，失败只输出 generic atomic JSON 并以 exit 2 结束；它不生成 output artifact，也不是
   functional recognizer entrypoint。membership/authority/custody、derived mapping、recognizer/runtime、
-  actual 960、capacity、scoring、effect 与 C1 全部仍为 false。下一刀是
-  `formal_unsealed_prediction_scoring_contract_v2`；actual unsealed 960-case replay 仍在其后；在完整
+  actual 960、capacity、scoring、effect 与 C1 全部仍为 false。独立 formal unsealed V2 scoring
+  contract 现冻结 evaluator-side 用于预承诺的 exact 720 answer rows 与 case-type quota、九个 metric
+  definitions、main denominator 排除 240 challenge rows、调用方提供的 commitment opening，以及
+  strict receipt/evaluation/partition cross-binding。threshold、Wilson 与 paired bootstrap 仅被引用而
+  未执行；成功仍只是 `CONTRACT_BINDING_COMPLETE_NOT_SCORED`，metric/scored-row/gate results 均为空。
+  它不认证 answer authority 或 pre-reveal timing，不读取 predictions，也不执行 score、gate、runtime、
+  actual 960、effect 或 C1。下一刀是
+  `actual_unsealed_960_case_prediction_scoring_replay_v2`；在完整
   standard-error 语义实现前，formal selector 只允许 `absolute_bound`；
 - seal → prediction commitment → reveal → consumed 的 immutable lifecycle model、
   answer salted-commitment opening 校验和进程内原子防分叉 guard，以及 read-only

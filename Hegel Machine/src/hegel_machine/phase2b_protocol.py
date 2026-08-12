@@ -1157,6 +1157,7 @@ def phase2b_preregistration_report() -> dict[str, object]:
         phase2b_exact_derived_witness_bridge_v1,
         phase2b_exact_bridge_v1,
         phase2b_exact_transform_semantics_v1,
+        phase2b_formal_unsealed_prediction_scoring_contract_v2,
         phase2b_projection_compiler,
         phase2b_recognizer_prediction_archive_v1,
         phase2b_recognizer_prediction_archive_v2,
@@ -1181,6 +1182,10 @@ def phase2b_preregistration_report() -> dict[str, object]:
 
     protocol = frozen_phase2b_protocol()
     exact_freeze = frozen_phase2b_exact_freeze()
+    formal_scoring_contract_v2 = (
+        phase2b_formal_unsealed_prediction_scoring_contract_v2
+        .frozen_formal_unsealed_prediction_scoring_contract_v2()
+    )
     implementation_id = (
         "phase2b_protocol_source_sha256_"
         + hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
@@ -1719,8 +1724,79 @@ def phase2b_preregistration_report() -> dict[str, object]:
         "strict_recognizer_cli_v2_prediction_scored": False,
         "strict_recognizer_cli_v2_effect_evidence": False,
         "strict_recognizer_cli_v2_c1_exit_evidence": False,
+        "formal_unsealed_prediction_scoring_contract_v2_version": (
+            phase2b_formal_unsealed_prediction_scoring_contract_v2
+            .FORMAL_UNSEALED_PREDICTION_SCORING_CONTRACT_V2_VERSION
+        ),
+        "formal_unsealed_prediction_scoring_contract_v2_schema_id": (
+            phase2b_formal_unsealed_prediction_scoring_contract_v2
+            .FORMAL_UNSEALED_PREDICTION_SCORING_CONTRACT_V2_SCHEMA_ID
+        ),
+        "formal_unsealed_prediction_scoring_contract_v2_policy_id": (
+            phase2b_formal_unsealed_prediction_scoring_contract_v2
+            .FORMAL_UNSEALED_PREDICTION_SCORING_CONTRACT_V2_POLICY_ID
+        ),
+        "formal_unsealed_prediction_scoring_contract_v2_claim_level": (
+            phase2b_formal_unsealed_prediction_scoring_contract_v2
+            .FORMAL_UNSEALED_PREDICTION_SCORING_CONTRACT_V2_CLAIM_LEVEL
+        ),
+        "formal_unsealed_prediction_scoring_contract_v2_contract_id": (
+            formal_scoring_contract_v2.contract_id
+        ),
+        "formal_unsealed_answer_row_v2_schema_id": (
+            formal_scoring_contract_v2.answer_row_schema_id
+        ),
+        "formal_unsealed_answer_manifest_v2_schema_id": (
+            formal_scoring_contract_v2.answer_manifest_schema_id
+        ),
+        "formal_unsealed_prediction_scoring_contract_v2_implemented": True,
+        "formal_unsealed_prediction_scoring_contract_v2_independent_identity_mechanics_implemented": True,
+        "formal_unsealed_prediction_scoring_contract_v2_precommitted_evaluator_side_answer_manifest_mechanics_implemented": True,
+        "formal_unsealed_prediction_scoring_contract_v2_exact_main_720_answer_row_coverage_mechanics_implemented": True,
+        "formal_unsealed_prediction_scoring_contract_v2_frozen_case_type_quota_mechanics_implemented": True,
+        "formal_unsealed_prediction_scoring_contract_v2_answer_row_decision_family_binding_scale_semantics_mechanics_implemented": True,
+        "formal_unsealed_prediction_scoring_contract_v2_nine_metric_definition_mechanics_implemented": True,
+        "formal_unsealed_prediction_scoring_contract_v2_challenge_exclusion_from_main_denominator_mechanics_implemented": True,
+        "formal_unsealed_prediction_scoring_contract_v2_supplied_answer_commitment_opening_validation_mechanics_implemented": True,
+        "formal_unsealed_prediction_scoring_contract_v2_strict_receipt_evaluation_partition_cross_binding_mechanics_implemented": True,
+        "formal_unsealed_prediction_scoring_contract_v2_referenced_not_executed_threshold_wilson_bootstrap_mechanics_implemented": True,
+        "formal_unsealed_prediction_scoring_contract_v2_global_preflight_before_content_hash_mechanics_implemented": True,
+        "formal_unsealed_prediction_scoring_contract_v2_atomic_all_false_rejection_mechanics_implemented": True,
+        "formal_unsealed_prediction_scoring_contract_v2_cross_version_rejection_mechanics_implemented": True,
+        "synthetic_exact_720_formal_unsealed_prediction_scoring_contract_v2_binding_mechanics_verified": True,
+        "formal_unsealed_prediction_scoring_contract_v2_challenge_in_main_denominator": False,
+        "formal_unsealed_prediction_scoring_contract_v2_answer_manifest_authority_verified": False,
+        "formal_unsealed_prediction_scoring_contract_v2_answer_commitment_authority_verified": False,
+        "formal_unsealed_prediction_scoring_contract_v2_pre_reveal_commitment_timing_verified": False,
+        "formal_unsealed_prediction_scoring_contract_v2_input_archive_membership_verified": False,
+        "formal_unsealed_prediction_scoring_contract_v2_batch_policy_membership_verified": False,
+        "formal_unsealed_prediction_scoring_contract_v2_source_registry_projection_verified": False,
+        "formal_unsealed_prediction_scoring_contract_v2_source_public_disjoint_verified": False,
+        "formal_unsealed_prediction_scoring_contract_v2_single_live_allocation_verified": False,
+        "formal_unsealed_prediction_scoring_contract_v2_secret_custodian_replay_verified": False,
+        "formal_unsealed_prediction_scoring_contract_v2_execution_manifest_authority_verified": False,
+        "formal_unsealed_prediction_scoring_contract_v2_partition_manifest_authority_verified": False,
+        "formal_unsealed_prediction_scoring_contract_v2_derived_mapping_verified": False,
+        "formal_unsealed_prediction_scoring_contract_v2_recognizer_executed": False,
+        "formal_unsealed_prediction_scoring_contract_v2_runtime_executed": False,
+        "formal_unsealed_prediction_scoring_contract_v2_actual_960_case_run_verified": False,
+        "formal_unsealed_prediction_scoring_contract_v2_recognizer_capacity_evidence": False,
+        "formal_unsealed_prediction_scoring_contract_v2_origin_authenticated": False,
+        "formal_unsealed_prediction_scoring_contract_v2_formal_uuid_audit": False,
+        "formal_unsealed_prediction_scoring_contract_v2_formal_covert_audit": False,
+        "formal_unsealed_prediction_scoring_contract_v2_sealed_holdout_eligible": False,
+        "formal_unsealed_prediction_scoring_contract_v2_scoring_performed": False,
+        "formal_unsealed_prediction_scoring_contract_v2_prediction_scored": False,
+        "formal_unsealed_prediction_scoring_contract_v2_formal_gate_evaluation_performed": False,
+        "formal_unsealed_prediction_scoring_contract_v2_metric_results_materialized": False,
+        "formal_unsealed_prediction_scoring_contract_v2_scored_rows_materialized": False,
+        "formal_unsealed_prediction_scoring_contract_v2_control_rejection_metrics_implemented": False,
+        "formal_unsealed_prediction_scoring_contract_v2_slice_gate_metrics_implemented": False,
+        "formal_unsealed_prediction_scoring_contract_v2_challenge_scoring_performed": False,
+        "formal_unsealed_prediction_scoring_contract_v2_effect_evidence": False,
+        "formal_unsealed_prediction_scoring_contract_v2_c1_exit_evidence": False,
         "next_phase2b_construction_slice": (
-            "formal_unsealed_prediction_scoring_contract_v2"
+            "actual_unsealed_960_case_prediction_scoring_replay_v2"
         ),
         "real_positive_prediction_end_to_end_replay_implemented": False,
         "recognizer_prediction_capacity_evidence": False,
@@ -1781,6 +1857,10 @@ def phase2b_preregistration_report() -> dict[str, object]:
                 (
                     "exact_transform_semantics",
                     phase2b_exact_transform_semantics_v1,
+                ),
+                (
+                    "formal_unsealed_prediction_scoring_contract_v2",
+                    phase2b_formal_unsealed_prediction_scoring_contract_v2,
                 ),
                 ("projection_compiler", phase2b_projection_compiler),
                 ("runner", phase2b_runner),

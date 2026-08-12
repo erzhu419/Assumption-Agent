@@ -93,6 +93,13 @@ from hegel_machine.phase2b_strict_recognizer_cli_v2 import (
     STRICT_RECOGNIZER_CLI_V2_SCHEMA_ID,
     STRICT_RECOGNIZER_CLI_V2_SCHEMA_VERSION,
 )
+from hegel_machine.phase2b_formal_unsealed_prediction_scoring_contract_v2 import (
+    FORMAL_UNSEALED_PREDICTION_SCORING_CONTRACT_V2_CLAIM_LEVEL,
+    FORMAL_UNSEALED_PREDICTION_SCORING_CONTRACT_V2_POLICY_ID,
+    FORMAL_UNSEALED_PREDICTION_SCORING_CONTRACT_V2_SCHEMA_ID,
+    FORMAL_UNSEALED_PREDICTION_SCORING_CONTRACT_V2_VERSION,
+    frozen_formal_unsealed_prediction_scoring_contract_v2,
+)
 from hegel_machine.phase2b_unsealed_prediction_evaluator_v1 import (
     UNSEALED_PREDICTION_EVALUATOR_POLICY_ID,
     UNSEALED_PREDICTION_EVALUATOR_VERSION,
@@ -193,6 +200,73 @@ STRICT_RECOGNIZER_CLI_V2_REPORT_FIELDS = (
     STRICT_RECOGNIZER_CLI_V2_IDENTITY_FIELDS
     | frozenset(STRICT_RECOGNIZER_CLI_V2_TRUE_FIELDS)
     | frozenset(STRICT_RECOGNIZER_CLI_V2_FALSE_FIELDS)
+)
+
+FORMAL_UNSEALED_PREDICTION_SCORING_CONTRACT_V2_IDENTITY_FIELDS = frozenset(
+    {
+        "formal_unsealed_prediction_scoring_contract_v2_version",
+        "formal_unsealed_prediction_scoring_contract_v2_schema_id",
+        "formal_unsealed_prediction_scoring_contract_v2_policy_id",
+        "formal_unsealed_prediction_scoring_contract_v2_claim_level",
+        "formal_unsealed_prediction_scoring_contract_v2_contract_id",
+        "formal_unsealed_answer_row_v2_schema_id",
+        "formal_unsealed_answer_manifest_v2_schema_id",
+    }
+)
+FORMAL_UNSEALED_PREDICTION_SCORING_CONTRACT_V2_TRUE_FIELDS = (
+    "formal_unsealed_prediction_scoring_contract_v2_implemented",
+    "formal_unsealed_prediction_scoring_contract_v2_independent_identity_mechanics_implemented",
+    "formal_unsealed_prediction_scoring_contract_v2_precommitted_evaluator_side_answer_manifest_mechanics_implemented",
+    "formal_unsealed_prediction_scoring_contract_v2_exact_main_720_answer_row_coverage_mechanics_implemented",
+    "formal_unsealed_prediction_scoring_contract_v2_frozen_case_type_quota_mechanics_implemented",
+    "formal_unsealed_prediction_scoring_contract_v2_answer_row_decision_family_binding_scale_semantics_mechanics_implemented",
+    "formal_unsealed_prediction_scoring_contract_v2_nine_metric_definition_mechanics_implemented",
+    "formal_unsealed_prediction_scoring_contract_v2_challenge_exclusion_from_main_denominator_mechanics_implemented",
+    "formal_unsealed_prediction_scoring_contract_v2_supplied_answer_commitment_opening_validation_mechanics_implemented",
+    "formal_unsealed_prediction_scoring_contract_v2_strict_receipt_evaluation_partition_cross_binding_mechanics_implemented",
+    "formal_unsealed_prediction_scoring_contract_v2_referenced_not_executed_threshold_wilson_bootstrap_mechanics_implemented",
+    "formal_unsealed_prediction_scoring_contract_v2_global_preflight_before_content_hash_mechanics_implemented",
+    "formal_unsealed_prediction_scoring_contract_v2_atomic_all_false_rejection_mechanics_implemented",
+    "formal_unsealed_prediction_scoring_contract_v2_cross_version_rejection_mechanics_implemented",
+    "synthetic_exact_720_formal_unsealed_prediction_scoring_contract_v2_binding_mechanics_verified",
+)
+FORMAL_UNSEALED_PREDICTION_SCORING_CONTRACT_V2_FALSE_FIELDS = (
+    "formal_unsealed_prediction_scoring_contract_v2_challenge_in_main_denominator",
+    "formal_unsealed_prediction_scoring_contract_v2_answer_manifest_authority_verified",
+    "formal_unsealed_prediction_scoring_contract_v2_answer_commitment_authority_verified",
+    "formal_unsealed_prediction_scoring_contract_v2_pre_reveal_commitment_timing_verified",
+    "formal_unsealed_prediction_scoring_contract_v2_input_archive_membership_verified",
+    "formal_unsealed_prediction_scoring_contract_v2_batch_policy_membership_verified",
+    "formal_unsealed_prediction_scoring_contract_v2_source_registry_projection_verified",
+    "formal_unsealed_prediction_scoring_contract_v2_source_public_disjoint_verified",
+    "formal_unsealed_prediction_scoring_contract_v2_single_live_allocation_verified",
+    "formal_unsealed_prediction_scoring_contract_v2_secret_custodian_replay_verified",
+    "formal_unsealed_prediction_scoring_contract_v2_execution_manifest_authority_verified",
+    "formal_unsealed_prediction_scoring_contract_v2_partition_manifest_authority_verified",
+    "formal_unsealed_prediction_scoring_contract_v2_derived_mapping_verified",
+    "formal_unsealed_prediction_scoring_contract_v2_recognizer_executed",
+    "formal_unsealed_prediction_scoring_contract_v2_runtime_executed",
+    "formal_unsealed_prediction_scoring_contract_v2_actual_960_case_run_verified",
+    "formal_unsealed_prediction_scoring_contract_v2_recognizer_capacity_evidence",
+    "formal_unsealed_prediction_scoring_contract_v2_origin_authenticated",
+    "formal_unsealed_prediction_scoring_contract_v2_formal_uuid_audit",
+    "formal_unsealed_prediction_scoring_contract_v2_formal_covert_audit",
+    "formal_unsealed_prediction_scoring_contract_v2_sealed_holdout_eligible",
+    "formal_unsealed_prediction_scoring_contract_v2_scoring_performed",
+    "formal_unsealed_prediction_scoring_contract_v2_prediction_scored",
+    "formal_unsealed_prediction_scoring_contract_v2_formal_gate_evaluation_performed",
+    "formal_unsealed_prediction_scoring_contract_v2_metric_results_materialized",
+    "formal_unsealed_prediction_scoring_contract_v2_scored_rows_materialized",
+    "formal_unsealed_prediction_scoring_contract_v2_control_rejection_metrics_implemented",
+    "formal_unsealed_prediction_scoring_contract_v2_slice_gate_metrics_implemented",
+    "formal_unsealed_prediction_scoring_contract_v2_challenge_scoring_performed",
+    "formal_unsealed_prediction_scoring_contract_v2_effect_evidence",
+    "formal_unsealed_prediction_scoring_contract_v2_c1_exit_evidence",
+)
+FORMAL_UNSEALED_PREDICTION_SCORING_CONTRACT_V2_REPORT_FIELDS = (
+    FORMAL_UNSEALED_PREDICTION_SCORING_CONTRACT_V2_IDENTITY_FIELDS
+    | frozenset(FORMAL_UNSEALED_PREDICTION_SCORING_CONTRACT_V2_TRUE_FIELDS)
+    | frozenset(FORMAL_UNSEALED_PREDICTION_SCORING_CONTRACT_V2_FALSE_FIELDS)
 )
 
 
@@ -514,7 +588,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     report = phase2b_preregistration_report()
     assert report["implementation_id"] == (
         "phase2b_protocol_source_sha256_"
-        "185da0e62f63514300520697becffb6ed10248d0ed871342b9a4bc1306a355f1"
+        "1c097f7ccce5820977249ee4ba1598c30f150e20251895202bdbbc67f67aab4b"
     )
     assert report["artifact"] == "phase2b_preregistration_readiness_v1"
     assert report["formal_phase2b_exit_claim"] is False
@@ -1052,6 +1126,75 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         for field_name in report
         if field_name.startswith("strict_recognizer_cli_v2_")
     } == STRICT_RECOGNIZER_CLI_V2_REPORT_FIELDS
+    formal_scoring_contract_v2 = (
+        frozen_formal_unsealed_prediction_scoring_contract_v2()
+    )
+    assert report["formal_unsealed_prediction_scoring_contract_v2_version"] == (
+        FORMAL_UNSEALED_PREDICTION_SCORING_CONTRACT_V2_VERSION
+    )
+    assert report["formal_unsealed_prediction_scoring_contract_v2_schema_id"] == (
+        FORMAL_UNSEALED_PREDICTION_SCORING_CONTRACT_V2_SCHEMA_ID
+    )
+    assert report["formal_unsealed_prediction_scoring_contract_v2_policy_id"] == (
+        FORMAL_UNSEALED_PREDICTION_SCORING_CONTRACT_V2_POLICY_ID
+    )
+    assert report[
+        "formal_unsealed_prediction_scoring_contract_v2_claim_level"
+    ] == FORMAL_UNSEALED_PREDICTION_SCORING_CONTRACT_V2_CLAIM_LEVEL
+    assert report[
+        "formal_unsealed_prediction_scoring_contract_v2_contract_id"
+    ] == formal_scoring_contract_v2.contract_id
+    assert report["formal_unsealed_answer_row_v2_schema_id"] == (
+        formal_scoring_contract_v2.answer_row_schema_id
+    )
+    assert report["formal_unsealed_answer_manifest_v2_schema_id"] == (
+        formal_scoring_contract_v2.answer_manifest_schema_id
+    )
+    assert report["formal_unsealed_prediction_scoring_contract_v2_version"] == (
+        "hegel-machine-phase2b-formal-unsealed-prediction-scoring-contract/2"
+    )
+    assert report["formal_unsealed_prediction_scoring_contract_v2_schema_id"] == (
+        "phase2b_formal_unsealed_prediction_scoring_contract_schema_v2_"
+        "59c5ed77970bcbcd7e8dc00bed6407b876679fe274b8103bb0edc9941ab6503b"
+    )
+    assert report["formal_unsealed_prediction_scoring_contract_v2_policy_id"] == (
+        "phase2b_formal_unsealed_prediction_scoring_contract_policy_v2_"
+        "c80fc5ac1899fe2cf439cea8f4273a47e60d9e77b56bf5d4c0c303743ded96e1"
+    )
+    assert report[
+        "formal_unsealed_prediction_scoring_contract_v2_claim_level"
+    ] == "NON_AUTHORITATIVE_CONTRACT_ONLY"
+    assert report[
+        "formal_unsealed_prediction_scoring_contract_v2_contract_id"
+    ] == (
+        "phase2b_formal_unsealed_prediction_scoring_contract_v2_"
+        "37fce52fac6287a16d1925e76424d4d5b4e05fdcc552bc093d75d60a601d183e"
+    )
+    assert report["formal_unsealed_answer_row_v2_schema_id"] == (
+        "phase2b_formal_unsealed_answer_row_schema_v2_"
+        "63a5e346a611212ce2b3f870fa901be564a258269511e7b8710a3e8553d15e0c"
+    )
+    assert report["formal_unsealed_answer_manifest_v2_schema_id"] == (
+        "phase2b_formal_unsealed_answer_manifest_schema_v2_"
+        "3f427810029665a54854751b7d021a77c4d5f874b7df1992d50434b7108d32f0"
+    )
+    for field_name in FORMAL_UNSEALED_PREDICTION_SCORING_CONTRACT_V2_TRUE_FIELDS:
+        assert report[field_name] is True
+    for field_name in FORMAL_UNSEALED_PREDICTION_SCORING_CONTRACT_V2_FALSE_FIELDS:
+        assert report[field_name] is False
+    assert {
+        field_name
+        for field_name in report
+        if field_name.startswith(
+            "formal_unsealed_prediction_scoring_contract_v2_"
+        )
+        or field_name
+        in {
+            "formal_unsealed_answer_row_v2_schema_id",
+            "formal_unsealed_answer_manifest_v2_schema_id",
+            "synthetic_exact_720_formal_unsealed_prediction_scoring_contract_v2_binding_mechanics_verified",
+        }
+    } == FORMAL_UNSEALED_PREDICTION_SCORING_CONTRACT_V2_REPORT_FIELDS
     assert report["public_prediction_run_context_v2_schema_version"] == (
         PUBLIC_PREDICTION_RUN_CONTEXT_V2_SCHEMA_VERSION
     )
@@ -1116,7 +1259,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     ):
         assert report[field_name] is False
     assert report["next_phase2b_construction_slice"] == (
-        "formal_unsealed_prediction_scoring_contract_v2"
+        "actual_unsealed_960_case_prediction_scoring_replay_v2"
     )
     for field_name in (
         "real_positive_prediction_end_to_end_replay_implemented",
@@ -1189,6 +1332,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "exact_derived_witness_bridge",
         "exact_bridge",
         "exact_transform_semantics",
+        "formal_unsealed_prediction_scoring_contract_v2",
         "projection_compiler",
         "recognizer_input_archive_mechanics",
         "recognizer_input_archive_mechanics_v2",
@@ -1227,6 +1371,12 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     ] == (
         "sha256:"
         "167e3492683e56599d541ce91c9534fcefb01ba5ab702cef0803947e1cd6a1bb"
+    )
+    assert report["component_source_ids"][
+        "formal_unsealed_prediction_scoring_contract_v2"
+    ] == (
+        "sha256:"
+        "7070a115669b0a4a9ea7def82b43f7d544c9c7bf3cb1167a3922c5b11e1a233b"
     )
     assert report["component_source_ids"][
         "recognizer_prediction_row_mapping_mechanics_v2"
@@ -1297,7 +1447,7 @@ def test_checked_in_phase2b_preregistration_artifact_matches_runtime():
     assert artifact == phase2b_preregistration_report()
 
 
-def test_strict_cli_report_artifact_refresh_transition_is_exact():
+def test_formal_scoring_contract_report_artifact_refresh_transition_is_exact():
     artifact_path = (
         Path(__file__).resolve().parents[1]
         / "artifacts"
@@ -1305,19 +1455,24 @@ def test_strict_cli_report_artifact_refresh_transition_is_exact():
     )
     artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
     report = phase2b_preregistration_report()
-    assert len(report) == 448
+    assert len(report) == 501
     if artifact == report:
         return
-    assert len(artifact) == 412
-    assert set(report) - set(artifact) == STRICT_RECOGNIZER_CLI_V2_REPORT_FIELDS
+    assert len(artifact) == 448
+    assert set(report) - set(artifact) == (
+        FORMAL_UNSEALED_PREDICTION_SCORING_CONTRACT_V2_REPORT_FIELDS
+    )
     assert set(artifact) - set(report) == set()
-    assert {
+    changed_common_fields = {
         field_name
         for field_name in artifact.keys() & report.keys()
         if artifact[field_name] != report[field_name]
-    } == {
+    }
+    assert changed_common_fields == {
         "component_source_ids",
         "implementation_id",
         "next_phase2b_construction_slice",
         "report_id",
     }
+    for field_name in (artifact.keys() & report.keys()) - changed_common_fields:
+        assert artifact[field_name] == report[field_name]

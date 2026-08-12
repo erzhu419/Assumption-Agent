@@ -330,8 +330,14 @@ absolute、no-follow、single-link regular files；两档都完成 bounded stabl
 ordered row IDs 和七个逐位置 input roots；成功只写一行 canonical compact JSON，失败是 generic
 atomic stderr JSON/exit 2，且无 output artifact。它不是 functional recognizer entrypoint，所有
 membership/authority/custody、derived mapping、recognizer/runtime、actual 960、capacity、scoring、
-effect 与 C1 claim 继续为 false。下一刀是
-`formal_unsealed_prediction_scoring_contract_v2`，actual unsealed run 仍在其后。
+effect 与 C1 claim 继续为 false。独立 formal unsealed V2 scoring contract 只冻结 evaluator-side
+用于预承诺的 exact-720 answer rows/case-type quota、九个 metric definitions、main denominator 排除 240
+challenge rows、调用方提供的 commitment opening，以及 strict receipt/evaluation/partition
+cross-binding。threshold、Wilson 与 paired bootstrap 仅引用、未执行；成功仍只是
+`CONTRACT_BINDING_COMPLETE_NOT_SCORED`，metric/scored-row/gate results 为空。它不认证 answer
+authority 或 pre-reveal timing，不读取 prediction，也不执行 score、gate、runtime、actual 960、
+effect 或 C1。下一刀是
+`actual_unsealed_960_case_prediction_scoring_replay_v2`。
 
 这些 receipts 仍恒为 `NON_AUTHORITATIVE_MECHANICS_ONLY`。pairwise distinct 不证明 IKM
 独立性；raw-envelope diagnostic 不验证 batch membership 或 secret padding；supplied-secret

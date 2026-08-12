@@ -297,9 +297,18 @@ columns positionally. Success is one canonical compact JSON line; failure is one
 generic atomic stderr JSON line with exit 2. It creates no output artifact and is
 not a functional recognizer entrypoint. Membership/authority/custody, derived
 mapping, recognizer/runtime execution, actual 960, capacity, scoring, effect, and
-C1 claims remain false. The next slice is
-`formal_unsealed_prediction_scoring_contract_v2`, followed later by actual
-unsealed replay.
+C1 claims remain false. The independent formal unsealed V2 scoring contract now
+freezes an evaluator-side exact-720 answer manifest structurally intended for
+precommitment and its case-type quotas, nine metric definitions, exclusion of the
+240 challenge rows from main
+denominators, a caller-supplied commitment opening, and strict
+receipt/evaluation/partition cross-binding. Threshold, Wilson, and paired-bootstrap
+mechanics are referenced but not executed. Success is only
+`CONTRACT_BINDING_COMPLETE_NOT_SCORED`, with empty metric, scored-row, and gate
+results. It authenticates neither answer authority nor pre-reveal timing, reads no
+predictions, and performs no scoring, gate evaluation, runtime or actual-960 replay,
+effect evaluation, or C1 exit. The next slice is
+`actual_unsealed_960_case_prediction_scoring_replay_v2`.
 
 Pairwise distinct IKM values do not attest independent generation. The raw-envelope
 diagnostic verifies typed payload identity and direct transform replay but not batch
