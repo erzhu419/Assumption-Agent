@@ -100,6 +100,15 @@ from hegel_machine.phase2b_formal_unsealed_prediction_scoring_contract_v2 import
     FORMAL_UNSEALED_PREDICTION_SCORING_CONTRACT_V2_VERSION,
     frozen_formal_unsealed_prediction_scoring_contract_v2,
 )
+from hegel_machine.phase2b_actual_unsealed_960_replay_input_contract_v2 import (
+    ACTUAL_UNSEALED_960_REPLAY_INPUT_CONTRACT_V2_CLAIM_LEVEL,
+    ACTUAL_UNSEALED_960_REPLAY_INPUT_CONTRACT_V2_POLICY_ID,
+    ACTUAL_UNSEALED_960_REPLAY_INPUT_CONTRACT_V2_SCHEMA_ID,
+    ACTUAL_UNSEALED_960_REPLAY_INPUT_CONTRACT_V2_VERSION,
+    FORMAL_UNSEALED_GATE_INPUT_MANIFEST_V2_POLICY_ID,
+    FORMAL_UNSEALED_GATE_INPUT_MANIFEST_V2_SCHEMA_ID,
+    FORMAL_UNSEALED_GATE_INPUT_MANIFEST_V2_SCHEMA_VERSION,
+)
 from hegel_machine.phase2b_unsealed_960_prediction_scoring_mechanics_v2 import (
     UNSEALED_960_PREDICTION_SCORING_MECHANICS_V2_CLAIM_LEVEL,
     UNSEALED_960_PREDICTION_SCORING_MECHANICS_V2_POLICY_ID,
@@ -345,6 +354,123 @@ UNSEALED_960_PREDICTION_SCORING_MECHANICS_V2_REPORT_FIELDS = (
     UNSEALED_960_PREDICTION_SCORING_MECHANICS_V2_IDENTITY_FIELDS
     | frozenset(UNSEALED_960_PREDICTION_SCORING_MECHANICS_V2_TRUE_FIELDS)
     | frozenset(UNSEALED_960_PREDICTION_SCORING_MECHANICS_V2_FALSE_FIELDS)
+)
+
+ACTUAL_REPLAY_INPUT_PREFIX_V2 = "actual_unsealed_960_replay_input_contract_v2_"
+ACTUAL_REPLAY_INPUT_IDENTITY_FIELDS_V2 = frozenset(
+    {
+        f"{ACTUAL_REPLAY_INPUT_PREFIX_V2}version",
+        f"{ACTUAL_REPLAY_INPUT_PREFIX_V2}schema_id",
+        f"{ACTUAL_REPLAY_INPUT_PREFIX_V2}policy_id",
+        f"{ACTUAL_REPLAY_INPUT_PREFIX_V2}claim_level",
+        "formal_unsealed_gate_input_manifest_v2_schema_version",
+        "formal_unsealed_gate_input_manifest_v2_schema_id",
+        "formal_unsealed_gate_input_manifest_v2_policy_id",
+        f"{ACTUAL_REPLAY_INPUT_PREFIX_V2}expected_main_gate_input_row_count",
+        f"{ACTUAL_REPLAY_INPUT_PREFIX_V2}expected_semantic_conflict_row_count",
+        f"{ACTUAL_REPLAY_INPUT_PREFIX_V2}expected_total_prediction_count",
+        f"{ACTUAL_REPLAY_INPUT_PREFIX_V2}expected_family_scale_cell_count",
+        f"{ACTUAL_REPLAY_INPUT_PREFIX_V2}expected_rows_per_family_scale_cell",
+        f"{ACTUAL_REPLAY_INPUT_PREFIX_V2}expected_unique_latent_base_case_id_count",
+        f"{ACTUAL_REPLAY_INPUT_PREFIX_V2}available_overall_gate_input_definition_count",
+        f"{ACTUAL_REPLAY_INPUT_PREFIX_V2}unavailable_overall_gate_input_definition_count",
+        f"{ACTUAL_REPLAY_INPUT_PREFIX_V2}slice_gate_input_definition_count",
+        f"{ACTUAL_REPLAY_INPUT_PREFIX_V2}required_unsupplied_evidence_requirement_count",
+    }
+)
+ACTUAL_REPLAY_INPUT_TRUE_SUFFIXES_V2 = (
+    "implemented",
+    "independent_identity_mechanics_implemented",
+    "independent_answer_manifest_validation_and_recalculation_mechanics_implemented",
+    "answer_gate_manifest_cross_binding_mechanics_implemented",
+    "domain_separated_supplied_gate_input_commitment_opening_validation_mechanics_implemented",
+    "exact_main_720_gate_row_coverage_mechanics_implemented",
+    "exact_12_family_scale_cell_quota_mechanics_implemented",
+    "exact_case_type_per_cell_quota_mechanics_implemented",
+    "exact_margin_per_cell_quota_mechanics_implemented",
+    "exact_nonunique_margin_case_composition_mechanics_implemented",
+    "supplied_family_slice_label_completeness_mechanics_implemented",
+    "supplied_scale_slice_label_completeness_mechanics_implemented",
+    "unique_720_latent_base_case_id_mechanics_implemented",
+    "downstream_prediction_identifier_fields_absent_from_precommit_schema_mechanics_implemented",
+    "semantic_conflict_240_root_binding_and_main_denominator_exclusion_contract_implemented",
+    "ten_available_overall_gate_input_definition_mechanics_implemented",
+    "two_unavailable_overall_gate_input_definition_mechanics_implemented",
+    "six_slice_gate_input_definition_mechanics_implemented",
+    "required_unsupplied_evidence_inventory_mechanics_implemented",
+    "complete_global_preflight_before_content_hash_mechanics_implemented",
+    "empty_metric_scored_row_and_gate_result_mechanics_implemented",
+    "missing_scale_regret_and_bootstrap_result_mechanics_implemented",
+    "atomic_all_false_rejection_mechanics_implemented",
+    "cross_version_rejection_mechanics_implemented",
+    "synthetic_exact_720_gate_input_contract_binding_mechanics_verified",
+)
+ACTUAL_REPLAY_INPUT_FALSE_SUFFIXES_V2 = (
+    "challenge_in_main_denominator",
+    "margin_stratum_authority_verified",
+    "family_slice_label_authority_verified",
+    "scale_slice_semantics_authority_verified",
+    "latent_case_independence_verified",
+    "one_shot_policy_enforced",
+    "durable_attempt_ledger_verified",
+    "raw_input_archive_replayed",
+    "raw_prediction_archive_replayed",
+    "prediction_commit_before_reveal_verified",
+    "wilson_bounds_evaluated",
+    "preservation_evaluated",
+    "challenge_descriptor_rows_implemented",
+    "challenge_scoring_performed",
+    "fail_closed_gate_inputs_contract_complete",
+    "preservation_gate_inputs_contract_complete",
+    "scale_regret_inputs_contract_complete",
+    "bootstrap_inputs_contract_complete",
+    "answer_manifest_authority_verified",
+    "gate_input_manifest_authority_verified",
+    "answer_commitment_authority_verified",
+    "gate_input_commitment_authority_verified",
+    "pre_reveal_commitment_timing_verified",
+    "input_archive_membership_verified",
+    "batch_policy_membership_verified",
+    "source_registry_projection_verified",
+    "source_public_disjoint_verified",
+    "single_live_allocation_verified",
+    "secret_custodian_replay_verified",
+    "execution_manifest_authority_verified",
+    "partition_manifest_authority_verified",
+    "derived_mapping_verified",
+    "recognizer_executed",
+    "runtime_executed",
+    "actual_960_case_run_verified",
+    "recognizer_capacity_evidence",
+    "origin_authenticated",
+    "formal_uuid_audit",
+    "formal_covert_audit",
+    "sealed_holdout_eligible",
+    "scoring_performed",
+    "prediction_scored",
+    "actual_prediction_scoring_evidence",
+    "formal_gate_evaluation_performed",
+    "metric_results_materialized",
+    "scored_rows_materialized",
+    "overall_gate_results_materialized",
+    "slice_gate_results_materialized",
+    "scale_regret_evaluated",
+    "bootstrap_evaluated",
+    "effect_evidence",
+    "c1_exit_evidence",
+)
+ACTUAL_REPLAY_INPUT_TRUE_FIELDS_V2 = tuple(
+    ACTUAL_REPLAY_INPUT_PREFIX_V2 + suffix
+    for suffix in ACTUAL_REPLAY_INPUT_TRUE_SUFFIXES_V2
+)
+ACTUAL_REPLAY_INPUT_FALSE_FIELDS_V2 = tuple(
+    ACTUAL_REPLAY_INPUT_PREFIX_V2 + suffix
+    for suffix in ACTUAL_REPLAY_INPUT_FALSE_SUFFIXES_V2
+)
+ACTUAL_REPLAY_INPUT_REPORT_FIELDS_V2 = (
+    ACTUAL_REPLAY_INPUT_IDENTITY_FIELDS_V2
+    | frozenset(ACTUAL_REPLAY_INPUT_TRUE_FIELDS_V2)
+    | frozenset(ACTUAL_REPLAY_INPUT_FALSE_FIELDS_V2)
 )
 
 
@@ -666,7 +792,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     report = phase2b_preregistration_report()
     assert report["implementation_id"] == (
         "phase2b_protocol_source_sha256_"
-        "e5ec9c51fcbb53818df0e1ca4787e0588c8d3396af8a0456fd5f931906857bc5"
+        "117c2b71681c21f246fea93c28cc2bef22fd8578f6bbdec55c503295150d8bb4"
     )
     assert report["artifact"] == "phase2b_preregistration_readiness_v1"
     assert report["formal_phase2b_exit_claim"] is False
@@ -1328,6 +1454,83 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
             "unsealed_960_prediction_scoring_mechanics_v2_"
         )
     } == UNSEALED_960_PREDICTION_SCORING_MECHANICS_V2_REPORT_FIELDS
+    assert len(ACTUAL_REPLAY_INPUT_IDENTITY_FIELDS_V2) == 17
+    assert len(ACTUAL_REPLAY_INPUT_TRUE_FIELDS_V2) == 25
+    assert len(ACTUAL_REPLAY_INPUT_FALSE_FIELDS_V2) == 52
+    assert len(ACTUAL_REPLAY_INPUT_REPORT_FIELDS_V2) == 94
+    assert report[f"{ACTUAL_REPLAY_INPUT_PREFIX_V2}version"] == (
+        ACTUAL_UNSEALED_960_REPLAY_INPUT_CONTRACT_V2_VERSION
+    )
+    assert report[f"{ACTUAL_REPLAY_INPUT_PREFIX_V2}schema_id"] == (
+        ACTUAL_UNSEALED_960_REPLAY_INPUT_CONTRACT_V2_SCHEMA_ID
+    )
+    assert report[f"{ACTUAL_REPLAY_INPUT_PREFIX_V2}policy_id"] == (
+        ACTUAL_UNSEALED_960_REPLAY_INPUT_CONTRACT_V2_POLICY_ID
+    )
+    assert report[f"{ACTUAL_REPLAY_INPUT_PREFIX_V2}claim_level"] == (
+        ACTUAL_UNSEALED_960_REPLAY_INPUT_CONTRACT_V2_CLAIM_LEVEL
+    )
+    assert report["formal_unsealed_gate_input_manifest_v2_schema_version"] == (
+        FORMAL_UNSEALED_GATE_INPUT_MANIFEST_V2_SCHEMA_VERSION
+    )
+    assert report["formal_unsealed_gate_input_manifest_v2_schema_id"] == (
+        FORMAL_UNSEALED_GATE_INPUT_MANIFEST_V2_SCHEMA_ID
+    )
+    assert report["formal_unsealed_gate_input_manifest_v2_policy_id"] == (
+        FORMAL_UNSEALED_GATE_INPUT_MANIFEST_V2_POLICY_ID
+    )
+    assert report[f"{ACTUAL_REPLAY_INPUT_PREFIX_V2}version"] == (
+        "hegel-machine-phase2b-actual-unsealed-960-replay-input-contract/2"
+    )
+    assert report[f"{ACTUAL_REPLAY_INPUT_PREFIX_V2}schema_id"] == (
+        "phase2b_actual_unsealed_960_replay_input_contract_schema_v2_"
+        "a4f61ddfb07643e23ac404616062127e2ae6ca02f13b29c265062d6a1f660f4a"
+    )
+    assert report[f"{ACTUAL_REPLAY_INPUT_PREFIX_V2}policy_id"] == (
+        "phase2b_actual_unsealed_960_replay_input_contract_policy_v2_"
+        "a12ca51dd6f17f29a28a7229f4108c32f438d4775a367a7ad3e5a6275557b531"
+    )
+    assert report[f"{ACTUAL_REPLAY_INPUT_PREFIX_V2}claim_level"] == (
+        "NON_AUTHORITATIVE_ACTUAL_REPLAY_INPUT_CONTRACT_ONLY"
+    )
+    assert report["formal_unsealed_gate_input_manifest_v2_schema_version"] == (
+        "hegel-machine-phase2b-formal-unsealed-gate-input-manifest/2"
+    )
+    assert report["formal_unsealed_gate_input_manifest_v2_schema_id"] == (
+        "phase2b_formal_unsealed_gate_input_manifest_schema_v2_"
+        "7cae322b25caf6e6a9a6239d9ad52281b1e8c7fcc3078b7a72f279de942a19f1"
+    )
+    assert report["formal_unsealed_gate_input_manifest_v2_policy_id"] == (
+        "phase2b_formal_unsealed_gate_input_manifest_policy_v2_"
+        "5168476f2f5483a90c75f4cebc05f4210c378333c2993b4973949d8a32e9aa9a"
+    )
+    expected_actual_replay_input_counts = {
+        "expected_main_gate_input_row_count": 720,
+        "expected_semantic_conflict_row_count": 240,
+        "expected_total_prediction_count": 960,
+        "expected_family_scale_cell_count": 12,
+        "expected_rows_per_family_scale_cell": 60,
+        "expected_unique_latent_base_case_id_count": 720,
+        "available_overall_gate_input_definition_count": 10,
+        "unavailable_overall_gate_input_definition_count": 2,
+        "slice_gate_input_definition_count": 6,
+        "required_unsupplied_evidence_requirement_count": 18,
+    }
+    for suffix, expected in expected_actual_replay_input_counts.items():
+        assert report[ACTUAL_REPLAY_INPUT_PREFIX_V2 + suffix] == expected
+    for field_name in ACTUAL_REPLAY_INPUT_TRUE_FIELDS_V2:
+        assert report[field_name] is True
+    for field_name in ACTUAL_REPLAY_INPUT_FALSE_FIELDS_V2:
+        assert report[field_name] is False
+    assert (
+        {
+            field_name
+            for field_name in report
+            if field_name.startswith(ACTUAL_REPLAY_INPUT_PREFIX_V2)
+            or field_name.startswith("formal_unsealed_gate_input_manifest_v2_")
+        }
+        == ACTUAL_REPLAY_INPUT_REPORT_FIELDS_V2
+    )
     assert report["public_prediction_run_context_v2_schema_version"] == (
         PUBLIC_PREDICTION_RUN_CONTEXT_V2_SCHEMA_VERSION
     )
@@ -1465,6 +1668,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "exact_derived_witness_bridge",
         "exact_bridge",
         "exact_transform_semantics",
+        "actual_unsealed_960_replay_input_contract_v2",
         "formal_unsealed_prediction_scoring_contract_v2",
         "unsealed_960_prediction_scoring_mechanics_v2",
         "projection_compiler",
@@ -1517,6 +1721,12 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     ] == (
         "sha256:"
         "c3c12e9cd72a930b9ca8667aab22c4eb3675ceab6249b0b26ba940bf794e7f11"
+    )
+    assert report["component_source_ids"][
+        "actual_unsealed_960_replay_input_contract_v2"
+    ] == (
+        "sha256:"
+        "35da6f01163835ca90c24cdbd4ad85a1f7f0b2ef78ceb6e70fe80de2534814f2"
     )
     assert report["component_source_ids"][
         "recognizer_prediction_row_mapping_mechanics_v2"
@@ -1587,7 +1797,7 @@ def test_checked_in_phase2b_preregistration_artifact_matches_runtime():
     assert artifact == phase2b_preregistration_report()
 
 
-def test_unsealed_960_scoring_mechanics_report_artifact_refresh_transition_is_exact():
+def test_actual_replay_input_contract_report_artifact_refresh_transition_is_exact():
     artifact_path = (
         Path(__file__).resolve().parents[1]
         / "artifacts"
@@ -1595,12 +1805,12 @@ def test_unsealed_960_scoring_mechanics_report_artifact_refresh_transition_is_ex
     )
     artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
     report = phase2b_preregistration_report()
-    assert len(report) == 559
+    assert len(report) == 653
     if artifact == report:
         return
-    assert len(artifact) == 501
+    assert len(artifact) == 559
     assert set(report) - set(artifact) == (
-        UNSEALED_960_PREDICTION_SCORING_MECHANICS_V2_REPORT_FIELDS
+        ACTUAL_REPLAY_INPUT_REPORT_FIELDS_V2
     )
     assert set(artifact) - set(report) == set()
     changed_common_fields = {
@@ -1620,7 +1830,7 @@ def test_unsealed_960_scoring_mechanics_report_artifact_refresh_transition_is_ex
     )
     assert set(report["component_source_ids"]) - set(
         artifact["component_source_ids"]
-    ) == {"unsealed_960_prediction_scoring_mechanics_v2"}
+    ) == {"actual_unsealed_960_replay_input_contract_v2"}
     assert set(artifact["component_source_ids"]) - set(
         report["component_source_ids"]
     ) == set()

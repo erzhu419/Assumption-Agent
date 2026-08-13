@@ -320,7 +320,23 @@ semantic-conflict challenge rows remain excluded. Success is
 and bootstrap results are absent. This supplied/synthetic archive mechanics replay
 does not authenticate answer authority or reveal timing and does not establish
 membership, custody, derived mapping, recognizer/runtime/actual-960/capacity,
-formal-gate, actual-scoring, effect, or C1 evidence. The next slice remains
+formal-gate, actual-scoring, effect, or C1 evidence. The independent V2
+actual-unsealed-960 replay-input contract adds only a non-authoritative evaluator
+input-package contract. It cross-binds exactly 720 supplied gate-label rows to the
+formal answer manifest; freezes twelve 60-row family-by-opaque-scale-slice cells,
+the per-cell case/margin/nonunique composition, 720 unique supplied latent-base-case
+identifiers, ten available overall gate-input definitions, two explicitly unavailable
+overall definitions with no denominator, and six slice definitions; and validates a
+supplied domain-separated commitment opening. “Input available” means only that
+evaluator-label-side inputs are defined, not that a numerator, metric, Wilson bound,
+or gate was evaluated. The 240 semantic-conflict rows are root-bound and excluded
+from the main denominator, but no challenge descriptor rows are implemented. Success
+is only `ACTUAL_REPLAY_CONTRACT_COMPLETE_NOT_EXECUTED`. The opening establishes
+neither authority nor pre-reveal timing, and identifier uniqueness establishes no
+latent-case independence. All eighteen required evidence packages remain unsupplied;
+metric, scored-row, and gate outputs remain empty, scale-regret and bootstrap outputs
+remain absent, and no recognizer/runtime/actual-960/scoring/formal-gate/effect/C1 or
+Q0.5b/Q1 evidence exists. The next slice remains
 `actual_unsealed_960_case_prediction_scoring_replay_v2`.
 
 Pairwise distinct IKM values do not attest independent generation. The raw-envelope

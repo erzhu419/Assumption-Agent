@@ -173,7 +173,18 @@ scored rows：其中仅 336 个 metric-eligible（240 answerable + 96 insufficie
 384 个 controls 没有 frozen metric；240 challenge 全部排除。成功 disposition 为
 `MECHANICS_COMPLETE_NOT_ACTUAL_EXECUTION`；`gate_results` 为空，scale regret/bootstrap 均未评估。
 它仍不认证 answer authority/pre-reveal timing，也不建立 membership/custody/derived mapping、
-recognizer/runtime/actual-960/capacity、formal gate、actual scoring、effect 或 C1 证据。下一施工切片仍是
+recognizer/runtime/actual-960/capacity、formal gate、actual scoring、effect 或 C1 证据。新增的 V2
+actual-unsealed-960 replay-input contract 仍只是 evaluator-side 的非权威输入包合同：它把 720 个
+supplied gate-label rows 与 formal answer manifest 逐行交叉绑定，冻结 12 个
+family×opaque-scale-slice cells 的 60-row 配额、逐 cell case/margin/nonunique composition、720 个
+唯一 supplied `latent_base_case_id`、10 个可用 overall gate-input definitions、2 个显式不可用且
+denominator 为 `None` 的 overall definitions，以及 6 个 slice definitions。“input available” 仅表示
+evaluator-label-side 输入定义齐备，不表示 numerator、metric、Wilson bound 或 gate 已执行。240 个
+semantic-conflict rows 只绑定 root 并继续排除 main denominator；没有 challenge descriptor rows。
+成功仅为 `ACTUAL_REPLAY_CONTRACT_COMPLETE_NOT_EXECUTED`。commitment opening 不证明预揭示时序或
+权威，唯一 latent IDs 不证明 latent-case independence；18 项所需证据仍明确未供应，metric/
+scored-row/gate results 为空，scale-regret/bootstrap results 缺失，recognizer/runtime/actual-960/
+scoring/formal-gate/effect/C1 与 Q0.5b/Q1 证据均不存在。下一施工切片仍是
 `actual_unsealed_960_case_prediction_scoring_replay_v2`。
 
 此外可以说：Phase-3A 的 v1.0.2 strict specification 已冻结，Python/Rust shared vectors

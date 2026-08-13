@@ -1157,6 +1157,7 @@ def phase2b_preregistration_report() -> dict[str, object]:
         phase2b_exact_derived_witness_bridge_v1,
         phase2b_exact_bridge_v1,
         phase2b_exact_transform_semantics_v1,
+        phase2b_actual_unsealed_960_replay_input_contract_v2,
         phase2b_formal_unsealed_prediction_scoring_contract_v2,
         phase2b_unsealed_960_prediction_scoring_mechanics_v2,
         phase2b_projection_compiler,
@@ -1866,6 +1867,121 @@ def phase2b_preregistration_report() -> dict[str, object]:
         "unsealed_960_prediction_scoring_mechanics_v2_actual_prediction_scoring_evidence": False,
         "unsealed_960_prediction_scoring_mechanics_v2_effect_evidence": False,
         "unsealed_960_prediction_scoring_mechanics_v2_c1_exit_evidence": False,
+        "actual_unsealed_960_replay_input_contract_v2_version": (
+            phase2b_actual_unsealed_960_replay_input_contract_v2
+            .ACTUAL_UNSEALED_960_REPLAY_INPUT_CONTRACT_V2_VERSION
+        ),
+        "actual_unsealed_960_replay_input_contract_v2_schema_id": (
+            phase2b_actual_unsealed_960_replay_input_contract_v2
+            .ACTUAL_UNSEALED_960_REPLAY_INPUT_CONTRACT_V2_SCHEMA_ID
+        ),
+        "actual_unsealed_960_replay_input_contract_v2_policy_id": (
+            phase2b_actual_unsealed_960_replay_input_contract_v2
+            .ACTUAL_UNSEALED_960_REPLAY_INPUT_CONTRACT_V2_POLICY_ID
+        ),
+        "actual_unsealed_960_replay_input_contract_v2_claim_level": (
+            phase2b_actual_unsealed_960_replay_input_contract_v2
+            .ACTUAL_UNSEALED_960_REPLAY_INPUT_CONTRACT_V2_CLAIM_LEVEL
+        ),
+        "formal_unsealed_gate_input_manifest_v2_schema_version": (
+            phase2b_actual_unsealed_960_replay_input_contract_v2
+            .FORMAL_UNSEALED_GATE_INPUT_MANIFEST_V2_SCHEMA_VERSION
+        ),
+        "formal_unsealed_gate_input_manifest_v2_schema_id": (
+            phase2b_actual_unsealed_960_replay_input_contract_v2
+            .FORMAL_UNSEALED_GATE_INPUT_MANIFEST_V2_SCHEMA_ID
+        ),
+        "formal_unsealed_gate_input_manifest_v2_policy_id": (
+            phase2b_actual_unsealed_960_replay_input_contract_v2
+            .FORMAL_UNSEALED_GATE_INPUT_MANIFEST_V2_POLICY_ID
+        ),
+        "actual_unsealed_960_replay_input_contract_v2_expected_main_gate_input_row_count": 720,
+        "actual_unsealed_960_replay_input_contract_v2_expected_semantic_conflict_row_count": 240,
+        "actual_unsealed_960_replay_input_contract_v2_expected_total_prediction_count": 960,
+        "actual_unsealed_960_replay_input_contract_v2_expected_family_scale_cell_count": 12,
+        "actual_unsealed_960_replay_input_contract_v2_expected_rows_per_family_scale_cell": 60,
+        "actual_unsealed_960_replay_input_contract_v2_expected_unique_latent_base_case_id_count": 720,
+        "actual_unsealed_960_replay_input_contract_v2_available_overall_gate_input_definition_count": 10,
+        "actual_unsealed_960_replay_input_contract_v2_unavailable_overall_gate_input_definition_count": 2,
+        "actual_unsealed_960_replay_input_contract_v2_slice_gate_input_definition_count": 6,
+        "actual_unsealed_960_replay_input_contract_v2_required_unsupplied_evidence_requirement_count": 18,
+        "actual_unsealed_960_replay_input_contract_v2_implemented": True,
+        "actual_unsealed_960_replay_input_contract_v2_independent_identity_mechanics_implemented": True,
+        "actual_unsealed_960_replay_input_contract_v2_independent_answer_manifest_validation_and_recalculation_mechanics_implemented": True,
+        "actual_unsealed_960_replay_input_contract_v2_answer_gate_manifest_cross_binding_mechanics_implemented": True,
+        "actual_unsealed_960_replay_input_contract_v2_domain_separated_supplied_gate_input_commitment_opening_validation_mechanics_implemented": True,
+        "actual_unsealed_960_replay_input_contract_v2_exact_main_720_gate_row_coverage_mechanics_implemented": True,
+        "actual_unsealed_960_replay_input_contract_v2_exact_12_family_scale_cell_quota_mechanics_implemented": True,
+        "actual_unsealed_960_replay_input_contract_v2_exact_case_type_per_cell_quota_mechanics_implemented": True,
+        "actual_unsealed_960_replay_input_contract_v2_exact_margin_per_cell_quota_mechanics_implemented": True,
+        "actual_unsealed_960_replay_input_contract_v2_exact_nonunique_margin_case_composition_mechanics_implemented": True,
+        "actual_unsealed_960_replay_input_contract_v2_supplied_family_slice_label_completeness_mechanics_implemented": True,
+        "actual_unsealed_960_replay_input_contract_v2_supplied_scale_slice_label_completeness_mechanics_implemented": True,
+        "actual_unsealed_960_replay_input_contract_v2_unique_720_latent_base_case_id_mechanics_implemented": True,
+        "actual_unsealed_960_replay_input_contract_v2_downstream_prediction_identifier_fields_absent_from_precommit_schema_mechanics_implemented": True,
+        "actual_unsealed_960_replay_input_contract_v2_semantic_conflict_240_root_binding_and_main_denominator_exclusion_contract_implemented": True,
+        "actual_unsealed_960_replay_input_contract_v2_ten_available_overall_gate_input_definition_mechanics_implemented": True,
+        "actual_unsealed_960_replay_input_contract_v2_two_unavailable_overall_gate_input_definition_mechanics_implemented": True,
+        "actual_unsealed_960_replay_input_contract_v2_six_slice_gate_input_definition_mechanics_implemented": True,
+        "actual_unsealed_960_replay_input_contract_v2_required_unsupplied_evidence_inventory_mechanics_implemented": True,
+        "actual_unsealed_960_replay_input_contract_v2_complete_global_preflight_before_content_hash_mechanics_implemented": True,
+        "actual_unsealed_960_replay_input_contract_v2_empty_metric_scored_row_and_gate_result_mechanics_implemented": True,
+        "actual_unsealed_960_replay_input_contract_v2_missing_scale_regret_and_bootstrap_result_mechanics_implemented": True,
+        "actual_unsealed_960_replay_input_contract_v2_atomic_all_false_rejection_mechanics_implemented": True,
+        "actual_unsealed_960_replay_input_contract_v2_cross_version_rejection_mechanics_implemented": True,
+        "actual_unsealed_960_replay_input_contract_v2_synthetic_exact_720_gate_input_contract_binding_mechanics_verified": True,
+        "actual_unsealed_960_replay_input_contract_v2_challenge_in_main_denominator": False,
+        "actual_unsealed_960_replay_input_contract_v2_margin_stratum_authority_verified": False,
+        "actual_unsealed_960_replay_input_contract_v2_family_slice_label_authority_verified": False,
+        "actual_unsealed_960_replay_input_contract_v2_scale_slice_semantics_authority_verified": False,
+        "actual_unsealed_960_replay_input_contract_v2_latent_case_independence_verified": False,
+        "actual_unsealed_960_replay_input_contract_v2_one_shot_policy_enforced": False,
+        "actual_unsealed_960_replay_input_contract_v2_durable_attempt_ledger_verified": False,
+        "actual_unsealed_960_replay_input_contract_v2_raw_input_archive_replayed": False,
+        "actual_unsealed_960_replay_input_contract_v2_raw_prediction_archive_replayed": False,
+        "actual_unsealed_960_replay_input_contract_v2_prediction_commit_before_reveal_verified": False,
+        "actual_unsealed_960_replay_input_contract_v2_wilson_bounds_evaluated": False,
+        "actual_unsealed_960_replay_input_contract_v2_preservation_evaluated": False,
+        "actual_unsealed_960_replay_input_contract_v2_challenge_descriptor_rows_implemented": False,
+        "actual_unsealed_960_replay_input_contract_v2_challenge_scoring_performed": False,
+        "actual_unsealed_960_replay_input_contract_v2_fail_closed_gate_inputs_contract_complete": False,
+        "actual_unsealed_960_replay_input_contract_v2_preservation_gate_inputs_contract_complete": False,
+        "actual_unsealed_960_replay_input_contract_v2_scale_regret_inputs_contract_complete": False,
+        "actual_unsealed_960_replay_input_contract_v2_bootstrap_inputs_contract_complete": False,
+        "actual_unsealed_960_replay_input_contract_v2_answer_manifest_authority_verified": False,
+        "actual_unsealed_960_replay_input_contract_v2_gate_input_manifest_authority_verified": False,
+        "actual_unsealed_960_replay_input_contract_v2_answer_commitment_authority_verified": False,
+        "actual_unsealed_960_replay_input_contract_v2_gate_input_commitment_authority_verified": False,
+        "actual_unsealed_960_replay_input_contract_v2_pre_reveal_commitment_timing_verified": False,
+        "actual_unsealed_960_replay_input_contract_v2_input_archive_membership_verified": False,
+        "actual_unsealed_960_replay_input_contract_v2_batch_policy_membership_verified": False,
+        "actual_unsealed_960_replay_input_contract_v2_source_registry_projection_verified": False,
+        "actual_unsealed_960_replay_input_contract_v2_source_public_disjoint_verified": False,
+        "actual_unsealed_960_replay_input_contract_v2_single_live_allocation_verified": False,
+        "actual_unsealed_960_replay_input_contract_v2_secret_custodian_replay_verified": False,
+        "actual_unsealed_960_replay_input_contract_v2_execution_manifest_authority_verified": False,
+        "actual_unsealed_960_replay_input_contract_v2_partition_manifest_authority_verified": False,
+        "actual_unsealed_960_replay_input_contract_v2_derived_mapping_verified": False,
+        "actual_unsealed_960_replay_input_contract_v2_recognizer_executed": False,
+        "actual_unsealed_960_replay_input_contract_v2_runtime_executed": False,
+        "actual_unsealed_960_replay_input_contract_v2_actual_960_case_run_verified": False,
+        "actual_unsealed_960_replay_input_contract_v2_recognizer_capacity_evidence": False,
+        "actual_unsealed_960_replay_input_contract_v2_origin_authenticated": False,
+        "actual_unsealed_960_replay_input_contract_v2_formal_uuid_audit": False,
+        "actual_unsealed_960_replay_input_contract_v2_formal_covert_audit": False,
+        "actual_unsealed_960_replay_input_contract_v2_sealed_holdout_eligible": False,
+        "actual_unsealed_960_replay_input_contract_v2_scoring_performed": False,
+        "actual_unsealed_960_replay_input_contract_v2_prediction_scored": False,
+        "actual_unsealed_960_replay_input_contract_v2_actual_prediction_scoring_evidence": False,
+        "actual_unsealed_960_replay_input_contract_v2_formal_gate_evaluation_performed": False,
+        "actual_unsealed_960_replay_input_contract_v2_metric_results_materialized": False,
+        "actual_unsealed_960_replay_input_contract_v2_scored_rows_materialized": False,
+        "actual_unsealed_960_replay_input_contract_v2_overall_gate_results_materialized": False,
+        "actual_unsealed_960_replay_input_contract_v2_slice_gate_results_materialized": False,
+        "actual_unsealed_960_replay_input_contract_v2_scale_regret_evaluated": False,
+        "actual_unsealed_960_replay_input_contract_v2_bootstrap_evaluated": False,
+        "actual_unsealed_960_replay_input_contract_v2_effect_evidence": False,
+        "actual_unsealed_960_replay_input_contract_v2_c1_exit_evidence": False,
         "next_phase2b_construction_slice": (
             "actual_unsealed_960_case_prediction_scoring_replay_v2"
         ),
@@ -1928,6 +2044,10 @@ def phase2b_preregistration_report() -> dict[str, object]:
                 (
                     "exact_transform_semantics",
                     phase2b_exact_transform_semantics_v1,
+                ),
+                (
+                    "actual_unsealed_960_replay_input_contract_v2",
+                    phase2b_actual_unsealed_960_replay_input_contract_v2,
                 ),
                 (
                     "formal_unsealed_prediction_scoring_contract_v2",
