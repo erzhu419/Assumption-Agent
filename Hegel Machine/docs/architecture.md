@@ -367,6 +367,13 @@ formal answer manifest
 
 下一刀仍是 `actual_unsealed_960_case_prediction_scoring_replay_v2`。
 
+The V2 actual-unsealed-960 replay-admission gap inventory freezes a catalogue of
+five upstream dependency identities, eighteen missing-evidence requirements, and
+sixteen declarative ordering statements. It accepts no evidence and supplies no
+event, signature, ledger, timing, runtime, scoring, gate, effect, or C1 verifier.
+Its successful disposition is `GAP_INVENTORY_FROZEN_NOT_ADMITTED`; it is never an
+admission decision or execution authorization.
+
 这些 receipts 仍恒为 `NON_AUTHORITATIVE_MECHANICS_ONLY`。pairwise distinct 不证明 IKM
 独立性；raw-envelope diagnostic 不验证 batch membership 或 secret padding；supplied-secret
 replay 只证明调用方给出的 authorities/run/IKM 可重建同一 bytes。origin authentication、

@@ -339,6 +339,13 @@ remain absent, and no recognizer/runtime/actual-960/scoring/formal-gate/effect/C
 Q0.5b/Q1 evidence exists. The next slice remains
 `actual_unsealed_960_case_prediction_scoring_replay_v2`.
 
+The V2 actual-unsealed-960 replay-admission gap inventory freezes a catalogue of
+five upstream dependency identities, eighteen missing-evidence requirements, and
+sixteen declarative ordering statements. It accepts no evidence and supplies no
+event, signature, ledger, timing, runtime, scoring, gate, effect, or C1 verifier.
+Its successful disposition is `GAP_INVENTORY_FROZEN_NOT_ADMITTED`; it is never an
+admission decision or execution authorization.
+
 Pairwise distinct IKM values do not attest independent generation. The raw-envelope
 diagnostic verifies typed payload identity and direct transform replay but not batch
 membership or secret padding; supplied-secret replay proves only that the supplied

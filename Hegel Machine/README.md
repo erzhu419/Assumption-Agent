@@ -324,6 +324,12 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
   actual-960/scoring/formal-gate/effect/C1 与 Q0.5b/Q1 证据均不存在。下一刀仍是
   `actual_unsealed_960_case_prediction_scoring_replay_v2`；在完整
   standard-error 语义实现前，formal selector 只允许 `absolute_bound`；
+  The V2 actual-unsealed-960 replay-admission gap inventory freezes a catalogue
+  of five upstream dependency identities, eighteen missing-evidence requirements,
+  and sixteen declarative ordering statements. It accepts no evidence and supplies
+  no event, signature, ledger, timing, runtime, scoring, gate, effect, or C1
+  verifier. Its successful disposition is `GAP_INVENTORY_FROZEN_NOT_ADMITTED`;
+  it is never an admission decision or execution authorization;
 - seal → prediction commitment → reveal → consumed 的 immutable lifecycle model、
   answer salted-commitment opening 校验和进程内原子防分叉 guard，以及 read-only
   input/root、no network、无 repo/generator/answer mount 的 OCI launch-spec contract；

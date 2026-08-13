@@ -1157,6 +1157,7 @@ def phase2b_preregistration_report() -> dict[str, object]:
         phase2b_exact_derived_witness_bridge_v1,
         phase2b_exact_bridge_v1,
         phase2b_exact_transform_semantics_v1,
+        phase2b_actual_unsealed_960_replay_admission_evidence_contract_v2,
         phase2b_actual_unsealed_960_replay_input_contract_v2,
         phase2b_formal_unsealed_prediction_scoring_contract_v2,
         phase2b_unsealed_960_prediction_scoring_mechanics_v2,
@@ -1188,6 +1189,26 @@ def phase2b_preregistration_report() -> dict[str, object]:
         phase2b_formal_unsealed_prediction_scoring_contract_v2
         .frozen_formal_unsealed_prediction_scoring_contract_v2()
     )
+    actual_replay_admission_gap_inventory_v2 = (
+        phase2b_actual_unsealed_960_replay_admission_evidence_contract_v2
+        .frozen_actual_unsealed_960_replay_admission_gap_inventory_v2()
+    )
+    actual_replay_admission_gap_inventory_validation_v2 = (
+        phase2b_actual_unsealed_960_replay_admission_evidence_contract_v2
+        .validate_actual_unsealed_960_replay_admission_gap_inventory_v2(
+            contract=actual_replay_admission_gap_inventory_v2,
+        )
+    )
+    if not isinstance(
+        actual_replay_admission_gap_inventory_validation_v2,
+        phase2b_actual_unsealed_960_replay_admission_evidence_contract_v2
+        .AdmissionGapInventoryValidationV2,
+    ) or (
+        actual_replay_admission_gap_inventory_validation_v2.disposition
+        is not phase2b_actual_unsealed_960_replay_admission_evidence_contract_v2
+        .AdmissionGapInventoryDispositionV2.GAP_INVENTORY_FROZEN_NOT_ADMITTED
+    ):
+        raise RuntimeError("actual replay admission gap inventory validation failed")
     implementation_id = (
         "phase2b_protocol_source_sha256_"
         + hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
@@ -1982,6 +2003,125 @@ def phase2b_preregistration_report() -> dict[str, object]:
         "actual_unsealed_960_replay_input_contract_v2_bootstrap_evaluated": False,
         "actual_unsealed_960_replay_input_contract_v2_effect_evidence": False,
         "actual_unsealed_960_replay_input_contract_v2_c1_exit_evidence": False,
+        "actual_unsealed_960_replay_admission_gap_inventory_v2_version": (
+            actual_replay_admission_gap_inventory_v2.version
+        ),
+        "actual_unsealed_960_replay_admission_gap_inventory_v2_schema_id": (
+            actual_replay_admission_gap_inventory_v2.schema_id
+        ),
+        "actual_unsealed_960_replay_admission_gap_inventory_v2_policy_id": (
+            actual_replay_admission_gap_inventory_v2.policy_id
+        ),
+        "actual_unsealed_960_replay_admission_gap_inventory_v2_claim_level": (
+            actual_replay_admission_gap_inventory_v2.claim_level
+        ),
+        "actual_unsealed_960_replay_admission_gap_inventory_v2_contract_id": (
+            actual_replay_admission_gap_inventory_v2.contract_id
+        ),
+        "actual_unsealed_960_replay_admission_gap_inventory_v2_upstream_dependency_identity_count": (
+            actual_replay_admission_gap_inventory_v2.upstream_dependency_identity_count
+        ),
+        "actual_unsealed_960_replay_admission_gap_inventory_v2_missing_evidence_requirement_count": (
+            actual_replay_admission_gap_inventory_v2.missing_evidence_requirement_count
+        ),
+        "actual_unsealed_960_replay_admission_gap_inventory_v2_required_ordering_statement_count": (
+            actual_replay_admission_gap_inventory_v2.required_ordering_statement_count
+        ),
+        **{
+            "actual_unsealed_960_replay_admission_gap_inventory_v2_"
+            + claim_name: getattr(
+                actual_replay_admission_gap_inventory_v2,
+                claim_name,
+            )
+            for claim_name in (
+                "gap_inventory_frozen",
+                "required_ordering_statements_frozen",
+                "upstream_dependency_identities_frozen",
+                "no_evidence_input_schema_accepted",
+                "content_addressed_gap_catalog_validated",
+                "atomic_catalog_validation_verified",
+                "admission_evidence_contract_complete",
+                "cryptographic_record_schemas_complete",
+                "signature_payload_profiles_complete",
+                "pinned_signer_registry_schema_complete",
+                "attempt_registry_schema_complete",
+                "rerun_policy_executable",
+                "timeline_event_schemas_complete",
+                "timeline_verifier_implemented",
+                "evidence_role_lifecycle_fully_bound",
+                "actual_evidence_inputs_accepted",
+                "verifier_implemented",
+                "admission_ready",
+                "execution_authorized",
+                "one_shot_policy_enforced",
+                "signature_coverage_verified",
+                "evidence_chain_verified",
+                "attempt_terminal_state_verified",
+                "pre_reveal_commitment_timing_verified",
+                "answer_commitment_authority_verified",
+                "gate_input_commitment_authority_verified",
+                "answer_commitment_opening_verified",
+                "gate_input_commitment_opening_verified",
+                "input_archive_membership_verified",
+                "batch_policy_membership_verified",
+                "source_registry_projection_verified",
+                "source_public_disjoint_verified",
+                "single_live_allocation_verified",
+                "secret_custodian_replay_verified",
+                "partition_manifest_authority_verified",
+                "derived_mapping_verified",
+                "recognizer_capacity_evidence",
+                "formal_uuid_audit",
+                "formal_covert_audit",
+                "sealed_holdout_eligible",
+                "preservation_prediction_commitment_verified",
+                "evidence_supplied",
+                "evidence_verified",
+                "custodian_identity_verified",
+                "signer_chain_verified",
+                "signatures_verified",
+                "pinned_signer_key_registry_verified",
+                "durable_attempt_ledger_verified",
+                "attempt_policy_enforced",
+                "retry_authorization_verified",
+                "timeline_observed",
+                "timeline_order_verified",
+                "package_commitment_before_run_verified",
+                "prediction_before_reveal_verified",
+                "answer_manifest_authority_verified",
+                "gate_input_manifest_authority_verified",
+                "input_archive_authority_verified",
+                "prediction_archive_authority_verified",
+                "allocation_authority_verified",
+                "evaluator_input_authority_verified",
+                "execution_freeze_authority_verified",
+                "runtime_attestation_authority_verified",
+                "raw_input_archive_replayed",
+                "raw_prediction_archive_replayed",
+                "canonical_archive_replay_verified",
+                "decoder_transcript_verified",
+                "recognizer_executed",
+                "runtime_executed",
+                "actual_960_case_run_verified",
+                "origin_authenticated",
+                "scoring_performed",
+                "prediction_scored",
+                "actual_prediction_scoring_evidence",
+                "formal_gate_evaluation_performed",
+                "metric_results_materialized",
+                "scored_rows_materialized",
+                "overall_gate_results_materialized",
+                "slice_gate_results_materialized",
+                "wilson_bounds_evaluated",
+                "preservation_evaluated",
+                "scale_regret_evaluated",
+                "bootstrap_evaluated",
+                "baseline_outputs_verified",
+                "effect_evidence",
+                "formal_c1_report_verified",
+                "c1_exit_evidence",
+            )
+        },
         "next_phase2b_construction_slice": (
             "actual_unsealed_960_case_prediction_scoring_replay_v2"
         ),
@@ -2048,6 +2188,10 @@ def phase2b_preregistration_report() -> dict[str, object]:
                 (
                     "actual_unsealed_960_replay_input_contract_v2",
                     phase2b_actual_unsealed_960_replay_input_contract_v2,
+                ),
+                (
+                    "actual_unsealed_960_replay_admission_gap_inventory_v2",
+                    phase2b_actual_unsealed_960_replay_admission_evidence_contract_v2,
                 ),
                 (
                     "formal_unsealed_prediction_scoring_contract_v2",

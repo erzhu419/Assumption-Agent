@@ -187,6 +187,13 @@ scored-row/gate results 为空，scale-regret/bootstrap results 缺失，recogni
 scoring/formal-gate/effect/C1 与 Q0.5b/Q1 证据均不存在。下一施工切片仍是
 `actual_unsealed_960_case_prediction_scoring_replay_v2`。
 
+The V2 actual-unsealed-960 replay-admission gap inventory freezes a catalogue of
+five upstream dependency identities, eighteen missing-evidence requirements, and
+sixteen declarative ordering statements. It accepts no evidence and supplies no
+event, signature, ledger, timing, runtime, scoring, gate, effect, or C1 verifier.
+Its successful disposition is `GAP_INVENTORY_FROZEN_NOT_ADMITTED`; it is never an
+admission decision or execution authorization.
+
 此外可以说：Phase-3A 的 v1.0.2 strict specification 已冻结，Python/Rust shared vectors
 各 48/48 PASS。M2 两端都接受 64,680 个 source candidates，并得到 64,680 个 unique strict
 canonical AST；共同 diagnostic set commitment 是

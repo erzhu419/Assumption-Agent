@@ -109,6 +109,13 @@ from hegel_machine.phase2b_actual_unsealed_960_replay_input_contract_v2 import (
     FORMAL_UNSEALED_GATE_INPUT_MANIFEST_V2_SCHEMA_ID,
     FORMAL_UNSEALED_GATE_INPUT_MANIFEST_V2_SCHEMA_VERSION,
 )
+from hegel_machine.phase2b_actual_unsealed_960_replay_admission_evidence_contract_v2 import (
+    ACTUAL_UNSEALED_960_REPLAY_ADMISSION_GAP_INVENTORY_V2_CLAIM_LEVEL,
+    ACTUAL_UNSEALED_960_REPLAY_ADMISSION_GAP_INVENTORY_V2_POLICY_ID,
+    ACTUAL_UNSEALED_960_REPLAY_ADMISSION_GAP_INVENTORY_V2_SCHEMA_ID,
+    ACTUAL_UNSEALED_960_REPLAY_ADMISSION_GAP_INVENTORY_V2_VERSION,
+    frozen_actual_unsealed_960_replay_admission_gap_inventory_v2,
+)
 from hegel_machine.phase2b_unsealed_960_prediction_scoring_mechanics_v2 import (
     UNSEALED_960_PREDICTION_SCORING_MECHANICS_V2_CLAIM_LEVEL,
     UNSEALED_960_PREDICTION_SCORING_MECHANICS_V2_POLICY_ID,
@@ -473,6 +480,130 @@ ACTUAL_REPLAY_INPUT_REPORT_FIELDS_V2 = (
     | frozenset(ACTUAL_REPLAY_INPUT_FALSE_FIELDS_V2)
 )
 
+ACTUAL_REPLAY_ADMISSION_GAP_PREFIX_V2 = (
+    "actual_unsealed_960_replay_admission_gap_inventory_v2_"
+)
+ACTUAL_REPLAY_ADMISSION_GAP_IDENTITY_FIELDS_V2 = frozenset(
+    {
+        f"{ACTUAL_REPLAY_ADMISSION_GAP_PREFIX_V2}version",
+        f"{ACTUAL_REPLAY_ADMISSION_GAP_PREFIX_V2}schema_id",
+        f"{ACTUAL_REPLAY_ADMISSION_GAP_PREFIX_V2}policy_id",
+        f"{ACTUAL_REPLAY_ADMISSION_GAP_PREFIX_V2}claim_level",
+        f"{ACTUAL_REPLAY_ADMISSION_GAP_PREFIX_V2}contract_id",
+    }
+)
+ACTUAL_REPLAY_ADMISSION_GAP_COUNT_FIELDS_V2 = frozenset(
+    {
+        f"{ACTUAL_REPLAY_ADMISSION_GAP_PREFIX_V2}upstream_dependency_identity_count",
+        f"{ACTUAL_REPLAY_ADMISSION_GAP_PREFIX_V2}missing_evidence_requirement_count",
+        f"{ACTUAL_REPLAY_ADMISSION_GAP_PREFIX_V2}required_ordering_statement_count",
+    }
+)
+ACTUAL_REPLAY_ADMISSION_GAP_TRUE_SUFFIXES_V2 = (
+    "gap_inventory_frozen",
+    "required_ordering_statements_frozen",
+    "upstream_dependency_identities_frozen",
+    "no_evidence_input_schema_accepted",
+    "content_addressed_gap_catalog_validated",
+    "atomic_catalog_validation_verified",
+)
+ACTUAL_REPLAY_ADMISSION_GAP_FALSE_SUFFIXES_V2 = (
+    "admission_evidence_contract_complete",
+    "cryptographic_record_schemas_complete",
+    "signature_payload_profiles_complete",
+    "pinned_signer_registry_schema_complete",
+    "attempt_registry_schema_complete",
+    "rerun_policy_executable",
+    "timeline_event_schemas_complete",
+    "timeline_verifier_implemented",
+    "evidence_role_lifecycle_fully_bound",
+    "actual_evidence_inputs_accepted",
+    "verifier_implemented",
+    "admission_ready",
+    "execution_authorized",
+    "one_shot_policy_enforced",
+    "signature_coverage_verified",
+    "evidence_chain_verified",
+    "attempt_terminal_state_verified",
+    "pre_reveal_commitment_timing_verified",
+    "answer_commitment_authority_verified",
+    "gate_input_commitment_authority_verified",
+    "answer_commitment_opening_verified",
+    "gate_input_commitment_opening_verified",
+    "input_archive_membership_verified",
+    "batch_policy_membership_verified",
+    "source_registry_projection_verified",
+    "source_public_disjoint_verified",
+    "single_live_allocation_verified",
+    "secret_custodian_replay_verified",
+    "partition_manifest_authority_verified",
+    "derived_mapping_verified",
+    "recognizer_capacity_evidence",
+    "formal_uuid_audit",
+    "formal_covert_audit",
+    "sealed_holdout_eligible",
+    "preservation_prediction_commitment_verified",
+    "evidence_supplied",
+    "evidence_verified",
+    "custodian_identity_verified",
+    "signer_chain_verified",
+    "signatures_verified",
+    "pinned_signer_key_registry_verified",
+    "durable_attempt_ledger_verified",
+    "attempt_policy_enforced",
+    "retry_authorization_verified",
+    "timeline_observed",
+    "timeline_order_verified",
+    "package_commitment_before_run_verified",
+    "prediction_before_reveal_verified",
+    "answer_manifest_authority_verified",
+    "gate_input_manifest_authority_verified",
+    "input_archive_authority_verified",
+    "prediction_archive_authority_verified",
+    "allocation_authority_verified",
+    "evaluator_input_authority_verified",
+    "execution_freeze_authority_verified",
+    "runtime_attestation_authority_verified",
+    "raw_input_archive_replayed",
+    "raw_prediction_archive_replayed",
+    "canonical_archive_replay_verified",
+    "decoder_transcript_verified",
+    "recognizer_executed",
+    "runtime_executed",
+    "actual_960_case_run_verified",
+    "origin_authenticated",
+    "scoring_performed",
+    "prediction_scored",
+    "actual_prediction_scoring_evidence",
+    "formal_gate_evaluation_performed",
+    "metric_results_materialized",
+    "scored_rows_materialized",
+    "overall_gate_results_materialized",
+    "slice_gate_results_materialized",
+    "wilson_bounds_evaluated",
+    "preservation_evaluated",
+    "scale_regret_evaluated",
+    "bootstrap_evaluated",
+    "baseline_outputs_verified",
+    "effect_evidence",
+    "formal_c1_report_verified",
+    "c1_exit_evidence",
+)
+ACTUAL_REPLAY_ADMISSION_GAP_TRUE_FIELDS_V2 = tuple(
+    ACTUAL_REPLAY_ADMISSION_GAP_PREFIX_V2 + suffix
+    for suffix in ACTUAL_REPLAY_ADMISSION_GAP_TRUE_SUFFIXES_V2
+)
+ACTUAL_REPLAY_ADMISSION_GAP_FALSE_FIELDS_V2 = tuple(
+    ACTUAL_REPLAY_ADMISSION_GAP_PREFIX_V2 + suffix
+    for suffix in ACTUAL_REPLAY_ADMISSION_GAP_FALSE_SUFFIXES_V2
+)
+ACTUAL_REPLAY_ADMISSION_GAP_REPORT_FIELDS_V2 = (
+    ACTUAL_REPLAY_ADMISSION_GAP_IDENTITY_FIELDS_V2
+    | ACTUAL_REPLAY_ADMISSION_GAP_COUNT_FIELDS_V2
+    | frozenset(ACTUAL_REPLAY_ADMISSION_GAP_TRUE_FIELDS_V2)
+    | frozenset(ACTUAL_REPLAY_ADMISSION_GAP_FALSE_FIELDS_V2)
+)
+
 
 def test_phase2b_protocol_freezes_720_independent_latent_cases():
     protocol = frozen_phase2b_protocol()
@@ -792,7 +923,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     report = phase2b_preregistration_report()
     assert report["implementation_id"] == (
         "phase2b_protocol_source_sha256_"
-        "117c2b71681c21f246fea93c28cc2bef22fd8578f6bbdec55c503295150d8bb4"
+        "366e61af544fb41275fdcf558aa759c23105bbc3bc8ee29b989935cfdc4dc857"
     )
     assert report["artifact"] == "phase2b_preregistration_readiness_v1"
     assert report["formal_phase2b_exit_claim"] is False
@@ -1531,6 +1662,77 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         }
         == ACTUAL_REPLAY_INPUT_REPORT_FIELDS_V2
     )
+    admission_gap_contract = (
+        frozen_actual_unsealed_960_replay_admission_gap_inventory_v2()
+    )
+    assert len(ACTUAL_REPLAY_ADMISSION_GAP_IDENTITY_FIELDS_V2) == 5
+    assert len(ACTUAL_REPLAY_ADMISSION_GAP_COUNT_FIELDS_V2) == 3
+    assert len(ACTUAL_REPLAY_ADMISSION_GAP_TRUE_FIELDS_V2) == 6
+    assert len(ACTUAL_REPLAY_ADMISSION_GAP_FALSE_FIELDS_V2) == 80
+    assert len(ACTUAL_REPLAY_ADMISSION_GAP_REPORT_FIELDS_V2) == 94
+    assert report[f"{ACTUAL_REPLAY_ADMISSION_GAP_PREFIX_V2}version"] == (
+        ACTUAL_UNSEALED_960_REPLAY_ADMISSION_GAP_INVENTORY_V2_VERSION
+    )
+    assert report[f"{ACTUAL_REPLAY_ADMISSION_GAP_PREFIX_V2}schema_id"] == (
+        ACTUAL_UNSEALED_960_REPLAY_ADMISSION_GAP_INVENTORY_V2_SCHEMA_ID
+    )
+    assert report[f"{ACTUAL_REPLAY_ADMISSION_GAP_PREFIX_V2}policy_id"] == (
+        ACTUAL_UNSEALED_960_REPLAY_ADMISSION_GAP_INVENTORY_V2_POLICY_ID
+    )
+    assert report[f"{ACTUAL_REPLAY_ADMISSION_GAP_PREFIX_V2}claim_level"] == (
+        ACTUAL_UNSEALED_960_REPLAY_ADMISSION_GAP_INVENTORY_V2_CLAIM_LEVEL
+    )
+    assert report[f"{ACTUAL_REPLAY_ADMISSION_GAP_PREFIX_V2}contract_id"] == (
+        admission_gap_contract.contract_id
+    )
+    assert report[f"{ACTUAL_REPLAY_ADMISSION_GAP_PREFIX_V2}version"] == (
+        "hegel-machine-phase2b-actual-unsealed-960-replay-admission-gap-inventory/2"
+    )
+    assert report[f"{ACTUAL_REPLAY_ADMISSION_GAP_PREFIX_V2}schema_id"] == (
+        "phase2b_actual_unsealed_960_replay_admission_gap_inventory_schema_v2_"
+        "f7c827897ec9719516f612cf1b072efedd8d2814fea8d6eb8e544ca06fb20866"
+    )
+    assert report[f"{ACTUAL_REPLAY_ADMISSION_GAP_PREFIX_V2}policy_id"] == (
+        "phase2b_actual_unsealed_960_replay_admission_gap_inventory_policy_v2_"
+        "fbb1b97f5dfcd794c0dca6c50a0e5ef8f2a8965a277150ea3027b0985ae1e0f1"
+    )
+    assert report[f"{ACTUAL_REPLAY_ADMISSION_GAP_PREFIX_V2}claim_level"] == (
+        "NON_AUTHORITATIVE_ACTUAL_REPLAY_ADMISSION_GAP_INVENTORY_ONLY"
+    )
+    assert report[f"{ACTUAL_REPLAY_ADMISSION_GAP_PREFIX_V2}contract_id"] == (
+        "phase2b_actual_unsealed_960_replay_admission_gap_inventory_v2_"
+        "5cb13b80972410f0434fc26614b87b6105086ff0d5ced2c19ea2b592ba58d455"
+    )
+    expected_admission_gap_counts = {
+        "upstream_dependency_identity_count": 5,
+        "missing_evidence_requirement_count": 18,
+        "required_ordering_statement_count": 16,
+    }
+    for suffix, expected in expected_admission_gap_counts.items():
+        assert report[ACTUAL_REPLAY_ADMISSION_GAP_PREFIX_V2 + suffix] == expected
+    for field_name in ACTUAL_REPLAY_ADMISSION_GAP_TRUE_FIELDS_V2:
+        assert report[field_name] is True
+    for field_name in ACTUAL_REPLAY_ADMISSION_GAP_FALSE_FIELDS_V2:
+        assert report[field_name] is False
+    assert {
+        field_name
+        for field_name in report
+        if field_name.startswith(ACTUAL_REPLAY_ADMISSION_GAP_PREFIX_V2)
+    } == ACTUAL_REPLAY_ADMISSION_GAP_REPORT_FIELDS_V2
+    for hidden_suffix in (
+        "validation_id",
+        "disposition",
+        "reason",
+        "contract_sha256",
+        "upstream_dependency_identity_ids_root",
+        "missing_evidence_requirement_ids_root",
+        "required_ordering_statement_ids_root",
+        "upstream_dependency_identities",
+        "missing_evidence_requirements",
+        "required_ordering_statements",
+        "implemented",
+    ):
+        assert ACTUAL_REPLAY_ADMISSION_GAP_PREFIX_V2 + hidden_suffix not in report
     assert report["public_prediction_run_context_v2_schema_version"] == (
         PUBLIC_PREDICTION_RUN_CONTEXT_V2_SCHEMA_VERSION
     )
@@ -1668,6 +1870,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "exact_derived_witness_bridge",
         "exact_bridge",
         "exact_transform_semantics",
+        "actual_unsealed_960_replay_admission_gap_inventory_v2",
         "actual_unsealed_960_replay_input_contract_v2",
         "formal_unsealed_prediction_scoring_contract_v2",
         "unsealed_960_prediction_scoring_mechanics_v2",
@@ -1727,6 +1930,12 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     ] == (
         "sha256:"
         "35da6f01163835ca90c24cdbd4ad85a1f7f0b2ef78ceb6e70fe80de2534814f2"
+    )
+    assert report["component_source_ids"][
+        "actual_unsealed_960_replay_admission_gap_inventory_v2"
+    ] == (
+        "sha256:"
+        "b1dc11a0ac6e3dfafc9621c10957308b9d50c30e8806e78ff5b6a056a8ff1450"
     )
     assert report["component_source_ids"][
         "recognizer_prediction_row_mapping_mechanics_v2"
@@ -1797,7 +2006,7 @@ def test_checked_in_phase2b_preregistration_artifact_matches_runtime():
     assert artifact == phase2b_preregistration_report()
 
 
-def test_actual_replay_input_contract_report_artifact_refresh_transition_is_exact():
+def test_actual_replay_admission_gap_inventory_report_artifact_refresh_transition_is_exact():
     artifact_path = (
         Path(__file__).resolve().parents[1]
         / "artifacts"
@@ -1805,12 +2014,12 @@ def test_actual_replay_input_contract_report_artifact_refresh_transition_is_exac
     )
     artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
     report = phase2b_preregistration_report()
-    assert len(report) == 653
+    assert len(report) == 747
     if artifact == report:
         return
-    assert len(artifact) == 559
+    assert len(artifact) == 653
     assert set(report) - set(artifact) == (
-        ACTUAL_REPLAY_INPUT_REPORT_FIELDS_V2
+        ACTUAL_REPLAY_ADMISSION_GAP_REPORT_FIELDS_V2
     )
     assert set(artifact) - set(report) == set()
     changed_common_fields = {
@@ -1830,7 +2039,7 @@ def test_actual_replay_input_contract_report_artifact_refresh_transition_is_exac
     )
     assert set(report["component_source_ids"]) - set(
         artifact["component_source_ids"]
-    ) == {"actual_unsealed_960_replay_input_contract_v2"}
+    ) == {"actual_unsealed_960_replay_admission_gap_inventory_v2"}
     assert set(artifact["component_source_ids"]) - set(
         report["component_source_ids"]
     ) == set()
