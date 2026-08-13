@@ -122,6 +122,12 @@ from hegel_machine.phase2b_unsealed_960_prediction_scoring_mechanics_v2 import (
     UNSEALED_960_PREDICTION_SCORING_MECHANICS_V2_SCHEMA_ID,
     UNSEALED_960_PREDICTION_SCORING_MECHANICS_V2_VERSION,
 )
+from hegel_machine.phase2b_unsealed_960_available_gate_mechanics_v2 import (
+    UNSEALED_960_AVAILABLE_GATE_MECHANICS_V2_CLAIM_LEVEL,
+    UNSEALED_960_AVAILABLE_GATE_MECHANICS_V2_POLICY_ID,
+    UNSEALED_960_AVAILABLE_GATE_MECHANICS_V2_SCHEMA_ID,
+    UNSEALED_960_AVAILABLE_GATE_MECHANICS_V2_VERSION,
+)
 from hegel_machine.phase2b_unsealed_prediction_evaluator_v1 import (
     UNSEALED_PREDICTION_EVALUATOR_POLICY_ID,
     UNSEALED_PREDICTION_EVALUATOR_VERSION,
@@ -361,6 +367,130 @@ UNSEALED_960_PREDICTION_SCORING_MECHANICS_V2_REPORT_FIELDS = (
     UNSEALED_960_PREDICTION_SCORING_MECHANICS_V2_IDENTITY_FIELDS
     | frozenset(UNSEALED_960_PREDICTION_SCORING_MECHANICS_V2_TRUE_FIELDS)
     | frozenset(UNSEALED_960_PREDICTION_SCORING_MECHANICS_V2_FALSE_FIELDS)
+)
+
+AVAILABLE_GATE_MECHANICS_PREFIX_V2 = "unsealed_960_available_gate_mechanics_v2_"
+AVAILABLE_GATE_MECHANICS_IDENTITY_FIELDS_V2 = frozenset(
+    {
+        AVAILABLE_GATE_MECHANICS_PREFIX_V2 + suffix
+        for suffix in (
+            "version",
+            "schema_id",
+            "policy_id",
+            "claim_level",
+            "expected_main_row_count",
+            "expected_semantic_conflict_excluded_count",
+            "expected_available_overall_result_count",
+            "expected_available_slice_result_count",
+            "expected_unavailable_result_count",
+        )
+    }
+)
+AVAILABLE_GATE_MECHANICS_TRUE_SUFFIXES_V2 = (
+    "component_mechanics_implemented",
+    "pure_three_supplied_graph_compositor_mechanics_implemented",
+    "independent_supplied_graph_validation_mechanics_implemented",
+    "three_supplied_graph_cross_binding_mechanics_implemented",
+    "exact_main_720_row_join_mechanics_implemented",
+    "ten_available_overall_gate_mechanics_implemented",
+    "twenty_four_available_slice_gate_mechanics_implemented",
+    "two_unavailable_gate_retention_mechanics_implemented",
+    "exact_rational_point_threshold_mechanics_implemented",
+    "one_sided_95_percent_wilson_mechanics_implemented",
+    "semantic_conflict_240_exclusion_mechanics_implemented",
+    "atomic_all_false_rejection_mechanics_implemented",
+    "cross_version_rejection_mechanics_implemented",
+    "synthetic_exact_720_available_gate_mechanics_test_verified",
+)
+AVAILABLE_GATE_MECHANICS_FALSE_SUFFIXES_V2 = (
+    "protocol_report_executes_compositor",
+    "supplied_scoring_mechanics_graph_independently_verified",
+    "supplied_replay_input_contract_graph_independently_verified",
+    "supplied_gate_input_manifest_graph_independently_verified",
+    "three_supplied_graphs_cross_bound",
+    "exact_main_720_row_join_verified",
+    "ten_available_overall_gate_mechanics_results_materialized",
+    "twenty_four_available_slice_gate_mechanics_results_materialized",
+    "two_unavailable_gate_inputs_retained",
+    "frozen_threshold_identity_verified",
+    "one_sided_95_percent_wilson_mechanics_evaluated",
+    "semantic_conflict_240_excluded_from_available_mechanics",
+    "atomic_fail_closed_rejection_verified",
+    "formal_gate_evaluation_performed",
+    "overall_gate_results_materialized",
+    "slice_gate_results_materialized",
+    "metric_results_materialized",
+    "scored_rows_materialized",
+    "formal_wilson_gate_bounds_evaluated",
+    "upstream_scoring_control_rejection_metrics_implemented",
+    "upstream_scoring_slice_gate_metrics_implemented",
+    "scoring_performed",
+    "prediction_scored",
+    "actual_prediction_scoring_evidence",
+    "challenge_in_main_denominator",
+    "challenge_scoring_performed",
+    "challenge_descriptor_rows_implemented",
+    "fail_closed_rate_evaluated",
+    "preservation_consistency_evaluated",
+    "preservation_evaluated",
+    "scale_regret_evaluated",
+    "bootstrap_evaluated",
+    "fail_closed_gate_inputs_contract_complete",
+    "preservation_gate_inputs_contract_complete",
+    "scale_regret_inputs_contract_complete",
+    "bootstrap_inputs_contract_complete",
+    "baseline_outputs_verified",
+    "margin_stratum_authority_verified",
+    "family_slice_label_authority_verified",
+    "scale_slice_semantics_authority_verified",
+    "latent_case_independence_verified",
+    "raw_input_archive_replayed",
+    "raw_prediction_archive_replayed",
+    "answer_commitment_opening_verified",
+    "gate_input_commitment_opening_verified",
+    "prediction_commit_before_reveal_verified",
+    "evidence_supplied",
+    "evidence_verified",
+    "answer_manifest_authority_verified",
+    "gate_input_manifest_authority_verified",
+    "answer_commitment_authority_verified",
+    "gate_input_commitment_authority_verified",
+    "pre_reveal_commitment_timing_verified",
+    "one_shot_policy_enforced",
+    "durable_attempt_ledger_verified",
+    "secret_custodian_replay_verified",
+    "input_archive_membership_verified",
+    "batch_policy_membership_verified",
+    "source_registry_projection_verified",
+    "source_public_disjoint_verified",
+    "single_live_allocation_verified",
+    "execution_manifest_authority_verified",
+    "partition_manifest_authority_verified",
+    "derived_mapping_verified",
+    "recognizer_executed",
+    "runtime_executed",
+    "actual_960_case_run_verified",
+    "recognizer_capacity_evidence",
+    "origin_authenticated",
+    "formal_uuid_audit",
+    "formal_covert_audit",
+    "sealed_holdout_eligible",
+    "effect_evidence",
+    "formal_c1_report_verified",
+    "c1_exit_evidence",
+)
+AVAILABLE_GATE_MECHANICS_TRUE_FIELDS_V2 = tuple(
+    AVAILABLE_GATE_MECHANICS_PREFIX_V2 + suffix
+    for suffix in AVAILABLE_GATE_MECHANICS_TRUE_SUFFIXES_V2
+)
+AVAILABLE_GATE_MECHANICS_FALSE_FIELDS_V2 = tuple(
+    AVAILABLE_GATE_MECHANICS_PREFIX_V2 + suffix
+    for suffix in AVAILABLE_GATE_MECHANICS_FALSE_SUFFIXES_V2
+)
+AVAILABLE_GATE_MECHANICS_REPORT_FIELDS_V2 = (
+    AVAILABLE_GATE_MECHANICS_IDENTITY_FIELDS_V2
+    | frozenset(AVAILABLE_GATE_MECHANICS_TRUE_FIELDS_V2)
+    | frozenset(AVAILABLE_GATE_MECHANICS_FALSE_FIELDS_V2)
 )
 
 ACTUAL_REPLAY_INPUT_PREFIX_V2 = "actual_unsealed_960_replay_input_contract_v2_"
@@ -923,7 +1053,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     report = phase2b_preregistration_report()
     assert report["implementation_id"] == (
         "phase2b_protocol_source_sha256_"
-        "366e61af544fb41275fdcf558aa759c23105bbc3bc8ee29b989935cfdc4dc857"
+        "c4621d987ab803c569debd9f3d390bd0988f88e450f238af9ae625a9fc8c1c75"
     )
     assert report["artifact"] == "phase2b_preregistration_readiness_v1"
     assert report["formal_phase2b_exit_claim"] is False
@@ -1585,6 +1715,54 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
             "unsealed_960_prediction_scoring_mechanics_v2_"
         )
     } == UNSEALED_960_PREDICTION_SCORING_MECHANICS_V2_REPORT_FIELDS
+    assert len(AVAILABLE_GATE_MECHANICS_IDENTITY_FIELDS_V2) == 9
+    assert len(AVAILABLE_GATE_MECHANICS_TRUE_FIELDS_V2) == 14
+    assert len(AVAILABLE_GATE_MECHANICS_FALSE_FIELDS_V2) == 75
+    assert len(AVAILABLE_GATE_MECHANICS_REPORT_FIELDS_V2) == 98
+    assert report[AVAILABLE_GATE_MECHANICS_PREFIX_V2 + "version"] == (
+        UNSEALED_960_AVAILABLE_GATE_MECHANICS_V2_VERSION
+    )
+    assert report[AVAILABLE_GATE_MECHANICS_PREFIX_V2 + "schema_id"] == (
+        UNSEALED_960_AVAILABLE_GATE_MECHANICS_V2_SCHEMA_ID
+    )
+    assert report[AVAILABLE_GATE_MECHANICS_PREFIX_V2 + "policy_id"] == (
+        UNSEALED_960_AVAILABLE_GATE_MECHANICS_V2_POLICY_ID
+    )
+    assert report[AVAILABLE_GATE_MECHANICS_PREFIX_V2 + "claim_level"] == (
+        UNSEALED_960_AVAILABLE_GATE_MECHANICS_V2_CLAIM_LEVEL
+    )
+    assert report[AVAILABLE_GATE_MECHANICS_PREFIX_V2 + "version"] == (
+        "hegel-machine-phase2b-unsealed-960-available-gate-mechanics/2"
+    )
+    assert report[AVAILABLE_GATE_MECHANICS_PREFIX_V2 + "schema_id"] == (
+        "phase2b_unsealed_960_available_gate_mechanics_schema_v2_"
+        "401bee5f7df3cb1a5b7b93bb23af5d482c82e178b1b047982d2fda11696cf0e9"
+    )
+    assert report[AVAILABLE_GATE_MECHANICS_PREFIX_V2 + "policy_id"] == (
+        "phase2b_unsealed_960_available_gate_mechanics_policy_v2_"
+        "ba0d17ddf4a4716ded51eb0d1e997770db1760dece3dc4505410bda775d756c0"
+    )
+    assert report[AVAILABLE_GATE_MECHANICS_PREFIX_V2 + "claim_level"] == (
+        "NON_AUTHORITATIVE_AVAILABLE_GATE_MECHANICS_ONLY"
+    )
+    expected_available_gate_mechanics_counts = {
+        "expected_main_row_count": 720,
+        "expected_semantic_conflict_excluded_count": 240,
+        "expected_available_overall_result_count": 10,
+        "expected_available_slice_result_count": 24,
+        "expected_unavailable_result_count": 2,
+    }
+    for suffix, expected in expected_available_gate_mechanics_counts.items():
+        assert report[AVAILABLE_GATE_MECHANICS_PREFIX_V2 + suffix] == expected
+    for field_name in AVAILABLE_GATE_MECHANICS_TRUE_FIELDS_V2:
+        assert report[field_name] is True
+    for field_name in AVAILABLE_GATE_MECHANICS_FALSE_FIELDS_V2:
+        assert report[field_name] is False
+    assert {
+        field_name
+        for field_name in report
+        if field_name.startswith(AVAILABLE_GATE_MECHANICS_PREFIX_V2)
+    } == AVAILABLE_GATE_MECHANICS_REPORT_FIELDS_V2
     assert len(ACTUAL_REPLAY_INPUT_IDENTITY_FIELDS_V2) == 17
     assert len(ACTUAL_REPLAY_INPUT_TRUE_FIELDS_V2) == 25
     assert len(ACTUAL_REPLAY_INPUT_FALSE_FIELDS_V2) == 52
@@ -1873,6 +2051,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "actual_unsealed_960_replay_admission_gap_inventory_v2",
         "actual_unsealed_960_replay_input_contract_v2",
         "formal_unsealed_prediction_scoring_contract_v2",
+        "unsealed_960_available_gate_mechanics_v2",
         "unsealed_960_prediction_scoring_mechanics_v2",
         "projection_compiler",
         "recognizer_input_archive_mechanics",
@@ -1924,6 +2103,12 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     ] == (
         "sha256:"
         "c3c12e9cd72a930b9ca8667aab22c4eb3675ceab6249b0b26ba940bf794e7f11"
+    )
+    assert report["component_source_ids"][
+        "unsealed_960_available_gate_mechanics_v2"
+    ] == (
+        "sha256:"
+        "7581f84a0b117de2c299ea338329c6420fa6e063192de3a6330eff78df983a72"
     )
     assert report["component_source_ids"][
         "actual_unsealed_960_replay_input_contract_v2"
@@ -2006,7 +2191,7 @@ def test_checked_in_phase2b_preregistration_artifact_matches_runtime():
     assert artifact == phase2b_preregistration_report()
 
 
-def test_actual_replay_admission_gap_inventory_report_artifact_refresh_transition_is_exact():
+def test_available_gate_mechanics_report_artifact_refresh_transition_is_exact():
     artifact_path = (
         Path(__file__).resolve().parents[1]
         / "artifacts"
@@ -2014,12 +2199,12 @@ def test_actual_replay_admission_gap_inventory_report_artifact_refresh_transitio
     )
     artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
     report = phase2b_preregistration_report()
-    assert len(report) == 747
+    assert len(report) == 845
     if artifact == report:
         return
-    assert len(artifact) == 653
+    assert len(artifact) == 747
     assert set(report) - set(artifact) == (
-        ACTUAL_REPLAY_ADMISSION_GAP_REPORT_FIELDS_V2
+        AVAILABLE_GATE_MECHANICS_REPORT_FIELDS_V2
     )
     assert set(artifact) - set(report) == set()
     changed_common_fields = {
@@ -2039,7 +2224,7 @@ def test_actual_replay_admission_gap_inventory_report_artifact_refresh_transitio
     )
     assert set(report["component_source_ids"]) - set(
         artifact["component_source_ids"]
-    ) == {"actual_unsealed_960_replay_admission_gap_inventory_v2"}
+    ) == {"unsealed_960_available_gate_mechanics_v2"}
     assert set(artifact["component_source_ids"]) - set(
         report["component_source_ids"]
     ) == set()

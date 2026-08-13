@@ -336,7 +336,22 @@ neither authority nor pre-reveal timing, and identifier uniqueness establishes n
 latent-case independence. All eighteen required evidence packages remain unsupplied;
 metric, scored-row, and gate outputs remain empty, scale-regret and bootstrap outputs
 remain absent, and no recognizer/runtime/actual-960/scoring/formal-gate/effect/C1 or
-Q0.5b/Q1 evidence exists. The next slice remains
+Q0.5b/Q1 evidence exists. The independent V2 available-gate mechanics is only a pure
+compositor over three already-materialized caller-supplied scoring-mechanics,
+replay-input-contract, and gate-input-manifest graphs. A successful supplied/synthetic
+call independently snapshots, revalidates, and cross-binds the graphs, joins exactly
+720 rows by identity, computes point-estimate and one-sided 95% Wilson mechanics for
+ten overall and twenty-four family/opaque-scale slice gates, and retains two gates
+with missing attempt-event or preservation-pair inputs as unavailable with `None`
+counts, estimates, and pass values. Its success disposition is only
+`AVAILABLE_GATE_MECHANICS_COMPLETE_NOT_FORMAL_GATE_EVALUATION`; these are mechanics
+results, not formal gate results, and do not promote upstream mechanics to actual
+scoring. It invokes no decoder, scorer, runner, ledger, or signature verifier. The
+preregistration report exposes only static component identity, capability, and source
+SHA: without supplied graphs it does not execute the compositor, so all report-level
+graph-verification, join, result-materialization, and Wilson-evaluated flags remain
+false. Actual-960, authority/timing, effect, and C1 boundaries remain unchanged. The
+next slice remains
 `actual_unsealed_960_case_prediction_scoring_replay_v2`.
 
 The V2 actual-unsealed-960 replay-admission gap inventory freezes a catalogue of

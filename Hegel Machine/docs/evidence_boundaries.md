@@ -184,7 +184,15 @@ semantic-conflict rows 只绑定 root 并继续排除 main denominator；没有 
 成功仅为 `ACTUAL_REPLAY_CONTRACT_COMPLETE_NOT_EXECUTED`。commitment opening 不证明预揭示时序或
 权威，唯一 latent IDs 不证明 latent-case independence；18 项所需证据仍明确未供应，metric/
 scored-row/gate results 为空，scale-regret/bootstrap results 缺失，recognizer/runtime/actual-960/
-scoring/formal-gate/effect/C1 与 Q0.5b/Q1 证据均不存在。下一施工切片仍是
+scoring/formal-gate/effect/C1 与 Q0.5b/Q1 证据均不存在。独立 V2 available-gate mechanics
+仅是接受已物化 scoring/replay/manifest 三图的纯 compositor。一次 caller-supplied/synthetic
+成功调用可独立重证并交叉绑定三图、按 ID join 720 行，物化 10 个 overall 和 24 个
+family/opaque-scale slice point/Wilson mechanics，并把缺少 attempt-event denominator 与
+preservation-pair results 的 2 个 gate 保持 unavailable/`None`；这仍不是 formal gate results。
+它不调用 decoder/scorer/runner/ledger/signature verifier，不证明 upstream actual scoring、actual 960、
+authority/timing、effect 或 C1。preregistration report 只有该组件的静态 identity/capability/source
+SHA；它没有 supplied 三图且不执行 compositor，所以 report 的 supplied-graph verification、join、
+result materialization 和 Wilson-evaluated flags 均为 false。下一施工切片仍是
 `actual_unsealed_960_case_prediction_scoring_replay_v2`。
 
 The V2 actual-unsealed-960 replay-admission gap inventory freezes a catalogue of

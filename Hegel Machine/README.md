@@ -321,7 +321,18 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
   `ACTUAL_REPLAY_CONTRACT_COMPLETE_NOT_EXECUTED`。commitment opening 不证明预揭示时序或权威，
   唯一 latent IDs 不证明 latent-case independence；18 项所需证据仍明确未供应，
   metric/scored-row/gate results 为空，scale-regret/bootstrap results 缺失，recognizer/runtime/
-  actual-960/scoring/formal-gate/effect/C1 与 Q0.5b/Q1 证据均不存在。下一刀仍是
+  actual-960/scoring/formal-gate/effect/C1 与 Q0.5b/Q1 证据均不存在。独立 V2 available-gate
+  mechanics 是只接受上述 scoring mechanics、replay-input contract 和 gate-input manifest
+  三个已物化图的纯 compositor；它不调用 decoder、scorer、runner、ledger 或签名验证器。对调用方
+  supplied/synthetic 图的成功路径会独立快照并重证三图、精确 join 720 行，计算 10 个 overall 与
+  24 个 family/opaque-scale slice 的 point/Wilson mechanics，并把缺失 attempt-event denominator
+  与 preservation pairs 的 2 个 gate 保持为 unavailable/`None`。成功仅为
+  `AVAILABLE_GATE_MECHANICS_COMPLETE_NOT_FORMAL_GATE_EVALUATION`，claim level 是
+  `NON_AUTHORITATIVE_AVAILABLE_GATE_MECHANICS_ONLY`；这些是 mechanics results，不是 formal gate
+  results，也不证明 upstream scoring、actual 960、authority/timing、effect 或 C1。preregistration
+  report 只发布该组件的静态 identity/capability/source SHA，不构造三图、不执行 compositor，因而
+  report 中 supplied-graph verification、720 join/result materialization 与 Wilson-evaluated flags
+  均保持 false。下一刀仍是
   `actual_unsealed_960_case_prediction_scoring_replay_v2`；在完整
   standard-error 语义实现前，formal selector 只允许 `absolute_bound`；
   The V2 actual-unsealed-960 replay-admission gap inventory freezes a catalogue

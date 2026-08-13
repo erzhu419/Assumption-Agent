@@ -357,6 +357,18 @@ semantic-conflict rows 只绑定 root 并继续排除 main denominator；没有 
 gate results 为空，scale-regret/bootstrap results 缺失，recognizer/runtime/actual-960/scoring/
 formal-gate/effect/C1 与 Q0.5b/Q1 证据均不存在。
 
+独立 V2 available-gate mechanics 是一个只接受已物化 scoring-mechanics、replay-input-contract
+与 gate-input-manifest 三图的纯 compositor，不调用 decoder、scorer、runner、ledger 或签名验证器。
+对 supplied/synthetic 三图的成功调用会独立快照/重证并交叉绑定三图、按 ID 精确 join 720 行，
+计算 10 个 overall 与 24 个 family/opaque-scale slice 的 point estimate 和 one-sided 95% Wilson
+mechanics；缺少 attempt-event denominator 与 preservation-pair results 的 2 个 gate 保持
+unavailable，counts/estimates/pass 均为 `None`。成功 disposition 仅为
+`AVAILABLE_GATE_MECHANICS_COMPLETE_NOT_FORMAL_GATE_EVALUATION`，不是 formal gate evaluation，
+也不把 upstream supplied mechanics 升格为 actual scoring。preregistration report 只暴露该组件的
+静态 identity/capability/source SHA；因为没有 caller-supplied 三图，它不执行 compositor，运行态
+verification/result/Wilson-evaluated flags 继续为 false，actual 960、authority/timing、effect/C1
+边界不变。
+
 ```text
 formal answer manifest
   + 720-row gate-input manifest
