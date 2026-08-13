@@ -202,6 +202,21 @@ event, signature, ledger, timing, runtime, scoring, gate, effect, or C1 verifier
 Its successful disposition is `GAP_INVENTORY_FROZEN_NOT_ADMITTED`; it is never an
 admission decision or execution authorization.
 
+The independent V2 signed-attempt-chain component closes only an in-memory,
+caller-supplied test-anchor mechanics slice. It accepts exactly one
+`TEST_ONLY_SUPPLIED_ANCHOR` custodian public key and verifies content addresses,
+Ed25519 signatures, predecessor links, and the exact ten stages ending at
+`TERMINAL_CONSUMED`. Even its success disposition,
+`SIGNED_ATTEMPT_CHAIN_MECHANICS_VERIFIED_NOT_DURABLE_AUTHORITY`, establishes no
+external trust anchor, custodian identity, qualified backend, durable append-only
+ledger, authoritative timestamp, one-shot/rerun enforcement, actual-960 execution,
+scoring, formal gate, effect, or C1 evidence. It generates no keys, anchors, events,
+or signatures. The preregistration report exposes only static component identity,
+counts, capabilities, and source SHA; it constructs no signed-chain input and does
+not call the verifier. Consequently all report-level instance-verification and broad
+claims remain false, and the next construction slice remains
+`actual_unsealed_960_case_prediction_scoring_replay_v2`.
+
 此外可以说：Phase-3A 的 v1.0.2 strict specification 已冻结，Python/Rust shared vectors
 各 48/48 PASS。M2 两端都接受 64,680 个 source candidates，并得到 64,680 个 unique strict
 canonical AST；共同 diagnostic set commitment 是

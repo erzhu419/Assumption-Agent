@@ -386,6 +386,22 @@ event, signature, ledger, timing, runtime, scoring, gate, effect, or C1 verifier
 Its successful disposition is `GAP_INVENTORY_FROZEN_NOT_ADMITTED`; it is never an
 admission decision or execution authorization.
 
+The independent V2 signed-attempt-chain component is narrower than that missing
+admission layer. Given a caller-supplied in-memory graph, it accepts exactly one
+`TEST_ONLY_SUPPLIED_ANCHOR` custodian public key and verifies content addresses,
+Ed25519 event signatures, predecessor links, and the exact ten-stage sequence ending
+at `TERMINAL_CONSUMED`. Success is only
+`SIGNED_ATTEMPT_CHAIN_MECHANICS_VERIFIED_NOT_DURABLE_AUTHORITY`. The component
+generates no key, anchor, event, or signature and performs no filesystem, clock,
+runner, scorer, or ledger operation. A real-Ed25519 test fixture establishes only
+test-anchor mechanics, not external trust, custodian identity, qualified-backend
+status, durable append-only storage, authoritative time, one-shot/rerun enforcement,
+actual-960 execution, scoring, formal gates, effect, or C1 evidence. The
+preregistration report exposes static identity/count/capability/source-SHA fields
+only: it constructs no signed-chain object and does not call the verifier, so every
+instance-verification and broad claim remains false. The next construction slice is
+unchanged.
+
 这些 receipts 仍恒为 `NON_AUTHORITATIVE_MECHANICS_ONLY`。pairwise distinct 不证明 IKM
 独立性；raw-envelope diagnostic 不验证 batch membership 或 secret padding；supplied-secret
 replay 只证明调用方给出的 authorities/run/IKM 可重建同一 bytes。origin authentication、

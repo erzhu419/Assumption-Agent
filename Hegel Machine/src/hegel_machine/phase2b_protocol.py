@@ -1159,6 +1159,7 @@ def phase2b_preregistration_report() -> dict[str, object]:
         phase2b_exact_transform_semantics_v1,
         phase2b_actual_unsealed_960_replay_admission_evidence_contract_v2,
         phase2b_actual_unsealed_960_replay_input_contract_v2,
+        phase2b_actual_unsealed_960_signed_attempt_chain_mechanics_v2,
         phase2b_formal_unsealed_prediction_scoring_contract_v2,
         phase2b_unsealed_960_available_gate_mechanics_v2,
         phase2b_unsealed_960_prediction_scoring_mechanics_v2,
@@ -2243,6 +2244,123 @@ def phase2b_preregistration_report() -> dict[str, object]:
                 "c1_exit_evidence",
             )
         },
+        "actual_unsealed_960_signed_attempt_chain_mechanics_v2_version": (
+            phase2b_actual_unsealed_960_signed_attempt_chain_mechanics_v2
+            .PHASE2B_ACTUAL_UNSEALED_960_SIGNED_ATTEMPT_CHAIN_MECHANICS_V2_VERSION
+        ),
+        "actual_unsealed_960_signed_attempt_chain_mechanics_v2_schema_id": (
+            phase2b_actual_unsealed_960_signed_attempt_chain_mechanics_v2
+            .PHASE2B_ACTUAL_UNSEALED_960_SIGNED_ATTEMPT_CHAIN_MECHANICS_V2_SCHEMA_ID
+        ),
+        "actual_unsealed_960_signed_attempt_chain_mechanics_v2_policy_id": (
+            phase2b_actual_unsealed_960_signed_attempt_chain_mechanics_v2
+            .PHASE2B_ACTUAL_UNSEALED_960_SIGNED_ATTEMPT_CHAIN_MECHANICS_V2_POLICY_ID
+        ),
+        "actual_unsealed_960_signed_attempt_chain_mechanics_v2_claim_level": (
+            phase2b_actual_unsealed_960_signed_attempt_chain_mechanics_v2
+            .PHASE2B_ACTUAL_UNSEALED_960_SIGNED_ATTEMPT_CHAIN_MECHANICS_V2_CLAIM_LEVEL
+        ),
+        "actual_unsealed_960_signed_attempt_chain_mechanics_v2_test_anchor_scope": (
+            phase2b_actual_unsealed_960_signed_attempt_chain_mechanics_v2
+            .PHASE2B_ACTUAL_UNSEALED_960_SIGNED_ATTEMPT_CHAIN_TEST_ANCHOR_SCOPE_V2
+        ),
+        "actual_unsealed_960_signed_attempt_chain_mechanics_v2_expected_test_only_custodian_signer_key_count": 1,
+        "actual_unsealed_960_signed_attempt_chain_mechanics_v2_expected_event_count": 10,
+        "actual_unsealed_960_signed_attempt_chain_mechanics_v2_expected_stage_count": 10,
+        "actual_unsealed_960_signed_attempt_chain_mechanics_v2_expected_terminal_stage": "TERMINAL_CONSUMED",
+        **{
+            "actual_unsealed_960_signed_attempt_chain_mechanics_v2_" + suffix: True
+            for suffix in (
+                "component_mechanics_implemented",
+                "test_only_anchor_scope_mechanics_implemented",
+                "test_only_anchor_content_addresses_mechanics_implemented",
+                "test_only_signer_key_content_address_mechanics_implemented",
+                "test_only_anchor_ed25519_event_signature_verification_mechanics_implemented",
+                "signed_event_content_addresses_mechanics_implemented",
+                "signed_test_chain_contiguous_event_indexes_mechanics_implemented",
+                "signed_test_chain_predecessor_links_mechanics_implemented",
+                "signed_test_chain_exact_ten_stage_order_mechanics_implemented",
+                "signed_test_chain_terminal_consumed_label_mechanics_implemented",
+                "signed_test_chain_root_and_id_mechanics_implemented",
+                "atomic_all_false_rejection_mechanics_implemented",
+                "cross_version_rejection_mechanics_implemented",
+                "test_only_real_ed25519_ten_stage_chain_mechanics_test_verified",
+            )
+        },
+        **{
+            "actual_unsealed_960_signed_attempt_chain_mechanics_v2_" + suffix: False
+            for suffix in (
+                "protocol_report_constructs_signer_keys",
+                "protocol_report_constructs_test_anchor",
+                "protocol_report_constructs_attempt_events",
+                "protocol_report_generates_event_signatures",
+                "protocol_report_executes_signed_attempt_chain_verifier",
+                "test_only_anchor_scope_enforced",
+                "test_only_anchor_content_addresses_verified",
+                "test_only_signer_key_content_address_verified",
+                "test_only_anchor_ed25519_event_signatures_verified",
+                "signed_event_content_addresses_verified",
+                "signed_test_chain_contiguous_event_indexes_verified",
+                "signed_test_chain_predecessor_links_verified",
+                "signed_test_chain_exact_ten_stage_order_verified",
+                "signed_test_chain_terminal_consumed_label_verified",
+                "signed_test_chain_root_and_id_verified",
+                "atomic_fail_closed_rejection_verified",
+                "external_trust_anchor_verified",
+                "external_signature_authority_verified",
+                "qualified_cryptographic_backend_verified",
+                "signature_coverage_verified",
+                "authoritative_evidence_chain_verified",
+                "custodian_identity_verified",
+                "pinned_signer_key_registry_verified",
+                "signer_independence_verified",
+                "durable_external_one_shot_ledger_verified",
+                "append_only_storage_verified",
+                "cross_process_fork_prevention_verified",
+                "external_timestamp_authority_verified",
+                "timeline_observed",
+                "authoritative_timeline_order_verified",
+                "authoritative_attempt_terminal_state_verified",
+                "full_c1_timeline_schema_complete",
+                "attempt_registry_complete",
+                "terminal_append_receipt_verified",
+                "campaign_finalization_verified",
+                "retry_authorization_verified",
+                "rerun_policy_enforced",
+                "one_shot_policy_enforced",
+                "actual_evidence_inputs_accepted",
+                "admission_evidence_contract_complete",
+                "authoritative_evidence_verifier_implemented",
+                "admission_ready",
+                "execution_authorized",
+                "evidence_supplied",
+                "evidence_verified",
+                "input_archive_authority_verified",
+                "prediction_archive_authority_verified",
+                "answer_commitment_authority_verified",
+                "gate_input_commitment_authority_verified",
+                "answer_commitment_opening_verified",
+                "gate_input_commitment_opening_verified",
+                "pre_reveal_commitment_timing_verified",
+                "runtime_attestation_authority_verified",
+                "recognizer_executed",
+                "runtime_executed",
+                "actual_960_case_run_verified",
+                "origin_authenticated",
+                "scoring_performed",
+                "prediction_scored",
+                "actual_prediction_scoring_evidence",
+                "formal_gate_evaluation_performed",
+                "overall_gate_results_materialized",
+                "slice_gate_results_materialized",
+                "preservation_evaluated",
+                "scale_regret_evaluated",
+                "bootstrap_evaluated",
+                "effect_evidence",
+                "formal_c1_report_verified",
+                "c1_exit_evidence",
+            )
+        },
         "next_phase2b_construction_slice": (
             "actual_unsealed_960_case_prediction_scoring_replay_v2"
         ),
@@ -2309,6 +2427,10 @@ def phase2b_preregistration_report() -> dict[str, object]:
                 (
                     "actual_unsealed_960_replay_input_contract_v2",
                     phase2b_actual_unsealed_960_replay_input_contract_v2,
+                ),
+                (
+                    "actual_unsealed_960_signed_attempt_chain_mechanics_v2",
+                    phase2b_actual_unsealed_960_signed_attempt_chain_mechanics_v2,
                 ),
                 (
                     "actual_unsealed_960_replay_admission_gap_inventory_v2",

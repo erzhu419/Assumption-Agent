@@ -340,7 +340,20 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
   and sixteen declarative ordering statements. It accepts no evidence and supplies
   no event, signature, ledger, timing, runtime, scoring, gate, effect, or C1
   verifier. Its successful disposition is `GAP_INVENTORY_FROZEN_NOT_ADMITTED`;
-  it is never an admission decision or execution authorization;
+  it is never an admission decision or execution authorization. The independent V2
+  signed-attempt-chain component adds only test-anchor mechanics: for a caller-supplied
+  in-memory chain it accepts exactly one `TEST_ONLY_SUPPLIED_ANCHOR` custodian public
+  key and verifies content addresses, Ed25519 signatures, predecessor links and the
+  exact ten-stage order through `TERMINAL_CONSUMED`. Its success disposition is
+  `SIGNED_ATTEMPT_CHAIN_MECHANICS_VERIFIED_NOT_DURABLE_AUTHORITY`, not authoritative
+  attempt evidence. It generates no key, anchor, event or signature and supplies no
+  external trust anchor, custodian identity, qualified backend, durable append-only
+  ledger, timestamp authority, one-shot/rerun enforcement, actual-960 execution,
+  scoring, formal gate, effect or C1 evidence. The preregistration report publishes
+  only static identity/count/capability/source-SHA fields; it does not construct any
+  signed-chain object or call the verifier, and all instance verification and broad
+  claims remain false. The next slice remains
+  `actual_unsealed_960_case_prediction_scoring_replay_v2`;
 - seal → prediction commitment → reveal → consumed 的 immutable lifecycle model、
   answer salted-commitment opening 校验和进程内原子防分叉 guard，以及 read-only
   input/root、no network、无 repo/generator/answer mount 的 OCI launch-spec contract；

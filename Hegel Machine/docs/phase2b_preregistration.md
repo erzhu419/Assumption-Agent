@@ -361,6 +361,23 @@ event, signature, ledger, timing, runtime, scoring, gate, effect, or C1 verifier
 Its successful disposition is `GAP_INVENTORY_FROZEN_NOT_ADMITTED`; it is never an
 admission decision or execution authorization.
 
+The independent V2 signed-attempt-chain component adds only caller-supplied,
+in-memory test-anchor mechanics. It accepts exactly one
+`TEST_ONLY_SUPPLIED_ANCHOR` custodian public key and verifies content addresses,
+Ed25519 event signatures, predecessor links, and the exact ten-stage order ending in
+`TERMINAL_CONSUMED`. Success is only
+`SIGNED_ATTEMPT_CHAIN_MECHANICS_VERIFIED_NOT_DURABLE_AUTHORITY`. Neither its
+real-Ed25519 test fixture nor a successful caller invocation authenticates an
+external trust anchor, custodian identity, qualified backend, durable append-only
+ledger, authoritative time, one-shot/rerun enforcement, actual-960 execution,
+scoring, formal gates, effect, or C1 evidence. The component generates no key,
+anchor, event, or signature and performs no filesystem, clock, runner, scorer, or
+ledger operation. The preregistration report exposes only static identity, expected
+counts, capability flags, and source SHA; it constructs no signed-chain object and
+does not call the verifier. All report-level instance-verification and broad claims
+therefore remain false. The next construction slice remains
+`actual_unsealed_960_case_prediction_scoring_replay_v2`.
+
 Pairwise distinct IKM values do not attest independent generation. The raw-envelope
 diagnostic verifies typed payload identity and direct transform replay but not batch
 membership or secret padding; supplied-secret replay proves only that the supplied

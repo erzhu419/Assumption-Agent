@@ -116,6 +116,13 @@ from hegel_machine.phase2b_actual_unsealed_960_replay_admission_evidence_contrac
     ACTUAL_UNSEALED_960_REPLAY_ADMISSION_GAP_INVENTORY_V2_VERSION,
     frozen_actual_unsealed_960_replay_admission_gap_inventory_v2,
 )
+from hegel_machine.phase2b_actual_unsealed_960_signed_attempt_chain_mechanics_v2 import (
+    PHASE2B_ACTUAL_UNSEALED_960_SIGNED_ATTEMPT_CHAIN_MECHANICS_V2_CLAIM_LEVEL,
+    PHASE2B_ACTUAL_UNSEALED_960_SIGNED_ATTEMPT_CHAIN_MECHANICS_V2_POLICY_ID,
+    PHASE2B_ACTUAL_UNSEALED_960_SIGNED_ATTEMPT_CHAIN_MECHANICS_V2_SCHEMA_ID,
+    PHASE2B_ACTUAL_UNSEALED_960_SIGNED_ATTEMPT_CHAIN_MECHANICS_V2_VERSION,
+    PHASE2B_ACTUAL_UNSEALED_960_SIGNED_ATTEMPT_CHAIN_TEST_ANCHOR_SCOPE_V2,
+)
 from hegel_machine.phase2b_unsealed_960_prediction_scoring_mechanics_v2 import (
     UNSEALED_960_PREDICTION_SCORING_MECHANICS_V2_CLAIM_LEVEL,
     UNSEALED_960_PREDICTION_SCORING_MECHANICS_V2_POLICY_ID,
@@ -491,6 +498,126 @@ AVAILABLE_GATE_MECHANICS_REPORT_FIELDS_V2 = (
     AVAILABLE_GATE_MECHANICS_IDENTITY_FIELDS_V2
     | frozenset(AVAILABLE_GATE_MECHANICS_TRUE_FIELDS_V2)
     | frozenset(AVAILABLE_GATE_MECHANICS_FALSE_FIELDS_V2)
+)
+
+SIGNED_ATTEMPT_CHAIN_MECHANICS_PREFIX_V2 = (
+    "actual_unsealed_960_signed_attempt_chain_mechanics_v2_"
+)
+SIGNED_ATTEMPT_CHAIN_MECHANICS_IDENTITY_FIELDS_V2 = frozenset(
+    {
+        SIGNED_ATTEMPT_CHAIN_MECHANICS_PREFIX_V2 + suffix
+        for suffix in (
+            "version",
+            "schema_id",
+            "policy_id",
+            "claim_level",
+            "test_anchor_scope",
+            "expected_test_only_custodian_signer_key_count",
+            "expected_event_count",
+            "expected_stage_count",
+            "expected_terminal_stage",
+        )
+    }
+)
+SIGNED_ATTEMPT_CHAIN_MECHANICS_TRUE_SUFFIXES_V2 = (
+    "component_mechanics_implemented",
+    "test_only_anchor_scope_mechanics_implemented",
+    "test_only_anchor_content_addresses_mechanics_implemented",
+    "test_only_signer_key_content_address_mechanics_implemented",
+    "test_only_anchor_ed25519_event_signature_verification_mechanics_implemented",
+    "signed_event_content_addresses_mechanics_implemented",
+    "signed_test_chain_contiguous_event_indexes_mechanics_implemented",
+    "signed_test_chain_predecessor_links_mechanics_implemented",
+    "signed_test_chain_exact_ten_stage_order_mechanics_implemented",
+    "signed_test_chain_terminal_consumed_label_mechanics_implemented",
+    "signed_test_chain_root_and_id_mechanics_implemented",
+    "atomic_all_false_rejection_mechanics_implemented",
+    "cross_version_rejection_mechanics_implemented",
+    "test_only_real_ed25519_ten_stage_chain_mechanics_test_verified",
+)
+SIGNED_ATTEMPT_CHAIN_MECHANICS_FALSE_SUFFIXES_V2 = (
+    "protocol_report_constructs_signer_keys",
+    "protocol_report_constructs_test_anchor",
+    "protocol_report_constructs_attempt_events",
+    "protocol_report_generates_event_signatures",
+    "protocol_report_executes_signed_attempt_chain_verifier",
+    "test_only_anchor_scope_enforced",
+    "test_only_anchor_content_addresses_verified",
+    "test_only_signer_key_content_address_verified",
+    "test_only_anchor_ed25519_event_signatures_verified",
+    "signed_event_content_addresses_verified",
+    "signed_test_chain_contiguous_event_indexes_verified",
+    "signed_test_chain_predecessor_links_verified",
+    "signed_test_chain_exact_ten_stage_order_verified",
+    "signed_test_chain_terminal_consumed_label_verified",
+    "signed_test_chain_root_and_id_verified",
+    "atomic_fail_closed_rejection_verified",
+    "external_trust_anchor_verified",
+    "external_signature_authority_verified",
+    "qualified_cryptographic_backend_verified",
+    "signature_coverage_verified",
+    "authoritative_evidence_chain_verified",
+    "custodian_identity_verified",
+    "pinned_signer_key_registry_verified",
+    "signer_independence_verified",
+    "durable_external_one_shot_ledger_verified",
+    "append_only_storage_verified",
+    "cross_process_fork_prevention_verified",
+    "external_timestamp_authority_verified",
+    "timeline_observed",
+    "authoritative_timeline_order_verified",
+    "authoritative_attempt_terminal_state_verified",
+    "full_c1_timeline_schema_complete",
+    "attempt_registry_complete",
+    "terminal_append_receipt_verified",
+    "campaign_finalization_verified",
+    "retry_authorization_verified",
+    "rerun_policy_enforced",
+    "one_shot_policy_enforced",
+    "actual_evidence_inputs_accepted",
+    "admission_evidence_contract_complete",
+    "authoritative_evidence_verifier_implemented",
+    "admission_ready",
+    "execution_authorized",
+    "evidence_supplied",
+    "evidence_verified",
+    "input_archive_authority_verified",
+    "prediction_archive_authority_verified",
+    "answer_commitment_authority_verified",
+    "gate_input_commitment_authority_verified",
+    "answer_commitment_opening_verified",
+    "gate_input_commitment_opening_verified",
+    "pre_reveal_commitment_timing_verified",
+    "runtime_attestation_authority_verified",
+    "recognizer_executed",
+    "runtime_executed",
+    "actual_960_case_run_verified",
+    "origin_authenticated",
+    "scoring_performed",
+    "prediction_scored",
+    "actual_prediction_scoring_evidence",
+    "formal_gate_evaluation_performed",
+    "overall_gate_results_materialized",
+    "slice_gate_results_materialized",
+    "preservation_evaluated",
+    "scale_regret_evaluated",
+    "bootstrap_evaluated",
+    "effect_evidence",
+    "formal_c1_report_verified",
+    "c1_exit_evidence",
+)
+SIGNED_ATTEMPT_CHAIN_MECHANICS_TRUE_FIELDS_V2 = tuple(
+    SIGNED_ATTEMPT_CHAIN_MECHANICS_PREFIX_V2 + suffix
+    for suffix in SIGNED_ATTEMPT_CHAIN_MECHANICS_TRUE_SUFFIXES_V2
+)
+SIGNED_ATTEMPT_CHAIN_MECHANICS_FALSE_FIELDS_V2 = tuple(
+    SIGNED_ATTEMPT_CHAIN_MECHANICS_PREFIX_V2 + suffix
+    for suffix in SIGNED_ATTEMPT_CHAIN_MECHANICS_FALSE_SUFFIXES_V2
+)
+SIGNED_ATTEMPT_CHAIN_MECHANICS_REPORT_FIELDS_V2 = (
+    SIGNED_ATTEMPT_CHAIN_MECHANICS_IDENTITY_FIELDS_V2
+    | frozenset(SIGNED_ATTEMPT_CHAIN_MECHANICS_TRUE_FIELDS_V2)
+    | frozenset(SIGNED_ATTEMPT_CHAIN_MECHANICS_FALSE_FIELDS_V2)
 )
 
 ACTUAL_REPLAY_INPUT_PREFIX_V2 = "actual_unsealed_960_replay_input_contract_v2_"
@@ -1053,7 +1180,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     report = phase2b_preregistration_report()
     assert report["implementation_id"] == (
         "phase2b_protocol_source_sha256_"
-        "c4621d987ab803c569debd9f3d390bd0988f88e450f238af9ae625a9fc8c1c75"
+        "cb57660f7958d03fcf9d9eb048d93e2d18cf10a9cc1aef9e8a0b09cef31bf8bb"
     )
     assert report["artifact"] == "phase2b_preregistration_readiness_v1"
     assert report["formal_phase2b_exit_claim"] is False
@@ -1911,6 +2038,63 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "implemented",
     ):
         assert ACTUAL_REPLAY_ADMISSION_GAP_PREFIX_V2 + hidden_suffix not in report
+    assert len(SIGNED_ATTEMPT_CHAIN_MECHANICS_IDENTITY_FIELDS_V2) == 9
+    assert len(SIGNED_ATTEMPT_CHAIN_MECHANICS_TRUE_FIELDS_V2) == 14
+    assert len(SIGNED_ATTEMPT_CHAIN_MECHANICS_FALSE_FIELDS_V2) == 69
+    assert len(SIGNED_ATTEMPT_CHAIN_MECHANICS_REPORT_FIELDS_V2) == 92
+    assert report[SIGNED_ATTEMPT_CHAIN_MECHANICS_PREFIX_V2 + "version"] == (
+        PHASE2B_ACTUAL_UNSEALED_960_SIGNED_ATTEMPT_CHAIN_MECHANICS_V2_VERSION
+    )
+    assert report[SIGNED_ATTEMPT_CHAIN_MECHANICS_PREFIX_V2 + "schema_id"] == (
+        PHASE2B_ACTUAL_UNSEALED_960_SIGNED_ATTEMPT_CHAIN_MECHANICS_V2_SCHEMA_ID
+    )
+    assert report[SIGNED_ATTEMPT_CHAIN_MECHANICS_PREFIX_V2 + "policy_id"] == (
+        PHASE2B_ACTUAL_UNSEALED_960_SIGNED_ATTEMPT_CHAIN_MECHANICS_V2_POLICY_ID
+    )
+    assert report[SIGNED_ATTEMPT_CHAIN_MECHANICS_PREFIX_V2 + "claim_level"] == (
+        PHASE2B_ACTUAL_UNSEALED_960_SIGNED_ATTEMPT_CHAIN_MECHANICS_V2_CLAIM_LEVEL
+    )
+    assert report[
+        SIGNED_ATTEMPT_CHAIN_MECHANICS_PREFIX_V2 + "test_anchor_scope"
+    ] == PHASE2B_ACTUAL_UNSEALED_960_SIGNED_ATTEMPT_CHAIN_TEST_ANCHOR_SCOPE_V2
+    assert report[SIGNED_ATTEMPT_CHAIN_MECHANICS_PREFIX_V2 + "version"] == (
+        "hegel-machine-phase2b-actual-unsealed-960-signed-attempt-chain-mechanics/2"
+    )
+    assert report[SIGNED_ATTEMPT_CHAIN_MECHANICS_PREFIX_V2 + "schema_id"] == (
+        "phase2b_actual_unsealed_960_signed_attempt_chain_mechanics_schema_v2_"
+        "8cef82cf64f90995092f28647decf7852d695f3d912cb6a807945016828d27c6"
+    )
+    assert report[SIGNED_ATTEMPT_CHAIN_MECHANICS_PREFIX_V2 + "policy_id"] == (
+        "phase2b_actual_unsealed_960_signed_attempt_chain_mechanics_policy_v2_"
+        "bc9aba86d575035608278044c22731eb29195ef1c32e6e5d585c005882d46b54"
+    )
+    assert report[SIGNED_ATTEMPT_CHAIN_MECHANICS_PREFIX_V2 + "claim_level"] == (
+        "NON_AUTHORITATIVE_TEST_ONLY_SIGNED_ATTEMPT_CHAIN_MECHANICS"
+    )
+    assert report[
+        SIGNED_ATTEMPT_CHAIN_MECHANICS_PREFIX_V2 + "test_anchor_scope"
+    ] == "TEST_ONLY_SUPPLIED_ANCHOR"
+    expected_signed_attempt_chain_counts = {
+        "expected_test_only_custodian_signer_key_count": 1,
+        "expected_event_count": 10,
+        "expected_stage_count": 10,
+        "expected_terminal_stage": "TERMINAL_CONSUMED",
+    }
+    for suffix, expected in expected_signed_attempt_chain_counts.items():
+        assert report[SIGNED_ATTEMPT_CHAIN_MECHANICS_PREFIX_V2 + suffix] == expected
+    for field_name in SIGNED_ATTEMPT_CHAIN_MECHANICS_TRUE_FIELDS_V2:
+        assert report[field_name] is True
+    for field_name in SIGNED_ATTEMPT_CHAIN_MECHANICS_FALSE_FIELDS_V2:
+        assert report[field_name] is False
+    assert {
+        field_name
+        for field_name in report
+        if field_name.startswith(SIGNED_ATTEMPT_CHAIN_MECHANICS_PREFIX_V2)
+    } == SIGNED_ATTEMPT_CHAIN_MECHANICS_REPORT_FIELDS_V2
+    assert (
+        SIGNED_ATTEMPT_CHAIN_MECHANICS_PREFIX_V2 + "ed25519_backend_available"
+        not in report
+    )
     assert report["public_prediction_run_context_v2_schema_version"] == (
         PUBLIC_PREDICTION_RUN_CONTEXT_V2_SCHEMA_VERSION
     )
@@ -2050,6 +2234,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "exact_transform_semantics",
         "actual_unsealed_960_replay_admission_gap_inventory_v2",
         "actual_unsealed_960_replay_input_contract_v2",
+        "actual_unsealed_960_signed_attempt_chain_mechanics_v2",
         "formal_unsealed_prediction_scoring_contract_v2",
         "unsealed_960_available_gate_mechanics_v2",
         "unsealed_960_prediction_scoring_mechanics_v2",
@@ -2123,6 +2308,12 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "b1dc11a0ac6e3dfafc9621c10957308b9d50c30e8806e78ff5b6a056a8ff1450"
     )
     assert report["component_source_ids"][
+        "actual_unsealed_960_signed_attempt_chain_mechanics_v2"
+    ] == (
+        "sha256:"
+        "7ba5e891b08a2a0b2d59161d784f64a9ecd2a11053f5436886f73307c3261e9c"
+    )
+    assert report["component_source_ids"][
         "recognizer_prediction_row_mapping_mechanics_v2"
     ] == (
         "sha256:"
@@ -2191,7 +2382,7 @@ def test_checked_in_phase2b_preregistration_artifact_matches_runtime():
     assert artifact == phase2b_preregistration_report()
 
 
-def test_available_gate_mechanics_report_artifact_refresh_transition_is_exact():
+def test_signed_attempt_chain_mechanics_report_artifact_refresh_transition_is_exact():
     artifact_path = (
         Path(__file__).resolve().parents[1]
         / "artifacts"
@@ -2199,12 +2390,12 @@ def test_available_gate_mechanics_report_artifact_refresh_transition_is_exact():
     )
     artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
     report = phase2b_preregistration_report()
-    assert len(report) == 845
+    assert len(report) == 937
     if artifact == report:
         return
-    assert len(artifact) == 747
+    assert len(artifact) == 845
     assert set(report) - set(artifact) == (
-        AVAILABLE_GATE_MECHANICS_REPORT_FIELDS_V2
+        SIGNED_ATTEMPT_CHAIN_MECHANICS_REPORT_FIELDS_V2
     )
     assert set(artifact) - set(report) == set()
     changed_common_fields = {
@@ -2224,7 +2415,7 @@ def test_available_gate_mechanics_report_artifact_refresh_transition_is_exact():
     )
     assert set(report["component_source_ids"]) - set(
         artifact["component_source_ids"]
-    ) == {"unsealed_960_available_gate_mechanics_v2"}
+    ) == {"actual_unsealed_960_signed_attempt_chain_mechanics_v2"}
     assert set(artifact["component_source_ids"]) - set(
         report["component_source_ids"]
     ) == set()
