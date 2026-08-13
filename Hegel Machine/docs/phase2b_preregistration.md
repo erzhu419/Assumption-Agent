@@ -307,7 +307,20 @@ mechanics are referenced but not executed. Success is only
 `CONTRACT_BINDING_COMPLETE_NOT_SCORED`, with empty metric, scored-row, and gate
 results. It authenticates neither answer authority nor pre-reveal timing, reads no
 predictions, and performs no scoring, gate evaluation, runtime or actual-960 replay,
-effect evaluation, or C1 exit. The next slice is
+effect evaluation, or C1 exit. The independent V2 unsealed-960 scoring mechanics now
+performs exactly one fresh public formal-contract validation and one fresh public
+prediction-archive replay. It independently closes the
+context/input-row/prediction-content/record/archive roots, joins the exact 720 answer
+rows by `input_row_id` in main-partition order, and materializes exactly nine
+integer-only metric results plus 720 main-row comparison records. These are not 720
+scored rows: only 336 rows are metric-eligible (240 answerable plus 96
+insufficient/nonidentifiable), while 384 controls have no frozen metric; all 240
+semantic-conflict challenge rows remain excluded. Success is
+`MECHANICS_COMPLETE_NOT_ACTUAL_EXECUTION`; `gate_results` is empty and scale-regret
+and bootstrap results are absent. This supplied/synthetic archive mechanics replay
+does not authenticate answer authority or reveal timing and does not establish
+membership, custody, derived mapping, recognizer/runtime/actual-960/capacity,
+formal-gate, actual-scoring, effect, or C1 evidence. The next slice remains
 `actual_unsealed_960_case_prediction_scoring_replay_v2`.
 
 Pairwise distinct IKM values do not attest independent generation. The raw-envelope

@@ -300,7 +300,17 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
   strict receipt/evaluation/partition cross-binding。threshold、Wilson 与 paired bootstrap 仅被引用而
   未执行；成功仍只是 `CONTRACT_BINDING_COMPLETE_NOT_SCORED`，metric/scored-row/gate results 均为空。
   它不认证 answer authority 或 pre-reveal timing，不读取 predictions，也不执行 score、gate、runtime、
-  actual 960、effect 或 C1。下一刀是
+  actual 960、effect 或 C1。独立 V2 unsealed-960 scoring mechanics 现在恰好各执行一次 fresh
+  public formal-contract validation 和 public prediction-archive replay，并独立闭合
+  context/input-row/prediction-content/record/archive roots；它按 `input_row_id` 以 main-partition
+  顺序 join exact 720 个 answer rows，物化恰好 9 个纯整数 metric results 和 720 个 main-row
+  comparison records。这 720 个不是 scored rows：仅 336 个 row 是 metric-eligible（240 个
+  answerable + 96 个 insufficient/nonidentifiable），384 个 controls 没有 frozen metric，240 个
+  semantic-conflict challenge rows 全部排除。成功 disposition 是
+  `MECHANICS_COMPLETE_NOT_ACTUAL_EXECUTION`；`gate_results` 为空，scale-regret/bootstrap results
+  均缺失。这一 supplied/synthetic archive mechanics replay 不认证 answer authority 或 reveal timing，
+  也不建立 membership、custody、derived mapping、recognizer/runtime/actual-960/capacity、formal-gate、
+  actual scoring、effect 或 C1 evidence。下一刀仍是
   `actual_unsealed_960_case_prediction_scoring_replay_v2`；在完整
   standard-error 语义实现前，formal selector 只允许 `absolute_bound`；
 - seal → prediction commitment → reveal → consumed 的 immutable lifecycle model、

@@ -165,7 +165,15 @@ metric definitions、main denominator 排除 240 challenge rows、调用方提�
 以及 strict receipt/evaluation/partition cross-binding。threshold、Wilson 与 paired bootstrap 仅引用、
 不执行；成功仍只是 `CONTRACT_BINDING_COMPLETE_NOT_SCORED`，metric/scored-row/gate results 为空。
 它不认证 answer authority 或 pre-reveal timing，不读取 prediction，也不执行 score、gate、runtime、
-actual 960、effect 或 C1。下一施工切片是
+actual 960、effect 或 C1。后续独立 V2 unsealed-960 scoring mechanics 对调用方提供的 V2 archive
+仅各调用一次 public formal-contract validator 与 public archive decoder，并独立重算
+context/input-row/prediction-content/record/archive roots；按 `input_row_id` join 后，以 main-partition
+顺序物化 9 个纯整数 metric results 和 720 个 main-row comparison records。720 不是 720 个
+scored rows：其中仅 336 个 metric-eligible（240 answerable + 96 insufficient/nonidentifiable），
+384 个 controls 没有 frozen metric；240 challenge 全部排除。成功 disposition 为
+`MECHANICS_COMPLETE_NOT_ACTUAL_EXECUTION`；`gate_results` 为空，scale regret/bootstrap 均未评估。
+它仍不认证 answer authority/pre-reveal timing，也不建立 membership/custody/derived mapping、
+recognizer/runtime/actual-960/capacity、formal gate、actual scoring、effect 或 C1 证据。下一施工切片仍是
 `actual_unsealed_960_case_prediction_scoring_replay_v2`。
 
 此外可以说：Phase-3A 的 v1.0.2 strict specification 已冻结，Python/Rust shared vectors

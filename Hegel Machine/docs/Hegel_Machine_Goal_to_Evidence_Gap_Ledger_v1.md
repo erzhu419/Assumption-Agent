@@ -118,9 +118,17 @@ without semantic acceptance**.  The dependency order is:
    receipt/evaluation/partition cross-binding. It is structurally intended for
    precommitment, but does not authenticate answer authority or pre-reveal timing;
    thresholds, Wilson, and paired bootstrap are references only, with no prediction
-   read, score, metric/scored-row materialization, or gate execution. A functional
-   recognizer entrypoint, actual 960 execution, formal scoring/challenge/preservation
-   evaluation and deterministic runtime replay remain missing.
+   read, score, metric/scored-row materialization, or gate execution. The independent
+   V2 supplied-archive scoring mechanics subsequently performs exactly one fresh
+   public contract validation and one fresh public archive replay, independently
+   recalculates context/input-row/prediction-content/record/archive roots, and joins
+   the exact 720 main rows by `input_row_id`. It materializes nine integer-only metric
+   results and 720 main-row comparison records: only 336 rows are metric-eligible,
+   384 controls have no frozen metric, and all 240 challenge rows are excluded. This
+   is `MECHANICS_COMPLETE_NOT_ACTUAL_EXECUTION`, with empty gate results and no scale
+   regret or bootstrap result. A functional recognizer entrypoint, actual 960
+   execution, formal scoring/challenge/preservation evaluation and deterministic
+   runtime replay remain missing.
 5. **Trusted wire and anti-leak audit** — independent shuffle/ID/padding keys,
    fixed 65,536-byte envelopes, global renaming/order invariance, NMI and
    stratified permutation/Holm-Bonferroni gates.
@@ -345,6 +353,20 @@ only `CONTRACT_BINDING_COMPLETE_NOT_SCORED`; metric results, scored rows and gat
 results remain empty. No answer authority or pre-reveal timing is authenticated, no
 prediction is read, and no score, gate, runtime, actual-960, effect or C1 result exists.
 
+`phase2b_unsealed_960_prediction_scoring_mechanics_v2.py` is separately limited to
+`NON_AUTHORITATIVE_SCORING_MECHANICS_ONLY`. For a caller-supplied V2 archive it invokes
+the public formal-contract validator and public archive decoder exactly once each,
+independently recalculates context/input-row/prediction-content/record/archive roots,
+then joins exact-720 answer rows by `input_row_id` in main-partition order. Its output
+contains exactly nine integer-only metric results and 720 main-row comparison records,
+not 720 scored rows: 336 rows are metric-eligible (240 answerable plus 96
+insufficient/nonidentifiable), 384 controls have no frozen metric, and 240 challenge
+rows are excluded from every metric. Success is
+`MECHANICS_COMPLETE_NOT_ACTUAL_EXECUTION`; gate results are empty and scale-regret and
+bootstrap results are absent. It authenticates no answer authority or reveal timing
+and establishes no membership, custody, derived mapping, recognizer/runtime/actual-960
+or capacity evidence, formal gate, actual scoring, effect, or C1 evidence.
+
 Accordingly these narrow flags are true:
 
 ```text
@@ -484,6 +506,21 @@ formal_unsealed_prediction_scoring_contract_v2_global_preflight_before_content_h
 formal_unsealed_prediction_scoring_contract_v2_atomic_all_false_rejection_mechanics_implemented
 formal_unsealed_prediction_scoring_contract_v2_cross_version_rejection_mechanics_implemented
 synthetic_exact_720_formal_unsealed_prediction_scoring_contract_v2_binding_mechanics_verified
+unsealed_960_prediction_scoring_mechanics_v2_implemented
+unsealed_960_prediction_scoring_mechanics_v2_independent_identity_mechanics_implemented
+unsealed_960_prediction_scoring_mechanics_v2_one_fresh_public_formal_contract_validation_mechanics_implemented
+unsealed_960_prediction_scoring_mechanics_v2_one_fresh_public_prediction_archive_replay_mechanics_implemented
+unsealed_960_prediction_scoring_mechanics_v2_complete_global_preflight_before_content_hash_mechanics_implemented
+unsealed_960_prediction_scoring_mechanics_v2_independent_context_row_content_record_archive_root_recalculation_mechanics_implemented
+unsealed_960_prediction_scoring_mechanics_v2_exact_main_720_row_join_mechanics_implemented
+unsealed_960_prediction_scoring_mechanics_v2_exact_336_metric_eligible_384_control_partition_mechanics_implemented
+unsealed_960_prediction_scoring_mechanics_v2_nine_integer_only_metric_result_mechanics_implemented
+unsealed_960_prediction_scoring_mechanics_v2_semantic_conflict_240_exclusion_from_all_metrics_mechanics_implemented
+unsealed_960_prediction_scoring_mechanics_v2_empty_gate_result_mechanics_implemented
+unsealed_960_prediction_scoring_mechanics_v2_missing_scale_regret_bootstrap_result_mechanics_implemented
+unsealed_960_prediction_scoring_mechanics_v2_atomic_all_false_rejection_mechanics_implemented
+unsealed_960_prediction_scoring_mechanics_v2_cross_version_rejection_mechanics_implemented
+unsealed_960_prediction_scoring_mechanics_v2_synthetic_mixed_exact_960_unsealed_prediction_scoring_mechanics_verified
 ```
 
 while the broad flags below remain false:
@@ -651,6 +688,39 @@ formal_unsealed_prediction_scoring_contract_v2_slice_gate_metrics_implemented
 formal_unsealed_prediction_scoring_contract_v2_challenge_scoring_performed
 formal_unsealed_prediction_scoring_contract_v2_effect_evidence
 formal_unsealed_prediction_scoring_contract_v2_c1_exit_evidence
+unsealed_960_prediction_scoring_mechanics_v2_challenge_in_main_denominator
+unsealed_960_prediction_scoring_mechanics_v2_challenge_scoring_performed
+unsealed_960_prediction_scoring_mechanics_v2_control_rejection_metrics_implemented
+unsealed_960_prediction_scoring_mechanics_v2_formal_gate_evaluation_performed
+unsealed_960_prediction_scoring_mechanics_v2_overall_gate_results_materialized
+unsealed_960_prediction_scoring_mechanics_v2_slice_gate_metrics_implemented
+unsealed_960_prediction_scoring_mechanics_v2_scale_regret_evaluated
+unsealed_960_prediction_scoring_mechanics_v2_bootstrap_evaluated
+unsealed_960_prediction_scoring_mechanics_v2_answer_manifest_authority_verified
+unsealed_960_prediction_scoring_mechanics_v2_answer_commitment_authority_verified
+unsealed_960_prediction_scoring_mechanics_v2_pre_reveal_commitment_timing_verified
+unsealed_960_prediction_scoring_mechanics_v2_input_archive_membership_verified
+unsealed_960_prediction_scoring_mechanics_v2_batch_policy_membership_verified
+unsealed_960_prediction_scoring_mechanics_v2_source_registry_projection_verified
+unsealed_960_prediction_scoring_mechanics_v2_source_public_disjoint_verified
+unsealed_960_prediction_scoring_mechanics_v2_single_live_allocation_verified
+unsealed_960_prediction_scoring_mechanics_v2_secret_custodian_replay_verified
+unsealed_960_prediction_scoring_mechanics_v2_execution_manifest_authority_verified
+unsealed_960_prediction_scoring_mechanics_v2_partition_manifest_authority_verified
+unsealed_960_prediction_scoring_mechanics_v2_derived_mapping_verified
+unsealed_960_prediction_scoring_mechanics_v2_recognizer_executed
+unsealed_960_prediction_scoring_mechanics_v2_runtime_executed
+unsealed_960_prediction_scoring_mechanics_v2_actual_960_case_run_verified
+unsealed_960_prediction_scoring_mechanics_v2_recognizer_capacity_evidence
+unsealed_960_prediction_scoring_mechanics_v2_origin_authenticated
+unsealed_960_prediction_scoring_mechanics_v2_formal_uuid_audit
+unsealed_960_prediction_scoring_mechanics_v2_formal_covert_audit
+unsealed_960_prediction_scoring_mechanics_v2_sealed_holdout_eligible
+unsealed_960_prediction_scoring_mechanics_v2_scoring_performed
+unsealed_960_prediction_scoring_mechanics_v2_prediction_scored
+unsealed_960_prediction_scoring_mechanics_v2_actual_prediction_scoring_evidence
+unsealed_960_prediction_scoring_mechanics_v2_effect_evidence
+unsealed_960_prediction_scoring_mechanics_v2_c1_exit_evidence
 real_positive_typed_profile_fits_trusted_wire
 real_positive_prediction_end_to_end_replay_implemented
 recognizer_prediction_capacity_evidence
@@ -696,6 +766,18 @@ mechanics are referenced but not executed. Success is only
 It authenticates neither answer authority nor pre-reveal timing, reads no predictions,
 and performs no scoring, gate evaluation, runtime or actual-960 replay, effect
 evaluation, or C1 exit.
+
+The completed **`unsealed_960_prediction_scoring_mechanics_v2`** is a supplied-archive
+development mechanics replay, not an actual run or sealed qualification. It performs
+one fresh public contract validation and one fresh public archive replay, independently
+closes context/input-row/prediction-content/record/archive roots, and joins exact-720
+answer rows in main-partition order. It materializes nine integer-only metric results
+and 720 main-row comparison records, of which 336 are metric-eligible while 384 controls
+have no frozen metric; all 240 challenge rows are excluded. Success is only
+`MECHANICS_COMPLETE_NOT_ACTUAL_EXECUTION`, with empty gate results and no scale-regret
+or bootstrap result. Answer authority/timing, membership, custody, derived mapping,
+recognizer/runtime/actual-960/capacity, formal gates, actual scoring, effect, and C1
+evidence all remain absent.
 
 The next construction slice is
 **`actual_unsealed_960_case_prediction_scoring_replay_v2`**. Its name is not evidence
