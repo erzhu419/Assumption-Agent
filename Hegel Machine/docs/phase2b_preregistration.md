@@ -419,6 +419,21 @@ path, and exposes no backend availability or result identifier. Its seventy-six
 invocation, authority, store, time, actual-960, scoring, gate, effect, and C1 fields are
 false. The next construction slice remains unchanged.
 
+The Phase-2B C1 Docker scope extension is a separate owner policy, not a retroactive
+change to the Phase-3A M2.5 profile and not satisfaction of the stronger independent-
+external-custodian requirement. It freezes six owner-accepted technical container
+roles while retaining same-admin, non-organizational-independence and non-hostile-host
+limitations. A local recognizer image has been assembled from a digest-pinned Python
+base and exactly 26 Hegel modules behind an inert package initializer. The checked
+build receipt records image
+`sha256:c2c557d5514496d20e3d88150d1c8e07f013bbd6abbafd3f4b82ef74cc1c6408`,
+non-root fixed entrypoint/no-healthcheck/no-volume image config, exact import closure,
+and a custom-seccomp/read-only/network-none empty-input smoke that failed closed with
+no output. These are preregistered image-readiness mechanics. They do not state that
+fresh role keys or a signed registry were created, any actual archive was mounted, the
+recognizer produced 960 predictions, an independent scorer ran, gates passed, or C1
+was established.
+
 Pairwise distinct IKM values do not attest independent generation. The raw-envelope
 diagnostic verifies typed payload identity and direct transform replay but not batch
 membership or secret padding; supplied-secret replay proves only that the supplied

@@ -21,6 +21,13 @@ from .phase2b_protocol import ExecutionFreezeManifest, frozen_phase2b_protocol
 RECOGNIZER_INPUT_MOUNT: Final = "/phase2b/input"
 RECOGNIZER_OUTPUT_MOUNT: Final = "/phase2b/output"
 RECOGNIZER_TMP_MOUNT: Final = "/tmp"
+RECOGNIZER_RUNTIME_UID_GID: Final = "65534:65534"
+RECOGNIZER_SECCOMP_PROFILE_RELATIVE_PATH: Final = (
+    "config/phase3_internal_actor_seccomp_v1.json"
+)
+RECOGNIZER_SECCOMP_PROFILE_SHA256: Final = (
+    "d1284e4731683b73352ecdd1577704ea87aa0b5c582b7b00757c3db4d2c950ca"
+)
 FROZEN_RECOGNIZER_ENTRYPOINT: Final = (
     "/opt/hegel/bin/phase2b-recognizer",
     "--input",
@@ -31,20 +38,55 @@ FROZEN_RECOGNIZER_ENTRYPOINT: Final = (
 
 REQUIRED_RECOGNIZER_MODULES: Final = frozenset(
     {
+        "hegel_machine.bootstrap",
         "hegel_machine.hashing",
         "hegel_machine.laws",
         "hegel_machine.milestones",
+        "hegel_machine.ontology",
         "hegel_machine.phase2b_adapter",
-        "hegel_machine.phase2b_selector",
+        "hegel_machine.phase2b_exact_bridge_v1",
+        "hegel_machine.phase2b_exact_derived_witness_bridge_v1",
+        "hegel_machine.phase2b_exact_transform_semantics_v1",
+        "hegel_machine.phase2b_freeze_v1",
+        "hegel_machine.phase2b_protocol",
+        "hegel_machine.phase2b_recognizer_input_archive_v2",
+        "hegel_machine.phase2b_recognizer_prediction_archive_v2",
+        "hegel_machine.phase2b_recognizer_prediction_v2",
+        "hegel_machine.phase2b_recognizer_runtime_cli_v2",
+        "hegel_machine.phase2b_runner",
+        "hegel_machine.phase2b_trusted_wire_batch_v1",
+        "hegel_machine.phase2b_trusted_wire_batch_v2",
+        "hegel_machine.phase2b_trusted_wire_typed_authority_v1",
+        "hegel_machine.phase2b_trusted_wire_typed_authority_v2",
+        "hegel_machine.phase2b_trusted_wire_typed_replay_v2",
+        "hegel_machine.phase2b_trusted_wire_v1",
+        "hegel_machine.phase2b_uncertainty_compiler",
         "hegel_machine.phase2b_wire",
+        "hegel_machine.phase3_dsl_v1",
         "hegel_machine.schema",
     }
 )
 FORBIDDEN_RECOGNIZER_MODULE_PREFIXES: Final = (
     "hegel_machine.benchmark",
     "hegel_machine.phase2_exit",
+    "hegel_machine.phase2b_actual_unsealed_960",
+    "hegel_machine.phase2b_covert_audit",
     "hegel_machine.phase2b_custodian",
     "hegel_machine.phase2b_evaluator",
+    "hegel_machine.phase2b_formal_unsealed_prediction_scoring",
+    "hegel_machine.phase2b_strict_recognizer_cli",
+    "hegel_machine.phase2b_unsealed_960",
+    "hegel_machine.phase2b_unsealed_960_prediction_scoring_mechanics_v2",
+    "hegel_machine.phase2b_unsealed_prediction_evaluator",
+    "hegel_machine.phase3_capacity_witness",
+    "hegel_machine.phase3_certificate",
+    "hegel_machine.phase3_closure_preflight",
+    "hegel_machine.phase3_m3",
+    "hegel_machine.phase3_shrink1",
+    "hegel_machine.phase3_strict_replay",
+    "hegel_machine.recognition",
+    "hegel_machine.strict_ast",
+    "hegel_machine.strict_cbor",
     "hegel_machine.vertical_slice",
 )
 
@@ -84,7 +126,12 @@ def _require_digest(value: str, name: str) -> None:
 
 def _absolute_clean_path(value: str, name: str) -> str:
     path = PurePosixPath(value)
-    if not path.is_absolute() or ".." in path.parts or str(path) == "/":
+    if (
+        not path.is_absolute()
+        or ".." in path.parts
+        or str(path) == "/"
+        or str(path) != value
+    ):
         raise ValueError(f"{name} must be a specific absolute path")
     return str(path)
 
@@ -99,17 +146,18 @@ class RuntimeLimits:
     maximum_output_bytes: int = 536_870_912
 
     def __post_init__(self) -> None:
-        if not self.cpus or not self.memory:
-            raise ValueError("CPU and memory limits are required")
-        for name in (
-            "pids",
-            "timeout_seconds",
-            "tmpfs_bytes",
-            "maximum_output_bytes",
-        ):
+        expected = {
+            "cpus": "2.0",
+            "memory": "2g",
+            "pids": 128,
+            "timeout_seconds": 3600,
+            "tmpfs_bytes": 268_435_456,
+            "maximum_output_bytes": 536_870_912,
+        }
+        for name, frozen_value in expected.items():
             value = getattr(self, name)
-            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-                raise ValueError(f"{name} must be a positive integer")
+            if type(value) is not type(frozen_value) or value != frozen_value:
+                raise ValueError(f"{name} differs from the frozen recognizer limit")
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,6 +168,8 @@ class OciRecognizerRunSpec:
     input_host_directory: str
     output_host_directory: str
     repository_host_directory: str
+    seccomp_profile_host_path: str
+    seccomp_profile_sha256: str
     input_manifest_sha256: str
     expected_case_count: int
     entrypoint: tuple[str, ...]
@@ -144,6 +194,10 @@ class OciRecognizerRunSpec:
             self.repository_host_directory,
             "repository host directory",
         )
+        seccomp_path = _absolute_clean_path(
+            self.seccomp_profile_host_path,
+            "seccomp profile host path",
+        )
         if len({input_path, output_path, repository_path}) != 3:
             raise ValueError("input, output, and repository paths must be distinct")
         if _is_within(input_path, repository_path) or _is_within(
@@ -153,6 +207,15 @@ class OciRecognizerRunSpec:
             raise ValueError("formal run directories must be outside the repository")
         if _is_within(input_path, output_path) or _is_within(output_path, input_path):
             raise ValueError("formal input and output directories cannot overlap")
+        expected_seccomp_path = str(
+            PurePosixPath(repository_path)
+            / RECOGNIZER_SECCOMP_PROFILE_RELATIVE_PATH
+        )
+        if (
+            seccomp_path != expected_seccomp_path
+            or self.seccomp_profile_sha256 != RECOGNIZER_SECCOMP_PROFILE_SHA256
+        ):
+            raise ValueError("recognizer seccomp profile binding drift")
         if (
             type(self.expected_case_count) is not int
             or self.expected_case_count != TOTAL_RECOGNIZER_CASE_COUNT
@@ -177,22 +240,33 @@ class OciRecognizerRunSpec:
         return stable_hash(self, prefix="phase2b_oci_run_spec_")
 
     def argv(self, runtime: str) -> tuple[str, ...]:
-        """Return a deterministic Docker/Podman-compatible launch vector."""
+        """Return the exact owner-accepted local Docker launch vector."""
 
-        if runtime not in {"docker", "podman"}:
-            raise ValueError("runtime must be docker or podman")
+        if runtime != "/usr/bin/docker":
+            raise ValueError("runtime must be the exact /usr/bin/docker executable")
         return (
             runtime,
+            "--host=unix:///var/run/docker.sock",
             "run",
             "--rm",
+            "--no-healthcheck",
+            "--pull=never",
             "--network=none",
+            "--ipc=none",
             "--read-only",
+            f"--user={RECOGNIZER_RUNTIME_UID_GID}",
             "--cap-drop=ALL",
             "--security-opt=no-new-privileges:true",
+            f"--security-opt=seccomp={self.seccomp_profile_host_path}",
+            f"--entrypoint={self.entrypoint[0]}",
             f"--cpus={self.limits.cpus}",
             f"--memory={self.limits.memory}",
             f"--pids-limit={self.limits.pids}",
+            f"--memory-swap={self.limits.memory}",
+            "--ulimit=nofile=256:256",
             "--env=PYTHONHASHSEED=0",
+            "--env=PYTHONDONTWRITEBYTECODE=1",
+            "--env=PYTHONPATH=/opt/hegel/src",
             "--env=HOME=/nonexistent",
             "--env=NO_PROXY=*",
             (
@@ -208,7 +282,7 @@ class OciRecognizerRunSpec:
                 f"{self.output_host_directory},dst={RECOGNIZER_OUTPUT_MOUNT}"
             ),
             self.image_digest,
-            *self.entrypoint,
+            *self.entrypoint[1:],
         )
 
 
@@ -234,6 +308,11 @@ def build_oci_run_spec(
         input_host_directory=input_host_directory,
         output_host_directory=output_host_directory,
         repository_host_directory=repository_host_directory,
+        seccomp_profile_host_path=str(
+            PurePosixPath(repository_host_directory)
+            / RECOGNIZER_SECCOMP_PROFILE_RELATIVE_PATH
+        ),
+        seccomp_profile_sha256=RECOGNIZER_SECCOMP_PROFILE_SHA256,
         input_manifest_sha256=input_manifest_sha256,
         expected_case_count=TOTAL_RECOGNIZER_CASE_COUNT,
         entrypoint=FROZEN_RECOGNIZER_ENTRYPOINT,
@@ -357,8 +436,8 @@ class ExternalRuntimeAttestation:
             raise ValueError("runtime attestation binds a different protocol")
         if self.input_manifest_sha256 != spec.input_manifest_sha256:
             raise ValueError("runtime attestation binds a different input manifest")
-        if self.runtime_name not in {"docker", "podman"}:
-            raise ValueError("runtime attestation names an unsupported runtime")
+        if self.runtime_name != "docker":
+            raise ValueError("runtime attestation must name the frozen Docker runtime")
         if self.exit_code != 0 or self.timed_out:
             raise ValueError("untrusted recognizer did not complete successfully")
         if self.output_size_bytes > spec.limits.maximum_output_bytes:

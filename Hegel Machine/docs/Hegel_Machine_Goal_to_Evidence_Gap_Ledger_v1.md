@@ -1443,6 +1443,24 @@ attestation, or cross-host one-shot policy. The preregistration report consumes 
 static identity and source metadata and never invokes the ledger. No actual execution,
 authoritative time, scoring, gate, effect, or C1 evidence follows from this component.
 
+The owner-approved route for the remaining Phase-2B C1 execution gap is now frozen as
+a **separate six-container technical-actor profile**, not four external humans or
+organizations and not a reinterpretation of the legacy independent-external authority
+requirement. Governance, custodian, store-receipt, time-attestor, recognizer and
+scorer/evaluator containers are technically separated while
+`same_admin_controller=true`, organizational independence, hostile-admin resistance,
+external UTC authority and cross-host global one-shot remain false. The recognizer
+image-readiness substep has actual local build evidence: pinned base, exact 26-module
+context, inert package initializer, non-root fixed entrypoint, no healthcheck/volumes,
+and image ID
+`sha256:c2c557d5514496d20e3d88150d1c8e07f013bbd6abbafd3f4b82ef74cc1c6408`.
+Under the frozen runtime seccomp and isolation vector, an empty-input negative smoke
+correctly returned generic ABSTAIN and left both mounted directories empty. Receipt
+`phase2b_recognizer_runtime_image_build_receipt_v2_cd9f15d2921bb670869bc4357efa6b6a05d4f22ba02a02efde06e384684898cd`
+therefore proves only local image build/config/import-closure/negative-path mechanics.
+Fresh keys, signed execution registry, ceremony, real 960 input/freeze, predictions,
+scoring, formal gates, effect and C1 remain missing.
+
 The next construction slice is
 **`actual_unsealed_960_case_prediction_scoring_replay_v2`**. Its name is not evidence
 that an actual run is authorized or complete. Origin, isolation, one-shot custody,
@@ -1450,5 +1468,5 @@ covert-audit, capacity, formal gate, effect, and sealed-C1 claims remain false u
 their independent gates pass. Formal 720+240 audit, independent labels, and sealed
 execution remain later gates.
 
-No Q0.5b actual rerun, Docker execution, holdout generation, or ACTIVE mutation
+No Q0.5b actual rerun, actual-960 Docker execution, holdout generation, or ACTIVE mutation
 is authorized by this ledger.

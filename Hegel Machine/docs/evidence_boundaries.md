@@ -251,6 +251,20 @@ or evidence path, and publishes no backend availability or result ID. Therefore 
 invocation results and external authority/store/time/actual-960/scoring/gate/effect/C1
 claims stay false, and the next slice remains unchanged.
 
+The Docker agreement is represented by a separate Phase-2B C1 owner amendment and
+six-role static profile. `OWNER_ACCEPTED_CONTAINER_TECHNICAL_ACTORS_V1` here means
+technical container separation accepted by the owner; it still discloses one admin
+controller, no independent humans or organizations, no hostile-daemon resistance,
+and no authoritative external time. The checked recognizer image-build receipt binds
+the pinned base, exact 26-module source closure, minimal image initializer, fixed
+non-root entrypoint and local image ID
+`sha256:c2c557d5514496d20e3d88150d1c8e07f013bbd6abbafd3f4b82ef74cc1c6408`.
+The only live run in that receipt is an empty-input negative smoke under network-none,
+read-only root, dropped capabilities, no-new-privileges and the frozen runtime seccomp;
+it correctly ABSTAINS and emits no archive. Therefore image construction and negative-
+path isolation are evidence, while fresh keys, ceremony signatures, signed registry,
+real 960 input, prediction output, scoring, gates, effect and C1 remain absent.
+
 此外可以说：Phase-3A 的 v1.0.2 strict specification 已冻结，Python/Rust shared vectors
 各 48/48 PASS。M2 两端都接受 64,680 个 source candidates，并得到 64,680 个 unique strict
 canonical AST；共同 diagnostic set commitment 是

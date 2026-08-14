@@ -440,6 +440,21 @@ verifier is constructed or called and no evidence/path/backend-availability/resu
 read or exposed. All invocation, authority, store, time, execution, scoring, gate,
 effect, and C1 claims remain false; the roadmap is unchanged.
 
+Phase-2B C1 now has its own owner-accepted container-actor extension rather than
+silently widening the Phase-3A M2.5 profile. Its six technical roles are governance,
+custodian, store receipt, time attestor, recognizer, and scorer/evaluator. The profile
+retains the exact disclosure `same_admin_controller=true` and never turns technical
+container separation into organizational or human independence. The recognizer side
+now has a pure-copy Docker image with a pinned base, an inert package initializer and
+an exact 26-module closure. The locally built image ID is
+`sha256:c2c557d5514496d20e3d88150d1c8e07f013bbd6abbafd3f4b82ef74cc1c6408`.
+Its image config and module closure were checked under the frozen non-root/read-only/
+network-none/custom-seccomp controls; an empty-input negative smoke exited 2 with the
+generic ABSTAIN and no output. This is an image-readiness edge, not a C1 execution
+edge: no fresh keys, signed execution registry, actual input/freeze, prediction,
+scorer receipt, formal gate, effect or C1 report exists yet. The legacy stronger
+external-candidate requirement remains a distinct incompatible authority profile.
+
 这些 receipts 仍恒为 `NON_AUTHORITATIVE_MECHANICS_ONLY`。pairwise distinct 不证明 IKM
 独立性；raw-envelope diagnostic 不验证 batch membership 或 secret padding；supplied-secret
 replay 只证明调用方给出的 authorities/run/IKM 可重建同一 bytes。origin authentication、

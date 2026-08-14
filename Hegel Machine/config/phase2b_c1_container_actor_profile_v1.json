@@ -1,0 +1,297 @@
+{
+  "schema_version": "hegel-phase2b-c1-container-actor-profile/1",
+  "profile_id": "hegel-owner-accepted-phase2b-c1-container-technical-actors-v1",
+  "authority_class": "OWNER_ACCEPTED_CONTAINER_TECHNICAL_ACTORS_V1",
+  "scope": [
+    "PHASE2B_C1_TECHNICAL_ACTOR_ELIGIBILITY",
+    "PHASE2B_ACTUAL_UNSEALED_960_CEREMONY"
+  ],
+  "owner_accepted_authority_requirement": {
+    "domain_hex": "484547454c2f504841534532422f43312f4f574e45525f41434345505445445f434f4e5441494e45525f415554484f524954595f524551554952454d454e542f563100",
+    "id_prefix": "phase2b_c1_owner_accepted_container_authority_requirement_v1_",
+    "statements": [
+      ["claim_boundary", "owner_accepted_single_admin_container_technical_actor_eligibility_not_external_organizational_independence"],
+      ["authority_class", "OWNER_ACCEPTED_CONTAINER_TECHNICAL_ACTORS_V1"],
+      ["profile_id", "hegel-owner-accepted-phase2b-c1-container-technical-actors-v1"],
+      ["required_roles", ["GOVERNANCE_ANCHOR", "CUSTODIAN", "STORE_RECEIPT", "TIME_ATTESTOR", "RECOGNIZER", "SCORER_EVALUATOR"]],
+      ["checkpoint_graph_roles", ["GOVERNANCE_ANCHOR", "CUSTODIAN", "STORE_RECEIPT", "TIME_ATTESTOR"]],
+      ["execution_operation_roles", ["RECOGNIZER", "SCORER_EVALUATOR"]],
+      ["registry_binding", "fresh_registry_must_bind_requirement_id_profile_content_id_campaign_and_attempt_before_holdout_generation"],
+      ["store_semantics", "repository_external_linux_local_if_absent_and_rollback_detection_for_cooperating_processes_not_hostile_admin"],
+      ["time_semantics", "signed_monotonic_logical_order_not_utc_or_external_timestamp_authority"],
+      ["permanent_nonclaims", ["ORGANIZATIONAL_INDEPENDENCE", "INDEPENDENT_HUMAN_ACTORS", "MALICIOUS_HOST_OR_DOCKER_DAEMON_RESISTANCE", "HOSTILE_ADMINISTRATOR_DELETION_OR_ROLLBACK_RESISTANCE", "CROSS_HOST_GLOBAL_ONE_SHOT", "AUTHORITATIVE_UTC_OR_EXTERNAL_TIME"]]
+    ],
+    "requirement_id": "phase2b_c1_owner_accepted_container_authority_requirement_v1_53631d563f8da8f26c7202b7dd0681be5423fe2ca5c15e9a9f5deaa2920d9940",
+    "legacy_external_authority_requirement_id": "phase2b_actual_unsealed_960_external_authority_requirement_v2_fea188566b28e0a8bf50ce0ae760a63e5ee8d0355a737fea30ed8cd8f05779e0",
+    "legacy_external_candidate_verifier_alone_satisfies_requirement": false,
+    "future_execution_registry_must_bind_requirement_id": true,
+    "future_execution_registry_must_bind_profile_content_id": true
+  },
+  "base_control_bindings": {
+    "phase3_container_actor_profile": {
+      "path": "config/phase3_container_actor_profile_v1.json",
+      "profile_id": "hegel-owner-accepted-container-technical-actors-v1",
+      "sha256": "0419b66ad72580a78f1145b1db6b08d8ce40d1211f3554f548690949ee3c0ad0",
+      "reuse_kind": "SECURITY_CONTROL_SOURCE_ONLY_NOT_PHASE2B_QUALIFICATION"
+    },
+    "runtime_seccomp": {
+      "path": "config/phase3_internal_actor_seccomp_v1.json",
+      "sha256": "d1284e4731683b73352ecdd1577704ea87aa0b5c582b7b00757c3db4d2c950ca",
+      "reuse_kind": "EXACT_RUNTIME_SYSCALL_FILTER"
+    },
+    "offline_build_seccomp": {
+      "path": "config/phase3_m3_offline_build_seccomp_v1.json",
+      "sha256": "41ebe406e2ea5c30572db12566e8c52b2986d23e8b1d6523dff00f5f7fce01fe",
+      "reuse_kind": "EXACT_OFFLINE_BUILD_SYSCALL_FILTER"
+    },
+    "local_runtime_source": {
+      "path": "src/hegel_machine/phase3_local_runtime_v1.py",
+      "sha256": "35c8360f3eca46ef4b6759547a37e6c39f83acdf0e98c4a525698bb501cf9802",
+      "reuse_kind": "EXACT_LOCAL_FILESYSTEM_AND_DOCKER_CONTROL_PLANE_MECHANICS"
+    },
+    "python_live_probe_source": {
+      "path": "tools/phase3_container_actor_probe_v1.py",
+      "sha256": "170b5c0ef5bdc6a587564e160304f4dc293c5bac4879991632128b3bd020469d",
+      "reuse_kind": "PROBE_LOGIC_SOURCE_REQUIRES_SIX_ROLE_PHASE2B_ADAPTER"
+    }
+  },
+  "reuse_boundary": {
+    "phase3_qualification_report_reusable_as_phase2b_evidence": false,
+    "phase3_actor_keys_reusable": false,
+    "phase3_actor_volumes_reusable": false,
+    "phase3_formal_executor_reusable_without_phase2b_adapter": false,
+    "fresh_phase2b_six_role_qualification_required": true
+  },
+  "authority_disclosure": {
+    "same_admin_controller": true,
+    "organizational_independence": false,
+    "independent_human_actors": false,
+    "technical_role_independence": true,
+    "owner_accepted_threat_model": true,
+    "remote_attestation": false,
+    "hardware_key_nonexportability": false
+  },
+  "actor_roles": [
+    {
+      "purpose_id": 1,
+      "role": "GOVERNANCE_ANCHOR",
+      "actor_class": "AUTHORITY_SIGNER",
+      "checkpoint_signature_purpose": "GOVERNANCE_CHECKPOINT",
+      "fresh_ed25519_operation_key_required": true,
+      "persistent_private_state_required": true,
+      "exclusive_writable_mounts": ["/state"],
+      "read_only_input_classes": ["PROFILE", "OWNER_ACCEPTED_AUTHORITY_REQUIREMENT", "SIGNER_REGISTRY", "PUBLIC_COMMITMENT_ROOTS", "EXECUTION_OPERATION_RECEIPTS", "TERMINAL_REPORT_STORE_RECEIPT", "SIGNED_LOGICAL_TERMINAL_TOKEN"],
+      "forbidden_input_classes": ["RAW_HOLDOUT_SECRETS", "ANSWER_MANIFEST_PLAINTEXT", "RECOGNIZER_WORKSPACE"],
+      "responsibility": "AUTHORIZE_PROFILE_REGISTRY_AND_TERMINAL_CHECKPOINT"
+    },
+    {
+      "purpose_id": 2,
+      "role": "CUSTODIAN",
+      "actor_class": "AUTHORITY_SIGNER",
+      "checkpoint_signature_purpose": "CUSTODIAN_CHECKPOINT",
+      "fresh_ed25519_operation_key_required": true,
+      "persistent_private_state_required": true,
+      "exclusive_writable_mounts": ["/state", "/custody"],
+      "read_only_input_classes": ["PROFILE", "FROZEN_GENERATION_INPUTS", "PREDICTION_COMMITMENT_ROOT", "PREDICTION_STORE_IF_ABSENT_RECEIPT", "SIGNED_PREDICTIONS_COMMITTED_TOKEN"],
+      "forbidden_input_classes": ["RECOGNIZER_WORKSPACE", "SCORER_WORKSPACE", "OTHER_ROLE_PRIVATE_KEYS"],
+      "responsibility": "GENERATE_SEAL_HOLD_REVEAL_AND_SIGN_CUSTODY_EVENTS"
+    },
+    {
+      "purpose_id": 3,
+      "role": "STORE_RECEIPT",
+      "actor_class": "AUTHORITY_SIGNER",
+      "checkpoint_signature_purpose": "STORE_IF_ABSENT_RECEIPT",
+      "fresh_ed25519_operation_key_required": true,
+      "persistent_private_state_required": true,
+      "exclusive_writable_mounts": ["/state", "/ledger", "/cas"],
+      "read_only_input_classes": ["PROFILE", "OPAQUE_CONTENT_BYTES", "CONTENT_ADDRESS_REQUESTS"],
+      "forbidden_input_classes": ["ANSWER_MANIFEST_PLAINTEXT", "RAW_CUSTODIAN_SEED", "OTHER_ROLE_PRIVATE_KEYS"],
+      "responsibility": "SOLE_WRITER_FOR_DURABLE_IF_ABSENT_LEDGER_AND_CAS_RECEIPTS"
+    },
+    {
+      "purpose_id": 4,
+      "role": "TIME_ATTESTOR",
+      "actor_class": "AUTHORITY_SIGNER",
+      "checkpoint_signature_purpose": "DECLARED_TIME_TOKEN",
+      "fresh_ed25519_operation_key_required": true,
+      "persistent_private_state_required": true,
+      "exclusive_writable_mounts": ["/state"],
+      "read_only_input_classes": ["PROFILE", "EVENT_CONTENT_ROOTS", "STORE_RECEIPT_ROOTS"],
+      "forbidden_input_classes": ["WALL_CLOCK_AUTHORITY_CLAIMS", "ANSWER_MANIFEST_PLAINTEXT", "OTHER_ROLE_PRIVATE_KEYS"],
+      "responsibility": "ISSUE_SIGNED_MONOTONIC_LOGICAL_ORDER_TOKENS"
+    },
+    {
+      "purpose_id": 5,
+      "role": "RECOGNIZER",
+      "actor_class": "EXECUTION_ACTOR",
+      "checkpoint_signature_purpose": null,
+      "fresh_ed25519_operation_key_required": true,
+      "persistent_private_state_required": true,
+      "exclusive_writable_mounts": ["/state", "/prediction"],
+      "read_only_input_classes": ["PROFILE", "EXECUTION_FREEZE_MANIFEST", "SIGNED_RUN_STARTED_TOKEN", "BLINDED_RECOGNIZER_INPUT_ARCHIVE"],
+      "forbidden_input_classes": ["ANSWER_MANIFEST_PLAINTEXT", "GATE_INPUT_MANIFEST_PLAINTEXT", "GENERATOR_SOURCE", "CUSTODY", "LEDGER", "LIVE_REPOSITORY"],
+      "responsibility": "EXECUTE_EXACTLY_ONE_BLINDED_960_CASE_RECOGNIZER_OPERATION"
+    },
+    {
+      "purpose_id": 6,
+      "role": "SCORER_EVALUATOR",
+      "actor_class": "EXECUTION_ACTOR",
+      "checkpoint_signature_purpose": null,
+      "fresh_ed25519_operation_key_required": true,
+      "persistent_private_state_required": true,
+      "exclusive_writable_mounts": ["/state", "/score"],
+      "read_only_input_classes": ["PROFILE", "PREDICTION_STORE_IF_ABSENT_RECEIPT", "SIGNED_REVEAL_TOKEN", "COMMITTED_PREDICTION_ARCHIVE", "REVEALED_ANSWER_MANIFEST", "REVEALED_GATE_INPUT_MANIFEST"],
+      "forbidden_input_classes": ["UNCOMMITTED_PREDICTIONS", "PRE_REVEAL_ANSWER_ACCESS", "RECOGNIZER_WORKSPACE", "CUSTODY", "LEDGER", "LIVE_REPOSITORY"],
+      "responsibility": "SCORE_ONCE_AFTER_REVEAL_AND_SIGN_REPORT_ROOTS"
+    }
+  ],
+  "checkpoint_signature_policy": {
+    "required_graph_roles_in_order": ["GOVERNANCE_ANCHOR", "CUSTODIAN", "STORE_RECEIPT", "TIME_ATTESTOR"],
+    "required_graph_signature_purposes_in_order": ["GOVERNANCE_CHECKPOINT", "CUSTODIAN_CHECKPOINT", "STORE_IF_ABSENT_RECEIPT", "DECLARED_TIME_TOKEN"],
+    "required_graph_signature_count": 4,
+    "graph_signer_locations": [
+      ["GOVERNANCE_ANCHOR", "checkpoint.checkpoint_signatures[0]"],
+      ["CUSTODIAN", "checkpoint.checkpoint_signatures[1]"],
+      ["STORE_RECEIPT", "store_receipt.detached_signature"],
+      ["TIME_ATTESTOR", "time_token.detached_signature"]
+    ],
+    "key_epoch": 1,
+    "checkpoint_sequence": 0,
+    "store_previous_generation": 0,
+    "store_new_generation": 1,
+    "store_condition": "IF_ABSENT"
+  },
+  "execution_signature_policy": {
+    "required_roles_in_order": ["RECOGNIZER", "SCORER_EVALUATOR"],
+    "required_signature_purposes_in_order": ["RECOGNIZER_OPERATION_RECEIPT", "SCORER_EVALUATION_REPORT"],
+    "signature_domains_hex_in_order": [
+      "484547454c2f504841534532422f43312f5245434f474e495a45525f4f5045524154494f4e5f524543454950542f563100",
+      "484547454c2f504841534532422f43312f53434f5245525f4556414c554154494f4e5f5245504f52542f563100"
+    ],
+    "signed_object_fields_in_order": {
+      "RECOGNIZER_OPERATION_RECEIPT": ["authority_requirement_id", "actor_profile_content_id", "campaign_id", "attempt_id", "execution_freeze_manifest_id", "recognizer_image_digest", "recognizer_source_root", "input_archive_id", "input_archive_sha256", "prediction_archive_id", "prediction_archive_sha256", "run_started_token_id", "run_finished_token_id"],
+      "SCORER_EVALUATION_REPORT": ["authority_requirement_id", "actor_profile_content_id", "campaign_id", "attempt_id", "scorer_image_digest", "scorer_source_root", "prediction_store_receipt_id", "reveal_token_id", "answer_manifest_id", "gate_input_manifest_id", "score_report_root", "gate_report_root", "reports_committed_token_id"]
+    },
+    "signer_locations": [
+      ["RECOGNIZER", "recognizer_operation_receipt.detached_signature"],
+      ["SCORER_EVALUATOR", "scorer_evaluation_report.detached_signature"]
+    ],
+    "execution_registry_must_bind_owner_accepted_requirement_id": true,
+    "execution_registry_must_bind_actor_profile_content_id": true,
+    "execution_registry_must_bind_campaign_and_attempt": true,
+    "execution_registry_must_bind_image_and_source_digests": true,
+    "implemented_by_static_profile_loader": false
+  },
+  "key_policy": {
+    "fresh_key_count": 6,
+    "algorithm": "Ed25519",
+    "generated_only_during_future_live_ceremony": true,
+    "generated_by_profile_loader": false,
+    "purpose_key_reuse_allowed": false,
+    "qualification_key_reuse_allowed": false,
+    "private_key_export_allowed": false,
+    "public_registry_frozen_before_holdout_generation": true
+  },
+  "docker_control_policy": {
+    "executable": "/usr/bin/docker",
+    "explicit_host_argument": "--host=unix:///var/run/docker.sock",
+    "socket": "/var/run/docker.sock",
+    "pull_policy": "never",
+    "network": "none",
+    "root_filesystem_read_only": true,
+    "nonroot_uid_gid": "65534:65534",
+    "capabilities_dropped": "ALL",
+    "no_new_privileges": true,
+    "custom_seccomp_required": true,
+    "six_live_containers_concurrent_for_separation_probe": true,
+    "purpose_private_state_volume_required": true,
+    "shared_writable_role_mount_allowed": false,
+    "pairwise_distinct_namespaces": ["pid", "mnt", "net", "ipc", "uts"],
+    "forbidden_mounts": ["DOCKER_SOCKET", "LIVE_REPOSITORY", "HOST_HOME", "/mnt/c", "OTHER_ROLE_PRIVATE_STATE"],
+    "authority_actor_limits": {"memory": "512m", "pids": 64},
+    "recognizer_actor_limits": {"memory": "2g", "pids": 128, "timeout_seconds": 3600, "maximum_output_bytes": 536870912},
+    "scorer_actor_limits": {"memory": "2g", "pids": 128, "timeout_seconds": 3600, "maximum_output_bytes": 536870912}
+  },
+  "filesystem_policy": {
+    "durable_root_kind": "REPOSITORY_EXTERNAL_LINUX_LOCAL",
+    "under_tmp_allowed": false,
+    "under_mnt_c_allowed": false,
+    "cloud_or_network_filesystem_allowed": false,
+    "symlink_allowed": false,
+    "directory_mode_octal": "0700",
+    "record_mode_octal": "0600",
+    "file_fsync_required": true,
+    "directory_fsync_required": true,
+    "atomic_rename_probe_required": true,
+    "hardlink_no_replace_publication_required": true,
+    "cooperating_process_lock_required": true,
+    "crash_recovery_required": true,
+    "hostile_owner_rollback_resistance_claimed": false,
+    "cross_host_global_one_shot_claimed": false
+  },
+  "chronology_policy": {
+    "time_semantics": "SIGNED_MONOTONIC_LOGICAL_ORDER_NOT_UTC",
+    "wall_clock_accuracy_claimed": false,
+    "external_timestamp_authority_claimed": false,
+    "signed_attempt_stage_order": ["PREREGISTERED", "RAW_INPUT_COMMITTED", "PACKAGE_COMMITMENTS_FROZEN", "RUN_STARTED", "RUN_FINISHED", "PREDICTIONS_COMMITTED", "REVEALED", "SCORING_STARTED", "REPORTS_COMMITTED", "TERMINAL_CONSUMED"],
+    "actor_enforced_gate_inputs": {
+      "CUSTODIAN_REVEAL": ["PREDICTION_STORE_IF_ABSENT_RECEIPT", "SIGNED_PREDICTIONS_COMMITTED_TOKEN"],
+      "SCORER_START": ["PREDICTION_STORE_IF_ABSENT_RECEIPT", "SIGNED_REVEAL_TOKEN"],
+      "GOVERNANCE_TERMINAL": ["EXECUTION_OPERATION_RECEIPTS", "TERMINAL_REPORT_STORE_RECEIPT", "SIGNED_LOGICAL_TERMINAL_TOKEN"]
+    },
+    "reveal_requires_prediction_store_receipt": true,
+    "scoring_requires_reveal_token": true,
+    "terminal_requires_report_store_receipt": true
+  },
+  "claim_policy": {
+    "static_profile_claims": {
+      "profile_schema_validated": true,
+      "six_role_contract_frozen": true,
+      "base_control_bindings_frozen": true,
+      "authority_disclosure_frozen": true,
+      "actual_execution_claimed": false
+    },
+    "actual_run_claims_required_false": {
+      "docker_invoked": false,
+      "actor_qualification_executed": false,
+      "technical_role_independence_live_verified": false,
+      "fresh_keys_generated": false,
+      "signatures_generated": false,
+      "owner_accepted_authority_requirement_signed_registry_verified": false,
+      "execution_operation_signatures_verified": false,
+      "actor_enforced_chronology_gate_inputs_verified": false,
+      "registry_issuance_authority_verified": false,
+      "custodian_identity_verified": false,
+      "durable_attempt_ledger_verified": false,
+      "one_shot_policy_enforced": false,
+      "timeline_observed": false,
+      "timeline_order_verified": false,
+      "pre_reveal_commitment_timing_verified": false,
+      "runtime_attestation_authority_verified": false,
+      "recognizer_executed": false,
+      "runtime_executed": false,
+      "actual_960_case_run_verified": false,
+      "scoring_performed": false,
+      "prediction_scored": false,
+      "actual_prediction_scoring_evidence": false,
+      "formal_gate_evaluation_performed": false,
+      "effect_evidence": false,
+      "formal_c1_report_verified": false,
+      "c1_exit_evidence": false
+    },
+    "permanent_nonclaims_required_false": {
+      "organizational_independence": false,
+      "independent_human_actors": false,
+      "malicious_host_root_resistance": false,
+      "malicious_docker_daemon_resistance": false,
+      "hostile_administrator_tamper_resistance_verified": false,
+      "owner_deletion_resistance_verified": false,
+      "owner_rollback_resistance_verified": false,
+      "cross_host_global_one_shot_verified": false,
+      "remote_attestation": false,
+      "hardware_key_nonexportability": false,
+      "authoritative_utc_time_verified": false,
+      "absence_of_all_covert_channels": false
+    }
+  }
+}

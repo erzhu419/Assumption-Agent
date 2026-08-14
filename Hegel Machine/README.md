@@ -389,6 +389,24 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
   candidate source-mechanics/test flags are static; all 76 invocation, authority,
   store, time, actual-960, scoring, gate, effect, and C1 flags remain false. The next
   slice is unchanged;
+  The owner-accepted Docker route is now explicit for Phase-2B C1 through the separate
+  six-role profile `phase2b_c1_container_actor_profile_v1`: governance, custodian,
+  store-receipt, time-attestor, recognizer, and scorer/evaluator are technically
+  separated containers under the same-admin-controller disclosure. This does not
+  assert organizational or human independence. A minimal recognizer image was built
+  locally from one pinned Python base and an exact 26-module package closure, with an
+  inert image-only `hegel_machine/__init__.py`. Image
+  `sha256:c2c557d5514496d20e3d88150d1c8e07f013bbd6abbafd3f4b82ef74cc1c6408`
+  was inspected as UID/GID 65534, fixed entrypoint, no healthcheck and no declared
+  volumes; a network-none/read-only/cap-drop/no-new-privileges/custom-seccomp empty-
+  input smoke returned only the expected generic ABSTAIN and wrote no output. The
+  checked receipt is
+  `phase2b_recognizer_runtime_image_build_receipt_v2_cd9f15d2921bb670869bc4357efa6b6a05d4f22ba02a02efde06e384684898cd`.
+  This closes static profile and local image-readiness mechanics only. Fresh role
+  keys, the signed execution registry, owner-accepted ceremony, real input/freeze
+  material, actual-960 prediction, independent scoring, gates, effect and C1 all
+  remain false; the stronger supplied-external-candidate requirement is not silently
+  reinterpreted as the Docker authority profile. The next slice remains unchanged;
 - seal → prediction commitment → reveal → consumed 的 immutable lifecycle model、
   answer salted-commitment opening 校验和进程内原子防分叉 guard，以及 read-only
   input/root、no network、无 repo/generator/answer mount 的 OCI launch-spec contract；
