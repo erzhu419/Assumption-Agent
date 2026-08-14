@@ -1,0 +1,91 @@
+{
+  "schema": "hegel-phase2b-rfc8785-golden-v1",
+  "normative_source": "RFC 8785",
+  "official_appendix_sample": {
+    "input_json": "{\n  \"numbers\": [333333333.33333329, 1E30, 4.50, 2e-3, 0.000000000000000000000000001],\n  \"string\": \"\\u20ac$\\u000F\\u000aA'\\u0042\\u0022\\u005c\\\\\\\"\\/\",\n  \"literals\": [null, true, false]\n}",
+    "canonical": "{\"literals\":[null,true,false],\"numbers\":[333333333.3333333,1e+30,4.5,0.002,1e-27],\"string\":\"€$\\u000f\\nA'B\\\"\\\\\\\\\\\"/\"}"
+  },
+  "official_property_sorting": {
+    "input_json": "{\"\\u20ac\":\"Euro Sign\",\"\\r\":\"Carriage Return\",\"\\ufb33\":\"Hebrew Letter Dalet With Dagesh\",\"1\":\"One\",\"\\ud83d\\ude00\":\"Emoji: Grinning Face\",\"\\u0080\":\"Control\",\"\\u00f6\":\"Latin Small Letter O With Diaeresis\"}",
+    "canonical": "{\"\\r\":\"Carriage Return\",\"1\":\"One\",\"\":\"Control\",\"ö\":\"Latin Small Letter O With Diaeresis\",\"€\":\"Euro Sign\",\"😀\":\"Emoji: Grinning Face\",\"דּ\":\"Hebrew Letter Dalet With Dagesh\"}"
+  },
+  "official_appendix_b_numbers": [
+    {"ieee754_hex": "0000000000000000", "canonical": "0"},
+    {"ieee754_hex": "8000000000000000", "canonical": "0"},
+    {"ieee754_hex": "0000000000000001", "canonical": "5e-324"},
+    {"ieee754_hex": "8000000000000001", "canonical": "-5e-324"},
+    {"ieee754_hex": "7fefffffffffffff", "canonical": "1.7976931348623157e+308"},
+    {"ieee754_hex": "ffefffffffffffff", "canonical": "-1.7976931348623157e+308"},
+    {"ieee754_hex": "4340000000000000", "canonical": "9007199254740992"},
+    {"ieee754_hex": "c340000000000000", "canonical": "-9007199254740992"},
+    {"ieee754_hex": "4430000000000000", "canonical": "295147905179352830000"},
+    {"ieee754_hex": "7fffffffffffffff", "error": "non-finite"},
+    {"ieee754_hex": "7ff0000000000000", "error": "non-finite"},
+    {"ieee754_hex": "44b52d02c7e14af5", "canonical": "9.999999999999997e+22"},
+    {"ieee754_hex": "44b52d02c7e14af6", "canonical": "1e+23"},
+    {"ieee754_hex": "44b52d02c7e14af7", "canonical": "1.0000000000000001e+23"},
+    {"ieee754_hex": "444b1ae4d6e2ef4e", "canonical": "999999999999999700000"},
+    {"ieee754_hex": "444b1ae4d6e2ef4f", "canonical": "999999999999999900000"},
+    {"ieee754_hex": "444b1ae4d6e2ef50", "canonical": "1e+21"},
+    {"ieee754_hex": "3eb0c6f7a0b5ed8c", "canonical": "9.999999999999997e-7"},
+    {"ieee754_hex": "3eb0c6f7a0b5ed8d", "canonical": "0.000001"},
+    {"ieee754_hex": "41b3de4355555553", "canonical": "333333333.3333332"},
+    {"ieee754_hex": "41b3de4355555554", "canonical": "333333333.33333325"},
+    {"ieee754_hex": "41b3de4355555555", "canonical": "333333333.3333333"},
+    {"ieee754_hex": "41b3de4355555556", "canonical": "333333333.3333334"},
+    {"ieee754_hex": "41b3de4355555557", "canonical": "333333333.33333343"},
+    {"ieee754_hex": "becbf647612f3696", "canonical": "-0.0000033333333333333333"},
+    {"ieee754_hex": "43143ff3c1cb0959", "canonical": "1424953923781206.2"}
+  ],
+  "independent_literal_vectors": [
+    {
+      "name": "utf16-order-differs-from-codepoint-order",
+      "input_json": "{\"\":1,\"𐀀\":2}",
+      "canonical": "{\"𐀀\":2,\"\":1}"
+    },
+    {
+      "name": "recursive-object-sort-array-order-preserved",
+      "input_json": "{\"z\":[{\"b\":1,\"a\":2},3,2,1],\"a\":{\"β\":0,\"a\":true}}",
+      "canonical": "{\"a\":{\"a\":true,\"β\":0},\"z\":[{\"a\":2,\"b\":1},3,2,1]}"
+    },
+    {
+      "name": "string-escape-and-unicode-preservation",
+      "input_json": "[\"/\",\"\\u0000\\b\\t\\n\\f\\r\",\"\\\"\\\\\",\"é\",\"é\",\"  \"]",
+      "canonical": "[\"/\",\"\\u0000\\b\\t\\n\\f\\r\",\"\\\"\\\\\",\"é\",\"é\",\"  \"]"
+    },
+    {
+      "name": "negative-zero-and-thresholds",
+      "input_json": "[-0,1e-7,1e-6,1e20,1e21]",
+      "canonical": "[0,1e-7,0.000001,100000000000000000000,1e+21]"
+    },
+    {
+      "name": "empty-and-prefix-property-names",
+      "input_json": "{\"ab\":4,\"aa\":3,\"a\":2,\"\":1}",
+      "canonical": "{\"\":1,\"a\":2,\"aa\":3,\"ab\":4}"
+    }
+  ],
+  "canonical_acceptance": [
+    "null",
+    "true",
+    "0",
+    "5e-324",
+    "\"😀\"",
+    "[0,1,\"x\"]",
+    "{\"a\":1,\"b\":2}"
+  ],
+  "canonical_rejection": [
+    {"name": "whitespace", "input_json": "{ \"a\":1}"},
+    {"name": "member-order", "input_json": "{\"b\":2,\"a\":1}"},
+    {"name": "noncanonical-number", "input_json": "1.0"},
+    {"name": "negative-zero", "input_json": "-0"},
+    {"name": "escaped-printable", "input_json": "\"\\u0061\""},
+    {"name": "escaped-slash", "input_json": "\"\\/\""},
+    {"name": "uppercase-control-hex", "input_json": "\"\\u000F\""},
+    {"name": "duplicate-name", "input_json": "{\"a\":1,\"\\u0061\":2}"},
+    {"name": "lone-high-surrogate", "input_json": "\"\\ud800\""},
+    {"name": "lone-low-surrogate", "input_json": "\"\\udead\""},
+    {"name": "unicode-noncharacter", "input_json": "\"\\ufdd0\""},
+    {"name": "non-json-nan", "input_json": "NaN"},
+    {"name": "non-json-infinity", "input_json": "Infinity"}
+  ]
+}
