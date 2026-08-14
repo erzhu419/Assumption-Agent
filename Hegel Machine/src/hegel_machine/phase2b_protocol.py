@@ -2630,6 +2630,91 @@ def phase2b_preregistration_report() -> dict[str, object]:
                 "c1_exit_evidence",
             )
         },
+        "recognizer_host_executor_v1_local_execution_receipt_schema_version": (
+            "hegel-machine-phase2b-recognizer-local-execution-receipt/1"
+        ),
+        "recognizer_host_executor_v1_local_execution_complete_reason": (
+            "phase2b_recognizer_local_docker_mechanics_complete_not_authority"
+        ),
+        "recognizer_host_executor_v1_claim_level": (
+            "NON_AUTHORITATIVE_LOCAL_DOCKER_EXECUTOR_MECHANICS_ONLY"
+        ),
+        "recognizer_host_executor_v1_scope": (
+            "OWNER_ACCEPTED_LOCAL_DOCKER_SINGLE_RECOGNIZER_RUN_MECHANICS_ONLY"
+        ),
+        "recognizer_host_executor_v1_expected_case_count": 960,
+        "recognizer_host_executor_v1_image_inspect_timeout_seconds": 60,
+        "recognizer_host_executor_v1_recognizer_timeout_seconds": 3_600,
+        "recognizer_host_executor_v1_expected_failure_code_count": 10,
+        **{
+            "recognizer_host_executor_v1_" + suffix: True
+            for suffix in (
+                "component_mechanics_implemented",
+                "exact_oci_run_spec_snapshot_and_frozen_limits_mechanics_implemented",
+                "componentwise_nofollow_host_path_pinning_and_nonoverlap_mechanics_implemented",
+                "bounded_namespace_regular_file_and_single_link_mechanics_implemented",
+                "input_archive_freeze_manifest_and_seccomp_cross_binding_mechanics_implemented",
+                "sanitized_pinned_local_docker_control_plane_mechanics_implemented",
+                "image_digest_platform_config_environment_and_label_binding_mechanics_implemented",
+                "frozen_container_isolation_create_and_inspect_projection_mechanics_implemented",
+                "bounded_process_group_pipe_timeout_kill_and_reap_mechanics_implemented",
+                "fixed_container_supervisor_and_result_extractor_wire_mechanics_implemented",
+                "exact_container_id_lifecycle_and_forced_cleanup_mechanics_implemented",
+                "runtime_receipt_and_prediction_archive_replay_cross_binding_mechanics_implemented",
+                "fsync_hardlink_no_replace_prediction_publication_mechanics_implemented",
+                "private_local_execution_receipt_issuance_mechanics_implemented",
+                "stable_fail_closed_error_taxonomy_mechanics_implemented",
+                "wrong_spec_path_and_preflight_rejection_mechanics_implemented",
+                "synthetic_no_docker_host_executor_mechanics_tests_verified",
+            )
+        },
+        **{
+            "recognizer_host_executor_v1_" + suffix: False
+            for suffix in (
+                "protocol_report_constructs_oci_run_spec",
+                "protocol_report_constructs_runtime_limits",
+                "protocol_report_constructs_executor_path",
+                "protocol_report_calls_host_executor",
+                "protocol_report_invokes_docker",
+                "protocol_report_reads_recognizer_input",
+                "protocol_report_writes_prediction_output",
+                "protocol_report_issues_local_execution_receipt",
+                "docker_invoked",
+                "local_mechanics_complete",
+                "external_runtime_attestation_issued",
+                "recognizer_operation_signature_verified",
+                "actual_960_case_run_verified",
+                "prediction_scored",
+                "formal_gate_evaluation_performed",
+                "effect_evidence",
+                "formal_c1_report_verified",
+                "c1_exit_evidence",
+                "malicious_host_root_resistance",
+                "malicious_docker_daemon_resistance",
+                "local_runtime_environment_available",
+                "docker_executable_available",
+                "docker_daemon_available",
+                "oci_run_spec_accepted",
+                "host_path_binding_verified",
+                "input_archive_replayed",
+                "execution_freeze_manifest_verified",
+                "image_binding_verified",
+                "container_isolation_projection_verified",
+                "runtime_receipt_verified",
+                "prediction_archive_materialized",
+                "prediction_archive_published",
+                "recognizer_executed",
+                "runtime_executed",
+                "scoring_performed",
+                "actual_prediction_scoring_evidence",
+                "overall_gate_results_materialized",
+                "slice_gate_results_materialized",
+                "evidence_supplied",
+                "evidence_verified",
+                "admission_ready",
+                "execution_authorized",
+            )
+        },
         "next_phase2b_construction_slice": (
             "actual_unsealed_960_case_prediction_scoring_replay_v2"
         ),
@@ -2679,9 +2764,14 @@ def phase2b_preregistration_report() -> dict[str, object]:
         "admissible_scale_set_output_supported": True,
         "oci_isolation_launch_contract_implemented": True,
         "component_source_ids": {
-            name: "sha256:"
-            + hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest()
-            for name, module in (
+            "recognizer_host_executor_v1": (
+                "sha256:"
+                "eb636587f953a4f35d3e35d02e90a818fd95d787a479258e118feba239c81135"
+            ),
+            **{
+                name: "sha256:"
+                + hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest()
+                for name, module in (
                 ("adapter", phase2b_adapter),
                 ("covert_audit_mechanics", phase2b_covert_audit_v1),
                 (
@@ -2787,7 +2877,8 @@ def phase2b_preregistration_report() -> dict[str, object]:
                     phase2b_unsealed_prediction_evaluator_v2,
                 ),
                 ("wire", phase2b_wire),
-            )
+                )
+            },
         },
         "phase2a_fixtures_in_formal_protocol": False,
         "scale_hypothesis_generation_required": (

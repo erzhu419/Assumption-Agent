@@ -434,6 +434,20 @@ fresh role keys or a signed registry were created, any actual archive was mounte
 recognizer produced 960 predictions, an independent scorer ran, gates passed, or C1
 was established.
 
+`phase2b_recognizer_host_executor_v1.py` is now frozen as
+`NON_AUTHORITATIVE_LOCAL_DOCKER_EXECUTOR_MECHANICS_ONLY`, scoped to one
+owner-accepted local-Docker recognizer-run mechanics invocation. Its source and 114/114
+synthetic no-Docker tests cover strict preflight, host-path and immutable-input binding,
+sanitized Docker control-plane construction, image/container isolation inspection,
+bounded timeout/capture/cleanup, runtime-receipt and prediction cross-binding, and
+no-replace output publication. The preregistration report exposes only eight static
+identity/expectation fields, seventeen source/test capability flags, and the literal
+source SHA. It imports no executor, constructs no OCI spec, limits, or executor path,
+calls no host-executor/Docker API, reads no input, writes no prediction, and emits no
+dynamic local receipt. Its forty-two invocation, environment, receipt, actual-960,
+scoring, gate, effect, and C1 fields are false. The next construction slice remains
+unchanged.
+
 Pairwise distinct IKM values do not attest independent generation. The raw-envelope
 diagnostic verifies typed payload identity and direct transform replay but not batch
 membership or secret padding; supplied-secret replay proves only that the supplied

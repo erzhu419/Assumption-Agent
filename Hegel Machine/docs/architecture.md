@@ -455,6 +455,18 @@ edge: no fresh keys, signed execution registry, actual input/freeze, prediction,
 scorer receipt, formal gate, effect or C1 report exists yet. The legacy stronger
 external-candidate requirement remains a distinct incompatible authority profile.
 
+The Phase-2B V1 recognizer host executor is now a checked-in executable source boundary,
+but it is not executed by the preregistration report. Its 114/114 synthetic no-Docker
+tests cover exact run-spec snapshots, frozen limits, no-follow host-path pinning,
+input/freeze/seccomp/image/container-isolation bindings, bounded subprocess capture and
+timeout cleanup, exact container lifecycle, runtime-receipt and prediction replay, and
+host no-replace publication. These establish source mechanics only. Report integration
+uses a literal source SHA and static values; it imports no executor module, constructs no
+OCI spec, limits, or executor path, invokes no Docker/API, reads no recognizer input,
+writes no prediction, and exposes no dynamic local receipt. Runtime availability,
+actual-960 execution, scoring, gates, effect, and C1 therefore remain false, and the
+roadmap is unchanged.
+
 这些 receipts 仍恒为 `NON_AUTHORITATIVE_MECHANICS_ONLY`。pairwise distinct 不证明 IKM
 独立性；raw-envelope diagnostic 不验证 batch membership 或 secret padding；supplied-secret
 replay 只证明调用方给出的 authorities/run/IKM 可重建同一 bytes。origin authentication、

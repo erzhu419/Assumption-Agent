@@ -265,6 +265,16 @@ it correctly ABSTAINS and emits no archive. Therefore image construction and neg
 path isolation are evidence, while fresh keys, ceremony signatures, signed registry,
 real 960 input, prediction output, scoring, gates, effect and C1 remain absent.
 
+The checked-in V1 recognizer host executor plus 114/114 synthetic no-Docker tests now
+establish a source-capability edge for local Docker mechanics. They do not establish
+that a suitable host, Docker executable, daemon, image, input, output directory, or
+runtime receipt was available or observed. The preregistration report deliberately
+uses only literal static metadata and the exact source SHA: it does not import or call
+the executor, construct its OCI spec/limits/path inputs, invoke Docker, replay an input,
+publish a prediction, or issue a local receipt. Consequently no local execution result,
+actual-960 run, scoring, formal gate, effect, or C1 evidence is promoted, and the next
+slice remains unchanged.
+
 此外可以说：Phase-3A 的 v1.0.2 strict specification 已冻结，Python/Rust shared vectors
 各 48/48 PASS。M2 两端都接受 64,680 个 source candidates，并得到 64,680 个 unique strict
 canonical AST；共同 diagnostic set commitment 是

@@ -407,6 +407,17 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
   material, actual-960 prediction, independent scoring, gates, effect and C1 all
   remain false; the stronger supplied-external-candidate requirement is not silently
   reinterpreted as the Docker authority profile. The next slice remains unchanged;
+  The checked-in `phase2b_recognizer_host_executor_v1.py` now supplies a fail-closed
+  local-Docker host-executor implementation and a 114/114 synthetic, no-Docker test
+  basis. Source mechanics cover exact run-spec/limit preflight, componentwise no-follow
+  host-path pinning, input/freeze/seccomp/image/isolation cross-binding, bounded process
+  groups and pipes, forced container cleanup, runtime-receipt/prediction replay, and
+  no-replace prediction publication. This is source/test capability, not a live run.
+  The preregistration report binds the exact source SHA as a literal and exposes only
+  8 static identity values and 17 source/test flags; it does not import the executor,
+  construct an OCI spec, limits, or executor path, call Docker, read input, write output,
+  or issue/expose a local receipt. All 42 invocation/environment/receipt/actual-960/
+  scoring/gate/effect/C1 fields remain false, and the next slice is unchanged;
 - seal → prediction commitment → reveal → consumed 的 immutable lifecycle model、
   answer salted-commitment opening 校验和进程内原子防分叉 guard，以及 read-only
   input/root、no network、无 repo/generator/answer mount 的 OCI launch-spec contract；

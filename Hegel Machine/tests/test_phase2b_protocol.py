@@ -902,6 +902,98 @@ EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_REPORT_FIELDS_V2 = (
     | frozenset(EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_FALSE_FIELDS_V2)
 )
 
+RECOGNIZER_HOST_EXECUTOR_PREFIX_V1 = "recognizer_host_executor_v1_"
+RECOGNIZER_HOST_EXECUTOR_IDENTITY_SUFFIXES_V1 = (
+    "local_execution_receipt_schema_version",
+    "local_execution_complete_reason",
+    "claim_level",
+    "scope",
+    "expected_case_count",
+    "image_inspect_timeout_seconds",
+    "recognizer_timeout_seconds",
+    "expected_failure_code_count",
+)
+RECOGNIZER_HOST_EXECUTOR_TRUE_SUFFIXES_V1 = (
+    "component_mechanics_implemented",
+    "exact_oci_run_spec_snapshot_and_frozen_limits_mechanics_implemented",
+    "componentwise_nofollow_host_path_pinning_and_nonoverlap_mechanics_implemented",
+    "bounded_namespace_regular_file_and_single_link_mechanics_implemented",
+    "input_archive_freeze_manifest_and_seccomp_cross_binding_mechanics_implemented",
+    "sanitized_pinned_local_docker_control_plane_mechanics_implemented",
+    "image_digest_platform_config_environment_and_label_binding_mechanics_implemented",
+    "frozen_container_isolation_create_and_inspect_projection_mechanics_implemented",
+    "bounded_process_group_pipe_timeout_kill_and_reap_mechanics_implemented",
+    "fixed_container_supervisor_and_result_extractor_wire_mechanics_implemented",
+    "exact_container_id_lifecycle_and_forced_cleanup_mechanics_implemented",
+    "runtime_receipt_and_prediction_archive_replay_cross_binding_mechanics_implemented",
+    "fsync_hardlink_no_replace_prediction_publication_mechanics_implemented",
+    "private_local_execution_receipt_issuance_mechanics_implemented",
+    "stable_fail_closed_error_taxonomy_mechanics_implemented",
+    "wrong_spec_path_and_preflight_rejection_mechanics_implemented",
+    "synthetic_no_docker_host_executor_mechanics_tests_verified",
+)
+RECOGNIZER_HOST_EXECUTOR_FALSE_SUFFIXES_V1 = (
+    "protocol_report_constructs_oci_run_spec",
+    "protocol_report_constructs_runtime_limits",
+    "protocol_report_constructs_executor_path",
+    "protocol_report_calls_host_executor",
+    "protocol_report_invokes_docker",
+    "protocol_report_reads_recognizer_input",
+    "protocol_report_writes_prediction_output",
+    "protocol_report_issues_local_execution_receipt",
+    "docker_invoked",
+    "local_mechanics_complete",
+    "external_runtime_attestation_issued",
+    "recognizer_operation_signature_verified",
+    "actual_960_case_run_verified",
+    "prediction_scored",
+    "formal_gate_evaluation_performed",
+    "effect_evidence",
+    "formal_c1_report_verified",
+    "c1_exit_evidence",
+    "malicious_host_root_resistance",
+    "malicious_docker_daemon_resistance",
+    "local_runtime_environment_available",
+    "docker_executable_available",
+    "docker_daemon_available",
+    "oci_run_spec_accepted",
+    "host_path_binding_verified",
+    "input_archive_replayed",
+    "execution_freeze_manifest_verified",
+    "image_binding_verified",
+    "container_isolation_projection_verified",
+    "runtime_receipt_verified",
+    "prediction_archive_materialized",
+    "prediction_archive_published",
+    "recognizer_executed",
+    "runtime_executed",
+    "scoring_performed",
+    "actual_prediction_scoring_evidence",
+    "overall_gate_results_materialized",
+    "slice_gate_results_materialized",
+    "evidence_supplied",
+    "evidence_verified",
+    "admission_ready",
+    "execution_authorized",
+)
+RECOGNIZER_HOST_EXECUTOR_IDENTITY_FIELDS_V1 = frozenset(
+    RECOGNIZER_HOST_EXECUTOR_PREFIX_V1 + suffix
+    for suffix in RECOGNIZER_HOST_EXECUTOR_IDENTITY_SUFFIXES_V1
+)
+RECOGNIZER_HOST_EXECUTOR_TRUE_FIELDS_V1 = tuple(
+    RECOGNIZER_HOST_EXECUTOR_PREFIX_V1 + suffix
+    for suffix in RECOGNIZER_HOST_EXECUTOR_TRUE_SUFFIXES_V1
+)
+RECOGNIZER_HOST_EXECUTOR_FALSE_FIELDS_V1 = tuple(
+    RECOGNIZER_HOST_EXECUTOR_PREFIX_V1 + suffix
+    for suffix in RECOGNIZER_HOST_EXECUTOR_FALSE_SUFFIXES_V1
+)
+RECOGNIZER_HOST_EXECUTOR_REPORT_FIELDS_V1 = (
+    RECOGNIZER_HOST_EXECUTOR_IDENTITY_FIELDS_V1
+    | frozenset(RECOGNIZER_HOST_EXECUTOR_TRUE_FIELDS_V1)
+    | frozenset(RECOGNIZER_HOST_EXECUTOR_FALSE_FIELDS_V1)
+)
+
 ACTUAL_REPLAY_INPUT_PREFIX_V2 = "actual_unsealed_960_replay_input_contract_v2_"
 ACTUAL_REPLAY_INPUT_IDENTITY_FIELDS_V2 = frozenset(
     {
@@ -1462,7 +1554,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     report = phase2b_preregistration_report()
     assert report["implementation_id"] == (
         "phase2b_protocol_source_sha256_"
-        "4c8ba23cd52a93bff08fd5ce0953b958ccb0fc05c9c135b2d96c0faec46652b4"
+        "aeccff3558e82ebf261cbeb1c389e968ff22c8ae229b9ce201808accf76074ef"
     )
     assert report["artifact"] == "phase2b_preregistration_readiness_v1"
     assert report["formal_phase2b_exit_claim"] is False
@@ -2546,6 +2638,59 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
             EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_PREFIX_V2 + hidden_suffix
             not in report
         )
+    assert len(RECOGNIZER_HOST_EXECUTOR_IDENTITY_FIELDS_V1) == 8
+    assert len(RECOGNIZER_HOST_EXECUTOR_TRUE_FIELDS_V1) == 17
+    assert len(RECOGNIZER_HOST_EXECUTOR_FALSE_FIELDS_V1) == 42
+    assert len(RECOGNIZER_HOST_EXECUTOR_REPORT_FIELDS_V1) == 67
+    expected_host_executor_static_values = {
+        "local_execution_receipt_schema_version": (
+            "hegel-machine-phase2b-recognizer-local-execution-receipt/1"
+        ),
+        "local_execution_complete_reason": (
+            "phase2b_recognizer_local_docker_mechanics_complete_not_authority"
+        ),
+        "claim_level": "NON_AUTHORITATIVE_LOCAL_DOCKER_EXECUTOR_MECHANICS_ONLY",
+        "scope": "OWNER_ACCEPTED_LOCAL_DOCKER_SINGLE_RECOGNIZER_RUN_MECHANICS_ONLY",
+        "expected_case_count": 960,
+        "image_inspect_timeout_seconds": 60,
+        "recognizer_timeout_seconds": 3_600,
+        "expected_failure_code_count": 10,
+    }
+    for suffix, expected in expected_host_executor_static_values.items():
+        assert report[RECOGNIZER_HOST_EXECUTOR_PREFIX_V1 + suffix] == expected
+    for field_name in RECOGNIZER_HOST_EXECUTOR_TRUE_FIELDS_V1:
+        assert report[field_name] is True
+    for field_name in RECOGNIZER_HOST_EXECUTOR_FALSE_FIELDS_V1:
+        assert report[field_name] is False
+    assert {
+        field_name
+        for field_name in report
+        if field_name.startswith(RECOGNIZER_HOST_EXECUTOR_PREFIX_V1)
+    } == RECOGNIZER_HOST_EXECUTOR_REPORT_FIELDS_V1
+    for hidden_suffix in (
+        "disposition",
+        "reason",
+        "run_spec_id",
+        "freeze_manifest_id",
+        "protocol_id",
+        "image_digest",
+        "observed_image_id",
+        "image_inspect_sha256",
+        "docker_control_plane_binding_sha256",
+        "docker_executable_sha256",
+        "seccomp_profile_sha256",
+        "host_path_binding_sha256",
+        "input_archive_id",
+        "input_archive_sha256",
+        "runtime_receipt_id",
+        "prediction_archive_id",
+        "prediction_archive_sha256",
+        "started_monotonic_ns",
+        "finished_monotonic_ns",
+        "receipt_id",
+        "local_execution_receipt",
+    ):
+        assert RECOGNIZER_HOST_EXECUTOR_PREFIX_V1 + hidden_suffix not in report
     assert report["public_prediction_run_context_v2_schema_version"] == (
         PUBLIC_PREDICTION_RUN_CONTEXT_V2_SCHEMA_VERSION
     )
@@ -2694,6 +2839,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "projection_compiler",
         "recognizer_input_archive_mechanics",
         "recognizer_input_archive_mechanics_v2",
+        "recognizer_host_executor_v1",
         "recognizer_prediction_archive_mechanics",
         "recognizer_prediction_archive_mechanics_v2",
         "recognizer_prediction_row_mapping_mechanics_v2",
@@ -2778,6 +2924,10 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "sha256:"
         "078786e4f6ed66bad05598ed839c8cce6f93f6999b92d4c0309f7d3a29da6a5f"
     )
+    assert report["component_source_ids"]["recognizer_host_executor_v1"] == (
+        "sha256:"
+        "eb636587f953a4f35d3e35d02e90a818fd95d787a479258e118feba239c81135"
+    )
     assert report["component_source_ids"][
         "recognizer_prediction_row_mapping_mechanics_v2"
     ] == (
@@ -2847,7 +2997,7 @@ def test_checked_in_phase2b_preregistration_artifact_matches_runtime():
     assert artifact == phase2b_preregistration_report()
 
 
-def test_external_checkpoint_verifier_report_artifact_refresh_transition_is_exact():
+def test_recognizer_host_executor_report_artifact_refresh_transition_is_exact():
     artifact_path = (
         Path(__file__).resolve().parents[1]
         / "artifacts"
@@ -2855,13 +3005,11 @@ def test_external_checkpoint_verifier_report_artifact_refresh_transition_is_exac
     )
     artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
     report = phase2b_preregistration_report()
-    assert len(report) == 1149
+    assert len(report) == 1216
     if artifact == report:
         return
-    assert len(artifact) == 1044
-    assert set(report) - set(artifact) == (
-        EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_REPORT_FIELDS_V2
-    )
+    assert len(artifact) == 1149
+    assert set(report) - set(artifact) == RECOGNIZER_HOST_EXECUTOR_REPORT_FIELDS_V1
     assert set(artifact) - set(report) == set()
     changed_common_fields = {
         field_name
@@ -2880,15 +3028,27 @@ def test_external_checkpoint_verifier_report_artifact_refresh_transition_is_exac
     )
     assert set(report["component_source_ids"]) - set(
         artifact["component_source_ids"]
-    ) == {
-        "actual_unsealed_960_external_custodian_checkpoint_verifier_mechanics_v2"
-    }
+    ) == {"recognizer_host_executor_v1"}
     assert set(artifact["component_source_ids"]) - set(
         report["component_source_ids"]
     ) == set()
+    changed_existing_components = {
+        component_name
+        for component_name, component_source_id in artifact[
+            "component_source_ids"
+        ].items()
+        if report["component_source_ids"][component_name] != component_source_id
+    }
+    assert changed_existing_components == {"runner"}
+    assert report["component_source_ids"]["runner"] == (
+        "sha256:"
+        "24ae136477745356d17aac2906ed46ef41f16f095875643c0c0c7d8d1e11b5ae"
+    )
     for component_name, component_source_id in artifact[
         "component_source_ids"
     ].items():
+        if component_name == "runner":
+            continue
         assert report["component_source_ids"][component_name] == component_source_id
 
 
@@ -3002,3 +3162,60 @@ def test_preregistration_report_uses_external_checkpoint_as_static_source_only()
         and node.func.value.id == module_alias
         for node in ast.walk(report_function)
     )
+
+
+def test_preregistration_report_never_invokes_or_imports_host_executor():
+    protocol_path = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "hegel_machine"
+        / "phase2b_protocol.py"
+    )
+    tree = ast.parse(protocol_path.read_text(encoding="utf-8"))
+    report_function = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "phase2b_preregistration_report"
+    )
+    imported_names = {
+        alias.name
+        for node in ast.walk(report_function)
+        if isinstance(node, ast.ImportFrom)
+        for alias in node.names
+    }
+    assert "phase2b_recognizer_host_executor_v1" not in imported_names
+    forbidden_symbols = {
+        "OciRecognizerRunSpec",
+        "RuntimeLimits",
+        "Phase2BRecognizerHostExecutorErrorV1",
+        "Phase2BRecognizerLocalExecutionReceiptV1",
+        "execute_phase2b_recognizer_docker_v1",
+    }
+    assert {
+        node.id
+        for node in ast.walk(report_function)
+        if isinstance(node, ast.Name) and node.id in forbidden_symbols
+    } == set()
+    source_literals = {
+        node.value
+        for node in ast.walk(report_function)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
+    assert "recognizer_host_executor_v1" in source_literals
+    assert (
+        "sha256:eb636587f953a4f35d3e35d02e90a818fd95d787a479258e118feba239c81135"
+        in source_literals
+    )
+    for node in ast.walk(report_function):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "Path"
+        ):
+            assert not any(
+                isinstance(item, ast.Constant)
+                and isinstance(item.value, str)
+                and "recognizer_host_executor" in item.value
+                for item in ast.walk(node)
+            )
