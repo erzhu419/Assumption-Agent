@@ -400,6 +400,25 @@ result. Its seventy-five invocation,
 durability, authority, timeline, actual-960, scoring, gate, effect, and C1 flags are
 false. The next construction slice remains unchanged.
 
+The independent V2 external-custodian checkpoint verifier is limited to
+`NON_AUTHORITATIVE_SUPPLIED_EXTERNAL_AUTHORITY_CANDIDATE_MECHANICS_ONLY` and
+`SUPPLIED_EXTERNAL_AUTHORITY_CANDIDATE_NOT_PRETRUSTED_SINGLE_TERMINAL_CHECKPOINT`.
+Its static profile expects four candidate signer roles and four signatures, key epoch
+1, checkpoint sequence 0, and a declared `IF_ABSENT` store generation transition from
+0 to 1. A caller-supplied graph can be checked for profile/key/subject/receipt/time-token/
+checkpoint content addresses, exact role-purpose domains, monotone declared time,
+Ed25519 signatures, and checkpoint cross-bindings. Those closed mechanics neither
+pretrust the registry nor attest custodian independence, external-store authority,
+durability or rollback resistance, authoritative time, local-ledger externalization,
+or cross-host one-shot enforcement. The verifier performs no external I/O. Its frozen
+authority-requirement ID is a declarative live-ceremony requirement, not evidence.
+The preregistration report publishes exactly thirteen identity/static-expectation
+fields, sixteen supplied-candidate source-mechanics/test flags, and the source SHA. It
+constructs no candidate DTO, invokes no verifier, reads no external evidence or evidence
+path, and exposes no backend availability or result identifier. Its seventy-six
+invocation, authority, store, time, actual-960, scoring, gate, effect, and C1 fields are
+false. The next construction slice remains unchanged.
+
 Pairwise distinct IKM values do not attest independent generation. The raw-envelope
 diagnostic verifies typed payload identity and direct transform replay but not batch
 membership or secret padding; supplied-secret replay proves only that the supplied

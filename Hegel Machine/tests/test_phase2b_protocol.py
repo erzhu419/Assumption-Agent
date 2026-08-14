@@ -131,6 +131,14 @@ from hegel_machine.phase2b_actual_unsealed_960_local_attempt_ledger_mechanics_v2
     PHASE2B_ACTUAL_UNSEALED_960_LOCAL_ATTEMPT_LEDGER_MECHANICS_V2_VERSION,
     PHASE2B_ACTUAL_UNSEALED_960_LOCAL_ATTEMPT_LEDGER_SCOPE_V2,
 )
+from hegel_machine.phase2b_actual_unsealed_960_external_custodian_checkpoint_verifier_mechanics_v2 import (
+    PHASE2B_ACTUAL_UNSEALED_960_EXTERNAL_CUSTODIAN_CHECKPOINT_VERIFIER_MECHANICS_V2_AUTHORITY_REQUIREMENT_ID,
+    PHASE2B_ACTUAL_UNSEALED_960_EXTERNAL_CUSTODIAN_CHECKPOINT_VERIFIER_MECHANICS_V2_CLAIM_LEVEL,
+    PHASE2B_ACTUAL_UNSEALED_960_EXTERNAL_CUSTODIAN_CHECKPOINT_VERIFIER_MECHANICS_V2_POLICY_ID,
+    PHASE2B_ACTUAL_UNSEALED_960_EXTERNAL_CUSTODIAN_CHECKPOINT_VERIFIER_MECHANICS_V2_SCHEMA_ID,
+    PHASE2B_ACTUAL_UNSEALED_960_EXTERNAL_CUSTODIAN_CHECKPOINT_VERIFIER_MECHANICS_V2_SCOPE,
+    PHASE2B_ACTUAL_UNSEALED_960_EXTERNAL_CUSTODIAN_CHECKPOINT_VERIFIER_MECHANICS_V2_VERSION,
+)
 from hegel_machine.phase2b_unsealed_960_prediction_scoring_mechanics_v2 import (
     UNSEALED_960_PREDICTION_SCORING_MECHANICS_V2_CLAIM_LEVEL,
     UNSEALED_960_PREDICTION_SCORING_MECHANICS_V2_POLICY_ID,
@@ -762,6 +770,138 @@ LOCAL_ATTEMPT_LEDGER_MECHANICS_REPORT_FIELDS_V2 = (
     | frozenset(LOCAL_ATTEMPT_LEDGER_MECHANICS_FALSE_FIELDS_V2)
 )
 
+EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_PREFIX_V2 = (
+    "actual_unsealed_960_external_custodian_checkpoint_verifier_mechanics_v2_"
+)
+EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_IDENTITY_SUFFIXES_V2 = (
+    "version",
+    "schema_id",
+    "policy_id",
+    "claim_level",
+    "scope",
+    "authority_requirement_id",
+    "expected_candidate_signer_role_count",
+    "expected_required_signature_count",
+    "expected_key_epoch",
+    "expected_checkpoint_sequence",
+    "expected_previous_generation",
+    "expected_new_generation",
+    "expected_cas_condition",
+)
+EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_TRUE_SUFFIXES_V2 = (
+    "component_mechanics_implemented",
+    "supplied_candidate_profile_content_address_mechanics_implemented",
+    "four_role_distinct_candidate_key_registry_mechanics_implemented",
+    "candidate_role_epoch_purpose_domain_binding_mechanics_implemented",
+    "terminal_subject_content_dag_mechanics_implemented",
+    "candidate_store_if_absent_zero_to_one_generation_transition_mechanics_implemented",
+    "candidate_store_receipt_ed25519_verification_mechanics_implemented",
+    "candidate_declared_time_monotonicity_mechanics_implemented",
+    "candidate_time_token_ed25519_verification_mechanics_implemented",
+    "candidate_governance_checkpoint_ed25519_verification_mechanics_implemented",
+    "candidate_custodian_checkpoint_ed25519_verification_mechanics_implemented",
+    "candidate_checkpoint_cross_bindings_mechanics_implemented",
+    "candidate_checkpoint_content_address_mechanics_implemented",
+    "ordinary_exception_atomic_all_false_rejection_mechanics_implemented",
+    "cross_version_rejection_mechanics_implemented",
+    "supplied_candidate_four_role_ed25519_checkpoint_mechanics_test_verified",
+)
+EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_FALSE_SUFFIXES_V2 = (
+    "protocol_report_constructs_candidate_signers",
+    "protocol_report_constructs_candidate_profile",
+    "protocol_report_constructs_candidate_store_receipt",
+    "protocol_report_constructs_candidate_time_token",
+    "protocol_report_constructs_candidate_checkpoint",
+    "protocol_report_executes_external_custodian_checkpoint_verifier",
+    "protocol_report_reads_external_evidence",
+    "protocol_report_reads_external_path",
+    "candidate_profile_content_address_verified",
+    "four_role_distinct_key_registry_verified",
+    "role_epoch_purpose_domain_binding_verified",
+    "terminal_subject_commitment_verified",
+    "store_if_absent_generation_transition_verified",
+    "store_receipt_signature_verified",
+    "declared_time_monotonicity_verified",
+    "time_token_signature_verified",
+    "governance_checkpoint_signature_verified",
+    "custodian_checkpoint_signature_verified",
+    "checkpoint_cross_bindings_verified",
+    "checkpoint_content_address_verified",
+    "ordinary_exception_atomic_rejection_verified",
+    "external_trust_anchor_verified",
+    "registry_issuance_authority_verified",
+    "custodian_identity_verified",
+    "signer_independence_verified",
+    "qualified_cryptographic_backend_verified",
+    "external_store_identity_verified",
+    "external_store_authority_verified",
+    "external_store_receipt_authority_verified",
+    "external_store_rollback_resistance_verified",
+    "external_store_durability_verified",
+    "hostile_administrator_tamper_resistance_verified",
+    "cross_host_global_one_shot_verified",
+    "authoritative_time_source_verified",
+    "authoritative_time_verified",
+    "timeline_observed",
+    "authoritative_timeline_order_verified",
+    "signed_attempt_chain_authority_verified",
+    "local_ledger_externalized_verified",
+    "authoritative_attempt_denominator_verified",
+    "attempt_registry_complete",
+    "retry_authorization_verified",
+    "rerun_policy_enforced",
+    "one_shot_policy_enforced",
+    "terminal_append_receipt_verified",
+    "campaign_finalization_verified",
+    "actual_evidence_inputs_accepted",
+    "admission_evidence_contract_complete",
+    "authoritative_evidence_verifier_implemented",
+    "admission_ready",
+    "execution_authorized",
+    "evidence_supplied",
+    "evidence_verified",
+    "input_archive_authority_verified",
+    "prediction_archive_authority_verified",
+    "answer_commitment_authority_verified",
+    "gate_input_commitment_authority_verified",
+    "pre_reveal_commitment_timing_verified",
+    "runtime_attestation_authority_verified",
+    "recognizer_executed",
+    "runtime_executed",
+    "actual_960_case_run_verified",
+    "scoring_performed",
+    "prediction_scored",
+    "actual_prediction_scoring_evidence",
+    "formal_gate_evaluation_performed",
+    "overall_gate_results_materialized",
+    "slice_gate_results_materialized",
+    "wilson_bounds_evaluated",
+    "preservation_evaluated",
+    "scale_regret_evaluated",
+    "bootstrap_evaluated",
+    "baseline_outputs_verified",
+    "effect_evidence",
+    "formal_c1_report_verified",
+    "c1_exit_evidence",
+)
+EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_IDENTITY_FIELDS_V2 = frozenset(
+    EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_PREFIX_V2 + suffix
+    for suffix in EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_IDENTITY_SUFFIXES_V2
+)
+EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_TRUE_FIELDS_V2 = tuple(
+    EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_PREFIX_V2 + suffix
+    for suffix in EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_TRUE_SUFFIXES_V2
+)
+EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_FALSE_FIELDS_V2 = tuple(
+    EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_PREFIX_V2 + suffix
+    for suffix in EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_FALSE_SUFFIXES_V2
+)
+EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_REPORT_FIELDS_V2 = (
+    EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_IDENTITY_FIELDS_V2
+    | frozenset(EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_TRUE_FIELDS_V2)
+    | frozenset(EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_FALSE_FIELDS_V2)
+)
+
 ACTUAL_REPLAY_INPUT_PREFIX_V2 = "actual_unsealed_960_replay_input_contract_v2_"
 ACTUAL_REPLAY_INPUT_IDENTITY_FIELDS_V2 = frozenset(
     {
@@ -1322,7 +1462,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     report = phase2b_preregistration_report()
     assert report["implementation_id"] == (
         "phase2b_protocol_source_sha256_"
-        "161ff0350751a8436c241041f70ef79aa4c06ee7d54ac2cee9ed19a7603d0b1c"
+        "4c8ba23cd52a93bff08fd5ce0953b958ccb0fc05c9c135b2d96c0faec46652b4"
     )
     assert report["artifact"] == "phase2b_preregistration_readiness_v1"
     assert report["formal_phase2b_exit_claim"] is False
@@ -2315,6 +2455,97 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "filesystem_recovery_required",
     ):
         assert LOCAL_ATTEMPT_LEDGER_MECHANICS_PREFIX_V2 + hidden_suffix not in report
+    assert len(EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_IDENTITY_FIELDS_V2) == 13
+    assert len(EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_TRUE_FIELDS_V2) == 16
+    assert len(EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_FALSE_FIELDS_V2) == 76
+    assert len(EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_REPORT_FIELDS_V2) == 105
+    assert report[EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_PREFIX_V2 + "version"] == (
+        PHASE2B_ACTUAL_UNSEALED_960_EXTERNAL_CUSTODIAN_CHECKPOINT_VERIFIER_MECHANICS_V2_VERSION
+    )
+    assert report[EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_PREFIX_V2 + "schema_id"] == (
+        PHASE2B_ACTUAL_UNSEALED_960_EXTERNAL_CUSTODIAN_CHECKPOINT_VERIFIER_MECHANICS_V2_SCHEMA_ID
+    )
+    assert report[EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_PREFIX_V2 + "policy_id"] == (
+        PHASE2B_ACTUAL_UNSEALED_960_EXTERNAL_CUSTODIAN_CHECKPOINT_VERIFIER_MECHANICS_V2_POLICY_ID
+    )
+    assert report[EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_PREFIX_V2 + "claim_level"] == (
+        PHASE2B_ACTUAL_UNSEALED_960_EXTERNAL_CUSTODIAN_CHECKPOINT_VERIFIER_MECHANICS_V2_CLAIM_LEVEL
+    )
+    assert report[EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_PREFIX_V2 + "scope"] == (
+        PHASE2B_ACTUAL_UNSEALED_960_EXTERNAL_CUSTODIAN_CHECKPOINT_VERIFIER_MECHANICS_V2_SCOPE
+    )
+    assert report[
+        EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_PREFIX_V2
+        + "authority_requirement_id"
+    ] == (
+        PHASE2B_ACTUAL_UNSEALED_960_EXTERNAL_CUSTODIAN_CHECKPOINT_VERIFIER_MECHANICS_V2_AUTHORITY_REQUIREMENT_ID
+    )
+    assert report[EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_PREFIX_V2 + "version"] == (
+        "hegel-machine-phase2b-actual-unsealed-960-external-custodian-"
+        "checkpoint-verifier-mechanics/2"
+    )
+    assert report[EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_PREFIX_V2 + "schema_id"] == (
+        "phase2b_actual_unsealed_960_external_checkpoint_verifier_schema_v2_"
+        "8f62cf96090d3ea24d1b0d6d9f93ff67004d2913b9d573b8670507bf45182968"
+    )
+    assert report[EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_PREFIX_V2 + "policy_id"] == (
+        "phase2b_actual_unsealed_960_external_checkpoint_verifier_policy_v2_"
+        "daff9ee739aa2c44b74f67612761e852b471ea03006d9fd41b08523811b42976"
+    )
+    assert report[EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_PREFIX_V2 + "claim_level"] == (
+        "NON_AUTHORITATIVE_SUPPLIED_EXTERNAL_AUTHORITY_CANDIDATE_MECHANICS_ONLY"
+    )
+    assert report[EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_PREFIX_V2 + "scope"] == (
+        "SUPPLIED_EXTERNAL_AUTHORITY_CANDIDATE_NOT_PRETRUSTED_SINGLE_TERMINAL_"
+        "CHECKPOINT"
+    )
+    assert report[
+        EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_PREFIX_V2
+        + "authority_requirement_id"
+    ] == (
+        "phase2b_actual_unsealed_960_external_authority_requirement_v2_"
+        "fea188566b28e0a8bf50ce0ae760a63e5ee8d0355a737fea30ed8cd8f05779e0"
+    )
+    expected_external_checkpoint_static_values = {
+        "expected_candidate_signer_role_count": 4,
+        "expected_required_signature_count": 4,
+        "expected_key_epoch": 1,
+        "expected_checkpoint_sequence": 0,
+        "expected_previous_generation": 0,
+        "expected_new_generation": 1,
+        "expected_cas_condition": "IF_ABSENT",
+    }
+    for suffix, expected in expected_external_checkpoint_static_values.items():
+        assert (
+            report[EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_PREFIX_V2 + suffix]
+            == expected
+        )
+    for field_name in EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_TRUE_FIELDS_V2:
+        assert report[field_name] is True
+    for field_name in EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_FALSE_FIELDS_V2:
+        assert report[field_name] is False
+    assert {
+        field_name
+        for field_name in report
+        if field_name.startswith(EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_PREFIX_V2)
+    } == EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_REPORT_FIELDS_V2
+    for hidden_suffix in (
+        "ed25519_backend_available",
+        "authority_requirement_statements",
+        "disposition",
+        "reason",
+        "result_id",
+        "profile_id",
+        "subject_id",
+        "store_receipt_id",
+        "time_token_id",
+        "checkpoint_id",
+        "verified_signature_count",
+    ):
+        assert (
+            EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_PREFIX_V2 + hidden_suffix
+            not in report
+        )
     assert report["public_prediction_run_context_v2_schema_version"] == (
         PUBLIC_PREDICTION_RUN_CONTEXT_V2_SCHEMA_VERSION
     )
@@ -2454,6 +2685,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "exact_transform_semantics",
         "actual_unsealed_960_replay_admission_gap_inventory_v2",
         "actual_unsealed_960_replay_input_contract_v2",
+        "actual_unsealed_960_external_custodian_checkpoint_verifier_mechanics_v2",
         "actual_unsealed_960_local_attempt_ledger_mechanics_v2",
         "actual_unsealed_960_signed_attempt_chain_mechanics_v2",
         "formal_unsealed_prediction_scoring_contract_v2",
@@ -2541,6 +2773,12 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "18c19fc9e2ea01a39504f5b38422b9f42029d2ae4faa426fc90a473636cf6a07"
     )
     assert report["component_source_ids"][
+        "actual_unsealed_960_external_custodian_checkpoint_verifier_mechanics_v2"
+    ] == (
+        "sha256:"
+        "078786e4f6ed66bad05598ed839c8cce6f93f6999b92d4c0309f7d3a29da6a5f"
+    )
+    assert report["component_source_ids"][
         "recognizer_prediction_row_mapping_mechanics_v2"
     ] == (
         "sha256:"
@@ -2609,7 +2847,7 @@ def test_checked_in_phase2b_preregistration_artifact_matches_runtime():
     assert artifact == phase2b_preregistration_report()
 
 
-def test_local_attempt_ledger_mechanics_report_artifact_refresh_transition_is_exact():
+def test_external_checkpoint_verifier_report_artifact_refresh_transition_is_exact():
     artifact_path = (
         Path(__file__).resolve().parents[1]
         / "artifacts"
@@ -2617,12 +2855,12 @@ def test_local_attempt_ledger_mechanics_report_artifact_refresh_transition_is_ex
     )
     artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
     report = phase2b_preregistration_report()
-    assert len(report) == 1044
+    assert len(report) == 1149
     if artifact == report:
         return
-    assert len(artifact) == 937
+    assert len(artifact) == 1044
     assert set(report) - set(artifact) == (
-        LOCAL_ATTEMPT_LEDGER_MECHANICS_REPORT_FIELDS_V2
+        EXTERNAL_CHECKPOINT_VERIFIER_MECHANICS_REPORT_FIELDS_V2
     )
     assert set(artifact) - set(report) == set()
     changed_common_fields = {
@@ -2642,7 +2880,9 @@ def test_local_attempt_ledger_mechanics_report_artifact_refresh_transition_is_ex
     )
     assert set(report["component_source_ids"]) - set(
         artifact["component_source_ids"]
-    ) == {"actual_unsealed_960_local_attempt_ledger_mechanics_v2"}
+    ) == {
+        "actual_unsealed_960_external_custodian_checkpoint_verifier_mechanics_v2"
+    }
     assert set(artifact["component_source_ids"]) - set(
         report["component_source_ids"]
     ) == set()
@@ -2691,6 +2931,64 @@ def test_preregistration_report_uses_local_attempt_ledger_as_static_source_only(
         "terminalize_phase2b_actual_unsealed_960_local_attempt_ledger_mechanics_v2",
         "recover_phase2b_actual_unsealed_960_local_attempt_ledger_mechanics_v2",
         "verify_phase2b_actual_unsealed_960_local_attempt_ledger_snapshot_v2",
+    }
+    assert {
+        node.id
+        for node in ast.walk(report_function)
+        if isinstance(node, ast.Name) and node.id in forbidden_symbols
+    } == set()
+    assert not any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == module_alias
+        for node in ast.walk(report_function)
+    )
+
+
+def test_preregistration_report_uses_external_checkpoint_as_static_source_only():
+    protocol_path = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "hegel_machine"
+        / "phase2b_protocol.py"
+    )
+    tree = ast.parse(protocol_path.read_text(encoding="utf-8"))
+    report_function = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "phase2b_preregistration_report"
+    )
+    module_alias = (
+        "phase2b_actual_unsealed_960_external_custodian_"
+        "checkpoint_verifier_mechanics_v2"
+    )
+    referenced_module_attributes = {
+        node.attr
+        for node in ast.walk(report_function)
+        if isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == module_alias
+    }
+    assert referenced_module_attributes == {
+        "PHASE2B_ACTUAL_UNSEALED_960_EXTERNAL_CUSTODIAN_CHECKPOINT_VERIFIER_MECHANICS_V2_VERSION",
+        "PHASE2B_ACTUAL_UNSEALED_960_EXTERNAL_CUSTODIAN_CHECKPOINT_VERIFIER_MECHANICS_V2_SCHEMA_ID",
+        "PHASE2B_ACTUAL_UNSEALED_960_EXTERNAL_CUSTODIAN_CHECKPOINT_VERIFIER_MECHANICS_V2_POLICY_ID",
+        "PHASE2B_ACTUAL_UNSEALED_960_EXTERNAL_CUSTODIAN_CHECKPOINT_VERIFIER_MECHANICS_V2_CLAIM_LEVEL",
+        "PHASE2B_ACTUAL_UNSEALED_960_EXTERNAL_CUSTODIAN_CHECKPOINT_VERIFIER_MECHANICS_V2_SCOPE",
+        "PHASE2B_ACTUAL_UNSEALED_960_EXTERNAL_CUSTODIAN_CHECKPOINT_VERIFIER_MECHANICS_V2_AUTHORITY_REQUIREMENT_ID",
+    }
+    forbidden_symbols = {
+        "ExternalCustodianCandidateSignerV2",
+        "ExternalCustodianAuthorityCandidateProfileV2",
+        "ExternalCustodianDetachedSignatureV2",
+        "ExternalCustodianStoreReceiptCandidateV2",
+        "ExternalCustodianTimeTokenCandidateV2",
+        "ExternalCustodianCheckpointCandidateV2",
+        "ExternalCustodianCheckpointVerifierMechanicsV2",
+        "ExternalCustodianCheckpointVerifierRejectionV2",
+        "verify_phase2b_actual_unsealed_960_external_custodian_checkpoint_verifier_mechanics_v2",
     }
     assert {
         node.id

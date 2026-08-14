@@ -235,6 +235,22 @@ receipt is produced. All 75
 invocation/durability/authority/timeline/actual-960/scoring/gate/effect/C1 flags remain
 false, and the next slice is unchanged.
 
+The V2 external-custodian checkpoint verifier advances only supplied-candidate
+verification mechanics. It can replay a caller-supplied content-addressed terminal
+checkpoint graph with four distinct candidate signer roles, Ed25519 role/epoch/purpose
+binding, a declared store `IF_ABSENT` generation transition from 0 to 1, monotone
+declared time, terminal-subject binding, and store/time/governance/custodian checkpoint
+signatures. This is not proof that the registry was pretrusted, the signers are who they
+claim or independent, the store exists or is authoritative/durable/rollback-resistant,
+the declared time came from an authoritative source, or one-shot use was enforced. The
+component performs no filesystem, clock, network, runner, or scorer operation. Its
+authority-requirement ID records missing live-ceremony requirements rather than
+satisfying them. The preregistration report reads static identities and source bytes
+only: it constructs no candidate input, invokes no verifier, reads no external evidence
+or evidence path, and publishes no backend availability or result ID. Therefore all
+invocation results and external authority/store/time/actual-960/scoring/gate/effect/C1
+claims stay false, and the next slice remains unchanged.
+
 此外可以说：Phase-3A 的 v1.0.2 strict specification 已冻结，Python/Rust shared vectors
 各 48/48 PASS。M2 两端都接受 64,680 个 source candidates，并得到 64,680 个 unique strict
 canonical AST；共同 diagnostic set commitment 是

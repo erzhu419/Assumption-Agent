@@ -372,6 +372,23 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
   fields and 17 source-mechanics flags are
   static; all 75 invocation, durability, authority, timeline, actual-960, scoring, gate,
   effect, and C1 flags remain false. The next slice is unchanged;
+  The independent V2 external-custodian checkpoint verifier remains supplied-candidate
+  mechanics only. It checks a caller-supplied content-addressed checkpoint DAG with four
+  distinct candidate signer roles (`GOVERNANCE_ANCHOR`, `CUSTODIAN`, `STORE_RECEIPT`,
+  `TIME_ATTESTOR`), role/epoch/purpose-domain Ed25519 signatures, a declared
+  `IF_ABSENT` generation `0 -> 1` store transition, monotone declared time, terminal
+  subject binding, and checkpoint cross-bindings. Neither the supplied registry nor
+  signatures establish pretrusted identities, external store authority/durability,
+  rollback resistance, authoritative time, custodian independence, or global one-shot
+  use; the verifier performs no filesystem, clock, network, execution, or scoring
+  operation. Its authority-requirement ID states what a live ceremony would still need,
+  not that the requirements are met. The preregistration report reads only six static
+  identity constants and the source SHA: it constructs no candidate DTO, calls no
+  verifier, reads no external evidence or evidence path, and exposes neither backend
+  availability nor result IDs. Its 13 identity/expectation fields and 16 supplied-
+  candidate source-mechanics/test flags are static; all 76 invocation, authority,
+  store, time, actual-960, scoring, gate, effect, and C1 flags remain false. The next
+  slice is unchanged;
 - seal → prediction commitment → reveal → consumed 的 immutable lifecycle model、
   answer salted-commitment opening 校验和进程内原子防分叉 guard，以及 read-only
   input/root、no network、无 repo/generator/answer mount 的 OCI launch-spec contract；

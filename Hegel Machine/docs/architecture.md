@@ -423,6 +423,23 @@ durability, authority, timeline,
 actual-960, scoring, gate, effect, and C1 claims therefore remain false, and the next
 construction slice remains unchanged.
 
+The V2 external-custodian checkpoint verifier is the next static mechanics layer, not
+an authority layer. For one caller-supplied terminal-checkpoint graph it replays a
+content-addressed candidate profile, four distinct candidate signer roles, exact
+role/epoch/purpose domains, terminal-subject bindings, a signed declared `IF_ABSENT`
+generation `0 -> 1` transition, monotone declared time, store/time/checkpoint Ed25519
+signatures, and checkpoint cross-bindings. The graph and every key are supplied; the
+code does not contact a registry, store, time source, filesystem, network, runner, or
+scorer. Consequently successful mechanics do not establish pretrust, registry issuance,
+custodian independence, external-store identity/authority/durability/rollback resistance,
+authoritative time, local-ledger externalization, or cross-host one-shot enforcement.
+The frozen authority-requirement ID is a requirements statement, not live evidence.
+The preregistration report is static source metadata only: six exported identity
+constants and `__file__` feed identity/source-SHA fields, while no candidate DTO or
+verifier is constructed or called and no evidence/path/backend-availability/result is
+read or exposed. All invocation, authority, store, time, execution, scoring, gate,
+effect, and C1 claims remain false; the roadmap is unchanged.
+
 这些 receipts 仍恒为 `NON_AUTHORITATIVE_MECHANICS_ONLY`。pairwise distinct 不证明 IKM
 独立性；raw-envelope diagnostic 不验证 batch membership 或 secret padding；supplied-secret
 replay 只证明调用方给出的 authorities/run/IKM 可重建同一 bytes。origin authentication、
