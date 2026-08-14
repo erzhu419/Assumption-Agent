@@ -67,6 +67,9 @@ FORMAL_GLOBAL_TRANSFORM_CATALOG_V3_SCHEMA_VERSION: Final = (
 FORMAL_GLOBAL_TRANSFORM_CATALOG_BINDING_V3_SCHEMA_VERSION: Final = (
     "hegel-machine-phase2b-formal-global-transform-catalog-binding/3"
 )
+FORMAL_VARIANT_SUITE_V3_SCHEMA_VERSION: Final = (
+    "hegel-machine-phase2b-formal-variant-suite/3"
+)
 FORMAL_TRUSTED_WIRE_V3_CLAIM_LEVEL: Final = (
     "FORMAL_WIRE_PUBLIC_STRUCTURE_ONLY_NOT_KEY_TRANSCRIPT_NOT_COVERT_AUDIT_NOT_EXECUTION"
 )
@@ -110,6 +113,14 @@ NAMESPACE_REGISTRY_V3: Final = (
 MAXIMUM_PRIVATE_UUID_MAPPINGS_PER_CASE_V3: Final = (
     len(NAMESPACE_REGISTRY_V3) * MAXIMUM_RECORDS_PER_KIND_V3
 )
+MAXIMUM_VARIANT_SUITE_SCHEDULES_V3: Final = 80
+MAXIMUM_VARIANT_SUITE_ENVELOPES_V3: Final = (
+    MAXIMUM_VARIANT_SUITE_SCHEDULES_V3 * MAXIMUM_BATCH_CASES_V3
+)
+MAXIMUM_VARIANT_SUITE_OUTPUT_BYTES_V3: Final = (
+    MAXIMUM_VARIANT_SUITE_ENVELOPES_V3 * ENVELOPE_BYTES_V3
+)
+MAXIMUM_VARIANT_SUITE_SCHEDULE_TOKENS_V3: Final = 8_388_608
 PUBLIC_OBSERVATION_ARRAY_PATHS_V3: Final = (
     "/public_case/graph/observations",
 )
@@ -176,6 +187,9 @@ _SOURCE_TRANSFORM_USE_DOMAIN_V3: Final = b"HEGEL/PHASE2B/FORMAL_TRUSTED_WIRE/SOU
 _TRANSFORM_CATALOG_ROOT_DOMAIN_V3: Final = b"HEGEL/PHASE2B/FORMAL_TRUSTED_WIRE/TRANSFORM_CATALOG_ROOT/V3\x00"
 _TRANSFORM_CATALOG_BINDING_DOMAIN_V3: Final = b"HEGEL/PHASE2B/FORMAL_TRUSTED_WIRE/TRANSFORM_CATALOG_BINDING/V3\x00"
 _VARIANT_CONTEXT_DOMAIN_V3: Final = b"HEGEL/PHASE2B/FORMAL_TRUSTED_WIRE/VARIANT_CONTEXT/V3\x00"
+_VARIANT_SCHEDULE_ROOT_DOMAIN_V3: Final = b"HEGEL/PHASE2B/FORMAL_TRUSTED_WIRE/VARIANT_SCHEDULE_ROOT/V3\x00"
+_VARIANT_BATCH_ENVELOPE_ROOT_DOMAIN_V3: Final = b"HEGEL/PHASE2B/FORMAL_TRUSTED_WIRE/VARIANT_BATCH_ENVELOPE_ROOT/V3\x00"
+_VARIANT_SUITE_ROOT_DOMAIN_V3: Final = b"HEGEL/PHASE2B/FORMAL_TRUSTED_WIRE/VARIANT_SUITE_ROOT/V3\x00"
 _PRIVATE_ROW_DOMAIN_V3: Final = b"HEGEL/PHASE2B/FORMAL_TRUSTED_WIRE/PRIVATE_ROW/V3\x00"
 _BUILD_SUCCESS_DOMAIN_V3: Final = b"HEGEL/PHASE2B/FORMAL_TRUSTED_WIRE/BUILD_SUCCESS/V3\x00"
 _POLICY_DOMAIN_V3: Final = b"HEGEL/PHASE2B/FORMAL_TRUSTED_WIRE/POLICY/V3\x00"
@@ -3551,21 +3565,37 @@ class FormalObservationOrderV3:
     observation_ids: tuple[str, ...]
 
     def __post_init__(self) -> None:
+        observation_ids = self.observation_ids
+        if (
+            type(observation_ids) is not tuple
+            or not observation_ids
+            or len(observation_ids) > MAXIMUM_RECORDS_PER_KIND_V3
+        ):
+            raise ValueError("observation order needs an exact nonempty tuple")
         _prefixed_digest(
             self.envelope_id,
             "phase2b_formal_trusted_envelope_v3_",
             "observation-order envelope ID",
         )
-        if (
-            type(self.observation_ids) is not tuple
-            or not self.observation_ids
-            or len(self.observation_ids) > MAXIMUM_RECORDS_PER_KIND_V3
-        ):
-            raise ValueError("observation order needs an exact nonempty tuple")
-        for value in self.observation_ids:
+        for value in observation_ids:
             _uuid(value, "observation-order UUID")
-        if len(set(self.observation_ids)) != len(self.observation_ids):
+        if len(set(observation_ids)) != len(observation_ids):
             raise ValueError("observation order repeats an observation UUID")
+
+
+def _checked_add_variant_schedule_tokens_v3(current: int, amount: int) -> int:
+    if (
+        type(current) is not int
+        or type(amount) is not int
+        or current < 0
+        or amount < 0
+        or type(MAXIMUM_VARIANT_SUITE_SCHEDULE_TOKENS_V3) is not int
+        or MAXIMUM_VARIANT_SUITE_SCHEDULE_TOKENS_V3 < 1
+        or current > MAXIMUM_VARIANT_SUITE_SCHEDULE_TOKENS_V3
+        or amount > MAXIMUM_VARIANT_SUITE_SCHEDULE_TOKENS_V3 - current
+    ):
+        raise ValueError("formal variant suite schedule token budget exceeded")
+    return current + amount
 
 
 @dataclass(frozen=True, slots=True)
@@ -3575,37 +3605,67 @@ class FormalVariantScheduleV3:
     observation_orders: tuple[FormalObservationOrderV3, ...]
 
     def __post_init__(self) -> None:
+        case_order = self.case_order_envelope_ids
+        uuid_rows = self.uuid_renamings
+        observation_rows = self.observation_orders
         if (
-            type(self.case_order_envelope_ids) is not tuple
-            or not self.case_order_envelope_ids
-            or len(self.case_order_envelope_ids) > MAXIMUM_BATCH_CASES_V3
+            type(case_order) is not tuple
+            or not case_order
+            or len(case_order) > MAXIMUM_BATCH_CASES_V3
         ):
             raise ValueError("variant case order needs an exact nonempty tuple")
-        for value in self.case_order_envelope_ids:
+        if type(uuid_rows) is not tuple:
+            raise TypeError("variant UUID renamings need an exact tuple")
+        if len(uuid_rows) > min(
+            MAXIMUM_BATCH_CASES_V3 * MAXIMUM_PRIVATE_UUID_MAPPINGS_PER_CASE_V3,
+            MAXIMUM_VARIANT_SUITE_SCHEDULE_TOKENS_V3,
+        ):
+            raise ValueError("variant UUID renaming collection exceeds its cap")
+        if type(observation_rows) is not tuple:
+            raise TypeError("variant observation orders need an exact tuple")
+        if len(observation_rows) > MAXIMUM_BATCH_CASES_V3:
+            raise ValueError(
+                "variant observation-order collection exceeds the batch cap"
+            )
+
+        token_count = _checked_add_variant_schedule_tokens_v3(0, 1)
+        token_count = _checked_add_variant_schedule_tokens_v3(
+            token_count, len(case_order)
+        )
+        token_count = _checked_add_variant_schedule_tokens_v3(
+            token_count, len(uuid_rows)
+        )
+        token_count = _checked_add_variant_schedule_tokens_v3(
+            token_count, len(observation_rows)
+        )
+        checked_observation_rows: list[FormalObservationOrderV3] = []
+        for row in observation_rows:
+            if type(row) is not FormalObservationOrderV3:
+                raise TypeError("variant observation-order row type drift")
+            observation_ids = row.observation_ids
+            if type(observation_ids) is not tuple:
+                raise TypeError("variant observation IDs need an exact tuple")
+            if len(observation_ids) > MAXIMUM_RECORDS_PER_KIND_V3:
+                raise ValueError("variant observation IDs exceed the record cap")
+            token_count = _checked_add_variant_schedule_tokens_v3(
+                token_count, len(observation_ids)
+            )
+            checked_observation_rows.append(row)
+
+        # Only bounded collections are traversed from here onward.
+        for value in case_order:
             _prefixed_digest(
                 value,
                 "phase2b_formal_trusted_envelope_v3_",
                 "variant case-order envelope ID",
             )
-        if len(set(self.case_order_envelope_ids)) != len(self.case_order_envelope_ids):
+        if len(set(case_order)) != len(case_order):
             raise ValueError("variant case order repeats an envelope")
-        if type(self.uuid_renamings) is not tuple or any(
-            type(row) is not FormalUuidRenamingV3 for row in self.uuid_renamings
-        ):
-            raise TypeError("variant UUID renamings need exact immutable rows")
-        if len(self.uuid_renamings) > (
-            MAXIMUM_BATCH_CASES_V3 * MAXIMUM_PRIVATE_UUID_MAPPINGS_PER_CASE_V3
-        ):
-            raise ValueError("variant UUID renaming collection exceeds the batch cap")
-        for row in self.uuid_renamings:
+        for row in uuid_rows:
+            if type(row) is not FormalUuidRenamingV3:
+                raise TypeError("variant UUID renaming row type drift")
             row.__post_init__()
-        if type(self.observation_orders) is not tuple or any(
-            type(row) is not FormalObservationOrderV3 for row in self.observation_orders
-        ):
-            raise TypeError("variant observation orders need exact immutable rows")
-        if len(self.observation_orders) > MAXIMUM_BATCH_CASES_V3:
-            raise ValueError("variant observation-order collection exceeds the batch cap")
-        for row in self.observation_orders:
+        for row in checked_observation_rows:
             row.__post_init__()
 
 
@@ -3623,6 +3683,257 @@ class FormalVariantPayloadV3:
         )
         if type(self.payload) is not dict or type(self.padding_bytes) is not bytes:
             raise TypeError("variant payload row type drift")
+
+
+def _variant_schedule_root_v3(schedule: FormalVariantScheduleV3) -> str:
+    if type(schedule) is not FormalVariantScheduleV3:
+        raise TypeError("variant schedule root needs exact schedule type")
+    schedule.__post_init__()
+    body = {
+        "case_order_envelope_ids": list(schedule.case_order_envelope_ids),
+        "observation_orders": [
+            {
+                "envelope_id": row.envelope_id,
+                "observation_ids": list(row.observation_ids),
+            }
+            for row in schedule.observation_orders
+        ],
+        "schema_version": FORMAL_VARIANT_SUITE_V3_SCHEMA_VERSION,
+        "uuid_renamings": [
+            {
+                "namespace": row.namespace,
+                "source_uuid": row.source_uuid,
+                "target_uuid": row.target_uuid,
+            }
+            for row in schedule.uuid_renamings
+        ],
+    }
+    return "sha256:" + hashlib.sha256(
+        _VARIANT_SCHEDULE_ROOT_DOMAIN_V3 + canonicalize_rfc8785_v1(body)
+    ).hexdigest()
+
+
+def _variant_batch_envelope_root_v3(
+    *,
+    source_batch_id: str,
+    schedule_root: str,
+    base_envelope_ids_in_order: tuple[str, ...],
+    variant_envelope_ids_in_order: tuple[str, ...],
+    envelope_sha256_in_order: tuple[str, ...],
+) -> str:
+    _prefixed_digest(
+        source_batch_id,
+        "phase2b_formal_trusted_wire_batch_v3_",
+        "variant suite source batch ID",
+    )
+    _digest(schedule_root, "variant suite schedule root")
+    body = {
+        "base_envelope_ids_in_order": list(base_envelope_ids_in_order),
+        "envelope_sha256_in_order": list(envelope_sha256_in_order),
+        "schedule_root": schedule_root,
+        "schema_version": FORMAL_VARIANT_SUITE_V3_SCHEMA_VERSION,
+        "source_batch_id": source_batch_id,
+        "variant_envelope_ids_in_order": list(variant_envelope_ids_in_order),
+    }
+    return "sha256:" + hashlib.sha256(
+        _VARIANT_BATCH_ENVELOPE_ROOT_DOMAIN_V3
+        + canonicalize_rfc8785_v1(body)
+    ).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class FormalVariantSuiteBatchV3:
+    source_batch_id: str
+    schedule: FormalVariantScheduleV3 = field(repr=False)
+    base_envelope_ids_in_order: tuple[str, ...]
+    envelopes: tuple[bytes, ...] = field(repr=False)
+    schedule_root: str = field(init=False)
+    variant_envelope_ids_in_order: tuple[str, ...] = field(init=False)
+    envelope_sha256_in_order: tuple[str, ...] = field(init=False)
+    batch_envelope_root: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        cached_schedule_root = getattr(self, "schedule_root", None)
+        cached_variant_ids = getattr(
+            self, "variant_envelope_ids_in_order", None
+        )
+        cached_envelope_sha = getattr(self, "envelope_sha256_in_order", None)
+        cached_batch_root = getattr(self, "batch_envelope_root", None)
+        _prefixed_digest(
+            self.source_batch_id,
+            "phase2b_formal_trusted_wire_batch_v3_",
+            "variant suite batch source ID",
+        )
+        schedule = _snapshot_variant_schedules_v3((self.schedule,))[0]
+        schedule_root = _variant_schedule_root_v3(schedule)
+        if (
+            type(self.base_envelope_ids_in_order) is not tuple
+            or not self.base_envelope_ids_in_order
+            or len(self.base_envelope_ids_in_order) > MAXIMUM_BATCH_CASES_V3
+        ):
+            raise ValueError("variant suite batch base order is outside the case cap")
+        for envelope_id in self.base_envelope_ids_in_order:
+            _prefixed_digest(
+                envelope_id,
+                "phase2b_formal_trusted_envelope_v3_",
+                "variant suite base envelope ID",
+            )
+        if len(set(self.base_envelope_ids_in_order)) != len(
+            self.base_envelope_ids_in_order
+        ):
+            raise ValueError("variant suite batch repeats a base envelope ID")
+        if self.base_envelope_ids_in_order != schedule.case_order_envelope_ids:
+            raise ValueError(
+                "variant suite batch base order does not match its schedule preimage"
+            )
+        if (
+            type(self.envelopes) is not tuple
+            or len(self.envelopes) != len(self.base_envelope_ids_in_order)
+            or any(
+                type(envelope) is not bytes
+                or len(envelope) != ENVELOPE_BYTES_V3
+                for envelope in self.envelopes
+            )
+        ):
+            raise ValueError("variant suite batch envelopes do not exactly cover cases")
+        variant_ids = tuple(
+            "phase2b_formal_trusted_envelope_v3_"
+            + hashlib.sha256(_ENVELOPE_ID_DOMAIN_V3 + envelope).hexdigest()
+            for envelope in self.envelopes
+        )
+        if len(set(variant_ids)) != len(variant_ids):
+            raise ValueError("variant suite batch repeats a variant envelope")
+        envelope_sha = tuple(
+            "sha256:" + hashlib.sha256(envelope).hexdigest()
+            for envelope in self.envelopes
+        )
+        root = _variant_batch_envelope_root_v3(
+            source_batch_id=self.source_batch_id,
+            schedule_root=schedule_root,
+            base_envelope_ids_in_order=self.base_envelope_ids_in_order,
+            variant_envelope_ids_in_order=variant_ids,
+            envelope_sha256_in_order=envelope_sha,
+        )
+        if (
+            cached_schedule_root is not None
+            and cached_schedule_root != schedule_root
+        ):
+            raise ValueError("variant suite batch cached schedule root drift")
+        if (
+            cached_variant_ids is not None
+            and cached_variant_ids != variant_ids
+        ):
+            raise ValueError("variant suite batch cached envelope IDs drift")
+        if (
+            cached_envelope_sha is not None
+            and cached_envelope_sha != envelope_sha
+        ):
+            raise ValueError("variant suite batch cached envelope hashes drift")
+        if cached_batch_root is not None and cached_batch_root != root:
+            raise ValueError("variant suite batch cached root drift")
+        object.__setattr__(self, "schedule", schedule)
+        object.__setattr__(self, "schedule_root", schedule_root)
+        object.__setattr__(self, "variant_envelope_ids_in_order", variant_ids)
+        object.__setattr__(self, "envelope_sha256_in_order", envelope_sha)
+        object.__setattr__(self, "batch_envelope_root", root)
+
+
+def _variant_suite_root_v3(
+    *,
+    source_batch_id: str,
+    build_success_id: str,
+    schedule_roots: tuple[str, ...],
+    batch_envelope_roots: tuple[str, ...],
+) -> str:
+    body = {
+        "batch_envelope_roots": list(batch_envelope_roots),
+        "build_success_id": build_success_id,
+        "schedule_roots": list(schedule_roots),
+        "schema_version": FORMAL_VARIANT_SUITE_V3_SCHEMA_VERSION,
+        "source_batch_id": source_batch_id,
+    }
+    return "phase2b_formal_variant_suite_v3_" + hashlib.sha256(
+        _VARIANT_SUITE_ROOT_DOMAIN_V3 + canonicalize_rfc8785_v1(body)
+    ).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class FormalVariantSuiteV3:
+    schema_version: str
+    source_batch_id: str
+    build_success_id: str
+    batches: tuple[FormalVariantSuiteBatchV3, ...] = field(repr=False)
+    schedule_roots: tuple[str, ...] = field(init=False)
+    batch_envelope_roots: tuple[str, ...] = field(init=False)
+    suite_root: str = field(init=False)
+    key_source_transcript_verified: bool = False
+    catalog_membership_verified: bool = False
+    origin_authenticated: bool = False
+    formal_covert_audit: bool = False
+    actual_execution_claimed: bool = False
+
+    def __post_init__(self) -> None:
+        cached_schedule_roots = getattr(self, "schedule_roots", None)
+        cached_batch_roots = getattr(self, "batch_envelope_roots", None)
+        cached_suite_root = getattr(self, "suite_root", None)
+        if self.schema_version != FORMAL_VARIANT_SUITE_V3_SCHEMA_VERSION:
+            raise ValueError("formal variant suite schema drift")
+        _prefixed_digest(
+            self.source_batch_id,
+            "phase2b_formal_trusted_wire_batch_v3_",
+            "variant suite source batch ID",
+        )
+        _prefixed_digest(
+            self.build_success_id,
+            "phase2b_formal_trusted_wire_build_success_v3_",
+            "variant suite build success ID",
+        )
+        if (
+            type(self.batches) is not tuple
+            or not 1 <= len(self.batches) <= MAXIMUM_VARIANT_SUITE_SCHEDULES_V3
+            or any(type(row) is not FormalVariantSuiteBatchV3 for row in self.batches)
+        ):
+            raise ValueError("formal variant suite batch collection is outside its cap")
+        for row in self.batches:
+            row.__post_init__()
+            if row.source_batch_id != self.source_batch_id:
+                raise ValueError("formal variant suite batch is source-spliced")
+        case_counts = {len(row.envelopes) for row in self.batches}
+        if len(case_counts) != 1:
+            raise ValueError("formal variant suite batch case counts disagree")
+        schedule_roots = tuple(row.schedule_root for row in self.batches)
+        if len(set(schedule_roots)) != len(schedule_roots):
+            raise ValueError("formal variant suite repeats a schedule root")
+        batch_roots = tuple(row.batch_envelope_root for row in self.batches)
+        suite_root = _variant_suite_root_v3(
+            source_batch_id=self.source_batch_id,
+            build_success_id=self.build_success_id,
+            schedule_roots=schedule_roots,
+            batch_envelope_roots=batch_roots,
+        )
+        if (
+            cached_schedule_roots is not None
+            and cached_schedule_roots != schedule_roots
+        ):
+            raise ValueError("formal variant suite cached schedule roots drift")
+        if cached_batch_roots is not None and cached_batch_roots != batch_roots:
+            raise ValueError("formal variant suite cached batch roots drift")
+        if cached_suite_root is not None and cached_suite_root != suite_root:
+            raise ValueError("formal variant suite cached root drift")
+        if any(
+            value is not False
+            for value in (
+                self.key_source_transcript_verified,
+                self.catalog_membership_verified,
+                self.origin_authenticated,
+                self.formal_covert_audit,
+                self.actual_execution_claimed,
+            )
+        ):
+            raise ValueError("formal variant suite claim boundary drift")
+        object.__setattr__(self, "schedule_roots", schedule_roots)
+        object.__setattr__(self, "batch_envelope_roots", batch_roots)
+        object.__setattr__(self, "suite_root", suite_root)
 
 
 @dataclass(frozen=True, slots=True)
@@ -4205,6 +4516,38 @@ class _FormalValidatedVariantSnapshotV3:
     success_id: str
 
 
+@dataclass(frozen=True, slots=True)
+class _FormalPreparedVariantValidationV3:
+    snapshot: _FormalValidatedVariantSnapshotV3
+    bases: tuple[_FormalVariantBaseEnvelopeV3, ...]
+    base_payload_rows: tuple[tuple[str, dict[str, object]], ...] = field(
+        repr=False
+    )
+    uuid_domain_rows: tuple[tuple[str, str], ...]
+    private_source_pairs: frozenset[tuple[str, str]]
+    private_source_uuids: frozenset[str]
+
+
+@dataclass(frozen=True, slots=True)
+class _FormalVariantSchedulePlanV3:
+    """Immutable, fully checked mechanical plan for one private suite pass."""
+
+    case_order_envelope_ids: tuple[str, ...]
+    renaming_rows: tuple[tuple[str, str, str], ...]
+    inverse_renaming_rows: tuple[tuple[str, str, str], ...]
+    observation_order_rows: tuple[tuple[str, tuple[str, ...]], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _FormalVariantSuiteReplayEnvelopeV3:
+    """Small internal replay record; it carries no verification claim."""
+
+    envelope_id: str
+    batch_context: FormalBatchContextV3
+    uuid_namespace_rows: tuple[tuple[str, str], ...]
+    observation_ids: tuple[str, ...]
+
+
 def _trusted_envelope_from_primitive_bytes_v3(
     envelope: bytes,
 ) -> FormalTrustedWireEnvelopeV3:
@@ -4509,6 +4852,7 @@ def _snapshot_variant_schedule_v3(
     """Copy primitive schedule state once and freshly validate the copy."""
     if type(schedule) is not FormalVariantScheduleV3:
         raise TypeError("formal variant issuance needs exact schedule type")
+    schedule.__post_init__()
     raw = (
         tuple(schedule.case_order_envelope_ids),
         tuple(
@@ -4527,21 +4871,130 @@ def _snapshot_variant_schedule_v3(
     )
 
 
-def _validated_variant_payload_rows_v3(
-    *,
-    build_success: FormalTrustedWireBuildSuccessV3,
-    schedule: FormalVariantScheduleV3,
-) -> tuple[FormalVariantPayloadV3, ...]:
-    schedule = _snapshot_variant_schedule_v3(schedule)
-    snapshot = _snapshot_and_validate_build_success_for_variants_v3(build_success)
-    bases = {
-        row.envelope_id: row for row in snapshot.variant_context.base_envelopes
-    }
-    if set(schedule.case_order_envelope_ids) != set(bases):
-        raise ValueError("variant case-order schedule is not an exact batch permutation")
+def _snapshot_variant_schedules_v3(
+    schedules: tuple[FormalVariantScheduleV3, ...],
+) -> tuple[FormalVariantScheduleV3, ...]:
+    """Snapshot a bounded complete schedule suite before reading build state."""
+    if (
+        type(schedules) is not tuple
+        or not 1 <= len(schedules) <= MAXIMUM_VARIANT_SUITE_SCHEDULES_V3
+    ):
+        raise ValueError("formal variant suite schedule count is outside 1 through 80")
 
-    base_payloads: dict[str, dict[str, object]] = {}
-    for envelope_id, base in bases.items():
+    # Phase one is resource-only.  In particular, an oversized UUID-row tuple
+    # is rejected from its exact length before a single row attribute is read.
+    # Observation rows are touched only far enough to exact-check their DTO and
+    # immutable ID-tuple length.  No case ID, UUID row, or observation ID value
+    # is traversed until the complete suite token sum is known to fit.
+    preflight: list[
+        tuple[
+            tuple[str, ...],
+            tuple[FormalUuidRenamingV3, ...],
+            tuple[
+                tuple[FormalObservationOrderV3, tuple[str, ...]], ...
+            ],
+        ]
+    ] = []
+    token_count = 0
+    for schedule in schedules:
+        if type(schedule) is not FormalVariantScheduleV3:
+            raise TypeError("formal variant suite needs exact schedule DTOs")
+        case_order = schedule.case_order_envelope_ids
+        uuid_rows = schedule.uuid_renamings
+        observation_rows = schedule.observation_orders
+        if (
+            type(case_order) is not tuple
+            or type(uuid_rows) is not tuple
+            or type(observation_rows) is not tuple
+        ):
+            raise TypeError("formal variant suite schedule containers must be tuples")
+        if (
+            len(case_order) > MAXIMUM_BATCH_CASES_V3
+            or len(observation_rows) > MAXIMUM_BATCH_CASES_V3
+        ):
+            raise ValueError("formal variant suite schedule exceeds the case cap")
+        token_count = _checked_add_variant_schedule_tokens_v3(token_count, 1)
+        token_count = _checked_add_variant_schedule_tokens_v3(
+            token_count, len(case_order)
+        )
+        token_count = _checked_add_variant_schedule_tokens_v3(
+            token_count, len(uuid_rows)
+        )
+        token_count = _checked_add_variant_schedule_tokens_v3(
+            token_count, len(observation_rows)
+        )
+        observation_preflight: list[
+            tuple[FormalObservationOrderV3, tuple[str, ...]]
+        ] = []
+        for row in observation_rows:
+            if type(row) is not FormalObservationOrderV3:
+                raise TypeError("formal variant suite observation row type drift")
+            observation_ids = row.observation_ids
+            if type(observation_ids) is not tuple:
+                raise TypeError(
+                    "formal variant suite observation IDs need an exact tuple"
+                )
+            if len(observation_ids) > MAXIMUM_RECORDS_PER_KIND_V3:
+                raise ValueError(
+                    "formal variant suite observation order exceeds the record cap"
+                )
+            token_count = _checked_add_variant_schedule_tokens_v3(
+                token_count, len(observation_ids)
+            )
+            observation_preflight.append((row, observation_ids))
+        preflight.append(
+            (case_order, uuid_rows, tuple(observation_preflight))
+        )
+
+    # Phase two snapshots primitive content.  Reconstructed DTOs below perform
+    # the normal exact value, UUID, uniqueness, and canonical-order validation.
+    raw_schedules: list[
+        tuple[
+            tuple[str, ...],
+            tuple[tuple[str, str, str], ...],
+            tuple[tuple[str, tuple[str, ...]], ...],
+        ]
+    ] = []
+    for case_order, uuid_rows, observation_rows in preflight:
+        raw_uuid_rows: list[tuple[str, str, str]] = []
+        for row in uuid_rows:
+            if type(row) is not FormalUuidRenamingV3:
+                raise TypeError("formal variant suite UUID row type drift")
+            raw_uuid_rows.append(
+                (row.namespace, row.source_uuid, row.target_uuid)
+            )
+        raw_schedules.append(
+            (
+                tuple(case_order),
+                tuple(raw_uuid_rows),
+                tuple(
+                    (row.envelope_id, tuple(observation_ids))
+                    for row, observation_ids in observation_rows
+                ),
+            )
+        )
+    snapshots = tuple(
+        FormalVariantScheduleV3(
+            raw[0],
+            tuple(FormalUuidRenamingV3(*row) for row in raw[1]),
+            tuple(FormalObservationOrderV3(*row) for row in raw[2]),
+        )
+        for raw in raw_schedules
+    )
+    roots = tuple(_variant_schedule_root_v3(schedule) for schedule in snapshots)
+    if len(set(roots)) != len(roots):
+        raise ValueError("formal variant suite repeats a schedule")
+    return snapshots
+
+
+def _prepare_variant_validation_v3(
+    build_success: FormalTrustedWireBuildSuccessV3,
+) -> _FormalPreparedVariantValidationV3:
+    snapshot = _snapshot_and_validate_build_success_for_variants_v3(build_success)
+    bases = tuple(snapshot.variant_context.base_envelopes)
+    base_payload_rows: list[tuple[str, dict[str, object]]] = []
+    uuid_domain: dict[str, str] = {}
+    for base in bases:
         decoded = _restore_json_integers_v3(
             decode_and_require_canonical_rfc8785_v1(base.canonical_payload_bytes)
         )
@@ -4550,62 +5003,139 @@ def _validated_variant_payload_rows_v3(
         normalized = _normalize_formal_payload_structure_v3(decoded)
         if normalized != decoded:
             raise ValueError("variant base payload bytes are not normalized")
-        base_payloads[envelope_id] = decoded
-
-    uuid_domain: dict[str, str] = {}
-    for envelope_id in tuple(bases):
-        graph = base_payloads[envelope_id]["public_case"]["graph"]  # type: ignore[index]
+        graph = decoded["public_case"]["graph"]  # type: ignore[index]
         for _, namespace, value in _walk_uuid_leaves_v3(graph):
             previous = uuid_domain.setdefault(value, namespace)
             if previous != namespace:
                 raise ValueError("variant base has cross-namespace UUID reuse")
-    private_source_pairs = {
+        base_payload_rows.append((base.envelope_id, decoded))
+    private_source_pairs = frozenset(
         (row.namespace, row.source_uuid)
         for link in snapshot.private_alignment.links_in_public_order
         for row in link.source_to_public_uuid_rows
-    }
-    private_source_uuids = {
+    )
+    private_source_uuids = frozenset(
         source_uuid for _, source_uuid in private_source_pairs
-    }
+    )
     if set(uuid_domain) & private_source_uuids:
         raise ValueError("variant base public UUID domain intersects private source UUIDs")
+    return _FormalPreparedVariantValidationV3(
+        snapshot=snapshot,
+        bases=bases,
+        base_payload_rows=tuple(base_payload_rows),
+        uuid_domain_rows=tuple(sorted(uuid_domain.items())),
+        private_source_pairs=private_source_pairs,
+        private_source_uuids=private_source_uuids,
+    )
+
+
+def _variant_schedule_plan_from_prepared_v3(
+    *,
+    prepared: _FormalPreparedVariantValidationV3,
+    schedule: FormalVariantScheduleV3,
+) -> _FormalVariantSchedulePlanV3:
+    """Validate one complete schedule without touching graph semantics."""
+    if type(prepared) is not _FormalPreparedVariantValidationV3:
+        raise TypeError("variant schedule preparation type drift")
+    if type(schedule) is not FormalVariantScheduleV3:
+        raise TypeError("variant schedule plan needs an exact schedule DTO")
+    schedule.__post_init__()
+    base_ids = tuple(row.envelope_id for row in prepared.bases)
+    if (
+        len(schedule.case_order_envelope_ids) != len(base_ids)
+        or set(schedule.case_order_envelope_ids) != set(base_ids)
+    ):
+        raise ValueError("variant case-order schedule is not an exact batch permutation")
+
+    uuid_domain = dict(prepared.uuid_domain_rows)
     if schedule.uuid_renamings:
         if schedule.uuid_renamings != tuple(
-            sorted(schedule.uuid_renamings, key=lambda row: (row.namespace, row.source_uuid))
+            sorted(
+                schedule.uuid_renamings,
+                key=lambda row: (row.namespace, row.source_uuid),
+            )
         ):
             raise ValueError("variant global UUID bijection rows are not canonical")
         if {row.source_uuid for row in schedule.uuid_renamings} != set(uuid_domain):
-            raise ValueError("variant global UUID bijection does not exactly cover the batch domain")
-        if len({row.target_uuid for row in schedule.uuid_renamings}) != len(uuid_domain):
+            raise ValueError(
+                "variant global UUID bijection does not exactly cover the batch domain"
+            )
+        if len({row.target_uuid for row in schedule.uuid_renamings}) != len(
+            uuid_domain
+        ):
             raise ValueError("variant global UUID targets are not injective")
-        if any(uuid_domain[row.source_uuid] != row.namespace for row in schedule.uuid_renamings):
-            raise ValueError("variant global UUID bijection changes namespace")
         if any(
-            row.target_uuid in private_source_uuids
-            or (row.namespace, row.target_uuid) in private_source_pairs
+            uuid_domain[row.source_uuid] != row.namespace
+            for row in schedule.uuid_renamings
+        ):
+            raise ValueError("variant global UUID bijection changes namespace")
+        if any(row.target_uuid in uuid_domain for row in schedule.uuid_renamings):
+            raise ValueError(
+                "variant target UUID domain intersects the base public UUID domain"
+            )
+        if any(
+            row.target_uuid in prepared.private_source_uuids
+            or (row.namespace, row.target_uuid) in prepared.private_source_pairs
             for row in schedule.uuid_renamings
         ):
             raise ValueError(
                 "variant target UUID domain intersects private source UUIDs"
             )
-        renamings = {
-            (row.namespace, row.source_uuid): row.target_uuid
+        renaming_rows = tuple(
+            (row.namespace, row.source_uuid, row.target_uuid)
             for row in schedule.uuid_renamings
-        }
+        )
     else:
-        renamings = {
-            (namespace, value): value for value, namespace in uuid_domain.items()
-        }
+        renaming_rows = tuple(
+            (namespace, value, value)
+            for value, namespace in prepared.uuid_domain_rows
+        )
+    inverse_rows = tuple(
+        (namespace, target, source)
+        for namespace, source, target in renaming_rows
+    )
 
-    if schedule.observation_orders != tuple(
-        sorted(schedule.observation_orders, key=lambda row: row.envelope_id)
-    ) or len(schedule.observation_orders) != len(bases) or {
-        row.envelope_id for row in schedule.observation_orders
-    } != set(bases):
-        raise ValueError("variant observation schedules must canonically cover every envelope")
-    observation_orders = {
-        row.envelope_id: row.observation_ids for row in schedule.observation_orders
+    if (
+        schedule.observation_orders
+        != tuple(
+            sorted(schedule.observation_orders, key=lambda row: row.envelope_id)
+        )
+        or len(schedule.observation_orders) != len(base_ids)
+        or {row.envelope_id for row in schedule.observation_orders} != set(base_ids)
+    ):
+        raise ValueError(
+            "variant observation schedules must canonically cover every envelope"
+        )
+    return _FormalVariantSchedulePlanV3(
+        case_order_envelope_ids=tuple(schedule.case_order_envelope_ids),
+        renaming_rows=renaming_rows,
+        inverse_renaming_rows=inverse_rows,
+        observation_order_rows=tuple(
+            (row.envelope_id, tuple(row.observation_ids))
+            for row in schedule.observation_orders
+        ),
+    )
+
+
+def _validated_variant_payload_rows_from_prepared_v3(
+    *,
+    prepared: _FormalPreparedVariantValidationV3,
+    schedule: FormalVariantScheduleV3,
+) -> tuple[FormalVariantPayloadV3, ...]:
+    plan = _variant_schedule_plan_from_prepared_v3(
+        prepared=prepared, schedule=schedule
+    )
+    bases = {row.envelope_id: row for row in prepared.bases}
+    base_payloads = dict(prepared.base_payload_rows)
+    renamings = {
+        (namespace, source): target
+        for namespace, source, target in plan.renaming_rows
     }
+    inverse_renamings = {
+        (namespace, target): source
+        for namespace, target, source in plan.inverse_renaming_rows
+    }
+    observation_orders = dict(plan.observation_order_rows)
 
     rows_by_id: dict[str, FormalVariantPayloadV3] = {}
     for envelope_id, base in bases.items():
@@ -4635,10 +5165,7 @@ def _validated_variant_payload_rows_v3(
         restored = deepcopy(normalized)
         restored_graph = _rename_graph_ids_v3(
             restored["public_case"]["graph"],  # type: ignore[index,arg-type]
-            {
-                (namespace, target): source
-                for (namespace, source), target in renamings.items()
-            },
+            inverse_renamings,
         )
         restored_by_id = {
             observation["observation_id"]: observation
@@ -4654,7 +5181,172 @@ def _validated_variant_payload_rows_v3(
         rows_by_id[envelope_id] = FormalVariantPayloadV3(
             envelope_id, normalized, base.padding_bytes
         )
-    return tuple(rows_by_id[value] for value in schedule.case_order_envelope_ids)
+    return tuple(rows_by_id[value] for value in plan.case_order_envelope_ids)
+
+
+def _mechanical_variant_payload_rows_from_prepared_v3(
+    *,
+    prepared: _FormalPreparedVariantValidationV3,
+    schedule: FormalVariantScheduleV3,
+) -> tuple[
+    tuple[FormalVariantPayloadV3, ...],
+    _FormalVariantSchedulePlanV3,
+    tuple[str, ...],
+]:
+    """Issue rename/order-only rows with an exact mechanical inverse check.
+
+    This helper deliberately does not claim that a payload is semantically
+    valid.  It only applies the already validated total bijection and exact
+    permutations, canonicalizes set-like graph collections, recomputes the
+    two public provenance layers, and proves byte-for-byte graph recovery
+    under the inverse schedule.  The suite path subsequently performs a
+    claim-free canonical candidate replay; each consumer remains responsible
+    for strict public decoding before use.
+    """
+    plan = _variant_schedule_plan_from_prepared_v3(
+        prepared=prepared, schedule=schedule
+    )
+    bases = {row.envelope_id: row for row in prepared.bases}
+    base_payloads = dict(prepared.base_payload_rows)
+    renamings = {
+        (namespace, source): target
+        for namespace, source, target in plan.renaming_rows
+    }
+    inverse_renamings = {
+        (namespace, target): source
+        for namespace, target, source in plan.inverse_renaming_rows
+    }
+    observation_orders = dict(plan.observation_order_rows)
+    global_root = prepared.snapshot.public_batch.batch_context.transform_catalog_root
+    changes_uuid_values = any(
+        source != target for _, source, target in plan.renaming_rows
+    )
+
+    rows_by_id: dict[str, FormalVariantPayloadV3] = {}
+    unchanged_ids: list[str] = []
+    for envelope_id, base in bases.items():
+        base_payload = base_payloads[envelope_id]
+        public_mapping = _mapping(
+            base_payload["public_case"],
+            {"graph", "public_provenance_commitment", "schema_version"},
+            "mechanical variant base public case",
+        )
+        base_graph = _mapping(
+            public_mapping["graph"],
+            {item.name for item in fields(FormalCaseGraphV3)},
+            "mechanical variant base graph",
+        )
+        base_observations = _array(
+            base_graph["observations"],
+            "mechanical variant base observations",
+            nonempty=True,
+        )
+        base_observation_ids = tuple(
+            _mapping(
+                observation,
+                {item.name for item in fields(FormalObservationRecordV3)},
+                "mechanical variant base observation",
+            )["observation_id"]
+            for observation in base_observations
+        )
+        requested_order = observation_orders[envelope_id]
+        if (
+            len(requested_order) != len(base_observation_ids)
+            or set(requested_order) != set(base_observation_ids)
+        ):
+            raise ValueError(
+                "variant observation order is not an exact case permutation"
+            )
+        if not changes_uuid_values and requested_order == base_observation_ids:
+            # The base bytes were fully decoded, exact-core checked, and bound
+            # to the private catalog during the one-time preparation.  Reuse
+            # that immutable payload rather than recanonicalizing it for pure
+            # case-order schedules or unaffected rows.
+            rows_by_id[envelope_id] = FormalVariantPayloadV3(
+                envelope_id=envelope_id,
+                payload=base_payload,
+                padding_bytes=base.padding_bytes,
+            )
+            unchanged_ids.append(envelope_id)
+            continue
+        by_id = {
+            observation["observation_id"]: observation
+            for observation in base_observations
+        }
+        ordered_graph = deepcopy(base_graph)
+        ordered_graph["observations"] = [
+            deepcopy(by_id[value]) for value in requested_order
+        ]
+        renamed_graph = _canonicalize_graph_mapping_v3(
+            _rename_graph_ids_v3(ordered_graph, renamings),
+            preserve_observation_order=True,
+        )
+        if changes_uuid_values:
+            _refresh_graph_provenance_v3(renamed_graph, global_root)
+
+        restored_graph = _canonicalize_graph_mapping_v3(
+            _rename_graph_ids_v3(renamed_graph, inverse_renamings),
+            preserve_observation_order=True,
+        )
+        restored_by_id = {
+            observation["observation_id"]: observation
+            for observation in restored_graph["observations"]
+        }
+        if set(restored_by_id) != set(base_observation_ids):
+            raise ValueError("variant inverse observation domain changed")
+        restored_graph["observations"] = [
+            restored_by_id[value] for value in base_observation_ids
+        ]
+        restored_graph = _canonicalize_graph_mapping_v3(
+            restored_graph, preserve_observation_order=True
+        )
+        if changes_uuid_values:
+            _refresh_graph_provenance_v3(restored_graph, global_root)
+        if restored_graph != base_graph:
+            raise ValueError("variant inverse-map replay changed base public graph")
+
+        proposed = deepcopy(base_payload)
+        proposed_public = _mapping(
+            proposed["public_case"],
+            {"graph", "public_provenance_commitment", "schema_version"},
+            "mechanical variant proposed public case",
+        )
+        proposed_public["graph"] = renamed_graph
+        proposed_public["public_provenance_commitment"] = (
+            "sha256:"
+            + hashlib.sha256(
+                _CASE_PROVENANCE_DOMAIN_V3
+                + canonicalize_rfc8785_v1(
+                    {
+                        "transform_catalog_root": global_root,
+                        "graph": renamed_graph,
+                    }
+                )
+            ).hexdigest()
+        )
+        rows_by_id[envelope_id] = FormalVariantPayloadV3(
+            envelope_id=envelope_id,
+            payload=proposed,
+            padding_bytes=base.padding_bytes,
+        )
+    return (
+        tuple(rows_by_id[value] for value in plan.case_order_envelope_ids),
+        plan,
+        tuple(unchanged_ids),
+    )
+
+
+def _validated_variant_payload_rows_v3(
+    *,
+    build_success: FormalTrustedWireBuildSuccessV3,
+    schedule: FormalVariantScheduleV3,
+) -> tuple[FormalVariantPayloadV3, ...]:
+    schedule_snapshot = _snapshot_variant_schedule_v3(schedule)
+    prepared = _prepare_variant_validation_v3(build_success)
+    return _validated_variant_payload_rows_from_prepared_v3(
+        prepared=prepared,
+        schedule=schedule_snapshot,
+    )
 
 
 def make_formal_variant_payloads_v3(
@@ -4788,6 +5480,335 @@ def reencode_formal_variant_batch_v3(
         return envelopes
     except (RecursionError, MemoryError):
         raise ValueError("bounded formal variant batch reencode rejected") from None
+
+
+def _replay_formal_variant_suite_candidate_envelope_v3(
+    *,
+    envelope: bytes,
+    expected_payload_bytes: bytes,
+    expected_padding_bytes: bytes,
+    expected_observation_ids: tuple[str, ...],
+) -> _FormalVariantSuiteReplayEnvelopeV3:
+    """Replay one claim-free candidate without asserting semantic verification.
+
+    The mechanical inverse check has already proved that rename/order are the
+    only graph changes and has freshly produced both provenance layers.  This
+    pass verifies the exact framed bytes, canonical closed wrapper, field
+    partition, UUID closure, requested observation order, and batch facts.  It
+    intentionally does not repeat graph semantics/provenance computation, call
+    the exact-transform core, or create a decoded/verified public DTO.  A
+    consumer must pass every returned envelope through
+    ``decode_and_audit_formal_envelope_v3`` before use.
+    """
+    if (
+        type(envelope) is not bytes
+        or len(envelope) != ENVELOPE_BYTES_V3
+        or type(expected_payload_bytes) is not bytes
+        or type(expected_padding_bytes) is not bytes
+        or type(expected_observation_ids) is not tuple
+    ):
+        raise TypeError("variant suite replay primitive type drift")
+    (
+        magic,
+        version,
+        header_bytes,
+        payload_length,
+        payload_digest,
+        padding_digest,
+    ) = _ENVELOPE_HEADER_V3.unpack(envelope[:ENVELOPE_HEADER_BYTES_V3])
+    if (
+        (magic, version, header_bytes)
+        != (ENVELOPE_MAGIC_V3, ENVELOPE_VERSION_V3, ENVELOPE_HEADER_BYTES_V3)
+        or not 0 < payload_length <= MAXIMUM_PAYLOAD_BYTES_V3
+    ):
+        raise ValueError("variant suite envelope header drift")
+    payload_bytes = envelope[header_bytes : header_bytes + payload_length]
+    padding_bytes = envelope[header_bytes + payload_length :]
+    if (
+        payload_bytes != expected_payload_bytes
+        or padding_bytes != expected_padding_bytes
+        or len(padding_bytes) < MINIMUM_PADDING_BYTES_V3
+        or hashlib.sha256(payload_bytes).digest() != payload_digest
+        or hashlib.sha256(padding_bytes).digest() != padding_digest
+    ):
+        raise ValueError("variant suite envelope byte/digest replay drift")
+    _bounded_json_wire_preflight_v3(payload_bytes)
+    decoded = _restore_json_integers_v3(
+        decode_and_require_canonical_rfc8785_v1(payload_bytes)
+    )
+    if type(decoded) is not dict:
+        raise ValueError("variant suite envelope payload root must be object")
+    _mapping(
+        decoded,
+        {
+            "batch_context",
+            "field_classification_manifest_id",
+            "graph_completeness_policy_id",
+            "public_case",
+            "schema_version",
+        },
+        "variant suite candidate payload",
+    )
+    _reject_forbidden_v3(decoded)
+    if (
+        decoded["schema_version"]
+        != FORMAL_TRUSTED_WIRE_V3_PAYLOAD_SCHEMA_VERSION
+        or decoded["field_classification_manifest_id"]
+        != FIELD_CLASSIFICATION_MANIFEST_ID_V3
+        or decoded["graph_completeness_policy_id"]
+        != FORMAL_CASE_GRAPH_COMPLETENESS_POLICY_ID_V3
+    ):
+        raise ValueError("variant suite candidate payload identity drift")
+    context = _context_from_mapping_v3(decoded["batch_context"])
+    public_mapping = _mapping(
+        decoded["public_case"],
+        {"graph", "public_provenance_commitment", "schema_version"},
+        "variant suite replay public case",
+    )
+    if public_mapping["schema_version"] != FORMAL_PUBLIC_CASE_V3_SCHEMA_VERSION:
+        raise ValueError("variant suite candidate public-case schema drift")
+    graph = _mapping(
+        public_mapping["graph"],
+        {item.name for item in fields(FormalCaseGraphV3)},
+        "variant suite replay graph",
+    )
+    _digest(
+        public_mapping["public_provenance_commitment"],
+        "variant suite candidate case provenance",
+    )
+    classify_public_payload_leaves_v3(decoded)
+    observations = _array(
+        graph["observations"], "variant suite replay observations", nonempty=True
+    )
+    observation_ids = tuple(
+        _mapping(
+            observation,
+            {item.name for item in fields(FormalObservationRecordV3)},
+            "variant suite replay observation",
+        )["observation_id"]
+        for observation in observations
+    )
+    if observation_ids != expected_observation_ids:
+        raise ValueError("variant suite observation order did not replay")
+    uuid_rows = tuple(
+        (public_uuid, namespace)
+        for _, namespace, public_uuid in _walk_uuid_leaves_v3(graph)
+    )
+    envelope_id = "phase2b_formal_trusted_envelope_v3_" + hashlib.sha256(
+        _ENVELOPE_ID_DOMAIN_V3 + envelope
+    ).hexdigest()
+    return _FormalVariantSuiteReplayEnvelopeV3(
+        envelope_id=envelope_id,
+        batch_context=context,
+        uuid_namespace_rows=uuid_rows,
+        observation_ids=observation_ids,
+    )
+
+
+def _verify_formal_variant_suite_batch_replay_v3(
+    *,
+    replayed: tuple[_FormalVariantSuiteReplayEnvelopeV3, ...],
+    expected_context: FormalBatchContextV3,
+) -> None:
+    """Replay the public batch invariants without constructing claim DTOs."""
+    if type(replayed) is not tuple or not replayed or any(
+        type(row) is not _FormalVariantSuiteReplayEnvelopeV3 for row in replayed
+    ):
+        raise TypeError("variant suite batch replay needs exact internal rows")
+    if type(expected_context) is not FormalBatchContextV3:
+        raise TypeError("variant suite expected context type drift")
+    expected_context.__post_init__()
+    if (
+        len(replayed) != int(expected_context.case_count_decimal)
+        or any(row.batch_context != expected_context for row in replayed)
+    ):
+        raise ValueError("variant suite envelope contexts disagree")
+    uuid_owner: dict[str, tuple[str, int]] = {}
+    for row_index, row in enumerate(replayed):
+        for public_uuid, namespace in row.uuid_namespace_rows:
+            previous = uuid_owner.setdefault(public_uuid, (namespace, row_index))
+            if previous[0] != namespace:
+                raise ValueError("variant suite public UUID crosses namespaces")
+            if previous[1] != row_index:
+                raise ValueError(
+                    "variant suite public UUID is reused across envelopes"
+                )
+    if int(expected_context.id_collision_retry_count_decimal) > (
+        len(uuid_owner) * MAXIMUM_UUID_COLLISION_RETRIES_V3
+    ):
+        raise ValueError("variant suite retry count exceeds UUID capacity")
+
+
+def reencode_formal_variant_suite_v3(
+    *,
+    build_success: FormalTrustedWireBuildSuccessV3,
+    schedules: tuple[FormalVariantScheduleV3, ...],
+) -> FormalVariantSuiteV3:
+    """Atomically reencode a bounded suite after one full-build replay.
+
+    The full build, private alignment, immutable bases, and private catalog are
+    snapshotted and validated once.  Every snapshotted schedule still performs
+    its own exact UUID/case/observation validation, mechanical inverse-equality
+    replay, provenance normalization, envelope framing, claim-free canonical
+    candidate replay, and global batch closure.  Returned envelopes are not
+    semantic verification artifacts; every consumer must strictly decode them.
+    Nothing is yielded or externally written before the whole immutable result
+    exists.
+    """
+    try:
+        schedule_snapshots = _snapshot_variant_schedules_v3(schedules)
+        prepared = _prepare_variant_validation_v3(build_success)
+        case_count = len(prepared.bases)
+        output_envelopes = case_count * len(schedule_snapshots)
+        output_bytes = output_envelopes * ENVELOPE_BYTES_V3
+        if (
+            output_envelopes > MAXIMUM_VARIANT_SUITE_ENVELOPES_V3
+            or output_bytes > MAXIMUM_VARIANT_SUITE_OUTPUT_BYTES_V3
+        ):
+            raise ValueError("formal variant suite output resource budget exceeded")
+
+        suite_batches: list[FormalVariantSuiteBatchV3] = []
+        expected_context = prepared.snapshot.public_batch.batch_context
+        source_batch_id = prepared.snapshot.public_batch.batch_id
+        base_envelopes: dict[str, bytes] = {}
+        base_replays: dict[str, _FormalVariantSuiteReplayEnvelopeV3] = {}
+        prepared_base_payloads = dict(prepared.base_payload_rows)
+        for base in prepared.bases:
+            base_payload = prepared_base_payloads[base.envelope_id]
+            base_public = _mapping(
+                base_payload["public_case"],
+                {"graph", "public_provenance_commitment", "schema_version"},
+                "variant suite prepared base public case",
+            )
+            base_graph = _mapping(
+                base_public["graph"],
+                {item.name for item in fields(FormalCaseGraphV3)},
+                "variant suite prepared base graph",
+            )
+            base_observation_ids = tuple(
+                _mapping(
+                    observation,
+                    {item.name for item in fields(FormalObservationRecordV3)},
+                    "variant suite prepared base observation",
+                )["observation_id"]
+                for observation in _array(
+                    base_graph["observations"],
+                    "variant suite prepared base observations",
+                    nonempty=True,
+                )
+            )
+            base_envelope = _frame_payload_with_padding_v3(
+                base.canonical_payload_bytes, base.padding_bytes
+            )
+            base_envelope_id = (
+                "phase2b_formal_trusted_envelope_v3_"
+                + hashlib.sha256(
+                    _ENVELOPE_ID_DOMAIN_V3 + base_envelope
+                ).hexdigest()
+            )
+            if base_envelope_id != base.envelope_id:
+                raise ValueError("variant suite prepared base envelope ID drift")
+            base_envelopes[base.envelope_id] = base_envelope
+            base_replays[base.envelope_id] = _FormalVariantSuiteReplayEnvelopeV3(
+                envelope_id=base_envelope_id,
+                batch_context=expected_context,
+                uuid_namespace_rows=tuple(
+                    (public_uuid, namespace)
+                    for _, namespace, public_uuid in _walk_uuid_leaves_v3(
+                        base_graph
+                    )
+                ),
+                observation_ids=base_observation_ids,
+            )
+        for schedule in schedule_snapshots:
+            rows, plan, unchanged_envelope_ids = (
+                _mechanical_variant_payload_rows_from_prepared_v3(
+                    prepared=prepared,
+                    schedule=schedule,
+                )
+            )
+            if (
+                tuple(row.envelope_id for row in rows)
+                != plan.case_order_envelope_ids
+            ):
+                raise ValueError("variant suite case order drift after validation")
+            renamings = {
+                (namespace, source): target
+                for namespace, source, target in plan.renaming_rows
+            }
+            observation_orders = dict(plan.observation_order_rows)
+            unchanged = set(unchanged_envelope_ids)
+            envelopes_list: list[bytes] = []
+            replayed_list: list[_FormalVariantSuiteReplayEnvelopeV3] = []
+            for row in rows:
+                expected_observation_ids = tuple(
+                    renamings[("observation_id", value)]
+                    for value in observation_orders[row.envelope_id]
+                )
+                if row.envelope_id in unchanged:
+                    envelope = base_envelopes[row.envelope_id]
+                    replayed = base_replays[row.envelope_id]
+                    if replayed.observation_ids != expected_observation_ids:
+                        raise ValueError(
+                            "variant suite unchanged observation order drift"
+                        )
+                else:
+                    payload_bytes = canonicalize_rfc8785_v1(row.payload)
+                    envelope = _frame_payload_with_padding_v3(
+                        payload_bytes, row.padding_bytes
+                    )
+                    replayed = (
+                        _replay_formal_variant_suite_candidate_envelope_v3(
+                            envelope=envelope,
+                            expected_payload_bytes=payload_bytes,
+                            expected_padding_bytes=row.padding_bytes,
+                            expected_observation_ids=expected_observation_ids,
+                        )
+                    )
+                envelopes_list.append(envelope)
+                replayed_list.append(replayed)
+            envelopes = tuple(envelopes_list)
+            replayed_rows = tuple(replayed_list)
+            _verify_formal_variant_suite_batch_replay_v3(
+                replayed=replayed_rows,
+                expected_context=expected_context,
+            )
+            if len({row.envelope_id for row in replayed_rows}) != len(
+                replayed_rows
+            ):
+                raise ValueError(
+                    "variant suite repeats a variant envelope after replay"
+                )
+            for replayed, envelope in zip(replayed_rows, envelopes, strict=True):
+                expected_id = (
+                    "phase2b_formal_trusted_envelope_v3_"
+                    + hashlib.sha256(
+                        _ENVELOPE_ID_DOMAIN_V3 + envelope
+                    ).hexdigest()
+                )
+                if replayed.envelope_id != expected_id:
+                    raise ValueError(
+                        "variant suite envelope identity replay drift"
+                    )
+            suite_batches.append(
+                FormalVariantSuiteBatchV3(
+                    source_batch_id=source_batch_id,
+                    schedule=schedule,
+                    base_envelope_ids_in_order=tuple(
+                        row.envelope_id for row in rows
+                    ),
+                    envelopes=envelopes,
+                )
+            )
+            del rows, replayed_rows, replayed_list, envelopes, envelopes_list
+        return FormalVariantSuiteV3(
+            schema_version=FORMAL_VARIANT_SUITE_V3_SCHEMA_VERSION,
+            source_batch_id=source_batch_id,
+            build_success_id=prepared.snapshot.success_id,
+            batches=tuple(suite_batches),
+        )
+    except (RecursionError, MemoryError):
+        raise ValueError("bounded formal variant suite reencode rejected") from None
 
 
 def _derive_keys_v3(run_id: bytes, keys: FormalWireKeySourcesV3) -> tuple[bytes, bytes, bytes]:
@@ -5904,9 +6925,14 @@ __all__ = tuple(
             "FORMAL_TRUSTED_WIRE_V3_CLAIM_LEVEL",
             "FORMAL_TRUSTED_WIRE_V3_PAYLOAD_SCHEMA_VERSION",
             "FORMAL_TRUSTED_WIRE_V3_SCHEMA_VERSION", "ID_FRAME_DOMAIN_V3",
+            "FORMAL_VARIANT_SUITE_V3_SCHEMA_VERSION",
             "KEY_SOURCE_TRANSCRIPT_V3_SCHEMA_VERSION",
             "MAXIMUM_BATCH_CASES_V3", "MAXIMUM_PAYLOAD_BYTES_V3",
             "MAXIMUM_PRIVATE_UUID_MAPPINGS_PER_CASE_V3",
+            "MAXIMUM_VARIANT_SUITE_ENVELOPES_V3",
+            "MAXIMUM_VARIANT_SUITE_OUTPUT_BYTES_V3",
+            "MAXIMUM_VARIANT_SUITE_SCHEDULES_V3",
+            "MAXIMUM_VARIANT_SUITE_SCHEDULE_TOKENS_V3",
             "MAXIMUM_UUID_COLLISION_RETRIES_V3", "NAMESPACE_REGISTRY_V3",
             "MissingnessChannelV3", "NamespaceUuidChannelV3",
             "OPERATION_CLAUSE_MANIFEST_V3", "PUBLIC_OBSERVATION_ARRAY_PATHS_V3",
@@ -5930,6 +6956,7 @@ __all__ = tuple(
             "project_private_source_label_to_public_v3",
             "project_private_source_labels_to_public_order_v3",
             "reencode_formal_variant_batch_v3",
+            "reencode_formal_variant_suite_v3",
             "reencode_formal_variant_payload_envelope_v3",
             "replay_formal_trusted_wire_batch_v3", "seed_commitment_v3",
             "source_case_commitment_v3", "verify_private_audit_alignment_v3",

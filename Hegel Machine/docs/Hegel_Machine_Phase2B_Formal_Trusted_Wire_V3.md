@@ -287,6 +287,7 @@ reencode_formal_variant_payload_envelope_v3(
     payload=..., padding_bytes=..., build_success=..., schedule=..., envelope_id=...
 )
 reencode_formal_variant_batch_v3(build_success=..., schedule=...)
+reencode_formal_variant_suite_v3(build_success=..., schedules=(...))
 verify_private_audit_alignment_v3(batch=..., alignment=...)
 issue_formal_private_audit_rows_v3(build_success=..., private_payloads_in_source_order=...)
 issue_projected_private_audit_rows_v3(build_success=..., canonical_source_label_bytes_in_source_order=...)
@@ -311,6 +312,50 @@ Every explicit variant target UUID must also be disjoint from the complete
 private source UUID domain captured by the freshly validated alignment. Thus a
 total public-to-source UUID schedule cannot turn a variant into a source-ID
 disclosure channel; rejection occurs before any envelope is framed.
+For a nonempty explicit full rename, the target domain is also disjoint from
+the base public UUID domain; the empty rename remains the sole identity form.
+
+`reencode_formal_variant_suite_v3` is the only batch-of-schedules entrypoint.
+It snapshots the complete primitive schedule tuple before build state, then
+reconstructs and validates the full public batch, key receipt, private
+alignment, private catalog evidence, immutable base bytes, and inverse catalog
+membership exactly once. Each snapshotted schedule independently repeats the
+case/UUID/observation permutation checks, inverse semantic equality,
+provenance normalization, framing, canonical candidate-wrapper replay, padding
+equality, context equality, global UUID ownership, and retry-bound closure.
+Pure case-order schedules and rows unaffected by an observation permutation
+reuse immutable base payload, padding, and envelope bytes that were fully
+replayed during the one-time build snapshot. The function has no generator,
+file write, validated handle, token, or reusable cache capability; failure
+returns no partial result.
+
+The suite is bounded to 80 unique schedules, 81,920 output envelopes,
+5,368,709,120 output bytes, and 8,388,608 primitive schedule tokens. Its
+resource preflight first requires the outer schedule, case-order, UUID-row,
+and observation-row containers to be exact tuples and applies O(1) length
+caps. For each observation-order row, preflight may inspect only the exact DTO
+type and the O(1) length of its exact observation-ID tuple while checked-adding
+the complete primitive-token budget. It does not traverse any case ID, UUID
+row field, or observation ID value until that whole budget has passed.
+Oversized or forged containers therefore fail closed before those element
+contents are accessed.
+
+Its private runtime result stores immutable nested envelope tuples. Every
+batch also carries a freshly reconstructed exact schedule preimage; its base
+envelope order must equal that schedule's case-order tuple. `schedule_root` is
+not a constructor input: the batch freshly derives it from the preimage and
+rejects any preexisting cached root drift. The suite then derives ordered
+schedule roots, per-batch envelope roots, and one suite root. These
+roots content-address atomic candidate bytes; they do not prove structural or
+semantic verification, key origin, catalog authority, covert audit, or
+execution. The suite deliberately does not repeat exact-transform-core work on
+every output. Every consumer must call
+`decode_and_audit_formal_envelope_v3` on every returned envelope before passing
+it to a recognizer or auditor. The public decoder is the verification boundary;
+all suite result claim flags remain false. Directly constructed batch and
+suite DTOs freshly recompute schedule roots, variant envelope IDs, envelope
+hashes, per-batch roots, and the suite root, and reject any caller-supplied
+derived cache that differs.
 
 ## 8. Atomic failures and qualification evidence
 
@@ -342,7 +387,14 @@ bounded JSON, self-minted variant contexts, immutable-base mutation, and
 after-validation TOCTOU hooks. It also covers direct decoded/batch/replay cache
 splices, global cross-envelope UUID reuse, excessive retry counts, the exact
 JSON container-token boundary, the private mapping cap, and a full-domain
-variant map back to private source UUIDs. Those are implementation tests, not an independent corpus or
-covert-audit qualification. The independent qualification layer must retain
-all execution, corpus, recognizer, scorer, and audit claims as false until it
-runs its own bounded evidence procedure.
+variant map back to private source UUIDs. Suite tests independently freeze all
+three root domains, reject duplicate/partial/base-domain schedules and bounded
+resource attacks, exercise schedule/build TOCTOU and atomic failure, prove one
+full-build snapshot per suite, explicitly public-decode every returned envelope
+in the focused consumer test, execute the exact 80-schedule surface over a
+32-case rich batch, and execute the maximum 80-by-1,024 surface (81,920 logical
+fixed envelopes) under the implementation resource bound. Those are
+implementation tests, not an independent corpus or covert-audit qualification.
+The independent qualification layer must retain all execution, corpus,
+recognizer, scorer, and audit claims as false until it runs its own bounded
+evidence procedure.

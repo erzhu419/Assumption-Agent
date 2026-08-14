@@ -1504,6 +1504,34 @@ def test_profile_ids_and_private_public_claim_boundary_are_synchronized() -> Non
     assert profile["private_build_and_variant_surface"][
         "variant_target_uuid_disjoint_from_complete_private_source_uuid_domain"
     ] is True
+    assert profile["private_build_and_variant_surface"][
+        "variant_full_rename_target_uuid_disjoint_from_base_public_uuid_domain"
+    ] is True
+    suite_profile = profile["variant_suite_surface"]
+    assert suite_profile["schema_version"] == wire.FORMAL_VARIANT_SUITE_V3_SCHEMA_VERSION
+    assert suite_profile["maximum_schedules"] == wire.MAXIMUM_VARIANT_SUITE_SCHEDULES_V3
+    assert suite_profile["maximum_output_envelopes"] == wire.MAXIMUM_VARIANT_SUITE_ENVELOPES_V3
+    assert suite_profile["maximum_output_bytes"] == wire.MAXIMUM_VARIANT_SUITE_OUTPUT_BYTES_V3
+    assert suite_profile["maximum_schedule_tokens"] == wire.MAXIMUM_VARIANT_SUITE_SCHEDULE_TOKENS_V3
+    assert suite_profile["early_resource_preflight"].startswith(
+        "EXACT_OUTER_TUPLES_O1_LENGTH_CAPS_AND_CHECKED_ADD"
+    )
+    assert suite_profile["derived_cache_rule"].startswith(
+        "FRESH_RECOMPUTE_SCHEDULE_ROOTS_VARIANT_IDS"
+    )
+    assert suite_profile["schedule_preimage_binding"].startswith(
+        "BATCH_CARRIES_EXACT_SNAPSHOTTED_SCHEDULE"
+    )
+    assert suite_profile["validated_handle_token_or_cache_capability_exported"] is False
+    assert suite_profile[
+        "public_positive_structural_semantic_transcript_catalog_origin_audit_or_execution_claim"
+    ] is False
+    assert suite_profile["candidate_boundary"].startswith(
+        "ATOMIC_CONTENT_ADDRESSED_CANDIDATE_BYTES"
+    )
+    assert suite_profile["consumer_requirement"].startswith(
+        "EVERY_RETURNED_ENVELOPE_MUST_PASS_DECODE_AND_AUDIT"
+    )
     assert profile["key_sources"]["batch_id_binding"].endswith(
         "KEY_SOURCE_RECEIPT_ID"
     )
@@ -2006,6 +2034,552 @@ def test_variant_targets_cannot_reveal_private_source_uuid_domain(
             schedule=safe_schedule,
         )
     ) == 2
+
+
+def test_variant_suite_roots_outputs_and_claim_boundary_are_exact() -> None:
+    suite_signature = inspect.signature(wire.reencode_formal_variant_suite_v3)
+    assert tuple(suite_signature.parameters) == ("build_success", "schedules")
+    assert all(
+        parameter.kind is inspect.Parameter.KEYWORD_ONLY
+        for parameter in suite_signature.parameters.values()
+    )
+    assert "reencode_formal_variant_suite_v3" in wire.__all__
+    assert not any(
+        "prepared" in name.lower() or "validatedvariantsnapshot" in name.lower()
+        for name in wire.__all__
+    )
+    success = build_success((source_case(0), source_case(1)))
+    identity = identity_variant_schedule(success)
+    renamed = identity_variant_schedule(
+        success, renamings=total_nonmonotonic_renamings(success, 201)
+    )
+    reversed_observations: dict[str, tuple[str, ...]] = {}
+    for row in success.public_batch.envelopes:
+        decoded = wire.decode_and_audit_formal_envelope_v3(row.envelope)
+        reversed_observations[row.envelope_id] = tuple(
+            reversed(
+                tuple(
+                    observation.observation_id
+                    for observation in decoded.public_case.graph.observations
+                )
+            )
+        )
+    reordered = identity_variant_schedule(
+        success,
+        case_order=tuple(reversed(success.public_batch.envelope_ids)),
+        observation_order_by_envelope=reversed_observations,
+    )
+    schedules = (identity, renamed, reordered)
+    sequential = tuple(
+        wire.reencode_formal_variant_batch_v3(
+            build_success=success, schedule=schedule
+        )
+        for schedule in schedules
+    )
+    suite = wire.reencode_formal_variant_suite_v3(
+        build_success=success, schedules=schedules
+    )
+    assert type(suite) is wire.FormalVariantSuiteV3
+    assert tuple(batch.envelopes for batch in suite.batches) == sequential
+    assert len(suite.schedule_roots) == len(suite.batch_envelope_roots) == 3
+    assert len(set(suite.schedule_roots)) == 3
+    assert all(
+        value is False
+        for value in (
+            suite.key_source_transcript_verified,
+            suite.catalog_membership_verified,
+            suite.origin_authenticated,
+            suite.formal_covert_audit,
+            suite.actual_execution_claimed,
+        )
+    )
+    assert not hasattr(suite, "structural_replay_verified")
+    for batch in suite.batches:
+        for envelope in batch.envelopes:
+            decoded = wire.decode_and_audit_formal_envelope_v3(envelope)
+            assert decoded.structural_replay_verified is True
+            assert decoded.catalog_membership_verified is False
+
+    def schedule_root(schedule: wire.FormalVariantScheduleV3) -> str:
+        body = {
+            "case_order_envelope_ids": list(schedule.case_order_envelope_ids),
+            "observation_orders": [
+                {
+                    "envelope_id": row.envelope_id,
+                    "observation_ids": list(row.observation_ids),
+                }
+                for row in schedule.observation_orders
+            ],
+            "schema_version": wire.FORMAL_VARIANT_SUITE_V3_SCHEMA_VERSION,
+            "uuid_renamings": [
+                {
+                    "namespace": row.namespace,
+                    "source_uuid": row.source_uuid,
+                    "target_uuid": row.target_uuid,
+                }
+                for row in schedule.uuid_renamings
+            ],
+        }
+        return "sha256:" + hashlib.sha256(
+            b"HEGEL/PHASE2B/FORMAL_TRUSTED_WIRE/VARIANT_SCHEDULE_ROOT/V3\x00"
+            + wire.canonicalize_rfc8785_v1(body)
+        ).hexdigest()
+
+    expected_schedule_roots = tuple(schedule_root(row) for row in schedules)
+    assert suite.schedule_roots == expected_schedule_roots
+    expected_batch_roots: list[str] = []
+    for schedule, batch in zip(schedules, suite.batches, strict=True):
+        expected_variant_ids = [
+            "phase2b_formal_trusted_envelope_v3_"
+            + hashlib.sha256(
+                b"HEGEL/PHASE2B/FORMAL_TRUSTED_WIRE/ENVELOPE/V3\x00"
+                + envelope
+            ).hexdigest()
+            for envelope in batch.envelopes
+        ]
+        expected_envelope_sha = [
+            "sha256:" + hashlib.sha256(envelope).hexdigest()
+            for envelope in batch.envelopes
+        ]
+        body = {
+            "base_envelope_ids_in_order": list(
+                schedule.case_order_envelope_ids
+            ),
+            "envelope_sha256_in_order": expected_envelope_sha,
+            "schedule_root": schedule_root(schedule),
+            "schema_version": wire.FORMAL_VARIANT_SUITE_V3_SCHEMA_VERSION,
+            "source_batch_id": success.public_batch.batch_id,
+            "variant_envelope_ids_in_order": expected_variant_ids,
+        }
+        assert list(batch.variant_envelope_ids_in_order) == expected_variant_ids
+        assert list(batch.envelope_sha256_in_order) == expected_envelope_sha
+        expected_batch_roots.append(
+            "sha256:"
+            + hashlib.sha256(
+                b"HEGEL/PHASE2B/FORMAL_TRUSTED_WIRE/VARIANT_BATCH_ENVELOPE_ROOT/V3\x00"
+                + wire.canonicalize_rfc8785_v1(body)
+            ).hexdigest()
+        )
+    assert suite.batch_envelope_roots == tuple(expected_batch_roots)
+    suite_body = {
+        "batch_envelope_roots": expected_batch_roots,
+        "build_success_id": success.success_id,
+        "schedule_roots": list(expected_schedule_roots),
+        "schema_version": wire.FORMAL_VARIANT_SUITE_V3_SCHEMA_VERSION,
+        "source_batch_id": success.public_batch.batch_id,
+    }
+    assert suite.suite_root == (
+        "phase2b_formal_variant_suite_v3_"
+        + hashlib.sha256(
+            b"HEGEL/PHASE2B/FORMAL_TRUSTED_WIRE/VARIANT_SUITE_ROOT/V3\x00"
+            + wire.canonicalize_rfc8785_v1(suite_body)
+        ).hexdigest()
+    )
+    with pytest.raises(ValueError, match="claim boundary"):
+        replace(suite, formal_covert_audit=True)
+
+    def forge_cached_field(value: object, name: str, forged: object) -> object:
+        result = object.__new__(type(value))
+        for item in fields(value):
+            try:
+                current = getattr(value, item.name)
+            except AttributeError:
+                continue
+            object.__setattr__(result, item.name, current)
+        object.__setattr__(result, name, forged)
+        return result
+
+    first_batch = suite.batches[0]
+    direct_batch = wire.FormalVariantSuiteBatchV3(
+        source_batch_id=success.public_batch.batch_id,
+        schedule=schedules[0],
+        base_envelope_ids_in_order=schedules[0].case_order_envelope_ids,
+        envelopes=first_batch.envelopes,
+    )
+    assert direct_batch.schedule == schedules[0]
+    assert direct_batch.schedule is not schedules[0]
+    assert direct_batch.schedule_root == schedule_root(schedules[0])
+    assert direct_batch.batch_envelope_root == first_batch.batch_envelope_root
+    direct_suite = wire.FormalVariantSuiteV3(
+        schema_version=wire.FORMAL_VARIANT_SUITE_V3_SCHEMA_VERSION,
+        source_batch_id=success.public_batch.batch_id,
+        build_success_id=success.success_id,
+        batches=(direct_batch,),
+    )
+    assert direct_suite.schedule_roots == (schedule_root(schedules[0]),)
+    assert direct_suite.batch_envelope_roots == (
+        direct_batch.batch_envelope_root,
+    )
+    assert "schedule_root" not in inspect.signature(
+        wire.FormalVariantSuiteBatchV3
+    ).parameters
+    with pytest.raises(TypeError, match="unexpected keyword"):
+        wire.FormalVariantSuiteBatchV3(  # type: ignore[call-arg]
+            source_batch_id=success.public_batch.batch_id,
+            schedule=schedules[0],
+            schedule_root=ZERO_DIGEST,
+            base_envelope_ids_in_order=schedules[0].case_order_envelope_ids,
+            envelopes=first_batch.envelopes,
+        )
+    with pytest.raises(ValueError, match="schedule preimage"):
+        wire.FormalVariantSuiteBatchV3(
+            source_batch_id=success.public_batch.batch_id,
+            schedule=schedules[0],
+            base_envelope_ids_in_order=tuple(
+                reversed(schedules[0].case_order_envelope_ids)
+            ),
+            envelopes=first_batch.envelopes,
+        )
+    forged_preimage = forge_cached_field(first_batch, "schedule", schedules[1])
+    with pytest.raises(ValueError, match="cached schedule root"):
+        forged_preimage.__post_init__()  # type: ignore[attr-defined]
+    for name, forged in (
+        ("schedule_root", ZERO_DIGEST),
+        ("variant_envelope_ids_in_order", ("forged",) * len(first_batch.envelopes)),
+        ("envelope_sha256_in_order", (ZERO_DIGEST,) * len(first_batch.envelopes)),
+        ("batch_envelope_root", ZERO_DIGEST),
+    ):
+        forged_batch = forge_cached_field(first_batch, name, forged)
+        with pytest.raises(ValueError, match="cached"):
+            forged_batch.__post_init__()  # type: ignore[attr-defined]
+    for name, forged in (
+        ("schedule_roots", (ZERO_DIGEST,) * len(suite.batches)),
+        ("batch_envelope_roots", (ZERO_DIGEST,) * len(suite.batches)),
+        ("suite_root", "phase2b_formal_variant_suite_v3_" + "0" * 64),
+    ):
+        forged_suite = forge_cached_field(suite, name, forged)
+        with pytest.raises(ValueError, match="cached"):
+            forged_suite.__post_init__()  # type: ignore[attr-defined]
+    for claim in (
+        "key_source_transcript_verified",
+        "catalog_membership_verified",
+        "origin_authenticated",
+        "formal_covert_audit",
+        "actual_execution_claimed",
+    ):
+        with pytest.raises(ValueError, match="claim boundary"):
+            replace(suite, **{claim: True})
+
+
+def test_variant_suite_resource_preflight_is_length_first_and_fail_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base_envelope_id = "phase2b_formal_trusted_envelope_v3_" + "1" * 64
+
+    def forged_schedule(
+        *, uuid_rows: tuple[object, ...], observation_rows: tuple[object, ...]
+    ) -> wire.FormalVariantScheduleV3:
+        result = object.__new__(wire.FormalVariantScheduleV3)
+        object.__setattr__(result, "case_order_envelope_ids", (base_envelope_id,))
+        object.__setattr__(result, "uuid_renamings", uuid_rows)
+        object.__setattr__(result, "observation_orders", observation_rows)
+        return result
+
+    class AttributeSpy:
+        accesses = 0
+
+        def __getattribute__(self, name: str) -> object:
+            type(self).accesses += 1
+            raise AssertionError("oversized row content was accessed: " + name)
+
+    class UnsafeTuple(tuple):
+        iterations = 0
+
+        def __iter__(self) -> object:
+            type(self).iterations += 1
+            raise AssertionError("unsafe tuple was traversed")
+
+    unsafe = forged_schedule(
+        uuid_rows=UnsafeTuple((AttributeSpy(),)), observation_rows=()
+    )
+    with pytest.raises(TypeError, match="exact tuple"):
+        unsafe.__post_init__()
+    with pytest.raises(TypeError, match="containers must be tuples"):
+        wire._snapshot_variant_schedules_v3((unsafe,))
+    assert UnsafeTuple.iterations == AttributeSpy.accesses == 0
+
+    outer_spies = tuple(AttributeSpy() for _ in range(81))
+    with pytest.raises(ValueError, match="outside 1 through 80"):
+        wire._snapshot_variant_schedules_v3(outer_spies)  # type: ignore[arg-type]
+    assert AttributeSpy.accesses == 0
+
+    monkeypatch.setattr(wire, "MAXIMUM_VARIANT_SUITE_SCHEDULE_TOKENS_V3", 5)
+    oversized_uuid = forged_schedule(
+        uuid_rows=tuple(AttributeSpy() for _ in range(5)), observation_rows=()
+    )
+    with pytest.raises(ValueError, match="token budget"):
+        oversized_uuid.__post_init__()
+    with pytest.raises(ValueError, match="token budget"):
+        wire._snapshot_variant_schedules_v3((oversized_uuid,))
+    with pytest.raises(ValueError, match="token budget"):
+        wire.FormalVariantSuiteBatchV3(
+            source_batch_id="phase2b_formal_trusted_wire_batch_v3_" + "1" * 64,
+            schedule=oversized_uuid,
+            base_envelope_ids_in_order=(base_envelope_id,),
+            envelopes=(b"\x00" * wire.ENVELOPE_BYTES_V3,),
+        )
+    assert AttributeSpy.accesses == 0
+
+    observation_row = object.__new__(wire.FormalObservationOrderV3)
+    object.__setattr__(
+        observation_row,
+        "observation_ids",
+        (_uuid(1), _uuid(2), _uuid(3)),
+    )
+    oversized_observation = forged_schedule(
+        uuid_rows=(), observation_rows=(observation_row,)
+    )
+    with pytest.raises(ValueError, match="token budget"):
+        oversized_observation.__post_init__()
+    with pytest.raises(ValueError, match="token budget"):
+        wire._snapshot_variant_schedules_v3((oversized_observation,))
+
+
+def test_variant_suite_bounds_attacks_atomicity_and_one_time_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    success = build_success((source_case(0), source_case(1)))
+    identity = identity_variant_schedule(success)
+    safe = identity_variant_schedule(
+        success, renamings=total_nonmonotonic_renamings(success, 202)
+    )
+    with pytest.raises(ValueError, match="outside 1 through 80"):
+        wire.reencode_formal_variant_suite_v3(
+            build_success=success, schedules=()
+        )
+    with pytest.raises(ValueError):
+        wire.reencode_formal_variant_suite_v3(  # type: ignore[arg-type]
+            build_success=success, schedules=[identity]
+        )
+    with pytest.raises(ValueError, match="outside 1 through 80"):
+        wire.reencode_formal_variant_suite_v3(
+            build_success=success, schedules=(identity,) * 81
+        )
+    identity_duplicate = wire.FormalVariantScheduleV3(
+        tuple(identity.case_order_envelope_ids),
+        tuple(
+            wire.FormalUuidRenamingV3(
+                row.namespace, row.source_uuid, row.target_uuid
+            )
+            for row in identity.uuid_renamings
+        ),
+        tuple(
+            wire.FormalObservationOrderV3(
+                row.envelope_id, tuple(row.observation_ids)
+            )
+            for row in identity.observation_orders
+        ),
+    )
+    assert identity_duplicate is not identity
+    with pytest.raises(ValueError, match="repeats a schedule"):
+        wire.reencode_formal_variant_suite_v3(
+            build_success=success, schedules=(identity, identity_duplicate)
+        )
+
+    explicit_base_targets: list[wire.FormalUuidRenamingV3] = []
+    for envelope in success.public_batch.envelopes:
+        decoded = wire.decode_and_audit_formal_envelope_v3(envelope.envelope)
+        explicit_base_targets.extend(
+            wire.FormalUuidRenamingV3(namespace, value, value)
+            for _, namespace, value in wire._walk_uuid_leaves_v3(
+                decoded.payload["public_case"]["graph"]
+            )
+        )
+    explicit_base_schedule = identity_variant_schedule(
+        success,
+        renamings=tuple(
+            sorted(
+                set(explicit_base_targets),
+                key=lambda row: (row.namespace, row.source_uuid),
+            )
+        ),
+    )
+    with pytest.raises(ValueError, match="base public UUID domain"):
+        wire.reencode_formal_variant_suite_v3(
+            build_success=success, schedules=(explicit_base_schedule,)
+        )
+    partial = identity_variant_schedule(
+        success, renamings=safe.uuid_renamings[:-1]
+    )
+    with pytest.raises(ValueError, match="does not exactly cover"):
+        wire.reencode_formal_variant_suite_v3(
+            build_success=success, schedules=(partial,)
+        )
+
+    snapshot_calls = 0
+    closure_calls = 0
+    suite_closure_calls = 0
+    original_snapshot = wire._snapshot_and_validate_build_success_for_variants_v3
+    original_closure = wire._verify_decoded_batch_closure_v3
+    original_suite_closure = wire._verify_formal_variant_suite_batch_replay_v3
+
+    def count_snapshot(value: wire.FormalTrustedWireBuildSuccessV3) -> object:
+        nonlocal snapshot_calls
+        snapshot_calls += 1
+        return original_snapshot(value)
+
+    def count_closure(decoded: object, context: object) -> None:
+        nonlocal closure_calls
+        closure_calls += 1
+        original_closure(decoded, context)  # type: ignore[arg-type]
+
+    def count_suite_closure(*, replayed: object, expected_context: object) -> None:
+        nonlocal suite_closure_calls
+        suite_closure_calls += 1
+        original_suite_closure(  # type: ignore[arg-type]
+            replayed=replayed, expected_context=expected_context
+        )
+
+    monkeypatch.setattr(
+        wire,
+        "_snapshot_and_validate_build_success_for_variants_v3",
+        count_snapshot,
+    )
+    monkeypatch.setattr(wire, "_verify_decoded_batch_closure_v3", count_closure)
+    monkeypatch.setattr(
+        wire,
+        "_verify_formal_variant_suite_batch_replay_v3",
+        count_suite_closure,
+    )
+    suite = wire.reencode_formal_variant_suite_v3(
+        build_success=success, schedules=(identity, safe)
+    )
+    assert len(suite.batches) == 2
+    assert snapshot_calls == 1
+    # One closure is part of the one-time public-batch reconstruction; each
+    # schedule then has one independent variant-batch closure.
+    assert closure_calls >= 3
+    assert suite_closure_calls == 2
+
+    monkeypatch.setattr(
+        wire,
+        "_snapshot_and_validate_build_success_for_variants_v3",
+        original_snapshot,
+    )
+    monkeypatch.setattr(wire, "_verify_decoded_batch_closure_v3", original_closure)
+    monkeypatch.setattr(
+        wire,
+        "_verify_formal_variant_suite_batch_replay_v3",
+        original_suite_closure,
+    )
+
+    exact_core_calls = 0
+    original_exact_core_verify = (
+        wire._exact_core_v1.verify_exact_transform_core_outputs_v1
+    )
+
+    def count_exact_core(*args: object, **kwargs: object) -> object:
+        nonlocal exact_core_calls
+        exact_core_calls += 1
+        return original_exact_core_verify(*args, **kwargs)
+
+    monkeypatch.setattr(
+        wire._exact_core_v1,
+        "verify_exact_transform_core_outputs_v1",
+        count_exact_core,
+    )
+    wire._prepare_variant_validation_v3(success)
+    preparation_exact_core_calls = exact_core_calls
+    assert preparation_exact_core_calls > 0
+    exact_core_calls = 0
+    wire.reencode_formal_variant_suite_v3(
+        build_success=success, schedules=(identity, safe)
+    )
+    assert exact_core_calls == preparation_exact_core_calls
+    monkeypatch.setattr(
+        wire._exact_core_v1,
+        "verify_exact_transform_core_outputs_v1",
+        original_exact_core_verify,
+    )
+    baseline = wire.reencode_formal_variant_suite_v3(
+        build_success=success, schedules=(identity, safe)
+    )
+    original_prepare = wire._prepare_variant_validation_v3
+
+    def mutate_after_schedule_snapshot(
+        value: wire.FormalTrustedWireBuildSuccessV3,
+    ) -> object:
+        object.__setattr__(identity, "case_order_envelope_ids", ())
+        return original_prepare(value)
+
+    monkeypatch.setattr(
+        wire, "_prepare_variant_validation_v3", mutate_after_schedule_snapshot
+    )
+    replayed = wire.reencode_formal_variant_suite_v3(
+        build_success=success, schedules=(identity, safe)
+    )
+    assert replayed.suite_root == baseline.suite_root
+    assert tuple(row.envelopes for row in replayed.batches) == tuple(
+        row.envelopes for row in baseline.batches
+    )
+    monkeypatch.setattr(wire, "_prepare_variant_validation_v3", original_prepare)
+
+    original_frame = wire._frame_payload_with_padding_v3
+    frame_calls = 0
+
+    def fail_in_second_schedule(payload: bytes, padding: bytes) -> bytes:
+        nonlocal frame_calls
+        frame_calls += 1
+        if frame_calls == len(success.public_batch.envelopes) + 1:
+            raise RuntimeError("injected atomic suite failure")
+        return original_frame(payload, padding)
+
+    monkeypatch.setattr(
+        wire, "_frame_payload_with_padding_v3", fail_in_second_schedule
+    )
+    partial_result: wire.FormalVariantSuiteV3 | None = None
+    with pytest.raises(RuntimeError, match="injected atomic suite failure"):
+        partial_result = wire.reencode_formal_variant_suite_v3(
+            build_success=success,
+            schedules=(identity_variant_schedule(success), safe),
+        )
+    assert partial_result is None
+    assert frame_calls == len(success.public_batch.envelopes) + 1
+    assert inspect.isgeneratorfunction(wire.reencode_formal_variant_suite_v3) is False
+    monkeypatch.setattr(wire, "_frame_payload_with_padding_v3", original_frame)
+
+    malformed_frame_calls = 0
+
+    def corrupt_internal_frame(payload: bytes, padding: bytes) -> bytes:
+        nonlocal malformed_frame_calls
+        malformed_frame_calls += 1
+        framed = original_frame(payload, padding)
+        if malformed_frame_calls == len(success.public_batch.envelopes) + 1:
+            return framed[:-1] + bytes((framed[-1] ^ 1,))
+        return framed
+
+    monkeypatch.setattr(
+        wire, "_frame_payload_with_padding_v3", corrupt_internal_frame
+    )
+    malformed_result: wire.FormalVariantSuiteV3 | None = None
+    with pytest.raises(ValueError, match="byte/digest replay drift"):
+        malformed_result = wire.reencode_formal_variant_suite_v3(
+            build_success=success, schedules=(safe,)
+        )
+    assert malformed_result is None
+    assert malformed_frame_calls == len(success.public_batch.envelopes) + 1
+    monkeypatch.setattr(wire, "_frame_payload_with_padding_v3", original_frame)
+
+    monkeypatch.setattr(wire, "MAXIMUM_VARIANT_SUITE_SCHEDULE_TOKENS_V3", 1)
+    with pytest.raises(ValueError, match="token budget"):
+        wire.reencode_formal_variant_suite_v3(
+            build_success=success, schedules=(safe,)
+        )
+    monkeypatch.setattr(
+        wire,
+        "MAXIMUM_VARIANT_SUITE_SCHEDULE_TOKENS_V3",
+        8_388_608,
+    )
+
+    def exhausted(_: wire.FormalTrustedWireBuildSuccessV3) -> object:
+        raise MemoryError
+
+    monkeypatch.setattr(wire, "_prepare_variant_validation_v3", exhausted)
+    with pytest.raises(ValueError) as failure:
+        wire.reencode_formal_variant_suite_v3(
+            build_success=success, schedules=(safe,)
+        )
+    assert str(failure.value) == "bounded formal variant suite reencode rejected"
 
 
 def test_variant_surface_requires_full_build_and_rejects_self_minted_context() -> None:
@@ -3962,6 +4536,198 @@ def test_combined_uuid_observation_and_case_order_variant_replays() -> None:
     assert type(replay) is wire.FormalTrustedWireBatchReplayV3
     assert replay.structural_replay_verified is True
     assert replay.catalog_membership_verified is False
+
+
+def test_variant_suite_rich32_exact_80_schedule_surface() -> None:
+    success = build_success(tuple(source_case(index) for index in range(32)))
+    base_orders: dict[str, tuple[str, ...]] = {}
+    uuid_domain: dict[str, str] = {}
+    for envelope in success.public_batch.envelopes:
+        decoded = wire.decode_and_audit_formal_envelope_v3(envelope.envelope)
+        base_orders[envelope.envelope_id] = tuple(
+            observation.observation_id
+            for observation in decoded.public_case.graph.observations
+        )
+        for _, namespace, value in wire._walk_uuid_leaves_v3(
+            decoded.payload["public_case"]["graph"]
+        ):
+            assert uuid_domain.setdefault(value, namespace) == namespace
+
+    def schedule(
+        *,
+        case_order: tuple[str, ...] | None = None,
+        renamings: tuple[wire.FormalUuidRenamingV3, ...] = (),
+        observation_override: tuple[str, tuple[str, ...]] | None = None,
+    ) -> wire.FormalVariantScheduleV3:
+        overrides = {} if observation_override is None else {
+            observation_override[0]: observation_override[1]
+        }
+        return wire.FormalVariantScheduleV3(
+            success.public_batch.envelope_ids if case_order is None else case_order,
+            renamings,
+            tuple(
+                wire.FormalObservationOrderV3(
+                    envelope_id, overrides.get(envelope_id, observation_ids)
+                )
+                for envelope_id, observation_ids in sorted(base_orders.items())
+            ),
+        )
+
+    sources = sorted(uuid_domain)
+    rename_schedules: list[wire.FormalVariantScheduleV3] = []
+    for variant in range(32):
+        targets = [
+            _uuid(30_000_000_000 + variant * 100_000 + index)
+            for index in range(len(sources))
+        ]
+        targets.reverse()
+        renamings = tuple(
+            sorted(
+                (
+                    wire.FormalUuidRenamingV3(
+                        uuid_domain[source], source, target
+                    )
+                    for source, target in zip(sources, targets, strict=True)
+                ),
+                key=lambda row: (row.namespace, row.source_uuid),
+            )
+        )
+        rename_schedules.append(schedule(renamings=renamings))
+
+    first_envelope_id = success.public_batch.envelope_ids[0]
+    observation_schedules = tuple(
+        schedule(observation_override=(first_envelope_id, order))
+        for order in itertools.islice(
+            itertools.permutations(base_orders[first_envelope_id]), 1, 17
+        )
+    )
+    envelope_ids = success.public_batch.envelope_ids
+    case_orders = tuple(
+        envelope_ids[offset:] + envelope_ids[:offset]
+        for offset in range(1, len(envelope_ids))
+    ) + (tuple(reversed(envelope_ids)),)
+    case_schedules = tuple(schedule(case_order=order) for order in case_orders)
+    schedules = (
+        *rename_schedules,
+        *observation_schedules,
+        *case_schedules,
+    )
+    assert len(schedules) == wire.MAXIMUM_VARIANT_SUITE_SCHEDULES_V3 == 80
+    suite = wire.reencode_formal_variant_suite_v3(
+        build_success=success, schedules=schedules
+    )
+    assert len(suite.batches) == len(suite.schedule_roots) == 80
+    assert len(set(suite.schedule_roots)) == 80
+    assert all(len(batch.envelopes) == 32 for batch in suite.batches)
+    assert sum(len(batch.envelopes) for batch in suite.batches) == 2_560
+    assert sum(
+        len(envelope)
+        for batch in suite.batches
+        for envelope in batch.envelopes
+    ) == 2_560 * wire.ENVELOPE_BYTES_V3
+
+
+def test_variant_suite_capacity_1024_exact_80_schedule_surface() -> None:
+    success = build_success(tuple(source_case(index) for index in range(1_024)))
+    base_orders: dict[str, tuple[str, ...]] = {}
+    uuid_domain: dict[str, str] = {}
+    for envelope in success.public_batch.envelopes:
+        decoded = wire.decode_and_audit_formal_envelope_v3(envelope.envelope)
+        base_orders[envelope.envelope_id] = tuple(
+            observation.observation_id
+            for observation in decoded.public_case.graph.observations
+        )
+        for _, namespace, value in wire._walk_uuid_leaves_v3(
+            decoded.payload["public_case"]["graph"]
+        ):
+            assert uuid_domain.setdefault(value, namespace) == namespace
+
+    def schedule(
+        *,
+        case_order: tuple[str, ...] | None = None,
+        renamings: tuple[wire.FormalUuidRenamingV3, ...] = (),
+        observation_override: tuple[str, tuple[str, ...]] | None = None,
+    ) -> wire.FormalVariantScheduleV3:
+        overrides = (
+            {}
+            if observation_override is None
+            else {observation_override[0]: observation_override[1]}
+        )
+        return wire.FormalVariantScheduleV3(
+            success.public_batch.envelope_ids
+            if case_order is None
+            else case_order,
+            renamings,
+            tuple(
+                wire.FormalObservationOrderV3(
+                    envelope_id, overrides.get(envelope_id, observation_ids)
+                )
+                for envelope_id, observation_ids in sorted(base_orders.items())
+            ),
+        )
+
+    sources = sorted(uuid_domain)
+    schedules: list[wire.FormalVariantScheduleV3] = []
+    for variant in range(32):
+        targets = [
+            _uuid(40_000_000_000 + variant * 1_000_000 + index)
+            for index in range(len(sources))
+        ]
+        targets.reverse()
+        schedules.append(
+            schedule(
+                renamings=tuple(
+                    sorted(
+                        (
+                            wire.FormalUuidRenamingV3(
+                                uuid_domain[source], source, target
+                            )
+                            for source, target in zip(
+                                sources, targets, strict=True
+                            )
+                        ),
+                        key=lambda row: (row.namespace, row.source_uuid),
+                    )
+                )
+            )
+        )
+    first_envelope_id = success.public_batch.envelope_ids[0]
+    schedules.extend(
+        schedule(observation_override=(first_envelope_id, order))
+        for order in itertools.islice(
+            itertools.permutations(base_orders[first_envelope_id]), 1, 17
+        )
+    )
+    envelope_ids = success.public_batch.envelope_ids
+    schedules.extend(
+        schedule(case_order=envelope_ids[offset:] + envelope_ids[:offset])
+        for offset in range(1, 32)
+    )
+    schedules.append(schedule(case_order=tuple(reversed(envelope_ids))))
+    assert len(schedules) == wire.MAXIMUM_VARIANT_SUITE_SCHEDULES_V3 == 80
+
+    suite = wire.reencode_formal_variant_suite_v3(
+        build_success=success, schedules=tuple(schedules)
+    )
+    assert len(suite.batches) == len(suite.schedule_roots) == 80
+    assert len(set(suite.schedule_roots)) == 80
+    assert all(len(batch.envelopes) == 1_024 for batch in suite.batches)
+    assert sum(len(batch.envelopes) for batch in suite.batches) == 81_920
+    assert sum(
+        len(envelope)
+        for batch in suite.batches
+        for envelope in batch.envelopes
+    ) == wire.MAXIMUM_VARIANT_SUITE_OUTPUT_BYTES_V3
+    assert all(
+        value is False
+        for value in (
+            suite.key_source_transcript_verified,
+            suite.catalog_membership_verified,
+            suite.origin_authenticated,
+            suite.formal_covert_audit,
+            suite.actual_execution_claimed,
+        )
+    )
 
 
 def test_payload_exact_boundary_and_plus_one() -> None:
