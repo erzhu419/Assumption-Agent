@@ -217,6 +217,24 @@ not call the verifier. Consequently all report-level instance-verification and b
 claims remain false, and the next construction slice remains
 `actual_unsealed_960_case_prediction_scoring_replay_v2`.
 
+The V2 local-attempt-ledger component closes a local persistence-mechanics gap only.
+It is scoped to attempt 0 in one caller-owned POSIX directory and a fixed four-name
+namespace implementing `EMPTY -> OPEN -> TERMINAL_CONSUMED`. Componentwise no-follow
+directory opens, owner/mode checks, a nonblocking cooperating-process directory lock,
+bounded canonical replay, hard-link no-replace publication, file/directory `fsync`,
+crash-window recovery, parent identity recheck, and fixed-name special-file/TOCTOU
+defenses are implemented and mechanically tested. Terminalization re-verifies the
+supplied test-only signed chain. None of this establishes external custodian authority,
+append-only or same-UID tamper resistance, deletion/rollback resistance, qualified
+power-loss or remote-filesystem durability, cross-host global one-shot enforcement,
+or authoritative time. `OPEN` is not execution authorization, and an existing `OPEN`
+leaves the execution state unknown. The preregistration report uses the component as
+static source metadata only: no anchor, chain, ledger-state directory/record path, API
+invocation, ledger filesystem access, environment-availability result, or runtime
+receipt is produced. All 75
+invocation/durability/authority/timeline/actual-960/scoring/gate/effect/C1 flags remain
+false, and the next slice is unchanged.
+
 此外可以说：Phase-3A 的 v1.0.2 strict specification 已冻结，Python/Rust shared vectors
 各 48/48 PASS。M2 两端都接受 64,680 个 source candidates，并得到 64,680 个 unique strict
 canonical AST；共同 diagnostic set commitment 是

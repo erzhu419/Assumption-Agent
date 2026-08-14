@@ -378,6 +378,28 @@ does not call the verifier. All report-level instance-verification and broad cla
 therefore remain false. The next construction slice remains
 `actual_unsealed_960_case_prediction_scoring_replay_v2`.
 
+The independent V2 local-attempt-ledger component is limited to
+`NON_AUTHORITATIVE_LOCAL_FILESYSTEM_ATTEMPT_LEDGER_MECHANICS_ONLY` and
+`CALLER_OWNED_SINGLE_DIRECTORY_ATTEMPT_ZERO_ONLY`. Its expected static state graph is
+`EMPTY -> OPEN -> TERMINAL_CONSUMED`; its expected namespace consists only of
+`attempt-000.open.json`, `.attempt-000.open.json.next`,
+`attempt-000.terminal.json`, and `.attempt-000.terminal.json.next`. The source
+implements componentwise no-follow mode-0700 directory acquisition, a nonblocking
+cooperating-process directory lock, bounded namespace/record validation, exact
+mode-0600 regular records, hard-link no-replace publication, file/directory `fsync`,
+explicit crash-window recovery, special-file/hardlink/parent-rebind defenses, and
+test-only signed-chain re-verification before terminalization. These local mechanics
+are not external authority, hostile-owner tamper resistance, qualified storage
+durability, or global one-shot enforcement. An `OPEN` record is not execution
+authorization and cannot determine whether execution occurred. The preregistration
+report publishes exactly fifteen identity/expected-namespace fields, seventeen
+source-mechanics flags, and the source SHA. It constructs no anchor, chain, or
+ledger-state directory/record path; calls none of open/terminalize/recover/
+snapshot-verify; touches no ledger filesystem; and exposes no runtime availability or
+result. Its seventy-five invocation,
+durability, authority, timeline, actual-960, scoring, gate, effect, and C1 flags are
+false. The next construction slice remains unchanged.
+
 Pairwise distinct IKM values do not attest independent generation. The raw-envelope
 diagnostic verifies typed payload identity and direct transform replay but not batch
 membership or secret padding; supplied-secret replay proves only that the supplied

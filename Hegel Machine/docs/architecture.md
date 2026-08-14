@@ -402,6 +402,27 @@ only: it constructs no signed-chain object and does not call the verifier, so ev
 instance-verification and broad claim remains false. The next construction slice is
 unchanged.
 
+The V2 local-attempt-ledger layer is a separate, non-authoritative local persistence
+mechanics boundary. It fixes attempt index 0 and four names in one caller-owned POSIX
+directory, with the state graph `EMPTY -> OPEN -> TERMINAL_CONSUMED`. The source uses
+componentwise no-follow directory opens, exact owner/mode checks, a nonblocking
+directory `flock`, bounded namespace scans and canonical reads, hard-link no-replace
+publication, file/directory `fsync`, explicit crash-window recovery, and fixed-name
+symlink/hardlink/FIFO/socket plus parent-rebind defenses. The terminal transition
+re-verifies the exact test-only signed chain while holding the local directory lock.
+These are cooperating-process/source mechanics, not an external custodian or hostile
+same-UID security boundary. They do not qualify power-loss or remote-filesystem
+durability, prevent owner deletion/rollback, enforce cross-host global one-shot use,
+observe authoritative time, or authorize execution. In particular, `OPEN` does not
+mean “safe to run” and an already-present `OPEN` does not prove that no execution
+occurred. The preregistration report is deliberately static: it reads five exported
+identity constants plus `__file__` for the component SHA, constructs no ledger-state
+input or ledger-state directory/record path, calls no ledger API, touches no ledger
+directory, and reports no environment availability or runtime result. All instance,
+durability, authority, timeline,
+actual-960, scoring, gate, effect, and C1 claims therefore remain false, and the next
+construction slice remains unchanged.
+
 这些 receipts 仍恒为 `NON_AUTHORITATIVE_MECHANICS_ONLY`。pairwise distinct 不证明 IKM
 独立性；raw-envelope diagnostic 不验证 batch membership 或 secret padding；supplied-secret
 replay 只证明调用方给出的 authorities/run/IKM 可重建同一 bytes。origin authentication、

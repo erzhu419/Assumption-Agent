@@ -354,6 +354,24 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
   signed-chain object or call the verifier, and all instance verification and broad
   claims remain false. The next slice remains
   `actual_unsealed_960_case_prediction_scoring_replay_v2`;
+  The independent V2 local-attempt-ledger component now supplies only
+  `NON_AUTHORITATIVE_LOCAL_FILESYSTEM_ATTEMPT_LEDGER_MECHANICS_ONLY` for attempt 0 in
+  one caller-owned POSIX directory. Its fixed four-name namespace implements the
+  `EMPTY -> OPEN -> TERMINAL_CONSUMED` source mechanics with componentwise no-follow
+  directory opens, a nonblocking cooperating-process directory lock, strict canonical
+  mode-0600 records, hard-link no-replace publication, file/directory `fsync`, bounded
+  crash-window recovery, parent-path identity recheck, and symlink/hardlink/FIFO/socket/
+  TOCTOU defenses. Terminalization internally re-verifies the supplied test-only signed
+  chain. This does not make the directory externally trusted, append-only, hostile-owner
+  tamper/rollback resistant, hardware/remote-filesystem durable, or cross-host globally
+  one-shot. `OPEN` is not execution authorization; an existing `OPEN` leaves execution
+  state unknown. The preregistration report imports only static identity constants and
+  hashes the source file: it constructs no anchor, chain, or ledger-state directory/
+  record path, calls none of the four ledger APIs, touches no ledger filesystem, and
+  exposes no runtime availability or invocation result. Its 15 identity/namespace
+  fields and 17 source-mechanics flags are
+  static; all 75 invocation, durability, authority, timeline, actual-960, scoring, gate,
+  effect, and C1 flags remain false. The next slice is unchanged;
 - seal → prediction commitment → reveal → consumed 的 immutable lifecycle model、
   answer salted-commitment opening 校验和进程内原子防分叉 guard，以及 read-only
   input/root、no network、无 repo/generator/answer mount 的 OCI launch-spec contract；

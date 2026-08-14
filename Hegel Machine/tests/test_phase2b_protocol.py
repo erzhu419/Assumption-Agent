@@ -1,3 +1,4 @@
+import ast
 import json
 from dataclasses import replace
 from pathlib import Path
@@ -122,6 +123,13 @@ from hegel_machine.phase2b_actual_unsealed_960_signed_attempt_chain_mechanics_v2
     PHASE2B_ACTUAL_UNSEALED_960_SIGNED_ATTEMPT_CHAIN_MECHANICS_V2_SCHEMA_ID,
     PHASE2B_ACTUAL_UNSEALED_960_SIGNED_ATTEMPT_CHAIN_MECHANICS_V2_VERSION,
     PHASE2B_ACTUAL_UNSEALED_960_SIGNED_ATTEMPT_CHAIN_TEST_ANCHOR_SCOPE_V2,
+)
+from hegel_machine.phase2b_actual_unsealed_960_local_attempt_ledger_mechanics_v2 import (
+    PHASE2B_ACTUAL_UNSEALED_960_LOCAL_ATTEMPT_LEDGER_MECHANICS_V2_CLAIM_LEVEL,
+    PHASE2B_ACTUAL_UNSEALED_960_LOCAL_ATTEMPT_LEDGER_MECHANICS_V2_POLICY_ID,
+    PHASE2B_ACTUAL_UNSEALED_960_LOCAL_ATTEMPT_LEDGER_MECHANICS_V2_SCHEMA_ID,
+    PHASE2B_ACTUAL_UNSEALED_960_LOCAL_ATTEMPT_LEDGER_MECHANICS_V2_VERSION,
+    PHASE2B_ACTUAL_UNSEALED_960_LOCAL_ATTEMPT_LEDGER_SCOPE_V2,
 )
 from hegel_machine.phase2b_unsealed_960_prediction_scoring_mechanics_v2 import (
     UNSEALED_960_PREDICTION_SCORING_MECHANICS_V2_CLAIM_LEVEL,
@@ -618,6 +626,140 @@ SIGNED_ATTEMPT_CHAIN_MECHANICS_REPORT_FIELDS_V2 = (
     SIGNED_ATTEMPT_CHAIN_MECHANICS_IDENTITY_FIELDS_V2
     | frozenset(SIGNED_ATTEMPT_CHAIN_MECHANICS_TRUE_FIELDS_V2)
     | frozenset(SIGNED_ATTEMPT_CHAIN_MECHANICS_FALSE_FIELDS_V2)
+)
+
+LOCAL_ATTEMPT_LEDGER_MECHANICS_PREFIX_V2 = (
+    "actual_unsealed_960_local_attempt_ledger_mechanics_v2_"
+)
+LOCAL_ATTEMPT_LEDGER_MECHANICS_IDENTITY_SUFFIXES_V2 = (
+    "version",
+    "schema_id",
+    "policy_id",
+    "claim_level",
+    "scope",
+    "expected_attempt_index",
+    "expected_state_count",
+    "expected_initial_state",
+    "expected_open_state",
+    "expected_terminal_state",
+    "expected_fixed_namespace_entry_count",
+    "expected_open_record_name",
+    "expected_open_pending_name",
+    "expected_terminal_record_name",
+    "expected_terminal_pending_name",
+)
+LOCAL_ATTEMPT_LEDGER_MECHANICS_TRUE_SUFFIXES_V2 = (
+    "component_mechanics_implemented",
+    "caller_owned_single_directory_attempt_zero_mechanics_implemented",
+    "owned_mode_0700_componentwise_nofollow_directory_open_mechanics_implemented",
+    "nonblocking_cooperating_process_directory_lock_mechanics_implemented",
+    "bounded_fixed_four_name_namespace_scan_mechanics_implemented",
+    "exact_mode_0600_regular_file_metadata_mechanics_implemented",
+    "strict_bounded_canonical_record_replay_mechanics_implemented",
+    "hardlink_no_replace_publication_mechanics_implemented",
+    "file_and_directory_fsync_publication_sequence_mechanics_implemented",
+    "crash_window_recovery_mechanics_implemented",
+    "symlink_hardlink_fifo_socket_and_toctou_defense_mechanics_implemented",
+    "open_before_terminal_state_machine_mechanics_implemented",
+    "terminal_test_only_signed_chain_reverification_mechanics_implemented",
+    "parent_path_identity_recheck_mechanics_implemented",
+    "atomic_all_false_rejection_mechanics_implemented",
+    "cross_version_rejection_mechanics_implemented",
+    "multiprocess_race_and_crash_window_mechanics_tests_verified",
+)
+LOCAL_ATTEMPT_LEDGER_MECHANICS_FALSE_SUFFIXES_V2 = (
+    "protocol_report_constructs_test_anchor",
+    "protocol_report_constructs_signed_chain",
+    "protocol_report_constructs_ledger_directory_path",
+    "protocol_report_opens_attempt_ledger",
+    "protocol_report_terminalizes_attempt_ledger",
+    "protocol_report_recovers_attempt_ledger",
+    "protocol_report_verifies_attempt_ledger_snapshot",
+    "protocol_report_touches_attempt_ledger_filesystem",
+    "test_only_anchor_content_reverified",
+    "test_only_signed_chain_reverified_for_terminal",
+    "owned_nofollow_directory_descriptor_pinned",
+    "cooperating_process_directory_lock_held",
+    "fixed_namespace_allowlist_verified",
+    "attempt_zero_open_record_content_address_verified",
+    "attempt_zero_terminal_record_content_address_verified",
+    "open_record_file_fsync_completed",
+    "terminal_record_file_fsync_completed",
+    "directory_fsync_completed",
+    "hardlink_no_replace_publication_verified",
+    "open_before_terminal_predecessor_verified",
+    "single_directory_terminal_exclusion_mechanics_verified",
+    "strict_canonical_record_replay_verified",
+    "atomic_result_issuance_verified",
+    "external_trust_anchor_verified",
+    "external_signature_authority_verified",
+    "qualified_cryptographic_backend_verified",
+    "custodian_identity_verified",
+    "signer_independence_verified",
+    "externally_durable_attempt_ledger_verified",
+    "hardware_power_loss_durability_qualified",
+    "remote_filesystem_durability_qualified",
+    "hostile_same_uid_writer_tamper_resistance_verified",
+    "owner_deletion_resistance_verified",
+    "owner_rollback_resistance_verified",
+    "cross_host_global_one_shot_verified",
+    "authoritative_attempt_denominator_verified",
+    "attempt_registry_complete",
+    "retry_authorization_verified",
+    "rerun_policy_enforced",
+    "one_shot_policy_enforced",
+    "external_timestamp_authority_verified",
+    "timeline_observed",
+    "authoritative_timeline_order_verified",
+    "authoritative_attempt_terminal_state_verified",
+    "terminal_append_receipt_verified",
+    "campaign_finalization_verified",
+    "actual_evidence_inputs_accepted",
+    "admission_evidence_contract_complete",
+    "authoritative_evidence_verifier_implemented",
+    "admission_ready",
+    "execution_authorized",
+    "evidence_supplied",
+    "evidence_verified",
+    "input_archive_authority_verified",
+    "prediction_archive_authority_verified",
+    "answer_commitment_authority_verified",
+    "gate_input_commitment_authority_verified",
+    "pre_reveal_commitment_timing_verified",
+    "runtime_attestation_authority_verified",
+    "recognizer_executed",
+    "runtime_executed",
+    "actual_960_case_run_verified",
+    "origin_authenticated",
+    "scoring_performed",
+    "prediction_scored",
+    "actual_prediction_scoring_evidence",
+    "formal_gate_evaluation_performed",
+    "overall_gate_results_materialized",
+    "slice_gate_results_materialized",
+    "preservation_evaluated",
+    "scale_regret_evaluated",
+    "bootstrap_evaluated",
+    "effect_evidence",
+    "formal_c1_report_verified",
+    "c1_exit_evidence",
+)
+LOCAL_ATTEMPT_LEDGER_MECHANICS_IDENTITY_FIELDS_V2 = frozenset(
+    LOCAL_ATTEMPT_LEDGER_MECHANICS_PREFIX_V2 + suffix
+    for suffix in LOCAL_ATTEMPT_LEDGER_MECHANICS_IDENTITY_SUFFIXES_V2
+)
+LOCAL_ATTEMPT_LEDGER_MECHANICS_TRUE_FIELDS_V2 = tuple(
+    LOCAL_ATTEMPT_LEDGER_MECHANICS_PREFIX_V2 + suffix
+    for suffix in LOCAL_ATTEMPT_LEDGER_MECHANICS_TRUE_SUFFIXES_V2
+)
+LOCAL_ATTEMPT_LEDGER_MECHANICS_FALSE_FIELDS_V2 = tuple(
+    LOCAL_ATTEMPT_LEDGER_MECHANICS_PREFIX_V2 + suffix
+    for suffix in LOCAL_ATTEMPT_LEDGER_MECHANICS_FALSE_SUFFIXES_V2
+)
+LOCAL_ATTEMPT_LEDGER_MECHANICS_REPORT_FIELDS_V2 = (
+    LOCAL_ATTEMPT_LEDGER_MECHANICS_IDENTITY_FIELDS_V2
+    | frozenset(LOCAL_ATTEMPT_LEDGER_MECHANICS_TRUE_FIELDS_V2)
+    | frozenset(LOCAL_ATTEMPT_LEDGER_MECHANICS_FALSE_FIELDS_V2)
 )
 
 ACTUAL_REPLAY_INPUT_PREFIX_V2 = "actual_unsealed_960_replay_input_contract_v2_"
@@ -1180,7 +1322,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
     report = phase2b_preregistration_report()
     assert report["implementation_id"] == (
         "phase2b_protocol_source_sha256_"
-        "cb57660f7958d03fcf9d9eb048d93e2d18cf10a9cc1aef9e8a0b09cef31bf8bb"
+        "161ff0350751a8436c241041f70ef79aa4c06ee7d54ac2cee9ed19a7603d0b1c"
     )
     assert report["artifact"] == "phase2b_preregistration_readiness_v1"
     assert report["formal_phase2b_exit_claim"] is False
@@ -2095,6 +2237,84 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         SIGNED_ATTEMPT_CHAIN_MECHANICS_PREFIX_V2 + "ed25519_backend_available"
         not in report
     )
+    assert len(LOCAL_ATTEMPT_LEDGER_MECHANICS_IDENTITY_FIELDS_V2) == 15
+    assert len(LOCAL_ATTEMPT_LEDGER_MECHANICS_TRUE_FIELDS_V2) == 17
+    assert len(LOCAL_ATTEMPT_LEDGER_MECHANICS_FALSE_FIELDS_V2) == 75
+    assert len(LOCAL_ATTEMPT_LEDGER_MECHANICS_REPORT_FIELDS_V2) == 107
+    assert report[LOCAL_ATTEMPT_LEDGER_MECHANICS_PREFIX_V2 + "version"] == (
+        PHASE2B_ACTUAL_UNSEALED_960_LOCAL_ATTEMPT_LEDGER_MECHANICS_V2_VERSION
+    )
+    assert report[LOCAL_ATTEMPT_LEDGER_MECHANICS_PREFIX_V2 + "schema_id"] == (
+        PHASE2B_ACTUAL_UNSEALED_960_LOCAL_ATTEMPT_LEDGER_MECHANICS_V2_SCHEMA_ID
+    )
+    assert report[LOCAL_ATTEMPT_LEDGER_MECHANICS_PREFIX_V2 + "policy_id"] == (
+        PHASE2B_ACTUAL_UNSEALED_960_LOCAL_ATTEMPT_LEDGER_MECHANICS_V2_POLICY_ID
+    )
+    assert report[LOCAL_ATTEMPT_LEDGER_MECHANICS_PREFIX_V2 + "claim_level"] == (
+        PHASE2B_ACTUAL_UNSEALED_960_LOCAL_ATTEMPT_LEDGER_MECHANICS_V2_CLAIM_LEVEL
+    )
+    assert report[LOCAL_ATTEMPT_LEDGER_MECHANICS_PREFIX_V2 + "scope"] == (
+        PHASE2B_ACTUAL_UNSEALED_960_LOCAL_ATTEMPT_LEDGER_SCOPE_V2
+    )
+    assert report[LOCAL_ATTEMPT_LEDGER_MECHANICS_PREFIX_V2 + "version"] == (
+        "hegel-machine-phase2b-actual-unsealed-960-local-attempt-ledger-mechanics/2"
+    )
+    assert report[LOCAL_ATTEMPT_LEDGER_MECHANICS_PREFIX_V2 + "schema_id"] == (
+        "phase2b_actual_unsealed_960_local_attempt_ledger_schema_v2_"
+        "11bb25c528d6c0227c51e29165909e0b9cb39bffc1434239d9872fbe56f30238"
+    )
+    assert report[LOCAL_ATTEMPT_LEDGER_MECHANICS_PREFIX_V2 + "policy_id"] == (
+        "phase2b_actual_unsealed_960_local_attempt_ledger_policy_v2_"
+        "2a2e2c0f79d96f09236ad303dc7f9504b7cdb690b6a156c73d7a623dc3e2eae2"
+    )
+    assert report[LOCAL_ATTEMPT_LEDGER_MECHANICS_PREFIX_V2 + "claim_level"] == (
+        "NON_AUTHORITATIVE_LOCAL_FILESYSTEM_ATTEMPT_LEDGER_MECHANICS_ONLY"
+    )
+    assert report[LOCAL_ATTEMPT_LEDGER_MECHANICS_PREFIX_V2 + "scope"] == (
+        "CALLER_OWNED_SINGLE_DIRECTORY_ATTEMPT_ZERO_ONLY"
+    )
+    expected_local_attempt_ledger_static_values = {
+        "expected_attempt_index": 0,
+        "expected_state_count": 3,
+        "expected_initial_state": "EMPTY",
+        "expected_open_state": "OPEN",
+        "expected_terminal_state": "TERMINAL_CONSUMED",
+        "expected_fixed_namespace_entry_count": 4,
+        "expected_open_record_name": "attempt-000.open.json",
+        "expected_open_pending_name": ".attempt-000.open.json.next",
+        "expected_terminal_record_name": "attempt-000.terminal.json",
+        "expected_terminal_pending_name": ".attempt-000.terminal.json.next",
+    }
+    for suffix, expected in expected_local_attempt_ledger_static_values.items():
+        assert report[LOCAL_ATTEMPT_LEDGER_MECHANICS_PREFIX_V2 + suffix] == expected
+    for field_name in LOCAL_ATTEMPT_LEDGER_MECHANICS_TRUE_FIELDS_V2:
+        assert report[field_name] is True
+    for field_name in LOCAL_ATTEMPT_LEDGER_MECHANICS_FALSE_FIELDS_V2:
+        assert report[field_name] is False
+    assert {
+        field_name
+        for field_name in report
+        if field_name.startswith(LOCAL_ATTEMPT_LEDGER_MECHANICS_PREFIX_V2)
+    } == LOCAL_ATTEMPT_LEDGER_MECHANICS_REPORT_FIELDS_V2
+    for hidden_suffix in (
+        "disposition",
+        "reason",
+        "result_id",
+        "ledger_id",
+        "anchor_id",
+        "attempt_id",
+        "state",
+        "open_record_sha256",
+        "terminal_record_sha256",
+        "signed_chain_result_id",
+        "chain_root_sha256",
+        "chain_id",
+        "newly_published",
+        "recovered_commit_window",
+        "identical_existing_state_observed",
+        "filesystem_recovery_required",
+    ):
+        assert LOCAL_ATTEMPT_LEDGER_MECHANICS_PREFIX_V2 + hidden_suffix not in report
     assert report["public_prediction_run_context_v2_schema_version"] == (
         PUBLIC_PREDICTION_RUN_CONTEXT_V2_SCHEMA_VERSION
     )
@@ -2234,6 +2454,7 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "exact_transform_semantics",
         "actual_unsealed_960_replay_admission_gap_inventory_v2",
         "actual_unsealed_960_replay_input_contract_v2",
+        "actual_unsealed_960_local_attempt_ledger_mechanics_v2",
         "actual_unsealed_960_signed_attempt_chain_mechanics_v2",
         "formal_unsealed_prediction_scoring_contract_v2",
         "unsealed_960_available_gate_mechanics_v2",
@@ -2314,6 +2535,12 @@ def test_phase2b_report_is_explicitly_unsealed_and_nonqualifying():
         "7ba5e891b08a2a0b2d59161d784f64a9ecd2a11053f5436886f73307c3261e9c"
     )
     assert report["component_source_ids"][
+        "actual_unsealed_960_local_attempt_ledger_mechanics_v2"
+    ] == (
+        "sha256:"
+        "18c19fc9e2ea01a39504f5b38422b9f42029d2ae4faa426fc90a473636cf6a07"
+    )
+    assert report["component_source_ids"][
         "recognizer_prediction_row_mapping_mechanics_v2"
     ] == (
         "sha256:"
@@ -2382,7 +2609,7 @@ def test_checked_in_phase2b_preregistration_artifact_matches_runtime():
     assert artifact == phase2b_preregistration_report()
 
 
-def test_signed_attempt_chain_mechanics_report_artifact_refresh_transition_is_exact():
+def test_local_attempt_ledger_mechanics_report_artifact_refresh_transition_is_exact():
     artifact_path = (
         Path(__file__).resolve().parents[1]
         / "artifacts"
@@ -2390,12 +2617,12 @@ def test_signed_attempt_chain_mechanics_report_artifact_refresh_transition_is_ex
     )
     artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
     report = phase2b_preregistration_report()
-    assert len(report) == 937
+    assert len(report) == 1044
     if artifact == report:
         return
-    assert len(artifact) == 845
+    assert len(artifact) == 937
     assert set(report) - set(artifact) == (
-        SIGNED_ATTEMPT_CHAIN_MECHANICS_REPORT_FIELDS_V2
+        LOCAL_ATTEMPT_LEDGER_MECHANICS_REPORT_FIELDS_V2
     )
     assert set(artifact) - set(report) == set()
     changed_common_fields = {
@@ -2415,7 +2642,7 @@ def test_signed_attempt_chain_mechanics_report_artifact_refresh_transition_is_ex
     )
     assert set(report["component_source_ids"]) - set(
         artifact["component_source_ids"]
-    ) == {"actual_unsealed_960_signed_attempt_chain_mechanics_v2"}
+    ) == {"actual_unsealed_960_local_attempt_ledger_mechanics_v2"}
     assert set(artifact["component_source_ids"]) - set(
         report["component_source_ids"]
     ) == set()
@@ -2423,3 +2650,57 @@ def test_signed_attempt_chain_mechanics_report_artifact_refresh_transition_is_ex
         "component_source_ids"
     ].items():
         assert report["component_source_ids"][component_name] == component_source_id
+
+
+def test_preregistration_report_uses_local_attempt_ledger_as_static_source_only():
+    protocol_path = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "hegel_machine"
+        / "phase2b_protocol.py"
+    )
+    tree = ast.parse(protocol_path.read_text(encoding="utf-8"))
+    report_function = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "phase2b_preregistration_report"
+    )
+    module_alias = "phase2b_actual_unsealed_960_local_attempt_ledger_mechanics_v2"
+    referenced_module_attributes = {
+        node.attr
+        for node in ast.walk(report_function)
+        if isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == module_alias
+    }
+    assert referenced_module_attributes == {
+        "PHASE2B_ACTUAL_UNSEALED_960_LOCAL_ATTEMPT_LEDGER_MECHANICS_V2_VERSION",
+        "PHASE2B_ACTUAL_UNSEALED_960_LOCAL_ATTEMPT_LEDGER_MECHANICS_V2_SCHEMA_ID",
+        "PHASE2B_ACTUAL_UNSEALED_960_LOCAL_ATTEMPT_LEDGER_MECHANICS_V2_POLICY_ID",
+        "PHASE2B_ACTUAL_UNSEALED_960_LOCAL_ATTEMPT_LEDGER_MECHANICS_V2_CLAIM_LEVEL",
+        "PHASE2B_ACTUAL_UNSEALED_960_LOCAL_ATTEMPT_LEDGER_SCOPE_V2",
+    }
+    forbidden_symbols = {
+        "ActualUnsealed960LocalAttemptLedgerMechanicsV2",
+        "ActualUnsealed960LocalAttemptLedgerRejectionV2",
+        "ActualUnsealed960SignedAttemptChainV2",
+        "ActualUnsealed960TestOnlyAnchorV2",
+        "PosixPath",
+        "open_phase2b_actual_unsealed_960_local_attempt_ledger_mechanics_v2",
+        "terminalize_phase2b_actual_unsealed_960_local_attempt_ledger_mechanics_v2",
+        "recover_phase2b_actual_unsealed_960_local_attempt_ledger_mechanics_v2",
+        "verify_phase2b_actual_unsealed_960_local_attempt_ledger_snapshot_v2",
+    }
+    assert {
+        node.id
+        for node in ast.walk(report_function)
+        if isinstance(node, ast.Name) and node.id in forbidden_symbols
+    } == set()
+    assert not any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == module_alias
+        for node in ast.walk(report_function)
+    )

@@ -1159,6 +1159,7 @@ def phase2b_preregistration_report() -> dict[str, object]:
         phase2b_exact_transform_semantics_v1,
         phase2b_actual_unsealed_960_replay_admission_evidence_contract_v2,
         phase2b_actual_unsealed_960_replay_input_contract_v2,
+        phase2b_actual_unsealed_960_local_attempt_ledger_mechanics_v2,
         phase2b_actual_unsealed_960_signed_attempt_chain_mechanics_v2,
         phase2b_formal_unsealed_prediction_scoring_contract_v2,
         phase2b_unsealed_960_available_gate_mechanics_v2,
@@ -2361,6 +2362,138 @@ def phase2b_preregistration_report() -> dict[str, object]:
                 "c1_exit_evidence",
             )
         },
+        "actual_unsealed_960_local_attempt_ledger_mechanics_v2_version": (
+            phase2b_actual_unsealed_960_local_attempt_ledger_mechanics_v2
+            .PHASE2B_ACTUAL_UNSEALED_960_LOCAL_ATTEMPT_LEDGER_MECHANICS_V2_VERSION
+        ),
+        "actual_unsealed_960_local_attempt_ledger_mechanics_v2_schema_id": (
+            phase2b_actual_unsealed_960_local_attempt_ledger_mechanics_v2
+            .PHASE2B_ACTUAL_UNSEALED_960_LOCAL_ATTEMPT_LEDGER_MECHANICS_V2_SCHEMA_ID
+        ),
+        "actual_unsealed_960_local_attempt_ledger_mechanics_v2_policy_id": (
+            phase2b_actual_unsealed_960_local_attempt_ledger_mechanics_v2
+            .PHASE2B_ACTUAL_UNSEALED_960_LOCAL_ATTEMPT_LEDGER_MECHANICS_V2_POLICY_ID
+        ),
+        "actual_unsealed_960_local_attempt_ledger_mechanics_v2_claim_level": (
+            phase2b_actual_unsealed_960_local_attempt_ledger_mechanics_v2
+            .PHASE2B_ACTUAL_UNSEALED_960_LOCAL_ATTEMPT_LEDGER_MECHANICS_V2_CLAIM_LEVEL
+        ),
+        "actual_unsealed_960_local_attempt_ledger_mechanics_v2_scope": (
+            phase2b_actual_unsealed_960_local_attempt_ledger_mechanics_v2
+            .PHASE2B_ACTUAL_UNSEALED_960_LOCAL_ATTEMPT_LEDGER_SCOPE_V2
+        ),
+        "actual_unsealed_960_local_attempt_ledger_mechanics_v2_expected_attempt_index": 0,
+        "actual_unsealed_960_local_attempt_ledger_mechanics_v2_expected_state_count": 3,
+        "actual_unsealed_960_local_attempt_ledger_mechanics_v2_expected_initial_state": "EMPTY",
+        "actual_unsealed_960_local_attempt_ledger_mechanics_v2_expected_open_state": "OPEN",
+        "actual_unsealed_960_local_attempt_ledger_mechanics_v2_expected_terminal_state": "TERMINAL_CONSUMED",
+        "actual_unsealed_960_local_attempt_ledger_mechanics_v2_expected_fixed_namespace_entry_count": 4,
+        "actual_unsealed_960_local_attempt_ledger_mechanics_v2_expected_open_record_name": "attempt-000.open.json",
+        "actual_unsealed_960_local_attempt_ledger_mechanics_v2_expected_open_pending_name": ".attempt-000.open.json.next",
+        "actual_unsealed_960_local_attempt_ledger_mechanics_v2_expected_terminal_record_name": "attempt-000.terminal.json",
+        "actual_unsealed_960_local_attempt_ledger_mechanics_v2_expected_terminal_pending_name": ".attempt-000.terminal.json.next",
+        **{
+            "actual_unsealed_960_local_attempt_ledger_mechanics_v2_" + suffix: True
+            for suffix in (
+                "component_mechanics_implemented",
+                "caller_owned_single_directory_attempt_zero_mechanics_implemented",
+                "owned_mode_0700_componentwise_nofollow_directory_open_mechanics_implemented",
+                "nonblocking_cooperating_process_directory_lock_mechanics_implemented",
+                "bounded_fixed_four_name_namespace_scan_mechanics_implemented",
+                "exact_mode_0600_regular_file_metadata_mechanics_implemented",
+                "strict_bounded_canonical_record_replay_mechanics_implemented",
+                "hardlink_no_replace_publication_mechanics_implemented",
+                "file_and_directory_fsync_publication_sequence_mechanics_implemented",
+                "crash_window_recovery_mechanics_implemented",
+                "symlink_hardlink_fifo_socket_and_toctou_defense_mechanics_implemented",
+                "open_before_terminal_state_machine_mechanics_implemented",
+                "terminal_test_only_signed_chain_reverification_mechanics_implemented",
+                "parent_path_identity_recheck_mechanics_implemented",
+                "atomic_all_false_rejection_mechanics_implemented",
+                "cross_version_rejection_mechanics_implemented",
+                "multiprocess_race_and_crash_window_mechanics_tests_verified",
+            )
+        },
+        **{
+            "actual_unsealed_960_local_attempt_ledger_mechanics_v2_" + suffix: False
+            for suffix in (
+                "protocol_report_constructs_test_anchor",
+                "protocol_report_constructs_signed_chain",
+                "protocol_report_constructs_ledger_directory_path",
+                "protocol_report_opens_attempt_ledger",
+                "protocol_report_terminalizes_attempt_ledger",
+                "protocol_report_recovers_attempt_ledger",
+                "protocol_report_verifies_attempt_ledger_snapshot",
+                "protocol_report_touches_attempt_ledger_filesystem",
+                "test_only_anchor_content_reverified",
+                "test_only_signed_chain_reverified_for_terminal",
+                "owned_nofollow_directory_descriptor_pinned",
+                "cooperating_process_directory_lock_held",
+                "fixed_namespace_allowlist_verified",
+                "attempt_zero_open_record_content_address_verified",
+                "attempt_zero_terminal_record_content_address_verified",
+                "open_record_file_fsync_completed",
+                "terminal_record_file_fsync_completed",
+                "directory_fsync_completed",
+                "hardlink_no_replace_publication_verified",
+                "open_before_terminal_predecessor_verified",
+                "single_directory_terminal_exclusion_mechanics_verified",
+                "strict_canonical_record_replay_verified",
+                "atomic_result_issuance_verified",
+                "external_trust_anchor_verified",
+                "external_signature_authority_verified",
+                "qualified_cryptographic_backend_verified",
+                "custodian_identity_verified",
+                "signer_independence_verified",
+                "externally_durable_attempt_ledger_verified",
+                "hardware_power_loss_durability_qualified",
+                "remote_filesystem_durability_qualified",
+                "hostile_same_uid_writer_tamper_resistance_verified",
+                "owner_deletion_resistance_verified",
+                "owner_rollback_resistance_verified",
+                "cross_host_global_one_shot_verified",
+                "authoritative_attempt_denominator_verified",
+                "attempt_registry_complete",
+                "retry_authorization_verified",
+                "rerun_policy_enforced",
+                "one_shot_policy_enforced",
+                "external_timestamp_authority_verified",
+                "timeline_observed",
+                "authoritative_timeline_order_verified",
+                "authoritative_attempt_terminal_state_verified",
+                "terminal_append_receipt_verified",
+                "campaign_finalization_verified",
+                "actual_evidence_inputs_accepted",
+                "admission_evidence_contract_complete",
+                "authoritative_evidence_verifier_implemented",
+                "admission_ready",
+                "execution_authorized",
+                "evidence_supplied",
+                "evidence_verified",
+                "input_archive_authority_verified",
+                "prediction_archive_authority_verified",
+                "answer_commitment_authority_verified",
+                "gate_input_commitment_authority_verified",
+                "pre_reveal_commitment_timing_verified",
+                "runtime_attestation_authority_verified",
+                "recognizer_executed",
+                "runtime_executed",
+                "actual_960_case_run_verified",
+                "origin_authenticated",
+                "scoring_performed",
+                "prediction_scored",
+                "actual_prediction_scoring_evidence",
+                "formal_gate_evaluation_performed",
+                "overall_gate_results_materialized",
+                "slice_gate_results_materialized",
+                "preservation_evaluated",
+                "scale_regret_evaluated",
+                "bootstrap_evaluated",
+                "effect_evidence",
+                "formal_c1_report_verified",
+                "c1_exit_evidence",
+            )
+        },
         "next_phase2b_construction_slice": (
             "actual_unsealed_960_case_prediction_scoring_replay_v2"
         ),
@@ -2431,6 +2564,10 @@ def phase2b_preregistration_report() -> dict[str, object]:
                 (
                     "actual_unsealed_960_signed_attempt_chain_mechanics_v2",
                     phase2b_actual_unsealed_960_signed_attempt_chain_mechanics_v2,
+                ),
+                (
+                    "actual_unsealed_960_local_attempt_ledger_mechanics_v2",
+                    phase2b_actual_unsealed_960_local_attempt_ledger_mechanics_v2,
                 ),
                 (
                     "actual_unsealed_960_replay_admission_gap_inventory_v2",
