@@ -286,6 +286,57 @@ absence. If cleanup cannot be proved, the only terminal is the explicit
 `ATOMIC_FAILURE_CLEANUP_UNPROVEN_EXTERNAL_INTERVENTION_REQUIRED` negative
 state; it is never ordinary closed success.
 
+The current `/failure/4` cleanup command is exactly `systemctl --user kill
+--kill-who=all --signal=SIGTERM|SIGKILL <unit>`, which is the systemd 249 CLI
+shape. The retained `/failure/3` schema is replay-only and keeps its historical
+command preimage; `/3` and `/4` field sets and command grammars are disjoint.
+The producer never emits a new `/failure/3` terminal.
+
+Before any failure-side TERM, KILL, or stop command, the outer process
+atomically writes and fsyncs the stdout and stderr bytes already consumed from
+the `systemd-run --pipe` relay. Cleanup then drains from the current pipe
+offset into the same bounded bytearrays, so the final retained bytes equal the
+prefix plus each tail byte exactly once. The two prefix files, two final raw
+files, and one nonempty framed stdout/stderr bundle in the attempt-private CAS
+are hash/size/path bound by `/failure/4` and replayed from retained dirfds.
+Success still requires a nonempty canonical stdout artifact and exactly empty
+stderr.
+
+Every `/failure/4` also carries an exact failure-CAS snapshot. It distinguishes
+an absent CAS directory from a present empty directory, lists every regular
+self-addressed object in lexicographic digest order, rehashes each object from
+an `O_NOFOLLOW` retained descriptor, and rejects any extra or missing object.
+Only temporary names bound by `managed_atomic_residues` are excluded from that
+object list. Partial failure-side CAS objects are explicitly unattributed
+(`partial_cas_roles_attributed=false`); this exact set is not a claim that all
+objects were produced by a particular causal step or have successful semantic
+roles. An additional correctly self-addressed object is accepted only when it
+is included in the terminal's exact CAS snapshot, and it remains unattributed.
+When pipe-capture persistence is
+verified, the framed pipe-bundle CAS row is separately cross-linked to its
+specific capture role.
+
+`capture_complete=true` means both pipe EOFs were observed, no tail remains,
+and the launcher was waited/reaped under a verified cleanup projection. An
+unproven cleanup may retain the actual prefix and any later bytes already
+observed, but `/failure/4` has no positive launcher-reap fields with which a
+pure replay could prove completeness. The producer therefore conservatively
+uses `capture_complete=false` even if EOF/reap preceded a later ownership or
+final-absence failure, and it does not claim a complete traceback. If prefix or
+final capture reaches a stream cap, retained bytes stop exactly at that cap,
+`capture_truncated_at_cap=true`, and the capture remains incomplete. If prefix
+or final capture persistence itself is uncertain, cleanup still runs first and
+the terminal uses the closed
+`ATOMIC_FAILURE_PIPE_CAPTURE_PERSISTENCE_UNVERIFIED` negative disposition,
+binding every retained partial raw artifact and any managed atomic residue.
+Cleanup uncertainty has precedence: if cleanup and capture persistence are
+both unproven, the terminal uses
+`ATOMIC_FAILURE_CLEANUP_UNPROVEN_EXTERNAL_INTERVENTION_REQUIRED` while still
+binding the persistence-unverified partial-artifact projection.
+The terminal records `primary_failure_stage` and the primary exception type
+separately from `cleanup_failure_exception_type`; cleanup failure cannot
+overwrite an `INNER_EXECUTION` primary failure.
+
 The systemctl transcript prevents accidental name collision and records
 cooperative ownership. It is not an adversarial same-UID integrity sandbox.
 The actual qualification prerequisite is a fresh dedicated user and
@@ -295,32 +346,52 @@ direct child creates no orphan descendants; it does not claim an adversarial
 PID/PGID ownership primitive.
 
 The end-to-end watchdog is 28,800 seconds. Normal work stops with a 3,000-second
-reserve: 2,400 seconds are reserved for two bounded retained-tree scans,
+reserve: 2,400 seconds are reserved for two bounded combined retained-manifest
+scans,
 metadata, fsync, verification, and terminal publication; 600 seconds are
 reserved for cleanup control. No success may extend the deadline. Command
-capture and process reaping use subordinate deadlines inside that bound.
+capture and process reaping use subordinate deadlines inside that bound. The
+producer derives its failure tree, exact CAS snapshot, and managed-residue
+binding in one fd-relative traversal; the prospective public verifier performs
+one independent traversal across the trust boundary. Each traversal hashes a
+regular inode at most once, including hard-linked target/temp aliases. No
+producer digest cache is trusted by the verifier.
 
 ## Retained transaction, private CAS, and terminal
 
 Reservation holds the output-root and attempt directory descriptors and uses
 openat/no-follow operations throughout. Inputs, extracted source tree, raw RFC
 bundle, evidence, and attempt-private CAS are retained under that inode.
+The raw RFC destination directory is created, opened, and registered before
+its first copied object is written, so pre-link and post-link uncertainty can
+be reconciled from its retained parent descriptor without a directory-tree
+search.
 Archive inspection binds every regular file, explicit empty directory, and
 implicit ancestor to the exact extracted full-tree manifest; path/type
 conflicts, symlinks, devices, and extras are rejected.
 
 Every successful or closed-failure attempt has exactly one O_EXCL
-`terminal.json`. A prospective pure verifier replays the retained directory,
-CAS roles, archive/tree relation, inner/outer semantics, mechanics, and exact
-tree before success becomes visible. The commit is followed only by bounded
-same-descriptor readback/fsync and parent-entry inode identity checks.
+`terminal.json`. Before success becomes visible, a prospective pure verifier
+replays the retained directory, successful semantic CAS roles, archive/tree
+relation, inner/outer semantics, mechanics, and exact tree. A `/failure/4`
+instead replays its exact self-addressed, explicitly unattributed partial CAS
+set plus any separately cross-linked failure role. The commit is followed only
+by bounded same-descriptor readback/fsync and parent-entry inode identity
+checks.
 
 If a nonterminal atomic link commits but cleanup/readback becomes uncertain,
-the outer transaction reconciles the retained target and managed temporary.
+the outer transaction reconciles the retained target and managed temporary
+only through the required finite retained-parent descriptor registry; the
+reconcile step performs no fallback tree traversal or content rehash.
 Unremovable owned residue is not ignored: the negative terminal's closed
 `managed_atomic_residues` rows bind its exact path, state, inode/link relation,
-hash, and size. Unknown temporaries or same-byte/different-inode splices are
-rejected. Terminal-link uncertainty itself forbids a second terminal.
+intended target hash, and observed size. In `evidence/cas`, the target name is
+the exact lowercase intended SHA-256. A `STAGED_TEMP_ONLY` file may contain only
+a partial prefix, so its actual retained-byte hash is bound by the tree row and
+need not equal that intended target hash; a committed target/temp hard-link
+must still hash exactly to it. Unknown temporaries or
+same-byte/different-inode splices are rejected. Terminal-link uncertainty
+itself forbids a second terminal.
 
 Content deduplication applies to unique objects in the attempt-private CAS;
 multiple semantic roles may reference the same digest. SHA-256 is a content

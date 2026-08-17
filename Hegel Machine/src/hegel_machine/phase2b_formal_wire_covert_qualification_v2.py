@@ -513,7 +513,19 @@ OUTER_ATTEMPT_SUCCESS_SCHEMA_V2: Final = (
     "hegel-machine-phase2b-formal-wire-covert-outer-attempt-success/2"
 )
 OUTER_ATTEMPT_FAILURE_SCHEMA_V2: Final = (
+    "hegel-machine-phase2b-formal-wire-covert-outer-attempt-failure/4"
+)
+_OUTER_ATTEMPT_FAILURE_SCHEMA_V3: Final = (
     "hegel-machine-phase2b-formal-wire-covert-outer-attempt-failure/3"
+)
+_FAILURE_CHILD_PIPE_CAPTURE_SCHEMA_V2: Final = (
+    "hegel-machine-phase2b-formal-wire-covert-failure-child-pipe-capture/1"
+)
+_FAILURE_CAS_PROJECTION_SCHEMA_V2: Final = (
+    "hegel-machine-phase2b-formal-wire-covert-failure-cas-projection/1"
+)
+_FAILURE_CHILD_PIPE_CAPTURE_BUNDLE_DOMAIN_V2: Final = (
+    b"HEGEL/PHASE2B/QV2/FAILURE_CHILD_PIPE_CAPTURE/V1\x00"
 )
 RUNTIME_ENVIRONMENT_MANIFEST_SCHEMA_V2: Final = (
     "hegel-machine-phase2b-formal-wire-covert-runtime-environment/2"
@@ -5599,6 +5611,7 @@ def _copy_rfc8785_raw_execution_bundle_v2(
     receipt_bytes: bytes,
     source_directory: Path,
     destination_directory: Path,
+    destination_directory_fd: int,
     deadline_ns: int,
     expected_qualification_source_sha256: str,
     replay_project_root: Path,
@@ -5611,9 +5624,9 @@ def _copy_rfc8785_raw_execution_bundle_v2(
         fresh_execute=True,
         deadline_ns=deadline_ns,
     )
-    destination = _mkdir_new_directory_v2(
-        destination_directory.parent, destination_directory.name
-    )
+    destination = destination_directory
+    if not stat.S_ISDIR(os.fstat(destination_directory_fd).st_mode):
+        raise ValueError("RFC retained raw bundle descriptor is not a directory")
     raw = receipt["raw_execution"]
     evidence_body = {
         key: receipt[key] for key in sorted(receipt) if key != "cas"
@@ -5645,8 +5658,11 @@ def _copy_rfc8785_raw_execution_bundle_v2(
                 raise ValueError("RFC evidence-body CAS changed before copy")
             if name == "receipt.json" and payload != receipt_bytes:
                 raise ValueError("RFC receipt changed before copy")
-            _atomic_write_new_file_v2(
-                destination, name, payload, deadline_ns=deadline_ns
+            _atomic_write_new_file_at_fd_v2(
+                destination_directory_fd,
+                name,
+                payload,
+                deadline_ns=deadline_ns,
             )
     finally:
         _close_owned_descriptors_v2((source_fd,), name="RFC raw bundle copy")
@@ -5657,6 +5673,7 @@ def _copy_rfc8785_raw_execution_bundle_v2(
         replay_project_root=replay_project_root,
         fresh_execute=False,
         deadline_ns=deadline_ns,
+        retained_bundle_fd=destination_directory_fd,
     )
     if not _exact_json_equal(projection, copied_projection):
         raise ValueError("copied RFC raw bundle projection drifted")
@@ -9766,6 +9783,7 @@ class _AtomicPublicationUncertainV2(RuntimeError):
         *,
         parent_identity: tuple[int, int] | None = None,
         target_identity: tuple[int, int] | None = None,
+        target_sha256: str | None = None,
         temporary_name: str | None = None,
         publication_state: str | None = None,
     ) -> None:
@@ -9773,6 +9791,7 @@ class _AtomicPublicationUncertainV2(RuntimeError):
         self.target_name = target_name
         self.parent_identity = parent_identity
         self.target_identity = target_identity
+        self.target_sha256 = target_sha256
         self.temporary_name = temporary_name
         self.publication_state = publication_state
 
@@ -9783,11 +9802,13 @@ def _atomic_publication_uncertainty_after_failure_v2(
     target_name: str,
     temporary_name: str,
     staged_stat: os.stat_result | None,
+    expected_sha256: str,
     linked_hint: bool,
     message: str,
 ) -> _AtomicPublicationUncertainV2 | None:
     """Reconcile the kernel namespace even across link-to-marker interruption."""
 
+    _require_raw_sha256_v2(expected_sha256, "atomic intended target")
     if staged_stat is None:
         return None
     parent_stat = os.fstat(directory_fd)
@@ -9833,6 +9854,7 @@ def _atomic_publication_uncertainty_after_failure_v2(
         message,
         parent_identity=(parent_stat.st_dev, parent_stat.st_ino),
         target_identity=expected_identity,
+        target_sha256=expected_sha256,
         temporary_name=temporary_name,
         publication_state=publication_state,
     )
@@ -10398,6 +10420,7 @@ def _atomic_write_new_file_at_fd_v2(
             target_name=name,
             temporary_name=temporary_name,
             staged_stat=written,
+            expected_sha256=hashlib.sha256(payload).hexdigest(),
             linked_hint=linked,
             message=(
                 f"atomic publication of {name} committed before a later failure"
@@ -10676,6 +10699,567 @@ def _cas_put_bytes_at_fd_v2(
     return _cas_projection_v2(digest, len(payload), store_namespace)
 
 
+def _failure_child_pipe_bundle_bytes_v2(stdout: bytes, stderr: bytes) -> bytes:
+    if (
+        type(stdout) is not bytes
+        or type(stderr) is not bytes
+        or len(stdout) > 8 * 1_024 * 1_024
+        or len(stderr) > 256 * 1_024
+    ):
+        raise ValueError("failure child pipe bytes exceed their exact caps")
+    return (
+        _FAILURE_CHILD_PIPE_CAPTURE_BUNDLE_DOMAIN_V2
+        + len(stdout).to_bytes(8, "big")
+        + len(stderr).to_bytes(8, "big")
+        + stdout
+        + stderr
+    )
+
+
+def _decode_failure_child_pipe_bundle_v2(payload: bytes) -> tuple[bytes, bytes]:
+    prefix_size = len(_FAILURE_CHILD_PIPE_CAPTURE_BUNDLE_DOMAIN_V2)
+    if (
+        type(payload) is not bytes
+        or len(payload) < prefix_size + 16
+        or payload[:prefix_size] != _FAILURE_CHILD_PIPE_CAPTURE_BUNDLE_DOMAIN_V2
+    ):
+        raise ValueError("failure child pipe CAS bundle framing drifted")
+    stdout_size = int.from_bytes(payload[prefix_size : prefix_size + 8], "big")
+    stderr_size = int.from_bytes(payload[prefix_size + 8 : prefix_size + 16], "big")
+    body = payload[prefix_size + 16 :]
+    if (
+        stdout_size > 8 * 1_024 * 1_024
+        or stderr_size > 256 * 1_024
+        or len(body) != stdout_size + stderr_size
+    ):
+        raise ValueError("failure child pipe CAS bundle lengths drifted")
+    return body[:stdout_size], body[stdout_size:]
+
+
+def _ensure_attempt_private_cas_bytes_at_fd_v2(
+    cas_fd: int,
+    payload: bytes,
+    *,
+    store_namespace: str,
+    deadline_ns: int,
+) -> dict[str, object]:
+    """Publish or exact-replay one nonempty attempt-private CAS object."""
+
+    if type(payload) is not bytes or not payload:
+        raise ValueError("attempt-private CAS bundle must be nonempty bytes")
+    digest = hashlib.sha256(payload).hexdigest()
+    names = set(_directory_names_at_fd_v2(cas_fd))
+    if digest in names:
+        replay, replay_stat = _read_regular_at_fd_v2(
+            cas_fd,
+            digest,
+            maximum_bytes=len(payload),
+            deadline_ns=deadline_ns,
+        )
+        if replay != payload or replay_stat.st_size != len(payload):
+            raise ValueError("attempt-private CAS dedup replay drifted")
+    else:
+        _atomic_write_new_file_at_fd_v2(
+            cas_fd, digest, payload, deadline_ns=deadline_ns
+        )
+    return _cas_projection_v2(digest, len(payload), store_namespace)
+
+
+def _failure_pipe_file_reference_v2(path: str, payload: bytes) -> dict[str, object]:
+    if (
+        type(path) is not str
+        or re.fullmatch(
+            r"evidence/failure-child-(?:stdout|stderr)(?:-prefix)?\.bin", path
+        )
+        is None
+        or type(payload) is not bytes
+    ):
+        raise ValueError("failure child pipe file reference is malformed")
+    return {
+        "path": path,
+        "sha256": hashlib.sha256(payload).hexdigest(),
+        "size_bytes": len(payload),
+    }
+
+
+def _persist_failure_child_pipe_prefix_v2(
+    evidence_fd: int,
+    *,
+    stdout: bytes,
+    stderr: bytes,
+    deadline_ns: int,
+) -> dict[str, object]:
+    """Durably retain the selector-consumed prefix before any cleanup control."""
+
+    if len(stdout) > 8 * 1_024 * 1_024 or len(stderr) > 256 * 1_024:
+        raise ValueError("failure child pipe prefix exceeds its exact cap")
+    rows: dict[str, object] = {}
+    for stream, payload in (("stdout", stdout), ("stderr", stderr)):
+        name = f"failure-child-{stream}-prefix.bin"
+        _atomic_write_new_file_at_fd_v2(
+            evidence_fd, name, payload, deadline_ns=deadline_ns
+        )
+        rows[stream] = _failure_pipe_file_reference_v2(
+            "evidence/" + name, payload
+        )
+    os.fsync(evidence_fd)
+    if time.monotonic_ns() >= deadline_ns:
+        raise TimeoutError("failure child pipe prefix fsync reached its deadline")
+    return rows
+
+
+def _persist_failure_child_pipe_capture_v2(
+    evidence_fd: int,
+    cas_fd: int,
+    *,
+    stdout: bytes,
+    stderr: bytes,
+    prefix_projection: dict[str, object],
+    capture_complete: bool,
+    capture_truncated: bool,
+    store_namespace: str,
+    deadline_ns: int,
+) -> dict[str, object]:
+    if (
+        type(capture_complete) is not bool
+        or type(capture_truncated) is not bool
+        or (capture_complete and capture_truncated)
+        or (
+            capture_truncated
+            and len(stdout) != 8 * 1_024 * 1_024
+            and len(stderr) != 256 * 1_024
+        )
+        or type(prefix_projection) is not dict
+    ):
+        raise ValueError("failure child pipe capture arguments are malformed")
+    stream_rows: dict[str, object] = {}
+    for stream, payload, cap in (
+        ("stdout", stdout, 8 * 1_024 * 1_024),
+        ("stderr", stderr, 256 * 1_024),
+    ):
+        prefix_row = prefix_projection.get(stream)
+        if type(prefix_row) is not dict or set(prefix_row) != {
+            "path",
+            "sha256",
+            "size_bytes",
+        }:
+            raise ValueError("failure child pipe prefix projection is not closed")
+        prefix_name = f"failure-child-{stream}-prefix.bin"
+        prefix_bytes, _ = _read_regular_at_fd_v2(
+            evidence_fd,
+            prefix_name,
+            maximum_bytes=cap,
+            deadline_ns=deadline_ns,
+        )
+        if (
+            prefix_row["path"] != "evidence/" + prefix_name
+            or prefix_row["sha256"] != hashlib.sha256(prefix_bytes).hexdigest()
+            or _require_exact_int_v2(
+                prefix_row["size_bytes"],
+                f"failure {stream} prefix size",
+                maximum=cap,
+            )
+            != len(prefix_bytes)
+            or type(payload) is not bytes
+            or len(payload) > cap
+            or not payload.startswith(prefix_bytes)
+        ):
+            raise ValueError("failure child pipe prefix/final splice drifted")
+        final_name = f"failure-child-{stream}.bin"
+        _atomic_write_new_file_at_fd_v2(
+            evidence_fd, final_name, payload, deadline_ns=deadline_ns
+        )
+        stream_rows[stream] = {
+            "final": _failure_pipe_file_reference_v2(
+                "evidence/" + final_name, payload
+            ),
+            "prefix": prefix_row,
+            "tail_size_bytes": len(payload) - len(prefix_bytes),
+        }
+    bundle = _failure_child_pipe_bundle_bytes_v2(stdout, stderr)
+    bundle_cas = _ensure_attempt_private_cas_bytes_at_fd_v2(
+        cas_fd,
+        bundle,
+        store_namespace=store_namespace,
+        deadline_ns=deadline_ns,
+    )
+    core = {
+        "schema_version": _FAILURE_CHILD_PIPE_CAPTURE_SCHEMA_V2,
+        "bundle_cas": bundle_cas,
+        "capture_boundary": (
+            "COMPLETE_EOF_AND_LAUNCHER_REAPED"
+            if capture_complete
+            else (
+                "INCOMPLETE_TRUNCATED_AT_STREAM_CAP"
+                if capture_truncated
+                else "INCOMPLETE_PREFIX_OR_PARTIAL_DRAIN_ONLY"
+            )
+        ),
+        "capture_complete": capture_complete,
+        "capture_persistence_verified": True,
+        "capture_truncated_at_cap": capture_truncated,
+        "prefix_persisted_before_cleanup": True,
+        "stderr": stream_rows["stderr"],
+        "stdout": stream_rows["stdout"],
+        "systemd_run_pipe_relay_bytes_not_independent_child_authentication": True,
+    }
+    return {
+        **core,
+        "capture_root": stable_hash(
+            core, prefix="phase2b_formal_wire_covert_failure_pipe_capture_v1_"
+        ),
+    }
+
+
+def _failure_child_pipe_persistence_unverified_projection_v2(
+    evidence_fd: int,
+    *,
+    persistence_error_type: str,
+    capture_truncated: bool,
+    deadline_ns: int,
+) -> dict[str, object]:
+    if (
+        type(persistence_error_type) is not str
+        or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,127}", persistence_error_type)
+        is None
+        or type(capture_truncated) is not bool
+    ):
+        raise ValueError("failure pipe persistence error type is malformed")
+    names = set(_directory_names_at_fd_v2(evidence_fd))
+    partial_names = {
+        name for name in names if name.startswith("failure-child-")
+    }
+    stdout_prefix_name = "failure-child-stdout-prefix.bin"
+    stderr_prefix_name = "failure-child-stderr-prefix.bin"
+    stdout_final_name = "failure-child-stdout.bin"
+    stderr_final_name = "failure-child-stderr.bin"
+    reachable_sets = (
+        set(),
+        {stdout_prefix_name},
+        {stdout_prefix_name, stderr_prefix_name},
+        {stdout_prefix_name, stderr_prefix_name, stdout_final_name},
+        {
+            stdout_prefix_name,
+            stderr_prefix_name,
+            stdout_final_name,
+            stderr_final_name,
+        },
+    )
+    if partial_names not in reachable_sets:
+        raise ValueError("failure pipe partial publication set is unreachable")
+    partial: list[dict[str, object]] = []
+    payloads: dict[str, bytes] = {}
+    ordered_names = (
+        stdout_prefix_name,
+        stdout_final_name,
+        stderr_prefix_name,
+        stderr_final_name,
+    )
+    for name in ordered_names:
+        if name not in partial_names:
+            continue
+        cap = 8 * 1_024 * 1_024 if "stdout" in name else 256 * 1_024
+        payload, _ = _read_regular_at_fd_v2(
+            evidence_fd, name, maximum_bytes=cap, deadline_ns=deadline_ns
+        )
+        payloads[name] = payload
+        partial.append(
+            _failure_pipe_file_reference_v2("evidence/" + name, payload)
+        )
+    if (
+        stdout_final_name in payloads
+        and not payloads[stdout_final_name].startswith(payloads[stdout_prefix_name])
+    ) or (
+        stderr_final_name in payloads
+        and not payloads[stderr_final_name].startswith(payloads[stderr_prefix_name])
+    ):
+        raise ValueError("failure pipe partial final does not extend its prefix")
+    core = {
+        "schema_version": _FAILURE_CHILD_PIPE_CAPTURE_SCHEMA_V2,
+        "capture_boundary": "PERSISTENCE_UNVERIFIED_NO_COMPLETE_CAPTURE_CLAIM",
+        "capture_complete": False,
+        "capture_persistence_verified": False,
+        "capture_truncated_at_cap": capture_truncated,
+        "persistence_error_type": persistence_error_type,
+        "retained_partial_artifacts": partial,
+        "systemd_run_pipe_relay_bytes_not_independent_child_authentication": True,
+    }
+    return {
+        **core,
+        "capture_root": stable_hash(
+            core, prefix="phase2b_formal_wire_covert_failure_pipe_capture_v1_"
+        ),
+    }
+
+
+def _verify_failure_child_pipe_capture_projection_v2(
+    evidence_fd: int,
+    capture: object,
+    *,
+    attempt_manifest_root: str,
+    deadline_ns: int | None,
+) -> tuple[bytes | None, bytes | None, bool]:
+    if type(capture) is not dict:
+        raise ValueError("launched /failure/4 lacks child pipe capture evidence")
+    common = {
+        "capture_boundary",
+        "capture_complete",
+        "capture_persistence_verified",
+        "capture_root",
+        "capture_truncated_at_cap",
+        "schema_version",
+        "systemd_run_pipe_relay_bytes_not_independent_child_authentication",
+    }
+    if (
+        capture.get("schema_version") != _FAILURE_CHILD_PIPE_CAPTURE_SCHEMA_V2
+        or type(capture.get("capture_complete")) is not bool
+        or type(capture.get("capture_persistence_verified")) is not bool
+        or type(capture.get("capture_truncated_at_cap")) is not bool
+        or (
+            capture.get("capture_complete") is True
+            and capture.get("capture_truncated_at_cap") is True
+        )
+        or capture.get(
+            "systemd_run_pipe_relay_bytes_not_independent_child_authentication"
+        )
+        is not True
+    ):
+        raise ValueError("failure child pipe capture header drifted")
+    observed_failure_names = {
+        name
+        for name in _directory_names_at_fd_v2(evidence_fd)
+        if name.startswith("failure-child-")
+    }
+    if capture["capture_persistence_verified"] is False:
+        expected = common | {"persistence_error_type", "retained_partial_artifacts"}
+        partial = capture.get("retained_partial_artifacts")
+        error_type = capture.get("persistence_error_type")
+        if (
+            set(capture) != expected
+            or capture["capture_complete"] is not False
+            or capture["capture_boundary"]
+            != "PERSISTENCE_UNVERIFIED_NO_COMPLETE_CAPTURE_CLAIM"
+            or type(error_type) is not str
+            or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,127}", error_type) is None
+            or type(partial) is not list
+            or len(partial) > 4
+        ):
+            raise ValueError("unverified failure pipe persistence shape drifted")
+        stdout_prefix_name = "failure-child-stdout-prefix.bin"
+        stderr_prefix_name = "failure-child-stderr-prefix.bin"
+        stdout_final_name = "failure-child-stdout.bin"
+        stderr_final_name = "failure-child-stderr.bin"
+        reachable_sets = (
+            set(),
+            {stdout_prefix_name},
+            {stdout_prefix_name, stderr_prefix_name},
+            {stdout_prefix_name, stderr_prefix_name, stdout_final_name},
+            {
+                stdout_prefix_name,
+                stderr_prefix_name,
+                stdout_final_name,
+                stderr_final_name,
+            },
+        )
+        if observed_failure_names not in reachable_sets:
+            raise ValueError("unverified failure pipe object set is unreachable")
+        expected_rows: list[dict[str, object]] = []
+        payloads: dict[str, bytes] = {}
+        for index, name in enumerate(
+            (
+                stdout_prefix_name,
+                stdout_final_name,
+                stderr_prefix_name,
+                stderr_final_name,
+            )
+        ):
+            if name not in observed_failure_names:
+                continue
+            cap = 8 * 1_024 * 1_024 if "stdout" in name else 256 * 1_024
+            payload, _ = _read_regular_at_fd_v2(
+                evidence_fd, name, maximum_bytes=cap, deadline_ns=deadline_ns
+            )
+            payloads[name] = payload
+            expected_rows.append(
+                _failure_pipe_file_reference_v2("evidence/" + name, payload)
+            )
+        if (
+            stdout_final_name in payloads
+            and not payloads[stdout_final_name].startswith(
+                payloads[stdout_prefix_name]
+            )
+        ) or (
+            stderr_final_name in payloads
+            and not payloads[stderr_final_name].startswith(
+                payloads[stderr_prefix_name]
+            )
+        ):
+            raise ValueError("unverified failure pipe final/prefix splice drifted")
+        if not _exact_json_equal(partial, expected_rows):
+            raise ValueError("partial failure pipe artifact order/bytes drifted")
+        if observed_failure_names != {
+            row["path"].removeprefix("evidence/") for row in expected_rows
+        }:
+            raise ValueError("unverified failure pipe retained object set drifted")
+        core = {key: capture[key] for key in capture if key != "capture_root"}
+        if capture["capture_root"] != stable_hash(
+            core, prefix="phase2b_formal_wire_covert_failure_pipe_capture_v1_"
+        ):
+            raise ValueError("unverified failure pipe capture root drifted")
+        return None, None, False
+
+    expected = common | {
+        "bundle_cas",
+        "prefix_persisted_before_cleanup",
+        "stderr",
+        "stdout",
+    }
+    if (
+        set(capture) != expected
+        or capture["prefix_persisted_before_cleanup"] is not True
+        or capture["capture_boundary"]
+        != (
+            "COMPLETE_EOF_AND_LAUNCHER_REAPED"
+            if capture["capture_complete"]
+            else (
+                "INCOMPLETE_TRUNCATED_AT_STREAM_CAP"
+                if capture["capture_truncated_at_cap"]
+                else "INCOMPLETE_PREFIX_OR_PARTIAL_DRAIN_ONLY"
+            )
+        )
+        or observed_failure_names
+        != {
+            "failure-child-stderr-prefix.bin",
+            "failure-child-stderr.bin",
+            "failure-child-stdout-prefix.bin",
+            "failure-child-stdout.bin",
+        }
+    ):
+        raise ValueError("verified failure pipe capture shape/object set drifted")
+    payloads: dict[str, bytes] = {}
+    for stream, cap in (("stdout", 8 * 1_024 * 1_024), ("stderr", 256 * 1_024)):
+        row = capture.get(stream)
+        if type(row) is not dict or set(row) != {"final", "prefix", "tail_size_bytes"}:
+            raise ValueError("failure pipe stream projection is not closed")
+        prefix_row = row["prefix"]
+        final_row = row["final"]
+        if (
+            type(prefix_row) is not dict
+            or type(final_row) is not dict
+            or set(prefix_row) != {"path", "sha256", "size_bytes"}
+            or set(final_row) != {"path", "sha256", "size_bytes"}
+            or prefix_row["path"] != f"evidence/failure-child-{stream}-prefix.bin"
+            or final_row["path"] != f"evidence/failure-child-{stream}.bin"
+        ):
+            raise ValueError("failure pipe stream paths drifted")
+        prefix_bytes, _ = _read_regular_at_fd_v2(
+            evidence_fd,
+            f"failure-child-{stream}-prefix.bin",
+            maximum_bytes=cap,
+            deadline_ns=deadline_ns,
+        )
+        final_bytes, _ = _read_regular_at_fd_v2(
+            evidence_fd,
+            f"failure-child-{stream}.bin",
+            maximum_bytes=cap,
+            deadline_ns=deadline_ns,
+        )
+        if (
+            prefix_row["sha256"] != hashlib.sha256(prefix_bytes).hexdigest()
+            or final_row["sha256"] != hashlib.sha256(final_bytes).hexdigest()
+            or _require_exact_int_v2(
+                prefix_row["size_bytes"], f"failure {stream} prefix size", maximum=cap
+            )
+            != len(prefix_bytes)
+            or _require_exact_int_v2(
+                final_row["size_bytes"], f"failure {stream} final size", maximum=cap
+            )
+            != len(final_bytes)
+            or not final_bytes.startswith(prefix_bytes)
+            or _require_exact_int_v2(
+                row["tail_size_bytes"], f"failure {stream} tail size", maximum=cap
+            )
+            != len(final_bytes) - len(prefix_bytes)
+        ):
+            raise ValueError("failure pipe stream bytes/prefix splice drifted")
+        payloads[stream] = final_bytes
+    if (
+        capture["capture_truncated_at_cap"]
+        and len(payloads["stdout"]) != 8 * 1_024 * 1_024
+        and len(payloads["stderr"]) != 256 * 1_024
+    ):
+        raise ValueError("truncated failure capture did not reach a stream cap")
+    bundle_cas = capture["bundle_cas"]
+    if type(bundle_cas) is not dict or set(bundle_cas) != {
+        "content_sha256",
+        "object_key",
+        "object_size_bytes",
+        "prior_object_count",
+        "put_exit_code",
+        "replay_verified",
+        "resulting_object_count",
+        "store_namespace",
+    }:
+        raise ValueError("failure pipe bundle CAS projection is not closed")
+    expected_bundle = _failure_child_pipe_bundle_bytes_v2(
+        payloads["stdout"], payloads["stderr"]
+    )
+    digest = hashlib.sha256(expected_bundle).hexdigest()
+    if (
+        bundle_cas["content_sha256"] != digest
+        or bundle_cas["object_key"] != "sha256:" + digest
+        or _require_exact_int_v2(
+            bundle_cas["object_size_bytes"], "failure pipe bundle CAS size", minimum=1
+        )
+        != len(expected_bundle)
+        or _require_exact_int_v2(
+            bundle_cas["prior_object_count"],
+            "failure pipe bundle prior object count",
+            maximum=0,
+        )
+        != 0
+        or _require_exact_int_v2(
+            bundle_cas["put_exit_code"],
+            "failure pipe bundle put exit code",
+            maximum=0,
+        )
+        != 0
+        or bundle_cas["replay_verified"] is not True
+        or _require_exact_int_v2(
+            bundle_cas["resulting_object_count"],
+            "failure pipe bundle resulting object count",
+            minimum=1,
+            maximum=1,
+        )
+        != 1
+        or bundle_cas["store_namespace"] != attempt_manifest_root
+    ):
+        raise ValueError("failure pipe bundle CAS identity drifted")
+    cas_fd = _open_directory_at_fd_v2(evidence_fd, "cas")
+    try:
+        retained_bundle, _ = _read_regular_at_fd_v2(
+            cas_fd,
+            digest,
+            maximum_bytes=len(expected_bundle),
+            deadline_ns=deadline_ns,
+        )
+    finally:
+        _close_owned_descriptors_v2((cas_fd,), name="failure pipe CAS replay")
+    if retained_bundle != expected_bundle:
+        raise ValueError("failure pipe bundle CAS bytes drifted")
+    decoded_stdout, decoded_stderr = _decode_failure_child_pipe_bundle_v2(
+        retained_bundle
+    )
+    if decoded_stdout != payloads["stdout"] or decoded_stderr != payloads["stderr"]:
+        raise ValueError("failure pipe bundle/raw stream splice drifted")
+    core = {key: capture[key] for key in capture if key != "capture_root"}
+    if capture["capture_root"] != stable_hash(
+        core, prefix="phase2b_formal_wire_covert_failure_pipe_capture_v1_"
+    ):
+        raise ValueError("failure child pipe capture root drifted")
+    return payloads["stdout"], payloads["stderr"], capture["capture_complete"]
+
+
 def _cas_put_file_v2(
     cas_directory: Path,
     source: Path,
@@ -10828,6 +11412,7 @@ def _cas_put_file_v2(
             target_name=expected_sha256,
             temporary_name=temporary_name,
             staged_stat=destination_stat,
+            expected_sha256=expected_sha256,
             linked_hint=linked,
             message=f"CAS publication of {name} committed before a later failure",
         )
@@ -11179,6 +11764,41 @@ def _verify_runtime_environment_manifest_v2(
     return decoded
 
 
+def _append_bounded_pipe_block_v2(
+    buffer: bytearray,
+    block: bytes,
+    *,
+    cap: int,
+    stream: str,
+    capture_state: dict[str, bool] | None,
+) -> None:
+    if (
+        type(buffer) is not bytearray
+        or type(block) is not bytes
+        or type(cap) is not int
+        or type(cap) is bool
+        or cap < 0
+        or stream not in {"stdout", "stderr"}
+        or (
+            capture_state is not None
+            and (
+                type(capture_state) is not dict
+                or set(capture_state)
+                != {"capture_complete", "capture_truncated"}
+                or any(type(value) is not bool for value in capture_state.values())
+            )
+        )
+    ):
+        raise ValueError("bounded child pipe append arguments are malformed")
+    remaining = max(0, cap - len(buffer))
+    buffer.extend(block[:remaining])
+    if len(block) > remaining:
+        if capture_state is not None:
+            capture_state["capture_complete"] = False
+            capture_state["capture_truncated"] = True
+        raise ValueError(f"bounded child {stream} exceeded its cap")
+
+
 def _capture_process_pipes_v2(
     process: subprocess.Popen[bytes],
     *,
@@ -11186,14 +11806,42 @@ def _capture_process_pipes_v2(
     stdout_cap: int,
     stderr_cap: int,
     wait_for_process_exit: bool,
+    stdout_buffer: bytearray | None = None,
+    stderr_buffer: bytearray | None = None,
+    capture_state: dict[str, bool] | None = None,
 ) -> tuple[bytes, bytes, int | None]:
     if process.stdout is None or process.stderr is None:
         raise ValueError("bounded capture needs both child pipes")
     selector = selectors.DefaultSelector()
     selector.register(process.stdout, selectors.EVENT_READ, "stdout")
     selector.register(process.stderr, selectors.EVENT_READ, "stderr")
-    output = {"stdout": bytearray(), "stderr": bytearray()}
+    if (
+        (stdout_buffer is not None and type(stdout_buffer) is not bytearray)
+        or (stderr_buffer is not None and type(stderr_buffer) is not bytearray)
+        or (
+            capture_state is not None
+            and (
+                type(capture_state) is not dict
+                or set(capture_state)
+                != {"capture_complete", "capture_truncated"}
+                or any(type(value) is not bool for value in capture_state.values())
+            )
+        )
+    ):
+        raise TypeError("bounded capture buffers/state are malformed")
+    output = {
+        "stdout": bytearray() if stdout_buffer is None else stdout_buffer,
+        "stderr": bytearray() if stderr_buffer is None else stderr_buffer,
+    }
     caps = {"stdout": stdout_cap, "stderr": stderr_cap}
+    starts = {name: len(buffer) for name, buffer in output.items()}
+    if any(
+        type(caps[name]) is not int
+        or type(caps[name]) is bool
+        or caps[name] < starts[name]
+        for name in output
+    ):
+        raise ValueError("bounded capture total cap is smaller than its prefix")
     try:
         while selector.get_map():
             remaining_ns = deadline_ns - time.monotonic_ns()
@@ -11206,16 +11854,30 @@ def _capture_process_pipes_v2(
                 if not block:
                     selector.unregister(key.fileobj)
                     continue
-                output[stream].extend(block)
-                if len(output[stream]) > caps[stream]:
-                    raise ValueError(f"bounded child {stream} exceeded its cap")
+                _append_bounded_pipe_block_v2(
+                    output[stream],
+                    block,
+                    cap=caps[stream],
+                    stream=stream,
+                    capture_state=capture_state,
+                )
         returncode: int | None = None
         if wait_for_process_exit:
             remaining_seconds = max(
                 0.001, (deadline_ns - time.monotonic_ns()) / 1_000_000_000
             )
             returncode = process.wait(timeout=remaining_seconds)
-        return bytes(output["stdout"]), bytes(output["stderr"]), returncode
+            if capture_state is not None:
+                if capture_state["capture_truncated"]:
+                    raise ValueError(
+                        "bounded child capture cannot complete after truncation"
+                    )
+                capture_state["capture_complete"] = True
+        return (
+            bytes(output["stdout"][starts["stdout"] :]),
+            bytes(output["stderr"][starts["stderr"] :]),
+            returncode,
+        )
     finally:
         selector.close()
 
@@ -11410,7 +12072,7 @@ def _verify_systemctl_transcript_v2(
 ) -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
     if (
         type(commands) is not list
-        or not 5 <= len(commands) <= _MAX_MAIN_SYSTEMCTL_COMMAND_ROWS_V2
+        or not 6 <= len(commands) <= _MAX_MAIN_SYSTEMCTL_COMMAND_ROWS_V2
     ):
         raise ValueError("systemctl transcript count is outside its frozen bounds")
     decoded: list[tuple[list[str], str, int, bytes, bytes]] = []
@@ -11446,54 +12108,59 @@ def _verify_systemctl_transcript_v2(
     entry_rows: list[dict[str, str]] = []
     locked_invocation_id: str | None = None
     saw_loaded_entry = False
+    ready_entry: dict[str, str] | None = None
     while position < len(decoded) and decoded[position][1].startswith("entry-show-"):
         argv, purpose, returncode, stdout, stderr = decoded[position]
         if purpose != f"entry-show-{len(entry_rows)}" or argv != show_argv:
             raise ValueError("systemctl entry probe sequence drifted")
-        if returncode != 0 or stderr:
-            raise ValueError("systemctl entry probe did not close successfully")
+        if len(entry_rows) >= 8:
+            raise ValueError("systemctl entry probe count exceeds eight")
+        if returncode != 0:
+            entry_rows.append({})
+            position += 1
+            continue
+        if stderr:
+            raise ValueError("successful systemctl entry probe wrote stderr")
         candidate = _parse_systemd_show_v2(
             stdout, set(_SYSTEMD_SHOW_PROPERTIES_V2)
         )
-        if candidate["LoadState"] == "not-found":
-            if (
-                saw_loaded_entry
-                or not _systemd_show_is_exact_absent_v2(candidate)
-            ):
+        entry_kind, invocation_id = _evaluate_owned_or_absent_systemd_show_v2(
+            candidate,
+            attempt=attempt,
+            source_tree=source_tree,
+            ownership_marker=ownership_marker,
+            expected_invocation_id=locked_invocation_id,
+            name="systemctl entry",
+        )
+        if entry_kind == "absent":
+            if saw_loaded_entry:
                 raise ValueError(
                     "systemctl entry became absent after an owned invocation appeared"
                 )
             entry_rows.append({})
         else:
-            invocation_id = candidate["InvocationID"]
-            if (
-                candidate["LoadState"] != "loaded"
-                or candidate["Description"] != ownership_marker
-                or re.fullmatch(r"[0-9a-f]{32}", invocation_id) is None
-            ):
-                raise ValueError("systemctl entry observed an unowned unit")
+            if invocation_id is None:
+                raise RuntimeError("owned systemctl entry lost its InvocationID")
             if locked_invocation_id is None:
                 locked_invocation_id = invocation_id
-            elif invocation_id != locked_invocation_id:
-                raise ValueError("systemctl entry InvocationID changed")
-            _normalize_effective_systemd_properties_v2(
-                candidate, attempt=attempt, source_tree=source_tree
-            )
             saw_loaded_entry = True
             entry_rows.append(candidate)
         position += 1
+        if entry_kind == "owned" and _systemd_entry_ready_v2(
+            candidate, name="systemctl entry"
+        ):
+            ready_entry = candidate
+            break
     if not 1 <= len(entry_rows) <= 8:
         raise ValueError("systemctl entry probe count drifted")
-    entry = entry_rows[-1]
-    if (
-        entry["LoadState"] != "loaded"
-        or entry["Description"] != ownership_marker
-        or entry["ActiveState"] != "active"
-        or entry["SubState"] != "running"
-        or _parse_systemd_unsigned_v2(entry["MainPID"], "entry MainPID") < 1
-    ):
+    if ready_entry is None:
         raise ValueError("systemctl entry terminal probe is not active/running")
-    _require_safe_cgroup_path_v2(entry["ControlGroup"], "systemctl entry cgroup")
+    if (
+        position < len(decoded)
+        and decoded[position][1].startswith("entry-show-")
+    ):
+        raise ValueError("systemctl entry probes continued after ready")
+    entry = ready_entry
     terminal_rows: list[dict[str, str]] = []
     while position < len(decoded) and decoded[position][1].startswith("terminal-show-"):
         argv, purpose, returncode, stdout, stderr = decoded[position]
@@ -11504,37 +12171,39 @@ def _verify_systemctl_transcript_v2(
         candidate = _parse_systemd_show_v2(
             stdout, set(_SYSTEMD_SHOW_PROPERTIES_V2)
         )
-        if (
-            candidate["LoadState"] != "loaded"
-            or candidate["Description"] != ownership_marker
-            or candidate["InvocationID"] != entry["InvocationID"]
-        ):
-            raise ValueError("systemctl terminal probe changed owned invocation")
-        _normalize_effective_systemd_properties_v2(
-            candidate, attempt=attempt, source_tree=source_tree
+        terminal_kind, _ = _evaluate_owned_or_absent_systemd_show_v2(
+            candidate,
+            attempt=attempt,
+            source_tree=source_tree,
+            ownership_marker=ownership_marker,
+            expected_invocation_id=entry["InvocationID"],
+            name="systemctl terminal probe",
+        )
+        if terminal_kind != "owned":
+            raise ValueError("systemctl terminal probe lost its owned invocation")
+        _systemd_terminal_success_v2(
+            candidate, name="systemctl terminal probe"
         )
         terminal_rows.append(candidate)
         position += 1
-    if not 1 <= len(terminal_rows) <= 33:
+    if not 2 <= len(terminal_rows) <= 33:
         raise ValueError("systemctl terminal probe count drifted")
+    for earlier in terminal_rows[:-2]:
+        if _systemd_terminal_success_v2(
+            earlier, name="systemctl terminal loop"
+        ):
+            raise ValueError(
+                "systemctl terminal probes continued after the loop exit snapshot"
+            )
     terminal = terminal_rows[-1]
-    if (
-        terminal["LoadState"] != "loaded"
-        or terminal["ActiveState"] != "active"
-        or terminal["SubState"] != "exited"
-        or terminal["Result"] != "success"
-        or _parse_systemd_unsigned_v2(terminal["ExecMainCode"], "terminal ExecMainCode")
-        != 1
-        or _parse_systemd_unsigned_v2(
-            terminal["ExecMainStatus"], "terminal ExecMainStatus"
-        )
-        != 0
-        or _parse_systemd_unsigned_v2(terminal["MainPID"], "terminal MainPID") != 0
-        or terminal["ControlGroup"] != ""
-        or terminal["InvocationID"] != entry["InvocationID"]
-        or terminal["Description"] != ownership_marker
+    for name, candidate in (
+        ("loop-exit", terminal_rows[-2]),
+        ("pre-stop", terminal),
     ):
-        raise ValueError("systemctl terminal snapshot drifted")
+        if not _systemd_terminal_success_v2(
+            candidate, name=f"systemctl {name} terminal"
+        ):
+            raise ValueError(f"systemctl {name} terminal snapshot drifted")
     if position >= len(decoded):
         raise ValueError("systemctl transcript lacks stop")
     stop_argv, stop_purpose, stop_rc, stop_stdout, stop_stderr = decoded[position]
@@ -11563,15 +12232,18 @@ def _verify_systemctl_transcript_v2(
             absent_stdout, set(_SYSTEMD_SHOW_PROPERTIES_V2)
         )
         if not _systemd_show_is_exact_absent_v2(candidate):
-            if (
-                candidate["LoadState"] != "loaded"
-                or candidate["Description"] != ownership_marker
-                or candidate["InvocationID"] != entry["InvocationID"]
-            ):
-                raise ValueError("systemctl post-stop probe observed a replacement unit")
-            _normalize_effective_systemd_properties_v2(
-                candidate, attempt=attempt, source_tree=source_tree
+            post_kind, _ = _evaluate_owned_or_absent_systemd_show_v2(
+                candidate,
+                attempt=attempt,
+                source_tree=source_tree,
+                ownership_marker=ownership_marker,
+                expected_invocation_id=entry["InvocationID"],
+                name="systemctl post-stop probe",
             )
+            if post_kind != "owned":
+                raise ValueError(
+                    "systemctl post-stop probe observed a replacement unit"
+                )
         elif position != len(decoded) - 1:
             raise ValueError("systemctl transcript continued after exact absence")
         absent_rows.append(candidate)
@@ -11868,6 +12540,9 @@ def _cleanup_transient_attempt_v2(
     deadline_ns: int,
     commands: list[dict[str, object]],
     cleanup_start_command_index: int,
+    stdout_capture: bytearray | None = None,
+    stderr_capture: bytearray | None = None,
+    capture_state: dict[str, bool] | None = None,
 ) -> dict[str, object]:
     if prelaunch_absent_verified is not True:
         raise RuntimeError("failure cleanup lacks prelaunch absence ownership evidence")
@@ -11880,6 +12555,20 @@ def _cleanup_transient_attempt_v2(
         <= _MAX_MAIN_SYSTEMCTL_COMMAND_ROWS_V2
     ):
         raise RuntimeError("failure cleanup boundary is not exact")
+    if (
+        (stdout_capture is not None and type(stdout_capture) is not bytearray)
+        or (stderr_capture is not None and type(stderr_capture) is not bytearray)
+        or (
+            capture_state is not None
+            and (
+                type(capture_state) is not dict
+                or set(capture_state)
+                != {"capture_complete", "capture_truncated"}
+                or any(type(value) is not bool for value in capture_state.values())
+            )
+        )
+    ):
+        raise RuntimeError("failure cleanup pipe-capture state is malformed")
     show_argv = _systemd_show_argv_v2(systemctl_realpath, unit_name)
 
     def show_once(purpose: str) -> dict[str, str]:
@@ -11897,49 +12586,30 @@ def _cleanup_transient_attempt_v2(
 
     current = show_once("failure-owned-show")
     recovered_invocation = owned_invocation_id
-    if not _systemd_show_is_exact_absent_v2(current):
-        if (
-            current["LoadState"] != "loaded"
-            or current["Description"] != ownership_marker
-            or re.fullmatch(r"[0-9a-f]{32}", current["InvocationID"]) is None
-        ):
-            raise RuntimeError("failure cleanup refuses an unowned unit")
-        _normalize_effective_systemd_properties_v2(
-            current, attempt=attempt, source_tree=source_tree
-        )
-        if (
-            recovered_invocation is not None
-            and recovered_invocation != current["InvocationID"]
-        ):
-            raise RuntimeError("failure cleanup InvocationID changed")
-        recovered_invocation = current["InvocationID"]
 
     def require_owned_or_absent(show: dict[str, str], name: str) -> None:
-        if _systemd_show_is_exact_absent_v2(show):
-            return
-        if (
-            recovered_invocation is None
-            or show["LoadState"] != "loaded"
-            or show["Description"] != ownership_marker
-            or show["InvocationID"] != recovered_invocation
-        ):
-            raise RuntimeError(f"failure cleanup {name} observed an unowned unit")
-        _normalize_effective_systemd_properties_v2(
-            show, attempt=attempt, source_tree=source_tree
+        nonlocal recovered_invocation
+        state, invocation = _evaluate_owned_or_absent_systemd_show_v2(
+            show,
+            attempt=attempt,
+            source_tree=source_tree,
+            ownership_marker=ownership_marker,
+            expected_invocation_id=recovered_invocation,
+            name=f"failure cleanup {name}",
         )
+        if state == "owned":
+            if invocation is None:
+                raise RuntimeError("owned cleanup show lost its InvocationID")
+            if recovered_invocation is None:
+                recovered_invocation = invocation
 
     require_owned_or_absent(current, "initial")
     term_sent = False
     kill_sent = False
 
     def unit_has_live_members(show: dict[str, str]) -> bool:
-        return (
-            not _systemd_show_is_exact_absent_v2(show)
-            and (
-                _parse_systemd_unsigned_v2(show["MainPID"], "cleanup MainPID") > 0
-                or show["ControlGroup"] != ""
-                or show["SubState"] in {"running", "start", "start-pre", "stop"}
-            )
+        return _systemd_show_has_live_members_v2(
+            show, name="failure cleanup"
         )
 
     if unit_has_live_members(current):
@@ -11947,7 +12617,7 @@ def _cleanup_transient_attempt_v2(
             systemctl_realpath,
             "--user",
             "kill",
-            "--kill-whom=all",
+            "--kill-who=all",
             "--signal=SIGTERM",
             unit_name,
         ]
@@ -11975,7 +12645,7 @@ def _cleanup_transient_attempt_v2(
                 systemctl_realpath,
                 "--user",
                 "kill",
-                "--kill-whom=all",
+                "--kill-who=all",
                 "--signal=SIGKILL",
                 unit_name,
             ]
@@ -12028,6 +12698,14 @@ def _cleanup_transient_attempt_v2(
                 and launcher.stdout.closed
                 and launcher.stderr.closed
             ):
+                if (
+                    capture_state is None
+                    or capture_state["capture_complete"] is not True
+                    or capture_state["capture_truncated"] is not False
+                ):
+                    raise RuntimeError(
+                        "closed failure pipes lack prior EOF/reap capture proof"
+                    )
                 drained_stdout = b""
                 drained_stderr = b""
                 launcher_returncode = launcher.returncode
@@ -12039,6 +12717,9 @@ def _cleanup_transient_attempt_v2(
                         stdout_cap=8 * 1_024 * 1_024,
                         stderr_cap=256 * 1_024,
                         wait_for_process_exit=True,
+                        stdout_buffer=stdout_capture,
+                        stderr_buffer=stderr_capture,
+                        capture_state=capture_state,
                     )
                 )
         except BaseException:
@@ -12049,10 +12730,17 @@ def _cleanup_transient_attempt_v2(
             launcher, name="failure cleanup launcher"
         )
     absent: dict[str, str] | None = None
+    absence_observed = _systemd_show_is_exact_absent_v2(current)
     for index in range(8):
         candidate = show_once(f"failure-absent-{index}")
+        if absence_observed and not _systemd_show_is_exact_absent_v2(candidate):
+            raise RuntimeError(
+                "failure cleanup unit reappeared after exact absence"
+            )
+        require_owned_or_absent(candidate, "final absence")
         if _systemd_show_is_exact_absent_v2(candidate):
             absent = candidate
+            absence_observed = True
             break
         if (
             candidate["Description"] != ownership_marker
@@ -12093,10 +12781,16 @@ def _verify_failure_cleanup_projection_v2(
     entry_kind: str,
     source_tree: Path,
     launch_intent: dict[str, object],
+    failure_schema_version: str = OUTER_ATTEMPT_FAILURE_SCHEMA_V2,
 ) -> None:
     """Replay a stage-bounded cleanup FSM from the immutable launch intent."""
 
-    if type(cleanup_verified) is not bool or type(cleanup) is not dict:
+    if (
+        type(cleanup_verified) is not bool
+        or type(cleanup) is not dict
+        or failure_schema_version
+        not in {OUTER_ATTEMPT_FAILURE_SCHEMA_V2, _OUTER_ATTEMPT_FAILURE_SCHEMA_V3}
+    ):
         raise ValueError("failure cleanup projection arguments are malformed")
     intent = _validate_launch_intent_projection_v2(
         launch_intent,
@@ -12168,6 +12862,11 @@ def _verify_failure_cleanup_projection_v2(
     systemctl_realpath = intent["executables"]["systemctl"]["realpath"]
     unit_name = intent["unit_name"]
     ownership_marker = intent["ownership_marker"]
+    kill_who_option = (
+        "--kill-who=all"
+        if failure_schema_version == OUTER_ATTEMPT_FAILURE_SCHEMA_V2
+        else "--kill-" + "whom=all"
+    )
     show_argv = _systemd_show_argv_v2(systemctl_realpath, unit_name)
     if len(decoded) - boundary > _MAX_FAILURE_CLEANUP_SUFFIX_ROWS_V2:
         raise ValueError("failure cleanup suffix exceeds its exact row bound")
@@ -12175,7 +12874,7 @@ def _verify_failure_cleanup_projection_v2(
         systemctl_realpath,
         "--user",
         "kill",
-        "--kill-whom=all",
+        kill_who_option,
         "--signal=SIGTERM",
         unit_name,
     ]
@@ -12183,7 +12882,7 @@ def _verify_failure_cleanup_projection_v2(
         systemctl_realpath,
         "--user",
         "kill",
-        "--kill-whom=all",
+        kill_who_option,
         "--signal=SIGKILL",
         unit_name,
     ]
@@ -12223,7 +12922,14 @@ def _verify_failure_cleanup_projection_v2(
             is None
         ):
             raise ValueError("unproven cleanup intervention marker drifted")
-        return
+        # Retained /failure/3 evidence predates the strict ownership/FSM
+        # projection below and remains replay-only.  Current /failure/4
+        # unproven transcripts are negative claims, but their recorded rows
+        # must still satisfy the same launch-intent, ownership, phase, and
+        # ordering constraints as verified cleanup up to the exact final
+        # failing transition.
+        if failure_schema_version == _OUTER_ATTEMPT_FAILURE_SCHEMA_V3:
+            return
     owned_invocation: str | None = None
 
     def parse_owned_show(
@@ -12231,6 +12937,7 @@ def _verify_failure_cleanup_projection_v2(
         *,
         allow_absent: bool,
         allow_failed_last: bool = False,
+        phase_name: str = "failure cleanup",
     ) -> dict[str, str] | None:
         nonlocal owned_invocation
         argv, _, returncode, stdout, stderr = item
@@ -12245,24 +12952,22 @@ def _verify_failure_cleanup_projection_v2(
             show = _parse_systemd_show_v2(
                 stdout, set(_SYSTEMD_SHOW_PROPERTIES_V2)
             )
-            if _systemd_show_is_exact_absent_v2(show):
+            state, invocation = _evaluate_owned_or_absent_systemd_show_v2(
+                show,
+                attempt=attempt,
+                source_tree=source_tree,
+                ownership_marker=ownership_marker,
+                expected_invocation_id=owned_invocation,
+                name=phase_name,
+            )
+            if state == "absent":
                 if not allow_absent:
                     raise ValueError("failure cleanup unexpectedly observed absence")
                 return show
-            invocation = show["InvocationID"]
-            if (
-                show["LoadState"] != "loaded"
-                or show["Description"] != ownership_marker
-                or re.fullmatch(r"[0-9a-f]{32}", invocation) is None
-            ):
-                raise ValueError("failure cleanup show observed an unowned unit")
+            if invocation is None:
+                raise ValueError("failure cleanup owned show lost its InvocationID")
             if owned_invocation is None:
                 owned_invocation = invocation
-            elif invocation != owned_invocation:
-                raise ValueError("failure cleanup InvocationID changed")
-            _normalize_effective_systemd_properties_v2(
-                show, attempt=attempt, source_tree=source_tree
-            )
             return show
         except ValueError:
             if allow_failed_last:
@@ -12276,43 +12981,63 @@ def _verify_failure_cleanup_projection_v2(
     terminal_index = 0
     post_stop_index = 0
     prefix_phase = "entry"
-    last_entry_show: dict[str, str] | None = None
     last_terminal_show: dict[str, str] | None = None
+    entry_ready = False
+    terminal_exit_seen = False
+    prestop_snapshot_seen = False
     for position in range(1, boundary):
         item = decoded[position]
         purpose = item[1]
         failed_boundary_row = position == boundary - 1
         if purpose == f"entry-show-{entry_index}" and prefix_phase == "entry":
+            if entry_ready:
+                raise ValueError("cleanup prefix continued entry probes after ready")
             entry_index += 1
             if entry_index > 8:
                 raise ValueError("cleanup prefix entry probe count exceeds eight")
+            # The producer intentionally retries a bounded entry `show` whose
+            # command returns nonzero.  A successful command, however, must
+            # parse and prove exact absence/ownership; only the final primary-
+            # failure row may carry a successful-but-malformed projection.
+            if item[2] != 0:
+                continue
+            if item[4]:
+                if failed_boundary_row:
+                    continue
+                raise ValueError(
+                    "successful cleanup-prefix entry show did not close: wrote stderr"
+                )
+            previous_owned_invocation = owned_invocation
             show = parse_owned_show(
-                item, allow_absent=owned_invocation is None,
+                item,
+                allow_absent=True,
                 allow_failed_last=failed_boundary_row,
+                phase_name="cleanup-prefix entry",
             )
-            if (
-                show is not None
-                and _systemd_show_is_exact_absent_v2(show)
-                and owned_invocation is not None
-            ):
-                raise ValueError("owned entry invocation disappeared")
-            if show is not None and not _systemd_show_is_exact_absent_v2(show):
-                last_entry_show = show
+            if show is None:
+                continue
+            if _systemd_show_is_exact_absent_v2(show):
+                if previous_owned_invocation is not None:
+                    if failed_boundary_row:
+                        continue
+                    raise ValueError("owned entry invocation disappeared")
+                continue
+            try:
+                entry_ready = _systemd_entry_ready_v2(
+                    show, name="cleanup-prefix entry"
+                )
+            except ValueError:
+                # Ownership was already proved and locked by the producer;
+                # malformed readiness is nevertheless an exact-final failure.
+                if failed_boundary_row:
+                    continue
+                raise
             continue
         if purpose == f"terminal-show-{terminal_index}" and prefix_phase in {
             "entry",
             "terminal",
         }:
-            if prefix_phase == "entry" and (
-                last_entry_show is None
-                or last_entry_show["ActiveState"] != "active"
-                or last_entry_show["SubState"] != "running"
-                or _parse_systemd_unsigned_v2(
-                    last_entry_show["MainPID"], "cleanup-prefix entry MainPID"
-                )
-                < 1
-                or not last_entry_show["ControlGroup"]
-            ):
+            if prefix_phase == "entry" and not entry_ready:
                 raise ValueError("cleanup prefix entered terminal phase without active entry")
             prefix_phase = "terminal"
             terminal_index += 1
@@ -12322,18 +13047,43 @@ def _verify_failure_cleanup_projection_v2(
                 item,
                 allow_absent=False,
                 allow_failed_last=failed_boundary_row,
+                phase_name="cleanup-prefix terminal",
             )
             if terminal_candidate is not None:
+                try:
+                    terminal_success = _systemd_terminal_success_v2(
+                        terminal_candidate,
+                        name="cleanup-prefix terminal",
+                    )
+                except ValueError:
+                    if failed_boundary_row:
+                        continue
+                    raise
+                if terminal_exit_seen:
+                    if prestop_snapshot_seen:
+                        raise ValueError(
+                            "cleanup prefix continued terminal probes after pre-stop"
+                        )
+                    if not terminal_success:
+                        if failed_boundary_row:
+                            continue
+                        raise ValueError(
+                            "cleanup prefix pre-stop terminal snapshot drifted"
+                        )
+                    prestop_snapshot_seen = True
+                elif terminal_success:
+                    terminal_exit_seen = True
                 last_terminal_show = terminal_candidate
             continue
         if purpose == "stop-after-terminal-snapshot" and prefix_phase == "terminal":
             if (
-                last_terminal_show is None
-                or last_terminal_show["ActiveState"] != "active"
-                or last_terminal_show["SubState"] != "exited"
-                or last_terminal_show["Result"] != "success"
-                or last_terminal_show["MainPID"] != "0"
-                or last_terminal_show["ControlGroup"] != ""
+                not prestop_snapshot_seen
+                or not terminal_exit_seen
+                or last_terminal_show is None
+                or not _systemd_terminal_success_v2(
+                    last_terminal_show,
+                    name="cleanup-prefix pre-stop terminal",
+                )
             ):
                 raise ValueError("cleanup prefix stop lacked terminal success state")
             prefix_phase = "post-stop"
@@ -12355,6 +13105,7 @@ def _verify_failure_cleanup_projection_v2(
                 item,
                 allow_absent=True,
                 allow_failed_last=failed_boundary_row,
+                phase_name="cleanup-prefix post-stop",
             )
             if (
                 post_stop_candidate is not None
@@ -12365,11 +13116,14 @@ def _verify_failure_cleanup_projection_v2(
             continue
         raise ValueError("failure cleanup main-prefix FSM drifted")
 
-    if cleanup["owned_invocation_id"] is not None:
-        if owned_invocation is None:
-            owned_invocation = cleanup["owned_invocation_id"]
-        elif cleanup["owned_invocation_id"] != owned_invocation:
-            raise ValueError("failure cleanup owned InvocationID projection drifted")
+    projected_owned_invocation = cleanup["owned_invocation_id"]
+    if (
+        owned_invocation is not None
+        and projected_owned_invocation != owned_invocation
+    ):
+        raise ValueError(
+            "failure cleanup main-prefix InvocationID is not projected exactly"
+        )
 
     suffix = decoded[boundary:]
     if not suffix:
@@ -12379,7 +13133,10 @@ def _verify_failure_cleanup_projection_v2(
         if suffix[0][1] != "failure-owned-show":
             raise ValueError("failure cleanup suffix lacks its ownership probe")
         current = parse_owned_show(
-            suffix[0], allow_absent=True, allow_failed_last=not cleanup_verified
+            suffix[0],
+            allow_absent=True,
+            allow_failed_last=(not cleanup_verified and len(suffix) == 1),
+            phase_name="failure cleanup initial ownership probe",
         )
         cursor = 1
         saw_term = False
@@ -12387,19 +13144,52 @@ def _verify_failure_cleanup_projection_v2(
         saw_stop = False
 
         def live_members(show: dict[str, str] | None) -> bool:
-            return bool(
-                show is not None
-                and not _systemd_show_is_exact_absent_v2(show)
-                and (
-                    _parse_systemd_unsigned_v2(show["MainPID"], "cleanup MainPID")
-                    > 0
-                    or show["ControlGroup"] != ""
-                    or show["SubState"] in {"running", "start", "start-pre", "stop"}
-                )
+            return _systemd_show_has_live_members_v2(
+                show, name="failure cleanup replay"
+            )
+
+        def live_members_or_exact_final_failure(
+            show: dict[str, str] | None, *, consumed_rows: int
+        ) -> bool | None:
+            try:
+                return live_members(show)
+            except ValueError:
+                if not cleanup_verified and consumed_rows == len(suffix):
+                    return None
+                raise
+
+        def require_next_purpose_or_unproven_end(expected: str, name: str) -> bool:
+            if cursor == len(suffix):
+                if cleanup_verified:
+                    raise ValueError(f"verified cleanup omitted {name}")
+                return False
+            if suffix[cursor][1] != expected:
+                raise ValueError(f"failure cleanup omitted required {name}")
+            return True
+
+        current_live = live_members_or_exact_final_failure(
+            current, consumed_rows=cursor
+        )
+        if current is None or current_live is None:
+            # The initial ownership probe itself is the exact final failing
+            # transition of an unproven transcript.
+            if cleanup_verified or cursor != len(suffix):
+                raise ValueError("failure cleanup initial ownership probe drifted")
+        elif current_live:
+            require_next_purpose_or_unproven_end(
+                "failure-owned-sigterm", "SIGTERM after a live ownership probe"
+            )
+        elif _systemd_show_is_exact_absent_v2(current):
+            require_next_purpose_or_unproven_end(
+                "failure-absent-0", "final absence confirmation"
+            )
+        else:
+            require_next_purpose_or_unproven_end(
+                "failure-owned-stop", "stop after a non-live owned probe"
             )
 
         if cursor < len(suffix) and suffix[cursor][1] == "failure-owned-sigterm":
-            if not live_members(current):
+            if current_live is not True:
                 raise ValueError("cleanup SIGTERM lacked a live owned pre-state")
             argv, _, rc, stdout, stderr = suffix[cursor]
             action_failed = (
@@ -12408,7 +13198,7 @@ def _verify_failure_cleanup_projection_v2(
                     systemctl_realpath,
                     "--user",
                     "kill",
-                    "--kill-whom=all",
+                    kill_who_option,
                     "--signal=SIGTERM",
                     unit_name,
                 ]
@@ -12424,26 +13214,51 @@ def _verify_failure_cleanup_projection_v2(
             cursor += 1
             grace = 0
             while cursor < len(suffix) and suffix[cursor][1] == f"failure-term-grace-{grace}":
+                if grace >= 20:
+                    raise ValueError("failure cleanup TERM grace exceeds twenty")
                 current = parse_owned_show(
                     suffix[cursor],
                     allow_absent=True,
                     allow_failed_last=(
                         not cleanup_verified and cursor == len(suffix) - 1
                     ),
+                    phase_name="failure cleanup TERM grace",
                 )
                 grace += 1
                 cursor += 1
-                if not live_members(current):
+                current_live = live_members_or_exact_final_failure(
+                    current, consumed_rows=cursor
+                )
+                if current is None or current_live is None or not current_live:
                     if (
                         cursor < len(suffix)
                         and suffix[cursor][1] == f"failure-term-grace-{grace}"
                     ):
                         raise ValueError("TERM grace continued after non-live state")
                     break
-            if not action_failed and not 1 <= grace <= 20:
+            signal_only_internal_failure = (
+                not cleanup_verified and grace == 0 and cursor == len(suffix)
+            )
+            if not action_failed and not (
+                1 <= grace <= 20 or signal_only_internal_failure
+            ):
                 raise ValueError("failure cleanup TERM grace sequence drifted")
+            if not action_failed and grace > 0 and current is not None:
+                if current_live:
+                    require_next_purpose_or_unproven_end(
+                        "failure-owned-sigkill",
+                        "SIGKILL after live TERM grace",
+                    )
+                elif _systemd_show_is_exact_absent_v2(current):
+                    require_next_purpose_or_unproven_end(
+                        "failure-absent-0", "absence after TERM grace"
+                    )
+                else:
+                    require_next_purpose_or_unproven_end(
+                        "failure-owned-stop", "stop after TERM grace"
+                    )
         if cursor < len(suffix) and suffix[cursor][1] == "failure-owned-sigkill":
-            if not saw_term or not live_members(current):
+            if not saw_term or current_live is not True:
                 raise ValueError("cleanup SIGKILL lacked TERM/live owned pre-state")
             argv, _, rc, stdout, stderr = suffix[cursor]
             action_failed = (
@@ -12452,7 +13267,7 @@ def _verify_failure_cleanup_projection_v2(
                     systemctl_realpath,
                     "--user",
                     "kill",
-                    "--kill-whom=all",
+                    kill_who_option,
                     "--signal=SIGKILL",
                     unit_name,
                 ]
@@ -12468,29 +13283,58 @@ def _verify_failure_cleanup_projection_v2(
             cursor += 1
             grace = 0
             while cursor < len(suffix) and suffix[cursor][1] == f"failure-kill-grace-{grace}":
+                if grace >= 8:
+                    raise ValueError("failure cleanup KILL grace exceeds eight")
                 current = parse_owned_show(
                     suffix[cursor],
                     allow_absent=True,
                     allow_failed_last=(
                         not cleanup_verified and cursor == len(suffix) - 1
                     ),
+                    phase_name="failure cleanup KILL grace",
                 )
                 grace += 1
                 cursor += 1
-                if not live_members(current):
+                current_live = live_members_or_exact_final_failure(
+                    current, consumed_rows=cursor
+                )
+                if current is None or current_live is None or not current_live:
                     if (
                         cursor < len(suffix)
                         and suffix[cursor][1] == f"failure-kill-grace-{grace}"
                     ):
                         raise ValueError("KILL grace continued after non-live state")
                     break
-            if not action_failed and not 1 <= grace <= 8:
+            signal_only_internal_failure = (
+                not cleanup_verified and grace == 0 and cursor == len(suffix)
+            )
+            if not action_failed and not (
+                1 <= grace <= 8 or signal_only_internal_failure
+            ):
                 raise ValueError("failure cleanup KILL grace sequence drifted")
+            if not action_failed and grace > 0 and current is not None:
+                if current_live:
+                    if cursor != len(suffix):
+                        raise ValueError(
+                            "failure cleanup continued after live KILL grace"
+                        )
+                    if cleanup_verified:
+                        raise ValueError(
+                            "verified cleanup retained live members after SIGKILL"
+                        )
+                elif _systemd_show_is_exact_absent_v2(current):
+                    require_next_purpose_or_unproven_end(
+                        "failure-absent-0", "absence after KILL grace"
+                    )
+                else:
+                    require_next_purpose_or_unproven_end(
+                        "failure-owned-stop", "stop after KILL grace"
+                    )
         if cursor < len(suffix) and suffix[cursor][1] == "failure-owned-stop":
             if (
                 current is None
                 or _systemd_show_is_exact_absent_v2(current)
-                or live_members(current)
+                or current_live is not False
             ):
                 raise ValueError("cleanup stop lacked an owned present pre-state")
             argv, _, rc, stdout, stderr = suffix[cursor]
@@ -12506,20 +13350,44 @@ def _verify_failure_cleanup_projection_v2(
                 raise ValueError("failure cleanup stop preimage drifted")
             saw_stop = True
             cursor += 1
+            if not action_failed:
+                require_next_purpose_or_unproven_end(
+                    "failure-absent-0", "absence probe after stop"
+                )
         absent_count = 0
         saw_final_absent = False
+        absence_observed = bool(
+            current is not None and _systemd_show_is_exact_absent_v2(current)
+        )
         while cursor < len(suffix):
             if suffix[cursor][1] != f"failure-absent-{absent_count}":
                 raise ValueError("failure cleanup final-absence sequence drifted")
+            if absent_count >= 8:
+                raise ValueError("failure cleanup final-absence exceeds eight")
+            previous_owned_invocation = owned_invocation
             current = parse_owned_show(
                 suffix[cursor],
                 allow_absent=True,
                 allow_failed_last=(not cleanup_verified and cursor == len(suffix) - 1),
+                phase_name="failure cleanup final absence",
             )
             absent_count += 1
             cursor += 1
+            if (
+                current is not None
+                and absence_observed
+                and not _systemd_show_is_exact_absent_v2(current)
+            ):
+                # The producer rejects reappearance before recording the new
+                # InvocationID as owned cleanup state.
+                owned_invocation = previous_owned_invocation
+                if not cleanup_verified and cursor == len(suffix):
+                    current = None
+                    continue
+                raise ValueError("cleanup unit reappeared after exact absence")
             if current is not None and _systemd_show_is_exact_absent_v2(current):
                 saw_final_absent = True
+                absence_observed = True
                 if cursor != len(suffix):
                     raise ValueError("cleanup transcript continued after final absence")
         if cleanup_verified:
@@ -12540,9 +13408,16 @@ def _verify_failure_cleanup_projection_v2(
         elif cursor != len(suffix):
             raise ValueError("unproven cleanup FSM did not consume its transcript")
 
+    if (
+        cleanup_verified
+        and projected_owned_invocation != owned_invocation
+    ) or (
+        not cleanup_verified
+        and projected_owned_invocation is not None
+        and projected_owned_invocation != owned_invocation
+    ):
+        raise ValueError("failure cleanup owned invocation is not transcript-bound")
     if cleanup_verified:
-        if cleanup["owned_invocation_id"] != owned_invocation:
-            raise ValueError("verified cleanup owned invocation is not transcript-bound")
         for stream, cap in (("stdout", 8 * 1_024 * 1_024), ("stderr", 256 * 1_024)):
             _require_exact_int_v2(
                 cleanup[f"drained_{stream}_size_bytes"],
@@ -13235,7 +14110,7 @@ def _systemd_show_argv_v2(systemctl: str, unit_name: str) -> list[str]:
 
 
 def _parse_systemd_unsigned_v2(value: str, name: str) -> int:
-    if re.fullmatch(r"[0-9]+", value) is None:
+    if re.fullmatch(r"(?:0|[1-9][0-9]*)", value) is None:
         raise ValueError(f"systemd {name} is not exact unsigned decimal")
     return int(value)
 
@@ -13315,13 +14190,104 @@ def _normalize_effective_systemd_properties_v2(
     return result
 
 
+def _evaluate_owned_or_absent_systemd_show_v2(
+    show: dict[str, str],
+    *,
+    attempt: Phase2BFormalWireCovertAttemptManifestV2,
+    source_tree: Path,
+    ownership_marker: str,
+    expected_invocation_id: str | None,
+    name: str,
+) -> tuple[str, str | None]:
+    """Validate the common show projection used by producer and replayers."""
+
+    if _systemd_show_is_exact_absent_v2(show):
+        return "absent", None
+    invocation = show["InvocationID"]
+    if (
+        show["LoadState"] != "loaded"
+        or show["Description"] != ownership_marker
+        or re.fullmatch(r"[0-9a-f]{32}", invocation) is None
+    ):
+        raise ValueError(f"{name} observed an unowned unit")
+    if expected_invocation_id is not None and invocation != expected_invocation_id:
+        raise ValueError(f"{name} InvocationID changed")
+    _normalize_effective_systemd_properties_v2(
+        show, attempt=attempt, source_tree=source_tree
+    )
+    return "owned", invocation
+
+
+def _systemd_entry_ready_v2(show: dict[str, str], *, name: str) -> bool:
+    """Return exact readiness; reject malformed PID/cgroup observations."""
+
+    if _systemd_show_is_exact_absent_v2(show):
+        return False
+    main_pid = _parse_systemd_unsigned_v2(show["MainPID"], f"{name} MainPID")
+    control_group = show["ControlGroup"]
+    if control_group:
+        _require_safe_cgroup_path_v2(control_group, f"{name} cgroup")
+    ready = show["ActiveState"] == "active" and show["SubState"] == "running"
+    if ready and (main_pid <= 0 or not control_group):
+        raise ValueError(f"{name} active/running state lacks PID/cgroup")
+    return ready
+
+
+def _systemd_terminal_success_v2(
+    show: dict[str, str], *, name: str
+) -> bool:
+    """Return exact active/exited success; reject noncanonical terminal scalars."""
+
+    if _systemd_show_is_exact_absent_v2(show):
+        return False
+    exec_code = _parse_systemd_unsigned_v2(
+        show["ExecMainCode"], f"{name} ExecMainCode"
+    )
+    exec_status = _parse_systemd_unsigned_v2(
+        show["ExecMainStatus"], f"{name} ExecMainStatus"
+    )
+    main_pid = _parse_systemd_unsigned_v2(show["MainPID"], f"{name} MainPID")
+    is_exited = show["ActiveState"] == "active" and show["SubState"] == "exited"
+    if not is_exited:
+        return False
+    if (
+        show["Result"] != "success"
+        or exec_code != 1
+        or exec_status != 0
+        or main_pid != 0
+        or show["ControlGroup"] != ""
+    ):
+        raise ValueError(f"{name} active/exited success projection drifted")
+    return True
+
+
+def _systemd_show_has_live_members_v2(
+    show: dict[str, str] | None, *, name: str
+) -> bool:
+    if show is None or _systemd_show_is_exact_absent_v2(show):
+        return False
+    main_pid = _parse_systemd_unsigned_v2(show["MainPID"], f"{name} MainPID")
+    control_group = show["ControlGroup"]
+    if control_group:
+        _require_safe_cgroup_path_v2(control_group, f"{name} cgroup")
+    return bool(
+        main_pid > 0
+        or control_group
+        or show["SubState"] in {"running", "start", "start-pre", "stop"}
+    )
+
+
 def _closed_outer_failure_artifact_v2(
     attempt: Phase2BFormalWireCovertAttemptManifestV2,
     *,
     entry_kind: str,
     stage: str,
+    primary_failure_exception_type: str,
     reason_code: str,
     cleanup: dict[str, object] | None,
+    cleanup_failure_exception_type: str | None,
+    child_pipe_capture: dict[str, object] | None,
+    failure_cas_projection: dict[str, object],
     cleanup_verified: bool,
     external_intervention_required: bool,
     launcher_started: bool,
@@ -13337,9 +14303,29 @@ def _closed_outer_failure_artifact_v2(
         or type(external_intervention_required) is not bool
         or cleanup_verified is external_intervention_required
         or type(launcher_started) is not bool
+        or type(primary_failure_exception_type) is not str
+        or re.fullmatch(
+            r"[A-Za-z_][A-Za-z0-9_]{0,127}", primary_failure_exception_type
+        )
+        is None
+        or (
+            cleanup_failure_exception_type is not None
+            and (
+                type(cleanup_failure_exception_type) is not str
+                or re.fullmatch(
+                    r"[A-Za-z_][A-Za-z0-9_]{0,127}",
+                    cleanup_failure_exception_type,
+                )
+                is None
+            )
+        )
+        or (cleanup_verified and cleanup_failure_exception_type is not None)
+        or (not cleanup_verified and cleanup_failure_exception_type is None)
+        or launcher_started is (child_pipe_capture is None)
     ):
         raise ValueError("outer failure cleanup disposition is inconsistent")
     _managed_atomic_residue_paths_v2(managed_atomic_residues)
+    _validate_failure_cas_projection_shape_v2(failure_cas_projection)
     if (
         type(retained_tree_before_terminal) is not dict
         or set(retained_tree_before_terminal)
@@ -13387,15 +14373,45 @@ def _closed_outer_failure_artifact_v2(
         raise ValueError("outer failure retained-tree manifest is not closed")
     if re.fullmatch(r"[A-Z0-9_]{1,96}", stage) is None:
         stage = "UNCLASSIFIED"
+    capture_persistence_verified = (
+        child_pipe_capture is None
+        or (
+            type(child_pipe_capture) is dict
+            and child_pipe_capture.get("capture_persistence_verified") is True
+        )
+    )
+    if (
+        launcher_started
+        and cleanup_verified
+        and capture_persistence_verified
+        and (
+            type(child_pipe_capture) is not dict
+            or child_pipe_capture.get("capture_complete") is not True
+        )
+    ):
+        raise ValueError("verified cleanup lacks complete child pipe evidence")
+    if (
+        launcher_started
+        and not cleanup_verified
+        and (
+            type(child_pipe_capture) is not dict
+            or child_pipe_capture.get("capture_complete") is not False
+        )
+    ):
+        raise ValueError("unproven cleanup cannot claim complete child pipe evidence")
     finalization_ready_ns = time.monotonic_ns()
     if finalization_ready_ns >= deadline_ns:
         raise TimeoutError("outer failure terminal missed the hard total deadline")
     body = {
         "schema_version": OUTER_ATTEMPT_FAILURE_SCHEMA_V2,
         "disposition": (
-            "ATOMIC_EMPTY_REJECTION"
-            if cleanup_verified
-            else "ATOMIC_FAILURE_CLEANUP_UNPROVEN_EXTERNAL_INTERVENTION_REQUIRED"
+            "ATOMIC_FAILURE_CLEANUP_UNPROVEN_EXTERNAL_INTERVENTION_REQUIRED"
+            if not cleanup_verified
+            else (
+                "ATOMIC_EMPTY_REJECTION"
+                if capture_persistence_verified
+                else "ATOMIC_FAILURE_PIPE_CAPTURE_PERSISTENCE_UNVERIFIED"
+            )
         ),
         "campaign_id": attempt.campaign_id,
         "attempt_id": attempt.attempt_id,
@@ -13403,7 +14419,11 @@ def _closed_outer_failure_artifact_v2(
         "entry_kind": entry_kind,
         "profile_id": attempt.profile_id,
         "reason_code": reason_code,
-        "failure_stage": stage,
+        "primary_failure_stage": stage,
+        "primary_failure_exception_type": primary_failure_exception_type,
+        "cleanup_failure_exception_type": cleanup_failure_exception_type,
+        "child_pipe_capture": child_pipe_capture,
+        "failure_cas_projection": failure_cas_projection,
         "cleanup": cleanup,
         "cleanup_verified": cleanup_verified,
         "external_intervention_required": external_intervention_required,
@@ -13456,6 +14476,10 @@ def _source_tree_manifest_at_fd_v2(
             file_names.sort()
             relative_directory = "" if directory == "." else directory[2:]
             for name in tuple(directory_names):
+                if deadline_ns is not None and time.monotonic_ns() >= deadline_ns:
+                    raise TimeoutError(
+                        "source tree manifest reached the absolute deadline"
+                    )
                 child_stat = os.stat(
                     name, dir_fd=directory_fd, follow_symlinks=False
                 )
@@ -13552,6 +14576,52 @@ def _verify_source_archive_full_tree_equivalence_v2(
         raise ValueError("source archive/extracted full-tree paths drifted")
 
 
+def _managed_atomic_target_is_publisher_reachable_v2(
+    relative_parent: str,
+    target_name: str,
+    target_sha256: str,
+) -> bool:
+    if relative_parent == "":
+        return target_name == "reservation.json"
+    if relative_parent == "evidence":
+        return target_name in {
+            "failure-child-stderr-prefix.bin",
+            "failure-child-stderr.bin",
+            "failure-child-stdout-prefix.bin",
+            "failure-child-stdout.bin",
+            "inner.json",
+            "launch-intent.json",
+            "mechanics.json",
+            "outer-supervisor.json",
+        }
+    if relative_parent == "evidence/inputs":
+        return target_name in {
+            "attempt.json",
+            "profile.json",
+            "runtime-environment.json",
+        }
+    if relative_parent == "evidence/cas":
+        return (
+            re.fullmatch(r"[0-9a-f]{64}", target_name) is not None
+            and target_name == target_sha256
+        )
+    if relative_parent == "evidence/rfc8785-raw-bundle":
+        return (
+            target_name == "receipt.json"
+            or (
+                re.fullmatch(r"[0-9a-f]{64}", target_name) is not None
+                and target_name == target_sha256
+            )
+            or re.fullmatch(
+                r"command-[0-9]{3}-[a-z0-9-]+\."
+                r"(?:argv\.json|stdout\.bin|stderr\.bin)",
+                target_name,
+            )
+            is not None
+        )
+    return False
+
+
 def _managed_atomic_residue_paths_v2(
     value: object,
 ) -> dict[str, dict[str, object]]:
@@ -13590,6 +14660,8 @@ def _managed_atomic_residue_paths_v2(
             or type(target_name) is not str
             or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,191}", target_name)
             is None
+            or type(row["target_sha256"]) is not str
+            or re.fullmatch(r"[0-9a-f]{64}", row["target_sha256"]) is None
             or type(temporary_name) is not str
             or re.fullmatch(
                 r"\." + re.escape(target_name) + r"\.tmp-[0-9]+-[0-9]+",
@@ -13631,6 +14703,12 @@ def _managed_atomic_residue_paths_v2(
             < 0
         ):
             raise ValueError(f"managed atomic residue[{index}] identity drifted")
+        if not _managed_atomic_target_is_publisher_reachable_v2(
+            relative_parent, target_name, row["target_sha256"]
+        ):
+            raise ValueError(
+                f"managed atomic residue[{index}] target is not publisher-reachable"
+            )
         _require_raw_sha256_v2(
             row["target_sha256"], f"managed atomic residue[{index}] target"
         )
@@ -13648,6 +14726,522 @@ def _managed_atomic_residue_paths_v2(
             raise ValueError("managed atomic residue paths are not unique")
         paths[temporary_relative] = row
     return paths
+
+
+def _validate_failure_cas_projection_shape_v2(
+    value: object,
+) -> dict[str, object]:
+    """Validate the exact self-addressed CAS snapshot of one /failure/4."""
+
+    expected = {
+        "cas_directory_present",
+        "object_count",
+        "objects_in_lexicographic_digest_order",
+        "objects_root",
+        "partial_cas_roles_attributed",
+        "schema_version",
+        "total_regular_bytes",
+    }
+    if (
+        type(value) is not dict
+        or set(value) != expected
+        or value.get("schema_version") != _FAILURE_CAS_PROJECTION_SCHEMA_V2
+        or type(value.get("cas_directory_present")) is not bool
+        or value.get("partial_cas_roles_attributed") is not False
+        or type(value.get("objects_in_lexicographic_digest_order")) is not list
+    ):
+        raise ValueError("failure CAS projection header drifted")
+    rows = value["objects_in_lexicographic_digest_order"]
+    if len(rows) > _MAXIMUM_RETAINED_ATTEMPT_TREE_ROWS_V2:
+        raise ValueError("failure CAS projection object count exceeds its cap")
+    digests: list[str] = []
+    total = 0
+    for index, row in enumerate(rows):
+        if type(row) is not dict or set(row) != {
+            "content_sha256",
+            "object_size_bytes",
+        }:
+            raise ValueError(f"failure CAS object[{index}] is not closed")
+        digest = _require_raw_sha256_v2(
+            row["content_sha256"], f"failure CAS object[{index}]"
+        )
+        size = _require_exact_int_v2(
+            row["object_size_bytes"],
+            f"failure CAS object[{index}] size",
+            minimum=1,
+            maximum=_MAXIMUM_RETAINED_ATTEMPT_TREE_BYTES_V2,
+        )
+        digests.append(digest)
+        total += size
+        if total > _MAXIMUM_RETAINED_ATTEMPT_TREE_BYTES_V2:
+            raise ValueError("failure CAS aggregate bytes exceed the retained cap")
+    if (
+        digests != sorted(set(digests))
+        or _require_exact_int_v2(
+            value["object_count"],
+            "failure CAS object count",
+            maximum=_MAXIMUM_RETAINED_ATTEMPT_TREE_ROWS_V2,
+        )
+        != len(rows)
+        or _require_exact_int_v2(
+            value["total_regular_bytes"],
+            "failure CAS total bytes",
+            maximum=_MAXIMUM_RETAINED_ATTEMPT_TREE_BYTES_V2,
+        )
+        != total
+        or (value["cas_directory_present"] is False and rows != [])
+        or value["objects_root"]
+        != stable_hash(
+            rows, prefix="phase2b_formal_wire_covert_failure_cas_v1_"
+        )
+    ):
+        raise ValueError("failure CAS projection aggregate/root drifted")
+    return value
+
+
+def _failure_cas_projection_at_attempt_fd_v2(
+    attempt_fd: int,
+    *,
+    managed_atomic_residues: object,
+    deadline_ns: int | None,
+) -> dict[str, object]:
+    """Snapshot every formal CAS object, excluding only proven managed temps."""
+
+    residue_paths = _managed_atomic_residue_paths_v2(managed_atomic_residues)
+    allowed_cas_temporary_names = {
+        relative.removeprefix("evidence/cas/")
+        for relative in residue_paths
+        if relative.startswith("evidence/cas/")
+        and "/" not in relative.removeprefix("evidence/cas/")
+    }
+    attempt_names = set(_directory_names_at_fd_v2(attempt_fd))
+    cas_fd: int | None = None
+    evidence_fd: int | None = None
+    if "evidence" not in attempt_names:
+        if allowed_cas_temporary_names:
+            raise ValueError("failure CAS residue exists without evidence directory")
+        rows: list[dict[str, object]] = []
+        core = {
+            "schema_version": _FAILURE_CAS_PROJECTION_SCHEMA_V2,
+            "cas_directory_present": False,
+            "object_count": 0,
+            "objects_in_lexicographic_digest_order": rows,
+            "partial_cas_roles_attributed": False,
+            "total_regular_bytes": 0,
+        }
+        return _validate_failure_cas_projection_shape_v2(
+            {
+                **core,
+                "objects_root": stable_hash(
+                    rows, prefix="phase2b_formal_wire_covert_failure_cas_v1_"
+                ),
+            }
+        )
+    try:
+        evidence_fd = _open_directory_at_fd_v2(attempt_fd, "evidence")
+        evidence_names = set(_directory_names_at_fd_v2(evidence_fd))
+        if "cas" not in evidence_names:
+            if allowed_cas_temporary_names:
+                raise ValueError("failure CAS residue exists without CAS directory")
+            rows = []
+            core = {
+                "schema_version": _FAILURE_CAS_PROJECTION_SCHEMA_V2,
+                "cas_directory_present": False,
+                "object_count": 0,
+                "objects_in_lexicographic_digest_order": rows,
+                "partial_cas_roles_attributed": False,
+                "total_regular_bytes": 0,
+            }
+            return _validate_failure_cas_projection_shape_v2(
+                {
+                    **core,
+                    "objects_root": stable_hash(
+                        rows,
+                        prefix="phase2b_formal_wire_covert_failure_cas_v1_",
+                    ),
+                }
+            )
+        cas_fd = _open_directory_at_fd_v2(evidence_fd, "cas")
+        cas_names = set(_directory_names_at_fd_v2(cas_fd))
+        if not allowed_cas_temporary_names.issubset(cas_names):
+            raise ValueError("declared failure CAS managed temp is absent")
+        object_names = cas_names - allowed_cas_temporary_names
+        if any(re.fullmatch(r"[0-9a-f]{64}", name) is None for name in object_names):
+            raise ValueError("failure CAS contains an unknown non-object name")
+        rows = []
+        total = 0
+        for name in sorted(object_names):
+            digest, opened = _hash_regular_at_fd_v2(
+                cas_fd,
+                name,
+                maximum_bytes=_MAXIMUM_RETAINED_ATTEMPT_TREE_BYTES_V2,
+                deadline_ns=deadline_ns,
+            )
+            if digest != name or opened.st_size < 1:
+                raise ValueError("failure CAS object is not content-addressed")
+            total += opened.st_size
+            if total > _MAXIMUM_RETAINED_ATTEMPT_TREE_BYTES_V2:
+                raise ValueError("failure CAS aggregate bytes exceed the retained cap")
+            rows.append(
+                {
+                    "content_sha256": name,
+                    "object_size_bytes": opened.st_size,
+                }
+            )
+        core = {
+            "schema_version": _FAILURE_CAS_PROJECTION_SCHEMA_V2,
+            "cas_directory_present": True,
+            "object_count": len(rows),
+            "objects_in_lexicographic_digest_order": rows,
+            "partial_cas_roles_attributed": False,
+            "total_regular_bytes": total,
+        }
+        return _validate_failure_cas_projection_shape_v2(
+            {
+                **core,
+                "objects_root": stable_hash(
+                    rows, prefix="phase2b_formal_wire_covert_failure_cas_v1_"
+                ),
+            }
+        )
+    finally:
+        _close_owned_descriptors_v2(
+            (cas_fd, evidence_fd), name="failure CAS snapshot"
+        )
+
+
+def _derive_failure_v4_retained_projection_at_fd_v2(
+    attempt_fd: int,
+    *,
+    managed_atomic_residues: object,
+    deadline_ns: int | None,
+) -> dict[str, dict[str, object]]:
+    """Derive the /failure/4 tree, CAS, and residue evidence in one walk.
+
+    This function is deliberately invoked independently by the producer and
+    public verifier.  Within either trust boundary it hashes each regular inode
+    at most once, including hard-linked managed atomic residues.
+    """
+
+    if (
+        deadline_ns is not None
+        and (
+            type(deadline_ns) is not int
+            or type(deadline_ns) is bool
+            or time.monotonic_ns() >= deadline_ns
+        )
+    ):
+        raise TimeoutError(
+            "failure retained projection lacks a future absolute deadline"
+        )
+    if not stat.S_ISDIR(os.fstat(attempt_fd).st_mode):
+        raise ValueError("failure retained projection root is not a directory")
+    residue_paths = _managed_atomic_residue_paths_v2(managed_atomic_residues)
+    target_paths: dict[str, dict[str, object]] = {}
+    for temporary_relative, row in residue_paths.items():
+        relative_parent = str(row["relative_parent"])
+        target_relative = (
+            str(row["target_name"])
+            if not relative_parent
+            else relative_parent + "/" + str(row["target_name"])
+        )
+        if target_relative in target_paths or target_relative == temporary_relative:
+            raise ValueError("managed atomic residue targets are not unique")
+        target_paths[target_relative] = row
+
+    rows: list[dict[str, object]] = []
+    observed_regular: dict[str, tuple[os.stat_result, str]] = {}
+    digest_by_inode: dict[
+        tuple[int, int], tuple[int, int, int, int, str]
+    ] = {}
+    total_regular_bytes = 0
+    cas_directory_present = False
+    cas_rows: list[dict[str, object]] = []
+    walk_fd = os.dup(attempt_fd)
+    try:
+        for directory, directory_names, file_names, directory_fd in os.fwalk(
+            ".", topdown=True, follow_symlinks=False, dir_fd=walk_fd
+        ):
+            if deadline_ns is not None and time.monotonic_ns() >= deadline_ns:
+                raise TimeoutError(
+                    "failure retained projection reached its absolute deadline"
+                )
+            directory_names.sort()
+            file_names.sort()
+            relative_directory = "" if directory == "." else directory[2:]
+            for name in tuple(directory_names):
+                if deadline_ns is not None and time.monotonic_ns() >= deadline_ns:
+                    raise TimeoutError(
+                        "failure retained projection reached its absolute deadline"
+                    )
+                child_stat = os.stat(
+                    name, dir_fd=directory_fd, follow_symlinks=False
+                )
+                if not stat.S_ISDIR(child_stat.st_mode):
+                    raise ValueError(
+                        "failure retained projection rejects directory symlinks"
+                    )
+                relative = (
+                    name
+                    if not relative_directory
+                    else relative_directory + "/" + name
+                )
+                if relative.startswith("evidence/cas/"):
+                    raise ValueError("failure CAS contains a nested directory")
+                if relative == "evidence/cas":
+                    cas_directory_present = True
+                rows.append({"path": relative, "type": "directory"})
+                if len(rows) > _MAXIMUM_RETAINED_ATTEMPT_TREE_ROWS_V2:
+                    raise ValueError(
+                        "failure retained projection row count exceeds the cap"
+                    )
+            for name in file_names:
+                if deadline_ns is not None and time.monotonic_ns() >= deadline_ns:
+                    raise TimeoutError(
+                        "failure retained projection reached its absolute deadline"
+                    )
+                relative = (
+                    name
+                    if not relative_directory
+                    else relative_directory + "/" + name
+                )
+                if name.endswith((".pyc", ".pyo")):
+                    raise ValueError("failure retained projection rejects bytecode")
+                preliminary = os.stat(
+                    name, dir_fd=directory_fd, follow_symlinks=False
+                )
+                if (
+                    not stat.S_ISREG(preliminary.st_mode)
+                    or not 0
+                    <= preliminary.st_size
+                    <= _MAXIMUM_RETAINED_ATTEMPT_TREE_BYTES_V2
+                ):
+                    raise ValueError(
+                        "failure retained projection rejects a nonregular file"
+                    )
+                inode_key = (preliminary.st_dev, preliminary.st_ino)
+                cached = digest_by_inode.get(inode_key)
+                if cached is None:
+                    digest, opened = _hash_regular_at_fd_v2(
+                        directory_fd,
+                        name,
+                        maximum_bytes=_MAXIMUM_RETAINED_ATTEMPT_TREE_BYTES_V2,
+                        deadline_ns=deadline_ns,
+                    )
+                    if (
+                        preliminary.st_dev,
+                        preliminary.st_ino,
+                        preliminary.st_size,
+                        preliminary.st_mtime_ns,
+                        preliminary.st_ctime_ns,
+                        preliminary.st_nlink,
+                    ) != (
+                        opened.st_dev,
+                        opened.st_ino,
+                        opened.st_size,
+                        opened.st_mtime_ns,
+                        opened.st_ctime_ns,
+                        opened.st_nlink,
+                    ):
+                        raise ValueError(
+                            "failure retained path changed before content replay"
+                        )
+                    digest_by_inode[inode_key] = (
+                        opened.st_size,
+                        opened.st_mtime_ns,
+                        opened.st_ctime_ns,
+                        opened.st_nlink,
+                        digest,
+                    )
+                    opened_stat = opened
+                else:
+                    (
+                        cached_size,
+                        cached_mtime,
+                        cached_ctime,
+                        cached_nlink,
+                        digest,
+                    ) = cached
+                    alias_fd = os.open(
+                        name,
+                        os.O_RDONLY
+                        | os.O_CLOEXEC
+                        | os.O_NONBLOCK
+                        | os.O_NOFOLLOW,
+                        dir_fd=directory_fd,
+                    )
+                    try:
+                        opened_stat = os.fstat(alias_fd)
+                    finally:
+                        os.close(alias_fd)
+                    if (
+                        opened_stat.st_dev,
+                        opened_stat.st_ino,
+                        opened_stat.st_size,
+                        opened_stat.st_mtime_ns,
+                        opened_stat.st_ctime_ns,
+                        opened_stat.st_nlink,
+                    ) != (
+                        inode_key[0],
+                        inode_key[1],
+                        cached_size,
+                        cached_mtime,
+                        cached_ctime,
+                        cached_nlink,
+                    ):
+                        raise ValueError(
+                            "failure retained hard-linked inode mutated during replay"
+                        )
+                observed_regular[relative] = (opened_stat, digest)
+                rows.append(
+                    {
+                        "path": relative,
+                        "type": "regular",
+                        "size_bytes": opened_stat.st_size,
+                        "sha256": digest,
+                    }
+                )
+                total_regular_bytes += opened_stat.st_size
+                if (
+                    len(rows) > _MAXIMUM_RETAINED_ATTEMPT_TREE_ROWS_V2
+                    or total_regular_bytes
+                    > _MAXIMUM_RETAINED_ATTEMPT_TREE_BYTES_V2
+                ):
+                    raise ValueError(
+                        "failure retained projection aggregate exceeds the cap"
+                    )
+                if relative.startswith("evidence/cas/"):
+                    if relative.count("/") != 2:
+                        raise ValueError("failure CAS object is not a direct child")
+                    if relative in residue_paths:
+                        continue
+                    if re.fullmatch(r"[0-9a-f]{64}", name) is None:
+                        raise ValueError(
+                            "failure CAS contains an unknown non-object name"
+                        )
+                    if digest != name or opened_stat.st_size < 1:
+                        raise ValueError(
+                            "failure CAS object is not content-addressed"
+                        )
+                    cas_rows.append(
+                        {
+                            "content_sha256": name,
+                            "object_size_bytes": opened_stat.st_size,
+                        }
+                    )
+    finally:
+        _close_owned_descriptors_v2(
+            (walk_fd,), name="failure retained projection walk"
+        )
+
+    rows.sort(key=lambda row: (row["path"], row["type"]))
+    row_paths = {str(row["path"]): row for row in rows}
+    cas_path_row = row_paths.get("evidence/cas")
+    if cas_path_row is not None and cas_path_row.get("type") != "directory":
+        raise ValueError("failure CAS path is not a directory")
+    if cas_directory_present is not (cas_path_row is not None):
+        raise ValueError("failure CAS directory presence drifted")
+
+    for temporary_relative, residue in residue_paths.items():
+        observed_temp = observed_regular.get(temporary_relative)
+        if observed_temp is None:
+            raise ValueError("declared managed atomic residue is absent")
+        temp_stat, _ = observed_temp
+        expected_identity = (int(residue["device"]), int(residue["inode"]))
+        if (
+            (temp_stat.st_dev, temp_stat.st_ino) != expected_identity
+            or temp_stat.st_nlink != residue["link_count"]
+            or temp_stat.st_size != residue["size_bytes"]
+        ):
+            raise ValueError("managed atomic residue inode/linkage drifted")
+        relative_parent = str(residue["relative_parent"])
+        target_relative = (
+            str(residue["target_name"])
+            if not relative_parent
+            else relative_parent + "/" + str(residue["target_name"])
+        )
+        target = observed_regular.get(target_relative)
+        if residue["state"] == "STAGED_TEMP_ONLY":
+            if target is not None or temp_stat.st_nlink != 1:
+                raise ValueError("staged-only atomic target/linkage drifted")
+            # A failed write may leave only a prefix of the intended target.
+            # Its intended digest is bound by the residue row; its actual
+            # partial bytes remain independently bound by the tree row.
+        else:
+            if target is None:
+                raise ValueError("managed atomic hard-link target is absent")
+            target_stat, target_digest = target
+            if (
+                (target_stat.st_dev, target_stat.st_ino) != expected_identity
+                or target_stat.st_nlink != residue["link_count"]
+                or target_stat.st_nlink < 2
+                or target_stat.st_size != residue["size_bytes"]
+                or target_digest != residue["target_sha256"]
+            ):
+                raise ValueError("managed atomic hard-link target drifted")
+
+    terminal_rows = [row for row in rows if row.get("path") == "terminal.json"]
+    filtered = [row for row in rows if row.get("path") != "terminal.json"]
+    allowed_temporary_paths = set(residue_paths)
+    if (
+        len(terminal_rows) > 1
+        or any(row.get("type") != "regular" for row in terminal_rows)
+        or any(
+            any(
+                re.fullmatch(r"\..+\.tmp-[0-9]+-[0-9]+", part) is not None
+                and str(row["path"]) not in allowed_temporary_paths
+                for part in str(row["path"]).split("/")
+            )
+            for row in filtered
+        )
+        or not allowed_temporary_paths.issubset(row_paths)
+    ):
+        raise ValueError("retained failure tree contains terminal/unknown temp objects")
+    top_level_names = sorted(
+        {str(row["path"]).split("/", 1)[0] for row in filtered}
+    )
+    regular_rows = [row for row in filtered if row.get("type") == "regular"]
+    retained_tree = {
+        "regular_file_count": len(regular_rows),
+        "root": stable_hash(
+            filtered, prefix="phase2b_formal_wire_covert_failure_tree_v3_"
+        ),
+        "row_count": len(filtered),
+        "top_level_names": top_level_names,
+        "total_regular_bytes": sum(
+            _require_exact_int_v2(
+                row.get("size_bytes"), "failure retained regular file size"
+            )
+            for row in regular_rows
+        ),
+    }
+    cas_rows.sort(key=lambda row: str(row["content_sha256"]))
+    cas_core = {
+        "schema_version": _FAILURE_CAS_PROJECTION_SCHEMA_V2,
+        "cas_directory_present": cas_directory_present,
+        "object_count": len(cas_rows),
+        "objects_in_lexicographic_digest_order": cas_rows,
+        "partial_cas_roles_attributed": False,
+        "total_regular_bytes": sum(
+            int(row["object_size_bytes"]) for row in cas_rows
+        ),
+    }
+    failure_cas = _validate_failure_cas_projection_shape_v2(
+        {
+            **cas_core,
+            "objects_root": stable_hash(
+                cas_rows, prefix="phase2b_formal_wire_covert_failure_cas_v1_"
+            ),
+        }
+    )
+    if deadline_ns is not None and time.monotonic_ns() >= deadline_ns:
+        raise TimeoutError(
+            "failure retained projection reached its absolute deadline"
+        )
+    return {
+        "failure_cas_projection": failure_cas,
+        "retained_tree_before_terminal": retained_tree,
+    }
 
 
 def _open_relative_directory_at_fd_v2(root_fd: int, relative: str) -> int:
@@ -13751,7 +15345,10 @@ def _verify_managed_atomic_residues_at_fd_v2(
                 deadline_ns=deadline_ns,
             )
             if (
-                digest != row["target_sha256"]
+                (
+                    row["state"] == "TARGET_AND_MANAGED_TEMP_HARDLINK"
+                    and digest != row["target_sha256"]
+                )
                 or replay_stat.st_size != row["size_bytes"]
                 or (replay_stat.st_dev, replay_stat.st_ino) != expected_identity
             ):
@@ -13817,52 +15414,21 @@ def _retained_attempt_tree_before_terminal_v2(
     }
 
 
-def _find_retained_directory_identity_v2(
-    attempt_fd: int,
-    identity: tuple[int, int],
-    *,
-    deadline_ns: int | None,
-) -> tuple[int, str]:
-    """Find one retained directory inode without trusting a display path."""
-
-    matches: list[tuple[int, str]] = []
-    walk_fd = os.dup(attempt_fd)
-    try:
-        for directory, directory_names, _, directory_fd in os.fwalk(
-            ".", topdown=True, follow_symlinks=False, dir_fd=walk_fd
-        ):
-            if deadline_ns is not None and time.monotonic_ns() >= deadline_ns:
-                raise TimeoutError("atomic residue directory search reached deadline")
-            directory_names.sort()
-            opened = os.fstat(directory_fd)
-            if (opened.st_dev, opened.st_ino) == identity:
-                relative = "" if directory == "." else directory[2:]
-                matches.append((os.dup(directory_fd), relative))
-                if len(matches) > 1:
-                    raise ValueError("atomic residue parent inode is not unique")
-    except BaseException:
-        _close_owned_descriptors_v2(
-            (descriptor for descriptor, _ in matches),
-            name="atomic residue duplicate parent matches",
-        )
-        raise
-    finally:
-        _close_owned_descriptors_v2(
-            (walk_fd,), name="atomic residue directory search"
-        )
-    if len(matches) != 1:
-        raise ValueError("atomic residue parent inode is outside retained attempt")
-    return matches[0]
-
-
 def _reconcile_nonterminal_atomic_uncertainty_v2(
     exc: BaseException,
     *,
     attempt_fd: int,
     deadline_ns: int,
+    known_parent_directories: dict[str, int],
 ) -> list[dict[str, object]]:
     """Clean or explicitly bind one owned hard-link staging residue."""
 
+    if (
+        type(deadline_ns) is not int
+        or type(deadline_ns) is bool
+        or time.monotonic_ns() >= deadline_ns
+    ):
+        raise TimeoutError("atomic uncertainty recovery lacks a future deadline")
     if type(exc) is not _AtomicPublicationUncertainV2:
         return []
     if exc.target_name == "terminal.json":
@@ -13883,6 +15449,8 @@ def _reconcile_nonterminal_atomic_uncertainty_v2(
         or type(exc.target_identity) is not tuple
         or len(exc.target_identity) != 2
         or any(type(value) is not int or value < 0 for value in exc.target_identity)
+        or type(exc.target_sha256) is not str
+        or re.fullmatch(r"[0-9a-f]{64}", exc.target_sha256) is None
         or type(exc.target_name) is not str
         or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,191}", exc.target_name)
         is None
@@ -13898,9 +15466,50 @@ def _reconcile_nonterminal_atomic_uncertainty_v2(
         not in {"STAGED_TEMP_ONLY", "TARGET_LINK_COMMITTED"}
     ):
         raise ValueError("atomic uncertainty metadata is malformed")
-    parent_fd, relative_parent = _find_retained_directory_identity_v2(
-        attempt_fd, exc.parent_identity, deadline_ns=deadline_ns
+    if (
+        type(known_parent_directories) is not dict
+        or any(
+            type(relative) is not str
+            or type(descriptor) is not int
+            or descriptor < 0
+            for relative, descriptor in known_parent_directories.items()
+        )
+    ):
+        raise ValueError("known retained parent directory map is malformed")
+    matching = [
+        (relative, descriptor)
+        for relative, descriptor in known_parent_directories.items()
+        if (
+            (opened := os.fstat(descriptor)).st_dev,
+            opened.st_ino,
+        )
+        == exc.parent_identity
+    ]
+    if len(matching) != 1:
+        raise ValueError(
+            "atomic uncertainty parent is outside the retained-fd registry"
+        )
+    relative_parent, retained_parent_fd = matching[0]
+    parent_fd = _open_relative_directory_at_fd_v2(
+        attempt_fd, relative_parent
     )
+    try:
+        retained_stat = os.fstat(retained_parent_fd)
+        reopened_stat = os.fstat(parent_fd)
+        if (
+            (retained_stat.st_dev, retained_stat.st_ino)
+            != (reopened_stat.st_dev, reopened_stat.st_ino)
+            or (reopened_stat.st_dev, reopened_stat.st_ino)
+            != exc.parent_identity
+        ):
+            raise ValueError(
+                "atomic uncertainty retained parent path identity drifted"
+            )
+    except BaseException:
+        _close_owned_descriptors_v2(
+            (parent_fd,), name="atomic residue retained-parent identity"
+        )
+        raise
     try:
         target_stat: os.stat_result | None
         try:
@@ -13947,6 +15556,8 @@ def _reconcile_nonterminal_atomic_uncertainty_v2(
             )
         ):
             raise ValueError("atomic uncertainty temporary inode is not owned")
+        if time.monotonic_ns() >= deadline_ns:
+            raise TimeoutError("atomic uncertainty recovery reached its deadline")
         try:
             os.remove(exc.temporary_name, dir_fd=parent_fd)
             os.fsync(parent_fd)
@@ -13984,7 +15595,6 @@ def _reconcile_nonterminal_atomic_uncertainty_v2(
             raise ValueError("atomic uncertainty residue changed during capture")
         state = "STAGED_TEMP_ONLY"
         same_inode = False
-        hash_name = exc.temporary_name
         if exc.publication_state == "TARGET_LINK_COMMITTED":
             target_stat = os.stat(
                 exc.target_name, dir_fd=parent_fd, follow_symlinks=False
@@ -13999,26 +15609,19 @@ def _reconcile_nonterminal_atomic_uncertainty_v2(
                 raise ValueError("atomic hard-link residue changed during capture")
             state = "TARGET_AND_MANAGED_TEMP_HARDLINK"
             same_inode = True
-            hash_name = exc.target_name
         elif temporary_stat.st_nlink != 1:
             raise ValueError("staged-only atomic residue acquired another link")
-        digest, replay_stat = _hash_regular_at_fd_v2(
-            parent_fd,
-            hash_name,
-            maximum_bytes=_MAXIMUM_RETAINED_ATTEMPT_TREE_BYTES_V2,
-            deadline_ns=deadline_ns,
-        )
         return [
             {
-                "device": str(replay_stat.st_dev),
-                "inode": str(replay_stat.st_ino),
-                "link_count": replay_stat.st_nlink,
+                "device": str(temporary_stat.st_dev),
+                "inode": str(temporary_stat.st_ino),
+                "link_count": temporary_stat.st_nlink,
                 "relative_parent": relative_parent,
                 "same_inode": same_inode,
-                "size_bytes": replay_stat.st_size,
+                "size_bytes": temporary_stat.st_size,
                 "state": state,
                 "target_name": exc.target_name,
-                "target_sha256": digest,
+                "target_sha256": exc.target_sha256,
                 "temporary_name": exc.temporary_name,
             }
         ]
@@ -14616,7 +16219,19 @@ def verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
             raise ValueError(
                 "depth-one calibration pair replay accepts only development success"
             )
-        if terminal.get("schema_version") == OUTER_ATTEMPT_FAILURE_SCHEMA_V2:
+        failure_schema_version = terminal.get("schema_version")
+        if (
+            failure_schema_version == _OUTER_ATTEMPT_FAILURE_SCHEMA_V3
+            and prospective_terminal
+        ):
+            raise ValueError("legacy /failure/3 is retained replay-only")
+        if failure_schema_version in {
+            OUTER_ATTEMPT_FAILURE_SCHEMA_V2,
+            _OUTER_ATTEMPT_FAILURE_SCHEMA_V3,
+        }:
+            failure_schema_is_v4 = (
+                failure_schema_version == OUTER_ATTEMPT_FAILURE_SCHEMA_V2
+            )
             required = {
                 "attempt_id",
                 "attempt_manifest_root",
@@ -14628,7 +16243,6 @@ def verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
                 "entry_kind",
                 "execution_completion_not_claimed",
                 "external_intervention_required",
-                "failure_stage",
                 "launcher_started",
                 "managed_atomic_residues",
                 "profile_id",
@@ -14642,6 +16256,16 @@ def verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
                 "terminal_publication_count",
                 "timing",
             }
+            if failure_schema_is_v4:
+                required |= {
+                    "child_pipe_capture",
+                    "cleanup_failure_exception_type",
+                    "failure_cas_projection",
+                    "primary_failure_exception_type",
+                    "primary_failure_stage",
+                }
+            else:
+                required.add("failure_stage")
             expected_claims = {
                 "r03_formal_trusted_wire_implementation_qualified": False,
                 "r04_formal_covert_auditor_implementation_qualified": False,
@@ -14655,11 +16279,32 @@ def verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
             tree_projection = terminal.get("retained_tree_before_terminal")
             managed_atomic_residues = terminal.get("managed_atomic_residues")
             _managed_atomic_residue_paths_v2(managed_atomic_residues)
-            live_tree_projection = _retained_attempt_tree_before_terminal_v2(
-                attempt_fd,
-                deadline_ns=deadline_ns,
-                managed_atomic_residues=managed_atomic_residues,
-            )
+            failure_cas_projection: dict[str, object] | None = None
+            if failure_schema_is_v4:
+                failure_cas_projection = _validate_failure_cas_projection_shape_v2(
+                    terminal.get("failure_cas_projection")
+                )
+                live_failure_projection = (
+                    _derive_failure_v4_retained_projection_at_fd_v2(
+                        attempt_fd,
+                        managed_atomic_residues=managed_atomic_residues,
+                        deadline_ns=deadline_ns,
+                    )
+                )
+                if not _exact_json_equal(
+                    failure_cas_projection,
+                    live_failure_projection["failure_cas_projection"],
+                ):
+                    raise ValueError("failure CAS retained snapshot drifted")
+                live_tree_projection = live_failure_projection[
+                    "retained_tree_before_terminal"
+                ]
+            else:
+                live_tree_projection = _retained_attempt_tree_before_terminal_v2(
+                    attempt_fd,
+                    deadline_ns=deadline_ns,
+                    managed_atomic_residues=managed_atomic_residues,
+                )
             failure_root = terminal.get("attempt_manifest_root")
             if (
                 type(failure_root) is not str
@@ -14670,6 +16315,20 @@ def verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
                 is None
             ):
                 raise ValueError("failure attempt manifest root is malformed")
+            expected_failure_disposition = (
+                "ATOMIC_FAILURE_CLEANUP_UNPROVEN_EXTERNAL_INTERVENTION_REQUIRED"
+                if terminal.get("cleanup_verified") is False
+                else (
+                    "ATOMIC_FAILURE_PIPE_CAPTURE_PERSISTENCE_UNVERIFIED"
+                    if failure_schema_is_v4
+                    and type(terminal.get("child_pipe_capture")) is dict
+                    and terminal["child_pipe_capture"].get(
+                        "capture_persistence_verified"
+                    )
+                    is False
+                    else "ATOMIC_EMPTY_REJECTION"
+                )
+            )
             if (
                 set(terminal) != required
                 or terminal["execution_completion_not_claimed"] is not True
@@ -14692,12 +16351,7 @@ def verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
                 or type(terminal["launcher_started"]) is not bool
                 or terminal["cleanup_verified"]
                 is terminal["external_intervention_required"]
-                or terminal["disposition"]
-                != (
-                    "ATOMIC_EMPTY_REJECTION"
-                    if terminal["cleanup_verified"]
-                    else "ATOMIC_FAILURE_CLEANUP_UNPROVEN_EXTERNAL_INTERVENTION_REQUIRED"
-                )
+                or terminal["disposition"] != expected_failure_disposition
                 or terminal["entry_kind"]
                 not in {"development-calibration", "live-inner"}
                 or type(terminal["campaign_id"]) is not str
@@ -14710,9 +16364,50 @@ def verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
                 or type(terminal["reason_code"]) is not str
                 or re.fullmatch(r"[A-Z0-9_]{1,96}", terminal["reason_code"])
                 is None
-                or type(terminal["failure_stage"]) is not str
-                or re.fullmatch(r"[A-Z0-9_]{1,96}", terminal["failure_stage"])
+                or type(
+                    terminal[
+                        "primary_failure_stage"
+                        if failure_schema_is_v4
+                        else "failure_stage"
+                    ]
+                )
+                is not str
+                or re.fullmatch(
+                    r"[A-Z0-9_]{1,96}",
+                    terminal[
+                        "primary_failure_stage"
+                        if failure_schema_is_v4
+                        else "failure_stage"
+                    ],
+                )
                 is None
+                or (
+                    failure_schema_is_v4
+                    and (
+                        type(terminal["primary_failure_exception_type"]) is not str
+                        or re.fullmatch(
+                            r"[A-Za-z_][A-Za-z0-9_]{0,127}",
+                            terminal["primary_failure_exception_type"],
+                        )
+                        is None
+                        or (
+                            terminal["cleanup_verified"]
+                            and terminal["cleanup_failure_exception_type"] is not None
+                        )
+                        or (
+                            not terminal["cleanup_verified"]
+                            and (
+                                type(terminal["cleanup_failure_exception_type"])
+                                is not str
+                                or re.fullmatch(
+                                    r"[A-Za-z_][A-Za-z0-9_]{0,127}",
+                                    terminal["cleanup_failure_exception_type"],
+                                )
+                                is None
+                            )
+                        )
+                    )
+                )
                 or terminal["retry_requires_new_attempt_id"] is not True
                 or not _exact_json_equal(terminal["claims"], expected_claims)
                 or not _exact_json_equal(tree_projection, live_tree_projection)
@@ -14813,14 +16508,30 @@ def verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
                         ):
                             raise ValueError("failure retained attempt identity drifted")
                     if terminal["launcher_started"]:
+                        launched_baseline_names = {
+                            "cas",
+                            "inputs",
+                            "launch-intent.json",
+                            "rfc8785-raw-bundle",
+                            "source-tree",
+                        }
                         if input_names != {
                             "attempt.json",
                             "profile.json",
                             "runtime-environment.json",
-                        }:
+                        } or not launched_baseline_names.issubset(evidence_names):
                             raise ValueError("launched failure input set drifted")
                         if retained_attempt is None:
                             raise ValueError("launched failure lacks retained attempt")
+                        for baseline_directory in (
+                            "cas",
+                            "rfc8785-raw-bundle",
+                            "source-tree",
+                        ):
+                            baseline_fd = _open_directory_at_fd_v2(
+                                failure_evidence_fd, baseline_directory
+                            )
+                            owned_fds.append(baseline_fd)
                         retained_profile_bytes, _ = _read_regular_at_fd_v2(
                             failure_inputs_fd,
                             "profile.json",
@@ -14864,6 +16575,61 @@ def verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
                             source_tree=attempt_directory / "evidence/source-tree",
                         )
             cleanup = terminal["cleanup"]
+            if failure_schema_is_v4:
+                capture = terminal["child_pipe_capture"]
+                if terminal["launcher_started"] is False:
+                    if capture is not None:
+                        raise ValueError("unlaunched /failure/4 retained pipe capture")
+                else:
+                    if "evidence" not in attempt_names:
+                        raise ValueError("launched /failure/4 lacks retained evidence")
+                    captured_stdout, captured_stderr, capture_complete = (
+                        _verify_failure_child_pipe_capture_projection_v2(
+                            failure_evidence_fd,
+                            capture,
+                            attempt_manifest_root=terminal["attempt_manifest_root"],
+                            deadline_ns=deadline_ns,
+                        )
+                    )
+                    if (
+                        terminal["cleanup_verified"]
+                        and type(capture) is dict
+                        and capture.get("capture_persistence_verified") is True
+                        and capture_complete is not True
+                    ):
+                        raise ValueError(
+                            "verified cleanup lacks a complete child pipe capture"
+                        )
+                    if (
+                        not terminal["cleanup_verified"]
+                        and capture_complete is not False
+                    ):
+                        raise ValueError(
+                            "unproven cleanup claims a complete child pipe capture"
+                        )
+                    if (
+                        type(capture) is dict
+                        and capture.get("capture_persistence_verified") is True
+                    ):
+                        if failure_cas_projection is None:
+                            raise ValueError("verified pipe bundle lacks failure CAS")
+                        bundle = capture.get("bundle_cas")
+                        if type(bundle) is not dict:
+                            raise ValueError("verified pipe bundle CAS row is absent")
+                        bundle_digest = bundle.get("content_sha256")
+                        bundle_size = bundle.get("object_size_bytes")
+                        matching_rows = [
+                            row
+                            for row in failure_cas_projection[
+                                "objects_in_lexicographic_digest_order"
+                            ]
+                            if row.get("content_sha256") == bundle_digest
+                            and row.get("object_size_bytes") == bundle_size
+                        ]
+                        if len(matching_rows) != 1:
+                            raise ValueError(
+                                "failure pipe bundle is not cross-linked into CAS snapshot"
+                            )
             if terminal["launcher_started"] is False:
                 if cleanup is not None or terminal["cleanup_verified"] is not True:
                     raise ValueError("unlaunched failure has inconsistent cleanup")
@@ -14879,7 +16645,62 @@ def verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
                     entry_kind=terminal["entry_kind"],
                     source_tree=attempt_directory / "evidence/source-tree",
                     launch_intent=failure_launch_intent,
+                    failure_schema_version=failure_schema_version,
                 )
+                if failure_schema_is_v4:
+                    if terminal["cleanup_failure_exception_type"] != (
+                        None
+                        if terminal["cleanup_verified"]
+                        else cleanup["cleanup_error_type"]
+                    ):
+                        raise ValueError(
+                            "failure pipe capture/cleanup projection linkage drifted"
+                        )
+                    if (
+                        terminal["cleanup_verified"]
+                        and capture.get("capture_persistence_verified") is True
+                    ):
+                        if (
+                            type(captured_stdout) is not bytes
+                            or type(captured_stderr) is not bytes
+                            or type(capture) is not dict
+                        ):
+                            raise ValueError(
+                                "verified cleanup lacks replayed child pipe bytes"
+                            )
+                        stdout_prefix_size = _require_exact_int_v2(
+                            capture["stdout"]["prefix"]["size_bytes"],
+                            "failure stdout prefix size linkage",
+                            maximum=8 * 1_024 * 1_024,
+                        )
+                        stderr_prefix_size = _require_exact_int_v2(
+                            capture["stderr"]["prefix"]["size_bytes"],
+                            "failure stderr prefix size linkage",
+                            maximum=256 * 1_024,
+                        )
+                        stdout_tail = captured_stdout[stdout_prefix_size:]
+                        stderr_tail = captured_stderr[stderr_prefix_size:]
+                        if (
+                            _require_exact_int_v2(
+                                cleanup["drained_stdout_size_bytes"],
+                                "failure cleanup drained stdout size",
+                                maximum=8 * 1_024 * 1_024,
+                            )
+                            != len(stdout_tail)
+                            or cleanup["drained_stdout_sha256"]
+                            != hashlib.sha256(stdout_tail).hexdigest()
+                            or _require_exact_int_v2(
+                                cleanup["drained_stderr_size_bytes"],
+                                "failure cleanup drained stderr size",
+                                maximum=256 * 1_024,
+                            )
+                            != len(stderr_tail)
+                            or cleanup["drained_stderr_sha256"]
+                            != hashlib.sha256(stderr_tail).hexdigest()
+                        ):
+                            raise ValueError(
+                                "failure cleanup drained tail differs from pipe capture"
+                            )
             return terminal_bytes
         if terminal.get("schema_version") != OUTER_ATTEMPT_SUCCESS_SCHEMA_V2:
             raise ValueError("outer attempt terminal schema is unknown")
@@ -15879,6 +17700,20 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
     inputs_fd: int | None = None
     source_tree_fd: int | None = None
     rfc_retained_bundle_fd: int | None = None
+
+    def known_attempt_parent_directories() -> dict[str, int]:
+        return {
+            relative: descriptor
+            for relative, descriptor in (
+                ("", attempt_fd),
+                ("evidence", evidence_fd),
+                ("evidence/cas", cas_fd),
+                ("evidence/inputs", inputs_fd),
+                ("evidence/source-tree", source_tree_fd),
+                ("evidence/rfc8785-raw-bundle", rfc_retained_bundle_fd),
+            )
+            if descriptor is not None
+        }
     attempt_directory_name = "attempt-" + hashlib.sha256(
         attempt.attempt_manifest_root.encode("ascii")
     ).hexdigest()[:48]
@@ -15895,6 +17730,11 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
     cleanup_start_command_index: int | None = None
     terminal_committed = False
     managed_atomic_residues: list[dict[str, object]] = []
+    service_output = {"stdout": bytearray(), "stderr": bytearray()}
+    service_capture_state = {
+        "capture_complete": False,
+        "capture_truncated": False,
+    }
     reservation = _canonical_inner_artifact_v2(
         {
             "schema_version": (
@@ -15999,7 +17839,10 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
             close_retained_descriptors()
             raise
         managed_atomic_residues = _reconcile_nonterminal_atomic_uncertainty_v2(
-            exc, attempt_fd=attempt_fd, deadline_ns=hard_deadline_ns
+            exc,
+            attempt_fd=attempt_fd,
+            deadline_ns=hard_deadline_ns,
+            known_parent_directories=known_attempt_parent_directories(),
         )
         if "reservation.json" not in _directory_names_at_fd_v2(attempt_fd):
             if (
@@ -16031,17 +17874,23 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
             raise RuntimeError(
                 "attempt reservation did not commit; empty directory rolled back"
             ) from exc
-        retained_tree = _retained_attempt_tree_before_terminal_v2(
+        failure_projection = _derive_failure_v4_retained_projection_at_fd_v2(
             attempt_fd,
-            deadline_ns=hard_deadline_ns,
             managed_atomic_residues=managed_atomic_residues,
+            deadline_ns=hard_deadline_ns,
         )
+        failure_cas_projection = failure_projection["failure_cas_projection"]
+        retained_tree = failure_projection["retained_tree_before_terminal"]
         failure_bytes = _closed_outer_failure_artifact_v2(
             attempt,
             entry_kind=entry_kind,
             stage=stage,
+            primary_failure_exception_type=type(exc).__name__,
             reason_code=FAIL_ISOLATED_EXECUTION,
             cleanup=None,
+            cleanup_failure_exception_type=None,
+            child_pipe_capture=None,
+            failure_cas_projection=failure_cas_projection,
             cleanup_verified=True,
             external_intervention_required=False,
             launcher_started=False,
@@ -16170,18 +18019,8 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
         rfc_source_bundle = rfc8785_prerequisite_receipt_path.parent.resolve(
             strict=True
         )
-        rfc_retained_bundle, rfc_raw_projection = (
-            _copy_rfc8785_raw_execution_bundle_v2(
-                receipt=rfc_receipt,
-                receipt_bytes=rfc_bytes,
-                source_directory=rfc_source_bundle,
-                destination_directory=(evidence_directory / "rfc8785-raw-bundle"),
-                deadline_ns=deadline_ns - 35_000_000_000,
-                expected_qualification_source_sha256=(
-                    attempt.qualification_source_sha256
-                ),
-                replay_project_root=source_tree,
-            )
+        rfc_retained_bundle = _mkdir_new_directory_v2(
+            evidence_directory, "rfc8785-raw-bundle"
         )
         rfc_retained_bundle_fd = retain_descriptor(
             _open_directory_at_fd_v2(
@@ -16189,6 +18028,18 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
                 "rfc8785-raw-bundle",
                 expected_path=rfc_retained_bundle,
             )
+        )
+        _, rfc_raw_projection = _copy_rfc8785_raw_execution_bundle_v2(
+            receipt=rfc_receipt,
+            receipt_bytes=rfc_bytes,
+            source_directory=rfc_source_bundle,
+            destination_directory=rfc_retained_bundle,
+            destination_directory_fd=rfc_retained_bundle_fd,
+            deadline_ns=deadline_ns - 35_000_000_000,
+            expected_qualification_source_sha256=(
+                attempt.qualification_source_sha256
+            ),
+            replay_project_root=source_tree,
         )
         calibration_paths = (
             calibration_basis_profile_path,
@@ -16408,51 +18259,38 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
         entry_show: dict[str, str] | None = None
         for probe_index in range(8):
             probe_deadline = min(deadline_ns, time.monotonic_ns() + 5_000_000_000)
-            evidence, stdout, _ = _run_bounded_control_command_v2(
+            evidence, stdout, entry_stderr = _run_bounded_control_command_v2(
                 _systemd_show_argv_v2(systemctl_realpath, unit_name),
                 purpose=f"entry-show-{probe_index}",
                 deadline_ns=probe_deadline,
             )
             systemctl_commands.append(evidence)
             if evidence["returncode"] == 0:
+                if entry_stderr:
+                    raise ValueError("successful entry systemd snapshot wrote stderr")
                 candidate = _parse_systemd_show_v2(
                     stdout, set(_SYSTEMD_SHOW_PROPERTIES_V2)
                 )
-                if candidate["LoadState"] == "loaded":
-                    if candidate["Description"] != unit_ownership_marker:
-                        raise ValueError(
-                            "post-launch unit description proves an ownership collision"
-                        )
-                    invocation = candidate["InvocationID"]
-                    if re.fullmatch(r"[0-9a-f]{32}", invocation) is None:
-                        raise ValueError("owned unit lacks an exact InvocationID")
-                    _normalize_effective_systemd_properties_v2(
-                        candidate, attempt=attempt, source_tree=source_tree
-                    )
+                entry_state, invocation = _evaluate_owned_or_absent_systemd_show_v2(
+                    candidate,
+                    attempt=attempt,
+                    source_tree=source_tree,
+                    ownership_marker=unit_ownership_marker,
+                    expected_invocation_id=owned_unit_invocation_id,
+                    name="post-launch entry",
+                )
+                if entry_state == "owned":
+                    if invocation is None:
+                        raise RuntimeError("owned entry lost its InvocationID")
                     if owned_unit_invocation_id is None:
                         owned_unit_invocation_id = invocation
-                    elif owned_unit_invocation_id != invocation:
+                else:
+                    if owned_unit_invocation_id is not None:
                         raise ValueError(
-                            "post-launch owned unit InvocationID changed"
+                            "post-launch unit disappeared after ownership"
                         )
-                elif (
-                    owned_unit_invocation_id is not None
-                    or not _systemd_show_is_exact_absent_v2(candidate)
-                ):
-                    raise ValueError(
-                        "post-launch unit disappeared or changed after ownership"
-                    )
-                if (
-                    candidate["LoadState"] == "loaded"
-                    and candidate["Description"] == unit_ownership_marker
-                    and candidate["ActiveState"] == "active"
-                    and candidate["SubState"] == "running"
-                    and _parse_systemd_unsigned_v2(candidate["MainPID"], "MainPID")
-                    > 0
-                    and _require_safe_cgroup_path_v2(
-                        candidate["ControlGroup"], "entry service cgroup"
-                    )
-                    == candidate["ControlGroup"]
+                if entry_state == "owned" and _systemd_entry_ready_v2(
+                    candidate, name="entry service"
                 ):
                     entry_show = candidate
                     break
@@ -16470,7 +18308,6 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
         service_selector = selectors.DefaultSelector()
         service_selector.register(launcher.stdout, selectors.EVENT_READ, "stdout")
         service_selector.register(launcher.stderr, selectors.EVENT_READ, "stderr")
-        service_output = {"stdout": bytearray(), "stderr": bytearray()}
         terminal_show: dict[str, str] | None = None
         terminal_probe_count = 0
         try:
@@ -16486,16 +18323,22 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
                     if not block:
                         service_selector.unregister(key.fileobj)
                         continue
-                    service_output[key.data].extend(block)
                     cap = (
                         8 * 1_024 * 1_024
                         if key.data == "stdout"
                         else 256 * 1_024
                     )
-                    if len(service_output[key.data]) > cap:
-                        raise ValueError(f"inner service {key.data} exceeded its cap")
+                    _append_bounded_pipe_block_v2(
+                        service_output[key.data],
+                        block,
+                        cap=cap,
+                        stream=key.data,
+                        capture_state=service_capture_state,
+                    )
                 if service_output["stderr"]:
-                    raise ValueError("successful inner service wrote stderr")
+                    raise ValueError(
+                        "inner service stderr appeared before terminal success was proven"
+                    )
                 framed = bytes(service_output["stdout"])
                 if framed.endswith(b"\n"):
                     _decode_canonical_transport_object_v2(
@@ -16522,21 +18365,18 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
                     candidate = _parse_systemd_show_v2(
                         terminal_stdout, set(_SYSTEMD_SHOW_PROPERTIES_V2)
                     )
-                    if (
-                        candidate["LoadState"] != "loaded"
-                        or candidate["Description"] != unit_ownership_marker
-                        or candidate["InvocationID"]
-                        != owned_unit_invocation_id
-                    ):
-                        raise ValueError(
-                            "terminal probe observed a replacement owned unit"
-                        )
-                    _normalize_effective_systemd_properties_v2(
-                        candidate, attempt=attempt, source_tree=source_tree
+                    terminal_state, _ = _evaluate_owned_or_absent_systemd_show_v2(
+                        candidate,
+                        attempt=attempt,
+                        source_tree=source_tree,
+                        ownership_marker=unit_ownership_marker,
+                        expected_invocation_id=owned_unit_invocation_id,
+                        name="terminal probe",
                     )
-                    if (
-                        candidate["ActiveState"] == "active"
-                        and candidate["SubState"] == "exited"
+                    if terminal_state != "owned":
+                        raise ValueError("terminal probe lost its owned unit")
+                    if _systemd_terminal_success_v2(
+                        candidate, name="terminal loop"
                     ):
                         terminal_show = candidate
                     else:
@@ -16549,23 +18389,8 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
         service_stderr = bytes(service_output["stderr"])
         if not inner_bytes or service_stderr:
             raise ValueError("successful inner service needs nonempty stdout and empty stderr")
-        if (
-            terminal_show["LoadState"] != "loaded"
-            or terminal_show["ActiveState"] != "active"
-            or terminal_show["SubState"] != "exited"
-            or terminal_show["Result"] != "success"
-            or _parse_systemd_unsigned_v2(
-                terminal_show["ExecMainCode"], "ExecMainCode"
-            )
-            != 1
-            or _parse_systemd_unsigned_v2(
-                terminal_show["ExecMainStatus"], "ExecMainStatus"
-            )
-            != 0
-            or _parse_systemd_unsigned_v2(terminal_show["MainPID"], "MainPID")
-            != 0
-            or terminal_show["ControlGroup"] != ""
-            or terminal_show["InvocationID"] != entry_show["InvocationID"]
+        if not _systemd_terminal_success_v2(
+            terminal_show, name="terminal loop result"
         ):
             raise ValueError("terminal active/exited service result drifted")
         cgroup_path = entry_show["ControlGroup"]
@@ -16583,37 +18408,44 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
         pre_stop_show = _parse_systemd_show_v2(
             pre_stop_stdout, set(_SYSTEMD_SHOW_PROPERTIES_V2)
         )
+        pre_stop_state, _ = _evaluate_owned_or_absent_systemd_show_v2(
+            pre_stop_show,
+            attempt=attempt,
+            source_tree=source_tree,
+            ownership_marker=unit_ownership_marker,
+            expected_invocation_id=owned_unit_invocation_id,
+            name="pre-stop snapshot",
+        )
         if (
             pre_stop_evidence["returncode"] != 0
             or pre_stop_stderr
-            or pre_stop_show["LoadState"] != "loaded"
-            or pre_stop_show["Description"] != unit_ownership_marker
-            or pre_stop_show["InvocationID"] != owned_unit_invocation_id
-            or pre_stop_show["ActiveState"] != "active"
-            or pre_stop_show["SubState"] != "exited"
-            or pre_stop_show["MainPID"] != "0"
-            or pre_stop_show["ControlGroup"] != ""
-            or pre_stop_show["Result"] != "success"
+            or pre_stop_state != "owned"
+            or not _systemd_terminal_success_v2(
+                pre_stop_show, name="pre-stop snapshot"
+            )
         ):
             raise ValueError("pre-stop unit ownership/result revalidation drifted")
         terminal_show = pre_stop_show
         stop_argv = [systemctl_realpath, "--user", "stop", unit_name]
-        stop_evidence, _, stop_stderr = _run_bounded_control_command_v2(
+        stop_evidence, stop_stdout, stop_stderr = _run_bounded_control_command_v2(
             stop_argv,
             purpose="stop-after-terminal-snapshot",
             deadline_ns=deadline_ns - 5_000_000_000,
         )
         systemctl_commands.append(stop_evidence)
-        if stop_evidence["returncode"] != 0 or stop_stderr:
+        if stop_evidence["returncode"] != 0 or stop_stdout or stop_stderr:
             raise ValueError("terminal unit stop failed")
         try:
             trailing_stdout, trailing_stderr, launcher_returncode = (
                 _capture_process_pipes_v2(
                     launcher,
                     deadline_ns=deadline_ns,
-                    stdout_cap=max(1, 8 * 1_024 * 1_024 - len(inner_bytes)),
-                    stderr_cap=max(1, 256 * 1_024 - len(service_stderr)),
+                    stdout_cap=8 * 1_024 * 1_024,
+                    stderr_cap=256 * 1_024,
                     wait_for_process_exit=True,
+                    stdout_buffer=service_output["stdout"],
+                    stderr_buffer=service_output["stderr"],
+                    capture_state=service_capture_state,
                 )
             )
         except BaseException:
@@ -16622,8 +18454,8 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
             _close_process_pipes_v2(
                 launcher, name="successful outer launcher capture"
             )
-        inner_bytes += trailing_stdout
-        service_stderr += trailing_stderr
+        inner_bytes = bytes(service_output["stdout"])
+        service_stderr = bytes(service_output["stderr"])
         _decode_canonical_transport_object_v2(
             inner_bytes,
             "runner final drained inner artifact",
@@ -16650,21 +18482,17 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
             candidate_absent = _parse_systemd_show_v2(
                 absent_stdout, set(_SYSTEMD_SHOW_PROPERTIES_V2)
             )
-            if _systemd_show_is_exact_absent_v2(candidate_absent):
+            post_stop_state, _ = _evaluate_owned_or_absent_systemd_show_v2(
+                candidate_absent,
+                attempt=attempt,
+                source_tree=source_tree,
+                ownership_marker=unit_ownership_marker,
+                expected_invocation_id=owned_unit_invocation_id,
+                name="post-stop absence probe",
+            )
+            if post_stop_state == "absent":
                 absent_show = candidate_absent
                 break
-            if (
-                candidate_absent["LoadState"] != "loaded"
-                or candidate_absent["Description"] != unit_ownership_marker
-                or candidate_absent["InvocationID"]
-                != owned_unit_invocation_id
-            ):
-                raise ValueError(
-                    "post-stop absence probe observed a replacement unit"
-                )
-            _normalize_effective_systemd_properties_v2(
-                candidate_absent, attempt=attempt, source_tree=source_tree
-            )
             time.sleep(0.05)
         if absent_show is None:
             raise ValueError("transient service was not exact not-found after stop")
@@ -16995,15 +18823,47 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
             close_retained_descriptors()
             raise
         managed_atomic_residues = _reconcile_nonterminal_atomic_uncertainty_v2(
-            exc, attempt_fd=attempt_fd, deadline_ns=hard_deadline_ns
+            exc,
+            attempt_fd=attempt_fd,
+            deadline_ns=hard_deadline_ns,
+            known_parent_directories=known_attempt_parent_directories(),
+        )
+        primary_failure_stage = stage
+        primary_failure_exception_type = type(exc).__name__
+        reason_code = (
+            exc.code
+            if type(exc) is Phase2BFormalWireCovertQualificationErrorV2
+            else FAIL_ISOLATED_EXECUTION
         )
         cleanup: dict[str, object] | None = None
+        cleanup_failure_exception_type: str | None = None
+        child_pipe_capture: dict[str, object] | None = None
+        capture_publication_failures: list[BaseException] = []
+
+        def reconcile_capture_publication_failure(
+            capture_exc: BaseException,
+        ) -> None:
+            additional = _reconcile_nonterminal_atomic_uncertainty_v2(
+                capture_exc,
+                attempt_fd=attempt_fd,
+                deadline_ns=hard_deadline_ns,
+                known_parent_directories=known_attempt_parent_directories(),
+            )
+            for row in additional:
+                if not any(
+                    _exact_json_equal(row, existing)
+                    for existing in managed_atomic_residues
+                ):
+                    managed_atomic_residues.append(row)
+
         if launcher is not None:
             if (
                 systemctl_realpath is None
                 or unit_name is None
                 or unit_ownership_marker is None
                 or source_tree_fd is None
+                or evidence_fd is None
+                or cas_fd is None
             ):
                 close_retained_descriptors()
                 raise RuntimeError(
@@ -17017,7 +18877,20 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
                 _OUTER_LAUNCHER_FINALIZATION_RESERVE_SECONDS_V2
                 * 1_000_000_000
             )
+            prefix_projection: dict[str, object] | None = None
+            capture_persistence_error_type: str | None = None
+            try:
+                prefix_projection = _persist_failure_child_pipe_prefix_v2(
+                    evidence_fd,
+                    stdout=bytes(service_output["stdout"]),
+                    stderr=bytes(service_output["stderr"]),
+                    deadline_ns=cleanup_control_deadline_ns,
+                )
+            except BaseException as capture_exc:
+                capture_persistence_error_type = type(capture_exc).__name__
+                capture_publication_failures.append(capture_exc)
             cleanup_start_command_index = len(systemctl_commands)
+            cleanup_exc: BaseException | None = None
             try:
                 try:
                     cleanup = _cleanup_transient_attempt_v2(
@@ -17032,14 +18905,19 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
                         deadline_ns=cleanup_control_deadline_ns,
                         commands=systemctl_commands,
                         cleanup_start_command_index=cleanup_start_command_index,
+                        stdout_capture=service_output["stdout"],
+                        stderr_capture=service_output["stderr"],
+                        capture_state=service_capture_state,
                     )
                 finally:
                     _finalize_outer_launcher_v2(
                         launcher, deadline_ns=cleanup_deadline_ns
                     )
-            except BaseException as cleanup_exc:
+            except BaseException as observed_cleanup_exc:
+                cleanup_exc = observed_cleanup_exc
+                cleanup_failure_exception_type = type(cleanup_exc).__name__
                 cleanup = {
-                    "cleanup_error_type": type(cleanup_exc).__name__,
+                    "cleanup_error_type": cleanup_failure_exception_type,
                     "cleanup_start_command_index": cleanup_start_command_index,
                     "cleanup_verified": False,
                     "commands": list(systemctl_commands),
@@ -17055,17 +18933,74 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
                     ),
                     "unit_name": unit_name,
                 }
-                retained_tree = _retained_attempt_tree_before_terminal_v2(
-                    attempt_fd,
-                    deadline_ns=hard_deadline_ns,
-                    managed_atomic_residues=managed_atomic_residues,
+            if cleanup_exc is not None:
+                # /failure/4 unproven cleanup has no positive launcher-reap
+                # fields that a pure replay can cross-bind.  Preserve every
+                # byte actually accumulated, but conservatively withhold the
+                # complete-capture claim even if EOF/reap preceded a later
+                # ownership or absence-probe failure.
+                service_capture_state["capture_complete"] = False
+            if capture_persistence_error_type is None:
+                if prefix_projection is None:
+                    raise RuntimeError(
+                        "failure child pipe prefix projection disappeared"
+                    )
+                try:
+                    child_pipe_capture = _persist_failure_child_pipe_capture_v2(
+                        evidence_fd,
+                        cas_fd,
+                        stdout=bytes(service_output["stdout"]),
+                        stderr=bytes(service_output["stderr"]),
+                        prefix_projection=prefix_projection,
+                        capture_complete=service_capture_state["capture_complete"],
+                        capture_truncated=service_capture_state[
+                            "capture_truncated"
+                        ],
+                        store_namespace=attempt.attempt_manifest_root,
+                        deadline_ns=cleanup_deadline_ns,
+                    )
+                except BaseException as capture_exc:
+                    capture_persistence_error_type = type(capture_exc).__name__
+                    capture_publication_failures.append(capture_exc)
+            for capture_exc in capture_publication_failures:
+                reconcile_capture_publication_failure(capture_exc)
+            if capture_persistence_error_type is not None:
+                child_pipe_capture = (
+                    _failure_child_pipe_persistence_unverified_projection_v2(
+                        evidence_fd,
+                        persistence_error_type=capture_persistence_error_type,
+                        capture_truncated=service_capture_state[
+                            "capture_truncated"
+                        ],
+                        deadline_ns=hard_deadline_ns,
+                    )
                 )
+            if cleanup_exc is not None:
+                failure_projection = _derive_failure_v4_retained_projection_at_fd_v2(
+                    attempt_fd,
+                    managed_atomic_residues=managed_atomic_residues,
+                    deadline_ns=hard_deadline_ns,
+                )
+                failure_cas_projection = failure_projection[
+                    "failure_cas_projection"
+                ]
+                retained_tree = failure_projection[
+                    "retained_tree_before_terminal"
+                ]
                 unproven_bytes = _closed_outer_failure_artifact_v2(
                     attempt,
                     entry_kind=entry_kind,
-                    stage="CLEANUP_UNPROVEN",
-                    reason_code=FAIL_ISOLATED_EXECUTION,
+                    stage=primary_failure_stage,
+                    primary_failure_exception_type=(
+                        primary_failure_exception_type
+                    ),
+                    reason_code=reason_code,
                     cleanup=cleanup,
+                    cleanup_failure_exception_type=(
+                        cleanup_failure_exception_type
+                    ),
+                    child_pipe_capture=child_pipe_capture,
+                    failure_cas_projection=failure_cas_projection,
                     cleanup_verified=False,
                     external_intervention_required=True,
                     launcher_started=True,
@@ -17109,22 +19044,23 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
                 "terminal.json",
                 "failure path found an already-published terminal"
             ) from exc
-        reason_code = (
-            exc.code
-            if type(exc) is Phase2BFormalWireCovertQualificationErrorV2
-            else FAIL_ISOLATED_EXECUTION
-        )
-        retained_tree = _retained_attempt_tree_before_terminal_v2(
+        failure_projection = _derive_failure_v4_retained_projection_at_fd_v2(
             attempt_fd,
-            deadline_ns=hard_deadline_ns,
             managed_atomic_residues=managed_atomic_residues,
+            deadline_ns=hard_deadline_ns,
         )
+        failure_cas_projection = failure_projection["failure_cas_projection"]
+        retained_tree = failure_projection["retained_tree_before_terminal"]
         failure_bytes = _closed_outer_failure_artifact_v2(
             attempt,
             entry_kind=entry_kind,
-            stage=stage,
+            stage=primary_failure_stage,
+            primary_failure_exception_type=primary_failure_exception_type,
             reason_code=reason_code,
             cleanup=cleanup,
+            cleanup_failure_exception_type=cleanup_failure_exception_type,
+            child_pipe_capture=child_pipe_capture,
+            failure_cas_projection=failure_cas_projection,
             cleanup_verified=True,
             external_intervention_required=False,
             launcher_started=launcher is not None,

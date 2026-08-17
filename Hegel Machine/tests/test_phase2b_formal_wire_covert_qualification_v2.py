@@ -120,6 +120,7 @@ def _systemd_show_bytes(
     main_pid: int = 0,
     cgroup: str = "",
     result: str = "success",
+    overrides: dict[str, str] | None = None,
 ) -> bytes:
     values = {
         "ActiveState": active,
@@ -146,16 +147,30 @@ def _systemd_show_bytes(
         "Type": "exec",
         "WorkingDirectory": str(source_tree),
     }
+    if overrides is not None:
+        if type(overrides) is not dict or any(
+            key not in values or type(value) is not str
+            for key, value in overrides.items()
+        ):
+            raise ValueError("test systemd show overrides are malformed")
+        values.update(overrides)
     return "".join(f"{key}={values[key]}\n" for key in qualification._SYSTEMD_SHOW_PROPERTIES_V2).encode()
 
 
-def _launch_intent() -> tuple[
+def _launch_intent(
+    attempt: qualification.Phase2BFormalWireCovertAttemptManifestV2 | None = None,
+    source_tree: Path | None = None,
+) -> tuple[
     qualification.Phase2BFormalWireCovertAttemptManifestV2,
     Path,
     dict[str, object],
 ]:
-    attempt = _attempt()
-    source_tree = Path("/tmp/hegel-qv2-attempt/evidence/source-tree")
+    attempt = _attempt() if attempt is None else attempt
+    source_tree = (
+        Path("/tmp/hegel-qv2-attempt/evidence/source-tree")
+        if source_tree is None
+        else source_tree
+    )
     python_row = _executable_row("/usr/bin/python3")
     systemd_run_row = _executable_row("/usr/bin/systemd-run")
     systemctl_row = _executable_row("/usr/bin/systemctl")
@@ -236,6 +251,1418 @@ def _launch_intent() -> tuple[
         "prelaunch_command": prelaunch,
         "prior_calibration_attempt_pair": None,
     }
+
+
+def _unproven_cleanup_projection(
+    intent: dict[str, object],
+    commands: list[dict[str, object]],
+    *,
+    boundary: int,
+    owned_invocation_id: str | None,
+) -> dict[str, object]:
+    return {
+        "cleanup_error_type": "RuntimeError",
+        "cleanup_start_command_index": boundary,
+        "cleanup_verified": False,
+        "commands": commands,
+        "external_intervention_required": True,
+        "owned_invocation_id": owned_invocation_id,
+        "ownership_marker": intent["ownership_marker"],
+        "prelaunch_unit_absent": True,
+        "transcript_root": qualification.stable_hash(
+            commands,
+            prefix="phase2b_formal_wire_covert_failure_cleanup_v2_",
+        ),
+        "unit_name": intent["unit_name"],
+    }
+
+
+def _materialize_launched_failure_v4(
+    root: Path,
+    *,
+    cleanup_verified: bool = True,
+    capture_persistence_verified: bool = True,
+    capture_truncated: bool = False,
+    capture_complete: bool | None = None,
+) -> tuple[Path, bytes, dict[str, object], dict[str, object]]:
+    if capture_complete is None:
+        capture_complete = cleanup_verified
+    if type(capture_complete) is not bool:
+        raise TypeError("test capture completion must be exact bool")
+    profile_bytes = b"failure-v4-profile\n"
+    runtime_bytes = b"failure-v4-runtime\n"
+    attempt = replace(
+        _attempt(),
+        qualification_config_sha256=hashlib.sha256(profile_bytes).hexdigest(),
+        runtime_environment_manifest_root=(
+            "sha256:" + hashlib.sha256(runtime_bytes).hexdigest()
+        ),
+        runtime_environment_manifest_size_bytes=len(runtime_bytes),
+    )
+    attempt_name = "attempt-" + hashlib.sha256(
+        attempt.attempt_manifest_root.encode("ascii")
+    ).hexdigest()[:48]
+    attempt_directory = root / attempt_name
+    evidence = attempt_directory / "evidence"
+    inputs = evidence / "inputs"
+    cas = evidence / "cas"
+    source_tree = evidence / "source-tree"
+    rfc_raw_bundle = evidence / "rfc8785-raw-bundle"
+    inputs.mkdir(parents=True)
+    cas.mkdir()
+    source_tree.mkdir()
+    rfc_raw_bundle.mkdir()
+    _, _, intent = _launch_intent(attempt, source_tree)
+    attempt_bytes = qualification.phase2b_formal_wire_covert_attempt_manifest_bytes_v2(
+        attempt
+    )
+    launch_intent_bytes = qualification._canonical_inner_artifact_v2(intent)
+    (inputs / "profile.json").write_bytes(profile_bytes)
+    (inputs / "attempt.json").write_bytes(attempt_bytes)
+    (inputs / "runtime-environment.json").write_bytes(runtime_bytes)
+    (evidence / "launch-intent.json").write_bytes(launch_intent_bytes)
+    reservation = qualification._canonical_inner_artifact_v2(
+        {
+            "schema_version": (
+                "hegel-machine-phase2b-formal-wire-covert-attempt-reservation/2"
+            ),
+            "campaign_id": attempt.campaign_id,
+            "attempt_id": attempt.attempt_id,
+            "profile_id": attempt.profile_id,
+            "attempt_manifest_root": attempt.attempt_manifest_root,
+            "entry_kind": "development-calibration",
+            "reserved_exclusively": True,
+            "terminal_publication_count": 0,
+        }
+    )
+    (attempt_directory / "reservation.json").write_bytes(reservation)
+
+    stdout_prefix = b"stdout-prefix\x00"
+    stderr_prefix = b"stderr-prefix\xff"
+    stdout_tail = b"stdout-tail\n"
+    stderr_tail = (
+        b"T" * (256 * 1_024 - len(stderr_prefix))
+        if capture_truncated
+        else b"stderr-tail\x80"
+    )
+    if capture_truncated and capture_complete:
+        raise ValueError("test fixture cannot claim complete truncated capture")
+    evidence_fd = qualification._open_real_directory_fd_v2(evidence)
+    cas_fd = qualification._open_real_directory_fd_v2(cas)
+    attempt_fd = qualification._open_real_directory_fd_v2(attempt_directory)
+    deadline = time.monotonic_ns() + 30_000_000_000
+    try:
+        prefix = qualification._persist_failure_child_pipe_prefix_v2(
+            evidence_fd,
+            stdout=stdout_prefix,
+            stderr=stderr_prefix,
+            deadline_ns=deadline,
+        )
+        if capture_persistence_verified:
+            capture = qualification._persist_failure_child_pipe_capture_v2(
+                evidence_fd,
+                cas_fd,
+                stdout=stdout_prefix + stdout_tail,
+                stderr=stderr_prefix + stderr_tail,
+                prefix_projection=prefix,
+                capture_complete=capture_complete,
+                capture_truncated=capture_truncated,
+                store_namespace=attempt.attempt_manifest_root,
+                deadline_ns=deadline,
+            )
+        else:
+            capture = (
+                qualification._failure_child_pipe_persistence_unverified_projection_v2(
+                    evidence_fd,
+                    persistence_error_type="OSError",
+                    capture_truncated=capture_truncated,
+                    deadline_ns=deadline,
+                )
+            )
+        absent = _systemd_show_bytes(attempt, source_tree)
+        show_argv = qualification._systemd_show_argv_v2(
+            intent["executables"]["systemctl"]["realpath"], intent["unit_name"]
+        )
+        commands = [
+            intent["prelaunch_command"],
+            qualification._command_evidence_v2(
+                argv=show_argv,
+                purpose="failure-owned-show",
+                returncode=0,
+                stdout=absent,
+                stderr=b"",
+            ),
+            qualification._command_evidence_v2(
+                argv=show_argv,
+                purpose="failure-absent-0",
+                returncode=0,
+                stdout=absent,
+                stderr=b"",
+            ),
+        ]
+        cleanup = {
+            "cleanup_start_command_index": 1,
+            "cleanup_verified": cleanup_verified,
+            "commands": commands,
+            "owned_invocation_id": None,
+            "ownership_marker": intent["ownership_marker"],
+            "prelaunch_unit_absent": True,
+            "transcript_root": qualification.stable_hash(
+                commands,
+                prefix="phase2b_formal_wire_covert_failure_cleanup_v2_",
+            ),
+            "unit_name": intent["unit_name"],
+        }
+        if cleanup_verified:
+            cleanup.update(
+                drained_stderr_sha256=hashlib.sha256(stderr_tail).hexdigest(),
+                drained_stderr_size_bytes=len(stderr_tail),
+                drained_stdout_sha256=hashlib.sha256(stdout_tail).hexdigest(),
+                drained_stdout_size_bytes=len(stdout_tail),
+                kill_sent=False,
+                launcher_reaped=True,
+                launcher_returncode=1,
+                post_cleanup_unit_absent=True,
+                term_sent=False,
+            )
+        else:
+            cleanup.update(
+                cleanup_error_type="RuntimeError",
+                external_intervention_required=True,
+            )
+        failure_projection = (
+            qualification._derive_failure_v4_retained_projection_at_fd_v2(
+                attempt_fd,
+                managed_atomic_residues=[],
+                deadline_ns=deadline,
+            )
+        )
+        failure_cas_projection = failure_projection["failure_cas_projection"]
+        tree = failure_projection["retained_tree_before_terminal"]
+        started = time.monotonic_ns()
+        terminal_bytes = qualification._closed_outer_failure_artifact_v2(
+            attempt,
+            entry_kind="development-calibration",
+            stage="INNER_EXECUTION",
+            primary_failure_exception_type="ValueError",
+            reason_code=qualification.FAIL_ISOLATED_EXECUTION,
+            cleanup=cleanup,
+            cleanup_failure_exception_type=(
+                None if cleanup_verified else "RuntimeError"
+            ),
+            child_pipe_capture=capture,
+            failure_cas_projection=failure_cas_projection,
+            cleanup_verified=cleanup_verified,
+            external_intervention_required=not cleanup_verified,
+            launcher_started=True,
+            managed_atomic_residues=[],
+            retained_tree_before_terminal=tree,
+            started_ns=started,
+            deadline_ns=(
+                started
+                + qualification.LIVE_HARD_TOTAL_TIMEOUT_SECONDS * 1_000_000_000
+            ),
+        )
+    finally:
+        os.close(attempt_fd)
+        os.close(cas_fd)
+        os.close(evidence_fd)
+    return attempt_directory, terminal_bytes, capture, cleanup
+
+
+def test_failure_v4_child_pipe_capture_round_trips_prospective_and_published(
+    tmp_path: Path,
+) -> None:
+    attempt_directory, terminal_bytes, capture, cleanup = (
+        _materialize_launched_failure_v4(tmp_path)
+    )
+    assert qualification.verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
+        attempt_directory,
+        expected_terminal_bytes=terminal_bytes,
+        prospective_terminal=True,
+    ) == terminal_bytes
+    (attempt_directory / "terminal.json").write_bytes(terminal_bytes)
+    assert qualification.verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
+        attempt_directory,
+        expected_terminal_bytes=terminal_bytes,
+    ) == terminal_bytes
+    terminal = qualification._decode_canonical_transport_object_v2(
+        terminal_bytes,
+        "failure /4 test terminal",
+        maximum_bytes=8 * 1_024 * 1_024,
+    )
+    assert terminal["schema_version"] == qualification.OUTER_ATTEMPT_FAILURE_SCHEMA_V2
+    assert terminal["primary_failure_stage"] == "INNER_EXECUTION"
+    assert terminal["primary_failure_exception_type"] == "ValueError"
+    assert terminal["cleanup_failure_exception_type"] is None
+    assert terminal["cleanup"] == cleanup
+    assert terminal["child_pipe_capture"] == capture
+    assert capture["capture_complete"] is True
+    assert capture["capture_boundary"] == "COMPLETE_EOF_AND_LAUNCHER_REAPED"
+
+
+@pytest.mark.parametrize(
+    ("cleanup_verified", "capture_persistence_verified", "disposition"),
+    (
+        (
+            False,
+            True,
+            "ATOMIC_FAILURE_CLEANUP_UNPROVEN_EXTERNAL_INTERVENTION_REQUIRED",
+        ),
+        (
+            True,
+            False,
+            "ATOMIC_FAILURE_PIPE_CAPTURE_PERSISTENCE_UNVERIFIED",
+        ),
+        (
+            False,
+            False,
+            "ATOMIC_FAILURE_CLEANUP_UNPROVEN_EXTERNAL_INTERVENTION_REQUIRED",
+        ),
+    ),
+)
+def test_failure_v4_negative_capture_boundaries_are_closed_and_nonpromotable(
+    tmp_path: Path,
+    cleanup_verified: bool,
+    capture_persistence_verified: bool,
+    disposition: str,
+) -> None:
+    attempt_directory, terminal_bytes, capture, _ = (
+        _materialize_launched_failure_v4(
+            tmp_path,
+            cleanup_verified=cleanup_verified,
+            capture_persistence_verified=capture_persistence_verified,
+        )
+    )
+    assert qualification.verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
+        attempt_directory,
+        expected_terminal_bytes=terminal_bytes,
+        prospective_terminal=True,
+    ) == terminal_bytes
+    (attempt_directory / "terminal.json").write_bytes(terminal_bytes)
+    assert qualification.verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
+        attempt_directory,
+        expected_terminal_bytes=terminal_bytes,
+    ) == terminal_bytes
+    terminal = qualification._decode_canonical_transport_object_v2(
+        terminal_bytes,
+        "negative failure /4 test terminal",
+        maximum_bytes=8 * 1_024 * 1_024,
+    )
+    assert terminal["disposition"] == disposition
+    assert terminal["primary_failure_stage"] == "INNER_EXECUTION"
+    assert terminal["primary_failure_exception_type"] == "ValueError"
+    assert terminal["cleanup_failure_exception_type"] == (
+        None if cleanup_verified else "RuntimeError"
+    )
+    assert terminal["claims"][
+        "r05_synthetic_dev_wire_covert_qualification_verified"
+    ] is False
+    assert capture["capture_complete"] is False
+    assert capture["capture_persistence_verified"] is capture_persistence_verified
+
+
+def test_failure_v4_unproven_cleanup_cannot_claim_complete_post_drain_capture(
+    tmp_path: Path,
+) -> None:
+    # EOF/reap can precede a later final-absence failure, but the unproven
+    # cleanup schema has no positive reap projection for pure replay.  The
+    # producer must therefore preserve the bytes without claiming complete.
+    with pytest.raises(ValueError, match="cannot claim complete child pipe"):
+        _materialize_launched_failure_v4(
+            tmp_path,
+            cleanup_verified=False,
+            capture_persistence_verified=True,
+            capture_complete=True,
+        )
+
+
+def test_failure_v4_truncated_at_cap_capture_is_retained_and_replayed(
+    tmp_path: Path,
+) -> None:
+    attempt_directory, terminal_bytes, capture, _ = (
+        _materialize_launched_failure_v4(
+            tmp_path,
+            cleanup_verified=False,
+            capture_persistence_verified=True,
+            capture_truncated=True,
+        )
+    )
+    assert capture["capture_complete"] is False
+    assert capture["capture_truncated_at_cap"] is True
+    assert capture["capture_boundary"] == "INCOMPLETE_TRUNCATED_AT_STREAM_CAP"
+    assert capture["stderr"]["final"]["size_bytes"] == 256 * 1_024
+    assert qualification.verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
+        attempt_directory,
+        expected_terminal_bytes=terminal_bytes,
+        prospective_terminal=True,
+    ) == terminal_bytes
+    (attempt_directory / "terminal.json").write_bytes(terminal_bytes)
+    assert qualification.verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
+        attempt_directory,
+        expected_terminal_bytes=terminal_bytes,
+    ) == terminal_bytes
+
+
+@pytest.mark.parametrize("missing_directory", ("cas", "rfc8785-raw-bundle"))
+def test_failure_v4_unverified_capture_requires_prelaunch_baseline_directories(
+    tmp_path: Path,
+    missing_directory: str,
+) -> None:
+    attempt_directory, terminal_bytes, _, _ = _materialize_launched_failure_v4(
+        tmp_path,
+        cleanup_verified=True,
+        capture_persistence_verified=False,
+    )
+    terminal = qualification._decode_canonical_transport_object_v2(
+        terminal_bytes,
+        "missing launched baseline terminal",
+        maximum_bytes=8 * 1_024 * 1_024,
+    )
+    (attempt_directory / "evidence" / missing_directory).rmdir()
+    attempt_fd = qualification._open_real_directory_fd_v2(attempt_directory)
+    try:
+        terminal["retained_tree_before_terminal"] = (
+            qualification._retained_attempt_tree_before_terminal_v2(attempt_fd)
+        )
+    finally:
+        os.close(attempt_fd)
+    spliced = qualification._canonical_inner_artifact_v2(terminal)
+    expected_message = (
+        "failure CAS retained snapshot drifted"
+        if missing_directory == "cas"
+        else "launched failure input set drifted"
+    )
+    with pytest.raises(ValueError, match=expected_message):
+        qualification.verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
+            attempt_directory,
+            expected_terminal_bytes=spliced,
+            prospective_terminal=True,
+        )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "raw-byte",
+        "cas-byte",
+        "missing-raw",
+        "missing-cas",
+        "path-splice",
+        "hash-splice",
+        "size-bool",
+        "stream-swap",
+    ),
+)
+def test_failure_v4_child_pipe_capture_rejects_retained_and_projection_tamper(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    attempt_directory, terminal_bytes, capture, _ = (
+        _materialize_launched_failure_v4(tmp_path)
+    )
+    terminal = qualification._decode_canonical_transport_object_v2(
+        terminal_bytes,
+        "failure /4 tamper terminal",
+        maximum_bytes=8 * 1_024 * 1_024,
+    )
+    projection = json.loads(json.dumps(capture))
+    evidence = attempt_directory / "evidence"
+    bundle_digest = projection["bundle_cas"]["content_sha256"]
+    if mutation == "raw-byte":
+        target = evidence / "failure-child-stdout.bin"
+        target.write_bytes(target.read_bytes() + b"tamper")
+    elif mutation == "cas-byte":
+        (evidence / "cas" / bundle_digest).write_bytes(b"tampered bundle")
+    elif mutation == "missing-raw":
+        (evidence / "failure-child-stderr.bin").unlink()
+    elif mutation == "missing-cas":
+        (evidence / "cas" / bundle_digest).unlink()
+    elif mutation == "path-splice":
+        projection["stdout"]["final"]["path"] = (
+            "evidence/failure-child-stderr.bin"
+        )
+    elif mutation == "hash-splice":
+        projection["stdout"]["final"]["sha256"] = projection["stderr"][
+            "final"
+        ]["sha256"]
+    elif mutation == "size-bool":
+        projection["stdout"]["final"]["size_bytes"] = True
+    elif mutation == "stream-swap":
+        projection["stdout"], projection["stderr"] = (
+            projection["stderr"],
+            projection["stdout"],
+        )
+    else:
+        raise AssertionError("unhandled failure pipe tamper")
+    if mutation in {"path-splice", "hash-splice", "size-bool", "stream-swap"}:
+        core = {key: value for key, value in projection.items() if key != "capture_root"}
+        projection["capture_root"] = qualification.stable_hash(
+            core,
+            prefix="phase2b_formal_wire_covert_failure_pipe_capture_v1_",
+        )
+    evidence_fd = qualification._open_real_directory_fd_v2(evidence)
+    try:
+        with pytest.raises((ValueError, FileNotFoundError, OSError)):
+            qualification._verify_failure_child_pipe_capture_projection_v2(
+                evidence_fd,
+                projection,
+                attempt_manifest_root=terminal["attempt_manifest_root"],
+                deadline_ns=time.monotonic_ns() + 10_000_000_000,
+            )
+    finally:
+        os.close(evidence_fd)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "missing-partial",
+        "unknown-partial",
+        "partial-hash",
+        "false-complete",
+        "partial-order",
+        "orphan-final",
+        "non-prefix-final",
+    ),
+)
+def test_failure_v4_persistence_unverified_capture_rejects_partial_splices(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    attempt_directory, terminal_bytes, capture, _ = (
+        _materialize_launched_failure_v4(
+            tmp_path,
+            cleanup_verified=True,
+            capture_persistence_verified=False,
+        )
+    )
+    terminal = qualification._decode_canonical_transport_object_v2(
+        terminal_bytes,
+        "unverified failure capture tamper terminal",
+        maximum_bytes=8 * 1_024 * 1_024,
+    )
+    projection = json.loads(json.dumps(capture))
+    evidence = attempt_directory / "evidence"
+    if mutation == "missing-partial":
+        (evidence / "failure-child-stdout-prefix.bin").unlink()
+    elif mutation == "unknown-partial":
+        (evidence / "failure-child-unknown.bin").write_bytes(b"unknown")
+    elif mutation == "partial-hash":
+        projection["retained_partial_artifacts"][0]["sha256"] = "f" * 64
+    elif mutation == "false-complete":
+        projection["capture_complete"] = True
+    elif mutation == "partial-order":
+        projection["retained_partial_artifacts"].reverse()
+    elif mutation == "orphan-final":
+        stdout_prefix = evidence / "failure-child-stdout-prefix.bin"
+        stdout_final = evidence / "failure-child-stdout.bin"
+        stdout_final.write_bytes(stdout_prefix.read_bytes() + b"tail")
+        stdout_prefix.unlink()
+        projection["retained_partial_artifacts"] = [
+            qualification._failure_pipe_file_reference_v2(
+                "evidence/failure-child-stdout.bin", stdout_final.read_bytes()
+            ),
+            projection["retained_partial_artifacts"][1],
+        ]
+    elif mutation == "non-prefix-final":
+        stdout_final = evidence / "failure-child-stdout.bin"
+        stdout_final.write_bytes(b"not-the-retained-stdout-prefix")
+        projection["retained_partial_artifacts"] = [
+            projection["retained_partial_artifacts"][0],
+            qualification._failure_pipe_file_reference_v2(
+                "evidence/failure-child-stdout.bin", stdout_final.read_bytes()
+            ),
+            projection["retained_partial_artifacts"][1],
+        ]
+    else:
+        raise AssertionError("unhandled unverified capture tamper")
+    if mutation in {
+        "partial-hash",
+        "false-complete",
+        "partial-order",
+        "orphan-final",
+        "non-prefix-final",
+    }:
+        core = {key: value for key, value in projection.items() if key != "capture_root"}
+        projection["capture_root"] = qualification.stable_hash(
+            core,
+            prefix="phase2b_formal_wire_covert_failure_pipe_capture_v1_",
+        )
+    evidence_fd = qualification._open_real_directory_fd_v2(evidence)
+    try:
+        with pytest.raises((ValueError, FileNotFoundError, OSError)):
+            qualification._verify_failure_child_pipe_capture_projection_v2(
+                evidence_fd,
+                projection,
+                attempt_manifest_root=terminal["attempt_manifest_root"],
+                deadline_ns=time.monotonic_ns() + 10_000_000_000,
+            )
+    finally:
+        os.close(evidence_fd)
+
+
+@pytest.mark.parametrize(
+    "retained_names",
+    (
+        (),
+        ("failure-child-stdout-prefix.bin",),
+        (
+            "failure-child-stdout-prefix.bin",
+            "failure-child-stderr-prefix.bin",
+        ),
+        (
+            "failure-child-stdout-prefix.bin",
+            "failure-child-stderr-prefix.bin",
+            "failure-child-stdout.bin",
+        ),
+        (
+            "failure-child-stdout-prefix.bin",
+            "failure-child-stderr-prefix.bin",
+            "failure-child-stdout.bin",
+            "failure-child-stderr.bin",
+        ),
+    ),
+)
+def test_failure_pipe_persistence_unverified_accepts_exact_reachable_prefixes(
+    tmp_path: Path, retained_names: tuple[str, ...]
+) -> None:
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    payloads = {
+        "failure-child-stdout-prefix.bin": b"stdout-prefix\x00",
+        "failure-child-stderr-prefix.bin": b"stderr-prefix\xff",
+        "failure-child-stdout.bin": b"stdout-prefix\x00stdout-tail",
+        "failure-child-stderr.bin": b"stderr-prefix\xffstderr-tail",
+    }
+    for name in retained_names:
+        (evidence / name).write_bytes(payloads[name])
+    evidence_fd = qualification._open_real_directory_fd_v2(evidence)
+    try:
+        deadline = time.monotonic_ns() + 10_000_000_000
+        projection = (
+            qualification._failure_child_pipe_persistence_unverified_projection_v2(
+                evidence_fd,
+                persistence_error_type="OSError",
+                capture_truncated=False,
+                deadline_ns=deadline,
+            )
+        )
+        expected_scan_order = (
+            "failure-child-stdout-prefix.bin",
+            "failure-child-stdout.bin",
+            "failure-child-stderr-prefix.bin",
+            "failure-child-stderr.bin",
+        )
+        assert [
+            Path(row["path"]).name
+            for row in projection["retained_partial_artifacts"]
+        ] == [name for name in expected_scan_order if name in retained_names]
+        qualification._verify_failure_child_pipe_capture_projection_v2(
+            evidence_fd,
+            projection,
+            attempt_manifest_root=_attempt().attempt_manifest_root,
+            deadline_ns=deadline,
+        )
+    finally:
+        os.close(evidence_fd)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "valid-unattributed-extra",
+        "unprojected-extra",
+        "missing-projected-object",
+        "object-name-content-mismatch",
+        "projection-order",
+        "projection-size-bool",
+    ),
+)
+def test_failure_v4_cas_projection_closes_exact_self_addressed_object_set(
+    tmp_path: Path, mutation: str
+) -> None:
+    attempt_directory, terminal_bytes, _, _ = _materialize_launched_failure_v4(
+        tmp_path
+    )
+    terminal = qualification._decode_canonical_transport_object_v2(
+        terminal_bytes,
+        "failure CAS exact-set terminal",
+        maximum_bytes=8 * 1_024 * 1_024,
+    )
+    cas = attempt_directory / "evidence" / "cas"
+    extra_payload = b"unattributed-partial-cas-object\x00"
+    extra_digest = hashlib.sha256(extra_payload).hexdigest()
+    (cas / extra_digest).write_bytes(extra_payload)
+
+    def refresh_projection_and_tree() -> bytes:
+        attempt_fd = qualification._open_real_directory_fd_v2(attempt_directory)
+        try:
+            projection = (
+                qualification._derive_failure_v4_retained_projection_at_fd_v2(
+                    attempt_fd,
+                    managed_atomic_residues=terminal["managed_atomic_residues"],
+                    deadline_ns=time.monotonic_ns() + 10_000_000_000,
+                )
+            )
+            terminal["failure_cas_projection"] = projection[
+                "failure_cas_projection"
+            ]
+            terminal["retained_tree_before_terminal"] = projection[
+                "retained_tree_before_terminal"
+            ]
+        finally:
+            os.close(attempt_fd)
+        return qualification._canonical_inner_artifact_v2(terminal)
+
+    if mutation == "valid-unattributed-extra":
+        spliced = refresh_projection_and_tree()
+        assert terminal["failure_cas_projection"][
+            "partial_cas_roles_attributed"
+        ] is False
+        assert qualification.verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
+            attempt_directory,
+            expected_terminal_bytes=spliced,
+            prospective_terminal=True,
+        ) == spliced
+        return
+    if mutation == "unprojected-extra":
+        spliced = terminal_bytes
+    elif mutation == "missing-projected-object":
+        spliced = refresh_projection_and_tree()
+        (cas / extra_digest).unlink()
+    elif mutation == "object-name-content-mismatch":
+        (cas / extra_digest).write_bytes(b"different bytes")
+        spliced = terminal_bytes
+    else:
+        refresh_projection_and_tree()
+        rows = terminal["failure_cas_projection"][
+            "objects_in_lexicographic_digest_order"
+        ]
+        if mutation == "projection-order":
+            rows.reverse()
+            terminal["failure_cas_projection"]["objects_root"] = (
+                qualification.stable_hash(
+                    rows,
+                    prefix="phase2b_formal_wire_covert_failure_cas_v1_",
+                )
+            )
+        elif mutation == "projection-size-bool":
+            rows[0]["object_size_bytes"] = True
+        else:
+            raise AssertionError("unhandled failure CAS mutation")
+        spliced = qualification._canonical_inner_artifact_v2(terminal)
+    with pytest.raises((ValueError, FileNotFoundError, OSError)):
+        qualification.verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
+            attempt_directory,
+            expected_terminal_bytes=spliced,
+            prospective_terminal=True,
+        )
+
+
+def test_failure_cas_projection_distinguishes_absent_empty_and_managed_temp(
+    tmp_path: Path,
+) -> None:
+    attempt_directory = tmp_path / "attempt"
+    attempt_directory.mkdir()
+    attempt_fd = qualification._open_real_directory_fd_v2(attempt_directory)
+    try:
+        deadline = time.monotonic_ns() + 10_000_000_000
+        absent = qualification._failure_cas_projection_at_attempt_fd_v2(
+            attempt_fd, managed_atomic_residues=[], deadline_ns=deadline
+        )
+        assert absent["cas_directory_present"] is False
+        assert absent["objects_in_lexicographic_digest_order"] == []
+        cas = attempt_directory / "evidence" / "cas"
+        cas.mkdir(parents=True)
+        empty = qualification._failure_cas_projection_at_attempt_fd_v2(
+            attempt_fd, managed_atomic_residues=[], deadline_ns=deadline
+        )
+        assert empty["cas_directory_present"] is True
+        assert empty["objects_in_lexicographic_digest_order"] == []
+
+        payload = b"managed-hardlink-cas-object"
+        digest = hashlib.sha256(payload).hexdigest()
+        target = cas / digest
+        target.write_bytes(payload)
+        temporary_name = f".{digest}.tmp-123-456"
+        temporary = cas / temporary_name
+        os.link(target, temporary)
+        opened = target.stat(follow_symlinks=False)
+        residue = {
+            "device": str(opened.st_dev),
+            "inode": str(opened.st_ino),
+            "link_count": opened.st_nlink,
+            "relative_parent": "evidence/cas",
+            "same_inode": True,
+            "size_bytes": len(payload),
+            "state": "TARGET_AND_MANAGED_TEMP_HARDLINK",
+            "target_name": digest,
+            "target_sha256": digest,
+            "temporary_name": temporary_name,
+        }
+        projected = qualification._failure_cas_projection_at_attempt_fd_v2(
+            attempt_fd,
+            managed_atomic_residues=[residue],
+            deadline_ns=deadline,
+        )
+        assert projected["objects_in_lexicographic_digest_order"] == [
+            {"content_sha256": digest, "object_size_bytes": len(payload)}
+        ]
+        assert qualification._verify_managed_atomic_residues_at_fd_v2(
+            attempt_fd, [residue], deadline_ns=deadline
+        ) == {"evidence/cas/" + temporary_name}
+        qualification._retained_attempt_tree_before_terminal_v2(
+            attempt_fd,
+            managed_atomic_residues=[residue],
+            deadline_ns=deadline,
+        )
+        with pytest.raises(ValueError, match="unknown non-object name"):
+            qualification._failure_cas_projection_at_attempt_fd_v2(
+                attempt_fd,
+                managed_atomic_residues=[],
+                deadline_ns=deadline,
+            )
+    finally:
+        os.close(attempt_fd)
+
+
+def test_managed_atomic_residue_target_language_matches_exact_publishers() -> None:
+    digest = hashlib.sha256(b"intended complete payload").hexdigest()
+
+    def row(
+        relative_parent: str,
+        target_name: str,
+        *,
+        state: str,
+        target_sha256: str = digest,
+    ) -> dict[str, object]:
+        hardlink = state == "TARGET_AND_MANAGED_TEMP_HARDLINK"
+        return {
+            "device": "0",
+            "inode": "1",
+            "link_count": 2 if hardlink else 1,
+            "relative_parent": relative_parent,
+            "same_inode": hardlink,
+            # A staged failure before the first byte is written is reachable.
+            "size_bytes": 1 if hardlink else 0,
+            "state": state,
+            "target_name": target_name,
+            "target_sha256": target_sha256,
+            "temporary_name": f".{target_name}.tmp-1-2",
+        }
+
+    legal_targets = [
+        ("", "reservation.json", digest),
+        *[
+            ("evidence", name, digest)
+            for name in (
+                "failure-child-stderr-prefix.bin",
+                "failure-child-stderr.bin",
+                "failure-child-stdout-prefix.bin",
+                "failure-child-stdout.bin",
+                "inner.json",
+                "launch-intent.json",
+                "mechanics.json",
+                "outer-supervisor.json",
+            )
+        ],
+        *[
+            ("evidence/inputs", name, digest)
+            for name in (
+                "attempt.json",
+                "profile.json",
+                "runtime-environment.json",
+            )
+        ],
+        ("evidence/cas", digest, digest),
+        ("evidence/rfc8785-raw-bundle", "receipt.json", digest),
+        ("evidence/rfc8785-raw-bundle", digest, digest),
+        (
+            "evidence/rfc8785-raw-bundle",
+            "command-000-python-version.argv.json",
+            digest,
+        ),
+        (
+            "evidence/rfc8785-raw-bundle",
+            "command-001-node-version.stdout.bin",
+            digest,
+        ),
+        (
+            "evidence/rfc8785-raw-bundle",
+            "command-002-v8-version.stderr.bin",
+            digest,
+        ),
+    ]
+    for parent, target, target_sha256 in legal_targets:
+        for state in (
+            "STAGED_TEMP_ONLY",
+            "TARGET_AND_MANAGED_TEMP_HARDLINK",
+        ):
+            item = row(
+                parent,
+                target,
+                state=state,
+                target_sha256=target_sha256,
+            )
+            assert qualification._managed_atomic_residue_paths_v2([item]) == {
+                (
+                    item["temporary_name"]
+                    if not parent
+                    else parent + "/" + str(item["temporary_name"])
+                ): item
+            }
+
+    for parent, target in (
+        ("", "terminal.json"),
+        ("evidence", "arbitrary-known-parent.json"),
+        ("evidence/source-tree", "qualification.py"),
+        ("evidence/unknown", "attempt.json"),
+        ("unknown-parent", "reservation.json"),
+        (
+            "evidence/rfc8785-raw-bundle",
+            "command-000-Python-version.stdout.bin",
+        ),
+    ):
+        with pytest.raises(ValueError, match="not publisher-reachable"):
+            qualification._managed_atomic_residue_paths_v2(
+                [row(parent, target, state="STAGED_TEMP_ONLY")]
+            )
+
+    mismatched_digest = hashlib.sha256(b"different intended payload").hexdigest()
+    for state in (
+        "STAGED_TEMP_ONLY",
+        "TARGET_AND_MANAGED_TEMP_HARDLINK",
+    ):
+        with pytest.raises(ValueError, match="not publisher-reachable"):
+            qualification._managed_atomic_residue_paths_v2(
+                [
+                    row(
+                        "evidence/rfc8785-raw-bundle",
+                        digest,
+                        state=state,
+                        target_sha256=mismatched_digest,
+                    )
+                ]
+            )
+
+
+def test_failure_v4_combined_projection_walks_once_and_hashes_each_inode_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    attempt_directory = tmp_path / "attempt"
+    cas = attempt_directory / "evidence" / "cas"
+    cas.mkdir(parents=True)
+    (attempt_directory / "ordinary.bin").write_bytes(b"ordinary")
+
+    payload = b"content-addressed-target"
+    digest = hashlib.sha256(payload).hexdigest()
+    target = cas / digest
+    target.write_bytes(payload)
+    hardlink_name = f".{digest}.tmp-101-202"
+    hardlink = cas / hardlink_name
+    os.link(target, hardlink)
+    hardlink_stat = target.stat(follow_symlinks=False)
+
+    intended_payload = b"complete-intended-CAS-payload"
+    intended_digest = hashlib.sha256(intended_payload).hexdigest()
+    staged_name = f".{intended_digest}.tmp-303-404"
+    staged = cas / staged_name
+    staged.write_bytes(intended_payload[:7])
+    staged_stat = staged.stat(follow_symlinks=False)
+    residues = [
+        {
+            "device": str(hardlink_stat.st_dev),
+            "inode": str(hardlink_stat.st_ino),
+            "link_count": hardlink_stat.st_nlink,
+            "relative_parent": "evidence/cas",
+            "same_inode": True,
+            "size_bytes": hardlink_stat.st_size,
+            "state": "TARGET_AND_MANAGED_TEMP_HARDLINK",
+            "target_name": digest,
+            "target_sha256": digest,
+            "temporary_name": hardlink_name,
+        },
+        {
+            "device": str(staged_stat.st_dev),
+            "inode": str(staged_stat.st_ino),
+            "link_count": staged_stat.st_nlink,
+            "relative_parent": "evidence/cas",
+            "same_inode": False,
+            "size_bytes": staged_stat.st_size,
+            "state": "STAGED_TEMP_ONLY",
+            "target_name": intended_digest,
+            "target_sha256": intended_digest,
+            "temporary_name": staged_name,
+        },
+    ]
+    real_fwalk = qualification.os.fwalk
+    real_hash = qualification._hash_regular_at_fd_v2
+    walks = 0
+    hashed_inodes: list[tuple[int, int]] = []
+
+    def counted_fwalk(*args: object, **kwargs: object):
+        nonlocal walks
+        walks += 1
+        return real_fwalk(*args, **kwargs)
+
+    def counted_hash(*args: object, **kwargs: object):
+        digest_value, opened = real_hash(*args, **kwargs)
+        hashed_inodes.append((opened.st_dev, opened.st_ino))
+        return digest_value, opened
+
+    monkeypatch.setattr(qualification.os, "fwalk", counted_fwalk)
+    monkeypatch.setattr(qualification, "_hash_regular_at_fd_v2", counted_hash)
+    attempt_fd = qualification._open_real_directory_fd_v2(attempt_directory)
+    try:
+        projection = qualification._derive_failure_v4_retained_projection_at_fd_v2(
+            attempt_fd,
+            managed_atomic_residues=residues,
+            deadline_ns=time.monotonic_ns() + 10_000_000_000,
+        )
+        with pytest.raises(ValueError, match="not publisher-reachable"):
+            qualification._derive_failure_v4_retained_projection_at_fd_v2(
+                attempt_fd,
+                managed_atomic_residues=[
+                    {
+                        **residues[1],
+                        "target_name": "not-a-sha",
+                        "temporary_name": ".not-a-sha.tmp-303-404",
+                    }
+                ],
+                deadline_ns=time.monotonic_ns() + 10_000_000_000,
+            )
+        with pytest.raises(TimeoutError, match="future absolute deadline"):
+            qualification._derive_failure_v4_retained_projection_at_fd_v2(
+                attempt_fd,
+                managed_atomic_residues=residues,
+                deadline_ns=time.monotonic_ns() - 1,
+            )
+        with pytest.raises(ValueError, match="not publisher-reachable"):
+            qualification._derive_failure_v4_retained_projection_at_fd_v2(
+                attempt_fd,
+                managed_atomic_residues=[
+                    {
+                        **residues[1],
+                        "target_name": "f" * 64,
+                        "temporary_name": f".{('f' * 64)}.tmp-303-404",
+                    }
+                ],
+                deadline_ns=time.monotonic_ns() + 10_000_000_000,
+            )
+    finally:
+        os.close(attempt_fd)
+    assert walks == 1
+    assert len(hashed_inodes) == 3
+    assert len(set(hashed_inodes)) == 3
+    assert projection["failure_cas_projection"][
+        "objects_in_lexicographic_digest_order"
+    ] == [{"content_sha256": digest, "object_size_bytes": len(payload)}]
+    assert projection["retained_tree_before_terminal"]["regular_file_count"] == 4
+    assert hashlib.sha256(staged.read_bytes()).hexdigest() != intended_digest
+
+
+def test_failure_v4_materialization_and_prospective_replay_use_exactly_two_combined_scans(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_combined = qualification._derive_failure_v4_retained_projection_at_fd_v2
+    calls = 0
+
+    def counted_combined(*args: object, **kwargs: object):
+        nonlocal calls
+        calls += 1
+        return real_combined(*args, **kwargs)
+
+    monkeypatch.setattr(
+        qualification,
+        "_derive_failure_v4_retained_projection_at_fd_v2",
+        counted_combined,
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_failure_cas_projection_at_attempt_fd_v2",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("legacy CAS scan entered /failure/4")
+        ),
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_retained_attempt_tree_before_terminal_v2",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("legacy tree scan entered /failure/4")
+        ),
+    )
+    attempt_directory, terminal_bytes, _, _ = _materialize_launched_failure_v4(
+        tmp_path
+    )
+    assert calls == 1
+    assert qualification.verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
+        attempt_directory,
+        expected_terminal_bytes=terminal_bytes,
+        prospective_terminal=True,
+    ) == terminal_bytes
+    assert calls == qualification._FINALIZATION_TREE_SCAN_PASSES_V2 == 2
+
+
+def test_failure_v4_combined_projection_checks_deadline_for_each_directory_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    attempt_directory = tmp_path / "attempt"
+    (attempt_directory / "first-empty-directory").mkdir(parents=True)
+
+    def root_only_fwalk(
+        *args: object, dir_fd: int, **kwargs: object
+    ):
+        yield ".", ["first-empty-directory"], [], dir_fd
+
+    def forbidden_stat(*args: object, **kwargs: object):
+        raise AssertionError("expired directory entry reached os.stat")
+
+    ticks = iter((0, 0, 101))
+    monkeypatch.setattr(qualification.os, "fwalk", root_only_fwalk)
+    monkeypatch.setattr(qualification.os, "stat", forbidden_stat)
+    monkeypatch.setattr(
+        qualification.time,
+        "monotonic_ns",
+        lambda: next(ticks),
+    )
+    attempt_fd = qualification._open_real_directory_fd_v2(attempt_directory)
+    try:
+        with pytest.raises(TimeoutError, match="absolute deadline"):
+            qualification._derive_failure_v4_retained_projection_at_fd_v2(
+                attempt_fd,
+                managed_atomic_residues=[],
+                deadline_ns=100,
+            )
+    finally:
+        os.close(attempt_fd)
+
+
+def test_atomic_reconcile_known_parent_is_fd_relative_without_walk_or_hash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    attempt_directory = tmp_path / "attempt"
+    cas = attempt_directory / "evidence" / "cas"
+    cas.mkdir(parents=True)
+    intended = hashlib.sha256(b"complete payload").hexdigest()
+    temporary_name = f".{intended}.tmp-505-606"
+    temporary = cas / temporary_name
+    temporary.write_bytes(b"partial")
+    opened = temporary.stat(follow_symlinks=False)
+    attempt_fd = qualification._open_real_directory_fd_v2(attempt_directory)
+    cas_fd = qualification._open_real_directory_fd_v2(cas)
+    exc = qualification._AtomicPublicationUncertainV2(
+        intended,
+        "test staged CAS residue",
+        parent_identity=(opened.st_dev, cas.stat().st_ino),
+        target_identity=(opened.st_dev, opened.st_ino),
+        target_sha256=intended,
+        temporary_name=temporary_name,
+        publication_state="STAGED_TEMP_ONLY",
+    )
+    real_remove = qualification.os.remove
+
+    def persistent_remove(path: object, *args: object, **kwargs: object) -> None:
+        if str(path) == temporary_name:
+            raise OSError("persistent test residue")
+        real_remove(path, *args, **kwargs)
+
+    monkeypatch.setattr(qualification.os, "remove", persistent_remove)
+    monkeypatch.setattr(
+        qualification,
+        "_hash_regular_at_fd_v2",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("reconcile hashed staged bytes")
+        ),
+    )
+    try:
+        rows = qualification._reconcile_nonterminal_atomic_uncertainty_v2(
+            exc,
+            attempt_fd=attempt_fd,
+            deadline_ns=time.monotonic_ns() + 10_000_000_000,
+            known_parent_directories={"evidence/cas": cas_fd},
+        )
+    finally:
+        os.close(cas_fd)
+        os.close(attempt_fd)
+    assert len(rows) == 1
+    assert rows[0]["target_name"] == intended
+    assert rows[0]["target_sha256"] == intended
+    assert rows[0]["size_bytes"] == len(b"partial")
+
+
+def test_failure_pipe_persistence_fallback_uses_remaining_terminal_reserve(
+    tmp_path: Path,
+) -> None:
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    evidence_fd = qualification._open_real_directory_fd_v2(evidence)
+    try:
+        terminal_deadline = time.monotonic_ns() + 10_000_000_000
+        qualification._persist_failure_child_pipe_prefix_v2(
+            evidence_fd,
+            stdout=b"retained-prefix",
+            stderr=b"\xff",
+            deadline_ns=terminal_deadline,
+        )
+        expired_cleanup_deadline = time.monotonic_ns() - 1
+        with pytest.raises(TimeoutError):
+            qualification._failure_child_pipe_persistence_unverified_projection_v2(
+                evidence_fd,
+                persistence_error_type="TimeoutError",
+                capture_truncated=False,
+                deadline_ns=expired_cleanup_deadline,
+            )
+        projection = (
+            qualification._failure_child_pipe_persistence_unverified_projection_v2(
+                evidence_fd,
+                persistence_error_type="TimeoutError",
+                capture_truncated=False,
+                deadline_ns=terminal_deadline,
+            )
+        )
+        assert projection["capture_persistence_verified"] is False
+        assert projection["capture_complete"] is False
+        assert len(projection["retained_partial_artifacts"]) == 2
+        qualification._verify_failure_child_pipe_capture_projection_v2(
+            evidence_fd,
+            projection,
+            attempt_manifest_root=_attempt().attempt_manifest_root,
+            deadline_ns=terminal_deadline,
+        )
+    finally:
+        os.close(evidence_fd)
+
+
+def test_failure_v4_verified_cleanup_rejects_incomplete_capture_splice(
+    tmp_path: Path,
+) -> None:
+    attempt_directory, terminal_bytes, _, _ = _materialize_launched_failure_v4(
+        tmp_path
+    )
+    terminal = qualification._decode_canonical_transport_object_v2(
+        terminal_bytes,
+        "failure /4 incomplete splice terminal",
+        maximum_bytes=8 * 1_024 * 1_024,
+    )
+    capture = terminal["child_pipe_capture"]
+    capture["capture_complete"] = False
+    capture["capture_boundary"] = "INCOMPLETE_PREFIX_OR_PARTIAL_DRAIN_ONLY"
+    capture_core = {
+        key: value for key, value in capture.items() if key != "capture_root"
+    }
+    capture["capture_root"] = qualification.stable_hash(
+        capture_core,
+        prefix="phase2b_formal_wire_covert_failure_pipe_capture_v1_",
+    )
+    spliced = qualification._canonical_inner_artifact_v2(terminal)
+    with pytest.raises(ValueError, match="complete child pipe capture"):
+        qualification.verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
+            attempt_directory,
+            expected_terminal_bytes=spliced,
+            prospective_terminal=True,
+        )
+
+
+def test_failure_v3_replay_remains_closed_and_v3_v4_field_splices_are_rejected(
+    tmp_path: Path,
+) -> None:
+    attempt_directory, terminal_bytes, capture, _ = (
+        _materialize_launched_failure_v4(tmp_path)
+    )
+    terminal_v4 = qualification._decode_canonical_transport_object_v2(
+        terminal_bytes,
+        "failure schema splice terminal",
+        maximum_bytes=8 * 1_024 * 1_024,
+    )
+    missing_capture_v4 = dict(terminal_v4)
+    missing_capture_v4.pop("child_pipe_capture")
+    with pytest.raises(ValueError, match="not closed"):
+        qualification.verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
+            attempt_directory,
+            expected_terminal_bytes=qualification._canonical_inner_artifact_v2(
+                missing_capture_v4
+            ),
+            prospective_terminal=True,
+        )
+
+    evidence = attempt_directory / "evidence"
+    for name in (
+        "failure-child-stdout-prefix.bin",
+        "failure-child-stderr-prefix.bin",
+        "failure-child-stdout.bin",
+        "failure-child-stderr.bin",
+    ):
+        (evidence / name).unlink()
+    (evidence / "cas" / capture["bundle_cas"]["content_sha256"]).unlink()
+    attempt_fd = qualification._open_real_directory_fd_v2(attempt_directory)
+    try:
+        legacy_tree = qualification._retained_attempt_tree_before_terminal_v2(
+            attempt_fd
+        )
+    finally:
+        os.close(attempt_fd)
+    legacy = dict(terminal_v4)
+    legacy["schema_version"] = qualification._OUTER_ATTEMPT_FAILURE_SCHEMA_V3
+    legacy["failure_stage"] = legacy.pop("primary_failure_stage")
+    legacy.pop("primary_failure_exception_type")
+    legacy.pop("cleanup_failure_exception_type")
+    legacy.pop("child_pipe_capture")
+    legacy.pop("failure_cas_projection")
+    legacy["retained_tree_before_terminal"] = legacy_tree
+    legacy_bytes = qualification._canonical_inner_artifact_v2(legacy)
+    with pytest.raises(ValueError, match="replay-only"):
+        qualification.verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
+            attempt_directory,
+            expected_terminal_bytes=legacy_bytes,
+            prospective_terminal=True,
+        )
+    with pytest.raises(ValueError, match="cannot be timing-finalized"):
+        qualification._retime_verified_outer_terminal_v2(
+            legacy_bytes,
+            prospective_replay_completed_ns=time.monotonic_ns(),
+            prospective_deadline_ns=time.monotonic_ns() + 10_000_000_000,
+        )
+
+    legacy_with_v4_field = dict(legacy)
+    legacy_with_v4_field["child_pipe_capture"] = capture
+    legacy_with_v4_bytes = qualification._canonical_inner_artifact_v2(
+        legacy_with_v4_field
+    )
+    (attempt_directory / "terminal.json").write_bytes(legacy_with_v4_bytes)
+    with pytest.raises(ValueError, match="not closed"):
+        qualification.verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
+            attempt_directory,
+            expected_terminal_bytes=legacy_with_v4_bytes,
+        )
+    (attempt_directory / "terminal.json").write_bytes(legacy_bytes)
+    assert qualification.verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
+        attempt_directory,
+        expected_terminal_bytes=legacy_bytes,
+    ) == legacy_bytes
+
+
+def test_child_pipe_capture_appends_chunked_non_utf8_tail_exactly_once() -> None:
+    stdout_prefix = b"stdout-prefix\x00\xff"
+    stderr_prefix = b"stderr-prefix\xfe\x80"
+    stdout_tail_parts = (b"stdout-tail-a\x81", b"stdout-tail-b\n")
+    stderr_tail_parts = (b"stderr-tail-a\x82", b"stderr-tail-b\r\n")
+    child_code = "\n".join(
+        (
+            "import os, time",
+            f"os.write(1, bytes.fromhex('{stdout_prefix.hex()}'))",
+            f"os.write(2, bytes.fromhex('{stderr_prefix.hex()}'))",
+            "time.sleep(0.05)",
+            f"os.write(1, bytes.fromhex('{stdout_tail_parts[0].hex()}'))",
+            f"os.write(2, bytes.fromhex('{stderr_tail_parts[0].hex()}'))",
+            "time.sleep(0.05)",
+            f"os.write(1, bytes.fromhex('{stdout_tail_parts[1].hex()}'))",
+            f"os.write(2, bytes.fromhex('{stderr_tail_parts[1].hex()}'))",
+        )
+    )
+    process = subprocess.Popen(
+        [sys.executable, "-I", "-S", "-B", "-c", child_code],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+
+    def read_exact(descriptor: int, size: int) -> bytes:
+        retained = bytearray()
+        while len(retained) < size:
+            block = os.read(descriptor, size - len(retained))
+            if not block:
+                raise AssertionError("child pipe reached EOF before its frozen prefix")
+            retained.extend(block)
+        return bytes(retained)
+
+    assert process.stdout is not None and process.stderr is not None
+    observed_stdout_prefix = read_exact(process.stdout.fileno(), len(stdout_prefix))
+    observed_stderr_prefix = read_exact(process.stderr.fileno(), len(stderr_prefix))
+    stdout_buffer = bytearray(observed_stdout_prefix)
+    stderr_buffer = bytearray(observed_stderr_prefix)
+    capture_state = {
+        "capture_complete": False,
+        "capture_truncated": False,
+    }
+    stdout_tail, stderr_tail, returncode = qualification._capture_process_pipes_v2(
+        process,
+        deadline_ns=time.monotonic_ns() + 5_000_000_000,
+        stdout_cap=len(stdout_prefix) + sum(map(len, stdout_tail_parts)),
+        stderr_cap=len(stderr_prefix) + sum(map(len, stderr_tail_parts)),
+        wait_for_process_exit=True,
+        stdout_buffer=stdout_buffer,
+        stderr_buffer=stderr_buffer,
+        capture_state=capture_state,
+    )
+    qualification._close_process_pipes_v2(
+        process, name="chunked non-UTF8 capture test"
+    )
+    assert stdout_tail == b"".join(stdout_tail_parts)
+    assert stderr_tail == b"".join(stderr_tail_parts)
+    assert bytes(stdout_buffer) == stdout_prefix + stdout_tail
+    assert bytes(stderr_buffer) == stderr_prefix + stderr_tail
+    assert returncode == 0
+    assert capture_state == {
+        "capture_complete": True,
+        "capture_truncated": False,
+    }
+    assert process.poll() == 0
+    assert process.stdout.closed and process.stderr.closed
+
+
+def test_child_pipe_capture_cap_failure_retains_bounded_prefix_and_marks_truncated() -> None:
+    prefix = b"at-cap"
+    extra = b"\xff"
+    child_code = "\n".join(
+        (
+            "import os, time",
+            f"os.write(1, bytes.fromhex('{prefix.hex()}'))",
+            "time.sleep(0.05)",
+            f"os.write(1, bytes.fromhex('{extra.hex()}'))",
+            "time.sleep(5)",
+        )
+    )
+    process = subprocess.Popen(
+        [sys.executable, "-I", "-S", "-B", "-c", child_code],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+    assert process.stdout is not None
+    observed_prefix = os.read(process.stdout.fileno(), len(prefix))
+    assert observed_prefix == prefix
+    stdout_buffer = bytearray(observed_prefix)
+    stderr_buffer = bytearray()
+    capture_state = {
+        "capture_complete": False,
+        "capture_truncated": False,
+    }
+    try:
+        with pytest.raises(ValueError, match="stdout exceeded its cap"):
+            qualification._capture_process_pipes_v2(
+                process,
+                deadline_ns=time.monotonic_ns() + 5_000_000_000,
+                stdout_cap=len(prefix),
+                stderr_cap=0,
+                wait_for_process_exit=True,
+                stdout_buffer=stdout_buffer,
+                stderr_buffer=stderr_buffer,
+                capture_state=capture_state,
+            )
+        assert bytes(stdout_buffer) == prefix
+        assert bytes(stderr_buffer) == b""
+        assert capture_state == {
+            "capture_complete": False,
+            "capture_truncated": True,
+        }
+    finally:
+        qualification._finalize_outer_launcher_v2(
+            process, deadline_ns=time.monotonic_ns() + 5_000_000_000
+        )
+    assert process.poll() is not None
+    assert process.stdout.closed
+    assert process.stderr is not None and process.stderr.closed
 
 
 def test_checked_profile_is_exact_canonical_candidate_with_live_disabled() -> None:
@@ -1944,7 +3371,7 @@ def test_verified_cleanup_requires_ordered_absence_and_rejects_kill_without_term
     kill = qualification._command_evidence_v2(
         argv=[
             intent["executables"]["systemctl"]["realpath"],
-            "--user", "kill", "--kill-whom=all", "--signal=SIGKILL",
+            "--user", "kill", "--kill-who=all", "--signal=SIGKILL",
             intent["unit_name"],
         ],
         purpose="failure-owned-sigkill",
@@ -1962,7 +3389,7 @@ def test_verified_cleanup_requires_ordered_absence_and_rejects_kill_without_term
             prefix="phase2b_formal_wire_covert_failure_cleanup_v2_",
         ),
     )
-    with pytest.raises(ValueError, match="SIGKILL lacked TERM"):
+    with pytest.raises(ValueError, match="absence confirmation|SIGKILL lacked TERM"):
         qualification._verify_failure_cleanup_projection_v2(
             bad,
             cleanup_verified=True,
@@ -1970,6 +3397,142 @@ def test_verified_cleanup_requires_ordered_absence_and_rejects_kill_without_term
             entry_kind="development-calibration",
             source_tree=source_tree,
             launch_intent=intent,
+        )
+
+
+def test_failure_cleanup_kill_option_is_schema_exact_and_systemd249_compatible() -> None:
+    help_result = subprocess.run(
+        ["systemctl", "kill", "--help"],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    legacy_option = "--kill-" + "whom=all"
+    assert help_result.returncode == 0
+    assert b"--kill-who=WHO" in help_result.stdout
+    assert legacy_option.encode("ascii") not in help_result.stdout
+
+    attempt, source_tree, intent = _launch_intent()
+    systemctl = intent["executables"]["systemctl"]["realpath"]
+    show_argv = qualification._systemd_show_argv_v2(
+        systemctl, intent["unit_name"]
+    )
+    invocation = "a" * 32
+    live = _systemd_show_bytes(
+        attempt,
+        source_tree,
+        marker=intent["ownership_marker"],
+        invocation=invocation,
+        load="loaded",
+        active="active",
+        sub="running",
+        main_pid=31337,
+        cgroup="/user.slice/hegel-qv2-schema-option.service",
+    )
+    absent = _systemd_show_bytes(attempt, source_tree)
+
+    def projection(option: str) -> dict[str, object]:
+        commands = [
+            intent["prelaunch_command"],
+            qualification._command_evidence_v2(
+                argv=show_argv,
+                purpose="failure-owned-show",
+                returncode=0,
+                stdout=live,
+                stderr=b"",
+            ),
+            qualification._command_evidence_v2(
+                argv=[
+                    systemctl,
+                    "--user",
+                    "kill",
+                    option,
+                    "--signal=SIGTERM",
+                    intent["unit_name"],
+                ],
+                purpose="failure-owned-sigterm",
+                returncode=0,
+                stdout=b"",
+                stderr=b"",
+            ),
+            qualification._command_evidence_v2(
+                argv=show_argv,
+                purpose="failure-term-grace-0",
+                returncode=0,
+                stdout=absent,
+                stderr=b"",
+            ),
+            qualification._command_evidence_v2(
+                argv=show_argv,
+                purpose="failure-absent-0",
+                returncode=0,
+                stdout=absent,
+                stderr=b"",
+            ),
+        ]
+        return {
+            "cleanup_start_command_index": 1,
+            "cleanup_verified": True,
+            "commands": commands,
+            "drained_stderr_sha256": hashlib.sha256(b"").hexdigest(),
+            "drained_stderr_size_bytes": 0,
+            "drained_stdout_sha256": hashlib.sha256(b"").hexdigest(),
+            "drained_stdout_size_bytes": 0,
+            "kill_sent": False,
+            "launcher_reaped": True,
+            "launcher_returncode": 1,
+            "owned_invocation_id": invocation,
+            "ownership_marker": intent["ownership_marker"],
+            "post_cleanup_unit_absent": True,
+            "prelaunch_unit_absent": True,
+            "term_sent": True,
+            "transcript_root": qualification.stable_hash(
+                commands,
+                prefix="phase2b_formal_wire_covert_failure_cleanup_v2_",
+            ),
+            "unit_name": intent["unit_name"],
+        }
+
+    current = projection("--kill-who=all")
+    legacy = projection(legacy_option)
+    qualification._verify_failure_cleanup_projection_v2(
+        current,
+        cleanup_verified=True,
+        attempt=attempt,
+        entry_kind="development-calibration",
+        source_tree=source_tree,
+        launch_intent=intent,
+        failure_schema_version=qualification.OUTER_ATTEMPT_FAILURE_SCHEMA_V2,
+    )
+    qualification._verify_failure_cleanup_projection_v2(
+        legacy,
+        cleanup_verified=True,
+        attempt=attempt,
+        entry_kind="development-calibration",
+        source_tree=source_tree,
+        launch_intent=intent,
+        failure_schema_version=qualification._OUTER_ATTEMPT_FAILURE_SCHEMA_V3,
+    )
+    with pytest.raises(ValueError):
+        qualification._verify_failure_cleanup_projection_v2(
+            legacy,
+            cleanup_verified=True,
+            attempt=attempt,
+            entry_kind="development-calibration",
+            source_tree=source_tree,
+            launch_intent=intent,
+            failure_schema_version=qualification.OUTER_ATTEMPT_FAILURE_SCHEMA_V2,
+        )
+    with pytest.raises(ValueError):
+        qualification._verify_failure_cleanup_projection_v2(
+            current,
+            cleanup_verified=True,
+            attempt=attempt,
+            entry_kind="development-calibration",
+            source_tree=source_tree,
+            launch_intent=intent,
+            failure_schema_version=qualification._OUTER_ATTEMPT_FAILURE_SCHEMA_V3,
         )
 
 
@@ -2018,16 +3581,85 @@ def test_cleanup_main_boundary_accepts_exact_51_and_rejects_52() -> None:
     show_argv = qualification._systemd_show_argv_v2(
         intent["executables"]["systemctl"]["realpath"], intent["unit_name"]
     )
-    commands = [intent["prelaunch_command"]] + [
+    invocation = "a" * 32
+    live = _systemd_show_bytes(
+        attempt,
+        source_tree,
+        marker=intent["ownership_marker"],
+        invocation=invocation,
+        load="loaded",
+        active="active",
+        sub="running",
+        main_pid=31337,
+        cgroup="/user.slice/hegel-qv2-boundary.service",
+    )
+    starting = _systemd_show_bytes(
+        attempt,
+        source_tree,
+        marker=intent["ownership_marker"],
+        invocation=invocation,
+        load="loaded",
+        active="activating",
+        sub="start",
+        main_pid=31337,
+        cgroup="/user.slice/hegel-qv2-boundary.service",
+    )
+    exited = _systemd_show_bytes(
+        attempt,
+        source_tree,
+        marker=intent["ownership_marker"],
+        invocation=invocation,
+        load="loaded",
+        active="active",
+        sub="exited",
+    )
+    absent = _systemd_show_bytes(attempt, source_tree)
+    commands = [intent["prelaunch_command"]]
+    commands.extend(
         qualification._command_evidence_v2(
             argv=show_argv,
             purpose=f"entry-show-{index}",
-            returncode=1,
-            stdout=b"",
-            stderr=b"failure boundary",
+            returncode=0,
+            stdout=starting if index < 7 else live,
+            stderr=b"",
         )
-        for index in range(50)
-    ]
+        for index in range(8)
+    )
+    commands.extend(
+        qualification._command_evidence_v2(
+            argv=show_argv,
+            purpose=f"terminal-show-{index}",
+            returncode=0,
+            stdout=live if index < 31 else exited,
+            stderr=b"",
+        )
+        for index in range(33)
+    )
+    commands.append(
+        qualification._command_evidence_v2(
+            argv=[
+                intent["executables"]["systemctl"]["realpath"],
+                "--user",
+                "stop",
+                intent["unit_name"],
+            ],
+            purpose="stop-after-terminal-snapshot",
+            returncode=0,
+            stdout=b"",
+            stderr=b"",
+        )
+    )
+    commands.extend(
+        qualification._command_evidence_v2(
+            argv=show_argv,
+            purpose=f"post-stop-absent-check-{index}",
+            returncode=0,
+            stdout=exited if index < 7 else absent,
+            stderr=b"",
+        )
+        for index in range(8)
+    )
+    assert len(commands) == 51
 
     def projection(rows: list[dict[str, object]], boundary: int) -> dict[str, object]:
         return {
@@ -2036,7 +3668,7 @@ def test_cleanup_main_boundary_accepts_exact_51_and_rejects_52() -> None:
             "cleanup_verified": False,
             "commands": rows,
             "external_intervention_required": True,
-            "owned_invocation_id": None,
+            "owned_invocation_id": invocation,
             "ownership_marker": intent["ownership_marker"],
             "prelaunch_unit_absent": True,
             "transcript_root": qualification.stable_hash(
@@ -2057,16 +3689,466 @@ def test_cleanup_main_boundary_accepts_exact_51_and_rejects_52() -> None:
     too_long = commands + [
         qualification._command_evidence_v2(
             argv=show_argv,
-            purpose="entry-show-50",
-            returncode=1,
-            stdout=b"",
-            stderr=b"failure boundary",
+            purpose="post-stop-absent-check-8",
+            returncode=0,
+            stdout=absent,
+            stderr=b"",
         )
     ]
     with pytest.raises(ValueError, match="command boundary"):
         qualification._verify_failure_cleanup_projection_v2(
             projection(too_long, 52),
             cleanup_verified=False,
+            attempt=attempt,
+            entry_kind="development-calibration",
+            source_tree=source_tree,
+            launch_intent=intent,
+        )
+
+
+def test_unproven_cleanup_v4_accepts_bounded_entry_retries_and_final_failures() -> None:
+    attempt, source_tree, intent = _launch_intent()
+    show_argv = qualification._systemd_show_argv_v2(
+        intent["executables"]["systemctl"]["realpath"], intent["unit_name"]
+    )
+    invocation = "a" * 32
+    live = _systemd_show_bytes(
+        attempt,
+        source_tree,
+        marker=intent["ownership_marker"],
+        invocation=invocation,
+        load="loaded",
+        active="active",
+        sub="running",
+        main_pid=31337,
+        cgroup="/user.slice/hegel-qv2-entry-retry.service",
+    )
+    absent = _systemd_show_bytes(attempt, source_tree)
+
+    def row(
+        purpose: str,
+        *,
+        returncode: int = 0,
+        stdout: bytes = b"",
+        stderr: bytes = b"",
+    ) -> dict[str, object]:
+        return qualification._command_evidence_v2(
+            argv=show_argv,
+            purpose=purpose,
+            returncode=returncode,
+            stdout=stdout,
+            stderr=stderr,
+        )
+
+    def projection(
+        rows: list[dict[str, object]], boundary: int, owned: str | None
+    ) -> dict[str, object]:
+        return {
+            "cleanup_error_type": "RuntimeError",
+            "cleanup_start_command_index": boundary,
+            "cleanup_verified": False,
+            "commands": rows,
+            "external_intervention_required": True,
+            "owned_invocation_id": owned,
+            "ownership_marker": intent["ownership_marker"],
+            "prelaunch_unit_absent": True,
+            "transcript_root": qualification.stable_hash(
+                rows,
+                prefix="phase2b_formal_wire_covert_failure_cleanup_v2_",
+            ),
+            "unit_name": intent["unit_name"],
+        }
+
+    retried = [
+        intent["prelaunch_command"],
+        row("entry-show-0", returncode=1, stderr=b"not ready"),
+        row("entry-show-1", returncode=1, stderr=b"not ready"),
+        row("entry-show-2", stdout=live),
+        row("terminal-show-0", returncode=1, stderr=b"primary failure"),
+        row("failure-owned-show", stdout=absent),
+        row("failure-absent-0", stdout=absent),
+    ]
+    qualification._verify_failure_cleanup_projection_v2(
+        projection(retried, 5, invocation),
+        cleanup_verified=False,
+        attempt=attempt,
+        entry_kind="development-calibration",
+        source_tree=source_tree,
+        launch_intent=intent,
+    )
+
+    eight_failed_entries = [intent["prelaunch_command"]] + [
+        row(f"entry-show-{index}", returncode=1, stderr=b"not ready")
+        for index in range(8)
+    ] + [
+        row("failure-owned-show", stdout=absent),
+        row("failure-absent-0", stdout=absent),
+    ]
+    qualification._verify_failure_cleanup_projection_v2(
+        projection(eight_failed_entries, 9, None),
+        cleanup_verified=False,
+        attempt=attempt,
+        entry_kind="development-calibration",
+        source_tree=source_tree,
+        launch_intent=intent,
+    )
+
+    fifty_failed_entries = [intent["prelaunch_command"]] + [
+        row(f"entry-show-{index}", returncode=1, stderr=b"not ready")
+        for index in range(50)
+    ]
+    with pytest.raises(ValueError, match="entry probe count exceeds eight"):
+        qualification._verify_failure_cleanup_projection_v2(
+            projection(fifty_failed_entries, 51, None),
+            cleanup_verified=False,
+            attempt=attempt,
+            entry_kind="development-calibration",
+            source_tree=source_tree,
+            launch_intent=intent,
+        )
+
+
+def test_unproven_cleanup_v4_rejects_ownership_and_fsm_splices() -> None:
+    attempt, source_tree, intent = _launch_intent()
+    systemctl = intent["executables"]["systemctl"]["realpath"]
+    show_argv = qualification._systemd_show_argv_v2(
+        systemctl, intent["unit_name"]
+    )
+    invocation_a = "a" * 32
+    invocation_b = "b" * 32
+
+    def show(
+        *,
+        marker: str = intent["ownership_marker"],
+        invocation: str = invocation_a,
+        active: str = "active",
+        sub: str = "running",
+        main_pid: int = 31337,
+        cgroup: str = "/user.slice/hegel-qv2-fsm.service",
+    ) -> bytes:
+        return _systemd_show_bytes(
+            attempt,
+            source_tree,
+            marker=marker,
+            invocation=invocation,
+            load="loaded",
+            active=active,
+            sub=sub,
+            main_pid=main_pid,
+            cgroup=cgroup,
+        )
+
+    absent = _systemd_show_bytes(attempt, source_tree)
+
+    def show_row(
+        purpose: str,
+        stdout: bytes,
+        *,
+        returncode: int = 0,
+        stderr: bytes = b"",
+    ) -> dict[str, object]:
+        return qualification._command_evidence_v2(
+            argv=show_argv,
+            purpose=purpose,
+            returncode=returncode,
+            stdout=stdout,
+            stderr=stderr,
+        )
+
+    term_row = qualification._command_evidence_v2(
+        argv=[
+            systemctl,
+            "--user",
+            "kill",
+            "--kill-who=all",
+            "--signal=SIGTERM",
+            intent["unit_name"],
+        ],
+        purpose="failure-owned-sigterm",
+        returncode=0,
+        stdout=b"",
+        stderr=b"",
+    )
+
+    def projection(
+        rows: list[dict[str, object]], boundary: int, owned: str | None
+    ) -> dict[str, object]:
+        return {
+            "cleanup_error_type": "RuntimeError",
+            "cleanup_start_command_index": boundary,
+            "cleanup_verified": False,
+            "commands": rows,
+            "external_intervention_required": True,
+            "owned_invocation_id": owned,
+            "ownership_marker": intent["ownership_marker"],
+            "prelaunch_unit_absent": True,
+            "transcript_root": qualification.stable_hash(
+                rows,
+                prefix="phase2b_formal_wire_covert_failure_cleanup_v2_",
+            ),
+            "unit_name": intent["unit_name"],
+        }
+
+    wrong_marker = [
+        intent["prelaunch_command"],
+        show_row("entry-show-0", show(marker="wrong-marker")),
+        show_row("entry-show-1", show()),
+        show_row("failure-owned-show", absent),
+    ]
+    invocation_splice = [
+        intent["prelaunch_command"],
+        show_row("entry-show-0", show()),
+        show_row("failure-owned-show", show(invocation=invocation_b)),
+        show_row("failure-absent-0", absent),
+    ]
+    failed_then_continued = [
+        intent["prelaunch_command"],
+        show_row(
+            "failure-owned-show", b"", returncode=1, stderr=b"manager failed"
+        ),
+        show_row("failure-absent-0", absent),
+    ]
+    nonlive_then_term = [
+        intent["prelaunch_command"],
+        show_row(
+            "failure-owned-show",
+            show(active="active", sub="exited", main_pid=0, cgroup=""),
+        ),
+        term_row,
+    ]
+    live_then_absence = [
+        intent["prelaunch_command"],
+        show_row("failure-owned-show", show()),
+        show_row("failure-absent-0", absent),
+    ]
+    term_live_then_absence = [
+        intent["prelaunch_command"],
+        show_row("failure-owned-show", show()),
+        term_row,
+        show_row("failure-term-grace-0", show()),
+        show_row("failure-absent-0", absent),
+    ]
+    nonlive_then_absence = [
+        intent["prelaunch_command"],
+        show_row(
+            "failure-owned-show",
+            show(active="active", sub="exited", main_pid=0, cgroup=""),
+        ),
+        show_row("failure-absent-0", absent),
+    ]
+    projected_invocation_splice = [
+        intent["prelaunch_command"],
+        show_row("entry-show-0", show()),
+        show_row("failure-owned-show", absent),
+    ]
+    continued_after_absent = [
+        intent["prelaunch_command"],
+        show_row("failure-owned-show", absent),
+        show_row("failure-absent-0", absent),
+        show_row("failure-absent-1", absent),
+    ]
+    successful_entry_stderr = [
+        intent["prelaunch_command"],
+        show_row("entry-show-0", show(), stderr=b"unexpected"),
+        show_row("entry-show-1", show()),
+        show_row("failure-owned-show", absent),
+    ]
+    ready_then_more_entry = [
+        intent["prelaunch_command"],
+        show_row("entry-show-0", show()),
+        show_row("entry-show-1", show()),
+        show_row("failure-owned-show", absent),
+    ]
+    cases = (
+        ("wrong-marker", wrong_marker, 3, None, "unowned unit"),
+        ("invocation-splice", invocation_splice, 2, invocation_a, "InvocationID changed"),
+        ("failed-then-continued", failed_then_continued, 1, None, "did not close"),
+        ("nonlive-then-term", nonlive_then_term, 1, invocation_a, "required stop"),
+        ("live-then-absence", live_then_absence, 1, invocation_a, "required SIGTERM"),
+        (
+            "term-live-then-absence",
+            term_live_then_absence,
+            1,
+            invocation_a,
+            "required SIGKILL",
+        ),
+        (
+            "nonlive-then-absence",
+            nonlive_then_absence,
+            1,
+            invocation_a,
+            "required stop",
+        ),
+        (
+            "projected-invocation-splice",
+            projected_invocation_splice,
+            2,
+            invocation_b,
+            "main-prefix InvocationID is not projected exactly",
+        ),
+        ("continued-after-absent", continued_after_absent, 1, None, "continued after final absence"),
+        ("successful-entry-stderr", successful_entry_stderr, 3, None, "did not close"),
+        ("ready-then-more-entry", ready_then_more_entry, 3, invocation_a, "after ready"),
+    )
+    for name, rows, boundary, owned, message in cases:
+        try:
+            qualification._verify_failure_cleanup_projection_v2(
+                projection(rows, boundary, owned),
+                cleanup_verified=False,
+                attempt=attempt,
+                entry_kind="development-calibration",
+                source_tree=source_tree,
+                launch_intent=intent,
+            )
+        except ValueError as exc:
+            assert message in str(exc), (name, str(exc))
+        else:
+            pytest.fail(f"unproven cleanup accepted {name} splice")
+
+
+def test_unproven_cleanup_signal_only_internal_failure_boundary_is_exact() -> None:
+    attempt, source_tree, intent = _launch_intent()
+    systemctl = intent["executables"]["systemctl"]["realpath"]
+    show_argv = qualification._systemd_show_argv_v2(
+        systemctl, intent["unit_name"]
+    )
+    invocation = "a" * 32
+    live = _systemd_show_bytes(
+        attempt,
+        source_tree,
+        marker=intent["ownership_marker"],
+        invocation=invocation,
+        load="loaded",
+        active="active",
+        sub="running",
+        main_pid=31337,
+        cgroup="/user.slice/hegel-qv2-signal-boundary.service",
+    )
+    absent = _systemd_show_bytes(attempt, source_tree)
+
+    def show_row(purpose: str, stdout: bytes) -> dict[str, object]:
+        return qualification._command_evidence_v2(
+            argv=show_argv,
+            purpose=purpose,
+            returncode=0,
+            stdout=stdout,
+            stderr=b"",
+        )
+
+    def signal_row(signal_name: str) -> dict[str, object]:
+        return qualification._command_evidence_v2(
+            argv=[
+                systemctl,
+                "--user",
+                "kill",
+                "--kill-who=all",
+                f"--signal={signal_name}",
+                intent["unit_name"],
+            ],
+            purpose=(
+                "failure-owned-sigterm"
+                if signal_name == "SIGTERM"
+                else "failure-owned-sigkill"
+            ),
+            returncode=0,
+            stdout=b"",
+            stderr=b"",
+        )
+
+    owned = show_row("failure-owned-show", live)
+    term = signal_row("SIGTERM")
+    kill = signal_row("SIGKILL")
+    term_grace_live = show_row("failure-term-grace-0", live)
+    final_absent = show_row("failure-absent-0", absent)
+
+    def projection(
+        rows: list[dict[str, object]], *, verified: bool
+    ) -> dict[str, object]:
+        result: dict[str, object] = {
+            "cleanup_start_command_index": 1,
+            "cleanup_verified": verified,
+            "commands": rows,
+            "owned_invocation_id": invocation,
+            "ownership_marker": intent["ownership_marker"],
+            "prelaunch_unit_absent": True,
+            "transcript_root": qualification.stable_hash(
+                rows,
+                prefix="phase2b_formal_wire_covert_failure_cleanup_v2_",
+            ),
+            "unit_name": intent["unit_name"],
+        }
+        if verified:
+            result.update(
+                drained_stderr_sha256=hashlib.sha256(b"").hexdigest(),
+                drained_stderr_size_bytes=0,
+                drained_stdout_sha256=hashlib.sha256(b"").hexdigest(),
+                drained_stdout_size_bytes=0,
+                kill_sent=False,
+                launcher_reaped=True,
+                launcher_returncode=1,
+                post_cleanup_unit_absent=True,
+                term_sent=True,
+            )
+        else:
+            result.update(
+                cleanup_error_type="TimeoutError",
+                external_intervention_required=True,
+            )
+        return result
+
+    term_only = [intent["prelaunch_command"], owned, term]
+    qualification._verify_failure_cleanup_projection_v2(
+        projection(term_only, verified=False),
+        cleanup_verified=False,
+        attempt=attempt,
+        entry_kind="development-calibration",
+        source_tree=source_tree,
+        launch_intent=intent,
+    )
+
+    term_then_kill_without_grace = [
+        intent["prelaunch_command"], owned, term, kill
+    ]
+    with pytest.raises(ValueError, match="TERM grace sequence"):
+        qualification._verify_failure_cleanup_projection_v2(
+            projection(term_then_kill_without_grace, verified=False),
+            cleanup_verified=False,
+            attempt=attempt,
+            entry_kind="development-calibration",
+            source_tree=source_tree,
+            launch_intent=intent,
+        )
+
+    kill_only_after_term_grace = [
+        intent["prelaunch_command"], owned, term, term_grace_live, kill
+    ]
+    qualification._verify_failure_cleanup_projection_v2(
+        projection(kill_only_after_term_grace, verified=False),
+        cleanup_verified=False,
+        attempt=attempt,
+        entry_kind="development-calibration",
+        source_tree=source_tree,
+        launch_intent=intent,
+    )
+
+    kill_then_later_row_without_grace = [
+        *kill_only_after_term_grace,
+        final_absent,
+    ]
+    with pytest.raises(ValueError, match="KILL grace sequence"):
+        qualification._verify_failure_cleanup_projection_v2(
+            projection(kill_then_later_row_without_grace, verified=False),
+            cleanup_verified=False,
+            attempt=attempt,
+            entry_kind="development-calibration",
+            source_tree=source_tree,
+            launch_intent=intent,
+        )
+
+    with pytest.raises(ValueError, match="TERM grace sequence"):
+        qualification._verify_failure_cleanup_projection_v2(
+            projection(term_only, verified=True),
+            cleanup_verified=True,
             attempt=attempt,
             entry_kind="development-calibration",
             source_tree=source_tree,
@@ -2180,7 +4262,7 @@ def test_verified_cleanup_rejects_rows_after_final_absence() -> None:
         )
 
 
-def test_systemctl_fast_success_transcript_is_exact_five_commands() -> None:
+def test_systemctl_fast_success_transcript_is_exact_six_commands() -> None:
     attempt, source_tree, intent = _launch_intent()
     systemctl = intent["executables"]["systemctl"]["realpath"]
     show_argv = qualification._systemd_show_argv_v2(systemctl, intent["unit_name"])
@@ -2217,6 +4299,10 @@ def test_systemctl_fast_success_transcript_is_exact_five_commands() -> None:
             stdout=terminal, stderr=b"",
         ),
         qualification._command_evidence_v2(
+            argv=show_argv, purpose="terminal-show-1", returncode=0,
+            stdout=terminal, stderr=b"",
+        ),
+        qualification._command_evidence_v2(
             argv=[systemctl, "--user", "stop", intent["unit_name"]],
             purpose="stop-after-terminal-snapshot", returncode=0,
             stdout=b"", stderr=b"",
@@ -2239,6 +4325,879 @@ def test_systemctl_fast_success_transcript_is_exact_five_commands() -> None:
     assert observed_entry["InvocationID"] == invocation
     assert observed_terminal["InvocationID"] == invocation
     assert qualification._systemd_show_is_exact_absent_v2(observed_absent)
+
+    retry_commands = [
+        commands[0],
+        qualification._command_evidence_v2(
+            argv=show_argv,
+            purpose="entry-show-0",
+            returncode=1,
+            stdout=b"",
+            stderr=b"manager not ready",
+        ),
+        qualification._command_evidence_v2(
+            argv=show_argv,
+            purpose="entry-show-1",
+            returncode=0,
+            stdout=entry,
+            stderr=b"",
+        ),
+        *commands[2:],
+    ]
+    assert qualification._verify_systemctl_transcript_v2(
+        retry_commands,
+        systemctl_realpath=systemctl,
+        unit_name=intent["unit_name"],
+        attempt=attempt,
+        source_tree=source_tree,
+        ownership_marker=intent["ownership_marker"],
+    )[0]["InvocationID"] == invocation
+
+    continued_after_ready = [
+        *commands[:2],
+        qualification._command_evidence_v2(
+            argv=show_argv,
+            purpose="entry-show-1",
+            returncode=0,
+            stdout=entry,
+            stderr=b"",
+        ),
+        *commands[2:],
+    ]
+    with pytest.raises(ValueError, match="after ready"):
+        qualification._verify_systemctl_transcript_v2(
+            continued_after_ready,
+            systemctl_realpath=systemctl,
+            unit_name=intent["unit_name"],
+            attempt=attempt,
+            source_tree=source_tree,
+            ownership_marker=intent["ownership_marker"],
+        )
+
+    successful_entry_stderr = list(commands)
+    successful_entry_stderr[1] = qualification._command_evidence_v2(
+        argv=show_argv,
+        purpose="entry-show-0",
+        returncode=0,
+        stdout=entry,
+        stderr=b"unexpected",
+    )
+    with pytest.raises(ValueError, match="entry probe wrote stderr"):
+        qualification._verify_systemctl_transcript_v2(
+            successful_entry_stderr,
+            systemctl_realpath=systemctl,
+            unit_name=intent["unit_name"],
+            attempt=attempt,
+            source_tree=source_tree,
+            ownership_marker=intent["ownership_marker"],
+        )
+
+    stop_stdout = list(commands)
+    stop_stdout[-2] = qualification._command_evidence_v2(
+        argv=[systemctl, "--user", "stop", intent["unit_name"]],
+        purpose="stop-after-terminal-snapshot",
+        returncode=0,
+        stdout=b"unexpected",
+        stderr=b"",
+    )
+    with pytest.raises(ValueError, match="stop evidence drifted"):
+        qualification._verify_systemctl_transcript_v2(
+            stop_stdout,
+            systemctl_realpath=systemctl,
+            unit_name=intent["unit_name"],
+            attempt=attempt,
+            source_tree=source_tree,
+            ownership_marker=intent["ownership_marker"],
+        )
+
+    absent_then_owned = [
+        commands[0],
+        qualification._command_evidence_v2(
+            argv=show_argv,
+            purpose="entry-show-0",
+            returncode=0,
+            stdout=absent,
+            stderr=b"",
+        ),
+        qualification._command_evidence_v2(
+            argv=show_argv,
+            purpose="entry-show-1",
+            returncode=0,
+            stdout=entry,
+            stderr=b"",
+        ),
+        *commands[2:],
+    ]
+    assert qualification._verify_systemctl_transcript_v2(
+        absent_then_owned,
+        systemctl_realpath=systemctl,
+        unit_name=intent["unit_name"],
+        attempt=attempt,
+        source_tree=source_tree,
+        ownership_marker=intent["ownership_marker"],
+    )[0]["InvocationID"] == invocation
+
+    for main_pid, cgroup in (
+        (123, ""),
+        (0, "/user.slice/hegel-qv2.service"),
+    ):
+        isolated_entry_drift = list(commands)
+        isolated_entry_drift[1] = qualification._command_evidence_v2(
+            argv=show_argv,
+            purpose="entry-show-0",
+            returncode=0,
+            stdout=_systemd_show_bytes(
+                attempt,
+                source_tree,
+                marker=intent["ownership_marker"],
+                invocation=invocation,
+                load="loaded",
+                active="active",
+                sub="running",
+                main_pid=main_pid,
+                cgroup=cgroup,
+            ),
+            stderr=b"",
+        )
+        with pytest.raises(ValueError, match="lacks PID/cgroup"):
+            qualification._verify_systemctl_transcript_v2(
+                isolated_entry_drift,
+                systemctl_realpath=systemctl,
+                unit_name=intent["unit_name"],
+                attempt=attempt,
+                source_tree=source_tree,
+                ownership_marker=intent["ownership_marker"],
+            )
+
+    for overrides in (
+        {"MainPID": "00"},
+        {"ExecMainCode": "01"},
+        {"ExecMainCode": "2"},
+        {"MemoryMax": "1"},
+    ):
+        drifted = list(commands)
+        drifted[-3] = qualification._command_evidence_v2(
+            argv=show_argv,
+            purpose="terminal-show-1",
+            returncode=0,
+            stdout=_systemd_show_bytes(
+                attempt,
+                source_tree,
+                marker=intent["ownership_marker"],
+                invocation=invocation,
+                load="loaded",
+                active="active",
+                sub="exited",
+                overrides=overrides,
+            ),
+            stderr=b"",
+        )
+        with pytest.raises(ValueError):
+            qualification._verify_systemctl_transcript_v2(
+                drifted,
+                systemctl_realpath=systemctl,
+                unit_name=intent["unit_name"],
+                attempt=attempt,
+                source_tree=source_tree,
+                ownership_marker=intent["ownership_marker"],
+            )
+
+
+def test_failure_v4_entry_semantic_failures_are_exact_final_boundaries() -> None:
+    attempt, source_tree, intent = _launch_intent()
+    show_argv = qualification._systemd_show_argv_v2(
+        intent["executables"]["systemctl"]["realpath"], intent["unit_name"]
+    )
+    invocation = "a" * 32
+    absent = _systemd_show_bytes(attempt, source_tree)
+    nonready = _systemd_show_bytes(
+        attempt,
+        source_tree,
+        marker=intent["ownership_marker"],
+        invocation=invocation,
+        load="loaded",
+        active="activating",
+        sub="start",
+        main_pid=123,
+        cgroup="/user.slice/hegel-qv2-entry-boundary.service",
+    )
+    ready = _systemd_show_bytes(
+        attempt,
+        source_tree,
+        marker=intent["ownership_marker"],
+        invocation=invocation,
+        load="loaded",
+        active="active",
+        sub="running",
+        main_pid=123,
+        cgroup="/user.slice/hegel-qv2-entry-boundary.service",
+    )
+
+    def row(index: int, stdout: bytes) -> dict[str, object]:
+        return qualification._command_evidence_v2(
+            argv=show_argv,
+            purpose=f"entry-show-{index}",
+            returncode=0,
+            stdout=stdout,
+            stderr=b"",
+        )
+
+    failed_terminal = qualification._command_evidence_v2(
+        argv=show_argv,
+        purpose="terminal-show-0",
+        returncode=1,
+        stdout=b"",
+        stderr=b"manager probe failed",
+    )
+    cases = (
+        (
+            [row(0, nonready), row(1, absent)],
+            invocation,
+            row(2, ready),
+            invocation,
+        ),
+        (
+            [
+                row(
+                    0,
+                    _systemd_show_bytes(
+                        attempt,
+                        source_tree,
+                        marker=intent["ownership_marker"],
+                        invocation=invocation,
+                        load="loaded",
+                        active="active",
+                        sub="running",
+                        main_pid=123,
+                        cgroup="/user.slice/hegel-qv2-entry-boundary.service",
+                        overrides={"MainPID": "00123"},
+                    ),
+                )
+            ],
+            invocation,
+            failed_terminal,
+            invocation,
+        ),
+        (
+            [
+                row(
+                    0,
+                    _systemd_show_bytes(
+                        attempt,
+                        source_tree,
+                        marker=intent["ownership_marker"],
+                        invocation=invocation,
+                        load="loaded",
+                        active="active",
+                        sub="running",
+                        main_pid=123,
+                        cgroup="",
+                    ),
+                )
+            ],
+            invocation,
+            failed_terminal,
+            invocation,
+        ),
+        (
+            [
+                row(
+                    0,
+                    _systemd_show_bytes(
+                        attempt,
+                        source_tree,
+                        marker=intent["ownership_marker"],
+                        invocation=invocation,
+                        load="loaded",
+                        active="active",
+                        sub="running",
+                        main_pid=0,
+                        cgroup="/user.slice/hegel-qv2-entry-boundary.service",
+                    ),
+                )
+            ],
+            invocation,
+            failed_terminal,
+            invocation,
+        ),
+        (
+            [
+                row(
+                    0,
+                    _systemd_show_bytes(
+                        attempt,
+                        source_tree,
+                        marker=intent["ownership_marker"],
+                        invocation=invocation,
+                        load="loaded",
+                        active="active",
+                        sub="running",
+                        main_pid=123,
+                        cgroup="/../unsafe",
+                    ),
+                )
+            ],
+            invocation,
+            failed_terminal,
+            invocation,
+        ),
+        (
+            [
+                row(
+                    0,
+                    _systemd_show_bytes(
+                        attempt,
+                        source_tree,
+                        marker=intent["ownership_marker"],
+                        invocation=invocation,
+                        load="loaded",
+                        active="activating",
+                        sub="start",
+                        main_pid=123,
+                        cgroup="/user.slice/hegel-qv2-entry-boundary.service",
+                        overrides={"MemoryMax": "1"},
+                    ),
+                )
+            ],
+            None,
+            row(1, ready),
+            invocation,
+        ),
+    )
+    for (
+        prefix_rows,
+        projected_invocation,
+        continuation,
+        continued_projection,
+    ) in cases:
+        commands = [intent["prelaunch_command"], *prefix_rows]
+        qualification._verify_failure_cleanup_projection_v2(
+            _unproven_cleanup_projection(
+                intent,
+                commands,
+                boundary=len(commands),
+                owned_invocation_id=projected_invocation,
+            ),
+            cleanup_verified=False,
+            attempt=attempt,
+            entry_kind="development-calibration",
+            source_tree=source_tree,
+            launch_intent=intent,
+        )
+        continued = [*commands, continuation]
+        with pytest.raises(ValueError):
+            qualification._verify_failure_cleanup_projection_v2(
+                _unproven_cleanup_projection(
+                    intent,
+                    continued,
+                    boundary=len(continued),
+                    owned_invocation_id=continued_projection,
+                ),
+                cleanup_verified=False,
+                attempt=attempt,
+                entry_kind="development-calibration",
+                source_tree=source_tree,
+                launch_intent=intent,
+            )
+
+    # Exact absence before the first owned observation is a normal startup
+    # retry.  Once the same entry sequence reaches an owned ready state, a
+    # later real command failure remains a valid /failure/4 final boundary and
+    # the InvocationID must stay locked.
+    absent_owned_then_failure = [
+        intent["prelaunch_command"],
+        row(0, absent),
+        row(1, ready),
+        failed_terminal,
+    ]
+    qualification._verify_failure_cleanup_projection_v2(
+        _unproven_cleanup_projection(
+            intent,
+            absent_owned_then_failure,
+            boundary=len(absent_owned_then_failure),
+            owned_invocation_id=invocation,
+        ),
+        cleanup_verified=False,
+        attempt=attempt,
+        entry_kind="development-calibration",
+        source_tree=source_tree,
+        launch_intent=intent,
+    )
+
+
+def test_failure_v4_prestop_semantic_drift_is_exact_final_only() -> None:
+    attempt, source_tree, intent = _launch_intent()
+    systemctl = intent["executables"]["systemctl"]["realpath"]
+    show_argv = qualification._systemd_show_argv_v2(
+        systemctl, intent["unit_name"]
+    )
+    invocation = "b" * 32
+    entry = _systemd_show_bytes(
+        attempt,
+        source_tree,
+        marker=intent["ownership_marker"],
+        invocation=invocation,
+        load="loaded",
+        active="active",
+        sub="running",
+        main_pid=321,
+        cgroup="/user.slice/hegel-qv2-prestop.service",
+    )
+    terminal = _systemd_show_bytes(
+        attempt,
+        source_tree,
+        marker=intent["ownership_marker"],
+        invocation=invocation,
+        load="loaded",
+        active="active",
+        sub="exited",
+    )
+
+    def show_row(purpose: str, stdout: bytes) -> dict[str, object]:
+        return qualification._command_evidence_v2(
+            argv=show_argv,
+            purpose=purpose,
+            returncode=0,
+            stdout=stdout,
+            stderr=b"",
+        )
+
+    base = [
+        intent["prelaunch_command"],
+        show_row("entry-show-0", entry),
+        show_row("terminal-show-0", terminal),
+    ]
+    stop = qualification._command_evidence_v2(
+        argv=[systemctl, "--user", "stop", intent["unit_name"]],
+        purpose="stop-after-terminal-snapshot",
+        returncode=0,
+        stdout=b"",
+        stderr=b"",
+    )
+    for overrides in (
+        {"ExecMainCode": "01"},
+        {"ExecMainCode": "2"},
+        {"ExecMainStatus": "00"},
+        {"MainPID": "00"},
+        {"MemoryMax": "1"},
+    ):
+        drift = _systemd_show_bytes(
+            attempt,
+            source_tree,
+            marker=intent["ownership_marker"],
+            invocation=invocation,
+            load="loaded",
+            active="active",
+            sub="exited",
+            overrides=overrides,
+        )
+        commands = [*base, show_row("terminal-show-1", drift)]
+        qualification._verify_failure_cleanup_projection_v2(
+            _unproven_cleanup_projection(
+                intent,
+                commands,
+                boundary=len(commands),
+                owned_invocation_id=invocation,
+            ),
+            cleanup_verified=False,
+            attempt=attempt,
+            entry_kind="development-calibration",
+            source_tree=source_tree,
+            launch_intent=intent,
+        )
+        continued = [*commands, stop]
+        with pytest.raises(ValueError):
+            qualification._verify_failure_cleanup_projection_v2(
+                _unproven_cleanup_projection(
+                    intent,
+                    continued,
+                    boundary=len(continued),
+                    owned_invocation_id=invocation,
+                ),
+                cleanup_verified=False,
+                attempt=attempt,
+                entry_kind="development-calibration",
+                source_tree=source_tree,
+                launch_intent=intent,
+            )
+
+
+def test_failure_v4_terminal_loop_semantic_drift_is_exact_final_only() -> None:
+    attempt, source_tree, intent = _launch_intent()
+    systemctl = intent["executables"]["systemctl"]["realpath"]
+    show_argv = qualification._systemd_show_argv_v2(
+        systemctl, intent["unit_name"]
+    )
+    invocation = "d" * 32
+    entry = _systemd_show_bytes(
+        attempt,
+        source_tree,
+        marker=intent["ownership_marker"],
+        invocation=invocation,
+        load="loaded",
+        active="active",
+        sub="running",
+        main_pid=456,
+        cgroup="/user.slice/hegel-qv2-terminal-loop.service",
+    )
+    terminal = _systemd_show_bytes(
+        attempt,
+        source_tree,
+        marker=intent["ownership_marker"],
+        invocation=invocation,
+        load="loaded",
+        active="active",
+        sub="exited",
+    )
+
+    def show_row(purpose: str, stdout: bytes) -> dict[str, object]:
+        return qualification._command_evidence_v2(
+            argv=show_argv,
+            purpose=purpose,
+            returncode=0,
+            stdout=stdout,
+            stderr=b"",
+        )
+
+    base = [intent["prelaunch_command"], show_row("entry-show-0", entry)]
+    for overrides in (
+        {"ExecMainCode": "01"},
+        {"ExecMainCode": "2"},
+        {"ExecMainStatus": "00"},
+        {"MainPID": "00"},
+        {"MemoryMax": "1"},
+    ):
+        drift = _systemd_show_bytes(
+            attempt,
+            source_tree,
+            marker=intent["ownership_marker"],
+            invocation=invocation,
+            load="loaded",
+            active="active",
+            sub="exited",
+            overrides=overrides,
+        )
+        commands = [*base, show_row("terminal-show-0", drift)]
+        qualification._verify_failure_cleanup_projection_v2(
+            _unproven_cleanup_projection(
+                intent,
+                commands,
+                boundary=len(commands),
+                owned_invocation_id=invocation,
+            ),
+            cleanup_verified=False,
+            attempt=attempt,
+            entry_kind="development-calibration",
+            source_tree=source_tree,
+            launch_intent=intent,
+        )
+        with pytest.raises(ValueError):
+            qualification._verify_failure_cleanup_projection_v2(
+                _unproven_cleanup_projection(
+                    intent,
+                    [*commands, show_row("terminal-show-1", terminal)],
+                    boundary=len(commands) + 1,
+                    owned_invocation_id=invocation,
+                ),
+                cleanup_verified=False,
+                attempt=attempt,
+                entry_kind="development-calibration",
+                source_tree=source_tree,
+                launch_intent=intent,
+            )
+
+
+def test_failure_v4_cleanup_show_semantics_and_absence_bound_are_exact() -> None:
+    attempt, source_tree, intent = _launch_intent()
+    systemctl = intent["executables"]["systemctl"]["realpath"]
+    show_argv = qualification._systemd_show_argv_v2(
+        systemctl, intent["unit_name"]
+    )
+    invocation = "c" * 32
+    absent = _systemd_show_bytes(attempt, source_tree)
+    live = _systemd_show_bytes(
+        attempt,
+        source_tree,
+        marker=intent["ownership_marker"],
+        invocation=invocation,
+        load="loaded",
+        active="active",
+        sub="running",
+        main_pid=789,
+        cgroup="/user.slice/hegel-qv2-cleanup-phase.service",
+    )
+    nonlive = _systemd_show_bytes(
+        attempt,
+        source_tree,
+        marker=intent["ownership_marker"],
+        invocation=invocation,
+        load="loaded",
+        active="active",
+        sub="exited",
+    )
+    drift = _systemd_show_bytes(
+        attempt,
+        source_tree,
+        marker=intent["ownership_marker"],
+        invocation=invocation,
+        load="loaded",
+        active="active",
+        sub="exited",
+        overrides={"MemoryMax": "1"},
+    )
+
+    def show_row(purpose: str, stdout: bytes) -> dict[str, object]:
+        return qualification._command_evidence_v2(
+            argv=show_argv,
+            purpose=purpose,
+            returncode=0,
+            stdout=stdout,
+            stderr=b"",
+        )
+
+    stop = qualification._command_evidence_v2(
+        argv=[systemctl, "--user", "stop", intent["unit_name"]],
+        purpose="failure-owned-stop",
+        returncode=0,
+        stdout=b"",
+        stderr=b"",
+    )
+
+    def signal_row(purpose: str, signal_name: str) -> dict[str, object]:
+        return qualification._command_evidence_v2(
+            argv=[
+                systemctl,
+                "--user",
+                "kill",
+                "--kill-who=all",
+                f"--signal={signal_name}",
+                intent["unit_name"],
+            ],
+            purpose=purpose,
+            returncode=0,
+            stdout=b"",
+            stderr=b"",
+        )
+
+    reappeared = [
+        intent["prelaunch_command"],
+        show_row("failure-owned-show", absent),
+        show_row("failure-absent-0", nonlive),
+    ]
+    qualification._verify_failure_cleanup_projection_v2(
+        _unproven_cleanup_projection(
+            intent, reappeared, boundary=1, owned_invocation_id=None
+        ),
+        cleanup_verified=False,
+        attempt=attempt,
+        entry_kind="development-calibration",
+        source_tree=source_tree,
+        launch_intent=intent,
+    )
+    with pytest.raises(ValueError, match="reappeared"):
+        qualification._verify_failure_cleanup_projection_v2(
+            _unproven_cleanup_projection(
+                intent,
+                [*reappeared, show_row("failure-absent-1", absent)],
+                boundary=1,
+                owned_invocation_id=None,
+            ),
+            cleanup_verified=False,
+            attempt=attempt,
+            entry_kind="development-calibration",
+            source_tree=source_tree,
+            launch_intent=intent,
+        )
+
+    drifted = [
+        intent["prelaunch_command"],
+        show_row("failure-owned-show", nonlive),
+        stop,
+        show_row("failure-absent-0", drift),
+    ]
+    qualification._verify_failure_cleanup_projection_v2(
+        _unproven_cleanup_projection(
+            intent, drifted, boundary=1, owned_invocation_id=invocation
+        ),
+        cleanup_verified=False,
+        attempt=attempt,
+        entry_kind="development-calibration",
+        source_tree=source_tree,
+        launch_intent=intent,
+    )
+    with pytest.raises(ValueError):
+        qualification._verify_failure_cleanup_projection_v2(
+            _unproven_cleanup_projection(
+                intent,
+                [*drifted, show_row("failure-absent-1", absent)],
+                boundary=1,
+                owned_invocation_id=invocation,
+            ),
+            cleanup_verified=False,
+            attempt=attempt,
+            entry_kind="development-calibration",
+            source_tree=source_tree,
+            launch_intent=intent,
+        )
+
+    sigterm = signal_row("failure-owned-sigterm", "SIGTERM")
+    sigkill = signal_row("failure-owned-sigkill", "SIGKILL")
+    # Each continuation is otherwise producer-reachable if the one targeted
+    # scalar/path check is removed: a live initial/TERM-grace row requires the
+    # corresponding signal, while a non-live KILL-grace row requires stop.
+    for bad_live_show in (
+        _systemd_show_bytes(
+            attempt,
+            source_tree,
+            marker=intent["ownership_marker"],
+            invocation=invocation,
+            load="loaded",
+            active="active",
+            sub="running",
+            main_pid=789,
+            cgroup="/user.slice/hegel-qv2-cleanup-phase.service",
+            overrides={"MainPID": "00789"},
+        ),
+        _systemd_show_bytes(
+            attempt,
+            source_tree,
+            marker=intent["ownership_marker"],
+            invocation=invocation,
+            load="loaded",
+            active="active",
+            sub="running",
+            main_pid=789,
+            cgroup="/../unsafe",
+        ),
+    ):
+        phase_cases = (
+            (
+                [
+                    intent["prelaunch_command"],
+                    show_row("failure-owned-show", bad_live_show),
+                ],
+                sigterm,
+            ),
+            (
+                [
+                    intent["prelaunch_command"],
+                    show_row("failure-owned-show", live),
+                    sigterm,
+                    show_row("failure-term-grace-0", bad_live_show),
+                ],
+                sigkill,
+            ),
+        )
+        for commands, continuation in phase_cases:
+            qualification._verify_failure_cleanup_projection_v2(
+                _unproven_cleanup_projection(
+                    intent,
+                    commands,
+                    boundary=1,
+                    owned_invocation_id=invocation,
+                ),
+                cleanup_verified=False,
+                attempt=attempt,
+                entry_kind="development-calibration",
+                source_tree=source_tree,
+                launch_intent=intent,
+            )
+            with pytest.raises(ValueError):
+                qualification._verify_failure_cleanup_projection_v2(
+                    _unproven_cleanup_projection(
+                        intent,
+                        [*commands, continuation],
+                        boundary=1,
+                        owned_invocation_id=invocation,
+                    ),
+                    cleanup_verified=False,
+                    attempt=attempt,
+                    entry_kind="development-calibration",
+                    source_tree=source_tree,
+                    launch_intent=intent,
+                )
+
+    bad_nonlive_kill_grace = _systemd_show_bytes(
+        attempt,
+        source_tree,
+        marker=intent["ownership_marker"],
+        invocation=invocation,
+        load="loaded",
+        active="active",
+        sub="exited",
+        main_pid=0,
+        cgroup="",
+        overrides={"MainPID": "00"},
+    )
+    kill_grace_bad_commands = [
+        intent["prelaunch_command"],
+        show_row("failure-owned-show", live),
+        sigterm,
+        show_row("failure-term-grace-0", live),
+        sigkill,
+        show_row("failure-kill-grace-0", bad_nonlive_kill_grace),
+    ]
+    qualification._verify_failure_cleanup_projection_v2(
+        _unproven_cleanup_projection(
+            intent,
+            kill_grace_bad_commands,
+            boundary=1,
+            owned_invocation_id=invocation,
+        ),
+        cleanup_verified=False,
+        attempt=attempt,
+        entry_kind="development-calibration",
+        source_tree=source_tree,
+        launch_intent=intent,
+    )
+    with pytest.raises(ValueError):
+        qualification._verify_failure_cleanup_projection_v2(
+            _unproven_cleanup_projection(
+                intent,
+                [*kill_grace_bad_commands, stop],
+                boundary=1,
+                owned_invocation_id=invocation,
+            ),
+            cleanup_verified=False,
+            attempt=attempt,
+            entry_kind="development-calibration",
+            source_tree=source_tree,
+            launch_intent=intent,
+        )
+
+    eight_present = [
+        intent["prelaunch_command"],
+        show_row("failure-owned-show", nonlive),
+        stop,
+        *[
+            show_row(f"failure-absent-{index}", nonlive)
+            for index in range(8)
+        ],
+    ]
+    qualification._verify_failure_cleanup_projection_v2(
+        _unproven_cleanup_projection(
+            intent, eight_present, boundary=1, owned_invocation_id=invocation
+        ),
+        cleanup_verified=False,
+        attempt=attempt,
+        entry_kind="development-calibration",
+        source_tree=source_tree,
+        launch_intent=intent,
+    )
+    with pytest.raises(ValueError, match="exceeds eight"):
+        qualification._verify_failure_cleanup_projection_v2(
+            _unproven_cleanup_projection(
+                intent,
+                [*eight_present, show_row("failure-absent-8", nonlive)],
+                boundary=1,
+                owned_invocation_id=invocation,
+            ),
+            cleanup_verified=False,
+            attempt=attempt,
+            entry_kind="development-calibration",
+            source_tree=source_tree,
+            launch_intent=intent,
+        )
 
 
 def test_nonterminal_atomic_commit_is_recoverable_but_terminal_commit_is_not() -> None:
@@ -2360,7 +5319,7 @@ def test_prelink_persistent_staging_residue_is_exactly_bound_and_tamper_rejected
     def persistent_cleanup_failure(
         path: object, *args: object, **kwargs: object
     ) -> None:
-        if str(path).startswith(".object.tmp-"):
+        if str(path).startswith(".reservation.json.tmp-"):
             raise OSError("injected persistent staging cleanup failure")
         real_unlink(path, *args, **kwargs)
 
@@ -2372,13 +5331,14 @@ def test_prelink_persistent_staging_residue_is_exactly_bound_and_tamper_rejected
             qualification._AtomicPublicationUncertainV2
         ) as captured:
             qualification._atomic_write_new_file_at_fd_v2(
-                directory_fd, "object", b"staging-content"
+                directory_fd, "reservation.json", b"staging-content"
             )
         assert captured.value.publication_state == "STAGED_TEMP_ONLY"
         residues = qualification._reconcile_nonterminal_atomic_uncertainty_v2(
             captured.value,
             attempt_fd=directory_fd,
             deadline_ns=time.monotonic_ns() + 10_000_000_000,
+            known_parent_directories={"": directory_fd},
         )
         assert len(residues) == 1
         assert residues[0]["state"] == "STAGED_TEMP_ONLY"
@@ -2475,9 +5435,11 @@ def test_nonterminal_atomic_uncertainty_finalizes_claims_false_terminal(
     real_unlink = qualification.os.unlink
     real_remove = qualification.os.remove
     real_write_all = qualification._write_all_fd_v2
+    real_combined = qualification._derive_failure_v4_retained_projection_at_fd_v2
     temporary_unlink_failures = 0
     prelink_injected = False
     prospective_returned_at: list[int] = []
+    combined_scans = 0
 
     def read_input(
         path: Path, *, maximum_bytes: int, name: str, deadline_ns: int | None = None
@@ -2547,10 +5509,20 @@ def test_nonterminal_atomic_uncertainty_finalizes_claims_false_terminal(
             prospective_returned_at.append(qualification.time.monotonic_ns())
         return result
 
+    def tracking_combined_scan(*args: object, **kwargs: object):
+        nonlocal combined_scans
+        combined_scans += 1
+        return real_combined(*args, **kwargs)
+
     monkeypatch.setattr(
         qualification,
         "verify_phase2b_formal_wire_covert_outer_attempt_directory_v2",
         tracking_attempt_verifier,
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_derive_failure_v4_retained_projection_at_fd_v2",
+        tracking_combined_scan,
     )
     dummy = tmp_path.resolve() / "unused"
     terminal_bytes = qualification.run_phase2b_formal_wire_covert_outer_attempt_v2(
@@ -2589,6 +5561,7 @@ def test_nonterminal_atomic_uncertainty_finalizes_claims_false_terminal(
         "r05_synthetic_dev_wire_covert_qualification_verified"
     ] is False
     assert len(prospective_returned_at) == 1
+    assert combined_scans == qualification._FINALIZATION_TREE_SCAN_PASSES_V2 == 2
     assert (
         terminal["timing"]["finalization_ready_monotonic_nanoseconds"]
         >= prospective_returned_at[0]
@@ -2615,6 +5588,250 @@ def test_nonterminal_atomic_uncertainty_finalizes_claims_false_terminal(
         )
         == terminal_bytes
     )
+    assert combined_scans == 3
+
+
+@pytest.mark.parametrize(
+    ("residue_parent", "uncertainty_point"),
+    (
+        ("rfc8785-raw-bundle", "prelink"),
+        ("rfc8785-raw-bundle", "postlink"),
+        ("cas", "prelink"),
+        ("cas", "postlink"),
+    ),
+)
+def test_rfc_or_cas_atomic_uncertainty_uses_retained_parent_and_finalizes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    residue_parent: str,
+    uncertainty_point: str,
+) -> None:
+    profile_bytes = b"synthetic-profile-bytes\n"
+    attempt_bytes = b"synthetic-attempt-bytes\n"
+    attempt = replace(
+        _attempt(),
+        qualification_config_sha256=hashlib.sha256(profile_bytes).hexdigest(),
+        qualification_lock_sha256=qualification.DEPENDENCY_LOCK_SHA256,
+    )
+    output_root = (tmp_path / "attempts").resolve()
+    output_root.mkdir()
+    source_archive = (tmp_path / "source.tar").resolve()
+    runtime_manifest = (tmp_path / "runtime.json").resolve()
+    source_archive.write_bytes(b"a")
+    runtime_manifest.write_bytes(b"r")
+    source_rfc_directory = (tmp_path / "source-rfc").resolve()
+    source_rfc_directory.mkdir()
+    source_rfc_receipt = source_rfc_directory / "receipt.json"
+    source_rfc_receipt.write_bytes(b"rfc-receipt")
+    real_write_all = qualification._write_all_fd_v2
+    real_unlink = qualification.os.unlink
+    real_remove = qualification.os.remove
+    real_attempt_verifier = (
+        qualification.verify_phase2b_formal_wire_covert_outer_attempt_directory_v2
+    )
+    real_combined = qualification._derive_failure_v4_retained_projection_at_fd_v2
+    prelink_injected = False
+    combined_scans = 0
+    atomic_payload = b"retained RFC raw object"
+    atomic_target_name = (
+        "command-000-python-version.stdout.bin"
+        if residue_parent == "rfc8785-raw-bundle"
+        else hashlib.sha256(atomic_payload).hexdigest()
+    )
+
+    def read_input(
+        path: Path, *, maximum_bytes: int, name: str, deadline_ns: int | None = None
+    ) -> bytes:
+        del path, maximum_bytes, deadline_ns
+        if name in {"runner profile", "extracted qualification profile/config"}:
+            return profile_bytes
+        if name == "runner attempt manifest":
+            return attempt_bytes
+        if name == "extracted qualification dependency lock":
+            return b"synthetic-lock"
+        if name == "runner RFC-8785 prerequisite receipt":
+            return b"rfc-receipt"
+        if name == "runner runtime environment manifest":
+            return b"runtime"
+        raise AssertionError(f"unexpected preflight read: {name}")
+
+    def fake_extract(
+        archive: Path,
+        destination: Path,
+        **kwargs: object,
+    ) -> dict[str, object]:
+        del archive, kwargs
+        main = (
+            destination
+            / "src/hegel_machine/phase2b_formal_wire_covert_qualification_v2.py"
+        )
+        main.parent.mkdir(parents=True)
+        main.write_bytes(b"synthetic qualification source")
+        return {}
+
+    def persist_raw_temporary(
+        path: object, *args: object, **kwargs: object
+    ) -> None:
+        if str(path).startswith(f".{atomic_target_name}.tmp-"):
+            raise OSError("injected persistent RFC raw temp cleanup failure")
+        real_unlink(path, *args, **kwargs)
+
+    def persist_raw_remove(
+        path: object, *args: object, **kwargs: object
+    ) -> None:
+        if str(path).startswith(f".{atomic_target_name}.tmp-"):
+            raise OSError("injected persistent RFC raw temp reconcile failure")
+        real_remove(path, *args, **kwargs)
+
+    def optionally_fail_raw_write(
+        descriptor: int,
+        payload: bytes,
+        *,
+        deadline_ns: int | None = None,
+    ) -> None:
+        nonlocal prelink_injected
+        descriptor_name = Path(
+            os.path.realpath(f"/proc/self/fd/{descriptor}")
+        ).name
+        if (
+            uncertainty_point == "prelink"
+            and descriptor_name.startswith(f".{atomic_target_name}.tmp-")
+            and not prelink_injected
+        ):
+            prelink_injected = True
+            real_write_all(descriptor, payload, deadline_ns=deadline_ns)
+            raise OSError("injected RFC raw failure before link")
+        real_write_all(descriptor, payload, deadline_ns=deadline_ns)
+
+    def fail_copy_from_preopened_raw_parent(**kwargs: object):
+        destination = kwargs["destination_directory"]
+        destination_fd = kwargs["destination_directory_fd"]
+        assert isinstance(destination, Path)
+        assert type(destination_fd) is int
+        assert (
+            os.fstat(destination_fd).st_dev,
+            os.fstat(destination_fd).st_ino,
+        ) == (
+            destination.stat(follow_symlinks=False).st_dev,
+            destination.stat(follow_symlinks=False).st_ino,
+        )
+        atomic_parent_fd = destination_fd
+        owned_atomic_parent_fd: int | None = None
+        if residue_parent == "cas":
+            owned_atomic_parent_fd = qualification._open_real_directory_fd_v2(
+                destination.parent / "cas"
+            )
+            atomic_parent_fd = owned_atomic_parent_fd
+        try:
+            qualification._atomic_write_new_file_at_fd_v2(
+                atomic_parent_fd,
+                atomic_target_name,
+                atomic_payload,
+                deadline_ns=kwargs["deadline_ns"],
+            )
+        finally:
+            if owned_atomic_parent_fd is not None:
+                os.close(owned_atomic_parent_fd)
+        raise AssertionError("RFC raw uncertainty injection did not fail")
+
+    def tracking_combined(*args: object, **kwargs: object):
+        nonlocal combined_scans
+        combined_scans += 1
+        return real_combined(*args, **kwargs)
+
+    monkeypatch.setattr(qualification, "_read_bounded_regular_file_v2", read_input)
+    monkeypatch.setattr(
+        qualification,
+        "load_phase2b_formal_wire_covert_qualification_profile_v2",
+        lambda payload: object(),
+    )
+    monkeypatch.setattr(
+        qualification,
+        "load_phase2b_formal_wire_covert_attempt_manifest_v2",
+        lambda payload: attempt,
+    )
+    monkeypatch.setattr(
+        qualification, "_outer_runner_tcb_snapshot_v2", lambda *args, **kwargs: {}
+    )
+    monkeypatch.setattr(qualification, "_sha256_file_v2", lambda *args, **kwargs: "0" * 64)
+    monkeypatch.setattr(qualification, "_safe_extract_source_archive_v2", fake_extract)
+    monkeypatch.setattr(
+        qualification, "_verify_live_package_tree_is_source_only_v2", lambda *args, **kwargs: None
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_expected_live_file_sha256_v2",
+        lambda value: {
+            "src/hegel_machine/phase2b_formal_wire_covert_qualification_v2.py": "0" * 64
+        },
+    )
+    monkeypatch.setattr(
+        qualification, "_verify_dependency_lock_bytes_v2", lambda payload: {}
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_verify_rfc8785_prerequisite_receipt_v2",
+        lambda *args, **kwargs: {"raw_execution": {}},
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_copy_rfc8785_raw_execution_bundle_v2",
+        fail_copy_from_preopened_raw_parent,
+    )
+    monkeypatch.setattr(qualification.os, "unlink", persist_raw_temporary)
+    monkeypatch.setattr(qualification.os, "remove", persist_raw_remove)
+    monkeypatch.setattr(qualification, "_write_all_fd_v2", optionally_fail_raw_write)
+    monkeypatch.setattr(
+        qualification,
+        "_derive_failure_v4_retained_projection_at_fd_v2",
+        tracking_combined,
+    )
+    monkeypatch.setattr(
+        qualification,
+        "verify_phase2b_formal_wire_covert_outer_attempt_directory_v2",
+        lambda *args, **kwargs: real_attempt_verifier(*args, **kwargs),
+    )
+
+    terminal_bytes = qualification.run_phase2b_formal_wire_covert_outer_attempt_v2(
+        entry_kind="development-calibration",
+        profile_path=(tmp_path / "profile.json").resolve(),
+        attempt_manifest_path=(tmp_path / "attempt.json").resolve(),
+        rfc8785_prerequisite_receipt_path=source_rfc_receipt,
+        source_archive_path=source_archive,
+        runtime_environment_manifest_path=runtime_manifest,
+        output_root=output_root,
+    )
+    terminal = qualification._decode_canonical_transport_object_v2(
+        terminal_bytes, "RFC raw failure terminal", maximum_bytes=8 * 1_024 * 1_024
+    )
+    attempt_directory = output_root / (
+        "attempt-"
+        + hashlib.sha256(attempt.attempt_manifest_root.encode("ascii")).hexdigest()[:48]
+    )
+    assert terminal["disposition"] == "ATOMIC_EMPTY_REJECTION"
+    assert terminal["primary_failure_stage"] == "PREFLIGHT"
+    assert terminal["claims"] == {
+        key: False for key in terminal["claims"]
+    }
+    assert len(terminal["managed_atomic_residues"]) == 1
+    residue = terminal["managed_atomic_residues"][0]
+    assert residue["relative_parent"] == "evidence/" + residue_parent
+    assert residue["target_name"] == atomic_target_name
+    assert residue["state"] == (
+        "STAGED_TEMP_ONLY"
+        if uncertainty_point == "prelink"
+        else "TARGET_AND_MANAGED_TEMP_HARDLINK"
+    )
+    assert combined_scans == qualification._FINALIZATION_TREE_SCAN_PASSES_V2 == 2
+    assert (attempt_directory / "terminal.json").read_bytes() == terminal_bytes
+    assert (
+        qualification.verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
+            attempt_directory,
+            expected_terminal_bytes=terminal_bytes,
+        )
+        == terminal_bytes
+    )
+    assert combined_scans == 3
 
 
 def test_attempt_mkdir_without_recovered_fd_is_reopened_and_rolled_back(
@@ -2793,6 +6010,7 @@ def test_cas_after_link_before_python_marker_is_reconciled_as_committed(
             captured.value,
             attempt_fd=cas_fd,
             deadline_ns=time.monotonic_ns() + 10_000_000_000,
+            known_parent_directories={"": cas_fd},
         ) == []
         assert (cas / hashlib.sha256(payload).hexdigest()).read_bytes() == payload
     finally:
@@ -2853,6 +6071,7 @@ def test_cas_prelink_persistent_staging_residue_is_reconciled(
             captured.value,
             attempt_fd=cas_fd,
             deadline_ns=time.monotonic_ns() + 10_000_000_000,
+            known_parent_directories={"": cas_fd},
         )
         assert len(residues) == 1
         assert residues[0]["state"] == "STAGED_TEMP_ONLY"
@@ -3215,6 +6434,218 @@ def test_cleanup_helper_reaps_launcher_then_finalizer_never_resignals_old_pgid(
     assert signals == []
     assert launcher.stdout is not None and launcher.stdout.closed
     assert launcher.stderr is not None and launcher.stderr.closed
+
+
+def test_cleanup_closed_pipes_cannot_upgrade_false_capture_complete(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attempt, source_tree, intent = _launch_intent()
+    launcher = subprocess.Popen(
+        [sys.executable, "-I", "-S", "-B", "-c", "pass"],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+    launcher.wait(timeout=5)
+    qualification._close_process_pipes_v2(
+        launcher, name="closed-pipe capture-proof regression"
+    )
+    absent = _systemd_show_bytes(attempt, source_tree)
+
+    def exact_absent_show(
+        argv: list[str], *, purpose: str, **kwargs: object
+    ) -> tuple[dict[str, object], bytes, bytes]:
+        del kwargs
+        return (
+            qualification._command_evidence_v2(
+                argv=argv,
+                purpose=purpose,
+                returncode=0,
+                stdout=absent,
+                stderr=b"",
+            ),
+            absent,
+            b"",
+        )
+
+    monkeypatch.setattr(
+        qualification, "_run_bounded_control_command_v2", exact_absent_show
+    )
+    capture_state = {
+        "capture_complete": False,
+        "capture_truncated": False,
+    }
+    with pytest.raises(RuntimeError, match="lack prior EOF/reap capture proof"):
+        qualification._cleanup_transient_attempt_v2(
+            launcher=launcher,
+            systemctl_realpath=intent["executables"]["systemctl"]["realpath"],
+            unit_name=intent["unit_name"],
+            ownership_marker=intent["ownership_marker"],
+            owned_invocation_id=None,
+            prelaunch_absent_verified=True,
+            attempt=attempt,
+            source_tree=source_tree,
+            deadline_ns=time.monotonic_ns() + 10_000_000_000,
+            commands=[intent["prelaunch_command"]],
+            cleanup_start_command_index=1,
+            stdout_capture=bytearray(),
+            stderr_capture=bytearray(),
+            capture_state=capture_state,
+        )
+    assert capture_state == {
+        "capture_complete": False,
+        "capture_truncated": False,
+    }
+
+
+def test_cleanup_helper_uses_systemd249_kill_option_for_term_and_stubborn_kill(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attempt, source_tree, intent = _launch_intent()
+    launcher = subprocess.Popen(
+        [
+            sys.executable,
+            "-I",
+            "-S",
+            "-B",
+            "-c",
+            (
+                "import os,signal,time;"
+                "signal.signal(signal.SIGTERM,signal.SIG_IGN);"
+                "os.write(1,b'ready\\n');time.sleep(60)"
+            ),
+        ],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+    assert launcher.stdout is not None
+    prefix = os.read(launcher.stdout.fileno(), len(b"ready\n"))
+    assert prefix == b"ready\n"
+    stdout_capture = bytearray(prefix)
+    stderr_capture = bytearray()
+    capture_state = {
+        "capture_complete": False,
+        "capture_truncated": False,
+    }
+    commands = [intent["prelaunch_command"]]
+    invocation = "b" * 32
+    live = _systemd_show_bytes(
+        attempt,
+        source_tree,
+        marker=intent["ownership_marker"],
+        invocation=invocation,
+        load="loaded",
+        active="active",
+        sub="running",
+        main_pid=launcher.pid,
+        cgroup="/user.slice/hegel-qv2-stubborn.service",
+    )
+    nonlive = _systemd_show_bytes(
+        attempt,
+        source_tree,
+        marker=intent["ownership_marker"],
+        invocation=invocation,
+        load="loaded",
+        active="active",
+        sub="exited",
+        main_pid=0,
+        cgroup="",
+    )
+    absent = _systemd_show_bytes(attempt, source_tree)
+    observed_kill_argv: list[list[str]] = []
+
+    def manager_command(
+        argv: list[str], *, purpose: str, **kwargs: object
+    ) -> tuple[dict[str, object], bytes, bytes]:
+        del kwargs
+        stdout = b""
+        if purpose == "failure-owned-show" or purpose.startswith(
+            "failure-term-grace-"
+        ):
+            stdout = live
+        elif purpose.startswith("failure-kill-grace-"):
+            stdout = nonlive
+        elif purpose.startswith("failure-absent-"):
+            stdout = absent
+        elif purpose == "failure-owned-sigterm":
+            observed_kill_argv.append(argv)
+            os.killpg(launcher.pid, signal.SIGTERM)
+        elif purpose == "failure-owned-sigkill":
+            observed_kill_argv.append(argv)
+            os.killpg(launcher.pid, signal.SIGKILL)
+        elif purpose != "failure-owned-stop":
+            raise AssertionError(f"unexpected cleanup purpose: {purpose}")
+        return (
+            qualification._command_evidence_v2(
+                argv=argv,
+                purpose=purpose,
+                returncode=0,
+                stdout=stdout,
+                stderr=b"",
+            ),
+            stdout,
+            b"",
+        )
+
+    monkeypatch.setattr(
+        qualification, "_run_bounded_control_command_v2", manager_command
+    )
+    monkeypatch.setattr(qualification.time, "sleep", lambda _: None)
+    cleanup = qualification._cleanup_transient_attempt_v2(
+        launcher=launcher,
+        systemctl_realpath=intent["executables"]["systemctl"]["realpath"],
+        unit_name=intent["unit_name"],
+        ownership_marker=intent["ownership_marker"],
+        owned_invocation_id=invocation,
+        prelaunch_absent_verified=True,
+        attempt=attempt,
+        source_tree=source_tree,
+        deadline_ns=time.monotonic_ns() + 30_000_000_000,
+        commands=commands,
+        cleanup_start_command_index=1,
+        stdout_capture=stdout_capture,
+        stderr_capture=stderr_capture,
+        capture_state=capture_state,
+    )
+    assert observed_kill_argv == [
+        [
+            intent["executables"]["systemctl"]["realpath"],
+            "--user",
+            "kill",
+            "--kill-who=all",
+            "--signal=SIGTERM",
+            intent["unit_name"],
+        ],
+        [
+            intent["executables"]["systemctl"]["realpath"],
+            "--user",
+            "kill",
+            "--kill-who=all",
+            "--signal=SIGKILL",
+            intent["unit_name"],
+        ],
+    ]
+    assert cleanup["term_sent"] is True
+    assert cleanup["kill_sent"] is True
+    assert cleanup["launcher_reaped"] is True
+    assert cleanup["post_cleanup_unit_absent"] is True
+    assert capture_state["capture_complete"] is True
+    assert bytes(stdout_capture) == prefix
+    assert bytes(stderr_capture) == b""
+    assert launcher.poll() == -signal.SIGKILL
+    assert launcher.stdout.closed
+    assert launcher.stderr is not None and launcher.stderr.closed
+    qualification._verify_failure_cleanup_projection_v2(
+        cleanup,
+        cleanup_verified=True,
+        attempt=attempt,
+        entry_kind="development-calibration",
+        source_tree=source_tree,
+        launch_intent=intent,
+    )
 
 
 def test_finalizer_inner_poll_reap_never_signals_reused_numeric_pgid(
