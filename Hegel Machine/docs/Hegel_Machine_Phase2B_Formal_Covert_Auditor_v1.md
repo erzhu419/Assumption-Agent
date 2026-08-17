@@ -10,9 +10,9 @@ are still not R04/R05 qualification: the frozen rich-graph 1,024-row external
 supervised run remains pending.
 
 Frozen candidate IDs are
-`phase2b_formal_covert_semantics_c52878eb2f0be26b82c7dcb86d77984bd2436baa2e9a7f554649b129a0fea10c`
+`phase2b_formal_covert_semantics_f335aefa7a04aa55d7d91cc9d20bd296454088a144ac05a42fe779969df684a2`
 and
-`phase2b_formal_covert_policy_binding_1ed838b1d66f73431d00243ebae1a42fa76edf2c1b55caabb2bc33807465b4c0`.
+`phase2b_formal_covert_policy_binding_9c9e755f4758b8809f6aef572527a0ddcfafa700176ee4ac26549a9a8308f90b`.
 
 ## Closed entry point and trust boundary
 
@@ -96,9 +96,15 @@ decision, family, binding, scale set, and candidate residual bytes must be
 exactly identical. Any structural or invariance failure is atomic.
 
 All 80 variant schedules are submitted in one bounded Wire V3 bulk-suite call
-inside a raw `setsid` child. Every returned envelope is publicly decoded before
+inside a raw `setsid` child. The adapter replays the shared BuildSuccess,
+variant-context, private-alignment, and bound-envelope state exactly once for
+that atomic call; every one of the 80 plans and resulting schedule DTOs is
+still replayed independently. The unchanged single-batch API performs the
+same bound-state replay on every call. Every returned envelope is publicly
+decoded and passed through the auditor's decoded-shape validator before
 recognizer use. The child must produce 80 batches, `rows * 80` consumer
-decodes, 81 recognizer runs, and `rows * 80 * 5` comparisons. The parent owns
+decodes and decoded-shape validations, 81 recognizer runs, and `rows * 80 * 5`
+comparisons. The parent owns
 the PID through pidfd/waitid/wait4. At 7,200 seconds the parent begins
 termination, permits at most five seconds of TERM grace, then KILLs and reaps;
 this nominal phase deadline is not an end-to-end 7,200-second termination

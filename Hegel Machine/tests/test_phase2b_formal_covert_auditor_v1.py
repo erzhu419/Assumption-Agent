@@ -15,6 +15,7 @@ import signal
 import tempfile
 import threading
 import time
+import uuid
 
 import pytest
 
@@ -2017,6 +2018,220 @@ def test_wire_v3_adapter_binds_private_rows_mappings_and_build_success_schedules
         match="FAIL_PRIVATE_AUTHORITY_WIRE_BINDING",
     ):
         adapter.bind_private_authority(authority, spliced)
+
+
+def test_wire_v3_bulk_amortizes_bound_state_and_matches_single_batch_path(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import hegel_machine.phase2b_formal_trusted_wire_v3 as wire_v3
+    import test_phase2b_formal_trusted_wire_v3 as wire_fixture
+
+    cases = (wire_fixture.source_case(0), wire_fixture.source_case(1))
+    global_catalog, catalog_binding = wire_fixture.catalog(cases)
+    success = wire_v3.build_formal_trusted_wire_batch_v3(
+        source_cases=cases,
+        global_transform_catalog=global_catalog,
+        transform_catalog_binding_receipt=catalog_binding,
+        run_id=b"B" * 32,
+        key_sources=wire_fixture.keys(),
+        key_source_receipt=wire_fixture.receipt(),
+    )
+    assert type(success) is wire_v3.FormalTrustedWireBuildSuccessV3
+    adapter = FormalWireV3AdapterV1(
+        success,
+        run_id=b"B" * 32,
+        key_sources=wire_fixture.keys(),
+        source_cases=cases,
+        global_transform_catalog=global_catalog,
+        transform_catalog_binding_receipt=catalog_binding,
+    )
+    decoded = tuple(adapter.decode_envelope(row) for row in adapter.envelopes)
+    for item in decoded:
+        auditor_module._validate_decoded(item, adapter)
+
+    source_domain = tuple(
+        sorted(
+            {
+                (leaf.namespace, leaf.public_uuid)
+                for item in decoded
+                for leaf in item.namespace_leaves
+            }
+        )
+    )
+    forbidden_uuids = {
+        leaf.public_uuid
+        for item in decoded
+        for leaf in item.namespace_leaves
+    } | {
+        row.source_uuid
+        for link in success.private_audit_alignment.links_in_public_order
+        for row in link.source_to_public_uuid_rows
+    }
+
+    def target_uuid(trial: int, row_index: int) -> str:
+        counter = 0
+        while True:
+            raw = hashlib.sha256(
+                b"phase2b-auditor-bulk-equivalence-kat"
+                + trial.to_bytes(2, "big")
+                + row_index.to_bytes(2, "big")
+                + counter.to_bytes(2, "big")
+            ).digest()[:16]
+            candidate = str(uuid.UUID(bytes=raw, version=4))
+            if candidate not in forbidden_uuids:
+                return candidate
+            counter += 1
+
+    plans = tuple(
+        FormalVariantPlanV1(
+            case_order_indices=tuple(range(len(cases))),
+            uuid_renamings=tuple(
+                sorted(
+                    FormalUuidRenamingPlanV1(
+                        namespace,
+                        source_uuid,
+                        target_uuid(trial, row_index),
+                    )
+                    for row_index, (namespace, source_uuid) in enumerate(
+                        source_domain
+                    )
+                )
+            ),
+            observation_orders=(),
+        )
+        for trial in range(80)
+    )
+
+    build_shape_calls: list[object] = []
+    plan_validation_calls: list[FormalVariantPlanV1] = []
+    consumer_decode_calls: list[bytes] = []
+    consumer_validate_calls: list[DecodedFormalEnvelopeV1] = []
+    bulk_schedules: tuple[object, ...] | None = None
+    original_build_validate = (
+        wire_v3.FormalTrustedWireBuildSuccessV3._validate_issued_shape
+    )
+    original_decode = FormalWireV3AdapterV1.decode_envelope
+    original_validate_plan = auditor_module._validate_variant_plan
+    original_validate_decoded = auditor_module._validate_decoded
+    original_suite = wire_v3.reencode_formal_variant_suite_v3
+
+    def record_build_validate(build_success: object) -> None:
+        if build_success is success:
+            build_shape_calls.append(build_success)
+        original_build_validate(build_success)  # type: ignore[arg-type]
+
+    def record_decode(
+        wire_adapter: FormalWireV3AdapterV1,
+        envelope: bytes,
+    ) -> DecodedFormalEnvelopeV1:
+        if wire_adapter is adapter:
+            consumer_decode_calls.append(envelope)
+        return original_decode(wire_adapter, envelope)
+
+    def record_validate_plan(
+        plan: FormalVariantPlanV1,
+        envelopes: tuple[bytes, ...],
+        decoded_rows: tuple[DecodedFormalEnvelopeV1, ...],
+    ) -> None:
+        plan_validation_calls.append(plan)
+        original_validate_plan(plan, envelopes, decoded_rows)
+
+    def record_validate_decoded(
+        item: DecodedFormalEnvelopeV1,
+        wire_adapter: FormalWireAdapterV1,
+    ) -> None:
+        if wire_adapter is adapter:
+            consumer_validate_calls.append(item)
+        original_validate_decoded(item, wire_adapter)
+
+    def record_suite(
+        *, build_success: object, schedules: tuple[object, ...]
+    ) -> object:
+        nonlocal bulk_schedules
+        bulk_schedules = schedules
+        return original_suite(
+            build_success=build_success,  # type: ignore[arg-type]
+            schedules=schedules,  # type: ignore[arg-type]
+        )
+
+    with monkeypatch.context() as bulk_patch:
+        bulk_patch.setattr(
+            wire_v3.FormalTrustedWireBuildSuccessV3,
+            "_validate_issued_shape",
+            record_build_validate,
+        )
+        bulk_patch.setattr(
+            FormalWireV3AdapterV1,
+            "decode_envelope",
+            record_decode,
+        )
+        bulk_patch.setattr(
+            auditor_module,
+            "_validate_variant_plan",
+            record_validate_plan,
+        )
+        bulk_patch.setattr(
+            auditor_module,
+            "_validate_decoded",
+            record_validate_decoded,
+        )
+        bulk_patch.setattr(
+            wire_v3,
+            "reencode_formal_variant_suite_v3",
+            record_suite,
+        )
+        bulk = adapter.make_variant_suite_envelopes(
+            envelopes=adapter.envelopes,
+            decoded=decoded,
+            plans=plans,
+        )
+
+    assert build_shape_calls == [success]
+    assert tuple(plan_validation_calls) == plans
+    assert len(consumer_decode_calls) == len(cases) * 80
+    assert len(consumer_validate_calls) == len(cases) * 80
+    assert bulk.consumer_decode_count == len(cases) * 80
+    assert bulk_schedules is not None
+
+    single_schedules: list[object] = []
+    original_single = wire_v3.reencode_formal_variant_batch_v3
+
+    def record_single(
+        *, build_success: object, schedule: object
+    ) -> tuple[bytes, ...]:
+        single_schedules.append(schedule)
+        return original_single(
+            build_success=build_success,  # type: ignore[arg-type]
+            schedule=schedule,  # type: ignore[arg-type]
+        )
+
+    with monkeypatch.context() as single_patch:
+        single_patch.setattr(
+            wire_v3,
+            "reencode_formal_variant_batch_v3",
+            record_single,
+        )
+        single_outputs = tuple(
+            adapter.make_variant_envelopes(
+                envelopes=adapter.envelopes,
+                decoded=decoded,
+                plan=plan,
+            )
+            for plan in plans
+        )
+
+    assert tuple(single_schedules) == bulk_schedules
+    bulk_roots = tuple(
+        wire_v3._variant_schedule_root_v3(schedule)  # type: ignore[attr-defined]
+        for schedule in bulk_schedules
+    )
+    single_roots = tuple(
+        wire_v3._variant_schedule_root_v3(schedule)  # type: ignore[attr-defined]
+        for schedule in single_schedules
+    )
+    assert bulk_roots == single_roots
+    assert len(set(bulk_roots)) == 80
+    assert bulk.batches == single_outputs
 
 
 def test_wire_v3_rich32_executes_exact_distinct_32_32_16_schedules(

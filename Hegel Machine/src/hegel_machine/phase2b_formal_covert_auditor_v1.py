@@ -268,6 +268,7 @@ _SEMANTICS_DESCRIPTOR: Final = (
     "descriptor_composite=ordered_canonical_representation_metadata_categorical_without_lexical_or_punctuation_symbol_exact_identity",
     "wire_v3_stop=source_3efea41ede867ca457a1d814fdaa544b37c814c30d9de628777be92ad6a12af8_test_d3300c6bf4172f98601ecdd8bc3dbfea7bcfe954ad9b5b49e780205733497546_config_1189e7391f3011d6ed46b2433df78f84af99c9c813e589ee596f7ca24621c943_doc_0db969e8c8e5160b2d0c3adb2e8373fbac01a4cbb918af10446d6c136fc9c0ea_commit_44d13c0fad425d8e9cb851c41cdcdc6ec883ff2d",
     "wire_v3_variant_suite=one_atomic_exact_80_schedule_build_success_replay_then_strict_public_decode_of_every_returned_envelope_before_recognizer",
+    "wire_v3_variant_suite_adapter_bound_state=one_deep_build_success_variant_context_private_alignment_and_envelope_binding_replay_per_exact_80_suite_while_every_plan_and_schedule_is_independently_replayed",
     "wire_v3_policy_manifest=graph_7585a9f9e58823d766906296905efcd24b1e350330ca5c3f64d75361e9ad90e5_field_12916eefe10770f54c3d6c71f4b8b2c14ebbd671642e96ff4082dd298e5088dc",
     "wire_v3_dependencies=exact_core_source_e0fa517b4275a1d2daee1fd1f877b61a8f79ca745a702979615b2130e53bdc5f_test_15d0d6084743d21c2b7a79ec0d4f2f07c84ecfef641fb3d47f5253c95e5a3920_rfc8785_source_16dcc6524a1c4a507edb9f85455c72b00fbc6c0c1b67471f03b67b2f25d32654",
     "wire_v3_fresh_build_verification=caller_held_run_id_keys_source_cases_catalog_and_binding_rebuilt_exactly_external_complete_status_ignored",
@@ -2122,17 +2123,64 @@ class FormalWireV3AdapterV1(FormalWireAdapterV1):
         decoded: tuple[DecodedFormalEnvelopeV1, ...],
         plan: FormalVariantPlanV1,
     ) -> object:
+        self._validate_wire_v3_variant_bound_state(
+            envelopes=envelopes,
+            decoded=decoded,
+        )
+        return self._wire_v3_schedule_from_validated_bound_state(
+            envelopes=envelopes,
+            decoded=decoded,
+            plan=plan,
+        )
+
+    def _validate_wire_v3_variant_bound_state(
+        self,
+        *,
+        envelopes: tuple[bytes, ...],
+        decoded: tuple[DecodedFormalEnvelopeV1, ...],
+    ) -> None:
+        """Replay the immutable full-build binding once per issuance call.
+
+        The single-batch surface invokes this for every call.  The atomic
+        80-schedule surface invokes it once before constructing any schedule;
+        its per-plan validator below remains mandatory for all 80 plans.
+        """
+        from . import phase2b_formal_trusted_wire_v3 as wire_v3
+
+        if type(envelopes) is not tuple or type(decoded) is not tuple:
+            raise TypeError("variant bound state needs exact immutable tuples")
+        if envelopes != self._envelopes:
+            raise ValueError("variant input is outside the bound batch")
+        if len(decoded) != len(envelopes):
+            raise ValueError("variant decoded input does not cover the bound batch")
+        self._build_success._validate_issued_shape()
+        if (
+            self._build_success.public_batch is not self._batch
+            or self._build_success.private_audit_alignment
+            is not self._wire_alignment
+            or self._build_success.variant_context is not self._variant_context
+            or tuple(item.envelope for item in self._batch.envelopes)
+            != self._envelopes
+            or self._variant_context.private_alignment_id
+            != self._wire_alignment.alignment_id
+            or self._variant_context.batch_id != self._batch.batch_id
+            or self._variant_context.transform_catalog_root
+            != self._batch.batch_context.transform_catalog_root
+            or type(self._wire_alignment)
+            is not wire_v3.FormalPrivateAuditAlignmentV3
+        ):
+            raise ValueError("variant build/alignment/context/envelope binding drift")
+
+    def _wire_v3_schedule_from_validated_bound_state(
+        self,
+        *,
+        envelopes: tuple[bytes, ...],
+        decoded: tuple[DecodedFormalEnvelopeV1, ...],
+        plan: FormalVariantPlanV1,
+    ) -> object:
         from . import phase2b_formal_trusted_wire_v3 as wire_v3
 
         _validate_variant_plan(plan, envelopes, decoded)
-        if envelopes != self._envelopes:
-            raise ValueError("variant input is outside the bound batch")
-        self._build_success._validate_issued_shape()
-        if (
-            self._variant_context.private_alignment_id
-            != self._wire_alignment.alignment_id
-        ):
-            raise ValueError("variant context/private alignment binding drift")
         observation_by_row: dict[int, FormalObservationOrderPlanV1] = {}
         for row in plan.observation_orders:
             if row.canonical_row_index in observation_by_row:
@@ -2159,7 +2207,7 @@ class FormalWireV3AdapterV1(FormalWireAdapterV1):
                     observation_ids,
                 )
             )
-        return wire_v3.FormalVariantScheduleV3(
+        schedule = wire_v3.FormalVariantScheduleV3(
             case_order_envelope_ids=tuple(
                 self._batch.envelopes[index].envelope_id
                 for index in plan.case_order_indices
@@ -2176,6 +2224,8 @@ class FormalWireV3AdapterV1(FormalWireAdapterV1):
                 sorted(observation_rows, key=lambda row: row.envelope_id)
             ),
         )
+        schedule.__post_init__()
+        return schedule
 
     def make_variant_suite_envelopes(
         self,
@@ -2199,8 +2249,12 @@ class FormalWireV3AdapterV1(FormalWireAdapterV1):
                 "Wire V3 atomic suite requires the exact frozen 80 plans",
             )
         try:
+            self._validate_wire_v3_variant_bound_state(
+                envelopes=envelopes,
+                decoded=decoded,
+            )
             schedules = tuple(
-                self._wire_v3_schedule(
+                self._wire_v3_schedule_from_validated_bound_state(
                     envelopes=envelopes,
                     decoded=decoded,
                     plan=plan,
