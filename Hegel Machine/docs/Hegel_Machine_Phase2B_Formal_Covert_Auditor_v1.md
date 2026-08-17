@@ -4,15 +4,20 @@ Status: production candidate for synthetic/development qualification only. It is
 not an actual-corpus audit, a custody claim, an execution authorization, or an
 actual-960 result.
 
-The implementation is synchronized to final Wire V3 bulk-suite commit
-`44d13c0fad425d8e9cb851c41cdcdc6ec883ff2d`. This document and its unit tests
-are still not R04/R05 qualification: the frozen rich-graph 1,024-row external
-supervised run remains pending.
+The implementation is synchronized to the exact candidate Wire V3 source,
+test, config, and documentation SHA-256 values
+`c8120920f0e31b959043f63a0f672471fcbea50d05ca2cd8eaf7fd0c29089765`,
+`253001d11d7603456b80cf43837ed71de567bfd2cd6613cc78b21ca23f7db0f0`,
+`4f82ab060e2d53912cd17c8966a681a53d11e96ce3c6bb02ea3a42c5d2e85784`,
+and `704a937967441ebbb9b2a77a865f83890e241d37031e2b0a87f1da2877b3456a`.
+Git commit identity is not treated as runtime authority; these exact candidate
+bytes are not yet an R03/R04/R05 qualification. The frozen rich-graph
+1,024-row external supervised run remains pending.
 
 Frozen candidate IDs are
-`phase2b_formal_covert_semantics_f335aefa7a04aa55d7d91cc9d20bd296454088a144ac05a42fe779969df684a2`
+`phase2b_formal_covert_semantics_39c7e1fddbaa05232b425da271b2403d30327971e4ddc7fae7c46012435fa4a0`
 and
-`phase2b_formal_covert_policy_binding_9c9e755f4758b8809f6aef572527a0ddcfafa700176ee4ac26549a9a8308f90b`.
+`phase2b_formal_covert_policy_binding_cb421f2b625865f10b6c82b21b6131bbf2433a85a3ac4d6ea4608f2c22ef8240`.
 
 ## Closed entry point and trust boundary
 
@@ -102,7 +107,12 @@ that atomic call; every one of the 80 plans and resulting schedule DTOs is
 still replayed independently. The unchanged single-batch API performs the
 same bound-state replay on every call. Every returned envelope is publicly
 decoded and passed through the auditor's decoded-shape validator before
-recognizer use. The child must produce 80 batches, `rows * 80` consumer
+recognizer use. The pinned public decoder accepts only raw envelope bytes;
+all decoded fields and false claim flags are freshly derived in one union
+validation with exactly one canonical JSON parse. This removes a duplicate
+DTO cache replay without caching, deduplicating, or bypassing any of the
+`rows * 80` public decoder or auditor-validator calls. The child must produce
+80 batches, `rows * 80` consumer
 decodes and decoded-shape validations, 81 recognizer runs, and `rows * 80 * 5`
 comparisons. The parent owns
 the PID through pidfd/waitid/wait4. At 7,200 seconds the parent begins

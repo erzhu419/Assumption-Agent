@@ -1493,8 +1493,9 @@ def test_profile_ids_and_private_public_claim_boundary_are_synchronized() -> Non
     assert profile["envelope"]["maximum_json_nesting_depth"] == 64
     assert profile["envelope"]["maximum_json_container_tokens"] == 16_384
     assert profile["envelope"]["decoded_dto_cache_rule"].startswith(
-        "FRESH_NORMALIZE_RAW_CANONICAL_PAYLOAD"
+        "RAW_ENVELOPE_IS_THE_ONLY_CONSTRUCTOR_INPUT"
     )
+    assert profile["envelope"]["canonical_payload_parse_count_per_public_decode"] == 1
     assert profile["envelope"]["batch_and_replay_cache_rule"].startswith(
         "FRESH_DECODE_EVERY_ENVELOPE"
     )
@@ -4084,13 +4085,20 @@ def test_fresh_header_cache_batch_success_and_single_envelope_uuid_replay() -> N
     success = build_success((source_case(0),))
     batch = success.public_batch
     decoded = wire.decode_and_audit_formal_envelope_v3(batch.envelopes[0].envelope)
+    assert tuple(item.name for item in fields(decoded) if item.init) == ("envelope",)
+    assert wire.DecodedFormalEnvelopeV3(decoded.envelope) == decoded
+    with pytest.raises(TypeError, match="unexpected keyword argument 'payload'"):
+        wire.DecodedFormalEnvelopeV3(  # type: ignore[call-arg]
+            decoded.envelope,
+            payload=deepcopy(decoded.payload),
+        )
     other = build_success((source_case(1),))
     other_decoded = wire.decode_and_audit_formal_envelope_v3(
         other.public_batch.envelopes[0].envelope
     )
-    with pytest.raises(ValueError, match="payload-spliced"):
+    with pytest.raises(ValueError, match="init=False"):
         replace(decoded, batch_context=other_decoded.batch_context)
-    with pytest.raises(ValueError, match="payload-spliced"):
+    with pytest.raises(ValueError, match="init=False"):
         replace(decoded, public_case=other_decoded.public_case)
     arbitrary_payload_bytes = b"{}"
     arbitrary_padding = b"p" * (
@@ -4101,24 +4109,8 @@ def test_fresh_header_cache_batch_success_and_single_envelope_uuid_replay() -> N
     arbitrary_envelope = wire._frame_payload_with_padding_v3(
         arbitrary_payload_bytes, arbitrary_padding
     )
-    arbitrary_cache = unsafe_issued_copy(
-        decoded,
-        envelope=arbitrary_envelope,
-        envelope_id="phase2b_formal_trusted_envelope_v3_"
-        + hashlib.sha256(
-            wire._ENVELOPE_ID_DOMAIN_V3 + arbitrary_envelope
-        ).hexdigest(),
-        payload={},
-        payload_bytes=arbitrary_payload_bytes,
-        padding_bytes=arbitrary_padding,
-        payload_length=len(arbitrary_payload_bytes),
-        padding_length=len(arbitrary_padding),
-        payload_sha256="sha256:"
-        + hashlib.sha256(arbitrary_payload_bytes).hexdigest(),
-        padding_sha256="sha256:" + hashlib.sha256(arbitrary_padding).hexdigest(),
-    )
     with pytest.raises(ValueError, match="closed field set"):
-        arbitrary_cache.__post_init__()
+        wire.DecodedFormalEnvelopeV3(arbitrary_envelope)
 
     foreign_batch_id = wire._batch_id_v3(
         other.public_batch.batch_context,
@@ -4149,14 +4141,14 @@ def test_fresh_header_cache_batch_success_and_single_envelope_uuid_replay() -> N
 
     forged_payload = deepcopy(decoded.payload)
     forged_payload["public_case"]["graph"]["semantic_descriptor"]["segments"][0] = "forged"
-    forged_decoded = unsafe_issued_copy(decoded, payload=forged_payload)
+    forged_decoded = wire.DecodedFormalEnvelopeV3(decoded.envelope)
+    object.__setattr__(forged_decoded, "payload", forged_payload)
     replay = wire.replay_formal_trusted_wire_batch_v3(
         (decoded.envelope,), key_source_receipt_id=batch.key_source_receipt_id
     )
     assert type(replay) is wire.FormalTrustedWireBatchReplayV3
     with pytest.raises(ValueError, match="fresh"):
         replace(replay, decoded_envelopes=(forged_decoded,))
-
     spliced_success = unsafe_issued_copy(
         success,
         private_audit_alignment=other.private_audit_alignment,
@@ -4210,6 +4202,26 @@ def test_fresh_header_cache_batch_success_and_single_envelope_uuid_replay() -> N
     )
     with pytest.raises(ValueError, match="across namespaces"):
         wire.decode_and_audit_formal_envelope_v3(forged_envelope)
+
+
+def test_public_decode_parses_canonical_payload_exactly_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    envelope = build((source_case(0),)).envelopes[0].envelope
+    original_decode = wire.decode_and_require_canonical_rfc8785_v1
+    decoded_payloads: list[bytes] = []
+
+    def record_decode(payload: bytes) -> object:
+        decoded_payloads.append(payload)
+        return original_decode(payload)
+
+    monkeypatch.setattr(
+        wire,
+        "decode_and_require_canonical_rfc8785_v1",
+        record_decode,
+    )
+    decoded = wire.decode_and_audit_formal_envelope_v3(envelope)
+    assert decoded_payloads == [decoded.payload_bytes]
 
 
 def test_input_tuple_and_record_order_are_erased_before_shuffle() -> None:

@@ -189,11 +189,16 @@ Each envelope is exactly 65,536 bytes: an 80-byte header, canonical public
 payload, and at least 32 padding bytes. The header binds payload length,
 payload SHA-256, and padding SHA-256. Strict decode requires canonical RFC
 8785 bytes, exact closed fields, recomputed observation/case provenance, all
-graph invariants, and exact cached DTO replay. A `DecodedFormalEnvelopeV3`
-constructor freshly parses and normalizes its raw canonical payload bytes,
-reconstructs the context and public case, and exact-compares those objects plus
-the payload mapping, classified leaves, and channel projection against every
-cached field.
+graph invariants, and exact derived DTO construction. A
+`DecodedFormalEnvelopeV3` constructor accepts only the raw envelope; every
+other dataclass field is `init=False`. Its one union validation checks the
+header, payload and padding limits and digests, performs exactly one canonical
+JSON parse, restores schema integers, freshly normalizes the closed payload,
+reconstructs the context and public case, replays the restored payload's exact
+canonical bytes, classifies every leaf, derives the channel projection, and
+only then assigns the derived fields and fixed false claim flags. Callers
+cannot inject a cached payload, digest, context, public case, classification,
+projection, or claim through the constructor.
 An iterative preflight caps JSON nesting at 64 and container tokens at 16,384
 before recursive JSON decoding. Public decode, replay, build, and variant
 boundaries convert recursion or memory exhaustion into fixed small fail-closed

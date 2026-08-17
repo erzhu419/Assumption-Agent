@@ -2188,8 +2188,23 @@ def test_wire_v3_bulk_amortizes_bound_state_and_matches_single_batch_path(
 
     assert build_shape_calls == [success]
     assert tuple(plan_validation_calls) == plans
-    assert len(consumer_decode_calls) == len(cases) * 80
-    assert len(consumer_validate_calls) == len(cases) * 80
+    expected_consumer_envelopes = tuple(
+        envelope for batch in bulk.batches for envelope in batch
+    )
+    assert len(expected_consumer_envelopes) == len(cases) * 80
+    assert tuple(consumer_decode_calls) == expected_consumer_envelopes
+    assert len(consumer_validate_calls) == len(expected_consumer_envelopes)
+    assert all(
+        envelope
+        == envelope[: wire_v3.ENVELOPE_HEADER_BYTES_V3]
+        + decoded_row.payload_bytes
+        + decoded_row.padding_bytes
+        for envelope, decoded_row in zip(
+            expected_consumer_envelopes,
+            consumer_validate_calls,
+            strict=True,
+        )
+    )
     assert bulk.consumer_decode_count == len(cases) * 80
     assert bulk_schedules is not None
 

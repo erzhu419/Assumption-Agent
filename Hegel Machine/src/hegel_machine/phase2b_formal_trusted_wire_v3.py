@@ -3182,60 +3182,66 @@ def _normalize_formal_payload_structure_v3(payload: dict[str, object]) -> dict[s
 @dataclass(frozen=True, slots=True)
 class DecodedFormalEnvelopeV3:
     envelope: bytes
-    envelope_id: str
-    payload: dict[str, object]
-    payload_bytes: bytes
-    padding_bytes: bytes
-    payload_length: int
-    padding_length: int
-    payload_sha256: str
-    padding_sha256: str
-    batch_context: FormalBatchContextV3
-    public_case: FormalPublicCaseV3
-    classified_leaves: tuple[ClassifiedPublicLeafV3, ...]
-    channel_projection: ChannelProjectionV3
-    structural_replay_verified: bool
-    catalog_membership_verified: bool
-    formal_covert_audit: bool
-    actual_execution_claimed: bool
+    envelope_id: str = field(init=False)
+    payload: dict[str, object] = field(init=False)
+    payload_bytes: bytes = field(init=False)
+    padding_bytes: bytes = field(init=False)
+    payload_length: int = field(init=False)
+    padding_length: int = field(init=False)
+    payload_sha256: str = field(init=False)
+    padding_sha256: str = field(init=False)
+    batch_context: FormalBatchContextV3 = field(init=False)
+    public_case: FormalPublicCaseV3 = field(init=False)
+    classified_leaves: tuple[ClassifiedPublicLeafV3, ...] = field(init=False)
+    channel_projection: ChannelProjectionV3 = field(init=False)
+    structural_replay_verified: bool = field(init=False)
+    catalog_membership_verified: bool = field(init=False)
+    formal_covert_audit: bool = field(init=False)
+    actual_execution_claimed: bool = field(init=False)
 
     def __post_init__(self) -> None:
-        if type(self.envelope) is not bytes or len(self.envelope) != ENVELOPE_BYTES_V3:
-            raise ValueError("decoded envelope cache has wrong bytes/length")
-        if type(self.payload) is not dict or type(self.payload_bytes) is not bytes or type(self.padding_bytes) is not bytes:
-            raise TypeError("decoded envelope cache has mutable-type drift")
-        if (
-            type(self.payload_length) is not int
-            or type(self.padding_length) is not int
-            or self.payload_length != len(self.payload_bytes)
-            or self.padding_length != len(self.padding_bytes)
-            or self.payload_length + self.padding_length + ENVELOPE_HEADER_BYTES_V3 != ENVELOPE_BYTES_V3
-        ):
-            raise ValueError("decoded envelope cached lengths disagree")
-        if self.envelope != self.envelope[:ENVELOPE_HEADER_BYTES_V3] + self.payload_bytes + self.padding_bytes:
-            raise ValueError("decoded envelope cached byte slices disagree")
-        magic, version, header_bytes, header_payload_length, payload_digest, padding_digest = _ENVELOPE_HEADER_V3.unpack(
-            self.envelope[:ENVELOPE_HEADER_BYTES_V3]
-        )
+        envelope = self.envelope
+        if type(envelope) is not bytes or len(envelope) != ENVELOPE_BYTES_V3:
+            raise ValueError("formal envelope must be exact 65536 bytes")
+        (
+            magic,
+            version,
+            header_bytes,
+            payload_length,
+            payload_digest,
+            padding_digest,
+        ) = _ENVELOPE_HEADER_V3.unpack(envelope[:ENVELOPE_HEADER_BYTES_V3])
         if (
             (magic, version, header_bytes)
             != (ENVELOPE_MAGIC_V3, ENVELOPE_VERSION_V3, ENVELOPE_HEADER_BYTES_V3)
-            or header_payload_length != self.payload_length
-            or payload_digest != hashlib.sha256(self.payload_bytes).digest()
-            or padding_digest != hashlib.sha256(self.padding_bytes).digest()
+            or not 0 < payload_length <= MAXIMUM_PAYLOAD_BYTES_V3
         ):
-            raise ValueError("decoded envelope cached header does not freshly replay")
-        _bounded_json_wire_preflight_v3(self.payload_bytes)
+            raise ValueError("formal envelope header drift")
+        payload_bytes = envelope[header_bytes : header_bytes + payload_length]
+        padding_bytes = envelope[header_bytes + payload_length :]
+        padding_length = len(padding_bytes)
+        if (
+            payload_length != len(payload_bytes)
+            or padding_length < MINIMUM_PADDING_BYTES_V3
+            or payload_length + padding_length + header_bytes
+            != ENVELOPE_BYTES_V3
+            or envelope
+            != envelope[:header_bytes] + payload_bytes + padding_bytes
+            or hashlib.sha256(payload_bytes).digest() != payload_digest
+            or hashlib.sha256(padding_bytes).digest() != padding_digest
+        ):
+            raise ValueError("formal envelope structural digest/length failure")
+        _bounded_json_wire_preflight_v3(payload_bytes)
         try:
-            reparsed = _restore_json_integers_v3(
-                decode_and_require_canonical_rfc8785_v1(self.payload_bytes)
+            payload = _restore_json_integers_v3(
+                decode_and_require_canonical_rfc8785_v1(payload_bytes)
             )
         except (RecursionError, MemoryError):
-            raise ValueError("bounded decoded-envelope cache replay rejected") from None
-        if reparsed != self.payload:
-            raise ValueError("decoded envelope cached payload does not freshly decode")
+            raise ValueError("bounded decoded-envelope replay rejected") from None
+        if type(payload) is not dict:
+            raise ValueError("formal envelope payload root must be object")
         try:
-            normalized = _normalize_formal_payload_structure_v3(deepcopy(reparsed))
+            normalized = _normalize_formal_payload_structure_v3(payload)
             reconstructed_context = _context_from_mapping_v3(
                 normalized["batch_context"]
             )
@@ -3254,43 +3260,36 @@ class DecodedFormalEnvelopeV3:
             )
         except (RecursionError, MemoryError):
             raise ValueError("bounded decoded-envelope closed replay rejected") from None
-        if normalized != reparsed:
-            raise ValueError("decoded envelope cached payload is not normalized")
-        if canonicalize_rfc8785_v1(self.payload) != self.payload_bytes:
-            raise ValueError("decoded envelope cached payload is not its canonical wire bytes")
-        expected_payload_sha = "sha256:" + hashlib.sha256(self.payload_bytes).hexdigest()
-        expected_padding_sha = "sha256:" + hashlib.sha256(self.padding_bytes).hexdigest()
-        if self.payload_sha256 != expected_payload_sha or self.padding_sha256 != expected_padding_sha:
-            raise ValueError("decoded envelope cached digest mismatch")
-        expected_id = "phase2b_formal_trusted_envelope_v3_" + hashlib.sha256(
-            _ENVELOPE_ID_DOMAIN_V3 + self.envelope
-        ).hexdigest()
-        if self.envelope_id != expected_id:
-            raise ValueError("decoded envelope cached ID mismatch")
-        if type(self.batch_context) is not FormalBatchContextV3 or type(self.public_case) is not FormalPublicCaseV3:
-            raise TypeError("decoded envelope cached formal types drift")
-        if (
-            self.batch_context != reconstructed_context
-            or self.public_case != reconstructed_public_case
-        ):
-            raise ValueError("decoded envelope cached context/public case is payload-spliced")
-        expected_classified = classify_public_payload_leaves_v3(normalized)
-        if type(self.classified_leaves) is not tuple or self.classified_leaves != expected_classified:
-            raise ValueError("decoded envelope cached leaf classification mismatch")
-        if type(self.channel_projection) is not ChannelProjectionV3:
-            raise TypeError("decoded envelope cached channel projection type drift")
-        expected_projection = _channel_projection_v3(
-            reconstructed_public_case, self.payload_length, self.padding_bytes
+        if normalized != payload:
+            raise ValueError("decoded envelope payload is not normalized")
+        # The wire decoder above proves the incoming binary64 JSON spelling.
+        # This second, deliberately retained check proves that restoring the
+        # schema's exact integers did not change those canonical bytes.
+        if canonicalize_rfc8785_v1(payload) != payload_bytes:
+            raise ValueError("decoded envelope payload is not its canonical wire bytes")
+        classified_leaves = classify_public_payload_leaves_v3(normalized)
+        channel_projection = _channel_projection_v3(
+            reconstructed_public_case, payload_length, padding_bytes
         )
-        if self.channel_projection != expected_projection:
-            raise ValueError("decoded envelope cached channel projection mismatch")
-        if (
-            self.structural_replay_verified is not True
-            or self.catalog_membership_verified is not False
-            or self.formal_covert_audit is not False
-            or self.actual_execution_claimed is not False
-        ):
-            raise ValueError("decoded envelope claim boundary drift")
+        envelope_id = "phase2b_formal_trusted_envelope_v3_" + hashlib.sha256(
+            _ENVELOPE_ID_DOMAIN_V3 + envelope
+        ).hexdigest()
+        object.__setattr__(self, "envelope_id", envelope_id)
+        object.__setattr__(self, "payload", payload)
+        object.__setattr__(self, "payload_bytes", payload_bytes)
+        object.__setattr__(self, "padding_bytes", padding_bytes)
+        object.__setattr__(self, "payload_length", payload_length)
+        object.__setattr__(self, "padding_length", padding_length)
+        object.__setattr__(self, "payload_sha256", "sha256:" + payload_digest.hex())
+        object.__setattr__(self, "padding_sha256", "sha256:" + padding_digest.hex())
+        object.__setattr__(self, "batch_context", reconstructed_context)
+        object.__setattr__(self, "public_case", reconstructed_public_case)
+        object.__setattr__(self, "classified_leaves", classified_leaves)
+        object.__setattr__(self, "channel_projection", channel_projection)
+        object.__setattr__(self, "structural_replay_verified", True)
+        object.__setattr__(self, "catalog_membership_verified", False)
+        object.__setattr__(self, "formal_covert_audit", False)
+        object.__setattr__(self, "actual_execution_claimed", False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -4470,32 +4469,7 @@ def _channel_projection_v3(public_case: FormalPublicCaseV3, payload_length: int,
 def _decode_and_audit_formal_envelope_impl_v3(
     envelope: bytes,
 ) -> DecodedFormalEnvelopeV3:
-    if type(envelope) is not bytes or len(envelope) != ENVELOPE_BYTES_V3: raise ValueError("formal envelope must be exact 65536 bytes")
-    magic, version, header_bytes, payload_length, payload_digest, padding_digest = _ENVELOPE_HEADER_V3.unpack(envelope[:ENVELOPE_HEADER_BYTES_V3])
-    if (magic, version, header_bytes) != (ENVELOPE_MAGIC_V3, ENVELOPE_VERSION_V3, ENVELOPE_HEADER_BYTES_V3) or not 0 < payload_length <= MAXIMUM_PAYLOAD_BYTES_V3:
-        raise ValueError("formal envelope header drift")
-    payload_bytes = envelope[header_bytes:header_bytes + payload_length]
-    padding = envelope[header_bytes + payload_length:]
-    if len(padding) < MINIMUM_PADDING_BYTES_V3 or hashlib.sha256(payload_bytes).digest() != payload_digest or hashlib.sha256(padding).digest() != padding_digest:
-        raise ValueError("formal envelope structural digest/length failure")
-    _bounded_json_wire_preflight_v3(payload_bytes)
-    decoded = decode_and_require_canonical_rfc8785_v1(payload_bytes)
-    decoded = _restore_json_integers_v3(decoded)
-    if type(decoded) is not dict: raise ValueError("formal envelope payload root must be object")
-    normalized = _normalize_formal_payload_structure_v3(decoded)
-    if normalized != decoded: raise ValueError("formal envelope payload is not normalized")
-    context = _context_from_mapping_v3(decoded["batch_context"])
-    public_mapping = decoded["public_case"]
-    graph = _graph_from_mapping_v3(public_mapping["graph"])  # type: ignore[index]
-    public_case = FormalPublicCaseV3(public_mapping["schema_version"], graph, public_mapping["public_provenance_commitment"])  # type: ignore[index,arg-type]
-    projection = _channel_projection_v3(public_case, payload_length, padding)
-    envelope_id = "phase2b_formal_trusted_envelope_v3_" + hashlib.sha256(_ENVELOPE_ID_DOMAIN_V3 + envelope).hexdigest()
-    return DecodedFormalEnvelopeV3(
-        envelope, envelope_id, decoded, payload_bytes, padding, payload_length,
-        len(padding), "sha256:" + payload_digest.hex(), "sha256:" + padding_digest.hex(),
-        context, public_case, classify_public_payload_leaves_v3(decoded), projection,
-        True, False, False, False,
-    )
+    return DecodedFormalEnvelopeV3(envelope)
 
 
 def decode_and_audit_formal_envelope_v3(
