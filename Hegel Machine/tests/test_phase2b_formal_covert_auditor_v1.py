@@ -3,11 +3,12 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import replace
 from fractions import Fraction
+import copy
 import copyreg
 import hashlib
 import json
 import math
-from inspect import signature
+from inspect import getsource, signature
 import os
 from pathlib import Path
 import resource
@@ -97,13 +98,71 @@ def _freeze_auditor_owned_permutation_seed(monkeypatch: pytest.MonkeyPatch):
     yield
     # Receipts have an explicit bounded same-process lifecycle.  Tests release
     # every issued object rather than relying on silent eviction or GC.
-    live = tuple(
-        item[0]
-        for item in auditor_module._IN_PROCESS_EXECUTED_RECEIPTS.values()
+    entries = tuple(auditor_module._IN_PROCESS_EXECUTED_RECEIPTS.values())
+    assert all(
+        type(item) is auditor_module._InProcessReceiptRegistryEntryV1
+        and item.state is auditor_module._InProcessReceiptRegistryStateV1.ISSUED
+        for item in entries
     )
+    live = tuple(item.receipt for item in entries)
     for receipt in live:
         auditor_module.release_formal_covert_audit_receipt_v1(receipt)
+    assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
     assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
+
+
+def _phase_plan_test_inputs(
+    rows: int,
+    partitions: tuple[object, ...],
+    *,
+    envelope_and_decode_bytes_bound: int | None = None,
+    adapter_retained_graph_bytes_bound: int = 2 * 1_048_576,
+    variant_suite_resident_bytes_per_row_bound: int | None = None,
+    variant_suite_resident_fixed_bytes_bound: int = 1_048_576,
+) -> tuple[object, int, object]:
+    cardinalities = tuple(len(item.masks) for item in partitions)
+    maximum_mask_bytes = auditor_module.sys.getsizeof((1 << rows) - 1)
+    maximum_count_bytes = auditor_module.sys.getsizeof(rows)
+    partition_shell_bytes = auditor_module.sys.getsizeof(
+        auditor_module._Partition((), ())
+    )
+    projected = auditor_module.sys.getsizeof((None,) * len(cardinalities)) + sum(
+        partition_shell_bytes
+        + 2 * auditor_module.sys.getsizeof((None,) * cardinality)
+        + cardinality * (maximum_mask_bytes + maximum_count_bytes)
+        for cardinality in cardinalities
+    )
+    projection = auditor_module._PartitionAllocationProjectionV1(
+        rows,
+        cardinalities,
+        projected * auditor_module.DEEP_SIZE_SAFETY_MULTIPLIER,
+    )
+    envelope_bound = (
+        rows * auditor_module.ENVELOPE_BYTES * 2
+        if envelope_and_decode_bytes_bound is None
+        else envelope_and_decode_bytes_bound
+    )
+    per_row_bound = (
+        auditor_module.ENVELOPE_BYTES
+        + auditor_module.ATOMIC_VARIANT_SUITE_REFERENCE_BYTES_PER_ENVELOPE
+        if variant_suite_resident_bytes_per_row_bound is None
+        else variant_suite_resident_bytes_per_row_bound
+    )
+    invariant_plan = auditor_module._invariance_resource_plan(
+        rows,
+        envelope_and_decode_bytes_bound=envelope_bound,
+        adapter_retained_graph_bytes_bound=adapter_retained_graph_bytes_bound,
+        variant_suite_resident_bytes_per_row_bound=per_row_bound,
+        variant_suite_resident_fixed_bytes_bound=(
+            variant_suite_resident_fixed_bytes_bound
+        ),
+    )
+    return (
+        projection,
+        time.monotonic_ns()
+        + auditor_module.PARTITION_PREPARATION_TIMEOUT_SECONDS * 1_000_000_000,
+        invariant_plan,
+    )
 
 
 def _old_two_loop_partition_oracle(
@@ -515,6 +574,38 @@ def _authority() -> FormalAuditAuthorityV1:
     )
 
 
+def _insufficient_authority() -> FormalAuditAuthorityV1:
+    labels = tuple(
+        FormalAuthorityLabelInputV1(
+            index,
+            "F01",
+            "binding-a",
+            "root",
+            AnswerabilityLabelV1.ANSWERABLE,
+            "joint-a",
+            "main",
+        )
+        for index in range(4)
+    )
+    return issue_development_formal_audit_authority_v1(
+        labels,
+        tuple(_source_case_commitment(index) for index in range(len(labels))),
+    )
+
+
+def _run_issuance_branch(branch: str):
+    if branch not in {"sufficient", "insufficient"}:
+        raise ValueError("unknown issuance branch")
+    authority = _authority() if branch == "sufficient" else _insufficient_authority()
+    wire = _SyntheticWire()
+    return run_formal_covert_audit_v1(
+        tuple(_envelope(_payload()) for _ in authority.rows),
+        authority,
+        wire,
+        _SemanticRecognizer(wire),
+    )
+
+
 class _SemanticRecognizer(FormalRecognizerAdapterV1):
     def __init__(self, wire: _SyntheticWire, *, covert: bool = False) -> None:
         self.wire = wire
@@ -669,6 +760,46 @@ def _valid_invariant_result(rows: int = 1) -> object:
 
 
 def test_public_api_has_no_caller_receipts_outputs_seed_or_thresholds():
+    assert auditor_module.SCHEMA_VERSION == (
+        "hegel-machine-phase2b-formal-covert-auditor/4"
+    )
+    profile = json.loads(
+        (
+            Path(__file__).parents[1]
+            / "config"
+            / "phase2b_formal_covert_auditor_v1.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert profile["schema_version"] == (
+        "hegel-machine-phase2b-formal-covert-auditor-profile/4"
+    )
+    assert profile["semantics_id"] == SEMANTICS_ID
+    assert profile["policy_binding_id"] == POLICY_BINDING_ID
+    assert tuple(
+        auditor_module.ReceiptIssuanceRuntimeEvidenceV1.__dataclass_fields__
+    ) == (
+        "absolute_deadline_kind",
+        "absolute_deadline_monotonic_nanoseconds",
+        "absolute_deadline_timeout_seconds",
+        "worker_peak_rss_bytes_sum",
+        "parent_peak_rss_bytes_before_receipt_finalization",
+        "parent_rss_charge_ceiling_bytes",
+        "conservative_parent_plus_worker_peak_sum_bytes",
+        "receipt_finalization_complete_pending_validation_count",
+        "receipt_finalization_locked_deadline_check_count",
+        "receipt_finalization_locked_deadline_within_absolute_limit",
+        "receipt_finalization_parent_peak_within_charge_ceiling",
+    )
+    assert (
+        auditor_module.FormalCovertAuditReceiptV1.__dataclass_fields__[
+            "receipt_issuance_runtime_evidence"
+        ].init
+        is True
+    )
+    assert (
+        auditor_module.FormalCovertAuditReceiptV1.__dataclass_fields__["receipt_id"].init
+        is False
+    )
     assert tuple(signature(run_formal_covert_audit_v1).parameters) == (
         "envelopes",
         "authority",
@@ -689,72 +820,311 @@ def test_receipt_registry_capacity_is_reserved_atomically_and_never_evicts():
         auditor_module._reserve_in_process_receipt_slot()
         for _ in range(auditor_module.MAXIMUM_IN_PROCESS_ISSUED_RECEIPTS)
     )
+    assert all(
+        type(item) is auditor_module._InProcessReceiptReservationV1
+        and item.entry_identity is None
+        for item in reservations
+    )
+    candidate = object.__new__(auditor_module.FormalCovertAuditReceiptV1)
+    object.__setattr__(
+        candidate,
+        "receipt_id",
+        "phase2b_formal_covert_audit_transcript_" + "0" * 64,
+    )
+    auditor_module._register_preconstructed_formal_covert_audit_receipt_v1(
+        _factory_token=auditor_module._RECEIPT_EXECUTION_FACTORY_TOKEN,
+        _reservation=reservations[0],
+        receipt=candidate,
+    )
+    identity = id(candidate)
+    entry = auditor_module._IN_PROCESS_EXECUTED_RECEIPTS[identity]
+    assert type(entry) is auditor_module._InProcessReceiptRegistryEntryV1
+    assert entry.receipt is candidate
+    assert entry.receipt_id == candidate.receipt_id
+    assert entry.reservation is reservations[0]
+    assert entry.state is auditor_module._InProcessReceiptRegistryStateV1.PENDING
+    assert reservations[0].entry_identity == identity
+    assert reservations[0] not in auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
+    assert len(auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS) == len(
+        reservations
+    ) - 1
     with pytest.raises(
         FormalCovertAuditRejectionV1,
         match="FAIL_RECEIPT_REGISTRY_CAPACITY",
     ):
         auditor_module._reserve_in_process_receipt_slot()
-    assert len(auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS) == len(
-        reservations
-    )
+    with pytest.raises(RuntimeError, match="identity collision"):
+        auditor_module._register_preconstructed_formal_covert_audit_receipt_v1(
+            _factory_token=auditor_module._RECEIPT_EXECUTION_FACTORY_TOKEN,
+            _reservation=reservations[1],
+            receipt=candidate,
+        )
+    assert auditor_module._IN_PROCESS_EXECUTED_RECEIPTS[identity] is entry
+    assert reservations[1].entry_identity is None
+    assert reservations[1] in auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
+    auditor_module._rollback_in_process_receipt_issuance(reservations[0])
+    assert reservations[0].entry_identity is None
+    assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
     for reservation in reservations:
         auditor_module._cancel_in_process_receipt_reservation(reservation)
-
-
-def test_receipt_finalization_rss_spike_rejects_and_rolls_back_registry(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    real_peak = auditor_module._linux_peak_rss_bytes
-    calls = 0
-
-    def increasing_peak() -> int:
-        nonlocal calls
-        calls += 1
-        return real_peak() + calls * 4_096
-
-    monkeypatch.setattr(
-        auditor_module,
-        "_linux_peak_rss_bytes",
-        increasing_peak,
-    )
-    authority = _authority()
-    wire = _SyntheticWire()
-    with pytest.raises(
-        FormalCovertAuditRejectionV1,
-        match="FAIL_STATISTICAL_RUNTIME_RSS",
-    ):
-        run_formal_covert_audit_v1(
-            tuple(_envelope(_payload()) for _ in authority.rows),
-            authority,
-            wire,
-            _SemanticRecognizer(wire),
-        )
-    assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
     assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
 
 
-def test_receipt_finalization_rebuilds_until_complete_validation_is_stable(
+def test_receipt_registry_insert_failure_and_rollbacks_are_exact_and_o1(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    original_registry = auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
+
+    class NoScanRegistry(dict):
+        def items(self):
+            raise AssertionError("registry items scan is forbidden")
+
+        def values(self):
+            raise AssertionError("registry values scan is forbidden")
+
+        def __iter__(self):
+            raise AssertionError("registry iteration is forbidden")
+
+    class InsertThenExitRegistry(NoScanRegistry):
+        def __setitem__(self, key: object, value: object) -> None:
+            super().__setitem__(key, value)
+            raise SystemExit("injected SystemExit after registry insertion")
+
+    def bare_candidate(digit: str):
+        receipt = object.__new__(auditor_module.FormalCovertAuditReceiptV1)
+        object.__setattr__(
+            receipt,
+            "receipt_id",
+            "phase2b_formal_covert_audit_transcript_" + digit * 64,
+        )
+        return receipt
+
+    rejecting_registry = InsertThenExitRegistry()
+    monkeypatch.setattr(
+        auditor_module,
+        "_IN_PROCESS_EXECUTED_RECEIPTS",
+        rejecting_registry,
+    )
+    failed_reservation = auditor_module._reserve_in_process_receipt_slot()
+    failed_candidate = bare_candidate("1")
+    with pytest.raises(SystemExit, match="after registry insertion"):
+        auditor_module._register_preconstructed_formal_covert_audit_receipt_v1(
+            _factory_token=auditor_module._RECEIPT_EXECUTION_FACTORY_TOKEN,
+            _reservation=failed_reservation,
+            receipt=failed_candidate,
+        )
+    assert not rejecting_registry
+    assert failed_reservation.entry_identity is None
+    assert failed_reservation in auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
+    auditor_module._cancel_in_process_receipt_reservation(failed_reservation)
+
+    no_scan_registry = NoScanRegistry()
+    monkeypatch.setattr(
+        auditor_module,
+        "_IN_PROCESS_EXECUTED_RECEIPTS",
+        no_scan_registry,
+    )
+    outer_reservation = auditor_module._reserve_in_process_receipt_slot()
+    outer_candidate = bare_candidate("2")
+    auditor_module._register_preconstructed_formal_covert_audit_receipt_v1(
+        _factory_token=auditor_module._RECEIPT_EXECUTION_FACTORY_TOKEN,
+        _reservation=outer_reservation,
+        receipt=outer_candidate,
+    )
+    auditor_module._rollback_in_process_receipt_issuance(outer_reservation)
+    assert not no_scan_registry
+    assert outer_reservation.entry_identity is None
+
+    direct_reservation = auditor_module._reserve_in_process_receipt_slot()
+    direct_candidate = bare_candidate("3")
+    auditor_module._register_preconstructed_formal_covert_audit_receipt_v1(
+        _factory_token=auditor_module._RECEIPT_EXECUTION_FACTORY_TOKEN,
+        _reservation=direct_reservation,
+        receipt=direct_candidate,
+    )
+    auditor_module._rollback_pending_in_process_receipt_issuance(
+        direct_candidate,
+        direct_reservation,
+    )
+    assert not no_scan_registry
+    assert direct_reservation.entry_identity is None
+    auditor_module._cancel_in_process_receipt_reservation(outer_reservation)
+    auditor_module._cancel_in_process_receipt_reservation(direct_reservation)
+    monkeypatch.setattr(
+        auditor_module,
+        "_IN_PROCESS_EXECUTED_RECEIPTS",
+        original_registry,
+    )
+
+    rollback_source = getsource(auditor_module._rollback_in_process_receipt_issuance)
+    direct_source = getsource(
+        auditor_module._rollback_pending_in_process_receipt_issuance
+    )
+    for source in (rollback_source, direct_source):
+        assert ".items(" not in source
+        assert ".values(" not in source
+        assert "tuple(" not in source
+
+
+def test_receipt_finalization_charge_ceiling_accepts_rising_peaks_and_is_closed(
     monkeypatch: pytest.MonkeyPatch,
 ):
     baseline_peak = auditor_module._linux_peak_rss_bytes()
+    real_statistics = auditor_module._statistics
     real_construct = auditor_module._construct_formal_covert_audit_receipt_v1
-    construction_rounds = 0
+    real_register = (
+        auditor_module._register_preconstructed_formal_covert_audit_receipt_v1
+    )
+    real_pending_validate = (
+        auditor_module._validate_pending_formal_covert_audit_receipt_v1
+    )
+    real_statistics_deadline = (
+        auditor_module._remaining_statistics_deadline_seconds
+    )
+    real_public_validate = auditor_module.validate_formal_covert_audit_receipt_v1
+    real_release = auditor_module.release_formal_covert_audit_receipt_v1
+    real_receipt_post_init = auditor_module.FormalCovertAuditReceiptV1.__post_init__
+    real_feature_projection = auditor_module._target_feature_metric_projection
+    real_family_projection = auditor_module._target_family_metric_projection
+    real_entry_setattr = auditor_module._InProcessReceiptRegistryEntryV1.__setattr__
+    calls: Counter[str] = Counter()
+    events: list[str] = []
+    peak_samples: list[int] = []
+    finalization_started = False
+    finalization_peak_count = 0
 
-    def staged_construct(**values: object):
-        nonlocal construction_rounds
-        receipt = real_construct(**values)
-        construction_rounds += 1
+    def tracked_statistics(*args: object, **kwargs: object):
+        nonlocal finalization_started
+        result = real_statistics(*args, **kwargs)
+        finalization_started = True
+        return result
+
+    def increasing_peak() -> int:
+        nonlocal finalization_peak_count
+        value = baseline_peak + (len(peak_samples) + 1) * 4_096
+        peak_samples.append(value)
+        if finalization_started:
+            finalization_peak_count += 1
+            events.append(
+                "final-pre-sample"
+                if finalization_peak_count == 1
+                else "final-post-sample"
+            )
+        return value
+
+    def counted_construct(**values: object):
+        calls["construct"] += 1
+        events.append("construct")
+        return real_construct(**values)
+
+    def counted_register(**values: object):
+        calls["register"] += 1
+        receipt = real_register(**values)
+        entry = auditor_module._IN_PROCESS_EXECUTED_RECEIPTS[id(receipt)]
+        assert type(entry) is auditor_module._InProcessReceiptRegistryEntryV1
+        assert entry.state is auditor_module._InProcessReceiptRegistryStateV1.PENDING
+        events.append("pending-register")
         return receipt
 
-    def staged_peak() -> int:
-        return baseline_peak + min(construction_rounds, 2) * 4_096
+    def counted_receipt_post_init(receipt: object) -> None:
+        calls["receipt_post_init"] += 1
+        events.append(f"receipt-post-init#{calls['receipt_post_init']}")
+        return real_receipt_post_init(receipt)
 
+    def counted_feature_projection(value: object):
+        calls["feature_projection"] += 1
+        return real_feature_projection(value)
+
+    def counted_family_projection(value: object):
+        calls["family_projection"] += 1
+        return real_family_projection(value)
+
+    def counted_public_validate(receipt: object):
+        calls["public_validate"] += 1
+        return real_public_validate(receipt)
+
+    def counted_pending_validate(**values: object):
+        calls["pending_validate"] += 1
+        events.append("pending-validate")
+        receipt = values["receipt"]
+        with pytest.raises(ValueError, match="PENDING receipt is not publicly issued"):
+            auditor_module.validate_formal_covert_audit_receipt_v1(receipt)
+        calls["pending_public_rejection"] += 1
+        with pytest.raises(ValueError, match="only an exact ISSUED receipt"):
+            real_release(receipt)
+        calls["pending_release_rejection"] += 1
+        return real_pending_validate(**values)
+
+    def tracked_statistics_deadline(deadline_ns: int) -> float:
+        if auditor_module._IN_PROCESS_EXECUTED_RECEIPTS:
+            entries = tuple(
+                auditor_module._IN_PROCESS_EXECUTED_RECEIPTS.values()
+            )
+            assert len(entries) == 1
+            assert (
+                entries[0].state
+                is auditor_module._InProcessReceiptRegistryStateV1.PENDING
+            )
+            events.extend(("locked-exact-recheck", "locked-final-deadline"))
+            calls["locked_deadline"] += 1
+        return real_statistics_deadline(deadline_ns)
+
+    def tracked_entry_setattr(entry: object, name: str, value: object) -> None:
+        if (
+            name == "state"
+            and getattr(entry, "state", None)
+            is auditor_module._InProcessReceiptRegistryStateV1.PENDING
+            and value is auditor_module._InProcessReceiptRegistryStateV1.ISSUED
+        ):
+            calls["commit"] += 1
+            events.append("commit")
+        return real_entry_setattr(entry, name, value)
+
+    monkeypatch.setattr(auditor_module, "_statistics", tracked_statistics)
+    monkeypatch.setattr(auditor_module, "_linux_peak_rss_bytes", increasing_peak)
+    monkeypatch.setattr(
+        auditor_module, "_construct_formal_covert_audit_receipt_v1", counted_construct
+    )
     monkeypatch.setattr(
         auditor_module,
-        "_construct_formal_covert_audit_receipt_v1",
-        staged_construct,
+        "_register_preconstructed_formal_covert_audit_receipt_v1",
+        counted_register,
     )
-    monkeypatch.setattr(auditor_module, "_linux_peak_rss_bytes", staged_peak)
+    monkeypatch.setattr(
+        auditor_module,
+        "_validate_pending_formal_covert_audit_receipt_v1",
+        counted_pending_validate,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_remaining_statistics_deadline_seconds",
+        tracked_statistics_deadline,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "validate_formal_covert_audit_receipt_v1",
+        counted_public_validate,
+    )
+    monkeypatch.setattr(
+        auditor_module.FormalCovertAuditReceiptV1,
+        "__post_init__",
+        counted_receipt_post_init,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_target_feature_metric_projection",
+        counted_feature_projection,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_target_family_metric_projection",
+        counted_family_projection,
+    )
+    monkeypatch.setattr(
+        auditor_module._InProcessReceiptRegistryEntryV1,
+        "__setattr__",
+        tracked_entry_setattr,
+    )
     authority = _authority()
     wire = _SyntheticWire()
     receipt = run_formal_covert_audit_v1(
@@ -763,13 +1133,1180 @@ def test_receipt_finalization_rebuilds_until_complete_validation_is_stable(
         wire,
         _SemanticRecognizer(wire),
     )
-    assert construction_rounds == 3
-    assert (
-        receipt.statistics_runtime_evidence.receipt_finalization_rss_stabilization_passes
-        == 3
+    evidence = receipt.statistics_runtime_evidence
+    worker_peak_sum = sum(evidence.worker_peak_rss_bytes)
+    expected_ceiling = auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES - worker_peak_sum
+    assert events == [
+        "final-pre-sample",
+        "construct",
+        "receipt-post-init#1",
+        "pending-register",
+        "pending-validate",
+        "receipt-post-init#2",
+        "locked-exact-recheck",
+        "locked-final-deadline",
+        "final-post-sample",
+        "commit",
+    ]
+    assert calls["construct"] == 1
+    assert calls["register"] == 1
+    assert calls["pending_validate"] == 1
+    assert calls["locked_deadline"] == 1
+    assert calls["public_validate"] == 1
+    assert calls["pending_public_rejection"] == 1
+    assert calls["pending_release_rejection"] == 1
+    assert calls["receipt_post_init"] == 2
+    assert calls["feature_projection"] == 2 * len(receipt.results)
+    assert calls["family_projection"] == 2 * len(receipt.target_family_results)
+    assert calls["commit"] == 1
+    entry = auditor_module._IN_PROCESS_EXECUTED_RECEIPTS[id(receipt)]
+    assert type(entry) is auditor_module._InProcessReceiptRegistryEntryV1
+    assert entry.receipt is receipt
+    assert entry.receipt_id == receipt.receipt_id
+    assert entry.state is auditor_module._InProcessReceiptRegistryStateV1.ISSUED
+    assert len(peak_samples) == 3
+    assert peak_samples == sorted(peak_samples)
+    assert evidence.parent_peak_rss_bytes_before_receipt_finalization == peak_samples[1]
+    assert peak_samples[2] > peak_samples[1]
+    assert peak_samples[2] <= expected_ceiling
+    assert evidence.parent_rss_charge_ceiling_bytes == expected_ceiling
+    assert evidence.conservative_parent_plus_worker_peak_sum_bytes == (
+        expected_ceiling + worker_peak_sum
+    ) == auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+    assert evidence.receipt_finalization_complete_pending_validation_count == 1
+    assert evidence.receipt_finalization_parent_peak_within_charge_ceiling is True
+    assert evidence.within_frozen_aggregate_cap is True
+    issuance = receipt.receipt_issuance_runtime_evidence
+    assert issuance.absolute_deadline_kind == "STATISTICS"
+    assert issuance.absolute_deadline_timeout_seconds == (
+        auditor_module.STATISTICS_WORKER_TIMEOUT_SECONDS
     )
-    assert validate_formal_covert_audit_receipt_v1(receipt) == receipt.receipt_id
+    assert issuance.worker_peak_rss_bytes_sum == worker_peak_sum
+    assert issuance.parent_peak_rss_bytes_before_receipt_finalization == (
+        evidence.parent_peak_rss_bytes_before_receipt_finalization
+    )
+    assert issuance.parent_rss_charge_ceiling_bytes == expected_ceiling
+    assert issuance.conservative_parent_plus_worker_peak_sum_bytes == (
+        auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+    )
+    assert issuance.receipt_finalization_complete_pending_validation_count == 1
+    assert issuance.receipt_finalization_locked_deadline_check_count == 1
+    assert issuance.receipt_finalization_locked_deadline_within_absolute_limit is True
+    assert issuance.receipt_finalization_parent_peak_within_charge_ceiling is True
+
+    formula_mutations = (
+        (
+            "parent_rss_charge_ceiling_bytes",
+            expected_ceiling - 1,
+            "charge ceiling formula drift",
+        ),
+        (
+            "parent_peak_rss_bytes_before_receipt_finalization",
+            expected_ceiling + 1,
+            "pre-finalization parent peak exceeds",
+        ),
+        (
+            "conservative_parent_plus_worker_peak_sum_bytes",
+            auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES - 1,
+            "conservative RSS charge drift",
+        ),
+        (
+            "receipt_finalization_complete_pending_validation_count",
+            2,
+            "receipt finalization evidence drift",
+        ),
+        (
+            "receipt_finalization_parent_peak_within_charge_ceiling",
+            False,
+            "receipt finalization evidence drift",
+        ),
+        (
+            "worker_peak_rss_bytes",
+            (auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES + 1,),
+            "worker RSS sum exceeds",
+        ),
+    )
+    for field_name, replacement, message in formula_mutations:
+        original = getattr(evidence, field_name)
+        object.__setattr__(evidence, field_name, replacement)
+        with pytest.raises(ValueError, match=message):
+            real_public_validate(receipt)
+        object.__setattr__(evidence, field_name, original)
+
+    issuance_formula_mutations = (
+        (
+            "parent_rss_charge_ceiling_bytes",
+            expected_ceiling - 1,
+            "W/C/prepeak charge formula drift",
+        ),
+        (
+            "conservative_parent_plus_worker_peak_sum_bytes",
+            auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES - 1,
+            "W/C/prepeak charge formula drift",
+        ),
+        (
+            "receipt_finalization_complete_pending_validation_count",
+            2,
+            "locked-finalization evidence drift",
+        ),
+        (
+            "receipt_finalization_locked_deadline_check_count",
+            0,
+            "locked-finalization evidence drift",
+        ),
+        (
+            "receipt_finalization_locked_deadline_within_absolute_limit",
+            False,
+            "locked-finalization evidence drift",
+        ),
+        (
+            "receipt_finalization_parent_peak_within_charge_ceiling",
+            False,
+            "locked-finalization evidence drift",
+        ),
+    )
+    for field_name, replacement, message in issuance_formula_mutations:
+        original = getattr(issuance, field_name)
+        object.__setattr__(issuance, field_name, replacement)
+        with pytest.raises(ValueError, match=message):
+            real_public_validate(receipt)
+        object.__setattr__(issuance, field_name, original)
+    assert real_public_validate(receipt) == receipt.receipt_id
+
+    copied_receipt = copy.copy(receipt)
+    assert copied_receipt is not receipt
+    with pytest.raises(ValueError, match="not issued by the in-process execution factory"):
+        real_public_validate(copied_receipt)
+    real_release(receipt)
+
+
+def test_public_receipt_validation_rechecks_after_concurrent_release(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    authority = _authority()
+    wire = _SyntheticWire()
+    receipt = run_formal_covert_audit_v1(
+        tuple(_envelope(_payload()) for _ in authority.rows),
+        authority,
+        wire,
+        _SemanticRecognizer(wire),
+    )
+    real_replay = auditor_module._replay_formal_covert_audit_receipt_content_v1
+    replay_entered = threading.Event()
+    allow_replay = threading.Event()
+    outcomes: list[object] = []
+
+    def blocked_replay(candidate: object, expected_id: str) -> str:
+        replay_entered.set()
+        if not allow_replay.wait(timeout=10.0):
+            raise RuntimeError("concurrent validation barrier timed out")
+        return real_replay(candidate, expected_id)
+
+    def validate_in_thread() -> None:
+        try:
+            outcomes.append(validate_formal_covert_audit_receipt_v1(receipt))
+        except BaseException as exc:
+            outcomes.append(exc)
+
+    monkeypatch.setattr(
+        auditor_module,
+        "_replay_formal_covert_audit_receipt_content_v1",
+        blocked_replay,
+    )
+    validator = threading.Thread(
+        target=validate_in_thread,
+        name="auditor-issued-validation-race-kat",
+    )
+    validator.start()
+    assert replay_entered.wait(timeout=10.0)
+    assert auditor_module.release_formal_covert_audit_receipt_v1(receipt) == (
+        receipt.receipt_id
+    )
+    allow_replay.set()
+    validator.join(timeout=10.0)
+    assert not validator.is_alive()
+    assert len(outcomes) == 1
+    assert isinstance(outcomes[0], ValueError)
+    assert "changed during full replay" in str(outcomes[0])
+    assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
+    assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
+
+
+def test_receipt_finalization_post_validation_ceiling_breach_rejects_once(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    real_statistics = auditor_module._statistics
+    real_peak = auditor_module._linux_peak_rss_bytes
+    real_construct = auditor_module._construct_formal_covert_audit_receipt_v1
+    real_register = (
+        auditor_module._register_preconstructed_formal_covert_audit_receipt_v1
+    )
+    real_pending_validate = (
+        auditor_module._validate_pending_formal_covert_audit_receipt_v1
+    )
+    real_entry_setattr = auditor_module._InProcessReceiptRegistryEntryV1.__setattr__
+    calls: Counter[str] = Counter()
+    charge_ceiling: int | None = None
+    finalization_peak_calls = 0
+
+    def capture_statistics(*args: object, **kwargs: object):
+        nonlocal charge_ceiling
+        result = real_statistics(*args, **kwargs)
+        inputs = result[-1]
+        charge_ceiling = auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES - sum(
+            inputs.worker_peak_rss_bytes
+        )
+        return result
+
+    def staged_peak() -> int:
+        nonlocal finalization_peak_calls
+        if charge_ceiling is None:
+            return real_peak()
+        finalization_peak_calls += 1
+        return charge_ceiling + (4_096 if finalization_peak_calls == 2 else 0)
+
+    def counted_construct(**values: object):
+        calls["construct"] += 1
+        return real_construct(**values)
+
+    def counted_register(**values: object):
+        calls["register"] += 1
+        return real_register(**values)
+
+    def counted_pending_validate(**values: object):
+        calls["pending_validate"] += 1
+        return real_pending_validate(**values)
+
+    def tracked_entry_setattr(entry: object, name: str, value: object) -> None:
+        if (
+            name == "state"
+            and getattr(entry, "state", None)
+            is auditor_module._InProcessReceiptRegistryStateV1.PENDING
+            and value is auditor_module._InProcessReceiptRegistryStateV1.ISSUED
+        ):
+            calls["commit"] += 1
+        return real_entry_setattr(entry, name, value)
+
+    monkeypatch.setattr(auditor_module, "_statistics", capture_statistics)
+    monkeypatch.setattr(
+        auditor_module,
+        "_construct_formal_covert_audit_receipt_v1",
+        counted_construct,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_register_preconstructed_formal_covert_audit_receipt_v1",
+        counted_register,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_validate_pending_formal_covert_audit_receipt_v1",
+        counted_pending_validate,
+    )
+    monkeypatch.setattr(
+        auditor_module._InProcessReceiptRegistryEntryV1,
+        "__setattr__",
+        tracked_entry_setattr,
+    )
+    monkeypatch.setattr(auditor_module, "_linux_peak_rss_bytes", staged_peak)
+    authority = _authority()
+    wire = _SyntheticWire()
+    with pytest.raises(
+        FormalCovertAuditRejectionV1,
+        match="post-validation parent peak exceeds its RSS charge ceiling",
+    ):
+        run_formal_covert_audit_v1(
+            tuple(_envelope(_payload()) for _ in authority.rows),
+            authority,
+            wire,
+            _SemanticRecognizer(wire),
+        )
+    assert charge_ceiling is not None
+    assert finalization_peak_calls == 2
+    assert calls == Counter({"construct": 1, "register": 1, "pending_validate": 1})
+    assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
+    assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
+
+
+@pytest.mark.parametrize(
+    ("worker_peak_sum", "expected_message", "expected_parent_peak_calls"),
+    (
+        (
+            auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES,
+            "pre-finalization parent peak exceeds its RSS charge ceiling",
+            2,
+        ),
+        (
+            auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES + 1,
+            "receipt finalization worker RSS sum exceeds the frozen cap",
+            1,
+        ),
+    ),
+    ids=("W-equals-cap-C-zero", "W-above-cap"),
+)
+def test_receipt_finalization_worker_sum_boundaries_reject_before_construction(
+    monkeypatch: pytest.MonkeyPatch,
+    worker_peak_sum: int,
+    expected_message: str,
+    expected_parent_peak_calls: int,
+):
+    real_statistics = auditor_module._statistics
+    real_construct = auditor_module._construct_formal_covert_audit_receipt_v1
+    real_register = (
+        auditor_module._register_preconstructed_formal_covert_audit_receipt_v1
+    )
+    real_peak = auditor_module._linux_peak_rss_bytes
+    calls: Counter[str] = Counter()
+
+    def rewrite_worker_peaks(*args: object, **kwargs: object):
+        result = real_statistics(*args, **kwargs)
+        runtime_inputs = result[-1]
+        worker_count = len(runtime_inputs.worker_peak_rss_bytes)
+        rewritten_inputs = replace(
+            runtime_inputs,
+            worker_peak_rss_bytes=(worker_peak_sum,) + (0,) * (worker_count - 1),
+        )
+        return result[:-1] + (rewritten_inputs,)
+
+    def positive_parent_peak() -> int:
+        calls["parent_peak"] += 1
+        value = real_peak()
+        assert value > 0
+        return value
+
+    def counted_construct(**values: object):
+        calls["construct"] += 1
+        return real_construct(**values)
+
+    def counted_register(**values: object):
+        calls["register"] += 1
+        return real_register(**values)
+
+    monkeypatch.setattr(auditor_module, "_statistics", rewrite_worker_peaks)
+    monkeypatch.setattr(auditor_module, "_linux_peak_rss_bytes", positive_parent_peak)
+    monkeypatch.setattr(
+        auditor_module,
+        "_construct_formal_covert_audit_receipt_v1",
+        counted_construct,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_register_preconstructed_formal_covert_audit_receipt_v1",
+        counted_register,
+    )
+    authority = _authority()
+    wire = _SyntheticWire()
+    with pytest.raises(FormalCovertAuditRejectionV1, match=expected_message):
+        run_formal_covert_audit_v1(
+            tuple(_envelope(_payload()) for _ in authority.rows),
+            authority,
+            wire,
+            _SemanticRecognizer(wire),
+        )
+    assert calls == Counter({"parent_peak": expected_parent_peak_calls})
+    assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
+    assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
+
+
+@pytest.mark.parametrize(
+    "failing_hook",
+    ("deadline", "peak_sample"),
+)
+def test_receipt_finalization_post_register_exceptions_roll_back_atomically(
+    monkeypatch: pytest.MonkeyPatch,
+    failing_hook: str,
+):
+    real_construct = auditor_module._construct_formal_covert_audit_receipt_v1
+    real_register = (
+        auditor_module._register_preconstructed_formal_covert_audit_receipt_v1
+    )
+    real_pending_validate = (
+        auditor_module._validate_pending_formal_covert_audit_receipt_v1
+    )
+    real_deadline = auditor_module._remaining_statistics_deadline_seconds
+    real_peak = auditor_module._linux_peak_rss_bytes
+    real_entry_setattr = auditor_module._InProcessReceiptRegistryEntryV1.__setattr__
+    calls: Counter[str] = Counter()
+    failure_message = f"injected post-register {failing_hook} failure"
+
+    def counted_construct(**values: object):
+        calls["construct"] += 1
+        return real_construct(**values)
+
+    def counted_register(**values: object):
+        calls["register"] += 1
+        return real_register(**values)
+
+    def counted_pending_validate(**values: object):
+        calls["pending_validate"] += 1
+        return real_pending_validate(**values)
+
+    def require_one_pending_entry() -> None:
+        entries = tuple(auditor_module._IN_PROCESS_EXECUTED_RECEIPTS.values())
+        assert len(entries) == 1
+        assert type(entries[0]) is auditor_module._InProcessReceiptRegistryEntryV1
+        assert (
+            entries[0].state
+            is auditor_module._InProcessReceiptRegistryStateV1.PENDING
+        )
+
+    def maybe_fail_deadline(deadline_ns: int) -> float:
+        if auditor_module._IN_PROCESS_EXECUTED_RECEIPTS:
+            require_one_pending_entry()
+            calls["deadline_failure"] += 1
+            raise RuntimeError(failure_message)
+        return real_deadline(deadline_ns)
+
+    def maybe_fail_peak_sample() -> int:
+        if auditor_module._IN_PROCESS_EXECUTED_RECEIPTS:
+            require_one_pending_entry()
+            calls["peak_sample_failure"] += 1
+            raise RuntimeError(failure_message)
+        return real_peak()
+
+    def tracked_entry_setattr(entry: object, name: str, value: object) -> None:
+        if (
+            name == "state"
+            and getattr(entry, "state", None)
+            is auditor_module._InProcessReceiptRegistryStateV1.PENDING
+            and value is auditor_module._InProcessReceiptRegistryStateV1.ISSUED
+        ):
+            calls["commit"] += 1
+        return real_entry_setattr(entry, name, value)
+
+    monkeypatch.setattr(
+        auditor_module,
+        "_construct_formal_covert_audit_receipt_v1",
+        counted_construct,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_register_preconstructed_formal_covert_audit_receipt_v1",
+        counted_register,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_validate_pending_formal_covert_audit_receipt_v1",
+        counted_pending_validate,
+    )
+    monkeypatch.setattr(
+        auditor_module._InProcessReceiptRegistryEntryV1,
+        "__setattr__",
+        tracked_entry_setattr,
+    )
+    if failing_hook == "deadline":
+        monkeypatch.setattr(
+            auditor_module,
+            "_remaining_statistics_deadline_seconds",
+            maybe_fail_deadline,
+        )
+        failure_counter = "deadline_failure"
+    else:
+        monkeypatch.setattr(
+            auditor_module,
+            "_linux_peak_rss_bytes",
+            maybe_fail_peak_sample,
+        )
+        failure_counter = "peak_sample_failure"
+    authority = _authority()
+    wire = _SyntheticWire()
+    with pytest.raises(RuntimeError, match=failure_message):
+        run_formal_covert_audit_v1(
+            tuple(_envelope(_payload()) for _ in authority.rows),
+            authority,
+            wire,
+            _SemanticRecognizer(wire),
+        )
+    assert calls == Counter(
+        {
+            "construct": 1,
+            "register": 1,
+            "pending_validate": 1,
+            failure_counter: 1,
+        }
+    )
+    assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
+    assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
+
+
+def test_locked_final_deadline_rejects_clock_advance_while_waiting_for_registry_lock(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    real_pending_validate = (
+        auditor_module._validate_pending_formal_covert_audit_receipt_v1
+    )
+    real_commit = auditor_module._commit_pending_formal_covert_audit_receipt_v1
+    real_deadline = auditor_module._remaining_statistics_deadline_seconds
+    real_monotonic_ns = time.monotonic_ns
+    replay_complete = threading.Event()
+    lock_acquired = threading.Event()
+    commit_entered = threading.Event()
+    clock_advanced = threading.Event()
+    events: list[str] = []
+    holder_failures: list[BaseException] = []
+    holders: list[threading.Thread] = []
+
+    def blocked_after_pending_replay(**values: object) -> str:
+        validated_id = real_pending_validate(**values)
+        events.append("pending-replay-complete")
+        replay_complete.set()
+        holder = threading.Thread(
+            target=hold_registry_lock_until_commit_waits,
+            name="auditor-locked-final-deadline-holder-kat",
+        )
+        holders.append(holder)
+        holder.start()
+        if not lock_acquired.wait(timeout=10.0):
+            raise RuntimeError("registry lock-holder barrier timed out")
+        return validated_id
+
+    def observed_commit_entry(**values: object):
+        events.append("commit-entered")
+        commit_entered.set()
+        return real_commit(**values)
+
+    def controlled_monotonic_ns() -> int:
+        if clock_advanced.is_set():
+            return 1 << 62
+        return real_monotonic_ns()
+
+    def observed_deadline(deadline_ns: int) -> float:
+        if (
+            clock_advanced.is_set()
+            and auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
+        ):
+            events.append("locked-final-deadline")
+        return real_deadline(deadline_ns)
+
+    def hold_registry_lock_until_commit_waits() -> None:
+        try:
+            with auditor_module._IN_PROCESS_RECEIPT_REGISTRY_LOCK:
+                lock_acquired.set()
+                if not commit_entered.wait(timeout=10.0):
+                    raise RuntimeError("commit did not contend on the registry lock")
+                events.append("clock-advanced-under-contended-lock")
+                clock_advanced.set()
+        except BaseException as exc:
+            holder_failures.append(exc)
+            lock_acquired.set()
+
+    monkeypatch.setattr(
+        auditor_module,
+        "_validate_pending_formal_covert_audit_receipt_v1",
+        blocked_after_pending_replay,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_commit_pending_formal_covert_audit_receipt_v1",
+        observed_commit_entry,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_remaining_statistics_deadline_seconds",
+        observed_deadline,
+    )
+    monkeypatch.setattr(auditor_module.time, "monotonic_ns", controlled_monotonic_ns)
+    with pytest.raises(FormalCovertAuditRejectionV1) as caught:
+        _run_issuance_branch("sufficient")
+    assert replay_complete.is_set()
+    assert len(holders) == 1
+    holder = holders[0]
+    holder.join(timeout=30.0)
+    assert not holder.is_alive()
+    assert not holder_failures
+    assert events == [
+        "pending-replay-complete",
+        "commit-entered",
+        "clock-advanced-under-contended-lock",
+        "locked-final-deadline",
+    ]
+    assert caught.value.code == "FAIL_STATISTICAL_RUNTIME"
+    assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
+    assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
+
+
+@pytest.mark.parametrize("branch", ("sufficient", "insufficient"))
+def test_shared_commit_holds_registry_lock_from_deadline_through_post_rss_and_flip(
+    monkeypatch: pytest.MonkeyPatch,
+    branch: str,
+):
+    real_statistics_deadline = (
+        auditor_module._remaining_statistics_deadline_seconds
+    )
+    real_partition_deadline = (
+        auditor_module._remaining_partition_preparation_deadline_seconds
+    )
+    real_peak = auditor_module._linux_peak_rss_bytes
+    real_commit = auditor_module._commit_pending_formal_covert_audit_receipt_v1
+    real_entry_setattr = auditor_module._InProcessReceiptRegistryEntryV1.__setattr__
+    contender_attempting = threading.Event()
+    contender_acquired = threading.Event()
+    calls: Counter[str] = Counter()
+    events: list[str] = []
+    contenders: list[threading.Thread] = []
+
+    def contend_for_registry_lock() -> None:
+        events.append("contender-attempt")
+        contender_attempting.set()
+        with auditor_module._IN_PROCESS_RECEIPT_REGISTRY_LOCK:
+            assert calls["issued_flip_complete"] == 1
+            calls["contender_acquired"] += 1
+            events.append("contender-acquired-after-flip")
+            contender_acquired.set()
+
+    def observe_locked_deadline(
+        deadline_ns: int,
+        real_checker: object,
+    ) -> float:
+        if auditor_module._IN_PROCESS_EXECUTED_RECEIPTS:
+            assert calls["locked_deadline"] == 0
+            calls["locked_deadline"] += 1
+            events.append("locked-deadline-hook")
+            contender = threading.Thread(
+                target=contend_for_registry_lock,
+                name=f"auditor-{branch}-commit-lock-contender-kat",
+            )
+            contenders.append(contender)
+            contender.start()
+            assert contender_attempting.wait(timeout=5.0)
+            assert not contender_acquired.wait(timeout=0.05)
+            calls["contender_blocked_at_deadline"] += 1
+            events.append("contender-blocked-at-deadline")
+        return real_checker(deadline_ns)  # type: ignore[operator]
+
+    def observed_statistics_deadline(deadline_ns: int) -> float:
+        return observe_locked_deadline(deadline_ns, real_statistics_deadline)
+
+    def observed_partition_deadline(deadline_ns: int) -> float:
+        return observe_locked_deadline(deadline_ns, real_partition_deadline)
+
+    def observed_peak() -> int:
+        if calls["locked_deadline"]:
+            assert contender_attempting.is_set()
+            assert not contender_acquired.is_set()
+            calls["post_rss"] += 1
+            events.append("post-rss-with-contender-blocked")
+        return real_peak()
+
+    def observed_entry_setattr(entry: object, name: str, value: object) -> None:
+        transitioning = (
+            name == "state"
+            and getattr(entry, "state", None)
+            is auditor_module._InProcessReceiptRegistryStateV1.PENDING
+            and value is auditor_module._InProcessReceiptRegistryStateV1.ISSUED
+        )
+        if transitioning:
+            assert calls["post_rss"] == 1
+            assert not contender_acquired.is_set()
+            calls["issued_flip"] += 1
+            events.append("issued-flip-with-contender-blocked")
+        real_entry_setattr(entry, name, value)
+        if transitioning:
+            assert not contender_acquired.is_set()
+            calls["issued_flip_complete"] += 1
+            events.append("issued-flip-complete-with-contender-blocked")
+
+    def observed_shared_commit(**values: object):
+        calls["shared_commit"] += 1
+        receipt = real_commit(**values)
+        calls["shared_commit_return"] += 1
+        events.append("shared-commit-return")
+        assert contender_acquired.wait(timeout=5.0)
+        return receipt
+
+    monkeypatch.setattr(
+        auditor_module,
+        "_remaining_statistics_deadline_seconds",
+        observed_statistics_deadline,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_remaining_partition_preparation_deadline_seconds",
+        observed_partition_deadline,
+    )
+    monkeypatch.setattr(auditor_module, "_linux_peak_rss_bytes", observed_peak)
+    monkeypatch.setattr(
+        auditor_module._InProcessReceiptRegistryEntryV1,
+        "__setattr__",
+        observed_entry_setattr,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_commit_pending_formal_covert_audit_receipt_v1",
+        observed_shared_commit,
+    )
+    receipt = None
+    try:
+        receipt = _run_issuance_branch(branch)
+    finally:
+        for contender in contenders:
+            contender.join(timeout=5.0)
+            assert not contender.is_alive()
+    assert receipt is not None
+    assert calls == Counter(
+        {
+            "locked_deadline": 1,
+            "contender_blocked_at_deadline": 1,
+            "post_rss": 1,
+            "issued_flip": 1,
+            "issued_flip_complete": 1,
+            "contender_acquired": 1,
+            "shared_commit": 1,
+            "shared_commit_return": 1,
+        }
+    )
+    assert events.index("contender-blocked-at-deadline") < events.index(
+        "post-rss-with-contender-blocked"
+    )
+    assert events.index("post-rss-with-contender-blocked") < events.index(
+        "issued-flip-with-contender-blocked"
+    )
+    assert events.index("issued-flip-complete-with-contender-blocked") < events.index(
+        "contender-acquired-after-flip"
+    )
+    assert events.index("issued-flip-complete-with-contender-blocked") < events.index(
+        "shared-commit-return"
+    )
+    entry = auditor_module._IN_PROCESS_EXECUTED_RECEIPTS[id(receipt)]
+    assert type(entry) is auditor_module._InProcessReceiptRegistryEntryV1
+    assert entry.state is auditor_module._InProcessReceiptRegistryStateV1.ISSUED
     auditor_module.release_formal_covert_audit_receipt_v1(receipt)
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    (
+        "parent_peak_rss_bytes_before_receipt_finalization",
+        "statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds",
+    ),
+    ids=("prepeak-plus-one", "elapsed-plus-one"),
+)
+def test_receipt_finalization_valid_content_mutation_rejects_by_registered_id(
+    monkeypatch: pytest.MonkeyPatch,
+    field_name: str,
+):
+    real_construct = auditor_module._construct_formal_covert_audit_receipt_v1
+    real_register = (
+        auditor_module._register_preconstructed_formal_covert_audit_receipt_v1
+    )
+    real_pending_validate = (
+        auditor_module._validate_pending_formal_covert_audit_receipt_v1
+    )
+    real_entry_setattr = auditor_module._InProcessReceiptRegistryEntryV1.__setattr__
+    calls: Counter[str] = Counter()
+
+    def counted_construct(**values: object):
+        calls["construct"] += 1
+        return real_construct(**values)
+
+    def counted_register(**values: object):
+        calls["register"] += 1
+        return real_register(**values)
+
+    def mutate_after_register(**values: object):
+        calls["pending_validate"] += 1
+        receipt = values["receipt"]
+        assert id(receipt) in auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
+        entry = auditor_module._IN_PROCESS_EXECUTED_RECEIPTS[id(receipt)]
+        assert type(entry) is auditor_module._InProcessReceiptRegistryEntryV1
+        assert entry.state is auditor_module._InProcessReceiptRegistryStateV1.PENDING
+        evidence = receipt.statistics_runtime_evidence
+        original = getattr(evidence, field_name)
+        replacement = original + 1
+        if field_name == "parent_peak_rss_bytes_before_receipt_finalization":
+            assert replacement <= evidence.parent_rss_charge_ceiling_bytes
+        else:
+            assert replacement <= (
+                auditor_module.STATISTICS_WORKER_TIMEOUT_SECONDS * 1_000_000_000
+            )
+        object.__setattr__(
+            evidence,
+            field_name,
+            replacement,
+        )
+        if field_name == "parent_peak_rss_bytes_before_receipt_finalization":
+            object.__setattr__(
+                receipt.receipt_issuance_runtime_evidence,
+                field_name,
+                replacement,
+            )
+        calls["valid_content_mutation"] += 1
+        return real_pending_validate(**values)
+
+    def tracked_entry_setattr(entry: object, name: str, value: object) -> None:
+        if (
+            name == "state"
+            and getattr(entry, "state", None)
+            is auditor_module._InProcessReceiptRegistryStateV1.PENDING
+            and value is auditor_module._InProcessReceiptRegistryStateV1.ISSUED
+        ):
+            calls["commit"] += 1
+        return real_entry_setattr(entry, name, value)
+
+    monkeypatch.setattr(
+        auditor_module, "_construct_formal_covert_audit_receipt_v1", counted_construct
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_register_preconstructed_formal_covert_audit_receipt_v1",
+        counted_register,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_validate_pending_formal_covert_audit_receipt_v1",
+        mutate_after_register,
+    )
+    monkeypatch.setattr(
+        auditor_module._InProcessReceiptRegistryEntryV1,
+        "__setattr__",
+        tracked_entry_setattr,
+    )
+    authority = _authority()
+    wire = _SyntheticWire()
+    with pytest.raises(ValueError, match="content changed after construction"):
+        run_formal_covert_audit_v1(
+            tuple(_envelope(_payload()) for _ in authority.rows),
+            authority,
+            wire,
+            _SemanticRecognizer(wire),
+        )
+    assert calls == Counter(
+        {
+            "construct": 1,
+            "register": 1,
+            "pending_validate": 1,
+            "valid_content_mutation": 1,
+        }
+    )
+    assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
+    assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
+
+
+@pytest.mark.parametrize("branch", ("sufficient", "insufficient"))
+def test_pending_commit_rejects_registered_id_drift_after_successful_replay(
+    monkeypatch: pytest.MonkeyPatch,
+    branch: str,
+):
+    real_pending_validate = (
+        auditor_module._validate_pending_formal_covert_audit_receipt_v1
+    )
+    calls: Counter[str] = Counter()
+
+    def mutate_registered_id_after_replay(**values: object) -> str:
+        validated_id = real_pending_validate(**values)
+        receipt = values["receipt"]
+        entry = auditor_module._IN_PROCESS_EXECUTED_RECEIPTS[id(receipt)]
+        assert type(entry) is auditor_module._InProcessReceiptRegistryEntryV1
+        assert entry.state is auditor_module._InProcessReceiptRegistryStateV1.PENDING
+        replacement = validated_id[:-1] + (
+            "0" if validated_id[-1] != "0" else "1"
+        )
+        assert replacement != validated_id
+        entry.receipt_id = replacement
+        calls["registered_id_mutation"] += 1
+        return validated_id
+
+    monkeypatch.setattr(
+        auditor_module,
+        "_validate_pending_formal_covert_audit_receipt_v1",
+        mutate_registered_id_after_replay,
+    )
+    with pytest.raises(ValueError, match="locked commit identity/evidence drift"):
+        _run_issuance_branch(branch)
+    assert calls == Counter({"registered_id_mutation": 1})
+    assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
+    assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
+
+
+@pytest.mark.parametrize("branch", ("sufficient", "insufficient"))
+def test_pending_commit_rejects_candidate_id_only_drift_after_successful_replay(
+    monkeypatch: pytest.MonkeyPatch,
+    branch: str,
+):
+    real_pending_validate = (
+        auditor_module._validate_pending_formal_covert_audit_receipt_v1
+    )
+    real_entry_setattr = auditor_module._InProcessReceiptRegistryEntryV1.__setattr__
+    calls: Counter[str] = Counter()
+
+    def mutate_candidate_id_only_after_replay(**values: object) -> str:
+        validated_id = real_pending_validate(**values)
+        receipt = values["receipt"]
+        entry = auditor_module._IN_PROCESS_EXECUTED_RECEIPTS[id(receipt)]
+        assert type(entry) is auditor_module._InProcessReceiptRegistryEntryV1
+        assert entry.state is auditor_module._InProcessReceiptRegistryStateV1.PENDING
+        assert entry.receipt_id == validated_id == receipt.receipt_id
+        replacement = validated_id[:-1] + (
+            "0" if validated_id[-1] != "0" else "1"
+        )
+        assert replacement.startswith("phase2b_formal_covert_audit_transcript_")
+        assert replacement != validated_id
+        object.__setattr__(receipt, "receipt_id", replacement)
+        assert entry.receipt_id == validated_id
+        calls["candidate_id_only_mutation"] += 1
+        return validated_id
+
+    def reject_any_issued_flip(entry: object, name: str, value: object) -> None:
+        if (
+            name == "state"
+            and getattr(entry, "state", None)
+            is auditor_module._InProcessReceiptRegistryStateV1.PENDING
+            and value is auditor_module._InProcessReceiptRegistryStateV1.ISSUED
+        ):
+            calls["erroneous_issued_flip"] += 1
+        real_entry_setattr(entry, name, value)
+
+    monkeypatch.setattr(
+        auditor_module,
+        "_validate_pending_formal_covert_audit_receipt_v1",
+        mutate_candidate_id_only_after_replay,
+    )
+    monkeypatch.setattr(
+        auditor_module._InProcessReceiptRegistryEntryV1,
+        "__setattr__",
+        reject_any_issued_flip,
+    )
+    with pytest.raises(ValueError, match="locked commit identity/evidence drift"):
+        _run_issuance_branch(branch)
+    assert calls == Counter({"candidate_id_only_mutation": 1})
+    assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
+    assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
+
+
+@pytest.mark.parametrize("branch", ("sufficient", "insufficient"))
+def test_branch_neutral_issuance_evidence_valid_mutation_changes_receipt_id(
+    monkeypatch: pytest.MonkeyPatch,
+    branch: str,
+):
+    real_pending_validate = (
+        auditor_module._validate_pending_formal_covert_audit_receipt_v1
+    )
+    calls: Counter[str] = Counter()
+
+    def mutate_bound_deadline_before_replay(**values: object) -> str:
+        receipt = values["receipt"]
+        entry = auditor_module._IN_PROCESS_EXECUTED_RECEIPTS[id(receipt)]
+        assert type(entry) is auditor_module._InProcessReceiptRegistryEntryV1
+        assert entry.state is auditor_module._InProcessReceiptRegistryStateV1.PENDING
+        evidence = receipt.receipt_issuance_runtime_evidence
+        object.__setattr__(
+            evidence,
+            "absolute_deadline_monotonic_nanoseconds",
+            evidence.absolute_deadline_monotonic_nanoseconds + 1,
+        )
+        calls["valid_issuance_evidence_mutation"] += 1
+        return real_pending_validate(**values)
+
+    monkeypatch.setattr(
+        auditor_module,
+        "_validate_pending_formal_covert_audit_receipt_v1",
+        mutate_bound_deadline_before_replay,
+    )
+    with pytest.raises(ValueError, match="content changed after construction"):
+        _run_issuance_branch(branch)
+    assert calls == Counter({"valid_issuance_evidence_mutation": 1})
+    assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
+    assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
+
+
+@pytest.mark.parametrize("branch", ("sufficient", "insufficient"))
+@pytest.mark.parametrize("failure_boundary", ("pending_replay", "issued_flip"))
+def test_pending_issuance_baseexception_boundaries_roll_back_exact_entry(
+    monkeypatch: pytest.MonkeyPatch,
+    branch: str,
+    failure_boundary: str,
+):
+    real_pending_validate = (
+        auditor_module._validate_pending_formal_covert_audit_receipt_v1
+    )
+    real_entry_setattr = auditor_module._InProcessReceiptRegistryEntryV1.__setattr__
+    calls: Counter[str] = Counter()
+    marker = f"injected SystemExit at {branch} {failure_boundary}"
+
+    def exit_pending_replay(**values: object) -> str:
+        receipt = values["receipt"]
+        entry = auditor_module._IN_PROCESS_EXECUTED_RECEIPTS[id(receipt)]
+        assert type(entry) is auditor_module._InProcessReceiptRegistryEntryV1
+        assert entry.state is auditor_module._InProcessReceiptRegistryStateV1.PENDING
+        calls["pending_replay_exit"] += 1
+        raise SystemExit(marker)
+
+    def exit_after_issued_flip(
+        entry: object,
+        name: str,
+        value: object,
+    ) -> None:
+        transitioning = (
+            name == "state"
+            and getattr(entry, "state", None)
+            is auditor_module._InProcessReceiptRegistryStateV1.PENDING
+            and value is auditor_module._InProcessReceiptRegistryStateV1.ISSUED
+        )
+        real_entry_setattr(entry, name, value)
+        if transitioning:
+            calls["issued_flip_exit"] += 1
+            raise SystemExit(marker)
+
+    if failure_boundary == "pending_replay":
+        monkeypatch.setattr(
+            auditor_module,
+            "_validate_pending_formal_covert_audit_receipt_v1",
+            exit_pending_replay,
+        )
+        expected_calls = Counter({"pending_replay_exit": 1})
+    else:
+        monkeypatch.setattr(
+            auditor_module,
+            "_validate_pending_formal_covert_audit_receipt_v1",
+            real_pending_validate,
+        )
+        monkeypatch.setattr(
+            auditor_module._InProcessReceiptRegistryEntryV1,
+            "__setattr__",
+            exit_after_issued_flip,
+        )
+        expected_calls = Counter({"issued_flip_exit": 1})
+    with pytest.raises(SystemExit, match=marker):
+        _run_issuance_branch(branch)
+    assert calls == expected_calls
+    assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
+    assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
+
+
+def test_cleanup_faults_preserve_primary_and_outer_cancel_is_always_attempted(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    primary = KeyboardInterrupt("primary pending replay interrupt")
+    calls: Counter[str] = Counter()
+
+    def raise_primary(**values: object) -> str:
+        receipt = values["receipt"]
+        entry = auditor_module._IN_PROCESS_EXECUTED_RECEIPTS[id(receipt)]
+        assert type(entry) is auditor_module._InProcessReceiptRegistryEntryV1
+        assert entry.state is auditor_module._InProcessReceiptRegistryStateV1.PENDING
+        calls["primary"] += 1
+        raise primary
+
+    def fail_direct_rollback(*args: object, **kwargs: object) -> None:
+        calls["direct_rollback_failure"] += 1
+        raise SystemExit("injected direct rollback SystemExit")
+
+    def fail_outer_cancel(*args: object, **kwargs: object) -> None:
+        calls["outer_cancel_failure"] += 1
+        raise SystemExit("injected outer cancel SystemExit")
+
+    monkeypatch.setattr(
+        auditor_module,
+        "_validate_pending_formal_covert_audit_receipt_v1",
+        raise_primary,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_rollback_pending_in_process_receipt_issuance",
+        fail_direct_rollback,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_cancel_in_process_receipt_reservation",
+        fail_outer_cancel,
+    )
+    with pytest.raises(KeyboardInterrupt) as caught:
+        _run_issuance_branch("insufficient")
+    assert caught.value is primary
+    assert calls == Counter(
+        {
+            "primary": 1,
+            "direct_rollback_failure": 1,
+            "outer_cancel_failure": 1,
+        }
+    )
+    notes = tuple(getattr(primary, "__notes__", ()))
+    assert any("direct receipt rollback cleanup failed" in note for note in notes)
+    assert any("reservation cancellation cleanup failed" in note for note in notes)
+    assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
+    assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
+
+
+def test_unhanded_issued_receipt_keyboardinterrupt_is_rolled_back(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    real_inner = auditor_module._run_formal_covert_audit_with_reservation_v1
+    primary = KeyboardInterrupt("injected issued-before-handoff interrupt")
+    unhanded: list[object] = []
+
+    def interrupt_after_inner_issuance(*args: object, **kwargs: object):
+        receipt = real_inner(*args, **kwargs)
+        entry = auditor_module._IN_PROCESS_EXECUTED_RECEIPTS[id(receipt)]
+        assert type(entry) is auditor_module._InProcessReceiptRegistryEntryV1
+        assert entry.state is auditor_module._InProcessReceiptRegistryStateV1.ISSUED
+        unhanded.append(receipt)
+        raise primary
+
+    monkeypatch.setattr(
+        auditor_module,
+        "_run_formal_covert_audit_with_reservation_v1",
+        interrupt_after_inner_issuance,
+    )
+    with pytest.raises(KeyboardInterrupt) as caught:
+        _run_issuance_branch("insufficient")
+    assert caught.value is primary
+    assert len(unhanded) == 1
+    assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
+    assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
+
+
+def test_release_deletes_registry_authority_before_backlink_interrupt(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    receipt = _run_issuance_branch("insufficient")
+    identity = id(receipt)
+    entry = auditor_module._IN_PROCESS_EXECUTED_RECEIPTS[identity]
+    reservation = entry.reservation
+    real_reservation_setattr = (
+        auditor_module._InProcessReceiptReservationV1.__setattr__
+    )
+    primary = KeyboardInterrupt("injected release backlink interrupt")
+    calls: Counter[str] = Counter()
+
+    def interrupt_backlink_clear(
+        slot: object,
+        name: str,
+        value: object,
+    ) -> None:
+        if (
+            slot is reservation
+            and name == "entry_identity"
+            and value is None
+            and getattr(slot, name, None) == identity
+        ):
+            calls["backlink_interrupt"] += 1
+            raise primary
+        real_reservation_setattr(slot, name, value)
+
+    monkeypatch.setattr(
+        auditor_module._InProcessReceiptReservationV1,
+        "__setattr__",
+        interrupt_backlink_clear,
+    )
+    with pytest.raises(KeyboardInterrupt) as caught:
+        auditor_module.release_formal_covert_audit_receipt_v1(receipt)
+    assert caught.value is primary
+    assert calls == Counter({"backlink_interrupt": 1})
+    assert identity not in auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
+    assert reservation.entry_identity == identity
+    assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
+    fresh = tuple(
+        auditor_module._reserve_in_process_receipt_slot()
+        for _ in range(auditor_module.MAXIMUM_IN_PROCESS_ISSUED_RECEIPTS)
+    )
+    with pytest.raises(
+        FormalCovertAuditRejectionV1,
+        match="FAIL_RECEIPT_REGISTRY_CAPACITY",
+    ):
+        auditor_module._reserve_in_process_receipt_slot()
+    for slot in fresh:
+        auditor_module._cancel_in_process_receipt_reservation(slot)
+    assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
 
 
 def test_exact_five_target_holm_and_same_feature_e1_conjunction_kat():
@@ -944,12 +2481,42 @@ def test_known_null_passes_executes_exact_81_runs_and_proves_full_manifest():
         is False
     )
     assert receipt.statistics_runtime_evidence.external_supervisor_required is True
-    assert 1 <= (
-        receipt.statistics_runtime_evidence.receipt_finalization_rss_stabilization_passes
-    ) <= 3
-    assert receipt.statistics_runtime_evidence.parent_peak_rss_bytes + sum(
-        receipt.statistics_runtime_evidence.worker_peak_rss_bytes
-    ) == receipt.statistics_runtime_evidence.conservative_parent_plus_worker_peak_sum_bytes
+    worker_peak_sum = sum(receipt.statistics_runtime_evidence.worker_peak_rss_bytes)
+    assert (
+        receipt.statistics_runtime_evidence.parent_peak_rss_bytes_before_receipt_finalization
+        <= receipt.statistics_runtime_evidence.parent_rss_charge_ceiling_bytes
+    )
+    assert receipt.statistics_runtime_evidence.parent_rss_charge_ceiling_bytes == (
+        auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES - worker_peak_sum
+    )
+    assert receipt.statistics_runtime_evidence.conservative_parent_plus_worker_peak_sum_bytes == (
+        receipt.statistics_runtime_evidence.parent_rss_charge_ceiling_bytes
+        + worker_peak_sum
+    ) == auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+    assert (
+        receipt.statistics_runtime_evidence.receipt_finalization_complete_pending_validation_count
+        == 1
+    )
+    assert (
+        receipt.statistics_runtime_evidence.receipt_finalization_parent_peak_within_charge_ceiling
+        is True
+    )
+    issuance = receipt.receipt_issuance_runtime_evidence
+    assert issuance.absolute_deadline_kind == "STATISTICS"
+    assert issuance.worker_peak_rss_bytes_sum == worker_peak_sum
+    assert issuance.parent_peak_rss_bytes_before_receipt_finalization == (
+        receipt.statistics_runtime_evidence.parent_peak_rss_bytes_before_receipt_finalization
+    )
+    assert issuance.parent_rss_charge_ceiling_bytes == (
+        receipt.statistics_runtime_evidence.parent_rss_charge_ceiling_bytes
+    )
+    assert issuance.conservative_parent_plus_worker_peak_sum_bytes == (
+        auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+    )
+    assert issuance.receipt_finalization_complete_pending_validation_count == 1
+    assert issuance.receipt_finalization_locked_deadline_check_count == 1
+    assert issuance.receipt_finalization_locked_deadline_within_absolute_limit is True
+    assert issuance.receipt_finalization_parent_peak_within_charge_ceiling is True
     assert not receipt.pairwise_holm_decision_eligible
     assert not receipt.pairwise_holm_resolution_capable
     assert receipt.positive_decision_claim == POSITIVE_DECISION_CLAIM
@@ -1563,25 +3130,150 @@ def test_eligibility_binding_leak_passes_quota_but_fails_global_statistics():
     )
 
 
-def test_insufficient_private_authority_rejects_atomically_without_recognizer_call():
+def test_insufficient_private_authority_rejects_atomically_without_recognizer_call(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    baseline_peak = auditor_module._linux_peak_rss_bytes()
     wire = _SyntheticWire()
     recognizer = _SemanticRecognizer(wire)
-    labels = tuple(
-        FormalAuthorityLabelInputV1(
-            index,
-            "F01",
-            "binding-a",
-            "root",
-            AnswerabilityLabelV1.ANSWERABLE,
-            "joint-a",
-            "main",
+    feature_gate_calls = 0
+    real_feature_gate = auditor_module._preflight_feature_extraction_memory
+    real_construct = auditor_module._construct_formal_covert_audit_receipt_v1
+    real_register = (
+        auditor_module._register_preconstructed_formal_covert_audit_receipt_v1
+    )
+    real_pending_validate = (
+        auditor_module._validate_pending_formal_covert_audit_receipt_v1
+    )
+    real_partition_deadline = (
+        auditor_module._remaining_partition_preparation_deadline_seconds
+    )
+    real_receipt_post_init = auditor_module.FormalCovertAuditReceiptV1.__post_init__
+    real_feature_projection = auditor_module._target_feature_metric_projection
+    real_family_projection = auditor_module._target_family_metric_projection
+    real_entry_setattr = auditor_module._InProcessReceiptRegistryEntryV1.__setattr__
+    issuance_events: list[str] = []
+    issuance_calls: Counter[str] = Counter()
+    peak_samples: list[int] = []
+
+    def observe_feature_gate(*args: object, **kwargs: object) -> object:
+        nonlocal feature_gate_calls
+        feature_gate_calls += 1
+        return real_feature_gate(*args, **kwargs)
+
+    def counted_construct(**values: object):
+        issuance_events.append("construct")
+        issuance_calls["construct"] += 1
+        return real_construct(**values)
+
+    def counted_register(**values: object):
+        receipt = real_register(**values)
+        issuance_events.append("pending-register")
+        issuance_calls["register"] += 1
+        return receipt
+
+    def counted_pending_validate(**values: object):
+        issuance_events.append("pending-validate")
+        issuance_calls["pending_validate"] += 1
+        return real_pending_validate(**values)
+
+    def rising_peak() -> int:
+        value = baseline_peak + (len(peak_samples) + 1) * 4_096
+        peak_samples.append(value)
+        issuance_events.append(
+            "final-pre-sample" if len(peak_samples) == 1 else "final-post-sample"
         )
-        for index in range(4)
+        return value
+
+    def tracked_partition_deadline(deadline_ns: int) -> float:
+        if auditor_module._IN_PROCESS_EXECUTED_RECEIPTS:
+            entries = tuple(
+                auditor_module._IN_PROCESS_EXECUTED_RECEIPTS.values()
+            )
+            assert len(entries) == 1
+            assert (
+                entries[0].state
+                is auditor_module._InProcessReceiptRegistryStateV1.PENDING
+            )
+            issuance_events.extend(
+                ("locked-exact-recheck", "locked-final-deadline")
+            )
+            issuance_calls["locked_deadline"] += 1
+        return real_partition_deadline(deadline_ns)
+
+    def counted_receipt_post_init(receipt: object) -> None:
+        issuance_calls["receipt_post_init"] += 1
+        issuance_events.append(
+            f"receipt-post-init#{issuance_calls['receipt_post_init']}"
+        )
+        return real_receipt_post_init(receipt)
+
+    def counted_feature_projection(value: object):
+        issuance_calls["feature_projection"] += 1
+        return real_feature_projection(value)
+
+    def counted_family_projection(value: object):
+        issuance_calls["family_projection"] += 1
+        return real_family_projection(value)
+
+    def tracked_entry_setattr(entry: object, name: str, value: object) -> None:
+        if (
+            name == "state"
+            and getattr(entry, "state", None)
+            is auditor_module._InProcessReceiptRegistryStateV1.PENDING
+            and value is auditor_module._InProcessReceiptRegistryStateV1.ISSUED
+        ):
+            issuance_events.append("commit")
+            issuance_calls["commit"] += 1
+        return real_entry_setattr(entry, name, value)
+
+    monkeypatch.setattr(
+        auditor_module,
+        "_preflight_feature_extraction_memory",
+        observe_feature_gate,
     )
-    authority = issue_development_formal_audit_authority_v1(
-        labels,
-        tuple(_source_case_commitment(index) for index in range(len(labels))),
+    monkeypatch.setattr(
+        auditor_module,
+        "_construct_formal_covert_audit_receipt_v1",
+        counted_construct,
     )
+    monkeypatch.setattr(
+        auditor_module,
+        "_register_preconstructed_formal_covert_audit_receipt_v1",
+        counted_register,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_validate_pending_formal_covert_audit_receipt_v1",
+        counted_pending_validate,
+    )
+    monkeypatch.setattr(auditor_module, "_linux_peak_rss_bytes", rising_peak)
+    monkeypatch.setattr(
+        auditor_module,
+        "_remaining_partition_preparation_deadline_seconds",
+        tracked_partition_deadline,
+    )
+    monkeypatch.setattr(
+        auditor_module.FormalCovertAuditReceiptV1,
+        "__post_init__",
+        counted_receipt_post_init,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_target_feature_metric_projection",
+        counted_feature_projection,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_target_family_metric_projection",
+        counted_family_projection,
+    )
+    monkeypatch.setattr(
+        auditor_module._InProcessReceiptRegistryEntryV1,
+        "__setattr__",
+        tracked_entry_setattr,
+    )
+    authority = _insufficient_authority()
     rows = authority.rows
     receipt = run_formal_covert_audit_v1(
         tuple(_envelope(_payload()) for _ in rows),
@@ -1595,6 +3287,206 @@ def test_insufficient_private_authority_rejects_atomically_without_recognizer_ca
     assert receipt.permutation_schedule_root is None
     assert receipt.invariant_run_count == 0
     assert recognizer.calls == 0
+    assert feature_gate_calls == 2
+    assert issuance_events == [
+        "final-pre-sample",
+        "construct",
+        "receipt-post-init#1",
+        "pending-register",
+        "pending-validate",
+        "receipt-post-init#2",
+        "locked-exact-recheck",
+        "locked-final-deadline",
+        "final-post-sample",
+        "commit",
+    ]
+    assert issuance_calls == Counter(
+        {
+            "construct": 1,
+            "register": 1,
+            "pending_validate": 1,
+            "receipt_post_init": 2,
+            "locked_deadline": 1,
+            "commit": 1,
+        }
+    )
+    issuance = receipt.receipt_issuance_runtime_evidence
+    assert peak_samples == sorted(peak_samples)
+    assert len(peak_samples) == 2
+    assert issuance.absolute_deadline_kind == "PARTITION_PREPARATION"
+    assert issuance.absolute_deadline_timeout_seconds == (
+        auditor_module.PARTITION_PREPARATION_TIMEOUT_SECONDS
+    )
+    assert issuance.worker_peak_rss_bytes_sum == 0
+    assert issuance.parent_peak_rss_bytes_before_receipt_finalization == (
+        peak_samples[0]
+    )
+    assert issuance.parent_rss_charge_ceiling_bytes == (
+        auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+    )
+    assert issuance.conservative_parent_plus_worker_peak_sum_bytes == (
+        auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+    )
+    assert issuance.receipt_finalization_complete_pending_validation_count == 1
+    assert issuance.receipt_finalization_locked_deadline_check_count == 1
+    assert issuance.receipt_finalization_locked_deadline_within_absolute_limit is True
+    assert issuance.receipt_finalization_parent_peak_within_charge_ceiling is True
+    assert peak_samples[1] <= issuance.parent_rss_charge_ceiling_bytes
+    entry = auditor_module._IN_PROCESS_EXECUTED_RECEIPTS[id(receipt)]
+    assert type(entry) is auditor_module._InProcessReceiptRegistryEntryV1
+    assert entry.state is auditor_module._InProcessReceiptRegistryStateV1.ISSUED
+    assert validate_formal_covert_audit_receipt_v1(receipt) == receipt.receipt_id
+    assert issuance_calls["receipt_post_init"] == 3
+    assert issuance_calls["feature_projection"] == 0
+    assert issuance_calls["family_projection"] == 0
+
+
+@pytest.mark.parametrize(
+    ("breach_stage", "expected_message", "expected_calls"),
+    (
+        (
+            "pre",
+            "insufficient pre-finalization parent peak exceeds its RSS charge ceiling",
+            Counter({"peak": 1}),
+        ),
+        (
+            "post",
+            "post-validation parent peak exceeds its RSS charge ceiling",
+            Counter(
+                {
+                    "peak": 2,
+                    "construct": 1,
+                    "register": 1,
+                    "pending_validate": 1,
+                }
+            ),
+        ),
+    ),
+)
+def test_insufficient_issuance_pre_and_post_ceiling_boundaries_are_atomic(
+    monkeypatch: pytest.MonkeyPatch,
+    breach_stage: str,
+    expected_message: str,
+    expected_calls: Counter[str],
+):
+    real_construct = auditor_module._construct_formal_covert_audit_receipt_v1
+    real_register = (
+        auditor_module._register_preconstructed_formal_covert_audit_receipt_v1
+    )
+    real_pending_validate = (
+        auditor_module._validate_pending_formal_covert_audit_receipt_v1
+    )
+    calls: Counter[str] = Counter()
+
+    def staged_peak() -> int:
+        calls["peak"] += 1
+        if breach_stage == "pre" or calls["peak"] == 2:
+            return auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES + 1
+        return 1
+
+    def counted_construct(**values: object):
+        calls["construct"] += 1
+        return real_construct(**values)
+
+    def counted_register(**values: object):
+        calls["register"] += 1
+        return real_register(**values)
+
+    def counted_pending_validate(**values: object):
+        calls["pending_validate"] += 1
+        return real_pending_validate(**values)
+
+    monkeypatch.setattr(auditor_module, "_linux_peak_rss_bytes", staged_peak)
+    monkeypatch.setattr(
+        auditor_module,
+        "_construct_formal_covert_audit_receipt_v1",
+        counted_construct,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_register_preconstructed_formal_covert_audit_receipt_v1",
+        counted_register,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_validate_pending_formal_covert_audit_receipt_v1",
+        counted_pending_validate,
+    )
+    with pytest.raises(FormalCovertAuditRejectionV1, match=expected_message):
+        _run_issuance_branch("insufficient")
+    assert calls == expected_calls
+    assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
+    assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
+
+
+def test_post_invariance_preparation_failure_issues_no_receipt_or_artifact(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    authority = _authority()
+    wire = _SyntheticWire()
+    recognizer = _SemanticRecognizer(wire)
+    events: list[str] = []
+    real_feature_gate = auditor_module._preflight_feature_extraction_memory
+
+    def observed_feature_gate(*args: object, **kwargs: object) -> object:
+        events.append("feature_gate")
+        return real_feature_gate(*args, **kwargs)
+
+    def completed_invariance(*_args: object, **_kwargs: object) -> tuple[object, object]:
+        # This token represents a successfully completed 81-call child phase.
+        # Later preparation failure cannot retroactively claim zero callbacks.
+        assert events == ["feature_gate"]
+        events.append("invariance_completed")
+        return object(), object()
+
+    def fail_feature_preparation(*_args: object, **_kwargs: object) -> object:
+        assert events == [
+            "feature_gate",
+            "invariance_completed",
+            "feature_gate",
+        ]
+        events.append("feature_extraction")
+        auditor_module._reject(
+            "FAIL_INJECTED_POST_INVARIANCE_PREPARATION",
+            "injected feature-preparation failure after invariant execution",
+        )
+
+    monkeypatch.setattr(auditor_module, "_run_invariance", completed_invariance)
+    monkeypatch.setattr(
+        auditor_module,
+        "_preflight_feature_extraction_memory",
+        observed_feature_gate,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_extract_feature_columns",
+        fail_feature_preparation,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_acquire_private_artifact_directory",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("post-invariance preparation must not acquire an artifact dir")
+        ),
+    )
+    with pytest.raises(
+        FormalCovertAuditRejectionV1,
+        match="FAIL_INJECTED_POST_INVARIANCE_PREPARATION",
+    ):
+        run_formal_covert_audit_v1(
+            tuple(_envelope(_payload()) for _ in authority.rows),
+            authority,
+            wire,
+            recognizer,
+        )
+    assert events == [
+        "feature_gate",
+        "invariance_completed",
+        "feature_gate",
+        "feature_extraction",
+    ]
+    assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
+    assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
 
 
 def test_forbidden_public_field_and_caller_mutation_fail_closed():
@@ -2433,12 +4325,104 @@ def test_wire_v3_rich32_executes_exact_distinct_32_32_16_schedules(
     ) == 16
 
 
+def test_raw_statistics_workers_require_plan_and_evidence_before_any_fork(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    fork_calls = 0
+
+    def forbidden_fork() -> int:
+        nonlocal fork_calls
+        fork_calls += 1
+        raise AssertionError("missing final-preflight inputs reached fork")
+
+    monkeypatch.setattr(auditor_module.os, "fork", forbidden_fork)
+    partition = auditor_module._partition(("a", "b", "a", "b"))
+    _, masks = auditor_module._label_masks(("x", "y", "x", "y"))
+    with pytest.raises(TypeError, match="preflight_plan"):
+        auditor_module._run_raw_statistics_workers(
+            (partition,),
+            tuple(masks for _ in auditor_module.TARGETS),
+            tuple((masks,) * 10_000 for _ in auditor_module.TARGETS),
+            "/unreached",
+            -1,
+            1_048_576,
+            1,
+            time.monotonic_ns() + 10_000_000_000,
+        )
+    assert fork_calls == 0
+
+
 def test_raw_statistics_workers_emit_five_closed_artifacts_and_reap_failures(
     monkeypatch: pytest.MonkeyPatch,
 ):
     partition = auditor_module._partition(("a", "b", "a", "b"))
     _, masks = auditor_module._label_masks(("x", "y", "x", "y"))
     permutation_masks = tuple(masks for _ in range(10_000))
+    with monkeypatch.context() as local:
+        local.setattr(auditor_module, "_linux_effective_cpu_capacity", lambda: 1)
+        projection, deadline_ns, invariant_plan = _phase_plan_test_inputs(
+            4,
+            (partition,),
+        )
+        one_worker_plan = auditor_module._resource_plan(
+            4,
+            (partition,),
+            (2, 2, 2, 2, 2),
+            adapter_retained_graph_bytes_bound=2 * 1_048_576,
+            partition_projection=projection,
+            partition_preparation_deadline_ns=deadline_ns,
+            invariance_plan=invariant_plan,
+        )
+    parallel_partitions = tuple(
+        auditor_module._Partition(
+            masks=(index + 1, ((1 << 32) - 1) ^ (index + 1)),
+            counts=(16, 16),
+        )
+        for index in range(100)
+    )
+    with monkeypatch.context() as local:
+        local.setattr(auditor_module, "_linux_effective_cpu_capacity", lambda: 32)
+        projection, deadline_ns, invariant_plan = _phase_plan_test_inputs(
+            32,
+            parallel_partitions,
+        )
+        five_worker_plan = auditor_module._resource_plan(
+            32,
+            parallel_partitions,
+            (256, 256, 256, 256, 256),
+            adapter_retained_graph_bytes_bound=2 * 1_048_576,
+            partition_projection=projection,
+            partition_preparation_deadline_ns=deadline_ns,
+            invariance_plan=invariant_plan,
+        )
+    assert one_worker_plan.maximum_parallel_workers == 1
+    assert five_worker_plan.maximum_parallel_workers == 5
+    plans = {1: one_worker_plan, 5: five_worker_plan}
+    preflight_slots: list[
+        tuple[int, object, list[object | None]]
+    ] = []
+
+    def run_raw(
+        directory: str,
+        directory_fd: int,
+        maximum_workers: int,
+        deadline_ns: int,
+    ) -> tuple[tuple[int, int, int], ...]:
+        slot: list[object | None] = [None]
+        plan = plans[maximum_workers]
+        preflight_slots.append((maximum_workers, plan, slot))
+        return auditor_module._run_raw_statistics_workers(
+            (partition,),
+            tuple(masks for _ in auditor_module.TARGETS),
+            tuple(permutation_masks for _ in auditor_module.TARGETS),
+            directory,
+            directory_fd,
+            1_048_576,
+            maximum_workers,
+            deadline_ns,
+            preflight_plan=plan,
+            preflight_evidence_slot=slot,
+        )
 
     def workspace(label: str) -> tuple[str, int, os.stat_result]:
         directory = tempfile.mkdtemp(
@@ -2453,13 +4437,9 @@ def test_raw_statistics_workers_emit_five_closed_artifacts_and_reap_failures(
 
     directory, directory_fd, directory_stat = workspace("success")
     try:
-        executions = auditor_module._run_raw_statistics_workers(
-            (partition,),
-            tuple(masks for _ in auditor_module.TARGETS),
-            tuple(permutation_masks for _ in auditor_module.TARGETS),
+        executions = run_raw(
             directory,
             directory_fd,
-            1_048_576,
             1,
             time.monotonic_ns() + 10_000_000_000,
         )
@@ -2494,13 +4474,9 @@ def test_raw_statistics_workers_emit_five_closed_artifacts_and_reap_failures(
                 FormalCovertAuditRejectionV1,
                 match="FAIL_STATISTICAL_FORK_SAFETY",
             ):
-                auditor_module._run_raw_statistics_workers(
-                    (partition,),
-                    tuple(masks for _ in auditor_module.TARGETS),
-                    tuple(permutation_masks for _ in auditor_module.TARGETS),
+                run_raw(
                     directory,
                     directory_fd,
-                    1_048_576,
                     1,
                     time.monotonic_ns() + 10_000_000_000,
                 )
@@ -2520,13 +4496,9 @@ def test_raw_statistics_workers_emit_five_closed_artifacts_and_reap_failures(
                 FormalCovertAuditRejectionV1,
                 match="FAIL_STATISTICAL_FORK_SAFETY",
             ):
-                auditor_module._run_raw_statistics_workers(
-                    (partition,),
-                    tuple(masks for _ in auditor_module.TARGETS),
-                    tuple(permutation_masks for _ in auditor_module.TARGETS),
+                run_raw(
                     directory,
                     directory_fd,
-                    1_048_576,
                     1,
                     time.monotonic_ns() + 10_000_000_000,
                 )
@@ -2550,13 +4522,9 @@ def test_raw_statistics_workers_emit_five_closed_artifacts_and_reap_failures(
     signal.signal(signal.SIGCHLD, observe_sigchld)
     directory, directory_fd, directory_stat = workspace("sigchld-owner")
     try:
-        auditor_module._run_raw_statistics_workers(
-            (partition,),
-            tuple(masks for _ in auditor_module.TARGETS),
-            tuple(permutation_masks for _ in auditor_module.TARGETS),
+        run_raw(
             directory,
             directory_fd,
-            1_048_576,
             1,
             time.monotonic_ns() + 10_000_000_000,
         )
@@ -2573,13 +4541,9 @@ def test_raw_statistics_workers_emit_five_closed_artifacts_and_reap_failures(
 
     directory, directory_fd, directory_stat = workspace("five-worker-success")
     try:
-        executions = auditor_module._run_raw_statistics_workers(
-            (partition,),
-            tuple(masks for _ in auditor_module.TARGETS),
-            tuple(permutation_masks for _ in auditor_module.TARGETS),
+        executions = run_raw(
             directory,
             directory_fd,
-            1_048_576,
             5,
             time.monotonic_ns() + 10_000_000_000,
         )
@@ -2620,13 +4584,9 @@ def test_raw_statistics_workers_emit_five_closed_artifacts_and_reap_failures(
             local.setattr(auditor_module, "_evaluate_target_statistics", hang)
             local.setattr(auditor_module.os, "fork", fail_third_fork)
             with pytest.raises(OSError, match="third-fork"):
-                auditor_module._run_raw_statistics_workers(
-                    (partition,),
-                    tuple(masks for _ in auditor_module.TARGETS),
-                    tuple(permutation_masks for _ in auditor_module.TARGETS),
+                run_raw(
                     directory,
                     directory_fd,
-                    1_048_576,
                     5,
                     time.monotonic_ns() + 5_000_000_000,
                 )
@@ -2662,13 +4622,9 @@ def test_raw_statistics_workers_emit_five_closed_artifacts_and_reap_failures(
             local.setattr(auditor_module, "_evaluate_target_statistics", hang)
             local.setattr(auditor_module.os, "pidfd_open", fail_second_pidfd)
             with pytest.raises(OSError, match="second-pidfd"):
-                auditor_module._run_raw_statistics_workers(
-                    (partition,),
-                    tuple(masks for _ in auditor_module.TARGETS),
-                    tuple(permutation_masks for _ in auditor_module.TARGETS),
+                run_raw(
                     directory,
                     directory_fd,
-                    1_048_576,
                     5,
                     time.monotonic_ns() + 5_000_000_000,
                 )
@@ -2706,13 +4662,9 @@ def test_raw_statistics_workers_emit_five_closed_artifacts_and_reap_failures(
     directory, directory_fd, directory_stat = workspace("baseexception")
     try:
         with pytest.raises(RuntimeError, match="exited without all assigned"):
-            auditor_module._run_raw_statistics_workers(
-                (partition,),
-                tuple(masks for _ in auditor_module.TARGETS),
-                tuple(permutation_masks for _ in auditor_module.TARGETS),
+            run_raw(
                 directory,
                 directory_fd,
-                1_048_576,
                 1,
                 time.monotonic_ns() + 5_000_000_000,
             )
@@ -2737,13 +4689,9 @@ def test_raw_statistics_workers_emit_five_closed_artifacts_and_reap_failures(
             FormalCovertAuditRejectionV1,
             match="FAIL_INVARIANCE_RUNTIME",
         ):
-            auditor_module._run_raw_statistics_workers(
-                (partition,),
-                tuple(masks for _ in auditor_module.TARGETS),
-                tuple(permutation_masks for _ in auditor_module.TARGETS),
+            run_raw(
                 directory,
                 directory_fd,
-                1_048_576,
                 1,
                 time.monotonic_ns() + 50_000_000,
             )
@@ -2759,6 +4707,21 @@ def test_raw_statistics_workers_emit_five_closed_artifacts_and_reap_failures(
     assert captured_pids and all(
         not Path(f"/proc/{pid}").exists() for pid in captured_pids
     )
+    assert len(preflight_slots) == 9
+    assert {
+        index
+        for index, (_workers, _plan, slot) in enumerate(preflight_slots)
+        if slot[0] is None
+    } == {1, 2}
+    for _workers, plan, slot in preflight_slots:
+        phase_host = slot[0]
+        if phase_host is None:
+            continue
+        assert type(phase_host) is auditor_module._PhaseHostMemoryPreflightV1
+        auditor_module._validate_statistics_phase_preflight_against_resource_plan(
+            plan,
+            phase_host.resource_preflight,
+        )
 
 
 def test_raw_invariance_wait4_nonzero_noartifact_timeout_and_descendant_reap(
@@ -3165,19 +5128,23 @@ def test_resource_plan_is_b_plus_one_cgroup_aware_and_worker_artifact_bounded(
     assert auditor_module._linux_effective_cpu_capacity() == 1
 
     partition = auditor_module._partition(("a", "b", "a", "b"))
+    monkeypatch.setattr(
+        auditor_module,
+        "_linux_current_rss_bytes",
+        lambda: 64 * 1_048_576,
+    )
+    projection, deadline_ns, invariant_plan = _phase_plan_test_inputs(
+        4,
+        (partition,),
+    )
     plan = auditor_module._resource_plan(
         4,
         (partition,),
         (2, 2, 2, 2, 2),
         adapter_retained_graph_bytes_bound=2 * 1_048_576,
-        parent_current_rss_bytes_at_plan=(
-            auditor_module._linux_current_rss_bytes()
-        ),
-        variant_suite_resident_bytes_per_row_bound=(
-            auditor_module.ENVELOPE_BYTES
-            + auditor_module.ATOMIC_VARIANT_SUITE_REFERENCE_BYTES_PER_ENVELOPE
-        ),
-        variant_suite_resident_fixed_bytes_bound=1_048_576,
+        partition_projection=projection,
+        partition_preparation_deadline_ns=deadline_ns,
+        invariance_plan=invariant_plan,
     )
     assert plan.estimated_intersection_work_units == (
         10_001 * plan.intersections_per_exchangeable_draw
@@ -3230,17 +5197,18 @@ def test_resource_plan_is_b_plus_one_cgroup_aware_and_worker_artifact_bounded(
         )
         for index in range(100)
     )
+    projection, deadline_ns, invariant_plan = _phase_plan_test_inputs(
+        32,
+        parallel_partitions,
+    )
     five_worker_plan = auditor_module._resource_plan(
         32,
         parallel_partitions,
         (256, 256, 256, 256, 256),
         adapter_retained_graph_bytes_bound=2 * 1_048_576,
-        parent_current_rss_bytes_at_plan=64 * 1_048_576,
-        variant_suite_resident_bytes_per_row_bound=(
-            auditor_module.ENVELOPE_BYTES
-            + auditor_module.ATOMIC_VARIANT_SUITE_REFERENCE_BYTES_PER_ENVELOPE
-        ),
-        variant_suite_resident_fixed_bytes_bound=1_048_576,
+        partition_projection=projection,
+        partition_preparation_deadline_ns=deadline_ns,
+        invariance_plan=invariant_plan,
     )
     assert five_worker_plan.estimated_intersection_work_units >= (
         auditor_module.PARALLEL_STATISTICS_WORK_THRESHOLD
@@ -3299,6 +5267,474 @@ def test_resource_plan_is_b_plus_one_cgroup_aware_and_worker_artifact_bounded(
         directory_stat.st_ino,
     )
     os.close(directory_fd)
+
+
+def test_phase_split_exact_diagnostic_formulas_and_preflight_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    parent_rss = 3_036_942_336
+    envelope_decode = 1_194_949_240
+    adapter = 1_012_034_804
+    variant_fixed = 268_435_456
+    variant_per_row = 3_252_224
+    monkeypatch.setattr(
+        auditor_module,
+        "_linux_current_rss_bytes",
+        lambda: parent_rss,
+    )
+    invariant_plan = auditor_module._invariance_resource_plan(
+        1_024,
+        envelope_and_decode_bytes_bound=envelope_decode,
+        adapter_retained_graph_bytes_bound=adapter,
+        variant_suite_resident_bytes_per_row_bound=variant_per_row,
+        variant_suite_resident_fixed_bytes_bound=variant_fixed,
+    )
+    assert invariant_plan.invariance_variant_suite_resident_bytes_bound == (
+        3_598_712_832
+    )
+    assert invariant_plan.invariance_recognizer_live_output_bytes_bound == (
+        1_006_632_960
+    )
+    assert invariant_plan.estimated_invariance_peak_rss_bytes == 10_680_279_040
+    profile = json.loads(
+        (
+            Path(__file__).parents[1]
+            / "config"
+            / "phase2b_formal_covert_auditor_v1.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert profile["resource_boundary"]["invariance_rss_formula"] == (
+        invariant_plan.invariance_rss_formula
+    )
+    assert (
+        invariant_plan.maximum_invariance_estimated_rss_bytes
+        - invariant_plan.estimated_invariance_peak_rss_bytes
+        == 2_204_622_848
+    )
+
+    statistics_static = 19_200_000 + adapter + 130_784_960 + 64 * 1_048_576
+    statistics_tail = 1_429_904_896
+    statistics_preflight = auditor_module._PhaseResourcePreflightEvidenceV1(
+        phase="STATISTICS",
+        resource_plan_root=(
+            "phase2b_formal_covert_statistics_resource_plan_" + "0" * 64
+        ),
+        parent_current_rss_bytes_at_preflight=parent_rss,
+        static_parent_bytes_bound=statistics_static,
+        fork_parent_rss_multiplier=2,
+        additional_bytes_bound=statistics_tail,
+        projected_aggregate_rss_bytes_at_preflight=7_503_789_568,
+        maximum_estimated_rss_bytes=auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES,
+        host_available_memory_safety_margin_bytes=(
+            auditor_module.HOST_AVAILABLE_MEMORY_SAFETY_MARGIN_BYTES
+        ),
+    )
+    statistics_preflight.__post_init__()
+    assert statistics_static == 1_229_128_628
+    assert (
+        auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+        - statistics_preflight.projected_aggregate_rss_bytes_at_preflight
+        == 5_381_112_320
+    )
+    with pytest.raises(ValueError, match="projection formula drift"):
+        replace(
+            statistics_preflight,
+            projected_aggregate_rss_bytes_at_preflight=(
+                statistics_preflight.projected_aggregate_rss_bytes_at_preflight
+                + 1
+            ),
+        )
+    with pytest.raises(ValueError, match="plan root drift"):
+        replace(
+            statistics_preflight,
+            resource_plan_root=invariant_plan.plan_root,
+        )
+    with pytest.raises(ValueError, match="exceeds frozen cap"):
+        replace(
+            statistics_preflight,
+            parent_current_rss_bytes_at_preflight=(
+                auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+            ),
+            projected_aggregate_rss_bytes_at_preflight=(
+                auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES * 2
+                + statistics_tail
+            ),
+        )
+    statistics_root = (
+        "phase2b_formal_covert_statistics_resource_plan_" + "1" * 64
+    )
+    static_dominant = auditor_module._PhaseResourcePreflightEvidenceV1(
+        phase="STATISTICS",
+        resource_plan_root=statistics_root,
+        parent_current_rss_bytes_at_preflight=100,
+        static_parent_bytes_bound=200,
+        fork_parent_rss_multiplier=2,
+        additional_bytes_bound=3,
+        projected_aggregate_rss_bytes_at_preflight=403,
+        maximum_estimated_rss_bytes=auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES,
+        host_available_memory_safety_margin_bytes=(
+            auditor_module.HOST_AVAILABLE_MEMORY_SAFETY_MARGIN_BYTES
+        ),
+    )
+    current_dominant = replace(
+        static_dominant,
+        parent_current_rss_bytes_at_preflight=200,
+        static_parent_bytes_bound=100,
+    )
+    assert static_dominant.projected_aggregate_rss_bytes_at_preflight == 403
+    assert current_dominant.projected_aggregate_rss_bytes_at_preflight == 403
+    exact_half_cap = auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES // 2
+    at_cap = replace(
+        static_dominant,
+        parent_current_rss_bytes_at_preflight=exact_half_cap,
+        static_parent_bytes_bound=1,
+        additional_bytes_bound=0,
+        projected_aggregate_rss_bytes_at_preflight=(
+            auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+        ),
+    )
+    assert at_cap.projected_aggregate_rss_bytes_at_preflight == (
+        auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+    )
+    with pytest.raises(ValueError, match="exceeds frozen cap"):
+        replace(
+            at_cap,
+            additional_bytes_bound=1,
+            projected_aggregate_rss_bytes_at_preflight=(
+                auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES + 1
+            ),
+        )
+
+
+def test_partition_measurement_is_single_and_stats_rss_sample_follows_it(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    deadline_ns = (
+        time.monotonic_ns()
+        + auditor_module.PARTITION_PREPARATION_TIMEOUT_SECONDS * 1_000_000_000
+    )
+    columns = (
+        auditor_module._FeatureColumn(("alias/a",), ("a", "b", "a", "b")),
+    )
+    projection = auditor_module._partition_allocation_projection(
+        4,
+        columns,
+        deadline_ns,
+    )
+    original_deep = auditor_module._deep_object_graph_bytes
+    with monkeypatch.context() as local:
+        local.setattr(
+            auditor_module,
+            "_deep_object_graph_bytes",
+            lambda _value: (_ for _ in ()).throw(
+                AssertionError("partition materialization must not deep-scan")
+            ),
+        )
+        partitions = auditor_module._materialize_partitions_bounded(
+            columns,
+            projection,
+            deadline_ns,
+        )
+    monkeypatch.setattr(
+        auditor_module,
+        "_linux_current_rss_bytes",
+        lambda: 64 * 1_048_576,
+    )
+    invariant_plan = auditor_module._invariance_resource_plan(
+        4,
+        envelope_and_decode_bytes_bound=4 * auditor_module.ENVELOPE_BYTES * 2,
+        adapter_retained_graph_bytes_bound=2 * 1_048_576,
+        variant_suite_resident_bytes_per_row_bound=(
+            auditor_module.ENVELOPE_BYTES
+            + auditor_module.ATOMIC_VARIANT_SUITE_REFERENCE_BYTES_PER_ENVELOPE
+        ),
+        variant_suite_resident_fixed_bytes_bound=1_048_576,
+    )
+    events: list[str] = []
+
+    def measured(value: object) -> int:
+        events.append("partition_deep")
+        return original_deep(value)
+
+    def sampled() -> int:
+        events.append("statistics_rss")
+        return 64 * 1_048_576
+
+    monkeypatch.setattr(auditor_module, "_deep_object_graph_bytes", measured)
+    monkeypatch.setattr(auditor_module, "_linux_current_rss_bytes", sampled)
+    plan = auditor_module._resource_plan(
+        4,
+        partitions,
+        (2, 2, 2, 2, 2),
+        adapter_retained_graph_bytes_bound=2 * 1_048_576,
+        partition_projection=projection,
+        partition_preparation_deadline_ns=deadline_ns,
+        invariance_plan=invariant_plan,
+    )
+    with pytest.raises(ValueError, match="invariant phase root drift"):
+        replace(
+            plan,
+            invariance_resource_plan_root=(
+                "phase2b_formal_covert_invariant_resource_plan_" + "0" * 64
+            ),
+        )
+    assert events == ["partition_deep", "statistics_rss"]
+    assert plan.partition_matrix_bytes_bound == (
+        auditor_module.DEEP_SIZE_SAFETY_MULTIPLIER
+        * original_deep(partitions)
+    )
+
+
+def test_phase_preflight_records_same_current_projection_and_rejects_growth(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    partition = auditor_module._partition(("a", "b", "a", "b"))
+    monkeypatch.setattr(
+        auditor_module,
+        "_linux_current_rss_bytes",
+        lambda: 64 * 1_048_576,
+    )
+    projection, deadline_ns, invariant_plan = _phase_plan_test_inputs(
+        4,
+        (partition,),
+    )
+    plan = auditor_module._resource_plan(
+        4,
+        (partition,),
+        (2, 2, 2, 2, 2),
+        adapter_retained_graph_bytes_bound=2 * 1_048_576,
+        partition_projection=projection,
+        partition_preparation_deadline_ns=deadline_ns,
+        invariance_plan=invariant_plan,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_linux_current_rss_bytes",
+        lambda: 65 * 1_048_576,
+    )
+    invariant_plan_2 = auditor_module._invariance_resource_plan(
+        4,
+        envelope_and_decode_bytes_bound=4 * auditor_module.ENVELOPE_BYTES * 2,
+        adapter_retained_graph_bytes_bound=2 * 1_048_576,
+        variant_suite_resident_bytes_per_row_bound=(
+            auditor_module.ENVELOPE_BYTES
+            + auditor_module.ATOMIC_VARIANT_SUITE_REFERENCE_BYTES_PER_ENVELOPE
+        ),
+        variant_suite_resident_fixed_bytes_bound=1_048_576,
+    )
+    plan_2 = auditor_module._resource_plan(
+        4,
+        (partition,),
+        (2, 2, 2, 2, 2),
+        adapter_retained_graph_bytes_bound=2 * 1_048_576,
+        partition_projection=projection,
+        partition_preparation_deadline_ns=deadline_ns,
+        invariance_plan=invariant_plan_2,
+    )
+    assert plan_2.resource_plan_root != plan.resource_plan_root
+    assert (
+        plan_2.invariance_resource_plan_root
+        != plan.invariance_resource_plan_root
+    )
+    current = 128 * 1_048_576
+    monkeypatch.setattr(
+        auditor_module,
+        "_linux_current_rss_bytes",
+        lambda: current,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_linux_system_available_memory_bytes",
+        lambda: 100 * 1_073_741_824,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_linux_cgroup_memory_remaining_bytes",
+        lambda: None,
+    )
+    evidence = auditor_module._preflight_host_memory(plan)
+    invariant_evidence = auditor_module._preflight_invariance_host_memory(
+        invariant_plan
+    )
+    auditor_module._validate_statistics_phase_preflight_against_resource_plan(
+        plan,
+        evidence.resource_preflight,
+    )
+    auditor_module._validate_invariant_phase_preflight_against_resource_plan(
+        plan,
+        invariant_evidence.resource_preflight,
+    )
+    with pytest.raises(ValueError, match="statistics.*splice drift"):
+        auditor_module._validate_statistics_phase_preflight_against_resource_plan(
+            plan,
+            replace(
+                evidence.resource_preflight,
+                resource_plan_root=plan_2.resource_plan_root,
+            ),
+        )
+    with pytest.raises(ValueError, match="invariant.*splice drift"):
+        auditor_module._validate_invariant_phase_preflight_against_resource_plan(
+            plan,
+            replace(
+                invariant_evidence.resource_preflight,
+                resource_plan_root=plan_2.invariance_resource_plan_root,
+            ),
+        )
+    assert evidence.resource_preflight.parent_current_rss_bytes_at_preflight == current
+    assert evidence.resource_preflight.projected_aggregate_rss_bytes_at_preflight == (
+        max(current, evidence.resource_preflight.static_parent_bytes_bound)
+        * evidence.resource_preflight.fork_parent_rss_multiplier
+        + evidence.resource_preflight.additional_bytes_bound
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_linux_current_rss_bytes",
+        lambda: auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES,
+    )
+    with pytest.raises(
+        FormalCovertAuditRejectionV1,
+        match="FAIL_STATISTICAL_RESOURCE_PLAN",
+    ):
+        auditor_module._preflight_host_memory(plan)
+    with pytest.raises(
+        FormalCovertAuditRejectionV1,
+        match="FAIL_INVARIANCE_RESOURCE_PLAN",
+    ):
+        auditor_module._preflight_invariance_host_memory(invariant_plan)
+
+
+def test_phase_order_and_final_preflight_are_adjacent_to_raw_fork_inputs():
+    audit_source = getsource(
+        auditor_module._run_formal_covert_audit_with_reservation_v1
+    )
+    assert audit_source.index("sufficiency = tuple(") < audit_source.index(
+        "invariant_plan = _invariance_resource_plan("
+    ) < audit_source.index("_run_invariance(") < audit_source.index(
+        "manifest, columns = _extract_feature_columns("
+    )
+    assert audit_source.count("_preflight_feature_extraction_memory(") == 2
+    assert audit_source.index("_run_invariance(") < audit_source.rindex(
+        "_preflight_feature_extraction_memory("
+    ) < audit_source.index("manifest, columns = _extract_feature_columns(")
+
+    invariant_source = getsource(auditor_module._run_invariance)
+    assert invariant_source.index(
+        "fork_input_snapshot_root = _invariance_input_snapshot_root("
+    ) < invariant_source.index(
+        "host_memory = _preflight_invariance_host_memory(plan)"
+    ) < invariant_source.index("child_pid = os.fork()")
+
+    statistics_source = getsource(auditor_module._run_raw_statistics_workers)
+    assert statistics_source.index("active: list[dict[str, object]]") < (
+        statistics_source.index(
+            "preflight_evidence_slot[0] = _preflight_host_memory(preflight_plan)"
+        )
+    ) < statistics_source.index("pid = os.fork()")
+
+
+def test_parent_preallocation_gates_charge_current_rss_without_fork_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    envelopes = tuple(_envelope(_payload()) for _ in range(4))
+    wire = _SyntheticWire()
+    decoded = tuple(wire.decode_envelope(item) for item in envelopes)
+    feature_projection = auditor_module._feature_cardinality_projection(decoded)
+    envelope_decode = auditor_module._measured_envelope_decode_bytes_bound(
+        len(envelopes),
+        envelopes,
+        decoded,
+    )
+    result_bound = auditor_module._parent_result_working_bytes_bound(
+        feature_projection.projected_concrete_feature_count
+    )
+    artifact_bound = len(auditor_module.TARGETS) * (
+        feature_projection.projected_concrete_feature_count
+        * auditor_module.WORKER_RESULT_ARTIFACT_BYTES_PER_FEATURE
+        + auditor_module.WORKER_RESULT_ARTIFACT_FIXED_BYTES
+    )
+    feature_tail = (
+        feature_projection.projected_feature_matrix_bytes_bound
+        + result_bound
+        + artifact_bound
+    )
+    state = {
+        "current": 1,
+        "available": envelope_decode
+        + feature_tail
+        + auditor_module.HOST_AVAILABLE_MEMORY_SAFETY_MARGIN_BYTES,
+    }
+    monkeypatch.setattr(
+        auditor_module,
+        "_linux_current_rss_bytes",
+        lambda: state["current"],
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_linux_system_available_memory_bytes",
+        lambda: state["available"],
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_linux_cgroup_memory_remaining_bytes",
+        lambda: None,
+    )
+    feature_gate = auditor_module._preflight_feature_extraction_memory(
+        feature_projection,
+        envelope_decode,
+    )
+    assert type(feature_gate) is auditor_module._HostMemoryPreflightV1
+    assert not hasattr(feature_gate, "resource_preflight")
+    state["current"] = envelope_decode + 1_048_576
+    with pytest.raises(
+        FormalCovertAuditRejectionV1,
+        match="FAIL_FEATURE_PROJECTION_HOST_MEMORY",
+    ):
+        auditor_module._preflight_feature_extraction_memory(
+            feature_projection,
+            envelope_decode,
+        )
+
+    deadline_ns = (
+        time.monotonic_ns()
+        + auditor_module.PARTITION_PREPARATION_TIMEOUT_SECONDS * 1_000_000_000
+    )
+    columns = (
+        auditor_module._FeatureColumn(("alias/a",), ("a", "b", "a", "b")),
+    )
+    partition_projection = auditor_module._partition_allocation_projection(
+        4,
+        columns,
+        deadline_ns,
+    )
+    feature_matrix = 1_048_576
+    partition_result = auditor_module._parent_result_working_bytes_bound(1)
+    resident_static = feature_matrix + envelope_decode
+    state["current"] = 1
+    state["available"] = (
+        resident_static
+        + partition_projection.projected_partition_matrix_bytes_bound
+        + partition_result
+        + auditor_module.HOST_AVAILABLE_MEMORY_SAFETY_MARGIN_BYTES
+    )
+    partition_gate = auditor_module._preflight_partition_allocation_memory(
+        feature_matrix_bytes_bound=feature_matrix,
+        envelope_and_decode_bytes_bound=envelope_decode,
+        partition_projection=partition_projection,
+        concrete_features=1,
+    )
+    assert type(partition_gate) is auditor_module._HostMemoryPreflightV1
+    assert not hasattr(partition_gate, "resource_preflight")
+    state["current"] = resident_static + 1_048_576
+    with pytest.raises(
+        FormalCovertAuditRejectionV1,
+        match="FAIL_PARTITION_PROJECTION_HOST_MEMORY",
+    ):
+        auditor_module._preflight_partition_allocation_memory(
+            feature_matrix_bytes_bound=feature_matrix,
+            envelope_and_decode_bytes_bound=envelope_decode,
+            partition_projection=partition_projection,
+            concrete_features=1,
+        )
 
 
 def test_cgroup_hierarchy_uses_same_level_pairs_and_tightest_ancestor(
@@ -3411,6 +5847,28 @@ def test_synthetic_rich1024_formula_is_admissible_not_r05_capacity_evidence(
         * auditor_module._deep_object_graph_bytes(partitions)
     )
     monkeypatch.setattr(auditor_module, "_linux_effective_cpu_capacity", lambda: 32)
+    monkeypatch.setattr(
+        auditor_module,
+        "_linux_current_rss_bytes",
+        lambda: 128 * 1_048_576,
+    )
+    adapter_bound = auditor_module.MAXIMUM_WIRE_ADAPTER_RETAINED_GRAPH_BYTES
+    variant_per_row = (
+        auditor_module.WIRE_V3_ATOMIC_SUITE_UNIQUE_BATCH_EQUIVALENTS
+        * auditor_module.ENVELOPE_BYTES
+        + 80
+        * auditor_module.ATOMIC_VARIANT_SUITE_REFERENCE_BYTES_PER_ENVELOPE
+    )
+    projection, deadline_ns, invariant_plan = _phase_plan_test_inputs(
+        rows,
+        partitions,
+        envelope_and_decode_bytes_bound=envelope_floor,
+        adapter_retained_graph_bytes_bound=adapter_bound,
+        variant_suite_resident_bytes_per_row_bound=variant_per_row,
+        variant_suite_resident_fixed_bytes_bound=(
+            auditor_module.ATOMIC_VARIANT_SUITE_FIXED_BYTES_BOUND
+        ),
+    )
     plan = auditor_module._resource_plan(
         rows,
         partitions,
@@ -3418,21 +5876,10 @@ def test_synthetic_rich1024_formula_is_admissible_not_r05_capacity_evidence(
         preextraction_feature_matrix_bytes_bound=feature_floor,
         feature_matrix_bytes_bound=feature_floor,
         envelope_and_decode_bytes_bound=envelope_floor,
-        partition_allocation_bytes_bound=partition_bound,
-        partition_matrix_bytes_bound=partition_bound,
-        adapter_retained_graph_bytes_bound=(
-            auditor_module.MAXIMUM_WIRE_ADAPTER_RETAINED_GRAPH_BYTES
-        ),
-        parent_current_rss_bytes_at_plan=128 * 1_048_576,
-        variant_suite_resident_bytes_per_row_bound=(
-            auditor_module.WIRE_V3_ATOMIC_SUITE_UNIQUE_BATCH_EQUIVALENTS
-            * auditor_module.ENVELOPE_BYTES
-            + 80
-            * auditor_module.ATOMIC_VARIANT_SUITE_REFERENCE_BYTES_PER_ENVELOPE
-        ),
-        variant_suite_resident_fixed_bytes_bound=(
-            auditor_module.ATOMIC_VARIANT_SUITE_FIXED_BYTES_BOUND
-        ),
+        adapter_retained_graph_bytes_bound=adapter_bound,
+        partition_projection=projection,
+        partition_preparation_deadline_ns=deadline_ns,
+        invariance_plan=invariant_plan,
     )
     plan.__post_init__()
     assert plan.rows == 1_024

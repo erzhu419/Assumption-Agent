@@ -32,6 +32,28 @@ compiled by the source-only loader:
 - `rfc8785_v1.py`; and
 - `schema.py`.
 
+The checked canonical profile ID is
+`phase2b_formal_wire_covert_qualification_profile_v2_e77159df436781e01d37165c61f88409a7f41f60891293b07664d89418894d57`,
+and its dependency-lock SHA-256 is
+`4c535f6726613c0c3a2365337b6c2ff1ba935550691dcb85e90c1d3a8d11ca98`.
+The dependency-lock root schema is
+`hegel-machine-phase2b-formal-wire-covert-qualification-dependency-lock/3`,
+and that exact discriminator is also closed inside the profile's lock binding.
+The qualification profile schema is
+`hegel-machine-phase2b-formal-wire-covert-qualification/4`; the profile domain
+and ID prefix remain V2 because the `/4` discriminator is part of the hashed
+canonical content. The development-calibration and live-inner candidate
+schemas are `/4`. Their prior `/3` forms already contained the receipt-build
+elapsed field; `/4` is required because the natural STOP was followed by
+changes to the nested complete-plan, observed/invariant/static-shape roots, and
+their replay grammar. The prior `/3` identities are not reused.
+The pinned Auditor contract is
+`hegel-machine-phase2b-formal-covert-auditor/4`, its profile schema is
+`hegel-machine-phase2b-formal-covert-auditor-profile/4`, semantics are
+`phase2b_formal_covert_semantics_e10509475901f7955f158536a163814239adda80f27afc5e89183fe73b5e27c0`,
+and policy binding
+`phase2b_formal_covert_policy_binding_0d6ebb47011ffa1ebbc55904ff0610f64c30e888badea9cd34bf746908a5bd2a`.
+
 A direct qualified CLI invocation must begin with CPython `-I -S -B`; missing
 initial flags fail before any project import, business input, output, or
 service launch. That small launcher no-follow descriptor-reads the current
@@ -87,6 +109,88 @@ operations. This remains a fixture-specific two-class
 development qualification. It does not qualify arbitrary Wire V3 graphs, the
 auditor's separate 100-class resource KAT, or an actual corpus.
 
+The qv2-local fixture identity is
+`CAPACITY_BOUNDED_EXACT_10_EIGHT_OPERATION_FORMAL_CASE_GRAPH_V4`. It is a new,
+strictly narrower profile, not a lossless rename of the former V3 fixture. The
+coordinate-affine witness is the one-dimensional, non-identity, frame-changing
+map `target_0 = 2 * source_0 + 1` on source support `[0,1]`, with exact inverse
+`source_0 = (target_0 - 1) / 2` and target support `[1,3]`. The temporal
+sampling witness has exactly two grid-point inputs, selects the point at zero,
+discards the point at one, and copies the selected metadata exactly to its one
+output. Exact-core tests outside this Task-4 fixture continue to cover the
+two-dimensional off-diagonal affine case and sampling shapes with more than
+one selected input; Task 4 V4 does not claim those shapes as fixture coverage.
+
+The former V3 fixture's concrete union-path projection was 38,168 for
+`KNOWN_NULL` and 37,866 for `KNOWN_BINDING_LEAK`, so it exceeded the frozen
+Auditor limit of 32,768 before feature materialization. V4 retains all eight
+operation kinds and the complete label crossing while reducing only those two
+operation witnesses. Its exact saturated counts are 32,337 concrete / 50,257
+raw semantic features for `KNOWN_NULL`, and 32,186 / 49,994 for
+`KNOWN_BINDING_LEAK`. Eight rows already contain all operation path shapes;
+the same union shape is repeated at 32 and 1,024 rows. The independently
+decoded union of `channel_only_leaf_owners` paths is exactly 229 for
+`KNOWN_NULL` and 228 for `KNOWN_BINDING_LEAK`; each mode's count is frozen in
+the V4 feature-capacity contract and stored on the fixture execution. Its
+canonical path-to-owner rows are ordered by the Auditor JSON-path text and
+owner group, and their mode-specific union root is frozen beside the count;
+conflicting owners for one path are rejected. Construction also retains the
+small complete feature-cardinality projection DTO (including its projection
+root) after deleting the build-local decoded tuple. The
+pinned Auditor `FeatureManifestV1` has no owner-union-count field, so receipt
+validation reads only its real UUID/channel/concrete/raw fields, while the
+six-field receipt-capacity projection must equal both that independently
+decoded execution projection and the frozen contract. The owner count and root
+flow from the source-derived execution through audit evidence and the retained
+static/inner projections. The complete feature-capacity projection and its
+root follow the same path; pure replay reconstructs the projection DTO, checks
+every closed field and recomputes its root before accepting the static shape.
+It then re-derives audited rows, channel/UUID paths, concrete/raw counts, and
+the pre-extraction byte bound, checks them through the frozen receipt-capacity
+validator, and separately replays the mode-specific owner count/root contract;
+synchronizing a forged measurement and its root cannot bypass these checks.
+These are static construction/capacity
+facts, not filled calibration statistics: both
+`known_*_frozen_static_projection` fields remain null until a successful fresh
+development calibration.
+
+Before either formal 1,024-row mode is launched, its separate slow
+resource-only gate builds and decodes the real V4 batch, replays the exact
+feature-capacity projection, and constructs the invariant-phase plan from the
+measured envelope/decode graph and pinned adapter bounds. It invokes the same
+invariant resource evaluator at this resource-only point, but it does not
+construct the invariant fork snapshot, signal/child ownership state, or
+artifact directory and therefore is not final fork-boundary evidence. It then
+repeats the feature-allocation preflight, materializes feature columns and
+partitions under one partition-preparation deadline, drops the decoded and
+column aliases, and calls the production statistics-plan constructor. That
+constructor performs the sole deep traversal of the materialized partition
+graph and takes a fresh statistics parent-RSS baseline. The gate validates the
+resource-only invariant sample against the composite plan, invokes the same
+statistics resource evaluator, and validates that resource-only sample against
+the same plan. It does not construct the production label/permutation masks,
+worker ownership state, or artifact directory, so this second sample is not
+the statistics fork-boundary evidence either.
+
+The gate executes no invariance batches, statistical permutations, receipt
+construction, PENDING registration, pending replay, ISSUED transition, public
+validation, release, or official attempt publication. It proves that the
+Auditor receipt registry and reservation set are unchanged. It has no CLI
+artifact or pure-verifier authority and is only a non-final
+preallocation/admissibility smoke over the real 1,024-row object graph and
+frozen formulas. The two modes are independently built and freshly decoded.
+Operators should run them in the intended host/cgroup containment, but that
+placement is separately observed rather than authenticated by the test. Only
+the subsequent formal audit records the fully prepared, final fork-boundary
+preflights and issuance linearization. Passing this gate is not an audit
+disposition or a replacement for the full run.
+
+Fixture construction uses the pinned Auditor decode-memory preflight before
+its first row decode. Every returned row must be the exact decoded DTO, pass
+the pinned semantic validator, and remain within the conservative 4 MiB
+per-row decoded-object-graph bound before it can enter any namespace, owner, or
+feature-capacity projection.
+
 ## Known-null, known-leak, and visible statistical replay
 
 The known-null graph exposes every legal observation in the eligibility mask.
@@ -127,17 +231,73 @@ compares five projected fields per row. The lightweight recognizer is accepted
 only after exact equivalence to a trusted full decode for base and transformed
 envelopes.
 
-The resource plan has a closed key set partitioned into frozen static fields
-and recorded dynamic fields. Retained comparison exact-compares only the
-frozen fixture-dependent fields, but requires all dynamic fields, nested run
-measurements, exact types, admissibility, and caps. Environmental RSS, CPU
-capacity, worker count, wall time, runtime seed, p-values, and worker hashes
-are recorded rather than mistaken for cross-revision fixture identity.
+The composite `ResourcePlanV1` has a closed key set partitioned into frozen
+static fields and recorded dynamic fields. Its dynamic side includes both
+phase baselines, the invariant-plan root, the derived statistics-plan root,
+phase peak estimates, CPU/worker selection, and admissibility. Retained
+comparison exact-compares only the frozen fixture-dependent fields, but still
+requires every dynamic field and reconstructs the complete DTO so its derived
+statistics root must match.
 
-Both auditor receipts are projected, validated, and released in their issuing
-process. Repeated candidate success does not consume the bounded auditor
+Invariant and statistical runtime evidence each retain an exact nested
+phase-preflight DTO. The invariant DTO is bound to
+`invariance_resource_plan_root`; the statistical DTO is bound to
+`resource_plan_root`. Receipt validation calls the pinned Auditor's two
+cross-stage validators against the composite plan.
+
+Every receipt also carries the branch-neutral
+`ReceiptIssuanceRuntimeEvidenceV1`. For an executed QV2 audit its deadline kind
+is `STATISTICS`: `W` is the exact sum of wait4 worker peaks,
+`C = 12 GiB - W`, the recorded pre-finalization parent peak must not exceed
+`C`, and the conservative charge is exactly `C + W = 12 GiB`. The evidence
+records exactly one producer PENDING full replay, exactly one deadline check
+under the receipt-registry lock, a successful locked deadline verdict, and a
+successful locked post-replay parent-peak ceiling verdict. Auditor `/4` also
+defines the insufficient branch as `PARTITION_PREPARATION`, `W=0`, and
+`C=12 GiB`; QV2's two full modes require statistical evidence and therefore do
+not use that branch.
+
+The inner projection keeps the complete plan and all three complete runtime
+DTOs. One shared executed-runtime-bundle evaluator is used before producer
+projection and by run/measurement, pure retained, two-run, and candidate
+validation. It reconstructs the 56-field plan, then the 20-field statistical
+DTO against that plan, then the 11-field issuance DTO. Every invocation binds
+the expected branch mode, exact 1,024 authority rows, and the mode-specific
+frozen concrete-feature count; candidate issuance also binds those values to
+the live Auditor receipt and manifest before release. For full run projections
+it additionally cross-binds visible row/feature counts, invariant resident
+bounds and adapter pin, compact/full invariant counts, roots, artifact digest,
+peak, wall time and cap, statistical worker/artifact cardinalities and resource
+bounds, compact/full statistical digest/peaks/wall/cap/charge/supervisor fields,
+diagnostics, permutation commit/reveal and root grammar, the five-target Holm
+family, and the `5 * concrete_features` pairwise family. The exact Auditor
+transcript-ID grammar is enforced and the audit, issuance, run, measurement,
+and candidate copies must agree. The eligibility-mask quota instead has its
+own `phase2b_formal_eligibility_mask_quota_<sha256>` ID grammar; it is included
+in the closed quota projection and quota root and must not equal the top-level
+audit transcript by construction. This reduced QV2 projection does not retain
+the Auditor's signature schema, public signature root, target cardinalities,
+or private contingency roots, so detached QV2 replay does not claim to rederive
+the Auditor quota content ID; it validates that ID's own grammar and fully
+cross-binds the retained projection bytes to the QV2 quota root. Environmental
+values remain recorded evidence, not cross-revision fixture identity.
+
+Each Auditor receipt receives exactly one public full validation in its issuing
+process. QV2 captures that validated ID, projects and pure-replays the complete
+issuance evidence without another public validation or top-level receipt
+`__post_init__`, and then releases the exact ISSUED receipt while checking the
+returned ID. Repeated candidate success does not consume the bounded Auditor
 receipt registry. No receipt DTO or live full-result object crosses the inner
-process boundary.
+process boundary. Each candidate branch retains the complete ResourcePlan
+projection and root before its complete statistical and issuance projections,
+and detached replay now requires the reconstructed plan's `admissible` field to
+be exactly true. Because that semantic gate was added after the V4 natural
+STOP, the local candidate receipt uses the V5 receipt hash domain and
+`phase2b_formal_wire_covert_qualification_receipt_v5_` prefix. Complete and
+observed ResourcePlan roots, complete invariant runtime roots, and static-shape
+roots use V3 prefixes; the static-shape schema is `/3`. Statistical and issuance
+runtime roots remain V3, while the unchanged static ResourcePlan projection
+continues to use its V2 prefix.
 
 ## Pending shape and two-revision calibration
 

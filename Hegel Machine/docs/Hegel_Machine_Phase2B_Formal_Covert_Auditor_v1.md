@@ -4,6 +4,10 @@ Status: production candidate for synthetic/development qualification only. It is
 not an actual-corpus audit, a custody claim, an execution authorization, or an
 actual-960 result.
 
+The executed receipt schema is
+`hegel-machine-phase2b-formal-covert-auditor/4`; the synchronized profile
+schema is `hegel-machine-phase2b-formal-covert-auditor-profile/4`.
+
 The implementation is synchronized to the exact candidate Wire V3 source,
 test, config, and documentation SHA-256 values
 `c8120920f0e31b959043f63a0f672471fcbea50d05ca2cd8eaf7fd0c29089765`,
@@ -15,9 +19,9 @@ bytes are not yet an R03/R04/R05 qualification. The frozen rich-graph
 1,024-row external supervised run remains pending.
 
 Frozen candidate IDs are
-`phase2b_formal_covert_semantics_39c7e1fddbaa05232b425da271b2403d30327971e4ddc7fae7c46012435fa4a0`
+`phase2b_formal_covert_semantics_e10509475901f7955f158536a163814239adda80f27afc5e89183fe73b5e27c0`
 and
-`phase2b_formal_covert_policy_binding_cb421f2b625865f10b6c82b21b6131bbf2433a85a3ac4d6ea4608f2c22ef8240`.
+`phase2b_formal_covert_policy_binding_0d6ebb47011ffa1ebbc55904ff0610f64c30e888badea9cd34bf746908a5bd2a`.
 
 ## Closed entry point and trust boundary
 
@@ -29,11 +33,27 @@ invariance receipts, recognizer outputs, statistical thresholds, permutation
 seeds, or feature lists.
 
 Before any execution the module atomically reserves one of eight live
-process-local receipt slots. Issued receipts are retained until the caller uses
-`release_formal_covert_audit_receipt_v1`; live receipts are never silently
-evicted. A full registry rejects before decode or recognizer execution. This
-underscore-token/factory/object-identity mechanism is cooperative same-process
-provenance only, not unforgeability or a security boundary.
+process-local receipt slots. The private mutable reservation slot starts with no
+entry identity. Registration inserts an exact mutable `PENDING` entry, records
+its identity in that preallocated slot, and only then consumes the reservation.
+Public validation and release reject `PENDING`; the producer alone may perform
+its second full replay. That replay returns the validated receipt ID. Under one
+registry lock, commit then rechecks the exact entry and reservation and requires
+`entry.receipt_id == validated_id == candidate.receipt_id`; it runs the branch's
+absolute deadline check immediately before the post-validation RSS sample and
+only then transitions to `ISSUED`. Issued receipts are retained until the caller
+uses `release_formal_covert_audit_receipt_v1`; live receipts are never silently
+evicted. The outer `return` is the caller-ownership transfer: any
+`BaseException` before that return completes rolls back an unhanded `PENDING` or
+`ISSUED` entry. Release deletes the authoritative registry entry and frees its
+capacity under the lock before clearing the private backlink, so an interruption
+cannot leave a publicly valid entry. Direct rollback, outer rollback, and
+reservation cancellation failures are recorded on, but never replace, the
+original exception; cancellation is still attempted. A full registry rejects
+before decode or recognizer execution, and rollback is direct O(1) identity
+lookup without a registry scan. This underscore-token/factory/object-identity
+mechanism is cooperative same-process provenance only, not unforgeability or a
+security boundary.
 
 `FormalAuditAuthorityV1` contains private source-order labels and strata. Its
 transcript root proves only the bytes used by this audit; it does not prove
@@ -99,6 +119,8 @@ surface. Wire validates inverse semantic and
 catalog replay and recomputes all content-derived provenance. After inverse UUID/order mapping,
 decision, family, binding, scale set, and candidate residual bytes must be
 exactly identical. Any structural or invariance failure is atomic.
+Here “atomic” means that no partial receipt is issued; it does not roll back
+callbacks that already ran in the child.
 
 All 80 variant schedules are submitted in one bounded Wire V3 bulk-suite call
 inside a raw `setsid` child. The adapter replays the shared BuildSuccess,
@@ -320,9 +342,11 @@ bound.
 Executed receipts must carry nonempty invariant and permutation roots, exactly
 81 recognizer batch calls, and exactly `rows * 80 * 5` bit-exact field
 comparisons. Receipt DTO construction is not execution issuance: validation
-requires identity in the bounded cooperative process-local registry. That
-check is not designed to resist same-process code with module access. The
-receipt content hash is neither a signature nor cross-process authority.
+requires the same exact entry to remain `ISSUED` across both the initial locked
+lookup and the final locked recheck after full content replay. A concurrent
+release therefore cannot yield stale validation success. That check is not
+designed to resist same-process code with module access. The receipt content
+hash is neither a signature nor cross-process authority.
 Durable qualification must run in the pinned isolated executor and bind the
 artifact through a separately authenticated signed or CAS record.
 
@@ -333,21 +357,90 @@ caps are 32,768 concrete features, 20,000,000,000 bitset intersections,
 50,000,000,000 total statistical work units, and 12 GiB conservative aggregate
 SELF-plus-worker RSS. Total work includes `P+1` contingency intersections,
 17-word center accumulation/finalization, scalar maxT scans, and bounded label
-shuffle calls. Aggregate statistics RSS is
+shuffle calls.
 
-`max(parent current RSS, label masks + feature matrix + envelopes/decodes +
-partition matrix + retained adapter graph + 64 MiB) * (1 + workers)
+Resource accounting is phase-specific. After decode, the auditor completes the
+feature-cardinality projection and an early parent-only host gate, then the
+eligibility-quota gate and sufficiency. It constructs and checks the private
+frozen invariant plan for every input before any feature columns or partitions
+exist. Sufficient inputs execute invariance; insufficient inputs skip its child
+callbacks. An inadmissible invariant plan rejects either branch rather than
+issuing an insufficient receipt. The invariant formula is:
+
+`max(invariant-plan parent current RSS, envelopes/decodes + retained adapter
+graph + 64 MiB) * 2 + verified variant-suite resident graph + recognizer live
+output + invariant artifact`.
+
+The invariant plan carries an independent parent-RSS baseline and a content
+root. Its fields and root are copied into the later public composite
+`ResourcePlanV1`; feature and partition terms are deliberately absent because
+those objects do not yet exist.
+
+The successful-invariance and insufficient-skip branches converge on a fresh
+parent-only feature host gate immediately before feature allocation. Both then
+extract feature columns, project and materialize partitions, and construct the
+statistics plan. The early and fresh feature gates charge
+
+`max(current RSS, envelopes/decodes) + projected feature matrix + parent result
+working graph + projected worker artifacts`.
+
+The adjacent partition gate charges
+
+`max(current RSS, measured feature matrix + envelopes/decodes) + projected
+partition matrix + parent result working graph`.
+
+Both are current-aware parent preallocation checks, not fork-phase runtime
+evidence. Feature, partition, or statistics-plan inadmissibility takes priority
+over an insufficient receipt; only a fully resource-admissible insufficient
+input receives that receipt. Partition
+materialization does not deep-scan its result. The statistics-plan producer
+performs the sole shared-object-aware deep measurement, checks it against the
+earlier allocation projection under the same 600-second deadline, and samples
+parent current RSS internally; no caller scalar can stand in for that
+measurement. Before statistics planning, auditor-owned decoded-row, column,
+and adapter aliases are released. Outer-frame aliases or allocator-retained
+pages may remain, so the model still includes the retained adapter bound and
+uses actual current RSS. Aggregate statistics RSS is
+
+`max(statistics-plan parent current RSS, label masks + partition matrix +
+retained adapter graph + 64 MiB) * (1 + workers)
 + metric cache * workers + ephemeral permutation metric tuples
 + target-max vectors + worker artifacts + parent result working graph`.
 
 This deliberately counts fork-shared pages once for the parent and once per
-worker. Feature, decode, partition, adapter, and result terms are explicitly
-bound. Recursive shared-object-aware `sys.getsizeof` observations are
-multiplied by four where the profile says so; this is pinned-runtime accounting,
-not a portable Python heap theorem. Feature/path projection enforces the
-32,768 cap incrementally before column materialization. Per-column cardinality
-and partition allocation are projected before the single materialization pass,
-which has a separate 600-second cooperative deadline.
+worker. Feature and decode graphs are phase-exclusive rather than silently
+counted as live during statistics. Recursive shared-object-aware
+`sys.getsizeof` observations are multiplied by four where the profile says so;
+this is pinned-runtime accounting, not a portable Python heap theorem.
+Feature/path projection enforces the 32,768 cap incrementally before invariant
+execution and before column materialization. Per-column cardinality and
+partition allocation remain projected before allocation.
+
+Each raw-fork boundary has a second exact preflight after its fork inputs are
+resident: the invariant snapshot root, signal state, child limit, and artifact
+path for invariance; label masks, target groups, ownership records, signal
+state, address limit, and retained artifact directory for statistics. The
+preflight resamples current RSS and recomputes the applicable formula with
+`max(current RSS, phase static bound)`. Bounded evidence-object bookkeeping
+after that sample is covered by the fixed 64 MiB parent term. Runtime evidence
+binds that same current sample, projected aggregate RSS, phase static term,
+fork multiplier, additional tail, exact plan root, cap, and margin. Its DTO
+replays the projection and rejects projections above 12 GiB. Receipt validation
+reconstructs the exact phase-plan root, static term, multiplier, additional
+tail, cap, and margin from the composite resource plan and requires them to
+equal the runtime evidence. The fork-boundary current sample and the resulting
+projection are observations, not values reconstructable from the earlier
+plan; the runtime DTO replays that projection directly. The receipt also
+requires effective host availability to cover the observed-current projection
+plus the 2 GiB margin, so the earlier plan estimate cannot substitute for this
+evidence.
+
+This ordering has an explicit failure boundary. Feature, partition, or
+statistics-plan preparation can still fail after the 81-call invariant child
+has completed. Such failure issues no receipt, restores the reserved registry
+slot, and cleans auditor-owned temporary artifacts. It does not claim that the
+recognizer child never ran, cannot roll callbacks back, and does not turn raw
+fork into a malicious-callback integrity sandbox.
 
 The cgroup parser reads `/proc/self/cgroup` and `/proc/self/mountinfo`, applies
 mountinfo's filesystem-root-to-visible-mount projection (including subtree and
@@ -364,6 +457,11 @@ when OS CPU count, scheduler affinity, the tightest cgroup quota, projected
 work, and the full five-worker RSS model all permit them; otherwise one child
 executes targets 0 through 4 sequentially. Failure to read scheduler affinity
 conservatively forces the one-child path. There is no direct unbounded path.
+The raw-worker helper requires the exact statistics resource plan and a fresh
+one-slot evidence sink; omitted, wrong, or prefilled arguments fail before the
+first fork. It performs the final statistics phase preflight itself and fills
+that slot from the same fork-boundary sample. There is no optional `None`
+bypass.
 Python `SIGCHLD=SIG_IGN` is rejected before either raw fork because automatic
 reaping would destroy PID ownership. After the selected lifecycle and
 cancellation signals are blocked, the parent temporarily sets SIGCHLD to its
@@ -393,20 +491,50 @@ nominal phase termination trigger, not a promise that every child is gone at
 exactly 1,800 seconds. pidfd/waitid-with-`WNOWAIT` keeps PID/process-group
 ownership until descendant cleanup and exactly-once wait4, whose rusage
 supplies full direct-child lifetime peak RSS. Parent result construction,
-receipt replay/hash, and RSS stabilization perform absolute monotonic checks
+receipt replay/hash, and receipt finalization perform absolute monotonic checks
 against the same deadline, but those checks are cooperative and explicitly
 `parent_postprocess_deadline_preemptive=false`.
-Finalization permits at most three complete construct/replay/provisional-
-register/validate passes. If validation raises historical RSS, the provisional
-registry entry is removed, the same reserved slot is restored atomically, and
-the next receipt binds the new peak; failure to stabilize rejects without a
-live receipt.
+Both receipt branches carry exact, receipt-ID-bound
+`ReceiptIssuanceRuntimeEvidenceV1`. For a sufficient receipt, `W` is the exact
+sum of all direct raw-worker wait4 peak-RSS values and the bound deadline is the
+statistics deadline. For an insufficient receipt there is no statistical
+runtime evidence, `W = 0`, and the bound deadline is the already active
+partition-preparation deadline. `W` above the 12-GiB aggregate cap rejects;
+otherwise the parent charge ceiling is `C = 12 GiB - W`. Both branches sample
+the parent historical peak immediately before receipt construction and require
+it not to exceed `C`.
+
+The branch-neutral issuance evidence records deadline kind, absolute monotonic
+deadline and timeout, `W`, the pre-finalization peak, `C`, the exact
+conservative charge `C + W = 12 GiB`, one complete producer-pending replay, one
+locked final deadline check, and successful deadline/RSS booleans. The exact
+post-validation peak cannot also be placed in the immutable receipt without
+reconstructing and revalidating that receipt after observing it, which would
+reintroduce the fixed-point problem. Therefore the receipt binds the successful
+boolean, while the locked linearization point proves it operationally: after
+the pending replay returns `validated_id`, one registry-lock critical section
+rechecks the exact `PENDING` entry, reservation, and three-way receipt ID, runs
+the branch deadline checker, immediately samples parent historical peak RSS,
+rejects above `C`, and otherwise performs the sole `PENDING` to `ISSUED` state
+flip. There is no post-commit clock, content hash, replay, log, or helper gate.
+
+Finalization performs exactly one complete receipt construction (including its
+full replay), one exact `PENDING` registration, and one producer-only pending
+validation through the shared full-replay kernel. A deadline, replay, sampling,
+ceiling, registry, or asynchronous `BaseException` failure deletes the exact
+entry by candidate identity/reservation without scanning, retry, or receipt
+rebuild. Cleanup faults are attached to the primary exception rather than
+replacing it, and the outer O(1) rollback/cancellation path is still attempted.
 The implementation does not replace or consume the caller's SIGALRM state.
 End-to-end preemption, descendant containment, aggregate memory, and pids
 limits therefore require a fresh isolated outer supervisor/cgroup; the receipt
 sets `external_supervisor_required=true`. The conservative runtime sum uses
-the parent's historical `ru_maxrss` plus each direct raw child's wait4 peak and
-rejects above 12 GiB. It is not observed physical PSS.
+the entire parent charge ceiling plus each direct raw child's wait4 peak. It is
+not observed physical PSS.
+Unlike the fork-boundary phase preflight, this final observed gate is
+whole-process conservative: parent `ru_maxrss` may retain an earlier
+phase-exclusive peak. It can therefore reject an execution that a phase-local
+peak model would accept; it is not represented as an exact phase peak.
 `process_group_empty_at_exit=true` covers the direct child's setsid process
 group at the final check only; it is not continuous descendant evidence and
 cannot detect a helper that already exited or escaped into a new session.

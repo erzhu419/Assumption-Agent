@@ -53,9 +53,9 @@ from .rfc8785_v1 import (
 )
 
 
-SCHEMA_VERSION: Final = "hegel-machine-phase2b-formal-covert-auditor/1"
+SCHEMA_VERSION: Final = "hegel-machine-phase2b-formal-covert-auditor/4"
 SEMANTICS_VERSION: Final = (
-    "hegel-machine-phase2b-formal-covert-statistics/2-target-max-t-erratum"
+    "hegel-machine-phase2b-formal-covert-statistics/6-pending-registry-locked-finalization-erratum"
 )
 CLAIM_LEVEL: Final = (
     "AUDIT_TRANSCRIPT_ONLY_NOT_AUTHORITY_ORIGIN_NOT_INDEPENDENCE_NOT_ACTUAL_CORPUS"
@@ -94,7 +94,6 @@ STATISTICS_WORKER_TIMEOUT_SECONDS: Final = 1_800
 PARENT_POSTPROCESS_DEADLINE_SCHEMA: Final = (
     "ABSOLUTE_MONOTONIC_COOPERATIVE_PARENT_POSTPROCESS_CHECKS_V1"
 )
-MAXIMUM_RECEIPT_RSS_STABILIZATION_PASSES: Final = 3
 PARTITION_PREPARATION_TIMEOUT_SECONDS: Final = 600
 INVARIANCE_WORKER_TIMEOUT_SECONDS: Final = 7_200
 INVARIANCE_WORKER_ARTIFACT_BYTES_BOUND: Final = 1_048_576
@@ -279,10 +278,18 @@ _SEMANTICS_DESCRIPTOR: Final = (
     "byte_non_equivalence=supplements_are_not_claimed_equivalent_to_raw_byte_categorical_test",
     "padding_summaries=length_total_hamming_and_all_256_full_padding_byte_histogram_counts",
     "variable_shape=each_union_uuid_channel_and_provenance_path_has_an_explicit_presence_hypothesis",
-    "resource_preallocation=decoded_union_paths_project_exact_feature_count_before_columns_then_incremental_32768_cap_then_per_column_cardinality_projection_before_partition_materialization",
+    "resource_preallocation=decoded_union_paths_project_exact_feature_count_before_columns_then_incremental_32768_cap_early_and_branch_converged_fresh_parent_only_feature_gates_use_max_current_or_envelope_decode_plus_projected_feature_result_and_worker_artifact_then_partition_parent_only_gate_uses_max_current_or_feature_plus_envelope_decode_plus_projected_partition_and_result",
     "resource_feature_projection=256_bytes_per_row_feature_cell_plus_1024_bytes_per_semantic_alias_plus_path_name_repetition_present_channel_value_and_512x_descriptor_utf8_expansion_bounds",
-    "resource_partition_projection=per_concrete_feature_cardinality_checked_at_1024_then_python_integer_tuple_partition_allocation_projected_before_materialization_and_measured_deep_graph_bound_after",
-    "resource_partition_deadline=600_seconds_absolute_from_cardinality_projection_through_single_partition_materialization_pass_separate_from_statistics_clock",
+    "resource_phase_order=decode_then_feature_cardinality_projection_and_early_parent_only_host_gate_then_eligibility_quota_and_sufficiency_then_invariant_plan_for_all_inputs_sufficient_executes_invariance_insufficient_skips_it_both_converge_on_fresh_parent_only_feature_gate_then_feature_partition_and_statistics_plan_then_only_admissible_insufficient_receipt_or_sufficient_statistics",
+    "resource_invariance_plan=max_parent_current_or_envelope_decode_plus_adapter_plus_64MiB_times_2_plus_variant_resident_recognizer_live_and_artifact_excludes_phase_exclusive_feature_and_partition_graphs",
+    "resource_statistics_plan=max_parent_current_or_masks_plus_partition_plus_adapter_plus_64MiB_times_parent_plus_workers_plus_exact_worker_and_parent_tails_excludes_released_phase_exclusive_feature_and_envelope_decode_graphs",
+    "resource_partition_projection=per_concrete_feature_cardinality_checked_at_1024_then_python_integer_tuple_partition_allocation_projected_before_materialization_and_one_producer_owned_deep_graph_measurement_inside_statistics_resource_plan_no_caller_scalar",
+    "resource_partition_deadline=600_seconds_absolute_from_cardinality_projection_through_single_partition_materialization_and_resource_plan_measurement_separate_from_statistics_clock",
+    "resource_final_fork_preflight=after_invariance_snapshot_or_statistics_masks_artifact_and_worker_ownership_inputs_resample_exact_parent_current_rss_recompute_max_current_or_phase_static_projection_and_bind_current_projection_static_multiplier_tail_plan_root_cap_and_margin_into_runtime_evidence_statistics_raw_worker_requires_plan_and_empty_evidence_slot_with_no_optional_bypass",
+    "resource_plan_cross_binding=private_invariant_plan_root_copied_into_public_statistics_composite_plan_each_phase_runtime_evidence_replays_projection_from_its_observed_current_and_receipt_reconstructs_only_static_multiplier_tail_cap_margin_and_exact_plan_root_from_the_composite_plan_current_and_projected_values_are_runtime_evidence_not_plan_reconstruction",
+    "resource_admissibility_priority=feature_projection_and_invariant_plan_resource_failures_precede_both_branches_then_feature_partition_and_statistics_plan_resource_failures_precede_even_an_insufficient_receipt_no_resource_inadmissible_receipt_is_issued",
+    "resource_post_invariance_failure=feature_partition_or_statistics_plan_failure_after_completed_invariance_issues_no_receipt_restores_reservation_and_cleans_auditor_artifacts_but_does_not_claim_zero_recognizer_callbacks_or_malicious_callback_rollback",
+    "resource_runtime_observation=phase_preflight_is_exact_fork_boundary_current_projection_while_final_ru_maxrss_plus_wait4_worker_sum_is_a_whole_process_conservative_gate_that_may_include_earlier_phase_exclusive_peaks",
     "resource_parent_results=8192_bytes_per_target_feature_hypothesis_plus_1MiB_per_target_bounds_live_artifact_deserialization_diagnostics_probabilities_and_final_dtos",
     "uuid_absence_encoding=absent_is_internal_all_zero_128_bit_value_outside_canonical_uuidv4_domain",
     "provenance_absence_encoding=absent_is_internal_all_zero_32_byte_digest",
@@ -321,7 +328,7 @@ _SEMANTICS_DESCRIPTOR: Final = (
     "target_max_vector_bound=64_bytes_per_permutation_per_parallel_worker",
     "worker_result_transport=one_or_five_raw_wait4_children_private_retained_dirfd_closed_rfc8785_artifacts_parent_canonical_replay_and_content_sha256_binding_no_object_or_pickle_ipc",
     "worker_result_artifact_bound=512_bytes_per_concrete_feature_plus_1MiB_per_worker",
-    "memory_accounting=runtime_deep_object_graph_size_times_4_with_fixed_envelope_feature_floors_and_4MiB_per_row_decode_gate",
+    "memory_accounting=runtime_deep_object_graph_size_times_4_with_fixed_envelope_feature_floors_4MiB_per_row_decode_gate_phase_specific_lifetimes_and_current_rss_covering_retained_allocator_or_outer_aliases",
     "host_capacity=min_linux_memavailable_and_same_level_cgroup_ancestor_remaining_cpu_capacity_min_os_affinity_and_tightest_cgroup_ancestor_quota",
     "affinity_read_failure=conservative_one_worker_capacity_never_parallel_five",
     "shuffle_rejection=at_most_4096_sha256_u64_draws_per_randbelow_then_atomic_fail",
@@ -332,9 +339,9 @@ _SEMANTICS_DESCRIPTOR: Final = (
     "artifact_cleanup_boundary=ordinary_paths_remove_private_artifacts_path_replacement_or_unexpected_directory_fails_closed_without_following_or_recursive_deletion_and_may_leave_one_bounded_forensic_temp_directory_for_external_namespace_cleanup",
     "resource_caps=1024_rows_32768_features_20000000000_intersections_50000000000_total_statistical_work_units_12884901888_aggregate_self_plus_child_rss_bytes",
     "receipt_execution_coverage=nonempty_invariant_and_permutation_roots_81_runs_rows_times_80_times_5_comparisons",
-    "receipt_finalization=at_most_3_complete_construct_replay_provisional_register_validate_rss_stabilization_passes_each_growth_rolls_back_and_restores_the_same_reserved_slot_then_atomic_reject_if_never_stable",
+    "receipt_finalization=unified_issuance_evidence_for_sufficient_and_insufficient_worker_peak_sum_W_sum_wait4_worker_peaks_or_zero_C_cap_minus_W_reject_W_gt_cap_or_prepeak_gt_C_one_construct_full_replay_insert_exact_pending_entry_one_producer_pending_full_replay_capture_validated_id_then_under_one_registry_lock_recheck_exact_pending_and_entry_id_eq_validated_id_eq_candidate_id_run_path_absolute_deadline_checker_immediately_before_postpeak_sample_require_postpeak_le_C_and_flip_issued_no_post_commit_work_else_direct_exact_rollback_no_retry_conservative_charge_C_plus_W",
     "receipt_authentication=cooperative_same_process_factory_object_identity_only_not_unforgeability_signature_or_authority",
-    "receipt_registry=maximum_8_live_receipts_explicit_release_no_silent_eviction_atomic_reservation_before_execution",
+    "receipt_registry=maximum_8_live_receipts_mutable_exact_entry_pending_to_issued_fsm_public_validate_and_release_require_issued_preallocated_reservation_slot_O1_rollback_no_silent_eviction_atomic_reservation_before_execution",
 )
 SEMANTICS_ID: Final = stable_hash(
     {"version": SEMANTICS_VERSION, "descriptor": _SEMANTICS_DESCRIPTOR},
@@ -458,6 +465,25 @@ def _append_exception_note(error: BaseException, note: str) -> None:
         prior.append(note)
     else:
         setattr(error, "__notes__", [*tuple(prior), note])
+
+
+def _record_cleanup_failure_without_replacing_primary(
+    primary: BaseException,
+    cleanup_error: BaseException,
+    operation: str,
+) -> None:
+    """Record a cleanup failure while preserving the original BaseException."""
+
+    try:
+        _append_exception_note(
+            primary,
+            f"{operation} cleanup failed with "
+            f"{type(cleanup_error).__name__}: {cleanup_error}",
+        )
+    except BaseException:
+        # The primary exception is the caller-visible failure identity.  Even a
+        # hostile exception formatter or note hook may not replace it.
+        pass
 
 
 def _exact_nonempty_str(value: object, name: str, maximum: int = 512) -> str:
@@ -2822,6 +2848,108 @@ class FeatureManifestV1:
 
 
 @dataclass(frozen=True, slots=True)
+class _InvariantResourcePlanV1:
+    rows: int
+    envelope_and_decode_bytes_bound: int
+    adapter_retained_graph_bytes_bound: int
+    parent_current_rss_bytes_at_plan: int
+    invariance_variant_suite_output_bytes_bound: int
+    variant_suite_resident_bytes_per_row_bound: int
+    variant_suite_resident_fixed_bytes_bound: int
+    invariance_variant_suite_resident_bytes_bound: int
+    invariance_recognizer_live_output_bytes_bound: int
+    invariance_worker_artifact_bytes_bound: int
+    estimated_invariance_peak_rss_bytes: int
+    maximum_invariance_estimated_rss_bytes: int
+    invariance_rss_formula: str
+    host_available_memory_safety_margin_bytes: int
+    admissible: bool
+    plan_root: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        if type(self) is not _InvariantResourcePlanV1:
+            raise TypeError("invariant resource plan must use the exact type")
+        integer_fields = (
+            "rows",
+            "envelope_and_decode_bytes_bound",
+            "adapter_retained_graph_bytes_bound",
+            "parent_current_rss_bytes_at_plan",
+            "invariance_variant_suite_output_bytes_bound",
+            "variant_suite_resident_bytes_per_row_bound",
+            "variant_suite_resident_fixed_bytes_bound",
+            "invariance_variant_suite_resident_bytes_bound",
+            "invariance_recognizer_live_output_bytes_bound",
+            "invariance_worker_artifact_bytes_bound",
+            "estimated_invariance_peak_rss_bytes",
+            "maximum_invariance_estimated_rss_bytes",
+            "host_available_memory_safety_margin_bytes",
+        )
+        if any(type(getattr(self, name)) is not int for name in integer_fields):
+            raise TypeError("invariant resource-plan scalars must be exact integers")
+        if not 1 <= self.rows <= MAXIMUM_ROWS:
+            raise ValueError("invariant resource-plan row count is outside the frozen cap")
+        if (
+            self.envelope_and_decode_bytes_bound < self.rows * ENVELOPE_BYTES * 2
+            or not 0 < self.adapter_retained_graph_bytes_bound
+            <= MAXIMUM_WIRE_ADAPTER_RETAINED_GRAPH_BYTES
+            + MAXIMUM_RECOGNIZER_ADAPTER_RETAINED_GRAPH_BYTES
+            or self.parent_current_rss_bytes_at_plan <= 0
+            or self.invariance_variant_suite_output_bytes_bound
+            != self.rows * 80 * ENVELOPE_BYTES
+            or self.variant_suite_resident_bytes_per_row_bound <= 0
+            or self.variant_suite_resident_fixed_bytes_bound <= 0
+            or self.invariance_variant_suite_resident_bytes_bound
+            != self.rows * self.variant_suite_resident_bytes_per_row_bound
+            + self.variant_suite_resident_fixed_bytes_bound
+            or self.invariance_recognizer_live_output_bytes_bound
+            != RECOGNIZER_OUTPUT_SIMULTANEOUS_GRAPH_MULTIPLIER
+            * _recognizer_output_graph_bytes_bound(self.rows)
+            or self.invariance_worker_artifact_bytes_bound
+            != INVARIANCE_WORKER_ARTIFACT_BYTES_BOUND
+            or self.maximum_invariance_estimated_rss_bytes
+            != MAXIMUM_ESTIMATED_RSS_BYTES
+            or self.host_available_memory_safety_margin_bytes
+            != HOST_AVAILABLE_MEMORY_SAFETY_MARGIN_BYTES
+        ):
+            raise ValueError("invariant resource-plan bound/frozen-cap drift")
+        if self.invariance_rss_formula != (
+            "max(parent_current_rss,envelope_and_decode_bytes+"
+            "adapter_retained_graph_bytes+64MiB)*2+variant_suite_resident_bytes+"
+            "recognizer_live_output_bytes+invariance_worker_artifact_bytes"
+        ):
+            raise ValueError("invariant resource-plan RSS formula drift")
+        expected_rss = (
+            max(
+                self.parent_current_rss_bytes_at_plan,
+                self.envelope_and_decode_bytes_bound
+                + self.adapter_retained_graph_bytes_bound
+                + 64 * 1_048_576,
+            )
+            * 2
+            + self.invariance_variant_suite_resident_bytes_bound
+            + self.invariance_recognizer_live_output_bytes_bound
+            + self.invariance_worker_artifact_bytes_bound
+        )
+        if self.estimated_invariance_peak_rss_bytes != expected_rss:
+            raise ValueError("invariant resource-plan RSS estimate drift")
+        expected_admissible = expected_rss <= MAXIMUM_ESTIMATED_RSS_BYTES
+        if type(self.admissible) is not bool or self.admissible is not expected_admissible:
+            raise ValueError("invariant resource-plan admissibility drift")
+        object.__setattr__(
+            self,
+            "plan_root",
+            stable_hash(
+                tuple(
+                    (name, getattr(self, name))
+                    for name in _InvariantResourcePlanV1.__slots__
+                    if name != "plan_root"
+                ),
+                prefix="phase2b_formal_covert_invariant_resource_plan_",
+            ),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class ResourcePlanV1:
     rows: int
     concrete_features: int
@@ -2856,6 +2984,8 @@ class ResourcePlanV1:
     parent_result_working_bytes_bound: int
     adapter_retained_graph_bytes_bound: int
     parent_current_rss_bytes_at_plan: int
+    invariance_parent_current_rss_bytes_at_plan: int
+    invariance_resource_plan_root: str
     invariance_variant_suite_output_bytes_bound: int
     variant_suite_resident_bytes_per_row_bound: int
     variant_suite_resident_fixed_bytes_bound: int
@@ -2876,6 +3006,7 @@ class ResourcePlanV1:
     effective_cpu_capacity_at_preflight: int
     maximum_parallel_workers: int
     admissible: bool
+    resource_plan_root: str = field(init=False)
 
     def __post_init__(self) -> None:
         if type(self) is not ResourcePlanV1:
@@ -2914,6 +3045,7 @@ class ResourcePlanV1:
             "parent_result_working_bytes_bound",
             "adapter_retained_graph_bytes_bound",
             "parent_current_rss_bytes_at_plan",
+            "invariance_parent_current_rss_bytes_at_plan",
             "invariance_variant_suite_output_bytes_bound",
             "variant_suite_resident_bytes_per_row_bound",
             "variant_suite_resident_fixed_bytes_bound",
@@ -2977,8 +3109,7 @@ class ResourcePlanV1:
         ):
             raise ValueError("resource-plan frozen cap drift")
         if self.aggregate_rss_formula != (
-            "max(parent_current_rss,mask_bytes+feature_matrix_bytes+"
-            "envelope_and_decode_bytes+partition_matrix_bytes+"
+            "max(parent_current_rss,mask_bytes+partition_matrix_bytes+"
             "adapter_retained_graph_bytes+64MiB)"
             "*(1+workers)+metric_cache_bytes*workers+permutation_metric_tuple_bytes"
             "+target_max_vector_bytes+worker_result_artifact_bytes+"
@@ -2986,10 +3117,9 @@ class ResourcePlanV1:
         ):
             raise ValueError("resource-plan aggregate RSS formula drift")
         if self.invariance_rss_formula != (
-            "max(parent_current_rss,feature_matrix_bytes+envelope_and_decode_bytes+"
-            "partition_matrix_bytes+adapter_retained_graph_bytes+64MiB)*2+"
-            "variant_suite_resident_bytes+recognizer_live_output_bytes+"
-            "invariance_worker_artifact_bytes"
+            "max(parent_current_rss,envelope_and_decode_bytes+"
+            "adapter_retained_graph_bytes+64MiB)*2+variant_suite_resident_bytes+"
+            "recognizer_live_output_bytes+invariance_worker_artifact_bytes"
         ):
             raise ValueError("resource-plan invariant RSS formula drift")
         if any(
@@ -3015,6 +3145,7 @@ class ResourcePlanV1:
                 "parent_result_working_bytes_bound",
                 "adapter_retained_graph_bytes_bound",
                 "parent_current_rss_bytes_at_plan",
+                "invariance_parent_current_rss_bytes_at_plan",
                 "invariance_variant_suite_output_bytes_bound",
                 "variant_suite_resident_bytes_per_row_bound",
                 "variant_suite_resident_fixed_bytes_bound",
@@ -3042,6 +3173,7 @@ class ResourcePlanV1:
             <= MAXIMUM_WIRE_ADAPTER_RETAINED_GRAPH_BYTES
             + MAXIMUM_RECOGNIZER_ADAPTER_RETAINED_GRAPH_BYTES
             or self.parent_current_rss_bytes_at_plan <= 0
+            or self.invariance_parent_current_rss_bytes_at_plan <= 0
             or self.invariance_variant_suite_output_bytes_bound
             != self.rows * 80 * ENVELOPE_BYTES
             or self.variant_suite_resident_bytes_per_row_bound <= 0
@@ -3056,29 +3188,53 @@ class ResourcePlanV1:
             != INVARIANCE_WORKER_ARTIFACT_BYTES_BOUND
         ):
             raise ValueError("resource-plan object-graph/preallocation bound is below its floor")
-        expected_invariance_rss = (
-            max(
-                self.parent_current_rss_bytes_at_plan,
-                self.feature_matrix_bytes_bound
-                + self.envelope_and_decode_bytes_bound
-                + self.partition_matrix_bytes_bound
-                + self.adapter_retained_graph_bytes_bound
-                + 64 * 1_048_576
-            )
-            * 2
-            + self.invariance_variant_suite_resident_bytes_bound
-            + self.invariance_recognizer_live_output_bytes_bound
-            + self.invariance_worker_artifact_bytes_bound
+        invariant_plan = _InvariantResourcePlanV1(
+            rows=self.rows,
+            envelope_and_decode_bytes_bound=self.envelope_and_decode_bytes_bound,
+            adapter_retained_graph_bytes_bound=self.adapter_retained_graph_bytes_bound,
+            parent_current_rss_bytes_at_plan=(
+                self.invariance_parent_current_rss_bytes_at_plan
+            ),
+            invariance_variant_suite_output_bytes_bound=(
+                self.invariance_variant_suite_output_bytes_bound
+            ),
+            variant_suite_resident_bytes_per_row_bound=(
+                self.variant_suite_resident_bytes_per_row_bound
+            ),
+            variant_suite_resident_fixed_bytes_bound=(
+                self.variant_suite_resident_fixed_bytes_bound
+            ),
+            invariance_variant_suite_resident_bytes_bound=(
+                self.invariance_variant_suite_resident_bytes_bound
+            ),
+            invariance_recognizer_live_output_bytes_bound=(
+                self.invariance_recognizer_live_output_bytes_bound
+            ),
+            invariance_worker_artifact_bytes_bound=(
+                self.invariance_worker_artifact_bytes_bound
+            ),
+            estimated_invariance_peak_rss_bytes=(
+                self.estimated_invariance_peak_rss_bytes
+            ),
+            maximum_invariance_estimated_rss_bytes=(
+                self.maximum_invariance_estimated_rss_bytes
+            ),
+            invariance_rss_formula=self.invariance_rss_formula,
+            host_available_memory_safety_margin_bytes=(
+                self.host_available_memory_safety_margin_bytes
+            ),
+            admissible=(
+                self.estimated_invariance_peak_rss_bytes
+                <= self.maximum_invariance_estimated_rss_bytes
+            ),
         )
-        if self.estimated_invariance_peak_rss_bytes != expected_invariance_rss:
-            raise ValueError("resource-plan invariant RSS estimate drift")
+        if self.invariance_resource_plan_root != invariant_plan.plan_root:
+            raise ValueError("resource-plan invariant phase root drift")
         if self.effective_cpu_capacity_at_preflight < 1:
             raise ValueError("resource-plan effective CPU capacity must be positive")
         resident_parent_bound = max(
             self.parent_current_rss_bytes_at_plan,
             self.permutation_label_mask_bytes_bound
-            + self.feature_matrix_bytes_bound
-            + self.envelope_and_decode_bytes_bound
             + self.partition_matrix_bytes_bound
             + self.adapter_retained_graph_bytes_bound
             + 64 * 1_048_576,
@@ -3164,11 +3320,22 @@ class ResourcePlanV1:
             and self.estimated_total_statistical_work_units
             <= MAXIMUM_TOTAL_STATISTICAL_WORK_UNITS
             and self.estimated_peak_rss_bytes <= MAXIMUM_ESTIMATED_RSS_BYTES
-            and self.estimated_invariance_peak_rss_bytes
-            <= MAXIMUM_ESTIMATED_RSS_BYTES
+            and invariant_plan.admissible
         )
         if type(self.admissible) is not bool or self.admissible is not expected_admissible:
             raise ValueError("resource-plan admissibility drift")
+        object.__setattr__(
+            self,
+            "resource_plan_root",
+            stable_hash(
+                tuple(
+                    (name, getattr(self, name))
+                    for name in ResourcePlanV1.__slots__
+                    if name != "resource_plan_root"
+                ),
+                prefix="phase2b_formal_covert_statistics_resource_plan_",
+            ),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -3288,11 +3455,97 @@ class EligibilityMaskQuotaReceiptV1:
 
 
 @dataclass(frozen=True, slots=True)
-class StatisticalRuntimeEvidenceV1:
+class _PhaseResourcePreflightEvidenceV1:
+    phase: str
+    resource_plan_root: str
+    parent_current_rss_bytes_at_preflight: int
+    static_parent_bytes_bound: int
+    fork_parent_rss_multiplier: int
+    additional_bytes_bound: int
+    projected_aggregate_rss_bytes_at_preflight: int
+    maximum_estimated_rss_bytes: int
+    host_available_memory_safety_margin_bytes: int
+
+    def __post_init__(self) -> None:
+        if self.phase not in {"INVARIANCE", "STATISTICS"}:
+            raise ValueError("phase resource-preflight kind drift")
+        expected_root_prefix = (
+            "phase2b_formal_covert_invariant_resource_plan_"
+            if self.phase == "INVARIANCE"
+            else "phase2b_formal_covert_statistics_resource_plan_"
+        )
+        if (
+            type(self.resource_plan_root) is not str
+            or re.fullmatch(re.escape(expected_root_prefix) + r"[0-9a-f]{64}", self.resource_plan_root)
+            is None
+        ):
+            raise ValueError("phase resource-preflight plan root drift")
+        for name in (
+            "parent_current_rss_bytes_at_preflight",
+            "static_parent_bytes_bound",
+            "fork_parent_rss_multiplier",
+            "additional_bytes_bound",
+            "projected_aggregate_rss_bytes_at_preflight",
+            "maximum_estimated_rss_bytes",
+            "host_available_memory_safety_margin_bytes",
+        ):
+            if type(getattr(self, name)) is not int or getattr(self, name) < 0:
+                raise TypeError("phase resource-preflight scalars must be exact nonnegative integers")
+        expected_multiplier = 2 if self.phase == "INVARIANCE" else None
+        if (
+            self.parent_current_rss_bytes_at_preflight <= 0
+            or self.static_parent_bytes_bound <= 0
+            or self.fork_parent_rss_multiplier < 2
+            or expected_multiplier is not None
+            and self.fork_parent_rss_multiplier != expected_multiplier
+            or self.maximum_estimated_rss_bytes != MAXIMUM_ESTIMATED_RSS_BYTES
+            or self.host_available_memory_safety_margin_bytes
+            != HOST_AVAILABLE_MEMORY_SAFETY_MARGIN_BYTES
+        ):
+            raise ValueError("phase resource-preflight frozen scalar drift")
+        expected_projection = (
+            max(
+                self.parent_current_rss_bytes_at_preflight,
+                self.static_parent_bytes_bound,
+            )
+            * self.fork_parent_rss_multiplier
+            + self.additional_bytes_bound
+        )
+        if self.projected_aggregate_rss_bytes_at_preflight != expected_projection:
+            raise ValueError("phase resource-preflight projection formula drift")
+        if (
+            self.projected_aggregate_rss_bytes_at_preflight
+            > self.maximum_estimated_rss_bytes
+        ):
+            raise ValueError("phase resource-preflight projection exceeds frozen cap")
+
+
+@dataclass(frozen=True, slots=True)
+class _StatisticalRuntimeEvidenceInputsV1:
+    resource_plan_root: str
+    resource_preflight: _PhaseResourcePreflightEvidenceV1
     system_available_memory_bytes_at_preflight: int
     cgroup_remaining_memory_bytes_at_preflight: int | None
     host_available_memory_bytes_at_preflight: int
-    parent_peak_rss_bytes: int
+    worker_peak_rss_bytes: tuple[int, ...]
+    worker_result_artifact_bytes: tuple[int, ...]
+    worker_result_artifact_sha256: tuple[str, ...]
+    parent_result_object_graph_bytes_observed: int
+    worker_timeout_seconds: int
+    parent_postprocess_deadline_schema: str
+    parent_postprocess_deadline_preemptive: bool
+    external_supervisor_required: bool
+
+
+@dataclass(frozen=True, slots=True)
+class StatisticalRuntimeEvidenceV1:
+    resource_plan_root: str
+    resource_preflight: _PhaseResourcePreflightEvidenceV1
+    system_available_memory_bytes_at_preflight: int
+    cgroup_remaining_memory_bytes_at_preflight: int | None
+    host_available_memory_bytes_at_preflight: int
+    parent_peak_rss_bytes_before_receipt_finalization: int
+    parent_rss_charge_ceiling_bytes: int
     worker_peak_rss_bytes: tuple[int, ...]
     worker_result_artifact_bytes: tuple[int, ...]
     worker_result_artifact_sha256: tuple[str, ...]
@@ -3303,21 +3556,37 @@ class StatisticalRuntimeEvidenceV1:
     parent_postprocess_deadline_schema: str
     parent_postprocess_deadline_preemptive: bool
     external_supervisor_required: bool
-    receipt_finalization_rss_stabilization_passes: int
+    receipt_finalization_complete_pending_validation_count: int
+    receipt_finalization_parent_peak_within_charge_ceiling: bool
     within_frozen_aggregate_cap: bool
 
     def __post_init__(self) -> None:
         if type(self) is not StatisticalRuntimeEvidenceV1:
             raise TypeError("statistical runtime evidence must use the exact type")
+        if (
+            type(self.resource_plan_root) is not str
+            or not self.resource_plan_root.startswith(
+                "phase2b_formal_covert_statistics_resource_plan_"
+            )
+        ):
+            raise ValueError("statistical runtime resource-plan root drift")
+        if (
+            type(self.resource_preflight) is not _PhaseResourcePreflightEvidenceV1
+            or self.resource_preflight.phase != "STATISTICS"
+            or self.resource_preflight.resource_plan_root != self.resource_plan_root
+        ):
+            raise ValueError("statistical runtime phase-preflight evidence drift")
+        self.resource_preflight.__post_init__()
         for name in (
             "system_available_memory_bytes_at_preflight",
             "host_available_memory_bytes_at_preflight",
-            "parent_peak_rss_bytes",
+            "parent_peak_rss_bytes_before_receipt_finalization",
+            "parent_rss_charge_ceiling_bytes",
             "parent_result_object_graph_bytes_observed",
             "conservative_parent_plus_worker_peak_sum_bytes",
             "statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds",
             "worker_timeout_seconds",
-            "receipt_finalization_rss_stabilization_passes",
+            "receipt_finalization_complete_pending_validation_count",
         ):
             if type(getattr(self, name)) is not int or getattr(self, name) < 0:
                 raise TypeError("statistical runtime evidence scalars must be exact integers")
@@ -3338,6 +3607,11 @@ class StatisticalRuntimeEvidenceV1:
         )
         if self.host_available_memory_bytes_at_preflight != expected_available:
             raise ValueError("effective host/cgroup memory evidence drift")
+        if self.host_available_memory_bytes_at_preflight < (
+            self.resource_preflight.projected_aggregate_rss_bytes_at_preflight
+            + self.resource_preflight.host_available_memory_safety_margin_bytes
+        ):
+            raise ValueError("statistical runtime host preflight did not cover final projection")
         if type(self.worker_result_artifact_bytes) is not tuple or any(
             type(item) is not int or item <= 0
             for item in self.worker_result_artifact_bytes
@@ -3352,10 +3626,28 @@ class StatisticalRuntimeEvidenceV1:
             self.worker_result_artifact_sha256
         ):
             raise ValueError("worker artifact byte/digest evidence cardinality drift")
-        if self.conservative_parent_plus_worker_peak_sum_bytes != (
-            self.parent_peak_rss_bytes + sum(self.worker_peak_rss_bytes)
+        worker_peak_sum = sum(self.worker_peak_rss_bytes)
+        if worker_peak_sum > MAXIMUM_ESTIMATED_RSS_BYTES:
+            raise ValueError("statistical worker RSS sum exceeds the frozen cap")
+        expected_parent_charge_ceiling = (
+            MAXIMUM_ESTIMATED_RSS_BYTES - worker_peak_sum
+        )
+        if self.parent_rss_charge_ceiling_bytes != expected_parent_charge_ceiling:
+            raise ValueError("statistical parent RSS charge ceiling formula drift")
+        if (
+            self.parent_peak_rss_bytes_before_receipt_finalization
+            > self.parent_rss_charge_ceiling_bytes
         ):
-            raise ValueError("statistical runtime conservative RSS sum drift")
+            raise ValueError(
+                "statistical pre-finalization parent peak exceeds its charge ceiling"
+            )
+        if (
+            self.conservative_parent_plus_worker_peak_sum_bytes
+            != self.parent_rss_charge_ceiling_bytes + worker_peak_sum
+            or self.conservative_parent_plus_worker_peak_sum_bytes
+            > MAXIMUM_ESTIMATED_RSS_BYTES
+        ):
+            raise ValueError("statistical runtime conservative RSS charge drift")
         if self.worker_timeout_seconds != STATISTICS_WORKER_TIMEOUT_SECONDS:
             raise ValueError("statistical runtime timeout drift")
         if self.statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds > (
@@ -3369,23 +3661,107 @@ class StatisticalRuntimeEvidenceV1:
             or self.external_supervisor_required is not True
         ):
             raise ValueError("statistical parent-postprocess deadline boundary drift")
-        if not 0 <= self.receipt_finalization_rss_stabilization_passes <= (
-            MAXIMUM_RECEIPT_RSS_STABILIZATION_PASSES
+        if (
+            self.receipt_finalization_complete_pending_validation_count != 1
+            or type(
+                self.receipt_finalization_parent_peak_within_charge_ceiling
+            )
+            is not bool
+            or self.receipt_finalization_parent_peak_within_charge_ceiling is not True
         ):
-            raise ValueError("statistical receipt RSS stabilization evidence drift")
-        expected = (
-            self.conservative_parent_plus_worker_peak_sum_bytes
-            <= MAXIMUM_ESTIMATED_RSS_BYTES
-        )
+            raise ValueError("statistical receipt finalization evidence drift")
         if (
             type(self.within_frozen_aggregate_cap) is not bool
-            or self.within_frozen_aggregate_cap is not expected
+            or self.within_frozen_aggregate_cap is not True
         ):
             raise ValueError("statistical runtime aggregate-cap verdict drift")
 
 
 @dataclass(frozen=True, slots=True)
+class ReceiptIssuanceRuntimeEvidenceV1:
+    absolute_deadline_kind: str
+    absolute_deadline_monotonic_nanoseconds: int
+    absolute_deadline_timeout_seconds: int
+    worker_peak_rss_bytes_sum: int
+    parent_peak_rss_bytes_before_receipt_finalization: int
+    parent_rss_charge_ceiling_bytes: int
+    conservative_parent_plus_worker_peak_sum_bytes: int
+    receipt_finalization_complete_pending_validation_count: int
+    receipt_finalization_locked_deadline_check_count: int
+    receipt_finalization_locked_deadline_within_absolute_limit: bool
+    receipt_finalization_parent_peak_within_charge_ceiling: bool
+
+    def __post_init__(self) -> None:
+        if type(self) is not ReceiptIssuanceRuntimeEvidenceV1:
+            raise TypeError("receipt issuance evidence must use the exact type")
+        if type(self.absolute_deadline_kind) is not str or (
+            self.absolute_deadline_kind
+            not in {
+                "STATISTICS",
+                "PARTITION_PREPARATION",
+            }
+        ):
+            raise ValueError("receipt issuance absolute-deadline kind drift")
+        for name in (
+            "absolute_deadline_monotonic_nanoseconds",
+            "absolute_deadline_timeout_seconds",
+            "worker_peak_rss_bytes_sum",
+            "parent_peak_rss_bytes_before_receipt_finalization",
+            "parent_rss_charge_ceiling_bytes",
+            "conservative_parent_plus_worker_peak_sum_bytes",
+            "receipt_finalization_complete_pending_validation_count",
+            "receipt_finalization_locked_deadline_check_count",
+        ):
+            if type(getattr(self, name)) is not int or getattr(self, name) < 0:
+                raise TypeError(
+                    "receipt issuance evidence scalars must be exact nonnegative integers"
+                )
+        expected_timeout = (
+            STATISTICS_WORKER_TIMEOUT_SECONDS
+            if self.absolute_deadline_kind == "STATISTICS"
+            else PARTITION_PREPARATION_TIMEOUT_SECONDS
+        )
+        if (
+            self.absolute_deadline_monotonic_nanoseconds <= 0
+            or self.absolute_deadline_timeout_seconds != expected_timeout
+            or self.worker_peak_rss_bytes_sum > MAXIMUM_ESTIMATED_RSS_BYTES
+        ):
+            raise ValueError("receipt issuance deadline/worker bound drift")
+        expected_ceiling = (
+            MAXIMUM_ESTIMATED_RSS_BYTES - self.worker_peak_rss_bytes_sum
+        )
+        if (
+            self.parent_rss_charge_ceiling_bytes != expected_ceiling
+            or self.parent_peak_rss_bytes_before_receipt_finalization
+            > self.parent_rss_charge_ceiling_bytes
+            or self.conservative_parent_plus_worker_peak_sum_bytes
+            != self.parent_rss_charge_ceiling_bytes
+            + self.worker_peak_rss_bytes_sum
+            or self.conservative_parent_plus_worker_peak_sum_bytes
+            != MAXIMUM_ESTIMATED_RSS_BYTES
+        ):
+            raise ValueError("receipt issuance W/C/prepeak charge formula drift")
+        if (
+            self.receipt_finalization_complete_pending_validation_count != 1
+            or self.receipt_finalization_locked_deadline_check_count != 1
+            or type(
+                self.receipt_finalization_locked_deadline_within_absolute_limit
+            )
+            is not bool
+            or not self.receipt_finalization_locked_deadline_within_absolute_limit
+            or type(
+                self.receipt_finalization_parent_peak_within_charge_ceiling
+            )
+            is not bool
+            or not self.receipt_finalization_parent_peak_within_charge_ceiling
+        ):
+            raise ValueError("receipt issuance locked-finalization evidence drift")
+
+
+@dataclass(frozen=True, slots=True)
 class InvariantRuntimeEvidenceV1:
+    invariance_resource_plan_root: str
+    resource_preflight: _PhaseResourcePreflightEvidenceV1
     system_available_memory_bytes_at_preflight: int
     cgroup_remaining_memory_bytes_at_preflight: int | None
     host_available_memory_bytes_at_preflight: int
@@ -3419,6 +3795,21 @@ class InvariantRuntimeEvidenceV1:
     def __post_init__(self) -> None:
         if type(self) is not InvariantRuntimeEvidenceV1:
             raise TypeError("invariant runtime evidence must use the exact type")
+        if (
+            type(self.invariance_resource_plan_root) is not str
+            or not self.invariance_resource_plan_root.startswith(
+                "phase2b_formal_covert_invariant_resource_plan_"
+            )
+        ):
+            raise ValueError("invariant runtime resource-plan root drift")
+        if (
+            type(self.resource_preflight) is not _PhaseResourcePreflightEvidenceV1
+            or self.resource_preflight.phase != "INVARIANCE"
+            or self.resource_preflight.resource_plan_root
+            != self.invariance_resource_plan_root
+        ):
+            raise ValueError("invariant runtime phase-preflight evidence drift")
+        self.resource_preflight.__post_init__()
         integer_fields = (
             "system_available_memory_bytes_at_preflight",
             "host_available_memory_bytes_at_preflight",
@@ -3457,6 +3848,11 @@ class InvariantRuntimeEvidenceV1:
         )
         if self.host_available_memory_bytes_at_preflight != expected_available:
             raise ValueError("invariant effective host-memory evidence drift")
+        if self.host_available_memory_bytes_at_preflight < (
+            self.resource_preflight.projected_aggregate_rss_bytes_at_preflight
+            + self.resource_preflight.host_available_memory_safety_margin_bytes
+        ):
+            raise ValueError("invariant runtime host preflight did not cover final projection")
         if self.conservative_parent_plus_worker_peak_sum_bytes != (
             self.parent_peak_rss_bytes + self.worker_peak_rss_bytes
         ):
@@ -3467,6 +3863,9 @@ class InvariantRuntimeEvidenceV1:
             self.parent_current_rss_bytes_at_completion,
         )
         if (
+            self.parent_current_rss_bytes_at_start
+            != self.resource_preflight.parent_current_rss_bytes_at_preflight
+            or
             self.parent_peak_rss_bytes != self.parent_historical_peak_rss_bytes
             or self.parent_historical_peak_rss_bytes < maximum_sampled_current
         ):
@@ -3809,6 +4208,7 @@ class FormalCovertAuditReceiptV1:
     eligibility_mask_quota: EligibilityMaskQuotaReceiptV1
     invariant_runtime_evidence: InvariantRuntimeEvidenceV1 | None
     statistics_runtime_evidence: StatisticalRuntimeEvidenceV1 | None
+    receipt_issuance_runtime_evidence: ReceiptIssuanceRuntimeEvidenceV1
     results: tuple[TargetFeatureResultV1, ...]
     target_family_results: tuple[TargetFamilyMaxTResultV1, ...]
     invariant_execution_root: str | None
@@ -3922,6 +4322,12 @@ class FormalCovertAuditReceiptV1:
             raise TypeError("receipt absence proof must use an exact tuple")
         if not self.resource_plan.admissible:
             raise ValueError("an executed transcript cannot use an inadmissible resource plan")
+        if (
+            type(self.receipt_issuance_runtime_evidence)
+            is not ReceiptIssuanceRuntimeEvidenceV1
+        ):
+            raise TypeError("receipt lacks exact branch-neutral issuance evidence")
+        self.receipt_issuance_runtime_evidence.__post_init__()
         for name in (
             "invariant_run_count",
             "exact_invariant_comparisons",
@@ -3970,6 +4376,17 @@ class FormalCovertAuditReceiptV1:
                 raise ValueError("insufficient rejection cannot expose runtime evidence")
             if self.positive_decision_claim is not None:
                 raise ValueError("insufficient rejection cannot carry a positive claim")
+            if (
+                self.receipt_issuance_runtime_evidence.absolute_deadline_kind
+                != "PARTITION_PREPARATION"
+                or self.receipt_issuance_runtime_evidence.worker_peak_rss_bytes_sum
+                != 0
+                or self.receipt_issuance_runtime_evidence.parent_rss_charge_ceiling_bytes
+                != MAXIMUM_ESTIMATED_RSS_BYTES
+            ):
+                raise ValueError(
+                    "insufficient receipt issuance evidence must use W=0 and its partition deadline"
+                )
         else:
             if not all(item.sufficient for item in self.sufficiency):
                 raise ValueError("executed receipt contains an insufficient target")
@@ -3997,6 +4414,10 @@ class FormalCovertAuditReceiptV1:
             if type(self.invariant_runtime_evidence) is not InvariantRuntimeEvidenceV1:
                 raise TypeError("executed transcript lacks exact invariant runtime evidence")
             self.invariant_runtime_evidence.__post_init__()
+            _validate_invariant_phase_preflight_against_resource_plan(
+                self.resource_plan,
+                self.invariant_runtime_evidence.resource_preflight,
+            )
             if (
                 self.invariant_runtime_evidence.invariant_run_count
                 != self.invariant_run_count
@@ -4006,11 +4427,27 @@ class FormalCovertAuditReceiptV1:
                 != self.audited_row_count * 80
                 or self.invariant_runtime_evidence.adapter_execution_pin_root
                 != self.adapter_execution_pin_root
+                or self.invariant_runtime_evidence.invariance_resource_plan_root
+                != self.resource_plan.invariance_resource_plan_root
+                or self.invariant_runtime_evidence.resource_preflight.static_parent_bytes_bound
+                != self.resource_plan.envelope_and_decode_bytes_bound
+                + self.resource_plan.adapter_retained_graph_bytes_bound
+                + 64 * 1_048_576
+                or self.invariant_runtime_evidence.resource_preflight.fork_parent_rss_multiplier
+                != 2
+                or self.invariant_runtime_evidence.resource_preflight.additional_bytes_bound
+                != self.resource_plan.invariance_variant_suite_resident_bytes_bound
+                + self.resource_plan.invariance_recognizer_live_output_bytes_bound
+                + self.resource_plan.invariance_worker_artifact_bytes_bound
+                or self.invariant_runtime_evidence.resource_preflight.maximum_estimated_rss_bytes
+                != self.resource_plan.maximum_invariance_estimated_rss_bytes
+                or self.invariant_runtime_evidence.resource_preflight.host_available_memory_safety_margin_bytes
+                != self.resource_plan.host_available_memory_safety_margin_bytes
                 or self.invariant_runtime_evidence.variant_suite_resident_object_graph_bytes_observed
                 > self.resource_plan.invariance_variant_suite_resident_bytes_bound
                 or not self.invariant_runtime_evidence.within_frozen_aggregate_cap
                 or self.invariant_runtime_evidence.host_available_memory_bytes_at_preflight
-                < self.resource_plan.estimated_invariance_peak_rss_bytes
+                < self.invariant_runtime_evidence.resource_preflight.projected_aggregate_rss_bytes_at_preflight
                 + self.resource_plan.host_available_memory_safety_margin_bytes
             ):
                 raise ValueError("invariant runtime/resource receipt linkage drift")
@@ -4119,6 +4556,10 @@ class FormalCovertAuditReceiptV1:
             if type(self.statistics_runtime_evidence) is not StatisticalRuntimeEvidenceV1:
                 raise TypeError("executed receipt lacks exact statistical runtime evidence")
             self.statistics_runtime_evidence.__post_init__()
+            _validate_statistics_phase_preflight_against_resource_plan(
+                self.resource_plan,
+                self.statistics_runtime_evidence.resource_preflight,
+            )
             expected_worker_count = self.resource_plan.maximum_parallel_workers
             if len(self.statistics_runtime_evidence.worker_peak_rss_bytes) != expected_worker_count:
                 raise ValueError("statistical runtime worker-count evidence drift")
@@ -4131,6 +4572,27 @@ class FormalCovertAuditReceiptV1:
             ) > self.resource_plan.worker_result_artifact_bytes_bound:
                 raise ValueError("statistical worker artifact exceeded its resource bound")
             if (
+                self.statistics_runtime_evidence.resource_plan_root
+                != self.resource_plan.resource_plan_root
+                or self.statistics_runtime_evidence.resource_preflight.static_parent_bytes_bound
+                != self.resource_plan.permutation_label_mask_bytes_bound
+                + self.resource_plan.partition_matrix_bytes_bound
+                + self.resource_plan.adapter_retained_graph_bytes_bound
+                + 64 * 1_048_576
+                or self.statistics_runtime_evidence.resource_preflight.fork_parent_rss_multiplier
+                != 1 + self.resource_plan.maximum_parallel_workers
+                or self.statistics_runtime_evidence.resource_preflight.additional_bytes_bound
+                != self.resource_plan.metric_cache_bytes_bound
+                * self.resource_plan.maximum_parallel_workers
+                + self.resource_plan.permutation_metric_tuple_bytes_bound
+                + self.resource_plan.target_max_vector_bytes_bound
+                + self.resource_plan.worker_result_artifact_bytes_bound
+                + self.resource_plan.parent_result_working_bytes_bound
+                or self.statistics_runtime_evidence.resource_preflight.maximum_estimated_rss_bytes
+                != self.resource_plan.maximum_estimated_rss_bytes
+                or self.statistics_runtime_evidence.resource_preflight.host_available_memory_safety_margin_bytes
+                != self.resource_plan.host_available_memory_safety_margin_bytes
+                or
                 self.statistics_runtime_evidence.parent_result_object_graph_bytes_observed
                 > self.resource_plan.parent_result_working_bytes_bound
             ):
@@ -4140,15 +4602,38 @@ class FormalCovertAuditReceiptV1:
             if (
                 self.statistics_runtime_evidence.parent_postprocess_deadline_preemptive
                 or not self.statistics_runtime_evidence.external_supervisor_required
-                or self.statistics_runtime_evidence.receipt_finalization_rss_stabilization_passes
-                < 1
+                or self.statistics_runtime_evidence.receipt_finalization_complete_pending_validation_count
+                != 1
+                or self.statistics_runtime_evidence.receipt_finalization_parent_peak_within_charge_ceiling
+                is not True
             ):
                 raise ValueError(
                     "executed receipt parent-postprocess boundary drift"
                 )
+            issuance = self.receipt_issuance_runtime_evidence
+            worker_peak_sum = sum(
+                self.statistics_runtime_evidence.worker_peak_rss_bytes
+            )
+            if (
+                issuance.absolute_deadline_kind != "STATISTICS"
+                or issuance.worker_peak_rss_bytes_sum != worker_peak_sum
+                or issuance.parent_peak_rss_bytes_before_receipt_finalization
+                != self.statistics_runtime_evidence.parent_peak_rss_bytes_before_receipt_finalization
+                or issuance.parent_rss_charge_ceiling_bytes
+                != self.statistics_runtime_evidence.parent_rss_charge_ceiling_bytes
+                or issuance.conservative_parent_plus_worker_peak_sum_bytes
+                != self.statistics_runtime_evidence.conservative_parent_plus_worker_peak_sum_bytes
+                or issuance.receipt_finalization_complete_pending_validation_count
+                != self.statistics_runtime_evidence.receipt_finalization_complete_pending_validation_count
+                or issuance.receipt_finalization_parent_peak_within_charge_ceiling
+                is not self.statistics_runtime_evidence.receipt_finalization_parent_peak_within_charge_ceiling
+            ):
+                raise ValueError(
+                    "statistical and branch-neutral issuance evidence cross-binding drift"
+                )
             if (
                 self.statistics_runtime_evidence.host_available_memory_bytes_at_preflight
-                < self.resource_plan.estimated_peak_rss_bytes
+                < self.statistics_runtime_evidence.resource_preflight.projected_aggregate_rss_bytes_at_preflight
                 + self.resource_plan.host_available_memory_safety_margin_bytes
             ):
                 raise ValueError("statistical runtime host-memory preflight evidence drift")
@@ -4177,6 +4662,9 @@ class FormalCovertAuditReceiptV1:
                     "eligibility_mask_quota": self.eligibility_mask_quota,
                     "invariant_runtime_evidence": self.invariant_runtime_evidence,
                     "statistics_runtime_evidence": self.statistics_runtime_evidence,
+                    "receipt_issuance_runtime_evidence": (
+                        self.receipt_issuance_runtime_evidence
+                    ),
                     "results_hex": tuple(
                         _target_feature_metric_projection(item)
                         for item in self.results
@@ -4213,15 +4701,37 @@ class FormalCovertAuditReceiptV1:
 
 
 _RECEIPT_EXECUTION_FACTORY_TOKEN: Final = object()
+
+
+class _InProcessReceiptRegistryStateV1(Enum):
+    PENDING = "PENDING"
+    ISSUED = "ISSUED"
+
+
+@dataclass(slots=True, eq=False)
+class _InProcessReceiptReservationV1:
+    entry_identity: int | None = None
+
+
+@dataclass(slots=True, eq=False)
+class _InProcessReceiptRegistryEntryV1:
+    receipt: FormalCovertAuditReceiptV1
+    receipt_id: str
+    reservation: _InProcessReceiptReservationV1
+    state: _InProcessReceiptRegistryStateV1
+
+
 _IN_PROCESS_EXECUTED_RECEIPTS: dict[
-    int, tuple[FormalCovertAuditReceiptV1, str, object]
+    int, _InProcessReceiptRegistryEntryV1
 ] = {}
-_IN_PROCESS_RECEIPT_RESERVATIONS: set[object] = set()
+_IN_PROCESS_RECEIPT_RESERVATIONS: set[
+    _InProcessReceiptReservationV1
+] = set()
 _IN_PROCESS_RECEIPT_REGISTRY_LOCK: Final = threading.Lock()
 
 
-def _reserve_in_process_receipt_slot() -> object:
-    reservation = object()
+def _reserve_in_process_receipt_slot() -> _InProcessReceiptReservationV1:
+    reservation = _InProcessReceiptReservationV1()
     with _IN_PROCESS_RECEIPT_REGISTRY_LOCK:
         if (
             len(_IN_PROCESS_EXECUTED_RECEIPTS)
@@ -4237,91 +4747,296 @@ def _reserve_in_process_receipt_slot() -> object:
     return reservation
 
 
-def _cancel_in_process_receipt_reservation(reservation: object) -> None:
+def _cancel_in_process_receipt_reservation(
+    reservation: _InProcessReceiptReservationV1,
+) -> None:
+    if type(reservation) is not _InProcessReceiptReservationV1:
+        raise TypeError("receipt reservation must use the exact private slot type")
     with _IN_PROCESS_RECEIPT_REGISTRY_LOCK:
+        if reservation.entry_identity is not None:
+            raise RuntimeError("a receipt-bearing reservation cannot be cancelled")
         _IN_PROCESS_RECEIPT_RESERVATIONS.discard(reservation)
 
 
 def _rollback_in_process_receipt_issuance(
-    reservation: object,
-    *,
-    restore_reservation: bool = False,
+    reservation: _InProcessReceiptReservationV1,
 ) -> None:
-    """Remove an unreturned issuance and optionally restore its reserved slot."""
+    """O(1) fallback removal for one receipt that was never returned."""
 
-    if type(restore_reservation) is not bool:
-        raise TypeError("receipt reservation restore flag must be an exact bool")
-
+    if type(reservation) is not _InProcessReceiptReservationV1:
+        raise TypeError("receipt rollback requires the exact reservation slot")
     with _IN_PROCESS_RECEIPT_REGISTRY_LOCK:
-        matching = tuple(
-            identity
-            for identity, issued in _IN_PROCESS_EXECUTED_RECEIPTS.items()
-            if issued[2] is reservation
-        )
-        if len(matching) > 1:
-            raise RuntimeError("one receipt reservation issued more than one transcript")
-        if restore_reservation and len(matching) != 1:
-            raise RuntimeError("cannot restore a reservation without one provisional receipt")
-        for identity in matching:
-            del _IN_PROCESS_EXECUTED_RECEIPTS[identity]
-        if restore_reservation:
-            if reservation in _IN_PROCESS_RECEIPT_RESERVATIONS:
-                raise RuntimeError("receipt reservation was already live during rollback")
-            if (
-                len(_IN_PROCESS_EXECUTED_RECEIPTS)
-                + len(_IN_PROCESS_RECEIPT_RESERVATIONS)
-                >= MAXIMUM_IN_PROCESS_ISSUED_RECEIPTS
-            ):
-                raise RuntimeError("receipt registry capacity changed during rollback")
-            _IN_PROCESS_RECEIPT_RESERVATIONS.add(reservation)
+        identity = reservation.entry_identity
+        if identity is None:
+            return
+        entry = _IN_PROCESS_EXECUTED_RECEIPTS.get(identity)
+        if (
+            type(entry) is not _InProcessReceiptRegistryEntryV1
+            or entry.reservation is not reservation
+            or id(entry.receipt) != identity
+        ):
+            raise RuntimeError("receipt reservation/registry rollback linkage drift")
+        del _IN_PROCESS_EXECUTED_RECEIPTS[identity]
+        reservation.entry_identity = None
+
+
+def _rollback_pending_in_process_receipt_issuance(
+    receipt: FormalCovertAuditReceiptV1,
+    reservation: _InProcessReceiptReservationV1,
+) -> None:
+    """Directly remove one unreturned exact candidate without a registry scan."""
+
+    if type(receipt) is not FormalCovertAuditReceiptV1:
+        raise TypeError("pending receipt rollback requires the exact receipt DTO")
+    if type(reservation) is not _InProcessReceiptReservationV1:
+        raise TypeError("pending receipt rollback requires the exact reservation slot")
+    identity = id(receipt)
+    with _IN_PROCESS_RECEIPT_REGISTRY_LOCK:
+        entry = _IN_PROCESS_EXECUTED_RECEIPTS.get(identity)
+        if entry is None and reservation.entry_identity is None:
+            return
+        if (
+            type(entry) is not _InProcessReceiptRegistryEntryV1
+            or entry.receipt is not receipt
+            or entry.reservation is not reservation
+            or (
+                entry.state is not _InProcessReceiptRegistryStateV1.PENDING
+                and entry.state is not _InProcessReceiptRegistryStateV1.ISSUED
+            )
+            or reservation.entry_identity != identity
+        ):
+            raise RuntimeError("receipt rollback exact-entry linkage drift")
+        del _IN_PROCESS_EXECUTED_RECEIPTS[identity]
+        reservation.entry_identity = None
 
 
 def _register_preconstructed_formal_covert_audit_receipt_v1(
     *,
     _factory_token: object,
-    _reservation: object,
+    _reservation: _InProcessReceiptReservationV1,
     receipt: FormalCovertAuditReceiptV1,
 ) -> FormalCovertAuditReceiptV1:
-    """Provisionally register one already replayed exact receipt object."""
+    """Insert one already replayed exact receipt as PENDING."""
 
     if _factory_token is not _RECEIPT_EXECUTION_FACTORY_TOKEN:
         raise PermissionError("formal covert transcript factory token mismatch")
     if type(receipt) is not FormalCovertAuditReceiptV1:
         raise TypeError("formal covert transcript registration requires the exact DTO")
+    if type(_reservation) is not _InProcessReceiptReservationV1:
+        raise TypeError("formal covert transcript registration requires an exact reservation")
+    identity = id(receipt)
+    entry = _InProcessReceiptRegistryEntryV1(
+        receipt=receipt,
+        receipt_id=receipt.receipt_id,
+        reservation=_reservation,
+        state=_InProcessReceiptRegistryStateV1.PENDING,
+    )
     # Retain the exact issued object as well as its content ID.  Keeping only
     # ``id(receipt)`` would admit a different object after address reuse.
     # Underscore names and the module token are cooperative provenance markers,
     # not a security boundary or unforgeability mechanism.
     with _IN_PROCESS_RECEIPT_REGISTRY_LOCK:
-        if _reservation not in _IN_PROCESS_RECEIPT_RESERVATIONS:
+        if (
+            _reservation not in _IN_PROCESS_RECEIPT_RESERVATIONS
+            or _reservation.entry_identity is not None
+        ):
             raise PermissionError("formal covert transcript reservation is absent or stale")
         if len(_IN_PROCESS_EXECUTED_RECEIPTS) >= MAXIMUM_IN_PROCESS_ISSUED_RECEIPTS:
             raise RuntimeError("formal covert transcript registry capacity drift")
-        _IN_PROCESS_RECEIPT_RESERVATIONS.remove(_reservation)
-        _IN_PROCESS_EXECUTED_RECEIPTS[id(receipt)] = (
-            receipt,
-            receipt.receipt_id,
-            _reservation,
-        )
+        if identity in _IN_PROCESS_EXECUTED_RECEIPTS:
+            raise RuntimeError("formal covert transcript identity collision")
+        try:
+            _IN_PROCESS_EXECUTED_RECEIPTS[identity] = entry
+            _reservation.entry_identity = identity
+            _IN_PROCESS_RECEIPT_RESERVATIONS.remove(_reservation)
+        except BaseException:
+            if _IN_PROCESS_EXECUTED_RECEIPTS.get(identity) is entry:
+                del _IN_PROCESS_EXECUTED_RECEIPTS[identity]
+            _reservation.entry_identity = None
+            raise
+    return receipt
+
+
+def _replay_formal_covert_audit_receipt_content_v1(
+    receipt: FormalCovertAuditReceiptV1,
+    expected_receipt_id: str,
+) -> str:
+    """Fully replay exact receipt content and preserve its registered ID."""
+
+    if type(receipt) is not FormalCovertAuditReceiptV1:
+        raise TypeError("receipt content replay requires the exact receipt DTO")
+    if type(expected_receipt_id) is not str:
+        raise TypeError("receipt content replay requires an exact registered ID")
+    observed_id = receipt.receipt_id
+    receipt.__post_init__()
+    if (
+        observed_id != expected_receipt_id
+        or receipt.receipt_id != observed_id
+        or receipt.receipt_id != expected_receipt_id
+    ):
+        raise ValueError("formal covert audit transcript content changed after construction")
+    return receipt.receipt_id
+
+
+def _validate_pending_formal_covert_audit_receipt_v1(
+    *,
+    _factory_token: object,
+    _reservation: _InProcessReceiptReservationV1,
+    receipt: FormalCovertAuditReceiptV1,
+) -> str:
+    """Producer-only full replay of one exact PENDING registry entry."""
+
+    if _factory_token is not _RECEIPT_EXECUTION_FACTORY_TOKEN:
+        raise PermissionError("formal covert pending-validator factory token mismatch")
+    if type(receipt) is not FormalCovertAuditReceiptV1:
+        raise TypeError("pending receipt validator requires the exact receipt DTO")
+    if type(_reservation) is not _InProcessReceiptReservationV1:
+        raise TypeError("pending receipt validator requires the exact reservation slot")
+    identity = id(receipt)
+    with _IN_PROCESS_RECEIPT_REGISTRY_LOCK:
+        entry = _IN_PROCESS_EXECUTED_RECEIPTS.get(identity)
+        if (
+            type(entry) is not _InProcessReceiptRegistryEntryV1
+            or entry.receipt is not receipt
+            or entry.reservation is not _reservation
+            or entry.state is not _InProcessReceiptRegistryStateV1.PENDING
+            or type(entry.receipt_id) is not str
+            or _reservation.entry_identity != identity
+        ):
+            raise ValueError("producer pending receipt registry entry drift")
+        registered_id = entry.receipt_id
+    replayed_id = _replay_formal_covert_audit_receipt_content_v1(
+        receipt,
+        registered_id,
+    )
+    with _IN_PROCESS_RECEIPT_REGISTRY_LOCK:
+        if (
+            _IN_PROCESS_EXECUTED_RECEIPTS.get(identity) is not entry
+            or entry.receipt is not receipt
+            or entry.receipt_id != replayed_id
+            or type(entry.receipt_id) is not str
+            or entry.reservation is not _reservation
+            or entry.state is not _InProcessReceiptRegistryStateV1.PENDING
+            or _reservation.entry_identity != identity
+        ):
+            raise ValueError("producer pending receipt changed during full replay")
+    return replayed_id
+
+
+def _commit_pending_formal_covert_audit_receipt_v1(
+    *,
+    _factory_token: object,
+    _reservation: _InProcessReceiptReservationV1,
+    receipt: FormalCovertAuditReceiptV1,
+    validated_id: str,
+    absolute_deadline_kind: str,
+    absolute_deadline_ns: int,
+    parent_rss_charge_ceiling_bytes: int,
+) -> FormalCovertAuditReceiptV1:
+    """Linearize one exact PENDING receipt after its locked final gates."""
+
+    if _factory_token is not _RECEIPT_EXECUTION_FACTORY_TOKEN:
+        raise PermissionError("formal covert pending-commit factory token mismatch")
+    if type(receipt) is not FormalCovertAuditReceiptV1:
+        raise TypeError("pending receipt commit requires the exact receipt DTO")
+    if type(_reservation) is not _InProcessReceiptReservationV1:
+        raise TypeError("pending receipt commit requires the exact reservation slot")
+    if type(validated_id) is not str:
+        raise TypeError("pending receipt commit requires an exact validated ID")
+    if (
+        type(absolute_deadline_kind) is not str
+        or absolute_deadline_kind
+        not in {"STATISTICS", "PARTITION_PREPARATION"}
+        or type(absolute_deadline_ns) is not int
+        or absolute_deadline_ns <= 0
+        or type(parent_rss_charge_ceiling_bytes) is not int
+        or parent_rss_charge_ceiling_bytes < 0
+    ):
+        raise TypeError("pending receipt commit deadline/RSS arguments are invalid")
+    identity = id(receipt)
+    issuance = receipt.receipt_issuance_runtime_evidence
+    with _IN_PROCESS_RECEIPT_REGISTRY_LOCK:
+        entry = _IN_PROCESS_EXECUTED_RECEIPTS.get(identity)
+        if (
+            type(entry) is not _InProcessReceiptRegistryEntryV1
+            or entry.receipt is not receipt
+            or entry.reservation is not _reservation
+            or entry.state is not _InProcessReceiptRegistryStateV1.PENDING
+            or type(entry.receipt_id) is not str
+            or entry.receipt_id != validated_id
+            or validated_id != receipt.receipt_id
+            or _reservation.entry_identity != identity
+            or type(issuance) is not ReceiptIssuanceRuntimeEvidenceV1
+            or issuance.absolute_deadline_kind != absolute_deadline_kind
+            or issuance.absolute_deadline_monotonic_nanoseconds
+            != absolute_deadline_ns
+            or issuance.parent_rss_charge_ceiling_bytes
+            != parent_rss_charge_ceiling_bytes
+        ):
+            raise ValueError("pending receipt locked commit identity/evidence drift")
+        if absolute_deadline_kind == "STATISTICS":
+            _remaining_statistics_deadline_seconds(absolute_deadline_ns)
+        else:
+            _remaining_partition_preparation_deadline_seconds(
+                absolute_deadline_ns
+            )
+        parent_peak_after_validation = _linux_peak_rss_bytes()
+        if parent_peak_after_validation > parent_rss_charge_ceiling_bytes:
+            _reject(
+                "FAIL_RECEIPT_ISSUANCE_RUNTIME_RSS",
+                "post-validation parent peak exceeds its RSS charge ceiling",
+            )
+        entry.state = _InProcessReceiptRegistryStateV1.ISSUED
     return receipt
 
 
 def _issue_formal_covert_audit_receipt_v1(
     *,
     _factory_token: object,
-    _reservation: object,
+    _reservation: _InProcessReceiptReservationV1,
+    _absolute_deadline_kind: str,
+    _absolute_deadline_ns: int,
+    _parent_rss_charge_ceiling_bytes: int,
     **values: object,
 ) -> FormalCovertAuditReceiptV1:
-    """Construct a cooperative same-process execution transcript."""
+    """Construct, replay, and atomically issue a non-statistical transcript."""
 
     if _factory_token is not _RECEIPT_EXECUTION_FACTORY_TOKEN:
         raise PermissionError("formal covert transcript factory token mismatch")
     receipt = _construct_formal_covert_audit_receipt_v1(**values)
-    return _register_preconstructed_formal_covert_audit_receipt_v1(
+    _register_preconstructed_formal_covert_audit_receipt_v1(
         _factory_token=_factory_token,
         _reservation=_reservation,
         receipt=receipt,
     )
+    try:
+        validated_id = _validate_pending_formal_covert_audit_receipt_v1(
+            _factory_token=_factory_token,
+            _reservation=_reservation,
+            receipt=receipt,
+        )
+        _commit_pending_formal_covert_audit_receipt_v1(
+            _factory_token=_factory_token,
+            _reservation=_reservation,
+            receipt=receipt,
+            validated_id=validated_id,
+            absolute_deadline_kind=_absolute_deadline_kind,
+            absolute_deadline_ns=_absolute_deadline_ns,
+            parent_rss_charge_ceiling_bytes=(
+                _parent_rss_charge_ceiling_bytes
+            ),
+        )
+    except BaseException as primary:
+        try:
+            _rollback_pending_in_process_receipt_issuance(receipt, _reservation)
+        except BaseException as cleanup_error:
+            _record_cleanup_failure_without_replacing_primary(
+                primary,
+                cleanup_error,
+                "non-statistical direct receipt rollback",
+            )
+        raise
+    return receipt
 
 
 def _construct_formal_covert_audit_receipt_v1(
@@ -4366,11 +5081,28 @@ def release_formal_covert_audit_receipt_v1(
     if type(receipt) is not FormalCovertAuditReceiptV1:
         raise TypeError("receipt release requires the exact receipt DTO")
     with _IN_PROCESS_RECEIPT_REGISTRY_LOCK:
-        issued = _IN_PROCESS_EXECUTED_RECEIPTS.get(id(receipt))
-        if issued is None or issued[0] is not receipt:
+        identity = id(receipt)
+        entry = _IN_PROCESS_EXECUTED_RECEIPTS.get(identity)
+        if (
+            type(entry) is not _InProcessReceiptRegistryEntryV1
+            or entry.receipt is not receipt
+        ):
             raise ValueError("receipt is not live in the cooperative in-process registry")
-        del _IN_PROCESS_EXECUTED_RECEIPTS[id(receipt)]
-        return issued[1]
+        if (
+            type(entry) is not _InProcessReceiptRegistryEntryV1
+            or entry.state is not _InProcessReceiptRegistryStateV1.ISSUED
+            or type(entry.receipt_id) is not str
+            or type(entry.reservation) is not _InProcessReceiptReservationV1
+            or entry.reservation.entry_identity != identity
+        ):
+            raise ValueError("only an exact ISSUED receipt can be released")
+        receipt_id = entry.receipt_id
+        # The registry is the issuance authority and capacity account.  Delete
+        # it first; an asynchronous failure while clearing the now-unreachable
+        # backlink cannot leave a live/publicly valid entry or consume capacity.
+        del _IN_PROCESS_EXECUTED_RECEIPTS[identity]
+        entry.reservation.entry_identity = None
+        return receipt_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -6017,7 +6749,7 @@ def _materialize_partitions_bounded(
     columns: tuple[_FeatureColumn, ...],
     projection: _PartitionAllocationProjectionV1,
     deadline_ns: int,
-) -> tuple[tuple[_Partition, ...], int]:
+) -> tuple[_Partition, ...]:
     projection.__post_init__()
     if len(columns) != len(projection.cardinalities):
         _reject("FAIL_PARTITION_PROJECTION_REPLAY", "partition feature count drift")
@@ -6033,16 +6765,8 @@ def _materialize_partitions_bounded(
                 "partition cardinality changed after preallocation projection",
             )
         rows.append(partition)
-    partitions = tuple(rows)
-    measured_bound = (
-        DEEP_SIZE_SAFETY_MULTIPLIER * _deep_object_graph_bytes(partitions)
-    )
-    if measured_bound > projection.projected_partition_matrix_bytes_bound:
-        _reject(
-            "FAIL_PARTITION_ALLOCATION_BOUND",
-            "materialized partition graph exceeds its conservative preallocation projection",
-        )
-    return partitions, measured_bound
+    _remaining_partition_preparation_deadline_seconds(deadline_ns)
+    return tuple(rows)
 
 
 def _label_masks(labels: tuple[str, ...]) -> tuple[tuple[str, ...], tuple[int, ...]]:
@@ -6458,6 +7182,88 @@ def _linux_effective_cpu_capacity() -> int:
     return min(capacities)
 
 
+def _invariance_resource_plan(
+    rows: int,
+    *,
+    envelope_and_decode_bytes_bound: int,
+    adapter_retained_graph_bytes_bound: int,
+    variant_suite_resident_bytes_per_row_bound: int,
+    variant_suite_resident_fixed_bytes_bound: int,
+) -> _InvariantResourcePlanV1:
+    if type(rows) is not int or not 1 <= rows <= MAXIMUM_ROWS:
+        raise ValueError("invariant resource-plan row count is outside the frozen cap")
+    if (
+        type(envelope_and_decode_bytes_bound) is not int
+        or envelope_and_decode_bytes_bound < rows * ENVELOPE_BYTES * 2
+    ):
+        raise ValueError("invariant envelope/decode bound is below its frozen floor")
+    if (
+        type(adapter_retained_graph_bytes_bound) is not int
+        or not 0 < adapter_retained_graph_bytes_bound
+        <= MAXIMUM_WIRE_ADAPTER_RETAINED_GRAPH_BYTES
+        + MAXIMUM_RECOGNIZER_ADAPTER_RETAINED_GRAPH_BYTES
+    ):
+        raise ValueError("invariant adapter retained-graph bound is absent or invalid")
+    if (
+        type(variant_suite_resident_bytes_per_row_bound) is not int
+        or variant_suite_resident_bytes_per_row_bound <= 0
+        or type(variant_suite_resident_fixed_bytes_bound) is not int
+        or variant_suite_resident_fixed_bytes_bound <= 0
+    ):
+        raise ValueError("invariant variant-suite resident bound is absent or invalid")
+    variant_suite_output = rows * 80 * ENVELOPE_BYTES
+    variant_suite_resident = (
+        rows * variant_suite_resident_bytes_per_row_bound
+        + variant_suite_resident_fixed_bytes_bound
+    )
+    recognizer_live = (
+        RECOGNIZER_OUTPUT_SIMULTANEOUS_GRAPH_MULTIPLIER
+        * _recognizer_output_graph_bytes_bound(rows)
+    )
+    # This is the sole parent baseline for the invariant phase.  The final
+    # preflight resamples immediately before fork and charges any later growth.
+    parent_current_rss = _linux_current_rss_bytes()
+    estimated_rss = (
+        max(
+            parent_current_rss,
+            envelope_and_decode_bytes_bound
+            + adapter_retained_graph_bytes_bound
+            + 64 * 1_048_576,
+        )
+        * 2
+        + variant_suite_resident
+        + recognizer_live
+        + INVARIANCE_WORKER_ARTIFACT_BYTES_BOUND
+    )
+    return _InvariantResourcePlanV1(
+        rows=rows,
+        envelope_and_decode_bytes_bound=envelope_and_decode_bytes_bound,
+        adapter_retained_graph_bytes_bound=adapter_retained_graph_bytes_bound,
+        parent_current_rss_bytes_at_plan=parent_current_rss,
+        invariance_variant_suite_output_bytes_bound=variant_suite_output,
+        variant_suite_resident_bytes_per_row_bound=(
+            variant_suite_resident_bytes_per_row_bound
+        ),
+        variant_suite_resident_fixed_bytes_bound=(
+            variant_suite_resident_fixed_bytes_bound
+        ),
+        invariance_variant_suite_resident_bytes_bound=variant_suite_resident,
+        invariance_recognizer_live_output_bytes_bound=recognizer_live,
+        invariance_worker_artifact_bytes_bound=INVARIANCE_WORKER_ARTIFACT_BYTES_BOUND,
+        estimated_invariance_peak_rss_bytes=estimated_rss,
+        maximum_invariance_estimated_rss_bytes=MAXIMUM_ESTIMATED_RSS_BYTES,
+        invariance_rss_formula=(
+            "max(parent_current_rss,envelope_and_decode_bytes+"
+            "adapter_retained_graph_bytes+64MiB)*2+variant_suite_resident_bytes+"
+            "recognizer_live_output_bytes+invariance_worker_artifact_bytes"
+        ),
+        host_available_memory_safety_margin_bytes=(
+            HOST_AVAILABLE_MEMORY_SAFETY_MARGIN_BYTES
+        ),
+        admissible=estimated_rss <= MAXIMUM_ESTIMATED_RSS_BYTES,
+    )
+
+
 def _resource_plan(
     rows: int,
     partitions: tuple[_Partition, ...],
@@ -6466,13 +7272,28 @@ def _resource_plan(
     preextraction_feature_matrix_bytes_bound: int | None = None,
     feature_matrix_bytes_bound: int | None = None,
     envelope_and_decode_bytes_bound: int | None = None,
-    partition_allocation_bytes_bound: int | None = None,
-    partition_matrix_bytes_bound: int | None = None,
     adapter_retained_graph_bytes_bound: int | None = None,
-    parent_current_rss_bytes_at_plan: int | None = None,
-    variant_suite_resident_bytes_per_row_bound: int | None = None,
-    variant_suite_resident_fixed_bytes_bound: int | None = None,
+    partition_projection: _PartitionAllocationProjectionV1,
+    partition_preparation_deadline_ns: int,
+    invariance_plan: _InvariantResourcePlanV1,
 ) -> ResourcePlanV1:
+    if type(partition_projection) is not _PartitionAllocationProjectionV1:
+        raise TypeError("resource plan requires the exact partition projection")
+    partition_projection.__post_init__()
+    if (
+        type(partition_preparation_deadline_ns) is not int
+        or partition_projection.rows != rows
+        or len(partition_projection.cardinalities) != len(partitions)
+        or tuple(len(item.masks) for item in partitions)
+        != partition_projection.cardinalities
+    ):
+        _reject(
+            "FAIL_PARTITION_PROJECTION_REPLAY",
+            "resource-plan partition projection/deadline drift",
+        )
+    _remaining_partition_preparation_deadline_seconds(
+        partition_preparation_deadline_ns
+    )
     features = len(partitions)
     unique_partitions = tuple(
         {partition.masks: partition for partition in partitions}.values()
@@ -6524,9 +7345,22 @@ def _resource_plan(
     )
     feature_matrix_floor = rows * features * 72
     envelope_and_decode_floor = rows * ENVELOPE_BYTES * 2
+    # This is the sole deep traversal of the materialized partition graph.
+    # The producer cannot substitute a caller-provided scalar for this value.
     measured_partition_floor = (
         DEEP_SIZE_SAFETY_MULTIPLIER * _deep_object_graph_bytes(partitions)
     )
+    _remaining_partition_preparation_deadline_seconds(
+        partition_preparation_deadline_ns
+    )
+    if (
+        measured_partition_floor
+        > partition_projection.projected_partition_matrix_bytes_bound
+    ):
+        _reject(
+            "FAIL_PARTITION_ALLOCATION_BOUND",
+            "materialized partition graph exceeds its conservative preallocation projection",
+        )
     if feature_matrix_bytes_bound is not None and (
         type(feature_matrix_bytes_bound) is not int
         or feature_matrix_bytes_bound < feature_matrix_floor
@@ -6557,25 +7391,9 @@ def _resource_plan(
         if preextraction_feature_matrix_bytes_bound is not None
         else feature_matrix_bytes
     )
-    if partition_matrix_bytes_bound is not None and (
-        type(partition_matrix_bytes_bound) is not int
-        or partition_matrix_bytes_bound < measured_partition_floor
-    ):
-        raise ValueError("measured partition bound is below the observed partition graph")
-    partition_matrix_bytes = (
-        partition_matrix_bytes_bound
-        if partition_matrix_bytes_bound is not None
-        else measured_partition_floor
-    )
-    if partition_allocation_bytes_bound is not None and (
-        type(partition_allocation_bytes_bound) is not int
-        or partition_allocation_bytes_bound < partition_matrix_bytes
-    ):
-        raise ValueError("partition preallocation bound is below its measured graph")
+    partition_matrix_bytes = measured_partition_floor
     partition_allocation_bytes = (
-        partition_allocation_bytes_bound
-        if partition_allocation_bytes_bound is not None
-        else partition_matrix_bytes
+        partition_projection.projected_partition_matrix_bytes_bound
     )
     effective_cpu_capacity = _linux_effective_cpu_capacity()
     execution_mode = "LINUX_RAW_FORK_WAIT4_ONE_OR_FIVE_TARGET_WORKERS"
@@ -6591,16 +7409,23 @@ def _resource_plan(
         + MAXIMUM_RECOGNIZER_ADAPTER_RETAINED_GRAPH_BYTES
     ):
         raise ValueError("adapter retained-graph resource bound is absent or invalid")
+    if type(invariance_plan) is not _InvariantResourcePlanV1:
+        raise TypeError("statistics plan requires the exact invariant phase plan")
+    invariance_plan.__post_init__()
     if (
-        type(parent_current_rss_bytes_at_plan) is not int
-        or parent_current_rss_bytes_at_plan <= 0
+        invariance_plan.rows != rows
+        or invariance_plan.envelope_and_decode_bytes_bound
+        != envelope_and_decode_bytes
+        or invariance_plan.adapter_retained_graph_bytes_bound
+        != adapter_retained_graph_bytes_bound
     ):
-        raise ValueError("parent current RSS observation is absent or invalid")
+        raise ValueError("statistics/invariant phase resource inputs drifted")
+    # The statistics parent baseline is sampled only after the sole partition
+    # measurement and all plan-side temporary computations above.
+    parent_current_rss_bytes_at_plan = _linux_current_rss_bytes()
     resident_parent_bound = max(
         parent_current_rss_bytes_at_plan,
         mask_bytes
-        + feature_matrix_bytes
-        + envelope_and_decode_bytes
         + partition_matrix_bytes
         + adapter_retained_graph_bytes_bound
         + 64 * 1024 * 1024,
@@ -6637,36 +7462,6 @@ def _resource_plan(
     # so shared fork pages are conservatively counted once for the parent and
     # once for every worker even though their physical PSS is normally shared.
     estimated_rss = statistics_rss_for_workers(parallel_workers)
-    invariance_variant_suite_output_bytes = rows * 80 * ENVELOPE_BYTES
-    if (
-        type(variant_suite_resident_bytes_per_row_bound) is not int
-        or variant_suite_resident_bytes_per_row_bound <= 0
-        or type(variant_suite_resident_fixed_bytes_bound) is not int
-        or variant_suite_resident_fixed_bytes_bound <= 0
-    ):
-        raise ValueError("variant-suite resident resource bound is absent or invalid")
-    invariance_variant_suite_resident_bytes = (
-        rows * variant_suite_resident_bytes_per_row_bound
-        + variant_suite_resident_fixed_bytes_bound
-    )
-    invariance_recognizer_live_output_bytes = (
-        RECOGNIZER_OUTPUT_SIMULTANEOUS_GRAPH_MULTIPLIER
-        * _recognizer_output_graph_bytes_bound(rows)
-    )
-    estimated_invariance_rss = (
-        max(
-            parent_current_rss_bytes_at_plan,
-            feature_matrix_bytes
-            + envelope_and_decode_bytes
-            + partition_matrix_bytes
-            + adapter_retained_graph_bytes_bound
-            + 64 * 1_048_576
-        )
-        * 2
-        + invariance_variant_suite_resident_bytes
-        + invariance_recognizer_live_output_bytes
-        + INVARIANCE_WORKER_ARTIFACT_BYTES_BOUND
-    )
     admissible = (
         1 <= rows <= MAXIMUM_ROWS
         and 1 <= features <= MAXIMUM_FEATURES
@@ -6675,7 +7470,7 @@ def _resource_plan(
         and estimated <= MAXIMUM_STATISTICAL_INTERSECTION_WORK_UNITS
         and estimated_total_work <= MAXIMUM_TOTAL_STATISTICAL_WORK_UNITS
         and estimated_rss <= MAXIMUM_ESTIMATED_RSS_BYTES
-        and estimated_invariance_rss <= MAXIMUM_ESTIMATED_RSS_BYTES
+        and invariance_plan.admissible
     )
     return ResourcePlanV1(
         rows=rows,
@@ -6720,37 +7515,39 @@ def _resource_plan(
         parent_result_working_bytes_bound=parent_result_working_bytes,
         adapter_retained_graph_bytes_bound=adapter_retained_graph_bytes_bound,
         parent_current_rss_bytes_at_plan=parent_current_rss_bytes_at_plan,
+        invariance_parent_current_rss_bytes_at_plan=(
+            invariance_plan.parent_current_rss_bytes_at_plan
+        ),
+        invariance_resource_plan_root=invariance_plan.plan_root,
         invariance_variant_suite_output_bytes_bound=(
-            invariance_variant_suite_output_bytes
+            invariance_plan.invariance_variant_suite_output_bytes_bound
         ),
         variant_suite_resident_bytes_per_row_bound=(
-            variant_suite_resident_bytes_per_row_bound
+            invariance_plan.variant_suite_resident_bytes_per_row_bound
         ),
         variant_suite_resident_fixed_bytes_bound=(
-            variant_suite_resident_fixed_bytes_bound
+            invariance_plan.variant_suite_resident_fixed_bytes_bound
         ),
         invariance_variant_suite_resident_bytes_bound=(
-            invariance_variant_suite_resident_bytes
+            invariance_plan.invariance_variant_suite_resident_bytes_bound
         ),
         invariance_recognizer_live_output_bytes_bound=(
-            invariance_recognizer_live_output_bytes
+            invariance_plan.invariance_recognizer_live_output_bytes_bound
         ),
         invariance_worker_artifact_bytes_bound=(
-            INVARIANCE_WORKER_ARTIFACT_BYTES_BOUND
+            invariance_plan.invariance_worker_artifact_bytes_bound
         ),
-        estimated_invariance_peak_rss_bytes=estimated_invariance_rss,
-        maximum_invariance_estimated_rss_bytes=MAXIMUM_ESTIMATED_RSS_BYTES,
-        invariance_rss_formula=(
-            "max(parent_current_rss,feature_matrix_bytes+envelope_and_decode_bytes+"
-            "partition_matrix_bytes+adapter_retained_graph_bytes+64MiB)*2+"
-            "variant_suite_resident_bytes+recognizer_live_output_bytes+"
-            "invariance_worker_artifact_bytes"
+        estimated_invariance_peak_rss_bytes=(
+            invariance_plan.estimated_invariance_peak_rss_bytes
         ),
+        maximum_invariance_estimated_rss_bytes=(
+            invariance_plan.maximum_invariance_estimated_rss_bytes
+        ),
+        invariance_rss_formula=invariance_plan.invariance_rss_formula,
         estimated_peak_rss_bytes=estimated_rss,
         maximum_estimated_rss_bytes=MAXIMUM_ESTIMATED_RSS_BYTES,
         aggregate_rss_formula=(
-            "max(parent_current_rss,mask_bytes+feature_matrix_bytes+"
-            "envelope_and_decode_bytes+partition_matrix_bytes+"
+            "max(parent_current_rss,mask_bytes+partition_matrix_bytes+"
             "adapter_retained_graph_bytes+64MiB)"
             "*(1+workers)+metric_cache_bytes*workers+permutation_metric_tuple_bytes"
             "+target_max_vector_bytes+worker_result_artifact_bytes+"
@@ -7051,6 +7848,24 @@ class _HostMemoryPreflightV1:
             raise ValueError("effective host-memory preflight value drift")
 
 
+@dataclass(frozen=True, slots=True)
+class _PhaseHostMemoryPreflightV1:
+    system_available_bytes: int
+    cgroup_remaining_bytes: int | None
+    effective_available_bytes: int
+    resource_preflight: _PhaseResourcePreflightEvidenceV1
+
+    def __post_init__(self) -> None:
+        _HostMemoryPreflightV1(
+            self.system_available_bytes,
+            self.cgroup_remaining_bytes,
+            self.effective_available_bytes,
+        ).__post_init__()
+        if type(self.resource_preflight) is not _PhaseResourcePreflightEvidenceV1:
+            raise TypeError("phase host preflight lacks exact resource evidence")
+        self.resource_preflight.__post_init__()
+
+
 def _host_memory_snapshot() -> _HostMemoryPreflightV1:
     system_available = _linux_system_available_memory_bytes()
     cgroup_remaining = _linux_cgroup_memory_remaining_bytes()
@@ -7085,6 +7900,11 @@ def _preflight_feature_extraction_memory(
     envelope_and_decode_bytes_bound: int,
 ) -> _HostMemoryPreflightV1:
     projection.__post_init__()
+    if (
+        type(envelope_and_decode_bytes_bound) is not int
+        or envelope_and_decode_bytes_bound < projection.rows * ENVELOPE_BYTES * 2
+    ):
+        raise ValueError("feature preflight envelope/decode bound is below its floor")
     result_bound = _parent_result_working_bytes_bound(
         projection.projected_concrete_feature_count
     )
@@ -7093,8 +7913,10 @@ def _preflight_feature_extraction_memory(
         * WORKER_RESULT_ARTIFACT_BYTES_PER_FEATURE
         + WORKER_RESULT_ARTIFACT_FIXED_BYTES
     )
+    evidence = _host_memory_snapshot()
+    current_rss = _linux_current_rss_bytes()
     required_without_margin = (
-        envelope_and_decode_bytes_bound
+        max(current_rss, envelope_and_decode_bytes_bound)
         + projection.projected_feature_matrix_bytes_bound
         + result_bound
         + artifact_bound
@@ -7104,7 +7926,6 @@ def _preflight_feature_extraction_memory(
             "FAIL_FEATURE_PROJECTION_RESOURCE_CAP",
             "pre-extraction feature/result projection exceeds the frozen aggregate cap",
         )
-    evidence = _host_memory_snapshot()
     if evidence.effective_available_bytes < (
         required_without_margin + HOST_AVAILABLE_MEMORY_SAFETY_MARGIN_BYTES
     ):
@@ -7124,10 +7945,22 @@ def _preflight_partition_allocation_memory(
     concrete_features: int,
 ) -> _HostMemoryPreflightV1:
     partition_projection.__post_init__()
+    if (
+        type(feature_matrix_bytes_bound) is not int
+        or feature_matrix_bytes_bound < 0
+        or type(envelope_and_decode_bytes_bound) is not int
+        or envelope_and_decode_bytes_bound
+        < partition_projection.rows * ENVELOPE_BYTES * 2
+    ):
+        raise ValueError("partition preflight resident bound is invalid")
     result_bound = _parent_result_working_bytes_bound(concrete_features)
+    evidence = _host_memory_snapshot()
+    current_rss = _linux_current_rss_bytes()
     required_without_margin = (
-        feature_matrix_bytes_bound
-        + envelope_and_decode_bytes_bound
+        max(
+            current_rss,
+            feature_matrix_bytes_bound + envelope_and_decode_bytes_bound,
+        )
         + partition_projection.projected_partition_matrix_bytes_bound
         + result_bound
     )
@@ -7136,7 +7969,6 @@ def _preflight_partition_allocation_memory(
             "FAIL_PARTITION_PROJECTION_RESOURCE_CAP",
             "projected parent partition/result allocation exceeds the frozen aggregate cap",
         )
-    evidence = _host_memory_snapshot()
     if evidence.effective_available_bytes < (
         required_without_margin + HOST_AVAILABLE_MEMORY_SAFETY_MARGIN_BYTES
     ):
@@ -7148,15 +7980,26 @@ def _preflight_partition_allocation_memory(
     return evidence
 
 
-def _preflight_host_memory(plan: ResourcePlanV1) -> _HostMemoryPreflightV1:
+def _preflight_host_memory(plan: ResourcePlanV1) -> _PhaseHostMemoryPreflightV1:
+    plan.__post_init__()
     evidence = _host_memory_snapshot()
     available = evidence.effective_available_bytes
     current_rss = _linux_current_rss_bytes()
-    additional_parent = max(0, current_rss - plan.parent_current_rss_bytes_at_plan)
-    runtime_projection = (
-        plan.estimated_peak_rss_bytes
-        + additional_parent * (1 + plan.maximum_parallel_workers)
+    static_parent = (
+        plan.permutation_label_mask_bytes_bound
+        + plan.partition_matrix_bytes_bound
+        + plan.adapter_retained_graph_bytes_bound
+        + 64 * 1_048_576
     )
+    multiplier = 1 + plan.maximum_parallel_workers
+    additional = (
+        plan.metric_cache_bytes_bound * plan.maximum_parallel_workers
+        + plan.permutation_metric_tuple_bytes_bound
+        + plan.target_max_vector_bytes_bound
+        + plan.worker_result_artifact_bytes_bound
+        + plan.parent_result_working_bytes_bound
+    )
+    runtime_projection = max(current_rss, static_parent) * multiplier + additional
     required = (
         runtime_projection
         + plan.host_available_memory_safety_margin_bytes
@@ -7166,29 +8009,69 @@ def _preflight_host_memory(plan: ResourcePlanV1) -> _HostMemoryPreflightV1:
             "FAIL_STATISTICAL_RESOURCE_PLAN",
             "projected aggregate SELF+CHILD RSS exceeds the frozen cap",
         )
+    phase_evidence = _PhaseResourcePreflightEvidenceV1(
+        phase="STATISTICS",
+        resource_plan_root=plan.resource_plan_root,
+        parent_current_rss_bytes_at_preflight=current_rss,
+        static_parent_bytes_bound=static_parent,
+        fork_parent_rss_multiplier=multiplier,
+        additional_bytes_bound=additional,
+        projected_aggregate_rss_bytes_at_preflight=runtime_projection,
+        maximum_estimated_rss_bytes=plan.maximum_estimated_rss_bytes,
+        host_available_memory_safety_margin_bytes=(
+            plan.host_available_memory_safety_margin_bytes
+        ),
+    )
     if available < required:
         _reject(
             "FAIL_STATISTICAL_HOST_MEMORY",
             "MemAvailable is below projected aggregate RSS plus the frozen safety margin",
         )
-    return evidence
+    return _PhaseHostMemoryPreflightV1(
+        evidence.system_available_bytes,
+        evidence.cgroup_remaining_bytes,
+        evidence.effective_available_bytes,
+        phase_evidence,
+    )
 
 
 def _preflight_invariance_host_memory(
-    plan: ResourcePlanV1,
-) -> _HostMemoryPreflightV1:
+    plan: _InvariantResourcePlanV1,
+) -> _PhaseHostMemoryPreflightV1:
     plan.__post_init__()
+    evidence = _host_memory_snapshot()
     current_rss = _linux_current_rss_bytes()
-    additional_parent = max(0, current_rss - plan.parent_current_rss_bytes_at_plan)
-    runtime_projection = (
-        plan.estimated_invariance_peak_rss_bytes + 2 * additional_parent
+    static_parent = (
+        plan.envelope_and_decode_bytes_bound
+        + plan.adapter_retained_graph_bytes_bound
+        + 64 * 1_048_576
     )
+    additional = (
+        plan.invariance_variant_suite_resident_bytes_bound
+        + plan.invariance_recognizer_live_output_bytes_bound
+        + plan.invariance_worker_artifact_bytes_bound
+    )
+    runtime_projection = max(current_rss, static_parent) * 2 + additional
     if runtime_projection > plan.maximum_invariance_estimated_rss_bytes:
         _reject(
             "FAIL_INVARIANCE_RESOURCE_PLAN",
             "projected invariant parent+worker RSS exceeds the frozen cap",
         )
-    evidence = _host_memory_snapshot()
+    phase_evidence = _PhaseResourcePreflightEvidenceV1(
+        phase="INVARIANCE",
+        resource_plan_root=plan.plan_root,
+        parent_current_rss_bytes_at_preflight=current_rss,
+        static_parent_bytes_bound=static_parent,
+        fork_parent_rss_multiplier=2,
+        additional_bytes_bound=additional,
+        projected_aggregate_rss_bytes_at_preflight=runtime_projection,
+        maximum_estimated_rss_bytes=(
+            plan.maximum_invariance_estimated_rss_bytes
+        ),
+        host_available_memory_safety_margin_bytes=(
+            plan.host_available_memory_safety_margin_bytes
+        ),
+    )
     if evidence.effective_available_bytes < (
         runtime_projection
         + plan.host_available_memory_safety_margin_bytes
@@ -7197,7 +8080,79 @@ def _preflight_invariance_host_memory(
             "FAIL_INVARIANCE_HOST_MEMORY",
             "MemAvailable is below invariant parent+worker projection plus margin",
         )
-    return evidence
+    return _PhaseHostMemoryPreflightV1(
+        evidence.system_available_bytes,
+        evidence.cgroup_remaining_bytes,
+        evidence.effective_available_bytes,
+        phase_evidence,
+    )
+
+
+def _validate_invariant_phase_preflight_against_resource_plan(
+    plan: ResourcePlanV1,
+    evidence: _PhaseResourcePreflightEvidenceV1,
+) -> None:
+    plan.__post_init__()
+    evidence.__post_init__()
+    expected = (
+        "INVARIANCE",
+        plan.invariance_resource_plan_root,
+        plan.envelope_and_decode_bytes_bound
+        + plan.adapter_retained_graph_bytes_bound
+        + 64 * 1_048_576,
+        2,
+        plan.invariance_variant_suite_resident_bytes_bound
+        + plan.invariance_recognizer_live_output_bytes_bound
+        + plan.invariance_worker_artifact_bytes_bound,
+        plan.maximum_invariance_estimated_rss_bytes,
+        plan.host_available_memory_safety_margin_bytes,
+    )
+    observed = (
+        evidence.phase,
+        evidence.resource_plan_root,
+        evidence.static_parent_bytes_bound,
+        evidence.fork_parent_rss_multiplier,
+        evidence.additional_bytes_bound,
+        evidence.maximum_estimated_rss_bytes,
+        evidence.host_available_memory_safety_margin_bytes,
+    )
+    if observed != expected:
+        raise ValueError("invariant phase-preflight/resource-plan splice drift")
+
+
+def _validate_statistics_phase_preflight_against_resource_plan(
+    plan: ResourcePlanV1,
+    evidence: _PhaseResourcePreflightEvidenceV1,
+) -> None:
+    plan.__post_init__()
+    evidence.__post_init__()
+    expected = (
+        "STATISTICS",
+        plan.resource_plan_root,
+        plan.permutation_label_mask_bytes_bound
+        + plan.partition_matrix_bytes_bound
+        + plan.adapter_retained_graph_bytes_bound
+        + 64 * 1_048_576,
+        1 + plan.maximum_parallel_workers,
+        plan.metric_cache_bytes_bound * plan.maximum_parallel_workers
+        + plan.permutation_metric_tuple_bytes_bound
+        + plan.target_max_vector_bytes_bound
+        + plan.worker_result_artifact_bytes_bound
+        + plan.parent_result_working_bytes_bound,
+        plan.maximum_estimated_rss_bytes,
+        plan.host_available_memory_safety_margin_bytes,
+    )
+    observed = (
+        evidence.phase,
+        evidence.resource_plan_root,
+        evidence.static_parent_bytes_bound,
+        evidence.fork_parent_rss_multiplier,
+        evidence.additional_bytes_bound,
+        evidence.maximum_estimated_rss_bytes,
+        evidence.host_available_memory_safety_margin_bytes,
+    )
+    if observed != expected:
+        raise ValueError("statistics phase-preflight/resource-plan splice drift")
 
 
 @dataclass(frozen=True, slots=True)
@@ -7903,11 +8858,25 @@ def _run_raw_statistics_workers(
     maximum_artifact_bytes: int,
     maximum_workers: int,
     deadline_ns: int,
+    *,
+    preflight_plan: ResourcePlanV1,
+    preflight_evidence_slot: list[_PhaseHostMemoryPreflightV1 | None],
 ) -> tuple[tuple[int, int, int], ...]:
     """Run five target jobs in one or five raw children with wait4 evidence."""
 
     if maximum_workers not in {1, len(TARGETS)}:
         raise ValueError("raw statistics worker count must be exactly one or five")
+    if type(preflight_plan) is not ResourcePlanV1:
+        raise TypeError("raw statistics require the exact final-preflight plan")
+    if (
+        type(preflight_evidence_slot) is not list
+        or len(preflight_evidence_slot) != 1
+        or preflight_evidence_slot[0] is not None
+    ):
+        raise ValueError("raw statistics final-preflight evidence slot drift")
+    preflight_plan.__post_init__()
+    if preflight_plan.maximum_parallel_workers != maximum_workers:
+        raise ValueError("raw statistics final-preflight worker-count drift")
     original_sigchld_disposition = signal.getsignal(signal.SIGCHLD)
     if original_sigchld_disposition == signal.SIG_IGN:
         _reject(
@@ -7967,6 +8936,11 @@ def _run_raw_statistics_workers(
             )
         signal.signal(signal.SIGCHLD, signal.SIG_DFL)
         sigchld_disposition_overridden = True
+        # Masks, target groups, ownership records, signal state, address
+        # limit, artifact dirfd and every raw-fork input are now resident.
+        # Only bounded evidence bookkeeping follows the phase evaluator;
+        # its fixed 64 MiB parent term covers that small producer overhead.
+        preflight_evidence_slot[0] = _preflight_host_memory(preflight_plan)
         for record in active:
             group = record["group"]
             if type(group) is not tuple:
@@ -8122,7 +9096,7 @@ def _statistics(
     tuple[TargetFamilyMaxTResultV1, ...],
     str,
     ResourcePlanV1,
-    StatisticalRuntimeEvidenceV1,
+    _StatisticalRuntimeEvidenceInputsV1,
 ]:
     if type(permutation_seed) is not bytes or len(permutation_seed) != 32:
         _reject(
@@ -8175,7 +9149,6 @@ def _statistics(
         _reject("FAIL_STATISTICAL_RESOURCE_PLAN", "statistics/resource inputs drifted")
     if not plan.admissible:
         _reject("FAIL_STATISTICAL_RESOURCE_PLAN", "bitset statistical resource plan exceeds a frozen cap")
-    host_memory = _preflight_host_memory(plan)
 
     schedule_hasher = hashlib.sha256(
         _PERMUTATION_DOMAIN
@@ -8232,6 +9205,7 @@ def _statistics(
             len(partitions) * WORKER_RESULT_ARTIFACT_BYTES_PER_FEATURE
             + WORKER_RESULT_ARTIFACT_FIXED_BYTES
         )
+        preflight_evidence_slot: list[_PhaseHostMemoryPreflightV1 | None] = [None]
         execution_rows = _run_raw_statistics_workers(
             partitions,
             tuple(all_observed_masks),
@@ -8241,7 +9215,12 @@ def _statistics(
             per_worker_artifact_bound,
             plan.maximum_parallel_workers,
             statistics_deadline_ns,
+            preflight_plan=plan,
+            preflight_evidence_slot=preflight_evidence_slot,
         )
+        host_memory = preflight_evidence_slot[0]
+        if type(host_memory) is not _PhaseHostMemoryPreflightV1:
+            raise RuntimeError("statistics fork boundary lacks exact host preflight")
         expected_names = {
             f"target-{index}.json" for index in range(len(TARGETS))
         }
@@ -8506,9 +9485,15 @@ def _statistics(
             "FAIL_PARENT_RESULT_GRAPH_BOUND",
             "live artifact replay/result DTO graph exceeds its conservative bound",
         )
-    parent_peak_rss = _linux_peak_rss_bytes()
-    conservative_sum = parent_peak_rss + sum(worker_peak_rss)
-    runtime_evidence = StatisticalRuntimeEvidenceV1(
+    worker_peak_sum = sum(worker_peak_rss)
+    if worker_peak_sum > MAXIMUM_ESTIMATED_RSS_BYTES:
+        _reject(
+            "FAIL_STATISTICAL_RUNTIME_RSS",
+            "observed worker RSS sum exceeds the frozen cap",
+        )
+    runtime_inputs = _StatisticalRuntimeEvidenceInputsV1(
+        resource_plan_root=plan.resource_plan_root,
+        resource_preflight=host_memory.resource_preflight,
         system_available_memory_bytes_at_preflight=(
             host_memory.system_available_bytes
         ),
@@ -8518,16 +9503,11 @@ def _statistics(
         host_available_memory_bytes_at_preflight=(
             host_memory.effective_available_bytes
         ),
-        parent_peak_rss_bytes=parent_peak_rss,
         worker_peak_rss_bytes=worker_peak_rss,
         worker_result_artifact_bytes=worker_artifact_bytes,
         worker_result_artifact_sha256=worker_artifact_sha256,
         parent_result_object_graph_bytes_observed=(
             parent_result_object_graph_bytes_observed
-        ),
-        conservative_parent_plus_worker_peak_sum_bytes=conservative_sum,
-        statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds=(
-            time.monotonic_ns() - statistics_started_ns
         ),
         worker_timeout_seconds=STATISTICS_WORKER_TIMEOUT_SECONDS,
         parent_postprocess_deadline_schema=(
@@ -8535,22 +9515,13 @@ def _statistics(
         ),
         parent_postprocess_deadline_preemptive=False,
         external_supervisor_required=True,
-        receipt_finalization_rss_stabilization_passes=0,
-        within_frozen_aggregate_cap=(
-            conservative_sum <= MAXIMUM_ESTIMATED_RSS_BYTES
-        ),
     )
-    if not runtime_evidence.within_frozen_aggregate_cap:
-        _reject(
-            "FAIL_STATISTICAL_RUNTIME_RSS",
-            "observed conservative parent-plus-worker RSS exceeds the frozen cap",
-        )
     return (
         results,
         target_family_results,
         "phase2b_formal_covert_permutation_schedule_" + schedule_hasher.hexdigest(),
         plan,
-        runtime_evidence,
+        runtime_inputs,
     )
 
 
@@ -9433,7 +10404,7 @@ def _run_invariance(
     wire: FormalWireAdapterV1,
     recognizer: FormalRecognizerAdapterV1,
     input_root: str,
-    plan: ResourcePlanV1,
+    plan: _InvariantResourcePlanV1,
     adapter_pins: _AdapterExecutionPinsV1,
 ) -> tuple[_InvariantExecutionResultV1, InvariantRuntimeEvidenceV1]:
     """Isolate the 81 suite/recognizer callbacks; parent adapter surfaces are TCB."""
@@ -9465,8 +10436,6 @@ def _run_invariance(
             "FAIL_INVARIANCE_FORK_SAFETY",
             "raw invariant execution requires one exact Python/native Linux task",
         )
-    host_memory = _preflight_invariance_host_memory(plan)
-    parent_current_rss_at_start = _linux_current_rss_bytes()
     child_address_space_limit = _invariance_child_address_space_limit_bytes()
     fork_input_snapshot_root = _invariance_input_snapshot_root(
         envelopes,
@@ -9523,6 +10492,13 @@ def _run_invariance(
             prefix="hegel-formal-covert-invariant-"
         )
         artifact_path = str(Path(artifact_directory) / artifact_name)
+        # The snapshot root, signal state, child limit, artifact path, and all
+        # other fork inputs already exist.  Only bounded evidence bookkeeping
+        # follows this phase-exact sample; the fixed 64 MiB term covers it.
+        host_memory = _preflight_invariance_host_memory(plan)
+        parent_current_rss_at_start = (
+            host_memory.resource_preflight.parent_current_rss_bytes_at_preflight
+        )
         child_pid = os.fork()
         if child_pid == 0:
             try:
@@ -9680,6 +10656,8 @@ def _run_invariance(
     parent_peak = parent_historical_peak_rss
     conservative_sum = parent_peak + artifact.worker_peak_rss_bytes
     evidence = InvariantRuntimeEvidenceV1(
+        invariance_resource_plan_root=plan.plan_root,
+        resource_preflight=host_memory.resource_preflight,
         system_available_memory_bytes_at_preflight=(
             host_memory.system_available_bytes
         ),
@@ -9741,7 +10719,7 @@ def _run_formal_covert_audit_with_reservation_v1(
     wire_adapter: FormalWireAdapterV1,
     recognizer_adapter: FormalRecognizerAdapterV1,
     *,
-    _receipt_reservation: object,
+    _receipt_reservation: _InProcessReceiptReservationV1,
 ) -> FormalCovertAuditReceiptV1:
     """Execute the closed field audit; never accept caller-produced receipts."""
 
@@ -9902,6 +10880,52 @@ def _run_formal_covert_audit_with_reservation_v1(
         aligned_authority,
         eligibility_signatures,
     )
+    sufficiency = tuple(
+        _sufficiency(
+            aligned_authority,
+            target,
+            eligibility_signatures,
+        )
+        for target in TARGETS
+    )
+    label_counts = tuple(item.label_class_count for item in sufficiency)
+    invariant_plan = _invariance_resource_plan(
+        len(envelopes),
+        envelope_and_decode_bytes_bound=envelope_and_decode_bytes_bound,
+        adapter_retained_graph_bytes_bound=(
+            adapter_pins.retained_graph_bytes_bound
+        ),
+        variant_suite_resident_bytes_per_row_bound=(
+            adapter_pins.variant_suite_resident_bytes_per_row_bound
+        ),
+        variant_suite_resident_fixed_bytes_bound=(
+            adapter_pins.variant_suite_resident_fixed_bytes_bound
+        ),
+    )
+    if not invariant_plan.admissible:
+        _reject(
+            "FAIL_INVARIANCE_RESOURCE_PLAN",
+            "input exceeds the frozen invariant phase resource plan",
+        )
+    invariant_result: _InvariantExecutionResultV1 | None = None
+    invariant_runtime_evidence: InvariantRuntimeEvidenceV1 | None = None
+    if all(item.sufficient for item in sufficiency):
+        invariant_result, invariant_runtime_evidence = _run_invariance(
+            envelopes,
+            decoded,
+            wire_adapter,
+            recognizer_adapter,
+            input_root,
+            invariant_plan,
+            adapter_pins,
+        )
+    # Invariance can consume substantial time and the insufficient branch
+    # skips it entirely.  Both branches converge on one fresh feature host
+    # gate immediately before the projected column allocation.
+    _preflight_feature_extraction_memory(
+        feature_projection,
+        envelope_and_decode_bytes_bound,
+    )
     manifest, columns = _extract_feature_columns(
         envelopes,
         decoded,
@@ -9935,20 +10959,17 @@ def _run_formal_covert_audit_with_reservation_v1(
         partition_projection=partition_projection,
         concrete_features=manifest.deduplicated_feature_count,
     )
-    partitions, partition_matrix_bytes_bound = _materialize_partitions_bounded(
+    partitions = _materialize_partitions_bounded(
         columns,
         partition_projection,
         partition_preparation_deadline_ns,
     )
-    sufficiency = tuple(
-        _sufficiency(
-            aligned_authority,
-            target,
-            eligibility_signatures,
-        )
-        for target in TARGETS
-    )
-    label_counts = tuple(item.label_class_count for item in sufficiency)
+    # Statistics has no semantic dependency on decoded rows, feature columns,
+    # or adapter callbacks.  Drop the auditor-owned aliases before its sole
+    # partition measurement and parent-RSS plan sample.  Retained outer-frame
+    # aliases remain conservatively covered by current RSS and the adapter
+    # retained-graph static term.
+    del decoded_list, decoded, columns, wire_adapter, recognizer_adapter
     plan = _resource_plan(
         len(envelopes),
         partitions,
@@ -9958,27 +10979,54 @@ def _run_formal_covert_audit_with_reservation_v1(
         ),
         feature_matrix_bytes_bound=feature_matrix_bytes_bound,
         envelope_and_decode_bytes_bound=envelope_and_decode_bytes_bound,
-        partition_allocation_bytes_bound=(
-            partition_projection.projected_partition_matrix_bytes_bound
-        ),
-        partition_matrix_bytes_bound=partition_matrix_bytes_bound,
         adapter_retained_graph_bytes_bound=(
             adapter_pins.retained_graph_bytes_bound
         ),
-        parent_current_rss_bytes_at_plan=_linux_current_rss_bytes(),
-        variant_suite_resident_bytes_per_row_bound=(
-            adapter_pins.variant_suite_resident_bytes_per_row_bound
+        partition_projection=partition_projection,
+        partition_preparation_deadline_ns=(
+            partition_preparation_deadline_ns
         ),
-        variant_suite_resident_fixed_bytes_bound=(
-            adapter_pins.variant_suite_resident_fixed_bytes_bound
-        ),
+        invariance_plan=invariant_plan,
     )
     if not plan.admissible:
         _reject("FAIL_STATISTICAL_RESOURCE_PLAN", "input exceeds the frozen bitset resource plan")
     if not all(item.sufficient for item in sufficiency):
+        _remaining_partition_preparation_deadline_seconds(
+            partition_preparation_deadline_ns
+        )
+        parent_peak_before_finalization = _linux_peak_rss_bytes()
+        if parent_peak_before_finalization > MAXIMUM_ESTIMATED_RSS_BYTES:
+            _reject(
+                "FAIL_RECEIPT_ISSUANCE_RUNTIME_RSS",
+                "insufficient pre-finalization parent peak exceeds its RSS charge ceiling",
+            )
+        issuance_evidence = ReceiptIssuanceRuntimeEvidenceV1(
+            absolute_deadline_kind="PARTITION_PREPARATION",
+            absolute_deadline_monotonic_nanoseconds=(
+                partition_preparation_deadline_ns
+            ),
+            absolute_deadline_timeout_seconds=(
+                PARTITION_PREPARATION_TIMEOUT_SECONDS
+            ),
+            worker_peak_rss_bytes_sum=0,
+            parent_peak_rss_bytes_before_receipt_finalization=(
+                parent_peak_before_finalization
+            ),
+            parent_rss_charge_ceiling_bytes=MAXIMUM_ESTIMATED_RSS_BYTES,
+            conservative_parent_plus_worker_peak_sum_bytes=(
+                MAXIMUM_ESTIMATED_RSS_BYTES
+            ),
+            receipt_finalization_complete_pending_validation_count=1,
+            receipt_finalization_locked_deadline_check_count=1,
+            receipt_finalization_locked_deadline_within_absolute_limit=True,
+            receipt_finalization_parent_peak_within_charge_ceiling=True,
+        )
         receipt = _issue_formal_covert_audit_receipt_v1(
             _factory_token=_RECEIPT_EXECUTION_FACTORY_TOKEN,
             _reservation=_receipt_reservation,
+            _absolute_deadline_kind="PARTITION_PREPARATION",
+            _absolute_deadline_ns=partition_preparation_deadline_ns,
+            _parent_rss_charge_ceiling_bytes=MAXIMUM_ESTIMATED_RSS_BYTES,
             disposition=FormalCovertDisposition.REJECT_INSUFFICIENT,
             authority_transcript_root=execution_authority.transcript_root,
             private_alignment_root=private_alignment.alignment_root,
@@ -9998,6 +11046,7 @@ def _run_formal_covert_audit_with_reservation_v1(
             eligibility_mask_quota=eligibility_quota,
             invariant_runtime_evidence=None,
             statistics_runtime_evidence=None,
+            receipt_issuance_runtime_evidence=issuance_evidence,
             results=(),
             target_family_results=(),
             invariant_execution_root=None,
@@ -10012,20 +11061,12 @@ def _run_formal_covert_audit_with_reservation_v1(
             pairwise_holm_resolution_capable=False,
             absence_fields_proved=MUST_BE_ABSENT_FIELDS,
         )
-        validate_formal_covert_audit_receipt_v1(receipt)
         return receipt
-    # Fail before any recognizer execution if the host cannot satisfy the
-    # conservative aggregate SELF+CHILD projection plus its safety margin.
-    _preflight_host_memory(plan)
-    invariant_result, invariant_runtime_evidence = _run_invariance(
-        envelopes,
-        decoded,
-        wire_adapter,
-        recognizer_adapter,
-        input_root,
-        plan,
-        adapter_pins,
-    )
+    if invariant_result is None or invariant_runtime_evidence is None:
+        _reject(
+            "FAIL_INVARIANCE_RUNTIME",
+            "sufficient execution lacks completed invariant phase evidence",
+        )
     statistics_started_ns = time.monotonic_ns()
     statistics_deadline_ns = (
         statistics_started_ns
@@ -10036,7 +11077,7 @@ def _run_formal_covert_audit_with_reservation_v1(
         target_family_results,
         schedule_root,
         statistics_plan,
-        runtime_evidence,
+        runtime_inputs,
     ) = _statistics(
         aligned_authority,
         eligibility_signatures,
@@ -10046,8 +11087,8 @@ def _run_formal_covert_audit_with_reservation_v1(
         feature_projection.projected_feature_matrix_bytes_bound,
         feature_matrix_bytes_bound,
         envelope_and_decode_bytes_bound,
-        partition_projection.projected_partition_matrix_bytes_bound,
-        partition_matrix_bytes_bound,
+        plan.partition_allocation_bytes_bound,
+        plan.partition_matrix_bytes_bound,
         plan,
         statistics_started_ns,
         statistics_deadline_ns,
@@ -10078,7 +11119,7 @@ def _run_formal_covert_audit_with_reservation_v1(
         sufficiency=sufficiency,
         eligibility_mask_quota=eligibility_quota,
         invariant_runtime_evidence=invariant_runtime_evidence,
-        statistics_runtime_evidence=runtime_evidence,
+        statistics_runtime_evidence=None,
         results=results,
         target_family_results=target_family_results,
         invariant_execution_root=invariant_result.invariant_execution_root,
@@ -10105,73 +11146,119 @@ def _run_formal_covert_audit_with_reservation_v1(
             else None
         ),
     )
-    worker_peak_sum = sum(runtime_evidence.worker_peak_rss_bytes)
-    receipt: FormalCovertAuditReceiptV1 | None = None
-    for stabilization_pass in range(
-        1,
-        MAXIMUM_RECEIPT_RSS_STABILIZATION_PASSES + 1,
-    ):
-        _remaining_statistics_deadline_seconds(statistics_deadline_ns)
-        parent_peak_before = _linux_peak_rss_bytes()
-        conservative_sum = parent_peak_before + worker_peak_sum
-        stabilized_evidence = replace(
-            runtime_evidence,
-            parent_peak_rss_bytes=parent_peak_before,
-            conservative_parent_plus_worker_peak_sum_bytes=(
-                conservative_sum
-            ),
-            statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds=(
-                time.monotonic_ns() - statistics_started_ns
-            ),
-            receipt_finalization_rss_stabilization_passes=(
-                stabilization_pass
-            ),
-            within_frozen_aggregate_cap=(
-                conservative_sum <= MAXIMUM_ESTIMATED_RSS_BYTES
-            ),
+    if type(runtime_inputs) is not _StatisticalRuntimeEvidenceInputsV1:
+        raise RuntimeError("statistics returned malformed runtime inputs")
+    worker_peak_sum = sum(runtime_inputs.worker_peak_rss_bytes)
+    if worker_peak_sum > MAXIMUM_ESTIMATED_RSS_BYTES:
+        _reject(
+            "FAIL_STATISTICAL_RUNTIME_RSS",
+            "receipt finalization worker RSS sum exceeds the frozen cap",
         )
-        if not stabilized_evidence.within_frozen_aggregate_cap:
-            _reject(
-                "FAIL_STATISTICAL_RUNTIME_RSS",
-                "receipt finalization raised the conservative aggregate RSS above cap",
+    parent_rss_charge_ceiling = MAXIMUM_ESTIMATED_RSS_BYTES - worker_peak_sum
+    _remaining_statistics_deadline_seconds(statistics_deadline_ns)
+    parent_peak_before_finalization = _linux_peak_rss_bytes()
+    if parent_peak_before_finalization > parent_rss_charge_ceiling:
+        _reject(
+            "FAIL_STATISTICAL_RUNTIME_RSS",
+            "pre-finalization parent peak exceeds its RSS charge ceiling",
         )
-        receipt_values["statistics_runtime_evidence"] = stabilized_evidence
-        candidate = _construct_formal_covert_audit_receipt_v1(**receipt_values)
-        # Replay the exact operation used by the public validator before any
-        # process-local issuance.  A raised historical peak is fed into the
-        # next bounded pass rather than allowing an underreported receipt.
-        candidate.__post_init__()
-        _remaining_statistics_deadline_seconds(statistics_deadline_ns)
-        if _linux_peak_rss_bytes() != parent_peak_before:
-            del candidate
-            continue
-        _register_preconstructed_formal_covert_audit_receipt_v1(
+    runtime_evidence = StatisticalRuntimeEvidenceV1(
+        resource_plan_root=runtime_inputs.resource_plan_root,
+        resource_preflight=runtime_inputs.resource_preflight,
+        system_available_memory_bytes_at_preflight=(
+            runtime_inputs.system_available_memory_bytes_at_preflight
+        ),
+        cgroup_remaining_memory_bytes_at_preflight=(
+            runtime_inputs.cgroup_remaining_memory_bytes_at_preflight
+        ),
+        host_available_memory_bytes_at_preflight=(
+            runtime_inputs.host_available_memory_bytes_at_preflight
+        ),
+        parent_peak_rss_bytes_before_receipt_finalization=(
+            parent_peak_before_finalization
+        ),
+        parent_rss_charge_ceiling_bytes=parent_rss_charge_ceiling,
+        worker_peak_rss_bytes=runtime_inputs.worker_peak_rss_bytes,
+        worker_result_artifact_bytes=runtime_inputs.worker_result_artifact_bytes,
+        worker_result_artifact_sha256=(
+            runtime_inputs.worker_result_artifact_sha256
+        ),
+        parent_result_object_graph_bytes_observed=(
+            runtime_inputs.parent_result_object_graph_bytes_observed
+        ),
+        conservative_parent_plus_worker_peak_sum_bytes=(
+            parent_rss_charge_ceiling + worker_peak_sum
+        ),
+        statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds=(
+            time.monotonic_ns() - statistics_started_ns
+        ),
+        worker_timeout_seconds=runtime_inputs.worker_timeout_seconds,
+        parent_postprocess_deadline_schema=(
+            runtime_inputs.parent_postprocess_deadline_schema
+        ),
+        parent_postprocess_deadline_preemptive=(
+            runtime_inputs.parent_postprocess_deadline_preemptive
+        ),
+        external_supervisor_required=runtime_inputs.external_supervisor_required,
+        receipt_finalization_complete_pending_validation_count=1,
+        receipt_finalization_parent_peak_within_charge_ceiling=True,
+        within_frozen_aggregate_cap=True,
+    )
+    issuance_evidence = ReceiptIssuanceRuntimeEvidenceV1(
+        absolute_deadline_kind="STATISTICS",
+        absolute_deadline_monotonic_nanoseconds=statistics_deadline_ns,
+        absolute_deadline_timeout_seconds=STATISTICS_WORKER_TIMEOUT_SECONDS,
+        worker_peak_rss_bytes_sum=worker_peak_sum,
+        parent_peak_rss_bytes_before_receipt_finalization=(
+            parent_peak_before_finalization
+        ),
+        parent_rss_charge_ceiling_bytes=parent_rss_charge_ceiling,
+        conservative_parent_plus_worker_peak_sum_bytes=(
+            parent_rss_charge_ceiling + worker_peak_sum
+        ),
+        receipt_finalization_complete_pending_validation_count=1,
+        receipt_finalization_locked_deadline_check_count=1,
+        receipt_finalization_locked_deadline_within_absolute_limit=True,
+        receipt_finalization_parent_peak_within_charge_ceiling=True,
+    )
+    receipt_values["statistics_runtime_evidence"] = runtime_evidence
+    receipt_values["receipt_issuance_runtime_evidence"] = issuance_evidence
+    candidate = _construct_formal_covert_audit_receipt_v1(**receipt_values)
+    _remaining_statistics_deadline_seconds(statistics_deadline_ns)
+    _register_preconstructed_formal_covert_audit_receipt_v1(
+        _factory_token=_RECEIPT_EXECUTION_FACTORY_TOKEN,
+        _reservation=_receipt_reservation,
+        receipt=candidate,
+    )
+    try:
+        validated_id = _validate_pending_formal_covert_audit_receipt_v1(
             _factory_token=_RECEIPT_EXECUTION_FACTORY_TOKEN,
             _reservation=_receipt_reservation,
             receipt=candidate,
         )
+        _commit_pending_formal_covert_audit_receipt_v1(
+            _factory_token=_RECEIPT_EXECUTION_FACTORY_TOKEN,
+            _reservation=_receipt_reservation,
+            receipt=candidate,
+            validated_id=validated_id,
+            absolute_deadline_kind="STATISTICS",
+            absolute_deadline_ns=statistics_deadline_ns,
+            parent_rss_charge_ceiling_bytes=parent_rss_charge_ceiling,
+        )
+    except BaseException as primary:
         try:
-            validate_formal_covert_audit_receipt_v1(candidate)
-            _remaining_statistics_deadline_seconds(statistics_deadline_ns)
-            parent_peak_after_validation = _linux_peak_rss_bytes()
-        except BaseException:
-            _rollback_in_process_receipt_issuance(_receipt_reservation)
-            raise
-        if parent_peak_after_validation == parent_peak_before:
-            runtime_evidence = stabilized_evidence
-            receipt = candidate
-            break
-        _rollback_in_process_receipt_issuance(
-            _receipt_reservation,
-            restore_reservation=True,
-        )
-        del candidate
-    if receipt is None:
-        _reject(
-            "FAIL_STATISTICAL_RUNTIME_RSS",
-            "receipt finalization RSS did not stabilize within three bounded passes",
-        )
-    return receipt
+            _rollback_pending_in_process_receipt_issuance(
+                candidate,
+                _receipt_reservation,
+            )
+        except BaseException as cleanup_error:
+            _record_cleanup_failure_without_replacing_primary(
+                primary,
+                cleanup_error,
+                "statistical direct receipt rollback",
+            )
+        raise
+    return candidate
 
 
 def run_formal_covert_audit_v1(
@@ -10183,22 +11270,32 @@ def run_formal_covert_audit_v1(
     """Execute one bounded audit under a reserved process-local receipt slot."""
 
     reservation = _reserve_in_process_receipt_slot()
-    completed = False
     try:
-        receipt = _run_formal_covert_audit_with_reservation_v1(
+        return _run_formal_covert_audit_with_reservation_v1(
             envelopes,
             authority,
             wire_adapter,
             recognizer_adapter,
             _receipt_reservation=reservation,
         )
-        completed = True
-        return receipt
-    finally:
-        if not completed:
+    except BaseException as primary:
+        try:
             _rollback_in_process_receipt_issuance(reservation)
-        # Issuance consumes the reservation.  Every rejection path cancels it.
-        _cancel_in_process_receipt_reservation(reservation)
+        except BaseException as cleanup_error:
+            _record_cleanup_failure_without_replacing_primary(
+                primary,
+                cleanup_error,
+                "outer receipt rollback",
+            )
+        try:
+            _cancel_in_process_receipt_reservation(reservation)
+        except BaseException as cleanup_error:
+            _record_cleanup_failure_without_replacing_primary(
+                primary,
+                cleanup_error,
+                "outer receipt reservation cancellation",
+            )
+        raise
 
 
 def validate_formal_covert_audit_receipt_v1(
@@ -10212,18 +11309,41 @@ def validate_formal_covert_audit_receipt_v1(
 
     if type(receipt) is not FormalCovertAuditReceiptV1:
         raise TypeError("receipt validator requires the exact receipt DTO")
+    identity = id(receipt)
     with _IN_PROCESS_RECEIPT_REGISTRY_LOCK:
-        issued = _IN_PROCESS_EXECUTED_RECEIPTS.get(id(receipt))
-    if issued is None or issued[0] is not receipt:
-        raise ValueError(
-            "publicly constructed transcript was not issued by the in-process execution factory"
-        )
-    registered_id = issued[1]
-    observed_id = receipt.receipt_id
-    receipt.__post_init__()
-    if receipt.receipt_id != observed_id or receipt.receipt_id != registered_id:
-        raise ValueError("formal covert audit transcript content changed after execution")
-    return receipt.receipt_id
+        entry = _IN_PROCESS_EXECUTED_RECEIPTS.get(identity)
+        if (
+            type(entry) is not _InProcessReceiptRegistryEntryV1
+            or entry.receipt is not receipt
+        ):
+            raise ValueError(
+                "publicly constructed transcript was not issued by the in-process execution factory"
+            )
+        if (
+            type(entry) is not _InProcessReceiptRegistryEntryV1
+            or entry.state is not _InProcessReceiptRegistryStateV1.ISSUED
+            or type(entry.receipt_id) is not str
+            or type(entry.reservation) is not _InProcessReceiptReservationV1
+            or entry.reservation.entry_identity != identity
+        ):
+            raise ValueError("a PENDING receipt is not publicly issued")
+        registered_id = entry.receipt_id
+    replayed_id = _replay_formal_covert_audit_receipt_content_v1(
+        receipt,
+        registered_id,
+    )
+    with _IN_PROCESS_RECEIPT_REGISTRY_LOCK:
+        if (
+            _IN_PROCESS_EXECUTED_RECEIPTS.get(identity) is not entry
+            or entry.receipt is not receipt
+            or entry.receipt_id != replayed_id
+            or type(entry.receipt_id) is not str
+            or entry.state is not _InProcessReceiptRegistryStateV1.ISSUED
+            or type(entry.reservation) is not _InProcessReceiptReservationV1
+            or entry.reservation.entry_identity != identity
+        ):
+            raise ValueError("issued receipt registry entry changed during full replay")
+    return replayed_id
 
 
 def validate_frozen_policy_binding_v1() -> str:
@@ -10311,6 +11431,7 @@ __all__ = [
     "POLICY_BINDING_ID",
     "POSITIVE_DECISION_CLAIM",
     "ResourcePlanV1",
+    "ReceiptIssuanceRuntimeEvidenceV1",
     "SEMANTICS_ID",
     "StatisticalRuntimeEvidenceV1",
     "TargetFamilyMaxTResultV1",

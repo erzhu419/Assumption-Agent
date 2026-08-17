@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import ast
 from collections import Counter
-from dataclasses import replace
+from dataclasses import dataclass, fields, replace
 from fractions import Fraction
 from functools import lru_cache
 from pathlib import Path
 from types import SimpleNamespace
+import gc
 import hashlib
 import io
 import inspect
@@ -24,6 +25,7 @@ import time
 import pytest
 
 from hegel_machine import phase2b_formal_covert_auditor_v1 as auditor
+from hegel_machine import phase2b_exact_transform_core_v1 as exact_core
 from hegel_machine import phase2b_formal_trusted_wire_v3 as wire
 from hegel_machine import phase2b_formal_wire_covert_qualification_v2 as qualification
 
@@ -34,6 +36,27 @@ ROOT = Path(__file__).parents[1]
 @lru_cache(maxsize=2)
 def _fixture(mode: str) -> qualification._FixtureExecutionV2:
     return qualification._build_fixture_execution_v2(mode, row_count=8)
+
+
+def _decode_batch_with_production_guards(
+    adapter: auditor.FormalWireV3AdapterV1,
+    envelopes: tuple[bytes, ...],
+) -> tuple[auditor.DecodedFormalEnvelopeV1, ...]:
+    auditor._preflight_decode_memory(len(envelopes))
+    decoded: list[auditor.DecodedFormalEnvelopeV1] = []
+    for envelope in envelopes:
+        item = adapter.decode_envelope(envelope)
+        if type(item) is not auditor.DecodedFormalEnvelopeV1:
+            raise TypeError("resource-only decode returned a non-exact DTO")
+        auditor._validate_decoded(item, adapter)
+        if (
+            auditor.DEEP_SIZE_SAFETY_MULTIPLIER
+            * auditor._deep_object_graph_bytes(item)
+            > auditor.MAXIMUM_DECODE_GRAPH_BYTES_PER_ROW
+        ):
+            raise ValueError("resource-only decoded row exceeds the deep graph bound")
+        decoded.append(item)
+    return tuple(decoded)
 
 
 def _attempt() -> qualification.Phase2BFormalWireCovertAttemptManifestV2:
@@ -1670,6 +1693,48 @@ def test_checked_profile_is_exact_canonical_candidate_with_live_disabled() -> No
     assert payload == (ROOT / "config/phase2b_formal_wire_covert_qualification_v2.json").read_bytes()
     profile = qualification.load_phase2b_formal_wire_covert_qualification_profile_v2(payload)
     assert profile.profile_id == qualification.PROFILE_ID
+    assert qualification.PROFILE_SCHEMA_VERSION == (
+        "hegel-machine-phase2b-formal-wire-covert-qualification/4"
+    )
+    assert qualification.AUDITOR_SCHEMA_VERSION_V2 == (
+        "hegel-machine-phase2b-formal-covert-auditor/4"
+    )
+    assert auditor.SCHEMA_VERSION == qualification.AUDITOR_SCHEMA_VERSION_V2
+    assert qualification.AUDITOR_PROFILE_SCHEMA_VERSION_V2 == (
+        "hegel-machine-phase2b-formal-covert-auditor-profile/4"
+    )
+    assert auditor.SEMANTICS_ID == qualification.AUDITOR_SEMANTICS_ID_V2
+    assert auditor.POLICY_BINDING_ID == qualification.AUDITOR_POLICY_BINDING_ID_V2
+    assert profile.profile["auditor_binding"]["schema_version"] == (
+        qualification.AUDITOR_SCHEMA_VERSION_V2
+    )
+    assert profile.profile["auditor_binding"]["profile_schema_version"] == (
+        qualification.AUDITOR_PROFILE_SCHEMA_VERSION_V2
+    )
+    assert profile.profile["auditor_binding"][
+        "receipt_issuance_runtime_evidence_required"
+    ] is True
+    assert profile.profile["auditor_binding"][
+        "receipt_issuance_runtime_evidence_fields"
+    ] == qualification._RECEIPT_ISSUANCE_RUNTIME_FIELDS_V2
+    resource_fields = fields(auditor.ResourcePlanV1)
+    assert len(qualification.FROZEN_STATIC_RESOURCE_PLAN_FIELDS_V2) == 45
+    assert len(qualification.DYNAMIC_RESOURCE_PLAN_FIELDS_NOT_EXACT_COMPARED_V2) == 11
+    assert len(resource_fields) == 56
+    assert sum(item.init for item in resource_fields) == 55
+    assert tuple(item.name for item in resource_fields if not item.init) == (
+        "resource_plan_root",
+    )
+    assert len(fields(auditor.StatisticalRuntimeEvidenceV1)) == 20
+    assert len(fields(auditor.ReceiptIssuanceRuntimeEvidenceV1)) == 11
+    receipt_fields = tuple(item.name for item in fields(auditor.FormalCovertAuditReceiptV1))
+    assert receipt_fields[17:22] == (
+        "invariant_runtime_evidence",
+        "statistics_runtime_evidence",
+        "receipt_issuance_runtime_evidence",
+        "results",
+        "target_family_results",
+    )
     shape = profile.profile["fixture_contract"]["rich_positive_shape"]
     assert shape["calibration_campaign_status"] == "PENDING_FULL_1024_DEVELOPMENT_MEASUREMENT"
     assert shape["live_qualification_enabled"] is False
@@ -1778,12 +1843,18 @@ def test_dependency_lock_is_canonical_exact_and_closes_the_source_loader() -> No
     assert local["auditor"] == {
         "config_sha256": qualification.AUDITOR_CONFIG_SHA256,
         "documentation_sha256": qualification.AUDITOR_DOCUMENTATION_SHA256,
-        "policy_binding_id": auditor.POLICY_BINDING_ID,
-        "semantics_id": auditor.SEMANTICS_ID,
+        "policy_binding_id": qualification.AUDITOR_POLICY_BINDING_ID_V2,
+        "profile_schema_version": qualification.AUDITOR_PROFILE_SCHEMA_VERSION_V2,
+        "schema_version": qualification.AUDITOR_SCHEMA_VERSION_V2,
+        "semantics_id": qualification.AUDITOR_SEMANTICS_ID_V2,
         "source_sha256": qualification.AUDITOR_SOURCE_SHA256,
         "test_sha256": qualification.AUDITOR_TEST_SHA256,
     }
     profile_lock = qualification._EXPECTED_PROFILE["dependency_lock"]
+    assert decoded["schema_version"] == (
+        "hegel-machine-phase2b-formal-wire-covert-qualification-dependency-lock/3"
+    )
+    assert profile_lock["schema_version"] == decoded["schema_version"]
     assert profile_lock["sha256"] == qualification.DEPENDENCY_LOCK_SHA256
     assert profile_lock["runtime_import_closure_sha256"] == (
         local["runtime_import_closure"]
@@ -2506,15 +2577,27 @@ def test_complete_resource_projection_requires_exact_static_union_dynamic_keys(
 ) -> None:
     expected = set(qualification._RESOURCE_PLAN_FIELDS_V2)
     complete = {name: 0 for name in expected}
+    complete["resource_plan_root"] = (
+        "phase2b_formal_covert_statistics_resource_plan_" + "0" * 64
+    )
 
     class Replay:
         def __init__(self, **values: object) -> None:
-            assert set(values) == expected
+            assert set(values) == expected - {"resource_plan_root"}
+            self.values = values
 
         def __post_init__(self) -> None:
             return None
 
+    original_closed = qualification._closed_primitive_v2
+
+    def closed(value: object) -> object:
+        if type(value) is Replay:
+            return {**value.values, "resource_plan_root": complete["resource_plan_root"]}
+        return original_closed(value)
+
     monkeypatch.setattr(auditor, "ResourcePlanV1", Replay)
+    monkeypatch.setattr(qualification, "_closed_primitive_v2", closed)
     assert qualification._validate_complete_resource_plan_projection_v2(
         complete, context="unit resource"
     ) is complete
@@ -2525,6 +2608,391 @@ def test_complete_resource_projection_requires_exact_static_union_dynamic_keys(
         with pytest.raises(ValueError, match="fields are not exact"):
             qualification._validate_complete_resource_plan_projection_v2(
                 value, context="unit resource"
+            )
+    with pytest.raises(ValueError, match="derived root"):
+        qualification._validate_complete_resource_plan_projection_v2(
+            {
+                **complete,
+                "resource_plan_root": (
+                    "phase2b_formal_covert_statistics_resource_plan_" + "1" * 64
+                ),
+            },
+            context="unit resource",
+        )
+
+
+@pytest.mark.parametrize(
+    ("phase", "prefix"),
+    (
+        ("INVARIANCE", "phase2b_formal_covert_invariant_resource_plan_"),
+        ("STATISTICS", "phase2b_formal_covert_statistics_resource_plan_"),
+    ),
+)
+def test_phase_resource_preflight_projection_is_exact_and_closed(
+    phase: str,
+    prefix: str,
+) -> None:
+    resource_plan_root = prefix + "0" * 64
+    preflight = auditor._PhaseResourcePreflightEvidenceV1(
+        phase=phase,
+        resource_plan_root=resource_plan_root,
+        parent_current_rss_bytes_at_preflight=100,
+        static_parent_bytes_bound=90,
+        fork_parent_rss_multiplier=2,
+        additional_bytes_bound=10,
+        projected_aggregate_rss_bytes_at_preflight=210,
+        maximum_estimated_rss_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+        host_available_memory_safety_margin_bytes=(
+            auditor.HOST_AVAILABLE_MEMORY_SAFETY_MARGIN_BYTES
+        ),
+    )
+    projection = qualification._closed_primitive_v2(preflight)
+    assert qualification._replay_phase_resource_preflight_projection_v2(
+        projection,
+        phase=phase,
+        resource_plan_root=resource_plan_root,
+        context="unit phase preflight",
+    ) == preflight
+    for malformed in (
+        {key: value for key, value in projection.items() if key != "phase"},
+        {**projection, "unexpected": 0},
+    ):
+        with pytest.raises(ValueError, match="fields are not exact"):
+            qualification._replay_phase_resource_preflight_projection_v2(
+                malformed,
+                phase=phase,
+                resource_plan_root=resource_plan_root,
+                context="unit phase preflight",
+            )
+
+
+@pytest.mark.parametrize(
+    ("field_name", "replacement"),
+    (
+        ("phase", "STATISTICS"),
+        (
+            "resource_plan_root",
+            "phase2b_formal_covert_invariant_resource_plan_" + "1" * 64,
+        ),
+        ("parent_current_rss_bytes_at_preflight", 0),
+        ("static_parent_bytes_bound", 0),
+        ("fork_parent_rss_multiplier", 3),
+        ("additional_bytes_bound", 11),
+        ("projected_aggregate_rss_bytes_at_preflight", 211),
+        ("maximum_estimated_rss_bytes", auditor.MAXIMUM_ESTIMATED_RSS_BYTES + 1),
+        (
+            "host_available_memory_safety_margin_bytes",
+            auditor.HOST_AVAILABLE_MEMORY_SAFETY_MARGIN_BYTES + 1,
+        ),
+    ),
+)
+def test_invariant_phase_resource_preflight_tamper_matrix_fails_closed(
+    field_name: str,
+    replacement: object,
+) -> None:
+    resource_plan_root = (
+        "phase2b_formal_covert_invariant_resource_plan_" + "0" * 64
+    )
+    projection = {
+        "phase": "INVARIANCE",
+        "resource_plan_root": resource_plan_root,
+        "parent_current_rss_bytes_at_preflight": 100,
+        "static_parent_bytes_bound": 90,
+        "fork_parent_rss_multiplier": 2,
+        "additional_bytes_bound": 10,
+        "projected_aggregate_rss_bytes_at_preflight": 210,
+        "maximum_estimated_rss_bytes": auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+        "host_available_memory_safety_margin_bytes": (
+            auditor.HOST_AVAILABLE_MEMORY_SAFETY_MARGIN_BYTES
+        ),
+    }
+    projection[field_name] = replacement
+    with pytest.raises(ValueError):
+        qualification._replay_phase_resource_preflight_projection_v2(
+            projection,
+            phase="INVARIANCE",
+            resource_plan_root=resource_plan_root,
+            context="unit invariant phase preflight",
+        )
+
+
+def test_complete_two_phase_runtime_reconstruction_crossbinds_composite_plan() -> None:
+    rows = 2
+    columns = (auditor._FeatureColumn(("unit",), ("a", "a")),)
+    deadline_ns = time.monotonic_ns() + 5_000_000_000
+    partition_projection = auditor._partition_allocation_projection(
+        rows,
+        columns,
+        deadline_ns,
+    )
+    partitions = auditor._materialize_partitions_bounded(
+        columns,
+        partition_projection,
+        deadline_ns,
+    )
+    envelope_and_decode_bytes_bound = rows * auditor.ENVELOPE_BYTES * 2
+    invariant_plan = auditor._invariance_resource_plan(
+        rows,
+        envelope_and_decode_bytes_bound=envelope_and_decode_bytes_bound,
+        adapter_retained_graph_bytes_bound=1,
+        variant_suite_resident_bytes_per_row_bound=1,
+        variant_suite_resident_fixed_bytes_bound=1,
+    )
+    plan = auditor._resource_plan(
+        rows,
+        partitions,
+        (2,) * len(auditor.TARGETS),
+        preextraction_feature_matrix_bytes_bound=rows * 72,
+        feature_matrix_bytes_bound=rows * 72,
+        envelope_and_decode_bytes_bound=envelope_and_decode_bytes_bound,
+        adapter_retained_graph_bytes_bound=1,
+        partition_projection=partition_projection,
+        partition_preparation_deadline_ns=deadline_ns,
+        invariance_plan=invariant_plan,
+    )
+    invariant_static = (
+        plan.envelope_and_decode_bytes_bound
+        + plan.adapter_retained_graph_bytes_bound
+        + 64 * 1_048_576
+    )
+    invariant_additional = (
+        plan.invariance_variant_suite_resident_bytes_bound
+        + plan.invariance_recognizer_live_output_bytes_bound
+        + plan.invariance_worker_artifact_bytes_bound
+    )
+    invariant_preflight = auditor._PhaseResourcePreflightEvidenceV1(
+        phase="INVARIANCE",
+        resource_plan_root=plan.invariance_resource_plan_root,
+        parent_current_rss_bytes_at_preflight=(
+            plan.invariance_parent_current_rss_bytes_at_plan
+        ),
+        static_parent_bytes_bound=invariant_static,
+        fork_parent_rss_multiplier=2,
+        additional_bytes_bound=invariant_additional,
+        projected_aggregate_rss_bytes_at_preflight=(
+            max(
+                plan.invariance_parent_current_rss_bytes_at_plan,
+                invariant_static,
+            )
+            * 2
+            + invariant_additional
+        ),
+        maximum_estimated_rss_bytes=plan.maximum_invariance_estimated_rss_bytes,
+        host_available_memory_safety_margin_bytes=(
+            plan.host_available_memory_safety_margin_bytes
+        ),
+    )
+    invariant_available = (
+        invariant_preflight.projected_aggregate_rss_bytes_at_preflight
+        + invariant_preflight.host_available_memory_safety_margin_bytes
+    )
+    parent_rss = invariant_preflight.parent_current_rss_bytes_at_preflight
+    invariant_runtime = auditor.InvariantRuntimeEvidenceV1(
+        invariance_resource_plan_root=plan.invariance_resource_plan_root,
+        resource_preflight=invariant_preflight,
+        system_available_memory_bytes_at_preflight=invariant_available,
+        cgroup_remaining_memory_bytes_at_preflight=None,
+        host_available_memory_bytes_at_preflight=invariant_available,
+        parent_current_rss_bytes_at_start=parent_rss,
+        parent_peak_current_rss_bytes_observed=parent_rss,
+        parent_current_rss_bytes_at_completion=parent_rss,
+        parent_historical_peak_rss_bytes=parent_rss,
+        parent_peak_rss_bytes=parent_rss,
+        worker_peak_rss_bytes=0,
+        worker_result_artifact_bytes=1,
+        worker_result_artifact_sha256="sha256:" + "0" * 64,
+        conservative_parent_plus_worker_peak_sum_bytes=parent_rss,
+        invariance_wall_time_nanoseconds=1,
+        worker_timeout_seconds=auditor.INVARIANCE_WORKER_TIMEOUT_SECONDS,
+        invariant_run_count=81,
+        exact_invariant_comparisons=rows * 80 * 5,
+        fork_input_snapshot_root=(
+            "phase2b_formal_covert_invariance_input_snapshot_" + "0" * 64
+        ),
+        adapter_execution_pin_root=(
+            "phase2b_formal_covert_adapter_execution_pins_" + "0" * 64
+        ),
+        variant_suite_root="phase2b_formal_variant_suite_" + "0" * 64,
+        consumer_decode_count=rows * 80,
+        variant_suite_unique_envelope_object_count=0,
+        variant_suite_resident_object_graph_bytes_observed=0,
+        recognizer_output_root=(
+            "phase2b_formal_covert_recognizer_output_" + "0" * 64
+        ),
+        execution_containment=auditor.INVARIANCE_EXECUTION_CONTAINMENT,
+        parent_side_adapter_tcb=auditor.PARENT_SIDE_ADAPTER_TCB,
+        parent_side_adapter_sandboxed=False,
+        process_group_empty_at_exit=True,
+        child_address_space_limit_bytes=1,
+        within_frozen_aggregate_cap=True,
+    )
+    statistics_static = (
+        plan.permutation_label_mask_bytes_bound
+        + plan.partition_matrix_bytes_bound
+        + plan.adapter_retained_graph_bytes_bound
+        + 64 * 1_048_576
+    )
+    statistics_additional = (
+        plan.metric_cache_bytes_bound * plan.maximum_parallel_workers
+        + plan.permutation_metric_tuple_bytes_bound
+        + plan.target_max_vector_bytes_bound
+        + plan.worker_result_artifact_bytes_bound
+        + plan.parent_result_working_bytes_bound
+    )
+    statistics_multiplier = 1 + plan.maximum_parallel_workers
+    statistics_preflight = auditor._PhaseResourcePreflightEvidenceV1(
+        phase="STATISTICS",
+        resource_plan_root=plan.resource_plan_root,
+        parent_current_rss_bytes_at_preflight=plan.parent_current_rss_bytes_at_plan,
+        static_parent_bytes_bound=statistics_static,
+        fork_parent_rss_multiplier=statistics_multiplier,
+        additional_bytes_bound=statistics_additional,
+        projected_aggregate_rss_bytes_at_preflight=(
+            max(plan.parent_current_rss_bytes_at_plan, statistics_static)
+            * statistics_multiplier
+            + statistics_additional
+        ),
+        maximum_estimated_rss_bytes=plan.maximum_estimated_rss_bytes,
+        host_available_memory_safety_margin_bytes=(
+            plan.host_available_memory_safety_margin_bytes
+        ),
+    )
+    statistics_available = (
+        statistics_preflight.projected_aggregate_rss_bytes_at_preflight
+        + statistics_preflight.host_available_memory_safety_margin_bytes
+    )
+    statistics_runtime = auditor.StatisticalRuntimeEvidenceV1(
+        resource_plan_root=plan.resource_plan_root,
+        resource_preflight=statistics_preflight,
+        system_available_memory_bytes_at_preflight=statistics_available,
+        cgroup_remaining_memory_bytes_at_preflight=None,
+        host_available_memory_bytes_at_preflight=statistics_available,
+        parent_peak_rss_bytes_before_receipt_finalization=1,
+        parent_rss_charge_ceiling_bytes=(
+            auditor.MAXIMUM_ESTIMATED_RSS_BYTES - 1
+        ),
+        worker_peak_rss_bytes=(1,),
+        worker_result_artifact_bytes=(1,),
+        worker_result_artifact_sha256=("sha256:" + "0" * 64,),
+        parent_result_object_graph_bytes_observed=0,
+        conservative_parent_plus_worker_peak_sum_bytes=(
+            auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        ),
+        statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds=1,
+        worker_timeout_seconds=auditor.STATISTICS_WORKER_TIMEOUT_SECONDS,
+        parent_postprocess_deadline_schema=auditor.PARENT_POSTPROCESS_DEADLINE_SCHEMA,
+        parent_postprocess_deadline_preemptive=False,
+        external_supervisor_required=True,
+        receipt_finalization_complete_pending_validation_count=1,
+        receipt_finalization_parent_peak_within_charge_ceiling=True,
+        within_frozen_aggregate_cap=True,
+    )
+    issuance_runtime = auditor.ReceiptIssuanceRuntimeEvidenceV1(
+        absolute_deadline_kind="STATISTICS",
+        absolute_deadline_monotonic_nanoseconds=1,
+        absolute_deadline_timeout_seconds=auditor.STATISTICS_WORKER_TIMEOUT_SECONDS,
+        worker_peak_rss_bytes_sum=1,
+        parent_peak_rss_bytes_before_receipt_finalization=1,
+        parent_rss_charge_ceiling_bytes=(
+            auditor.MAXIMUM_ESTIMATED_RSS_BYTES - 1
+        ),
+        conservative_parent_plus_worker_peak_sum_bytes=(
+            auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        ),
+        receipt_finalization_complete_pending_validation_count=1,
+        receipt_finalization_locked_deadline_check_count=1,
+        receipt_finalization_locked_deadline_within_absolute_limit=True,
+        receipt_finalization_parent_peak_within_charge_ceiling=True,
+    )
+    plan_projection = qualification._closed_primitive_v2(plan)
+    invariant_projection = qualification._closed_primitive_v2(invariant_runtime)
+    statistics_projection = qualification._closed_primitive_v2(statistics_runtime)
+    issuance_projection = qualification._closed_primitive_v2(issuance_runtime)
+    assert qualification._validate_complete_invariant_runtime_projection_v2(
+        invariant_projection,
+        plan_projection,
+        context="unit complete runtime",
+    ) is invariant_projection
+    assert qualification._validate_complete_statistics_runtime_projection_v2(
+        statistics_projection,
+        plan_projection,
+        context="unit complete runtime",
+    ) is statistics_projection
+    assert qualification._validate_complete_receipt_issuance_runtime_projection_v2(
+        issuance_projection,
+        statistics_projection,
+        context="unit complete runtime",
+    ) is issuance_projection
+    for field_name, replacement in (
+        ("worker_peak_rss_bytes_sum", 2),
+        ("parent_peak_rss_bytes_before_receipt_finalization", 2),
+        ("receipt_finalization_complete_pending_validation_count", 0),
+        ("receipt_finalization_locked_deadline_check_count", 0),
+        ("receipt_finalization_locked_deadline_within_absolute_limit", False),
+        ("receipt_finalization_parent_peak_within_charge_ceiling", False),
+    ):
+        tampered = dict(issuance_projection)
+        tampered[field_name] = replacement
+        with pytest.raises(ValueError):
+            qualification._validate_complete_receipt_issuance_runtime_projection_v2(
+                tampered,
+                statistics_projection,
+                context="unit complete runtime",
+            )
+    insufficient_issuance = auditor.ReceiptIssuanceRuntimeEvidenceV1(
+        absolute_deadline_kind="PARTITION_PREPARATION",
+        absolute_deadline_monotonic_nanoseconds=1,
+        absolute_deadline_timeout_seconds=(
+            auditor.PARTITION_PREPARATION_TIMEOUT_SECONDS
+        ),
+        worker_peak_rss_bytes_sum=0,
+        parent_peak_rss_bytes_before_receipt_finalization=1,
+        parent_rss_charge_ceiling_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+        conservative_parent_plus_worker_peak_sum_bytes=(
+            auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        ),
+        receipt_finalization_complete_pending_validation_count=1,
+        receipt_finalization_locked_deadline_check_count=1,
+        receipt_finalization_locked_deadline_within_absolute_limit=True,
+        receipt_finalization_parent_peak_within_charge_ceiling=True,
+    )
+    insufficient_projection = qualification._closed_primitive_v2(
+        insufficient_issuance
+    )
+    assert qualification._validate_complete_receipt_issuance_runtime_projection_v2(
+        insufficient_projection,
+        None,
+        context="unit insufficient runtime",
+    ) is insufficient_projection
+    for projection, validator, field_name, prefix in (
+        (
+            invariant_projection,
+            qualification._validate_complete_invariant_runtime_projection_v2,
+            "invariance_resource_plan_root",
+            "phase2b_formal_covert_invariant_resource_plan_",
+        ),
+        (
+            statistics_projection,
+            qualification._validate_complete_statistics_runtime_projection_v2,
+            "resource_plan_root",
+            "phase2b_formal_covert_statistics_resource_plan_",
+        ),
+    ):
+        tampered = json.loads(json.dumps(projection))
+        tampered[field_name] = prefix + "f" * 64
+        with pytest.raises(ValueError):
+            validator(
+                tampered,
+                plan_projection,
+                context="unit complete runtime",
+            )
+        tampered = json.loads(json.dumps(projection))
+        tampered["resource_preflight"]["resource_plan_root"] = prefix + "f" * 64
+        with pytest.raises(ValueError):
+            validator(
+                tampered,
+                plan_projection,
+                context="unit complete runtime",
             )
 
 
@@ -2598,6 +3066,995 @@ def test_small_eight_operation_build_uses_final_fresh_api_and_exact_ten_namespac
     for envelope in execution.adapter.envelopes:
         decoded = execution.adapter.decode_envelope(envelope)
         assert {leaf.namespace for leaf in decoded.namespace_leaves} == expected
+
+
+def test_capacity_bounded_v4_coordinate_and_sampling_shapes_complete_exact_core() -> None:
+    coordinate = qualification._core_fixture_profile_v2(
+        exact_core.CoreTransformOperationV1.COORDINATE_AFFINE
+    )
+    coordinate_certificate = coordinate.contract.certificate
+    assert type(coordinate_certificate) is exact_core.CoreCoordinateAffineCertificateV1
+    assert len(coordinate.source_components) == 1
+    assert len(coordinate.contract.output_metadata) == 1
+    assert coordinate_certificate.dimension == 1
+    assert coordinate_certificate.source_frame_binding == qualification._FRAME_A
+    assert coordinate_certificate.target_frame_binding == qualification._FRAME_B
+    assert coordinate.source_components[0].metadata.spatial_support == (
+        exact_core.CoreSpatialSupportV1(
+            qualification._FRAME_A,
+            (Fraction(0),),
+            (Fraction(1),),
+        )
+    )
+    assert coordinate.contract.output_metadata[0].spatial_support == (
+        exact_core.CoreSpatialSupportV1(
+            qualification._FRAME_B,
+            (Fraction(1),),
+            (Fraction(3),),
+        )
+    )
+    forward = coordinate.contract.kernel_rows[0]
+    inverse = coordinate_certificate.inverse_rows[0]
+    assert (
+        tuple(term.coefficient for term in forward.terms),
+        forward.offset,
+        tuple(term.coefficient for term in inverse.terms),
+        inverse.offset,
+    ) == (
+        (Fraction(2),),
+        Fraction(1),
+        (Fraction(1, 2),),
+        Fraction(-1, 2),
+    )
+    coordinate_result = exact_core.run_exact_transform_core_v1(coordinate)
+    assert coordinate_result.disposition is exact_core.CoreTransformDispositionV1.COMPLETE
+    assert coordinate_result.output_components[0].numeric_value == Fraction(2)
+
+    sampling = qualification._core_fixture_profile_v2(
+        exact_core.CoreTransformOperationV1.SAMPLING_RESOLUTION
+    )
+    sampling_certificate = sampling.contract.certificate
+    assert type(sampling_certificate) is exact_core.CoreSamplingResolutionCertificateV1
+    assert len(sampling.source_components) == 2
+    assert len(sampling.contract.output_metadata) == 1
+    assert len(sampling_certificate.selected_inputs) == 1
+    assert len(sampling_certificate.discarded_inputs) == 1
+    assert set(sampling_certificate.selected_inputs).isdisjoint(
+        sampling_certificate.discarded_inputs
+    )
+    assert set(sampling_certificate.selected_inputs).union(
+        sampling_certificate.discarded_inputs
+    ) == {item.ref for item in sampling.source_components}
+    assert sampling_certificate.grid_points == (
+        exact_core.CoreSamplingGridPointV1(
+            sampling_certificate.selected_inputs[0],
+            (Fraction(0),),
+        ),
+    )
+    sampling_result = exact_core.run_exact_transform_core_v1(sampling)
+    assert sampling_result.disposition is exact_core.CoreTransformDispositionV1.COMPLETE
+    assert sampling_result.output_components[0].numeric_value == Fraction(1)
+
+
+@pytest.mark.parametrize("mode", qualification.LIVE_MODE_ORDER)
+def test_capacity_bounded_v4_n8_projection_is_exact_and_below_auditor_cap(
+    mode: str,
+) -> None:
+    execution = _fixture(mode)
+    decoded = tuple(
+        execution.adapter.decode_envelope(envelope)
+        for envelope in execution.adapter.envelopes
+    )
+    projection = auditor._feature_cardinality_projection(decoded)
+    assert qualification._validate_fixture_feature_capacity_projection_v2(
+        mode, projection
+    ) is projection
+    expected = qualification._FIXTURE_FEATURE_CAPACITY_CONTRACT_V2["modes"][mode]
+    assert projection.projected_concrete_feature_count < auditor.MAXIMUM_FEATURES
+    assert projection.projected_concrete_feature_count == expected["projections"][0][
+        "projected_concrete_feature_count"
+    ]
+    assert projection.projection_root == expected["projections"][0][
+        "projection_root"
+    ]
+
+
+@pytest.mark.parametrize("mode", qualification.LIVE_MODE_ORDER)
+def test_capacity_bounded_v4_owner_union_is_execution_derived_and_mutation_closed(
+    mode: str,
+) -> None:
+    execution = _fixture(mode)
+    decoded = tuple(
+        execution.adapter.decode_envelope(envelope)
+        for envelope in execution.adapter.envelopes
+    )
+    independently_decoded_owner_paths = {
+        owner.path for row in decoded for owner in row.channel_only_leaf_owners
+    }
+    expected_contract = qualification._FIXTURE_FEATURE_CAPACITY_CONTRACT_V2[
+        "modes"
+    ][mode]
+    expected = expected_contract["channel_only_owned_union_path_count"]
+    independently_derived_owner_projection = (
+        qualification._channel_only_owner_union_projection_v2(
+            owner for row in decoded for owner in row.channel_only_leaf_owners
+        )
+    )
+    assert execution.exact_owned_channel_only_leaf_paths == (
+        len(independently_decoded_owner_paths)
+    )
+    assert execution.exact_owned_channel_only_leaf_paths == expected
+    assert independently_derived_owner_projection == (
+        expected,
+        expected_contract["channel_only_owned_union_root"],
+    )
+    assert execution.channel_only_owner_union_root == (
+        expected_contract["channel_only_owned_union_root"]
+    )
+    assert qualification._validate_fixture_channel_only_owner_union_v2(
+        mode,
+        execution.row_count,
+        execution.exact_owned_channel_only_leaf_paths,
+        execution.channel_only_owner_union_root,
+    ) == independently_derived_owner_projection
+    independent_feature_projection = auditor._feature_cardinality_projection(decoded)
+    assert execution.feature_capacity_projection == independent_feature_projection
+    receipt_projection = (
+        qualification._fixture_capacity_receipt_projection_from_execution_v2(
+            execution
+        )
+    )
+    assert receipt_projection == {
+        "audited_rows": execution.row_count,
+        "channel_leaf_count": independent_feature_projection.channel_union_path_count,
+        "concrete_feature_count": (
+            independent_feature_projection.projected_concrete_feature_count
+        ),
+        "preextraction_feature_matrix_bytes_bound": (
+            independent_feature_projection.projected_feature_matrix_bytes_bound
+        ),
+        "raw_semantic_feature_count": (
+            independent_feature_projection.projected_raw_semantic_feature_count
+        ),
+        "uuid_leaf_count": independent_feature_projection.uuid_union_path_count,
+    }
+    with pytest.raises(ValueError, match="owner union count drift"):
+        replace(
+            execution,
+            exact_owned_channel_only_leaf_paths=(
+                execution.exact_owned_channel_only_leaf_paths + 1
+            ),
+        )
+    with pytest.raises(ValueError, match="owner union root drift"):
+        replace(
+            execution,
+            channel_only_owner_union_root=(
+                "phase2b_formal_wire_covert_channel_only_owner_union_v2_"
+                + "0" * 64
+            ),
+        )
+
+
+def test_capacity_bounded_v4_owner_union_rejects_conflicting_owner_mutation() -> None:
+    path = ("public_case", "graph", "conflict")
+    with pytest.raises(ValueError, match="conflicting owner"):
+        qualification._channel_only_owner_union_projection_v2(
+            (
+                auditor.ChannelOnlyLeafOwnerV1(path, "uuid_leaf"),
+                auditor.ChannelOnlyLeafOwnerV1(path, "missingness"),
+            )
+        )
+
+
+@pytest.mark.parametrize("mode", qualification.LIVE_MODE_ORDER)
+def test_closed_feature_capacity_projection_rejects_every_axis_mutation(
+    mode: str,
+) -> None:
+    execution = _fixture(mode)
+    closed = qualification._closed_primitive_v2(
+        execution.feature_capacity_projection
+    )
+    assert qualification._validate_closed_feature_capacity_projection_v2(
+        mode,
+        execution.row_count,
+        closed,
+    ) is closed
+    for field in auditor._FeatureCardinalityProjectionV1.__dataclass_fields__.values():
+        tampered = dict(closed)
+        if field.name == "projection_root":
+            tampered[field.name] = (
+                "phase2b_formal_covert_feature_projection_" + "0" * 64
+            )
+        else:
+            assert type(tampered[field.name]) is int
+            tampered[field.name] += 1
+        with pytest.raises((TypeError, ValueError)):
+            qualification._validate_closed_feature_capacity_projection_v2(
+                mode,
+                execution.row_count,
+                tampered,
+            )
+
+
+def test_receipt_projections_do_not_read_nonexistent_owner_count_manifest_field() -> None:
+    assert "channel_only_owned_leaf_count" not in {
+        field.name for field in auditor.FeatureManifestV1.__dataclass_fields__.values()
+    }
+    qualification_tree = ast.parse(inspect.getsource(qualification))
+    assert not [
+        node
+        for node in ast.walk(qualification_tree)
+        if isinstance(node, ast.Attribute)
+        and node.attr == "channel_only_owned_leaf_count"
+    ]
+
+
+def test_fixture_build_preflights_before_first_decode_and_mirrors_decode_guards(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    original_decode = auditor.FormalWireV3AdapterV1.decode_envelope
+    original_validate = auditor._validate_decoded
+    original_deep = auditor._deep_object_graph_bytes
+
+    def preflight(rows: int) -> object:
+        assert rows == 8
+        events.append("preflight")
+        return object()
+
+    def decode(
+        self: auditor.FormalWireV3AdapterV1,
+        envelope: bytes,
+    ) -> auditor.DecodedFormalEnvelopeV1:
+        events.append("decode")
+        return original_decode(self, envelope)
+
+    def validate(
+        item: auditor.DecodedFormalEnvelopeV1,
+        adapter: auditor.FormalWireV3AdapterV1,
+    ) -> None:
+        events.append("validate")
+        original_validate(item, adapter)
+
+    def deep(value: object) -> int:
+        if type(value) is auditor.DecodedFormalEnvelopeV1:
+            events.append("deep")
+        return original_deep(value)
+
+    monkeypatch.setattr(auditor, "_preflight_decode_memory", preflight)
+    monkeypatch.setattr(auditor.FormalWireV3AdapterV1, "decode_envelope", decode)
+    monkeypatch.setattr(auditor, "_validate_decoded", validate)
+    monkeypatch.setattr(auditor, "_deep_object_graph_bytes", deep)
+    execution = qualification._build_fixture_execution_v2(
+        "KNOWN_NULL", row_count=8
+    )
+    assert execution.row_count == 8
+    assert events == ["preflight", *[item for _ in range(8) for item in (
+        "decode", "validate", "deep"
+    )]]
+
+
+def test_fixture_build_rejects_nonexact_decoded_type(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(auditor, "_preflight_decode_memory", lambda rows: object())
+    monkeypatch.setattr(
+        auditor.FormalWireV3AdapterV1,
+        "decode_envelope",
+        lambda self, envelope: object(),
+    )
+    with pytest.raises(TypeError, match="non-exact decoded DTO"):
+        qualification._build_fixture_execution_v2("KNOWN_NULL", row_count=8)
+
+
+def test_fixture_build_rejects_semantically_invalid_decoded_row(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_decode = auditor.FormalWireV3AdapterV1.decode_envelope
+
+    def corrupt(
+        self: auditor.FormalWireV3AdapterV1,
+        envelope: bytes,
+    ) -> auditor.DecodedFormalEnvelopeV1:
+        item = original_decode(self, envelope)
+        object.__setattr__(item, "payload_bytes", b"{}")
+        return item
+
+    monkeypatch.setattr(auditor, "_preflight_decode_memory", lambda rows: object())
+    monkeypatch.setattr(auditor.FormalWireV3AdapterV1, "decode_envelope", corrupt)
+    with pytest.raises(
+        auditor.FormalCovertAuditRejectionV1,
+        match="FAIL_WIRE_CANONICAL_REPLAY",
+    ):
+        qualification._build_fixture_execution_v2("KNOWN_NULL", row_count=8)
+
+
+def test_fixture_build_rejects_decoded_row_over_deep_graph_bound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_deep = auditor._deep_object_graph_bytes
+
+    def oversized(value: object) -> int:
+        if type(value) is auditor.DecodedFormalEnvelopeV1:
+            return (
+                auditor.MAXIMUM_DECODE_GRAPH_BYTES_PER_ROW
+                // auditor.DEEP_SIZE_SAFETY_MULTIPLIER
+                + 1
+            )
+        return original_deep(value)
+
+    monkeypatch.setattr(auditor, "_preflight_decode_memory", lambda rows: object())
+    monkeypatch.setattr(auditor, "_deep_object_graph_bytes", oversized)
+    with pytest.raises(ValueError, match="conservative graph bound"):
+        qualification._build_fixture_execution_v2("KNOWN_NULL", row_count=8)
+
+
+@pytest.mark.parametrize("mode", qualification.LIVE_MODE_ORDER)
+def test_pure_static_replay_rejects_synchronized_capacity_and_owner_splices(
+    mode: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    execution = _fixture(mode)
+    contract = qualification._FIXTURE_FEATURE_CAPACITY_CONTRACT_V2["modes"][mode]
+    full_row = next(row for row in contract["projections"] if row["rows"] == 1_024)
+    full_projection = replace(
+        execution.feature_capacity_projection,
+        rows=qualification.EXACT_AUTHORITY_ROWS,
+        descriptor_source_utf8_bytes=(
+            execution.feature_capacity_projection.descriptor_source_utf8_bytes * 128
+        ),
+        present_generic_channel_feature_utf8_bytes=(
+            execution.feature_capacity_projection.present_generic_channel_feature_utf8_bytes
+            * 128
+        ),
+        projected_feature_matrix_bytes_bound=full_row[
+            "projected_feature_matrix_bytes_bound"
+        ],
+    )
+    assert full_projection.projection_root == full_row["projection_root"]
+    resource = {name: 0 for name in qualification._RESOURCE_PLAN_FIELDS_V2}
+    resource["preextraction_feature_matrix_bytes_bound"] = (
+        full_projection.projected_feature_matrix_bytes_bound
+    )
+    audit = {
+        "audited_rows": qualification.EXACT_AUTHORITY_ROWS,
+        "channel_leaf_paths": full_projection.channel_union_path_count,
+        "channel_only_owned_leaf_paths": contract[
+            "channel_only_owned_union_path_count"
+        ],
+        "channel_only_owned_leaf_union_root": contract[
+            "channel_only_owned_union_root"
+        ],
+        "concrete_features": full_projection.projected_concrete_feature_count,
+        "eligibility_quota": {
+            "receipt_id": (
+                "phase2b_formal_eligibility_mask_quota_" + "1" * 64
+            )
+        },
+        "feature_capacity_projection": qualification._closed_primitive_v2(
+            full_projection
+        ),
+        "feature_capacity_projection_root": full_projection.projection_root,
+        "feature_manifest_root": "manifest-root",
+        "full_raw_byte_categorical_hypotheses": 1,
+        "namespace_uuid_leaf_paths": full_projection.uuid_union_path_count,
+        "raw_semantic_features": (
+            full_projection.projected_raw_semantic_feature_count
+        ),
+        "resource_plan": resource,
+    }
+    run = {
+        "audit": audit,
+        "batch_id": "unused",
+        "label_factorial_proof_root": "label-root",
+        "mode": mode,
+        "namespace_row_proof_root": "namespace-root",
+        "operation_counts": {},
+        "run_fixture_root": "fixture-root",
+        "source_pair_delta_root": None,
+        "wire": {
+            "batch_id": "batch-root",
+            "build_success_id": "build-root",
+            "transform_catalog_root": "catalog-root",
+        },
+    }
+    monkeypatch.setattr(
+        qualification,
+        "_validate_complete_resource_plan_projection_v2",
+        lambda value, *, context: value,
+    )
+    frozen = qualification._static_shape_from_run_projection_v2(run)
+    assert frozen["feature_capacity_projection_root"] == full_projection.projection_root
+
+    six_splices = (
+        ("audited_rows", None),
+        ("channel_leaf_paths", None),
+        ("concrete_features", None),
+        ("preextraction_feature_matrix_bytes_bound", "resource_plan"),
+        ("raw_semantic_features", None),
+        ("namespace_uuid_leaf_paths", None),
+    )
+    for field_name, container in six_splices:
+        spliced = json.loads(json.dumps(run))
+        target = spliced["audit"] if container is None else spliced["audit"][container]
+        target[field_name] += 1
+        forged_measurement = json.loads(json.dumps(frozen))
+        static_field = {
+            "audited_rows": "rows",
+            "channel_leaf_paths": "channel_leaf_count",
+            "concrete_features": "concrete_features",
+            "preextraction_feature_matrix_bytes_bound": (
+                "preextraction_feature_matrix_bytes_bound"
+            ),
+            "raw_semantic_features": "raw_semantic_features",
+            "namespace_uuid_leaf_paths": "uuid_leaf_count",
+        }[field_name]
+        if container is None:
+            forged_measurement[static_field] += 1
+        else:
+            forged_measurement["resource_plan_static"][static_field] += 1
+            forged_measurement["resource_plan_static_root"] = (
+                qualification.stable_hash(
+                    forged_measurement["resource_plan_static"],
+                    prefix=(
+                        "phase2b_formal_wire_covert_static_resource_plan_v2_"
+                    ),
+                )
+            )
+        forged_measurement_root = qualification.stable_hash(
+            forged_measurement,
+            prefix="phase2b_formal_wire_covert_static_shape_v3_",
+        )
+        assert forged_measurement_root
+        with pytest.raises((TypeError, ValueError)):
+            qualification._static_shape_from_run_projection_v2(spliced)
+
+    for field_name, replacement in (
+        (
+            "channel_only_owned_leaf_paths",
+            contract["channel_only_owned_union_path_count"] + 1,
+        ),
+        (
+            "channel_only_owned_leaf_union_root",
+            "phase2b_formal_wire_covert_channel_only_owner_union_v2_" + "0" * 64,
+        ),
+    ):
+        spliced = json.loads(json.dumps(run))
+        spliced["audit"][field_name] = replacement
+        forged_measurement = json.loads(json.dumps(frozen))
+        forged_measurement[
+            "channel_only_owned_leaf_count"
+            if field_name == "channel_only_owned_leaf_paths"
+            else "channel_only_owned_leaf_union_root"
+        ] = replacement
+        assert qualification.stable_hash(
+            forged_measurement,
+            prefix="phase2b_formal_wire_covert_static_shape_v3_",
+        )
+        with pytest.raises((TypeError, ValueError)):
+            qualification._static_shape_from_run_projection_v2(spliced)
+
+    other_mode = next(item for item in qualification.LIVE_MODE_ORDER if item != mode)
+    other_contract = qualification._FIXTURE_FEATURE_CAPACITY_CONTRACT_V2["modes"][
+        other_mode
+    ]
+    swapped = json.loads(json.dumps(run))
+    swapped["audit"]["channel_only_owned_leaf_paths"] = other_contract[
+        "channel_only_owned_union_path_count"
+    ]
+    swapped["audit"]["channel_only_owned_leaf_union_root"] = other_contract[
+        "channel_only_owned_union_root"
+    ]
+    with pytest.raises(ValueError):
+        qualification._static_shape_from_run_projection_v2(swapped)
+
+
+def test_post_audit_fake_receipt_uses_execution_owner_count_and_root(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    invariant_runtime_type = auditor.InvariantRuntimeEvidenceV1
+    statistics_runtime_type = auditor.StatisticalRuntimeEvidenceV1
+    issuance_runtime_type = auditor.ReceiptIssuanceRuntimeEvidenceV1
+    invariant_runtime_field_names = tuple(
+        item.name for item in fields(invariant_runtime_type)
+    )
+    statistics_runtime_field_names = tuple(
+        item.name for item in fields(statistics_runtime_type)
+    )
+    issuance_runtime_field_names = tuple(
+        item.name for item in fields(issuance_runtime_type)
+    )
+
+    class FakeInvariant(SimpleNamespace):
+        def __post_init__(self) -> None:
+            return None
+
+    class FakeStatistics(SimpleNamespace):
+        def __post_init__(self) -> None:
+            return None
+
+    class FakeIssuance(SimpleNamespace):
+        def __post_init__(self) -> None:
+            return None
+
+    class FakeReceipt(SimpleNamespace):
+        def __post_init__(self) -> None:
+            return None
+
+    mode = "KNOWN_NULL"
+    contract = qualification._FIXTURE_FEATURE_CAPACITY_CONTRACT_V2["modes"][mode]
+    full_projection = next(
+        row for row in contract["projections"] if row["rows"] == 1_024
+    )
+    capacity = {
+        "audited_rows": 1_024,
+        "channel_leaf_count": contract["union_shape"][
+            "channel_union_path_count"
+        ],
+        "concrete_feature_count": full_projection[
+            "projected_concrete_feature_count"
+        ],
+        "preextraction_feature_matrix_bytes_bound": full_projection[
+            "projected_feature_matrix_bytes_bound"
+        ],
+        "raw_semantic_feature_count": full_projection[
+            "projected_raw_semantic_feature_count"
+        ],
+        "uuid_leaf_count": contract["union_shape"]["uuid_union_path_count"],
+    }
+    manifest = SimpleNamespace(
+        alias_coverage=(
+            SimpleNamespace(semantic_aliases=("owner/raw_byte_categorical",)),
+        ),
+        channel_leaf_count=capacity["channel_leaf_count"],
+        deduplicated_feature_count=capacity["concrete_feature_count"],
+        manifest_root="manifest-root",
+        raw_semantic_feature_count=capacity["raw_semantic_feature_count"],
+        uuid_leaf_count=capacity["uuid_leaf_count"],
+    )
+    assert not hasattr(manifest, "channel_only_owned_leaf_count")
+    resource = SimpleNamespace(
+        admissible=True,
+        invariance_resource_plan_root=(
+            "phase2b_formal_covert_invariant_resource_plan_" + "0" * 64
+        ),
+        label_permutations=qualification.EXACT_LABEL_PERMUTATIONS,
+        preextraction_feature_matrix_bytes_bound=capacity[
+            "preextraction_feature_matrix_bytes_bound"
+        ],
+        resource_plan_root=(
+            "phase2b_formal_covert_statistics_resource_plan_" + "1" * 64
+        ),
+    )
+    invariant = FakeInvariant(
+        consumer_decode_count=qualification.EXACT_AUTHORITY_ROWS * 80,
+        invariance_resource_plan_root=resource.invariance_resource_plan_root,
+        invariance_wall_time_nanoseconds=1,
+        resource_preflight=SimpleNamespace(),
+        variant_suite_root="variant-suite-root",
+        worker_peak_rss_bytes=1_024,
+        worker_result_artifact_sha256="invariant-worker-sha",
+        within_frozen_aggregate_cap=True,
+    )
+    statistics = FakeStatistics(
+        conservative_parent_plus_worker_peak_sum_bytes=(
+            auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        ),
+        external_supervisor_required=True,
+        host_available_memory_bytes_at_preflight=1,
+        parent_peak_rss_bytes_before_receipt_finalization=1_024,
+        parent_rss_charge_ceiling_bytes=(
+            auditor.MAXIMUM_ESTIMATED_RSS_BYTES - 1_024
+        ),
+        receipt_finalization_complete_pending_validation_count=1,
+        receipt_finalization_parent_peak_within_charge_ceiling=True,
+        resource_plan_root=resource.resource_plan_root,
+        resource_preflight=SimpleNamespace(),
+        statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds=1,
+        worker_peak_rss_bytes=(1_024,),
+        worker_result_artifact_sha256=("statistics-worker-sha",),
+        within_frozen_aggregate_cap=True,
+    )
+    issuance = FakeIssuance(
+        absolute_deadline_kind="STATISTICS",
+        absolute_deadline_monotonic_nanoseconds=1,
+        absolute_deadline_timeout_seconds=auditor.STATISTICS_WORKER_TIMEOUT_SECONDS,
+        worker_peak_rss_bytes_sum=1_024,
+        parent_peak_rss_bytes_before_receipt_finalization=1_024,
+        parent_rss_charge_ceiling_bytes=(
+            auditor.MAXIMUM_ESTIMATED_RSS_BYTES - 1_024
+        ),
+        conservative_parent_plus_worker_peak_sum_bytes=(
+            auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        ),
+        receipt_finalization_complete_pending_validation_count=1,
+        receipt_finalization_locked_deadline_check_count=1,
+        receipt_finalization_locked_deadline_within_absolute_limit=True,
+        receipt_finalization_parent_peak_within_charge_ceiling=True,
+    )
+    probabilities = SimpleNamespace(numerator=1, denominator=1)
+    target_family_results = tuple(
+        SimpleNamespace(
+            exceedance_count=0,
+            holm_adjusted_p=probabilities,
+            holm_critical_value=probabilities,
+            holm_rank=index + 1,
+            holm_rejected=False,
+            observed_target_max_omnibus=0.0,
+            raw_p=probabilities,
+            target=target,
+        )
+        for index, target in enumerate(auditor.TARGETS)
+    )
+    fake_receipt_id = "phase2b_formal_covert_audit_transcript_" + "0" * 64
+    fake_quota_receipt_id = (
+        "phase2b_formal_eligibility_mask_quota_" + "1" * 64
+    )
+    receipt = FakeReceipt(
+        actual_corpus_audit=False,
+        adapter_execution_pin_root="adapter-pin-root",
+        audited_row_count=qualification.EXACT_AUTHORITY_ROWS,
+        authority_independence_verified=False,
+        authority_origin_authenticated=False,
+        disposition=auditor.FormalCovertDisposition.PASS,
+        eligibility_mask_quota=SimpleNamespace(
+            exact_quota_matched=True,
+            receipt_id=fake_quota_receipt_id,
+            targets=(),
+        ),
+        exact_invariant_comparisons=qualification.EXACT_AUTHORITY_ROWS * 80 * 5,
+        feature_manifest=manifest,
+        holm_family_size=len(auditor.TARGETS),
+        invariant_execution_root="invariant-root",
+        invariant_run_count=qualification.EXACT_RECOGNIZER_INVOCATIONS,
+        invariant_runtime_evidence=invariant,
+        pairwise_holm_decision_eligible=False,
+        pairwise_holm_family_size=0,
+        permutation_schedule_root="permutation-root",
+        permutation_seed_commitment="permutation-seed-commitment",
+        permutation_seed_reveal_hex="00",
+        positive_decision_claim=auditor.POSITIVE_DECISION_CLAIM,
+        receipt_id=fake_receipt_id,
+        resource_plan=resource,
+        results=(),
+        receipt_issuance_runtime_evidence=issuance,
+        statistics_runtime_evidence=statistics,
+        target_family_results=target_family_results,
+        wire_alignment_issuance_verified=True,
+    )
+    base = _fixture(mode)
+    full_capacity_projection = replace(
+        base.feature_capacity_projection,
+        rows=qualification.EXACT_AUTHORITY_ROWS,
+        descriptor_source_utf8_bytes=(
+            base.feature_capacity_projection.descriptor_source_utf8_bytes * 128
+        ),
+        present_generic_channel_feature_utf8_bytes=(
+            base.feature_capacity_projection.present_generic_channel_feature_utf8_bytes
+            * 128
+        ),
+        projected_feature_matrix_bytes_bound=full_projection[
+            "projected_feature_matrix_bytes_bound"
+        ],
+    )
+    assert full_capacity_projection.projection_root == full_projection[
+        "projection_root"
+    ]
+    build_success = SimpleNamespace(
+        key_source_receipt=SimpleNamespace(receipt_id="key-source-root"),
+        private_audit_alignment=SimpleNamespace(
+            alignment_id="alignment-root",
+            source_row_index_by_public_row=tuple(
+                range(qualification.EXACT_AUTHORITY_ROWS)
+            ),
+        ),
+        public_batch=SimpleNamespace(batch_id="batch-root"),
+        success_id="build-root",
+        variant_context=SimpleNamespace(context_id="variant-root"),
+    )
+    execution = SimpleNamespace(
+        adapter=base.adapter,
+        build_success=build_success,
+        channel_only_owner_union_root=contract[
+            "channel_only_owned_union_root"
+        ],
+        exact_owned_channel_only_leaf_paths=contract[
+            "channel_only_owned_union_path_count"
+        ],
+        feature_capacity_projection=full_capacity_projection,
+        label_factorial_proof_root=base.label_factorial_proof_root,
+        namespace_row_proof_root=base.namespace_row_proof_root,
+        operation_counts=tuple(
+            (operation, qualification.EXACT_ROWS_PER_TRANSFORM_OPERATION)
+            for operation in qualification.EXACT_TRANSFORM_OPERATIONS
+        ),
+        row_count=qualification.EXACT_AUTHORITY_ROWS,
+        run_fixture_root=base.run_fixture_root,
+        source_pair_delta_root=None,
+        transform_catalog_binding_receipt=SimpleNamespace(
+            transform_catalog_root=(
+                base.transform_catalog_binding_receipt.transform_catalog_root
+            )
+        ),
+    )
+    monkeypatch.setattr(auditor, "FormalCovertAuditReceiptV1", FakeReceipt)
+    monkeypatch.setattr(auditor, "InvariantRuntimeEvidenceV1", FakeInvariant)
+    monkeypatch.setattr(auditor, "StatisticalRuntimeEvidenceV1", FakeStatistics)
+    monkeypatch.setattr(
+        auditor, "ReceiptIssuanceRuntimeEvidenceV1", FakeIssuance
+    )
+    public_validations: list[object] = []
+
+    def validate_once(value: object) -> str:
+        public_validations.append(value)
+        return value.receipt_id
+
+    monkeypatch.setattr(
+        auditor,
+        "validate_formal_covert_audit_receipt_v1",
+        validate_once,
+    )
+    monkeypatch.setattr(
+        auditor,
+        "_validate_invariant_phase_preflight_against_resource_plan",
+        lambda plan, preflight: None,
+    )
+    monkeypatch.setattr(
+        auditor,
+        "_validate_statistics_phase_preflight_against_resource_plan",
+        lambda plan, preflight: None,
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_fixture_capacity_receipt_projection_from_execution_v2",
+        lambda value: dict(capacity),
+    )
+    evidence = qualification._validate_isolated_audit_receipt_v2(
+        mode,
+        time.perf_counter_ns(),
+        execution,
+        receipt,
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_static_resource_plan_projection_v2",
+        lambda value: {"fake_static_resource": True},
+    )
+    static_projection = qualification._frozen_static_shape_projection_v2(evidence)
+    original_closed_primitive = qualification._closed_primitive_v2
+    resource_projection = {
+        item.name: 0 for item in fields(auditor.ResourcePlanV1)
+    }
+    resource_projection.update(
+        {
+            "admissible": True,
+            "invariance_resource_plan_root": (
+                resource.invariance_resource_plan_root
+            ),
+            "preextraction_feature_matrix_bytes_bound": capacity[
+                "preextraction_feature_matrix_bytes_bound"
+            ],
+            "resource_plan_root": resource.resource_plan_root,
+        }
+    )
+    invariant_projection = {
+        name: 0 for name in invariant_runtime_field_names
+    }
+    invariant_projection.update(
+        {
+            "invariance_resource_plan_root": (
+                resource.invariance_resource_plan_root
+            ),
+            "resource_preflight": {},
+        }
+    )
+    statistics_projection = {
+        name: 0 for name in statistics_runtime_field_names
+    }
+    statistics_projection.update(
+        {
+            "resource_plan_root": resource.resource_plan_root,
+            "resource_preflight": {},
+        }
+    )
+    issuance_projection = {
+        name: getattr(issuance, name) for name in issuance_runtime_field_names
+    }
+
+    def fake_closed_primitive(value: object) -> object:
+        if value is resource:
+            return dict(resource_projection)
+        if value is invariant:
+            return dict(invariant_projection)
+        if value is statistics:
+            return dict(statistics_projection)
+        if value is issuance:
+            return dict(issuance_projection)
+        return original_closed_primitive(value)
+
+    monkeypatch.setattr(
+        qualification,
+        "_closed_primitive_v2",
+        fake_closed_primitive,
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_validate_complete_resource_plan_projection_v2",
+        lambda value, *, context: value,
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_validate_complete_invariant_runtime_projection_v2",
+        lambda value, resource_plan, *, context: value,
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_validate_complete_statistics_runtime_projection_v2",
+        lambda value, resource_plan, *, context: value,
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_validate_complete_receipt_issuance_runtime_projection_v2",
+        lambda value, statistics_runtime, *, context: value,
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_validate_executed_runtime_bundle_v2",
+        lambda **kwargs: None,
+    )
+    primitive_projection = qualification._audit_primitive_projection_v2(evidence)
+    monkeypatch.setattr(auditor, "InvariantRuntimeEvidenceV1", invariant_runtime_type)
+    monkeypatch.setattr(
+        auditor,
+        "StatisticalRuntimeEvidenceV1",
+        statistics_runtime_type,
+    )
+    monkeypatch.setattr(
+        auditor,
+        "ReceiptIssuanceRuntimeEvidenceV1",
+        issuance_runtime_type,
+    )
+    assert static_projection["channel_only_owned_leaf_count"] == (
+        contract["channel_only_owned_union_path_count"]
+    )
+    assert static_projection["channel_only_owned_leaf_union_root"] == (
+        contract["channel_only_owned_union_root"]
+    )
+    assert static_projection["feature_capacity_projection_root"] == (
+        full_projection["projection_root"]
+    )
+    assert static_projection["feature_capacity_projection"][
+        "projection_root"
+    ] == static_projection["feature_capacity_projection_root"]
+    assert primitive_projection["audit"]["channel_only_owned_leaf_paths"] == (
+        static_projection["channel_only_owned_leaf_count"]
+    )
+    assert primitive_projection["audit"][
+        "channel_only_owned_leaf_union_root"
+    ] == static_projection["channel_only_owned_leaf_union_root"]
+    assert primitive_projection["audit"][
+        "feature_capacity_projection"
+    ] == static_projection["feature_capacity_projection"]
+    assert primitive_projection["audit"][
+        "feature_capacity_projection_root"
+    ] == static_projection["feature_capacity_projection_root"]
+    replayed_static = qualification._static_shape_from_run_projection_v2(
+        primitive_projection
+    )
+    measurement = {
+        "diagnostics": primitive_projection["diagnostics"],
+        "dynamic_fields_are_recorded_but_not_exact_compared": list(
+            qualification.DYNAMIC_RESOURCE_PLAN_FIELDS_NOT_EXACT_COMPARED_V2
+        ),
+        "frozen_static_projection": replayed_static,
+        "frozen_static_projection_root": qualification.stable_hash(
+            replayed_static,
+            prefix="phase2b_formal_wire_covert_static_shape_v3_",
+        ),
+        "mode": mode,
+        "observed_complete_receipt_issuance_runtime": issuance_projection,
+        "observed_complete_receipt_issuance_runtime_root": qualification.stable_hash(
+            issuance_projection,
+            prefix="phase2b_formal_wire_covert_receipt_issuance_runtime_v3_",
+        ),
+        "observed_complete_resource_plan": resource_projection,
+        "observed_complete_resource_plan_root": qualification.stable_hash(
+            resource_projection,
+            prefix="phase2b_formal_wire_covert_observed_resource_plan_v3_",
+        ),
+        "observed_receipt_id": receipt.receipt_id,
+    }
+    assert qualification._validate_run_and_measurement_binding_v2(
+        primitive_projection,
+        measurement,
+    ) == replayed_static
+    assert public_validations == [receipt]
+    tampered_run = json.loads(json.dumps(primitive_projection))
+    tampered_run["audit"]["receipt_issuance"]["receipt_id"] = "other-receipt"
+    with pytest.raises(ValueError, match="resource/issuance bindings"):
+        qualification._validate_run_and_measurement_binding_v2(
+            tampered_run,
+            measurement,
+        )
+    tampered_measurement = json.loads(json.dumps(measurement))
+    tampered_measurement["observed_receipt_id"] = "other-receipt"
+    with pytest.raises(ValueError, match="cross-binding"):
+        qualification._validate_run_and_measurement_binding_v2(
+            primitive_projection,
+            tampered_measurement,
+        )
+    tampered_measurement = json.loads(json.dumps(measurement))
+    tampered_measurement[
+        "observed_complete_receipt_issuance_runtime_root"
+    ] = "phase2b_formal_wire_covert_receipt_issuance_runtime_v3_" + "f" * 64
+    with pytest.raises(ValueError, match="cross-binding"):
+        qualification._validate_run_and_measurement_binding_v2(
+            primitive_projection,
+            tampered_measurement,
+        )
+    tamper_paths = (
+        ("invariance", "invariance_resource_plan_root"),
+        ("statistics", "resource_plan_root"),
+    )
+    for group_name, field_name in tamper_paths:
+        for complete in (False, True):
+            tampered_run = json.loads(json.dumps(primitive_projection))
+            target = tampered_run["audit"][group_name]
+            if complete:
+                target = target["complete_runtime_projection"]
+            prefix = (
+                "phase2b_formal_covert_invariant_resource_plan_"
+                if group_name == "invariance"
+                else "phase2b_formal_covert_statistics_resource_plan_"
+            )
+            target[field_name] = prefix + "f" * 64
+            with pytest.raises(ValueError, match="resource/issuance bindings"):
+                qualification._validate_run_and_measurement_binding_v2(
+                    tampered_run,
+                    measurement,
+                )
+
+
+@pytest.mark.parametrize("mode", qualification.LIVE_MODE_ORDER)
+def test_full1024_receipt_capacity_projection_is_exactly_frozen(mode: str) -> None:
+    mode_contract = qualification._FIXTURE_FEATURE_CAPACITY_CONTRACT_V2["modes"][
+        mode
+    ]
+    expected_projection = next(
+        row for row in mode_contract["projections"] if row["rows"] == 1_024
+    )
+    valid = {
+        "audited_rows": 1_024,
+        "channel_leaf_count": mode_contract["union_shape"][
+            "channel_union_path_count"
+        ],
+        "concrete_feature_count": expected_projection[
+            "projected_concrete_feature_count"
+        ],
+        "preextraction_feature_matrix_bytes_bound": expected_projection[
+            "projected_feature_matrix_bytes_bound"
+        ],
+        "raw_semantic_feature_count": expected_projection[
+            "projected_raw_semantic_feature_count"
+        ],
+        "uuid_leaf_count": mode_contract["union_shape"][
+            "uuid_union_path_count"
+        ],
+    }
+    assert qualification._validate_fixture_capacity_receipt_projection_v2(
+        mode, valid
+    ) is valid
+    for name in tuple(valid):
+        tampered = dict(valid)
+        tampered[name] += 1
+        with pytest.raises(ValueError, match="receipt capacity projection drift"):
+            qualification._validate_fixture_capacity_receipt_projection_v2(
+                mode, tampered
+            )
+    with pytest.raises(TypeError, match="projection is not exact"):
+        qualification._validate_fixture_capacity_receipt_projection_v2(
+            mode, {**valid, "unexpected": 0}
+        )
 
 
 @pytest.mark.parametrize("mode", qualification.LIVE_MODE_ORDER)
@@ -2858,27 +4315,683 @@ def test_post_receipt_validation_failure_releases_only_locally_owned_receipt(
     assert released == [owned]
 
 
+def _valid_candidate_runtime_bundle(
+    rows: int = qualification.EXACT_AUTHORITY_ROWS,
+) -> tuple[
+    auditor.ResourcePlanV1,
+    auditor.StatisticalRuntimeEvidenceV1,
+    auditor.ReceiptIssuanceRuntimeEvidenceV1,
+]:
+    columns = (auditor._FeatureColumn(("unit",), tuple("a" for _ in range(rows))),)
+    deadline_ns = time.monotonic_ns() + 5_000_000_000
+    partition_projection = auditor._partition_allocation_projection(
+        rows,
+        columns,
+        deadline_ns,
+    )
+    partitions = auditor._materialize_partitions_bounded(
+        columns,
+        partition_projection,
+        deadline_ns,
+    )
+    envelope_and_decode_bytes_bound = rows * auditor.ENVELOPE_BYTES * 2
+    invariant_plan = auditor._invariance_resource_plan(
+        rows,
+        envelope_and_decode_bytes_bound=envelope_and_decode_bytes_bound,
+        adapter_retained_graph_bytes_bound=1,
+        variant_suite_resident_bytes_per_row_bound=1,
+        variant_suite_resident_fixed_bytes_bound=1,
+    )
+    plan = auditor._resource_plan(
+        rows,
+        partitions,
+        (2,) * len(auditor.TARGETS),
+        preextraction_feature_matrix_bytes_bound=rows * 72,
+        feature_matrix_bytes_bound=rows * 72,
+        envelope_and_decode_bytes_bound=envelope_and_decode_bytes_bound,
+        adapter_retained_graph_bytes_bound=1,
+        partition_projection=partition_projection,
+        partition_preparation_deadline_ns=deadline_ns,
+        invariance_plan=invariant_plan,
+    )
+    statistics_static = (
+        plan.permutation_label_mask_bytes_bound
+        + plan.partition_matrix_bytes_bound
+        + plan.adapter_retained_graph_bytes_bound
+        + 64 * 1_048_576
+    )
+    statistics_additional = (
+        plan.metric_cache_bytes_bound * plan.maximum_parallel_workers
+        + plan.permutation_metric_tuple_bytes_bound
+        + plan.target_max_vector_bytes_bound
+        + plan.worker_result_artifact_bytes_bound
+        + plan.parent_result_working_bytes_bound
+    )
+    statistics_multiplier = 1 + plan.maximum_parallel_workers
+    preflight = auditor._PhaseResourcePreflightEvidenceV1(
+        phase="STATISTICS",
+        resource_plan_root=plan.resource_plan_root,
+        parent_current_rss_bytes_at_preflight=plan.parent_current_rss_bytes_at_plan,
+        static_parent_bytes_bound=statistics_static,
+        fork_parent_rss_multiplier=statistics_multiplier,
+        additional_bytes_bound=statistics_additional,
+        projected_aggregate_rss_bytes_at_preflight=(
+            max(plan.parent_current_rss_bytes_at_plan, statistics_static)
+            * statistics_multiplier
+            + statistics_additional
+        ),
+        maximum_estimated_rss_bytes=plan.maximum_estimated_rss_bytes,
+        host_available_memory_safety_margin_bytes=(
+            plan.host_available_memory_safety_margin_bytes
+        ),
+    )
+    available = (
+        preflight.projected_aggregate_rss_bytes_at_preflight
+        + preflight.host_available_memory_safety_margin_bytes
+    )
+    worker_peaks = (0,) * plan.maximum_parallel_workers
+    statistics = auditor.StatisticalRuntimeEvidenceV1(
+        resource_plan_root=plan.resource_plan_root,
+        resource_preflight=preflight,
+        system_available_memory_bytes_at_preflight=available,
+        cgroup_remaining_memory_bytes_at_preflight=None,
+        host_available_memory_bytes_at_preflight=available,
+        parent_peak_rss_bytes_before_receipt_finalization=0,
+        parent_rss_charge_ceiling_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+        worker_peak_rss_bytes=worker_peaks,
+        worker_result_artifact_bytes=(1,) * 5,
+        worker_result_artifact_sha256=("sha256:" + "0" * 64,) * 5,
+        parent_result_object_graph_bytes_observed=0,
+        conservative_parent_plus_worker_peak_sum_bytes=(
+            auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        ),
+        statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds=1,
+        worker_timeout_seconds=auditor.STATISTICS_WORKER_TIMEOUT_SECONDS,
+        parent_postprocess_deadline_schema=auditor.PARENT_POSTPROCESS_DEADLINE_SCHEMA,
+        parent_postprocess_deadline_preemptive=False,
+        external_supervisor_required=True,
+        receipt_finalization_complete_pending_validation_count=1,
+        receipt_finalization_parent_peak_within_charge_ceiling=True,
+        within_frozen_aggregate_cap=True,
+    )
+    issuance = auditor.ReceiptIssuanceRuntimeEvidenceV1(
+        absolute_deadline_kind="STATISTICS",
+        absolute_deadline_monotonic_nanoseconds=1,
+        absolute_deadline_timeout_seconds=auditor.STATISTICS_WORKER_TIMEOUT_SECONDS,
+        worker_peak_rss_bytes_sum=0,
+        parent_peak_rss_bytes_before_receipt_finalization=0,
+        parent_rss_charge_ceiling_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+        conservative_parent_plus_worker_peak_sum_bytes=(
+            auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        ),
+        receipt_finalization_complete_pending_validation_count=1,
+        receipt_finalization_locked_deadline_check_count=1,
+        receipt_finalization_locked_deadline_within_absolute_limit=True,
+        receipt_finalization_parent_peak_within_charge_ceiling=True,
+    )
+    return plan, statistics, issuance
+
+
+def _inadmissible_candidate_runtime_bundle(
+    plan: auditor.ResourcePlanV1,
+    statistics: auditor.StatisticalRuntimeEvidenceV1,
+) -> tuple[auditor.ResourcePlanV1, auditor.StatisticalRuntimeEvidenceV1]:
+    invariant_parent = auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+    invariant_peak = (
+        max(
+            invariant_parent,
+            plan.envelope_and_decode_bytes_bound
+            + plan.adapter_retained_graph_bytes_bound
+            + 64 * 1_048_576,
+        )
+        * 2
+        + plan.invariance_variant_suite_resident_bytes_bound
+        + plan.invariance_recognizer_live_output_bytes_bound
+        + plan.invariance_worker_artifact_bytes_bound
+    )
+    invariant_plan = auditor._InvariantResourcePlanV1(
+        rows=plan.rows,
+        envelope_and_decode_bytes_bound=plan.envelope_and_decode_bytes_bound,
+        adapter_retained_graph_bytes_bound=(
+            plan.adapter_retained_graph_bytes_bound
+        ),
+        parent_current_rss_bytes_at_plan=invariant_parent,
+        invariance_variant_suite_output_bytes_bound=(
+            plan.invariance_variant_suite_output_bytes_bound
+        ),
+        variant_suite_resident_bytes_per_row_bound=(
+            plan.variant_suite_resident_bytes_per_row_bound
+        ),
+        variant_suite_resident_fixed_bytes_bound=(
+            plan.variant_suite_resident_fixed_bytes_bound
+        ),
+        invariance_variant_suite_resident_bytes_bound=(
+            plan.invariance_variant_suite_resident_bytes_bound
+        ),
+        invariance_recognizer_live_output_bytes_bound=(
+            plan.invariance_recognizer_live_output_bytes_bound
+        ),
+        invariance_worker_artifact_bytes_bound=(
+            plan.invariance_worker_artifact_bytes_bound
+        ),
+        estimated_invariance_peak_rss_bytes=invariant_peak,
+        maximum_invariance_estimated_rss_bytes=(
+            plan.maximum_invariance_estimated_rss_bytes
+        ),
+        invariance_rss_formula=plan.invariance_rss_formula,
+        host_available_memory_safety_margin_bytes=(
+            plan.host_available_memory_safety_margin_bytes
+        ),
+        admissible=False,
+    )
+    inadmissible_plan = replace(
+        plan,
+        invariance_parent_current_rss_bytes_at_plan=invariant_parent,
+        invariance_resource_plan_root=invariant_plan.plan_root,
+        estimated_invariance_peak_rss_bytes=invariant_peak,
+        admissible=False,
+    )
+    inadmissible_preflight = replace(
+        statistics.resource_preflight,
+        resource_plan_root=inadmissible_plan.resource_plan_root,
+    )
+    inadmissible_statistics = replace(
+        statistics,
+        resource_plan_root=inadmissible_plan.resource_plan_root,
+        resource_preflight=inadmissible_preflight,
+    )
+    inadmissible_plan.__post_init__()
+    inadmissible_statistics.__post_init__()
+    return inadmissible_plan, inadmissible_statistics
+
+
+def _valid_executed_runtime_bundle_projection() -> tuple[
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+]:
+    plan, statistics_runtime, issuance_runtime = _valid_candidate_runtime_bundle()
+    invariant_static = (
+        plan.envelope_and_decode_bytes_bound
+        + plan.adapter_retained_graph_bytes_bound
+        + 64 * 1_048_576
+    )
+    invariant_additional = (
+        plan.invariance_variant_suite_resident_bytes_bound
+        + plan.invariance_recognizer_live_output_bytes_bound
+        + plan.invariance_worker_artifact_bytes_bound
+    )
+    invariant_preflight = auditor._PhaseResourcePreflightEvidenceV1(
+        phase="INVARIANCE",
+        resource_plan_root=plan.invariance_resource_plan_root,
+        parent_current_rss_bytes_at_preflight=(
+            plan.invariance_parent_current_rss_bytes_at_plan
+        ),
+        static_parent_bytes_bound=invariant_static,
+        fork_parent_rss_multiplier=2,
+        additional_bytes_bound=invariant_additional,
+        projected_aggregate_rss_bytes_at_preflight=(
+            max(
+                plan.invariance_parent_current_rss_bytes_at_plan,
+                invariant_static,
+            )
+            * 2
+            + invariant_additional
+        ),
+        maximum_estimated_rss_bytes=plan.maximum_invariance_estimated_rss_bytes,
+        host_available_memory_safety_margin_bytes=(
+            plan.host_available_memory_safety_margin_bytes
+        ),
+    )
+    invariant_available = (
+        invariant_preflight.projected_aggregate_rss_bytes_at_preflight
+        + invariant_preflight.host_available_memory_safety_margin_bytes
+    )
+    parent_rss = invariant_preflight.parent_current_rss_bytes_at_preflight
+    adapter_pin = "phase2b_formal_covert_adapter_execution_pins_" + "0" * 64
+    invariant_runtime = auditor.InvariantRuntimeEvidenceV1(
+        invariance_resource_plan_root=plan.invariance_resource_plan_root,
+        resource_preflight=invariant_preflight,
+        system_available_memory_bytes_at_preflight=invariant_available,
+        cgroup_remaining_memory_bytes_at_preflight=None,
+        host_available_memory_bytes_at_preflight=invariant_available,
+        parent_current_rss_bytes_at_start=parent_rss,
+        parent_peak_current_rss_bytes_observed=parent_rss,
+        parent_current_rss_bytes_at_completion=parent_rss,
+        parent_historical_peak_rss_bytes=parent_rss,
+        parent_peak_rss_bytes=parent_rss,
+        worker_peak_rss_bytes=0,
+        worker_result_artifact_bytes=1,
+        worker_result_artifact_sha256="sha256:" + "0" * 64,
+        conservative_parent_plus_worker_peak_sum_bytes=parent_rss,
+        invariance_wall_time_nanoseconds=1,
+        worker_timeout_seconds=auditor.INVARIANCE_WORKER_TIMEOUT_SECONDS,
+        invariant_run_count=qualification.EXACT_RECOGNIZER_INVOCATIONS,
+        exact_invariant_comparisons=(
+            qualification.EXACT_AUTHORITY_ROWS * 80 * 5
+        ),
+        fork_input_snapshot_root=(
+            "phase2b_formal_covert_invariance_input_snapshot_" + "0" * 64
+        ),
+        adapter_execution_pin_root=adapter_pin,
+        variant_suite_root="phase2b_formal_variant_suite_" + "0" * 64,
+        consumer_decode_count=qualification.EXACT_AUTHORITY_ROWS * 80,
+        variant_suite_unique_envelope_object_count=0,
+        variant_suite_resident_object_graph_bytes_observed=0,
+        recognizer_output_root=(
+            "phase2b_formal_covert_recognizer_output_" + "0" * 64
+        ),
+        execution_containment=auditor.INVARIANCE_EXECUTION_CONTAINMENT,
+        parent_side_adapter_tcb=auditor.PARENT_SIDE_ADAPTER_TCB,
+        parent_side_adapter_sandboxed=False,
+        process_group_empty_at_exit=True,
+        child_address_space_limit_bytes=1,
+        within_frozen_aggregate_cap=True,
+    )
+    plan_projection = qualification._closed_primitive_v2(plan)
+    invariant_projection = qualification._closed_primitive_v2(invariant_runtime)
+    statistics_projection = qualification._closed_primitive_v2(statistics_runtime)
+    issuance_projection = qualification._closed_primitive_v2(issuance_runtime)
+    receipt_id = "phase2b_formal_covert_audit_transcript_" + "0" * 64
+    quota_receipt_id = "phase2b_formal_eligibility_mask_quota_" + "1" * 64
+    seed_reveal = "0" * 64
+    diagnostics = qualification._diagnostic_projection(
+        qualification.AuditRunDiagnosticsV2(
+            "KNOWN_NULL",
+            1,
+            0,
+            auditor.MAXIMUM_ESTIMATED_RSS_BYTES // 1_024,
+            tuple(0 for _ in statistics_runtime.worker_peak_rss_bytes),
+            auditor.MAXIMUM_ESTIMATED_RSS_BYTES // 1_024,
+            statistics_runtime.statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds,
+            statistics_runtime.host_available_memory_bytes_at_preflight,
+            qualification.EXACT_RECOGNIZER_INVOCATIONS,
+            qualification.EXACT_AUTHORITY_ROWS,
+            qualification.EXACT_AUTHORITY_ROWS,
+        )
+    )
+    run = {
+        "mode": "KNOWN_NULL",
+        "disposition": "PASS",
+        "diagnostics": diagnostics,
+        "wire": {"adapter_execution_pin_root": adapter_pin},
+        "audit": {
+            "receipt_id": receipt_id,
+            "audited_rows": qualification.EXACT_AUTHORITY_ROWS,
+            "feature_manifest_root": (
+                "phase2b_formal_covert_feature_manifest_" + "0" * 64
+            ),
+            "concrete_features": plan.concrete_features,
+            "resource_plan": plan_projection,
+            "resource_plan_root": qualification.stable_hash(
+                plan_projection,
+                prefix="phase2b_formal_wire_covert_resource_plan_v3_",
+            ),
+            "invariance": {
+                "invariance_resource_plan_root": plan.invariance_resource_plan_root,
+                "consumer_decode_count": invariant_runtime.consumer_decode_count,
+                "exact_comparisons": invariant_runtime.exact_invariant_comparisons,
+                "execution_root": (
+                    "phase2b_formal_covert_invariant_execution_" + "0" * 64
+                ),
+                "run_count": invariant_runtime.invariant_run_count,
+                "variant_suite_root": invariant_runtime.variant_suite_root,
+                "worker_artifact_sha256": (
+                    invariant_runtime.worker_result_artifact_sha256
+                ),
+                "worker_peak_rss_bytes": invariant_runtime.worker_peak_rss_bytes,
+                "wall_time_nanoseconds": (
+                    invariant_runtime.invariance_wall_time_nanoseconds
+                ),
+                "within_frozen_aggregate_cap": (
+                    invariant_runtime.within_frozen_aggregate_cap
+                ),
+                "complete_runtime_projection": invariant_projection,
+                "complete_runtime_projection_root": qualification.stable_hash(
+                    invariant_projection,
+                    prefix="phase2b_formal_wire_covert_invariant_runtime_v3_",
+                ),
+            },
+            "statistics": {
+                "resource_plan_root": statistics_runtime.resource_plan_root,
+                "conservative_parent_plus_worker_peak_sum_bytes": (
+                    statistics_runtime.conservative_parent_plus_worker_peak_sum_bytes
+                ),
+                "external_supervisor_required": (
+                    statistics_runtime.external_supervisor_required
+                ),
+                "pairwise_holm_decision_eligible": False,
+                "pairwise_holm_family_size": 5 * plan.concrete_features,
+                "permutation_schedule_root": (
+                    "phase2b_formal_covert_permutation_schedule_" + "0" * 64
+                ),
+                "permutation_seed_commitment": auditor._permutation_seed_commitment(
+                    bytes.fromhex(seed_reveal)
+                ),
+                "permutation_seed_reveal_hex": seed_reveal,
+                "worker_artifact_sha256": list(
+                    statistics_runtime.worker_result_artifact_sha256
+                ),
+                "worker_peak_rss_bytes": list(
+                    statistics_runtime.worker_peak_rss_bytes
+                ),
+                "statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds": (
+                    statistics_runtime.statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds
+                ),
+                "within_frozen_aggregate_cap": (
+                    statistics_runtime.within_frozen_aggregate_cap
+                ),
+                "complete_runtime_projection": statistics_projection,
+                "complete_runtime_projection_root": qualification.stable_hash(
+                    statistics_projection,
+                    prefix="phase2b_formal_wire_covert_statistics_runtime_v3_",
+                ),
+            },
+            "receipt_issuance": {
+                "receipt_id": receipt_id,
+                "absolute_deadline_kind": issuance_runtime.absolute_deadline_kind,
+                "worker_peak_rss_bytes_sum": (
+                    issuance_runtime.worker_peak_rss_bytes_sum
+                ),
+                "parent_rss_charge_ceiling_bytes": (
+                    issuance_runtime.parent_rss_charge_ceiling_bytes
+                ),
+                "conservative_parent_plus_worker_peak_sum_bytes": (
+                    issuance_runtime.conservative_parent_plus_worker_peak_sum_bytes
+                ),
+                "receipt_finalization_complete_pending_validation_count": (
+                    issuance_runtime.receipt_finalization_complete_pending_validation_count
+                ),
+                "receipt_finalization_locked_deadline_check_count": (
+                    issuance_runtime.receipt_finalization_locked_deadline_check_count
+                ),
+                "receipt_finalization_locked_deadline_within_absolute_limit": (
+                    issuance_runtime.receipt_finalization_locked_deadline_within_absolute_limit
+                ),
+                "receipt_finalization_parent_peak_within_charge_ceiling": (
+                    issuance_runtime.receipt_finalization_parent_peak_within_charge_ceiling
+                ),
+                "complete_runtime_projection": issuance_projection,
+                "complete_runtime_projection_root": qualification.stable_hash(
+                    issuance_projection,
+                    prefix=(
+                        "phase2b_formal_wire_covert_receipt_issuance_runtime_v3_"
+                    ),
+                ),
+            },
+            "eligibility_quota": {"receipt_id": quota_receipt_id},
+            "eligibility_quota_root": qualification.stable_hash(
+                {"receipt_id": quota_receipt_id},
+                prefix="phase2b_formal_wire_covert_eligibility_quota_v2_",
+            ),
+            "target_family_max_t_holm": _valid_target_family_rows(),
+        },
+    }
+    measurement = {
+        "observed_receipt_id": receipt_id,
+        "observed_complete_resource_plan": plan_projection,
+        "observed_complete_receipt_issuance_runtime": issuance_projection,
+        "diagnostics": diagnostics,
+    }
+    return (
+        plan_projection,
+        invariant_projection,
+        statistics_projection,
+        issuance_projection,
+        run,
+        measurement,
+    )
+
+
+@pytest.mark.parametrize(
+    "case",
+    (
+        "visible_rows",
+        "visible_features",
+        "adapter_pin",
+        "resident_overbound",
+        "compact_invariant_consumer_count",
+        "compact_invariant_run_count",
+        "compact_invariant_exact_comparisons",
+        "compact_invariant_variant_root",
+        "compact_invariant_worker_sha",
+        "compact_invariant_worker_peak",
+        "compact_invariant_wall",
+        "compact_invariant_cap",
+        "worker_count",
+        "artifact_count",
+        "artifact_sum",
+        "parent_graph",
+        "compact_worker_sha",
+        "compact_worker_peak",
+        "compact_statistics_wall",
+        "compact_statistics_cap",
+        "compact_statistics_conservative",
+        "compact_statistics_external",
+        "diagnostics_statistics_wall",
+        "schedule_root",
+        "execution_root",
+        "seed_commitment",
+        "pairwise_family",
+        "target_family",
+        "synchronized_fake_receipt_id",
+        "synchronized_quota_own_id_and_root",
+        "quota_root",
+    ),
+)
+def test_executed_runtime_bundle_dto_valid_splice_matrix_fails_closed(
+    case: str,
+) -> None:
+    _, _, _, _, original_run, original_measurement = (
+        _valid_executed_runtime_bundle_projection()
+    )
+    run = json.loads(json.dumps(original_run))
+    measurement = json.loads(json.dumps(original_measurement))
+    audit_row = run["audit"]
+    resource = audit_row["resource_plan"]
+    invariant = audit_row["invariance"]
+    statistics = audit_row["statistics"]
+    issuance = audit_row["receipt_issuance"]
+    invariant_complete = invariant["complete_runtime_projection"]
+    statistics_complete = statistics["complete_runtime_projection"]
+    issuance_complete = issuance["complete_runtime_projection"]
+    qualification._validate_executed_runtime_bundle_v2(
+        resource_plan=resource,
+        statistics_runtime=statistics_complete,
+        receipt_issuance_runtime=issuance_complete,
+        diagnostics=run["diagnostics"],
+        run=run,
+        measurement=measurement,
+        expected_mode="KNOWN_NULL",
+        visible_audited_rows=resource["rows"],
+        visible_concrete_features=resource["concrete_features"],
+        context="unit valid bundle",
+    )
+    assert (
+        audit_row["eligibility_quota"]["receipt_id"]
+        != audit_row["receipt_id"]
+    )
+
+    def refresh_invariant_root() -> None:
+        invariant["complete_runtime_projection_root"] = qualification.stable_hash(
+            invariant_complete,
+            prefix="phase2b_formal_wire_covert_invariant_runtime_v3_",
+        )
+
+    def refresh_statistics_root() -> None:
+        statistics["complete_runtime_projection_root"] = qualification.stable_hash(
+            statistics_complete,
+            prefix="phase2b_formal_wire_covert_statistics_runtime_v3_",
+        )
+
+    if case == "visible_rows":
+        audit_row["audited_rows"] += 1
+    elif case == "visible_features":
+        audit_row["concrete_features"] += 1
+    elif case == "adapter_pin":
+        run["wire"]["adapter_execution_pin_root"] = (
+            "phase2b_formal_covert_adapter_execution_pins_" + "1" * 64
+        )
+    elif case == "resident_overbound":
+        invariant_complete[
+            "variant_suite_resident_object_graph_bytes_observed"
+        ] = resource["invariance_variant_suite_resident_bytes_bound"] + 1
+        refresh_invariant_root()
+    elif case == "compact_invariant_consumer_count":
+        invariant["consumer_decode_count"] += 80
+    elif case == "compact_invariant_run_count":
+        invariant["run_count"] += 1
+    elif case == "compact_invariant_exact_comparisons":
+        invariant["exact_comparisons"] += 400
+    elif case == "compact_invariant_variant_root":
+        invariant["variant_suite_root"] = (
+            "phase2b_formal_variant_suite_" + "1" * 64
+        )
+    elif case == "compact_invariant_worker_sha":
+        invariant["worker_artifact_sha256"] = "sha256:" + "1" * 64
+    elif case == "compact_invariant_worker_peak":
+        invariant["worker_peak_rss_bytes"] += 1
+    elif case == "compact_invariant_wall":
+        invariant["wall_time_nanoseconds"] += 1
+    elif case == "compact_invariant_cap":
+        invariant["within_frozen_aggregate_cap"] = False
+    elif case == "worker_count":
+        statistics_complete["worker_peak_rss_bytes"].append(0)
+        statistics["worker_peak_rss_bytes"].append(0)
+        run["diagnostics"]["statistics_worker_peak_rss_kib"].append(0)
+        measurement["diagnostics"] = json.loads(
+            json.dumps(run["diagnostics"])
+        )
+        refresh_statistics_root()
+    elif case == "artifact_count":
+        statistics_complete["worker_result_artifact_bytes"] = (
+            statistics_complete["worker_result_artifact_bytes"][:-1]
+        )
+        statistics_complete["worker_result_artifact_sha256"] = (
+            statistics_complete["worker_result_artifact_sha256"][:-1]
+        )
+        statistics["worker_artifact_sha256"] = list(
+            statistics_complete["worker_result_artifact_sha256"]
+        )
+        refresh_statistics_root()
+    elif case == "artifact_sum":
+        statistics_complete["worker_result_artifact_bytes"] = [
+            resource["worker_result_artifact_bytes_bound"] + 1,
+            1,
+            1,
+            1,
+            1,
+        ]
+        refresh_statistics_root()
+    elif case == "parent_graph":
+        statistics_complete["parent_result_object_graph_bytes_observed"] = (
+            resource["parent_result_working_bytes_bound"] + 1
+        )
+        refresh_statistics_root()
+    elif case == "compact_worker_sha":
+        statistics["worker_artifact_sha256"][0] = "sha256:" + "1" * 64
+    elif case == "compact_worker_peak":
+        statistics["worker_peak_rss_bytes"][0] += 1
+    elif case == "compact_statistics_wall":
+        statistics[
+            "statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds"
+        ] += 1
+    elif case == "compact_statistics_cap":
+        statistics["within_frozen_aggregate_cap"] = False
+    elif case == "compact_statistics_conservative":
+        statistics["conservative_parent_plus_worker_peak_sum_bytes"] += 1
+    elif case == "compact_statistics_external":
+        statistics["external_supervisor_required"] = False
+    elif case == "diagnostics_statistics_wall":
+        run["diagnostics"]["statistics_wall_time_ns"] += 1
+        measurement["diagnostics"] = dict(run["diagnostics"])
+    elif case == "schedule_root":
+        statistics["permutation_schedule_root"] = "schedule"
+    elif case == "execution_root":
+        invariant["execution_root"] = "execution"
+    elif case == "seed_commitment":
+        statistics["permutation_seed_commitment"] = "sha256:" + "1" * 64
+    elif case == "pairwise_family":
+        statistics["pairwise_holm_family_size"] += 5
+    elif case == "target_family":
+        audit_row["target_family_max_t_holm"] = audit_row[
+            "target_family_max_t_holm"
+        ][:-1]
+    elif case == "synchronized_fake_receipt_id":
+        fake_id = "phase2b_formal_covert_audit_transcript_fake"
+        audit_row["receipt_id"] = fake_id
+        issuance["receipt_id"] = fake_id
+        measurement["observed_receipt_id"] = fake_id
+    elif case == "synchronized_quota_own_id_and_root":
+        audit_row["eligibility_quota"]["receipt_id"] = audit_row["receipt_id"]
+        audit_row["eligibility_quota_root"] = qualification.stable_hash(
+            audit_row["eligibility_quota"],
+            prefix="phase2b_formal_wire_covert_eligibility_quota_v2_",
+        )
+    elif case == "quota_root":
+        audit_row["eligibility_quota_root"] = (
+            "phase2b_formal_wire_covert_eligibility_quota_v2_" + "f" * 64
+        )
+    else:  # pragma: no cover - parameter list is closed above
+        raise AssertionError(case)
+
+    with pytest.raises(ValueError):
+        qualification._validate_executed_runtime_bundle_v2(
+            resource_plan=resource,
+            statistics_runtime=statistics_complete,
+            receipt_issuance_runtime=issuance_complete,
+            diagnostics=run["diagnostics"],
+            run=run,
+            measurement=measurement,
+            expected_mode="KNOWN_NULL",
+            visible_audited_rows=resource["rows"],
+            visible_concrete_features=resource["concrete_features"],
+            context=f"unit bundle {case}",
+        )
+
+
 def test_candidate_success_projects_and_releases_both_receipts_over_registry_cap(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     live: set[int] = set()
+    validations: list[int] = []
+    plan, statistics_runtime, issuance_runtime = _valid_candidate_runtime_bundle()
+    frozen_capacity_row = (
+        qualification._fixture_feature_capacity_projection_row_v2
+    )
+
+    def unit_capacity_row(mode: str, rows: int) -> dict[str, object]:
+        row = dict(frozen_capacity_row(mode, rows))
+        if rows == qualification.EXACT_AUTHORITY_ROWS:
+            row["projected_concrete_feature_count"] = plan.concrete_features
+        return row
+
+    monkeypatch.setattr(
+        qualification,
+        "_fixture_feature_capacity_projection_row_v2",
+        unit_capacity_row,
+    )
 
     class FakeReceipt:
         def __init__(self, receipt_id: str) -> None:
             self.receipt_id = receipt_id
+            self.audited_row_count = plan.rows
             self.feature_manifest = SimpleNamespace(
                 manifest_root="feature-root",
-                deduplicated_feature_count=4,
-                raw_semantic_feature_count=4,
+                deduplicated_feature_count=plan.concrete_features,
+                raw_semantic_feature_count=plan.concrete_features,
             )
-            self.resource_plan = SimpleNamespace(
-                unique_statistical_partitions=4,
-                hypotheses=20,
-            )
+            self.resource_plan = plan
+            self.statistics_runtime_evidence = statistics_runtime
+            self.receipt_issuance_runtime_evidence = issuance_runtime
             live.add(id(self))
 
     def validate(receipt: FakeReceipt) -> str:
         assert id(receipt) in live
+        validations.append(id(receipt))
         return receipt.receipt_id
 
     def release(receipt: FakeReceipt) -> str:
@@ -2898,14 +5011,16 @@ def test_candidate_success_projects_and_releases_both_receipts_over_registry_cap
     )
 
     def diagnostics(mode: str) -> qualification.AuditRunDiagnosticsV2:
+        cap_kib = auditor.MAXIMUM_ESTIMATED_RSS_BYTES // 1_024
         return qualification.AuditRunDiagnosticsV2(
             mode,
             1,
+            0,
+            cap_kib,
+            tuple(0 for _ in statistics_runtime.worker_peak_rss_bytes),
+            cap_kib,
             1,
-            (1,),
-            2,
-            1,
-            1,
+            statistics_runtime.host_available_memory_bytes_at_preflight,
             qualification.EXACT_RECOGNIZER_INVOCATIONS,
             qualification.EXACT_AUTHORITY_ROWS,
             qualification.EXACT_AUTHORITY_ROWS,
@@ -2913,12 +5028,21 @@ def test_candidate_success_projects_and_releases_both_receipts_over_registry_cap
 
     for index in range(auditor.MAXIMUM_IN_PROCESS_ISSUED_RECEIPTS + 1):
         assert len(live) + 2 <= auditor.MAXIMUM_IN_PROCESS_ISSUED_RECEIPTS
-        positive_receipt = FakeReceipt(f"positive-{index}")
-        negative_receipt = FakeReceipt(f"negative-{index}")
+        positive_id = (
+            "phase2b_formal_covert_audit_transcript_"
+            + f"{2 * index:064x}"
+        )
+        negative_id = (
+            "phase2b_formal_covert_audit_transcript_"
+            + f"{2 * index + 1:064x}"
+        )
+        positive_receipt = FakeReceipt(positive_id)
+        negative_receipt = FakeReceipt(negative_id)
         positive = SimpleNamespace(
             mode="KNOWN_NULL",
             label_factorial_proof_root="phase2b_formal_wire_covert_label_factorial_v2_x",
             audit_receipt=positive_receipt,
+            validated_receipt_id=positive_receipt.receipt_id,
             batch_id="batch",
             transform_catalog_root="catalog",
             diagnostics=diagnostics("KNOWN_NULL"),
@@ -2928,13 +5052,23 @@ def test_candidate_success_projects_and_releases_both_receipts_over_registry_cap
             ),
             namespace_uuid_leaf_paths=1,
             channel_leaf_paths=1,
-            exact_owned_channel_only_leaf_paths=1,
+            exact_owned_channel_only_leaf_paths=(
+                qualification._FIXTURE_FEATURE_CAPACITY_CONTRACT_V2["modes"][
+                    "KNOWN_NULL"
+                ]["channel_only_owned_union_path_count"]
+            ),
+            channel_only_owner_union_root=(
+                qualification._FIXTURE_FEATURE_CAPACITY_CONTRACT_V2["modes"][
+                    "KNOWN_NULL"
+                ]["channel_only_owned_union_root"]
+            ),
             full_raw_byte_categorical_hypotheses=1,
         )
         negative = SimpleNamespace(
             mode="KNOWN_BINDING_LEAK",
             label_factorial_proof_root=positive.label_factorial_proof_root,
             audit_receipt=negative_receipt,
+            validated_receipt_id=negative_receipt.receipt_id,
             diagnostics=diagnostics("KNOWN_BINDING_LEAK"),
             disposition="FAIL",
             leak_feature_id="feature",
@@ -2950,11 +5084,26 @@ def test_candidate_success_projects_and_releases_both_receipts_over_registry_cap
             positive=positive,
             negative=negative,
         )
-        assert candidate.positive_audit_receipt_id == f"positive-{index}"
+        assert candidate.positive_audit_receipt_id == positive_id
+        assert candidate.qualification_receipt_id.startswith(
+            "phase2b_formal_wire_covert_qualification_receipt_v5_"
+        )
         assert not hasattr(candidate, "positive_audit_receipt")
         projection = candidate._receipt_projection()
         assert projection["projection_only_boundary"] == (
             qualification._TASK4_PROJECTION_ONLY_BOUNDARY_V2
+        )
+        assert projection["positive"]["resource_plan_projection"] == (
+            candidate.positive_resource_plan_projection
+        )
+        assert projection["positive"]["resource_plan_projection_root"] == (
+            candidate.positive_resource_plan_projection_root
+        )
+        assert projection["negative"]["resource_plan_projection"] == (
+            candidate.negative_resource_plan_projection
+        )
+        assert projection["negative"]["resource_plan_projection_root"] == (
+            candidate.negative_resource_plan_projection_root
         )
         assert projection["claims"] == {
             "actual_corpus_audit": False,
@@ -2966,7 +5115,321 @@ def test_candidate_success_projects_and_releases_both_receipts_over_registry_cap
             "synthetic_fixture_archive_verified": False,
         }
         assert live == set()
+        assert validations == []
         if index == 0:
+            def refresh_candidate_id() -> None:
+                object.__setattr__(
+                    candidate,
+                    "qualification_receipt_id",
+                    qualification.QUALIFICATION_RECEIPT_PREFIX
+                    + hashlib.sha256(
+                        qualification.QUALIFICATION_RECEIPT_DOMAIN
+                        + qualification.canonicalize_rfc8785_v1(
+                            candidate._receipt_projection()
+                        )
+                    ).hexdigest(),
+                )
+
+            alternate_plan = replace(
+                plan,
+                effective_cpu_capacity_at_preflight=(
+                    plan.effective_cpu_capacity_at_preflight + 1
+                ),
+            )
+            alternate_plan.__post_init__()
+            original_plan = candidate.negative_resource_plan_projection
+            original_plan_root = candidate.negative_resource_plan_projection_root
+            alternate_plan_projection = qualification._closed_primitive_v2(
+                alternate_plan
+            )
+            object.__setattr__(
+                candidate,
+                "negative_resource_plan_projection",
+                alternate_plan_projection,
+            )
+            object.__setattr__(
+                candidate,
+                "negative_resource_plan_projection_root",
+                qualification.stable_hash(
+                    alternate_plan_projection,
+                    prefix="phase2b_formal_wire_covert_resource_plan_v3_",
+                ),
+            )
+            refresh_candidate_id()
+            with pytest.raises(ValueError):
+                candidate._validate()
+            object.__setattr__(
+                candidate, "negative_resource_plan_projection", original_plan
+            )
+            object.__setattr__(
+                candidate,
+                "negative_resource_plan_projection_root",
+                original_plan_root,
+            )
+            refresh_candidate_id()
+
+            original_positive_diagnostics = candidate.positive_diagnostics
+            object.__setattr__(
+                candidate,
+                "positive_diagnostics",
+                replace(
+                    original_positive_diagnostics,
+                    mode="KNOWN_BINDING_LEAK",
+                ),
+            )
+            refresh_candidate_id()
+            with pytest.raises(ValueError):
+                candidate._validate()
+            object.__setattr__(
+                candidate,
+                "positive_diagnostics",
+                original_positive_diagnostics,
+            )
+            refresh_candidate_id()
+
+            inadmissible_plan, inadmissible_statistics = (
+                _inadmissible_candidate_runtime_bundle(
+                    plan,
+                    statistics_runtime,
+                )
+            )
+            inadmissible_plan_projection = qualification._closed_primitive_v2(
+                inadmissible_plan
+            )
+            inadmissible_statistics_projection = (
+                qualification._closed_primitive_v2(inadmissible_statistics)
+            )
+            qualification._validate_complete_resource_plan_projection_v2(
+                inadmissible_plan_projection,
+                context="candidate inadmissible KAT",
+            )
+            qualification._validate_complete_statistics_runtime_projection_v2(
+                inadmissible_statistics_projection,
+                inadmissible_plan_projection,
+                context="candidate inadmissible KAT",
+            )
+            assert inadmissible_plan_projection["admissible"] is False
+            for branch in ("positive", "negative"):
+                plan_field = f"{branch}_resource_plan_projection"
+                plan_root_field = f"{branch}_resource_plan_projection_root"
+                statistics_field = f"{branch}_statistics_runtime_projection"
+                statistics_root_field = (
+                    f"{branch}_statistics_runtime_projection_root"
+                )
+                original_branch_plan = getattr(candidate, plan_field)
+                original_branch_plan_root = getattr(candidate, plan_root_field)
+                original_branch_statistics = getattr(candidate, statistics_field)
+                original_branch_statistics_root = getattr(
+                    candidate,
+                    statistics_root_field,
+                )
+                object.__setattr__(
+                    candidate,
+                    plan_field,
+                    inadmissible_plan_projection,
+                )
+                object.__setattr__(
+                    candidate,
+                    plan_root_field,
+                    qualification.stable_hash(
+                        inadmissible_plan_projection,
+                        prefix="phase2b_formal_wire_covert_resource_plan_v3_",
+                    ),
+                )
+                object.__setattr__(
+                    candidate,
+                    statistics_field,
+                    inadmissible_statistics_projection,
+                )
+                object.__setattr__(
+                    candidate,
+                    statistics_root_field,
+                    qualification.stable_hash(
+                        inadmissible_statistics_projection,
+                        prefix=(
+                            "phase2b_formal_wire_covert_statistics_runtime_v3_"
+                        ),
+                    ),
+                )
+                refresh_candidate_id()
+                with pytest.raises(ValueError):
+                    candidate._validate()
+                object.__setattr__(candidate, plan_field, original_branch_plan)
+                object.__setattr__(
+                    candidate,
+                    plan_root_field,
+                    original_branch_plan_root,
+                )
+                object.__setattr__(
+                    candidate,
+                    statistics_field,
+                    original_branch_statistics,
+                )
+                object.__setattr__(
+                    candidate,
+                    statistics_root_field,
+                    original_branch_statistics_root,
+                )
+                refresh_candidate_id()
+            candidate._validate()
+
+            changed_worker_peaks = (
+                1_024,
+                *tuple(
+                    0
+                    for _ in range(
+                        len(statistics_runtime.worker_peak_rss_bytes) - 1
+                    )
+                ),
+            )
+            changed_statistics = replace(
+                statistics_runtime,
+                worker_peak_rss_bytes=changed_worker_peaks,
+                parent_rss_charge_ceiling_bytes=(
+                    auditor.MAXIMUM_ESTIMATED_RSS_BYTES - 1_024
+                ),
+            )
+            changed_statistics_projection = qualification._closed_primitive_v2(
+                changed_statistics
+            )
+            original_statistics = candidate.positive_statistics_runtime_projection
+            original_statistics_root = (
+                candidate.positive_statistics_runtime_projection_root
+            )
+            original_diagnostics = candidate.positive_diagnostics
+            object.__setattr__(
+                candidate,
+                "positive_statistics_runtime_projection",
+                changed_statistics_projection,
+            )
+            object.__setattr__(
+                candidate,
+                "positive_statistics_runtime_projection_root",
+                qualification.stable_hash(
+                    changed_statistics_projection,
+                    prefix="phase2b_formal_wire_covert_statistics_runtime_v3_",
+                ),
+            )
+            cap_kib = auditor.MAXIMUM_ESTIMATED_RSS_BYTES // 1_024
+            object.__setattr__(
+                candidate,
+                "positive_diagnostics",
+                qualification.AuditRunDiagnosticsV2(
+                    "KNOWN_NULL",
+                    1,
+                    0,
+                    cap_kib - 1,
+                    tuple(value // 1_024 for value in changed_worker_peaks),
+                    cap_kib,
+                    1,
+                    statistics_runtime.host_available_memory_bytes_at_preflight,
+                    qualification.EXACT_RECOGNIZER_INVOCATIONS,
+                    qualification.EXACT_AUTHORITY_ROWS,
+                    qualification.EXACT_AUTHORITY_ROWS,
+                ),
+            )
+            refresh_candidate_id()
+            with pytest.raises(ValueError):
+                candidate._validate()
+            object.__setattr__(
+                candidate,
+                "positive_statistics_runtime_projection",
+                original_statistics,
+            )
+            object.__setattr__(
+                candidate,
+                "positive_statistics_runtime_projection_root",
+                original_statistics_root,
+            )
+            object.__setattr__(
+                candidate, "positive_diagnostics", original_diagnostics
+            )
+
+            changed_issuance = replace(
+                issuance_runtime,
+                worker_peak_rss_bytes_sum=1_024,
+                parent_rss_charge_ceiling_bytes=(
+                    auditor.MAXIMUM_ESTIMATED_RSS_BYTES - 1_024
+                ),
+            )
+            changed_issuance_projection = qualification._closed_primitive_v2(
+                changed_issuance
+            )
+            original_issuance = (
+                candidate.positive_receipt_issuance_runtime_projection
+            )
+            original_issuance_root = (
+                candidate.positive_receipt_issuance_runtime_projection_root
+            )
+            object.__setattr__(
+                candidate,
+                "positive_receipt_issuance_runtime_projection",
+                changed_issuance_projection,
+            )
+            object.__setattr__(
+                candidate,
+                "positive_receipt_issuance_runtime_projection_root",
+                qualification.stable_hash(
+                    changed_issuance_projection,
+                    prefix=(
+                        "phase2b_formal_wire_covert_receipt_issuance_runtime_v3_"
+                    ),
+                ),
+            )
+            refresh_candidate_id()
+            with pytest.raises(ValueError):
+                candidate._validate()
+            object.__setattr__(
+                candidate,
+                "positive_receipt_issuance_runtime_projection",
+                original_issuance,
+            )
+            object.__setattr__(
+                candidate,
+                "positive_receipt_issuance_runtime_projection_root",
+                original_issuance_root,
+            )
+            refresh_candidate_id()
+            candidate._validate()
+
+            original_negative_id = candidate.negative_audit_receipt_id
+            object.__setattr__(
+                candidate,
+                "negative_audit_receipt_id",
+                candidate.positive_audit_receipt_id,
+            )
+            refresh_candidate_id()
+            with pytest.raises(ValueError, match="branch-distinct"):
+                candidate._validate()
+            object.__setattr__(
+                candidate, "negative_audit_receipt_id", original_negative_id
+            )
+            original_positive_id = candidate.positive_audit_receipt_id
+            object.__setattr__(
+                candidate,
+                "positive_audit_receipt_id",
+                "phase2b_formal_covert_audit_transcript_fake",
+            )
+            refresh_candidate_id()
+            with pytest.raises(ValueError, match="exact Auditor receipt ID"):
+                candidate._validate()
+            object.__setattr__(
+                candidate, "positive_audit_receipt_id", original_positive_id
+            )
+            refresh_candidate_id()
+            candidate._validate()
+
+            original_worker_sum = candidate.positive_receipt_issuance_runtime_projection[
+                "worker_peak_rss_bytes_sum"
+            ]
+            candidate.positive_receipt_issuance_runtime_projection[
+                "worker_peak_rss_bytes_sum"
+            ] = original_worker_sum + 1
+            with pytest.raises(ValueError):
+                candidate._validate()
+            candidate.positive_receipt_issuance_runtime_projection[
+                "worker_peak_rss_bytes_sum"
+            ] = original_worker_sum
             object.__setattr__(candidate, "actual_execution_claimed", True)
             with pytest.raises(ValueError, match="runtime/readiness boundary"):
                 candidate._validate()
@@ -3008,6 +5471,90 @@ def test_production_has_zero_assert_and_no_pickle_pipe_or_process_pool() -> None
     source = path.read_text(encoding="utf-8")
     tree = ast.parse(source)
     assert not any(isinstance(node, ast.Assert) for node in ast.walk(tree))
+    public_receipt_validations = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "validate_formal_covert_audit_receipt_v1"
+    ]
+    assert len(public_receipt_validations) == 1
+    shared_bundle_calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "_validate_executed_runtime_bundle_v2"
+    ]
+    assert len(shared_bundle_calls) == 5
+    quota_id_validation_calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "_require_eligibility_quota_receipt_id_v2"
+    ]
+    assert len(quota_id_validation_calls) == 3
+    assert 'quota.get("receipt_id") != receipt_id' not in source
+    assert 'resource_plan.get("admissible") is not True' in source
+    for method in (
+        qualification.Phase2BFormalWireCovertCandidateReceiptV2._issue,
+        qualification.Phase2BFormalWireCovertCandidateReceiptV2._validate,
+    ):
+        method_source = inspect.getsource(method)
+        assert (
+            method_source.index("_validate_complete_resource_plan_projection_v2")
+            < method_source.index(
+                "_validate_complete_statistics_runtime_projection_v2"
+            )
+            < method_source.index(
+                "_validate_complete_receipt_issuance_runtime_projection_v2"
+            )
+            < method_source.index("_validate_executed_runtime_bundle_v2")
+        )
+    assert "receipt.__post_init__()" not in source
+    assert qualification.QUALIFICATION_RECEIPT_DOMAIN == (
+        b"HEGEL/PHASE2B/FORMAL_WIRE_COVERT_QUALIFICATION/RECEIPT/V5\x00"
+    )
+    assert qualification.QUALIFICATION_RECEIPT_PREFIX == (
+        "phase2b_formal_wire_covert_qualification_receipt_v5_"
+    )
+    assert (
+        "HEGEL/PHASE2B/FORMAL_WIRE_COVERT_QUALIFICATION/RECEIPT/V4"
+        not in source
+    )
+    assert "phase2b_formal_wire_covert_qualification_receipt_v4_" not in source
+    current_schema_tokens = (
+        "hegel-machine-phase2b-formal-wire-covert-qualification/4",
+        "hegel-machine-phase2b-formal-wire-covert-qualification-dependency-lock/3",
+        "hegel-machine-phase2b-formal-wire-covert-development-calibration/4",
+        "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/4",
+        "hegel-machine-phase2b-formal-wire-covert-static-shape/3",
+        "phase2b_formal_wire_covert_qualification_receipt_v5_",
+        "phase2b_formal_wire_covert_resource_plan_v3_",
+        "phase2b_formal_wire_covert_observed_resource_plan_v3_",
+        "phase2b_formal_wire_covert_invariant_runtime_v3_",
+        "phase2b_formal_wire_covert_statistics_runtime_v3_",
+        "phase2b_formal_wire_covert_receipt_issuance_runtime_v3_",
+    )
+    for schema in current_schema_tokens:
+        assert schema in source
+    for current in current_schema_tokens:
+        stale = current.replace("/4", "/2").replace("/3", "/2").replace(
+            "_v5_", "_v2_"
+        ).replace("_v4_", "_v2_").replace("_v3_", "_v2_")
+        assert stale not in source
+    for current_inner_schema in (
+        "hegel-machine-phase2b-formal-wire-covert-development-calibration/4",
+        "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/4",
+    ):
+        assert current_inner_schema.replace("/4", "/3") not in source
+    assert source.count(
+        "hegel-machine-phase2b-formal-wire-covert-development-calibration/4"
+    ) == 5
+    assert source.count(
+        "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/4"
+    ) == 4
     for forbidden in (
         "multiprocessing.Pipe",
         "ProcessPoolExecutor",
@@ -7049,6 +9596,24 @@ def test_rich32_invariance_core_only_executes_one_atomic_80_schedule_suite(
     )
     for item in decoded:
         auditor._validate_decoded(item, execution.adapter)
+    feature_projection = auditor._feature_cardinality_projection(decoded)
+    assert qualification._validate_fixture_feature_capacity_projection_v2(
+        mode, feature_projection
+    ) is feature_projection
+    expected_feature_projection = (
+        qualification._FIXTURE_FEATURE_CAPACITY_CONTRACT_V2["modes"][mode][
+            "projections"
+        ][1]
+    )
+    assert feature_projection.projected_concrete_feature_count == (
+        expected_feature_projection["projected_concrete_feature_count"]
+    )
+    assert feature_projection.projected_raw_semantic_feature_count == (
+        expected_feature_projection["projected_raw_semantic_feature_count"]
+    )
+    assert feature_projection.projection_root == expected_feature_projection[
+        "projection_root"
+    ]
     recognizer = execution.recognizer
     pins, _ = auditor._capture_adapter_execution_pins(execution.adapter, recognizer)
     input_root = auditor._input_root(execution.adapter.envelopes)
@@ -7169,3 +9734,267 @@ def test_rich32_invariance_core_only_executes_one_atomic_80_schedule_suite(
     assert recognizer.calls == 81
     assert recognizer.row_counts == [32] * 81
     assert total_seconds <= 225.0, timing
+
+
+def test_resource_only_decode_helper_fresh_preflight_precedes_each_batch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeDecoded:
+        def __init__(self, envelope: bytes) -> None:
+            self.envelope = envelope
+
+    events: list[str] = []
+
+    def preflight(rows: int) -> object:
+        events.append(f"preflight:{rows}")
+        return object()
+
+    def decode(envelope: bytes) -> FakeDecoded:
+        events.append("decode")
+        return FakeDecoded(envelope)
+
+    def validate(item: FakeDecoded, adapter: object) -> None:
+        events.append("validate")
+
+    def deep(item: FakeDecoded) -> int:
+        events.append("deep")
+        return 1
+
+    adapter = SimpleNamespace(decode_envelope=decode)
+    monkeypatch.setattr(auditor, "DecodedFormalEnvelopeV1", FakeDecoded)
+    monkeypatch.setattr(auditor, "_preflight_decode_memory", preflight)
+    monkeypatch.setattr(auditor, "_validate_decoded", validate)
+    monkeypatch.setattr(auditor, "_deep_object_graph_bytes", deep)
+    first = _decode_batch_with_production_guards(adapter, (b"a", b"b"))
+    second = _decode_batch_with_production_guards(adapter, (b"c",))
+    assert tuple(item.envelope for item in first) == (b"a", b"b")
+    assert tuple(item.envelope for item in second) == (b"c",)
+    assert events == [
+        "preflight:2",
+        "decode",
+        "validate",
+        "deep",
+        "decode",
+        "validate",
+        "deep",
+        "preflight:1",
+        "decode",
+        "validate",
+        "deep",
+    ]
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("mode", qualification.LIVE_MODE_ORDER)
+def test_full1024_resource_only_projection_is_exact_and_admissible(
+    mode: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executed_receipts_before = dict(auditor._IN_PROCESS_EXECUTED_RECEIPTS)
+    receipt_reservations_before = set(auditor._IN_PROCESS_RECEIPT_RESERVATIONS)
+    receipt_lifecycle_calls: list[str] = []
+
+    def forbid_receipt_lifecycle(*args: object, **kwargs: object) -> None:
+        receipt_lifecycle_calls.append("called")
+        pytest.fail("resource-only projection must not construct or touch a receipt")
+
+    for name in (
+        "_construct_formal_covert_audit_receipt_v1",
+        "_register_preconstructed_formal_covert_audit_receipt_v1",
+        "_validate_pending_formal_covert_audit_receipt_v1",
+        "_commit_pending_formal_covert_audit_receipt_v1",
+        "validate_formal_covert_audit_receipt_v1",
+        "release_formal_covert_audit_receipt_v1",
+    ):
+        monkeypatch.setattr(auditor, name, forbid_receipt_lifecycle)
+
+    execution = decoded = aligned_authority = eligibility_signatures = None
+    sufficiency = feature_projection = manifest = columns = None
+    partition_projection = partitions = adapter_pins = invariant_plan = None
+    invariant_host_memory = plan = statistics_host_memory = None
+    try:
+        execution = qualification._build_fixture_execution_v2(mode)
+        adapter_pins, _ = auditor._capture_adapter_execution_pins(
+            execution.adapter,
+            execution.recognizer,
+        )
+        decoded = _decode_batch_with_production_guards(
+            execution.adapter,
+            execution.adapter.envelopes,
+        )
+        aligned_authority = auditor._align_private_authority(
+            execution.adapter.envelopes,
+            execution.authority,
+            execution.adapter.private_alignment,
+        )
+        eligibility_signatures = tuple(
+            auditor._eligibility_structural_signature(item) for item in decoded
+        )
+        sufficiency = tuple(
+            auditor._sufficiency(aligned_authority, target, eligibility_signatures)
+            for target in auditor.TARGETS
+        )
+        assert all(item.sufficient for item in sufficiency)
+        label_class_counts = tuple(item.label_class_count for item in sufficiency)
+        envelope_and_decode_bytes_bound = (
+            auditor._measured_envelope_decode_bytes_bound(
+                len(execution.adapter.envelopes),
+                execution.adapter.envelopes,
+                decoded,
+            )
+        )
+        feature_projection = auditor._feature_cardinality_projection(decoded)
+        assert qualification._validate_fixture_feature_capacity_projection_v2(
+            mode, feature_projection
+        ) is feature_projection
+        auditor._preflight_feature_extraction_memory(
+            feature_projection,
+            envelope_and_decode_bytes_bound,
+        )
+        invariant_plan = auditor._invariance_resource_plan(
+            len(execution.adapter.envelopes),
+            envelope_and_decode_bytes_bound=envelope_and_decode_bytes_bound,
+            adapter_retained_graph_bytes_bound=(
+                adapter_pins.retained_graph_bytes_bound
+            ),
+            variant_suite_resident_bytes_per_row_bound=(
+                adapter_pins.variant_suite_resident_bytes_per_row_bound
+            ),
+            variant_suite_resident_fixed_bytes_bound=(
+                adapter_pins.variant_suite_resident_fixed_bytes_bound
+            ),
+        )
+        assert invariant_plan.admissible is True
+        invariant_host_memory = auditor._preflight_invariance_host_memory(
+            invariant_plan
+        )
+        auditor._preflight_feature_extraction_memory(
+            feature_projection,
+            envelope_and_decode_bytes_bound,
+        )
+        manifest, columns = auditor._extract_feature_columns(
+            execution.adapter.envelopes,
+            decoded,
+            feature_projection,
+        )
+        assert manifest.deduplicated_feature_count == (
+            feature_projection.projected_concrete_feature_count
+        )
+        assert manifest.raw_semantic_feature_count == (
+            feature_projection.projected_raw_semantic_feature_count
+        )
+        feature_matrix_bytes_bound = auditor._measured_feature_matrix_bytes_bound(
+            len(execution.adapter.envelopes),
+            columns,
+        )
+        assert feature_matrix_bytes_bound <= (
+            feature_projection.projected_feature_matrix_bytes_bound
+        )
+        partition_deadline_ns = (
+            time.monotonic_ns()
+            + auditor.PARTITION_PREPARATION_TIMEOUT_SECONDS * 1_000_000_000
+        )
+        partition_projection = auditor._partition_allocation_projection(
+            len(execution.adapter.envelopes),
+            columns,
+            partition_deadline_ns,
+        )
+        auditor._preflight_partition_allocation_memory(
+            feature_matrix_bytes_bound=feature_matrix_bytes_bound,
+            envelope_and_decode_bytes_bound=envelope_and_decode_bytes_bound,
+            partition_projection=partition_projection,
+            concrete_features=manifest.deduplicated_feature_count,
+        )
+        partitions = auditor._materialize_partitions_bounded(
+            columns,
+            partition_projection,
+            partition_deadline_ns,
+        )
+        del decoded, columns
+        decoded = None
+        columns = None
+        plan = auditor._resource_plan(
+            len(execution.adapter.envelopes),
+            partitions,
+            label_class_counts,
+            preextraction_feature_matrix_bytes_bound=(
+                feature_projection.projected_feature_matrix_bytes_bound
+            ),
+            feature_matrix_bytes_bound=feature_matrix_bytes_bound,
+            envelope_and_decode_bytes_bound=envelope_and_decode_bytes_bound,
+            adapter_retained_graph_bytes_bound=(
+                adapter_pins.retained_graph_bytes_bound
+            ),
+            partition_projection=partition_projection,
+            partition_preparation_deadline_ns=partition_deadline_ns,
+            invariance_plan=invariant_plan,
+        )
+        assert plan.admissible is True
+        auditor._validate_invariant_phase_preflight_against_resource_plan(
+            plan,
+            invariant_host_memory.resource_preflight,
+        )
+        statistics_host_memory = auditor._preflight_host_memory(plan)
+        auditor._validate_statistics_phase_preflight_against_resource_plan(
+            plan,
+            statistics_host_memory.resource_preflight,
+        )
+        assert plan.concrete_features == (
+            feature_projection.projected_concrete_feature_count
+        )
+        assert plan.preextraction_feature_matrix_bytes_bound == (
+            feature_projection.projected_feature_matrix_bytes_bound
+        )
+        assert plan.estimated_peak_rss_bytes <= auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        assert (
+            plan.estimated_invariance_peak_rss_bytes
+            <= auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        )
+        assert (
+            plan.estimated_intersection_work_units
+            <= auditor.MAXIMUM_STATISTICAL_INTERSECTION_WORK_UNITS
+        )
+        assert (
+            plan.estimated_total_statistical_work_units
+            <= auditor.MAXIMUM_TOTAL_STATISTICAL_WORK_UNITS
+        )
+        assert plan.partition_allocation_bytes_bound == (
+            partition_projection.projected_partition_matrix_bytes_bound
+        )
+        assert plan.partition_matrix_bytes_bound <= (
+            plan.partition_allocation_bytes_bound
+        )
+        assert plan.invariance_parent_current_rss_bytes_at_plan == (
+            invariant_plan.parent_current_rss_bytes_at_plan
+        )
+        assert plan.invariance_resource_plan_root == invariant_plan.plan_root
+        assert invariant_host_memory.resource_preflight.resource_plan_root == (
+            plan.invariance_resource_plan_root
+        )
+        assert statistics_host_memory.resource_preflight.resource_plan_root == (
+            plan.resource_plan_root
+        )
+    finally:
+        del execution
+        del decoded
+        del aligned_authority
+        del eligibility_signatures
+        del sufficiency
+        del feature_projection
+        del manifest
+        del columns
+        del partition_projection
+        del partitions
+        del adapter_pins
+        del invariant_plan
+        del invariant_host_memory
+        del plan
+        del statistics_host_memory
+        gc.collect()
+        assert dict(auditor._IN_PROCESS_EXECUTED_RECEIPTS) == (
+            executed_receipts_before
+        )
+        assert set(auditor._IN_PROCESS_RECEIPT_RESERVATIONS) == (
+            receipt_reservations_before
+        )
+        assert receipt_lifecycle_calls == []
