@@ -5,8 +5,8 @@ not an actual-corpus audit, a custody claim, an execution authorization, or an
 actual-960 result.
 
 The executed receipt schema is
-`hegel-machine-phase2b-formal-covert-auditor/4`; the synchronized profile
-schema is `hegel-machine-phase2b-formal-covert-auditor-profile/4`.
+`hegel-machine-phase2b-formal-covert-auditor/5`; the synchronized profile
+schema is `hegel-machine-phase2b-formal-covert-auditor-profile/5`.
 
 The implementation is synchronized to the exact candidate Wire V3 source,
 test, config, and documentation SHA-256 values
@@ -19,9 +19,9 @@ bytes are not yet an R03/R04/R05 qualification. The frozen rich-graph
 1,024-row external supervised run remains pending.
 
 Frozen candidate IDs are
-`phase2b_formal_covert_semantics_627506ef33be3134ee81c2a8bd765e4e7898abd7da9c94660bfc82176b0cbc1f`
+`phase2b_formal_covert_semantics_d50564375ce978d2ee585662adc6d9ac5c2335aa662214f508897f1076918321`
 and
-`phase2b_formal_covert_policy_binding_19c00ee7ccd65d0d11146aab1a1b6b5007a1d5e1cfd97599b26bfb7feb9f2825`.
+`phase2b_formal_covert_policy_binding_122bb24b8d8983a294a66e64c59fd74ac4017eaead1b7888141ff1679ac4272b`.
 
 ## Closed entry point and trust boundary
 
@@ -40,8 +40,9 @@ Public validation and release reject `PENDING`; the producer alone may perform
 its second full replay. That replay returns the validated receipt ID. Under one
 registry lock, commit then rechecks the exact entry and reservation and requires
 `entry.receipt_id == validated_id == candidate.receipt_id`; it runs the branch's
-absolute deadline check immediately before the post-validation RSS sample and
-only then transitions to `ISSUED`. Issued receipts are retained until the caller
+absolute deadline check, samples the parent historical RSS diagnostic, and then
+takes the final same-scope cgroup `memory.peak` sample immediately before the
+transition to `ISSUED`. Issued receipts are retained until the caller
 uses `release_formal_covert_audit_receipt_v1`; live receipts are never silently
 evicted. The outer `return` is the caller-ownership transfer: any
 `BaseException` before that return completes rolls back an unhanded `PENDING` or
@@ -356,8 +357,10 @@ artifact through a separately authenticated signed or CAS record.
 
 The hard input boundary is 1,024 rows; 1,025 rejects before decode. The current
 caps are 32,768 concrete features, 20,000,000,000 bitset intersections,
-50,000,000,000 total statistical work units, and 12 GiB conservative aggregate
-SELF-plus-worker RSS. Total work includes `P+1` contingency intersections,
+50,000,000,000 total statistical work units, a 12 GiB static phase-plan
+admission estimate, and an independent 12 GiB whole-attempt physical cap on
+the exact unified cgroup-v2 leaf's `memory.peak`. Total work includes `P+1`
+contingency intersections,
 17-word center accumulation/finalization, scalar maxT scans, and bounded label
 shuffle calls.
 
@@ -402,7 +405,7 @@ parent current RSS internally; no caller scalar can stand in for that
 measurement. Before statistics planning, auditor-owned decoded-row, column,
 and adapter aliases are released. Outer-frame aliases or allocator-retained
 pages may remain, so the model still includes the retained adapter bound and
-uses actual current RSS. Aggregate statistics RSS is
+uses actual current RSS. The statistics static admission estimate is
 
 `max(statistics-plan parent current RSS, label masks + partition matrix +
 retained adapter graph + 64 MiB) * (1 + workers)
@@ -410,7 +413,10 @@ retained adapter graph + 64 MiB) * (1 + workers)
 + target-max vectors + worker artifacts + parent result working graph`.
 
 This deliberately counts fork-shared pages once for the parent and once per
-worker. Feature and decode graphs are phase-exclusive rather than silently
+worker, so it is a conservative planning formula rather than observed physical
+usage. The cgroup `memory.peak` gate counts pages as actually charged to the
+whole attempt leaf and does not duplicate fork-shared pages. Feature and decode
+graphs are phase-exclusive rather than silently
 counted as live during statistics. Recursive shared-object-aware
 `sys.getsizeof` observations are multiplied by four where the profile says so;
 this is pinned-runtime accounting, not a portable Python heap theorem.
@@ -425,7 +431,7 @@ state, address limit, and retained artifact directory for statistics. The
 preflight resamples current RSS and recomputes the applicable formula with
 `max(current RSS, phase static bound)`. Bounded evidence-object bookkeeping
 after that sample is covered by the fixed 64 MiB parent term. Runtime evidence
-binds that same current sample, projected aggregate RSS, phase static term,
+binds that same current sample, projected static-plan RSS, phase static term,
 fork multiplier, additional tail, exact plan root, cap, and margin. Its DTO
 replays the projection and rejects projections above 12 GiB. Receipt validation
 reconstructs the exact phase-plan root, static term, multiplier, additional
@@ -449,7 +455,16 @@ mountinfo's filesystem-root-to-visible-mount projection (including subtree and
 combined v1 mounts), reads each limit/usage or quota/period pair from the same
 hierarchy level, walks every ancestor, and takes the tightest finite value.
 Leaf `max` never hides a finite ancestor. Module preflight uses the minimum of
-that value and Linux `MemAvailable`, plus a 2 GiB margin. A durable
+that value and Linux `MemAvailable`, plus a 2 GiB margin. Separately, the
+execution-scope snapshot requires one exact non-root unified membership and one
+unique visible real leaf; it binds leaf device/inode and membership into a
+scope root and reads canonical finite `memory.current`, `memory.peak`, and
+`memory.max` counters with `peak >= current`. Linux cgroup-v2 may temporarily
+report `memory.current` or `memory.peak` above `memory.max`; the structural
+snapshot therefore does not impose either invalid inequality. The target
+runtime DTOs and explicit physical gates independently require
+`memory.peak <= 12 GiB`. Missing, malformed, ambiguous, or identity-drifting
+evidence fails closed. It never writes or resets `memory.peak`. A durable
 qualification requires a fresh finite cgroup-v2 memory/pids scope supplied by
 the external supervisor; a host-only `None` cgroup observation is not R05
 execution evidence.
@@ -510,46 +525,58 @@ retains `FAIL_INVARIANCE_RUNTIME`, `FAIL_INVARIANCE_CONTAINMENT`, and
 `raw invariant child`. Both paths terminate and reap all directly owned
 children, and the statistics wrapper preserves either already-classified code.
 Both receipt branches carry exact, receipt-ID-bound
-`ReceiptIssuanceRuntimeEvidenceV1`. For a sufficient receipt, `W` is the exact
-sum of all direct raw-worker wait4 peak-RSS values and the bound deadline is the
-statistics deadline. For an insufficient receipt there is no statistical
-runtime evidence, `W = 0`, and the bound deadline is the already active
-partition-preparation deadline. `W` above the 12-GiB aggregate cap rejects;
-otherwise the parent charge ceiling is `C = 12 GiB - W`. Both branches sample
-the parent historical peak immediately before receipt construction and require
-it not to exceed `C`.
+`ReceiptIssuanceRuntimeEvidenceV1`. For a sufficient receipt, the bound deadline
+is the statistics deadline; for an insufficient receipt there is no statistical
+runtime evidence and the bound deadline is the already active
+partition-preparation deadline. Both branches record the parent whole-lifetime
+`ru_maxrss`, each direct worker's wait4 peak, and their exact sum only as
+signed-64-bit-bounded historical diagnostics. Those values never determine the
+physical cap and never reject an otherwise valid execution.
 
-The branch-neutral issuance evidence records deadline kind, absolute monotonic
-deadline and timeout, `W`, the pre-finalization peak, `C`, the exact
-conservative charge `C + W = 12 GiB`, one complete producer-pending replay, one
-locked final deadline check, and successful deadline/RSS booleans. The exact
-post-validation peak cannot also be placed in the immutable receipt without
-reconstructing and revalidating that receipt after observing it, which would
-reintroduce the fixed-point problem. Therefore the receipt binds the successful
-boolean, while the locked linearization point proves it operationally: after
-the pending replay returns `validated_id`, one registry-lock critical section
+The physical authority is the kernel-charged high-water mark of one exact
+unified cgroup-v2 attempt leaf. Sufficient execution samples it at invariance
+completion, statistics pre-finalization, and locked post-validation;
+insufficient execution samples it at pre-finalization and locked
+post-validation. Every sample must preserve membership, scope root, leaf
+device/inode, and `memory.max`; `memory.peak` must be monotonic, must be at least
+`memory.current`, and must be at most 12 GiB. `memory.max` remains a same-scope
+identity/binding value, not an assumed instantaneous upper bound on either
+usage counter. No sample resets the counter.
+Invariance, statistics pre-finalization, insufficient pre-finalization, and
+locked issuance use `FAIL_INVARIANCE_RUNTIME_RSS`,
+`FAIL_STATISTICAL_RUNTIME_RSS`, and
+`FAIL_RECEIPT_ISSUANCE_RUNTIME_RSS` as applicable. A cap failure persists one
+bounded ASCII line in the exact field order `stage`, `scope`,
+`physical_current_bytes`, `physical_peak_bytes`,
+`physical_memory_max_bytes`, `physical_cap_bytes`,
+`parent_historical_peak_rss_bytes`,
+`worker_historical_peak_rss_bytes_sum`, and `overage_bytes`.
+
+The branch-neutral issuance evidence records deadline kind and exact deadline,
+the diagnostic historical counters, the pre-finalization cgroup identity and
+physical counters, the 12-GiB cap, one complete producer-pending replay, one
+locked final deadline check, and successful deadline/physical-peak booleans.
+After pending replay returns `validated_id`, one registry-lock critical section
 rechecks the exact `PENDING` entry, reservation, and three-way receipt ID, runs
-the branch deadline checker, immediately samples parent historical peak RSS,
-rejects above `C`, and otherwise performs the sole `PENDING` to `ISSUED` state
-flip. There is no post-commit clock, content hash, replay, log, or helper gate.
+the branch deadline checker, samples the parent historical diagnostic, and then
+takes the final cgroup snapshot. Same-scope/monotonicity/cap validation is the
+last substantive gate before the sole `PENDING` to `ISSUED` state flip. There
+is no post-commit clock, allocation, content hash, replay, log, or helper gate.
 
 Finalization performs exactly one complete receipt construction (including its
 full replay), one exact `PENDING` registration, and one producer-only pending
 validation through the shared full-replay kernel. A deadline, replay, sampling,
-ceiling, registry, or asynchronous `BaseException` failure deletes the exact
+physical-cap, registry, or asynchronous `BaseException` failure deletes the exact
 entry by candidate identity/reservation without scanning, retry, or receipt
 rebuild. Cleanup faults are attached to the primary exception rather than
 replacing it, and the outer O(1) rollback/cancellation path is still attempted.
 The implementation does not replace or consume the caller's SIGALRM state.
-End-to-end preemption, descendant containment, aggregate memory, and pids
+End-to-end preemption, descendant containment, physical memory, and pids
 limits therefore require a fresh isolated outer supervisor/cgroup; the receipt
-sets `external_supervisor_required=true`. The conservative runtime sum uses
-the entire parent charge ceiling plus each direct raw child's wait4 peak. It is
-not observed physical PSS.
-Unlike the fork-boundary phase preflight, this final observed gate is
-whole-process conservative: parent `ru_maxrss` may retain an earlier
-phase-exclusive peak. It can therefore reject an execution that a phase-local
-peak model would accept; it is not represented as an exact phase peak.
+sets `external_supervisor_required=true`. Parent `ru_maxrss` may retain an
+earlier phase-exclusive peak and wait4 child peaks may double-count shared fork
+pages; both remain useful diagnostics but are not physical PSS and are never a
+fallback cap formula.
 `process_group_empty_at_exit=true` covers the direct child's setsid process
 group at the final check only; it is not continuous descendant evidence and
 cannot detect a helper that already exited or escaped into a new session.

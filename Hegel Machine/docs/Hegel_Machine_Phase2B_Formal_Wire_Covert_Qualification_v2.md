@@ -33,26 +33,26 @@ compiled by the source-only loader:
 - `schema.py`.
 
 The checked canonical profile ID is
-`phase2b_formal_wire_covert_qualification_profile_v2_c81a345cadb799976b61ca665df7a898436254eb4dc85fa4922f9f880c1ae3ea`,
+`phase2b_formal_wire_covert_qualification_profile_v2_36c8913b900f2feb87e6ca5f6b3855818220498c646560216b55da78a4160ccf`,
 and its dependency-lock SHA-256 is
-`7f524eb9c111315f010efc27d3e73d508da33ebfe52c5b838b35e11dcf25ee8c`.
+`8c375133fb17d484d129464975ed4deb737d8f1e200d850f9ac75f4046bbfa07`.
 The dependency-lock root schema is
 `hegel-machine-phase2b-formal-wire-covert-qualification-dependency-lock/3`,
 and that exact discriminator is also closed inside the profile's lock binding.
 The qualification profile schema is
-`hegel-machine-phase2b-formal-wire-covert-qualification/4`; the profile domain
-and ID prefix remain V2 because the `/4` discriminator is part of the hashed
+`hegel-machine-phase2b-formal-wire-covert-qualification/6`; the profile domain
+and ID prefix remain V2 because the `/6` discriminator is part of the hashed
 canonical content. The development-calibration and live-inner candidate
-schemas are `/4`. Their prior `/3` forms already contained the receipt-build
-elapsed field; `/4` is required because the natural STOP was followed by
-changes to the nested complete-plan, observed/invariant/static-shape roots, and
-their replay grammar. The prior `/3` identities are not reused.
+schemas are `/6`. Their prior `/5` forms predate the exact post-output physical
+gate contract and direct-exit success semantics, so those identities are not
+reused. The outer-supervisor result is `/3`; its prior `/2` form did not carry
+the post-output gate attestation or extracted-child preopened-source map.
 The pinned Auditor contract is
-`hegel-machine-phase2b-formal-covert-auditor/4`, its profile schema is
-`hegel-machine-phase2b-formal-covert-auditor-profile/4`, semantics are
-`phase2b_formal_covert_semantics_627506ef33be3134ee81c2a8bd765e4e7898abd7da9c94660bfc82176b0cbc1f`,
+`hegel-machine-phase2b-formal-covert-auditor/5`, its profile schema is
+`hegel-machine-phase2b-formal-covert-auditor-profile/5`, semantics are
+`phase2b_formal_covert_semantics_d50564375ce978d2ee585662adc6d9ac5c2335aa662214f508897f1076918321`,
 and policy binding
-`phase2b_formal_covert_policy_binding_19c00ee7ccd65d0d11146aab1a1b6b5007a1d5e1cfd97599b26bfb7feb9f2825`.
+`phase2b_formal_covert_policy_binding_122bb24b8d8983a294a66e64c59fd74ac4017eaead1b7888141ff1679ac4272b`.
 
 A direct qualified CLI invocation must begin with CPython `-I -S -B`; missing
 initial flags fail before any project import, business input, output, or
@@ -247,28 +247,52 @@ cross-stage validators against the composite plan.
 
 Every receipt also carries the branch-neutral
 `ReceiptIssuanceRuntimeEvidenceV1`. For an executed QV2 audit its deadline kind
-is `STATISTICS`: `W` is the exact sum of wait4 worker peaks,
-`C = 12 GiB - W`, the recorded pre-finalization parent peak must not exceed
-`C`, and the conservative charge is exactly `C + W = 12 GiB`. The evidence
-records exactly one producer PENDING full replay, exactly one deadline check
-under the receipt-registry lock, a successful locked deadline verdict, and a
-successful locked post-replay parent-peak ceiling verdict. Auditor `/4` also
-defines the insufficient branch as `PARTITION_PREPARATION`, `W=0`, and
-`C=12 GiB`; QV2's two full modes require statistical evidence and therefore do
-not use that branch.
+is `STATISTICS`. The ResourcePlan RSS formulas remain conservative static-plan
+admissibility estimates; they are not the execution-time physical-cap
+authority. Execution authority is the charged high-water value in
+`memory.peak` for one exact unified-cgroup-v2 attempt leaf. The Auditor samples
+that leaf at invariance completion, before both sufficient and insufficient
+receipt-finalization branches, and again under the receipt-registry lock after
+pending validation and immediately before the `ISSUED` transition. Every
+sample must preserve the same canonical membership, scope root, leaf device
+and inode, and finite `memory.max`; `memory.peak` must be at least
+`memory.current`, must not decrease across samples, and must remain at or below
+the independent 12 GiB physical cap. Missing, malformed, noncanonical, or
+identity-drifting cgroup evidence fails closed.
+
+The structural cgroup snapshot does not assume `memory.current <= memory.max`
+or `memory.peak <= memory.max`: cgroup v2 can temporarily report usage above
+the configured hard limit while reclaim and enforcement converge. This does
+not relax acceptance. The Auditor runtime DTOs and QV2 entry, exit, and
+post-output gates separately require the observed peak to remain within the
+12 GiB physical cap.
+
+Parent whole-lifetime `ru_maxrss` and the sum of raw-worker `wait4` peaks remain
+bounded historical diagnostics only. They are retained in the statistical and
+issuance DTOs but are never added together as a physical charge and never
+cause a cap rejection. This avoids double-counting fork-shared pages. A
+physical-cap rejection instead emits one bounded line containing the phase,
+exact scope, current, peak, observed `memory.max`, 12 GiB cap, parent
+historical peak, worker historical sum, and overage. The issuance evidence also records exactly
+one producer PENDING full replay, exactly one deadline check and one final
+physical sample under the registry lock, and successful locked deadline and
+physical-cap verdicts. The statistics phase has one unchanged absolute
+3,600-second deadline created before `_statistics`; the invariance worker keeps
+its 7,200-second wait-boundary deadline.
 
 The inner projection keeps the complete plan and all three complete runtime
 DTOs. One shared executed-runtime-bundle evaluator is used before producer
 projection and by run/measurement, pure retained, two-run, and candidate
-validation. It reconstructs the 56-field plan, then the 20-field statistical
-DTO against that plan, then the 11-field issuance DTO. Every invocation binds
+validation. It reconstructs the 56-field plan, 38-field invariant DTO,
+27-field statistical DTO against that plan, and 18-field issuance DTO. Every invocation binds
 the expected branch mode, exact 1,024 authority rows, and the mode-specific
 frozen concrete-feature count; candidate issuance also binds those values to
 the live Auditor receipt and manifest before release. For full run projections
 it additionally cross-binds visible row/feature counts, invariant resident
 bounds and adapter pin, compact/full invariant counts, roots, artifact digest,
 peak, wall time and cap, statistical worker/artifact cardinalities and resource
-bounds, compact/full statistical digest/peaks/wall/cap/charge/supervisor fields,
+bounds, compact/full statistical digest, historical diagnostics, wall time,
+unified-cgroup scope, physical current/peak/max/cap, and supervisor fields,
 diagnostics, permutation commit/reveal and root grammar, the five-target Holm
 family, and the `5 * concrete_features` pairwise family. The exact Auditor
 transcript-ID grammar is enforced and the audit, issuance, run, measurement,
@@ -291,13 +315,15 @@ receipt registry. No receipt DTO or live full-result object crosses the inner
 process boundary. Each candidate branch retains the complete ResourcePlan
 projection and root before its complete statistical and issuance projections,
 and detached replay now requires the reconstructed plan's `admissible` field to
-be exactly true. Because that semantic gate was added after the V4 natural
-STOP, the local candidate receipt uses the V5 receipt hash domain and
-`phase2b_formal_wire_covert_qualification_receipt_v5_` prefix. Complete and
-observed ResourcePlan roots, complete invariant runtime roots, and static-shape
-roots use V3 prefixes; the static-shape schema is `/3`. Statistical and issuance
-runtime roots remain V3, while the unchanged static ResourcePlan projection
-continues to use its V2 prefix.
+be exactly true. Positive and negative candidate receipts must bind the same
+unified-cgroup membership/scope/leaf identity and finite `memory.max`, and their
+physical peaks are nondecreasing in live mode order. The local candidate
+receipt therefore uses the V6 receipt hash domain and
+`phase2b_formal_wire_covert_qualification_receipt_v6_` prefix. Complete and
+observed ResourcePlan roots and static-shape roots retain V3 prefixes; the
+static-shape schema remains `/3`. Changed invariant, statistical, and issuance
+runtime roots use V4 prefixes, while the unchanged static ResourcePlan
+projection continues to use its V2 prefix.
 
 ## Pending shape and two-revision calibration
 
@@ -341,7 +367,15 @@ construction:
 - runtime-manifest root and size, with null runtime-image digest;
 - RFC-8785 receipt root, SHA, and size;
 - mode order and the 28,800-second hard total; and
-- requested cgroup memory and pids maxima.
+- requested cgroup memory and pids maxima. The attempt's requested
+  `memory.max` must equal the Auditor cap exactly: 12 GiB
+  (`12884901888` bytes). A private-manager or enclosing outer limit may be
+  24 GiB, but it is not serialized in this attempt field and cannot satisfy
+  an attempt value other than exactly 12 GiB.
+
+The manifest has no `schema_version` member. Its canonical identity is the
+root prefix `phase2b_formal_wire_covert_attempt_manifest_v3_`; the prior V2
+root language allowed a looser memory-limit relation and is rejected.
 
 The five qualification-file hashes are attempt inputs. They are not written
 back into the profile, lock, or documentation, which avoids a self-hash cycle.
@@ -392,7 +426,7 @@ manifest, RFC receipt, and raw bundle before output or service launch:
   --source-commit-sha <40-hex> --source-archive <source.tar> \
   --runtime-environment-manifest <runtime-manifest.json> \
   --rfc8785-prerequisite-receipt <rfc-bundle>/receipt.json \
-  --cgroup-memory-max-bytes <finite-bytes> --cgroup-pids-max <finite-count> \
+  --cgroup-memory-max-bytes 12884901888 --cgroup-pids-max <finite-count> \
   > <attempt.json>
 ```
 
@@ -426,7 +460,7 @@ launcher shape is exactly:
 systemd-run --user --pipe --wait --quiet --unit=<fresh-unit> \
   --property=Description=<attempt-bound-marker> \
   --property=Type=exec --property=RemainAfterExit=yes \
-  --property=MemoryMax=<finite-bytes> \
+  --property=MemoryMax=12884901888 \
   --property=TasksMax=<finite-count> \
   --property=RuntimeMaxSec=28800s \
   --property=KillMode=control-group \
@@ -445,6 +479,57 @@ Failure cleanup is TERM, bounded grace, optional KILL, stop, reap, and bounded
 absence. If cleanup cannot be proved, the only terminal is the explicit
 `ATOMIC_FAILURE_CLEANUP_UNPROVEN_EXTERNAL_INTERVENTION_REQUIRED` negative
 state; it is never ordinary closed success.
+
+At live-inner entry and exit, the child independently parses bounded canonical
+cgroup-v2 membership, `memory.current`, `memory.peak`, finite `memory.max`, and
+required memory/pids event rows from its unique visible non-root leaf. Entry
+and exit leaf identities must match, peak must be monotonic, and both accepted
+peaks must be at or below 12 GiB. The requested and observed `memory.max` must
+both equal exactly 12 GiB; the structural reader still tolerates a transient
+counter value above `memory.max` so that the explicit physical gate can emit
+the bounded `FAIL_RESOURCE` diagnostic rather than misclassifying a valid
+kernel state as a parse error. Exit also cross-binds both Auditor receipt scopes,
+leaf identities, maxima, and pre-finalization peaks to the same live leaf and
+requires the full chronology to be nondecreasing: entry peak, positive-mode
+invariance peak, positive receipt peak, negative-mode invariance peak, negative
+receipt peak, then exit peak.
+
+Inner success is linearized only through a post-output, pre-exit sample. The
+child canonicalizes the complete `/6` artifact, writes it to stdout, flushes
+stdout, disables GC, rejects active trace/profile hooks or Python signal
+handlers, freezes the required signal mask, and takes one full snapshot of the
+same cgroup leaf. At that full-snapshot point `memory.events` counters `max`,
+`oom`, and `oom_kill` and `pids.events max` must all be zero; `cgroup.procs`
+must contain only the child, `pids.current` must be one, and both descendant
+counters must be zero. The event-zero claim ends at this full sample.
+
+After the full snapshot, the child fresh-opens the same retained leaf using
+`openat`/`O_NOFOLLOW`, rechecks membership before and after reading
+`memory.peak`, and requires the fresh peak to be monotonic and no greater than
+`12 GiB - 64 MiB = 12817793024` bytes. The 64 MiB reserve is cooperative tail
+headroom, not a formal whole-lifetime upper bound and not a claim that
+`MemoryMax` prevents every transient overage. On success, no return,
+`SystemExit`, interpreter teardown, logging, or further formatted allocation is
+allowed: the already-bound direct `os._exit(0)` is invoked immediately. Any
+failure writes one bounded single-line `FAIL_RESOURCE` diagnostic and exits
+nonzero for outer capture.
+
+No numeric value from the final fresh peak is serialized, and there is no
+post-exit numeric sample. The outer `/3` result instead attests that the pinned
+child source and exact argv implement this gate, the retained stdout is one
+canonical `/6` artifact, stderr is empty, `MemoryMax` is exactly 12 GiB, and
+systemd reports real `CLD_EXITED` semantics (`ExecMainCode=1`,
+`ExecMainStatus=0`). `SuccessExitStatus` cannot substitute for that terminal
+state: the same otherwise-valid stdout followed by exit 86 is atomically
+rejected and retained only in `/failure/4` evidence.
+
+The outer result separately carries the fixed bootstrap-file snapshot map for
+the extracted child source tree and its root. It samples that map before launch
+and after the terminal, requires exact equality, binds the inner interpreter's
+preopened-source root to it, and replays it again from the retained tree in
+both live and producer-free verification. The outer runner's own preopened
+source map is a distinct physical tree/root. The systemd entry `MainPID` must
+equal the single PID in both inner entry and exit cgroup projections.
 
 The current `/failure/4` cleanup command is exactly `systemctl --user kill
 --kill-who=all --signal=SIGTERM|SIGKILL <unit>`, which is the systemd 249 CLI

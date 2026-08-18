@@ -42,7 +42,7 @@ import tempfile
 import threading
 import time
 import unicodedata
-from typing import Final, TypeAlias
+from typing import Callable, Final, TypeAlias
 
 from .hashing import stable_hash
 from .phase2b_freeze_v1 import frozen_phase2b_exact_freeze
@@ -53,9 +53,9 @@ from .rfc8785_v1 import (
 )
 
 
-SCHEMA_VERSION: Final = "hegel-machine-phase2b-formal-covert-auditor/4"
+SCHEMA_VERSION: Final = "hegel-machine-phase2b-formal-covert-auditor/5"
 SEMANTICS_VERSION: Final = (
-    "hegel-machine-phase2b-formal-covert-statistics/7-statistics-phase-deadline-erratum"
+    "hegel-machine-phase2b-formal-covert-statistics/9-cgroup-memory-max-transient-overage-erratum"
 )
 CLAIM_LEVEL: Final = (
     "AUDIT_TRANSCRIPT_ONLY_NOT_AUTHORITY_ORIGIN_NOT_INDEPENDENCE_NOT_ACTUAL_CORPUS"
@@ -83,6 +83,7 @@ MAXIMUM_VALUES_PER_FEATURE: Final = 1_024
 MAXIMUM_LABEL_CLASSES: Final = 256
 MAXIMUM_STATISTICAL_INTERSECTION_WORK_UNITS: Final = 20_000_000_000
 MAXIMUM_ESTIMATED_RSS_BYTES: Final = 12_884_901_888
+MAXIMUM_LINUX_RESOURCE_COUNTER_BYTES: Final = (1 << 63) - 1
 MAXIMUM_TOTAL_STATISTICAL_WORK_UNITS: Final = 50_000_000_000
 MAXIMUM_WIRE_ADAPTER_RETAINED_GRAPH_BYTES: Final = 2_147_483_648
 MAXIMUM_RECOGNIZER_ADAPTER_RETAINED_GRAPH_BYTES: Final = 268_435_456
@@ -108,7 +109,8 @@ INVARIANCE_EXECUTION_CONTAINMENT: Final = (
     "LINUX_SETSID_DIRECT_CHILD_PROCESS_GROUP_EMPTY_AT_EXIT_NOT_CONTINUOUS_"
     "DESCENDANT_PROOF_COOPERATIVE_NO_DAEMONIZE_OR_NEW_SESSION_CONTRACT_"
     "STDIO_FDS_0_1_2_INHERITED_AS_TCB_"
-    "OUTER_ISOLATED_QUALIFICATION_CGROUP_REQUIRED_FOR_EXTERNAL_AGGREGATE_CLAIM"
+    "OUTER_ISOLATED_QUALIFICATION_CGROUP_REQUIRED_FOR_EXTERNAL_EXECUTION_SCOPE_"
+    "PHYSICAL_PEAK_CLAIM"
 )
 PARENT_SIDE_ADAPTER_TCB: Final = (
     "COOPERATIVE_PARENT_IMPLEMENTATION_ID_SCHEMA_RETAINED_BOUND_ALIGNMENT_"
@@ -289,7 +291,8 @@ _SEMANTICS_DESCRIPTOR: Final = (
     "resource_plan_cross_binding=private_invariant_plan_root_copied_into_public_statistics_composite_plan_each_phase_runtime_evidence_replays_projection_from_its_observed_current_and_receipt_reconstructs_only_static_multiplier_tail_cap_margin_and_exact_plan_root_from_the_composite_plan_current_and_projected_values_are_runtime_evidence_not_plan_reconstruction",
     "resource_admissibility_priority=feature_projection_and_invariant_plan_resource_failures_precede_both_branches_then_feature_partition_and_statistics_plan_resource_failures_precede_even_an_insufficient_receipt_no_resource_inadmissible_receipt_is_issued",
     "resource_post_invariance_failure=feature_partition_or_statistics_plan_failure_after_completed_invariance_issues_no_receipt_restores_reservation_and_cleans_auditor_artifacts_but_does_not_claim_zero_recognizer_callbacks_or_malicious_callback_rollback",
-    "resource_runtime_observation=phase_preflight_is_exact_fork_boundary_current_projection_while_final_ru_maxrss_plus_wait4_worker_sum_is_a_whole_process_conservative_gate_that_may_include_earlier_phase_exclusive_peaks",
+    "resource_runtime_observation=phase_preflight_is_exact_fork_boundary_current_projection_parent_whole_lifetime_ru_maxrss_and_wait4_worker_peaks_are_diagnostics_only_bounded_to_signed_64bit_bytes_while_one_exact_unified_cgroup_v2_attempt_leaf_memory_peak_is_the_independent_12GiB_physical_cap_authority",
+    "resource_cgroup_counter_semantics=finite_structural_snapshot_requires_peak_ge_current_but_does_not_assume_current_or_peak_le_memory_max_because_memory_max_may_be_temporarily_exceeded_target_runtime_dtos_and_explicit_gates_still_require_peak_le_12GiB_physical_cap",
     "resource_parent_results=8192_bytes_per_target_feature_hypothesis_plus_1MiB_per_target_bounds_live_artifact_deserialization_diagnostics_probabilities_and_final_dtos",
     "uuid_absence_encoding=absent_is_internal_all_zero_128_bit_value_outside_canonical_uuidv4_domain",
     "provenance_absence_encoding=absent_is_internal_all_zero_32_byte_digest",
@@ -337,9 +340,9 @@ _SEMANTICS_DESCRIPTOR: Final = (
     "fork_integrity_boundary=raw_fork_provides_liveness_resource_and_copy_on_write_state_isolation_not_malicious_callback_integrity_wire_v3_stop_bytes_are_module_hash_pinned_while_recognizer_and_other_adapter_ids_are_only_recorded_cooperatively_stable_tcb_external_cas_or_signature_must_pin_their_exact_bytes",
     "fork_sigchld_boundary=python_sigchld_ignore_is_rejected_selected_lifecycle_and_cancellation_signals_are_blocked_then_sigchld_is_temporarily_default_through_owned_wait4_and_original_disposition_is_restored_before_unblocking_other_parent_signal_handlers_are_cooperative_tcb_external_qualification_requires_fresh_default_signal_dispositions_and_cgroup_pids_containment",
     "artifact_cleanup_boundary=ordinary_paths_remove_private_artifacts_path_replacement_or_unexpected_directory_fails_closed_without_following_or_recursive_deletion_and_may_leave_one_bounded_forensic_temp_directory_for_external_namespace_cleanup",
-    "resource_caps=1024_rows_32768_features_20000000000_intersections_50000000000_total_statistical_work_units_12884901888_aggregate_self_plus_child_rss_bytes",
+    "resource_caps=1024_rows_32768_features_20000000000_intersections_50000000000_total_statistical_work_units_12884901888_static_phase_plan_estimate_bytes_and_12884901888_unified_cgroup_v2_attempt_leaf_memory_peak_physical_cap_bytes",
     "receipt_execution_coverage=nonempty_invariant_and_permutation_roots_81_runs_rows_times_80_times_5_comparisons",
-    "receipt_finalization=unified_issuance_evidence_for_sufficient_and_insufficient_worker_peak_sum_W_sum_wait4_worker_peaks_or_zero_C_cap_minus_W_reject_W_gt_cap_or_prepeak_gt_C_one_construct_full_replay_insert_exact_pending_entry_one_producer_pending_full_replay_capture_validated_id_then_under_one_registry_lock_recheck_exact_pending_and_entry_id_eq_validated_id_eq_candidate_id_run_path_absolute_deadline_checker_immediately_before_postpeak_sample_require_postpeak_le_C_and_flip_issued_no_post_commit_work_else_direct_exact_rollback_no_retry_conservative_charge_C_plus_W",
+    "receipt_finalization=unified_issuance_evidence_for_sufficient_and_insufficient_one_exact_attempt_leaf_cgroup_v2_memory_peak_prefinal_sample_one_construct_full_replay_insert_exact_pending_entry_one_producer_pending_full_replay_capture_validated_id_then_under_one_registry_lock_recheck_exact_pending_entry_id_scope_identity_absolute_deadline_and_monotonic_physical_peak_at_or_below_12GiB_immediately_before_issued_no_post_commit_work_else_direct_exact_rollback_no_retry_parent_and_wait4_peaks_diagnostic_only",
     "receipt_authentication=cooperative_same_process_factory_object_identity_only_not_unforgeability_signature_or_authority",
     "receipt_registry=maximum_8_live_receipts_mutable_exact_entry_pending_to_issued_fsm_public_validate_and_release_require_issued_preallocated_reservation_slot_O1_rollback_no_silent_eviction_atomic_reservation_before_execution",
 )
@@ -3521,6 +3524,63 @@ class _PhaseResourcePreflightEvidenceV1:
 
 
 @dataclass(frozen=True, slots=True)
+class UnifiedCgroupMemorySnapshotV1:
+    unified_membership: str
+    memory_scope_root: str
+    leaf_device: int
+    leaf_inode: int
+    memory_current_bytes: int
+    memory_peak_bytes: int
+    memory_max_bytes: int
+
+    def __post_init__(self) -> None:
+        if type(self) is not UnifiedCgroupMemorySnapshotV1:
+            raise TypeError("unified cgroup memory snapshot must use the exact type")
+        if (
+            type(self.unified_membership) is not str
+            or not 1 < len(self.unified_membership) <= 4_096
+            or re.fullmatch(
+                r"/(?:[A-Za-z0-9_.@:-]+/)*[A-Za-z0-9_.@:-]+",
+                self.unified_membership,
+            )
+            is None
+            or any(
+                component in {"", ".", ".."}
+                for component in self.unified_membership.split("/")[1:]
+            )
+        ):
+            raise ValueError("unified cgroup membership is not one exact non-root leaf")
+        for name in (
+            "leaf_device",
+            "leaf_inode",
+            "memory_current_bytes",
+            "memory_peak_bytes",
+            "memory_max_bytes",
+        ):
+            if type(getattr(self, name)) is not int or getattr(self, name) < 0:
+                raise TypeError("unified cgroup memory counters must be exact integers")
+            if getattr(self, name) > MAXIMUM_LINUX_RESOURCE_COUNTER_BYTES:
+                raise ValueError("unified cgroup memory counters exceed the finite bound")
+        if (
+            self.leaf_device <= 0
+            or self.leaf_inode <= 0
+            or self.memory_max_bytes <= 0
+            or self.memory_peak_bytes < self.memory_current_bytes
+        ):
+            raise ValueError("unified cgroup memory counter/leaf semantics drift")
+        expected_scope = stable_hash(
+            {
+                "leaf_device": self.leaf_device,
+                "leaf_inode": self.leaf_inode,
+                "unified_membership": self.unified_membership,
+            },
+            prefix="phase2b_formal_covert_unified_cgroup_memory_scope_v1_",
+        )
+        if self.memory_scope_root != expected_scope:
+            raise ValueError("unified cgroup memory scope root drift")
+
+
+@dataclass(frozen=True, slots=True)
 class _StatisticalRuntimeEvidenceInputsV1:
     resource_plan_root: str
     resource_preflight: _PhaseResourcePreflightEvidenceV1
@@ -3544,21 +3604,28 @@ class StatisticalRuntimeEvidenceV1:
     system_available_memory_bytes_at_preflight: int
     cgroup_remaining_memory_bytes_at_preflight: int | None
     host_available_memory_bytes_at_preflight: int
-    parent_peak_rss_bytes_before_receipt_finalization: int
-    parent_rss_charge_ceiling_bytes: int
+    parent_historical_peak_rss_bytes_before_receipt_finalization: int
     worker_peak_rss_bytes: tuple[int, ...]
     worker_result_artifact_bytes: tuple[int, ...]
     worker_result_artifact_sha256: tuple[str, ...]
     parent_result_object_graph_bytes_observed: int
-    conservative_parent_plus_worker_peak_sum_bytes: int
+    diagnostic_parent_plus_worker_historical_peak_sum_bytes: int
+    unified_cgroup_membership: str
+    unified_cgroup_memory_scope_root: str
+    unified_cgroup_leaf_device: int
+    unified_cgroup_leaf_inode: int
+    physical_memory_current_bytes_before_receipt_finalization: int
+    physical_memory_peak_bytes_before_receipt_finalization: int
+    physical_memory_max_bytes: int
+    physical_memory_cap_bytes: int
     statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds: int
     worker_timeout_seconds: int
     parent_postprocess_deadline_schema: str
     parent_postprocess_deadline_preemptive: bool
     external_supervisor_required: bool
     receipt_finalization_complete_pending_validation_count: int
-    receipt_finalization_parent_peak_within_charge_ceiling: bool
-    within_frozen_aggregate_cap: bool
+    receipt_finalization_physical_peak_within_cap: bool
+    within_frozen_physical_peak_cap: bool
 
     def __post_init__(self) -> None:
         if type(self) is not StatisticalRuntimeEvidenceV1:
@@ -3580,10 +3647,15 @@ class StatisticalRuntimeEvidenceV1:
         for name in (
             "system_available_memory_bytes_at_preflight",
             "host_available_memory_bytes_at_preflight",
-            "parent_peak_rss_bytes_before_receipt_finalization",
-            "parent_rss_charge_ceiling_bytes",
+            "parent_historical_peak_rss_bytes_before_receipt_finalization",
             "parent_result_object_graph_bytes_observed",
-            "conservative_parent_plus_worker_peak_sum_bytes",
+            "diagnostic_parent_plus_worker_historical_peak_sum_bytes",
+            "unified_cgroup_leaf_device",
+            "unified_cgroup_leaf_inode",
+            "physical_memory_current_bytes_before_receipt_finalization",
+            "physical_memory_peak_bytes_before_receipt_finalization",
+            "physical_memory_max_bytes",
+            "physical_memory_cap_bytes",
             "statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds",
             "worker_timeout_seconds",
             "receipt_finalization_complete_pending_validation_count",
@@ -3594,6 +3666,17 @@ class StatisticalRuntimeEvidenceV1:
             type(item) is not int or item < 0 for item in self.worker_peak_rss_bytes
         ):
             raise TypeError("worker RSS evidence must be an exact integer tuple")
+        if (
+            self.parent_historical_peak_rss_bytes_before_receipt_finalization
+            > MAXIMUM_LINUX_RESOURCE_COUNTER_BYTES
+            or self.diagnostic_parent_plus_worker_historical_peak_sum_bytes
+            > MAXIMUM_LINUX_RESOURCE_COUNTER_BYTES
+            or any(
+                item > MAXIMUM_LINUX_RESOURCE_COUNTER_BYTES
+                for item in self.worker_peak_rss_bytes
+            )
+        ):
+            raise ValueError("statistical historical RSS diagnostics exceed the finite bound")
         if self.cgroup_remaining_memory_bytes_at_preflight is not None and (
             type(self.cgroup_remaining_memory_bytes_at_preflight) is not int
             or self.cgroup_remaining_memory_bytes_at_preflight < 0
@@ -3627,27 +3710,31 @@ class StatisticalRuntimeEvidenceV1:
         ):
             raise ValueError("worker artifact byte/digest evidence cardinality drift")
         worker_peak_sum = sum(self.worker_peak_rss_bytes)
-        if worker_peak_sum > MAXIMUM_ESTIMATED_RSS_BYTES:
-            raise ValueError("statistical worker RSS sum exceeds the frozen cap")
-        expected_parent_charge_ceiling = (
-            MAXIMUM_ESTIMATED_RSS_BYTES - worker_peak_sum
+        if (
+            self.diagnostic_parent_plus_worker_historical_peak_sum_bytes
+            != self.parent_historical_peak_rss_bytes_before_receipt_finalization
+            + worker_peak_sum
+        ):
+            raise ValueError("statistical historical RSS diagnostic sum drift")
+        if (
+            type(self.unified_cgroup_membership) is not str
+            or type(self.unified_cgroup_memory_scope_root) is not str
+            or self.physical_memory_cap_bytes != MAXIMUM_ESTIMATED_RSS_BYTES
+            or self.physical_memory_peak_bytes_before_receipt_finalization
+            < self.physical_memory_current_bytes_before_receipt_finalization
+            or self.physical_memory_peak_bytes_before_receipt_finalization
+            > self.physical_memory_cap_bytes
+        ):
+            raise ValueError("statistical physical memory evidence drift")
+        UnifiedCgroupMemorySnapshotV1(
+            self.unified_cgroup_membership,
+            self.unified_cgroup_memory_scope_root,
+            self.unified_cgroup_leaf_device,
+            self.unified_cgroup_leaf_inode,
+            self.physical_memory_current_bytes_before_receipt_finalization,
+            self.physical_memory_peak_bytes_before_receipt_finalization,
+            self.physical_memory_max_bytes,
         )
-        if self.parent_rss_charge_ceiling_bytes != expected_parent_charge_ceiling:
-            raise ValueError("statistical parent RSS charge ceiling formula drift")
-        if (
-            self.parent_peak_rss_bytes_before_receipt_finalization
-            > self.parent_rss_charge_ceiling_bytes
-        ):
-            raise ValueError(
-                "statistical pre-finalization parent peak exceeds its charge ceiling"
-            )
-        if (
-            self.conservative_parent_plus_worker_peak_sum_bytes
-            != self.parent_rss_charge_ceiling_bytes + worker_peak_sum
-            or self.conservative_parent_plus_worker_peak_sum_bytes
-            > MAXIMUM_ESTIMATED_RSS_BYTES
-        ):
-            raise ValueError("statistical runtime conservative RSS charge drift")
         if self.worker_timeout_seconds != STATISTICS_WORKER_TIMEOUT_SECONDS:
             raise ValueError("statistical runtime timeout drift")
         if self.statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds > (
@@ -3664,17 +3751,17 @@ class StatisticalRuntimeEvidenceV1:
         if (
             self.receipt_finalization_complete_pending_validation_count != 1
             or type(
-                self.receipt_finalization_parent_peak_within_charge_ceiling
+                self.receipt_finalization_physical_peak_within_cap
             )
             is not bool
-            or self.receipt_finalization_parent_peak_within_charge_ceiling is not True
+            or self.receipt_finalization_physical_peak_within_cap is not True
         ):
             raise ValueError("statistical receipt finalization evidence drift")
         if (
-            type(self.within_frozen_aggregate_cap) is not bool
-            or self.within_frozen_aggregate_cap is not True
+            type(self.within_frozen_physical_peak_cap) is not bool
+            or self.within_frozen_physical_peak_cap is not True
         ):
-            raise ValueError("statistical runtime aggregate-cap verdict drift")
+            raise ValueError("statistical runtime physical-peak-cap verdict drift")
 
 
 @dataclass(frozen=True, slots=True)
@@ -3682,14 +3769,21 @@ class ReceiptIssuanceRuntimeEvidenceV1:
     absolute_deadline_kind: str
     absolute_deadline_monotonic_nanoseconds: int
     absolute_deadline_timeout_seconds: int
-    worker_peak_rss_bytes_sum: int
-    parent_peak_rss_bytes_before_receipt_finalization: int
-    parent_rss_charge_ceiling_bytes: int
-    conservative_parent_plus_worker_peak_sum_bytes: int
+    diagnostic_worker_historical_peak_rss_bytes_sum: int
+    diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization: int
+    diagnostic_parent_plus_worker_historical_peak_sum_bytes: int
+    unified_cgroup_membership: str
+    unified_cgroup_memory_scope_root: str
+    unified_cgroup_leaf_device: int
+    unified_cgroup_leaf_inode: int
+    physical_memory_current_bytes_before_receipt_finalization: int
+    physical_memory_peak_bytes_before_receipt_finalization: int
+    physical_memory_max_bytes: int
+    physical_memory_cap_bytes: int
     receipt_finalization_complete_pending_validation_count: int
     receipt_finalization_locked_deadline_check_count: int
     receipt_finalization_locked_deadline_within_absolute_limit: bool
-    receipt_finalization_parent_peak_within_charge_ceiling: bool
+    receipt_finalization_locked_physical_peak_within_cap: bool
 
     def __post_init__(self) -> None:
         if type(self) is not ReceiptIssuanceRuntimeEvidenceV1:
@@ -3705,10 +3799,15 @@ class ReceiptIssuanceRuntimeEvidenceV1:
         for name in (
             "absolute_deadline_monotonic_nanoseconds",
             "absolute_deadline_timeout_seconds",
-            "worker_peak_rss_bytes_sum",
-            "parent_peak_rss_bytes_before_receipt_finalization",
-            "parent_rss_charge_ceiling_bytes",
-            "conservative_parent_plus_worker_peak_sum_bytes",
+            "diagnostic_worker_historical_peak_rss_bytes_sum",
+            "diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization",
+            "diagnostic_parent_plus_worker_historical_peak_sum_bytes",
+            "unified_cgroup_leaf_device",
+            "unified_cgroup_leaf_inode",
+            "physical_memory_current_bytes_before_receipt_finalization",
+            "physical_memory_peak_bytes_before_receipt_finalization",
+            "physical_memory_max_bytes",
+            "physical_memory_cap_bytes",
             "receipt_finalization_complete_pending_validation_count",
             "receipt_finalization_locked_deadline_check_count",
         ):
@@ -3724,23 +3823,37 @@ class ReceiptIssuanceRuntimeEvidenceV1:
         if (
             self.absolute_deadline_monotonic_nanoseconds <= 0
             or self.absolute_deadline_timeout_seconds != expected_timeout
-            or self.worker_peak_rss_bytes_sum > MAXIMUM_ESTIMATED_RSS_BYTES
         ):
-            raise ValueError("receipt issuance deadline/worker bound drift")
-        expected_ceiling = (
-            MAXIMUM_ESTIMATED_RSS_BYTES - self.worker_peak_rss_bytes_sum
+            raise ValueError("receipt issuance deadline evidence drift")
+        if (
+            self.diagnostic_parent_plus_worker_historical_peak_sum_bytes
+            != self.diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization
+            + self.diagnostic_worker_historical_peak_rss_bytes_sum
+        ):
+            raise ValueError("receipt issuance historical RSS diagnostic drift")
+        if any(
+            value > MAXIMUM_LINUX_RESOURCE_COUNTER_BYTES
+            for value in (
+                self.diagnostic_worker_historical_peak_rss_bytes_sum,
+                self.diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization,
+                self.diagnostic_parent_plus_worker_historical_peak_sum_bytes,
+            )
+        ):
+            raise ValueError("receipt issuance historical RSS diagnostics exceed the finite bound")
+        snapshot = UnifiedCgroupMemorySnapshotV1(
+            self.unified_cgroup_membership,
+            self.unified_cgroup_memory_scope_root,
+            self.unified_cgroup_leaf_device,
+            self.unified_cgroup_leaf_inode,
+            self.physical_memory_current_bytes_before_receipt_finalization,
+            self.physical_memory_peak_bytes_before_receipt_finalization,
+            self.physical_memory_max_bytes,
         )
         if (
-            self.parent_rss_charge_ceiling_bytes != expected_ceiling
-            or self.parent_peak_rss_bytes_before_receipt_finalization
-            > self.parent_rss_charge_ceiling_bytes
-            or self.conservative_parent_plus_worker_peak_sum_bytes
-            != self.parent_rss_charge_ceiling_bytes
-            + self.worker_peak_rss_bytes_sum
-            or self.conservative_parent_plus_worker_peak_sum_bytes
-            != MAXIMUM_ESTIMATED_RSS_BYTES
+            self.physical_memory_cap_bytes != MAXIMUM_ESTIMATED_RSS_BYTES
+            or snapshot.memory_peak_bytes > self.physical_memory_cap_bytes
         ):
-            raise ValueError("receipt issuance W/C/prepeak charge formula drift")
+            raise ValueError("receipt issuance physical memory cap drift")
         if (
             self.receipt_finalization_complete_pending_validation_count != 1
             or self.receipt_finalization_locked_deadline_check_count != 1
@@ -3750,10 +3863,10 @@ class ReceiptIssuanceRuntimeEvidenceV1:
             is not bool
             or not self.receipt_finalization_locked_deadline_within_absolute_limit
             or type(
-                self.receipt_finalization_parent_peak_within_charge_ceiling
+                self.receipt_finalization_locked_physical_peak_within_cap
             )
             is not bool
-            or not self.receipt_finalization_parent_peak_within_charge_ceiling
+            or not self.receipt_finalization_locked_physical_peak_within_cap
         ):
             raise ValueError("receipt issuance locked-finalization evidence drift")
 
@@ -3769,11 +3882,18 @@ class InvariantRuntimeEvidenceV1:
     parent_peak_current_rss_bytes_observed: int
     parent_current_rss_bytes_at_completion: int
     parent_historical_peak_rss_bytes: int
-    parent_peak_rss_bytes: int
     worker_peak_rss_bytes: int
     worker_result_artifact_bytes: int
     worker_result_artifact_sha256: str
-    conservative_parent_plus_worker_peak_sum_bytes: int
+    diagnostic_parent_plus_worker_historical_peak_sum_bytes: int
+    unified_cgroup_membership: str
+    unified_cgroup_memory_scope_root: str
+    unified_cgroup_leaf_device: int
+    unified_cgroup_leaf_inode: int
+    physical_memory_current_bytes_at_completion: int
+    physical_memory_peak_bytes_at_completion: int
+    physical_memory_max_bytes: int
+    physical_memory_cap_bytes: int
     invariance_wall_time_nanoseconds: int
     worker_timeout_seconds: int
     invariant_run_count: int
@@ -3790,7 +3910,7 @@ class InvariantRuntimeEvidenceV1:
     parent_side_adapter_sandboxed: bool
     process_group_empty_at_exit: bool
     child_address_space_limit_bytes: int
-    within_frozen_aggregate_cap: bool
+    within_frozen_physical_peak_cap: bool
 
     def __post_init__(self) -> None:
         if type(self) is not InvariantRuntimeEvidenceV1:
@@ -3817,10 +3937,15 @@ class InvariantRuntimeEvidenceV1:
             "parent_peak_current_rss_bytes_observed",
             "parent_current_rss_bytes_at_completion",
             "parent_historical_peak_rss_bytes",
-            "parent_peak_rss_bytes",
             "worker_peak_rss_bytes",
             "worker_result_artifact_bytes",
-            "conservative_parent_plus_worker_peak_sum_bytes",
+            "diagnostic_parent_plus_worker_historical_peak_sum_bytes",
+            "unified_cgroup_leaf_device",
+            "unified_cgroup_leaf_inode",
+            "physical_memory_current_bytes_at_completion",
+            "physical_memory_peak_bytes_at_completion",
+            "physical_memory_max_bytes",
+            "physical_memory_cap_bytes",
             "invariance_wall_time_nanoseconds",
             "worker_timeout_seconds",
             "invariant_run_count",
@@ -3853,10 +3978,19 @@ class InvariantRuntimeEvidenceV1:
             + self.resource_preflight.host_available_memory_safety_margin_bytes
         ):
             raise ValueError("invariant runtime host preflight did not cover final projection")
-        if self.conservative_parent_plus_worker_peak_sum_bytes != (
-            self.parent_peak_rss_bytes + self.worker_peak_rss_bytes
+        if self.diagnostic_parent_plus_worker_historical_peak_sum_bytes != (
+            self.parent_historical_peak_rss_bytes + self.worker_peak_rss_bytes
         ):
-            raise ValueError("invariant conservative RSS sum drift")
+            raise ValueError("invariant historical RSS diagnostic sum drift")
+        if any(
+            value > MAXIMUM_LINUX_RESOURCE_COUNTER_BYTES
+            for value in (
+                self.parent_historical_peak_rss_bytes,
+                self.worker_peak_rss_bytes,
+                self.diagnostic_parent_plus_worker_historical_peak_sum_bytes,
+            )
+        ):
+            raise ValueError("invariant historical RSS diagnostics exceed the finite bound")
         maximum_sampled_current = max(
             self.parent_current_rss_bytes_at_start,
             self.parent_peak_current_rss_bytes_observed,
@@ -3865,11 +3999,23 @@ class InvariantRuntimeEvidenceV1:
         if (
             self.parent_current_rss_bytes_at_start
             != self.resource_preflight.parent_current_rss_bytes_at_preflight
-            or
-            self.parent_peak_rss_bytes != self.parent_historical_peak_rss_bytes
             or self.parent_historical_peak_rss_bytes < maximum_sampled_current
         ):
             raise ValueError("invariant parent current/historical RSS evidence drift")
+        snapshot = UnifiedCgroupMemorySnapshotV1(
+            self.unified_cgroup_membership,
+            self.unified_cgroup_memory_scope_root,
+            self.unified_cgroup_leaf_device,
+            self.unified_cgroup_leaf_inode,
+            self.physical_memory_current_bytes_at_completion,
+            self.physical_memory_peak_bytes_at_completion,
+            self.physical_memory_max_bytes,
+        )
+        if (
+            self.physical_memory_cap_bytes != MAXIMUM_ESTIMATED_RSS_BYTES
+            or snapshot.memory_peak_bytes > self.physical_memory_cap_bytes
+        ):
+            raise ValueError("invariant physical memory cap evidence drift")
         if (
             self.worker_timeout_seconds != INVARIANCE_WORKER_TIMEOUT_SECONDS
             or self.invariance_wall_time_nanoseconds
@@ -3914,15 +4060,11 @@ class InvariantRuntimeEvidenceV1:
             <= MAXIMUM_ESTIMATED_RSS_BYTES
         ):
             raise ValueError("invariant runtime containment evidence drift")
-        expected_cap = (
-            self.conservative_parent_plus_worker_peak_sum_bytes
-            <= MAXIMUM_ESTIMATED_RSS_BYTES
-        )
         if (
-            type(self.within_frozen_aggregate_cap) is not bool
-            or self.within_frozen_aggregate_cap is not expected_cap
+            type(self.within_frozen_physical_peak_cap) is not bool
+            or self.within_frozen_physical_peak_cap is not True
         ):
-            raise ValueError("invariant runtime aggregate-cap verdict drift")
+            raise ValueError("invariant runtime physical-cap verdict drift")
 
 
 @dataclass(frozen=True, slots=True)
@@ -4379,9 +4521,9 @@ class FormalCovertAuditReceiptV1:
             if (
                 self.receipt_issuance_runtime_evidence.absolute_deadline_kind
                 != "PARTITION_PREPARATION"
-                or self.receipt_issuance_runtime_evidence.worker_peak_rss_bytes_sum
+                or self.receipt_issuance_runtime_evidence.diagnostic_worker_historical_peak_rss_bytes_sum
                 != 0
-                or self.receipt_issuance_runtime_evidence.parent_rss_charge_ceiling_bytes
+                or self.receipt_issuance_runtime_evidence.physical_memory_cap_bytes
                 != MAXIMUM_ESTIMATED_RSS_BYTES
             ):
                 raise ValueError(
@@ -4445,7 +4587,7 @@ class FormalCovertAuditReceiptV1:
                 != self.resource_plan.host_available_memory_safety_margin_bytes
                 or self.invariant_runtime_evidence.variant_suite_resident_object_graph_bytes_observed
                 > self.resource_plan.invariance_variant_suite_resident_bytes_bound
-                or not self.invariant_runtime_evidence.within_frozen_aggregate_cap
+                or not self.invariant_runtime_evidence.within_frozen_physical_peak_cap
                 or self.invariant_runtime_evidence.host_available_memory_bytes_at_preflight
                 < self.invariant_runtime_evidence.resource_preflight.projected_aggregate_rss_bytes_at_preflight
                 + self.resource_plan.host_available_memory_safety_margin_bytes
@@ -4597,14 +4739,14 @@ class FormalCovertAuditReceiptV1:
                 > self.resource_plan.parent_result_working_bytes_bound
             ):
                 raise ValueError("parent statistical result graph exceeded its resource bound")
-            if not self.statistics_runtime_evidence.within_frozen_aggregate_cap:
-                raise ValueError("statistical runtime evidence exceeds the aggregate cap")
+            if not self.statistics_runtime_evidence.within_frozen_physical_peak_cap:
+                raise ValueError("statistical runtime evidence exceeds the physical peak cap")
             if (
                 self.statistics_runtime_evidence.parent_postprocess_deadline_preemptive
                 or not self.statistics_runtime_evidence.external_supervisor_required
                 or self.statistics_runtime_evidence.receipt_finalization_complete_pending_validation_count
                 != 1
-                or self.statistics_runtime_evidence.receipt_finalization_parent_peak_within_charge_ceiling
+                or self.statistics_runtime_evidence.receipt_finalization_physical_peak_within_cap
                 is not True
             ):
                 raise ValueError(
@@ -4616,21 +4758,52 @@ class FormalCovertAuditReceiptV1:
             )
             if (
                 issuance.absolute_deadline_kind != "STATISTICS"
-                or issuance.worker_peak_rss_bytes_sum != worker_peak_sum
-                or issuance.parent_peak_rss_bytes_before_receipt_finalization
-                != self.statistics_runtime_evidence.parent_peak_rss_bytes_before_receipt_finalization
-                or issuance.parent_rss_charge_ceiling_bytes
-                != self.statistics_runtime_evidence.parent_rss_charge_ceiling_bytes
-                or issuance.conservative_parent_plus_worker_peak_sum_bytes
-                != self.statistics_runtime_evidence.conservative_parent_plus_worker_peak_sum_bytes
+                or issuance.diagnostic_worker_historical_peak_rss_bytes_sum
+                != worker_peak_sum
+                or issuance.diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization
+                != self.statistics_runtime_evidence.parent_historical_peak_rss_bytes_before_receipt_finalization
+                or issuance.diagnostic_parent_plus_worker_historical_peak_sum_bytes
+                != self.statistics_runtime_evidence.diagnostic_parent_plus_worker_historical_peak_sum_bytes
+                or issuance.unified_cgroup_membership
+                != self.statistics_runtime_evidence.unified_cgroup_membership
+                or issuance.unified_cgroup_memory_scope_root
+                != self.statistics_runtime_evidence.unified_cgroup_memory_scope_root
+                or issuance.unified_cgroup_leaf_device
+                != self.statistics_runtime_evidence.unified_cgroup_leaf_device
+                or issuance.unified_cgroup_leaf_inode
+                != self.statistics_runtime_evidence.unified_cgroup_leaf_inode
+                or issuance.physical_memory_current_bytes_before_receipt_finalization
+                != self.statistics_runtime_evidence.physical_memory_current_bytes_before_receipt_finalization
+                or issuance.physical_memory_peak_bytes_before_receipt_finalization
+                != self.statistics_runtime_evidence.physical_memory_peak_bytes_before_receipt_finalization
+                or issuance.physical_memory_max_bytes
+                != self.statistics_runtime_evidence.physical_memory_max_bytes
+                or issuance.physical_memory_cap_bytes
+                != self.statistics_runtime_evidence.physical_memory_cap_bytes
                 or issuance.receipt_finalization_complete_pending_validation_count
                 != self.statistics_runtime_evidence.receipt_finalization_complete_pending_validation_count
-                or issuance.receipt_finalization_parent_peak_within_charge_ceiling
-                is not self.statistics_runtime_evidence.receipt_finalization_parent_peak_within_charge_ceiling
+                or issuance.receipt_finalization_locked_physical_peak_within_cap
+                is not self.statistics_runtime_evidence.receipt_finalization_physical_peak_within_cap
             ):
                 raise ValueError(
                     "statistical and branch-neutral issuance evidence cross-binding drift"
                 )
+            invariant_scope = self.invariant_runtime_evidence
+            if (
+                invariant_scope.unified_cgroup_membership
+                != issuance.unified_cgroup_membership
+                or invariant_scope.unified_cgroup_memory_scope_root
+                != issuance.unified_cgroup_memory_scope_root
+                or invariant_scope.unified_cgroup_leaf_device
+                != issuance.unified_cgroup_leaf_device
+                or invariant_scope.unified_cgroup_leaf_inode
+                != issuance.unified_cgroup_leaf_inode
+                or invariant_scope.physical_memory_max_bytes
+                != issuance.physical_memory_max_bytes
+                or invariant_scope.physical_memory_peak_bytes_at_completion
+                > issuance.physical_memory_peak_bytes_before_receipt_finalization
+            ):
+                raise ValueError("invariant/statistics physical memory scope binding drift")
             if (
                 self.statistics_runtime_evidence.host_available_memory_bytes_at_preflight
                 < self.statistics_runtime_evidence.resource_preflight.projected_aggregate_rss_bytes_at_preflight
@@ -4931,7 +5104,6 @@ def _commit_pending_formal_covert_audit_receipt_v1(
     validated_id: str,
     absolute_deadline_kind: str,
     absolute_deadline_ns: int,
-    parent_rss_charge_ceiling_bytes: int,
 ) -> FormalCovertAuditReceiptV1:
     """Linearize one exact PENDING receipt after its locked final gates."""
 
@@ -4949,10 +5121,8 @@ def _commit_pending_formal_covert_audit_receipt_v1(
         not in {"STATISTICS", "PARTITION_PREPARATION"}
         or type(absolute_deadline_ns) is not int
         or absolute_deadline_ns <= 0
-        or type(parent_rss_charge_ceiling_bytes) is not int
-        or parent_rss_charge_ceiling_bytes < 0
     ):
-        raise TypeError("pending receipt commit deadline/RSS arguments are invalid")
+        raise TypeError("pending receipt commit deadline arguments are invalid")
     identity = id(receipt)
     issuance = receipt.receipt_issuance_runtime_evidence
     with _IN_PROCESS_RECEIPT_REGISTRY_LOCK:
@@ -4970,8 +5140,6 @@ def _commit_pending_formal_covert_audit_receipt_v1(
             or issuance.absolute_deadline_kind != absolute_deadline_kind
             or issuance.absolute_deadline_monotonic_nanoseconds
             != absolute_deadline_ns
-            or issuance.parent_rss_charge_ceiling_bytes
-            != parent_rss_charge_ceiling_bytes
         ):
             raise ValueError("pending receipt locked commit identity/evidence drift")
         if absolute_deadline_kind == "STATISTICS":
@@ -4980,12 +5148,34 @@ def _commit_pending_formal_covert_audit_receipt_v1(
             _remaining_partition_preparation_deadline_seconds(
                 absolute_deadline_ns
             )
-        parent_peak_after_validation = _linux_peak_rss_bytes()
-        if parent_peak_after_validation > parent_rss_charge_ceiling_bytes:
+        expected_snapshot = UnifiedCgroupMemorySnapshotV1(
+            issuance.unified_cgroup_membership,
+            issuance.unified_cgroup_memory_scope_root,
+            issuance.unified_cgroup_leaf_device,
+            issuance.unified_cgroup_leaf_inode,
+            issuance.physical_memory_current_bytes_before_receipt_finalization,
+            issuance.physical_memory_peak_bytes_before_receipt_finalization,
+            issuance.physical_memory_max_bytes,
+        )
+        locked_parent_historical_peak_rss_bytes = _linux_peak_rss_bytes()
+        locked_snapshot = _capture_unified_cgroup_memory_snapshot_v1()
+        if locked_snapshot.memory_peak_bytes < expected_snapshot.memory_peak_bytes:
             _reject(
-                "FAIL_RECEIPT_ISSUANCE_RUNTIME_RSS",
-                "post-validation parent peak exceeds its RSS charge ceiling",
+                "FAIL_PLATFORM_RESOURCE_SEMANTICS",
+                "unified cgroup memory.peak decreased before locked issuance",
             )
+        _require_unified_cgroup_physical_peak_v1(
+            failure_code="FAIL_RECEIPT_ISSUANCE_RUNTIME_RSS",
+            stage="LOCKED_POST_VALIDATION",
+            snapshot=locked_snapshot,
+            parent_historical_peak_rss_bytes=(
+                locked_parent_historical_peak_rss_bytes
+            ),
+            worker_historical_peak_rss_bytes_sum=(
+                issuance.diagnostic_worker_historical_peak_rss_bytes_sum
+            ),
+            expected_scope=expected_snapshot,
+        )
         entry.state = _InProcessReceiptRegistryStateV1.ISSUED
     return receipt
 
@@ -4996,7 +5186,6 @@ def _issue_formal_covert_audit_receipt_v1(
     _reservation: _InProcessReceiptReservationV1,
     _absolute_deadline_kind: str,
     _absolute_deadline_ns: int,
-    _parent_rss_charge_ceiling_bytes: int,
     **values: object,
 ) -> FormalCovertAuditReceiptV1:
     """Construct, replay, and atomically issue a non-statistical transcript."""
@@ -5022,9 +5211,6 @@ def _issue_formal_covert_audit_receipt_v1(
             validated_id=validated_id,
             absolute_deadline_kind=_absolute_deadline_kind,
             absolute_deadline_ns=_absolute_deadline_ns,
-            parent_rss_charge_ceiling_bytes=(
-                _parent_rss_charge_ceiling_bytes
-            ),
         )
     except BaseException as primary:
         try:
@@ -7013,6 +7199,320 @@ def _parse_cgroup_mount_roots(
                 )
             )
     return tuple(dict.fromkeys(roots))
+
+
+def _read_bounded_ascii_cgroup_file(
+    path: Path,
+    *,
+    name: str,
+    maximum_bytes: int = 65_536,
+) -> str:
+    try:
+        with path.open("rb") as handle:
+            payload = handle.read(maximum_bytes + 1)
+    except OSError as exc:
+        _reject(
+            "FAIL_PLATFORM_RESOURCE_SEMANTICS",
+            f"{name} is unreadable: {type(exc).__name__}",
+        )
+    if len(payload) > maximum_bytes:
+        _reject(
+            "FAIL_PLATFORM_RESOURCE_SEMANTICS",
+            f"{name} exceeds its bounded read",
+        )
+    try:
+        return payload.decode("ascii", errors="strict")
+    except UnicodeError:
+        _reject(
+            "FAIL_PLATFORM_RESOURCE_SEMANTICS",
+            f"{name} is not exact ASCII",
+        )
+
+
+def _parse_exact_cgroup_decimal(value: str, *, name: str, positive: bool) -> int:
+    if re.fullmatch(r"(?:0|[1-9][0-9]*)\n?", value) is None:
+        _reject(
+            "FAIL_PLATFORM_RESOURCE_SEMANTICS",
+            f"{name} is not one canonical finite decimal",
+        )
+    parsed = int(value.removesuffix("\n"))
+    if parsed > MAXIMUM_LINUX_RESOURCE_COUNTER_BYTES:
+        _reject(
+            "FAIL_PLATFORM_RESOURCE_SEMANTICS",
+            f"{name} exceeds the finite resource-counter bound",
+        )
+    if positive and parsed <= 0:
+        _reject(
+            "FAIL_PLATFORM_RESOURCE_SEMANTICS",
+            f"{name} is not positive",
+        )
+    return parsed
+
+
+def _read_unified_cgroup_memory_snapshot_v1(
+    *,
+    proc_cgroup_path: Path = Path("/proc/self/cgroup"),
+    proc_mountinfo_path: Path = Path("/proc/self/mountinfo"),
+) -> UnifiedCgroupMemorySnapshotV1:
+    """Read one exact visible non-root cgroup-v2 leaf without mutating it."""
+
+    membership_text = _read_bounded_ascii_cgroup_file(
+        proc_cgroup_path,
+        name="unified cgroup membership",
+    )
+    membership_rows = membership_text.splitlines()
+    if len(membership_rows) != 1:
+        _reject(
+            "FAIL_PLATFORM_RESOURCE_SEMANTICS",
+            "unified cgroup membership is not one exact row",
+        )
+    match = re.fullmatch(
+        r"0::(/(?:[A-Za-z0-9_.@:-]+/)*[A-Za-z0-9_.@:-]+)",
+        membership_rows[0],
+    )
+    if match is None:
+        _reject(
+            "FAIL_PLATFORM_RESOURCE_SEMANTICS",
+            "unified cgroup membership is not one exact non-root leaf",
+        )
+    membership_text_value = match.group(1)
+    if any(
+        component in {"", ".", ".."}
+        for component in membership_text_value.split("/")[1:]
+    ):
+        _reject(
+            "FAIL_PLATFORM_RESOURCE_SEMANTICS",
+            "unified cgroup membership contains a noncanonical path component",
+        )
+    membership = Path(membership_text_value)
+    mountinfo_text = _read_bounded_ascii_cgroup_file(
+        proc_mountinfo_path,
+        name="cgroup mount inventory",
+        maximum_bytes=1_048_576,
+    )
+    mounts: list[tuple[Path, Path]] = []
+    for row in mountinfo_text.splitlines():
+        halves = row.split(" - ", 1)
+        if len(halves) != 2:
+            if "cgroup2" in row:
+                _reject(
+                    "FAIL_PLATFORM_RESOURCE_SEMANTICS",
+                    "cgroup-v2 mount row is malformed",
+                )
+            continue
+        before = halves[0].split()
+        after = halves[1].split()
+        if not after or after[0] != "cgroup2":
+            continue
+        if len(before) < 6 or len(after) < 3:
+            _reject(
+                "FAIL_PLATFORM_RESOURCE_SEMANTICS",
+                "cgroup-v2 mount row is malformed",
+            )
+        mounts.append(
+            (
+                _decode_mountinfo_path(before[4]),
+                _decode_mountinfo_path(before[3]),
+            )
+        )
+    visible: list[Path] = []
+    for mount_point, filesystem_root in tuple(dict.fromkeys(mounts)):
+        try:
+            relative = membership.relative_to(filesystem_root)
+        except ValueError:
+            continue
+        if relative == Path("."):
+            continue
+        visible.append(mount_point / relative)
+    visible = list(dict.fromkeys(visible))
+    if len(visible) != 1:
+        _reject(
+            "FAIL_PLATFORM_RESOURCE_SEMANTICS",
+            "unified cgroup membership lacks one unique visible leaf",
+        )
+    leaf = visible[0]
+    try:
+        before_stat = leaf.stat(follow_symlinks=False)
+        resolved_leaf = leaf.resolve(strict=True)
+    except OSError as exc:
+        _reject(
+            "FAIL_PLATFORM_RESOURCE_SEMANTICS",
+            f"unified cgroup leaf is unreadable: {type(exc).__name__}",
+        )
+    if not stat.S_ISDIR(before_stat.st_mode) or resolved_leaf != leaf:
+        _reject(
+            "FAIL_PLATFORM_RESOURCE_SEMANTICS",
+            "unified cgroup leaf is not one exact real directory",
+        )
+    values = {
+        name: _parse_exact_cgroup_decimal(
+            _read_bounded_ascii_cgroup_file(
+                leaf / name,
+                name=name,
+                maximum_bytes=4_096,
+            ),
+            name=name,
+            positive=name == "memory.max",
+        )
+        for name in ("memory.current", "memory.peak", "memory.max")
+    }
+    try:
+        after_stat = leaf.stat(follow_symlinks=False)
+    except OSError as exc:
+        _reject(
+            "FAIL_PLATFORM_RESOURCE_SEMANTICS",
+            f"unified cgroup leaf identity disappeared: {type(exc).__name__}",
+        )
+    if (
+        before_stat.st_dev,
+        before_stat.st_ino,
+    ) != (
+        after_stat.st_dev,
+        after_stat.st_ino,
+    ) or _read_bounded_ascii_cgroup_file(
+        proc_cgroup_path,
+        name="unified cgroup membership replay",
+    ) != membership_text:
+        _reject(
+            "FAIL_PLATFORM_RESOURCE_SEMANTICS",
+            "unified cgroup membership or leaf identity drifted during snapshot",
+        )
+    scope_root = stable_hash(
+        {
+            "leaf_device": before_stat.st_dev,
+            "leaf_inode": before_stat.st_ino,
+            "unified_membership": membership_text_value,
+        },
+        prefix="phase2b_formal_covert_unified_cgroup_memory_scope_v1_",
+    )
+    try:
+        snapshot = UnifiedCgroupMemorySnapshotV1(
+            unified_membership=membership_text_value,
+            memory_scope_root=scope_root,
+            leaf_device=before_stat.st_dev,
+            leaf_inode=before_stat.st_ino,
+            memory_current_bytes=values["memory.current"],
+            memory_peak_bytes=values["memory.peak"],
+            memory_max_bytes=values["memory.max"],
+        )
+        snapshot.__post_init__()
+    except (TypeError, ValueError) as exc:
+        _reject(
+            "FAIL_PLATFORM_RESOURCE_SEMANTICS",
+            f"unified cgroup memory snapshot is malformed: {exc}",
+        )
+    return snapshot
+
+
+_UNIFIED_CGROUP_MEMORY_SNAPSHOT_PROVIDER_V1: Callable[
+    [], UnifiedCgroupMemorySnapshotV1
+] = _read_unified_cgroup_memory_snapshot_v1
+
+
+def _capture_unified_cgroup_memory_snapshot_v1() -> UnifiedCgroupMemorySnapshotV1:
+    snapshot = _UNIFIED_CGROUP_MEMORY_SNAPSHOT_PROVIDER_V1()
+    if type(snapshot) is not UnifiedCgroupMemorySnapshotV1:
+        _reject(
+            "FAIL_PLATFORM_RESOURCE_SEMANTICS",
+            "unified cgroup memory snapshot provider returned a non-exact DTO",
+        )
+    snapshot.__post_init__()
+    return snapshot
+
+
+def _same_unified_cgroup_memory_scope_v1(
+    left: UnifiedCgroupMemorySnapshotV1,
+    right: UnifiedCgroupMemorySnapshotV1,
+) -> bool:
+    left.__post_init__()
+    right.__post_init__()
+    return (
+        left.unified_membership,
+        left.memory_scope_root,
+        left.leaf_device,
+        left.leaf_inode,
+        left.memory_max_bytes,
+    ) == (
+        right.unified_membership,
+        right.memory_scope_root,
+        right.leaf_device,
+        right.leaf_inode,
+        right.memory_max_bytes,
+    )
+
+
+def _physical_memory_failure_detail_v1(
+    *,
+    stage: str,
+    snapshot: UnifiedCgroupMemorySnapshotV1,
+    parent_historical_peak_rss_bytes: int,
+    worker_historical_peak_rss_bytes_sum: int,
+) -> str:
+    if (
+        type(stage) is not str
+        or re.fullmatch(r"[A-Z_]{1,64}", stage) is None
+        or type(parent_historical_peak_rss_bytes) is not int
+        or parent_historical_peak_rss_bytes < 0
+        or parent_historical_peak_rss_bytes
+        > MAXIMUM_LINUX_RESOURCE_COUNTER_BYTES
+        or type(worker_historical_peak_rss_bytes_sum) is not int
+        or worker_historical_peak_rss_bytes_sum < 0
+        or worker_historical_peak_rss_bytes_sum
+        > MAXIMUM_LINUX_RESOURCE_COUNTER_BYTES
+    ):
+        raise TypeError("physical memory failure diagnostic arguments are invalid")
+    snapshot.__post_init__()
+    overage = max(
+        0,
+        snapshot.memory_peak_bytes - MAXIMUM_ESTIMATED_RSS_BYTES,
+    )
+    detail = (
+        f"stage={stage};scope={snapshot.memory_scope_root};"
+        f"physical_current_bytes={snapshot.memory_current_bytes};"
+        f"physical_peak_bytes={snapshot.memory_peak_bytes};"
+        f"physical_memory_max_bytes={snapshot.memory_max_bytes};"
+        f"physical_cap_bytes={MAXIMUM_ESTIMATED_RSS_BYTES};"
+        f"parent_historical_peak_rss_bytes={parent_historical_peak_rss_bytes};"
+        f"worker_historical_peak_rss_bytes_sum={worker_historical_peak_rss_bytes_sum};"
+        f"overage_bytes={overage}"
+    )
+    if "\n" in detail or "\r" in detail or len(detail.encode("ascii")) > 1_024:
+        raise RuntimeError("physical memory failure diagnostic is not bounded one-line ASCII")
+    return detail
+
+
+def _require_unified_cgroup_physical_peak_v1(
+    *,
+    failure_code: str,
+    stage: str,
+    snapshot: UnifiedCgroupMemorySnapshotV1,
+    parent_historical_peak_rss_bytes: int,
+    worker_historical_peak_rss_bytes_sum: int,
+    expected_scope: UnifiedCgroupMemorySnapshotV1 | None = None,
+) -> None:
+    snapshot.__post_init__()
+    if expected_scope is not None and not _same_unified_cgroup_memory_scope_v1(
+        expected_scope,
+        snapshot,
+    ):
+        _reject(
+            "FAIL_PLATFORM_RESOURCE_SEMANTICS",
+            "unified cgroup memory scope identity drifted between receipt samples",
+        )
+    if snapshot.memory_peak_bytes > MAXIMUM_ESTIMATED_RSS_BYTES:
+        _reject(
+            failure_code,
+            _physical_memory_failure_detail_v1(
+                stage=stage,
+                snapshot=snapshot,
+                parent_historical_peak_rss_bytes=(
+                    parent_historical_peak_rss_bytes
+                ),
+                worker_historical_peak_rss_bytes_sum=(
+                    worker_historical_peak_rss_bytes_sum
+                ),
+            ),
+        )
 
 
 def _cgroup_mount_roots(
@@ -9497,11 +9997,6 @@ def _statistics(
             "live artifact replay/result DTO graph exceeds its conservative bound",
         )
     worker_peak_sum = sum(worker_peak_rss)
-    if worker_peak_sum > MAXIMUM_ESTIMATED_RSS_BYTES:
-        _reject(
-            "FAIL_STATISTICAL_RUNTIME_RSS",
-            "observed worker RSS sum exceeds the frozen cap",
-        )
     runtime_inputs = _StatisticalRuntimeEvidenceInputsV1(
         resource_plan_root=plan.resource_plan_root,
         resource_preflight=host_memory.resource_preflight,
@@ -10743,12 +11238,17 @@ def _run_invariance(
         )
     parent_current_rss_at_completion = _linux_current_rss_bytes()
     parent_historical_peak_rss = _linux_peak_rss_bytes()
-    # ru_maxrss is intentionally conservative across the entire fresh
-    # qualification process.  The sampled current RSS fields remain useful
-    # phase diagnostics, but cannot be called a peak because a spike may fall
-    # between samples.
-    parent_peak = parent_historical_peak_rss
-    conservative_sum = parent_peak + artifact.worker_peak_rss_bytes
+    diagnostic_historical_sum = (
+        parent_historical_peak_rss + artifact.worker_peak_rss_bytes
+    )
+    physical_snapshot = _capture_unified_cgroup_memory_snapshot_v1()
+    _require_unified_cgroup_physical_peak_v1(
+        failure_code="FAIL_INVARIANCE_RUNTIME_RSS",
+        stage="INVARIANCE_COMPLETION",
+        snapshot=physical_snapshot,
+        parent_historical_peak_rss_bytes=parent_historical_peak_rss,
+        worker_historical_peak_rss_bytes_sum=artifact.worker_peak_rss_bytes,
+    )
     evidence = InvariantRuntimeEvidenceV1(
         invariance_resource_plan_root=plan.plan_root,
         resource_preflight=host_memory.resource_preflight,
@@ -10769,11 +11269,24 @@ def _run_invariance(
             parent_current_rss_at_completion
         ),
         parent_historical_peak_rss_bytes=parent_historical_peak_rss,
-        parent_peak_rss_bytes=parent_peak,
         worker_peak_rss_bytes=artifact.worker_peak_rss_bytes,
         worker_result_artifact_bytes=artifact.serialized_bytes,
         worker_result_artifact_sha256=artifact.sha256,
-        conservative_parent_plus_worker_peak_sum_bytes=conservative_sum,
+        diagnostic_parent_plus_worker_historical_peak_sum_bytes=(
+            diagnostic_historical_sum
+        ),
+        unified_cgroup_membership=physical_snapshot.unified_membership,
+        unified_cgroup_memory_scope_root=physical_snapshot.memory_scope_root,
+        unified_cgroup_leaf_device=physical_snapshot.leaf_device,
+        unified_cgroup_leaf_inode=physical_snapshot.leaf_inode,
+        physical_memory_current_bytes_at_completion=(
+            physical_snapshot.memory_current_bytes
+        ),
+        physical_memory_peak_bytes_at_completion=(
+            physical_snapshot.memory_peak_bytes
+        ),
+        physical_memory_max_bytes=physical_snapshot.memory_max_bytes,
+        physical_memory_cap_bytes=MAXIMUM_ESTIMATED_RSS_BYTES,
         invariance_wall_time_nanoseconds=time.monotonic_ns() - started_ns,
         worker_timeout_seconds=INVARIANCE_WORKER_TIMEOUT_SECONDS,
         invariant_run_count=result.invariant_run_count,
@@ -10794,16 +11307,9 @@ def _run_invariance(
         parent_side_adapter_sandboxed=False,
         process_group_empty_at_exit=True,
         child_address_space_limit_bytes=child_address_space_limit,
-        within_frozen_aggregate_cap=(
-            conservative_sum <= MAXIMUM_ESTIMATED_RSS_BYTES
-        ),
+        within_frozen_physical_peak_cap=True,
     )
     evidence.__post_init__()
-    if not evidence.within_frozen_aggregate_cap:
-        _reject(
-            "FAIL_INVARIANCE_RUNTIME_RSS",
-            "observed invariant parent-plus-worker RSS exceeds the frozen cap",
-        )
     return result, evidence
 
 
@@ -11088,12 +11594,17 @@ def _run_formal_covert_audit_with_reservation_v1(
         _remaining_partition_preparation_deadline_seconds(
             partition_preparation_deadline_ns
         )
-        parent_peak_before_finalization = _linux_peak_rss_bytes()
-        if parent_peak_before_finalization > MAXIMUM_ESTIMATED_RSS_BYTES:
-            _reject(
-                "FAIL_RECEIPT_ISSUANCE_RUNTIME_RSS",
-                "insufficient pre-finalization parent peak exceeds its RSS charge ceiling",
-            )
+        parent_historical_peak_before_finalization = _linux_peak_rss_bytes()
+        physical_snapshot = _capture_unified_cgroup_memory_snapshot_v1()
+        _require_unified_cgroup_physical_peak_v1(
+            failure_code="FAIL_RECEIPT_ISSUANCE_RUNTIME_RSS",
+            stage="INSUFFICIENT_PRE_FINALIZATION",
+            snapshot=physical_snapshot,
+            parent_historical_peak_rss_bytes=(
+                parent_historical_peak_before_finalization
+            ),
+            worker_historical_peak_rss_bytes_sum=0,
+        )
         issuance_evidence = ReceiptIssuanceRuntimeEvidenceV1(
             absolute_deadline_kind="PARTITION_PREPARATION",
             absolute_deadline_monotonic_nanoseconds=(
@@ -11102,25 +11613,35 @@ def _run_formal_covert_audit_with_reservation_v1(
             absolute_deadline_timeout_seconds=(
                 PARTITION_PREPARATION_TIMEOUT_SECONDS
             ),
-            worker_peak_rss_bytes_sum=0,
-            parent_peak_rss_bytes_before_receipt_finalization=(
-                parent_peak_before_finalization
+            diagnostic_worker_historical_peak_rss_bytes_sum=0,
+            diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization=(
+                parent_historical_peak_before_finalization
             ),
-            parent_rss_charge_ceiling_bytes=MAXIMUM_ESTIMATED_RSS_BYTES,
-            conservative_parent_plus_worker_peak_sum_bytes=(
-                MAXIMUM_ESTIMATED_RSS_BYTES
+            diagnostic_parent_plus_worker_historical_peak_sum_bytes=(
+                parent_historical_peak_before_finalization
             ),
+            unified_cgroup_membership=physical_snapshot.unified_membership,
+            unified_cgroup_memory_scope_root=physical_snapshot.memory_scope_root,
+            unified_cgroup_leaf_device=physical_snapshot.leaf_device,
+            unified_cgroup_leaf_inode=physical_snapshot.leaf_inode,
+            physical_memory_current_bytes_before_receipt_finalization=(
+                physical_snapshot.memory_current_bytes
+            ),
+            physical_memory_peak_bytes_before_receipt_finalization=(
+                physical_snapshot.memory_peak_bytes
+            ),
+            physical_memory_max_bytes=physical_snapshot.memory_max_bytes,
+            physical_memory_cap_bytes=MAXIMUM_ESTIMATED_RSS_BYTES,
             receipt_finalization_complete_pending_validation_count=1,
             receipt_finalization_locked_deadline_check_count=1,
             receipt_finalization_locked_deadline_within_absolute_limit=True,
-            receipt_finalization_parent_peak_within_charge_ceiling=True,
+            receipt_finalization_locked_physical_peak_within_cap=True,
         )
         receipt = _issue_formal_covert_audit_receipt_v1(
             _factory_token=_RECEIPT_EXECUTION_FACTORY_TOKEN,
             _reservation=_receipt_reservation,
             _absolute_deadline_kind="PARTITION_PREPARATION",
             _absolute_deadline_ns=partition_preparation_deadline_ns,
-            _parent_rss_charge_ceiling_bytes=MAXIMUM_ESTIMATED_RSS_BYTES,
             disposition=FormalCovertDisposition.REJECT_INSUFFICIENT,
             authority_transcript_root=execution_authority.transcript_root,
             private_alignment_root=private_alignment.alignment_root,
@@ -11243,19 +11764,39 @@ def _run_formal_covert_audit_with_reservation_v1(
     if type(runtime_inputs) is not _StatisticalRuntimeEvidenceInputsV1:
         raise RuntimeError("statistics returned malformed runtime inputs")
     worker_peak_sum = sum(runtime_inputs.worker_peak_rss_bytes)
-    if worker_peak_sum > MAXIMUM_ESTIMATED_RSS_BYTES:
-        _reject(
-            "FAIL_STATISTICAL_RUNTIME_RSS",
-            "receipt finalization worker RSS sum exceeds the frozen cap",
-        )
-    parent_rss_charge_ceiling = MAXIMUM_ESTIMATED_RSS_BYTES - worker_peak_sum
     _remaining_statistics_deadline_seconds(statistics_deadline_ns)
-    parent_peak_before_finalization = _linux_peak_rss_bytes()
-    if parent_peak_before_finalization > parent_rss_charge_ceiling:
+    parent_historical_peak_before_finalization = _linux_peak_rss_bytes()
+    diagnostic_historical_sum = (
+        parent_historical_peak_before_finalization + worker_peak_sum
+    )
+    invariant_physical_snapshot = UnifiedCgroupMemorySnapshotV1(
+        invariant_runtime_evidence.unified_cgroup_membership,
+        invariant_runtime_evidence.unified_cgroup_memory_scope_root,
+        invariant_runtime_evidence.unified_cgroup_leaf_device,
+        invariant_runtime_evidence.unified_cgroup_leaf_inode,
+        invariant_runtime_evidence.physical_memory_current_bytes_at_completion,
+        invariant_runtime_evidence.physical_memory_peak_bytes_at_completion,
+        invariant_runtime_evidence.physical_memory_max_bytes,
+    )
+    physical_snapshot = _capture_unified_cgroup_memory_snapshot_v1()
+    if (
+        physical_snapshot.memory_peak_bytes
+        < invariant_physical_snapshot.memory_peak_bytes
+    ):
         _reject(
-            "FAIL_STATISTICAL_RUNTIME_RSS",
-            "pre-finalization parent peak exceeds its RSS charge ceiling",
+            "FAIL_PLATFORM_RESOURCE_SEMANTICS",
+            "unified cgroup memory.peak decreased after invariance",
         )
+    _require_unified_cgroup_physical_peak_v1(
+        failure_code="FAIL_STATISTICAL_RUNTIME_RSS",
+        stage="STATISTICS_PRE_FINALIZATION",
+        snapshot=physical_snapshot,
+        parent_historical_peak_rss_bytes=(
+            parent_historical_peak_before_finalization
+        ),
+        worker_historical_peak_rss_bytes_sum=worker_peak_sum,
+        expected_scope=invariant_physical_snapshot,
+    )
     runtime_evidence = StatisticalRuntimeEvidenceV1(
         resource_plan_root=runtime_inputs.resource_plan_root,
         resource_preflight=runtime_inputs.resource_preflight,
@@ -11268,10 +11809,9 @@ def _run_formal_covert_audit_with_reservation_v1(
         host_available_memory_bytes_at_preflight=(
             runtime_inputs.host_available_memory_bytes_at_preflight
         ),
-        parent_peak_rss_bytes_before_receipt_finalization=(
-            parent_peak_before_finalization
+        parent_historical_peak_rss_bytes_before_receipt_finalization=(
+            parent_historical_peak_before_finalization
         ),
-        parent_rss_charge_ceiling_bytes=parent_rss_charge_ceiling,
         worker_peak_rss_bytes=runtime_inputs.worker_peak_rss_bytes,
         worker_result_artifact_bytes=runtime_inputs.worker_result_artifact_bytes,
         worker_result_artifact_sha256=(
@@ -11280,9 +11820,21 @@ def _run_formal_covert_audit_with_reservation_v1(
         parent_result_object_graph_bytes_observed=(
             runtime_inputs.parent_result_object_graph_bytes_observed
         ),
-        conservative_parent_plus_worker_peak_sum_bytes=(
-            parent_rss_charge_ceiling + worker_peak_sum
+        diagnostic_parent_plus_worker_historical_peak_sum_bytes=(
+            diagnostic_historical_sum
         ),
+        unified_cgroup_membership=physical_snapshot.unified_membership,
+        unified_cgroup_memory_scope_root=physical_snapshot.memory_scope_root,
+        unified_cgroup_leaf_device=physical_snapshot.leaf_device,
+        unified_cgroup_leaf_inode=physical_snapshot.leaf_inode,
+        physical_memory_current_bytes_before_receipt_finalization=(
+            physical_snapshot.memory_current_bytes
+        ),
+        physical_memory_peak_bytes_before_receipt_finalization=(
+            physical_snapshot.memory_peak_bytes
+        ),
+        physical_memory_max_bytes=physical_snapshot.memory_max_bytes,
+        physical_memory_cap_bytes=MAXIMUM_ESTIMATED_RSS_BYTES,
         statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds=(
             time.monotonic_ns() - statistics_started_ns
         ),
@@ -11295,25 +11847,36 @@ def _run_formal_covert_audit_with_reservation_v1(
         ),
         external_supervisor_required=runtime_inputs.external_supervisor_required,
         receipt_finalization_complete_pending_validation_count=1,
-        receipt_finalization_parent_peak_within_charge_ceiling=True,
-        within_frozen_aggregate_cap=True,
+        receipt_finalization_physical_peak_within_cap=True,
+        within_frozen_physical_peak_cap=True,
     )
     issuance_evidence = ReceiptIssuanceRuntimeEvidenceV1(
         absolute_deadline_kind="STATISTICS",
         absolute_deadline_monotonic_nanoseconds=statistics_deadline_ns,
         absolute_deadline_timeout_seconds=STATISTICS_WORKER_TIMEOUT_SECONDS,
-        worker_peak_rss_bytes_sum=worker_peak_sum,
-        parent_peak_rss_bytes_before_receipt_finalization=(
-            parent_peak_before_finalization
+        diagnostic_worker_historical_peak_rss_bytes_sum=worker_peak_sum,
+        diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization=(
+            parent_historical_peak_before_finalization
         ),
-        parent_rss_charge_ceiling_bytes=parent_rss_charge_ceiling,
-        conservative_parent_plus_worker_peak_sum_bytes=(
-            parent_rss_charge_ceiling + worker_peak_sum
+        diagnostic_parent_plus_worker_historical_peak_sum_bytes=(
+            diagnostic_historical_sum
         ),
+        unified_cgroup_membership=physical_snapshot.unified_membership,
+        unified_cgroup_memory_scope_root=physical_snapshot.memory_scope_root,
+        unified_cgroup_leaf_device=physical_snapshot.leaf_device,
+        unified_cgroup_leaf_inode=physical_snapshot.leaf_inode,
+        physical_memory_current_bytes_before_receipt_finalization=(
+            physical_snapshot.memory_current_bytes
+        ),
+        physical_memory_peak_bytes_before_receipt_finalization=(
+            physical_snapshot.memory_peak_bytes
+        ),
+        physical_memory_max_bytes=physical_snapshot.memory_max_bytes,
+        physical_memory_cap_bytes=MAXIMUM_ESTIMATED_RSS_BYTES,
         receipt_finalization_complete_pending_validation_count=1,
         receipt_finalization_locked_deadline_check_count=1,
         receipt_finalization_locked_deadline_within_absolute_limit=True,
-        receipt_finalization_parent_peak_within_charge_ceiling=True,
+        receipt_finalization_locked_physical_peak_within_cap=True,
     )
     receipt_values["statistics_runtime_evidence"] = runtime_evidence
     receipt_values["receipt_issuance_runtime_evidence"] = issuance_evidence
@@ -11337,7 +11900,6 @@ def _run_formal_covert_audit_with_reservation_v1(
             validated_id=validated_id,
             absolute_deadline_kind="STATISTICS",
             absolute_deadline_ns=statistics_deadline_ns,
-            parent_rss_charge_ceiling_bytes=parent_rss_charge_ceiling,
         )
     except BaseException as primary:
         try:
@@ -11533,6 +12095,7 @@ __all__ = [
     "TargetSufficiencyV1",
     "UNIQUE_ID_FEATURE_FAMILY",
     "TRANSCRIPT_AUTHENTICATION",
+    "UnifiedCgroupMemorySnapshotV1",
     "issue_development_formal_audit_authority_v1",
     "issue_formal_wire_v3_audit_authority_v1",
     "run_formal_covert_audit_v1",

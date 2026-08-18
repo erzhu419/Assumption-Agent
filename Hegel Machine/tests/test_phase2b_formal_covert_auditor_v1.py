@@ -11,6 +11,7 @@ import math
 from inspect import getsource, signature
 import os
 from pathlib import Path
+import re
 import resource
 import signal
 import tempfile
@@ -78,6 +79,37 @@ _PERMUTATION_DOMAIN_ORACLE = (
 _TEST_PERMUTATION_SEED = hashlib.sha256(
     b"phase2b-formal-covert-auditor-e1-deterministic-kat"
 ).digest()
+_TEST_CGROUP_MEMBERSHIP = "/test.slice/auditor-test.scope"
+_TEST_CGROUP_LEAF_DEVICE = 101
+_TEST_CGROUP_LEAF_INODE = 202
+_TEST_CGROUP_MEMORY_MAX = 24 * 1_024 * 1_024 * 1_024
+
+
+def _test_unified_cgroup_memory_snapshot(
+    *,
+    current: int = 64 * 1_024 * 1_024,
+    peak: int = 128 * 1_024 * 1_024,
+    membership: str = _TEST_CGROUP_MEMBERSHIP,
+    leaf_device: int = _TEST_CGROUP_LEAF_DEVICE,
+    leaf_inode: int = _TEST_CGROUP_LEAF_INODE,
+    memory_max: int = _TEST_CGROUP_MEMORY_MAX,
+) -> auditor_module.UnifiedCgroupMemorySnapshotV1:
+    return auditor_module.UnifiedCgroupMemorySnapshotV1(
+        unified_membership=membership,
+        memory_scope_root=stable_hash(
+            {
+                "leaf_device": leaf_device,
+                "leaf_inode": leaf_inode,
+                "unified_membership": membership,
+            },
+            prefix="phase2b_formal_covert_unified_cgroup_memory_scope_v1_",
+        ),
+        leaf_device=leaf_device,
+        leaf_inode=leaf_inode,
+        memory_current_bytes=current,
+        memory_peak_bytes=peak,
+        memory_max_bytes=memory_max,
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -94,6 +126,14 @@ def _freeze_auditor_owned_permutation_seed(monkeypatch: pytest.MonkeyPatch):
         auditor_module,
         "_linux_process_task_ids",
         lambda: (threading.get_native_id(),),
+    )
+    # Ordinary pytest runs in 0::/ where the visible root does not expose the
+    # private attempt leaf's memory.peak.  Production remains fail-closed;
+    # direct Auditor KATs inject one exact immutable leaf snapshot.
+    monkeypatch.setattr(
+        auditor_module,
+        "_UNIFIED_CGROUP_MEMORY_SNAPSHOT_PROVIDER_V1",
+        _test_unified_cgroup_memory_snapshot,
     )
     yield
     # Receipts have an explicit bounded same-process lifecycle.  Tests release
@@ -761,7 +801,11 @@ def _valid_invariant_result(rows: int = 1) -> object:
 
 def test_public_api_has_no_caller_receipts_outputs_seed_or_thresholds():
     assert auditor_module.SCHEMA_VERSION == (
-        "hegel-machine-phase2b-formal-covert-auditor/4"
+        "hegel-machine-phase2b-formal-covert-auditor/5"
+    )
+    assert auditor_module.SEMANTICS_VERSION == (
+        "hegel-machine-phase2b-formal-covert-statistics/9-"
+        "cgroup-memory-max-transient-overage-erratum"
     )
     profile = json.loads(
         (
@@ -771,7 +815,7 @@ def test_public_api_has_no_caller_receipts_outputs_seed_or_thresholds():
         ).read_text(encoding="utf-8")
     )
     assert profile["schema_version"] == (
-        "hegel-machine-phase2b-formal-covert-auditor-profile/4"
+        "hegel-machine-phase2b-formal-covert-auditor-profile/5"
     )
     assert profile["semantics_id"] == SEMANTICS_ID
     assert profile["policy_binding_id"] == POLICY_BINDING_ID
@@ -787,14 +831,21 @@ def test_public_api_has_no_caller_receipts_outputs_seed_or_thresholds():
         "absolute_deadline_kind",
         "absolute_deadline_monotonic_nanoseconds",
         "absolute_deadline_timeout_seconds",
-        "worker_peak_rss_bytes_sum",
-        "parent_peak_rss_bytes_before_receipt_finalization",
-        "parent_rss_charge_ceiling_bytes",
-        "conservative_parent_plus_worker_peak_sum_bytes",
+        "diagnostic_worker_historical_peak_rss_bytes_sum",
+        "diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization",
+        "diagnostic_parent_plus_worker_historical_peak_sum_bytes",
+        "unified_cgroup_membership",
+        "unified_cgroup_memory_scope_root",
+        "unified_cgroup_leaf_device",
+        "unified_cgroup_leaf_inode",
+        "physical_memory_current_bytes_before_receipt_finalization",
+        "physical_memory_peak_bytes_before_receipt_finalization",
+        "physical_memory_max_bytes",
+        "physical_memory_cap_bytes",
         "receipt_finalization_complete_pending_validation_count",
         "receipt_finalization_locked_deadline_check_count",
         "receipt_finalization_locked_deadline_within_absolute_limit",
-        "receipt_finalization_parent_peak_within_charge_ceiling",
+        "receipt_finalization_locked_physical_peak_within_cap",
     )
     assert (
         auditor_module.FormalCovertAuditReceiptV1.__dataclass_fields__[
@@ -813,6 +864,697 @@ def test_public_api_has_no_caller_receipts_outputs_seed_or_thresholds():
         "recognizer_adapter",
     )
     assert validate_frozen_policy_binding_v1() == POLICY_BINDING_ID
+
+
+def _write_unified_cgroup_parser_fixture(
+    root: Path,
+    *,
+    current: str = "4096\n",
+    peak: str = "8192\n",
+    maximum: str = str(24 * 1_024 * 1_024 * 1_024) + "\n",
+) -> tuple[Path, Path, Path]:
+    proc_self = root / "proc" / "self"
+    cgroup_root = root / "cgroup2"
+    leaf = cgroup_root / "test.slice" / "auditor.scope"
+    proc_self.mkdir(parents=True)
+    leaf.mkdir(parents=True)
+    membership = proc_self / "cgroup"
+    mountinfo = proc_self / "mountinfo"
+    membership.write_text("0::/test.slice/auditor.scope\n", encoding="ascii")
+    mountinfo.write_text(
+        f"36 25 0:32 / {cgroup_root} rw,nosuid,nodev - cgroup2 cgroup rw\n",
+        encoding="ascii",
+    )
+    (leaf / "memory.current").write_text(current, encoding="ascii")
+    (leaf / "memory.peak").write_text(peak, encoding="ascii")
+    (leaf / "memory.max").write_text(maximum, encoding="ascii")
+    return membership, mountinfo, leaf
+
+
+def test_unified_cgroup_memory_snapshot_parser_is_exact_and_fail_closed(
+    tmp_path: Path,
+) -> None:
+    membership, mountinfo, leaf = _write_unified_cgroup_parser_fixture(tmp_path)
+    snapshot = auditor_module._read_unified_cgroup_memory_snapshot_v1(
+        proc_cgroup_path=membership,
+        proc_mountinfo_path=mountinfo,
+    )
+    assert snapshot.unified_membership == "/test.slice/auditor.scope"
+    assert snapshot.memory_current_bytes == 4_096
+    assert snapshot.memory_peak_bytes == 8_192
+    assert snapshot.memory_max_bytes == 24 * 1_024 * 1_024 * 1_024
+    snapshot.__post_init__()
+
+    membership.write_text(
+        "0::/test.slice/./auditor.scope\n",
+        encoding="ascii",
+    )
+    with pytest.raises(
+        FormalCovertAuditRejectionV1,
+        match="FAIL_PLATFORM_RESOURCE_SEMANTICS.*noncanonical path component",
+    ):
+        auditor_module._read_unified_cgroup_memory_snapshot_v1(
+            proc_cgroup_path=membership,
+            proc_mountinfo_path=mountinfo,
+        )
+    membership.write_text("0::/test.slice/auditor.scope\n", encoding="ascii")
+
+    (leaf / "memory.peak").unlink()
+    with pytest.raises(
+        FormalCovertAuditRejectionV1,
+        match="FAIL_PLATFORM_RESOURCE_SEMANTICS.*memory.peak is unreadable",
+    ):
+        auditor_module._read_unified_cgroup_memory_snapshot_v1(
+            proc_cgroup_path=membership,
+            proc_mountinfo_path=mountinfo,
+        )
+
+    (leaf / "memory.peak").write_text("not-decimal\n", encoding="ascii")
+    with pytest.raises(
+        FormalCovertAuditRejectionV1,
+        match="FAIL_PLATFORM_RESOURCE_SEMANTICS.*canonical finite decimal",
+    ):
+        auditor_module._read_unified_cgroup_memory_snapshot_v1(
+            proc_cgroup_path=membership,
+            proc_mountinfo_path=mountinfo,
+        )
+
+    (leaf / "memory.peak").write_text(" 8192 \n", encoding="ascii")
+    with pytest.raises(
+        FormalCovertAuditRejectionV1,
+        match="FAIL_PLATFORM_RESOURCE_SEMANTICS.*canonical finite decimal",
+    ):
+        auditor_module._read_unified_cgroup_memory_snapshot_v1(
+            proc_cgroup_path=membership,
+            proc_mountinfo_path=mountinfo,
+        )
+
+    (leaf / "memory.peak").write_text("8192\n\n", encoding="ascii")
+    with pytest.raises(
+        FormalCovertAuditRejectionV1,
+        match="FAIL_PLATFORM_RESOURCE_SEMANTICS.*canonical finite decimal",
+    ):
+        auditor_module._read_unified_cgroup_memory_snapshot_v1(
+            proc_cgroup_path=membership,
+            proc_mountinfo_path=mountinfo,
+        )
+
+    (leaf / "memory.peak").write_text("2048\n", encoding="ascii")
+    with pytest.raises(
+        FormalCovertAuditRejectionV1,
+        match="FAIL_PLATFORM_RESOURCE_SEMANTICS.*snapshot is malformed",
+    ):
+        auditor_module._read_unified_cgroup_memory_snapshot_v1(
+            proc_cgroup_path=membership,
+            proc_mountinfo_path=mountinfo,
+        )
+
+
+@pytest.mark.parametrize(
+    ("peak", "detail"),
+    (
+        ("max\n", "canonical finite decimal"),
+        (f"{1 << 63}\n", "finite resource-counter bound"),
+        ("08192\n", "canonical finite decimal"),
+    ),
+    ids=("max-token", "two-to-63", "leading-zero"),
+)
+def test_unified_cgroup_memory_peak_rejects_nonfinite_or_noncanonical_values(
+    tmp_path: Path,
+    peak: str,
+    detail: str,
+) -> None:
+    membership, mountinfo, _leaf = _write_unified_cgroup_parser_fixture(
+        tmp_path,
+        peak=peak,
+    )
+    with pytest.raises(
+        FormalCovertAuditRejectionV1,
+        match=rf"FAIL_PLATFORM_RESOURCE_SEMANTICS.*{detail}",
+    ):
+        auditor_module._read_unified_cgroup_memory_snapshot_v1(
+            proc_cgroup_path=membership,
+            proc_mountinfo_path=mountinfo,
+        )
+
+
+def test_unified_cgroup_parser_rejects_duplicate_visible_v2_mounts(
+    tmp_path: Path,
+) -> None:
+    membership, mountinfo, _leaf = _write_unified_cgroup_parser_fixture(tmp_path)
+    first_mount = tmp_path / "cgroup2"
+    second_mount = tmp_path / "second-cgroup2"
+    mountinfo.write_text(
+        f"36 25 0:32 / {first_mount} rw,nosuid,nodev - cgroup2 cgroup rw\n"
+        f"37 25 0:33 / {second_mount} rw,nosuid,nodev - cgroup2 cgroup rw\n",
+        encoding="ascii",
+    )
+    with pytest.raises(
+        FormalCovertAuditRejectionV1,
+        match=(
+            "FAIL_PLATFORM_RESOURCE_SEMANTICS.*"
+            "lacks one unique visible leaf"
+        ),
+    ):
+        auditor_module._read_unified_cgroup_memory_snapshot_v1(
+            proc_cgroup_path=membership,
+            proc_mountinfo_path=mountinfo,
+        )
+
+
+def test_unified_cgroup_parser_rejects_symlink_leaf(tmp_path: Path) -> None:
+    membership, mountinfo, leaf = _write_unified_cgroup_parser_fixture(tmp_path)
+    relocated = tmp_path / "relocated-auditor.scope"
+    leaf.rename(relocated)
+    leaf.symlink_to(relocated, target_is_directory=True)
+    with pytest.raises(
+        FormalCovertAuditRejectionV1,
+        match=(
+            "FAIL_PLATFORM_RESOURCE_SEMANTICS.*"
+            "leaf is not one exact real directory"
+        ),
+    ):
+        auditor_module._read_unified_cgroup_memory_snapshot_v1(
+            proc_cgroup_path=membership,
+            proc_mountinfo_path=mountinfo,
+        )
+
+
+def test_unified_cgroup_parser_projects_nonroot_filesystem_mount_root(
+    tmp_path: Path,
+) -> None:
+    membership, mountinfo, leaf = _write_unified_cgroup_parser_fixture(tmp_path)
+    membership.write_text(
+        "0::/delegated/test.slice/auditor.scope\n",
+        encoding="ascii",
+    )
+    mountinfo.write_text(
+        f"36 25 0:32 /delegated {tmp_path / 'cgroup2'} "
+        "rw,nosuid,nodev - cgroup2 cgroup rw\n",
+        encoding="ascii",
+    )
+    snapshot = auditor_module._read_unified_cgroup_memory_snapshot_v1(
+        proc_cgroup_path=membership,
+        proc_mountinfo_path=mountinfo,
+    )
+    assert leaf.is_dir()
+    assert snapshot.unified_membership == "/delegated/test.slice/auditor.scope"
+    assert snapshot.memory_current_bytes == 4_096
+    assert snapshot.memory_peak_bytes == 8_192
+    assert snapshot.memory_max_bytes == 24 * 1_024 * 1_024 * 1_024
+
+
+def test_unified_cgroup_scope_drift_fails_closed() -> None:
+    expected = _test_unified_cgroup_memory_snapshot()
+    drifted = _test_unified_cgroup_memory_snapshot(leaf_inode=203)
+    with pytest.raises(
+        FormalCovertAuditRejectionV1,
+        match="FAIL_PLATFORM_RESOURCE_SEMANTICS.*scope identity drifted",
+    ):
+        auditor_module._require_unified_cgroup_physical_peak_v1(
+            failure_code="FAIL_STATISTICAL_RUNTIME_RSS",
+            stage="STATISTICS_PRE_FINALIZATION",
+            snapshot=drifted,
+            parent_historical_peak_rss_bytes=1,
+            worker_historical_peak_rss_bytes_sum=2,
+            expected_scope=expected,
+        )
+
+
+def test_physical_peak_cap_failure_has_exact_bounded_persistent_diagnostic() -> None:
+    snapshot = _test_unified_cgroup_memory_snapshot(
+        current=auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES,
+        peak=auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES + 1,
+    )
+    with pytest.raises(FormalCovertAuditRejectionV1) as captured:
+        auditor_module._require_unified_cgroup_physical_peak_v1(
+            failure_code="FAIL_STATISTICAL_RUNTIME_RSS",
+            stage="STATISTICS_PRE_FINALIZATION",
+            snapshot=snapshot,
+            parent_historical_peak_rss_bytes=7,
+            worker_historical_peak_rss_bytes_sum=11,
+        )
+    expected_detail = (
+        "stage=STATISTICS_PRE_FINALIZATION;"
+        f"scope={snapshot.memory_scope_root};"
+        "physical_current_bytes=12884901888;"
+        "physical_peak_bytes=12884901889;"
+        "physical_memory_max_bytes=25769803776;"
+        "physical_cap_bytes=12884901888;"
+        "parent_historical_peak_rss_bytes=7;"
+        "worker_historical_peak_rss_bytes_sum=11;overage_bytes=1"
+    )
+    assert captured.value.code == "FAIL_STATISTICAL_RUNTIME_RSS"
+    assert captured.value.detail == expected_detail
+    assert str(captured.value) == f"FAIL_STATISTICAL_RUNTIME_RSS: {expected_detail}"
+    assert "\n" not in expected_detail
+    assert len(expected_detail.encode("ascii")) <= 1_024
+
+
+def test_transient_current_and_peak_above_memory_max_are_structural_but_cap_gated(
+) -> None:
+    cap = auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+    snapshot = _test_unified_cgroup_memory_snapshot(
+        current=cap + 1,
+        peak=cap + 2,
+        memory_max=cap,
+    )
+    assert snapshot.memory_current_bytes > snapshot.memory_max_bytes
+    assert snapshot.memory_peak_bytes > snapshot.memory_max_bytes
+    with pytest.raises(FormalCovertAuditRejectionV1) as captured:
+        auditor_module._require_unified_cgroup_physical_peak_v1(
+            failure_code="FAIL_STATISTICAL_RUNTIME_RSS",
+            stage="STATISTICS_PRE_FINALIZATION",
+            snapshot=snapshot,
+            parent_historical_peak_rss_bytes=3,
+            worker_historical_peak_rss_bytes_sum=5,
+        )
+    expected_detail = (
+        "stage=STATISTICS_PRE_FINALIZATION;"
+        f"scope={snapshot.memory_scope_root};"
+        "physical_current_bytes=12884901889;"
+        "physical_peak_bytes=12884901890;"
+        "physical_memory_max_bytes=12884901888;"
+        "physical_cap_bytes=12884901888;"
+        "parent_historical_peak_rss_bytes=3;"
+        "worker_historical_peak_rss_bytes_sum=5;overage_bytes=2"
+    )
+    assert captured.value.code == "FAIL_STATISTICAL_RUNTIME_RSS"
+    assert captured.value.detail == expected_detail
+    with pytest.raises(ValueError, match="counter/leaf semantics drift"):
+        _test_unified_cgroup_memory_snapshot(
+            current=cap + 2,
+            peak=cap + 1,
+            memory_max=cap,
+        )
+
+
+def test_statistics_dto_allows_peak_above_memory_max_only_within_physical_cap(
+) -> None:
+    receipt = _run_issuance_branch("sufficient")
+    statistics = receipt.statistics_runtime_evidence
+    assert statistics is not None
+    cap = auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+    transient = replace(
+        statistics,
+        physical_memory_current_bytes_before_receipt_finalization=cap - 1,
+        physical_memory_peak_bytes_before_receipt_finalization=cap,
+        physical_memory_max_bytes=cap - 2,
+    )
+    assert transient.physical_memory_peak_bytes_before_receipt_finalization == cap
+    assert (
+        transient.physical_memory_peak_bytes_before_receipt_finalization
+        > transient.physical_memory_max_bytes
+    )
+    with pytest.raises(ValueError, match="statistical physical memory evidence drift"):
+        replace(
+            statistics,
+            physical_memory_current_bytes_before_receipt_finalization=cap,
+            physical_memory_peak_bytes_before_receipt_finalization=cap + 1,
+            physical_memory_max_bytes=cap - 2,
+        )
+    auditor_module.release_formal_covert_audit_receipt_v1(receipt)
+
+
+def test_insufficient_receipt_issuance_dto_rejects_physical_peak_above_cap(
+) -> None:
+    receipt = _run_issuance_branch("insufficient")
+    issuance = receipt.receipt_issuance_runtime_evidence
+    assert issuance is not None
+    cap = auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+    with pytest.raises(
+        ValueError, match="receipt issuance physical memory cap drift"
+    ):
+        replace(
+            issuance,
+            physical_memory_current_bytes_before_receipt_finalization=cap,
+            physical_memory_peak_bytes_before_receipt_finalization=cap + 1,
+        )
+    original_current = (
+        issuance.physical_memory_current_bytes_before_receipt_finalization
+    )
+    original_peak = issuance.physical_memory_peak_bytes_before_receipt_finalization
+    try:
+        object.__setattr__(
+            issuance,
+            "physical_memory_current_bytes_before_receipt_finalization",
+            cap,
+        )
+        object.__setattr__(
+            issuance,
+            "physical_memory_peak_bytes_before_receipt_finalization",
+            cap + 1,
+        )
+        with pytest.raises(
+            ValueError, match="receipt issuance physical memory cap drift"
+        ):
+            validate_formal_covert_audit_receipt_v1(receipt)
+    finally:
+        object.__setattr__(
+            issuance,
+            "physical_memory_current_bytes_before_receipt_finalization",
+            original_current,
+        )
+        object.__setattr__(
+            issuance,
+            "physical_memory_peak_bytes_before_receipt_finalization",
+            original_peak,
+        )
+    assert validate_formal_covert_audit_receipt_v1(receipt) == receipt.receipt_id
+    auditor_module.release_formal_covert_audit_receipt_v1(receipt)
+
+
+def test_resource_counter_diagnostics_are_bounded_at_signed_64_bit_maximum() -> None:
+    maximum = auditor_module.MAXIMUM_LINUX_RESOURCE_COUNTER_BYTES
+    bounded_snapshot = _test_unified_cgroup_memory_snapshot(
+        current=maximum,
+        peak=maximum,
+        memory_max=maximum,
+    )
+    bounded_snapshot.__post_init__()
+    with pytest.raises(ValueError, match="exceed the finite bound"):
+        _test_unified_cgroup_memory_snapshot(
+            current=maximum + 1,
+            peak=maximum + 1,
+            memory_max=maximum + 1,
+        )
+
+    receipt = _run_issuance_branch("sufficient")
+    statistics = receipt.statistics_runtime_evidence
+    assert statistics is not None
+    zero_workers = (0,) * len(statistics.worker_peak_rss_bytes)
+    replace(
+        statistics,
+        parent_historical_peak_rss_bytes_before_receipt_finalization=maximum,
+        worker_peak_rss_bytes=zero_workers,
+        diagnostic_parent_plus_worker_historical_peak_sum_bytes=maximum,
+    )
+    with pytest.raises(ValueError, match="diagnostics exceed the finite bound"):
+        replace(
+            statistics,
+            parent_historical_peak_rss_bytes_before_receipt_finalization=maximum
+            + 1,
+            worker_peak_rss_bytes=zero_workers,
+            diagnostic_parent_plus_worker_historical_peak_sum_bytes=maximum
+            + 1,
+        )
+    one_max_worker = (maximum,) + zero_workers[1:]
+    replace(
+        statistics,
+        parent_historical_peak_rss_bytes_before_receipt_finalization=0,
+        worker_peak_rss_bytes=one_max_worker,
+        diagnostic_parent_plus_worker_historical_peak_sum_bytes=maximum,
+    )
+    with pytest.raises(ValueError, match="diagnostics exceed the finite bound"):
+        replace(
+            statistics,
+            parent_historical_peak_rss_bytes_before_receipt_finalization=0,
+            worker_peak_rss_bytes=(maximum + 1,) + zero_workers[1:],
+            diagnostic_parent_plus_worker_historical_peak_sum_bytes=maximum + 1,
+        )
+    auditor_module.release_formal_covert_audit_receipt_v1(receipt)
+
+
+def test_historical_worker_sum_above_cap_is_diagnostic_when_physical_peak_passes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        auditor_module,
+        "_raw_child_rusage_peak_bytes",
+        lambda usage, *, child_label="raw child": (
+            auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES + 1_024
+        ),
+    )
+    receipt = _run_issuance_branch("sufficient")
+    statistics = receipt.statistics_runtime_evidence
+    assert statistics is not None
+    assert sum(statistics.worker_peak_rss_bytes) > (
+        auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+    )
+    assert statistics.within_frozen_physical_peak_cap is True
+    assert statistics.physical_memory_peak_bytes_before_receipt_finalization < (
+        auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+    )
+    auditor_module.release_formal_covert_audit_receipt_v1(receipt)
+
+
+def test_parent_ru_maxrss_above_cap_is_diagnostic_when_sufficient_physical_peak_passes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    historical_peak = auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES + 1
+    monkeypatch.setattr(
+        auditor_module,
+        "_linux_peak_rss_bytes",
+        lambda: historical_peak,
+    )
+    receipt = _run_issuance_branch("sufficient")
+    statistics = receipt.statistics_runtime_evidence
+    issuance = receipt.receipt_issuance_runtime_evidence
+    assert statistics is not None
+    assert (
+        statistics.parent_historical_peak_rss_bytes_before_receipt_finalization
+        == historical_peak
+    )
+    assert statistics.diagnostic_parent_plus_worker_historical_peak_sum_bytes > (
+        auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+    )
+    assert statistics.within_frozen_physical_peak_cap is True
+    assert statistics.physical_memory_peak_bytes_before_receipt_finalization < (
+        statistics.physical_memory_cap_bytes
+    )
+    assert (
+        issuance.diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization
+        == historical_peak
+    )
+    assert issuance.receipt_finalization_locked_physical_peak_within_cap is True
+    auditor_module.release_formal_covert_audit_receipt_v1(receipt)
+
+
+@pytest.mark.parametrize("branch", ("sufficient", "insufficient"))
+@pytest.mark.parametrize("failure_stage", ("pre", "locked"))
+def test_physical_peak_cap_plus_one_rejects_with_exact_diagnostics_and_o1_rollback(
+    monkeypatch: pytest.MonkeyPatch,
+    branch: str,
+    failure_stage: str,
+) -> None:
+    low = _test_unified_cgroup_memory_snapshot()
+    high = _test_unified_cgroup_memory_snapshot(
+        current=auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES,
+        peak=auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES + 1,
+    )
+    sequence = (
+        [low, high]
+        if branch == "sufficient" and failure_stage == "pre"
+        else [low, low, high]
+        if branch == "sufficient"
+        else [high]
+        if failure_stage == "pre"
+        else [low, high]
+    )
+    iterator = iter(sequence)
+    monkeypatch.setattr(
+        auditor_module,
+        "_UNIFIED_CGROUP_MEMORY_SNAPSHOT_PROVIDER_V1",
+        lambda: next(iterator),
+    )
+    with pytest.raises(FormalCovertAuditRejectionV1) as captured:
+        _run_issuance_branch(branch)
+    expected_stage = (
+        "STATISTICS_PRE_FINALIZATION"
+        if branch == "sufficient" and failure_stage == "pre"
+        else "INSUFFICIENT_PRE_FINALIZATION"
+        if failure_stage == "pre"
+        else "LOCKED_POST_VALIDATION"
+    )
+    expected_code = (
+        "FAIL_STATISTICAL_RUNTIME_RSS"
+        if branch == "sufficient" and failure_stage == "pre"
+        else "FAIL_RECEIPT_ISSUANCE_RUNTIME_RSS"
+    )
+    match = re.fullmatch(
+        rf"stage={expected_stage};scope={re.escape(high.memory_scope_root)};"
+        r"physical_current_bytes=12884901888;"
+        r"physical_peak_bytes=12884901889;"
+        r"physical_memory_max_bytes=25769803776;"
+        r"physical_cap_bytes=12884901888;"
+        r"parent_historical_peak_rss_bytes=([0-9]+);"
+        r"worker_historical_peak_rss_bytes_sum=([0-9]+);overage_bytes=1",
+        captured.value.detail,
+    )
+    assert captured.value.code == expected_code
+    assert match is not None
+    assert captured.value.detail == auditor_module._physical_memory_failure_detail_v1(
+        stage=expected_stage,
+        snapshot=high,
+        parent_historical_peak_rss_bytes=int(match.group(1)),
+        worker_historical_peak_rss_bytes_sum=int(match.group(2)),
+    )
+    assert str(captured.value) == f"{expected_code}: {captured.value.detail}"
+    assert "\n" not in captured.value.detail
+    assert len(captured.value.detail.encode("ascii")) <= 1_024
+    assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
+    assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
+
+
+def test_sufficient_pre_final_sample_rejects_peak_decrease_from_invariance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    invariant = _test_unified_cgroup_memory_snapshot(peak=128 * 1_024 * 1_024)
+    decreased = _test_unified_cgroup_memory_snapshot(
+        current=64 * 1_024 * 1_024,
+        peak=invariant.memory_peak_bytes - 1,
+    )
+    snapshots = iter((invariant, decreased))
+    monkeypatch.setattr(
+        auditor_module,
+        "_UNIFIED_CGROUP_MEMORY_SNAPSHOT_PROVIDER_V1",
+        lambda: next(snapshots),
+    )
+    with pytest.raises(
+        FormalCovertAuditRejectionV1,
+        match=(
+            "FAIL_PLATFORM_RESOURCE_SEMANTICS.*"
+            "memory.peak decreased after invariance"
+        ),
+    ):
+        _run_issuance_branch("sufficient")
+    assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
+    assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
+
+
+@pytest.mark.parametrize("branch", ("sufficient", "insufficient"))
+def test_locked_sample_rejects_peak_decrease_from_pre_final_sample(
+    monkeypatch: pytest.MonkeyPatch,
+    branch: str,
+) -> None:
+    invariant = _test_unified_cgroup_memory_snapshot(peak=127 * 1_024 * 1_024)
+    pre_final = _test_unified_cgroup_memory_snapshot(peak=128 * 1_024 * 1_024)
+    decreased = _test_unified_cgroup_memory_snapshot(
+        current=64 * 1_024 * 1_024,
+        peak=pre_final.memory_peak_bytes - 1,
+    )
+    sequence = (
+        (invariant, pre_final, decreased)
+        if branch == "sufficient"
+        else (pre_final, decreased)
+    )
+    snapshots = iter(sequence)
+    monkeypatch.setattr(
+        auditor_module,
+        "_UNIFIED_CGROUP_MEMORY_SNAPSHOT_PROVIDER_V1",
+        lambda: next(snapshots),
+    )
+    with pytest.raises(
+        FormalCovertAuditRejectionV1,
+        match=(
+            "FAIL_PLATFORM_RESOURCE_SEMANTICS.*"
+            "memory.peak decreased before locked issuance"
+        ),
+    ):
+        _run_issuance_branch(branch)
+    assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
+    assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
+
+
+@pytest.mark.parametrize(
+    ("gate", "sample_count"),
+    (
+        ("sufficient-pre", 2),
+        ("sufficient-locked", 3),
+        ("insufficient-locked", 2),
+    ),
+)
+@pytest.mark.parametrize(
+    "drift",
+    ("membership", "device", "inode", "memory-max"),
+)
+def test_each_receipt_physical_gate_rejects_scope_or_memory_max_drift(
+    monkeypatch: pytest.MonkeyPatch,
+    gate: str,
+    sample_count: int,
+    drift: str,
+) -> None:
+    baseline = _test_unified_cgroup_memory_snapshot()
+    drifted = (
+        _test_unified_cgroup_memory_snapshot(membership="/test.slice/drift.scope")
+        if drift == "membership"
+        else _test_unified_cgroup_memory_snapshot(leaf_device=303)
+        if drift == "device"
+        else _test_unified_cgroup_memory_snapshot(leaf_inode=404)
+        if drift == "inode"
+        else _test_unified_cgroup_memory_snapshot(
+            memory_max=_TEST_CGROUP_MEMORY_MAX + 1
+        )
+    )
+    sequence = (
+        (baseline, drifted)
+        if gate == "sufficient-pre"
+        else (baseline, baseline, drifted)
+        if gate == "sufficient-locked"
+        else (baseline, drifted)
+    )
+    calls = 0
+
+    def next_snapshot() -> auditor_module.UnifiedCgroupMemorySnapshotV1:
+        nonlocal calls
+        snapshot = sequence[calls]
+        calls += 1
+        return snapshot
+
+    monkeypatch.setattr(
+        auditor_module,
+        "_UNIFIED_CGROUP_MEMORY_SNAPSHOT_PROVIDER_V1",
+        next_snapshot,
+    )
+    with pytest.raises(
+        FormalCovertAuditRejectionV1,
+        match=(
+            "FAIL_PLATFORM_RESOURCE_SEMANTICS.*"
+            "scope identity drifted between receipt samples"
+        ),
+    ):
+        _run_issuance_branch(
+            "insufficient" if gate == "insufficient-locked" else "sufficient"
+        )
+    assert calls == sample_count
+    assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
+    assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
+
+
+def test_invariance_completion_physical_peak_cap_plus_one_rejects_exactly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    high = _test_unified_cgroup_memory_snapshot(
+        current=auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES,
+        peak=auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES + 1,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_UNIFIED_CGROUP_MEMORY_SNAPSHOT_PROVIDER_V1",
+        lambda: high,
+    )
+    with pytest.raises(FormalCovertAuditRejectionV1) as captured:
+        _run_issuance_branch("sufficient")
+    match = re.fullmatch(
+        rf"stage=INVARIANCE_COMPLETION;scope={re.escape(high.memory_scope_root)};"
+        r"physical_current_bytes=12884901888;"
+        r"physical_peak_bytes=12884901889;"
+        r"physical_memory_max_bytes=25769803776;"
+        r"physical_cap_bytes=12884901888;"
+        r"parent_historical_peak_rss_bytes=([0-9]+);"
+        r"worker_historical_peak_rss_bytes_sum=([0-9]+);overage_bytes=1",
+        captured.value.detail,
+    )
+    assert captured.value.code == "FAIL_INVARIANCE_RUNTIME_RSS"
+    assert match is not None
+    assert captured.value.detail == auditor_module._physical_memory_failure_detail_v1(
+        stage="INVARIANCE_COMPLETION",
+        snapshot=high,
+        parent_historical_peak_rss_bytes=int(match.group(1)),
+        worker_historical_peak_rss_bytes_sum=int(match.group(2)),
+    )
+    assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
+    assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
 
 
 def test_public_receipt_constructor_cannot_impersonate_execution_issuance():
@@ -972,7 +1714,7 @@ def test_receipt_registry_insert_failure_and_rollbacks_are_exact_and_o1(
         assert "tuple(" not in source
 
 
-def test_receipt_finalization_charge_ceiling_accepts_rising_peaks_and_is_closed(
+def test_receipt_finalization_physical_peak_accepts_rising_diagnostics_and_is_closed(
     monkeypatch: pytest.MonkeyPatch,
 ):
     baseline_peak = auditor_module._linux_peak_rss_bytes()
@@ -993,11 +1735,15 @@ def test_receipt_finalization_charge_ceiling_accepts_rising_peaks_and_is_closed(
     real_feature_projection = auditor_module._target_feature_metric_projection
     real_family_projection = auditor_module._target_family_metric_projection
     real_entry_setattr = auditor_module._InProcessReceiptRegistryEntryV1.__setattr__
+    real_snapshot_provider = (
+        auditor_module._UNIFIED_CGROUP_MEMORY_SNAPSHOT_PROVIDER_V1
+    )
     calls: Counter[str] = Counter()
     events: list[str] = []
     peak_samples: list[int] = []
     finalization_started = False
     finalization_peak_count = 0
+    finalization_physical_count = 0
 
     def tracked_statistics(*args: object, **kwargs: object):
         nonlocal finalization_started
@@ -1017,6 +1763,18 @@ def test_receipt_finalization_charge_ceiling_accepts_rising_peaks_and_is_closed(
                 else "final-post-sample"
             )
         return value
+
+    def tracked_physical_snapshot() -> object:
+        nonlocal finalization_physical_count
+        snapshot = real_snapshot_provider()
+        if finalization_started:
+            finalization_physical_count += 1
+            events.append(
+                "final-pre-physical-sample"
+                if finalization_physical_count == 1
+                else "final-locked-physical-sample"
+            )
+        return snapshot
 
     def counted_construct(**values: object):
         calls["construct"] += 1
@@ -1089,6 +1847,11 @@ def test_receipt_finalization_charge_ceiling_accepts_rising_peaks_and_is_closed(
     monkeypatch.setattr(auditor_module, "_statistics", tracked_statistics)
     monkeypatch.setattr(auditor_module, "_linux_peak_rss_bytes", increasing_peak)
     monkeypatch.setattr(
+        auditor_module,
+        "_UNIFIED_CGROUP_MEMORY_SNAPSHOT_PROVIDER_V1",
+        tracked_physical_snapshot,
+    )
+    monkeypatch.setattr(
         auditor_module, "_construct_formal_covert_audit_receipt_v1", counted_construct
     )
     monkeypatch.setattr(
@@ -1141,9 +1904,9 @@ def test_receipt_finalization_charge_ceiling_accepts_rising_peaks_and_is_closed(
     )
     evidence = receipt.statistics_runtime_evidence
     worker_peak_sum = sum(evidence.worker_peak_rss_bytes)
-    expected_ceiling = auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES - worker_peak_sum
     assert events == [
         "final-pre-sample",
+        "final-pre-physical-sample",
         "construct",
         "receipt-post-init#1",
         "pending-register",
@@ -1152,6 +1915,7 @@ def test_receipt_finalization_charge_ceiling_accepts_rising_peaks_and_is_closed(
         "locked-exact-recheck",
         "locked-final-deadline",
         "final-post-sample",
+        "final-locked-physical-sample",
         "commit",
     ]
     assert calls["construct"] == 1
@@ -1172,33 +1936,53 @@ def test_receipt_finalization_charge_ceiling_accepts_rising_peaks_and_is_closed(
     assert entry.state is auditor_module._InProcessReceiptRegistryStateV1.ISSUED
     assert len(peak_samples) == 3
     assert peak_samples == sorted(peak_samples)
-    assert evidence.parent_peak_rss_bytes_before_receipt_finalization == peak_samples[1]
+    assert (
+        evidence.parent_historical_peak_rss_bytes_before_receipt_finalization
+        == peak_samples[1]
+    )
     assert peak_samples[2] > peak_samples[1]
-    assert peak_samples[2] <= expected_ceiling
-    assert evidence.parent_rss_charge_ceiling_bytes == expected_ceiling
-    assert evidence.conservative_parent_plus_worker_peak_sum_bytes == (
-        expected_ceiling + worker_peak_sum
-    ) == auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+    assert evidence.diagnostic_parent_plus_worker_historical_peak_sum_bytes == (
+        peak_samples[1] + worker_peak_sum
+    )
+    assert evidence.physical_memory_peak_bytes_before_receipt_finalization == (
+        _test_unified_cgroup_memory_snapshot().memory_peak_bytes
+    )
+    assert evidence.physical_memory_peak_bytes_before_receipt_finalization <= (
+        evidence.physical_memory_cap_bytes
+    )
+    assert (
+        evidence.physical_memory_cap_bytes
+        == auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+    )
     assert evidence.receipt_finalization_complete_pending_validation_count == 1
-    assert evidence.receipt_finalization_parent_peak_within_charge_ceiling is True
-    assert evidence.within_frozen_aggregate_cap is True
+    assert evidence.receipt_finalization_physical_peak_within_cap is True
+    assert evidence.within_frozen_physical_peak_cap is True
     issuance = receipt.receipt_issuance_runtime_evidence
     assert issuance.absolute_deadline_kind == "STATISTICS"
     assert issuance.absolute_deadline_timeout_seconds == (
         auditor_module.STATISTICS_WORKER_TIMEOUT_SECONDS
     )
-    assert issuance.worker_peak_rss_bytes_sum == worker_peak_sum
-    assert issuance.parent_peak_rss_bytes_before_receipt_finalization == (
-        evidence.parent_peak_rss_bytes_before_receipt_finalization
+    assert issuance.diagnostic_worker_historical_peak_rss_bytes_sum == worker_peak_sum
+    assert (
+        issuance.diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization
+        == evidence.parent_historical_peak_rss_bytes_before_receipt_finalization
     )
-    assert issuance.parent_rss_charge_ceiling_bytes == expected_ceiling
-    assert issuance.conservative_parent_plus_worker_peak_sum_bytes == (
-        auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+    assert issuance.diagnostic_parent_plus_worker_historical_peak_sum_bytes == (
+        evidence.diagnostic_parent_plus_worker_historical_peak_sum_bytes
     )
+    assert issuance.unified_cgroup_membership == evidence.unified_cgroup_membership
+    assert (
+        issuance.unified_cgroup_memory_scope_root
+        == evidence.unified_cgroup_memory_scope_root
+    )
+    assert issuance.physical_memory_peak_bytes_before_receipt_finalization == (
+        evidence.physical_memory_peak_bytes_before_receipt_finalization
+    )
+    assert issuance.physical_memory_cap_bytes == evidence.physical_memory_cap_bytes
     assert issuance.receipt_finalization_complete_pending_validation_count == 1
     assert issuance.receipt_finalization_locked_deadline_check_count == 1
     assert issuance.receipt_finalization_locked_deadline_within_absolute_limit is True
-    assert issuance.receipt_finalization_parent_peak_within_charge_ceiling is True
+    assert issuance.receipt_finalization_locked_physical_peak_within_cap is True
     assert (
         receipt.resource_plan.statistics_worker_timeout_seconds
         == evidence.worker_timeout_seconds
@@ -1208,19 +1992,19 @@ def test_receipt_finalization_charge_ceiling_accepts_rising_peaks_and_is_closed(
 
     formula_mutations = (
         (
-            "parent_rss_charge_ceiling_bytes",
-            expected_ceiling - 1,
-            "charge ceiling formula drift",
+            "diagnostic_parent_plus_worker_historical_peak_sum_bytes",
+            evidence.diagnostic_parent_plus_worker_historical_peak_sum_bytes - 1,
+            "historical RSS diagnostic sum drift",
         ),
         (
-            "parent_peak_rss_bytes_before_receipt_finalization",
-            expected_ceiling + 1,
-            "pre-finalization parent peak exceeds",
+            "parent_historical_peak_rss_bytes_before_receipt_finalization",
+            evidence.parent_historical_peak_rss_bytes_before_receipt_finalization + 1,
+            "historical RSS diagnostic sum drift",
         ),
         (
-            "conservative_parent_plus_worker_peak_sum_bytes",
-            auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES - 1,
-            "conservative RSS charge drift",
+            "physical_memory_peak_bytes_before_receipt_finalization",
+            auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES + 1,
+            "statistical physical memory evidence drift",
         ),
         (
             "receipt_finalization_complete_pending_validation_count",
@@ -1228,14 +2012,9 @@ def test_receipt_finalization_charge_ceiling_accepts_rising_peaks_and_is_closed(
             "receipt finalization evidence drift",
         ),
         (
-            "receipt_finalization_parent_peak_within_charge_ceiling",
+            "receipt_finalization_physical_peak_within_cap",
             False,
-            "receipt finalization evidence drift",
-        ),
-        (
-            "worker_peak_rss_bytes",
-            (auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES + 1,),
-            "worker RSS sum exceeds",
+            "statistical receipt finalization evidence drift",
         ),
     )
     for field_name, replacement, message in formula_mutations:
@@ -1247,14 +2026,14 @@ def test_receipt_finalization_charge_ceiling_accepts_rising_peaks_and_is_closed(
 
     issuance_formula_mutations = (
         (
-            "parent_rss_charge_ceiling_bytes",
-            expected_ceiling - 1,
-            "W/C/prepeak charge formula drift",
+            "diagnostic_parent_plus_worker_historical_peak_sum_bytes",
+            issuance.diagnostic_parent_plus_worker_historical_peak_sum_bytes - 1,
+            "historical RSS diagnostic drift",
         ),
         (
-            "conservative_parent_plus_worker_peak_sum_bytes",
-            auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES - 1,
-            "W/C/prepeak charge formula drift",
+            "physical_memory_peak_bytes_before_receipt_finalization",
+            auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES + 1,
+            "receipt issuance physical memory cap drift",
         ),
         (
             "receipt_finalization_complete_pending_validation_count",
@@ -1272,7 +2051,7 @@ def test_receipt_finalization_charge_ceiling_accepts_rising_peaks_and_is_closed(
             "locked-finalization evidence drift",
         ),
         (
-            "receipt_finalization_parent_peak_within_charge_ceiling",
+            "receipt_finalization_locked_physical_peak_within_cap",
             False,
             "locked-finalization evidence drift",
         ),
@@ -1340,182 +2119,6 @@ def test_public_receipt_validation_rechecks_after_concurrent_release(
     assert len(outcomes) == 1
     assert isinstance(outcomes[0], ValueError)
     assert "changed during full replay" in str(outcomes[0])
-    assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
-    assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
-
-
-def test_receipt_finalization_post_validation_ceiling_breach_rejects_once(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    real_statistics = auditor_module._statistics
-    real_peak = auditor_module._linux_peak_rss_bytes
-    real_construct = auditor_module._construct_formal_covert_audit_receipt_v1
-    real_register = (
-        auditor_module._register_preconstructed_formal_covert_audit_receipt_v1
-    )
-    real_pending_validate = (
-        auditor_module._validate_pending_formal_covert_audit_receipt_v1
-    )
-    real_entry_setattr = auditor_module._InProcessReceiptRegistryEntryV1.__setattr__
-    calls: Counter[str] = Counter()
-    charge_ceiling: int | None = None
-    finalization_peak_calls = 0
-
-    def capture_statistics(*args: object, **kwargs: object):
-        nonlocal charge_ceiling
-        result = real_statistics(*args, **kwargs)
-        inputs = result[-1]
-        charge_ceiling = auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES - sum(
-            inputs.worker_peak_rss_bytes
-        )
-        return result
-
-    def staged_peak() -> int:
-        nonlocal finalization_peak_calls
-        if charge_ceiling is None:
-            return real_peak()
-        finalization_peak_calls += 1
-        return charge_ceiling + (4_096 if finalization_peak_calls == 2 else 0)
-
-    def counted_construct(**values: object):
-        calls["construct"] += 1
-        return real_construct(**values)
-
-    def counted_register(**values: object):
-        calls["register"] += 1
-        return real_register(**values)
-
-    def counted_pending_validate(**values: object):
-        calls["pending_validate"] += 1
-        return real_pending_validate(**values)
-
-    def tracked_entry_setattr(entry: object, name: str, value: object) -> None:
-        if (
-            name == "state"
-            and getattr(entry, "state", None)
-            is auditor_module._InProcessReceiptRegistryStateV1.PENDING
-            and value is auditor_module._InProcessReceiptRegistryStateV1.ISSUED
-        ):
-            calls["commit"] += 1
-        return real_entry_setattr(entry, name, value)
-
-    monkeypatch.setattr(auditor_module, "_statistics", capture_statistics)
-    monkeypatch.setattr(
-        auditor_module,
-        "_construct_formal_covert_audit_receipt_v1",
-        counted_construct,
-    )
-    monkeypatch.setattr(
-        auditor_module,
-        "_register_preconstructed_formal_covert_audit_receipt_v1",
-        counted_register,
-    )
-    monkeypatch.setattr(
-        auditor_module,
-        "_validate_pending_formal_covert_audit_receipt_v1",
-        counted_pending_validate,
-    )
-    monkeypatch.setattr(
-        auditor_module._InProcessReceiptRegistryEntryV1,
-        "__setattr__",
-        tracked_entry_setattr,
-    )
-    monkeypatch.setattr(auditor_module, "_linux_peak_rss_bytes", staged_peak)
-    authority = _authority()
-    wire = _SyntheticWire()
-    with pytest.raises(
-        FormalCovertAuditRejectionV1,
-        match="post-validation parent peak exceeds its RSS charge ceiling",
-    ):
-        run_formal_covert_audit_v1(
-            tuple(_envelope(_payload()) for _ in authority.rows),
-            authority,
-            wire,
-            _SemanticRecognizer(wire),
-        )
-    assert charge_ceiling is not None
-    assert finalization_peak_calls == 2
-    assert calls == Counter({"construct": 1, "register": 1, "pending_validate": 1})
-    assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
-    assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
-
-
-@pytest.mark.parametrize(
-    ("worker_peak_sum", "expected_message", "expected_parent_peak_calls"),
-    (
-        (
-            auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES,
-            "pre-finalization parent peak exceeds its RSS charge ceiling",
-            2,
-        ),
-        (
-            auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES + 1,
-            "receipt finalization worker RSS sum exceeds the frozen cap",
-            1,
-        ),
-    ),
-    ids=("W-equals-cap-C-zero", "W-above-cap"),
-)
-def test_receipt_finalization_worker_sum_boundaries_reject_before_construction(
-    monkeypatch: pytest.MonkeyPatch,
-    worker_peak_sum: int,
-    expected_message: str,
-    expected_parent_peak_calls: int,
-):
-    real_statistics = auditor_module._statistics
-    real_construct = auditor_module._construct_formal_covert_audit_receipt_v1
-    real_register = (
-        auditor_module._register_preconstructed_formal_covert_audit_receipt_v1
-    )
-    real_peak = auditor_module._linux_peak_rss_bytes
-    calls: Counter[str] = Counter()
-
-    def rewrite_worker_peaks(*args: object, **kwargs: object):
-        result = real_statistics(*args, **kwargs)
-        runtime_inputs = result[-1]
-        worker_count = len(runtime_inputs.worker_peak_rss_bytes)
-        rewritten_inputs = replace(
-            runtime_inputs,
-            worker_peak_rss_bytes=(worker_peak_sum,) + (0,) * (worker_count - 1),
-        )
-        return result[:-1] + (rewritten_inputs,)
-
-    def positive_parent_peak() -> int:
-        calls["parent_peak"] += 1
-        value = real_peak()
-        assert value > 0
-        return value
-
-    def counted_construct(**values: object):
-        calls["construct"] += 1
-        return real_construct(**values)
-
-    def counted_register(**values: object):
-        calls["register"] += 1
-        return real_register(**values)
-
-    monkeypatch.setattr(auditor_module, "_statistics", rewrite_worker_peaks)
-    monkeypatch.setattr(auditor_module, "_linux_peak_rss_bytes", positive_parent_peak)
-    monkeypatch.setattr(
-        auditor_module,
-        "_construct_formal_covert_audit_receipt_v1",
-        counted_construct,
-    )
-    monkeypatch.setattr(
-        auditor_module,
-        "_register_preconstructed_formal_covert_audit_receipt_v1",
-        counted_register,
-    )
-    authority = _authority()
-    wire = _SyntheticWire()
-    with pytest.raises(FormalCovertAuditRejectionV1, match=expected_message):
-        run_formal_covert_audit_v1(
-            tuple(_envelope(_payload()) for _ in authority.rows),
-            authority,
-            wire,
-            _SemanticRecognizer(wire),
-        )
-    assert calls == Counter({"parent_peak": expected_parent_peak_calls})
     assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
     assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
 
@@ -1749,6 +2352,9 @@ def test_shared_commit_holds_registry_lock_from_deadline_through_post_rss_and_fl
         auditor_module._remaining_partition_preparation_deadline_seconds
     )
     real_peak = auditor_module._linux_peak_rss_bytes
+    real_snapshot_provider = (
+        auditor_module._UNIFIED_CGROUP_MEMORY_SNAPSHOT_PROVIDER_V1
+    )
     real_commit = auditor_module._commit_pending_formal_covert_audit_receipt_v1
     real_entry_setattr = auditor_module._InProcessReceiptRegistryEntryV1.__setattr__
     contender_attempting = threading.Event()
@@ -1800,6 +2406,15 @@ def test_shared_commit_holds_registry_lock_from_deadline_through_post_rss_and_fl
             events.append("post-rss-with-contender-blocked")
         return real_peak()
 
+    def observed_physical_snapshot() -> object:
+        if calls["locked_deadline"]:
+            assert calls["post_rss"] == 1
+            assert contender_attempting.is_set()
+            assert not contender_acquired.is_set()
+            calls["locked_physical"] += 1
+            events.append("locked-physical-with-contender-blocked")
+        return real_snapshot_provider()
+
     def observed_entry_setattr(entry: object, name: str, value: object) -> None:
         transitioning = (
             name == "state"
@@ -1809,6 +2424,7 @@ def test_shared_commit_holds_registry_lock_from_deadline_through_post_rss_and_fl
         )
         if transitioning:
             assert calls["post_rss"] == 1
+            assert calls["locked_physical"] == 1
             assert not contender_acquired.is_set()
             calls["issued_flip"] += 1
             events.append("issued-flip-with-contender-blocked")
@@ -1838,6 +2454,11 @@ def test_shared_commit_holds_registry_lock_from_deadline_through_post_rss_and_fl
     )
     monkeypatch.setattr(auditor_module, "_linux_peak_rss_bytes", observed_peak)
     monkeypatch.setattr(
+        auditor_module,
+        "_UNIFIED_CGROUP_MEMORY_SNAPSHOT_PROVIDER_V1",
+        observed_physical_snapshot,
+    )
+    monkeypatch.setattr(
         auditor_module._InProcessReceiptRegistryEntryV1,
         "__setattr__",
         observed_entry_setattr,
@@ -1860,6 +2481,7 @@ def test_shared_commit_holds_registry_lock_from_deadline_through_post_rss_and_fl
             "locked_deadline": 1,
             "contender_blocked_at_deadline": 1,
             "post_rss": 1,
+            "locked_physical": 1,
             "issued_flip": 1,
             "issued_flip_complete": 1,
             "contender_acquired": 1,
@@ -1871,6 +2493,9 @@ def test_shared_commit_holds_registry_lock_from_deadline_through_post_rss_and_fl
         "post-rss-with-contender-blocked"
     )
     assert events.index("post-rss-with-contender-blocked") < events.index(
+        "locked-physical-with-contender-blocked"
+    )
+    assert events.index("locked-physical-with-contender-blocked") < events.index(
         "issued-flip-with-contender-blocked"
     )
     assert events.index("issued-flip-complete-with-contender-blocked") < events.index(
@@ -1888,10 +2513,10 @@ def test_shared_commit_holds_registry_lock_from_deadline_through_post_rss_and_fl
 @pytest.mark.parametrize(
     "field_name",
     (
-        "parent_peak_rss_bytes_before_receipt_finalization",
+        "physical_memory_current_bytes_before_receipt_finalization",
         "statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds",
     ),
-    ids=("prepeak-plus-one", "elapsed-plus-one"),
+    ids=("physical-current-plus-one", "elapsed-plus-one"),
 )
 def test_receipt_finalization_valid_content_mutation_rejects_by_registered_id(
     monkeypatch: pytest.MonkeyPatch,
@@ -1925,8 +2550,10 @@ def test_receipt_finalization_valid_content_mutation_rejects_by_registered_id(
         evidence = receipt.statistics_runtime_evidence
         original = getattr(evidence, field_name)
         replacement = original + 1
-        if field_name == "parent_peak_rss_bytes_before_receipt_finalization":
-            assert replacement <= evidence.parent_rss_charge_ceiling_bytes
+        if field_name == "physical_memory_current_bytes_before_receipt_finalization":
+            assert replacement <= (
+                evidence.physical_memory_peak_bytes_before_receipt_finalization
+            )
         else:
             assert replacement <= (
                 auditor_module.STATISTICS_WORKER_TIMEOUT_SECONDS * 1_000_000_000
@@ -1936,7 +2563,7 @@ def test_receipt_finalization_valid_content_mutation_rejects_by_registered_id(
             field_name,
             replacement,
         )
-        if field_name == "parent_peak_rss_bytes_before_receipt_finalization":
+        if field_name == "physical_memory_current_bytes_before_receipt_finalization":
             object.__setattr__(
                 receipt.receipt_issuance_runtime_evidence,
                 field_name,
@@ -2181,6 +2808,51 @@ def test_pending_issuance_baseexception_boundaries_roll_back_exact_entry(
     with pytest.raises(SystemExit, match=marker):
         _run_issuance_branch(branch)
     assert calls == expected_calls
+    assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
+    assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
+
+
+@pytest.mark.parametrize("branch", ("sufficient", "insufficient"))
+@pytest.mark.parametrize(
+    "exception_type",
+    (RuntimeError, KeyboardInterrupt),
+    ids=("runtime-error", "keyboard-interrupt"),
+)
+def test_pending_locked_snapshot_provider_exception_rolls_back_both_branches(
+    monkeypatch: pytest.MonkeyPatch,
+    branch: str,
+    exception_type: type[BaseException],
+) -> None:
+    marker = exception_type(f"injected locked snapshot failure for {branch}")
+    low = _test_unified_cgroup_memory_snapshot()
+    calls: Counter[str] = Counter()
+
+    def fail_only_after_pending() -> auditor_module.UnifiedCgroupMemorySnapshotV1:
+        entries = tuple(auditor_module._IN_PROCESS_EXECUTED_RECEIPTS.values())
+        if not entries:
+            calls["pre_pending_snapshot"] += 1
+            return low
+        assert len(entries) == 1
+        entry = entries[0]
+        assert type(entry) is auditor_module._InProcessReceiptRegistryEntryV1
+        assert entry.state is auditor_module._InProcessReceiptRegistryStateV1.PENDING
+        calls["pending_locked_snapshot"] += 1
+        raise marker
+
+    monkeypatch.setattr(
+        auditor_module,
+        "_UNIFIED_CGROUP_MEMORY_SNAPSHOT_PROVIDER_V1",
+        fail_only_after_pending,
+    )
+    with pytest.raises(exception_type) as caught:
+        _run_issuance_branch(branch)
+    assert caught.value is marker
+    assert calls == Counter(
+        {
+            "pre_pending_snapshot": 2 if branch == "sufficient" else 1,
+            "pending_locked_snapshot": 1,
+        }
+    )
     assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
     assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
 
@@ -2494,41 +3166,47 @@ def test_known_null_passes_executes_exact_81_runs_and_proves_full_manifest():
     )
     assert receipt.statistics_runtime_evidence.external_supervisor_required is True
     worker_peak_sum = sum(receipt.statistics_runtime_evidence.worker_peak_rss_bytes)
-    assert (
-        receipt.statistics_runtime_evidence.parent_peak_rss_bytes_before_receipt_finalization
-        <= receipt.statistics_runtime_evidence.parent_rss_charge_ceiling_bytes
-    )
-    assert receipt.statistics_runtime_evidence.parent_rss_charge_ceiling_bytes == (
-        auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES - worker_peak_sum
-    )
-    assert receipt.statistics_runtime_evidence.conservative_parent_plus_worker_peak_sum_bytes == (
-        receipt.statistics_runtime_evidence.parent_rss_charge_ceiling_bytes
+    statistics = receipt.statistics_runtime_evidence
+    assert statistics.diagnostic_parent_plus_worker_historical_peak_sum_bytes == (
+        statistics.parent_historical_peak_rss_bytes_before_receipt_finalization
         + worker_peak_sum
-    ) == auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+    )
+    assert statistics.physical_memory_peak_bytes_before_receipt_finalization <= (
+        statistics.physical_memory_cap_bytes
+    )
     assert (
-        receipt.statistics_runtime_evidence.receipt_finalization_complete_pending_validation_count
+        statistics.physical_memory_cap_bytes
+        == auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+    )
+    assert (
+        statistics.receipt_finalization_complete_pending_validation_count
         == 1
     )
     assert (
-        receipt.statistics_runtime_evidence.receipt_finalization_parent_peak_within_charge_ceiling
+        statistics.receipt_finalization_physical_peak_within_cap
         is True
     )
     issuance = receipt.receipt_issuance_runtime_evidence
     assert issuance.absolute_deadline_kind == "STATISTICS"
-    assert issuance.worker_peak_rss_bytes_sum == worker_peak_sum
-    assert issuance.parent_peak_rss_bytes_before_receipt_finalization == (
-        receipt.statistics_runtime_evidence.parent_peak_rss_bytes_before_receipt_finalization
+    assert issuance.diagnostic_worker_historical_peak_rss_bytes_sum == worker_peak_sum
+    assert (
+        issuance.diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization
+        == statistics.parent_historical_peak_rss_bytes_before_receipt_finalization
     )
-    assert issuance.parent_rss_charge_ceiling_bytes == (
-        receipt.statistics_runtime_evidence.parent_rss_charge_ceiling_bytes
+    assert issuance.diagnostic_parent_plus_worker_historical_peak_sum_bytes == (
+        statistics.diagnostic_parent_plus_worker_historical_peak_sum_bytes
     )
-    assert issuance.conservative_parent_plus_worker_peak_sum_bytes == (
-        auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+    assert issuance.unified_cgroup_memory_scope_root == (
+        statistics.unified_cgroup_memory_scope_root
     )
+    assert issuance.physical_memory_peak_bytes_before_receipt_finalization == (
+        statistics.physical_memory_peak_bytes_before_receipt_finalization
+    )
+    assert issuance.physical_memory_cap_bytes == auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
     assert issuance.receipt_finalization_complete_pending_validation_count == 1
     assert issuance.receipt_finalization_locked_deadline_check_count == 1
     assert issuance.receipt_finalization_locked_deadline_within_absolute_limit is True
-    assert issuance.receipt_finalization_parent_peak_within_charge_ceiling is True
+    assert issuance.receipt_finalization_locked_physical_peak_within_cap is True
     assert not receipt.pairwise_holm_decision_eligible
     assert not receipt.pairwise_holm_resolution_capable
     assert receipt.positive_decision_claim == POSITIVE_DECISION_CLAIM
@@ -3329,21 +4007,25 @@ def test_insufficient_private_authority_rejects_atomically_without_recognizer_ca
     assert issuance.absolute_deadline_timeout_seconds == (
         auditor_module.PARTITION_PREPARATION_TIMEOUT_SECONDS
     )
-    assert issuance.worker_peak_rss_bytes_sum == 0
-    assert issuance.parent_peak_rss_bytes_before_receipt_finalization == (
+    assert issuance.diagnostic_worker_historical_peak_rss_bytes_sum == 0
+    assert (
+        issuance.diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization
+        == peak_samples[0]
+    )
+    assert issuance.diagnostic_parent_plus_worker_historical_peak_sum_bytes == (
         peak_samples[0]
     )
-    assert issuance.parent_rss_charge_ceiling_bytes == (
-        auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+    expected_snapshot = _test_unified_cgroup_memory_snapshot()
+    assert issuance.unified_cgroup_membership == expected_snapshot.unified_membership
+    assert issuance.unified_cgroup_memory_scope_root == expected_snapshot.memory_scope_root
+    assert issuance.physical_memory_peak_bytes_before_receipt_finalization == (
+        expected_snapshot.memory_peak_bytes
     )
-    assert issuance.conservative_parent_plus_worker_peak_sum_bytes == (
-        auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
-    )
+    assert issuance.physical_memory_cap_bytes == auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
     assert issuance.receipt_finalization_complete_pending_validation_count == 1
     assert issuance.receipt_finalization_locked_deadline_check_count == 1
     assert issuance.receipt_finalization_locked_deadline_within_absolute_limit is True
-    assert issuance.receipt_finalization_parent_peak_within_charge_ceiling is True
-    assert peak_samples[1] <= issuance.parent_rss_charge_ceiling_bytes
+    assert issuance.receipt_finalization_locked_physical_peak_within_cap is True
     entry = auditor_module._IN_PROCESS_EXECUTED_RECEIPTS[id(receipt)]
     assert type(entry) is auditor_module._InProcessReceiptRegistryEntryV1
     assert entry.state is auditor_module._InProcessReceiptRegistryStateV1.ISSUED
@@ -3353,82 +4035,28 @@ def test_insufficient_private_authority_rejects_atomically_without_recognizer_ca
     assert issuance_calls["family_projection"] == 0
 
 
-@pytest.mark.parametrize(
-    ("breach_stage", "expected_message", "expected_calls"),
-    (
-        (
-            "pre",
-            "insufficient pre-finalization parent peak exceeds its RSS charge ceiling",
-            Counter({"peak": 1}),
-        ),
-        (
-            "post",
-            "post-validation parent peak exceeds its RSS charge ceiling",
-            Counter(
-                {
-                    "peak": 2,
-                    "construct": 1,
-                    "register": 1,
-                    "pending_validate": 1,
-                }
-            ),
-        ),
-    ),
-)
-def test_insufficient_issuance_pre_and_post_ceiling_boundaries_are_atomic(
+def test_parent_ru_maxrss_above_cap_is_diagnostic_only_for_insufficient_branch(
     monkeypatch: pytest.MonkeyPatch,
-    breach_stage: str,
-    expected_message: str,
-    expected_calls: Counter[str],
 ):
-    real_construct = auditor_module._construct_formal_covert_audit_receipt_v1
-    real_register = (
-        auditor_module._register_preconstructed_formal_covert_audit_receipt_v1
-    )
-    real_pending_validate = (
-        auditor_module._validate_pending_formal_covert_audit_receipt_v1
-    )
-    calls: Counter[str] = Counter()
-
-    def staged_peak() -> int:
-        calls["peak"] += 1
-        if breach_stage == "pre" or calls["peak"] == 2:
-            return auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES + 1
-        return 1
-
-    def counted_construct(**values: object):
-        calls["construct"] += 1
-        return real_construct(**values)
-
-    def counted_register(**values: object):
-        calls["register"] += 1
-        return real_register(**values)
-
-    def counted_pending_validate(**values: object):
-        calls["pending_validate"] += 1
-        return real_pending_validate(**values)
-
-    monkeypatch.setattr(auditor_module, "_linux_peak_rss_bytes", staged_peak)
+    historical_peak = auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES + 1
     monkeypatch.setattr(
         auditor_module,
-        "_construct_formal_covert_audit_receipt_v1",
-        counted_construct,
+        "_linux_peak_rss_bytes",
+        lambda: historical_peak,
     )
-    monkeypatch.setattr(
-        auditor_module,
-        "_register_preconstructed_formal_covert_audit_receipt_v1",
-        counted_register,
+    receipt = _run_issuance_branch("insufficient")
+    issuance = receipt.receipt_issuance_runtime_evidence
+    assert (
+        issuance.diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization
+        == historical_peak
     )
-    monkeypatch.setattr(
-        auditor_module,
-        "_validate_pending_formal_covert_audit_receipt_v1",
-        counted_pending_validate,
+    assert issuance.diagnostic_parent_plus_worker_historical_peak_sum_bytes == (
+        historical_peak
     )
-    with pytest.raises(FormalCovertAuditRejectionV1, match=expected_message):
-        _run_issuance_branch("insufficient")
-    assert calls == expected_calls
-    assert not auditor_module._IN_PROCESS_EXECUTED_RECEIPTS
-    assert not auditor_module._IN_PROCESS_RECEIPT_RESERVATIONS
+    assert issuance.physical_memory_peak_bytes_before_receipt_finalization < (
+        issuance.physical_memory_cap_bytes
+    )
+    auditor_module.release_formal_covert_audit_receipt_v1(receipt)
 
 
 def test_post_invariance_preparation_failure_issues_no_receipt_or_artifact(

@@ -33,6 +33,32 @@ from hegel_machine import phase2b_formal_wire_covert_qualification_v2 as qualifi
 ROOT = Path(__file__).parents[1]
 
 
+def _test_auditor_cgroup_snapshot(
+    *,
+    current: int = 4_096,
+    peak: int = 8_192,
+) -> auditor.UnifiedCgroupMemorySnapshotV1:
+    membership = "/test.slice/qv2.scope"
+    device = 11
+    inode = 22
+    return auditor.UnifiedCgroupMemorySnapshotV1(
+        unified_membership=membership,
+        memory_scope_root=qualification.stable_hash(
+            {
+                "leaf_device": device,
+                "leaf_inode": inode,
+                "unified_membership": membership,
+            },
+            prefix="phase2b_formal_covert_unified_cgroup_memory_scope_v1_",
+        ),
+        leaf_device=device,
+        leaf_inode=inode,
+        memory_current_bytes=current,
+        memory_peak_bytes=peak,
+        memory_max_bytes=24 * 1_024 * 1_024 * 1_024,
+    )
+
+
 @lru_cache(maxsize=2)
 def _fixture(mode: str) -> qualification._FixtureExecutionV2:
     return qualification._build_fixture_execution_v2(mode, row_count=8)
@@ -1694,14 +1720,18 @@ def test_checked_profile_is_exact_canonical_candidate_with_live_disabled() -> No
     profile = qualification.load_phase2b_formal_wire_covert_qualification_profile_v2(payload)
     assert profile.profile_id == qualification.PROFILE_ID
     assert qualification.PROFILE_SCHEMA_VERSION == (
-        "hegel-machine-phase2b-formal-wire-covert-qualification/4"
+        "hegel-machine-phase2b-formal-wire-covert-qualification/6"
     )
     assert qualification.AUDITOR_SCHEMA_VERSION_V2 == (
-        "hegel-machine-phase2b-formal-covert-auditor/4"
+        "hegel-machine-phase2b-formal-covert-auditor/5"
     )
     assert auditor.SCHEMA_VERSION == qualification.AUDITOR_SCHEMA_VERSION_V2
     assert qualification.AUDITOR_PROFILE_SCHEMA_VERSION_V2 == (
-        "hegel-machine-phase2b-formal-covert-auditor-profile/4"
+        "hegel-machine-phase2b-formal-covert-auditor-profile/5"
+    )
+    assert auditor.SEMANTICS_VERSION == (
+        "hegel-machine-phase2b-formal-covert-statistics/9-"
+        "cgroup-memory-max-transient-overage-erratum"
     )
     assert auditor.SEMANTICS_ID == qualification.AUDITOR_SEMANTICS_ID_V2
     assert auditor.POLICY_BINDING_ID == qualification.AUDITOR_POLICY_BINDING_ID_V2
@@ -1725,8 +1755,8 @@ def test_checked_profile_is_exact_canonical_candidate_with_live_disabled() -> No
     assert tuple(item.name for item in resource_fields if not item.init) == (
         "resource_plan_root",
     )
-    assert len(fields(auditor.StatisticalRuntimeEvidenceV1)) == 20
-    assert len(fields(auditor.ReceiptIssuanceRuntimeEvidenceV1)) == 11
+    assert len(fields(auditor.StatisticalRuntimeEvidenceV1)) == 27
+    assert len(fields(auditor.ReceiptIssuanceRuntimeEvidenceV1)) == 18
     receipt_fields = tuple(item.name for item in fields(auditor.FormalCovertAuditReceiptV1))
     assert receipt_fields[17:22] == (
         "invariant_runtime_evidence",
@@ -1779,6 +1809,14 @@ def test_checked_profile_is_exact_canonical_candidate_with_live_disabled() -> No
     assert live["work_deadline_reserve_seconds"] == 3_000
     assert live["terminal_publication_reserve_seconds"] == 2_400
     assert live["cleanup_control_reserve_seconds"] == 600
+    assert live["requested_memory_max_equals_auditor_physical_cap"] is True
+    assert live["post_exit_numeric_memory_peak_sample_claimed"] is False
+    assert qualification._deep_thaw(
+        live["post_output_physical_gate_contract"]
+    ) == qualification._POST_OUTPUT_PHYSICAL_GATE_CONTRACT_V2
+    assert live["outer_supervisor_result_schema"] == (
+        "hegel-machine-phase2b-formal-wire-covert-outer-supervisor-result/3"
+    )
     assert auditor.STATISTICS_WORKER_TIMEOUT_SECONDS == 3_600
     phase_deadline_seconds = 2 * (
         auditor.PARTITION_PREPARATION_TIMEOUT_SECONDS
@@ -2111,6 +2149,27 @@ def test_development_attempt_cli_parses_one_closed_argument_set(
         "source_archive": (tmp_path / "source.tar").resolve(),
         "source_commit_sha": "a" * 40,
     }
+
+
+def test_attempt_manifest_v3_requires_exact_twelve_gib_memory_max() -> None:
+    attempt = _attempt()
+    exact_twelve_gib = 12 * 1_024**3
+    assert auditor.MAXIMUM_ESTIMATED_RSS_BYTES == exact_twelve_gib
+    assert attempt.requested_cgroup_memory_max_bytes == exact_twelve_gib
+    assert attempt.attempt_manifest_root.startswith(
+        "phase2b_formal_wire_covert_attempt_manifest_v3_"
+    )
+    for rejected in (
+        exact_twelve_gib - 1,
+        exact_twelve_gib + 1,
+        24 * 1_024**3,
+        True,
+    ):
+        with pytest.raises((TypeError, ValueError), match="cgroup limits"):
+            replace(
+                attempt,
+                requested_cgroup_memory_max_bytes=rejected,
+            )
 
 
 @pytest.mark.parametrize("tamper", ("source", "config"))
@@ -2813,6 +2872,22 @@ def test_complete_two_phase_runtime_reconstruction_crossbinds_composite_plan() -
         + invariant_preflight.host_available_memory_safety_margin_bytes
     )
     parent_rss = invariant_preflight.parent_current_rss_bytes_at_preflight
+    cgroup_snapshot = auditor.UnifiedCgroupMemorySnapshotV1(
+        unified_membership="/test.slice/qv2.scope",
+        memory_scope_root=qualification.stable_hash(
+            {
+                "leaf_device": 11,
+                "leaf_inode": 22,
+                "unified_membership": "/test.slice/qv2.scope",
+            },
+            prefix="phase2b_formal_covert_unified_cgroup_memory_scope_v1_",
+        ),
+        leaf_device=11,
+        leaf_inode=22,
+        memory_current_bytes=4_096,
+        memory_peak_bytes=8_192,
+        memory_max_bytes=24 * 1_024 * 1_024 * 1_024,
+    )
     invariant_runtime = auditor.InvariantRuntimeEvidenceV1(
         invariance_resource_plan_root=plan.invariance_resource_plan_root,
         resource_preflight=invariant_preflight,
@@ -2823,11 +2898,20 @@ def test_complete_two_phase_runtime_reconstruction_crossbinds_composite_plan() -
         parent_peak_current_rss_bytes_observed=parent_rss,
         parent_current_rss_bytes_at_completion=parent_rss,
         parent_historical_peak_rss_bytes=parent_rss,
-        parent_peak_rss_bytes=parent_rss,
         worker_peak_rss_bytes=0,
         worker_result_artifact_bytes=1,
         worker_result_artifact_sha256="sha256:" + "0" * 64,
-        conservative_parent_plus_worker_peak_sum_bytes=parent_rss,
+        diagnostic_parent_plus_worker_historical_peak_sum_bytes=parent_rss,
+        unified_cgroup_membership=cgroup_snapshot.unified_membership,
+        unified_cgroup_memory_scope_root=cgroup_snapshot.memory_scope_root,
+        unified_cgroup_leaf_device=cgroup_snapshot.leaf_device,
+        unified_cgroup_leaf_inode=cgroup_snapshot.leaf_inode,
+        physical_memory_current_bytes_at_completion=(
+            cgroup_snapshot.memory_current_bytes
+        ),
+        physical_memory_peak_bytes_at_completion=cgroup_snapshot.memory_peak_bytes,
+        physical_memory_max_bytes=cgroup_snapshot.memory_max_bytes,
+        physical_memory_cap_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
         invariance_wall_time_nanoseconds=1,
         worker_timeout_seconds=auditor.INVARIANCE_WORKER_TIMEOUT_SECONDS,
         invariant_run_count=81,
@@ -2850,7 +2934,7 @@ def test_complete_two_phase_runtime_reconstruction_crossbinds_composite_plan() -
         parent_side_adapter_sandboxed=False,
         process_group_empty_at_exit=True,
         child_address_space_limit_bytes=1,
-        within_frozen_aggregate_cap=True,
+        within_frozen_physical_peak_cap=True,
     )
     statistics_static = (
         plan.permutation_label_mask_bytes_bound
@@ -2893,42 +2977,56 @@ def test_complete_two_phase_runtime_reconstruction_crossbinds_composite_plan() -
         system_available_memory_bytes_at_preflight=statistics_available,
         cgroup_remaining_memory_bytes_at_preflight=None,
         host_available_memory_bytes_at_preflight=statistics_available,
-        parent_peak_rss_bytes_before_receipt_finalization=1,
-        parent_rss_charge_ceiling_bytes=(
-            auditor.MAXIMUM_ESTIMATED_RSS_BYTES - 1
-        ),
+        parent_historical_peak_rss_bytes_before_receipt_finalization=1,
         worker_peak_rss_bytes=(1,),
         worker_result_artifact_bytes=(1,),
         worker_result_artifact_sha256=("sha256:" + "0" * 64,),
         parent_result_object_graph_bytes_observed=0,
-        conservative_parent_plus_worker_peak_sum_bytes=(
-            auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        diagnostic_parent_plus_worker_historical_peak_sum_bytes=2,
+        unified_cgroup_membership=cgroup_snapshot.unified_membership,
+        unified_cgroup_memory_scope_root=cgroup_snapshot.memory_scope_root,
+        unified_cgroup_leaf_device=cgroup_snapshot.leaf_device,
+        unified_cgroup_leaf_inode=cgroup_snapshot.leaf_inode,
+        physical_memory_current_bytes_before_receipt_finalization=(
+            cgroup_snapshot.memory_current_bytes
         ),
+        physical_memory_peak_bytes_before_receipt_finalization=(
+            cgroup_snapshot.memory_peak_bytes
+        ),
+        physical_memory_max_bytes=cgroup_snapshot.memory_max_bytes,
+        physical_memory_cap_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
         statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds=1,
         worker_timeout_seconds=auditor.STATISTICS_WORKER_TIMEOUT_SECONDS,
         parent_postprocess_deadline_schema=auditor.PARENT_POSTPROCESS_DEADLINE_SCHEMA,
         parent_postprocess_deadline_preemptive=False,
         external_supervisor_required=True,
         receipt_finalization_complete_pending_validation_count=1,
-        receipt_finalization_parent_peak_within_charge_ceiling=True,
-        within_frozen_aggregate_cap=True,
+        receipt_finalization_physical_peak_within_cap=True,
+        within_frozen_physical_peak_cap=True,
     )
     issuance_runtime = auditor.ReceiptIssuanceRuntimeEvidenceV1(
         absolute_deadline_kind="STATISTICS",
         absolute_deadline_monotonic_nanoseconds=1,
         absolute_deadline_timeout_seconds=auditor.STATISTICS_WORKER_TIMEOUT_SECONDS,
-        worker_peak_rss_bytes_sum=1,
-        parent_peak_rss_bytes_before_receipt_finalization=1,
-        parent_rss_charge_ceiling_bytes=(
-            auditor.MAXIMUM_ESTIMATED_RSS_BYTES - 1
+        diagnostic_worker_historical_peak_rss_bytes_sum=1,
+        diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization=1,
+        diagnostic_parent_plus_worker_historical_peak_sum_bytes=2,
+        unified_cgroup_membership=cgroup_snapshot.unified_membership,
+        unified_cgroup_memory_scope_root=cgroup_snapshot.memory_scope_root,
+        unified_cgroup_leaf_device=cgroup_snapshot.leaf_device,
+        unified_cgroup_leaf_inode=cgroup_snapshot.leaf_inode,
+        physical_memory_current_bytes_before_receipt_finalization=(
+            cgroup_snapshot.memory_current_bytes
         ),
-        conservative_parent_plus_worker_peak_sum_bytes=(
-            auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        physical_memory_peak_bytes_before_receipt_finalization=(
+            cgroup_snapshot.memory_peak_bytes
         ),
+        physical_memory_max_bytes=cgroup_snapshot.memory_max_bytes,
+        physical_memory_cap_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
         receipt_finalization_complete_pending_validation_count=1,
         receipt_finalization_locked_deadline_check_count=1,
         receipt_finalization_locked_deadline_within_absolute_limit=True,
-        receipt_finalization_parent_peak_within_charge_ceiling=True,
+        receipt_finalization_locked_physical_peak_within_cap=True,
     )
     plan_projection = qualification._closed_primitive_v2(plan)
     invariant_projection = qualification._closed_primitive_v2(invariant_runtime)
@@ -2950,12 +3048,17 @@ def test_complete_two_phase_runtime_reconstruction_crossbinds_composite_plan() -
         context="unit complete runtime",
     ) is issuance_projection
     for field_name, replacement in (
-        ("worker_peak_rss_bytes_sum", 2),
-        ("parent_peak_rss_bytes_before_receipt_finalization", 2),
+        ("diagnostic_worker_historical_peak_rss_bytes_sum", 2),
+        (
+            "diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization",
+            2,
+        ),
+        ("unified_cgroup_membership", "/test.slice/drift.scope"),
+        ("physical_memory_peak_bytes_before_receipt_finalization", 8_193),
         ("receipt_finalization_complete_pending_validation_count", 0),
         ("receipt_finalization_locked_deadline_check_count", 0),
         ("receipt_finalization_locked_deadline_within_absolute_limit", False),
-        ("receipt_finalization_parent_peak_within_charge_ceiling", False),
+        ("receipt_finalization_locked_physical_peak_within_cap", False),
     ):
         tampered = dict(issuance_projection)
         tampered[field_name] = replacement
@@ -2971,16 +3074,25 @@ def test_complete_two_phase_runtime_reconstruction_crossbinds_composite_plan() -
         absolute_deadline_timeout_seconds=(
             auditor.PARTITION_PREPARATION_TIMEOUT_SECONDS
         ),
-        worker_peak_rss_bytes_sum=0,
-        parent_peak_rss_bytes_before_receipt_finalization=1,
-        parent_rss_charge_ceiling_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
-        conservative_parent_plus_worker_peak_sum_bytes=(
-            auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        diagnostic_worker_historical_peak_rss_bytes_sum=0,
+        diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization=1,
+        diagnostic_parent_plus_worker_historical_peak_sum_bytes=1,
+        unified_cgroup_membership=cgroup_snapshot.unified_membership,
+        unified_cgroup_memory_scope_root=cgroup_snapshot.memory_scope_root,
+        unified_cgroup_leaf_device=cgroup_snapshot.leaf_device,
+        unified_cgroup_leaf_inode=cgroup_snapshot.leaf_inode,
+        physical_memory_current_bytes_before_receipt_finalization=(
+            cgroup_snapshot.memory_current_bytes
         ),
+        physical_memory_peak_bytes_before_receipt_finalization=(
+            cgroup_snapshot.memory_peak_bytes
+        ),
+        physical_memory_max_bytes=cgroup_snapshot.memory_max_bytes,
+        physical_memory_cap_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
         receipt_finalization_complete_pending_validation_count=1,
         receipt_finalization_locked_deadline_check_count=1,
         receipt_finalization_locked_deadline_within_absolute_limit=True,
-        receipt_finalization_parent_peak_within_charge_ceiling=True,
+        receipt_finalization_locked_physical_peak_within_cap=True,
     )
     insufficient_projection = qualification._closed_primitive_v2(
         insufficient_issuance
@@ -3652,6 +3764,20 @@ def test_post_audit_fake_receipt_uses_execution_owner_count_and_root(
             "phase2b_formal_covert_statistics_resource_plan_" + "1" * 64
         ),
     )
+    cgroup_membership = "/test.slice/qv2.scope"
+    cgroup_device = 11
+    cgroup_inode = 22
+    cgroup_scope_root = qualification.stable_hash(
+        {
+            "leaf_device": cgroup_device,
+            "leaf_inode": cgroup_inode,
+            "unified_membership": cgroup_membership,
+        },
+        prefix="phase2b_formal_covert_unified_cgroup_memory_scope_v1_",
+    )
+    cgroup_current = 4_096
+    cgroup_peak = 8_192
+    cgroup_max = 24 * 1_024 * 1_024 * 1_024
     invariant = FakeInvariant(
         consumer_decode_count=qualification.EXACT_AUTHORITY_ROWS * 80,
         invariance_resource_plan_root=resource.invariance_resource_plan_root,
@@ -3660,43 +3786,57 @@ def test_post_audit_fake_receipt_uses_execution_owner_count_and_root(
         variant_suite_root="variant-suite-root",
         worker_peak_rss_bytes=1_024,
         worker_result_artifact_sha256="invariant-worker-sha",
-        within_frozen_aggregate_cap=True,
+        unified_cgroup_membership=cgroup_membership,
+        unified_cgroup_memory_scope_root=cgroup_scope_root,
+        unified_cgroup_leaf_device=cgroup_device,
+        unified_cgroup_leaf_inode=cgroup_inode,
+        physical_memory_current_bytes_at_completion=cgroup_current,
+        physical_memory_peak_bytes_at_completion=cgroup_peak,
+        physical_memory_max_bytes=cgroup_max,
+        physical_memory_cap_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+        within_frozen_physical_peak_cap=True,
     )
     statistics = FakeStatistics(
-        conservative_parent_plus_worker_peak_sum_bytes=(
-            auditor.MAXIMUM_ESTIMATED_RSS_BYTES
-        ),
+        diagnostic_parent_plus_worker_historical_peak_sum_bytes=2_048,
         external_supervisor_required=True,
         host_available_memory_bytes_at_preflight=1,
-        parent_peak_rss_bytes_before_receipt_finalization=1_024,
-        parent_rss_charge_ceiling_bytes=(
-            auditor.MAXIMUM_ESTIMATED_RSS_BYTES - 1_024
-        ),
+        parent_historical_peak_rss_bytes_before_receipt_finalization=1_024,
+        unified_cgroup_membership=cgroup_membership,
+        unified_cgroup_memory_scope_root=cgroup_scope_root,
+        unified_cgroup_leaf_device=cgroup_device,
+        unified_cgroup_leaf_inode=cgroup_inode,
+        physical_memory_current_bytes_before_receipt_finalization=cgroup_current,
+        physical_memory_peak_bytes_before_receipt_finalization=cgroup_peak,
+        physical_memory_max_bytes=cgroup_max,
+        physical_memory_cap_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
         receipt_finalization_complete_pending_validation_count=1,
-        receipt_finalization_parent_peak_within_charge_ceiling=True,
+        receipt_finalization_physical_peak_within_cap=True,
         resource_plan_root=resource.resource_plan_root,
         resource_preflight=SimpleNamespace(),
         statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds=1,
         worker_peak_rss_bytes=(1_024,),
         worker_result_artifact_sha256=("statistics-worker-sha",),
-        within_frozen_aggregate_cap=True,
+        within_frozen_physical_peak_cap=True,
     )
     issuance = FakeIssuance(
         absolute_deadline_kind="STATISTICS",
         absolute_deadline_monotonic_nanoseconds=1,
         absolute_deadline_timeout_seconds=auditor.STATISTICS_WORKER_TIMEOUT_SECONDS,
-        worker_peak_rss_bytes_sum=1_024,
-        parent_peak_rss_bytes_before_receipt_finalization=1_024,
-        parent_rss_charge_ceiling_bytes=(
-            auditor.MAXIMUM_ESTIMATED_RSS_BYTES - 1_024
-        ),
-        conservative_parent_plus_worker_peak_sum_bytes=(
-            auditor.MAXIMUM_ESTIMATED_RSS_BYTES
-        ),
+        diagnostic_worker_historical_peak_rss_bytes_sum=1_024,
+        diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization=1_024,
+        diagnostic_parent_plus_worker_historical_peak_sum_bytes=2_048,
+        unified_cgroup_membership=cgroup_membership,
+        unified_cgroup_memory_scope_root=cgroup_scope_root,
+        unified_cgroup_leaf_device=cgroup_device,
+        unified_cgroup_leaf_inode=cgroup_inode,
+        physical_memory_current_bytes_before_receipt_finalization=cgroup_current,
+        physical_memory_peak_bytes_before_receipt_finalization=cgroup_peak,
+        physical_memory_max_bytes=cgroup_max,
+        physical_memory_cap_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
         receipt_finalization_complete_pending_validation_count=1,
         receipt_finalization_locked_deadline_check_count=1,
         receipt_finalization_locked_deadline_within_absolute_limit=True,
-        receipt_finalization_parent_peak_within_charge_ceiling=True,
+        receipt_finalization_locked_physical_peak_within_cap=True,
     )
     probabilities = SimpleNamespace(numerator=1, denominator=1)
     target_family_results = tuple(
@@ -3981,7 +4121,7 @@ def test_post_audit_fake_receipt_uses_execution_owner_count_and_root(
         "observed_complete_receipt_issuance_runtime": issuance_projection,
         "observed_complete_receipt_issuance_runtime_root": qualification.stable_hash(
             issuance_projection,
-            prefix="phase2b_formal_wire_covert_receipt_issuance_runtime_v3_",
+            prefix="phase2b_formal_wire_covert_receipt_issuance_runtime_v4_",
         ),
         "observed_complete_resource_plan": resource_projection,
         "observed_complete_resource_plan_root": qualification.stable_hash(
@@ -4012,7 +4152,7 @@ def test_post_audit_fake_receipt_uses_execution_owner_count_and_root(
     tampered_measurement = json.loads(json.dumps(measurement))
     tampered_measurement[
         "observed_complete_receipt_issuance_runtime_root"
-    ] = "phase2b_formal_wire_covert_receipt_issuance_runtime_v3_" + "f" * 64
+    ] = "phase2b_formal_wire_covert_receipt_issuance_runtime_v4_" + "f" * 64
     with pytest.raises(ValueError, match="cross-binding"):
         qualification._validate_run_and_measurement_binding_v2(
             primitive_projection,
@@ -4416,44 +4556,63 @@ def _valid_candidate_runtime_bundle(
         + preflight.host_available_memory_safety_margin_bytes
     )
     worker_peaks = (0,) * plan.maximum_parallel_workers
+    cgroup_snapshot = _test_auditor_cgroup_snapshot()
     statistics = auditor.StatisticalRuntimeEvidenceV1(
         resource_plan_root=plan.resource_plan_root,
         resource_preflight=preflight,
         system_available_memory_bytes_at_preflight=available,
         cgroup_remaining_memory_bytes_at_preflight=None,
         host_available_memory_bytes_at_preflight=available,
-        parent_peak_rss_bytes_before_receipt_finalization=0,
-        parent_rss_charge_ceiling_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+        parent_historical_peak_rss_bytes_before_receipt_finalization=0,
         worker_peak_rss_bytes=worker_peaks,
         worker_result_artifact_bytes=(1,) * 5,
         worker_result_artifact_sha256=("sha256:" + "0" * 64,) * 5,
         parent_result_object_graph_bytes_observed=0,
-        conservative_parent_plus_worker_peak_sum_bytes=(
-            auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        diagnostic_parent_plus_worker_historical_peak_sum_bytes=0,
+        unified_cgroup_membership=cgroup_snapshot.unified_membership,
+        unified_cgroup_memory_scope_root=cgroup_snapshot.memory_scope_root,
+        unified_cgroup_leaf_device=cgroup_snapshot.leaf_device,
+        unified_cgroup_leaf_inode=cgroup_snapshot.leaf_inode,
+        physical_memory_current_bytes_before_receipt_finalization=(
+            cgroup_snapshot.memory_current_bytes
         ),
+        physical_memory_peak_bytes_before_receipt_finalization=(
+            cgroup_snapshot.memory_peak_bytes
+        ),
+        physical_memory_max_bytes=cgroup_snapshot.memory_max_bytes,
+        physical_memory_cap_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
         statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds=1,
         worker_timeout_seconds=auditor.STATISTICS_WORKER_TIMEOUT_SECONDS,
         parent_postprocess_deadline_schema=auditor.PARENT_POSTPROCESS_DEADLINE_SCHEMA,
         parent_postprocess_deadline_preemptive=False,
         external_supervisor_required=True,
         receipt_finalization_complete_pending_validation_count=1,
-        receipt_finalization_parent_peak_within_charge_ceiling=True,
-        within_frozen_aggregate_cap=True,
+        receipt_finalization_physical_peak_within_cap=True,
+        within_frozen_physical_peak_cap=True,
     )
     issuance = auditor.ReceiptIssuanceRuntimeEvidenceV1(
         absolute_deadline_kind="STATISTICS",
         absolute_deadline_monotonic_nanoseconds=1,
         absolute_deadline_timeout_seconds=auditor.STATISTICS_WORKER_TIMEOUT_SECONDS,
-        worker_peak_rss_bytes_sum=0,
-        parent_peak_rss_bytes_before_receipt_finalization=0,
-        parent_rss_charge_ceiling_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
-        conservative_parent_plus_worker_peak_sum_bytes=(
-            auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        diagnostic_worker_historical_peak_rss_bytes_sum=0,
+        diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization=0,
+        diagnostic_parent_plus_worker_historical_peak_sum_bytes=0,
+        unified_cgroup_membership=cgroup_snapshot.unified_membership,
+        unified_cgroup_memory_scope_root=cgroup_snapshot.memory_scope_root,
+        unified_cgroup_leaf_device=cgroup_snapshot.leaf_device,
+        unified_cgroup_leaf_inode=cgroup_snapshot.leaf_inode,
+        physical_memory_current_bytes_before_receipt_finalization=(
+            cgroup_snapshot.memory_current_bytes
         ),
+        physical_memory_peak_bytes_before_receipt_finalization=(
+            cgroup_snapshot.memory_peak_bytes
+        ),
+        physical_memory_max_bytes=cgroup_snapshot.memory_max_bytes,
+        physical_memory_cap_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
         receipt_finalization_complete_pending_validation_count=1,
         receipt_finalization_locked_deadline_check_count=1,
         receipt_finalization_locked_deadline_within_absolute_limit=True,
-        receipt_finalization_parent_peak_within_charge_ceiling=True,
+        receipt_finalization_locked_physical_peak_within_cap=True,
     )
     return plan, statistics, issuance
 
@@ -4578,6 +4737,7 @@ def _valid_executed_runtime_bundle_projection() -> tuple[
     )
     parent_rss = invariant_preflight.parent_current_rss_bytes_at_preflight
     adapter_pin = "phase2b_formal_covert_adapter_execution_pins_" + "0" * 64
+    cgroup_snapshot = _test_auditor_cgroup_snapshot()
     invariant_runtime = auditor.InvariantRuntimeEvidenceV1(
         invariance_resource_plan_root=plan.invariance_resource_plan_root,
         resource_preflight=invariant_preflight,
@@ -4588,11 +4748,20 @@ def _valid_executed_runtime_bundle_projection() -> tuple[
         parent_peak_current_rss_bytes_observed=parent_rss,
         parent_current_rss_bytes_at_completion=parent_rss,
         parent_historical_peak_rss_bytes=parent_rss,
-        parent_peak_rss_bytes=parent_rss,
         worker_peak_rss_bytes=0,
         worker_result_artifact_bytes=1,
         worker_result_artifact_sha256="sha256:" + "0" * 64,
-        conservative_parent_plus_worker_peak_sum_bytes=parent_rss,
+        diagnostic_parent_plus_worker_historical_peak_sum_bytes=parent_rss,
+        unified_cgroup_membership=cgroup_snapshot.unified_membership,
+        unified_cgroup_memory_scope_root=cgroup_snapshot.memory_scope_root,
+        unified_cgroup_leaf_device=cgroup_snapshot.leaf_device,
+        unified_cgroup_leaf_inode=cgroup_snapshot.leaf_inode,
+        physical_memory_current_bytes_at_completion=(
+            cgroup_snapshot.memory_current_bytes
+        ),
+        physical_memory_peak_bytes_at_completion=cgroup_snapshot.memory_peak_bytes,
+        physical_memory_max_bytes=cgroup_snapshot.memory_max_bytes,
+        physical_memory_cap_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
         invariance_wall_time_nanoseconds=1,
         worker_timeout_seconds=auditor.INVARIANCE_WORKER_TIMEOUT_SECONDS,
         invariant_run_count=qualification.EXACT_RECOGNIZER_INVOCATIONS,
@@ -4615,7 +4784,7 @@ def _valid_executed_runtime_bundle_projection() -> tuple[
         parent_side_adapter_sandboxed=False,
         process_group_empty_at_exit=True,
         child_address_space_limit_bytes=1,
-        within_frozen_aggregate_cap=True,
+        within_frozen_physical_peak_cap=True,
     )
     plan_projection = qualification._closed_primitive_v2(plan)
     invariant_projection = qualification._closed_primitive_v2(invariant_runtime)
@@ -4626,17 +4795,36 @@ def _valid_executed_runtime_bundle_projection() -> tuple[
     seed_reveal = "0" * 64
     diagnostics = qualification._diagnostic_projection(
         qualification.AuditRunDiagnosticsV2(
-            "KNOWN_NULL",
-            1,
-            0,
-            auditor.MAXIMUM_ESTIMATED_RSS_BYTES // 1_024,
-            tuple(0 for _ in statistics_runtime.worker_peak_rss_bytes),
-            auditor.MAXIMUM_ESTIMATED_RSS_BYTES // 1_024,
-            statistics_runtime.statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds,
-            statistics_runtime.host_available_memory_bytes_at_preflight,
-            qualification.EXACT_RECOGNIZER_INVOCATIONS,
-            qualification.EXACT_AUTHORITY_ROWS,
-            qualification.EXACT_AUTHORITY_ROWS,
+            mode="KNOWN_NULL",
+            wall_time_ns=1,
+            parent_historical_peak_rss_before_receipt_finalization_kib=0,
+            statistics_worker_historical_peak_rss_kib=tuple(
+                0 for _ in statistics_runtime.worker_peak_rss_bytes
+            ),
+            parent_plus_worker_historical_peak_rss_kib=0,
+            unified_cgroup_membership=cgroup_snapshot.unified_membership,
+            unified_cgroup_memory_scope_root=cgroup_snapshot.memory_scope_root,
+            unified_cgroup_leaf_device=cgroup_snapshot.leaf_device,
+            unified_cgroup_leaf_inode=cgroup_snapshot.leaf_inode,
+            physical_memory_current_before_receipt_finalization_bytes=(
+                cgroup_snapshot.memory_current_bytes
+            ),
+            physical_memory_peak_before_receipt_finalization_bytes=(
+                cgroup_snapshot.memory_peak_bytes
+            ),
+            physical_memory_max_bytes=cgroup_snapshot.memory_max_bytes,
+            physical_memory_cap_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+            statistics_wall_time_ns=(
+                statistics_runtime.statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds
+            ),
+            host_available_memory_bytes_at_preflight=(
+                statistics_runtime.host_available_memory_bytes_at_preflight
+            ),
+            recognizer_adapter_invocations=(
+                qualification.EXACT_RECOGNIZER_INVOCATIONS
+            ),
+            minimum_rows_per_invocation=qualification.EXACT_AUTHORITY_ROWS,
+            maximum_rows_per_invocation=qualification.EXACT_AUTHORITY_ROWS,
         )
     )
     run = {
@@ -4672,19 +4860,63 @@ def _valid_executed_runtime_bundle_projection() -> tuple[
                 "wall_time_nanoseconds": (
                     invariant_runtime.invariance_wall_time_nanoseconds
                 ),
-                "within_frozen_aggregate_cap": (
-                    invariant_runtime.within_frozen_aggregate_cap
+                "unified_cgroup_membership": (
+                    invariant_runtime.unified_cgroup_membership
+                ),
+                "unified_cgroup_memory_scope_root": (
+                    invariant_runtime.unified_cgroup_memory_scope_root
+                ),
+                "unified_cgroup_leaf_device": (
+                    invariant_runtime.unified_cgroup_leaf_device
+                ),
+                "unified_cgroup_leaf_inode": (
+                    invariant_runtime.unified_cgroup_leaf_inode
+                ),
+                "physical_memory_current_bytes_at_completion": (
+                    invariant_runtime.physical_memory_current_bytes_at_completion
+                ),
+                "physical_memory_peak_bytes_at_completion": (
+                    invariant_runtime.physical_memory_peak_bytes_at_completion
+                ),
+                "physical_memory_max_bytes": invariant_runtime.physical_memory_max_bytes,
+                "physical_memory_cap_bytes": (
+                    invariant_runtime.physical_memory_cap_bytes
+                ),
+                "within_frozen_physical_peak_cap": (
+                    invariant_runtime.within_frozen_physical_peak_cap
                 ),
                 "complete_runtime_projection": invariant_projection,
                 "complete_runtime_projection_root": qualification.stable_hash(
                     invariant_projection,
-                    prefix="phase2b_formal_wire_covert_invariant_runtime_v3_",
+                    prefix="phase2b_formal_wire_covert_invariant_runtime_v4_",
                 ),
             },
             "statistics": {
                 "resource_plan_root": statistics_runtime.resource_plan_root,
-                "conservative_parent_plus_worker_peak_sum_bytes": (
-                    statistics_runtime.conservative_parent_plus_worker_peak_sum_bytes
+                "diagnostic_parent_plus_worker_historical_peak_sum_bytes": (
+                    statistics_runtime.diagnostic_parent_plus_worker_historical_peak_sum_bytes
+                ),
+                "unified_cgroup_membership": (
+                    statistics_runtime.unified_cgroup_membership
+                ),
+                "unified_cgroup_memory_scope_root": (
+                    statistics_runtime.unified_cgroup_memory_scope_root
+                ),
+                "unified_cgroup_leaf_device": (
+                    statistics_runtime.unified_cgroup_leaf_device
+                ),
+                "unified_cgroup_leaf_inode": (
+                    statistics_runtime.unified_cgroup_leaf_inode
+                ),
+                "physical_memory_current_bytes_before_receipt_finalization": (
+                    statistics_runtime.physical_memory_current_bytes_before_receipt_finalization
+                ),
+                "physical_memory_peak_bytes_before_receipt_finalization": (
+                    statistics_runtime.physical_memory_peak_bytes_before_receipt_finalization
+                ),
+                "physical_memory_max_bytes": statistics_runtime.physical_memory_max_bytes,
+                "physical_memory_cap_bytes": (
+                    statistics_runtime.physical_memory_cap_bytes
                 ),
                 "external_supervisor_required": (
                     statistics_runtime.external_supervisor_required
@@ -4707,27 +4939,47 @@ def _valid_executed_runtime_bundle_projection() -> tuple[
                 "statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds": (
                     statistics_runtime.statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds
                 ),
-                "within_frozen_aggregate_cap": (
-                    statistics_runtime.within_frozen_aggregate_cap
+                "within_frozen_physical_peak_cap": (
+                    statistics_runtime.within_frozen_physical_peak_cap
                 ),
                 "complete_runtime_projection": statistics_projection,
                 "complete_runtime_projection_root": qualification.stable_hash(
                     statistics_projection,
-                    prefix="phase2b_formal_wire_covert_statistics_runtime_v3_",
+                    prefix="phase2b_formal_wire_covert_statistics_runtime_v4_",
                 ),
             },
             "receipt_issuance": {
                 "receipt_id": receipt_id,
                 "absolute_deadline_kind": issuance_runtime.absolute_deadline_kind,
-                "worker_peak_rss_bytes_sum": (
-                    issuance_runtime.worker_peak_rss_bytes_sum
+                "diagnostic_worker_historical_peak_rss_bytes_sum": (
+                    issuance_runtime.diagnostic_worker_historical_peak_rss_bytes_sum
                 ),
-                "parent_rss_charge_ceiling_bytes": (
-                    issuance_runtime.parent_rss_charge_ceiling_bytes
+                "diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization": (
+                    issuance_runtime.diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization
                 ),
-                "conservative_parent_plus_worker_peak_sum_bytes": (
-                    issuance_runtime.conservative_parent_plus_worker_peak_sum_bytes
+                "diagnostic_parent_plus_worker_historical_peak_sum_bytes": (
+                    issuance_runtime.diagnostic_parent_plus_worker_historical_peak_sum_bytes
                 ),
+                "unified_cgroup_membership": (
+                    issuance_runtime.unified_cgroup_membership
+                ),
+                "unified_cgroup_memory_scope_root": (
+                    issuance_runtime.unified_cgroup_memory_scope_root
+                ),
+                "unified_cgroup_leaf_device": (
+                    issuance_runtime.unified_cgroup_leaf_device
+                ),
+                "unified_cgroup_leaf_inode": (
+                    issuance_runtime.unified_cgroup_leaf_inode
+                ),
+                "physical_memory_current_bytes_before_receipt_finalization": (
+                    issuance_runtime.physical_memory_current_bytes_before_receipt_finalization
+                ),
+                "physical_memory_peak_bytes_before_receipt_finalization": (
+                    issuance_runtime.physical_memory_peak_bytes_before_receipt_finalization
+                ),
+                "physical_memory_max_bytes": issuance_runtime.physical_memory_max_bytes,
+                "physical_memory_cap_bytes": issuance_runtime.physical_memory_cap_bytes,
                 "receipt_finalization_complete_pending_validation_count": (
                     issuance_runtime.receipt_finalization_complete_pending_validation_count
                 ),
@@ -4737,14 +4989,14 @@ def _valid_executed_runtime_bundle_projection() -> tuple[
                 "receipt_finalization_locked_deadline_within_absolute_limit": (
                     issuance_runtime.receipt_finalization_locked_deadline_within_absolute_limit
                 ),
-                "receipt_finalization_parent_peak_within_charge_ceiling": (
-                    issuance_runtime.receipt_finalization_parent_peak_within_charge_ceiling
+                "receipt_finalization_locked_physical_peak_within_cap": (
+                    issuance_runtime.receipt_finalization_locked_physical_peak_within_cap
                 ),
                 "complete_runtime_projection": issuance_projection,
                 "complete_runtime_projection_root": qualification.stable_hash(
                     issuance_projection,
                     prefix=(
-                        "phase2b_formal_wire_covert_receipt_issuance_runtime_v3_"
+                        "phase2b_formal_wire_covert_receipt_issuance_runtime_v4_"
                     ),
                 ),
             },
@@ -4797,6 +5049,12 @@ def _valid_executed_runtime_bundle_projection() -> tuple[
         "compact_statistics_cap",
         "compact_statistics_conservative",
         "compact_statistics_external",
+        "complete_statistics_scope",
+        "complete_issuance_scope",
+        "synchronized_invariant_scope",
+        "compact_issuance_bool_alias",
+        "diagnostics_scope",
+        "receipt_physical_peak",
         "diagnostics_statistics_wall",
         "schedule_root",
         "execution_root",
@@ -4844,13 +5102,19 @@ def test_executed_runtime_bundle_dto_valid_splice_matrix_fails_closed(
     def refresh_invariant_root() -> None:
         invariant["complete_runtime_projection_root"] = qualification.stable_hash(
             invariant_complete,
-            prefix="phase2b_formal_wire_covert_invariant_runtime_v3_",
+            prefix="phase2b_formal_wire_covert_invariant_runtime_v4_",
         )
 
     def refresh_statistics_root() -> None:
         statistics["complete_runtime_projection_root"] = qualification.stable_hash(
             statistics_complete,
-            prefix="phase2b_formal_wire_covert_statistics_runtime_v3_",
+            prefix="phase2b_formal_wire_covert_statistics_runtime_v4_",
+        )
+
+    def refresh_issuance_root() -> None:
+        issuance["complete_runtime_projection_root"] = qualification.stable_hash(
+            issuance_complete,
+            prefix="phase2b_formal_wire_covert_receipt_issuance_runtime_v4_",
         )
 
     if case == "visible_rows":
@@ -4883,11 +5147,11 @@ def test_executed_runtime_bundle_dto_valid_splice_matrix_fails_closed(
     elif case == "compact_invariant_wall":
         invariant["wall_time_nanoseconds"] += 1
     elif case == "compact_invariant_cap":
-        invariant["within_frozen_aggregate_cap"] = False
+        invariant["within_frozen_physical_peak_cap"] = False
     elif case == "worker_count":
         statistics_complete["worker_peak_rss_bytes"].append(0)
         statistics["worker_peak_rss_bytes"].append(0)
-        run["diagnostics"]["statistics_worker_peak_rss_kib"].append(0)
+        run["diagnostics"]["statistics_worker_historical_peak_rss_kib"].append(0)
         measurement["diagnostics"] = json.loads(
             json.dumps(run["diagnostics"])
         )
@@ -4926,11 +5190,46 @@ def test_executed_runtime_bundle_dto_valid_splice_matrix_fails_closed(
             "statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds"
         ] += 1
     elif case == "compact_statistics_cap":
-        statistics["within_frozen_aggregate_cap"] = False
+        statistics["within_frozen_physical_peak_cap"] = False
     elif case == "compact_statistics_conservative":
-        statistics["conservative_parent_plus_worker_peak_sum_bytes"] += 1
+        statistics["diagnostic_parent_plus_worker_historical_peak_sum_bytes"] += 1
     elif case == "compact_statistics_external":
         statistics["external_supervisor_required"] = False
+    elif case == "complete_statistics_scope":
+        statistics_complete["unified_cgroup_leaf_inode"] += 1
+        refresh_statistics_root()
+    elif case == "complete_issuance_scope":
+        issuance_complete["unified_cgroup_leaf_device"] += 1
+        refresh_issuance_root()
+    elif case == "synchronized_invariant_scope":
+        new_device = invariant_complete["unified_cgroup_leaf_device"] + 1
+        new_scope = qualification.stable_hash(
+            {
+                "leaf_device": new_device,
+                "leaf_inode": invariant_complete["unified_cgroup_leaf_inode"],
+                "unified_membership": invariant_complete[
+                    "unified_cgroup_membership"
+                ],
+            },
+            prefix="phase2b_formal_covert_unified_cgroup_memory_scope_v1_",
+        )
+        invariant_complete["unified_cgroup_leaf_device"] = new_device
+        invariant_complete["unified_cgroup_memory_scope_root"] = new_scope
+        invariant["unified_cgroup_leaf_device"] = new_device
+        invariant["unified_cgroup_memory_scope_root"] = new_scope
+        refresh_invariant_root()
+    elif case == "compact_issuance_bool_alias":
+        issuance["receipt_finalization_complete_pending_validation_count"] = True
+    elif case == "diagnostics_scope":
+        run["diagnostics"]["unified_cgroup_memory_scope_root"] = (
+            "phase2b_formal_covert_unified_cgroup_memory_scope_v1_" + "1" * 64
+        )
+        measurement["diagnostics"] = dict(run["diagnostics"])
+    elif case == "receipt_physical_peak":
+        issuance_complete[
+            "physical_memory_peak_bytes_before_receipt_finalization"
+        ] += 1
+        refresh_issuance_root()
     elif case == "diagnostics_statistics_wall":
         run["diagnostics"]["statistics_wall_time_ns"] += 1
         measurement["diagnostics"] = dict(run["diagnostics"])
@@ -5037,19 +5336,39 @@ def test_candidate_success_projects_and_releases_both_receipts_over_registry_cap
     )
 
     def diagnostics(mode: str) -> qualification.AuditRunDiagnosticsV2:
-        cap_kib = auditor.MAXIMUM_ESTIMATED_RSS_BYTES // 1_024
         return qualification.AuditRunDiagnosticsV2(
-            mode,
-            1,
-            0,
-            cap_kib,
-            tuple(0 for _ in statistics_runtime.worker_peak_rss_bytes),
-            cap_kib,
-            1,
-            statistics_runtime.host_available_memory_bytes_at_preflight,
-            qualification.EXACT_RECOGNIZER_INVOCATIONS,
-            qualification.EXACT_AUTHORITY_ROWS,
-            qualification.EXACT_AUTHORITY_ROWS,
+            mode=mode,
+            wall_time_ns=1,
+            parent_historical_peak_rss_before_receipt_finalization_kib=0,
+            statistics_worker_historical_peak_rss_kib=tuple(
+                0 for _ in statistics_runtime.worker_peak_rss_bytes
+            ),
+            parent_plus_worker_historical_peak_rss_kib=0,
+            unified_cgroup_membership=(
+                statistics_runtime.unified_cgroup_membership
+            ),
+            unified_cgroup_memory_scope_root=(
+                statistics_runtime.unified_cgroup_memory_scope_root
+            ),
+            unified_cgroup_leaf_device=statistics_runtime.unified_cgroup_leaf_device,
+            unified_cgroup_leaf_inode=statistics_runtime.unified_cgroup_leaf_inode,
+            physical_memory_current_before_receipt_finalization_bytes=(
+                statistics_runtime.physical_memory_current_bytes_before_receipt_finalization
+            ),
+            physical_memory_peak_before_receipt_finalization_bytes=(
+                statistics_runtime.physical_memory_peak_bytes_before_receipt_finalization
+            ),
+            physical_memory_max_bytes=statistics_runtime.physical_memory_max_bytes,
+            physical_memory_cap_bytes=statistics_runtime.physical_memory_cap_bytes,
+            statistics_wall_time_ns=1,
+            host_available_memory_bytes_at_preflight=(
+                statistics_runtime.host_available_memory_bytes_at_preflight
+            ),
+            recognizer_adapter_invocations=(
+                qualification.EXACT_RECOGNIZER_INVOCATIONS
+            ),
+            minimum_rows_per_invocation=qualification.EXACT_AUTHORITY_ROWS,
+            maximum_rows_per_invocation=qualification.EXACT_AUTHORITY_ROWS,
         )
 
     for index in range(auditor.MAXIMUM_IN_PROCESS_ISSUED_RECEIPTS + 1):
@@ -5112,7 +5431,7 @@ def test_candidate_success_projects_and_releases_both_receipts_over_registry_cap
         )
         assert candidate.positive_audit_receipt_id == positive_id
         assert candidate.qualification_receipt_id.startswith(
-            "phase2b_formal_wire_covert_qualification_receipt_v5_"
+            "phase2b_formal_wire_covert_qualification_receipt_v6_"
         )
         assert not hasattr(candidate, "positive_audit_receipt")
         projection = candidate._receipt_projection()
@@ -5273,7 +5592,7 @@ def test_candidate_success_projects_and_releases_both_receipts_over_registry_cap
                     qualification.stable_hash(
                         inadmissible_statistics_projection,
                         prefix=(
-                            "phase2b_formal_wire_covert_statistics_runtime_v3_"
+                            "phase2b_formal_wire_covert_statistics_runtime_v4_"
                         ),
                     ),
                 )
@@ -5311,9 +5630,7 @@ def test_candidate_success_projects_and_releases_both_receipts_over_registry_cap
             changed_statistics = replace(
                 statistics_runtime,
                 worker_peak_rss_bytes=changed_worker_peaks,
-                parent_rss_charge_ceiling_bytes=(
-                    auditor.MAXIMUM_ESTIMATED_RSS_BYTES - 1_024
-                ),
+                diagnostic_parent_plus_worker_historical_peak_sum_bytes=1_024,
             )
             changed_statistics_projection = qualification._closed_primitive_v2(
                 changed_statistics
@@ -5333,25 +5650,57 @@ def test_candidate_success_projects_and_releases_both_receipts_over_registry_cap
                 "positive_statistics_runtime_projection_root",
                 qualification.stable_hash(
                     changed_statistics_projection,
-                    prefix="phase2b_formal_wire_covert_statistics_runtime_v3_",
+                    prefix="phase2b_formal_wire_covert_statistics_runtime_v4_",
                 ),
             )
-            cap_kib = auditor.MAXIMUM_ESTIMATED_RSS_BYTES // 1_024
             object.__setattr__(
                 candidate,
                 "positive_diagnostics",
                 qualification.AuditRunDiagnosticsV2(
-                    "KNOWN_NULL",
-                    1,
-                    0,
-                    cap_kib - 1,
-                    tuple(value // 1_024 for value in changed_worker_peaks),
-                    cap_kib,
-                    1,
-                    statistics_runtime.host_available_memory_bytes_at_preflight,
-                    qualification.EXACT_RECOGNIZER_INVOCATIONS,
-                    qualification.EXACT_AUTHORITY_ROWS,
-                    qualification.EXACT_AUTHORITY_ROWS,
+                    mode="KNOWN_NULL",
+                    wall_time_ns=1,
+                    parent_historical_peak_rss_before_receipt_finalization_kib=0,
+                    statistics_worker_historical_peak_rss_kib=tuple(
+                        value // 1_024 for value in changed_worker_peaks
+                    ),
+                    parent_plus_worker_historical_peak_rss_kib=1,
+                    unified_cgroup_membership=(
+                        statistics_runtime.unified_cgroup_membership
+                    ),
+                    unified_cgroup_memory_scope_root=(
+                        statistics_runtime.unified_cgroup_memory_scope_root
+                    ),
+                    unified_cgroup_leaf_device=(
+                        statistics_runtime.unified_cgroup_leaf_device
+                    ),
+                    unified_cgroup_leaf_inode=(
+                        statistics_runtime.unified_cgroup_leaf_inode
+                    ),
+                    physical_memory_current_before_receipt_finalization_bytes=(
+                        statistics_runtime.physical_memory_current_bytes_before_receipt_finalization
+                    ),
+                    physical_memory_peak_before_receipt_finalization_bytes=(
+                        statistics_runtime.physical_memory_peak_bytes_before_receipt_finalization
+                    ),
+                    physical_memory_max_bytes=(
+                        statistics_runtime.physical_memory_max_bytes
+                    ),
+                    physical_memory_cap_bytes=(
+                        statistics_runtime.physical_memory_cap_bytes
+                    ),
+                    statistics_wall_time_ns=1,
+                    host_available_memory_bytes_at_preflight=(
+                        statistics_runtime.host_available_memory_bytes_at_preflight
+                    ),
+                    recognizer_adapter_invocations=(
+                        qualification.EXACT_RECOGNIZER_INVOCATIONS
+                    ),
+                    minimum_rows_per_invocation=(
+                        qualification.EXACT_AUTHORITY_ROWS
+                    ),
+                    maximum_rows_per_invocation=(
+                        qualification.EXACT_AUTHORITY_ROWS
+                    ),
                 ),
             )
             refresh_candidate_id()
@@ -5373,10 +5722,8 @@ def test_candidate_success_projects_and_releases_both_receipts_over_registry_cap
 
             changed_issuance = replace(
                 issuance_runtime,
-                worker_peak_rss_bytes_sum=1_024,
-                parent_rss_charge_ceiling_bytes=(
-                    auditor.MAXIMUM_ESTIMATED_RSS_BYTES - 1_024
-                ),
+                diagnostic_worker_historical_peak_rss_bytes_sum=1_024,
+                diagnostic_parent_plus_worker_historical_peak_sum_bytes=1_024,
             )
             changed_issuance_projection = qualification._closed_primitive_v2(
                 changed_issuance
@@ -5398,7 +5745,7 @@ def test_candidate_success_projects_and_releases_both_receipts_over_registry_cap
                 qualification.stable_hash(
                     changed_issuance_projection,
                     prefix=(
-                        "phase2b_formal_wire_covert_receipt_issuance_runtime_v3_"
+                        "phase2b_formal_wire_covert_receipt_issuance_runtime_v4_"
                     ),
                 ),
             )
@@ -5414,6 +5761,188 @@ def test_candidate_success_projects_and_releases_both_receipts_over_registry_cap
                 candidate,
                 "positive_receipt_issuance_runtime_projection_root",
                 original_issuance_root,
+            )
+            refresh_candidate_id()
+            candidate._validate()
+
+            positive_statistics = candidate.positive_statistics_runtime_projection
+            positive_statistics_root = (
+                candidate.positive_statistics_runtime_projection_root
+            )
+            original_physical_peak = positive_statistics[
+                "physical_memory_peak_bytes_before_receipt_finalization"
+            ]
+            positive_statistics[
+                "physical_memory_peak_bytes_before_receipt_finalization"
+            ] = original_physical_peak + 1
+            object.__setattr__(
+                candidate,
+                "positive_statistics_runtime_projection_root",
+                qualification.stable_hash(
+                    positive_statistics,
+                    prefix="phase2b_formal_wire_covert_statistics_runtime_v4_",
+                ),
+            )
+            refresh_candidate_id()
+            with pytest.raises(ValueError):
+                candidate._validate()
+            positive_statistics[
+                "physical_memory_peak_bytes_before_receipt_finalization"
+            ] = original_physical_peak
+            object.__setattr__(
+                candidate,
+                "positive_statistics_runtime_projection_root",
+                positive_statistics_root,
+            )
+            refresh_candidate_id()
+            candidate._validate()
+
+            negative_statistics = candidate.negative_statistics_runtime_projection
+            negative_issuance = (
+                candidate.negative_receipt_issuance_runtime_projection
+            )
+            negative_statistics_root = (
+                candidate.negative_statistics_runtime_projection_root
+            )
+            negative_issuance_root = (
+                candidate.negative_receipt_issuance_runtime_projection_root
+            )
+            negative_diagnostics = candidate.negative_diagnostics
+            original_negative_peak = negative_statistics[
+                "physical_memory_peak_bytes_before_receipt_finalization"
+            ]
+            lower_negative_peak = original_negative_peak - 1
+            assert lower_negative_peak >= negative_statistics[
+                "physical_memory_current_bytes_before_receipt_finalization"
+            ]
+            negative_statistics[
+                "physical_memory_peak_bytes_before_receipt_finalization"
+            ] = lower_negative_peak
+            negative_issuance[
+                "physical_memory_peak_bytes_before_receipt_finalization"
+            ] = lower_negative_peak
+            object.__setattr__(
+                candidate,
+                "negative_statistics_runtime_projection_root",
+                qualification.stable_hash(
+                    negative_statistics,
+                    prefix="phase2b_formal_wire_covert_statistics_runtime_v4_",
+                ),
+            )
+            object.__setattr__(
+                candidate,
+                "negative_receipt_issuance_runtime_projection_root",
+                qualification.stable_hash(
+                    negative_issuance,
+                    prefix=(
+                        "phase2b_formal_wire_covert_receipt_issuance_runtime_v4_"
+                    ),
+                ),
+            )
+            object.__setattr__(
+                candidate,
+                "negative_diagnostics",
+                replace(
+                    negative_diagnostics,
+                    physical_memory_peak_before_receipt_finalization_bytes=(
+                        lower_negative_peak
+                    ),
+                ),
+            )
+            refresh_candidate_id()
+            with pytest.raises(ValueError, match="changed physical memory scope"):
+                candidate._validate()
+            negative_statistics[
+                "physical_memory_peak_bytes_before_receipt_finalization"
+            ] = original_negative_peak
+            negative_issuance[
+                "physical_memory_peak_bytes_before_receipt_finalization"
+            ] = original_negative_peak
+            object.__setattr__(
+                candidate,
+                "negative_statistics_runtime_projection_root",
+                negative_statistics_root,
+            )
+            object.__setattr__(
+                candidate,
+                "negative_receipt_issuance_runtime_projection_root",
+                negative_issuance_root,
+            )
+            object.__setattr__(
+                candidate,
+                "negative_diagnostics",
+                negative_diagnostics,
+            )
+            refresh_candidate_id()
+            candidate._validate()
+
+            original_device = negative_statistics["unified_cgroup_leaf_device"]
+            original_scope = negative_statistics[
+                "unified_cgroup_memory_scope_root"
+            ]
+            alternate_device = original_device + 1
+            alternate_scope = qualification.stable_hash(
+                {
+                    "leaf_device": alternate_device,
+                    "leaf_inode": negative_statistics[
+                        "unified_cgroup_leaf_inode"
+                    ],
+                    "unified_membership": negative_statistics[
+                        "unified_cgroup_membership"
+                    ],
+                },
+                prefix="phase2b_formal_covert_unified_cgroup_memory_scope_v1_",
+            )
+            for projection in (negative_statistics, negative_issuance):
+                projection["unified_cgroup_leaf_device"] = alternate_device
+                projection["unified_cgroup_memory_scope_root"] = alternate_scope
+            object.__setattr__(
+                candidate,
+                "negative_statistics_runtime_projection_root",
+                qualification.stable_hash(
+                    negative_statistics,
+                    prefix="phase2b_formal_wire_covert_statistics_runtime_v4_",
+                ),
+            )
+            object.__setattr__(
+                candidate,
+                "negative_receipt_issuance_runtime_projection_root",
+                qualification.stable_hash(
+                    negative_issuance,
+                    prefix=(
+                        "phase2b_formal_wire_covert_receipt_issuance_runtime_v4_"
+                    ),
+                ),
+            )
+            object.__setattr__(
+                candidate,
+                "negative_diagnostics",
+                replace(
+                    negative_diagnostics,
+                    unified_cgroup_leaf_device=alternate_device,
+                    unified_cgroup_memory_scope_root=alternate_scope,
+                ),
+            )
+            refresh_candidate_id()
+            with pytest.raises(ValueError, match="changed physical memory scope"):
+                candidate._validate()
+            for projection in (negative_statistics, negative_issuance):
+                projection["unified_cgroup_leaf_device"] = original_device
+                projection["unified_cgroup_memory_scope_root"] = original_scope
+            object.__setattr__(
+                candidate,
+                "negative_statistics_runtime_projection_root",
+                negative_statistics_root,
+            )
+            object.__setattr__(
+                candidate,
+                "negative_receipt_issuance_runtime_projection_root",
+                negative_issuance_root,
+            )
+            object.__setattr__(
+                candidate,
+                "negative_diagnostics",
+                negative_diagnostics,
             )
             refresh_candidate_id()
             candidate._validate()
@@ -5446,15 +5975,15 @@ def test_candidate_success_projects_and_releases_both_receipts_over_registry_cap
             candidate._validate()
 
             original_worker_sum = candidate.positive_receipt_issuance_runtime_projection[
-                "worker_peak_rss_bytes_sum"
+                "diagnostic_worker_historical_peak_rss_bytes_sum"
             ]
             candidate.positive_receipt_issuance_runtime_projection[
-                "worker_peak_rss_bytes_sum"
+                "diagnostic_worker_historical_peak_rss_bytes_sum"
             ] = original_worker_sum + 1
             with pytest.raises(ValueError):
                 candidate._validate()
             candidate.positive_receipt_issuance_runtime_projection[
-                "worker_peak_rss_bytes_sum"
+                "diagnostic_worker_historical_peak_rss_bytes_sum"
             ] = original_worker_sum
             object.__setattr__(candidate, "actual_execution_claimed", True)
             with pytest.raises(ValueError, match="runtime/readiness boundary"):
@@ -5468,8 +5997,11 @@ def test_cgroup_v2_parser_requires_finite_memory_and_pids(tmp_path: Path) -> Non
     (proc / "self").mkdir(parents=True)
     target.mkdir(parents=True)
     (proc / "self/cgroup").write_text("0::/unit.service\n", encoding="utf-8")
+    requested_memory_max = 24 * 1_024 * 1_024 * 1_024
     rows = {
-        "memory.max": str(auditor.MAXIMUM_ESTIMATED_RSS_BYTES),
+        "cgroup.procs": str(os.getpid()),
+        "cgroup.stat": "nr_descendants 0\nnr_dying_descendants 0\n",
+        "memory.max": str(requested_memory_max),
         "memory.current": "1024",
         "memory.peak": "2048",
         "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\n",
@@ -5482,13 +6014,2951 @@ def test_cgroup_v2_parser_requires_finite_memory_and_pids(tmp_path: Path) -> Non
     evidence = qualification.inspect_current_live_cgroup_v2(
         proc_root=proc, cgroup_root=cgroup
     )
-    assert evidence["memory_max"] == auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+    opened = target.stat(follow_symlinks=False)
+    assert evidence["memory_max"] == requested_memory_max
+    assert evidence["memory_peak"] == 2_048
+    assert evidence["unified_cgroup_leaf_device"] == opened.st_dev
+    assert evidence["unified_cgroup_leaf_inode"] == opened.st_ino
+    assert evidence["unified_cgroup_memory_scope_root"] == qualification.stable_hash(
+        {
+            "leaf_device": opened.st_dev,
+            "leaf_inode": opened.st_ino,
+            "unified_membership": "/unit.service",
+        },
+        prefix="phase2b_formal_covert_unified_cgroup_memory_scope_v1_",
+    )
     assert evidence["pids_max"] == 64
+    assert evidence["cgroup_procs"] == [os.getpid()]
+    assert evidence["cgroup_stat"]["nr_descendants"] == 0
     assert evidence["cpu_max"] is None
+    for malformed in ("01024", " 1024\n", "1024\n\n"):
+        (target / "memory.current").write_text(malformed, encoding="ascii")
+        with pytest.raises(ValueError, match="canonical"):
+            qualification.inspect_current_live_cgroup_v2(
+                proc_root=proc, cgroup_root=cgroup
+            )
+    (target / "memory.current").write_text("1" * 4_097, encoding="ascii")
+    with pytest.raises(ValueError, match="outside bounds"):
+        qualification.inspect_current_live_cgroup_v2(
+            proc_root=proc, cgroup_root=cgroup
+        )
+    (target / "memory.current").write_text("1024", encoding="ascii")
+    (target / "memory.events").write_text("", encoding="ascii")
+    with pytest.raises(ValueError, match="outside bounds"):
+        qualification.inspect_current_live_cgroup_v2(
+            proc_root=proc, cgroup_root=cgroup
+        )
+    (target / "memory.events").write_text("oom 0\n", encoding="ascii")
+    with pytest.raises(ValueError, match="structural snapshot drifted"):
+        qualification.inspect_current_live_cgroup_v2(
+            proc_root=proc, cgroup_root=cgroup
+        )
+    (target / "memory.events").write_text("oom  0\noom_kill 0\n", encoding="ascii")
+    with pytest.raises(ValueError, match="malformed"):
+        qualification.inspect_current_live_cgroup_v2(
+            proc_root=proc, cgroup_root=cgroup
+        )
+    (target / "memory.events").write_text(rows["memory.events"], encoding="ascii")
+    (target / "memory.peak").write_text(
+        str(auditor.MAXIMUM_ESTIMATED_RSS_BYTES + 1), encoding="ascii"
+    )
+    over_cap = qualification.inspect_current_live_cgroup_v2(
+        proc_root=proc, cgroup_root=cgroup
+    )
+    assert over_cap["memory_peak"] == auditor.MAXIMUM_ESTIMATED_RSS_BYTES + 1
+    (target / "memory.max").write_text(
+        str(auditor.MAXIMUM_ESTIMATED_RSS_BYTES), encoding="ascii"
+    )
+    (target / "memory.current").write_text(
+        str(auditor.MAXIMUM_ESTIMATED_RSS_BYTES + 1), encoding="ascii"
+    )
+    (target / "memory.peak").write_text(
+        str(auditor.MAXIMUM_ESTIMATED_RSS_BYTES + 2), encoding="ascii"
+    )
+    (target / "memory.events").write_text(
+        "low 0\nhigh 0\nmax 1\noom 0\noom_kill 0\n", encoding="ascii"
+    )
+    transient_overage = qualification.inspect_current_live_cgroup_v2(
+        proc_root=proc, cgroup_root=cgroup
+    )
+    assert transient_overage["memory_current"] == (
+        auditor.MAXIMUM_ESTIMATED_RSS_BYTES + 1
+    )
+    assert transient_overage["memory_peak"] == (
+        auditor.MAXIMUM_ESTIMATED_RSS_BYTES + 2
+    )
+    assert transient_overage["memory_events"]["max"] == 1
+    (target / "memory.events").write_text(rows["memory.events"], encoding="ascii")
+    (target / "memory.max").write_text(str(requested_memory_max), encoding="ascii")
+    (target / "memory.peak").write_text("2048", encoding="ascii")
+    (target / "memory.current").write_text("2049", encoding="ascii")
+    with pytest.raises(ValueError, match="structural snapshot drifted"):
+        qualification.inspect_current_live_cgroup_v2(
+            proc_root=proc, cgroup_root=cgroup
+        )
+    (target / "memory.current").write_text("1024", encoding="ascii")
     (target / "memory.max").write_text("max\n", encoding="ascii")
     with pytest.raises(ValueError, match="finite"):
         qualification.inspect_current_live_cgroup_v2(
             proc_root=proc, cgroup_root=cgroup
+        )
+
+
+def _post_output_gate_fixture() -> tuple[
+    qualification.Phase2BFormalWireCovertAttemptManifestV2,
+    dict[str, object],
+    dict[str, object],
+]:
+    attempt = _attempt()
+    membership = "/test.slice/post-output.scope"
+    device = 11
+    inode = 22
+    snapshot = {
+        "cgroup_path": membership,
+        "cgroup_procs": [os.getpid()],
+        "cgroup_stat": {"nr_descendants": 0, "nr_dying_descendants": 0},
+        "cpu_affinity": [0],
+        "cpu_capacity": 1,
+        "cpu_max": None,
+        "memory_current": 1_024,
+        "memory_events": {
+            "high": 0,
+            "low": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_kill": 0,
+        },
+        "memory_max": auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+        "memory_peak": 2_048,
+        "pids_current": 1,
+        "pids_events": {"max": 0},
+        "pids_max": attempt.requested_cgroup_pids_max,
+        "unified_cgroup_leaf_device": device,
+        "unified_cgroup_leaf_inode": inode,
+        "unified_cgroup_memory_scope_root": qualification.stable_hash(
+            {
+                "leaf_device": device,
+                "leaf_inode": inode,
+                "unified_membership": membership,
+            },
+            prefix="phase2b_formal_covert_unified_cgroup_memory_scope_v1_",
+        ),
+    }
+    runtime_exit = {
+        "cgroup": json.loads(json.dumps(snapshot)),
+    }
+    runtime_exit["cgroup"]["memory_peak"] = 1_024
+    runtime_exit["cgroup"]["memory_current"] = 512
+    return attempt, runtime_exit, snapshot
+
+
+def _expected_cgroup_physical_resource_failure(
+    *,
+    prefix: str,
+    stage: str,
+    snapshot: dict[str, object],
+    cap: int,
+    reserve: int,
+) -> str:
+    memory_events = snapshot["memory_events"]
+    pids_events = snapshot["pids_events"]
+    assert type(memory_events) is dict
+    assert type(pids_events) is dict
+    peak = snapshot["memory_peak"]
+    assert type(peak) is int
+    return (
+        f"{prefix}; stage={stage};"
+        f"scope={snapshot['unified_cgroup_memory_scope_root']};"
+        f"current={snapshot['memory_current']};peak={peak};"
+        f"memory.max={snapshot['memory_max']};cap={cap};reserve={reserve};"
+        f"overage={max(0, peak - (cap - reserve))};"
+        f"memory.events.max={memory_events['max']};"
+        f"memory.events.oom={memory_events['oom']};"
+        f"memory.events.oom_kill={memory_events['oom_kill']};"
+        f"pids.max={snapshot['pids_max']};"
+        f"pids.events.max={pids_events['max']}"
+    )
+
+
+@pytest.mark.parametrize("event_only", (False, True), ids=("overcap-events", "events"))
+def test_live_entry_physical_gate_has_exact_transient_overage_or_event_detail(
+    monkeypatch: pytest.MonkeyPatch,
+    event_only: bool,
+) -> None:
+    attempt, _runtime_exit, snapshot = _post_output_gate_fixture()
+    cap = auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+    snapshot["memory_events"]["max"] = 1
+    if not event_only:
+        snapshot["memory_current"] = cap + 1
+        snapshot["memory_peak"] = cap + 2
+    interpreter_runtime = {"fixture": "source-only-runtime"}
+    monkeypatch.setattr(
+        qualification,
+        "_verify_source_only_runtime_bootstrap_v2",
+        lambda: interpreter_runtime,
+    )
+    with pytest.raises(
+        qualification.Phase2BFormalWireCovertQualificationErrorV2
+    ) as captured:
+        qualification._validate_live_runtime_entry_v2(
+            {"cgroup": snapshot, "interpreter_runtime": interpreter_runtime},
+            attempt,
+        )
+    expected = _expected_cgroup_physical_resource_failure(
+        prefix="live inner entry physical resource gate rejected",
+        stage="RUNTIME_ENTRY_SAMPLE",
+        snapshot=snapshot,
+        cap=cap,
+        reserve=0,
+    )
+    assert captured.value.code == qualification.FAIL_RESOURCE
+    assert captured.value.detail == expected
+    assert "\n" not in expected and "\r" not in expected
+    assert len(expected.encode("ascii")) <= 1_024
+
+
+@pytest.mark.parametrize("event_only", (False, True), ids=("overcap-events", "events"))
+def test_live_exit_physical_gate_has_exact_detail_before_event_drift(
+    monkeypatch: pytest.MonkeyPatch,
+    event_only: bool,
+) -> None:
+    attempt, runtime_exit, snapshot = _post_output_gate_fixture()
+    entry_cgroup = runtime_exit["cgroup"]
+    assert type(entry_cgroup) is dict
+    candidate = json.loads(json.dumps(entry_cgroup))
+    candidate["memory_events"]["max"] = 1
+    cap = auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+    if not event_only:
+        candidate["memory_current"] = cap + 1
+        candidate["memory_peak"] = cap + 2
+    real_read_text = Path.read_text
+
+    def read_text(path: Path, *args: object, **kwargs: object) -> str:
+        if path == Path("/proc/self/status"):
+            return "Threads:\t1\nSigBlk:\t0000000000000000\n"
+        return real_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", read_text)
+    monkeypatch.setattr(signal, "getsignal", lambda _number: signal.SIG_DFL)
+    monkeypatch.setattr(
+        qualification, "inspect_current_live_cgroup_v2", lambda: candidate
+    )
+    with pytest.raises(
+        qualification.Phase2BFormalWireCovertQualificationErrorV2
+    ) as captured:
+        qualification._capture_live_runtime_exit_v2(runtime_exit, attempt, [])
+    expected = _expected_cgroup_physical_resource_failure(
+        prefix="live inner exit physical resource gate rejected",
+        stage="RUNTIME_EXIT_SAMPLE",
+        snapshot=candidate,
+        cap=cap,
+        reserve=0,
+    )
+    assert captured.value.code == qualification.FAIL_RESOURCE
+    assert captured.value.detail == expected
+    assert "\n" not in expected and "\r" not in expected
+    assert len(expected.encode("ascii")) <= 1_024
+
+    scope_splice = json.loads(json.dumps(candidate))
+    scope_splice["unified_cgroup_leaf_inode"] += 1
+    monkeypatch.setattr(
+        qualification, "inspect_current_live_cgroup_v2", lambda: scope_splice
+    )
+    with pytest.raises(ValueError, match="live inner exit cgroup scope drifted"):
+        qualification._capture_live_runtime_exit_v2(runtime_exit, attempt, [])
+
+
+@pytest.mark.parametrize("event_only", (False, True), ids=("overcap-events", "events"))
+def test_post_output_full_gate_has_exact_detail_after_scope_identity(
+    event_only: bool,
+) -> None:
+    attempt, runtime_exit, snapshot = _post_output_gate_fixture()
+    cap = auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+    reserve = qualification.POST_OUTPUT_DIRECT_EXIT_TAIL_RESERVE_BYTES_V2
+    snapshot["memory_events"]["max"] = 1
+    if not event_only:
+        snapshot["memory_current"] = cap + 1
+        snapshot["memory_peak"] = cap + 2
+    with pytest.raises(
+        qualification.Phase2BFormalWireCovertQualificationErrorV2
+    ) as captured:
+        qualification._validate_post_output_full_cgroup_snapshot_v2(
+            runtime_exit, attempt, snapshot
+        )
+    expected = _expected_cgroup_physical_resource_failure(
+        prefix="post-output full physical resource gate rejected",
+        stage="POST_OUTPUT_FULL_SAMPLE",
+        snapshot=snapshot,
+        cap=cap,
+        reserve=reserve,
+    )
+    assert captured.value.code == qualification.FAIL_RESOURCE
+    assert captured.value.detail == expected
+    assert "\n" not in expected and "\r" not in expected
+    assert len(expected.encode("ascii")) <= 1_024
+
+    scope_splice = json.loads(json.dumps(snapshot))
+    scope_splice["unified_cgroup_leaf_inode"] += 1
+    with pytest.raises(
+        qualification.Phase2BFormalWireCovertQualificationErrorV2
+    ) as scope_failure:
+        qualification._validate_post_output_full_cgroup_snapshot_v2(
+            runtime_exit, attempt, scope_splice
+        )
+    assert scope_failure.value.code == qualification.FAIL_RESOURCE
+    assert scope_failure.value.detail == (
+        "post-output cgroup scope drifted after stdout flush"
+    )
+
+
+def test_post_output_success_order_is_write_flush_full_final_direct_exit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attempt, runtime_exit, full_snapshot = _post_output_gate_fixture()
+    events: list[str] = []
+
+    class Buffer:
+        def write(self, payload: bytes) -> int:
+            events.append("write")
+            return len(payload)
+
+        def flush(self) -> None:
+            events.append("flush")
+
+    class DirectExit(BaseException):
+        pass
+
+    artifact = qualification._canonical_inner_artifact_v2(
+        {
+            "post_output_physical_gate_contract": dict(
+                qualification._POST_OUTPUT_PHYSICAL_GATE_CONTRACT_V2
+            ),
+            "runtime_exit_evidence": runtime_exit,
+        }
+    )
+    monkeypatch.setattr(qualification, "_inner_stdout_buffer_v2", Buffer)
+    monkeypatch.setattr(
+        qualification,
+        "_prepare_post_output_quiescent_runtime_v2",
+        lambda: events.append("quiesce"),
+    )
+    monkeypatch.setattr(
+        qualification,
+        "inspect_current_live_cgroup_v2",
+        lambda: events.append("full-snapshot") or full_snapshot,
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_fresh_current_cgroup_memory_peak_v2",
+        lambda snapshot: events.append("final-reread") or 3_072,
+    )
+
+    def direct_exit(code: int) -> None:
+        events.append(f"direct-exit-{code}")
+        raise DirectExit(code)
+
+    monkeypatch.setattr(qualification, "_DIRECT_PROCESS_EXIT_V2", direct_exit)
+    with pytest.raises(DirectExit) as raised:
+        qualification._write_flush_gate_and_direct_exit_v2(artifact, attempt)
+    assert raised.value.args == (0,)
+    assert events == [
+        "write",
+        "flush",
+        "quiesce",
+        "full-snapshot",
+        "final-reread",
+        "direct-exit-0",
+    ]
+
+
+def test_valid_canonical_stdout_then_final_gate_failure_exits_nonzero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attempt, runtime_exit, full_snapshot = _post_output_gate_fixture()
+    written_payloads: list[bytes] = []
+    failure_lines: list[bytes] = []
+    events: list[str] = []
+
+    class Buffer:
+        def write(self, payload: bytes) -> int:
+            events.append("write-valid-bytes")
+            written_payloads.append(payload)
+            return len(payload)
+
+        def flush(self) -> None:
+            events.append("flush-valid-bytes")
+
+    class DirectExit(BaseException):
+        pass
+
+    artifact = qualification._canonical_inner_artifact_v2(
+        {
+            "post_output_physical_gate_contract": dict(
+                qualification._POST_OUTPUT_PHYSICAL_GATE_CONTRACT_V2
+            ),
+            "runtime_exit_evidence": runtime_exit,
+        }
+    )
+    monkeypatch.setattr(qualification, "_inner_stdout_buffer_v2", Buffer)
+    monkeypatch.setattr(
+        qualification, "_prepare_post_output_quiescent_runtime_v2", lambda: None
+    )
+    monkeypatch.setattr(
+        qualification,
+        "inspect_current_live_cgroup_v2",
+        lambda: events.append("full-snapshot") or full_snapshot,
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_fresh_current_cgroup_memory_peak_v2",
+        lambda snapshot: (
+            events.append("final-reread")
+            or
+            auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+            - qualification.POST_OUTPUT_DIRECT_EXIT_TAIL_RESERVE_BYTES_V2
+            + 1
+        ),
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_write_post_output_failure_line_v2",
+        lambda payload: failure_lines.append(payload),
+    )
+
+    def direct_exit(code: int) -> None:
+        events.append(f"direct-exit-{code}")
+        raise DirectExit(code)
+
+    monkeypatch.setattr(qualification, "_DIRECT_PROCESS_EXIT_V2", direct_exit)
+    with pytest.raises(DirectExit) as raised:
+        qualification._write_flush_gate_and_direct_exit_v2(artifact, attempt)
+    assert raised.value.args == (86,)
+    assert written_payloads == [artifact]
+    assert qualification._decode_canonical_transport_object_v2(
+        written_payloads[0], "failed-tail valid stdout", maximum_bytes=1_048_576
+    )["runtime_exit_evidence"] == runtime_exit
+    assert events == [
+        "write-valid-bytes",
+        "flush-valid-bytes",
+        "full-snapshot",
+        "final-reread",
+        "direct-exit-86",
+    ]
+    assert len(failure_lines) == 1
+    assert failure_lines[0].startswith(
+        (qualification.FAIL_RESOURCE + ": ").encode("ascii")
+    )
+    assert failure_lines[0].count(b"\n") == 1
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "scope",
+        "events",
+        "full-cap",
+        "full-reserve",
+        "final-decrease",
+        "final-reserve",
+        "final-cap",
+    ),
+)
+def test_post_output_scope_events_cap_and_tail_reserve_fail_closed(
+    mutation: str,
+) -> None:
+    attempt, runtime_exit, full_snapshot = _post_output_gate_fixture()
+    cap = auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+    ceiling = cap - qualification.POST_OUTPUT_DIRECT_EXIT_TAIL_RESERVE_BYTES_V2
+    if mutation == "scope":
+        full_snapshot["unified_cgroup_leaf_inode"] += 1
+    elif mutation == "events":
+        full_snapshot["memory_events"]["max"] = 1
+    elif mutation == "full-cap":
+        full_snapshot["memory_peak"] = cap + 1
+    elif mutation == "full-reserve":
+        full_snapshot["memory_peak"] = ceiling + 1
+    if mutation.startswith("full") or mutation in {"scope", "events"}:
+        with pytest.raises(
+            qualification.Phase2BFormalWireCovertQualificationErrorV2
+        ):
+            qualification._validate_post_output_full_cgroup_snapshot_v2(
+                runtime_exit, attempt, full_snapshot
+            )
+        return
+    full_peak = qualification._validate_post_output_full_cgroup_snapshot_v2(
+        runtime_exit, attempt, full_snapshot
+    )
+    final_peak = (
+        full_peak - 1
+        if mutation == "final-decrease"
+        else ceiling + 1
+        if mutation == "final-reserve"
+        else cap + 1
+    )
+    with pytest.raises(qualification.Phase2BFormalWireCovertQualificationErrorV2):
+        qualification._validate_final_post_output_memory_peak_v2(
+            full_snapshot, full_peak, final_peak
+        )
+
+
+def test_final_memory_peak_uses_fresh_nofollow_openat_on_same_leaf(
+    tmp_path: Path,
+) -> None:
+    proc = tmp_path / "proc"
+    cgroup = tmp_path / "cgroup"
+    leaf = cgroup / "unit.service"
+    (proc / "self").mkdir(parents=True)
+    leaf.mkdir(parents=True)
+    (proc / "self/cgroup").write_text("0::/unit.service\n", encoding="ascii")
+    (leaf / "memory.peak").write_text("3072\n", encoding="ascii")
+    opened = leaf.stat(follow_symlinks=False)
+    expected = {
+        "cgroup_path": "/unit.service",
+        "unified_cgroup_leaf_device": opened.st_dev,
+        "unified_cgroup_leaf_inode": opened.st_ino,
+    }
+    assert qualification._fresh_current_cgroup_memory_peak_v2(
+        expected, proc_root=proc, cgroup_root=cgroup
+    ) == 3_072
+    (leaf / "memory.peak").unlink()
+    (leaf / "target").write_text("3072\n", encoding="ascii")
+    (leaf / "memory.peak").symlink_to("target")
+    with pytest.raises(qualification.Phase2BFormalWireCovertQualificationErrorV2):
+        qualification._fresh_current_cgroup_memory_peak_v2(
+            expected, proc_root=proc, cgroup_root=cgroup
+        )
+
+
+def test_final_memory_peak_rejects_symlink_leaf_directory(tmp_path: Path) -> None:
+    proc = tmp_path / "proc"
+    cgroup = tmp_path / "cgroup"
+    real_leaf = cgroup / "real-unit.service"
+    linked_leaf = cgroup / "unit.service"
+    (proc / "self").mkdir(parents=True)
+    real_leaf.mkdir(parents=True)
+    (proc / "self/cgroup").write_text("0::/unit.service\n", encoding="ascii")
+    (real_leaf / "memory.peak").write_text("3072\n", encoding="ascii")
+    opened = real_leaf.stat(follow_symlinks=False)
+    linked_leaf.symlink_to(real_leaf, target_is_directory=True)
+    expected = {
+        "cgroup_path": "/unit.service",
+        "unified_cgroup_leaf_device": opened.st_dev,
+        "unified_cgroup_leaf_inode": opened.st_ino,
+    }
+    with pytest.raises(
+        qualification.Phase2BFormalWireCovertQualificationErrorV2,
+        match="final peak memory.peak is unreadable",
+    ):
+        qualification._fresh_current_cgroup_memory_peak_v2(
+            expected, proc_root=proc, cgroup_root=cgroup
+        )
+
+
+@pytest.mark.parametrize("mutation", ("membership", "device", "inode"))
+def test_final_memory_peak_rejects_each_same_leaf_binding_drift(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    proc = tmp_path / "proc"
+    cgroup = tmp_path / "cgroup"
+    leaf = cgroup / "unit.service"
+    (proc / "self").mkdir(parents=True)
+    leaf.mkdir(parents=True)
+    (proc / "self/cgroup").write_text("0::/unit.service\n", encoding="ascii")
+    (leaf / "memory.peak").write_text("3072\n", encoding="ascii")
+    opened = leaf.stat(follow_symlinks=False)
+    expected = {
+        "cgroup_path": "/unit.service",
+        "unified_cgroup_leaf_device": opened.st_dev,
+        "unified_cgroup_leaf_inode": opened.st_ino,
+    }
+    if mutation == "membership":
+        (proc / "self/cgroup").write_text("0::/other.service\n", encoding="ascii")
+    elif mutation == "device":
+        expected["unified_cgroup_leaf_device"] += 1
+    else:
+        expected["unified_cgroup_leaf_inode"] += 1
+    with pytest.raises(
+        qualification.Phase2BFormalWireCovertQualificationErrorV2,
+        match=(
+            "final peak unified membership drifted"
+            if mutation == "membership"
+            else "final peak cgroup leaf identity drifted"
+        ),
+    ) as caught:
+        qualification._fresh_current_cgroup_memory_peak_v2(
+            expected, proc_root=proc, cgroup_root=cgroup
+        )
+    assert caught.value.code == qualification.FAIL_RESOURCE
+
+
+def test_final_memory_peak_replays_membership_after_peak_read(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    proc = tmp_path / "proc"
+    cgroup = tmp_path / "cgroup"
+    leaf = cgroup / "unit.service"
+    (proc / "self").mkdir(parents=True)
+    leaf.mkdir(parents=True)
+    membership_path = proc / "self/cgroup"
+    membership_path.write_text("0::/unit.service\n", encoding="ascii")
+    (leaf / "memory.peak").write_text("3072\n", encoding="ascii")
+    opened = leaf.stat(follow_symlinks=False)
+    expected = {
+        "cgroup_path": "/unit.service",
+        "unified_cgroup_leaf_device": opened.st_dev,
+        "unified_cgroup_leaf_inode": opened.st_ino,
+    }
+    real_reader = qualification._read_bounded_cgroup_ascii_v2
+    membership_reads = 0
+
+    def migrate_after_peak(
+        path: Path,
+        name: str,
+        *,
+        maximum_bytes: int = 64 * 1_024,
+    ) -> str:
+        nonlocal membership_reads
+        if path == membership_path:
+            membership_reads += 1
+            if membership_reads == 2:
+                return "0::/other.service\n"
+        return real_reader(path, name, maximum_bytes=maximum_bytes)
+
+    monkeypatch.setattr(
+        qualification, "_read_bounded_cgroup_ascii_v2", migrate_after_peak
+    )
+    with pytest.raises(
+        qualification.Phase2BFormalWireCovertQualificationErrorV2,
+        match="final peak unified membership drifted during read",
+    ) as caught:
+        qualification._fresh_current_cgroup_memory_peak_v2(
+            expected, proc_root=proc, cgroup_root=cgroup
+        )
+    assert caught.value.code == qualification.FAIL_RESOURCE
+    assert membership_reads == 2
+
+
+@pytest.mark.parametrize(
+    "active_state",
+    (
+        "trace",
+        "profile",
+        "python-handler",
+        "selected-ignored",
+        "unselected-handler",
+        "pre-existing-mask",
+        "threads",
+        "post-block-sigblk",
+    ),
+)
+def test_post_output_quiescence_behavior_rejects_active_python_state_without_leak(
+    monkeypatch: pytest.MonkeyPatch,
+    active_state: str,
+) -> None:
+    selected = set(qualification.LIVE_SELECTED_DEFAULT_SIGNALS)
+    real_pthread_sigmask = signal.pthread_sigmask
+    original_mask = real_pthread_sigmask(signal.SIG_BLOCK, set())
+    original_gc_enabled = gc.isenabled()
+    real_read_text = Path.read_text
+    monkeypatch.setattr(sys, "gettrace", lambda: None)
+    monkeypatch.setattr(sys, "getprofile", lambda: None)
+    monkeypatch.setattr(signal, "valid_signals", lambda: set(selected))
+    monkeypatch.setattr(signal, "getsignal", lambda _number: signal.SIG_DFL)
+    if active_state == "trace":
+        monkeypatch.setattr(sys, "gettrace", lambda: object())
+    elif active_state == "profile":
+        monkeypatch.setattr(sys, "getprofile", lambda: object())
+    elif active_state == "python-handler":
+        handled = next(iter(selected))
+        monkeypatch.setattr(
+            signal,
+            "getsignal",
+            lambda number: (lambda *_args: None)
+            if number == handled
+            else signal.SIG_DFL,
+        )
+    elif active_state == "selected-ignored":
+        ignored = next(iter(selected))
+        monkeypatch.setattr(
+            signal,
+            "getsignal",
+            lambda number: signal.SIG_IGN
+            if number == ignored
+            else signal.SIG_DFL,
+        )
+    elif active_state == "unselected-handler":
+        unselected = signal.SIGUSR1
+        assert unselected not in selected
+        monkeypatch.setattr(
+            signal, "valid_signals", lambda: set(selected) | {unselected}
+        )
+        monkeypatch.setattr(
+            signal,
+            "getsignal",
+            lambda number: (lambda *_args: None)
+            if number == unselected
+            else signal.SIG_DFL,
+        )
+    elif active_state == "pre-existing-mask":
+        monkeypatch.setattr(
+            signal,
+            "pthread_sigmask",
+            lambda how, signals: {signal.SIGUSR1},
+        )
+    else:
+
+        def isolated_quiescence_status(
+            path: Path, *args: object, **kwargs: object
+        ) -> str:
+            text = real_read_text(path, *args, **kwargs)
+            if path != Path("/proc/self/status"):
+                return text
+            rows = []
+            for line in text.splitlines():
+                if line.startswith("Threads:"):
+                    line = (
+                        "Threads:\t2"
+                        if active_state == "threads"
+                        else "Threads:\t1"
+                    )
+                elif (
+                    line.startswith("SigBlk:")
+                    and active_state == "post-block-sigblk"
+                ):
+                    line = "SigBlk:\t0000000000000000"
+                rows.append(line)
+            return "\n".join(rows) + "\n"
+
+        monkeypatch.setattr(Path, "read_text", isolated_quiescence_status)
+    try:
+        real_pthread_sigmask(signal.SIG_SETMASK, set())
+        with pytest.raises(
+            qualification.Phase2BFormalWireCovertQualificationErrorV2,
+            match=(
+                "active trace/profile"
+                if active_state in {"trace", "profile"}
+                else "Python signal handlers"
+                if active_state
+                in {"python-handler", "selected-ignored", "unselected-handler"}
+                else "pre-existing signal mask"
+                if active_state == "pre-existing-mask"
+                else "signal/thread quiescence drifted"
+            ),
+        ) as caught:
+            qualification._prepare_post_output_quiescent_runtime_v2()
+        assert caught.value.code == qualification.FAIL_RESOURCE
+    finally:
+        real_pthread_sigmask(signal.SIG_SETMASK, original_mask)
+        gc.enable() if original_gc_enabled else gc.disable()
+    assert gc.isenabled() is original_gc_enabled
+    assert real_pthread_sigmask(signal.SIG_BLOCK, set()) == original_mask
+
+
+def test_post_output_quiescence_success_disables_gc_and_blocks_then_fixture_restores(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    selected = set(qualification.LIVE_SELECTED_DEFAULT_SIGNALS)
+    real_pthread_sigmask = signal.pthread_sigmask
+    original_mask = real_pthread_sigmask(signal.SIG_BLOCK, set())
+    original_gc_enabled = gc.isenabled()
+    observed_mask: set[signal.Signals] | None = None
+    observed_gc_enabled: bool | None = None
+    real_read_text = Path.read_text
+
+    def isolated_single_task_status(
+        path: Path, *args: object, **kwargs: object
+    ) -> str:
+        text = real_read_text(path, *args, **kwargs)
+        if path == Path("/proc/self/status"):
+            rows = [
+                "Threads:\t1" if line.startswith("Threads:") else line
+                for line in text.splitlines()
+            ]
+            return "\n".join(rows) + "\n"
+        return text
+
+    monkeypatch.setattr(sys, "gettrace", lambda: None)
+    monkeypatch.setattr(sys, "getprofile", lambda: None)
+    monkeypatch.setattr(signal, "valid_signals", lambda: set(selected))
+    monkeypatch.setattr(signal, "getsignal", lambda _number: signal.SIG_DFL)
+    # Pytest/plugins own helper threads outside the fresh inner-process TCB.
+    # Isolate only that inventory; the kernel-backed signal mask remains real.
+    monkeypatch.setattr(Path, "read_text", isolated_single_task_status)
+    try:
+        real_pthread_sigmask(signal.SIG_SETMASK, set())
+        gc.enable()
+        qualification._prepare_post_output_quiescent_runtime_v2()
+        observed_mask = real_pthread_sigmask(signal.SIG_BLOCK, set())
+        observed_gc_enabled = gc.isenabled()
+    finally:
+        real_pthread_sigmask(signal.SIG_SETMASK, original_mask)
+        gc.enable() if original_gc_enabled else gc.disable()
+    assert observed_mask == selected
+    assert observed_gc_enabled is False
+    assert gc.isenabled() is original_gc_enabled
+    assert real_pthread_sigmask(signal.SIG_BLOCK, set()) == original_mask
+
+
+def test_inner_cli_success_cannot_return_or_run_interpreter_teardown() -> None:
+    writer_tree = ast.parse(
+        inspect.getsource(qualification._write_flush_gate_and_direct_exit_v2)
+    )
+    direct_zero_calls = [
+        node
+        for node in ast.walk(writer_tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "direct_exit"
+        and len(node.args) == 1
+        and isinstance(node.args[0], ast.Constant)
+        and node.args[0].value == 0
+    ]
+    assert len(direct_zero_calls) == 1
+    main_tree = ast.parse(inspect.getsource(qualification._main_v2))
+    last = main_tree.body[0].body[-1]
+    assert isinstance(last, ast.Expr)
+    assert isinstance(last.value, ast.Call)
+    assert isinstance(last.value.func, ast.Name)
+    assert last.value.func.id == "_write_flush_gate_and_direct_exit_v2"
+    writer_source = inspect.getsource(
+        qualification._write_flush_gate_and_direct_exit_v2
+    )
+    assert (
+        writer_source.index("stdout_buffer.write")
+        < writer_source.index("stdout_buffer.flush")
+        < writer_source.index("_prepare_post_output_quiescent_runtime_v2")
+        < writer_source.index("inspect_current_live_cgroup_v2")
+        < writer_source.index("_fresh_current_cgroup_memory_peak_v2")
+        < writer_source.index("direct_exit(0)")
+    )
+    quiescent_source = inspect.getsource(
+        qualification._prepare_post_output_quiescent_runtime_v2
+    )
+    for required in (
+        "sys.gettrace()",
+        "sys.getprofile()",
+        "callable(value)",
+        "gc.disable()",
+        "signal.pthread_sigmask",
+        'fields.get("Threads") != "1"',
+    ):
+        assert required in quiescent_source
+
+
+def test_outer_v3_post_output_attestation_is_closed_and_tamper_evident() -> None:
+    attempt = _attempt()
+    inner = {
+        "post_output_physical_gate_contract": dict(
+            qualification._POST_OUTPUT_PHYSICAL_GATE_CONTRACT_V2
+        )
+    }
+    inner_bytes = qualification._canonical_inner_artifact_v2(inner)
+    child_argv_sha256 = "a" * 64
+    invocation_id = "b" * 32
+    attestation = qualification._expected_post_output_gate_attestation_v2(
+        attempt,
+        inner,
+        inner_bytes,
+        expected_entry="development-calibration",
+        child_argv_sha256=child_argv_sha256,
+        owned_invocation_id=invocation_id,
+    )
+    assert qualification.OUTER_SUPERVISOR_RESULT_SCHEMA_V2.endswith("/3")
+    assert attestation["systemd_memory_max_bytes"] == (
+        auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+    )
+    assert attestation["pinned_qualification_source_sha256"] == (
+        attempt.qualification_source_sha256
+    )
+    assert attestation["child_exec_main_code"] == 1
+    assert attestation["child_exec_main_status"] == 0
+    assert attestation["child_systemd_exit_kind"] == "CLD_EXITED"
+    assert attestation["exact_exec_start_argv_sha256"] == child_argv_sha256
+    assert attestation["systemd_owned_invocation_id"] == invocation_id
+    assert attestation["success_exit_status_override_can_satisfy_attestation"] is False
+    assert attestation["canonical_stdout_matches_inner_artifact"] is True
+    assert attestation["empty_stderr"] is True
+    assert attestation["post_exit_numeric_memory_peak_sample_claimed"] is False
+    qualification._validate_post_output_gate_attestation_v2(
+        attestation,
+        attempt,
+        inner,
+        inner_bytes,
+        context="KAT",
+        expected_entry="development-calibration",
+        child_argv_sha256=child_argv_sha256,
+        owned_invocation_id=invocation_id,
+    )
+    tampered = json.loads(json.dumps(attestation))
+    tampered["post_exit_numeric_memory_peak_sample_claimed"] = True
+    with pytest.raises(ValueError, match="attestation drifted"):
+        qualification._validate_post_output_gate_attestation_v2(
+            tampered,
+            attempt,
+            inner,
+            inner_bytes,
+            context="KAT",
+            expected_entry="development-calibration",
+            child_argv_sha256=child_argv_sha256,
+            owned_invocation_id=invocation_id,
+        )
+    live_source = inspect.getsource(
+        qualification._validate_outer_supervisor_result_v2
+    )
+    pure_source = inspect.getsource(
+        qualification._validate_outer_supervisor_semantics_pure_v2
+    )
+    assert "_validate_post_output_gate_attestation_v2" in live_source
+    assert "_validate_post_output_gate_attestation_v2" in pure_source
+
+
+def test_nonzero_tail_gate_exit_cannot_be_reclassified_as_systemd_success() -> None:
+    attempt, source_tree, intent = _launch_intent()
+    forged = qualification._parse_systemd_show_v2(
+        _systemd_show_bytes(
+            attempt,
+            source_tree,
+            marker=intent["ownership_marker"],
+            invocation="c" * 32,
+            load="loaded",
+            active="active",
+            sub="exited",
+            result="success",
+            overrides={"ExecMainCode": "1", "ExecMainStatus": "86"},
+        ),
+        set(qualification._SYSTEMD_SHOW_PROPERTIES_V2),
+    )
+    with pytest.raises(ValueError, match="active/exited success projection"):
+        qualification._systemd_terminal_success_v2(
+            forged, name="forged SuccessExitStatus"
+        )
+
+
+def _full1024_resource_plan_for_inner_v6(
+    mode: str,
+) -> tuple[auditor.ResourcePlanV1, auditor._FeatureCardinalityProjectionV1]:
+    """Build the real frozen 1,024-row scalar plan without materializing a matrix."""
+
+    rows = qualification.EXACT_AUTHORITY_ROWS
+    frozen_projection = qualification._fixture_feature_capacity_projection_row_v2(
+        mode, rows
+    )
+    feature_count = frozen_projection["projected_concrete_feature_count"]
+    assert type(feature_count) is int
+    mode_contract = qualification._FIXTURE_FEATURE_CAPACITY_CONTRACT_V2["modes"][
+        mode
+    ]
+    union_shape = mode_contract["union_shape"]
+    capacity_projection = auditor._FeatureCardinalityProjectionV1(
+        rows=rows,
+        uuid_union_path_count=union_shape["uuid_union_path_count"],
+        channel_union_path_count=union_shape["channel_union_path_count"],
+        generic_channel_union_path_count=union_shape[
+            "generic_channel_union_path_count"
+        ],
+        provenance_union_path_count=union_shape["provenance_union_path_count"],
+        descriptor_union_path_count=union_shape["descriptor_union_path_count"],
+        descriptor_segment_position_count=union_shape[
+            "descriptor_segment_position_count"
+        ],
+        eligibility_absent_feature_count=union_shape[
+            "eligibility_absent_feature_count"
+        ],
+        descriptor_source_utf8_bytes=303 * 128,
+        present_generic_channel_feature_utf8_bytes=34_760 * 128,
+        semantic_path_repetition_utf8_bytes=(
+            3_610_791 if mode == "KNOWN_NULL" else 3_593_170
+        ),
+        projected_concrete_feature_count=feature_count,
+        projected_raw_semantic_feature_count=frozen_projection[
+            "projected_raw_semantic_feature_count"
+        ],
+        projected_feature_matrix_bytes_bound=frozen_projection[
+            "projected_feature_matrix_bytes_bound"
+        ],
+    )
+    capacity_projection.__post_init__()
+    assert capacity_projection.projection_root == frozen_projection["projection_root"]
+
+    cardinalities = (2,) * feature_count
+    maximum_mask_bytes = sys.getsizeof((1 << rows) - 1)
+    maximum_count_bytes = sys.getsizeof(rows)
+    partition_shell_bytes = sys.getsizeof(auditor._Partition((), ()))
+    projected_partition_bytes = sys.getsizeof((None,) * feature_count) + sum(
+        partition_shell_bytes
+        + 2 * sys.getsizeof((None,) * 2)
+        + 2 * (maximum_mask_bytes + maximum_count_bytes)
+        for _ in range(feature_count)
+    )
+    partition_projection = auditor._PartitionAllocationProjectionV1(
+        rows,
+        cardinalities,
+        projected_partition_bytes * auditor.DEEP_SIZE_SAFETY_MULTIPLIER,
+    )
+    shared_partition = auditor._Partition(
+        (1, ((1 << rows) - 1) ^ 1),
+        (1, rows - 1),
+    )
+    partitions = (shared_partition,) * feature_count
+    envelope_and_decode_bytes_bound = rows * auditor.ENVELOPE_BYTES * 2
+    invariant_plan = auditor._invariance_resource_plan(
+        rows,
+        envelope_and_decode_bytes_bound=envelope_and_decode_bytes_bound,
+        adapter_retained_graph_bytes_bound=1,
+        variant_suite_resident_bytes_per_row_bound=1,
+        variant_suite_resident_fixed_bytes_bound=1,
+    )
+    feature_matrix_bytes_bound = frozen_projection[
+        "projected_feature_matrix_bytes_bound"
+    ]
+    assert type(feature_matrix_bytes_bound) is int
+    plan = auditor._resource_plan(
+        rows,
+        partitions,
+        (2,) * len(auditor.TARGETS),
+        preextraction_feature_matrix_bytes_bound=feature_matrix_bytes_bound,
+        feature_matrix_bytes_bound=feature_matrix_bytes_bound,
+        envelope_and_decode_bytes_bound=envelope_and_decode_bytes_bound,
+        adapter_retained_graph_bytes_bound=1,
+        partition_projection=partition_projection,
+        partition_preparation_deadline_ns=time.monotonic_ns() + 10_000_000_000,
+        invariance_plan=invariant_plan,
+    )
+    assert plan.admissible is True
+    assert plan.concrete_features == feature_count
+    return plan, capacity_projection
+
+
+def _valid_full1024_inner_run_v6(
+    mode: str,
+    *,
+    receipt_digit: str,
+    invariant_peak: int,
+    receipt_peak: int,
+) -> tuple[dict[str, object], dict[str, object]]:
+    plan, capacity_projection = _full1024_resource_plan_for_inner_v6(mode)
+    rows = qualification.EXACT_AUTHORITY_ROWS
+    membership = "/test.slice/qv2.scope"
+    device = 11
+    inode = 22
+    scope_root = qualification.stable_hash(
+        {
+            "leaf_device": device,
+            "leaf_inode": inode,
+            "unified_membership": membership,
+        },
+        prefix="phase2b_formal_covert_unified_cgroup_memory_scope_v1_",
+    )
+    memory_max = auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+    memory_current = 512
+
+    invariant_static = (
+        plan.envelope_and_decode_bytes_bound
+        + plan.adapter_retained_graph_bytes_bound
+        + 64 * 1_048_576
+    )
+    invariant_additional = (
+        plan.invariance_variant_suite_resident_bytes_bound
+        + plan.invariance_recognizer_live_output_bytes_bound
+        + plan.invariance_worker_artifact_bytes_bound
+    )
+    invariant_preflight = auditor._PhaseResourcePreflightEvidenceV1(
+        phase="INVARIANCE",
+        resource_plan_root=plan.invariance_resource_plan_root,
+        parent_current_rss_bytes_at_preflight=(
+            plan.invariance_parent_current_rss_bytes_at_plan
+        ),
+        static_parent_bytes_bound=invariant_static,
+        fork_parent_rss_multiplier=2,
+        additional_bytes_bound=invariant_additional,
+        projected_aggregate_rss_bytes_at_preflight=(
+            max(
+                plan.invariance_parent_current_rss_bytes_at_plan,
+                invariant_static,
+            )
+            * 2
+            + invariant_additional
+        ),
+        maximum_estimated_rss_bytes=plan.maximum_invariance_estimated_rss_bytes,
+        host_available_memory_safety_margin_bytes=(
+            plan.host_available_memory_safety_margin_bytes
+        ),
+    )
+    invariant_available = (
+        invariant_preflight.projected_aggregate_rss_bytes_at_preflight
+        + invariant_preflight.host_available_memory_safety_margin_bytes
+    )
+    adapter_pin = (
+        "phase2b_formal_covert_adapter_execution_pins_" + receipt_digit * 64
+    )
+    invariant_runtime = auditor.InvariantRuntimeEvidenceV1(
+        invariance_resource_plan_root=plan.invariance_resource_plan_root,
+        resource_preflight=invariant_preflight,
+        system_available_memory_bytes_at_preflight=invariant_available,
+        cgroup_remaining_memory_bytes_at_preflight=None,
+        host_available_memory_bytes_at_preflight=invariant_available,
+        parent_current_rss_bytes_at_start=(
+            invariant_preflight.parent_current_rss_bytes_at_preflight
+        ),
+        parent_peak_current_rss_bytes_observed=(
+            invariant_preflight.parent_current_rss_bytes_at_preflight
+        ),
+        parent_current_rss_bytes_at_completion=(
+            invariant_preflight.parent_current_rss_bytes_at_preflight
+        ),
+        parent_historical_peak_rss_bytes=(
+            invariant_preflight.parent_current_rss_bytes_at_preflight
+        ),
+        worker_peak_rss_bytes=0,
+        worker_result_artifact_bytes=1,
+        worker_result_artifact_sha256="sha256:" + receipt_digit * 64,
+        diagnostic_parent_plus_worker_historical_peak_sum_bytes=(
+            invariant_preflight.parent_current_rss_bytes_at_preflight
+        ),
+        unified_cgroup_membership=membership,
+        unified_cgroup_memory_scope_root=scope_root,
+        unified_cgroup_leaf_device=device,
+        unified_cgroup_leaf_inode=inode,
+        physical_memory_current_bytes_at_completion=memory_current,
+        physical_memory_peak_bytes_at_completion=invariant_peak,
+        physical_memory_max_bytes=memory_max,
+        physical_memory_cap_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+        invariance_wall_time_nanoseconds=1,
+        worker_timeout_seconds=auditor.INVARIANCE_WORKER_TIMEOUT_SECONDS,
+        invariant_run_count=qualification.EXACT_RECOGNIZER_INVOCATIONS,
+        exact_invariant_comparisons=rows * 80 * 5,
+        fork_input_snapshot_root=(
+            "phase2b_formal_covert_invariance_input_snapshot_"
+            + receipt_digit * 64
+        ),
+        adapter_execution_pin_root=adapter_pin,
+        variant_suite_root="phase2b_formal_variant_suite_" + receipt_digit * 64,
+        consumer_decode_count=rows * 80,
+        variant_suite_unique_envelope_object_count=0,
+        variant_suite_resident_object_graph_bytes_observed=0,
+        recognizer_output_root=(
+            "phase2b_formal_covert_recognizer_output_" + receipt_digit * 64
+        ),
+        execution_containment=auditor.INVARIANCE_EXECUTION_CONTAINMENT,
+        parent_side_adapter_tcb=auditor.PARENT_SIDE_ADAPTER_TCB,
+        parent_side_adapter_sandboxed=False,
+        process_group_empty_at_exit=True,
+        child_address_space_limit_bytes=1,
+        within_frozen_physical_peak_cap=True,
+    )
+
+    statistics_static = (
+        plan.permutation_label_mask_bytes_bound
+        + plan.partition_matrix_bytes_bound
+        + plan.adapter_retained_graph_bytes_bound
+        + 64 * 1_048_576
+    )
+    statistics_additional = (
+        plan.metric_cache_bytes_bound * plan.maximum_parallel_workers
+        + plan.permutation_metric_tuple_bytes_bound
+        + plan.target_max_vector_bytes_bound
+        + plan.worker_result_artifact_bytes_bound
+        + plan.parent_result_working_bytes_bound
+    )
+    statistics_multiplier = 1 + plan.maximum_parallel_workers
+    statistics_preflight = auditor._PhaseResourcePreflightEvidenceV1(
+        phase="STATISTICS",
+        resource_plan_root=plan.resource_plan_root,
+        parent_current_rss_bytes_at_preflight=plan.parent_current_rss_bytes_at_plan,
+        static_parent_bytes_bound=statistics_static,
+        fork_parent_rss_multiplier=statistics_multiplier,
+        additional_bytes_bound=statistics_additional,
+        projected_aggregate_rss_bytes_at_preflight=(
+            max(plan.parent_current_rss_bytes_at_plan, statistics_static)
+            * statistics_multiplier
+            + statistics_additional
+        ),
+        maximum_estimated_rss_bytes=plan.maximum_estimated_rss_bytes,
+        host_available_memory_safety_margin_bytes=(
+            plan.host_available_memory_safety_margin_bytes
+        ),
+    )
+    statistics_available = (
+        statistics_preflight.projected_aggregate_rss_bytes_at_preflight
+        + statistics_preflight.host_available_memory_safety_margin_bytes
+    )
+    worker_peaks = (0,) * plan.maximum_parallel_workers
+    statistics_runtime = auditor.StatisticalRuntimeEvidenceV1(
+        resource_plan_root=plan.resource_plan_root,
+        resource_preflight=statistics_preflight,
+        system_available_memory_bytes_at_preflight=statistics_available,
+        cgroup_remaining_memory_bytes_at_preflight=None,
+        host_available_memory_bytes_at_preflight=statistics_available,
+        parent_historical_peak_rss_bytes_before_receipt_finalization=0,
+        worker_peak_rss_bytes=worker_peaks,
+        worker_result_artifact_bytes=(1,) * len(auditor.TARGETS),
+        worker_result_artifact_sha256=(
+            "sha256:" + receipt_digit * 64,
+        )
+        * len(auditor.TARGETS),
+        parent_result_object_graph_bytes_observed=0,
+        diagnostic_parent_plus_worker_historical_peak_sum_bytes=0,
+        unified_cgroup_membership=membership,
+        unified_cgroup_memory_scope_root=scope_root,
+        unified_cgroup_leaf_device=device,
+        unified_cgroup_leaf_inode=inode,
+        physical_memory_current_bytes_before_receipt_finalization=memory_current,
+        physical_memory_peak_bytes_before_receipt_finalization=receipt_peak,
+        physical_memory_max_bytes=memory_max,
+        physical_memory_cap_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+        statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds=1,
+        worker_timeout_seconds=auditor.STATISTICS_WORKER_TIMEOUT_SECONDS,
+        parent_postprocess_deadline_schema=auditor.PARENT_POSTPROCESS_DEADLINE_SCHEMA,
+        parent_postprocess_deadline_preemptive=False,
+        external_supervisor_required=True,
+        receipt_finalization_complete_pending_validation_count=1,
+        receipt_finalization_physical_peak_within_cap=True,
+        within_frozen_physical_peak_cap=True,
+    )
+    issuance_runtime = auditor.ReceiptIssuanceRuntimeEvidenceV1(
+        absolute_deadline_kind="STATISTICS",
+        absolute_deadline_monotonic_nanoseconds=1,
+        absolute_deadline_timeout_seconds=auditor.STATISTICS_WORKER_TIMEOUT_SECONDS,
+        diagnostic_worker_historical_peak_rss_bytes_sum=0,
+        diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization=0,
+        diagnostic_parent_plus_worker_historical_peak_sum_bytes=0,
+        unified_cgroup_membership=membership,
+        unified_cgroup_memory_scope_root=scope_root,
+        unified_cgroup_leaf_device=device,
+        unified_cgroup_leaf_inode=inode,
+        physical_memory_current_bytes_before_receipt_finalization=memory_current,
+        physical_memory_peak_bytes_before_receipt_finalization=receipt_peak,
+        physical_memory_max_bytes=memory_max,
+        physical_memory_cap_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+        receipt_finalization_complete_pending_validation_count=1,
+        receipt_finalization_locked_deadline_check_count=1,
+        receipt_finalization_locked_deadline_within_absolute_limit=True,
+        receipt_finalization_locked_physical_peak_within_cap=True,
+    )
+
+    plan_projection = qualification._closed_primitive_v2(plan)
+    invariant_projection = qualification._closed_primitive_v2(invariant_runtime)
+    statistics_projection = qualification._closed_primitive_v2(statistics_runtime)
+    issuance_projection = qualification._closed_primitive_v2(issuance_runtime)
+    capacity = qualification._closed_primitive_v2(capacity_projection)
+    assert type(plan_projection) is dict
+    assert type(invariant_projection) is dict
+    assert type(statistics_projection) is dict
+    assert type(issuance_projection) is dict
+    assert type(capacity) is dict
+
+    receipt_id = (
+        "phase2b_formal_covert_audit_transcript_" + receipt_digit * 64
+    )
+    quota_receipt_id = (
+        "phase2b_formal_eligibility_mask_quota_" + receipt_digit * 64
+    )
+    diagnostics = qualification._diagnostic_projection(
+        qualification.AuditRunDiagnosticsV2(
+            mode=mode,
+            wall_time_ns=1,
+            parent_historical_peak_rss_before_receipt_finalization_kib=0,
+            statistics_worker_historical_peak_rss_kib=tuple(
+                0 for _ in worker_peaks
+            ),
+            parent_plus_worker_historical_peak_rss_kib=0,
+            unified_cgroup_membership=membership,
+            unified_cgroup_memory_scope_root=scope_root,
+            unified_cgroup_leaf_device=device,
+            unified_cgroup_leaf_inode=inode,
+            physical_memory_current_before_receipt_finalization_bytes=(
+                memory_current
+            ),
+            physical_memory_peak_before_receipt_finalization_bytes=receipt_peak,
+            physical_memory_max_bytes=memory_max,
+            physical_memory_cap_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+            statistics_wall_time_ns=1,
+            host_available_memory_bytes_at_preflight=statistics_available,
+            recognizer_adapter_invocations=(
+                qualification.EXACT_RECOGNIZER_INVOCATIONS
+            ),
+            minimum_rows_per_invocation=rows,
+            maximum_rows_per_invocation=rows,
+        )
+    )
+    target_rows = _valid_target_family_rows()
+    quota = {
+        "exact_quota_matched": True,
+        "receipt_id": quota_receipt_id,
+        "targets": [
+            {
+                "checked_integer_cells": 1,
+                "exact_quota_matched": True,
+                "maximum_absolute_cross_product_difference": 0,
+                "target": target,
+            }
+            for target in ("family", "scale", "answerable_vs_abstain")
+        ],
+    }
+    mode_contract = qualification._FIXTURE_FEATURE_CAPACITY_CONTRACT_V2["modes"][
+        mode
+    ]
+    union_shape = mode_contract["union_shape"]
+    seed_reveal = receipt_digit * 64
+    run_fixture_root = "unit-full1024-run-" + mode.lower()
+    audit_row = {
+        "actual_corpus_audit": False,
+        "audited_rows": rows,
+        "authority_independence_verified": False,
+        "authority_origin_authenticated": False,
+        "channel_leaf_paths": union_shape["channel_union_path_count"],
+        "channel_only_owned_leaf_paths": mode_contract[
+            "channel_only_owned_union_path_count"
+        ],
+        "channel_only_owned_leaf_union_root": mode_contract[
+            "channel_only_owned_union_root"
+        ],
+        "concrete_features": plan.concrete_features,
+        "eligibility_quota": quota,
+        "eligibility_quota_root": qualification.stable_hash(
+            quota,
+            prefix="phase2b_formal_wire_covert_eligibility_quota_v2_",
+        ),
+        "failure_witness_count": 0 if mode == "KNOWN_NULL" else 1,
+        "feature_capacity_projection": capacity,
+        "feature_capacity_projection_root": capacity_projection.projection_root,
+        "feature_manifest_root": (
+            "phase2b_formal_covert_feature_manifest_" + receipt_digit * 64
+        ),
+        "full_raw_byte_categorical_hypotheses": plan.hypotheses,
+        "invariance": {
+            "complete_runtime_projection": invariant_projection,
+            "complete_runtime_projection_root": qualification.stable_hash(
+                invariant_projection,
+                prefix="phase2b_formal_wire_covert_invariant_runtime_v4_",
+            ),
+            "consumer_decode_count": invariant_runtime.consumer_decode_count,
+            "exact_comparisons": invariant_runtime.exact_invariant_comparisons,
+            "execution_root": (
+                "phase2b_formal_covert_invariant_execution_"
+                + receipt_digit * 64
+            ),
+            "invariance_resource_plan_root": plan.invariance_resource_plan_root,
+            "physical_memory_cap_bytes": auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+            "physical_memory_current_bytes_at_completion": memory_current,
+            "physical_memory_max_bytes": memory_max,
+            "physical_memory_peak_bytes_at_completion": invariant_peak,
+            "run_count": invariant_runtime.invariant_run_count,
+            "unified_cgroup_leaf_device": device,
+            "unified_cgroup_leaf_inode": inode,
+            "unified_cgroup_membership": membership,
+            "unified_cgroup_memory_scope_root": scope_root,
+            "variant_suite_root": invariant_runtime.variant_suite_root,
+            "wall_time_nanoseconds": invariant_runtime.invariance_wall_time_nanoseconds,
+            "worker_artifact_sha256": (
+                invariant_runtime.worker_result_artifact_sha256
+            ),
+            "worker_peak_rss_bytes": invariant_runtime.worker_peak_rss_bytes,
+            "within_frozen_physical_peak_cap": True,
+        },
+        "namespace_uuid_leaf_paths": union_shape["uuid_union_path_count"],
+        "positive_decision_claim": auditor.POSITIVE_DECISION_CLAIM,
+        "raw_semantic_features": capacity_projection.projected_raw_semantic_feature_count,
+        "receipt_id": receipt_id,
+        "receipt_issuance": {
+            "absolute_deadline_kind": issuance_runtime.absolute_deadline_kind,
+            "complete_runtime_projection": issuance_projection,
+            "complete_runtime_projection_root": qualification.stable_hash(
+                issuance_projection,
+                prefix="phase2b_formal_wire_covert_receipt_issuance_runtime_v4_",
+            ),
+            "diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization": 0,
+            "diagnostic_parent_plus_worker_historical_peak_sum_bytes": 0,
+            "diagnostic_worker_historical_peak_rss_bytes_sum": 0,
+            "physical_memory_cap_bytes": auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+            "physical_memory_current_bytes_before_receipt_finalization": memory_current,
+            "physical_memory_max_bytes": memory_max,
+            "physical_memory_peak_bytes_before_receipt_finalization": receipt_peak,
+            "receipt_finalization_complete_pending_validation_count": 1,
+            "receipt_finalization_locked_deadline_check_count": 1,
+            "receipt_finalization_locked_deadline_within_absolute_limit": True,
+            "receipt_finalization_locked_physical_peak_within_cap": True,
+            "receipt_id": receipt_id,
+            "unified_cgroup_leaf_device": device,
+            "unified_cgroup_leaf_inode": inode,
+            "unified_cgroup_membership": membership,
+            "unified_cgroup_memory_scope_root": scope_root,
+        },
+        "resource_plan": plan_projection,
+        "resource_plan_root": qualification.stable_hash(
+            plan_projection,
+            prefix="phase2b_formal_wire_covert_resource_plan_v3_",
+        ),
+        "statistics": {
+            "complete_runtime_projection": statistics_projection,
+            "complete_runtime_projection_root": qualification.stable_hash(
+                statistics_projection,
+                prefix="phase2b_formal_wire_covert_statistics_runtime_v4_",
+            ),
+            "diagnostic_parent_plus_worker_historical_peak_sum_bytes": 0,
+            "external_supervisor_required": True,
+            "pairwise_holm_decision_eligible": False,
+            "pairwise_holm_family_size": 5 * plan.concrete_features,
+            "permutation_schedule_root": (
+                "phase2b_formal_covert_permutation_schedule_"
+                + receipt_digit * 64
+            ),
+            "permutation_seed_commitment": auditor._permutation_seed_commitment(
+                bytes.fromhex(seed_reveal)
+            ),
+            "permutation_seed_reveal_hex": seed_reveal,
+            "physical_memory_cap_bytes": auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+            "physical_memory_current_bytes_before_receipt_finalization": memory_current,
+            "physical_memory_max_bytes": memory_max,
+            "physical_memory_peak_bytes_before_receipt_finalization": receipt_peak,
+            "resource_plan_root": plan.resource_plan_root,
+            "statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds": 1,
+            "unified_cgroup_leaf_device": device,
+            "unified_cgroup_leaf_inode": inode,
+            "unified_cgroup_membership": membership,
+            "unified_cgroup_memory_scope_root": scope_root,
+            "worker_artifact_sha256": list(
+                statistics_runtime.worker_result_artifact_sha256
+            ),
+            "worker_peak_rss_bytes": list(statistics_runtime.worker_peak_rss_bytes),
+            "within_frozen_physical_peak_cap": True,
+        },
+        "target_family_max_t_holm": target_rows,
+    }
+    wire_row = {
+        "adapter_execution_pin_root": adapter_pin,
+        "batch_id": "unit-batch-" + mode.lower(),
+        "build_success_id": "unit-build-" + mode.lower(),
+        "fresh_build_verification_root": "unit-fresh-build-" + mode.lower(),
+        "key_source_receipt_id": "unit-key-source-" + mode.lower(),
+        "private_alignment_id": "unit-alignment-" + mode.lower(),
+        "transform_catalog_root": "unit-transform-catalog",
+        "variant_context_id": "unit-variant-" + mode.lower(),
+    }
+    if mode == "KNOWN_NULL":
+        known_leak_witness = None
+    else:
+        binding = next(row for row in target_rows if row["target"] == "binding")
+        alias = (
+            "uuid_leaf/observation_id/"
+            + qualification._json_path_text_v2(
+                qualification._REGISTERED_BINDING_LEAK_OWNER_PATH_V2
+            )
+            + "/presence"
+        )
+        known_leak_witness = {
+            "balanced_accuracy_advantage_hex": (0.0).hex(),
+            "bias_corrected_nmi_hex": (0.04).hex(),
+            "failure_witness": True,
+            "feature_aliases": [alias],
+            "feature_id": "unit-binding-leak-feature",
+            "feature_localization_rejected": True,
+            "feature_max_t_exceedance_count": 5,
+            "feature_max_t_p": "6/10001",
+            "feature_owner": "eligibility_mask",
+            "feature_owner_path": qualification._json_path_text_v2(
+                qualification._REGISTERED_BINDING_LEAK_OWNER_PATH_V2
+            ),
+            "material_effect": True,
+            "observed_omnibus_hex": (2.0).hex(),
+            "passed": False,
+            "raw_nmi_hex": (0.04).hex(),
+            "registered_presence_alias": alias,
+            "target_family_holm_rejected": True,
+            "target_holm_critical_value": binding["holm_critical_value"],
+        }
+    run = {
+        "audit": audit_row,
+        "diagnostics": diagnostics,
+        "disposition": "PASS" if mode == "KNOWN_NULL" else "FAIL",
+        "known_leak_witness": known_leak_witness,
+        "label_factorial_proof_root": "unit-label-factorial-proof",
+        "mode": mode,
+        "namespace_row_proof_root": "unit-namespace-row-proof",
+        "operation_counts": {
+            operation: qualification.EXACT_ROWS_PER_TRANSFORM_OPERATION
+            for operation in qualification.EXACT_TRANSFORM_OPERATIONS
+        },
+        "run_fixture_root": run_fixture_root,
+        "source_pair_delta_root": (
+            None if mode == "KNOWN_NULL" else "unit-source-pair-delta"
+        ),
+        "wire": wire_row,
+    }
+    frozen = qualification._static_shape_from_run_projection_v2(run)
+    measurement = {
+        "diagnostics": diagnostics,
+        "dynamic_fields_are_recorded_but_not_exact_compared": list(
+            qualification.DYNAMIC_RESOURCE_PLAN_FIELDS_NOT_EXACT_COMPARED_V2
+        ),
+        "frozen_static_projection": frozen,
+        "frozen_static_projection_root": qualification.stable_hash(
+            frozen,
+            prefix="phase2b_formal_wire_covert_static_shape_v3_",
+        ),
+        "mode": mode,
+        "observed_complete_receipt_issuance_runtime": issuance_projection,
+        "observed_complete_receipt_issuance_runtime_root": qualification.stable_hash(
+            issuance_projection,
+            prefix="phase2b_formal_wire_covert_receipt_issuance_runtime_v4_",
+        ),
+        "observed_complete_resource_plan": plan_projection,
+        "observed_complete_resource_plan_root": qualification.stable_hash(
+            plan_projection,
+            prefix="phase2b_formal_wire_covert_observed_resource_plan_v3_",
+        ),
+        "observed_receipt_id": receipt_id,
+    }
+    return run, measurement
+
+
+def _valid_development_inner_v6(
+    attempt: qualification.Phase2BFormalWireCovertAttemptManifestV2,
+    source_tree: Path,
+) -> dict[str, object]:
+    positive_run, positive_measurement = _valid_full1024_inner_run_v6(
+        "KNOWN_NULL",
+        receipt_digit="2",
+        invariant_peak=2_048,
+        receipt_peak=4_096,
+    )
+    negative_run, negative_measurement = _valid_full1024_inner_run_v6(
+        "KNOWN_BINDING_LEAK",
+        receipt_digit="3",
+        invariant_peak=4_096,
+        receipt_peak=8_192,
+    )
+    membership = "/test.slice/qv2.scope"
+    device = 11
+    inode = 22
+    scope_root = qualification.stable_hash(
+        {
+            "leaf_device": device,
+            "leaf_inode": inode,
+            "unified_membership": membership,
+        },
+        prefix="phase2b_formal_covert_unified_cgroup_memory_scope_v1_",
+    )
+
+    def cgroup_row(*, current: int, peak: int) -> dict[str, object]:
+        return {
+            "cgroup_path": membership,
+            "cgroup_procs": [os.getpid()],
+            "cgroup_stat": {"nr_descendants": 0, "nr_dying_descendants": 0},
+            "cpu_affinity": [0],
+            "cpu_capacity": 1,
+            "cpu_max": None,
+            "memory_current": current,
+            "memory_events": {
+                "high": 0,
+                "low": 0,
+                "max": 0,
+                "oom": 0,
+                "oom_kill": 0,
+            },
+            "memory_max": auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+            "memory_peak": peak,
+            "pids_current": 1,
+            "pids_events": {"max": 0},
+            "pids_max": attempt.requested_cgroup_pids_max,
+            "unified_cgroup_leaf_device": device,
+            "unified_cgroup_leaf_inode": inode,
+            "unified_cgroup_memory_scope_root": scope_root,
+        }
+
+    selected_signals = [
+        number.name for number in qualification.LIVE_SELECTED_DEFAULT_SIGNALS
+    ]
+    runtime_entry = {
+        "cgroup": cgroup_row(current=512, peak=1_024),
+        "interpreter_runtime": {
+            "bytecode_candidates_found": [],
+            "dont_write_bytecode": 1,
+            "executed_main_source_sha256": attempt.qualification_source_sha256,
+            "ignore_environment": 1,
+            "isolated": 1,
+            "no_site": 1,
+            "package_directory": str(source_tree / "src/hegel_machine"),
+            "preopened_source_snapshot_root": (
+                "phase2b_formal_wire_covert_preopened_sources_v2_" + "4" * 64
+            ),
+            "source_execution_bootstrap_active": True,
+            "source_execution_bootstrap_manifest_root": (
+                "phase2b_formal_wire_covert_source_bootstrap_manifest_v2_"
+                + "5" * 64
+            ),
+            "source_only_importer_active": True,
+        },
+        "selected_default_signals": selected_signals,
+        "sigblk_hex": "0000000000000000",
+        "threads": 1,
+    }
+    runtime_exit = {
+        "audit_receipts_validated_and_released_in_process": True,
+        "cgroup": cgroup_row(current=512, peak=8_192),
+        "cgroup_events_unchanged_from_entry": True,
+        "selected_default_signals": selected_signals,
+        "sigblk_hex": "0000000000000000",
+        "threads": 1,
+    }
+    runs = [positive_run, negative_run]
+    return {
+        "artifact_cannot_be_finalized_or_promoted": True,
+        "attempt_manifest_root": attempt.attempt_manifest_root,
+        "calibration_attempt_id": attempt.attempt_id,
+        "calibration_campaign_id": attempt.campaign_id,
+        "claim_level": "DEVELOPMENT_MEASUREMENT_ONLY_NOT_R03_R04_R05",
+        "claims": {
+            "actual_corpus_audit": False,
+            "actual_unsealed_960_generation": False,
+            "campaign_execution_authorized": False,
+            "fixture_specific_only": True,
+            "joint_decision_classes": 2,
+            "key_independence_verified": False,
+            "origin_authenticated": False,
+            "r03_formal_trusted_wire_implementation_qualified": False,
+            "r04_formal_covert_auditor_implementation_qualified": False,
+            "r05_synthetic_dev_wire_covert_qualification_verified": False,
+            "wire_wider_graphs_and_100_class_profile_qualified": False,
+        },
+        "content_sha256_is_not_a_signature": True,
+        "external_supervisor_evidence_required": True,
+        "frozen_static_measurement_candidates_in_order": [
+            positive_measurement,
+            negative_measurement,
+        ],
+        "independent_review_and_profile_update_required": True,
+        "mode_order": list(qualification.LIVE_MODE_ORDER),
+        "outer_hard_deadline_self_verified": False,
+        "post_output_physical_gate_contract": dict(
+            qualification._POST_OUTPUT_PHYSICAL_GATE_CONTRACT_V2
+        ),
+        "profile_id": attempt.profile_id,
+        "projection_only_boundary": dict(
+            qualification._TASK4_PROJECTION_ONLY_BOUNDARY_V2
+        ),
+        "runs_in_order": runs,
+        "runtime_entry_evidence": runtime_entry,
+        "runtime_exit_evidence": runtime_exit,
+        "same_run_shape_acceptance_forbidden": True,
+        "schema_version": (
+            "hegel-machine-phase2b-formal-wire-covert-development-calibration/6"
+        ),
+        "synthetic_fixture_root": (
+            qualification._combined_fixture_root_from_run_roots_v2(
+                positive_run["run_fixture_root"],
+                negative_run["run_fixture_root"],
+            )
+        ),
+    }
+
+
+def _valid_outer_main_pid_replay_v3(tmp_path: Path) -> SimpleNamespace:
+    source_archive_bytes = b"outer-main-pid-source-archive"
+    source_digest = hashlib.sha256(source_archive_bytes).hexdigest()
+    source_sha = hashlib.sha256(
+        (ROOT / qualification._BOOTSTRAP_MAIN_RELATIVE_PATH_V2).read_bytes()
+    ).hexdigest()
+    python_row = _executable_row("/usr/bin/python3")
+    systemd_run_row = _executable_row("/usr/bin/systemd-run")
+    systemctl_row = _executable_row("/usr/bin/systemctl")
+    runtime = {
+        "cgroup2": {
+            "controllers": ["memory", "pids"],
+            "membership": "0::/test.slice/qv2.scope",
+            "mount": {
+                "filesystem_type": "cgroup2",
+                "mount_options": "rw,nosuid,nodev,noexec,relatime",
+                "mount_point": "/sys/fs/cgroup",
+                "mount_root": "/",
+            },
+        },
+        "cpu_affinity": [0],
+        "dependency_lock_runtime": {
+            "lock_platform": "linux/amd64",
+            "platform_machine": "x86_64",
+            "platform_system": "Linux",
+            "python_abi": "cp310",
+            "python_cache_tag": "cpython-310",
+            "python_implementation": "CPython",
+            "python_soabi": "cpython-310-x86_64-linux-gnu",
+            "python_version": "3.10.12",
+        },
+        "dependency_lock_sha256": qualification.DEPENDENCY_LOCK_SHA256,
+        "environment_scope": (
+            "ONLY_LANG_AND_LC_ALL_OVERRIDES_ARE_QUALIFIED;"
+            "OTHER_USER_MANAGER_ENVIRONMENT_IS_NOT_QUALIFIED"
+        ),
+        "executables": {
+            "python": python_row,
+            "systemd_run": systemd_run_row,
+            "systemctl": systemctl_row,
+        },
+        "fresh_dedicated_user_service_manager_session_required": True,
+        "host": {
+            "architecture": "x86_64",
+            "kernel_release": "test-release",
+            "kernel_system": "Linux",
+            "kernel_version": "test-version",
+            "libc_name": "glibc",
+            "libc_version": "2.31",
+        },
+        "host_runtime_fingerprint_only_not_full_runtime_image_closure": True,
+        "interpreter_contract": {
+            "argv_flags": ["-I", "-S", "-B"],
+            "forbid_pyc_pyo": True,
+            "ignore_python_environment": True,
+            "no_site": True,
+            "source_only_loader": True,
+        },
+        "runtime_image_digest": None,
+        "schema_version": qualification.RUNTIME_ENVIRONMENT_MANIFEST_SCHEMA_V2,
+        "selected_locale_overrides": {"LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"},
+        "systemd_user_manager_same_uid_is_cooperative_outer_tcb": True,
+    }
+    runtime_bytes = qualification._canonical_inner_artifact_v2(runtime)
+    runtime_digest = hashlib.sha256(runtime_bytes).hexdigest()
+    rfc_receipt = {"executables": {"python": python_row}}
+    rfc_bytes = qualification._canonical_inner_artifact_v2(rfc_receipt)
+    rfc_digest = hashlib.sha256(rfc_bytes).hexdigest()
+    attempt = replace(
+        _attempt(),
+        source_archive_root="sha256:" + source_digest,
+        source_archive_size_bytes=len(source_archive_bytes),
+        dependency_lock_sha256=qualification.DEPENDENCY_LOCK_SHA256,
+        qualification_source_sha256=source_sha,
+        qualification_lock_sha256=qualification.DEPENDENCY_LOCK_SHA256,
+        runtime_environment_manifest_root="sha256:" + runtime_digest,
+        runtime_environment_manifest_size_bytes=len(runtime_bytes),
+        rfc8785_prerequisite_receipt_root="sha256:" + rfc_digest,
+        rfc8785_prerequisite_receipt_sha256=rfc_digest,
+        rfc8785_prerequisite_receipt_size_bytes=len(rfc_bytes),
+    )
+    source_tree = (tmp_path / "attempt/evidence/source-tree").resolve()
+    outer_tree = (tmp_path / "outer-runner-tree").resolve()
+    source_tree.mkdir(parents=True)
+    outer_tree.mkdir(parents=True)
+    cas_directory = source_tree.parent / "cas"
+    raw_directory = source_tree.parent / "rfc8785-raw-bundle"
+    cas_directory.mkdir()
+    raw_directory.mkdir()
+    (cas_directory / source_digest).write_bytes(source_archive_bytes)
+    (cas_directory / runtime_digest).write_bytes(runtime_bytes)
+
+    bootstrap_manifest = qualification._source_execution_bootstrap_manifest_v2(
+        source_sha
+    )
+    expected_files = dict(bootstrap_manifest["sha256"])
+    tree_rows: list[dict[str, object]] = []
+    child_snapshots: dict[str, dict[str, object]] = {}
+    outer_snapshots: dict[str, dict[str, object]] = {}
+    for relative, digest in sorted(expected_files.items()):
+        payload = (ROOT / relative).read_bytes()
+        assert hashlib.sha256(payload).hexdigest() == digest
+        path = source_tree / relative
+        outer_path = outer_tree / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        outer_path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(payload)
+        outer_path.write_bytes(payload)
+        opened = path.stat(follow_symlinks=False)
+        outer_opened = outer_path.stat(follow_symlinks=False)
+        tree_rows.append(
+            {
+                "path": relative,
+                "sha256": digest,
+                "size_bytes": len(payload),
+                "type": "regular",
+            }
+        )
+        child_snapshots[relative] = {
+            "descriptor_realpath": str(path),
+            "device": opened.st_dev,
+            "inode": opened.st_ino,
+            "mtime_nanoseconds": opened.st_mtime_ns,
+            "sha256": digest,
+            "size_bytes": len(payload),
+        }
+        outer_snapshots[relative] = {
+            "descriptor_realpath": str(outer_path),
+            "device": outer_opened.st_dev,
+            "inode": outer_opened.st_ino,
+            "mtime_nanoseconds": outer_opened.st_mtime_ns,
+            "sha256": digest,
+            "size_bytes": len(payload),
+        }
+    tree_rows.sort(key=lambda row: (row["path"], row["type"]))
+    tree_root = qualification.stable_hash(
+        tree_rows, prefix="phase2b_formal_wire_covert_source_tree_v2_"
+    )
+    regular_root = qualification._regular_file_manifest_root_v2(tree_rows)
+    outer_preopened_root = qualification.stable_hash(
+        outer_snapshots, prefix="phase2b_formal_wire_covert_preopened_sources_v2_"
+    )
+    child_preopened_root = qualification.stable_hash(
+        child_snapshots, prefix="phase2b_formal_wire_covert_preopened_sources_v2_"
+    )
+    bootstrap_root = qualification.stable_hash(
+        bootstrap_manifest,
+        prefix="phase2b_formal_wire_covert_source_bootstrap_manifest_v2_",
+    )
+    inner = _valid_development_inner_v6(attempt, source_tree)
+    interpreter = inner["runtime_entry_evidence"]["interpreter_runtime"]
+    interpreter["preopened_source_snapshot_root"] = child_preopened_root
+    interpreter["source_execution_bootstrap_manifest_root"] = bootstrap_root
+    qualification._validate_development_calibration_artifact_v2(inner, attempt)
+    inner_bytes = qualification._canonical_inner_artifact_v2(inner)
+    main_snapshot = outer_snapshots[qualification._BOOTSTRAP_MAIN_RELATIVE_PATH_V2]
+    outer_tcb = {
+        "broad_package_init_executed": False,
+        "bypassed_package_init_sha256": qualification.BYPASSED_PACKAGE_INIT_SHA256,
+        "executed_main_source_bootstrap": {
+            **main_snapshot,
+            "bootstrap_kind": "EXTERNAL_PYTHON_C_OPEN_ONCE_V2",
+            "reexecuted_from_stable_descriptor": True,
+        },
+        "interpreter_flags": {
+            "dont_write_bytecode": 1,
+            "ignore_environment": 1,
+            "isolated": 1,
+            "no_site": 1,
+        },
+        "live_files_sha256": expected_files,
+        "preopened_source_snapshots": outer_snapshots,
+        "source_bootstrap_manifest": bootstrap_manifest,
+        "source_execution_bootstrap_active": True,
+        "source_only_importer_active": True,
+        "source_realpath": str(
+            outer_tree / qualification._BOOTSTRAP_MAIN_RELATIVE_PATH_V2
+        ),
+        "source_sha256": source_sha,
+        "source_tree_root": str(outer_tree),
+    }
+    _, _, intent = _launch_intent(attempt, source_tree)
+    intent["executables"] = {
+        "python": python_row,
+        "systemd_run": systemd_run_row,
+        "systemctl": systemctl_row,
+    }
+    systemctl = systemctl_row["realpath"]
+    show_argv = qualification._systemd_show_argv_v2(
+        systemctl, intent["unit_name"]
+    )
+    invocation = "b" * 32
+    main_pid = inner["runtime_entry_evidence"]["cgroup"]["cgroup_procs"][0]
+    entry = _systemd_show_bytes(
+        attempt,
+        source_tree,
+        marker=intent["ownership_marker"],
+        invocation=invocation,
+        load="loaded",
+        active="active",
+        sub="running",
+        main_pid=main_pid,
+        cgroup="/test.slice/qv2.scope",
+    )
+    terminal = _systemd_show_bytes(
+        attempt,
+        source_tree,
+        marker=intent["ownership_marker"],
+        invocation=invocation,
+        load="loaded",
+        active="active",
+        sub="exited",
+    )
+    absent = _systemd_show_bytes(attempt, source_tree)
+    commands = [
+        intent["prelaunch_command"],
+        qualification._command_evidence_v2(
+            argv=show_argv,
+            purpose="entry-show-0",
+            returncode=0,
+            stdout=entry,
+            stderr=b"",
+        ),
+        qualification._command_evidence_v2(
+            argv=show_argv,
+            purpose="terminal-show-0",
+            returncode=0,
+            stdout=terminal,
+            stderr=b"",
+        ),
+        qualification._command_evidence_v2(
+            argv=show_argv,
+            purpose="terminal-show-1",
+            returncode=0,
+            stdout=terminal,
+            stderr=b"",
+        ),
+        qualification._command_evidence_v2(
+            argv=[systemctl, "--user", "stop", intent["unit_name"]],
+            purpose="stop-after-terminal-snapshot",
+            returncode=0,
+            stdout=b"",
+            stderr=b"",
+        ),
+        qualification._command_evidence_v2(
+            argv=show_argv,
+            purpose="post-stop-absent-check-0",
+            returncode=0,
+            stdout=absent,
+            stderr=b"",
+        ),
+    ]
+    effective_properties = {
+        "FinalKillSignal": int(signal.SIGKILL),
+        "KillMode": "control-group",
+        "KillSignal": int(signal.SIGTERM),
+        "MemoryMax": attempt.requested_cgroup_memory_max_bytes,
+        "RemainAfterExit": True,
+        "RuntimeMaxUSec": qualification.LIVE_HARD_TOTAL_TIMEOUT_SECONDS
+        * 1_000_000,
+        "SendSIGKILL": True,
+        "TasksMax": attempt.requested_cgroup_pids_max,
+        "TimeoutStopUSec": 30_000_000,
+        "Type": "exec",
+    }
+    extraction = {
+        "archive_format": "TAR_REGULAR_AND_DIRECTORY_ENTRIES_ONLY",
+        "archive_sha256": source_digest,
+        "archive_size_bytes": len(source_archive_bytes),
+        "directory_count": 0,
+        "forbidden_bytecode_count": 0,
+        "member_count": len(tree_rows),
+        "regular_file_count": len(tree_rows),
+        "regular_file_manifest_root": regular_root,
+        "source_tree_manifest_row_count": len(tree_rows),
+        "source_tree_manifest_root": tree_root,
+        "symlink_hardlink_special_count": 0,
+        "total_regular_bytes": sum(row["size_bytes"] for row in tree_rows),
+    }
+    raw_projection: dict[str, object] = {}
+    inner_sha = hashlib.sha256(inner_bytes).hexdigest()
+    body = {
+        "attempt_manifest_root": attempt.attempt_manifest_root,
+        "child_source_bootstrap_preopened_snapshots": child_snapshots,
+        "child_source_bootstrap_preopened_snapshots_root": child_preopened_root,
+        "content_sha256_is_not_a_signature": True,
+        "inner_artifact_cas": qualification._cas_projection_v2(
+            inner_sha, len(inner_bytes), attempt.attempt_manifest_root
+        ),
+        "launcher": {
+            "argv": intent["child_argv"],
+            "environment": {"LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"},
+            "python": python_row,
+            "systemd_argv": intent["systemd_argv"],
+            "systemd_run": systemd_run_row,
+            "systemctl": systemctl_row,
+            "systemctl_commands": commands,
+        },
+        "live_files_sha256": expected_files,
+        "mode": "development-calibration",
+        "outer_runner_tcb_entry": outer_tcb,
+        "outer_runner_tcb_exit": outer_tcb,
+        "post_output_physical_gate_attestation": (
+            qualification._expected_post_output_gate_attestation_v2(
+                attempt,
+                inner,
+                inner_bytes,
+                expected_entry="development-calibration",
+                child_argv_sha256=intent["child_argv_sha256"],
+                owned_invocation_id=invocation,
+            )
+        ),
+        "profile_id": attempt.profile_id,
+        "result": {
+            "control_group_empty": True,
+            "control_group_property_at_terminal_snapshot": "",
+            "cgroup_path_absent_at_terminal_snapshot": True,
+            "exec_main_code": 1,
+            "exec_main_status": 0,
+            "kill_sent": False,
+            "launcher_exit_code": 0,
+            "launcher_reaped": True,
+            "main_pid_at_terminal_snapshot": 0,
+            "result": "success",
+            "term_sent": False,
+            "timed_out": False,
+            "unit_absent_after_collection": True,
+            "unit_active_state_at_terminal_snapshot": "active",
+            "unit_collected_after_terminal_snapshot": True,
+            "unit_sub_state_at_terminal_snapshot": "exited",
+        },
+        "rfc8785_receipt_cas": qualification._cas_projection_v2(
+            rfc_digest, len(rfc_bytes), attempt.attempt_manifest_root
+        ),
+        "rfc8785_raw_bundle_directory": str(raw_directory),
+        "rfc8785_raw_bundle_projection": raw_projection,
+        "runtime_environment_manifest_cas": qualification._cas_projection_v2(
+            runtime_digest, len(runtime_bytes), attempt.attempt_manifest_root
+        ),
+        "runtime_environment_manifest_object_path": str(
+            cas_directory / runtime_digest
+        ),
+        "runtime_environment_manifest_root": (
+            attempt.runtime_environment_manifest_root
+        ),
+        "runtime_image_digest": None,
+        "schema_version": qualification.OUTER_SUPERVISOR_RESULT_SCHEMA_V2,
+        "source_archive_cas": qualification._cas_projection_v2(
+            source_digest, len(source_archive_bytes), attempt.attempt_manifest_root
+        ),
+        "source_archive_extraction": extraction,
+        "source_archive_object_path": str(cas_directory / source_digest),
+        "source_archive_root": attempt.source_archive_root,
+        "source_commit_sha": attempt.source_commit_sha,
+        "source_tree_root": str(source_tree),
+        "stderr": {
+            "sha256": hashlib.sha256(b"").hexdigest(),
+            "size_bytes": 0,
+        },
+        "stdout": {"sha256": inner_sha, "size_bytes": len(inner_bytes)},
+        "timing": {
+            "elapsed_to_supervisor_ready_nanoseconds": 200,
+            "service_ended_monotonic_nanoseconds": 200,
+            "started_monotonic_nanoseconds": 100,
+            "supervisor_ready_monotonic_nanoseconds": 300,
+            "watchdog_deadline_monotonic_nanoseconds": 100
+            + qualification.LIVE_HARD_TOTAL_TIMEOUT_SECONDS * 1_000_000_000,
+        },
+        "unit": {
+            "cgroup_path": "/test.slice/qv2.scope",
+            "child_argv_sha256": intent["child_argv_sha256"],
+            "effective_properties": effective_properties,
+            "invocation_id": invocation,
+            "owned_invocation_id": invocation,
+            "ownership_marker": intent["ownership_marker"],
+            "ownership_nonce": intent["ownership_nonce"],
+            "prelaunch_absent_verified": True,
+            "selected_environment_root": attempt.runtime_environment_manifest_root,
+            "unit_name": intent["unit_name"],
+            "working_directory": str(source_tree),
+        },
+    }
+    return SimpleNamespace(
+        attempt=attempt,
+        body=body,
+        expected_files=expected_files,
+        inner=inner,
+        inner_bytes=inner_bytes,
+        main_pid=main_pid,
+        child_preopened_root=child_preopened_root,
+        outer_preopened_root=outer_preopened_root,
+        raw_projection=raw_projection,
+        rfc_bytes=rfc_bytes,
+        rfc_receipt=rfc_receipt,
+        runtime_bytes=runtime_bytes,
+        source_tree=source_tree,
+        tree_root=tree_root,
+        tree_rows=tree_rows,
+    )
+
+
+def test_outer_live_and_pure_main_pid_crossbinding_rejects_splices(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    replay = _valid_outer_main_pid_replay_v3(tmp_path)
+    assert (
+        replay.inner["runtime_entry_evidence"]["interpreter_runtime"][
+            "preopened_source_snapshot_root"
+        ]
+        != replay.outer_preopened_root
+    )
+    real_sha256_file = qualification._sha256_file_v2
+
+    def replay_file_sha256(path: Path, **kwargs: object) -> str:
+        del kwargs
+        try:
+            relative = str(path.relative_to(replay.source_tree))
+        except ValueError:
+            relative = ""
+        if relative in replay.expected_files:
+            return replay.expected_files[relative]
+        if path.parent == replay.source_tree.parent / "cas":
+            return path.name
+        return real_sha256_file(path)
+
+    monkeypatch.setattr(
+        qualification,
+        "_expected_live_file_sha256_v2",
+        lambda _attempt: replay.expected_files,
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_verify_live_package_tree_is_source_only_v2",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(qualification, "_sha256_file_v2", replay_file_sha256)
+    monkeypatch.setattr(
+        qualification,
+        "_inspect_source_archive_regular_manifest_v2",
+        lambda *_args, **_kwargs: (
+            qualification._regular_file_manifest_root_v2(replay.tree_rows),
+            len(replay.tree_rows),
+            sum(row["size_bytes"] for row in replay.tree_rows),
+            len(replay.tree_rows),
+            0,
+            replay.tree_rows,
+            replay.tree_root,
+        ),
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_source_tree_manifest_v2",
+        lambda *_args, **_kwargs: (replay.tree_rows, replay.tree_root),
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_verify_live_executable_v2",
+        lambda row, name, **_kwargs: (
+            qualification._verify_executable_projection_shape_v2(row, name)
+        ),
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_verify_runtime_environment_manifest_v2",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_verify_rfc8785_raw_execution_bundle_v2",
+        lambda *_args, **_kwargs: replay.raw_projection,
+    )
+
+    def validate_live(
+        body: dict[str, object],
+        inner: dict[str, object],
+        inner_bytes: bytes,
+    ) -> None:
+        qualification._validate_outer_supervisor_result_v2(
+            body,
+            attempt=replay.attempt,
+            inner=inner,
+            inner_bytes=inner_bytes,
+            rfc_receipt=replay.rfc_receipt,
+            rfc_receipt_bytes=replay.rfc_bytes,
+            expected_entry="development-calibration",
+        )
+
+    def validate_pure(
+        body: dict[str, object],
+        inner: dict[str, object],
+        inner_bytes: bytes,
+    ) -> None:
+        qualification._validate_outer_supervisor_semantics_pure_v2(
+            body,
+            attempt=replay.attempt,
+            inner=inner,
+            inner_bytes=inner_bytes,
+            rfc_receipt=replay.rfc_receipt,
+            rfc_receipt_bytes=replay.rfc_bytes,
+            runtime_manifest_bytes=replay.runtime_bytes,
+            source_tree_rows=replay.tree_rows,
+            source_archive_tree_rows=replay.tree_rows,
+            raw_bundle_projection=replay.raw_projection,
+            expected_entry="development-calibration",
+        )
+
+    validate_live(replay.body, replay.inner, replay.inner_bytes)
+    validate_pure(replay.body, replay.inner, replay.inner_bytes)
+
+    inner_splice = json.loads(json.dumps(replay.inner))
+    for name in ("runtime_entry_evidence", "runtime_exit_evidence"):
+        inner_splice[name]["cgroup"]["cgroup_procs"] = [replay.main_pid + 1]
+    qualification._validate_development_calibration_artifact_v2(
+        inner_splice, replay.attempt
+    )
+    inner_splice_bytes = qualification._canonical_inner_artifact_v2(inner_splice)
+    inner_splice_sha = hashlib.sha256(inner_splice_bytes).hexdigest()
+    inner_bound_outer = json.loads(json.dumps(replay.body))
+    inner_bound_outer["inner_artifact_cas"] = qualification._cas_projection_v2(
+        inner_splice_sha,
+        len(inner_splice_bytes),
+        replay.attempt.attempt_manifest_root,
+    )
+    inner_bound_outer["stdout"] = {
+        "sha256": inner_splice_sha,
+        "size_bytes": len(inner_splice_bytes),
+    }
+    inner_bound_outer["post_output_physical_gate_attestation"] = (
+        qualification._expected_post_output_gate_attestation_v2(
+            replay.attempt,
+            inner_splice,
+            inner_splice_bytes,
+            expected_entry="development-calibration",
+            child_argv_sha256=inner_bound_outer["unit"]["child_argv_sha256"],
+            owned_invocation_id=inner_bound_outer["unit"]["owned_invocation_id"],
+        )
+    )
+    for validator in (validate_live, validate_pure):
+        with pytest.raises(ValueError, match="membership|transcript"):
+            validator(inner_bound_outer, inner_splice, inner_splice_bytes)
+
+    transcript_splice = json.loads(json.dumps(replay.body))
+    entry_row = transcript_splice["launcher"]["systemctl_commands"][1]
+    spliced_entry = _systemd_show_bytes(
+        replay.attempt,
+        replay.source_tree,
+        marker=transcript_splice["unit"]["ownership_marker"],
+        invocation=transcript_splice["unit"]["invocation_id"],
+        load="loaded",
+        active="active",
+        sub="running",
+        main_pid=replay.main_pid + 1,
+        cgroup=transcript_splice["unit"]["cgroup_path"],
+    )
+    transcript_splice["launcher"]["systemctl_commands"][1] = (
+        qualification._command_evidence_v2(
+            argv=entry_row["argv"],
+            purpose="entry-show-0",
+            returncode=0,
+            stdout=spliced_entry,
+            stderr=b"",
+        )
+    )
+    for validator in (validate_live, validate_pure):
+        with pytest.raises(ValueError, match="membership|transcript"):
+            validator(transcript_splice, replay.inner, replay.inner_bytes)
+
+    child_root_splice = json.loads(json.dumps(replay.inner))
+    child_root_splice["runtime_entry_evidence"]["interpreter_runtime"][
+        "preopened_source_snapshot_root"
+    ] = "phase2b_formal_wire_covert_preopened_sources_v2_" + "d" * 64
+    qualification._validate_development_calibration_artifact_v2(
+        child_root_splice, replay.attempt
+    )
+    child_root_splice_bytes = qualification._canonical_inner_artifact_v2(
+        child_root_splice
+    )
+    child_root_splice_sha = hashlib.sha256(child_root_splice_bytes).hexdigest()
+    child_root_bound_outer = json.loads(json.dumps(replay.body))
+    child_root_bound_outer["inner_artifact_cas"] = (
+        qualification._cas_projection_v2(
+            child_root_splice_sha,
+            len(child_root_splice_bytes),
+            replay.attempt.attempt_manifest_root,
+        )
+    )
+    child_root_bound_outer["stdout"] = {
+        "sha256": child_root_splice_sha,
+        "size_bytes": len(child_root_splice_bytes),
+    }
+    child_root_bound_outer["post_output_physical_gate_attestation"] = (
+        qualification._expected_post_output_gate_attestation_v2(
+            replay.attempt,
+            child_root_splice,
+            child_root_splice_bytes,
+            expected_entry="development-calibration",
+            child_argv_sha256=child_root_bound_outer["unit"][
+                "child_argv_sha256"
+            ],
+            owned_invocation_id=child_root_bound_outer["unit"][
+                "owned_invocation_id"
+            ],
+        )
+    )
+    for validator in (validate_live, validate_pure):
+        with pytest.raises(ValueError, match="preopened|identity|membership"):
+            validator(
+                child_root_bound_outer,
+                child_root_splice,
+                child_root_splice_bytes,
+            )
+
+    child_map_splice = json.loads(json.dumps(replay.body))
+    nonmain_relative = next(
+        relative
+        for relative in sorted(
+            child_map_splice["child_source_bootstrap_preopened_snapshots"]
+        )
+        if relative != qualification._BOOTSTRAP_MAIN_RELATIVE_PATH_V2
+    )
+    child_map_splice["child_source_bootstrap_preopened_snapshots"][
+        nonmain_relative
+    ]["inode"] += 1
+    child_map_splice["child_source_bootstrap_preopened_snapshots"][
+        nonmain_relative
+    ]["mtime_nanoseconds"] += 1
+    child_map_splice["child_source_bootstrap_preopened_snapshots_root"] = (
+        qualification.stable_hash(
+            child_map_splice["child_source_bootstrap_preopened_snapshots"],
+            prefix="phase2b_formal_wire_covert_preopened_sources_v2_",
+        )
+    )
+    for validator in (validate_live, validate_pure):
+        with pytest.raises(ValueError, match="preopened"):
+            validator(child_map_splice, replay.inner, replay.inner_bytes)
+
+    child_main = (
+        replay.source_tree / qualification._BOOTSTRAP_MAIN_RELATIVE_PATH_V2
+    )
+    original_payload = child_main.read_bytes()
+    original_stat = child_main.stat(follow_symlinks=False)
+
+    os.utime(
+        child_main,
+        ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns + 1_000_000_000),
+    )
+    assert child_main.stat(follow_symlinks=False).st_mtime_ns != original_stat.st_mtime_ns
+    for validator in (validate_live, validate_pure):
+        with pytest.raises(ValueError):
+            validator(replay.body, replay.inner, replay.inner_bytes)
+    os.utime(
+        child_main,
+        ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns),
+    )
+
+    retained_original = child_main.with_name(child_main.name + ".retained-original")
+    child_main.rename(retained_original)
+    child_main.write_bytes(original_payload)
+    os.utime(
+        child_main,
+        ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns),
+    )
+    assert child_main.stat(follow_symlinks=False).st_ino != original_stat.st_ino
+    for validator in (validate_live, validate_pure):
+        with pytest.raises(ValueError):
+            validator(replay.body, replay.inner, replay.inner_bytes)
+    child_main.unlink()
+    retained_original.rename(child_main)
+
+    child_main.write_bytes(original_payload + b"\nsplice")
+    for validator in (validate_live, validate_pure):
+        with pytest.raises(ValueError):
+            validator(replay.body, replay.inner, replay.inner_bytes)
+    child_main.write_bytes(original_payload)
+    os.utime(
+        child_main,
+        ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns),
+    )
+
+    live_source = inspect.getsource(
+        qualification._validate_outer_supervisor_result_v2
+    )
+    pure_source = inspect.getsource(
+        qualification._validate_outer_supervisor_semantics_pure_v2
+    )
+    assert (
+        'inner_entry["cgroup"].get("cgroup_procs") != [entry_main_pid]'
+        in live_source
+    )
+    assert (
+        'inner_entry["cgroup"].get("cgroup_procs") != [entry_main_pid]'
+        in pure_source
+    )
+    producer_source = inspect.getsource(
+        qualification._run_phase2b_formal_wire_covert_outer_attempt_impl_v2
+    )
+    assert producer_source.count(
+        "_replay_extracted_child_preopened_sources_v2("
+    ) == 2
+    assert "post_child_snapshots_root" in producer_source
+    assert "child preopened source snapshots drifted during execution" in producer_source
+
+
+@pytest.mark.parametrize(
+    "emit_failure_stderr",
+    (False, True),
+    ids=(
+        "terminal-status86-empty-stderr",
+        "bounded-fail-resource-stderr-capture",
+    ),
+)
+def test_outer_runner_canonical_stdout_then_tail_exit86_publishes_only_failure_v4(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    emit_failure_stderr: bool,
+) -> None:
+    profile_bytes = b"synthetic-tail-profile\n"
+    attempt_bytes = b"synthetic-tail-attempt\n"
+    source_archive_bytes = b"synthetic-source-archive"
+    runtime_bytes = b"synthetic-runtime-manifest"
+    rfc_bytes = b"synthetic-rfc-receipt"
+    pinned_source = b"# synthetic pinned qualification source\n"
+    pinned_source_sha = hashlib.sha256(pinned_source).hexdigest()
+    attempt = replace(
+        _attempt(),
+        source_archive_root=(
+            "sha256:" + hashlib.sha256(source_archive_bytes).hexdigest()
+        ),
+        source_archive_size_bytes=len(source_archive_bytes),
+        qualification_source_sha256=pinned_source_sha,
+        qualification_config_sha256=hashlib.sha256(profile_bytes).hexdigest(),
+        qualification_lock_sha256=qualification.DEPENDENCY_LOCK_SHA256,
+        runtime_environment_manifest_root=(
+            "sha256:" + hashlib.sha256(runtime_bytes).hexdigest()
+        ),
+        runtime_environment_manifest_size_bytes=len(runtime_bytes),
+        rfc8785_prerequisite_receipt_root=(
+            "sha256:" + hashlib.sha256(rfc_bytes).hexdigest()
+        ),
+        rfc8785_prerequisite_receipt_sha256=(
+            hashlib.sha256(rfc_bytes).hexdigest()
+        ),
+        rfc8785_prerequisite_receipt_size_bytes=len(rfc_bytes),
+    )
+    output_root = (tmp_path / "attempts").resolve()
+    output_root.mkdir()
+    profile_path = (tmp_path / "profile.json").resolve()
+    attempt_path = (tmp_path / "attempt.json").resolve()
+    source_archive_path = (tmp_path / "source.tar").resolve()
+    runtime_path = (tmp_path / "runtime.json").resolve()
+    rfc_directory = (tmp_path / "rfc").resolve()
+    rfc_directory.mkdir()
+    rfc_path = rfc_directory / "receipt.json"
+    profile_path.write_bytes(profile_bytes)
+    attempt_path.write_bytes(attempt_bytes)
+    source_archive_path.write_bytes(source_archive_bytes)
+    runtime_path.write_bytes(runtime_bytes)
+    rfc_path.write_bytes(rfc_bytes)
+    attempt_directory = output_root / (
+        "attempt-"
+        + hashlib.sha256(attempt.attempt_manifest_root.encode("ascii")).hexdigest()[
+            :48
+        ]
+    )
+    source_tree = attempt_directory / "evidence/source-tree"
+    dependency_runtime: dict[str, object] = {}
+    python_row = _executable_row(str(Path(sys.executable).resolve()))
+    launcher_context: dict[str, object] = {}
+    invocation_id = "b" * 32
+    synthetic_child_snapshots: dict[str, object] = {}
+    synthetic_child_root = qualification.stable_hash(
+        synthetic_child_snapshots,
+        prefix="phase2b_formal_wire_covert_preopened_sources_v2_",
+    )
+    expected_bootstrap_manifest_root = qualification.stable_hash(
+        qualification._source_execution_bootstrap_manifest_v2(pinned_source_sha),
+        prefix="phase2b_formal_wire_covert_source_bootstrap_manifest_v2_",
+    )
+    valid_inner = _valid_development_inner_v6(attempt, source_tree)
+    interpreter_runtime = valid_inner["runtime_entry_evidence"][
+        "interpreter_runtime"
+    ]
+    interpreter_runtime["preopened_source_snapshot_root"] = synthetic_child_root
+    interpreter_runtime["source_execution_bootstrap_manifest_root"] = (
+        expected_bootstrap_manifest_root
+    )
+    for run, measurement in zip(
+        valid_inner["runs_in_order"],
+        valid_inner["frozen_static_measurement_candidates_in_order"],
+        strict=True,
+    ):
+        qualification._validate_run_and_measurement_binding_v2(run, measurement)
+    qualification._validate_development_calibration_artifact_v2(
+        valid_inner, attempt
+    )
+    validated_interpreter_runtime = (
+        qualification._validate_interpreter_runtime_projection_v2(
+            interpreter_runtime, "tail-exit86 counterfactual-success inner"
+        )
+    )
+    assert (
+        validated_interpreter_runtime["preopened_source_snapshot_root"]
+        == synthetic_child_root
+    )
+    assert (
+        validated_interpreter_runtime["source_execution_bootstrap_manifest_root"]
+        == expected_bootstrap_manifest_root
+    )
+    canonical_stdout = qualification._canonical_inner_artifact_v2(valid_inner)
+    canonical_stdout_path = (tmp_path / "valid-inner-v6.json").resolve()
+    canonical_stdout_path.write_bytes(canonical_stdout)
+    exact_stderr = (
+        qualification._bounded_post_output_failure_line_v2(
+            qualification.Phase2BFormalWireCovertQualificationErrorV2(
+                qualification.FAIL_RESOURCE,
+                "injected final fresh peak above cooperative tail threshold",
+            )
+        )
+        if emit_failure_stderr
+        else b""
+    )
+    real_popen = subprocess.Popen
+    real_terminal_success = qualification._systemd_terminal_success_v2
+    terminal_success_observations: list[dict[str, object]] = []
+
+    def observed_terminal_success(
+        show: dict[str, str], *, name: str
+    ) -> bool:
+        observation: dict[str, object] = {
+            "name": name,
+            "Result": show["Result"],
+            "ExecMainCode": show["ExecMainCode"],
+            "ExecMainStatus": show["ExecMainStatus"],
+        }
+        terminal_success_observations.append(observation)
+        try:
+            result = real_terminal_success(show, name=name)
+        except ValueError:
+            observation["raised"] = "ValueError"
+            raise
+        observation["returned"] = result
+        return result
+
+    def fake_extract(
+        _archive: Path,
+        destination: Path,
+        **_kwargs: object,
+    ) -> dict[str, object]:
+        main = (
+            destination
+            / "src/hegel_machine/phase2b_formal_wire_covert_qualification_v2.py"
+        )
+        config = (
+            destination
+            / "config/phase2b_formal_wire_covert_qualification_v2.json"
+        )
+        lock = (
+            destination
+            / "config/phase2b_formal_wire_covert_qualification_v2.lock.json"
+        )
+        main.parent.mkdir(parents=True)
+        config.parent.mkdir(parents=True)
+        main.write_bytes(pinned_source)
+        config.write_bytes(profile_bytes)
+        lock.write_bytes(b"synthetic-lock\n")
+        return {}
+
+    def fake_systemd_popen(
+        argv: list[str],
+        **kwargs: object,
+    ) -> subprocess.Popen[bytes]:
+        assert (
+            f"--property=MemoryMax={auditor.MAXIMUM_ESTIMATED_RSS_BYTES}"
+            in argv
+        )
+        launcher_context["unit_name"] = (
+            next(item for item in argv if item.startswith("--unit="))
+            .removeprefix("--unit=")
+            + ".service"
+        )
+        launcher_context["ownership_marker"] = next(
+            item for item in argv if item.startswith("--property=Description=")
+        ).removeprefix("--property=Description=")
+        stderr_write = (
+            f"os.write(2,bytes.fromhex('{exact_stderr.hex()}'))\n"
+            if emit_failure_stderr
+            else ""
+        )
+        script = (
+            "import os,sys\n"
+            "with open(sys.argv[1],'rb') as stream:\n"
+            " payload=stream.read()\n"
+            "os.write(1,payload)\n"
+            + stderr_write
+            + "os._exit(86)\n"
+        )
+        process = real_popen(
+            [sys.executable, "-c", script, str(canonical_stdout_path)],
+            **kwargs,
+        )
+        launcher_context["pid"] = process.pid
+        return process
+
+    def control_command(
+        argv: list[str],
+        *,
+        purpose: str,
+        **_kwargs: object,
+    ) -> tuple[dict[str, object], bytes, bytes]:
+        if purpose == "prelaunch-absent-check":
+            stdout = _systemd_show_bytes(attempt, source_tree)
+        elif purpose == "entry-show-0":
+            stdout = _systemd_show_bytes(
+                attempt,
+                source_tree,
+                marker=str(launcher_context["ownership_marker"]),
+                invocation=invocation_id,
+                load="loaded",
+                active="active",
+                sub="running",
+                main_pid=valid_inner["runtime_entry_evidence"]["cgroup"][
+                    "cgroup_procs"
+                ][0],
+                cgroup="/test.slice/qv2.scope",
+            )
+        elif purpose == "terminal-show-0":
+            stdout = _systemd_show_bytes(
+                attempt,
+                source_tree,
+                marker=str(launcher_context["ownership_marker"]),
+                invocation=invocation_id,
+                load="loaded",
+                active="active",
+                sub="exited",
+                main_pid=0,
+                cgroup="",
+                result="exit-code",
+                overrides={"ExecMainStatus": "86"},
+            )
+        elif purpose in {"failure-owned-show", "failure-absent-0"}:
+            stdout = _systemd_show_bytes(attempt, source_tree)
+        else:
+            raise AssertionError(f"unexpected systemd control purpose: {purpose}")
+        stderr = b""
+        evidence = qualification._command_evidence_v2(
+            argv=argv,
+            purpose=purpose,
+            returncode=0,
+            stdout=stdout,
+            stderr=stderr,
+        )
+        return evidence, stdout, stderr
+
+    monkeypatch.setattr(
+        qualification,
+        "load_phase2b_formal_wire_covert_qualification_profile_v2",
+        lambda _payload: object(),
+    )
+    monkeypatch.setattr(
+        qualification,
+        "load_phase2b_formal_wire_covert_attempt_manifest_v2",
+        lambda _payload: attempt,
+    )
+    monkeypatch.setattr(
+        qualification, "_outer_runner_tcb_snapshot_v2", lambda *_args, **_kwargs: {}
+    )
+    monkeypatch.setattr(qualification, "_safe_extract_source_archive_v2", fake_extract)
+    monkeypatch.setattr(
+        qualification,
+        "_replay_extracted_child_preopened_sources_v2",
+        lambda *_args, **_kwargs: (
+            synthetic_child_snapshots,
+            synthetic_child_root,
+        ),
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_verify_live_package_tree_is_source_only_v2",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_expected_live_file_sha256_v2",
+        lambda _attempt: {
+            "src/hegel_machine/phase2b_formal_wire_covert_qualification_v2.py": (
+                pinned_source_sha
+            )
+        },
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_verify_dependency_lock_bytes_v2",
+        lambda _payload: dependency_runtime,
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_verify_rfc8785_prerequisite_receipt_v2",
+        lambda *_args, **_kwargs: {"executables": {"python": python_row}},
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_copy_rfc8785_raw_execution_bundle_v2",
+        lambda **_kwargs: (b"", {}),
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_verify_live_executable_v2",
+        lambda value, *_args, **_kwargs: value,
+    )
+    monkeypatch.setattr(
+        qualification.shutil,
+        "which",
+        lambda name: f"/usr/bin/{name}",
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_executable_projection_for_runner_v2",
+        lambda path, **_kwargs: _executable_row(str(path)),
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_verify_runtime_environment_manifest_v2",
+        lambda *_args, **_kwargs: {
+            "dependency_lock_runtime": dependency_runtime
+        },
+    )
+    monkeypatch.setattr(qualification.subprocess, "Popen", fake_systemd_popen)
+    monkeypatch.setattr(
+        qualification, "_run_bounded_control_command_v2", control_command
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_systemd_terminal_success_v2",
+        observed_terminal_success,
+    )
+
+    terminal_bytes = qualification.run_phase2b_formal_wire_covert_outer_attempt_v2(
+        entry_kind="development-calibration",
+        profile_path=profile_path,
+        attempt_manifest_path=attempt_path,
+        rfc8785_prerequisite_receipt_path=rfc_path,
+        source_archive_path=source_archive_path,
+        runtime_environment_manifest_path=runtime_path,
+        output_root=output_root,
+    )
+    terminal = qualification._decode_canonical_transport_object_v2(
+        terminal_bytes,
+        "tail-exit86 outer terminal",
+        maximum_bytes=8 * 1_024 * 1_024,
+    )
+    assert terminal["schema_version"] == qualification.OUTER_ATTEMPT_FAILURE_SCHEMA_V2
+    assert terminal["disposition"] == "ATOMIC_EMPTY_REJECTION"
+    assert terminal["primary_failure_stage"] == "INNER_EXECUTION"
+    assert terminal["primary_failure_exception_type"] == "ValueError"
+    if not emit_failure_stderr:
+        assert [
+            observation
+            for observation in terminal_success_observations
+            if observation["name"] == "terminal loop"
+        ] == [
+            {
+                "name": "terminal loop",
+                "Result": "exit-code",
+                "ExecMainCode": "1",
+                "ExecMainStatus": "86",
+                "raised": "ValueError",
+            }
+        ]
+    assert terminal["published_accepted_audit_runs"] == 0
+    assert terminal["run_roots"] == []
+    assert terminal["qualification_receipt_id"] is None
+    assert terminal["claims"] == {key: False for key in terminal["claims"]}
+    assert terminal["cleanup_verified"] is True
+    assert terminal["cleanup"]["launcher_returncode"] == 86
+    assert terminal["cleanup"]["term_sent"] is False
+    assert terminal["cleanup"]["kill_sent"] is False
+    failure_cas = terminal["failure_cas_projection"]
+    child_capture = terminal["child_pipe_capture"]
+    expected_bundle = qualification._failure_child_pipe_bundle_bytes_v2(
+        canonical_stdout, exact_stderr
+    )
+    bundle_digest = hashlib.sha256(expected_bundle).hexdigest()
+    assert child_capture["bundle_cas"] == qualification._cas_projection_v2(
+        bundle_digest,
+        len(expected_bundle),
+        attempt.attempt_manifest_root,
+    )
+    assert failure_cas["object_count"] == 1
+    assert failure_cas["objects_in_lexicographic_digest_order"] == [
+        {
+            "content_sha256": bundle_digest,
+            "object_size_bytes": len(expected_bundle),
+        }
+    ]
+    assert failure_cas["total_regular_bytes"] == len(expected_bundle)
+    assert failure_cas["partial_cas_roles_attributed"] is False
+    assert not (attempt_directory / "evidence/inner.json").exists()
+    assert not (attempt_directory / "evidence/outer-supervisor.json").exists()
+    assert not (attempt_directory / "evidence/mechanics.json").exists()
+    cas_objects = list((attempt_directory / "evidence/cas").iterdir())
+    assert [path.name for path in cas_objects] == [bundle_digest]
+    assert cas_objects[0].read_bytes() == expected_bundle
+    evidence_fd = qualification._open_real_directory_fd_v2(
+        attempt_directory / "evidence"
+    )
+    try:
+        captured_stdout, captured_stderr, capture_complete = (
+            qualification._verify_failure_child_pipe_capture_projection_v2(
+                evidence_fd,
+                terminal["child_pipe_capture"],
+                attempt_manifest_root=attempt.attempt_manifest_root,
+                deadline_ns=time.monotonic_ns() + 10_000_000_000,
+            )
+        )
+    finally:
+        os.close(evidence_fd)
+    assert capture_complete is True
+    assert captured_stdout == canonical_stdout
+    assert captured_stderr == exact_stderr
+    captured_inner = qualification._decode_canonical_transport_object_v2(
+        captured_stdout,
+        "captured canonical tail-exit86 stdout",
+        maximum_bytes=8 * 1_024 * 1_024,
+    )
+    qualification._validate_development_calibration_artifact_v2(
+        captured_inner, attempt
+    )
+    assert captured_inner["schema_version"].endswith(
+        "development-calibration/6"
+    )
+    assert captured_inner["post_output_physical_gate_contract"] == dict(
+        qualification._POST_OUTPUT_PHYSICAL_GATE_CONTRACT_V2
+    )
+    assert (
+        qualification.verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
+            attempt_directory,
+            expected_terminal_bytes=terminal_bytes,
+        )
+        == terminal_bytes
+    )
+
+
+def test_post_output_failure_line_is_one_bounded_exact_resource_record() -> None:
+    line = qualification._bounded_post_output_failure_line_v2(
+        ValueError("first\nsecond\r" + "x" * 2_000)
+    )
+    assert 1 <= len(line) <= 1_024
+    assert line.endswith(b"\n")
+    assert line.count(b"\n") == 1
+    assert line.startswith((qualification.FAIL_RESOURCE + ": ").encode("ascii"))
+
+
+@pytest.mark.parametrize(
+    "case",
+    (
+        "second_receipt_scope",
+        "exit_scope_root",
+        "exit_peak_below_receipt",
+        "exit_peak_above_auditor_cap",
+        "exit_peak_below_current",
+        "second_receipt_memory_max",
+        "second_receipt_peak_decreases",
+        "first_invariant_peak_below_entry",
+        "second_invariant_peak_below_first_receipt",
+    ),
+)
+def test_inner_exit_cgroup_crossbinds_both_receipt_scopes_and_physical_peaks(
+    case: str,
+) -> None:
+    _, _, _, _, positive_run, _ = _valid_executed_runtime_bundle_projection()
+    positive = json.loads(json.dumps(positive_run))
+    negative = json.loads(json.dumps(positive_run))
+    negative["mode"] = "KNOWN_BINDING_LEAK"
+    runs = [positive, negative]
+    issuance = positive["audit"]["receipt_issuance"][
+        "complete_runtime_projection"
+    ]
+    exit_cgroup = {
+        "cgroup_path": issuance["unified_cgroup_membership"],
+        "unified_cgroup_memory_scope_root": (
+            issuance["unified_cgroup_memory_scope_root"]
+        ),
+        "unified_cgroup_leaf_device": issuance["unified_cgroup_leaf_device"],
+        "unified_cgroup_leaf_inode": issuance["unified_cgroup_leaf_inode"],
+        "memory_current": issuance[
+            "physical_memory_current_bytes_before_receipt_finalization"
+        ],
+        "memory_peak": issuance[
+            "physical_memory_peak_bytes_before_receipt_finalization"
+        ],
+        "memory_max": issuance["physical_memory_max_bytes"],
+    }
+    entry_cgroup = json.loads(json.dumps(exit_cgroup))
+    qualification._validate_receipt_physical_scope_against_exit_cgroup_v2(
+        runs, entry_cgroup, exit_cgroup, context="unit inner exit"
+    )
+    if case == "second_receipt_scope":
+        negative["audit"]["receipt_issuance"]["complete_runtime_projection"][
+            "unified_cgroup_leaf_inode"
+        ] += 1
+    elif case == "exit_scope_root":
+        exit_cgroup["unified_cgroup_memory_scope_root"] = (
+            "phase2b_formal_covert_unified_cgroup_memory_scope_v1_" + "f" * 64
+        )
+    elif case == "exit_peak_below_receipt":
+        exit_cgroup["memory_peak"] -= 1
+    elif case == "exit_peak_above_auditor_cap":
+        exit_cgroup["memory_peak"] = auditor.MAXIMUM_ESTIMATED_RSS_BYTES + 1
+    elif case == "exit_peak_below_current":
+        exit_cgroup["memory_current"] = exit_cgroup["memory_peak"] + 1
+    elif case == "second_receipt_memory_max":
+        negative["audit"]["receipt_issuance"]["complete_runtime_projection"][
+            "physical_memory_max_bytes"
+        ] += 1
+    elif case == "second_receipt_peak_decreases":
+        negative["audit"]["receipt_issuance"]["complete_runtime_projection"][
+            "physical_memory_peak_bytes_before_receipt_finalization"
+        ] -= 1
+    elif case == "first_invariant_peak_below_entry":
+        positive["audit"]["invariance"]["complete_runtime_projection"][
+            "physical_memory_peak_bytes_at_completion"
+        ] -= 1
+    elif case == "second_invariant_peak_below_first_receipt":
+        negative["audit"]["invariance"]["complete_runtime_projection"][
+            "physical_memory_peak_bytes_at_completion"
+        ] -= 1
+    else:  # pragma: no cover - parameter list is closed above
+        raise AssertionError(case)
+    with pytest.raises(ValueError):
+        qualification._validate_receipt_physical_scope_against_exit_cgroup_v2(
+            runs, entry_cgroup, exit_cgroup, context="unit inner exit"
+        )
+
+
+@pytest.mark.parametrize(
+    ("event_field", "replacement"),
+    (("memory_events", {"x": 0}), ("pids_events", {"y": 0})),
+)
+def test_inner_runtime_replay_requires_canonical_event_counter_witnesses(
+    monkeypatch: pytest.MonkeyPatch,
+    event_field: str,
+    replacement: dict[str, int],
+) -> None:
+    attempt = _attempt()
+    membership = "/test.slice/qv2-events.scope"
+    leaf_device = 11
+    leaf_inode = 22
+    cgroup = {
+        "cgroup_path": membership,
+        "cgroup_procs": [12_345],
+        "cgroup_stat": {"nr_descendants": 0, "nr_dying_descendants": 0},
+        "cpu_affinity": [0],
+        "cpu_capacity": 1,
+        "cpu_max": None,
+        "memory_current": 1_024,
+        "memory_events": {"low": 0, "high": 0, "max": 0, "oom": 0, "oom_kill": 0},
+        "memory_max": attempt.requested_cgroup_memory_max_bytes,
+        "memory_peak": 2_048,
+        "pids_current": 1,
+        "pids_events": {"max": 0},
+        "pids_max": attempt.requested_cgroup_pids_max,
+        "unified_cgroup_leaf_device": leaf_device,
+        "unified_cgroup_leaf_inode": leaf_inode,
+        "unified_cgroup_memory_scope_root": qualification.stable_hash(
+            {
+                "leaf_device": leaf_device,
+                "leaf_inode": leaf_inode,
+                "unified_membership": membership,
+            },
+            prefix="phase2b_formal_covert_unified_cgroup_memory_scope_v1_",
+        ),
+    }
+    selected_signals = [
+        number.name for number in qualification.LIVE_SELECTED_DEFAULT_SIGNALS
+    ]
+    entry = {
+        "cgroup": json.loads(json.dumps(cgroup)),
+        "interpreter_runtime": {},
+        "selected_default_signals": selected_signals,
+        "sigblk_hex": "0000000000000000",
+        "threads": 1,
+    }
+    exit_row = {
+        "audit_receipts_validated_and_released_in_process": True,
+        "cgroup": json.loads(json.dumps(cgroup)),
+        "cgroup_events_unchanged_from_entry": True,
+        "selected_default_signals": selected_signals,
+        "sigblk_hex": "0000000000000000",
+        "threads": 1,
+    }
+    monkeypatch.setattr(
+        qualification,
+        "_validate_interpreter_runtime_projection_v2",
+        lambda value, context: None,
+    )
+    qualification._validate_runtime_entry_exit_contract_v2(
+        entry, exit_row, attempt, context="unit retained inner"
+    )
+    entry["cgroup"][event_field] = replacement
+    exit_row["cgroup"][event_field] = replacement
+    with pytest.raises(ValueError, match="missing required counters"):
+        qualification._validate_runtime_entry_exit_contract_v2(
+            entry, exit_row, attempt, context="unit retained inner"
         )
 
 
@@ -5540,46 +9010,54 @@ def test_production_has_zero_assert_and_no_pickle_pipe_or_process_pool() -> None
         )
     assert "receipt.__post_init__()" not in source
     assert qualification.QUALIFICATION_RECEIPT_DOMAIN == (
-        b"HEGEL/PHASE2B/FORMAL_WIRE_COVERT_QUALIFICATION/RECEIPT/V5\x00"
+        b"HEGEL/PHASE2B/FORMAL_WIRE_COVERT_QUALIFICATION/RECEIPT/V6\x00"
     )
     assert qualification.QUALIFICATION_RECEIPT_PREFIX == (
-        "phase2b_formal_wire_covert_qualification_receipt_v5_"
+        "phase2b_formal_wire_covert_qualification_receipt_v6_"
     )
     assert (
-        "HEGEL/PHASE2B/FORMAL_WIRE_COVERT_QUALIFICATION/RECEIPT/V4"
+        "HEGEL/PHASE2B/FORMAL_WIRE_COVERT_QUALIFICATION/RECEIPT/V5"
         not in source
     )
     assert "phase2b_formal_wire_covert_qualification_receipt_v4_" not in source
     current_schema_tokens = (
-        "hegel-machine-phase2b-formal-wire-covert-qualification/4",
+        "hegel-machine-phase2b-formal-wire-covert-qualification/6",
         "hegel-machine-phase2b-formal-wire-covert-qualification-dependency-lock/3",
-        "hegel-machine-phase2b-formal-wire-covert-development-calibration/4",
-        "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/4",
+        "hegel-machine-phase2b-formal-wire-covert-development-calibration/6",
+        "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/6",
         "hegel-machine-phase2b-formal-wire-covert-static-shape/3",
-        "phase2b_formal_wire_covert_qualification_receipt_v5_",
+        "phase2b_formal_wire_covert_qualification_receipt_v6_",
         "phase2b_formal_wire_covert_resource_plan_v3_",
         "phase2b_formal_wire_covert_observed_resource_plan_v3_",
-        "phase2b_formal_wire_covert_invariant_runtime_v3_",
-        "phase2b_formal_wire_covert_statistics_runtime_v3_",
-        "phase2b_formal_wire_covert_receipt_issuance_runtime_v3_",
+        "phase2b_formal_wire_covert_invariant_runtime_v4_",
+        "phase2b_formal_wire_covert_statistics_runtime_v4_",
+        "phase2b_formal_wire_covert_receipt_issuance_runtime_v4_",
     )
     for schema in current_schema_tokens:
         assert schema in source
-    for current in current_schema_tokens:
-        stale = current.replace("/4", "/2").replace("/3", "/2").replace(
-            "_v5_", "_v2_"
-        ).replace("_v4_", "_v2_").replace("_v3_", "_v2_")
-        assert stale not in source
-    for current_inner_schema in (
+    for stale in (
+        "hegel-machine-phase2b-formal-wire-covert-qualification/5",
+        "hegel-machine-phase2b-formal-wire-covert-development-calibration/5",
+        "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/5",
+        "hegel-machine-phase2b-formal-wire-covert-qualification/4",
         "hegel-machine-phase2b-formal-wire-covert-development-calibration/4",
         "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/4",
+        "phase2b_formal_wire_covert_qualification_receipt_v5_",
+        "phase2b_formal_wire_covert_invariant_runtime_v3_",
+        "phase2b_formal_wire_covert_statistics_runtime_v3_",
+        "phase2b_formal_wire_covert_receipt_issuance_runtime_v3_",
     ):
-        assert current_inner_schema.replace("/4", "/3") not in source
+        assert stale not in source
+    for current_inner_schema in (
+        "hegel-machine-phase2b-formal-wire-covert-development-calibration/6",
+        "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/6",
+    ):
+        assert current_inner_schema.replace("/6", "/5") not in source
     assert source.count(
-        "hegel-machine-phase2b-formal-wire-covert-development-calibration/4"
+        "hegel-machine-phase2b-formal-wire-covert-development-calibration/6"
     ) == 5
     assert source.count(
-        "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/4"
+        "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/6"
     ) == 4
     for forbidden in (
         "multiprocessing.Pipe",
@@ -8328,6 +11806,19 @@ def test_rfc_or_cas_atomic_uncertainty_uses_retained_parent_and_finalizes(
     )
     monkeypatch.setattr(qualification, "_sha256_file_v2", lambda *args, **kwargs: "0" * 64)
     monkeypatch.setattr(qualification, "_safe_extract_source_archive_v2", fake_extract)
+    synthetic_child_snapshots: dict[str, object] = {}
+    synthetic_child_root = qualification.stable_hash(
+        synthetic_child_snapshots,
+        prefix="phase2b_formal_wire_covert_preopened_sources_v2_",
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_replay_extracted_child_preopened_sources_v2",
+        lambda *args, **kwargs: (
+            synthetic_child_snapshots,
+            synthetic_child_root,
+        ),
+    )
     monkeypatch.setattr(
         qualification, "_verify_live_package_tree_is_source_only_v2", lambda *args, **kwargs: None
     )

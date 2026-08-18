@@ -21,6 +21,7 @@ from enum import Enum
 from fractions import Fraction
 import argparse
 import fcntl
+import gc
 import hashlib
 from importlib.machinery import FileFinder, ModuleSpec, SOURCE_SUFFIXES, SourceFileLoader
 import os
@@ -68,7 +69,7 @@ _BOOTSTRAP_FIXED_SOURCE_SHA256_V2 = {
         "e0fa517b4275a1d2daee1fd1f877b61a8f79ca745a702979615b2130e53bdc5f"
     ),
     "src/hegel_machine/phase2b_formal_covert_auditor_v1.py": (
-        "3bc0d0800da38001bd0a962379fabf76b3ba392a69539de466f2946ec1d01b78"
+        "f4ea0bb54fd7b4f5707a6eea22ac8b728279e4f2e5559899626e4bf477d87312"
     ),
     "src/hegel_machine/phase2b_formal_trusted_wire_v3.py": (
         "c8120920f0e31b959043f63a0f672471fcbea50d05ca2cd8eaf7fd0c29089765"
@@ -338,7 +339,7 @@ from . import phase2b_formal_trusted_wire_v3 as wire
 
 
 PROFILE_SCHEMA_VERSION: Final = (
-    "hegel-machine-phase2b-formal-wire-covert-qualification/4"
+    "hegel-machine-phase2b-formal-wire-covert-qualification/6"
 )
 PROFILE_STATUS: Final = (
     "CANDIDATE_SOURCE_FROZEN_FULL_1024_SHAPE_CALIBRATION_PENDING"
@@ -353,10 +354,10 @@ PROFILE_ID_PREFIX: Final = (
     "phase2b_formal_wire_covert_qualification_profile_v2_"
 )
 QUALIFICATION_RECEIPT_DOMAIN: Final = (
-    b"HEGEL/PHASE2B/FORMAL_WIRE_COVERT_QUALIFICATION/RECEIPT/V5\x00"
+    b"HEGEL/PHASE2B/FORMAL_WIRE_COVERT_QUALIFICATION/RECEIPT/V6\x00"
 )
 QUALIFICATION_RECEIPT_PREFIX: Final = (
-    "phase2b_formal_wire_covert_qualification_receipt_v5_"
+    "phase2b_formal_wire_covert_qualification_receipt_v6_"
 )
 SYNTHETIC_FIXTURE_DOMAIN: Final = (
     b"HEGEL/PHASE2B/FORMAL_WIRE_COVERT_QUALIFICATION/FIXTURE/V2\x00"
@@ -372,7 +373,7 @@ SYNTHETIC_KAT_VECTOR_DOMAIN: Final = (
 )
 
 DEPENDENCY_LOCK_SHA256: Final = (
-    "7f524eb9c111315f010efc27d3e73d508da33ebfe52c5b838b35e11dcf25ee8c"
+    "8c375133fb17d484d129464975ed4deb737d8f1e200d850f9ac75f4046bbfa07"
 )
 EXACT_AUTHORITY_ROWS: Final = 1_024
 EXACT_RECOGNIZER_INVOCATIONS: Final = 81
@@ -381,6 +382,7 @@ EXACT_CASE_ORDER_PERMUTATIONS: Final = 32
 EXACT_OBSERVATION_ORDER_PERMUTATIONS: Final = 16
 EXACT_LABEL_PERMUTATIONS: Final = 10_000
 LIVE_HARD_TOTAL_TIMEOUT_SECONDS: Final = 28_800
+POST_OUTPUT_DIRECT_EXIT_TAIL_RESERVE_BYTES_V2: Final = 64 * 1_024 * 1_024
 _MAXIMUM_SOURCE_ARCHIVE_PATH_DEPTH_V2: Final = 32
 _MAXIMUM_SOURCE_ARCHIVE_TREE_ROWS_V2: Final = 80_000
 _MAXIMUM_RETAINED_ATTEMPT_TREE_ROWS_V2: Final = 100_000
@@ -456,30 +458,30 @@ WIRE_DOCUMENTATION_SHA256: Final = (
     "704a937967441ebbb9b2a77a865f83890e241d37031e2b0a87f1da2877b3456a"
 )
 AUDITOR_SOURCE_SHA256: Final = (
-    "3bc0d0800da38001bd0a962379fabf76b3ba392a69539de466f2946ec1d01b78"
+    "f4ea0bb54fd7b4f5707a6eea22ac8b728279e4f2e5559899626e4bf477d87312"
 )
 AUDITOR_CONFIG_SHA256: Final = (
-    "a3981e498dfbc1085b869f595cc5ae6a554d9ced46ba1871a859a1b013b37f8f"
+    "e98052fd9e545ef17c577ab294388793a44502c91b22a1d784b41b86ecf54e83"
 )
 AUDITOR_TEST_SHA256: Final = (
-    "f763e661556e81eab781e95e72a00cecce60dc8925d47b54b78b2f14ff2af353"
+    "0a383c06b4d3a7d048134e74f1465e85f2bc35add262bc065463e6b984d01b4f"
 )
 AUDITOR_DOCUMENTATION_SHA256: Final = (
-    "121332df47bd74f13f2a5f8e033ef49f73c8bf6d6a9c25a8918f6e4f50f7a3e0"
+    "07000f2f505731704392883062ac3d7ae1cd19411026e327f688ce441a7c6936"
 )
 AUDITOR_SCHEMA_VERSION_V2: Final = (
-    "hegel-machine-phase2b-formal-covert-auditor/4"
+    "hegel-machine-phase2b-formal-covert-auditor/5"
 )
 AUDITOR_PROFILE_SCHEMA_VERSION_V2: Final = (
-    "hegel-machine-phase2b-formal-covert-auditor-profile/4"
+    "hegel-machine-phase2b-formal-covert-auditor-profile/5"
 )
 AUDITOR_SEMANTICS_ID_V2: Final = (
     "phase2b_formal_covert_semantics_"
-    "627506ef33be3134ee81c2a8bd765e4e7898abd7da9c94660bfc82176b0cbc1f"
+    "d50564375ce978d2ee585662adc6d9ac5c2335aa662214f508897f1076918321"
 )
 AUDITOR_POLICY_BINDING_ID_V2: Final = (
     "phase2b_formal_covert_policy_binding_"
-    "19c00ee7ccd65d0d11146aab1a1b6b5007a1d5e1cfd97599b26bfb7feb9f2825"
+    "122bb24b8d8983a294a66e64c59fd74ac4017eaead1b7888141ff1679ac4272b"
 )
 if (
     auditor.SCHEMA_VERSION != AUDITOR_SCHEMA_VERSION_V2
@@ -524,7 +526,7 @@ RFC8785_PREREQUISITE_SCHEMA_V2: Final = (
     "hegel-machine-rfc8785-runtime-prerequisite-receipt/2"
 )
 OUTER_SUPERVISOR_RESULT_SCHEMA_V2: Final = (
-    "hegel-machine-phase2b-formal-wire-covert-outer-supervisor-result/2"
+    "hegel-machine-phase2b-formal-wire-covert-outer-supervisor-result/3"
 )
 MECHANICS_VERIFIER_SCHEMA_V2: Final = (
     "hegel-machine-phase2b-formal-wire-covert-mechanics-verifier/2"
@@ -670,14 +672,21 @@ _RECEIPT_ISSUANCE_RUNTIME_FIELDS_V2: Final = (
     "absolute_deadline_kind",
     "absolute_deadline_monotonic_nanoseconds",
     "absolute_deadline_timeout_seconds",
-    "worker_peak_rss_bytes_sum",
-    "parent_peak_rss_bytes_before_receipt_finalization",
-    "parent_rss_charge_ceiling_bytes",
-    "conservative_parent_plus_worker_peak_sum_bytes",
+    "diagnostic_worker_historical_peak_rss_bytes_sum",
+    "diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization",
+    "diagnostic_parent_plus_worker_historical_peak_sum_bytes",
+    "unified_cgroup_membership",
+    "unified_cgroup_memory_scope_root",
+    "unified_cgroup_leaf_device",
+    "unified_cgroup_leaf_inode",
+    "physical_memory_current_bytes_before_receipt_finalization",
+    "physical_memory_peak_bytes_before_receipt_finalization",
+    "physical_memory_max_bytes",
+    "physical_memory_cap_bytes",
     "receipt_finalization_complete_pending_validation_count",
     "receipt_finalization_locked_deadline_check_count",
     "receipt_finalization_locked_deadline_within_absolute_limit",
-    "receipt_finalization_parent_peak_within_charge_ceiling",
+    "receipt_finalization_locked_physical_peak_within_cap",
 )
 if (
     frozenset(FROZEN_STATIC_RESOURCE_PLAN_FIELDS_V2)
@@ -709,6 +718,31 @@ _TASK4_PROJECTION_ONLY_BOUNDARY_V2: Final = {
     "step5_must_rerun_and_retain_full_result_and_worker_artifacts": True,
     "step5_must_retain_full_runtime_image_and_import_native_closure": True,
 }
+
+_POST_OUTPUT_PHYSICAL_GATE_CONTRACT_V2: Final = {
+    "canonical_stdout_write_then_flush_required": True,
+    "cooperative_tail_headroom_not_formal_whole_lifetime_bound": True,
+    "direct_os_exit_zero_required_after_final_gate": True,
+    "final_memory_peak_fresh_reread_required": True,
+    "fixed_direct_exit_tail_reserve_bytes": (
+        POST_OUTPUT_DIRECT_EXIT_TAIL_RESERVE_BYTES_V2
+    ),
+    "full_post_output_cgroup_snapshot_required": True,
+    "gc_disabled_no_trace_profile_or_python_signal_handlers_before_full_sample": True,
+    "memory_events_required_zero": ["max", "oom", "oom_kill"],
+    "memory_events_zero_claim_ends_at_full_post_output_sample": True,
+    "numeric_post_output_peak_serialized": False,
+    "physical_peak_evidence_ends_at_final_fresh_sample": True,
+    "same_runtime_exit_cgroup_scope_and_events_required": True,
+    "single_process_zero_descendants_at_full_sample": True,
+    "success_peak_threshold_bytes": (
+        auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        - POST_OUTPUT_DIRECT_EXIT_TAIL_RESERVE_BYTES_V2
+    ),
+    "successful_return_or_interpreter_teardown_forbidden": True,
+    "systemd_memory_max_bytes": auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+}
+_DIRECT_PROCESS_EXIT_V2: Final = os._exit
 
 
 _FIXTURE_OPERATION_SHAPE_CONTRACT_V2: Final = {
@@ -866,7 +900,12 @@ _EXPECTED_PROFILE: Final = {
         ),
         "family_wise_alpha": "0.01",
         "full_raw_byte_categorical_hypotheses_required": True,
-        "maximum_estimated_rss_bytes": auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+        "maximum_static_phase_plan_rss_bytes": (
+            auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        ),
+        "execution_scope_physical_memory_peak_cap_bytes": (
+            auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        ),
         "maximum_features": auditor.MAXIMUM_FEATURES,
         "maximum_rows": auditor.MAXIMUM_ROWS,
         "maximum_statistical_intersection_work_units": (
@@ -887,8 +926,8 @@ _EXPECTED_PROFILE: Final = {
         ),
         "receipt_issuance_runtime_evidence_required": True,
         "receipt_issuance_runtime_evidence_branch_contract": (
-            "STATISTICS_W_SUM_WORKER_PEAKS_OR_PARTITION_PREPARATION_W_ZERO_"
-            "WITH_CAP_MINUS_W_CHARGE_AND_ONE_LOCKED_PENDING_VALIDATION"
+            "ONE_UNIFIED_CGROUP_V2_ATTEMPT_LEAF_MEMORY_PEAK_AT_OR_BELOW_12GIB_"
+            "WITH_SCOPE_STABILITY_AND_ONE_LOCKED_PENDING_VALIDATION"
         ),
         "statistics_runtime_evidence_required": True,
         "target_family_inference": (
@@ -1052,6 +1091,14 @@ _EXPECTED_PROFILE: Final = {
             "fresh_isolated_outer_process_required": True,
             "hard_end_to_end_deadline_required": True,
             "hard_total_timeout_seconds": LIVE_HARD_TOTAL_TIMEOUT_SECONDS,
+            "entry_exit_memory_peak_at_or_below_auditor_cap": True,
+            "entry_exit_memory_peak_monotonic": True,
+            "receipt_scope_and_prefinal_peak_crossbound_to_exit": True,
+            "requested_memory_max_equals_auditor_physical_cap": True,
+            "post_output_physical_gate_contract": dict(
+                _POST_OUTPUT_PHYSICAL_GATE_CONTRACT_V2
+            ),
+            "post_exit_numeric_memory_peak_sample_claimed": False,
             "mode_order": list(LIVE_MODE_ORDER),
             "outer_process_group_ownership_tcb": (
                 OUTER_PROCESS_GROUP_OWNERSHIP_TCB_V2
@@ -2817,10 +2864,17 @@ def _validate_fixture_execution_feature_capacity_projection_v2(
 class AuditRunDiagnosticsV2:
     mode: str
     wall_time_ns: int
-    parent_peak_rss_before_receipt_finalization_kib: int
-    parent_rss_charge_ceiling_kib: int
-    statistics_worker_peak_rss_kib: tuple[int, ...]
-    conservative_parent_charge_plus_worker_peak_rss_kib: int
+    parent_historical_peak_rss_before_receipt_finalization_kib: int
+    statistics_worker_historical_peak_rss_kib: tuple[int, ...]
+    parent_plus_worker_historical_peak_rss_kib: int
+    unified_cgroup_membership: str
+    unified_cgroup_memory_scope_root: str
+    unified_cgroup_leaf_device: int
+    unified_cgroup_leaf_inode: int
+    physical_memory_current_before_receipt_finalization_bytes: int
+    physical_memory_peak_before_receipt_finalization_bytes: int
+    physical_memory_max_bytes: int
+    physical_memory_cap_bytes: int
     statistics_wall_time_ns: int
     host_available_memory_bytes_at_preflight: int
     recognizer_adapter_invocations: int
@@ -2832,9 +2886,14 @@ class AuditRunDiagnosticsV2:
             raise ValueError("audit diagnostic mode drift")
         for name in (
             "wall_time_ns",
-            "parent_peak_rss_before_receipt_finalization_kib",
-            "parent_rss_charge_ceiling_kib",
-            "conservative_parent_charge_plus_worker_peak_rss_kib",
+            "parent_historical_peak_rss_before_receipt_finalization_kib",
+            "parent_plus_worker_historical_peak_rss_kib",
+            "physical_memory_current_before_receipt_finalization_bytes",
+            "physical_memory_peak_before_receipt_finalization_bytes",
+            "physical_memory_max_bytes",
+            "physical_memory_cap_bytes",
+            "unified_cgroup_leaf_device",
+            "unified_cgroup_leaf_inode",
             "statistics_wall_time_ns",
             "host_available_memory_bytes_at_preflight",
             "recognizer_adapter_invocations",
@@ -2843,21 +2902,34 @@ class AuditRunDiagnosticsV2:
         ):
             if type(getattr(self, name)) is not int or getattr(self, name) < 0:
                 raise TypeError("audit diagnostic values must be nonnegative integers")
-        if type(self.statistics_worker_peak_rss_kib) is not tuple or any(
+        if type(self.statistics_worker_historical_peak_rss_kib) is not tuple or any(
             type(item) is not int or item < 0
-            for item in self.statistics_worker_peak_rss_kib
+            for item in self.statistics_worker_historical_peak_rss_kib
         ):
             raise TypeError("worker peak RSS values must be an exact integer tuple")
         if (
-            self.parent_peak_rss_before_receipt_finalization_kib
-            > self.parent_rss_charge_ceiling_kib
-            or self.conservative_parent_charge_plus_worker_peak_rss_kib
-            != self.parent_rss_charge_ceiling_kib
-            + sum(self.statistics_worker_peak_rss_kib)
-            or self.conservative_parent_charge_plus_worker_peak_rss_kib * 1_024
-            != auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+            self.parent_plus_worker_historical_peak_rss_kib
+            != self.parent_historical_peak_rss_before_receipt_finalization_kib
+            + sum(self.statistics_worker_historical_peak_rss_kib)
         ):
-            raise ValueError("audit diagnostic conservative RSS charge drift")
+            raise ValueError("audit historical RSS diagnostic drift")
+        try:
+            snapshot = auditor.UnifiedCgroupMemorySnapshotV1(
+                self.unified_cgroup_membership,
+                self.unified_cgroup_memory_scope_root,
+                self.unified_cgroup_leaf_device,
+                self.unified_cgroup_leaf_inode,
+                self.physical_memory_current_before_receipt_finalization_bytes,
+                self.physical_memory_peak_before_receipt_finalization_bytes,
+                self.physical_memory_max_bytes,
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError("audit physical-memory diagnostic drift") from exc
+        if (
+            self.physical_memory_cap_bytes != auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+            or snapshot.memory_peak_bytes > self.physical_memory_cap_bytes
+        ):
+            raise ValueError("audit physical-memory cap diagnostic drift")
         if (
             self.recognizer_adapter_invocations != EXACT_RECOGNIZER_INVOCATIONS
             or self.minimum_rows_per_invocation != EXACT_AUTHORITY_ROWS
@@ -3842,52 +3914,83 @@ def _validate_isolated_audit_receipt_v2(
     issuance.__post_init__()
     if (
         issuance.absolute_deadline_kind != "STATISTICS"
-        or issuance.worker_peak_rss_bytes_sum
+        or issuance.diagnostic_worker_historical_peak_rss_bytes_sum
         != sum(runtime.worker_peak_rss_bytes)
-        or issuance.parent_peak_rss_bytes_before_receipt_finalization
-        != runtime.parent_peak_rss_bytes_before_receipt_finalization
-        or issuance.parent_rss_charge_ceiling_bytes
-        != runtime.parent_rss_charge_ceiling_bytes
-        or issuance.conservative_parent_plus_worker_peak_sum_bytes
-        != runtime.conservative_parent_plus_worker_peak_sum_bytes
+        or issuance.diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization
+        != runtime.parent_historical_peak_rss_bytes_before_receipt_finalization
+        or issuance.diagnostic_parent_plus_worker_historical_peak_sum_bytes
+        != runtime.diagnostic_parent_plus_worker_historical_peak_sum_bytes
+        or issuance.unified_cgroup_membership
+        != runtime.unified_cgroup_membership
+        or issuance.unified_cgroup_memory_scope_root
+        != runtime.unified_cgroup_memory_scope_root
+        or issuance.unified_cgroup_leaf_device
+        != runtime.unified_cgroup_leaf_device
+        or issuance.unified_cgroup_leaf_inode
+        != runtime.unified_cgroup_leaf_inode
+        or issuance.physical_memory_current_bytes_before_receipt_finalization
+        != runtime.physical_memory_current_bytes_before_receipt_finalization
+        or issuance.physical_memory_peak_bytes_before_receipt_finalization
+        != runtime.physical_memory_peak_bytes_before_receipt_finalization
+        or issuance.physical_memory_max_bytes
+        != runtime.physical_memory_max_bytes
+        or issuance.physical_memory_cap_bytes
+        != runtime.physical_memory_cap_bytes
         or issuance.receipt_finalization_complete_pending_validation_count
         != runtime.receipt_finalization_complete_pending_validation_count
-        or issuance.receipt_finalization_parent_peak_within_charge_ceiling
-        is not runtime.receipt_finalization_parent_peak_within_charge_ceiling
+        or issuance.receipt_finalization_locked_physical_peak_within_cap
+        is not runtime.receipt_finalization_physical_peak_within_cap
     ):
         raise ValueError("isolated statistical/issuance runtime binding drift")
     if any(
         value % 1_024
         for value in (
             *runtime.worker_peak_rss_bytes,
-            runtime.parent_peak_rss_bytes_before_receipt_finalization,
-            runtime.parent_rss_charge_ceiling_bytes,
-            runtime.conservative_parent_plus_worker_peak_sum_bytes,
+            runtime.parent_historical_peak_rss_bytes_before_receipt_finalization,
+            runtime.diagnostic_parent_plus_worker_historical_peak_sum_bytes,
         )
     ):
         raise ValueError("runtime RSS evidence is not representable in Linux KiB units")
-    if runtime.within_frozen_aggregate_cap is not True:
-        raise ValueError("statistics runtime exceeded the frozen aggregate cap")
-    parent_peak = (
-        runtime.parent_peak_rss_bytes_before_receipt_finalization // 1_024
+    if runtime.within_frozen_physical_peak_cap is not True:
+        raise ValueError("statistics runtime exceeded the frozen physical peak cap")
+    parent_historical_peak = (
+        runtime.parent_historical_peak_rss_bytes_before_receipt_finalization // 1_024
     )
-    parent_charge_ceiling = runtime.parent_rss_charge_ceiling_bytes // 1_024
     worker_peaks = tuple(value // 1_024 for value in runtime.worker_peak_rss_bytes)
-    aggregate_peak = runtime.conservative_parent_plus_worker_peak_sum_bytes // 1_024
-    if aggregate_peak * 1_024 != auditor.MAXIMUM_ESTIMATED_RSS_BYTES:
-        raise ValueError("conservative parent charge plus worker RSS is not the cap")
+    historical_sum = (
+        runtime.diagnostic_parent_plus_worker_historical_peak_sum_bytes // 1_024
+    )
     diagnostics = AuditRunDiagnosticsV2(
-        mode,
-        time.perf_counter_ns() - started,
-        parent_peak,
-        parent_charge_ceiling,
-        worker_peaks,
-        aggregate_peak,
-        runtime.statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds,
-        runtime.host_available_memory_bytes_at_preflight,
-        receipt.invariant_run_count,
-        receipt.audited_row_count,
-        receipt.audited_row_count,
+        mode=mode,
+        wall_time_ns=time.perf_counter_ns() - started,
+        parent_historical_peak_rss_before_receipt_finalization_kib=(
+            parent_historical_peak
+        ),
+        statistics_worker_historical_peak_rss_kib=worker_peaks,
+        parent_plus_worker_historical_peak_rss_kib=historical_sum,
+        unified_cgroup_membership=runtime.unified_cgroup_membership,
+        unified_cgroup_memory_scope_root=(
+            runtime.unified_cgroup_memory_scope_root
+        ),
+        unified_cgroup_leaf_device=runtime.unified_cgroup_leaf_device,
+        unified_cgroup_leaf_inode=runtime.unified_cgroup_leaf_inode,
+        physical_memory_current_before_receipt_finalization_bytes=(
+            runtime.physical_memory_current_bytes_before_receipt_finalization
+        ),
+        physical_memory_peak_before_receipt_finalization_bytes=(
+            runtime.physical_memory_peak_bytes_before_receipt_finalization
+        ),
+        physical_memory_max_bytes=runtime.physical_memory_max_bytes,
+        physical_memory_cap_bytes=runtime.physical_memory_cap_bytes,
+        statistics_wall_time_ns=(
+            runtime.statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds
+        ),
+        host_available_memory_bytes_at_preflight=(
+            runtime.host_available_memory_bytes_at_preflight
+        ),
+        recognizer_adapter_invocations=receipt.invariant_run_count,
+        minimum_rows_per_invocation=receipt.audited_row_count,
+        maximum_rows_per_invocation=receipt.audited_row_count,
     )
     build_success = execution.build_success
     evidence = _IsolatedAuditEvidenceV2(
@@ -4171,6 +4274,10 @@ class Phase2BFormalWireCovertCandidateReceiptV2:
             negative_statistics,
             negative_issuance,
         ) = runtime_projections["negative"]
+        _validate_candidate_branch_physical_scope_v2(
+            positive_statistics,
+            negative_statistics,
+        )
         value = object.__new__(cls)
         assignments = {
             "disposition": QualificationDispositionV2.CANDIDATE_IMPLEMENTATION_EXERCISED_NOT_R03_R04_R05,
@@ -4190,13 +4297,13 @@ class Phase2BFormalWireCovertCandidateReceiptV2:
             "positive_statistics_runtime_projection": positive_statistics,
             "positive_statistics_runtime_projection_root": stable_hash(
                 positive_statistics,
-                prefix="phase2b_formal_wire_covert_statistics_runtime_v3_",
+                prefix="phase2b_formal_wire_covert_statistics_runtime_v4_",
             ),
             "positive_receipt_issuance_runtime_projection": positive_issuance,
             "positive_receipt_issuance_runtime_projection_root": stable_hash(
                 positive_issuance,
                 prefix=(
-                    "phase2b_formal_wire_covert_receipt_issuance_runtime_v3_"
+                    "phase2b_formal_wire_covert_receipt_issuance_runtime_v4_"
                 ),
             ),
             "negative_expected_fail_observed": True,
@@ -4211,13 +4318,13 @@ class Phase2BFormalWireCovertCandidateReceiptV2:
             "negative_statistics_runtime_projection": negative_statistics,
             "negative_statistics_runtime_projection_root": stable_hash(
                 negative_statistics,
-                prefix="phase2b_formal_wire_covert_statistics_runtime_v3_",
+                prefix="phase2b_formal_wire_covert_statistics_runtime_v4_",
             ),
             "negative_receipt_issuance_runtime_projection": negative_issuance,
             "negative_receipt_issuance_runtime_projection_root": stable_hash(
                 negative_issuance,
                 prefix=(
-                    "phase2b_formal_wire_covert_receipt_issuance_runtime_v3_"
+                    "phase2b_formal_wire_covert_receipt_issuance_runtime_v4_"
                 ),
             ),
             "negative_leak_feature_id": negative.leak_feature_id,
@@ -4476,32 +4583,40 @@ class Phase2BFormalWireCovertCandidateReceiptV2:
                 or statistics_root
                 != stable_hash(
                     statistics,
-                    prefix="phase2b_formal_wire_covert_statistics_runtime_v3_",
+                    prefix="phase2b_formal_wire_covert_statistics_runtime_v4_",
                 )
                 or issuance_root
                 != stable_hash(
                     issuance,
                     prefix=(
-                        "phase2b_formal_wire_covert_receipt_issuance_runtime_v3_"
+                        "phase2b_formal_wire_covert_receipt_issuance_runtime_v4_"
                     ),
                 )
                 or statistics.get("worker_peak_rss_bytes")
                 != [
                     value * 1_024
-                    for value in diagnostics.statistics_worker_peak_rss_kib
+                    for value in diagnostics.statistics_worker_historical_peak_rss_kib
                 ]
                 or statistics.get(
-                    "parent_peak_rss_bytes_before_receipt_finalization"
+                    "parent_historical_peak_rss_bytes_before_receipt_finalization"
                 )
-                != diagnostics.parent_peak_rss_before_receipt_finalization_kib
+                != diagnostics.parent_historical_peak_rss_before_receipt_finalization_kib
                 * 1_024
-                or statistics.get("parent_rss_charge_ceiling_bytes")
-                != diagnostics.parent_rss_charge_ceiling_kib * 1_024
                 or statistics.get(
-                    "conservative_parent_plus_worker_peak_sum_bytes"
+                    "diagnostic_parent_plus_worker_historical_peak_sum_bytes"
                 )
-                != diagnostics.conservative_parent_charge_plus_worker_peak_rss_kib
+                != diagnostics.parent_plus_worker_historical_peak_rss_kib
                 * 1_024
+                or statistics.get("unified_cgroup_membership")
+                != diagnostics.unified_cgroup_membership
+                or statistics.get("unified_cgroup_memory_scope_root")
+                != diagnostics.unified_cgroup_memory_scope_root
+                or statistics.get(
+                    "physical_memory_peak_bytes_before_receipt_finalization"
+                )
+                != diagnostics.physical_memory_peak_before_receipt_finalization_bytes
+                or statistics.get("physical_memory_cap_bytes")
+                != diagnostics.physical_memory_cap_bytes
                 or statistics.get(
                     "statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds"
                 )
@@ -4512,6 +4627,10 @@ class Phase2BFormalWireCovertCandidateReceiptV2:
                 raise ValueError(
                     f"candidate {name} statistics/issuance/diagnostics binding drift"
                 )
+        _validate_candidate_branch_physical_scope_v2(
+            self.positive_statistics_runtime_projection,
+            self.negative_statistics_runtime_projection,
+        )
         if (
             not self.negative_expected_fail_observed
             or self.negative_disposition != "FAIL"
@@ -4602,8 +4721,8 @@ class Phase2BFormalWireCovertCandidateReceiptV2:
 def _diagnostic_projection(value: AuditRunDiagnosticsV2) -> dict[str, object]:
     value.__post_init__()
     return {
-        "conservative_parent_charge_plus_worker_peak_rss_kib": (
-            value.conservative_parent_charge_plus_worker_peak_rss_kib
+        "parent_plus_worker_historical_peak_rss_kib": (
+            value.parent_plus_worker_historical_peak_rss_kib
         ),
         "host_available_memory_bytes_at_preflight": (
             value.host_available_memory_bytes_at_preflight
@@ -4612,14 +4731,25 @@ def _diagnostic_projection(value: AuditRunDiagnosticsV2) -> dict[str, object]:
         "minimum_rows_per_invocation": value.minimum_rows_per_invocation,
         "mode": value.mode,
         "recognizer_adapter_invocations": value.recognizer_adapter_invocations,
-        "parent_peak_rss_before_receipt_finalization_kib": (
-            value.parent_peak_rss_before_receipt_finalization_kib
+        "parent_historical_peak_rss_before_receipt_finalization_kib": (
+            value.parent_historical_peak_rss_before_receipt_finalization_kib
         ),
-        "parent_rss_charge_ceiling_kib": value.parent_rss_charge_ceiling_kib,
+        "physical_memory_cap_bytes": value.physical_memory_cap_bytes,
+        "physical_memory_current_before_receipt_finalization_bytes": (
+            value.physical_memory_current_before_receipt_finalization_bytes
+        ),
+        "physical_memory_max_bytes": value.physical_memory_max_bytes,
+        "physical_memory_peak_before_receipt_finalization_bytes": (
+            value.physical_memory_peak_before_receipt_finalization_bytes
+        ),
         "statistics_wall_time_ns": value.statistics_wall_time_ns,
-        "statistics_worker_peak_rss_kib": list(
-            value.statistics_worker_peak_rss_kib
+        "statistics_worker_historical_peak_rss_kib": list(
+            value.statistics_worker_historical_peak_rss_kib
         ),
+        "unified_cgroup_membership": value.unified_cgroup_membership,
+        "unified_cgroup_leaf_device": value.unified_cgroup_leaf_device,
+        "unified_cgroup_leaf_inode": value.unified_cgroup_leaf_inode,
+        "unified_cgroup_memory_scope_root": value.unified_cgroup_memory_scope_root,
         "wall_time_ns": value.wall_time_ns,
     }
 
@@ -4753,7 +4883,7 @@ class Phase2BFormalWireCovertAttemptManifestV2:
         if (
             type(self.requested_cgroup_memory_max_bytes) is not int
             or self.requested_cgroup_memory_max_bytes
-            < auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+            != auditor.MAXIMUM_ESTIMATED_RSS_BYTES
             or type(self.requested_cgroup_pids_max) is not int
             or not 2 <= self.requested_cgroup_pids_max <= 4_096
         ):
@@ -4764,7 +4894,7 @@ class Phase2BFormalWireCovertAttemptManifestV2:
             "attempt_manifest_root",
             stable_hash(
                 projection,
-                prefix="phase2b_formal_wire_covert_attempt_manifest_v2_",
+                prefix="phase2b_formal_wire_covert_attempt_manifest_v3_",
             ),
         )
 
@@ -4902,30 +5032,94 @@ def load_phase2b_formal_wire_covert_attempt_manifest_v2(
     return attempt
 
 
+def _read_bounded_cgroup_ascii_v2(
+    path: Path,
+    name: str,
+    *,
+    maximum_bytes: int = 64 * 1_024,
+) -> str:
+    try:
+        with path.open("rb") as handle:
+            payload = handle.read(maximum_bytes + 1)
+    except OSError as exc:
+        raise ValueError(f"{name} cgroup file is unreadable") from exc
+    if len(payload) > maximum_bytes:
+        raise ValueError(f"{name} cgroup file is outside bounds")
+    try:
+        return payload.decode("ascii", errors="strict")
+    except UnicodeError as exc:
+        raise ValueError(f"{name} cgroup file is not exact ASCII") from exc
+
+
+def _parse_canonical_cgroup_decimal_v2(
+    payload: str,
+    name: str,
+    *,
+    positive: bool = False,
+) -> int:
+    if (
+        type(payload) is not str
+        or re.fullmatch(r"(?:0|[1-9][0-9]*)\n?", payload) is None
+    ):
+        raise ValueError(f"{name} is not one canonical cgroup-v2 decimal")
+    parsed = int(payload.removesuffix("\n"))
+    if (
+        parsed > auditor.MAXIMUM_LINUX_RESOURCE_COUNTER_BYTES
+        or positive
+        and parsed <= 0
+    ):
+        raise ValueError(f"{name} is outside its finite cgroup-v2 bounds")
+    return parsed
+
+
 def _parse_cgroup_counter_file_v2(payload: str, name: str) -> dict[str, int]:
-    if type(payload) is not str or len(payload.encode("utf-8")) > 64 * 1_024:
+    if (
+        type(payload) is not str
+        or not payload
+        or len(payload.encode("utf-8")) > 64 * 1_024
+        or payload.endswith("\n\n")
+    ):
         raise ValueError(f"{name} cgroup counter file is outside bounds")
     result: dict[str, int] = {}
     for line in payload.splitlines():
-        parts = line.split()
-        if len(parts) != 2 or re.fullmatch(r"[a-z0-9_.-]+", parts[0]) is None:
+        match = re.fullmatch(
+            r"([a-z0-9_.-]+) ((?:0|[1-9][0-9]*))",
+            line,
+        )
+        if match is None:
             raise ValueError(f"{name} cgroup counter row is malformed")
-        if re.fullmatch(r"[0-9]+", parts[1]) is None:
-            raise ValueError(f"{name} cgroup counter is not decimal")
-        if parts[0] in result:
+        key, decimal = match.groups()
+        if key in result:
             raise ValueError(f"{name} cgroup counter key is duplicated")
-        result[parts[0]] = int(parts[1])
+        result[key] = _parse_canonical_cgroup_decimal_v2(
+            decimal,
+            f"{name}.{key}",
+        )
     return result
 
 
 def _parse_finite_cgroup_limit_v2(payload: str, name: str) -> int:
-    value = payload.strip()
-    if value == "max" or re.fullmatch(r"[0-9]+", value) is None:
+    if payload in {"max", "max\n"}:
         raise ValueError(f"{name} must be a finite cgroup-v2 decimal limit")
-    parsed = int(value)
-    if parsed <= 0:
-        raise ValueError(f"{name} must be positive")
-    return parsed
+    return _parse_canonical_cgroup_decimal_v2(payload, name, positive=True)
+
+
+def _parse_cgroup_procs_v2(payload: str) -> list[int]:
+    if (
+        type(payload) is not str
+        or not payload
+        or payload.endswith("\n\n")
+        or len(payload.encode("ascii", errors="ignore")) > 64 * 1_024
+    ):
+        raise ValueError("cgroup.procs is outside bounds")
+    rows = payload.splitlines()
+    pids = [
+        _parse_canonical_cgroup_decimal_v2(row, "cgroup.procs PID", positive=True)
+        for row in rows
+    ]
+    if len(pids) != len(set(pids)):
+        raise ValueError("cgroup.procs contains a duplicate PID")
+    return pids
 
 
 def inspect_current_live_cgroup_v2(
@@ -4935,64 +5129,119 @@ def inspect_current_live_cgroup_v2(
 ) -> dict[str, object]:
     """Read the current unified cgroup; this never creates or changes a cgroup."""
 
-    membership_text = (proc_root / "self/cgroup").read_text(
-        encoding="utf-8", errors="strict"
+    membership_path = proc_root / "self/cgroup"
+    membership_text = _read_bounded_cgroup_ascii_v2(
+        membership_path,
+        "live qualification unified membership",
     )
-    memberships = tuple(
-        line[3:]
-        for line in membership_text.splitlines()
-        if line.startswith("0::")
-    )
-    if len(memberships) != 1 or not memberships[0].startswith("/"):
+    membership_rows = membership_text.splitlines()
+    if len(membership_rows) != 1 or not membership_rows[0].startswith("0::"):
         raise ValueError("live qualification needs one exact unified cgroup membership")
-    relative = memberships[0].lstrip("/")
+    membership = _require_safe_cgroup_path_v2(
+        membership_rows[0][3:], "live qualification unified cgroup membership"
+    )
+    relative = membership.lstrip("/")
     directory = cgroup_root / relative
+    try:
+        before_stat = directory.stat(follow_symlinks=False)
+        resolved_directory = directory.resolve(strict=True)
+    except OSError as exc:
+        raise ValueError("live qualification cgroup leaf is unreadable") from exc
+    if not stat.S_ISDIR(before_stat.st_mode) or resolved_directory != directory:
+        raise ValueError("live qualification cgroup leaf is not one real directory")
     memory_max = _parse_finite_cgroup_limit_v2(
-        (directory / "memory.max").read_text(encoding="ascii", errors="strict"),
+        _read_bounded_cgroup_ascii_v2(
+            directory / "memory.max", "memory.max", maximum_bytes=4_096
+        ),
         "memory.max",
     )
     pids_max = _parse_finite_cgroup_limit_v2(
-        (directory / "pids.max").read_text(encoding="ascii", errors="strict"),
+        _read_bounded_cgroup_ascii_v2(
+            directory / "pids.max", "pids.max", maximum_bytes=4_096
+        ),
         "pids.max",
     )
     decimal_files: dict[str, int] = {}
     for name in ("memory.current", "memory.peak", "pids.current"):
-        text = (directory / name).read_text(encoding="ascii", errors="strict").strip()
-        if re.fullmatch(r"[0-9]+", text) is None:
-            raise ValueError(f"{name} is not an exact decimal counter")
-        decimal_files[name] = int(text)
+        decimal_files[name] = _parse_canonical_cgroup_decimal_v2(
+            _read_bounded_cgroup_ascii_v2(
+                directory / name, name, maximum_bytes=4_096
+            ),
+            name,
+        )
     memory_events = _parse_cgroup_counter_file_v2(
-        (directory / "memory.events").read_text(
-            encoding="ascii", errors="strict"
+        _read_bounded_cgroup_ascii_v2(
+            directory / "memory.events", "memory.events"
         ),
         "memory.events",
     )
     pids_events = _parse_cgroup_counter_file_v2(
-        (directory / "pids.events").read_text(
-            encoding="ascii", errors="strict"
+        _read_bounded_cgroup_ascii_v2(
+            directory / "pids.events", "pids.events"
         ),
         "pids.events",
     )
+    cgroup_procs = _parse_cgroup_procs_v2(
+        _read_bounded_cgroup_ascii_v2(
+            directory / "cgroup.procs", "cgroup.procs"
+        )
+    )
+    cgroup_stat = _parse_cgroup_counter_file_v2(
+        _read_bounded_cgroup_ascii_v2(
+            directory / "cgroup.stat", "cgroup.stat"
+        ),
+        "cgroup.stat",
+    )
     if (
-        memory_events.get("oom", 0) != 0
-        or memory_events.get("oom_kill", 0) != 0
-        or pids_events.get("max", 0) != 0
-        or decimal_files["memory.current"] > memory_max
-        or decimal_files["memory.peak"] > memory_max
-        or decimal_files["pids.current"] > pids_max
+        not {"max", "oom", "oom_kill"}.issubset(memory_events)
+        or "max" not in pids_events
+        or cgroup_procs != [os.getpid()]
+        or not {"nr_descendants", "nr_dying_descendants"}.issubset(cgroup_stat)
+        or cgroup_stat["nr_descendants"] != 0
+        or cgroup_stat["nr_dying_descendants"] != 0
+        or decimal_files["memory.peak"] < decimal_files["memory.current"]
     ):
-        raise ValueError("live cgroup already records a resource-limit violation")
+        raise ValueError("live cgroup structural snapshot drifted")
     cpu_max_path = directory / "cpu.max"
     cpu_max = (
-        cpu_max_path.read_text(encoding="ascii", errors="strict").strip()
+        _read_bounded_cgroup_ascii_v2(
+            cpu_max_path, "cpu.max", maximum_bytes=4_096
+        ).removesuffix("\n")
         if cpu_max_path.is_file()
         else None
     )
     affinity = tuple(sorted(os.sched_getaffinity(0)))
     if not affinity:
         raise ValueError("live qualification CPU affinity is empty")
+    try:
+        after_stat = directory.stat(follow_symlinks=False)
+        membership_replay = _read_bounded_cgroup_ascii_v2(
+            membership_path,
+            "live qualification unified membership replay",
+        )
+    except OSError as exc:
+        raise ValueError("live qualification cgroup identity replay failed") from exc
+    if (
+        (before_stat.st_dev, before_stat.st_ino)
+        != (after_stat.st_dev, after_stat.st_ino)
+        or membership_replay != membership_text
+    ):
+        raise ValueError("live qualification cgroup identity drifted during snapshot")
+    memory_scope_root = stable_hash(
+        {
+            "leaf_device": before_stat.st_dev,
+            "leaf_inode": before_stat.st_ino,
+            "unified_membership": membership,
+        },
+        prefix="phase2b_formal_covert_unified_cgroup_memory_scope_v1_",
+    )
     return {
-        "cgroup_path": memberships[0],
+        "cgroup_path": membership,
+        "cgroup_procs": cgroup_procs,
+        "cgroup_stat": cgroup_stat,
+        "unified_cgroup_memory_scope_root": memory_scope_root,
+        "unified_cgroup_leaf_device": before_stat.st_dev,
+        "unified_cgroup_leaf_inode": before_stat.st_ino,
         "memory_current": decimal_files["memory.current"],
         "memory_events": memory_events,
         "memory_max": memory_max,
@@ -5106,6 +5355,66 @@ def prepare_live_inner_process_v2() -> dict[str, object]:
     }
 
 
+def _bounded_cgroup_physical_resource_detail_v2(
+    *,
+    stage: str,
+    cgroup: dict[str, object],
+    cap: int,
+    reserve: int,
+) -> str:
+    """Format one exact bounded diagnostic for an explicit physical gate."""
+
+    if (
+        type(stage) is not str
+        or re.fullmatch(r"[A-Z_]{1,64}", stage) is None
+        or type(cap) is not int
+        or cap <= 0
+        or type(reserve) is not int
+        or not 0 <= reserve < cap
+    ):
+        raise TypeError("cgroup physical resource detail inputs are malformed")
+    scope = cgroup.get("unified_cgroup_memory_scope_root")
+    if type(scope) is not str or len(scope) > 128:
+        raise ValueError("cgroup physical resource scope root is malformed")
+    current = _require_exact_int_v2(
+        cgroup.get("memory_current"), f"{stage} memory.current"
+    )
+    peak = _require_exact_int_v2(cgroup.get("memory_peak"), f"{stage} memory.peak")
+    memory_max = _require_exact_int_v2(
+        cgroup.get("memory_max"), f"{stage} memory.max", minimum=1
+    )
+    pids_max = _require_exact_int_v2(
+        cgroup.get("pids_max"), f"{stage} pids.max", minimum=1
+    )
+    memory_events = cgroup.get("memory_events")
+    pids_events = cgroup.get("pids_events")
+    if type(memory_events) is not dict or type(pids_events) is not dict:
+        raise ValueError("cgroup physical resource events are absent")
+    event_max = _require_exact_int_v2(
+        memory_events.get("max"), f"{stage} memory.events.max"
+    )
+    event_oom = _require_exact_int_v2(
+        memory_events.get("oom"), f"{stage} memory.events.oom"
+    )
+    event_oom_kill = _require_exact_int_v2(
+        memory_events.get("oom_kill"), f"{stage} memory.events.oom_kill"
+    )
+    pids_event_max = _require_exact_int_v2(
+        pids_events.get("max"), f"{stage} pids.events.max"
+    )
+    detail = (
+        f"stage={stage};scope={scope};current={current};peak={peak};"
+        f"memory.max={memory_max};cap={cap};reserve={reserve};"
+        f"overage={max(0, peak - (cap - reserve))};"
+        f"memory.events.max={event_max};memory.events.oom={event_oom};"
+        f"memory.events.oom_kill={event_oom_kill};pids.max={pids_max};"
+        f"pids.events.max={pids_event_max}"
+    )
+    if "\n" in detail or "\r" in detail or len(detail.encode("ascii")) > 1_024:
+        raise RuntimeError("cgroup physical resource diagnostic is not bounded")
+    return detail
+
+
 def _validate_live_runtime_entry_v2(
     runtime: dict[str, object],
     attempt: Phase2BFormalWireCovertAttemptManifestV2,
@@ -5124,11 +5433,229 @@ def _validate_live_runtime_entry_v2(
         )
     ):
         _fail(FAIL_RESOURCE, "actual live entry bindings differ from the attempt manifest")
+    current = _require_exact_int_v2(
+        cgroup.get("memory_current"), "live entry memory.current"
+    )
+    peak = _require_exact_int_v2(
+        cgroup.get("memory_peak"), "live entry memory.peak"
+    )
+    detail = _bounded_cgroup_physical_resource_detail_v2(
+        stage="RUNTIME_ENTRY_SAMPLE",
+        cgroup=cgroup,
+        cap=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+        reserve=0,
+    )
+    if current > peak or peak > auditor.MAXIMUM_ESTIMATED_RSS_BYTES:
+        _fail(
+            FAIL_RESOURCE,
+            "live inner entry physical resource gate rejected; " + detail,
+        )
+    try:
+        _validate_zero_cgroup_events_v2(
+            cgroup.get("memory_events"),
+            "live entry memory",
+            required_keys=frozenset({"max", "oom", "oom_kill"}),
+        )
+        _validate_zero_cgroup_events_v2(
+            cgroup.get("pids_events"),
+            "live entry pids",
+            required_keys=frozenset({"max"}),
+        )
+    except ValueError as exc:
+        raise Phase2BFormalWireCovertQualificationErrorV2(
+            FAIL_RESOURCE,
+            "live inner entry physical resource gate rejected; " + detail,
+        ) from exc
+
+
+def _validate_receipt_physical_scope_against_exit_cgroup_v2(
+    runs: object,
+    entry_cgroup: object,
+    exit_cgroup: object,
+    *,
+    context: str,
+) -> None:
+    """Bind sequential Auditor samples to one non-reset inner cgroup leaf."""
+
+    if (
+        type(runs) is not list
+        or len(runs) != len(LIVE_MODE_ORDER)
+        or type(entry_cgroup) is not dict
+        or type(exit_cgroup) is not dict
+    ):
+        raise ValueError(f"{context} receipt/cgroup binding inputs are absent")
+    exit_membership = _require_safe_cgroup_path_v2(
+        exit_cgroup.get("cgroup_path"), f"{context} exit cgroup"
+    )
+    exit_peak = _require_exact_int_v2(
+        exit_cgroup.get("memory_peak"), f"{context} exit memory.peak"
+    )
+    exit_current = _require_exact_int_v2(
+        exit_cgroup.get("memory_current"), f"{context} exit memory.current"
+    )
+    exit_max = _require_exact_int_v2(
+        exit_cgroup.get("memory_max"),
+        f"{context} exit memory.max",
+        minimum=1,
+    )
+    exit_leaf_device = _require_exact_int_v2(
+        exit_cgroup.get("unified_cgroup_leaf_device"),
+        f"{context} exit cgroup leaf device",
+        minimum=1,
+    )
+    exit_leaf_inode = _require_exact_int_v2(
+        exit_cgroup.get("unified_cgroup_leaf_inode"),
+        f"{context} exit cgroup leaf inode",
+        minimum=1,
+    )
+    exit_scope_root = exit_cgroup.get("unified_cgroup_memory_scope_root")
+    expected_exit_scope_root = stable_hash(
+        {
+            "leaf_device": exit_leaf_device,
+            "leaf_inode": exit_leaf_inode,
+            "unified_membership": exit_membership,
+        },
+        prefix="phase2b_formal_covert_unified_cgroup_memory_scope_v1_",
+    )
+    if (
+        exit_current > exit_peak
+        or exit_peak > auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        or exit_scope_root != expected_exit_scope_root
+    ):
+        raise ValueError(f"{context} exit physical peak exceeds the Auditor cap")
+    exit_scope = (
+        exit_membership,
+        exit_scope_root,
+        exit_leaf_device,
+        exit_leaf_inode,
+        exit_max,
+    )
+    entry_scope = (
+        _require_safe_cgroup_path_v2(
+            entry_cgroup.get("cgroup_path"), f"{context} entry cgroup"
+        ),
+        entry_cgroup.get("unified_cgroup_memory_scope_root"),
+        _require_exact_int_v2(
+            entry_cgroup.get("unified_cgroup_leaf_device"),
+            f"{context} entry cgroup leaf device",
+            minimum=1,
+        ),
+        _require_exact_int_v2(
+            entry_cgroup.get("unified_cgroup_leaf_inode"),
+            f"{context} entry cgroup leaf inode",
+            minimum=1,
+        ),
+        _require_exact_int_v2(
+            entry_cgroup.get("memory_max"),
+            f"{context} entry memory.max",
+            minimum=1,
+        ),
+    )
+    entry_current = _require_exact_int_v2(
+        entry_cgroup.get("memory_current"), f"{context} entry memory.current"
+    )
+    entry_peak = _require_exact_int_v2(
+        entry_cgroup.get("memory_peak"), f"{context} entry memory.peak"
+    )
+    if (
+        entry_scope != exit_scope
+        or entry_current > entry_peak
+        or entry_peak > exit_peak
+    ):
+        raise ValueError(f"{context} entry/exit physical scope binding drifted")
+    expected_scope: tuple[object, ...] | None = None
+    previous_physical_peak = entry_peak
+    invariant_fields = {
+        item.name for item in dataclass_fields(auditor.InvariantRuntimeEvidenceV1)
+    }
+    for index, expected_mode in enumerate(LIVE_MODE_ORDER):
+        run = runs[index]
+        audit_row = run.get("audit") if type(run) is dict else None
+        invariant_row = (
+            audit_row.get("invariance") if type(audit_row) is dict else None
+        )
+        issuance_row = (
+            audit_row.get("receipt_issuance")
+            if type(audit_row) is dict
+            else None
+        )
+        complete = (
+            issuance_row.get("complete_runtime_projection")
+            if type(issuance_row) is dict
+            else None
+        )
+        invariant_complete = (
+            invariant_row.get("complete_runtime_projection")
+            if type(invariant_row) is dict
+            else None
+        )
+        if (
+            type(run) is not dict
+            or run.get("mode") != expected_mode
+            or type(invariant_complete) is not dict
+            or set(invariant_complete) != invariant_fields
+            or type(complete) is not dict
+            or set(complete) != set(_RECEIPT_ISSUANCE_RUNTIME_FIELDS_V2)
+        ):
+            raise ValueError(f"{context} receipt physical scope is not closed")
+        scope = (
+            complete.get("unified_cgroup_membership"),
+            complete.get("unified_cgroup_memory_scope_root"),
+            complete.get("unified_cgroup_leaf_device"),
+            complete.get("unified_cgroup_leaf_inode"),
+            complete.get("physical_memory_max_bytes"),
+        )
+        if expected_scope is None:
+            expected_scope = scope
+        invariant_scope = (
+            invariant_complete.get("unified_cgroup_membership"),
+            invariant_complete.get("unified_cgroup_memory_scope_root"),
+            invariant_complete.get("unified_cgroup_leaf_device"),
+            invariant_complete.get("unified_cgroup_leaf_inode"),
+            invariant_complete.get("physical_memory_max_bytes"),
+        )
+        invariant_current = _require_exact_int_v2(
+            invariant_complete.get("physical_memory_current_bytes_at_completion"),
+            f"{context} {expected_mode} invariant memory.current",
+        )
+        invariant_peak = _require_exact_int_v2(
+            invariant_complete.get("physical_memory_peak_bytes_at_completion"),
+            f"{context} {expected_mode} invariant memory.peak",
+        )
+        receipt_current = _require_exact_int_v2(
+            complete.get(
+                "physical_memory_current_bytes_before_receipt_finalization"
+            ),
+            f"{context} {expected_mode} receipt memory.current",
+        )
+        receipt_peak = _require_exact_int_v2(
+            complete.get(
+                "physical_memory_peak_bytes_before_receipt_finalization"
+            ),
+            f"{context} {expected_mode} receipt memory.peak",
+        )
+        if (
+            scope != expected_scope
+            or scope != exit_scope
+            or invariant_scope != exit_scope
+            or invariant_complete.get("physical_memory_cap_bytes")
+            != auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+            or complete.get("physical_memory_cap_bytes")
+            != auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+            or invariant_current > invariant_peak
+            or invariant_peak < previous_physical_peak
+            or receipt_current > receipt_peak
+            or receipt_peak < invariant_peak
+            or receipt_peak > exit_peak
+        ):
+            raise ValueError(f"{context} receipt/exit physical scope binding drifted")
+        previous_physical_peak = receipt_peak
 
 
 def _capture_live_runtime_exit_v2(
     runtime_entry: dict[str, object],
     attempt: Phase2BFormalWireCovertAttemptManifestV2,
+    runs: list[dict[str, object]],
 ) -> dict[str, object]:
     entry_cgroup = runtime_entry.get("cgroup")
     if type(entry_cgroup) is not dict:
@@ -5151,14 +5678,97 @@ def _capture_live_runtime_exit_v2(
     cgroup = inspect_current_live_cgroup_v2()
     if (
         cgroup["cgroup_path"] != entry_cgroup.get("cgroup_path")
-        or cgroup["memory_max"] != attempt.requested_cgroup_memory_max_bytes
+        or cgroup["unified_cgroup_memory_scope_root"]
+        != entry_cgroup.get("unified_cgroup_memory_scope_root")
+        or cgroup["unified_cgroup_leaf_device"]
+        != entry_cgroup.get("unified_cgroup_leaf_device")
+        or cgroup["unified_cgroup_leaf_inode"]
+        != entry_cgroup.get("unified_cgroup_leaf_inode")
+    ):
+        raise ValueError("live inner exit cgroup scope drifted")
+    cap = auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+    current = _require_exact_int_v2(
+        cgroup.get("memory_current"), "live exit memory.current"
+    )
+    peak = _require_exact_int_v2(
+        cgroup.get("memory_peak"), "live exit memory.peak"
+    )
+    memory_max = _require_exact_int_v2(
+        cgroup.get("memory_max"), "live exit memory.max", minimum=1
+    )
+    memory_events = cgroup.get("memory_events")
+    pids_events = cgroup.get("pids_events")
+    if type(memory_events) is not dict or type(pids_events) is not dict:
+        _fail(FAIL_RESOURCE, "live inner exit cgroup resource events are absent")
+    event_max = _require_exact_int_v2(
+        memory_events.get("max"), "live exit memory.events.max"
+    )
+    event_oom = _require_exact_int_v2(
+        memory_events.get("oom"), "live exit memory.events.oom"
+    )
+    event_oom_kill = _require_exact_int_v2(
+        memory_events.get("oom_kill"), "live exit memory.events.oom_kill"
+    )
+    pids_event_max = _require_exact_int_v2(
+        pids_events.get("max"), "live exit pids.events.max"
+    )
+    if current > peak or peak > cap:
+        _fail(
+            FAIL_RESOURCE,
+            "live inner exit physical resource gate rejected; "
+            + _bounded_cgroup_physical_resource_detail_v2(
+                stage="RUNTIME_EXIT_SAMPLE",
+                cgroup=cgroup,
+                cap=cap,
+                reserve=0,
+            ),
+        )
+    if (
+        cgroup["memory_max"] != attempt.requested_cgroup_memory_max_bytes
         or cgroup["pids_max"] != attempt.requested_cgroup_pids_max
         or cgroup["pids_current"] != 1
-        or cgroup["memory_events"] != entry_cgroup.get("memory_events")
-        or cgroup["pids_events"] != entry_cgroup.get("pids_events")
+        or cgroup["cgroup_procs"] != entry_cgroup.get("cgroup_procs")
+        or cgroup["cgroup_stat"] != entry_cgroup.get("cgroup_stat")
         or cgroup["memory_peak"] < entry_cgroup.get("memory_peak", 0)
     ):
-        raise ValueError("live inner exit cgroup membership/counters drifted")
+        raise ValueError("live inner exit cgroup events/topology drifted")
+    try:
+        _validate_zero_cgroup_events_v2(
+            cgroup.get("memory_events"),
+            "live exit memory",
+            required_keys=frozenset({"max", "oom", "oom_kill"}),
+        )
+        _validate_zero_cgroup_events_v2(
+            cgroup.get("pids_events"),
+            "live exit pids",
+            required_keys=frozenset({"max"}),
+        )
+    except ValueError as exc:
+        raise Phase2BFormalWireCovertQualificationErrorV2(
+            FAIL_RESOURCE,
+            "live inner exit physical resource gate rejected; "
+            + _bounded_cgroup_physical_resource_detail_v2(
+                stage="RUNTIME_EXIT_SAMPLE",
+                cgroup=cgroup,
+                cap=cap,
+                reserve=0,
+            ),
+        ) from exc
+    if (
+        not _exact_json_equal(
+            cgroup.get("memory_events"), entry_cgroup.get("memory_events")
+        )
+        or not _exact_json_equal(
+            cgroup.get("pids_events"), entry_cgroup.get("pids_events")
+        )
+    ):
+        raise ValueError("live inner exit cgroup events/topology drifted")
+    _validate_receipt_physical_scope_against_exit_cgroup_v2(
+        runs,
+        entry_cgroup,
+        cgroup,
+        context="live runtime capture",
+    )
     return {
         "cgroup": cgroup,
         "audit_receipts_validated_and_released_in_process": True,
@@ -5169,6 +5779,317 @@ def _capture_live_runtime_exit_v2(
         "threads": 1,
         "cgroup_events_unchanged_from_entry": True,
     }
+
+
+def _validate_post_output_full_cgroup_snapshot_v2(
+    runtime_exit: object,
+    attempt: Phase2BFormalWireCovertAttemptManifestV2,
+    snapshot: object,
+) -> int:
+    """Gate the post-flush full snapshot against the serialized exit scope."""
+
+    exit_cgroup = (
+        runtime_exit.get("cgroup") if type(runtime_exit) is dict else None
+    )
+    if type(exit_cgroup) is not dict or type(snapshot) is not dict:
+        _fail(FAIL_RESOURCE, "post-output cgroup evidence is absent")
+    scope_fields = (
+        "cgroup_path",
+        "unified_cgroup_memory_scope_root",
+        "unified_cgroup_leaf_device",
+        "unified_cgroup_leaf_inode",
+    )
+    if any(snapshot.get(name) != exit_cgroup.get(name) for name in scope_fields):
+        _fail(FAIL_RESOURCE, "post-output cgroup scope drifted after stdout flush")
+    cap = auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+    ceiling = cap - POST_OUTPUT_DIRECT_EXIT_TAIL_RESERVE_BYTES_V2
+    peak = _require_exact_int_v2(
+        snapshot.get("memory_peak"), "post-output full memory.peak"
+    )
+    current = _require_exact_int_v2(
+        snapshot.get("memory_current"), "post-output full memory.current"
+    )
+    exit_peak = _require_exact_int_v2(
+        exit_cgroup.get("memory_peak"), "serialized runtime-exit memory.peak"
+    )
+    _require_safe_cgroup_path_v2(
+        snapshot.get("cgroup_path"), "post-output full cgroup"
+    )
+    scope = snapshot.get("unified_cgroup_memory_scope_root")
+    if type(scope) is not str or len(scope) > 128:
+        _fail(FAIL_RESOURCE, "post-output cgroup scope root is malformed")
+    memory_max = _require_exact_int_v2(
+        snapshot.get("memory_max"), "post-output full memory.max", minimum=1
+    )
+    pids_max = _require_exact_int_v2(
+        snapshot.get("pids_max"), "post-output full pids.max", minimum=1
+    )
+    pids_current = _require_exact_int_v2(
+        snapshot.get("pids_current"), "post-output full pids.current"
+    )
+    memory_events = snapshot.get("memory_events")
+    pids_events = snapshot.get("pids_events")
+    if type(memory_events) is not dict or type(pids_events) is not dict:
+        _fail(FAIL_RESOURCE, "post-output cgroup resource events are absent")
+    memory_events_max = _require_exact_int_v2(
+        memory_events.get("max"), "post-output memory.events.max"
+    )
+    memory_events_oom = _require_exact_int_v2(
+        memory_events.get("oom"), "post-output memory.events.oom"
+    )
+    memory_events_oom_kill = _require_exact_int_v2(
+        memory_events.get("oom_kill"), "post-output memory.events.oom_kill"
+    )
+    pids_events_max = _require_exact_int_v2(
+        pids_events.get("max"), "post-output pids.events.max"
+    )
+    if (
+        attempt.requested_cgroup_memory_max_bytes != cap
+        or memory_max != cap
+        or pids_max != attempt.requested_cgroup_pids_max
+        or pids_current != 1
+        or type(snapshot.get("cgroup_procs")) is not list
+        or len(snapshot["cgroup_procs"]) != 1
+        or type(snapshot.get("cgroup_stat")) is not dict
+        or snapshot["cgroup_stat"].get("nr_descendants") != 0
+        or snapshot["cgroup_stat"].get("nr_dying_descendants") != 0
+        or current > peak
+        or peak < exit_peak
+        or peak > ceiling
+        or memory_events_max != 0
+        or memory_events_oom != 0
+        or memory_events_oom_kill != 0
+        or pids_events_max != 0
+    ):
+        _fail(
+            FAIL_RESOURCE,
+            "post-output full physical resource gate rejected; "
+            + _bounded_cgroup_physical_resource_detail_v2(
+                stage="POST_OUTPUT_FULL_SAMPLE",
+                cgroup=snapshot,
+                cap=cap,
+                reserve=POST_OUTPUT_DIRECT_EXIT_TAIL_RESERVE_BYTES_V2,
+            ),
+        )
+    _validate_zero_cgroup_events_v2(
+        memory_events,
+        "post-output memory",
+        required_keys=frozenset({"max", "oom", "oom_kill"}),
+    )
+    _validate_zero_cgroup_events_v2(
+        pids_events,
+        "post-output pids",
+        required_keys=frozenset({"max"}),
+    )
+    if (
+        not _exact_json_equal(memory_events, exit_cgroup.get("memory_events"))
+        or not _exact_json_equal(pids_events, exit_cgroup.get("pids_events"))
+        or not _exact_json_equal(
+            snapshot.get("cgroup_procs"), exit_cgroup.get("cgroup_procs")
+        )
+        or not _exact_json_equal(
+            snapshot.get("cgroup_stat"), exit_cgroup.get("cgroup_stat")
+        )
+    ):
+        _fail(
+            FAIL_RESOURCE,
+            "post-output cgroup events/process topology drifted after stdout flush",
+        )
+    return peak
+
+
+def _fresh_current_cgroup_memory_peak_v2(
+    expected_snapshot: dict[str, object],
+    *,
+    proc_root: Path = Path("/proc"),
+    cgroup_root: Path = Path("/sys/fs/cgroup"),
+) -> int:
+    """Fresh-open the same leaf's memory.peak as the final cgroup read."""
+
+    expected_membership = _require_safe_cgroup_path_v2(
+        expected_snapshot.get("cgroup_path"), "final peak cgroup"
+    )
+    membership_text = _read_bounded_cgroup_ascii_v2(
+        proc_root / "self/cgroup", "final peak unified membership"
+    )
+    if membership_text not in {
+        f"0::{expected_membership}",
+        f"0::{expected_membership}\n",
+    }:
+        _fail(FAIL_RESOURCE, "final peak unified membership drifted")
+    directory = cgroup_root / expected_membership.lstrip("/")
+    flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NONBLOCK
+    if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY"):
+        _fail(FAIL_RESOURCE, "final peak read requires Linux no-follow dirfd flags")
+    directory_fd: int | None = None
+    peak_fd: int | None = None
+    try:
+        directory_fd = os.open(
+            directory, flags | os.O_NOFOLLOW | os.O_DIRECTORY
+        )
+        opened = os.fstat(directory_fd)
+        if (
+            not stat.S_ISDIR(opened.st_mode)
+            or opened.st_dev != expected_snapshot.get("unified_cgroup_leaf_device")
+            or opened.st_ino != expected_snapshot.get("unified_cgroup_leaf_inode")
+        ):
+            _fail(FAIL_RESOURCE, "final peak cgroup leaf identity drifted")
+        peak_fd = os.open(
+            "memory.peak", flags | os.O_NOFOLLOW, dir_fd=directory_fd
+        )
+        payload = os.read(peak_fd, 4_097)
+        if len(payload) > 4_096 or os.read(peak_fd, 1):
+            _fail(FAIL_RESOURCE, "final peak memory.peak is outside bounds")
+    except OSError as exc:
+        _fail(FAIL_RESOURCE, f"final peak memory.peak is unreadable: {exc.errno}")
+    finally:
+        _close_owned_descriptors_v2(
+            (peak_fd, directory_fd), name="final peak cgroup read"
+        )
+    membership_replay = _read_bounded_cgroup_ascii_v2(
+        proc_root / "self/cgroup", "final peak unified membership replay"
+    )
+    if membership_replay != membership_text:
+        _fail(FAIL_RESOURCE, "final peak unified membership drifted during read")
+    try:
+        text = payload.decode("ascii", errors="strict")
+    except UnicodeError as exc:
+        raise Phase2BFormalWireCovertQualificationErrorV2(
+            FAIL_RESOURCE, "final peak memory.peak is not exact ASCII"
+        ) from exc
+    return _parse_canonical_cgroup_decimal_v2(text, "final peak memory.peak")
+
+
+def _validate_final_post_output_memory_peak_v2(
+    full_snapshot: dict[str, object],
+    full_peak: int,
+    final_peak: object,
+) -> None:
+    """Require monotonic headroom immediately before the direct process exit."""
+
+    final = _require_exact_int_v2(final_peak, "final fresh memory.peak")
+    cap = auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+    ceiling = cap - POST_OUTPUT_DIRECT_EXIT_TAIL_RESERVE_BYTES_V2
+    membership = _require_safe_cgroup_path_v2(
+        full_snapshot.get("cgroup_path"), "final peak cgroup"
+    )
+    if final < full_peak or final > ceiling:
+        overage = max(0, final - ceiling)
+        _fail(
+            FAIL_RESOURCE,
+            "final fresh physical peak gate rejected; "
+            f"scope={membership}; peak={final}; prior_peak={full_peak}; "
+            f"cap={cap}; reserve={POST_OUTPUT_DIRECT_EXIT_TAIL_RESERVE_BYTES_V2}; "
+            f"overage={overage}",
+        )
+
+
+def _bounded_post_output_failure_line_v2(exc: BaseException) -> bytes:
+    detail = str(exc).replace("\r", " ").replace("\n", " ")
+    detail = " ".join(detail.split())[:768]
+    line = (
+        f"{FAIL_RESOURCE}: post-output physical gate failed; "
+        f"exception={type(exc).__name__}; detail={detail}\n"
+    )
+    return line.encode("ascii", errors="backslashreplace")[:1_024].rstrip(b"\n") + b"\n"
+
+
+def _write_post_output_failure_line_v2(payload: bytes) -> None:
+    written = os.write(2, payload)
+    if written != len(payload):
+        raise OSError("post-output failure stderr write was short")
+
+
+def _inner_stdout_buffer_v2() -> object:
+    return sys.stdout.buffer
+
+
+def _prepare_post_output_quiescent_runtime_v2() -> None:
+    """Remove Python-managed tail work and block selected terminal signals."""
+
+    if sys.gettrace() is not None or sys.getprofile() is not None:
+        _fail(FAIL_RESOURCE, "post-output gate rejects active trace/profile hooks")
+    catchable = signal.valid_signals() - {signal.SIGKILL, signal.SIGSTOP}
+    try:
+        dispositions = {number: signal.getsignal(number) for number in catchable}
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise Phase2BFormalWireCovertQualificationErrorV2(
+            FAIL_RESOURCE, "post-output signal disposition inspection failed"
+        ) from exc
+    if any(callable(value) for value in dispositions.values()) or any(
+        dispositions.get(number) is not signal.SIG_DFL
+        for number in LIVE_SELECTED_DEFAULT_SIGNALS
+    ):
+        _fail(FAIL_RESOURCE, "post-output gate rejects Python signal handlers")
+    gc.disable()
+    if gc.isenabled():
+        _fail(FAIL_RESOURCE, "post-output gate could not disable cyclic GC")
+    selected = set(LIVE_SELECTED_DEFAULT_SIGNALS)
+    previous = signal.pthread_sigmask(signal.SIG_BLOCK, selected)
+    if previous:
+        _fail(FAIL_RESOURCE, "post-output gate observed a pre-existing signal mask")
+    status = (Path("/proc") / "self/status").read_text(
+        encoding="ascii", errors="strict"
+    )
+    fields: dict[str, str] = {}
+    for line in status.splitlines():
+        if ":" in line:
+            key, value = line.split(":", 1)
+            fields[key] = value.strip()
+    expected_mask = sum(1 << (int(number) - 1) for number in selected)
+    if (
+        fields.get("Threads") != "1"
+        or int(fields.get("SigBlk", "0"), 16) != expected_mask
+    ):
+        _fail(FAIL_RESOURCE, "post-output signal/thread quiescence drifted")
+
+
+def _write_flush_gate_and_direct_exit_v2(
+    artifact: bytes,
+    attempt: Phase2BFormalWireCovertAttemptManifestV2,
+) -> NoReturn:
+    """Publish one canonical inner artifact, gate its tail, then bypass teardown."""
+
+    try:
+        body = _decode_canonical_transport_object_v2(
+            artifact, "inner CLI artifact", maximum_bytes=8 * 1_024 * 1_024
+        )
+        runtime_exit = body.get("runtime_exit_evidence")
+        if not _exact_json_equal(
+            body.get("post_output_physical_gate_contract"),
+            _POST_OUTPUT_PHYSICAL_GATE_CONTRACT_V2,
+        ):
+            _fail(FAIL_RESOURCE, "inner post-output physical gate contract drifted")
+        stdout_buffer = _inner_stdout_buffer_v2()
+        written = stdout_buffer.write(artifact)
+        if written != len(artifact):
+            raise OSError("inner canonical stdout write was short")
+        stdout_buffer.flush()
+        _prepare_post_output_quiescent_runtime_v2()
+        full_snapshot = inspect_current_live_cgroup_v2()
+        full_peak = _validate_post_output_full_cgroup_snapshot_v2(
+            runtime_exit, attempt, full_snapshot
+        )
+        direct_exit = _DIRECT_PROCESS_EXIT_V2
+        final_ceiling = (
+            auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+            - POST_OUTPUT_DIRECT_EXIT_TAIL_RESERVE_BYTES_V2
+        )
+        final_peak = _fresh_current_cgroup_memory_peak_v2(full_snapshot)
+        if type(final_peak) is not int or final_peak < full_peak or final_peak > final_ceiling:
+            _validate_final_post_output_memory_peak_v2(
+                full_snapshot, full_peak, final_peak
+            )
+    except BaseException as exc:
+        try:
+            _write_post_output_failure_line_v2(
+                _bounded_post_output_failure_line_v2(exc)
+            )
+        finally:
+            _DIRECT_PROCESS_EXIT_V2(86)
+        raise RuntimeError("direct nonzero os._exit returned unexpectedly")
+    direct_exit(0)
+    raise RuntimeError("direct zero os._exit returned unexpectedly")
 
 
 def _exact_probability_text_v2(value: auditor.ExactProbabilityV1) -> str:
@@ -5386,9 +6307,8 @@ def _validate_complete_receipt_issuance_runtime_projection_v2(
     if statistics_runtime is None:
         if (
             replay.absolute_deadline_kind != "PARTITION_PREPARATION"
-            or replay.worker_peak_rss_bytes_sum != 0
-            or replay.parent_rss_charge_ceiling_bytes
-            != auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+            or replay.diagnostic_worker_historical_peak_rss_bytes_sum != 0
+            or replay.physical_memory_cap_bytes != auditor.MAXIMUM_ESTIMATED_RSS_BYTES
         ):
             raise ValueError(
                 f"{context} insufficient receipt-issuance branch drifted"
@@ -5408,30 +6328,81 @@ def _validate_complete_receipt_issuance_runtime_projection_v2(
         )
     if (
         replay.absolute_deadline_kind != "STATISTICS"
-        or replay.worker_peak_rss_bytes_sum != sum(worker_peaks)
-        or replay.parent_peak_rss_bytes_before_receipt_finalization
+        or replay.diagnostic_worker_historical_peak_rss_bytes_sum
+        != sum(worker_peaks)
+        or replay.diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization
         != statistics_runtime.get(
-            "parent_peak_rss_bytes_before_receipt_finalization"
+            "parent_historical_peak_rss_bytes_before_receipt_finalization"
         )
-        or replay.parent_rss_charge_ceiling_bytes
-        != statistics_runtime.get("parent_rss_charge_ceiling_bytes")
-        or replay.conservative_parent_plus_worker_peak_sum_bytes
+        or replay.diagnostic_parent_plus_worker_historical_peak_sum_bytes
         != statistics_runtime.get(
-            "conservative_parent_plus_worker_peak_sum_bytes"
+            "diagnostic_parent_plus_worker_historical_peak_sum_bytes"
         )
+        or replay.unified_cgroup_membership
+        != statistics_runtime.get("unified_cgroup_membership")
+        or replay.unified_cgroup_memory_scope_root
+        != statistics_runtime.get("unified_cgroup_memory_scope_root")
+        or replay.unified_cgroup_leaf_device
+        != statistics_runtime.get("unified_cgroup_leaf_device")
+        or replay.unified_cgroup_leaf_inode
+        != statistics_runtime.get("unified_cgroup_leaf_inode")
+        or replay.physical_memory_current_bytes_before_receipt_finalization
+        != statistics_runtime.get(
+            "physical_memory_current_bytes_before_receipt_finalization"
+        )
+        or replay.physical_memory_peak_bytes_before_receipt_finalization
+        != statistics_runtime.get(
+            "physical_memory_peak_bytes_before_receipt_finalization"
+        )
+        or replay.physical_memory_max_bytes
+        != statistics_runtime.get("physical_memory_max_bytes")
+        or replay.physical_memory_cap_bytes
+        != statistics_runtime.get("physical_memory_cap_bytes")
         or replay.receipt_finalization_complete_pending_validation_count
         != statistics_runtime.get(
             "receipt_finalization_complete_pending_validation_count"
         )
-        or replay.receipt_finalization_parent_peak_within_charge_ceiling
+        or replay.receipt_finalization_locked_physical_peak_within_cap
         is not statistics_runtime.get(
-            "receipt_finalization_parent_peak_within_charge_ceiling"
+            "receipt_finalization_physical_peak_within_cap"
         )
     ):
         raise ValueError(
             f"{context} statistical and receipt-issuance runtime cross-binding drifted"
         )
     return value
+
+
+def _validate_candidate_branch_physical_scope_v2(
+    positive_statistics: dict[str, object],
+    negative_statistics: dict[str, object],
+) -> None:
+    """Bind sequential candidate audits to one non-reset cgroup leaf."""
+
+    scope_fields = (
+        "unified_cgroup_membership",
+        "unified_cgroup_memory_scope_root",
+        "unified_cgroup_leaf_device",
+        "unified_cgroup_leaf_inode",
+        "physical_memory_max_bytes",
+        "physical_memory_cap_bytes",
+    )
+    positive_scope = tuple(positive_statistics.get(name) for name in scope_fields)
+    negative_scope = tuple(negative_statistics.get(name) for name in scope_fields)
+    positive_peak = _require_exact_int_v2(
+        positive_statistics.get(
+            "physical_memory_peak_bytes_before_receipt_finalization"
+        ),
+        "candidate positive physical memory peak",
+    )
+    negative_peak = _require_exact_int_v2(
+        negative_statistics.get(
+            "physical_memory_peak_bytes_before_receipt_finalization"
+        ),
+        "candidate negative physical memory peak",
+    )
+    if positive_scope != negative_scope or negative_peak < positive_peak:
+        raise ValueError("candidate audit branches changed physical memory scope")
 
 
 def _validate_executed_runtime_bundle_v2(
@@ -5464,16 +6435,23 @@ def _validate_executed_runtime_bundle_v2(
         context=f"{context} executed bundle",
     )
     expected_diagnostic_keys = {
-        "conservative_parent_charge_plus_worker_peak_rss_kib",
         "host_available_memory_bytes_at_preflight",
         "maximum_rows_per_invocation",
         "minimum_rows_per_invocation",
         "mode",
         "recognizer_adapter_invocations",
-        "parent_peak_rss_before_receipt_finalization_kib",
-        "parent_rss_charge_ceiling_kib",
+        "parent_historical_peak_rss_before_receipt_finalization_kib",
+        "parent_plus_worker_historical_peak_rss_kib",
+        "physical_memory_cap_bytes",
+        "physical_memory_current_before_receipt_finalization_bytes",
+        "physical_memory_max_bytes",
+        "physical_memory_peak_before_receipt_finalization_bytes",
         "statistics_wall_time_ns",
-        "statistics_worker_peak_rss_kib",
+        "statistics_worker_historical_peak_rss_kib",
+        "unified_cgroup_membership",
+        "unified_cgroup_leaf_device",
+        "unified_cgroup_leaf_inode",
+        "unified_cgroup_memory_scope_root",
         "wall_time_ns",
     }
     if (
@@ -5493,10 +6471,28 @@ def _validate_executed_runtime_bundle_v2(
         or diagnostics.get("mode") != expected_mode
     ):
         raise ValueError(f"{context} executed bundle projections are not exact")
+    try:
+        diagnostic_arguments = {
+            item.name: diagnostics[item.name]
+            for item in dataclass_fields(AuditRunDiagnosticsV2)
+        }
+        if type(diagnostic_arguments["statistics_worker_historical_peak_rss_kib"]) is not list:
+            raise TypeError("diagnostic worker peaks are not one closed list")
+        diagnostic_arguments["statistics_worker_historical_peak_rss_kib"] = tuple(
+            diagnostic_arguments["statistics_worker_historical_peak_rss_kib"]
+        )
+        diagnostic_replay = AuditRunDiagnosticsV2(**diagnostic_arguments)
+        diagnostic_replay.__post_init__()
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{context} diagnostic projection semantics drifted") from exc
+    if not _exact_json_equal(_diagnostic_projection(diagnostic_replay), diagnostics):
+        raise ValueError(f"{context} diagnostic projection replay drifted")
     worker_peaks = statistics_runtime.get("worker_peak_rss_bytes")
     artifact_bytes = statistics_runtime.get("worker_result_artifact_bytes")
     artifact_sha256 = statistics_runtime.get("worker_result_artifact_sha256")
-    diagnostic_worker_peaks = diagnostics.get("statistics_worker_peak_rss_kib")
+    diagnostic_worker_peaks = diagnostics.get(
+        "statistics_worker_historical_peak_rss_kib"
+    )
     if (
         len(auditor.TARGETS) != 5
         or type(worker_peaks) is not list
@@ -5510,19 +6506,45 @@ def _validate_executed_runtime_bundle_v2(
         > resource_plan.get("parent_result_working_bytes_bound")
         or worker_peaks != [value * 1_024 for value in diagnostic_worker_peaks]
         or statistics_runtime.get(
-            "parent_peak_rss_bytes_before_receipt_finalization"
-        )
-        != diagnostics.get("parent_peak_rss_before_receipt_finalization_kib")
-        * 1_024
-        or statistics_runtime.get("parent_rss_charge_ceiling_bytes")
-        != diagnostics.get("parent_rss_charge_ceiling_kib") * 1_024
-        or statistics_runtime.get(
-            "conservative_parent_plus_worker_peak_sum_bytes"
+            "parent_historical_peak_rss_bytes_before_receipt_finalization"
         )
         != diagnostics.get(
-            "conservative_parent_charge_plus_worker_peak_rss_kib"
+            "parent_historical_peak_rss_before_receipt_finalization_kib"
         )
         * 1_024
+        or statistics_runtime.get(
+            "diagnostic_parent_plus_worker_historical_peak_sum_bytes"
+        )
+        != diagnostics.get(
+            "parent_plus_worker_historical_peak_rss_kib"
+        )
+        * 1_024
+        or statistics_runtime.get("unified_cgroup_membership")
+        != diagnostics.get("unified_cgroup_membership")
+        or statistics_runtime.get("unified_cgroup_leaf_device")
+        != diagnostics.get("unified_cgroup_leaf_device")
+        or statistics_runtime.get("unified_cgroup_leaf_inode")
+        != diagnostics.get("unified_cgroup_leaf_inode")
+        or statistics_runtime.get("unified_cgroup_memory_scope_root")
+        != diagnostics.get("unified_cgroup_memory_scope_root")
+        or statistics_runtime.get(
+            "physical_memory_current_bytes_before_receipt_finalization"
+        )
+        != diagnostics.get(
+            "physical_memory_current_before_receipt_finalization_bytes"
+        )
+        or statistics_runtime.get(
+            "physical_memory_peak_bytes_before_receipt_finalization"
+        )
+        != diagnostics.get(
+            "physical_memory_peak_before_receipt_finalization_bytes"
+        )
+        or statistics_runtime.get("physical_memory_max_bytes")
+        != diagnostics.get("physical_memory_max_bytes")
+        or statistics_runtime.get("physical_memory_cap_bytes")
+        != diagnostics.get("physical_memory_cap_bytes")
+        or diagnostics.get("physical_memory_cap_bytes")
+        != auditor.MAXIMUM_ESTIMATED_RSS_BYTES
         or statistics_runtime.get(
             "statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds"
         )
@@ -5570,25 +6592,55 @@ def _validate_executed_runtime_bundle_v2(
         resource_plan,
         context=f"{context} executed bundle",
     )
+    invariant_scope = (
+        invariant_complete.get("unified_cgroup_membership"),
+        invariant_complete.get("unified_cgroup_memory_scope_root"),
+        invariant_complete.get("unified_cgroup_leaf_device"),
+        invariant_complete.get("unified_cgroup_leaf_inode"),
+        invariant_complete.get("physical_memory_max_bytes"),
+        invariant_complete.get("physical_memory_cap_bytes"),
+    )
+    statistics_scope = (
+        statistics_runtime.get("unified_cgroup_membership"),
+        statistics_runtime.get("unified_cgroup_memory_scope_root"),
+        statistics_runtime.get("unified_cgroup_leaf_device"),
+        statistics_runtime.get("unified_cgroup_leaf_inode"),
+        statistics_runtime.get("physical_memory_max_bytes"),
+        statistics_runtime.get("physical_memory_cap_bytes"),
+    )
+    issuance_scope = (
+        receipt_issuance_runtime.get("unified_cgroup_membership"),
+        receipt_issuance_runtime.get("unified_cgroup_memory_scope_root"),
+        receipt_issuance_runtime.get("unified_cgroup_leaf_device"),
+        receipt_issuance_runtime.get("unified_cgroup_leaf_inode"),
+        receipt_issuance_runtime.get("physical_memory_max_bytes"),
+        receipt_issuance_runtime.get("physical_memory_cap_bytes"),
+    )
     if (
         not _exact_json_equal(statistics_complete, statistics_runtime)
         or not _exact_json_equal(issuance_complete, receipt_issuance_runtime)
         or not _exact_json_equal(run.get("diagnostics"), diagnostics)
+        or invariant_scope != statistics_scope
+        or statistics_scope != issuance_scope
+        or invariant_complete.get("physical_memory_peak_bytes_at_completion")
+        > statistics_runtime.get(
+            "physical_memory_peak_bytes_before_receipt_finalization"
+        )
         or invariant.get("complete_runtime_projection_root")
         != stable_hash(
             invariant_complete,
-            prefix="phase2b_formal_wire_covert_invariant_runtime_v3_",
+            prefix="phase2b_formal_wire_covert_invariant_runtime_v4_",
         )
         or statistics.get("complete_runtime_projection_root")
         != stable_hash(
             statistics_runtime,
-            prefix="phase2b_formal_wire_covert_statistics_runtime_v3_",
+            prefix="phase2b_formal_wire_covert_statistics_runtime_v4_",
         )
         or issuance.get("complete_runtime_projection_root")
         != stable_hash(
             receipt_issuance_runtime,
             prefix=(
-                "phase2b_formal_wire_covert_receipt_issuance_runtime_v3_"
+                "phase2b_formal_wire_covert_receipt_issuance_runtime_v4_"
             ),
         )
     ):
@@ -5605,23 +6657,77 @@ def _validate_executed_runtime_bundle_v2(
         issuance.get("receipt_id") != receipt_id
         or issuance.get("absolute_deadline_kind")
         != receipt_issuance_runtime.get("absolute_deadline_kind")
-        or issuance.get("worker_peak_rss_bytes_sum")
-        != receipt_issuance_runtime.get("worker_peak_rss_bytes_sum")
-        or issuance.get("parent_rss_charge_ceiling_bytes")
-        != receipt_issuance_runtime.get("parent_rss_charge_ceiling_bytes")
-        or issuance.get("conservative_parent_plus_worker_peak_sum_bytes")
-        != receipt_issuance_runtime.get(
-            "conservative_parent_plus_worker_peak_sum_bytes"
+        or not _exact_json_equal(
+            issuance.get("diagnostic_worker_historical_peak_rss_bytes_sum"),
+            receipt_issuance_runtime.get(
+                "diagnostic_worker_historical_peak_rss_bytes_sum"
+            ),
         )
-        or issuance.get(
-            "receipt_finalization_complete_pending_validation_count"
+        or not _exact_json_equal(
+            issuance.get(
+                "diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization"
+            ),
+            receipt_issuance_runtime.get(
+                "diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization"
+            ),
         )
-        != receipt_issuance_runtime.get(
-            "receipt_finalization_complete_pending_validation_count"
+        or not _exact_json_equal(
+            issuance.get(
+                "diagnostic_parent_plus_worker_historical_peak_sum_bytes"
+            ),
+            receipt_issuance_runtime.get(
+                "diagnostic_parent_plus_worker_historical_peak_sum_bytes"
+            ),
         )
-        or issuance.get("receipt_finalization_locked_deadline_check_count")
-        != receipt_issuance_runtime.get(
-            "receipt_finalization_locked_deadline_check_count"
+        or issuance.get("unified_cgroup_membership")
+        != receipt_issuance_runtime.get("unified_cgroup_membership")
+        or issuance.get("unified_cgroup_memory_scope_root")
+        != receipt_issuance_runtime.get("unified_cgroup_memory_scope_root")
+        or not _exact_json_equal(
+            issuance.get("unified_cgroup_leaf_device"),
+            receipt_issuance_runtime.get("unified_cgroup_leaf_device"),
+        )
+        or not _exact_json_equal(
+            issuance.get("unified_cgroup_leaf_inode"),
+            receipt_issuance_runtime.get("unified_cgroup_leaf_inode"),
+        )
+        or not _exact_json_equal(
+            issuance.get(
+                "physical_memory_current_bytes_before_receipt_finalization"
+            ),
+            receipt_issuance_runtime.get(
+                "physical_memory_current_bytes_before_receipt_finalization"
+            ),
+        )
+        or not _exact_json_equal(
+            issuance.get(
+                "physical_memory_peak_bytes_before_receipt_finalization"
+            ),
+            receipt_issuance_runtime.get(
+                "physical_memory_peak_bytes_before_receipt_finalization"
+            ),
+        )
+        or not _exact_json_equal(
+            issuance.get("physical_memory_cap_bytes"),
+            receipt_issuance_runtime.get("physical_memory_cap_bytes"),
+        )
+        or not _exact_json_equal(
+            issuance.get("physical_memory_max_bytes"),
+            receipt_issuance_runtime.get("physical_memory_max_bytes"),
+        )
+        or not _exact_json_equal(
+            issuance.get(
+                "receipt_finalization_complete_pending_validation_count"
+            ),
+            receipt_issuance_runtime.get(
+                "receipt_finalization_complete_pending_validation_count"
+            ),
+        )
+        or not _exact_json_equal(
+            issuance.get("receipt_finalization_locked_deadline_check_count"),
+            receipt_issuance_runtime.get(
+                "receipt_finalization_locked_deadline_check_count"
+            ),
         )
         or issuance.get(
             "receipt_finalization_locked_deadline_within_absolute_limit"
@@ -5630,10 +6736,10 @@ def _validate_executed_runtime_bundle_v2(
             "receipt_finalization_locked_deadline_within_absolute_limit"
         )
         or issuance.get(
-            "receipt_finalization_parent_peak_within_charge_ceiling"
+            "receipt_finalization_locked_physical_peak_within_cap"
         )
         is not receipt_issuance_runtime.get(
-            "receipt_finalization_parent_peak_within_charge_ceiling"
+            "receipt_finalization_locked_physical_peak_within_cap"
         )
     ):
         raise ValueError(f"{context} transcript/issuance ID binding drifted")
@@ -5668,28 +6774,66 @@ def _validate_executed_runtime_bundle_v2(
         != invariant_complete.get("invariance_resource_plan_root")
         or invariant_complete.get("invariance_resource_plan_root")
         != resource_plan.get("invariance_resource_plan_root")
-        or invariant.get("consumer_decode_count")
-        != invariant_complete.get("consumer_decode_count")
+        or not _exact_json_equal(
+            invariant.get("consumer_decode_count"),
+            invariant_complete.get("consumer_decode_count"),
+        )
         or invariant_complete.get("consumer_decode_count")
         != resource_plan.get("rows") * 80
-        or invariant.get("run_count")
-        != invariant_complete.get("invariant_run_count")
+        or not _exact_json_equal(
+            invariant.get("run_count"),
+            invariant_complete.get("invariant_run_count"),
+        )
         or diagnostics.get("recognizer_adapter_invocations")
         != invariant_complete.get("invariant_run_count")
-        or invariant.get("exact_comparisons")
-        != invariant_complete.get("exact_invariant_comparisons")
+        or not _exact_json_equal(
+            invariant.get("exact_comparisons"),
+            invariant_complete.get("exact_invariant_comparisons"),
+        )
         or invariant_complete.get("exact_invariant_comparisons")
         != resource_plan.get("rows") * 80 * 5
         or invariant.get("variant_suite_root")
         != invariant_complete.get("variant_suite_root")
         or invariant.get("worker_artifact_sha256")
         != invariant_complete.get("worker_result_artifact_sha256")
-        or invariant.get("worker_peak_rss_bytes")
-        != invariant_complete.get("worker_peak_rss_bytes")
-        or invariant.get("wall_time_nanoseconds")
-        != invariant_complete.get("invariance_wall_time_nanoseconds")
-        or invariant.get("within_frozen_aggregate_cap")
-        is not invariant_complete.get("within_frozen_aggregate_cap")
+        or not _exact_json_equal(
+            invariant.get("worker_peak_rss_bytes"),
+            invariant_complete.get("worker_peak_rss_bytes"),
+        )
+        or not _exact_json_equal(
+            invariant.get("wall_time_nanoseconds"),
+            invariant_complete.get("invariance_wall_time_nanoseconds"),
+        )
+        or invariant.get("unified_cgroup_membership")
+        != invariant_complete.get("unified_cgroup_membership")
+        or invariant.get("unified_cgroup_memory_scope_root")
+        != invariant_complete.get("unified_cgroup_memory_scope_root")
+        or not _exact_json_equal(
+            invariant.get("unified_cgroup_leaf_device"),
+            invariant_complete.get("unified_cgroup_leaf_device"),
+        )
+        or not _exact_json_equal(
+            invariant.get("unified_cgroup_leaf_inode"),
+            invariant_complete.get("unified_cgroup_leaf_inode"),
+        )
+        or not _exact_json_equal(
+            invariant.get("physical_memory_current_bytes_at_completion"),
+            invariant_complete.get("physical_memory_current_bytes_at_completion"),
+        )
+        or not _exact_json_equal(
+            invariant.get("physical_memory_peak_bytes_at_completion"),
+            invariant_complete.get("physical_memory_peak_bytes_at_completion"),
+        )
+        or not _exact_json_equal(
+            invariant.get("physical_memory_max_bytes"),
+            invariant_complete.get("physical_memory_max_bytes"),
+        )
+        or not _exact_json_equal(
+            invariant.get("physical_memory_cap_bytes"),
+            invariant_complete.get("physical_memory_cap_bytes"),
+        )
+        or invariant.get("within_frozen_physical_peak_cap")
+        is not invariant_complete.get("within_frozen_physical_peak_cap")
         or invariant_complete.get(
             "variant_suite_resident_object_graph_bytes_observed"
         )
@@ -5708,22 +6852,66 @@ def _validate_executed_runtime_bundle_v2(
         != resource_plan.get("resource_plan_root")
         or statistics.get("worker_artifact_sha256")
         != statistics_runtime.get("worker_result_artifact_sha256")
-        or statistics.get("worker_peak_rss_bytes")
-        != statistics_runtime.get("worker_peak_rss_bytes")
-        or statistics.get(
-            "statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds"
+        or not _exact_json_equal(
+            statistics.get("worker_peak_rss_bytes"),
+            statistics_runtime.get("worker_peak_rss_bytes"),
         )
-        != statistics_runtime.get(
-            "statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds"
+        or not _exact_json_equal(
+            statistics.get(
+                "statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds"
+            ),
+            statistics_runtime.get(
+                "statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds"
+            ),
         )
-        or statistics.get("conservative_parent_plus_worker_peak_sum_bytes")
-        != statistics_runtime.get(
-            "conservative_parent_plus_worker_peak_sum_bytes"
+        or not _exact_json_equal(
+            statistics.get(
+                "diagnostic_parent_plus_worker_historical_peak_sum_bytes"
+            ),
+            statistics_runtime.get(
+                "diagnostic_parent_plus_worker_historical_peak_sum_bytes"
+            ),
+        )
+        or statistics.get("unified_cgroup_membership")
+        != statistics_runtime.get("unified_cgroup_membership")
+        or statistics.get("unified_cgroup_memory_scope_root")
+        != statistics_runtime.get("unified_cgroup_memory_scope_root")
+        or not _exact_json_equal(
+            statistics.get("unified_cgroup_leaf_device"),
+            statistics_runtime.get("unified_cgroup_leaf_device"),
+        )
+        or not _exact_json_equal(
+            statistics.get("unified_cgroup_leaf_inode"),
+            statistics_runtime.get("unified_cgroup_leaf_inode"),
+        )
+        or not _exact_json_equal(
+            statistics.get(
+                "physical_memory_current_bytes_before_receipt_finalization"
+            ),
+            statistics_runtime.get(
+                "physical_memory_current_bytes_before_receipt_finalization"
+            ),
+        )
+        or not _exact_json_equal(
+            statistics.get(
+                "physical_memory_peak_bytes_before_receipt_finalization"
+            ),
+            statistics_runtime.get(
+                "physical_memory_peak_bytes_before_receipt_finalization"
+            ),
+        )
+        or not _exact_json_equal(
+            statistics.get("physical_memory_max_bytes"),
+            statistics_runtime.get("physical_memory_max_bytes"),
+        )
+        or not _exact_json_equal(
+            statistics.get("physical_memory_cap_bytes"),
+            statistics_runtime.get("physical_memory_cap_bytes"),
         )
         or statistics.get("external_supervisor_required")
         is not statistics_runtime.get("external_supervisor_required")
-        or statistics.get("within_frozen_aggregate_cap")
-        is not statistics_runtime.get("within_frozen_aggregate_cap")
+        or statistics.get("within_frozen_physical_peak_cap")
+        is not statistics_runtime.get("within_frozen_physical_peak_cap")
         or statistics.get("pairwise_holm_decision_eligible") is not False
         or statistics.get("pairwise_holm_family_size")
         != 5 * resource_plan.get("concrete_features")
@@ -5903,7 +7091,7 @@ def _measured_shape_projection_v2(
         "observed_complete_receipt_issuance_runtime": issuance,
         "observed_complete_receipt_issuance_runtime_root": stable_hash(
             issuance,
-            prefix="phase2b_formal_wire_covert_receipt_issuance_runtime_v3_",
+            prefix="phase2b_formal_wire_covert_receipt_issuance_runtime_v4_",
         ),
         "dynamic_fields_are_recorded_but_not_exact_compared": list(
             DYNAMIC_RESOURCE_PLAN_FIELDS_NOT_EXACT_COMPARED_V2
@@ -6033,7 +7221,7 @@ def _verify_frozen_shape_v2(
         or not 1 <= calibration_size <= 8 * 1_024 * 1_024
         or type(calibration_attempt_manifest_root) is not str
         or re.fullmatch(
-            r"phase2b_formal_wire_covert_attempt_manifest_v2_[0-9a-f]{64}",
+            r"phase2b_formal_wire_covert_attempt_manifest_v3_[0-9a-f]{64}",
             calibration_attempt_manifest_root,
         )
         is None
@@ -6275,9 +7463,16 @@ def _require_safe_cgroup_path_v2(value: object, name: str) -> str:
     return value
 
 
-def _validate_zero_cgroup_events_v2(row: object, name: str) -> dict[str, int]:
+def _validate_zero_cgroup_events_v2(
+    row: object,
+    name: str,
+    *,
+    required_keys: frozenset[str],
+) -> dict[str, int]:
     if type(row) is not dict or not row:
         raise ValueError(f"{name} cgroup events are absent")
+    if not required_keys.issubset(row):
+        raise ValueError(f"{name} cgroup events are missing required counters")
     for key, value in row.items():
         if (
             type(key) is not str
@@ -7411,18 +8606,48 @@ def _audit_primitive_projection_v2(
                 "worker_artifact_sha256": invariant.worker_result_artifact_sha256,
                 "worker_peak_rss_bytes": invariant.worker_peak_rss_bytes,
                 "wall_time_nanoseconds": invariant.invariance_wall_time_nanoseconds,
-                "within_frozen_aggregate_cap": invariant.within_frozen_aggregate_cap,
+                "unified_cgroup_membership": invariant.unified_cgroup_membership,
+                "unified_cgroup_memory_scope_root": (
+                    invariant.unified_cgroup_memory_scope_root
+                ),
+                "unified_cgroup_leaf_device": invariant.unified_cgroup_leaf_device,
+                "unified_cgroup_leaf_inode": invariant.unified_cgroup_leaf_inode,
+                "physical_memory_current_bytes_at_completion": (
+                    invariant.physical_memory_current_bytes_at_completion
+                ),
+                "physical_memory_peak_bytes_at_completion": (
+                    invariant.physical_memory_peak_bytes_at_completion
+                ),
+                "physical_memory_max_bytes": invariant.physical_memory_max_bytes,
+                "physical_memory_cap_bytes": invariant.physical_memory_cap_bytes,
+                "within_frozen_physical_peak_cap": (
+                    invariant.within_frozen_physical_peak_cap
+                ),
                 "complete_runtime_projection": invariant_projection,
                 "complete_runtime_projection_root": stable_hash(
                     invariant_projection,
-                    prefix="phase2b_formal_wire_covert_invariant_runtime_v3_",
+                    prefix="phase2b_formal_wire_covert_invariant_runtime_v4_",
                 ),
             },
             "statistics": {
                 "resource_plan_root": statistics.resource_plan_root,
-                "conservative_parent_plus_worker_peak_sum_bytes": (
-                    statistics.conservative_parent_plus_worker_peak_sum_bytes
+                "diagnostic_parent_plus_worker_historical_peak_sum_bytes": (
+                    statistics.diagnostic_parent_plus_worker_historical_peak_sum_bytes
                 ),
+                "unified_cgroup_membership": statistics.unified_cgroup_membership,
+                "unified_cgroup_memory_scope_root": (
+                    statistics.unified_cgroup_memory_scope_root
+                ),
+                "unified_cgroup_leaf_device": statistics.unified_cgroup_leaf_device,
+                "unified_cgroup_leaf_inode": statistics.unified_cgroup_leaf_inode,
+                "physical_memory_current_bytes_before_receipt_finalization": (
+                    statistics.physical_memory_current_bytes_before_receipt_finalization
+                ),
+                "physical_memory_peak_bytes_before_receipt_finalization": (
+                    statistics.physical_memory_peak_bytes_before_receipt_finalization
+                ),
+                "physical_memory_max_bytes": statistics.physical_memory_max_bytes,
+                "physical_memory_cap_bytes": statistics.physical_memory_cap_bytes,
                 "external_supervisor_required": statistics.external_supervisor_required,
                 "pairwise_holm_decision_eligible": (
                     receipt.pairwise_holm_decision_eligible
@@ -7438,23 +8663,41 @@ def _audit_primitive_projection_v2(
                 "statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds": (
                     statistics.statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds
                 ),
-                "within_frozen_aggregate_cap": statistics.within_frozen_aggregate_cap,
+                "within_frozen_physical_peak_cap": (
+                    statistics.within_frozen_physical_peak_cap
+                ),
                 "complete_runtime_projection": statistics_projection,
                 "complete_runtime_projection_root": stable_hash(
                     statistics_projection,
-                    prefix="phase2b_formal_wire_covert_statistics_runtime_v3_",
+                    prefix="phase2b_formal_wire_covert_statistics_runtime_v4_",
                 ),
             },
             "receipt_issuance": {
                 "receipt_id": receipt_id,
                 "absolute_deadline_kind": issuance.absolute_deadline_kind,
-                "worker_peak_rss_bytes_sum": issuance.worker_peak_rss_bytes_sum,
-                "parent_rss_charge_ceiling_bytes": (
-                    issuance.parent_rss_charge_ceiling_bytes
+                "diagnostic_worker_historical_peak_rss_bytes_sum": (
+                    issuance.diagnostic_worker_historical_peak_rss_bytes_sum
                 ),
-                "conservative_parent_plus_worker_peak_sum_bytes": (
-                    issuance.conservative_parent_plus_worker_peak_sum_bytes
+                "diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization": (
+                    issuance.diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization
                 ),
+                "diagnostic_parent_plus_worker_historical_peak_sum_bytes": (
+                    issuance.diagnostic_parent_plus_worker_historical_peak_sum_bytes
+                ),
+                "unified_cgroup_membership": issuance.unified_cgroup_membership,
+                "unified_cgroup_memory_scope_root": (
+                    issuance.unified_cgroup_memory_scope_root
+                ),
+                "unified_cgroup_leaf_device": issuance.unified_cgroup_leaf_device,
+                "unified_cgroup_leaf_inode": issuance.unified_cgroup_leaf_inode,
+                "physical_memory_current_bytes_before_receipt_finalization": (
+                    issuance.physical_memory_current_bytes_before_receipt_finalization
+                ),
+                "physical_memory_peak_bytes_before_receipt_finalization": (
+                    issuance.physical_memory_peak_bytes_before_receipt_finalization
+                ),
+                "physical_memory_max_bytes": issuance.physical_memory_max_bytes,
+                "physical_memory_cap_bytes": issuance.physical_memory_cap_bytes,
                 "receipt_finalization_complete_pending_validation_count": (
                     issuance.receipt_finalization_complete_pending_validation_count
                 ),
@@ -7464,14 +8707,14 @@ def _audit_primitive_projection_v2(
                 "receipt_finalization_locked_deadline_within_absolute_limit": (
                     issuance.receipt_finalization_locked_deadline_within_absolute_limit
                 ),
-                "receipt_finalization_parent_peak_within_charge_ceiling": (
-                    issuance.receipt_finalization_parent_peak_within_charge_ceiling
+                "receipt_finalization_locked_physical_peak_within_cap": (
+                    issuance.receipt_finalization_locked_physical_peak_within_cap
                 ),
                 "complete_runtime_projection": issuance_projection,
                 "complete_runtime_projection_root": stable_hash(
                     issuance_projection,
                     prefix=(
-                        "phase2b_formal_wire_covert_receipt_issuance_runtime_v3_"
+                        "phase2b_formal_wire_covert_receipt_issuance_runtime_v4_"
                     ),
                 ),
             },
@@ -7594,10 +8837,10 @@ def build_development_calibration_artifact_v2(
             _audit_primitive_projection_v2(negative),
         ]
         _validate_and_release_completed_audits_v2((positive, negative))
-        runtime_exit = _capture_live_runtime_exit_v2(runtime, attempt)
+        runtime_exit = _capture_live_runtime_exit_v2(runtime, attempt, runs)
         body = {
             "schema_version": (
-                "hegel-machine-phase2b-formal-wire-covert-development-calibration/4"
+                "hegel-machine-phase2b-formal-wire-covert-development-calibration/6"
             ),
             "profile_id": PROFILE_ID,
             "attempt_manifest_root": attempt.attempt_manifest_root,
@@ -7609,6 +8852,9 @@ def build_development_calibration_artifact_v2(
             "synthetic_fixture_root": fixture_root,
             "runtime_entry_evidence": runtime,
             "runtime_exit_evidence": runtime_exit,
+            "post_output_physical_gate_contract": dict(
+                _POST_OUTPUT_PHYSICAL_GATE_CONTRACT_V2
+            ),
             "frozen_static_measurement_candidates_in_order": measurements,
             "runs_in_order": runs,
             "claims": {
@@ -7680,10 +8926,10 @@ def build_live_inner_candidate_artifact_v2(
             _audit_primitive_projection_v2(negative),
         ]
         _validate_and_release_completed_audits_v2((positive, negative))
-        runtime_exit = _capture_live_runtime_exit_v2(runtime, attempt)
+        runtime_exit = _capture_live_runtime_exit_v2(runtime, attempt, runs)
         body = {
             "schema_version": (
-                "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/4"
+                "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/6"
             ),
             "profile_id": PROFILE_ID,
             "attempt_manifest_root": attempt.attempt_manifest_root,
@@ -7694,6 +8940,9 @@ def build_live_inner_candidate_artifact_v2(
             "synthetic_fixture_root": fixture_root,
             "runtime_entry_evidence": runtime,
             "runtime_exit_evidence": runtime_exit,
+            "post_output_physical_gate_contract": dict(
+                _POST_OUTPUT_PHYSICAL_GATE_CONTRACT_V2
+            ),
             "fresh_static_measurements_in_order": measurements,
             "frozen_static_shape_exact_match": True,
             "runs_in_order": runs,
@@ -7928,12 +9177,20 @@ def _validate_run_and_measurement_binding_v2(
         "wall_time_nanoseconds",
         "worker_artifact_sha256",
         "worker_peak_rss_bytes",
-        "within_frozen_aggregate_cap",
+        "unified_cgroup_membership",
+        "unified_cgroup_memory_scope_root",
+        "unified_cgroup_leaf_device",
+        "unified_cgroup_leaf_inode",
+        "physical_memory_current_bytes_at_completion",
+        "physical_memory_peak_bytes_at_completion",
+        "physical_memory_max_bytes",
+        "physical_memory_cap_bytes",
+        "within_frozen_physical_peak_cap",
     }
     expected_statistics_keys = {
         "complete_runtime_projection",
         "complete_runtime_projection_root",
-        "conservative_parent_plus_worker_peak_sum_bytes",
+        "diagnostic_parent_plus_worker_historical_peak_sum_bytes",
         "external_supervisor_required",
         "pairwise_holm_decision_eligible",
         "pairwise_holm_family_size",
@@ -7941,35 +9198,58 @@ def _validate_run_and_measurement_binding_v2(
         "permutation_seed_commitment",
         "permutation_seed_reveal_hex",
         "resource_plan_root",
+        "unified_cgroup_membership",
+        "unified_cgroup_memory_scope_root",
+        "unified_cgroup_leaf_device",
+        "unified_cgroup_leaf_inode",
+        "physical_memory_current_bytes_before_receipt_finalization",
+        "physical_memory_peak_bytes_before_receipt_finalization",
+        "physical_memory_max_bytes",
+        "physical_memory_cap_bytes",
         "statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds",
         "worker_artifact_sha256",
         "worker_peak_rss_bytes",
-        "within_frozen_aggregate_cap",
+        "within_frozen_physical_peak_cap",
     }
     expected_receipt_issuance_keys = {
         "absolute_deadline_kind",
         "complete_runtime_projection",
         "complete_runtime_projection_root",
-        "conservative_parent_plus_worker_peak_sum_bytes",
-        "parent_rss_charge_ceiling_bytes",
+        "diagnostic_worker_historical_peak_rss_bytes_sum",
+        "diagnostic_parent_historical_peak_rss_bytes_before_receipt_finalization",
+        "diagnostic_parent_plus_worker_historical_peak_sum_bytes",
+        "unified_cgroup_membership",
+        "unified_cgroup_memory_scope_root",
+        "unified_cgroup_leaf_device",
+        "unified_cgroup_leaf_inode",
+        "physical_memory_current_bytes_before_receipt_finalization",
+        "physical_memory_peak_bytes_before_receipt_finalization",
+        "physical_memory_max_bytes",
+        "physical_memory_cap_bytes",
         "receipt_finalization_complete_pending_validation_count",
         "receipt_finalization_locked_deadline_check_count",
         "receipt_finalization_locked_deadline_within_absolute_limit",
-        "receipt_finalization_parent_peak_within_charge_ceiling",
+        "receipt_finalization_locked_physical_peak_within_cap",
         "receipt_id",
-        "worker_peak_rss_bytes_sum",
     }
     expected_diagnostic_keys = {
-        "conservative_parent_charge_plus_worker_peak_rss_kib",
         "host_available_memory_bytes_at_preflight",
         "maximum_rows_per_invocation",
         "minimum_rows_per_invocation",
         "mode",
         "recognizer_adapter_invocations",
-        "parent_peak_rss_before_receipt_finalization_kib",
-        "parent_rss_charge_ceiling_kib",
+        "parent_historical_peak_rss_before_receipt_finalization_kib",
+        "parent_plus_worker_historical_peak_rss_kib",
+        "physical_memory_cap_bytes",
+        "physical_memory_current_before_receipt_finalization_bytes",
+        "physical_memory_max_bytes",
+        "physical_memory_peak_before_receipt_finalization_bytes",
         "statistics_wall_time_ns",
-        "statistics_worker_peak_rss_kib",
+        "statistics_worker_historical_peak_rss_kib",
+        "unified_cgroup_membership",
+        "unified_cgroup_leaf_device",
+        "unified_cgroup_leaf_inode",
+        "unified_cgroup_memory_scope_root",
         "wall_time_ns",
     }
     if (
@@ -8062,38 +9342,13 @@ def _validate_run_and_measurement_binding_v2(
         or statistics_complete["resource_plan_root"]
         != full_resource["resource_plan_root"]
         or receipt_issuance.get("receipt_id") != audit_row.get("receipt_id")
-        or receipt_issuance.get("absolute_deadline_kind")
-        != receipt_issuance_complete["absolute_deadline_kind"]
-        or receipt_issuance.get("worker_peak_rss_bytes_sum")
-        != receipt_issuance_complete["worker_peak_rss_bytes_sum"]
-        or receipt_issuance.get("parent_rss_charge_ceiling_bytes")
-        != receipt_issuance_complete["parent_rss_charge_ceiling_bytes"]
-        or receipt_issuance.get("conservative_parent_plus_worker_peak_sum_bytes")
-        != receipt_issuance_complete[
-            "conservative_parent_plus_worker_peak_sum_bytes"
-        ]
-        or receipt_issuance.get(
-            "receipt_finalization_complete_pending_validation_count"
+        or any(
+            not _exact_json_equal(
+                receipt_issuance.get(name), receipt_issuance_complete[name]
+            )
+            for name in _RECEIPT_ISSUANCE_RUNTIME_FIELDS_V2
+            if name in expected_receipt_issuance_keys
         )
-        != receipt_issuance_complete[
-            "receipt_finalization_complete_pending_validation_count"
-        ]
-        or receipt_issuance.get("receipt_finalization_locked_deadline_check_count")
-        != receipt_issuance_complete[
-            "receipt_finalization_locked_deadline_check_count"
-        ]
-        or receipt_issuance.get(
-            "receipt_finalization_locked_deadline_within_absolute_limit"
-        )
-        is not receipt_issuance_complete[
-            "receipt_finalization_locked_deadline_within_absolute_limit"
-        ]
-        or receipt_issuance.get(
-            "receipt_finalization_parent_peak_within_charge_ceiling"
-        )
-        is not receipt_issuance_complete[
-            "receipt_finalization_parent_peak_within_charge_ceiling"
-        ]
     ):
         raise ValueError("run two-phase resource/issuance bindings drifted")
     if (
@@ -8122,7 +9377,7 @@ def _validate_run_and_measurement_binding_v2(
         or measurement.get("observed_complete_receipt_issuance_runtime_root")
         != stable_hash(
             receipt_issuance_complete,
-            prefix="phase2b_formal_wire_covert_receipt_issuance_runtime_v3_",
+            prefix="phase2b_formal_wire_covert_receipt_issuance_runtime_v4_",
         )
         or measurement.get("dynamic_fields_are_recorded_but_not_exact_compared")
         != list(DYNAMIC_RESOURCE_PLAN_FIELDS_NOT_EXACT_COMPARED_V2)
@@ -8141,11 +9396,11 @@ def _validate_run_and_measurement_binding_v2(
     ):
         raise ValueError("run eligibility-quota root drifted")
     for group_name, prefix in (
-        ("invariance", "phase2b_formal_wire_covert_invariant_runtime_v3_"),
-        ("statistics", "phase2b_formal_wire_covert_statistics_runtime_v3_"),
+        ("invariance", "phase2b_formal_wire_covert_invariant_runtime_v4_"),
+        ("statistics", "phase2b_formal_wire_covert_statistics_runtime_v4_"),
         (
             "receipt_issuance",
-            "phase2b_formal_wire_covert_receipt_issuance_runtime_v3_",
+            "phase2b_formal_wire_covert_receipt_issuance_runtime_v4_",
         ),
     ):
         group = audit_row[group_name]
@@ -8239,6 +9494,8 @@ def _validate_runtime_entry_exit_contract_v2(
     exit_cgroup = exit_row["cgroup"]
     expected_cgroup_keys = {
         "cgroup_path",
+        "cgroup_procs",
+        "cgroup_stat",
         "cpu_affinity",
         "cpu_capacity",
         "cpu_max",
@@ -8249,6 +9506,9 @@ def _validate_runtime_entry_exit_contract_v2(
         "pids_current",
         "pids_events",
         "pids_max",
+        "unified_cgroup_leaf_device",
+        "unified_cgroup_leaf_inode",
+        "unified_cgroup_memory_scope_root",
     }
     if (
         type(entry_cgroup) is not dict
@@ -8272,15 +9532,41 @@ def _validate_runtime_entry_exit_contract_v2(
         is not True
         or exit_row["cgroup_events_unchanged_from_entry"] is not True
         or entry_cgroup["cgroup_path"] != exit_cgroup["cgroup_path"]
+        or entry_cgroup["unified_cgroup_memory_scope_root"]
+        != exit_cgroup["unified_cgroup_memory_scope_root"]
+        or entry_cgroup["unified_cgroup_leaf_device"]
+        != exit_cgroup["unified_cgroup_leaf_device"]
+        or entry_cgroup["unified_cgroup_leaf_inode"]
+        != exit_cgroup["unified_cgroup_leaf_inode"]
     ):
         raise ValueError(f"{context} signal/thread/runtime identity drifted")
     for phase, cgroup in (("entry", entry_cgroup), ("exit", exit_cgroup)):
         affinity = cgroup["cpu_affinity"]
+        membership = _require_safe_cgroup_path_v2(
+            cgroup["cgroup_path"], f"{context} {phase} cgroup"
+        )
+        leaf_device = _require_exact_int_v2(
+            cgroup["unified_cgroup_leaf_device"],
+            f"{context} {phase} cgroup leaf device",
+            minimum=1,
+        )
+        leaf_inode = _require_exact_int_v2(
+            cgroup["unified_cgroup_leaf_inode"],
+            f"{context} {phase} cgroup leaf inode",
+            minimum=1,
+        )
+        expected_scope_root = stable_hash(
+            {
+                "leaf_device": leaf_device,
+                "leaf_inode": leaf_inode,
+                "unified_membership": membership,
+            },
+            prefix="phase2b_formal_covert_unified_cgroup_memory_scope_v1_",
+        )
         if (
-            _require_safe_cgroup_path_v2(
-                cgroup["cgroup_path"], f"{context} {phase} cgroup"
-            )
-            != cgroup["cgroup_path"]
+            membership != cgroup["cgroup_path"]
+            or cgroup["unified_cgroup_memory_scope_root"]
+            != expected_scope_root
             or type(affinity) is not list
             or not affinity
             or any(type(cpu) is not int or cpu < 0 for cpu in affinity)
@@ -8308,23 +9594,46 @@ def _validate_runtime_entry_exit_contract_v2(
                 cgroup["pids_current"], f"{context} {phase} pids.current"
             )
             != 1
+            or type(cgroup["cgroup_procs"]) is not list
+            or len(cgroup["cgroup_procs"]) != 1
+            or _require_exact_int_v2(
+                cgroup["cgroup_procs"][0], f"{context} {phase} cgroup.procs PID",
+                minimum=1,
+            )
+            < 1
+            or type(cgroup["cgroup_stat"]) is not dict
+            or cgroup["cgroup_stat"].get("nr_descendants") != 0
+            or cgroup["cgroup_stat"].get("nr_dying_descendants") != 0
             or _require_exact_int_v2(
                 cgroup["memory_current"], f"{context} {phase} memory.current"
             )
-            > attempt.requested_cgroup_memory_max_bytes
+            > _require_exact_int_v2(
+                cgroup["memory_peak"], f"{context} {phase} memory.peak"
+            )
             or _require_exact_int_v2(
                 cgroup["memory_peak"], f"{context} {phase} memory.peak"
             )
-            > attempt.requested_cgroup_memory_max_bytes
+            > auditor.MAXIMUM_ESTIMATED_RSS_BYTES
         ):
             raise ValueError(f"{context} cgroup integer evidence drifted")
         _validate_zero_cgroup_events_v2(
-            cgroup["memory_events"], f"{context} {phase} memory"
+            cgroup["memory_events"],
+            f"{context} {phase} memory",
+            required_keys=frozenset({"max", "oom", "oom_kill"}),
         )
         _validate_zero_cgroup_events_v2(
-            cgroup["pids_events"], f"{context} {phase} pids"
+            cgroup["pids_events"],
+            f"{context} {phase} pids",
+            required_keys=frozenset({"max"}),
         )
     if (
+        not _exact_json_equal(
+            entry_cgroup["cgroup_procs"], exit_cgroup["cgroup_procs"]
+        )
+        or not _exact_json_equal(
+            entry_cgroup["cgroup_stat"], exit_cgroup["cgroup_stat"]
+        )
+        or
         not _exact_json_equal(
             entry_cgroup["memory_events"], exit_cgroup["memory_events"]
         )
@@ -8653,7 +9962,7 @@ def _validate_two_run_hard_contract_v2(
             resource.get("admissible") is not True
             or statistics.get("external_supervisor_required") is not True
             or statistics.get("pairwise_holm_decision_eligible") is not False
-            or statistics.get("within_frozen_aggregate_cap") is not True
+            or statistics.get("within_frozen_physical_peak_cap") is not True
             or type(receipt_issuance) is not dict
             or receipt_issuance.get("absolute_deadline_kind") != "STATISTICS"
             or receipt_issuance.get(
@@ -8669,7 +9978,7 @@ def _validate_two_run_hard_contract_v2(
             )
             is not True
             or receipt_issuance.get(
-                "receipt_finalization_parent_peak_within_charge_ceiling"
+                "receipt_finalization_locked_physical_peak_within_cap"
             )
             is not True
             or type(quota) is not dict
@@ -8723,10 +10032,10 @@ def _validate_two_run_hard_contract_v2(
         if (
             type(invariant_complete) is not dict
             or invariant_complete.get("process_group_empty_at_exit") is not True
-            or invariant_complete.get("within_frozen_aggregate_cap") is not True
+            or invariant_complete.get("within_frozen_physical_peak_cap") is not True
             or type(statistics_complete) is not dict
             or statistics_complete.get("external_supervisor_required") is not True
-            or statistics_complete.get("within_frozen_aggregate_cap") is not True
+            or statistics_complete.get("within_frozen_physical_peak_cap") is not True
             or type(receipt_issuance_complete) is not dict
             or receipt_issuance_complete.get("absolute_deadline_kind")
             != "STATISTICS"
@@ -8735,7 +10044,7 @@ def _validate_two_run_hard_contract_v2(
             )
             is not True
             or receipt_issuance_complete.get(
-                "receipt_finalization_parent_peak_within_charge_ceiling"
+                "receipt_finalization_locked_physical_peak_within_cap"
             )
             is not True
         ):
@@ -8944,6 +10253,7 @@ def _validate_live_inner_artifact_v2(
         "mode_order",
         "outer_hard_deadline_self_verified",
         "profile_id",
+        "post_output_physical_gate_contract",
         "projection_only_boundary",
         "runs_in_order",
         "runtime_entry_evidence",
@@ -8955,7 +10265,7 @@ def _validate_live_inner_artifact_v2(
         raise ValueError("live inner artifact root fields are not exact")
     if (
         body["schema_version"]
-        != "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/4"
+        != "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/6"
         or body["profile_id"] != attempt.profile_id
         or body["attempt_manifest_root"] != attempt.attempt_manifest_root
         or body["campaign_id"] != attempt.campaign_id
@@ -8966,6 +10276,10 @@ def _validate_live_inner_artifact_v2(
         or body["outer_hard_deadline_self_verified"] is not False
         or body["external_finalizer_required"] is not True
         or body["content_sha256_is_not_a_signature"] is not True
+        or not _exact_json_equal(
+            body["post_output_physical_gate_contract"],
+            _POST_OUTPUT_PHYSICAL_GATE_CONTRACT_V2,
+        )
         or not _exact_json_equal(
             body["projection_only_boundary"], _TASK4_PROJECTION_ONLY_BOUNDARY_V2
         )
@@ -9035,18 +10349,24 @@ def _validate_live_inner_artifact_v2(
             or _require_exact_int_v2(
                 cgroup.get("memory_current"), f"inner {name} memory.current"
             )
-            > attempt.requested_cgroup_memory_max_bytes
+            > _require_exact_int_v2(
+                cgroup.get("memory_peak"), f"inner {name} memory.peak"
+            )
             or _require_exact_int_v2(
                 cgroup.get("memory_peak"), f"inner {name} memory.peak"
             )
-            > attempt.requested_cgroup_memory_max_bytes
+            > auditor.MAXIMUM_ESTIMATED_RSS_BYTES
         ):
             raise ValueError("live inner cgroup integer evidence drifted")
         _validate_zero_cgroup_events_v2(
-            cgroup.get("memory_events"), f"inner {name} memory"
+            cgroup.get("memory_events"),
+            f"inner {name} memory",
+            required_keys=frozenset({"max", "oom", "oom_kill"}),
         )
         _validate_zero_cgroup_events_v2(
-            cgroup.get("pids_events"), f"inner {name} pids"
+            cgroup.get("pids_events"),
+            f"inner {name} pids",
+            required_keys=frozenset({"max"}),
         )
     if (
         not _exact_json_equal(
@@ -9088,6 +10408,12 @@ def _validate_live_inner_artifact_v2(
     )
     if type(runs) is not list or len(runs) != 2:
         raise ValueError("live inner artifact does not contain exactly two runs")
+    _validate_receipt_physical_scope_against_exit_cgroup_v2(
+        runs,
+        entry_cgroup,
+        exit_cgroup,
+        context="live inner",
+    )
     for index, mode in enumerate(LIVE_MODE_ORDER):
         run = runs[index]
         if type(run) is not dict or run.get("mode") != mode:
@@ -9111,7 +10437,7 @@ def _validate_live_inner_artifact_v2(
             or type(statistics) is not dict
             or statistics.get("external_supervisor_required") is not True
             or statistics.get("pairwise_holm_decision_eligible") is not False
-            or statistics.get("within_frozen_aggregate_cap") is not True
+            or statistics.get("within_frozen_physical_peak_cap") is not True
             or type(quota) is not dict
             or quota.get("exact_quota_matched") is not True
             or type(target_rows) is not list
@@ -9167,7 +10493,7 @@ def _validate_live_inner_artifact_v2(
         if (
             type(invariant_complete) is not dict
             or invariant_complete.get("process_group_empty_at_exit") is not True
-            or invariant_complete.get("within_frozen_aggregate_cap") is not True
+            or invariant_complete.get("within_frozen_physical_peak_cap") is not True
         ):
             raise ValueError("live inner invariance containment evidence drifted")
         if mode == "KNOWN_NULL":
@@ -9232,6 +10558,7 @@ def _validate_development_calibration_artifact_v2(
         "mode_order",
         "outer_hard_deadline_self_verified",
         "profile_id",
+        "post_output_physical_gate_contract",
         "projection_only_boundary",
         "runs_in_order",
         "runtime_entry_evidence",
@@ -9243,7 +10570,7 @@ def _validate_development_calibration_artifact_v2(
         raise ValueError("calibration inner artifact root fields are not exact")
     if (
         body["schema_version"]
-        != "hegel-machine-phase2b-formal-wire-covert-development-calibration/4"
+        != "hegel-machine-phase2b-formal-wire-covert-development-calibration/6"
         or body["profile_id"] != attempt.profile_id
         or body["attempt_manifest_root"] != attempt.attempt_manifest_root
         or body["calibration_campaign_id"] != attempt.campaign_id
@@ -9257,6 +10584,10 @@ def _validate_development_calibration_artifact_v2(
         or body["independent_review_and_profile_update_required"] is not True
         or body["same_run_shape_acceptance_forbidden"] is not True
         or body["content_sha256_is_not_a_signature"] is not True
+        or not _exact_json_equal(
+            body["post_output_physical_gate_contract"],
+            _POST_OUTPUT_PHYSICAL_GATE_CONTRACT_V2,
+        )
         or not _exact_json_equal(
             body["projection_only_boundary"], _TASK4_PROJECTION_ONLY_BOUNDARY_V2
         )
@@ -9319,14 +10650,18 @@ def _validate_development_calibration_artifact_v2(
             or _require_exact_int_v2(
                 row.get("memory_peak"), f"calibration {phase} memory.peak"
             )
-            > attempt.requested_cgroup_memory_max_bytes
+            > auditor.MAXIMUM_ESTIMATED_RSS_BYTES
         ):
             raise ValueError("calibration cgroup integer evidence drifted")
         _validate_zero_cgroup_events_v2(
-            row.get("memory_events"), f"calibration {phase} memory"
+            row.get("memory_events"),
+            f"calibration {phase} memory",
+            required_keys=frozenset({"max", "oom", "oom_kill"}),
         )
         _validate_zero_cgroup_events_v2(
-            row.get("pids_events"), f"calibration {phase} pids"
+            row.get("pids_events"),
+            f"calibration {phase} pids",
+            required_keys=frozenset({"max"}),
         )
     if (
         entry_cgroup.get("cgroup_path") != exit_cgroup.get("cgroup_path")
@@ -9353,6 +10688,12 @@ def _validate_development_calibration_artifact_v2(
         or len(runs) != 2
     ):
         raise ValueError("calibration does not contain exactly two modes")
+    _validate_receipt_physical_scope_against_exit_cgroup_v2(
+        runs,
+        entry_cgroup,
+        exit_cgroup,
+        context="development calibration",
+    )
     for index, mode in enumerate(LIVE_MODE_ORDER):
         run = runs[index]
         measurement = measurements[index]
@@ -9684,7 +11025,7 @@ def _validate_frozen_calibration_bytes_v2(
     )
     if (
         inner.get("schema_version")
-        != "hegel-machine-phase2b-formal-wire-covert-development-calibration/4"
+        != "hegel-machine-phase2b-formal-wire-covert-development-calibration/6"
         or inner.get("profile_id") != calibration_attempt.profile_id
         or inner.get("calibration_campaign_id")
         != shape.get("calibration_campaign_id")
@@ -9964,6 +11305,60 @@ def _source_execution_bootstrap_manifest_v2(
     }
 
 
+def _replay_extracted_child_preopened_sources_v2(
+    source_tree: Path,
+    qualification_source_sha256: str,
+    *,
+    retained_source_tree_fd: int | None = None,
+    deadline_ns: int | None = None,
+) -> tuple[dict[str, dict[str, object]], str]:
+    """Rebuild the child's open-once snapshot root from retained source bytes."""
+
+    if not source_tree.is_absolute():
+        raise ValueError("child preopened-source replay root is not absolute")
+    owned_fd: int | None = None
+    if retained_source_tree_fd is None:
+        owned_fd = _open_real_directory_fd_v2(source_tree)
+        source_tree_fd = owned_fd
+    elif type(retained_source_tree_fd) is int and retained_source_tree_fd >= 0:
+        source_tree_fd = retained_source_tree_fd
+    else:
+        raise TypeError("child preopened-source retained descriptor is malformed")
+    try:
+        _verify_retained_directory_path_identity_v2(
+            source_tree_fd, source_tree, name="child preopened-source tree"
+        )
+        manifest = _source_execution_bootstrap_manifest_v2(
+            qualification_source_sha256
+        )
+        snapshots: dict[str, dict[str, object]] = {}
+        for relative, expected_digest in sorted(manifest["sha256"].items()):
+            digest, opened = _hash_relative_regular_at_fd_v2(
+                source_tree_fd,
+                relative,
+                maximum_bytes=16 * 1_024 * 1_024,
+                deadline_ns=deadline_ns,
+            )
+            if opened.st_size < 1 or digest != expected_digest:
+                raise ValueError("child preopened-source retained bytes drifted")
+            snapshots[relative] = {
+                "descriptor_realpath": str(source_tree / relative),
+                "device": opened.st_dev,
+                "inode": opened.st_ino,
+                "mtime_nanoseconds": opened.st_mtime_ns,
+                "sha256": digest,
+                "size_bytes": opened.st_size,
+            }
+        return snapshots, stable_hash(
+            snapshots,
+            prefix="phase2b_formal_wire_covert_preopened_sources_v2_",
+        )
+    finally:
+        _close_owned_descriptors_v2(
+            (owned_fd,), name="child preopened-source replay"
+        )
+
+
 def _source_execution_bootstrap_argv_v2(
     *,
     python_realpath: str,
@@ -10203,6 +11598,84 @@ def _outer_runner_tcb_snapshot_v2(
     }
 
 
+def _expected_post_output_gate_attestation_v2(
+    attempt: Phase2BFormalWireCovertAttemptManifestV2,
+    inner: dict[str, object],
+    inner_bytes: bytes,
+    *,
+    expected_entry: str,
+    child_argv_sha256: object,
+    owned_invocation_id: object,
+) -> dict[str, object]:
+    """Reconstruct the source-and-exit attestation without inventing a peak."""
+
+    if not _exact_json_equal(
+        inner.get("post_output_physical_gate_contract"),
+        _POST_OUTPUT_PHYSICAL_GATE_CONTRACT_V2,
+    ):
+        raise ValueError("outer attestation cannot bind an absent inner tail contract")
+    if (
+        expected_entry not in {"development-calibration", "live-inner"}
+        or type(child_argv_sha256) is not str
+        or re.fullmatch(r"[0-9a-f]{64}", child_argv_sha256) is None
+        or type(owned_invocation_id) is not str
+        or re.fullmatch(r"[0-9a-f]{32}", owned_invocation_id) is None
+    ):
+        raise ValueError("outer attestation launch identity is malformed")
+    return {
+        "attestation_basis": (
+            "PINNED_INNER_SOURCE_PLUS_SYSTEMD_EXEC_EXIT_ZERO;"
+            "NOT_A_POST_EXIT_NUMERIC_MEMORY_PEAK_SAMPLE"
+        ),
+        "canonical_stdout_matches_inner_artifact": True,
+        "child_exec_main_code": 1,
+        "child_exec_main_status": 0,
+        "child_result": "success",
+        "child_systemd_exit_kind": "CLD_EXITED",
+        "direct_os_exit_success_path_required_by_pinned_source": True,
+        "empty_stderr": True,
+        "entry_kind": expected_entry,
+        "exact_exec_start_argv_sha256": child_argv_sha256,
+        "inner_artifact_sha256": hashlib.sha256(inner_bytes).hexdigest(),
+        "inner_artifact_size_bytes": len(inner_bytes),
+        "inner_post_output_physical_gate_contract": dict(
+            _POST_OUTPUT_PHYSICAL_GATE_CONTRACT_V2
+        ),
+        "pinned_qualification_source_sha256": (
+            attempt.qualification_source_sha256
+        ),
+        "post_exit_numeric_memory_peak_sample_claimed": False,
+        "success_exit_status_override_can_satisfy_attestation": False,
+        "systemd_memory_max_bytes": attempt.requested_cgroup_memory_max_bytes,
+        "systemd_owned_invocation_id": owned_invocation_id,
+    }
+
+
+def _validate_post_output_gate_attestation_v2(
+    value: object,
+    attempt: Phase2BFormalWireCovertAttemptManifestV2,
+    inner: dict[str, object],
+    inner_bytes: bytes,
+    *,
+    context: str,
+    expected_entry: str,
+    child_argv_sha256: object,
+    owned_invocation_id: object,
+) -> None:
+    if not _exact_json_equal(
+        value,
+        _expected_post_output_gate_attestation_v2(
+            attempt,
+            inner,
+            inner_bytes,
+            expected_entry=expected_entry,
+            child_argv_sha256=child_argv_sha256,
+            owned_invocation_id=owned_invocation_id,
+        ),
+    ):
+        raise ValueError(f"{context} post-output physical gate attestation drifted")
+
+
 def _validate_outer_supervisor_result_v2(
     body: dict[str, object],
     *,
@@ -10218,6 +11691,8 @@ def _validate_outer_supervisor_result_v2(
         raise TimeoutError("outer supervisor replay reached its absolute deadline")
     expected_keys = {
         "attempt_manifest_root",
+        "child_source_bootstrap_preopened_snapshots",
+        "child_source_bootstrap_preopened_snapshots_root",
         "content_sha256_is_not_a_signature",
         "inner_artifact_cas",
         "launcher",
@@ -10225,6 +11700,7 @@ def _validate_outer_supervisor_result_v2(
         "mode",
         "outer_runner_tcb_entry",
         "outer_runner_tcb_exit",
+        "post_output_physical_gate_attestation",
         "profile_id",
         "result",
         "rfc8785_receipt_cas",
@@ -10326,6 +11802,27 @@ def _validate_outer_supervisor_result_v2(
         )
     ):
         raise ValueError("outer runner entry/exit TCB evidence drifted")
+    outer_source_tree_path = Path(outer_tcb_entry["source_tree_root"])
+    outer_snapshots, outer_preopened_root = _replay_extracted_child_preopened_sources_v2(
+        outer_source_tree_path,
+        attempt.qualification_source_sha256,
+        deadline_ns=deadline_ns,
+    )
+    outer_main_snapshot = outer_snapshots[_BOOTSTRAP_MAIN_RELATIVE_PATH_V2]
+    if (
+        not _exact_json_equal(
+            outer_tcb_entry["preopened_source_snapshots"], outer_snapshots
+        )
+        or not _exact_json_equal(
+            outer_tcb_entry["executed_main_source_bootstrap"],
+            {
+                **outer_main_snapshot,
+                "bootstrap_kind": "EXTERNAL_PYTHON_C_OPEN_ONCE_V2",
+                "reexecuted_from_stable_descriptor": True,
+            },
+        )
+    ):
+        raise ValueError("outer runner preopened source snapshots drifted")
     source_tree = body["source_tree_root"]
     if type(source_tree) is not str or not Path(source_tree).is_absolute():
         raise ValueError("outer source tree root is not absolute")
@@ -10334,6 +11831,7 @@ def _validate_outer_supervisor_result_v2(
         source_tree_path.is_symlink()
         or not source_tree_path.is_dir()
         or str(source_tree_path.resolve(strict=True)) != source_tree
+        or source_tree_path == outer_source_tree_path
     ):
         raise ValueError("outer source tree root is not a live realpath")
     _verify_live_package_tree_is_source_only_v2(
@@ -10594,6 +12092,29 @@ def _validate_outer_supervisor_result_v2(
     interpreter_runtime = _validate_interpreter_runtime_projection_v2(
         inner_entry.get("interpreter_runtime"), "outer-bound inner"
     )
+    child_snapshots, expected_inner_preopened_root = (
+        _replay_extracted_child_preopened_sources_v2(
+            source_tree_path,
+            attempt.qualification_source_sha256,
+            deadline_ns=deadline_ns,
+        )
+    )
+    if (
+        outer_preopened_root == expected_inner_preopened_root
+        or not _exact_json_equal(
+            body["child_source_bootstrap_preopened_snapshots"],
+            child_snapshots,
+        )
+        or body["child_source_bootstrap_preopened_snapshots_root"]
+        != expected_inner_preopened_root
+    ):
+        raise ValueError("outer child preopened source snapshots drifted")
+    expected_inner_bootstrap_manifest_root = stable_hash(
+        _source_execution_bootstrap_manifest_v2(
+            attempt.qualification_source_sha256
+        ),
+        prefix="phase2b_formal_wire_covert_source_bootstrap_manifest_v2_",
+    )
     if (
         type(unit_name) is not str
         or re.fullmatch(r"hegel-qv2-[A-Za-z0-9_-]{8,96}\.service", unit_name)
@@ -10632,6 +12153,12 @@ def _validate_outer_supervisor_result_v2(
         != attempt.runtime_environment_manifest_root
         or interpreter_runtime["package_directory"]
         != str(source_tree_path / "src/hegel_machine")
+        or interpreter_runtime["executed_main_source_sha256"]
+        != attempt.qualification_source_sha256
+        or interpreter_runtime["preopened_source_snapshot_root"]
+        != expected_inner_preopened_root
+        or interpreter_runtime["source_execution_bootstrap_manifest_root"]
+        != expected_inner_bootstrap_manifest_root
     ):
         raise ValueError("outer unit identity/membership drifted")
     systemd_row = launcher["systemd_run"]
@@ -10670,8 +12197,15 @@ def _validate_outer_supervisor_result_v2(
         source_tree=source_tree_path,
         ownership_marker=ownership_marker,
     )
+    entry_main_pid = _parse_systemd_unsigned_v2(
+        entry_show["MainPID"], "outer entry MainPID"
+    )
     if (
-        entry_show["InvocationID"] != unit["invocation_id"]
+        entry_main_pid <= 0
+        or type(inner_entry.get("cgroup")) is not dict
+        or inner_entry["cgroup"].get("cgroup_procs") != [entry_main_pid]
+        or inner_exit_cgroup.get("cgroup_procs") != [entry_main_pid]
+        or entry_show["InvocationID"] != unit["invocation_id"]
         or entry_show["ControlGroup"] != cgroup_path
         or terminal_show["ControlGroup"] != ""
         or absent_show["LoadState"] != "not-found"
@@ -10770,6 +12304,16 @@ def _validate_outer_supervisor_result_v2(
         != hashlib.sha256(b"").hexdigest()
     ):
         raise ValueError("successful outer service must have exact empty stderr")
+    _validate_post_output_gate_attestation_v2(
+        body["post_output_physical_gate_attestation"],
+        attempt,
+        inner,
+        inner_bytes,
+        context="outer",
+        expected_entry=expected_entry,
+        child_argv_sha256=unit["child_argv_sha256"],
+        owned_invocation_id=unit["owned_invocation_id"],
+    )
     _verify_cas_store_projection_v2(
         body["inner_artifact_cas"],
         expected_sha256=inner_sha,
@@ -10814,11 +12358,14 @@ def _validate_outer_supervisor_semantics_pure_v2(
     source_archive_tree_rows: list[dict[str, object]],
     raw_bundle_projection: dict[str, object],
     expected_entry: str,
+    retained_source_tree_fd: int | None = None,
 ) -> None:
-    """Replay outer semantics without reopening paths or consulting live state."""
+    """Replay outer semantics from retained bytes without producer execution."""
 
     expected_keys = {
         "attempt_manifest_root",
+        "child_source_bootstrap_preopened_snapshots",
+        "child_source_bootstrap_preopened_snapshots_root",
         "content_sha256_is_not_a_signature",
         "inner_artifact_cas",
         "launcher",
@@ -10826,6 +12373,7 @@ def _validate_outer_supervisor_semantics_pure_v2(
         "mode",
         "outer_runner_tcb_entry",
         "outer_runner_tcb_exit",
+        "post_output_physical_gate_attestation",
         "profile_id",
         "result",
         "rfc8785_receipt_cas",
@@ -10866,6 +12414,13 @@ def _validate_outer_supervisor_semantics_pure_v2(
     if type(source_tree_text) is not str or not Path(source_tree_text).is_absolute():
         raise ValueError("pure outer source-tree display path is malformed")
     source_tree = Path(source_tree_text)
+    child_snapshots, expected_inner_preopened_root = (
+        _replay_extracted_child_preopened_sources_v2(
+            source_tree,
+            attempt.qualification_source_sha256,
+            retained_source_tree_fd=retained_source_tree_fd,
+        )
+    )
     expected_files = _expected_live_file_sha256_v2(attempt)
     if not _exact_json_equal(body["live_files_sha256"], expected_files):
         raise ValueError("pure outer live-file manifest drifted")
@@ -11011,6 +12566,7 @@ def _validate_outer_supervisor_semantics_pure_v2(
         or tcb_entry["source_sha256"] != attempt.qualification_source_sha256
         or type(outer_tcb_root_text) is not str
         or not outer_tcb_root.is_absolute()
+        or outer_tcb_root == source_tree
         or tcb_entry["source_realpath"]
         != str(outer_tcb_root / _BOOTSTRAP_MAIN_RELATIVE_PATH_V2)
         or not _exact_json_equal(tcb_entry["live_files_sha256"], expected_files)
@@ -11094,10 +12650,20 @@ def _validate_outer_supervisor_semantics_pure_v2(
         for key in snapshot_keys
     ):
         raise ValueError("pure main bootstrap differs from its preopened snapshot")
-    expected_preopened_root = stable_hash(
+    outer_preopened_root = stable_hash(
         snapshots,
         prefix="phase2b_formal_wire_covert_preopened_sources_v2_",
     )
+    if (
+        outer_preopened_root == expected_inner_preopened_root
+        or not _exact_json_equal(
+            body["child_source_bootstrap_preopened_snapshots"],
+            child_snapshots,
+        )
+        or body["child_source_bootstrap_preopened_snapshots_root"]
+        != expected_inner_preopened_root
+    ):
+        raise ValueError("pure outer child preopened source snapshots drifted")
     expected_bootstrap_manifest_root = stable_hash(
         manifest,
         prefix="phase2b_formal_wire_covert_source_bootstrap_manifest_v2_",
@@ -11245,8 +12811,12 @@ def _validate_outer_supervisor_semantics_pure_v2(
         source_tree=source_tree,
         ownership_marker=unit["ownership_marker"],
     )
+    entry_main_pid = _parse_systemd_unsigned_v2(
+        entry_show["MainPID"], "pure outer entry MainPID"
+    )
     if (
-        entry_show["InvocationID"] != invocation
+        entry_main_pid <= 0
+        or entry_show["InvocationID"] != invocation
         or entry_show["ControlGroup"] != unit["cgroup_path"]
         or terminal_show["InvocationID"] != invocation
         or not _systemd_show_is_exact_absent_v2(absent_show)
@@ -11264,13 +12834,15 @@ def _validate_outer_supervisor_semantics_pure_v2(
         or type(inner_exit.get("cgroup")) is not dict
         or inner_entry["cgroup"].get("cgroup_path") != unit["cgroup_path"]
         or inner_exit["cgroup"].get("cgroup_path") != unit["cgroup_path"]
+        or inner_entry["cgroup"].get("cgroup_procs") != [entry_main_pid]
+        or inner_exit["cgroup"].get("cgroup_procs") != [entry_main_pid]
         or type(interpreter_runtime) is not dict
         or interpreter_runtime["package_directory"]
         != str(source_tree / "src/hegel_machine")
         or interpreter_runtime["executed_main_source_sha256"]
         != attempt.qualification_source_sha256
         or interpreter_runtime["preopened_source_snapshot_root"]
-        != expected_preopened_root
+        != expected_inner_preopened_root
         or interpreter_runtime["source_execution_bootstrap_manifest_root"]
         != expected_bootstrap_manifest_root
     ):
@@ -11467,6 +13039,16 @@ def _validate_outer_supervisor_semantics_pure_v2(
         {"sha256": hashlib.sha256(b"").hexdigest(), "size_bytes": 0},
     ):
         raise ValueError("pure outer stdout/stderr binding drifted")
+    _validate_post_output_gate_attestation_v2(
+        body["post_output_physical_gate_attestation"],
+        attempt,
+        inner,
+        inner_bytes,
+        context="pure outer",
+        expected_entry=expected_entry,
+        child_argv_sha256=unit["child_argv_sha256"],
+        owned_invocation_id=unit["owned_invocation_id"],
+    )
 
 
 def _verify_phase2b_formal_wire_covert_outer_mechanics_core_v2(
@@ -11516,7 +13098,7 @@ def _verify_phase2b_formal_wire_covert_outer_mechanics_core_v2(
     )
     inner_schema = inner.get("schema_version")
     if inner_schema == (
-        "hegel-machine-phase2b-formal-wire-covert-development-calibration/4"
+        "hegel-machine-phase2b-formal-wire-covert-development-calibration/6"
     ):
         if (
             calibration_basis_profile_bytes is not None
@@ -11533,7 +13115,7 @@ def _verify_phase2b_formal_wire_covert_outer_mechanics_core_v2(
         expected_entry = "development-calibration"
         _validate_development_calibration_artifact_v2(inner, attempt)
     elif inner_schema == (
-        "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/4"
+        "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/6"
     ):
         if shape.get("live_qualification_enabled") is not True:
             _fail(FAIL_PROFILE, "live outer mechanics needs the frozen profile")
@@ -14189,7 +15771,7 @@ def _validate_calibration_pair_projection_shape_v2(
         or not Path(value["attempt_directory"]).is_absolute()
         or type(value["attempt_manifest_root"]) is not str
         or re.fullmatch(
-            r"phase2b_formal_wire_covert_attempt_manifest_v2_[0-9a-f]{64}",
+            r"phase2b_formal_wire_covert_attempt_manifest_v3_[0-9a-f]{64}",
             value["attempt_manifest_root"],
         )
         is None
@@ -18196,7 +19778,7 @@ def verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
             if (
                 type(failure_root) is not str
                 or re.fullmatch(
-                    r"phase2b_formal_wire_covert_attempt_manifest_v2_[0-9a-f]{64}",
+                    r"phase2b_formal_wire_covert_attempt_manifest_v3_[0-9a-f]{64}",
                     failure_root,
                 )
                 is None
@@ -19104,9 +20686,9 @@ def verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
         ):
             raise ValueError("retained outer supervisor CAS/path binding drifted")
         expected_inner_schema = (
-            "hegel-machine-phase2b-formal-wire-covert-development-calibration/4"
+            "hegel-machine-phase2b-formal-wire-covert-development-calibration/6"
             if entry_kind == "development-calibration"
-            else "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/4"
+            else "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/6"
         )
         if (
             inner.get("schema_version") != expected_inner_schema
@@ -19229,6 +20811,7 @@ def verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
             source_archive_tree_rows=retained_archive_tree_rows,
             raw_bundle_projection=raw_projection,
             expected_entry=entry_kind,
+            retained_source_tree_fd=source_tree_fd,
         )
         outer_timing = outer["timing"]
         if (
@@ -19622,6 +21205,8 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
         "capture_complete": False,
         "capture_truncated": False,
     }
+    child_source_bootstrap_preopened_snapshots: dict[str, dict[str, object]] | None = None
+    child_source_bootstrap_preopened_snapshots_root: str | None = None
     reservation = _canonical_inner_artifact_v2(
         {
             "schema_version": (
@@ -19874,6 +21459,15 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
                 != expected_digest
             ):
                 raise ValueError(f"extracted live file differs: {relative}")
+        (
+            child_source_bootstrap_preopened_snapshots,
+            child_source_bootstrap_preopened_snapshots_root,
+        ) = _replay_extracted_child_preopened_sources_v2(
+            source_tree,
+            attempt.qualification_source_sha256,
+            retained_source_tree_fd=source_tree_fd,
+            deadline_ns=deadline_ns,
+        )
         archive_profile_bytes = _read_bounded_regular_file_v2(
             source_tree / "config/phase2b_formal_wire_covert_qualification_v2.json",
             maximum_bytes=_MAXIMUM_PROFILE_BYTES,
@@ -20343,7 +21937,7 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
             )
         inner_bytes = bytes(service_output["stdout"])
         service_stderr = bytes(service_output["stderr"])
-        _decode_canonical_transport_object_v2(
+        inner_body = _decode_canonical_transport_object_v2(
             inner_bytes,
             "runner final drained inner artifact",
             maximum_bytes=8 * 1_024 * 1_024,
@@ -20394,6 +21988,26 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
                 != expected_digest
             ):
                 raise ValueError(f"post-run live file differs: {relative}")
+        (
+            post_child_snapshots,
+            post_child_snapshots_root,
+        ) = _replay_extracted_child_preopened_sources_v2(
+            source_tree,
+            attempt.qualification_source_sha256,
+            retained_source_tree_fd=source_tree_fd,
+            deadline_ns=deadline_ns,
+        )
+        if (
+            child_source_bootstrap_preopened_snapshots is None
+            or child_source_bootstrap_preopened_snapshots_root is None
+            or not _exact_json_equal(
+                post_child_snapshots,
+                child_source_bootstrap_preopened_snapshots,
+            )
+            or post_child_snapshots_root
+            != child_source_bootstrap_preopened_snapshots_root
+        ):
+            raise ValueError("child preopened source snapshots drifted during execution")
         outer_runner_tcb_exit = _outer_runner_tcb_snapshot_v2(
             attempt, deadline_ns=deadline_ns
         )
@@ -20462,6 +22076,12 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
         supervisor_body = {
             "schema_version": OUTER_SUPERVISOR_RESULT_SCHEMA_V2,
             "mode": entry_kind,
+            "child_source_bootstrap_preopened_snapshots": (
+                child_source_bootstrap_preopened_snapshots
+            ),
+            "child_source_bootstrap_preopened_snapshots_root": (
+                child_source_bootstrap_preopened_snapshots_root
+            ),
             "outer_runner_tcb_entry": outer_runner_tcb_entry,
             "outer_runner_tcb_exit": outer_runner_tcb_exit,
             "profile_id": PROFILE_ID,
@@ -20532,6 +22152,16 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
                 "unit_collected_after_terminal_snapshot": True,
                 "unit_sub_state_at_terminal_snapshot": "exited",
             },
+            "post_output_physical_gate_attestation": (
+                _expected_post_output_gate_attestation_v2(
+                    attempt,
+                    inner_body,
+                    inner_bytes,
+                    expected_entry=entry_kind,
+                    child_argv_sha256=child_argv_sha256,
+                    owned_invocation_id=owned_unit_invocation_id,
+                )
+            ),
             "stdout": {
                 "sha256": hashlib.sha256(inner_bytes).hexdigest(),
                 "size_bytes": len(inner_bytes),
@@ -21479,7 +23109,7 @@ def _build_development_attempt_manifest_bytes_v2(
         raise ValueError("development attempt source commit is not exact Git SHA-1")
     if (
         type(requested_cgroup_memory_max_bytes) is not int
-        or requested_cgroup_memory_max_bytes < auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        or requested_cgroup_memory_max_bytes != auditor.MAXIMUM_ESTIMATED_RSS_BYTES
         or type(requested_cgroup_pids_max) is not int
         or not 2 <= requested_cgroup_pids_max <= 4_096
     ):
@@ -21896,9 +23526,7 @@ def _main_v2(argv: tuple[str, ...] | None = None) -> int:
         artifact = build_development_calibration_artifact_v2(profile, attempt)
     else:
         artifact = build_live_inner_candidate_artifact_v2(profile, attempt)
-    sys.stdout.buffer.write(artifact)
-    sys.stdout.buffer.flush()
-    return 0
+    _write_flush_gate_and_direct_exit_v2(artifact, attempt)
 
 
 __all__ = [
