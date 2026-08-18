@@ -19,9 +19,9 @@ bytes are not yet an R03/R04/R05 qualification. The frozen rich-graph
 1,024-row external supervised run remains pending.
 
 Frozen candidate IDs are
-`phase2b_formal_covert_semantics_e10509475901f7955f158536a163814239adda80f27afc5e89183fe73b5e27c0`
+`phase2b_formal_covert_semantics_627506ef33be3134ee81c2a8bd765e4e7898abd7da9c94660bfc82176b0cbc1f`
 and
-`phase2b_formal_covert_policy_binding_0d6ebb47011ffa1ebbc55904ff0610f64c30e888badea9cd34bf746908a5bd2a`.
+`phase2b_formal_covert_policy_binding_19c00ee7ccd65d0d11146aab1a1b6b5007a1d5e1cfd97599b26bfb7feb9f2825`.
 
 ## Closed entry point and trust boundary
 
@@ -140,7 +140,9 @@ comparisons. The parent owns
 the PID through pidfd/waitid/wait4. At 7,200 seconds the parent begins
 termination, permits at most five seconds of TERM grace, then KILLs and reaps;
 this nominal phase deadline is not an end-to-end 7,200-second termination
-guarantee. The parent replays one closed RFC-8785 artifact from a retained
+guarantee. Its exact absolute deadline is created only after pidfd ownership,
+immediately before the wait boundary, preserving the prior timeout start. The
+parent replays one closed RFC-8785 artifact from a retained
 no-follow directory FD.
 The parent-computed SHA-256 is a transcript content binding after canonical
 replay, not an independently authenticated child commitment.
@@ -485,15 +487,28 @@ cleanup fails closed without following the replacement and without recursive
 deletion; it may leave one bounded forensic temporary directory. A fresh
 external qualification namespace owns final cleanup of such leftovers.
 
-At 1,800 seconds the raw statistics worker supervisor begins termination,
+One exact absolute 3,600-second statistics-phase deadline starts immediately before
+statistics preparation and covers target-mask/permutation construction, raw
+worker execution, parent result construction, receipt replay/hash, and receipt
+finalization. The same nanosecond deadline is passed unchanged to every raw
+worker wait, and each wait checks it before accepting an observed exit; an
+already-zombie child first observed after the deadline is rejected and reaped.
+At that deadline the raw statistics worker supervisor begins termination,
 permits at most five seconds of TERM grace, then KILLs and reaps. This is a
 nominal phase termination trigger, not a promise that every child is gone at
-exactly 1,800 seconds. pidfd/waitid-with-`WNOWAIT` keeps PID/process-group
+exactly 3,600 seconds. pidfd/waitid-with-`WNOWAIT` keeps PID/process-group
 ownership until descendant cleanup and exactly-once wait4, whose rusage
 supplies full direct-child lifetime peak RSS. Parent result construction,
 receipt replay/hash, and receipt finalization perform absolute monotonic checks
 against the same deadline, but those checks are cooperative and explicitly
 `parent_postprocess_deadline_preemptive=false`.
+Timeout and containment failures from the shared raw-child waiter retain their
+phase and class: statistics reports `FAIL_STATISTICAL_RUNTIME` for timeout and
+`FAIL_STATISTICAL_CONTAINMENT` for containment, always naming
+`raw statistics child` with a bounded target-group diagnostic. Invariance
+retains `FAIL_INVARIANCE_RUNTIME`, `FAIL_INVARIANCE_CONTAINMENT`, and
+`raw invariant child`. Both paths terminate and reap all directly owned
+children, and the statistics wrapper preserves either already-classified code.
 Both receipt branches carry exact, receipt-ID-bound
 `ReceiptIssuanceRuntimeEvidenceV1`. For a sufficient receipt, `W` is the exact
 sum of all direct raw-worker wait4 peak-RSS values and the bound deadline is the

@@ -55,7 +55,7 @@ from .rfc8785_v1 import (
 
 SCHEMA_VERSION: Final = "hegel-machine-phase2b-formal-covert-auditor/4"
 SEMANTICS_VERSION: Final = (
-    "hegel-machine-phase2b-formal-covert-statistics/6-pending-registry-locked-finalization-erratum"
+    "hegel-machine-phase2b-formal-covert-statistics/7-statistics-phase-deadline-erratum"
 )
 CLAIM_LEVEL: Final = (
     "AUDIT_TRANSCRIPT_ONLY_NOT_AUTHORITY_ORIGIN_NOT_INDEPENDENCE_NOT_ACTUAL_CORPUS"
@@ -90,7 +90,7 @@ MAXIMUM_METRIC_CACHE_ENTRIES: Final = 2_048
 MAXIMUM_METRIC_CACHE_CELLS: Final = 64
 PARALLEL_STATISTICS_WORK_THRESHOLD: Final = 250_000_000
 HOST_AVAILABLE_MEMORY_SAFETY_MARGIN_BYTES: Final = 2_147_483_648
-STATISTICS_WORKER_TIMEOUT_SECONDS: Final = 1_800
+STATISTICS_WORKER_TIMEOUT_SECONDS: Final = 3_600
 PARENT_POSTPROCESS_DEADLINE_SCHEMA: Final = (
     "ABSOLUTE_MONOTONIC_COOPERATIVE_PARENT_POSTPROCESS_CHECKS_V1"
 )
@@ -332,7 +332,7 @@ _SEMANTICS_DESCRIPTOR: Final = (
     "host_capacity=min_linux_memavailable_and_same_level_cgroup_ancestor_remaining_cpu_capacity_min_os_affinity_and_tightest_cgroup_ancestor_quota",
     "affinity_read_failure=conservative_one_worker_capacity_never_parallel_five",
     "shuffle_rejection=at_most_4096_sha256_u64_draws_per_randbelow_then_atomic_fail",
-    "statistics_deadline=1800_seconds_triggers_raw_statistics_child_termination_followed_by_at_most_5_seconds_term_grace_then_kill_and_reap_parent_result_and_receipt_replay_use_cooperative_absolute_monotonic_checks_not_preemptive_only_external_supervisor_has_hard_end_to_end_deadline",
+    "statistics_deadline=3600_seconds_one_exact_absolute_monotonic_nanosecond_deadline_created_before_statistics_preparation_and_passed_unchanged_through_raw_statistics_waits_parent_result_and_receipt_finalization_the_waiter_checks_deadline_before_accepting_observed_exit_timeout_uses_FAIL_STATISTICAL_RUNTIME_containment_uses_FAIL_STATISTICAL_CONTAINMENT_and_both_identify_raw_statistics_child_then_terminate_followed_by_at_most_5_seconds_term_grace_then_kill_and_reap_invariance_preserves_its_distinct_7200_second_wait_boundary_deadline_created_after_pidfd_ownership_immediately_before_wait_timeout_retains_FAIL_INVARIANCE_RUNTIME_and_containment_retains_FAIL_INVARIANCE_CONTAINMENT_parent_result_and_receipt_replay_use_cooperative_absolute_monotonic_checks_not_preemptive_only_external_supervisor_has_hard_end_to_end_deadline",
     "qualification_supervisor=fresh_isolated_outer_cgroup_pids_memory_and_hard_total_deadline_required_for_external_execution_claim",
     "fork_integrity_boundary=raw_fork_provides_liveness_resource_and_copy_on_write_state_isolation_not_malicious_callback_integrity_wire_v3_stop_bytes_are_module_hash_pinned_while_recognizer_and_other_adapter_ids_are_only_recorded_cooperatively_stable_tcb_external_cas_or_signature_must_pin_their_exact_bytes",
     "fork_sigchld_boundary=python_sigchld_ignore_is_rejected_selected_lifecycle_and_cancellation_signals_are_blocked_then_sigchld_is_temporarily_default_through_owned_wait4_and_original_disposition_is_restored_before_unblocking_other_parent_signal_handlers_are_cooperative_tcb_external_qualification_requires_fresh_default_signal_dispositions_and_cgroup_pids_containment",
@@ -8984,19 +8984,24 @@ def _run_raw_statistics_workers(
             marker = record["marker"]
             if type(pid) is not int or type(pidfd) is not int or type(marker) is not list:
                 raise RuntimeError("raw statistics worker ownership record drift")
-            status, peak, _ = _wait_raw_invariance_child(
+            group = record["group"]
+            if type(group) is not tuple:
+                raise RuntimeError("raw statistics target group drift")
+            group_diagnostic = "target_group=" + ",".join(
+                TARGETS[target_index] for target_index in group
+            )
+            status, peak, _ = _wait_raw_child(
                 pid,
-                _remaining_statistics_deadline_seconds(deadline_ns),
+                deadline_ns,
                 pidfd,
                 marker,
+                phase="STATISTICS",
+                diagnostic=group_diagnostic,
             )
             if not os.WIFEXITED(status) or os.WEXITSTATUS(status) != 0:
                 raise RuntimeError(
                     "raw statistics child exited without all assigned artifacts"
                 )
-            group = record["group"]
-            if type(group) is not tuple:
-                raise RuntimeError("raw statistics target group drift")
             for target_index in group:
                 target_execution[target_index] = (pid, peak)
         signal.signal(signal.SIGCHLD, original_sigchld_disposition)
@@ -9015,6 +9020,7 @@ def _run_raw_statistics_workers(
                         pid,
                         pidfd if type(pidfd) is int else None,
                         marker,
+                        child_label="raw statistics child",
                     )
                 except BaseException as exc:
                     cleanup_errors.append(exc)
@@ -9258,6 +9264,11 @@ def _statistics(
         )
         worker_artifact_sha256 = tuple(item.sha256 for item in artifacts)
     except FormalCovertAuditRejectionV1 as exc:
+        if exc.code in {
+            "FAIL_STATISTICAL_RUNTIME",
+            "FAIL_STATISTICAL_CONTAINMENT",
+        }:
+            raise
         _reject(
             "FAIL_STATISTICAL_RUNTIME",
             f"raw statistics worker failed closed: {exc}",
@@ -10100,15 +10111,25 @@ def _run_invariance_core(
     return result
 
 
-def _raw_child_rusage_peak_bytes(usage: resource.struct_rusage) -> int:
+def _raw_child_rusage_peak_bytes(
+    usage: resource.struct_rusage,
+    *,
+    child_label: str = "raw child",
+) -> int:
+    if type(child_label) is not str or child_label not in {
+        "raw child",
+        "raw invariant child",
+        "raw statistics child",
+    }:
+        raise ValueError("raw child label drift")
     if not sys.platform.startswith("linux"):
         _reject(
             "FAIL_PLATFORM_RESOURCE_SEMANTICS",
-            "raw invariant child RSS evidence requires Linux wait4 semantics",
+            f"{child_label} RSS evidence requires Linux wait4 semantics",
         )
     peak = int(usage.ru_maxrss) * 1_024
     if peak <= 0:
-        raise ValueError("raw invariant child wait4 RSS observation is not positive")
+        raise ValueError(f"{child_label} wait4 RSS observation is not positive")
     return peak
 
 
@@ -10177,9 +10198,17 @@ def _terminate_and_reap_raw_child(
     pid: int,
     pidfd: int | None = None,
     reap_marker: list[bool] | None = None,
+    *,
+    child_label: str = "raw child",
 ) -> tuple[int, int]:
     """Kill the owned session, clean descendants, then exactly once wait4."""
 
+    if type(child_label) is not str or child_label not in {
+        "raw child",
+        "raw invariant child",
+        "raw statistics child",
+    }:
+        raise ValueError("raw child label drift")
     _signal_raw_child_scope(pid, signal.SIGTERM, pidfd)
     grace_deadline = time.monotonic() + 5.0
     exited = False
@@ -10191,7 +10220,7 @@ def _terminate_and_reap_raw_child(
                 os.WEXITED | os.WNOHANG | os.WNOWAIT,
             )
         except ChildProcessError as exc:
-            raise RuntimeError("raw invariant child was already reaped") from exc
+            raise RuntimeError(f"{child_label} was already reaped") from exc
         if info is not None and info.si_pid == pid:
             exited = True
             break
@@ -10201,16 +10230,18 @@ def _terminate_and_reap_raw_child(
         try:
             info = os.waitid(os.P_PID, pid, os.WEXITED | os.WNOWAIT)
         except ChildProcessError as exc:
-            raise RuntimeError("raw invariant child disappeared before reap") from exc
+            raise RuntimeError(f"{child_label} disappeared before reap") from exc
         if info is None or info.si_pid != pid:
-            raise RuntimeError("raw invariant SIGKILL did not produce an owned zombie")
+            raise RuntimeError(
+                f"{child_label} SIGKILL did not produce an owned zombie"
+            )
 
     # Keep the direct child as an unreaped zombie while acting on its numeric
     # process-group ID.  This prevents PID/PGID reuse from redirecting cleanup.
     containment_error: str | None = None
     process_group_id = _linux_process_group_id(pid)
     if process_group_id != pid:
-        containment_error = "raw invariant child did not own its private session"
+        containment_error = f"{child_label} did not own its private session"
     else:
         descendants = tuple(
             member for member in _linux_process_group_members(pid) if member != pid
@@ -10236,30 +10267,54 @@ def _terminate_and_reap_raw_child(
                 if member != pid
             ):
                 containment_error = (
-                    "raw invariant descendant process group survived SIGKILL"
+                    f"{child_label} descendant process group survived SIGKILL"
                 )
     try:
         waited, status, usage = os.wait4(pid, 0)
     except ChildProcessError as exc:
-        raise RuntimeError("raw invariant child disappeared before final wait4") from exc
+        raise RuntimeError(
+            f"{child_label} disappeared before final wait4"
+        ) from exc
     if waited != pid:
-        raise RuntimeError("blocking wait4 did not reap the raw invariant child")
+        raise RuntimeError(f"blocking wait4 did not reap the {child_label}")
     if reap_marker is not None:
         reap_marker[0] = True
     if containment_error is not None:
         raise RuntimeError(containment_error)
-    return status, _raw_child_rusage_peak_bytes(usage)
+    return status, _raw_child_rusage_peak_bytes(
+        usage,
+        child_label=child_label,
+    )
 
 
-def _wait_raw_invariance_child(
+def _wait_raw_child(
     pid: int,
-    timeout_seconds: int | float,
+    absolute_deadline_ns: int,
     pidfd: int | None = None,
     reap_marker: list[bool] | None = None,
+    *,
+    phase: str,
+    diagnostic: str = "",
 ) -> tuple[int, int, int]:
-    if type(timeout_seconds) not in {int, float} or timeout_seconds <= 0:
-        raise ValueError("raw invariant timeout must be positive")
-    deadline = time.monotonic() + timeout_seconds
+    if type(absolute_deadline_ns) is not int or absolute_deadline_ns <= 0:
+        raise ValueError("raw child absolute deadline must be a positive integer")
+    if phase == "INVARIANCE":
+        runtime_failure_code = "FAIL_INVARIANCE_RUNTIME"
+        containment_failure_code = "FAIL_INVARIANCE_CONTAINMENT"
+        child_label = "raw invariant child"
+    elif phase == "STATISTICS":
+        runtime_failure_code = "FAIL_STATISTICAL_RUNTIME"
+        containment_failure_code = "FAIL_STATISTICAL_CONTAINMENT"
+        child_label = "raw statistics child"
+    else:
+        raise ValueError("raw child phase must be INVARIANCE or STATISTICS")
+    if (
+        type(diagnostic) is not str
+        or len(diagnostic.encode("utf-8")) > 256
+        or any(character in diagnostic for character in "\r\n\x00")
+    ):
+        raise ValueError("raw child diagnostic must be a bounded single line")
+    diagnostic_suffix = f" ({diagnostic})" if diagnostic else ""
     reaped = False
     parent_peak_current_rss = _linux_current_rss_bytes()
     try:
@@ -10268,6 +10323,28 @@ def _wait_raw_invariance_child(
                 parent_peak_current_rss,
                 _linux_current_rss_bytes(),
             )
+            remaining_ns = absolute_deadline_ns - time.monotonic_ns()
+            if remaining_ns <= 0:
+                try:
+                    _terminate_and_reap_raw_child(
+                        pid,
+                        pidfd,
+                        reap_marker,
+                        child_label=child_label,
+                    )
+                except BaseException as exc:
+                    reaped = bool(reap_marker is not None and reap_marker[0])
+                    _reject(
+                        runtime_failure_code,
+                        f"{child_label} deadline cleanup failed closed: "
+                        f"{type(exc).__name__}: {exc}{diagnostic_suffix}",
+                    )
+                reaped = True
+                _reject(
+                    runtime_failure_code,
+                    f"{child_label} exceeded its absolute deadline"
+                    + diagnostic_suffix,
+                )
             info = os.waitid(
                 os.P_PID,
                 pid,
@@ -10285,41 +10362,52 @@ def _wait_raw_invariance_child(
                     else ()
                 )
                 if process_group_id != pid or descendants:
-                    status, peak = _terminate_and_reap_raw_child(
-                        pid,
-                        pidfd,
-                        reap_marker,
-                    )
+                    try:
+                        _terminate_and_reap_raw_child(
+                            pid,
+                            pidfd,
+                            reap_marker,
+                            child_label=child_label,
+                        )
+                    except BaseException as exc:
+                        reaped = bool(reap_marker is not None and reap_marker[0])
+                        _reject(
+                            containment_failure_code,
+                            f"{child_label} containment cleanup failed closed: "
+                            f"{type(exc).__name__}: {exc}{diagnostic_suffix}",
+                        )
                     reaped = True
                     reason = (
-                        "raw invariant child did not retain its private session"
+                        f"{child_label} did not retain its private session"
                         if process_group_id != pid
-                        else "raw invariant child left descendant processes"
+                        else f"{child_label} left descendant processes"
                     )
-                    _reject("FAIL_INVARIANCE_CONTAINMENT", reason)
+                    _reject(containment_failure_code, reason + diagnostic_suffix)
                 waited, status, usage = os.wait4(pid, 0)
                 reaped = True
                 if reap_marker is not None:
                     reap_marker[0] = True
                 if waited != pid:
-                    raise RuntimeError("raw invariant success wait4 reaped the wrong PID")
+                    raise RuntimeError(
+                        f"{child_label} success wait4 reaped the wrong PID"
+                    )
                 return (
                     status,
-                    _raw_child_rusage_peak_bytes(usage),
+                    _raw_child_rusage_peak_bytes(
+                        usage,
+                        child_label=child_label,
+                    ),
                     parent_peak_current_rss,
                 )
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                _terminate_and_reap_raw_child(pid, pidfd, reap_marker)
-                reaped = True
-                _reject(
-                    "FAIL_INVARIANCE_RUNTIME",
-                    "raw invariant child exceeded its absolute deadline",
-                )
-            time.sleep(min(0.05, remaining))
+            time.sleep(min(0.05, remaining_ns / 1_000_000_000))
     except BaseException:
         if not reaped and not (reap_marker is not None and reap_marker[0]):
-            _terminate_and_reap_raw_child(pid, pidfd, reap_marker)
+            _terminate_and_reap_raw_child(
+                pid,
+                pidfd,
+                reap_marker,
+                child_label=child_label,
+            )
         raise
 
 
@@ -10526,6 +10614,10 @@ def _run_invariance(
                 child_exit(70)
             child_exit(0)
         child_pidfd = os.pidfd_open(child_pid, 0)
+        invariance_deadline_ns = (
+            time.monotonic_ns()
+            + INVARIANCE_WORKER_TIMEOUT_SECONDS * 1_000_000_000
+        )
         # Keep the selected lifecycle/cancellation handlers blocked while the
         # direct child is owned.  Other parent signal handlers are cooperative
         # TCB; external qualification requires fresh default dispositions.
@@ -10533,11 +10625,12 @@ def _run_invariance(
             status,
             worker_peak_rss_bytes,
             parent_peak_current_rss_observed,
-        ) = _wait_raw_invariance_child(
+        ) = _wait_raw_child(
             child_pid,
-            INVARIANCE_WORKER_TIMEOUT_SECONDS,
+            invariance_deadline_ns,
             child_pidfd,
             child_reaped,
+            phase="INVARIANCE",
         )
         signal.signal(signal.SIGCHLD, original_sigchld_disposition)
         sigchld_disposition_restored = True
@@ -10588,6 +10681,7 @@ def _run_invariance(
                     child_pid,
                     child_pidfd,
                     child_reaped,
+                    child_label="raw invariant child",
                 )
             except BaseException as exc:
                 cleanup_errors.append(exc)

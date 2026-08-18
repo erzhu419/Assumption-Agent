@@ -33,9 +33,9 @@ compiled by the source-only loader:
 - `schema.py`.
 
 The checked canonical profile ID is
-`phase2b_formal_wire_covert_qualification_profile_v2_e77159df436781e01d37165c61f88409a7f41f60891293b07664d89418894d57`,
+`phase2b_formal_wire_covert_qualification_profile_v2_c81a345cadb799976b61ca665df7a898436254eb4dc85fa4922f9f880c1ae3ea`,
 and its dependency-lock SHA-256 is
-`4c535f6726613c0c3a2365337b6c2ff1ba935550691dcb85e90c1d3a8d11ca98`.
+`7f524eb9c111315f010efc27d3e73d508da33ebfe52c5b838b35e11dcf25ee8c`.
 The dependency-lock root schema is
 `hegel-machine-phase2b-formal-wire-covert-qualification-dependency-lock/3`,
 and that exact discriminator is also closed inside the profile's lock binding.
@@ -50,9 +50,9 @@ their replay grammar. The prior `/3` identities are not reused.
 The pinned Auditor contract is
 `hegel-machine-phase2b-formal-covert-auditor/4`, its profile schema is
 `hegel-machine-phase2b-formal-covert-auditor-profile/4`, semantics are
-`phase2b_formal_covert_semantics_e10509475901f7955f158536a163814239adda80f27afc5e89183fe73b5e27c0`,
+`phase2b_formal_covert_semantics_627506ef33be3134ee81c2a8bd765e4e7898abd7da9c94660bfc82176b0cbc1f`,
 and policy binding
-`phase2b_formal_covert_policy_binding_0d6ebb47011ffa1ebbc55904ff0610f64c30e888badea9cd34bf746908a5bd2a`.
+`phase2b_formal_covert_policy_binding_19c00ee7ccd65d0d11146aab1a1b6b5007a1d5e1cfd97599b26bfb7feb9f2825`.
 
 A direct qualified CLI invocation must begin with CPython `-I -S -B`; missing
 initial flags fail before any project import, business input, output, or
@@ -511,6 +511,14 @@ scans,
 metadata, fsync, verification, and terminal publication; 600 seconds are
 reserved for cleanup control. No success may extend the deadline. Command
 capture and process reaping use subordinate deadlines inside that bound. The
+two-mode Auditor phase budget is exactly
+`2 * (600 partition + 7,200 invariance + 3,600 statistics) = 22,800` seconds.
+The 25,800-second normal-work window therefore retains exactly 3,000 seconds
+for QV2 fixture/preparation/headroom, and the remaining 3,000 seconds are the
+2,400-second terminal-publication plus 600-second cleanup-control reserve:
+`22,800 + 3,000 + 3,000 = 28,800`. This deadline erratum changes neither the
+pending calibration state nor the Task-4 projection-only/R03-R05-false boundary.
+The
 producer derives its failure tree, exact CAS snapshot, and managed-residue
 binding in one fd-relative traversal; the prospective public verifier performs
 one independent traversal across the trust boundary. Each traversal hashes a

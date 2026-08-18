@@ -775,6 +775,12 @@ def test_public_api_has_no_caller_receipts_outputs_seed_or_thresholds():
     )
     assert profile["semantics_id"] == SEMANTICS_ID
     assert profile["policy_binding_id"] == POLICY_BINDING_ID
+    assert auditor_module.STATISTICS_WORKER_TIMEOUT_SECONDS == 3_600
+    assert auditor_module.PARTITION_PREPARATION_TIMEOUT_SECONDS == 600
+    assert auditor_module.INVARIANCE_WORKER_TIMEOUT_SECONDS == 7_200
+    assert profile["resource_boundary"][
+        "absolute_statistics_worker_deadline_seconds"
+    ] == 3_600
     assert tuple(
         auditor_module.ReceiptIssuanceRuntimeEvidenceV1.__dataclass_fields__
     ) == (
@@ -1193,6 +1199,12 @@ def test_receipt_finalization_charge_ceiling_accepts_rising_peaks_and_is_closed(
     assert issuance.receipt_finalization_locked_deadline_check_count == 1
     assert issuance.receipt_finalization_locked_deadline_within_absolute_limit is True
     assert issuance.receipt_finalization_parent_peak_within_charge_ceiling is True
+    assert (
+        receipt.resource_plan.statistics_worker_timeout_seconds
+        == evidence.worker_timeout_seconds
+        == issuance.absolute_deadline_timeout_seconds
+        == 3_600
+    )
 
     formula_mutations = (
         (
@@ -4352,6 +4364,123 @@ def test_raw_statistics_workers_require_plan_and_evidence_before_any_fork(
     assert fork_calls == 0
 
 
+@pytest.mark.parametrize(
+    "failure_code",
+    ("FAIL_STATISTICAL_RUNTIME", "FAIL_STATISTICAL_CONTAINMENT"),
+)
+def test_statistics_preserves_classified_raw_worker_failure_code(
+    monkeypatch: pytest.MonkeyPatch,
+    failure_code: str,
+):
+    authority = FormalAuditAuthorityV1(_authority().rows[:4])
+    partition = auditor_module._partition(("a", "b", "a", "b"))
+    projection, partition_deadline_ns, invariant_plan = _phase_plan_test_inputs(
+        len(authority.rows),
+        (partition,),
+    )
+    label_class_counts = tuple(
+        len(
+            {
+                auditor_module._target_label(row, target)
+                for row in authority.rows
+            }
+        )
+        for target in auditor_module.TARGETS
+    )
+    plan = auditor_module._resource_plan(
+        len(authority.rows),
+        (partition,),
+        label_class_counts,
+        adapter_retained_graph_bytes_bound=2 * 1_048_576,
+        partition_projection=projection,
+        partition_preparation_deadline_ns=partition_deadline_ns,
+        invariance_plan=invariant_plan,
+    )
+
+    monkeypatch.setattr(
+        auditor_module,
+        "_permuted_labels",
+        lambda labels, *_args, **_kwargs: labels,
+    )
+
+    def reject_classified(*_args: object, **_kwargs: object) -> object:
+        auditor_module._reject(
+            failure_code,
+            "injected classified raw statistics failure",
+        )
+
+    monkeypatch.setattr(
+        auditor_module,
+        "_run_raw_statistics_workers",
+        reject_classified,
+    )
+    statistics_started_ns = time.monotonic_ns()
+    statistics_deadline_ns = (
+        statistics_started_ns
+        + auditor_module.STATISTICS_WORKER_TIMEOUT_SECONDS * 1_000_000_000
+    )
+    with pytest.raises(FormalCovertAuditRejectionV1) as caught:
+        auditor_module._statistics(
+            authority,
+            ((1, 1, 1, 1, 1, 1),) * len(authority.rows),
+            None,
+            (partition,),
+            _TEST_PERMUTATION_SEED,
+            plan.preextraction_feature_matrix_bytes_bound,
+            plan.feature_matrix_bytes_bound,
+            plan.envelope_and_decode_bytes_bound,
+            plan.partition_allocation_bytes_bound,
+            plan.partition_matrix_bytes_bound,
+            plan,
+            statistics_started_ns,
+            statistics_deadline_ns,
+        )
+    assert caught.value.code == failure_code
+    assert str(caught.value) == (
+        f"{failure_code}: injected classified raw statistics failure"
+    )
+
+
+def test_raw_waiters_receive_one_exact_absolute_deadline_without_reset() -> None:
+    entry_source = getsource(
+        auditor_module._run_formal_covert_audit_with_reservation_v1
+    )
+    phase_start_offset = entry_source.index(
+        "statistics_started_ns = time.monotonic_ns()"
+    )
+    phase_deadline_offset = entry_source.index(
+        "statistics_deadline_ns = ("
+    )
+    statistics_call_offset = entry_source.index("    ) = _statistics(")
+    assert phase_start_offset < phase_deadline_offset < statistics_call_offset
+    assert (
+        "statistics_started_ns\n"
+        "        + STATISTICS_WORKER_TIMEOUT_SECONDS * 1_000_000_000"
+    ) in entry_source
+    statistics_source = getsource(auditor_module._run_raw_statistics_workers)
+    assert "_wait_raw_child(\n                pid,\n                deadline_ns," in (
+        statistics_source
+    )
+    assert "_remaining_statistics_deadline_seconds(deadline_ns)" not in (
+        statistics_source
+    )
+    invariance_source = getsource(auditor_module._run_invariance)
+    pidfd_offset = invariance_source.index("child_pidfd = os.pidfd_open(child_pid, 0)")
+    deadline_offset = invariance_source.index("invariance_deadline_ns = (")
+    wait_offset = invariance_source.index(") = _wait_raw_child(")
+    assert pidfd_offset < deadline_offset < wait_offset
+    assert (
+        "time.monotonic_ns()\n"
+        "            + INVARIANCE_WORKER_TIMEOUT_SECONDS * 1_000_000_000"
+    ) in invariance_source
+    waiter_source = getsource(auditor_module._wait_raw_child)
+    deadline_check_offset = waiter_source.index(
+        "remaining_ns = absolute_deadline_ns - time.monotonic_ns()"
+    )
+    waitid_offset = waiter_source.index("info = os.waitid(")
+    assert deadline_check_offset < waitid_offset
+
+
 def test_raw_statistics_workers_emit_five_closed_artifacts_and_reap_failures(
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -4687,7 +4816,11 @@ def test_raw_statistics_workers_emit_five_closed_artifacts_and_reap_failures(
     try:
         with pytest.raises(
             FormalCovertAuditRejectionV1,
-            match="FAIL_INVARIANCE_RUNTIME",
+            match=(
+                "FAIL_STATISTICAL_RUNTIME: raw statistics child exceeded its "
+                "absolute deadline \\(target_group=family,binding,scale,"
+                "answerable_vs_abstain,joint_decision_class\\)"
+            ),
         ):
             run_raw(
                 directory,
@@ -4740,11 +4873,12 @@ def test_raw_invariance_wait4_nonzero_noartifact_timeout_and_descendant_reap(
 
     ordinary_pid, ordinary_pidfd = spawn(0)
     try:
-        status, peak, _ = auditor_module._wait_raw_invariance_child(
+        status, peak, _ = auditor_module._wait_raw_child(
             ordinary_pid,
-            2.0,
+            time.monotonic_ns() + 2_000_000_000,
             ordinary_pidfd,
             [False],
+            phase="INVARIANCE",
         )
         assert os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0
         assert peak > 0
@@ -4753,11 +4887,12 @@ def test_raw_invariance_wait4_nonzero_noartifact_timeout_and_descendant_reap(
 
     base_pid, base_pidfd = spawn(70)
     try:
-        status, _, _ = auditor_module._wait_raw_invariance_child(
+        status, _, _ = auditor_module._wait_raw_child(
             base_pid,
-            2.0,
+            time.monotonic_ns() + 2_000_000_000,
             base_pidfd,
             [False],
+            phase="INVARIANCE",
         )
         assert os.WIFEXITED(status) and os.WEXITSTATUS(status) == 70
     finally:
@@ -4791,47 +4926,127 @@ def test_raw_invariance_wait4_nonzero_noartifact_timeout_and_descendant_reap(
     finally:
         os.close(directory_fd)
 
-    hanging_pid, hanging_pidfd = spawn(0, ignore_term=True)
-    started = time.monotonic()
-    try:
-        with pytest.raises(
-            FormalCovertAuditRejectionV1,
-            match="exceeded its absolute deadline",
-        ):
-            auditor_module._wait_raw_invariance_child(
-                hanging_pid,
-                0.05,
-                hanging_pidfd,
-                [False],
+    phase_cases = (
+        (
+            "INVARIANCE",
+            "FAIL_INVARIANCE_RUNTIME",
+            "FAIL_INVARIANCE_CONTAINMENT",
+            "raw invariant child",
+            "",
+        ),
+        (
+            "STATISTICS",
+            "FAIL_STATISTICAL_RUNTIME",
+            "FAIL_STATISTICAL_CONTAINMENT",
+            "raw statistics child",
+            "target_group=family",
+        ),
+    )
+    for (
+        phase,
+        runtime_failure_code,
+        containment_failure_code,
+        child_label,
+        diagnostic,
+    ) in phase_cases:
+        hanging_pid, hanging_pidfd = spawn(0, ignore_term=True)
+        started = time.monotonic()
+        try:
+            with pytest.raises(FormalCovertAuditRejectionV1) as caught:
+                auditor_module._wait_raw_child(
+                    hanging_pid,
+                    time.monotonic_ns() + 50_000_000,
+                    hanging_pidfd,
+                    [False],
+                    phase=phase,
+                    diagnostic=diagnostic,
+                )
+            assert caught.value.code == runtime_failure_code
+            assert f"{child_label} exceeded its absolute deadline" in str(
+                caught.value
             )
-        assert time.monotonic() - started < 8.0
-    finally:
-        os.close(hanging_pidfd)
-    assert not Path(f"/proc/{hanging_pid}").exists()
+            if diagnostic:
+                assert diagnostic in str(caught.value)
+            assert time.monotonic() - started < 8.0
+        finally:
+            os.close(hanging_pidfd)
+        assert not Path(f"/proc/{hanging_pid}").exists()
 
-    leader = os.fork()
-    if leader == 0:
-        os.setsid()
-        descendant = os.fork()
-        if descendant == 0:
-            while True:
-                time.sleep(1.0)
-        os._exit(0)
-    leader_pidfd = os.pidfd_open(leader, 0)
-    try:
-        with pytest.raises(
-            FormalCovertAuditRejectionV1,
-            match="left descendant processes",
-        ):
-            auditor_module._wait_raw_invariance_child(
-                leader,
-                2.0,
-                leader_pidfd,
-                [False],
+        late_zombie_pid, late_zombie_pidfd = spawn(0)
+        info = os.waitid(
+            os.P_PID,
+            late_zombie_pid,
+            os.WEXITED | os.WNOWAIT,
+        )
+        assert info is not None and info.si_pid == late_zombie_pid
+        try:
+            with pytest.raises(FormalCovertAuditRejectionV1) as caught:
+                auditor_module._wait_raw_child(
+                    late_zombie_pid,
+                    time.monotonic_ns() - 1,
+                    late_zombie_pidfd,
+                    [False],
+                    phase=phase,
+                    diagnostic=diagnostic,
+                )
+            assert caught.value.code == runtime_failure_code
+            assert f"{child_label} exceeded its absolute deadline" in str(
+                caught.value
             )
-    finally:
-        os.close(leader_pidfd)
-    assert not auditor_module._linux_process_group_members(leader)
+        finally:
+            os.close(late_zombie_pidfd)
+        assert not Path(f"/proc/{late_zombie_pid}").exists()
+
+        uncontained_pid = os.fork()
+        if uncontained_pid == 0:
+            os._exit(0)
+        uncontained_pidfd = os.pidfd_open(uncontained_pid, 0)
+        try:
+            with pytest.raises(FormalCovertAuditRejectionV1) as caught:
+                auditor_module._wait_raw_child(
+                    uncontained_pid,
+                    time.monotonic_ns() + 2_000_000_000,
+                    uncontained_pidfd,
+                    [False],
+                    phase=phase,
+                    diagnostic=diagnostic,
+                )
+            assert caught.value.code == containment_failure_code
+            assert f"{child_label} did not own its private session" in str(
+                caught.value
+            )
+            if diagnostic:
+                assert diagnostic in str(caught.value)
+        finally:
+            os.close(uncontained_pidfd)
+        assert not Path(f"/proc/{uncontained_pid}").exists()
+
+        leader = os.fork()
+        if leader == 0:
+            os.setsid()
+            descendant = os.fork()
+            if descendant == 0:
+                while True:
+                    time.sleep(1.0)
+            os._exit(0)
+        leader_pidfd = os.pidfd_open(leader, 0)
+        try:
+            with pytest.raises(FormalCovertAuditRejectionV1) as caught:
+                auditor_module._wait_raw_child(
+                    leader,
+                    time.monotonic_ns() + 2_000_000_000,
+                    leader_pidfd,
+                    [False],
+                    phase=phase,
+                    diagnostic=diagnostic,
+                )
+            assert caught.value.code == containment_failure_code
+            assert f"{child_label} left descendant processes" in str(caught.value)
+            if diagnostic:
+                assert diagnostic in str(caught.value)
+        finally:
+            os.close(leader_pidfd)
+        assert not auditor_module._linux_process_group_members(leader)
 
 
 def test_raw_invariance_child_closes_high_fd_after_soft_limit_lowering():

@@ -1779,6 +1779,32 @@ def test_checked_profile_is_exact_canonical_candidate_with_live_disabled() -> No
     assert live["work_deadline_reserve_seconds"] == 3_000
     assert live["terminal_publication_reserve_seconds"] == 2_400
     assert live["cleanup_control_reserve_seconds"] == 600
+    assert auditor.STATISTICS_WORKER_TIMEOUT_SECONDS == 3_600
+    phase_deadline_seconds = 2 * (
+        auditor.PARTITION_PREPARATION_TIMEOUT_SECONDS
+        + auditor.INVARIANCE_WORKER_TIMEOUT_SECONDS
+        + auditor.STATISTICS_WORKER_TIMEOUT_SECONDS
+    )
+    assert phase_deadline_seconds == 22_800
+    normal_work_window_seconds = (
+        live["hard_total_timeout_seconds"]
+        - live["terminal_publication_reserve_seconds"]
+        - live["cleanup_control_reserve_seconds"]
+    )
+    assert normal_work_window_seconds == 25_800
+    assert phase_deadline_seconds < normal_work_window_seconds
+    qualification_preparation_headroom_seconds = (
+        normal_work_window_seconds - phase_deadline_seconds
+    )
+    assert qualification_preparation_headroom_seconds == 3_000
+    assert (
+        phase_deadline_seconds
+        + qualification_preparation_headroom_seconds
+        + live["terminal_publication_reserve_seconds"]
+        + live["cleanup_control_reserve_seconds"]
+        == live["hard_total_timeout_seconds"]
+        == 28_800
+    )
     assert live["outer_mechanics_verifier_issues_r03_r04_r05"] is False
     assert live["task4_issues_r03_r04_r05"] is False
     assert live["systemd_user_manager_same_uid_is_cooperative_outer_tcb"] is True
