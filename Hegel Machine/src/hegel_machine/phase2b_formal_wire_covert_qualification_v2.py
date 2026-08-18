@@ -382,6 +382,9 @@ EXACT_CASE_ORDER_PERMUTATIONS: Final = 32
 EXACT_OBSERVATION_ORDER_PERMUTATIONS: Final = 16
 EXACT_LABEL_PERMUTATIONS: Final = 10_000
 LIVE_HARD_TOTAL_TIMEOUT_SECONDS: Final = 28_800
+# Kernel containment headroom is operational only.  Auditor qualification and
+# every explicit physical-peak gate remain frozen at the independent 12 GiB cap.
+OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2: Final = 24 * 1_024 * 1_024 * 1_024
 POST_OUTPUT_DIRECT_EXIT_TAIL_RESERVE_BYTES_V2: Final = 64 * 1_024 * 1_024
 _MAXIMUM_SOURCE_ARCHIVE_PATH_DEPTH_V2: Final = 32
 _MAXIMUM_SOURCE_ARCHIVE_TREE_ROWS_V2: Final = 80_000
@@ -740,7 +743,7 @@ _POST_OUTPUT_PHYSICAL_GATE_CONTRACT_V2: Final = {
         - POST_OUTPUT_DIRECT_EXIT_TAIL_RESERVE_BYTES_V2
     ),
     "successful_return_or_interpreter_teardown_forbidden": True,
-    "systemd_memory_max_bytes": auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+    "systemd_memory_max_bytes": OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2,
 }
 _DIRECT_PROCESS_EXIT_V2: Final = os._exit
 
@@ -1094,7 +1097,7 @@ _EXPECTED_PROFILE: Final = {
             "entry_exit_memory_peak_at_or_below_auditor_cap": True,
             "entry_exit_memory_peak_monotonic": True,
             "receipt_scope_and_prefinal_peak_crossbound_to_exit": True,
-            "requested_memory_max_equals_auditor_physical_cap": True,
+            "requested_memory_max_equals_auditor_physical_cap": False,
             "post_output_physical_gate_contract": dict(
                 _POST_OUTPUT_PHYSICAL_GATE_CONTRACT_V2
             ),
@@ -4883,7 +4886,7 @@ class Phase2BFormalWireCovertAttemptManifestV2:
         if (
             type(self.requested_cgroup_memory_max_bytes) is not int
             or self.requested_cgroup_memory_max_bytes
-            != auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+            != OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2
             or type(self.requested_cgroup_pids_max) is not int
             or not 2 <= self.requested_cgroup_pids_max <= 4_096
         ):
@@ -5844,8 +5847,9 @@ def _validate_post_output_full_cgroup_snapshot_v2(
         pids_events.get("max"), "post-output pids.events.max"
     )
     if (
-        attempt.requested_cgroup_memory_max_bytes != cap
-        or memory_max != cap
+        attempt.requested_cgroup_memory_max_bytes
+        != OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2
+        or memory_max != OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2
         or pids_max != attempt.requested_cgroup_pids_max
         or pids_current != 1
         or type(snapshot.get("cgroup_procs")) is not list
@@ -23109,7 +23113,8 @@ def _build_development_attempt_manifest_bytes_v2(
         raise ValueError("development attempt source commit is not exact Git SHA-1")
     if (
         type(requested_cgroup_memory_max_bytes) is not int
-        or requested_cgroup_memory_max_bytes != auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        or requested_cgroup_memory_max_bytes
+        != OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2
         or type(requested_cgroup_pids_max) is not int
         or not 2 <= requested_cgroup_pids_max <= 4_096
     ):
@@ -23545,6 +23550,7 @@ __all__ = [
     "FROZEN_STATIC_RESOURCE_PLAN_FIELDS_V2",
     "LIVE_HARD_TOTAL_TIMEOUT_SECONDS",
     "LIVE_MODE_ORDER",
+    "OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2",
     "PROFILE_CLAIM_LEVEL",
     "PROFILE_ID",
     "PROFILE_SCHEMA_VERSION",

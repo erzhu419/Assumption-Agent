@@ -108,7 +108,7 @@ def _attempt() -> qualification.Phase2BFormalWireCovertAttemptManifestV2:
         1,
         qualification.LIVE_MODE_ORDER,
         qualification.LIVE_HARD_TOTAL_TIMEOUT_SECONDS,
-        auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+        qualification.OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2,
         64,
     )
 
@@ -1809,7 +1809,7 @@ def test_checked_profile_is_exact_canonical_candidate_with_live_disabled() -> No
     assert live["work_deadline_reserve_seconds"] == 3_000
     assert live["terminal_publication_reserve_seconds"] == 2_400
     assert live["cleanup_control_reserve_seconds"] == 600
-    assert live["requested_memory_max_equals_auditor_physical_cap"] is True
+    assert live["requested_memory_max_equals_auditor_physical_cap"] is False
     assert live["post_exit_numeric_memory_peak_sample_claimed"] is False
     assert qualification._deep_thaw(
         live["post_output_physical_gate_contract"]
@@ -2130,7 +2130,7 @@ def test_development_attempt_cli_parses_one_closed_argument_set(
         "--rfc8785-prerequisite-receipt",
         str((tmp_path / "rfc" / "receipt.json").resolve()),
         "--cgroup-memory-max-bytes",
-        str(auditor.MAXIMUM_ESTIMATED_RSS_BYTES),
+        str(qualification.OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2),
         "--cgroup-pids-max",
         "64",
     )
@@ -2142,7 +2142,9 @@ def test_development_attempt_cli_parses_one_closed_argument_set(
         "attempt_id": "attempt-cli",
         "campaign_id": "campaign-cli",
         "project_root": project_root,
-        "requested_cgroup_memory_max_bytes": auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+        "requested_cgroup_memory_max_bytes": (
+            qualification.OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2
+        ),
         "requested_cgroup_pids_max": 64,
         "rfc8785_prerequisite_receipt": (tmp_path / "rfc" / "receipt.json").resolve(),
         "runtime_environment_manifest": (tmp_path / "runtime.json").resolve(),
@@ -2151,18 +2153,23 @@ def test_development_attempt_cli_parses_one_closed_argument_set(
     }
 
 
-def test_attempt_manifest_v3_requires_exact_twelve_gib_memory_max() -> None:
+def test_attempt_manifest_v3_requires_exact_operational_twenty_four_gib_memory_max() -> None:
     attempt = _attempt()
     exact_twelve_gib = 12 * 1_024**3
+    exact_twenty_four_gib = 24 * 1_024**3
     assert auditor.MAXIMUM_ESTIMATED_RSS_BYTES == exact_twelve_gib
-    assert attempt.requested_cgroup_memory_max_bytes == exact_twelve_gib
+    assert qualification.OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2 == exact_twenty_four_gib
+    assert attempt.requested_cgroup_memory_max_bytes == exact_twenty_four_gib
+    assert attempt.requested_cgroup_memory_max_bytes != (
+        auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+    )
     assert attempt.attempt_manifest_root.startswith(
         "phase2b_formal_wire_covert_attempt_manifest_v3_"
     )
     for rejected in (
-        exact_twelve_gib - 1,
-        exact_twelve_gib + 1,
-        24 * 1_024**3,
+        exact_twelve_gib,
+        exact_twenty_four_gib - 1,
+        exact_twenty_four_gib + 1,
         True,
     ):
         with pytest.raises((TypeError, ValueError), match="cgroup limits"):
@@ -2170,6 +2177,64 @@ def test_attempt_manifest_v3_requires_exact_twelve_gib_memory_max() -> None:
                 attempt,
                 requested_cgroup_memory_max_bytes=rejected,
             )
+
+
+@pytest.mark.parametrize(
+    "rejected",
+    (
+        12 * 1_024**3,
+        24 * 1_024**3 - 1,
+        24 * 1_024**3 + 1,
+        True,
+    ),
+)
+def test_development_attempt_builder_rejects_nonexact_operational_memory_max_before_io(
+    rejected: object,
+) -> None:
+    with pytest.raises(ValueError, match="cgroup limits"):
+        qualification._build_development_attempt_manifest_bytes_v2(
+            campaign_id="campaign-rejected-memory",
+            attempt_id="attempt-rejected-memory",
+            source_commit_sha="0" * 40,
+            source_archive=Path("/never-read/source.tar"),
+            runtime_environment_manifest=Path("/never-read/runtime.json"),
+            rfc8785_prerequisite_receipt=Path("/never-read/rfc.json"),
+            requested_cgroup_memory_max_bytes=rejected,  # type: ignore[arg-type]
+            requested_cgroup_pids_max=64,
+            project_root=Path("/never-read/project"),
+        )
+
+
+def test_retained_r3_profile_identity_is_rejected_after_operational_limit_split() -> None:
+    retained_r3_profile_id = (
+        "phase2b_formal_wire_covert_qualification_profile_v2_"
+        "36c8913b900f2feb87e6ca5f6b3855818220498c646560216b55da78a4160ccf"
+    )
+    old_profile = qualification._deep_thaw(qualification._EXPECTED_PROFILE)
+    live = old_profile["readiness_boundary"]["live_execution_contract"]
+    live["requested_memory_max_equals_auditor_physical_cap"] = True
+    live["post_output_physical_gate_contract"]["systemd_memory_max_bytes"] = (
+        auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+    )
+    old_encoded = qualification.canonicalize_rfc8785_v1(old_profile)
+    assert retained_r3_profile_id == (
+        qualification.PROFILE_ID_PREFIX
+        + hashlib.sha256(qualification.PROFILE_DOMAIN + old_encoded).hexdigest()
+    )
+    assert qualification.PROFILE_ID != retained_r3_profile_id
+    old_transport = qualification.canonicalize_rfc8785_v1(
+        {
+            "qualification_profile": old_profile,
+            "qualification_profile_id": retained_r3_profile_id,
+        }
+    ) + b"\n"
+    with pytest.raises(
+        qualification.Phase2BFormalWireCovertQualificationErrorV2,
+        match="qualification profile content drift",
+    ):
+        qualification.load_phase2b_formal_wire_covert_qualification_profile_v2(
+            old_transport
+        )
 
 
 @pytest.mark.parametrize("tamper", ("source", "config"))
@@ -2297,7 +2362,9 @@ def test_development_attempt_builder_binds_five_files_archive_runtime_and_rfc(
         source_archive=archive,
         runtime_environment_manifest=runtime_path,
         rfc8785_prerequisite_receipt=receipt_path,
-        requested_cgroup_memory_max_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+        requested_cgroup_memory_max_bytes=(
+            qualification.OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2
+        ),
         requested_cgroup_pids_max=64,
         project_root=project_root,
     )
@@ -2378,7 +2445,9 @@ def test_development_attempt_builder_rejects_archive_tamper_before_live_runners(
             source_archive=archive,
             runtime_environment_manifest=runtime_path,
             rfc8785_prerequisite_receipt=receipt_path,
-            requested_cgroup_memory_max_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+            requested_cgroup_memory_max_bytes=(
+                qualification.OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2
+            ),
             requested_cgroup_pids_max=64,
             project_root=project_root,
         )
@@ -6128,7 +6197,7 @@ def _post_output_gate_fixture() -> tuple[
             "oom": 0,
             "oom_kill": 0,
         },
-        "memory_max": auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+        "memory_max": attempt.requested_cgroup_memory_max_bytes,
         "memory_peak": 2_048,
         "pids_current": 1,
         "pids_events": {"max": 0},
@@ -6189,8 +6258,8 @@ def test_live_entry_physical_gate_has_exact_transient_overage_or_event_detail(
     cap = auditor.MAXIMUM_ESTIMATED_RSS_BYTES
     snapshot["memory_events"]["max"] = 1
     if not event_only:
-        snapshot["memory_current"] = cap + 1
-        snapshot["memory_peak"] = cap + 2
+        snapshot["memory_current"] = cap
+        snapshot["memory_peak"] = cap + 1
     interpreter_runtime = {"fixture": "source-only-runtime"}
     monkeypatch.setattr(
         qualification,
@@ -6229,8 +6298,8 @@ def test_live_exit_physical_gate_has_exact_detail_before_event_drift(
     candidate["memory_events"]["max"] = 1
     cap = auditor.MAXIMUM_ESTIMATED_RSS_BYTES
     if not event_only:
-        candidate["memory_current"] = cap + 1
-        candidate["memory_peak"] = cap + 2
+        candidate["memory_current"] = cap
+        candidate["memory_peak"] = cap + 1
     real_read_text = Path.read_text
 
     def read_text(path: Path, *args: object, **kwargs: object) -> str:
@@ -6309,6 +6378,47 @@ def test_post_output_full_gate_has_exact_detail_after_scope_identity(
     assert scope_failure.value.detail == (
         "post-output cgroup scope drifted after stdout flush"
     )
+
+
+def test_post_output_gate_separates_twenty_four_gib_hard_max_from_twelve_gib_cap() -> None:
+    attempt, runtime_exit, snapshot = _post_output_gate_fixture()
+    cap = auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+    ceiling = cap - qualification.POST_OUTPUT_DIRECT_EXIT_TAIL_RESERVE_BYTES_V2
+    assert attempt.requested_cgroup_memory_max_bytes == 24 * 1_024**3
+    assert snapshot["memory_max"] == attempt.requested_cgroup_memory_max_bytes
+    assert snapshot["memory_max"] == 2 * cap
+    contract = qualification._POST_OUTPUT_PHYSICAL_GATE_CONTRACT_V2
+    assert contract["success_peak_threshold_bytes"] == ceiling
+    assert (
+        contract["systemd_memory_max_bytes"]
+        == attempt.requested_cgroup_memory_max_bytes
+    )
+    assert (
+        qualification._validate_post_output_full_cgroup_snapshot_v2(
+            runtime_exit, attempt, snapshot
+        )
+        == snapshot["memory_peak"]
+    )
+    old_limit_snapshot = json.loads(json.dumps(snapshot))
+    old_limit_snapshot["memory_max"] = auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+    with pytest.raises(
+        qualification.Phase2BFormalWireCovertQualificationErrorV2
+    ) as captured:
+        qualification._validate_post_output_full_cgroup_snapshot_v2(
+            runtime_exit, attempt, old_limit_snapshot
+        )
+    expected = _expected_cgroup_physical_resource_failure(
+        prefix="post-output full physical resource gate rejected",
+        stage="POST_OUTPUT_FULL_SAMPLE",
+        snapshot=old_limit_snapshot,
+        cap=cap,
+        reserve=qualification.POST_OUTPUT_DIRECT_EXIT_TAIL_RESERVE_BYTES_V2,
+    )
+    assert captured.value.code == qualification.FAIL_RESOURCE
+    assert captured.value.detail == expected
+    assert "memory.max=12884901888;cap=12884901888;reserve=67108864" in expected
+    assert "\n" not in expected and "\r" not in expected
+    assert len(expected.encode("ascii")) <= 1_024
 
 
 def test_post_output_success_order_is_write_flush_full_final_direct_exit(
@@ -6867,7 +6977,7 @@ def test_outer_v3_post_output_attestation_is_closed_and_tamper_evident() -> None
     )
     assert qualification.OUTER_SUPERVISOR_RESULT_SCHEMA_V2.endswith("/3")
     assert attestation["systemd_memory_max_bytes"] == (
-        auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        qualification.OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2
     )
     assert attestation["pinned_qualification_source_sha256"] == (
         attempt.qualification_source_sha256
@@ -6893,6 +7003,19 @@ def test_outer_v3_post_output_attestation_is_closed_and_tamper_evident() -> None
     )
     tampered = json.loads(json.dumps(attestation))
     tampered["post_exit_numeric_memory_peak_sample_claimed"] = True
+    with pytest.raises(ValueError, match="attestation drifted"):
+        qualification._validate_post_output_gate_attestation_v2(
+            tampered,
+            attempt,
+            inner,
+            inner_bytes,
+            context="KAT",
+            expected_entry="development-calibration",
+            child_argv_sha256=child_argv_sha256,
+            owned_invocation_id=invocation_id,
+        )
+    tampered = json.loads(json.dumps(attestation))
+    tampered["systemd_memory_max_bytes"] = auditor.MAXIMUM_ESTIMATED_RSS_BYTES
     with pytest.raises(ValueError, match="attestation drifted"):
         qualification._validate_post_output_gate_attestation_v2(
             tampered,
@@ -7051,7 +7174,7 @@ def _valid_full1024_inner_run_v6(
         },
         prefix="phase2b_formal_covert_unified_cgroup_memory_scope_v1_",
     )
-    memory_max = auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+    memory_max = qualification.OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2
     memory_current = 512
 
     invariant_static = (
@@ -7558,7 +7681,7 @@ def _valid_development_inner_v6(
                 "oom": 0,
                 "oom_kill": 0,
             },
-            "memory_max": auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+            "memory_max": attempt.requested_cgroup_memory_max_bytes,
             "memory_peak": peak,
             "pids_current": 1,
             "pids_events": {"max": 0},
@@ -8165,6 +8288,63 @@ def test_outer_live_and_pure_main_pid_crossbinding_rejects_splices(
     validate_live(replay.body, replay.inner, replay.inner_bytes)
     validate_pure(replay.body, replay.inner, replay.inner_bytes)
 
+    observed_old_limit = json.loads(json.dumps(replay.body))
+    attestation = observed_old_limit["post_output_physical_gate_attestation"]
+    assert attestation["systemd_memory_max_bytes"] == (
+        qualification.OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2
+    )
+    observed_old_limit["unit"]["effective_properties"]["MemoryMax"] = (
+        auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+    )
+    changed_show_rows = 0
+    for index, command in enumerate(
+        observed_old_limit["launcher"]["systemctl_commands"]
+    ):
+        if not (
+            command["purpose"].startswith("entry-show-")
+            or command["purpose"].startswith("terminal-show-")
+        ):
+            continue
+        argv, purpose, returncode, stdout, stderr = (
+            qualification._verify_command_evidence_v2(
+                command, name=f"old-limit systemctl[{index}]"
+            )
+        )
+        exact_operational_row = (
+            "MemoryMax="
+            + str(qualification.OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2)
+            + "\n"
+        ).encode("ascii")
+        exact_old_limit_row = (
+            "MemoryMax=" + str(auditor.MAXIMUM_ESTIMATED_RSS_BYTES) + "\n"
+        ).encode("ascii")
+        assert stdout.count(exact_operational_row) == 1
+        changed_stdout = stdout.replace(exact_operational_row, exact_old_limit_row)
+        command.clear()
+        command.update(
+            qualification._command_evidence_v2(
+                argv=argv,
+                purpose=purpose,
+                returncode=returncode,
+                stdout=changed_stdout,
+                stderr=stderr,
+            )
+        )
+        changed_show_rows += 1
+    assert changed_show_rows == 3
+    assert observed_old_limit["launcher"]["systemd_argv"] == (
+        replay.body["launcher"]["systemd_argv"]
+    )
+    assert observed_old_limit["post_output_physical_gate_attestation"] == (
+        replay.body["post_output_physical_gate_attestation"]
+    )
+    for validator, detail in (
+        (validate_live, "outer unit effective properties drifted"),
+        (validate_pure, "pure outer effective service properties drifted"),
+    ):
+        with pytest.raises(ValueError, match=detail):
+            validator(observed_old_limit, replay.inner, replay.inner_bytes)
+
     inner_splice = json.loads(json.dumps(replay.inner))
     for name in ("runtime_entry_evidence", "runtime_exit_evidence"):
         inner_splice[name]["cgroup"]["cgroup_procs"] = [replay.main_pid + 1]
@@ -8528,7 +8708,7 @@ def test_outer_runner_canonical_stdout_then_tail_exit86_publishes_only_failure_v
         **kwargs: object,
     ) -> subprocess.Popen[bytes]:
         assert (
-            f"--property=MemoryMax={auditor.MAXIMUM_ESTIMATED_RSS_BYTES}"
+            f"--property=MemoryMax={qualification.OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2}"
             in argv
         )
         launcher_context["unit_name"] = (
@@ -8953,6 +9133,34 @@ def test_inner_runtime_replay_requires_canonical_event_counter_witnesses(
     )
     qualification._validate_runtime_entry_exit_contract_v2(
         entry, exit_row, attempt, context="unit retained inner"
+    )
+    assert entry["cgroup"]["memory_max"] == (
+        qualification.OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2
+    )
+    assert exit_row["cgroup"]["memory_max"] == (
+        qualification.OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2
+    )
+    for runtime_row in (entry, exit_row):
+        runtime_cgroup = runtime_row["cgroup"]
+        runtime_cgroup["memory_max"] = auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        with pytest.raises(ValueError, match="cgroup integer evidence drifted"):
+            qualification._validate_runtime_entry_exit_contract_v2(
+                entry, exit_row, attempt, context="unit retained inner"
+            )
+        runtime_cgroup["memory_max"] = (
+            qualification.OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2
+        )
+    entry["cgroup"]["memory_max"] = auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+    exit_row["cgroup"]["memory_max"] = auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+    with pytest.raises(ValueError, match="cgroup integer evidence drifted"):
+        qualification._validate_runtime_entry_exit_contract_v2(
+            entry, exit_row, attempt, context="unit retained inner"
+        )
+    entry["cgroup"]["memory_max"] = (
+        qualification.OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2
+    )
+    exit_row["cgroup"]["memory_max"] = (
+        qualification.OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2
     )
     entry["cgroup"][event_field] = replacement
     exit_row["cgroup"][event_field] = replacement

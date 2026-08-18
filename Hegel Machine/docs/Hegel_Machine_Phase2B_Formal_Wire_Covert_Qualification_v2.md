@@ -33,7 +33,7 @@ compiled by the source-only loader:
 - `schema.py`.
 
 The checked canonical profile ID is
-`phase2b_formal_wire_covert_qualification_profile_v2_36c8913b900f2feb87e6ca5f6b3855818220498c646560216b55da78a4160ccf`,
+`phase2b_formal_wire_covert_qualification_profile_v2_3a055d4dea2c4d00c7ccbce465746ed5f70cc51977460ee027bd5807ab6e5d46`,
 and its dependency-lock SHA-256 is
 `8c375133fb17d484d129464975ed4deb737d8f1e200d850f9ac75f4046bbfa07`.
 The dependency-lock root schema is
@@ -367,11 +367,12 @@ construction:
 - runtime-manifest root and size, with null runtime-image digest;
 - RFC-8785 receipt root, SHA, and size;
 - mode order and the 28,800-second hard total; and
-- requested cgroup memory and pids maxima. The attempt's requested
-  `memory.max` must equal the Auditor cap exactly: 12 GiB
-  (`12884901888` bytes). A private-manager or enclosing outer limit may be
-  24 GiB, but it is not serialized in this attempt field and cannot satisfy
-  an attempt value other than exactly 12 GiB.
+- requested cgroup memory and pids maxima. The attempt's requested operational
+  hard `memory.max` must equal exactly 24 GiB (`25769803776` bytes). This
+  kernel-containment ceiling is deliberately distinct from, and does not
+  relax, the Auditor's 12 GiB static-plan and physical-peak qualification cap.
+  The old 12 GiB attempt value and every value other than exact 24 GiB fail
+  closed before launch.
 
 The manifest has no `schema_version` member. Its canonical identity is the
 root prefix `phase2b_formal_wire_covert_attempt_manifest_v3_`; the prior V2
@@ -426,7 +427,7 @@ manifest, RFC receipt, and raw bundle before output or service launch:
   --source-commit-sha <40-hex> --source-archive <source.tar> \
   --runtime-environment-manifest <runtime-manifest.json> \
   --rfc8785-prerequisite-receipt <rfc-bundle>/receipt.json \
-  --cgroup-memory-max-bytes 12884901888 --cgroup-pids-max <finite-count> \
+  --cgroup-memory-max-bytes 25769803776 --cgroup-pids-max <finite-count> \
   > <attempt.json>
 ```
 
@@ -460,7 +461,7 @@ launcher shape is exactly:
 systemd-run --user --pipe --wait --quiet --unit=<fresh-unit> \
   --property=Description=<attempt-bound-marker> \
   --property=Type=exec --property=RemainAfterExit=yes \
-  --property=MemoryMax=12884901888 \
+  --property=MemoryMax=25769803776 \
   --property=TasksMax=<finite-count> \
   --property=RuntimeMaxSec=28800s \
   --property=KillMode=control-group \
@@ -485,7 +486,7 @@ cgroup-v2 membership, `memory.current`, `memory.peak`, finite `memory.max`, and
 required memory/pids event rows from its unique visible non-root leaf. Entry
 and exit leaf identities must match, peak must be monotonic, and both accepted
 peaks must be at or below 12 GiB. The requested and observed `memory.max` must
-both equal exactly 12 GiB; the structural reader still tolerates a transient
+both equal exactly 24 GiB; the structural reader still tolerates a transient
 counter value above `memory.max` so that the explicit physical gate can emit
 the bounded `FAIL_RESOURCE` diagnostic rather than misclassifying a valid
 kernel state as a parse error. Exit also cross-binds both Auditor receipt scopes,
@@ -517,8 +518,9 @@ nonzero for outer capture.
 No numeric value from the final fresh peak is serialized, and there is no
 post-exit numeric sample. The outer `/3` result instead attests that the pinned
 child source and exact argv implement this gate, the retained stdout is one
-canonical `/6` artifact, stderr is empty, `MemoryMax` is exactly 12 GiB, and
-systemd reports real `CLD_EXITED` semantics (`ExecMainCode=1`,
+canonical `/6` artifact, stderr is empty, operational `MemoryMax` is exactly
+24 GiB while the independent accepted physical peak remains capped at 12 GiB,
+and systemd reports real `CLD_EXITED` semantics (`ExecMainCode=1`,
 `ExecMainStatus=0`). `SuccessExitStatus` cannot substitute for that terminal
 state: the same otherwise-valid stdout followed by exit 86 is atomically
 rejected and retained only in `/failure/4` evidence.
