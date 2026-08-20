@@ -804,8 +804,8 @@ def test_public_api_has_no_caller_receipts_outputs_seed_or_thresholds():
         "hegel-machine-phase2b-formal-covert-auditor/5"
     )
     assert auditor_module.SEMANTICS_VERSION == (
-        "hegel-machine-phase2b-formal-covert-statistics/9-"
-        "cgroup-memory-max-transient-overage-erratum"
+        "hegel-machine-phase2b-formal-covert-statistics/11-"
+        "counter-ordering-erratum"
     )
     profile = json.loads(
         (
@@ -819,6 +819,16 @@ def test_public_api_has_no_caller_receipts_outputs_seed_or_thresholds():
     )
     assert profile["semantics_id"] == SEMANTICS_ID
     assert profile["policy_binding_id"] == POLICY_BINDING_ID
+    resource_boundary = profile["resource_boundary"]
+    assert resource_boundary["maximum_static_phase_plan_rss_bytes"] == (
+        auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
+    )
+    assert resource_boundary[
+        "execution_scope_unified_cgroup_v2_memory_peak_cap_bytes"
+    ] == auditor_module.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
+    assert "250000000" in resource_boundary["parallel_worker_policy"]
+    assert "25769803776" in resource_boundary["parallel_worker_policy"]
+    assert "12884901888" in resource_boundary["raw_worker_deadline_semantics"]
     assert auditor_module.STATISTICS_WORKER_TIMEOUT_SECONDS == 3_600
     assert auditor_module.PARTITION_PREPARATION_TIMEOUT_SECONDS == 600
     assert auditor_module.INVARIANCE_WORKER_TIMEOUT_SECONDS == 7_200
@@ -864,6 +874,104 @@ def test_public_api_has_no_caller_receipts_outputs_seed_or_thresholds():
         "recognizer_adapter",
     )
     assert validate_frozen_policy_binding_v1() == POLICY_BINDING_ID
+
+
+def test_resource_cap_domains_worker_selection_and_raw_child_limit_are_exact(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    static_cap = 25_769_803_776
+    physical_cap = 12_884_901_888
+    assert auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES == static_cap
+    assert (
+        auditor_module.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
+        == physical_cap
+    )
+    assert auditor_module.RAW_CHILD_ADDRESS_SPACE_LIMIT_BYTES == physical_cap
+    assert auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES == physical_cap
+    assert physical_cap == auditor_module.RAW_CHILD_ADDRESS_SPACE_LIMIT_BYTES
+    assert physical_cap != static_cap
+
+    selector = auditor_module._maximum_parallel_statistics_workers
+    assert selector(249_999_999, 5, static_cap) == 1
+    assert selector(250_000_000, 4, static_cap) == 1
+    assert selector(250_000_000, 5, static_cap) == 5
+    assert selector(250_000_000, 5, static_cap + 1) == 1
+    producer_source = getsource(auditor_module._resource_plan)
+    exact_selector_call = (
+        "parallel_workers = _maximum_parallel_statistics_workers(\n"
+        "        estimated,\n"
+        "        effective_cpu_capacity,\n"
+        "        statistics_rss_for_workers(len(TARGETS)),\n"
+        "    )"
+    )
+    assert producer_source.count(exact_selector_call) == 1
+    assert (
+        "_maximum_parallel_statistics_workers(\n"
+        "        estimated_total_work,"
+    ) not in producer_source
+
+    captured_intersection_work = 12_205_620_440
+    captured_unique_partitions = 17_562
+    assert captured_intersection_work == 10_001 * 1_220_440
+    assert captured_unique_partitions < 32_186
+    fixed_tail = 1_471_784_960
+    fixed_one_worker_tail = 1_423_333_376
+    captured_parent = 1_917_636_608
+    assert captured_parent * 2 + fixed_one_worker_tail == 5_258_606_592
+    assert captured_parent * 6 + fixed_tail == 12_977_604_608
+    assert selector(
+        captured_intersection_work,
+        32,
+        captured_parent * 6 + fixed_tail,
+    ) == 5
+    last_five_worker_parent = 4_049_669_802
+    assert last_five_worker_parent * 6 + fixed_tail == static_cap - 4
+    assert selector(
+        250_000_000,
+        5,
+        last_five_worker_parent * 6 + fixed_tail,
+    ) == 5
+    assert selector(
+        250_000_000,
+        5,
+        (last_five_worker_parent + 1) * 6 + fixed_tail,
+    ) == 1
+
+    limit_state = {"soft": resource.RLIM_INFINITY, "hard": resource.RLIM_INFINITY}
+
+    def get_limit(_resource: int) -> tuple[int, int]:
+        return limit_state["soft"], limit_state["hard"]
+
+    def set_limit(_resource: int, limits: tuple[int, int]) -> None:
+        limit_state["soft"], limit_state["hard"] = limits
+
+    monkeypatch.setattr(auditor_module.resource, "getrlimit", get_limit)
+    monkeypatch.setattr(auditor_module.resource, "setrlimit", set_limit)
+    monkeypatch.setattr(
+        auditor_module,
+        "_linux_current_virtual_memory_bytes",
+        lambda: 1,
+    )
+    assert auditor_module._invariance_child_address_space_limit_bytes() == physical_cap
+    auditor_module._set_invariance_child_address_space_limit(physical_cap)
+    assert limit_state == {"soft": physical_cap, "hard": physical_cap}
+    with pytest.raises(ValueError, match="address-space limit drift"):
+        auditor_module._set_invariance_child_address_space_limit(physical_cap + 1)
+    inherited_finite_hard = 8 * 1_024**3
+    limit_state.update(
+        {"soft": resource.RLIM_INFINITY, "hard": inherited_finite_hard}
+    )
+    assert (
+        auditor_module._invariance_child_address_space_limit_bytes()
+        == inherited_finite_hard
+    )
+    auditor_module._set_invariance_child_address_space_limit(
+        inherited_finite_hard
+    )
+    assert limit_state == {
+        "soft": inherited_finite_hard,
+        "hard": inherited_finite_hard,
+    }
 
 
 def _write_unified_cgroup_parser_fixture(
@@ -1150,8 +1258,74 @@ def test_transient_current_and_peak_above_memory_max_are_structural_but_cap_gate
 
 
 def test_statistics_dto_allows_peak_above_memory_max_only_within_physical_cap(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    parent_pid = os.getpid()
+    real_current_rss = auditor_module._linux_current_rss_bytes
+    parent_current_samples: list[int] = []
+
+    def sampled_current_rss() -> int:
+        value = real_current_rss()
+        if os.getpid() == parent_pid:
+            parent_current_samples.append(value)
+        return value
+
+    def raw_historical_peak_below_latest_current() -> int:
+        assert parent_current_samples
+        return parent_current_samples[-1] - 1
+
+    monkeypatch.setattr(
+        auditor_module,
+        "_linux_current_rss_bytes",
+        sampled_current_rss,
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_linux_peak_rss_bytes",
+        raw_historical_peak_below_latest_current,
+    )
     receipt = _run_issuance_branch("sufficient")
+    invariant = receipt.invariant_runtime_evidence
+    maximum_sampled_current = max(
+        invariant.parent_current_rss_bytes_at_start,
+        invariant.parent_peak_current_rss_bytes_observed,
+        invariant.parent_current_rss_bytes_at_completion,
+    )
+    assert invariant.parent_historical_peak_rss_bytes == (
+        invariant.parent_current_rss_bytes_at_completion - 1
+    )
+    assert invariant.parent_historical_peak_rss_bytes < maximum_sampled_current
+    assert invariant.diagnostic_parent_plus_worker_historical_peak_sum_bytes == (
+        invariant.parent_historical_peak_rss_bytes
+        + invariant.worker_peak_rss_bytes
+    )
+    independent_counter_dto = replace(
+        invariant,
+        parent_historical_peak_rss_bytes=maximum_sampled_current - 1,
+        diagnostic_parent_plus_worker_historical_peak_sum_bytes=(
+            maximum_sampled_current - 1 + invariant.worker_peak_rss_bytes
+        ),
+    )
+    assert independent_counter_dto.parent_historical_peak_rss_bytes == (
+        maximum_sampled_current - 1
+    )
+    with pytest.raises(ValueError, match="current/preflight RSS evidence drift"):
+        replace(
+            independent_counter_dto,
+            parent_current_rss_bytes_at_start=(
+                invariant.resource_preflight.parent_current_rss_bytes_at_preflight
+                + 1
+            ),
+        )
+    maximum_counter = auditor_module.MAXIMUM_LINUX_RESOURCE_COUNTER_BYTES
+    with pytest.raises(ValueError, match="diagnostics exceed the finite bound"):
+        replace(
+            independent_counter_dto,
+            parent_historical_peak_rss_bytes=maximum_counter + 1,
+            diagnostic_parent_plus_worker_historical_peak_sum_bytes=(
+                maximum_counter + 1 + invariant.worker_peak_rss_bytes
+            ),
+        )
     statistics = receipt.statistics_runtime_evidence
     assert statistics is not None
     cap = auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
@@ -1173,6 +1347,7 @@ def test_statistics_dto_allows_peak_above_memory_max_only_within_physical_cap(
             physical_memory_peak_bytes_before_receipt_finalization=cap + 1,
             physical_memory_max_bytes=cap - 2,
         )
+    assert validate_formal_covert_audit_receipt_v1(receipt) == receipt.receipt_id
     auditor_module.release_formal_covert_audit_receipt_v1(receipt)
 
 
@@ -6059,6 +6234,138 @@ def test_resource_plan_is_b_plus_one_cgroup_aware_and_worker_artifact_bounded(
     assert five_worker_plan.maximum_parallel_workers == 5
     assert five_worker_plan.admissible is True
 
+    fixed_five_worker_tail = 1_471_784_960
+    non_cache_tail = (
+        five_worker_plan.permutation_metric_tuple_bytes_bound
+        + five_worker_plan.target_max_vector_bytes_bound
+        + five_worker_plan.worker_result_artifact_bytes_bound
+        + five_worker_plan.parent_result_working_bytes_bound
+    )
+    assert (fixed_five_worker_tail - non_cache_tail) % 5 == 0
+    captured_metric_cache = (fixed_five_worker_tail - non_cache_tail) // 5
+    captured_parent = 1_917_636_608
+    captured_projection = 12_977_604_608
+    assert captured_parent * 6 + fixed_five_worker_tail == captured_projection
+    captured_plan = replace(
+        five_worker_plan,
+        metric_cache_bytes_bound=captured_metric_cache,
+        parent_current_rss_bytes_at_plan=captured_parent,
+        estimated_peak_rss_bytes=captured_projection,
+        effective_cpu_capacity_at_preflight=5,
+        maximum_parallel_workers=5,
+        admissible=True,
+    )
+    assert captured_plan.maximum_estimated_rss_bytes == (
+        auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
+    )
+    assert captured_plan.estimated_peak_rss_bytes > (
+        auditor_module.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
+    )
+
+    last_five_worker_parent = 4_049_669_802
+    boundary_plan = replace(
+        captured_plan,
+        parent_current_rss_bytes_at_plan=last_five_worker_parent,
+        estimated_peak_rss_bytes=(
+            last_five_worker_parent * 6 + fixed_five_worker_tail
+        ),
+    )
+    assert boundary_plan.estimated_peak_rss_bytes == (
+        auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES - 4
+    )
+    with pytest.raises(ValueError, match="execution mode drift"):
+        replace(
+            boundary_plan,
+            parent_current_rss_bytes_at_plan=last_five_worker_parent + 1,
+            estimated_peak_rss_bytes=(
+                (last_five_worker_parent + 1) * 6 + fixed_five_worker_tail
+            ),
+        )
+    one_worker_tail = (
+        captured_plan.metric_cache_bytes_bound
+        + auditor_module.LABEL_PERMUTATIONS * 256
+        + auditor_module.LABEL_PERMUTATIONS
+        * auditor_module.TARGET_MAX_VECTOR_BYTES_PER_PERMUTATION
+        + captured_plan.worker_result_artifact_bytes_bound
+        + captured_plan.parent_result_working_bytes_bound
+    )
+    one_worker_plan = replace(
+        boundary_plan,
+        parent_current_rss_bytes_at_plan=last_five_worker_parent + 1,
+        permutation_metric_tuple_bytes_bound=(
+            auditor_module.LABEL_PERMUTATIONS * 256
+        ),
+        target_max_vector_bytes_bound=(
+            auditor_module.LABEL_PERMUTATIONS
+            * auditor_module.TARGET_MAX_VECTOR_BYTES_PER_PERMUTATION
+        ),
+        estimated_peak_rss_bytes=(
+            (last_five_worker_parent + 1) * 2 + one_worker_tail
+        ),
+        maximum_parallel_workers=1,
+    )
+    assert one_worker_plan.maximum_parallel_workers == 1
+    with pytest.raises(ValueError, match="admissibility drift"):
+        replace(
+            one_worker_plan,
+            estimated_peak_rss_bytes=(
+                auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES + 1
+            ),
+            admissible=True,
+        )
+
+    exact_required_effective_available = 15_125_088_256
+    assert exact_required_effective_available == (
+        captured_projection
+        + auditor_module.HOST_AVAILABLE_MEMORY_SAFETY_MARGIN_BYTES
+    )
+    assert (
+        auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
+        - exact_required_effective_available
+        == 10_644_715_520
+    )
+    state = {
+        "current": captured_parent,
+        "system_available": exact_required_effective_available,
+        "cgroup_remaining": exact_required_effective_available,
+    }
+    monkeypatch.setattr(
+        auditor_module,
+        "_linux_current_rss_bytes",
+        lambda: state["current"],
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_linux_system_available_memory_bytes",
+        lambda: state["system_available"],
+    )
+    monkeypatch.setattr(
+        auditor_module,
+        "_linux_cgroup_memory_remaining_bytes",
+        lambda: state["cgroup_remaining"],
+    )
+    final_preflight = auditor_module._preflight_host_memory(captured_plan)
+    assert final_preflight.effective_available_bytes == (
+        exact_required_effective_available
+    )
+    assert (
+        final_preflight.resource_preflight.projected_aggregate_rss_bytes_at_preflight
+        == captured_projection
+    )
+    state["cgroup_remaining"] = exact_required_effective_available - 1
+    with pytest.raises(
+        FormalCovertAuditRejectionV1,
+        match="FAIL_STATISTICAL_HOST_MEMORY",
+    ):
+        auditor_module._preflight_host_memory(captured_plan)
+    state["cgroup_remaining"] = exact_required_effective_available
+    state["system_available"] = exact_required_effective_available - 1
+    with pytest.raises(
+        FormalCovertAuditRejectionV1,
+        match="FAIL_STATISTICAL_HOST_MEMORY",
+    ):
+        auditor_module._preflight_host_memory(captured_plan)
+
     directory = tmp_path / "hegel-formal-covert-stats-kat"
     directory.mkdir()
     directory_fd = os.open(
@@ -6152,8 +6459,51 @@ def test_phase_split_exact_diagnostic_formulas_and_preflight_evidence(
     assert (
         invariant_plan.maximum_invariance_estimated_rss_bytes
         - invariant_plan.estimated_invariance_peak_rss_bytes
-        == 2_204_622_848
+        == 15_089_524_736
     )
+    invariant_tail = (
+        invariant_plan.invariance_variant_suite_resident_bytes_bound
+        + invariant_plan.invariance_recognizer_live_output_bytes_bound
+        + invariant_plan.invariance_worker_artifact_bytes_bound
+    )
+    exact_invariant_parent_boundary = (
+        auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES - invariant_tail
+    ) // 2
+    monkeypatch.setattr(
+        auditor_module,
+        "_linux_current_rss_bytes",
+        lambda: exact_invariant_parent_boundary,
+    )
+    invariant_at_static_cap = auditor_module._invariance_resource_plan(
+        1_024,
+        envelope_and_decode_bytes_bound=envelope_decode,
+        adapter_retained_graph_bytes_bound=adapter,
+        variant_suite_resident_bytes_per_row_bound=variant_per_row,
+        variant_suite_resident_fixed_bytes_bound=variant_fixed,
+    )
+    assert invariant_at_static_cap.estimated_invariance_peak_rss_bytes == (
+        auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
+    )
+    assert invariant_at_static_cap.estimated_invariance_peak_rss_bytes > (
+        auditor_module.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
+    )
+    assert invariant_at_static_cap.admissible is True
+    monkeypatch.setattr(
+        auditor_module,
+        "_linux_current_rss_bytes",
+        lambda: exact_invariant_parent_boundary + 1,
+    )
+    invariant_above_static_cap = auditor_module._invariance_resource_plan(
+        1_024,
+        envelope_and_decode_bytes_bound=envelope_decode,
+        adapter_retained_graph_bytes_bound=adapter,
+        variant_suite_resident_bytes_per_row_bound=variant_per_row,
+        variant_suite_resident_fixed_bytes_bound=variant_fixed,
+    )
+    assert invariant_above_static_cap.estimated_invariance_peak_rss_bytes == (
+        auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES + 2
+    )
+    assert invariant_above_static_cap.admissible is False
 
     statistics_static = 19_200_000 + adapter + 130_784_960 + 64 * 1_048_576
     statistics_tail = 1_429_904_896
@@ -6167,7 +6517,9 @@ def test_phase_split_exact_diagnostic_formulas_and_preflight_evidence(
         fork_parent_rss_multiplier=2,
         additional_bytes_bound=statistics_tail,
         projected_aggregate_rss_bytes_at_preflight=7_503_789_568,
-        maximum_estimated_rss_bytes=auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES,
+        maximum_estimated_rss_bytes=(
+            auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
+        ),
         host_available_memory_safety_margin_bytes=(
             auditor_module.HOST_AVAILABLE_MEMORY_SAFETY_MARGIN_BYTES
         ),
@@ -6175,9 +6527,9 @@ def test_phase_split_exact_diagnostic_formulas_and_preflight_evidence(
     statistics_preflight.__post_init__()
     assert statistics_static == 1_229_128_628
     assert (
-        auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+        auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
         - statistics_preflight.projected_aggregate_rss_bytes_at_preflight
-        == 5_381_112_320
+        == 18_266_014_208
     )
     with pytest.raises(ValueError, match="projection formula drift"):
         replace(
@@ -6196,10 +6548,10 @@ def test_phase_split_exact_diagnostic_formulas_and_preflight_evidence(
         replace(
             statistics_preflight,
             parent_current_rss_bytes_at_preflight=(
-                auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+                auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
             ),
             projected_aggregate_rss_bytes_at_preflight=(
-                auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES * 2
+                auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES * 2
                 + statistics_tail
             ),
         )
@@ -6214,7 +6566,9 @@ def test_phase_split_exact_diagnostic_formulas_and_preflight_evidence(
         fork_parent_rss_multiplier=2,
         additional_bytes_bound=3,
         projected_aggregate_rss_bytes_at_preflight=403,
-        maximum_estimated_rss_bytes=auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES,
+        maximum_estimated_rss_bytes=(
+            auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
+        ),
         host_available_memory_safety_margin_bytes=(
             auditor_module.HOST_AVAILABLE_MEMORY_SAFETY_MARGIN_BYTES
         ),
@@ -6226,25 +6580,25 @@ def test_phase_split_exact_diagnostic_formulas_and_preflight_evidence(
     )
     assert static_dominant.projected_aggregate_rss_bytes_at_preflight == 403
     assert current_dominant.projected_aggregate_rss_bytes_at_preflight == 403
-    exact_half_cap = auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES // 2
+    exact_half_cap = auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES // 2
     at_cap = replace(
         static_dominant,
         parent_current_rss_bytes_at_preflight=exact_half_cap,
         static_parent_bytes_bound=1,
         additional_bytes_bound=0,
         projected_aggregate_rss_bytes_at_preflight=(
-            auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+            auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
         ),
     )
     assert at_cap.projected_aggregate_rss_bytes_at_preflight == (
-        auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES
+        auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
     )
     with pytest.raises(ValueError, match="exceeds frozen cap"):
         replace(
             at_cap,
             additional_bytes_bound=1,
             projected_aggregate_rss_bytes_at_preflight=(
-                auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES + 1
+                auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES + 1
             ),
         )
 
@@ -6432,7 +6786,7 @@ def test_phase_preflight_records_same_current_projection_and_rejects_growth(
     monkeypatch.setattr(
         auditor_module,
         "_linux_current_rss_bytes",
-        lambda: auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES,
+        lambda: auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES,
     )
     with pytest.raises(
         FormalCovertAuditRejectionV1,
@@ -6461,18 +6815,43 @@ def test_phase_order_and_final_preflight_are_adjacent_to_raw_fork_inputs():
     ) < audit_source.index("manifest, columns = _extract_feature_columns(")
 
     invariant_source = getsource(auditor_module._run_invariance)
+    invariant_limit_assignment = (
+        "child_address_space_limit = "
+        "_invariance_child_address_space_limit_bytes()"
+    )
+    invariant_limit_setter = (
+        "_set_invariance_child_address_space_limit(\n"
+        "                    child_address_space_limit\n"
+        "                )"
+    )
+    assert invariant_source.count(invariant_limit_assignment) == 1
+    assert invariant_source.count(invariant_limit_setter) == 1
     assert invariant_source.index(
+        invariant_limit_assignment
+    ) < invariant_source.index(
         "fork_input_snapshot_root = _invariance_input_snapshot_root("
     ) < invariant_source.index(
         "host_memory = _preflight_invariance_host_memory(plan)"
-    ) < invariant_source.index("child_pid = os.fork()")
+    ) < invariant_source.index("child_pid = os.fork()") < invariant_source.index(
+        invariant_limit_setter
+    ) < invariant_source.index("child_result = invariant_core(")
 
     statistics_source = getsource(auditor_module._run_raw_statistics_workers)
+    statistics_limit_assignment = invariant_limit_assignment
+    statistics_limit_setter = (
+        "_set_invariance_child_address_space_limit(\n"
+        "                        child_address_space_limit\n"
+        "                    )"
+    )
+    assert statistics_source.count(statistics_limit_assignment) == 1
+    assert statistics_source.count(statistics_limit_setter) == 1
     assert statistics_source.index("active: list[dict[str, object]]") < (
         statistics_source.index(
             "preflight_evidence_slot[0] = _preflight_host_memory(preflight_plan)"
         )
-    ) < statistics_source.index("pid = os.fork()")
+    ) < statistics_source.index("pid = os.fork()") < statistics_source.index(
+        statistics_limit_setter
+    ) < statistics_source.index("rows = _evaluate_target_statistics(")
 
 
 def test_parent_preallocation_gates_charge_current_rss_without_fork_evidence(
@@ -6527,6 +6906,41 @@ def test_parent_preallocation_gates_charge_current_rss_without_fork_evidence(
     )
     assert type(feature_gate) is auditor_module._HostMemoryPreflightV1
     assert not hasattr(feature_gate, "resource_preflight")
+    state["available"] = 100 * 1_073_741_824
+    state["current"] = (
+        auditor_module.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES + 1
+    )
+    auditor_module._preflight_feature_extraction_memory(
+        feature_projection,
+        envelope_decode,
+    )
+    state["current"] = (
+        auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES - feature_tail
+    )
+    exact_feature_boundary = auditor_module._preflight_feature_extraction_memory(
+        feature_projection,
+        envelope_decode,
+    )
+    assert state["current"] + feature_tail == (
+        auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
+    )
+    assert exact_feature_boundary.effective_available_bytes == state["available"]
+    state["current"] = (
+        auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES - feature_tail + 1
+    )
+    with pytest.raises(
+        FormalCovertAuditRejectionV1,
+        match="FAIL_FEATURE_PROJECTION_RESOURCE_CAP",
+    ):
+        auditor_module._preflight_feature_extraction_memory(
+            feature_projection,
+            envelope_decode,
+        )
+    state["available"] = (
+        envelope_decode
+        + feature_tail
+        + auditor_module.HOST_AVAILABLE_MEMORY_SAFETY_MARGIN_BYTES
+    )
     state["current"] = envelope_decode + 1_048_576
     with pytest.raises(
         FormalCovertAuditRejectionV1,
@@ -6567,6 +6981,55 @@ def test_parent_preallocation_gates_charge_current_rss_without_fork_evidence(
     )
     assert type(partition_gate) is auditor_module._HostMemoryPreflightV1
     assert not hasattr(partition_gate, "resource_preflight")
+    partition_tail = (
+        partition_projection.projected_partition_matrix_bytes_bound
+        + partition_result
+    )
+    state["available"] = 100 * 1_073_741_824
+    state["current"] = (
+        auditor_module.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES + 1
+    )
+    auditor_module._preflight_partition_allocation_memory(
+        feature_matrix_bytes_bound=feature_matrix,
+        envelope_and_decode_bytes_bound=envelope_decode,
+        partition_projection=partition_projection,
+        concrete_features=1,
+    )
+    state["current"] = (
+        auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES - partition_tail
+    )
+    exact_partition_boundary = (
+        auditor_module._preflight_partition_allocation_memory(
+            feature_matrix_bytes_bound=feature_matrix,
+            envelope_and_decode_bytes_bound=envelope_decode,
+            partition_projection=partition_projection,
+            concrete_features=1,
+        )
+    )
+    assert state["current"] + partition_tail == (
+        auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
+    )
+    assert exact_partition_boundary.effective_available_bytes == state["available"]
+    state["current"] = (
+        auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
+        - partition_tail
+        + 1
+    )
+    with pytest.raises(
+        FormalCovertAuditRejectionV1,
+        match="FAIL_PARTITION_PROJECTION_RESOURCE_CAP",
+    ):
+        auditor_module._preflight_partition_allocation_memory(
+            feature_matrix_bytes_bound=feature_matrix,
+            envelope_and_decode_bytes_bound=envelope_decode,
+            partition_projection=partition_projection,
+            concrete_features=1,
+        )
+    state["available"] = (
+        resident_static
+        + partition_tail
+        + auditor_module.HOST_AVAILABLE_MEMORY_SAFETY_MARGIN_BYTES
+    )
     state["current"] = resident_static + 1_048_576
     with pytest.raises(
         FormalCovertAuditRejectionV1,
@@ -6729,17 +7192,88 @@ def test_synthetic_rich1024_formula_is_admissible_not_r05_capacity_evidence(
     assert plan.concrete_features == 16_863
     assert plan.unique_statistical_partitions == 7_991
     assert plan.hypotheses == 84_315
-    assert plan.maximum_parallel_workers == 1
+    assert plan.estimated_intersection_work_units == 17_262_286_056
+    assert plan.estimated_intersection_work_units >= (
+        auditor_module.PARALLEL_STATISTICS_WORK_THRESHOLD
+    )
+    assert plan.effective_cpu_capacity_at_preflight == 32
+    assert plan.maximum_parallel_workers == len(auditor_module.TARGETS) == 5
+    assert plan.statistics_execution_mode == (
+        "LINUX_RAW_FORK_WAIT4_ONE_OR_FIVE_TARGET_WORKERS"
+    )
+    one_worker_metric_tuple_bytes = auditor_module.LABEL_PERMUTATIONS * 256
+    one_worker_target_max_bytes = (
+        auditor_module.LABEL_PERMUTATIONS
+        * auditor_module.TARGET_MAX_VECTOR_BYTES_PER_PERMUTATION
+    )
+    assert plan.permutation_metric_tuple_bytes_bound == 12_800_000 == (
+        auditor_module.LABEL_PERMUTATIONS * 256 * 5
+    )
+    assert plan.target_max_vector_bytes_bound == 3_200_000 == (
+        auditor_module.LABEL_PERMUTATIONS
+        * auditor_module.TARGET_MAX_VECTOR_BYTES_PER_PERMUTATION
+        * 5
+    )
+    assert plan.partition_matrix_bytes_bound == partition_bound == 10_001_456
+    static_parent_bound = (
+        plan.permutation_label_mask_bytes_bound
+        + plan.partition_matrix_bytes_bound
+        + plan.adapter_retained_graph_bytes_bound
+        + 64 * 1_048_576
+    )
+    resident_parent_bound = max(
+        plan.parent_current_rss_bytes_at_plan,
+        static_parent_bound,
+    )
+    shared_artifact_and_parent_result_tail = (
+        plan.worker_result_artifact_bytes_bound
+        + plan.parent_result_working_bytes_bound
+    )
+    one_worker_tail = (
+        plan.metric_cache_bytes_bound
+        + one_worker_metric_tuple_bytes
+        + one_worker_target_max_bytes
+        + shared_artifact_and_parent_result_tail
+    )
+    five_worker_tail = (
+        plan.metric_cache_bytes_bound * 5
+        + plan.permutation_metric_tuple_bytes_bound
+        + plan.target_max_vector_bytes_bound
+        + shared_artifact_and_parent_result_tail
+    )
+    one_worker_projection = resident_parent_bound * 2 + one_worker_tail
+    five_worker_projection = resident_parent_bound * 6 + five_worker_tail
+    assert plan.parent_current_rss_bytes_at_plan == 128 * 1_048_576
+    assert static_parent_bound == resident_parent_bound == 2_431_953_968
+    assert one_worker_tail == 756_476_416
+    assert five_worker_tail == 804_928_000
+    assert one_worker_projection == 5_620_384_352
+    assert plan.estimated_peak_rss_bytes == five_worker_projection == 15_396_651_808
     assert plan.invariance_variant_suite_output_bytes_bound == (
         rows * 80 * auditor_module.ENVELOPE_BYTES
     )
     assert plan.invariance_variant_suite_resident_bytes_bound < (
         plan.invariance_variant_suite_output_bytes_bound
     )
+    assert plan.maximum_invariance_estimated_rss_bytes == (
+        auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
+    )
     assert plan.estimated_invariance_peak_rss_bytes <= (
         plan.maximum_invariance_estimated_rss_bytes
     )
-    assert plan.estimated_peak_rss_bytes <= plan.maximum_estimated_rss_bytes
+    assert plan.maximum_estimated_rss_bytes == (
+        auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
+    )
+    assert one_worker_projection < (
+        auditor_module.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
+    ) < five_worker_projection <= plan.maximum_estimated_rss_bytes
+    assert auditor_module.MAXIMUM_ESTIMATED_RSS_BYTES == (
+        auditor_module.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
+    ) == auditor_module.RAW_CHILD_ADDRESS_SPACE_LIMIT_BYTES
+    assert (
+        auditor_module.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
+        < auditor_module.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
+    )
     assert plan.estimated_total_statistical_work_units <= (
         plan.maximum_total_statistical_work_units
     )

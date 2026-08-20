@@ -69,7 +69,7 @@ _BOOTSTRAP_FIXED_SOURCE_SHA256_V2 = {
         "e0fa517b4275a1d2daee1fd1f877b61a8f79ca745a702979615b2130e53bdc5f"
     ),
     "src/hegel_machine/phase2b_formal_covert_auditor_v1.py": (
-        "f4ea0bb54fd7b4f5707a6eea22ac8b728279e4f2e5559899626e4bf477d87312"
+        "5d77403dc41c661cb8a8d7deb90c9b2644de7a27fda9369c37f76eb82474a9be"
     ),
     "src/hegel_machine/phase2b_formal_trusted_wire_v3.py": (
         "c8120920f0e31b959043f63a0f672471fcbea50d05ca2cd8eaf7fd0c29089765"
@@ -373,7 +373,7 @@ SYNTHETIC_KAT_VECTOR_DOMAIN: Final = (
 )
 
 DEPENDENCY_LOCK_SHA256: Final = (
-    "8c375133fb17d484d129464975ed4deb737d8f1e200d850f9ac75f4046bbfa07"
+    "d8538a7ccbb617d5d42aa25500b862d829e7b957ebeb329bf67ca6dd75ee7f94"
 )
 EXACT_AUTHORITY_ROWS: Final = 1_024
 EXACT_RECOGNIZER_INVOCATIONS: Final = 81
@@ -461,16 +461,16 @@ WIRE_DOCUMENTATION_SHA256: Final = (
     "704a937967441ebbb9b2a77a865f83890e241d37031e2b0a87f1da2877b3456a"
 )
 AUDITOR_SOURCE_SHA256: Final = (
-    "f4ea0bb54fd7b4f5707a6eea22ac8b728279e4f2e5559899626e4bf477d87312"
+    "5d77403dc41c661cb8a8d7deb90c9b2644de7a27fda9369c37f76eb82474a9be"
 )
 AUDITOR_CONFIG_SHA256: Final = (
-    "e98052fd9e545ef17c577ab294388793a44502c91b22a1d784b41b86ecf54e83"
+    "1c803a31f7d511dc88710fd44a258d54a4a2fa5290f6c25ce7e9e35dfe0a2518"
 )
 AUDITOR_TEST_SHA256: Final = (
-    "0a383c06b4d3a7d048134e74f1465e85f2bc35add262bc065463e6b984d01b4f"
+    "23b2b1fbf06c6426df68473643de9a39dcbc833eda265f73c966e097cddb47b2"
 )
 AUDITOR_DOCUMENTATION_SHA256: Final = (
-    "07000f2f505731704392883062ac3d7ae1cd19411026e327f688ce441a7c6936"
+    "5a7d560495d75bf7e911e0b3a9412edcab962ccf828a9b3285f3543cf8fb5a5b"
 )
 AUDITOR_SCHEMA_VERSION_V2: Final = (
     "hegel-machine-phase2b-formal-covert-auditor/5"
@@ -480,11 +480,11 @@ AUDITOR_PROFILE_SCHEMA_VERSION_V2: Final = (
 )
 AUDITOR_SEMANTICS_ID_V2: Final = (
     "phase2b_formal_covert_semantics_"
-    "d50564375ce978d2ee585662adc6d9ac5c2335aa662214f508897f1076918321"
+    "6891de9f6ad452fcff18784140a26dd58ad783bbcf8a35f472e7042ae09ed7f8"
 )
 AUDITOR_POLICY_BINDING_ID_V2: Final = (
     "phase2b_formal_covert_policy_binding_"
-    "122bb24b8d8983a294a66e64c59fd74ac4017eaead1b7888141ff1679ac4272b"
+    "7db4601dc697625edfdb0b3495dcaf5d8289c6737433d277f13b092c5763a8e4"
 )
 if (
     auditor.SCHEMA_VERSION != AUDITOR_SCHEMA_VERSION_V2
@@ -739,7 +739,7 @@ _POST_OUTPUT_PHYSICAL_GATE_CONTRACT_V2: Final = {
     "same_runtime_exit_cgroup_scope_and_events_required": True,
     "single_process_zero_descendants_at_full_sample": True,
     "success_peak_threshold_bytes": (
-        auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
         - POST_OUTPUT_DIRECT_EXIT_TAIL_RESERVE_BYTES_V2
     ),
     "successful_return_or_interpreter_teardown_forbidden": True,
@@ -904,10 +904,10 @@ _EXPECTED_PROFILE: Final = {
         "family_wise_alpha": "0.01",
         "full_raw_byte_categorical_hypotheses_required": True,
         "maximum_static_phase_plan_rss_bytes": (
-            auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+            auditor.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
         ),
         "execution_scope_physical_memory_peak_cap_bytes": (
-            auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+            auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
         ),
         "maximum_features": auditor.MAXIMUM_FEATURES,
         "maximum_rows": auditor.MAXIMUM_ROWS,
@@ -2929,7 +2929,8 @@ class AuditRunDiagnosticsV2:
         except (TypeError, ValueError) as exc:
             raise ValueError("audit physical-memory diagnostic drift") from exc
         if (
-            self.physical_memory_cap_bytes != auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+            self.physical_memory_cap_bytes
+            != auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
             or snapshot.memory_peak_bytes > self.physical_memory_cap_bytes
         ):
             raise ValueError("audit physical-memory cap diagnostic drift")
@@ -5445,10 +5446,13 @@ def _validate_live_runtime_entry_v2(
     detail = _bounded_cgroup_physical_resource_detail_v2(
         stage="RUNTIME_ENTRY_SAMPLE",
         cgroup=cgroup,
-        cap=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+        cap=auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES,
         reserve=0,
     )
-    if current > peak or peak > auditor.MAXIMUM_ESTIMATED_RSS_BYTES:
+    if (
+        current > peak
+        or peak > auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
+    ):
         _fail(
             FAIL_RESOURCE,
             "live inner entry physical resource gate rejected; " + detail,
@@ -5522,7 +5526,8 @@ def _validate_receipt_physical_scope_against_exit_cgroup_v2(
     )
     if (
         exit_current > exit_peak
-        or exit_peak > auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        or exit_peak
+        > auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
         or exit_scope_root != expected_exit_scope_root
     ):
         raise ValueError(f"{context} exit physical peak exceeds the Auditor cap")
@@ -5642,9 +5647,9 @@ def _validate_receipt_physical_scope_against_exit_cgroup_v2(
             or scope != exit_scope
             or invariant_scope != exit_scope
             or invariant_complete.get("physical_memory_cap_bytes")
-            != auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+            != auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
             or complete.get("physical_memory_cap_bytes")
-            != auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+            != auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
             or invariant_current > invariant_peak
             or invariant_peak < previous_physical_peak
             or receipt_current > receipt_peak
@@ -5689,7 +5694,7 @@ def _capture_live_runtime_exit_v2(
         != entry_cgroup.get("unified_cgroup_leaf_inode")
     ):
         raise ValueError("live inner exit cgroup scope drifted")
-    cap = auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+    cap = auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
     current = _require_exact_int_v2(
         cgroup.get("memory_current"), "live exit memory.current"
     )
@@ -5804,7 +5809,7 @@ def _validate_post_output_full_cgroup_snapshot_v2(
     )
     if any(snapshot.get(name) != exit_cgroup.get(name) for name in scope_fields):
         _fail(FAIL_RESOURCE, "post-output cgroup scope drifted after stdout flush")
-    cap = auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+    cap = auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
     ceiling = cap - POST_OUTPUT_DIRECT_EXIT_TAIL_RESERVE_BYTES_V2
     peak = _require_exact_int_v2(
         snapshot.get("memory_peak"), "post-output full memory.peak"
@@ -5972,7 +5977,7 @@ def _validate_final_post_output_memory_peak_v2(
     """Require monotonic headroom immediately before the direct process exit."""
 
     final = _require_exact_int_v2(final_peak, "final fresh memory.peak")
-    cap = auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+    cap = auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
     ceiling = cap - POST_OUTPUT_DIRECT_EXIT_TAIL_RESERVE_BYTES_V2
     membership = _require_safe_cgroup_path_v2(
         full_snapshot.get("cgroup_path"), "final peak cgroup"
@@ -6076,7 +6081,7 @@ def _write_flush_gate_and_direct_exit_v2(
         )
         direct_exit = _DIRECT_PROCESS_EXIT_V2
         final_ceiling = (
-            auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+            auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
             - POST_OUTPUT_DIRECT_EXIT_TAIL_RESERVE_BYTES_V2
         )
         final_peak = _fresh_current_cgroup_memory_peak_v2(full_snapshot)
@@ -6312,7 +6317,8 @@ def _validate_complete_receipt_issuance_runtime_projection_v2(
         if (
             replay.absolute_deadline_kind != "PARTITION_PREPARATION"
             or replay.diagnostic_worker_historical_peak_rss_bytes_sum != 0
-            or replay.physical_memory_cap_bytes != auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+            or replay.physical_memory_cap_bytes
+            != auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
         ):
             raise ValueError(
                 f"{context} insufficient receipt-issuance branch drifted"
@@ -6548,7 +6554,7 @@ def _validate_executed_runtime_bundle_v2(
         or statistics_runtime.get("physical_memory_cap_bytes")
         != diagnostics.get("physical_memory_cap_bytes")
         or diagnostics.get("physical_memory_cap_bytes")
-        != auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        != auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
         or statistics_runtime.get(
             "statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds"
         )
@@ -9617,7 +9623,7 @@ def _validate_runtime_entry_exit_contract_v2(
             or _require_exact_int_v2(
                 cgroup["memory_peak"], f"{context} {phase} memory.peak"
             )
-            > auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+            > auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
         ):
             raise ValueError(f"{context} cgroup integer evidence drifted")
         _validate_zero_cgroup_events_v2(
@@ -10359,7 +10365,7 @@ def _validate_live_inner_artifact_v2(
             or _require_exact_int_v2(
                 cgroup.get("memory_peak"), f"inner {name} memory.peak"
             )
-            > auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+            > auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
         ):
             raise ValueError("live inner cgroup integer evidence drifted")
         _validate_zero_cgroup_events_v2(
@@ -10654,7 +10660,7 @@ def _validate_development_calibration_artifact_v2(
             or _require_exact_int_v2(
                 row.get("memory_peak"), f"calibration {phase} memory.peak"
             )
-            > auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+            > auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
         ):
             raise ValueError("calibration cgroup integer evidence drifted")
         _validate_zero_cgroup_events_v2(

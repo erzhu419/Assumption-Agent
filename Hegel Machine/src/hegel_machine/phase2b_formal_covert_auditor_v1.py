@@ -55,7 +55,8 @@ from .rfc8785_v1 import (
 
 SCHEMA_VERSION: Final = "hegel-machine-phase2b-formal-covert-auditor/5"
 SEMANTICS_VERSION: Final = (
-    "hegel-machine-phase2b-formal-covert-statistics/9-cgroup-memory-max-transient-overage-erratum"
+    "hegel-machine-phase2b-formal-covert-statistics/11-"
+    "counter-ordering-erratum"
 )
 CLAIM_LEVEL: Final = (
     "AUDIT_TRANSCRIPT_ONLY_NOT_AUTHORITY_ORIGIN_NOT_INDEPENDENCE_NOT_ACTUAL_CORPUS"
@@ -82,7 +83,15 @@ MAXIMUM_FEATURES: Final = 32_768
 MAXIMUM_VALUES_PER_FEATURE: Final = 1_024
 MAXIMUM_LABEL_CLASSES: Final = 256
 MAXIMUM_STATISTICAL_INTERSECTION_WORK_UNITS: Final = 20_000_000_000
-MAXIMUM_ESTIMATED_RSS_BYTES: Final = 12_884_901_888
+MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES: Final = 25_769_803_776
+EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES: Final = 12_884_901_888
+RAW_CHILD_ADDRESS_SPACE_LIMIT_BYTES: Final = 12_884_901_888
+# Compatibility only: historical callers used this name for the independent
+# physical peak cap.  Production plan, runtime, and DTO branches use one of the
+# three explicit domains above and never infer a domain from this alias.
+MAXIMUM_ESTIMATED_RSS_BYTES: Final = (
+    EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
+)
 MAXIMUM_LINUX_RESOURCE_COUNTER_BYTES: Final = (1 << 63) - 1
 MAXIMUM_TOTAL_STATISTICAL_WORK_UNITS: Final = 50_000_000_000
 MAXIMUM_WIRE_ADAPTER_RETAINED_GRAPH_BYTES: Final = 2_147_483_648
@@ -287,11 +296,13 @@ _SEMANTICS_DESCRIPTOR: Final = (
     "resource_statistics_plan=max_parent_current_or_masks_plus_partition_plus_adapter_plus_64MiB_times_parent_plus_workers_plus_exact_worker_and_parent_tails_excludes_released_phase_exclusive_feature_and_envelope_decode_graphs",
     "resource_partition_projection=per_concrete_feature_cardinality_checked_at_1024_then_python_integer_tuple_partition_allocation_projected_before_materialization_and_one_producer_owned_deep_graph_measurement_inside_statistics_resource_plan_no_caller_scalar",
     "resource_partition_deadline=600_seconds_absolute_from_cardinality_projection_through_single_partition_materialization_and_resource_plan_measurement_separate_from_statistics_clock",
-    "resource_final_fork_preflight=after_invariance_snapshot_or_statistics_masks_artifact_and_worker_ownership_inputs_resample_exact_parent_current_rss_recompute_max_current_or_phase_static_projection_and_bind_current_projection_static_multiplier_tail_plan_root_cap_and_margin_into_runtime_evidence_statistics_raw_worker_requires_plan_and_empty_evidence_slot_with_no_optional_bypass",
+    "resource_cap_domains=aggregate_static_phase_plan_admission_cap_25769803776_bytes_is_a_conservative_self_plus_children_formula_and_neither_fork_authorization_nor_physical_memory_claim_independent_exact_unified_cgroup_v2_attempt_leaf_physical_peak_cap_12884901888_bytes_each_raw_child_RLIMIT_AS_cap_at_most_12884901888_bytes_legacy_MAXIMUM_ESTIMATED_RSS_BYTES_alias_equals_physical_only",
+    "resource_parallel_worker_selection=five_raw_target_children_iff_exact_estimated_intersection_work_units_at_least_250000000_effective_cpu_capacity_at_least_5_and_full_five_worker_aggregate_static_rss_at_most_25769803776_bytes_otherwise_one_raw_child_executes_targets_0_through_4_sequentially",
+    "resource_final_fork_preflight=after_invariance_snapshot_or_statistics_masks_artifact_and_worker_ownership_inputs_resample_exact_parent_current_rss_recompute_max_current_or_phase_static_projection_and_bind_current_projection_static_multiplier_tail_plan_root_cap_and_margin_into_runtime_evidence_statistics_raw_worker_requires_plan_and_empty_evidence_slot_with_no_optional_bypass_static_projection_at_most_25769803776_bytes_is_not_sufficient_to_fork_effective_available_must_also_be_at_least_exact_runtime_projection_plus_2147483648_bytes",
     "resource_plan_cross_binding=private_invariant_plan_root_copied_into_public_statistics_composite_plan_each_phase_runtime_evidence_replays_projection_from_its_observed_current_and_receipt_reconstructs_only_static_multiplier_tail_cap_margin_and_exact_plan_root_from_the_composite_plan_current_and_projected_values_are_runtime_evidence_not_plan_reconstruction",
     "resource_admissibility_priority=feature_projection_and_invariant_plan_resource_failures_precede_both_branches_then_feature_partition_and_statistics_plan_resource_failures_precede_even_an_insufficient_receipt_no_resource_inadmissible_receipt_is_issued",
     "resource_post_invariance_failure=feature_partition_or_statistics_plan_failure_after_completed_invariance_issues_no_receipt_restores_reservation_and_cleans_auditor_artifacts_but_does_not_claim_zero_recognizer_callbacks_or_malicious_callback_rollback",
-    "resource_runtime_observation=phase_preflight_is_exact_fork_boundary_current_projection_parent_whole_lifetime_ru_maxrss_and_wait4_worker_peaks_are_diagnostics_only_bounded_to_signed_64bit_bytes_while_one_exact_unified_cgroup_v2_attempt_leaf_memory_peak_is_the_independent_12GiB_physical_cap_authority",
+    "resource_runtime_observation=phase_preflight_is_exact_fork_boundary_current_VmRSS_projection_under_the_independent_24GiB_aggregate_static_admission_cap_and_requires_effective_available_at_least_projection_plus_2GiB_parent_sampled_proc_status_VmRSS_parent_whole_lifetime_ru_maxrss_and_wait4_worker_peaks_are_independent_diagnostic_streams_recorded_raw_without_normalization_or_Linux_ABI_cross_counter_ordering_requirement_raw_values_and_exact_sums_are_bounded_to_signed_64bit_bytes_while_one_exact_unified_cgroup_v2_attempt_leaf_memory_peak_is_the_only_independent_12GiB_physical_cap_authority",
     "resource_cgroup_counter_semantics=finite_structural_snapshot_requires_peak_ge_current_but_does_not_assume_current_or_peak_le_memory_max_because_memory_max_may_be_temporarily_exceeded_target_runtime_dtos_and_explicit_gates_still_require_peak_le_12GiB_physical_cap",
     "resource_parent_results=8192_bytes_per_target_feature_hypothesis_plus_1MiB_per_target_bounds_live_artifact_deserialization_diagnostics_probabilities_and_final_dtos",
     "uuid_absence_encoding=absent_is_internal_all_zero_128_bit_value_outside_canonical_uuidv4_domain",
@@ -335,12 +346,12 @@ _SEMANTICS_DESCRIPTOR: Final = (
     "host_capacity=min_linux_memavailable_and_same_level_cgroup_ancestor_remaining_cpu_capacity_min_os_affinity_and_tightest_cgroup_ancestor_quota",
     "affinity_read_failure=conservative_one_worker_capacity_never_parallel_five",
     "shuffle_rejection=at_most_4096_sha256_u64_draws_per_randbelow_then_atomic_fail",
-    "statistics_deadline=3600_seconds_one_exact_absolute_monotonic_nanosecond_deadline_created_before_statistics_preparation_and_passed_unchanged_through_raw_statistics_waits_parent_result_and_receipt_finalization_the_waiter_checks_deadline_before_accepting_observed_exit_timeout_uses_FAIL_STATISTICAL_RUNTIME_containment_uses_FAIL_STATISTICAL_CONTAINMENT_and_both_identify_raw_statistics_child_then_terminate_followed_by_at_most_5_seconds_term_grace_then_kill_and_reap_invariance_preserves_its_distinct_7200_second_wait_boundary_deadline_created_after_pidfd_ownership_immediately_before_wait_timeout_retains_FAIL_INVARIANCE_RUNTIME_and_containment_retains_FAIL_INVARIANCE_CONTAINMENT_parent_result_and_receipt_replay_use_cooperative_absolute_monotonic_checks_not_preemptive_only_external_supervisor_has_hard_end_to_end_deadline",
+    "statistics_deadline=3600_seconds_one_exact_absolute_monotonic_nanosecond_deadline_created_before_statistics_preparation_and_passed_unchanged_through_raw_statistics_waits_parent_result_and_receipt_finalization_the_waiter_checks_deadline_before_accepting_observed_exit_timeout_uses_FAIL_STATISTICAL_RUNTIME_containment_uses_FAIL_STATISTICAL_CONTAINMENT_and_both_identify_raw_statistics_child_then_terminate_followed_by_at_most_5_seconds_term_grace_then_kill_and_reap_every_raw_statistics_or_invariance_child_sets_exact_RLIMIT_AS_at_most_12884901888_bytes_invariance_preserves_its_distinct_7200_second_wait_boundary_deadline_created_after_pidfd_ownership_immediately_before_wait_timeout_retains_FAIL_INVARIANCE_RUNTIME_and_containment_retains_FAIL_INVARIANCE_CONTAINMENT_parent_result_and_receipt_replay_use_cooperative_absolute_monotonic_checks_not_preemptive_only_external_supervisor_has_hard_end_to_end_deadline",
     "qualification_supervisor=fresh_isolated_outer_cgroup_pids_memory_and_hard_total_deadline_required_for_external_execution_claim",
     "fork_integrity_boundary=raw_fork_provides_liveness_resource_and_copy_on_write_state_isolation_not_malicious_callback_integrity_wire_v3_stop_bytes_are_module_hash_pinned_while_recognizer_and_other_adapter_ids_are_only_recorded_cooperatively_stable_tcb_external_cas_or_signature_must_pin_their_exact_bytes",
     "fork_sigchld_boundary=python_sigchld_ignore_is_rejected_selected_lifecycle_and_cancellation_signals_are_blocked_then_sigchld_is_temporarily_default_through_owned_wait4_and_original_disposition_is_restored_before_unblocking_other_parent_signal_handlers_are_cooperative_tcb_external_qualification_requires_fresh_default_signal_dispositions_and_cgroup_pids_containment",
     "artifact_cleanup_boundary=ordinary_paths_remove_private_artifacts_path_replacement_or_unexpected_directory_fails_closed_without_following_or_recursive_deletion_and_may_leave_one_bounded_forensic_temp_directory_for_external_namespace_cleanup",
-    "resource_caps=1024_rows_32768_features_20000000000_intersections_50000000000_total_statistical_work_units_12884901888_static_phase_plan_estimate_bytes_and_12884901888_unified_cgroup_v2_attempt_leaf_memory_peak_physical_cap_bytes",
+    "resource_caps=1024_rows_32768_features_20000000000_intersections_50000000000_total_statistical_work_units_25769803776_aggregate_static_phase_plan_admission_bytes_12884901888_unified_cgroup_v2_attempt_leaf_memory_peak_physical_cap_bytes_and_12884901888_raw_child_address_space_limit_bytes",
     "receipt_execution_coverage=nonempty_invariant_and_permutation_roots_81_runs_rows_times_80_times_5_comparisons",
     "receipt_finalization=unified_issuance_evidence_for_sufficient_and_insufficient_one_exact_attempt_leaf_cgroup_v2_memory_peak_prefinal_sample_one_construct_full_replay_insert_exact_pending_entry_one_producer_pending_full_replay_capture_validated_id_then_under_one_registry_lock_recheck_exact_pending_entry_id_scope_identity_absolute_deadline_and_monotonic_physical_peak_at_or_below_12GiB_immediately_before_issued_no_post_commit_work_else_direct_exact_rollback_no_retry_parent_and_wait4_peaks_diagnostic_only",
     "receipt_authentication=cooperative_same_process_factory_object_identity_only_not_unforgeability_signature_or_authority",
@@ -2910,7 +2921,7 @@ class _InvariantResourcePlanV1:
             or self.invariance_worker_artifact_bytes_bound
             != INVARIANCE_WORKER_ARTIFACT_BYTES_BOUND
             or self.maximum_invariance_estimated_rss_bytes
-            != MAXIMUM_ESTIMATED_RSS_BYTES
+            != MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
             or self.host_available_memory_safety_margin_bytes
             != HOST_AVAILABLE_MEMORY_SAFETY_MARGIN_BYTES
         ):
@@ -2935,7 +2946,7 @@ class _InvariantResourcePlanV1:
         )
         if self.estimated_invariance_peak_rss_bytes != expected_rss:
             raise ValueError("invariant resource-plan RSS estimate drift")
-        expected_admissible = expected_rss <= MAXIMUM_ESTIMATED_RSS_BYTES
+        expected_admissible = expected_rss <= MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
         if type(self.admissible) is not bool or self.admissible is not expected_admissible:
             raise ValueError("invariant resource-plan admissibility drift")
         object.__setattr__(
@@ -2950,6 +2961,33 @@ class _InvariantResourcePlanV1:
                 prefix="phase2b_formal_covert_invariant_resource_plan_",
             ),
         )
+
+
+def _maximum_parallel_statistics_workers(
+    estimated_intersection_work_units: int,
+    effective_cpu_capacity: int,
+    five_worker_estimated_rss_bytes: int,
+) -> int:
+    """Apply the exact closed one-or-five raw-worker admission rule."""
+
+    if (
+        type(estimated_intersection_work_units) is not int
+        or estimated_intersection_work_units < 0
+        or type(effective_cpu_capacity) is not int
+        or effective_cpu_capacity < 1
+        or type(five_worker_estimated_rss_bytes) is not int
+        or five_worker_estimated_rss_bytes < 0
+    ):
+        raise TypeError("parallel statistics worker inputs must be exact bounds")
+    return (
+        len(TARGETS)
+        if estimated_intersection_work_units
+        >= PARALLEL_STATISTICS_WORK_THRESHOLD
+        and effective_cpu_capacity >= len(TARGETS)
+        and five_worker_estimated_rss_bytes
+        <= MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
+        else 1
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -3098,9 +3136,10 @@ class ResourcePlanV1:
             != MAXIMUM_STATISTICAL_INTERSECTION_WORK_UNITS
             or self.maximum_total_statistical_work_units
             != MAXIMUM_TOTAL_STATISTICAL_WORK_UNITS
-            or self.maximum_estimated_rss_bytes != MAXIMUM_ESTIMATED_RSS_BYTES
+            or self.maximum_estimated_rss_bytes
+            != MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
             or self.maximum_invariance_estimated_rss_bytes
-            != MAXIMUM_ESTIMATED_RSS_BYTES
+            != MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
             or self.host_available_memory_safety_margin_bytes
             != HOST_AVAILABLE_MEMORY_SAFETY_MARGIN_BYTES
             or self.partition_preparation_timeout_seconds
@@ -3252,13 +3291,10 @@ class ResourcePlanV1:
             + self.worker_result_artifact_bytes_bound
             + self.parent_result_working_bytes_bound
         )
-        expected_workers = (
-            len(TARGETS)
-            if self.estimated_intersection_work_units
-            >= PARALLEL_STATISTICS_WORK_THRESHOLD
-            and self.effective_cpu_capacity_at_preflight >= len(TARGETS)
-            and five_worker_rss <= MAXIMUM_ESTIMATED_RSS_BYTES
-            else 1
+        expected_workers = _maximum_parallel_statistics_workers(
+            self.estimated_intersection_work_units,
+            self.effective_cpu_capacity_at_preflight,
+            five_worker_rss,
         )
         expected_mode = "LINUX_RAW_FORK_WAIT4_ONE_OR_FIVE_TARGET_WORKERS"
         if (
@@ -3322,7 +3358,8 @@ class ResourcePlanV1:
             <= MAXIMUM_STATISTICAL_INTERSECTION_WORK_UNITS
             and self.estimated_total_statistical_work_units
             <= MAXIMUM_TOTAL_STATISTICAL_WORK_UNITS
-            and self.estimated_peak_rss_bytes <= MAXIMUM_ESTIMATED_RSS_BYTES
+            and self.estimated_peak_rss_bytes
+            <= MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
             and invariant_plan.admissible
         )
         if type(self.admissible) is not bool or self.admissible is not expected_admissible:
@@ -3501,7 +3538,8 @@ class _PhaseResourcePreflightEvidenceV1:
             or self.fork_parent_rss_multiplier < 2
             or expected_multiplier is not None
             and self.fork_parent_rss_multiplier != expected_multiplier
-            or self.maximum_estimated_rss_bytes != MAXIMUM_ESTIMATED_RSS_BYTES
+            or self.maximum_estimated_rss_bytes
+            != MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
             or self.host_available_memory_safety_margin_bytes
             != HOST_AVAILABLE_MEMORY_SAFETY_MARGIN_BYTES
         ):
@@ -3719,7 +3757,8 @@ class StatisticalRuntimeEvidenceV1:
         if (
             type(self.unified_cgroup_membership) is not str
             or type(self.unified_cgroup_memory_scope_root) is not str
-            or self.physical_memory_cap_bytes != MAXIMUM_ESTIMATED_RSS_BYTES
+            or self.physical_memory_cap_bytes
+            != EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
             or self.physical_memory_peak_bytes_before_receipt_finalization
             < self.physical_memory_current_bytes_before_receipt_finalization
             or self.physical_memory_peak_bytes_before_receipt_finalization
@@ -3850,7 +3889,8 @@ class ReceiptIssuanceRuntimeEvidenceV1:
             self.physical_memory_max_bytes,
         )
         if (
-            self.physical_memory_cap_bytes != MAXIMUM_ESTIMATED_RSS_BYTES
+            self.physical_memory_cap_bytes
+            != EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
             or snapshot.memory_peak_bytes > self.physical_memory_cap_bytes
         ):
             raise ValueError("receipt issuance physical memory cap drift")
@@ -3991,17 +4031,10 @@ class InvariantRuntimeEvidenceV1:
             )
         ):
             raise ValueError("invariant historical RSS diagnostics exceed the finite bound")
-        maximum_sampled_current = max(
-            self.parent_current_rss_bytes_at_start,
-            self.parent_peak_current_rss_bytes_observed,
-            self.parent_current_rss_bytes_at_completion,
-        )
-        if (
-            self.parent_current_rss_bytes_at_start
-            != self.resource_preflight.parent_current_rss_bytes_at_preflight
-            or self.parent_historical_peak_rss_bytes < maximum_sampled_current
+        if self.parent_current_rss_bytes_at_start != (
+            self.resource_preflight.parent_current_rss_bytes_at_preflight
         ):
-            raise ValueError("invariant parent current/historical RSS evidence drift")
+            raise ValueError("invariant parent current/preflight RSS evidence drift")
         snapshot = UnifiedCgroupMemorySnapshotV1(
             self.unified_cgroup_membership,
             self.unified_cgroup_memory_scope_root,
@@ -4012,7 +4045,8 @@ class InvariantRuntimeEvidenceV1:
             self.physical_memory_max_bytes,
         )
         if (
-            self.physical_memory_cap_bytes != MAXIMUM_ESTIMATED_RSS_BYTES
+            self.physical_memory_cap_bytes
+            != EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
             or snapshot.memory_peak_bytes > self.physical_memory_cap_bytes
         ):
             raise ValueError("invariant physical memory cap evidence drift")
@@ -4057,7 +4091,7 @@ class InvariantRuntimeEvidenceV1:
             or self.parent_side_adapter_sandboxed is not False
             or self.process_group_empty_at_exit is not True
             or not 0 < self.child_address_space_limit_bytes
-            <= MAXIMUM_ESTIMATED_RSS_BYTES
+            <= RAW_CHILD_ADDRESS_SPACE_LIMIT_BYTES
         ):
             raise ValueError("invariant runtime containment evidence drift")
         if (
@@ -4524,7 +4558,7 @@ class FormalCovertAuditReceiptV1:
                 or self.receipt_issuance_runtime_evidence.diagnostic_worker_historical_peak_rss_bytes_sum
                 != 0
                 or self.receipt_issuance_runtime_evidence.physical_memory_cap_bytes
-                != MAXIMUM_ESTIMATED_RSS_BYTES
+                != EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
             ):
                 raise ValueError(
                     "insufficient receipt issuance evidence must use W=0 and its partition deadline"
@@ -7464,14 +7498,16 @@ def _physical_memory_failure_detail_v1(
     snapshot.__post_init__()
     overage = max(
         0,
-        snapshot.memory_peak_bytes - MAXIMUM_ESTIMATED_RSS_BYTES,
+        snapshot.memory_peak_bytes
+        - EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES,
     )
     detail = (
         f"stage={stage};scope={snapshot.memory_scope_root};"
         f"physical_current_bytes={snapshot.memory_current_bytes};"
         f"physical_peak_bytes={snapshot.memory_peak_bytes};"
         f"physical_memory_max_bytes={snapshot.memory_max_bytes};"
-        f"physical_cap_bytes={MAXIMUM_ESTIMATED_RSS_BYTES};"
+        "physical_cap_bytes="
+        f"{EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES};"
         f"parent_historical_peak_rss_bytes={parent_historical_peak_rss_bytes};"
         f"worker_historical_peak_rss_bytes_sum={worker_historical_peak_rss_bytes_sum};"
         f"overage_bytes={overage}"
@@ -7499,7 +7535,10 @@ def _require_unified_cgroup_physical_peak_v1(
             "FAIL_PLATFORM_RESOURCE_SEMANTICS",
             "unified cgroup memory scope identity drifted between receipt samples",
         )
-    if snapshot.memory_peak_bytes > MAXIMUM_ESTIMATED_RSS_BYTES:
+    if (
+        snapshot.memory_peak_bytes
+        > EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
+    ):
         _reject(
             failure_code,
             _physical_memory_failure_detail_v1(
@@ -7751,7 +7790,9 @@ def _invariance_resource_plan(
         invariance_recognizer_live_output_bytes_bound=recognizer_live,
         invariance_worker_artifact_bytes_bound=INVARIANCE_WORKER_ARTIFACT_BYTES_BOUND,
         estimated_invariance_peak_rss_bytes=estimated_rss,
-        maximum_invariance_estimated_rss_bytes=MAXIMUM_ESTIMATED_RSS_BYTES,
+        maximum_invariance_estimated_rss_bytes=(
+            MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
+        ),
         invariance_rss_formula=(
             "max(parent_current_rss,envelope_and_decode_bytes+"
             "adapter_retained_graph_bytes+64MiB)*2+variant_suite_resident_bytes+"
@@ -7760,7 +7801,7 @@ def _invariance_resource_plan(
         host_available_memory_safety_margin_bytes=(
             HOST_AVAILABLE_MEMORY_SAFETY_MARGIN_BYTES
         ),
-        admissible=estimated_rss <= MAXIMUM_ESTIMATED_RSS_BYTES,
+        admissible=estimated_rss <= MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES,
     )
 
 
@@ -7943,13 +7984,11 @@ def _resource_plan(
             + parent_result_working_bytes
         )
 
-    five_worker_eligible = (
-        estimated >= PARALLEL_STATISTICS_WORK_THRESHOLD
-        and effective_cpu_capacity >= len(TARGETS)
-        and statistics_rss_for_workers(len(TARGETS))
-        <= MAXIMUM_ESTIMATED_RSS_BYTES
+    parallel_workers = _maximum_parallel_statistics_workers(
+        estimated,
+        effective_cpu_capacity,
+        statistics_rss_for_workers(len(TARGETS)),
     )
-    parallel_workers = len(TARGETS) if five_worker_eligible else 1
     permutation_metric_tuple_bytes = (
         LABEL_PERMUTATIONS * 256 * parallel_workers
     )
@@ -7969,7 +8008,7 @@ def _resource_plan(
         and maximum_classes <= MAXIMUM_LABEL_CLASSES
         and estimated <= MAXIMUM_STATISTICAL_INTERSECTION_WORK_UNITS
         and estimated_total_work <= MAXIMUM_TOTAL_STATISTICAL_WORK_UNITS
-        and estimated_rss <= MAXIMUM_ESTIMATED_RSS_BYTES
+        and estimated_rss <= MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
         and invariance_plan.admissible
     )
     return ResourcePlanV1(
@@ -8045,7 +8084,7 @@ def _resource_plan(
         ),
         invariance_rss_formula=invariance_plan.invariance_rss_formula,
         estimated_peak_rss_bytes=estimated_rss,
-        maximum_estimated_rss_bytes=MAXIMUM_ESTIMATED_RSS_BYTES,
+        maximum_estimated_rss_bytes=MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES,
         aggregate_rss_formula=(
             "max(parent_current_rss,mask_bytes+partition_matrix_bytes+"
             "adapter_retained_graph_bytes+64MiB)"
@@ -8421,7 +8460,7 @@ def _preflight_feature_extraction_memory(
         + result_bound
         + artifact_bound
     )
-    if required_without_margin > MAXIMUM_ESTIMATED_RSS_BYTES:
+    if required_without_margin > MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES:
         _reject(
             "FAIL_FEATURE_PROJECTION_RESOURCE_CAP",
             "pre-extraction feature/result projection exceeds the frozen aggregate cap",
@@ -8464,7 +8503,7 @@ def _preflight_partition_allocation_memory(
         + partition_projection.projected_partition_matrix_bytes_bound
         + result_bound
     )
-    if required_without_margin > MAXIMUM_ESTIMATED_RSS_BYTES:
+    if required_without_margin > MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES:
         _reject(
             "FAIL_PARTITION_PROJECTION_RESOURCE_CAP",
             "projected parent partition/result allocation exceeds the frozen aggregate cap",
@@ -10934,7 +10973,7 @@ def _close_inherited_fds_for_invariance_child(
 
 def _invariance_child_address_space_limit_bytes() -> int:
     _, hard = resource.getrlimit(resource.RLIMIT_AS)
-    target = MAXIMUM_ESTIMATED_RSS_BYTES
+    target = RAW_CHILD_ADDRESS_SPACE_LIMIT_BYTES
     if hard != resource.RLIM_INFINITY:
         target = min(target, int(hard))
     if target <= _linux_current_virtual_memory_bytes() + 64 * 1_048_576:
@@ -10947,7 +10986,7 @@ def _invariance_child_address_space_limit_bytes() -> int:
 
 def _set_invariance_child_address_space_limit(limit_bytes: int) -> None:
     if type(limit_bytes) is not int or not 0 < limit_bytes <= (
-        MAXIMUM_ESTIMATED_RSS_BYTES
+        RAW_CHILD_ADDRESS_SPACE_LIMIT_BYTES
     ):
         raise ValueError("invariant child address-space limit drift")
     _, hard = resource.getrlimit(resource.RLIMIT_AS)
@@ -11286,7 +11325,9 @@ def _run_invariance(
             physical_snapshot.memory_peak_bytes
         ),
         physical_memory_max_bytes=physical_snapshot.memory_max_bytes,
-        physical_memory_cap_bytes=MAXIMUM_ESTIMATED_RSS_BYTES,
+        physical_memory_cap_bytes=(
+            EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
+        ),
         invariance_wall_time_nanoseconds=time.monotonic_ns() - started_ns,
         worker_timeout_seconds=INVARIANCE_WORKER_TIMEOUT_SECONDS,
         invariant_run_count=result.invariant_run_count,
@@ -11631,7 +11672,9 @@ def _run_formal_covert_audit_with_reservation_v1(
                 physical_snapshot.memory_peak_bytes
             ),
             physical_memory_max_bytes=physical_snapshot.memory_max_bytes,
-            physical_memory_cap_bytes=MAXIMUM_ESTIMATED_RSS_BYTES,
+            physical_memory_cap_bytes=(
+                EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
+            ),
             receipt_finalization_complete_pending_validation_count=1,
             receipt_finalization_locked_deadline_check_count=1,
             receipt_finalization_locked_deadline_within_absolute_limit=True,
@@ -11834,7 +11877,9 @@ def _run_formal_covert_audit_with_reservation_v1(
             physical_snapshot.memory_peak_bytes
         ),
         physical_memory_max_bytes=physical_snapshot.memory_max_bytes,
-        physical_memory_cap_bytes=MAXIMUM_ESTIMATED_RSS_BYTES,
+        physical_memory_cap_bytes=(
+            EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
+        ),
         statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds=(
             time.monotonic_ns() - statistics_started_ns
         ),
@@ -11872,7 +11917,9 @@ def _run_formal_covert_audit_with_reservation_v1(
             physical_snapshot.memory_peak_bytes
         ),
         physical_memory_max_bytes=physical_snapshot.memory_max_bytes,
-        physical_memory_cap_bytes=MAXIMUM_ESTIMATED_RSS_BYTES,
+        physical_memory_cap_bytes=(
+            EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
+        ),
         receipt_finalization_complete_pending_validation_count=1,
         receipt_finalization_locked_deadline_check_count=1,
         receipt_finalization_locked_deadline_within_absolute_limit=True,
@@ -12077,16 +12124,19 @@ __all__ = [
     "FormalWireV3AdapterV1",
     "FormalUuidRenamingPlanV1",
     "FormalVariantPlanV1",
+    "EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES",
     "GLOBAL_CASE_ORDER_PERMUTATIONS",
     "GLOBAL_RENAMINGS",
     "LABEL_PERMUTATIONS",
     "MAXIMUM_IN_PROCESS_ISSUED_RECEIPTS",
+    "MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES",
     "MUST_BE_ABSENT_FIELDS",
     "NamespaceLeafV1",
     "OBSERVATION_ORDER_PERMUTATIONS",
     "POLICY_BINDING_ID",
     "POSITIVE_DECISION_CLAIM",
     "ResourcePlanV1",
+    "RAW_CHILD_ADDRESS_SPACE_LIMIT_BYTES",
     "ReceiptIssuanceRuntimeEvidenceV1",
     "SEMANTICS_ID",
     "StatisticalRuntimeEvidenceV1",

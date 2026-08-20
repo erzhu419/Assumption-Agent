@@ -33,9 +33,9 @@ compiled by the source-only loader:
 - `schema.py`.
 
 The checked canonical profile ID is
-`phase2b_formal_wire_covert_qualification_profile_v2_3a055d4dea2c4d00c7ccbce465746ed5f70cc51977460ee027bd5807ab6e5d46`,
+`phase2b_formal_wire_covert_qualification_profile_v2_22ad936a3a7147804bfa2b9679686ca8d74c83b5f9ec29ae21e4fbd440240ab2`,
 and its dependency-lock SHA-256 is
-`8c375133fb17d484d129464975ed4deb737d8f1e200d850f9ac75f4046bbfa07`.
+`d8538a7ccbb617d5d42aa25500b862d829e7b957ebeb329bf67ca6dd75ee7f94`.
 The dependency-lock root schema is
 `hegel-machine-phase2b-formal-wire-covert-qualification-dependency-lock/3`,
 and that exact discriminator is also closed inside the profile's lock binding.
@@ -50,9 +50,9 @@ the post-output gate attestation or extracted-child preopened-source map.
 The pinned Auditor contract is
 `hegel-machine-phase2b-formal-covert-auditor/5`, its profile schema is
 `hegel-machine-phase2b-formal-covert-auditor-profile/5`, semantics are
-`phase2b_formal_covert_semantics_d50564375ce978d2ee585662adc6d9ac5c2335aa662214f508897f1076918321`,
+`phase2b_formal_covert_semantics_6891de9f6ad452fcff18784140a26dd58ad783bbcf8a35f472e7042ae09ed7f8`,
 and policy binding
-`phase2b_formal_covert_policy_binding_122bb24b8d8983a294a66e64c59fd74ac4017eaead1b7888141ff1679ac4272b`.
+`phase2b_formal_covert_policy_binding_7db4601dc697625edfdb0b3495dcaf5d8289c6737433d277f13b092c5763a8e4`.
 
 A direct qualified CLI invocation must begin with CPython `-I -S -B`; missing
 initial flags fail before any project import, business input, output, or
@@ -247,9 +247,22 @@ cross-stage validators against the composite plan.
 
 Every receipt also carries the branch-neutral
 `ReceiptIssuanceRuntimeEvidenceV1`. For an executed QV2 audit its deadline kind
-is `STATISTICS`. The ResourcePlan RSS formulas remain conservative static-plan
-admissibility estimates; they are not the execution-time physical-cap
-authority. Execution authority is the charged high-water value in
+is `STATISTICS`. The ResourcePlan RSS formulas use an exact 24 GiB aggregate
+static-plan admission cap. They conservatively count fork-shared pages once
+for the parent and once per raw child and are neither fork authorization nor
+the execution-time physical-cap authority. Every final fork preflight must
+also observe effective availability at least equal to its exact runtime
+projection plus 2 GiB. For the captured five-worker projection of
+12,977,604,608 bytes, that lower bound is exactly 15,125,088,256 bytes. The
+actual gate takes the minimum of `MemAvailable` and remaining capacity at every
+finite same-level cgroup ancestor. Provided `MemAvailable` independently meets
+15,125,088,256 bytes and the 24 GiB attempt leaf is the tightest finite cgroup
+level with no ancestor having smaller remaining capacity, only the
+cgroup-remaining half of the gate for that fixed captured projection reduces
+to the leaf-local
+`memory.current <= 10,644,715,520`. This is not a general fork or current
+cutoff: runtime recomputes its projection from the fresh parent current sample.
+Execution authority is the charged high-water value in
 `memory.peak` for one exact unified-cgroup-v2 attempt leaf. The Auditor samples
 that leaf at invariance completion, before both sufficient and insufficient
 receipt-finalization branches, and again under the receipt-registry lock after
@@ -267,10 +280,22 @@ not relax acceptance. The Auditor runtime DTOs and QV2 entry, exit, and
 post-output gates separately require the observed peak to remain within the
 12 GiB physical cap.
 
-Parent whole-lifetime `ru_maxrss` and the sum of raw-worker `wait4` peaks remain
-bounded historical diagnostics only. They are retained in the statistical and
-issuance DTOs but are never added together as a physical charge and never
-cause a cap rejection. This avoids double-counting fork-shared pages. A
+The one-or-five statistics worker rule is exact: five raw children require at
+least 250,000,000 estimated intersection work units, effective CPU capacity at
+least five, and the full five-worker aggregate static estimate at or below
+24 GiB. Otherwise one raw child executes all five targets sequentially. Every
+statistics or invariance child independently installs an at-most-12-GiB
+`RLIMIT_AS`; neither the 24 GiB static cap nor operational `MemoryMax` widens it.
+
+Parent `/proc/self/status` `VmRSS` samples, whole-lifetime `ru_maxrss`, and raw
+worker `wait4` peaks are independent diagnostic streams. Their raw values and
+exact historical sum remain signed-64-bit bounded and are retained without
+normalization in the runtime and issuance DTOs. Linux defines no ABI
+cross-counter ordering between them; in particular, `ru_maxrss >= VmRSS` is
+not required. They are never added together as a
+physical charge and never cause a cap rejection merely because one stream is
+below another. Only the same-scope cgroup-v2 `memory.peak` is physical
+authority. This avoids double-counting fork-shared pages. A
 physical-cap rejection instead emits one bounded line containing the phase,
 exact scope, current, peak, observed `memory.max`, 12 GiB cap, parent
 historical peak, worker historical sum, and overage. The issuance evidence also records exactly
@@ -370,7 +395,8 @@ construction:
 - requested cgroup memory and pids maxima. The attempt's requested operational
   hard `memory.max` must equal exactly 24 GiB (`25769803776` bytes). This
   kernel-containment ceiling is deliberately distinct from, and does not
-  relax, the Auditor's 12 GiB static-plan and physical-peak qualification cap.
+  relax, the Auditor's 24 GiB aggregate static-plan admission cap, independent
+  12 GiB physical-peak qualification cap, or 12 GiB raw-child `RLIMIT_AS`.
   The old 12 GiB attempt value and every value other than exact 24 GiB fail
   closed before launch.
 

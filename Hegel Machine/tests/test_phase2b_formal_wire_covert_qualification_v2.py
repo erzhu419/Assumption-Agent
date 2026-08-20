@@ -1730,8 +1730,8 @@ def test_checked_profile_is_exact_canonical_candidate_with_live_disabled() -> No
         "hegel-machine-phase2b-formal-covert-auditor-profile/5"
     )
     assert auditor.SEMANTICS_VERSION == (
-        "hegel-machine-phase2b-formal-covert-statistics/9-"
-        "cgroup-memory-max-transient-overage-erratum"
+        "hegel-machine-phase2b-formal-covert-statistics/11-"
+        "counter-ordering-erratum"
     )
     assert auditor.SEMANTICS_ID == qualification.AUDITOR_SEMANTICS_ID_V2
     assert auditor.POLICY_BINDING_ID == qualification.AUDITOR_POLICY_BINDING_ID_V2
@@ -1747,6 +1747,16 @@ def test_checked_profile_is_exact_canonical_candidate_with_live_disabled() -> No
     assert profile.profile["auditor_binding"][
         "receipt_issuance_runtime_evidence_fields"
     ] == qualification._RECEIPT_ISSUANCE_RUNTIME_FIELDS_V2
+    assert profile.profile["auditor_binding"][
+        "maximum_static_phase_plan_rss_bytes"
+    ] == auditor.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES == 25_769_803_776
+    assert profile.profile["auditor_binding"][
+        "execution_scope_physical_memory_peak_cap_bytes"
+    ] == auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES == 12_884_901_888
+    assert (
+        auditor.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
+        != auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
+    )
     resource_fields = fields(auditor.ResourcePlanV1)
     assert len(qualification.FROZEN_STATIC_RESOURCE_PLAN_FIELDS_V2) == 45
     assert len(qualification.DYNAMIC_RESOURCE_PLAN_FIELDS_NOT_EXACT_COMPARED_V2) == 11
@@ -2157,11 +2167,16 @@ def test_attempt_manifest_v3_requires_exact_operational_twenty_four_gib_memory_m
     attempt = _attempt()
     exact_twelve_gib = 12 * 1_024**3
     exact_twenty_four_gib = 24 * 1_024**3
+    assert (
+        auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
+        == exact_twelve_gib
+    )
     assert auditor.MAXIMUM_ESTIMATED_RSS_BYTES == exact_twelve_gib
+    assert auditor.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES == exact_twenty_four_gib
     assert qualification.OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2 == exact_twenty_four_gib
     assert attempt.requested_cgroup_memory_max_bytes == exact_twenty_four_gib
     assert attempt.requested_cgroup_memory_max_bytes != (
-        auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
     )
     assert attempt.attempt_manifest_root.startswith(
         "phase2b_formal_wire_covert_attempt_manifest_v3_"
@@ -2205,16 +2220,83 @@ def test_development_attempt_builder_rejects_nonexact_operational_memory_max_bef
         )
 
 
-def test_retained_r3_profile_identity_is_rejected_after_operational_limit_split() -> None:
+def test_retained_pre_decoupling_and_r3_profile_identities_are_rejected() -> None:
+    retained_pre_decoupling_profile_id = (
+        "phase2b_formal_wire_covert_qualification_profile_v2_"
+        "3a055d4dea2c4d00c7ccbce465746ed5f70cc51977460ee027bd5807ab6e5d46"
+    )
+    pre_decoupling_profile = qualification._deep_thaw(
+        qualification._EXPECTED_PROFILE
+    )
+    auditor_binding = pre_decoupling_profile["auditor_binding"]
+    auditor_binding["maximum_static_phase_plan_rss_bytes"] = (
+        auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
+    )
+    auditor_binding["semantics_id"] = (
+        "phase2b_formal_covert_semantics_"
+        "d50564375ce978d2ee585662adc6d9ac5c2335aa662214f508897f1076918321"
+    )
+    auditor_binding["policy_binding_id"] = (
+        "phase2b_formal_covert_policy_binding_"
+        "122bb24b8d8983a294a66e64c59fd74ac4017eaead1b7888141ff1679ac4272b"
+    )
+    dependency_lock = pre_decoupling_profile["dependency_lock"]
+    dependency_lock["sha256"] = (
+        "8c375133fb17d484d129464975ed4deb737d8f1e200d850f9ac75f4046bbfa07"
+    )
+    dependency_lock["runtime_import_closure_sha256"][
+        "src/hegel_machine/phase2b_formal_covert_auditor_v1.py"
+    ] = "f4ea0bb54fd7b4f5707a6eea22ac8b728279e4f2e5559899626e4bf477d87312"
+    pinned = pre_decoupling_profile["wire_binding"]["pinned_artifact_sha256"]
+    pinned.update(
+        {
+            "auditor_config": (
+                "e98052fd9e545ef17c577ab294388793a44502c91b22a1d784b41b86ecf54e83"
+            ),
+            "auditor_documentation": (
+                "07000f2f505731704392883062ac3d7ae1cd19411026e327f688ce441a7c6936"
+            ),
+            "auditor_source": (
+                "f4ea0bb54fd7b4f5707a6eea22ac8b728279e4f2e5559899626e4bf477d87312"
+            ),
+            "auditor_test": (
+                "0a383c06b4d3a7d048134e74f1465e85f2bc35add262bc065463e6b984d01b4f"
+            ),
+        }
+    )
+    pre_decoupling_encoded = qualification.canonicalize_rfc8785_v1(
+        pre_decoupling_profile
+    )
+    assert retained_pre_decoupling_profile_id == (
+        qualification.PROFILE_ID_PREFIX
+        + hashlib.sha256(
+            qualification.PROFILE_DOMAIN + pre_decoupling_encoded
+        ).hexdigest()
+    )
+    assert qualification.PROFILE_ID != retained_pre_decoupling_profile_id
+    pre_decoupling_transport = qualification.canonicalize_rfc8785_v1(
+        {
+            "qualification_profile": pre_decoupling_profile,
+            "qualification_profile_id": retained_pre_decoupling_profile_id,
+        }
+    ) + b"\n"
+    with pytest.raises(
+        qualification.Phase2BFormalWireCovertQualificationErrorV2,
+        match="qualification profile content drift",
+    ):
+        qualification.load_phase2b_formal_wire_covert_qualification_profile_v2(
+            pre_decoupling_transport
+        )
+
     retained_r3_profile_id = (
         "phase2b_formal_wire_covert_qualification_profile_v2_"
         "36c8913b900f2feb87e6ca5f6b3855818220498c646560216b55da78a4160ccf"
     )
-    old_profile = qualification._deep_thaw(qualification._EXPECTED_PROFILE)
+    old_profile = json.loads(json.dumps(pre_decoupling_profile))
     live = old_profile["readiness_boundary"]["live_execution_contract"]
     live["requested_memory_max_equals_auditor_physical_cap"] = True
     live["post_output_physical_gate_contract"]["systemd_memory_max_bytes"] = (
-        auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
     )
     old_encoded = qualification.canonicalize_rfc8785_v1(old_profile)
     assert retained_r3_profile_id == (
@@ -2787,15 +2869,21 @@ def test_phase_resource_preflight_projection_is_exact_and_closed(
     prefix: str,
 ) -> None:
     resource_plan_root = prefix + "0" * 64
+    parent_current = (
+        auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES // 2 + 1
+    )
+    projected = parent_current * 2
     preflight = auditor._PhaseResourcePreflightEvidenceV1(
         phase=phase,
         resource_plan_root=resource_plan_root,
-        parent_current_rss_bytes_at_preflight=100,
+        parent_current_rss_bytes_at_preflight=parent_current,
         static_parent_bytes_bound=90,
         fork_parent_rss_multiplier=2,
-        additional_bytes_bound=10,
-        projected_aggregate_rss_bytes_at_preflight=210,
-        maximum_estimated_rss_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+        additional_bytes_bound=0,
+        projected_aggregate_rss_bytes_at_preflight=projected,
+        maximum_estimated_rss_bytes=(
+            auditor.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
+        ),
         host_available_memory_safety_margin_bytes=(
             auditor.HOST_AVAILABLE_MEMORY_SAFETY_MARGIN_BYTES
         ),
@@ -2807,6 +2895,20 @@ def test_phase_resource_preflight_projection_is_exact_and_closed(
         resource_plan_root=resource_plan_root,
         context="unit phase preflight",
     ) == preflight
+    assert projected > auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
+    assert projected <= auditor.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
+    with pytest.raises(ValueError, match="phase resource-preflight semantics drifted"):
+        qualification._replay_phase_resource_preflight_projection_v2(
+            {
+                **projection,
+                "maximum_estimated_rss_bytes": (
+                    auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
+                ),
+            },
+            phase=phase,
+            resource_plan_root=resource_plan_root,
+            context="unit static-physical cap splice",
+        )
     for malformed in (
         {key: value for key, value in projection.items() if key != "phase"},
         {**projection, "unexpected": 0},
@@ -2833,7 +2935,10 @@ def test_phase_resource_preflight_projection_is_exact_and_closed(
         ("fork_parent_rss_multiplier", 3),
         ("additional_bytes_bound", 11),
         ("projected_aggregate_rss_bytes_at_preflight", 211),
-        ("maximum_estimated_rss_bytes", auditor.MAXIMUM_ESTIMATED_RSS_BYTES + 1),
+        (
+            "maximum_estimated_rss_bytes",
+            auditor.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES + 1,
+        ),
         (
             "host_available_memory_safety_margin_bytes",
             auditor.HOST_AVAILABLE_MEMORY_SAFETY_MARGIN_BYTES + 1,
@@ -2855,7 +2960,9 @@ def test_invariant_phase_resource_preflight_tamper_matrix_fails_closed(
         "fork_parent_rss_multiplier": 2,
         "additional_bytes_bound": 10,
         "projected_aggregate_rss_bytes_at_preflight": 210,
-        "maximum_estimated_rss_bytes": auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+        "maximum_estimated_rss_bytes": (
+            auditor.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
+        ),
         "host_available_memory_safety_margin_bytes": (
             auditor.HOST_AVAILABLE_MEMORY_SAFETY_MARGIN_BYTES
         ),
@@ -2980,7 +3087,9 @@ def test_complete_two_phase_runtime_reconstruction_crossbinds_composite_plan() -
         ),
         physical_memory_peak_bytes_at_completion=cgroup_snapshot.memory_peak_bytes,
         physical_memory_max_bytes=cgroup_snapshot.memory_max_bytes,
-        physical_memory_cap_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+        physical_memory_cap_bytes=(
+            auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
+        ),
         invariance_wall_time_nanoseconds=1,
         worker_timeout_seconds=auditor.INVARIANCE_WORKER_TIMEOUT_SECONDS,
         invariant_run_count=81,
@@ -3063,7 +3172,9 @@ def test_complete_two_phase_runtime_reconstruction_crossbinds_composite_plan() -
             cgroup_snapshot.memory_peak_bytes
         ),
         physical_memory_max_bytes=cgroup_snapshot.memory_max_bytes,
-        physical_memory_cap_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+        physical_memory_cap_bytes=(
+            auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
+        ),
         statistics_and_parent_postprocess_elapsed_at_receipt_build_nanoseconds=1,
         worker_timeout_seconds=auditor.STATISTICS_WORKER_TIMEOUT_SECONDS,
         parent_postprocess_deadline_schema=auditor.PARENT_POSTPROCESS_DEADLINE_SCHEMA,
@@ -3091,7 +3202,9 @@ def test_complete_two_phase_runtime_reconstruction_crossbinds_composite_plan() -
             cgroup_snapshot.memory_peak_bytes
         ),
         physical_memory_max_bytes=cgroup_snapshot.memory_max_bytes,
-        physical_memory_cap_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+        physical_memory_cap_bytes=(
+            auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
+        ),
         receipt_finalization_complete_pending_validation_count=1,
         receipt_finalization_locked_deadline_check_count=1,
         receipt_finalization_locked_deadline_within_absolute_limit=True,
@@ -3101,6 +3214,30 @@ def test_complete_two_phase_runtime_reconstruction_crossbinds_composite_plan() -
     invariant_projection = qualification._closed_primitive_v2(invariant_runtime)
     statistics_projection = qualification._closed_primitive_v2(statistics_runtime)
     issuance_projection = qualification._closed_primitive_v2(issuance_runtime)
+    assert invariant_runtime.resource_preflight.maximum_estimated_rss_bytes == (
+        auditor.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
+    )
+    assert statistics_runtime.resource_preflight.maximum_estimated_rss_bytes == (
+        auditor.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
+    )
+    assert statistics_runtime.physical_memory_cap_bytes == (
+        auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
+    )
+    for runtime in (invariant_runtime, statistics_runtime, issuance_runtime):
+        with pytest.raises(ValueError):
+            replace(
+                runtime,
+                physical_memory_cap_bytes=(
+                    auditor.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
+                ),
+            )
+    with pytest.raises(ValueError, match="frozen scalar drift"):
+        replace(
+            statistics_runtime.resource_preflight,
+            maximum_estimated_rss_bytes=(
+                auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
+            ),
+        )
     assert qualification._validate_complete_invariant_runtime_projection_v2(
         invariant_projection,
         plan_projection,
@@ -3116,6 +3253,33 @@ def test_complete_two_phase_runtime_reconstruction_crossbinds_composite_plan() -
         statistics_projection,
         context="unit complete runtime",
     ) is issuance_projection
+    for projection, validator, plan_or_statistics in (
+        (
+            invariant_projection,
+            qualification._validate_complete_invariant_runtime_projection_v2,
+            plan_projection,
+        ),
+        (
+            statistics_projection,
+            qualification._validate_complete_statistics_runtime_projection_v2,
+            plan_projection,
+        ),
+        (
+            issuance_projection,
+            qualification._validate_complete_receipt_issuance_runtime_projection_v2,
+            statistics_projection,
+        ),
+    ):
+        static_cap_splice = json.loads(json.dumps(projection))
+        static_cap_splice["physical_memory_cap_bytes"] = (
+            auditor.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
+        )
+        with pytest.raises(ValueError):
+            validator(
+                static_cap_splice,
+                plan_or_statistics,
+                context="unit static-cap physical replay splice",
+            )
     for field_name, replacement in (
         ("diagnostic_worker_historical_peak_rss_bytes_sum", 2),
         (
@@ -3157,7 +3321,9 @@ def test_complete_two_phase_runtime_reconstruction_crossbinds_composite_plan() -
             cgroup_snapshot.memory_peak_bytes
         ),
         physical_memory_max_bytes=cgroup_snapshot.memory_max_bytes,
-        physical_memory_cap_bytes=auditor.MAXIMUM_ESTIMATED_RSS_BYTES,
+        physical_memory_cap_bytes=(
+            auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
+        ),
         receipt_finalization_complete_pending_validation_count=1,
         receipt_finalization_locked_deadline_check_count=1,
         receipt_finalization_locked_deadline_within_absolute_limit=True,
@@ -4690,7 +4856,7 @@ def _inadmissible_candidate_runtime_bundle(
     plan: auditor.ResourcePlanV1,
     statistics: auditor.StatisticalRuntimeEvidenceV1,
 ) -> tuple[auditor.ResourcePlanV1, auditor.StatisticalRuntimeEvidenceV1]:
-    invariant_parent = auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+    invariant_parent = auditor.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
     invariant_peak = (
         max(
             invariant_parent,
@@ -13670,11 +13836,17 @@ def test_full1024_resource_only_projection_is_exact_and_admissible(
         assert plan.preextraction_feature_matrix_bytes_bound == (
             feature_projection.projected_feature_matrix_bytes_bound
         )
-        assert plan.estimated_peak_rss_bytes <= auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+        assert plan.estimated_peak_rss_bytes <= (
+            auditor.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
+        )
+        assert plan.maximum_parallel_workers == 5
         assert (
             plan.estimated_invariance_peak_rss_bytes
-            <= auditor.MAXIMUM_ESTIMATED_RSS_BYTES
+            <= auditor.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
         )
+        if mode == "KNOWN_BINDING_LEAK":
+            assert plan.estimated_intersection_work_units == 12_205_620_440
+            assert plan.unique_statistical_partitions == 17_562
         assert (
             plan.estimated_intersection_work_units
             <= auditor.MAXIMUM_STATISTICAL_INTERSECTION_WORK_UNITS
@@ -13698,6 +13870,25 @@ def test_full1024_resource_only_projection_is_exact_and_admissible(
         )
         assert statistics_host_memory.resource_preflight.resource_plan_root == (
             plan.resource_plan_root
+        )
+        final_projection = (
+            statistics_host_memory.resource_preflight
+            .projected_aggregate_rss_bytes_at_preflight
+        )
+        assert final_projection == (
+            max(
+                statistics_host_memory.resource_preflight
+                .parent_current_rss_bytes_at_preflight,
+                statistics_host_memory.resource_preflight
+                .static_parent_bytes_bound,
+            )
+            * statistics_host_memory.resource_preflight.fork_parent_rss_multiplier
+            + statistics_host_memory.resource_preflight.additional_bytes_bound
+        )
+        assert final_projection <= auditor.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
+        assert statistics_host_memory.effective_available_bytes >= (
+            final_projection
+            + auditor.HOST_AVAILABLE_MEMORY_SAFETY_MARGIN_BYTES
         )
     finally:
         del execution

@@ -19,9 +19,9 @@ bytes are not yet an R03/R04/R05 qualification. The frozen rich-graph
 1,024-row external supervised run remains pending.
 
 Frozen candidate IDs are
-`phase2b_formal_covert_semantics_d50564375ce978d2ee585662adc6d9ac5c2335aa662214f508897f1076918321`
+`phase2b_formal_covert_semantics_6891de9f6ad452fcff18784140a26dd58ad783bbcf8a35f472e7042ae09ed7f8`
 and
-`phase2b_formal_covert_policy_binding_122bb24b8d8983a294a66e64c59fd74ac4017eaead1b7888141ff1679ac4272b`.
+`phase2b_formal_covert_policy_binding_7db4601dc697625edfdb0b3495dcaf5d8289c6737433d277f13b092c5763a8e4`.
 
 ## Closed entry point and trust boundary
 
@@ -357,9 +357,11 @@ artifact through a separately authenticated signed or CAS record.
 
 The hard input boundary is 1,024 rows; 1,025 rejects before decode. The current
 caps are 32,768 concrete features, 20,000,000,000 bitset intersections,
-50,000,000,000 total statistical work units, a 12 GiB static phase-plan
-admission estimate, and an independent 12 GiB whole-attempt physical cap on
-the exact unified cgroup-v2 leaf's `memory.peak`. Total work includes `P+1`
+50,000,000,000 total statistical work units, a 24 GiB aggregate static
+phase-plan admission estimate, and an independent 12 GiB whole-attempt physical
+cap on the exact unified cgroup-v2 leaf's `memory.peak`. Every raw statistics or
+invariance child separately receives an address-space (`RLIMIT_AS`) limit of at
+most 12 GiB. Total work includes `P+1`
 contingency intersections,
 17-word center accumulation/finalization, scalar maxT scans, and bounded label
 shuffle calls.
@@ -414,8 +416,10 @@ retained adapter graph + 64 MiB) * (1 + workers)
 
 This deliberately counts fork-shared pages once for the parent and once per
 worker, so it is a conservative planning formula rather than observed physical
-usage. The cgroup `memory.peak` gate counts pages as actually charged to the
-whole attempt leaf and does not duplicate fork-shared pages. Feature and decode
+usage. Its 24 GiB cap is static admission only: it is neither authorization to
+fork nor a physical-memory success claim. The cgroup `memory.peak` gate counts
+pages as actually charged to the whole attempt leaf and does not duplicate
+fork-shared pages. Feature and decode
 graphs are phase-exclusive rather than silently
 counted as live during statistics. Recursive shared-object-aware
 `sys.getsizeof` observations are multiplied by four where the profile says so;
@@ -433,15 +437,26 @@ preflight resamples current RSS and recomputes the applicable formula with
 after that sample is covered by the fixed 64 MiB parent term. Runtime evidence
 binds that same current sample, projected static-plan RSS, phase static term,
 fork multiplier, additional tail, exact plan root, cap, and margin. Its DTO
-replays the projection and rejects projections above 12 GiB. Receipt validation
+replays the projection and rejects projections above 24 GiB. Receipt validation
 reconstructs the exact phase-plan root, static term, multiplier, additional
 tail, cap, and margin from the composite resource plan and requires them to
 equal the runtime evidence. The fork-boundary current sample and the resulting
 projection are observations, not values reconstructable from the earlier
 plan; the runtime DTO replays that projection directly. The receipt also
-requires effective host availability to cover the observed-current projection
-plus the 2 GiB margin, so the earlier plan estimate cannot substitute for this
-evidence.
+requires effective host availability to cover the exact observed-current
+projection plus the 2 GiB margin, so a projection at or below 24 GiB is not by
+itself sufficient to fork and the earlier plan estimate cannot substitute for
+this evidence. For the captured five-worker projection of 12,977,604,608 bytes,
+the exact minimum effective availability is 15,125,088,256 bytes. The actual
+gate always requires the minimum of `MemAvailable` and the remaining capacity
+at every finite same-level cgroup ancestor to meet that bound. Provided
+`MemAvailable` independently meets 15,125,088,256 bytes and the 24 GiB attempt
+leaf is the tightest finite cgroup level with no ancestor having smaller
+remaining capacity, only the cgroup-remaining half of the gate for that fixed
+captured projection reduces to the leaf-local
+`memory.current <= 10,644,715,520` at that sample. This is not a general fork
+or current cutoff: runtime recomputes its projection from the fresh parent
+current sample.
 
 This ordering has an explicit failure boundary. Feature, partition, or
 statistics-plan preparation can still fail after the 81-call invariant child
@@ -470,15 +485,19 @@ the external supervisor; a host-only `None` cgroup observation is not R05
 execution evidence.
 
 Statistics use exactly one or five raw `fork` children. Five are selected only
-when OS CPU count, scheduler affinity, the tightest cgroup quota, projected
-work, and the full five-worker RSS model all permit them; otherwise one child
-executes targets 0 through 4 sequentially. Failure to read scheduler affinity
+when the exact estimated intersection work is at least 250,000,000 units, the
+effective CPU capacity from OS CPU count, scheduler affinity, and the tightest
+cgroup quota is at least five, and the full five-worker aggregate static RSS
+model is at most 24 GiB; otherwise one child executes targets 0 through 4
+sequentially. Failure to read scheduler affinity
 conservatively forces the one-child path. There is no direct unbounded path.
 The raw-worker helper requires the exact statistics resource plan and a fresh
 one-slot evidence sink; omitted, wrong, or prefilled arguments fail before the
 first fork. It performs the final statistics phase preflight itself and fills
 that slot from the same fork-boundary sample. There is no optional `None`
-bypass.
+bypass. Immediately after each fork, the child installs the independently
+frozen at-most-12-GiB `RLIMIT_AS`; neither the 24 GiB static admission cap nor
+the external operational `MemoryMax` widens that child address-space limit.
 Python `SIGCHLD=SIG_IGN` is rejected before either raw fork because automatic
 reaping would destroy PID ownership. After the selected lifecycle and
 cancellation signals are blocked, the parent temporarily sets SIGCHLD to its
@@ -528,12 +547,17 @@ Both receipt branches carry exact, receipt-ID-bound
 `ReceiptIssuanceRuntimeEvidenceV1`. For a sufficient receipt, the bound deadline
 is the statistics deadline; for an insufficient receipt there is no statistical
 runtime evidence and the bound deadline is the already active
-partition-preparation deadline. Both branches record the parent whole-lifetime
-`ru_maxrss`, each direct worker's wait4 peak, and their exact sum only as
-signed-64-bit-bounded historical diagnostics. Those values never determine the
-physical cap and never reject an otherwise valid execution.
+partition-preparation deadline. The phase-preflight and later parent
+`/proc/self/status` `VmRSS` samples, parent whole-lifetime `ru_maxrss`, and each
+direct worker's wait4 peak are independent diagnostic streams. Their raw
+values and exact historical sum are signed-64-bit bounded and recorded without
+normalization. Linux defines no ABI cross-counter ordering between them; in
+particular, `ru_maxrss >= VmRSS` is not required. The start `VmRSS` remains
+exactly bound to the resource-preflight sample, but no one diagnostic stream
+determines the physical cap or rejects an otherwise valid execution merely
+because it is below another stream.
 
-The physical authority is the kernel-charged high-water mark of one exact
+The only physical authority is the kernel-charged high-water mark of one exact
 unified cgroup-v2 attempt leaf. Sufficient execution samples it at invariance
 completion, statistics pre-finalization, and locked post-validation;
 insufficient execution samples it at pre-finalization and locked
