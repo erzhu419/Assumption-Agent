@@ -376,7 +376,7 @@ from . import phase2b_formal_trusted_wire_v3 as wire
 
 
 PROFILE_SCHEMA_VERSION: Final = (
-    "hegel-machine-phase2b-formal-wire-covert-qualification/7"
+    "hegel-machine-phase2b-formal-wire-covert-qualification/8"
 )
 PROFILE_STATUS: Final = (
     "CANDIDATE_SOURCE_FROZEN_FULL_1024_SHAPE_CALIBRATION_PENDING"
@@ -801,6 +801,24 @@ _TASK4_PROJECTION_ONLY_BOUNDARY_V2: Final = {
     "step5_must_retain_full_runtime_image_and_import_native_closure": True,
 }
 
+_RETAINED_FAILURE_WITNESS_COUNT_CONTRACT_V2: Final = {
+    "full_result_matrix_retained": False,
+    "known_leak_maximum_formula": (
+        "CONCRETE_FEATURES_TIMES_HOLM_REJECTED_TARGET_COUNT"
+    ),
+    "known_leak_minimum_count": 1,
+    "known_null_required_count": 0,
+    "producer_exact_total_count_recorded": True,
+    "producer_total_count_scope": (
+        "SUM_OF_FAILURE_WITNESS_TRUE_OVER_FULL_RECEIPT_RESULTS"
+    ),
+    "pure_verifier_recomputes_exact_total_count": False,
+    "selected_visible_witness_aliases_canonical_sorted_unique": True,
+    "selected_visible_binding_e1_witness_count": 1,
+    "selected_visible_witness_feature_id_replayed_from_aliases": True,
+    "selected_visible_witness_is_distinct_projection_from_total_count": True,
+}
+
 _POST_OUTPUT_PHYSICAL_GATE_CONTRACT_V2: Final = {
     "canonical_stdout_write_then_flush_required": True,
     "cooperative_tail_headroom_not_formal_whole_lifetime_bound": True,
@@ -1074,6 +1092,9 @@ _EXPECTED_PROFILE: Final = {
         ),
         "known_leak_expected_disposition": "FAIL",
         "known_null_expected_disposition": "PASS",
+        "retained_failure_witness_count_contract": dict(
+            _RETAINED_FAILURE_WITNESS_COUNT_CONTRACT_V2
+        ),
         "fixture_specific_only": True,
         "joint_decision_classes": 2,
         "private_label_factorial": (
@@ -10038,10 +10059,56 @@ def _parse_exact_probability_text_v2(value: object, name: str) -> Fraction:
     return probability
 
 
+def _validate_projected_failure_witness_count_v2(
+    audit_row: dict[str, object],
+    target_rows: list[dict[str, object]],
+    *,
+    mode: str,
+    context: str,
+) -> int:
+    concrete_features = _require_exact_int_v2(
+        audit_row.get("concrete_features"),
+        f"{context} concrete feature count",
+        minimum=1,
+        maximum=auditor.MAXIMUM_FEATURES,
+    )
+    if (
+        type(target_rows) is not list
+        or len(target_rows) != len(auditor.TARGETS)
+        or [
+            row.get("target") if type(row) is dict else None
+            for row in target_rows
+        ]
+        != list(auditor.TARGETS)
+        or any(
+            type(row) is not dict or type(row.get("holm_rejected")) is not bool
+            for row in target_rows
+        )
+    ):
+        raise ValueError(f"{context} target rejection rows are not exact")
+    rejected_target_count = sum(
+        row["holm_rejected"] is True for row in target_rows
+    )
+    maximum_failure_witness_count = concrete_features * rejected_target_count
+    if mode == "KNOWN_NULL":
+        return _require_exact_int_v2(
+            audit_row.get("failure_witness_count"),
+            f"{context} retained known-null failure witness count",
+            maximum=0,
+        )
+    if mode != "KNOWN_BINDING_LEAK":
+        raise ValueError(f"{context} failure witness count mode is unknown")
+    return _require_exact_int_v2(
+        audit_row.get("failure_witness_count"),
+        f"{context} retained known-leak failure witness count",
+        minimum=1,
+        maximum=maximum_failure_witness_count,
+    )
+
+
 def _validate_known_leak_witness_semantics_v2(
     witness: object,
     *,
-    audit_row: dict[str, object],
     target_rows: list[dict[str, object]],
     context: str,
 ) -> None:
@@ -10142,19 +10209,15 @@ def _validate_known_leak_witness_semantics_v2(
         or type(aliases) is not list
         or not aliases
         or any(type(alias) is not str or not alias for alias in aliases)
-        or len(set(aliases)) != len(aliases)
+        or aliases != sorted(set(aliases))
         or type(registered) is not str
         or registered not in aliases
         or not _is_registered_binding_leak_alias_v2(registered)
-        or type(witness["feature_id"]) is not str
-        or not witness["feature_id"]
-        or _require_exact_int_v2(
-            audit_row.get("failure_witness_count"),
-            f"{context} exact known-leak failure witness count",
-            minimum=1,
-            maximum=1,
+        or witness["feature_id"]
+        != stable_hash(
+            {"aliases": tuple(aliases)},
+            prefix="phase2b_formal_covert_feature_",
         )
-        != 1
     ):
         raise ValueError(f"{context} known-leak E1 numeric witness drifted")
 
@@ -10353,6 +10416,12 @@ def _validate_two_run_hard_contract_v2(
         _validate_target_family_holm_projection_v2(
             target_rows, context=context
         )
+        _validate_projected_failure_witness_count_v2(
+            audit_row,
+            target_rows,
+            mode=mode,
+            context=context,
+        )
         if (
             _require_exact_int_v2(
                 audit_row.get("audited_rows"), f"{context} audited rows", minimum=1
@@ -10544,11 +10613,6 @@ def _validate_two_run_hard_contract_v2(
         if mode == "KNOWN_NULL":
             if (
                 run.get("disposition") != "PASS"
-                or _require_exact_int_v2(
-                    audit_row.get("failure_witness_count"),
-                    f"{context} known-null failure witness count",
-                )
-                != 0
                 or audit_row.get("positive_decision_claim")
                 != auditor.POSITIVE_DECISION_CLAIM
                 or run.get("known_leak_witness") is not None
@@ -10558,7 +10622,6 @@ def _validate_two_run_hard_contract_v2(
             witness = run.get("known_leak_witness")
             _validate_known_leak_witness_semantics_v2(
                 witness,
-                audit_row=audit_row,
                 target_rows=target_rows,
                 context=context,
             )
@@ -10584,13 +10647,6 @@ def _validate_two_run_hard_contract_v2(
                 not in witness["feature_aliases"]
                 or len(binding_rows) != 1
                 or binding_rows[0]["holm_rejected"] is not True
-                or _require_exact_int_v2(
-                    audit_row.get("failure_witness_count"),
-                    f"{context} known-leak failure witness count",
-                    minimum=1,
-                    maximum=1,
-                )
-                != 1
             ):
                 raise ValueError(f"{context} known-leak E1 witness drifted")
     return typed_measurements, typed_runs
@@ -10865,11 +10921,6 @@ def _validate_live_inner_artifact_v2(
         if mode == "KNOWN_NULL":
             if (
                 run.get("disposition") != "PASS"
-                or _require_exact_int_v2(
-                    audit_row.get("failure_witness_count"),
-                    "known-null failure witness count",
-                )
-                != 0
                 or audit_row.get("positive_decision_claim")
                 != auditor.POSITIVE_DECISION_CLAIM
                 or run.get("known_leak_witness") is not None
@@ -11110,11 +11161,6 @@ def _validate_development_calibration_artifact_v2(
         if mode == "KNOWN_NULL":
             if (
                 run.get("disposition") != "PASS"
-                or _require_exact_int_v2(
-                    audit_row.get("failure_witness_count"),
-                    "calibration null failure witnesses",
-                )
-                != 0
                 or audit_row.get("positive_decision_claim")
                 != auditor.POSITIVE_DECISION_CLAIM
             ):

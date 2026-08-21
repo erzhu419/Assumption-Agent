@@ -33,16 +33,19 @@ compiled by the source-only loader:
 - `schema.py`.
 
 The checked canonical profile ID is
-`phase2b_formal_wire_covert_qualification_profile_v2_56dbfbc1b4736fb5feec0edda85191c1d495884b28102e68f1172780772f6cd4`,
+`phase2b_formal_wire_covert_qualification_profile_v2_9e41ae3d8f3950d5d0fe86048bfbc3ec17e450f7d699338f2b082d9444a16bc6`,
 and its dependency-lock SHA-256 is
 `0ccd291a28df11fa0e7e7399a086bf01516a20fa2aa5e8abf3a05687b54b85db`.
 The dependency-lock root schema is
 `hegel-machine-phase2b-formal-wire-covert-qualification-dependency-lock/4`,
 and that exact discriminator is also closed inside the profile's lock binding.
 The qualification profile schema is
-`hegel-machine-phase2b-formal-wire-covert-qualification/7`; the profile domain
-and ID prefix remain V2 because the `/7` discriminator is part of the hashed
-canonical content. The development-calibration and live-inner candidate
+`hegel-machine-phase2b-formal-wire-covert-qualification/8`; the profile domain
+and ID prefix remain V2 because the `/8` discriminator is part of the hashed
+canonical content. The `/8` contract makes explicit the distinction that the
+`/7` verifier failed to enforce between the selected visible E1 witness and
+the aggregate receipt failure-witness count. The
+development-calibration and live-inner candidate
 schemas are `/7`. Their prior `/6` forms predate the scientific-child
 credential-environment proof. The outer-supervisor result is `/5`; its prior
 `/4` form introduced lossless decimal-string transport for raw Linux device,
@@ -234,6 +237,27 @@ visible rows:
 Known leak must have exactly one visible binding E1 witness with finite
 omnibus statistic greater than one. Pairwise Holm remains diagnostic only and
 has `pairwise_holm_decision_eligible=false`.
+
+The visible binding E1 dictionary is the uniquely selected witness projection;
+it is not the total number of failing result rows. The producer records
+`failure_witness_count` as the exact sum of true `failure_witness` flags over
+the full Auditor receipt results. Because Task 4 does not retain those complete
+rows, the pure verifier does not claim to recompute that exact total. It
+requires known-null count zero and, for known leak, an exact non-boolean integer
+from one through `concrete_features * Holm-rejected target count`. That upper
+bound follows from the retained result shape: each target has exactly one row
+per concrete feature, and a failure witness requires its target-family Holm
+rejection. The selected binding E1 witness is replayed independently and
+remains exactly one visible dictionary whether the recorded total is one or
+greater than one.
+
+The retained r11 failure's observed total of 169 is diagnostic evidence, not a
+frozen constant. Any producer-recorded total inside the retained bound is
+accepted by this projection verifier because only the pinned producer saw the
+complete result matrix; changing an in-range total while consistently
+rebuilding an otherwise synthetic projection is therefore not presented as an
+independent exact-total replay. The selected witness aliases remain canonical
+sorted-unique, and their feature ID is recomputed from that exact alias tuple.
 
 The Task-4 primitive projection does not retain the full result matrix,
 permutation workers, or all worker artifacts. Consequently its pure directory

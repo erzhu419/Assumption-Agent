@@ -1725,7 +1725,7 @@ def test_checked_profile_is_exact_canonical_candidate_with_live_disabled() -> No
     profile = qualification.load_phase2b_formal_wire_covert_qualification_profile_v2(payload)
     assert profile.profile_id == qualification.PROFILE_ID
     assert qualification.PROFILE_SCHEMA_VERSION == (
-        "hegel-machine-phase2b-formal-wire-covert-qualification/7"
+        "hegel-machine-phase2b-formal-wire-covert-qualification/8"
     )
     assert qualification.AUDITOR_SCHEMA_VERSION_V2 == (
         "hegel-machine-phase2b-formal-covert-auditor/5"
@@ -1762,6 +1762,9 @@ def test_checked_profile_is_exact_canonical_candidate_with_live_disabled() -> No
         auditor.MAXIMUM_STATIC_PHASE_PLAN_RSS_BYTES
         != auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
     )
+    assert profile.profile["fixture_contract"][
+        "retained_failure_witness_count_contract"
+    ] == qualification._RETAINED_FAILURE_WITNESS_COUNT_CONTRACT_V2
     resource_fields = fields(auditor.ResourcePlanV1)
     assert len(qualification.FROZEN_STATIC_RESOURCE_PLAN_FIELDS_V2) == 45
     assert len(qualification.DYNAMIC_RESOURCE_PLAN_FIELDS_NOT_EXACT_COMPARED_V2) == 11
@@ -2903,6 +2906,9 @@ def test_retained_pre_decoupling_and_r3_profile_identities_are_rejected() -> Non
     pre_decoupling_profile["schema_version"] = (
         "hegel-machine-phase2b-formal-wire-covert-qualification/6"
     )
+    del pre_decoupling_profile["fixture_contract"][
+        "retained_failure_witness_count_contract"
+    ]
     historical_live = pre_decoupling_profile["readiness_boundary"][
         "live_execution_contract"
     ]
@@ -3436,8 +3442,10 @@ def test_lightweight_trusted_projection_drift_fails_closed(
         )
 
 
-def _valid_target_family_rows() -> list[dict[str, object]]:
-    exceedances = [0, 4, 4, 100, 10_000]
+def _target_family_rows_from_exceedances(
+    exceedances: list[int],
+) -> list[dict[str, object]]:
+    assert len(exceedances) == len(auditor.TARGETS)
     raw = [Fraction(value + 1, 10_001) for value in exceedances]
     order = sorted(range(5), key=lambda index: (raw[index], index))
     ranks = [0] * 5
@@ -3464,6 +3472,10 @@ def _valid_target_family_rows() -> list[dict[str, object]]:
         }
         for index, target in enumerate(auditor.TARGETS)
     ]
+
+
+def _valid_target_family_rows() -> list[dict[str, object]]:
+    return _target_family_rows_from_exceedances([0, 4, 4, 100, 10_000])
 
 
 @pytest.mark.parametrize(
@@ -4065,12 +4077,16 @@ def test_known_leak_feature_max_t_plus_one_binding_is_replayed() -> None:
         )
         + "/presence"
     )
+    aliases = sorted([alias, "eligibility_mask/unit-secondary-alias"])
+    feature_id = qualification.stable_hash(
+        {"aliases": tuple(aliases)}, prefix="phase2b_formal_covert_feature_"
+    )
     witness = {
         "balanced_accuracy_advantage_hex": (0.0).hex(),
         "bias_corrected_nmi_hex": (0.5).hex(),
         "failure_witness": True,
-        "feature_aliases": [alias],
-        "feature_id": "unit-feature",
+        "feature_aliases": aliases,
+        "feature_id": feature_id,
         "feature_localization_rejected": True,
         "feature_max_t_exceedance_count": 5,
         "feature_max_t_p": "6/10001",
@@ -4088,7 +4104,6 @@ def test_known_leak_feature_max_t_plus_one_binding_is_replayed() -> None:
     }
     qualification._validate_known_leak_witness_semantics_v2(
         witness,
-        audit_row={"failure_witness_count": 1},
         target_rows=rows,
         context="unit witness",
     )
@@ -4097,10 +4112,141 @@ def test_known_leak_feature_max_t_plus_one_binding_is_replayed() -> None:
     with pytest.raises(ValueError, match="numeric witness"):
         qualification._validate_known_leak_witness_semantics_v2(
             tampered,
-            audit_row={"failure_witness_count": 1},
             target_rows=rows,
             context="unit witness",
         )
+    for selected_witness_tamper in (
+        {**witness, "feature_id": "phase2b_formal_covert_feature_" + "f" * 64},
+        {**witness, "feature_aliases": list(reversed(aliases))},
+        {**witness, "feature_aliases": [aliases[0], aliases[0]]},
+        {
+            **witness,
+            "feature_aliases": sorted(
+                [aliases[0], "eligibility_mask/spliced-alias"]
+            ),
+        },
+    ):
+        with pytest.raises(ValueError, match="numeric witness"):
+            qualification._validate_known_leak_witness_semantics_v2(
+                selected_witness_tamper,
+                target_rows=rows,
+                context="unit witness",
+            )
+
+
+def test_projected_failure_witness_count_uses_retained_target_feature_bound() -> None:
+    rows = _valid_target_family_rows()
+    concrete_features = 100
+    rejected_target_count = sum(row["holm_rejected"] is True for row in rows)
+    assert rejected_target_count == 3
+    upper_bound = concrete_features * rejected_target_count
+    for count in (1, 2, 169, 193, upper_bound):
+        assert qualification._validate_projected_failure_witness_count_v2(
+            {
+                "concrete_features": concrete_features,
+                "failure_witness_count": count,
+            },
+            rows,
+            mode="KNOWN_BINDING_LEAK",
+            context="unit projected count",
+        ) == count
+    single_rejected_rows = _target_family_rows_from_exceedances(
+        [1_000, 0, 2_000, 3_000, 4_000]
+    )
+    qualification._validate_target_family_holm_projection_v2(
+        single_rejected_rows, context="unit single-target family"
+    )
+    assert [
+        row["target"]
+        for row in single_rejected_rows
+        if row["holm_rejected"] is True
+    ] == ["binding"]
+    r11_concrete_features = 32_186
+    for count in (169, r11_concrete_features):
+        assert qualification._validate_projected_failure_witness_count_v2(
+            {
+                "concrete_features": r11_concrete_features,
+                "failure_witness_count": count,
+            },
+            single_rejected_rows,
+            mode="KNOWN_BINDING_LEAK",
+            context="unit r11 single-target projected count",
+        ) == count
+    with pytest.raises(ValueError, match="failure witness count"):
+        qualification._validate_projected_failure_witness_count_v2(
+            {
+                "concrete_features": r11_concrete_features,
+                "failure_witness_count": r11_concrete_features + 1,
+            },
+            single_rejected_rows,
+            mode="KNOWN_BINDING_LEAK",
+            context="unit r11 single-target projected count",
+        )
+    two_rejected_rows = _target_family_rows_from_exceedances(
+        [1_000, 0, 1, 2_000, 3_000]
+    )
+    qualification._validate_target_family_holm_projection_v2(
+        two_rejected_rows, context="unit two-target family"
+    )
+    assert sum(row["holm_rejected"] is True for row in two_rejected_rows) == 2
+    assert qualification._validate_projected_failure_witness_count_v2(
+        {
+            "concrete_features": concrete_features,
+            "failure_witness_count": concrete_features + 1,
+        },
+        two_rejected_rows,
+        mode="KNOWN_BINDING_LEAK",
+        context="unit two-target projected count",
+    ) == concrete_features + 1
+    for count in (0, upper_bound + 1, True, 1.0, "1", None):
+        with pytest.raises(ValueError, match="failure witness count"):
+            qualification._validate_projected_failure_witness_count_v2(
+                {
+                    "concrete_features": concrete_features,
+                    "failure_witness_count": count,
+                },
+                rows,
+                mode="KNOWN_BINDING_LEAK",
+                context="unit projected count",
+            )
+    for concrete_feature_count in (0, True, auditor.MAXIMUM_FEATURES + 1):
+        with pytest.raises(ValueError, match="concrete feature count"):
+            qualification._validate_projected_failure_witness_count_v2(
+                {
+                    "concrete_features": concrete_feature_count,
+                    "failure_witness_count": 1,
+                },
+                rows,
+                mode="KNOWN_BINDING_LEAK",
+                context="unit projected count",
+            )
+    zero_rejected_rows = [dict(row) for row in rows]
+    for row in zero_rejected_rows:
+        row["holm_rejected"] = False
+    with pytest.raises(ValueError, match="failure witness count"):
+        qualification._validate_projected_failure_witness_count_v2(
+            {"concrete_features": concrete_features, "failure_witness_count": 1},
+            zero_rejected_rows,
+            mode="KNOWN_BINDING_LEAK",
+            context="unit zero-target projected count",
+        )
+    assert qualification._validate_projected_failure_witness_count_v2(
+        {"concrete_features": concrete_features, "failure_witness_count": 0},
+        rows,
+        mode="KNOWN_NULL",
+        context="unit null projected count",
+    ) == 0
+    for count in (1, True):
+        with pytest.raises(ValueError, match="failure witness count"):
+            qualification._validate_projected_failure_witness_count_v2(
+                {
+                    "concrete_features": concrete_features,
+                    "failure_witness_count": count,
+                },
+                rows,
+                mode="KNOWN_NULL",
+                context="unit null projected count",
+            )
 
 
 def test_small_eight_operation_build_uses_final_fresh_api_and_exact_ten_namespaces() -> None:
@@ -4989,6 +5135,24 @@ def test_post_audit_fake_receipt_uses_execution_owner_count_and_root(
         lambda **kwargs: None,
     )
     primitive_projection = qualification._audit_primitive_projection_v2(evidence)
+    assert primitive_projection["audit"]["failure_witness_count"] == 0
+    producer_tree = ast.parse(
+        inspect.getsource(qualification._audit_primitive_projection_v2)
+    )
+    producer_values = [
+        value
+        for node in ast.walk(producer_tree)
+        if isinstance(node, ast.Dict)
+        for key, value in zip(node.keys, node.values, strict=True)
+        if isinstance(key, ast.Constant) and key.value == "failure_witness_count"
+    ]
+    assert len(producer_values) == 1
+    expected_producer = ast.parse(
+        "sum(row.failure_witness for row in receipt.results)", mode="eval"
+    ).body
+    assert ast.dump(producer_values[0], include_attributes=False) == ast.dump(
+        expected_producer, include_attributes=False
+    )
     monkeypatch.setattr(auditor, "InvariantRuntimeEvidenceV1", invariant_runtime_type)
     monkeypatch.setattr(
         auditor,
@@ -8422,12 +8586,15 @@ def _valid_full1024_inner_run_v6(
             )
             + "/presence"
         )
+        feature_id = qualification.stable_hash(
+            {"aliases": (alias,)}, prefix="phase2b_formal_covert_feature_"
+        )
         known_leak_witness = {
             "balanced_accuracy_advantage_hex": (0.0).hex(),
             "bias_corrected_nmi_hex": (0.04).hex(),
             "failure_witness": True,
             "feature_aliases": [alias],
-            "feature_id": "unit-binding-leak-feature",
+            "feature_id": feature_id,
             "feature_localization_rejected": True,
             "feature_max_t_exceedance_count": 5,
             "feature_max_t_p": "6/10001",
@@ -8642,6 +8809,49 @@ def _valid_development_inner_v7(
             )
         ),
     }
+
+
+def test_development_inner_accepts_multiple_retained_failure_witnesses(
+    tmp_path: Path,
+) -> None:
+    source_tree = (tmp_path / "source-tree").resolve()
+    source_tree.mkdir()
+    attempt = _attempt()
+    inner = _valid_development_inner_v7(attempt, source_tree)
+    leak_run = inner["runs_in_order"][1]
+    leak_audit = leak_run["audit"]
+    target_rows = _target_family_rows_from_exceedances(
+        [1_000, 0, 2_000, 3_000, 4_000]
+    )
+    qualification._validate_target_family_holm_projection_v2(
+        target_rows, context="development r11 single-target family"
+    )
+    leak_audit["target_family_max_t_holm"] = target_rows
+    leak_run["known_leak_witness"]["target_holm_critical_value"] = next(
+        row["holm_critical_value"]
+        for row in target_rows
+        if row["target"] == "binding"
+    )
+    assert leak_audit["concrete_features"] == 32_186
+    assert [
+        row["target"] for row in target_rows if row["holm_rejected"] is True
+    ] == ["binding"]
+    upper_bound = leak_audit["concrete_features"] * sum(
+        row["holm_rejected"] is True for row in target_rows
+    )
+    assert upper_bound == 32_186
+    # Captured r11 regression value; this is evidence, not a semantic constant.
+    leak_audit["failure_witness_count"] = 169
+    qualification._validate_development_calibration_artifact_v2(inner, attempt)
+    for invalid_count in (0, upper_bound + 1, True):
+        tampered = json.loads(json.dumps(inner))
+        tampered["runs_in_order"][1]["audit"][
+            "failure_witness_count"
+        ] = invalid_count
+        with pytest.raises(ValueError, match="failure witness count"):
+            qualification._validate_development_calibration_artifact_v2(
+                tampered, attempt
+            )
 
 
 def _valid_outer_main_pid_replay_v5(tmp_path: Path) -> SimpleNamespace:
@@ -10497,7 +10707,7 @@ def test_production_has_zero_assert_and_no_pickle_pipe_or_process_pool() -> None
     )
     assert "phase2b_formal_wire_covert_qualification_receipt_v4_" not in source
     current_schema_tokens = (
-        "hegel-machine-phase2b-formal-wire-covert-qualification/7",
+        "hegel-machine-phase2b-formal-wire-covert-qualification/8",
         "hegel-machine-phase2b-formal-wire-covert-qualification-dependency-lock/4",
         "hegel-machine-phase2b-formal-wire-covert-outer-supervisor-result/5",
         "hegel-machine-phase2b-formal-wire-covert-development-calibration/7",
@@ -10513,6 +10723,7 @@ def test_production_has_zero_assert_and_no_pickle_pipe_or_process_pool() -> None
     for schema in current_schema_tokens:
         assert schema in source
     for stale in (
+        "hegel-machine-phase2b-formal-wire-covert-qualification/7",
         "hegel-machine-phase2b-formal-wire-covert-qualification/6",
         "hegel-machine-phase2b-formal-wire-covert-qualification-dependency-lock/3",
         "hegel-machine-phase2b-formal-wire-covert-outer-supervisor-result/4",
