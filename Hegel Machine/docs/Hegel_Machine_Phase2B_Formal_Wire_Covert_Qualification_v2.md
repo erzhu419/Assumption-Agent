@@ -2,11 +2,11 @@
 
 ## Current disposition
 
-This revision is a source-and-profile candidate. Its checked status is
-`CANDIDATE_SOURCE_FROZEN_FULL_1024_SHAPE_CALIBRATION_PENDING`, and
-`live_qualification_enabled=false`. The ordinary candidate entry and the
-live-inner entry fail closed before a 1,024-row audit. The development entry is
-the only route through the pending-profile gate.
+This revision is the P1 source-and-profile candidate. Its checked status is
+`CANDIDATE_SOURCE_FROZEN_FULL_1024_SHAPE_CALIBRATION_PAIR_FROZEN_LIVE_PENDING`,
+and `live_qualification_enabled=true`. The prior P0 development entry now fails
+closed before runtime inspection. Only a fresh `outer-live` attempt can cross
+the frozen-shape gate, and no such P1 attempt has yet been run.
 
 Task 4 can publish only transaction and mechanics evidence with disposition
 `MECHANICS_VERIFIED_NOT_AUTHORITY`. It never sets R03, R04, or R05. Host tests,
@@ -32,19 +32,27 @@ compiled by the source-only loader:
 - `rfc8785_v1.py`; and
 - `schema.py`.
 
-The checked canonical profile ID is
-`phase2b_formal_wire_covert_qualification_profile_v2_9e41ae3d8f3950d5d0fe86048bfbc3ec17e450f7d699338f2b082d9444a16bc6`,
+The checked P1 canonical profile ID is
+`phase2b_formal_wire_covert_qualification_profile_v2_ad20443a8f68a9f07492a532adb389c8e73234d343a14bc547a91d868a935d6b`,
 and its dependency-lock SHA-256 is
 `0ccd291a28df11fa0e7e7399a086bf01516a20fa2aa5e8abf3a05687b54b85db`.
 The dependency-lock root schema is
 `hegel-machine-phase2b-formal-wire-covert-qualification-dependency-lock/4`,
 and that exact discriminator is also closed inside the profile's lock binding.
 The qualification profile schema is
-`hegel-machine-phase2b-formal-wire-covert-qualification/8`; the profile domain
-and ID prefix remain V2 because the `/8` discriminator is part of the hashed
-canonical content. The `/8` contract makes explicit the distinction that the
-`/7` verifier failed to enforce between the selected visible E1 witness and
-the aggregate receipt failure-witness count. The
+`hegel-machine-phase2b-formal-wire-covert-qualification/9`; the profile domain
+and ID prefix remain V2 because the `/9` discriminator is part of the hashed
+canonical content. The `/9` contract closes the retained P0 terminal, absolute
+attempt locator, derived directory name, manifest root, full pre-terminal tree,
+and joint-retention flags inside the current P1 profile. The historical P0
+basis is the single exact `/8` profile with ID
+`phase2b_formal_wire_covert_qualification_profile_v2_9e41ae3d8f3950d5d0fe86048bfbc3ec17e450f7d699338f2b082d9444a16bc6`,
+SHA-256
+`bf765062544c54cc1396600ec56734101674f14def3179a8fcda604b6ad0c933`,
+and size 19,619 bytes. No arbitrary `/8` profile, and no current `/9` profile,
+may substitute for it. The `/8` contract made explicit the distinction that
+the `/7` verifier failed to enforce between the selected visible E1 witness
+and the aggregate receipt failure-witness count. The
 development-calibration and live-inner candidate
 schemas are `/7`. Their prior `/6` forms predate the scientific-child
 credential-environment proof. The outer-supervisor result is `/5`; its prior
@@ -173,10 +181,11 @@ It then re-derives audited rows, channel/UUID paths, concrete/raw counts, and
 the pre-extraction byte bound, checks them through the frozen receipt-capacity
 validator, and separately replays the mode-specific owner count/root contract;
 synchronizing a forged measurement and its root cannot bypass these checks.
-These are static construction/capacity
-facts, not filled calibration statistics: both
-`known_*_frozen_static_projection` fields remain null until a successful fresh
-development calibration.
+These are static construction/capacity facts.  In the historical P0 `/8`
+basis both `known_*_frozen_static_projection` fields were null before the
+development calibration.  The current P1 `/9` profile now freezes the two
+reviewed r12 projections exactly; that provenance freeze is not an
+authoritative R03/R04/R05 qualification claim.
 
 Before either formal 1,024-row mode is launched, its separate slow
 resource-only gate builds and decodes the real V4 batch, replays the exact
@@ -395,34 +404,79 @@ static-shape schema remains `/3`. Changed invariant, statistical, and issuance
 runtime roots use V4 prefixes, while the unchanged static ResourcePlan
 projection continues to use its V2 prefix.
 
-## Pending shape and two-revision calibration
+## Frozen P0 shape and P1 live-pending transition
 
-The checked `rich_positive_shape` is deliberately pending. For each of the six
-retained calibration roles—basis profile, attempt manifest, inner artifact,
-outer supervisor result, RFC-8785 receipt, and mechanics artifact—the SHA-256,
-size, and CAS reference are null. Campaign ID, attempt ID, attempt-manifest
-root, combined fixture root, and both frozen static projections are also null.
-No observed feature count, target result, p-value, RSS, or wall time may be
-filled before a real development campaign is retained and reviewed.
+Revision P0 completed one real 1,024-row development measurement. P1 freezes
+only its reviewed static projections and retained transaction identities. The
+P0 campaign is `qv2-p0-20260821-ad4c92c6-r12`, its attempt is
+`development-calibration-012-ad4c92c6-r12`, its attempt-manifest root is
+`phase2b_formal_wire_covert_attempt_manifest_v3_599ef7f1b77b13c98f96c519df26b17043bea2f7fbe649fbc4fc52c9108138a2`,
+and its combined fixture root is
+`phase2b_formal_wire_covert_synthetic_fixture_v2_1c95fa532da5b4548ecf4bcc708b9a53a7381b17f453460c9c02da22772f4250`.
+That scientific-content root deliberately retains
+`SYNTHETIC_FIXTURE_ROOT_SCHEMA_VERSION_V2=/8` in its preimage. The `/9` profile
+revision adds pair provenance; it must not relabel identical P0 fixture science
+with a new root.
+The six frozen canonical roles are:
 
-The intended two-revision transition is:
+- basis profile: SHA-256 `bf765062544c54cc1396600ec56734101674f14def3179a8fcda604b6ad0c933`,
+  19,619 bytes;
+- attempt manifest: SHA-256 `cd8c2a5f0c5562343af6612428333d924283bdb078906d85924ddfeb85984688`,
+  1,700 bytes;
+- inner artifact: SHA-256 `2d978f48de2f1d10bf802982f80d61d8aa773c4173e45684ac6e6c1d320ce3a5`,
+  76,170 bytes;
+- outer-supervisor result: SHA-256 `84af38cf7c201f7c19897264798f8dc4daabc69cd5adc679a2a429cb616ce332`,
+  64,647 bytes;
+- RFC-8785 receipt: SHA-256 `24099f014e1fb32198603572beaa3903f22e9b4998dcc9328ebc09592884cb7b`,
+  74,815 bytes; and
+- mechanics artifact: SHA-256 `1f445d9d4fc991dd69f777ec502ee6402e1c1441a481b74debc18bd53f799c54`,
+  1,900 bytes.
 
-1. revision P0 runs a pending development-calibration attempt and retains its
-   complete attempt directory;
-2. a reviewer copies only the approved static projection into revision P1 and
-   binds P0's canonical basis-profile bytes, IDs, six role objects, terminal,
-   tree projection, and CAS objects;
-3. P1 performs a fresh live attempt with distinct campaign and attempt IDs;
-4. the live verifier recursively replays the paired P0 development directory
-   at depth one, while depth zero remains current-profile-only.
+Each role's CAS reference is exactly `sha256:<its SHA-256>`. The frozen
+`KNOWN_NULL` projection has 1,024 rows, 81 channel leaves, 32,337 concrete
+features, 50,257 raw semantic features, and static-plan root
+`phase2b_formal_wire_covert_static_resource_plan_v2_2235a4174efc3efbb144407f01f555e71fa9086b5e278d3eef31361297b89149`.
+The frozen `KNOWN_BINDING_LEAK` projection has 1,024 rows, 81 channel leaves,
+32,186 concrete features, 49,994 raw semantic features, and static-plan root
+`phase2b_formal_wire_covert_static_resource_plan_v2_79a40ad7ef12feea158f45f1cf9d701f08dd34d87bcef8edfba68041fae36d9a`.
+These are fixture-specific static measurements, not actual-corpus results or
+R03/R04/R05 authority.
 
-The calibration and live attempt directories are a jointly retained pair.
-The pair projection binds the old terminal hash, attempt root, exact retained
-tree root/count/bytes, and `pair_retention_required=true`. Step 5 must bind the
-pair as provenance in evidence for its new authoritative run; the pair is not
-a promotion path or a substitute for that run. Moving, deleting, or replacing
-either directory makes the live mechanics evidence unreplayable. Six loose
-historical paths are not a durable substitute.
+The checked pair projection uses schema
+`hegel-machine-phase2b-formal-wire-covert-calibration-attempt-pair/2` and has
+exactly nine fields: `schema_version`, `absolute_attempt_directory`,
+`attempt_directory_name`, `attempt_manifest_root`, `terminal_sha256`,
+`terminal_size_bytes`, `retained_tree_before_terminal`,
+`pair_retention_required`, and `pair_must_be_jointly_signed_by_step5`. Its
+absolute retained directory is
+`/home/erzhu419/.local/state/hegel-machine/phase2b-qv2-task4/qv2-p0-20260821-ad4c92c6-r12/attempt-output/attempt-1b8350885adf1d605a222e0aa13f4cd421e6b157f1128079`;
+the separately bound directory name is
+`attempt-1b8350885adf1d605a222e0aa13f4cd421e6b157f1128079`. Aliased, relative,
+relocated, or name/root-inconsistent locators fail closed. The terminal is
+7,176 bytes with SHA-256
+`a6acbc45f820aa3a651fe1ddc66b6abebd07d3735a20871a3bf35ef6ad7dd249`.
+Before that terminal, the retained tree has 222 rows, 210 regular files,
+16,748,103 regular bytes, top-level names `evidence` and `reservation.json`,
+and root
+`phase2b_formal_wire_covert_failure_tree_v3_5d511be46bd0a3765901dda7e1d55a680e0b09c9eb15bd132215e938689f74a6`.
+Both retention flags are exactly true.
+
+P1 must next perform a fresh `outer-live` attempt with campaign and attempt IDs
+distinct from P0. Reuse of either P0 ID fails in the outer process before any
+scientific `Popen`, and the live-inner entry repeats that identity gate before
+runtime/fixture preparation. The outer runner replays this one retained P0
+directory at depth one, exact-compares the derived pair projection to the P1
+profile before issuing a private replay token or launching the scientific
+child, and keeps depth zero current-profile-only. The calibration and live
+directories are a jointly retained pair. Step 5 must bind that pair as
+provenance in evidence for
+its new authoritative run; the pair is not a promotion path or a substitute
+for that run. Replay fails if the frozen locator is absent or relocated, or if
+the terminal, any frozen role bytes, tree, or retained parent/leaf identity
+changes during acquisition. The contract does not freeze historical device or
+inode numbers, so a byte-identical tree restored at the exact locator before a
+later replay is not distinguished from the earlier inode. Six loose historical
+paths are not a durable substitute.
 
 ## Exact attempt manifest
 
@@ -488,7 +542,10 @@ Create the source TAR with `git archive --format=tar <source-commit> --
 <exact-23-pinned-paths>`. Git's global PAX `comment` must equal the supplied
 40-hex commit. The builder and outer extraction verify that metadata, every
 pinned archive file, all five current qualification-file hashes, the runtime
-manifest, RFC receipt, and raw bundle before output or service launch:
+manifest, RFC receipt, and raw bundle before output or service launch. The
+historical CLI spelling remains `build-development-attempt-manifest`; under the
+frozen `/9` profile it builds the new P1 attempt manifest and does not reopen
+the disabled P0 development route:
 
 ```text
 <python> -I -S -B <qualification.py> \
@@ -505,9 +562,23 @@ manifest, RFC receipt, and raw bundle before output or service launch:
 The PAX comment is an exact archive-to-asserted-commit binding; it is not a
 signature or an independent proof that a cooperative producer used a
 particular Git object. A later authority must authenticate the source archive.
-The pending development outer entry then consumes the checked-in profile, the
-new attempt, that same source TAR/runtime manifest/RFC bundle, and a fresh
-output root.
+The P1 outer entry then consumes the checked-in profile, a fresh attempt with
+new campaign and attempt IDs, that same source TAR/runtime manifest/RFC bundle,
+the one exact frozen P0 directory, and a fresh output root:
+
+```text
+<python> -I -S -B <qualification.py> \
+  --entry outer-live \
+  --profile <canonical-p1-profile.json> --attempt <fresh-p1-attempt.json> \
+  --source-archive <source.tar> \
+  --runtime-environment-manifest <runtime-manifest.json> \
+  --rfc8785-prerequisite-receipt <rfc-bundle>/receipt.json \
+  --calibration-attempt-directory <exact-frozen-p0-attempt-directory> \
+  --output-root <fresh-p1-output-root>
+```
+
+The six former loose calibration-path options are forbidden for `outer-live`;
+the retained directory is the sole depth-one pair input.
 
 ## RFC-8785 prerequisite
 
@@ -701,7 +772,8 @@ The 25,800-second normal-work window therefore retains exactly 3,000 seconds
 for QV2 fixture/preparation/headroom, and the remaining 3,000 seconds are the
 2,400-second terminal-publication plus 600-second cleanup-control reserve:
 `22,800 + 3,000 + 3,000 = 28,800`. This deadline erratum changes neither the
-pending calibration state nor the Task-4 projection-only/R03-R05-false boundary.
+frozen-pair/live-pending state nor the Task-4 projection-only/R03-R05-false
+boundary.
 The
 producer derives its failure tree, exact CAS snapshot, and managed-residue
 binding in one fd-relative traversal; the prospective public verifier performs

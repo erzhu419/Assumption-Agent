@@ -376,10 +376,27 @@ from . import phase2b_formal_trusted_wire_v3 as wire
 
 
 PROFILE_SCHEMA_VERSION: Final = (
-    "hegel-machine-phase2b-formal-wire-covert-qualification/8"
+    "hegel-machine-phase2b-formal-wire-covert-qualification/9"
 )
 PROFILE_STATUS: Final = (
-    "CANDIDATE_SOURCE_FROZEN_FULL_1024_SHAPE_CALIBRATION_PENDING"
+    "CANDIDATE_SOURCE_FROZEN_FULL_1024_SHAPE_"
+    "CALIBRATION_PAIR_FROZEN_LIVE_PENDING"
+)
+HISTORICAL_CALIBRATION_BASIS_SCHEMA_VERSION_V2: Final = (
+    "hegel-machine-phase2b-formal-wire-covert-qualification/8"
+)
+HISTORICAL_CALIBRATION_BASIS_PROFILE_ID_V2: Final = (
+    "phase2b_formal_wire_covert_qualification_profile_v2_"
+    "9e41ae3d8f3950d5d0fe86048bfbc3ec17e450f7d699338f2b082d9444a16bc6"
+)
+HISTORICAL_CALIBRATION_BASIS_SHA256_V2: Final = (
+    "bf765062544c54cc1396600ec56734101674f14def3179a8fcda604b6ad0c933"
+)
+HISTORICAL_CALIBRATION_BASIS_SIZE_BYTES_V2: Final = 19_619
+# The fixture content ID stays on the scientific-shape revision used by P0.
+# Qualification /9 changes only the retained-pair provenance contract.
+SYNTHETIC_FIXTURE_ROOT_SCHEMA_VERSION_V2: Final = (
+    "hegel-machine-phase2b-formal-wire-covert-qualification/8"
 )
 PROFILE_CLAIM_LEVEL: Final = (
     "CANDIDATE_IMPLEMENTATION_EXERCISED_NOT_R03_R04_R05"
@@ -988,6 +1005,14 @@ if (
     raise RuntimeError("fixture feature-capacity contract exceeds the pinned auditor")
 
 
+_FROZEN_KNOWN_NULL_STATIC_PROJECTION_V2: Final = json.loads(
+    r'''{"batch_id":"phase2b_formal_trusted_wire_batch_v3_1f1577e73b00513aec074d6f98748501edf7f46aff742e16516e2c38e4248086","build_success_id":"phase2b_formal_trusted_wire_build_success_v3_0fb20d1f681c1fbbd5b9524c74c195deca773e68baa420bc67f6040bc84b4518","channel_leaf_count":81,"channel_only_owned_leaf_count":229,"channel_only_owned_leaf_union_root":"phase2b_formal_wire_covert_channel_only_owner_union_v2_063e3f71c9772e45e873452c9073ae8c2afb68c46f4f50ae51b25429c302bf4b","concrete_features":32337,"eligibility_quota":{"exact_quota_matched":true,"receipt_id":"phase2b_formal_eligibility_mask_quota_4a61e1eae08c9965ee2c7b41ca82b8701b15a8453a4f2e6e0b300009ecba8fd6","targets":[{"checked_integer_cells":4,"exact_quota_matched":true,"maximum_absolute_cross_product_difference":0,"target":"family"},{"checked_integer_cells":4,"exact_quota_matched":true,"maximum_absolute_cross_product_difference":0,"target":"scale"},{"checked_integer_cells":4,"exact_quota_matched":true,"maximum_absolute_cross_product_difference":0,"target":"answerable_vs_abstain"}]},"eligibility_quota_root":"phase2b_formal_wire_covert_eligibility_quota_v2_f72ff79fdf8fa5b4bd41a6870643f0893ec342bb385a8c9bb7f8d9a0552c6da8","feature_capacity_projection":{"channel_union_path_count":81,"descriptor_segment_position_count":1,"descriptor_source_utf8_bytes":38784,"descriptor_union_path_count":1,"eligibility_absent_feature_count":0,"generic_channel_union_path_count":76,"present_generic_channel_feature_utf8_bytes":4449280,"projected_concrete_feature_count":32337,"projected_feature_matrix_bytes_bound":8580511388,"projected_raw_semantic_feature_count":50257,"projection_root":"phase2b_formal_covert_feature_projection_090d420d392e7df0a7dd7d4bbe896b01d589284bd2dbf1124e9b05ae45ef3110","provenance_union_path_count":4,"rows":1024,"semantic_path_repetition_utf8_bytes":3610791,"uuid_union_path_count":160},"feature_capacity_projection_root":"phase2b_formal_covert_feature_projection_090d420d392e7df0a7dd7d4bbe896b01d589284bd2dbf1124e9b05ae45ef3110","feature_manifest_root":"phase2b_formal_covert_feature_manifest_27dcb9e1d814f19ea2b2b29a95099fa32063c116f5012197fc64828885e207c3","fixture_specific_only":true,"full_raw_byte_categorical_hypotheses":192,"joint_decision_classes":2,"label_factorial_proof_root":"phase2b_formal_wire_covert_label_factorial_v2_20bf3ff7e25dc2db7708267a051d304dec011ca9b4062fea17050dfe95365a2d","label_factorial_summary":{"binary_factor_count":6,"joint_decision_class_levels":["joint-a","joint-b"],"label_cells":64,"operations_per_label_cell":8,"rows_per_label_cell":16,"rows_per_operation_per_label_cell":2},"mode":"KNOWN_NULL","namespace_row_proof_root":"phase2b_formal_wire_covert_namespace_row_proof_v2_5e4efa912438a8f1c04401233958c7e8372d8639f691442483406e16d27b7b53","operation_counts":{"coarse_graining":128,"coordinate_affine":128,"equivalent_split_merge":128,"identity":128,"sampling_resolution":128,"spatial_aggregation":128,"temporal_aggregation":128,"unit_conversion":128},"raw_semantic_features":50257,"resource_plan_static":{"adapter_retained_graph_bytes_bound":1012034804,"aggregate_rss_formula":"max(parent_current_rss,mask_bytes+partition_matrix_bytes+adapter_retained_graph_bytes+64MiB)*(1+workers)+metric_cache_bytes*workers+permutation_metric_tuple_bytes+target_max_vector_bytes+worker_result_artifact_bytes+parent_result_working_bytes","bias_center_canonicalization_work_units":14705071570,"bitset_words_per_mask":16,"concrete_features":32337,"envelope_and_decode_bytes_bound":1194949240,"estimated_intersection_work_units":12116211500,"estimated_total_statistical_work_units":27735883070,"exchangeable_sample_size":10001,"feature_matrix_bytes_bound":7713428316,"host_available_memory_safety_margin_bytes":2147483648,"hypotheses":161685,"intersections_per_exchangeable_draw":1211500,"invariance_recognizer_live_output_bytes_bound":1006632960,"invariance_rss_formula":"max(parent_current_rss,envelope_and_decode_bytes+adapter_retained_graph_bytes+64MiB)*2+variant_suite_resident_bytes+recognizer_live_output_bytes+invariance_worker_artifact_bytes","invariance_variant_suite_output_bytes_bound":5368709120,"invariance_variant_suite_resident_bytes_bound":3598712832,"invariance_worker_artifact_bytes_bound":1048576,"invariance_worker_timeout_seconds":7200,"label_permutations":10000,"maximum_estimated_rss_bytes":25769803776,"maximum_feature_values":1024,"maximum_intersection_work_units":20000000000,"maximum_invariance_estimated_rss_bytes":25769803776,"maximum_label_classes":2,"maximum_label_shuffle_randbelow_calls":51150000,"maximum_shuffle_rejection_draws":209510400000,"maximum_total_statistical_work_units":50000000000,"metric_cache_bytes_bound":8912896,"parent_result_working_bytes_bound":1329766400,"partition_allocation_bytes_bound":156824192,"partition_matrix_bytes_bound":130784960,"partition_preparation_timeout_seconds":600,"permutation_label_mask_bytes_bound":19200000,"permutation_passes":1,"preextraction_feature_matrix_bytes_bound":8580511388,"rows":1024,"scalar_omnibus_scan_work_units":863450000,"scalar_row_feature_permutation_work_avoided":1655654400000,"statistics_execution_mode":"LINUX_RAW_FORK_WAIT4_ONE_OR_FIVE_TARGET_WORKERS","statistics_worker_timeout_seconds":3600,"unique_statistical_partitions":17269,"variant_suite_resident_bytes_per_row_bound":3252224,"variant_suite_resident_fixed_bytes_bound":268435456,"worker_result_artifact_bytes_bound":88025600},"resource_plan_static_root":"phase2b_formal_wire_covert_static_resource_plan_v2_2235a4174efc3efbb144407f01f555e71fa9086b5e278d3eef31361297b89149","rows":1024,"run_fixture_root":"phase2b_formal_wire_covert_run_fixture_v2_18044923d2a5a38a02148faa3ca9eabfcf13040b2594d5fdf1148027bb3d789a","schema_version":"hegel-machine-phase2b-formal-wire-covert-static-shape/3","source_pair_delta_root":null,"transform_catalog_root":"sha256:c6fc76c6d623d1dfafee6b4618cc286e2406db105fefeb094f85044be27d7510","uuid_leaf_count":160}'''
+)
+_FROZEN_KNOWN_LEAK_STATIC_PROJECTION_V2: Final = json.loads(
+    r'''{"batch_id":"phase2b_formal_trusted_wire_batch_v3_05adeca402dafdfc99196880f6eecc24a2937ae8bbe0093fd62e1cb3fd6ddb61","build_success_id":"phase2b_formal_trusted_wire_build_success_v3_39103545d0babc382d03cfd4612c069dc0f326a8fd1de25ee0899f0db9088faf","channel_leaf_count":81,"channel_only_owned_leaf_count":228,"channel_only_owned_leaf_union_root":"phase2b_formal_wire_covert_channel_only_owner_union_v2_b58d3584425ca689772af6c701fb7b7c5769e9aa4ab267852bd0af3ccecef18e","concrete_features":32186,"eligibility_quota":{"exact_quota_matched":true,"receipt_id":"phase2b_formal_eligibility_mask_quota_5bb18605a3ccd727186701e0d2119c17a98caffbbc173163b45884be76ff6fe4","targets":[{"checked_integer_cells":4,"exact_quota_matched":true,"maximum_absolute_cross_product_difference":0,"target":"family"},{"checked_integer_cells":4,"exact_quota_matched":true,"maximum_absolute_cross_product_difference":0,"target":"scale"},{"checked_integer_cells":4,"exact_quota_matched":true,"maximum_absolute_cross_product_difference":0,"target":"answerable_vs_abstain"}]},"eligibility_quota_root":"phase2b_formal_wire_covert_eligibility_quota_v2_3707ea8f701a9522c7d434ba47284ba65e84f4d3566fd02591dcfa155127f6ea","feature_capacity_projection":{"channel_union_path_count":81,"descriptor_segment_position_count":1,"descriptor_source_utf8_bytes":38784,"descriptor_union_path_count":1,"eligibility_absent_feature_count":0,"generic_channel_union_path_count":76,"present_generic_channel_feature_utf8_bytes":4449280,"projected_concrete_feature_count":32186,"projected_feature_matrix_bytes_bound":8540587848,"projected_raw_semantic_feature_count":49994,"projection_root":"phase2b_formal_covert_feature_projection_59d3b166ca6eb860c0a9025c9fdf1d1dbbf60a46180843606f143fe4bb8b61f7","provenance_union_path_count":4,"rows":1024,"semantic_path_repetition_utf8_bytes":3593170,"uuid_union_path_count":159},"feature_capacity_projection_root":"phase2b_formal_covert_feature_projection_59d3b166ca6eb860c0a9025c9fdf1d1dbbf60a46180843606f143fe4bb8b61f7","feature_manifest_root":"phase2b_formal_covert_feature_manifest_c445887d0103fe4ee5bc7c21a98735e5499fdc652e5f13d338e34759f21d772e","fixture_specific_only":true,"full_raw_byte_categorical_hypotheses":192,"joint_decision_classes":2,"label_factorial_proof_root":"phase2b_formal_wire_covert_label_factorial_v2_20bf3ff7e25dc2db7708267a051d304dec011ca9b4062fea17050dfe95365a2d","label_factorial_summary":{"binary_factor_count":6,"joint_decision_class_levels":["joint-a","joint-b"],"label_cells":64,"operations_per_label_cell":8,"rows_per_label_cell":16,"rows_per_operation_per_label_cell":2},"mode":"KNOWN_BINDING_LEAK","namespace_row_proof_root":"phase2b_formal_wire_covert_namespace_row_proof_v2_51c86575cfbecf08959c173d01870a411f3093e9013a724daca895abc2800fb9","operation_counts":{"coarse_graining":128,"coordinate_affine":128,"equivalent_split_merge":128,"identity":128,"sampling_resolution":128,"spatial_aggregation":128,"temporal_aggregation":128,"unit_conversion":128},"raw_semantic_features":49994,"resource_plan_static":{"adapter_retained_graph_bytes_bound":1010081012,"aggregate_rss_formula":"max(parent_current_rss,mask_bytes+partition_matrix_bytes+adapter_retained_graph_bytes+64MiB)*(1+workers)+metric_cache_bytes*workers+permutation_metric_tuple_bytes+target_max_vector_bytes+worker_result_artifact_bytes+parent_result_working_bytes","bias_center_canonicalization_work_units":14954569860,"bitset_words_per_mask":16,"concrete_features":32186,"envelope_and_decode_bytes_bound":1191027832,"estimated_intersection_work_units":12205620440,"estimated_total_statistical_work_units":28089440300,"exchangeable_sample_size":10001,"feature_matrix_bytes_bound":7677495440,"host_available_memory_safety_margin_bytes":2147483648,"hypotheses":160930,"intersections_per_exchangeable_draw":1220440,"invariance_recognizer_live_output_bytes_bound":1006632960,"invariance_rss_formula":"max(parent_current_rss,envelope_and_decode_bytes+adapter_retained_graph_bytes+64MiB)*2+variant_suite_resident_bytes+recognizer_live_output_bytes+invariance_worker_artifact_bytes","invariance_variant_suite_output_bytes_bound":5368709120,"invariance_variant_suite_resident_bytes_bound":3598712832,"invariance_worker_artifact_bytes_bound":1048576,"invariance_worker_timeout_seconds":7200,"label_permutations":10000,"maximum_estimated_rss_bytes":25769803776,"maximum_feature_values":1024,"maximum_intersection_work_units":20000000000,"maximum_invariance_estimated_rss_bytes":25769803776,"maximum_label_classes":2,"maximum_label_shuffle_randbelow_calls":51150000,"maximum_shuffle_rejection_draws":209510400000,"maximum_total_statistical_work_units":50000000000,"metric_cache_bytes_bound":8912896,"parent_result_working_bytes_bound":1323581440,"partition_allocation_bytes_bound":156315232,"partition_matrix_bytes_bound":130363296,"partition_preparation_timeout_seconds":600,"permutation_label_mask_bytes_bound":19200000,"permutation_passes":1,"preextraction_feature_matrix_bytes_bound":8540587848,"rows":1024,"scalar_omnibus_scan_work_units":878100000,"scalar_row_feature_permutation_work_avoided":1647923200000,"statistics_execution_mode":"LINUX_RAW_FORK_WAIT4_ONE_OR_FIVE_TARGET_WORKERS","statistics_worker_timeout_seconds":3600,"unique_statistical_partitions":17562,"variant_suite_resident_bytes_per_row_bound":3252224,"variant_suite_resident_fixed_bytes_bound":268435456,"worker_result_artifact_bytes_bound":87639040},"resource_plan_static_root":"phase2b_formal_wire_covert_static_resource_plan_v2_79a40ad7ef12feea158f45f1cf9d701f08dd34d87bcef8edfba68041fae36d9a","rows":1024,"run_fixture_root":"phase2b_formal_wire_covert_run_fixture_v2_96efb1effb062371ca9e890e71dfc35235999de10a040eff768d681086f82675","schema_version":"hegel-machine-phase2b-formal-wire-covert-static-shape/3","source_pair_delta_root":"phase2b_formal_wire_covert_source_pair_delta_v2_cf73debef5e331328856430943f3bc520a432dd8c43a48adebe0246641307571","transform_catalog_root":"sha256:c6fc76c6d623d1dfafee6b4618cc286e2406db105fefeb094f85044be27d7510","uuid_leaf_count":159}'''
+)
+
+
 _EXPECTED_PROFILE: Final = {
     "auditor_binding": {
         "balanced_accuracy_advantage_limit": "0.05",
@@ -1107,39 +1132,110 @@ _EXPECTED_PROFILE: Final = {
         "operation_shape_contract": _FIXTURE_OPERATION_SHAPE_CONTRACT_V2,
         "rich_positive_shape": {
             "calibration_artifact_cannot_be_promoted": True,
-            "calibration_artifact_cas_root": None,
-            "calibration_artifact_sha256": None,
-            "calibration_artifact_size_bytes": None,
-            "calibration_attempt_id": None,
-            "calibration_attempt_manifest_cas_root": None,
-            "calibration_attempt_manifest_root": None,
-            "calibration_attempt_manifest_sha256": None,
-            "calibration_attempt_manifest_size_bytes": None,
-            "calibration_basis_profile_cas_root": None,
-            "calibration_basis_profile_id": None,
-            "calibration_basis_profile_sha256": None,
-            "calibration_basis_profile_size_bytes": None,
-            "calibration_campaign_id": None,
-            "calibration_mechanics_artifact_cas_root": None,
-            "calibration_mechanics_artifact_sha256": None,
-            "calibration_mechanics_artifact_size_bytes": None,
-            "calibration_outer_supervisor_result_cas_root": None,
-            "calibration_outer_supervisor_result_sha256": None,
-            "calibration_outer_supervisor_result_size_bytes": None,
-            "calibration_rfc8785_receipt_cas_root": None,
-            "calibration_rfc8785_receipt_sha256": None,
-            "calibration_rfc8785_receipt_size_bytes": None,
-            "calibration_campaign_status": (
-                "PENDING_FULL_1024_DEVELOPMENT_MEASUREMENT"
+            "calibration_artifact_cas_root": (
+                "sha256:2d978f48de2f1d10bf802982f80d61d8aa773c4173e45684ac6e6c1d320ce3a5"
             ),
-            "combined_fixture_root": None,
+            "calibration_artifact_sha256": (
+                "2d978f48de2f1d10bf802982f80d61d8aa773c4173e45684ac6e6c1d320ce3a5"
+            ),
+            "calibration_artifact_size_bytes": 76_170,
+            "calibration_attempt_id": "development-calibration-012-ad4c92c6-r12",
+            "calibration_attempt_manifest_cas_root": (
+                "sha256:cd8c2a5f0c5562343af6612428333d924283bdb078906d85924ddfeb85984688"
+            ),
+            "calibration_attempt_manifest_root": (
+                "phase2b_formal_wire_covert_attempt_manifest_v3_"
+                "599ef7f1b77b13c98f96c519df26b17043bea2f7fbe649fbc4fc52c9108138a2"
+            ),
+            "calibration_attempt_manifest_sha256": (
+                "cd8c2a5f0c5562343af6612428333d924283bdb078906d85924ddfeb85984688"
+            ),
+            "calibration_attempt_manifest_size_bytes": 1_700,
+            "calibration_basis_profile_cas_root": (
+                "sha256:bf765062544c54cc1396600ec56734101674f14def3179a8fcda604b6ad0c933"
+            ),
+            "calibration_basis_profile_id": (
+                "phase2b_formal_wire_covert_qualification_profile_v2_"
+                "9e41ae3d8f3950d5d0fe86048bfbc3ec17e450f7d699338f2b082d9444a16bc6"
+            ),
+            "calibration_basis_profile_sha256": (
+                "bf765062544c54cc1396600ec56734101674f14def3179a8fcda604b6ad0c933"
+            ),
+            "calibration_basis_profile_size_bytes": 19_619,
+            "calibration_campaign_id": "qv2-p0-20260821-ad4c92c6-r12",
+            "calibration_mechanics_artifact_cas_root": (
+                "sha256:1f445d9d4fc991dd69f777ec502ee6402e1c1441a481b74debc18bd53f799c54"
+            ),
+            "calibration_mechanics_artifact_sha256": (
+                "1f445d9d4fc991dd69f777ec502ee6402e1c1441a481b74debc18bd53f799c54"
+            ),
+            "calibration_mechanics_artifact_size_bytes": 1_900,
+            "calibration_outer_supervisor_result_cas_root": (
+                "sha256:84af38cf7c201f7c19897264798f8dc4daabc69cd5adc679a2a429cb616ce332"
+            ),
+            "calibration_outer_supervisor_result_sha256": (
+                "84af38cf7c201f7c19897264798f8dc4daabc69cd5adc679a2a429cb616ce332"
+            ),
+            "calibration_outer_supervisor_result_size_bytes": 64_647,
+            "calibration_pair_projection": {
+                "absolute_attempt_directory": (
+                    "/home/erzhu419/.local/state/hegel-machine/phase2b-qv2-task4/"
+                    "qv2-p0-20260821-ad4c92c6-r12/attempt-output/"
+                    "attempt-1b8350885adf1d605a222e0aa13f4cd421e6b157f1128079"
+                ),
+                "attempt_directory_name": (
+                    "attempt-1b8350885adf1d605a222e0aa13f4cd421e6b157f1128079"
+                ),
+                "attempt_manifest_root": (
+                    "phase2b_formal_wire_covert_attempt_manifest_v3_"
+                    "599ef7f1b77b13c98f96c519df26b17043bea2f7fbe649fbc4fc52c9108138a2"
+                ),
+                "pair_must_be_jointly_signed_by_step5": True,
+                "pair_retention_required": True,
+                "retained_tree_before_terminal": {
+                    "regular_file_count": 210,
+                    "root": (
+                        "phase2b_formal_wire_covert_failure_tree_v3_"
+                        "5d511be46bd0a3765901dda7e1d55a680e0b09c9eb15bd132215e938689f74a6"
+                    ),
+                    "row_count": 222,
+                    "top_level_names": ["evidence", "reservation.json"],
+                    "total_regular_bytes": 16_748_103,
+                },
+                "schema_version": (
+                    "hegel-machine-phase2b-formal-wire-covert-"
+                    "calibration-attempt-pair/2"
+                ),
+                "terminal_sha256": (
+                    "a6acbc45f820aa3a651fe1ddc66b6abebd07d3735a20871a3bf35ef6ad7dd249"
+                ),
+                "terminal_size_bytes": 7_176,
+            },
+            "calibration_rfc8785_receipt_cas_root": (
+                "sha256:24099f014e1fb32198603572beaa3903f22e9b4998dcc9328ebc09592884cb7b"
+            ),
+            "calibration_rfc8785_receipt_sha256": (
+                "24099f014e1fb32198603572beaa3903f22e9b4998dcc9328ebc09592884cb7b"
+            ),
+            "calibration_rfc8785_receipt_size_bytes": 74_815,
+            "calibration_campaign_status": (
+                "FROZEN_FULL_1024_DEVELOPMENT_MEASUREMENT"
+            ),
+            "combined_fixture_root": (
+                "phase2b_formal_wire_covert_synthetic_fixture_v2_"
+                "1c95fa532da5b4548ecf4bcc708b9a53a7381b17f453460c9c02da22772f4250"
+            ),
             "dynamic_resource_plan_fields_not_exact_compared": list(
                 DYNAMIC_RESOURCE_PLAN_FIELDS_NOT_EXACT_COMPARED_V2
             ),
             "fresh_qualification_must_equal_frozen_calibration": True,
-            "known_leak_frozen_static_projection": None,
-            "known_null_frozen_static_projection": None,
-            "live_qualification_enabled": False,
+            "known_leak_frozen_static_projection": (
+                _FROZEN_KNOWN_LEAK_STATIC_PROJECTION_V2
+            ),
+            "known_null_frozen_static_projection": (
+                _FROZEN_KNOWN_NULL_STATIC_PROJECTION_V2
+            ),
+            "live_qualification_enabled": True,
             "old_identity_only_counts_valid": False,
             "static_resource_plan_fields": list(
                 FROZEN_STATIC_RESOURCE_PLAN_FIELDS_V2
@@ -4898,7 +4994,7 @@ def _combined_fixture_root_from_run_roots_v2(
             {
                 "negative_run_fixture_root": negative_run_fixture_root,
                 "positive_run_fixture_root": positive_run_fixture_root,
-                "schema_version": PROFILE_SCHEMA_VERSION,
+                "schema_version": SYNTHETIC_FIXTURE_ROOT_SCHEMA_VERSION_V2,
             }
         )
     ).hexdigest()
@@ -7288,6 +7384,7 @@ def _require_pending_calibration_profile_v2(shape: object) -> dict[str, object]:
         "calibration_outer_supervisor_result_cas_root",
         "calibration_outer_supervisor_result_sha256",
         "calibration_outer_supervisor_result_size_bytes",
+        "calibration_pair_projection",
         "calibration_rfc8785_receipt_cas_root",
         "calibration_rfc8785_receipt_sha256",
         "calibration_rfc8785_receipt_size_bytes",
@@ -7298,6 +7395,38 @@ def _require_pending_calibration_profile_v2(shape: object) -> dict[str, object]:
     if any(shape.get(name) is not None for name in pending_fields):
         _fail(FAIL_PROFILE, "pending calibration profile contains observed results")
     return shape
+
+
+def _require_fresh_live_attempt_preflight_v2(
+    shape: object,
+    attempt: Phase2BFormalWireCovertAttemptManifestV2,
+) -> dict[str, object]:
+    """Close the frozen pair and fresh P1 identity before scientific work."""
+
+    if type(attempt) is not Phase2BFormalWireCovertAttemptManifestV2:
+        _fail(FAIL_PROFILE, "live preflight needs the exact attempt manifest")
+    pair_value = (
+        shape.get("calibration_pair_projection") if type(shape) is dict else None
+    )
+    pair_projection = _require_frozen_calibration_pair_projection_v2(
+        shape, pair_value
+    )
+    calibration_campaign = shape.get("calibration_campaign_id")
+    calibration_attempt = shape.get("calibration_attempt_id")
+    if (
+        type(calibration_campaign) is not str
+        or not calibration_campaign
+        or type(calibration_attempt) is not str
+        or not calibration_attempt
+        or attempt.profile_id != PROFILE_ID
+        or attempt.campaign_id == calibration_campaign
+        or attempt.attempt_id == calibration_attempt
+    ):
+        _fail(
+            FAIL_PROFILE,
+            "live qualification needs fresh campaign and attempt identities",
+        )
+    return pair_projection
 
 
 def _verify_frozen_shape_v2(
@@ -7316,6 +7445,13 @@ def _verify_frozen_shape_v2(
         or shape.get("calibration_artifact_cannot_be_promoted") is not True
     ):
         _fail(FAIL_PROFILE, "full qualification lacks an independently frozen calibration")
+    pair_projection = (
+        _require_frozen_calibration_pair_projection_v2(
+            shape, shape.get("calibration_pair_projection")
+        )
+        if attempt is None
+        else _require_fresh_live_attempt_preflight_v2(shape, attempt)
+    )
     calibration_campaign = shape.get("calibration_campaign_id")
     calibration_attempt = shape.get("calibration_attempt_id")
     calibration_sha256 = shape.get("calibration_artifact_sha256")
@@ -7418,13 +7554,10 @@ def _verify_frozen_shape_v2(
         or calibration_rfc_cas != "sha256:" + calibration_rfc_sha256
         or type(calibration_rfc_size) is not int
         or not 1 <= calibration_rfc_size <= 1_048_576
+        or pair_projection.get("attempt_manifest_root")
+        != calibration_attempt_manifest_root
     ):
         _fail(FAIL_PROFILE, "frozen calibration identity/CAS binding is incomplete")
-    if attempt is not None and (
-        attempt.campaign_id == calibration_campaign
-        or attempt.attempt_id == calibration_attempt
-    ):
-        _fail(FAIL_PROFILE, "qualification must use a fresh campaign and attempt ID")
     actual = {
         "known_null_frozen_static_projection": (
             _frozen_static_shape_projection_v2(positive)
@@ -9280,6 +9413,7 @@ def build_live_inner_candidate_artifact_v2(
             FAIL_PROFILE,
             "live inner execution is disabled until full-1024 shape calibration freezes",
         )
+    _require_fresh_live_attempt_preflight_v2(shape, attempt)
     runtime = prepare_live_inner_process_v2()
     _validate_live_runtime_entry_v2(runtime, attempt)
     positive: _IsolatedAuditEvidenceV2 | None = None
@@ -11318,15 +11452,23 @@ def _validate_frozen_calibration_bytes_v2(
         calibration_rfc8785_prerequisite_receipt_bytes,
         calibration_mechanics_artifact_bytes,
     )
-    if _pair_replay_token is not None:
-        _consume_verified_calibration_pair_replay_token_v2(
-            _pair_replay_token,
-            pair_payloads,
-            _pair_projection,
-            _pair_replay_purpose,
+    if (
+        type(_pair_replay_token) is not _VerifiedCalibrationPairReplayTokenV2
+        or _pair_replay_purpose
+        not in {"outer-mechanics", "retained-attempt-replay"}
+    ):
+        raise TypeError(
+            "frozen calibration bytes require one retained-directory pair token"
         )
-    elif _pair_projection is not None or _pair_replay_purpose is not None:
-        raise TypeError("calibration pair projection lacks its private replay token")
+    closed_pair_projection = _require_frozen_calibration_pair_projection_v2(
+        shape, _pair_projection
+    )
+    _consume_verified_calibration_pair_replay_token_v2(
+        _pair_replay_token,
+        pair_payloads,
+        closed_pair_projection,
+        _pair_replay_purpose,
+    )
     basis_sha256 = hashlib.sha256(calibration_basis_profile_bytes).hexdigest()
     attempt_sha256 = hashlib.sha256(
         calibration_attempt_manifest_bytes
@@ -11397,10 +11539,17 @@ def _validate_frozen_calibration_bytes_v2(
     if (
         basis_transport["qualification_profile_id"] != computed_basis_id
         or computed_basis_id != shape.get("calibration_basis_profile_id")
+        or computed_basis_id != HISTORICAL_CALIBRATION_BASIS_PROFILE_ID_V2
+        or basis_sha256 != HISTORICAL_CALIBRATION_BASIS_SHA256_V2
+        or len(calibration_basis_profile_bytes)
+        != HISTORICAL_CALIBRATION_BASIS_SIZE_BYTES_V2
         or type(basis_shape) is not dict
+        or basis_profile.get("schema_version")
+        != HISTORICAL_CALIBRATION_BASIS_SCHEMA_VERSION_V2
         or basis_shape.get("calibration_campaign_status")
         != "PENDING_FULL_1024_DEVELOPMENT_MEASUREMENT"
         or basis_shape.get("live_qualification_enabled") is not False
+        or basis_shape.get("calibration_pair_projection") is not None
         or not _exact_json_equal(
             basis_profile.get("auditor_binding"),
             _EXPECTED_PROFILE.get("auditor_binding"),
@@ -11418,6 +11567,7 @@ def _validate_frozen_calibration_bytes_v2(
         )
     ):
         raise ValueError("frozen calibration basis profile revision drifted")
+    _require_pending_calibration_profile_v2(basis_shape)
     calibration_attempt = load_phase2b_formal_wire_covert_attempt_manifest_v2(
         calibration_attempt_manifest_bytes,
         expected_profile_id=computed_basis_id,
@@ -11601,11 +11751,14 @@ def _load_retained_development_basis_profile_id_v2(
         )
         is None
         or expected_id == PROFILE_ID
+        or expected_id != HISTORICAL_CALIBRATION_BASIS_PROFILE_ID_V2
         or type(expected_sha256) is not str
         or re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None
+        or expected_sha256 != HISTORICAL_CALIBRATION_BASIS_SHA256_V2
         or type(expected_size) is not int
         or type(expected_size) is bool
         or not 1 <= expected_size <= _MAXIMUM_PROFILE_BYTES
+        or expected_size != HISTORICAL_CALIBRATION_BASIS_SIZE_BYTES_V2
         or type(payload) is not bytes
         or len(payload) != expected_size
         or hashlib.sha256(payload).hexdigest() != expected_sha256
@@ -11634,7 +11787,10 @@ def _load_retained_development_basis_profile_id_v2(
     if (
         transported_id != computed_id
         or computed_id != expected_id
-        or profile.get("schema_version") != PROFILE_SCHEMA_VERSION
+        or profile.get("schema_version")
+        != HISTORICAL_CALIBRATION_BASIS_SCHEMA_VERSION_V2
+        or profile.get("status")
+        != "CANDIDATE_SOURCE_FROZEN_FULL_1024_SHAPE_CALIBRATION_PENDING"
         or not _exact_json_equal(
             profile.get("auditor_binding"), _EXPECTED_PROFILE.get("auditor_binding")
         )
@@ -11650,6 +11806,10 @@ def _load_retained_development_basis_profile_id_v2(
         )
     ):
         raise ValueError("retained historical basis profile revision drifted")
+    if type(pending_shape) is not dict or pending_shape.get(
+        "calibration_pair_projection"
+    ) is not None:
+        raise ValueError("retained historical basis unexpectedly binds a pair")
     _require_pending_calibration_profile_v2(pending_shape)
     return computed_id
 
@@ -16272,7 +16432,8 @@ def _validate_calibration_pair_projection_shape_v2(
             raise ValueError("development calibration unexpectedly binds a prior pair")
         return None
     keys = {
-        "attempt_directory",
+        "absolute_attempt_directory",
+        "attempt_directory_name",
         "attempt_manifest_root",
         "pair_must_be_jointly_signed_by_step5",
         "pair_retention_required",
@@ -16285,9 +16446,9 @@ def _validate_calibration_pair_projection_shape_v2(
         type(value) is not dict
         or set(value) != keys
         or value["schema_version"]
-        != "hegel-machine-phase2b-formal-wire-covert-calibration-attempt-pair/1"
-        or type(value["attempt_directory"]) is not str
-        or not Path(value["attempt_directory"]).is_absolute()
+        != "hegel-machine-phase2b-formal-wire-covert-calibration-attempt-pair/2"
+        or type(value["absolute_attempt_directory"]) is not str
+        or type(value["attempt_directory_name"]) is not str
         or type(value["attempt_manifest_root"]) is not str
         or re.fullmatch(
             r"phase2b_formal_wire_covert_attempt_manifest_v3_[0-9a-f]{64}",
@@ -16310,13 +16471,24 @@ def _validate_calibration_pair_projection_shape_v2(
         or type(value["retained_tree_before_terminal"]) is not dict
     ):
         raise ValueError("calibration pair projection is not closed")
-    attempt_directory = Path(value["attempt_directory"])
+    attempt_directory_text = value["absolute_attempt_directory"]
+    try:
+        canonical_utf8 = attempt_directory_text.encode("utf-8").decode("utf-8")
+    except UnicodeError as exc:
+        raise ValueError("calibration pair locator is not canonical UTF-8") from exc
+    attempt_directory = Path(attempt_directory_text)
     expected_attempt_name = "attempt-" + hashlib.sha256(
         value["attempt_manifest_root"].encode("ascii")
     ).hexdigest()[:48]
     tree = value["retained_tree_before_terminal"]
     if (
-        attempt_directory.name != expected_attempt_name
+        canonical_utf8 != attempt_directory_text
+        or not attempt_directory.is_absolute()
+        or str(attempt_directory) != attempt_directory_text
+        or "//" in attempt_directory_text
+        or any(part in {".", ".."} for part in attempt_directory.parts)
+        or attempt_directory.name != expected_attempt_name
+        or value["attempt_directory_name"] != expected_attempt_name
         or set(tree)
         != {
             "regular_file_count",
@@ -16359,6 +16531,36 @@ def _validate_calibration_pair_projection_shape_v2(
     ):
         raise ValueError("calibration pair retained-tree projection is not closed")
     return value
+
+
+def _require_frozen_calibration_pair_projection_v2(
+    shape: object,
+    projection: object,
+) -> dict[str, object]:
+    """Require the one pair selected by the canonical P1 profile."""
+
+    if (
+        type(shape) is not dict
+        or shape.get("calibration_campaign_status")
+        != "FROZEN_FULL_1024_DEVELOPMENT_MEASUREMENT"
+        or shape.get("live_qualification_enabled") is not True
+    ):
+        raise ValueError("frozen calibration pair requires the live P1 shape")
+    expected = _validate_calibration_pair_projection_shape_v2(
+        shape.get("calibration_pair_projection"), required=True
+    )
+    actual = _validate_calibration_pair_projection_shape_v2(
+        projection, required=True
+    )
+    if (
+        type(expected) is not dict
+        or type(actual) is not dict
+        or not _exact_json_equal(actual, expected)
+        or actual["attempt_manifest_root"]
+        != shape.get("calibration_attempt_manifest_root")
+    ):
+        raise ValueError("frozen calibration pair projection drifted")
+    return actual
 
 
 def _validate_launch_intent_projection_v2(
@@ -21115,12 +21317,17 @@ def verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
                 raise ValueError("calibration pair replay depth exceeds one")
             if type(pair_projection) is not dict:
                 raise ValueError("live attempt lacks its retained calibration pair")
-            pair_directory_text = pair_projection.get("attempt_directory")
-            if (
-                type(pair_directory_text) is not str
-                or not Path(pair_directory_text).is_absolute()
-            ):
-                raise ValueError("live calibration pair directory is malformed")
+            frozen_shape = _EXPECTED_PROFILE["fixture_contract"][
+                "rich_positive_shape"
+            ]
+            frozen_pair_projection = (
+                _require_frozen_calibration_pair_projection_v2(
+                    frozen_shape, pair_projection
+                )
+            )
+            pair_directory_text = frozen_pair_projection[
+                "absolute_attempt_directory"
+            ]
             (
                 derived_prior_bytes,
                 derived_pair_projection,
@@ -21128,6 +21335,7 @@ def verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
             ) = (
                 _load_verified_development_calibration_pair_v2(
                     Path(pair_directory_text),
+                    expected_pair_projection=frozen_pair_projection,
                     deadline_ns=deadline_ns,
                     pair_replay_depth=_pair_replay_depth + 1,
                     token_purpose="retained-attempt-replay",
@@ -21426,6 +21634,7 @@ def verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
 def _load_verified_development_calibration_pair_v2(
     calibration_attempt_directory: Path,
     *,
+    expected_pair_projection: object,
     deadline_ns: int | None,
     pair_replay_depth: int,
     token_purpose: str,
@@ -21445,6 +21654,17 @@ def _load_verified_development_calibration_pair_v2(
         or token_purpose not in {"outer-mechanics", "retained-attempt-replay"}
     ):
         raise ValueError("calibration pair replay arguments are not depth-one paths")
+    expected_pair = _validate_calibration_pair_projection_shape_v2(
+        expected_pair_projection, required=True
+    )
+    if (
+        type(expected_pair) is not dict
+        or str(calibration_attempt_directory)
+        != expected_pair["absolute_attempt_directory"]
+        or calibration_attempt_directory.name
+        != expected_pair["attempt_directory_name"]
+    ):
+        raise ValueError("calibration pair locator differs from its frozen projection")
     parent_fd = _open_real_directory_fd_v2(calibration_attempt_directory.parent)
     owned: list[int] = [parent_fd]
     try:
@@ -21546,9 +21766,10 @@ def _load_verified_development_calibration_pair_v2(
             raise ValueError("paired calibration terminal/tree projection drifted")
         projection = {
             "schema_version": (
-                "hegel-machine-phase2b-formal-wire-covert-calibration-attempt-pair/1"
+                "hegel-machine-phase2b-formal-wire-covert-calibration-attempt-pair/2"
             ),
-            "attempt_directory": str(calibration_attempt_directory),
+            "absolute_attempt_directory": str(calibration_attempt_directory),
+            "attempt_directory_name": calibration_attempt_directory.name,
             "attempt_manifest_root": terminal["attempt_manifest_root"],
             "terminal_sha256": hashlib.sha256(terminal_bytes).hexdigest(),
             "terminal_size_bytes": len(terminal_bytes),
@@ -21557,6 +21778,8 @@ def _load_verified_development_calibration_pair_v2(
             "pair_must_be_jointly_signed_by_step5": True,
         }
         _validate_calibration_pair_projection_shape_v2(projection, required=True)
+        if not _exact_json_equal(projection, expected_pair):
+            raise ValueError("frozen calibration pair projection drifted")
         payloads = (
             profile_bytes,
             attempt_bytes,
@@ -21565,13 +21788,85 @@ def _load_verified_development_calibration_pair_v2(
             rfc_bytes,
             mechanics_bytes,
         )
+        terminal_replay_bytes, _ = _read_regular_at_fd_v2(
+            attempt_fd,
+            "terminal.json",
+            maximum_bytes=8 * 1_024 * 1_024,
+            deadline_ns=deadline_ns,
+        )
+        replayed_payloads = (
+            _read_regular_at_fd_v2(
+                inputs_fd,
+                "profile.json",
+                maximum_bytes=_MAXIMUM_PROFILE_BYTES,
+                deadline_ns=deadline_ns,
+            )[0],
+            _read_regular_at_fd_v2(
+                inputs_fd,
+                "attempt.json",
+                maximum_bytes=256 * 1_024,
+                deadline_ns=deadline_ns,
+            )[0],
+            _read_regular_at_fd_v2(
+                evidence_fd,
+                "inner.json",
+                maximum_bytes=8 * 1_024 * 1_024,
+                deadline_ns=deadline_ns,
+            )[0],
+            _read_regular_at_fd_v2(
+                evidence_fd,
+                "outer-supervisor.json",
+                maximum_bytes=1_048_576,
+                deadline_ns=deadline_ns,
+            )[0],
+            _read_regular_at_fd_v2(
+                cas_fd,
+                rfc_digest,
+                maximum_bytes=rfc_size,
+                deadline_ns=deadline_ns,
+            )[0],
+            _read_regular_at_fd_v2(
+                evidence_fd,
+                "mechanics.json",
+                maximum_bytes=8 * 1_024 * 1_024,
+                deadline_ns=deadline_ns,
+            )[0],
+        )
+        final_tree_projection = _retained_attempt_tree_before_terminal_v2(
+            attempt_fd, deadline_ns=deadline_ns
+        )
+        _verify_retained_directory_path_identity_v2(
+            parent_fd,
+            calibration_attempt_directory.parent,
+            name="frozen calibration pair parent",
+        )
+        _verify_retained_directory_path_identity_v2(
+            attempt_fd,
+            calibration_attempt_directory,
+            name="frozen calibration pair attempt",
+        )
+        held_attempt = os.fstat(attempt_fd)
+        named_attempt = os.stat(
+            calibration_attempt_directory.name,
+            dir_fd=parent_fd,
+            follow_symlinks=False,
+        )
+        if (
+            terminal_replay_bytes != terminal_bytes
+            or replayed_payloads != payloads
+            or not _exact_json_equal(final_tree_projection, tree_projection)
+            or not stat.S_ISDIR(named_attempt.st_mode)
+            or (held_attempt.st_dev, held_attempt.st_ino)
+            != (named_attempt.st_dev, named_attempt.st_ino)
+        ):
+            raise ValueError("calibration pair changed before token issuance")
         return (
             payloads,
             projection,
             _issue_verified_calibration_pair_replay_token_v2(
                 _CALIBRATION_PAIR_REPLAY_TOKEN_ISSUER_V2,
                 payloads,
-                projection,
+                expected_pair,
                 token_purpose,
             ),
         )
@@ -22077,6 +22372,12 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
                     "live attempt needs one retained calibration attempt directory; "
                     "loose calibration artifact paths are forbidden"
                 )
+            shape = _EXPECTED_PROFILE["fixture_contract"]["rich_positive_shape"]
+            if type(shape) is not dict:
+                raise ValueError("live runner lacks the frozen rich-shape profile")
+            expected_pair_projection = _require_fresh_live_attempt_preflight_v2(
+                shape, attempt
+            )
             (
                 calibration_bytes,
                 calibration_pair_projection,
@@ -22084,15 +22385,13 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
             ) = (
                 _load_verified_development_calibration_pair_v2(
                     calibration_attempt_directory_path,
+                    expected_pair_projection=expected_pair_projection,
                     deadline_ns=deadline_ns,
                     pair_replay_depth=1,
                     token_purpose="outer-mechanics",
                 )
             )
             _retained_pair_tokens.append(calibration_pair_replay_token)
-            shape = _EXPECTED_PROFILE["fixture_contract"]["rich_positive_shape"]
-            if type(shape) is not dict:
-                raise ValueError("live runner lacks the frozen rich-shape profile")
         python_row = _verify_live_executable_v2(
             rfc_receipt["executables"]["python"],
             "runner Python",
@@ -23209,7 +23508,7 @@ def qualify_phase2b_formal_wire_covert_candidate_v2(
     Phase2BFormalWireCovertCandidateReceiptV2
     | Phase2BFormalWireCovertQualificationRejectionV2
 ):
-    """Run two real 1,024-row audits; issue no R03/R04/R05 claim."""
+    """Reject the uncontained host path; issue no R03/R04/R05 claim."""
 
     profile_id = getattr(profile, "profile_id", None)
     positive: _IsolatedAuditEvidenceV2 | None = None
@@ -23236,6 +23535,13 @@ def qualify_phase2b_formal_wire_covert_candidate_v2(
                 FAIL_PROFILE,
                 "full-1024 development shape calibration is still pending",
             )
+        _require_frozen_calibration_pair_projection_v2(
+            shape, shape.get("calibration_pair_projection")
+        )
+        _fail(
+            FAIL_PROFILE,
+            "frozen calibration requires the retained-pair outer live entry",
+        )
         positive = _execute_isolated_audit_v2("KNOWN_NULL")
         negative = _execute_isolated_audit_v2("KNOWN_BINDING_LEAK")
         _verify_frozen_shape_v2(shape, positive, negative, attempt=None)
@@ -23686,9 +23992,15 @@ def _build_development_attempt_manifest_bytes_v2(
     ):
         raise ValueError("development attempt profile bytes differ from this source")
     profile = load_phase2b_formal_wire_covert_qualification_profile_v2(profile_bytes)
-    _require_pending_calibration_profile_v2(
-        _deep_thaw(profile.profile)["fixture_contract"]["rich_positive_shape"]
-    )
+    current_shape = _deep_thaw(profile.profile)["fixture_contract"][
+        "rich_positive_shape"
+    ]
+    if current_shape.get("live_qualification_enabled") is False:
+        _require_pending_calibration_profile_v2(current_shape)
+    else:
+        _require_frozen_calibration_pair_projection_v2(
+            current_shape, current_shape.get("calibration_pair_projection")
+        )
 
     lock_path = project_root / _QUALIFICATION_TRANSACTION_RELATIVE_PATHS_V2["lock"]
     lock_bytes = _read_bounded_regular_file_v2(

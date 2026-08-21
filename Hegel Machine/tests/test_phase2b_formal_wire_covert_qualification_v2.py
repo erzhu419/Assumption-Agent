@@ -20,6 +20,7 @@ import struct
 import subprocess
 import sys
 import tarfile
+import tempfile
 import time
 
 import pytest
@@ -1719,13 +1720,13 @@ def test_child_pipe_capture_cap_failure_retains_bounded_prefix_and_marks_truncat
     assert process.stderr is not None and process.stderr.closed
 
 
-def test_checked_profile_is_exact_canonical_candidate_with_live_disabled() -> None:
+def test_checked_profile_is_exact_canonical_p1_with_frozen_r12_pair() -> None:
     payload = qualification.phase2b_formal_wire_covert_qualification_profile_bytes_v2()
     assert payload == (ROOT / "config/phase2b_formal_wire_covert_qualification_v2.json").read_bytes()
     profile = qualification.load_phase2b_formal_wire_covert_qualification_profile_v2(payload)
     assert profile.profile_id == qualification.PROFILE_ID
     assert qualification.PROFILE_SCHEMA_VERSION == (
-        "hegel-machine-phase2b-formal-wire-covert-qualification/8"
+        "hegel-machine-phase2b-formal-wire-covert-qualification/9"
     )
     assert qualification.AUDITOR_SCHEMA_VERSION_V2 == (
         "hegel-machine-phase2b-formal-covert-auditor/5"
@@ -1784,38 +1785,120 @@ def test_checked_profile_is_exact_canonical_candidate_with_live_disabled() -> No
         "target_family_results",
     )
     shape = profile.profile["fixture_contract"]["rich_positive_shape"]
-    assert shape["calibration_campaign_status"] == "PENDING_FULL_1024_DEVELOPMENT_MEASUREMENT"
-    assert shape["live_qualification_enabled"] is False
+    assert shape["calibration_campaign_status"] == (
+        "FROZEN_FULL_1024_DEVELOPMENT_MEASUREMENT"
+    )
+    assert shape["live_qualification_enabled"] is True
     assert shape["old_identity_only_counts_valid"] is False
-    assert {
-        name for name, value in shape.items() if value is None
-    } == {
-        "calibration_artifact_cas_root",
-        "calibration_artifact_sha256",
-        "calibration_artifact_size_bytes",
-        "calibration_attempt_id",
-        "calibration_attempt_manifest_cas_root",
-        "calibration_attempt_manifest_root",
-        "calibration_attempt_manifest_sha256",
-        "calibration_attempt_manifest_size_bytes",
-        "calibration_basis_profile_cas_root",
-        "calibration_basis_profile_id",
-        "calibration_basis_profile_sha256",
-        "calibration_basis_profile_size_bytes",
-        "calibration_campaign_id",
-        "calibration_mechanics_artifact_cas_root",
-        "calibration_mechanics_artifact_sha256",
-        "calibration_mechanics_artifact_size_bytes",
-        "calibration_outer_supervisor_result_cas_root",
-        "calibration_outer_supervisor_result_sha256",
-        "calibration_outer_supervisor_result_size_bytes",
-        "calibration_rfc8785_receipt_cas_root",
-        "calibration_rfc8785_receipt_sha256",
-        "calibration_rfc8785_receipt_size_bytes",
-        "combined_fixture_root",
-        "known_leak_frozen_static_projection",
-        "known_null_frozen_static_projection",
+    assert {name for name, value in shape.items() if value is None} == set()
+    expected_frozen_roles = {
+        "calibration_artifact": (
+            "2d978f48de2f1d10bf802982f80d61d8aa773c4173e45684ac6e6c1d320ce3a5",
+            76_170,
+        ),
+        "calibration_attempt_manifest": (
+            "cd8c2a5f0c5562343af6612428333d924283bdb078906d85924ddfeb85984688",
+            1_700,
+        ),
+        "calibration_basis_profile": (
+            "bf765062544c54cc1396600ec56734101674f14def3179a8fcda604b6ad0c933",
+            19_619,
+        ),
+        "calibration_mechanics_artifact": (
+            "1f445d9d4fc991dd69f777ec502ee6402e1c1441a481b74debc18bd53f799c54",
+            1_900,
+        ),
+        "calibration_outer_supervisor_result": (
+            "84af38cf7c201f7c19897264798f8dc4daabc69cd5adc679a2a429cb616ce332",
+            64_647,
+        ),
+        "calibration_rfc8785_receipt": (
+            "24099f014e1fb32198603572beaa3903f22e9b4998dcc9328ebc09592884cb7b",
+            74_815,
+        ),
     }
+    for role, (digest, size) in expected_frozen_roles.items():
+        assert shape[f"{role}_sha256"] == digest
+        assert shape[f"{role}_size_bytes"] == size
+        assert shape[f"{role}_cas_root"] == "sha256:" + digest
+    assert shape["calibration_campaign_id"] == "qv2-p0-20260821-ad4c92c6-r12"
+    assert shape["calibration_attempt_id"] == (
+        "development-calibration-012-ad4c92c6-r12"
+    )
+    assert shape["calibration_attempt_manifest_root"] == (
+        "phase2b_formal_wire_covert_attempt_manifest_v3_"
+        "599ef7f1b77b13c98f96c519df26b17043bea2f7fbe649fbc4fc52c9108138a2"
+    )
+    assert shape["calibration_basis_profile_id"] == (
+        "phase2b_formal_wire_covert_qualification_profile_v2_"
+        "9e41ae3d8f3950d5d0fe86048bfbc3ec17e450f7d699338f2b082d9444a16bc6"
+    )
+    assert shape["combined_fixture_root"] == (
+        "phase2b_formal_wire_covert_synthetic_fixture_v2_"
+        "1c95fa532da5b4548ecf4bcc708b9a53a7381b17f453460c9c02da22772f4250"
+    )
+    assert qualification._deep_thaw(shape["calibration_pair_projection"]) == {
+        "schema_version": (
+            "hegel-machine-phase2b-formal-wire-covert-"
+            "calibration-attempt-pair/2"
+        ),
+        "absolute_attempt_directory": (
+            "/home/erzhu419/.local/state/hegel-machine/phase2b-qv2-task4/"
+            "qv2-p0-20260821-ad4c92c6-r12/attempt-output/"
+            "attempt-1b8350885adf1d605a222e0aa13f4cd421e6b157f1128079"
+        ),
+        "attempt_directory_name": (
+            "attempt-1b8350885adf1d605a222e0aa13f4cd421e6b157f1128079"
+        ),
+        "attempt_manifest_root": shape["calibration_attempt_manifest_root"],
+        "terminal_sha256": (
+            "a6acbc45f820aa3a651fe1ddc66b6abebd07d3735a20871a3bf35ef6ad7dd249"
+        ),
+        "terminal_size_bytes": 7_176,
+        "retained_tree_before_terminal": {
+            "regular_file_count": 210,
+            "root": (
+                "phase2b_formal_wire_covert_failure_tree_v3_"
+                "5d511be46bd0a3765901dda7e1d55a680e0b09c9eb15bd132215e938689f74a6"
+            ),
+            "row_count": 222,
+            "top_level_names": ["evidence", "reservation.json"],
+            "total_regular_bytes": 16_748_103,
+        },
+        "pair_retention_required": True,
+        "pair_must_be_jointly_signed_by_step5": True,
+    }
+    assert shape["known_null_frozen_static_projection"]["mode"] == "KNOWN_NULL"
+    assert shape["known_null_frozen_static_projection"]["rows"] == 1_024
+    assert shape["known_null_frozen_static_projection"]["channel_leaf_count"] == 81
+    assert shape["known_null_frozen_static_projection"][
+        "resource_plan_static_root"
+    ] == (
+        "phase2b_formal_wire_covert_static_resource_plan_v2_"
+        "2235a4174efc3efbb144407f01f555e71fa9086b5e278d3eef31361297b89149"
+    )
+    assert shape["known_leak_frozen_static_projection"]["mode"] == (
+        "KNOWN_BINDING_LEAK"
+    )
+    assert shape["known_leak_frozen_static_projection"]["rows"] == 1_024
+    assert shape["known_leak_frozen_static_projection"]["channel_leaf_count"] == 81
+    assert shape["known_leak_frozen_static_projection"][
+        "resource_plan_static_root"
+    ] == (
+        "phase2b_formal_wire_covert_static_resource_plan_v2_"
+        "79a40ad7ef12feea158f45f1cf9d701f08dd34d87bcef8edfba68041fae36d9a"
+    )
+    assert qualification.SYNTHETIC_FIXTURE_ROOT_SCHEMA_VERSION_V2 == (
+        "hegel-machine-phase2b-formal-wire-covert-qualification/8"
+    )
+    assert (
+        qualification.SYNTHETIC_FIXTURE_ROOT_SCHEMA_VERSION_V2
+        != qualification.PROFILE_SCHEMA_VERSION
+    )
+    assert qualification._combined_fixture_root_from_run_roots_v2(
+        shape["known_null_frozen_static_projection"]["run_fixture_root"],
+        shape["known_leak_frozen_static_projection"]["run_fixture_root"],
+    ) == shape["combined_fixture_root"]
     readiness = profile.profile["readiness_boundary"]
     assert "required_runtime_evidence_fields_in_order" not in readiness
     live = readiness["live_execution_contract"]
@@ -2900,9 +2983,10 @@ def test_retained_pre_decoupling_and_r3_profile_identities_are_rejected() -> Non
         "phase2b_formal_wire_covert_qualification_profile_v2_"
         "3a055d4dea2c4d00c7ccbce465746ed5f70cc51977460ee027bd5807ab6e5d46"
     )
-    pre_decoupling_profile = qualification._deep_thaw(
-        qualification._EXPECTED_PROFILE
-    )
+    historical_basis_bytes, _ = _historical_r12_pending_basis_profile_bytes()
+    pre_decoupling_profile = json.loads(historical_basis_bytes)[
+        "qualification_profile"
+    ]
     pre_decoupling_profile["schema_version"] = (
         "hegel-machine-phase2b-formal-wire-covert-qualification/6"
     )
@@ -5481,27 +5565,27 @@ def test_registered_synthetic_vectors_are_exact_reproducible_and_nonclaiming() -
     assert profile["fixture_contract"]["input_class"] == "SYNTHETIC_DEV_ONLY"
 
 
-def test_live_attempt_is_host_environment_only_and_calibration_blocks_inner(
+def test_live_attempt_reaches_runtime_only_after_p1_frozen_pair_gate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     profile = qualification.load_phase2b_formal_wire_covert_qualification_profile_v2(
         qualification.phase2b_formal_wire_covert_qualification_profile_bytes_v2()
     )
     attempt = _attempt()
-    monkeypatch.setattr(
-        qualification,
-        "prepare_live_inner_process_v2",
-        lambda: pytest.fail("calibration gate must precede runtime inspection"),
-    )
-    with pytest.raises(
-        qualification.Phase2BFormalWireCovertQualificationErrorV2,
-        match="shape calibration",
-    ):
+    reached: list[bool] = []
+
+    def stop_before_full() -> dict[str, object]:
+        reached.append(True)
+        raise RuntimeError("STOP_BEFORE_FRESH_LIVE_1024")
+
+    monkeypatch.setattr(qualification, "prepare_live_inner_process_v2", stop_before_full)
+    with pytest.raises(RuntimeError, match="STOP_BEFORE_FRESH_LIVE_1024"):
         qualification.build_live_inner_candidate_artifact_v2(profile, attempt)
+    assert reached == [True]
     assert attempt.runtime_image_digest is None
 
 
-def test_development_calibration_entry_is_reachable_but_never_live_claiming(
+def test_development_calibration_entry_is_disabled_after_p1_freeze(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     profile = qualification.load_phase2b_formal_wire_covert_qualification_profile_v2(
@@ -5509,24 +5593,85 @@ def test_development_calibration_entry_is_reachable_but_never_live_claiming(
     )
     reached: list[bool] = []
 
-    def stop_before_full() -> dict[str, object]:
+    def forbidden_runtime_entry() -> dict[str, object]:
         reached.append(True)
-        raise RuntimeError("STOP_BEFORE_FULL_1024")
+        raise AssertionError("frozen P1 must reject development before runtime")
 
     monkeypatch.setattr(
-        qualification, "prepare_live_inner_process_v2", stop_before_full
+        qualification, "prepare_live_inner_process_v2", forbidden_runtime_entry
     )
-    with pytest.raises(RuntimeError, match="STOP_BEFORE_FULL_1024"):
+    with pytest.raises(
+        qualification.Phase2BFormalWireCovertQualificationErrorV2,
+        match="pending profile",
+    ):
         qualification.build_development_calibration_artifact_v2(
             profile, _attempt()
         )
-    assert reached == [True]
+    assert reached == []
     assert (
         qualification._EXPECTED_PROFILE["fixture_contract"][
             "rich_positive_shape"
         ]["calibration_artifact_cannot_be_promoted"]
         is True
     )
+
+
+@pytest.mark.parametrize(
+    ("campaign_id", "attempt_id"),
+    (
+        ("qv2-p0-20260821-ad4c92c6-r12", "fresh-live-attempt"),
+        ("fresh-live-campaign", "development-calibration-012-ad4c92c6-r12"),
+        (
+            "qv2-p0-20260821-ad4c92c6-r12",
+            "development-calibration-012-ad4c92c6-r12",
+        ),
+    ),
+)
+def test_live_inner_rejects_each_p0_identity_before_scientific_preparation(
+    monkeypatch: pytest.MonkeyPatch,
+    campaign_id: str,
+    attempt_id: str,
+) -> None:
+    profile = qualification.load_phase2b_formal_wire_covert_qualification_profile_v2(
+        qualification.phase2b_formal_wire_covert_qualification_profile_bytes_v2()
+    )
+    attempt = replace(
+        _attempt(),
+        campaign_id=campaign_id,
+        attempt_id=attempt_id,
+    )
+    scientific_calls: list[str] = []
+
+    def forbidden(label: str) -> object:
+        scientific_calls.append(label)
+        raise AssertionError(f"duplicate P0 identity reached {label}")
+
+    monkeypatch.setattr(
+        qualification,
+        "prepare_live_inner_process_v2",
+        lambda: forbidden("live runtime preparation"),
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_build_fixture_execution_v2",
+        lambda *args, **kwargs: forbidden("fixture preparation"),
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_execute_isolated_audit_v2",
+        lambda *args, **kwargs: forbidden("isolated audit"),
+    )
+    monkeypatch.setattr(
+        qualification.subprocess,
+        "Popen",
+        lambda *args, **kwargs: forbidden("scientific Popen"),
+    )
+    with pytest.raises(
+        qualification.Phase2BFormalWireCovertQualificationErrorV2,
+        match="fresh campaign and attempt identities",
+    ):
+        qualification.build_live_inner_candidate_artifact_v2(profile, attempt)
+    assert scientific_calls == []
 
 
 def test_post_receipt_validation_failure_releases_only_locally_owned_receipt(
@@ -10707,7 +10852,7 @@ def test_production_has_zero_assert_and_no_pickle_pipe_or_process_pool() -> None
     )
     assert "phase2b_formal_wire_covert_qualification_receipt_v4_" not in source
     current_schema_tokens = (
-        "hegel-machine-phase2b-formal-wire-covert-qualification/8",
+        "hegel-machine-phase2b-formal-wire-covert-qualification/9",
         "hegel-machine-phase2b-formal-wire-covert-qualification-dependency-lock/4",
         "hegel-machine-phase2b-formal-wire-covert-outer-supervisor-result/5",
         "hegel-machine-phase2b-formal-wire-covert-development-calibration/7",
@@ -10722,6 +10867,9 @@ def test_production_has_zero_assert_and_no_pickle_pipe_or_process_pool() -> None
     )
     for schema in current_schema_tokens:
         assert schema in source
+    assert qualification.HISTORICAL_CALIBRATION_BASIS_SCHEMA_VERSION_V2 == (
+        "hegel-machine-phase2b-formal-wire-covert-qualification/8"
+    )
     for stale in (
         "hegel-machine-phase2b-formal-wire-covert-qualification/7",
         "hegel-machine-phase2b-formal-wire-covert-qualification/6",
@@ -10940,34 +11088,44 @@ def test_public_mechanics_rejects_asserted_or_forged_pair_replay_authority() -> 
         )
 
 
-def test_calibration_pair_projection_and_private_token_are_content_bound() -> None:
-    attempt = _attempt()
+def _calibration_pair_projection_kat(
+    *,
+    attempt: qualification.Phase2BFormalWireCovertAttemptManifestV2 | None = None,
+    parent: Path = Path("/tmp/hegel-qv2-pair"),
+) -> dict[str, object]:
+    attempt = _attempt() if attempt is None else attempt
     attempt_name = "attempt-" + hashlib.sha256(
         attempt.attempt_manifest_root.encode("ascii")
     ).hexdigest()[:48]
-    projection = {
+    return {
         "schema_version": (
-            "hegel-machine-phase2b-formal-wire-covert-calibration-attempt-pair/1"
+            "hegel-machine-phase2b-formal-wire-covert-"
+            "calibration-attempt-pair/2"
         ),
-        "attempt_directory": str(Path("/tmp/hegel-qv2-pair") / attempt_name),
+        "absolute_attempt_directory": str(parent / attempt_name),
+        "attempt_directory_name": attempt_name,
         "attempt_manifest_root": attempt.attempt_manifest_root,
         "terminal_sha256": "3" * 64,
-        "terminal_size_bytes": 1024,
+        "terminal_size_bytes": 1_024,
         "retained_tree_before_terminal": {
             "regular_file_count": 6,
             "root": "phase2b_formal_wire_covert_failure_tree_v3_" + "4" * 64,
             "row_count": 10,
             "top_level_names": ["evidence", "reservation.json"],
-            "total_regular_bytes": 4096,
+            "total_regular_bytes": 4_096,
         },
         "pair_retention_required": True,
         "pair_must_be_jointly_signed_by_step5": True,
     }
+
+
+def test_calibration_pair_projection_and_private_token_are_content_bound() -> None:
+    projection = _calibration_pair_projection_kat()
     assert qualification._validate_calibration_pair_projection_shape_v2(
         projection, required=True
     ) == projection
-    tampered = dict(projection)
-    tampered["attempt_directory"] = str(
+    tampered = json.loads(json.dumps(projection))
+    tampered["absolute_attempt_directory"] = str(
         Path("/tmp/hegel-qv2-pair") / ("attempt-" + "f" * 48)
     )
     with pytest.raises(ValueError, match="retained-tree projection|not closed"):
@@ -11009,6 +11167,282 @@ def test_calibration_pair_projection_and_private_token_are_content_bound() -> No
         qualification._consume_verified_calibration_pair_replay_token_v2(
             foreign_token, payloads, projection, "outer-mechanics"
         )
+
+
+@pytest.mark.parametrize(
+    ("case", "mutate"),
+    (
+        ("missing", lambda value: value.pop("terminal_sha256")),
+        ("extra", lambda value: value.__setitem__("unexpected", False)),
+        (
+            "schema",
+            lambda value: value.__setitem__(
+                "schema_version",
+                "hegel-machine-phase2b-formal-wire-covert-"
+                "calibration-attempt-pair/1",
+            ),
+        ),
+        (
+            "type",
+            lambda value: value.__setitem__("terminal_size_bytes", True),
+        ),
+        (
+            "relative-path",
+            lambda value: value.__setitem__(
+                "absolute_attempt_directory", value["attempt_directory_name"]
+            ),
+        ),
+        (
+            "path-alias",
+            lambda value: value.__setitem__(
+                "absolute_attempt_directory",
+                "/tmp/hegel-qv2-pair/alias/../" + value["attempt_directory_name"],
+            ),
+        ),
+        (
+            "directory-name",
+            lambda value: value.__setitem__(
+                "attempt_directory_name", "attempt-" + "f" * 48
+            ),
+        ),
+        (
+            "manifest-root",
+            lambda value: value.__setitem__(
+                "attempt_manifest_root",
+                "phase2b_formal_wire_covert_attempt_manifest_v3_" + "e" * 64,
+            ),
+        ),
+        (
+            "tree-missing",
+            lambda value: value["retained_tree_before_terminal"].pop("root"),
+        ),
+        (
+            "tree-extra",
+            lambda value: value["retained_tree_before_terminal"].__setitem__(
+                "unexpected", 0
+            ),
+        ),
+        (
+            "tree-row-type",
+            lambda value: value["retained_tree_before_terminal"].__setitem__(
+                "row_count", True
+            ),
+        ),
+        (
+            "tree-regular-count",
+            lambda value: value["retained_tree_before_terminal"].__setitem__(
+                "regular_file_count", -1
+            ),
+        ),
+        (
+            "tree-byte-count",
+            lambda value: value["retained_tree_before_terminal"].__setitem__(
+                "total_regular_bytes", True
+            ),
+        ),
+        (
+            "tree-top-level-order",
+            lambda value: value["retained_tree_before_terminal"].__setitem__(
+                "top_level_names", ["reservation.json", "evidence"]
+            ),
+        ),
+        (
+            "tree-root",
+            lambda value: value["retained_tree_before_terminal"].__setitem__(
+                "root", "phase2b_formal_wire_covert_failure_tree_v3_" + "g" * 64
+            ),
+        ),
+        (
+            "terminal-sha",
+            lambda value: value.__setitem__("terminal_sha256", "g" * 64),
+        ),
+        (
+            "terminal-size",
+            lambda value: value.__setitem__("terminal_size_bytes", 0),
+        ),
+        (
+            "retention-flag",
+            lambda value: value.__setitem__("pair_retention_required", False),
+        ),
+        (
+            "signing-flag",
+            lambda value: value.__setitem__(
+                "pair_must_be_jointly_signed_by_step5", False
+            ),
+        ),
+    ),
+)
+def test_calibration_pair_v2_projection_is_mutation_isolated(
+    case: str,
+    mutate: object,
+) -> None:
+    del case
+    projection = _calibration_pair_projection_kat()
+    assert callable(mutate)
+    mutate(projection)
+    with pytest.raises((TypeError, ValueError)):
+        qualification._validate_calibration_pair_projection_shape_v2(
+            projection, required=True
+        )
+
+
+@pytest.mark.parametrize(
+    "drift",
+    (
+        "relocated-directory",
+        "manifest-root-and-name",
+        "terminal-sha",
+        "terminal-size",
+        "tree-root",
+        "tree-row-count",
+        "tree-regular-count",
+        "tree-byte-count",
+        "tree-top-level-names",
+    ),
+)
+def test_frozen_p1_requires_exact_pair_projection_not_only_valid_shape(
+    drift: str,
+) -> None:
+    shape = qualification._deep_thaw(
+        qualification._EXPECTED_PROFILE["fixture_contract"]["rich_positive_shape"]
+    )
+    expected = shape["calibration_pair_projection"]
+    qualification._validate_calibration_pair_projection_shape_v2(
+        expected, required=True
+    )
+    qualification._require_frozen_calibration_pair_projection_v2(shape, expected)
+    candidate = json.loads(json.dumps(expected))
+    if drift == "relocated-directory":
+        candidate["absolute_attempt_directory"] = str(
+            Path("/tmp/relocated-calibration")
+            / candidate["attempt_directory_name"]
+        )
+    elif drift == "manifest-root-and-name":
+        candidate["attempt_manifest_root"] = (
+            "phase2b_formal_wire_covert_attempt_manifest_v3_" + "e" * 64
+        )
+        name = "attempt-" + hashlib.sha256(
+            candidate["attempt_manifest_root"].encode("ascii")
+        ).hexdigest()[:48]
+        candidate["attempt_directory_name"] = name
+        candidate["absolute_attempt_directory"] = str(
+            Path(candidate["absolute_attempt_directory"]).parent / name
+        )
+    elif drift == "terminal-sha":
+        candidate["terminal_sha256"] = "e" * 64
+    elif drift == "terminal-size":
+        candidate["terminal_size_bytes"] += 1
+    elif drift == "tree-root":
+        candidate["retained_tree_before_terminal"]["root"] = (
+            "phase2b_formal_wire_covert_failure_tree_v3_" + "e" * 64
+        )
+    elif drift == "tree-row-count":
+        candidate["retained_tree_before_terminal"]["row_count"] += 1
+    elif drift == "tree-regular-count":
+        candidate["retained_tree_before_terminal"]["regular_file_count"] += 1
+    elif drift == "tree-byte-count":
+        candidate["retained_tree_before_terminal"]["total_regular_bytes"] += 1
+    elif drift == "tree-top-level-names":
+        candidate["retained_tree_before_terminal"]["top_level_names"] = [
+            "evidence",
+            "other.json",
+        ]
+    else:  # pragma: no cover - closed parametrization
+        raise AssertionError(drift)
+    qualification._validate_calibration_pair_projection_shape_v2(
+        candidate, required=True
+    )
+    with pytest.raises(ValueError):
+        qualification._require_frozen_calibration_pair_projection_v2(
+            shape, candidate
+        )
+
+
+def test_frozen_pair_comparison_precedes_token_consumption(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    shape = qualification._deep_thaw(
+        qualification._EXPECTED_PROFILE["fixture_contract"]["rich_positive_shape"]
+    )
+    projection = json.loads(json.dumps(shape["calibration_pair_projection"]))
+    projection["terminal_sha256"] = "e" * 64
+    payloads = tuple(f"pair-{index}".encode("ascii") for index in range(6))
+    token = qualification._issue_verified_calibration_pair_replay_token_v2(
+        qualification._CALIBRATION_PAIR_REPLAY_TOKEN_ISSUER_V2,
+        payloads,
+        projection,
+        "outer-mechanics",
+    )
+    consumed: list[bool] = []
+
+    def forbidden_consume(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        consumed.append(True)
+
+    monkeypatch.setattr(
+        qualification,
+        "_consume_verified_calibration_pair_replay_token_v2",
+        forbidden_consume,
+    )
+    try:
+        with pytest.raises(ValueError):
+            qualification._validate_frozen_calibration_bytes_v2(
+                shape,
+                calibration_basis_profile_bytes=payloads[0],
+                calibration_attempt_manifest_bytes=payloads[1],
+                calibration_inner_artifact_bytes=payloads[2],
+                calibration_outer_supervisor_result_bytes=payloads[3],
+                calibration_rfc8785_prerequisite_receipt_bytes=payloads[4],
+                calibration_mechanics_artifact_bytes=payloads[5],
+                _pair_replay_token=token,
+                _pair_projection=projection,
+                _pair_replay_purpose="outer-mechanics",
+            )
+        assert consumed == []
+    finally:
+        qualification._discard_verified_calibration_pair_replay_token_v2(token)
+
+
+def test_frozen_pair_compare_precedes_token_issue_and_scientific_child() -> None:
+    loader_source = inspect.getsource(
+        qualification._load_verified_development_calibration_pair_v2
+    )
+    issue_position = loader_source.index(
+        "_issue_verified_calibration_pair_replay_token_v2("
+    )
+    assert loader_source.index(
+        "if not _exact_json_equal(projection, expected_pair)"
+    ) < issue_position
+    for final_reread_gate in (
+        "terminal_replay_bytes",
+        "replayed_payloads",
+        "final_tree_projection",
+        "_verify_retained_directory_path_identity_v2(",
+        "named_attempt = os.stat(",
+        'raise ValueError("calibration pair changed before token issuance")',
+    ):
+        assert loader_source.index(final_reread_gate) < issue_position
+    frozen_source = inspect.getsource(
+        qualification._validate_frozen_calibration_bytes_v2
+    )
+    assert frozen_source.index(
+        "_require_frozen_calibration_pair_projection_v2("
+    ) < frozen_source.index("_consume_verified_calibration_pair_replay_token_v2(")
+    outer_source = inspect.getsource(
+        qualification._run_phase2b_formal_wire_covert_outer_attempt_impl_v2
+    )
+    outer_fresh_preflight = outer_source.index(
+        "_require_fresh_live_attempt_preflight_v2("
+    )
+    outer_pair_replay = outer_source.index(
+        "_load_verified_development_calibration_pair_v2("
+    )
+    outer_scientific_popen = outer_source.index("launcher = subprocess.Popen(")
+    assert outer_source.count("_require_fresh_live_attempt_preflight_v2(") == 1
+    assert outer_source.count("_load_verified_development_calibration_pair_v2(") == 1
+    assert outer_source.count("launcher = subprocess.Popen(") == 1
+    assert outer_fresh_preflight < outer_pair_replay < outer_scientific_popen
+    assert outer_fresh_preflight < outer_source.index("_verify_live_executable_v2(")
 
 
 def test_pair_loader_derives_six_bytes_from_retained_attempt(
@@ -11070,9 +11504,23 @@ def test_pair_loader_derives_six_bytes_from_retained_attempt(
         "verify_phase2b_formal_wire_covert_outer_attempt_directory_v2",
         verified_directory,
     )
+    expected_projection = {
+        "schema_version": (
+            "hegel-machine-phase2b-formal-wire-covert-calibration-attempt-pair/2"
+        ),
+        "absolute_attempt_directory": str(pair_directory),
+        "attempt_directory_name": attempt_name,
+        "attempt_manifest_root": attempt.attempt_manifest_root,
+        "terminal_sha256": hashlib.sha256(terminal_bytes).hexdigest(),
+        "terminal_size_bytes": len(terminal_bytes),
+        "retained_tree_before_terminal": tree,
+        "pair_retention_required": True,
+        "pair_must_be_jointly_signed_by_step5": True,
+    }
     payloads, projection, token = (
         qualification._load_verified_development_calibration_pair_v2(
             pair_directory,
+            expected_pair_projection=expected_projection,
             deadline_ns=None,
             pair_replay_depth=1,
             token_purpose="outer-mechanics",
@@ -11086,6 +11534,11 @@ def test_pair_loader_derives_six_bytes_from_retained_attempt(
         rfc_bytes,
         mechanics_bytes,
     )
+    assert projection["schema_version"] == (
+        "hegel-machine-phase2b-formal-wire-covert-calibration-attempt-pair/2"
+    )
+    assert projection["absolute_attempt_directory"] == str(pair_directory)
+    assert projection["attempt_directory_name"] == attempt_name
     assert projection["retained_tree_before_terminal"] == tree
     assert projection["terminal_sha256"] == hashlib.sha256(terminal_bytes).hexdigest()
     qualification._consume_verified_calibration_pair_replay_token_v2(
@@ -11093,9 +11546,330 @@ def test_pair_loader_derives_six_bytes_from_retained_attempt(
     )
 
 
-def test_cross_revision_pair_accepts_only_pending_basis_for_frozen_current() -> None:
+def _materialize_pair_loader_final_reread_kat(
+    root: Path,
+) -> tuple[
+    qualification.Phase2BFormalWireCovertAttemptManifestV2,
+    Path,
+    str,
+    bytes,
+    dict[str, object],
+    dict[str, object],
+    str,
+]:
+    attempt = _attempt()
+    attempt_name = "attempt-" + hashlib.sha256(
+        attempt.attempt_manifest_root.encode("ascii")
+    ).hexdigest()[:48]
+    pair_directory = root / attempt_name
+    inputs = pair_directory / "evidence/inputs"
+    cas = pair_directory / "evidence/cas"
+    inputs.mkdir(parents=True)
+    cas.mkdir()
+    payloads = {
+        "profile.json": b"paired-profile\n",
+        "attempt.json": b"paired-attempt\n",
+        "inner.json": b"paired-inner\n",
+        "outer-supervisor.json": b"paired-outer\n",
+        "mechanics.json": b"paired-mechanics\n",
+    }
+    (inputs / "profile.json").write_bytes(payloads["profile.json"])
+    (inputs / "attempt.json").write_bytes(payloads["attempt.json"])
+    for name in ("inner.json", "outer-supervisor.json", "mechanics.json"):
+        (pair_directory / "evidence" / name).write_bytes(payloads[name])
+    rfc_bytes = b"paired-rfc\n"
+    rfc_digest = hashlib.sha256(rfc_bytes).hexdigest()
+    (cas / rfc_digest).write_bytes(rfc_bytes)
+    attempt_fd = qualification._open_real_directory_fd_v2(pair_directory)
+    try:
+        tree = qualification._retained_attempt_tree_before_terminal_v2(attempt_fd)
+    finally:
+        os.close(attempt_fd)
+    terminal_bytes = qualification._canonical_inner_artifact_v2(
+        {
+            "schema_version": qualification.OUTER_ATTEMPT_SUCCESS_SCHEMA_V2,
+            "entry_kind": "development-calibration",
+            "disposition": "MECHANICS_VERIFIED_NOT_AUTHORITY",
+            "attempt_manifest_root": attempt.attempt_manifest_root,
+            "retained_tree_before_terminal": tree,
+            "artifacts": {
+                "rfc8785_prerequisite_receipt": {
+                    "content_sha256": rfc_digest,
+                    "object_size_bytes": len(rfc_bytes),
+                }
+            },
+        }
+    )
+    (pair_directory / "terminal.json").write_bytes(terminal_bytes)
+    expected_projection = {
+        "schema_version": (
+            "hegel-machine-phase2b-formal-wire-covert-calibration-attempt-pair/2"
+        ),
+        "absolute_attempt_directory": str(pair_directory),
+        "attempt_directory_name": attempt_name,
+        "attempt_manifest_root": attempt.attempt_manifest_root,
+        "terminal_sha256": hashlib.sha256(terminal_bytes).hexdigest(),
+        "terminal_size_bytes": len(terminal_bytes),
+        "retained_tree_before_terminal": tree,
+        "pair_retention_required": True,
+        "pair_must_be_jointly_signed_by_step5": True,
+    }
+    return (
+        attempt,
+        pair_directory,
+        attempt_name,
+        terminal_bytes,
+        tree,
+        expected_projection,
+        rfc_digest,
+    )
+
+
+@pytest.mark.parametrize(
+    "drift",
+    (
+        "terminal",
+        "basis-profile",
+        "attempt-manifest",
+        "inner-artifact",
+        "outer-supervisor",
+        "rfc8785-receipt",
+        "mechanics-artifact",
+        "final-tree",
+        "named-attempt-inode",
+    ),
+)
+def test_pair_loader_final_reread_rejects_every_injected_drift_before_token(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    drift: str,
+) -> None:
+    (
+        _attempt_row,
+        pair_directory,
+        attempt_name,
+        terminal_bytes,
+        _initial_tree,
+        expected_projection,
+        rfc_digest,
+    ) = _materialize_pair_loader_final_reread_kat(tmp_path)
+
+    def verified_directory(directory: Path, **kwargs: object) -> bytes:
+        assert directory == pair_directory
+        assert kwargs["_pair_replay_depth"] == 1
+        return terminal_bytes
+
+    monkeypatch.setattr(
+        qualification,
+        "verify_phase2b_formal_wire_covert_outer_attempt_directory_v2",
+        verified_directory,
+    )
+    target_names = {
+        "terminal": "terminal.json",
+        "basis-profile": "profile.json",
+        "attempt-manifest": "attempt.json",
+        "inner-artifact": "inner.json",
+        "outer-supervisor": "outer-supervisor.json",
+        "rfc8785-receipt": rfc_digest,
+        "mechanics-artifact": "mechanics.json",
+    }
+    real_read = qualification._read_regular_at_fd_v2
+    read_counts: Counter[str] = Counter()
+
+    def injected_read(
+        descriptor: int,
+        name: str,
+        **kwargs: object,
+    ) -> tuple[bytes, os.stat_result]:
+        payload, row = real_read(descriptor, name, **kwargs)
+        read_counts[name] += 1
+        target = target_names.get(drift)
+        final_occurrence = 1 if drift == "terminal" else 2
+        if name == target and read_counts[name] >= final_occurrence:
+            return payload + b"FINAL_REREAD_DRIFT", row
+        return payload, row
+
+    monkeypatch.setattr(qualification, "_read_regular_at_fd_v2", injected_read)
+    real_tree = qualification._retained_attempt_tree_before_terminal_v2
+    tree_calls: list[bool] = []
+
+    def injected_tree(*args: object, **kwargs: object) -> dict[str, object]:
+        projection = real_tree(*args, **kwargs)
+        tree_calls.append(True)
+        if drift == "final-tree" and len(tree_calls) >= 2:
+            projection = json.loads(json.dumps(projection))
+            projection["total_regular_bytes"] += 1
+        return projection
+
+    monkeypatch.setattr(
+        qualification,
+        "_retained_attempt_tree_before_terminal_v2",
+        injected_tree,
+    )
+    real_stat = qualification.os.stat
+
+    def injected_stat(
+        path: object,
+        *args: object,
+        **kwargs: object,
+    ) -> os.stat_result:
+        row = real_stat(path, *args, **kwargs)
+        if (
+            drift == "named-attempt-inode"
+            and path == attempt_name
+            and kwargs.get("dir_fd") is not None
+            and kwargs.get("follow_symlinks") is False
+        ):
+            fields = list(row)
+            fields[1] += 1
+            return os.stat_result(fields)
+        return row
+
+    monkeypatch.setattr(qualification.os, "stat", injected_stat)
+    issued: list[bool] = []
+
+    def record_issue(*args: object, **kwargs: object) -> object:
+        del args, kwargs
+        issued.append(True)
+        return object()
+
+    monkeypatch.setattr(
+        qualification,
+        "_issue_verified_calibration_pair_replay_token_v2",
+        record_issue,
+    )
+    with pytest.raises(ValueError, match="changed before token issuance"):
+        qualification._load_verified_development_calibration_pair_v2(
+            pair_directory,
+            expected_pair_projection=expected_projection,
+            deadline_ns=None,
+            pair_replay_depth=1,
+            token_purpose="outer-mechanics",
+        )
+    assert issued == []
+
+
+def test_pair_loader_rejects_replaced_attempt_output_parent_before_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    temporary_root = tempfile.TemporaryDirectory(
+        prefix="hegel-qv2-pair-parent-replacement-",
+        dir="/tmp",
+    )
+    root = Path(temporary_root.name)
+    attempt_output = root / "attempt-output"
+    attempt_output.mkdir()
+    try:
+        (
+            _attempt_row,
+            pair_directory,
+            attempt_name,
+            terminal_bytes,
+            _initial_tree,
+            expected_projection,
+            _rfc_digest,
+        ) = _materialize_pair_loader_final_reread_kat(attempt_output)
+
+        def verified_directory(directory: Path, **kwargs: object) -> bytes:
+            assert directory == pair_directory
+            assert kwargs["_pair_replay_depth"] == 1
+            return terminal_bytes
+
+        monkeypatch.setattr(
+            qualification,
+            "verify_phase2b_formal_wire_covert_outer_attempt_directory_v2",
+            verified_directory,
+        )
+        real_read = qualification._read_regular_at_fd_v2
+        replaced: list[Path] = []
+
+        def replace_parent_on_final_reread(
+            descriptor: int,
+            name: str,
+            **kwargs: object,
+        ) -> tuple[bytes, os.stat_result]:
+            result = real_read(descriptor, name, **kwargs)
+            if name == "terminal.json" and not replaced:
+                moved = attempt_output.with_name("attempt-output-retained")
+                attempt_output.rename(moved)
+                attempt_output.mkdir()
+                (attempt_output / attempt_name).mkdir()
+                replaced.append(moved)
+            return result
+
+        monkeypatch.setattr(
+            qualification,
+            "_read_regular_at_fd_v2",
+            replace_parent_on_final_reread,
+        )
+        issued: list[bool] = []
+
+        def record_issue(*args: object, **kwargs: object) -> object:
+            del args, kwargs
+            issued.append(True)
+            return object()
+
+        monkeypatch.setattr(
+            qualification,
+            "_issue_verified_calibration_pair_replay_token_v2",
+            record_issue,
+        )
+        with pytest.raises(ValueError):
+            qualification._load_verified_development_calibration_pair_v2(
+                pair_directory,
+                expected_pair_projection=expected_projection,
+                deadline_ns=None,
+                pair_replay_depth=1,
+                token_purpose="outer-mechanics",
+            )
+        assert replaced
+        assert issued == []
+    finally:
+        temporary_root.cleanup()
+
+
+def _historical_r12_pending_basis_profile_bytes() -> tuple[bytes, str]:
     basis_profile = qualification._deep_thaw(qualification._EXPECTED_PROFILE)
-    basis_profile["status"] = "P0_PENDING_CALIBRATION_BASIS_FOR_CROSS_REVISION_KAT"
+    basis_profile["schema_version"] = (
+        qualification.HISTORICAL_CALIBRATION_BASIS_SCHEMA_VERSION_V2
+    )
+    basis_profile["status"] = (
+        "CANDIDATE_SOURCE_FROZEN_FULL_1024_SHAPE_CALIBRATION_PENDING"
+    )
+    basis_shape = basis_profile["fixture_contract"]["rich_positive_shape"]
+    for name in (
+        "calibration_artifact_cas_root",
+        "calibration_artifact_sha256",
+        "calibration_artifact_size_bytes",
+        "calibration_attempt_id",
+        "calibration_attempt_manifest_cas_root",
+        "calibration_attempt_manifest_root",
+        "calibration_attempt_manifest_sha256",
+        "calibration_attempt_manifest_size_bytes",
+        "calibration_basis_profile_cas_root",
+        "calibration_basis_profile_id",
+        "calibration_basis_profile_sha256",
+        "calibration_basis_profile_size_bytes",
+        "calibration_campaign_id",
+        "calibration_mechanics_artifact_cas_root",
+        "calibration_mechanics_artifact_sha256",
+        "calibration_mechanics_artifact_size_bytes",
+        "calibration_outer_supervisor_result_cas_root",
+        "calibration_outer_supervisor_result_sha256",
+        "calibration_outer_supervisor_result_size_bytes",
+        "calibration_rfc8785_receipt_cas_root",
+        "calibration_rfc8785_receipt_sha256",
+        "calibration_rfc8785_receipt_size_bytes",
+        "combined_fixture_root",
+        "known_leak_frozen_static_projection",
+        "known_null_frozen_static_projection",
+    ):
+        basis_shape[name] = None
+    basis_shape.pop("calibration_pair_projection")
+    basis_shape["calibration_campaign_status"] = (
+        "PENDING_FULL_1024_DEVELOPMENT_MEASUREMENT"
+    )
+    basis_shape["live_qualification_enabled"] = False
     basis_id = qualification.PROFILE_ID_PREFIX + hashlib.sha256(
         qualification.PROFILE_DOMAIN
         + qualification.canonicalize_rfc8785_v1(basis_profile)
@@ -11106,19 +11880,20 @@ def test_cross_revision_pair_accepts_only_pending_basis_for_frozen_current() -> 
             "qualification_profile_id": basis_id,
         }
     ) + b"\n"
+    return basis_bytes, basis_id
+
+
+def test_cross_revision_pair_accepts_only_exact_pinned_pending_r12_basis() -> None:
+    basis_bytes, basis_id = _historical_r12_pending_basis_profile_bytes()
+    assert basis_id == qualification.HISTORICAL_CALIBRATION_BASIS_PROFILE_ID_V2
+    assert hashlib.sha256(basis_bytes).hexdigest() == (
+        qualification.HISTORICAL_CALIBRATION_BASIS_SHA256_V2
+    )
+    assert len(basis_bytes) == qualification.HISTORICAL_CALIBRATION_BASIS_SIZE_BYTES_V2
     assert basis_id != qualification.PROFILE_ID
     frozen_shape = qualification._deep_thaw(
         qualification._EXPECTED_PROFILE["fixture_contract"]["rich_positive_shape"]
     )
-    frozen_shape["calibration_campaign_status"] = (
-        "FROZEN_FULL_1024_DEVELOPMENT_MEASUREMENT"
-    )
-    frozen_shape["live_qualification_enabled"] = True
-    frozen_shape["calibration_basis_profile_id"] = basis_id
-    frozen_shape["calibration_basis_profile_sha256"] = hashlib.sha256(
-        basis_bytes
-    ).hexdigest()
-    frozen_shape["calibration_basis_profile_size_bytes"] = len(basis_bytes)
     assert qualification._load_retained_development_basis_profile_id_v2(
         basis_bytes,
         frozen_shape=frozen_shape,
@@ -11130,6 +11905,30 @@ def test_cross_revision_pair_accepts_only_pending_basis_for_frozen_current() -> 
             basis_bytes,
             frozen_shape=frozen_shape,
             expected_entry_kind="live-inner",
+        )
+
+    decoded_basis = json.loads(basis_bytes)
+    arbitrary_profile = decoded_basis["qualification_profile"]
+    arbitrary_profile["status"] = "ARBITRARY_PENDING_PROFILE_WITH_SCHEMA_8"
+    arbitrary_id = qualification.PROFILE_ID_PREFIX + hashlib.sha256(
+        qualification.PROFILE_DOMAIN
+        + qualification.canonicalize_rfc8785_v1(arbitrary_profile)
+    ).hexdigest()
+    arbitrary_bytes = qualification.canonicalize_rfc8785_v1(
+        {
+            "qualification_profile": arbitrary_profile,
+            "qualification_profile_id": arbitrary_id,
+        }
+    ) + b"\n"
+    assert arbitrary_profile["schema_version"] == (
+        qualification.HISTORICAL_CALIBRATION_BASIS_SCHEMA_VERSION_V2
+    )
+    assert arbitrary_id != basis_id
+    with pytest.raises(ValueError, match="identity/bytes are not frozen"):
+        qualification._load_retained_development_basis_profile_id_v2(
+            arbitrary_bytes,
+            frozen_shape=frozen_shape,
+            expected_entry_kind="development-calibration",
         )
 
     current_bytes = (
@@ -11148,43 +11947,15 @@ def test_cross_revision_pair_accepts_only_pending_basis_for_frozen_current() -> 
             expected_entry_kind="development-calibration",
         )
 
-    spliced_shape = dict(frozen_shape)
-    spliced_shape["calibration_basis_profile_sha256"] = "f" * 64
+    spliced_transport = json.loads(basis_bytes)
+    spliced_transport["qualification_profile_id"] = (
+        qualification.PROFILE_ID_PREFIX + "f" * 64
+    )
+    spliced_bytes = qualification.canonicalize_rfc8785_v1(spliced_transport) + b"\n"
     with pytest.raises(ValueError, match="identity/bytes are not frozen"):
         qualification._load_retained_development_basis_profile_id_v2(
-            basis_bytes,
-            frozen_shape=spliced_shape,
-            expected_entry_kind="development-calibration",
-        )
-
-    old_live_profile = qualification._deep_thaw(basis_profile)
-    old_live_shape = old_live_profile["fixture_contract"]["rich_positive_shape"]
-    old_live_shape["calibration_campaign_status"] = (
-        "FROZEN_FULL_1024_DEVELOPMENT_MEASUREMENT"
-    )
-    old_live_shape["live_qualification_enabled"] = True
-    old_live_id = qualification.PROFILE_ID_PREFIX + hashlib.sha256(
-        qualification.PROFILE_DOMAIN
-        + qualification.canonicalize_rfc8785_v1(old_live_profile)
-    ).hexdigest()
-    old_live_bytes = qualification.canonicalize_rfc8785_v1(
-        {
-            "qualification_profile": old_live_profile,
-            "qualification_profile_id": old_live_id,
-        }
-    ) + b"\n"
-    old_live_frozen_shape = dict(frozen_shape)
-    old_live_frozen_shape["calibration_basis_profile_id"] = old_live_id
-    old_live_frozen_shape["calibration_basis_profile_sha256"] = hashlib.sha256(
-        old_live_bytes
-    ).hexdigest()
-    old_live_frozen_shape["calibration_basis_profile_size_bytes"] = len(
-        old_live_bytes
-    )
-    with pytest.raises(qualification.Phase2BFormalWireCovertQualificationErrorV2):
-        qualification._load_retained_development_basis_profile_id_v2(
-            old_live_bytes,
-            frozen_shape=old_live_frozen_shape,
+            spliced_bytes,
+            frozen_shape=frozen_shape,
             expected_entry_kind="development-calibration",
         )
 
