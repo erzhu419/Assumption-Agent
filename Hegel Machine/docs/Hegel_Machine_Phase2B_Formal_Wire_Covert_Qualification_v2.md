@@ -33,23 +33,28 @@ compiled by the source-only loader:
 - `schema.py`.
 
 The checked canonical profile ID is
-`phase2b_formal_wire_covert_qualification_profile_v2_739648dbf0c106ff290da9fe27a34dc68d1ab762027ea91eb8093cdbffae97d3`,
+`phase2b_formal_wire_covert_qualification_profile_v2_56dbfbc1b4736fb5feec0edda85191c1d495884b28102e68f1172780772f6cd4`,
 and its dependency-lock SHA-256 is
-`d8538a7ccbb617d5d42aa25500b862d829e7b957ebeb329bf67ca6dd75ee7f94`.
+`0ccd291a28df11fa0e7e7399a086bf01516a20fa2aa5e8abf3a05687b54b85db`.
 The dependency-lock root schema is
-`hegel-machine-phase2b-formal-wire-covert-qualification-dependency-lock/3`,
+`hegel-machine-phase2b-formal-wire-covert-qualification-dependency-lock/4`,
 and that exact discriminator is also closed inside the profile's lock binding.
 The qualification profile schema is
-`hegel-machine-phase2b-formal-wire-covert-qualification/6`; the profile domain
-and ID prefix remain V2 because the `/6` discriminator is part of the hashed
+`hegel-machine-phase2b-formal-wire-covert-qualification/7`; the profile domain
+and ID prefix remain V2 because the `/7` discriminator is part of the hashed
 canonical content. The development-calibration and live-inner candidate
-schemas are `/6`. Their prior `/5` forms predate the exact post-output physical
-gate contract and direct-exit success semantics, so those identities are not
-reused. The outer-supervisor result is `/4`; its prior `/3` form transported
-raw Linux device, inode, and nanosecond-mtime integers even though those exact
-identity values need not be representable as RFC 8785 binary64 JSON numbers.
-The older `/2` form did not carry the post-output gate attestation or
-extracted-child preopened-source map.
+schemas are `/7`. Their prior `/6` forms predate the scientific-child
+credential-environment proof. The outer-supervisor result is `/5`; its prior
+`/4` form introduced lossless decimal-string transport for raw Linux device,
+inode, and nanosecond-mtime identity values but did not close the new per-unit
+`UnsetEnvironment` property and bootstrap absence proof. The older `/2` form
+did not carry the post-output gate attestation or extracted-child preopened-
+source map.
+The `/4` dependency lock also binds the exact two target names, one-token
+systemd-run transport, final-step `UnsetEnvironment` semantics, explicit
+scientific bootstrap role, pre-source membership ordering, value non-reading,
+manager best-effort boundary, and the absence of a full-environment-closure
+claim.
 The pinned Auditor contract is
 `hegel-machine-phase2b-formal-covert-auditor/5`, its profile schema is
 `hegel-machine-phase2b-formal-covert-auditor-profile/5`, semantics are
@@ -59,12 +64,25 @@ and policy binding
 
 A direct qualified CLI invocation must begin with CPython `-I -S -B`; missing
 initial flags fail before any project import, business input, output, or
-service launch. That small launcher no-follow descriptor-reads the current
-main source, combines its measured SHA-256 with the seven fixed dependency
-pins, and execs the external `-I -S -B -c <bootstrap>`. The external bootstrap
-opens the main and all seven imported project modules once, verifies the exact
-manifest, and compiles those same snapshots. A source-only loader consumes
-only those preopened bytes. For attempt-bearing entries, the bootstrapped CLI
+service launch. For a scientific entry, that small launcher first checks the
+two fixed bytes keys and fails before its explicit no-follow main-source
+descriptor reopen. It then combines the measured main-source SHA-256 with the
+seven fixed dependency pins and execs the external `-I -S -B -c <bootstrap>`.
+The external bootstrap receives one explicit `scientific-child` or
+`non-scientific` role. Only the two scientific entries
+(`development-calibration` and `live-inner`) perform the fixed bytes-key
+membership checks for `ANTHROPIC_API_KEY` and `ANTHROPIC_BASE_URL`. Presence
+fails even when a value is empty or is not UTF-8. Both checks require CPython's
+`os.environb._data` backing object to be an exact `dict` and use native
+`dict.__contains__` on the two byte keys; they do not invoke the mapping
+`__getitem__`, iterate or copy the environment, or obtain a present value. The
+qualified external-bootstrap check is before JSON manifest decoding and before
+every retained project-source `open`; it never indexes, hashes, persists, or
+reports either value. Non-scientific outer, builder, RFC, and public-replay
+roles do not inspect those keys. The bootstrap then opens the main and all
+seven imported project modules once, verifies the exact manifest, and compiles
+those same snapshots. A source-only loader consumes only those
+preopened bytes. For attempt-bearing entries, the bootstrapped CLI
 then requires the executed-main SHA and profile SHA to equal the frozen
 attempt before dispatch; the outer runner repeats the executed-source check
 before reservation. This is cooperative executed-byte provenance, not
@@ -496,6 +514,7 @@ systemd-run --user --pipe --wait --quiet --unit=<fresh-unit> \
   --property=KillMode=control-group \
   --property=KillSignal=SIGTERM --property=SendSIGKILL=yes \
   --property=FinalKillSignal=SIGKILL --property=TimeoutStopSec=30s \
+  --property=UnsetEnvironment=ANTHROPIC_API_KEY\ ANTHROPIC_BASE_URL \
   --working-directory=<retained-source-tree> \
   --setenv=LANG=C.UTF-8 --setenv=LC_ALL=C.UTF-8 -- \
   <direct-python> -I -S -B -c <open-once-bootstrap> ...
@@ -509,6 +528,21 @@ Failure cleanup is TERM, bounded grace, optional KILL, stop, reap, and bounded
 absence. If cleanup cannot be proved, the only terminal is the explicit
 `ATOMIC_FAILURE_CLEANUP_UNPROVEN_EXTERNAL_INTERVENTION_REQUIRED` negative
 state; it is never ordinary closed success.
+
+The `UnsetEnvironment` transport above is one argv token whose property value
+is exactly the two space-separated, name-only keys in that order. systemd
+applies this property as the final environment-composition step for each
+scientific transient service. Entry and terminal `systemctl show` projections
+must contain exactly `UnsetEnvironment=ANTHROPIC_API_KEY ANTHROPIC_BASE_URL`,
+and live and producer-free replay bind that normalized two-name set to the
+bootstrap proof. The child proof contains only the fixed key names, two true
+absence booleans, `values_read=false`, and
+`full_environment_closure_claimed=false`. It is the pre-source self-stop; the
+systemd property is the independently replayed unit configuration. Neither is
+a claim that every user-manager environment key is closed. A manager-level
+`unset-environment` operation may be retained as a best-effort diagnostic, but
+it is not authoritative, performs no post-unset `show-environment` value read,
+and makes no promise about future children.
 
 At live-inner entry and exit, the child independently parses bounded canonical
 cgroup-v2 membership, `memory.current`, `memory.peak`, finite `memory.max`, and
@@ -525,7 +559,7 @@ invariance peak, positive receipt peak, negative-mode invariance peak, negative
 receipt peak, then exit peak.
 
 Inner success is linearized only through a post-output, pre-exit sample. The
-child canonicalizes the complete `/6` artifact, writes it to stdout, flushes
+child canonicalizes the complete `/7` artifact, writes it to stdout, flushes
 stdout, disables GC, rejects active trace/profile hooks or Python signal
 handlers, freezes the required signal mask, and takes one full snapshot of the
 same cgroup leaf. At that full-snapshot point `memory.events` counters `max`,
@@ -545,9 +579,9 @@ failure writes one bounded single-line `FAIL_RESOURCE` diagnostic and exits
 nonzero for outer capture.
 
 No numeric value from the final fresh peak is serialized, and there is no
-post-exit numeric sample. The outer `/4` result instead attests that the pinned
+post-exit numeric sample. The outer `/5` result instead attests that the pinned
 child source and exact argv implement this gate, the retained stdout is one
-canonical `/6` artifact, stderr is empty, operational `MemoryMax` is exactly
+canonical `/7` artifact, stderr is empty, operational `MemoryMax` is exactly
 24 GiB while the independent accepted physical peak remains capped at 12 GiB,
 and systemd reports real `CLD_EXITED` semantics (`ExecMainCode=1`,
 `ExecMainStatus=0`). `SuccessExitStatus` cannot substitute for that terminal
@@ -560,8 +594,9 @@ and after the terminal, requires exact equality, binds the inner interpreter's
 preopened-source root to it, and replays it again from the retained tree in
 both live and producer-free verification. The raw in-memory snapshot and the
 existing `phase2b_formal_wire_covert_preopened_sources_v2_...` root remain
-unchanged. Only the `/4` wire representation encodes `device`, `inode`, and
-`mtime_nanoseconds` as lossless canonical nonnegative decimal strings;
+unchanged. The `/5` result preserves the `/4` wire codec that encodes
+`device`, `inode`, and `mtime_nanoseconds` as lossless canonical nonnegative
+decimal strings;
 `size_bytes` remains a bounded JSON integer. Both verifiers strictly decode
 those strings back to the exact raw integers before comparing live `fstat`
 evidence or recomputing the existing raw snapshot root. Leading zeroes, signs,

@@ -97,6 +97,20 @@ _QUALIFICATION_TRANSACTION_RELATIVE_PATHS_V2 = {
     "test": "tests/test_phase2b_formal_wire_covert_qualification_v2.py",
 }
 SOURCE_EXECUTION_BOOTSTRAP_CODE_V2 = r'''import hashlib,json,os,re,stat,sys
+targets=("ANTHROPIC_API_KEY","ANTHROPIC_BASE_URL")
+if len(sys.argv)<7 or sys.argv[3]!="--bootstrap-role":raise RuntimeError("source bootstrap role argv drift")
+role=sys.argv[4];args=sys.argv[5:]
+if len(args)<2 or args[0]!="--entry":raise RuntimeError("source bootstrap entry argv drift")
+entry=args[1]
+scientific=entry in {"development-calibration","live-inner"}
+if (scientific and role!="scientific-child") or (not scientific and role!="non-scientific"):raise RuntimeError("source bootstrap role/entry drift")
+proof=None
+if scientific:
+ backing=getattr(os.environb,"_data",None)
+ if type(backing) is not dict:raise RuntimeError("scientific child credential environment backing drift")
+ absent={name:(not dict.__contains__(backing,name.encode("ascii"))) for name in targets}
+ if not all(absent.values()):raise RuntimeError("scientific child credential environment was not absent")
+ proof={"bootstrap_role":role,"entry_kind":entry,"full_environment_closure_claimed":False,"target_key_absence":absent,"target_key_names":list(targets),"values_read":False}
 m=json.loads(sys.argv[1]);root=sys.argv[2]
 mods={"hegel_machine.hashing":"src/hegel_machine/hashing.py","hegel_machine.phase2b_exact_transform_core_v1":"src/hegel_machine/phase2b_exact_transform_core_v1.py","hegel_machine.phase2b_formal_covert_auditor_v1":"src/hegel_machine/phase2b_formal_covert_auditor_v1.py","hegel_machine.phase2b_formal_trusted_wire_v3":"src/hegel_machine/phase2b_formal_trusted_wire_v3.py","hegel_machine.phase2b_freeze_v1":"src/hegel_machine/phase2b_freeze_v1.py","hegel_machine.rfc8785_v1":"src/hegel_machine/rfc8785_v1.py","hegel_machine.schema":"src/hegel_machine/schema.py"}
 main="src/hegel_machine/phase2b_formal_wire_covert_qualification_v2.py"
@@ -120,8 +134,8 @@ for rel in sorted(m["sha256"]):
   if (a.st_dev,a.st_ino,a.st_size,a.st_mtime_ns)!=(z.st_dev,z.st_ino,z.st_size,z.st_mtime_ns) or hashlib.sha256(b).hexdigest()!=d:raise RuntimeError("source bootstrap byte mismatch")
  finally:os.close(fd)
  blobs[rel]=b;snaps[rel]={"descriptor_realpath":p,"device":a.st_dev,"inode":a.st_ino,"mtime_nanoseconds":a.st_mtime_ns,"sha256":d,"size_bytes":a.st_size}
-g={"__builtins__":__builtins__,"__cached__":None,"__doc__":None,"__file__":snaps[main]["descriptor_realpath"],"__loader__":None,"__name__":"__main__","__package__":None,"__spec__":None,"_EXECUTED_MAIN_SOURCE_BOOTSTRAP_V2":dict(snaps[main],bootstrap_kind="EXTERNAL_PYTHON_C_OPEN_ONCE_V2",reexecuted_from_stable_descriptor=True),"_HEGEL_PREOPENED_SOURCE_BYTES_V2":{n:blobs[r] for n,r in mods.items()},"_HEGEL_PREOPENED_SOURCE_SNAPSHOTS_V2":snaps,"_HEGEL_SOURCE_BOOTSTRAP_ACTIVE_V2":True,"_HEGEL_SOURCE_BOOTSTRAP_MANIFEST_V2":m}
-sys.argv=[g["__file__"],*sys.argv[3:]]
+g={"__builtins__":__builtins__,"__cached__":None,"__doc__":None,"__file__":snaps[main]["descriptor_realpath"],"__loader__":None,"__name__":"__main__","__package__":None,"__spec__":None,"_EXECUTED_MAIN_SOURCE_BOOTSTRAP_V2":dict(snaps[main],bootstrap_kind="EXTERNAL_PYTHON_C_OPEN_ONCE_V2",reexecuted_from_stable_descriptor=True),"_HEGEL_CREDENTIAL_ENVIRONMENT_PROOF_V2":proof,"_HEGEL_PREOPENED_SOURCE_BYTES_V2":{n:blobs[r] for n,r in mods.items()},"_HEGEL_PREOPENED_SOURCE_SNAPSHOTS_V2":snaps,"_HEGEL_SOURCE_BOOTSTRAP_ACTIVE_V2":True,"_HEGEL_SOURCE_BOOTSTRAP_MANIFEST_V2":m,"_HEGEL_SOURCE_BOOTSTRAP_ROLE_V2":role}
+sys.argv=[g["__file__"],*args]
 exec(compile(blobs[main],g["__file__"],"exec",dont_inherit=True),g)
 '''
 
@@ -146,6 +160,27 @@ if (
         raise RuntimeError(
             "direct source bootstrap requires initial Python -I -S -B flags"
         )
+    if len(sys.argv) < 3 or sys.argv[1] != "--entry":
+        raise RuntimeError("direct source bootstrap entry argv drifted")
+    _bootstrap_entry_v2 = sys.argv[2]
+    _bootstrap_role_v2 = (
+        "scientific-child"
+        if _bootstrap_entry_v2 in {"development-calibration", "live-inner"}
+        else "non-scientific"
+    )
+    if _bootstrap_role_v2 == "scientific-child":
+        _bootstrap_environment_backing_v2 = getattr(os.environb, "_data", None)
+        if type(_bootstrap_environment_backing_v2) is not dict:
+            raise RuntimeError(
+                "direct scientific child credential environment backing drift"
+            )
+        if any(
+            dict.__contains__(_bootstrap_environment_backing_v2, target)
+            for target in (b"ANTHROPIC_API_KEY", b"ANTHROPIC_BASE_URL")
+        ):
+            raise RuntimeError(
+                "direct scientific child credential environment was not absent"
+            )
     _bootstrap_path_v2 = Path(__file__).resolve(strict=True)
     _bootstrap_project_root_v2 = _bootstrap_path_v2.parents[2]
     if _bootstrap_path_v2 != (
@@ -223,6 +258,8 @@ if (
                 sort_keys=True,
             ),
             str(_bootstrap_project_root_v2),
+            "--bootstrap-role",
+            _bootstrap_role_v2,
             *sys.argv[1:],
         ],
     )
@@ -339,7 +376,7 @@ from . import phase2b_formal_trusted_wire_v3 as wire
 
 
 PROFILE_SCHEMA_VERSION: Final = (
-    "hegel-machine-phase2b-formal-wire-covert-qualification/6"
+    "hegel-machine-phase2b-formal-wire-covert-qualification/7"
 )
 PROFILE_STATUS: Final = (
     "CANDIDATE_SOURCE_FROZEN_FULL_1024_SHAPE_CALIBRATION_PENDING"
@@ -373,7 +410,7 @@ SYNTHETIC_KAT_VECTOR_DOMAIN: Final = (
 )
 
 DEPENDENCY_LOCK_SHA256: Final = (
-    "d8538a7ccbb617d5d42aa25500b862d829e7b957ebeb329bf67ca6dd75ee7f94"
+    "0ccd291a28df11fa0e7e7399a086bf01516a20fa2aa5e8abf3a05687b54b85db"
 )
 EXACT_AUTHORITY_ROWS: Final = 1_024
 EXACT_RECOGNIZER_INVOCATIONS: Final = 81
@@ -432,6 +469,48 @@ OUTER_PROCESS_GROUP_OWNERSHIP_TCB_V2: Final = (
 )
 _RFC8785_RANDOM_DIFFERENTIAL_SEED_V2: Final = 0x8785_2026_0814
 LIVE_MODE_ORDER: Final = ("KNOWN_NULL", "KNOWN_BINDING_LEAK")
+SCIENTIFIC_CHILD_BOOTSTRAP_ROLE_V2: Final = "scientific-child"
+NON_SCIENTIFIC_BOOTSTRAP_ROLE_V2: Final = "non-scientific"
+SCIENTIFIC_CHILD_ENTRY_KINDS_V2: Final = frozenset(
+    {"development-calibration", "live-inner"}
+)
+SCIENTIFIC_CHILD_CREDENTIAL_ENVIRONMENT_TARGET_KEYS_V2: Final = (
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_BASE_URL",
+)
+SCIENTIFIC_CHILD_UNSET_ENVIRONMENT_PROPERTY_VALUE_V2: Final = " ".join(
+    SCIENTIFIC_CHILD_CREDENTIAL_ENVIRONMENT_TARGET_KEYS_V2
+)
+SCIENTIFIC_CHILD_UNSET_ENVIRONMENT_SYSTEMD_RUN_TOKEN_V2: Final = (
+    "--property=UnsetEnvironment="
+    + SCIENTIFIC_CHILD_UNSET_ENVIRONMENT_PROPERTY_VALUE_V2
+)
+_SCIENTIFIC_CHILD_CREDENTIAL_ENVIRONMENT_BOUNDARY_V2: Final = {
+    "authority": (
+        "PER_SCIENTIFIC_TRANSIENT_UNIT_UNSETENVIRONMENT_PLUS_"
+        "PRE_SOURCE_BOOTSTRAP_KEY_MEMBERSHIP"
+    ),
+    "bootstrap_membership_check_before_manifest_decode_or_source_open": True,
+    "bootstrap_key_membership_primitive": (
+        "CPYTHON_ENVIRONB_PRIVATE_DATA_EXACT_DICT_CONTAINS"
+    ),
+    "bootstrap_role": SCIENTIFIC_CHILD_BOOTSTRAP_ROLE_V2,
+    "direct_launcher_membership_check_before_source_descriptor_reopen": True,
+    "full_environment_closure_claimed": False,
+    "manager_unset_environment_authoritative": False,
+    "manager_unset_environment_best_effort_only": True,
+    "systemd_unset_environment_applied_as_final_unit_environment_step": True,
+    "systemd_unset_environment_property_value": (
+        SCIENTIFIC_CHILD_UNSET_ENVIRONMENT_PROPERTY_VALUE_V2
+    ),
+    "systemd_run_property_token": (
+        SCIENTIFIC_CHILD_UNSET_ENVIRONMENT_SYSTEMD_RUN_TOKEN_V2
+    ),
+    "target_key_names": list(
+        SCIENTIFIC_CHILD_CREDENTIAL_ENVIRONMENT_TARGET_KEYS_V2
+    ),
+    "values_read_by_bootstrap": False,
+}
 LIVE_SELECTED_DEFAULT_SIGNALS: Final = (
     signal.SIGHUP,
     signal.SIGINT,
@@ -529,7 +608,7 @@ RFC8785_PREREQUISITE_SCHEMA_V2: Final = (
     "hegel-machine-rfc8785-runtime-prerequisite-receipt/2"
 )
 OUTER_SUPERVISOR_RESULT_SCHEMA_V2: Final = (
-    "hegel-machine-phase2b-formal-wire-covert-outer-supervisor-result/4"
+    "hegel-machine-phase2b-formal-wire-covert-outer-supervisor-result/5"
 )
 MECHANICS_VERIFIER_SCHEMA_V2: Final = (
     "hegel-machine-phase2b-formal-wire-covert-mechanics-verifier/2"
@@ -951,7 +1030,7 @@ _EXPECTED_PROFILE: Final = {
         "path": "config/phase2b_formal_wire_covert_qualification_v2.lock.json",
         "schema_version": (
             "hegel-machine-phase2b-formal-wire-covert-qualification-"
-            "dependency-lock/3"
+            "dependency-lock/4"
         ),
         "sha256": DEPENDENCY_LOCK_SHA256,
         "standard_library_only": True,
@@ -1086,6 +1165,9 @@ _EXPECTED_PROFILE: Final = {
             "attempt_manifest_fields_are_exact_top_level_projection": True,
             "cleanup_control_reserve_seconds": (
                 _OUTER_CLEANUP_CONTROL_RESERVE_SECONDS_V2
+            ),
+            "credential_environment_boundary": dict(
+                _SCIENTIFIC_CHILD_CREDENTIAL_ENVIRONMENT_BOUNDARY_V2
             ),
             "default_signal_dispositions_required": True,
             "finite_cgroup_v2_memory_max_required": True,
@@ -5259,6 +5341,36 @@ def inspect_current_live_cgroup_v2(
     }
 
 
+def _validate_scientific_child_environment_proof_v2(
+    value: object, *, expected_entry_kind: str, name: str
+) -> dict[str, object]:
+    """Validate key-membership-only proof; no credential value is an input."""
+
+    target_names = list(SCIENTIFIC_CHILD_CREDENTIAL_ENVIRONMENT_TARGET_KEYS_V2)
+    expected_absence = {key: True for key in target_names}
+    if (
+        expected_entry_kind not in SCIENTIFIC_CHILD_ENTRY_KINDS_V2
+        or type(value) is not dict
+        or set(value)
+        != {
+            "bootstrap_role",
+            "entry_kind",
+            "full_environment_closure_claimed",
+            "target_key_absence",
+            "target_key_names",
+            "values_read",
+        }
+        or value["bootstrap_role"] != SCIENTIFIC_CHILD_BOOTSTRAP_ROLE_V2
+        or value["entry_kind"] != expected_entry_kind
+        or value["target_key_names"] != target_names
+        or not _exact_json_equal(value["target_key_absence"], expected_absence)
+        or value["values_read"] is not False
+        or value["full_environment_closure_claimed"] is not False
+    ):
+        raise ValueError(f"{name} scientific child environment proof drifted")
+    return value
+
+
 def _verify_source_only_runtime_bootstrap_v2() -> dict[str, object]:
     flags = sys.flags
     expected = {
@@ -5277,12 +5389,19 @@ def _verify_source_only_runtime_bootstrap_v2() -> dict[str, object]:
         raise ValueError("live inner interpreter is not exact -I -S -B isolated mode")
     bootstrap = _EXECUTED_MAIN_SOURCE_BOOTSTRAP_V2
     manifest = globals().get("_HEGEL_SOURCE_BOOTSTRAP_MANIFEST_V2")
+    bootstrap_role = globals().get("_HEGEL_SOURCE_BOOTSTRAP_ROLE_V2")
+    environment_proof = globals().get("_HEGEL_CREDENTIAL_ENVIRONMENT_PROOF_V2")
+    if len(sys.argv) < 3 or sys.argv[1] != "--entry":
+        raise ValueError("live inner bootstrap entry argv is absent")
+    entry_kind = sys.argv[2]
     if (
         _SOURCE_ONLY_IMPORTER_ACTIVE_V2 is not True
         or _SOURCE_EXECUTION_BOOTSTRAP_ACTIVE_V2 is not True
         or type(bootstrap) is not dict
         or bootstrap.get("bootstrap_kind") != "EXTERNAL_PYTHON_C_OPEN_ONCE_V2"
         or type(manifest) is not dict
+        or bootstrap_role != SCIENTIFIC_CHILD_BOOTSTRAP_ROLE_V2
+        or entry_kind not in SCIENTIFIC_CHILD_ENTRY_KINDS_V2
         or not _exact_json_equal(
             manifest,
             _source_execution_bootstrap_manifest_v2(bootstrap.get("sha256")),
@@ -5290,6 +5409,11 @@ def _verify_source_only_runtime_bootstrap_v2() -> dict[str, object]:
         or type(_PREOPENED_SOURCE_SNAPSHOTS_V2) is not dict
     ):
         raise ValueError("live inner lacks the external open-once source bootstrap")
+    environment_proof = _validate_scientific_child_environment_proof_v2(
+        environment_proof,
+        expected_entry_kind=entry_kind,
+        name="live inner bootstrap",
+    )
     package_directory = Path(__file__).resolve(strict=True).parent
     for root, directory_names, file_names in os.walk(
         package_directory, topdown=True, followlinks=False
@@ -5307,6 +5431,7 @@ def _verify_source_only_runtime_bootstrap_v2() -> dict[str, object]:
                 raise ValueError("live source package contains forbidden bytecode")
     return {
         "bytecode_candidates_found": [],
+        "credential_environment_proof": environment_proof,
         "dont_write_bytecode": 1,
         "ignore_environment": 1,
         "isolated": 1,
@@ -8354,6 +8479,7 @@ def _verify_rfc8785_raw_execution_bundle_v2(
         python_realpath=python_row["realpath"],
         project_root=recorded_root,
         qualification_source_sha256=qualification_source_sha256,
+        bootstrap_role=NON_SCIENTIFIC_BOOTSTRAP_ROLE_V2,
         source_arguments=[
             "--entry",
             "rfc-selfcheck-version",
@@ -8374,6 +8500,7 @@ def _verify_rfc8785_raw_execution_bundle_v2(
         python_realpath=python_row["realpath"],
         project_root=recorded_root,
         qualification_source_sha256=qualification_source_sha256,
+        bootstrap_role=NON_SCIENTIFIC_BOOTSTRAP_ROLE_V2,
         source_arguments=[
             "--entry", "rfc-selfcheck", "--project-root", str(recorded_root)
         ],
@@ -9064,7 +9191,7 @@ def build_development_calibration_artifact_v2(
         runtime_exit = _capture_live_runtime_exit_v2(runtime, attempt, runs)
         body = {
             "schema_version": (
-                "hegel-machine-phase2b-formal-wire-covert-development-calibration/6"
+                "hegel-machine-phase2b-formal-wire-covert-development-calibration/7"
             ),
             "profile_id": PROFILE_ID,
             "attempt_manifest_root": attempt.attempt_manifest_root,
@@ -9153,7 +9280,7 @@ def build_live_inner_candidate_artifact_v2(
         runtime_exit = _capture_live_runtime_exit_v2(runtime, attempt, runs)
         body = {
             "schema_version": (
-                "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/6"
+                "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/7"
             ),
             "profile_id": PROFILE_ID,
             "attempt_manifest_root": attempt.attempt_manifest_root,
@@ -9636,10 +9763,11 @@ def _validate_run_and_measurement_binding_v2(
 
 
 def _validate_interpreter_runtime_projection_v2(
-    value: object, name: str
+    value: object, name: str, *, expected_entry_kind: str
 ) -> dict[str, object]:
     if type(value) is not dict or set(value) != {
         "bytecode_candidates_found",
+        "credential_environment_proof",
         "dont_write_bytecode",
         "executed_main_source_sha256",
         "ignore_environment",
@@ -9652,6 +9780,11 @@ def _validate_interpreter_runtime_projection_v2(
         "source_only_importer_active",
     }:
         raise ValueError(f"{name} interpreter runtime projection is not closed")
+    _validate_scientific_child_environment_proof_v2(
+        value["credential_environment_proof"],
+        expected_entry_kind=expected_entry_kind,
+        name=name,
+    )
     for flag_name in (
         "dont_write_bytecode",
         "ignore_environment",
@@ -9693,6 +9826,7 @@ def _validate_runtime_entry_exit_contract_v2(
     attempt: Phase2BFormalWireCovertAttemptManifestV2,
     *,
     context: str,
+    expected_entry_kind: str,
 ) -> None:
     if type(entry) is not dict or set(entry) != {
         "cgroup",
@@ -9712,7 +9846,9 @@ def _validate_runtime_entry_exit_contract_v2(
     }:
         raise ValueError(f"{context} exit runtime projection is not closed")
     _validate_interpreter_runtime_projection_v2(
-        entry["interpreter_runtime"], context
+        entry["interpreter_runtime"],
+        context,
+        expected_entry_kind=expected_entry_kind,
     )
     entry_cgroup = entry["cgroup"]
     exit_cgroup = exit_row["cgroup"]
@@ -10489,7 +10625,7 @@ def _validate_live_inner_artifact_v2(
         raise ValueError("live inner artifact root fields are not exact")
     if (
         body["schema_version"]
-        != "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/6"
+        != "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/7"
         or body["profile_id"] != attempt.profile_id
         or body["attempt_manifest_root"] != attempt.attempt_manifest_root
         or body["campaign_id"] != attempt.campaign_id
@@ -10529,10 +10665,16 @@ def _validate_live_inner_artifact_v2(
     if type(entry) is not dict or type(exit_row) is not dict:
         raise ValueError("live inner runtime entry/exit evidence is absent")
     _validate_runtime_entry_exit_contract_v2(
-        entry, exit_row, attempt, context="live inner"
+        entry,
+        exit_row,
+        attempt,
+        context="live inner",
+        expected_entry_kind="live-inner",
     )
     _validate_interpreter_runtime_projection_v2(
-        entry.get("interpreter_runtime"), "live inner"
+        entry.get("interpreter_runtime"),
+        "live inner",
+        expected_entry_kind="live-inner",
     )
     entry_cgroup = entry.get("cgroup")
     exit_cgroup = exit_row.get("cgroup")
@@ -10794,7 +10936,7 @@ def _validate_development_calibration_artifact_v2(
         raise ValueError("calibration inner artifact root fields are not exact")
     if (
         body["schema_version"]
-        != "hegel-machine-phase2b-formal-wire-covert-development-calibration/6"
+        != "hegel-machine-phase2b-formal-wire-covert-development-calibration/7"
         or body["profile_id"] != attempt.profile_id
         or body["attempt_manifest_root"] != attempt.attempt_manifest_root
         or body["calibration_campaign_id"] != attempt.campaign_id
@@ -10848,10 +10990,16 @@ def _validate_development_calibration_artifact_v2(
     if type(entry) is not dict or type(exit_row) is not dict:
         raise ValueError("calibration runtime evidence is absent")
     _validate_runtime_entry_exit_contract_v2(
-        entry, exit_row, attempt, context="development calibration"
+        entry,
+        exit_row,
+        attempt,
+        context="development calibration",
+        expected_entry_kind="development-calibration",
     )
     _validate_interpreter_runtime_projection_v2(
-        entry.get("interpreter_runtime"), "calibration"
+        entry.get("interpreter_runtime"),
+        "calibration",
+        expected_entry_kind="development-calibration",
     )
     entry_cgroup = entry.get("cgroup")
     exit_cgroup = exit_row.get("cgroup")
@@ -11249,7 +11397,7 @@ def _validate_frozen_calibration_bytes_v2(
     )
     if (
         inner.get("schema_version")
-        != "hegel-machine-phase2b-formal-wire-covert-development-calibration/6"
+        != "hegel-machine-phase2b-formal-wire-covert-development-calibration/7"
         or inner.get("profile_id") != calibration_attempt.profile_id
         or inner.get("calibration_campaign_id")
         != shape.get("calibration_campaign_id")
@@ -11583,19 +11731,40 @@ def _replay_extracted_child_preopened_sources_v2(
         )
 
 
+def _source_execution_bootstrap_role_for_arguments_v2(
+    source_arguments: list[str],
+) -> str:
+    """Return the closed bootstrap role without inspecting process environment."""
+
+    if (
+        type(source_arguments) is not list
+        or len(source_arguments) < 2
+        or source_arguments[0] != "--entry"
+        or type(source_arguments[1]) is not str
+        or any(type(item) is not str or "\x00" in item for item in source_arguments)
+    ):
+        raise ValueError("source bootstrap arguments lack one leading entry")
+    return (
+        SCIENTIFIC_CHILD_BOOTSTRAP_ROLE_V2
+        if source_arguments[1] in SCIENTIFIC_CHILD_ENTRY_KINDS_V2
+        else NON_SCIENTIFIC_BOOTSTRAP_ROLE_V2
+    )
+
+
 def _source_execution_bootstrap_argv_v2(
     *,
     python_realpath: str,
     project_root: Path,
     qualification_source_sha256: str,
+    bootstrap_role: str,
     source_arguments: list[str],
 ) -> list[str]:
     if (
         type(python_realpath) is not str
         or not Path(python_realpath).is_absolute()
         or not project_root.is_absolute()
-        or type(source_arguments) is not list
-        or any(type(item) is not str or "\x00" in item for item in source_arguments)
+        or bootstrap_role
+        != _source_execution_bootstrap_role_for_arguments_v2(source_arguments)
     ):
         raise ValueError("source bootstrap argv inputs are malformed")
     manifest = _source_execution_bootstrap_manifest_v2(
@@ -11610,7 +11779,62 @@ def _source_execution_bootstrap_argv_v2(
         SOURCE_EXECUTION_BOOTSTRAP_CODE_V2,
         canonicalize_rfc8785_v1(manifest).decode("utf-8"),
         str(project_root),
+        "--bootstrap-role",
+        bootstrap_role,
         *source_arguments,
+    ]
+
+
+def _scientific_child_systemd_run_argv_v2(
+    *,
+    systemd_run_realpath: str,
+    unit_name: str,
+    ownership_marker: str,
+    attempt: Phase2BFormalWireCovertAttemptManifestV2,
+    source_tree: Path,
+    child_argv: list[str],
+) -> list[str]:
+    """Build the sole qualified scientific transient-service argv."""
+
+    if (
+        type(systemd_run_realpath) is not str
+        or not Path(systemd_run_realpath).is_absolute()
+        or type(unit_name) is not str
+        or re.fullmatch(r"hegel-qv2-[A-Za-z0-9_-]{8,96}\.service", unit_name)
+        is None
+        or type(ownership_marker) is not str
+        or re.fullmatch(r"hegel-qv2-owned-[0-9a-f]{64}", ownership_marker) is None
+        or type(attempt) is not Phase2BFormalWireCovertAttemptManifestV2
+        or not isinstance(source_tree, Path)
+        or not source_tree.is_absolute()
+        or type(child_argv) is not list
+        or any(type(item) is not str or "\x00" in item for item in child_argv)
+    ):
+        raise ValueError("scientific child systemd-run argv inputs are malformed")
+    return [
+        systemd_run_realpath,
+        "--user",
+        "--pipe",
+        "--wait",
+        "--quiet",
+        f"--unit={unit_name.removesuffix('.service')}",
+        f"--property=Description={ownership_marker}",
+        "--property=Type=exec",
+        "--property=RemainAfterExit=yes",
+        f"--property=MemoryMax={attempt.requested_cgroup_memory_max_bytes}",
+        f"--property=TasksMax={attempt.requested_cgroup_pids_max}",
+        f"--property=RuntimeMaxSec={LIVE_HARD_TOTAL_TIMEOUT_SECONDS}s",
+        "--property=KillMode=control-group",
+        "--property=KillSignal=SIGTERM",
+        "--property=SendSIGKILL=yes",
+        "--property=FinalKillSignal=SIGKILL",
+        "--property=TimeoutStopSec=30s",
+        SCIENTIFIC_CHILD_UNSET_ENVIRONMENT_SYSTEMD_RUN_TOKEN_V2,
+        f"--working-directory={source_tree}",
+        "--setenv=LANG=C.UTF-8",
+        "--setenv=LC_ALL=C.UTF-8",
+        "--",
+        *child_argv,
     ]
 
 
@@ -11642,6 +11866,8 @@ def _verify_qualified_cli_source_bootstrap_v2(project_root: Path) -> str:
     manifest = globals().get("_HEGEL_SOURCE_BOOTSTRAP_MANIFEST_V2")
     snapshots = _PREOPENED_SOURCE_SNAPSHOTS_V2
     source_bytes = globals().get("_HEGEL_PREOPENED_SOURCE_BYTES_V2")
+    bootstrap_role = globals().get("_HEGEL_SOURCE_BOOTSTRAP_ROLE_V2")
+    environment_proof = globals().get("_HEGEL_CREDENTIAL_ENVIRONMENT_PROOF_V2")
     expected_relatives = set(_BOOTSTRAP_FIXED_SOURCE_SHA256_V2) | {
         _BOOTSTRAP_MAIN_RELATIVE_PATH_V2
     }
@@ -11654,6 +11880,24 @@ def _verify_qualified_cli_source_bootstrap_v2(project_root: Path) -> str:
         or set(source_bytes) != set(_BOOTSTRAP_MODULE_RELATIVE_PATHS_V2)
     ):
         raise ValueError("qualified CLI bootstrap evidence is incomplete")
+    if len(sys.argv) < 3 or sys.argv[1] != "--entry":
+        raise ValueError("qualified CLI bootstrap entry is absent")
+    entry_kind = sys.argv[2]
+    expected_role = (
+        SCIENTIFIC_CHILD_BOOTSTRAP_ROLE_V2
+        if entry_kind in SCIENTIFIC_CHILD_ENTRY_KINDS_V2
+        else NON_SCIENTIFIC_BOOTSTRAP_ROLE_V2
+    )
+    if bootstrap_role != expected_role:
+        raise ValueError("qualified CLI bootstrap role/entry binding drifted")
+    if expected_role == SCIENTIFIC_CHILD_BOOTSTRAP_ROLE_V2:
+        _validate_scientific_child_environment_proof_v2(
+            environment_proof,
+            expected_entry_kind=entry_kind,
+            name="qualified CLI bootstrap",
+        )
+    elif environment_proof is not None:
+        raise ValueError("non-scientific bootstrap inspected credential environment")
     main_snapshot = snapshots.get(_BOOTSTRAP_MAIN_RELATIVE_PATH_V2)
     if type(main_snapshot) is not dict:
         raise ValueError("qualified CLI main-source snapshot is absent")
@@ -12252,6 +12496,7 @@ def _validate_outer_supervisor_result_v2(
         python_realpath=python_row["realpath"],
         project_root=source_tree_path,
         qualification_source_sha256=attempt.qualification_source_sha256,
+        bootstrap_role=SCIENTIFIC_CHILD_BOOTSTRAP_ROLE_V2,
         source_arguments=[
             "--entry",
             expected_entry,
@@ -12298,6 +12543,9 @@ def _validate_outer_supervisor_result_v2(
         "TasksMax": attempt.requested_cgroup_pids_max,
         "TimeoutStopUSec": 30_000_000,
         "Type": "exec",
+        "UnsetEnvironment": list(
+            SCIENTIFIC_CHILD_CREDENTIAL_ENVIRONMENT_TARGET_KEYS_V2
+        ),
     }
     if type(properties) is not dict or not _exact_json_equal(
         properties, expected_properties
@@ -12318,7 +12566,9 @@ def _validate_outer_supervisor_result_v2(
     if type(inner_entry) is not dict:
         raise ValueError("inner entry runtime evidence is absent")
     interpreter_runtime = _validate_interpreter_runtime_projection_v2(
-        inner_entry.get("interpreter_runtime"), "outer-bound inner"
+        inner_entry.get("interpreter_runtime"),
+        "outer-bound inner",
+        expected_entry_kind=expected_entry,
     )
     child_snapshots, expected_inner_preopened_root = (
         _replay_extracted_child_preopened_sources_v2(
@@ -12391,34 +12641,20 @@ def _validate_outer_supervisor_result_v2(
         != expected_inner_preopened_root
         or interpreter_runtime["source_execution_bootstrap_manifest_root"]
         != expected_inner_bootstrap_manifest_root
+        or properties["UnsetEnvironment"]
+        != interpreter_runtime["credential_environment_proof"]["target_key_names"]
     ):
         raise ValueError("outer unit identity/membership drifted")
     systemd_row = launcher["systemd_run"]
     systemd_argv = launcher["systemd_argv"]
-    expected_systemd_argv = [
-        systemd_row["realpath"],
-        "--user",
-        "--pipe",
-        "--wait",
-        "--quiet",
-        f"--unit={unit_name.removesuffix('.service')}",
-        f"--property=Description={ownership_marker}",
-        "--property=Type=exec",
-        "--property=RemainAfterExit=yes",
-        f"--property=MemoryMax={attempt.requested_cgroup_memory_max_bytes}",
-        f"--property=TasksMax={attempt.requested_cgroup_pids_max}",
-        f"--property=RuntimeMaxSec={LIVE_HARD_TOTAL_TIMEOUT_SECONDS}s",
-        "--property=KillMode=control-group",
-        "--property=KillSignal=SIGTERM",
-        "--property=SendSIGKILL=yes",
-        "--property=FinalKillSignal=SIGKILL",
-        "--property=TimeoutStopSec=30s",
-        f"--working-directory={source_tree}",
-        "--setenv=LANG=C.UTF-8",
-        "--setenv=LC_ALL=C.UTF-8",
-        "--",
-        *argv,
-    ]
+    expected_systemd_argv = _scientific_child_systemd_run_argv_v2(
+        systemd_run_realpath=systemd_row["realpath"],
+        unit_name=unit_name,
+        ownership_marker=ownership_marker,
+        attempt=attempt,
+        source_tree=source_tree_path,
+        child_argv=argv,
+    )
     if not _exact_json_equal(systemd_argv, expected_systemd_argv):
         raise ValueError("outer full systemd-run argv drifted")
     entry_show, terminal_show, absent_show = _verify_systemctl_transcript_v2(
@@ -12935,6 +13171,7 @@ def _validate_outer_supervisor_semantics_pure_v2(
         python_realpath=python_row["realpath"],
         project_root=source_tree,
         qualification_source_sha256=attempt.qualification_source_sha256,
+        bootstrap_role=SCIENTIFIC_CHILD_BOOTSTRAP_ROLE_V2,
         source_arguments=[
             "--entry",
             expected_entry,
@@ -13014,33 +13251,20 @@ def _validate_outer_supervisor_semantics_pure_v2(
         "TasksMax": attempt.requested_cgroup_pids_max,
         "TimeoutStopUSec": 30_000_000,
         "Type": "exec",
+        "UnsetEnvironment": list(
+            SCIENTIFIC_CHILD_CREDENTIAL_ENVIRONMENT_TARGET_KEYS_V2
+        ),
     }
     if not _exact_json_equal(unit["effective_properties"], expected_properties):
         raise ValueError("pure outer effective service properties drifted")
-    expected_systemd_argv = [
-        systemd_run_row["realpath"],
-        "--user",
-        "--pipe",
-        "--wait",
-        "--quiet",
-        f"--unit={unit['unit_name'].removesuffix('.service')}",
-        f"--property=Description={unit['ownership_marker']}",
-        "--property=Type=exec",
-        "--property=RemainAfterExit=yes",
-        f"--property=MemoryMax={attempt.requested_cgroup_memory_max_bytes}",
-        f"--property=TasksMax={attempt.requested_cgroup_pids_max}",
-        f"--property=RuntimeMaxSec={LIVE_HARD_TOTAL_TIMEOUT_SECONDS}s",
-        "--property=KillMode=control-group",
-        "--property=KillSignal=SIGTERM",
-        "--property=SendSIGKILL=yes",
-        "--property=FinalKillSignal=SIGKILL",
-        "--property=TimeoutStopSec=30s",
-        f"--working-directory={source_tree_text}",
-        "--setenv=LANG=C.UTF-8",
-        "--setenv=LC_ALL=C.UTF-8",
-        "--",
-        *expected_argv,
-    ]
+    expected_systemd_argv = _scientific_child_systemd_run_argv_v2(
+        systemd_run_realpath=systemd_run_row["realpath"],
+        unit_name=unit["unit_name"],
+        ownership_marker=unit["ownership_marker"],
+        attempt=attempt,
+        source_tree=source_tree,
+        child_argv=expected_argv,
+    )
     if launcher["systemd_argv"] != expected_systemd_argv:
         raise ValueError("pure outer systemd-run argv drifted")
     entry_show, terminal_show, absent_show = _verify_systemctl_transcript_v2(
@@ -13065,7 +13289,9 @@ def _validate_outer_supervisor_semantics_pure_v2(
     inner_entry = inner.get("runtime_entry_evidence")
     inner_exit = inner.get("runtime_exit_evidence")
     interpreter_runtime = _validate_interpreter_runtime_projection_v2(
-        inner_entry.get("interpreter_runtime"), "pure outer-bound inner"
+        inner_entry.get("interpreter_runtime"),
+        "pure outer-bound inner",
+        expected_entry_kind=expected_entry,
     ) if type(inner_entry) is dict else None
     if (
         type(inner_entry) is not dict
@@ -13085,6 +13311,8 @@ def _validate_outer_supervisor_semantics_pure_v2(
         != expected_inner_preopened_root
         or interpreter_runtime["source_execution_bootstrap_manifest_root"]
         != expected_bootstrap_manifest_root
+        or unit["effective_properties"]["UnsetEnvironment"]
+        != interpreter_runtime["credential_environment_proof"]["target_key_names"]
     ):
         raise ValueError("pure outer inner/unit membership drifted")
 
@@ -13170,7 +13398,8 @@ def _validate_outer_supervisor_semantics_pure_v2(
         or not dependency_runtime["python_soabi"].startswith("cpython-310-")
         or runtime["environment_scope"]
         != (
-            "ONLY_LANG_AND_LC_ALL_OVERRIDES_ARE_QUALIFIED;"
+            "LANG_AND_LC_ALL_OVERRIDES_PLUS_TWO_NAME_ONLY_UNSETENVIRONMENT_"
+            "KEYS_ARE_QUALIFIED;"
             "OTHER_USER_MANAGER_ENVIRONMENT_IS_NOT_QUALIFIED"
         )
         or type(host) is not dict
@@ -13338,7 +13567,7 @@ def _verify_phase2b_formal_wire_covert_outer_mechanics_core_v2(
     )
     inner_schema = inner.get("schema_version")
     if inner_schema == (
-        "hegel-machine-phase2b-formal-wire-covert-development-calibration/6"
+        "hegel-machine-phase2b-formal-wire-covert-development-calibration/7"
     ):
         if (
             calibration_basis_profile_bytes is not None
@@ -13355,7 +13584,7 @@ def _verify_phase2b_formal_wire_covert_outer_mechanics_core_v2(
         expected_entry = "development-calibration"
         _validate_development_calibration_artifact_v2(inner, attempt)
     elif inner_schema == (
-        "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/6"
+        "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/7"
     ):
         if shape.get("live_qualification_enabled") is not True:
             _fail(FAIL_PROFILE, "live outer mechanics needs the frozen profile")
@@ -15348,6 +15577,9 @@ def _verify_dependency_lock_bytes_v2(payload: bytes) -> dict[str, object]:
         "python_abi": "cp310",
         "python_implementation": "CPython",
         "python_version": "3.10.12",
+        "scientific_transient_environment_boundary": dict(
+            _SCIENTIFIC_CHILD_CREDENTIAL_ENVIRONMENT_BOUNDARY_V2
+        ),
         "standard_library_only": True,
         "standard_library_only_scope": "PYTHON_THIRD_PARTY_PACKAGES_ONLY",
         "step5_full_runtime_image_and_import_native_closure_required": True,
@@ -15355,7 +15587,7 @@ def _verify_dependency_lock_bytes_v2(payload: bytes) -> dict[str, object]:
     }
     if (
         decoded["schema_version"]
-        != "hegel-machine-phase2b-formal-wire-covert-qualification-dependency-lock/3"
+        != "hegel-machine-phase2b-formal-wire-covert-qualification-dependency-lock/4"
         or type(lock) is not dict
         or not _exact_json_equal(lock, expected_lock)
     ):
@@ -15401,7 +15633,8 @@ def _runtime_environment_manifest_body_v2(
             "forbid_pyc_pyo": True,
         },
         "environment_scope": (
-            "ONLY_LANG_AND_LC_ALL_OVERRIDES_ARE_QUALIFIED;"
+            "LANG_AND_LC_ALL_OVERRIDES_PLUS_TWO_NAME_ONLY_UNSETENVIRONMENT_"
+            "KEYS_ARE_QUALIFIED;"
             "OTHER_USER_MANAGER_ENVIRONMENT_IS_NOT_QUALIFIED"
         ),
         "host_runtime_fingerprint_only_not_full_runtime_image_closure": True,
@@ -16165,6 +16398,7 @@ def _validate_launch_intent_projection_v2(
         python_realpath=python_row["realpath"],
         project_root=source_tree,
         qualification_source_sha256=attempt.qualification_source_sha256,
+        bootstrap_role=SCIENTIFIC_CHILD_BOOTSTRAP_ROLE_V2,
         source_arguments=[
             "--entry",
             entry_kind,
@@ -16183,30 +16417,14 @@ def _validate_launch_intent_projection_v2(
         + bytes.fromhex(nonce)
         + bytes.fromhex(child_sha)
     ).hexdigest()
-    expected_systemd_argv = [
-        systemd_run_row["realpath"],
-        "--user",
-        "--pipe",
-        "--wait",
-        "--quiet",
-        f"--unit={expected_unit.removesuffix('.service')}",
-        f"--property=Description={expected_marker}",
-        "--property=Type=exec",
-        "--property=RemainAfterExit=yes",
-        f"--property=MemoryMax={attempt.requested_cgroup_memory_max_bytes}",
-        f"--property=TasksMax={attempt.requested_cgroup_pids_max}",
-        f"--property=RuntimeMaxSec={LIVE_HARD_TOTAL_TIMEOUT_SECONDS}s",
-        "--property=KillMode=control-group",
-        "--property=KillSignal=SIGTERM",
-        "--property=SendSIGKILL=yes",
-        "--property=FinalKillSignal=SIGKILL",
-        "--property=TimeoutStopSec=30s",
-        f"--working-directory={source_tree}",
-        "--setenv=LANG=C.UTF-8",
-        "--setenv=LC_ALL=C.UTF-8",
-        "--",
-        *expected_child_argv,
-    ]
+    expected_systemd_argv = _scientific_child_systemd_run_argv_v2(
+        systemd_run_realpath=systemd_run_row["realpath"],
+        unit_name=expected_unit,
+        ownership_marker=expected_marker,
+        attempt=attempt,
+        source_tree=source_tree,
+        child_argv=expected_child_argv,
+    )
     if (
         intent["unit_name"] != expected_unit
         or intent["child_argv"] != expected_child_argv
@@ -17497,6 +17715,7 @@ def build_rfc8785_prerequisite_bundle_v2(
         python_realpath=python_row["realpath"],
         project_root=project_root,
         qualification_source_sha256=qualification_source_sha256,
+        bootstrap_role=NON_SCIENTIFIC_BOOTSTRAP_ROLE_V2,
         source_arguments=[
             "--entry",
             "rfc-selfcheck-version",
@@ -17516,6 +17735,7 @@ def build_rfc8785_prerequisite_bundle_v2(
         python_realpath=python_row["realpath"],
         project_root=project_root,
         qualification_source_sha256=qualification_source_sha256,
+        bootstrap_role=NON_SCIENTIFIC_BOOTSTRAP_ROLE_V2,
         source_arguments=[
             "--entry",
             "rfc-selfcheck",
@@ -17803,6 +18023,7 @@ _SYSTEMD_SHOW_PROPERTIES_V2: Final = (
     "TasksMax",
     "TimeoutStopUSec",
     "Type",
+    "UnsetEnvironment",
     "WorkingDirectory",
 )
 
@@ -17849,6 +18070,19 @@ def _parse_systemd_duration_microseconds_v2(value: str, name: str) -> int:
     return total
 
 
+def _parse_scientific_child_unset_environment_v2(value: object) -> list[str]:
+    """Decode the one qualified name-only UnsetEnvironment= property value."""
+
+    if (
+        type(value) is not str
+        or value != SCIENTIFIC_CHILD_UNSET_ENVIRONMENT_PROPERTY_VALUE_V2
+        or value.split(" ")
+        != list(SCIENTIFIC_CHILD_CREDENTIAL_ENVIRONMENT_TARGET_KEYS_V2)
+    ):
+        raise ValueError("scientific child UnsetEnvironment property drifted")
+    return value.split(" ")
+
+
 def _normalize_effective_systemd_properties_v2(
     show: dict[str, str],
     *,
@@ -17881,6 +18115,9 @@ def _normalize_effective_systemd_properties_v2(
             show["TimeoutStopUSec"], "TimeoutStopUSec"
         ),
         "Type": show["Type"],
+        "UnsetEnvironment": _parse_scientific_child_unset_environment_v2(
+            show["UnsetEnvironment"]
+        ),
     }
     expected = {
         "FinalKillSignal": int(signal.SIGKILL),
@@ -17893,6 +18130,9 @@ def _normalize_effective_systemd_properties_v2(
         "TasksMax": attempt.requested_cgroup_pids_max,
         "TimeoutStopUSec": 30_000_000,
         "Type": "exec",
+        "UnsetEnvironment": list(
+            SCIENTIFIC_CHILD_CREDENTIAL_ENVIRONMENT_TARGET_KEYS_V2
+        ),
     }
     if not _exact_json_equal(result, expected) or working_directory != str(source_tree):
         raise ValueError("effective systemd service properties drifted")
@@ -20926,9 +21166,9 @@ def verify_phase2b_formal_wire_covert_outer_attempt_directory_v2(
         ):
             raise ValueError("retained outer supervisor CAS/path binding drifted")
         expected_inner_schema = (
-            "hegel-machine-phase2b-formal-wire-covert-development-calibration/6"
+            "hegel-machine-phase2b-formal-wire-covert-development-calibration/7"
             if entry_kind == "development-calibration"
-            else "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/6"
+            else "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/7"
         )
         if (
             inner.get("schema_version") != expected_inner_schema
@@ -21865,6 +22105,7 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
             python_realpath=python_row["realpath"],
             project_root=source_tree,
             qualification_source_sha256=attempt.qualification_source_sha256,
+            bootstrap_role=SCIENTIFIC_CHILD_BOOTSTRAP_ROLE_V2,
             source_arguments=[
                 "--entry",
                 entry_kind,
@@ -21883,30 +22124,14 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
             + bytes.fromhex(ownership_nonce)
             + bytes.fromhex(child_argv_sha256)
         ).hexdigest()
-        systemd_argv = [
-            systemd_run_row["realpath"],
-            "--user",
-            "--pipe",
-            "--wait",
-            "--quiet",
-            f"--unit={unit_base}",
-            f"--property=Description={unit_ownership_marker}",
-            "--property=Type=exec",
-            "--property=RemainAfterExit=yes",
-            f"--property=MemoryMax={attempt.requested_cgroup_memory_max_bytes}",
-            f"--property=TasksMax={attempt.requested_cgroup_pids_max}",
-            f"--property=RuntimeMaxSec={LIVE_HARD_TOTAL_TIMEOUT_SECONDS}s",
-            "--property=KillMode=control-group",
-            "--property=KillSignal=SIGTERM",
-            "--property=SendSIGKILL=yes",
-            "--property=FinalKillSignal=SIGKILL",
-            "--property=TimeoutStopSec=30s",
-            f"--working-directory={source_tree}",
-            "--setenv=LANG=C.UTF-8",
-            "--setenv=LC_ALL=C.UTF-8",
-            "--",
-            *child_argv,
-        ]
+        systemd_argv = _scientific_child_systemd_run_argv_v2(
+            systemd_run_realpath=systemd_run_row["realpath"],
+            unit_name=unit_name,
+            ownership_marker=unit_ownership_marker,
+            attempt=attempt,
+            source_tree=source_tree,
+            child_argv=child_argv,
+        )
         prelaunch_evidence, prelaunch_stdout, prelaunch_stderr = (
             _run_bounded_control_command_v2(
                 _systemd_show_argv_v2(systemctl_realpath, unit_name),
@@ -23793,6 +24018,7 @@ __all__ = [
     "FROZEN_STATIC_RESOURCE_PLAN_FIELDS_V2",
     "LIVE_HARD_TOTAL_TIMEOUT_SECONDS",
     "LIVE_MODE_ORDER",
+    "NON_SCIENTIFIC_BOOTSTRAP_ROLE_V2",
     "OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2",
     "PROFILE_CLAIM_LEVEL",
     "PROFILE_ID",
@@ -23803,6 +24029,9 @@ __all__ = [
     "Phase2BFormalWireCovertQualificationProfileV2",
     "Phase2BFormalWireCovertQualificationRejectionV2",
     "QualificationDispositionV2",
+    "SCIENTIFIC_CHILD_BOOTSTRAP_ROLE_V2",
+    "SCIENTIFIC_CHILD_CREDENTIAL_ENVIRONMENT_TARGET_KEYS_V2",
+    "SCIENTIFIC_CHILD_UNSET_ENVIRONMENT_SYSTEMD_RUN_TOKEN_V2",
     "build_development_calibration_artifact_v2",
     "build_live_inner_candidate_artifact_v2",
     "build_rfc8785_prerequisite_bundle_v2",

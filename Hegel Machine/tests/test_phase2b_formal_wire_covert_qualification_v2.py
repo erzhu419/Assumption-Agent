@@ -194,6 +194,9 @@ def _systemd_show_bytes(
         "TasksMax": str(attempt.requested_cgroup_pids_max),
         "TimeoutStopUSec": "30000000us",
         "Type": "exec",
+        "UnsetEnvironment": (
+            qualification.SCIENTIFIC_CHILD_UNSET_ENVIRONMENT_PROPERTY_VALUE_V2
+        ),
         "WorkingDirectory": str(source_tree),
     }
     if overrides is not None:
@@ -234,6 +237,7 @@ def _launch_intent(
         python_realpath=python_row["realpath"],
         project_root=source_tree,
         qualification_source_sha256=attempt.qualification_source_sha256,
+        bootstrap_role=qualification.SCIENTIFIC_CHILD_BOOTSTRAP_ROLE_V2,
         source_arguments=[
             "--entry",
             entry,
@@ -267,6 +271,7 @@ def _launch_intent(
         "--property=SendSIGKILL=yes",
         "--property=FinalKillSignal=SIGKILL",
         "--property=TimeoutStopSec=30s",
+        qualification.SCIENTIFIC_CHILD_UNSET_ENVIRONMENT_SYSTEMD_RUN_TOKEN_V2,
         f"--working-directory={source_tree}",
         "--setenv=LANG=C.UTF-8", "--setenv=LC_ALL=C.UTF-8", "--",
         *child_argv,
@@ -1720,7 +1725,7 @@ def test_checked_profile_is_exact_canonical_candidate_with_live_disabled() -> No
     profile = qualification.load_phase2b_formal_wire_covert_qualification_profile_v2(payload)
     assert profile.profile_id == qualification.PROFILE_ID
     assert qualification.PROFILE_SCHEMA_VERSION == (
-        "hegel-machine-phase2b-formal-wire-covert-qualification/6"
+        "hegel-machine-phase2b-formal-wire-covert-qualification/7"
     )
     assert qualification.AUDITOR_SCHEMA_VERSION_V2 == (
         "hegel-machine-phase2b-formal-covert-auditor/5"
@@ -1819,13 +1824,16 @@ def test_checked_profile_is_exact_canonical_candidate_with_live_disabled() -> No
     assert live["work_deadline_reserve_seconds"] == 3_000
     assert live["terminal_publication_reserve_seconds"] == 2_400
     assert live["cleanup_control_reserve_seconds"] == 600
+    assert qualification._deep_thaw(live["credential_environment_boundary"]) == (
+        qualification._SCIENTIFIC_CHILD_CREDENTIAL_ENVIRONMENT_BOUNDARY_V2
+    )
     assert live["requested_memory_max_equals_auditor_physical_cap"] is False
     assert live["post_exit_numeric_memory_peak_sample_claimed"] is False
     assert qualification._deep_thaw(
         live["post_output_physical_gate_contract"]
     ) == qualification._POST_OUTPUT_PHYSICAL_GATE_CONTRACT_V2
     assert live["outer_supervisor_result_schema"] == (
-        "hegel-machine-phase2b-formal-wire-covert-outer-supervisor-result/4"
+        "hegel-machine-phase2b-formal-wire-covert-outer-supervisor-result/5"
     )
     assert auditor.STATISTICS_WORKER_TIMEOUT_SECONDS == 3_600
     phase_deadline_seconds = 2 * (
@@ -1903,6 +1911,9 @@ def test_dependency_lock_is_canonical_exact_and_closes_the_source_loader() -> No
         "python_argv_flags": ["-I", "-S", "-B"],
         "source_only_loader_required": True,
     }
+    assert lock["scientific_transient_environment_boundary"] == (
+        qualification._SCIENTIFIC_CHILD_CREDENTIAL_ENVIRONMENT_BOUNDARY_V2
+    )
     local = lock["project_local_dependencies"]
     assert local["runtime_import_closure"] == (
         qualification._BOOTSTRAP_FIXED_SOURCE_SHA256_V2
@@ -1926,7 +1937,7 @@ def test_dependency_lock_is_canonical_exact_and_closes_the_source_loader() -> No
     }
     profile_lock = qualification._EXPECTED_PROFILE["dependency_lock"]
     assert decoded["schema_version"] == (
-        "hegel-machine-phase2b-formal-wire-covert-qualification-dependency-lock/3"
+        "hegel-machine-phase2b-formal-wire-covert-qualification-dependency-lock/4"
     )
     assert profile_lock["schema_version"] == decoded["schema_version"]
     assert profile_lock["sha256"] == qualification.DEPENDENCY_LOCK_SHA256
@@ -1970,6 +1981,7 @@ def test_direct_cli_requires_initial_isolation_and_reexecutes_open_once() -> Non
         python_realpath=os.path.realpath(sys.executable),
         project_root=ROOT.resolve(strict=True),
         qualification_source_sha256="0" * 64,
+        bootstrap_role=qualification.NON_SCIENTIFIC_BOOTSTRAP_ROLE_V2,
         source_arguments=base_arguments,
     )
     tampered = subprocess.run(
@@ -1987,6 +1999,7 @@ def test_direct_cli_requires_initial_isolation_and_reexecutes_open_once() -> Non
         python_realpath=os.path.realpath(sys.executable),
         project_root=ROOT.resolve(strict=True),
         qualification_source_sha256=current_sha256,
+        bootstrap_role=qualification.NON_SCIENTIFIC_BOOTSTRAP_ROLE_V2,
         source_arguments=base_arguments,
     )
     dependency_manifest = json.loads(dependency_tampered_argv[6])
@@ -2003,6 +2016,665 @@ def test_direct_cli_requires_initial_isolation_and_reexecutes_open_once() -> Non
     assert dependency_tampered.returncode != 0
     assert dependency_tampered.stdout == b""
     assert b"source bootstrap byte mismatch" in dependency_tampered.stderr
+
+
+def test_source_bootstrap_role_and_key_membership_gate_precedes_all_source_reads() -> None:
+    source = (
+        ROOT
+        / "src/hegel_machine/phase2b_formal_wire_covert_qualification_v2.py"
+    ).resolve(strict=True)
+    source_sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
+    code = qualification.SOURCE_EXECUTION_BOOTSTRAP_CODE_V2
+    expected_external_scientific_gate_ast = ast.dump(
+        ast.parse(
+            '''if scientific:
+ backing=getattr(os.environb,"_data",None)
+ if type(backing) is not dict:raise RuntimeError("scientific child credential environment backing drift")
+ absent={name:(not dict.__contains__(backing,name.encode("ascii"))) for name in targets}
+ if not all(absent.values()):raise RuntimeError("scientific child credential environment was not absent")
+ proof={"bootstrap_role":role,"entry_kind":entry,"full_environment_closure_claimed":False,"target_key_absence":absent,"target_key_names":list(targets),"values_read":False}
+'''
+        ).body[0],
+        include_attributes=False,
+    )
+    expected_direct_scientific_gate_ast = ast.dump(
+        ast.parse(
+            '''if _bootstrap_role_v2 == "scientific-child":
+    _bootstrap_environment_backing_v2 = getattr(os.environb, "_data", None)
+    if type(_bootstrap_environment_backing_v2) is not dict:
+        raise RuntimeError(
+            "direct scientific child credential environment backing drift"
+        )
+    if any(
+        dict.__contains__(_bootstrap_environment_backing_v2, target)
+        for target in (b"ANTHROPIC_API_KEY", b"ANTHROPIC_BASE_URL")
+    ):
+        raise RuntimeError(
+            "direct scientific child credential environment was not absent"
+        )
+'''
+        ).body[0],
+        include_attributes=False,
+    )
+    backing_expression = 'backing=getattr(os.environb,"_data",None)'
+    membership_expression = (
+        'dict.__contains__(backing,name.encode("ascii"))'
+    )
+    assert code.count(backing_expression) == 1
+    assert code.count(membership_expression) == 1
+    membership_index = code.index(membership_expression)
+    assert membership_index < code.index("m=json.loads")
+    assert membership_index < code.index("os.open")
+
+    def assert_backing_loads_are_key_only(
+        candidate_source: str, backing_name: str
+    ) -> None:
+        candidate_tree = ast.parse(candidate_source)
+        parents = {
+            child: parent
+            for parent in ast.walk(candidate_tree)
+            for child in ast.iter_child_nodes(parent)
+        }
+        references = [
+            node
+            for node in ast.walk(candidate_tree)
+            if isinstance(node, ast.Name) and node.id == backing_name
+        ]
+        stores = [
+            node for node in references if isinstance(node.ctx, ast.Store)
+        ]
+        loads = [node for node in references if isinstance(node.ctx, ast.Load)]
+        assert len(stores) == 1
+        assert len(loads) == 2
+        for node in loads:
+            parent = parents[node]
+            allowed_type_guard = (
+                isinstance(parent, ast.Call)
+                and isinstance(parent.func, ast.Name)
+                and parent.func.id == "type"
+                and parent.args == [node]
+                and not parent.keywords
+            )
+            allowed_native_membership = (
+                isinstance(parent, ast.Call)
+                and isinstance(parent.func, ast.Attribute)
+                and isinstance(parent.func.value, ast.Name)
+                and parent.func.value.id == "dict"
+                and parent.func.attr == "__contains__"
+                and len(parent.args) == 2
+                and parent.args[0] is node
+                and not parent.keywords
+            )
+            assert allowed_type_guard or allowed_native_membership, ast.dump(
+                parent, include_attributes=False
+            )
+
+    def assigned_name(statement: ast.stmt) -> str | None:
+        if (
+            isinstance(statement, ast.Assign)
+            and len(statement.targets) == 1
+            and isinstance(statement.targets[0], ast.Name)
+        ):
+            return statement.targets[0].id
+        if isinstance(statement, ast.AugAssign) and isinstance(
+            statement.target, ast.Name
+        ):
+            return statement.target.id
+        return None
+
+    def assert_single_environb_assignment(
+        candidate_source: str, backing_name: str
+    ) -> ast.Module:
+        candidate_tree = ast.parse(candidate_source)
+        parents = {
+            child: parent
+            for parent in ast.walk(candidate_tree)
+            for child in ast.iter_child_nodes(parent)
+        }
+        environb_references = [
+            node
+            for node in ast.walk(candidate_tree)
+            if isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "os"
+            and node.attr == "environb"
+        ]
+        assert len(environb_references) == 1
+        reference = environb_references[0]
+        getter = parents[reference]
+        assert isinstance(getter, ast.Call)
+        assert isinstance(getter.func, ast.Name) and getter.func.id == "getattr"
+        assert len(getter.args) == 3 and getter.args[0] is reference
+        assert isinstance(getter.args[1], ast.Constant)
+        assert getter.args[1].value == "_data"
+        assert isinstance(getter.args[2], ast.Constant)
+        assert getter.args[2].value is None
+        assert not getter.keywords
+        exact_data_constants = [
+            node
+            for node in ast.walk(candidate_tree)
+            if isinstance(node, ast.Constant) and node.value == "_data"
+        ]
+        exact_data_getters = [
+            node
+            for node in ast.walk(candidate_tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "getattr"
+            and len(node.args) >= 2
+            and isinstance(node.args[1], ast.Constant)
+            and node.args[1].value == "_data"
+        ]
+        assert exact_data_constants == [getter.args[1]]
+        assert exact_data_getters == [getter]
+        assert not any(
+            isinstance(node, ast.Attribute) and node.attr == "_data"
+            for node in ast.walk(candidate_tree)
+        )
+        assignment = parents[getter]
+        assert isinstance(assignment, ast.Assign)
+        assert len(assignment.targets) == 1
+        assert isinstance(assignment.targets[0], ast.Name)
+        assert assignment.targets[0].id == backing_name
+        return candidate_tree
+
+    def assert_environment_gate_segment_is_closed(
+        tree: ast.Module, *, start_line: int, end_line: int
+    ) -> None:
+        segment_nodes = [
+            node
+            for node in ast.walk(tree)
+            if hasattr(node, "lineno")
+            and start_line <= node.lineno <= end_line
+        ]
+        assert sum(
+            isinstance(node, ast.Constant) and node.value == "_data"
+            for node in segment_nodes
+        ) == 1
+        assert not any(
+            isinstance(node, ast.Attribute) and node.attr == "_data"
+            for node in segment_nodes
+        )
+        assert sum(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "getattr"
+            for node in segment_nodes
+        ) == 1
+        assert not any(
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "os"
+            and node.attr == "environ"
+            for node in segment_nodes
+        )
+
+    def assert_external_environment_gate_is_closed(
+        candidate_source: str,
+    ) -> None:
+        tree = assert_single_environb_assignment(candidate_source, "backing")
+        assert_backing_loads_are_key_only(candidate_source, "backing")
+        scientific_blocks = [
+            statement
+            for statement in tree.body
+            if isinstance(statement, ast.If)
+            and any(
+                isinstance(node, ast.Name)
+                and node.id == "backing"
+                and isinstance(node.ctx, ast.Store)
+                for node in ast.walk(statement)
+            )
+        ]
+        assert len(scientific_blocks) == 1
+        scientific_block = scientific_blocks[0]
+        assert [type(statement) for statement in scientific_block.body] == [
+            ast.Assign,
+            ast.If,
+            ast.Assign,
+            ast.If,
+            ast.Assign,
+        ]
+        assert [assigned_name(statement) for statement in scientific_block.body] == [
+            "backing",
+            None,
+            "absent",
+            None,
+            "proof",
+        ]
+        assert ast.dump(scientific_block, include_attributes=False) == (
+            expected_external_scientific_gate_ast
+        )
+        manifest_assignments = [
+            statement
+            for statement in tree.body
+            if assigned_name(statement) == "m"
+        ]
+        assert len(manifest_assignments) == 1
+        manifest_assignment = manifest_assignments[0]
+        assert scientific_block.end_lineno < manifest_assignment.lineno
+        assert_environment_gate_segment_is_closed(
+            tree,
+            start_line=scientific_block.lineno,
+            end_line=scientific_block.end_lineno,
+        )
+
+    def assert_direct_environment_gate_is_closed(candidate_source: str) -> None:
+        tree = assert_single_environb_assignment(
+            candidate_source, "_bootstrap_environment_backing_v2"
+        )
+        assert_backing_loads_are_key_only(
+            candidate_source, "_bootstrap_environment_backing_v2"
+        )
+        direct_blocks = [
+            statement
+            for statement in tree.body
+            if isinstance(statement, ast.If)
+            and any(
+                isinstance(node, ast.Name)
+                and node.id == "_bootstrap_environment_backing_v2"
+                and isinstance(node.ctx, ast.Store)
+                for node in ast.walk(statement)
+            )
+        ]
+        assert len(direct_blocks) == 1
+        direct_block = direct_blocks[0]
+        entry_index = next(
+            index
+            for index, statement in enumerate(direct_block.body)
+            if assigned_name(statement) == "_bootstrap_entry_v2"
+        )
+        descriptor_index = next(
+            index
+            for index, statement in enumerate(direct_block.body)
+            if assigned_name(statement) == "_bootstrap_fd_v2"
+        )
+        gate_statements = direct_block.body[entry_index - 1 : descriptor_index + 1]
+        assert [type(statement) for statement in gate_statements] == [
+            ast.If,
+            ast.Assign,
+            ast.Assign,
+            ast.If,
+            ast.Assign,
+            ast.Assign,
+            ast.If,
+            ast.Assign,
+            ast.If,
+            ast.AugAssign,
+            ast.Assign,
+        ]
+        assert [assigned_name(statement) for statement in gate_statements] == [
+            None,
+            "_bootstrap_entry_v2",
+            "_bootstrap_role_v2",
+            None,
+            "_bootstrap_path_v2",
+            "_bootstrap_project_root_v2",
+            None,
+            "_bootstrap_flags_v2",
+            None,
+            "_bootstrap_flags_v2",
+            "_bootstrap_fd_v2",
+        ]
+        scientific_block = gate_statements[3]
+        assert isinstance(scientific_block, ast.If)
+        assert [type(statement) for statement in scientific_block.body] == [
+            ast.Assign,
+            ast.If,
+            ast.If,
+        ]
+        assert [assigned_name(statement) for statement in scientific_block.body] == [
+            "_bootstrap_environment_backing_v2",
+            None,
+            None,
+        ]
+        assert ast.dump(scientific_block, include_attributes=False) == (
+            expected_direct_scientific_gate_ast
+        )
+        os_attributes = [
+            node.attr
+            for node in ast.walk(scientific_block)
+            if isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "os"
+        ]
+        assert os_attributes == ["environb"]
+        assert_environment_gate_segment_is_closed(
+            tree,
+            start_line=gate_statements[0].lineno,
+            end_line=gate_statements[-1].end_lineno,
+        )
+
+    assert_external_environment_gate_is_closed(code)
+    bootstrap_tree = ast.parse(code)
+    native_contains_calls = [
+        node
+        for node in ast.walk(bootstrap_tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "dict"
+        and node.func.attr == "__contains__"
+    ]
+    assert len(native_contains_calls) == 1
+    assert "type(backing) is not dict" in code
+    assert "os.environb[" not in code
+    assert "os.environb.get" not in code
+    assert "os.environb.items" not in code
+    assert "os.environb.keys" not in code
+    assert "os.environb.values" not in code
+    assert "os.environb.copy" not in code
+    assert "dict(os.environb)" not in code
+    assert "list(os.environb)" not in code
+    assert "tuple(os.environb)" not in code
+
+    source_text = source.read_text(encoding="utf-8")
+    direct_backing_index = source_text.index(
+        '_bootstrap_environment_backing_v2 = getattr(os.environb, "_data", None)'
+    )
+    direct_membership_index = source_text.index(
+        "dict.__contains__(_bootstrap_environment_backing_v2, target)"
+    )
+    direct_descriptor_reopen_index = source_text.index(
+        "_bootstrap_fd_v2 = os.open(_bootstrap_path_v2, _bootstrap_flags_v2)"
+    )
+    assert direct_backing_index < direct_membership_index
+    assert direct_membership_index < direct_descriptor_reopen_index
+    assert_direct_environment_gate_is_closed(source_text)
+
+    external_anchor = backing_expression + "\n"
+    direct_anchor = (
+        '        _bootstrap_environment_backing_v2 = getattr(os.environb, "_data", None)\n'
+    )
+    for external_mutant, direct_mutant in (
+        (" backing.values()\n", "        _bootstrap_environment_backing_v2.values()\n"),
+        (" dict.values(backing)\n", "        dict.values(_bootstrap_environment_backing_v2)\n"),
+        (" iter(backing)\n", "        iter(_bootstrap_environment_backing_v2)\n"),
+        (
+            ' backing[b"ANTHROPIC_API_KEY"]\n',
+            '        _bootstrap_environment_backing_v2[b"ANTHROPIC_API_KEY"]\n',
+        ),
+    ):
+        mutated_external = code.replace(
+            external_anchor, external_anchor + external_mutant, 1
+        )
+        mutated_direct = source_text.replace(
+            direct_anchor, direct_anchor + direct_mutant, 1
+        )
+        assert mutated_external != code
+        assert mutated_direct != source_text
+        with pytest.raises(AssertionError):
+            assert_backing_loads_are_key_only(mutated_external, "backing")
+        with pytest.raises(AssertionError):
+            assert_backing_loads_are_key_only(
+                mutated_direct, "_bootstrap_environment_backing_v2"
+            )
+
+    for external_alias, direct_alias in (
+        (
+            ' alias=getattr(os.environb,"_data",None);alias[b"ANTHROPIC_API_KEY"]\n',
+            '        _alias=getattr(os.environb,"_data",None);_alias[b"ANTHROPIC_API_KEY"]\n',
+        ),
+        (
+            ' alias=getattr(os.environ,"_data",None);alias[b"ANTHROPIC_API_KEY"]\n',
+            '        _alias=getattr(os.environ,"_data",None);_alias[b"ANTHROPIC_API_KEY"]\n',
+        ),
+    ):
+        mutated_external = code.replace(
+            external_anchor, external_anchor + external_alias, 1
+        )
+        mutated_direct = source_text.replace(
+            direct_anchor, direct_anchor + direct_alias, 1
+        )
+        assert mutated_external != code
+        assert mutated_direct != source_text
+        with pytest.raises(AssertionError):
+            assert_external_environment_gate_is_closed(mutated_external)
+        with pytest.raises(AssertionError):
+            assert_direct_environment_gate_is_closed(mutated_direct)
+
+    for getter_name in ("getenv", "getenvb"):
+        mutated_external = code.replace(
+            "if type(backing) is not dict:",
+            "if type(backing) is not dict or "
+            f'(os.{getter_name}("ANTHROPIC_API_KEY") is not None and False):',
+            1,
+        )
+        mutated_direct = source_text.replace(
+            "if type(_bootstrap_environment_backing_v2) is not dict:",
+            "if type(_bootstrap_environment_backing_v2) is not dict or "
+            f'(os.{getter_name}("ANTHROPIC_API_KEY") is not None and False):',
+            1,
+        )
+        assert mutated_external != code
+        assert mutated_direct != source_text
+        with pytest.raises(AssertionError):
+            assert_external_environment_gate_is_closed(mutated_external)
+        with pytest.raises(AssertionError):
+            assert_direct_environment_gate_is_closed(mutated_direct)
+
+    getter_probe_code = "\n".join(
+        (
+            "import hashlib,json,os,re,stat,sys",
+            "getter_calls=0",
+            "def forbidden_getitem(self,key):",
+            " global getter_calls",
+            " getter_calls+=1",
+            " raise RuntimeError('credential value getter invoked')",
+            "os._Environ.__getitem__=forbidden_getitem",
+            "try:",
+            f" exec({code!r},{{'__name__':'__main__'}})",
+            "except RuntimeError as exc:",
+            " if str(exc)!='scientific child credential environment was not absent':raise",
+            "else:raise RuntimeError('scientific key-presence gate did not reject')",
+            "if getter_calls!=0:raise RuntimeError('credential getter was invoked')",
+        )
+    )
+    getter_probe_environment = {
+        os.fsencode(key): os.fsencode(value)
+        for key, value in os.environ.items()
+        if key
+        not in qualification.SCIENTIFIC_CHILD_CREDENTIAL_ENVIRONMENT_TARGET_KEYS_V2
+    }
+    for present_value in (b"VALUE_MUST_NOT_BE_READ_CANARY", b"", b"\xff"):
+        probe_environment = dict(getter_probe_environment)
+        probe_environment[b"ANTHROPIC_API_KEY"] = present_value
+        getter_probe = subprocess.run(
+            [
+                sys.executable,
+                "-I",
+                "-S",
+                "-B",
+                "-c",
+                getter_probe_code,
+                "not-json",
+                str(ROOT.resolve(strict=True)),
+                "--bootstrap-role",
+                qualification.SCIENTIFIC_CHILD_BOOTSTRAP_ROLE_V2,
+                "--entry",
+                "development-calibration",
+            ],
+            check=False,
+            capture_output=True,
+            env=probe_environment,
+            timeout=20,
+        )
+        assert getter_probe.returncode == 0
+        assert getter_probe.stdout == b""
+        assert getter_probe.stderr == b""
+
+    direct_getter_probe_code = "\n".join(
+        (
+            "import argparse,dataclasses,enum,fcntl,fractions,gc,hashlib,json,math,os,pathlib,platform,random,re,selectors,shutil,signal,stat,struct,subprocess,sys,sysconfig,tarfile,tempfile,time,typing",
+            "import importlib.machinery",
+            "import types",
+            "source_path=sys.argv[1]",
+            "entry_kind=sys.argv[2]",
+            "with open(source_path,'rb') as stream:source_bytes=stream.read()",
+            "getter_calls=0",
+            "def forbidden_getitem(self,key):",
+            " global getter_calls",
+            " getter_calls+=1",
+            " raise RuntimeError('credential value getter invoked')",
+            "os._Environ.__getitem__=forbidden_getitem",
+            "sys.argv=[source_path,'--entry',entry_kind,'--profile','/does/not/exist/profile.json','--attempt','/does/not/exist/attempt.json']",
+            "namespace={'__name__':'__main__','__file__':source_path,'__package__':None,'__builtins__':__builtins__}",
+            "try:",
+            " exec(compile(source_bytes,source_path,'exec'),namespace)",
+            "except RuntimeError as exc:",
+            " if str(exc)!='direct scientific child credential environment was not absent':raise",
+            "else:raise RuntimeError('direct scientific key-presence gate did not reject')",
+            "if getter_calls!=0:raise RuntimeError('direct credential getter was invoked')",
+        )
+    )
+    for entry_kind in ("development-calibration", "live-inner"):
+        for present_value in (b"VALUE_MUST_NOT_BE_READ_CANARY", b"", b"\xff"):
+            probe_environment = dict(getter_probe_environment)
+            probe_environment[b"ANTHROPIC_BASE_URL"] = present_value
+            direct_getter_probe = subprocess.run(
+                [
+                    sys.executable,
+                    "-I",
+                    "-S",
+                    "-B",
+                    "-c",
+                    direct_getter_probe_code,
+                    str(source),
+                    entry_kind,
+                ],
+                check=False,
+                capture_output=True,
+                env=probe_environment,
+                timeout=20,
+            )
+            assert direct_getter_probe.returncode == 0
+            assert direct_getter_probe.stdout == b""
+            assert direct_getter_probe.stderr == b""
+
+    direct_clean_environment = {
+        key: value
+        for key, value in os.environ.items()
+        if key
+        not in qualification.SCIENTIFIC_CHILD_CREDENTIAL_ENVIRONMENT_TARGET_KEYS_V2
+    }
+    for entry_kind in ("development-calibration", "live-inner"):
+        direct_clean = subprocess.run(
+            [
+                sys.executable,
+                "-I",
+                "-S",
+                "-B",
+                str(source),
+                "--entry",
+                entry_kind,
+                "--profile",
+                "/does/not/exist/profile.json",
+                "--attempt",
+                "/does/not/exist/attempt.json",
+            ],
+            check=False,
+            capture_output=True,
+            env=direct_clean_environment,
+            timeout=30,
+        )
+        assert direct_clean.returncode != 0
+        assert direct_clean.stdout == b""
+        assert b"credential environment" not in direct_clean.stderr
+
+    non_scientific_arguments = [
+        "--entry",
+        "rfc-selfcheck-version",
+        "--project-root",
+        str(ROOT.resolve(strict=True)),
+    ]
+    non_scientific_argv = qualification._source_execution_bootstrap_argv_v2(
+        python_realpath=os.path.realpath(sys.executable),
+        project_root=ROOT.resolve(strict=True),
+        qualification_source_sha256=source_sha256,
+        bootstrap_role=qualification.NON_SCIENTIFIC_BOOTSTRAP_ROLE_V2,
+        source_arguments=non_scientific_arguments,
+    )
+    credential_present_environment = dict(os.environ)
+    credential_present_environment.update(
+        {"ANTHROPIC_API_KEY": "", "ANTHROPIC_BASE_URL": "not-read"}
+    )
+    non_scientific = subprocess.run(
+        non_scientific_argv,
+        check=False,
+        capture_output=True,
+        env=credential_present_environment,
+        timeout=20,
+    )
+    assert non_scientific.returncode == 0
+    assert non_scientific.stdout == b"hegel-rfc8785-stdlib-selfcheck-v1\n"
+    assert non_scientific.stderr == b""
+
+    for entry_kind, present_key in (
+        ("development-calibration", "ANTHROPIC_API_KEY"),
+        ("live-inner", "ANTHROPIC_BASE_URL"),
+    ):
+        scientific_argv = qualification._source_execution_bootstrap_argv_v2(
+            python_realpath=os.path.realpath(sys.executable),
+            project_root=ROOT.resolve(strict=True),
+            qualification_source_sha256="0" * 64,
+            bootstrap_role=qualification.SCIENTIFIC_CHILD_BOOTSTRAP_ROLE_V2,
+            source_arguments=[
+                "--entry",
+                entry_kind,
+                "--profile",
+                "/does/not/exist/profile.json",
+                "--attempt",
+                "/does/not/exist/attempt.json",
+            ],
+        )
+        scientific_environment = {
+            key: value
+            for key, value in os.environ.items()
+            if key
+            not in qualification.SCIENTIFIC_CHILD_CREDENTIAL_ENVIRONMENT_TARGET_KEYS_V2
+        }
+        gate_passed = subprocess.run(
+            scientific_argv,
+            check=False,
+            capture_output=True,
+            env=scientific_environment,
+            timeout=20,
+        )
+        assert gate_passed.returncode != 0
+        assert gate_passed.stdout == b""
+        assert b"scientific child credential environment" not in (
+            gate_passed.stderr
+        )
+        assert b"source bootstrap byte mismatch" in gate_passed.stderr
+        scientific_environment[present_key] = ""
+        rejected = subprocess.run(
+            scientific_argv,
+            check=False,
+            capture_output=True,
+            env=scientific_environment,
+            timeout=20,
+        )
+        assert rejected.returncode != 0
+        assert rejected.stdout == b""
+        assert b"scientific child credential environment was not absent" in (
+            rejected.stderr
+        )
+        assert b"source bootstrap byte mismatch" not in rejected.stderr
+
+    with pytest.raises(ValueError, match="source bootstrap argv inputs"):
+        qualification._source_execution_bootstrap_argv_v2(
+            python_realpath=os.path.realpath(sys.executable),
+            project_root=ROOT.resolve(strict=True),
+            qualification_source_sha256=source_sha256,
+            bootstrap_role=qualification.NON_SCIENTIFIC_BOOTSTRAP_ROLE_V2,
+            source_arguments=[
+                "--entry",
+                "development-calibration",
+                "--profile",
+                "/does/not/exist/profile.json",
+                "--attempt",
+                "/does/not/exist/attempt.json",
+            ],
+        )
 
 
 def test_runtime_manifest_cli_emits_one_canonical_artifact_and_rejects_extras(
@@ -2228,9 +2900,16 @@ def test_retained_pre_decoupling_and_r3_profile_identities_are_rejected() -> Non
     pre_decoupling_profile = qualification._deep_thaw(
         qualification._EXPECTED_PROFILE
     )
-    pre_decoupling_profile["readiness_boundary"]["live_execution_contract"][
-        "outer_supervisor_result_schema"
-    ] = "hegel-machine-phase2b-formal-wire-covert-outer-supervisor-result/3"
+    pre_decoupling_profile["schema_version"] = (
+        "hegel-machine-phase2b-formal-wire-covert-qualification/6"
+    )
+    historical_live = pre_decoupling_profile["readiness_boundary"][
+        "live_execution_contract"
+    ]
+    historical_live["outer_supervisor_result_schema"] = (
+        "hegel-machine-phase2b-formal-wire-covert-outer-supervisor-result/3"
+    )
+    del historical_live["credential_environment_boundary"]
     auditor_binding = pre_decoupling_profile["auditor_binding"]
     auditor_binding["maximum_static_phase_plan_rss_bytes"] = (
         auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
@@ -2244,6 +2923,9 @@ def test_retained_pre_decoupling_and_r3_profile_identities_are_rejected() -> Non
         "122bb24b8d8983a294a66e64c59fd74ac4017eaead1b7888141ff1679ac4272b"
     )
     dependency_lock = pre_decoupling_profile["dependency_lock"]
+    dependency_lock["schema_version"] = (
+        "hegel-machine-phase2b-formal-wire-covert-qualification-dependency-lock/3"
+    )
     dependency_lock["sha256"] = (
         "8c375133fb17d484d129464975ed4deb737d8f1e200d850f9ac75f4046bbfa07"
     )
@@ -7126,7 +7808,7 @@ def test_inner_cli_success_cannot_return_or_run_interpreter_teardown() -> None:
         assert required in quiescent_source
 
 
-def test_outer_v4_post_output_attestation_is_closed_and_tamper_evident() -> None:
+def test_outer_v5_post_output_attestation_is_closed_and_tamper_evident() -> None:
     attempt = _attempt()
     inner = {
         "post_output_physical_gate_contract": dict(
@@ -7144,7 +7826,7 @@ def test_outer_v4_post_output_attestation_is_closed_and_tamper_evident() -> None
         child_argv_sha256=child_argv_sha256,
         owned_invocation_id=invocation_id,
     )
-    assert qualification.OUTER_SUPERVISOR_RESULT_SCHEMA_V2.endswith("/4")
+    assert qualification.OUTER_SUPERVISOR_RESULT_SCHEMA_V2.endswith("/5")
     assert attestation["systemd_memory_max_bytes"] == (
         qualification.OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2
     )
@@ -7806,7 +8488,7 @@ def _valid_full1024_inner_run_v6(
     return run, measurement
 
 
-def _valid_development_inner_v6(
+def _valid_development_inner_v7(
     attempt: qualification.Phase2BFormalWireCovertAttemptManifestV2,
     source_tree: Path,
 ) -> dict[str, object]:
@@ -7867,6 +8549,21 @@ def _valid_development_inner_v6(
         "cgroup": cgroup_row(current=512, peak=1_024),
         "interpreter_runtime": {
             "bytecode_candidates_found": [],
+            "credential_environment_proof": {
+                "bootstrap_role": (
+                    qualification.SCIENTIFIC_CHILD_BOOTSTRAP_ROLE_V2
+                ),
+                "entry_kind": "development-calibration",
+                "full_environment_closure_claimed": False,
+                "target_key_absence": {
+                    key: True
+                    for key in qualification.SCIENTIFIC_CHILD_CREDENTIAL_ENVIRONMENT_TARGET_KEYS_V2
+                },
+                "target_key_names": list(
+                    qualification.SCIENTIFIC_CHILD_CREDENTIAL_ENVIRONMENT_TARGET_KEYS_V2
+                ),
+                "values_read": False,
+            },
             "dont_write_bytecode": 1,
             "executed_main_source_sha256": attempt.qualification_source_sha256,
             "ignore_environment": 1,
@@ -7936,7 +8633,7 @@ def _valid_development_inner_v6(
         "runtime_exit_evidence": runtime_exit,
         "same_run_shape_acceptance_forbidden": True,
         "schema_version": (
-            "hegel-machine-phase2b-formal-wire-covert-development-calibration/6"
+            "hegel-machine-phase2b-formal-wire-covert-development-calibration/7"
         ),
         "synthetic_fixture_root": (
             qualification._combined_fixture_root_from_run_roots_v2(
@@ -7947,7 +8644,7 @@ def _valid_development_inner_v6(
     }
 
 
-def _valid_outer_main_pid_replay_v4(tmp_path: Path) -> SimpleNamespace:
+def _valid_outer_main_pid_replay_v5(tmp_path: Path) -> SimpleNamespace:
     source_archive_bytes = b"outer-main-pid-source-archive"
     source_digest = hashlib.sha256(source_archive_bytes).hexdigest()
     source_sha = hashlib.sha256(
@@ -7980,7 +8677,8 @@ def _valid_outer_main_pid_replay_v4(tmp_path: Path) -> SimpleNamespace:
         },
         "dependency_lock_sha256": qualification.DEPENDENCY_LOCK_SHA256,
         "environment_scope": (
-            "ONLY_LANG_AND_LC_ALL_OVERRIDES_ARE_QUALIFIED;"
+            "LANG_AND_LC_ALL_OVERRIDES_PLUS_TWO_NAME_ONLY_UNSETENVIRONMENT_"
+            "KEYS_ARE_QUALIFIED;"
             "OTHER_USER_MANAGER_ENVIRONMENT_IS_NOT_QUALIFIED"
         ),
         "executables": {
@@ -8112,7 +8810,7 @@ def _valid_outer_main_pid_replay_v4(tmp_path: Path) -> SimpleNamespace:
         bootstrap_manifest,
         prefix="phase2b_formal_wire_covert_source_bootstrap_manifest_v2_",
     )
-    inner = _valid_development_inner_v6(attempt, source_tree)
+    inner = _valid_development_inner_v7(attempt, source_tree)
     interpreter = inner["runtime_entry_evidence"]["interpreter_runtime"]
     interpreter["preopened_source_snapshot_root"] = child_preopened_root
     interpreter["source_execution_bootstrap_manifest_root"] = bootstrap_root
@@ -8227,6 +8925,9 @@ def _valid_outer_main_pid_replay_v4(tmp_path: Path) -> SimpleNamespace:
         "TasksMax": attempt.requested_cgroup_pids_max,
         "TimeoutStopUSec": 30_000_000,
         "Type": "exec",
+        "UnsetEnvironment": list(
+            qualification.SCIENTIFIC_CHILD_CREDENTIAL_ENVIRONMENT_TARGET_KEYS_V2
+        ),
     }
     extraction = {
         "archive_format": "TAR_REGULAR_AND_DIRECTORY_ENTRIES_ONLY",
@@ -8483,7 +9184,7 @@ def test_outer_live_and_pure_main_pid_crossbinding_rejects_splices(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    replay = _valid_outer_main_pid_replay_v4(tmp_path)
+    replay = _valid_outer_main_pid_replay_v5(tmp_path)
     outer_bytes = qualification._canonical_inner_artifact_v2(replay.body)
     assert qualification._decode_canonical_transport_object_v2(
         outer_bytes,
@@ -8610,6 +9311,168 @@ def test_outer_live_and_pure_main_pid_crossbinding_rejects_splices(
 
     validate_live(replay.body, replay.inner, replay.inner_bytes)
     validate_pure(replay.body, replay.inner, replay.inner_bytes)
+
+    def bind_mutated_inner(
+        mutated_inner: dict[str, object],
+    ) -> tuple[dict[str, object], bytes]:
+        mutated_inner_bytes = qualification._canonical_inner_artifact_v2(
+            mutated_inner
+        )
+        mutated_inner_sha256 = hashlib.sha256(mutated_inner_bytes).hexdigest()
+        bound_outer = json.loads(json.dumps(replay.body))
+        bound_outer["inner_artifact_cas"] = qualification._cas_projection_v2(
+            mutated_inner_sha256,
+            len(mutated_inner_bytes),
+            replay.attempt.attempt_manifest_root,
+        )
+        bound_outer["stdout"] = {
+            "sha256": mutated_inner_sha256,
+            "size_bytes": len(mutated_inner_bytes),
+        }
+        bound_outer["post_output_physical_gate_attestation"] = (
+            qualification._expected_post_output_gate_attestation_v2(
+                replay.attempt,
+                mutated_inner,
+                mutated_inner_bytes,
+                expected_entry="development-calibration",
+                child_argv_sha256=bound_outer["unit"]["child_argv_sha256"],
+                owned_invocation_id=bound_outer["unit"]["owned_invocation_id"],
+            )
+        )
+        return bound_outer, mutated_inner_bytes
+
+    systemd_argv_splice = json.loads(json.dumps(replay.body))
+    exact_unset_token = (
+        qualification.SCIENTIFIC_CHILD_UNSET_ENVIRONMENT_SYSTEMD_RUN_TOKEN_V2
+    )
+    systemd_argv_index = systemd_argv_splice["launcher"]["systemd_argv"].index(
+        exact_unset_token
+    )
+    systemd_argv_splice["launcher"]["systemd_argv"][systemd_argv_index] = (
+        "--property=UnsetEnvironment=ANTHROPIC_BASE_URL ANTHROPIC_API_KEY"
+    )
+    for validator in (validate_live, validate_pure):
+        with pytest.raises(ValueError, match="argv|launch"):
+            validator(systemd_argv_splice, replay.inner, replay.inner_bytes)
+
+    entry_show_splice = json.loads(json.dumps(replay.body))
+    entry_show_index = next(
+        index
+        for index, row in enumerate(
+            entry_show_splice["launcher"]["systemctl_commands"]
+        )
+        if row["purpose"] == "entry-show-0"
+    )
+    entry_show_row = entry_show_splice["launcher"]["systemctl_commands"][
+        entry_show_index
+    ]
+    entry_argv, entry_purpose, entry_rc, entry_stdout, entry_stderr = (
+        qualification._verify_command_evidence_v2(
+            entry_show_row, name="credential entry-show splice"
+        )
+    )
+    exact_unset_row = (
+        "UnsetEnvironment="
+        + qualification.SCIENTIFIC_CHILD_UNSET_ENVIRONMENT_PROPERTY_VALUE_V2
+        + "\n"
+    ).encode("ascii")
+    reversed_unset_row = (
+        b"UnsetEnvironment=ANTHROPIC_BASE_URL ANTHROPIC_API_KEY\n"
+    )
+    assert entry_stdout.count(exact_unset_row) == 1
+    entry_show_splice["launcher"]["systemctl_commands"][entry_show_index] = (
+        qualification._command_evidence_v2(
+            argv=entry_argv,
+            purpose=entry_purpose,
+            returncode=entry_rc,
+            stdout=entry_stdout.replace(exact_unset_row, reversed_unset_row),
+            stderr=entry_stderr,
+        )
+    )
+    for validator in (validate_live, validate_pure):
+        with pytest.raises(ValueError, match="UnsetEnvironment"):
+            validator(entry_show_splice, replay.inner, replay.inner_bytes)
+
+    terminal_show_indices = [
+        index
+        for index, row in enumerate(
+            replay.body["launcher"]["systemctl_commands"]
+        )
+        if row["purpose"].startswith("terminal-show-")
+    ]
+    assert len(terminal_show_indices) == 2
+    for terminal_index in terminal_show_indices:
+        terminal_show_splice = json.loads(json.dumps(replay.body))
+        row = terminal_show_splice["launcher"]["systemctl_commands"][
+            terminal_index
+        ]
+        (
+            terminal_argv,
+            terminal_purpose,
+            terminal_rc,
+            terminal_stdout,
+            terminal_stderr,
+        ) = qualification._verify_command_evidence_v2(
+            row, name=f"credential terminal-show splice[{terminal_index}]"
+        )
+        assert terminal_stdout.count(exact_unset_row) == 1
+        terminal_show_splice["launcher"]["systemctl_commands"][terminal_index] = (
+            qualification._command_evidence_v2(
+                argv=terminal_argv,
+                purpose=terminal_purpose,
+                returncode=terminal_rc,
+                stdout=terminal_stdout.replace(
+                    exact_unset_row, reversed_unset_row
+                ),
+                stderr=terminal_stderr,
+            )
+        )
+        for validator in (validate_live, validate_pure):
+            with pytest.raises(ValueError, match="UnsetEnvironment"):
+                validator(terminal_show_splice, replay.inner, replay.inner_bytes)
+
+    effective_property_splice = json.loads(json.dumps(replay.body))
+    effective_property_splice["unit"]["effective_properties"][
+        "UnsetEnvironment"
+    ] = ["ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY"]
+    for validator in (validate_live, validate_pure):
+        with pytest.raises(ValueError, match=r"effective (service )?properties"):
+            validator(effective_property_splice, replay.inner, replay.inner_bytes)
+
+    development_proof_splice = json.loads(json.dumps(replay.inner))
+    development_proof = development_proof_splice["runtime_entry_evidence"][
+        "interpreter_runtime"
+    ]["credential_environment_proof"]
+    development_proof["target_key_absence"]["ANTHROPIC_API_KEY"] = False
+    development_bound_outer, development_splice_bytes = bind_mutated_inner(
+        development_proof_splice
+    )
+    for validator in (validate_live, validate_pure):
+        with pytest.raises(ValueError, match="environment proof drifted"):
+            validator(
+                development_bound_outer,
+                development_proof_splice,
+                development_splice_bytes,
+            )
+
+    live_proof_splice = json.loads(json.dumps(replay.inner))
+    live_proof = live_proof_splice["runtime_entry_evidence"][
+        "interpreter_runtime"
+    ]["credential_environment_proof"]
+    live_proof["entry_kind"] = "live-inner"
+    assert qualification._validate_scientific_child_environment_proof_v2(
+        live_proof,
+        expected_entry_kind="live-inner",
+        name="valid live proof splice precondition",
+    ) == live_proof
+    live_bound_outer, live_splice_bytes = bind_mutated_inner(live_proof_splice)
+    for validator in (validate_live, validate_pure):
+        with pytest.raises(ValueError, match="environment proof drifted"):
+            validator(
+                live_bound_outer,
+                live_proof_splice,
+                live_splice_bytes,
+            )
 
     main_relative = qualification._BOOTSTRAP_MAIN_RELATIVE_PATH_V2
     outer_transport_splices: list[dict[str, object]] = []
@@ -9001,7 +9864,7 @@ def test_outer_runner_canonical_stdout_then_tail_exit86_publishes_only_failure_v
         qualification._source_execution_bootstrap_manifest_v2(pinned_source_sha),
         prefix="phase2b_formal_wire_covert_source_bootstrap_manifest_v2_",
     )
-    valid_inner = _valid_development_inner_v6(attempt, source_tree)
+    valid_inner = _valid_development_inner_v7(attempt, source_tree)
     interpreter_runtime = valid_inner["runtime_entry_evidence"][
         "interpreter_runtime"
     ]
@@ -9020,7 +9883,9 @@ def test_outer_runner_canonical_stdout_then_tail_exit86_publishes_only_failure_v
     )
     validated_interpreter_runtime = (
         qualification._validate_interpreter_runtime_projection_v2(
-            interpreter_runtime, "tail-exit86 counterfactual-success inner"
+            interpreter_runtime,
+            "tail-exit86 counterfactual-success inner",
+            expected_entry_kind="development-calibration",
         )
     )
     assert (
@@ -9351,7 +10216,7 @@ def test_outer_runner_canonical_stdout_then_tail_exit86_publishes_only_failure_v
         captured_inner, attempt
     )
     assert captured_inner["schema_version"].endswith(
-        "development-calibration/6"
+        "development-calibration/7"
     )
     assert captured_inner["post_output_physical_gate_contract"] == dict(
         qualification._POST_OUTPUT_PHYSICAL_GATE_CONTRACT_V2
@@ -9516,10 +10381,14 @@ def test_inner_runtime_replay_requires_canonical_event_counter_witnesses(
     monkeypatch.setattr(
         qualification,
         "_validate_interpreter_runtime_projection_v2",
-        lambda value, context: None,
+        lambda value, context, *, expected_entry_kind: None,
     )
     qualification._validate_runtime_entry_exit_contract_v2(
-        entry, exit_row, attempt, context="unit retained inner"
+        entry,
+        exit_row,
+        attempt,
+        context="unit retained inner",
+        expected_entry_kind="development-calibration",
     )
     assert entry["cgroup"]["memory_max"] == (
         qualification.OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2
@@ -9532,7 +10401,11 @@ def test_inner_runtime_replay_requires_canonical_event_counter_witnesses(
         runtime_cgroup["memory_max"] = auditor.MAXIMUM_ESTIMATED_RSS_BYTES
         with pytest.raises(ValueError, match="cgroup integer evidence drifted"):
             qualification._validate_runtime_entry_exit_contract_v2(
-                entry, exit_row, attempt, context="unit retained inner"
+                entry,
+                exit_row,
+                attempt,
+                context="unit retained inner",
+                expected_entry_kind="development-calibration",
             )
         runtime_cgroup["memory_max"] = (
             qualification.OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2
@@ -9541,7 +10414,11 @@ def test_inner_runtime_replay_requires_canonical_event_counter_witnesses(
     exit_row["cgroup"]["memory_max"] = auditor.MAXIMUM_ESTIMATED_RSS_BYTES
     with pytest.raises(ValueError, match="cgroup integer evidence drifted"):
         qualification._validate_runtime_entry_exit_contract_v2(
-            entry, exit_row, attempt, context="unit retained inner"
+            entry,
+            exit_row,
+            attempt,
+            context="unit retained inner",
+            expected_entry_kind="development-calibration",
         )
     entry["cgroup"]["memory_max"] = (
         qualification.OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2
@@ -9553,7 +10430,11 @@ def test_inner_runtime_replay_requires_canonical_event_counter_witnesses(
     exit_row["cgroup"][event_field] = replacement
     with pytest.raises(ValueError, match="missing required counters"):
         qualification._validate_runtime_entry_exit_contract_v2(
-            entry, exit_row, attempt, context="unit retained inner"
+            entry,
+            exit_row,
+            attempt,
+            context="unit retained inner",
+            expected_entry_kind="development-calibration",
         )
 
 
@@ -9616,10 +10497,11 @@ def test_production_has_zero_assert_and_no_pickle_pipe_or_process_pool() -> None
     )
     assert "phase2b_formal_wire_covert_qualification_receipt_v4_" not in source
     current_schema_tokens = (
-        "hegel-machine-phase2b-formal-wire-covert-qualification/6",
-        "hegel-machine-phase2b-formal-wire-covert-qualification-dependency-lock/3",
-        "hegel-machine-phase2b-formal-wire-covert-development-calibration/6",
-        "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/6",
+        "hegel-machine-phase2b-formal-wire-covert-qualification/7",
+        "hegel-machine-phase2b-formal-wire-covert-qualification-dependency-lock/4",
+        "hegel-machine-phase2b-formal-wire-covert-outer-supervisor-result/5",
+        "hegel-machine-phase2b-formal-wire-covert-development-calibration/7",
+        "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/7",
         "hegel-machine-phase2b-formal-wire-covert-static-shape/3",
         "phase2b_formal_wire_covert_qualification_receipt_v6_",
         "phase2b_formal_wire_covert_resource_plan_v3_",
@@ -9631,6 +10513,9 @@ def test_production_has_zero_assert_and_no_pickle_pipe_or_process_pool() -> None
     for schema in current_schema_tokens:
         assert schema in source
     for stale in (
+        "hegel-machine-phase2b-formal-wire-covert-qualification/6",
+        "hegel-machine-phase2b-formal-wire-covert-qualification-dependency-lock/3",
+        "hegel-machine-phase2b-formal-wire-covert-outer-supervisor-result/4",
         "hegel-machine-phase2b-formal-wire-covert-qualification/5",
         "hegel-machine-phase2b-formal-wire-covert-development-calibration/5",
         "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/5",
@@ -9644,16 +10529,35 @@ def test_production_has_zero_assert_and_no_pickle_pipe_or_process_pool() -> None
     ):
         assert stale not in source
     for current_inner_schema in (
-        "hegel-machine-phase2b-formal-wire-covert-development-calibration/6",
-        "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/6",
+        "hegel-machine-phase2b-formal-wire-covert-development-calibration/7",
+        "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/7",
     ):
-        assert current_inner_schema.replace("/6", "/5") not in source
+        assert current_inner_schema.replace("/7", "/6") not in source
+        assert current_inner_schema.replace("/7", "/5") not in source
     assert source.count(
-        "hegel-machine-phase2b-formal-wire-covert-development-calibration/6"
+        "hegel-machine-phase2b-formal-wire-covert-development-calibration/7"
     ) == 5
     assert source.count(
-        "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/6"
+        "hegel-machine-phase2b-formal-wire-covert-live-inner-candidate/7"
     ) == 4
+    historical_rejection_source = inspect.getsource(
+        test_retained_pre_decoupling_and_r3_profile_identities_are_rejected
+    )
+    stale_profile_v6 = "hegel-machine-phase2b-formal-wire-covert-qualification" + "/6"
+    stale_lock_v3 = (
+        "hegel-machine-phase2b-formal-wire-covert-qualification-dependency-lock"
+        + "/3"
+    )
+    stale_outer_v4 = (
+        "hegel-machine-phase2b-formal-wire-covert-outer-supervisor-result" + "/4"
+    )
+    assert historical_rejection_source.count(stale_profile_v6) == 1
+    assert historical_rejection_source.count(stale_lock_v3) == 1
+    assert stale_outer_v4 not in historical_rejection_source
+    complete_test_source = Path(__file__).read_text(encoding="utf-8")
+    assert complete_test_source.count(stale_profile_v6) == 2
+    assert complete_test_source.count(stale_lock_v3) == 2
+    assert complete_test_source.count(stale_outer_v4) == 1
     for forbidden in (
         "multiprocessing.Pipe",
         "ProcessPoolExecutor",
@@ -9676,6 +10580,119 @@ def test_launch_intent_binds_attempt_unit_marker_and_prelaunch_absence() -> None
     with pytest.raises(ValueError, match="ownership preimage"):
         qualification._validate_launch_intent_projection_v2(
             tampered,
+            attempt=attempt,
+            entry_kind="development-calibration",
+            source_tree=source_tree,
+        )
+
+
+def test_scientific_environment_boundary_crossbinds_unit_property_and_child_proof() -> None:
+    attempt, source_tree, intent = _launch_intent()
+    token = qualification.SCIENTIFIC_CHILD_UNSET_ENVIRONMENT_SYSTEMD_RUN_TOKEN_V2
+    assert intent["systemd_argv"].count(token) == 1
+    assert intent["systemd_argv"].index(token) < intent["systemd_argv"].index("--")
+    assert intent["child_argv"][8:10] == [
+        "--bootstrap-role",
+        qualification.SCIENTIFIC_CHILD_BOOTSTRAP_ROLE_V2,
+    ]
+    for function in (
+        qualification._validate_launch_intent_projection_v2,
+        qualification._validate_outer_supervisor_result_v2,
+        qualification._validate_outer_supervisor_semantics_pure_v2,
+        qualification._run_phase2b_formal_wire_covert_outer_attempt_impl_v2,
+    ):
+        assert "_scientific_child_systemd_run_argv_v2" in inspect.getsource(
+            function
+        )
+
+    show = qualification._parse_systemd_show_v2(
+        _systemd_show_bytes(
+            attempt,
+            source_tree,
+            marker=intent["ownership_marker"],
+            invocation="a" * 32,
+            load="loaded",
+            active="active",
+            sub="running",
+            main_pid=123,
+            cgroup="/user.slice/hegel-qv2.service",
+        ),
+        set(qualification._SYSTEMD_SHOW_PROPERTIES_V2),
+    )
+    effective = qualification._normalize_effective_systemd_properties_v2(
+        show, attempt=attempt, source_tree=source_tree
+    )
+    assert effective["UnsetEnvironment"] == list(
+        qualification.SCIENTIFIC_CHILD_CREDENTIAL_ENVIRONMENT_TARGET_KEYS_V2
+    )
+    for malformed in (
+        "ANTHROPIC_BASE_URL ANTHROPIC_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_API_KEY ANTHROPIC_BASE_URL EXTRA",
+        "ANTHROPIC_API_KEY=redacted ANTHROPIC_BASE_URL",
+        "ANTHROPIC_API_KEY  ANTHROPIC_BASE_URL",
+        " ANTHROPIC_API_KEY ANTHROPIC_BASE_URL",
+    ):
+        bad_show = qualification._parse_systemd_show_v2(
+            _systemd_show_bytes(
+                attempt,
+                source_tree,
+                marker=intent["ownership_marker"],
+                invocation="a" * 32,
+                load="loaded",
+                active="active",
+                sub="running",
+                main_pid=123,
+                cgroup="/user.slice/hegel-qv2.service",
+                overrides={"UnsetEnvironment": malformed},
+            ),
+            set(qualification._SYSTEMD_SHOW_PROPERTIES_V2),
+        )
+        with pytest.raises(ValueError, match="UnsetEnvironment property drifted"):
+            qualification._normalize_effective_systemd_properties_v2(
+                bad_show, attempt=attempt, source_tree=source_tree
+            )
+
+    inner = _valid_development_inner_v7(attempt, source_tree)
+    runtime = inner["runtime_entry_evidence"]["interpreter_runtime"]
+    proof = runtime["credential_environment_proof"]
+    assert qualification._validate_scientific_child_environment_proof_v2(
+        proof,
+        expected_entry_kind="development-calibration",
+        name="KAT",
+    ) == proof
+    for field, replacement in (
+        ("target_key_absence", {"ANTHROPIC_API_KEY": False, "ANTHROPIC_BASE_URL": True}),
+        ("values_read", True),
+        ("full_environment_closure_claimed", True),
+        ("entry_kind", "live-inner"),
+    ):
+        tampered_proof = json.loads(json.dumps(proof))
+        tampered_proof[field] = replacement
+        with pytest.raises(ValueError, match="environment proof drifted"):
+            qualification._validate_scientific_child_environment_proof_v2(
+                tampered_proof,
+                expected_entry_kind="development-calibration",
+                name="KAT",
+            )
+    missing_proof = json.loads(json.dumps(runtime))
+    del missing_proof["credential_environment_proof"]
+    with pytest.raises(ValueError, match="runtime projection is not closed"):
+        qualification._validate_interpreter_runtime_projection_v2(
+            missing_proof,
+            "KAT",
+            expected_entry_kind="development-calibration",
+        )
+
+    split_property = json.loads(json.dumps(intent))
+    property_index = split_property["systemd_argv"].index(token)
+    split_property["systemd_argv"][property_index : property_index + 1] = [
+        "--property=UnsetEnvironment=ANTHROPIC_API_KEY",
+        "ANTHROPIC_BASE_URL",
+    ]
+    with pytest.raises(ValueError, match="ownership preimage"):
+        qualification._validate_launch_intent_projection_v2(
+            split_property,
             attempt=attempt,
             entry_kind="development-calibration",
             source_tree=source_tree,
