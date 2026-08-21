@@ -529,7 +529,7 @@ RFC8785_PREREQUISITE_SCHEMA_V2: Final = (
     "hegel-machine-rfc8785-runtime-prerequisite-receipt/2"
 )
 OUTER_SUPERVISOR_RESULT_SCHEMA_V2: Final = (
-    "hegel-machine-phase2b-formal-wire-covert-outer-supervisor-result/3"
+    "hegel-machine-phase2b-formal-wire-covert-outer-supervisor-result/4"
 )
 MECHANICS_VERIFIER_SCHEMA_V2: Final = (
     "hegel-machine-phase2b-formal-wire-covert-mechanics-verifier/2"
@@ -7457,6 +7457,220 @@ def _require_exact_int_v2(
     return value
 
 
+_SOURCE_SNAPSHOT_KEYS_V2: Final = frozenset(
+    {
+        "descriptor_realpath",
+        "device",
+        "inode",
+        "mtime_nanoseconds",
+        "sha256",
+        "size_bytes",
+    }
+)
+_SOURCE_BOOTSTRAP_SNAPSHOT_KEYS_V2: Final = _SOURCE_SNAPSHOT_KEYS_V2 | {
+    "bootstrap_kind",
+    "reexecuted_from_stable_descriptor",
+}
+_MAXIMUM_SOURCE_SNAPSHOT_DECIMAL_V2: Final = (1 << 64) - 1
+
+
+def _source_snapshot_decimal_transport_v2(
+    value: object,
+    name: str,
+    *,
+    minimum: int,
+) -> str:
+    return str(
+        _require_exact_int_v2(
+            value,
+            name,
+            minimum=minimum,
+            maximum=_MAXIMUM_SOURCE_SNAPSHOT_DECIMAL_V2,
+        )
+    )
+
+
+def _decode_source_snapshot_decimal_transport_v2(
+    value: object,
+    name: str,
+    *,
+    minimum: int,
+) -> int:
+    if (
+        type(value) is not str
+        or not 1 <= len(value) <= 20
+        or re.fullmatch(r"0|[1-9][0-9]*", value) is None
+    ):
+        raise ValueError(f"{name} is not one canonical decimal string")
+    parsed = int(value)
+    if not minimum <= parsed <= _MAXIMUM_SOURCE_SNAPSHOT_DECIMAL_V2:
+        raise ValueError(f"{name} is outside its exact decimal bounds")
+    return parsed
+
+
+def _source_snapshot_row_transport_projection_v2(
+    row: object,
+    name: str,
+    *,
+    bootstrap: bool = False,
+) -> dict[str, object]:
+    expected_keys = (
+        _SOURCE_BOOTSTRAP_SNAPSHOT_KEYS_V2
+        if bootstrap
+        else _SOURCE_SNAPSHOT_KEYS_V2
+    )
+    if type(row) is not dict or set(row) != expected_keys:
+        raise ValueError(f"{name} source snapshot fields are not exact")
+    if (
+        type(row["descriptor_realpath"]) is not str
+        or not row["descriptor_realpath"]
+        or type(row["sha256"]) is not str
+        or re.fullmatch(r"[0-9a-f]{64}", row["sha256"]) is None
+        or _require_exact_int_v2(
+            row["size_bytes"],
+            f"{name} source snapshot size",
+            minimum=1,
+            maximum=16 * 1_024 * 1_024,
+        )
+        < 1
+        or bootstrap
+        and (
+            row["bootstrap_kind"] != "EXTERNAL_PYTHON_C_OPEN_ONCE_V2"
+            or row["reexecuted_from_stable_descriptor"] is not True
+        )
+    ):
+        raise ValueError(f"{name} source snapshot values are malformed")
+    projected = dict(row)
+    projected["device"] = _source_snapshot_decimal_transport_v2(
+        row["device"], f"{name} source snapshot device", minimum=0
+    )
+    projected["inode"] = _source_snapshot_decimal_transport_v2(
+        row["inode"], f"{name} source snapshot inode", minimum=1
+    )
+    projected["mtime_nanoseconds"] = _source_snapshot_decimal_transport_v2(
+        row["mtime_nanoseconds"],
+        f"{name} source snapshot mtime",
+        minimum=0,
+    )
+    return projected
+
+
+def _decode_source_snapshot_row_transport_v2(
+    row: object,
+    name: str,
+    *,
+    bootstrap: bool = False,
+) -> dict[str, object]:
+    expected_keys = (
+        _SOURCE_BOOTSTRAP_SNAPSHOT_KEYS_V2
+        if bootstrap
+        else _SOURCE_SNAPSHOT_KEYS_V2
+    )
+    if type(row) is not dict or set(row) != expected_keys:
+        raise ValueError(f"{name} source snapshot transport fields are not exact")
+    decoded = dict(row)
+    decoded["device"] = _decode_source_snapshot_decimal_transport_v2(
+        row["device"], f"{name} source snapshot device", minimum=0
+    )
+    decoded["inode"] = _decode_source_snapshot_decimal_transport_v2(
+        row["inode"], f"{name} source snapshot inode", minimum=1
+    )
+    decoded["mtime_nanoseconds"] = _decode_source_snapshot_decimal_transport_v2(
+        row["mtime_nanoseconds"],
+        f"{name} source snapshot mtime",
+        minimum=0,
+    )
+    # Reuse the producer-side shape/value checks after the lossless decode.
+    _source_snapshot_row_transport_projection_v2(
+        decoded,
+        name,
+        bootstrap=bootstrap,
+    )
+    return decoded
+
+
+def _source_snapshot_map_transport_projection_v2(
+    snapshots: object,
+    name: str,
+) -> dict[str, dict[str, object]]:
+    if (
+        type(snapshots) is not dict
+        or not 1 <= len(snapshots) <= len(_BOOTSTRAP_FIXED_SOURCE_SHA256_V2) + 1
+        or any(type(relative) is not str or not relative for relative in snapshots)
+    ):
+        raise ValueError(f"{name} source snapshot map is malformed")
+    return {
+        relative: _source_snapshot_row_transport_projection_v2(
+            snapshots[relative], f"{name}.{relative}"
+        )
+        for relative in sorted(snapshots)
+    }
+
+
+def _decode_source_snapshot_map_transport_v2(
+    snapshots: object,
+    name: str,
+) -> dict[str, dict[str, object]]:
+    if (
+        type(snapshots) is not dict
+        or not 1 <= len(snapshots) <= len(_BOOTSTRAP_FIXED_SOURCE_SHA256_V2) + 1
+        or any(type(relative) is not str or not relative for relative in snapshots)
+    ):
+        raise ValueError(f"{name} source snapshot transport map is malformed")
+    return {
+        relative: _decode_source_snapshot_row_transport_v2(
+            snapshots[relative], f"{name}.{relative}"
+        )
+        for relative in sorted(snapshots)
+    }
+
+
+def _outer_runner_tcb_transport_projection_v2(
+    snapshot: object,
+    name: str,
+) -> dict[str, object]:
+    if type(snapshot) is not dict:
+        raise ValueError(f"{name} outer-runner TCB snapshot is malformed")
+    projected = dict(snapshot)
+    projected["preopened_source_snapshots"] = (
+        _source_snapshot_map_transport_projection_v2(
+            snapshot.get("preopened_source_snapshots"),
+            f"{name}.preopened_source_snapshots",
+        )
+    )
+    projected["executed_main_source_bootstrap"] = (
+        _source_snapshot_row_transport_projection_v2(
+            snapshot.get("executed_main_source_bootstrap"),
+            f"{name}.executed_main_source_bootstrap",
+            bootstrap=True,
+        )
+    )
+    return projected
+
+
+def _decode_outer_runner_tcb_transport_v2(
+    snapshot: object,
+    name: str,
+) -> dict[str, object]:
+    if type(snapshot) is not dict:
+        raise ValueError(f"{name} outer-runner TCB transport is malformed")
+    decoded = dict(snapshot)
+    decoded["preopened_source_snapshots"] = (
+        _decode_source_snapshot_map_transport_v2(
+            snapshot.get("preopened_source_snapshots"),
+            f"{name}.preopened_source_snapshots",
+        )
+    )
+    decoded["executed_main_source_bootstrap"] = (
+        _decode_source_snapshot_row_transport_v2(
+            snapshot.get("executed_main_source_bootstrap"),
+            f"{name}.executed_main_source_bootstrap",
+            bootstrap=True,
+        )
+    )
+    return decoded
+
+
 def _require_safe_cgroup_path_v2(value: object, name: str) -> str:
     if (
         type(value) is not str
@@ -11747,8 +11961,12 @@ def _validate_outer_supervisor_result_v2(
         or body["content_sha256_is_not_a_signature"] is not True
     ):
         raise ValueError("outer supervisor identity/CAS boundary drifted")
-    outer_tcb_entry = body["outer_runner_tcb_entry"]
-    outer_tcb_exit = body["outer_runner_tcb_exit"]
+    outer_tcb_entry = _decode_outer_runner_tcb_transport_v2(
+        body["outer_runner_tcb_entry"], "outer runner entry"
+    )
+    outer_tcb_exit = _decode_outer_runner_tcb_transport_v2(
+        body["outer_runner_tcb_exit"], "outer runner exit"
+    )
     expected_tcb_keys = {
         "broad_package_init_executed",
         "bypassed_package_init_sha256",
@@ -12109,10 +12327,14 @@ def _validate_outer_supervisor_result_v2(
             deadline_ns=deadline_ns,
         )
     )
+    transported_child_snapshots = _decode_source_snapshot_map_transport_v2(
+        body["child_source_bootstrap_preopened_snapshots"],
+        "outer child preopened sources",
+    )
     if (
         outer_preopened_root == expected_inner_preopened_root
         or not _exact_json_equal(
-            body["child_source_bootstrap_preopened_snapshots"],
+            transported_child_snapshots,
             child_snapshots,
         )
         or body["child_source_bootstrap_preopened_snapshots_root"]
@@ -12431,6 +12653,10 @@ def _validate_outer_supervisor_semantics_pure_v2(
             retained_source_tree_fd=retained_source_tree_fd,
         )
     )
+    transported_child_snapshots = _decode_source_snapshot_map_transport_v2(
+        body["child_source_bootstrap_preopened_snapshots"],
+        "pure outer child preopened sources",
+    )
     expected_files = _expected_live_file_sha256_v2(attempt)
     if not _exact_json_equal(body["live_files_sha256"], expected_files):
         raise ValueError("pure outer live-file manifest drifted")
@@ -12540,8 +12766,12 @@ def _validate_outer_supervisor_semantics_pure_v2(
     ):
         raise ValueError("pure outer retained path/projection binding drifted")
 
-    tcb_entry = body["outer_runner_tcb_entry"]
-    tcb_exit = body["outer_runner_tcb_exit"]
+    tcb_entry = _decode_outer_runner_tcb_transport_v2(
+        body["outer_runner_tcb_entry"], "pure outer runner entry"
+    )
+    tcb_exit = _decode_outer_runner_tcb_transport_v2(
+        body["outer_runner_tcb_exit"], "pure outer runner exit"
+    )
     tcb_keys = {
         "broad_package_init_executed",
         "bypassed_package_init_sha256",
@@ -12667,7 +12897,7 @@ def _validate_outer_supervisor_semantics_pure_v2(
     if (
         outer_preopened_root == expected_inner_preopened_root
         or not _exact_json_equal(
-            body["child_source_bootstrap_preopened_snapshots"],
+            transported_child_snapshots,
             child_snapshots,
         )
         or body["child_source_bootstrap_preopened_snapshots_root"]
@@ -22087,13 +22317,20 @@ def _run_phase2b_formal_wire_covert_outer_attempt_impl_v2(
             "schema_version": OUTER_SUPERVISOR_RESULT_SCHEMA_V2,
             "mode": entry_kind,
             "child_source_bootstrap_preopened_snapshots": (
-                child_source_bootstrap_preopened_snapshots
+                _source_snapshot_map_transport_projection_v2(
+                    child_source_bootstrap_preopened_snapshots,
+                    "outer child preopened sources",
+                )
             ),
             "child_source_bootstrap_preopened_snapshots_root": (
                 child_source_bootstrap_preopened_snapshots_root
             ),
-            "outer_runner_tcb_entry": outer_runner_tcb_entry,
-            "outer_runner_tcb_exit": outer_runner_tcb_exit,
+            "outer_runner_tcb_entry": _outer_runner_tcb_transport_projection_v2(
+                outer_runner_tcb_entry, "outer runner entry"
+            ),
+            "outer_runner_tcb_exit": _outer_runner_tcb_transport_projection_v2(
+                outer_runner_tcb_exit, "outer runner exit"
+            ),
             "profile_id": PROFILE_ID,
             "attempt_manifest_root": attempt.attempt_manifest_root,
             "source_commit_sha": attempt.source_commit_sha,

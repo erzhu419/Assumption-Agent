@@ -1825,7 +1825,7 @@ def test_checked_profile_is_exact_canonical_candidate_with_live_disabled() -> No
         live["post_output_physical_gate_contract"]
     ) == qualification._POST_OUTPUT_PHYSICAL_GATE_CONTRACT_V2
     assert live["outer_supervisor_result_schema"] == (
-        "hegel-machine-phase2b-formal-wire-covert-outer-supervisor-result/3"
+        "hegel-machine-phase2b-formal-wire-covert-outer-supervisor-result/4"
     )
     assert auditor.STATISTICS_WORKER_TIMEOUT_SECONDS == 3_600
     phase_deadline_seconds = 2 * (
@@ -2228,6 +2228,9 @@ def test_retained_pre_decoupling_and_r3_profile_identities_are_rejected() -> Non
     pre_decoupling_profile = qualification._deep_thaw(
         qualification._EXPECTED_PROFILE
     )
+    pre_decoupling_profile["readiness_boundary"]["live_execution_contract"][
+        "outer_supervisor_result_schema"
+    ] = "hegel-machine-phase2b-formal-wire-covert-outer-supervisor-result/3"
     auditor_binding = pre_decoupling_profile["auditor_binding"]
     auditor_binding["maximum_static_phase_plan_rss_bytes"] = (
         auditor.EXECUTION_SCOPE_PHYSICAL_MEMORY_PEAK_CAP_BYTES
@@ -7123,7 +7126,7 @@ def test_inner_cli_success_cannot_return_or_run_interpreter_teardown() -> None:
         assert required in quiescent_source
 
 
-def test_outer_v3_post_output_attestation_is_closed_and_tamper_evident() -> None:
+def test_outer_v4_post_output_attestation_is_closed_and_tamper_evident() -> None:
     attempt = _attempt()
     inner = {
         "post_output_physical_gate_contract": dict(
@@ -7141,7 +7144,7 @@ def test_outer_v3_post_output_attestation_is_closed_and_tamper_evident() -> None
         child_argv_sha256=child_argv_sha256,
         owned_invocation_id=invocation_id,
     )
-    assert qualification.OUTER_SUPERVISOR_RESULT_SCHEMA_V2.endswith("/3")
+    assert qualification.OUTER_SUPERVISOR_RESULT_SCHEMA_V2.endswith("/4")
     assert attestation["systemd_memory_max_bytes"] == (
         qualification.OPERATIONAL_HARD_MEMORY_MAX_BYTES_V2
     )
@@ -7944,7 +7947,7 @@ def _valid_development_inner_v6(
     }
 
 
-def _valid_outer_main_pid_replay_v3(tmp_path: Path) -> SimpleNamespace:
+def _valid_outer_main_pid_replay_v4(tmp_path: Path) -> SimpleNamespace:
     source_archive_bytes = b"outer-main-pid-source-archive"
     source_digest = hashlib.sha256(source_archive_bytes).hexdigest()
     source_sha = hashlib.sha256(
@@ -8052,8 +8055,24 @@ def _valid_outer_main_pid_replay_v3(tmp_path: Path) -> SimpleNamespace:
         outer_path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(payload)
         outer_path.write_bytes(payload)
+        if relative == "src/hegel_machine/hashing.py":
+            # Captured r8 values: both are lossless identity evidence but neither
+            # is exactly representable as an RFC 8785 binary64 JSON number.
+            os.utime(path, ns=(1_787_269_531_522_872_917,) * 2)
+            os.utime(outer_path, ns=(1_786_217_751_955_621_245,) * 2)
+        elif relative == qualification._BOOTSTRAP_MAIN_RELATIVE_PATH_V2:
+            os.utime(path, ns=(1_787_269_531_556_366_626,) * 2)
+            os.utime(outer_path, ns=(1_787_256_813_693_509_361,) * 2)
         opened = path.stat(follow_symlinks=False)
         outer_opened = outer_path.stat(follow_symlinks=False)
+        if relative == "src/hegel_machine/hashing.py":
+            assert opened.st_mtime_ns == 1_787_269_531_522_872_917
+            assert outer_opened.st_mtime_ns == 1_786_217_751_955_621_245
+            assert int(float(opened.st_mtime_ns)) != opened.st_mtime_ns
+            assert int(float(outer_opened.st_mtime_ns)) != outer_opened.st_mtime_ns
+        elif relative == qualification._BOOTSTRAP_MAIN_RELATIVE_PATH_V2:
+            assert opened.st_mtime_ns == 1_787_269_531_556_366_626
+            assert outer_opened.st_mtime_ns == 1_787_256_813_693_509_361
         tree_rows.append(
             {
                 "path": relative,
@@ -8227,7 +8246,11 @@ def _valid_outer_main_pid_replay_v3(tmp_path: Path) -> SimpleNamespace:
     inner_sha = hashlib.sha256(inner_bytes).hexdigest()
     body = {
         "attempt_manifest_root": attempt.attempt_manifest_root,
-        "child_source_bootstrap_preopened_snapshots": child_snapshots,
+        "child_source_bootstrap_preopened_snapshots": (
+            qualification._source_snapshot_map_transport_projection_v2(
+                child_snapshots, "test child preopened sources"
+            )
+        ),
         "child_source_bootstrap_preopened_snapshots_root": child_preopened_root,
         "content_sha256_is_not_a_signature": True,
         "inner_artifact_cas": qualification._cas_projection_v2(
@@ -8244,8 +8267,16 @@ def _valid_outer_main_pid_replay_v3(tmp_path: Path) -> SimpleNamespace:
         },
         "live_files_sha256": expected_files,
         "mode": "development-calibration",
-        "outer_runner_tcb_entry": outer_tcb,
-        "outer_runner_tcb_exit": outer_tcb,
+        "outer_runner_tcb_entry": (
+            qualification._outer_runner_tcb_transport_projection_v2(
+                outer_tcb, "test outer runner entry"
+            )
+        ),
+        "outer_runner_tcb_exit": (
+            qualification._outer_runner_tcb_transport_projection_v2(
+                outer_tcb, "test outer runner exit"
+            )
+        ),
         "post_output_physical_gate_attestation": (
             qualification._expected_post_output_gate_attestation_v2(
                 attempt,
@@ -8345,11 +8376,137 @@ def _valid_outer_main_pid_replay_v3(tmp_path: Path) -> SimpleNamespace:
     )
 
 
+def test_source_snapshot_outer_transport_is_lossless_canonical_decimal() -> None:
+    relative = "src/hegel_machine/hashing.py"
+    raw_row = {
+        "descriptor_realpath": "/retained/source/src/hegel_machine/hashing.py",
+        "device": (1 << 53) + 3,
+        "inode": (1 << 53) + 5,
+        "mtime_nanoseconds": 1_787_269_531_522_872_917,
+        "sha256": "a" * 64,
+        "size_bytes": 1_691,
+    }
+    raw_map = {relative: raw_row}
+    raw_root = qualification.stable_hash(
+        raw_map, prefix="phase2b_formal_wire_covert_preopened_sources_v2_"
+    )
+    with pytest.raises(
+        qualification.RFC8785Error,
+        match="integer is not exactly representable as binary64",
+    ):
+        qualification._canonical_inner_artifact_v2({"snapshots": raw_map})
+
+    transported = qualification._source_snapshot_map_transport_projection_v2(
+        raw_map, "captured child"
+    )
+    for field in ("device", "inode", "mtime_nanoseconds"):
+        assert transported[relative][field] == str(raw_row[field])
+    assert type(transported[relative]["size_bytes"]) is int
+    decoded = qualification._decode_source_snapshot_map_transport_v2(
+        transported, "captured child"
+    )
+    assert decoded == raw_map
+    assert (
+        qualification.stable_hash(
+            decoded,
+            prefix="phase2b_formal_wire_covert_preopened_sources_v2_",
+        )
+        == raw_root
+    )
+    assert qualification.stable_hash(
+        transported,
+        prefix="phase2b_formal_wire_covert_preopened_sources_v2_",
+    ) != raw_root
+
+    raw_bootstrap = {
+        **raw_row,
+        "mtime_nanoseconds": 1_786_217_751_955_621_245,
+        "bootstrap_kind": "EXTERNAL_PYTHON_C_OPEN_ONCE_V2",
+        "reexecuted_from_stable_descriptor": True,
+    }
+    raw_tcb = {
+        "preopened_source_snapshots": raw_map,
+        "executed_main_source_bootstrap": raw_bootstrap,
+        "sentinel": True,
+    }
+    transported_tcb = qualification._outer_runner_tcb_transport_projection_v2(
+        raw_tcb, "captured outer"
+    )
+    assert (
+        transported_tcb["executed_main_source_bootstrap"]["mtime_nanoseconds"]
+        == "1786217751955621245"
+    )
+    assert qualification._decode_outer_runner_tcb_transport_v2(
+        transported_tcb, "captured outer"
+    ) == raw_tcb
+    qualification._canonical_inner_artifact_v2(
+        {
+            "child_source_bootstrap_preopened_snapshots": transported,
+            "outer_runner_tcb_entry": transported_tcb,
+            "outer_runner_tcb_exit": transported_tcb,
+        }
+    )
+
+    for malformed in (
+        "01",
+        "+1",
+        "-1",
+        " 1",
+        "1 ",
+        "1.0",
+        "x",
+        "18446744073709551616",
+        1,
+        1.0,
+    ):
+        mutated = json.loads(json.dumps(transported))
+        mutated[relative]["inode"] = malformed
+        with pytest.raises(ValueError, match="canonical decimal|decimal bounds"):
+            qualification._decode_source_snapshot_map_transport_v2(
+                mutated, "malformed child"
+            )
+    for field, value in (
+        ("device", -1),
+        ("inode", 0),
+        ("mtime_nanoseconds", -1),
+        ("mtime_nanoseconds", 1 << 64),
+    ):
+        mutated_raw = json.loads(json.dumps(raw_map))
+        mutated_raw[relative][field] = value
+        with pytest.raises(ValueError, match="exact integer bounds"):
+            qualification._source_snapshot_map_transport_projection_v2(
+                mutated_raw, "out-of-bounds child"
+            )
+
+
 def test_outer_live_and_pure_main_pid_crossbinding_rejects_splices(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    replay = _valid_outer_main_pid_replay_v3(tmp_path)
+    replay = _valid_outer_main_pid_replay_v4(tmp_path)
+    outer_bytes = qualification._canonical_inner_artifact_v2(replay.body)
+    assert qualification._decode_canonical_transport_object_v2(
+        outer_bytes,
+        "captured outer supervisor",
+        maximum_bytes=8 * 1_024 * 1_024,
+    ) == replay.body
+    child_wire = replay.body["child_source_bootstrap_preopened_snapshots"]
+    outer_entry_wire = replay.body["outer_runner_tcb_entry"]
+    assert (
+        child_wire["src/hegel_machine/hashing.py"]["mtime_nanoseconds"]
+        == "1787269531522872917"
+    )
+    assert (
+        outer_entry_wire["preopened_source_snapshots"]
+        ["src/hegel_machine/hashing.py"]["mtime_nanoseconds"]
+        == "1786217751955621245"
+    )
+    assert (
+        outer_entry_wire["executed_main_source_bootstrap"]["mtime_nanoseconds"]
+        == "1787256813693509361"
+        == outer_entry_wire["preopened_source_snapshots"]
+        [qualification._BOOTSTRAP_MAIN_RELATIVE_PATH_V2]["mtime_nanoseconds"]
+    )
     assert (
         replay.inner["runtime_entry_evidence"]["interpreter_runtime"][
             "preopened_source_snapshot_root"
@@ -8453,6 +8610,50 @@ def test_outer_live_and_pure_main_pid_crossbinding_rejects_splices(
 
     validate_live(replay.body, replay.inner, replay.inner_bytes)
     validate_pure(replay.body, replay.inner, replay.inner_bytes)
+
+    main_relative = qualification._BOOTSTRAP_MAIN_RELATIVE_PATH_V2
+    outer_transport_splices: list[dict[str, object]] = []
+
+    entry_only = json.loads(json.dumps(replay.body))
+    entry_only_row = entry_only["outer_runner_tcb_entry"][
+        "preopened_source_snapshots"
+    ][main_relative]
+    entry_only_row["mtime_nanoseconds"] = str(
+        int(entry_only_row["mtime_nanoseconds"]) + 1
+    )
+    outer_transport_splices.append(entry_only)
+
+    outer_map_only = json.loads(json.dumps(replay.body))
+    for boundary in ("outer_runner_tcb_entry", "outer_runner_tcb_exit"):
+        row = outer_map_only[boundary]["preopened_source_snapshots"][main_relative]
+        row["mtime_nanoseconds"] = str(int(row["mtime_nanoseconds"]) + 1)
+    outer_transport_splices.append(outer_map_only)
+
+    executed_main_only = json.loads(json.dumps(replay.body))
+    for boundary in ("outer_runner_tcb_entry", "outer_runner_tcb_exit"):
+        row = executed_main_only[boundary]["executed_main_source_bootstrap"]
+        row["inode"] = str(int(row["inode"]) + 1)
+    outer_transport_splices.append(executed_main_only)
+
+    wire_number = json.loads(json.dumps(replay.body))
+    wire_number["outer_runner_tcb_entry"]["executed_main_source_bootstrap"][
+        "mtime_nanoseconds"
+    ] = 1_787_256_813_693_509_361
+    outer_transport_splices.append(wire_number)
+
+    malformed_child = json.loads(json.dumps(replay.body))
+    malformed_child["child_source_bootstrap_preopened_snapshots"][main_relative][
+        "device"
+    ] = "01"
+    outer_transport_splices.append(malformed_child)
+
+    for splice in outer_transport_splices:
+        for validator in (validate_live, validate_pure):
+            with pytest.raises(
+                ValueError,
+                match="snapshot|TCB|preopened|canonical decimal",
+            ):
+                validator(splice, replay.inner, replay.inner_bytes)
 
     observed_old_limit = json.loads(json.dumps(replay.body))
     attestation = observed_old_limit["post_output_physical_gate_attestation"]
@@ -8624,13 +8825,33 @@ def test_outer_live_and_pure_main_pid_crossbinding_rejects_splices(
     )
     child_map_splice["child_source_bootstrap_preopened_snapshots"][
         nonmain_relative
-    ]["inode"] += 1
+    ]["inode"] = str(
+        int(
+            child_map_splice["child_source_bootstrap_preopened_snapshots"][
+                nonmain_relative
+            ]["inode"]
+        )
+        + 1
+    )
     child_map_splice["child_source_bootstrap_preopened_snapshots"][
         nonmain_relative
-    ]["mtime_nanoseconds"] += 1
+    ]["mtime_nanoseconds"] = str(
+        int(
+            child_map_splice["child_source_bootstrap_preopened_snapshots"][
+                nonmain_relative
+            ]["mtime_nanoseconds"]
+        )
+        + 1
+    )
+    decoded_child_map_splice = (
+        qualification._decode_source_snapshot_map_transport_v2(
+            child_map_splice["child_source_bootstrap_preopened_snapshots"],
+            "test child splice",
+        )
+    )
     child_map_splice["child_source_bootstrap_preopened_snapshots_root"] = (
         qualification.stable_hash(
-            child_map_splice["child_source_bootstrap_preopened_snapshots"],
+            decoded_child_map_splice,
             prefix="phase2b_formal_wire_covert_preopened_sources_v2_",
         )
     )

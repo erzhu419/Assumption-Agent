@@ -33,7 +33,7 @@ compiled by the source-only loader:
 - `schema.py`.
 
 The checked canonical profile ID is
-`phase2b_formal_wire_covert_qualification_profile_v2_22ad936a3a7147804bfa2b9679686ca8d74c83b5f9ec29ae21e4fbd440240ab2`,
+`phase2b_formal_wire_covert_qualification_profile_v2_739648dbf0c106ff290da9fe27a34dc68d1ab762027ea91eb8093cdbffae97d3`,
 and its dependency-lock SHA-256 is
 `d8538a7ccbb617d5d42aa25500b862d829e7b957ebeb329bf67ca6dd75ee7f94`.
 The dependency-lock root schema is
@@ -45,8 +45,11 @@ and ID prefix remain V2 because the `/6` discriminator is part of the hashed
 canonical content. The development-calibration and live-inner candidate
 schemas are `/6`. Their prior `/5` forms predate the exact post-output physical
 gate contract and direct-exit success semantics, so those identities are not
-reused. The outer-supervisor result is `/3`; its prior `/2` form did not carry
-the post-output gate attestation or extracted-child preopened-source map.
+reused. The outer-supervisor result is `/4`; its prior `/3` form transported
+raw Linux device, inode, and nanosecond-mtime integers even though those exact
+identity values need not be representable as RFC 8785 binary64 JSON numbers.
+The older `/2` form did not carry the post-output gate attestation or
+extracted-child preopened-source map.
 The pinned Auditor contract is
 `hegel-machine-phase2b-formal-covert-auditor/5`, its profile schema is
 `hegel-machine-phase2b-formal-covert-auditor-profile/5`, semantics are
@@ -542,7 +545,7 @@ failure writes one bounded single-line `FAIL_RESOURCE` diagnostic and exits
 nonzero for outer capture.
 
 No numeric value from the final fresh peak is serialized, and there is no
-post-exit numeric sample. The outer `/3` result instead attests that the pinned
+post-exit numeric sample. The outer `/4` result instead attests that the pinned
 child source and exact argv implement this gate, the retained stdout is one
 canonical `/6` artifact, stderr is empty, operational `MemoryMax` is exactly
 24 GiB while the independent accepted physical peak remains capped at 12 GiB,
@@ -555,9 +558,18 @@ The outer result separately carries the fixed bootstrap-file snapshot map for
 the extracted child source tree and its root. It samples that map before launch
 and after the terminal, requires exact equality, binds the inner interpreter's
 preopened-source root to it, and replays it again from the retained tree in
-both live and producer-free verification. The outer runner's own preopened
-source map is a distinct physical tree/root. The systemd entry `MainPID` must
-equal the single PID in both inner entry and exit cgroup projections.
+both live and producer-free verification. The raw in-memory snapshot and the
+existing `phase2b_formal_wire_covert_preopened_sources_v2_...` root remain
+unchanged. Only the `/4` wire representation encodes `device`, `inode`, and
+`mtime_nanoseconds` as lossless canonical nonnegative decimal strings;
+`size_bytes` remains a bounded JSON integer. Both verifiers strictly decode
+those strings back to the exact raw integers before comparing live `fstat`
+evidence or recomputing the existing raw snapshot root. Leading zeroes, signs,
+spaces, fractional spellings, overflow, entry/exit divergence, and map/root
+splices are rejected. The outer runner's own preopened source map is a distinct
+physical tree/root and uses the same codec, including its executed-main row.
+The systemd entry `MainPID` must equal the single PID in both inner entry and
+exit cgroup projections.
 
 The current `/failure/4` cleanup command is exactly `systemctl --user kill
 --kill-who=all --signal=SIGTERM|SIGKILL <unit>`, which is the systemd 249 CLI
