@@ -5,6 +5,9 @@ verifier and the eighteen package verifiers must implement.  It does not
 accept operational evidence, allocate campaign or attempt identifiers, sign
 anything, touch the filesystem, or establish any R01--R16 gate.  Successful
 catalog verification therefore means only ``RUNBOOK_FROZEN_NOT_ADMITTED``.
+The separately frozen Package 0 raw ABI and private result contract remain an
+exact ``NOT_IMPLEMENTED`` boundary: this module issues no Package 0 result and
+does not turn presented ledger, custody, or signature bytes into R10 evidence.
 
 The catalog deliberately replaces two unusable topology fragments in the
 older gap inventory: an attempt is limited to index 0 and conditional index 1
@@ -33,6 +36,12 @@ CLAIM_LEVEL_V1: Final = (
 )
 CANONICALIZATION_V1: Final = "RFC8785_EXACT_BYTES_NO_TRAILING_LF"
 REAL_BUNDLE_VERIFICATION_STATUS_V1: Final = "NOT_IMPLEMENTED"
+REAL_PACKAGE0_VERIFICATION_STATUS_V1: Final = "NOT_IMPLEMENTED"
+PACKAGE_OUTER_STATUS_V1: Final = "PRESENTED_UNVERIFIED"
+PACKAGE_OUTER_CLAIM_LEVEL_V1: Final = (
+    "PRESENTED_EXTERNAL_EVIDENCE_ONLY_NOT_VERIFIED_NOT_GATE_ADMISSION_"
+    "NOT_AUTHORITY_NOT_CURRENTNESS_NOT_DURABILITY_NOT_C1"
+)
 SIGNATURE_ALGORITHM_V1: Final = "Ed25519"
 MAXIMUM_CATALOG_PAYLOAD_BYTES_V1: Final = 2_097_152
 CONTENT_ID_PREIMAGE_PROFILE_V1: Final = (
@@ -49,6 +58,9 @@ DETACHED_SIGNATURE_PREIMAGE_PROFILE_V1: Final = (
 DETACHED_SIGNATURE_PREIMAGE_SCHEMA_VERSION_V1: Final = (
     "hegel-machine-phase2b-actual-unsealed-960-authoritative-evidence-"
     "detached-signature-preimage/1"
+)
+DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION_V1: Final = (
+    "hegel-machine-phase2b-actual-unsealed-960-detached-signature/1"
 )
 DETACHED_SIGNATURE_PREIMAGE_FIELDS_IN_EXACT_ORDER_V1: Final = (
     "schema_version",
@@ -135,6 +147,30 @@ class CatalogReasonV1(str, Enum):
     PIN_MISMATCH = "PIN_MISMATCH"
     CONTENT_ID_MISMATCH = "CONTENT_ID_MISMATCH"
     DAG_INVALID = "DAG_INVALID"
+    CLAIM_BOUNDARY_INVALID = "CLAIM_BOUNDARY_INVALID"
+    NOT_IMPLEMENTED = "NOT_IMPLEMENTED"
+    INTERNAL_ERROR = "INTERNAL_ERROR"
+
+
+class Package0DispositionV1(str, Enum):
+    VERIFIED_PRESENTED_EXTERNAL_EVIDENCE_NOT_GATE_ADMISSION = (
+        "VERIFIED_PRESENTED_EXTERNAL_EVIDENCE_NOT_GATE_ADMISSION"
+    )
+    REJECTED = "REJECTED"
+
+
+class Package0ReasonV1(str, Enum):
+    EXACT_PACKAGE0_RAW_CONTRACT_VERIFIED = (
+        "EXACT_PACKAGE0_RAW_CONTRACT_VERIFIED"
+    )
+    WRONG_INPUT_TYPE = "WRONG_INPUT_TYPE"
+    NONCANONICAL_INPUT = "NONCANONICAL_INPUT"
+    PIN_MISMATCH = "PIN_MISMATCH"
+    SCHEMA_INVALID = "SCHEMA_INVALID"
+    CONTENT_ID_MISMATCH = "CONTENT_ID_MISMATCH"
+    SIGNATURE_INVALID = "SIGNATURE_INVALID"
+    LINEAGE_INVALID = "LINEAGE_INVALID"
+    TERMINAL_BINDING_INVALID = "TERMINAL_BINDING_INVALID"
     CLAIM_BOUNDARY_INVALID = "CLAIM_BOUNDARY_INVALID"
     NOT_IMPLEMENTED = "NOT_IMPLEMENTED"
     INTERNAL_ERROR = "INTERNAL_ERROR"
@@ -1803,6 +1839,12 @@ _SIGNER_BINDING_FIELDS_V1: Final = (
     "control_domain_id",
     "registry_id",
 )
+_PACKAGE0_SIGNED_STAGE_EVENT_ENVELOPE_SCHEMA_VERSION_V1: Final = (
+    "hegel-machine-phase2b-actual-unsealed-960-signed-stage-event/1"
+)
+_PACKAGE0_CUSTODIAN_LEDGER_EVENT_BODY_SCHEMA_VERSION_V1: Final = (
+    "hegel-machine-phase2b-actual-unsealed-960-custodian-ledger-event/1"
+)
 _SIGNED_STAGE_EVENT_ENVELOPE_FIELDS_V1: Final = (
     "schema_version",
     "body",
@@ -2564,6 +2606,16 @@ _STAGE_TERMINAL_DISPOSITION_BINDING_RULES_IN_EXACT_ORDER_V1: Final = (
 
 _SIGNER_REGISTRY_BINDING_RULES_IN_EXACT_ORDER_V1: Final = (
     (
+        "EXACT_DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION",
+        (
+            "descriptor.detached_signature_schema_version",
+            "signature.schema_version",
+        ),
+        "EVERY_DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION_MUST_EXACT_EQUAL_"
+        "HEGEL_MACHINE_PHASE2B_ACTUAL_UNSEALED_960_DETACHED_SIGNATURE_V1_"
+        "BEFORE_ANY_ROLE_PURPOSE_EPOCH_DOMAIN_OR_ED25519_CHECK",
+    ),
+    (
         "RAW_SIGNER_REGISTRY_REQUIRED",
         ("raw_signer_registry_payload",),
         "VERIFIER_MUST_RECEIVE_ONE_EXACT_BUILTIN_BYTES_CANONICAL_SIGNER_REGISTRY_ENVELOPE_AND_MUST_NOT_ACCEPT_A_DECODED_MAPPING_OR_CALLER_KEY_LOOKUP",
@@ -2658,6 +2710,15 @@ _PACKAGE0_STAGE_SUBJECT_BINDING_RULES_IN_EXACT_ORDER_V1: Final = (
 )
 
 _PACKAGE0_REFERENCED_ARTIFACT_BINDING_RULES_IN_EXACT_ORDER_V1: Final = (
+    (
+        "EXACT_DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION",
+        (
+            "artifact_contract.detached_signature_schema_version",
+            "raw_referenced_artifact_payload.signatures_in_exact_order[*].schema_version",
+        ),
+        "EVERY_REFERENCED_ARTIFACT_DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION_"
+        "MUST_EXACT_EQUAL_THE_FROZEN_V1_LITERAL_BEFORE_SIGNATURE_VERIFICATION",
+    ),
     (
         "RAW_REFERENCED_ARTIFACT_REQUIRED",
         ("raw_referenced_artifact_payload",),
@@ -2903,6 +2964,43 @@ _BUNDLE_FINAL_DISPOSITION_BINDING_RULES_IN_EXACT_ORDER_V1: Final = (
     ),
 )
 
+_PACKAGE_OUTER_BINDING_RULES_IN_EXACT_ORDER_V1: Final = (
+    (
+        "EXACT_PACKAGE_SCHEMA_STATUS_CLAIM_AND_IDENTITY",
+        (
+            "descriptor.schema_version",
+            "envelope.schema_version",
+            "body.schema_version",
+            "descriptor.ordinal",
+            "body.package_ordinal",
+            "descriptor.package_name",
+            "body.package_name",
+            "descriptor.body_required_literals.status",
+            "body.status",
+            "descriptor.body_required_literals.claim_level",
+            "body.claim_level",
+        ),
+        "ENVELOPE_AND_BODY_SCHEMA_VERSION_MUST_EQUAL_THE_DESCRIPTOR_ORDINAL_AND_"
+        "PACKAGE_NAME_MUST_EQUAL_THE_FROZEN_IDENTITY_STATUS_MUST_BE_PRESENTED_"
+        "UNVERIFIED_AND_CLAIM_LEVEL_MUST_BE_PRESENTED_EXTERNAL_EVIDENCE_ONLY_"
+        "NOT_VERIFIED_NOT_GATE_ADMISSION_NOT_AUTHORITY_NOT_CURRENTNESS_NOT_"
+        "DURABILITY_NOT_C1",
+    ),
+    (
+        "PACKAGE_NON_ELEVATION",
+        (
+            "descriptor.required_gate_ids_in_exact_order",
+            "descriptor.verifier_success_disposition",
+            "body.status",
+            "body.claim_level",
+            "verified_result",
+        ),
+        "PACKAGE_ACCEPTANCE_MAY_ONLY_RETURN_VERIFIED_PRESENTED_EXTERNAL_EVIDENCE_"
+        "NOT_GATE_ADMISSION_AND_MUST_KEEP_GATE_AUTHORITY_CURRENTNESS_DURABILITY_"
+        "NON_EQUIVOCATION_EXECUTION_AUTHORIZATION_AND_C1_EXACT_FALSE",
+    ),
+)
+
 _PACKAGE_INSTANCE_LINEAGE_BINDING_RULES_IN_EXACT_ORDER_V1: Final = (
     (
         "EXACT_FOUR_TUPLE_CARDINALITY_AND_ORDER",
@@ -3113,6 +3211,21 @@ _LEDGER_EVENT_SIGNATURE_SLOTS_IN_EXACT_ORDER_V1: Final = (
     _ledger_event_signature_slots_v1()
 )
 _LEDGER_EVENT_BINDING_RULES_IN_EXACT_ORDER_V1: Final = (
+    (
+        "EXACT_LEDGER_ENVELOPE_BODY_AND_SIGNATURE_RECORD_SCHEMA_VERSIONS",
+        (
+            "descriptor.record_schema_version",
+            "descriptor.event_body_schema_version",
+            "descriptor.detached_signature_schema_version",
+            "signed_stage_event_envelope.schema_version",
+            "signed_stage_event_envelope.body.schema_version",
+            "signed_stage_event_envelope.signatures_in_exact_order[0].schema_version",
+        ),
+        "ENVELOPE_SCHEMA_VERSION_MUST_EXACT_EQUAL_DESCRIPTOR_RECORD_SCHEMA_VERSION_"
+        "BODY_SCHEMA_VERSION_MUST_EXACT_EQUAL_DESCRIPTOR_EVENT_BODY_SCHEMA_VERSION_"
+        "AND_THE_DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION_MUST_EXACT_EQUAL_THE_"
+        "FROZEN_V1_LITERAL",
+    ),
     (
         "LEDGER_EVENT_CONTENT_ID",
         ("signed_stage_event_id",) + _LEDGER_EVENT_ID_PREIMAGE_FIELDS_IN_EXACT_ORDER_V1,
@@ -4711,6 +4824,9 @@ def _signer_registry_schema_json_v1() -> dict[str, object]:
             CONTENT_ID_PREIMAGE_FIELDS_IN_EXACT_ORDER_V1
         ),
         "signature_preimage_profile": DETACHED_SIGNATURE_PREIMAGE_PROFILE_V1,
+        "detached_signature_schema_version": (
+            DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION_V1
+        ),
         "signature_preimage_schema_version": (
             DETACHED_SIGNATURE_PREIMAGE_SCHEMA_VERSION_V1
         ),
@@ -4892,6 +5008,9 @@ def _preallocation_lineage_schema_json_v1() -> dict[str, object]:
         ),
         "content_id_formula": CONTENT_ID_FORMULA_V1,
         "signature_preimage_profile": DETACHED_SIGNATURE_PREIMAGE_PROFILE_V1,
+        "detached_signature_schema_version": (
+            DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION_V1
+        ),
         "signature_preimage_schema_version": (
             DETACHED_SIGNATURE_PREIMAGE_SCHEMA_VERSION_V1
         ),
@@ -5019,6 +5138,9 @@ def _gate_source_receipt_schema_json_v1(
         ),
         "content_id_formula": CONTENT_ID_FORMULA_V1,
         "signature_preimage_profile": DETACHED_SIGNATURE_PREIMAGE_PROFILE_V1,
+        "detached_signature_schema_version": (
+            DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION_V1
+        ),
         "signature_preimage_schema_version": (
             DETACHED_SIGNATURE_PREIMAGE_SCHEMA_VERSION_V1
         ),
@@ -5174,6 +5296,9 @@ def _gate_support_schema_json_v1(spec: _GateSpecV1) -> dict[str, object]:
         ),
         "content_id_formula": CONTENT_ID_FORMULA_V1,
         "signature_preimage_profile": DETACHED_SIGNATURE_PREIMAGE_PROFILE_V1,
+        "detached_signature_schema_version": (
+            DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION_V1
+        ),
         "signature_preimage_schema_version": (
             DETACHED_SIGNATURE_PREIMAGE_SCHEMA_VERSION_V1
         ),
@@ -5348,6 +5473,9 @@ def _gate_json_v1(spec: _GateSpecV1) -> dict[str, object]:
             CONTENT_ID_PREIMAGE_FIELDS_IN_EXACT_ORDER_V1
         ),
         "signature_preimage_profile": DETACHED_SIGNATURE_PREIMAGE_PROFILE_V1,
+        "detached_signature_schema_version": (
+            DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION_V1
+        ),
         "signature_preimage_schema_version": (
             DETACHED_SIGNATURE_PREIMAGE_SCHEMA_VERSION_V1
         ),
@@ -5509,6 +5637,9 @@ def _stage_json_v1(spec: _StageSpecV1) -> dict[str, object]:
             CONTENT_ID_PREIMAGE_FIELDS_IN_EXACT_ORDER_V1
         ),
         "signature_preimage_profile": DETACHED_SIGNATURE_PREIMAGE_PROFILE_V1,
+        "detached_signature_schema_version": (
+            DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION_V1
+        ),
         "signature_preimage_schema_version": (
             DETACHED_SIGNATURE_PREIMAGE_SCHEMA_VERSION_V1
         ),
@@ -5625,6 +5756,9 @@ def _package0_referenced_artifact_contract_json_v1(
         ),
         "record_content_id_formula": CONTENT_ID_FORMULA_V1,
         "signature_preimage_profile": DETACHED_SIGNATURE_PREIMAGE_PROFILE_V1,
+        "detached_signature_schema_version": (
+            DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION_V1
+        ),
         "signature_preimage_schema_version": (
             DETACHED_SIGNATURE_PREIMAGE_SCHEMA_VERSION_V1
         ),
@@ -5663,6 +5797,12 @@ def _nested_record_binding_contracts_json_v1(
             {
                 "record_name": "signed_stage_event_envelope",
                 "event_body_record_name": "custodian_ledger_event_body",
+                "record_schema_version": (
+                    _PACKAGE0_SIGNED_STAGE_EVENT_ENVELOPE_SCHEMA_VERSION_V1
+                ),
+                "event_body_schema_version": (
+                    _PACKAGE0_CUSTODIAN_LEDGER_EVENT_BODY_SCHEMA_VERSION_V1
+                ),
                 "record_content_id_domain_ascii": _LEDGER_EVENT_ID_DOMAIN_ASCII_V1,
                 "record_content_id_prefix": _LEDGER_EVENT_ID_PREFIX_V1,
                 "record_content_id_preimage_profile": (
@@ -5674,6 +5814,9 @@ def _nested_record_binding_contracts_json_v1(
                 "record_content_id_formula": _LEDGER_EVENT_ID_FORMULA_V1,
                 "event_signature_preimage_schema_version": (
                     _LEDGER_EVENT_SIGNATURE_PREIMAGE_SCHEMA_VERSION_V1
+                ),
+                "detached_signature_schema_version": (
+                    DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION_V1
                 ),
                 "event_signature_preimage_fields_in_exact_order": list(
                     _LEDGER_EVENT_SIGNATURE_PREIMAGE_FIELDS_IN_EXACT_ORDER_V1
@@ -5747,6 +5890,9 @@ def _nested_record_binding_contracts_json_v1(
                 "record_content_id_formula": CONTENT_ID_FORMULA_V1,
                 "signature_preimage_profile": (
                     DETACHED_SIGNATURE_PREIMAGE_PROFILE_V1
+                ),
+                "detached_signature_schema_version": (
+                    DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION_V1
                 ),
                 "signature_preimage_schema_version": (
                     DETACHED_SIGNATURE_PREIMAGE_SCHEMA_VERSION_V1
@@ -5874,6 +6020,9 @@ def _nested_record_binding_contracts_json_v1(
                 "signature_preimage_profile": (
                     DETACHED_SIGNATURE_PREIMAGE_PROFILE_V1
                 ),
+                "detached_signature_schema_version": (
+                    DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION_V1
+                ),
                 "signature_preimage_schema_version": (
                     DETACHED_SIGNATURE_PREIMAGE_SCHEMA_VERSION_V1
                 ),
@@ -5934,6 +6083,9 @@ def _nested_record_binding_contracts_json_v1(
                 ),
                 "signature_preimage_profile": (
                     DETACHED_SIGNATURE_PREIMAGE_PROFILE_V1
+                ),
+                "detached_signature_schema_version": (
+                    DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION_V1
                 ),
                 "signature_preimage_schema_version": (
                     DETACHED_SIGNATURE_PREIMAGE_SCHEMA_VERSION_V1
@@ -6129,6 +6281,11 @@ def _nested_record_binding_contracts_json_v1(
 
 def _package_body_required_literals_v1(spec: _PackageSpecV1) -> dict[str, object]:
     literals: dict[str, object] = {
+        "schema_version": spec.schema_version,
+        "status": PACKAGE_OUTER_STATUS_V1,
+        "claim_level": PACKAGE_OUTER_CLAIM_LEVEL_V1,
+        "package_ordinal": spec.ordinal,
+        "package_name": spec.package_name,
         "external_evidence_class": spec.required_external_evidence_class,
         "external_evidence_disposition": spec.producer_evidence_disposition,
         "interleaved_dag_root": DAG_ROOT_V1,
@@ -6217,6 +6374,9 @@ def _package_json_v1(
             CONTENT_ID_PREIMAGE_FIELDS_IN_EXACT_ORDER_V1
         ),
         "signature_preimage_profile": DETACHED_SIGNATURE_PREIMAGE_PROFILE_V1,
+        "detached_signature_schema_version": (
+            DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION_V1
+        ),
         "signature_preimage_schema_version": (
             DETACHED_SIGNATURE_PREIMAGE_SCHEMA_VERSION_V1
         ),
@@ -6290,6 +6450,11 @@ def _package_json_v1(
         ),
         "interleaved_dag_root": DAG_ROOT_V1,
         "body_required_literals": _package_body_required_literals_v1(spec),
+        "package_outer_binding_rules_in_exact_order": (
+            _binding_rules_json_v1(
+                _PACKAGE_OUTER_BINDING_RULES_IN_EXACT_ORDER_V1
+            )
+        ),
         "required_gate_ids_in_exact_order": list(
             spec.required_gate_ids_in_exact_order
         ),
@@ -6379,6 +6544,9 @@ def _bundle_index_json_v1() -> dict[str, object]:
             CONTENT_ID_PREIMAGE_FIELDS_IN_EXACT_ORDER_V1
         ),
         "signature_preimage_profile": DETACHED_SIGNATURE_PREIMAGE_PROFILE_V1,
+        "detached_signature_schema_version": (
+            DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION_V1
+        ),
         "signature_preimage_schema_version": (
             DETACHED_SIGNATURE_PREIMAGE_SCHEMA_VERSION_V1
         ),
@@ -6492,6 +6660,150 @@ PACKAGE_SCHEMA_DAG_ROOT_V1: Final = _content_id_v1(
     ],
 )
 BUNDLE_INDEX_SCHEMA_OBJECT_V1: Final = _bundle_index_json_v1()
+
+_PACKAGE0_MECHANICS_BOOLEAN_FIELDS_IN_EXACT_ORDER_V1: Final = (
+    "exact_raw_bytes_verified",
+    "rfc8785_canonical_bytes_verified",
+    "content_ids_verified",
+    "raw_payload_sha256s_verified",
+    "signature_contracts_verified",
+    "ledger_chain_verified",
+    "stage_subject_binding_verified",
+    "referenced_artifact_graph_verified",
+    "package0_lineage_verified",
+    "terminal_p15_p16_binding_verified",
+    "predecessor_absence_verified",
+    "private_lineage_verified",
+)
+_PACKAGE0_NONCLAIM_BOOLEAN_FIELDS_IN_EXACT_ORDER_V1: Final = (
+    "package15_verified",
+    "package16_verified",
+    "gate_admission_verified",
+    "r10_satisfied",
+    "authority_currentness_verified",
+    "owner_non_revocation_verified",
+    "external_key_custody_verified",
+    "external_durability_verified",
+    "external_non_equivocation_verified",
+    "global_anti_fork_verified",
+    "execution_authorized",
+    "actual_960_verified",
+    "c1_satisfied",
+)
+PACKAGE0_VERIFIED_RESULT_FIELDS_IN_EXACT_ORDER_V1: Final = (
+    ("schema_version", "str"),
+    ("status", "str"),
+    ("claim_level", "str"),
+    ("disposition", "Package0DispositionV1"),
+    ("reason", "Package0ReasonV1"),
+    ("catalog_id", "str"),
+    ("catalog_payload_sha256", "str"),
+    ("package_schema_id", "str"),
+    ("package_id", "str"),
+    ("package_payload_sha256", "str"),
+    ("signer_registry_id", "str"),
+    ("signer_registry_payload_sha256", "str"),
+    ("signer_registry_entries_root_sha256", "str"),
+    ("campaign_id", "str"),
+    ("attempt_id", "str"),
+    ("chain_root_sha256", "str"),
+    ("terminal_signed_stage_event_id", "str"),
+    ("terminal_signed_stage_event_payload_sha256", "str"),
+    ("ledger_event_count", "int"),
+    ("stage_subject_event_count", "int"),
+    ("referenced_artifact_count", "int"),
+    ("total_signature_count", "int"),
+    *((field_name, "bool") for field_name in _PACKAGE0_MECHANICS_BOOLEAN_FIELDS_IN_EXACT_ORDER_V1),
+    *((field_name, "bool") for field_name in _PACKAGE0_NONCLAIM_BOOLEAN_FIELDS_IN_EXACT_ORDER_V1),
+)
+FUTURE_REAL_PACKAGE0_VERIFIED_RESULT_CONTRACT_V1: Final = {
+    "result_type_name": (
+        "VerifiedPhase2BActualUnsealed960AuthoritativeEvidencePackage0V1"
+    ),
+    "require_callable_name": (
+        "require_verified_phase2b_actual_unsealed_960_authoritative_evidence_package0_v1"
+    ),
+    "schema_version": (
+        "hegel-machine-phase2b-actual-unsealed-960-authoritative-evidence-"
+        "verified-package0/1"
+    ),
+    "status": "VERIFIED_PRESENTED_EXTERNAL_EVIDENCE_NOT_GATE_ADMISSION",
+    "claim_level": (
+        "PACKAGE0_RAW_CONTRACT_VERIFIED_NOT_GATE_ADMISSION_NOT_R10_NOT_AUTHORITY_"
+        "NOT_CURRENTNESS_NOT_DURABILITY_NOT_NON_EQUIVOCATION_NOT_EXECUTION_NOT_C1"
+    ),
+    "success_disposition": (
+        "VERIFIED_PRESENTED_EXTERNAL_EVIDENCE_NOT_GATE_ADMISSION"
+    ),
+    "success_reason": "EXACT_PACKAGE0_RAW_CONTRACT_VERIFIED",
+    "fields_in_exact_order": [
+        [field_name, field_type]
+        for field_name, field_type in PACKAGE0_VERIFIED_RESULT_FIELDS_IN_EXACT_ORDER_V1
+    ],
+    "mechanics_boolean_fields_that_may_be_true_in_exact_order": list(
+        _PACKAGE0_MECHANICS_BOOLEAN_FIELDS_IN_EXACT_ORDER_V1
+    ),
+    "nonclaim_boolean_fields_required_exact_false_in_exact_order": list(
+        _PACKAGE0_NONCLAIM_BOOLEAN_FIELDS_IN_EXACT_ORDER_V1
+    ),
+    "private_issuer_only": True,
+    "issuance_available_while_verifier_not_implemented": False,
+    "copy_deepcopy_pickle_and_mutation_allowed": False,
+}
+
+FUTURE_REAL_PACKAGE0_VERIFIER_RAW_ABI_V1: Final = {
+    "public_callable_name": (
+        "verify_real_phase2b_actual_unsealed_960_authoritative_evidence_package0_v1"
+    ),
+    "verified_result_contract": FUTURE_REAL_PACKAGE0_VERIFIED_RESULT_CONTRACT_V1,
+    "positional_parameters_in_exact_order": [
+        ["catalog_payload", "EXACT_BUILTIN_BYTES"],
+        ["raw_signer_registry_payload", "EXACT_BUILTIN_BYTES"],
+        ["raw_package0_envelope_payload", "EXACT_BUILTIN_BYTES"],
+        [
+            "raw_package0_ledger_event_payloads_in_exact_order",
+            "EXACT_BUILTIN_TUPLE_OF_10_EXACT_BUILTIN_BYTES",
+        ],
+        [
+            "raw_package0_stage_subject_event_payloads_in_exact_order",
+            "EXACT_BUILTIN_TUPLE_OF_10_EXACT_BUILTIN_BYTES",
+        ],
+        ["raw_store_if_absent_receipt_payload", "EXACT_BUILTIN_BYTES"],
+        ["raw_logical_time_token_payload", "EXACT_BUILTIN_BYTES"],
+        ["raw_governance_checkpoint_payload", "EXACT_BUILTIN_BYTES"],
+        ["raw_custodian_checkpoint_payload", "EXACT_BUILTIN_BYTES"],
+        ["raw_external_anchor_payload", "EXACT_BUILTIN_BYTES"],
+        ["raw_package15_envelope_payload", "EXACT_BUILTIN_BYTES"],
+        ["raw_package16_envelope_payload", "EXACT_BUILTIN_BYTES"],
+    ],
+    "mandatory_keyword_only_byte_parameters_in_exact_order": [
+        "out_of_band_expected_catalog_id_bytes",
+        "out_of_band_expected_catalog_payload_sha256_digest",
+        "out_of_band_expected_signer_registry_id_bytes",
+        "out_of_band_expected_signer_registry_payload_sha256_digest",
+        "out_of_band_expected_signer_registry_entries_root_sha256_digest",
+        "out_of_band_expected_governance_root_key_id_bytes",
+        "out_of_band_expected_governance_root_public_key_bytes",
+        "out_of_band_expected_custodian_root_key_id_bytes",
+        "out_of_band_expected_custodian_root_public_key_bytes",
+        "out_of_band_expected_readiness_dag_id_bytes",
+        "out_of_band_expected_readiness_dag_payload_sha256_digest",
+        "out_of_band_expected_progression_plan_payload_sha256_digest",
+        "out_of_band_expected_gap_inventory_source_sha256_digest",
+        "out_of_band_expected_statistical_validation_source_sha256_digest",
+        "expected_campaign_id_bytes",
+        "expected_attempt_id_bytes",
+    ],
+    "defaults_allowed": False,
+    "varargs_or_kwargs_allowed": False,
+    "decoded_mapping_path_key_callback_socket_clock_nonce_inputs_allowed": False,
+    "implementation_status": REAL_PACKAGE0_VERIFICATION_STATUS_V1,
+    "claim_boundary": (
+        "FUTURE_RAW_PACKAGE0_VERIFIER_ABI_ONLY_NOT_IMPLEMENTED_PRESENTED_EXTERNAL_"
+        "EVIDENCE_NOT_GATE_ADMISSION_NOT_R10_NOT_AUTHORITY_NOT_CURRENTNESS_NOT_"
+        "DURABILITY_NOT_NON_EQUIVOCATION_NOT_EXECUTION_NOT_C1"
+    ),
+}
 
 FUTURE_REAL_BUNDLE_VERIFIER_RAW_ABI_V1: Final = {
     "public_callable_name": (
@@ -6651,6 +6963,9 @@ def _catalog_body_v1() -> dict[str, object]:
             },
             "detached_signature": {
                 "profile": DETACHED_SIGNATURE_PREIMAGE_PROFILE_V1,
+                "record_schema_version": (
+                    DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION_V1
+                ),
                 "schema_version": DETACHED_SIGNATURE_PREIMAGE_SCHEMA_VERSION_V1,
                 "algorithm": SIGNATURE_ALGORITHM_V1,
                 "fields_in_exact_order": list(
@@ -6763,6 +7078,12 @@ def _catalog_body_v1() -> dict[str, object]:
         "future_real_bundle_verifier_raw_abi": (
             FUTURE_REAL_BUNDLE_VERIFIER_RAW_ABI_V1
         ),
+        "future_real_package0_verifier_raw_abi": (
+            FUTURE_REAL_PACKAGE0_VERIFIER_RAW_ABI_V1
+        ),
+        "future_real_package0_verified_result_contract": (
+            FUTURE_REAL_PACKAGE0_VERIFIED_RESULT_CONTRACT_V1
+        ),
         "gate_schema_ids_root": GATE_SCHEMA_IDS_ROOT_V1,
         "gate_source_schema_ids_root": GATE_SOURCE_SCHEMA_IDS_ROOT_V1,
         "gate_support_schema_ids_root": GATE_SUPPORT_SCHEMA_IDS_ROOT_V1,
@@ -6797,6 +7118,9 @@ def _catalog_body_v1() -> dict[str, object]:
         "attempt_id": None,
         "execution_authorized": False,
         "real_bundle_verification_status": REAL_BUNDLE_VERIFICATION_STATUS_V1,
+        "real_package0_verification_status": (
+            REAL_PACKAGE0_VERIFICATION_STATUS_V1
+        ),
     }
 
 
@@ -6875,6 +7199,10 @@ def _assert_static_catalog_v1() -> None:
         _binding_rules_json_v1(_SIGNER_REGISTRY_BINDING_RULES_IN_EXACT_ORDER_V1)
     ):
         raise RuntimeError("signer registry raw binding rules differ")
+    if registry["detached_signature_schema_version"] != (
+        DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION_V1
+    ):
+        raise RuntimeError("detached signature record schema version differs")
     if (
         "out_of_band_expected_signer_registry_entries_root_sha256_digest"
         not in FUTURE_REAL_BUNDLE_VERIFIER_RAW_ABI_V1[
@@ -6931,6 +7259,124 @@ def _assert_static_catalog_v1() -> None:
         ]
     ]:
         raise RuntimeError("duplicated stage-subject ABI equality differs")
+    package0_positional_parameters = tuple(
+        row[0]
+        for row in FUTURE_REAL_PACKAGE0_VERIFIER_RAW_ABI_V1[
+            "positional_parameters_in_exact_order"
+        ]
+    )
+    expected_package0_positional_parameters = (
+        "catalog_payload",
+        "raw_signer_registry_payload",
+        "raw_package0_envelope_payload",
+        "raw_package0_ledger_event_payloads_in_exact_order",
+        "raw_package0_stage_subject_event_payloads_in_exact_order",
+        "raw_store_if_absent_receipt_payload",
+        "raw_logical_time_token_payload",
+        "raw_governance_checkpoint_payload",
+        "raw_custodian_checkpoint_payload",
+        "raw_external_anchor_payload",
+        "raw_package15_envelope_payload",
+        "raw_package16_envelope_payload",
+    )
+    package0_keyword_parameters = tuple(
+        FUTURE_REAL_PACKAGE0_VERIFIER_RAW_ABI_V1[
+            "mandatory_keyword_only_byte_parameters_in_exact_order"
+        ]
+    )
+    expected_package0_keyword_parameters = (
+        "out_of_band_expected_catalog_id_bytes",
+        "out_of_band_expected_catalog_payload_sha256_digest",
+        "out_of_band_expected_signer_registry_id_bytes",
+        "out_of_band_expected_signer_registry_payload_sha256_digest",
+        "out_of_band_expected_signer_registry_entries_root_sha256_digest",
+        "out_of_band_expected_governance_root_key_id_bytes",
+        "out_of_band_expected_governance_root_public_key_bytes",
+        "out_of_band_expected_custodian_root_key_id_bytes",
+        "out_of_band_expected_custodian_root_public_key_bytes",
+        "out_of_band_expected_readiness_dag_id_bytes",
+        "out_of_band_expected_readiness_dag_payload_sha256_digest",
+        "out_of_band_expected_progression_plan_payload_sha256_digest",
+        "out_of_band_expected_gap_inventory_source_sha256_digest",
+        "out_of_band_expected_statistical_validation_source_sha256_digest",
+        "expected_campaign_id_bytes",
+        "expected_attempt_id_bytes",
+    )
+    package0_parameter_types = tuple(
+        row[1]
+        for row in FUTURE_REAL_PACKAGE0_VERIFIER_RAW_ABI_V1[
+            "positional_parameters_in_exact_order"
+        ]
+    )
+    if (
+        FUTURE_REAL_PACKAGE0_VERIFIER_RAW_ABI_V1["public_callable_name"]
+        != "verify_real_phase2b_actual_unsealed_960_authoritative_evidence_package0_v1"
+        or package0_positional_parameters
+        != expected_package0_positional_parameters
+        or package0_keyword_parameters != expected_package0_keyword_parameters
+        or package0_parameter_types
+        != (
+            "EXACT_BUILTIN_BYTES",
+            "EXACT_BUILTIN_BYTES",
+            "EXACT_BUILTIN_BYTES",
+            "EXACT_BUILTIN_TUPLE_OF_10_EXACT_BUILTIN_BYTES",
+            "EXACT_BUILTIN_TUPLE_OF_10_EXACT_BUILTIN_BYTES",
+            "EXACT_BUILTIN_BYTES",
+            "EXACT_BUILTIN_BYTES",
+            "EXACT_BUILTIN_BYTES",
+            "EXACT_BUILTIN_BYTES",
+            "EXACT_BUILTIN_BYTES",
+            "EXACT_BUILTIN_BYTES",
+            "EXACT_BUILTIN_BYTES",
+        )
+        or FUTURE_REAL_PACKAGE0_VERIFIER_RAW_ABI_V1["defaults_allowed"]
+        is not False
+        or FUTURE_REAL_PACKAGE0_VERIFIER_RAW_ABI_V1[
+            "varargs_or_kwargs_allowed"
+        ]
+        is not False
+        or FUTURE_REAL_PACKAGE0_VERIFIER_RAW_ABI_V1[
+            "decoded_mapping_path_key_callback_socket_clock_nonce_inputs_allowed"
+        ]
+        is not False
+        or FUTURE_REAL_PACKAGE0_VERIFIER_RAW_ABI_V1["implementation_status"]
+        != REAL_PACKAGE0_VERIFICATION_STATUS_V1
+    ):
+        raise RuntimeError("future real package 0 verifier ABI differs")
+    if FUTURE_REAL_PACKAGE0_VERIFIED_RESULT_CONTRACT_V1 != (
+        FUTURE_REAL_PACKAGE0_VERIFIER_RAW_ABI_V1["verified_result_contract"]
+    ) or FUTURE_REAL_PACKAGE0_VERIFIED_RESULT_CONTRACT_V1[
+        "fields_in_exact_order"
+    ] != [
+        [field_name, field_type]
+        for field_name, field_type in (
+            PACKAGE0_VERIFIED_RESULT_FIELDS_IN_EXACT_ORDER_V1
+        )
+    ]:
+        raise RuntimeError("future package 0 verified result contract differs")
+    if tuple(
+        FUTURE_REAL_PACKAGE0_VERIFIED_RESULT_CONTRACT_V1[
+            "mechanics_boolean_fields_that_may_be_true_in_exact_order"
+        ]
+    ) != _PACKAGE0_MECHANICS_BOOLEAN_FIELDS_IN_EXACT_ORDER_V1 or tuple(
+        FUTURE_REAL_PACKAGE0_VERIFIED_RESULT_CONTRACT_V1[
+            "nonclaim_boolean_fields_required_exact_false_in_exact_order"
+        ]
+    ) != _PACKAGE0_NONCLAIM_BOOLEAN_FIELDS_IN_EXACT_ORDER_V1:
+        raise RuntimeError("future package 0 result claim boundary differs")
+    if (
+        CATALOG_BODY_V1["future_real_package0_verifier_raw_abi"]
+        != FUTURE_REAL_PACKAGE0_VERIFIER_RAW_ABI_V1
+        or CATALOG_BODY_V1["future_real_package0_verified_result_contract"]
+        != FUTURE_REAL_PACKAGE0_VERIFIED_RESULT_CONTRACT_V1
+        or CATALOG_BODY_V1["real_package0_verification_status"]
+        != REAL_PACKAGE0_VERIFICATION_STATUS_V1
+        or CATALOG_BODY_V1["wire_preimage_profiles"]["detached_signature"][
+            "record_schema_version"
+        ]
+        != DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION_V1
+    ):
+        raise RuntimeError("package 0 or signature catalog projection differs")
     if (
         PREALLOCATION_LINEAGE_SCHEMA_OBJECT_V1[
             "signature_slots_in_exact_order"
@@ -7578,6 +8024,16 @@ def _assert_static_catalog_v1() -> None:
             raise RuntimeError("package interleaved DAG root binding differs")
         if item["body_required_literals"] != _package_body_required_literals_v1(spec):
             raise RuntimeError("package required body literals differ")
+        if item["package_outer_binding_rules_in_exact_order"] != (
+            _binding_rules_json_v1(
+                _PACKAGE_OUTER_BINDING_RULES_IN_EXACT_ORDER_V1
+            )
+        ):
+            raise RuntimeError("package outer claim binding rules differ")
+        if item["detached_signature_schema_version"] != (
+            DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION_V1
+        ):
+            raise RuntimeError("package detached signature schema differs")
         if any(
             threshold_id not in threshold_ids
             for threshold_id in spec.frozen_threshold_ids_in_exact_order
@@ -7609,6 +8065,20 @@ def _assert_static_catalog_v1() -> None:
         != "custodian_ledger_event_body"
     ):
         raise RuntimeError("signed stage-event record naming differs")
+    if (
+        ledger_contract["record_schema_version"]
+        != _PACKAGE0_SIGNED_STAGE_EVENT_ENVELOPE_SCHEMA_VERSION_V1
+        or ledger_contract["event_body_schema_version"]
+        != _PACKAGE0_CUSTODIAN_LEDGER_EVENT_BODY_SCHEMA_VERSION_V1
+        or ledger_contract["detached_signature_schema_version"]
+        != DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION_V1
+        or ledger_contract["binding_rules_in_exact_order"]
+        != _binding_rules_json_v1(
+            _LEDGER_EVENT_BINDING_RULES_IN_EXACT_ORDER_V1
+        )
+        or len(ledger_contract["binding_rules_in_exact_order"]) != 8
+    ):
+        raise RuntimeError("signed stage-event exact schema contract differs")
     if ledger_contract["record_content_id_domain_ascii"] != (
         _LEDGER_EVENT_ID_DOMAIN_ASCII_V1
     ) or ledger_contract["record_content_id_prefix"] != (
@@ -8500,6 +8970,10 @@ def _assert_static_catalog_v1() -> None:
             raise RuntimeError("content-ID preimage profile drift")
         if item["signature_preimage_profile"] != DETACHED_SIGNATURE_PREIMAGE_PROFILE_V1:
             raise RuntimeError("signature preimage profile drift")
+        if item["detached_signature_schema_version"] != (
+            DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION_V1
+        ):
+            raise RuntimeError("detached signature record schema version drift")
         if item["signature_preimage_schema_version"] != (
             DETACHED_SIGNATURE_PREIMAGE_SCHEMA_VERSION_V1
         ):
@@ -8603,6 +9077,12 @@ class Phase2BActualUnsealed960AuthoritativeEvidenceSchemaCatalogErrorV1(
     """Stable failure type for the raw catalog boundary."""
 
 
+class Phase2BActualUnsealed960AuthoritativeEvidencePackage0ErrorV1(
+    ValueError
+):
+    """Stable failure type for the future raw Package 0 boundary."""
+
+
 @dataclass(frozen=True, slots=True, init=False)
 class VerifiedPhase2BActualUnsealed960AuthoritativeEvidenceSchemaCatalogV1:
     schema_version: str
@@ -8694,6 +9174,79 @@ class VerifiedPhase2BActualUnsealed960AuthoritativeEvidenceSchemaCatalogV1:
         raise _type_error("verified catalog results cannot be serialized")
 
 
+@dataclass(frozen=True, slots=True, init=False)
+class VerifiedPhase2BActualUnsealed960AuthoritativeEvidencePackage0V1:
+    schema_version: str
+    status: str
+    claim_level: str
+    disposition: Package0DispositionV1
+    reason: Package0ReasonV1
+    catalog_id: str
+    catalog_payload_sha256: str
+    package_schema_id: str
+    package_id: str
+    package_payload_sha256: str
+    signer_registry_id: str
+    signer_registry_payload_sha256: str
+    signer_registry_entries_root_sha256: str
+    campaign_id: str
+    attempt_id: str
+    chain_root_sha256: str
+    terminal_signed_stage_event_id: str
+    terminal_signed_stage_event_payload_sha256: str
+    ledger_event_count: int
+    stage_subject_event_count: int
+    referenced_artifact_count: int
+    total_signature_count: int
+    exact_raw_bytes_verified: bool
+    rfc8785_canonical_bytes_verified: bool
+    content_ids_verified: bool
+    raw_payload_sha256s_verified: bool
+    signature_contracts_verified: bool
+    ledger_chain_verified: bool
+    stage_subject_binding_verified: bool
+    referenced_artifact_graph_verified: bool
+    package0_lineage_verified: bool
+    terminal_p15_p16_binding_verified: bool
+    predecessor_absence_verified: bool
+    private_lineage_verified: bool
+    package15_verified: bool
+    package16_verified: bool
+    gate_admission_verified: bool
+    r10_satisfied: bool
+    authority_currentness_verified: bool
+    owner_non_revocation_verified: bool
+    external_key_custody_verified: bool
+    external_durability_verified: bool
+    external_non_equivocation_verified: bool
+    global_anti_fork_verified: bool
+    execution_authorized: bool
+    actual_960_verified: bool
+    c1_satisfied: bool
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        raise TypeError("verified package 0 results are privately issued")
+
+    def __copy__(self, _type_error: type[TypeError] = TypeError) -> NoReturn:
+        raise _type_error("verified package 0 results cannot be copied")
+
+    def __deepcopy__(
+        self,
+        memo: object,
+        _type_error: type[TypeError] = TypeError,
+    ) -> NoReturn:
+        del memo
+        raise _type_error("verified package 0 results cannot be deep-copied")
+
+    def __reduce_ex__(
+        self,
+        protocol: object,
+        _type_error: type[TypeError] = TypeError,
+    ) -> NoReturn:
+        del protocol
+        raise _type_error("verified package 0 results cannot be serialized")
+
+
 _RESULT_FIELD_NAMES_V1: Final = tuple(
     VerifiedPhase2BActualUnsealed960AuthoritativeEvidenceSchemaCatalogV1.__dataclass_fields__
 )
@@ -8702,6 +9255,15 @@ if _RESULT_FIELD_NAMES_V1[_RESULT_NONCLAIM_START_V1:] != (
     PERMANENT_NONCLAIMS_IN_EXACT_ORDER_V1
 ):
     raise RuntimeError("permanent nonclaim/result field set differs")
+
+_PACKAGE0_RESULT_FIELD_NAMES_V1: Final = tuple(
+    VerifiedPhase2BActualUnsealed960AuthoritativeEvidencePackage0V1.__dataclass_fields__
+)
+if _PACKAGE0_RESULT_FIELD_NAMES_V1 != tuple(
+    field_name
+    for field_name, _ in PACKAGE0_VERIFIED_RESULT_FIELDS_IN_EXACT_ORDER_V1
+):
+    raise RuntimeError("package 0 verified result field set differs")
 
 
 def _build_private_catalog_boundary_v1():
@@ -9044,6 +9606,108 @@ def _build_private_catalog_boundary_v1():
 ) = _build_private_catalog_boundary_v1()
 
 
+def _build_private_package0_boundary_v1():
+    """Build a definition-time closed fail-closed Package 0 boundary."""
+
+    result_type = VerifiedPhase2BActualUnsealed960AuthoritativeEvidencePackage0V1
+    error_type = Phase2BActualUnsealed960AuthoritativeEvidencePackage0ErrorV1
+    type_builtin = type
+    id_builtin = id
+    registry: dict[int, object] = {}
+
+    def fail(code: str, detail: str) -> NoReturn:
+        raise error_type(f"{code}: {detail}")
+
+    def require_result(
+        result: VerifiedPhase2BActualUnsealed960AuthoritativeEvidencePackage0V1,
+    ) -> VerifiedPhase2BActualUnsealed960AuthoritativeEvidencePackage0V1:
+        if type_builtin(result) is not result_type:
+            fail("FAIL_C1_PACKAGE0_V1_LINEAGE", "result type differs")
+        issued = registry.get(id_builtin(result))
+        if issued is not result:
+            fail(
+                "FAIL_C1_PACKAGE0_V1_LINEAGE",
+                "result was not privately issued by an implemented verifier",
+            )
+        return result
+
+    def real_implementation(
+        catalog_payload: bytes,
+        raw_signer_registry_payload: bytes,
+        raw_package0_envelope_payload: bytes,
+        raw_package0_ledger_event_payloads_in_exact_order: tuple[bytes, ...],
+        raw_package0_stage_subject_event_payloads_in_exact_order: tuple[
+            bytes, ...
+        ],
+        raw_store_if_absent_receipt_payload: bytes,
+        raw_logical_time_token_payload: bytes,
+        raw_governance_checkpoint_payload: bytes,
+        raw_custodian_checkpoint_payload: bytes,
+        raw_external_anchor_payload: bytes,
+        raw_package15_envelope_payload: bytes,
+        raw_package16_envelope_payload: bytes,
+        *,
+        out_of_band_expected_catalog_id_bytes: bytes,
+        out_of_band_expected_catalog_payload_sha256_digest: bytes,
+        out_of_band_expected_signer_registry_id_bytes: bytes,
+        out_of_band_expected_signer_registry_payload_sha256_digest: bytes,
+        out_of_band_expected_signer_registry_entries_root_sha256_digest: bytes,
+        out_of_band_expected_governance_root_key_id_bytes: bytes,
+        out_of_band_expected_governance_root_public_key_bytes: bytes,
+        out_of_band_expected_custodian_root_key_id_bytes: bytes,
+        out_of_band_expected_custodian_root_public_key_bytes: bytes,
+        out_of_band_expected_readiness_dag_id_bytes: bytes,
+        out_of_band_expected_readiness_dag_payload_sha256_digest: bytes,
+        out_of_band_expected_progression_plan_payload_sha256_digest: bytes,
+        out_of_band_expected_gap_inventory_source_sha256_digest: bytes,
+        out_of_band_expected_statistical_validation_source_sha256_digest: bytes,
+        expected_campaign_id_bytes: bytes,
+        expected_attempt_id_bytes: bytes,
+    ) -> VerifiedPhase2BActualUnsealed960AuthoritativeEvidencePackage0V1:
+        del (
+            catalog_payload,
+            raw_signer_registry_payload,
+            raw_package0_envelope_payload,
+            raw_package0_ledger_event_payloads_in_exact_order,
+            raw_package0_stage_subject_event_payloads_in_exact_order,
+            raw_store_if_absent_receipt_payload,
+            raw_logical_time_token_payload,
+            raw_governance_checkpoint_payload,
+            raw_custodian_checkpoint_payload,
+            raw_external_anchor_payload,
+            raw_package15_envelope_payload,
+            raw_package16_envelope_payload,
+            out_of_band_expected_catalog_id_bytes,
+            out_of_band_expected_catalog_payload_sha256_digest,
+            out_of_band_expected_signer_registry_id_bytes,
+            out_of_band_expected_signer_registry_payload_sha256_digest,
+            out_of_band_expected_signer_registry_entries_root_sha256_digest,
+            out_of_band_expected_governance_root_key_id_bytes,
+            out_of_band_expected_governance_root_public_key_bytes,
+            out_of_band_expected_custodian_root_key_id_bytes,
+            out_of_band_expected_custodian_root_public_key_bytes,
+            out_of_band_expected_readiness_dag_id_bytes,
+            out_of_band_expected_readiness_dag_payload_sha256_digest,
+            out_of_band_expected_progression_plan_payload_sha256_digest,
+            out_of_band_expected_gap_inventory_source_sha256_digest,
+            out_of_band_expected_statistical_validation_source_sha256_digest,
+            expected_campaign_id_bytes,
+            expected_attempt_id_bytes,
+        )
+        fail(
+            "FAIL_C1_PACKAGE0_V1_NOT_IMPLEMENTED",
+            "real package 0 evidence verification is exactly NOT_IMPLEMENTED",
+        )
+
+    return require_result, real_implementation
+
+
+(
+    require_verified_phase2b_actual_unsealed_960_authoritative_evidence_package0_v1,
+    _VERIFY_REAL_PACKAGE0_IMPLEMENTATION_V1,
+) = _build_private_package0_boundary_v1()
+
+
 def _build_public_catalog_verifier_v1(implementation):
     def verify_phase2b_actual_unsealed_960_authoritative_evidence_schema_catalog_v1(
         payload: bytes,
@@ -9074,6 +9738,102 @@ def _build_public_catalog_verifier_v1(implementation):
         )
 
     return verify_phase2b_actual_unsealed_960_authoritative_evidence_schema_catalog_v1
+
+
+def _build_public_real_package0_verifier_v1(implementation):
+    def verify_real_phase2b_actual_unsealed_960_authoritative_evidence_package0_v1(
+        catalog_payload: bytes,
+        raw_signer_registry_payload: bytes,
+        raw_package0_envelope_payload: bytes,
+        raw_package0_ledger_event_payloads_in_exact_order: tuple[bytes, ...],
+        raw_package0_stage_subject_event_payloads_in_exact_order: tuple[
+            bytes, ...
+        ],
+        raw_store_if_absent_receipt_payload: bytes,
+        raw_logical_time_token_payload: bytes,
+        raw_governance_checkpoint_payload: bytes,
+        raw_custodian_checkpoint_payload: bytes,
+        raw_external_anchor_payload: bytes,
+        raw_package15_envelope_payload: bytes,
+        raw_package16_envelope_payload: bytes,
+        *,
+        out_of_band_expected_catalog_id_bytes: bytes,
+        out_of_band_expected_catalog_payload_sha256_digest: bytes,
+        out_of_band_expected_signer_registry_id_bytes: bytes,
+        out_of_band_expected_signer_registry_payload_sha256_digest: bytes,
+        out_of_band_expected_signer_registry_entries_root_sha256_digest: bytes,
+        out_of_band_expected_governance_root_key_id_bytes: bytes,
+        out_of_band_expected_governance_root_public_key_bytes: bytes,
+        out_of_band_expected_custodian_root_key_id_bytes: bytes,
+        out_of_band_expected_custodian_root_public_key_bytes: bytes,
+        out_of_band_expected_readiness_dag_id_bytes: bytes,
+        out_of_band_expected_readiness_dag_payload_sha256_digest: bytes,
+        out_of_band_expected_progression_plan_payload_sha256_digest: bytes,
+        out_of_band_expected_gap_inventory_source_sha256_digest: bytes,
+        out_of_band_expected_statistical_validation_source_sha256_digest: bytes,
+        expected_campaign_id_bytes: bytes,
+        expected_attempt_id_bytes: bytes,
+    ) -> VerifiedPhase2BActualUnsealed960AuthoritativeEvidencePackage0V1:
+        return implementation(
+            catalog_payload,
+            raw_signer_registry_payload,
+            raw_package0_envelope_payload,
+            raw_package0_ledger_event_payloads_in_exact_order,
+            raw_package0_stage_subject_event_payloads_in_exact_order,
+            raw_store_if_absent_receipt_payload,
+            raw_logical_time_token_payload,
+            raw_governance_checkpoint_payload,
+            raw_custodian_checkpoint_payload,
+            raw_external_anchor_payload,
+            raw_package15_envelope_payload,
+            raw_package16_envelope_payload,
+            out_of_band_expected_catalog_id_bytes=(
+                out_of_band_expected_catalog_id_bytes
+            ),
+            out_of_band_expected_catalog_payload_sha256_digest=(
+                out_of_band_expected_catalog_payload_sha256_digest
+            ),
+            out_of_band_expected_signer_registry_id_bytes=(
+                out_of_band_expected_signer_registry_id_bytes
+            ),
+            out_of_band_expected_signer_registry_payload_sha256_digest=(
+                out_of_band_expected_signer_registry_payload_sha256_digest
+            ),
+            out_of_band_expected_signer_registry_entries_root_sha256_digest=(
+                out_of_band_expected_signer_registry_entries_root_sha256_digest
+            ),
+            out_of_band_expected_governance_root_key_id_bytes=(
+                out_of_band_expected_governance_root_key_id_bytes
+            ),
+            out_of_band_expected_governance_root_public_key_bytes=(
+                out_of_band_expected_governance_root_public_key_bytes
+            ),
+            out_of_band_expected_custodian_root_key_id_bytes=(
+                out_of_band_expected_custodian_root_key_id_bytes
+            ),
+            out_of_band_expected_custodian_root_public_key_bytes=(
+                out_of_band_expected_custodian_root_public_key_bytes
+            ),
+            out_of_band_expected_readiness_dag_id_bytes=(
+                out_of_band_expected_readiness_dag_id_bytes
+            ),
+            out_of_band_expected_readiness_dag_payload_sha256_digest=(
+                out_of_band_expected_readiness_dag_payload_sha256_digest
+            ),
+            out_of_band_expected_progression_plan_payload_sha256_digest=(
+                out_of_band_expected_progression_plan_payload_sha256_digest
+            ),
+            out_of_band_expected_gap_inventory_source_sha256_digest=(
+                out_of_band_expected_gap_inventory_source_sha256_digest
+            ),
+            out_of_band_expected_statistical_validation_source_sha256_digest=(
+                out_of_band_expected_statistical_validation_source_sha256_digest
+            ),
+            expected_campaign_id_bytes=expected_campaign_id_bytes,
+            expected_attempt_id_bytes=expected_attempt_id_bytes,
+        )
+
+    return verify_real_phase2b_actual_unsealed_960_authoritative_evidence_package0_v1
 
 
 def _build_public_real_bundle_verifier_v1(implementation):
@@ -9215,9 +9975,58 @@ def _build_public_real_bundle_verifier_v1(implementation):
 verify_phase2b_actual_unsealed_960_authoritative_evidence_schema_catalog_v1 = (
     _build_public_catalog_verifier_v1(_VERIFY_CATALOG_IMPLEMENTATION_V1)
 )
+verify_real_phase2b_actual_unsealed_960_authoritative_evidence_package0_v1 = (
+    _build_public_real_package0_verifier_v1(
+        _VERIFY_REAL_PACKAGE0_IMPLEMENTATION_V1
+    )
+)
 verify_real_phase2b_actual_unsealed_960_authoritative_evidence_bundle_v1 = (
     _build_public_real_bundle_verifier_v1(_VERIFY_REAL_BUNDLE_IMPLEMENTATION_V1)
 )
+
+_REAL_PACKAGE0_CODE_V1 = (
+    verify_real_phase2b_actual_unsealed_960_authoritative_evidence_package0_v1.__code__
+)
+_REAL_PACKAGE0_PRIVATE_CODE_V1 = _VERIFY_REAL_PACKAGE0_IMPLEMENTATION_V1.__code__
+_REAL_PACKAGE0_POSITIONAL_NAMES_V1 = tuple(
+    row[0]
+    for row in FUTURE_REAL_PACKAGE0_VERIFIER_RAW_ABI_V1[
+        "positional_parameters_in_exact_order"
+    ]
+)
+_REAL_PACKAGE0_KEYWORD_ONLY_NAMES_V1 = tuple(
+    FUTURE_REAL_PACKAGE0_VERIFIER_RAW_ABI_V1[
+        "mandatory_keyword_only_byte_parameters_in_exact_order"
+    ]
+)
+for _real_package0_code_v1 in (
+    _REAL_PACKAGE0_PRIVATE_CODE_V1,
+    _REAL_PACKAGE0_CODE_V1,
+):
+    if (
+        _real_package0_code_v1.co_posonlyargcount != 0
+        or _real_package0_code_v1.co_argcount
+        != len(_REAL_PACKAGE0_POSITIONAL_NAMES_V1)
+        or _real_package0_code_v1.co_kwonlyargcount
+        != len(_REAL_PACKAGE0_KEYWORD_ONLY_NAMES_V1)
+        or tuple(
+            _real_package0_code_v1.co_varnames[
+                : _real_package0_code_v1.co_argcount
+            ]
+        )
+        != _REAL_PACKAGE0_POSITIONAL_NAMES_V1
+        or tuple(
+            _real_package0_code_v1.co_varnames[
+                _real_package0_code_v1.co_argcount :
+                _real_package0_code_v1.co_argcount
+                + _real_package0_code_v1.co_kwonlyargcount
+            ]
+        )
+        != _REAL_PACKAGE0_KEYWORD_ONLY_NAMES_V1
+        or _real_package0_code_v1.co_flags & 0x04
+        or _real_package0_code_v1.co_flags & 0x08
+    ):
+        raise RuntimeError("real package 0 NI stub ABI differs from frozen catalog")
 
 _REAL_BUNDLE_CODE_V1 = (
     verify_real_phase2b_actual_unsealed_960_authoritative_evidence_bundle_v1.__code__
@@ -9264,10 +10073,18 @@ for _real_bundle_code_v1 in (
         raise RuntimeError("real bundle NI stub ABI differs from frozen catalog")
 
 del _VERIFY_CATALOG_IMPLEMENTATION_V1
+del _VERIFY_REAL_PACKAGE0_IMPLEMENTATION_V1
 del _VERIFY_REAL_BUNDLE_IMPLEMENTATION_V1
 del _build_private_catalog_boundary_v1
+del _build_private_package0_boundary_v1
 del _build_public_catalog_verifier_v1
+del _build_public_real_package0_verifier_v1
 del _build_public_real_bundle_verifier_v1
+del _REAL_PACKAGE0_CODE_V1
+del _REAL_PACKAGE0_PRIVATE_CODE_V1
+del _real_package0_code_v1
+del _REAL_PACKAGE0_POSITIONAL_NAMES_V1
+del _REAL_PACKAGE0_KEYWORD_ONLY_NAMES_V1
 del _REAL_BUNDLE_CODE_V1
 del _REAL_BUNDLE_PRIVATE_CODE_V1
 del _real_bundle_code_v1
@@ -9281,6 +10098,9 @@ __all__ = (
     "CLAIM_LEVEL_V1",
     "CANONICALIZATION_V1",
     "REAL_BUNDLE_VERIFICATION_STATUS_V1",
+    "REAL_PACKAGE0_VERIFICATION_STATUS_V1",
+    "PACKAGE_OUTER_STATUS_V1",
+    "PACKAGE_OUTER_CLAIM_LEVEL_V1",
     "SIGNATURE_ALGORITHM_V1",
     "MAXIMUM_CATALOG_PAYLOAD_BYTES_V1",
     "CONTENT_ID_PREIMAGE_PROFILE_V1",
@@ -9288,6 +10108,7 @@ __all__ = (
     "CONTENT_ID_FORMULA_V1",
     "DETACHED_SIGNATURE_PREIMAGE_PROFILE_V1",
     "DETACHED_SIGNATURE_PREIMAGE_SCHEMA_VERSION_V1",
+    "DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION_V1",
     "DETACHED_SIGNATURE_PREIMAGE_FIELDS_IN_EXACT_ORDER_V1",
     "DETACHED_SIGNATURE_FORMULA_V1",
     "DETACHED_SIGNATURE_EXCLUDED_FIELDS_IN_EXACT_ORDER_V1",
@@ -9300,9 +10121,13 @@ __all__ = (
     "INSPECTED_DEPENDENCIES_IN_EXACT_ORDER_V1",
     "CatalogDispositionV1",
     "CatalogReasonV1",
+    "Package0DispositionV1",
+    "Package0ReasonV1",
     "AttemptDispositionV1",
     "Phase2BActualUnsealed960AuthoritativeEvidenceSchemaCatalogErrorV1",
     "VerifiedPhase2BActualUnsealed960AuthoritativeEvidenceSchemaCatalogV1",
+    "Phase2BActualUnsealed960AuthoritativeEvidencePackage0ErrorV1",
+    "VerifiedPhase2BActualUnsealed960AuthoritativeEvidencePackage0V1",
     "GATE_SPECS_IN_EXACT_ORDER_V1",
     "GATE_SOURCE_SPECS_IN_EXACT_ORDER_V1",
     "GATE_VERIFICATION_AVAILABILITIES_IN_EXACT_ORDER_V1",
@@ -9347,9 +10172,14 @@ __all__ = (
     "CATALOG_ID_V1",
     "CATALOG_PAYLOAD_V1",
     "CATALOG_PAYLOAD_SHA256_V1",
+    "PACKAGE0_VERIFIED_RESULT_FIELDS_IN_EXACT_ORDER_V1",
+    "FUTURE_REAL_PACKAGE0_VERIFIED_RESULT_CONTRACT_V1",
+    "FUTURE_REAL_PACKAGE0_VERIFIER_RAW_ABI_V1",
     "FUTURE_REAL_BUNDLE_VERIFIER_RAW_ABI_V1",
     "canonical_phase2b_actual_unsealed_960_authoritative_evidence_schema_catalog_bytes_v1",
     "verify_phase2b_actual_unsealed_960_authoritative_evidence_schema_catalog_v1",
     "require_verified_phase2b_actual_unsealed_960_authoritative_evidence_schema_catalog_v1",
+    "verify_real_phase2b_actual_unsealed_960_authoritative_evidence_package0_v1",
+    "require_verified_phase2b_actual_unsealed_960_authoritative_evidence_package0_v1",
     "verify_real_phase2b_actual_unsealed_960_authoritative_evidence_bundle_v1",
 )

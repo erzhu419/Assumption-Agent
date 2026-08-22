@@ -5,6 +5,7 @@ import copy
 import hashlib
 import inspect
 import json
+import pickle
 from pathlib import Path
 import re
 import subprocess
@@ -34,13 +35,13 @@ SOURCE = (
 
 EXPECTED_CATALOG_ID = (
     "phase2b_actual_unsealed_960_authoritative_evidence_schema_catalog_v1_"
-    "accb3c3739394cc36f2e89fc420f58799fbe71a1f33c21ee31906a3624e23082"
+    "a9f1b10bf7df69065f9847a69b935613ba1c368832c21ea5ac60e863961272cd"
 )
 EXPECTED_CONFIG_SHA256 = (
-    "71473b38f5fd4df165884c06134f4fbef6d94bb8e307fa71703d946d3a49b0ed"
+    "62f46cfba8a86f7ad969a7ea584c1828f0b34bb1d95571b1cc64259ac01a588a"
 )
 EXPECTED_SOURCE_SHA256 = (
-    "c75bfe81e5d77d5062da2babe9adc193ca2bdf6a9943aad442ea8214f3e89dff"
+    "ead2e2e5a7b03a804148fbd329e67561c1367375b2c05bf4ab2cd691f20487c6"
 )
 
 EXPECTED_GATES = (
@@ -159,6 +160,45 @@ def _real_stub_inputs() -> tuple[tuple[object, ...], dict[str, bytes]]:
             "out_of_band_expected_custodian_root_public_key_bytes",
             "out_of_band_expected_attempt_universe_head_id_bytes",
             "out_of_band_expected_attempt_universe_head_payload_sha256_digest",
+            "out_of_band_expected_readiness_dag_id_bytes",
+            "out_of_band_expected_readiness_dag_payload_sha256_digest",
+            "out_of_band_expected_progression_plan_payload_sha256_digest",
+            "out_of_band_expected_gap_inventory_source_sha256_digest",
+            "out_of_band_expected_statistical_validation_source_sha256_digest",
+            "expected_campaign_id_bytes",
+            "expected_attempt_id_bytes",
+        )
+    }
+    return positional, keyword_only
+
+
+def _package0_real_stub_inputs() -> tuple[tuple[object, ...], dict[str, bytes]]:
+    positional: tuple[object, ...] = (
+        _raw(),
+        b"signer-registry",
+        b"package0-envelope",
+        tuple(f"ledger-{index}".encode("ascii") for index in range(10)),
+        tuple(f"stage-{index}".encode("ascii") for index in range(10)),
+        b"store-receipt",
+        b"logical-time-token",
+        b"governance-checkpoint",
+        b"custodian-checkpoint",
+        b"external-anchor",
+        b"package15-envelope",
+        b"package16-envelope",
+    )
+    keyword_only = {
+        name: b"required-oob-byte-pin"
+        for name in (
+            "out_of_band_expected_catalog_id_bytes",
+            "out_of_band_expected_catalog_payload_sha256_digest",
+            "out_of_band_expected_signer_registry_id_bytes",
+            "out_of_band_expected_signer_registry_payload_sha256_digest",
+            "out_of_band_expected_signer_registry_entries_root_sha256_digest",
+            "out_of_band_expected_governance_root_key_id_bytes",
+            "out_of_band_expected_governance_root_public_key_bytes",
+            "out_of_band_expected_custodian_root_key_id_bytes",
+            "out_of_band_expected_custodian_root_public_key_bytes",
             "out_of_band_expected_readiness_dag_id_bytes",
             "out_of_band_expected_readiness_dag_payload_sha256_digest",
             "out_of_band_expected_progression_plan_payload_sha256_digest",
@@ -332,6 +372,169 @@ def test_real_bundle_ni_raw_abi_is_exact_21_plus_20() -> None:
         )
         for parameter in parameters
     )
+
+
+def test_real_package0_ni_raw_abi_and_result_contract_are_exact_12_plus_16() -> None:
+    expected_positional = (
+        "catalog_payload",
+        "raw_signer_registry_payload",
+        "raw_package0_envelope_payload",
+        "raw_package0_ledger_event_payloads_in_exact_order",
+        "raw_package0_stage_subject_event_payloads_in_exact_order",
+        "raw_store_if_absent_receipt_payload",
+        "raw_logical_time_token_payload",
+        "raw_governance_checkpoint_payload",
+        "raw_custodian_checkpoint_payload",
+        "raw_external_anchor_payload",
+        "raw_package15_envelope_payload",
+        "raw_package16_envelope_payload",
+    )
+    _, keyword_inputs = _package0_real_stub_inputs()
+    expected_keyword_only = tuple(keyword_inputs)
+    manifest = catalog.FUTURE_REAL_PACKAGE0_VERIFIER_RAW_ABI_V1
+    assert tuple(
+        row[0] for row in manifest["positional_parameters_in_exact_order"]
+    ) == expected_positional
+    assert tuple(
+        manifest["mandatory_keyword_only_byte_parameters_in_exact_order"]
+    ) == expected_keyword_only
+    assert tuple(
+        row[1] for row in manifest["positional_parameters_in_exact_order"]
+    ) == (
+        "EXACT_BUILTIN_BYTES",
+        "EXACT_BUILTIN_BYTES",
+        "EXACT_BUILTIN_BYTES",
+        "EXACT_BUILTIN_TUPLE_OF_10_EXACT_BUILTIN_BYTES",
+        "EXACT_BUILTIN_TUPLE_OF_10_EXACT_BUILTIN_BYTES",
+        "EXACT_BUILTIN_BYTES",
+        "EXACT_BUILTIN_BYTES",
+        "EXACT_BUILTIN_BYTES",
+        "EXACT_BUILTIN_BYTES",
+        "EXACT_BUILTIN_BYTES",
+        "EXACT_BUILTIN_BYTES",
+        "EXACT_BUILTIN_BYTES",
+    )
+    assert manifest["defaults_allowed"] is False
+    assert manifest["varargs_or_kwargs_allowed"] is False
+    assert manifest[
+        "decoded_mapping_path_key_callback_socket_clock_nonce_inputs_allowed"
+    ] is False
+    assert manifest["implementation_status"] == "NOT_IMPLEMENTED"
+    assert manifest["verified_result_contract"] == (
+        catalog.FUTURE_REAL_PACKAGE0_VERIFIED_RESULT_CONTRACT_V1
+    )
+    signature = inspect.signature(
+        catalog.verify_real_phase2b_actual_unsealed_960_authoritative_evidence_package0_v1
+    )
+    parameters = tuple(signature.parameters.values())
+    assert tuple(signature.parameters) == expected_positional + expected_keyword_only
+    assert all(
+        parameter.kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
+        for parameter in parameters[:12]
+    )
+    assert all(
+        parameter.kind is inspect.Parameter.KEYWORD_ONLY
+        for parameter in parameters[12:]
+    )
+    assert all(parameter.default is inspect.Parameter.empty for parameter in parameters)
+    assert not any(
+        parameter.kind in (
+            inspect.Parameter.VAR_POSITIONAL,
+            inspect.Parameter.VAR_KEYWORD,
+        )
+        for parameter in parameters
+    )
+    expected_core_result_rows = (
+        ("schema_version", "str"),
+        ("status", "str"),
+        ("claim_level", "str"),
+        ("disposition", "Package0DispositionV1"),
+        ("reason", "Package0ReasonV1"),
+        ("catalog_id", "str"),
+        ("catalog_payload_sha256", "str"),
+        ("package_schema_id", "str"),
+        ("package_id", "str"),
+        ("package_payload_sha256", "str"),
+        ("signer_registry_id", "str"),
+        ("signer_registry_payload_sha256", "str"),
+        ("signer_registry_entries_root_sha256", "str"),
+        ("campaign_id", "str"),
+        ("attempt_id", "str"),
+        ("chain_root_sha256", "str"),
+        ("terminal_signed_stage_event_id", "str"),
+        ("terminal_signed_stage_event_payload_sha256", "str"),
+        ("ledger_event_count", "int"),
+        ("stage_subject_event_count", "int"),
+        ("referenced_artifact_count", "int"),
+        ("total_signature_count", "int"),
+    )
+    expected_mechanics_fields = (
+        "exact_raw_bytes_verified",
+        "rfc8785_canonical_bytes_verified",
+        "content_ids_verified",
+        "raw_payload_sha256s_verified",
+        "signature_contracts_verified",
+        "ledger_chain_verified",
+        "stage_subject_binding_verified",
+        "referenced_artifact_graph_verified",
+        "package0_lineage_verified",
+        "terminal_p15_p16_binding_verified",
+        "predecessor_absence_verified",
+        "private_lineage_verified",
+    )
+    expected_nonclaim_fields = (
+        "package15_verified",
+        "package16_verified",
+        "gate_admission_verified",
+        "r10_satisfied",
+        "authority_currentness_verified",
+        "owner_non_revocation_verified",
+        "external_key_custody_verified",
+        "external_durability_verified",
+        "external_non_equivocation_verified",
+        "global_anti_fork_verified",
+        "execution_authorized",
+        "actual_960_verified",
+        "c1_satisfied",
+    )
+    expected_result_rows = (
+        *expected_core_result_rows,
+        *((name, "bool") for name in expected_mechanics_fields),
+        *((name, "bool") for name in expected_nonclaim_fields),
+    )
+    assert catalog.PACKAGE0_VERIFIED_RESULT_FIELDS_IN_EXACT_ORDER_V1 == (
+        expected_result_rows
+    )
+    dataclass_fields = (
+        catalog.VerifiedPhase2BActualUnsealed960AuthoritativeEvidencePackage0V1.__dataclass_fields__
+    )
+    assert tuple(dataclass_fields) == tuple(row[0] for row in expected_result_rows)
+    assert tuple(str(field.type) for field in dataclass_fields.values()) == tuple(
+        row[1] for row in expected_result_rows
+    )
+    result_contract = catalog.FUTURE_REAL_PACKAGE0_VERIFIED_RESULT_CONTRACT_V1
+    assert result_contract["fields_in_exact_order"] == [
+        list(row) for row in expected_result_rows
+    ]
+    assert result_contract[
+        "mechanics_boolean_fields_that_may_be_true_in_exact_order"
+    ] == list(expected_mechanics_fields)
+    assert result_contract["issuance_available_while_verifier_not_implemented"] is False
+    assert result_contract[
+        "nonclaim_boolean_fields_required_exact_false_in_exact_order"
+    ] == list(expected_nonclaim_fields)
+    body = json.loads(_raw())["body"]
+    assert body["future_real_package0_verifier_raw_abi"] == manifest
+    assert body["future_real_package0_verified_result_contract"] == result_contract
+    assert body["real_package0_verification_status"] == "NOT_IMPLEMENTED"
+    positional, keyword_only = _package0_real_stub_inputs()
+    with pytest.raises(
+        catalog.Phase2BActualUnsealed960AuthoritativeEvidencePackage0ErrorV1,
+        match=r"^FAIL_C1_PACKAGE0_V1_NOT_IMPLEMENTED:",
+    ):
+        catalog.verify_real_phase2b_actual_unsealed_960_authoritative_evidence_package0_v1(
+            *positional, **keyword_only
+        )
 
 
 def test_permanent_nonclaim_oracle_is_exact_bool_false_and_matches_result_suffix() -> None:
@@ -748,6 +951,14 @@ def test_package_catalog_exact_names_backward_only_and_terminal_semantics() -> N
         ]
         assert descriptor["interleaved_dag_root"] == catalog.DAG_ROOT_V1
         expected_body_literals = {
+            "schema_version": (
+                "hegel-machine-phase2b-actual-unsealed-960-authoritative-"
+                f"evidence-package/{spec.ordinal}/1"
+            ),
+            "status": catalog.PACKAGE_OUTER_STATUS_V1,
+            "claim_level": catalog.PACKAGE_OUTER_CLAIM_LEVEL_V1,
+            "package_ordinal": spec.ordinal,
+            "package_name": spec.package_name,
             "external_evidence_class": (
                 "AUTHORITATIVE_C1_EVIDENCE_REQUIRING_EXTERNAL_LINEAGE"
             ),
@@ -758,6 +969,13 @@ def test_package_catalog_exact_names_backward_only_and_terminal_semantics() -> N
             expected_body_literals["overall_gate_count"] = 12
             expected_body_literals["slice_gate_count"] = 24
         assert descriptor["body_required_literals"] == expected_body_literals
+        assert tuple(
+            rule["rule_id"]
+            for rule in descriptor["package_outer_binding_rules_in_exact_order"]
+        ) == (
+            "EXACT_PACKAGE_SCHEMA_STATUS_CLAIM_AND_IDENTITY",
+            "PACKAGE_NON_ELEVATION",
+        )
     assert schema_objects[0]["predecessor_package_schema_ids_in_exact_order"] == []
     assert len(schema_objects[17]["predecessor_package_schema_ids_in_exact_order"]) == 17
     bundle = catalog.BUNDLE_INDEX_SCHEMA_OBJECT_V1
@@ -993,6 +1211,9 @@ def test_exact_preimage_profiles_and_field_type_manifests_are_machine_complete()
         },
         "detached_signature": {
             "profile": "DOMAIN_BYTES_PLUS_RFC8785_EXACT_DETACHED_SIGNATURE_PREIMAGE_V1",
+            "record_schema_version": (
+                "hegel-machine-phase2b-actual-unsealed-960-detached-signature/1"
+            ),
             "schema_version": (
                 "hegel-machine-phase2b-actual-unsealed-960-authoritative-evidence-"
                 "detached-signature-preimage/1"
@@ -1138,6 +1359,9 @@ def test_exact_preimage_profiles_and_field_type_manifests_are_machine_complete()
         assert item["content_id_preimage_profile"] == catalog.CONTENT_ID_PREIMAGE_PROFILE_V1
         assert item["content_id_preimage_fields_in_exact_order"] == ["body"]
         assert item["signature_preimage_profile"] == catalog.DETACHED_SIGNATURE_PREIMAGE_PROFILE_V1
+        assert item["detached_signature_schema_version"] == (
+            "hegel-machine-phase2b-actual-unsealed-960-detached-signature/1"
+        )
         assert item["signature_preimage_schema_version"] == (
             catalog.DETACHED_SIGNATURE_PREIMAGE_SCHEMA_VERSION_V1
         )
@@ -1308,6 +1532,7 @@ def _assert_independent_catalog_hard_contract(body: dict[str, object]) -> None:
             "RAW_DEPENDENCY_EVIDENCE_REQUIRED",
             "DEPENDENCY_CONTENT_ID_SIGNATURE_AND_SHA256",
             "DEPENDENCY_BODY_CROSS_BINDING",
+            "ALLOCATION_CHRONOLOGY_AND_NO_FUTURE_ID_BACKFILL",
             "SELF_FORWARD_DUPLICATE_AND_PARTIAL_FORBIDDEN",
         )
     for descriptor in body["stage_schema_objects_in_exact_order"]:
@@ -1392,6 +1617,14 @@ def _assert_independent_catalog_hard_contract(body: dict[str, object]) -> None:
         assert descriptor["producer_evidence_disposition"] == "PRESENTED_UNVERIFIED"
         assert descriptor["interleaved_dag_root"] == body["interleaved_dag_root"]
         expected_literals = {
+            "schema_version": (
+                "hegel-machine-phase2b-actual-unsealed-960-authoritative-"
+                f"evidence-package/{ordinal}/1"
+            ),
+            "status": catalog.PACKAGE_OUTER_STATUS_V1,
+            "claim_level": catalog.PACKAGE_OUTER_CLAIM_LEVEL_V1,
+            "package_ordinal": ordinal,
+            "package_name": EXPECTED_PACKAGES[ordinal],
             "external_evidence_class": (
                 "AUTHORITATIVE_C1_EVIDENCE_REQUIRING_EXTERNAL_LINEAGE"
             ),
@@ -1402,15 +1635,42 @@ def _assert_independent_catalog_hard_contract(body: dict[str, object]) -> None:
             expected_literals["overall_gate_count"] = 12
             expected_literals["slice_gate_count"] = 24
         assert descriptor["body_required_literals"] == expected_literals
+        assert descriptor["detached_signature_schema_version"] == (
+            catalog.DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION_V1
+        )
+        assert tuple(
+            rule["rule_id"]
+            for rule in descriptor["package_outer_binding_rules_in_exact_order"]
+        ) == (
+            "EXACT_PACKAGE_SCHEMA_STATUS_CLAIM_AND_IDENTITY",
+            "PACKAGE_NON_ELEVATION",
+        )
     assert packages[0]["predecessor_package_schema_ids_in_exact_order"] == []
     assert packages[0]["predecessor_package_instance_cardinality"] == 0
     assert len(packages[17]["predecessor_package_schema_ids_in_exact_order"]) == 17
     assert packages[17]["predecessor_package_instance_cardinality"] == 17
     ledger_contracts = packages[0]["nested_record_binding_contracts_in_exact_order"]
-    assert len(ledger_contracts) == 1
+    assert tuple(contract["record_name"] for contract in ledger_contracts) == (
+        "signed_stage_event_envelope",
+        "store_if_absent_receipt",
+        "logical_time_token",
+        "governance_checkpoint",
+        "custodian_checkpoint",
+        "external_anchor",
+        "package0_referenced_artifact_graph",
+    )
     ledger_contract = ledger_contracts[0]
     assert ledger_contract["record_name"] == "signed_stage_event_envelope"
     assert ledger_contract["event_body_record_name"] == "custodian_ledger_event_body"
+    assert ledger_contract["record_schema_version"] == (
+        "hegel-machine-phase2b-actual-unsealed-960-signed-stage-event/1"
+    )
+    assert ledger_contract["event_body_schema_version"] == (
+        "hegel-machine-phase2b-actual-unsealed-960-custodian-ledger-event/1"
+    )
+    assert ledger_contract["detached_signature_schema_version"] == (
+        catalog.DETACHED_SIGNATURE_RECORD_SCHEMA_VERSION_V1
+    )
     assert ledger_contract["record_content_id_domain_ascii"].endswith("\x00")
     assert ledger_contract["record_content_id_prefix"] == (
         "phase2b_actual_unsealed_960_signed_stage_event_v1_"
@@ -1421,6 +1681,7 @@ def _assert_independent_catalog_hard_contract(body: dict[str, object]) -> None:
     assert tuple(
         rule["rule_id"] for rule in ledger_contract["binding_rules_in_exact_order"]
     ) == (
+        "EXACT_LEDGER_ENVELOPE_BODY_AND_SIGNATURE_RECORD_SCHEMA_VERSIONS",
         "LEDGER_EVENT_CONTENT_ID",
         "RAW_LEDGER_EVENT_PAYLOADS_REQUIRED",
         "OUTER_LEDGER_EVENT_THREE_TUPLE_BINDING",
@@ -1518,10 +1779,12 @@ def _assert_independent_catalog_hard_contract(body: dict[str, object]) -> None:
     ) == (
         "ATTEMPT_RECORD_CONTENT_ID",
         "ATTEMPT_INDEX_SEQUENCE",
-        "ATTEMPT_ZERO_PREDECESSOR",
-        "ATTEMPT_ONE_PREDECESSOR",
-        "ATTEMPT_ONE_REEXECUTE_ELIGIBILITY",
-        "UPLOAD_RETRY_NOT_NEW_ATTEMPT",
+            "ATTEMPT_ZERO_PREDECESSOR",
+            "ATTEMPT_ONE_PREDECESSOR",
+            "ATTEMPT_ONE_REEXECUTE_ELIGIBILITY",
+            "ATTEMPT_REEXECUTE_BIDIRECTIONAL_CARDINALITY",
+            "FINAL_ATTEMPT_HAS_NO_OUTSTANDING_REEXECUTE",
+            "UPLOAD_RETRY_NOT_NEW_ATTEMPT",
         "RAW_ATTEMPT_RECORD_PAYLOADS_REQUIRED",
         "OUTER_ATTEMPT_RECORD_FOUR_TUPLE_BINDING",
         "OUTER_ATTEMPT_RECORD_ID_SHA_INDEX_REDERIVATION",
@@ -1558,6 +1821,10 @@ def _assert_independent_catalog_hard_contract(body: dict[str, object]) -> None:
     assert all(type(value) is bool and value is False for value in nonclaims.values())
 
 
+def test_independent_catalog_hard_contract_pristine_positive() -> None:
+    _assert_independent_catalog_hard_contract(json.loads(_raw())["body"])
+
+
 @pytest.mark.parametrize(
     "mutation",
     (
@@ -1566,6 +1833,13 @@ def _assert_independent_catalog_hard_contract(body: dict[str, object]) -> None:
         "GATE_PREDECESSOR_RULE_DROP",
         "STAGE_PREDECESSOR_RULE_DROP",
         "LEDGER_EVENT_RULE_DROP",
+        "LEDGER_ENVELOPE_SCHEMA_DRIFT",
+        "LEDGER_BODY_SCHEMA_DRIFT",
+        "LEDGER_SIGNATURE_SCHEMA_DRIFT",
+        "PACKAGE_STATUS_DRIFT",
+        "PACKAGE_CLAIM_DRIFT",
+        "PACKAGE_DETACHED_SIGNATURE_SCHEMA_DRIFT",
+        "PACKAGE_OUTER_RULE_DROP",
         "STATISTICAL_GATE_ENUM_AS_CONTENT_ID",
         "PREDECESSOR_SCHEMA_SPLICE",
         "PREDECESSOR_FINALIZATION_AFTER_CHILD",
@@ -1589,13 +1863,21 @@ def _assert_independent_catalog_hard_contract(body: dict[str, object]) -> None:
 def test_independent_hard_contract_negative_mutations(mutation: str) -> None:
     body = copy.deepcopy(json.loads(_raw())["body"])
     if mutation == "GATE_ENUM_AS_CONTENT_ID":
-        body["gate_schema_objects_in_exact_order"][0][
-            "evidence_body_field_types_in_exact_order"
-        ][5]["exact_wire_type"] = "EXACT_ASCII_CONTENT_IDENTIFIER_PREFIX_PLUS_64_LOWERHEX"
+        next(
+            row
+            for row in body["gate_schema_objects_in_exact_order"][0][
+                "evidence_body_field_types_in_exact_order"
+            ]
+            if row["field_name"] == "gate_id"
+        )["exact_wire_type"] = "EXACT_ASCII_CONTENT_IDENTIFIER_PREFIX_PLUS_64_LOWERHEX"
     elif mutation == "GATE_SCHEMA_ID_AS_ENUM":
-        body["gate_schema_objects_in_exact_order"][0][
-            "evidence_body_field_types_in_exact_order"
-        ][6]["exact_wire_type"] = "EXACT_ASCII_ENUM_MEMBER_OF_GATE_IDS_IN_EXACT_ORDER"
+        next(
+            row
+            for row in body["gate_schema_objects_in_exact_order"][0][
+                "evidence_body_field_types_in_exact_order"
+            ]
+            if row["field_name"] == "gate_schema_id"
+        )["exact_wire_type"] = "EXACT_ASCII_ENUM_MEMBER_OF_GATE_IDS_IN_EXACT_ORDER"
     elif mutation == "GATE_PREDECESSOR_RULE_DROP":
         body["gate_schema_objects_in_exact_order"][1][
             "predecessor_gate_evidence_binding_rules_in_exact_order"
@@ -1608,6 +1890,34 @@ def test_independent_hard_contract_negative_mutations(mutation: str) -> None:
         body["package_schema_objects_in_exact_order"][0][
             "nested_record_binding_contracts_in_exact_order"
         ][0]["binding_rules_in_exact_order"].pop()
+    elif mutation == "LEDGER_ENVELOPE_SCHEMA_DRIFT":
+        body["package_schema_objects_in_exact_order"][0][
+            "nested_record_binding_contracts_in_exact_order"
+        ][0]["record_schema_version"] += "-drift"
+    elif mutation == "LEDGER_BODY_SCHEMA_DRIFT":
+        body["package_schema_objects_in_exact_order"][0][
+            "nested_record_binding_contracts_in_exact_order"
+        ][0]["event_body_schema_version"] += "-drift"
+    elif mutation == "LEDGER_SIGNATURE_SCHEMA_DRIFT":
+        body["package_schema_objects_in_exact_order"][0][
+            "nested_record_binding_contracts_in_exact_order"
+        ][0]["detached_signature_schema_version"] += "-drift"
+    elif mutation == "PACKAGE_STATUS_DRIFT":
+        body["package_schema_objects_in_exact_order"][0][
+            "body_required_literals"
+        ]["status"] = "C1_PASS"
+    elif mutation == "PACKAGE_CLAIM_DRIFT":
+        body["package_schema_objects_in_exact_order"][0][
+            "body_required_literals"
+        ]["claim_level"] = "AUTHORITY_VERIFIED"
+    elif mutation == "PACKAGE_DETACHED_SIGNATURE_SCHEMA_DRIFT":
+        body["package_schema_objects_in_exact_order"][0][
+            "detached_signature_schema_version"
+        ] += "-drift"
+    elif mutation == "PACKAGE_OUTER_RULE_DROP":
+        body["package_schema_objects_in_exact_order"][0][
+            "package_outer_binding_rules_in_exact_order"
+        ].pop()
     elif mutation == "STATISTICAL_GATE_ENUM_AS_CONTENT_ID":
         gate_result = next(
             item
@@ -1915,6 +2225,15 @@ def test_custodian_ledger_first_event_null_and_exact_ten_record_chain() -> None:
     contract = descriptor["nested_record_binding_contracts_in_exact_order"][0]
     assert contract["record_name"] == "signed_stage_event_envelope"
     assert contract["event_body_record_name"] == "custodian_ledger_event_body"
+    assert contract["record_schema_version"] == (
+        "hegel-machine-phase2b-actual-unsealed-960-signed-stage-event/1"
+    )
+    assert contract["event_body_schema_version"] == (
+        "hegel-machine-phase2b-actual-unsealed-960-custodian-ledger-event/1"
+    )
+    assert contract["detached_signature_schema_version"] == (
+        "hegel-machine-phase2b-actual-unsealed-960-detached-signature/1"
+    )
     assert contract["required_record_cardinality"] == 10
     assert contract["raw_record_payloads_required"] is True
     assert contract["stage_names_in_exact_order"] == list(EXPECTED_STAGES)
@@ -1960,11 +2279,16 @@ def test_custodian_ledger_first_event_null_and_exact_ten_record_chain() -> None:
         "signer_key_id": first_body["signer_key_id"],
         "signature_hex": "7" * 128,
     }
+    assert first_body["schema_version"] == contract["event_body_schema_version"]
+    assert first_signature["schema_version"] == (
+        contract["detached_signature_schema_version"]
+    )
     first_preimage = {
         "schema_version": "hegel-machine-phase2b-actual-unsealed-960-signed-stage-event/1",
         "body": first_body,
         "signatures_in_exact_order": [first_signature],
     }
+    assert first_preimage["schema_version"] == contract["record_schema_version"]
     assert tuple(first_preimage) == tuple(
         contract["record_content_id_preimage_fields_in_exact_order"]
     )
@@ -2147,6 +2471,31 @@ def test_private_result_forge_copy_deepcopy_and_mutation_reject() -> None:
         )
 
 
+def test_package0_private_result_construction_copy_pickle_and_lineage_reject() -> None:
+    result_type = (
+        catalog.VerifiedPhase2BActualUnsealed960AuthoritativeEvidencePackage0V1
+    )
+    with pytest.raises(TypeError, match="privately issued"):
+        result_type()
+    forged = object.__new__(result_type)
+    with pytest.raises(TypeError, match="cannot be copied"):
+        copy.copy(forged)
+    with pytest.raises(TypeError, match="cannot be deep-copied"):
+        copy.deepcopy(forged)
+    with pytest.raises(TypeError, match="cannot be serialized"):
+        pickle.dumps(forged)
+    with pytest.raises((AttributeError, TypeError)):
+        setattr(forged, "c1_satisfied", True)
+    object.__setattr__(forged, "c1_satisfied", True)
+    with pytest.raises(
+        catalog.Phase2BActualUnsealed960AuthoritativeEvidencePackage0ErrorV1,
+        match=r"^FAIL_C1_PACKAGE0_V1_LINEAGE:",
+    ):
+        catalog.require_verified_phase2b_actual_unsealed_960_authoritative_evidence_package0_v1(
+            forged
+        )
+
+
 def test_extreme_definition_time_rebind_and_real_not_implemented_are_stable() -> None:
     script = r'''
 import sys
@@ -2157,6 +2506,10 @@ raw=bytes(m.CATALOG_PAYLOAD_V1)
 v=m.verify_phase2b_actual_unsealed_960_authoritative_evidence_schema_catalog_v1
 req=m.require_verified_phase2b_actual_unsealed_960_authoritative_evidence_schema_catalog_v1
 real=m.verify_real_phase2b_actual_unsealed_960_authoritative_evidence_bundle_v1
+package0_real=m.verify_real_phase2b_actual_unsealed_960_authoritative_evidence_package0_v1
+package0_req=m.require_verified_phase2b_actual_unsealed_960_authoritative_evidence_package0_v1
+package0_error=m.Phase2BActualUnsealed960AuthoritativeEvidencePackage0ErrorV1
+package0_type=m.VerifiedPhase2BActualUnsealed960AuthoritativeEvidencePackage0V1
 error=m.Phase2BActualUnsealed960AuthoritativeEvidenceSchemaCatalogErrorV1
 kw=dict(
  out_of_band_expected_readiness_dag_id_bytes=m.INSPECTED_READINESS_DAG_ID_V1.encode(),
@@ -2177,6 +2530,35 @@ real_kw={
   "mandatory_keyword_only_byte_parameters_in_exact_order"
  ]
 }
+package0_args=(
+ raw,b"signer-registry",b"package0-envelope",
+ tuple(f"ledger-{index}".encode() for index in range(10)),
+ tuple(f"stage-{index}".encode() for index in range(10)),
+ b"store-receipt",b"logical-time-token",b"governance-checkpoint",
+ b"custodian-checkpoint",b"external-anchor",b"package15-envelope",
+ b"package16-envelope",
+)
+package0_kw={
+ name:b"required-oob-byte-pin"
+ for name in (
+  "out_of_band_expected_catalog_id_bytes",
+  "out_of_band_expected_catalog_payload_sha256_digest",
+  "out_of_band_expected_signer_registry_id_bytes",
+  "out_of_band_expected_signer_registry_payload_sha256_digest",
+  "out_of_band_expected_signer_registry_entries_root_sha256_digest",
+  "out_of_band_expected_governance_root_key_id_bytes",
+  "out_of_band_expected_governance_root_public_key_bytes",
+  "out_of_band_expected_custodian_root_key_id_bytes",
+  "out_of_band_expected_custodian_root_public_key_bytes",
+  "out_of_band_expected_readiness_dag_id_bytes",
+  "out_of_band_expected_readiness_dag_payload_sha256_digest",
+  "out_of_band_expected_progression_plan_payload_sha256_digest",
+  "out_of_band_expected_gap_inventory_source_sha256_digest",
+  "out_of_band_expected_statistical_validation_source_sha256_digest",
+  "expected_campaign_id_bytes",
+  "expected_attempt_id_bytes",
+ )
+}
 getter=m.canonical_phase2b_actual_unsealed_960_authoritative_evidence_schema_catalog_bytes_v1
 def bomb(*args,**kwargs): raise RuntimeError("REBIND_REACHED")
 rfc._decode_json_bytes=bomb
@@ -2191,6 +2573,13 @@ assert req(r) is r and r.c1_satisfied is False and getter()==raw
 try: real(*real_args,**real_kw)
 except error as exc: assert str(exc).startswith("FAIL_C1_CATALOG_V1_NOT_IMPLEMENTED:")
 else: raise AssertionError("real API unexpectedly returned")
+forged=object.__new__(package0_type)
+try: package0_req(forged)
+except package0_error as exc: assert str(exc).startswith("FAIL_C1_PACKAGE0_V1_LINEAGE:")
+else: raise AssertionError("forged package 0 result unexpectedly accepted")
+try: package0_real(*package0_args,**package0_kw)
+except package0_error as exc: assert str(exc).startswith("FAIL_C1_PACKAGE0_V1_NOT_IMPLEMENTED:")
+else: raise AssertionError("real package 0 API unexpectedly returned")
 '''
     completed = subprocess.run(
         [sys.executable, "-I", "-c", script],

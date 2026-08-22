@@ -14,6 +14,7 @@ The frozen current state is:
 - catalog disposition: `RUNBOOK_FROZEN_NOT_ADMITTED`;
 - all 16 gate verifier availabilities: `SCHEMA_FROZEN_NOT_VERIFIABLE`;
 - real evidence-bundle verifier: `NOT_IMPLEMENTED`;
+- real Package 0 verifier: `NOT_IMPLEMENTED`;
 - campaign and attempt identifiers: not allocated;
 - actual generation, inference, reveal, scoring, and terminal consumption: not
   executed.
@@ -28,14 +29,14 @@ The following identities record the local bytes inspected for this document:
 
 | Artifact | SHA-256 | Size |
 |---|---|---:|
-| `src/hegel_machine/phase2b_actual_unsealed_960_authoritative_evidence_schema_catalog_v1.py` | `c75bfe81e5d77d5062da2babe9adc193ca2bdf6a9943aad442ea8214f3e89dff` | 9,355 lines / 403,738 bytes |
-| `config/phase2b_actual_unsealed_960_authoritative_evidence_schema_catalog_v1.json` | `71473b38f5fd4df165884c06134f4fbef6d94bb8e307fa71703d946d3a49b0ed` | 1,527,500 bytes, no trailing LF |
-| `tests/test_phase2b_actual_unsealed_960_authoritative_evidence_schema_catalog_v1.py` | `0e32c0b5183112b7f3ef429e683b6e6999ef2703a57537f96fa50312d61202b2` | 2,291 lines / 97,684 bytes |
+| `src/hegel_machine/phase2b_actual_unsealed_960_authoritative_evidence_schema_catalog_v1.py` | `ead2e2e5a7b03a804148fbd329e67561c1367375b2c05bf4ab2cd691f20487c6` | 10,185 lines / 439,676 bytes |
+| `config/phase2b_actual_unsealed_960_authoritative_evidence_schema_catalog_v1.json` | `62f46cfba8a86f7ad969a7ea584c1828f0b34bb1d95571b1cc64259ac01a588a` | 1,592,184 bytes, no trailing LF |
+| `tests/test_phase2b_actual_unsealed_960_authoritative_evidence_schema_catalog_v1.py` | `3f37bef4defd4acd5d1b0e94d89486bbc577186eb358575122d42b16a22f5bb7` | 2,680 lines / 114,552 bytes |
 
 The catalog content identifier is:
 
 ```text
-phase2b_actual_unsealed_960_authoritative_evidence_schema_catalog_v1_accb3c3739394cc36f2e89fc420f58799fbe71a1f33c21ee31906a3624e23082
+phase2b_actual_unsealed_960_authoritative_evidence_schema_catalog_v1_a9f1b10bf7df69065f9847a69b935613ba1c368832c21ea5ac60e863961272cd
 ```
 
 This document is deliberately not an input pin of the catalog. It may explain
@@ -61,6 +62,10 @@ The catalog freezes:
   issued or live authorizations;
 - exact raw-byte, RFC8785, content-ID, detached-signature, length-framed root,
   dependency-pin, and private-lineage rules.
+- one exact detached-signature record schema version across all signed
+  top-level descriptors and the signed nested Package 0 records;
+- an exact Package 0 raw verifier ABI, private result schema, and stable
+  `NOT_IMPLEMENTED` boundary.
 
 Every gate-source predecessor list must equal the matching gate dependency
 list, remain pairwise distinct, and refer only to an earlier gate. Self,
@@ -124,9 +129,9 @@ boundary.
 
 ## 5. Local verification record and its limits
 
-The focused catalog suite passes 61 tests. The dependency-integrated suite
+The focused catalog suite passes 71 tests. The dependency-integrated suite
 covering the readiness DAG, legacy gap inventory, statistical-validation
-candidate, and catalog passes 164 tests.
+candidate, and catalog passes 174 tests.
 
 The focused suite independently checks all 79 schema content IDs, length-framed
 schema roots, exact field manifests, 187 signature domains, the 16 source-root
@@ -152,9 +157,19 @@ prove that:
 
 All corresponding result fields remain exact boolean `false`.
 
-## 6. Next construction slice: package 0 verifier mechanics
+## 6. Package 0 boundary and next implementation slice
 
-The next local construction slice is package ordinal 0:
+The catalog now freezes a Package 0-only public surface with 12 positional raw
+inputs and 16 mandatory keyword-only byte pins. It also freezes a 47-field
+private result contract: 12 mechanics booleans may become true only after a
+future producer-free verifier succeeds, while 13 authority, R10, durability,
+anti-fork, execution, actual-960, and C1 fields must remain exact false. Direct
+construction, copying, deep-copying, pickling, mutation, and forged lineage are
+rejected. The public real entry currently fails with the exact
+`FAIL_C1_PACKAGE0_V1_NOT_IMPLEMENTED` boundary and issues no result.
+
+The next local implementation slice behind that frozen boundary is package
+ordinal 0:
 
 ```text
 name: durable_signed_custodian_ledger_and_signer_chain
@@ -164,7 +179,7 @@ producer stage: PREREGISTERED
 finalization stage: TERMINAL_CONSUMED
 ```
 
-The slice should implement a producer-free raw-bytes verifier and matching
+The slice must implement a producer-free raw-bytes verifier and matching
 synthetic/negative KAT for:
 
 1. the exact ten-stage signed ledger chain;
