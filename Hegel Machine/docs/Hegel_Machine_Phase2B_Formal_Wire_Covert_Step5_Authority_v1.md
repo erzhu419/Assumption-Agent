@@ -3255,6 +3255,169 @@ readiness row, issue an R01-only readiness overlay, change the all-false
 sixteen-row readiness state, or retroactively upgrade the frozen `b480`
 candidate. The gate remains `HOLD` and execution remains unauthorized.
 
+#### 9.7.5 Downstream admission-v2 acyclic candidate and local exact-six replay stop
+
+The next surface is a new, downstream-only consumer of the frozen admission
+and overlay mechanics. It does not alter, replace, reinterpret or back-propagate
+anything into authority/profile v2, the frozen `b480` admission contract, the
+offline runtime-closure replay, the generic CAS replay core or the presented
+overlay `/2`. No frozen predecessor source or test byte is changed by this
+candidate. The exact reviewed downstream artifacts are:
+
+| Surface | Artifact | SHA-256 | Lines | Bytes |
+|---|---|---|---:|---:|
+| downstream admission-v2 candidate source | `src/hegel_machine/phase2b_formal_wire_covert_step5_r01_external_witness_admission_contract_v2.py` | `7e00fb5b136d26c556b5d60997175ed5e006fcd609bb5d96000811223fed1871` | 3733 | 168805 |
+| downstream admission-v2 candidate KAT | `tests/test_phase2b_formal_wire_covert_step5_r01_external_witness_admission_contract_v2.py` | `2cf6694c74a5933412faca98ea5dd7368ee402c34125d89f9011a8951beadb54` | 1709 | 68150 |
+
+The final focused stop is 18/18 in 14.77 seconds. The admission-v2 KAT plus
+the five frozen dependency suites close together at 297/297 in 115.44 seconds.
+The final source and test compile, have no trailing whitespace, retain the
+exact SHA-256 values above and received an independent read-only disposition
+of `GO; P0=0, P1=0`. This GO applies only to freezing the presented candidate
+mechanics. It is not an R01, authority, live-service or actual-corpus GO.
+
+The public
+`verify_external_witness_admission_candidate_v2` entry has exactly 51
+required positional raw transports followed by exactly 19 required
+keyword-only raw pins. All seventy parameters have no default. The public ABI
+has no decoded-object transport, callback or verifier-injection parameter.
+The first 25 positional inputs replay the complete frozen `b480` ancestry,
+including its predecessor result; the remaining positional inputs consume the
+raw offline closure, six same-session admission objects, exact-six CAS replay
+and A/2 suffix. The nineteen pin names and order are exactly the overlay `/2`
+pin contract: nine independently supplied raw ID/SHA-256 pairs plus the exact
+attempt-context ID. Every scalar transport must be exact `bytes`; every
+sequence and chunk matrix has an exact tuple shape and exact byte elements.
+
+The candidate dependency order is acyclic and fixed as follows:
+
+~~~text
+frozen b480 admission-candidate result
+  -> admission-v2 live policy
+  -> admission-v2 A/2 policy
+  -> pre-response challenge
+  -> W response
+  -> source report
+  -> W custody attestation
+  -> admission-v2 candidate result
+  -> exact six-object CAS replay
+  -> A/2 request -> checkpoint -> head -> receipt
+  -> privately issued post-A/2 candidate result
+~~~
+
+The A/2 policy is a raw, independently pinned prerequisite and is not one of
+the six stored objects. It cannot name the future admission-v2 result. The
+five objects before the result cannot name that same-session result; after the
+result ID and payload SHA-256 are known, the verifier also scans their nested
+values for either exact scalar. The result contains no same-session CAS or A/2
+transcript fields. The exact six stored objects are, in ordinal order:
+
+~~~text
+0 external_admission_v2_live_policy
+1 external_admission_v2_pre_response_challenge
+2 external_admission_v2_w_response
+3 external_admission_v2_w_report
+4 external_admission_v2_custody_attestation
+5 external_admission_v2_candidate_result
+~~~
+
+Each has the frozen 16,777,216-byte maximum. Every store request must bind the
+exact ordinal, artifact kind, semantic artifact ID, `sha256:` payload address,
+raw size and one-FD declaration. The positive KAT uses the concrete
+implementation rather than a mock: it writes the six exact raw objects
+through a local `CasStoreV2` in a test-owned temporary directory, collects its
+requests,
+signed receipts, checkpoints, heads and responses, and then independently
+replays those bytes with the producer-free generic CAS replay core. The A/2
+request consumes the complete six-object binding only after that replay; its
+checkpoint, head and receipt then exact-bind the previous high-water mapping,
+the committed mapping, every suffix ID/SHA-256 and the presented
+compare-and-append result. This is concrete local store/replay mechanics, not
+evidence of an external CAS, external durability, currentness or authority.
+
+The final review repaired one real P1 in the downstream CAS projection. A
+generic replay-core object-binding tuple has these relevant meanings:
+
+~~~text
+[2] bound_artifact_id  = semantic admission artifact ID
+[4] object_id          = CAS content address, equal to object SHA-256
+~~~
+
+The earlier downstream check incorrectly compared tuple position `[4]` with
+the admission-v2 candidate-result semantic ID. That conflated a `sha256:` CAS
+object address with the separately domain-addressed admission result and
+rejected an otherwise valid exact-six replay. The fixed verifier compares
+position `[2]` with the admission-v2 candidate-result ID, while the derived
+complete binding correctly retains position `[4]` as `final_object_id`. The
+regression KAT independently asserts that `[2]` equals the candidate-result
+ID, `[4]` equals the raw result's CAS address, and `[2] != [4]`.
+
+The downstream dependency contract freezes these exact inspected predecessor
+source identities; the KAT independently hashes the corresponding files:
+
+| Frozen predecessor | Source SHA-256 |
+|---|---|
+| external-witness admission contract v1 (`b480`) | `b480b0d4b286e1b0cfb43f88846bbbf635b753fffc64b5e89e9073264360e285` |
+| presented live-runtime overlay v2 | `5e4b23b79c04e4a613995ddec5aafe883e1aa694b945b86bda7ba67caff3be0e` |
+| authority/profile v2 | `03d689327ca422f93e5a32db0a7f813fe84b1099f1bac1b31395c975d76d8e86` |
+| offline runtime-closure replay v1 | `f836b3d00f332398214d3ccf7787109abb8f2de96b7b8281748bbb0ec695f2f9` |
+| generic CAS-store replay core v2 | `e33bb8ae1f4c70668de3bfbdbd803a953513db94cb0a9c1ceb1082e97141de02` |
+
+Exact schemas, complete field sets, content-ID domains, signature domains,
+signature cardinality/order, signer role or external key, purpose and key
+epoch are all fail-closed. Integer validation excludes JSON booleans, boolean
+validation excludes integers, and exact structural comparison prevents Python
+equality from laundering `0`/`1` across claim or sequence fields. The KATs
+cover all nineteen pins, future-result injection, signed-body drift,
+role/purpose/epoch drift, bool-as-int substitution, Q1/Q2 aliasing, six-object
+permutation and legally re-signed A/2 mapping drift.
+
+The returned `VerifiedExternalWitnessAdmissionCandidateV2` is constructor-
+disabled and privately issued. Its closure records exact object identity and
+an immutable field snapshot; `object.__new__` field copying, shallow or deep
+copy, and post-issuance mutation are rejected. Definition-time capture clones
+the local verifier graph and freezes the upstream verifier entrypoints used by
+the raw replay. The rebind KAT replaces public local helpers and predecessor
+exports with bombs yet still reaches only the captured graph. A clean isolated
+import also proves that the downstream candidate does not import the live
+producer, store-service or runtime-service modules. These are ordinary Python
+definition-capture and private-lineage properties, not protection from
+interpreter-memory or loaded-code mutation.
+
+The exact claim level remains
+`RAW_PRESENTED_SERIALIZATION_SIGNATURE_AND_REPLAY_INTEGRITY_ONLY_NOT_ACTUAL_RUNTIME_NOT_KEY_CUSTODY_NOT_DURABILITY_NOT_CURRENTNESS_NOT_NON_EQUIVOCATION_NOT_AUTHORITY_NOT_R01_NOT_READINESS_NOT_EXECUTION`.
+`REAL_ADMISSION_STATUS_V2` is exactly `NOT_IMPLEMENTED`, and
+`verify_real_external_witness_admission_v2` fails closed with
+`FAIL_STEP5_R01_EXTERNAL_ADMISSION_V2_NOT_IMPLEMENTED`.
+
+Every elevated result predicate remains exactly false:
+
+~~~text
+actual_runtime_verified
+runtime_closure_verified
+live_channel_verified
+key_custody_verified
+online_key_nonexportable_verified
+distinct_live_uid_gid_verified
+external_cas_verified
+external_anchor_verified
+external_anti_rollback_verified
+external_currentness_verified
+durability_verified
+non_equivocation_verified
+global_anti_fork_verified
+malicious_root_resistance_verified
+authority_evidence
+r01_satisfied
+readiness_evidence
+execution_authorized
+~~~
+
+Accordingly, this new consumer does not rewrite any predecessor result, does
+not set an R01 or readiness row, does not authorize execution and does not
+convert presented/local mechanics into actual or authority evidence. The
+downstream candidate is a static `GO`; the real gate remains `HOLD`.
+
 ### 9.8 Remaining prospective schema boundary
 
 For every remaining object, the machine validator must freeze an exact schema
