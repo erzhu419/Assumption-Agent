@@ -13,7 +13,7 @@ setup(
     python_requires=">=3.10",
     package_dir={"": "src"},
     packages=find_packages("src"),
-    install_requires=[],
+    install_requires=["cryptography>=41"],
     extras_require={"dev": ["pytest>=8"]},
     entry_points={"console_scripts": ["hegel-machine=hegel_machine.cli:main"]},
 )
