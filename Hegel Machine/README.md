@@ -15,6 +15,16 @@ verifier、Phase-2A development qualification，以及正在施工的 Phase-2B/P
 双实现 replay 与测试裁决。完整优先级和 material override 留痕要求见
 [engineering decision authority](docs/engineering_decision_authority.md)。
 
+当前跨轨道状态以
+[Current-State Reconciliation v1](docs/Hegel_Machine_Current_State_Reconciliation_v1.md)
+为准。下文保留了按时间追加的历史 qualification 与“下一刀”记录；除非该状态文档明确
+采纳，它们不能当作当前队列、执行授权或 capability/effect 声明。
+[Bounded relation-invention mechanics v1](docs/Hegel_Machine_Bounded_Relation_Invention_Mechanics_v1.md)
+仅是 public synthetic、shadow-only、C2-locked mechanics；它不是正式 relation invention、
+C2/effect 证据、promotion 或 ACTIVE 授权，且不改变 C1=false。
+[Five-source coverage v1](references/five_source_coverage_v1.md) 是附加覆盖账本，
+明确不把两个外部本地 bundle 声称为仓内自包含归档，也不替代原 manifest/checksum。
+
 Phase-3A M2.5 的 purpose 1–4 采用 owner-accepted、purpose-separated、离线 Docker
 technical actors；这里的 “external actor” 指仓库构建/编排进程之外的冻结隔离 runtime，
 不要求不同真人或组织。该决定只接管 M2.5 actor eligibility，不改 Phase-2B sealed-holdout
@@ -48,7 +58,8 @@ Phase-2B formal track（精确协议已冻结，尚未资格化）：
   → prediction commitment before answer reveal
   → one-shot independent-custodian scoring                    [目标，未实现]
 
-Phase-3A **Bounded Frozen-Closure Adequacy**（父 DSL overflow；shrink-1 subset 已验证）：
+Phase-3A **Bounded Frozen-Closure Adequacy**（legacy syntactic M3 已
+`DSL_TOO_LARGE`；shrink-6 已耗尽；当前主路线为 C3 exact quotient）：
 
 hegel-old-dsl-v1.0.0 + 480-row target + 85-row null control
   → strict canonical AST/CBOR + certificate bridge spec       [已冻结]
@@ -64,11 +75,14 @@ hegel-old-dsl-v1.0.0 + 480-row target + 85-row null control
   → M2.5 v1.1.2 exact-wire registry                              [81 tags/schemas]
   → Python/Rust/golden errata replay                             [21 objects + 8 trees + 15 guards; exact]
   → detached Commit-A qualification                              [PASS; fresh replay required for use]
-  → owner-accepted technical-actor genesis                       [authorized to begin; NOT_EXECUTED]
-  → formal binding roots                                         [null; live isolated actor evidence required]
-  → rerun closure; only COMPLETE may enter target/null evaluation
-  → outside certificate                                       [formal gate 关闭]
-  → relation synthesis + Q32 MDL scorer replay                [formal gate 关闭]
+  → owner-accepted technical-actor genesis                       [historically executed]
+  → legacy canonical M3 attempt 1                                [executed; DSL_TOO_LARGE]
+  → shrink-2 through shrink-6 diagnostics                        [exhausted; DSL_TOO_LARGE]
+  → post-shrink C3 exact-quotient direction                      [selected; target-blind]
+  → Q0 micro qualification                                       [14/14 PASS; not Q1/C1/C2]
+  → Q0.5b actual attempt 1                                       [Stage-7 fail-closed; 0/20; no artifact]
+  → Q0.5b actual attempt 2                                       [NOT_RUN; explicit authorization required]
+  → Q1 / outside / relation invention                            [0/20 NOT_RUN; formal gates closed]
   → shadow-only conservative integration
 ```
 
@@ -131,11 +145,13 @@ secret 检测证明。结果准确称为 `DUAL_EXACT_WIRE_ERRATA_GOLDEN_PASS`，
 `DETERMINISTIC_CANDIDATE_NON_AUTHORITATIVE`；它现为历史资格化证据，不是后续 genesis
 的 implementation basis。
 
-这次 fresh qualification 只给出无副作用的 external-genesis start authorization；流程尚未执行，
+在该历史节点，这次 fresh qualification 只给出无副作用的 external-genesis start authorization；流程尚未执行，
 checked JSON 单独不能授权，操作员每次必须 fresh replay 或取得后来由合格隔离 technical
 actor 生成的 live attestation。这里不要求独立真人/组织，但不能用同进程测试签名代替 actor evidence。
-真实 seed/key/signature/marker、formal roots 和 M3 execution identity 均未生成，状态保持
-`14/24 / NOT_RUN`。历史 direct artifact 见
+当时真实 seed/key/signature/marker、formal roots 和 M3 execution identity 均未生成，状态为
+`14/24 / NOT_RUN`；这不是当前状态。后续 legacy canonical M3 已真实执行并以
+`DSL_TOO_LARGE` 终止，随后 shrink-6 耗尽并转入 C3 quotient 路线；当前对账见
+[Current-State Reconciliation v1](docs/Hegel_Machine_Current_State_Reconciliation_v1.md)。历史 direct artifact 见
 [exact-wire qualification](artifacts/phase3_m25_errata_qualification_v1.json)；A2 提交后必须
 在 `artifacts/phase3_m25_external/phase3_m25_errata_qualification_v1.json` 重新生成并绑定
 新的 implementation-basis commit，旧 artifact 不得作为执行输入。操作边界见
@@ -321,7 +337,7 @@ integration failure，不能把 v2 hard eligibility 当成已验证正先验。
   `ACTUAL_REPLAY_CONTRACT_COMPLETE_NOT_EXECUTED`。commitment opening 不证明预揭示时序或权威，
   唯一 latent IDs 不证明 latent-case independence；18 项所需证据仍明确未供应，
   metric/scored-row/gate results 为空，scale-regret/bootstrap results 缺失，recognizer/runtime/
-  actual-960/scoring/formal-gate/effect/C1 与 Q0.5b/Q1 证据均不存在。独立 V2 available-gate
+  actual-960/scoring/formal-gate/effect/C1，也不供应 Q0.5b/Q1 证据。独立 V2 available-gate
   mechanics 是只接受上述 scoring mechanics、replay-input contract 和 gate-input manifest
   三个已物化图的纯 compositor；它不调用 decoder、scorer、runner、ledger 或签名验证器。对调用方
   supplied/synthetic 图的成功路径会独立快照并重证三图、精确 join 720 行，计算 10 个 overall 与

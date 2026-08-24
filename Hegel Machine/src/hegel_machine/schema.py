@@ -207,12 +207,16 @@ class ProbeSpec:
 @dataclass(frozen=True, slots=True)
 class ViolationFunctionalSpec:
     functional_id: str
-    law_kind: LawKind
+    law_kind: LawKind | None
     required_observables: tuple[str, ...]
     output_semantics: str
     tolerance: float
 
     def __post_init__(self) -> None:
+        if self.law_kind is not None and type(self.law_kind) is not LawKind:
+            raise ValueError(
+                "violation functional kind must be a registered LawKind or None"
+            )
         require_tuple(self.required_observables, "functional observables")
         require_finite(self.tolerance, "violation tolerance")
         if self.tolerance < 0:
@@ -236,6 +240,8 @@ class RelationLaw:
     role_observable_requirements: tuple[tuple[str, tuple[str, ...]], ...]
 
     def __post_init__(self) -> None:
+        if type(self.kind) is not LawKind:
+            raise ValueError("active relation law needs a concrete registered LawKind")
         for name in (
             "roles",
             "scope",
@@ -353,6 +359,10 @@ class RelationLawCandidate:
     identifiability: IdentifiabilityCertificate
 
     def __post_init__(self) -> None:
+        if self.kind is not None and type(self.kind) is not LawKind:
+            raise ValueError(
+                "candidate kind must be a registered LawKind or None"
+            )
         for name in (
             "roles",
             "scopes",
@@ -371,6 +381,10 @@ class RelationLawCandidate:
         if self.description_length < 0:
             raise ValueError("description length cannot be negative")
         require_finite(self.description_length, "description length")
+        if self.violation_functional.law_kind is not self.kind:
+            raise ValueError(
+                "candidate and candidate violation functional kinds disagree"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -582,6 +596,15 @@ class TheoryState:
             for functional in self.violation_functionals
         }
         registered_scale_ids = set(scale_ids)
+        if any(type(law.kind) is not LawKind for law in self.relation_laws):
+            raise ValueError("active theory law kinds must be concrete LawKind values")
+        if any(
+            type(functional.law_kind) is not LawKind
+            for functional in self.violation_functionals
+        ):
+            raise ValueError(
+                "active theory functional kinds must be concrete LawKind values"
+            )
         if any(
             not law.scale_ids
             or not set(law.scale_ids).issubset(registered_scale_ids)
