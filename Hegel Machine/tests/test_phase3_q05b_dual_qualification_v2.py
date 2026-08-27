@@ -514,6 +514,40 @@ def test_internal_host_package_bootstrap_works_under_isolated_python() -> None:
     )
 
 
+def test_python310_isolated_stage8_artifact_lazy_import_uses_vendored_tomli() -> None:
+    program = (
+        "import importlib,importlib.util,pathlib,runpy,sys\n"
+        "assert importlib.util.find_spec('tomli') is None\n"
+        f"m=runpy.run_path({str(TOOL_PATH)!r},run_name='q05b_py310_isolated')\n"
+        "name='hegel_machine.phase3_q05b_actual_artifact_v2'\n"
+        "assert name not in sys.modules\n"
+        f"m['_load_host_replay_module_v1'](pathlib.Path({str(ROOT)!r}))\n"
+        "artifact=importlib.import_module(name)\n"
+        "assert artifact.tomllib.__name__=='hegel_machine._vendor.tomli'\n"
+        "assert artifact.tomllib.loads('answer = 42\\n')=={'answer':42}\n"
+        "assert 'tomli' not in sys.modules\n"
+        "print('PYTHON310_ISOLATED_STAGE8_ARTIFACT_IMPORT_OK')\n"
+    )
+    completed = subprocess.run(
+        [
+            "/usr/bin/python3.10",
+            "-I",
+            "-S",
+            "-B",
+            "-X",
+            "utf8",
+            "-c",
+            program,
+        ],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    assert completed.stdout == "PYTHON310_ISOLATED_STAGE8_ARTIFACT_IMPORT_OK\n"
+    assert completed.stderr == ""
+
+
 def _write_exact_sidecar_tree(root: Path, *, payload: bytes = b"x") -> None:
     for relative in WIRE.ORDERED_OUTPUT_RELATIVE_PATHS:
         path = root / relative.decode("ascii")
@@ -942,11 +976,38 @@ def test_isolation_config_is_exact_zero_null_and_actual_not_executed() -> None:
     assert config["docker"]["pids_limit"] == 128
     assert config["docker"]["nofile_ulimit"] == "256:256"
     assert config["docker"]["memory"] == config["docker"]["memory_swap"] == "14g"
-    assert [row[:3] for row in config["source_allowlist_policy"]["actor_rows"]] == [
-        [1, "PYTHON_ENDPOINT", 40],
-        [2, "RUST_ENDPOINT", 27],
-        [3, "TRUSTED_HOST_REPLAY", 49],
+    assert config["source_allowlist_policy"]["actor_rows"] == [
+        [
+            1,
+            "PYTHON_ENDPOINT",
+            40,
+            "c7fdc83a14151fd5ddd4c2026b42be9dba900c4161c540ed36541afaae4ce1d8",
+        ],
+        [
+            2,
+            "RUST_ENDPOINT",
+            27,
+            "16d01f7955412d43575d81d04e73b3337698d52f3fc77e707ec061245340f727",
+        ],
+        [
+            3,
+            "TRUSTED_HOST_REPLAY",
+            55,
+            "97c6c00d1c981c5343a12054e09edd846d6931f964ad394e92efc560ccaa1fce",
+        ],
     ]
+    assert tuple(
+        path
+        for path in TOOL.HOST_SOURCE_ALLOWLIST
+        if path.startswith("src/hegel_machine/_vendor/")
+    ) == (
+        "src/hegel_machine/_vendor/__init__.py",
+        "src/hegel_machine/_vendor/tomli/LICENSE",
+        "src/hegel_machine/_vendor/tomli/__init__.py",
+        "src/hegel_machine/_vendor/tomli/_parser.py",
+        "src/hegel_machine/_vendor/tomli/_re.py",
+        "src/hegel_machine/_vendor/tomli/_types.py",
+    )
     assert config["durable_trajectory_policy"] == {
         "schema_version": "hegel-phase3a-q05b-durable-trajectory-policy/4",
         "required_for_run_cli": True,

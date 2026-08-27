@@ -17,10 +17,10 @@ import re
 import tarfile
 from typing import Final, Mapping, NoReturn
 
-try:  # Python 3.11 stdlib; the project test runtime also supports 3.10+tomli.
+try:  # Python 3.11 stdlib; Python 3.10 uses the source-closed vendored parser.
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover - interpreter dependent
-    import tomli as tomllib
+    from ._vendor import tomli as tomllib
 
 from . import phase3_q05b_host_replay_v1 as _host
 from . import phase3_q05b_negative_vectors_v1 as _negative
