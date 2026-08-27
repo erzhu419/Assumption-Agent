@@ -948,7 +948,7 @@ def test_isolation_config_is_exact_zero_null_and_actual_not_executed() -> None:
         [3, "TRUSTED_HOST_REPLAY", 49],
     ]
     assert config["durable_trajectory_policy"] == {
-        "schema_version": "hegel-phase3a-q05b-durable-trajectory-policy/2",
+        "schema_version": "hegel-phase3a-q05b-durable-trajectory-policy/3",
         "required_for_run_cli": True,
         "core_relative_path": TOOL.TRAJECTORY_CORE_RELATIVE_PATH,
         "core_raw_sha256": TOOL.TRAJECTORY_CORE_RAW_SHA256,
@@ -964,6 +964,30 @@ def test_isolation_config_is_exact_zero_null_and_actual_not_executed() -> None:
         "failure_manifest_preserves_open_span_registry": True,
         "incomplete_prefix_is_read_only_verifiable": True,
         "logger_failure_fails_execution_closed": True,
+        "global_fifo_sequencer": "SINGLE_PUBLISHER_ALL_EVENTS",
+        "global_fifo_capacity": 512,
+        "ordinary_event_completion": "DURABLE_BEFORE_RETURN",
+        "sampler_epoch_begin": "DURABLE_BEFORE_SAMPLING",
+        "live_sample_begin": "ENQUEUED_BEFORE_COLLECTION",
+        "live_sample_terminal": "ENQUEUED_AFTER_COLLECTION",
+        "normal_outer_sampler_terminal": (
+            "ENQUEUED_NO_BARRIER_BEFORE_HELD_FINAL"
+        ),
+        "held_final_begin_and_terminal": (
+            "ENQUEUED_WITHOUT_INTERMEDIATE_BARRIER"
+        ),
+        "accepted_event_drain_boundaries": (
+            "BEFORE_TYPED_FAILURE_ACTOR_RELEASE_OR_TERMINAL_MANIFEST"
+        ),
+        "abrupt_loss_ceiling": "ABRUPT_LOSS_ONLY_LAST_DURABLE_PREFIX",
+        "typed_failure_propagation": (
+            "DRAINED_BEFORE_TYPED_CAUSE_PROPAGATION"
+        ),
+        "held_final_release": "DRAINED_BEFORE_ACTOR_RELEASE",
+        "terminal_manifest_ordering": (
+            "QUIESCED_AND_DRAINED_BEFORE_TERMINAL"
+        ),
+        "queue_full_or_publisher_fault": "FAIL_CLOSED_NO_RETRY",
     }
     inspect_policy = config["runtime_command_inspect_policy"]
     assert inspect_policy["environment_rows"] == [
@@ -2246,7 +2270,7 @@ def test_q05b_v2_regression_held_final_deadline_and_trajectory_are_exact(
         trajectory_root,
         expected_parent=trajectory_parent,
         trace_id="held-final-trajectory",
-        producer_id="Q05B_SUPERVISOR_V2",
+        producer_id="Q05B_SUPERVISOR_V3",
     )
     TOOL._ACTIVE_TRAJECTORY_V2 = writer
     try:
@@ -2349,6 +2373,174 @@ def test_q05b_v2_regression_held_final_deadline_and_trajectory_are_exact(
         held_sample["sample_monotonic_ns"] + held_sample["sample_duration_ns"]
     )
     assert held_ok["timestamp_ns"] >= held_ok["finish_ns_or_null"]
+
+
+def test_q05b_v3_held_final_writer_delay_does_not_delay_collection_or_release_early(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (
+        actor,
+        inspect_reader,
+        proc_root,
+        cgroup_root,
+        command_runner,
+        _docker_calls,
+        control,
+        _actor_stdout,
+    ) = _mock_held_python_actor(tmp_path, "held-final-v3-writer-delay")
+    trajectory_parent = tmp_path / "held-final-v3-writer-delay-parent"
+    trajectory_parent.mkdir(mode=0o700)
+    trajectory_root = trajectory_parent / "held-final-v3-writer-delay"
+    durable_writer = TRAJECTORY.create_durable_trajectory_writer_v2(
+        trajectory_root,
+        expected_parent=trajectory_parent,
+        trace_id="held-final-v3-writer-delay",
+        producer_id=TOOL.TRAJECTORY_PRODUCER_ID,
+    )
+    held_begin_entered = threading.Event()
+    release_publication = threading.Event()
+    collection_entered = threading.Event()
+
+    class DelayedHeldBeginWriter:
+        def begin(self, span_id, operation, **kwargs):
+            if operation == "HELD_FINAL_RESOURCE_SAMPLE":
+                held_begin_entered.set()
+                assert release_publication.wait(5.0)
+            return durable_writer.begin(span_id, operation, **kwargs)
+
+        def __getattr__(self, name):
+            return getattr(durable_writer, name)
+
+    real_held_final_sample = TOOL.held_final_resource_sample_v1
+
+    def observe_held_final_collection(*args, **kwargs):
+        collection_entered.set()
+        return real_held_final_sample(*args, **kwargs)
+
+    monkeypatch.setattr(
+        TOOL,
+        "held_final_resource_sample_v1",
+        observe_held_final_collection,
+    )
+    sequencer = TOOL.TrajectorySequencerV3(DelayedHeldBeginWriter())
+    close_result: dict[str, object] = {}
+    close_errors: list[BaseException] = []
+    close_done = threading.Event()
+
+    def close_actor() -> None:
+        try:
+            close_result["value"] = TOOL.close_held_actor_process_v1(
+                actor,
+                child_timeout_seconds=2.0,
+                inspect_reader=inspect_reader,
+                proc_root=proc_root,
+                cgroup_root=cgroup_root,
+                command_runner=command_runner,
+            )
+        except BaseException as error:
+            close_errors.append(error)
+        finally:
+            close_done.set()
+
+    close_thread = threading.Thread(
+        target=close_actor,
+        name="test-q05b-v3-held-final-close",
+    )
+    TOOL._ACTIVE_TRAJECTORY_V2 = sequencer
+    try:
+        initial = actor.sample_rows[0]
+        initial_finish_ns = (
+            initial["sample_monotonic_ns"] + initial["sample_duration_ns"]
+        )
+        sequencer.begin(
+            "sampler-PYTHON_ENDPOINT",
+            "LIVE_RESOURCE_SAMPLER",
+            stage="ACTOR_LIFECYCLE",
+            actor="PYTHON_ENDPOINT",
+        )
+        sequencer.begin(
+            "sample-PYTHON_ENDPOINT-000001",
+            "LIVE_RESOURCE_SAMPLE",
+            stage="ACTOR_LIFECYCLE",
+            actor="PYTHON_ENDPOINT",
+        )
+        sequencer.ok(
+            "sample-PYTHON_ENDPOINT-000001",
+            role_id="1",
+            sample_ordinal=1,
+            previous_finish_ns=initial["prior_sample_finish_ns"],
+            scheduled_start_ns=initial["sample_scheduled_start_ns"],
+            actual_start_ns=initial["sample_monotonic_ns"],
+            finish_ns=initial_finish_ns,
+            collection_duration_ns=initial["sample_duration_ns"],
+            scheduler_lateness_ns=initial["sample_scheduler_lateness_ns"],
+            target_wait_ns=initial["sample_target_wait_ns"],
+            gap_ns=initial["sample_gap_from_prior_finish_ns"],
+            maximum_gap_ns=initial["sample_maximum_unsampled_gap_ns"],
+            gap_exceeded=False,
+        )
+        sequencer.ok("sampler-PYTHON_ENDPOINT")
+        close_thread.start()
+        assert held_begin_entered.wait(2.0)
+        assert collection_entered.wait(2.0)
+        # Keep the real durable writer stalled for longer than the 250 ms gap
+        # ceiling.  Collection has already occurred, but actor release must
+        # remain impossible until held-final OK and its FIFO prefix are durable.
+        assert not close_done.wait(0.26)
+        assert not (control / "release").exists()
+        release_publication.set()
+        close_thread.join(timeout=5.0)
+        assert not close_thread.is_alive()
+        assert close_errors == []
+        assert "value" in close_result
+        sequencer.quiesce_and_drain()
+        sequencer.seal_ok()
+    finally:
+        release_publication.set()
+        close_thread.join(timeout=5.0)
+        TOOL._ACTIVE_TRAJECTORY_V2 = None
+        sequencer.close()
+        if actor.process.poll() is None:
+            actor.process.kill()
+            actor.process.wait(timeout=2.0)
+        actor.stdout_thread.join(timeout=2.0)
+        actor.stderr_thread.join(timeout=2.0)
+        control.chmod(0o755)
+
+    assert (control / "release").read_bytes() == TOOL.HELD_RELEASE_BYTES
+    verified = TRAJECTORY.verify_durable_trajectory_v2(
+        trajectory_root,
+        expected_parent=trajectory_parent,
+        allow_incomplete=False,
+    )
+    assert verified.status == "COMPLETE_OK"
+    events = [
+        _strict_json(path.read_bytes())
+        for path in sorted(trajectory_root.glob("event-*-v2.json"))
+    ]
+    held_begin = next(
+        event
+        for event in events
+        if event["operation"] == "HELD_FINAL_RESOURCE_SAMPLE"
+        and event["event_type"] == "BEGIN"
+    )
+    held_ok = next(
+        event
+        for event in events
+        if event["operation"] == "HELD_FINAL_RESOURCE_SAMPLE"
+        and event["event_type"] == "OK"
+    )
+    actor_close_ok = next(
+        event
+        for event in events
+        if event["operation"] == "HELD_ACTOR_CLOSE"
+        and event["event_type"] == "OK"
+    )
+    assert held_begin["sequence"] < held_ok["sequence"] < actor_close_ok["sequence"]
+    assert held_ok["gap_ns_or_null"] <= 250_000_000
+    assert held_begin["timestamp_ns"] > held_ok["finish_ns_or_null"]
+    assert not sequencer.publisher_thread.is_alive()
 
 
 def test_q05b_v2_regression_held_final_sleep_interrupt_closes_child_span(
@@ -2736,7 +2928,7 @@ def test_stage4_exited_sampler_replays_exact_typed_gap_after_cleanup(
         trajectory_root,
         expected_parent=trajectory_parent,
         trace_id="stage4-exited-typed-gap",
-        producer_id="Q05B_SUPERVISOR_V2",
+        producer_id="Q05B_SUPERVISOR_V3",
         clock_ns=lambda: next(ticks),
     )
     TOOL._ACTIVE_TRAJECTORY_V2 = writer
@@ -2878,7 +3070,7 @@ def test_trajectory_error_detail_is_nul_safe_utf8_byte_bounded_and_replayable(
         root,
         expected_parent=parent,
         trace_id="utf8-byte-bound-" + error_code.lower(),
-        producer_id="Q05B_SUPERVISOR_V2",
+        producer_id="Q05B_SUPERVISOR_V3",
     )
     TOOL._ACTIVE_TRAJECTORY_V2 = writer
     try:
@@ -2959,7 +3151,7 @@ def test_trajectory_logger_fault_binds_event_span_and_artifact_state(
     assert failure.value.artifact_written is True
 
 
-def test_v2_sampler_50ms_target_accepts_51ms_scheduler_jitter(
+def test_v3_sampler_accepts_exact_250ms_maximum_gap(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2969,9 +3161,9 @@ def test_v2_sampler_50ms_target_accepts_51ms_scheduler_jitter(
             50_000_000,
             60_000_000,
             60_000_000,
-            161_000_000,
-            171_000_000,
-            171_000_000,
+            310_000_000,
+            320_000_000,
+            320_000_000,
         )
     )
     monkeypatch.setattr(TOOL.time, "monotonic_ns", lambda: next(monotonic_values))
@@ -3021,7 +3213,7 @@ def test_v2_sampler_50ms_target_accepts_51ms_scheduler_jitter(
         trajectory_root,
         expected_parent=trajectory_parent,
         trace_id="sampler-ok",
-        producer_id="Q05B_SUPERVISOR_V2",
+        producer_id="Q05B_SUPERVISOR_V3",
         clock_ns=lambda: next(trajectory_ticks),
     )
     TOOL._ACTIVE_TRAJECTORY_V2 = writer
@@ -3039,8 +3231,8 @@ def test_v2_sampler_50ms_target_accepts_51ms_scheduler_jitter(
         writer.close()
     assert actor.sample_errors == []
     assert len(actor.sample_rows) == 2
-    assert actor.sample_rows[1]["sample_gap_from_prior_finish_ns"] == 101_000_000
-    assert actor.sample_rows[1]["sample_scheduler_lateness_ns"] == 51_000_000
+    assert actor.sample_rows[1]["sample_gap_from_prior_finish_ns"] == 250_000_000
+    assert actor.sample_rows[1]["sample_scheduler_lateness_ns"] == 200_000_000
     assert actor.sample_rows[1]["sample_target_wait_ns"] == 50_000_000
     assert actor.sample_rows[1]["sample_maximum_unsampled_gap_ns"] == 250_000_000
     verified = TRAJECTORY.verify_durable_trajectory_v2(
@@ -3104,7 +3296,7 @@ def test_v2_sampler_rejects_250ms_plus_one_ns_with_exact_actor_metrics(
         trajectory_root,
         expected_parent=trajectory_parent,
         trace_id="sampler-gap-fail",
-        producer_id="Q05B_SUPERVISOR_V2",
+        producer_id="Q05B_SUPERVISOR_V3",
         clock_ns=lambda: next(trajectory_ticks),
     )
     TOOL._ACTIVE_TRAJECTORY_V2 = writer
@@ -5549,7 +5741,24 @@ def test_cli_run_passes_unresolved_cargo_path_assigns_value_and_is_exact(
         observed["args"] = (root, commit, target, cargo_source)
         return {"status": "MOCK_ACTUAL_RETURN", "q1_state": "NOT_RUN"}
 
+    sequencer_steps: list[str] = []
+    sequencer_type = TOOL.TrajectorySequencerV3
+
+    class RecordingSuccessSequencer(sequencer_type):
+        def quiesce_and_drain(self) -> None:
+            sequencer_steps.append("QUIESCE_AND_DRAIN")
+            return super().quiesce_and_drain()
+
+        def ok_after_quiesce(self, *args, **kwargs):
+            sequencer_steps.append("SUPERVISOR_OK")
+            return super().ok_after_quiesce(*args, **kwargs)
+
+        def seal_ok(self):
+            sequencer_steps.append("SEAL_OK")
+            return super().seal_ok()
+
     monkeypatch.setattr(TOOL, "run_actual_v1", fake_run)
+    monkeypatch.setattr(TOOL, "TrajectorySequencerV3", RecordingSuccessSequencer)
     exit_code = TOOL.main(
         [
             "--run",
@@ -5585,6 +5794,18 @@ def test_cli_run_passes_unresolved_cargo_path_assigns_value_and_is_exact(
         allow_incomplete=False,
     )
     assert verified.status == "COMPLETE_OK"
+
+    success_events = [
+        _strict_json(path.read_bytes())
+        for path in sorted(trajectory_root.glob("event-*-v2.json"))
+    ]
+    assert success_events[-1]["operation"] == "SUPERVISOR_RUN"
+    assert success_events[-1]["event_type"] == "OK"
+    assert sequencer_steps == [
+        "QUIESCE_AND_DRAIN",
+        "SUPERVISOR_OK",
+        "SEAL_OK",
+    ]
 
     assert TOOL.main(
         [
@@ -5689,7 +5910,24 @@ def test_cli_run_preserves_typed_sampling_gap_in_wire_and_terminal_trace(
             "typed gap survived sampler cleanup",
         )
 
+    sequencer_steps: list[str] = []
+    sequencer_type = TOOL.TrajectorySequencerV3
+
+    class RecordingFailureSequencer(sequencer_type):
+        def quiesce_and_drain(self) -> None:
+            sequencer_steps.append("QUIESCE_AND_DRAIN")
+            return super().quiesce_and_drain()
+
+        def fail_after_quiesce(self, *args, **kwargs):
+            sequencer_steps.append("SUPERVISOR_FAIL")
+            return super().fail_after_quiesce(*args, **kwargs)
+
+        def seal_fail(self):
+            sequencer_steps.append("SEAL_FAIL")
+            return super().seal_fail()
+
     monkeypatch.setattr(TOOL, "run_actual_v1", fail_with_gap)
+    monkeypatch.setattr(TOOL, "TrajectorySequencerV3", RecordingFailureSequencer)
     assert TOOL.main(
         [
             "--run",
@@ -5722,6 +5960,17 @@ def test_cli_run_preserves_typed_sampling_gap_in_wire_and_terminal_trace(
     assert verified.open_span_ids_in_begin_order == ()
     assert [row.error_code for row in verified.failure_rows_in_sequence_order] == [
         TOOL.FAIL_SAMPLING_GAP
+    ]
+    failure_events = [
+        _strict_json(path.read_bytes())
+        for path in sorted(trajectory_root.glob("event-*-v2.json"))
+    ]
+    assert failure_events[-1]["operation"] == "SUPERVISOR_RUN"
+    assert failure_events[-1]["event_type"] == "FAIL"
+    assert sequencer_steps == [
+        "QUIESCE_AND_DRAIN",
+        "SUPERVISOR_FAIL",
+        "SEAL_FAIL",
     ]
 
 
@@ -13927,41 +14176,41 @@ def test_group_close_is_synchronous_and_cleans_only_remaining_actors(
     )
 
 
-def test_q05b_v2_regression_continuous_sample_counts_durable_begin_delay(
+def test_q05b_v3_regression_slow_durable_begin_does_not_pollute_real_gap(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A slow durable BEGIN is part of the bounded unsampled interval."""
+    """>250 ms publisher delay is outside the real collection cadence."""
 
-    now_ns = [50_000_010]
     prior_finish_ns = 10
-    begin_delay_ns = 250_000_001
-    monkeypatch.setattr(TOOL.time, "monotonic_ns", lambda: now_ns[0])
+    monotonic_values = iter((10, 50_000_010, 50_000_011, 50_000_011))
+    monkeypatch.setattr(TOOL.time, "monotonic_ns", lambda: next(monotonic_values))
     monkeypatch.setattr(
         TOOL,
         "_wait_for_cidfile_v1",
         lambda _actor, _timeout: ("cd" * 32, prior_finish_ns),
     )
-    inspected = False
+    monkeypatch.setattr(
+        TOOL,
+        "collect_bound_live_resource_transcript_v1",
+        lambda *_args, **_kwargs: {},
+    )
 
-    def unexpected_inspect(_container_id: str) -> bytes:
-        nonlocal inspected
-        inspected = True
-        raise AssertionError("resource inspection must not follow an excessive gap")
+    class StopAfterOne:
+        def __init__(self) -> None:
+            self.wait_count = 0
 
-    class NeverStop:
-        @staticmethod
-        def is_set() -> bool:
+        def is_set(self) -> bool:
             return False
 
-        @staticmethod
-        def wait(_timeout: float) -> bool:
-            return False
+        def wait(self, _timeout: float) -> bool:
+            self.wait_count += 1
+            return self.wait_count > 1
 
     actor = SimpleNamespace(
         actor_id="PYTHON_ENDPOINT",
         role_id=1,
-        sample_stop=NeverStop(),
+        sample_stop=StopAfterOne(),
         process=SimpleNamespace(poll=lambda: None),
         sample_lock=threading.Lock(),
         sample_rows=[],
@@ -13969,7 +14218,7 @@ def test_q05b_v2_regression_continuous_sample_counts_durable_begin_delay(
         sample_complete=threading.Event(),
         child_done_observed=threading.Event(),
         control_root=tmp_path,
-        container_name="v2-python-begin-delay",
+        container_name="v3-python-begin-delay",
         mount_registry=object(),
         seccomp_evidence={},
         docker_execution_principal={},
@@ -13978,66 +14227,328 @@ def test_q05b_v2_regression_continuous_sample_counts_durable_begin_delay(
     trajectory_parent.mkdir(mode=0o700)
     trajectory_root = trajectory_parent / "sampler-begin-delay"
     trajectory_ticks = iter(range(3_000_000_000, 3_000_000_100))
-    writer = TRAJECTORY.create_durable_trajectory_writer_v2(
+    durable_writer = TRAJECTORY.create_durable_trajectory_writer_v2(
         trajectory_root,
         expected_parent=trajectory_parent,
         trace_id="sampler-begin-delay",
-        producer_id="Q05B_SUPERVISOR_V2",
+        producer_id=TOOL.TRAJECTORY_PRODUCER_ID,
         clock_ns=lambda: next(trajectory_ticks),
     )
-    real_begin = TOOL._trajectory_begin_v2
+    publication_entered = threading.Event()
+    release_publication = threading.Event()
 
-    def delayed_begin(span_id, operation, **kwargs):
-        real_begin(span_id, operation, **kwargs)
-        if operation == "LIVE_RESOURCE_SAMPLE":
-            now_ns[0] += begin_delay_ns
+    class DelayedSampleBeginWriter:
+        def begin(self, span_id, operation, **kwargs):
+            if operation == "LIVE_RESOURCE_SAMPLE":
+                publication_entered.set()
+                assert release_publication.wait(5.0)
+            return durable_writer.begin(span_id, operation, **kwargs)
 
-    monkeypatch.setattr(TOOL, "_trajectory_begin_v2", delayed_begin)
-    TOOL._ACTIVE_TRAJECTORY_V2 = writer
+        def __getattr__(self, name):
+            return getattr(durable_writer, name)
+
+    sequencer = TOOL.TrajectorySequencerV3(DelayedSampleBeginWriter())
+    TOOL._ACTIVE_TRAJECTORY_V2 = sequencer
+    sampler_thread = threading.Thread(
+        target=TOOL._sample_actor_resources_v1,
+        args=(actor, lambda _container_id: b"{}", tmp_path, tmp_path, 1.0),
+        name="test-v3-real-gap-sampler",
+    )
     try:
-        TOOL._sample_actor_resources_v1(
-            actor,
-            unexpected_inspect,
-            tmp_path,
-            tmp_path,
-            1.0,
-        )
-        writer.seal_fail()
+        sampler_thread.start()
+        assert publication_entered.wait(2.0)
+        sampler_thread.join(timeout=1.0)
+        assert not sampler_thread.is_alive()
+        time.sleep(0.26)
+        release_publication.set()
+        sequencer.quiesce_and_drain()
+        sequencer.seal_ok()
     finally:
+        release_publication.set()
+        sampler_thread.join(timeout=2.0)
         TOOL._ACTIVE_TRAJECTORY_V2 = None
-        writer.close()
+        sequencer.close()
 
-    assert inspected is False
-    assert actor.sample_rows == []
-    assert len(actor.sample_errors) == 1
+    assert actor.sample_errors == []
+    assert len(actor.sample_rows) == 1
+    assert actor.sample_rows[0]["sample_gap_from_prior_finish_ns"] == 50_000_000
     verified = TRAJECTORY.verify_durable_trajectory_v2(
         trajectory_root,
         expected_parent=trajectory_parent,
         allow_incomplete=False,
     )
-    assert verified.status == "COMPLETE_FAIL"
+    assert verified.status == "COMPLETE_OK"
     events = [
         _strict_json(path.read_bytes())
         for path in sorted(trajectory_root.glob("event-*-v2.json"))
     ]
-    gap_event = next(
+    sample_event = next(
         event
         for event in events
         if event["operation"] == "LIVE_RESOURCE_SAMPLE"
-        and event["event_type"] == "FAIL"
+        and event["event_type"] == "OK"
     )
-    assert gap_event["previous_finish_ns_or_null"] == prior_finish_ns
-    assert gap_event["scheduled_start_ns_or_null"] == 50_000_010
-    assert gap_event["actual_start_ns_or_null"] == 300_000_011
-    assert gap_event["finish_ns_or_null"] == 300_000_011
-    assert gap_event["collection_duration_ns_or_null"] == 0
-    assert gap_event["scheduler_lateness_ns_or_null"] == begin_delay_ns
-    assert gap_event["gap_ns_or_null"] == 300_000_001
-    assert gap_event["target_wait_ns_or_null"] == 50_000_000
-    assert gap_event["maximum_gap_ns_or_null"] == 250_000_000
-    assert gap_event["gap_exceeded_or_null"] is True
-    assert gap_event["error_code_or_null"] == TOOL.FAIL_SAMPLING_GAP
-    assert not any(event["event_type"] == "OK" for event in events)
+    assert sample_event["previous_finish_ns_or_null"] == prior_finish_ns
+    assert sample_event["scheduled_start_ns_or_null"] == 50_000_010
+    assert sample_event["actual_start_ns_or_null"] == 50_000_010
+    assert sample_event["finish_ns_or_null"] == 50_000_011
+    assert sample_event["collection_duration_ns_or_null"] == 1
+    assert sample_event["scheduler_lateness_ns_or_null"] == 0
+    assert sample_event["gap_ns_or_null"] == 50_000_000
+    assert sample_event["target_wait_ns_or_null"] == 50_000_000
+    assert sample_event["maximum_gap_ns_or_null"] == 250_000_000
+    assert sample_event["gap_exceeded_or_null"] is False
+
+
+def test_q05b_v3_sequencer_preserves_global_fifo_and_sync_durability() -> None:
+    publication_entered = threading.Event()
+    release_publication = threading.Event()
+    ordinary_returned = threading.Event()
+
+    class BlockingWriter:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str | None]] = []
+
+        def begin(self, span_id, _operation, **_kwargs):
+            self.calls.append(("begin", span_id))
+            if span_id == "async-sample":
+                publication_entered.set()
+                assert release_publication.wait(5.0)
+            return span_id
+
+        def ok(self, span_id, **_kwargs):
+            self.calls.append(("ok", span_id))
+            return span_id
+
+        def seal_ok(self):
+            self.calls.append(("seal_ok", None))
+            return True
+
+        def close(self):
+            self.calls.append(("close", None))
+
+    durable = BlockingWriter()
+    sequencer = TOOL.TrajectorySequencerV3(durable)
+    sync_errors: list[BaseException] = []
+
+    def publish_ordinary() -> None:
+        try:
+            sequencer.begin("ordinary-control", "ORDINARY_CONTROL")
+            ordinary_returned.set()
+        except BaseException as error:
+            sync_errors.append(error)
+
+    ordinary_thread = threading.Thread(
+        target=publish_ordinary,
+        name="test-q05b-v3-ordinary-publication",
+    )
+    try:
+        first = sequencer.enqueue_begin(
+            "async-sample", "LIVE_RESOURCE_SAMPLE"
+        )
+        second = sequencer.enqueue_ok("async-sample")
+        assert publication_entered.wait(2.0)
+        ordinary_thread.start()
+        assert not ordinary_returned.wait(0.05)
+        release_publication.set()
+        ordinary_thread.join(timeout=2.0)
+        assert not ordinary_thread.is_alive()
+        assert sync_errors == []
+        assert ordinary_returned.is_set()
+        assert sequencer.flush_through(first) == "async-sample"
+        assert sequencer.flush_through(second) == "async-sample"
+        sequencer.ok("ordinary-control")
+        sequencer.quiesce_and_drain()
+        sequencer.seal_ok()
+    finally:
+        release_publication.set()
+        ordinary_thread.join(timeout=2.0)
+        sequencer.close()
+
+    assert durable.calls == [
+        ("begin", "async-sample"),
+        ("ok", "async-sample"),
+        ("begin", "ordinary-control"),
+        ("ok", "ordinary-control"),
+        ("seal_ok", None),
+        ("close", None),
+    ]
+    assert not sequencer.publisher_thread.is_alive()
+
+
+def test_q05b_v3_sequencer_three_producers_share_one_exact_fifo() -> None:
+    class RecordingWriter:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str]] = []
+            self.sealed = False
+            self.closed = False
+
+        def begin(self, span_id, _operation, **_kwargs):
+            self.calls.append(("begin", span_id))
+
+        def ok(self, span_id, **_kwargs):
+            self.calls.append(("ok", span_id))
+
+        def seal_ok(self):
+            self.sealed = True
+
+        def close(self):
+            self.closed = True
+
+    durable = RecordingWriter()
+    sequencer = TOOL.TrajectorySequencerV3(durable)
+    start = threading.Barrier(4)
+    accepted_lock = threading.Lock()
+    accepted: list[tuple[int, str, str]] = []
+    producer_errors: list[BaseException] = []
+
+    def produce(lane: str) -> None:
+        try:
+            start.wait(timeout=2.0)
+            for ordinal in range(8):
+                span_id = f"{lane}-{ordinal:02d}"
+                begin = sequencer.enqueue_begin(span_id, "LANE_EVENT")
+                terminal = sequencer.enqueue_ok(span_id)
+                with accepted_lock:
+                    accepted.extend(
+                        (
+                            (begin.ticket_id, "begin", span_id),
+                            (terminal.ticket_id, "ok", span_id),
+                        )
+                    )
+        except BaseException as error:
+            producer_errors.append(error)
+
+    producers = [
+        threading.Thread(
+            target=produce,
+            args=(lane,),
+            name=f"test-q05b-v3-{lane}",
+        )
+        for lane in (
+            "python-sampler",
+            "rust-sampler",
+            "stage5-controller",
+        )
+    ]
+    try:
+        for producer in producers:
+            producer.start()
+        start.wait(timeout=2.0)
+        for producer in producers:
+            producer.join(timeout=5.0)
+        assert not any(producer.is_alive() for producer in producers)
+        assert producer_errors == []
+        sequencer.flush()
+        ordered = sorted(accepted)
+        assert [row[0] for row in ordered] == list(range(1, 49))
+        assert durable.calls == [(row[1], row[2]) for row in ordered]
+        assert len(set(durable.calls)) == 48
+        sequencer.quiesce_and_drain()
+        sequencer.seal_ok()
+    finally:
+        for producer in producers:
+            producer.join(timeout=2.0)
+        sequencer.close()
+
+    assert durable.sealed is True
+    assert durable.closed is True
+    assert not sequencer.publisher_thread.is_alive()
+
+
+def test_q05b_v3_sequencer_queue_full_is_nonblocking_permanent_poison() -> None:
+    publication_entered = threading.Event()
+    release_publication = threading.Event()
+
+    class BlockingWriter:
+        def __init__(self) -> None:
+            self.begin_count = 0
+            self.closed = False
+
+        def begin(self, *_args, **_kwargs):
+            self.begin_count += 1
+            if self.begin_count == 1:
+                publication_entered.set()
+                assert release_publication.wait(5.0)
+
+        def close(self):
+            self.closed = True
+
+    durable = BlockingWriter()
+    sequencer = TOOL.TrajectorySequencerV3(durable)
+    try:
+        sequencer.enqueue_begin("blocked", "LIVE_RESOURCE_SAMPLE")
+        assert publication_entered.wait(2.0)
+        for ordinal in range(TOOL.TRAJECTORY_ASYNC_QUEUE_CAPACITY_V3):
+            sequencer.enqueue_begin(
+                f"queued-{ordinal:04d}", "LIVE_RESOURCE_SAMPLE"
+            )
+        with pytest.raises(TOOL.TrajectorySequencerErrorV3) as full:
+            sequencer.enqueue_begin("overflow", "LIVE_RESOURCE_SAMPLE")
+        assert full.value.code == "FAIL_TRAJECTORY_QUEUE_FULL"
+        assert not release_publication.is_set()
+        with pytest.raises(TOOL.TrajectorySequencerErrorV3) as poisoned:
+            sequencer.enqueue_begin("cannot-recover", "LIVE_RESOURCE_SAMPLE")
+        assert poisoned.value.code == full.value.code
+        assert poisoned.value.detail == full.value.detail
+        release_publication.set()
+        with pytest.raises(TOOL.TrajectorySequencerErrorV3) as drained:
+            sequencer.flush()
+        assert drained.value.code == full.value.code
+    finally:
+        release_publication.set()
+        sequencer.close()
+
+    assert durable.begin_count == 513
+    assert durable.closed is True
+    assert not sequencer.publisher_thread.is_alive()
+
+
+def test_q05b_v3_sequencer_publisher_fault_is_typed_and_thread_closes() -> None:
+    class FaultingWriter:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def begin(self, *_args, **_kwargs):
+            raise OSError("injected trajectory writer fault")
+
+        def close(self):
+            self.closed = True
+
+    durable = FaultingWriter()
+    sequencer = TOOL.TrajectorySequencerV3(durable)
+    try:
+        with pytest.raises(TOOL.TrajectorySequencerErrorV3) as first:
+            sequencer.begin("faulted", "ORDINARY_CONTROL")
+        assert first.value.code == "FAIL_TRAJECTORY_PUBLISHER_FAULT"
+        with pytest.raises(TOOL.TrajectorySequencerErrorV3) as subsequent:
+            sequencer.enqueue_ok("faulted")
+        assert subsequent.value.code == first.value.code
+        with pytest.raises(TOOL.TrajectorySequencerErrorV3) as drained:
+            sequencer.flush()
+        assert drained.value.code == first.value.code
+    finally:
+        sequencer.close()
+
+    assert durable.closed is True
+    assert not sequencer.publisher_thread.is_alive()
+
+
+def test_q05b_v3_sequencer_close_fault_still_terminates_publisher() -> None:
+    class CloseFaultWriter:
+        def begin(self, span_id, _operation, **_kwargs):
+            return span_id
+
+        def close(self):
+            raise OSError("injected trajectory close fault")
+
+    sequencer = TOOL.TrajectorySequencerV3(CloseFaultWriter())
+    sequencer.begin("ordinary", "ORDINARY_CONTROL")
+    with pytest.raises(TOOL.TrajectorySequencerErrorV3) as close:
+        sequencer.close()
+    assert close.value.code == "FAIL_TRAJECTORY_PUBLISHER_CLOSE"
+    assert not sequencer.publisher_thread.is_alive()
+    sequencer.close()
 
 
 @pytest.mark.parametrize("fault", ("short_write", "flush"))
@@ -14174,6 +14685,8 @@ def test_q05b_v2_regression_on_disk_trajectory_policy_replays_and_rejects_tamper
         forged_policy = forged_value["durable_trajectory_policy"]
         if type(observed) is bool:
             forged_policy[field] = not observed
+        elif type(observed) is int:
+            forged_policy[field] = observed + 1
         elif field == "core_raw_sha256":
             forged_policy[field] = (
                 ("0" if observed[0] != "0" else "1") + observed[1:]

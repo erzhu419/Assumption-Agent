@@ -21,6 +21,7 @@ import json
 import os
 from pathlib import Path
 from pathlib import PurePosixPath
+import queue
 import re
 import signal
 import stat
@@ -47,7 +48,8 @@ TRAJECTORY_CORE_RELATIVE_PATH: Final = (
 TRAJECTORY_CORE_RAW_SHA256: Final = (
     "9d72cc6c155f6e30dcda139025578399b8ebc391d688a037bfebf7de6ed2b398"
 )
-TRAJECTORY_PRODUCER_ID: Final = "Q05B_SUPERVISOR_V2"
+TRAJECTORY_PRODUCER_ID: Final = "Q05B_SUPERVISOR_V3"
+TRAJECTORY_ASYNC_QUEUE_CAPACITY_V3: Final = 512
 RESOURCE_SAMPLER_TARGET_WAIT_NS: Final = 50_000_000
 RESOURCE_SAMPLER_MAXIMUM_UNSAMPLED_GAP_NS: Final = 250_000_000
 PLAN_SCHEMA_VERSION: Final = "hegel-phase3a-q05b-dual-qualification-plan/2"
@@ -323,6 +325,439 @@ _ACTIVE_TRAJECTORY_V2: object | None = None
 _TRAJECTORY_MODULE_V2: object | None = None
 
 
+class TrajectorySequencerErrorV3(RuntimeError):
+    """Stable fail-closed error for the supervisor FIFO sequencer."""
+
+    def __init__(self, code: str, detail: str) -> None:
+        super().__init__(f"{code}: {detail}")
+        self.code = code
+        self.detail = detail
+
+
+@dataclass(slots=True)
+class TrajectoryTicketV3:
+    """One accepted FIFO command and its eventual durable disposition."""
+
+    ticket_id: int
+    operation: str
+    complete: threading.Event
+    result: object | None = None
+    error: BaseException | None = None
+
+
+@dataclass(slots=True)
+class _TrajectoryCommandV3:
+    ticket: TrajectoryTicketV3
+    arguments: tuple[object, ...]
+    keywords: dict[str, object]
+
+
+class TrajectorySequencerV3:
+    """One bounded FIFO in front of the unchanged durable trajectory writer.
+
+    Every supervisor event uses this sequencer, so the underlying writer still
+    receives one total order.  Ordinary control events wait for their durable
+    commit.  Sampling call sites may retain a ticket and continue after enqueue;
+    a later barrier must complete before typed failure propagation, held-actor
+    release, or terminal-manifest publication.
+    """
+
+    def __init__(
+        self,
+        writer: object,
+        *,
+        capacity: int = TRAJECTORY_ASYNC_QUEUE_CAPACITY_V3,
+    ) -> None:
+        if writer is None or type(capacity) is not int or capacity != 512:
+            raise TrajectorySequencerErrorV3(
+                "FAIL_TRAJECTORY_SEQUENCER_INPUT",
+                "trajectory FIFO writer or frozen capacity differs",
+            )
+        self._writer = writer
+        self._queue: queue.Queue[_TrajectoryCommandV3] = queue.Queue(
+            maxsize=capacity
+        )
+        self._submission_lock = threading.Lock()
+        self._state_lock = threading.Lock()
+        self._next_ticket = 1
+        self._accepting = True
+        self._quiesced = False
+        self._closed = False
+        self._post_quiesce_terminal_submitted = False
+        self._fault: BaseException | None = None
+        self._submission_fault: TrajectorySequencerErrorV3 | None = None
+        self._publisher = threading.Thread(
+            target=self._publish_loop,
+            name="q05b-trajectory-publisher-v3",
+            daemon=False,
+        )
+        try:
+            self._publisher.start()
+        except BaseException:
+            try:
+                writer.close()
+            finally:
+                raise
+
+    @property
+    def publisher_thread(self) -> threading.Thread:
+        return self._publisher
+
+    @property
+    def pending_count(self) -> int:
+        return self._queue.qsize()
+
+    @property
+    def fault(self) -> BaseException | None:
+        with self._state_lock:
+            return self._fault or self._submission_fault
+
+    def _new_command(
+        self,
+        operation: str,
+        arguments: tuple[object, ...],
+        keywords: Mapping[str, object],
+    ) -> _TrajectoryCommandV3:
+        ticket = TrajectoryTicketV3(
+            ticket_id=self._next_ticket,
+            operation=operation,
+            complete=threading.Event(),
+        )
+        return _TrajectoryCommandV3(ticket, arguments, dict(keywords))
+
+    def _require_accepting(self) -> None:
+        with self._state_lock:
+            if self._closed:
+                raise TrajectorySequencerErrorV3(
+                    "FAIL_TRAJECTORY_SEQUENCER_CLOSED",
+                    "trajectory FIFO is closed",
+                )
+            if self._submission_fault is not None:
+                raise TrajectorySequencerErrorV3(
+                    self._submission_fault.code,
+                    self._submission_fault.detail,
+                ) from self._submission_fault
+            if self._fault is not None:
+                raise TrajectorySequencerErrorV3(
+                    "FAIL_TRAJECTORY_PUBLISHER_FAULT",
+                    _trajectory_core_error_detail_v2(self._fault),
+                )
+            if not self._accepting:
+                raise TrajectorySequencerErrorV3(
+                    "FAIL_TRAJECTORY_SEQUENCER_QUIESCED",
+                    "trajectory FIFO no longer accepts events",
+                )
+
+    @staticmethod
+    def _publisher_fault_error(
+        error: BaseException,
+    ) -> TrajectorySequencerErrorV3:
+        return TrajectorySequencerErrorV3(
+            "FAIL_TRAJECTORY_PUBLISHER_FAULT",
+            _trajectory_core_error_detail_v2(error),
+        )
+
+    def _submit(
+        self,
+        operation: str,
+        arguments: tuple[object, ...],
+        keywords: Mapping[str, object],
+        *,
+        wait_for_durable: bool,
+    ) -> TrajectoryTicketV3:
+        with self._submission_lock:
+            self._require_accepting()
+            command = self._new_command(operation, arguments, keywords)
+            try:
+                self._queue.put_nowait(command)
+            except queue.Full as error:
+                queue_full = TrajectorySequencerErrorV3(
+                    "FAIL_TRAJECTORY_QUEUE_FULL",
+                    "trajectory FIFO reached frozen capacity 512",
+                )
+                with self._state_lock:
+                    if self._submission_fault is None:
+                        self._submission_fault = queue_full
+                    self._accepting = False
+                    latched = self._submission_fault
+                raise TrajectorySequencerErrorV3(
+                    latched.code,
+                    latched.detail,
+                ) from error
+            self._next_ticket += 1
+        if wait_for_durable:
+            self.flush_through(command.ticket)
+        return command.ticket
+
+    def _submit_internal(self, operation: str) -> TrajectoryTicketV3:
+        command = self._new_command(operation, (), {})
+        try:
+            self._queue.put_nowait(command)
+        except queue.Full as error:
+            raise TrajectorySequencerErrorV3(
+                "FAIL_TRAJECTORY_QUEUE_FULL",
+                "trajectory FIFO internal boundary found a non-empty full queue",
+            ) from error
+        self._next_ticket += 1
+        return command.ticket
+
+    def _publish_loop(self) -> None:
+        while True:
+            command = self._queue.get()
+            ticket = command.ticket
+            stop_after_command = ticket.operation == "__close__"
+            try:
+                if ticket.operation == "__barrier__":
+                    with self._state_lock:
+                        fault = self._fault
+                    if fault is not None:
+                        raise fault
+                    ticket.result = True
+                elif ticket.operation == "__close__":
+                    self._writer.close()
+                    ticket.result = True
+                    return
+                else:
+                    with self._state_lock:
+                        fault = self._fault
+                    if fault is not None:
+                        raise fault
+                    target = getattr(self._writer, ticket.operation, None)
+                    if not callable(target):
+                        raise TrajectorySequencerErrorV3(
+                            "FAIL_TRAJECTORY_PUBLISHER_API",
+                            f"trajectory writer lacks {ticket.operation}",
+                        )
+                    ticket.result = target(
+                        *command.arguments,
+                        **command.keywords,
+                    )
+            except BaseException as error:
+                ticket.error = error
+                if ticket.operation not in {"__barrier__", "__close__"}:
+                    with self._state_lock:
+                        if self._fault is None:
+                            self._fault = error
+            finally:
+                ticket.complete.set()
+                self._queue.task_done()
+            if stop_after_command:
+                return
+
+    def flush_through(self, ticket: TrajectoryTicketV3 | None) -> object | None:
+        if ticket is None:
+            return None
+        if type(ticket) is not TrajectoryTicketV3:
+            raise TrajectorySequencerErrorV3(
+                "FAIL_TRAJECTORY_TICKET",
+                "trajectory barrier ticket type differs",
+            )
+        ticket.complete.wait()
+        if ticket.error is not None:
+            if ticket.operation == "__close__":
+                raise TrajectorySequencerErrorV3(
+                    "FAIL_TRAJECTORY_PUBLISHER_CLOSE",
+                    _trajectory_core_error_detail_v2(ticket.error),
+                ) from ticket.error
+            raise self._publisher_fault_error(ticket.error) from ticket.error
+        return ticket.result
+
+    def flush(self) -> None:
+        with self._submission_lock:
+            with self._state_lock:
+                if self._closed:
+                    raise TrajectorySequencerErrorV3(
+                        "FAIL_TRAJECTORY_SEQUENCER_CLOSED",
+                        "trajectory FIFO is closed",
+                    )
+            self._queue.join()
+            with self._state_lock:
+                fault = self._fault
+                submission_fault = self._submission_fault
+            if fault is not None:
+                raise self._publisher_fault_error(fault) from fault
+            if submission_fault is not None:
+                raise TrajectorySequencerErrorV3(
+                    submission_fault.code,
+                    submission_fault.detail,
+                ) from submission_fault
+
+    def quiesce_and_drain(self) -> None:
+        with self._submission_lock:
+            with self._state_lock:
+                if self._closed:
+                    raise TrajectorySequencerErrorV3(
+                        "FAIL_TRAJECTORY_SEQUENCER_CLOSED",
+                        "trajectory FIFO is closed",
+                    )
+                if self._quiesced:
+                    raise TrajectorySequencerErrorV3(
+                        "FAIL_TRAJECTORY_SEQUENCER_STATE",
+                        "trajectory FIFO was quiesced twice",
+                    )
+                self._accepting = False
+            self._queue.join()
+            with self._state_lock:
+                self._quiesced = True
+                fault = self._fault
+                submission_fault = self._submission_fault
+            if fault is not None:
+                raise self._publisher_fault_error(fault) from fault
+            if submission_fault is not None:
+                raise TrajectorySequencerErrorV3(
+                    submission_fault.code,
+                    submission_fault.detail,
+                ) from submission_fault
+
+    def _seal_after_quiesce(self, outcome: str) -> object:
+        with self._submission_lock:
+            with self._state_lock:
+                if not self._quiesced or self._closed:
+                    raise TrajectorySequencerErrorV3(
+                        "FAIL_TRAJECTORY_SEQUENCER_STATE",
+                        "trajectory seal preceded one quiesce-and-drain",
+                    )
+                if self._fault is not None:
+                    raise self._publisher_fault_error(
+                        self._fault
+                    ) from self._fault
+                if self._submission_fault is not None:
+                    raise TrajectorySequencerErrorV3(
+                        self._submission_fault.code,
+                        self._submission_fault.detail,
+                    ) from self._submission_fault
+            ticket = self._submit_internal(f"seal_{outcome.lower()}")
+        return self.flush_through(ticket)
+
+    def _terminal_after_quiesce(
+        self,
+        operation: str,
+        arguments: tuple[object, ...],
+        keywords: Mapping[str, object],
+    ) -> object:
+        """Append the supervisor terminal only after async acceptance stops.
+
+        This remains a FIFO publisher command; it is not a raw-writer bypass.
+        The queue was drained by ``quiesce_and_drain``, so this command becomes
+        the final event immediately before the terminal manifest.
+        """
+
+        if operation not in {"ok", "fail"}:
+            raise TrajectorySequencerErrorV3(
+                "FAIL_TRAJECTORY_SEQUENCER_INPUT",
+                "post-quiesce terminal operation differs",
+            )
+        with self._submission_lock:
+            with self._state_lock:
+                if not self._quiesced or self._closed:
+                    raise TrajectorySequencerErrorV3(
+                        "FAIL_TRAJECTORY_SEQUENCER_STATE",
+                        "supervisor terminal preceded quiesce-and-drain",
+                    )
+                if self._post_quiesce_terminal_submitted:
+                    raise TrajectorySequencerErrorV3(
+                        "FAIL_TRAJECTORY_SEQUENCER_STATE",
+                        "supervisor terminal was submitted twice",
+                    )
+                if self._fault is not None:
+                    raise self._publisher_fault_error(
+                        self._fault
+                    ) from self._fault
+                if self._submission_fault is not None:
+                    raise TrajectorySequencerErrorV3(
+                        self._submission_fault.code,
+                        self._submission_fault.detail,
+                    ) from self._submission_fault
+            command = self._new_command(operation, arguments, keywords)
+            try:
+                self._queue.put_nowait(command)
+            except queue.Full as error:
+                raise TrajectorySequencerErrorV3(
+                    "FAIL_TRAJECTORY_QUEUE_FULL",
+                    "drained FIFO rejected the supervisor terminal",
+                ) from error
+            self._next_ticket += 1
+            with self._state_lock:
+                self._post_quiesce_terminal_submitted = True
+        return self.flush_through(command.ticket)
+
+    def ok_after_quiesce(
+        self, *arguments: object, **keywords: object
+    ) -> object:
+        return self._terminal_after_quiesce(
+            "ok", arguments, keywords
+        )
+
+    def fail_after_quiesce(
+        self, *arguments: object, **keywords: object
+    ) -> object:
+        return self._terminal_after_quiesce(
+            "fail", arguments, keywords
+        )
+
+    def seal_ok(self) -> object:
+        return self._seal_after_quiesce("OK")
+
+    def seal_fail(self) -> object:
+        return self._seal_after_quiesce("FAIL")
+
+    def close(self) -> None:
+        with self._submission_lock:
+            with self._state_lock:
+                if self._closed:
+                    return
+                self._accepting = False
+                self._closed = True
+            self._queue.join()
+            ticket = self._submit_internal("__close__")
+        close_error: BaseException | None = None
+        try:
+            self.flush_through(ticket)
+        except BaseException as error:
+            close_error = error
+        self._publisher.join(timeout=10.0)
+        if self._publisher.is_alive():
+            raise TrajectorySequencerErrorV3(
+                "FAIL_TRAJECTORY_PUBLISHER_THREAD",
+                "trajectory publisher thread did not terminate",
+            )
+        if close_error is not None:
+            raise close_error
+
+    def begin(self, *arguments: object, **keywords: object) -> object:
+        ticket = self._submit(
+            "begin", arguments, keywords, wait_for_durable=True
+        )
+        return ticket.result
+
+    def ok(self, *arguments: object, **keywords: object) -> object:
+        ticket = self._submit("ok", arguments, keywords, wait_for_durable=True)
+        return ticket.result
+
+    def fail(self, *arguments: object, **keywords: object) -> object:
+        ticket = self._submit(
+            "fail", arguments, keywords, wait_for_durable=True
+        )
+        return ticket.result
+
+    def enqueue_begin(
+        self, *arguments: object, **keywords: object
+    ) -> TrajectoryTicketV3:
+        return self._submit(
+            "begin", arguments, keywords, wait_for_durable=False
+        )
+
+    def enqueue_ok(
+        self, *arguments: object, **keywords: object
+    ) -> TrajectoryTicketV3:
+        return self._submit("ok", arguments, keywords, wait_for_durable=False)
+
+    def enqueue_fail(
+        self, *arguments: object, **keywords: object
+    ) -> TrajectoryTicketV3:
+        return self._submit("fail", arguments, keywords, wait_for_durable=False)
+
+
 def _load_trajectory_module_v2() -> object:
     """Load the exact bound trajectory core without trusting ``sys.path``."""
 
@@ -549,6 +984,253 @@ def _trajectory_fail_v2(
                 + _trajectory_core_error_detail_v2(trajectory_error),
                 artifact_written=artifact_written,
             )
+
+
+def _trajectory_begin_async_v3(
+    span_id: str,
+    operation: str,
+    *,
+    stage: str | None = None,
+    substep: str | None = None,
+    actor: str | None = None,
+    detail: str | None = None,
+    artifact_written: bool = False,
+    **sample: object,
+) -> TrajectoryTicketV3 | None:
+    """Enqueue a sample-path BEGIN without waiting for filesystem durability."""
+
+    if _ACTIVE_TRAJECTORY_V2 is None:
+        return None
+    enqueue = getattr(_ACTIVE_TRAJECTORY_V2, "enqueue_begin", None)
+    if not callable(enqueue):
+        _trajectory_begin_v2(
+            span_id,
+            operation,
+            stage=stage,
+            substep=substep,
+            actor=actor,
+            detail=detail,
+            artifact_written=artifact_written,
+            **sample,
+        )
+        return None
+    try:
+        return enqueue(
+            span_id,
+            operation,
+            stage=stage,
+            substep=substep,
+            actor=actor,
+            detail=(
+                _trajectory_bounded_text_v2(detail)
+                if detail is not None
+                else None
+            ),
+            **sample,
+        )
+    except BaseException as trajectory_error:
+        _fail(
+            FAIL_TRAJECTORY,
+            "trajectory FIFO enqueue failed; event_type=BEGIN; "
+            f"span_id={span_id}; operation={operation}; trajectory="
+            + _trajectory_core_error_detail_v2(trajectory_error),
+            artifact_written=artifact_written,
+        )
+
+
+def _trajectory_ok_async_v3(
+    span_id: str,
+    *,
+    detail: str | None = None,
+    artifact_written: bool = False,
+    **sample: object,
+) -> TrajectoryTicketV3 | None:
+    """Enqueue a sample-path OK without waiting for filesystem durability."""
+
+    if _ACTIVE_TRAJECTORY_V2 is None:
+        return None
+    enqueue = getattr(_ACTIVE_TRAJECTORY_V2, "enqueue_ok", None)
+    if not callable(enqueue):
+        _trajectory_ok_v2(
+            span_id,
+            detail=detail,
+            artifact_written=artifact_written,
+            **sample,
+        )
+        return None
+    try:
+        return enqueue(
+            span_id,
+            detail=(
+                _trajectory_bounded_text_v2(detail)
+                if detail is not None
+                else None
+            ),
+            **sample,
+        )
+    except BaseException as trajectory_error:
+        _fail(
+            FAIL_TRAJECTORY,
+            "trajectory FIFO enqueue failed; event_type=OK; "
+            f"span_id={span_id}; trajectory="
+            + _trajectory_core_error_detail_v2(trajectory_error),
+            artifact_written=artifact_written,
+        )
+
+
+def _trajectory_fail_async_v3(
+    span_id: str,
+    error: BaseException,
+    *,
+    detail: str | None = None,
+    artifact_written: bool | None = None,
+    **sample: object,
+) -> TrajectoryTicketV3 | None:
+    """Enqueue a sample-path FAIL; its caller chooses the durability barrier."""
+
+    if _ACTIVE_TRAJECTORY_V2 is None:
+        return None
+    enqueue = getattr(_ACTIVE_TRAJECTORY_V2, "enqueue_fail", None)
+    if not callable(enqueue):
+        _trajectory_fail_v2(
+            span_id,
+            error,
+            detail=detail,
+            artifact_written=artifact_written,
+            **sample,
+        )
+        return None
+    error_code, error_detail = _trajectory_error_fields_v2(error)
+    try:
+        return enqueue(
+            span_id,
+            error_code=error_code,
+            error_detail=error_detail,
+            detail=(
+                _trajectory_bounded_text_v2(detail)
+                if detail is not None
+                else None
+            ),
+            **sample,
+        )
+    except BaseException as trajectory_error:
+        if artifact_written is None:
+            artifact_written = (
+                error.artifact_written
+                if isinstance(error, Q05BDualSupervisorError)
+                else False
+            )
+        _fail(
+            FAIL_TRAJECTORY,
+            "operation failed and trajectory FIFO enqueue failed; "
+            f"event_type=FAIL; span_id={span_id}; operation="
+            + _trajectory_core_error_detail_v2(error)
+            + "; trajectory="
+            + _trajectory_core_error_detail_v2(trajectory_error),
+            artifact_written=artifact_written,
+        )
+
+
+def _trajectory_flush_v3(ticket: TrajectoryTicketV3 | None = None) -> None:
+    """Wait for one accepted ticket, or for every prior accepted event."""
+
+    if _ACTIVE_TRAJECTORY_V2 is None:
+        return
+    try:
+        if ticket is None:
+            flush = getattr(_ACTIVE_TRAJECTORY_V2, "flush", None)
+            if callable(flush):
+                flush()
+            return
+        flush_through = getattr(_ACTIVE_TRAJECTORY_V2, "flush_through", None)
+        if callable(flush_through):
+            flush_through(ticket)
+    except BaseException as trajectory_error:
+        _fail(
+            FAIL_TRAJECTORY,
+            "trajectory FIFO durability barrier failed:"
+            + _trajectory_core_error_detail_v2(trajectory_error),
+        )
+
+
+def _trajectory_ok_after_quiesce_v3(
+    span_id: str,
+    *,
+    detail: str | None = None,
+    artifact_written: bool = False,
+) -> None:
+    """Publish the supervisor OK after the FIFO has stopped accepting events."""
+
+    terminal = getattr(_ACTIVE_TRAJECTORY_V2, "ok_after_quiesce", None)
+    if not callable(terminal):
+        _fail(
+            FAIL_TRAJECTORY,
+            "post-quiesce OK publisher is unavailable",
+            artifact_written=artifact_written,
+        )
+    try:
+        terminal(
+            span_id,
+            detail=(
+                _trajectory_bounded_text_v2(detail)
+                if detail is not None
+                else None
+            ),
+        )
+    except BaseException as trajectory_error:
+        _fail(
+            FAIL_TRAJECTORY,
+            "post-quiesce supervisor OK publication failed; "
+            f"span_id={span_id}; trajectory="
+            + _trajectory_core_error_detail_v2(trajectory_error),
+            artifact_written=artifact_written,
+        )
+
+
+def _trajectory_fail_after_quiesce_v3(
+    span_id: str,
+    error: BaseException,
+    *,
+    detail: str | None = None,
+    artifact_written: bool | None = None,
+) -> None:
+    """Publish the supervisor FAIL after the FIFO has stopped accepting events."""
+
+    if artifact_written is None:
+        artifact_written = (
+            error.artifact_written
+            if isinstance(error, Q05BDualSupervisorError)
+            else False
+        )
+    terminal = getattr(_ACTIVE_TRAJECTORY_V2, "fail_after_quiesce", None)
+    if not callable(terminal):
+        _fail(
+            FAIL_TRAJECTORY,
+            "post-quiesce FAIL publisher is unavailable",
+            artifact_written=artifact_written,
+        )
+    error_code, error_detail = _trajectory_error_fields_v2(error)
+    try:
+        terminal(
+            span_id,
+            error_code=error_code,
+            error_detail=error_detail,
+            detail=(
+                _trajectory_bounded_text_v2(detail)
+                if detail is not None
+                else None
+            ),
+        )
+    except BaseException as trajectory_error:
+        _fail(
+            FAIL_TRAJECTORY,
+            "operation failed and post-quiesce supervisor FAIL publication "
+            f"failed; span_id={span_id}; operation="
+            + _trajectory_core_error_detail_v2(error)
+            + "; trajectory="
+            + _trajectory_core_error_detail_v2(trajectory_error),
+            artifact_written=artifact_written,
+        )
 
 
 def _canonical_json_bytes(value: object) -> bytes:
@@ -3061,13 +3743,27 @@ def _validate_policy_sections_v1(config: Mapping[str, object]) -> None:
             "failure_manifest_preserves_open_span_registry",
             "incomplete_prefix_is_read_only_verifiable",
             "logger_failure_fails_execution_closed",
+            "global_fifo_sequencer",
+            "global_fifo_capacity",
+            "ordinary_event_completion",
+            "sampler_epoch_begin",
+            "live_sample_begin",
+            "live_sample_terminal",
+            "normal_outer_sampler_terminal",
+            "held_final_begin_and_terminal",
+            "accepted_event_drain_boundaries",
+            "abrupt_loss_ceiling",
+            "typed_failure_propagation",
+            "held_final_release",
+            "terminal_manifest_ordering",
+            "queue_full_or_publisher_fault",
         },
         "durable_trajectory_policy",
     )
     _require_type_exact_v1(
         trajectory_policy,
         {
-            "schema_version": "hegel-phase3a-q05b-durable-trajectory-policy/2",
+            "schema_version": "hegel-phase3a-q05b-durable-trajectory-policy/3",
             "required_for_run_cli": True,
             "core_relative_path": TRAJECTORY_CORE_RELATIVE_PATH,
             "core_raw_sha256": TRAJECTORY_CORE_RAW_SHA256,
@@ -3083,6 +3779,32 @@ def _validate_policy_sections_v1(config: Mapping[str, object]) -> None:
             "failure_manifest_preserves_open_span_registry": True,
             "incomplete_prefix_is_read_only_verifiable": True,
             "logger_failure_fails_execution_closed": True,
+            "global_fifo_sequencer": "SINGLE_PUBLISHER_ALL_EVENTS",
+            "global_fifo_capacity": TRAJECTORY_ASYNC_QUEUE_CAPACITY_V3,
+            "ordinary_event_completion": "DURABLE_BEFORE_RETURN",
+            "sampler_epoch_begin": "DURABLE_BEFORE_SAMPLING",
+            "live_sample_begin": "ENQUEUED_BEFORE_COLLECTION",
+            "live_sample_terminal": "ENQUEUED_AFTER_COLLECTION",
+            "normal_outer_sampler_terminal": (
+                "ENQUEUED_NO_BARRIER_BEFORE_HELD_FINAL"
+            ),
+            "held_final_begin_and_terminal": (
+                "ENQUEUED_WITHOUT_INTERMEDIATE_BARRIER"
+            ),
+            "accepted_event_drain_boundaries": (
+                "BEFORE_TYPED_FAILURE_ACTOR_RELEASE_OR_TERMINAL_MANIFEST"
+            ),
+            "abrupt_loss_ceiling": (
+                "ABRUPT_LOSS_ONLY_LAST_DURABLE_PREFIX"
+            ),
+            "typed_failure_propagation": (
+                "DRAINED_BEFORE_TYPED_CAUSE_PROPAGATION"
+            ),
+            "held_final_release": "DRAINED_BEFORE_ACTOR_RELEASE",
+            "terminal_manifest_ordering": (
+                "QUIESCED_AND_DRAINED_BEFORE_TERMINAL"
+            ),
+            "queue_full_or_publisher_fault": "FAIL_CLOSED_NO_RETRY",
         },
         "durable_trajectory_policy",
     )
@@ -6129,6 +6851,8 @@ def _sample_actor_resources_v1(
 ) -> None:
     trajectory_span = f"sampler-{actor.actor_id}"
     trajectory_span_open = False
+    sample_span: str | None = None
+    sample_span_open = False
     try:
         _trajectory_begin_v2(
             trajectory_span,
@@ -6157,7 +6881,7 @@ def _sample_actor_resources_v1(
             sample_span = (
                 f"sample-{actor.actor_id}-{attempted_ordinal:06d}"
             )
-            _trajectory_begin_v2(
+            _trajectory_begin_async_v3(
                 sample_span,
                 "LIVE_RESOURCE_SAMPLE",
                 stage="ACTOR_LIFECYCLE",
@@ -6166,9 +6890,12 @@ def _sample_actor_resources_v1(
                 detail=f"sample_ordinal={attempted_ordinal}",
             )
             sample_span_open = True
-            # BEGIN is a synchronous durable write.  Anchor the collection only
-            # after it completes so logger/lock/fsync latency is included in the
-            # unsampled gap and cannot be hidden from the 250 ms bound.
+            # V3 linearizes this BEGIN in the one global FIFO but does not wait
+            # for file/directory fsync.  The monotonic anchor immediately before
+            # collection therefore measures the actual unsampled interval, not
+            # unrelated trajectory durability latency.  The outer sampler BEGIN
+            # is already durable and every accepted sample event is drained
+            # before typed failure propagation, held release, or trace sealing.
             start_ns = time.monotonic_ns()
             gap_ns = start_ns - prior_finish_ns
             scheduler_lateness_ns = max(0, start_ns - scheduled_start_ns)
@@ -6186,8 +6913,7 @@ def _sample_actor_resources_v1(
                     f"target_wait_ns={RESOURCE_SAMPLER_TARGET_WAIT_NS}; "
                     f"previous_duration_ns={prior_duration_ns}",
                 )
-                sample_span_open = False
-                _trajectory_fail_v2(
+                _trajectory_fail_async_v3(
                     sample_span,
                     gap_error,
                     detail="MAXIMUM_UNSAMPLED_GAP_EXCEEDED",
@@ -6206,8 +6932,8 @@ def _sample_actor_resources_v1(
                     ),
                     gap_exceeded=True,
                 )
-                trajectory_span_open = False
-                _trajectory_fail_v2(
+                sample_span_open = False
+                outer_failure_ticket = _trajectory_fail_async_v3(
                     trajectory_span,
                     gap_error,
                     detail=(
@@ -6215,6 +6941,8 @@ def _sample_actor_resources_v1(
                         + sample_span
                     ),
                 )
+                trajectory_span_open = False
+                _trajectory_flush_v3(outer_failure_ticket)
                 raise gap_error
             try:
                 inspect_before = inspect_reader(container_id)
@@ -6233,9 +6961,8 @@ def _sample_actor_resources_v1(
                 finish_ns = time.monotonic_ns()
             except BaseException as sample_error:
                 if sample_span_open:
-                    sample_span_open = False
                     failure_finish_ns = time.monotonic_ns()
-                    _trajectory_fail_v2(
+                    _trajectory_fail_async_v3(
                         sample_span,
                         sample_error,
                         detail="LIVE_RESOURCE_COLLECTION_FAILED",
@@ -6256,6 +6983,7 @@ def _sample_actor_resources_v1(
                         ),
                         gap_exceeded=False,
                     )
+                    sample_span_open = False
                 raise
             ordinal += 1
             sample["sample_ordinal"] = ordinal
@@ -6270,8 +6998,7 @@ def _sample_actor_resources_v1(
             )
             sample["prior_sample_finish_ns"] = prior_finish_ns
             sample["prior_sample_duration_ns"] = prior_duration_ns
-            sample_span_open = False
-            _trajectory_ok_v2(
+            _trajectory_ok_async_v3(
                 sample_span,
                 detail="LIVE_RESOURCE_COLLECTION_COMPLETE",
                 role_id=str(actor.role_id),
@@ -6289,6 +7016,7 @@ def _sample_actor_resources_v1(
                 ),
                 gap_exceeded=False,
             )
+            sample_span_open = False
             with actor.sample_lock:
                 actor.sample_rows.append(sample)
             prior_finish_ns = finish_ns
@@ -6304,29 +7032,59 @@ def _sample_actor_resources_v1(
             if actor.sample_stop.wait(max(0, remaining_ns) / 1_000_000_000):
                 break
         if trajectory_span_open:
-            trajectory_span_open = False
-            _trajectory_ok_v2(
+            _trajectory_ok_async_v3(
                 trajectory_span,
                 detail=f"sample_count={ordinal}",
             )
+            trajectory_span_open = False
     except BaseException as error:
         observed_error = error
+        if sample_span_open and sample_span is not None:
+            sample_span_open = False
+            try:
+                _trajectory_fail_v2(
+                    sample_span,
+                    error,
+                    detail="SAMPLE_TRACE_ENQUEUE_FAILED",
+                )
+            except BaseException as trajectory_error:
+                observed_error = Q05BDualSupervisorError(
+                    FAIL_TRAJECTORY,
+                    "sample failed and sample-span trajectory publication failed; "
+                    "sample="
+                    + _trajectory_core_error_detail_v2(error)
+                    + "; trajectory="
+                    + _trajectory_core_error_detail_v2(trajectory_error),
+                )
         if trajectory_span_open:
             trajectory_span_open = False
             try:
                 _trajectory_fail_v2(
                     trajectory_span,
-                    error,
+                    observed_error,
                     detail="SAMPLER_EXCEPTION",
                 )
             except BaseException as trajectory_error:
                 observed_error = Q05BDualSupervisorError(
                     FAIL_TRAJECTORY,
                     "sampler failed and trajectory publication failed; sampler="
-                    + _trajectory_core_error_detail_v2(error)
+                    + _trajectory_core_error_detail_v2(observed_error)
                     + "; trajectory="
                     + _trajectory_core_error_detail_v2(trajectory_error),
                 )
+        try:
+            # Do not expose even a queue-full or publisher-fault cause to the
+            # actor owner until every command accepted before that cause has
+            # reached a terminal publisher disposition.
+            _trajectory_flush_v3()
+        except BaseException as trajectory_error:
+            observed_error = Q05BDualSupervisorError(
+                FAIL_TRAJECTORY,
+                "sampler failure durability drain failed; sampler="
+                + _trajectory_core_error_detail_v2(observed_error)
+                + "; trajectory="
+                + _trajectory_core_error_detail_v2(trajectory_error),
+            )
         actor.sample_errors.append(observed_error)
     finally:
         actor.sample_complete.set()
@@ -6993,6 +7751,17 @@ def _abort_held_actor_cleanup_body_v1(
             actor.cleanup_errors.append(
                 f"resource-sampler-join:{type(error).__name__}:{error}"
             )
+    if sample_thread is None or not sample_thread.is_alive():
+        try:
+            # A normal stop enqueues its outer sampler terminal without waiting;
+            # abort cleanup has no held-final barrier, so drain that accepted
+            # prefix before any release/terminate/remove mutation.
+            _trajectory_flush_v3()
+        except BaseException as error:
+            actor.cleanup_errors.append(
+                "resource-sampler-trajectory-drain:"
+                f"{type(error).__name__}:{error}"
+            )
     try:
         if actor.control_root.is_dir() and os.path.lexists(actor.control_root / "done"):
             _write_abort_release_v1(actor.control_root)
@@ -7299,7 +8068,7 @@ def close_held_actor_process_v1(
         held_final_span = (
             f"held-final-sample-{actor.actor_id}-{held_final_ordinal:06d}"
         )
-        _trajectory_begin_v2(
+        _trajectory_begin_async_v3(
             held_final_span,
             "HELD_FINAL_RESOURCE_SAMPLE",
             stage="ACTOR_LIFECYCLE",
@@ -7325,12 +8094,13 @@ def close_held_actor_process_v1(
             )
         except BaseException as scheduling_error:
             if held_final_span_open:
-                held_final_span_open = False
-                _trajectory_fail_v2(
+                failure_ticket = _trajectory_fail_async_v3(
                     held_final_span,
                     scheduling_error,
                     detail="HELD_FINAL_RESOURCE_SCHEDULING_FAILED",
                 )
+                held_final_span_open = False
+                _trajectory_flush_v3(failure_ticket)
             raise
         if held_final_gap_ns > RESOURCE_SAMPLER_MAXIMUM_UNSAMPLED_GAP_NS:
             held_final_gap_error = Q05BDualSupervisorError(
@@ -7346,8 +8116,7 @@ def close_held_actor_process_v1(
                 "previous_duration_ns="
                 f"{previous_sample['sample_duration_ns']}",
             )
-            held_final_span_open = False
-            _trajectory_fail_v2(
+            failure_ticket = _trajectory_fail_async_v3(
                 held_final_span,
                 held_final_gap_error,
                 detail="MAXIMUM_UNSAMPLED_GAP_EXCEEDED",
@@ -7366,6 +8135,8 @@ def close_held_actor_process_v1(
                 ),
                 gap_exceeded=True,
             )
+            held_final_span_open = False
+            _trajectory_flush_v3(failure_ticket)
             raise held_final_gap_error
         try:
             inspect_before = inspect_reader(container_id)
@@ -7395,9 +8166,8 @@ def close_held_actor_process_v1(
             )
         except BaseException as held_final_error:
             if held_final_span_open:
-                held_final_span_open = False
                 held_final_failure_finish_ns = time.monotonic_ns()
-                _trajectory_fail_v2(
+                failure_ticket = _trajectory_fail_async_v3(
                     held_final_span,
                     held_final_error,
                     detail="HELD_FINAL_RESOURCE_COLLECTION_FAILED",
@@ -7421,6 +8191,8 @@ def close_held_actor_process_v1(
                     ),
                     gap_exceeded=False,
                 )
+                held_final_span_open = False
+                _trajectory_flush_v3(failure_ticket)
             raise
         try:
             held_final["sample_ordinal"] = held_final_ordinal
@@ -7449,9 +8221,8 @@ def close_held_actor_process_v1(
             ]
         except BaseException as postprocess_error:
             if held_final_span_open:
-                held_final_span_open = False
                 held_final_failure_finish_ns = time.monotonic_ns()
-                _trajectory_fail_v2(
+                failure_ticket = _trajectory_fail_async_v3(
                     held_final_span,
                     postprocess_error,
                     detail="HELD_FINAL_RESOURCE_POSTPROCESS_FAILED",
@@ -7475,24 +8246,68 @@ def close_held_actor_process_v1(
                     ),
                     gap_exceeded=False,
                 )
+                held_final_span_open = False
+                _trajectory_flush_v3(failure_ticket)
             raise
-        held_final_span_open = False
-        _trajectory_ok_v2(
-            held_final_span,
-            detail="HELD_FINAL_RESOURCE_COLLECTION_COMPLETE",
-            role_id=str(actor.role_id),
-            sample_ordinal=held_final_ordinal,
-            previous_finish_ns=previous_finish_ns,
-            scheduled_start_ns=held_final_scheduled_start_ns,
-            actual_start_ns=held_final["sample_monotonic_ns"],
-            finish_ns=held_final_finish_ns,
-            collection_duration_ns=held_final["sample_duration_ns"],
-            scheduler_lateness_ns=held_final_scheduler_lateness_ns,
-            target_wait_ns=RESOURCE_SAMPLER_TARGET_WAIT_NS,
-            gap_ns=held_final_gap_ns,
-            maximum_gap_ns=RESOURCE_SAMPLER_MAXIMUM_UNSAMPLED_GAP_NS,
-            gap_exceeded=False,
-        )
+        try:
+            held_final_ticket = _trajectory_ok_async_v3(
+                held_final_span,
+                detail="HELD_FINAL_RESOURCE_COLLECTION_COMPLETE",
+                role_id=str(actor.role_id),
+                sample_ordinal=held_final_ordinal,
+                previous_finish_ns=previous_finish_ns,
+                scheduled_start_ns=held_final_scheduled_start_ns,
+                actual_start_ns=held_final["sample_monotonic_ns"],
+                finish_ns=held_final_finish_ns,
+                collection_duration_ns=held_final["sample_duration_ns"],
+                scheduler_lateness_ns=held_final_scheduler_lateness_ns,
+                target_wait_ns=RESOURCE_SAMPLER_TARGET_WAIT_NS,
+                gap_ns=held_final_gap_ns,
+                maximum_gap_ns=RESOURCE_SAMPLER_MAXIMUM_UNSAMPLED_GAP_NS,
+                gap_exceeded=False,
+            )
+            held_final_span_open = False
+            # This is the first normal-stop durability barrier: continuous
+            # samples, outer-sampler OK, and held-final evidence are FIFO-prior.
+            # It occurs after held-final collection, so it cannot contaminate the
+            # last-continuous-to-held-final <=250 ms measurement, but release is
+            # still forbidden until every accepted event is immutable.
+            _trajectory_flush_v3(held_final_ticket)
+        except BaseException as trace_error:
+            if held_final_span_open:
+                held_final_span_open = False
+                try:
+                    _trajectory_fail_v2(
+                        held_final_span,
+                        trace_error,
+                        detail="HELD_FINAL_TRACE_ENQUEUE_FAILED",
+                        role_id=str(actor.role_id),
+                        sample_ordinal=held_final_ordinal,
+                        previous_finish_ns=previous_finish_ns,
+                        scheduled_start_ns=held_final_scheduled_start_ns,
+                        actual_start_ns=held_final["sample_monotonic_ns"],
+                        finish_ns=held_final_finish_ns,
+                        collection_duration_ns=held_final["sample_duration_ns"],
+                        scheduler_lateness_ns=(
+                            held_final_scheduler_lateness_ns
+                        ),
+                        target_wait_ns=RESOURCE_SAMPLER_TARGET_WAIT_NS,
+                        gap_ns=held_final_gap_ns,
+                        maximum_gap_ns=(
+                            RESOURCE_SAMPLER_MAXIMUM_UNSAMPLED_GAP_NS
+                        ),
+                        gap_exceeded=False,
+                    )
+                except BaseException as terminal_error:
+                    _fail(
+                        FAIL_TRAJECTORY,
+                        "held-final event enqueue and FAIL publication failed; "
+                        "enqueue="
+                        + _trajectory_core_error_detail_v2(trace_error)
+                        + "; terminal="
+                        + _trajectory_core_error_detail_v2(terminal_error),
+                    )
+            raise
         release = release_held_actor_v1(actor.control_root, completion, held_final)
         try:
             exit_code = actor.process.wait(timeout=exit_timeout_seconds)
@@ -17397,12 +18212,13 @@ def _run_cli_actual_with_trajectory_body_v2(
     terminal_manifest_published = False
     try:
         try:
-            writer = module.create_durable_trajectory_writer_v2(
+            durable_writer = module.create_durable_trajectory_writer_v2(
                 trajectory_root,
                 expected_parent=trajectory_root.parent,
                 trace_id=trajectory_trace_id,
                 producer_id=TRAJECTORY_PRODUCER_ID,
             )
+            writer = TrajectorySequencerV3(durable_writer)
         except BaseException as error:
             _fail(
                 FAIL_TRAJECTORY,
@@ -17462,7 +18278,8 @@ def _run_cli_actual_with_trajectory_body_v2(
             )
         except BaseException as execution_error:
             try:
-                _trajectory_fail_v2(
+                writer.quiesce_and_drain()
+                _trajectory_fail_after_quiesce_v3(
                     "supervisor-run",
                     execution_error,
                     detail="supervisor attempt failed",
@@ -17494,7 +18311,8 @@ def _run_cli_actual_with_trajectory_body_v2(
                 )
             raise
         try:
-            _trajectory_ok_v2(
+            writer.quiesce_and_drain()
+            _trajectory_ok_after_quiesce_v3(
                 "supervisor-run",
                 detail="supervisor attempt completed",
                 artifact_written=True,

@@ -322,7 +322,7 @@ ACTUAL_COMMAND_MOUNT_RESOURCE_POLICY_ROOT_DOMAIN: Final = (
     b"HEGEL/Q05B/ACTUAL/COMMAND_MOUNT_RESOURCE_POLICY/V1\x00"
 )
 EXPECTED_COMMIT_A_STATIC_POLICY_ROOT: Final = (
-    "3fa927d3e339b8f724e1a58cf89d36066b333d384012189a99aa5055522a46b0"
+    "dc3c35dd2509da75a67a8cbf38dced466909292f5c2b7327be6509abf302f3a9"
 )
 EXPECTED_COMMAND_MOUNT_RESOURCE_POLICY_ROOT: Final = (
     "176f04c46cfe80ad1e700d5bf4b8ab466d02933d00d0e180835c2dad6f358ef2"
@@ -1667,13 +1667,13 @@ def _validate_config_bytes_v1(value: object) -> dict[str, object]:
     _require_type_exact_v1(
         decoded["durable_trajectory_policy"],
         {
-            "schema_version": "hegel-phase3a-q05b-durable-trajectory-policy/2",
+            "schema_version": "hegel-phase3a-q05b-durable-trajectory-policy/3",
             "required_for_run_cli": True,
             "core_relative_path": "src/hegel_machine/phase3_q05b_trajectory_v2.py",
             "core_raw_sha256": (
                 "9d72cc6c155f6e30dcda139025578399b8ebc391d688a037bfebf7de6ed2b398"
             ),
-            "producer_id": "Q05B_SUPERVISOR_V2",
+            "producer_id": "Q05B_SUPERVISOR_V3",
             "clock_id": "CLOCK_MONOTONIC",
             "trajectory_root_mode": "0700",
             "event_and_manifest_mode": "0444",
@@ -1685,6 +1685,32 @@ def _validate_config_bytes_v1(value: object) -> dict[str, object]:
             "failure_manifest_preserves_open_span_registry": True,
             "incomplete_prefix_is_read_only_verifiable": True,
             "logger_failure_fails_execution_closed": True,
+            "global_fifo_sequencer": "SINGLE_PUBLISHER_ALL_EVENTS",
+            "global_fifo_capacity": 512,
+            "ordinary_event_completion": "DURABLE_BEFORE_RETURN",
+            "sampler_epoch_begin": "DURABLE_BEFORE_SAMPLING",
+            "live_sample_begin": "ENQUEUED_BEFORE_COLLECTION",
+            "live_sample_terminal": "ENQUEUED_AFTER_COLLECTION",
+            "normal_outer_sampler_terminal": (
+                "ENQUEUED_NO_BARRIER_BEFORE_HELD_FINAL"
+            ),
+            "held_final_begin_and_terminal": (
+                "ENQUEUED_WITHOUT_INTERMEDIATE_BARRIER"
+            ),
+            "accepted_event_drain_boundaries": (
+                "BEFORE_TYPED_FAILURE_ACTOR_RELEASE_OR_TERMINAL_MANIFEST"
+            ),
+            "abrupt_loss_ceiling": (
+                "ABRUPT_LOSS_ONLY_LAST_DURABLE_PREFIX"
+            ),
+            "typed_failure_propagation": (
+                "DRAINED_BEFORE_TYPED_CAUSE_PROPAGATION"
+            ),
+            "held_final_release": "DRAINED_BEFORE_ACTOR_RELEASE",
+            "terminal_manifest_ordering": (
+                "QUIESCED_AND_DRAINED_BEFORE_TERMINAL"
+            ),
+            "queue_full_or_publisher_fault": "FAIL_CLOSED_NO_RETRY",
         },
         "Commit-A durable trajectory policy",
     )
