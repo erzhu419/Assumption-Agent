@@ -919,7 +919,7 @@ def _base(slot: int = 1) -> dict[str, object]:
         "campaign_id": "campaign-1",
         "slot_number": slot,
         "expected_trace_id": f"campaign-1-slot-{slot}",
-        "expected_producer_id": "Q05B_SUPERVISOR_V2",
+        "expected_producer_id": "Q05B_SUPERVISOR_V3",
         "invocation_count": 1,
         "supervisor_returned": True,
         "supervisor_reaped": True,
@@ -935,7 +935,7 @@ def _base(slot: int = 1) -> dict[str, object]:
         "stderr_empty": True,
         "trajectory_status": "COMPLETE_FAIL",
         "trajectory_trace_id": f"campaign-1-slot-{slot}",
-        "trajectory_producer_id": "Q05B_SUPERVISOR_V2",
+        "trajectory_producer_id": "Q05B_SUPERVISOR_V3",
         "trajectory_torn_tail_or_null": None,
         "trajectory_open_span_ids": [],
         "trajectory_terminal_error_code_or_null": campaign.GAP_ERROR_CODE_V2,
@@ -1035,6 +1035,56 @@ def test_canonical_strict_codec_and_domain_separated_digest_known_answer() -> No
     second = campaign.campaign_record_digest_v2("TEST/B\x00", {"x": 1})
     assert first == "sha256:" + hashlib.sha256(b'TEST/A\x00{"x":1}').hexdigest()
     assert first != second
+
+
+def test_v2r3_partition_digest_domains_are_new_instance_authority() -> None:
+    rows: list[dict[str, object]] = []
+    failure_domain = (
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/"
+        "TRAJECTORY_FAILURE_ROWS/V2\x00"
+    )
+    cleanup_domain = (
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/"
+        "TRAJECTORY_CLEANUP_ROWS/V2\x00"
+    )
+    certificate_domain = (
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/"
+        "POST_ORIGIN_PARTITION_CERTIFICATE/V2\x00"
+    )
+    certificate: dict[str, object] = {"certificate_digest": None}
+
+    failure_digest = campaign.failure_rows_digest_v2(rows)
+    cleanup_digest = campaign.cleanup_rows_digest_v2(rows)
+    certificate_digest = campaign.partition_certificate_digest_v2(certificate)
+
+    assert failure_digest == campaign.campaign_record_digest_v2(
+        failure_domain, rows
+    )
+    assert cleanup_digest == campaign.campaign_record_digest_v2(
+        cleanup_domain, rows
+    )
+    assert certificate_digest == campaign.campaign_record_digest_v2(
+        certificate_domain, {}
+    )
+    assert failure_digest != campaign.campaign_record_digest_v2(
+        failure_domain.replace("V2R3", "V2R2"), rows
+    )
+    assert cleanup_digest != campaign.campaign_record_digest_v2(
+        cleanup_domain.replace("V2R3", "V2R2"), rows
+    )
+    assert certificate_digest != campaign.campaign_record_digest_v2(
+        certificate_domain.replace("V2R3", "V2R2"), {}
+    )
+
+
+def test_version_neutral_slot_observation_digest_domain_is_retained() -> None:
+    value: dict[str, object] = {"record_digest": None}
+    assert campaign.slot_observation_record_digest_v2(
+        value
+    ) == campaign.campaign_record_digest_v2(
+        "HEGEL/Q05B/SHADOW-RETRY-CAMPAIGN/SLOT-OBSERVATION/V2\x00",
+        {},
+    )
 
 
 @pytest.mark.parametrize(

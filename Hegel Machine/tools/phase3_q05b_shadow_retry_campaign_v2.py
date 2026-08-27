@@ -11,6 +11,7 @@ fully closed ``HELD_ACTOR_GAP_EXCEEDED`` outcome can open the next slot.
 from __future__ import annotations
 
 import argparse
+from collections import deque
 from copy import deepcopy
 from dataclasses import asdict, is_dataclass
 import errno
@@ -28,6 +29,7 @@ import signal
 import stat
 import subprocess
 import sys
+import threading
 import time
 import types
 from typing import Any, Callable, Final, Mapping, NoReturn, Sequence
@@ -56,7 +58,7 @@ V1_SAFETY_KERNEL_PATH: Final = (
     PROJECT_ROOT / "src/hegel_machine/phase3_q05b_shadow_nonadoption_trial_v1.py"
 )
 _STATE_ROOT_V2: Final = "/home/erzhu419/.local/state/hegel-machine"
-_V2R2_STATE_PREFIX: Final = f"{_STATE_ROOT_V2}/q05b-shadow-retry-campaign-v2r2"
+_V2R3_STATE_PREFIX: Final = f"{_STATE_ROOT_V2}/q05b-shadow-retry-campaign-v2r3"
 _PRIOR_V2_STATE_PREFIX: Final = f"{_STATE_ROOT_V2}/q05b-shadow-retry-campaign-v2"
 _PRIOR_V2_CONTRACT_ID: Final = "hegel-phase3a-q05b-shadow-retry-campaign-v2"
 _PRIOR_V2_CAPSULE_DIGEST: Final = (
@@ -87,8 +89,54 @@ _PRIOR_V2R1_TERMINAL_LEDGER_RECORD_DIGEST: Final = (
 _PRIOR_V2R1_COMPLETION_LEDGER_RECORD_DIGEST: Final = (
     "sha256:b9e63585d7a6eb48d6195fa188ce1d40f2c79a169848f58cd10b82328be4702b"
 )
-_CLONE_TARGET_REF_V2R2: Final = (
-    "refs/hegel/q05b-shadow-retry-v2r2-target"
+_PRIOR_V2R2_STATE_PREFIX: Final = (
+    f"{_STATE_ROOT_V2}/q05b-shadow-retry-campaign-v2r2"
+)
+_PRIOR_V2R2_WORKTREE_ROOT: Final = "/tmp/hegel-q05b-shadow-retry-v2r2-worktree"
+_PRIOR_V2R2_CONTRACT_ID: Final = (
+    "hegel-phase3a-q05b-shadow-retry-campaign-v2r2"
+)
+_PRIOR_V2R2_CONTROLLER_COMMIT: Final = (
+    "33ff8ba17addf914f06eb440b8b7a40e93654816"
+)
+_PRIOR_V2R2_CONTROLLER_TREE: Final = (
+    "bafb4291cdc003e514e6ae36800588f3e37242e7"
+)
+_PRIOR_V2R2_TARGET_COMMIT: Final = (
+    "7bc2044212e278443b1ca703115c7cb17591ac14"
+)
+_PRIOR_V2R2_CAMPAIGN_SOURCE_BINDING_DIGEST: Final = (
+    "sha256:f1bf112b268c5fdf1a104e9e66f92e21bc8187347657e0556ea47c3bd8815079"
+)
+_PRIOR_V2R2_CONTRACT_DIGEST: Final = (
+    "sha256:02e297682d99e2efa7818b2b58562dd6b6dc3ef468e20b980240e2ab1e19c871"
+)
+_PRIOR_V2R2_CAPSULE_DIGEST: Final = (
+    "sha256:325fc2d916e021d811b5ca0bce2bba4a2f89282e5529d9471670a4c8cd34648d"
+)
+_PRIOR_V2R2_OWNER_CONFIRMATION_DIGEST: Final = (
+    "sha256:a1e8b8d688d239aec60b30094e34a470bb889290d7101a8683a9a8fd951c0f52"
+)
+_PRIOR_V2R2_AUTHORIZATION_DIGEST: Final = (
+    "sha256:079730f604279e5da1e2aa81c22ae4a00806f5981659622fdec3da2efde836c9"
+)
+_PRIOR_V2R2_TERMINAL_BODY_DIGEST: Final = (
+    "sha256:61d2b63a73e781351a65d49c638498ddc3a66fe8972eaa1ed214b73f0e33edde"
+)
+_PRIOR_V2R2_TERMINAL_LEDGER_RECORD_DIGEST: Final = (
+    "sha256:bb312d9774a57723a4b59e3a31a4adfd0ad6abef6c3b12cd3bc852e9b6280f78"
+)
+_PRIOR_V2R2_COMPLETION_BODY_DIGEST: Final = (
+    "sha256:55b8b25cc990b56bbda03930d90bda14e9329546d136812ca8714a8b2d0cef85"
+)
+_PRIOR_V2R2_COMPLETION_LEDGER_RECORD_DIGEST: Final = (
+    "sha256:1d3c632731315906eea3ef104d4f73628ab8aeeb62af693055d69be02da03d09"
+)
+_PRIOR_V2R2_TERMINAL_STATUS: Final = (
+    "CAMPAIGN_RETRY_EXHAUSTED_TERMINAL_NO_SLOT_04"
+)
+_CLONE_TARGET_REF_V2R3: Final = (
+    "refs/hegel/q05b-shadow-retry-v2r3-target"
 )
 _PRIOR_V2_PROTECTED_ROOTS: Final = (
     f"{_PRIOR_V2_STATE_PREFIX}-authorization",
@@ -109,12 +157,23 @@ _PRIOR_V2R1_PROTECTED_ROOTS: Final = (
         for suffix in ("clone", "cargo-cache", "artifact", "evidence", "trace")
     ),
 )
-_EXPECTED_PROTECTED_ROOTS_V2R2: Final = (
+_PRIOR_V2R2_PROTECTED_ROOTS: Final = (
+    _PRIOR_V2R2_WORKTREE_ROOT,
+    f"{_PRIOR_V2R2_STATE_PREFIX}-authorization",
+    f"{_PRIOR_V2R2_STATE_PREFIX}-ledger",
+    *tuple(
+        f"{_PRIOR_V2R2_STATE_PREFIX}-slot-{ordinal:02d}-{suffix}"
+        for ordinal in range(1, 4)
+        for suffix in ("clone", "cargo-cache", "artifact", "evidence", "trace")
+    ),
+)
+_EXPECTED_PROTECTED_ROOTS_V2R3: Final = (
     "/home/erzhu419/mine_code/Asumption Agent",
     os.fspath(WORKTREE_ROOT),
     f"{_STATE_ROOT_V2}/q05b-shadow-trajectory-v2-dev-worktree",
     *_PRIOR_V2_PROTECTED_ROOTS,
     *_PRIOR_V2R1_PROTECTED_ROOTS,
+    *_PRIOR_V2R2_PROTECTED_ROOTS,
     f"{_STATE_ROOT_V2}/m3-start-runtime-worktree",
     f"{_STATE_ROOT_V2}/q05b-attempt2-ledger-v1",
     f"{_STATE_ROOT_V2}/q05b-attempt-2-authorization",
@@ -198,13 +257,25 @@ _MAX_RETAINED_FAILURE_ROWS: Final = 7
 _MAX_RETAINED_CLEANUP_ROWS: Final = 12
 _MAX_PARTITION_CERTIFICATE_BYTES: Final = 256 * 1024
 _MAX_ERROR_RECEIPT_BYTES: Final = 128 * 1024
-_SCHEDULING_ADMISSION_POLICY_SCHEMA_V2: Final = (
-    "hegel-phase3a-q05b-shadow-retry-scheduling-admission-policy/2"
+_SCHEDULING_ADMISSION_POLICY_SCHEMA_V3: Final = (
+    "hegel-phase3a-q05b-shadow-retry-scheduling-admission-policy/3"
 )
-_SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V2: Final = (
-    "hegel-phase3a-q05b-shadow-retry-scheduling-admission-evidence/2"
+_SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V3: Final = (
+    "hegel-phase3a-q05b-shadow-retry-scheduling-admission-evidence/3"
+)
+_SCHEDULING_ADMISSION_RECORD_SCHEMA_V3: Final = (
+    "hegel-phase3a-q05b-shadow-retry-scheduling-admission-record/3"
 )
 _SCHEDULING_ADMISSION_FAILURE_V2: Final = "FAIL_CAMPAIGN_SCHEDULING_ADMISSION"
+_SCHEDULING_CONTROLLER_EVENTS_V3: Final = (
+    "SUPERVISOR_STAGE_04_OK",
+    "SUPERVISOR_STAGE_05_BEGIN",
+    "HELD_ACTOR_CLOSE_BEGIN",
+)
+_SCHEDULING_SAMPLER_ACTORS_V3: Final = (
+    "PYTHON_ENDPOINT",
+    "RUST_ENDPOINT",
+)
 _SPAWN_REGISTRATION_SCHEMA_V2: Final = (
     "hegel-phase3a-q05b-shadow-retry-spawn-registration/2"
 )
@@ -229,6 +300,7 @@ _AUTHORITATIVE_ERROR_RECEIPT_SCHEMAS_V2: Final = (
     _SPAWN_REGISTRATION_SCHEMA_V2,
     _PRESPAWN_DOCKER_RECEIPT_SCHEMA_V2,
     _PUBLICATION_RECEIPT_SCHEMA_V2,
+    _SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V3,
     _BOUNDED_RECEIPT_OMISSION_SCHEMA_V2,
 )
 _SPAWN_RECEIPT_MAX_BYTES: Final = 64
@@ -259,29 +331,32 @@ _SPAWN_LAUNCHER_SOURCE_V2: Final = (
 _TARGET_STATIC_POLICY_DOMAIN: Final = (
     b"HEGEL/Q05B/ACTUAL/COMMIT_A_STATIC_POLICY/V1\x00"
 )
-_EXPECTED_HASH_DOMAINS_V2R2: Final = {
-    "contract": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/CONTRACT/V2",
-    "campaign_source_binding": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/CAMPAIGN_SOURCE_BINDING/V2",
-    "capsule": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/CAPSULE/V2",
-    "authorization": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/AUTHORIZATION/V2",
-    "cargo_manifest": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/CARGO_MANIFEST/V2",
-    "ledger_record": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/LEDGER_RECORD/V2",
-    "trajectory_binding": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/TRAJECTORY_BINDING/V2",
-    "trajectory_event_payloads": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/EVENT_PAYLOADS/V2",
-    "trajectory_suffix": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/TRAJECTORY_SUFFIX/V2",
-    "trajectory_other_nonfailure": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/TRAJECTORY_OTHER_NONFAILURE/V2",
-    "trajectory_failure_rows": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/TRAJECTORY_FAILURE_ROWS/V2",
-    "trajectory_cleanup_rows": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/TRAJECTORY_CLEANUP_ROWS/V2",
-    "trajectory_partition_certificate": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/POST_ORIGIN_PARTITION_CERTIFICATE/V2",
-    "slot_outcome": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/SLOT_OUTCOME/V2",
-    "campaign_terminal": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/CAMPAIGN_TERMINAL/V2",
-    "campaign_completion": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/CAMPAIGN_COMPLETION/V2",
+_TARGET_SOURCE_BINDING_DOMAIN: Final = (
+    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/TARGET_SOURCE_BINDING/V2"
+)
+_EXPECTED_HASH_DOMAINS_V2R3: Final = {
+    "contract": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/CONTRACT/V2",
+    "campaign_source_binding": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/CAMPAIGN_SOURCE_BINDING/V2",
+    "capsule": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/CAPSULE/V2",
+    "authorization": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/AUTHORIZATION/V2",
+    "cargo_manifest": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/CARGO_MANIFEST/V2",
+    "ledger_record": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/LEDGER_RECORD/V2",
+    "trajectory_binding": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/TRAJECTORY_BINDING/V2",
+    "trajectory_event_payloads": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/EVENT_PAYLOADS/V2",
+    "trajectory_suffix": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/TRAJECTORY_SUFFIX/V2",
+    "trajectory_other_nonfailure": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/TRAJECTORY_OTHER_NONFAILURE/V2",
+    "trajectory_failure_rows": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/TRAJECTORY_FAILURE_ROWS/V2",
+    "trajectory_cleanup_rows": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/TRAJECTORY_CLEANUP_ROWS/V2",
+    "trajectory_partition_certificate": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/POST_ORIGIN_PARTITION_CERTIFICATE/V2",
+    "slot_outcome": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/SLOT_OUTCOME/V2",
+    "campaign_terminal": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/CAMPAIGN_TERMINAL/V2",
+    "campaign_completion": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/CAMPAIGN_COMPLETION/V2",
 }
 _PREDICATE_DIGEST_DOMAINS: Final = {
-    "retry_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/RETRY_PREDICATE/V2",
-    "success_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/SUCCESS_PREDICATE/V2",
-    "ledger_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/LEDGER_STATE_REGISTRY/V2",
-    "forbidden_scope": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/FORBIDDEN_SCOPE/V2",
+    "retry_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/RETRY_PREDICATE/V2",
+    "success_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/SUCCESS_PREDICATE/V2",
+    "ledger_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/LEDGER_STATE_REGISTRY/V2",
+    "forbidden_scope": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/FORBIDDEN_SCOPE/V2",
 }
 _EXPECTED_FIXED_ENVIRONMENT: Final = {
     "DOCKER_CONFIG": "/nonexistent",
@@ -1023,42 +1098,111 @@ def _scheduling_admission_policy_v2(
     policy = execution.get("scheduling_admission_gate") if type(execution) is dict else None
     expected_fields = {
         "schema_version", "clock_id", "maximum_windows", "quiet_period_ns",
-        "probes_per_window", "maximum_probe_duration_ns",
-        "publication_payload_byte_count", "publication_protocol",
+        "bursts_per_window", "producer_lanes_in_exact_order",
+        "records_per_burst", "controller_records_per_burst",
+        "sampler_lane_count", "sampler_records_per_lane_per_burst",
+        "sampling_target_wait_ns", "maximum_unsampled_gap_ns",
+        "maximum_sampler_deadline_to_post_enqueue_anchor_ns",
+        "maximum_projected_gap_ns", "reserved_runtime_margin_ns",
+        "maximum_burst_drain_ns", "terminal_drain_policy_ns",
+        "queue_capacity_records", "maximum_queue_high_watermark_records",
+        "publication_payload_byte_count", "publication_protocol", "queue_policy",
         "cleanup_policy", "claim_ceiling",
+    }
+    exact_ints = {
+        "maximum_windows": 3,
+        "quiet_period_ns": 30_000_000_000,
+        "bursts_per_window": 16,
+        "records_per_burst": 5,
+        "controller_records_per_burst": 3,
+        "sampler_lane_count": 2,
+        "sampler_records_per_lane_per_burst": 1,
+        "sampling_target_wait_ns": 50_000_000,
+        "maximum_unsampled_gap_ns": 250_000_000,
+        "maximum_sampler_deadline_to_post_enqueue_anchor_ns": 100_000_000,
+        "maximum_projected_gap_ns": 150_000_000,
+        "reserved_runtime_margin_ns": 100_000_000,
+        "maximum_burst_drain_ns": 5_000_000_000,
+        "terminal_drain_policy_ns": 120_000_000_000,
+        "queue_capacity_records": 512,
+        "maximum_queue_high_watermark_records": 5,
+        "publication_payload_byte_count": 4096,
     }
     if (
         type(policy) is not dict
         or set(policy) != expected_fields
-        or policy.get("schema_version") != _SCHEDULING_ADMISSION_POLICY_SCHEMA_V2
+        or policy.get("schema_version") != _SCHEDULING_ADMISSION_POLICY_SCHEMA_V3
         or policy.get("clock_id") != "CLOCK_MONOTONIC"
-        or type(policy.get("maximum_windows")) is not int
-        or policy.get("maximum_windows") != 3
-        or type(policy.get("quiet_period_ns")) is not int
-        or policy.get("quiet_period_ns") != 30_000_000_000
-        or type(policy.get("probes_per_window")) is not int
-        or policy.get("probes_per_window") != 16
-        or type(policy.get("maximum_probe_duration_ns")) is not int
-        or policy.get("maximum_probe_duration_ns") != 40_000_000
-        or type(policy.get("publication_payload_byte_count")) is not int
-        or policy.get("publication_payload_byte_count") != 64
+        or any(type(policy.get(name)) is not int or policy.get(name) != expected
+               for name, expected in exact_ints.items())
+        or policy.get("producer_lanes_in_exact_order")
+        != ["CONTROLLER", *_SCHEDULING_SAMPLER_ACTORS_V3]
+        or int(policy.get("controller_records_per_burst", -1))
+        + int(policy.get("sampler_lane_count", -1))
+        * int(policy.get("sampler_records_per_lane_per_burst", -1))
+        != int(policy.get("records_per_burst", -1))
+        or int(policy.get("sampling_target_wait_ns", -1))
+        + int(policy.get(
+            "maximum_sampler_deadline_to_post_enqueue_anchor_ns", -1
+        ))
+        != int(policy.get("maximum_projected_gap_ns", -1))
+        or int(policy.get("maximum_projected_gap_ns", -1))
+        + int(policy.get("reserved_runtime_margin_ns", -1))
+        != int(policy.get("maximum_unsampled_gap_ns", -1))
         or policy.get("publication_protocol")
         != "STAGING_EXCL_NOFOLLOW_WRITE_FILE_FSYNC_FCHMOD_FILE_FSYNC_DIR_FSYNC_LINK_FINAL_NOFOLLOW_DIR_FSYNC_UNLINK_STAGING_DIR_FSYNC_READBACK"
+        or policy.get("queue_policy")
+        != "THREE_PRODUCER_LANES_PUT_NOWAIT_SINGLE_FIFO_DURABILITY_WORKER_QUEUE_LOCK_RELEASED_BEFORE_PUBLICATION_ZERO_DROP_DUPLICATE_OR_REORDER"
         or policy.get("cleanup_policy")
         != "UNLINK_FINAL_AND_STAGING_THEN_DIR_FSYNC_AND_PROVE_BOTH_ABSENT"
         or policy.get("claim_ceiling")
-        != "OBSERVED_PRESPAWN_DURABILITY_LATENCY_ADMISSION_ONLY_NOT_A_GUARANTEE_OF_THE_TARGET_250MS_SAMPLING_GAP"
+        != "OBSERVED_PRECONSUME_BOUND_STAGE5_ENQUEUE_AND_DURABLE_DRAIN_HEALTH_ONLY_NOT_A_RUNTIME_SCHEDULING_DURABILITY_OR_250MS_GAP_GUARANTEE"
     ):
         _fail("FAIL_CAMPAIGN_CONTRACT", "scheduling admission policy differs", terminal=True)
     return deepcopy(policy)
 
 
-def _scheduling_probe_payload_v2(slot_id: str, window: int, probe: int) -> bytes:
-    seed = f"{slot_id}:{window}:{probe}".encode("ascii")
-    return sha256(b"0:" + seed).digest() + sha256(b"1:" + seed).digest()
+def _scheduling_probe_payload_v3(
+    slot_id: str,
+    window: int,
+    burst: int,
+    enqueue_ordinal: int,
+    lane_id: str,
+    lane_event_ordinal: int,
+    operation: str,
+) -> bytes:
+    record: dict[str, object] = {
+        "schema_version": _SCHEDULING_ADMISSION_RECORD_SCHEMA_V3,
+        "slot_id": slot_id,
+        "window_ordinal": window,
+        "burst_ordinal": burst,
+        "enqueue_ordinal": enqueue_ordinal,
+        "lane_id": lane_id,
+        "lane_event_ordinal": lane_event_ordinal,
+        "operation": operation,
+        "padding": "",
+    }
+    base_size = len(_canonical_json_bytes(record))
+    padding_size = 4096 - base_size
+    if (
+        type(slot_id) is not str
+        or _SAFE_NAME.fullmatch(slot_id) is None
+        or any(type(item) is not int or item <= 0 for item in (
+            window, burst, enqueue_ordinal, lane_event_ordinal
+        ))
+        or type(lane_id) is not str
+        or type(operation) is not str
+        or padding_size < 0
+    ):
+        _fail(_SCHEDULING_ADMISSION_FAILURE_V2, "record inputs differ", terminal=True)
+    record["padding"] = "0" * padding_size
+    payload = _canonical_json_bytes(record)
+    if len(payload) != 4096:
+        _fail(_SCHEDULING_ADMISSION_FAILURE_V2, "record byte count differs", terminal=True)
+    return payload
 
 
-def _five_fsync_publication_probe_v2(
+def _five_fsync_publication_probe_v3(
     directory_fd: int,
     unique_token: str,
     payload: bytes,
@@ -1068,8 +1212,8 @@ def _five_fsync_publication_probe_v2(
     if (
         type(directory_fd) is not int or directory_fd < 0
         or type(unique_token) is not str
-        or re.fullmatch(r"w[0-9]{2}-p[0-9]{2}", unique_token) is None
-        or type(payload) is not bytes or len(payload) != 64
+        or re.fullmatch(r"w[0-9]{2}-p[0-9]{3}", unique_token) is None
+        or type(payload) is not bytes or len(payload) != 4096
     ):
         _fail(_SCHEDULING_ADMISSION_FAILURE_V2, "probe inputs differ", terminal=True)
     staging = f".q05b-admission-{unique_token}.staging-v2"
@@ -1164,76 +1308,606 @@ def _five_fsync_publication_probe_v2(
     return duration
 
 
-def _scheduling_admission_evidence_exact_v2(
-    contract: Mapping[str, object], value: object
+def _uint64_exact(value: object) -> bool:
+    return type(value) is int and 0 <= value < 2**64
+
+
+def _scheduling_admission_burst_exact_v3(
+    policy: Mapping[str, object], slot_id: str, window: int, value: object,
+) -> bool:
+    if type(value) is not dict or set(value) != {
+        "burst_ordinal", "release_deadline_ns",
+        "enqueue_rows_in_global_order", "durable_rows_in_global_order",
+        "sampler_rows_in_actor_order", "queue_start_depth", "queue_end_depth",
+        "queue_high_watermark_records", "dropped_record_count",
+        "duplicate_record_count", "reordered_record_count", "records_enqueued",
+        "records_durable", "burst_start_ns", "burst_finish_ns", "burst_drain_ns",
+        "passed",
+    }:
+        return False
+    burst = value.get("burst_ordinal")
+    release = value.get("release_deadline_ns")
+    start = value.get("burst_start_ns")
+    finish = value.get("burst_finish_ns")
+    drain = value.get("burst_drain_ns")
+    enqueued = value.get("enqueue_rows_in_global_order")
+    durable = value.get("durable_rows_in_global_order")
+    samplers = value.get("sampler_rows_in_actor_order")
+    uint_fields = (
+        "queue_start_depth", "queue_end_depth", "queue_high_watermark_records",
+        "dropped_record_count", "duplicate_record_count",
+        "reordered_record_count", "records_enqueued", "records_durable",
+    )
+    if (
+        type(burst) is not int or not 1 <= burst <= int(policy["bursts_per_window"])
+        or not all(_uint64_exact(item) for item in (release, start, finish, drain))
+        or start != release or finish < start or drain != finish - start
+        or any(not _uint64_exact(value.get(name)) for name in uint_fields)
+        or type(enqueued) is not list or type(durable) is not list
+        or type(samplers) is not list
+    ):
+        return False
+    expected_events = {
+        "CONTROLLER": dict(enumerate(_SCHEDULING_CONTROLLER_EVENTS_V3, start=1)),
+        "PYTHON_ENDPOINT": {1: "LIVE_RESOURCE_SAMPLE_BEGIN"},
+        "RUST_ENDPOINT": {1: "LIVE_RESOURCE_SAMPLE_BEGIN"},
+    }
+    seen_lane_events: set[tuple[str, int]] = set()
+    hashes: list[str] = []
+    if len(enqueued) != int(value["records_enqueued"]):
+        return False
+    for ordinal, row in enumerate(enqueued, start=1):
+        if type(row) is not dict or set(row) != {
+            "enqueue_ordinal", "lane_id", "lane_event_ordinal", "operation",
+            "raw_sha256",
+        }:
+            return False
+        lane = row.get("lane_id")
+        lane_ordinal = row.get("lane_event_ordinal")
+        operation = row.get("operation")
+        if (
+            type(row.get("enqueue_ordinal")) is not int
+            or row.get("enqueue_ordinal") != ordinal
+            or type(lane) is not str or lane not in expected_events
+            or type(lane_ordinal) is not int
+            or expected_events[lane].get(lane_ordinal) != operation
+            or (lane, lane_ordinal) in seen_lane_events
+            or type(row.get("raw_sha256")) is not str
+            or _RAW_SHA256.fullmatch(str(row.get("raw_sha256"))) is None
+        ):
+            return False
+        payload = _scheduling_probe_payload_v3(
+            slot_id, window, burst, ordinal, lane, lane_ordinal, str(operation)
+        )
+        expected_hash = sha256(payload).hexdigest()
+        if row["raw_sha256"] != expected_hash:
+            return False
+        seen_lane_events.add((lane, lane_ordinal))
+        hashes.append(expected_hash)
+    expected_lane_events = {
+        (lane, lane_ordinal)
+        for lane, events in expected_events.items()
+        for lane_ordinal in events
+    }
+    if seen_lane_events != expected_lane_events:
+        return False
+    if len(durable) != int(value["records_durable"]):
+        return False
+    for ordinal, row in enumerate(durable, start=1):
+        if type(row) is not dict or set(row) != {
+            "durable_ordinal", "enqueue_ordinal", "duration_ns",
+            "raw_sha256",
+        }:
+            return False
+        if (
+            type(row.get("durable_ordinal")) is not int
+            or row.get("durable_ordinal") != ordinal
+            or type(row.get("enqueue_ordinal")) is not int
+            or row.get("enqueue_ordinal") != ordinal
+            or not _uint64_exact(row.get("duration_ns"))
+            or ordinal > len(hashes)
+            or row.get("raw_sha256") != hashes[ordinal - 1]
+        ):
+            return False
+    sampler_by_actor: dict[str, Mapping[str, object]] = {}
+    if len(samplers) != 2:
+        return False
+    for actor, row in zip(_SCHEDULING_SAMPLER_ACTORS_V3, samplers):
+        if type(row) is not dict or set(row) != {
+            "actor_id", "enqueue_ordinal", "enqueue_start_ns",
+            "post_enqueue_anchor_ns",
+            "deadline_to_post_enqueue_anchor_ns", "projected_gap_ns", "passed",
+        }:
+            return False
+        enqueue_ordinal = row.get("enqueue_ordinal")
+        enqueue_start = row.get("enqueue_start_ns")
+        anchor = row.get("post_enqueue_anchor_ns")
+        critical = row.get("deadline_to_post_enqueue_anchor_ns")
+        projected = row.get("projected_gap_ns")
+        if (
+            row.get("actor_id") != actor
+            or type(enqueue_ordinal) is not int
+            or not 1 <= enqueue_ordinal <= len(enqueued)
+            or enqueued[enqueue_ordinal - 1].get("lane_id") != actor
+            or not all(_uint64_exact(item) for item in (
+                enqueue_start, anchor, critical, projected
+            ))
+            or enqueue_start < release or anchor < enqueue_start
+            or critical != anchor - release
+            or projected != int(policy["sampling_target_wait_ns"]) + critical
+            or row.get("passed") is not (
+                critical <= int(policy[
+                    "maximum_sampler_deadline_to_post_enqueue_anchor_ns"
+                ])
+                and projected <= int(policy["maximum_projected_gap_ns"])
+            )
+        ):
+            return False
+        sampler_by_actor[actor] = row
+    duplicates = len(enqueued) - len({
+        (row["lane_id"], row["lane_event_ordinal"]) for row in enqueued
+    })
+    reordered = sum(
+        row.get("enqueue_ordinal") != ordinal
+        for ordinal, row in enumerate(durable, start=1)
+    )
+    passed = (
+        value["queue_start_depth"] == 0
+        and value["queue_end_depth"] == 0
+        and value["queue_high_watermark_records"]
+        <= int(policy["maximum_queue_high_watermark_records"])
+        and value["dropped_record_count"] == 0
+        and value["duplicate_record_count"] == duplicates == 0
+        and value["reordered_record_count"] == reordered == 0
+        and value["records_enqueued"] == int(policy["records_per_burst"])
+        and value["records_durable"] == int(policy["records_per_burst"])
+        and drain <= int(policy["maximum_burst_drain_ns"])
+        and all(row["passed"] is True for row in sampler_by_actor.values())
+    )
+    return type(value.get("passed")) is bool and value["passed"] is passed
+
+
+def _scheduling_admission_evidence_semantics_v3(
+    contract: Mapping[str, object], value: object, *, require_passed: bool | None,
 ) -> bool:
     try:
         policy = _scheduling_admission_policy_v2(contract)
     except BaseException:
         return False
     if type(value) is not dict or set(value) != {
-        "schema_version", "policy", "windows_in_strict_order",
+        "schema_version", "slot_id", "policy", "windows_in_strict_order",
         "selected_window_ordinal", "passed",
     }:
         return False
+    slots = contract.get("slot_registry")
+    slot_id = value.get("slot_id")
+    valid_slots = {
+        row.get("slot_id") for row in slots if type(row) is dict
+    } if type(slots) is list else set()
     rows = value.get("windows_in_strict_order")
     selected = value.get("selected_window_ordinal")
+    passed = value.get("passed")
     if (
-        value.get("schema_version") != _SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V2
-        or value.get("policy") != policy or value.get("passed") is not True
-        or type(selected) is not int or not 1 <= selected <= 3
-        or type(rows) is not list or len(rows) != selected
+        value.get("schema_version") != _SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V3
+        or type(slot_id) is not str or slot_id not in valid_slots
+        or value.get("policy") != policy
+        or type(passed) is not bool
+        or (require_passed is not None and passed is not require_passed)
+        or type(rows) is not list or not 1 <= len(rows) <= 3
+        or (
+            passed is True
+            and (type(selected) is not int or selected != len(rows))
+        )
+        or (passed is False and (selected is not None or len(rows) != 3))
     ):
         return False
-    threshold = int(policy["maximum_probe_duration_ns"])
-    quiet_min = int(policy["quiet_period_ns"])
     previous_finish = -1
     for index, row in enumerate(rows, start=1):
         if type(row) is not dict or set(row) != {
             "window_ordinal", "quiet_start_ns", "quiet_finish_ns",
-            "quiet_duration_ns", "probe_durations_ns_in_strict_order",
-            "maximum_probe_duration_ns", "passed",
+            "quiet_duration_ns", "bursts_in_strict_order",
+            "maximum_sampler_deadline_to_post_enqueue_anchor_ns",
+            "maximum_projected_gap_ns", "maximum_burst_drain_ns",
+            "maximum_queue_high_watermark_records", "passed",
         }:
             return False
-        durations = row.get("probe_durations_ns_in_strict_order")
-        start = row.get("quiet_start_ns")
-        finish = row.get("quiet_finish_ns")
+        quiet_start = row.get("quiet_start_ns")
+        quiet_finish = row.get("quiet_finish_ns")
         quiet_duration = row.get("quiet_duration_ns")
-        maximum_duration = row.get("maximum_probe_duration_ns")
+        bursts = row.get("bursts_in_strict_order")
+        maxima = (
+            row.get("maximum_sampler_deadline_to_post_enqueue_anchor_ns"),
+            row.get("maximum_projected_gap_ns"),
+            row.get("maximum_burst_drain_ns"),
+            row.get("maximum_queue_high_watermark_records"),
+        )
         if (
             type(row.get("window_ordinal")) is not int
             or row.get("window_ordinal") != index
-            or type(start) is not int or not 0 <= start < 2**64
-            or type(finish) is not int or not start <= finish < 2**64
-            or start < previous_finish
-            or type(quiet_duration) is not int
-            or not 0 <= quiet_duration < 2**64
-            or quiet_duration != finish - start
-            or finish - start < quiet_min
-            or type(durations) is not list or len(durations) != 16
-            or any(type(item) is not int or not 0 <= item < 2**64 for item in durations)
-            or type(maximum_duration) is not int
-            or not 0 <= maximum_duration < 2**64
-            or maximum_duration != max(durations)
-            or row.get("passed") is not all(item <= threshold for item in durations)
-            or (index < selected and row.get("passed") is not False)
-            or (index == selected and row.get("passed") is not True)
+            or not all(_uint64_exact(item) for item in (
+                quiet_start, quiet_finish, quiet_duration, *maxima
+            ))
+            or quiet_start < previous_finish or quiet_finish < quiet_start
+            or quiet_duration != quiet_finish - quiet_start
+            or quiet_duration < int(policy["quiet_period_ns"])
+            or type(bursts) is not list
+            or len(bursts) != int(policy["bursts_per_window"])
         ):
             return False
-        previous_finish = finish
+        previous_burst_finish = quiet_finish
+        for burst_index, burst_row in enumerate(bursts, start=1):
+            if (
+                not _scheduling_admission_burst_exact_v3(
+                    policy, slot_id, index, burst_row
+                )
+                or burst_row["burst_ordinal"] != burst_index
+                or burst_row["burst_start_ns"] < previous_burst_finish
+            ):
+                return False
+            previous_burst_finish = burst_row["burst_finish_ns"]
+        sampler_rows = [
+            sample
+            for burst_row in bursts
+            for sample in burst_row["sampler_rows_in_actor_order"]
+        ]
+        expected_maxima = (
+            max(sample["deadline_to_post_enqueue_anchor_ns"] for sample in sampler_rows),
+            max(sample["projected_gap_ns"] for sample in sampler_rows),
+            max(burst_row["burst_drain_ns"] for burst_row in bursts),
+            max(burst_row["queue_high_watermark_records"] for burst_row in bursts),
+        )
+        window_passed = all(burst_row["passed"] is True for burst_row in bursts)
+        if (
+            maxima != expected_maxima
+            or type(row.get("passed")) is not bool
+            or row["passed"] is not window_passed
+            or (index < len(rows) and row["passed"] is not False)
+            or (passed is True and index == len(rows) and row["passed"] is not True)
+            or (passed is False and row["passed"] is not False)
+        ):
+            return False
+        previous_finish = previous_burst_finish
     return True
+
+
+def _scheduling_admission_evidence_exact_v2(
+    contract: Mapping[str, object], value: object
+) -> bool:
+    return _scheduling_admission_evidence_semantics_v3(
+        contract, value, require_passed=True
+    )
+
+
+def _scheduling_admission_failure_detail_v3(value: object) -> str | None:
+    if type(value) is not dict:
+        return None
+    slot_id = value.get("slot_id")
+    rows = value.get("windows_in_strict_order")
+    if (
+        type(slot_id) is not str
+        or _SAFE_NAME.fullmatch(slot_id) is None
+        or type(rows) is not list
+        or not rows
+    ):
+        return None
+    maxima: list[dict[str, int]] = []
+    for row in rows:
+        if type(row) is not dict:
+            return None
+        values = {
+            "critical_ns": row.get(
+                "maximum_sampler_deadline_to_post_enqueue_anchor_ns"
+            ),
+            "projected_ns": row.get("maximum_projected_gap_ns"),
+            "drain_ns": row.get("maximum_burst_drain_ns"),
+            "high_watermark": row.get("maximum_queue_high_watermark_records"),
+        }
+        if any(not _uint64_exact(item) for item in values.values()):
+            return None
+        maxima.append({key: int(item) for key, item in values.items()})
+    return (
+        f"{slot_id} admission exhausted before consume/Popen; "
+        f"window_maxima={maxima}; observed admission is not a runtime "
+        "scheduling, durability, or 250ms gap guarantee"
+    )
+
+
+def _run_stage5_scheduling_admission_burst_v3(
+    directory_fd: int,
+    slot_id: str,
+    window: int,
+    burst: int,
+    policy: Mapping[str, object],
+    *,
+    clock_ns: Callable[[], int] = time.monotonic_ns,
+    probe_publisher: Callable[[int, str, bytes, Callable[[], int]], int] =
+        _five_fsync_publication_probe_v3,
+) -> dict[str, object]:
+    queue: deque[dict[str, object]] = deque()
+    condition = threading.Condition(threading.Lock())
+    release = threading.Event()
+    ready_count = 0
+    producers_done = 0
+    dropped = 0
+    queue_high_watermark = 0
+    enqueue_rows: list[dict[str, object]] = []
+    durable_rows: list[dict[str, object]] = []
+    sampler_rows_by_actor: dict[str, dict[str, object]] = {}
+    producer_errors: list[BaseException] = []
+    publisher_errors: list[BaseException] = []
+    release_deadline_ns = -1
+    accepting = True
+    shutdown_requested = False
+
+    def producer(lane_id: str, operations: Sequence[str]) -> None:
+        nonlocal ready_count, producers_done, dropped, queue_high_watermark
+        try:
+            with condition:
+                ready_count += 1
+                condition.notify_all()
+            release.wait()
+            with condition:
+                if not accepting:
+                    return
+            for lane_event_ordinal, operation in enumerate(operations, start=1):
+                enqueue_start = clock_ns()
+                with condition:
+                    if len(queue) >= int(policy["queue_capacity_records"]):
+                        dropped += 1
+                        continue
+                    enqueue_ordinal = len(enqueue_rows) + 1
+                    payload = _scheduling_probe_payload_v3(
+                        slot_id, window, burst, enqueue_ordinal, lane_id,
+                        lane_event_ordinal, operation,
+                    )
+                    payload_hash = sha256(payload).hexdigest()
+                    item = {
+                        "enqueue_ordinal": enqueue_ordinal,
+                        "lane_id": lane_id,
+                        "lane_event_ordinal": lane_event_ordinal,
+                        "operation": operation,
+                        "raw_sha256": payload_hash,
+                        "payload": payload,
+                    }
+                    enqueue_rows.append({
+                        key: value for key, value in item.items() if key != "payload"
+                    })
+                    queue.append(item)
+                    queue_high_watermark = max(queue_high_watermark, len(queue))
+                    condition.notify_all()
+                post_enqueue_anchor = clock_ns()
+                if lane_id in _SCHEDULING_SAMPLER_ACTORS_V3:
+                    critical = post_enqueue_anchor - release_deadline_ns
+                    projected = int(policy["sampling_target_wait_ns"]) + critical
+                    sampler_rows_by_actor[lane_id] = {
+                        "actor_id": lane_id,
+                        "enqueue_ordinal": enqueue_ordinal,
+                        "enqueue_start_ns": enqueue_start,
+                        "post_enqueue_anchor_ns": post_enqueue_anchor,
+                        "deadline_to_post_enqueue_anchor_ns": critical,
+                        "projected_gap_ns": projected,
+                        "passed": (
+                            critical <= int(policy[
+                                "maximum_sampler_deadline_to_post_enqueue_anchor_ns"
+                            ])
+                            and projected <= int(policy["maximum_projected_gap_ns"])
+                        ),
+                    }
+        except BaseException as error:
+            with condition:
+                producer_errors.append(error)
+        finally:
+            with condition:
+                producers_done += 1
+                condition.notify_all()
+
+    def publisher() -> None:
+        while True:
+            with condition:
+                condition.wait_for(lambda: bool(queue) or shutdown_requested)
+                if not queue and shutdown_requested:
+                    return
+                item = queue.popleft()
+            if publisher_errors:
+                continue
+            try:
+                ordinal = int(item["enqueue_ordinal"])
+                duration = probe_publisher(
+                    directory_fd,
+                    f"w{window:02d}-p{((burst - 1) * 5 + ordinal):03d}",
+                    item["payload"],
+                    clock_ns,
+                )
+                if not _uint64_exact(duration):
+                    raise RuntimeError("publication duration differs")
+                durable_rows.append({
+                    "durable_ordinal": len(durable_rows) + 1,
+                    "enqueue_ordinal": ordinal,
+                    "duration_ns": duration,
+                    "raw_sha256": item["raw_sha256"],
+                })
+            except BaseException as error:
+                publisher_errors.append(error)
+
+    threads = [
+        threading.Thread(
+            target=producer,
+            args=("CONTROLLER", _SCHEDULING_CONTROLLER_EVENTS_V3),
+            name=f"q05b-admission-controller-w{window}-b{burst}",
+            daemon=True,
+        ),
+        *[
+            threading.Thread(
+                target=producer,
+                args=(actor, ("LIVE_RESOURCE_SAMPLE_BEGIN",)),
+                name=f"q05b-admission-{actor.lower()}-w{window}-b{burst}",
+                daemon=True,
+            )
+            for actor in _SCHEDULING_SAMPLER_ACTORS_V3
+        ],
+    ]
+    worker = threading.Thread(
+        target=publisher,
+        name=f"q05b-admission-durability-w{window}-b{burst}",
+        daemon=True,
+    )
+    started: list[threading.Thread] = []
+    primary_error: BaseException | None = None
+    cleanup_errors: list[str] = []
+    terminal_drain_exceeded = False
+    burst_start_ns = -1
+    previous_signal_mask: set[signal.Signals] | None = None
+    terminal_seconds = int(policy["terminal_drain_policy_ns"]) / 1_000_000_000
+    drain_deadline_monotonic: float | None = None
+    try:
+        previous_signal_mask = signal.pthread_sigmask(
+            signal.SIG_BLOCK,
+            {signal.SIGINT},
+        )
+        started.append(worker)
+        worker.start()
+        for thread in threads:
+            started.append(thread)
+            thread.start()
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous_signal_mask)
+        previous_signal_mask = None
+        with condition:
+            if not condition.wait_for(lambda: ready_count == 3, timeout=terminal_seconds):
+                raise RuntimeError("producer readiness exceeded terminal drain policy")
+        release_deadline_ns = clock_ns()
+        if not _uint64_exact(release_deadline_ns):
+            raise RuntimeError("burst release clock differs")
+        burst_start_ns = release_deadline_ns
+        release.set()
+        terminal_deadline = time.monotonic() + terminal_seconds
+        drain_deadline_monotonic = terminal_deadline
+        for thread in threads:
+            thread.join(max(0.0, terminal_deadline - time.monotonic()))
+        if any(thread.is_alive() for thread in threads):
+            terminal_drain_exceeded = True
+    except BaseException as error:
+        primary_error = error
+    finally:
+        with condition:
+            if primary_error is not None:
+                accepting = False
+            release.set()
+        terminal_deadline = (
+            drain_deadline_monotonic
+            if drain_deadline_monotonic is not None
+            else time.monotonic() + terminal_seconds
+        )
+        joinable = [thread for thread in started if thread.ident is not None]
+        for thread in joinable:
+            if thread is not worker:
+                thread.join(max(0.0, terminal_deadline - time.monotonic()))
+        with condition:
+            shutdown_requested = True
+            condition.notify_all()
+        if worker in joinable:
+            worker.join(max(0.0, terminal_deadline - time.monotonic()))
+        live_threads = [thread for thread in joinable if thread.is_alive()]
+        if live_threads:
+            # No returning admission path may leave a thread behind.  If a
+            # kernel durability syscall never returns this remains a fail-stop
+            # boundary before consumption/Popen rather than inventing cleanup.
+            terminal_drain_exceeded = True
+            for thread in live_threads:
+                thread.join()
+        if previous_signal_mask is not None:
+            try:
+                signal.pthread_sigmask(
+                    signal.SIG_SETMASK,
+                    previous_signal_mask,
+                )
+            except BaseException as error:
+                cleanup_errors.append(
+                    f"signal-mask-restore:{type(error).__name__}:{error}"
+                )
+            previous_signal_mask = None
+        try:
+            _require_single_threaded_spawn_controller_v2()
+        except BaseException as error:
+            cleanup_errors.append(
+                f"thread-proof:{type(error).__name__}:{error}"
+            )
+    errors = ([primary_error] if primary_error is not None else [])
+    errors.extend(producer_errors)
+    errors.extend(publisher_errors)
+    if errors or cleanup_errors or terminal_drain_exceeded:
+        error = errors[0] if errors else RuntimeError(
+            "terminal drain policy was exceeded"
+        )
+        detail = (
+            f"burst {window}:{burst} failed after zero-thread drain: "
+            f"{type(error).__name__}:{error}"
+        )
+        if terminal_drain_exceeded:
+            detail += "; terminal-drain-policy-exceeded"
+        if cleanup_errors:
+            detail += "; cleanup=" + "|".join(cleanup_errors)
+        _fail(
+            _SCHEDULING_ADMISSION_FAILURE_V2,
+            detail,
+            terminal=True,
+        )
+    burst_finish_ns = clock_ns()
+    if not _uint64_exact(burst_finish_ns) or burst_finish_ns < burst_start_ns:
+        _fail(_SCHEDULING_ADMISSION_FAILURE_V2, "burst finish clock differs", terminal=True)
+    sampler_rows = [sampler_rows_by_actor[actor]
+                    for actor in _SCHEDULING_SAMPLER_ACTORS_V3]
+    reordered = sum(
+        row["enqueue_ordinal"] != ordinal
+        for ordinal, row in enumerate(durable_rows, start=1)
+    )
+    duplicates = len(enqueue_rows) - len({
+        (row["lane_id"], row["lane_event_ordinal"]) for row in enqueue_rows
+    })
+    result: dict[str, object] = {
+        "burst_ordinal": burst,
+        "release_deadline_ns": release_deadline_ns,
+        "enqueue_rows_in_global_order": enqueue_rows,
+        "durable_rows_in_global_order": durable_rows,
+        "sampler_rows_in_actor_order": sampler_rows,
+        "queue_start_depth": 0,
+        "queue_end_depth": len(queue),
+        "queue_high_watermark_records": queue_high_watermark,
+        "dropped_record_count": dropped,
+        "duplicate_record_count": duplicates,
+        "reordered_record_count": reordered,
+        "records_enqueued": len(enqueue_rows),
+        "records_durable": len(durable_rows),
+        "burst_start_ns": burst_start_ns,
+        "burst_finish_ns": burst_finish_ns,
+        "burst_drain_ns": burst_finish_ns - burst_start_ns,
+        "passed": False,
+    }
+    result["passed"] = (
+        result["queue_end_depth"] == 0
+        and queue_high_watermark
+        <= int(policy["maximum_queue_high_watermark_records"])
+        and dropped == duplicates == reordered == 0
+        and len(enqueue_rows) == len(durable_rows)
+        == int(policy["records_per_burst"])
+        and result["burst_drain_ns"] <= int(policy["maximum_burst_drain_ns"])
+        and all(row["passed"] is True for row in sampler_rows)
+    )
+    if not _scheduling_admission_burst_exact_v3(
+        policy, slot_id, window, result
+    ):
+        _fail(_SCHEDULING_ADMISSION_FAILURE_V2, "burst evidence differs", terminal=True)
+    return result
 
 
 def _run_scheduling_admission_gate_v2(
     contract: Mapping[str, object], evidence_fd: int, slot_id: str, *,
     clock_ns: Callable[[], int] = time.monotonic_ns,
     sleeper: Callable[[float], None] = time.sleep,
-    probe_publisher: Callable[[int, str, bytes, Callable[[], int]], int] =
-        _five_fsync_publication_probe_v2,
+    burst_runner: Callable[..., dict[str, object]] =
+        _run_stage5_scheduling_admission_burst_v3,
 ) -> dict[str, object]:
     policy = _scheduling_admission_policy_v2(contract)
     rows: list[dict[str, object]] = []
-    threshold = int(policy["maximum_probe_duration_ns"])
     quiet_ns = int(policy["quiet_period_ns"])
     for window in range(1, int(policy["maximum_windows"]) + 1):
         try:
@@ -1256,36 +1930,54 @@ def _run_scheduling_admission_gate_v2(
             or quiet_finish - quiet_start < quiet_ns
         ):
             _fail(_SCHEDULING_ADMISSION_FAILURE_V2, "quiet period was not observed", terminal=True)
-        durations: list[int] = []
-        for probe in range(1, int(policy["probes_per_window"]) + 1):
+        bursts: list[dict[str, object]] = []
+        for burst in range(1, int(policy["bursts_per_window"]) + 1):
             try:
-                duration = probe_publisher(
-                    evidence_fd, f"w{window:02d}-p{probe:02d}",
-                    _scheduling_probe_payload_v2(slot_id, window, probe), clock_ns,
+                burst_row = burst_runner(
+                    evidence_fd, slot_id, window, burst, policy, clock_ns=clock_ns,
                 )
             except ShadowRetryCampaignErrorV2:
                 raise
             except BaseException as error:
                 _fail(
                     _SCHEDULING_ADMISSION_FAILURE_V2,
-                    f"probe {window}:{probe} failed: "
+                    f"burst {window}:{burst} failed: "
                     f"{type(error).__name__}:{error}",
                     terminal=True,
                 )
-            if type(duration) is not int or not 0 <= duration < 2**64:
-                _fail(_SCHEDULING_ADMISSION_FAILURE_V2, "probe duration differs", terminal=True)
-            durations.append(duration)
-        passed = all(duration <= threshold for duration in durations)
+            if not _scheduling_admission_burst_exact_v3(
+                policy, slot_id, window, burst_row
+            ) or burst_row.get("burst_ordinal") != burst:
+                _fail(_SCHEDULING_ADMISSION_FAILURE_V2, "burst evidence differs", terminal=True)
+            bursts.append(burst_row)
+        sampler_rows = [
+            sample for burst_row in bursts
+            for sample in burst_row["sampler_rows_in_actor_order"]
+        ]
+        passed = all(burst_row["passed"] is True for burst_row in bursts)
         rows.append({
             "window_ordinal": window, "quiet_start_ns": quiet_start,
             "quiet_finish_ns": quiet_finish,
             "quiet_duration_ns": quiet_finish - quiet_start,
-            "probe_durations_ns_in_strict_order": durations,
-            "maximum_probe_duration_ns": max(durations), "passed": passed,
+            "bursts_in_strict_order": bursts,
+            "maximum_sampler_deadline_to_post_enqueue_anchor_ns": max(
+                sample["deadline_to_post_enqueue_anchor_ns"] for sample in sampler_rows
+            ),
+            "maximum_projected_gap_ns": max(
+                sample["projected_gap_ns"] for sample in sampler_rows
+            ),
+            "maximum_burst_drain_ns": max(
+                burst_row["burst_drain_ns"] for burst_row in bursts
+            ),
+            "maximum_queue_high_watermark_records": max(
+                burst_row["queue_high_watermark_records"] for burst_row in bursts
+            ),
+            "passed": passed,
         })
         if passed:
             result: dict[str, object] = {
-                "schema_version": _SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V2,
+                "schema_version": _SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V3,
+                "slot_id": slot_id,
                 "policy": deepcopy(policy),
                 "windows_in_strict_order": rows,
                 "selected_window_ordinal": window, "passed": True,
@@ -1293,12 +1985,30 @@ def _run_scheduling_admission_gate_v2(
             if not _scheduling_admission_evidence_exact_v2(contract, result):
                 _fail(_SCHEDULING_ADMISSION_FAILURE_V2, "admission evidence differs", terminal=True)
             return result
-    maxima = [row["maximum_probe_duration_ns"] for row in rows]
+    result = {
+        "schema_version": _SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V3,
+        "slot_id": slot_id,
+        "policy": deepcopy(policy),
+        "windows_in_strict_order": rows,
+        "selected_window_ordinal": None,
+        "passed": False,
+    }
+    if not _scheduling_admission_evidence_semantics_v3(
+        contract, result, require_passed=False
+    ):
+        _fail(_SCHEDULING_ADMISSION_FAILURE_V2, "failed evidence differs", terminal=True)
+    detail = _scheduling_admission_failure_detail_v3(result)
+    if detail is None:
+        _fail(
+            _SCHEDULING_ADMISSION_FAILURE_V2,
+            "failed admission detail reconstruction differs",
+            terminal=True,
+        )
     _fail(
         _SCHEDULING_ADMISSION_FAILURE_V2,
-        f"{slot_id} admission exhausted before spawn; window_max_ns={maxima}; "
-        "observed admission does not guarantee the target sampling gap",
+        detail,
         terminal=True,
+        receipt=result,
     )
 
 
@@ -1571,7 +2281,7 @@ def _source_binding_preimage(binding: Mapping[str, object]) -> dict[str, object]
     return result
 
 
-def _require_v2r2_instance_isolation_v2(
+def _require_v2r3_instance_isolation_v2(
     contract: Mapping[str, object],
 ) -> None:
     protected = contract.get("protected_state_policy")
@@ -1594,6 +2304,29 @@ def _require_v2r2_instance_isolation_v2(
         "prior_v2r1_campaign_root_open_allowed",
         "prior_v2r1_campaign_root_access_allowed",
         "prior_v2r1_capsule_authorization_or_ledger_reuse_allowed",
+        "prior_v2r2_campaign_contract_id",
+        "prior_v2r2_controller_commit",
+        "prior_v2r2_controller_tree",
+        "prior_v2r2_target_commit",
+        "prior_v2r2_campaign_source_binding_digest",
+        "prior_v2r2_contract_digest",
+        "prior_v2r2_capsule_digest",
+        "prior_v2r2_owner_confirmation_digest",
+        "prior_v2r2_authorization_digest",
+        "prior_v2r2_terminal_status",
+        "prior_v2r2_terminal_body_digest",
+        "prior_v2r2_terminal_ledger_record_digest",
+        "prior_v2r2_completion_body_digest",
+        "prior_v2r2_completion_ledger_record_digest",
+        "prior_v2r2_supervisor_invocation_count",
+        "prior_v2r2_each_slot_trajectory_event_count",
+        "prior_v2r2_each_slot_retained_failure_rows",
+        "prior_v2r2_each_slot_retained_cleanup_rows",
+        "prior_v2r2_each_slot_unpartitioned_event_count",
+        "prior_v2r2_terminal_is_historical_nonresumable_evidence_only",
+        "prior_v2r2_campaign_root_open_allowed",
+        "prior_v2r2_campaign_root_access_allowed",
+        "prior_v2r2_capsule_authorization_or_ledger_reuse_allowed",
         "historical_attempt2_or_attempt3_path_open_allowed",
         "meta_or_production_path_open_allowed",
         "protected_state_mutation_allowed",
@@ -1609,11 +2342,11 @@ def _require_v2r2_instance_isolation_v2(
     slots = contract.get("slot_registry")
     if (
         contract.get("contract_id")
-        != "hegel-phase3a-q05b-shadow-retry-campaign-v2r2"
+        != "hegel-phase3a-q05b-shadow-retry-campaign-v2r3"
         or type(protected) is not dict
         or set(protected) != expected_protected_fields
         or protected.get("protected_roots_in_exact_order")
-        != list(_EXPECTED_PROTECTED_ROOTS_V2R2)
+        != list(_EXPECTED_PROTECTED_ROOTS_V2R3)
         or protected.get("prior_v2_campaign_contract_id")
         != _PRIOR_V2_CONTRACT_ID
         or protected.get("prior_v2_capsule_digest")
@@ -1632,12 +2365,49 @@ def _require_v2r2_instance_isolation_v2(
         != _PRIOR_V2R1_TERMINAL_LEDGER_RECORD_DIGEST
         or protected.get("prior_v2r1_completion_ledger_record_digest")
         != _PRIOR_V2R1_COMPLETION_LEDGER_RECORD_DIGEST
+        or protected.get("prior_v2r2_campaign_contract_id")
+        != _PRIOR_V2R2_CONTRACT_ID
+        or protected.get("prior_v2r2_controller_commit")
+        != _PRIOR_V2R2_CONTROLLER_COMMIT
+        or protected.get("prior_v2r2_controller_tree")
+        != _PRIOR_V2R2_CONTROLLER_TREE
+        or protected.get("prior_v2r2_target_commit")
+        != _PRIOR_V2R2_TARGET_COMMIT
+        or protected.get("prior_v2r2_campaign_source_binding_digest")
+        != _PRIOR_V2R2_CAMPAIGN_SOURCE_BINDING_DIGEST
+        or protected.get("prior_v2r2_contract_digest")
+        != _PRIOR_V2R2_CONTRACT_DIGEST
+        or protected.get("prior_v2r2_capsule_digest")
+        != _PRIOR_V2R2_CAPSULE_DIGEST
+        or protected.get("prior_v2r2_owner_confirmation_digest")
+        != _PRIOR_V2R2_OWNER_CONFIRMATION_DIGEST
+        or protected.get("prior_v2r2_authorization_digest")
+        != _PRIOR_V2R2_AUTHORIZATION_DIGEST
+        or protected.get("prior_v2r2_terminal_status")
+        != _PRIOR_V2R2_TERMINAL_STATUS
+        or protected.get("prior_v2r2_terminal_body_digest")
+        != _PRIOR_V2R2_TERMINAL_BODY_DIGEST
+        or protected.get("prior_v2r2_terminal_ledger_record_digest")
+        != _PRIOR_V2R2_TERMINAL_LEDGER_RECORD_DIGEST
+        or protected.get("prior_v2r2_completion_body_digest")
+        != _PRIOR_V2R2_COMPLETION_BODY_DIGEST
+        or protected.get("prior_v2r2_completion_ledger_record_digest")
+        != _PRIOR_V2R2_COMPLETION_LEDGER_RECORD_DIGEST
+        or protected.get("prior_v2r2_supervisor_invocation_count") != 3
+        or protected.get("prior_v2r2_each_slot_trajectory_event_count") != 42
+        or protected.get("prior_v2r2_each_slot_retained_failure_rows") != 7
+        or protected.get("prior_v2r2_each_slot_retained_cleanup_rows") != 8
+        or protected.get("prior_v2r2_each_slot_unpartitioned_event_count") != 0
         or protected.get(
             "prior_v2_terminal_is_historical_nonresumable_evidence_only"
         )
         is not True
         or protected.get(
             "prior_v2r1_terminal_is_historical_nonresumable_evidence_only"
+        )
+        is not True
+        or protected.get(
+            "prior_v2r2_terminal_is_historical_nonresumable_evidence_only"
         )
         is not True
         or any(
@@ -1649,27 +2419,30 @@ def _require_v2r2_instance_isolation_v2(
                 "prior_v2r1_campaign_root_open_allowed",
                 "prior_v2r1_campaign_root_access_allowed",
                 "prior_v2r1_capsule_authorization_or_ledger_reuse_allowed",
+                "prior_v2r2_campaign_root_open_allowed",
+                "prior_v2r2_campaign_root_access_allowed",
+                "prior_v2r2_capsule_authorization_or_ledger_reuse_allowed",
             )
         )
         or type(fixed) is not dict
-        or fixed.get("authorization_root") != f"{_V2R2_STATE_PREFIX}-authorization"
-        or fixed.get("ledger_root") != f"{_V2R2_STATE_PREFIX}-ledger"
+        or fixed.get("authorization_root") != f"{_V2R3_STATE_PREFIX}-authorization"
+        or fixed.get("ledger_root") != f"{_V2R3_STATE_PREFIX}-ledger"
         or type(authorization) is not dict
         or authorization.get("authorization_root")
-        != f"{_V2R2_STATE_PREFIX}-authorization"
+        != f"{_V2R3_STATE_PREFIX}-authorization"
         or type(ledger) is not dict
-        or ledger.get("ledger_root") != f"{_V2R2_STATE_PREFIX}-ledger"
+        or ledger.get("ledger_root") != f"{_V2R3_STATE_PREFIX}-ledger"
         or type(slots) is not list
         or len(slots) != 3
     ):
         _fail(
             "FAIL_CAMPAIGN_CONTRACT",
-            "v2r2 instance or historical protected-state isolation differs",
+            "v2r3 instance or historical protected-state isolation differs",
         )
     for ordinal, slot in enumerate(slots, start=1):
         if type(slot) is not dict:
-            _fail("FAIL_CAMPAIGN_CONTRACT", "v2r2 slot isolation differs")
-        prefix = f"{_V2R2_STATE_PREFIX}-slot-{ordinal:02d}"
+            _fail("FAIL_CAMPAIGN_CONTRACT", "v2r3 slot isolation differs")
+        prefix = f"{_V2R3_STATE_PREFIX}-slot-{ordinal:02d}"
         clone = f"{prefix}-clone"
         evidence = f"{prefix}-evidence"
         if (
@@ -1684,14 +2457,14 @@ def _require_v2r2_instance_isolation_v2(
             or slot.get("evidence_root") != evidence
             or slot.get("trace_root") != f"{prefix}-trace"
             or slot.get("trajectory_trace_id")
-            != f"q05b-shadow-retry-campaign-v2r2-slot-{ordinal:02d}"
+            != f"q05b-shadow-retry-campaign-v2r3-slot-{ordinal:02d}"
             or slot.get("stdout_path") != f"{evidence}/supervisor.stdout"
             or slot.get("stderr_path") != f"{evidence}/supervisor.stderr"
             or slot.get("external_trajectory_binding_path")
             != f"{evidence}/trajectory-binding.json"
             or slot.get("slot_result_path") != f"{evidence}/slot-result.json"
         ):
-            _fail("FAIL_CAMPAIGN_CONTRACT", "v2r2 slot isolation differs")
+            _fail("FAIL_CAMPAIGN_CONTRACT", "v2r3 slot isolation differs")
 
 
 def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
@@ -1708,7 +2481,7 @@ def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
         contract.get("schema_version")
         != "hegel-phase3a-q05b-shadow-retry-campaign/2"
         or contract.get("contract_id")
-        != "hegel-phase3a-q05b-shadow-retry-campaign-v2r2"
+        != "hegel-phase3a-q05b-shadow-retry-campaign-v2r3"
     ):
         _fail("FAIL_CAMPAIGN_CONTRACT", "campaign contract header differs")
     expected_top_fields = {
@@ -1738,14 +2511,14 @@ def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
     }
     if set(contract) != expected_top_fields:
         _fail("FAIL_CAMPAIGN_CONTRACT", "campaign contract fields differ")
-    _require_v2r2_instance_isolation_v2(contract)
+    _require_v2r3_instance_isolation_v2(contract)
     authority = contract["authority_boundary"]
     execution_policy = contract["execution_policy"]
     forbidden = contract["forbidden_scope"]
     implementation = contract["implementation_state"]
     if (
         contract["status"]
-        != "V2R2_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
+        != "V2R3_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
         or contract["claim_scope"]
         != "THREE_SLOT_SHADOW_ONLY_NONADOPTING_Q05B_RETRY_CAMPAIGN"
         or type(authority) is not dict
@@ -1772,7 +2545,7 @@ def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
         or execution_policy.get("clone_source_project_relative_path")
         != PROJECT_ROOT.name
         or execution_policy.get("clone_target_ref_name")
-        != _CLONE_TARGET_REF_V2R2
+        != _CLONE_TARGET_REF_V2R3
         or execution_policy.get("clone_ref_policy")
         != (
             "EXACTLY_ONE_PERMANENT_INTERNAL_REF_BOUND_TO_TARGET_COMMIT_A;"
@@ -1817,17 +2590,18 @@ def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
         _fail("FAIL_CAMPAIGN_CONTRACT", "campaign authority boundary differs")
     _scheduling_admission_policy_v2(contract)
     domains = contract.get("hash_domains")
-    if type(domains) is not dict or domains != _EXPECTED_HASH_DOMAINS_V2R2:
+    if type(domains) is not dict or domains != _EXPECTED_HASH_DOMAINS_V2R3:
         _fail("FAIL_CAMPAIGN_CONTRACT", "campaign hash-domain registry differs")
     trajectory_policy = contract.get("trajectory_binding_policy")
     if (
         type(trajectory_policy) is not dict
         or trajectory_policy.get("binding_digest_domain")
         != domains["trajectory_binding"]
+        or trajectory_policy.get("producer_id") != "Q05B_SUPERVISOR_V3"
     ):
         _fail(
             "FAIL_CAMPAIGN_CONTRACT",
-            "trajectory binding digest domain differs",
+            "trajectory binding domain or v2r3 producer differs",
         )
     digest_fields = {
         "retry_policy": "retry_predicate_digest",
@@ -2970,7 +3744,7 @@ def _scan_tree(
     maximum_entries: int = 100_000,
     maximum_total_bytes: int = 4 * 1024 * 1024 * 1024,
     manifest_domain: str = (
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/CARGO_MANIFEST/V2"
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/CARGO_MANIFEST/V2"
     ),
     allowed_uids: Sequence[int] | None = None,
     reject_group_or_world_writable: bool = False,
@@ -3723,7 +4497,7 @@ def _verify_target_git_objects(
         "target_contract_digest": target_contract_digest,
     }
     target_source_binding_digest = _domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/TARGET_SOURCE_BINDING/V2",
+        _TARGET_SOURCE_BINDING_DOMAIN,
         target_source_preimage,
     )
     if (
@@ -3967,7 +4741,7 @@ def _verify_clone(
         label="slot clone no-alias tree replay",
         maximum_entries=200_000,
         manifest_domain=(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/CLONE_TREE_MANIFEST/V2"
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/CLONE_TREE_MANIFEST/V2"
         ),
     )
     artifact_relative = artifact.relative_to(clone_root).as_posix()
@@ -3977,7 +4751,7 @@ def _verify_clone(
         if row["relative_path"] != artifact_relative
     ]
     closure_without_artifact = _domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/"
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/"
         "CLONE_CLOSURE_WITHOUT_ARTIFACT/V2",
         closure_rows_without_artifact,
     )
@@ -4339,7 +5113,7 @@ def _slot_roots_absence_evidence(
     return {
         **preimage,
         "root": _domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/"
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/"
             "SLOT_ROOT_ABSENCE/V2",
             preimage,
         ),
@@ -4494,7 +5268,7 @@ def _authorization_template(
         ],
     }
     owner_confirmation_digest = _domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/OWNER_CONFIRMATION/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/OWNER_CONFIRMATION/V2",
         confirmation,
     )
     value: dict[str, object] = {
@@ -6376,7 +7150,7 @@ def _source_state_replay(
         "evidence": evidence,
         "clone_closure_rows_internal": clone_closure_rows,
         "root": _domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/SOURCE_REPLAY/V2",
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/SOURCE_REPLAY/V2",
             evidence,
         ),
     }
@@ -6414,7 +7188,7 @@ def _safe_source_state_replay(
             "error_or_null": detail,
             "evidence": evidence,
             "root": _domain_digest(
-                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/SOURCE_REPLAY/V2",
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/SOURCE_REPLAY/V2",
                 evidence,
             ),
         }
@@ -6429,7 +7203,7 @@ def _augment_source_replay_with_alias_rows(
     evidence["nonalias_directory_identities"] = deepcopy(dict(alias_rows))
     result["evidence"] = evidence
     result["root"] = _domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/SOURCE_REPLAY/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/SOURCE_REPLAY/V2",
         evidence,
     )
     return result
@@ -6512,7 +7286,7 @@ def _enforce_clone_closure(
         "error_or_null": detail,
         "evidence": evidence,
         "root": _domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/SOURCE_REPLAY/V2",
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/SOURCE_REPLAY/V2",
             evidence,
         ),
     }
@@ -6840,7 +7614,7 @@ def _cleanup_replay_evidence(
     return {
         "preimage": value,
         "root": _domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/CLEANUP_REPLAY/V2",
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/CLEANUP_REPLAY/V2",
             value,
         ),
     }
@@ -7220,6 +7994,44 @@ def _docker_inventory_argv_v2(contract: Mapping[str, object]) -> list[str]:
     ]
 
 
+def _bound_command_slot_id_v2(
+    contract: Mapping[str, object],
+    label: object,
+    argv: object,
+) -> str | None:
+    if type(label) is not str or type(argv) is not list:
+        return None
+    execution = contract.get("execution_policy")
+    if type(execution) is not dict:
+        return None
+    git = execution.get("git_executable")
+    for slot in _slot_registry(contract):
+        slot_id = str(slot["slot_id"])
+        supervisor_argv = _slot_argv(contract, slot)
+        if argv == supervisor_argv and label in {
+            f"{slot_id} bound supervisor",
+            "bounded process wrapper resource closure",
+        }:
+            return slot_id
+        clone = str(slot["clone_root"])
+        if (
+            argv
+            and argv[0] == git
+            and (
+                any(
+                    argv[index] == "-C" and argv[index + 1] == clone
+                    for index in range(len(argv) - 1)
+                )
+                or (
+                    label == "slot no-local clone"
+                    and argv[-1] == clone
+                )
+            )
+        ):
+            return slot_id
+    return None
+
+
 def _bounded_command_binding_is_exact_v2(
     contract: Mapping[str, object],
     label: object,
@@ -7299,7 +8111,7 @@ def _bounded_command_binding_is_exact_v2(
             ("slot cloned ref enumeration", ["-C", clone, "for-each-ref", "--format=%(refname)"]),
             ("slot clone reflog expiration", ["-C", clone, "reflog", "expire", "--expire=now", "--all"]),
             ("slot clone exact closure prune", ["-C", clone, "gc", "--prune=now", "--quiet"]),
-            ("slot clone target graph ref creation", ["-C", clone, "update-ref", _CLONE_TARGET_REF_V2R2, commit]),
+            ("slot clone target graph ref creation", ["-C", clone, "update-ref", _CLONE_TARGET_REF_V2R3, commit]),
             ("slot clone reachable commit-graph write", ["-C", clone, "commit-graph", "write", "--reachable"]),
         )
         for name, arguments in clone_rows:
@@ -7372,6 +8184,8 @@ def _error_snapshot_semantics_v2(
     value: object,
     *,
     depth: int,
+    expected_active_slot_id_or_null: str | None = None,
+    expected_command_argv_or_null: Sequence[str] | None = None,
 ) -> bool:
     return (
         type(value) is dict
@@ -7394,6 +8208,10 @@ def _error_snapshot_semantics_v2(
             terminal_error_detail=value["error_detail"],
             top_level=False,
             depth=depth + 1,
+            expected_active_slot_id_or_null=(
+                expected_active_slot_id_or_null
+            ),
+            expected_command_argv_or_null=expected_command_argv_or_null,
         )
     )
 
@@ -7407,6 +8225,8 @@ def _terminal_error_receipt_semantics_v2(
     top_level: bool,
     depth: int = 0,
     expected_prespawn_slot_id_or_null: str | None = None,
+    expected_active_slot_id_or_null: str | None = None,
+    expected_command_argv_or_null: Sequence[str] | None = None,
 ) -> bool:
     if value is None:
         return True
@@ -7427,6 +8247,19 @@ def _terminal_error_receipt_semantics_v2(
         return set(value) == {"schema_version", "status"} and value.get(
             "status"
         ) == "RECEIPT_OMITTED_OVER_BOUND"
+    if schema == _SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V3:
+        expected_detail = _scheduling_admission_failure_detail_v3(value)
+        return (
+            top_level
+            and terminal_error_code == _SCHEDULING_ADMISSION_FAILURE_V2
+            and type(expected_prespawn_slot_id_or_null) is str
+            and value.get("slot_id") == expected_prespawn_slot_id_or_null
+            and expected_detail is not None
+            and terminal_error_detail == expected_detail[:4096]
+            and _scheduling_admission_evidence_semantics_v3(
+                contract, value, require_passed=False
+            )
+        )
     if schema == _PUBLICATION_RECEIPT_SCHEMA_V2:
         if set(value) != {
             "schema_version",
@@ -7538,6 +8371,11 @@ def _terminal_error_receipt_semantics_v2(
             terminal_error_code == "FAIL_CAMPAIGN_PROCESS"
             and not certain_git_source
         )
+        command_slot_id = _bound_command_slot_id_v2(
+            contract,
+            value["label"],
+            value["argv"],
+        )
         if (
             not classification_ok
             or type(value["return_code"]) not in (int, type(None))
@@ -7555,6 +8393,14 @@ def _terminal_error_receipt_semantics_v2(
             or not _receipt_stream_semantics_v2(value["stdout"])
             or not _receipt_stream_semantics_v2(value["stderr"])
             or not terminal_code_ok
+            or (
+                expected_command_argv_or_null is not None
+                and value["argv"] != list(expected_command_argv_or_null)
+            )
+            or (
+                command_slot_id is not None
+                and command_slot_id != expected_active_slot_id_or_null
+            )
             or (
                 top_level
                 and value["argv"][0]
@@ -7605,6 +8451,11 @@ def _terminal_error_receipt_semantics_v2(
             return False
         inner_code = value["error_code"]
         inner_detail = value["error_detail"]
+        command_slot_id = _bound_command_slot_id_v2(
+            contract,
+            value["label"],
+            value["argv"],
+        )
         return (
             value["phase"] == "BOUNDED_PROCESS_RAISED_BEFORE_RESULT"
             and type(inner_code) is str
@@ -7632,8 +8483,20 @@ def _terminal_error_receipt_semantics_v2(
                 terminal_error_detail=inner_detail,
                 top_level=False,
                 depth=depth + 1,
+                expected_active_slot_id_or_null=(
+                    expected_active_slot_id_or_null
+                ),
+                expected_command_argv_or_null=value["argv"],
             )
             and terminal_error_code in {inner_code, "FAIL_CAMPAIGN_PROCESS"}
+            and (
+                expected_command_argv_or_null is None
+                or value["argv"] == list(expected_command_argv_or_null)
+            )
+            and (
+                command_slot_id is None
+                or command_slot_id == expected_active_slot_id_or_null
+            )
             and (
                 not top_level
                 or value["label"].endswith(" bound supervisor")
@@ -7705,6 +8568,9 @@ def _terminal_error_receipt_semantics_v2(
                         terminal_error_detail="bounded Docker diagnostic omitted",
                         top_level=False,
                         depth=depth + 1,
+                        expected_active_slot_id_or_null=(
+                            expected_active_slot_id_or_null
+                        ),
                     )
                     and type(expected_prespawn_slot_id_or_null) is str
                     and terminal_error_detail
@@ -7744,6 +8610,9 @@ def _terminal_error_receipt_semantics_v2(
                 ),
                 top_level=False,
                 depth=depth + 1,
+                expected_active_slot_id_or_null=(
+                    expected_active_slot_id_or_null
+                ),
             ):
                 return False
         return (
@@ -7838,7 +8707,15 @@ def _terminal_error_receipt_semantics_v2(
                     contract,
                     constructor_error,
                     depth=depth,
+                    expected_active_slot_id_or_null=(
+                        expected_active_slot_id_or_null
+                    ),
+                    expected_command_argv_or_null=value["argv"],
                 )
+            )
+            or (
+                expected_command_argv_or_null is not None
+                and value["argv"] != list(expected_command_argv_or_null)
             )
         ):
             return False
@@ -7909,7 +8786,7 @@ def _verify_slot_absence_evidence_semantics_v2(
     evidence = _verify_domain_root_v2(
         value,
         domain=(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/"
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/"
             "SLOT_ROOT_ABSENCE/V2"
         ),
         root_field="root",
@@ -8315,6 +9192,8 @@ def _verify_ledger_state_semantics_v2(
             or not _scheduling_admission_evidence_exact_v2(
                 contract, consumed_body["scheduling_admission"]
             )
+            or consumed_body["scheduling_admission"].get("slot_id")
+            != consumed_body["slot_id"]
         ):
             _ledger_semantic_fail(f"{slot['slot_id']} consumed mapping differs")
         if binding_name not in by_name:
@@ -8365,7 +9244,7 @@ def _verify_ledger_state_semantics_v2(
         before = _verify_domain_root_v2(
             binding["source_replay_before_evidence"],
             domain=(
-                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/"
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/"
                 "SOURCE_REPLAY/V2"
             ),
             root_field="root",
@@ -8375,7 +9254,7 @@ def _verify_ledger_state_semantics_v2(
         after = _verify_domain_root_v2(
             binding["source_replay_after_evidence"],
             domain=(
-                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/"
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/"
                 "SOURCE_REPLAY/V2"
             ),
             root_field="root",
@@ -8400,7 +9279,7 @@ def _verify_ledger_state_semantics_v2(
         cleanup = _verify_domain_root_v2(
             binding["cleanup_replay_evidence"],
             domain=(
-                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/"
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/"
                 "CLEANUP_REPLAY/V2"
             ),
             root_field="root",
@@ -8579,6 +9458,25 @@ def _verify_ledger_state_semantics_v2(
         or terminal["last_slot_outcome_digest_or_null"] != expected_last_digest
     ):
         _ledger_semantic_fail("terminal progress differs from frozen records")
+    active_prefix_match = (
+        re.fullmatch(
+            r"slot-([0-9]{2})\.(intent|consumed|trajectory-binding|outcome)\.json",
+            prefix_names[-1],
+        )
+        if prefix_names
+        else None
+    )
+    expected_active_slot_id_or_null = (
+        "SLOT_" + active_prefix_match.group(1)
+        if active_prefix_match is not None
+        else None
+    )
+    expected_prespawn_slot_id_or_null = (
+        expected_active_slot_id_or_null
+        if active_prefix_match is not None
+        and active_prefix_match.group(2) == "intent"
+        else None
+    )
     has_error = error_code is not None
     if has_error:
         if (
@@ -8611,11 +9509,10 @@ def _verify_ledger_state_semantics_v2(
                 terminal_error_detail=error_detail,
                 top_level=True,
                 expected_prespawn_slot_id_or_null=(
-                    "SLOT_" + prefix_names[-1][5:7]
-                    if prefix_names
-                    and re.fullmatch(r"slot-[0-9]{2}\.intent\.json", prefix_names[-1])
-                    is not None
-                    else None
+                    expected_prespawn_slot_id_or_null
+                ),
+                expected_active_slot_id_or_null=(
+                    expected_active_slot_id_or_null
                 ),
             )
         ):
@@ -9424,6 +10321,7 @@ def _run_one_slot(
             or not _scheduling_admission_evidence_exact_v2(
                 contract, scheduling_admission
             )
+            or scheduling_admission.get("slot_id") != slot["slot_id"]
         ):
             _fail(
                 "FAIL_CAMPAIGN_INVOCATION",
@@ -9526,7 +10424,7 @@ def _run_one_slot(
                 "error_or_null": detail,
                 "evidence": {"error": detail},
                 "root": _domain_digest(
-                    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/SOURCE_REPLAY/V2",
+                    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/SOURCE_REPLAY/V2",
                     {"error": detail},
                 ),
             }
@@ -9692,7 +10590,7 @@ def _run_one_slot(
                 "error_or_null": detail,
                 "evidence": {"error": detail},
                 "root": _domain_digest(
-                    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/SOURCE_REPLAY/V2",
+                    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/SOURCE_REPLAY/V2",
                     {"error": detail},
                 ),
             }
