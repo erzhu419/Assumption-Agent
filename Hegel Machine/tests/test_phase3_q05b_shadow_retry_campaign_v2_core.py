@@ -20,9 +20,9 @@ def _continuous_gap_detail() -> str:
     return (
         "held actor sampling gap exceeded bound: "
         "actor_id=RUST_ENDPOINT; role_id=2; sample_ordinal=1; "
-        "previous_finish_ns=1000000000; scheduled_start_ns=1050000000; "
+        "previous_finish_ns=1000000000; scheduled_start_ns=1125000000; "
         "actual_start_ns=1250000001; gap_ns=250000001; "
-        "maximum_gap_ns=250000000; target_wait_ns=50000000; "
+        "maximum_gap_ns=250000000; target_wait_ns=125000000; "
         "previous_duration_ns=1000000"
     )
 
@@ -340,7 +340,7 @@ def _held_final_failure_rows() -> list[dict[str, object]]:
         "actor_id=RUST_ENDPOINT; role_id=2; sample_ordinal=1; "
         "previous_finish_ns=1000000000; actual_start_ns=1250000001; "
         "gap_ns=250000001; maximum_gap_ns=250000000; "
-        "target_wait_ns=50000000; previous_duration_ns=1000000"
+        "target_wait_ns=125000000; previous_duration_ns=1000000"
     )
     origin.update(
         {
@@ -919,7 +919,7 @@ def _base(slot: int = 1) -> dict[str, object]:
         "campaign_id": "campaign-1",
         "slot_number": slot,
         "expected_trace_id": f"campaign-1-slot-{slot}",
-        "expected_producer_id": "Q05B_SUPERVISOR_V3",
+        "expected_producer_id": "Q05B_SUPERVISOR_V4",
         "invocation_count": 1,
         "supervisor_returned": True,
         "supervisor_reaped": True,
@@ -935,7 +935,7 @@ def _base(slot: int = 1) -> dict[str, object]:
         "stderr_empty": True,
         "trajectory_status": "COMPLETE_FAIL",
         "trajectory_trace_id": f"campaign-1-slot-{slot}",
-        "trajectory_producer_id": "Q05B_SUPERVISOR_V3",
+        "trajectory_producer_id": "Q05B_SUPERVISOR_V4",
         "trajectory_torn_tail_or_null": None,
         "trajectory_open_span_ids": [],
         "trajectory_terminal_error_code_or_null": campaign.GAP_ERROR_CODE_V2,
@@ -1037,18 +1037,18 @@ def test_canonical_strict_codec_and_domain_separated_digest_known_answer() -> No
     assert first != second
 
 
-def test_v2r3_partition_digest_domains_are_new_instance_authority() -> None:
+def test_v2r7_partition_digest_domains_are_new_instance_authority() -> None:
     rows: list[dict[str, object]] = []
     failure_domain = (
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/"
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/"
         "TRAJECTORY_FAILURE_ROWS/V2\x00"
     )
     cleanup_domain = (
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/"
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/"
         "TRAJECTORY_CLEANUP_ROWS/V2\x00"
     )
     certificate_domain = (
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/"
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/"
         "POST_ORIGIN_PARTITION_CERTIFICATE/V2\x00"
     )
     certificate: dict[str, object] = {"certificate_digest": None}
@@ -1067,13 +1067,49 @@ def test_v2r3_partition_digest_domains_are_new_instance_authority() -> None:
         certificate_domain, {}
     )
     assert failure_digest != campaign.campaign_record_digest_v2(
-        failure_domain.replace("V2R3", "V2R2"), rows
+        failure_domain.replace("V2R7", "V2R2"), rows
+    )
+    assert failure_digest != campaign.campaign_record_digest_v2(
+        failure_domain.replace("V2R7", "V2R3"), rows
+    )
+    assert failure_digest != campaign.campaign_record_digest_v2(
+        failure_domain.replace("V2R7", "V2R4"), rows
+    )
+    assert failure_digest != campaign.campaign_record_digest_v2(
+        failure_domain.replace("V2R7", "V2R5"), rows
+    )
+    assert failure_digest != campaign.campaign_record_digest_v2(
+        failure_domain.replace("V2R7", "V2R6"), rows
     )
     assert cleanup_digest != campaign.campaign_record_digest_v2(
-        cleanup_domain.replace("V2R3", "V2R2"), rows
+        cleanup_domain.replace("V2R7", "V2R2"), rows
+    )
+    assert cleanup_digest != campaign.campaign_record_digest_v2(
+        cleanup_domain.replace("V2R7", "V2R3"), rows
+    )
+    assert cleanup_digest != campaign.campaign_record_digest_v2(
+        cleanup_domain.replace("V2R7", "V2R4"), rows
+    )
+    assert cleanup_digest != campaign.campaign_record_digest_v2(
+        cleanup_domain.replace("V2R7", "V2R5"), rows
+    )
+    assert cleanup_digest != campaign.campaign_record_digest_v2(
+        cleanup_domain.replace("V2R7", "V2R6"), rows
     )
     assert certificate_digest != campaign.campaign_record_digest_v2(
-        certificate_domain.replace("V2R3", "V2R2"), {}
+        certificate_domain.replace("V2R7", "V2R2"), {}
+    )
+    assert certificate_digest != campaign.campaign_record_digest_v2(
+        certificate_domain.replace("V2R7", "V2R3"), {}
+    )
+    assert certificate_digest != campaign.campaign_record_digest_v2(
+        certificate_domain.replace("V2R7", "V2R4"), {}
+    )
+    assert certificate_digest != campaign.campaign_record_digest_v2(
+        certificate_domain.replace("V2R7", "V2R5"), {}
+    )
+    assert certificate_digest != campaign.campaign_record_digest_v2(
+        certificate_domain.replace("V2R7", "V2R6"), {}
     )
 
 

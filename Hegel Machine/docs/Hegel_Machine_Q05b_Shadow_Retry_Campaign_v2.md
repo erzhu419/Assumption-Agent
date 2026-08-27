@@ -1,24 +1,32 @@
-# Hegel Machine Q0.5b Shadow Retry Campaign v2r3 (record schema `/2`)
+# Hegel Machine Q0.5b Shadow Retry Campaign v2r7 (record schema `/2`)
 
-Status: `V2R3_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED`
+Status: `V2R7_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED`
 
 This document accompanies
 `config/phase3_q05b_shadow_retry_campaign_v2.json`.  The unchanged filename and
 all structural schema tags ending in `/2` describe the retained record format;
 the distinct contract ID, hash domains, roots, and trace IDs identify the new
-v2r3 campaign instance.  The controller source, tests, document, exact V2R3
-hash-domain registry, roots, and trace IDs are frozen by the accompanying
-loadable contract.  Neither a source-bound contract nor its binding summaries
-are an execution capsule, authorization record, preflight receipt, or
-execution result.  The revised target supervisor is frozen as exact Commit A
-`fdf8e22f6811fe3062b4409dad48cf9f044f2919`, tree
-`7d3daf0088e24e223857f3f0daf789e2ce73c710`, parent
-`33ff8ba17addf914f06eb440b8b7a40e93654816`, and raw commit-object SHA-256
-`b953ec74d5c23f9f8ec734bf56921ee65d4355476b1a3c699391c43668e5ef1f`.
-Its seven required source hashes, static-policy root, target contract digest,
+v2r7 campaign instance under contract ID
+`hegel-phase3a-q05b-shadow-retry-campaign-v2r7`.  The controller source,
+tests, document, exact V2R7 hash-domain registry, roots, and trace IDs are
+frozen by the accompanying loadable contract.  Neither the source-bound
+contract nor its binding summaries are an execution capsule, authorization
+record, preflight receipt, or execution result.  The revised target supervisor
+is frozen as exact Commit A
+`5d85bf858e80a22633f96de41259344c70e25519`, tree
+`aca3fc65be392c51c829544bfda8ae9149fc566b`, parent
+`abaedf57e9795515d9b7ca6b04f905d87f30d5e3`, and raw commit-object SHA-256
+`20a8f8bd0a8a1022e6a82619447f74a2dedc984cd9137de8336da684908166c1`.
+Its thirteen required source hashes, static-policy root, target contract digest,
 and target source-binding digest are independently replayed by the controller.
-No v2r3 preflight, authorization, or campaign execution had occurred when
-these source bytes were frozen.
+The read-only preflight accepts the controller source only when its clean live
+`HEAD` is a non-merge commit with Commit A as its sole parent and its raw
+NUL-delimited diff contains exactly the six campaign paths frozen by the
+contract.  Thus the future frozen Commit B is the sole one-commit controller
+layer admitted to capsule derivation; a clean later descendant, merge, path
+omission, reordering, rename, or extra path is rejected.
+No v2r7 preflight, capsule derivation, authorization, or campaign execution
+had occurred when these source bytes were frozen.
 
 The prior v2 capsule
 `sha256:238b79a5ddf5adb379df9ac1b0ae7e762f7616f1cfbf19b93474315a9197ab62`
@@ -26,7 +34,7 @@ and authorization
 `sha256:0f59cc4aa2f605bdd1388baf769961ccfebf2123c6d6c9ff467f7f61add29cea`
 belong only to the completed prior-v2 terminal/completion chain.  That chain is
 historical, terminal, non-resumable evidence.  Neither digest, its immutable
-ledger, nor any prior-v2 root is v2r3 authority or an input that v2r3 may open,
+ledger, nor any prior-v2 root is v2r7 authority or an input that v2r7 may open,
 access, reuse, copy, adopt, or resume.
 
 The completed v2r1 capsule
@@ -43,7 +51,7 @@ ledger record is
 `sha256:b910df6dfea1e0bd8fd4bd11d8aa20d682f43898b495f8c643b668b970f8108b`
 and the completion ledger record is
 `sha256:b9e63585d7a6eb48d6195fa188ce1d40f2c79a169848f58cd10b82328be4702b`.
-v2r3 protects the v2r1 worktree, authorization, ledger, and all fifteen slot
+v2r7 protects the v2r1 worktree, authorization, ledger, and all fifteen slot
 roots as negative historical registry entries; none is opened or reused.
 
 The completed v2r2 campaign is likewise historical, terminal, non-resumable
@@ -78,15 +86,141 @@ The complete trajectories identified synchronous shared trajectory
 publication, including its global writer lock and per-event fsync path, as
 part of the observed sampler scheduling delay.  That evidence motivates the
 v2r3 sampler-publication separation and workload-bound scheduling admission;
-it grants no authority to reuse or resume v2r2.  V2r3 protects the v2r2
+it grants no authority to reuse or resume v2r2.  V2r7 protects the v2r2
 worktree, authorization, ledger, and all fifteen slot roots as unopened
 negative historical registry entries.
 
+The completed v2r3 campaign is a distinct historical terminal chain, not a
+partially available v2r7 run.  Its controller Commit B is
+`bcf22f321478ace834b2bc4c0953960812f74d45`, tree
+`ef5f42336b5b6490396491062fe6b699c65b96d5`; its target Commit A is
+`fdf8e22f6811fe3062b4409dad48cf9f044f2919`, tree
+`7d3daf0088e24e223857f3f0daf789e2ce73c710`.  Its campaign source-binding,
+contract, capsule, owner-confirmation, and authorization digests are,
+respectively,
+`sha256:2fe4c2b80e0218dd1aaefe99cf431701ef0350477f828254c1bb6f4a7cb81de9`,
+`sha256:4be13ab3045cc67ff9087ab3e24c6e6327ec1a8efc0be99e4d2befb391282828`,
+`sha256:150e92c65f870df8591655fba3d6798d60bfecf52693e9b30719385e93f0cc24`,
+`sha256:43dc31c26c9853a5d8d507c64eb402d6e3b10d882e4df640fd75fbde16543ac7`,
+and
+`sha256:7a32ebc4fe0da30df71d74698733e7734080dc15138e3429af22bf54d5f25969`.
+It invoked only `SLOT_01`.  Its `Q05B_SUPERVISOR_V3` trace
+`q05b-shadow-retry-campaign-v2r3-slot-01` ended as an `INCOMPLETE_PREFIX`
+after 5,410 durable events, with six open spans, no terminal manifest, and no
+partition certificate.  Consequently, its authoritative decision was
+`TERMINAL_NONRETRYABLE`, not retry eligibility.  The campaign terminal status
+is `CAMPAIGN_TRAJECTORY_UNCERTAIN_TERMINAL_NO_RESUME`; its terminal-body and
+completion-body digests are
+`sha256:bd372c290bb4809479e3344da3a090a8f03a426bf04549d26174b41c72af089f`
+and
+`sha256:41280c9afdf42ab951617408b97f5526233b8eea94c63f09adc0fa6a8c229c96`,
+and its terminal and completion ledger-record digests are
+`sha256:6b4542757feefa7d26e4c537a66eae3f5486a0d1f3e30f74c4c340f0c833646f`
+and
+`sha256:b0adfb9cc65d5422918fb498f10fac534bb6c60ea71d6611c701553628984007`.
+The eight-record ledger and completion record close that authority
+permanently; `SLOT_02` and `SLOT_03` were never executed.  The absent
+partition certificate and unknown unpartitioned-event count must not be
+rewritten as zero or as complete-failure evidence.  V2r7 protects the v2r3
+worktree, authorization root, ledger root, and all fifteen slot roots as
+negative historical entries.  It may not open, access, mutate, copy, resume,
+or reuse them, and may not reuse any v2r3 capsule, owner confirmation,
+authorization, ledger prefix, trace prefix, slot, or completion authority.
+
+The completed v2r4 campaign is also historical, terminal, and non-resumable.
+Its controller Commit B
+`a2fac3ae10789eb2be34ad33f8ef9785d312eb53`, tree
+`7d9e3c36ce10d00f2458c83d8bf16d60512f007e`, had exact parent and target
+Commit A `abaedf57e9795515d9b7ca6b04f905d87f30d5e3`.  Its campaign
+source-binding, contract, capsule, owner-confirmation, and authorization
+digests were, respectively,
+`sha256:76f03e0c55c54b95a9288d83d636f25bd04eb6a599bc6515e05231d92af7ce18`,
+`sha256:09e2f40cceed32d38bd0e3d4a04f620593b76e8ff68f62e86ff35dd7ffa68cb8`,
+`sha256:8646ad08037d681e8e619de66f5d23b15ebedccee0234108881488e758129a46`,
+`sha256:cd083fef0b3f10636d972e4d24ffce2eb1152bf794bc40e5afdef5e474114742`,
+and
+`sha256:1bc5b4da4e67368a633ab4cb708099c0e8f09761e002fdb654397dd4e4d70e26`.
+The authorization was consumed exactly once.  All three pre-consume
+scheduling-admission windows failed; their timed durable counts were 570,
+405, and 490 of 4,800, and all retained files were removed with absence
+proved.  No slot was consumed, no supervisor was invoked, and no trajectory
+or artifact was created.  The terminal status/error were
+`CAMPAIGN_FAILED_CLOSED_TERMINAL` / `FAIL_CAMPAIGN_SCHEDULING_ADMISSION`;
+terminal and completion ledger-record digests were
+`sha256:b64f61ef3cf57419fa902dca6b58cf1bb49ad45b87137f8264099640305341bf`
+and
+`sha256:7d3a30a7fc8749e9a05a06f8c47ee01bcc06223925f20be50f49e3874ab8c74c`.
+
+The v2r4 receipt exposed a gate-harness defect rather than a need to weaken
+the 40-record/s requirement: the declared five-fsync path itself measured
+42.81--44.35 records/s, but the retained-probe success `finally` performed an
+undeclared sixth directory fsync after timing stopped.  That extra 5.58--5.91
+ms per record reduced end-to-end worker throughput to 34.17--35.52 records/s
+and filled the 64-record admission allowance.  V2r5 removes only that hidden
+success-path sync, advances the campaign admission semantics to `/5`, and
+retains the target five-fsync durability protocol and every frozen rate,
+cardinality, queue, and gap threshold.  The v2r4 worktree and its seventeen
+state roots are protected negative historical entries and cannot be opened,
+reused, or resumed by v2r7.
+
+The completed v2r5 campaign is the most recent completed and executed
+campaign predecessor and is terminal, non-resumable evidence only.  Its
+frozen controller Commit B
+was `8c1018518bb885ba4821ccaf10f2a3fb17f86a35`; its target was
+`abaedf57e9795515d9b7ca6b04f905d87f30d5e3`.  Capsule
+`sha256:ba1d195b17fea2cc461a50db50bc08fd45f63d2858ba608257a733ad3846d74d`
+was authorized and consumed exactly once.  `SLOT_01` passed scheduling
+admission, invoked the supervisor once, and closed a complete 6,338-event
+trajectory with one exact Rust sampling-gap origin
+(`290,330,097 ns > 250,000,000 ns`); its decision was
+`RETRY_EXACT_GAP`, so and only so did `SLOT_02` become eligible.  `SLOT_02`
+also passed scheduling admission and invoked the supervisor once.  It closed
+a complete 13,602-event trajectory at Stage 8 with
+`FAIL_Q05B_DUAL_ARTIFACT`: the isolated Python 3.10 process could not import
+ambient top-level `tomli` (`No module named 'tomli'`).  That failure was
+`TERMINAL_NONRETRYABLE`; `SLOT_03` was never invoked.  The campaign therefore
+ended `CAMPAIGN_FAILED_CLOSED_TERMINAL` after two total supervisor
+invocations.  Its exact twelve-record immutable ledger ends at completion
+record digest
+`sha256:a2ddd0e6493ed8023143052df672fa7425c39f2d5a4f0ba59df7d59bc9fd1f42`.
+The v2r5 worktree, authorization, ledger, and fifteen slot roots are now
+protected, unopened negative history; none of its capsule, authorization,
+ledger prefix, paths, slots, or completion authority can be reused by v2r7.
+
+The v2r6 controller is a distinct failed historical source-bound version, not
+a partially available v2r7 run.  Its exact controller commit was
+`d0701ad308fca2d27818cbd6cab861dd47c8cdcd`, tree
+`2bef012c37fc86c88e674697b2fb6e6a0fd4d97a`, with sole parent and unchanged
+target Commit A `5d85bf858e80a22633f96de41259344c70e25519`.  Its campaign source-binding
+and contract digests were
+`sha256:883ae7ec454833bc3e6c1112422e88f0ccf428159309681b6779d14c00290ab8`
+and
+`sha256:47d7a676d836bc1c2c44ffb79f7b3de4c0ad658d95df3ca800ae750fff0be130`.
+Exactly one CLI preflight returned exit code 1 and canonical
+`CAMPAIGN_COMMAND_FAILED_CLOSED` error `FAIL_CAMPAIGN_SOURCE: target derived
+binding differs`.  The 290-byte stdout had raw SHA-256
+`8119c23e0df62403f01b3eddb5508664f0d49410e41f72b3196300c4c21fa1bb`;
+stderr was empty.  The controller had derived the exact Target-A source
+preimage but v2r6 incorrectly bound the domain digest computed with the
+canonical transport LF retained,
+`sha256:5dde4a55053e2e6ffc26f3c6b485bd1c92b001b68046431f878793d90e3c27c6`,
+instead of the required no-final-LF digest
+`sha256:8b24967b9fca37cb0f7f741b6ebc356dbeded597b567cca1ddd11c3ce61fe61a`.
+The failure occurred before the Docker-label check, dependency child, capsule,
+authorization lookup/publication, any state write or consumption, and any
+supervisor spawn.  The 16 campaign freshness targets checked by the controller
+were absent; independent before/after observation found all 17 v2r6 runtime
+roots absent.  No capsule, owner confirmation, authorization, ledger record,
+dependency-gate invocation, or supervisor invocation exists.  The clean v2r6
+worktree and those 17 absent runtime roots are now 18 unopened protected
+historical roots; their paths or failed binding cannot be reused by v2r7.
+
 No source-bound contract or self-consistent capsule is execution authority.
-The read-only preflight may derive one exact capsule and authorization
-template, but no clone, Cargo copy, authorization root, ledger root, artifact,
-evidence directory, trajectory, Docker process, or supervisor invocation may
-be created until the project owner authorizes that exact capsule digest.
+Only after final binding may the read-only preflight derive one exact capsule
+and authorization template, but no clone, Cargo copy, authorization root,
+ledger root, artifact, evidence directory, trajectory, Docker process, or
+supervisor invocation may be created until the project owner authorizes that
+exact capsule digest.
 
 ## 1. Purpose and claim boundary
 
@@ -117,27 +251,58 @@ The hard campaign limits are:
 ## 2. Binding and future authorization
 
 Commit A is frozen as one exact 40-hex commit and tree.  The final contract
-binds the raw bytes of the v2 isolation config, admission core,
-artifact core, trajectory core, dual test file, trajectory test file, and
-supervisor tool.  It also binds the config static-policy root and the target
-source-binding digest.  The controller recomputes every value from the local
-Git object store without network access.  Before capsule derivation it also
-runs a bounded, strict, full `git fsck` rooted at the exact target commit with
-reflogs and dangling diagnostics excluded and requires empty stdout/stderr;
-therefore deterministic missing or corrupt local-object closure fails before
-owner authorization rather than consuming a campaign slot.
+binds thirteen raw paths in exact order: the v2 isolation config; the complete
+six-file vendored Tomli closure under `src/hegel_machine/_vendor` (including
+the `_vendor/__init__.py` namespace initializer outside the `tomli` directory,
+plus the Tomli license); the admission, artifact, and trajectory cores; the
+dual and trajectory tests; and the supervisor tool.  It also binds the config
+static-policy root and the target source-binding digest.  The controller
+recomputes every value from the local Git object store without network access.
+Before capsule derivation it runs a bounded, strict, full `git fsck` rooted at
+the exact target commit with reflogs and dangling diagnostics excluded and
+requires empty stdout/stderr; deterministic missing or corrupt local-object
+closure therefore fails before owner authorization rather than consuming a
+campaign slot.
 
-The new v2r3 controller commit implements and tests its campaign core and tool
-at the unchanged schema-v2 paths:
+`Cargo.lock` is intentionally not a fourteenth target source-registry path.
+Its provenance is separately bound as the exact Commit-A Git object
+`Hegel Machine/rust/q1_archive_projection_oracle/Cargo.lock`, 6,493 bytes with
+raw SHA-256
+`c4b9d1eff522017c85b151696d082a0ff9f88bd2890c93d932f7467323a13b49`.
+Before capsule construction, authorization lookup or publication, any ledger
+or slot-state creation, write, or consumption, and any campaign-supervisor
+spawn, a bounded child runs exactly
+`/usr/bin/python3.10 -I -S -B -X utf8 -X
+pycache_prefix=/nonexistent/hegel-q05b-v2r7-preflight-pyc -c PROGRAM` from
+`/`.  It proves the pycache prefix absent before and after import, top-level
+`tomli` unavailable and unloaded, bootstraps the frozen supervisor host
+package, lazily imports the Stage-8 artifact module, proves
+`artifact.tomllib.__name__ == 'hegel_machine._vendor.tomli'`, parses a smoke
+TOML value and the real lockfile, and checks the 55-path host allowlist.  Its
+canonical single-LF stdout and empty stderr form a deterministic receipt that
+binds the six vendored files, Python flags and executable, loaded modules,
+Cargo format 4, all 29 packages, the 21 registry-package projection, and full
+bounded-process cleanup facts.  The full receipt and its replayed digest enter
+the capsule; its producer-free validator reconstructs stdout from the retained
+full child receipt and cross-binds the target and controller Git identities,
+Python executable, runtime environment, frozen source hashes, and Commit-A
+Cargo object against the surrounding capsule inputs.  The receipt digest also
+enters owner confirmation.  Preflight, record-authorization, and run each
+replay this gate freshly; it is never cached.
 
+The new v2r7 controller commit implements and tests its campaign core and tool
+at the unchanged schema-v2 paths, and Commit B may differ from Commit A only
+at these six paths:
+
+- `config/phase3_q05b_shadow_retry_campaign_v2.json`;
+- `docs/Hegel_Machine_Q05b_Shadow_Retry_Campaign_v2.md`;
 - `src/hegel_machine/phase3_q05b_shadow_retry_campaign_v2.py`;
 - `tests/test_phase3_q05b_shadow_retry_campaign_v2_core.py`;
-- `tools/phase3_q05b_shadow_retry_campaign_v2.py`;
 - `tests/test_phase3_q05b_shadow_retry_campaign_v2_tool.py`;
-- `docs/Hegel_Machine_Q05b_Shadow_Retry_Campaign_v2.md`.
+- `tools/phase3_q05b_shadow_retry_campaign_v2.py`.
 
-Their raw/static hashes and campaign source-binding digest are frozen in the
-final contract.  The campaign additionally binds the raw hash of the v1 safety
+Their raw/static hashes and campaign source-binding digest are frozen in
+the final contract.  The campaign additionally binds the raw hash of the v1 safety
 kernel at
 `src/hegel_machine/phase3_q05b_shadow_nonadoption_trial_v1.py`.  Final binding
 also closes the document hash, exact predicate digests, ledger grammar, and
@@ -168,26 +333,30 @@ terminal, and campaign completion.
 
 Only a later exact project-owner confirmation may authorize execution.  That
 confirmation must bind the final contract, target commit and source binding,
-campaign source binding, capsule, both external roots, all three slot path
-records, maximum invocation count 3, the exact retry and success predicates,
-the terminal-no-resume rule, and the forbidden-scope digest.  The owner record
-is a local same-UID direction record, not a digital signature or external
-identity attestation.
+campaign source binding, capsule, Python 3.10 dependency-preflight receipt
+digest, both external roots, all three slot path records, maximum invocation
+count 3, the exact retry and success predicates, the terminal-no-resume rule,
+and the forbidden-scope digest.  The owner record is a local same-UID direction
+record, not a digital signature or external identity attestation.
 
 The fixed future roots are:
 
 | Purpose | Absolute path |
 |---|---|
-| Owner authorization | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r3-authorization` |
-| Durable campaign ledger | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r3-ledger` |
+| Owner authorization | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r7-authorization` |
+| Durable campaign ledger | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r7-ledger` |
 
 The original repository, controller worktree
-`/tmp/hegel-q05b-shadow-retry-v2r3-worktree`, trajectory-dev worktree, all
+`/tmp/hegel-q05b-shadow-retry-v2r7-worktree`, trajectory-dev worktree, all
 seventeen prior-v2 authorization/ledger/slot roots, the prior-v2r1 worktree
 plus its seventeen authorization/ledger/slot roots, and the prior-v2r2
-worktree plus its seventeen authorization/ledger/slot roots are frozen
+worktree plus its seventeen authorization/ledger/slot roots, and the prior-v2r3
+worktree plus its seventeen authorization/ledger/slot roots, and the prior-v2r4
+worktree plus its seventeen authorization/ledger/slot roots, and the prior-v2r5
+worktree plus its seventeen authorization/ledger/slot roots, and the v2r6
+worktree plus its seventeen absent runtime roots are frozen
 protected roots.  Together with the fixed Cargo, Meta, production, and
-attempt roots, the final v2r3 registry contains exactly 64 protected roots.
+attempt roots, the v2r7 registry contains exactly 136 protected roots.
 Historical-root open/access and
 capsule/authorization/ledger reuse are all explicitly false.
 
@@ -207,15 +376,15 @@ caller or reused by another slot.
 
 | Slot | Dedicated clone root | Cargo cache root | External artifact | Evidence root | Trace root |
 |---|---|---|---|---|---|
-| 01 | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r3-slot-01-clone` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r3-slot-01-cargo-cache` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r3-slot-01-artifact/phase3_q05b_dual_qualification_v2.json` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r3-slot-01-evidence` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r3-slot-01-trace` |
-| 02 | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r3-slot-02-clone` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r3-slot-02-cargo-cache` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r3-slot-02-artifact/phase3_q05b_dual_qualification_v2.json` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r3-slot-02-evidence` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r3-slot-02-trace` |
-| 03 | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r3-slot-03-clone` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r3-slot-03-cargo-cache` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r3-slot-03-artifact/phase3_q05b_dual_qualification_v2.json` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r3-slot-03-evidence` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r3-slot-03-trace` |
+| 01 | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r7-slot-01-clone` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r7-slot-01-cargo-cache` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r7-slot-01-artifact/phase3_q05b_dual_qualification_v2.json` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r7-slot-01-evidence` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r7-slot-01-trace` |
+| 02 | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r7-slot-02-clone` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r7-slot-02-cargo-cache` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r7-slot-02-artifact/phase3_q05b_dual_qualification_v2.json` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r7-slot-02-evidence` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r7-slot-02-trace` |
+| 03 | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r7-slot-03-clone` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r7-slot-03-cargo-cache` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r7-slot-03-artifact/phase3_q05b_dual_qualification_v2.json` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r7-slot-03-evidence` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r7-slot-03-trace` |
 
 The stdout and stderr files are fixed beneath each corresponding evidence
 root as `supervisor.stdout` and `supervisor.stderr`.  The external trajectory
 binding is `trajectory-binding.json`, and the slot result is
 `slot-result.json`, in that same evidence root.  Trace IDs are exactly
-`q05b-shadow-retry-campaign-v2r3-slot-01`, `-02`, and `-03`.
+`q05b-shadow-retry-campaign-v2r7-slot-01`, `-02`, and `-03`.
 
 All external artifact, evidence, trace, stdout, stderr, and cache paths are
 outside Git roots.  Each dedicated clone is itself a new isolated Git root
@@ -267,12 +436,12 @@ Commit-A closure itself was complete.  Disabling commit-graph made that clone
 fsck pass, identifying the copied stale graph—not the target closure—as the
 failure source.
 
-Each v2r3 slot instead uses a file-protocol `git clone --no-local` of the same
-bound Commit-A object closure and a private, content/mode-manifest-equal copy
+Each v2r7 slot uses a file-protocol `git clone --no-local` of the bound
+Commit-A object closure and a private, content/mode-manifest-equal copy
 of the allowed Cargo cache.  Clone preparation removes every inherited source
 ref, remote, reflog, source-only branch, and stash ref, then prunes.  It creates
 exactly one permanent internal ref,
-`refs/hegel/q05b-shadow-retry-v2r3-target`, bound to Commit A, and writes a new
+`refs/hegel/q05b-shadow-retry-v2r7-target`, bound to Commit A, and writes a new
 commit-graph from commits reachable through only that ref.  The ref is not
 temporary: its exact name and object ID are replayed before and after the
 supervisor, eliminating a create/write/delete lifecycle window.  Preparation
@@ -304,7 +473,7 @@ tools/phase3_q05b_dual_qualification_v2.py
 
 The fixed local runtime inputs are `/usr/bin/git`, `/usr/bin/docker`, Docker
 host `unix:///var/run/docker.sock`, clone source repository
-`/tmp/hegel-q05b-shadow-retry-v2r3-worktree`,
+`/tmp/hegel-q05b-shadow-retry-v2r7-worktree`,
 project subpath `Hegel Machine`, and read-only Cargo copy source
 `/home/erzhu419/.local/state/hegel-machine/rust-cargo-cache`.  The final runner
 recognizes that the clone source is a linked worktree whose common Git store is
@@ -329,26 +498,38 @@ locale/timezone/PATH, and a slot-substituted `core.worktree` value.
 
 The target keeps the underlying `phase3_q05b_trajectory_v2.py` event and
 terminal-manifest wire format at schema `/2`, but raises the supervisor's
-`durable_trajectory_policy` to `/3` and freezes producer
-`Q05B_SUPERVISOR_V3`.  One capacity-512 global FIFO facade is the only route
-to the unchanged durable writer.  Ordinary control events submit and wait for
-durability.  Sampling-sensitive live-sample begin/terminal events, the normal
-outer-sampler terminal, and the held-final sample begin/terminal instead use
-bounded nonblocking enqueue; the sampler takes its start or collection anchor
-immediately after the enqueue returns, so the writer's later filesystem
-publication is not charged to that measurement.  The outer sampler begin
-remains durably synchronous.
+`durable_trajectory_policy` to `/4` and freezes producer
+`Q05B_SUPERVISOR_V4`.  One physical capacity-512 global FIFO facade is the
+only route to the unchanged durable writer.  Ordinary live-sample `BEGIN`/`OK`
+traffic is capped at 384 outstanding records, including the record in service,
+leaving a physical 128-record reserve for recovery, failure, cleanup, control,
+and terminal closure.  Normal admission polls at most every 10 ms and has an
+absolute deadline at `previous_finish_ns + 250,000,000`; time spent waiting is
+part of the actual unsampled gap.  If that deadline is reached before normal
+admission, the same `BEGIN` is rolled back from normal accounting and submitted
+once through the recovery reserve.  The sampling anchor is taken only after
+that fallback enqueue, so the resulting real gap is strictly greater than the
+hard maximum and propagates as exact `HELD_ACTOR_GAP_EXCEEDED`.  Equality at
+exactly 250 ms remains accepted.
 
-The single publisher preserves total FIFO order.  A normal stop enqueues the
-outer terminal, joins the outer sampler, enqueues and collects the held-final
-sample, enqueues its terminal, and then drains before actor release.  Gap or
-collection failures drain before exposing their typed cause.  Terminal
-manifest publication is allowed only after one quiesce-and-drain barrier, and
-close terminates and joins the publisher.  Queue-full, publisher fault,
-barrier, or close failure is fail-closed; there is no raw-writer bypass.  This
-separates measurement from synchronous publication latency while retaining
-durable evidence before typed failure propagation, actor release, and the
-terminal manifest.
+All sampler outer terminals, held-final sampling records, failure propagation,
+cleanup, control, terminalization, and normal-admission fallback use the
+recovery path.  At most seven recovery/control records may be outstanding:
+two sampler fallback chains can each require recovery `BEGIN`, sample `FAIL`,
+and outer `FAIL`, while the main controller can require one more synchronous
+record.  A forged eighth outstanding record is an invariant violation.  The
+publisher never permanently poisons later closure merely because normal
+capacity was temporarily unavailable; a publisher fault still fails closed.
+If the writer itself stops progressing, only the last durable prefix is
+claimed.
+
+The single publisher preserves total FIFO order.  A normal stop that arrives
+before a sample `BEGIN` ends that sampler without creating an accepted span;
+its outer `OK` then uses recovery capacity.  After quiescence, terminal-manifest
+publication and close each require a drained writer and have no raw-writer
+bypass.  Recovery-cap violation, publisher fault, barrier, or close failure is
+fail-closed.  This leaves enough capacity to durably close a typed failure
+trajectory whenever the writer continues to progress.
 
 The supervisor monotonic timeout is exactly `7200` seconds.  Stdout and stderr
 are independently bounded at `67,108,864` bytes.  Timeout cleanup uses a
@@ -414,48 +595,78 @@ can never enable the next slot.
 
 Immediately before each slot's consumed record and `Popen`, the controller
 runs the exact scheduling-admission gate in that slot's held evidence
-directory.  Its policy, evidence, and per-record schemas are `/3`.  It admits
+directory.  Its policy, evidence, and per-record schemas are `/5`.  It admits
 at most three windows in strict order; each window first observes at least 30
-seconds of `CLOCK_MONOTONIC` quiet time and then runs exactly sixteen fully
-drained bursts.  Every burst registers and starts three producer lanes in the
-exact registry order controller, Python endpoint, Rust endpoint, then releases
-all three concurrently.  Each lane preserves its local event order; the global
-enqueue order is the observed queue-lock acquisition order and is the exact
-order that the durable FIFO replay must preserve.  The five exact 4,096-byte
-canonical records are controller events `SUPERVISOR_STAGE_04_OK`,
-`SUPERVISOR_STAGE_05_BEGIN`, and `HELD_ACTOR_CLOSE_BEGIN`, plus one
-`LIVE_RESOURCE_SAMPLE_BEGIN` record for each sampler endpoint.
+seconds of `CLOCK_MONOTONIC` quiet time.  It runs sixteen independent
+seven-record critical-enqueue probes: three controller records plus Python and
+Rust `BEGIN`/`OK` pairs, with exact FIFO replay, high-water mark at most seven,
+per-probe drain, and cleanup.  It does not treat that transient high-water mark
+as sustained-rate evidence.
+After those probes it exercises the same capacity-512 FIFO and immutable
+five-fsync publication path under a separate continuous load in one held
+evidence directory whose final files remain present throughout measurement.
+The retained probe's successful path contains exactly two file fsyncs and
+three directory fsyncs.  Its measured duration ends only after immutable
+readback, replay-descriptor close, and staging-absence proof.  Error cleanup
+fsyncs the directory only after an actual staging/final namespace mutation;
+there is no unmeasured sixth sync on the successful service path.
 
-The admission publisher uses the runtime-matched capacity-512 bounded FIFO and
-`put_nowait`; each burst offers exactly five records, and its single durability
-worker releases the queue lock before executing the
-unchanged five-fsync immutable-publication path.  Every burst must begin and
-end with an empty queue, retain a high-water mark no greater than five, and
-prove zero drop, duplication, or reorder by exact durable replay.  For each
-sampler lane the critical metric is the interval from the common release
-deadline to a `CLOCK_MONOTONIC` anchor taken immediately after its enqueue
-returns.  Both intervals must be at most `100,000,000 ns`.  Adding the frozen
-`50,000,000 ns` runtime sampling target yields a projected gap of at most
-`150,000,000 ns`, reserving `100,000,000 ns` beneath the runtime hard maximum
-of `250,000,000 ns`.  Each burst must also drain within `5,000,000,000 ns`;
-that drain bound is publication-health evidence only and is not added to or
-identified with the runtime sampling gap.  Terminal admission drain policy is
-`120,000,000,000 ns`.
+The frozen runtime model has two sampler lanes, two trajectory records per
+sample, and a `125,000,000 ns` sample period.  Its conservative arrival-rate
+upper bound is therefore exactly 32 records per second.  Each admission window
+first durably publishes and retains exactly 5,411 records, strictly exceeding
+the old incomplete prefix before measurement begins, then runs a 120-second
+timed epoch of 960 five-record cycles at a 125 ms cadence without an
+intermediate cleanup.  Each cycle contains Python `BEGIN`, Rust `BEGIN`, Python
+`OK`, Rust `OK`, and one controller service-margin record.  The timed epoch
+must durably retain exactly 4,800 records by its deadline, with no timed
+durability after that deadline,
+proving a service-rate floor of at least 40 records per second; equivalently it
+must satisfy
+`5 * arrival_rate_upper_bound <= 4 * durable_service_rate_floor`, reserving at
+least 20 percent service headroom.  The final retained count is exactly 10,211,
+and the whole timed interval therefore runs above the 5,410-event v2r3
+incomplete-prefix cardinality rather than extrapolating from a transient
+critical-burst high-water mark.
 
-A window passes only when all sixteen bursts pass, the first passing window is
-selected, and no later window is opened.  A fully recorded nonpassing window
-may open only the next admission window; residue, evidence, clock, identity,
-or close uncertainty remains fail-closed.  If all three windows fail, the slot
-terminates with `FAIL_CAMPAIGN_SCHEDULING_ADMISSION` before its consumed
-record, invocation-count increment, or `Popen`, so it does not consume a
-supervisor invocation.
+Every offered and durable record is canonical and bound by twelve exact
+10-second epoch aggregates plus deterministic ordered chain digests.  Replay
+must prove the same FIFO order, zero drop, duplication, or substitution, exact
+epoch boundaries, two enqueue anchors per timed cycle, and empty final backlog
+after a terminal drain of at most `2,000,000,000 ns`.  That drain cannot count
+toward the by-deadline 40-record/s floor, and any timed durability after the
+deadline fails the window.  Cleanup removes all 10,211 final records and any
+staging residue, fsyncs the directory, and proves absence.
+The sustained queue target and maximum observed high-water mark are 64 records.
+The physical queue capacity remains 512, but normal sampler traffic may occupy
+at most 384 outstanding records, leaving 128 physically reserved while the
+runtime recovery/control outstanding cap remains exactly seven.  Queue-full,
+reservation breach,
+insufficient retained cardinality, arrival/service-rate inequality, reorder,
+residue, evidence, clock, identity, drain, or close uncertainty fails closed.
+
+For each sampler lane the critical metric is the interval from its scheduled
+release to a `CLOCK_MONOTONIC` anchor taken immediately after enqueue returns.
+It must be at most `25,000,000 ns`.  Adding the frozen `125,000,000 ns` runtime
+sampling target yields a projected gap of at most `150,000,000 ns`, reserving
+`100,000,000 ns` beneath the runtime hard maximum of `250,000,000 ns`.
+
+A window passes only when all sustained-load, ordered-replay, service-margin,
+enqueue-bound, reserve, and terminal-drain clauses pass.  The first passing
+window is selected and no later window is opened.  A fully recorded nonpassing
+window may open only the next admission window; uncertainty never may.  If all
+three windows fail, the slot terminates with
+`FAIL_CAMPAIGN_SCHEDULING_ADMISSION` before its consumed record,
+invocation-count increment, or `Popen`, so it does not consume a supervisor
+invocation.
 
 The gate's exact claim ceiling is
-`OBSERVED_PRECONSUME_BOUND_STAGE5_ENQUEUE_AND_DURABLE_DRAIN_HEALTH_ONLY_NOT_A_RUNTIME_SCHEDULING_DURABILITY_OR_250MS_GAP_GUARANTEE`.
-It is not a promise about later scheduler behavior, Docker execution, either
-runtime sampler thread, filesystem durability timing, or a runtime gap.  Any
-exact runtime gap is still classified solely from the durable trajectory
-grammar below.
+`OBSERVED_PRECONSUME_BOUND_STAGE5_ENQUEUE_AND_120_SECOND_SAME_DIRECTORY_RETAINED_FILE_PUBLICATION_RATE_HEALTH_ONLY_NOT_A_RUNTIME_SCHEDULING_DURABILITY_OR_250MS_GAP_GUARANTEE`.
+This is pre-consumption evidence for the exact sustained admission workload,
+not a promise about later scheduler behavior, Docker execution, either runtime
+sampler thread, filesystem durability timing, or a runtime gap.  Any exact
+runtime gap is still classified solely from the durable trajectory grammar
+below.
 
 Before consumption and again immediately before spawn, Linux
 `/proc/self/task` must prove that the controller has exactly one thread, and
@@ -508,7 +719,7 @@ non-admissible.  For an admissible slot, a safe, same-pass disk replay must bind
 - campaign/slot identity and ordinal;
 - bound target commit, supervisor tool hash, and trajectory-core hash;
 - trace-root path plus device, inode, mount ID, mode, UID, and link count;
-- trace ID, producer `Q05B_SUPERVISOR_V3`, and `CLOCK_MONOTONIC`;
+- trace ID, producer `Q05B_SUPERVISOR_V4`, and `CLOCK_MONOTONIC`;
 - verification status and terminal-manifest outcome;
 - terminal-manifest raw hash and manifest digest;
 - event count, first/final event digests, and terminal event type;
@@ -600,7 +811,7 @@ true for the immediately preceding slot, in one coherent evidence replay:
    duration, scheduler lateness, target wait, gap, maximum, exceeded flag, and
    exact raw error detail; the two actors' ordinals and timings are not
    conflated.
-5. At every accepted origin, target wait is exactly `50,000,000 ns`, maximum
+5. At every accepted origin, target wait is exactly `125,000,000 ns`, maximum
    gap is exactly `250,000,000 ns`, observed gap is strictly greater than the
    maximum, `gap_exceeded` is true, finish equals actual start, and collection
    duration is zero.
@@ -828,48 +1039,52 @@ the contract rather than an unstated assumption.
 
 ## 10. Present facts
 
-At the final v2r3 source-binding checkpoint:
+At the final v2r7 source-binding checkpoint:
 
-- the completed v2, v2r1, and v2r2 chains remain historical, terminal,
-  non-resumable evidence; v2r3 has distinct roots, trace IDs, clone ref,
-  instance hash domains, and protected historical registry;
+- the completed v2, v2r1, v2r2, v2r3, v2r4, and v2r5 chains, plus the failed
+  pre-capsule v2r6 source-binding preflight, remain historical,
+  non-resumable evidence; v2r7 has distinct roots, trace IDs, clone ref,
+  instance hash domains, and a 136-entry protected historical registry; the
+  producer ID and trajectory wire are intentionally retained;
 - the underlying trajectory event and terminal-manifest wire remains `/2`;
-  the supervisor durability policy is `/3`, uses producer
-  `Q05B_SUPERVISOR_V3`, and separates sampling-sensitive enqueue anchors from
-  its single FIFO publisher's filesystem latency while retaining mandatory
-  drain boundaries;
-- the campaign admission policy, evidence, and record schemas are `/3` and
-  exercise the five-record, three-lane workload surrogate, exact FIFO replay,
-  100 ms enqueue bound, 150 ms projected-gap ceiling, 100 ms reserved margin,
-  and independent five-second drain-health ceiling before consumption;
-- the core's v2r3 failure-row, cleanup-row, and partition-certificate digest
+  the supervisor durability policy is `/4`, uses producer
+  `Q05B_SUPERVISOR_V4`, separates sampling-sensitive enqueue anchors from its
+  single FIFO publisher, reserves 128 of 512 physical queue entries for
+  recovery/failure/control/cleanup closure, and enforces a seven-record
+  recovery/control outstanding cap;
+- the campaign admission policy, evidence, and record schemas are `/5` and
+  replace the v2r3 transient five-record burst surrogate with a 120-second
+  two-sampler workload, exact FIFO replay, 25 ms enqueue bound, 32 records/s
+  arrival ceiling, 40 records/s durable-service floor, 20 percent service
+  margin, 150 ms projected-gap ceiling, 100 ms hard-gap reserve, and exactly
+  10,211 retained records before consumption;
+- the core's v2r7 failure-row, cleanup-row, and partition-certificate digest
   domains are instance-specific; the version-neutral slot-observation domain
   and retained `/2` record schemas are intentionally unchanged;
-- target sampler KATs cover slow publication not contaminating measured gaps,
-  held-final behavior, queue full/publisher fault fail-closure, drain
-  boundaries, publisher-thread closure, and terminal ordering; campaign
-  admission KATs cover first-pass selection, three-window exhaustion,
-  exact-integer rejection, payload rehash and durable-reorder forgeries,
-  truncation, gate-before-spawn, residue-free cleanup, and close double faults
-  that preserve the original typed cause;
-- final target commit: `fdf8e22f6811fe3062b4409dad48cf9f044f2919`;
+- final target commit: `5d85bf858e80a22633f96de41259344c70e25519`;
 - final target contract digest:
-  `sha256:a180bac578b2663a883900d2e389febbf5fbb8047a82d479c3cb626149ab70b5`;
+  `sha256:bb89ee62447ca72b5e45419cb0a63f3ca45659789dc4abbac2ce21d500e91e5f`;
 - final target source-binding digest:
-  `sha256:bd390e498cf5ad122dccb9b8999a4ff07b171c147cf30786f37ed5f783347583`;
-- the target-supervisor suite passed all 235 tests and the campaign pure-core
-  suite passed all 214 tests before the final campaign binding freeze;
-- the final campaign source-binding and contract digests live only in the
-  machine-verifiable contract and eventual preflight receipt.  They are not
-  duplicated in this document because this document is itself one of the
-  hashed campaign source inputs;
-- no v2r3 capsule has been derived or owner-authorized, and source binding
-  alone will not be execution authority;
-- no v2r3 preflight, scheduling-admission window, supervisor invocation,
+  `sha256:8b24967b9fca37cb0f7f741b6ebc356dbeded597b567cca1ddd11c3ce61fe61a`;
+- the complete target trajectory and dual-qualification suites passed all 238
+  tests before the target Commit-A freeze.  An independent stable audit
+  separately reran all 42 trajectory-core tests and nine focused v4 sequencer
+  tests; the focused exact-boundary v4 run passed all 11 tests.  These checks
+  used neither Docker nor network access;
+- the final campaign raw/static hashes, campaign source-binding digest,
+  policy digests, and contract digest live only in the machine-verifiable
+  contract and eventual preflight receipt.  They are not duplicated in this
+  document because this document is itself one of the hashed campaign source
+  inputs.  No v2r3, v2r4, v2r5, or v2r6 binding value is a v2r7 current value;
+- no v2r7 capsule or Python dependency-preflight receipt has been derived or
+  owner-authorized, and neither the implementation tree nor later source
+  binding alone is execution authority;
+- no v2r7 preflight, scheduling-admission window, supervisor invocation,
   campaign Docker/Cargo/clone/artifact/evidence/trajectory action, Meta/Q1/
   production action, adoption, promotion, or current-pointer write has run.
 
 The exact offline campaign-tool result is recorded outside these self-bound
-document bytes after strict contract loading and digest replay.  A single later
-read-only preflight may derive one exact capsule from the frozen Commit B; this
-document does not itself represent preflight, authorization, or execution.
+document bytes only after strict final-contract loading and digest replay.  A
+single later read-only preflight may derive one exact capsule only from the
+frozen v2r7 Commit B; this document does not itself represent preflight,
+authorization, or execution.

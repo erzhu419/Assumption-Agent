@@ -58,7 +58,7 @@ V1_SAFETY_KERNEL_PATH: Final = (
     PROJECT_ROOT / "src/hegel_machine/phase3_q05b_shadow_nonadoption_trial_v1.py"
 )
 _STATE_ROOT_V2: Final = "/home/erzhu419/.local/state/hegel-machine"
-_V2R3_STATE_PREFIX: Final = f"{_STATE_ROOT_V2}/q05b-shadow-retry-campaign-v2r3"
+_V2R7_STATE_PREFIX: Final = f"{_STATE_ROOT_V2}/q05b-shadow-retry-campaign-v2r7"
 _PRIOR_V2_STATE_PREFIX: Final = f"{_STATE_ROOT_V2}/q05b-shadow-retry-campaign-v2"
 _PRIOR_V2_CONTRACT_ID: Final = "hegel-phase3a-q05b-shadow-retry-campaign-v2"
 _PRIOR_V2_CAPSULE_DIGEST: Final = (
@@ -135,8 +135,450 @@ _PRIOR_V2R2_COMPLETION_LEDGER_RECORD_DIGEST: Final = (
 _PRIOR_V2R2_TERMINAL_STATUS: Final = (
     "CAMPAIGN_RETRY_EXHAUSTED_TERMINAL_NO_SLOT_04"
 )
-_CLONE_TARGET_REF_V2R3: Final = (
-    "refs/hegel/q05b-shadow-retry-v2r3-target"
+_PRIOR_V2R3_STATE_PREFIX: Final = (
+    f"{_STATE_ROOT_V2}/q05b-shadow-retry-campaign-v2r3"
+)
+_PRIOR_V2R3_WORKTREE_ROOT: Final = "/tmp/hegel-q05b-shadow-retry-v2r3-worktree"
+_PRIOR_V2R3_CONTRACT_ID: Final = (
+    "hegel-phase3a-q05b-shadow-retry-campaign-v2r3"
+)
+_PRIOR_V2R3_CONTROLLER_COMMIT: Final = (
+    "bcf22f321478ace834b2bc4c0953960812f74d45"
+)
+_PRIOR_V2R3_CONTROLLER_TREE: Final = (
+    "ef5f42336b5b6490396491062fe6b699c65b96d5"
+)
+_PRIOR_V2R3_TARGET_COMMIT: Final = (
+    "fdf8e22f6811fe3062b4409dad48cf9f044f2919"
+)
+_PRIOR_V2R3_TARGET_TREE: Final = (
+    "7d3daf0088e24e223857f3f0daf789e2ce73c710"
+)
+_PRIOR_V2R3_CAMPAIGN_SOURCE_BINDING_DIGEST: Final = (
+    "sha256:2fe4c2b80e0218dd1aaefe99cf431701ef0350477f828254c1bb6f4a7cb81de9"
+)
+_PRIOR_V2R3_CONTRACT_DIGEST: Final = (
+    "sha256:4be13ab3045cc67ff9087ab3e24c6e6327ec1a8efc0be99e4d2befb391282828"
+)
+_PRIOR_V2R3_CAPSULE_DIGEST: Final = (
+    "sha256:150e92c65f870df8591655fba3d6798d60bfecf52693e9b30719385e93f0cc24"
+)
+_PRIOR_V2R3_OWNER_CONFIRMATION_DIGEST: Final = (
+    "sha256:43dc31c26c9853a5d8d507c64eb402d6e3b10d882e4df640fd75fbde16543ac7"
+)
+_PRIOR_V2R3_AUTHORIZATION_DIGEST: Final = (
+    "sha256:7a32ebc4fe0da30df71d74698733e7734080dc15138e3429af22bf54d5f25969"
+)
+_PRIOR_V2R3_TERMINAL_STATUS: Final = (
+    "CAMPAIGN_TRAJECTORY_UNCERTAIN_TERMINAL_NO_RESUME"
+)
+_PRIOR_V2R3_TERMINAL_BODY_DIGEST: Final = (
+    "sha256:bd372c290bb4809479e3344da3a090a8f03a426bf04549d26174b41c72af089f"
+)
+_PRIOR_V2R3_TERMINAL_LEDGER_RECORD_DIGEST: Final = (
+    "sha256:6b4542757feefa7d26e4c537a66eae3f5486a0d1f3e30f74c4c340f0c833646f"
+)
+_PRIOR_V2R3_COMPLETION_BODY_DIGEST: Final = (
+    "sha256:41280c9afdf42ab951617408b97f5526233b8eea94c63f09adc0fa6a8c229c96"
+)
+_PRIOR_V2R3_COMPLETION_LEDGER_RECORD_DIGEST: Final = (
+    "sha256:b0adfb9cc65d5422918fb498f10fac534bb6c60ea71d6611c701553628984007"
+)
+_PRIOR_V2R4_STATE_PREFIX: Final = (
+    f"{_STATE_ROOT_V2}/q05b-shadow-retry-campaign-v2r4"
+)
+_PRIOR_V2R4_WORKTREE_ROOT: Final = "/tmp/hegel-q05b-shadow-retry-v2r4-worktree"
+_PRIOR_V2R4_CONTRACT_ID: Final = (
+    "hegel-phase3a-q05b-shadow-retry-campaign-v2r4"
+)
+_PRIOR_V2R4_CONTROLLER_COMMIT: Final = (
+    "a2fac3ae10789eb2be34ad33f8ef9785d312eb53"
+)
+_PRIOR_V2R4_CONTROLLER_TREE: Final = (
+    "7d9e3c36ce10d00f2458c83d8bf16d60512f007e"
+)
+_PRIOR_V2R4_CONTROLLER_PARENT_COMMIT: Final = (
+    "abaedf57e9795515d9b7ca6b04f905d87f30d5e3"
+)
+_PRIOR_V2R4_TARGET_COMMIT: Final = _PRIOR_V2R4_CONTROLLER_PARENT_COMMIT
+_PRIOR_V2R4_TARGET_TREE: Final = (
+    "c9a88e1223faa703860d5f1cbd5fe3e83210f9c3"
+)
+_PRIOR_V2R4_TARGET_SOURCE_BINDING_DIGEST: Final = (
+    "sha256:5a8fb98578c945e71b046304679c49f0f614b3b06a389b47c671ec4ada3887d2"
+)
+_PRIOR_V2R4_TARGET_CONTRACT_DIGEST: Final = (
+    "sha256:2b05dcd39c1d2074f89a6e88f337a3303a33951923392b096904bbecd3b32761"
+)
+_PRIOR_V2R4_CAMPAIGN_SOURCE_BINDING_DIGEST: Final = (
+    "sha256:76f03e0c55c54b95a9288d83d636f25bd04eb6a599bc6515e05231d92af7ce18"
+)
+_PRIOR_V2R4_CONTRACT_DIGEST: Final = (
+    "sha256:09e2f40cceed32d38bd0e3d4a04f620593b76e8ff68f62e86ff35dd7ffa68cb8"
+)
+_PRIOR_V2R4_CAPSULE_DIGEST: Final = (
+    "sha256:8646ad08037d681e8e619de66f5d23b15ebedccee0234108881488e758129a46"
+)
+_PRIOR_V2R4_OWNER_CONFIRMATION_DIGEST: Final = (
+    "sha256:cd083fef0b3f10636d972e4d24ffce2eb1152bf794bc40e5afdef5e474114742"
+)
+_PRIOR_V2R4_AUTHORIZATION_DIGEST: Final = (
+    "sha256:1bc5b4da4e67368a633ab4cb708099c0e8f09761e002fdb654397dd4e4d70e26"
+)
+_PRIOR_V2R4_INTENT_LEDGER_RECORD_DIGEST: Final = (
+    "sha256:053a657e8e9b7ba2ec64bd8b058e811649a1b8c6afe7e7506d55c68ab14582a8"
+)
+_PRIOR_V2R4_AUTHORIZATION_CONSUMED_LEDGER_RECORD_DIGEST: Final = (
+    "sha256:d3aa14b06f216a8e8997cc7618ca7ed2bbffa9ad8340c5d81f1182ec19816210"
+)
+_PRIOR_V2R4_SLOT_01_INTENT_LEDGER_RECORD_DIGEST: Final = (
+    "sha256:f53277df9c4e65e6d62d4d4d58f0b78956f8c75fbddc84636d6b835892818cad"
+)
+_PRIOR_V2R4_TERMINAL_STATUS: Final = "CAMPAIGN_FAILED_CLOSED_TERMINAL"
+_PRIOR_V2R4_TERMINAL_ERROR_CODE: Final = "FAIL_CAMPAIGN_SCHEDULING_ADMISSION"
+_PRIOR_V2R4_TERMINAL_BODY_DIGEST: Final = (
+    "sha256:0fdc27653795b98df13639af9d9ad255a00b287bf1931cc74d36729da693cb83"
+)
+_PRIOR_V2R4_TERMINAL_LEDGER_RECORD_DIGEST: Final = (
+    "sha256:b64f61ef3cf57419fa902dca6b58cf1bb49ad45b87137f8264099640305341bf"
+)
+_PRIOR_V2R4_COMPLETION_BODY_DIGEST: Final = (
+    "sha256:805bb7678abeb0640e23473ffe6c6aeda2123a6362dac86ef44c6e3b40474094"
+)
+_PRIOR_V2R4_COMPLETION_LEDGER_RECORD_DIGEST: Final = (
+    "sha256:7d3a30a7fc8749e9a05a06f8c47ee01bcc06223925f20be50f49e3874ab8c74c"
+)
+_PRIOR_V2R4_PROTECTED_POLICY_FACTS: Final = {
+    "prior_v2r4_campaign_contract_id": _PRIOR_V2R4_CONTRACT_ID,
+    "prior_v2r4_controller_commit": _PRIOR_V2R4_CONTROLLER_COMMIT,
+    "prior_v2r4_controller_tree": _PRIOR_V2R4_CONTROLLER_TREE,
+    "prior_v2r4_controller_parent_commit": _PRIOR_V2R4_CONTROLLER_PARENT_COMMIT,
+    "prior_v2r4_target_commit": _PRIOR_V2R4_TARGET_COMMIT,
+    "prior_v2r4_target_tree": _PRIOR_V2R4_TARGET_TREE,
+    "prior_v2r4_target_source_binding_digest": (
+        _PRIOR_V2R4_TARGET_SOURCE_BINDING_DIGEST
+    ),
+    "prior_v2r4_target_contract_digest": _PRIOR_V2R4_TARGET_CONTRACT_DIGEST,
+    "prior_v2r4_campaign_source_binding_digest": (
+        _PRIOR_V2R4_CAMPAIGN_SOURCE_BINDING_DIGEST
+    ),
+    "prior_v2r4_contract_digest": _PRIOR_V2R4_CONTRACT_DIGEST,
+    "prior_v2r4_capsule_digest": _PRIOR_V2R4_CAPSULE_DIGEST,
+    "prior_v2r4_owner_confirmation_digest": (
+        _PRIOR_V2R4_OWNER_CONFIRMATION_DIGEST
+    ),
+    "prior_v2r4_authorization_digest": _PRIOR_V2R4_AUTHORIZATION_DIGEST,
+    "prior_v2r4_intent_ledger_record_digest": (
+        _PRIOR_V2R4_INTENT_LEDGER_RECORD_DIGEST
+    ),
+    "prior_v2r4_authorization_consumed_ledger_record_digest": (
+        _PRIOR_V2R4_AUTHORIZATION_CONSUMED_LEDGER_RECORD_DIGEST
+    ),
+    "prior_v2r4_slot_01_intent_ledger_record_digest": (
+        _PRIOR_V2R4_SLOT_01_INTENT_LEDGER_RECORD_DIGEST
+    ),
+    "prior_v2r4_terminal_status": _PRIOR_V2R4_TERMINAL_STATUS,
+    "prior_v2r4_terminal_error_code": _PRIOR_V2R4_TERMINAL_ERROR_CODE,
+    "prior_v2r4_terminal_body_digest": _PRIOR_V2R4_TERMINAL_BODY_DIGEST,
+    "prior_v2r4_terminal_ledger_record_digest": (
+        _PRIOR_V2R4_TERMINAL_LEDGER_RECORD_DIGEST
+    ),
+    "prior_v2r4_completion_body_digest": _PRIOR_V2R4_COMPLETION_BODY_DIGEST,
+    "prior_v2r4_completion_ledger_record_digest": (
+        _PRIOR_V2R4_COMPLETION_LEDGER_RECORD_DIGEST
+    ),
+    "prior_v2r4_ledger_record_count": 5,
+    "prior_v2r4_authorization_consumed_once": True,
+    "prior_v2r4_supervisor_invocation_count": 0,
+    "prior_v2r4_last_slot_id_or_null": None,
+    "prior_v2r4_last_slot_outcome_digest_or_null": None,
+    "prior_v2r4_slot_01_intent_staged": True,
+    "prior_v2r4_slot_01_consumed": False,
+    "prior_v2r4_slot_01_supervisor_invoked": False,
+    "prior_v2r4_slot_01_trace_created": False,
+    "prior_v2r4_slot_01_artifact_created": False,
+    "prior_v2r4_slot_02_invoked": False,
+    "prior_v2r4_slot_03_invoked": False,
+    "prior_v2r4_scheduling_admission_window_count": 3,
+    "prior_v2r4_scheduling_admission_selected_window_ordinal_or_null": None,
+    "prior_v2r4_scheduling_admission_timed_records_durable_by_window": [
+        570, 405, 490,
+    ],
+    "prior_v2r4_scheduling_admission_retained_records_by_window": [
+        5_981, 5_816, 5_901,
+    ],
+    "prior_v2r4_scheduling_admission_cleanup_removed_records_by_window": [
+        5_981, 5_816, 5_901,
+    ],
+    "prior_v2r4_scheduling_admission_cleanup_absence_by_window": [
+        True, True, True,
+    ],
+    "prior_v2r4_terminal_is_historical_nonresumable_evidence_only": True,
+    "prior_v2r4_campaign_root_open_allowed": False,
+    "prior_v2r4_campaign_root_access_allowed": False,
+    "prior_v2r4_capsule_authorization_or_ledger_reuse_allowed": False,
+}
+_PRIOR_V2R5_STATE_PREFIX: Final = (
+    f"{_STATE_ROOT_V2}/q05b-shadow-retry-campaign-v2r5"
+)
+_PRIOR_V2R5_WORKTREE_ROOT: Final = "/tmp/hegel-q05b-shadow-retry-v2r5-worktree"
+_PRIOR_V2R5_LEDGER_RECORD_NAMES_IN_SEQUENCE_ORDER: Final = (
+    "campaign.intent.json",
+    "campaign.authorization-consumed.json",
+    "slot-01.intent.json",
+    "slot-01.consumed.json",
+    "slot-01.trajectory-binding.json",
+    "slot-01.outcome.json",
+    "slot-02.intent.json",
+    "slot-02.consumed.json",
+    "slot-02.trajectory-binding.json",
+    "slot-02.outcome.json",
+    "campaign.terminal.json",
+    "campaign.completion.json",
+)
+_PRIOR_V2R5_LEDGER_RECORD_DIGESTS_IN_SEQUENCE_ORDER: Final = (
+    "sha256:0743479056deb481b8e21b8ce2d762649bb8da2c936e76c4af3846f0aa471a23",
+    "sha256:63c244676d3299fcc7734cff7fac778ac2f2fdfbacd03ef54bcde79a40604205",
+    "sha256:3902326411865fc5d1605253609c48f252b412dcf70379c8d3bd1b68fed9bc86",
+    "sha256:662fe117e2df380b9d6aa99cde270c92288702a14b199465916637ffc44a300a",
+    "sha256:f29a472141104a7412dc6eed4f7e6ba9f8a63677191cb849e2d97eca7140e3e5",
+    "sha256:7ce8823768e904e6c21ca9700e9b08256ed538d2868b54196ab231218f8220c0",
+    "sha256:c70532147bea7851bb074a1074b4434704942d89b6e85de61b66fe9ac2816897",
+    "sha256:0fbd04a991026bdd883e852a28dc7321263e3d195fc8052860add353e3953e8b",
+    "sha256:ac24254fe6d6b145f8e6a0695490ec7fff724c82fb8b738cea4e841a1176972f",
+    "sha256:edf59bc70c98d6ad2fd1ddc540e478a9aa4bc2134c71a2fec1312c3ff0ee3683",
+    "sha256:e3b5ab05808234a5d56acd9c09240dc84b4b4ba29d4b293e43286ab6d7732797",
+    "sha256:a2ddd0e6493ed8023143052df672fa7425c39f2d5a4f0ba59df7d59bc9fd1f42",
+)
+_PRIOR_V2R5_PROTECTED_POLICY_FACTS: Final = {
+    "prior_v2r5_campaign_contract_id": (
+        "hegel-phase3a-q05b-shadow-retry-campaign-v2r5"
+    ),
+    "prior_v2r5_controller_commit": (
+        "8c1018518bb885ba4821ccaf10f2a3fb17f86a35"
+    ),
+    "prior_v2r5_controller_tree": (
+        "968818406af8d3ca5d9d507c69f0ef32ff8159a2"
+    ),
+    "prior_v2r5_controller_parent_commit": (
+        "abaedf57e9795515d9b7ca6b04f905d87f30d5e3"
+    ),
+    "prior_v2r5_target_commit": "abaedf57e9795515d9b7ca6b04f905d87f30d5e3",
+    "prior_v2r5_target_tree": "c9a88e1223faa703860d5f1cbd5fe3e83210f9c3",
+    "prior_v2r5_target_source_binding_digest": (
+        "sha256:5a8fb98578c945e71b046304679c49f0f614b3b06a389b47c671ec4ada3887d2"
+    ),
+    "prior_v2r5_target_contract_digest": (
+        "sha256:2b05dcd39c1d2074f89a6e88f337a3303a33951923392b096904bbecd3b32761"
+    ),
+    "prior_v2r5_campaign_source_binding_digest": (
+        "sha256:c290da621e9016d79ea33398d55ae0687dbf4b4e3b4179f70727e22203c3a65a"
+    ),
+    "prior_v2r5_contract_digest": (
+        "sha256:eba17a7bf118657259aa0279fd8b62263db19b55755e20b08bb078625c4312c9"
+    ),
+    "prior_v2r5_capsule_digest": (
+        "sha256:ba1d195b17fea2cc461a50db50bc08fd45f63d2858ba608257a733ad3846d74d"
+    ),
+    "prior_v2r5_owner_confirmation_digest": (
+        "sha256:a7cc4cf63f7ccca3f5d75eb5f90c80d9ac37dd1b33e12335081f6d2780baefc9"
+    ),
+    "prior_v2r5_authorization_digest": (
+        "sha256:5b0355f87aec83834599360ee2c35a3581f61cabe547caa21e9a92256e8402bf"
+    ),
+    "prior_v2r5_ledger_record_names_in_sequence_order": list(
+        _PRIOR_V2R5_LEDGER_RECORD_NAMES_IN_SEQUENCE_ORDER
+    ),
+    "prior_v2r5_ledger_record_digests_in_sequence_order": list(
+        _PRIOR_V2R5_LEDGER_RECORD_DIGESTS_IN_SEQUENCE_ORDER
+    ),
+    "prior_v2r5_ledger_record_count": 12,
+    "prior_v2r5_authorization_consumed_once": True,
+    "prior_v2r5_supervisor_invocation_count": 2,
+    "prior_v2r5_last_slot_id": "SLOT_02",
+    "prior_v2r5_last_slot_outcome_digest": (
+        "sha256:1a7d985561b6742b7eeb0fb89388774e2d18c07385e1594f78bbf4d99523ed1e"
+    ),
+    "prior_v2r5_slot_01_decision": "RETRY_EXACT_GAP",
+    "prior_v2r5_slot_01_outcome_digest": (
+        "sha256:859522773dc644391c9acd534a15f193dce63994baefbc8e65fb8fbe7d510659"
+    ),
+    "prior_v2r5_slot_01_trajectory_binding_digest": (
+        "sha256:06831072700cca655d0aab4b26c68f1cf3ef41cc8c6dcadad7a7a3858174632a"
+    ),
+    "prior_v2r5_slot_01_observation_digest": (
+        "sha256:d1107f1b064d48e0f50ae3fb922ed1d15f7dc4e15701bb1c8184d547426eb3f1"
+    ),
+    "prior_v2r5_slot_01_partition_certificate_digest": (
+        "sha256:bb08fa35f16ea17022b8fd53fa2de73fd5d6a0697e2aaaef18e426d10d547b04"
+    ),
+    "prior_v2r5_slot_01_trajectory_status": "COMPLETE_FAIL",
+    "prior_v2r5_slot_01_trajectory_event_count": 6_338,
+    "prior_v2r5_slot_01_failure_rows_retained": 5,
+    "prior_v2r5_slot_01_cleanup_rows_retained": 6,
+    "prior_v2r5_slot_01_unpartitioned_event_count": 0,
+    "prior_v2r5_slot_01_terminal_error_code": "HELD_ACTOR_GAP_EXCEEDED",
+    "prior_v2r5_slot_01_gap_origin_actor": "RUST_ENDPOINT",
+    "prior_v2r5_slot_01_gap_origin_role_id": 2,
+    "prior_v2r5_slot_01_gap_origin_sample_ordinal": 1_578,
+    "prior_v2r5_slot_01_gap_ns": 290_330_097,
+    "prior_v2r5_slot_01_maximum_gap_ns": 250_000_000,
+    "prior_v2r5_slot_01_target_wait_ns": 125_000_000,
+    "prior_v2r5_slot_01_previous_duration_ns": 301_367_353,
+    "prior_v2r5_slot_02_decision": "TERMINAL_NONRETRYABLE",
+    "prior_v2r5_slot_02_outcome_digest": (
+        "sha256:1a7d985561b6742b7eeb0fb89388774e2d18c07385e1594f78bbf4d99523ed1e"
+    ),
+    "prior_v2r5_slot_02_trajectory_binding_digest": (
+        "sha256:61c6840ab0ace4717fe2ce862687bf144c85feaab545abd0e3cb73cbec64a3e7"
+    ),
+    "prior_v2r5_slot_02_observation_digest": (
+        "sha256:b0bad116471ebd4b8d404948bb5ea57b7cb4e51282621c283fc360370671f0ec"
+    ),
+    "prior_v2r5_slot_02_partition_certificate_digest": (
+        "sha256:69351d9d9d1a6e3720be578ddc2e3bce14a3de5c4a43829519459e1cadcdacf7"
+    ),
+    "prior_v2r5_slot_02_trajectory_status": "COMPLETE_FAIL",
+    "prior_v2r5_slot_02_trajectory_event_count": 13_602,
+    "prior_v2r5_slot_02_failure_rows_retained": 2,
+    "prior_v2r5_slot_02_cleanup_rows_retained": 4,
+    "prior_v2r5_slot_02_unpartitioned_event_count": 0,
+    "prior_v2r5_slot_02_terminal_error_code": "FAIL_Q05B_DUAL_ARTIFACT",
+    "prior_v2r5_slot_02_terminal_error_detail": (
+        "candidate evidence strict replay failed: No module named 'tomli'"
+    ),
+    "prior_v2r5_slot_02_terminal_origin_actor_or_null": None,
+    "prior_v2r5_slot_02_terminal_stage": (
+        "STAGE_08_BUILD_AND_STRICTLY_DECODE_NINETEEN_ROW_CANDIDATE"
+    ),
+    "prior_v2r5_slot_03_invoked": False,
+    "prior_v2r5_each_invoked_slot_scheduling_admission_passed": True,
+    "prior_v2r5_each_invoked_slot_selected_window_ordinal": 1,
+    "prior_v2r5_each_invoked_slot_window_count": 1,
+    "prior_v2r5_each_invoked_slot_burst_count": 16,
+    "prior_v2r5_each_invoked_slot_timed_records_durable_by_deadline": 4_800,
+    "prior_v2r5_each_invoked_slot_retained_records": 10_211,
+    "prior_v2r5_each_invoked_slot_cleanup_removed_records": 10_211,
+    "prior_v2r5_each_invoked_slot_cleanup_absence": True,
+    "prior_v2r5_each_invoked_slot_artifact_state": "ABSENT",
+    "prior_v2r5_each_invoked_slot_stderr_empty": True,
+    "prior_v2r5_terminal_status": "CAMPAIGN_FAILED_CLOSED_TERMINAL",
+    "prior_v2r5_terminal_body_digest": (
+        "sha256:df82eca0ad58a7b39687792a7cdb56bd0f8c8cc75b68a03c5294d112844e6f90"
+    ),
+    "prior_v2r5_terminal_ledger_record_digest": (
+        "sha256:e3b5ab05808234a5d56acd9c09240dc84b4b4ba29d4b293e43286ab6d7732797"
+    ),
+    "prior_v2r5_terminal_error_code_or_null": None,
+    "prior_v2r5_completion_body_digest": (
+        "sha256:776fa05886220708165fb1c81f649c82f8e123035ab4896f7245eab7f19363aa"
+    ),
+    "prior_v2r5_completion_ledger_record_digest": (
+        "sha256:a2ddd0e6493ed8023143052df672fa7425c39f2d5a4f0ba59df7d59bc9fd1f42"
+    ),
+    "prior_v2r5_completion_is_authoritative_final_commit": True,
+    "prior_v2r5_no_later_campaign_write_authorized": True,
+    "prior_v2r5_terminal_is_historical_nonresumable_evidence_only": True,
+    "prior_v2r5_campaign_root_open_allowed": False,
+    "prior_v2r5_campaign_root_access_allowed": False,
+    "prior_v2r5_capsule_authorization_or_ledger_reuse_allowed": False,
+}
+_PRIOR_V2R6_STATE_PREFIX: Final = (
+    f"{_STATE_ROOT_V2}/q05b-shadow-retry-campaign-v2r6"
+)
+_PRIOR_V2R6_WORKTREE_ROOT: Final = "/tmp/hegel-q05b-shadow-retry-v2r6-worktree"
+_PRIOR_V2R6_RUNTIME_ROOTS: Final = (
+    f"{_PRIOR_V2R6_STATE_PREFIX}-authorization",
+    f"{_PRIOR_V2R6_STATE_PREFIX}-ledger",
+    *tuple(
+        f"{_PRIOR_V2R6_STATE_PREFIX}-slot-{ordinal:02d}-{suffix}"
+        for ordinal in range(1, 4)
+        for suffix in ("clone", "cargo-cache", "artifact", "evidence", "trace")
+    ),
+)
+_PRIOR_V2R6_PROTECTED_POLICY_FACTS: Final = {
+    "prior_v2r6_campaign_contract_id": (
+        "hegel-phase3a-q05b-shadow-retry-campaign-v2r6"
+    ),
+    "prior_v2r6_controller_commit": (
+        "d0701ad308fca2d27818cbd6cab861dd47c8cdcd"
+    ),
+    "prior_v2r6_controller_tree": (
+        "2bef012c37fc86c88e674697b2fb6e6a0fd4d97a"
+    ),
+    "prior_v2r6_controller_parent_commit": (
+        "5d85bf858e80a22633f96de41259344c70e25519"
+    ),
+    "prior_v2r6_target_commit": "5d85bf858e80a22633f96de41259344c70e25519",
+    "prior_v2r6_target_tree": "aca3fc65be392c51c829544bfda8ae9149fc566b",
+    "prior_v2r6_bound_target_source_binding_digest": (
+        "sha256:5dde4a55053e2e6ffc26f3c6b485bd1c92b001b68046431f878793d90e3c27c6"
+    ),
+    "prior_v2r6_observed_target_source_binding_digest": (
+        "sha256:8b24967b9fca37cb0f7f741b6ebc356dbeded597b567cca1ddd11c3ce61fe61a"
+    ),
+    "prior_v2r6_target_contract_digest": (
+        "sha256:bb89ee62447ca72b5e45419cb0a63f3ca45659789dc4abbac2ce21d500e91e5f"
+    ),
+    "prior_v2r6_campaign_source_binding_digest": (
+        "sha256:883ae7ec454833bc3e6c1112422e88f0ccf428159309681b6779d14c00290ab8"
+    ),
+    "prior_v2r6_contract_digest": (
+        "sha256:47d7a676d836bc1c2c44ffb79f7b3de4c0ad658d95df3ca800ae750fff0be130"
+    ),
+    "prior_v2r6_preflight_cli_invocation_count": 1,
+    "prior_v2r6_preflight_cli_status": "CAMPAIGN_COMMAND_FAILED_CLOSED",
+    "prior_v2r6_preflight_error_code": "FAIL_CAMPAIGN_SOURCE",
+    "prior_v2r6_preflight_error_detail": "target derived binding differs",
+    "prior_v2r6_preflight_exit_code": 1,
+    "prior_v2r6_preflight_stdout_canonical_single_lf": True,
+    "prior_v2r6_preflight_stderr_empty": True,
+    "prior_v2r6_preflight_resumable": False,
+    "prior_v2r6_preflight_error_receipt_or_null": None,
+    "prior_v2r6_preflight_cli_supervisor_invocation_count_or_null": None,
+    "prior_v2r6_preflight_error_raw_byte_count": 290,
+    "prior_v2r6_preflight_error_raw_sha256": (
+        "8119c23e0df62403f01b3eddb5508664f0d49410e41f72b3196300c4c21fa1bb"
+    ),
+    "prior_v2r6_preflight_stderr_raw_sha256": (
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ),
+    "prior_v2r6_target_source_preimage_canonical_without_lf_byte_count": 2_029,
+    "prior_v2r6_preflight_last_completed_phase": (
+        "TARGET_SOURCE_PREIMAGE_DERIVED"
+    ),
+    "prior_v2r6_preflight_failure_phase": (
+        "TARGET_SOURCE_BINDING_DIGEST_COMPARE"
+    ),
+    "prior_v2r6_preflight_first_unreached_phase": (
+        "TARGET_DOCKER_LABEL_BINDING"
+    ),
+    "prior_v2r6_preflight_freshness_target_count": 16,
+    "prior_v2r6_preflight_freshness_targets_absent": True,
+    "prior_v2r6_preflight_failure_before_capsule_derivation": True,
+    "prior_v2r6_dependency_preflight_invocation_count": 0,
+    "prior_v2r6_capsule_digest_or_null": None,
+    "prior_v2r6_owner_confirmation_digest_or_null": None,
+    "prior_v2r6_authorization_digest_or_null": None,
+    "prior_v2r6_authorization_lookup_or_publication_count": 0,
+    "prior_v2r6_state_write_or_consumption_count": 0,
+    "prior_v2r6_supervisor_invocation_count": 0,
+    "prior_v2r6_campaign_execution_started": False,
+    "prior_v2r6_runtime_roots_in_exact_order": list(
+        _PRIOR_V2R6_RUNTIME_ROOTS
+    ),
+    "prior_v2r6_runtime_root_count": 17,
+    "prior_v2r6_all_runtime_roots_absent": True,
+    "prior_v2r6_external_before_runtime_roots_absent": True,
+    "prior_v2r6_external_after_runtime_roots_absent": True,
+    "prior_v2r6_worktree_clean": True,
+    "prior_v2r6_failure_is_historical_nonresumable_evidence_only": True,
+    "prior_v2r6_campaign_root_open_allowed": False,
+    "prior_v2r6_campaign_root_access_allowed": False,
+    "prior_v2r6_capsule_authorization_or_ledger_reuse_allowed": False,
+}
+_CLONE_TARGET_REF_V2R7: Final = (
+    "refs/hegel/q05b-shadow-retry-v2r7-target"
 )
 _PRIOR_V2_PROTECTED_ROOTS: Final = (
     f"{_PRIOR_V2_STATE_PREFIX}-authorization",
@@ -167,13 +609,51 @@ _PRIOR_V2R2_PROTECTED_ROOTS: Final = (
         for suffix in ("clone", "cargo-cache", "artifact", "evidence", "trace")
     ),
 )
-_EXPECTED_PROTECTED_ROOTS_V2R3: Final = (
+_PRIOR_V2R3_PROTECTED_ROOTS: Final = (
+    _PRIOR_V2R3_WORKTREE_ROOT,
+    f"{_PRIOR_V2R3_STATE_PREFIX}-authorization",
+    f"{_PRIOR_V2R3_STATE_PREFIX}-ledger",
+    *tuple(
+        f"{_PRIOR_V2R3_STATE_PREFIX}-slot-{ordinal:02d}-{suffix}"
+        for ordinal in range(1, 4)
+        for suffix in ("clone", "cargo-cache", "artifact", "evidence", "trace")
+    ),
+)
+_PRIOR_V2R4_PROTECTED_ROOTS: Final = (
+    _PRIOR_V2R4_WORKTREE_ROOT,
+    f"{_PRIOR_V2R4_STATE_PREFIX}-authorization",
+    f"{_PRIOR_V2R4_STATE_PREFIX}-ledger",
+    *tuple(
+        f"{_PRIOR_V2R4_STATE_PREFIX}-slot-{ordinal:02d}-{suffix}"
+        for ordinal in range(1, 4)
+        for suffix in ("clone", "cargo-cache", "artifact", "evidence", "trace")
+    ),
+)
+_PRIOR_V2R5_PROTECTED_ROOTS: Final = (
+    _PRIOR_V2R5_WORKTREE_ROOT,
+    f"{_PRIOR_V2R5_STATE_PREFIX}-authorization",
+    f"{_PRIOR_V2R5_STATE_PREFIX}-ledger",
+    *tuple(
+        f"{_PRIOR_V2R5_STATE_PREFIX}-slot-{ordinal:02d}-{suffix}"
+        for ordinal in range(1, 4)
+        for suffix in ("clone", "cargo-cache", "artifact", "evidence", "trace")
+    ),
+)
+_PRIOR_V2R6_PROTECTED_ROOTS: Final = (
+    _PRIOR_V2R6_WORKTREE_ROOT,
+    *_PRIOR_V2R6_RUNTIME_ROOTS,
+)
+_EXPECTED_PROTECTED_ROOTS_V2R7: Final = (
     "/home/erzhu419/mine_code/Asumption Agent",
     os.fspath(WORKTREE_ROOT),
     f"{_STATE_ROOT_V2}/q05b-shadow-trajectory-v2-dev-worktree",
     *_PRIOR_V2_PROTECTED_ROOTS,
     *_PRIOR_V2R1_PROTECTED_ROOTS,
     *_PRIOR_V2R2_PROTECTED_ROOTS,
+    *_PRIOR_V2R3_PROTECTED_ROOTS,
+    *_PRIOR_V2R4_PROTECTED_ROOTS,
+    *_PRIOR_V2R5_PROTECTED_ROOTS,
+    *_PRIOR_V2R6_PROTECTED_ROOTS,
     f"{_STATE_ROOT_V2}/m3-start-runtime-worktree",
     f"{_STATE_ROOT_V2}/q05b-attempt2-ledger-v1",
     f"{_STATE_ROOT_V2}/q05b-attempt-2-authorization",
@@ -257,22 +737,25 @@ _MAX_RETAINED_FAILURE_ROWS: Final = 7
 _MAX_RETAINED_CLEANUP_ROWS: Final = 12
 _MAX_PARTITION_CERTIFICATE_BYTES: Final = 256 * 1024
 _MAX_ERROR_RECEIPT_BYTES: Final = 128 * 1024
-_SCHEDULING_ADMISSION_POLICY_SCHEMA_V3: Final = (
-    "hegel-phase3a-q05b-shadow-retry-scheduling-admission-policy/3"
+_SCHEDULING_ADMISSION_POLICY_SCHEMA_V5: Final = (
+    "hegel-phase3a-q05b-shadow-retry-scheduling-admission-policy/5"
 )
-_SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V3: Final = (
-    "hegel-phase3a-q05b-shadow-retry-scheduling-admission-evidence/3"
+_SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V5: Final = (
+    "hegel-phase3a-q05b-shadow-retry-scheduling-admission-evidence/5"
 )
-_SCHEDULING_ADMISSION_RECORD_SCHEMA_V3: Final = (
-    "hegel-phase3a-q05b-shadow-retry-scheduling-admission-record/3"
+_SCHEDULING_ADMISSION_RECORD_SCHEMA_V5: Final = (
+    "hegel-phase3a-q05b-shadow-retry-scheduling-admission-record/5"
+)
+_SCHEDULING_SUSTAINED_EVIDENCE_SCHEMA_V5: Final = (
+    "hegel-phase3a-q05b-shadow-retry-sustained-publication-evidence/5"
 )
 _SCHEDULING_ADMISSION_FAILURE_V2: Final = "FAIL_CAMPAIGN_SCHEDULING_ADMISSION"
-_SCHEDULING_CONTROLLER_EVENTS_V3: Final = (
+_SCHEDULING_CONTROLLER_EVENTS_V5: Final = (
     "SUPERVISOR_STAGE_04_OK",
     "SUPERVISOR_STAGE_05_BEGIN",
     "HELD_ACTOR_CLOSE_BEGIN",
 )
-_SCHEDULING_SAMPLER_ACTORS_V3: Final = (
+_SCHEDULING_SAMPLER_ACTORS_V5: Final = (
     "PYTHON_ENDPOINT",
     "RUST_ENDPOINT",
 )
@@ -300,7 +783,7 @@ _AUTHORITATIVE_ERROR_RECEIPT_SCHEMAS_V2: Final = (
     _SPAWN_REGISTRATION_SCHEMA_V2,
     _PRESPAWN_DOCKER_RECEIPT_SCHEMA_V2,
     _PUBLICATION_RECEIPT_SCHEMA_V2,
-    _SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V3,
+    _SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V5,
     _BOUNDED_RECEIPT_OMISSION_SCHEMA_V2,
 )
 _SPAWN_RECEIPT_MAX_BYTES: Final = 64
@@ -334,29 +817,190 @@ _TARGET_STATIC_POLICY_DOMAIN: Final = (
 _TARGET_SOURCE_BINDING_DOMAIN: Final = (
     "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/TARGET_SOURCE_BINDING/V2"
 )
-_EXPECTED_HASH_DOMAINS_V2R3: Final = {
-    "contract": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/CONTRACT/V2",
-    "campaign_source_binding": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/CAMPAIGN_SOURCE_BINDING/V2",
-    "capsule": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/CAPSULE/V2",
-    "authorization": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/AUTHORIZATION/V2",
-    "cargo_manifest": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/CARGO_MANIFEST/V2",
-    "ledger_record": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/LEDGER_RECORD/V2",
-    "trajectory_binding": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/TRAJECTORY_BINDING/V2",
-    "trajectory_event_payloads": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/EVENT_PAYLOADS/V2",
-    "trajectory_suffix": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/TRAJECTORY_SUFFIX/V2",
-    "trajectory_other_nonfailure": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/TRAJECTORY_OTHER_NONFAILURE/V2",
-    "trajectory_failure_rows": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/TRAJECTORY_FAILURE_ROWS/V2",
-    "trajectory_cleanup_rows": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/TRAJECTORY_CLEANUP_ROWS/V2",
-    "trajectory_partition_certificate": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/POST_ORIGIN_PARTITION_CERTIFICATE/V2",
-    "slot_outcome": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/SLOT_OUTCOME/V2",
-    "campaign_terminal": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/CAMPAIGN_TERMINAL/V2",
-    "campaign_completion": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/CAMPAIGN_COMPLETION/V2",
+_PYTHON310_DEPENDENCY_PREFLIGHT_POLICY_SCHEMA_V1: Final = (
+    "hegel-phase3a-q05b-shadow-retry-python310-dependency-preflight-policy/1"
+)
+_PYTHON310_DEPENDENCY_PREFLIGHT_CHILD_SCHEMA_V1: Final = (
+    "hegel-phase3a-q05b-shadow-retry-python310-dependency-preflight-child/1"
+)
+_PYTHON310_DEPENDENCY_PREFLIGHT_RECEIPT_SCHEMA_V1: Final = (
+    "hegel-phase3a-q05b-shadow-retry-python310-dependency-preflight-receipt/1"
+)
+_PYTHON310_DEPENDENCY_PREFLIGHT_RECEIPT_DOMAIN_V1: Final = (
+    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/"
+    "PYTHON310_VENDORED_TOMLI_CARGO_LOCK_PREFLIGHT_RECEIPT/V1"
+)
+_VENDORED_TOMLI_CLOSURE_DOMAIN_V1: Final = (
+    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/"
+    "VENDORED_TOMLI_CLOSURE/V1"
+)
+_CARGO_LOCK_REGISTRY_PROJECTION_DOMAIN_V1: Final = (
+    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/"
+    "CARGO_LOCK_REGISTRY_PACKAGE_PROJECTION/V1"
+)
+_DEPENDENCY_RUNTIME_ENVIRONMENT_DOMAIN_V1: Final = (
+    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/"
+    "PYTHON310_DEPENDENCY_RUNTIME_ENVIRONMENT/V1"
+)
+_CONTROLLER_CHANGED_PATHS_FROM_TARGET_IN_EXACT_ORDER: Final = (
+    "config/phase3_q05b_shadow_retry_campaign_v2.json",
+    "docs/Hegel_Machine_Q05b_Shadow_Retry_Campaign_v2.md",
+    "src/hegel_machine/phase3_q05b_shadow_retry_campaign_v2.py",
+    "tests/test_phase3_q05b_shadow_retry_campaign_v2_core.py",
+    "tests/test_phase3_q05b_shadow_retry_campaign_v2_tool.py",
+    "tools/phase3_q05b_shadow_retry_campaign_v2.py",
+)
+_TARGET_REQUIRED_PATHS_V2R7: Final = (
+    "config/phase3_q05b_dual_isolation_v2.json",
+    "src/hegel_machine/_vendor/__init__.py",
+    "src/hegel_machine/_vendor/tomli/LICENSE",
+    "src/hegel_machine/_vendor/tomli/__init__.py",
+    "src/hegel_machine/_vendor/tomli/_parser.py",
+    "src/hegel_machine/_vendor/tomli/_re.py",
+    "src/hegel_machine/_vendor/tomli/_types.py",
+    "src/hegel_machine/phase3_q05b_actual_admission_v2.py",
+    "src/hegel_machine/phase3_q05b_actual_artifact_v2.py",
+    "src/hegel_machine/phase3_q05b_trajectory_v2.py",
+    "tests/test_phase3_q05b_dual_qualification_v2.py",
+    "tests/test_phase3_q05b_trajectory_v2.py",
+    "tools/phase3_q05b_dual_qualification_v2.py",
+)
+_VENDORED_TOMLI_CLOSURE_ROWS_V1: Final = (
+    (
+        "src/hegel_machine/_vendor/__init__.py",
+        57,
+        "ee9748e550c7a30a129da0ca1fb2a93116f599541a57039ebd687a679dd86673",
+    ),
+    (
+        "src/hegel_machine/_vendor/tomli/LICENSE",
+        1_072,
+        "b80816b0d530b8accb4c2211783790984a6e3b61922c2b5ee92f3372ab2742fe",
+    ),
+    (
+        "src/hegel_machine/_vendor/tomli/__init__.py",
+        314,
+        "9eb042d7c0db5d14c2168ec4946e410de5a91c9cce86892f5e4db5e4633c6762",
+    ),
+    (
+        "src/hegel_machine/_vendor/tomli/_parser.py",
+        26_440,
+        "a412234c86bf710b361e0943276961f0e25fa6d7c36ba7a0e7eec87a3e018c7b",
+    ),
+    (
+        "src/hegel_machine/_vendor/tomli/_re.py",
+        3_396,
+        "a12359fe294523a72112e434d58452a14c9d050affa2417f9927474e4166bfdd",
+    ),
+    (
+        "src/hegel_machine/_vendor/tomli/_types.py",
+        254,
+        "f864c6d9552a929c7032ace654ee05ef26ca75d21b027b801d77e65907138b74",
+    ),
+)
+_VENDORED_TOMLI_CLOSURE_DIGEST_V1: Final = (
+    "sha256:24dbc70810a4366a44f63e846728266a2019dd40c1343a5668ab4a3831328a25"
+)
+_HOST_SOURCE_ALLOWLIST_COUNT_V1: Final = 55
+_HOST_SOURCE_ALLOWLIST_CANONICAL_LF_SHA256_V1: Final = (
+    "97c6c00d1c981c5343a12054e09edd846d6931f964ad394e92efc560ccaa1fce"
+)
+_CARGO_LOCK_RELATIVE_PATH_V1: Final = (
+    "rust/q1_archive_projection_oracle/Cargo.lock"
+)
+_CARGO_LOCK_BYTE_COUNT_V1: Final = 6_493
+_CARGO_LOCK_RAW_SHA256_V1: Final = (
+    "c4b9d1eff522017c85b151696d082a0ff9f88bd2890c93d932f7467323a13b49"
+)
+_CARGO_LOCK_FORMAT_V1: Final = 4
+_CARGO_LOCK_PACKAGE_COUNT_V1: Final = 29
+_CARGO_LOCK_REGISTRY_PACKAGE_COUNT_V1: Final = 21
+_CARGO_LOCK_REGISTRY_PROJECTION_DIGEST_V1: Final = (
+    "sha256:aefe3885b96c45e26de08ac5ce5bacd4e4a5c00151ee0049868714a96175c557"
+)
+_DEPENDENCY_PREFLIGHT_PYCACHE_PREFIX_V1: Final = (
+    "/nonexistent/hegel-q05b-v2r7-preflight-pyc"
+)
+_DEPENDENCY_PREFLIGHT_ARGV_PREFIX_V1: Final = (
+    "/usr/bin/python3.10",
+    "-I",
+    "-S",
+    "-B",
+    "-X",
+    "utf8",
+    "-X",
+    f"pycache_prefix={_DEPENDENCY_PREFLIGHT_PYCACHE_PREFIX_V1}",
+    "-c",
+)
+_DEPENDENCY_PREFLIGHT_LOADED_VENDORED_MODULES_V1: Final = (
+    "hegel_machine._vendor",
+    "hegel_machine._vendor.tomli",
+    "hegel_machine._vendor.tomli._parser",
+    "hegel_machine._vendor.tomli._re",
+)
+_PYTHON310_DEPENDENCY_PREFLIGHT_PROGRAM_V1: Final = (
+    "import hashlib,importlib,importlib.util,json,os,runpy,sys\n"
+    "from pathlib import Path\n"
+    "root=Path(sys.argv[1])\n"
+    "cargo_path=Path(sys.argv[2])\n"
+    "assert sys.flags.isolated==1\n"
+    "assert sys.flags.no_site==1\n"
+    "assert sys.flags.ignore_environment==1\n"
+    "assert sys.dont_write_bytecode is True\n"
+    "assert sys.flags.utf8_mode==1\n"
+    "assert sys.pycache_prefix=='/nonexistent/hegel-q05b-v2r7-preflight-pyc'\n"
+    "pycache_absent_before=not os.path.lexists(sys.pycache_prefix)\n"
+    "assert pycache_absent_before\n"
+    "assert importlib.util.find_spec('tomli') is None\n"
+    "artifact_name='hegel_machine.phase3_q05b_actual_artifact_v2'\n"
+    "assert artifact_name not in sys.modules\n"
+    "supervisor_path=root/'tools/phase3_q05b_dual_qualification_v2.py'\n"
+    "namespace=runpy.run_path(str(supervisor_path))\n"
+    "host=namespace['_load_host_replay_module_v1'](root)\n"
+    "assert artifact_name not in sys.modules\n"
+    "artifact=importlib.import_module(artifact_name)\n"
+    "assert artifact.tomllib.__name__=='hegel_machine._vendor.tomli'\n"
+    "assert 'tomli' not in sys.modules\n"
+    "pycache_absent_after=not os.path.lexists(sys.pycache_prefix)\n"
+    "assert pycache_absent_after\n"
+    "assert artifact.tomllib.loads('answer = 42\\n')=={'answer':42}\n"
+    "raw=cargo_path.read_bytes()\n"
+    "parsed=artifact.tomllib.loads(raw.decode('utf-8'))\n"
+    "packages=parsed['package']\n"
+    "registry_rows=[[row['name'],row['version'],row['source'],row['checksum']] for row in packages if row.get('source','').startswith('registry+')]\n"
+    "canonical=lambda value:(json.dumps(value,ensure_ascii=True,allow_nan=False,sort_keys=True,separators=(',',':'))+'\\n').encode('ascii')\n"
+    "domain_digest=lambda domain,value:'sha256:'+hashlib.sha256(domain.encode('ascii')+b'\\x00'+canonical(value)[:-1]).hexdigest()\n"
+    "vendor_paths=['src/hegel_machine/_vendor/__init__.py','src/hegel_machine/_vendor/tomli/LICENSE','src/hegel_machine/_vendor/tomli/__init__.py','src/hegel_machine/_vendor/tomli/_parser.py','src/hegel_machine/_vendor/tomli/_re.py','src/hegel_machine/_vendor/tomli/_types.py']\n"
+    "vendor_rows=[]\n"
+    "for relative in vendor_paths:\n"
+    " payload=(root/relative).read_bytes()\n"
+    " vendor_rows.append([relative,len(payload),hashlib.sha256(payload).hexdigest()])\n"
+    "allowlist=list(namespace['HOST_SOURCE_ALLOWLIST'])\n"
+    "result={'schema_version':'hegel-phase3a-q05b-shadow-retry-python310-dependency-preflight-child/1','status':'PASS','python_flags':{'isolated':sys.flags.isolated,'no_site':sys.flags.no_site,'ignore_environment':sys.flags.ignore_environment,'dont_write_bytecode':sys.dont_write_bytecode,'utf8_mode':sys.flags.utf8_mode,'pycache_prefix':sys.pycache_prefix,'pycache_prefix_absent_before_import':pycache_absent_before,'pycache_prefix_absent_after_import':pycache_absent_after},'tomli_top_level_spec_or_null':None,'artifact_module_name':artifact.__name__,'vendored_tomli_module_name':artifact.tomllib.__name__,'top_level_tomli_in_sys_modules':False,'host_replay_module_name':host.__name__,'host_source_allowlist_count':len(allowlist),'host_source_allowlist_canonical_lf_sha256':hashlib.sha256(canonical(allowlist)).hexdigest(),'vendor_closure_rows':vendor_rows,'vendor_closure_digest':domain_digest('HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/VENDORED_TOMLI_CLOSURE/V1',vendor_rows),'loaded_vendored_modules':sorted(name for name in sys.modules if name.startswith('hegel_machine._vendor')),'cargo_lock':{'relative_path':'rust/q1_archive_projection_oracle/Cargo.lock','byte_count':len(raw),'raw_sha256':hashlib.sha256(raw).hexdigest(),'format':parsed.get('version'),'package_count':len(packages),'registry_package_count':len(registry_rows),'registry_package_rows':registry_rows,'registry_projection_digest':domain_digest('HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/CARGO_LOCK_REGISTRY_PACKAGE_PROJECTION/V1',registry_rows)}}\n"
+    "sys.stdout.buffer.write(canonical(result))\n"
+)
+_EXPECTED_HASH_DOMAINS_V2R7: Final = {
+    "contract": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/CONTRACT/V2",
+    "campaign_source_binding": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/CAMPAIGN_SOURCE_BINDING/V2",
+    "capsule": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/CAPSULE/V2",
+    "authorization": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/AUTHORIZATION/V2",
+    "cargo_manifest": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/CARGO_MANIFEST/V2",
+    "ledger_record": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/LEDGER_RECORD/V2",
+    "trajectory_binding": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/TRAJECTORY_BINDING/V2",
+    "trajectory_event_payloads": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/EVENT_PAYLOADS/V2",
+    "trajectory_suffix": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/TRAJECTORY_SUFFIX/V2",
+    "trajectory_other_nonfailure": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/TRAJECTORY_OTHER_NONFAILURE/V2",
+    "trajectory_failure_rows": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/TRAJECTORY_FAILURE_ROWS/V2",
+    "trajectory_cleanup_rows": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/TRAJECTORY_CLEANUP_ROWS/V2",
+    "trajectory_partition_certificate": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/POST_ORIGIN_PARTITION_CERTIFICATE/V2",
+    "slot_outcome": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/SLOT_OUTCOME/V2",
+    "campaign_terminal": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/CAMPAIGN_TERMINAL/V2",
+    "campaign_completion": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/CAMPAIGN_COMPLETION/V2",
 }
 _PREDICATE_DIGEST_DOMAINS: Final = {
-    "retry_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/RETRY_PREDICATE/V2",
-    "success_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/SUCCESS_PREDICATE/V2",
-    "ledger_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/LEDGER_STATE_REGISTRY/V2",
-    "forbidden_scope": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/FORBIDDEN_SCOPE/V2",
+    "retry_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/RETRY_PREDICATE/V2",
+    "success_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/SUCCESS_PREDICATE/V2",
+    "ledger_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/LEDGER_STATE_REGISTRY/V2",
+    "forbidden_scope": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/FORBIDDEN_SCOPE/V2",
 }
 _EXPECTED_FIXED_ENVIRONMENT: Final = {
     "DOCKER_CONFIG": "/nonexistent",
@@ -543,6 +1187,26 @@ def _domain_digest(domain: str, value: object) -> str:
     return "sha256:" + sha256(
         domain.encode("ascii") + b"\x00" + _canonical_json_bytes(value)[:-1]
     ).hexdigest()
+
+
+def _json_value_type_exact_v1(observed: object, expected: object) -> bool:
+    """Compare JSON trees without bool/int or int/float equivalence."""
+
+    if type(observed) is not type(expected):
+        return False
+    if type(expected) is dict:
+        assert type(observed) is dict
+        return set(observed) == set(expected) and all(
+            _json_value_type_exact_v1(observed[key], expected[key])
+            for key in expected
+        )
+    if type(expected) is list:
+        assert type(observed) is list
+        return len(observed) == len(expected) and all(
+            _json_value_type_exact_v1(left, right)
+            for left, right in zip(observed, expected, strict=True)
+        )
+    return observed == expected
 
 
 def _exact_dict(
@@ -1104,39 +1768,83 @@ def _scheduling_admission_policy_v2(
         "sampling_target_wait_ns", "maximum_unsampled_gap_ns",
         "maximum_sampler_deadline_to_post_enqueue_anchor_ns",
         "maximum_projected_gap_ns", "reserved_runtime_margin_ns",
+        "sampler_event_records_per_sample",
+        "maximum_sampler_event_production_rate_records_per_second",
+        "minimum_sustained_publication_rate_records_per_second",
+        "maximum_utilization_numerator", "maximum_utilization_denominator",
+        "sustained_offered_rate_records_per_second",
+        "sustained_records_per_cycle", "sustained_cycle_count",
+        "sustained_measurement_duration_ns", "sustained_epoch_duration_ns",
+        "sustained_prefill_retained_records", "sustained_timed_records",
+        "prior_failed_trajectory_event_count", "minimum_final_retained_records",
+        "sustained_queue_target_records",
+        "maximum_sustained_queue_high_watermark_records",
+        "maximum_sustained_terminal_drain_ns",
         "maximum_burst_drain_ns", "terminal_drain_policy_ns",
-        "queue_capacity_records", "maximum_queue_high_watermark_records",
-        "publication_payload_byte_count", "publication_protocol", "queue_policy",
+        "queue_capacity_records", "normal_sampler_capacity_records",
+        "failure_closure_reserve_records",
+        "maximum_queue_high_watermark_records",
+        "publication_payload_byte_count", "publication_protocol",
+        "retained_probe_success_file_fsync_count",
+        "retained_probe_success_directory_fsync_count",
+        "retained_probe_success_total_fsync_count",
+        "retained_probe_success_cleanup_directory_fsync_count",
+        "retained_probe_duration_scope",
+        "error_cleanup_directory_fsync_required_if_namespace_mutated",
+        "queue_policy",
         "cleanup_policy", "claim_ceiling",
     }
     exact_ints = {
         "maximum_windows": 3,
         "quiet_period_ns": 30_000_000_000,
         "bursts_per_window": 16,
-        "records_per_burst": 5,
+        "records_per_burst": 7,
         "controller_records_per_burst": 3,
         "sampler_lane_count": 2,
-        "sampler_records_per_lane_per_burst": 1,
-        "sampling_target_wait_ns": 50_000_000,
+        "sampler_records_per_lane_per_burst": 2,
+        "sampling_target_wait_ns": 125_000_000,
         "maximum_unsampled_gap_ns": 250_000_000,
-        "maximum_sampler_deadline_to_post_enqueue_anchor_ns": 100_000_000,
+        "maximum_sampler_deadline_to_post_enqueue_anchor_ns": 25_000_000,
         "maximum_projected_gap_ns": 150_000_000,
         "reserved_runtime_margin_ns": 100_000_000,
+        "sampler_event_records_per_sample": 2,
+        "maximum_sampler_event_production_rate_records_per_second": 32,
+        "minimum_sustained_publication_rate_records_per_second": 40,
+        "maximum_utilization_numerator": 4,
+        "maximum_utilization_denominator": 5,
+        "sustained_offered_rate_records_per_second": 40,
+        "sustained_records_per_cycle": 5,
+        "sustained_cycle_count": 960,
+        "sustained_measurement_duration_ns": 120_000_000_000,
+        "sustained_epoch_duration_ns": 10_000_000_000,
+        "sustained_prefill_retained_records": 5_411,
+        "sustained_timed_records": 4_800,
+        "prior_failed_trajectory_event_count": 5_410,
+        "minimum_final_retained_records": 10_211,
+        "sustained_queue_target_records": 64,
+        "maximum_sustained_queue_high_watermark_records": 64,
+        "maximum_sustained_terminal_drain_ns": 2_000_000_000,
         "maximum_burst_drain_ns": 5_000_000_000,
         "terminal_drain_policy_ns": 120_000_000_000,
         "queue_capacity_records": 512,
-        "maximum_queue_high_watermark_records": 5,
+        "normal_sampler_capacity_records": 384,
+        "failure_closure_reserve_records": 128,
+        "maximum_queue_high_watermark_records": 7,
         "publication_payload_byte_count": 4096,
+        "retained_probe_success_file_fsync_count": 2,
+        "retained_probe_success_directory_fsync_count": 3,
+        "retained_probe_success_total_fsync_count": 5,
+        "retained_probe_success_cleanup_directory_fsync_count": 0,
     }
     if (
         type(policy) is not dict
         or set(policy) != expected_fields
-        or policy.get("schema_version") != _SCHEDULING_ADMISSION_POLICY_SCHEMA_V3
+        or policy.get("schema_version") != _SCHEDULING_ADMISSION_POLICY_SCHEMA_V5
         or policy.get("clock_id") != "CLOCK_MONOTONIC"
         or any(type(policy.get(name)) is not int or policy.get(name) != expected
                for name, expected in exact_ints.items())
         or policy.get("producer_lanes_in_exact_order")
-        != ["CONTROLLER", *_SCHEDULING_SAMPLER_ACTORS_V3]
+        != ["CONTROLLER", *_SCHEDULING_SAMPLER_ACTORS_V5]
         or int(policy.get("controller_records_per_burst", -1))
         + int(policy.get("sampler_lane_count", -1))
         * int(policy.get("sampler_records_per_lane_per_burst", -1))
@@ -1149,20 +1857,158 @@ def _scheduling_admission_policy_v2(
         or int(policy.get("maximum_projected_gap_ns", -1))
         + int(policy.get("reserved_runtime_margin_ns", -1))
         != int(policy.get("maximum_unsampled_gap_ns", -1))
+        or 1_000_000_000 % int(policy.get("sampling_target_wait_ns", -1)) != 0
+        or int(policy.get("sampler_lane_count", -1))
+        * int(policy.get("sampler_event_records_per_sample", -1))
+        * 1_000_000_000
+        // int(policy.get("sampling_target_wait_ns", -1))
+        != int(policy.get(
+            "maximum_sampler_event_production_rate_records_per_second", -1
+        ))
+        or int(policy.get("sustained_offered_rate_records_per_second", -1))
+        != int(policy.get(
+            "minimum_sustained_publication_rate_records_per_second", -1
+        ))
+        or int(policy.get("sustained_records_per_cycle", -1))
+        * 1_000_000_000
+        // int(policy.get("sampling_target_wait_ns", -1))
+        != int(policy.get("sustained_offered_rate_records_per_second", -1))
+        or int(policy.get("sustained_records_per_cycle", -1))
+        * int(policy.get("sustained_cycle_count", -1))
+        != int(policy.get("sustained_timed_records", -1))
+        or int(policy.get("sustained_cycle_count", -1))
+        * int(policy.get("sampling_target_wait_ns", -1))
+        != int(policy.get("sustained_measurement_duration_ns", -1))
+        or 1_000_000_000 % int(policy.get(
+            "sustained_offered_rate_records_per_second", -1
+        )) != 0
+        or int(policy.get("sustained_measurement_duration_ns", -1))
+        % int(policy.get("sustained_epoch_duration_ns", -1)) != 0
+        or int(policy.get("sustained_offered_rate_records_per_second", -1))
+        * int(policy.get("sustained_measurement_duration_ns", -1))
+        // 1_000_000_000
+        != int(policy.get("sustained_timed_records", -1))
+        or int(policy.get("sustained_prefill_retained_records", -1))
+        + int(policy.get("sustained_timed_records", -1))
+        != int(policy.get("minimum_final_retained_records", -1))
+        or int(policy.get("minimum_final_retained_records", -1))
+        <= int(policy.get("prior_failed_trajectory_event_count", -1))
+        or int(policy.get("normal_sampler_capacity_records", -1))
+        + int(policy.get("failure_closure_reserve_records", -1))
+        != int(policy.get("queue_capacity_records", -1))
+        or int(policy.get("sustained_queue_target_records", -1))
+        != int(policy.get(
+            "maximum_sustained_queue_high_watermark_records", -1
+        ))
+        or int(policy.get("sustained_queue_target_records", -1))
+        > int(policy.get("normal_sampler_capacity_records", -1))
+        or int(policy.get(
+            "maximum_sampler_event_production_rate_records_per_second", -1
+        )) * int(policy.get("maximum_utilization_denominator", -1))
+        > int(policy.get(
+            "minimum_sustained_publication_rate_records_per_second", -1
+        )) * int(policy.get("maximum_utilization_numerator", -1))
         or policy.get("publication_protocol")
         != "STAGING_EXCL_NOFOLLOW_WRITE_FILE_FSYNC_FCHMOD_FILE_FSYNC_DIR_FSYNC_LINK_FINAL_NOFOLLOW_DIR_FSYNC_UNLINK_STAGING_DIR_FSYNC_READBACK"
+        or policy.get("retained_probe_duration_scope")
+        != "OPEN_WRITE_FILE_FSYNC_FCHMOD_FILE_FSYNC_DIR_FSYNC_LINK_DIR_FSYNC_UNLINK_DIR_FSYNC_READBACK_REPLAY_FD_CLOSE_STAGING_ABSENCE_PROOF"
+        or policy.get(
+            "error_cleanup_directory_fsync_required_if_namespace_mutated"
+        ) is not True
         or policy.get("queue_policy")
-        != "THREE_PRODUCER_LANES_PUT_NOWAIT_SINGLE_FIFO_DURABILITY_WORKER_QUEUE_LOCK_RELEASED_BEFORE_PUBLICATION_ZERO_DROP_DUPLICATE_OR_REORDER"
+        != "THREE_PRODUCER_LANES_PUT_NOWAIT_SINGLE_FIFO_DURABILITY_WORKER_NORMAL_SAMPLER_CAP_384_FAILURE_CLOSURE_RESERVE_128_QUEUE_LOCK_RELEASED_BEFORE_PUBLICATION_ZERO_DROP_DUPLICATE_OR_REORDER"
         or policy.get("cleanup_policy")
-        != "UNLINK_FINAL_AND_STAGING_THEN_DIR_FSYNC_AND_PROVE_BOTH_ABSENT"
+        != "CRITICAL_BURSTS_UNLINK_AFTER_EACH_PROBE_SUSTAINED_PHASE_RETAINS_ALL_FINALS_IN_ONE_DIRECTORY_THROUGH_MEASUREMENT_THEN_UNLINKS_FINAL_AND_STAGING_DIR_FSYNC_AND_PROVES_ABSENCE"
         or policy.get("claim_ceiling")
-        != "OBSERVED_PRECONSUME_BOUND_STAGE5_ENQUEUE_AND_DURABLE_DRAIN_HEALTH_ONLY_NOT_A_RUNTIME_SCHEDULING_DURABILITY_OR_250MS_GAP_GUARANTEE"
+        != "OBSERVED_PRECONSUME_BOUND_STAGE5_ENQUEUE_AND_120_SECOND_SAME_DIRECTORY_RETAINED_FILE_PUBLICATION_RATE_HEALTH_ONLY_NOT_A_RUNTIME_SCHEDULING_DURABILITY_OR_250MS_GAP_GUARANTEE"
     ):
         _fail("FAIL_CAMPAIGN_CONTRACT", "scheduling admission policy differs", terminal=True)
     return deepcopy(policy)
 
 
-def _scheduling_probe_payload_v3(
+def _python310_dependency_preflight_policy_v1(
+    contract: Mapping[str, object],
+) -> dict[str, object]:
+    """Return the exact pre-capsule Python 3.10 dependency policy."""
+
+    execution = contract.get("execution_policy")
+    if type(execution) is not dict:
+        _fail("FAIL_CAMPAIGN_CONTRACT", "execution policy differs")
+    policy = execution.get("python310_dependency_preflight_gate")
+    expected = {
+        "schema_version": _PYTHON310_DEPENDENCY_PREFLIGHT_POLICY_SCHEMA_V1,
+        "status": (
+            "REQUIRED_BEFORE_CAPSULE_AUTHORIZATION_STATE_OR_SUPERVISOR_SPAWN"
+        ),
+        "interpreter_path": "/usr/bin/python3.10",
+        "argv_prefix_before_program": list(
+            _DEPENDENCY_PREFLIGHT_ARGV_PREFIX_V1
+        ),
+        "cwd": "/",
+        "program_raw_sha256": sha256(
+            _PYTHON310_DEPENDENCY_PREFLIGHT_PROGRAM_V1.encode("utf-8")
+        ).hexdigest(),
+        "pycache_prefix": _DEPENDENCY_PREFLIGHT_PYCACHE_PREFIX_V1,
+        "pycache_prefix_must_remain_absent": True,
+        "timeout_seconds": 30,
+        "stdout_max_bytes": 1_048_576,
+        "stderr_max_bytes": 1_048_576,
+        "supervisor_relative_path": (
+            "tools/phase3_q05b_dual_qualification_v2.py"
+        ),
+        "artifact_relative_path": (
+            "src/hegel_machine/phase3_q05b_actual_artifact_v2.py"
+        ),
+        "vendored_tomli_module_name": "hegel_machine._vendor.tomli",
+        "top_level_tomli_spec_expected_null": True,
+        "top_level_tomli_in_sys_modules_allowed": False,
+        "vendor_closure_rows_in_exact_order": [
+            list(row) for row in _VENDORED_TOMLI_CLOSURE_ROWS_V1
+        ],
+        "vendor_closure_digest_domain": _VENDORED_TOMLI_CLOSURE_DOMAIN_V1,
+        "vendor_closure_digest": _VENDORED_TOMLI_CLOSURE_DIGEST_V1,
+        "loaded_vendored_modules_in_exact_order": list(
+            _DEPENDENCY_PREFLIGHT_LOADED_VENDORED_MODULES_V1
+        ),
+        "host_source_allowlist_count": _HOST_SOURCE_ALLOWLIST_COUNT_V1,
+        "host_source_allowlist_canonical_lf_sha256": (
+            _HOST_SOURCE_ALLOWLIST_CANONICAL_LF_SHA256_V1
+        ),
+        "cargo_lock_relative_path": _CARGO_LOCK_RELATIVE_PATH_V1,
+        "cargo_lock_git_object_must_match_target_commit_a": True,
+        "cargo_lock_byte_count": _CARGO_LOCK_BYTE_COUNT_V1,
+        "cargo_lock_raw_sha256": _CARGO_LOCK_RAW_SHA256_V1,
+        "cargo_lock_format": _CARGO_LOCK_FORMAT_V1,
+        "cargo_lock_package_count": _CARGO_LOCK_PACKAGE_COUNT_V1,
+        "cargo_lock_registry_package_count": (
+            _CARGO_LOCK_REGISTRY_PACKAGE_COUNT_V1
+        ),
+        "cargo_lock_registry_projection_domain": (
+            _CARGO_LOCK_REGISTRY_PROJECTION_DOMAIN_V1
+        ),
+        "cargo_lock_registry_projection_digest": (
+            _CARGO_LOCK_REGISTRY_PROJECTION_DIGEST_V1
+        ),
+        "runtime_environment_digest_domain": (
+            _DEPENDENCY_RUNTIME_ENVIRONMENT_DOMAIN_V1
+        ),
+        "receipt_digest_domain": (
+            _PYTHON310_DEPENDENCY_PREFLIGHT_RECEIPT_DOMAIN_V1
+        ),
+        "replay_on_preflight_record_authorization_and_run": True,
+        "cache_allowed": False,
+        "stdout_policy": "EXACT_CANONICAL_SINGLE_LF_CHILD_RECEIPT",
+        "stderr_policy": "EMPTY",
+    }
+    if not _json_value_type_exact_v1(policy, expected):
+        _fail(
+            "FAIL_CAMPAIGN_CONTRACT",
+            "Python 3.10 dependency preflight policy differs",
+        )
+    return deepcopy(policy)
+
+
+def _scheduling_probe_payload_v5(
     slot_id: str,
     window: int,
     burst: int,
@@ -1172,7 +2018,7 @@ def _scheduling_probe_payload_v3(
     operation: str,
 ) -> bytes:
     record: dict[str, object] = {
-        "schema_version": _SCHEDULING_ADMISSION_RECORD_SCHEMA_V3,
+        "schema_version": _SCHEDULING_ADMISSION_RECORD_SCHEMA_V5,
         "slot_id": slot_id,
         "window_ordinal": window,
         "burst_ordinal": burst,
@@ -1202,7 +2048,204 @@ def _scheduling_probe_payload_v3(
     return payload
 
 
-def _five_fsync_publication_probe_v3(
+_SCHEDULING_SUSTAINED_OPERATIONS_V5: Final = (
+    ("PYTHON_ENDPOINT", "LIVE_RESOURCE_SAMPLE_BEGIN"),
+    ("RUST_ENDPOINT", "LIVE_RESOURCE_SAMPLE_BEGIN"),
+    ("PYTHON_ENDPOINT", "LIVE_RESOURCE_SAMPLE_OK"),
+    ("RUST_ENDPOINT", "LIVE_RESOURCE_SAMPLE_OK"),
+    ("CONTROLLER", "CONTROLLER_SERVICE_MARGIN"),
+)
+_SCHEDULING_SUSTAINED_CHAIN_GENESIS_V5: Final = sha256(
+    b"hegel-phase3a-q05b-scheduling-sustained-chain-genesis/5"
+).hexdigest()
+_SCHEDULING_SUSTAINED_CHAIN_DOMAIN_V5: Final = (
+    b"hegel-phase3a-q05b-scheduling-sustained-chain-step/5\x00"
+)
+
+
+def _scheduling_sustained_record_identity_v5(
+    slot_id: str,
+    window: int,
+    global_ordinal: int,
+    prefill_records: int,
+) -> dict[str, object]:
+    if (
+        type(slot_id) is not str
+        or _SAFE_NAME.fullmatch(slot_id) is None
+        or type(window) is not int
+        or not 1 <= window <= 3
+        or type(global_ordinal) is not int
+        or global_ordinal <= 0
+        or type(prefill_records) is not int
+        or prefill_records <= 0
+    ):
+        _fail(
+            _SCHEDULING_ADMISSION_FAILURE_V2,
+            "sustained record identity inputs differ",
+            terminal=True,
+        )
+    if global_ordinal <= prefill_records:
+        phase = "PREFILL_RETAINED"
+        phase_ordinal = global_ordinal
+    else:
+        phase = "TIMED_SUSTAINED"
+        phase_ordinal = global_ordinal - prefill_records
+    cycle_event_ordinal = (
+        (phase_ordinal - 1) % len(_SCHEDULING_SUSTAINED_OPERATIONS_V5)
+    ) + 1
+    cycle_ordinal = (
+        (phase_ordinal - 1) // len(_SCHEDULING_SUSTAINED_OPERATIONS_V5)
+    ) + 1
+    lane_id, operation = _SCHEDULING_SUSTAINED_OPERATIONS_V5[
+        cycle_event_ordinal - 1
+    ]
+    return {
+        "schema_version": _SCHEDULING_ADMISSION_RECORD_SCHEMA_V5,
+        "phase": phase,
+        "phase_ordinal": phase_ordinal,
+        "slot_id": slot_id,
+        "window_ordinal": window,
+        "global_ordinal": global_ordinal,
+        "lane_id": lane_id,
+        "cycle_ordinal": cycle_ordinal,
+        "cycle_event_ordinal": cycle_event_ordinal,
+        "lane_event_ordinal": cycle_ordinal,
+        "operation": operation,
+    }
+
+
+def _scheduling_sustained_record_digest_v5(
+    slot_id: str,
+    window: int,
+    global_ordinal: int,
+    prefill_records: int,
+) -> str:
+    return sha256(_canonical_json_bytes(
+        _scheduling_sustained_record_identity_v5(
+            slot_id, window, global_ordinal, prefill_records
+        )
+    )).hexdigest()
+
+
+def _scheduling_sustained_probe_payload_v5(
+    slot_id: str,
+    window: int,
+    global_ordinal: int,
+    prefill_records: int,
+) -> bytes:
+    record = _scheduling_sustained_record_identity_v5(
+        slot_id, window, global_ordinal, prefill_records
+    )
+    record["record_digest"] = sha256(_canonical_json_bytes(record)).hexdigest()
+    record["padding"] = ""
+    padding_size = 4096 - len(_canonical_json_bytes(record))
+    if padding_size < 0:
+        _fail(
+            _SCHEDULING_ADMISSION_FAILURE_V2,
+            "sustained record exceeds publication payload bound",
+            terminal=True,
+        )
+    record["padding"] = "0" * padding_size
+    payload = _canonical_json_bytes(record)
+    if len(payload) != 4096:
+        _fail(
+            _SCHEDULING_ADMISSION_FAILURE_V2,
+            "sustained record byte count differs",
+            terminal=True,
+        )
+    return payload
+
+
+def _scheduling_sustained_chain_step_v5(
+    previous_digest: str,
+    global_ordinal: int,
+    record_digest: str,
+) -> str:
+    if (
+        type(previous_digest) is not str
+        or _RAW_SHA256.fullmatch(previous_digest) is None
+        or type(global_ordinal) is not int
+        or not 1 <= global_ordinal < 2**64
+        or type(record_digest) is not str
+        or _RAW_SHA256.fullmatch(record_digest) is None
+    ):
+        _fail(
+            _SCHEDULING_ADMISSION_FAILURE_V2,
+            "sustained chain inputs differ",
+            terminal=True,
+        )
+    return sha256(
+        _SCHEDULING_SUSTAINED_CHAIN_DOMAIN_V5
+        + bytes.fromhex(previous_digest)
+        + global_ordinal.to_bytes(8, "big")
+        + bytes.fromhex(record_digest)
+    ).hexdigest()
+
+
+def _scheduling_sustained_chain_checkpoints_v5(
+    slot_id: str,
+    window: int,
+    maximum_ordinal: int,
+    prefill_records: int,
+    checkpoints: set[int],
+) -> dict[int, str]:
+    if (
+        type(maximum_ordinal) is not int
+        or maximum_ordinal < 0
+        or type(prefill_records) is not int
+        or prefill_records <= 0
+        or type(checkpoints) is not set
+        or any(type(item) is not int or not 0 <= item <= maximum_ordinal
+               for item in checkpoints)
+    ):
+        _fail(
+            _SCHEDULING_ADMISSION_FAILURE_V2,
+            "sustained checkpoint inputs differ",
+            terminal=True,
+        )
+    chain = _SCHEDULING_SUSTAINED_CHAIN_GENESIS_V5
+    observed = {0: chain} if 0 in checkpoints else {}
+    for ordinal in range(1, maximum_ordinal + 1):
+        chain = _scheduling_sustained_chain_step_v5(
+            chain,
+            ordinal,
+            _scheduling_sustained_record_digest_v5(
+                slot_id, window, ordinal, prefill_records
+            ),
+        )
+        if ordinal in checkpoints:
+            observed[ordinal] = chain
+    return observed
+
+
+def _scheduling_sustained_probe_token_v5(
+    window: int, global_ordinal: int
+) -> str:
+    if (
+        type(window) is not int
+        or not 1 <= window <= 3
+        or type(global_ordinal) is not int
+        or not 1 <= global_ordinal <= 999_999
+    ):
+        _fail(
+            _SCHEDULING_ADMISSION_FAILURE_V2,
+            "sustained probe token inputs differ",
+            terminal=True,
+        )
+    return f"w{window:02d}-r{global_ordinal:06d}"
+
+
+def _scheduling_sustained_final_name_v5(token: str) -> str:
+    if type(token) is not str or re.fullmatch(r"w[0-9]{2}-r[0-9]{6}", token) is None:
+        _fail(
+            _SCHEDULING_ADMISSION_FAILURE_V2,
+            "sustained probe final token differs",
+            terminal=True,
+        )
+    return f"q05b-admission-{token}.probe-v5"
+
+
+def _five_fsync_publication_probe_v5(
     directory_fd: int,
     unique_token: str,
     payload: bytes,
@@ -1308,11 +2351,443 @@ def _five_fsync_publication_probe_v3(
     return duration
 
 
+def _retained_five_fsync_publication_probe_v5(
+    directory_fd: int,
+    unique_token: str,
+    payload: bytes,
+    clock_ns: Callable[[], int] = time.monotonic_ns,
+) -> int:
+    """Publish one immutable probe and retain its final name for the window."""
+
+    if (
+        type(directory_fd) is not int
+        or directory_fd < 0
+        or type(unique_token) is not str
+        or re.fullmatch(r"w[0-9]{2}-r[0-9]{6}", unique_token) is None
+        or type(payload) is not bytes
+        or len(payload) != 4096
+    ):
+        _fail(
+            _SCHEDULING_ADMISSION_FAILURE_V2,
+            "retained probe inputs differ",
+            terminal=True,
+        )
+    staging = f".q05b-admission-{unique_token}.staging-v5"
+    final = _scheduling_sustained_final_name_v5(unique_token)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    descriptor = -1
+    replay_fd = -1
+    started: int | None = None
+    duration: int | None = None
+    primary_error: BaseException | None = None
+    cleanup_errors: list[str] = []
+    try:
+        started = clock_ns()
+        if type(started) is not int or started < 0:
+            raise RuntimeError("retained probe start clock differs")
+        descriptor = os.open(staging, flags, 0o600, dir_fd=directory_fd)
+        view = memoryview(payload)
+        offset = 0
+        while offset < len(view):
+            written = os.write(descriptor, view[offset:])
+            if written <= 0:
+                raise OSError("retained probe write made no progress")
+            offset += written
+        os.fsync(descriptor)
+        os.fchmod(descriptor, 0o444)
+        os.fsync(descriptor)
+        os.close(descriptor)
+        descriptor = -1
+        os.fsync(directory_fd)
+        os.link(
+            staging,
+            final,
+            src_dir_fd=directory_fd,
+            dst_dir_fd=directory_fd,
+            follow_symlinks=False,
+        )
+        os.fsync(directory_fd)
+        os.unlink(staging, dir_fd=directory_fd)
+        os.fsync(directory_fd)
+        replay_fd = os.open(
+            final,
+            os.O_RDONLY | os.O_CLOEXEC | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=directory_fd,
+        )
+        replay_stat = os.fstat(replay_fd)
+        chunks: list[bytes] = []
+        while True:
+            chunk = os.read(replay_fd, 4096)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        if (
+            b"".join(chunks) != payload
+            or not stat.S_ISREG(replay_stat.st_mode)
+            or stat.S_IMODE(replay_stat.st_mode) != 0o444
+            or replay_stat.st_uid != os.geteuid()
+            or replay_stat.st_nlink != 1
+            or replay_stat.st_size != 4096
+        ):
+            raise RuntimeError("retained probe readback identity differs")
+        os.close(replay_fd)
+        replay_fd = -1
+        try:
+            os.stat(staging, dir_fd=directory_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            pass
+        else:
+            raise RuntimeError("retained probe staging absence differs")
+        finished = clock_ns()
+        if type(finished) is not int or finished < started:
+            raise RuntimeError("retained probe finish clock differs")
+        duration = finished - started
+    except BaseException as error:
+        primary_error = error
+    finally:
+        for open_fd in (replay_fd, descriptor):
+            if open_fd >= 0:
+                try:
+                    os.close(open_fd)
+                except BaseException as error:
+                    cleanup_errors.append(
+                        f"close:{type(error).__name__}:{error}"
+                    )
+        if primary_error is not None or cleanup_errors:
+            namespace_mutated = False
+            for basename in (staging, final):
+                try:
+                    os.unlink(basename, dir_fd=directory_fd)
+                    namespace_mutated = True
+                except FileNotFoundError:
+                    pass
+                except BaseException as error:
+                    cleanup_errors.append(
+                        f"unlink:{basename}:{type(error).__name__}:{error}"
+                    )
+            if namespace_mutated:
+                try:
+                    os.fsync(directory_fd)
+                except BaseException as error:
+                    cleanup_errors.append(
+                        f"cleanup-dir-fsync:{type(error).__name__}:{error}"
+                    )
+            for basename in (staging, final):
+                try:
+                    os.stat(
+                        basename,
+                        dir_fd=directory_fd,
+                        follow_symlinks=False,
+                    )
+                    cleanup_errors.append(f"residual:{basename}")
+                except FileNotFoundError:
+                    pass
+                except BaseException as error:
+                    cleanup_errors.append(
+                        f"absence:{basename}:{type(error).__name__}:{error}"
+                    )
+            detail = (
+                f"retained probe failed: {type(primary_error).__name__}:"
+                f"{primary_error}"
+                if primary_error is not None
+                else "retained probe cleanup failed"
+            )
+            if cleanup_errors:
+                detail += "; cleanup=" + "|".join(cleanup_errors)
+            _fail(_SCHEDULING_ADMISSION_FAILURE_V2, detail, terminal=True)
+    assert started is not None and duration is not None
+    return duration
+
+
 def _uint64_exact(value: object) -> bool:
     return type(value) is int and 0 <= value < 2**64
 
 
-def _scheduling_admission_burst_exact_v3(
+def _scheduling_sustained_evidence_exact_v5(
+    policy: Mapping[str, object],
+    slot_id: str,
+    window: int,
+    value: object,
+) -> bool:
+    fields = {
+        "schema_version", "slot_id", "window_ordinal", "clock_id",
+        "measurement_start_ns", "measurement_deadline_ns",
+        "measurement_finish_ns", "measurement_duration_ns",
+        "offered_rate_records_per_second", "cycle_interval_ns",
+        "records_per_cycle", "cycle_count",
+        "prefill_records_durable", "prefill_publication_duration_ns_total",
+        "prefill_completed_before_measurement",
+        "timed_records_enqueued", "timed_records_durable_by_deadline",
+        "timed_records_durable_after_deadline", "records_durable_total",
+        "retained_records_at_measurement_end", "queue_start_depth_records",
+        "queue_end_depth_records", "queue_high_watermark_records",
+        "dropped_record_count", "duplicate_record_count",
+        "reordered_record_count", "last_timed_durable_finish_ns_or_null",
+        "terminal_drain_ns", "sampler_anchor_count",
+        "maximum_sampler_release_to_post_enqueue_anchor_ns",
+        "epoch_aggregates_in_strict_order",
+        "prefill_chain_digest", "final_chain_digest",
+        "cleanup_removed_records", "cleanup_absence_passed", "passed",
+    }
+    if type(value) is not dict or set(value) != fields:
+        return False
+    exact_policy_names = (
+        "sustained_offered_rate_records_per_second",
+        "sustained_measurement_duration_ns",
+        "sustained_epoch_duration_ns",
+        "sustained_prefill_retained_records",
+        "sustained_timed_records",
+        "prior_failed_trajectory_event_count",
+        "minimum_final_retained_records",
+        "sustained_queue_target_records",
+        "maximum_sustained_queue_high_watermark_records",
+        "maximum_sustained_terminal_drain_ns",
+        "minimum_sustained_publication_rate_records_per_second",
+        "maximum_sampler_deadline_to_post_enqueue_anchor_ns",
+        "sampling_target_wait_ns", "sustained_records_per_cycle",
+        "sustained_cycle_count",
+    )
+    if any(type(policy.get(name)) is not int or int(policy[name]) <= 0
+           for name in exact_policy_names):
+        return False
+    offered = int(policy["sustained_offered_rate_records_per_second"])
+    duration_policy = int(policy["sustained_measurement_duration_ns"])
+    epoch_duration = int(policy["sustained_epoch_duration_ns"])
+    prefill_policy = int(policy["sustained_prefill_retained_records"])
+    timed_policy = int(policy["sustained_timed_records"])
+    queue_target = int(policy["sustained_queue_target_records"])
+    records_per_cycle = int(policy["sustained_records_per_cycle"])
+    cycle_count = int(policy["sustained_cycle_count"])
+    cycle_interval = int(policy["sampling_target_wait_ns"])
+    if (
+        value.get("schema_version") != _SCHEDULING_SUSTAINED_EVIDENCE_SCHEMA_V5
+        or value.get("slot_id") != slot_id
+        or type(window) is not int
+        or value.get("window_ordinal") != window
+        or value.get("clock_id") != "CLOCK_MONOTONIC"
+        or 1_000_000_000 % offered != 0
+        or duration_policy % epoch_duration != 0
+        or offered * duration_policy // 1_000_000_000 != timed_policy
+        or records_per_cycle * cycle_count != timed_policy
+        or cycle_count * cycle_interval != duration_policy
+        or records_per_cycle * 1_000_000_000 // cycle_interval != offered
+        or prefill_policy + timed_policy
+        != int(policy["minimum_final_retained_records"])
+    ):
+        return False
+    uint_names = (
+        "measurement_start_ns", "measurement_deadline_ns",
+        "measurement_finish_ns", "measurement_duration_ns",
+        "offered_rate_records_per_second", "cycle_interval_ns",
+        "records_per_cycle", "cycle_count",
+        "prefill_records_durable", "prefill_publication_duration_ns_total",
+        "timed_records_enqueued", "timed_records_durable_by_deadline",
+        "timed_records_durable_after_deadline", "records_durable_total",
+        "retained_records_at_measurement_end", "queue_start_depth_records",
+        "queue_end_depth_records", "queue_high_watermark_records",
+        "dropped_record_count", "duplicate_record_count",
+        "reordered_record_count", "terminal_drain_ns", "sampler_anchor_count",
+        "maximum_sampler_release_to_post_enqueue_anchor_ns",
+        "cleanup_removed_records",
+    )
+    if any(not _uint64_exact(value.get(name)) for name in uint_names):
+        return False
+    start = int(value["measurement_start_ns"])
+    deadline = int(value["measurement_deadline_ns"])
+    finish = int(value["measurement_finish_ns"])
+    timed_enqueued = int(value["timed_records_enqueued"])
+    timed_by_deadline = int(value["timed_records_durable_by_deadline"])
+    timed_after_deadline = int(value["timed_records_durable_after_deadline"])
+    durable_total = int(value["records_durable_total"])
+    last_finish = value.get("last_timed_durable_finish_ns_or_null")
+    if (
+        value["measurement_duration_ns"] != duration_policy
+        or deadline != start + duration_policy
+        or finish < deadline
+        or value["offered_rate_records_per_second"] != offered
+        or value["cycle_interval_ns"] != cycle_interval
+        or value["records_per_cycle"] != records_per_cycle
+        or value["cycle_count"] != cycle_count
+        or value["prefill_records_durable"] != prefill_policy
+        or value.get("prefill_completed_before_measurement") is not True
+        or not 0 <= timed_enqueued <= timed_policy
+        or timed_by_deadline + timed_after_deadline != timed_enqueued
+        or durable_total != prefill_policy + timed_enqueued
+        or value["retained_records_at_measurement_end"] != durable_total
+        or value["queue_start_depth_records"] != records_per_cycle
+        or value["queue_end_depth_records"] != 0
+        or not records_per_cycle
+        <= value["queue_high_watermark_records"]
+        <= queue_target
+        or timed_enqueued % records_per_cycle != 0
+        or value["dropped_record_count"] != timed_policy - timed_enqueued
+        or value["duplicate_record_count"] != 0
+        or value["reordered_record_count"] != 0
+        or value["cleanup_removed_records"] != durable_total
+        or value.get("cleanup_absence_passed") is not True
+        or type(value.get("passed")) is not bool
+    ):
+        return False
+    if timed_enqueued == 0:
+        if last_finish is not None or value["terminal_drain_ns"] != 0:
+            return False
+    elif (
+        not _uint64_exact(last_finish)
+        or int(last_finish) < start
+        or int(last_finish) > finish
+        or value["terminal_drain_ns"] != max(0, int(last_finish) - deadline)
+    ):
+        return False
+    epochs = value.get("epoch_aggregates_in_strict_order")
+    epoch_count = duration_policy // epoch_duration
+    if type(epochs) is not list or len(epochs) != epoch_count:
+        return False
+    cumulative = 0
+    checkpoints = {prefill_policy, durable_total}
+    checkpoint_for_epoch: list[int] = []
+    for ordinal, row in enumerate(epochs, start=1):
+        if type(row) is not dict or set(row) != {
+            "epoch_ordinal", "start_offset_ns", "finish_offset_ns",
+            "records_durable", "first_global_ordinal_or_null",
+            "last_global_ordinal_or_null", "total_publication_duration_ns",
+            "minimum_publication_duration_ns_or_null",
+            "maximum_publication_duration_ns_or_null",
+            "cumulative_timed_records_durable", "sampler_anchor_count",
+            "maximum_sampler_release_to_post_enqueue_anchor_ns_or_null",
+            "chain_digest",
+        }:
+            return False
+        count = row.get("records_durable")
+        if (
+            type(row.get("epoch_ordinal")) is not int
+            or row["epoch_ordinal"] != ordinal
+            or row.get("start_offset_ns") != (ordinal - 1) * epoch_duration
+            or row.get("finish_offset_ns") != ordinal * epoch_duration
+            or not _uint64_exact(count)
+            or not _uint64_exact(row.get("total_publication_duration_ns"))
+            or not _uint64_exact(row.get("sampler_anchor_count"))
+            or type(row.get("cumulative_timed_records_durable")) is not int
+        ):
+            return False
+        count = int(count)
+        previous_cumulative = cumulative
+        cumulative += count
+        if row["cumulative_timed_records_durable"] != cumulative:
+            return False
+        first = row.get("first_global_ordinal_or_null")
+        last = row.get("last_global_ordinal_or_null")
+        minimum = row.get("minimum_publication_duration_ns_or_null")
+        maximum = row.get("maximum_publication_duration_ns_or_null")
+        if count == 0:
+            if any(item is not None for item in (first, last, minimum, maximum)):
+                return False
+        elif (
+            first != prefill_policy + previous_cumulative + 1
+            or last != prefill_policy + cumulative
+            or not _uint64_exact(minimum)
+            or not _uint64_exact(maximum)
+            or int(minimum) > int(maximum)
+            or not int(minimum) * count
+            <= int(row["total_publication_duration_ns"])
+            <= int(maximum) * count
+        ):
+            return False
+        sampler_count = int(row["sampler_anchor_count"])
+        sampler_maximum = row.get(
+            "maximum_sampler_release_to_post_enqueue_anchor_ns_or_null"
+        )
+        if (
+            (sampler_count == 0 and sampler_maximum is not None)
+            or (sampler_count > 0 and not _uint64_exact(sampler_maximum))
+        ):
+            return False
+        checkpoint = prefill_policy + cumulative
+        checkpoints.add(checkpoint)
+        checkpoint_for_epoch.append(checkpoint)
+        if (
+            type(row.get("chain_digest")) is not str
+            or _RAW_SHA256.fullmatch(str(row["chain_digest"])) is None
+        ):
+            return False
+    if cumulative != timed_by_deadline:
+        return False
+    expected_sampler_anchors = sum(
+        _scheduling_sustained_record_identity_v5(
+            slot_id, window, prefill_policy + ordinal, prefill_policy
+        )["operation"] == "LIVE_RESOURCE_SAMPLE_BEGIN"
+        for ordinal in range(1, timed_enqueued + 1)
+    )
+    expected_sampler_anchors_by_epoch = [0] * epoch_count
+    for cycle_index in range(timed_enqueued // records_per_cycle):
+        epoch_index = min(
+            (cycle_index * cycle_interval) // epoch_duration,
+            epoch_count - 1,
+        )
+        expected_sampler_anchors_by_epoch[epoch_index] += 2
+    sampler_anchor_total = sum(
+        int(row["sampler_anchor_count"]) for row in epochs
+    )
+    sampler_epoch_maxima = [
+        int(row[
+            "maximum_sampler_release_to_post_enqueue_anchor_ns_or_null"
+        ])
+        for row in epochs
+        if row[
+            "maximum_sampler_release_to_post_enqueue_anchor_ns_or_null"
+        ] is not None
+    ]
+    if (
+        value["sampler_anchor_count"] != expected_sampler_anchors
+        or sampler_anchor_total != expected_sampler_anchors
+        or [int(row["sampler_anchor_count"]) for row in epochs]
+        != expected_sampler_anchors_by_epoch
+        or value["maximum_sampler_release_to_post_enqueue_anchor_ns"]
+        != (max(sampler_epoch_maxima) if sampler_epoch_maxima else 0)
+    ):
+        return False
+    try:
+        expected_chains = _scheduling_sustained_chain_checkpoints_v5(
+            slot_id, window, durable_total, prefill_policy, checkpoints
+        )
+    except BaseException:
+        return False
+    if (
+        value.get("prefill_chain_digest") != expected_chains[prefill_policy]
+        or value.get("final_chain_digest") != expected_chains[durable_total]
+        or any(
+            row["chain_digest"] != expected_chains[checkpoint]
+            for row, checkpoint in zip(epochs, checkpoint_for_epoch)
+        )
+    ):
+        return False
+    passed = (
+        timed_enqueued == timed_policy
+        and timed_by_deadline == timed_policy
+        and timed_after_deadline == 0
+        and value["dropped_record_count"] == 0
+        and value["duplicate_record_count"] == 0
+        and value["reordered_record_count"] == 0
+        and durable_total >= int(policy["minimum_final_retained_records"])
+        and durable_total > int(policy["prior_failed_trajectory_event_count"])
+        and timed_by_deadline * 1_000_000_000
+        >= int(policy[
+            "minimum_sustained_publication_rate_records_per_second"
+        ]) * duration_policy
+        and value["queue_high_watermark_records"]
+        <= int(policy["maximum_sustained_queue_high_watermark_records"])
+        and value["terminal_drain_ns"]
+        <= int(policy["maximum_sustained_terminal_drain_ns"])
+        and value["maximum_sampler_release_to_post_enqueue_anchor_ns"]
+        <= int(policy[
+            "maximum_sampler_deadline_to_post_enqueue_anchor_ns"
+        ])
+        and value["cleanup_absence_passed"] is True
+    )
+    return value["passed"] is passed
+
+
+def _scheduling_admission_burst_exact_v5(
     policy: Mapping[str, object], slot_id: str, window: int, value: object,
 ) -> bool:
     if type(value) is not dict or set(value) != {
@@ -1348,9 +2823,15 @@ def _scheduling_admission_burst_exact_v3(
     ):
         return False
     expected_events = {
-        "CONTROLLER": dict(enumerate(_SCHEDULING_CONTROLLER_EVENTS_V3, start=1)),
-        "PYTHON_ENDPOINT": {1: "LIVE_RESOURCE_SAMPLE_BEGIN"},
-        "RUST_ENDPOINT": {1: "LIVE_RESOURCE_SAMPLE_BEGIN"},
+        "CONTROLLER": dict(enumerate(_SCHEDULING_CONTROLLER_EVENTS_V5, start=1)),
+        "PYTHON_ENDPOINT": {
+            1: "LIVE_RESOURCE_SAMPLE_BEGIN",
+            2: "LIVE_RESOURCE_SAMPLE_OK",
+        },
+        "RUST_ENDPOINT": {
+            1: "LIVE_RESOURCE_SAMPLE_BEGIN",
+            2: "LIVE_RESOURCE_SAMPLE_OK",
+        },
     }
     seen_lane_events: set[tuple[str, int]] = set()
     hashes: list[str] = []
@@ -1376,7 +2857,7 @@ def _scheduling_admission_burst_exact_v3(
             or _RAW_SHA256.fullmatch(str(row.get("raw_sha256"))) is None
         ):
             return False
-        payload = _scheduling_probe_payload_v3(
+        payload = _scheduling_probe_payload_v5(
             slot_id, window, burst, ordinal, lane, lane_ordinal, str(operation)
         )
         expected_hash = sha256(payload).hexdigest()
@@ -1412,7 +2893,7 @@ def _scheduling_admission_burst_exact_v3(
     sampler_by_actor: dict[str, Mapping[str, object]] = {}
     if len(samplers) != 2:
         return False
-    for actor, row in zip(_SCHEDULING_SAMPLER_ACTORS_V3, samplers):
+    for actor, row in zip(_SCHEDULING_SAMPLER_ACTORS_V5, samplers):
         if type(row) is not dict or set(row) != {
             "actor_id", "enqueue_ordinal", "enqueue_start_ns",
             "post_enqueue_anchor_ns",
@@ -1467,7 +2948,252 @@ def _scheduling_admission_burst_exact_v3(
     return type(value.get("passed")) is bool and value["passed"] is passed
 
 
-def _scheduling_admission_evidence_semantics_v3(
+_SCHEDULING_BURST_EVENT_BY_CODE_V5: Final = {
+    "C1": ("CONTROLLER", 1, "SUPERVISOR_STAGE_04_OK"),
+    "C2": ("CONTROLLER", 2, "SUPERVISOR_STAGE_05_BEGIN"),
+    "C3": ("CONTROLLER", 3, "HELD_ACTOR_CLOSE_BEGIN"),
+    "P1": ("PYTHON_ENDPOINT", 1, "LIVE_RESOURCE_SAMPLE_BEGIN"),
+    "P2": ("PYTHON_ENDPOINT", 2, "LIVE_RESOURCE_SAMPLE_OK"),
+    "R1": ("RUST_ENDPOINT", 1, "LIVE_RESOURCE_SAMPLE_BEGIN"),
+    "R2": ("RUST_ENDPOINT", 2, "LIVE_RESOURCE_SAMPLE_OK"),
+}
+_SCHEDULING_BURST_CODE_BY_EVENT_V5: Final = {
+    value: key for key, value in _SCHEDULING_BURST_EVENT_BY_CODE_V5.items()
+}
+_SCHEDULING_BURST_CHAIN_GENESIS_V5: Final = sha256(
+    b"hegel-phase3a-q05b-scheduling-critical-burst-chain-genesis/5"
+).hexdigest()
+_SCHEDULING_BURST_CHAIN_DOMAIN_V5: Final = (
+    b"hegel-phase3a-q05b-scheduling-critical-burst-chain-step/5\x00"
+)
+
+
+def _scheduling_burst_chain_step_v5(
+    previous_digest: str, enqueue_ordinal: int, raw_sha256: str
+) -> str:
+    if (
+        type(previous_digest) is not str
+        or _RAW_SHA256.fullmatch(previous_digest) is None
+        or type(enqueue_ordinal) is not int
+        or not 1 <= enqueue_ordinal < 2**64
+        or type(raw_sha256) is not str
+        or _RAW_SHA256.fullmatch(raw_sha256) is None
+    ):
+        _fail(
+            _SCHEDULING_ADMISSION_FAILURE_V2,
+            "critical burst chain inputs differ",
+            terminal=True,
+        )
+    return sha256(
+        _SCHEDULING_BURST_CHAIN_DOMAIN_V5
+        + bytes.fromhex(previous_digest)
+        + enqueue_ordinal.to_bytes(8, "big")
+        + bytes.fromhex(raw_sha256)
+    ).hexdigest()
+
+
+def _compact_scheduling_admission_burst_v5(
+    policy: Mapping[str, object],
+    slot_id: str,
+    window: int,
+    value: Mapping[str, object],
+) -> dict[str, object]:
+    if not _scheduling_admission_burst_exact_v5(
+        policy, slot_id, window, value
+    ):
+        _fail(
+            _SCHEDULING_ADMISSION_FAILURE_V2,
+            "critical burst cannot be compacted",
+            terminal=True,
+        )
+    codes: list[str] = []
+    chain = _SCHEDULING_BURST_CHAIN_GENESIS_V5
+    for ordinal, row in enumerate(
+        value["enqueue_rows_in_global_order"], start=1
+    ):
+        event = (
+            str(row["lane_id"]),
+            int(row["lane_event_ordinal"]),
+            str(row["operation"]),
+        )
+        code = _SCHEDULING_BURST_CODE_BY_EVENT_V5.get(event)
+        if code is None:
+            _fail(
+                _SCHEDULING_ADMISSION_FAILURE_V2,
+                "critical burst event code differs",
+                terminal=True,
+            )
+        codes.append(code)
+        chain = _scheduling_burst_chain_step_v5(
+            chain, ordinal, str(row["raw_sha256"])
+        )
+    durations = [
+        int(row["duration_ns"])
+        for row in value["durable_rows_in_global_order"]
+    ]
+    compact: dict[str, object] = {
+        "burst_ordinal": value["burst_ordinal"],
+        "release_deadline_ns": value["release_deadline_ns"],
+        "enqueue_order_codes_in_global_order": codes,
+        "payload_chain_digest": chain,
+        "sampler_rows_in_actor_order": deepcopy(
+            value["sampler_rows_in_actor_order"]
+        ),
+        "queue_start_depth": value["queue_start_depth"],
+        "queue_end_depth": value["queue_end_depth"],
+        "queue_high_watermark_records": value[
+            "queue_high_watermark_records"
+        ],
+        "dropped_record_count": value["dropped_record_count"],
+        "duplicate_record_count": value["duplicate_record_count"],
+        "reordered_record_count": value["reordered_record_count"],
+        "records_enqueued": value["records_enqueued"],
+        "records_durable": value["records_durable"],
+        "durable_duration_ns_total": sum(durations),
+        "durable_duration_ns_minimum": min(durations),
+        "durable_duration_ns_maximum": max(durations),
+        "burst_start_ns": value["burst_start_ns"],
+        "burst_finish_ns": value["burst_finish_ns"],
+        "burst_drain_ns": value["burst_drain_ns"],
+        "passed": value["passed"],
+    }
+    if not _scheduling_admission_compact_burst_exact_v5(
+        policy, slot_id, window, compact
+    ):
+        _fail(
+            _SCHEDULING_ADMISSION_FAILURE_V2,
+            "compacted critical burst evidence differs",
+            terminal=True,
+        )
+    return compact
+
+
+def _scheduling_admission_compact_burst_exact_v5(
+    policy: Mapping[str, object],
+    slot_id: str,
+    window: int,
+    value: object,
+) -> bool:
+    fields = {
+        "burst_ordinal", "release_deadline_ns",
+        "enqueue_order_codes_in_global_order", "payload_chain_digest",
+        "sampler_rows_in_actor_order", "queue_start_depth", "queue_end_depth",
+        "queue_high_watermark_records", "dropped_record_count",
+        "duplicate_record_count", "reordered_record_count", "records_enqueued",
+        "records_durable", "durable_duration_ns_total",
+        "durable_duration_ns_minimum", "durable_duration_ns_maximum",
+        "burst_start_ns", "burst_finish_ns", "burst_drain_ns", "passed",
+    }
+    if type(value) is not dict or set(value) != fields:
+        return False
+    burst = value.get("burst_ordinal")
+    release = value.get("release_deadline_ns")
+    start = value.get("burst_start_ns")
+    finish = value.get("burst_finish_ns")
+    drain = value.get("burst_drain_ns")
+    codes = value.get("enqueue_order_codes_in_global_order")
+    samplers = value.get("sampler_rows_in_actor_order")
+    uint_names = (
+        "queue_start_depth", "queue_end_depth",
+        "queue_high_watermark_records", "dropped_record_count",
+        "duplicate_record_count", "reordered_record_count", "records_enqueued",
+        "records_durable", "durable_duration_ns_total",
+        "durable_duration_ns_minimum", "durable_duration_ns_maximum",
+    )
+    if (
+        type(burst) is not int
+        or not 1 <= burst <= int(policy["bursts_per_window"])
+        or not all(_uint64_exact(item) for item in (release, start, finish, drain))
+        or start != release
+        or finish < start
+        or drain != finish - start
+        or any(not _uint64_exact(value.get(name)) for name in uint_names)
+        or type(codes) is not list
+        or len(codes) != int(policy["records_per_burst"])
+        or any(type(code) is not str for code in codes)
+        or set(codes) != set(_SCHEDULING_BURST_EVENT_BY_CODE_V5)
+        or type(samplers) is not list
+        or len(samplers) != 2
+    ):
+        return False
+    positions = {code: index for index, code in enumerate(codes)}
+    if not (
+        positions["C1"] < positions["C2"] < positions["C3"]
+        and positions["P1"] < positions["P2"]
+        and positions["R1"] < positions["R2"]
+    ):
+        return False
+    chain = _SCHEDULING_BURST_CHAIN_GENESIS_V5
+    for ordinal, code in enumerate(codes, start=1):
+        lane, lane_ordinal, operation = _SCHEDULING_BURST_EVENT_BY_CODE_V5[code]
+        payload = _scheduling_probe_payload_v5(
+            slot_id,
+            window,
+            int(burst),
+            ordinal,
+            lane,
+            lane_ordinal,
+            operation,
+        )
+        chain = _scheduling_burst_chain_step_v5(
+            chain, ordinal, sha256(payload).hexdigest()
+        )
+    if value.get("payload_chain_digest") != chain:
+        return False
+    for actor, row in zip(_SCHEDULING_SAMPLER_ACTORS_V5, samplers):
+        if type(row) is not dict or set(row) != {
+            "actor_id", "enqueue_ordinal", "enqueue_start_ns",
+            "post_enqueue_anchor_ns",
+            "deadline_to_post_enqueue_anchor_ns", "projected_gap_ns", "passed",
+        }:
+            return False
+        enqueue_ordinal = row.get("enqueue_ordinal")
+        enqueue_start = row.get("enqueue_start_ns")
+        anchor = row.get("post_enqueue_anchor_ns")
+        critical = row.get("deadline_to_post_enqueue_anchor_ns")
+        projected = row.get("projected_gap_ns")
+        actor_code = "P1" if actor == "PYTHON_ENDPOINT" else "R1"
+        if (
+            row.get("actor_id") != actor
+            or enqueue_ordinal != positions[actor_code] + 1
+            or not all(_uint64_exact(item) for item in (
+                enqueue_start, anchor, critical, projected
+            ))
+            or enqueue_start < release
+            or anchor < enqueue_start
+            or critical != anchor - release
+            or projected != int(policy["sampling_target_wait_ns"]) + critical
+            or row.get("passed") is not (
+                critical <= int(policy[
+                    "maximum_sampler_deadline_to_post_enqueue_anchor_ns"
+                ])
+                and projected <= int(policy["maximum_projected_gap_ns"])
+            )
+        ):
+            return False
+    minimum = int(value["durable_duration_ns_minimum"])
+    maximum = int(value["durable_duration_ns_maximum"])
+    total = int(value["durable_duration_ns_total"])
+    records = int(policy["records_per_burst"])
+    if minimum > maximum or not minimum * records <= total <= maximum * records:
+        return False
+    passed = (
+        value["queue_start_depth"] == 0
+        and value["queue_end_depth"] == 0
+        and value["queue_high_watermark_records"]
+        <= int(policy["maximum_queue_high_watermark_records"])
+        and value["dropped_record_count"] == 0
+        and value["duplicate_record_count"] == 0
+        and value["reordered_record_count"] == 0
+        and value["records_enqueued"] == records
+        and value["records_durable"] == records
+        and drain <= int(policy["maximum_burst_drain_ns"])
+        and all(row["passed"] is True for row in samplers)
+    )
+    return type(value.get("passed")) is bool and value["passed"] is passed
+
+
+def _scheduling_admission_evidence_semantics_v5(
     contract: Mapping[str, object], value: object, *, require_passed: bool | None,
 ) -> bool:
     try:
@@ -1488,7 +3214,7 @@ def _scheduling_admission_evidence_semantics_v3(
     selected = value.get("selected_window_ordinal")
     passed = value.get("passed")
     if (
-        value.get("schema_version") != _SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V3
+        value.get("schema_version") != _SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V5
         or type(slot_id) is not str or slot_id not in valid_slots
         or value.get("policy") != policy
         or type(passed) is not bool
@@ -1506,6 +3232,7 @@ def _scheduling_admission_evidence_semantics_v3(
         if type(row) is not dict or set(row) != {
             "window_ordinal", "quiet_start_ns", "quiet_finish_ns",
             "quiet_duration_ns", "bursts_in_strict_order",
+            "sustained_publication_or_null",
             "maximum_sampler_deadline_to_post_enqueue_anchor_ns",
             "maximum_projected_gap_ns", "maximum_burst_drain_ns",
             "maximum_queue_high_watermark_records", "passed",
@@ -1537,7 +3264,7 @@ def _scheduling_admission_evidence_semantics_v3(
         previous_burst_finish = quiet_finish
         for burst_index, burst_row in enumerate(bursts, start=1):
             if (
-                not _scheduling_admission_burst_exact_v3(
+                not _scheduling_admission_compact_burst_exact_v5(
                     policy, slot_id, index, burst_row
                 )
                 or burst_row["burst_ordinal"] != burst_index
@@ -1556,9 +3283,26 @@ def _scheduling_admission_evidence_semantics_v3(
             max(burst_row["burst_drain_ns"] for burst_row in bursts),
             max(burst_row["queue_high_watermark_records"] for burst_row in bursts),
         )
-        window_passed = all(burst_row["passed"] is True for burst_row in bursts)
+        critical_passed = all(
+            burst_row["passed"] is True for burst_row in bursts
+        )
+        sustained = row.get("sustained_publication_or_null")
+        sustained_exact = (
+            type(sustained) is dict
+            and _scheduling_sustained_evidence_exact_v5(
+                policy, str(slot_id), index, sustained
+            )
+            and sustained["measurement_start_ns"] >= previous_burst_finish
+        )
+        window_passed = (
+            critical_passed
+            and sustained_exact
+            and sustained["passed"] is True
+        )
         if (
             maxima != expected_maxima
+            or (critical_passed is False and sustained is not None)
+            or (critical_passed is True and not sustained_exact)
             or type(row.get("passed")) is not bool
             or row["passed"] is not window_passed
             or (index < len(rows) and row["passed"] is not False)
@@ -1566,19 +3310,23 @@ def _scheduling_admission_evidence_semantics_v3(
             or (passed is False and row["passed"] is not False)
         ):
             return False
-        previous_finish = previous_burst_finish
+        previous_finish = (
+            int(sustained["measurement_finish_ns"])
+            if sustained_exact
+            else previous_burst_finish
+        )
     return True
 
 
 def _scheduling_admission_evidence_exact_v2(
     contract: Mapping[str, object], value: object
 ) -> bool:
-    return _scheduling_admission_evidence_semantics_v3(
+    return _scheduling_admission_evidence_semantics_v5(
         contract, value, require_passed=True
     )
 
 
-def _scheduling_admission_failure_detail_v3(value: object) -> str | None:
+def _scheduling_admission_failure_detail_v5(value: object) -> str | None:
     if type(value) is not dict:
         return None
     slot_id = value.get("slot_id")
@@ -1604,7 +3352,23 @@ def _scheduling_admission_failure_detail_v3(value: object) -> str | None:
         }
         if any(not _uint64_exact(item) for item in values.values()):
             return None
-        maxima.append({key: int(item) for key, item in values.items()})
+        summary = {key: int(item) for key, item in values.items()}
+        sustained = row.get("sustained_publication_or_null")
+        if sustained is not None:
+            if type(sustained) is not dict:
+                return None
+            for source, target in (
+                ("timed_records_durable_by_deadline", "sustained_by_deadline"),
+                ("timed_records_durable_after_deadline", "sustained_after_deadline"),
+                ("retained_records_at_measurement_end", "retained_cardinality"),
+                ("queue_high_watermark_records", "sustained_high_watermark"),
+                ("terminal_drain_ns", "sustained_terminal_drain_ns"),
+            ):
+                item = sustained.get(source)
+                if not _uint64_exact(item):
+                    return None
+                summary[target] = int(item)
+        maxima.append(summary)
     return (
         f"{slot_id} admission exhausted before consume/Popen; "
         f"window_maxima={maxima}; observed admission is not a runtime "
@@ -1612,7 +3376,7 @@ def _scheduling_admission_failure_detail_v3(value: object) -> str | None:
     )
 
 
-def _run_stage5_scheduling_admission_burst_v3(
+def _run_stage5_scheduling_admission_burst_v5(
     directory_fd: int,
     slot_id: str,
     window: int,
@@ -1621,7 +3385,7 @@ def _run_stage5_scheduling_admission_burst_v3(
     *,
     clock_ns: Callable[[], int] = time.monotonic_ns,
     probe_publisher: Callable[[int, str, bytes, Callable[[], int]], int] =
-        _five_fsync_publication_probe_v3,
+        _five_fsync_publication_probe_v5,
 ) -> dict[str, object]:
     queue: deque[dict[str, object]] = deque()
     condition = threading.Condition(threading.Lock())
@@ -1656,7 +3420,7 @@ def _run_stage5_scheduling_admission_burst_v3(
                         dropped += 1
                         continue
                     enqueue_ordinal = len(enqueue_rows) + 1
-                    payload = _scheduling_probe_payload_v3(
+                    payload = _scheduling_probe_payload_v5(
                         slot_id, window, burst, enqueue_ordinal, lane_id,
                         lane_event_ordinal, operation,
                     )
@@ -1676,7 +3440,10 @@ def _run_stage5_scheduling_admission_burst_v3(
                     queue_high_watermark = max(queue_high_watermark, len(queue))
                     condition.notify_all()
                 post_enqueue_anchor = clock_ns()
-                if lane_id in _SCHEDULING_SAMPLER_ACTORS_V3:
+                if (
+                    lane_id in _SCHEDULING_SAMPLER_ACTORS_V5
+                    and operation == "LIVE_RESOURCE_SAMPLE_BEGIN"
+                ):
                     critical = post_enqueue_anchor - release_deadline_ns
                     projected = int(policy["sampling_target_wait_ns"]) + critical
                     sampler_rows_by_actor[lane_id] = {
@@ -1714,7 +3481,7 @@ def _run_stage5_scheduling_admission_burst_v3(
                 ordinal = int(item["enqueue_ordinal"])
                 duration = probe_publisher(
                     directory_fd,
-                    f"w{window:02d}-p{((burst - 1) * 5 + ordinal):03d}",
+                    f"w{window:02d}-p{((burst - 1) * 7 + ordinal):03d}",
                     item["payload"],
                     clock_ns,
                 )
@@ -1732,18 +3499,21 @@ def _run_stage5_scheduling_admission_burst_v3(
     threads = [
         threading.Thread(
             target=producer,
-            args=("CONTROLLER", _SCHEDULING_CONTROLLER_EVENTS_V3),
+            args=("CONTROLLER", _SCHEDULING_CONTROLLER_EVENTS_V5),
             name=f"q05b-admission-controller-w{window}-b{burst}",
             daemon=True,
         ),
         *[
             threading.Thread(
                 target=producer,
-                args=(actor, ("LIVE_RESOURCE_SAMPLE_BEGIN",)),
+                args=(actor, (
+                    "LIVE_RESOURCE_SAMPLE_BEGIN",
+                    "LIVE_RESOURCE_SAMPLE_OK",
+                )),
                 name=f"q05b-admission-{actor.lower()}-w{window}-b{burst}",
                 daemon=True,
             )
-            for actor in _SCHEDULING_SAMPLER_ACTORS_V3
+            for actor in _SCHEDULING_SAMPLER_ACTORS_V5
         ],
     ]
     worker = threading.Thread(
@@ -1855,7 +3625,7 @@ def _run_stage5_scheduling_admission_burst_v3(
     if not _uint64_exact(burst_finish_ns) or burst_finish_ns < burst_start_ns:
         _fail(_SCHEDULING_ADMISSION_FAILURE_V2, "burst finish clock differs", terminal=True)
     sampler_rows = [sampler_rows_by_actor[actor]
-                    for actor in _SCHEDULING_SAMPLER_ACTORS_V3]
+                    for actor in _SCHEDULING_SAMPLER_ACTORS_V5]
     reordered = sum(
         row["enqueue_ordinal"] != ordinal
         for ordinal, row in enumerate(durable_rows, start=1)
@@ -1892,10 +3662,592 @@ def _run_stage5_scheduling_admission_burst_v3(
         and result["burst_drain_ns"] <= int(policy["maximum_burst_drain_ns"])
         and all(row["passed"] is True for row in sampler_rows)
     )
-    if not _scheduling_admission_burst_exact_v3(
+    if not _scheduling_admission_burst_exact_v5(
         policy, slot_id, window, result
     ):
         _fail(_SCHEDULING_ADMISSION_FAILURE_V2, "burst evidence differs", terminal=True)
+    return result
+
+
+def _run_stage5_sustained_publication_admission_v5(
+    directory_fd: int,
+    slot_id: str,
+    window: int,
+    policy: Mapping[str, object],
+    *,
+    clock_ns: Callable[[], int] = time.monotonic_ns,
+    sleeper: Callable[[float], None] = time.sleep,
+    probe_publisher: Callable[[int, str, bytes, Callable[[], int]], int] =
+        _retained_five_fsync_publication_probe_v5,
+) -> dict[str, object]:
+    """Offer 40 records/s for 120 s while retaining every immutable file."""
+
+    if (
+        type(directory_fd) is not int
+        or directory_fd < 0
+        or type(slot_id) is not str
+        or _SAFE_NAME.fullmatch(slot_id) is None
+        or type(window) is not int
+        or not 1 <= window <= 3
+        or not callable(clock_ns)
+        or not callable(sleeper)
+        or not callable(probe_publisher)
+    ):
+        _fail(
+            _SCHEDULING_ADMISSION_FAILURE_V2,
+            "sustained admission inputs differ",
+            terminal=True,
+        )
+    required = (
+        "sustained_offered_rate_records_per_second",
+        "sustained_measurement_duration_ns",
+        "sustained_epoch_duration_ns",
+        "sustained_prefill_retained_records",
+        "sustained_timed_records",
+        "sustained_records_per_cycle",
+        "sustained_cycle_count",
+        "sampling_target_wait_ns",
+        "prior_failed_trajectory_event_count",
+        "minimum_final_retained_records",
+        "minimum_sustained_publication_rate_records_per_second",
+        "maximum_sustained_queue_high_watermark_records",
+        "maximum_sampler_deadline_to_post_enqueue_anchor_ns",
+        "sustained_queue_target_records",
+        "maximum_sustained_terminal_drain_ns",
+    )
+    if any(type(policy.get(name)) is not int or int(policy[name]) <= 0
+           for name in required):
+        _fail(
+            _SCHEDULING_ADMISSION_FAILURE_V2,
+            "sustained admission policy inputs differ",
+            terminal=True,
+        )
+    offered = int(policy["sustained_offered_rate_records_per_second"])
+    measurement_duration_ns = int(policy["sustained_measurement_duration_ns"])
+    epoch_duration_ns = int(policy["sustained_epoch_duration_ns"])
+    prefill_records = int(policy["sustained_prefill_retained_records"])
+    timed_records = int(policy["sustained_timed_records"])
+    records_per_cycle = int(policy["sustained_records_per_cycle"])
+    cycle_count = int(policy["sustained_cycle_count"])
+    cycle_interval_ns = int(policy["sampling_target_wait_ns"])
+    queue_target = int(policy["sustained_queue_target_records"])
+    maximum_terminal_drain_ns = int(
+        policy["maximum_sustained_terminal_drain_ns"]
+    )
+    if (
+        1_000_000_000 % offered != 0
+        or measurement_duration_ns % epoch_duration_ns != 0
+        or offered * measurement_duration_ns // 1_000_000_000
+        != timed_records
+        or records_per_cycle != len(_SCHEDULING_SUSTAINED_OPERATIONS_V5)
+        or records_per_cycle * cycle_count != timed_records
+        or cycle_count * cycle_interval_ns != measurement_duration_ns
+        or records_per_cycle * 1_000_000_000 // cycle_interval_ns != offered
+        or not records_per_cycle <= queue_target <= timed_records
+        or prefill_records + timed_records
+        != int(policy["minimum_final_retained_records"])
+        or int(policy["minimum_final_retained_records"])
+        <= int(policy["prior_failed_trajectory_event_count"])
+        or offered < int(policy[
+            "minimum_sustained_publication_rate_records_per_second"
+        ])
+        or queue_target > int(policy[
+            "maximum_sustained_queue_high_watermark_records"
+        ])
+        or prefill_records + timed_records > 999_999
+    ):
+        _fail(
+            _SCHEDULING_ADMISSION_FAILURE_V2,
+            "sustained admission rate topology differs",
+            terminal=True,
+        )
+    epoch_count = measurement_duration_ns // epoch_duration_ns
+    pending: deque[tuple[int, bytes, str]] = deque()
+    condition = threading.Condition(threading.Lock())
+    release = threading.Event()
+    worker_ready = False
+    producer_done = False
+    publisher_done = False
+    publisher_errors: list[BaseException] = []
+    owned_tokens: list[str] = []
+    chain_digest = _SCHEDULING_SUSTAINED_CHAIN_GENESIS_V5
+    prefill_chain_digest = chain_digest
+    prefill_duration_total = 0
+    timed_enqueued = 0
+    timed_durable = 0
+    timed_durable_by_deadline = 0
+    timed_durable_after_deadline = 0
+    queue_high_watermark = 0
+    duplicate_count = 0
+    reordered_count = 0
+    sampler_anchor_count = 0
+    maximum_sampler_anchor_ns = 0
+    seen_ordinals: set[int] = set()
+    last_timed_finish_ns: int | None = None
+    measurement_start_ns = -1
+    measurement_deadline_ns = -1
+    measurement_finish_ns = -1
+    epoch_bins: list[dict[str, object]] = [
+        {
+            "records": 0,
+            "first": None,
+            "last": None,
+            "total_duration": 0,
+            "minimum_duration": None,
+            "maximum_duration": None,
+            "chain_digest": None,
+        }
+        for _ in range(epoch_count)
+    ]
+    sampler_anchor_bins: list[dict[str, object]] = [
+        {"count": 0, "maximum": None} for _ in range(epoch_count)
+    ]
+
+    def item_for_timed_ordinal(
+        timed_ordinal: int,
+    ) -> tuple[int, bytes, str]:
+        global_ordinal = prefill_records + timed_ordinal
+        return (
+            global_ordinal,
+            _scheduling_sustained_probe_payload_v5(
+                slot_id, window, global_ordinal, prefill_records
+            ),
+            _scheduling_sustained_record_digest_v5(
+                slot_id, window, global_ordinal, prefill_records
+            ),
+        )
+
+    def enqueue_timed_cycle(cycle_ordinal: int, due_ns: int) -> bool:
+        nonlocal timed_enqueued, queue_high_watermark
+        nonlocal sampler_anchor_count, maximum_sampler_anchor_ns
+        first_timed_ordinal = (cycle_ordinal - 1) * records_per_cycle + 1
+        items = [
+            item_for_timed_ordinal(first_timed_ordinal + offset)
+            for offset in range(records_per_cycle)
+        ]
+        with condition:
+            if (
+                publisher_errors
+                or len(pending) + records_per_cycle > queue_target
+            ):
+                return False
+            for item in items:
+                pending.append(item)
+                timed_enqueued += 1
+                global_ordinal = item[0]
+                identity = _scheduling_sustained_record_identity_v5(
+                    slot_id, window, global_ordinal, prefill_records
+                )
+                if identity["operation"] == "LIVE_RESOURCE_SAMPLE_BEGIN":
+                    post_enqueue_anchor_ns = clock_ns()
+                    if (
+                        not _uint64_exact(post_enqueue_anchor_ns)
+                        or post_enqueue_anchor_ns < due_ns
+                    ):
+                        raise RuntimeError(
+                            "sustained sampler enqueue anchor differs"
+                        )
+                    critical_ns = int(post_enqueue_anchor_ns) - due_ns
+                    sampler_anchor_count += 1
+                    maximum_sampler_anchor_ns = max(
+                        maximum_sampler_anchor_ns, critical_ns
+                    )
+                    elapsed = min(
+                        max(0, due_ns - measurement_start_ns),
+                        measurement_duration_ns - 1,
+                    )
+                    epoch_index = min(
+                        elapsed // epoch_duration_ns, epoch_count - 1
+                    )
+                    anchor_row = sampler_anchor_bins[epoch_index]
+                    anchor_row["count"] = int(anchor_row["count"]) + 1
+                    anchor_row["maximum"] = (
+                        critical_ns
+                        if anchor_row["maximum"] is None
+                        else max(
+                            int(anchor_row["maximum"]), critical_ns
+                        )
+                    )
+            queue_high_watermark = max(queue_high_watermark, len(pending))
+            condition.notify_all()
+        return True
+
+    def publisher() -> None:
+        nonlocal worker_ready, publisher_done, chain_digest
+        nonlocal timed_durable, timed_durable_by_deadline
+        nonlocal timed_durable_after_deadline, duplicate_count
+        nonlocal reordered_count, last_timed_finish_ns
+        try:
+            with condition:
+                worker_ready = True
+                condition.notify_all()
+            release.wait()
+            while True:
+                with condition:
+                    condition.wait_for(lambda: bool(pending) or producer_done)
+                    if not pending and producer_done:
+                        return
+                    global_ordinal, payload, record_digest = pending.popleft()
+                    condition.notify_all()
+                token = _scheduling_sustained_probe_token_v5(
+                    window, global_ordinal
+                )
+                duration = probe_publisher(
+                    directory_fd, token, payload, clock_ns
+                )
+                finished = clock_ns()
+                if not _uint64_exact(duration) or not _uint64_exact(finished):
+                    raise RuntimeError(
+                        "sustained publication duration or finish differs"
+                    )
+                owned_tokens.append(token)
+                expected_ordinal = prefill_records + timed_durable + 1
+                if global_ordinal in seen_ordinals:
+                    duplicate_count += 1
+                seen_ordinals.add(global_ordinal)
+                if global_ordinal != expected_ordinal:
+                    reordered_count += 1
+                chain_digest = _scheduling_sustained_chain_step_v5(
+                    chain_digest, global_ordinal, record_digest
+                )
+                timed_durable += 1
+                last_timed_finish_ns = int(finished)
+                if finished <= measurement_deadline_ns:
+                    timed_durable_by_deadline += 1
+                    elapsed = max(0, int(finished) - measurement_start_ns)
+                    epoch_index = (
+                        0 if elapsed == 0 else
+                        min((elapsed - 1) // epoch_duration_ns, epoch_count - 1)
+                    )
+                    row = epoch_bins[epoch_index]
+                    if row["records"] == 0:
+                        row["first"] = global_ordinal
+                        row["minimum_duration"] = int(duration)
+                        row["maximum_duration"] = int(duration)
+                    row["records"] = int(row["records"]) + 1
+                    row["last"] = global_ordinal
+                    row["total_duration"] = (
+                        int(row["total_duration"]) + int(duration)
+                    )
+                    row["minimum_duration"] = min(
+                        int(row["minimum_duration"]), int(duration)
+                    )
+                    row["maximum_duration"] = max(
+                        int(row["maximum_duration"]), int(duration)
+                    )
+                    row["chain_digest"] = chain_digest
+                else:
+                    timed_durable_after_deadline += 1
+        except BaseException as error:
+            with condition:
+                publisher_errors.append(error)
+                pending.clear()
+                condition.notify_all()
+        finally:
+            with condition:
+                publisher_done = True
+                condition.notify_all()
+
+    queue_start_depth = records_per_cycle
+    worker = threading.Thread(
+        target=publisher,
+        name=f"q05b-admission-sustained-w{window}",
+        daemon=True,
+    )
+    primary_error: BaseException | None = None
+    cleanup_errors: list[str] = []
+    previous_signal_mask: set[signal.Signals] | None = None
+    worker_started = False
+    try:
+        for global_ordinal in range(1, prefill_records + 1):
+            token = _scheduling_sustained_probe_token_v5(
+                window, global_ordinal
+            )
+            duration = probe_publisher(
+                directory_fd,
+                token,
+                _scheduling_sustained_probe_payload_v5(
+                    slot_id, window, global_ordinal, prefill_records
+                ),
+                clock_ns,
+            )
+            if not _uint64_exact(duration):
+                raise RuntimeError("sustained prefill duration differs")
+            owned_tokens.append(token)
+            prefill_duration_total += int(duration)
+            chain_digest = _scheduling_sustained_chain_step_v5(
+                chain_digest,
+                global_ordinal,
+                _scheduling_sustained_record_digest_v5(
+                    slot_id, window, global_ordinal, prefill_records
+                ),
+            )
+        prefill_chain_digest = chain_digest
+        previous_signal_mask = signal.pthread_sigmask(
+            signal.SIG_BLOCK, {signal.SIGINT}
+        )
+        worker.start()
+        worker_started = True
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous_signal_mask)
+        previous_signal_mask = None
+        with condition:
+            if not condition.wait_for(lambda: worker_ready, timeout=2.0):
+                raise RuntimeError("sustained publisher readiness timed out")
+        measurement_start_ns = clock_ns()
+        if not _uint64_exact(measurement_start_ns):
+            raise RuntimeError("sustained measurement start clock differs")
+        measurement_deadline_ns = (
+            measurement_start_ns + measurement_duration_ns
+        )
+        if measurement_deadline_ns >= 2**64:
+            raise RuntimeError("sustained measurement deadline overflowed")
+        if not enqueue_timed_cycle(1, measurement_start_ns):
+            raise RuntimeError("sustained initial cycle was rejected")
+        release.set()
+        for cycle_ordinal in range(2, cycle_count + 1):
+            due_ns = measurement_start_ns + (
+                cycle_ordinal - 1
+            ) * cycle_interval_ns
+            now_ns = clock_ns()
+            if not _uint64_exact(now_ns):
+                raise RuntimeError("sustained producer clock differs")
+            if now_ns < due_ns:
+                sleeper((due_ns - now_ns) / 1_000_000_000)
+            if not enqueue_timed_cycle(cycle_ordinal, due_ns):
+                break
+        with condition:
+            producer_done = True
+            condition.notify_all()
+        now_ns = clock_ns()
+        if not _uint64_exact(now_ns):
+            raise RuntimeError("sustained completion clock differs")
+        if now_ns < measurement_deadline_ns and not publisher_errors:
+            sleeper(
+                (measurement_deadline_ns - now_ns) / 1_000_000_000
+            )
+        terminal_deadline = time.monotonic() + (
+            maximum_terminal_drain_ns / 1_000_000_000
+        )
+        worker.join(max(0.0, terminal_deadline - time.monotonic()))
+        if worker.is_alive():
+            raise RuntimeError("sustained terminal drain policy was exceeded")
+        if publisher_errors:
+            raise publisher_errors[0]
+        measurement_finish_ns = clock_ns()
+        if (
+            not _uint64_exact(measurement_finish_ns)
+            or measurement_finish_ns < measurement_deadline_ns
+        ):
+            raise RuntimeError("sustained measurement finish clock differs")
+    except BaseException as error:
+        primary_error = error
+    finally:
+        with condition:
+            producer_done = True
+            condition.notify_all()
+        release.set()
+        if worker.ident is not None and worker.is_alive():
+            worker.join()
+        if previous_signal_mask is not None:
+            try:
+                signal.pthread_sigmask(
+                    signal.SIG_SETMASK, previous_signal_mask
+                )
+            except BaseException as error:
+                cleanup_errors.append(
+                    f"signal-mask-restore:{type(error).__name__}:{error}"
+                )
+        retained_count = 0
+        for token in owned_tokens:
+            final = _scheduling_sustained_final_name_v5(token)
+            try:
+                final_stat = os.stat(
+                    final, dir_fd=directory_fd, follow_symlinks=False
+                )
+                if (
+                    not stat.S_ISREG(final_stat.st_mode)
+                    or stat.S_IMODE(final_stat.st_mode) != 0o444
+                    or final_stat.st_uid != os.geteuid()
+                    or final_stat.st_nlink != 1
+                    or final_stat.st_size != 4096
+                ):
+                    cleanup_errors.append(f"retained-identity:{final}")
+                else:
+                    retained_count += 1
+            except BaseException as error:
+                cleanup_errors.append(
+                    f"retained-stat:{final}:{type(error).__name__}:{error}"
+                )
+        removed_count = 0
+        for token in reversed(owned_tokens):
+            final = _scheduling_sustained_final_name_v5(token)
+            staging = f".q05b-admission-{token}.staging-v5"
+            try:
+                os.unlink(final, dir_fd=directory_fd)
+                removed_count += 1
+            except BaseException as error:
+                cleanup_errors.append(
+                    f"unlink:{final}:{type(error).__name__}:{error}"
+                )
+            try:
+                os.unlink(staging, dir_fd=directory_fd)
+            except FileNotFoundError:
+                pass
+            except BaseException as error:
+                cleanup_errors.append(
+                    f"unlink:{staging}:{type(error).__name__}:{error}"
+                )
+        try:
+            os.fsync(directory_fd)
+        except BaseException as error:
+            cleanup_errors.append(f"dir-fsync:{type(error).__name__}:{error}")
+        for token in owned_tokens:
+            for basename in (
+                _scheduling_sustained_final_name_v5(token),
+                f".q05b-admission-{token}.staging-v5",
+            ):
+                try:
+                    os.stat(
+                        basename,
+                        dir_fd=directory_fd,
+                        follow_symlinks=False,
+                    )
+                    cleanup_errors.append(f"residual:{basename}")
+                except FileNotFoundError:
+                    pass
+                except BaseException as error:
+                    cleanup_errors.append(
+                        f"absence:{basename}:{type(error).__name__}:{error}"
+                    )
+        try:
+            _require_single_threaded_spawn_controller_v2()
+        except BaseException as error:
+            cleanup_errors.append(
+                f"thread-proof:{type(error).__name__}:{error}"
+            )
+    if primary_error is not None or cleanup_errors:
+        error = primary_error or RuntimeError("sustained cleanup failed")
+        detail = (
+            "sustained publication failed after zero-thread drain: "
+            f"{type(error).__name__}:{error}"
+        )
+        if cleanup_errors:
+            detail += "; cleanup=" + "|".join(cleanup_errors)
+        _fail(
+            _SCHEDULING_ADMISSION_FAILURE_V2,
+            detail,
+            terminal=True,
+        )
+    assert measurement_start_ns >= 0 and measurement_deadline_ns >= 0
+    assert measurement_finish_ns >= measurement_deadline_ns
+    cumulative = 0
+    carried_chain = prefill_chain_digest
+    epoch_rows: list[dict[str, object]] = []
+    for epoch_ordinal, (source, anchor_source) in enumerate(
+        zip(epoch_bins, sampler_anchor_bins), start=1
+    ):
+        count = int(source["records"])
+        cumulative += count
+        if source["chain_digest"] is not None:
+            carried_chain = str(source["chain_digest"])
+        epoch_rows.append({
+            "epoch_ordinal": epoch_ordinal,
+            "start_offset_ns": (epoch_ordinal - 1) * epoch_duration_ns,
+            "finish_offset_ns": epoch_ordinal * epoch_duration_ns,
+            "records_durable": count,
+            "first_global_ordinal_or_null": source["first"],
+            "last_global_ordinal_or_null": source["last"],
+            "total_publication_duration_ns": int(source["total_duration"]),
+            "minimum_publication_duration_ns_or_null": source[
+                "minimum_duration"
+            ],
+            "maximum_publication_duration_ns_or_null": source[
+                "maximum_duration"
+            ],
+            "cumulative_timed_records_durable": cumulative,
+            "sampler_anchor_count": int(anchor_source["count"]),
+            "maximum_sampler_release_to_post_enqueue_anchor_ns_or_null": (
+                anchor_source["maximum"]
+            ),
+            "chain_digest": carried_chain,
+        })
+    dropped = timed_records - timed_enqueued
+    terminal_drain_ns = (
+        max(0, last_timed_finish_ns - measurement_deadline_ns)
+        if last_timed_finish_ns is not None
+        else 0
+    )
+    result: dict[str, object] = {
+        "schema_version": _SCHEDULING_SUSTAINED_EVIDENCE_SCHEMA_V5,
+        "slot_id": slot_id,
+        "window_ordinal": window,
+        "clock_id": "CLOCK_MONOTONIC",
+        "measurement_start_ns": measurement_start_ns,
+        "measurement_deadline_ns": measurement_deadline_ns,
+        "measurement_finish_ns": measurement_finish_ns,
+        "measurement_duration_ns": measurement_duration_ns,
+        "offered_rate_records_per_second": offered,
+        "cycle_interval_ns": cycle_interval_ns,
+        "records_per_cycle": records_per_cycle,
+        "cycle_count": cycle_count,
+        "prefill_records_durable": prefill_records,
+        "prefill_publication_duration_ns_total": prefill_duration_total,
+        "prefill_completed_before_measurement": True,
+        "timed_records_enqueued": timed_enqueued,
+        "timed_records_durable_by_deadline": timed_durable_by_deadline,
+        "timed_records_durable_after_deadline": timed_durable_after_deadline,
+        "records_durable_total": prefill_records + timed_durable,
+        "retained_records_at_measurement_end": retained_count,
+        "queue_start_depth_records": queue_start_depth,
+        "queue_end_depth_records": 0,
+        "queue_high_watermark_records": queue_high_watermark,
+        "dropped_record_count": dropped,
+        "duplicate_record_count": duplicate_count,
+        "reordered_record_count": reordered_count,
+        "last_timed_durable_finish_ns_or_null": last_timed_finish_ns,
+        "terminal_drain_ns": terminal_drain_ns,
+        "sampler_anchor_count": sampler_anchor_count,
+        "maximum_sampler_release_to_post_enqueue_anchor_ns": (
+            maximum_sampler_anchor_ns
+        ),
+        "epoch_aggregates_in_strict_order": epoch_rows,
+        "prefill_chain_digest": prefill_chain_digest,
+        "final_chain_digest": chain_digest,
+        "cleanup_removed_records": removed_count,
+        "cleanup_absence_passed": True,
+        "passed": False,
+    }
+    result["passed"] = (
+        timed_enqueued == timed_records
+        and timed_durable_by_deadline == timed_records
+        and timed_durable_after_deadline == 0
+        and dropped == duplicate_count == reordered_count == 0
+        and result["records_durable_total"]
+        >= int(policy["minimum_final_retained_records"])
+        and result["records_durable_total"]
+        > int(policy["prior_failed_trajectory_event_count"])
+        and timed_durable_by_deadline * 1_000_000_000
+        >= int(policy[
+            "minimum_sustained_publication_rate_records_per_second"
+        ]) * measurement_duration_ns
+        and queue_high_watermark
+        <= int(policy["maximum_sustained_queue_high_watermark_records"])
+        and terminal_drain_ns <= maximum_terminal_drain_ns
+        and maximum_sampler_anchor_ns
+        <= int(policy[
+            "maximum_sampler_deadline_to_post_enqueue_anchor_ns"
+        ])
+        and retained_count == removed_count
+        == result["records_durable_total"]
+    )
+    if not _scheduling_sustained_evidence_exact_v5(
+        policy, slot_id, window, result
+    ):
+        _fail(
+            _SCHEDULING_ADMISSION_FAILURE_V2,
+            "sustained publication evidence differs",
+            terminal=True,
+        )
     return result
 
 
@@ -1904,7 +4256,9 @@ def _run_scheduling_admission_gate_v2(
     clock_ns: Callable[[], int] = time.monotonic_ns,
     sleeper: Callable[[float], None] = time.sleep,
     burst_runner: Callable[..., dict[str, object]] =
-        _run_stage5_scheduling_admission_burst_v3,
+        _run_stage5_scheduling_admission_burst_v5,
+    sustained_runner: Callable[..., dict[str, object]] =
+        _run_stage5_sustained_publication_admission_v5,
 ) -> dict[str, object]:
     policy = _scheduling_admission_policy_v2(contract)
     rows: list[dict[str, object]] = []
@@ -1945,7 +4299,7 @@ def _run_scheduling_admission_gate_v2(
                     f"{type(error).__name__}:{error}",
                     terminal=True,
                 )
-            if not _scheduling_admission_burst_exact_v3(
+            if not _scheduling_admission_burst_exact_v5(
                 policy, slot_id, window, burst_row
             ) or burst_row.get("burst_ordinal") != burst:
                 _fail(_SCHEDULING_ADMISSION_FAILURE_V2, "burst evidence differs", terminal=True)
@@ -1954,12 +4308,54 @@ def _run_scheduling_admission_gate_v2(
             sample for burst_row in bursts
             for sample in burst_row["sampler_rows_in_actor_order"]
         ]
-        passed = all(burst_row["passed"] is True for burst_row in bursts)
+        critical_passed = all(
+            burst_row["passed"] is True for burst_row in bursts
+        )
+        sustained: dict[str, object] | None = None
+        if critical_passed:
+            try:
+                sustained = sustained_runner(
+                    evidence_fd,
+                    slot_id,
+                    window,
+                    policy,
+                    clock_ns=clock_ns,
+                    sleeper=sleeper,
+                )
+            except ShadowRetryCampaignErrorV2:
+                raise
+            except BaseException as error:
+                _fail(
+                    _SCHEDULING_ADMISSION_FAILURE_V2,
+                    f"sustained window {window} failed: "
+                    f"{type(error).__name__}:{error}",
+                    terminal=True,
+                )
+            if not _scheduling_sustained_evidence_exact_v5(
+                policy, slot_id, window, sustained
+            ):
+                _fail(
+                    _SCHEDULING_ADMISSION_FAILURE_V2,
+                    "sustained publication evidence differs",
+                    terminal=True,
+                )
+        passed = (
+            critical_passed
+            and sustained is not None
+            and sustained["passed"] is True
+        )
+        compact_bursts = [
+            _compact_scheduling_admission_burst_v5(
+                policy, slot_id, window, burst_row
+            )
+            for burst_row in bursts
+        ]
         rows.append({
             "window_ordinal": window, "quiet_start_ns": quiet_start,
             "quiet_finish_ns": quiet_finish,
             "quiet_duration_ns": quiet_finish - quiet_start,
-            "bursts_in_strict_order": bursts,
+            "bursts_in_strict_order": compact_bursts,
+            "sustained_publication_or_null": sustained,
             "maximum_sampler_deadline_to_post_enqueue_anchor_ns": max(
                 sample["deadline_to_post_enqueue_anchor_ns"] for sample in sampler_rows
             ),
@@ -1976,7 +4372,7 @@ def _run_scheduling_admission_gate_v2(
         })
         if passed:
             result: dict[str, object] = {
-                "schema_version": _SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V3,
+                "schema_version": _SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V5,
                 "slot_id": slot_id,
                 "policy": deepcopy(policy),
                 "windows_in_strict_order": rows,
@@ -1986,18 +4382,18 @@ def _run_scheduling_admission_gate_v2(
                 _fail(_SCHEDULING_ADMISSION_FAILURE_V2, "admission evidence differs", terminal=True)
             return result
     result = {
-        "schema_version": _SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V3,
+        "schema_version": _SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V5,
         "slot_id": slot_id,
         "policy": deepcopy(policy),
         "windows_in_strict_order": rows,
         "selected_window_ordinal": None,
         "passed": False,
     }
-    if not _scheduling_admission_evidence_semantics_v3(
+    if not _scheduling_admission_evidence_semantics_v5(
         contract, result, require_passed=False
     ):
         _fail(_SCHEDULING_ADMISSION_FAILURE_V2, "failed evidence differs", terminal=True)
-    detail = _scheduling_admission_failure_detail_v3(result)
+    detail = _scheduling_admission_failure_detail_v5(result)
     if detail is None:
         _fail(
             _SCHEDULING_ADMISSION_FAILURE_V2,
@@ -2281,7 +4677,7 @@ def _source_binding_preimage(binding: Mapping[str, object]) -> dict[str, object]
     return result
 
 
-def _require_v2r3_instance_isolation_v2(
+def _require_v2r7_instance_isolation_v2(
     contract: Mapping[str, object],
 ) -> None:
     protected = contract.get("protected_state_policy")
@@ -2327,6 +4723,42 @@ def _require_v2r3_instance_isolation_v2(
         "prior_v2r2_campaign_root_open_allowed",
         "prior_v2r2_campaign_root_access_allowed",
         "prior_v2r2_capsule_authorization_or_ledger_reuse_allowed",
+        "prior_v2r3_campaign_contract_id",
+        "prior_v2r3_controller_commit",
+        "prior_v2r3_controller_tree",
+        "prior_v2r3_target_commit",
+        "prior_v2r3_target_tree",
+        "prior_v2r3_campaign_source_binding_digest",
+        "prior_v2r3_contract_digest",
+        "prior_v2r3_capsule_digest",
+        "prior_v2r3_owner_confirmation_digest",
+        "prior_v2r3_authorization_digest",
+        "prior_v2r3_terminal_status",
+        "prior_v2r3_terminal_body_digest",
+        "prior_v2r3_terminal_ledger_record_digest",
+        "prior_v2r3_completion_body_digest",
+        "prior_v2r3_completion_ledger_record_digest",
+        "prior_v2r3_supervisor_invocation_count",
+        "prior_v2r3_ledger_record_count",
+        "prior_v2r3_last_consumed_slot_id",
+        "prior_v2r3_slot_01_decision",
+        "prior_v2r3_slot_01_trajectory_status",
+        "prior_v2r3_slot_01_trajectory_event_count",
+        "prior_v2r3_slot_01_retained_failure_rows",
+        "prior_v2r3_slot_01_retained_cleanup_rows",
+        "prior_v2r3_slot_01_open_span_count",
+        "prior_v2r3_slot_01_terminal_manifest_present",
+        "prior_v2r3_slot_01_partition_certificate_present",
+        "prior_v2r3_slot_01_unpartitioned_event_count_or_null",
+        "prior_v2r3_slot_02_invoked",
+        "prior_v2r3_slot_03_invoked",
+        "prior_v2r3_terminal_is_historical_nonresumable_evidence_only",
+        "prior_v2r3_campaign_root_open_allowed",
+        "prior_v2r3_campaign_root_access_allowed",
+        "prior_v2r3_capsule_authorization_or_ledger_reuse_allowed",
+        *_PRIOR_V2R4_PROTECTED_POLICY_FACTS,
+        *_PRIOR_V2R5_PROTECTED_POLICY_FACTS,
+        *_PRIOR_V2R6_PROTECTED_POLICY_FACTS,
         "historical_attempt2_or_attempt3_path_open_allowed",
         "meta_or_production_path_open_allowed",
         "protected_state_mutation_allowed",
@@ -2342,11 +4774,11 @@ def _require_v2r3_instance_isolation_v2(
     slots = contract.get("slot_registry")
     if (
         contract.get("contract_id")
-        != "hegel-phase3a-q05b-shadow-retry-campaign-v2r3"
+        != "hegel-phase3a-q05b-shadow-retry-campaign-v2r7"
         or type(protected) is not dict
         or set(protected) != expected_protected_fields
         or protected.get("protected_roots_in_exact_order")
-        != list(_EXPECTED_PROTECTED_ROOTS_V2R3)
+        != list(_EXPECTED_PROTECTED_ROOTS_V2R7)
         or protected.get("prior_v2_campaign_contract_id")
         != _PRIOR_V2_CONTRACT_ID
         or protected.get("prior_v2_capsule_digest")
@@ -2398,6 +4830,69 @@ def _require_v2r3_instance_isolation_v2(
         or protected.get("prior_v2r2_each_slot_retained_failure_rows") != 7
         or protected.get("prior_v2r2_each_slot_retained_cleanup_rows") != 8
         or protected.get("prior_v2r2_each_slot_unpartitioned_event_count") != 0
+        or protected.get("prior_v2r3_campaign_contract_id")
+        != _PRIOR_V2R3_CONTRACT_ID
+        or protected.get("prior_v2r3_controller_commit")
+        != _PRIOR_V2R3_CONTROLLER_COMMIT
+        or protected.get("prior_v2r3_controller_tree")
+        != _PRIOR_V2R3_CONTROLLER_TREE
+        or protected.get("prior_v2r3_target_commit")
+        != _PRIOR_V2R3_TARGET_COMMIT
+        or protected.get("prior_v2r3_target_tree")
+        != _PRIOR_V2R3_TARGET_TREE
+        or protected.get("prior_v2r3_campaign_source_binding_digest")
+        != _PRIOR_V2R3_CAMPAIGN_SOURCE_BINDING_DIGEST
+        or protected.get("prior_v2r3_contract_digest")
+        != _PRIOR_V2R3_CONTRACT_DIGEST
+        or protected.get("prior_v2r3_capsule_digest")
+        != _PRIOR_V2R3_CAPSULE_DIGEST
+        or protected.get("prior_v2r3_owner_confirmation_digest")
+        != _PRIOR_V2R3_OWNER_CONFIRMATION_DIGEST
+        or protected.get("prior_v2r3_authorization_digest")
+        != _PRIOR_V2R3_AUTHORIZATION_DIGEST
+        or protected.get("prior_v2r3_terminal_status")
+        != _PRIOR_V2R3_TERMINAL_STATUS
+        or protected.get("prior_v2r3_terminal_body_digest")
+        != _PRIOR_V2R3_TERMINAL_BODY_DIGEST
+        or protected.get("prior_v2r3_terminal_ledger_record_digest")
+        != _PRIOR_V2R3_TERMINAL_LEDGER_RECORD_DIGEST
+        or protected.get("prior_v2r3_completion_body_digest")
+        != _PRIOR_V2R3_COMPLETION_BODY_DIGEST
+        or protected.get("prior_v2r3_completion_ledger_record_digest")
+        != _PRIOR_V2R3_COMPLETION_LEDGER_RECORD_DIGEST
+        or protected.get("prior_v2r3_supervisor_invocation_count") != 1
+        or protected.get("prior_v2r3_ledger_record_count") != 8
+        or protected.get("prior_v2r3_last_consumed_slot_id") != "SLOT_01"
+        or protected.get("prior_v2r3_slot_01_decision")
+        != "TERMINAL_NONRETRYABLE"
+        or protected.get("prior_v2r3_slot_01_trajectory_status")
+        != "INCOMPLETE_PREFIX"
+        or protected.get("prior_v2r3_slot_01_trajectory_event_count") != 5_410
+        or protected.get("prior_v2r3_slot_01_retained_failure_rows") != 0
+        or protected.get("prior_v2r3_slot_01_retained_cleanup_rows") != 0
+        or protected.get("prior_v2r3_slot_01_open_span_count") != 6
+        or protected.get("prior_v2r3_slot_01_terminal_manifest_present")
+        is not False
+        or protected.get("prior_v2r3_slot_01_partition_certificate_present")
+        is not False
+        or protected.get(
+            "prior_v2r3_slot_01_unpartitioned_event_count_or_null"
+        )
+        is not None
+        or protected.get("prior_v2r3_slot_02_invoked") is not False
+        or protected.get("prior_v2r3_slot_03_invoked") is not False
+        or any(
+            not _json_value_type_exact_v1(protected.get(field), expected)
+            for field, expected in _PRIOR_V2R4_PROTECTED_POLICY_FACTS.items()
+        )
+        or any(
+            not _json_value_type_exact_v1(protected.get(field), expected)
+            for field, expected in _PRIOR_V2R5_PROTECTED_POLICY_FACTS.items()
+        )
+        or any(
+            not _json_value_type_exact_v1(protected.get(field), expected)
+            for field, expected in _PRIOR_V2R6_PROTECTED_POLICY_FACTS.items()
+        )
         or protected.get(
             "prior_v2_terminal_is_historical_nonresumable_evidence_only"
         )
@@ -2408,6 +4903,10 @@ def _require_v2r3_instance_isolation_v2(
         is not True
         or protected.get(
             "prior_v2r2_terminal_is_historical_nonresumable_evidence_only"
+        )
+        is not True
+        or protected.get(
+            "prior_v2r3_terminal_is_historical_nonresumable_evidence_only"
         )
         is not True
         or any(
@@ -2422,27 +4921,58 @@ def _require_v2r3_instance_isolation_v2(
                 "prior_v2r2_campaign_root_open_allowed",
                 "prior_v2r2_campaign_root_access_allowed",
                 "prior_v2r2_capsule_authorization_or_ledger_reuse_allowed",
+                "prior_v2r3_campaign_root_open_allowed",
+                "prior_v2r3_campaign_root_access_allowed",
+                "prior_v2r3_capsule_authorization_or_ledger_reuse_allowed",
+                "prior_v2r4_campaign_root_open_allowed",
+                "prior_v2r4_campaign_root_access_allowed",
+                "prior_v2r4_capsule_authorization_or_ledger_reuse_allowed",
+                "prior_v2r5_campaign_root_open_allowed",
+                "prior_v2r5_campaign_root_access_allowed",
+                "prior_v2r5_capsule_authorization_or_ledger_reuse_allowed",
+                "prior_v2r6_campaign_root_open_allowed",
+                "prior_v2r6_campaign_root_access_allowed",
+                "prior_v2r6_capsule_authorization_or_ledger_reuse_allowed",
             )
         )
         or type(fixed) is not dict
-        or fixed.get("authorization_root") != f"{_V2R3_STATE_PREFIX}-authorization"
-        or fixed.get("ledger_root") != f"{_V2R3_STATE_PREFIX}-ledger"
+        or fixed.get("authorization_root") != f"{_V2R7_STATE_PREFIX}-authorization"
+        or fixed.get("ledger_root") != f"{_V2R7_STATE_PREFIX}-ledger"
         or type(authorization) is not dict
         or authorization.get("authorization_root")
-        != f"{_V2R3_STATE_PREFIX}-authorization"
+        != f"{_V2R7_STATE_PREFIX}-authorization"
+        or authorization.get("future_confirmation_must_bind_in_exact_order")
+        != [
+            "contract_id",
+            "contract_digest",
+            "target_supervisor_commit",
+            "target_source_binding_digest",
+            "campaign_source_binding_digest",
+            "capsule_digest",
+            "python310_dependency_preflight_receipt_digest",
+            "authorization_root",
+            "ledger_root",
+            "three_exact_slot_path_records",
+            "maximum_supervisor_invocations_3",
+            "strictly_sequential_one_shot_slots",
+            "exact_retry_predicate_digest",
+            "success_predicate_digest",
+            "terminal_no_resume_policy",
+            "forbidden_scope_digest",
+        ]
         or type(ledger) is not dict
-        or ledger.get("ledger_root") != f"{_V2R3_STATE_PREFIX}-ledger"
+        or ledger.get("ledger_root") != f"{_V2R7_STATE_PREFIX}-ledger"
         or type(slots) is not list
         or len(slots) != 3
     ):
         _fail(
             "FAIL_CAMPAIGN_CONTRACT",
-            "v2r3 instance or historical protected-state isolation differs",
+            "v2r7 instance or historical protected-state isolation differs",
         )
     for ordinal, slot in enumerate(slots, start=1):
         if type(slot) is not dict:
-            _fail("FAIL_CAMPAIGN_CONTRACT", "v2r3 slot isolation differs")
-        prefix = f"{_V2R3_STATE_PREFIX}-slot-{ordinal:02d}"
+            _fail("FAIL_CAMPAIGN_CONTRACT", "v2r7 slot isolation differs")
+        prefix = f"{_V2R7_STATE_PREFIX}-slot-{ordinal:02d}"
         clone = f"{prefix}-clone"
         evidence = f"{prefix}-evidence"
         if (
@@ -2457,14 +4987,14 @@ def _require_v2r3_instance_isolation_v2(
             or slot.get("evidence_root") != evidence
             or slot.get("trace_root") != f"{prefix}-trace"
             or slot.get("trajectory_trace_id")
-            != f"q05b-shadow-retry-campaign-v2r3-slot-{ordinal:02d}"
+            != f"q05b-shadow-retry-campaign-v2r7-slot-{ordinal:02d}"
             or slot.get("stdout_path") != f"{evidence}/supervisor.stdout"
             or slot.get("stderr_path") != f"{evidence}/supervisor.stderr"
             or slot.get("external_trajectory_binding_path")
             != f"{evidence}/trajectory-binding.json"
             or slot.get("slot_result_path") != f"{evidence}/slot-result.json"
         ):
-            _fail("FAIL_CAMPAIGN_CONTRACT", "v2r3 slot isolation differs")
+            _fail("FAIL_CAMPAIGN_CONTRACT", "v2r7 slot isolation differs")
 
 
 def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
@@ -2481,7 +5011,7 @@ def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
         contract.get("schema_version")
         != "hegel-phase3a-q05b-shadow-retry-campaign/2"
         or contract.get("contract_id")
-        != "hegel-phase3a-q05b-shadow-retry-campaign-v2r3"
+        != "hegel-phase3a-q05b-shadow-retry-campaign-v2r7"
     ):
         _fail("FAIL_CAMPAIGN_CONTRACT", "campaign contract header differs")
     expected_top_fields = {
@@ -2511,14 +5041,25 @@ def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
     }
     if set(contract) != expected_top_fields:
         _fail("FAIL_CAMPAIGN_CONTRACT", "campaign contract fields differ")
-    _require_v2r3_instance_isolation_v2(contract)
+    _require_v2r7_instance_isolation_v2(contract)
+    canonicalization = contract["canonicalization"]
     authority = contract["authority_boundary"]
     execution_policy = contract["execution_policy"]
     forbidden = contract["forbidden_scope"]
     implementation = contract["implementation_state"]
     if (
-        contract["status"]
-        != "V2R3_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
+        type(canonicalization) is not dict
+        or canonicalization.get(
+            "runtime_authorization_record_fields_not_stored_in_the_contract"
+        )
+        != [
+            "capsule_digest",
+            "python310_dependency_preflight_receipt_digest",
+            "owner_confirmation_digest",
+            "authorization_digest",
+        ]
+        or contract["status"]
+        != "V2R7_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
         or contract["claim_scope"]
         != "THREE_SLOT_SHADOW_ONLY_NONADOPTING_Q05B_RETRY_CAMPAIGN"
         or type(authority) is not dict
@@ -2545,7 +5086,7 @@ def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
         or execution_policy.get("clone_source_project_relative_path")
         != PROJECT_ROOT.name
         or execution_policy.get("clone_target_ref_name")
-        != _CLONE_TARGET_REF_V2R3
+        != _CLONE_TARGET_REF_V2R7
         or execution_policy.get("clone_ref_policy")
         != (
             "EXACTLY_ONE_PERMANENT_INTERNAL_REF_BOUND_TO_TARGET_COMMIT_A;"
@@ -2589,19 +5130,20 @@ def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
     ):
         _fail("FAIL_CAMPAIGN_CONTRACT", "campaign authority boundary differs")
     _scheduling_admission_policy_v2(contract)
+    _python310_dependency_preflight_policy_v1(contract)
     domains = contract.get("hash_domains")
-    if type(domains) is not dict or domains != _EXPECTED_HASH_DOMAINS_V2R3:
+    if type(domains) is not dict or domains != _EXPECTED_HASH_DOMAINS_V2R7:
         _fail("FAIL_CAMPAIGN_CONTRACT", "campaign hash-domain registry differs")
     trajectory_policy = contract.get("trajectory_binding_policy")
     if (
         type(trajectory_policy) is not dict
         or trajectory_policy.get("binding_digest_domain")
         != domains["trajectory_binding"]
-        or trajectory_policy.get("producer_id") != "Q05B_SUPERVISOR_V3"
+        or trajectory_policy.get("producer_id") != "Q05B_SUPERVISOR_V4"
     ):
         _fail(
             "FAIL_CAMPAIGN_CONTRACT",
-            "trajectory binding domain or v2r3 producer differs",
+            "trajectory binding domain or v2r7 producer differs",
         )
     digest_fields = {
         "retry_policy": "retry_predicate_digest",
@@ -2650,8 +5192,24 @@ def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
         TOOL_TEST_PATH.relative_to(PROJECT_ROOT).as_posix(),
         DOC_PATH.relative_to(PROJECT_ROOT).as_posix(),
     ]
-    if binding.get("expected_future_paths_in_exact_order") != expected_paths:
+    if (
+        binding.get("expected_future_paths_in_exact_order") != expected_paths
+        or binding.get(
+            "controller_commit_b_changed_paths_from_target_in_exact_order"
+        )
+        != list(_CONTROLLER_CHANGED_PATHS_FROM_TARGET_IN_EXACT_ORDER)
+    ):
         _fail("FAIL_CAMPAIGN_SOURCE", "campaign source path registry differs")
+    target_binding = contract.get("target_commit_a_binding")
+    if (
+        type(target_binding) is not dict
+        or target_binding.get("required_paths_in_exact_order")
+        != list(_TARGET_REQUIRED_PATHS_V2R7)
+        or type(target_binding.get("required_raw_sha256_by_path")) is not dict
+        or list(target_binding["required_raw_sha256_by_path"])
+        != list(_TARGET_REQUIRED_PATHS_V2R7)
+    ):
+        _fail("FAIL_CAMPAIGN_SOURCE", "target path registry differs")
     file_specs = (
         (CORE_PATH, "core_raw_sha256", "campaign core"),
         (CORE_TEST_PATH, "core_test_raw_sha256", "campaign core tests"),
@@ -3744,7 +6302,7 @@ def _scan_tree(
     maximum_entries: int = 100_000,
     maximum_total_bytes: int = 4 * 1024 * 1024 * 1024,
     manifest_domain: str = (
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/CARGO_MANIFEST/V2"
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/CARGO_MANIFEST/V2"
     ),
     allowed_uids: Sequence[int] | None = None,
     reject_group_or_world_writable: bool = False,
@@ -4449,6 +7007,7 @@ def _verify_target_git_objects(
     ):
         _fail("FAIL_CAMPAIGN_SOURCE", "target path registry differs")
     observed_payloads: dict[str, bytes] = {}
+    project_prefix = str(execution["clone_source_project_relative_path"])
     for relative in required_paths:
         if (
             type(relative) is not str
@@ -4456,7 +7015,6 @@ def _verify_target_git_objects(
             or ".." in PurePosixPath(relative).parts
         ):
             _fail("FAIL_CAMPAIGN_SOURCE", "target relative path differs")
-        project_prefix = str(execution["clone_source_project_relative_path"])
         object_path = (PurePosixPath(project_prefix) / relative).as_posix()
         payload = _git(
             contract,
@@ -4467,6 +7025,32 @@ def _verify_target_git_objects(
         if sha256(payload).hexdigest() != required_hashes[relative]:
             _fail("FAIL_CAMPAIGN_SOURCE", f"target object hash differs: {relative}")
         observed_payloads[relative] = payload
+    dependency_policy = _python310_dependency_preflight_policy_v1(contract)
+    cargo_relative = str(dependency_policy["cargo_lock_relative_path"])
+    cargo_object_path = (
+        PurePosixPath(project_prefix) / cargo_relative
+    ).as_posix()
+    cargo_object_spec = f"{commit}:{cargo_object_path}"
+    cargo_payload = _git(
+        contract,
+        ["-C", repository, "show", cargo_object_spec],
+        "target Cargo.lock object replay",
+    )
+    current_cargo_payload, _current_cargo_status = _read_regular_nofollow(
+        PROJECT_ROOT / cargo_relative,
+        "current target Cargo.lock replay",
+        1 * 1024 * 1024,
+    )
+    if (
+        len(cargo_payload) != dependency_policy["cargo_lock_byte_count"]
+        or sha256(cargo_payload).hexdigest()
+        != dependency_policy["cargo_lock_raw_sha256"]
+        or current_cargo_payload != cargo_payload
+    ):
+        _fail(
+            "FAIL_CAMPAIGN_SOURCE",
+            "target/current Cargo.lock object binding differs",
+        )
     target_config_raw = observed_payloads[
         "config/phase3_q05b_dual_isolation_v2.json"
     ]
@@ -4541,6 +7125,13 @@ def _verify_target_git_objects(
         "target_config_static_policy_root": static_policy_root,
         "target_contract_digest": target_contract_digest,
         "target_source_binding_digest": target_source_binding_digest,
+        "cargo_lock_git_object": {
+            "object_spec": cargo_object_spec,
+            "project_relative_path": cargo_relative,
+            "byte_count": len(cargo_payload),
+            "raw_sha256": sha256(cargo_payload).hexdigest(),
+            "matches_current_controller_worktree": True,
+        },
         "local_object_closure_fsck_passed": True,
         "source_repository_self_containment": source_repository,
     }
@@ -4548,7 +7139,8 @@ def _verify_target_git_objects(
 
 def _controller_git_identity(contract: Mapping[str, object]) -> dict[str, object]:
     execution = contract["execution_policy"]
-    assert type(execution) is dict
+    target = contract["target_commit_a_binding"]
+    assert type(execution) is dict and type(target) is dict
     repository = str(execution["clone_source_repository"])
     head = _git(
         contract,
@@ -4565,6 +7157,11 @@ def _controller_git_identity(contract: Mapping[str, object]) -> dict[str, object
         ["-C", repository, "rev-parse", "HEAD^"],
         "controller parent replay",
     ).decode("ascii").strip()
+    lineage_raw = _git(
+        contract,
+        ["-C", repository, "rev-list", "--parents", "-n", "1", "HEAD"],
+        "controller exact one-parent lineage replay",
+    )
     status_raw = _git(
         contract,
         ["-C", repository, "status", "--porcelain=v1", "-z", "--untracked-files=all"],
@@ -4575,15 +7172,685 @@ def _controller_git_identity(contract: Mapping[str, object]) -> dict[str, object
         ["-C", repository, "rev-parse", "--show-toplevel"],
         "controller toplevel replay",
     ).decode("utf-8").strip()
+    changed_raw = _git(
+        contract,
+        [
+            "-C",
+            repository,
+            "diff-tree",
+            "--no-commit-id",
+            "--name-only",
+            "--no-renames",
+            "-r",
+            "-z",
+            "HEAD^",
+            "HEAD",
+        ],
+        "controller exact six-path diff-tree replay",
+    )
+    project_prefix = str(execution["clone_source_project_relative_path"])
+    expected_changed_from_repository = [
+        (PurePosixPath(project_prefix) / relative).as_posix()
+        for relative in _CONTROLLER_CHANGED_PATHS_FROM_TARGET_IN_EXACT_ORDER
+    ]
+    expected_changed_raw = b"".join(
+        os.fsencode(relative) + b"\x00"
+        for relative in expected_changed_from_repository
+    )
+    expected_parent = target.get("target_supervisor_commit")
     if (
         _COMMIT.fullmatch(head) is None
         or _COMMIT.fullmatch(tree) is None
         or _COMMIT.fullmatch(parent) is None
+        or _COMMIT.fullmatch(str(expected_parent)) is None
+        or parent != expected_parent
+        or lineage_raw
+        != f"{head} {expected_parent}\n".encode("ascii")
         or status_raw != b""
         or top != repository
+        or changed_raw != expected_changed_raw
     ):
-        _fail("FAIL_CAMPAIGN_SOURCE", "controller Git identity or cleanliness differs")
-    return {"commit": head, "tree": tree, "parent": parent, "clean": True}
+        _fail(
+            "FAIL_CAMPAIGN_SOURCE",
+            "controller Git identity, cleanliness, exact Commit-B parent, or "
+            "exact six-path diff binding to target Commit A differs",
+        )
+    return {
+        "commit": head,
+        "tree": tree,
+        "parent": parent,
+        "parent_count": 1,
+        "clean": True,
+        "changed_paths_from_target_in_exact_order": list(
+            _CONTROLLER_CHANGED_PATHS_FROM_TARGET_IN_EXACT_ORDER
+        ),
+    }
+
+
+def _python310_dependency_preflight_v1(
+    contract: Mapping[str, object],
+    *,
+    target_git: Mapping[str, object],
+    controller_git: Mapping[str, object],
+    python_identity: Mapping[str, object],
+) -> dict[str, object]:
+    """Prove the isolated 3.10 artifact path and real Cargo.lock parse."""
+
+    policy = _python310_dependency_preflight_policy_v1(contract)
+    target_binding = contract["target_commit_a_binding"]
+    execution = contract["execution_policy"]
+    assert type(target_binding) is dict and type(execution) is dict
+    cargo_git = target_git.get("cargo_lock_git_object")
+    expected_cargo_object_spec = (
+        f"{target_binding['target_supervisor_commit']}:"
+        f"{execution['clone_source_project_relative_path']}/"
+        f"{policy['cargo_lock_relative_path']}"
+    )
+    if (
+        type(cargo_git) is not dict
+        or target_git.get("commit")
+        != target_binding["target_supervisor_commit"]
+        or target_git.get("target_source_binding_digest")
+        != target_binding["target_source_binding_digest"]
+        or target_git.get("required_raw_sha256_by_path")
+        != target_binding["required_raw_sha256_by_path"]
+        or cargo_git.get("object_spec") != expected_cargo_object_spec
+        or cargo_git.get("project_relative_path")
+        != policy["cargo_lock_relative_path"]
+        or cargo_git.get("byte_count") != policy["cargo_lock_byte_count"]
+        or cargo_git.get("raw_sha256") != policy["cargo_lock_raw_sha256"]
+        or cargo_git.get("matches_current_controller_worktree") is not True
+        or controller_git.get("parent")
+        != target_binding["target_supervisor_commit"]
+        or controller_git.get("parent_count") != 1
+        or controller_git.get("clean") is not True
+        or controller_git.get("changed_paths_from_target_in_exact_order")
+        != list(_CONTROLLER_CHANGED_PATHS_FROM_TARGET_IN_EXACT_ORDER)
+        or python_identity.get("path") != policy["interpreter_path"]
+        or type(python_identity.get("raw_sha256")) is not str
+        or _RAW_SHA256.fullmatch(str(python_identity["raw_sha256"])) is None
+    ):
+        _fail(
+            "FAIL_CAMPAIGN_SOURCE",
+            "dependency preflight provenance binding differs",
+        )
+    supervisor_relative = str(policy["supervisor_relative_path"])
+    artifact_relative = str(policy["artifact_relative_path"])
+    supervisor_raw, _supervisor_status = _read_regular_nofollow(
+        PROJECT_ROOT / supervisor_relative,
+        "dependency preflight supervisor source",
+        32 * 1024 * 1024,
+    )
+    artifact_raw, _artifact_status = _read_regular_nofollow(
+        PROJECT_ROOT / artifact_relative,
+        "dependency preflight artifact source",
+        8 * 1024 * 1024,
+    )
+    target_hashes = target_binding["required_raw_sha256_by_path"]
+    if (
+        type(target_hashes) is not dict
+        or sha256(supervisor_raw).hexdigest()
+        != target_hashes.get(supervisor_relative)
+        or sha256(artifact_raw).hexdigest()
+        != target_hashes.get(artifact_relative)
+    ):
+        _fail(
+            "FAIL_CAMPAIGN_SOURCE",
+            "dependency preflight supervisor/artifact source differs",
+        )
+    argv = [
+        *list(_DEPENDENCY_PREFLIGHT_ARGV_PREFIX_V1),
+        _PYTHON310_DEPENDENCY_PREFLIGHT_PROGRAM_V1,
+        os.fspath(PROJECT_ROOT),
+        os.fspath(PROJECT_ROOT / str(policy["cargo_lock_relative_path"])),
+    ]
+    runtime_environment = _runtime_environment(contract)
+    result = _bounded_process(
+        argv,
+        cwd=str(policy["cwd"]),
+        env=runtime_environment,
+        timeout_seconds=float(policy["timeout_seconds"]),
+        stdout_max_bytes=int(policy["stdout_max_bytes"]),
+        stderr_max_bytes=int(policy["stderr_max_bytes"]),
+        reap_seconds=float(execution["sigkill_reap_seconds"]),
+    )
+    process_facts = {
+        key: result.get(key)
+        for key in (
+            "return_code",
+            "timed_out",
+            "stdout_overflow",
+            "stderr_overflow",
+            "child_reaped",
+            "process_group_absent",
+            "wrapper_resources_closed",
+        )
+    }
+    stdout = result.get("stdout")
+    stderr = result.get("stderr")
+    if (
+        process_facts
+        != {
+            "return_code": 0,
+            "timed_out": False,
+            "stdout_overflow": False,
+            "stderr_overflow": False,
+            "child_reaped": True,
+            "process_group_absent": True,
+            "wrapper_resources_closed": True,
+        }
+        or type(stdout) is not bytes
+        or type(stderr) is not bytes
+        or stderr != b""
+    ):
+        _fail(
+            "FAIL_CAMPAIGN_SOURCE",
+            "isolated Python dependency child process differs",
+        )
+    child = _strict_json(stdout, "isolated Python dependency child receipt")
+    expected_child_fields = {
+        "schema_version",
+        "status",
+        "python_flags",
+        "tomli_top_level_spec_or_null",
+        "artifact_module_name",
+        "vendored_tomli_module_name",
+        "top_level_tomli_in_sys_modules",
+        "host_replay_module_name",
+        "host_source_allowlist_count",
+        "host_source_allowlist_canonical_lf_sha256",
+        "vendor_closure_rows",
+        "vendor_closure_digest",
+        "loaded_vendored_modules",
+        "cargo_lock",
+    }
+    expected_cargo_fields = {
+        "relative_path",
+        "byte_count",
+        "raw_sha256",
+        "format",
+        "package_count",
+        "registry_package_count",
+        "registry_package_rows",
+        "registry_projection_digest",
+    }
+    if (
+        type(child) is not dict
+        or set(child) != expected_child_fields
+        or stdout != _canonical_json_bytes(child)
+    ):
+        _fail("FAIL_CAMPAIGN_SOURCE", "dependency child receipt fields differ")
+    child_cargo = child["cargo_lock"]
+    registry_rows = (
+        child_cargo.get("registry_package_rows")
+        if type(child_cargo) is dict
+        else None
+    )
+    registry_rows_valid = (
+        type(registry_rows) is list
+        and len(registry_rows) == policy["cargo_lock_registry_package_count"]
+        and all(
+            type(row) is list
+            and len(row) == 4
+            and all(type(item) is str for item in row)
+            and row[2].startswith("registry+")
+            and _RAW_SHA256.fullmatch(row[3]) is not None
+            for row in registry_rows
+        )
+        and registry_rows == sorted(registry_rows)
+    )
+    registry_projection_digest = (
+        _domain_digest(
+            str(policy["cargo_lock_registry_projection_domain"]),
+            registry_rows,
+        )
+        if registry_rows_valid
+        else None
+    )
+    if (
+        child.get("schema_version")
+        != _PYTHON310_DEPENDENCY_PREFLIGHT_CHILD_SCHEMA_V1
+        or child.get("status") != "PASS"
+        or not _json_value_type_exact_v1(
+            child.get("python_flags"),
+            {
+                "isolated": 1,
+                "no_site": 1,
+                "ignore_environment": 1,
+                "dont_write_bytecode": True,
+                "utf8_mode": 1,
+                "pycache_prefix": _DEPENDENCY_PREFLIGHT_PYCACHE_PREFIX_V1,
+                "pycache_prefix_absent_before_import": True,
+                "pycache_prefix_absent_after_import": True,
+            },
+        )
+        or child.get("tomli_top_level_spec_or_null") is not None
+        or child.get("artifact_module_name")
+        != "hegel_machine.phase3_q05b_actual_artifact_v2"
+        or child.get("vendored_tomli_module_name")
+        != policy["vendored_tomli_module_name"]
+        or child.get("top_level_tomli_in_sys_modules") is not False
+        or child.get("host_replay_module_name")
+        != "hegel_machine.phase3_q05b_host_replay_v1"
+        or child.get("host_source_allowlist_count")
+        != policy["host_source_allowlist_count"]
+        or child.get("host_source_allowlist_canonical_lf_sha256")
+        != policy["host_source_allowlist_canonical_lf_sha256"]
+        or not _json_value_type_exact_v1(
+            child.get("vendor_closure_rows"),
+            policy["vendor_closure_rows_in_exact_order"],
+        )
+        or child.get("vendor_closure_digest")
+        != policy["vendor_closure_digest"]
+        or child.get("loaded_vendored_modules")
+        != policy["loaded_vendored_modules_in_exact_order"]
+        or type(child_cargo) is not dict
+        or set(child_cargo) != expected_cargo_fields
+        or child_cargo.get("relative_path")
+        != policy["cargo_lock_relative_path"]
+        or type(child_cargo.get("byte_count")) is not int
+        or child_cargo.get("byte_count") != policy["cargo_lock_byte_count"]
+        or child_cargo.get("raw_sha256") != policy["cargo_lock_raw_sha256"]
+        or type(child_cargo.get("format")) is not int
+        or child_cargo.get("format") != policy["cargo_lock_format"]
+        or type(child_cargo.get("package_count")) is not int
+        or child_cargo.get("package_count")
+        != policy["cargo_lock_package_count"]
+        or type(child_cargo.get("registry_package_count")) is not int
+        or child_cargo.get("registry_package_count")
+        != policy["cargo_lock_registry_package_count"]
+        or not registry_rows_valid
+        or child_cargo.get("registry_projection_digest")
+        != policy["cargo_lock_registry_projection_digest"]
+        or registry_projection_digest
+        != policy["cargo_lock_registry_projection_digest"]
+    ):
+        _fail("FAIL_CAMPAIGN_SOURCE", "dependency child semantics differ")
+    receipt: dict[str, object] = {
+        "schema_version": (
+            _PYTHON310_DEPENDENCY_PREFLIGHT_RECEIPT_SCHEMA_V1
+        ),
+        "status": "PASS",
+        "target_commit": target_git["commit"],
+        "target_source_binding_digest": target_git[
+            "target_source_binding_digest"
+        ],
+        "controller_commit": controller_git["commit"],
+        "controller_changed_paths_from_target_in_exact_order": list(
+            _CONTROLLER_CHANGED_PATHS_FROM_TARGET_IN_EXACT_ORDER
+        ),
+        "python_executable": {
+            "path": python_identity["path"],
+            "raw_sha256": python_identity["raw_sha256"],
+        },
+        "argv_prefix_before_program": list(
+            _DEPENDENCY_PREFLIGHT_ARGV_PREFIX_V1
+        ),
+        "program_raw_sha256": policy["program_raw_sha256"],
+        "runtime_environment_digest": _domain_digest(
+            str(policy["runtime_environment_digest_domain"]),
+            runtime_environment,
+        ),
+        "supervisor_source": {
+            "relative_path": supervisor_relative,
+            "raw_sha256": sha256(supervisor_raw).hexdigest(),
+        },
+        "artifact_source": {
+            "relative_path": artifact_relative,
+            "raw_sha256": sha256(artifact_raw).hexdigest(),
+        },
+        "artifact_module_name": child["artifact_module_name"],
+        "host_replay_module_name": child["host_replay_module_name"],
+        "vendored_tomli_module_name": child["vendored_tomli_module_name"],
+        "tomli_top_level_spec_or_null": child[
+            "tomli_top_level_spec_or_null"
+        ],
+        "top_level_tomli_in_sys_modules": child[
+            "top_level_tomli_in_sys_modules"
+        ],
+        "python_flags": deepcopy(child["python_flags"]),
+        "vendor_closure_rows": deepcopy(child["vendor_closure_rows"]),
+        "vendor_closure_digest": child["vendor_closure_digest"],
+        "loaded_vendored_modules": deepcopy(
+            child["loaded_vendored_modules"]
+        ),
+        "host_source_allowlist_count": child[
+            "host_source_allowlist_count"
+        ],
+        "host_source_allowlist_canonical_lf_sha256": child[
+            "host_source_allowlist_canonical_lf_sha256"
+        ],
+        "cargo_lock_git_object": deepcopy(cargo_git),
+        "cargo_lock_parse": deepcopy(child_cargo),
+        "child_receipt": deepcopy(child),
+        "process_facts": process_facts,
+        "stdout": {
+            "byte_count": len(stdout),
+            "raw_sha256": sha256(stdout).hexdigest(),
+            "canonical_single_lf": True,
+        },
+        "stderr": {
+            "byte_count": 0,
+            "raw_sha256": sha256(b"").hexdigest(),
+            "empty": True,
+        },
+        "receipt_digest": None,
+    }
+    unsigned = deepcopy(receipt)
+    unsigned.pop("receipt_digest")
+    receipt["receipt_digest"] = _domain_digest(
+        str(policy["receipt_digest_domain"]),
+        unsigned,
+    )
+    return _validate_dependency_receipt_v1(
+        contract,
+        receipt,
+        expected_target_git=target_git,
+        expected_controller_git=controller_git,
+        expected_python_identity=python_identity,
+    )
+
+
+def _validate_dependency_receipt_v1(
+    contract: Mapping[str, object],
+    value: object,
+    *,
+    expected_target_git: object,
+    expected_controller_git: object,
+    expected_python_identity: object,
+) -> dict[str, object]:
+    """Producer-free replay against the capsule's independently bound inputs."""
+
+    policy = _python310_dependency_preflight_policy_v1(contract)
+    target = contract["target_commit_a_binding"]
+    execution = contract["execution_policy"]
+    assert type(target) is dict and type(execution) is dict
+    expected_fields = {
+        "schema_version",
+        "status",
+        "target_commit",
+        "target_source_binding_digest",
+        "controller_commit",
+        "controller_changed_paths_from_target_in_exact_order",
+        "python_executable",
+        "argv_prefix_before_program",
+        "program_raw_sha256",
+        "runtime_environment_digest",
+        "supervisor_source",
+        "artifact_source",
+        "artifact_module_name",
+        "host_replay_module_name",
+        "vendored_tomli_module_name",
+        "tomli_top_level_spec_or_null",
+        "top_level_tomli_in_sys_modules",
+        "python_flags",
+        "vendor_closure_rows",
+        "vendor_closure_digest",
+        "loaded_vendored_modules",
+        "host_source_allowlist_count",
+        "host_source_allowlist_canonical_lf_sha256",
+        "cargo_lock_git_object",
+        "cargo_lock_parse",
+        "child_receipt",
+        "process_facts",
+        "stdout",
+        "stderr",
+        "receipt_digest",
+    }
+    if type(value) is not dict or set(value) != expected_fields:
+        _fail("FAIL_CAMPAIGN_SOURCE", "dependency receipt fields differ")
+    receipt = value
+    if (
+        type(expected_target_git) is not dict
+        or type(expected_controller_git) is not dict
+        or type(expected_python_identity) is not dict
+    ):
+        _fail(
+            "FAIL_CAMPAIGN_SOURCE",
+            "dependency receipt expected context fields differ",
+        )
+    python_executable = receipt["python_executable"]
+    supervisor_source = receipt["supervisor_source"]
+    artifact_source = receipt["artifact_source"]
+    cargo_git = receipt["cargo_lock_git_object"]
+    cargo_parse = receipt["cargo_lock_parse"]
+    process_facts = receipt["process_facts"]
+    stdout = receipt["stdout"]
+    stderr = receipt["stderr"]
+    child_receipt = receipt["child_receipt"]
+    rows = (
+        cargo_parse.get("registry_package_rows")
+        if type(cargo_parse) is dict
+        else None
+    )
+    rows_valid = (
+        type(rows) is list
+        and len(rows) == policy["cargo_lock_registry_package_count"]
+        and all(
+            type(row) is list
+            and len(row) == 4
+            and all(type(item) is str for item in row)
+            and row[2].startswith("registry+")
+            and _RAW_SHA256.fullmatch(row[3]) is not None
+            for row in rows
+        )
+        and rows == sorted(rows)
+    )
+    expected_cargo_object_spec = (
+        f"{target['target_supervisor_commit']}:"
+        f"{execution['clone_source_project_relative_path']}/"
+        f"{policy['cargo_lock_relative_path']}"
+    )
+    target_hashes = target["required_raw_sha256_by_path"]
+    expected_runtime_environment_digest = _domain_digest(
+        str(policy["runtime_environment_digest_domain"]),
+        _runtime_environment(contract),
+    )
+    expected_cargo_git = {
+        "object_spec": expected_cargo_object_spec,
+        "project_relative_path": policy["cargo_lock_relative_path"],
+        "byte_count": policy["cargo_lock_byte_count"],
+        "raw_sha256": policy["cargo_lock_raw_sha256"],
+        "matches_current_controller_worktree": True,
+    }
+    if (
+        receipt.get("schema_version")
+        != _PYTHON310_DEPENDENCY_PREFLIGHT_RECEIPT_SCHEMA_V1
+        or receipt.get("status") != "PASS"
+        or receipt.get("target_commit") != target["target_supervisor_commit"]
+        or receipt.get("target_source_binding_digest")
+        != target["target_source_binding_digest"]
+        or expected_target_git.get("commit") != receipt.get("target_commit")
+        or expected_target_git.get("target_source_binding_digest")
+        != receipt.get("target_source_binding_digest")
+        or expected_target_git.get("required_raw_sha256_by_path")
+        != target_hashes
+        or expected_target_git.get("cargo_lock_git_object")
+        != expected_cargo_git
+        or receipt.get("controller_commit")
+        != expected_controller_git.get("commit")
+        or type(receipt.get("controller_commit")) is not str
+        or _COMMIT.fullmatch(str(receipt["controller_commit"])) is None
+        or expected_controller_git.get("parent")
+        != target["target_supervisor_commit"]
+        or expected_controller_git.get("parent_count") != 1
+        or expected_controller_git.get("clean") is not True
+        or expected_controller_git.get(
+            "changed_paths_from_target_in_exact_order"
+        )
+        != list(_CONTROLLER_CHANGED_PATHS_FROM_TARGET_IN_EXACT_ORDER)
+        or receipt.get("controller_changed_paths_from_target_in_exact_order")
+        != list(_CONTROLLER_CHANGED_PATHS_FROM_TARGET_IN_EXACT_ORDER)
+        or type(python_executable) is not dict
+        or set(python_executable) != {"path", "raw_sha256"}
+        or python_executable.get("path") != policy["interpreter_path"]
+        or python_executable.get("path")
+        != expected_python_identity.get("path")
+        or type(python_executable.get("raw_sha256")) is not str
+        or _RAW_SHA256.fullmatch(str(python_executable["raw_sha256"])) is None
+        or python_executable.get("raw_sha256")
+        != expected_python_identity.get("raw_sha256")
+        or receipt.get("argv_prefix_before_program")
+        != policy["argv_prefix_before_program"]
+        or receipt.get("program_raw_sha256") != policy["program_raw_sha256"]
+        or receipt.get("runtime_environment_digest")
+        != expected_runtime_environment_digest
+        or type(supervisor_source) is not dict
+        or supervisor_source
+        != {
+            "relative_path": policy["supervisor_relative_path"],
+            "raw_sha256": target_hashes[policy["supervisor_relative_path"]],
+        }
+        or type(artifact_source) is not dict
+        or artifact_source
+        != {
+            "relative_path": policy["artifact_relative_path"],
+            "raw_sha256": target_hashes[policy["artifact_relative_path"]],
+        }
+        or receipt.get("artifact_module_name")
+        != "hegel_machine.phase3_q05b_actual_artifact_v2"
+        or receipt.get("host_replay_module_name")
+        != "hegel_machine.phase3_q05b_host_replay_v1"
+        or receipt.get("vendored_tomli_module_name")
+        != policy["vendored_tomli_module_name"]
+        or receipt.get("tomli_top_level_spec_or_null") is not None
+        or receipt.get("top_level_tomli_in_sys_modules") is not False
+        or not _json_value_type_exact_v1(
+            receipt.get("python_flags"),
+            {
+                "isolated": 1,
+                "no_site": 1,
+                "ignore_environment": 1,
+                "dont_write_bytecode": True,
+                "utf8_mode": 1,
+                "pycache_prefix": _DEPENDENCY_PREFLIGHT_PYCACHE_PREFIX_V1,
+                "pycache_prefix_absent_before_import": True,
+                "pycache_prefix_absent_after_import": True,
+            },
+        )
+        or not _json_value_type_exact_v1(
+            receipt.get("vendor_closure_rows"),
+            policy["vendor_closure_rows_in_exact_order"],
+        )
+        or receipt.get("vendor_closure_digest")
+        != policy["vendor_closure_digest"]
+        or receipt.get("loaded_vendored_modules")
+        != policy["loaded_vendored_modules_in_exact_order"]
+        or type(receipt.get("host_source_allowlist_count")) is not int
+        or receipt.get("host_source_allowlist_count")
+        != policy["host_source_allowlist_count"]
+        or receipt.get("host_source_allowlist_canonical_lf_sha256")
+        != policy["host_source_allowlist_canonical_lf_sha256"]
+        or not _json_value_type_exact_v1(cargo_git, expected_cargo_git)
+        or type(cargo_parse) is not dict
+        or set(cargo_parse)
+        != {
+            "relative_path",
+            "byte_count",
+            "raw_sha256",
+            "format",
+            "package_count",
+            "registry_package_count",
+            "registry_package_rows",
+            "registry_projection_digest",
+        }
+        or cargo_parse.get("relative_path")
+        != policy["cargo_lock_relative_path"]
+        or type(cargo_parse.get("byte_count")) is not int
+        or cargo_parse.get("byte_count") != policy["cargo_lock_byte_count"]
+        or cargo_parse.get("raw_sha256") != policy["cargo_lock_raw_sha256"]
+        or type(cargo_parse.get("format")) is not int
+        or cargo_parse.get("format") != policy["cargo_lock_format"]
+        or type(cargo_parse.get("package_count")) is not int
+        or cargo_parse.get("package_count") != policy["cargo_lock_package_count"]
+        or type(cargo_parse.get("registry_package_count")) is not int
+        or cargo_parse.get("registry_package_count")
+        != policy["cargo_lock_registry_package_count"]
+        or not rows_valid
+        or cargo_parse.get("registry_projection_digest")
+        != policy["cargo_lock_registry_projection_digest"]
+        or _domain_digest(
+            str(policy["cargo_lock_registry_projection_domain"]),
+            rows,
+        )
+        != policy["cargo_lock_registry_projection_digest"]
+        or not _json_value_type_exact_v1(
+            process_facts,
+            {
+                "return_code": 0,
+                "timed_out": False,
+                "stdout_overflow": False,
+                "stderr_overflow": False,
+                "child_reaped": True,
+                "process_group_absent": True,
+                "wrapper_resources_closed": True,
+            },
+        )
+        or not _json_value_type_exact_v1(
+            stderr,
+            {
+                "byte_count": 0,
+                "raw_sha256": sha256(b"").hexdigest(),
+                "empty": True,
+            },
+        )
+        or type(receipt.get("receipt_digest")) is not str
+        or _TAGGED_SHA256.fullmatch(str(receipt["receipt_digest"])) is None
+    ):
+        _fail("FAIL_CAMPAIGN_SOURCE", "dependency receipt semantics differ")
+    expected_child_receipt = {
+        "schema_version": _PYTHON310_DEPENDENCY_PREFLIGHT_CHILD_SCHEMA_V1,
+        "status": "PASS",
+        "python_flags": deepcopy(receipt["python_flags"]),
+        "tomli_top_level_spec_or_null": receipt[
+            "tomli_top_level_spec_or_null"
+        ],
+        "artifact_module_name": receipt["artifact_module_name"],
+        "vendored_tomli_module_name": receipt["vendored_tomli_module_name"],
+        "top_level_tomli_in_sys_modules": receipt[
+            "top_level_tomli_in_sys_modules"
+        ],
+        "host_replay_module_name": receipt["host_replay_module_name"],
+        "host_source_allowlist_count": receipt[
+            "host_source_allowlist_count"
+        ],
+        "host_source_allowlist_canonical_lf_sha256": receipt[
+            "host_source_allowlist_canonical_lf_sha256"
+        ],
+        "vendor_closure_rows": deepcopy(receipt["vendor_closure_rows"]),
+        "vendor_closure_digest": receipt["vendor_closure_digest"],
+        "loaded_vendored_modules": deepcopy(
+            receipt["loaded_vendored_modules"]
+        ),
+        "cargo_lock": deepcopy(receipt["cargo_lock_parse"]),
+    }
+    expected_stdout = _canonical_json_bytes(expected_child_receipt)
+    if (
+        not _json_value_type_exact_v1(
+            child_receipt,
+            expected_child_receipt,
+        )
+        or not _json_value_type_exact_v1(
+            stdout,
+            {
+                "byte_count": len(expected_stdout),
+                "raw_sha256": sha256(expected_stdout).hexdigest(),
+                "canonical_single_lf": True,
+            },
+        )
+    ):
+        _fail(
+            "FAIL_CAMPAIGN_SOURCE",
+            "dependency child/stdout receipt replay differs",
+        )
+    unsigned = deepcopy(receipt)
+    observed_digest = unsigned.pop("receipt_digest")
+    if observed_digest != _domain_digest(
+        str(policy["receipt_digest_domain"]),
+        unsigned,
+    ):
+        _fail("FAIL_CAMPAIGN_SOURCE", "dependency receipt digest differs")
+    return deepcopy(receipt)
 
 
 def _verify_clone(
@@ -4741,7 +8008,7 @@ def _verify_clone(
         label="slot clone no-alias tree replay",
         maximum_entries=200_000,
         manifest_domain=(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/CLONE_TREE_MANIFEST/V2"
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/CLONE_TREE_MANIFEST/V2"
         ),
     )
     artifact_relative = artifact.relative_to(clone_root).as_posix()
@@ -4751,7 +8018,7 @@ def _verify_clone(
         if row["relative_path"] != artifact_relative
     ]
     closure_without_artifact = _domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/"
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/"
         "CLONE_CLOSURE_WITHOUT_ARTIFACT/V2",
         closure_rows_without_artifact,
     )
@@ -5113,7 +8380,7 @@ def _slot_roots_absence_evidence(
     return {
         **preimage,
         "root": _domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/"
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/"
             "SLOT_ROOT_ABSENCE/V2",
             preimage,
         ),
@@ -5166,12 +8433,21 @@ def _build_capsule(
     target_git: Mapping[str, object],
     cargo_identity: Mapping[str, object],
     executable_identities: Mapping[str, object],
+    python310_dependency_preflight_receipt: Mapping[str, object],
     slots: Sequence[Mapping[str, object]],
     freshness_parent_identities: Mapping[str, object],
 ) -> dict[str, object]:
     binding = contract["campaign_source_binding"]
     domains = contract["hash_domains"]
     assert type(binding) is dict and type(domains) is dict
+    python_identity = executable_identities.get("python")
+    validated_dependency_receipt = _validate_dependency_receipt_v1(
+        contract,
+        python310_dependency_preflight_receipt,
+        expected_target_git=target_git,
+        expected_controller_git=controller_git,
+        expected_python_identity=python_identity,
+    )
     config_raw, _ = _read_regular_nofollow(CONFIG_PATH, "campaign contract capsule input", 8 * 1024 * 1024)
     tool_raw, _ = _read_regular_nofollow(TOOL_PATH, "campaign tool capsule input", 32 * 1024 * 1024)
     capsule: dict[str, object] = {
@@ -5184,6 +8460,12 @@ def _build_capsule(
         "controller_git": deepcopy(dict(controller_git)),
         "target_git": deepcopy(dict(target_git)),
         "executable_identities": deepcopy(dict(executable_identities)),
+        "python310_dependency_preflight_receipt": deepcopy(
+            validated_dependency_receipt
+        ),
+        "python310_dependency_preflight_receipt_digest": (
+            validated_dependency_receipt["receipt_digest"]
+        ),
         "cargo_source_identity": deepcopy(dict(cargo_identity)),
         "freshness_parent_identities": deepcopy(
             dict(freshness_parent_identities)
@@ -5232,6 +8514,51 @@ def _authorization_template(
 ) -> dict[str, object]:
     domains = contract["hash_domains"]
     assert type(domains) is dict
+    dependency_receipt = capsule.get(
+        "python310_dependency_preflight_receipt"
+    )
+    dependency_receipt_digest = capsule.get(
+        "python310_dependency_preflight_receipt_digest"
+    )
+    controller_git = capsule.get("controller_git")
+    target_git = capsule.get("target_git")
+    executable_identities = capsule.get("executable_identities")
+    python_identity = (
+        executable_identities.get("python")
+        if type(executable_identities) is dict
+        else None
+    )
+    if (
+        type(dependency_receipt) is not dict
+        or type(dependency_receipt_digest) is not str
+        or _TAGGED_SHA256.fullmatch(dependency_receipt_digest) is None
+    ):
+        _fail(
+            "FAIL_CAMPAIGN_AUTHORIZATION",
+            "dependency preflight receipt is absent or digest-inconsistent",
+        )
+    try:
+        validated_dependency_receipt = _validate_dependency_receipt_v1(
+            contract,
+            dependency_receipt,
+            expected_target_git=target_git,
+            expected_controller_git=controller_git,
+            expected_python_identity=python_identity,
+        )
+    except ShadowRetryCampaignErrorV2 as error:
+        _fail(
+            "FAIL_CAMPAIGN_AUTHORIZATION",
+            "dependency preflight receipt replay differs: "
+            f"{error.code}:{error.detail}",
+        )
+    if (
+        validated_dependency_receipt["receipt_digest"]
+        != dependency_receipt_digest
+    ):
+        _fail(
+            "FAIL_CAMPAIGN_AUTHORIZATION",
+            "dependency preflight receipt digest binding differs",
+        )
     confirmation = {
         "campaign_id": contract["contract_id"],
         "contract_digest": contract["contract_digest"],
@@ -5245,6 +8572,9 @@ def _authorization_template(
             "source_binding_digest"
         ],
         "capsule_digest": capsule["capsule_digest"],
+        "python310_dependency_preflight_receipt_digest": (
+            dependency_receipt_digest
+        ),
         "authorization_root": contract["fixed_external_roots"][
             "authorization_root"
         ],
@@ -5268,7 +8598,7 @@ def _authorization_template(
         ],
     }
     owner_confirmation_digest = _domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/OWNER_CONFIRMATION/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/OWNER_CONFIRMATION/V2",
         confirmation,
     )
     value: dict[str, object] = {
@@ -5309,12 +8639,19 @@ def _preflight_context(contract: Mapping[str, object]) -> dict[str, object]:
         "git": _executable_identity(str(execution["git_executable"]), "Git"),
         "docker": _executable_identity(str(execution["docker_executable"]), "Docker"),
     }
+    dependency_receipt = _python310_dependency_preflight_v1(
+        contract,
+        target_git=target_git,
+        controller_git=controller_git,
+        python_identity=executables["python"],
+    )
     capsule = _build_capsule(
         contract,
         controller_git=controller_git,
         target_git=target_git,
         cargo_identity=cargo_identity,
         executable_identities=executables,
+        python310_dependency_preflight_receipt=dependency_receipt,
         slots=slots,
         freshness_parent_identities=freshness_parent_identities,
     )
@@ -5325,6 +8662,7 @@ def _preflight_context(contract: Mapping[str, object]) -> dict[str, object]:
         "cargo_identity": cargo_identity,
         "cargo_rows": cargo_rows,
         "executable_identities": executables,
+        "python310_dependency_preflight_receipt": dependency_receipt,
         "freshness_parent_identities": freshness_parent_identities,
         "capsule": capsule,
         "authorization_template": _authorization_template(contract, capsule),
@@ -5348,6 +8686,12 @@ def preflight_phase3_q05b_shadow_retry_campaign_v2() -> dict[str, object]:
         "campaign_source_binding_digest": contract["campaign_source_binding"]["source_binding_digest"],
         "capsule": context["capsule"],
         "capsule_digest": context["capsule"]["capsule_digest"],
+        "python310_dependency_preflight_receipt": context[
+            "python310_dependency_preflight_receipt"
+        ],
+        "python310_dependency_preflight_receipt_digest": context[
+            "python310_dependency_preflight_receipt"
+        ]["receipt_digest"],
         "required_authorization_template": context["authorization_template"],
         "owner_authorization_present": os.path.lexists(auth_path),
         "execution_authorized": False,
@@ -7150,7 +10494,7 @@ def _source_state_replay(
         "evidence": evidence,
         "clone_closure_rows_internal": clone_closure_rows,
         "root": _domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/SOURCE_REPLAY/V2",
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/SOURCE_REPLAY/V2",
             evidence,
         ),
     }
@@ -7188,7 +10532,7 @@ def _safe_source_state_replay(
             "error_or_null": detail,
             "evidence": evidence,
             "root": _domain_digest(
-                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/SOURCE_REPLAY/V2",
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/SOURCE_REPLAY/V2",
                 evidence,
             ),
         }
@@ -7203,7 +10547,7 @@ def _augment_source_replay_with_alias_rows(
     evidence["nonalias_directory_identities"] = deepcopy(dict(alias_rows))
     result["evidence"] = evidence
     result["root"] = _domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/SOURCE_REPLAY/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/SOURCE_REPLAY/V2",
         evidence,
     )
     return result
@@ -7286,7 +10630,7 @@ def _enforce_clone_closure(
         "error_or_null": detail,
         "evidence": evidence,
         "root": _domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/SOURCE_REPLAY/V2",
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/SOURCE_REPLAY/V2",
             evidence,
         ),
     }
@@ -7614,7 +10958,7 @@ def _cleanup_replay_evidence(
     return {
         "preimage": value,
         "root": _domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/CLEANUP_REPLAY/V2",
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/CLEANUP_REPLAY/V2",
             value,
         ),
     }
@@ -8111,7 +11455,7 @@ def _bounded_command_binding_is_exact_v2(
             ("slot cloned ref enumeration", ["-C", clone, "for-each-ref", "--format=%(refname)"]),
             ("slot clone reflog expiration", ["-C", clone, "reflog", "expire", "--expire=now", "--all"]),
             ("slot clone exact closure prune", ["-C", clone, "gc", "--prune=now", "--quiet"]),
-            ("slot clone target graph ref creation", ["-C", clone, "update-ref", _CLONE_TARGET_REF_V2R3, commit]),
+            ("slot clone target graph ref creation", ["-C", clone, "update-ref", _CLONE_TARGET_REF_V2R7, commit]),
             ("slot clone reachable commit-graph write", ["-C", clone, "commit-graph", "write", "--reachable"]),
         )
         for name, arguments in clone_rows:
@@ -8247,8 +11591,8 @@ def _terminal_error_receipt_semantics_v2(
         return set(value) == {"schema_version", "status"} and value.get(
             "status"
         ) == "RECEIPT_OMITTED_OVER_BOUND"
-    if schema == _SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V3:
-        expected_detail = _scheduling_admission_failure_detail_v3(value)
+    if schema == _SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V5:
+        expected_detail = _scheduling_admission_failure_detail_v5(value)
         return (
             top_level
             and terminal_error_code == _SCHEDULING_ADMISSION_FAILURE_V2
@@ -8256,7 +11600,7 @@ def _terminal_error_receipt_semantics_v2(
             and value.get("slot_id") == expected_prespawn_slot_id_or_null
             and expected_detail is not None
             and terminal_error_detail == expected_detail[:4096]
-            and _scheduling_admission_evidence_semantics_v3(
+            and _scheduling_admission_evidence_semantics_v5(
                 contract, value, require_passed=False
             )
         )
@@ -8786,7 +12130,7 @@ def _verify_slot_absence_evidence_semantics_v2(
     evidence = _verify_domain_root_v2(
         value,
         domain=(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/"
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/"
             "SLOT_ROOT_ABSENCE/V2"
         ),
         root_field="root",
@@ -9244,7 +12588,7 @@ def _verify_ledger_state_semantics_v2(
         before = _verify_domain_root_v2(
             binding["source_replay_before_evidence"],
             domain=(
-                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/"
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/"
                 "SOURCE_REPLAY/V2"
             ),
             root_field="root",
@@ -9254,7 +12598,7 @@ def _verify_ledger_state_semantics_v2(
         after = _verify_domain_root_v2(
             binding["source_replay_after_evidence"],
             domain=(
-                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/"
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/"
                 "SOURCE_REPLAY/V2"
             ),
             root_field="root",
@@ -9279,7 +12623,7 @@ def _verify_ledger_state_semantics_v2(
         cleanup = _verify_domain_root_v2(
             binding["cleanup_replay_evidence"],
             domain=(
-                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/"
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/"
                 "CLEANUP_REPLAY/V2"
             ),
             root_field="root",
@@ -10424,7 +13768,7 @@ def _run_one_slot(
                 "error_or_null": detail,
                 "evidence": {"error": detail},
                 "root": _domain_digest(
-                    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/SOURCE_REPLAY/V2",
+                    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/SOURCE_REPLAY/V2",
                     {"error": detail},
                 ),
             }
@@ -10590,7 +13934,7 @@ def _run_one_slot(
                 "error_or_null": detail,
                 "evidence": {"error": detail},
                 "root": _domain_digest(
-                    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R3/SOURCE_REPLAY/V2",
+                    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/SOURCE_REPLAY/V2",
                     {"error": detail},
                 ),
             }
