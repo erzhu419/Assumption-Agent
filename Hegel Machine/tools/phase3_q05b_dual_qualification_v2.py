@@ -46,11 +46,18 @@ TRAJECTORY_CORE_RELATIVE_PATH: Final = (
     "src/hegel_machine/phase3_q05b_trajectory_v2.py"
 )
 TRAJECTORY_CORE_RAW_SHA256: Final = (
-    "9d72cc6c155f6e30dcda139025578399b8ebc391d688a037bfebf7de6ed2b398"
+    "0b0d33fc9ff0be239b61ce1bed6d93511f797ad1adc6666938cfb7581be7cf34"
 )
-TRAJECTORY_PRODUCER_ID: Final = "Q05B_SUPERVISOR_V3"
-TRAJECTORY_ASYNC_QUEUE_CAPACITY_V3: Final = 512
-RESOURCE_SAMPLER_TARGET_WAIT_NS: Final = 50_000_000
+TRAJECTORY_PRODUCER_ID: Final = "Q05B_SUPERVISOR_V4"
+TRAJECTORY_FIFO_CAPACITY_V4: Final = 512
+TRAJECTORY_NORMAL_OUTSTANDING_CAPACITY_V4: Final = 384
+TRAJECTORY_CONTROL_RECOVERY_RESERVE_V4: Final = 128
+TRAJECTORY_CONTROL_RECOVERY_OUTSTANDING_CAPACITY_V4: Final = 7
+TRAJECTORY_NORMAL_SAMPLE_ADMISSION_V4: Final = "NORMAL_LIVE_SAMPLE"
+TRAJECTORY_CONTROL_RECOVERY_ADMISSION_V4: Final = "CONTROL_RECOVERY"
+TRAJECTORY_INTERNAL_ADMISSION_V4: Final = "INTERNAL"
+TRAJECTORY_BACKPRESSURE_POLL_SECONDS_V4: Final = 0.01
+RESOURCE_SAMPLER_TARGET_WAIT_NS: Final = 125_000_000
 RESOURCE_SAMPLER_MAXIMUM_UNSAMPLED_GAP_NS: Final = 250_000_000
 PLAN_SCHEMA_VERSION: Final = "hegel-phase3a-q05b-dual-qualification-plan/2"
 ERROR_SCHEMA_VERSION: Final = "hegel-phase3a-q05b-dual-qualification-error/2"
@@ -325,7 +332,7 @@ _ACTIVE_TRAJECTORY_V2: object | None = None
 _TRAJECTORY_MODULE_V2: object | None = None
 
 
-class TrajectorySequencerErrorV3(RuntimeError):
+class TrajectorySequencerErrorV4(RuntimeError):
     """Stable fail-closed error for the supervisor FIFO sequencer."""
 
     def __init__(self, code: str, detail: str) -> None:
@@ -335,24 +342,25 @@ class TrajectorySequencerErrorV3(RuntimeError):
 
 
 @dataclass(slots=True)
-class TrajectoryTicketV3:
+class TrajectoryTicketV4:
     """One accepted FIFO command and its eventual durable disposition."""
 
     ticket_id: int
     operation: str
+    admission_class: str
     complete: threading.Event
     result: object | None = None
     error: BaseException | None = None
 
 
 @dataclass(slots=True)
-class _TrajectoryCommandV3:
-    ticket: TrajectoryTicketV3
+class _TrajectoryCommandV4:
+    ticket: TrajectoryTicketV4
     arguments: tuple[object, ...]
     keywords: dict[str, object]
 
 
-class TrajectorySequencerV3:
+class TrajectorySequencerV4:
     """One bounded FIFO in front of the unchanged durable trajectory writer.
 
     Every supervisor event uses this sequencer, so the underlying writer still
@@ -366,29 +374,47 @@ class TrajectorySequencerV3:
         self,
         writer: object,
         *,
-        capacity: int = TRAJECTORY_ASYNC_QUEUE_CAPACITY_V3,
+        capacity: int = TRAJECTORY_FIFO_CAPACITY_V4,
+        normal_outstanding_capacity: int = (
+            TRAJECTORY_NORMAL_OUTSTANDING_CAPACITY_V4
+        ),
     ) -> None:
-        if writer is None or type(capacity) is not int or capacity != 512:
-            raise TrajectorySequencerErrorV3(
+        if (
+            writer is None
+            or type(capacity) is not int
+            or capacity != TRAJECTORY_FIFO_CAPACITY_V4
+            or type(normal_outstanding_capacity) is not int
+            or normal_outstanding_capacity
+            != TRAJECTORY_NORMAL_OUTSTANDING_CAPACITY_V4
+            or capacity - normal_outstanding_capacity
+            != TRAJECTORY_CONTROL_RECOVERY_RESERVE_V4
+            or TRAJECTORY_CONTROL_RECOVERY_RESERVE_V4
+            < TRAJECTORY_CONTROL_RECOVERY_OUTSTANDING_CAPACITY_V4
+        ):
+            raise TrajectorySequencerErrorV4(
                 "FAIL_TRAJECTORY_SEQUENCER_INPUT",
-                "trajectory FIFO writer or frozen capacity differs",
+                "trajectory FIFO writer or frozen V4 capacities differ",
             )
         self._writer = writer
-        self._queue: queue.Queue[_TrajectoryCommandV3] = queue.Queue(
+        self._queue: queue.Queue[_TrajectoryCommandV4] = queue.Queue(
             maxsize=capacity
         )
         self._submission_lock = threading.Lock()
         self._state_lock = threading.Lock()
+        self._admission_condition = threading.Condition(self._state_lock)
+        self._normal_outstanding_capacity = normal_outstanding_capacity
+        self._normal_outstanding = 0
+        self._control_recovery_outstanding = 0
+        self._total_outstanding = 0
         self._next_ticket = 1
         self._accepting = True
         self._quiesced = False
         self._closed = False
         self._post_quiesce_terminal_submitted = False
         self._fault: BaseException | None = None
-        self._submission_fault: TrajectorySequencerErrorV3 | None = None
         self._publisher = threading.Thread(
             target=self._publish_loop,
-            name="q05b-trajectory-publisher-v3",
+            name="q05b-trajectory-publisher-v4",
             daemon=False,
         )
         try:
@@ -408,54 +434,199 @@ class TrajectorySequencerV3:
         return self._queue.qsize()
 
     @property
+    def normal_outstanding_count(self) -> int:
+        with self._state_lock:
+            return self._normal_outstanding
+
+    @property
+    def total_outstanding_count(self) -> int:
+        with self._state_lock:
+            return self._total_outstanding
+
+    @property
+    def control_recovery_outstanding_count(self) -> int:
+        with self._state_lock:
+            return self._control_recovery_outstanding
+
+    @property
     def fault(self) -> BaseException | None:
         with self._state_lock:
-            return self._fault or self._submission_fault
+            return self._fault
 
     def _new_command(
         self,
         operation: str,
         arguments: tuple[object, ...],
         keywords: Mapping[str, object],
-    ) -> _TrajectoryCommandV3:
-        ticket = TrajectoryTicketV3(
+        admission_class: str,
+    ) -> _TrajectoryCommandV4:
+        ticket = TrajectoryTicketV4(
             ticket_id=self._next_ticket,
             operation=operation,
+            admission_class=admission_class,
             complete=threading.Event(),
         )
-        return _TrajectoryCommandV3(ticket, arguments, dict(keywords))
+        return _TrajectoryCommandV4(ticket, arguments, dict(keywords))
+
+    def _require_accepting_locked(self) -> None:
+        if self._closed:
+            raise TrajectorySequencerErrorV4(
+                "FAIL_TRAJECTORY_SEQUENCER_CLOSED",
+                "trajectory FIFO is closed",
+            )
+        if self._fault is not None:
+            raise TrajectorySequencerErrorV4(
+                "FAIL_TRAJECTORY_PUBLISHER_FAULT",
+                _trajectory_core_error_detail_v2(self._fault),
+            )
+        if not self._accepting:
+            raise TrajectorySequencerErrorV4(
+                "FAIL_TRAJECTORY_SEQUENCER_QUIESCED",
+                "trajectory FIFO no longer accepts events",
+            )
 
     def _require_accepting(self) -> None:
         with self._state_lock:
-            if self._closed:
-                raise TrajectorySequencerErrorV3(
-                    "FAIL_TRAJECTORY_SEQUENCER_CLOSED",
-                    "trajectory FIFO is closed",
-                )
-            if self._submission_fault is not None:
-                raise TrajectorySequencerErrorV3(
-                    self._submission_fault.code,
-                    self._submission_fault.detail,
-                ) from self._submission_fault
-            if self._fault is not None:
-                raise TrajectorySequencerErrorV3(
-                    "FAIL_TRAJECTORY_PUBLISHER_FAULT",
-                    _trajectory_core_error_detail_v2(self._fault),
-                )
-            if not self._accepting:
-                raise TrajectorySequencerErrorV3(
-                    "FAIL_TRAJECTORY_SEQUENCER_QUIESCED",
-                    "trajectory FIFO no longer accepts events",
-                )
+            self._require_accepting_locked()
 
     @staticmethod
     def _publisher_fault_error(
         error: BaseException,
-    ) -> TrajectorySequencerErrorV3:
-        return TrajectorySequencerErrorV3(
+    ) -> TrajectorySequencerErrorV4:
+        return TrajectorySequencerErrorV4(
             "FAIL_TRAJECTORY_PUBLISHER_FAULT",
             _trajectory_core_error_detail_v2(error),
         )
+
+    @staticmethod
+    def _normal_backpressure_interrupted_error() -> TrajectorySequencerErrorV4:
+        return TrajectorySequencerErrorV4(
+            "FAIL_TRAJECTORY_NORMAL_BACKPRESSURE_INTERRUPTED",
+            "normal live-sample admission was interrupted while capacity-bound",
+        )
+
+    @staticmethod
+    def _normal_backpressure_deadline_error() -> TrajectorySequencerErrorV4:
+        return TrajectorySequencerErrorV4(
+            "FAIL_TRAJECTORY_NORMAL_BACKPRESSURE_DEADLINE",
+            "normal live-sample BEGIN admission reached its absolute gap deadline",
+        )
+
+    def _reserve_normal(
+        self,
+        interrupt_event: object | None,
+        deadline_ns: int | None,
+    ) -> None:
+        if interrupt_event is not None and not callable(
+            getattr(interrupt_event, "is_set", None)
+        ):
+            raise TrajectorySequencerErrorV4(
+                "FAIL_TRAJECTORY_SEQUENCER_INPUT",
+                "normal live-sample interrupt event type differs",
+            )
+        if deadline_ns is not None and (
+            type(deadline_ns) is not int or deadline_ns < 0
+        ):
+            raise TrajectorySequencerErrorV4(
+                "FAIL_TRAJECTORY_SEQUENCER_INPUT",
+                "normal live-sample admission deadline differs",
+            )
+        waited = False
+        with self._admission_condition:
+            while (
+                self._normal_outstanding
+                >= self._normal_outstanding_capacity
+                or self._total_outstanding >= TRAJECTORY_FIFO_CAPACITY_V4
+            ):
+                self._require_accepting_locked()
+                if (
+                    interrupt_event is not None
+                    and interrupt_event.is_set()
+                ):
+                    raise self._normal_backpressure_interrupted_error()
+                remaining_seconds = TRAJECTORY_BACKPRESSURE_POLL_SECONDS_V4
+                if deadline_ns is not None:
+                    remaining_ns = deadline_ns - time.monotonic_ns()
+                    if remaining_ns < 0:
+                        raise self._normal_backpressure_deadline_error()
+                    remaining_seconds = min(
+                        remaining_seconds,
+                        remaining_ns / 1_000_000_000,
+                    )
+                waited = True
+                self._admission_condition.wait(remaining_seconds)
+            self._require_accepting_locked()
+            if interrupt_event is not None and interrupt_event.is_set():
+                raise self._normal_backpressure_interrupted_error()
+            if (
+                waited
+                and deadline_ns is not None
+                and time.monotonic_ns() > deadline_ns
+            ):
+                raise self._normal_backpressure_deadline_error()
+            self._normal_outstanding += 1
+            self._total_outstanding += 1
+
+    def _reserve_control(self) -> None:
+        with self._admission_condition:
+            self._require_accepting_locked()
+            if (
+                self._control_recovery_outstanding
+                >= TRAJECTORY_CONTROL_RECOVERY_OUTSTANDING_CAPACITY_V4
+            ):
+                raise TrajectorySequencerErrorV4(
+                    "FAIL_TRAJECTORY_CONTROL_TOPOLOGY_EXCEEDED",
+                    "control/recovery outstanding topology exceeded frozen maximum 7",
+                )
+            if self._total_outstanding >= TRAJECTORY_FIFO_CAPACITY_V4:
+                raise TrajectorySequencerErrorV4(
+                    "FAIL_TRAJECTORY_ADMISSION_ACCOUNTING",
+                    "control/recovery reserve found total FIFO capacity exhausted",
+                )
+            self._control_recovery_outstanding += 1
+            self._total_outstanding += 1
+
+    def _release_admission(self, admission_class: str) -> None:
+        with self._admission_condition:
+            invalid = self._total_outstanding <= 0
+            if admission_class == TRAJECTORY_NORMAL_SAMPLE_ADMISSION_V4:
+                invalid = invalid or self._normal_outstanding <= 0
+            elif admission_class == TRAJECTORY_CONTROL_RECOVERY_ADMISSION_V4:
+                invalid = (
+                    invalid or self._control_recovery_outstanding <= 0
+                )
+            if invalid:
+                if self._fault is None:
+                    self._fault = TrajectorySequencerErrorV4(
+                        "FAIL_TRAJECTORY_ADMISSION_ACCOUNTING",
+                        "trajectory outstanding admission count underflowed",
+                    )
+            else:
+                self._total_outstanding -= 1
+                if admission_class == TRAJECTORY_NORMAL_SAMPLE_ADMISSION_V4:
+                    self._normal_outstanding -= 1
+                elif (
+                    admission_class
+                    == TRAJECTORY_CONTROL_RECOVERY_ADMISSION_V4
+                ):
+                    self._control_recovery_outstanding -= 1
+            self._admission_condition.notify_all()
+
+    def _put_command(
+        self,
+        command: _TrajectoryCommandV4,
+        *,
+        interrupt_event: object | None,
+        deadline_ns: int | None,
+    ) -> None:
+        del interrupt_event, deadline_ns
+        try:
+            self._queue.put_nowait(command)
+        except queue.Full as error:
+            raise TrajectorySequencerErrorV4(
+                "FAIL_TRAJECTORY_ADMISSION_ACCOUNTING",
+                "reserved trajectory outstanding slot found a full FIFO",
+            ) from error
 
     def _submit(
         self,
@@ -464,39 +635,87 @@ class TrajectorySequencerV3:
         keywords: Mapping[str, object],
         *,
         wait_for_durable: bool,
-    ) -> TrajectoryTicketV3:
-        with self._submission_lock:
-            self._require_accepting()
-            command = self._new_command(operation, arguments, keywords)
-            try:
-                self._queue.put_nowait(command)
-            except queue.Full as error:
-                queue_full = TrajectorySequencerErrorV3(
-                    "FAIL_TRAJECTORY_QUEUE_FULL",
-                    "trajectory FIFO reached frozen capacity 512",
+        admission_class: str,
+        interrupt_event: object | None = None,
+        deadline_ns: int | None = None,
+    ) -> TrajectoryTicketV4:
+        if admission_class not in {
+            TRAJECTORY_NORMAL_SAMPLE_ADMISSION_V4,
+            TRAJECTORY_CONTROL_RECOVERY_ADMISSION_V4,
+        }:
+            raise TrajectorySequencerErrorV4(
+                "FAIL_TRAJECTORY_SEQUENCER_INPUT",
+                "trajectory admission class differs",
+            )
+        normal_reserved = False
+        control_reserved = False
+        accepted = False
+        if admission_class == TRAJECTORY_NORMAL_SAMPLE_ADMISSION_V4:
+            self._reserve_normal(interrupt_event, deadline_ns)
+            normal_reserved = True
+        elif interrupt_event is not None:
+            raise TrajectorySequencerErrorV4(
+                "FAIL_TRAJECTORY_SEQUENCER_INPUT",
+                "control/recovery admission cannot carry an interrupt event",
+            )
+        elif deadline_ns is not None:
+            raise TrajectorySequencerErrorV4(
+                "FAIL_TRAJECTORY_SEQUENCER_INPUT",
+                "control/recovery admission cannot carry a normal deadline",
+            )
+        else:
+            self._reserve_control()
+            control_reserved = True
+        try:
+            with self._submission_lock:
+                self._require_accepting()
+                if (
+                    admission_class
+                    == TRAJECTORY_NORMAL_SAMPLE_ADMISSION_V4
+                    and interrupt_event is not None
+                    and interrupt_event.is_set()
+                ):
+                    raise self._normal_backpressure_interrupted_error()
+                if (
+                    admission_class
+                    == TRAJECTORY_NORMAL_SAMPLE_ADMISSION_V4
+                    and deadline_ns is not None
+                    and time.monotonic_ns() > deadline_ns
+                ):
+                    raise self._normal_backpressure_deadline_error()
+                command = self._new_command(
+                    operation,
+                    arguments,
+                    keywords,
+                    admission_class,
                 )
-                with self._state_lock:
-                    if self._submission_fault is None:
-                        self._submission_fault = queue_full
-                    self._accepting = False
-                    latched = self._submission_fault
-                raise TrajectorySequencerErrorV3(
-                    latched.code,
-                    latched.detail,
-                ) from error
-            self._next_ticket += 1
+                self._put_command(
+                    command,
+                    interrupt_event=interrupt_event,
+                    deadline_ns=deadline_ns,
+                )
+                accepted = True
+                self._next_ticket += 1
+        finally:
+            if (normal_reserved or control_reserved) and not accepted:
+                self._release_admission(admission_class)
         if wait_for_durable:
             self.flush_through(command.ticket)
         return command.ticket
 
-    def _submit_internal(self, operation: str) -> TrajectoryTicketV3:
-        command = self._new_command(operation, (), {})
+    def _submit_internal(self, operation: str) -> TrajectoryTicketV4:
+        command = self._new_command(
+            operation,
+            (),
+            {},
+            TRAJECTORY_INTERNAL_ADMISSION_V4,
+        )
         try:
             self._queue.put_nowait(command)
         except queue.Full as error:
-            raise TrajectorySequencerErrorV3(
-                "FAIL_TRAJECTORY_QUEUE_FULL",
-                "trajectory FIFO internal boundary found a non-empty full queue",
+            raise TrajectorySequencerErrorV4(
+                "FAIL_TRAJECTORY_RECOVERY_RESERVE_EXHAUSTED",
+                "drained FIFO rejected an internal boundary command",
             ) from error
         self._next_ticket += 1
         return command.ticket
@@ -524,7 +743,7 @@ class TrajectorySequencerV3:
                         raise fault
                     target = getattr(self._writer, ticket.operation, None)
                     if not callable(target):
-                        raise TrajectorySequencerErrorV3(
+                        raise TrajectorySequencerErrorV4(
                             "FAIL_TRAJECTORY_PUBLISHER_API",
                             f"trajectory writer lacks {ticket.operation}",
                         )
@@ -535,27 +754,36 @@ class TrajectorySequencerV3:
             except BaseException as error:
                 ticket.error = error
                 if ticket.operation not in {"__barrier__", "__close__"}:
-                    with self._state_lock:
+                    with self._admission_condition:
                         if self._fault is None:
                             self._fault = error
+                        self._admission_condition.notify_all()
             finally:
+                if (
+                    ticket.admission_class
+                    in {
+                        TRAJECTORY_NORMAL_SAMPLE_ADMISSION_V4,
+                        TRAJECTORY_CONTROL_RECOVERY_ADMISSION_V4,
+                    }
+                ):
+                    self._release_admission(ticket.admission_class)
                 ticket.complete.set()
                 self._queue.task_done()
             if stop_after_command:
                 return
 
-    def flush_through(self, ticket: TrajectoryTicketV3 | None) -> object | None:
+    def flush_through(self, ticket: TrajectoryTicketV4 | None) -> object | None:
         if ticket is None:
             return None
-        if type(ticket) is not TrajectoryTicketV3:
-            raise TrajectorySequencerErrorV3(
+        if type(ticket) is not TrajectoryTicketV4:
+            raise TrajectorySequencerErrorV4(
                 "FAIL_TRAJECTORY_TICKET",
                 "trajectory barrier ticket type differs",
             )
         ticket.complete.wait()
         if ticket.error is not None:
             if ticket.operation == "__close__":
-                raise TrajectorySequencerErrorV3(
+                raise TrajectorySequencerErrorV4(
                     "FAIL_TRAJECTORY_PUBLISHER_CLOSE",
                     _trajectory_core_error_detail_v2(ticket.error),
                 ) from ticket.error
@@ -566,54 +794,43 @@ class TrajectorySequencerV3:
         with self._submission_lock:
             with self._state_lock:
                 if self._closed:
-                    raise TrajectorySequencerErrorV3(
+                    raise TrajectorySequencerErrorV4(
                         "FAIL_TRAJECTORY_SEQUENCER_CLOSED",
                         "trajectory FIFO is closed",
                     )
             self._queue.join()
             with self._state_lock:
                 fault = self._fault
-                submission_fault = self._submission_fault
             if fault is not None:
                 raise self._publisher_fault_error(fault) from fault
-            if submission_fault is not None:
-                raise TrajectorySequencerErrorV3(
-                    submission_fault.code,
-                    submission_fault.detail,
-                ) from submission_fault
 
     def quiesce_and_drain(self) -> None:
         with self._submission_lock:
             with self._state_lock:
                 if self._closed:
-                    raise TrajectorySequencerErrorV3(
+                    raise TrajectorySequencerErrorV4(
                         "FAIL_TRAJECTORY_SEQUENCER_CLOSED",
                         "trajectory FIFO is closed",
                     )
                 if self._quiesced:
-                    raise TrajectorySequencerErrorV3(
+                    raise TrajectorySequencerErrorV4(
                         "FAIL_TRAJECTORY_SEQUENCER_STATE",
                         "trajectory FIFO was quiesced twice",
                     )
                 self._accepting = False
+                self._admission_condition.notify_all()
             self._queue.join()
             with self._state_lock:
                 self._quiesced = True
                 fault = self._fault
-                submission_fault = self._submission_fault
             if fault is not None:
                 raise self._publisher_fault_error(fault) from fault
-            if submission_fault is not None:
-                raise TrajectorySequencerErrorV3(
-                    submission_fault.code,
-                    submission_fault.detail,
-                ) from submission_fault
 
     def _seal_after_quiesce(self, outcome: str) -> object:
         with self._submission_lock:
             with self._state_lock:
                 if not self._quiesced or self._closed:
-                    raise TrajectorySequencerErrorV3(
+                    raise TrajectorySequencerErrorV4(
                         "FAIL_TRAJECTORY_SEQUENCER_STATE",
                         "trajectory seal preceded one quiesce-and-drain",
                     )
@@ -621,11 +838,6 @@ class TrajectorySequencerV3:
                     raise self._publisher_fault_error(
                         self._fault
                     ) from self._fault
-                if self._submission_fault is not None:
-                    raise TrajectorySequencerErrorV3(
-                        self._submission_fault.code,
-                        self._submission_fault.detail,
-                    ) from self._submission_fault
             ticket = self._submit_internal(f"seal_{outcome.lower()}")
         return self.flush_through(ticket)
 
@@ -643,19 +855,19 @@ class TrajectorySequencerV3:
         """
 
         if operation not in {"ok", "fail"}:
-            raise TrajectorySequencerErrorV3(
+            raise TrajectorySequencerErrorV4(
                 "FAIL_TRAJECTORY_SEQUENCER_INPUT",
                 "post-quiesce terminal operation differs",
             )
         with self._submission_lock:
             with self._state_lock:
                 if not self._quiesced or self._closed:
-                    raise TrajectorySequencerErrorV3(
+                    raise TrajectorySequencerErrorV4(
                         "FAIL_TRAJECTORY_SEQUENCER_STATE",
                         "supervisor terminal preceded quiesce-and-drain",
                     )
                 if self._post_quiesce_terminal_submitted:
-                    raise TrajectorySequencerErrorV3(
+                    raise TrajectorySequencerErrorV4(
                         "FAIL_TRAJECTORY_SEQUENCER_STATE",
                         "supervisor terminal was submitted twice",
                     )
@@ -663,17 +875,17 @@ class TrajectorySequencerV3:
                     raise self._publisher_fault_error(
                         self._fault
                     ) from self._fault
-                if self._submission_fault is not None:
-                    raise TrajectorySequencerErrorV3(
-                        self._submission_fault.code,
-                        self._submission_fault.detail,
-                    ) from self._submission_fault
-            command = self._new_command(operation, arguments, keywords)
+            command = self._new_command(
+                operation,
+                arguments,
+                keywords,
+                TRAJECTORY_INTERNAL_ADMISSION_V4,
+            )
             try:
                 self._queue.put_nowait(command)
             except queue.Full as error:
-                raise TrajectorySequencerErrorV3(
-                    "FAIL_TRAJECTORY_QUEUE_FULL",
+                raise TrajectorySequencerErrorV4(
+                    "FAIL_TRAJECTORY_RECOVERY_RESERVE_EXHAUSTED",
                     "drained FIFO rejected the supervisor terminal",
                 ) from error
             self._next_ticket += 1
@@ -708,6 +920,7 @@ class TrajectorySequencerV3:
                     return
                 self._accepting = False
                 self._closed = True
+                self._admission_condition.notify_all()
             self._queue.join()
             ticket = self._submit_internal("__close__")
         close_error: BaseException | None = None
@@ -717,7 +930,7 @@ class TrajectorySequencerV3:
             close_error = error
         self._publisher.join(timeout=10.0)
         if self._publisher.is_alive():
-            raise TrajectorySequencerErrorV3(
+            raise TrajectorySequencerErrorV4(
                 "FAIL_TRAJECTORY_PUBLISHER_THREAD",
                 "trajectory publisher thread did not terminate",
             )
@@ -726,36 +939,94 @@ class TrajectorySequencerV3:
 
     def begin(self, *arguments: object, **keywords: object) -> object:
         ticket = self._submit(
-            "begin", arguments, keywords, wait_for_durable=True
+            "begin",
+            arguments,
+            keywords,
+            wait_for_durable=True,
+            admission_class=TRAJECTORY_CONTROL_RECOVERY_ADMISSION_V4,
         )
         return ticket.result
 
     def ok(self, *arguments: object, **keywords: object) -> object:
-        ticket = self._submit("ok", arguments, keywords, wait_for_durable=True)
+        ticket = self._submit(
+            "ok",
+            arguments,
+            keywords,
+            wait_for_durable=True,
+            admission_class=TRAJECTORY_CONTROL_RECOVERY_ADMISSION_V4,
+        )
         return ticket.result
 
     def fail(self, *arguments: object, **keywords: object) -> object:
         ticket = self._submit(
-            "fail", arguments, keywords, wait_for_durable=True
+            "fail",
+            arguments,
+            keywords,
+            wait_for_durable=True,
+            admission_class=TRAJECTORY_CONTROL_RECOVERY_ADMISSION_V4,
         )
         return ticket.result
 
-    def enqueue_begin(
-        self, *arguments: object, **keywords: object
-    ) -> TrajectoryTicketV3:
+    def enqueue_sample_begin(
+        self,
+        *arguments: object,
+        interrupt_event: object | None = None,
+        deadline_ns: int,
+        **keywords: object,
+    ) -> TrajectoryTicketV4:
         return self._submit(
-            "begin", arguments, keywords, wait_for_durable=False
+            "begin",
+            arguments,
+            keywords,
+            wait_for_durable=False,
+            admission_class=TRAJECTORY_NORMAL_SAMPLE_ADMISSION_V4,
+            interrupt_event=interrupt_event,
+            deadline_ns=deadline_ns,
         )
 
-    def enqueue_ok(
+    def enqueue_sample_ok(
         self, *arguments: object, **keywords: object
-    ) -> TrajectoryTicketV3:
-        return self._submit("ok", arguments, keywords, wait_for_durable=False)
+    ) -> TrajectoryTicketV4:
+        return self._submit(
+            "ok",
+            arguments,
+            keywords,
+            wait_for_durable=False,
+            admission_class=TRAJECTORY_NORMAL_SAMPLE_ADMISSION_V4,
+        )
+
+    def enqueue_recovery_begin(
+        self, *arguments: object, **keywords: object
+    ) -> TrajectoryTicketV4:
+        return self._submit(
+            "begin",
+            arguments,
+            keywords,
+            wait_for_durable=False,
+            admission_class=TRAJECTORY_CONTROL_RECOVERY_ADMISSION_V4,
+        )
+
+    def enqueue_recovery_ok(
+        self, *arguments: object, **keywords: object
+    ) -> TrajectoryTicketV4:
+        return self._submit(
+            "ok",
+            arguments,
+            keywords,
+            wait_for_durable=False,
+            admission_class=TRAJECTORY_CONTROL_RECOVERY_ADMISSION_V4,
+        )
 
     def enqueue_fail(
         self, *arguments: object, **keywords: object
-    ) -> TrajectoryTicketV3:
-        return self._submit("fail", arguments, keywords, wait_for_durable=False)
+    ) -> TrajectoryTicketV4:
+        return self._submit(
+            "fail",
+            arguments,
+            keywords,
+            wait_for_durable=False,
+            admission_class=TRAJECTORY_CONTROL_RECOVERY_ADMISSION_V4,
+        )
 
 
 def _load_trajectory_module_v2() -> object:
@@ -986,7 +1257,7 @@ def _trajectory_fail_v2(
             )
 
 
-def _trajectory_begin_async_v3(
+def _trajectory_begin_async_v4(
     span_id: str,
     operation: str,
     *,
@@ -995,13 +1266,24 @@ def _trajectory_begin_async_v3(
     actor: str | None = None,
     detail: str | None = None,
     artifact_written: bool = False,
+    use_recovery_reserve: bool = False,
+    interrupt_event: object | None = None,
+    deadline_ns: int | None = None,
     **sample: object,
-) -> TrajectoryTicketV3 | None:
+) -> TrajectoryTicketV4 | None:
     """Enqueue a sample-path BEGIN without waiting for filesystem durability."""
 
     if _ACTIVE_TRAJECTORY_V2 is None:
         return None
-    enqueue = getattr(_ACTIVE_TRAJECTORY_V2, "enqueue_begin", None)
+    enqueue = getattr(
+        _ACTIVE_TRAJECTORY_V2,
+        (
+            "enqueue_recovery_begin"
+            if use_recovery_reserve
+            else "enqueue_sample_begin"
+        ),
+        None,
+    )
     if not callable(enqueue):
         _trajectory_begin_v2(
             span_id,
@@ -1015,20 +1297,62 @@ def _trajectory_begin_async_v3(
         )
         return None
     try:
-        return enqueue(
-            span_id,
-            operation,
-            stage=stage,
-            substep=substep,
-            actor=actor,
-            detail=(
+        enqueue_keywords: dict[str, object] = {
+            "stage": stage,
+            "substep": substep,
+            "actor": actor,
+            "detail": (
                 _trajectory_bounded_text_v2(detail)
                 if detail is not None
                 else None
             ),
             **sample,
+        }
+        if not use_recovery_reserve:
+            enqueue_keywords["interrupt_event"] = interrupt_event
+            enqueue_keywords["deadline_ns"] = deadline_ns
+        elif interrupt_event is not None:
+            raise TrajectorySequencerErrorV4(
+                "FAIL_TRAJECTORY_SEQUENCER_INPUT",
+                "recovery BEGIN cannot carry an interrupt event",
+            )
+        return enqueue(
+            span_id,
+            operation,
+            **enqueue_keywords,
         )
     except BaseException as trajectory_error:
+        if (
+            isinstance(trajectory_error, TrajectorySequencerErrorV4)
+            and trajectory_error.code
+            == "FAIL_TRAJECTORY_NORMAL_BACKPRESSURE_INTERRUPTED"
+            and interrupt_event is not None
+            and interrupt_event.is_set()
+        ):
+            raise
+        if (
+            isinstance(trajectory_error, TrajectorySequencerErrorV4)
+            and trajectory_error.code
+            == "FAIL_TRAJECTORY_NORMAL_BACKPRESSURE_DEADLINE"
+            and not use_recovery_reserve
+        ):
+            recovery_enqueue = getattr(
+                _ACTIVE_TRAJECTORY_V2,
+                "enqueue_recovery_begin",
+                None,
+            )
+            if callable(recovery_enqueue):
+                recovery_keywords = dict(enqueue_keywords)
+                recovery_keywords.pop("interrupt_event", None)
+                recovery_keywords.pop("deadline_ns", None)
+                try:
+                    return recovery_enqueue(
+                        span_id,
+                        operation,
+                        **recovery_keywords,
+                    )
+                except BaseException as recovery_error:
+                    trajectory_error = recovery_error
         _fail(
             FAIL_TRAJECTORY,
             "trajectory FIFO enqueue failed; event_type=BEGIN; "
@@ -1038,18 +1362,27 @@ def _trajectory_begin_async_v3(
         )
 
 
-def _trajectory_ok_async_v3(
+def _trajectory_ok_async_v4(
     span_id: str,
     *,
     detail: str | None = None,
     artifact_written: bool = False,
+    use_recovery_reserve: bool = False,
     **sample: object,
-) -> TrajectoryTicketV3 | None:
+) -> TrajectoryTicketV4 | None:
     """Enqueue a sample-path OK without waiting for filesystem durability."""
 
     if _ACTIVE_TRAJECTORY_V2 is None:
         return None
-    enqueue = getattr(_ACTIVE_TRAJECTORY_V2, "enqueue_ok", None)
+    enqueue = getattr(
+        _ACTIVE_TRAJECTORY_V2,
+        (
+            "enqueue_recovery_ok"
+            if use_recovery_reserve
+            else "enqueue_sample_ok"
+        ),
+        None,
+    )
     if not callable(enqueue):
         _trajectory_ok_v2(
             span_id,
@@ -1078,14 +1411,14 @@ def _trajectory_ok_async_v3(
         )
 
 
-def _trajectory_fail_async_v3(
+def _trajectory_fail_async_v4(
     span_id: str,
     error: BaseException,
     *,
     detail: str | None = None,
     artifact_written: bool | None = None,
     **sample: object,
-) -> TrajectoryTicketV3 | None:
+) -> TrajectoryTicketV4 | None:
     """Enqueue a sample-path FAIL; its caller chooses the durability barrier."""
 
     if _ACTIVE_TRAJECTORY_V2 is None:
@@ -1131,7 +1464,7 @@ def _trajectory_fail_async_v3(
         )
 
 
-def _trajectory_flush_v3(ticket: TrajectoryTicketV3 | None = None) -> None:
+def _trajectory_flush_v4(ticket: TrajectoryTicketV4 | None = None) -> None:
     """Wait for one accepted ticket, or for every prior accepted event."""
 
     if _ACTIVE_TRAJECTORY_V2 is None:
@@ -1153,7 +1486,7 @@ def _trajectory_flush_v3(ticket: TrajectoryTicketV3 | None = None) -> None:
         )
 
 
-def _trajectory_ok_after_quiesce_v3(
+def _trajectory_ok_after_quiesce_v4(
     span_id: str,
     *,
     detail: str | None = None,
@@ -1187,7 +1520,7 @@ def _trajectory_ok_after_quiesce_v3(
         )
 
 
-def _trajectory_fail_after_quiesce_v3(
+def _trajectory_fail_after_quiesce_v4(
     span_id: str,
     error: BaseException,
     *,
@@ -3745,6 +4078,11 @@ def _validate_policy_sections_v1(config: Mapping[str, object]) -> None:
             "logger_failure_fails_execution_closed",
             "global_fifo_sequencer",
             "global_fifo_capacity",
+            "normal_live_sample_outstanding_capacity",
+            "control_recovery_reserve",
+            "control_recovery_outstanding_capacity",
+            "control_recovery_reserve_relation",
+            "capacity_partition_required",
             "ordinary_event_completion",
             "sampler_epoch_begin",
             "live_sample_begin",
@@ -3756,14 +4094,21 @@ def _validate_policy_sections_v1(config: Mapping[str, object]) -> None:
             "typed_failure_propagation",
             "held_final_release",
             "terminal_manifest_ordering",
-            "queue_full_or_publisher_fault",
+            "normal_capacity_behavior",
+            "normal_backpressure_poll_milliseconds",
+            "normal_backpressure_gap_accounting",
+            "normal_begin_absolute_deadline",
+            "normal_begin_deadline_fallback",
+            "control_recovery_behavior",
+            "physical_fifo_exhaustion_behavior",
+            "publisher_fault_behavior",
         },
         "durable_trajectory_policy",
     )
     _require_type_exact_v1(
         trajectory_policy,
         {
-            "schema_version": "hegel-phase3a-q05b-durable-trajectory-policy/3",
+            "schema_version": "hegel-phase3a-q05b-durable-trajectory-policy/4",
             "required_for_run_cli": True,
             "core_relative_path": TRAJECTORY_CORE_RELATIVE_PATH,
             "core_raw_sha256": TRAJECTORY_CORE_RAW_SHA256,
@@ -3780,16 +4125,33 @@ def _validate_policy_sections_v1(config: Mapping[str, object]) -> None:
             "incomplete_prefix_is_read_only_verifiable": True,
             "logger_failure_fails_execution_closed": True,
             "global_fifo_sequencer": "SINGLE_PUBLISHER_ALL_EVENTS",
-            "global_fifo_capacity": TRAJECTORY_ASYNC_QUEUE_CAPACITY_V3,
+            "global_fifo_capacity": TRAJECTORY_FIFO_CAPACITY_V4,
+            "normal_live_sample_outstanding_capacity": (
+                TRAJECTORY_NORMAL_OUTSTANDING_CAPACITY_V4
+            ),
+            "control_recovery_reserve": (
+                TRAJECTORY_CONTROL_RECOVERY_RESERVE_V4
+            ),
+            "control_recovery_outstanding_capacity": (
+                TRAJECTORY_CONTROL_RECOVERY_OUTSTANDING_CAPACITY_V4
+            ),
+            "control_recovery_reserve_relation": (
+                "PHYSICAL_RESERVE_128_GE_TOPOLOGY_MAXIMUM_7"
+            ),
+            "capacity_partition_required": True,
             "ordinary_event_completion": "DURABLE_BEFORE_RETURN",
             "sampler_epoch_begin": "DURABLE_BEFORE_SAMPLING",
-            "live_sample_begin": "ENQUEUED_BEFORE_COLLECTION",
-            "live_sample_terminal": "ENQUEUED_AFTER_COLLECTION",
+            "live_sample_begin": (
+                "NORMAL_ADMISSION_ENQUEUED_BEFORE_COLLECTION"
+            ),
+            "live_sample_terminal": (
+                "NORMAL_ADMISSION_ENQUEUED_AFTER_COLLECTION"
+            ),
             "normal_outer_sampler_terminal": (
-                "ENQUEUED_NO_BARRIER_BEFORE_HELD_FINAL"
+                "CONTROL_RECOVERY_RESERVE_NO_BARRIER_BEFORE_HELD_FINAL"
             ),
             "held_final_begin_and_terminal": (
-                "ENQUEUED_WITHOUT_INTERMEDIATE_BARRIER"
+                "CONTROL_RECOVERY_RESERVE_WITHOUT_INTERMEDIATE_BARRIER"
             ),
             "accepted_event_drain_boundaries": (
                 "BEFORE_TYPED_FAILURE_ACTOR_RELEASE_OR_TERMINAL_MANIFEST"
@@ -3804,7 +4166,26 @@ def _validate_policy_sections_v1(config: Mapping[str, object]) -> None:
             "terminal_manifest_ordering": (
                 "QUIESCED_AND_DRAINED_BEFORE_TERMINAL"
             ),
-            "queue_full_or_publisher_fault": "FAIL_CLOSED_NO_RETRY",
+            "normal_capacity_behavior": (
+                "INTERRUPTIBLE_BLOCKING_BACKPRESSURE_NO_DROP_NO_PERMANENT_POISON"
+            ),
+            "normal_backpressure_poll_milliseconds": 10,
+            "normal_backpressure_gap_accounting": (
+                "START_ANCHOR_AFTER_ADMISSION_WAIT_TYPED_GAP_IF_OVER_250MS"
+            ),
+            "normal_begin_absolute_deadline": (
+                "PRIOR_FINISH_PLUS_MAXIMUM_UNSAMPLED_GAP"
+            ),
+            "normal_begin_deadline_fallback": (
+                "ROLLBACK_NORMAL_THEN_ACCEPT_SAME_BEGIN_VIA_CONTROL_RECOVERY_RESERVE"
+            ),
+            "control_recovery_behavior": (
+                "MAXIMUM_7_TOPOLOGY_BOUND_NO_WAIT_NO_PERMANENT_POISON"
+            ),
+            "physical_fifo_exhaustion_behavior": (
+                "FAIL_CLOSED_LAST_DURABLE_PREFIX_ONLY"
+            ),
+            "publisher_fault_behavior": "FAIL_CLOSED_NO_RETRY",
         },
         "durable_trajectory_policy",
     )
@@ -3954,8 +4335,8 @@ def _validate_policy_sections_v1(config: Mapping[str, object]) -> None:
                 "MAXIMUM_UNSAMPLED_GAP_FROM_PREVIOUS_COLLECTION_FINISH_TO_"
                 "NEXT_COLLECTION_START"
             ),
-            "sampling_target_wait_milliseconds": 50,
-            "sampling_scheduler_reserve_milliseconds": 200,
+            "sampling_target_wait_milliseconds": 125,
+            "sampling_scheduler_reserve_milliseconds": 125,
             "sampling_deadline_clock": "CLOCK_MONOTONIC",
             "cid_seal_to_first_sample_gap_enforced": True,
             "last_continuous_to_held_final_gap_enforced": True,
@@ -6881,22 +7262,54 @@ def _sample_actor_resources_v1(
             sample_span = (
                 f"sample-{actor.actor_id}-{attempted_ordinal:06d}"
             )
-            _trajectory_begin_async_v3(
-                sample_span,
-                "LIVE_RESOURCE_SAMPLE",
-                stage="ACTOR_LIFECYCLE",
-                substep="COLLECT_BOUND_LIVE_RESOURCES",
-                actor=actor.actor_id,
-                detail=f"sample_ordinal={attempted_ordinal}",
-            )
+            try:
+                sample_begin_ticket = _trajectory_begin_async_v4(
+                    sample_span,
+                    "LIVE_RESOURCE_SAMPLE",
+                    stage="ACTOR_LIFECYCLE",
+                    substep="COLLECT_BOUND_LIVE_RESOURCES",
+                    actor=actor.actor_id,
+                    detail=f"sample_ordinal={attempted_ordinal}",
+                    interrupt_event=actor.sample_stop,
+                    deadline_ns=(
+                        prior_finish_ns
+                        + RESOURCE_SAMPLER_MAXIMUM_UNSAMPLED_GAP_NS
+                    ),
+                )
+            except TrajectorySequencerErrorV4 as backpressure_error:
+                if (
+                    backpressure_error.code
+                    == "FAIL_TRAJECTORY_NORMAL_BACKPRESSURE_INTERRUPTED"
+                    and actor.sample_stop.is_set()
+                ):
+                    break
+                raise
             sample_span_open = True
-            # V3 linearizes this BEGIN in the one global FIFO but does not wait
+            # V4 linearizes this BEGIN in the one global FIFO but does not wait
             # for file/directory fsync.  The monotonic anchor immediately before
             # collection therefore measures the actual unsampled interval, not
             # unrelated trajectory durability latency.  The outer sampler BEGIN
             # is already durable and every accepted sample event is drained
             # before typed failure propagation, held release, or trace sealing.
-            start_ns = time.monotonic_ns()
+            if (
+                isinstance(sample_begin_ticket, TrajectoryTicketV4)
+                and sample_begin_ticket.admission_class
+                == TRAJECTORY_CONTROL_RECOVERY_ADMISSION_V4
+            ):
+                admission_deadline_ns = (
+                    prior_finish_ns
+                    + RESOURCE_SAMPLER_MAXIMUM_UNSAMPLED_GAP_NS
+                )
+                while True:
+                    start_ns = time.monotonic_ns()
+                    if start_ns > admission_deadline_ns:
+                        break
+                    time.sleep(
+                        (admission_deadline_ns + 1 - start_ns)
+                        / 1_000_000_000
+                    )
+            else:
+                start_ns = time.monotonic_ns()
             gap_ns = start_ns - prior_finish_ns
             scheduler_lateness_ns = max(0, start_ns - scheduled_start_ns)
             if gap_ns > RESOURCE_SAMPLER_MAXIMUM_UNSAMPLED_GAP_NS:
@@ -6913,7 +7326,7 @@ def _sample_actor_resources_v1(
                     f"target_wait_ns={RESOURCE_SAMPLER_TARGET_WAIT_NS}; "
                     f"previous_duration_ns={prior_duration_ns}",
                 )
-                _trajectory_fail_async_v3(
+                _trajectory_fail_async_v4(
                     sample_span,
                     gap_error,
                     detail="MAXIMUM_UNSAMPLED_GAP_EXCEEDED",
@@ -6933,7 +7346,7 @@ def _sample_actor_resources_v1(
                     gap_exceeded=True,
                 )
                 sample_span_open = False
-                outer_failure_ticket = _trajectory_fail_async_v3(
+                outer_failure_ticket = _trajectory_fail_async_v4(
                     trajectory_span,
                     gap_error,
                     detail=(
@@ -6942,7 +7355,7 @@ def _sample_actor_resources_v1(
                     ),
                 )
                 trajectory_span_open = False
-                _trajectory_flush_v3(outer_failure_ticket)
+                _trajectory_flush_v4(outer_failure_ticket)
                 raise gap_error
             try:
                 inspect_before = inspect_reader(container_id)
@@ -6962,7 +7375,7 @@ def _sample_actor_resources_v1(
             except BaseException as sample_error:
                 if sample_span_open:
                     failure_finish_ns = time.monotonic_ns()
-                    _trajectory_fail_async_v3(
+                    _trajectory_fail_async_v4(
                         sample_span,
                         sample_error,
                         detail="LIVE_RESOURCE_COLLECTION_FAILED",
@@ -6998,7 +7411,7 @@ def _sample_actor_resources_v1(
             )
             sample["prior_sample_finish_ns"] = prior_finish_ns
             sample["prior_sample_duration_ns"] = prior_duration_ns
-            _trajectory_ok_async_v3(
+            _trajectory_ok_async_v4(
                 sample_span,
                 detail="LIVE_RESOURCE_COLLECTION_COMPLETE",
                 role_id=str(actor.role_id),
@@ -7025,16 +7438,17 @@ def _sample_actor_resources_v1(
             if os.path.lexists(actor.control_root / "done"):
                 actor.child_done_observed.set()
             # The 250 ms value remains the hard maximum unsampled gap.  The
-            # 50 ms target leaves 200 ms of scheduler reserve without changing
+            # 125 ms target leaves 125 ms of scheduler reserve without changing
             # that evidence boundary.  The wait is scheduled against an
             # absolute monotonic deadline and remains close-interruptible.
             remaining_ns = scheduled_start_ns - time.monotonic_ns()
             if actor.sample_stop.wait(max(0, remaining_ns) / 1_000_000_000):
                 break
         if trajectory_span_open:
-            _trajectory_ok_async_v3(
+            _trajectory_ok_async_v4(
                 trajectory_span,
                 detail=f"sample_count={ordinal}",
+                use_recovery_reserve=True,
             )
             trajectory_span_open = False
     except BaseException as error:
@@ -7076,7 +7490,7 @@ def _sample_actor_resources_v1(
             # Do not expose even a queue-full or publisher-fault cause to the
             # actor owner until every command accepted before that cause has
             # reached a terminal publisher disposition.
-            _trajectory_flush_v3()
+            _trajectory_flush_v4()
         except BaseException as trajectory_error:
             observed_error = Q05BDualSupervisorError(
                 FAIL_TRAJECTORY,
@@ -7756,7 +8170,7 @@ def _abort_held_actor_cleanup_body_v1(
             # A normal stop enqueues its outer sampler terminal without waiting;
             # abort cleanup has no held-final barrier, so drain that accepted
             # prefix before any release/terminate/remove mutation.
-            _trajectory_flush_v3()
+            _trajectory_flush_v4()
         except BaseException as error:
             actor.cleanup_errors.append(
                 "resource-sampler-trajectory-drain:"
@@ -8068,13 +8482,14 @@ def close_held_actor_process_v1(
         held_final_span = (
             f"held-final-sample-{actor.actor_id}-{held_final_ordinal:06d}"
         )
-        _trajectory_begin_async_v3(
+        _trajectory_begin_async_v4(
             held_final_span,
             "HELD_FINAL_RESOURCE_SAMPLE",
             stage="ACTOR_LIFECYCLE",
             substep="COLLECT_BOUND_HELD_FINAL_RESOURCES",
             actor=actor.actor_id,
             detail=f"sample_ordinal={held_final_ordinal}",
+            use_recovery_reserve=True,
         )
         held_final_span_open = True
         try:
@@ -8094,13 +8509,13 @@ def close_held_actor_process_v1(
             )
         except BaseException as scheduling_error:
             if held_final_span_open:
-                failure_ticket = _trajectory_fail_async_v3(
+                failure_ticket = _trajectory_fail_async_v4(
                     held_final_span,
                     scheduling_error,
                     detail="HELD_FINAL_RESOURCE_SCHEDULING_FAILED",
                 )
                 held_final_span_open = False
-                _trajectory_flush_v3(failure_ticket)
+                _trajectory_flush_v4(failure_ticket)
             raise
         if held_final_gap_ns > RESOURCE_SAMPLER_MAXIMUM_UNSAMPLED_GAP_NS:
             held_final_gap_error = Q05BDualSupervisorError(
@@ -8116,7 +8531,7 @@ def close_held_actor_process_v1(
                 "previous_duration_ns="
                 f"{previous_sample['sample_duration_ns']}",
             )
-            failure_ticket = _trajectory_fail_async_v3(
+            failure_ticket = _trajectory_fail_async_v4(
                 held_final_span,
                 held_final_gap_error,
                 detail="MAXIMUM_UNSAMPLED_GAP_EXCEEDED",
@@ -8136,7 +8551,7 @@ def close_held_actor_process_v1(
                 gap_exceeded=True,
             )
             held_final_span_open = False
-            _trajectory_flush_v3(failure_ticket)
+            _trajectory_flush_v4(failure_ticket)
             raise held_final_gap_error
         try:
             inspect_before = inspect_reader(container_id)
@@ -8167,7 +8582,7 @@ def close_held_actor_process_v1(
         except BaseException as held_final_error:
             if held_final_span_open:
                 held_final_failure_finish_ns = time.monotonic_ns()
-                failure_ticket = _trajectory_fail_async_v3(
+                failure_ticket = _trajectory_fail_async_v4(
                     held_final_span,
                     held_final_error,
                     detail="HELD_FINAL_RESOURCE_COLLECTION_FAILED",
@@ -8192,7 +8607,7 @@ def close_held_actor_process_v1(
                     gap_exceeded=False,
                 )
                 held_final_span_open = False
-                _trajectory_flush_v3(failure_ticket)
+                _trajectory_flush_v4(failure_ticket)
             raise
         try:
             held_final["sample_ordinal"] = held_final_ordinal
@@ -8222,7 +8637,7 @@ def close_held_actor_process_v1(
         except BaseException as postprocess_error:
             if held_final_span_open:
                 held_final_failure_finish_ns = time.monotonic_ns()
-                failure_ticket = _trajectory_fail_async_v3(
+                failure_ticket = _trajectory_fail_async_v4(
                     held_final_span,
                     postprocess_error,
                     detail="HELD_FINAL_RESOURCE_POSTPROCESS_FAILED",
@@ -8247,10 +8662,10 @@ def close_held_actor_process_v1(
                     gap_exceeded=False,
                 )
                 held_final_span_open = False
-                _trajectory_flush_v3(failure_ticket)
+                _trajectory_flush_v4(failure_ticket)
             raise
         try:
-            held_final_ticket = _trajectory_ok_async_v3(
+            held_final_ticket = _trajectory_ok_async_v4(
                 held_final_span,
                 detail="HELD_FINAL_RESOURCE_COLLECTION_COMPLETE",
                 role_id=str(actor.role_id),
@@ -8265,6 +8680,7 @@ def close_held_actor_process_v1(
                 gap_ns=held_final_gap_ns,
                 maximum_gap_ns=RESOURCE_SAMPLER_MAXIMUM_UNSAMPLED_GAP_NS,
                 gap_exceeded=False,
+                use_recovery_reserve=True,
             )
             held_final_span_open = False
             # This is the first normal-stop durability barrier: continuous
@@ -8272,7 +8688,7 @@ def close_held_actor_process_v1(
             # It occurs after held-final collection, so it cannot contaminate the
             # last-continuous-to-held-final <=250 ms measurement, but release is
             # still forbidden until every accepted event is immutable.
-            _trajectory_flush_v3(held_final_ticket)
+            _trajectory_flush_v4(held_final_ticket)
         except BaseException as trace_error:
             if held_final_span_open:
                 held_final_span_open = False
@@ -18218,7 +18634,7 @@ def _run_cli_actual_with_trajectory_body_v2(
                 trace_id=trajectory_trace_id,
                 producer_id=TRAJECTORY_PRODUCER_ID,
             )
-            writer = TrajectorySequencerV3(durable_writer)
+            writer = TrajectorySequencerV4(durable_writer)
         except BaseException as error:
             _fail(
                 FAIL_TRAJECTORY,
@@ -18279,7 +18695,7 @@ def _run_cli_actual_with_trajectory_body_v2(
         except BaseException as execution_error:
             try:
                 writer.quiesce_and_drain()
-                _trajectory_fail_after_quiesce_v3(
+                _trajectory_fail_after_quiesce_v4(
                     "supervisor-run",
                     execution_error,
                     detail="supervisor attempt failed",
@@ -18312,7 +18728,7 @@ def _run_cli_actual_with_trajectory_body_v2(
             raise
         try:
             writer.quiesce_and_drain()
-            _trajectory_ok_after_quiesce_v3(
+            _trajectory_ok_after_quiesce_v4(
                 "supervisor-run",
                 detail="supervisor attempt completed",
                 artifact_written=True,

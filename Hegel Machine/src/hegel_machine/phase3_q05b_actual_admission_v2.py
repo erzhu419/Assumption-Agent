@@ -322,10 +322,10 @@ ACTUAL_COMMAND_MOUNT_RESOURCE_POLICY_ROOT_DOMAIN: Final = (
     b"HEGEL/Q05B/ACTUAL/COMMAND_MOUNT_RESOURCE_POLICY/V1\x00"
 )
 EXPECTED_COMMIT_A_STATIC_POLICY_ROOT: Final = (
-    "dc3c35dd2509da75a67a8cbf38dced466909292f5c2b7327be6509abf302f3a9"
+    "35a07dfe423e987f6b91312764db337fd8ac03eed1cc44dfa61456dd7ca4dfd1"
 )
 EXPECTED_COMMAND_MOUNT_RESOURCE_POLICY_ROOT: Final = (
-    "176f04c46cfe80ad1e700d5bf4b8ab466d02933d00d0e180835c2dad6f358ef2"
+    "f92d94f7ba7fefbc60d4a815e16fd8a66be7090aea67cddde6b899ea24dd9e78"
 )
 COMMAND_MOUNT_RESOURCE_POLICY_FIELDS: Final = (
     "docker",
@@ -1667,13 +1667,13 @@ def _validate_config_bytes_v1(value: object) -> dict[str, object]:
     _require_type_exact_v1(
         decoded["durable_trajectory_policy"],
         {
-            "schema_version": "hegel-phase3a-q05b-durable-trajectory-policy/3",
+            "schema_version": "hegel-phase3a-q05b-durable-trajectory-policy/4",
             "required_for_run_cli": True,
             "core_relative_path": "src/hegel_machine/phase3_q05b_trajectory_v2.py",
             "core_raw_sha256": (
-                "9d72cc6c155f6e30dcda139025578399b8ebc391d688a037bfebf7de6ed2b398"
+                "0b0d33fc9ff0be239b61ce1bed6d93511f797ad1adc6666938cfb7581be7cf34"
             ),
-            "producer_id": "Q05B_SUPERVISOR_V3",
+            "producer_id": "Q05B_SUPERVISOR_V4",
             "clock_id": "CLOCK_MONOTONIC",
             "trajectory_root_mode": "0700",
             "event_and_manifest_mode": "0444",
@@ -1687,15 +1687,26 @@ def _validate_config_bytes_v1(value: object) -> dict[str, object]:
             "logger_failure_fails_execution_closed": True,
             "global_fifo_sequencer": "SINGLE_PUBLISHER_ALL_EVENTS",
             "global_fifo_capacity": 512,
+            "normal_live_sample_outstanding_capacity": 384,
+            "control_recovery_reserve": 128,
+            "control_recovery_outstanding_capacity": 7,
+            "control_recovery_reserve_relation": (
+                "PHYSICAL_RESERVE_128_GE_TOPOLOGY_MAXIMUM_7"
+            ),
+            "capacity_partition_required": True,
             "ordinary_event_completion": "DURABLE_BEFORE_RETURN",
             "sampler_epoch_begin": "DURABLE_BEFORE_SAMPLING",
-            "live_sample_begin": "ENQUEUED_BEFORE_COLLECTION",
-            "live_sample_terminal": "ENQUEUED_AFTER_COLLECTION",
+            "live_sample_begin": (
+                "NORMAL_ADMISSION_ENQUEUED_BEFORE_COLLECTION"
+            ),
+            "live_sample_terminal": (
+                "NORMAL_ADMISSION_ENQUEUED_AFTER_COLLECTION"
+            ),
             "normal_outer_sampler_terminal": (
-                "ENQUEUED_NO_BARRIER_BEFORE_HELD_FINAL"
+                "CONTROL_RECOVERY_RESERVE_NO_BARRIER_BEFORE_HELD_FINAL"
             ),
             "held_final_begin_and_terminal": (
-                "ENQUEUED_WITHOUT_INTERMEDIATE_BARRIER"
+                "CONTROL_RECOVERY_RESERVE_WITHOUT_INTERMEDIATE_BARRIER"
             ),
             "accepted_event_drain_boundaries": (
                 "BEFORE_TYPED_FAILURE_ACTOR_RELEASE_OR_TERMINAL_MANIFEST"
@@ -1710,7 +1721,26 @@ def _validate_config_bytes_v1(value: object) -> dict[str, object]:
             "terminal_manifest_ordering": (
                 "QUIESCED_AND_DRAINED_BEFORE_TERMINAL"
             ),
-            "queue_full_or_publisher_fault": "FAIL_CLOSED_NO_RETRY",
+            "normal_capacity_behavior": (
+                "INTERRUPTIBLE_BLOCKING_BACKPRESSURE_NO_DROP_NO_PERMANENT_POISON"
+            ),
+            "normal_backpressure_poll_milliseconds": 10,
+            "normal_backpressure_gap_accounting": (
+                "START_ANCHOR_AFTER_ADMISSION_WAIT_TYPED_GAP_IF_OVER_250MS"
+            ),
+            "normal_begin_absolute_deadline": (
+                "PRIOR_FINISH_PLUS_MAXIMUM_UNSAMPLED_GAP"
+            ),
+            "normal_begin_deadline_fallback": (
+                "ROLLBACK_NORMAL_THEN_ACCEPT_SAME_BEGIN_VIA_CONTROL_RECOVERY_RESERVE"
+            ),
+            "control_recovery_behavior": (
+                "MAXIMUM_7_TOPOLOGY_BOUND_NO_WAIT_NO_PERMANENT_POISON"
+            ),
+            "physical_fifo_exhaustion_behavior": (
+                "FAIL_CLOSED_LAST_DURABLE_PREFIX_ONLY"
+            ),
+            "publisher_fault_behavior": "FAIL_CLOSED_NO_RETRY",
         },
         "Commit-A durable trajectory policy",
     )

@@ -798,7 +798,7 @@ def _replay_live_sample_v1(
         or type(sample["sample_maximum_unsampled_gap_ns"]) is not int
         or type(sample["prior_sample_finish_ns"]) is not int
         or type(sample["prior_sample_duration_ns"]) is not int
-        or sample["sample_target_wait_ns"] != 50_000_000
+        or sample["sample_target_wait_ns"] != 125_000_000
         or sample["sample_maximum_unsampled_gap_ns"] != 250_000_000
         or sample["sample_scheduled_start_ns"]
         != sample["prior_sample_finish_ns"] + sample["sample_target_wait_ns"]
@@ -2164,22 +2164,33 @@ def _isolation_config_v1(
             "incomplete_prefix_is_read_only_verifiable",
             "logger_failure_fails_execution_closed",
             "global_fifo_sequencer", "global_fifo_capacity",
+            "normal_live_sample_outstanding_capacity",
+            "control_recovery_reserve",
+            "control_recovery_outstanding_capacity",
+            "control_recovery_reserve_relation",
+            "capacity_partition_required",
             "ordinary_event_completion", "sampler_epoch_begin",
             "live_sample_begin", "live_sample_terminal",
             "normal_outer_sampler_terminal",
             "held_final_begin_and_terminal",
             "accepted_event_drain_boundaries", "abrupt_loss_ceiling",
             "typed_failure_propagation", "held_final_release",
-            "terminal_manifest_ordering", "queue_full_or_publisher_fault",
+            "terminal_manifest_ordering", "normal_capacity_behavior",
+            "normal_backpressure_poll_milliseconds",
+            "normal_backpressure_gap_accounting",
+            "normal_begin_absolute_deadline",
+            "normal_begin_deadline_fallback",
+            "control_recovery_behavior", "physical_fifo_exhaustion_behavior",
+            "publisher_fault_behavior",
         }
         or trajectory["schema_version"]
-        != "hegel-phase3a-q05b-durable-trajectory-policy/3"
+        != "hegel-phase3a-q05b-durable-trajectory-policy/4"
         or trajectory["required_for_run_cli"] is not True
         or trajectory["core_relative_path"]
         != "src/hegel_machine/phase3_q05b_trajectory_v2.py"
         or trajectory["core_raw_sha256"]
-        != "9d72cc6c155f6e30dcda139025578399b8ebc391d688a037bfebf7de6ed2b398"
-        or trajectory["producer_id"] != "Q05B_SUPERVISOR_V3"
+        != "0b0d33fc9ff0be239b61ce1bed6d93511f797ad1adc6666938cfb7581be7cf34"
+        or trajectory["producer_id"] != "Q05B_SUPERVISOR_V4"
         or trajectory["clock_id"] != "CLOCK_MONOTONIC"
         or trajectory["trajectory_root_mode"] != "0700"
         or trajectory["event_and_manifest_mode"] != "0444"
@@ -2196,14 +2207,22 @@ def _isolation_config_v1(
         or trajectory["global_fifo_sequencer"]
         != "SINGLE_PUBLISHER_ALL_EVENTS"
         or trajectory["global_fifo_capacity"] != 512
+        or trajectory["normal_live_sample_outstanding_capacity"] != 384
+        or trajectory["control_recovery_reserve"] != 128
+        or trajectory["control_recovery_outstanding_capacity"] != 7
+        or trajectory["control_recovery_reserve_relation"]
+        != "PHYSICAL_RESERVE_128_GE_TOPOLOGY_MAXIMUM_7"
+        or trajectory["capacity_partition_required"] is not True
         or trajectory["ordinary_event_completion"] != "DURABLE_BEFORE_RETURN"
         or trajectory["sampler_epoch_begin"] != "DURABLE_BEFORE_SAMPLING"
-        or trajectory["live_sample_begin"] != "ENQUEUED_BEFORE_COLLECTION"
-        or trajectory["live_sample_terminal"] != "ENQUEUED_AFTER_COLLECTION"
+        or trajectory["live_sample_begin"]
+        != "NORMAL_ADMISSION_ENQUEUED_BEFORE_COLLECTION"
+        or trajectory["live_sample_terminal"]
+        != "NORMAL_ADMISSION_ENQUEUED_AFTER_COLLECTION"
         or trajectory["normal_outer_sampler_terminal"]
-        != "ENQUEUED_NO_BARRIER_BEFORE_HELD_FINAL"
+        != "CONTROL_RECOVERY_RESERVE_NO_BARRIER_BEFORE_HELD_FINAL"
         or trajectory["held_final_begin_and_terminal"]
-        != "ENQUEUED_WITHOUT_INTERMEDIATE_BARRIER"
+        != "CONTROL_RECOVERY_RESERVE_WITHOUT_INTERMEDIATE_BARRIER"
         or trajectory["accepted_event_drain_boundaries"]
         != "BEFORE_TYPED_FAILURE_ACTOR_RELEASE_OR_TERMINAL_MANIFEST"
         or trajectory["abrupt_loss_ceiling"]
@@ -2213,8 +2232,20 @@ def _isolation_config_v1(
         or trajectory["held_final_release"] != "DRAINED_BEFORE_ACTOR_RELEASE"
         or trajectory["terminal_manifest_ordering"]
         != "QUIESCED_AND_DRAINED_BEFORE_TERMINAL"
-        or trajectory["queue_full_or_publisher_fault"]
-        != "FAIL_CLOSED_NO_RETRY"
+        or trajectory["normal_capacity_behavior"]
+        != "INTERRUPTIBLE_BLOCKING_BACKPRESSURE_NO_DROP_NO_PERMANENT_POISON"
+        or trajectory["normal_backpressure_poll_milliseconds"] != 10
+        or trajectory["normal_backpressure_gap_accounting"]
+        != "START_ANCHOR_AFTER_ADMISSION_WAIT_TYPED_GAP_IF_OVER_250MS"
+        or trajectory["normal_begin_absolute_deadline"]
+        != "PRIOR_FINISH_PLUS_MAXIMUM_UNSAMPLED_GAP"
+        or trajectory["normal_begin_deadline_fallback"]
+        != "ROLLBACK_NORMAL_THEN_ACCEPT_SAME_BEGIN_VIA_CONTROL_RECOVERY_RESERVE"
+        or trajectory["control_recovery_behavior"]
+        != "MAXIMUM_7_TOPOLOGY_BOUND_NO_WAIT_NO_PERMANENT_POISON"
+        or trajectory["physical_fifo_exhaustion_behavior"]
+        != "FAIL_CLOSED_LAST_DURABLE_PREFIX_ONLY"
+        or trajectory["publisher_fault_behavior"] != "FAIL_CLOSED_NO_RETRY"
     ):
         _fail("REJECT_Q05B_ARTIFACT_SOURCE", "durable trajectory policy differs")
     actual = value.get("actual_preconditions")
