@@ -1,21 +1,21 @@
-# Hegel Machine Q0.5b Shadow Retry Campaign v2r1 (record schema `/2`)
+# Hegel Machine Q0.5b Shadow Retry Campaign v2r2 (record schema `/2`)
 
-Status: `V2R1_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED`
+Status: `V2R2_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED`
 
 This document accompanies
 `config/phase3_q05b_shadow_retry_campaign_v2.json`.  The unchanged filename and
 all structural schema tags ending in `/2` describe the retained record format;
 the distinct contract ID, hash domains, roots, and trace IDs identify the new
-v2r1 campaign instance.  The controller source, tests, document, exact V2R1
-hash-domain registry, roots, and trace IDs are now frozen for binding.  The 13
-binding summary values remain null only until the main agent derives and fills
-them in the next freeze step, so this intermediate byte image is not yet a
-loadable contract, execution capsule, authorization record, preflight receipt,
-or execution result.  The frozen target supervisor remains exact
+v2r2 campaign instance.  The controller source, tests, document, exact V2R2
+hash-domain registry, roots, and trace IDs are frozen.  The 13 binding summary
+values are independently recomputed and fixed in the accompanying loadable
+contract; neither a source-bound contract nor those summaries are an execution
+capsule, authorization record, preflight receipt, or execution result.  The
+frozen target supervisor remains exact
 Commit A `7bc2044212e278443b1ca703115c7cb17591ac14`; its tree, parent,
 commit-object bytes, seven required source hashes, static-policy root, target
 contract digest, and target source-binding digest are independently replayed
-by the controller and are not revised by v2r1.  No preflight, authorization,
+by the controller and are not revised by v2r2.  No preflight, authorization,
 or campaign execution has occurred.
 
 The prior v2 capsule
@@ -24,8 +24,25 @@ and authorization
 `sha256:0f59cc4aa2f605bdd1388baf769961ccfebf2123c6d6c9ff467f7f61add29cea`
 belong only to the completed prior-v2 terminal/completion chain.  That chain is
 historical, terminal, non-resumable evidence.  Neither digest, its immutable
-ledger, nor any prior-v2 root is v2r1 authority or an input that v2r1 may open,
+ledger, nor any prior-v2 root is v2r2 authority or an input that v2r2 may open,
 access, reuse, copy, adopt, or resume.
+
+The completed v2r1 capsule
+`sha256:62d6d7a56107439261ce66788e5d803f7d1370733673416076131e6d20a16e61`
+and authorization
+`sha256:2a410cff6c59895f941075af5cc6035f61dea4ba4734d82eb0719c5b23a1bb90`
+are also historical, terminal, and non-resumable.  V2r1 ran exactly two
+supervisor slots.  Slot 1 exposed one exact Python sampling-gap origin and
+correctly opened Slot 2.  Slot 2 durably recorded two independent exact gap
+origins, Python and Rust, with seven total failure events.  Its five-row
+projection was explicitly marked truncated, so the single-origin v2r1
+predicate failed closed and did not open Slot 3.  The authoritative terminal
+ledger record is
+`sha256:b910df6dfea1e0bd8fd4bd11d8aa20d682f43898b495f8c643b668b970f8108b`
+and the completion ledger record is
+`sha256:b9e63585d7a6eb48d6195fa188ce1d40f2c79a169848f58cd10b82328be4702b`.
+v2r2 protects the v2r1 worktree, authorization, ledger, and all fifteen slot
+roots as negative historical registry entries; none is opened or reused.
 
 No source-bound contract or self-consistent capsule is execution authority.
 The read-only preflight may derive one exact capsule and authorization
@@ -72,7 +89,7 @@ reflogs and dangling diagnostics excluded and requires empty stdout/stderr;
 therefore deterministic missing or corrupt local-object closure fails before
 owner authorization rather than consuming a campaign slot.
 
-The new v2r1 controller commit implements and tests its campaign core and tool
+The new v2r2 controller commit implements and tests its campaign core and tool
 at the unchanged schema-v2 paths:
 
 - `src/hegel_machine/phase3_q05b_shadow_retry_campaign_v2.py`;
@@ -123,13 +140,15 @@ The fixed future roots are:
 
 | Purpose | Absolute path |
 |---|---|
-| Owner authorization | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-authorization` |
-| Durable campaign ledger | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-ledger` |
+| Owner authorization | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r2-authorization` |
+| Durable campaign ledger | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r2-ledger` |
 
-The controller worktree `/tmp/hegel-q05b-shadow-retry-v2r1-worktree` and all
-seventeen prior-v2 authorization, ledger, clone, Cargo-cache, artifact,
-evidence, and trace roots are frozen protected roots.  Prior-v2 root open,
-access, and capsule/authorization/ledger reuse are all explicitly false.
+The original repository, controller worktree
+`/tmp/hegel-q05b-shadow-retry-v2r2-worktree`, trajectory-dev worktree, all
+seventeen prior-v2 authorization/ledger/slot roots, and the prior-v2r1
+worktree plus its seventeen authorization/ledger/slot roots are frozen
+protected roots.  Historical-root open/access and
+capsule/authorization/ledger reuse are all explicitly false.
 
 The ledger and every slot freshness target must be absent at each preflight.
 Authorization-root absence is intentionally not a preflight freshness claim:
@@ -147,15 +166,15 @@ caller or reused by another slot.
 
 | Slot | Dedicated clone root | Cargo cache root | External artifact | Evidence root | Trace root |
 |---|---|---|---|---|---|
-| 01 | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-01-clone` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-01-cargo-cache` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-01-artifact/phase3_q05b_dual_qualification_v2.json` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-01-evidence` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-01-trace` |
-| 02 | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-02-clone` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-02-cargo-cache` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-02-artifact/phase3_q05b_dual_qualification_v2.json` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-02-evidence` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-02-trace` |
-| 03 | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-03-clone` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-03-cargo-cache` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-03-artifact/phase3_q05b_dual_qualification_v2.json` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-03-evidence` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-03-trace` |
+| 01 | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r2-slot-01-clone` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r2-slot-01-cargo-cache` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r2-slot-01-artifact/phase3_q05b_dual_qualification_v2.json` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r2-slot-01-evidence` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r2-slot-01-trace` |
+| 02 | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r2-slot-02-clone` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r2-slot-02-cargo-cache` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r2-slot-02-artifact/phase3_q05b_dual_qualification_v2.json` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r2-slot-02-evidence` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r2-slot-02-trace` |
+| 03 | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r2-slot-03-clone` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r2-slot-03-cargo-cache` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r2-slot-03-artifact/phase3_q05b_dual_qualification_v2.json` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r2-slot-03-evidence` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r2-slot-03-trace` |
 
 The stdout and stderr files are fixed beneath each corresponding evidence
 root as `supervisor.stdout` and `supervisor.stderr`.  The external trajectory
 binding is `trajectory-binding.json`, and the slot result is
 `slot-result.json`, in that same evidence root.  Trace IDs are exactly
-`q05b-shadow-retry-campaign-v2r1-slot-01`, `-02`, and `-03`.
+`q05b-shadow-retry-campaign-v2r2-slot-01`, `-02`, and `-03`.
 
 All external artifact, evidence, trace, stdout, stderr, and cache paths are
 outside Git roots.  Each dedicated clone is itself a new isolated Git root
@@ -207,12 +226,12 @@ Commit-A closure itself was complete.  Disabling commit-graph made that clone
 fsck pass, identifying the copied stale graph—not the target closure—as the
 failure source.
 
-Each v2r1 slot instead uses a file-protocol `git clone --no-local` of the same
+Each v2r2 slot instead uses a file-protocol `git clone --no-local` of the same
 bound Commit-A object closure and a private, content/mode-manifest-equal copy
 of the allowed Cargo cache.  Clone preparation removes every inherited source
 ref, remote, reflog, source-only branch, and stash ref, then prunes.  It creates
 exactly one permanent internal ref,
-`refs/hegel/q05b-shadow-retry-v2r1-target`, bound to Commit A, and writes a new
+`refs/hegel/q05b-shadow-retry-v2r2-target`, bound to Commit A, and writes a new
 commit-graph from commits reachable through only that ref.  The ref is not
 temporary: its exact name and object ID are replayed before and after the
 supervisor, eliminating a create/write/delete lifecycle window.  Preparation
@@ -244,7 +263,7 @@ tools/phase3_q05b_dual_qualification_v2.py
 
 The fixed local runtime inputs are `/usr/bin/git`, `/usr/bin/docker`, Docker
 host `unix:///var/run/docker.sock`, clone source repository
-`/tmp/hegel-q05b-shadow-retry-v2r1-worktree`,
+`/tmp/hegel-q05b-shadow-retry-v2r2-worktree`,
 project subpath `Hegel Machine`, and read-only Cargo copy source
 `/home/erzhu419/.local/state/hegel-machine/rust-cargo-cache`.  The final runner
 recognizes that the clone source is a linked worktree whose common Git store is
@@ -328,6 +347,32 @@ or reparented descendant outside the original process group.  It relies on the
 frozen trusted supervisor and owner-controlled namespace boundary.  Timeout,
 signal, `ECHILD`, observed survivor, or cleanup uncertainty is terminal and
 can never enable the next slot.
+
+Immediately before each slot's consumed record and `Popen`, the controller
+runs the exact scheduling-admission gate in that slot's held evidence
+directory.  The gate admits at most three windows in strict order.  Each
+window first observes at least 30 seconds of `CLOCK_MONOTONIC` quiet time and
+then runs exactly sixteen 64-byte immutable-publication probes.  Each timed
+probe performs the frozen five-fsync publication path—two file fsyncs and
+three directory fsyncs—followed by exact no-follow readback; cleanup removes
+both final and staging names, fsyncs the directory, and proves their absence.
+A window passes only when all sixteen measured durations are inclusively at
+most `40,000,000 ns`; the first passing window is selected and no later window
+is opened.  A window with any duration above that bound is retained as failed
+evidence and is followed by a new 30-second quiet observation, up to the third
+window.  Probe, clock, identity, cleanup, or evidence-validation error is
+terminal rather than another scheduling window.  If all three windows fail,
+the slot terminates with `FAIL_CAMPAIGN_SCHEDULING_ADMISSION` before its
+consumed record, invocation-count increment, or `Popen`, so it does not consume
+a supervisor invocation.
+
+This gate proves only that those exact pre-spawn durability operations were
+observed within the 40 ms admission threshold in the selected short window.
+It is not a promise about later scheduler behavior, Docker execution, either
+sampler thread, or the target's frozen 250 ms maximum unsampled gap.  Runtime
+sampling therefore retains its independent 50 ms target wait and 250 ms hard
+maximum, and any exact runtime gap is still classified solely from the durable
+trajectory grammar below.
 
 Before consumption and again immediately before spawn, Linux
 `/proc/self/task` must prove that the controller has exactly one thread, and
@@ -413,7 +458,7 @@ publication is terminal; it is never retry evidence.
 The raw immutable trace is authoritative and remains fully reconstructable;
 the ledger does not duplicate every event.  The bounded certificate partitions
 the origin-inclusive suffix through the terminal event into: every explicit
-`FAIL` row (at most five for retry), every nonfailure
+`FAIL` row (at most seven for retry), every nonfailure
 `HELD_ACTOR_ABORT_CLEANUP` `BEGIN`/`OK` row (at most twelve for retry), and all
 other nonfailure events as an exact count plus ordered rolling root.  It also
 binds the suffix count/root, global payload digest, per-class counts/digests,
@@ -456,27 +501,48 @@ true for the immediately preceding slot, in one coherent evidence replay:
    counts/masks are zero, receipts are null, Q1 and Q2 are `NOT_RUN`, and M3
    roots are null.
 3. The disk trajectory safely replays as exactly `COMPLETE_FAIL`.
-4. Exactly one failure row is the metric-complete origin.  Its operation is
-   `LIVE_RESOURCE_SAMPLE` or `HELD_FINAL_RESOURCE_SAMPLE`; its error code is
-   `HELD_ACTOR_GAP_EXCEEDED`; actor, role, sample ordinal, previous finish,
-   scheduled start, actual start, finish, collection duration, scheduler
-   lateness, target wait, gap, maximum, exceeded flag, and error detail are all
-   non-null and arithmetically exact.
-5. At that origin, target wait is exactly `50,000,000 ns`, maximum gap is
-   exactly `250,000,000 ns`, observed gap is strictly greater than the maximum,
-   and `gap_exceeded` is true.
-6. Every other FAIL row is an exact registered causal propagation of that
-   single origin, carries the same `HELD_ACTOR_GAP_EXCEEDED` code, and carries
-   null sample metrics.  For `HELD_FINAL_RESOURCE_SAMPLE`, every layer and the
-   stdout/terminal wire retain the raw origin detail.  A normal continuous
-   `LIVE_RESOURCE_SAMPLE` path is origin -> sampler -> actor-close -> Stage 5
-   (or trusted-host Stage 6) -> run.  If one endpoint sampler exits while
-   Stage 4 is still coordinating the two endpoints, the separately registered
-   early path is origin -> sampler -> Stage 4 -> run.  In either LIVE path the
-   origin and sampler retain the raw detail, while every later layer and the
+4. The complete failure projection contains either one metric-complete gap
+   origin, preserving every v2r1 single-origin grammar, or exactly two
+   independent metric-complete origins in one of only two frozen Stage-5
+   combinations: Python `LIVE_RESOURCE_SAMPLE` plus Rust
+   `LIVE_RESOURCE_SAMPLE`, or Python `HELD_FINAL_RESOURCE_SAMPLE` plus Rust
+   `LIVE_RESOURCE_SAMPLE`.  No trusted-host origin, Rust held-final origin,
+   duplicate actor, or third origin is admitted in a multi-origin projection.
+   The first failure in global sequence remains the partition-certificate
+   suffix origin and may be Rust, but Python is always the terminal cause in
+   either accepted dual-origin combination because the frozen producer closes
+   Python first and abort-cleans Rust after Python close propagation fails.
+   Each origin independently binds its actor, role, operation, span, sample
+   ordinal, prior finish, scheduled and actual start, finish, collection
+   duration, scheduler lateness, target wait, gap, maximum, exceeded flag, and
+   exact raw error detail; the two actors' ordinals and timings are not
+   conflated.
+5. At every accepted origin, target wait is exactly `50,000,000 ns`, maximum
+   gap is exactly `250,000,000 ns`, observed gap is strictly greater than the
+   maximum, `gap_exceeded` is true, finish equals actual start, and collection
+   duration is zero.
+6. The single-origin propagation alternatives remain unchanged.  A held-final
+   origin propagates through actor-close, endpoint Stage 5 or trusted-host
+   Stage 6, and run with its raw detail.  A live origin normally propagates
+   through sampler, actor-close, Stage 5 or Stage 6, and run; the separately
+   frozen endpoint Stage-4 early path is origin -> sampler -> Stage 4 -> run.
+   Its origin and sampler retain the raw detail, while later layers and the
    stdout/terminal wire carry exactly one `held actor sampler failed: ` prefix.
-   The bounded certificate's explicit `FAIL` projection must equal these
-   failure rows exactly, and any additional `FAIL` therefore rejects retry.
+
+   The dual-origin grammar is a separate exact partial order, not a generic
+   merge of single-origin failures.  Rust contributes exactly live origin ->
+   sampler and no actor-close row.  Python contributes either live origin ->
+   sampler -> actor-close or held-final origin -> actor-close.  Both actor-local
+   chains must complete before the common Stage-5 failure, which must precede
+   the terminal run failure.  Cross-actor interleaving is permitted only when
+   those per-actor and common-tail orders remain true.  Stage 5, run, terminal
+   manifest, and stdout all carry the Python terminal-cause detail: exactly one
+   prefix for Python live, or the raw Python detail for Python held-final.  The
+   live/live form has exactly seven FAIL rows; the Python-held-final/Rust-live
+   form has exactly six.  The bounded projection capacity is seven, and retry
+   requires every FAIL row to be retained, sequence ordered, digest bound, and
+   untruncated.  Any additional or unmatched FAIL therefore rejects retry.
+
    Every event from the origin through the terminal event must fall into the
    certificate's `FAIL`, cleanup-nonfailure, or other-nonfailure partition;
    counts must sum to the exact suffix count and
@@ -494,12 +560,17 @@ true for the immediately preceding slot, in one coherent evidence replay:
    adjacent: other nonfailure events and registered FAIL propagation may
    interleave before it closes.  The same actor may have at most two cleanup
    pairs, covering local Stage-4/Stage-5 cleanup followed by the outer
-   `run_actual_v1` sweep, and the origin actor must have at least one successful
-   pair.  A malformed cleanup, a third cleanup for one actor, a missing cleanup
-   for the origin actor, retained-row truncation, a nonzero unpartitioned count,
-   a partition count/root/digest mismatch, a
+   `run_actual_v1` sweep.  A single origin requires at least one successful pair
+   for that origin actor; either accepted dual-origin form requires at least one
+   successful pair for both Python and Rust.  Endpoint Stage-4/Stage-5 paths may
+   contain only endpoint cleanup actors, while trusted-host Stage 6 may contain
+   only trusted-host cleanup.  A malformed cleanup, a third cleanup for one
+   actor, missing cleanup for any required origin actor, retained-row
+   truncation, a nonzero unpartitioned count, a partition count/root/digest
+   mismatch, a
    missing/collapsed/double-prefixed tier, an unregistered Stage-4 path, an
-   independent failure, or a second origin rejects retry.
+   independent failure, an unsupported second origin, or any third origin
+   rejects retry.
 
    These certificate and ordered-root checks belong to the same source-bound
    trajectory replay that constructs the external binding.  The pure campaign
@@ -674,34 +745,42 @@ the contract rather than an unstated assumption.
 
 ## 10. Present facts
 
-At the current v2r1 frozen-source state, before the 13 binding summaries are
-filled or any read-only preflight:
+At the final v2r2 frozen-source state, before any read-only preflight:
 
-- target Commit A remains finalized and independently replayable; the v2r1
+- target Commit A remains finalized and independently replayable; the v2r2
   controller source, tests, document, exact hash domains, roots, and trace IDs
   are frozen; the source hashes, static-surface hash, predicate digests,
   ledger-registry digest, forbidden-scope digest, source-binding digest, and
-  contract digest comprise the 13 deliberately null values that the main agent
-  will fill next and are not yet authority;
+  contract digest comprise the 13 independently recomputed and frozen binding
+  values, but are not execution authority;
 - the trajectory and campaign decision suites include real-control-flow gap
   propagation KATs, torn-prefix/open-span replay, sampler/process/deadline/join
-  races, success and failure wire replay, and three-slot stop/retry/exhaustion
-  tests; the campaign ledger KATs additionally cover all ten legal caught-error
-  prefixes, real valid success, frozen prepared bytes, rehashed semantic
-  forgeries, bounded composite receipts, and injected `O_CREAT`, helper-return,
-  callback-store, and caller-return publication faults;
+  races, the unchanged single-origin grammar, both frozen dual-origin forms,
+  their legal cross-actor interleavings, strict propagation and two-actor
+  cleanup, rehashed semantic forgeries, success and failure wire replay, and
+  three-slot stop/retry/exhaustion tests; the controller suite also freezes the
+  scheduling-admission first-passing-window boundary, three-window exhaustion,
+  exact-integer semantic forgeries, short-quiet-period and probe-failure
+  rejection, residue-free five-fsync publication cleanup, intent-only
+  terminalization before consumption, and admission/evidence-close double
+  faults; the campaign ledger KATs additionally cover all ten legal
+  caught-error prefixes, real valid success, frozen prepared bytes, rehashed
+  admission and progress semantic forgeries, bounded composite receipts, and injected
+  `O_CREAT`, helper-return, callback-store, and caller-return publication
+  faults;
 - no capsule has yet been owner-authorized, and source binding alone is not
   execution authority;
 - no owner authorization record exists;
 - no preflight has run;
 - no external root or slot path has been created;
+- no scheduling-admission quiet window or five-fsync probe has run;
 - supervisor invocation count is exactly zero;
 - no Docker, Cargo, clone, artifact, evidence, trajectory, Q1, Meta,
   production, adoption, promotion, current, attempt-2, or attempt-3 action has
   occurred.
 
 Therefore the frozen source surface carries status
-`V2R1_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED`.  It cannot
-pass contract loading or derive a capsule until the main agent independently
-computes and fills all 13 binding summary values; no preflight, authorization,
-or execution is represented by this status.
+`V2R2_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED`.  It passes
+strict contract loading, but only a later read-only preflight can derive one
+exact capsule; no preflight, authorization, or execution is represented by
+this frozen-source status.

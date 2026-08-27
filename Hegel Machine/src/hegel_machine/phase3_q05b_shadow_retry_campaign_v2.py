@@ -87,13 +87,13 @@ _SLOT_DIGEST_DOMAIN: Final = (
     "HEGEL/Q05B/SHADOW-RETRY-CAMPAIGN/SLOT-OBSERVATION/V2\x00"
 )
 _FAILURE_ROWS_DIGEST_DOMAIN: Final = (
-    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/TRAJECTORY_FAILURE_ROWS/V2\x00"
+    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/TRAJECTORY_FAILURE_ROWS/V2\x00"
 )
 _CLEANUP_ROWS_DIGEST_DOMAIN: Final = (
-    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/TRAJECTORY_CLEANUP_ROWS/V2\x00"
+    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/TRAJECTORY_CLEANUP_ROWS/V2\x00"
 )
 _PARTITION_CERTIFICATE_DIGEST_DOMAIN: Final = (
-    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/"
+    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/"
     "POST_ORIGIN_PARTITION_CERTIFICATE/V2\x00"
 )
 _ACTUAL_FINAL_DELIVERY_ROOT_DOMAIN: Final = (
@@ -114,7 +114,7 @@ _ERROR_CODE = re.compile(r"[A-Z][A-Z0-9_]{0,127}\Z")
 _MAX_COUNTER: Final = (1 << 53) - 1
 _MAX_UINT64: Final = (1 << 64) - 1
 _MAX_REGISTERED_CLEANUP_PAIRS_PER_ACTOR: Final = 2
-_MAX_RETAINED_FAILURE_ROWS: Final = 5
+_MAX_RETAINED_FAILURE_ROWS: Final = 7
 _MAX_RETAINED_CLEANUP_ROWS: Final = 12
 _MAX_PARTITION_CERTIFICATE_BYTES: Final = 256 * 1024
 
@@ -1126,6 +1126,29 @@ def _terminal_gap_detail(origin: Mapping[str, object]) -> str:
     return raw_detail
 
 
+def _propagation_row_exact(
+    row: Mapping[str, object],
+    context: tuple[str, str, str | None, str | None, str | None, str],
+    origin: Mapping[str, object],
+) -> bool:
+    operation, span_id, stage, substep, actor, detail = context
+    expected_error_detail = (
+        origin["error_detail"]
+        if operation == "LIVE_RESOURCE_SAMPLER"
+        else _terminal_gap_detail(origin)
+    )
+    return (
+        row["operation"] == operation
+        and row["span_id"] == span_id
+        and row["stage_or_null"] == stage
+        and row["substep_or_null"] == substep
+        and row["actor_or_null"] == actor
+        and row["detail_or_null"] == detail
+        and row["error_detail"] == expected_error_detail
+        and all(row[field] is None for field in _SAMPLE_FIELDS)
+    )
+
+
 def _canonical_padded_counter_text(value: object) -> int | None:
     if type(value) is not str or re.fullmatch(r"[0-9]{6,}", value) is None:
         return None
@@ -1339,9 +1362,16 @@ def _exact_cleanup_grammar(
     value: object,
     *,
     origin_sequence: int,
-    origin_actor: object,
+    required_origin_actors: frozenset[str],
+    allowed_cleanup_actors: frozenset[str],
 ) -> bool:
-    if type(value) is not list or len(value) > _MAX_RETAINED_CLEANUP_ROWS:
+    if (
+        type(value) is not list
+        or len(value) > _MAX_RETAINED_CLEANUP_ROWS
+        or not required_origin_actors
+        or not required_origin_actors <= allowed_cleanup_actors
+        or not allowed_cleanup_actors <= frozenset(_ROLE_ACTOR.values())
+    ):
         return False
     prior_sequence = origin_sequence
     prior_timestamp = 0
@@ -1373,7 +1403,8 @@ def _exact_cleanup_grammar(
                 return False
             actor, suffix = registered
             if (
-                suffix <= last_suffix
+                actor not in allowed_cleanup_actors
+                or suffix <= last_suffix
                 or begin_counts[actor]
                 >= _MAX_REGISTERED_CLEANUP_PAIRS_PER_ACTOR
                 or span_id in active
@@ -1391,14 +1422,15 @@ def _exact_cleanup_grammar(
         active.pop(span_id)
     return (
         not active
-        and type(origin_actor) is str
-        and origin_actor in success_counts
-        and success_counts[origin_actor] >= 1
+        and all(success_counts[actor] >= 1 for actor in required_origin_actors)
     )
 
 
 def _partition_certificate_retry_exact(
     value: Mapping[str, object],
+    *,
+    required_origin_actors: frozenset[str],
+    allowed_cleanup_actors: frozenset[str],
 ) -> bool:
     certificate = _partition_certificate_shape(
         value["trajectory_partition_certificate_or_null"]
@@ -1433,20 +1465,21 @@ def _partition_certificate_retry_exact(
         and _exact_cleanup_grammar(
             cleanups,
             origin_sequence=int(certificate["origin_sequence"]),
-            origin_actor=certificate["origin_actor_or_null"],
+            required_origin_actors=required_origin_actors,
+            allowed_cleanup_actors=allowed_cleanup_actors,
         )
     )
 
 
 def _exact_gap_failure_grammar(
     value: object,
-) -> bool:
+) -> tuple[dict[str, object], frozenset[str], frozenset[str]] | None:
     if (
         type(value) is not list
         or not value
         or len(value) > _MAX_RETAINED_FAILURE_ROWS
     ):
-        return False
+        return None
     prior_sequence = 0
     prior_timestamp = 0
     record_digests: set[str] = set()
@@ -1454,49 +1487,121 @@ def _exact_gap_failure_grammar(
     for raw_row in value:
         row = _failure_row_shape(raw_row)
         if row is None:
-            return False
+            return None
         rows.append(row)
         sequence = int(row["sequence"])
         if sequence <= prior_sequence:
-            return False
+            return None
         prior_sequence = sequence
         timestamp = int(row["timestamp_ns"])
         if timestamp < prior_timestamp or row["record_digest"] in record_digests:
-            return False
+            return None
         prior_timestamp = timestamp
         record_digests.add(str(row["record_digest"]))
         if row["error_code"] != GAP_ERROR_CODE_V2:
-            return False
-    origin = rows[0]
-    if not _origin_gap_row(origin):
-        return False
-    terminal_detail = _terminal_gap_detail(origin)
-    for contexts in _propagation_context_alternatives(origin):
-        if len(rows) != 1 + len(contexts):
-            continue
-        matches = True
-        for row, context in zip(rows[1:], contexts, strict=True):
-            operation, span_id, stage, substep, actor, detail = context
-            expected_error_detail = (
-                origin["error_detail"]
-                if operation == "LIVE_RESOURCE_SAMPLER"
-                else terminal_detail
-            )
-            if (
-                row["operation"] != operation
-                or row["span_id"] != span_id
-                or row["stage_or_null"] != stage
-                or row["substep_or_null"] != substep
-                or row["actor_or_null"] != actor
-                or row["detail_or_null"] != detail
-                or row["error_detail"] != expected_error_detail
-                or any(row[field] is not None for field in _SAMPLE_FIELDS)
+            return None
+
+    origins = [row for row in rows if _origin_gap_row(row)]
+    if not origins or rows[0] is not origins[0]:
+        return None
+
+    if len(origins) == 1:
+        origin = origins[0]
+        for contexts in _propagation_context_alternatives(origin):
+            if len(rows) != 1 + len(contexts):
+                continue
+            if all(
+                _propagation_row_exact(row, context, origin)
+                for row, context in zip(rows[1:], contexts, strict=True)
             ):
-                matches = False
-                break
-        if matches:
-            return True
-    return False
+                actor = str(origin["actor_or_null"])
+                allowed_cleanup_actors = (
+                    frozenset({"TRUSTED_HOST_REPLAY"})
+                    if actor == "TRUSTED_HOST_REPLAY"
+                    else frozenset({"PYTHON_ENDPOINT", "RUST_ENDPOINT"})
+                )
+                return origin, frozenset({actor}), allowed_cleanup_actors
+        return None
+
+    # The frozen producer has only one multi-origin failure surface.  During
+    # Stage 5 it closes PYTHON_ENDPOINT first while RUST_ENDPOINT's independent
+    # live sampler remains running.  The peer sampler can therefore fail while
+    # Python is propagating either its live-sampler gap or its held-final gap.
+    # No trusted-host, dual-held-final, reverse-held-final, Stage-4, or second
+    # actor-close combination is reachable from that fixed control flow.
+    if len(origins) != 2:
+        return None
+    origins_by_actor = {str(origin["actor_or_null"]): origin for origin in origins}
+    if (
+        len(origins_by_actor) != 2
+        or frozenset(origins_by_actor)
+        != frozenset({"PYTHON_ENDPOINT", "RUST_ENDPOINT"})
+    ):
+        return None
+    python_origin = origins_by_actor["PYTHON_ENDPOINT"]
+    rust_origin = origins_by_actor["RUST_ENDPOINT"]
+    if (
+        python_origin["operation"]
+        not in {"LIVE_RESOURCE_SAMPLE", "HELD_FINAL_RESOURCE_SAMPLE"}
+        or rust_origin["operation"] != "LIVE_RESOURCE_SAMPLE"
+    ):
+        return None
+
+    python_contexts = _propagation_contexts(python_origin)
+    rust_contexts = _propagation_contexts(rust_origin)
+    expected: dict[str, tuple[object, ...]] = {
+        "PYTHON_CLOSE": (python_contexts[-3], python_origin),
+        "RUST_SAMPLER": (rust_contexts[0], rust_origin),
+        "STAGE_5": (python_contexts[-2], python_origin),
+        "RUN": (python_contexts[-1], python_origin),
+    }
+    if python_origin["operation"] == "LIVE_RESOURCE_SAMPLE":
+        expected["PYTHON_SAMPLER"] = (python_contexts[0], python_origin)
+
+    origin_identities = {id(origin) for origin in origins}
+    nonorigins = [row for row in rows if id(row) not in origin_identities]
+    if len(nonorigins) != len(expected):
+        return None
+    positions: dict[str, int] = {}
+    for label, (raw_context, raw_origin) in expected.items():
+        context = raw_context
+        origin = raw_origin
+        assert type(context) is tuple and type(origin) is dict
+        matches = [
+            index
+            for index, row in enumerate(rows)
+            if _propagation_row_exact(row, context, origin)
+        ]
+        if len(matches) != 1:
+            return None
+        positions[label] = matches[0]
+    if len(set(positions.values())) != len(positions):
+        return None
+
+    origin_positions = {
+        actor: rows.index(origin) for actor, origin in origins_by_actor.items()
+    }
+    if not (
+        origin_positions["RUST_ENDPOINT"] < positions["RUST_SAMPLER"]
+        < positions["STAGE_5"]
+        < positions["RUN"]
+        and origin_positions["PYTHON_ENDPOINT"] < positions["PYTHON_CLOSE"]
+        < positions["STAGE_5"]
+    ):
+        return None
+    if (
+        python_origin["operation"] == "LIVE_RESOURCE_SAMPLE"
+        and not (
+            origin_positions["PYTHON_ENDPOINT"] < positions["PYTHON_SAMPLER"]
+            < positions["PYTHON_CLOSE"]
+        )
+    ):
+        return None
+    return (
+        python_origin,
+        frozenset({"PYTHON_ENDPOINT", "RUST_ENDPOINT"}),
+        frozenset({"PYTHON_ENDPOINT", "RUST_ENDPOINT"}),
+    )
 
 
 def _is_exact_retryable_gap(value: Mapping[str, object]) -> bool:
@@ -1511,10 +1616,11 @@ def _is_exact_retryable_gap(value: Mapping[str, object]) -> bool:
     ):
         return False
     wire_detail = wire.get("detail")
-    origin = rows[0]
-    if type(origin) is not dict:
+    grammar = _exact_gap_failure_grammar(rows)
+    if grammar is None:
         return False
-    terminal_detail = _terminal_gap_detail(origin)
+    terminal_origin, required_origin_actors, allowed_cleanup_actors = grammar
+    terminal_detail = _terminal_gap_detail(terminal_origin)
     return (
         value["exit_code_or_null"] == 1
         and value["stdout_wire_kind"] == STDOUT_WIRE_ERROR_V2
@@ -1526,8 +1632,11 @@ def _is_exact_retryable_gap(value: Mapping[str, object]) -> bool:
         and type(wire_detail) is str
         and wire_detail == terminal_detail
         and value["trajectory_terminal_error_detail_or_null"] == wire_detail
-        and _partition_certificate_retry_exact(value)
-        and _exact_gap_failure_grammar(rows)
+        and _partition_certificate_retry_exact(
+            value,
+            required_origin_actors=required_origin_actors,
+            allowed_cleanup_actors=allowed_cleanup_actors,
+        )
         and value["artifact_state"] == "ABSENT"
         and value["artifact_validation_status"] == "ABSENCE_VERIFIED"
         and value["artifact_replay_status"] == "ABSENCE_REPLAY_VERIFIED"

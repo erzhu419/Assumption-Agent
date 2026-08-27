@@ -359,6 +359,127 @@ def _held_final_failure_rows() -> list[dict[str, object]]:
     return [origin, *propagated]
 
 
+def _endpoint_gap_origin(
+    actor: str,
+    operation: str,
+    *,
+    sequence: int,
+    label: str,
+) -> dict[str, object]:
+    role = "1" if actor == "PYTHON_ENDPOINT" else "2"
+    row = _failure_row(origin=True, sequence=sequence)
+    ordinal = 2 if actor == "PYTHON_ENDPOINT" else 3
+    previous = int(row["previous_finish_ns_or_null"])
+    scheduled = int(row["scheduled_start_ns_or_null"])
+    actual = int(row["actual_start_ns_or_null"])
+    gap = int(row["gap_ns_or_null"])
+    maximum = int(row["maximum_gap_ns_or_null"])
+    target = int(row["target_wait_ns_or_null"])
+    if operation == "LIVE_RESOURCE_SAMPLE":
+        span = f"sample-{actor}-{ordinal:06d}"
+        substep = "COLLECT_BOUND_LIVE_RESOURCES"
+        detail = (
+            "held actor sampling gap exceeded bound: "
+            f"actor_id={actor}; role_id={role}; sample_ordinal={ordinal}; "
+            f"previous_finish_ns={previous}; scheduled_start_ns={scheduled}; "
+            f"actual_start_ns={actual}; gap_ns={gap}; maximum_gap_ns={maximum}; "
+            f"target_wait_ns={target}; previous_duration_ns=0"
+        )
+    else:
+        assert operation == "HELD_FINAL_RESOURCE_SAMPLE"
+        span = f"held-final-sample-{actor}-{ordinal:06d}"
+        substep = "COLLECT_BOUND_HELD_FINAL_RESOURCES"
+        detail = (
+            "held final sampling gap exceeded bound: "
+            f"actor_id={actor}; role_id={role}; sample_ordinal={ordinal}; "
+            f"previous_finish_ns={previous}; actual_start_ns={actual}; "
+            f"gap_ns={gap}; maximum_gap_ns={maximum}; target_wait_ns={target}; "
+            "previous_duration_ns=0"
+        )
+    row.update(
+        {
+            "sequence": sequence,
+            "timestamp_ns": 2_000_000_000 + sequence,
+            "span_id": span,
+            "operation": operation,
+            "substep_or_null": substep,
+            "actor_or_null": actor,
+            "error_detail": detail,
+            "role_id_or_null": role,
+            "sample_ordinal_or_null": ordinal,
+            "record_digest": "sha256:" + _root(label),
+        }
+    )
+    return row
+
+
+def _propagation_row(
+    origin: dict[str, object],
+    operation: str,
+    *,
+    sequence: int,
+    label: str,
+) -> dict[str, object]:
+    actor = str(origin["actor_or_null"])
+    terminal_detail = (
+        "held actor sampler failed: " + str(origin["error_detail"])
+        if origin["operation"] == "LIVE_RESOURCE_SAMPLE"
+        else str(origin["error_detail"])
+    )
+    contexts = {
+        "LIVE_RESOURCE_SAMPLER": (
+            f"sampler-{actor}",
+            "ACTOR_LIFECYCLE",
+            "CID_TO_HELD_FINAL_CONTINUOUS_SAMPLING",
+            actor,
+            "MAXIMUM_UNSAMPLED_GAP_EXCEEDED; sample_span="
+            + str(origin["span_id"]),
+            str(origin["error_detail"]),
+        ),
+        "HELD_ACTOR_CLOSE": (
+            f"actor-close-{actor}",
+            "ACTOR_LIFECYCLE",
+            "DONE_FINAL_SAMPLE_RELEASE_EXIT_REMOVE_ABSENCE",
+            actor,
+            "ACTOR_CLOSE_FAILED_BEFORE_CLEANUP",
+            terminal_detail,
+        ),
+        "SUPERVISOR_STAGE": (
+            "supervisor-stage-05",
+            "STAGE_05",
+            "SEAL_ENDPOINT_STDOUT_SIDECARS_CONTROLS_AND_RESOURCES",
+            None,
+            "FAILED",
+            terminal_detail,
+        ),
+        "SUPERVISOR_RUN": (
+            "supervisor-run",
+            "RUN",
+            None,
+            None,
+            "supervisor attempt failed",
+            terminal_detail,
+        ),
+    }
+    span, stage, substep, row_actor, detail, error_detail = contexts[operation]
+    row = _failure_row(origin=False, sequence=sequence)
+    row.update(
+        {
+            "sequence": sequence,
+            "timestamp_ns": 2_000_000_000 + sequence,
+            "span_id": span,
+            "operation": operation,
+            "stage_or_null": stage,
+            "substep_or_null": substep,
+            "actor_or_null": row_actor,
+            "detail_or_null": detail,
+            "error_detail": error_detail,
+            "record_digest": "sha256:" + _root(label),
+        }
+    )
+    return row
+
+
 def _event_row(
     *,
     sequence: int,
@@ -609,6 +730,184 @@ def _refresh_certificate(value: dict[str, object]) -> None:
     )
 
 
+def _dual_origin_value(
+    python_operation: str = "LIVE_RESOURCE_SAMPLE",
+    *,
+    token_order: tuple[str, ...] | None = None,
+) -> tuple[dict[str, object], list[dict[str, object]]]:
+    value = _base(1)
+    python_origin = _endpoint_gap_origin(
+        "PYTHON_ENDPOINT",
+        python_operation,
+        sequence=1,
+        label="dual-python-origin",
+    )
+    rust_origin = _endpoint_gap_origin(
+        "RUST_ENDPOINT",
+        "LIVE_RESOURCE_SAMPLE",
+        sequence=1,
+        label="dual-rust-origin",
+    )
+    rows_by_token = {
+        "P_ORIGIN": python_origin,
+        "R_ORIGIN": rust_origin,
+        "P_CLOSE": _propagation_row(
+            python_origin,
+            "HELD_ACTOR_CLOSE",
+            sequence=1,
+            label="dual-python-close",
+        ),
+        "R_SAMPLER": _propagation_row(
+            rust_origin,
+            "LIVE_RESOURCE_SAMPLER",
+            sequence=1,
+            label="dual-rust-sampler",
+        ),
+        "STAGE": _propagation_row(
+            python_origin,
+            "SUPERVISOR_STAGE",
+            sequence=1,
+            label="dual-stage",
+        ),
+        "RUN": _propagation_row(
+            python_origin,
+            "SUPERVISOR_RUN",
+            sequence=1,
+            label="dual-run",
+        ),
+    }
+    if python_operation == "LIVE_RESOURCE_SAMPLE":
+        rows_by_token["P_SAMPLER"] = _propagation_row(
+            python_origin,
+            "LIVE_RESOURCE_SAMPLER",
+            sequence=1,
+            label="dual-python-sampler",
+        )
+        default_order = (
+            "R_ORIGIN",
+            "R_SAMPLER",
+            "P_ORIGIN",
+            "P_SAMPLER",
+            "P_CLOSE",
+            "STAGE",
+            "RUN",
+        )
+    else:
+        default_order = (
+            "R_ORIGIN",
+            "R_SAMPLER",
+            "P_ORIGIN",
+            "P_CLOSE",
+            "STAGE",
+            "RUN",
+        )
+    order = default_order if token_order is None else token_order
+    assert frozenset(order) == frozenset(rows_by_token)
+
+    events = [
+        _event_row(
+            sequence=sequence,
+            event_type="BEGIN",
+            span_id=f"dual-prelude-{sequence}",
+            operation="DUAL_PRELUDE",
+            stage="STAGE_04",
+            substep=None,
+            actor=None,
+            detail="ENTER",
+        )
+        for sequence in range(1, 7)
+    ]
+    failures: list[dict[str, object]] = []
+    cleanup_inserted = False
+    for token in order:
+        if token == "STAGE" and not cleanup_inserted:
+            for suffix, actor in enumerate(
+                ("PYTHON_ENDPOINT", "RUST_ENDPOINT"),
+                start=1,
+            ):
+                span = f"actor-cleanup-{actor}-{suffix:06d}"
+                for event_type, detail in (
+                    ("BEGIN", "ENTER"),
+                    ("OK", "cleanup_error_count=0"),
+                ):
+                    events.append(
+                        _event_row(
+                            sequence=len(events) + 1,
+                            event_type=event_type,
+                            span_id=span,
+                            operation="HELD_ACTOR_ABORT_CLEANUP",
+                            stage="ACTOR_LIFECYCLE",
+                            substep="STOP_TERMINATE_DRAIN_REMOVE_ABSENCE",
+                            actor=actor,
+                            detail=detail,
+                        )
+                    )
+            cleanup_inserted = True
+        row = rows_by_token[token]
+        sequence = len(events) + 1
+        row["sequence"] = sequence
+        row["timestamp_ns"] = 2_000_000_000 + sequence
+        row["record_digest"] = "sha256:" + _root(f"dual-{token}-{sequence}")
+        failures.append(row)
+        events.append(
+            _event_row(
+                sequence=sequence,
+                event_type="FAIL",
+                span_id=str(row["span_id"]),
+                operation=str(row["operation"]),
+                stage=row["stage_or_null"],
+                substep=row["substep_or_null"],
+                actor=row["actor_or_null"],
+                detail=row["detail_or_null"],
+                error_code=str(row["error_code"]),
+                error_detail=str(row["error_detail"]),
+                record_digest=str(row["record_digest"]),
+            )
+        )
+
+    terminal_detail = str(rows_by_token["RUN"]["error_detail"])
+    value["trajectory_failure_rows"] = failures
+    value["trajectory_terminal_error_detail_or_null"] = terminal_detail
+    value.update(
+        campaign.classify_supervisor_stdout_v2(
+            _wire(_error_wire(detail=terminal_detail))
+        )
+    )
+    _install_partition(value, events)
+    return value, events
+
+
+def _rehash_failure_semantics(value: dict[str, object], label: str) -> None:
+    failures = value["trajectory_failure_rows"]
+    certificate = value["trajectory_partition_certificate_or_null"]
+    assert type(failures) is list and failures
+    assert type(certificate) is dict
+    for index, row in enumerate(failures):
+        assert type(row) is dict
+        row["record_digest"] = "sha256:" + _root(
+            f"{label}-failure-{index}"
+        )
+    certificate["origin_sequence"] = failures[0]["sequence"]
+    certificate["origin_record_digest"] = failures[0]["record_digest"]
+    certificate["origin_actor_or_null"] = failures[0]["actor_or_null"]
+    certificate["final_event_record_digest"] = failures[-1]["record_digest"]
+    certificate["failure_event_count"] = len(failures)
+    certificate["failure_rows_retained_count"] = len(failures)
+    certificate["failure_rows_truncated"] = False
+    certificate["failure_rows_digest"] = campaign.failure_rows_digest_v2(failures)
+    value["trajectory_final_event_record_digest"] = failures[-1]["record_digest"]
+    value["trajectory_canonical_event_payloads_digest"] = (
+        campaign.campaign_record_digest_v2(
+            "HEGEL/TEST/Q05B/REHASHED/ALL_EVENTS/V2\x00",
+            failures,
+        )
+    )
+    certificate["canonical_event_payloads_digest"] = value[
+        "trajectory_canonical_event_payloads_digest"
+    ]
+    _refresh_certificate(value)
+
+
 def _base(slot: int = 1) -> dict[str, object]:
     failure_rows = _failure_rows()
     events = _events_for_failures(failure_rows)
@@ -825,6 +1124,221 @@ def test_live_gap_integration_kat_preserves_exact_two_tier_detail_flow() -> None
     assert value["trajectory_terminal_error_detail_or_null"] == outer_detail
     assert campaign.evaluate_slot_observation_v2(value) == (
         campaign.RETRY_EXACT_GAP_V2
+    )
+
+
+@pytest.mark.parametrize(
+    ("python_operation", "token_order"),
+    (
+        (
+            "LIVE_RESOURCE_SAMPLE",
+            (
+                "R_ORIGIN",
+                "R_SAMPLER",
+                "P_ORIGIN",
+                "P_SAMPLER",
+                "P_CLOSE",
+                "STAGE",
+                "RUN",
+            ),
+        ),
+        (
+            "LIVE_RESOURCE_SAMPLE",
+            (
+                "P_ORIGIN",
+                "P_SAMPLER",
+                "R_ORIGIN",
+                "P_CLOSE",
+                "R_SAMPLER",
+                "STAGE",
+                "RUN",
+            ),
+        ),
+        (
+            "HELD_FINAL_RESOURCE_SAMPLE",
+            (
+                "R_ORIGIN",
+                "P_ORIGIN",
+                "P_CLOSE",
+                "R_SAMPLER",
+                "STAGE",
+                "RUN",
+            ),
+        ),
+        (
+            "HELD_FINAL_RESOURCE_SAMPLE",
+            (
+                "P_ORIGIN",
+                "P_CLOSE",
+                "R_ORIGIN",
+                "R_SAMPLER",
+                "STAGE",
+                "RUN",
+            ),
+        ),
+    ),
+)
+@pytest.mark.parametrize(
+    ("slot", "expected"),
+    (
+        (1, campaign.RETRY_EXACT_GAP_V2),
+        (2, campaign.RETRY_EXACT_GAP_V2),
+        (3, campaign.EXHAUSTED_RETRYABLE_GAP_V2),
+    ),
+)
+def test_exact_dual_origin_stage5_grammar_accepts_only_reachable_partial_orders(
+    python_operation: str,
+    token_order: tuple[str, ...],
+    slot: int,
+    expected: str,
+) -> None:
+    value, _events = _dual_origin_value(
+        python_operation,
+        token_order=token_order,
+    )
+    value["slot_number"] = slot
+    rows = value["trajectory_failure_rows"]
+    certificate = value["trajectory_partition_certificate_or_null"]
+    assert type(rows) is list and type(certificate) is dict
+    assert len(rows) == (7 if python_operation == "LIVE_RESOURCE_SAMPLE" else 6)
+    assert certificate["origin_actor_or_null"] == rows[0]["actor_or_null"]
+    assert value["stdout_wire_value_or_null"]["detail"] == rows[-1][
+        "error_detail"
+    ]
+    assert rows[-1]["error_detail"].startswith(
+        "held actor sampler failed: "
+    ) is (python_operation == "LIVE_RESOURCE_SAMPLE")
+    assert campaign.evaluate_slot_observation_v2(_seal(value)) == expected
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "other-error",
+        "duplicate-actor",
+        "third-origin",
+        "rust-held-final",
+        "crossed-sampler",
+        "missing-propagation",
+        "rust-close",
+        "wrong-terminal-cause",
+        "stage4-dual",
+    ),
+)
+def test_dual_origin_rehashed_semantic_forgeries_remain_nonretryable(
+    mutation: str,
+) -> None:
+    value, _events = _dual_origin_value()
+    rows = value["trajectory_failure_rows"]
+    assert type(rows) is list
+    python_origin = next(
+        row
+        for row in rows
+        if row["actor_or_null"] == "PYTHON_ENDPOINT"
+        and row["operation"] == "LIVE_RESOURCE_SAMPLE"
+    )
+    rust_origin = next(
+        row
+        for row in rows
+        if row["actor_or_null"] == "RUST_ENDPOINT"
+        and row["operation"] == "LIVE_RESOURCE_SAMPLE"
+    )
+    python_sampler = next(
+        row
+        for row in rows
+        if row["operation"] == "LIVE_RESOURCE_SAMPLER"
+        and row["actor_or_null"] == "PYTHON_ENDPOINT"
+    )
+    rust_sampler = next(
+        row
+        for row in rows
+        if row["operation"] == "LIVE_RESOURCE_SAMPLER"
+        and row["actor_or_null"] == "RUST_ENDPOINT"
+    )
+    python_close = next(row for row in rows if row["operation"] == "HELD_ACTOR_CLOSE")
+    stage = next(row for row in rows if row["operation"] == "SUPERVISOR_STAGE")
+    run = rows[-1]
+    if mutation == "other-error":
+        rust_sampler["error_code"] = "FAIL_POLICY"
+    elif mutation == "duplicate-actor":
+        replacement = deepcopy(python_origin)
+        replacement["sequence"] = rust_origin["sequence"]
+        replacement["timestamp_ns"] = rust_origin["timestamp_ns"]
+        rows[rows.index(rust_origin)] = replacement
+    elif mutation == "third-origin":
+        replacement = deepcopy(rust_origin)
+        replacement.update(
+            {
+                "actor_or_null": "TRUSTED_HOST_REPLAY",
+                "role_id_or_null": "3",
+                "span_id": "sample-TRUSTED_HOST_REPLAY-000003",
+                "error_detail": str(replacement["error_detail"])
+                .replace("actor_id=RUST_ENDPOINT", "actor_id=TRUSTED_HOST_REPLAY")
+                .replace("role_id=2", "role_id=3"),
+            }
+        )
+        replacement["sequence"] = rust_sampler["sequence"]
+        replacement["timestamp_ns"] = rust_sampler["timestamp_ns"]
+        rows[rows.index(rust_sampler)] = replacement
+    elif mutation == "rust-held-final":
+        replacement = _endpoint_gap_origin(
+            "RUST_ENDPOINT",
+            "HELD_FINAL_RESOURCE_SAMPLE",
+            sequence=int(rust_origin["sequence"]),
+            label="forged-rust-held-final",
+        )
+        rows[rows.index(rust_origin)] = replacement
+    elif mutation == "crossed-sampler":
+        python_sampler["error_detail"] = rust_origin["error_detail"]
+    elif mutation == "missing-propagation":
+        rust_sampler["operation"] = "INDEPENDENT_FAILURE"
+    elif mutation == "rust-close":
+        python_close["span_id"] = "actor-close-RUST_ENDPOINT"
+        python_close["actor_or_null"] = "RUST_ENDPOINT"
+    elif mutation == "wrong-terminal-cause":
+        rust_terminal = "held actor sampler failed: " + str(
+            rust_origin["error_detail"]
+        )
+        stage["error_detail"] = rust_terminal
+        run["error_detail"] = rust_terminal
+        value["trajectory_terminal_error_detail_or_null"] = rust_terminal
+        value.update(
+            campaign.classify_supervisor_stdout_v2(
+                _wire(_error_wire(detail=rust_terminal))
+            )
+        )
+    elif mutation == "stage4-dual":
+        stage.update(
+            {
+                "span_id": "supervisor-stage-04",
+                "stage_or_null": "STAGE_04",
+                "substep_or_null": "RUN_TWO_HELD_ENDPOINTS_IN_PARALLEL",
+            }
+        )
+    else:  # pragma: no cover - parametrization is exact.
+        raise AssertionError(mutation)
+    _rehash_failure_semantics(value, mutation)
+    assert campaign.evaluate_slot_observation_v2(_seal(value)) == (
+        campaign.TERMINAL_NONRETRYABLE_V2
+    )
+
+
+@pytest.mark.parametrize("missing_actor", ("PYTHON_ENDPOINT", "RUST_ENDPOINT"))
+def test_dual_origin_requires_complete_cleanup_for_both_origin_actors(
+    missing_actor: str,
+) -> None:
+    value, events = _dual_origin_value()
+    events[:] = [
+        event
+        for event in events
+        if not (
+            event["operation"] == "HELD_ACTOR_ABORT_CLEANUP"
+            and event["actor_or_null"] == missing_actor
+        )
+    ]
+    _renumber_events_and_failure_projection(value, events)
+    assert campaign.evaluate_slot_observation_v2(_seal(value)) == (
+        campaign.TERMINAL_NONRETRYABLE_V2
     )
 
 

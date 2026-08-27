@@ -120,6 +120,201 @@ def _contract() -> dict[str, object]:
     return contract
 
 
+class _AdmissionClock:
+    def __init__(self) -> None:
+        self.now_ns = 0
+
+    def __call__(self) -> int:
+        return self.now_ns
+
+    def sleep(self, seconds: float) -> None:
+        self.now_ns += int(seconds * 1_000_000_000)
+
+
+def _admitted_scheduling_evidence(
+    contract: Mapping[str, object],
+) -> dict[str, object]:
+    policy = TOOL._scheduling_admission_policy_v2(contract)
+    durations = [40_000_000] * 16
+    evidence: dict[str, object] = {
+        "schema_version": TOOL._SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V2,
+        "policy": deepcopy(policy),
+        "windows_in_strict_order": [
+            {
+                "window_ordinal": 1,
+                "quiet_start_ns": 0,
+                "quiet_finish_ns": 30_000_000_000,
+                "quiet_duration_ns": 30_000_000_000,
+                "probe_durations_ns_in_strict_order": durations,
+                "maximum_probe_duration_ns": 40_000_000,
+                "passed": True,
+            }
+        ],
+        "selected_window_ordinal": 1,
+        "passed": True,
+    }
+    assert TOOL._scheduling_admission_evidence_exact_v2(contract, evidence)
+    return evidence
+
+
+def test_scheduling_admission_selects_first_passing_window_at_boundary() -> None:
+    contract = _contract()
+    clock = _AdmissionClock()
+    calls: list[str] = []
+
+    def publish(
+        _fd: int,
+        token: str,
+        payload: bytes,
+        _clock: object,
+    ) -> int:
+        calls.append(token)
+        assert len(payload) == 64
+        if token == "w01-p16":
+            return 40_000_001
+        return 40_000_000
+
+    result = TOOL._run_scheduling_admission_gate_v2(
+        contract,
+        7,
+        "Q05B_SHADOW_RETRY_V2R2_SLOT_01",
+        clock_ns=clock,
+        sleeper=clock.sleep,
+        probe_publisher=publish,
+    )
+    assert result["selected_window_ordinal"] == 2
+    assert len(result["windows_in_strict_order"]) == 2
+    assert len(calls) == 32
+    assert calls[0] == "w01-p01"
+    assert calls[-1] == "w02-p16"
+    assert TOOL._scheduling_admission_evidence_exact_v2(contract, result)
+
+
+def test_scheduling_admission_exhaustion_is_typed_and_prevents_spawn() -> None:
+    contract = _contract()
+    clock = _AdmissionClock()
+    spawned = False
+
+    def publish(*_args: object) -> int:
+        return 40_000_001
+
+    try:
+        TOOL._run_scheduling_admission_gate_v2(
+            contract,
+            7,
+            "Q05B_SHADOW_RETRY_V2R2_SLOT_01",
+            clock_ns=clock,
+            sleeper=clock.sleep,
+            probe_publisher=publish,
+        )
+        spawned = True
+    except TOOL.ShadowRetryCampaignErrorV2 as error:
+        assert error.code == "FAIL_CAMPAIGN_SCHEDULING_ADMISSION"
+        assert "window_max_ns=[40000001, 40000001, 40000001]" in error.detail
+        assert "before spawn" in error.detail
+    assert spawned is False
+
+
+def test_scheduling_admission_rejects_short_quiet_period() -> None:
+    contract = _contract()
+    clock = _AdmissionClock()
+    with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+        TOOL._run_scheduling_admission_gate_v2(
+            contract,
+            7,
+            "Q05B_SHADOW_RETRY_V2R2_SLOT_01",
+            clock_ns=clock,
+            sleeper=lambda _seconds: None,
+            probe_publisher=lambda *_args: 1,
+        )
+    assert error.value.code == "FAIL_CAMPAIGN_SCHEDULING_ADMISSION"
+    assert "quiet period" in error.value.detail
+
+
+def test_scheduling_admission_wraps_injected_probe_failure() -> None:
+    contract = _contract()
+    clock = _AdmissionClock()
+
+    def fail_probe(*_args: object) -> int:
+        raise OSError("injected publication failure")
+
+    with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+        TOOL._run_scheduling_admission_gate_v2(
+            contract,
+            7,
+            "Q05B_SHADOW_RETRY_V2R2_SLOT_01",
+            clock_ns=clock,
+            sleeper=clock.sleep,
+            probe_publisher=fail_probe,
+        )
+    assert error.value.code == "FAIL_CAMPAIGN_SCHEDULING_ADMISSION"
+    assert "probe 1:1 failed" in error.value.detail
+    assert "injected publication failure" in error.value.detail
+
+
+@pytest.mark.parametrize(
+    ("field", "forged_value"),
+    (
+        ("window_ordinal", True),
+        ("quiet_duration_ns", 30_000_000_000.0),
+        ("maximum_probe_duration_ns", 40_000_000.0),
+    ),
+)
+def test_scheduling_admission_evidence_rejects_bool_or_float_integer_forgery(
+    field: str,
+    forged_value: object,
+) -> None:
+    contract = _contract()
+    evidence = _admitted_scheduling_evidence(contract)
+    windows = evidence["windows_in_strict_order"]
+    assert type(windows) is list and type(windows[0]) is dict
+    windows[0][field] = forged_value
+    assert not TOOL._scheduling_admission_evidence_exact_v2(contract, evidence)
+
+
+@pytest.mark.parametrize(
+    ("field", "forged_value"),
+    (
+        ("maximum_windows", 3.0),
+        ("quiet_period_ns", 30_000_000_000.0),
+        ("probes_per_window", True),
+        ("maximum_probe_duration_ns", 40_000_000.0),
+        ("publication_payload_byte_count", 64.0),
+    ),
+)
+def test_scheduling_admission_policy_rejects_nonexact_integer_types(
+    field: str,
+    forged_value: object,
+) -> None:
+    contract = _contract()
+    policy = contract["execution_policy"]["scheduling_admission_gate"]
+    assert type(policy) is dict
+    policy[field] = forged_value
+    with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+        TOOL._scheduling_admission_policy_v2(contract)
+    assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
+
+
+def test_five_fsync_publication_probe_removes_all_names() -> None:
+    with tempfile.TemporaryDirectory(dir="/tmp") as temporary:
+        root = Path(temporary)
+        directory_fd = os.open(
+            root,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC |
+            getattr(os, "O_NOFOLLOW", 0),
+        )
+        try:
+            duration = TOOL._five_fsync_publication_probe_v2(
+                directory_fd,
+                "w01-p01",
+                b"x" * 64,
+            )
+            assert type(duration) is int and duration >= 0
+            assert list(root.iterdir()) == []
+        finally:
+            os.close(directory_fd)
+
+
 def _slot(
     contract: Mapping[str, object],
     ordinal: int = 1,
@@ -1040,7 +1235,7 @@ def _source_replay(label: str) -> dict[str, object]:
         "error_or_null": None,
         "evidence": evidence,
         "root": TOOL._domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/SOURCE_REPLAY/V2",
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/SOURCE_REPLAY/V2",
             evidence,
         ),
     }
@@ -1057,7 +1252,7 @@ def _future_freshness() -> dict[str, object]:
     unsigned = deepcopy(value)
     unsigned.pop("root")
     value["root"] = TOOL._domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/SLOT_ROOT_ABSENCE/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/SLOT_ROOT_ABSENCE/V2",
         unsigned,
     )
     return value
@@ -1139,7 +1334,7 @@ def _slot_absence_evidence(
     unsigned = deepcopy(value)
     unsigned.pop("root")
     value["root"] = TOOL._domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/SLOT_ROOT_ABSENCE/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/SLOT_ROOT_ABSENCE/V2",
         unsigned,
     )
     return value
@@ -1150,7 +1345,7 @@ def _cleanup_replay() -> dict[str, object]:
     return {
         "preimage": preimage,
         "root": TOOL._domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/CLEANUP_REPLAY/V2",
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/CLEANUP_REPLAY/V2",
             preimage,
         ),
     }
@@ -1589,10 +1784,10 @@ def test_slot_registry_accepts_exact_contract_and_rejects_path_drift() -> None:
     assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
 
 
-def test_v2r1_instance_isolation_rejects_prior_v2_authority_and_roots() -> None:
+def test_v2r2_instance_isolation_rejects_prior_v2_authority_and_roots() -> None:
     raw_contract = TOOL._pretty_json(
         TOOL.CONFIG_PATH.read_bytes(),
-        "v2r1 target Git object closure",
+        "v2r2 target Git object closure",
     )
     assert type(raw_contract) is dict
     target_git_object_closure = raw_contract["target_commit_a_binding"]
@@ -1602,18 +1797,37 @@ def test_v2r1_instance_isolation_rejects_prior_v2_authority_and_roots() -> None:
     )
 
     contract = _contract()
-    TOOL._require_v2r1_instance_isolation_v2(contract)
+    TOOL._require_v2r2_instance_isolation_v2(contract)
     protected = contract["protected_state_policy"]
     assert type(protected) is dict
     protected_roots = protected["protected_roots_in_exact_order"]
     assert type(protected_roots) is list
     assert set(TOOL._PRIOR_V2_PROTECTED_ROOTS).issubset(protected_roots)
+    assert set(TOOL._PRIOR_V2R1_PROTECTED_ROOTS).issubset(protected_roots)
+    assert protected["prior_v2r1_campaign_contract_id"] == (
+        TOOL._PRIOR_V2R1_CONTRACT_ID
+    )
+    assert protected["prior_v2r1_contract_digest"] == (
+        TOOL._PRIOR_V2R1_CONTRACT_DIGEST
+    )
+    assert protected["prior_v2r1_capsule_digest"] == (
+        TOOL._PRIOR_V2R1_CAPSULE_DIGEST
+    )
+    assert protected["prior_v2r1_authorization_digest"] == (
+        TOOL._PRIOR_V2R1_AUTHORIZATION_DIGEST
+    )
+    assert protected["prior_v2r1_terminal_ledger_record_digest"] == (
+        TOOL._PRIOR_V2R1_TERMINAL_LEDGER_RECORD_DIGEST
+    )
+    assert protected["prior_v2r1_completion_ledger_record_digest"] == (
+        TOOL._PRIOR_V2R1_COMPLETION_LEDGER_RECORD_DIGEST
+    )
     slots = contract["slot_registry"]
     assert type(slots) is list
     for ordinal, slot in enumerate(slots, start=1):
         assert type(slot) is dict
         assert slot["trajectory_trace_id"] == (
-            f"q05b-shadow-retry-campaign-v2r1-slot-{ordinal:02d}"
+            f"q05b-shadow-retry-campaign-v2r2-slot-{ordinal:02d}"
         )
 
     mutations = []
@@ -1626,6 +1840,18 @@ def test_v2r1_instance_isolation_rejects_prior_v2_authority_and_roots() -> None:
         "prior_v2_capsule_authorization_or_ledger_reuse_allowed"
     ] = True
     mutations.append(reusable_prior)
+
+    reusable_prior_v2r1 = deepcopy(contract)
+    reusable_prior_v2r1["protected_state_policy"][
+        "prior_v2r1_capsule_authorization_or_ledger_reuse_allowed"
+    ] = True
+    mutations.append(reusable_prior_v2r1)
+
+    missing_prior_v2r1_root = deepcopy(contract)
+    missing_prior_v2r1_root["protected_state_policy"][
+        "protected_roots_in_exact_order"
+    ].remove(TOOL._PRIOR_V2R1_WORKTREE_ROOT)
+    mutations.append(missing_prior_v2r1_root)
 
     prior_authorization_root = deepcopy(contract)
     prior_authorization_root["fixed_external_roots"]["authorization_root"] = (
@@ -1647,22 +1873,35 @@ def test_v2r1_instance_isolation_rejects_prior_v2_authority_and_roots() -> None:
 
     for mutation in mutations:
         with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
-            TOOL._require_v2r1_instance_isolation_v2(mutation)
+            TOOL._require_v2r2_instance_isolation_v2(mutation)
         assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
+
+
+def test_final_frozen_v2r2_contract_loads_with_exact_source_binding() -> None:
+    contract = TOOL.load_phase3_q05b_shadow_retry_campaign_contract_v2()
+    assert contract["contract_id"] == (
+        "hegel-phase3a-q05b-shadow-retry-campaign-v2r2"
+    )
+    assert contract["status"] == (
+        "V2R2_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
+    )
+    assert contract["target_commit_a_binding"]["target_supervisor_commit"] == (
+        "7bc2044212e278443b1ca703115c7cb17591ac14"
+    )
 
 
 @pytest.mark.parametrize(
     "domain_name",
-    tuple(TOOL._EXPECTED_HASH_DOMAINS_V2R1),
+    tuple(TOOL._EXPECTED_HASH_DOMAINS_V2R2),
 )
-def test_contract_loader_rejects_rehashed_v2r1_hash_domain_drift(
+def test_contract_loader_rejects_rehashed_v2r2_hash_domain_drift(
     monkeypatch: pytest.MonkeyPatch,
     domain_name: str,
 ) -> None:
     base = _contract()
-    expected_domain = TOOL._EXPECTED_HASH_DOMAINS_V2R1[domain_name]
+    expected_domain = TOOL._EXPECTED_HASH_DOMAINS_V2R2[domain_name]
     prior_v2_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R1",
+        "SHADOW_RETRY_CAMPAIGN_V2R2",
         "SHADOW_RETRY_CAMPAIGN",
     )
     for forged_domain in (
@@ -1717,8 +1956,30 @@ def test_contract_loader_rejects_clone_target_ref_policy_drift(
     assert error.value.detail == "campaign authority boundary differs"
 
 
-def test_prior_v2_capsule_authorization_and_rehashed_ledger_are_not_v2r1_authority(
+@pytest.mark.parametrize(
+    ("historical_campaign_id", "historical_state_prefix", "historical_capsule", "historical_authorization"),
+    (
+        (
+            TOOL._PRIOR_V2_CONTRACT_ID,
+            TOOL._PRIOR_V2_STATE_PREFIX,
+            TOOL._PRIOR_V2_CAPSULE_DIGEST,
+            TOOL._PRIOR_V2_AUTHORIZATION_DIGEST,
+        ),
+        (
+            TOOL._PRIOR_V2R1_CONTRACT_ID,
+            TOOL._PRIOR_V2R1_STATE_PREFIX,
+            TOOL._PRIOR_V2R1_CAPSULE_DIGEST,
+            TOOL._PRIOR_V2R1_AUTHORIZATION_DIGEST,
+        ),
+    ),
+    ids=("prior-v2", "prior-v2r1"),
+)
+def test_historical_capsule_authorization_and_rehashed_ledger_are_not_v2r2_authority(
     tmp_path: Path,
+    historical_campaign_id: str,
+    historical_state_prefix: str,
+    historical_capsule: str,
+    historical_authorization: str,
 ) -> None:
     contract, capsule, authorization, ledger_object, _result = (
         _completed_real_ledger(tmp_path)
@@ -1726,10 +1987,10 @@ def test_prior_v2_capsule_authorization_and_rehashed_ledger_are_not_v2r1_authori
     ledger = ledger_object
     try:
         copied_prior_capsule = {
-            "capsule_digest": TOOL._PRIOR_V2_CAPSULE_DIGEST,
+            "capsule_digest": historical_capsule,
         }
         copied_prior_authorization = {
-            "authorization_digest": TOOL._PRIOR_V2_AUTHORIZATION_DIGEST,
+            "authorization_digest": historical_authorization,
         }
         rows = deepcopy(
             list(zip(ledger.published_names, ledger.published_records))
@@ -1744,11 +2005,11 @@ def test_prior_v2_capsule_authorization_and_rehashed_ledger_are_not_v2r1_authori
         assert error.value.code == "FAIL_CAMPAIGN_LEDGER"
 
         prior_capsule_preimage = {
-            "campaign_id": TOOL._PRIOR_V2_CONTRACT_ID,
+            "campaign_id": historical_campaign_id,
             "authorization_root": (
-                f"{TOOL._PRIOR_V2_STATE_PREFIX}-authorization"
+                f"{historical_state_prefix}-authorization"
             ),
-            "ledger_root": f"{TOOL._PRIOR_V2_STATE_PREFIX}-ledger",
+            "ledger_root": f"{historical_state_prefix}-ledger",
         }
         rehashed_prior_capsule = {
             **prior_capsule_preimage,
@@ -1760,13 +2021,13 @@ def test_prior_v2_capsule_authorization_and_rehashed_ledger_are_not_v2r1_authori
         rehashed_prior_authorization = deepcopy(authorization)
         rehashed_prior_authorization.update(
             {
-                "campaign_id": TOOL._PRIOR_V2_CONTRACT_ID,
-                "contract_digest": _tagged("prior-v2-contract"),
+                "campaign_id": historical_campaign_id,
+                "contract_digest": _tagged("historical-contract"),
                 "capsule_digest": rehashed_prior_capsule["capsule_digest"],
                 "authorization_root": (
-                    f"{TOOL._PRIOR_V2_STATE_PREFIX}-authorization"
+                    f"{historical_state_prefix}-authorization"
                 ),
-                "ledger_root": f"{TOOL._PRIOR_V2_STATE_PREFIX}-ledger",
+                "ledger_root": f"{historical_state_prefix}-ledger",
             }
         )
         confirmation_fields = (
@@ -1788,7 +2049,7 @@ def test_prior_v2_capsule_authorization_and_rehashed_ledger_are_not_v2r1_authori
         )
         rehashed_prior_authorization["owner_confirmation_digest"] = (
             TOOL._domain_digest(
-                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/"
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/"
                 "OWNER_CONFIRMATION/V2",
                 {
                     field: deepcopy(rehashed_prior_authorization[field])
@@ -1805,7 +2066,7 @@ def test_prior_v2_capsule_authorization_and_rehashed_ledger_are_not_v2r1_authori
             )
         )
         auth_contract = deepcopy(contract)
-        auth_root = tmp_path / "rehashed-prior-v2-authorization"
+        auth_root = tmp_path / "rehashed-historical-authorization"
         auth_root.mkdir(mode=0o700)
         auth_root.chmod(0o700)
         auth_contract["fixed_external_roots"]["authorization_root"] = (
@@ -1838,15 +2099,13 @@ def test_prior_v2_capsule_authorization_and_rehashed_ledger_are_not_v2r1_authori
         rehashed_rows = deepcopy(rows)
         previous_digest: str | None = None
         for _basename, record in rehashed_rows:
-            record["campaign_id"] = TOOL._PRIOR_V2_CONTRACT_ID
-            record["contract_digest"] = _tagged("prior-v2-contract")
+            record["campaign_id"] = historical_campaign_id
+            record["contract_digest"] = _tagged("historical-contract")
             record["campaign_source_binding_digest"] = _tagged(
                 "prior-v2-source-binding"
             )
-            record["capsule_digest"] = TOOL._PRIOR_V2_CAPSULE_DIGEST
-            record["authorization_digest"] = (
-                TOOL._PRIOR_V2_AUTHORIZATION_DIGEST
-            )
+            record["capsule_digest"] = historical_capsule
+            record["authorization_digest"] = historical_authorization
             record["previous_record_digest_or_null"] = previous_digest
             unsigned = deepcopy(record)
             unsigned.pop("record_digest")
@@ -3516,6 +3775,7 @@ def test_prepared_ledger_mapping_is_frozen_before_check_and_publication(
         "postbinding_freshness",
         "postoutcome_evidence_close",
         "spawn_uncertain_evidence_close",
+        "admission_evidence_close",
     ),
 )
 def test_slot_postbinding_failures_never_fall_through_to_a_second_terminal_write(
@@ -3644,10 +3904,12 @@ def test_slot_postbinding_failures_never_fall_through_to_a_second_terminal_write
             in {
                 "postoutcome_evidence_close",
                 "spawn_uncertain_evidence_close",
+                "admission_evidence_close",
             }
             and (
                 outcome_published
                 or fault_stage == "spawn_uncertain_evidence_close"
+                or fault_stage == "admission_evidence_close"
             )
             and evidence_fd is not None
             and descriptor == evidence_fd
@@ -3687,6 +3949,21 @@ def test_slot_postbinding_failures_never_fall_through_to_a_second_terminal_write
         TOOL,
         "_augment_source_replay_with_alias_rows",
         lambda value, _rows: deepcopy(dict(value)),
+    )
+    if fault_stage == "admission_evidence_close":
+        def scheduling_admission(*_args: object, **_kwargs: object) -> object:
+            raise TOOL.ShadowRetryCampaignErrorV2(
+                TOOL._SCHEDULING_ADMISSION_FAILURE_V2,
+                "injected admission exhaustion",
+                terminal=True,
+            )
+    else:
+        def scheduling_admission(*_args: object, **_kwargs: object) -> object:
+            return _admitted_scheduling_evidence(contract)
+    monkeypatch.setattr(
+        TOOL,
+        "_run_scheduling_admission_gate_v2",
+        scheduling_admission,
     )
     monkeypatch.setattr(TOOL, "_bounded_process", bounded_process)
     monkeypatch.setattr(TOOL, "_publish_raw_streams", lambda *_args: None)
@@ -3762,11 +4039,12 @@ def test_slot_postbinding_failures_never_fall_through_to_a_second_terminal_write
                 slot,
                 invocation_counter,
             )
-        assert error.value.code == (
-            "FAIL_CAMPAIGN_SPAWN_UNCERTAIN"
-            if fault_stage == "spawn_uncertain_evidence_close"
-            else "FAIL_CAMPAIGN_PUBLICATION_UNCERTAIN"
-        )
+        if fault_stage == "spawn_uncertain_evidence_close":
+            assert error.value.code == "FAIL_CAMPAIGN_SPAWN_UNCERTAIN"
+        elif fault_stage == "admission_evidence_close":
+            assert error.value.code == TOOL._SCHEDULING_ADMISSION_FAILURE_V2
+        else:
+            assert error.value.code == "FAIL_CAMPAIGN_PUBLICATION_UNCERTAIN"
         if fault_stage == "external_artifact_return":
             assert binding_published is False
             assert outcome_published is False
@@ -3780,11 +4058,18 @@ def test_slot_postbinding_failures_never_fall_through_to_a_second_terminal_write
             assert outcome_published is True
             assert close_failed is True
             assert "postoutcome evidence close failure" in error.value.detail
-        else:
+        elif fault_stage == "spawn_uncertain_evidence_close":
             assert binding_published is False
             assert outcome_published is False
             assert close_failed is True
             assert "injected spawn uncertainty" in error.value.detail
+        else:
+            assert binding_published is False
+            assert outcome_published is False
+            assert close_failed is True
+            assert invocation_counter == [0]
+            assert ledger.published_names == ["slot-01.intent.json"]
+            assert "injected admission exhaustion" in error.value.detail
     finally:
         if close_failed and evidence_fd is not None:
             real_close(evidence_fd)
@@ -4564,6 +4849,7 @@ def _completed_real_success_ledger(
             "argv": TOOL._slot_argv(contract, slot),
             "source_replay_before_root": source_before["root"],
             "docker_absence_before_spawn": True,
+            "scheduling_admission": _admitted_scheduling_evidence(contract),
         },
     )
     ledger.publish(
@@ -4732,6 +5018,7 @@ def _full_real_gap_ledger_prefix(
                 "argv": TOOL._slot_argv(contract, slot),
                 "source_replay_before_root": source_before["root"],
                 "docker_absence_before_spawn": True,
+                "scheduling_admission": _admitted_scheduling_evidence(contract),
             },
         )
         ledger.publish(
@@ -5584,6 +5871,170 @@ def test_offline_verifier_accepts_each_legal_error_prefix(
         assert verification["status"] == (
             "AUTHORITATIVE_CAMPAIGN_COMPLETION_VERIFIED"
         )
+    finally:
+        ledger.close()
+
+
+def test_scheduling_admission_exhaustion_intent_only_chain_is_authoritative(
+    tmp_path: Path,
+) -> None:
+    contract, capsule, authorization, ledger_object = (
+        _full_real_gap_ledger_prefix(tmp_path)
+    )
+    ledger = ledger_object
+    try:
+        rows = deepcopy(
+            list(zip(ledger.published_names, ledger.published_records))[:3]
+        )
+        assert [name for name, _record in rows] == list(
+            TOOL._LEDGER_RECORD_NAMES_V2[:3]
+        )
+        progress = TOOL._ledger_progress_snapshot_v2(
+            [record for _name, record in rows]
+        )
+        assert progress["supervisor_invocation_count"] == 0
+        error_code = TOOL._SCHEDULING_ADMISSION_FAILURE_V2
+        status_text = TOOL._error_code_terminal_disposition(
+            contract,
+            error_code,
+        )
+        terminal = TOOL._campaign_terminal_body(
+            contract,
+            capsule,
+            status_text=status_text,
+            invocation_count=0,
+            last_slot_id_or_null=None,
+            last_slot_outcome_digest_or_null=None,
+            error_code_or_null=error_code,
+            error_detail_or_null="injected three-window admission exhaustion",
+        )
+        terminal_record = _append_test_ledger_record(
+            contract,
+            capsule,
+            authorization,
+            rows,
+            "campaign.terminal.json",
+            "CAMPAIGN_TERMINAL",
+            status_text,
+            terminal,
+        )
+        completion = TOOL._campaign_completion_body(
+            contract,
+            capsule,
+            authorization_digest=str(authorization["authorization_digest"]),
+            terminal=terminal,
+            terminal_ledger_record=terminal_record,
+            preceding_ledger_names=[name for name, _record in rows],
+        )
+        _append_test_ledger_record(
+            contract,
+            capsule,
+            authorization,
+            rows,
+            "campaign.completion.json",
+            "CAMPAIGN_COMPLETION",
+            "CAMPAIGN_COMPLETION_COMMITTED",
+            completion,
+        )
+        verification = TOOL._verify_campaign_completion_chain_v2(
+            contract,
+            capsule,
+            authorization,
+            rows,
+        )
+        assert verification["terminal_status"] == status_text
+    finally:
+        ledger.close()
+
+
+@pytest.mark.parametrize(
+    ("field", "forged_value"),
+    (
+        ("window_ordinal", True),
+        ("quiet_duration_ns", 30_000_000_000.0),
+        ("maximum_probe_duration_ns", 40_000_000.0),
+    ),
+)
+def test_offline_verifier_rejects_rehashed_scheduling_integer_type_forgery(
+    tmp_path: Path,
+    field: str,
+    forged_value: object,
+) -> None:
+    contract, capsule, authorization, ledger_object = (
+        _full_real_gap_ledger_prefix(tmp_path)
+    )
+    ledger = ledger_object
+    try:
+        rows = deepcopy(
+            list(zip(ledger.published_names, ledger.published_records))[:4]
+        )
+        consumed_record = rows[-1][1]
+        consumed_body = consumed_record["body"]
+        assert type(consumed_body) is dict
+        admission = consumed_body["scheduling_admission"]
+        assert type(admission) is dict
+        windows = admission["windows_in_strict_order"]
+        assert type(windows) is list and type(windows[0]) is dict
+        windows[0][field] = forged_value
+        consumed_unsigned = deepcopy(consumed_record)
+        consumed_unsigned.pop("record_digest")
+        consumed_record["record_digest"] = TOOL._domain_digest(
+            contract["hash_domains"]["ledger_record"],
+            consumed_unsigned,
+        )
+        progress = TOOL._ledger_progress_snapshot_v2(
+            [record for _name, record in rows]
+        )
+        status_text = contract["terminal_failure_policy"]["crash_disposition"]
+        terminal = TOOL._campaign_terminal_body(
+            contract,
+            capsule,
+            status_text=status_text,
+            invocation_count=int(progress["supervisor_invocation_count"]),
+            last_slot_id_or_null=progress["last_slot_id_or_null"],
+            last_slot_outcome_digest_or_null=progress[
+                "last_slot_outcome_digest_or_null"
+            ],
+            error_code_or_null="KeyboardInterrupt",
+            error_detail_or_null="injected rehashed admission type forgery",
+        )
+        terminal_record = _append_test_ledger_record(
+            contract,
+            capsule,
+            authorization,
+            rows,
+            "campaign.terminal.json",
+            "CAMPAIGN_TERMINAL",
+            status_text,
+            terminal,
+        )
+        completion = TOOL._campaign_completion_body(
+            contract,
+            capsule,
+            authorization_digest=str(authorization["authorization_digest"]),
+            terminal=terminal,
+            terminal_ledger_record=terminal_record,
+            preceding_ledger_names=[name for name, _record in rows],
+        )
+        _append_test_ledger_record(
+            contract,
+            capsule,
+            authorization,
+            rows,
+            "campaign.completion.json",
+            "CAMPAIGN_COMPLETION",
+            "CAMPAIGN_COMPLETION_COMMITTED",
+            completion,
+        )
+        with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+            TOOL._verify_campaign_completion_chain_v2(
+                contract,
+                capsule,
+                authorization,
+                rows,
+            )
+        assert error.value.code == "FAIL_CAMPAIGN_LEDGER"
+        assert "consumed mapping" in error.value.detail
     finally:
         ledger.close()
 
@@ -6870,7 +7321,7 @@ def test_safe_postrun_source_replay_preserves_bounded_command_receipt(
     assert result["evidence"]["error_receipt_or_null"] == receipt
     assert result["evidence"]["error_receipt_or_null"]["argv"] == receipt["argv"]
     assert result["root"] == TOOL._domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/SOURCE_REPLAY/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/SOURCE_REPLAY/V2",
         result["evidence"],
     )
 

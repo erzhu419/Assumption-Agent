@@ -56,7 +56,7 @@ V1_SAFETY_KERNEL_PATH: Final = (
     PROJECT_ROOT / "src/hegel_machine/phase3_q05b_shadow_nonadoption_trial_v1.py"
 )
 _STATE_ROOT_V2: Final = "/home/erzhu419/.local/state/hegel-machine"
-_V2R1_STATE_PREFIX: Final = f"{_STATE_ROOT_V2}/q05b-shadow-retry-campaign-v2r1"
+_V2R2_STATE_PREFIX: Final = f"{_STATE_ROOT_V2}/q05b-shadow-retry-campaign-v2r2"
 _PRIOR_V2_STATE_PREFIX: Final = f"{_STATE_ROOT_V2}/q05b-shadow-retry-campaign-v2"
 _PRIOR_V2_CONTRACT_ID: Final = "hegel-phase3a-q05b-shadow-retry-campaign-v2"
 _PRIOR_V2_CAPSULE_DIGEST: Final = (
@@ -65,8 +65,30 @@ _PRIOR_V2_CAPSULE_DIGEST: Final = (
 _PRIOR_V2_AUTHORIZATION_DIGEST: Final = (
     "sha256:0f59cc4aa2f605bdd1388baf769961ccfebf2123c6d6c9ff467f7f61add29cea"
 )
-_CLONE_TARGET_REF_V2R1: Final = (
-    "refs/hegel/q05b-shadow-retry-v2r1-target"
+_PRIOR_V2R1_STATE_PREFIX: Final = (
+    f"{_STATE_ROOT_V2}/q05b-shadow-retry-campaign-v2r1"
+)
+_PRIOR_V2R1_WORKTREE_ROOT: Final = "/tmp/hegel-q05b-shadow-retry-v2r1-worktree"
+_PRIOR_V2R1_CONTRACT_ID: Final = (
+    "hegel-phase3a-q05b-shadow-retry-campaign-v2r1"
+)
+_PRIOR_V2R1_CONTRACT_DIGEST: Final = (
+    "sha256:b18548d74ce744a5326ae42fa957b297963a3b2b187131591c5541c562ef3210"
+)
+_PRIOR_V2R1_CAPSULE_DIGEST: Final = (
+    "sha256:62d6d7a56107439261ce66788e5d803f7d1370733673416076131e6d20a16e61"
+)
+_PRIOR_V2R1_AUTHORIZATION_DIGEST: Final = (
+    "sha256:2a410cff6c59895f941075af5cc6035f61dea4ba4734d82eb0719c5b23a1bb90"
+)
+_PRIOR_V2R1_TERMINAL_LEDGER_RECORD_DIGEST: Final = (
+    "sha256:b910df6dfea1e0bd8fd4bd11d8aa20d682f43898b495f8c643b668b970f8108b"
+)
+_PRIOR_V2R1_COMPLETION_LEDGER_RECORD_DIGEST: Final = (
+    "sha256:b9e63585d7a6eb48d6195fa188ce1d40f2c79a169848f58cd10b82328be4702b"
+)
+_CLONE_TARGET_REF_V2R2: Final = (
+    "refs/hegel/q05b-shadow-retry-v2r2-target"
 )
 _PRIOR_V2_PROTECTED_ROOTS: Final = (
     f"{_PRIOR_V2_STATE_PREFIX}-authorization",
@@ -77,11 +99,22 @@ _PRIOR_V2_PROTECTED_ROOTS: Final = (
         for suffix in ("clone", "cargo-cache", "artifact", "evidence", "trace")
     ),
 )
-_EXPECTED_PROTECTED_ROOTS_V2R1: Final = (
+_PRIOR_V2R1_PROTECTED_ROOTS: Final = (
+    _PRIOR_V2R1_WORKTREE_ROOT,
+    f"{_PRIOR_V2R1_STATE_PREFIX}-authorization",
+    f"{_PRIOR_V2R1_STATE_PREFIX}-ledger",
+    *tuple(
+        f"{_PRIOR_V2R1_STATE_PREFIX}-slot-{ordinal:02d}-{suffix}"
+        for ordinal in range(1, 4)
+        for suffix in ("clone", "cargo-cache", "artifact", "evidence", "trace")
+    ),
+)
+_EXPECTED_PROTECTED_ROOTS_V2R2: Final = (
     "/home/erzhu419/mine_code/Asumption Agent",
     os.fspath(WORKTREE_ROOT),
     f"{_STATE_ROOT_V2}/q05b-shadow-trajectory-v2-dev-worktree",
     *_PRIOR_V2_PROTECTED_ROOTS,
+    *_PRIOR_V2R1_PROTECTED_ROOTS,
     f"{_STATE_ROOT_V2}/m3-start-runtime-worktree",
     f"{_STATE_ROOT_V2}/q05b-attempt2-ledger-v1",
     f"{_STATE_ROOT_V2}/q05b-attempt-2-authorization",
@@ -161,10 +194,17 @@ _TRAJECTORY_FAILURE_ROW_FIELDS: Final = (
 _PARTITION_CERTIFICATE_SCHEMA_V2: Final = (
     "hegel-phase3a-q05b-shadow-retry-post-origin-partition-certificate/2"
 )
-_MAX_RETAINED_FAILURE_ROWS: Final = 5
+_MAX_RETAINED_FAILURE_ROWS: Final = 7
 _MAX_RETAINED_CLEANUP_ROWS: Final = 12
 _MAX_PARTITION_CERTIFICATE_BYTES: Final = 256 * 1024
 _MAX_ERROR_RECEIPT_BYTES: Final = 128 * 1024
+_SCHEDULING_ADMISSION_POLICY_SCHEMA_V2: Final = (
+    "hegel-phase3a-q05b-shadow-retry-scheduling-admission-policy/2"
+)
+_SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V2: Final = (
+    "hegel-phase3a-q05b-shadow-retry-scheduling-admission-evidence/2"
+)
+_SCHEDULING_ADMISSION_FAILURE_V2: Final = "FAIL_CAMPAIGN_SCHEDULING_ADMISSION"
 _SPAWN_REGISTRATION_SCHEMA_V2: Final = (
     "hegel-phase3a-q05b-shadow-retry-spawn-registration/2"
 )
@@ -219,29 +259,29 @@ _SPAWN_LAUNCHER_SOURCE_V2: Final = (
 _TARGET_STATIC_POLICY_DOMAIN: Final = (
     b"HEGEL/Q05B/ACTUAL/COMMIT_A_STATIC_POLICY/V1\x00"
 )
-_EXPECTED_HASH_DOMAINS_V2R1: Final = {
-    "contract": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/CONTRACT/V2",
-    "campaign_source_binding": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/CAMPAIGN_SOURCE_BINDING/V2",
-    "capsule": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/CAPSULE/V2",
-    "authorization": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/AUTHORIZATION/V2",
-    "cargo_manifest": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/CARGO_MANIFEST/V2",
-    "ledger_record": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/LEDGER_RECORD/V2",
-    "trajectory_binding": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/TRAJECTORY_BINDING/V2",
-    "trajectory_event_payloads": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/EVENT_PAYLOADS/V2",
-    "trajectory_suffix": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/TRAJECTORY_SUFFIX/V2",
-    "trajectory_other_nonfailure": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/TRAJECTORY_OTHER_NONFAILURE/V2",
-    "trajectory_failure_rows": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/TRAJECTORY_FAILURE_ROWS/V2",
-    "trajectory_cleanup_rows": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/TRAJECTORY_CLEANUP_ROWS/V2",
-    "trajectory_partition_certificate": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/POST_ORIGIN_PARTITION_CERTIFICATE/V2",
-    "slot_outcome": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/SLOT_OUTCOME/V2",
-    "campaign_terminal": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/CAMPAIGN_TERMINAL/V2",
-    "campaign_completion": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/CAMPAIGN_COMPLETION/V2",
+_EXPECTED_HASH_DOMAINS_V2R2: Final = {
+    "contract": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/CONTRACT/V2",
+    "campaign_source_binding": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/CAMPAIGN_SOURCE_BINDING/V2",
+    "capsule": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/CAPSULE/V2",
+    "authorization": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/AUTHORIZATION/V2",
+    "cargo_manifest": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/CARGO_MANIFEST/V2",
+    "ledger_record": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/LEDGER_RECORD/V2",
+    "trajectory_binding": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/TRAJECTORY_BINDING/V2",
+    "trajectory_event_payloads": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/EVENT_PAYLOADS/V2",
+    "trajectory_suffix": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/TRAJECTORY_SUFFIX/V2",
+    "trajectory_other_nonfailure": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/TRAJECTORY_OTHER_NONFAILURE/V2",
+    "trajectory_failure_rows": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/TRAJECTORY_FAILURE_ROWS/V2",
+    "trajectory_cleanup_rows": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/TRAJECTORY_CLEANUP_ROWS/V2",
+    "trajectory_partition_certificate": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/POST_ORIGIN_PARTITION_CERTIFICATE/V2",
+    "slot_outcome": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/SLOT_OUTCOME/V2",
+    "campaign_terminal": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/CAMPAIGN_TERMINAL/V2",
+    "campaign_completion": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/CAMPAIGN_COMPLETION/V2",
 }
 _PREDICATE_DIGEST_DOMAINS: Final = {
-    "retry_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/RETRY_PREDICATE/V2",
-    "success_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/SUCCESS_PREDICATE/V2",
-    "ledger_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/LEDGER_STATE_REGISTRY/V2",
-    "forbidden_scope": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/FORBIDDEN_SCOPE/V2",
+    "retry_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/RETRY_PREDICATE/V2",
+    "success_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/SUCCESS_PREDICATE/V2",
+    "ledger_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/LEDGER_STATE_REGISTRY/V2",
+    "forbidden_scope": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/FORBIDDEN_SCOPE/V2",
 }
 _EXPECTED_FIXED_ENVIRONMENT: Final = {
     "DOCKER_CONFIG": "/nonexistent",
@@ -976,6 +1016,292 @@ def _publish_immutable_at(
                     pass
 
 
+def _scheduling_admission_policy_v2(
+    contract: Mapping[str, object],
+) -> dict[str, object]:
+    execution = contract.get("execution_policy")
+    policy = execution.get("scheduling_admission_gate") if type(execution) is dict else None
+    expected_fields = {
+        "schema_version", "clock_id", "maximum_windows", "quiet_period_ns",
+        "probes_per_window", "maximum_probe_duration_ns",
+        "publication_payload_byte_count", "publication_protocol",
+        "cleanup_policy", "claim_ceiling",
+    }
+    if (
+        type(policy) is not dict
+        or set(policy) != expected_fields
+        or policy.get("schema_version") != _SCHEDULING_ADMISSION_POLICY_SCHEMA_V2
+        or policy.get("clock_id") != "CLOCK_MONOTONIC"
+        or type(policy.get("maximum_windows")) is not int
+        or policy.get("maximum_windows") != 3
+        or type(policy.get("quiet_period_ns")) is not int
+        or policy.get("quiet_period_ns") != 30_000_000_000
+        or type(policy.get("probes_per_window")) is not int
+        or policy.get("probes_per_window") != 16
+        or type(policy.get("maximum_probe_duration_ns")) is not int
+        or policy.get("maximum_probe_duration_ns") != 40_000_000
+        or type(policy.get("publication_payload_byte_count")) is not int
+        or policy.get("publication_payload_byte_count") != 64
+        or policy.get("publication_protocol")
+        != "STAGING_EXCL_NOFOLLOW_WRITE_FILE_FSYNC_FCHMOD_FILE_FSYNC_DIR_FSYNC_LINK_FINAL_NOFOLLOW_DIR_FSYNC_UNLINK_STAGING_DIR_FSYNC_READBACK"
+        or policy.get("cleanup_policy")
+        != "UNLINK_FINAL_AND_STAGING_THEN_DIR_FSYNC_AND_PROVE_BOTH_ABSENT"
+        or policy.get("claim_ceiling")
+        != "OBSERVED_PRESPAWN_DURABILITY_LATENCY_ADMISSION_ONLY_NOT_A_GUARANTEE_OF_THE_TARGET_250MS_SAMPLING_GAP"
+    ):
+        _fail("FAIL_CAMPAIGN_CONTRACT", "scheduling admission policy differs", terminal=True)
+    return deepcopy(policy)
+
+
+def _scheduling_probe_payload_v2(slot_id: str, window: int, probe: int) -> bytes:
+    seed = f"{slot_id}:{window}:{probe}".encode("ascii")
+    return sha256(b"0:" + seed).digest() + sha256(b"1:" + seed).digest()
+
+
+def _five_fsync_publication_probe_v2(
+    directory_fd: int,
+    unique_token: str,
+    payload: bytes,
+    clock_ns: Callable[[], int] = time.monotonic_ns,
+) -> int:
+    """Measure the target's five-fsync immutable publication, then remove it."""
+    if (
+        type(directory_fd) is not int or directory_fd < 0
+        or type(unique_token) is not str
+        or re.fullmatch(r"w[0-9]{2}-p[0-9]{2}", unique_token) is None
+        or type(payload) is not bytes or len(payload) != 64
+    ):
+        _fail(_SCHEDULING_ADMISSION_FAILURE_V2, "probe inputs differ", terminal=True)
+    staging = f".q05b-admission-{unique_token}.staging-v2"
+    final = f"q05b-admission-{unique_token}.probe-v2"
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    descriptor = -1
+    replay_fd = -1
+    duration: int | None = None
+    primary_error: BaseException | None = None
+    try:
+        started = clock_ns()
+        if type(started) is not int or started < 0:
+            raise RuntimeError("probe start clock differs")
+        descriptor = os.open(staging, flags, 0o600, dir_fd=directory_fd)
+        view = memoryview(payload)
+        offset = 0
+        while offset < len(view):
+            written = os.write(descriptor, view[offset:])
+            if written <= 0:
+                raise OSError("probe write made no progress")
+            offset += written
+        os.fsync(descriptor)
+        os.fchmod(descriptor, 0o444)
+        os.fsync(descriptor)
+        os.close(descriptor)
+        descriptor = -1
+        os.fsync(directory_fd)
+        os.link(staging, final, src_dir_fd=directory_fd,
+                dst_dir_fd=directory_fd, follow_symlinks=False)
+        os.fsync(directory_fd)
+        os.unlink(staging, dir_fd=directory_fd)
+        os.fsync(directory_fd)
+        replay_fd = os.open(final, os.O_RDONLY | os.O_CLOEXEC |
+                            getattr(os, "O_NOFOLLOW", 0), dir_fd=directory_fd)
+        replay_stat = os.fstat(replay_fd)
+        chunks: list[bytes] = []
+        while True:
+            chunk = os.read(replay_fd, 4096)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        if (
+            b"".join(chunks) != payload
+            or stat.S_IMODE(replay_stat.st_mode) != 0o444
+            or replay_stat.st_uid != os.geteuid()
+            or replay_stat.st_nlink != 1
+        ):
+            raise RuntimeError("probe readback identity differs")
+        finished = clock_ns()
+        if type(finished) is not int or finished < started:
+            raise RuntimeError("probe finish clock differs")
+        duration = finished - started
+    except BaseException as error:
+        primary_error = error
+    finally:
+        cleanup_errors: list[str] = []
+        for open_fd in (replay_fd, descriptor):
+            if open_fd >= 0:
+                try:
+                    os.close(open_fd)
+                except BaseException as error:
+                    cleanup_errors.append(f"close:{type(error).__name__}:{error}")
+        for basename in (final, staging):
+            try:
+                os.unlink(basename, dir_fd=directory_fd)
+            except FileNotFoundError:
+                pass
+            except BaseException as error:
+                cleanup_errors.append(f"unlink:{basename}:{type(error).__name__}:{error}")
+        try:
+            os.fsync(directory_fd)
+        except BaseException as error:
+            cleanup_errors.append(f"dir-fsync:{type(error).__name__}:{error}")
+        for basename in (final, staging):
+            try:
+                os.stat(basename, dir_fd=directory_fd, follow_symlinks=False)
+                cleanup_errors.append(f"residual:{basename}")
+            except FileNotFoundError:
+                pass
+            except BaseException as error:
+                cleanup_errors.append(f"absence:{basename}:{type(error).__name__}:{error}")
+        if primary_error is not None or cleanup_errors:
+            detail = (
+                f"probe failed: {type(primary_error).__name__}:{primary_error}"
+                if primary_error is not None else "probe cleanup failed"
+            )
+            if cleanup_errors:
+                detail += "; cleanup=" + "|".join(cleanup_errors)
+            _fail(_SCHEDULING_ADMISSION_FAILURE_V2, detail, terminal=True)
+    assert duration is not None
+    return duration
+
+
+def _scheduling_admission_evidence_exact_v2(
+    contract: Mapping[str, object], value: object
+) -> bool:
+    try:
+        policy = _scheduling_admission_policy_v2(contract)
+    except BaseException:
+        return False
+    if type(value) is not dict or set(value) != {
+        "schema_version", "policy", "windows_in_strict_order",
+        "selected_window_ordinal", "passed",
+    }:
+        return False
+    rows = value.get("windows_in_strict_order")
+    selected = value.get("selected_window_ordinal")
+    if (
+        value.get("schema_version") != _SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V2
+        or value.get("policy") != policy or value.get("passed") is not True
+        or type(selected) is not int or not 1 <= selected <= 3
+        or type(rows) is not list or len(rows) != selected
+    ):
+        return False
+    threshold = int(policy["maximum_probe_duration_ns"])
+    quiet_min = int(policy["quiet_period_ns"])
+    previous_finish = -1
+    for index, row in enumerate(rows, start=1):
+        if type(row) is not dict or set(row) != {
+            "window_ordinal", "quiet_start_ns", "quiet_finish_ns",
+            "quiet_duration_ns", "probe_durations_ns_in_strict_order",
+            "maximum_probe_duration_ns", "passed",
+        }:
+            return False
+        durations = row.get("probe_durations_ns_in_strict_order")
+        start = row.get("quiet_start_ns")
+        finish = row.get("quiet_finish_ns")
+        quiet_duration = row.get("quiet_duration_ns")
+        maximum_duration = row.get("maximum_probe_duration_ns")
+        if (
+            type(row.get("window_ordinal")) is not int
+            or row.get("window_ordinal") != index
+            or type(start) is not int or not 0 <= start < 2**64
+            or type(finish) is not int or not start <= finish < 2**64
+            or start < previous_finish
+            or type(quiet_duration) is not int
+            or not 0 <= quiet_duration < 2**64
+            or quiet_duration != finish - start
+            or finish - start < quiet_min
+            or type(durations) is not list or len(durations) != 16
+            or any(type(item) is not int or not 0 <= item < 2**64 for item in durations)
+            or type(maximum_duration) is not int
+            or not 0 <= maximum_duration < 2**64
+            or maximum_duration != max(durations)
+            or row.get("passed") is not all(item <= threshold for item in durations)
+            or (index < selected and row.get("passed") is not False)
+            or (index == selected and row.get("passed") is not True)
+        ):
+            return False
+        previous_finish = finish
+    return True
+
+
+def _run_scheduling_admission_gate_v2(
+    contract: Mapping[str, object], evidence_fd: int, slot_id: str, *,
+    clock_ns: Callable[[], int] = time.monotonic_ns,
+    sleeper: Callable[[float], None] = time.sleep,
+    probe_publisher: Callable[[int, str, bytes, Callable[[], int]], int] =
+        _five_fsync_publication_probe_v2,
+) -> dict[str, object]:
+    policy = _scheduling_admission_policy_v2(contract)
+    rows: list[dict[str, object]] = []
+    threshold = int(policy["maximum_probe_duration_ns"])
+    quiet_ns = int(policy["quiet_period_ns"])
+    for window in range(1, int(policy["maximum_windows"]) + 1):
+        try:
+            quiet_start = clock_ns()
+            sleeper(quiet_ns / 1_000_000_000)
+            quiet_finish = clock_ns()
+        except ShadowRetryCampaignErrorV2:
+            raise
+        except BaseException as error:
+            _fail(
+                _SCHEDULING_ADMISSION_FAILURE_V2,
+                f"quiet observation failed: {type(error).__name__}:{error}",
+                terminal=True,
+            )
+        if type(quiet_start) is not int or quiet_start < 0:
+            _fail(_SCHEDULING_ADMISSION_FAILURE_V2, "quiet clock differs", terminal=True)
+        if (
+            type(quiet_finish) is not int
+            or not 0 <= quiet_start <= quiet_finish < 2**64
+            or quiet_finish - quiet_start < quiet_ns
+        ):
+            _fail(_SCHEDULING_ADMISSION_FAILURE_V2, "quiet period was not observed", terminal=True)
+        durations: list[int] = []
+        for probe in range(1, int(policy["probes_per_window"]) + 1):
+            try:
+                duration = probe_publisher(
+                    evidence_fd, f"w{window:02d}-p{probe:02d}",
+                    _scheduling_probe_payload_v2(slot_id, window, probe), clock_ns,
+                )
+            except ShadowRetryCampaignErrorV2:
+                raise
+            except BaseException as error:
+                _fail(
+                    _SCHEDULING_ADMISSION_FAILURE_V2,
+                    f"probe {window}:{probe} failed: "
+                    f"{type(error).__name__}:{error}",
+                    terminal=True,
+                )
+            if type(duration) is not int or not 0 <= duration < 2**64:
+                _fail(_SCHEDULING_ADMISSION_FAILURE_V2, "probe duration differs", terminal=True)
+            durations.append(duration)
+        passed = all(duration <= threshold for duration in durations)
+        rows.append({
+            "window_ordinal": window, "quiet_start_ns": quiet_start,
+            "quiet_finish_ns": quiet_finish,
+            "quiet_duration_ns": quiet_finish - quiet_start,
+            "probe_durations_ns_in_strict_order": durations,
+            "maximum_probe_duration_ns": max(durations), "passed": passed,
+        })
+        if passed:
+            result: dict[str, object] = {
+                "schema_version": _SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V2,
+                "policy": deepcopy(policy),
+                "windows_in_strict_order": rows,
+                "selected_window_ordinal": window, "passed": True,
+            }
+            if not _scheduling_admission_evidence_exact_v2(contract, result):
+                _fail(_SCHEDULING_ADMISSION_FAILURE_V2, "admission evidence differs", terminal=True)
+            return result
+    maxima = [row["maximum_probe_duration_ns"] for row in rows]
+    _fail(
+        _SCHEDULING_ADMISSION_FAILURE_V2,
+        f"{slot_id} admission exhausted before spawn; window_max_ns={maxima}; "
+        "observed admission does not guarantee the target sampling gap",
+        terminal=True,
+    )
+
+
 def _bounded_receipt_or_null(value: object) -> dict[str, object] | None:
     if type(value) is not dict:
         return None
@@ -1245,7 +1571,7 @@ def _source_binding_preimage(binding: Mapping[str, object]) -> dict[str, object]
     return result
 
 
-def _require_v2r1_instance_isolation_v2(
+def _require_v2r2_instance_isolation_v2(
     contract: Mapping[str, object],
 ) -> None:
     protected = contract.get("protected_state_policy")
@@ -1258,6 +1584,16 @@ def _require_v2r1_instance_isolation_v2(
         "prior_v2_campaign_root_open_allowed",
         "prior_v2_campaign_root_access_allowed",
         "prior_v2_capsule_authorization_or_ledger_reuse_allowed",
+        "prior_v2r1_campaign_contract_id",
+        "prior_v2r1_contract_digest",
+        "prior_v2r1_capsule_digest",
+        "prior_v2r1_authorization_digest",
+        "prior_v2r1_terminal_ledger_record_digest",
+        "prior_v2r1_completion_ledger_record_digest",
+        "prior_v2r1_terminal_is_historical_nonresumable_evidence_only",
+        "prior_v2r1_campaign_root_open_allowed",
+        "prior_v2r1_campaign_root_access_allowed",
+        "prior_v2r1_capsule_authorization_or_ledger_reuse_allowed",
         "historical_attempt2_or_attempt3_path_open_allowed",
         "meta_or_production_path_open_allowed",
         "protected_state_mutation_allowed",
@@ -1273,19 +1609,35 @@ def _require_v2r1_instance_isolation_v2(
     slots = contract.get("slot_registry")
     if (
         contract.get("contract_id")
-        != "hegel-phase3a-q05b-shadow-retry-campaign-v2r1"
+        != "hegel-phase3a-q05b-shadow-retry-campaign-v2r2"
         or type(protected) is not dict
         or set(protected) != expected_protected_fields
         or protected.get("protected_roots_in_exact_order")
-        != list(_EXPECTED_PROTECTED_ROOTS_V2R1)
+        != list(_EXPECTED_PROTECTED_ROOTS_V2R2)
         or protected.get("prior_v2_campaign_contract_id")
         != _PRIOR_V2_CONTRACT_ID
         or protected.get("prior_v2_capsule_digest")
         != _PRIOR_V2_CAPSULE_DIGEST
         or protected.get("prior_v2_authorization_digest")
         != _PRIOR_V2_AUTHORIZATION_DIGEST
+        or protected.get("prior_v2r1_campaign_contract_id")
+        != _PRIOR_V2R1_CONTRACT_ID
+        or protected.get("prior_v2r1_contract_digest")
+        != _PRIOR_V2R1_CONTRACT_DIGEST
+        or protected.get("prior_v2r1_capsule_digest")
+        != _PRIOR_V2R1_CAPSULE_DIGEST
+        or protected.get("prior_v2r1_authorization_digest")
+        != _PRIOR_V2R1_AUTHORIZATION_DIGEST
+        or protected.get("prior_v2r1_terminal_ledger_record_digest")
+        != _PRIOR_V2R1_TERMINAL_LEDGER_RECORD_DIGEST
+        or protected.get("prior_v2r1_completion_ledger_record_digest")
+        != _PRIOR_V2R1_COMPLETION_LEDGER_RECORD_DIGEST
         or protected.get(
             "prior_v2_terminal_is_historical_nonresumable_evidence_only"
+        )
+        is not True
+        or protected.get(
+            "prior_v2r1_terminal_is_historical_nonresumable_evidence_only"
         )
         is not True
         or any(
@@ -1294,27 +1646,30 @@ def _require_v2r1_instance_isolation_v2(
                 "prior_v2_campaign_root_open_allowed",
                 "prior_v2_campaign_root_access_allowed",
                 "prior_v2_capsule_authorization_or_ledger_reuse_allowed",
+                "prior_v2r1_campaign_root_open_allowed",
+                "prior_v2r1_campaign_root_access_allowed",
+                "prior_v2r1_capsule_authorization_or_ledger_reuse_allowed",
             )
         )
         or type(fixed) is not dict
-        or fixed.get("authorization_root") != f"{_V2R1_STATE_PREFIX}-authorization"
-        or fixed.get("ledger_root") != f"{_V2R1_STATE_PREFIX}-ledger"
+        or fixed.get("authorization_root") != f"{_V2R2_STATE_PREFIX}-authorization"
+        or fixed.get("ledger_root") != f"{_V2R2_STATE_PREFIX}-ledger"
         or type(authorization) is not dict
         or authorization.get("authorization_root")
-        != f"{_V2R1_STATE_PREFIX}-authorization"
+        != f"{_V2R2_STATE_PREFIX}-authorization"
         or type(ledger) is not dict
-        or ledger.get("ledger_root") != f"{_V2R1_STATE_PREFIX}-ledger"
+        or ledger.get("ledger_root") != f"{_V2R2_STATE_PREFIX}-ledger"
         or type(slots) is not list
         or len(slots) != 3
     ):
         _fail(
             "FAIL_CAMPAIGN_CONTRACT",
-            "v2r1 instance or prior-v2 protected-state isolation differs",
+            "v2r2 instance or historical protected-state isolation differs",
         )
     for ordinal, slot in enumerate(slots, start=1):
         if type(slot) is not dict:
-            _fail("FAIL_CAMPAIGN_CONTRACT", "v2r1 slot isolation differs")
-        prefix = f"{_V2R1_STATE_PREFIX}-slot-{ordinal:02d}"
+            _fail("FAIL_CAMPAIGN_CONTRACT", "v2r2 slot isolation differs")
+        prefix = f"{_V2R2_STATE_PREFIX}-slot-{ordinal:02d}"
         clone = f"{prefix}-clone"
         evidence = f"{prefix}-evidence"
         if (
@@ -1329,14 +1684,14 @@ def _require_v2r1_instance_isolation_v2(
             or slot.get("evidence_root") != evidence
             or slot.get("trace_root") != f"{prefix}-trace"
             or slot.get("trajectory_trace_id")
-            != f"q05b-shadow-retry-campaign-v2r1-slot-{ordinal:02d}"
+            != f"q05b-shadow-retry-campaign-v2r2-slot-{ordinal:02d}"
             or slot.get("stdout_path") != f"{evidence}/supervisor.stdout"
             or slot.get("stderr_path") != f"{evidence}/supervisor.stderr"
             or slot.get("external_trajectory_binding_path")
             != f"{evidence}/trajectory-binding.json"
             or slot.get("slot_result_path") != f"{evidence}/slot-result.json"
         ):
-            _fail("FAIL_CAMPAIGN_CONTRACT", "v2r1 slot isolation differs")
+            _fail("FAIL_CAMPAIGN_CONTRACT", "v2r2 slot isolation differs")
 
 
 def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
@@ -1353,7 +1708,7 @@ def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
         contract.get("schema_version")
         != "hegel-phase3a-q05b-shadow-retry-campaign/2"
         or contract.get("contract_id")
-        != "hegel-phase3a-q05b-shadow-retry-campaign-v2r1"
+        != "hegel-phase3a-q05b-shadow-retry-campaign-v2r2"
     ):
         _fail("FAIL_CAMPAIGN_CONTRACT", "campaign contract header differs")
     expected_top_fields = {
@@ -1383,14 +1738,14 @@ def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
     }
     if set(contract) != expected_top_fields:
         _fail("FAIL_CAMPAIGN_CONTRACT", "campaign contract fields differ")
-    _require_v2r1_instance_isolation_v2(contract)
+    _require_v2r2_instance_isolation_v2(contract)
     authority = contract["authority_boundary"]
     execution_policy = contract["execution_policy"]
     forbidden = contract["forbidden_scope"]
     implementation = contract["implementation_state"]
     if (
         contract["status"]
-        != "V2R1_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
+        != "V2R2_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
         or contract["claim_scope"]
         != "THREE_SLOT_SHADOW_ONLY_NONADOPTING_Q05B_RETRY_CAMPAIGN"
         or type(authority) is not dict
@@ -1417,7 +1772,7 @@ def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
         or execution_policy.get("clone_source_project_relative_path")
         != PROJECT_ROOT.name
         or execution_policy.get("clone_target_ref_name")
-        != _CLONE_TARGET_REF_V2R1
+        != _CLONE_TARGET_REF_V2R2
         or execution_policy.get("clone_ref_policy")
         != (
             "EXACTLY_ONE_PERMANENT_INTERNAL_REF_BOUND_TO_TARGET_COMMIT_A;"
@@ -1460,8 +1815,9 @@ def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
         or implementation.get("supervisor_invocation_count") != 0
     ):
         _fail("FAIL_CAMPAIGN_CONTRACT", "campaign authority boundary differs")
+    _scheduling_admission_policy_v2(contract)
     domains = contract.get("hash_domains")
-    if type(domains) is not dict or domains != _EXPECTED_HASH_DOMAINS_V2R1:
+    if type(domains) is not dict or domains != _EXPECTED_HASH_DOMAINS_V2R2:
         _fail("FAIL_CAMPAIGN_CONTRACT", "campaign hash-domain registry differs")
     trajectory_policy = contract.get("trajectory_binding_policy")
     if (
@@ -2614,7 +2970,7 @@ def _scan_tree(
     maximum_entries: int = 100_000,
     maximum_total_bytes: int = 4 * 1024 * 1024 * 1024,
     manifest_domain: str = (
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/CARGO_MANIFEST/V2"
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/CARGO_MANIFEST/V2"
     ),
     allowed_uids: Sequence[int] | None = None,
     reject_group_or_world_writable: bool = False,
@@ -3611,7 +3967,7 @@ def _verify_clone(
         label="slot clone no-alias tree replay",
         maximum_entries=200_000,
         manifest_domain=(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/CLONE_TREE_MANIFEST/V2"
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/CLONE_TREE_MANIFEST/V2"
         ),
     )
     artifact_relative = artifact.relative_to(clone_root).as_posix()
@@ -3621,7 +3977,7 @@ def _verify_clone(
         if row["relative_path"] != artifact_relative
     ]
     closure_without_artifact = _domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/"
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/"
         "CLONE_CLOSURE_WITHOUT_ARTIFACT/V2",
         closure_rows_without_artifact,
     )
@@ -3983,7 +4339,7 @@ def _slot_roots_absence_evidence(
     return {
         **preimage,
         "root": _domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/"
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/"
             "SLOT_ROOT_ABSENCE/V2",
             preimage,
         ),
@@ -4138,7 +4494,7 @@ def _authorization_template(
         ],
     }
     owner_confirmation_digest = _domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/OWNER_CONFIRMATION/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/OWNER_CONFIRMATION/V2",
         confirmation,
     )
     value: dict[str, object] = {
@@ -6020,7 +6376,7 @@ def _source_state_replay(
         "evidence": evidence,
         "clone_closure_rows_internal": clone_closure_rows,
         "root": _domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/SOURCE_REPLAY/V2",
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/SOURCE_REPLAY/V2",
             evidence,
         ),
     }
@@ -6058,7 +6414,7 @@ def _safe_source_state_replay(
             "error_or_null": detail,
             "evidence": evidence,
             "root": _domain_digest(
-                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/SOURCE_REPLAY/V2",
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/SOURCE_REPLAY/V2",
                 evidence,
             ),
         }
@@ -6073,7 +6429,7 @@ def _augment_source_replay_with_alias_rows(
     evidence["nonalias_directory_identities"] = deepcopy(dict(alias_rows))
     result["evidence"] = evidence
     result["root"] = _domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/SOURCE_REPLAY/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/SOURCE_REPLAY/V2",
         evidence,
     )
     return result
@@ -6156,7 +6512,7 @@ def _enforce_clone_closure(
         "error_or_null": detail,
         "evidence": evidence,
         "root": _domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/SOURCE_REPLAY/V2",
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/SOURCE_REPLAY/V2",
             evidence,
         ),
     }
@@ -6484,7 +6840,7 @@ def _cleanup_replay_evidence(
     return {
         "preimage": value,
         "root": _domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/CLEANUP_REPLAY/V2",
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/CLEANUP_REPLAY/V2",
             value,
         ),
     }
@@ -6943,7 +7299,7 @@ def _bounded_command_binding_is_exact_v2(
             ("slot cloned ref enumeration", ["-C", clone, "for-each-ref", "--format=%(refname)"]),
             ("slot clone reflog expiration", ["-C", clone, "reflog", "expire", "--expire=now", "--all"]),
             ("slot clone exact closure prune", ["-C", clone, "gc", "--prune=now", "--quiet"]),
-            ("slot clone target graph ref creation", ["-C", clone, "update-ref", _CLONE_TARGET_REF_V2R1, commit]),
+            ("slot clone target graph ref creation", ["-C", clone, "update-ref", _CLONE_TARGET_REF_V2R2, commit]),
             ("slot clone reachable commit-graph write", ["-C", clone, "commit-graph", "write", "--reachable"]),
         )
         for name, arguments in clone_rows:
@@ -7553,7 +7909,7 @@ def _verify_slot_absence_evidence_semantics_v2(
     evidence = _verify_domain_root_v2(
         value,
         domain=(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/"
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/"
             "SLOT_ROOT_ABSENCE/V2"
         ),
         root_field="root",
@@ -7943,6 +8299,7 @@ def _verify_ledger_state_semantics_v2(
                 "argv",
                 "source_replay_before_root",
                 "docker_absence_before_spawn",
+                "scheduling_admission",
             }
             or consumed_record["status"]
             != f"{slot['slot_id']}_CONSUMED_OUTCOME_UNKNOWN"
@@ -7955,6 +8312,9 @@ def _verify_ledger_state_semantics_v2(
             )
             is None
             or consumed_body["docker_absence_before_spawn"] is not True
+            or not _scheduling_admission_evidence_exact_v2(
+                contract, consumed_body["scheduling_admission"]
+            )
         ):
             _ledger_semantic_fail(f"{slot['slot_id']} consumed mapping differs")
         if binding_name not in by_name:
@@ -8005,7 +8365,7 @@ def _verify_ledger_state_semantics_v2(
         before = _verify_domain_root_v2(
             binding["source_replay_before_evidence"],
             domain=(
-                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/"
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/"
                 "SOURCE_REPLAY/V2"
             ),
             root_field="root",
@@ -8015,7 +8375,7 @@ def _verify_ledger_state_semantics_v2(
         after = _verify_domain_root_v2(
             binding["source_replay_after_evidence"],
             domain=(
-                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/"
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/"
                 "SOURCE_REPLAY/V2"
             ),
             root_field="root",
@@ -8040,7 +8400,7 @@ def _verify_ledger_state_semantics_v2(
         cleanup = _verify_domain_root_v2(
             binding["cleanup_replay_evidence"],
             domain=(
-                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/"
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/"
                 "CLEANUP_REPLAY/V2"
             ),
             root_field="root",
@@ -8885,6 +9245,8 @@ def _error_code_terminal_disposition(
 ) -> str:
     policy = contract["terminal_failure_policy"]
     assert type(policy) is dict
+    if code == _SCHEDULING_ADMISSION_FAILURE_V2:
+        return str(policy["generic_nonretry_disposition"])
     if code in {"FAIL_CAMPAIGN_PROCESS", "FAIL_CAMPAIGN_DOCKER"}:
         return str(policy["cleanup_or_survivor_uncertainty_disposition"])
     if code == "FAIL_CAMPAIGN_TRAJECTORY":
@@ -9053,9 +9415,16 @@ def _run_one_slot(
         alias_before,
     )
     consumed_record: list[dict[str, object]] = []
+    scheduling_admission: dict[str, object] | None = None
 
     def consume_before_spawn() -> None:
-        if consumed_record or invocation_counter[0] >= 3:
+        if (
+            consumed_record
+            or invocation_counter[0] >= 3
+            or not _scheduling_admission_evidence_exact_v2(
+                contract, scheduling_admission
+            )
+        ):
             _fail(
                 "FAIL_CAMPAIGN_INVOCATION",
                 "slot consumption or invocation count differs",
@@ -9071,6 +9440,7 @@ def _run_one_slot(
                 "argv": argv,
                 "source_replay_before_root": source_before["root"],
                 "docker_absence_before_spawn": True,
+                "scheduling_admission": deepcopy(scheduling_admission),
             },
         )
         consumed_record.append(record)
@@ -9078,6 +9448,9 @@ def _run_one_slot(
 
     external_binding_attempted = False
     try:
+        scheduling_admission = _run_scheduling_admission_gate_v2(
+            contract, evidence_fd, str(slot["slot_id"])
+        )
         try:
             process_result = _bounded_process(
                 argv,
@@ -9153,7 +9526,7 @@ def _run_one_slot(
                 "error_or_null": detail,
                 "evidence": {"error": detail},
                 "root": _domain_digest(
-                    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/SOURCE_REPLAY/V2",
+                    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/SOURCE_REPLAY/V2",
                     {"error": detail},
                 ),
             }
@@ -9319,7 +9692,7 @@ def _run_one_slot(
                 "error_or_null": detail,
                 "evidence": {"error": detail},
                 "root": _domain_digest(
-                    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/SOURCE_REPLAY/V2",
+                    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R2/SOURCE_REPLAY/V2",
                     {"error": detail},
                 ),
             }
@@ -9503,6 +9876,7 @@ def _run_one_slot(
                 in {
                     "FAIL_CAMPAIGN_PUBLICATION_UNCERTAIN",
                     "FAIL_CAMPAIGN_SPAWN_UNCERTAIN",
+                    _SCHEDULING_ADMISSION_FAILURE_V2,
                 }
             ):
                 raise active_error
