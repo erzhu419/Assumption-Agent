@@ -1,17 +1,31 @@
-# Hegel Machine Q0.5b Shadow Retry Campaign v2
+# Hegel Machine Q0.5b Shadow Retry Campaign v2r1 (record schema `/2`)
 
-Status: `FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED`
+Status: `V2R1_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED`
 
 This document accompanies
-`config/phase3_q05b_shadow_retry_campaign_v2.json`.  It is a Commit-B
-**final source-bound contract**, not an execution capsule, authorization
-record, preflight receipt, or execution result.  The frozen target supervisor
-is the final Commit A recorded in the contract; its tree, parent,
+`config/phase3_q05b_shadow_retry_campaign_v2.json`.  The unchanged filename and
+all structural schema tags ending in `/2` describe the retained record format;
+the distinct contract ID, hash domains, roots, and trace IDs identify the new
+v2r1 campaign instance.  The controller source, tests, document, exact V2R1
+hash-domain registry, roots, and trace IDs are now frozen for binding.  The 13
+binding summary values remain null only until the main agent derives and fills
+them in the next freeze step, so this intermediate byte image is not yet a
+loadable contract, execution capsule, authorization record, preflight receipt,
+or execution result.  The frozen target supervisor remains exact
+Commit A `7bc2044212e278443b1ca703115c7cb17591ac14`; its tree, parent,
 commit-object bytes, seven required source hashes, static-policy root, target
 contract digest, and target source-binding digest are independently replayed
-by the controller.  The campaign implementation, tests, document, raw tool,
-v1 safety kernel, predicate registries, and final contract are likewise
-digest-bound.
+by the controller and are not revised by v2r1.  No preflight, authorization,
+or campaign execution has occurred.
+
+The prior v2 capsule
+`sha256:238b79a5ddf5adb379df9ac1b0ae7e762f7616f1cfbf19b93474315a9197ab62`
+and authorization
+`sha256:0f59cc4aa2f605bdd1388baf769961ccfebf2123c6d6c9ff467f7f61add29cea`
+belong only to the completed prior-v2 terminal/completion chain.  That chain is
+historical, terminal, non-resumable evidence.  Neither digest, its immutable
+ledger, nor any prior-v2 root is v2r1 authority or an input that v2r1 may open,
+access, reuse, copy, adopt, or resume.
 
 No source-bound contract or self-consistent capsule is execution authority.
 The read-only preflight may derive one exact capsule and authorization
@@ -58,7 +72,8 @@ reflogs and dangling diagnostics excluded and requires empty stdout/stderr;
 therefore deterministic missing or corrupt local-object closure fails before
 owner authorization rather than consuming a campaign slot.
 
-Commit B implements and tests its own campaign core and tool at these paths:
+The new v2r1 controller commit implements and tests its campaign core and tool
+at the unchanged schema-v2 paths:
 
 - `src/hegel_machine/phase3_q05b_shadow_retry_campaign_v2.py`;
 - `tests/test_phase3_q05b_shadow_retry_campaign_v2_core.py`;
@@ -108,8 +123,13 @@ The fixed future roots are:
 
 | Purpose | Absolute path |
 |---|---|
-| Owner authorization | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2-authorization` |
-| Durable campaign ledger | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2-ledger` |
+| Owner authorization | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-authorization` |
+| Durable campaign ledger | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-ledger` |
+
+The controller worktree `/tmp/hegel-q05b-shadow-retry-v2r1-worktree` and all
+seventeen prior-v2 authorization, ledger, clone, Cargo-cache, artifact,
+evidence, and trace roots are frozen protected roots.  Prior-v2 root open,
+access, and capsule/authorization/ledger reuse are all explicitly false.
 
 The ledger and every slot freshness target must be absent at each preflight.
 Authorization-root absence is intentionally not a preflight freshness claim:
@@ -127,15 +147,15 @@ caller or reused by another slot.
 
 | Slot | Dedicated clone root | Cargo cache root | External artifact | Evidence root | Trace root |
 |---|---|---|---|---|---|
-| 01 | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2-slot-01-clone` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2-slot-01-cargo-cache` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2-slot-01-artifact/phase3_q05b_dual_qualification_v2.json` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2-slot-01-evidence` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2-slot-01-trace` |
-| 02 | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2-slot-02-clone` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2-slot-02-cargo-cache` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2-slot-02-artifact/phase3_q05b_dual_qualification_v2.json` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2-slot-02-evidence` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2-slot-02-trace` |
-| 03 | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2-slot-03-clone` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2-slot-03-cargo-cache` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2-slot-03-artifact/phase3_q05b_dual_qualification_v2.json` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2-slot-03-evidence` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2-slot-03-trace` |
+| 01 | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-01-clone` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-01-cargo-cache` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-01-artifact/phase3_q05b_dual_qualification_v2.json` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-01-evidence` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-01-trace` |
+| 02 | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-02-clone` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-02-cargo-cache` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-02-artifact/phase3_q05b_dual_qualification_v2.json` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-02-evidence` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-02-trace` |
+| 03 | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-03-clone` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-03-cargo-cache` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-03-artifact/phase3_q05b_dual_qualification_v2.json` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-03-evidence` | `/home/erzhu419/.local/state/hegel-machine/q05b-shadow-retry-campaign-v2r1-slot-03-trace` |
 
 The stdout and stderr files are fixed beneath each corresponding evidence
 root as `supervisor.stdout` and `supervisor.stderr`.  The external trajectory
 binding is `trajectory-binding.json`, and the slot result is
 `slot-result.json`, in that same evidence root.  Trace IDs are exactly
-`q05b-shadow-retry-campaign-v2-slot-01`, `-02`, and `-03`.
+`q05b-shadow-retry-campaign-v2r1-slot-01`, `-02`, and `-03`.
 
 All external artifact, evidence, trace, stdout, stderr, and cache paths are
 outside Git roots.  Each dedicated clone is itself a new isolated Git root
@@ -177,8 +197,31 @@ eligibility.
 
 ## 4. Strict execution sequence
 
-Each slot uses one local clone of the same bound Commit-A object closure and a
-private, content/mode-manifest-equal copy of the allowed Cargo cache.  Cargo
+The prior authorized v2 campaign terminalized before its first supervisor
+invocation while verifying the `SLOT_01` clone.  Its `git clone --local`
+copied the source repository's commit-graph, while later ref deletion and
+pruning correctly removed two source-only stash/index commits.  The copied
+graph still named those removed OIDs, so graph-enabled
+`git fsck --unreachable` reported missing commits even though the target
+Commit-A closure itself was complete.  Disabling commit-graph made that clone
+fsck pass, identifying the copied stale graph—not the target closure—as the
+failure source.
+
+Each v2r1 slot instead uses a file-protocol `git clone --no-local` of the same
+bound Commit-A object closure and a private, content/mode-manifest-equal copy
+of the allowed Cargo cache.  Clone preparation removes every inherited source
+ref, remote, reflog, source-only branch, and stash ref, then prunes.  It creates
+exactly one permanent internal ref,
+`refs/hegel/q05b-shadow-retry-v2r1-target`, bound to Commit A, and writes a new
+commit-graph from commits reachable through only that ref.  The ref is not
+temporary: its exact name and object ID are replayed before and after the
+supervisor, eliminating a create/write/delete lifecycle window.  Preparation
+and every later clone replay require `git commit-graph verify`, an empty-output
+graph-enabled `git fsck --full --strict --unreachable --no-reflogs`, and the
+same empty-output strict fsck with `core.commitGraph=false`.  Thus graph
+metadata and the underlying object closure must independently agree.
+
+Cargo
 source entries may be owned only by root or the effective UID and may not be
 group/world writable; every private-copy entry must be owned by the effective
 UID.  Ownership is recorded in both evidence manifests but intentionally
@@ -201,7 +244,7 @@ tools/phase3_q05b_dual_qualification_v2.py
 
 The fixed local runtime inputs are `/usr/bin/git`, `/usr/bin/docker`, Docker
 host `unix:///var/run/docker.sock`, clone source repository
-`/home/erzhu419/.local/state/hegel-machine/q05b-shadow-trajectory-v2-dev-worktree`,
+`/tmp/hegel-q05b-shadow-retry-v2r1-worktree`,
 project subpath `Hegel Machine`, and read-only Cargo copy source
 `/home/erzhu419/.local/state/hegel-machine/rust-cargo-cache`.  The final runner
 recognizes that the clone source is a linked worktree whose common Git store is
@@ -229,8 +272,14 @@ are independently bounded at `67,108,864` bytes.  Timeout cleanup uses a
 `120`-second `SIGINT` grace followed by `SIGKILL` and a `30`-second reap
 window.  Read-only Git commands are bounded at 120 seconds and 64 MiB per
 stream; read-only Docker list/inspect commands are bounded at 60 seconds and
-16 MiB per stream.  Truncation, timeout, or nonzero diagnostic-command status
-is uncertainty, not absence evidence.  Every caught bounded-command failure
+16 MiB per stream.  Truncation, timeout, incomplete reap, a surviving process
+group, or wrapper-close uncertainty remains process/cleanup uncertainty.  A
+registered Git command's ordinary nonzero status or required-empty-stream
+violation is classified as a source/binding failure only when its bounded
+receipt proves no timeout or overflow, direct-child reap, process-group
+absence, and complete wrapper resource closure.  Spawn receipts, exception
+receipts, close/cleanup faults, signals, and unregistered argv can never take
+that reclassification path.  Every caught bounded-command failure
 carries a structured receipt containing the fixed argv, label, phase,
 and typed reason.  When a process result exists it also contains
 return/timeout/overflow/reap/process-group facts, classification, and each
@@ -625,11 +674,15 @@ the contract rather than an unstated assumption.
 
 ## 10. Present facts
 
-At the final Commit-B freeze, before read-only preflight:
+At the current v2r1 frozen-source state, before the 13 binding summaries are
+filled or any read-only preflight:
 
-- target Commit A, campaign implementation, tests, document, safety kernel,
-  predicate registries, ledger grammar, source binding, and contract digest
-  are finalized and independently replayable;
+- target Commit A remains finalized and independently replayable; the v2r1
+  controller source, tests, document, exact hash domains, roots, and trace IDs
+  are frozen; the source hashes, static-surface hash, predicate digests,
+  ledger-registry digest, forbidden-scope digest, source-binding digest, and
+  contract digest comprise the 13 deliberately null values that the main agent
+  will fill next and are not yet authority;
 - the trajectory and campaign decision suites include real-control-flow gap
   propagation KATs, torn-prefix/open-span replay, sampler/process/deadline/join
   races, success and failure wire replay, and three-slot stop/retry/exhaustion
@@ -647,5 +700,8 @@ At the final Commit-B freeze, before read-only preflight:
   production, adoption, promotion, current, attempt-2, or attempt-3 action has
   occurred.
 
-Therefore the only accurate status is
-`FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED`.
+Therefore the frozen source surface carries status
+`V2R1_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED`.  It cannot
+pass contract loading or derive a capsule until the main agent independently
+computes and fills all 13 binding summary values; no preflight, authorization,
+or execution is represented by this status.

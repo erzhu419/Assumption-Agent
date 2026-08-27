@@ -8,6 +8,7 @@ import importlib.util
 import os
 from pathlib import Path
 import stat
+import subprocess
 import sys
 import tempfile
 import threading
@@ -128,6 +129,218 @@ def _slot(
     value = slots[ordinal - 1]
     assert type(value) is dict
     return deepcopy(value)
+
+
+def test_prepare_clone_rebuilds_reachable_graph_without_source_only_objects(
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
+) -> None:
+    temporary = tempfile.TemporaryDirectory(
+        prefix="hegel-q05b-clone-graph-kat-",
+        dir="/tmp",
+    )
+    request.addfinalizer(temporary.cleanup)
+    tmp_path = Path(temporary.name)
+    git = "/usr/bin/git"
+    source = tmp_path / "source"
+    subprocess.run(
+        [git, "init", "--initial-branch=main", os.fspath(source)],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    def source_git(*arguments: str) -> bytes:
+        result = subprocess.run(
+            [git, "-C", os.fspath(source), *arguments],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        return result.stdout
+
+    source_git("config", "user.name", "Q05b KAT")
+    source_git("config", "user.email", "q05b-kat@example.invalid")
+    project = source / ROOT.name
+    contract = _contract()
+    target = contract["target_commit_a_binding"]
+    execution = contract["execution_policy"]
+    assert type(target) is dict and type(execution) is dict
+    required = target["required_raw_sha256_by_path"]
+    assert type(required) is dict
+    for index, relative in enumerate(required, start=1):
+        path = project / str(relative)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(f"fixture-{index}-parent\n".encode("ascii"))
+    source_git("add", ROOT.name)
+    source_git("commit", "--quiet", "-m", "fixture parent")
+    parent = source_git("rev-parse", "HEAD").decode("ascii").strip()
+    first_required = project / str(next(iter(required)))
+    first_required.write_bytes(b"fixture-target\n")
+    source_git("add", ROOT.name)
+    source_git("commit", "--quiet", "-m", "fixture target")
+    target_commit = source_git("rev-parse", "HEAD").decode("ascii").strip()
+    target_tree = source_git("rev-parse", "HEAD^{tree}").decode("ascii").strip()
+
+    source_git("checkout", "--quiet", "-b", "source-only-ref")
+    first_required.write_bytes(b"fixture-source-only-ref\n")
+    source_git("add", ROOT.name)
+    source_git("commit", "--quiet", "-m", "source-only ref commit")
+    source_only_ref = source_git("rev-parse", "HEAD").decode("ascii").strip()
+    source_git("checkout", "--quiet", "main")
+    first_required.write_bytes(b"fixture-stash-only\n")
+    source_git("add", ROOT.name)
+    source_git("stash", "push", "--quiet", "-m", "source-only stash")
+    source_only_stash = source_git("rev-parse", "refs/stash").decode(
+        "ascii"
+    ).strip()
+    source_git("commit-graph", "write", "--reachable")
+    source_git("commit-graph", "verify")
+    source_graph = (source / ".git/objects/info/commit-graph").read_bytes()
+    assert bytes.fromhex(source_only_ref) in source_graph
+    assert bytes.fromhex(source_only_stash) in source_graph
+    assert source_git("status", "--porcelain=v1", "-z") == b""
+
+    execution["clone_source_repository"] = os.fspath(source)
+    execution["clone_source_project_relative_path"] = ROOT.name
+    target["target_supervisor_commit"] = target_commit
+    target["target_supervisor_tree"] = target_tree
+    target["target_supervisor_parent_commit"] = parent
+    for relative in required:
+        required[str(relative)] = sha256(
+            (project / str(relative)).read_bytes()
+        ).hexdigest()
+
+    slot = contract["slot_registry"][0]
+    assert type(slot) is dict
+    clone = tmp_path / "slot-01-clone"
+    clone_project = clone / ROOT.name
+    artifact_parent = tmp_path / "slot-01-artifact"
+    evidence = tmp_path / "slot-01-evidence"
+    trace = tmp_path / "slot-01-trace"
+    slot.update(
+        {
+            "clone_root": os.fspath(clone),
+            "clone_project_root": os.fspath(clone_project),
+            "cargo_cache_root": os.fspath(tmp_path / "slot-01-cargo"),
+            "supervisor_artifact_path": os.fspath(
+                clone_project
+                / "artifacts/phase3_q05b_dual_qualification_v2.json"
+            ),
+            "artifact_parent_root": os.fspath(artifact_parent),
+            "artifact_path": os.fspath(
+                artifact_parent / "phase3_q05b_dual_qualification_v2.json"
+            ),
+            "evidence_root": os.fspath(evidence),
+            "trace_root": os.fspath(trace),
+            "stdout_path": os.fspath(evidence / "supervisor.stdout"),
+            "stderr_path": os.fspath(evidence / "supervisor.stderr"),
+            "external_trajectory_binding_path": os.fspath(
+                evidence / "trajectory-binding.json"
+            ),
+            "slot_result_path": os.fspath(evidence / "slot-result.json"),
+        }
+    )
+
+    calls: list[tuple[str, list[str], dict[str, str]]] = []
+    real_run_exact_command = TOOL._run_exact_command
+
+    def recording_run_exact_command(
+        argv: Sequence[str],
+        **kwargs: object,
+    ) -> bytes:
+        environment = kwargs["env"]
+        assert type(environment) is dict
+        calls.append(
+            (
+                str(kwargs["label"]),
+                list(argv),
+                dict(environment),
+            )
+        )
+        return real_run_exact_command(argv, **kwargs)
+
+    monkeypatch.setattr(TOOL, "_run_exact_command", recording_run_exact_command)
+    identity = TOOL._prepare_clone(contract, slot)
+    assert identity["head"] == target_commit
+    assert identity["tree"] == target_tree
+    assert identity["parent"] == parent
+    expected_target_ref = str(execution["clone_target_ref_name"])
+    exact_ref = subprocess.run(
+        [
+            git,
+            "-C",
+            os.fspath(clone),
+            "for-each-ref",
+            "--format=%(refname)%00%(objectname)",
+        ],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    assert exact_ref.stdout == (
+        expected_target_ref + "\x00" + target_commit + "\n"
+    ).encode("ascii")
+    assert exact_ref.stderr == b""
+    replay_identity = TOOL._verify_clone(contract, slot, artifact_state="ABSENT")
+    assert replay_identity == identity
+
+    clone_graph = (clone / ".git/objects/info/commit-graph").read_bytes()
+    assert bytes.fromhex(source_only_ref) not in clone_graph
+    assert bytes.fromhex(source_only_stash) not in clone_graph
+    for stale_oid in (source_only_ref, source_only_stash):
+        absent = subprocess.run(
+            [git, "-C", os.fspath(clone), "cat-file", "-e", stale_oid],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        assert absent.returncode != 0
+        assert absent.stdout == b""
+    for command in (
+        (git, "-C", os.fspath(clone), "commit-graph", "verify"),
+        (
+            git,
+            "-C",
+            os.fspath(clone),
+            "fsck",
+            "--full",
+            "--strict",
+            "--unreachable",
+            "--no-reflogs",
+        ),
+        (
+            git,
+            "-c",
+            "core.commitGraph=false",
+            "-C",
+            os.fspath(clone),
+            "fsck",
+            "--full",
+            "--strict",
+            "--unreachable",
+            "--no-reflogs",
+        ),
+    ):
+        replay = subprocess.run(
+            command,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        assert replay.returncode == 0
+        assert replay.stdout == b""
+        assert replay.stderr == b""
+
+    assert calls
+    for label, argv, environment in calls:
+        assert TOOL._bounded_command_binding_is_exact_v2(contract, label, argv)
+        assert environment["GIT_ALLOW_PROTOCOL"] == "file"
+        assert environment["GIT_PROTOCOL_FROM_USER"] == "0"
+        assert environment["GIT_SSH_COMMAND"] == "/bin/false"
+    clone_call = next(argv for label, argv, _env in calls if label == "slot no-local clone")
+    assert "--no-local" in clone_call
+    assert "--local" not in clone_call
 
 
 def _success_wire(
@@ -827,7 +1040,7 @@ def _source_replay(label: str) -> dict[str, object]:
         "error_or_null": None,
         "evidence": evidence,
         "root": TOOL._domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/SOURCE_REPLAY/V2",
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/SOURCE_REPLAY/V2",
             evidence,
         ),
     }
@@ -844,7 +1057,7 @@ def _future_freshness() -> dict[str, object]:
     unsigned = deepcopy(value)
     unsigned.pop("root")
     value["root"] = TOOL._domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/SLOT_ROOT_ABSENCE/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/SLOT_ROOT_ABSENCE/V2",
         unsigned,
     )
     return value
@@ -926,7 +1139,7 @@ def _slot_absence_evidence(
     unsigned = deepcopy(value)
     unsigned.pop("root")
     value["root"] = TOOL._domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/SLOT_ROOT_ABSENCE/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/SLOT_ROOT_ABSENCE/V2",
         unsigned,
     )
     return value
@@ -937,7 +1150,7 @@ def _cleanup_replay() -> dict[str, object]:
     return {
         "preimage": preimage,
         "root": TOOL._domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/CLEANUP_REPLAY/V2",
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/CLEANUP_REPLAY/V2",
             preimage,
         ),
     }
@@ -1374,6 +1587,284 @@ def test_slot_registry_accepts_exact_contract_and_rejects_path_drift() -> None:
     with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
         TOOL._slot_registry(aliased)
     assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
+
+
+def test_v2r1_instance_isolation_rejects_prior_v2_authority_and_roots() -> None:
+    raw_contract = TOOL._pretty_json(
+        TOOL.CONFIG_PATH.read_bytes(),
+        "v2r1 target Git object closure",
+    )
+    assert type(raw_contract) is dict
+    target_git_object_closure = raw_contract["target_commit_a_binding"]
+    assert type(target_git_object_closure) is dict
+    assert target_git_object_closure["target_supervisor_commit"] == (
+        "7bc2044212e278443b1ca703115c7cb17591ac14"
+    )
+
+    contract = _contract()
+    TOOL._require_v2r1_instance_isolation_v2(contract)
+    protected = contract["protected_state_policy"]
+    assert type(protected) is dict
+    protected_roots = protected["protected_roots_in_exact_order"]
+    assert type(protected_roots) is list
+    assert set(TOOL._PRIOR_V2_PROTECTED_ROOTS).issubset(protected_roots)
+    slots = contract["slot_registry"]
+    assert type(slots) is list
+    for ordinal, slot in enumerate(slots, start=1):
+        assert type(slot) is dict
+        assert slot["trajectory_trace_id"] == (
+            f"q05b-shadow-retry-campaign-v2r1-slot-{ordinal:02d}"
+        )
+
+    mutations = []
+    prior_id = deepcopy(contract)
+    prior_id["contract_id"] = TOOL._PRIOR_V2_CONTRACT_ID
+    mutations.append(prior_id)
+
+    reusable_prior = deepcopy(contract)
+    reusable_prior["protected_state_policy"][
+        "prior_v2_capsule_authorization_or_ledger_reuse_allowed"
+    ] = True
+    mutations.append(reusable_prior)
+
+    prior_authorization_root = deepcopy(contract)
+    prior_authorization_root["fixed_external_roots"]["authorization_root"] = (
+        f"{TOOL._PRIOR_V2_STATE_PREFIX}-authorization"
+    )
+    mutations.append(prior_authorization_root)
+
+    prior_clone_root = deepcopy(contract)
+    prior_clone_root["slot_registry"][0]["clone_root"] = (
+        f"{TOOL._PRIOR_V2_STATE_PREFIX}-slot-01-clone"
+    )
+    mutations.append(prior_clone_root)
+
+    prior_trace_id = deepcopy(contract)
+    prior_trace_id["slot_registry"][0]["trajectory_trace_id"] = (
+        "q05b-shadow-retry-campaign-v2-slot-01"
+    )
+    mutations.append(prior_trace_id)
+
+    for mutation in mutations:
+        with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+            TOOL._require_v2r1_instance_isolation_v2(mutation)
+        assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
+
+
+@pytest.mark.parametrize(
+    "domain_name",
+    tuple(TOOL._EXPECTED_HASH_DOMAINS_V2R1),
+)
+def test_contract_loader_rejects_rehashed_v2r1_hash_domain_drift(
+    monkeypatch: pytest.MonkeyPatch,
+    domain_name: str,
+) -> None:
+    base = _contract()
+    expected_domain = TOOL._EXPECTED_HASH_DOMAINS_V2R1[domain_name]
+    prior_v2_domain = expected_domain.replace(
+        "SHADOW_RETRY_CAMPAIGN_V2R1",
+        "SHADOW_RETRY_CAMPAIGN",
+    )
+    for forged_domain in (
+        prior_v2_domain,
+        f"HEGEL/FORGED/Q05B/{domain_name.upper()}/V2",
+    ):
+        contract = deepcopy(base)
+        domains = contract["hash_domains"]
+        assert type(domains) is dict
+        domains[domain_name] = forged_domain
+        unsigned_contract = deepcopy(contract)
+        unsigned_contract.pop("contract_digest")
+        contract["contract_digest"] = TOOL._domain_digest(
+            domains["contract"],
+            unsigned_contract,
+        )
+        monkeypatch.setattr(
+            TOOL,
+            "_pretty_json",
+            lambda _raw, _label, value=contract: deepcopy(value),
+        )
+        with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+            TOOL.load_phase3_q05b_shadow_retry_campaign_contract_v2()
+        assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
+        assert error.value.detail == "campaign hash-domain registry differs"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("clone_target_ref_name", "refs/hegel/drifted-target"),
+        ("clone_ref_policy", "TEMPORARY_OR_MULTIPLE_REFS_ALLOWED"),
+    ),
+)
+def test_contract_loader_rejects_clone_target_ref_policy_drift(
+    monkeypatch: pytest.MonkeyPatch,
+    field: str,
+    value: str,
+) -> None:
+    contract = _contract()
+    execution = contract["execution_policy"]
+    assert type(execution) is dict
+    execution[field] = value
+    monkeypatch.setattr(
+        TOOL,
+        "_pretty_json",
+        lambda _raw, _label: deepcopy(contract),
+    )
+    with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+        TOOL.load_phase3_q05b_shadow_retry_campaign_contract_v2()
+    assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
+    assert error.value.detail == "campaign authority boundary differs"
+
+
+def test_prior_v2_capsule_authorization_and_rehashed_ledger_are_not_v2r1_authority(
+    tmp_path: Path,
+) -> None:
+    contract, capsule, authorization, ledger_object, _result = (
+        _completed_real_ledger(tmp_path)
+    )
+    ledger = ledger_object
+    try:
+        copied_prior_capsule = {
+            "capsule_digest": TOOL._PRIOR_V2_CAPSULE_DIGEST,
+        }
+        copied_prior_authorization = {
+            "authorization_digest": TOOL._PRIOR_V2_AUTHORIZATION_DIGEST,
+        }
+        rows = deepcopy(
+            list(zip(ledger.published_names, ledger.published_records))
+        )
+        with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+            TOOL._verify_campaign_completion_chain_v2(
+                contract,
+                copied_prior_capsule,
+                copied_prior_authorization,
+                rows,
+            )
+        assert error.value.code == "FAIL_CAMPAIGN_LEDGER"
+
+        prior_capsule_preimage = {
+            "campaign_id": TOOL._PRIOR_V2_CONTRACT_ID,
+            "authorization_root": (
+                f"{TOOL._PRIOR_V2_STATE_PREFIX}-authorization"
+            ),
+            "ledger_root": f"{TOOL._PRIOR_V2_STATE_PREFIX}-ledger",
+        }
+        rehashed_prior_capsule = {
+            **prior_capsule_preimage,
+            "capsule_digest": TOOL._domain_digest(
+                contract["hash_domains"]["capsule"],
+                prior_capsule_preimage,
+            ),
+        }
+        rehashed_prior_authorization = deepcopy(authorization)
+        rehashed_prior_authorization.update(
+            {
+                "campaign_id": TOOL._PRIOR_V2_CONTRACT_ID,
+                "contract_digest": _tagged("prior-v2-contract"),
+                "capsule_digest": rehashed_prior_capsule["capsule_digest"],
+                "authorization_root": (
+                    f"{TOOL._PRIOR_V2_STATE_PREFIX}-authorization"
+                ),
+                "ledger_root": f"{TOOL._PRIOR_V2_STATE_PREFIX}-ledger",
+            }
+        )
+        confirmation_fields = (
+            "campaign_id",
+            "contract_digest",
+            "target_supervisor_commit",
+            "target_source_binding_digest",
+            "campaign_source_binding_digest",
+            "capsule_digest",
+            "authorization_root",
+            "ledger_root",
+            "three_exact_slot_path_records",
+            "maximum_supervisor_invocations",
+            "strictly_sequential_one_shot_slots",
+            "retry_predicate_digest",
+            "success_predicate_digest",
+            "terminal_no_resume_policy",
+            "forbidden_scope_digest",
+        )
+        rehashed_prior_authorization["owner_confirmation_digest"] = (
+            TOOL._domain_digest(
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/"
+                "OWNER_CONFIRMATION/V2",
+                {
+                    field: deepcopy(rehashed_prior_authorization[field])
+                    for field in confirmation_fields
+                },
+            )
+        )
+        authorization_unsigned = deepcopy(rehashed_prior_authorization)
+        authorization_unsigned.pop("authorization_digest")
+        rehashed_prior_authorization["authorization_digest"] = (
+            TOOL._domain_digest(
+                contract["hash_domains"]["authorization"],
+                authorization_unsigned,
+            )
+        )
+        auth_contract = deepcopy(contract)
+        auth_root = tmp_path / "rehashed-prior-v2-authorization"
+        auth_root.mkdir(mode=0o700)
+        auth_root.chmod(0o700)
+        auth_contract["fixed_external_roots"]["authorization_root"] = (
+            os.fspath(auth_root)
+        )
+        auth_contract["authorization_policy"]["authorization_root"] = (
+            os.fspath(auth_root)
+        )
+        auth_basename = str(
+            auth_contract["authorization_policy"][
+                "authorization_record_name"
+            ]
+        )
+        auth_root_fd = os.open(
+            auth_root,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC,
+        )
+        try:
+            TOOL._publish_immutable_at(
+                auth_root_fd,
+                auth_basename,
+                rehashed_prior_authorization,
+            )
+        finally:
+            os.close(auth_root_fd)
+        with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+            TOOL._load_authorization(auth_contract, capsule)
+        assert error.value.code == "FAIL_CAMPAIGN_AUTHORIZATION"
+
+        rehashed_rows = deepcopy(rows)
+        previous_digest: str | None = None
+        for _basename, record in rehashed_rows:
+            record["campaign_id"] = TOOL._PRIOR_V2_CONTRACT_ID
+            record["contract_digest"] = _tagged("prior-v2-contract")
+            record["campaign_source_binding_digest"] = _tagged(
+                "prior-v2-source-binding"
+            )
+            record["capsule_digest"] = TOOL._PRIOR_V2_CAPSULE_DIGEST
+            record["authorization_digest"] = (
+                TOOL._PRIOR_V2_AUTHORIZATION_DIGEST
+            )
+            record["previous_record_digest_or_null"] = previous_digest
+            unsigned = deepcopy(record)
+            unsigned.pop("record_digest")
+            record["record_digest"] = TOOL._domain_digest(
+                contract["hash_domains"]["ledger_record"],
+                unsigned,
+            )
+            previous_digest = str(record["record_digest"])
+        with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+            TOOL._verify_campaign_completion_chain_v2(
+                contract,
+                copied_prior_capsule,
+                copied_prior_authorization,
+                rehashed_rows,
+            )
+        assert error.value.code == "FAIL_CAMPAIGN_LEDGER"
+    finally:
+        ledger.close()
 
 
 def test_external_binding_exact_fields_digest_and_disk_replay(
@@ -6009,6 +6500,157 @@ def test_bounded_command_failure_receipt_is_durable_in_terminal(
     ] == sha256(b"exact clone reason\n").hexdigest()
 
 
+def _registered_certain_git_failure(
+    contract: Mapping[str, object],
+) -> tuple[list[str], str, dict[str, object], str]:
+    execution = contract["execution_policy"]
+    target = contract["target_commit_a_binding"]
+    assert type(execution) is dict and type(target) is dict
+    arguments = [
+        "-C",
+        str(execution["clone_source_repository"]),
+        "rev-parse",
+        f"{target['target_supervisor_commit']}^{{tree}}",
+    ]
+    label = "target tree replay"
+    argv = [str(execution["git_executable"]), *arguments]
+    receipt = TOOL._bounded_process_diagnostic(
+        label,
+        argv,
+        {
+            "return_code": 7,
+            "timed_out": False,
+            "stdout_overflow": False,
+            "stderr_overflow": False,
+            "child_reaped": True,
+            "process_group_absent": True,
+            "wrapper_resources_closed": True,
+            "stdout": b"",
+            "stderr": b"fatal: exact Git source failure\n",
+        },
+        classification={
+            "require_empty_stdout": False,
+            "require_empty_stderr": True,
+            "accepted": False,
+        },
+    )
+    detail = (
+        f"{label} failed closed: return_code=7; timed_out=False; "
+        "stdout_overflow=False; stderr_overflow=False; "
+        f"stderr_excerpt_hex={receipt['stderr']['excerpt_hex']}"
+    )
+    return arguments, label, receipt, detail
+
+
+def test_certain_registered_git_failure_is_source_not_cleanup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = _contract()
+    arguments, label, receipt, detail = _registered_certain_git_failure(
+        contract
+    )
+    failure = TOOL.ShadowRetryCampaignErrorV2(
+        "FAIL_CAMPAIGN_PROCESS",
+        detail,
+        terminal=True,
+        receipt=receipt,
+    )
+
+    def fail_exact_command(*_args: object, **_kwargs: object) -> bytes:
+        raise failure
+
+    monkeypatch.setattr(TOOL, "_run_exact_command", fail_exact_command)
+    with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+        TOOL._git(contract, arguments, label)
+    captured = error.value
+    assert captured.code == "FAIL_CAMPAIGN_SOURCE"
+    assert captured.detail == detail
+    assert captured.receipt == receipt
+    assert captured.terminal is True
+    assert TOOL._error_code_terminal_disposition(
+        contract,
+        captured.code,
+    ) == contract["terminal_failure_policy"][
+        "source_or_binding_uncertainty_disposition"
+    ]
+    assert TOOL._terminal_error_receipt_semantics_v2(
+        contract,
+        receipt,
+        terminal_error_code="FAIL_CAMPAIGN_SOURCE",
+        terminal_error_detail=detail,
+        top_level=True,
+    )
+    assert not TOOL._terminal_error_receipt_semantics_v2(
+        contract,
+        receipt,
+        terminal_error_code="FAIL_CAMPAIGN_PROCESS",
+        terminal_error_detail=detail,
+        top_level=True,
+    )
+
+
+@pytest.mark.parametrize(
+    "uncertainty",
+    (
+        "spawn",
+        "exception",
+        "close",
+        "cleanup",
+        "timeout",
+        "overflow",
+        "unregistered",
+    ),
+)
+def test_git_never_reclassifies_process_or_receipt_uncertainty(
+    monkeypatch: pytest.MonkeyPatch,
+    uncertainty: str,
+) -> None:
+    contract = _contract()
+    arguments, label, base_receipt, detail = _registered_certain_git_failure(
+        contract
+    )
+    receipt = deepcopy(base_receipt)
+    if uncertainty == "spawn":
+        receipt = {
+            "schema_version": TOOL._SPAWN_REGISTRATION_SCHEMA_V2,
+            "registration_state": "INVALID",
+        }
+    elif uncertainty == "exception":
+        receipt["schema_version"] = (
+            TOOL._BOUNDED_COMMAND_EXCEPTION_DIAGNOSTIC_SCHEMA_V2
+        )
+    elif uncertainty == "close":
+        receipt["wrapper_resources_closed"] = False
+        receipt["classification"] = {
+            "accepted": False,
+            "close_errors": ["injected close uncertainty"],
+            "prior_error_or_null": None,
+        }
+    elif uncertainty == "cleanup":
+        receipt["child_reaped"] = False
+    elif uncertainty == "timeout":
+        receipt["timed_out"] = True
+    elif uncertainty == "overflow":
+        receipt["stderr_overflow"] = True
+    else:
+        receipt["label"] = "unregistered Git command"
+    failure = TOOL.ShadowRetryCampaignErrorV2(
+        "FAIL_CAMPAIGN_PROCESS",
+        detail,
+        terminal=True,
+        receipt=receipt,
+    )
+
+    def fail_exact_command(*_args: object, **_kwargs: object) -> bytes:
+        raise failure
+
+    monkeypatch.setattr(TOOL, "_run_exact_command", fail_exact_command)
+    with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+        TOOL._git(contract, arguments, label)
+    assert error.value.code == "FAIL_CAMPAIGN_PROCESS"
+    assert error.value.receipt == receipt
+
+
 def test_bounded_process_exception_receipts_preserve_command_phase(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -6228,7 +6870,7 @@ def test_safe_postrun_source_replay_preserves_bounded_command_receipt(
     assert result["evidence"]["error_receipt_or_null"] == receipt
     assert result["evidence"]["error_receipt_or_null"]["argv"] == receipt["argv"]
     assert result["root"] == TOOL._domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/SOURCE_REPLAY/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/SOURCE_REPLAY/V2",
         result["evidence"],
     )
 

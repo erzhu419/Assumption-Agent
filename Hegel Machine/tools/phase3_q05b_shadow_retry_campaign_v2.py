@@ -55,6 +55,42 @@ DOC_PATH: Final = (
 V1_SAFETY_KERNEL_PATH: Final = (
     PROJECT_ROOT / "src/hegel_machine/phase3_q05b_shadow_nonadoption_trial_v1.py"
 )
+_STATE_ROOT_V2: Final = "/home/erzhu419/.local/state/hegel-machine"
+_V2R1_STATE_PREFIX: Final = f"{_STATE_ROOT_V2}/q05b-shadow-retry-campaign-v2r1"
+_PRIOR_V2_STATE_PREFIX: Final = f"{_STATE_ROOT_V2}/q05b-shadow-retry-campaign-v2"
+_PRIOR_V2_CONTRACT_ID: Final = "hegel-phase3a-q05b-shadow-retry-campaign-v2"
+_PRIOR_V2_CAPSULE_DIGEST: Final = (
+    "sha256:238b79a5ddf5adb379df9ac1b0ae7e762f7616f1cfbf19b93474315a9197ab62"
+)
+_PRIOR_V2_AUTHORIZATION_DIGEST: Final = (
+    "sha256:0f59cc4aa2f605bdd1388baf769961ccfebf2123c6d6c9ff467f7f61add29cea"
+)
+_CLONE_TARGET_REF_V2R1: Final = (
+    "refs/hegel/q05b-shadow-retry-v2r1-target"
+)
+_PRIOR_V2_PROTECTED_ROOTS: Final = (
+    f"{_PRIOR_V2_STATE_PREFIX}-authorization",
+    f"{_PRIOR_V2_STATE_PREFIX}-ledger",
+    *tuple(
+        f"{_PRIOR_V2_STATE_PREFIX}-slot-{ordinal:02d}-{suffix}"
+        for ordinal in range(1, 4)
+        for suffix in ("clone", "cargo-cache", "artifact", "evidence", "trace")
+    ),
+)
+_EXPECTED_PROTECTED_ROOTS_V2R1: Final = (
+    "/home/erzhu419/mine_code/Asumption Agent",
+    os.fspath(WORKTREE_ROOT),
+    f"{_STATE_ROOT_V2}/q05b-shadow-trajectory-v2-dev-worktree",
+    *_PRIOR_V2_PROTECTED_ROOTS,
+    f"{_STATE_ROOT_V2}/m3-start-runtime-worktree",
+    f"{_STATE_ROOT_V2}/q05b-attempt2-ledger-v1",
+    f"{_STATE_ROOT_V2}/q05b-attempt-2-authorization",
+    f"{_STATE_ROOT_V2}/rust-cargo-cache",
+    "/home/erzhu419/.local/state/kg-op/meta-prior-theory-operations-worktree",
+    "/home/erzhu419/.local/state/kg-op/meta-prior-production-campaigns",
+    "/home/erzhu419/.local/state/kg-op/meta-prior-production-execution-preregs",
+    "/home/erzhu419/.local/state/kg-op/meta-prior-production-executions",
+)
 
 
 _RAW_SHA256: Final = re.compile(r"[0-9a-f]{64}\Z")
@@ -183,11 +219,29 @@ _SPAWN_LAUNCHER_SOURCE_V2: Final = (
 _TARGET_STATIC_POLICY_DOMAIN: Final = (
     b"HEGEL/Q05B/ACTUAL/COMMIT_A_STATIC_POLICY/V1\x00"
 )
+_EXPECTED_HASH_DOMAINS_V2R1: Final = {
+    "contract": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/CONTRACT/V2",
+    "campaign_source_binding": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/CAMPAIGN_SOURCE_BINDING/V2",
+    "capsule": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/CAPSULE/V2",
+    "authorization": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/AUTHORIZATION/V2",
+    "cargo_manifest": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/CARGO_MANIFEST/V2",
+    "ledger_record": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/LEDGER_RECORD/V2",
+    "trajectory_binding": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/TRAJECTORY_BINDING/V2",
+    "trajectory_event_payloads": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/EVENT_PAYLOADS/V2",
+    "trajectory_suffix": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/TRAJECTORY_SUFFIX/V2",
+    "trajectory_other_nonfailure": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/TRAJECTORY_OTHER_NONFAILURE/V2",
+    "trajectory_failure_rows": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/TRAJECTORY_FAILURE_ROWS/V2",
+    "trajectory_cleanup_rows": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/TRAJECTORY_CLEANUP_ROWS/V2",
+    "trajectory_partition_certificate": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/POST_ORIGIN_PARTITION_CERTIFICATE/V2",
+    "slot_outcome": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/SLOT_OUTCOME/V2",
+    "campaign_terminal": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/CAMPAIGN_TERMINAL/V2",
+    "campaign_completion": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/CAMPAIGN_COMPLETION/V2",
+}
 _PREDICATE_DIGEST_DOMAINS: Final = {
-    "retry_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/RETRY_PREDICATE/V2",
-    "success_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/SUCCESS_PREDICATE/V2",
-    "ledger_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/LEDGER_STATE_REGISTRY/V2",
-    "forbidden_scope": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/FORBIDDEN_SCOPE/V2",
+    "retry_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/RETRY_PREDICATE/V2",
+    "success_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/SUCCESS_PREDICATE/V2",
+    "ledger_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/LEDGER_STATE_REGISTRY/V2",
+    "forbidden_scope": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/FORBIDDEN_SCOPE/V2",
 }
 _EXPECTED_FIXED_ENVIRONMENT: Final = {
     "DOCKER_CONFIG": "/nonexistent",
@@ -1191,6 +1245,100 @@ def _source_binding_preimage(binding: Mapping[str, object]) -> dict[str, object]
     return result
 
 
+def _require_v2r1_instance_isolation_v2(
+    contract: Mapping[str, object],
+) -> None:
+    protected = contract.get("protected_state_policy")
+    expected_protected_fields = {
+        "protected_roots_in_exact_order",
+        "prior_v2_campaign_contract_id",
+        "prior_v2_capsule_digest",
+        "prior_v2_authorization_digest",
+        "prior_v2_terminal_is_historical_nonresumable_evidence_only",
+        "prior_v2_campaign_root_open_allowed",
+        "prior_v2_campaign_root_access_allowed",
+        "prior_v2_capsule_authorization_or_ledger_reuse_allowed",
+        "historical_attempt2_or_attempt3_path_open_allowed",
+        "meta_or_production_path_open_allowed",
+        "protected_state_mutation_allowed",
+        "protected_root_hardlink_bind_mount_or_inode_alias_exclusion_proved",
+        "protected_root_separation_evidence",
+        "before_and_after_negative_alias_replay_scope",
+        "operational_threat_boundary",
+        "campaign_outputs_are_never_current_or_adopted",
+    }
+    fixed = contract.get("fixed_external_roots")
+    authorization = contract.get("authorization_policy")
+    ledger = contract.get("ledger_policy")
+    slots = contract.get("slot_registry")
+    if (
+        contract.get("contract_id")
+        != "hegel-phase3a-q05b-shadow-retry-campaign-v2r1"
+        or type(protected) is not dict
+        or set(protected) != expected_protected_fields
+        or protected.get("protected_roots_in_exact_order")
+        != list(_EXPECTED_PROTECTED_ROOTS_V2R1)
+        or protected.get("prior_v2_campaign_contract_id")
+        != _PRIOR_V2_CONTRACT_ID
+        or protected.get("prior_v2_capsule_digest")
+        != _PRIOR_V2_CAPSULE_DIGEST
+        or protected.get("prior_v2_authorization_digest")
+        != _PRIOR_V2_AUTHORIZATION_DIGEST
+        or protected.get(
+            "prior_v2_terminal_is_historical_nonresumable_evidence_only"
+        )
+        is not True
+        or any(
+            protected.get(field) is not False
+            for field in (
+                "prior_v2_campaign_root_open_allowed",
+                "prior_v2_campaign_root_access_allowed",
+                "prior_v2_capsule_authorization_or_ledger_reuse_allowed",
+            )
+        )
+        or type(fixed) is not dict
+        or fixed.get("authorization_root") != f"{_V2R1_STATE_PREFIX}-authorization"
+        or fixed.get("ledger_root") != f"{_V2R1_STATE_PREFIX}-ledger"
+        or type(authorization) is not dict
+        or authorization.get("authorization_root")
+        != f"{_V2R1_STATE_PREFIX}-authorization"
+        or type(ledger) is not dict
+        or ledger.get("ledger_root") != f"{_V2R1_STATE_PREFIX}-ledger"
+        or type(slots) is not list
+        or len(slots) != 3
+    ):
+        _fail(
+            "FAIL_CAMPAIGN_CONTRACT",
+            "v2r1 instance or prior-v2 protected-state isolation differs",
+        )
+    for ordinal, slot in enumerate(slots, start=1):
+        if type(slot) is not dict:
+            _fail("FAIL_CAMPAIGN_CONTRACT", "v2r1 slot isolation differs")
+        prefix = f"{_V2R1_STATE_PREFIX}-slot-{ordinal:02d}"
+        clone = f"{prefix}-clone"
+        evidence = f"{prefix}-evidence"
+        if (
+            slot.get("clone_root") != clone
+            or slot.get("clone_project_root") != f"{clone}/{PROJECT_ROOT.name}"
+            or slot.get("cargo_cache_root") != f"{prefix}-cargo-cache"
+            or slot.get("supervisor_artifact_path")
+            != f"{clone}/{PROJECT_ROOT.name}/artifacts/phase3_q05b_dual_qualification_v2.json"
+            or slot.get("artifact_parent_root") != f"{prefix}-artifact"
+            or slot.get("artifact_path")
+            != f"{prefix}-artifact/phase3_q05b_dual_qualification_v2.json"
+            or slot.get("evidence_root") != evidence
+            or slot.get("trace_root") != f"{prefix}-trace"
+            or slot.get("trajectory_trace_id")
+            != f"q05b-shadow-retry-campaign-v2r1-slot-{ordinal:02d}"
+            or slot.get("stdout_path") != f"{evidence}/supervisor.stdout"
+            or slot.get("stderr_path") != f"{evidence}/supervisor.stderr"
+            or slot.get("external_trajectory_binding_path")
+            != f"{evidence}/trajectory-binding.json"
+            or slot.get("slot_result_path") != f"{evidence}/slot-result.json"
+        ):
+            _fail("FAIL_CAMPAIGN_CONTRACT", "v2r1 slot isolation differs")
+
+
 def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
     config_raw, _config_status = _read_regular_nofollow(
         CONFIG_PATH,
@@ -1205,7 +1353,7 @@ def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
         contract.get("schema_version")
         != "hegel-phase3a-q05b-shadow-retry-campaign/2"
         or contract.get("contract_id")
-        != "hegel-phase3a-q05b-shadow-retry-campaign-v2"
+        != "hegel-phase3a-q05b-shadow-retry-campaign-v2r1"
     ):
         _fail("FAIL_CAMPAIGN_CONTRACT", "campaign contract header differs")
     expected_top_fields = {
@@ -1235,13 +1383,14 @@ def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
     }
     if set(contract) != expected_top_fields:
         _fail("FAIL_CAMPAIGN_CONTRACT", "campaign contract fields differ")
+    _require_v2r1_instance_isolation_v2(contract)
     authority = contract["authority_boundary"]
     execution_policy = contract["execution_policy"]
     forbidden = contract["forbidden_scope"]
     implementation = contract["implementation_state"]
     if (
         contract["status"]
-        != "FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
+        != "V2R1_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
         or contract["claim_scope"]
         != "THREE_SLOT_SHADOW_ONLY_NONADOPTING_Q05B_RETRY_CAMPAIGN"
         or type(authority) is not dict
@@ -1267,6 +1416,14 @@ def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
         != os.fspath(WORKTREE_ROOT)
         or execution_policy.get("clone_source_project_relative_path")
         != PROJECT_ROOT.name
+        or execution_policy.get("clone_target_ref_name")
+        != _CLONE_TARGET_REF_V2R1
+        or execution_policy.get("clone_ref_policy")
+        != (
+            "EXACTLY_ONE_PERMANENT_INTERNAL_REF_BOUND_TO_TARGET_COMMIT_A;"
+            "ALL_SOURCE_REFS_AND_STASH_REFS_REMOVED;"
+            "REF_NAME_AND_OBJECT_ID_REPLAYED_BEFORE_AND_AFTER_SUPERVISOR"
+        )
         or execution_policy.get("cargo_copy_source")
         != "/home/erzhu419/.local/state/hegel-machine/rust-cargo-cache"
         or execution_policy.get("fixed_no_network_environment")
@@ -1304,32 +1461,7 @@ def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
     ):
         _fail("FAIL_CAMPAIGN_CONTRACT", "campaign authority boundary differs")
     domains = contract.get("hash_domains")
-    expected_domains = {
-        "contract",
-        "campaign_source_binding",
-        "capsule",
-        "authorization",
-        "cargo_manifest",
-        "ledger_record",
-        "trajectory_binding",
-        "trajectory_event_payloads",
-        "trajectory_suffix",
-        "trajectory_other_nonfailure",
-        "trajectory_failure_rows",
-        "trajectory_cleanup_rows",
-        "trajectory_partition_certificate",
-        "slot_outcome",
-        "campaign_terminal",
-        "campaign_completion",
-    }
-    if (
-        type(domains) is not dict
-        or set(domains) != expected_domains
-        or any(
-            type(value) is not str or not value or "\x00" in value
-            for value in domains.values()
-        )
-    ):
+    if type(domains) is not dict or domains != _EXPECTED_HASH_DOMAINS_V2R1:
         _fail("FAIL_CAMPAIGN_CONTRACT", "campaign hash-domain registry differs")
     trajectory_policy = contract.get("trajectory_binding_policy")
     if (
@@ -2311,6 +2443,86 @@ def _run_exact_command(
     return result["stdout"]
 
 
+def _certain_registered_git_failure_diagnostic_v2(
+    contract: Mapping[str, object],
+    value: object,
+    detail: object,
+) -> bool:
+    if (
+        type(value) is not dict
+        or value.get("schema_version")
+        != _BOUNDED_COMMAND_DIAGNOSTIC_SCHEMA_V2
+        or set(value)
+        != {
+            "schema_version",
+            "label",
+            "argv",
+            "return_code",
+            "timed_out",
+            "stdout_overflow",
+            "stderr_overflow",
+            "child_reaped",
+            "process_group_absent",
+            "wrapper_resources_closed",
+            "stdout",
+            "stderr",
+            "classification",
+        }
+        or type(detail) is not str
+    ):
+        return False
+    classification = value["classification"]
+    if (
+        type(classification) is not dict
+        or set(classification)
+        != {
+            "require_empty_stdout",
+            "require_empty_stderr",
+            "accepted",
+        }
+        or classification["accepted"] is not False
+        or type(classification["require_empty_stdout"]) is not bool
+        or type(classification["require_empty_stderr"]) is not bool
+        or type(value["return_code"]) is not int
+        or value["return_code"] < 0
+        or value["timed_out"] is not False
+        or value["stdout_overflow"] is not False
+        or value["stderr_overflow"] is not False
+        or value["child_reaped"] is not True
+        or value["process_group_absent"] is not True
+        or value["wrapper_resources_closed"] is not True
+        or not _receipt_stream_semantics_v2(value["stdout"])
+        or not _receipt_stream_semantics_v2(value["stderr"])
+        or not _bounded_command_binding_is_exact_v2(
+            contract,
+            value["label"],
+            value["argv"],
+        )
+        or value["argv"][0]
+        != contract["execution_policy"]["git_executable"]
+    ):
+        return False
+    ordinary_failure = (
+        value["return_code"] > 0
+        or (
+            classification["require_empty_stdout"]
+            and value["stdout"]["byte_count"] > 0
+        )
+        or (
+            classification["require_empty_stderr"]
+            and value["stderr"]["byte_count"] > 0
+        )
+    )
+    return ordinary_failure and detail == (
+        f"{value['label']} failed closed: "
+        f"return_code={value['return_code']}; "
+        f"timed_out={value['timed_out']}; "
+        f"stdout_overflow={value['stdout_overflow']}; "
+        f"stderr_overflow={value['stderr_overflow']}; "
+        f"stderr_excerpt_hex={value['stderr']['excerpt_hex']}"
+    )
+
+
 def _git(
     contract: Mapping[str, object],
     arguments: Sequence[str],
@@ -2327,18 +2539,36 @@ def _git(
         git_worktree=git_worktree,
     )
     bounds = execution["readonly_command_bounds"]["git"]
-    return _run_exact_command(
-        [str(path), *arguments],
-        cwd="/",
-        env=environment,
-        timeout_seconds=float(bounds["timeout_seconds"]),
-        maximum_bytes=max(
-            int(bounds["stdout_max_bytes"]),
-            int(bounds["stderr_max_bytes"]),
-        ),
-        label=label,
-        require_empty_stdout=require_empty_stdout,
-    )
+    argv = [str(path), *arguments]
+    try:
+        return _run_exact_command(
+            argv,
+            cwd="/",
+            env=environment,
+            timeout_seconds=float(bounds["timeout_seconds"]),
+            maximum_bytes=max(
+                int(bounds["stdout_max_bytes"]),
+                int(bounds["stderr_max_bytes"]),
+            ),
+            label=label,
+            require_empty_stdout=require_empty_stdout,
+        )
+    except ShadowRetryCampaignErrorV2 as error:
+        if (
+            error.code == "FAIL_CAMPAIGN_PROCESS"
+            and _certain_registered_git_failure_diagnostic_v2(
+                contract,
+                error.receipt,
+                error.detail,
+            )
+        ):
+            _fail(
+                "FAIL_CAMPAIGN_SOURCE",
+                error.detail,
+                terminal=error.terminal,
+                receipt=error.receipt,
+            )
+        raise
 
 
 def _runtime_environment(
@@ -2384,7 +2614,7 @@ def _scan_tree(
     maximum_entries: int = 100_000,
     maximum_total_bytes: int = 4 * 1024 * 1024 * 1024,
     manifest_domain: str = (
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/CARGO_MANIFEST/V2"
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/CARGO_MANIFEST/V2"
     ),
     allowed_uids: Sequence[int] | None = None,
     reject_group_or_world_writable: bool = False,
@@ -3240,6 +3470,20 @@ def _verify_clone(
         _fail("FAIL_CAMPAIGN_SOURCE", "slot clone project root differs", terminal=True)
     clone_fd, clone_stat = _open_directory_nofollow(clone_root, "slot clone root")
     os.close(clone_fd)
+    commit_graph_raw, _commit_graph_stat = _read_regular_nofollow(
+        clone_root / ".git/objects/info/commit-graph",
+        "slot clone reachable commit-graph",
+        256 * 1024 * 1024,
+    )
+    if not commit_graph_raw:
+        _fail("FAIL_CAMPAIGN_SOURCE", "slot clone commit-graph is empty", terminal=True)
+    _git(
+        contract,
+        ["-C", os.fspath(clone_root), "commit-graph", "verify"],
+        "slot clone commit-graph verify",
+        require_empty_stdout=True,
+        git_worktree=os.fspath(clone_root),
+    )
     head = _git(
         contract,
         ["-C", os.fspath(clone_root), "rev-parse", "HEAD"],
@@ -3284,21 +3528,51 @@ def _verify_clone(
     )
     refs = _git(
         contract,
-        ["-C", os.fspath(clone_root), "for-each-ref", "--format=%(refname)"],
+        [
+            "-C",
+            os.fspath(clone_root),
+            "for-each-ref",
+            "--format=%(refname)%00%(objectname)",
+        ],
         "slot clone ref replay",
         git_worktree=os.fspath(clone_root),
     )
-    unreachable = _git(
+    expected_ref = (
+        str(contract["execution_policy"]["clone_target_ref_name"])
+        + "\x00"
+        + str(target["target_supervisor_commit"])
+        + "\n"
+    ).encode("ascii")
+    graph_enabled_fsck = _git(
         contract,
         [
             "-C",
             os.fspath(clone_root),
             "fsck",
             "--full",
+            "--strict",
             "--unreachable",
             "--no-reflogs",
         ],
-        "slot clone unreachable-object replay",
+        "slot clone graph-enabled strict fsck",
+        require_empty_stdout=True,
+        git_worktree=os.fspath(clone_root),
+    )
+    graph_disabled_fsck = _git(
+        contract,
+        [
+            "-c",
+            "core.commitGraph=false",
+            "-C",
+            os.fspath(clone_root),
+            "fsck",
+            "--full",
+            "--strict",
+            "--unreachable",
+            "--no-reflogs",
+        ],
+        "slot clone graph-disabled strict fsck",
+        require_empty_stdout=True,
         git_worktree=os.fspath(clone_root),
     )
     expected_untracked = b""
@@ -3315,8 +3589,9 @@ def _verify_clone(
         or untracked != expected_untracked
         or remotes != b""
         or branch != b""
-        or refs != b""
-        or unreachable != b""
+        or refs != expected_ref
+        or graph_enabled_fsck != b""
+        or graph_disabled_fsck != b""
         or stat.S_IMODE(clone_stat.st_mode) not in (0o700, 0o755)
         or clone_stat.st_uid != os.geteuid()
     ):
@@ -3336,7 +3611,7 @@ def _verify_clone(
         label="slot clone no-alias tree replay",
         maximum_entries=200_000,
         manifest_domain=(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/CLONE_TREE_MANIFEST/V2"
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/CLONE_TREE_MANIFEST/V2"
         ),
     )
     artifact_relative = artifact.relative_to(clone_root).as_posix()
@@ -3346,7 +3621,7 @@ def _verify_clone(
         if row["relative_path"] != artifact_relative
     ]
     closure_without_artifact = _domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/"
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/"
         "CLONE_CLOSURE_WITHOUT_ARTIFACT/V2",
         closure_rows_without_artifact,
     )
@@ -3384,12 +3659,12 @@ def _prepare_clone(
             "--no-checkout",
             "--no-hardlinks",
             "--no-tags",
-            "--local",
+            "--no-local",
             "--quiet",
             source,
             destination,
         ],
-        "slot local clone",
+        "slot no-local clone",
         require_empty_stdout=True,
         git_worktree=destination,
     )
@@ -3445,6 +3720,27 @@ def _prepare_clone(
         contract,
         ["-C", destination, "gc", "--prune=now", "--quiet"],
         "slot clone exact closure prune",
+        require_empty_stdout=True,
+        git_worktree=destination,
+    )
+    graph_ref = str(execution["clone_target_ref_name"])
+    _git(
+        contract,
+        [
+            "-C",
+            destination,
+            "update-ref",
+            graph_ref,
+            str(target["target_supervisor_commit"]),
+        ],
+        "slot clone target graph ref creation",
+        require_empty_stdout=True,
+        git_worktree=destination,
+    )
+    _git(
+        contract,
+        ["-C", destination, "commit-graph", "write", "--reachable"],
+        "slot clone reachable commit-graph write",
         require_empty_stdout=True,
         git_worktree=destination,
     )
@@ -3687,7 +3983,7 @@ def _slot_roots_absence_evidence(
     return {
         **preimage,
         "root": _domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/"
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/"
             "SLOT_ROOT_ABSENCE/V2",
             preimage,
         ),
@@ -3842,7 +4138,7 @@ def _authorization_template(
         ],
     }
     owner_confirmation_digest = _domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/OWNER_CONFIRMATION/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/OWNER_CONFIRMATION/V2",
         confirmation,
     )
     value: dict[str, object] = {
@@ -5724,7 +6020,7 @@ def _source_state_replay(
         "evidence": evidence,
         "clone_closure_rows_internal": clone_closure_rows,
         "root": _domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/SOURCE_REPLAY/V2",
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/SOURCE_REPLAY/V2",
             evidence,
         ),
     }
@@ -5762,7 +6058,7 @@ def _safe_source_state_replay(
             "error_or_null": detail,
             "evidence": evidence,
             "root": _domain_digest(
-                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/SOURCE_REPLAY/V2",
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/SOURCE_REPLAY/V2",
                 evidence,
             ),
         }
@@ -5777,7 +6073,7 @@ def _augment_source_replay_with_alias_rows(
     evidence["nonalias_directory_identities"] = deepcopy(dict(alias_rows))
     result["evidence"] = evidence
     result["root"] = _domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/SOURCE_REPLAY/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/SOURCE_REPLAY/V2",
         evidence,
     )
     return result
@@ -5860,7 +6156,7 @@ def _enforce_clone_closure(
         "error_or_null": detail,
         "evidence": evidence,
         "root": _domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/SOURCE_REPLAY/V2",
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/SOURCE_REPLAY/V2",
             evidence,
         ),
     }
@@ -6188,7 +6484,7 @@ def _cleanup_replay_evidence(
     return {
         "preimage": value,
         "root": _domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/CLEANUP_REPLAY/V2",
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/CLEANUP_REPLAY/V2",
             value,
         ),
     }
@@ -6637,14 +6933,18 @@ def _bounded_command_binding_is_exact_v2(
             ("slot clone untracked replay", ["-C", clone, "ls-files", "--others", "-z"]),
             ("slot clone remote replay", ["-C", clone, "remote"]),
             ("slot clone detached replay", ["-C", clone, "branch", "--show-current"]),
-            ("slot clone ref replay", ["-C", clone, "for-each-ref", "--format=%(refname)"]),
-            ("slot clone unreachable-object replay", ["-C", clone, "fsck", "--full", "--unreachable", "--no-reflogs"]),
-            ("slot local clone", ["clone", "--no-checkout", "--no-hardlinks", "--no-tags", "--local", "--quiet", source, clone]),
+            ("slot clone ref replay", ["-C", clone, "for-each-ref", "--format=%(refname)%00%(objectname)"]),
+            ("slot clone commit-graph verify", ["-C", clone, "commit-graph", "verify"]),
+            ("slot clone graph-enabled strict fsck", ["-C", clone, "fsck", "--full", "--strict", "--unreachable", "--no-reflogs"]),
+            ("slot clone graph-disabled strict fsck", ["-c", "core.commitGraph=false", "-C", clone, "fsck", "--full", "--strict", "--unreachable", "--no-reflogs"]),
+            ("slot no-local clone", ["clone", "--no-checkout", "--no-hardlinks", "--no-tags", "--no-local", "--quiet", source, clone]),
             ("slot detached checkout", ["-C", clone, "checkout", "--detach", "--quiet", commit]),
             ("slot remote removal", ["-C", clone, "remote", "remove", "origin"]),
             ("slot cloned ref enumeration", ["-C", clone, "for-each-ref", "--format=%(refname)"]),
             ("slot clone reflog expiration", ["-C", clone, "reflog", "expire", "--expire=now", "--all"]),
             ("slot clone exact closure prune", ["-C", clone, "gc", "--prune=now", "--quiet"]),
+            ("slot clone target graph ref creation", ["-C", clone, "update-ref", _CLONE_TARGET_REF_V2R1, commit]),
+            ("slot clone reachable commit-graph write", ["-C", clone, "commit-graph", "write", "--reachable"]),
         )
         for name, arguments in clone_rows:
             allow(name, arguments)
@@ -6870,6 +7170,18 @@ def _terminal_error_receipt_semantics_v2(
             )
         else:
             classification_ok = False
+        certain_git_source = _certain_registered_git_failure_diagnostic_v2(
+            contract,
+            value,
+            terminal_error_detail,
+        )
+        terminal_code_ok = (
+            terminal_error_code == "FAIL_CAMPAIGN_SOURCE"
+            and certain_git_source
+        ) or (
+            terminal_error_code == "FAIL_CAMPAIGN_PROCESS"
+            and not certain_git_source
+        )
         if (
             not classification_ok
             or type(value["return_code"]) not in (int, type(None))
@@ -6886,7 +7198,7 @@ def _terminal_error_receipt_semantics_v2(
             )
             or not _receipt_stream_semantics_v2(value["stdout"])
             or not _receipt_stream_semantics_v2(value["stderr"])
-            or terminal_error_code != "FAIL_CAMPAIGN_PROCESS"
+            or not terminal_code_ok
             or (
                 top_level
                 and value["argv"][0]
@@ -7241,7 +7553,7 @@ def _verify_slot_absence_evidence_semantics_v2(
     evidence = _verify_domain_root_v2(
         value,
         domain=(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/"
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/"
             "SLOT_ROOT_ABSENCE/V2"
         ),
         root_field="root",
@@ -7693,7 +8005,7 @@ def _verify_ledger_state_semantics_v2(
         before = _verify_domain_root_v2(
             binding["source_replay_before_evidence"],
             domain=(
-                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/"
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/"
                 "SOURCE_REPLAY/V2"
             ),
             root_field="root",
@@ -7703,7 +8015,7 @@ def _verify_ledger_state_semantics_v2(
         after = _verify_domain_root_v2(
             binding["source_replay_after_evidence"],
             domain=(
-                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/"
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/"
                 "SOURCE_REPLAY/V2"
             ),
             root_field="root",
@@ -7728,7 +8040,7 @@ def _verify_ledger_state_semantics_v2(
         cleanup = _verify_domain_root_v2(
             binding["cleanup_replay_evidence"],
             domain=(
-                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/"
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/"
                 "CLEANUP_REPLAY/V2"
             ),
             root_field="root",
@@ -8841,7 +9153,7 @@ def _run_one_slot(
                 "error_or_null": detail,
                 "evidence": {"error": detail},
                 "root": _domain_digest(
-                    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/SOURCE_REPLAY/V2",
+                    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/SOURCE_REPLAY/V2",
                     {"error": detail},
                 ),
             }
@@ -9007,7 +9319,7 @@ def _run_one_slot(
                 "error_or_null": detail,
                 "evidence": {"error": detail},
                 "root": _domain_digest(
-                    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN/SOURCE_REPLAY/V2",
+                    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1/SOURCE_REPLAY/V2",
                     {"error": detail},
                 ),
             }
