@@ -1037,18 +1037,18 @@ def test_canonical_strict_codec_and_domain_separated_digest_known_answer() -> No
     assert first != second
 
 
-def test_v2r12_partition_digest_domains_are_new_instance_authority() -> None:
+def test_v2r13_partition_digest_domains_are_new_instance_authority() -> None:
     rows: list[dict[str, object]] = []
     failure_domain = (
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R12/"
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R13/"
         "TRAJECTORY_FAILURE_ROWS/V2\x00"
     )
     cleanup_domain = (
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R12/"
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R13/"
         "TRAJECTORY_CLEANUP_ROWS/V2\x00"
     )
     certificate_domain = (
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R12/"
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R13/"
         "POST_ORIGIN_PARTITION_CERTIFICATE/V2\x00"
     )
     certificate: dict[str, object] = {"certificate_digest": None}
@@ -1067,85 +1067,103 @@ def test_v2r12_partition_digest_domains_are_new_instance_authority() -> None:
         certificate_domain, {}
     )
     assert failure_digest != campaign.campaign_record_digest_v2(
-        failure_domain.replace("V2R12", "V2R2"), rows
+        failure_domain.replace("V2R13", "V2R2"), rows
     )
     assert failure_digest != campaign.campaign_record_digest_v2(
-        failure_domain.replace("V2R12", "V2R3"), rows
+        failure_domain.replace("V2R13", "V2R3"), rows
     )
     assert failure_digest != campaign.campaign_record_digest_v2(
-        failure_domain.replace("V2R12", "V2R4"), rows
+        failure_domain.replace("V2R13", "V2R4"), rows
     )
     assert failure_digest != campaign.campaign_record_digest_v2(
-        failure_domain.replace("V2R12", "V2R5"), rows
+        failure_domain.replace("V2R13", "V2R5"), rows
     )
     assert failure_digest != campaign.campaign_record_digest_v2(
-        failure_domain.replace("V2R12", "V2R6"), rows
+        failure_domain.replace("V2R13", "V2R6"), rows
     )
     assert failure_digest != campaign.campaign_record_digest_v2(
-        failure_domain.replace("V2R12", "V2R7"), rows
+        failure_domain.replace("V2R13", "V2R7"), rows
     )
     assert failure_digest != campaign.campaign_record_digest_v2(
-        failure_domain.replace("V2R12", "V2R8"), rows
+        failure_domain.replace("V2R13", "V2R8"), rows
     )
     assert failure_digest != campaign.campaign_record_digest_v2(
-        failure_domain.replace("V2R12", "V2R9"), rows
+        failure_domain.replace("V2R13", "V2R9"), rows
     )
     assert failure_digest != campaign.campaign_record_digest_v2(
-        failure_domain.replace("V2R12", "V2R10"), rows
+        failure_domain.replace("V2R13", "V2R10"), rows
+    )
+    assert failure_digest != campaign.campaign_record_digest_v2(
+        failure_domain.replace("V2R13", "V2R11"), rows
+    )
+    assert failure_digest != campaign.campaign_record_digest_v2(
+        failure_domain.replace("V2R13", "V2R12"), rows
     )
     assert cleanup_digest != campaign.campaign_record_digest_v2(
-        cleanup_domain.replace("V2R12", "V2R2"), rows
+        cleanup_domain.replace("V2R13", "V2R2"), rows
     )
     assert cleanup_digest != campaign.campaign_record_digest_v2(
-        cleanup_domain.replace("V2R12", "V2R3"), rows
+        cleanup_domain.replace("V2R13", "V2R3"), rows
     )
     assert cleanup_digest != campaign.campaign_record_digest_v2(
-        cleanup_domain.replace("V2R12", "V2R4"), rows
+        cleanup_domain.replace("V2R13", "V2R4"), rows
     )
     assert cleanup_digest != campaign.campaign_record_digest_v2(
-        cleanup_domain.replace("V2R12", "V2R5"), rows
+        cleanup_domain.replace("V2R13", "V2R5"), rows
     )
     assert cleanup_digest != campaign.campaign_record_digest_v2(
-        cleanup_domain.replace("V2R12", "V2R6"), rows
+        cleanup_domain.replace("V2R13", "V2R6"), rows
     )
     assert cleanup_digest != campaign.campaign_record_digest_v2(
-        cleanup_domain.replace("V2R12", "V2R7"), rows
+        cleanup_domain.replace("V2R13", "V2R7"), rows
     )
     assert cleanup_digest != campaign.campaign_record_digest_v2(
-        cleanup_domain.replace("V2R12", "V2R8"), rows
+        cleanup_domain.replace("V2R13", "V2R8"), rows
     )
     assert cleanup_digest != campaign.campaign_record_digest_v2(
-        cleanup_domain.replace("V2R12", "V2R9"), rows
+        cleanup_domain.replace("V2R13", "V2R9"), rows
     )
     assert cleanup_digest != campaign.campaign_record_digest_v2(
-        cleanup_domain.replace("V2R12", "V2R10"), rows
+        cleanup_domain.replace("V2R13", "V2R10"), rows
+    )
+    assert cleanup_digest != campaign.campaign_record_digest_v2(
+        cleanup_domain.replace("V2R13", "V2R11"), rows
+    )
+    assert cleanup_digest != campaign.campaign_record_digest_v2(
+        cleanup_domain.replace("V2R13", "V2R12"), rows
     )
     assert certificate_digest != campaign.campaign_record_digest_v2(
-        certificate_domain.replace("V2R12", "V2R2"), {}
+        certificate_domain.replace("V2R13", "V2R2"), {}
     )
     assert certificate_digest != campaign.campaign_record_digest_v2(
-        certificate_domain.replace("V2R12", "V2R3"), {}
+        certificate_domain.replace("V2R13", "V2R3"), {}
     )
     assert certificate_digest != campaign.campaign_record_digest_v2(
-        certificate_domain.replace("V2R12", "V2R4"), {}
+        certificate_domain.replace("V2R13", "V2R4"), {}
     )
     assert certificate_digest != campaign.campaign_record_digest_v2(
-        certificate_domain.replace("V2R12", "V2R5"), {}
+        certificate_domain.replace("V2R13", "V2R5"), {}
     )
     assert certificate_digest != campaign.campaign_record_digest_v2(
-        certificate_domain.replace("V2R12", "V2R6"), {}
+        certificate_domain.replace("V2R13", "V2R6"), {}
     )
     assert certificate_digest != campaign.campaign_record_digest_v2(
-        certificate_domain.replace("V2R12", "V2R7"), {}
+        certificate_domain.replace("V2R13", "V2R7"), {}
     )
     assert certificate_digest != campaign.campaign_record_digest_v2(
-        certificate_domain.replace("V2R12", "V2R8"), {}
+        certificate_domain.replace("V2R13", "V2R8"), {}
     )
     assert certificate_digest != campaign.campaign_record_digest_v2(
-        certificate_domain.replace("V2R12", "V2R9"), {}
+        certificate_domain.replace("V2R13", "V2R9"), {}
     )
     assert certificate_digest != campaign.campaign_record_digest_v2(
-        certificate_domain.replace("V2R12", "V2R10"), {}
+        certificate_domain.replace("V2R13", "V2R10"), {}
+    )
+    assert certificate_digest != campaign.campaign_record_digest_v2(
+        certificate_domain.replace("V2R13", "V2R11"), {}
+    )
+    assert certificate_digest != campaign.campaign_record_digest_v2(
+        certificate_domain.replace("V2R13", "V2R12"), {}
     )
 
 
@@ -2540,7 +2558,7 @@ def test_canonical_codec_wraps_recursive_tree_failure_in_typed_error() -> None:
     assert caught.value.code == campaign.FAIL_CANONICAL_V2
 
 
-def test_v2r12_preconsumption_pending_is_not_a_slot_decision() -> None:
+def test_v2r13_preconsumption_pending_is_not_a_slot_decision() -> None:
     decisions = {
         campaign.SUCCESS_V2,
         campaign.RETRY_EXACT_GAP_V2,

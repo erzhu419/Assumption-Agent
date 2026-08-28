@@ -304,7 +304,7 @@ def _contract() -> dict[str, object]:
     assert type(value) is dict
     contract = deepcopy(value)
     final_status = (
-        "V2R12_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
+        "V2R13_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
     )
     contract["status"] = final_status
     contract["contract_digest"] = _tagged("contract")
@@ -642,7 +642,7 @@ def _exact_scheduling_exhaustion_error(
             burst_runner=failed_burst,
         )
     error = generated.value
-    assert TOOL._scheduling_gate_exhaustion_is_exact_v2r12(
+    assert TOOL._scheduling_gate_exhaustion_is_exact_v2r13(
         contract,
         slot_id,
         error,
@@ -2478,8 +2478,8 @@ def _target_fsck_pending_error(
     result = _process(b"", -9)
     result["timed_out"] = True
     receipt = TOOL._bounded_process_diagnostic(
-        TOOL._TARGET_FSCK_ADMISSION_LABEL_V2R12,
-        TOOL._target_object_closure_fsck_argv_v2r12(contract),
+        TOOL._TARGET_FSCK_ADMISSION_LABEL_V2R13,
+        TOOL._target_object_closure_fsck_argv_v2r13(contract),
         result,
         classification={
             "accepted": False,
@@ -2491,7 +2491,7 @@ def _target_fsck_pending_error(
         },
     )
     return TOOL.ShadowRetryCampaignPendingV1(
-        TOOL._TARGET_FSCK_PENDING_CODE_V2R12,
+        TOOL._TARGET_FSCK_PENDING_CODE_V2R13,
         "injected exact clean target fsck timeout",
         phase="TARGET_LOCAL_OBJECT_CLOSURE_FSCK",
         condition="READONLY_COMMAND_TIMEOUT",
@@ -2606,7 +2606,7 @@ def _source_replay(label: str) -> dict[str, object]:
         "error_or_null": None,
         "evidence": evidence,
         "root": TOOL._domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R12/SOURCE_REPLAY/V2",
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R13/SOURCE_REPLAY/V2",
             evidence,
         ),
     }
@@ -2623,7 +2623,7 @@ def _future_freshness() -> dict[str, object]:
     unsigned = deepcopy(value)
     unsigned.pop("root")
     value["root"] = TOOL._domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R12/SLOT_ROOT_ABSENCE/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R13/SLOT_ROOT_ABSENCE/V2",
         unsigned,
     )
     return value
@@ -2719,7 +2719,7 @@ def _scheduling_probe_cleanup_receipt(
         "cleanup_errors": [],
         "passed": True,
     }
-    assert TOOL._scheduling_probe_cleanup_receipt_exact_v2r12(
+    assert TOOL._scheduling_probe_cleanup_receipt_exact_v2r13(
         capsule,
         slot,
         receipt,
@@ -2773,7 +2773,7 @@ def _slot_absence_evidence(
     unsigned = deepcopy(value)
     unsigned.pop("root")
     value["root"] = TOOL._domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R12/SLOT_ROOT_ABSENCE/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R13/SLOT_ROOT_ABSENCE/V2",
         unsigned,
     )
     return value
@@ -2784,7 +2784,7 @@ def _cleanup_replay() -> dict[str, object]:
     return {
         "preimage": preimage,
         "root": TOOL._domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R12/CLEANUP_REPLAY/V2",
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R13/CLEANUP_REPLAY/V2",
             preimage,
         ),
     }
@@ -3052,7 +3052,7 @@ def test_target_binding_replay_is_light_and_does_not_repeat_full_fsck(
     monkeypatch.setattr(TOOL, "_git", recording_git)
     replay = TOOL._verify_target_git_objects(contract)
     assert replay["local_object_closure_fsck_passed"] is False
-    assert TOOL._TARGET_FSCK_ADMISSION_LABEL_V2R12 not in observed_labels
+    assert TOOL._TARGET_FSCK_ADMISSION_LABEL_V2R13 not in observed_labels
 
 
 def test_exact_target_fsck_clean_timeout_is_typed_pending(
@@ -3072,7 +3072,7 @@ def test_exact_target_fsck_clean_timeout_is_typed_pending(
     monkeypatch.setattr(TOOL, "_bounded_process", bounded)
     monkeypatch.setattr(TOOL.time, "monotonic_ns", lambda: next(monotonic))
     with pytest.raises(TOOL.ShadowRetryCampaignPendingV1) as pending:
-        TOOL._target_object_closure_fsck_admission_v2r12(
+        TOOL._target_object_closure_fsck_admission_v2r13(
             contract,
             dependency_gate_invocation_count=1,
         )
@@ -3080,15 +3080,15 @@ def test_exact_target_fsck_clean_timeout_is_typed_pending(
     assert pending.value.condition == "READONLY_COMMAND_TIMEOUT"
     assert pending.value.dependency_gate_invocation_count == 1
     receipt = pending.value.receipt
-    assert receipt["label"] == TOOL._TARGET_FSCK_ADMISSION_LABEL_V2R12
+    assert receipt["label"] == TOOL._TARGET_FSCK_ADMISSION_LABEL_V2R13
     assert receipt["argv"] == (
-        TOOL._target_object_closure_fsck_argv_v2r12(contract)
+        TOOL._target_object_closure_fsck_argv_v2r13(contract)
     )
     assert receipt["stdout"]["byte_count"] == 0
     assert receipt["stderr"]["byte_count"] == 0
     assert receipt["classification"]["elapsed_ns"] == 300_000_000_000
     assert observed["kwargs"]["timeout_seconds"] == 300.0
-    assert TOOL._preconsumption_pending_is_exact_v2r12(
+    assert TOOL._preconsumption_pending_is_exact_v2r13(
         contract,
         pending.value,
     ) is True
@@ -3188,7 +3188,7 @@ def test_pending_classifier_rejects_every_nonexact_receipt_mutation(
     else:
         assert mutation == "classification-elapsed-negative"
         receipt["classification"]["elapsed_ns"] = -1
-    assert TOOL._preconsumption_pending_is_exact_v2r12(
+    assert TOOL._preconsumption_pending_is_exact_v2r13(
         contract,
         pending,
     ) is False
@@ -3219,8 +3219,8 @@ def test_typed_pending_raise_sites_are_only_exact_fsck_and_slot_gate() -> None:
 
     Visitor().visit(tree)
     assert sites == [
-        "_run_slot_scheduling_admission_v2r12",
-        "_target_object_closure_fsck_admission_v2r12",
+        "_run_slot_scheduling_admission_v2r13",
+        "_target_object_closure_fsck_admission_v2r13",
     ]
 
 
@@ -3260,7 +3260,7 @@ def test_target_fsck_nonclean_outcomes_are_terminal_not_pending(
     )
     monkeypatch.setattr(TOOL.time, "monotonic_ns", lambda: next(monotonic))
     with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
-        TOOL._target_object_closure_fsck_admission_v2r12(
+        TOOL._target_object_closure_fsck_admission_v2r13(
             contract,
             dependency_gate_invocation_count=1,
         )
@@ -3281,7 +3281,7 @@ def test_only_exact_target_fsck_receives_300_second_budget(
     monotonic = iter((1_000, 2_000))
     monkeypatch.setattr(TOOL, "_bounded_process", bounded)
     monkeypatch.setattr(TOOL.time, "monotonic_ns", lambda: next(monotonic))
-    receipt = TOOL._target_object_closure_fsck_admission_v2r12(
+    receipt = TOOL._target_object_closure_fsck_admission_v2r13(
         contract,
         dependency_gate_invocation_count=1,
     )
@@ -3293,7 +3293,7 @@ def test_only_exact_target_fsck_receives_300_second_budget(
     )
     assert receipt["classification"]["accepted"] is True
     assert observed == [
-        (TOOL._target_object_closure_fsck_argv_v2r12(contract), 300.0),
+        (TOOL._target_object_closure_fsck_argv_v2r13(contract), 300.0),
         (["/usr/bin/git", "-C", repository, "rev-parse", "HEAD"], 120.0),
     ]
 
@@ -3344,7 +3344,7 @@ def test_real_tiny_repository_fixture_passes_exact_target_fsck(
         repository
     )
     contract["target_commit_a_binding"]["target_supervisor_commit"] = commit
-    receipt = TOOL._target_object_closure_fsck_admission_v2r12(
+    receipt = TOOL._target_object_closure_fsck_admission_v2r13(
         contract,
         dependency_gate_invocation_count=1,
     )
@@ -3900,7 +3900,7 @@ def test_preflight_has_no_docker_supervisor_clone_or_root_mutation_calls(
     )
     monkeypatch.setattr(
         TOOL,
-        "_target_object_closure_fsck_admission_v2r12",
+        "_target_object_closure_fsck_admission_v2r13",
         lambda *_args, **_kwargs: {"classification": {"accepted": True}},
     )
     monkeypatch.setattr(TOOL.os.path, "lexists", lambda _path: False)
@@ -4024,7 +4024,7 @@ def test_preflight_context_runs_dependency_then_one_fsck_then_authorization_temp
     monkeypatch.setattr(TOOL, "_build_capsule", build)
     monkeypatch.setattr(
         TOOL,
-        "_target_object_closure_fsck_admission_v2r12",
+        "_target_object_closure_fsck_admission_v2r13",
         fsck,
     )
     monkeypatch.setattr(TOOL, "_authorization_template", authorization)
@@ -4103,7 +4103,7 @@ def test_wrong_valid_capsule_digest_stops_before_fsck_and_cannot_pending(
 
     monkeypatch.setattr(
         TOOL,
-        "_target_object_closure_fsck_admission_v2r12",
+        "_target_object_closure_fsck_admission_v2r13",
         forbidden_fsck,
     )
     monkeypatch.setattr(TOOL, "_authorization_template", forbidden_authorization)
@@ -4220,27 +4220,27 @@ def test_slot_registry_accepts_exact_contract_and_rejects_path_drift() -> None:
     assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
 
 
-def test_v2r12_instance_isolation_rejects_all_historical_authority_and_roots() -> None:
+def test_v2r13_instance_isolation_rejects_all_historical_authority_and_roots() -> None:
     raw_contract = TOOL._pretty_json(
         TOOL.CONFIG_PATH.read_bytes(),
-        "v2r12 target Git object closure",
+        "v2r13 target Git object closure",
     )
     assert type(raw_contract) is dict
     target_git_object_closure = raw_contract["target_commit_a_binding"]
     assert type(target_git_object_closure) is dict
     assert target_git_object_closure["status"] == "TARGET_COMMIT_A_BOUND"
     assert target_git_object_closure["target_supervisor_commit"] == (
-        "dd004ef75a67ccd14de8d6e6b6e4e0bd80c971b7"
+        "0bde03ba2d00887e1590c12d235b96fe07d09b5c"
     )
 
     contract = _contract()
-    TOOL._require_v2r12_instance_isolation_v2(contract)
+    TOOL._require_v2r13_instance_isolation_v2(contract)
     protected = contract["protected_state_policy"]
     assert type(protected) is dict
     protected_roots = protected["protected_roots_in_exact_order"]
     assert type(protected_roots) is list
-    assert len(protected_roots) == 226
-    assert protected_roots == list(TOOL._EXPECTED_PROTECTED_ROOTS_V2R12)
+    assert len(protected_roots) == 247
+    assert protected_roots == list(TOOL._EXPECTED_PROTECTED_ROOTS_V2R13)
     assert set(TOOL._PRIOR_V2_PROTECTED_ROOTS).issubset(protected_roots)
     assert set(TOOL._PRIOR_V2R1_PROTECTED_ROOTS).issubset(protected_roots)
     assert set(TOOL._PRIOR_V2R2_PROTECTED_ROOTS).issubset(protected_roots)
@@ -4252,6 +4252,8 @@ def test_v2r12_instance_isolation_rejects_all_historical_authority_and_roots() -
     assert set(TOOL._PRIOR_V2R8_PROTECTED_ROOTS).issubset(protected_roots)
     assert set(TOOL._PRIOR_V2R9_PROTECTED_ROOTS).issubset(protected_roots)
     assert set(TOOL._PRIOR_V2R10_PROTECTED_ROOTS).issubset(protected_roots)
+    assert set(TOOL._PRIOR_V2R11_PROTECTED_ROOTS).issubset(protected_roots)
+    assert set(TOOL._PRIOR_V2R12_PROTECTED_ROOTS).issubset(protected_roots)
     assert protected["prior_v2r1_campaign_contract_id"] == (
         TOOL._PRIOR_V2R1_CONTRACT_ID
     )
@@ -4382,6 +4384,14 @@ def test_v2r12_instance_isolation_rejects_all_historical_authority_and_roots() -
         field: protected[field]
         for field in TOOL._PRIOR_V2R10_PROTECTED_POLICY_FACTS
     } == TOOL._PRIOR_V2R10_PROTECTED_POLICY_FACTS
+    assert {
+        field: protected[field]
+        for field in TOOL._PRIOR_V2R11_PROTECTED_POLICY_FACTS
+    } == TOOL._PRIOR_V2R11_PROTECTED_POLICY_FACTS
+    assert {
+        field: protected[field]
+        for field in TOOL._PRIOR_V2R12_PROTECTED_POLICY_FACTS
+    } == TOOL._PRIOR_V2R12_PROTECTED_POLICY_FACTS
     assert len(TOOL._PRIOR_V2R6_RUNTIME_ROOTS) == 17
     assert TOOL._PRIOR_V2R6_PROTECTED_ROOTS == (
         TOOL._PRIOR_V2R6_WORKTREE_ROOT,
@@ -4415,7 +4425,19 @@ def test_v2r12_instance_isolation_rejects_all_historical_authority_and_roots() -
         TOOL._PRIOR_V2R10_WORKTREE_ROOT,
         *TOOL._PRIOR_V2R10_RUNTIME_ROOTS,
     )
-    assert protected["preauthorization_historical_read_only_review_count"] == 2
+    assert len(TOOL._PRIOR_V2R12_RUNTIME_ROOTS) == 20
+    assert len(TOOL._PRIOR_V2R12_RUNTIME_ROOT_STATES_IN_EXACT_ORDER) == 20
+    assert TOOL._PRIOR_V2R12_RUNTIME_ROOT_STATES_IN_EXACT_ORDER.count(
+        "PRESENT"
+    ) == 10
+    assert TOOL._PRIOR_V2R12_RUNTIME_ROOT_STATES_IN_EXACT_ORDER.count(
+        "ABSENT"
+    ) == 10
+    assert TOOL._PRIOR_V2R12_PROTECTED_ROOTS == (
+        TOOL._PRIOR_V2R12_WORKTREE_ROOT,
+        *TOOL._PRIOR_V2R12_RUNTIME_ROOTS,
+    )
+    assert protected["preauthorization_historical_read_only_review_count"] == 3
     assert protected[
         "preauthorization_historical_read_only_review_scope_in_exact_order"
     ] == list(TOOL._PREAUTHORIZATION_HISTORICAL_READ_ONLY_REVIEW_SCOPE_IN_EXACT_ORDER)
@@ -4543,18 +4565,19 @@ def test_v2r12_instance_isolation_rejects_all_historical_authority_and_roots() -
     for ordinal, slot in enumerate(slots, start=1):
         assert type(slot) is dict
         assert slot["trajectory_trace_id"] == (
-            f"q05b-shadow-retry-campaign-v2r12-slot-{ordinal:02d}"
+            f"q05b-shadow-retry-campaign-v2r13-slot-{ordinal:02d}"
         )
         active_roots.update(
             {
                 slot["clone_root"],
                 slot["cargo_cache_root"],
                 slot["artifact_parent_root"],
+                slot["scheduling_probe_root"],
                 slot["evidence_root"],
                 slot["trace_root"],
             }
         )
-    assert len(active_roots) == 17
+    assert len(active_roots) == 20
     assert active_roots.isdisjoint(protected_roots)
 
     mutations = []
@@ -4634,6 +4657,18 @@ def test_v2r12_instance_isolation_rejects_all_historical_authority_and_roots() -
         drifted_prior_v2r10_boundary["protected_state_policy"][field] = True
         mutations.append(drifted_prior_v2r10_boundary)
 
+    for version in ("v2r11", "v2r12"):
+        for suffix in (
+            "capsule_authorization_or_ledger_reuse_allowed",
+            "campaign_root_open_allowed",
+            "campaign_root_access_allowed",
+        ):
+            drifted_boundary = deepcopy(contract)
+            drifted_boundary["protected_state_policy"][
+                f"prior_{version}_{suffix}"
+            ] = True
+            mutations.append(drifted_boundary)
+
     missing_prior_v2r1_root = deepcopy(contract)
     missing_prior_v2r1_root["protected_state_policy"][
         "protected_roots_in_exact_order"
@@ -4693,6 +4728,20 @@ def test_v2r12_instance_isolation_rejects_all_historical_authority_and_roots() -
         "protected_roots_in_exact_order"
     ].remove(TOOL._PRIOR_V2R10_WORKTREE_ROOT)
     mutations.append(missing_prior_v2r10_root)
+
+    missing_prior_v2r11_root = deepcopy(contract)
+    missing_prior_v2r11_root["protected_state_policy"][
+        "protected_roots_in_exact_order"
+    ].remove(TOOL._PRIOR_V2R11_WORKTREE_ROOT)
+    mutations.append(missing_prior_v2r11_root)
+
+    missing_prior_v2r12_probe_root = deepcopy(contract)
+    missing_prior_v2r12_probe_root["protected_state_policy"][
+        "protected_roots_in_exact_order"
+    ].remove(
+        f"{TOOL._PRIOR_V2R12_STATE_PREFIX}-slot-01-scheduling-probe"
+    )
+    mutations.append(missing_prior_v2r12_probe_root)
 
     prior_authorization_root = deepcopy(contract)
     prior_authorization_root["fixed_external_roots"]["authorization_root"] = (
@@ -4844,8 +4893,26 @@ def test_v2r12_instance_isolation_rejects_all_historical_authority_and_roots() -
     ] = 0
     mutations.append(drifted_v2r10_type)
 
+    drifted_v2r11_fact = deepcopy(contract)
+    drifted_v2r11_fact["protected_state_policy"][
+        "prior_v2r11_completion_ledger_record_digest"
+    ] = _tagged("forged-v2r11-completion")
+    mutations.append(drifted_v2r11_fact)
+
+    drifted_v2r12_fact = deepcopy(contract)
+    drifted_v2r12_fact["protected_state_policy"][
+        "prior_v2r12_slot_02_outcome_digest"
+    ] = _tagged("forged-v2r12-slot-02-outcome")
+    mutations.append(drifted_v2r12_fact)
+
+    drifted_v2r12_type = deepcopy(contract)
+    drifted_v2r12_type["protected_state_policy"][
+        "prior_v2r12_slot_03_invoked"
+    ] = 0
+    mutations.append(drifted_v2r12_type)
+
     for field, value in (
-        ("preauthorization_historical_read_only_review_count", 3),
+        ("preauthorization_historical_read_only_review_count", 4),
         (
             "preauthorization_historical_read_only_review_scope_in_exact_order",
             ["SELECTED_V2_THROUGH_V2R8_LEDGER_OUTCOME_AND_TRAJECTORY_BINDING_JSON"],
@@ -4920,7 +4987,7 @@ def test_v2r12_instance_isolation_rejects_all_historical_authority_and_roots() -
 
     for mutation in mutations:
         with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
-            TOOL._require_v2r12_instance_isolation_v2(mutation)
+            TOOL._require_v2r13_instance_isolation_v2(mutation)
         assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
 
 
@@ -4982,7 +5049,7 @@ def test_prior_v2r8_exact_eight_record_stage8_terminal_history_is_frozen() -> No
     assert protected["prior_v2r8_terminal_error_code_or_null"] is None
 
 
-def test_retired_v2r9_capsule_is_not_v2r12_authority(tmp_path: Path) -> None:
+def test_retired_v2r9_capsule_is_not_v2r13_authority(tmp_path: Path) -> None:
     contract, capsule, authorization, ledger, _result = _completed_real_ledger(
         tmp_path
     )
@@ -5012,7 +5079,7 @@ def test_retired_v2r9_capsule_is_not_v2r12_authority(tmp_path: Path) -> None:
         ledger.close()
 
 
-def test_retired_v2r10_capsule_and_authorization_are_not_v2r12_authority(
+def test_retired_v2r10_capsule_and_authorization_are_not_v2r13_authority(
     tmp_path: Path,
 ) -> None:
     contract, capsule, authorization, ledger, _result = _completed_real_ledger(
@@ -5144,20 +5211,20 @@ def test_prior_v2r6_source_binding_failure_precedes_every_later_preflight_stage(
     ]
 
 
-def test_final_bound_v2r12_contract_loads_with_exact_source_replay() -> None:
+def test_final_bound_v2r13_contract_loads_with_exact_source_replay() -> None:
     raw_contract = TOOL._pretty_json(
         TOOL.CONFIG_PATH.read_bytes(),
-        "final-bound v2r12 campaign contract",
+        "final-bound v2r13 campaign contract",
     )
     assert type(raw_contract) is dict
     assert raw_contract["contract_id"] == (
-        "hegel-phase3a-q05b-shadow-retry-campaign-v2r12"
+        "hegel-phase3a-q05b-shadow-retry-campaign-v2r13"
     )
     assert raw_contract["status"] == (
-        "V2R12_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
+        "V2R13_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
     )
     assert raw_contract["target_commit_a_binding"]["target_supervisor_commit"] == (
-        "dd004ef75a67ccd14de8d6e6b6e4e0bd80c971b7"
+        "0bde03ba2d00887e1590c12d235b96fe07d09b5c"
     )
     assert raw_contract["campaign_source_binding"]["status"] == (
         "CAMPAIGN_SOURCE_BOUND"
@@ -5190,30 +5257,30 @@ def test_contract_loader_rejects_rehashed_v2r2_trajectory_producer(
         TOOL.load_phase3_q05b_shadow_retry_campaign_contract_v2()
     assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
     assert error.value.detail == (
-        "trajectory binding domain or v2r12 producer differs"
+        "trajectory binding domain or v2r13 producer differs"
     )
 
 
-def test_v2r12_target_commit_a_binding_is_exact() -> None:
+def test_v2r13_target_commit_a_binding_is_exact() -> None:
     contract = TOOL._pretty_json(
         TOOL.CONFIG_PATH.read_bytes(),
-        "v2r12 exact target binding",
+        "v2r13 exact target binding",
     )
     assert type(contract) is dict
     target = contract["target_commit_a_binding"]
     assert type(target) is dict
     assert target["status"] == "TARGET_COMMIT_A_BOUND"
     assert target["target_supervisor_commit"] == (
-        "dd004ef75a67ccd14de8d6e6b6e4e0bd80c971b7"
+        "0bde03ba2d00887e1590c12d235b96fe07d09b5c"
     )
     assert target["target_supervisor_tree"] == (
-        "c66c2a6fd7be2329238d94ffce95f9a445198229"
+        "72e08ec33cd0207aecb96789c3a08306985aa793"
     )
     assert target["target_supervisor_parent_commit"] == (
-        "b80473df5ae2515896d2e841b832636f09702f47"
+        "fb66aa373535c96afec1609c6755acf0fa69767f"
     )
     assert target["target_supervisor_commit_object_raw_sha256"] == (
-        "f57d696b4af8d3c4ef3d2107276825675cdcfc0972ccc3e12200e597bc6400a8"
+        "1e2a608e2248821301960eca4c24d287459dbae05bcf51bca06dbba787d37027"
     )
     literal_required_paths = [
         "config/phase3_q05b_dual_isolation_v2.json",
@@ -5258,13 +5325,13 @@ def test_v2r12_target_commit_a_binding_is_exact() -> None:
             "68ab76d84eb87df82f1e8fc152a45108f16934dc224341859738c1e2cfa71b6e"
         ),
         "src/hegel_machine/phase3_q05b_actual_artifact_v2.py": (
-            "0bffefb3fd41f64e154c9bd790822715e1c01652049ba25a7c3d07c4e76a1870"
+            "ac78f7804ee9bba43b628965c0cf8d04da9796179977474954df1ee79ae926f6"
         ),
         "src/hegel_machine/phase3_q05b_trajectory_v2.py": (
             "e0339921ba19614ed23615a943d15acc5eaeed2c4012c6ffa1e4e0ae092cc013"
         ),
         "tests/test_phase3_q05b_dual_qualification_v2.py": (
-            "956b70007cfe73bb1ca26a1d3c432cec5c54b704b91e072e08bfff5c31cf7446"
+            "a9c9e24e91b345c786e61a78c83337ea3d57b45c98ecc3a9492dcbed0b55de74"
         ),
         "tests/test_phase3_q05b_trajectory_v2.py": (
             "1b575286d6f1419613ac8a898aa4cee48f9f3952ac3d2644d5c8c30d63dd9ac0"
@@ -5280,7 +5347,7 @@ def test_v2r12_target_commit_a_binding_is_exact() -> None:
         "sha256:ba3888df0d88d0b9005ac6907131d3c0e8d7ee4b0aaa50835cc2ef0ab6855770"
     )
     assert target["target_source_binding_digest"] == (
-        "sha256:c7848fc4f3fd115ebf15297f17cff7cde80431d4a10507c1ebc00f4a637a006b"
+        "sha256:489ab20686bfca2fed13d07d34cd16235211639cf53bf9ec39893257ad6bc4ac"
     )
     docker_labels = contract["execution_policy"]["target_docker_label_policy"]
     assert docker_labels["source_commit_label_value"] == (
@@ -5288,7 +5355,7 @@ def test_v2r12_target_commit_a_binding_is_exact() -> None:
     )
     assert docker_labels["pre_spawn_and_post_reap_readonly_absence_filter"] == (
         "label=org.hegel.q05b.source_commit="
-        "dd004ef75a67ccd14de8d6e6b6e4e0bd80c971b7"
+        "0bde03ba2d00887e1590c12d235b96fe07d09b5c"
     )
     dependency = contract["execution_policy"][
         "python310_dependency_preflight_gate"
@@ -5302,7 +5369,7 @@ def test_v2r12_target_commit_a_binding_is_exact() -> None:
 def test_target_git_object_source_digest_strips_lf_and_rejects_lf_value() -> None:
     contract = TOOL._pretty_json(
         TOOL.CONFIG_PATH.read_bytes(),
-        "v2r12 target Git-object source-digest KAT",
+        "v2r13 target Git-object source-digest KAT",
     )
     assert type(contract) is dict
     target = contract["target_commit_a_binding"]
@@ -5333,7 +5400,7 @@ def test_target_git_object_source_digest_strips_lf_and_rejects_lf_value() -> Non
             target_config_raw = raw
     target_config = TOOL._decoded_json_bytes(
         target_config_raw,
-        "v2r12 target Git-object config KAT",
+        "v2r13 target Git-object config KAT",
     )
     assert type(target_config) is dict
     static_policy = {
@@ -5368,10 +5435,10 @@ def test_target_git_object_source_digest_strips_lf_and_rejects_lf_value() -> Non
         + canonical_with_lf
     ).hexdigest()
     assert correct == (
-        "sha256:c7848fc4f3fd115ebf15297f17cff7cde80431d4a10507c1ebc00f4a637a006b"
+        "sha256:489ab20686bfca2fed13d07d34cd16235211639cf53bf9ec39893257ad6bc4ac"
     )
     assert wrong_with_lf == (
-        "sha256:68443dfa4c9343f6a18f82cc96f98659b7daa6e1e108bd092f4469e88ed30844"
+        "sha256:40fb82d52a2a7acad5328fb0d1d27475c2b8c97e68b0199758ca8b1347b78ddf"
     )
     assert target["target_source_binding_digest"] == correct != wrong_with_lf
     replay = TOOL._verify_target_git_objects(contract)
@@ -5398,7 +5465,7 @@ def test_controller_commit_b_exact_six_path_registry_is_literal() -> None:
     ]
     contract = TOOL._pretty_json(
         TOOL.CONFIG_PATH.read_bytes(),
-        "v2r12 exact six-path controller registry",
+        "v2r13 exact six-path controller registry",
     )
     assert list(TOOL._CONTROLLER_CHANGED_PATHS_FROM_TARGET_IN_EXACT_ORDER) == literal
     assert contract["campaign_source_binding"][
@@ -5406,11 +5473,11 @@ def test_controller_commit_b_exact_six_path_registry_is_literal() -> None:
     ] == literal
 
 
-def test_v2r12_instance_domains_preserve_version_neutral_domains() -> None:
+def test_v2r13_instance_domains_preserve_version_neutral_domains() -> None:
     contract = _contract()
-    assert contract["hash_domains"] == TOOL._EXPECTED_HASH_DOMAINS_V2R12
+    assert contract["hash_domains"] == TOOL._EXPECTED_HASH_DOMAINS_V2R13
     assert all(
-        "SHADOW_RETRY_CAMPAIGN_V2R12" in domain
+        "SHADOW_RETRY_CAMPAIGN_V2R13" in domain
         for domain in contract["hash_domains"].values()
     )
     assert TOOL._TARGET_SOURCE_BINDING_DOMAIN == (
@@ -5427,52 +5494,52 @@ def test_v2r12_instance_domains_preserve_version_neutral_domains() -> None:
 
 @pytest.mark.parametrize(
     "domain_name",
-    tuple(TOOL._EXPECTED_HASH_DOMAINS_V2R12),
+    tuple(TOOL._EXPECTED_HASH_DOMAINS_V2R13),
 )
-def test_contract_loader_rejects_rehashed_v2r12_hash_domain_drift(
+def test_contract_loader_rejects_rehashed_v2r13_hash_domain_drift(
     monkeypatch: pytest.MonkeyPatch,
     domain_name: str,
 ) -> None:
     base = _contract()
-    expected_domain = TOOL._EXPECTED_HASH_DOMAINS_V2R12[domain_name]
+    expected_domain = TOOL._EXPECTED_HASH_DOMAINS_V2R13[domain_name]
     prior_v2_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R12",
+        "SHADOW_RETRY_CAMPAIGN_V2R13",
         "SHADOW_RETRY_CAMPAIGN",
     )
     prior_v2r2_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R12",
+        "SHADOW_RETRY_CAMPAIGN_V2R13",
         "SHADOW_RETRY_CAMPAIGN_V2R2",
     )
     prior_v2r3_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R12",
+        "SHADOW_RETRY_CAMPAIGN_V2R13",
         "SHADOW_RETRY_CAMPAIGN_V2R3",
     )
     prior_v2r4_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R12",
+        "SHADOW_RETRY_CAMPAIGN_V2R13",
         "SHADOW_RETRY_CAMPAIGN_V2R4",
     )
     prior_v2r5_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R12",
+        "SHADOW_RETRY_CAMPAIGN_V2R13",
         "SHADOW_RETRY_CAMPAIGN_V2R5",
     )
     prior_v2r6_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R12",
+        "SHADOW_RETRY_CAMPAIGN_V2R13",
         "SHADOW_RETRY_CAMPAIGN_V2R6",
     )
     prior_v2r7_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R12",
+        "SHADOW_RETRY_CAMPAIGN_V2R13",
         "SHADOW_RETRY_CAMPAIGN_V2R7",
     )
     prior_v2r8_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R12",
+        "SHADOW_RETRY_CAMPAIGN_V2R13",
         "SHADOW_RETRY_CAMPAIGN_V2R8",
     )
     prior_v2r9_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R12",
+        "SHADOW_RETRY_CAMPAIGN_V2R13",
         "SHADOW_RETRY_CAMPAIGN_V2R9",
     )
     prior_v2r10_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R12",
+        "SHADOW_RETRY_CAMPAIGN_V2R13",
         "SHADOW_RETRY_CAMPAIGN_V2R10",
     )
     for forged_domain in (
@@ -5605,6 +5672,30 @@ def test_contract_loader_rejects_clone_target_ref_policy_drift(
                 "prior_v2r8_authorization_digest"
             ],
         ),
+        (
+            TOOL._PRIOR_V2R11_PROTECTED_POLICY_FACTS[
+                "prior_v2r11_campaign_contract_id"
+            ],
+            TOOL._PRIOR_V2R11_STATE_PREFIX,
+            TOOL._PRIOR_V2R11_PROTECTED_POLICY_FACTS[
+                "prior_v2r11_capsule_digest"
+            ],
+            TOOL._PRIOR_V2R11_PROTECTED_POLICY_FACTS[
+                "prior_v2r11_authorization_digest"
+            ],
+        ),
+        (
+            TOOL._PRIOR_V2R12_PROTECTED_POLICY_FACTS[
+                "prior_v2r12_campaign_contract_id"
+            ],
+            TOOL._PRIOR_V2R12_STATE_PREFIX,
+            TOOL._PRIOR_V2R12_PROTECTED_POLICY_FACTS[
+                "prior_v2r12_capsule_digest"
+            ],
+            TOOL._PRIOR_V2R12_PROTECTED_POLICY_FACTS[
+                "prior_v2r12_authorization_digest"
+            ],
+        ),
     ),
     ids=(
         "prior-v2",
@@ -5615,9 +5706,11 @@ def test_contract_loader_rejects_clone_target_ref_policy_drift(
         "prior-v2r5",
         "prior-v2r7",
         "prior-v2r8",
+        "prior-v2r11",
+        "prior-v2r12",
     ),
 )
-def test_historical_capsule_authorization_and_rehashed_ledger_are_not_v2r12_authority(
+def test_historical_capsule_authorization_and_rehashed_ledger_are_not_v2r13_authority(
     tmp_path: Path,
     historical_campaign_id: str,
     historical_state_prefix: str,
@@ -5701,7 +5794,7 @@ def test_historical_capsule_authorization_and_rehashed_ledger_are_not_v2r12_auth
         )
         rehashed_prior_authorization["owner_confirmation_digest"] = (
             TOOL._domain_digest(
-                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R12/"
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R13/"
                 "OWNER_CONFIRMATION/V2",
                 {
                     field: deepcopy(rehashed_prior_authorization[field])
@@ -7764,7 +7857,7 @@ def test_slot_postbinding_failures_never_fall_through_to_a_second_terminal_write
     probe_cleanup = _scheduling_probe_cleanup_receipt(capsule, slot)
     monkeypatch.setattr(
         TOOL,
-        "_run_slot_scheduling_admission_v2r12",
+        "_run_slot_scheduling_admission_v2r13",
         lambda *_args, **_kwargs: (
             _admitted_scheduling_evidence(contract),
             deepcopy(probe_cleanup),
@@ -8960,7 +9053,7 @@ def _produce_exact_scheduling_pending(
         ),
     }
     with pytest.raises(TOOL.ShadowRetryCampaignPendingV1) as generated:
-        TOOL._run_slot_scheduling_admission_v2r12(
+        TOOL._run_slot_scheduling_admission_v2r13(
             contract,
             context,
             capsule,
@@ -8988,7 +9081,7 @@ def test_scheduling_pending_prefix_verifier_accepts_exact_clean_boundaries(
         completed_gap_slots=completed_gap_slots,
     )
     try:
-        prefix = TOOL._verify_scheduling_pending_ledger_prefix_v2r12(
+        prefix = TOOL._verify_scheduling_pending_ledger_prefix_v2r13(
             contract,
             capsule,
             authorization,
@@ -9017,7 +9110,7 @@ def test_scheduling_pending_prefix_verifier_rejects_shape_chain_and_nongap(
     )
     try:
         with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as illegal_count:
-            TOOL._verify_scheduling_pending_ledger_prefix_v2r12(
+            TOOL._verify_scheduling_pending_ledger_prefix_v2r13(
                 contract,
                 capsule,
                 authorization,
@@ -9029,7 +9122,7 @@ def test_scheduling_pending_prefix_verifier_rejects_shape_chain_and_nongap(
         corrupt_records = deepcopy(ledger.published_records)
         corrupt_records[-1]["record_digest"] = _tagged("corrupt-prefix")
         with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as corrupt:
-            TOOL._verify_scheduling_pending_ledger_prefix_v2r12(
+            TOOL._verify_scheduling_pending_ledger_prefix_v2r13(
                 contract,
                 capsule,
                 authorization,
@@ -9047,7 +9140,7 @@ def test_scheduling_pending_prefix_verifier_rejects_shape_chain_and_nongap(
             unsigned,
         )
         with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as nongap:
-            TOOL._verify_scheduling_pending_ledger_prefix_v2r12(
+            TOOL._verify_scheduling_pending_ledger_prefix_v2r13(
                 contract,
                 capsule,
                 authorization,
@@ -9113,9 +9206,9 @@ def test_transient_scheduling_probe_cleanup_is_durable_and_exact(
         ]
     }
     parent_fd, root_fd, root_identity = (
-        TOOL._create_transient_scheduling_probe_root_v2r12(context, slot)
+        TOOL._create_transient_scheduling_probe_root_v2r13(context, slot)
     )
-    receipt = TOOL._cleanup_scheduling_probe_root_v2r12(
+    receipt = TOOL._cleanup_scheduling_probe_root_v2r13(
         contract,
         context,
         slot,
@@ -9126,7 +9219,7 @@ def test_transient_scheduling_probe_cleanup_is_durable_and_exact(
     assert receipt["passed"] is True
     assert receipt["pathname_absent"] is True
     assert not probe.exists()
-    assert TOOL._scheduling_probe_cleanup_receipt_exact_v2r12(
+    assert TOOL._scheduling_probe_cleanup_receipt_exact_v2r13(
         context,
         slot,
         receipt,
@@ -9153,7 +9246,7 @@ def test_transient_scheduling_probe_cleanup_fault_is_terminal_not_pending(
         ]
     }
     parent_fd, root_fd, root_identity = (
-        TOOL._create_transient_scheduling_probe_root_v2r12(context, slot)
+        TOOL._create_transient_scheduling_probe_root_v2r13(context, slot)
     )
     real_verify = TOOL._verify_held_directory_path
     real_rmdir = TOOL.os.rmdir
@@ -9183,7 +9276,7 @@ def test_transient_scheduling_probe_cleanup_fault_is_terminal_not_pending(
             ),
         )
     with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as terminal:
-        TOOL._cleanup_scheduling_probe_root_v2r12(
+        TOOL._cleanup_scheduling_probe_root_v2r13(
             contract,
             context,
             slot,
@@ -9236,7 +9329,7 @@ def test_exact_scheduling_exhaustion_produces_classified_pending_counts(
         ),
     )
     try:
-        assert TOOL._scheduling_pending_is_exact_v2r12(
+        assert TOOL._scheduling_pending_is_exact_v2r13(
             contract,
             options,
             error,
@@ -9295,7 +9388,7 @@ def test_scheduling_pending_classifier_rejects_bool_and_count_mutations(
         run_reentry=False,
     )
     try:
-        assert TOOL._scheduling_pending_is_exact_v2r12(
+        assert TOOL._scheduling_pending_is_exact_v2r13(
             contract,
             options,
             error,
@@ -9330,7 +9423,7 @@ def test_scheduling_pending_classifier_rejects_bool_and_count_mutations(
                     error.dependency_gate_invocation_count
                 ),
             )
-            assert not TOOL._scheduling_pending_is_exact_v2r12(
+            assert not TOOL._scheduling_pending_is_exact_v2r13(
                 contract,
                 options,
                 forged,
@@ -9348,7 +9441,7 @@ def test_scheduling_pending_classifier_rejects_bool_and_count_mutations(
             receipt=forged_receipt,
             dependency_gate_invocation_count=1,
         )
-        assert not TOOL._scheduling_pending_is_exact_v2r12(
+        assert not TOOL._scheduling_pending_is_exact_v2r13(
             contract,
             options,
             forged,
@@ -9428,7 +9521,7 @@ def test_run_one_slot_pending_gate_precedes_all_slot_mutation_and_spawn(
     ledger = _FakeLedger()
     calls: list[str] = []
     pending = TOOL.ShadowRetryCampaignPendingV1(
-        TOOL._SCHEDULING_PENDING_CODE_V2R12,
+        TOOL._SCHEDULING_PENDING_CODE_V2R13,
         "injected exact gate pending",
         phase="SLOT_SCHEDULING_ADMISSION",
         condition="COMPLETE_GATE_EXHAUSTION",
@@ -9447,7 +9540,7 @@ def test_run_one_slot_pending_gate_precedes_all_slot_mutation_and_spawn(
 
         return invoke
 
-    monkeypatch.setattr(TOOL, "_run_slot_scheduling_admission_v2r12", gate)
+    monkeypatch.setattr(TOOL, "_run_slot_scheduling_admission_v2r13", gate)
     monkeypatch.setattr(TOOL, "_prepare_clone", forbidden("clone"))
     monkeypatch.setattr(TOOL, "_copy_tree_exact", forbidden("cargo"))
     monkeypatch.setattr(TOOL, "_safe_docker_inventory", forbidden("docker"))
@@ -9633,7 +9726,7 @@ def test_run_reopens_prefix6_at_slot2_without_new_consumption_or_ledger(
     )
     monkeypatch.setattr(
         TOOL,
-        "_verify_scheduling_probe_roots_absent_v2r12",
+        "_verify_scheduling_probe_roots_absent_v2r13",
         lambda *_args, **_kwargs: None,
     )
     monkeypatch.setattr(TOOL, "_run_one_slot", stop_at_slot)
@@ -9704,7 +9797,7 @@ def test_transient_probe_creation_fault_cleans_created_root(
     monkeypatch.setattr(TOOL.os, "open", open_child)
     monkeypatch.setattr(TOOL, "_verify_held_directory_path", verify)
     with pytest.raises(BaseException) as failed:
-        TOOL._create_transient_scheduling_probe_root_v2r12(context, slot)
+        TOOL._create_transient_scheduling_probe_root_v2r13(context, slot)
     assert not isinstance(failed.value, TOOL.ShadowRetryCampaignPendingV1)
     assert not probe.exists()
 
@@ -12487,7 +12580,7 @@ def test_safe_postrun_source_replay_preserves_bounded_command_receipt(
     assert result["evidence"]["error_receipt_or_null"] == receipt
     assert result["evidence"]["error_receipt_or_null"]["argv"] == receipt["argv"]
     assert result["root"] == TOOL._domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R12/SOURCE_REPLAY/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R13/SOURCE_REPLAY/V2",
         result["evidence"],
     )
 
@@ -12552,7 +12645,7 @@ def test_source_replay_reuses_prepared_clone_then_verifies_once_postrun(
     monkeypatch.setattr(TOOL, "_verify_clone", verify_clone)
     monkeypatch.setattr(
         TOOL,
-        "_target_object_closure_fsck_admission_v2r12",
+        "_target_object_closure_fsck_admission_v2r13",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             AssertionError("slot replay repeated target full fsck")
         ),
