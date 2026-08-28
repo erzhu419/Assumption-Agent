@@ -302,7 +302,7 @@ def _contract() -> dict[str, object]:
     assert type(value) is dict
     contract = deepcopy(value)
     final_status = (
-        "V2R7_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
+        "V2R8_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
     )
     contract["status"] = final_status
     contract["contract_digest"] = _tagged("contract")
@@ -466,7 +466,7 @@ def _sustained_scheduling_evidence(
         cumulative += count
         cumulative_rows.append(prefill + cumulative)
         checkpoints.add(prefill + cumulative)
-    chains = TOOL._scheduling_sustained_chain_checkpoints_v5(
+    chains = TOOL._scheduling_sustained_chain_checkpoints_v6(
         slot_id, window, prefill + timed, prefill, checkpoints
     )
     cumulative = 0
@@ -508,7 +508,7 @@ def _sustained_scheduling_evidence(
         ])
     )
     result: dict[str, object] = {
-        "schema_version": TOOL._SCHEDULING_SUSTAINED_EVIDENCE_SCHEMA_V5,
+        "schema_version": TOOL._SCHEDULING_SUSTAINED_EVIDENCE_SCHEMA_V6,
         "slot_id": slot_id,
         "window_ordinal": window,
         "clock_id": "CLOCK_MONOTONIC",
@@ -549,7 +549,7 @@ def _sustained_scheduling_evidence(
         "cleanup_absence_passed": True,
         "passed": passed,
     }
-    assert TOOL._scheduling_sustained_evidence_exact_v5(
+    assert TOOL._scheduling_sustained_evidence_exact_v6(
         policy, slot_id, window, result
     )
     return result
@@ -568,13 +568,13 @@ def _admitted_scheduling_evidence(
         for ordinal in range(1, 17)
     ]
     bursts = [
-        TOOL._compact_scheduling_admission_burst_v5(
+        TOOL._compact_scheduling_admission_burst_v6(
             policy, slot_id, 1, row
         )
         for row in full_bursts
     ]
     evidence: dict[str, object] = {
-        "schema_version": TOOL._SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V5,
+        "schema_version": TOOL._SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V6,
         "slot_id": slot_id,
         "policy": deepcopy(policy),
         "windows_in_strict_order": [
@@ -627,7 +627,7 @@ def _admitted_scheduling_burst(
     for ordinal, (lane, lane_ordinal, operation) in enumerate(
         lane_operations, start=1
     ):
-        payload = TOOL._scheduling_probe_payload_v5(
+        payload = TOOL._scheduling_probe_payload_v6(
             slot_id, window, burst, ordinal, lane, lane_ordinal, operation
         )
         enqueue_rows.append({
@@ -680,7 +680,7 @@ def _admitted_scheduling_burst(
         "burst_drain_ns": drain_ns,
         "passed": passed,
     }
-    assert TOOL._scheduling_admission_burst_exact_v5(
+    assert TOOL._scheduling_admission_burst_exact_v6(
         policy, slot_id, window, result
     )
     return result
@@ -765,13 +765,13 @@ def test_scheduling_admission_exhaustion_is_typed_and_prevents_spawn() -> None:
         assert error.code == "FAIL_CAMPAIGN_SCHEDULING_ADMISSION"
         assert "critical_ns': 25000001" in error.detail
         assert "before consume/Popen" in error.detail
-        assert TOOL._scheduling_admission_evidence_semantics_v5(
+        assert TOOL._scheduling_admission_evidence_semantics_v6(
             contract, error.receipt, require_passed=False
         )
         bounded = TOOL._bounded_receipt_or_null(error.receipt)
         assert bounded is not None
         assert bounded["schema_version"] == (
-            TOOL._SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V5
+            TOOL._SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V6
         )
         assert TOOL._terminal_error_receipt_semantics_v2(
             contract,
@@ -891,7 +891,9 @@ def test_scheduling_admission_policy_rejects_nonexact_integer_types(
     assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
 
 
-def test_five_fsync_publication_probe_removes_all_names() -> None:
+def test_four_fsync_publication_probe_removes_all_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     with tempfile.TemporaryDirectory(dir="/tmp") as temporary:
         root = Path(temporary)
         directory_fd = os.open(
@@ -899,19 +901,32 @@ def test_five_fsync_publication_probe_removes_all_names() -> None:
             os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC |
             getattr(os, "O_NOFOLLOW", 0),
         )
+        real_fsync = TOOL.os.fsync
+        fsync_targets: list[str] = []
+
+        def observed_fsync(descriptor: int) -> None:
+            fsync_targets.append(
+                "directory" if descriptor == directory_fd else "file"
+            )
+            real_fsync(descriptor)
+
+        monkeypatch.setattr(TOOL.os, "fsync", observed_fsync)
         try:
-            duration = TOOL._five_fsync_publication_probe_v5(
+            duration = TOOL._four_fsync_publication_probe_v6(
                 directory_fd,
                 "w01-p001",
                 b"x" * 4096,
             )
             assert type(duration) is int and duration >= 0
+            assert fsync_targets == [
+                "file", "directory", "directory", "directory", "directory",
+            ]
             assert list(root.iterdir()) == []
         finally:
             os.close(directory_fd)
 
 
-def test_five_fsync_publication_probe_fault_removes_all_names(
+def test_four_fsync_publication_probe_fault_removes_all_names(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     with tempfile.TemporaryDirectory(dir="/tmp") as temporary:
@@ -930,7 +945,7 @@ def test_five_fsync_publication_probe_fault_removes_all_names(
         )
         try:
             with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
-                TOOL._five_fsync_publication_probe_v5(
+                TOOL._four_fsync_publication_probe_v6(
                     directory_fd,
                     "w01-p001",
                     b"x" * 4096,
@@ -945,7 +960,7 @@ def test_five_fsync_publication_probe_fault_removes_all_names(
 def test_stage5_admission_burst_exact_replay_and_thread_drain() -> None:
     contract = _contract()
     policy = TOOL._scheduling_admission_policy_v2(contract)
-    result = TOOL._run_stage5_scheduling_admission_burst_v5(
+    result = TOOL._run_stage5_scheduling_admission_burst_v6(
         7,
         "SLOT_01",
         1,
@@ -956,7 +971,7 @@ def test_stage5_admission_burst_exact_replay_and_thread_drain() -> None:
     assert result["records_enqueued"] == result["records_durable"] == 7
     assert result["queue_start_depth"] == result["queue_end_depth"] == 0
     assert result["queue_high_watermark_records"] <= 7
-    assert TOOL._scheduling_admission_burst_exact_v5(
+    assert TOOL._scheduling_admission_burst_exact_v6(
         policy, "SLOT_01", 1, result
     )
 
@@ -972,7 +987,7 @@ def test_stage5_admission_release_clock_fault_leaves_no_thread() -> None:
     contract = _contract()
     policy = TOOL._scheduling_admission_policy_v2(contract)
     with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
-        TOOL._run_stage5_scheduling_admission_burst_v5(
+        TOOL._run_stage5_scheduling_admission_burst_v6(
             7, "SLOT_01", 1, 1, policy,
             clock_ns=lambda: True,
             probe_publisher=lambda *_args: 1,
@@ -1000,7 +1015,7 @@ def test_stage5_admission_thread_start_fault_leaves_no_thread(
 
     monkeypatch.setattr(threading.Thread, "start", start_with_fault)
     with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
-        TOOL._run_stage5_scheduling_admission_burst_v5(
+        TOOL._run_stage5_scheduling_admission_burst_v6(
             7, "SLOT_01", 1, 1, policy,
             probe_publisher=lambda *_args: 1,
         )
@@ -1028,7 +1043,7 @@ def test_stage5_admission_post_start_interrupt_leaves_no_thread(
 
     monkeypatch.setattr(threading.Thread, "start", start_then_interrupt)
     with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
-        TOOL._run_stage5_scheduling_admission_burst_v5(
+        TOOL._run_stage5_scheduling_admission_burst_v6(
             7,
             "SLOT_01",
             1,
@@ -1049,7 +1064,7 @@ def test_stage5_admission_publication_fault_leaves_no_thread() -> None:
         raise OSError("injected durability failure")
 
     with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
-        TOOL._run_stage5_scheduling_admission_burst_v5(
+        TOOL._run_stage5_scheduling_admission_burst_v6(
             7, "SLOT_01", 1, 1, policy,
             probe_publisher=fail_publication,
         )
@@ -1098,7 +1113,7 @@ def _retaining_test_probe(
         identity.pop("padding")
         identity.pop("record_digest")
         observed_identities.append(identity)
-        final = TOOL._scheduling_sustained_final_name_v5(token)
+        final = TOOL._scheduling_sustained_final_name_v6(token)
         descriptor = os.open(
             final,
             os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC |
@@ -1136,7 +1151,7 @@ def test_stage5_sustained_admission_retains_across_nondivisible_prefill(
         getattr(os, "O_NOFOLLOW", 0),
     )
     try:
-        result = TOOL._run_stage5_sustained_publication_admission_v5(
+        result = TOOL._run_stage5_sustained_publication_admission_v6(
             directory_fd,
             "SLOT_01",
             1,
@@ -1153,7 +1168,7 @@ def test_stage5_sustained_admission_retains_across_nondivisible_prefill(
     assert result["records_durable_total"] == 26 > 5
     assert result["sampler_anchor_count"] == 8
     assert len(result["epoch_aggregates_in_strict_order"]) == 4
-    assert TOOL._scheduling_sustained_evidence_exact_v5(
+    assert TOOL._scheduling_sustained_evidence_exact_v6(
         policy, "SLOT_01", 1, result
     )
     assert observed_identities[5]["phase"] == "PREFILL_RETAINED"
@@ -1181,7 +1196,7 @@ def test_stage5_sustained_queue_pressure_drains_durable_prefix_and_cleans(
         getattr(os, "O_NOFOLLOW", 0),
     )
     try:
-        result = TOOL._run_stage5_sustained_publication_admission_v5(
+        result = TOOL._run_stage5_sustained_publication_admission_v6(
             directory_fd,
             "SLOT_01",
             1,
@@ -1200,14 +1215,14 @@ def test_stage5_sustained_queue_pressure_drains_durable_prefix_and_cleans(
     assert result["records_durable_total"] == 11
     assert result["retained_records_at_measurement_end"] == 11
     assert result["cleanup_removed_records"] == 11
-    assert TOOL._scheduling_sustained_evidence_exact_v5(
+    assert TOOL._scheduling_sustained_evidence_exact_v6(
         policy, "SLOT_01", 1, result
     )
     assert list(tmp_path.iterdir()) == []
     assert _admission_threads() == []
 
 
-def test_retained_five_fsync_probe_keeps_only_immutable_final(
+def test_retained_four_fsync_probe_keeps_only_immutable_final(
     tmp_path: Path,
 ) -> None:
     directory_fd = os.open(
@@ -1216,9 +1231,9 @@ def test_retained_five_fsync_probe_keeps_only_immutable_final(
         getattr(os, "O_NOFOLLOW", 0),
     )
     token = "w01-r000001"
-    final = TOOL._scheduling_sustained_final_name_v5(token)
+    final = TOOL._scheduling_sustained_final_name_v6(token)
     try:
-        duration = TOOL._retained_five_fsync_publication_probe_v5(
+        duration = TOOL._retained_four_fsync_publication_probe_v6(
             directory_fd,
             token,
             b"x" * 4096,
@@ -1236,7 +1251,7 @@ def test_retained_five_fsync_probe_keeps_only_immutable_final(
     assert list(tmp_path.iterdir()) == []
 
 
-def test_retained_probe_success_has_exact_five_fsync_and_full_duration(
+def test_retained_probe_success_has_exact_four_fsync_and_full_duration(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1246,8 +1261,8 @@ def test_retained_probe_success_has_exact_five_fsync_and_full_duration(
         getattr(os, "O_NOFOLLOW", 0),
     )
     token = "w01-r000002"
-    staging = f".q05b-admission-{token}.staging-v5"
-    final = TOOL._scheduling_sustained_final_name_v5(token)
+    staging = f".q05b-admission-{token}.staging-v6"
+    final = TOOL._scheduling_sustained_final_name_v6(token)
     real_fsync = TOOL.os.fsync
     real_close = TOOL.os.close
     real_stat = TOOL.os.stat
@@ -1291,7 +1306,7 @@ def test_retained_probe_success_has_exact_five_fsync_and_full_duration(
     monkeypatch.setattr(TOOL.os, "close", observed_close)
     monkeypatch.setattr(TOOL.os, "stat", observed_stat)
     try:
-        duration = TOOL._retained_five_fsync_publication_probe_v5(
+        duration = TOOL._retained_four_fsync_publication_probe_v6(
             directory_fd,
             token,
             b"x" * 4096,
@@ -1299,7 +1314,7 @@ def test_retained_probe_success_has_exact_five_fsync_and_full_duration(
         )
         assert duration == 150
         assert [value for kind, value in events if kind == "fsync"] == [
-            "file", "file", "directory", "directory", "directory",
+            "file", "directory", "directory", "directory",
         ]
         assert sorted(path.name for path in tmp_path.iterdir()) == [final]
         os.unlink(final, dir_fd=directory_fd)
@@ -1319,7 +1334,7 @@ def test_retained_probe_failure_cleanup_mutation_is_durably_fsynced(
         getattr(os, "O_NOFOLLOW", 0),
     )
     token = "w01-r000003"
-    final = TOOL._scheduling_sustained_final_name_v5(token)
+    final = TOOL._scheduling_sustained_final_name_v6(token)
     real_open = TOOL.os.open
     real_unlink = TOOL.os.unlink
     real_fsync = TOOL.os.fsync
@@ -1352,7 +1367,7 @@ def test_retained_probe_failure_cleanup_mutation_is_durably_fsynced(
     monkeypatch.setattr(TOOL.os, "fsync", observed_fsync)
     try:
         with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
-            TOOL._retained_five_fsync_publication_probe_v5(
+            TOOL._retained_four_fsync_publication_probe_v6(
                 directory_fd,
                 token,
                 b"x" * 4096,
@@ -1366,8 +1381,7 @@ def test_retained_probe_failure_cleanup_mutation_is_durably_fsynced(
         )
         assert cleanup_fsync_index > final_unlink_index
         assert [value for kind, value in events if kind == "fsync"] == [
-            "file", "file", "directory", "directory", "directory",
-            "directory",
+            "file", "directory", "directory", "directory", "directory",
         ]
         assert list(tmp_path.iterdir()) == []
     finally:
@@ -1393,7 +1407,7 @@ def test_retained_probe_failure_without_namespace_mutation_does_not_fsync(
         *,
         dir_fd: int | None = None,
     ) -> int:
-        if path == ".q05b-admission-w01-r000004.staging-v5":
+        if path == ".q05b-admission-w01-r000004.staging-v6":
             raise OSError("injected pre-create failure")
         return real_open(path, flags, mode, dir_fd=dir_fd)
 
@@ -1405,7 +1419,7 @@ def test_retained_probe_failure_without_namespace_mutation_does_not_fsync(
     )
     try:
         with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
-            TOOL._retained_five_fsync_publication_probe_v5(
+            TOOL._retained_four_fsync_publication_probe_v6(
                 directory_fd,
                 "w01-r000004",
                 b"x" * 4096,
@@ -1452,7 +1466,7 @@ def test_stage5_sustained_4800_record_simulation_has_no_drop(
         getattr(os, "O_NOFOLLOW", 0),
     )
     try:
-        result = TOOL._run_stage5_sustained_publication_admission_v5(
+        result = TOOL._run_stage5_sustained_publication_admission_v6(
             directory_fd,
             "SLOT_01",
             1,
@@ -1490,7 +1504,7 @@ def test_sustained_admission_late_durability_and_anchor_overrun_fail_closed(
     assert late["timed_records_durable_by_deadline"] == 4_799
     assert late["timed_records_durable_after_deadline"] == 1
     assert late["terminal_drain_ns"] == 1
-    assert TOOL._scheduling_sustained_evidence_exact_v5(
+    assert TOOL._scheduling_sustained_evidence_exact_v6(
         policy, "SLOT_01", 1, late
     )
 
@@ -1502,7 +1516,7 @@ def test_sustained_admission_late_durability_and_anchor_overrun_fail_closed(
         sampler_anchor_maximum_ns=25_000_001,
     )
     assert overrun["passed"] is False
-    assert TOOL._scheduling_sustained_evidence_exact_v5(
+    assert TOOL._scheduling_sustained_evidence_exact_v6(
         policy, "SLOT_01", 1, overrun
     )
 
@@ -1528,7 +1542,7 @@ def test_three_failed_scheduling_windows_fit_direct_receipt_bound() -> None:
             full_bursts.append(full)
             burst_start = int(full["burst_finish_ns"])
         bursts = [
-            TOOL._compact_scheduling_admission_burst_v5(
+            TOOL._compact_scheduling_admission_burst_v6(
                 policy, "SLOT_01", window, row
             )
             for row in full_bursts
@@ -1555,14 +1569,14 @@ def test_three_failed_scheduling_windows_fit_direct_receipt_bound() -> None:
         })
         previous_finish = int(sustained["measurement_finish_ns"])
     evidence: dict[str, object] = {
-        "schema_version": TOOL._SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V5,
+        "schema_version": TOOL._SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V6,
         "slot_id": "SLOT_01",
         "policy": deepcopy(policy),
         "windows_in_strict_order": windows,
         "selected_window_ordinal": None,
         "passed": False,
     }
-    assert TOOL._scheduling_admission_evidence_semantics_v5(
+    assert TOOL._scheduling_admission_evidence_semantics_v6(
         contract, evidence, require_passed=False
     )
     encoded = TOOL._canonical_json_bytes(evidence)
@@ -1570,7 +1584,7 @@ def test_three_failed_scheduling_windows_fit_direct_receipt_bound() -> None:
     bounded = TOOL._bounded_receipt_or_null(evidence)
     assert bounded == evidence
     assert bounded["schema_version"] == (
-        TOOL._SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V5
+        TOOL._SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V6
     )
 
 
@@ -2515,7 +2529,7 @@ def _source_replay(label: str) -> dict[str, object]:
         "error_or_null": None,
         "evidence": evidence,
         "root": TOOL._domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/SOURCE_REPLAY/V2",
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R8/SOURCE_REPLAY/V2",
             evidence,
         ),
     }
@@ -2532,7 +2546,7 @@ def _future_freshness() -> dict[str, object]:
     unsigned = deepcopy(value)
     unsigned.pop("root")
     value["root"] = TOOL._domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/SLOT_ROOT_ABSENCE/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R8/SLOT_ROOT_ABSENCE/V2",
         unsigned,
     )
     return value
@@ -2615,7 +2629,7 @@ def _slot_absence_evidence(
     unsigned = deepcopy(value)
     unsigned.pop("root")
     value["root"] = TOOL._domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/SLOT_ROOT_ABSENCE/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R8/SLOT_ROOT_ABSENCE/V2",
         unsigned,
     )
     return value
@@ -2626,7 +2640,7 @@ def _cleanup_replay() -> dict[str, object]:
     return {
         "preimage": preimage,
         "root": TOOL._domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/CLEANUP_REPLAY/V2",
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R8/CLEANUP_REPLAY/V2",
             preimage,
         ),
     }
@@ -3630,26 +3644,27 @@ def test_slot_registry_accepts_exact_contract_and_rejects_path_drift() -> None:
     assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
 
 
-def test_v2r7_instance_isolation_rejects_all_historical_authority_and_roots() -> None:
+def test_v2r8_instance_isolation_rejects_all_historical_authority_and_roots() -> None:
     raw_contract = TOOL._pretty_json(
         TOOL.CONFIG_PATH.read_bytes(),
-        "v2r7 target Git object closure",
+        "v2r8 target Git object closure",
     )
     assert type(raw_contract) is dict
     target_git_object_closure = raw_contract["target_commit_a_binding"]
     assert type(target_git_object_closure) is dict
     assert target_git_object_closure["status"] == "TARGET_COMMIT_A_BOUND"
     assert target_git_object_closure["target_supervisor_commit"] == (
-        "5d85bf858e80a22633f96de41259344c70e25519"
+        "8547fe0f084f3c914601b3f1a25f3957c53ab559"
     )
 
     contract = _contract()
-    TOOL._require_v2r7_instance_isolation_v2(contract)
+    TOOL._require_v2r8_instance_isolation_v2(contract)
     protected = contract["protected_state_policy"]
     assert type(protected) is dict
     protected_roots = protected["protected_roots_in_exact_order"]
     assert type(protected_roots) is list
-    assert len(protected_roots) == 136
+    assert len(protected_roots) == 154
+    assert protected_roots == list(TOOL._EXPECTED_PROTECTED_ROOTS_V2R8)
     assert set(TOOL._PRIOR_V2_PROTECTED_ROOTS).issubset(protected_roots)
     assert set(TOOL._PRIOR_V2R1_PROTECTED_ROOTS).issubset(protected_roots)
     assert set(TOOL._PRIOR_V2R2_PROTECTED_ROOTS).issubset(protected_roots)
@@ -3657,6 +3672,7 @@ def test_v2r7_instance_isolation_rejects_all_historical_authority_and_roots() ->
     assert set(TOOL._PRIOR_V2R4_PROTECTED_ROOTS).issubset(protected_roots)
     assert set(TOOL._PRIOR_V2R5_PROTECTED_ROOTS).issubset(protected_roots)
     assert set(TOOL._PRIOR_V2R6_PROTECTED_ROOTS).issubset(protected_roots)
+    assert set(TOOL._PRIOR_V2R7_PROTECTED_ROOTS).issubset(protected_roots)
     assert protected["prior_v2r1_campaign_contract_id"] == (
         TOOL._PRIOR_V2R1_CONTRACT_ID
     )
@@ -3771,6 +3787,10 @@ def test_v2r7_instance_isolation_rejects_all_historical_authority_and_roots() ->
         field: protected[field]
         for field in TOOL._PRIOR_V2R6_PROTECTED_POLICY_FACTS
     } == TOOL._PRIOR_V2R6_PROTECTED_POLICY_FACTS
+    assert {
+        field: protected[field]
+        for field in TOOL._PRIOR_V2R7_PROTECTED_POLICY_FACTS
+    } == TOOL._PRIOR_V2R7_PROTECTED_POLICY_FACTS
     assert len(TOOL._PRIOR_V2R6_RUNTIME_ROOTS) == 17
     assert TOOL._PRIOR_V2R6_PROTECTED_ROOTS == (
         TOOL._PRIOR_V2R6_WORKTREE_ROOT,
@@ -3788,7 +3808,7 @@ def test_v2r7_instance_isolation_rejects_all_historical_authority_and_roots() ->
     for ordinal, slot in enumerate(slots, start=1):
         assert type(slot) is dict
         assert slot["trajectory_trace_id"] == (
-            f"q05b-shadow-retry-campaign-v2r7-slot-{ordinal:02d}"
+            f"q05b-shadow-retry-campaign-v2r8-slot-{ordinal:02d}"
         )
         active_roots.update(
             {
@@ -3849,6 +3869,12 @@ def test_v2r7_instance_isolation_rejects_all_historical_authority_and_roots() ->
     ] = True
     mutations.append(reusable_prior_v2r6)
 
+    reusable_prior_v2r7 = deepcopy(contract)
+    reusable_prior_v2r7["protected_state_policy"][
+        "prior_v2r7_capsule_authorization_or_ledger_reuse_allowed"
+    ] = True
+    mutations.append(reusable_prior_v2r7)
+
     missing_prior_v2r1_root = deepcopy(contract)
     missing_prior_v2r1_root["protected_state_policy"][
         "protected_roots_in_exact_order"
@@ -3884,6 +3910,12 @@ def test_v2r7_instance_isolation_rejects_all_historical_authority_and_roots() ->
         "protected_roots_in_exact_order"
     ].remove(TOOL._PRIOR_V2R6_WORKTREE_ROOT)
     mutations.append(missing_prior_v2r6_root)
+
+    missing_prior_v2r7_root = deepcopy(contract)
+    missing_prior_v2r7_root["protected_state_policy"][
+        "protected_roots_in_exact_order"
+    ].remove(TOOL._PRIOR_V2R7_WORKTREE_ROOT)
+    mutations.append(missing_prior_v2r7_root)
 
     prior_authorization_root = deepcopy(contract)
     prior_authorization_root["fixed_external_roots"]["authorization_root"] = (
@@ -3987,9 +4019,21 @@ def test_v2r7_instance_isolation_rejects_all_historical_authority_and_roots() ->
     ] = False
     mutations.append(drifted_v2r6_type)
 
+    drifted_v2r7_fact = deepcopy(contract)
+    drifted_v2r7_fact["protected_state_policy"][
+        "prior_v2r7_completion_ledger_record_digest"
+    ] = _tagged("forged-v2r7-completion")
+    mutations.append(drifted_v2r7_fact)
+
+    drifted_v2r7_type = deepcopy(contract)
+    drifted_v2r7_type["protected_state_policy"][
+        "prior_v2r7_supervisor_invocation_count"
+    ] = False
+    mutations.append(drifted_v2r7_type)
+
     for mutation in mutations:
         with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
-            TOOL._require_v2r7_instance_isolation_v2(mutation)
+            TOOL._require_v2r8_instance_isolation_v2(mutation)
         assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
 
 
@@ -4087,20 +4131,20 @@ def test_prior_v2r6_source_binding_failure_precedes_every_later_preflight_stage(
     ]
 
 
-def test_final_bound_v2r7_contract_loads_with_exact_source_replay() -> None:
+def test_final_bound_v2r8_contract_loads_with_exact_source_replay() -> None:
     raw_contract = TOOL._pretty_json(
         TOOL.CONFIG_PATH.read_bytes(),
-        "final-bound v2r7 campaign contract",
+        "final-bound v2r8 campaign contract",
     )
     assert type(raw_contract) is dict
     assert raw_contract["contract_id"] == (
-        "hegel-phase3a-q05b-shadow-retry-campaign-v2r7"
+        "hegel-phase3a-q05b-shadow-retry-campaign-v2r8"
     )
     assert raw_contract["status"] == (
-        "V2R7_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
+        "V2R8_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
     )
     assert raw_contract["target_commit_a_binding"]["target_supervisor_commit"] == (
-        "5d85bf858e80a22633f96de41259344c70e25519"
+        "8547fe0f084f3c914601b3f1a25f3957c53ab559"
     )
     assert raw_contract["campaign_source_binding"]["status"] == (
         "CAMPAIGN_SOURCE_BOUND"
@@ -4133,30 +4177,30 @@ def test_contract_loader_rejects_rehashed_v2r2_trajectory_producer(
         TOOL.load_phase3_q05b_shadow_retry_campaign_contract_v2()
     assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
     assert error.value.detail == (
-        "trajectory binding domain or v2r7 producer differs"
+        "trajectory binding domain or v2r8 producer differs"
     )
 
 
-def test_v2r7_target_commit_a_binding_is_exact() -> None:
+def test_v2r8_target_commit_a_binding_is_exact() -> None:
     contract = TOOL._pretty_json(
         TOOL.CONFIG_PATH.read_bytes(),
-        "v2r7 exact target binding",
+        "v2r8 exact target binding",
     )
     assert type(contract) is dict
     target = contract["target_commit_a_binding"]
     assert type(target) is dict
     assert target["status"] == "TARGET_COMMIT_A_BOUND"
     assert target["target_supervisor_commit"] == (
-        "5d85bf858e80a22633f96de41259344c70e25519"
+        "8547fe0f084f3c914601b3f1a25f3957c53ab559"
     )
     assert target["target_supervisor_tree"] == (
-        "aca3fc65be392c51c829544bfda8ae9149fc566b"
+        "0a31d7a4244f2df3563392ff40c6d18ae5af57f8"
     )
     assert target["target_supervisor_parent_commit"] == (
-        "abaedf57e9795515d9b7ca6b04f905d87f30d5e3"
+        "18bbcc62b7ed74cc4c479494cda0a3323321f628"
     )
     assert target["target_supervisor_commit_object_raw_sha256"] == (
-        "20a8f8bd0a8a1022e6a82619447f74a2dedc984cd9137de8336da684908166c1"
+        "7f685efbd269c4094ad792762b98e77c2441fbbb1bccd7f37b56cb10961abe2b"
     )
     literal_required_paths = [
         "config/phase3_q05b_dual_isolation_v2.json",
@@ -4177,7 +4221,7 @@ def test_v2r7_target_commit_a_binding_is_exact() -> None:
     assert list(target["required_raw_sha256_by_path"]) == literal_required_paths
     assert target["required_raw_sha256_by_path"] == {
         "config/phase3_q05b_dual_isolation_v2.json": (
-            "bb89ee62447ca72b5e45419cb0a63f3ca45659789dc4abbac2ce21d500e91e5f"
+            "ba3888df0d88d0b9005ac6907131d3c0e8d7ee4b0aaa50835cc2ef0ab6855770"
         ),
         "src/hegel_machine/_vendor/__init__.py": (
             "ee9748e550c7a30a129da0ca1fb2a93116f599541a57039ebd687a679dd86673"
@@ -4198,32 +4242,32 @@ def test_v2r7_target_commit_a_binding_is_exact() -> None:
             "f864c6d9552a929c7032ace654ee05ef26ca75d21b027b801d77e65907138b74"
         ),
         "src/hegel_machine/phase3_q05b_actual_admission_v2.py": (
-            "a3c49f39fbd41ec7e0fbab907ca5f8595d6203e1d17ff4fc0b2c3cc2e871530c"
+            "68ab76d84eb87df82f1e8fc152a45108f16934dc224341859738c1e2cfa71b6e"
         ),
         "src/hegel_machine/phase3_q05b_actual_artifact_v2.py": (
-            "c5fe4fd2bbdabae62dc3f255ffdda832573fe641b7eb1910e17ccb73a51bb405"
+            "2460cb2aba49bf9589898ebaab70d57aed358c4f83b33653f3f00a5ffcc3a68d"
         ),
         "src/hegel_machine/phase3_q05b_trajectory_v2.py": (
-            "0b0d33fc9ff0be239b61ce1bed6d93511f797ad1adc6666938cfb7581be7cf34"
+            "e0339921ba19614ed23615a943d15acc5eaeed2c4012c6ffa1e4e0ae092cc013"
         ),
         "tests/test_phase3_q05b_dual_qualification_v2.py": (
             "5f14c98f836d56b277c07af023bddb30d837fde001ea66a1486707086a2226c7"
         ),
         "tests/test_phase3_q05b_trajectory_v2.py": (
-            "b50efe036100ce487a095da4d4e05163ca72389313362e9c4606748b4be4d227"
+            "1b575286d6f1419613ac8a898aa4cee48f9f3952ac3d2644d5c8c30d63dd9ac0"
         ),
         "tools/phase3_q05b_dual_qualification_v2.py": (
-            "d95829b3d14d21d537112304497eb1c1d8a34d17fdb370d329645cfc5bf15781"
+            "f93fbe46fbd34a9783c9b78d82dc70ae3ae13b1f5ec891af2497344e4733db15"
         ),
     }
     assert target["target_config_static_policy_root"] == (
-        "193a2985dfac1dcc9852ece6f8bc4a5227d87dc4cc13b8edd26ae313ae53a511"
+        "a5e7272551c7cfd1e7ea7c4970a7c28fb15582c345690860a3f444fd36d7baa9"
     )
     assert target["target_contract_digest"] == (
-        "sha256:bb89ee62447ca72b5e45419cb0a63f3ca45659789dc4abbac2ce21d500e91e5f"
+        "sha256:ba3888df0d88d0b9005ac6907131d3c0e8d7ee4b0aaa50835cc2ef0ab6855770"
     )
     assert target["target_source_binding_digest"] == (
-        "sha256:8b24967b9fca37cb0f7f741b6ebc356dbeded597b567cca1ddd11c3ce61fe61a"
+        "sha256:fbc4222f947c7f8ca805deaf92f9173fe9eec0dfa7a034e9f1d94a20b39fb894"
     )
     docker_labels = contract["execution_policy"]["target_docker_label_policy"]
     assert docker_labels["source_commit_label_value"] == (
@@ -4231,7 +4275,7 @@ def test_v2r7_target_commit_a_binding_is_exact() -> None:
     )
     assert docker_labels["pre_spawn_and_post_reap_readonly_absence_filter"] == (
         "label=org.hegel.q05b.source_commit="
-        "5d85bf858e80a22633f96de41259344c70e25519"
+        "8547fe0f084f3c914601b3f1a25f3957c53ab559"
     )
     dependency = contract["execution_policy"][
         "python310_dependency_preflight_gate"
@@ -4242,10 +4286,10 @@ def test_v2r7_target_commit_a_binding_is_exact() -> None:
     assert dependency["cargo_lock_raw_sha256"] == TOOL._CARGO_LOCK_RAW_SHA256_V1
 
 
-def test_target_git_object_source_digest_strips_lf_and_rejects_v2r6_value() -> None:
+def test_target_git_object_source_digest_strips_lf_and_rejects_lf_value() -> None:
     contract = TOOL._pretty_json(
         TOOL.CONFIG_PATH.read_bytes(),
-        "v2r7 target Git-object source-digest KAT",
+        "v2r8 target Git-object source-digest KAT",
     )
     assert type(contract) is dict
     target = contract["target_commit_a_binding"]
@@ -4276,7 +4320,7 @@ def test_target_git_object_source_digest_strips_lf_and_rejects_v2r6_value() -> N
             target_config_raw = raw
     target_config = TOOL._decoded_json_bytes(
         target_config_raw,
-        "v2r7 target Git-object config KAT",
+        "v2r8 target Git-object config KAT",
     )
     assert type(target_config) is dict
     static_policy = {
@@ -4311,10 +4355,10 @@ def test_target_git_object_source_digest_strips_lf_and_rejects_v2r6_value() -> N
         + canonical_with_lf
     ).hexdigest()
     assert correct == (
-        "sha256:8b24967b9fca37cb0f7f741b6ebc356dbeded597b567cca1ddd11c3ce61fe61a"
+        "sha256:fbc4222f947c7f8ca805deaf92f9173fe9eec0dfa7a034e9f1d94a20b39fb894"
     )
     assert wrong_with_lf == (
-        "sha256:5dde4a55053e2e6ffc26f3c6b485bd1c92b001b68046431f878793d90e3c27c6"
+        "sha256:11c81d8f2718bf8f74333fef689b45085fddf5ba7ed83592cf86d99d7cb67e7a"
     )
     assert target["target_source_binding_digest"] == correct != wrong_with_lf
     replay = TOOL._verify_target_git_objects(contract)
@@ -4341,7 +4385,7 @@ def test_controller_commit_b_exact_six_path_registry_is_literal() -> None:
     ]
     contract = TOOL._pretty_json(
         TOOL.CONFIG_PATH.read_bytes(),
-        "v2r7 exact six-path controller registry",
+        "v2r8 exact six-path controller registry",
     )
     assert list(TOOL._CONTROLLER_CHANGED_PATHS_FROM_TARGET_IN_EXACT_ORDER) == literal
     assert contract["campaign_source_binding"][
@@ -4349,11 +4393,11 @@ def test_controller_commit_b_exact_six_path_registry_is_literal() -> None:
     ] == literal
 
 
-def test_v2r7_instance_domains_preserve_version_neutral_domains() -> None:
+def test_v2r8_instance_domains_preserve_version_neutral_domains() -> None:
     contract = _contract()
-    assert contract["hash_domains"] == TOOL._EXPECTED_HASH_DOMAINS_V2R7
+    assert contract["hash_domains"] == TOOL._EXPECTED_HASH_DOMAINS_V2R8
     assert all(
-        "SHADOW_RETRY_CAMPAIGN_V2R7" in domain
+        "SHADOW_RETRY_CAMPAIGN_V2R8" in domain
         for domain in contract["hash_domains"].values()
     )
     assert TOOL._TARGET_SOURCE_BINDING_DOMAIN == (
@@ -4370,36 +4414,36 @@ def test_v2r7_instance_domains_preserve_version_neutral_domains() -> None:
 
 @pytest.mark.parametrize(
     "domain_name",
-    tuple(TOOL._EXPECTED_HASH_DOMAINS_V2R7),
+    tuple(TOOL._EXPECTED_HASH_DOMAINS_V2R8),
 )
-def test_contract_loader_rejects_rehashed_v2r7_hash_domain_drift(
+def test_contract_loader_rejects_rehashed_v2r8_hash_domain_drift(
     monkeypatch: pytest.MonkeyPatch,
     domain_name: str,
 ) -> None:
     base = _contract()
-    expected_domain = TOOL._EXPECTED_HASH_DOMAINS_V2R7[domain_name]
+    expected_domain = TOOL._EXPECTED_HASH_DOMAINS_V2R8[domain_name]
     prior_v2_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R7",
+        "SHADOW_RETRY_CAMPAIGN_V2R8",
         "SHADOW_RETRY_CAMPAIGN",
     )
     prior_v2r2_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R7",
+        "SHADOW_RETRY_CAMPAIGN_V2R8",
         "SHADOW_RETRY_CAMPAIGN_V2R2",
     )
     prior_v2r3_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R7",
+        "SHADOW_RETRY_CAMPAIGN_V2R8",
         "SHADOW_RETRY_CAMPAIGN_V2R3",
     )
     prior_v2r4_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R7",
+        "SHADOW_RETRY_CAMPAIGN_V2R8",
         "SHADOW_RETRY_CAMPAIGN_V2R4",
     )
     prior_v2r5_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R7",
+        "SHADOW_RETRY_CAMPAIGN_V2R8",
         "SHADOW_RETRY_CAMPAIGN_V2R5",
     )
     prior_v2r6_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R7",
+        "SHADOW_RETRY_CAMPAIGN_V2R8",
         "SHADOW_RETRY_CAMPAIGN_V2R6",
     )
     for forged_domain in (
@@ -4514,7 +4558,7 @@ def test_contract_loader_rejects_clone_target_ref_policy_drift(
         "prior-v2r5",
     ),
 )
-def test_historical_capsule_authorization_and_rehashed_ledger_are_not_v2r7_authority(
+def test_historical_capsule_authorization_and_rehashed_ledger_are_not_v2r8_authority(
     tmp_path: Path,
     historical_campaign_id: str,
     historical_state_prefix: str,
@@ -4590,7 +4634,7 @@ def test_historical_capsule_authorization_and_rehashed_ledger_are_not_v2r7_autho
         )
         rehashed_prior_authorization["owner_confirmation_digest"] = (
             TOOL._domain_digest(
-                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/"
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R8/"
                 "OWNER_CONFIRMATION/V2",
                 {
                     field: deepcopy(rehashed_prior_authorization[field])
@@ -8894,7 +8938,7 @@ def test_offline_verifier_rejects_rehashed_wrong_slot_admission_receipt(
         wrong_slot_receipt = generated.value.receipt
         assert type(wrong_slot_receipt) is dict
         assert wrong_slot_receipt["slot_id"] == "SLOT_01"
-        assert TOOL._scheduling_admission_evidence_semantics_v5(
+        assert TOOL._scheduling_admission_evidence_semantics_v6(
             contract,
             wrong_slot_receipt,
             require_passed=False,
@@ -10340,7 +10384,7 @@ def test_safe_postrun_source_replay_preserves_bounded_command_receipt(
     assert result["evidence"]["error_receipt_or_null"] == receipt
     assert result["evidence"]["error_receipt_or_null"]["argv"] == receipt["argv"]
     assert result["root"] == TOOL._domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R7/SOURCE_REPLAY/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R8/SOURCE_REPLAY/V2",
         result["evidence"],
     )
 
