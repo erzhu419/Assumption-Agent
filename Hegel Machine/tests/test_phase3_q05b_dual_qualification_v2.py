@@ -548,6 +548,71 @@ def test_python310_isolated_stage8_artifact_lazy_import_uses_vendored_tomli() ->
     assert completed.stderr == ""
 
 
+def test_python310_fresh_internal_host_exact_module_closure_kat() -> None:
+    program = (
+        "import hashlib,importlib,pathlib,runpy\n"
+        f"root=pathlib.Path({str(ROOT)!r})\n"
+        f"m=runpy.run_path({str(TOOL_PATH)!r},run_name='q05b_closure_kat')\n"
+        "m['_load_host_replay_module_v1'](root)\n"
+        "importlib.import_module('hegel_machine.phase3_q05b_negative_vectors_v1')\n"
+        "rows=[list(row) for row in m['host_loaded_module_rows_v1'](root)]\n"
+        "assert len(rows)==39\n"
+        "admission='hegel_machine.phase3_q05b_actual_admission_v2'\n"
+        "assert sum(row[0]==admission for row in rows)==1\n"
+        "artifact=importlib.import_module('hegel_machine.phase3_q05b_actual_artifact_v2')\n"
+        "payloads={}\n"
+        "for relative in m['HOST_SOURCE_ALLOWLIST']:\n"
+        " path=root/relative\n"
+        " if path.is_file():\n"
+        "  raw=path.read_bytes()\n"
+        "  payloads[relative]=(0o100644,'',raw)\n"
+        "validated,replayed_root=artifact._validate_loaded_modules_v1(rows,payloads)\n"
+        "assert validated==rows\n"
+        "emitted_root=hashlib.sha256(b'HEGEL/Q05B/HOST/LOADED_MODULE_CLOSURE/V1\\x00'+m['_canonical_json_bytes'](rows)).hexdigest()\n"
+        "assert replayed_root==emitted_root\n"
+        "missing=[row for row in rows if row[0]!=admission]\n"
+        "try:\n"
+        " artifact._validate_loaded_modules_v1(missing,payloads)\n"
+        "except artifact.Q05BActualArtifactError as error:\n"
+        " assert error.code=='REJECT_Q05B_ARTIFACT_HOST'\n"
+        " assert error.detail=='loaded module closure is incomplete'\n"
+        "else:\n"
+        " raise AssertionError('missing admission module was accepted')\n"
+        "extra_path='src/hegel_machine/phase3_q05b_actual_artifact_v2.py'\n"
+        "extra=['hegel_machine.phase3_q05b_actual_artifact_v2',extra_path,hashlib.sha256(payloads[extra_path][2]).hexdigest()]\n"
+        "with_extra=sorted(rows+[extra],key=lambda row:row[0])\n"
+        "assert len(with_extra)==40\n"
+        "try:\n"
+        " artifact._validate_loaded_modules_v1(with_extra,payloads)\n"
+        "except artifact.Q05BActualArtifactError as error:\n"
+        " assert error.code=='REJECT_Q05B_ARTIFACT_HOST'\n"
+        " assert error.detail=='loaded module closure is incomplete'\n"
+        "else:\n"
+        " raise AssertionError('extra project module was accepted')\n"
+        "print('PYTHON310_FRESH_INTERNAL_HOST_EXACT_39_MODULE_CLOSURE_OK')\n"
+    )
+    completed = subprocess.run(
+        [
+            "/usr/bin/python3.10",
+            "-I",
+            "-S",
+            "-B",
+            "-X",
+            "utf8",
+            "-c",
+            program,
+        ],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    assert completed.stdout == (
+        "PYTHON310_FRESH_INTERNAL_HOST_EXACT_39_MODULE_CLOSURE_OK\n"
+    )
+    assert completed.stderr == ""
+
+
 def _write_exact_sidecar_tree(root: Path, *, payload: bytes = b"x") -> None:
     for relative in WIRE.ORDERED_OUTPUT_RELATIVE_PATHS:
         path = root / relative.decode("ascii")

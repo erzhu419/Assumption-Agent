@@ -1971,7 +1971,9 @@ def _validate_loaded_modules_v1(
         "hegel_machine.phase3_m25_formal_static_basis_v1",
     }
     expected_modules = {
-        "phase3_q05b_host_replay_v1", "phase3_q05b_negative_vectors_v1"
+        "phase3_q05b_actual_admission_v2",
+        "phase3_q05b_host_replay_v1",
+        "phase3_q05b_negative_vectors_v1",
     }
     pending = list(expected_modules)
     while pending:
