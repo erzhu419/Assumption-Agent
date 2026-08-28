@@ -1144,7 +1144,7 @@ def _command_mount_registry_v1(
 def _replay_control_identity_v1(
     value: object, actor_id: str, stdout: bytes, released: bool
 ) -> dict[str, object]:
-    item = _object(value, {"actor_id", "actor_stdout_hex", "file_rows", "manifest_sha256", "root_device", "root_inode", "root_mode", "schema_version"}, "held control identity")
+    item = _object(value, {"actor_id", "actor_stdout_hex", "control_root_path", "file_rows", "manifest_sha256", "root_device", "root_inode", "root_mode", "root_nlink", "schema_version"}, "held control identity")
     names = ("actor.stdout", "done", "exit-code") + (("release",) if released else ())
     payloads = {
         "actor.stdout": stdout,
@@ -1158,7 +1158,11 @@ def _replay_control_identity_v1(
         item["schema_version"] != "hegel-phase3a-q05b-held-control-evidence/1"
         or item["actor_id"] != actor_id
         or item["actor_stdout_hex"] != stdout.hex()
+        or type(item["control_root_path"]) is not str
+        or not item["control_root_path"].startswith("/")
+        or ".." in item["control_root_path"].split("/")
         or type(item["root_device"]) is not int or type(item["root_inode"]) is not int
+        or type(item["root_nlink"]) is not int or item["root_nlink"] < 1
         or item["root_mode"] != (0o555 if released else 0o700)
         or type(rows) is not list or [row[0] if type(row) is list and row else None for row in rows] != list(names)
         or observed != sha256(_canonical_json(body)).hexdigest()
@@ -1350,6 +1354,16 @@ def _validate_actor_control_exact_v1(
     command_sha, mount_sha = _command_mount_registry_v1(actor["command"], role_id, actor_id, config)
     completion = _replay_control_identity_v1(control["completion_evidence"], actor_id, stdout, False)
     release = _replay_control_identity_v1(control["release_evidence"], actor_id, stdout, True)
+    if (
+        completion["control_root_path"] != control["control_root_path"]
+        or release["control_root_path"] != control["control_root_path"]
+        or completion["root_nlink"] != control["control_root_nlink"]
+        or release["root_nlink"] != control["control_root_nlink"]
+    ):
+        _fail(
+            "REJECT_Q05B_ARTIFACT_ACTOR",
+            f"{actor_id} control root identity differs",
+        )
     cid = _object(control["cidfile_evidence"], {"cidfile_path", "container_id", "file_device", "file_gid", "file_inode", "file_mode", "file_nlink", "file_size", "file_uid", "manifest_sha256", "parent_device", "parent_inode", "parent_mode", "parent_nlink", "payload_hex", "payload_sha256", "relative_name", "schema_version"}, "cidfile evidence")
     cid_payload = _validate_docker_cid_payload_v1(
         cid, control["container_id"], "actor cidfile"

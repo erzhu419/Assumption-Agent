@@ -797,6 +797,7 @@ def _mock_held_python_actor(
     live_document = [
         {
             "Id": container_id,
+            "Image": TOOL.PYTHON_IMAGE.removeprefix("python@"),
             "Name": f"/{docker_slot_row['container_name']}",
             "State": {"Running": True, "OOMKilled": False, "Pid": pid},
             "Config": {
@@ -848,6 +849,7 @@ def _mock_held_python_actor(
     post_document = [
         {
             "Id": container_id,
+            "Image": TOOL.PYTHON_IMAGE.removeprefix("python@"),
             "Name": f"/{docker_slot_row['container_name']}",
             "State": {"Running": False, "OOMKilled": False, "ExitCode": 0},
             "Config": {
@@ -2399,6 +2401,95 @@ def test_close_held_actor_walks_final_sample_stdout_exit_and_remove(
     assert evidence["docker_absence_evidence"]["inspect_exit_code"] == 1
     assert actor.process.poll() == 0
     assert (control / "release").read_bytes() == TOOL.HELD_RELEASE_BYTES
+    control.chmod(0o755)
+
+
+def test_artifact_replay_accepts_tool_control_identity_and_binds_root(
+    tmp_path: Path,
+) -> None:
+    (
+        actor,
+        inspect_reader,
+        proc_root,
+        cgroup_root,
+        command_runner,
+        _docker_calls,
+        control,
+        actor_stdout,
+    ) = _mock_held_python_actor(tmp_path, "artifact-control-identity")
+    evidence = TOOL.close_held_actor_process_v1(
+        actor,
+        child_timeout_seconds=2.0,
+        inspect_reader=inspect_reader,
+        proc_root=proc_root,
+        cgroup_root=cgroup_root,
+        command_runner=command_runner,
+    )
+    config = json.loads((ROOT / TOOL.CONFIG_RELATIVE_PATH).read_bytes())
+    runtime_seccomp_payload = Path(
+        evidence["seccomp_evidence"]["absolute_path"]
+    ).read_bytes()
+    actor_row = {
+        "actor_id": actor.actor_id,
+        "command": list(actor.command),
+    }
+
+    def replay(candidate: dict[str, object]) -> dict[str, object]:
+        return ARTIFACT._validate_actor_control_exact_v1(
+            candidate,
+            actor_row,
+            actor.role_id,
+            actor_stdout,
+            candidate["final_resource_transcript"],
+            config,
+            runtime_seccomp_payload,
+            TOOL.PYTHON_IMAGE.removeprefix("python@"),
+        )
+
+    assert replay(evidence) == evidence
+    assert set(evidence["completion_evidence"]) == {
+        "actor_id",
+        "actor_stdout_hex",
+        "control_root_path",
+        "file_rows",
+        "manifest_sha256",
+        "root_device",
+        "root_inode",
+        "root_mode",
+        "root_nlink",
+        "schema_version",
+    }
+    assert set(evidence["release_evidence"]) == set(
+        evidence["completion_evidence"]
+    )
+
+    changed_path = deepcopy(evidence)
+    changed_path_identity = changed_path["completion_evidence"]
+    changed_path_identity["control_root_path"] = (
+        tmp_path / "rehash-path-mutation"
+    ).resolve().as_posix()
+    changed_path_body = dict(changed_path_identity)
+    changed_path_body.pop("manifest_sha256")
+    changed_path_identity["manifest_sha256"] = sha256(
+        ARTIFACT._canonical_json(changed_path_body)
+    ).hexdigest()
+    with pytest.raises(ARTIFACT.Q05BActualArtifactError) as path_rejected:
+        replay(changed_path)
+    assert path_rejected.value.code == "REJECT_Q05B_ARTIFACT_ACTOR"
+    assert "control root identity differs" in path_rejected.value.detail
+
+    changed_nlink = deepcopy(evidence)
+    changed_nlink_identity = changed_nlink["release_evidence"]
+    changed_nlink_identity["root_nlink"] += 1
+    changed_nlink_body = dict(changed_nlink_identity)
+    changed_nlink_body.pop("manifest_sha256")
+    changed_nlink_identity["manifest_sha256"] = sha256(
+        ARTIFACT._canonical_json(changed_nlink_body)
+    ).hexdigest()
+    with pytest.raises(ARTIFACT.Q05BActualArtifactError) as nlink_rejected:
+        replay(changed_nlink)
+    assert nlink_rejected.value.code == "REJECT_Q05B_ARTIFACT_ACTOR"
+    assert "control root identity differs" in nlink_rejected.value.detail
     control.chmod(0o755)
 
 
