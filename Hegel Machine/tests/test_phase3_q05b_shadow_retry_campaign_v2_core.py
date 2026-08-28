@@ -1037,18 +1037,18 @@ def test_canonical_strict_codec_and_domain_separated_digest_known_answer() -> No
     assert first != second
 
 
-def test_v2r8_partition_digest_domains_are_new_instance_authority() -> None:
+def test_v2r12_partition_digest_domains_are_new_instance_authority() -> None:
     rows: list[dict[str, object]] = []
     failure_domain = (
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R8/"
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R12/"
         "TRAJECTORY_FAILURE_ROWS/V2\x00"
     )
     cleanup_domain = (
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R8/"
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R12/"
         "TRAJECTORY_CLEANUP_ROWS/V2\x00"
     )
     certificate_domain = (
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R8/"
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R12/"
         "POST_ORIGIN_PARTITION_CERTIFICATE/V2\x00"
     )
     certificate: dict[str, object] = {"certificate_digest": None}
@@ -1067,49 +1067,85 @@ def test_v2r8_partition_digest_domains_are_new_instance_authority() -> None:
         certificate_domain, {}
     )
     assert failure_digest != campaign.campaign_record_digest_v2(
-        failure_domain.replace("V2R8", "V2R2"), rows
+        failure_domain.replace("V2R12", "V2R2"), rows
     )
     assert failure_digest != campaign.campaign_record_digest_v2(
-        failure_domain.replace("V2R8", "V2R3"), rows
+        failure_domain.replace("V2R12", "V2R3"), rows
     )
     assert failure_digest != campaign.campaign_record_digest_v2(
-        failure_domain.replace("V2R8", "V2R4"), rows
+        failure_domain.replace("V2R12", "V2R4"), rows
     )
     assert failure_digest != campaign.campaign_record_digest_v2(
-        failure_domain.replace("V2R8", "V2R5"), rows
+        failure_domain.replace("V2R12", "V2R5"), rows
     )
     assert failure_digest != campaign.campaign_record_digest_v2(
-        failure_domain.replace("V2R8", "V2R6"), rows
+        failure_domain.replace("V2R12", "V2R6"), rows
+    )
+    assert failure_digest != campaign.campaign_record_digest_v2(
+        failure_domain.replace("V2R12", "V2R7"), rows
+    )
+    assert failure_digest != campaign.campaign_record_digest_v2(
+        failure_domain.replace("V2R12", "V2R8"), rows
+    )
+    assert failure_digest != campaign.campaign_record_digest_v2(
+        failure_domain.replace("V2R12", "V2R9"), rows
+    )
+    assert failure_digest != campaign.campaign_record_digest_v2(
+        failure_domain.replace("V2R12", "V2R10"), rows
     )
     assert cleanup_digest != campaign.campaign_record_digest_v2(
-        cleanup_domain.replace("V2R8", "V2R2"), rows
+        cleanup_domain.replace("V2R12", "V2R2"), rows
     )
     assert cleanup_digest != campaign.campaign_record_digest_v2(
-        cleanup_domain.replace("V2R8", "V2R3"), rows
+        cleanup_domain.replace("V2R12", "V2R3"), rows
     )
     assert cleanup_digest != campaign.campaign_record_digest_v2(
-        cleanup_domain.replace("V2R8", "V2R4"), rows
+        cleanup_domain.replace("V2R12", "V2R4"), rows
     )
     assert cleanup_digest != campaign.campaign_record_digest_v2(
-        cleanup_domain.replace("V2R8", "V2R5"), rows
+        cleanup_domain.replace("V2R12", "V2R5"), rows
     )
     assert cleanup_digest != campaign.campaign_record_digest_v2(
-        cleanup_domain.replace("V2R8", "V2R6"), rows
+        cleanup_domain.replace("V2R12", "V2R6"), rows
+    )
+    assert cleanup_digest != campaign.campaign_record_digest_v2(
+        cleanup_domain.replace("V2R12", "V2R7"), rows
+    )
+    assert cleanup_digest != campaign.campaign_record_digest_v2(
+        cleanup_domain.replace("V2R12", "V2R8"), rows
+    )
+    assert cleanup_digest != campaign.campaign_record_digest_v2(
+        cleanup_domain.replace("V2R12", "V2R9"), rows
+    )
+    assert cleanup_digest != campaign.campaign_record_digest_v2(
+        cleanup_domain.replace("V2R12", "V2R10"), rows
     )
     assert certificate_digest != campaign.campaign_record_digest_v2(
-        certificate_domain.replace("V2R8", "V2R2"), {}
+        certificate_domain.replace("V2R12", "V2R2"), {}
     )
     assert certificate_digest != campaign.campaign_record_digest_v2(
-        certificate_domain.replace("V2R8", "V2R3"), {}
+        certificate_domain.replace("V2R12", "V2R3"), {}
     )
     assert certificate_digest != campaign.campaign_record_digest_v2(
-        certificate_domain.replace("V2R8", "V2R4"), {}
+        certificate_domain.replace("V2R12", "V2R4"), {}
     )
     assert certificate_digest != campaign.campaign_record_digest_v2(
-        certificate_domain.replace("V2R8", "V2R5"), {}
+        certificate_domain.replace("V2R12", "V2R5"), {}
     )
     assert certificate_digest != campaign.campaign_record_digest_v2(
-        certificate_domain.replace("V2R8", "V2R6"), {}
+        certificate_domain.replace("V2R12", "V2R6"), {}
+    )
+    assert certificate_digest != campaign.campaign_record_digest_v2(
+        certificate_domain.replace("V2R12", "V2R7"), {}
+    )
+    assert certificate_digest != campaign.campaign_record_digest_v2(
+        certificate_domain.replace("V2R12", "V2R8"), {}
+    )
+    assert certificate_digest != campaign.campaign_record_digest_v2(
+        certificate_domain.replace("V2R12", "V2R9"), {}
+    )
+    assert certificate_digest != campaign.campaign_record_digest_v2(
+        certificate_domain.replace("V2R12", "V2R10"), {}
     )
 
 
@@ -2502,3 +2538,15 @@ def test_canonical_codec_wraps_recursive_tree_failure_in_typed_error() -> None:
     with pytest.raises(campaign.ShadowRetryCampaignValidationErrorV2) as caught:
         campaign.canonical_campaign_json_bytes_v2(cyclic)
     assert caught.value.code == campaign.FAIL_CANONICAL_V2
+
+
+def test_v2r12_preconsumption_pending_is_not_a_slot_decision() -> None:
+    decisions = {
+        campaign.SUCCESS_V2,
+        campaign.RETRY_EXACT_GAP_V2,
+        campaign.EXHAUSTED_RETRYABLE_GAP_V2,
+        campaign.TERMINAL_NONRETRYABLE_V2,
+    }
+    assert len(decisions) == 4
+    assert all("PENDING" not in decision for decision in decisions)
+    assert all("PENDING" not in name for name in campaign.__all__)
