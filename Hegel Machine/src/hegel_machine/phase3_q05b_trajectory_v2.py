@@ -1021,7 +1021,6 @@ class DurableTrajectoryWriterV2:
                 if count <= 0:
                     _fail(FAIL_FILESYSTEM_V2, "record write made no progress")
                 written += count
-            os.fsync(descriptor)
             os.fchmod(descriptor, 0o444)
             os.fsync(descriptor)
         finally:

@@ -2189,7 +2189,7 @@ def _isolation_config_v1(
         or trajectory["core_relative_path"]
         != "src/hegel_machine/phase3_q05b_trajectory_v2.py"
         or trajectory["core_raw_sha256"]
-        != "0b0d33fc9ff0be239b61ce1bed6d93511f797ad1adc6666938cfb7581be7cf34"
+        != "e0339921ba19614ed23615a943d15acc5eaeed2c4012c6ffa1e4e0ae092cc013"
         or trajectory["producer_id"] != "Q05B_SUPERVISOR_V4"
         or trajectory["clock_id"] != "CLOCK_MONOTONIC"
         or trajectory["trajectory_root_mode"] != "0700"

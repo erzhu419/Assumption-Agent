@@ -869,6 +869,59 @@ def test_write_and_fsync_faults_permanently_poison_writer(
     )
 
 
+def test_publication_uses_exact_single_file_fsync_sequence(
+    private_parent: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    writer = _writer(private_parent, "publication-sequence")
+    root_fd = writer._root_fd
+    operations: list[str] = []
+    real_write = os.write
+    real_fchmod = os.fchmod
+    real_fsync = os.fsync
+    real_link = os.link
+    real_unlink = os.unlink
+
+    def record_write(descriptor: int, payload: object) -> int:
+        operations.append("write")
+        return real_write(descriptor, payload)
+
+    def record_fchmod(descriptor: int, mode: int) -> None:
+        operations.append(f"fchmod:{mode:o}")
+        real_fchmod(descriptor, mode)
+
+    def record_fsync(descriptor: int) -> None:
+        operations.append("fsync:directory" if descriptor == root_fd else "fsync:file")
+        real_fsync(descriptor)
+
+    def record_link(*args: object, **kwargs: object) -> None:
+        operations.append("link")
+        real_link(*args, **kwargs)
+
+    def record_unlink(*args: object, **kwargs: object) -> None:
+        operations.append("unlink")
+        real_unlink(*args, **kwargs)
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(trajectory.os, "write", record_write)
+        scoped.setattr(trajectory.os, "fchmod", record_fchmod)
+        scoped.setattr(trajectory.os, "fsync", record_fsync)
+        scoped.setattr(trajectory.os, "link", record_link)
+        scoped.setattr(trajectory.os, "unlink", record_unlink)
+        writer.begin("root", "trial")
+    writer.close()
+
+    assert operations == [
+        "write",
+        "fchmod:444",
+        "fsync:file",
+        "fsync:directory",
+        "link",
+        "fsync:directory",
+        "unlink",
+        "fsync:directory",
+    ]
+
+
 def test_torn_event_preserves_preceding_durable_prefix(
     private_parent: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -905,15 +958,15 @@ def test_post_link_fsync_fault_is_recognized_as_two_link_torn_tail(
     real_fsync = os.fsync
     calls = 0
 
-    def fail_fourth_fsync(descriptor: int) -> None:
+    def fail_third_fsync(descriptor: int) -> None:
         nonlocal calls
         calls += 1
-        if calls == 4:
+        if calls == 3:
             raise OSError("injected post-link directory fsync failure")
         real_fsync(descriptor)
 
     with monkeypatch.context() as scoped:
-        scoped.setattr(trajectory.os, "fsync", fail_fourth_fsync)
+        scoped.setattr(trajectory.os, "fsync", fail_third_fsync)
         with pytest.raises(trajectory.TrajectoryErrorV2):
             writer.begin("root", "trial")
     writer.close()

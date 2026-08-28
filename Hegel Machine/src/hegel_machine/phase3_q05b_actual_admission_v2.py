@@ -322,7 +322,7 @@ ACTUAL_COMMAND_MOUNT_RESOURCE_POLICY_ROOT_DOMAIN: Final = (
     b"HEGEL/Q05B/ACTUAL/COMMAND_MOUNT_RESOURCE_POLICY/V1\x00"
 )
 EXPECTED_COMMIT_A_STATIC_POLICY_ROOT: Final = (
-    "193a2985dfac1dcc9852ece6f8bc4a5227d87dc4cc13b8edd26ae313ae53a511"
+    "a5e7272551c7cfd1e7ea7c4970a7c28fb15582c345690860a3f444fd36d7baa9"
 )
 EXPECTED_COMMAND_MOUNT_RESOURCE_POLICY_ROOT: Final = (
     "f92d94f7ba7fefbc60d4a815e16fd8a66be7090aea67cddde6b899ea24dd9e78"
@@ -1671,7 +1671,7 @@ def _validate_config_bytes_v1(value: object) -> dict[str, object]:
             "required_for_run_cli": True,
             "core_relative_path": "src/hegel_machine/phase3_q05b_trajectory_v2.py",
             "core_raw_sha256": (
-                "0b0d33fc9ff0be239b61ce1bed6d93511f797ad1adc6666938cfb7581be7cf34"
+                "e0339921ba19614ed23615a943d15acc5eaeed2c4012c6ffa1e4e0ae092cc013"
             ),
             "producer_id": "Q05B_SUPERVISOR_V4",
             "clock_id": "CLOCK_MONOTONIC",
