@@ -38,6 +38,7 @@ from typing import Callable, Final, Iterable, Mapping, NoReturn, Sequence
 PROJECT_ROOT: Final = Path(__file__).resolve().parents[1]
 CONFIG_RELATIVE_PATH: Final = "config/phase3_q05b_dual_isolation_v2.json"
 CONFIG_PATH: Final = PROJECT_ROOT / CONFIG_RELATIVE_PATH
+ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2: Final = 2 * 1024 * 1024 * 1024
 ACTUAL_ARTIFACT_RELATIVE_PATH: Final = (
     "artifacts/phase3_q05b_dual_qualification_v2.json"
 )
@@ -9151,6 +9152,22 @@ ACTUAL_FINAL_DELIVERY_ROOT_DOMAIN: Final = (
 )
 
 
+def _descriptor_replays_exact_payload_v1(
+    descriptor: int,
+    payload: bytes,
+) -> bool:
+    offset = 0
+    while offset < len(payload):
+        block = os.read(
+            descriptor,
+            min(1024 * 1024, len(payload) - offset),
+        )
+        if not block or block != payload[offset : offset + len(block)]:
+            return False
+        offset += len(block)
+    return os.read(descriptor, 1) == b""
+
+
 def atomic_publish_canonical_artifact_v1(
     path: Path,
     value: object,
@@ -9223,7 +9240,7 @@ def atomic_publish_canonical_artifact_v1(
         ):
             _fail(FAIL_ARTIFACT, "temporary artifact identity differs")
         os.lseek(descriptor, 0, os.SEEK_SET)
-        if os.read(descriptor, len(payload) + 1) != payload:
+        if not _descriptor_replays_exact_payload_v1(descriptor, payload):
             _fail(FAIL_ARTIFACT, "temporary artifact bytes differ")
         os.link(
             temporary_name,
@@ -9263,7 +9280,7 @@ def atomic_publish_canonical_artifact_v1(
             )
         ):
             _fail(FAIL_ARTIFACT, "published artifact identity differs")
-        if os.read(final_descriptor, len(payload) + 1) != payload:
+        if not _descriptor_replays_exact_payload_v1(final_descriptor, payload):
             _fail(FAIL_ARTIFACT, "published artifact bytes differ")
         if fault_hook is not None:
             fault_hook("AFTER_FINAL_LINK_VALIDATED_BEFORE_TEMP_UNLINK")
@@ -9293,7 +9310,7 @@ def atomic_publish_canonical_artifact_v1(
         ):
             _fail(FAIL_ARTIFACT, "published artifact unlink closure differs")
         os.lseek(final_descriptor, 0, os.SEEK_SET)
-        if os.read(final_descriptor, len(payload) + 1) != payload:
+        if not _descriptor_replays_exact_payload_v1(final_descriptor, payload):
             _fail(FAIL_ARTIFACT, "published artifact bytes changed after unlink")
         parent_after = parent.lstat()
         if (
@@ -9622,7 +9639,7 @@ def read_published_canonical_artifact_v1(
         or path.name in ("", ".", "..")
         or type(expected_payload) is not bytes
         or not expected_payload.endswith(b"\n")
-        or len(expected_payload) > 1024 * 1024 * 1024
+        or len(expected_payload) > ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2
     ):
         _fail(FAIL_ARTIFACT, "published artifact replay input differs")
     parent_before = path.parent.lstat()

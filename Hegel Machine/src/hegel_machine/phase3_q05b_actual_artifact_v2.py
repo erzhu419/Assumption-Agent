@@ -30,7 +30,7 @@ from .strict_cbor_v1 import canonical_cbor_decode, canonical_cbor_encode, conten
 
 
 ARTIFACT_SCHEMA_VERSION: Final = "hegel-phase3a-q05b-actual-artifact/2"
-ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES: Final = 64 * 1024 * 1024
+ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES: Final = 2 * 1024 * 1024 * 1024
 HOST_EXECUTION_BINDING_ROOT_DOMAIN: Final = "HEGEL/Q05B/ACTUAL/HOST_EXECUTION_BINDING/V1"
 RESOURCE_EVIDENCE_ROOT_DOMAIN: Final = "HEGEL/Q05B/ACTUAL/RESOURCE/V1"
 ISOLATION_EVIDENCE_ROOT_DOMAIN: Final = "HEGEL/Q05B/ACTUAL/ISOLATION/V1"
@@ -5183,10 +5183,13 @@ def build_actual_artifact_v1(evidence: Mapping[str, object]) -> dict[str, object
             "artifact evidence must be an exact object",
         )
     artifact = _replay_actual_evidence_v1(evidence, candidate_only=False)
-    if len(_canonical_json(artifact)) > ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES:
+    observed_bytes = len(_canonical_json(artifact))
+    if observed_bytes > ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES:
         _fail(
             "REJECT_Q05B_ARTIFACT_SIZE",
-            "artifact canonical bytes exceed frozen maximum",
+            "artifact canonical bytes exceed frozen maximum: "
+            f"observed={observed_bytes}; "
+            f"maximum={ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES}",
         )
     return artifact
 
@@ -5195,10 +5198,13 @@ def canonical_actual_artifact_bytes_v1(value: object) -> bytes:
     if type(value) is not dict:
         _fail("REJECT_Q05B_ARTIFACT_SCHEMA", "artifact value must be exact object")
     payload = _canonical_json(value)
-    if len(payload) > ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES:
+    observed_bytes = len(payload)
+    if observed_bytes > ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES:
         _fail(
             "REJECT_Q05B_ARTIFACT_SIZE",
-            "artifact canonical bytes exceed frozen maximum",
+            "artifact canonical bytes exceed frozen maximum: "
+            f"observed={observed_bytes}; "
+            f"maximum={ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES}",
         )
     replayed = decode_and_replay_actual_artifact_v1(payload)
     if replayed != value:
@@ -5207,13 +5213,18 @@ def canonical_actual_artifact_bytes_v1(value: object) -> bytes:
 
 
 def decode_and_replay_actual_artifact_v1(payload: bytes) -> dict[str, object]:
-    if (
-        type(payload) is not bytes
-        or len(payload) > ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES
-    ):
+    if type(payload) is not bytes:
         _fail(
             "REJECT_Q05B_ARTIFACT_SIZE",
             "artifact payload must be exact bytes within frozen maximum",
+        )
+    observed_bytes = len(payload)
+    if observed_bytes > ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES:
+        _fail(
+            "REJECT_Q05B_ARTIFACT_SIZE",
+            "artifact payload exceeds frozen maximum: "
+            f"observed={observed_bytes}; "
+            f"maximum={ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES}",
         )
     value = _strict_json(payload)
     _object(value, {"derived", "schema_version", "sections", "status"}, "artifact")

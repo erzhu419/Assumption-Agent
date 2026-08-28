@@ -11338,6 +11338,39 @@ def test_atomic_artifact_primitive_is_noreplace_mode444_and_canonical(tmp_path: 
     assert second.value.code == TOOL.FAIL_ARTIFACT
 
 
+def test_atomic_artifact_exact_replay_accepts_short_reads_and_rejects_difference_or_tail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = b'{"artifact":"short-read-kat"}'
+    original_read = TOOL.os.read
+    read_results: list[tuple[int, int]] = []
+
+    def short_read(descriptor: int, size: int) -> bytes:
+        block = original_read(descriptor, min(size, 3))
+        read_results.append((size, len(block)))
+        return block
+
+    monkeypatch.setattr(TOOL.os, "read", short_read)
+
+    def replay(candidate: bytes) -> bool:
+        reader, writer = os.pipe()
+        try:
+            assert os.write(writer, candidate) == len(candidate)
+        finally:
+            os.close(writer)
+        try:
+            return TOOL._descriptor_replays_exact_payload_v1(reader, payload)
+        finally:
+            os.close(reader)
+
+    assert replay(payload) is True
+    assert any(requested > returned > 0 for requested, returned in read_results)
+    different = payload[:10] + bytes([payload[10] ^ 1]) + payload[11:]
+    assert len(different) == len(payload)
+    assert replay(different) is False
+    assert replay(payload + b"x") is False
+
+
 def test_published_artifact_replay_rejects_hardlink_and_symlink(
     tmp_path: Path,
 ) -> None:
@@ -15600,6 +15633,172 @@ def _q05b_v2_regression_artifact_resource_rows(
         _refresh_q05b_v2_regression_resource_row(row)
         resources.append(row)
     return resources
+
+
+def test_q05b_v2_artifact_size_cap_is_exact_diagnostic_and_aligned(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected_maximum = 2 * 1024 * 1024 * 1024
+    assert type(ARTIFACT.ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES) is int
+    assert type(TOOL.ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2) is int
+    assert (
+        ARTIFACT.ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES
+        == TOOL.ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2
+        == expected_maximum
+    )
+
+    class ExactLimitReached(Exception):
+        pass
+
+    def stop_after_size_gate(_payload: bytes) -> object:
+        raise ExactLimitReached
+
+    local_maximum = 32
+    monkeypatch.setattr(
+        ARTIFACT,
+        "ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES",
+        local_maximum,
+    )
+    monkeypatch.setattr(
+        ARTIFACT,
+        "_strict_json",
+        stop_after_size_gate,
+    )
+    with pytest.raises(ExactLimitReached):
+        ARTIFACT.decode_and_replay_actual_artifact_v1(
+            b" " * local_maximum
+        )
+    with pytest.raises(ARTIFACT.Q05BActualArtifactError) as oversized:
+        ARTIFACT.decode_and_replay_actual_artifact_v1(
+            b" " * (local_maximum + 1)
+        )
+    assert oversized.value.code == "REJECT_Q05B_ARTIFACT_SIZE"
+    assert oversized.value.detail == (
+        "artifact payload exceeds frozen maximum: "
+        "observed=33; maximum=32"
+    )
+    for alias in (bytearray(b"{}\n"), memoryview(b"{}\n")):
+        with pytest.raises(ARTIFACT.Q05BActualArtifactError) as rejected:
+            ARTIFACT.decode_and_replay_actual_artifact_v1(alias)
+        assert rejected.value.code == "REJECT_Q05B_ARTIFACT_SIZE"
+
+    synthetic = {"synthetic": True}
+    synthetic_payload = ARTIFACT._canonical_json(synthetic)
+    synthetic_maximum = len(synthetic_payload) - 1
+    monkeypatch.setattr(
+        ARTIFACT,
+        "ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES",
+        synthetic_maximum,
+    )
+    monkeypatch.setattr(
+        ARTIFACT,
+        "_replay_actual_evidence_v1",
+        lambda _evidence, *, candidate_only: synthetic,
+    )
+    with pytest.raises(ARTIFACT.Q05BActualArtifactError) as build_oversized:
+        ARTIFACT.build_actual_artifact_v1({})
+    assert build_oversized.value.code == "REJECT_Q05B_ARTIFACT_SIZE"
+    assert build_oversized.value.detail == (
+        "artifact canonical bytes exceed frozen maximum: "
+        f"observed={len(synthetic_payload)}; maximum={synthetic_maximum}"
+    )
+    with pytest.raises(ARTIFACT.Q05BActualArtifactError) as canonical_oversized:
+        ARTIFACT.canonical_actual_artifact_bytes_v1(synthetic)
+    assert canonical_oversized.value.code == "REJECT_Q05B_ARTIFACT_SIZE"
+    assert canonical_oversized.value.detail == build_oversized.value.detail
+
+    class PublishedLimitReached(Exception):
+        pass
+
+    def stop_after_published_size_gate(_path: Path) -> object:
+        raise PublishedLimitReached
+
+    published_payload = b"{}\n"
+    published = Path("/q05b-artifact-size-gate-test.json")
+    monkeypatch.setattr(Path, "lstat", stop_after_published_size_gate)
+    monkeypatch.setattr(
+        TOOL,
+        "ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2",
+        len(published_payload),
+    )
+    with pytest.raises(PublishedLimitReached):
+        TOOL.read_published_canonical_artifact_v1(
+            published,
+            published_payload,
+        )
+    monkeypatch.setattr(
+        TOOL,
+        "ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2",
+        len(published_payload) - 1,
+    )
+    with pytest.raises(TOOL.Q05BDualSupervisorError) as published_oversized:
+        TOOL.read_published_canonical_artifact_v1(
+            published,
+            published_payload,
+        )
+    assert published_oversized.value.code == TOOL.FAIL_ARTIFACT
+    with pytest.raises(TOOL.Q05BDualSupervisorError) as published_alias:
+        TOOL.read_published_canonical_artifact_v1(
+            published,
+            bytearray(published_payload),
+        )
+    assert published_alias.value.code == TOOL.FAIL_ARTIFACT
+
+
+def test_q05b_v2_real_sample_counts_exceed_legacy_artifact_cap_under_repeated_topology(
+) -> None:
+    config = ADMISSION.validate_commit_a_actual_config_bytes_v1(
+        (ROOT / TOOL.CONFIG_RELATIVE_PATH).read_bytes()
+    )
+    resources = _q05b_v2_regression_artifact_resource_rows(config)
+    sample_counts = (1575, 1583, 4071)
+    common_occurrences = (
+        "sections.actor_rows.control_evidence.final_resource_transcript",
+        "sections.final_resource_rows",
+        "sections.semantic_execution.isolation_preimage.actor_rows",
+        "sections.semantic_execution.isolation_preimage.final_resource_rows",
+        "sections.semantic_execution.resource_preimage.final_resource_rows",
+    )
+    endpoint_admission_occurrences = (
+        "sections.actual_admission.prior_stage_05.actor_completion_rows",
+        "sections.semantic_execution.isolation_preimage.actual_admission.stage_05",
+    )
+    host_admission_and_binding_occurrences = (
+        "sections.actual_admission.prior_stage_06.host_actor_completion",
+        "sections.semantic_execution.isolation_preimage.actual_admission.stage_06",
+        "sections.host_stage.host_binding.host_actor_row",
+        "sections.host_stage.host_binding.host_final_resource",
+        "sections.semantic_execution.isolation_preimage.host_stage.host_actor_row",
+        "sections.semantic_execution.isolation_preimage.host_stage.host_final_resource",
+        "sections.semantic_execution.host_binding.host_actor_row",
+        "sections.semantic_execution.host_binding.host_final_resource",
+    )
+    repeated_occurrences = (
+        len(common_occurrences) + len(endpoint_admission_occurrences),
+        len(common_occurrences) + len(endpoint_admission_occurrences),
+        len(common_occurrences)
+        + len(host_admission_and_binding_occurrences),
+    )
+    assert repeated_occurrences == (7, 7, 13)
+    representative_sample_bytes = tuple(
+        max(
+            len(ARTIFACT._canonical_json(sample))
+            for sample in resource["live_sample_objects"]
+        )
+        for resource in resources
+    )
+    repeated_sample_budget = sum(
+        sample_bytes * sample_count * occurrences
+        for sample_bytes, sample_count, occurrences in zip(
+            representative_sample_bytes,
+            sample_counts,
+            repeated_occurrences,
+            strict=True,
+        )
+    )
+    assert representative_sample_bytes == (2927, 2928, 2927)
+    assert repeated_sample_budget == 219_620_964
+    assert repeated_sample_budget > 64 * 1024 * 1024
 
 
 def test_q05b_v2_regression_artifact_sample_arithmetic_and_cross_chain_tamper(
