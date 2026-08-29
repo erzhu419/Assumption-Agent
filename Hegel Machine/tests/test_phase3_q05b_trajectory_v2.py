@@ -302,7 +302,7 @@ def test_complete_fail_persists_actor_and_over_250ms_gap_before_return(
 
 
 def test_exact_250ms_boundary_is_not_exceeded(private_parent: Path) -> None:
-    assert trajectory.TARGET_WAIT_NS_V2 == 125_000_000
+    assert trajectory.TARGET_WAIT_NS_V2 == 50_000_000
     root = private_parent / "boundary"
     with _writer(private_parent, "boundary") as writer:
         writer.begin(
@@ -320,7 +320,7 @@ def test_exact_250ms_boundary_is_not_exceeded(private_parent: Path) -> None:
     assert (
         boundary["scheduled_start_ns_or_null"]
         - boundary["previous_finish_ns_or_null"]
-        == 125_000_000
+        == 50_000_000
     )
     assert trajectory.verify_durable_trajectory_v2(
         root, expected_parent=private_parent
@@ -775,17 +775,17 @@ def test_producer_free_verifier_rejects_sample_policy_and_chain_weakening(
         _rewrite_final_event_and_manifest(root, {"sample_ordinal_or_null": 1})
     elif mutation == "break-chain":
         previous = int(final["previous_finish_ns_or_null"]) + 1
-        actual = previous + 125_000_000
+        actual = previous + 50_000_000
         finish = actual + 1_000_000
         _rewrite_final_event_and_manifest(
             root,
             {
                 "previous_finish_ns_or_null": previous,
-                "scheduled_start_ns_or_null": previous + 125_000_000,
+                "scheduled_start_ns_or_null": previous + 50_000_000,
                 "actual_start_ns_or_null": actual,
                 "finish_ns_or_null": finish,
                 "scheduler_lateness_ns_or_null": 0,
-                "gap_ns_or_null": 125_000_000,
+                "gap_ns_or_null": 50_000_000,
                 "collection_duration_ns_or_null": 1_000_000,
             },
         )

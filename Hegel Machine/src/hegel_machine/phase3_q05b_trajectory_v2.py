@@ -9,8 +9,8 @@ no-follow staging creation, an atomic no-replace hard-link commit, immutable-
 by-mode records, and file/directory fsync.  A crash before commit leaves one
 strictly recognizable hidden torn tail and never invalidates the durable prefix.
 
-V2 freezes the held-actor sampling policy at a 125 ms target wait and a 250 ms
-maximum gap.  Sample ordinals start at one and are contiguous independently
+The event/manifest V2 wire is reused by a producer-bound policy with a 50 ms
+target wait and a 250 ms maximum gap.  Sample ordinals start at one and are contiguous independently
 for each role; every later sample binds the preceding finish timestamp.  All
 monotonic timestamps and durations are exact JSON integers bounded as uint64,
 while sequence/count fields use their own smaller counter bound.
@@ -60,7 +60,7 @@ TERMINAL_MANIFEST_SCHEMA_V2: Final = (
     "hegel-phase3-q05b-durable-trajectory-terminal-manifest/2"
 )
 TERMINAL_MANIFEST_BASENAME_V2: Final = "terminal-manifest-v2.json"
-TARGET_WAIT_NS_V2: Final = 125_000_000
+TARGET_WAIT_NS_V2: Final = 50_000_000
 MAXIMUM_GAP_NS_V2: Final = 250_000_000
 GAP_EXCEEDED_ERROR_CODE_V2: Final = "HELD_ACTOR_GAP_EXCEEDED"
 SAMPLE_ROLE_ACTOR_MAP_V2: Final = MappingProxyType(

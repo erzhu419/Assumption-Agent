@@ -750,6 +750,8 @@ _LIVE_SAMPLE_BASE_KEYS: Final = {
     "sample_duration_ns", "sample_monotonic_ns", "sample_ordinal",
     "sample_scheduled_start_ns", "sample_gap_from_prior_finish_ns",
     "sample_scheduler_lateness_ns", "sample_target_wait_ns",
+    "sample_native_wake_ns", "sample_native_wake_lateness_ns",
+    "sample_trajectory_admission_duration_ns",
     "sample_maximum_unsampled_gap_ns", "prior_sample_finish_ns",
     "prior_sample_duration_ns",
     "schema_version",
@@ -780,7 +782,7 @@ def _replay_live_sample_v1(
         type(container_id) is not str
         or re.fullmatch(r"[0-9a-f]{64}", container_id) is None
         or sample["schema_version"]
-        != "hegel-phase3a-q05b-live-container-resource-transcript/2"
+        != "hegel-phase3a-q05b-live-container-resource-transcript/3"
         or sample["role_id"] != role_row[0]
         or type(sample["role_id"]) is not int
         or sample["captured_while_running"] is not True
@@ -798,13 +800,25 @@ def _replay_live_sample_v1(
         or type(sample["sample_maximum_unsampled_gap_ns"]) is not int
         or type(sample["prior_sample_finish_ns"]) is not int
         or type(sample["prior_sample_duration_ns"]) is not int
-        or sample["sample_target_wait_ns"] != 125_000_000
+        or sample["sample_target_wait_ns"] != 50_000_000
         or sample["sample_maximum_unsampled_gap_ns"] != 250_000_000
         or sample["sample_scheduled_start_ns"]
         != sample["prior_sample_finish_ns"] + sample["sample_target_wait_ns"]
         or sample["sample_monotonic_ns"] < sample["sample_scheduled_start_ns"]
         or sample["sample_scheduler_lateness_ns"]
         != sample["sample_monotonic_ns"] - sample["sample_scheduled_start_ns"]
+        or type(sample["sample_native_wake_ns"]) is not int
+        or type(sample["sample_native_wake_lateness_ns"]) is not int
+        or type(sample["sample_trajectory_admission_duration_ns"]) is not int
+        or sample["sample_native_wake_ns"] < sample["sample_scheduled_start_ns"]
+        or sample["sample_native_wake_ns"] > sample["sample_monotonic_ns"]
+        or sample["sample_native_wake_lateness_ns"]
+        != sample["sample_native_wake_ns"] - sample["sample_scheduled_start_ns"]
+        or sample["sample_trajectory_admission_duration_ns"]
+        != sample["sample_monotonic_ns"] - sample["sample_native_wake_ns"]
+        or sample["sample_scheduler_lateness_ns"]
+        != sample["sample_native_wake_lateness_ns"]
+        + sample["sample_trajectory_admission_duration_ns"]
         or sample["sample_gap_from_prior_finish_ns"]
         != sample["sample_monotonic_ns"] - sample["prior_sample_finish_ns"]
         or sample["sample_gap_from_prior_finish_ns"] < 0
@@ -2200,13 +2214,13 @@ def _isolation_config_v1(
             "publisher_fault_behavior",
         }
         or trajectory["schema_version"]
-        != "hegel-phase3a-q05b-durable-trajectory-policy/4"
+        != "hegel-phase3a-q05b-durable-trajectory-policy/5"
         or trajectory["required_for_run_cli"] is not True
         or trajectory["core_relative_path"]
         != "src/hegel_machine/phase3_q05b_trajectory_v2.py"
         or trajectory["core_raw_sha256"]
-        != "e0339921ba19614ed23615a943d15acc5eaeed2c4012c6ffa1e4e0ae092cc013"
-        or trajectory["producer_id"] != "Q05B_SUPERVISOR_V4"
+        != "47a2766a039f9422e26e105c8a0a5d4ffec514dd4b2119ae63c7acc5f1fea0b1"
+        or trajectory["producer_id"] != "Q05B_SUPERVISOR_V5"
         or trajectory["clock_id"] != "CLOCK_MONOTONIC"
         or trajectory["trajectory_root_mode"] != "0700"
         or trajectory["event_and_manifest_mode"] != "0444"

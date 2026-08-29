@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import replace
+import _thread
 import errno
 import fcntl
 from hashlib import sha256
@@ -914,11 +915,14 @@ def _mock_held_python_actor(
     initial_sample["sample_monotonic_ns"] = start_ns
     initial_sample["sample_duration_ns"] = finish_ns - start_ns
     initial_sample["sample_scheduled_start_ns"] = start_ns
-    initial_sample["sample_gap_from_prior_finish_ns"] = 125_000_000
+    initial_sample["sample_gap_from_prior_finish_ns"] = 50_000_000
     initial_sample["sample_scheduler_lateness_ns"] = 0
-    initial_sample["sample_target_wait_ns"] = 125_000_000
+    initial_sample["sample_native_wake_ns"] = start_ns
+    initial_sample["sample_native_wake_lateness_ns"] = 0
+    initial_sample["sample_trajectory_admission_duration_ns"] = 0
+    initial_sample["sample_target_wait_ns"] = 50_000_000
     initial_sample["sample_maximum_unsampled_gap_ns"] = 250_000_000
-    initial_sample["prior_sample_finish_ns"] = start_ns - 125_000_000
+    initial_sample["prior_sample_finish_ns"] = start_ns - 50_000_000
     initial_sample["prior_sample_duration_ns"] = 0
     actor = TOOL.HeldActorProcessV1(
         role_id=1,
@@ -1076,7 +1080,7 @@ def test_isolation_config_is_exact_zero_null_and_actual_not_executed() -> None:
         "src/hegel_machine/_vendor/tomli/_types.py",
     )
     assert config["durable_trajectory_policy"] == {
-        "schema_version": "hegel-phase3a-q05b-durable-trajectory-policy/4",
+        "schema_version": "hegel-phase3a-q05b-durable-trajectory-policy/5",
         "required_for_run_cli": True,
         "core_relative_path": TOOL.TRAJECTORY_CORE_RELATIVE_PATH,
         "core_raw_sha256": TOOL.TRAJECTORY_CORE_RAW_SHA256,
@@ -1786,7 +1790,7 @@ def test_live_resource_transcript_replays_inspect_cgroup_and_proc_limits(
     continuous_sample = dict(collected)
     continuous_sample["sample_ordinal"] = 1
     continuous_sample["sample_monotonic_ns"] = (
-        held_sample["sample_monotonic_ns"] - 625_000_000
+        held_sample["sample_monotonic_ns"] - 550_000_000
     )
     # Collection itself may exceed 250 ms; the contract bounds only the
     # unsampled gap from the preceding collection finish to the next start.
@@ -1794,12 +1798,17 @@ def test_live_resource_transcript_replays_inspect_cgroup_and_proc_limits(
     continuous_sample["sample_scheduled_start_ns"] = continuous_sample[
         "sample_monotonic_ns"
     ]
-    continuous_sample["sample_gap_from_prior_finish_ns"] = 125_000_000
+    continuous_sample["sample_gap_from_prior_finish_ns"] = 50_000_000
     continuous_sample["sample_scheduler_lateness_ns"] = 0
-    continuous_sample["sample_target_wait_ns"] = 125_000_000
+    continuous_sample["sample_native_wake_ns"] = continuous_sample[
+        "sample_monotonic_ns"
+    ]
+    continuous_sample["sample_native_wake_lateness_ns"] = 0
+    continuous_sample["sample_trajectory_admission_duration_ns"] = 0
+    continuous_sample["sample_target_wait_ns"] = 50_000_000
     continuous_sample["sample_maximum_unsampled_gap_ns"] = 250_000_000
     continuous_sample["prior_sample_finish_ns"] = (
-        continuous_sample["sample_monotonic_ns"] - 125_000_000
+        continuous_sample["sample_monotonic_ns"] - 50_000_000
     )
     continuous_sample["prior_sample_duration_ns"] = 0
     held_sample["sample_ordinal"] = 2
@@ -1811,11 +1820,14 @@ def test_live_resource_transcript_replays_inspect_cgroup_and_proc_limits(
         "sample_duration_ns"
     ]
     held_sample["sample_scheduled_start_ns"] = (
-        held_sample["prior_sample_finish_ns"] + 125_000_000
+        held_sample["prior_sample_finish_ns"] + 50_000_000
     )
-    held_sample["sample_gap_from_prior_finish_ns"] = 125_000_000
+    held_sample["sample_gap_from_prior_finish_ns"] = 50_000_000
     held_sample["sample_scheduler_lateness_ns"] = 0
-    held_sample["sample_target_wait_ns"] = 125_000_000
+    held_sample["sample_native_wake_ns"] = held_sample["sample_monotonic_ns"]
+    held_sample["sample_native_wake_lateness_ns"] = 0
+    held_sample["sample_trajectory_admission_duration_ns"] = 0
+    held_sample["sample_target_wait_ns"] = 50_000_000
     held_sample["sample_maximum_unsampled_gap_ns"] = 250_000_000
     final = TOOL.final_resource_transcript_v1(
         (continuous_sample, held_sample),
@@ -1829,7 +1841,7 @@ def test_live_resource_transcript_replays_inspect_cgroup_and_proc_limits(
     assert final["peak_scope"] == "CHILD_PLUS_WRAPPER_THROUGH_HELD_FINAL_SAMPLE"
     assert final["explicit_remove_admitted_after_this_transcript"] is True
     assert final["final_memory_peak_bytes"] == 999
-    assert final["maximum_inter_sample_gap_ns"] == 125_000_000
+    assert final["maximum_inter_sample_gap_ns"] == 50_000_000
     assert len(final["live_sample_objects"]) == 2
     excessive_gap = dict(continuous_sample)
     excessive_gap["sample_monotonic_ns"] -= 200_000_001
@@ -2404,6 +2416,66 @@ def test_close_held_actor_walks_final_sample_stdout_exit_and_remove(
     control.chmod(0o755)
 
 
+def test_close_defers_raw_sample_preimage_replay_until_final_artifact(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (
+        actor,
+        inspect_reader,
+        proc_root,
+        cgroup_root,
+        command_runner,
+        _docker_calls,
+        control,
+        _actor_stdout,
+    ) = _mock_held_python_actor(tmp_path, "deferred-raw-replay")
+    monkeypatch.setattr(
+        TOOL,
+        "_validate_resource_sample_raw_preimages_v1",
+        lambda _sample: pytest.fail(
+            "close path must not replay full raw sample preimages"
+        ),
+    )
+    evidence = TOOL.close_held_actor_process_v1(
+        actor,
+        child_timeout_seconds=2.0,
+        inspect_reader=inspect_reader,
+        proc_root=proc_root,
+        cgroup_root=cgroup_root,
+        command_runner=command_runner,
+    )
+    assert evidence["final_resource_transcript"]["sample_count"] == 2
+    samples = deepcopy(
+        evidence["final_resource_transcript"]["live_sample_objects"]
+    )
+    stale_digest_sample = samples[0]
+    original_hex = stale_digest_sample["inspect_payload_hex"]
+    stale_digest_sample["inspect_payload_hex"] = (
+        ("00" if original_hex[:2] != "00" else "01") + original_hex[2:]
+    )
+    deferred = TOOL.final_resource_transcript_v1(
+        tuple(samples),
+        inspect_reader(actor.container_id),
+        command_security_options=actor.mount_registry.security_options,
+        seccomp_evidence=actor.seccomp_evidence,
+    )
+    assert (
+        deferred["live_sample_objects"][0]["inspect_sha256"]
+        == stale_digest_sample["inspect_sha256"]
+    )
+    config = ADMISSION.validate_commit_a_actual_config_bytes_v1(
+        (ROOT / TOOL.CONFIG_RELATIVE_PATH).read_bytes()
+    )
+    artifact_resources = _q05b_v2_regression_artifact_resource_rows(config)
+    artifact_resources[0] = deferred
+    with pytest.raises(ARTIFACT.Q05BActualArtifactError) as rejected:
+        ARTIFACT._validate_resources_v1(artifact_resources, config)
+    assert rejected.value.code == "REJECT_Q05B_ARTIFACT_RESOURCE"
+    assert rejected.value.detail == "inspect_sha256 differs"
+    control.chmod(0o755)
+
+
 def test_artifact_replay_accepts_tool_control_identity_and_binds_root(
     tmp_path: Path,
 ) -> None:
@@ -2513,7 +2585,7 @@ def test_q05b_v2_regression_held_final_deadline_and_trajectory_are_exact(
         trajectory_root,
         expected_parent=trajectory_parent,
         trace_id="held-final-trajectory",
-        producer_id="Q05B_SUPERVISOR_V4",
+        producer_id="Q05B_SUPERVISOR_V5",
     )
     TOOL._ACTIVE_TRAJECTORY_V2 = writer
     try:
@@ -2532,7 +2604,7 @@ def test_q05b_v2_regression_held_final_deadline_and_trajectory_are_exact(
             actor="PYTHON_ENDPOINT",
         )
         sample_start_ns = time.monotonic_ns()
-        prior_finish_ns = sample_start_ns - 125_000_000
+        prior_finish_ns = sample_start_ns - 50_000_000
         sample = actor.sample_rows[0]
         sample.update(
             {
@@ -2540,9 +2612,12 @@ def test_q05b_v2_regression_held_final_deadline_and_trajectory_are_exact(
                 "sample_monotonic_ns": sample_start_ns,
                 "sample_duration_ns": 0,
                 "sample_scheduled_start_ns": sample_start_ns,
-                "sample_gap_from_prior_finish_ns": 125_000_000,
+                "sample_gap_from_prior_finish_ns": 50_000_000,
                 "sample_scheduler_lateness_ns": 0,
-                "sample_target_wait_ns": 125_000_000,
+                "sample_native_wake_ns": sample_start_ns,
+                "sample_native_wake_lateness_ns": 0,
+                "sample_trajectory_admission_duration_ns": 0,
+                "sample_target_wait_ns": 50_000_000,
                 "sample_maximum_unsampled_gap_ns": 250_000_000,
                 "prior_sample_finish_ns": prior_finish_ns,
                 "prior_sample_duration_ns": 0,
@@ -2558,8 +2633,8 @@ def test_q05b_v2_regression_held_final_deadline_and_trajectory_are_exact(
             finish_ns=sample_start_ns,
             collection_duration_ns=0,
             scheduler_lateness_ns=0,
-            target_wait_ns=125_000_000,
-            gap_ns=125_000_000,
+            target_wait_ns=50_000_000,
+            gap_ns=50_000_000,
             maximum_gap_ns=250_000_000,
             gap_exceeded=False,
         )
@@ -2605,11 +2680,11 @@ def test_q05b_v2_regression_held_final_deadline_and_trajectory_are_exact(
     assert held_ok["actor_or_null"] == "PYTHON_ENDPOINT"
     assert held_ok["role_id_or_null"] == "1"
     assert held_ok["sample_ordinal_or_null"] == 2
-    assert held_ok["target_wait_ns_or_null"] == 125_000_000
+    assert held_ok["target_wait_ns_or_null"] == 50_000_000
     assert held_ok["maximum_gap_ns_or_null"] == 250_000_000
-    assert 125_000_000 <= held_ok["gap_ns_or_null"] <= 250_000_000
+    assert 50_000_000 <= held_ok["gap_ns_or_null"] <= 250_000_000
     assert held_ok["scheduled_start_ns_or_null"] == (
-        held_ok["previous_finish_ns_or_null"] + 125_000_000
+        held_ok["previous_finish_ns_or_null"] + 50_000_000
     )
     assert held_ok["actual_start_ns_or_null"] == held_sample["sample_monotonic_ns"]
     assert held_ok["finish_ns_or_null"] == (
@@ -2807,11 +2882,14 @@ def test_q05b_v2_regression_held_final_sleep_interrupt_closes_child_span(
             "sample_monotonic_ns": sample_start_ns,
             "sample_duration_ns": 0,
             "sample_scheduled_start_ns": sample_start_ns,
-            "sample_gap_from_prior_finish_ns": 125_000_000,
+            "sample_gap_from_prior_finish_ns": 50_000_000,
             "sample_scheduler_lateness_ns": 0,
-            "sample_target_wait_ns": 125_000_000,
+            "sample_native_wake_ns": sample_start_ns,
+            "sample_native_wake_lateness_ns": 0,
+            "sample_trajectory_admission_duration_ns": 0,
+            "sample_target_wait_ns": 50_000_000,
             "sample_maximum_unsampled_gap_ns": 250_000_000,
-            "prior_sample_finish_ns": sample_start_ns - 125_000_000,
+            "prior_sample_finish_ns": sample_start_ns - 50_000_000,
             "prior_sample_duration_ns": 0,
         }
     )
@@ -3146,7 +3224,7 @@ def test_stage4_exited_sampler_replays_exact_typed_gap_after_cleanup(
     assert actor.sample_thread.is_alive() is False
 
     previous_finish_ns = 10
-    scheduled_start_ns = previous_finish_ns + 125_000_000
+    scheduled_start_ns = previous_finish_ns + 50_000_000
     actual_start_ns = previous_finish_ns + 250_000_001
     gap_detail = (
         "held actor sampling gap exceeded bound: "
@@ -3154,7 +3232,7 @@ def test_stage4_exited_sampler_replays_exact_typed_gap_after_cleanup(
         f"previous_finish_ns={previous_finish_ns}; "
         f"scheduled_start_ns={scheduled_start_ns}; "
         f"actual_start_ns={actual_start_ns}; gap_ns=250000001; "
-        "maximum_gap_ns=250000000; target_wait_ns=125000000; "
+        "maximum_gap_ns=250000000; target_wait_ns=50000000; "
         "previous_duration_ns=0"
     )
     gap_error = TOOL.Q05BDualSupervisorError(
@@ -3171,7 +3249,7 @@ def test_stage4_exited_sampler_replays_exact_typed_gap_after_cleanup(
         trajectory_root,
         expected_parent=trajectory_parent,
         trace_id="stage4-exited-typed-gap",
-        producer_id="Q05B_SUPERVISOR_V4",
+        producer_id="Q05B_SUPERVISOR_V5",
         clock_ns=lambda: next(ticks),
     )
     TOOL._ACTIVE_TRAJECTORY_V2 = writer
@@ -3217,8 +3295,8 @@ def test_stage4_exited_sampler_replays_exact_typed_gap_after_cleanup(
             actual_start_ns=actual_start_ns,
             finish_ns=actual_start_ns,
             collection_duration_ns=0,
-            scheduler_lateness_ns=125_000_001,
-            target_wait_ns=125_000_000,
+            scheduler_lateness_ns=200_000_001,
+            target_wait_ns=50_000_000,
             gap_ns=250_000_001,
             maximum_gap_ns=250_000_000,
             gap_exceeded=True,
@@ -3313,7 +3391,7 @@ def test_trajectory_error_detail_is_nul_safe_utf8_byte_bounded_and_replayable(
         root,
         expected_parent=parent,
         trace_id="utf8-byte-bound-" + error_code.lower(),
-        producer_id="Q05B_SUPERVISOR_V4",
+        producer_id="Q05B_SUPERVISOR_V5",
     )
     TOOL._ACTIVE_TRAJECTORY_V2 = writer
     try:
@@ -3401,12 +3479,14 @@ def test_v4_sampler_accepts_exact_250ms_maximum_gap(
     monotonic_values = iter(
         (
             0,
-            125_000_000,
-            135_000_000,
-            135_000_000,
-            385_000_000,
-            395_000_000,
-            395_000_000,
+            50_000_000,
+            50_000_000,
+            60_000_000,
+            60_000_000,
+            310_000_000,
+            310_000_000,
+            320_000_000,
+            320_000_000,
         )
     )
     monkeypatch.setattr(TOOL.time, "monotonic_ns", lambda: next(monotonic_values))
@@ -3456,7 +3536,7 @@ def test_v4_sampler_accepts_exact_250ms_maximum_gap(
         trajectory_root,
         expected_parent=trajectory_parent,
         trace_id="sampler-ok",
-        producer_id="Q05B_SUPERVISOR_V4",
+        producer_id="Q05B_SUPERVISOR_V5",
         clock_ns=lambda: next(trajectory_ticks),
     )
     TOOL._ACTIVE_TRAJECTORY_V2 = writer
@@ -3475,8 +3555,10 @@ def test_v4_sampler_accepts_exact_250ms_maximum_gap(
     assert actor.sample_errors == []
     assert len(actor.sample_rows) == 2
     assert actor.sample_rows[1]["sample_gap_from_prior_finish_ns"] == 250_000_000
-    assert actor.sample_rows[1]["sample_scheduler_lateness_ns"] == 125_000_000
-    assert actor.sample_rows[1]["sample_target_wait_ns"] == 125_000_000
+    assert actor.sample_rows[1]["sample_scheduler_lateness_ns"] == 200_000_000
+    assert actor.sample_rows[1]["sample_native_wake_lateness_ns"] == 200_000_000
+    assert actor.sample_rows[1]["sample_trajectory_admission_duration_ns"] == 0
+    assert actor.sample_rows[1]["sample_target_wait_ns"] == 50_000_000
     assert actor.sample_rows[1]["sample_maximum_unsampled_gap_ns"] == 250_000_000
     verified = TRAJECTORY.verify_durable_trajectory_v2(
         trajectory_root,
@@ -3501,11 +3583,121 @@ def test_v4_sampler_accepts_exact_250ms_maximum_gap(
     assert all(event["gap_exceeded_or_null"] is False for event in sample_events)
 
 
+def test_v5_actual_run_host_thread_scheduling_binds_and_restores() -> None:
+    original_affinity = frozenset(os.sched_getaffinity(0))
+    original_switch_interval = sys.getswitchinterval()
+    worker_evidence: list[dict[str, object]] = []
+    with TOOL._host_thread_scheduling_scope_v5() as policy:
+        assert frozenset(os.sched_getaffinity(0)) == (
+            TOOL.HOST_SUPERVISOR_CONTROL_CPUS_V5
+        )
+        assert sys.getswitchinterval() == 0.001
+        assert policy["required_effective_cpus"] == list(range(32))
+        worker = threading.Thread(
+            target=lambda: worker_evidence.append(
+                TOOL._bind_current_host_thread_v5(
+                    "PYTHON_ENDPOINT_SAMPLER",
+                    frozenset({24}),
+                )
+            ),
+            name="test-v5-affinity-worker",
+        )
+        worker.start()
+        worker.join(timeout=2.0)
+        assert not worker.is_alive()
+    assert worker_evidence[0]["effective_cpus"] == [24]
+    assert frozenset(os.sched_getaffinity(0)) == original_affinity
+    assert sys.getswitchinterval() == original_switch_interval
+    assert TOOL._ACTIVE_HOST_THREAD_SCHEDULING_V5 is None
+
+
+def test_v5_host_cpu_admission_rejects_missing_required_cpu(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(TOOL.os, "sched_getaffinity", lambda _pid: set(range(31)))
+    with pytest.raises(TOOL.Q05BDualSupervisorError) as rejected:
+        with TOOL._host_thread_scheduling_scope_v5():
+            pytest.fail("missing CPU admission cannot enter the run scope")
+    assert rejected.value.code == TOOL.FAIL_POLICY
+    assert "host effective CPU admission differs" in rejected.value.detail
+    assert TOOL._ACTIVE_HOST_THREAD_SCHEDULING_V5 is None
+
+
+def test_v5_publisher_and_sampler_affinity_startup_fail_without_survivors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class CloseOnlyWriter:
+        def __init__(self) -> None:
+            self.close_count = 0
+
+        def close(self) -> None:
+            self.close_count += 1
+
+    def fail_binding(*_args, **_kwargs):
+        raise RuntimeError("injected native-thread affinity failure")
+
+    monkeypatch.setattr(TOOL, "_bind_current_host_thread_v5", fail_binding)
+    writer = CloseOnlyWriter()
+    with pytest.raises(RuntimeError, match="native-thread affinity failure"):
+        TOOL.TrajectorySequencerV4(writer)
+    assert writer.close_count == 1
+    assert not any(
+        thread.name == "q05b-trajectory-publisher-v4"
+        for thread in threading.enumerate()
+    )
+
+    cid_parent = tmp_path / "affinity-cid"
+    control = tmp_path / "affinity-control"
+    cid_parent.mkdir(mode=0o700)
+    control.mkdir(mode=0o700)
+    status = cid_parent.lstat()
+    actor = TOOL.HeldActorProcessV1(
+        role_id=1,
+        actor_id="PYTHON_ENDPOINT",
+        container_name="affinity-startup",
+        command=("unused",),
+        cidfile=cid_parent / "actor.cid",
+        control_root=control,
+        mount_registry=SimpleNamespace(),
+        process=SimpleNamespace(),
+        stdout_drain=TOOL.BoundedPipeDrainV1(
+            1, bytearray(), 0, False, sha256(), []
+        ),
+        stderr_drain=TOOL.BoundedPipeDrainV1(
+            1, bytearray(), 0, False, sha256(), []
+        ),
+        stdout_thread=threading.Thread(),
+        stderr_thread=threading.Thread(),
+        sample_thread=None,
+        sample_rows=[],
+        sample_errors=[],
+        sample_complete=threading.Event(),
+        child_done_observed=threading.Event(),
+        sample_stop=threading.Event(),
+        sample_lock=threading.Lock(),
+        container_id=None,
+        cid_parent_identity=(
+            status.st_dev,
+            status.st_ino,
+            stat.S_IMODE(status.st_mode),
+            status.st_nlink,
+        ),
+        cidfile_evidence=None,
+        cleanup_errors=[],
+    )
+    with pytest.raises(RuntimeError, match="native-thread affinity failure"):
+        TOOL.start_held_actor_resource_sampler_v1(actor)
+    assert actor.sample_thread is not None
+    assert not actor.sample_thread.is_alive()
+    assert actor.sample_complete.is_set()
+
+
 def test_v2_sampler_rejects_250ms_plus_one_ns_with_exact_actor_metrics(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monotonic_values = iter((10, 250_000_011))
+    monotonic_values = iter((10, 250_000_011, 250_000_011))
     monkeypatch.setattr(TOOL.time, "monotonic_ns", lambda: next(monotonic_values))
     monkeypatch.setattr(
         TOOL,
@@ -3539,7 +3731,7 @@ def test_v2_sampler_rejects_250ms_plus_one_ns_with_exact_actor_metrics(
         trajectory_root,
         expected_parent=trajectory_parent,
         trace_id="sampler-gap-fail",
-        producer_id="Q05B_SUPERVISOR_V4",
+        producer_id="Q05B_SUPERVISOR_V5",
         clock_ns=lambda: next(trajectory_ticks),
     )
     TOOL._ACTIVE_TRAJECTORY_V2 = writer
@@ -3562,7 +3754,7 @@ def test_v2_sampler_rejects_250ms_plus_one_ns_with_exact_actor_metrics(
     assert "sample_ordinal=1" in error
     assert "gap_ns=250000001" in error
     assert "maximum_gap_ns=250000000" in error
-    assert "target_wait_ns=125000000" in error
+    assert "target_wait_ns=50000000" in error
     with pytest.raises(TOOL.Q05BDualSupervisorError) as propagated:
         TOOL._wait_for_held_child_done_v1(actor, 1.0)
     assert propagated.value.code == TOOL.FAIL_SAMPLING_GAP
@@ -3590,6 +3782,101 @@ def test_v2_sampler_rejects_250ms_plus_one_ns_with_exact_actor_metrics(
     assert gap_event["maximum_gap_ns_or_null"] == 250_000_000
     assert gap_event["gap_exceeded_or_null"] is True
     assert gap_event["error_code_or_null"] == TOOL.FAIL_SAMPLING_GAP
+
+
+@pytest.mark.parametrize(
+    ("prior_lateness_ns", "expected_gap_ns", "expected_failure"),
+    (
+        (140_055_000, 190_055_000, False),
+        (159_215_000, 209_215_000, False),
+        (342_770_340, 392_770_340, True),
+    ),
+)
+def test_v5_prior_campaign_lateness_replays_against_50ms_target_and_250ms_bound(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    prior_lateness_ns: int,
+    expected_gap_ns: int,
+    expected_failure: bool,
+) -> None:
+    prior_finish_ns = 1_000
+    scheduled_start_ns = prior_finish_ns + 50_000_000
+    actual_start_ns = scheduled_start_ns + prior_lateness_ns
+    values = [prior_finish_ns, actual_start_ns, actual_start_ns]
+    if not expected_failure:
+        values.extend((actual_start_ns + 1, actual_start_ns + 1))
+    monotonic_values = iter(values)
+    monkeypatch.setattr(
+        TOOL.time,
+        "monotonic_ns",
+        lambda: next(monotonic_values),
+    )
+    monkeypatch.setattr(
+        TOOL,
+        "_wait_for_cidfile_v1",
+        lambda _actor, _timeout: ("cd" * 32, prior_finish_ns),
+    )
+    monkeypatch.setattr(
+        TOOL,
+        "collect_bound_live_resource_transcript_v1",
+        lambda *_args, **_kwargs: {},
+    )
+
+    class StopAfterFirstSample:
+        def __init__(self) -> None:
+            self.wait_count = 0
+
+        def is_set(self) -> bool:
+            return False
+
+        def wait(self, _timeout: float) -> bool:
+            self.wait_count += 1
+            return self.wait_count == 2
+
+    actor = SimpleNamespace(
+        actor_id="PYTHON_ENDPOINT",
+        role_id=1,
+        sample_stop=StopAfterFirstSample(),
+        process=SimpleNamespace(poll=lambda: None),
+        sample_lock=threading.Lock(),
+        sample_rows=[],
+        sample_errors=[],
+        sample_complete=threading.Event(),
+        child_done_observed=threading.Event(),
+        control_root=tmp_path,
+        container_name="v5-prior-lateness-replay",
+        mount_registry=object(),
+        seccomp_evidence={},
+        docker_execution_principal={},
+    )
+    TOOL._sample_actor_resources_v1(
+        actor,
+        lambda _container_id: b"inspect",
+        tmp_path,
+        tmp_path,
+        1.0,
+    )
+
+    if expected_failure:
+        assert actor.sample_rows == []
+        assert len(actor.sample_errors) == 1
+        failure = actor.sample_errors[0]
+        assert isinstance(failure, TOOL.Q05BDualSupervisorError)
+        assert failure.code == TOOL.FAIL_SAMPLING_GAP
+        assert f"gap_ns={expected_gap_ns}" in failure.detail
+        assert "maximum_gap_ns=250000000" in failure.detail
+    else:
+        assert actor.sample_errors == []
+        assert len(actor.sample_rows) == 1
+        assert (
+            actor.sample_rows[0]["sample_scheduler_lateness_ns"]
+            == prior_lateness_ns
+        )
+        assert (
+            actor.sample_rows[0]["sample_gap_from_prior_finish_ns"]
+            == expected_gap_ns
+        )
+        assert expected_gap_ns <= 250_000_000
 
 
 def test_failed_owned_id_remove_is_reported_without_name_fallback(
@@ -14374,7 +14661,127 @@ def test_concrete_backend_partial_endpoint_start_cleans_first_actor(
         sampler.join(timeout=1)
 
 
-def test_group_close_is_synchronous_and_cleans_only_remaining_actors(
+def _minimal_v5_control_actor(
+    tmp_path: Path,
+    role_id: int,
+    actor_id: str,
+    *,
+    live_sampler: bool,
+) -> TOOL.HeldActorProcessV1:
+    cid_parent = tmp_path / f"minimal-v5-cid-{role_id}"
+    control = tmp_path / f"minimal-v5-control-{role_id}"
+    cid_parent.mkdir(mode=0o700)
+    control.mkdir(mode=0o700)
+    cid_status = cid_parent.lstat()
+    sample_stop = threading.Event()
+    sample_complete = threading.Event()
+    if live_sampler:
+        def sampler() -> None:
+            sample_stop.wait()
+            sample_complete.set()
+
+        sample_thread = threading.Thread(
+            target=sampler,
+            name=f"test-v5-readiness-sampler-{role_id}",
+        )
+        sample_thread.start()
+    else:
+        sample_thread = threading.Thread()
+    return TOOL.HeldActorProcessV1(
+        role_id=role_id,
+        actor_id=actor_id,
+        container_name=f"hegel-q05b-minimal-v5-{role_id}",
+        command=("unused",),
+        cidfile=cid_parent / "actor.cid",
+        control_root=control,
+        mount_registry=SimpleNamespace(),
+        process=SimpleNamespace(poll=lambda: None),
+        stdout_drain=TOOL.BoundedPipeDrainV1(
+            1, bytearray(), 0, False, sha256(), []
+        ),
+        stderr_drain=TOOL.BoundedPipeDrainV1(
+            1, bytearray(), 0, False, sha256(), []
+        ),
+        stdout_thread=threading.Thread(),
+        stderr_thread=threading.Thread(),
+        sample_thread=sample_thread,
+        sample_rows=[],
+        sample_errors=[],
+        sample_complete=sample_complete,
+        child_done_observed=threading.Event(),
+        sample_stop=sample_stop,
+        sample_lock=threading.Lock(),
+        container_id=None,
+        cid_parent_identity=(
+            cid_status.st_dev,
+            cid_status.st_ino,
+            stat.S_IMODE(cid_status.st_mode),
+            cid_status.st_nlink,
+        ),
+        cidfile_evidence=None,
+        cleanup_errors=[],
+    )
+
+
+def test_stage4_readiness_requires_two_post_both_started_rows_per_actor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    actors = (
+        _minimal_v5_control_actor(
+            tmp_path,
+            1,
+            "PYTHON_ENDPOINT",
+            live_sampler=True,
+        ),
+        _minimal_v5_control_actor(
+            tmp_path,
+            2,
+            "RUST_ENDPOINT",
+            live_sampler=True,
+        ),
+    )
+    anchor_ns = 10_000
+    actors[0].sample_rows[:] = [
+        {"sample_monotonic_ns": anchor_ns + 1},
+        {"sample_monotonic_ns": anchor_ns + 2},
+    ]
+    actors[1].sample_rows[:] = [
+        {"sample_monotonic_ns": anchor_ns - 1},
+        {"sample_monotonic_ns": anchor_ns + 1},
+    ]
+    monkeypatch.setattr(
+        TOOL,
+        "_ACTIVE_HOST_THREAD_SCHEDULING_V5",
+        {"test_scope": True},
+    )
+    sleep_calls: list[float] = []
+
+    def add_second_post_anchor_row(seconds: float) -> None:
+        sleep_calls.append(seconds)
+        with actors[1].sample_lock:
+            actors[1].sample_rows.append(
+                {"sample_monotonic_ns": anchor_ns + 2}
+            )
+
+    monkeypatch.setattr(TOOL.time, "sleep", add_second_post_anchor_row)
+    try:
+        assert TOOL._wait_for_stage4_sampler_readiness_v5(
+            actors,
+            lambda *_args, **_kwargs: None,
+            anchor_ns,
+        ) == (2, 2)
+        assert sleep_calls == [0.01]
+    finally:
+        for actor in actors:
+            actor.sample_stop.set()
+        for actor in actors:
+            assert actor.sample_thread is not None
+            actor.sample_thread.join(timeout=1.0)
+            assert not actor.sample_thread.is_alive()
+
+
+def test_two_phase_group_close_failure_cleans_the_exact_actor_set(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -14445,7 +14852,219 @@ def test_group_close_is_synchronous_and_cleans_only_remaining_actors(
             child_timeout_seconds=1.0,
         )
     assert close_calls == ["PYTHON_ENDPOINT"]
-    assert cleaned == ["RUST_ENDPOINT"]
+    assert cleaned == ["PYTHON_ENDPOINT", "RUST_ENDPOINT"]
+    assert not any(
+        thread.name.startswith("q05b-close-")
+        for thread in threading.enumerate()
+    )
+
+
+def test_two_phase_group_phase_b_failure_preserves_typed_cause_and_closes_workers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    actors = (
+        _minimal_v5_control_actor(
+            tmp_path,
+            1,
+            "PYTHON_ENDPOINT",
+            live_sampler=False,
+        ),
+        _minimal_v5_control_actor(
+            tmp_path,
+            2,
+            "RUST_ENDPOINT",
+            live_sampler=False,
+        ),
+    )
+    typed_cause = TOOL.Q05BDualSupervisorError(
+        TOOL.FAIL_SAMPLING_GAP,
+        "typed Phase-B transcript failure",
+    )
+    calls: list[str] = []
+
+    def close_actor(actor, *, phase_gate, **_kwargs):
+        calls.append("A:" + actor.actor_id)
+        actor.sample_complete.set()
+        phase_gate.phase_a_ready.set()
+        assert phase_gate.phase_b_release.wait(2.0)
+        calls.append("B:" + actor.actor_id)
+        if actor.actor_id == "PYTHON_ENDPOINT":
+            raise typed_cause
+        return {"actor_id": actor.actor_id}
+
+    monkeypatch.setattr(TOOL, "close_held_actor_process_v1", close_actor)
+    cleaned: list[str] = []
+    monkeypatch.setattr(
+        TOOL,
+        "_cleanup_actor_set_v1",
+        lambda values, _runner: (
+            cleaned.extend(actor.actor_id for actor in values),
+            (),
+        )[1],
+    )
+    with pytest.raises(TOOL.Q05BDualSupervisorError) as failure:
+        TOOL.close_held_actor_group_v1(
+            actors,
+            child_timeout_seconds=1.0,
+        )
+    assert failure.value is typed_cause
+    assert failure.value.code == TOOL.FAIL_SAMPLING_GAP
+    assert failure.value.detail == "typed Phase-B transcript failure"
+    assert calls == [
+        "A:PYTHON_ENDPOINT",
+        "A:RUST_ENDPOINT",
+        "B:PYTHON_ENDPOINT",
+        "B:RUST_ENDPOINT",
+    ]
+    assert cleaned == ["PYTHON_ENDPOINT", "RUST_ENDPOINT"]
+    assert not any(
+        thread.name.startswith("q05b-close-")
+        for thread in threading.enumerate()
+    )
+
+
+def test_two_phase_group_main_interrupt_releases_joins_and_cleans_workers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    actors = (
+        _minimal_v5_control_actor(
+            tmp_path,
+            1,
+            "PYTHON_ENDPOINT",
+            live_sampler=False,
+        ),
+        _minimal_v5_control_actor(
+            tmp_path,
+            2,
+            "RUST_ENDPOINT",
+            live_sampler=False,
+        ),
+    )
+    phase_a_worker_waiting = threading.Event()
+
+    def close_actor(actor, *, phase_gate, **_kwargs):
+        actor.sample_complete.set()
+        phase_a_worker_waiting.set()
+        assert phase_gate.phase_b_release.wait(2.0)
+        assert phase_gate.abort.is_set()
+        return {"actor_id": actor.actor_id}
+
+    monkeypatch.setattr(TOOL, "close_held_actor_process_v1", close_actor)
+    cleaned: list[str] = []
+    monkeypatch.setattr(
+        TOOL,
+        "_cleanup_actor_set_v1",
+        lambda values, _runner: (
+            cleaned.extend(actor.actor_id for actor in values),
+            (),
+        )[1],
+    )
+
+    def interrupt_coordinator() -> None:
+        assert phase_a_worker_waiting.wait(2.0)
+        _thread.interrupt_main()
+
+    interrupter = threading.Thread(
+        target=interrupt_coordinator,
+        name="q05b-test-interrupt-coordinator",
+        daemon=False,
+    )
+    interrupter.start()
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            TOOL.close_held_actor_group_v1(
+                actors,
+                child_timeout_seconds=1.0,
+            )
+    finally:
+        interrupter.join(timeout=2.0)
+    assert not interrupter.is_alive()
+    assert cleaned == ["PYTHON_ENDPOINT", "RUST_ENDPOINT"]
+    assert not any(
+        thread.name.startswith("q05b-close-")
+        for thread in threading.enumerate()
+    )
+
+
+def test_two_phase_group_close_defers_all_phase_b_work_until_both_samplers_stop(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    actors: list[TOOL.HeldActorProcessV1] = []
+    for role_id, actor_id in ((1, "PYTHON_ENDPOINT"), (2, "RUST_ENDPOINT")):
+        cid_parent = tmp_path / f"two-phase-cid-{role_id}"
+        control = tmp_path / f"two-phase-control-{role_id}"
+        cid_parent.mkdir(mode=0o700)
+        control.mkdir(mode=0o700)
+        cid_status = cid_parent.lstat()
+        actors.append(
+            TOOL.HeldActorProcessV1(
+                role_id=role_id,
+                actor_id=actor_id,
+                container_name=f"hegel-q05b-two-phase-{role_id}",
+                command=("unused",),
+                cidfile=cid_parent / "actor.cid",
+                control_root=control,
+                mount_registry=SimpleNamespace(),
+                process=SimpleNamespace(),
+                stdout_drain=TOOL.BoundedPipeDrainV1(
+                    1, bytearray(), 0, False, sha256(), []
+                ),
+                stderr_drain=TOOL.BoundedPipeDrainV1(
+                    1, bytearray(), 0, False, sha256(), []
+                ),
+                stdout_thread=threading.Thread(),
+                stderr_thread=threading.Thread(),
+                sample_thread=threading.Thread(),
+                sample_rows=[],
+                sample_errors=[],
+                sample_complete=threading.Event(),
+                child_done_observed=threading.Event(),
+                sample_stop=threading.Event(),
+                sample_lock=threading.Lock(),
+                container_id=None,
+                cid_parent_identity=(
+                    cid_status.st_dev,
+                    cid_status.st_ino,
+                    stat.S_IMODE(cid_status.st_mode),
+                    cid_status.st_nlink,
+                ),
+                cidfile_evidence=None,
+                cleanup_errors=[],
+            )
+        )
+    calls: list[str] = []
+
+    def close_actor(actor, *, phase_gate, **_kwargs):
+        calls.append("A:" + actor.actor_id)
+        actor.sample_complete.set()
+        phase_gate.phase_a_ready.set()
+        assert phase_gate.phase_b_release.wait(2.0)
+        assert all(row.sample_complete.is_set() for row in actors)
+        assert not any(
+            row.sample_thread is not None and row.sample_thread.is_alive()
+            for row in actors
+        )
+        calls.append("B:" + actor.actor_id)
+        return {"actor_id": actor.actor_id}
+
+    monkeypatch.setattr(TOOL, "close_held_actor_process_v1", close_actor)
+    completed = TOOL.close_held_actor_group_v1(
+        tuple(actors),
+        child_timeout_seconds=1.0,
+    )
+    assert [row["actor_id"] for row in completed] == [
+        "PYTHON_ENDPOINT",
+        "RUST_ENDPOINT",
+    ]
+    assert calls == [
+        "A:PYTHON_ENDPOINT",
+        "A:RUST_ENDPOINT",
+        "B:PYTHON_ENDPOINT",
+        "B:RUST_ENDPOINT",
+    ]
     assert not any(
         thread.name.startswith("q05b-close-")
         for thread in threading.enumerate()
@@ -14460,7 +15079,14 @@ def test_q05b_v4_regression_slow_durable_begin_does_not_pollute_real_gap(
 
     prior_finish_ns = 10
     monotonic_values = iter(
-        (10, 125_000_010, 125_000_010, 125_000_011, 125_000_011)
+        (
+            10,
+            50_000_010,
+            50_000_010,
+            50_000_010,
+            50_000_011,
+            50_000_011,
+        )
     )
     monkeypatch.setattr(TOOL.time, "monotonic_ns", lambda: next(monotonic_values))
     monkeypatch.setattr(
@@ -14549,7 +15175,7 @@ def test_q05b_v4_regression_slow_durable_begin_does_not_pollute_real_gap(
 
     assert actor.sample_errors == []
     assert len(actor.sample_rows) == 1
-    assert actor.sample_rows[0]["sample_gap_from_prior_finish_ns"] == 125_000_000
+    assert actor.sample_rows[0]["sample_gap_from_prior_finish_ns"] == 50_000_000
     verified = TRAJECTORY.verify_durable_trajectory_v2(
         trajectory_root,
         expected_parent=trajectory_parent,
@@ -14567,13 +15193,13 @@ def test_q05b_v4_regression_slow_durable_begin_does_not_pollute_real_gap(
         and event["event_type"] == "OK"
     )
     assert sample_event["previous_finish_ns_or_null"] == prior_finish_ns
-    assert sample_event["scheduled_start_ns_or_null"] == 125_000_010
-    assert sample_event["actual_start_ns_or_null"] == 125_000_010
-    assert sample_event["finish_ns_or_null"] == 125_000_011
+    assert sample_event["scheduled_start_ns_or_null"] == 50_000_010
+    assert sample_event["actual_start_ns_or_null"] == 50_000_010
+    assert sample_event["finish_ns_or_null"] == 50_000_011
     assert sample_event["collection_duration_ns_or_null"] == 1
     assert sample_event["scheduler_lateness_ns_or_null"] == 0
-    assert sample_event["gap_ns_or_null"] == 125_000_000
-    assert sample_event["target_wait_ns_or_null"] == 125_000_000
+    assert sample_event["gap_ns_or_null"] == 50_000_000
+    assert sample_event["target_wait_ns_or_null"] == 50_000_000
     assert sample_event["maximum_gap_ns_or_null"] == 250_000_000
     assert sample_event["gap_exceeded_or_null"] is False
 
@@ -15196,7 +15822,7 @@ def test_q05b_v4_normal_deadline_falls_back_to_typed_gap_complete_fail(
         and event["event_type"] == "FAIL"
     )
     assert gap_event["error_code_or_null"] == TOOL.FAIL_SAMPLING_GAP
-    assert gap_event["target_wait_ns_or_null"] == 125_000_000
+    assert gap_event["target_wait_ns_or_null"] == 50_000_000
     assert gap_event["gap_ns_or_null"] > gap_event["maximum_gap_ns_or_null"]
     assert gap_event["gap_exceeded_or_null"] is True
 
@@ -15519,10 +16145,10 @@ def _q05b_v2_regression_artifact_resource_rows(
             *,
             held: bool,
         ) -> dict[str, object]:
-            scheduled_start_ns = prior_finish_ns + 125_000_000
+            scheduled_start_ns = prior_finish_ns + 50_000_000
             result: dict[str, object] = {
                 "schema_version": (
-                    "hegel-phase3a-q05b-live-container-resource-transcript/2"
+                    "hegel-phase3a-q05b-live-container-resource-transcript/3"
                 ),
                 "role_id": role_id,
                 "container_id": container_id,
@@ -15534,7 +16160,12 @@ def _q05b_v2_regression_artifact_resource_rows(
                 "sample_scheduled_start_ns": scheduled_start_ns,
                 "sample_gap_from_prior_finish_ns": start_ns - prior_finish_ns,
                 "sample_scheduler_lateness_ns": start_ns - scheduled_start_ns,
-                "sample_target_wait_ns": 125_000_000,
+                "sample_native_wake_ns": start_ns,
+                "sample_native_wake_lateness_ns": (
+                    start_ns - scheduled_start_ns
+                ),
+                "sample_trajectory_admission_duration_ns": 0,
+                "sample_target_wait_ns": 50_000_000,
                 "sample_maximum_unsampled_gap_ns": 250_000_000,
                 "prior_sample_finish_ns": prior_finish_ns,
                 "prior_sample_duration_ns": prior_duration_ns,
@@ -15578,20 +16209,20 @@ def _q05b_v2_regression_artifact_resource_rows(
                 )
             return result
 
-        first_start_ns = role_id * 1_000_000_000 + 125_000_000
+        first_start_ns = role_id * 1_000_000_000 + 50_000_000
         first_duration_ns = 10_000_000
         first = sample(
             1,
             first_start_ns,
             first_duration_ns,
-            first_start_ns - 125_000_000,
+            first_start_ns - 50_000_000,
             0,
             held=False,
         )
         first_finish_ns = first_start_ns + first_duration_ns
         second = sample(
             2,
-            first_finish_ns + 125_000_000,
+            first_finish_ns + 50_000_000,
             15_000_000,
             first_finish_ns,
             first_duration_ns,
@@ -15751,7 +16382,7 @@ def test_q05b_v2_real_sample_counts_exceed_legacy_artifact_cap_under_repeated_to
         (ROOT / TOOL.CONFIG_RELATIVE_PATH).read_bytes()
     )
     resources = _q05b_v2_regression_artifact_resource_rows(config)
-    sample_counts = (1575, 1583, 4071)
+    sample_counts = (3938, 3958, 10178)
     common_occurrences = (
         "sections.actor_rows.control_evidence.final_resource_transcript",
         "sections.final_resource_rows",
@@ -15796,9 +16427,10 @@ def test_q05b_v2_real_sample_counts_exceed_legacy_artifact_cap_under_repeated_to
             strict=True,
         )
     )
-    assert representative_sample_bytes == (2927, 2928, 2927)
-    assert repeated_sample_budget == 219_620_964
+    assert representative_sample_bytes == (3039, 3040, 3039)
+    assert repeated_sample_budget == 570_101_560
     assert repeated_sample_budget > 64 * 1024 * 1024
+    assert repeated_sample_budget < 2 * 1024 * 1024 * 1024
 
 
 def test_q05b_v2_regression_artifact_sample_arithmetic_and_cross_chain_tamper(
@@ -15809,6 +16441,17 @@ def test_q05b_v2_regression_artifact_sample_arithmetic_and_cross_chain_tamper(
     valid = _q05b_v2_regression_artifact_resource_rows(config)
     assert ARTIFACT._validate_resources_v1(valid, config) == valid
 
+    raw_tamper = deepcopy(valid)
+    raw_sample = raw_tamper[0]["live_sample_objects"][0]
+    raw_sample["inspect_payload_hex"] = (
+        "00" + raw_sample["inspect_payload_hex"][2:]
+    )
+    _refresh_q05b_v2_regression_resource_row(raw_tamper[0])
+    with pytest.raises(ARTIFACT.Q05BActualArtifactError) as raw_rejected:
+        ARTIFACT._validate_resources_v1(raw_tamper, config)
+    assert raw_rejected.value.code == "REJECT_Q05B_ARTIFACT_RESOURCE"
+    assert raw_rejected.value.detail == "inspect_sha256 differs"
+
     arithmetic_tamper = deepcopy(valid)
     arithmetic_sample = arithmetic_tamper[0]["live_sample_objects"][0]
     arithmetic_sample["sample_scheduler_lateness_ns"] += 1
@@ -15817,6 +16460,29 @@ def test_q05b_v2_regression_artifact_sample_arithmetic_and_cross_chain_tamper(
         ARTIFACT._validate_resources_v1(arithmetic_tamper, config)
     assert arithmetic_rejected.value.code == "REJECT_Q05B_ARTIFACT_RESOURCE"
     assert arithmetic_rejected.value.detail == "live sample header differs"
+
+    split_valid = deepcopy(valid)
+    split_sample = split_valid[0]["live_sample_objects"][1]
+    split_sample["sample_monotonic_ns"] += 10
+    split_sample["sample_gap_from_prior_finish_ns"] += 10
+    split_sample["sample_scheduler_lateness_ns"] = 10
+    split_sample["sample_native_wake_ns"] = (
+        split_sample["sample_scheduled_start_ns"] + 4
+    )
+    split_sample["sample_native_wake_lateness_ns"] = 4
+    split_sample["sample_trajectory_admission_duration_ns"] = 6
+    _refresh_q05b_v2_regression_resource_row(split_valid[0])
+    assert ARTIFACT._validate_resources_v1(split_valid, config) == split_valid
+
+    split_tamper = deepcopy(split_valid)
+    split_tamper[0]["live_sample_objects"][1][
+        "sample_trajectory_admission_duration_ns"
+    ] += 1
+    _refresh_q05b_v2_regression_resource_row(split_tamper[0])
+    with pytest.raises(ARTIFACT.Q05BActualArtifactError) as split_rejected:
+        ARTIFACT._validate_resources_v1(split_tamper, config)
+    assert split_rejected.value.code == "REJECT_Q05B_ARTIFACT_RESOURCE"
+    assert split_rejected.value.detail == "live sample header differs"
 
     cross_chain_tamper = deepcopy(valid)
     chained_sample = cross_chain_tamper[0]["live_sample_objects"][1]
@@ -15827,6 +16493,10 @@ def test_q05b_v2_regression_artifact_sample_arithmetic_and_cross_chain_tamper(
     )
     chained_sample["sample_scheduler_lateness_ns"] = (
         chained_sample["sample_monotonic_ns"]
+        - chained_sample["sample_scheduled_start_ns"]
+    )
+    chained_sample["sample_native_wake_lateness_ns"] = (
+        chained_sample["sample_native_wake_ns"]
         - chained_sample["sample_scheduled_start_ns"]
     )
     chained_sample["sample_gap_from_prior_finish_ns"] = (

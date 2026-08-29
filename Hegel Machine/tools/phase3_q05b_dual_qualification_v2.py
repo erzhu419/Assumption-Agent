@@ -47,9 +47,9 @@ TRAJECTORY_CORE_RELATIVE_PATH: Final = (
     "src/hegel_machine/phase3_q05b_trajectory_v2.py"
 )
 TRAJECTORY_CORE_RAW_SHA256: Final = (
-    "e0339921ba19614ed23615a943d15acc5eaeed2c4012c6ffa1e4e0ae092cc013"
+    "47a2766a039f9422e26e105c8a0a5d4ffec514dd4b2119ae63c7acc5f1fea0b1"
 )
-TRAJECTORY_PRODUCER_ID: Final = "Q05B_SUPERVISOR_V4"
+TRAJECTORY_PRODUCER_ID: Final = "Q05B_SUPERVISOR_V5"
 TRAJECTORY_FIFO_CAPACITY_V4: Final = 512
 TRAJECTORY_NORMAL_OUTSTANDING_CAPACITY_V4: Final = 384
 TRAJECTORY_CONTROL_RECOVERY_RESERVE_V4: Final = 128
@@ -58,8 +58,15 @@ TRAJECTORY_NORMAL_SAMPLE_ADMISSION_V4: Final = "NORMAL_LIVE_SAMPLE"
 TRAJECTORY_CONTROL_RECOVERY_ADMISSION_V4: Final = "CONTROL_RECOVERY"
 TRAJECTORY_INTERNAL_ADMISSION_V4: Final = "INTERNAL"
 TRAJECTORY_BACKPRESSURE_POLL_SECONDS_V4: Final = 0.01
-RESOURCE_SAMPLER_TARGET_WAIT_NS: Final = 125_000_000
+RESOURCE_SAMPLER_TARGET_WAIT_NS: Final = 50_000_000
 RESOURCE_SAMPLER_MAXIMUM_UNSAMPLED_GAP_NS: Final = 250_000_000
+HOST_REQUIRED_EFFECTIVE_CPUS_V5: Final = frozenset(range(32))
+HOST_SAMPLER_CPU_BY_ROLE_V5: Final = {1: 24, 2: 25, 3: 24}
+HOST_TRAJECTORY_PUBLISHER_CPUS_V5: Final = frozenset({26})
+HOST_SUPERVISOR_CONTROL_CPUS_V5: Final = frozenset(range(27, 32))
+HOST_GIL_SWITCH_INTERVAL_SECONDS_V5: Final = 0.001
+SAMPLER_STAGE4_READINESS_MINIMUM_SAMPLES_V5: Final = 2
+SAMPLER_STAGE4_READINESS_TIMEOUT_SECONDS_V5: Final = 60.0
 PLAN_SCHEMA_VERSION: Final = "hegel-phase3a-q05b-dual-qualification-plan/2"
 ERROR_SCHEMA_VERSION: Final = "hegel-phase3a-q05b-dual-qualification-error/2"
 PROFILE_ID: Final = "hegel-phase3a-q05b-three-actor-offline-qualification-v2"
@@ -68,7 +75,7 @@ STDOUT_SET_SCHEMA_VERSION: Final = (
     "hegel-phase3a-q05b-sealed-actor-stdout-set/1"
 )
 RESOURCE_TRANSCRIPT_SCHEMA_VERSION: Final = (
-    "hegel-phase3a-q05b-live-container-resource-transcript/2"
+    "hegel-phase3a-q05b-live-container-resource-transcript/3"
 )
 HELD_ACTOR_WRAPPER_SCHEMA_VERSION: Final = (
     "hegel-phase3a-q05b-held-actor-wrapper/1"
@@ -337,6 +344,127 @@ def _fail(
 
 _ACTIVE_TRAJECTORY_V2: object | None = None
 _TRAJECTORY_MODULE_V2: object | None = None
+_ACTIVE_HOST_THREAD_SCHEDULING_V5: dict[str, object] | None = None
+
+
+def _host_thread_scheduling_detail_v5(value: Mapping[str, object]) -> str:
+    """Return one compact stable scheduling detail for trajectory events."""
+
+    return json.dumps(
+        dict(value),
+        ensure_ascii=True,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def _bind_current_host_thread_v5(
+    thread_role: str,
+    cpus: frozenset[int],
+) -> dict[str, object]:
+    """Bind and replay the calling native thread under an active run policy."""
+
+    policy = _ACTIVE_HOST_THREAD_SCHEDULING_V5
+    if policy is None:
+        return {
+            "policy_active": False,
+            "thread_role": thread_role,
+        }
+    if (
+        type(thread_role) is not str
+        or not thread_role
+        or type(cpus) is not frozenset
+        or not cpus
+        or any(type(cpu) is not int or cpu < 0 for cpu in cpus)
+        or not cpus <= HOST_REQUIRED_EFFECTIVE_CPUS_V5
+    ):
+        _fail(FAIL_POLICY, "host thread scheduling request differs")
+    try:
+        os.sched_setaffinity(0, cpus)
+        observed = frozenset(os.sched_getaffinity(0))
+    except (AttributeError, OSError) as error:
+        _fail(
+            FAIL_POLICY,
+            "host thread affinity binding failed: "
+            f"role={thread_role}; error={type(error).__name__}:{error}",
+        )
+    if observed != cpus:
+        _fail(
+            FAIL_POLICY,
+            "host thread affinity replay differs: "
+            f"role={thread_role}; expected={sorted(cpus)}; "
+            f"observed={sorted(observed)}",
+        )
+    return {
+        "policy_active": True,
+        "thread_role": thread_role,
+        "native_thread_id": threading.get_native_id(),
+        "effective_cpus": sorted(observed),
+    }
+
+
+@contextmanager
+def _host_thread_scheduling_scope_v5() -> Iterable[dict[str, object]]:
+    """Freeze actual-run host CPUs and the CPython GIL handoff interval."""
+
+    global _ACTIVE_HOST_THREAD_SCHEDULING_V5
+    if _ACTIVE_HOST_THREAD_SCHEDULING_V5 is not None:
+        _fail(FAIL_POLICY, "host thread scheduling policy is already active")
+    try:
+        original_affinity = frozenset(os.sched_getaffinity(0))
+    except (AttributeError, OSError) as error:
+        _fail(
+            FAIL_POLICY,
+            "host effective CPU admission failed: "
+            f"{type(error).__name__}:{error}",
+        )
+    if not HOST_REQUIRED_EFFECTIVE_CPUS_V5 <= original_affinity:
+        _fail(
+            FAIL_POLICY,
+            "host effective CPU admission differs: "
+            f"required={sorted(HOST_REQUIRED_EFFECTIVE_CPUS_V5)}; "
+            f"observed={sorted(original_affinity)}",
+        )
+    original_switch_interval = sys.getswitchinterval()
+    policy = {
+        "schema_version": "hegel-phase3a-q05b-host-thread-scheduling/5",
+        "original_effective_cpus": sorted(original_affinity),
+        "required_effective_cpus": sorted(HOST_REQUIRED_EFFECTIVE_CPUS_V5),
+        "sampler_cpu_rows": [
+            [1, "PYTHON_ENDPOINT", HOST_SAMPLER_CPU_BY_ROLE_V5[1]],
+            [2, "RUST_ENDPOINT", HOST_SAMPLER_CPU_BY_ROLE_V5[2]],
+            [3, "TRUSTED_HOST_REPLAY", HOST_SAMPLER_CPU_BY_ROLE_V5[3]],
+        ],
+        "trajectory_publisher_cpus": sorted(
+            HOST_TRAJECTORY_PUBLISHER_CPUS_V5
+        ),
+        "supervisor_control_cpus": sorted(HOST_SUPERVISOR_CONTROL_CPUS_V5),
+        "gil_switch_interval_microseconds": 1000,
+    }
+    try:
+        os.sched_setaffinity(0, HOST_SUPERVISOR_CONTROL_CPUS_V5)
+        control_replay = frozenset(os.sched_getaffinity(0))
+        if control_replay != HOST_SUPERVISOR_CONTROL_CPUS_V5:
+            _fail(FAIL_POLICY, "host supervisor control affinity replay differs")
+        sys.setswitchinterval(HOST_GIL_SWITCH_INTERVAL_SECONDS_V5)
+        if sys.getswitchinterval() != HOST_GIL_SWITCH_INTERVAL_SECONDS_V5:
+            _fail(FAIL_POLICY, "host GIL switch interval replay differs")
+        policy["control_native_thread_id"] = threading.get_native_id()
+        policy["control_effective_cpus"] = sorted(control_replay)
+        _ACTIVE_HOST_THREAD_SCHEDULING_V5 = policy
+        yield policy
+    finally:
+        _ACTIVE_HOST_THREAD_SCHEDULING_V5 = None
+        sys.setswitchinterval(original_switch_interval)
+        os.sched_setaffinity(0, original_affinity)
+
+
+def _sampling_cooperative_yield_v5() -> None:
+    """Yield the GIL only in the bound actual-run sampling topology."""
+
+    if _ACTIVE_HOST_THREAD_SCHEDULING_V5 is not None:
+        time.sleep(0)
 
 
 class TrajectorySequencerErrorV4(RuntimeError):
@@ -419,6 +547,9 @@ class TrajectorySequencerV4:
         self._closed = False
         self._post_quiesce_terminal_submitted = False
         self._fault: BaseException | None = None
+        self._publisher_ready = threading.Event()
+        self._publisher_startup_error: BaseException | None = None
+        self._publisher_affinity_evidence: dict[str, object] | None = None
         self._publisher = threading.Thread(
             target=self._publish_loop,
             name="q05b-trajectory-publisher-v4",
@@ -426,8 +557,13 @@ class TrajectorySequencerV4:
         )
         try:
             self._publisher.start()
+            self._publisher_ready.wait()
+            if self._publisher_startup_error is not None:
+                raise self._publisher_startup_error
         except BaseException:
             try:
+                if self._publisher.ident is not None:
+                    self._publisher.join()
                 writer.close()
             finally:
                 raise
@@ -435,6 +571,16 @@ class TrajectorySequencerV4:
     @property
     def publisher_thread(self) -> threading.Thread:
         return self._publisher
+
+    @property
+    def publisher_affinity_evidence(self) -> dict[str, object]:
+        value = self._publisher_affinity_evidence
+        if type(value) is not dict:
+            raise TrajectorySequencerErrorV4(
+                "FAIL_TRAJECTORY_PUBLISHER_STARTUP",
+                "trajectory publisher affinity evidence is absent",
+            )
+        return dict(value)
 
     @property
     def pending_count(self) -> int:
@@ -728,6 +874,16 @@ class TrajectorySequencerV4:
         return command.ticket
 
     def _publish_loop(self) -> None:
+        try:
+            self._publisher_affinity_evidence = _bind_current_host_thread_v5(
+                "TRAJECTORY_PUBLISHER",
+                HOST_TRAJECTORY_PUBLISHER_CPUS_V5,
+            )
+        except BaseException as error:
+            self._publisher_startup_error = error
+            self._publisher_ready.set()
+            return
+        self._publisher_ready.set()
         while True:
             command = self._queue.get()
             ticket = command.ticket
@@ -3210,6 +3366,7 @@ def collect_bound_live_resource_transcript_v1(
         if before_ownership["container_id"] != container_id:
             _fail(FAIL_POLICY, "pre-sample Docker ownership ID differs")
     before = _strict_json_value_v1(inspect_before_payload, "pre-sample Docker inspect")
+    _sampling_cooperative_yield_v5()
     if (
         type(before) is not list
         or len(before) != 1
@@ -3258,6 +3415,7 @@ def collect_bound_live_resource_transcript_v1(
                 "pids.peak",
             )
         }
+        _sampling_cooperative_yield_v5()
         pid_after = os.fstat(pid_descriptor)
         cgroup_after = os.fstat(cgroup_descriptor)
         if (
@@ -3293,6 +3451,7 @@ def collect_bound_live_resource_transcript_v1(
         inspect_after_payload = inspect_after_reader()
         if type(inspect_after_payload) is not bytes:
             _fail(FAIL_POLICY, "post-sample Docker inspect payload differs")
+        _sampling_cooperative_yield_v5()
         if docker_execution_principal is not None:
             after_ownership = _validate_owned_docker_inspect_payload_v1(
                 inspect_after_payload,
@@ -3327,6 +3486,7 @@ def collect_bound_live_resource_transcript_v1(
             proc_limits_payload,
             seccomp_evidence=seccomp_evidence,
         )
+        _sampling_cooperative_yield_v5()
         after_replay = live_resource_transcript_v1(
             role_id,
             container_id,
@@ -3476,6 +3636,12 @@ def final_resource_transcript_v1(
             or type(sample.get("sample_scheduled_start_ns")) is not int
             or type(sample.get("sample_gap_from_prior_finish_ns")) is not int
             or type(sample.get("sample_scheduler_lateness_ns")) is not int
+            or type(sample.get("sample_native_wake_ns")) is not int
+            or type(sample.get("sample_native_wake_lateness_ns")) is not int
+            or type(
+                sample.get("sample_trajectory_admission_duration_ns")
+            )
+            is not int
             or type(sample.get("sample_target_wait_ns")) is not int
             or type(sample.get("sample_maximum_unsampled_gap_ns")) is not int
             or type(sample.get("prior_sample_finish_ns")) is not int
@@ -3492,6 +3658,19 @@ def final_resource_transcript_v1(
             or sample["sample_scheduler_lateness_ns"]
             != sample["sample_monotonic_ns"]
             - sample["sample_scheduled_start_ns"]
+            or sample["sample_native_wake_ns"]
+            < sample["sample_scheduled_start_ns"]
+            or sample["sample_native_wake_ns"]
+            > sample["sample_monotonic_ns"]
+            or sample["sample_native_wake_lateness_ns"]
+            != sample["sample_native_wake_ns"]
+            - sample["sample_scheduled_start_ns"]
+            or sample["sample_trajectory_admission_duration_ns"]
+            != sample["sample_monotonic_ns"]
+            - sample["sample_native_wake_ns"]
+            or sample["sample_scheduler_lateness_ns"]
+            != sample["sample_native_wake_lateness_ns"]
+            + sample["sample_trajectory_admission_duration_ns"]
             or sample["sample_gap_from_prior_finish_ns"]
             != sample["sample_monotonic_ns"]
             - sample["prior_sample_finish_ns"]
@@ -3505,7 +3684,12 @@ def final_resource_transcript_v1(
             or type(sample.get("cgroup_payload_rows")) is not list
         ):
             _fail(FAIL_POLICY, "live resource sample continuity differs")
-        _validate_resource_sample_raw_preimages_v1(sample)
+        # Full raw-preimage replay is deliberately deferred to the final
+        # artifact verifier, after every endpoint sampler has stopped.  The
+        # close path checks shape, timing continuity, and peak monotonicity
+        # here without monopolizing the GIL while another sampler is live.
+        if ordinal % 64 == 0:
+            _sampling_cooperative_yield_v5()
         if previous_sample_finish_ns is not None:
             gap = sample["sample_monotonic_ns"] - previous_sample_finish_ns
             if (
@@ -4115,7 +4299,7 @@ def _validate_policy_sections_v1(config: Mapping[str, object]) -> None:
     _require_type_exact_v1(
         trajectory_policy,
         {
-            "schema_version": "hegel-phase3a-q05b-durable-trajectory-policy/4",
+            "schema_version": "hegel-phase3a-q05b-durable-trajectory-policy/5",
             "required_for_run_cli": True,
             "core_relative_path": TRAJECTORY_CORE_RELATIVE_PATH,
             "core_raw_sha256": TRAJECTORY_CORE_RAW_SHA256,
@@ -4219,6 +4403,17 @@ def _validate_policy_sections_v1(config: Mapping[str, object]) -> None:
             "sampling_target_wait_milliseconds",
             "sampling_scheduler_reserve_milliseconds",
             "sampling_deadline_clock",
+            "required_host_effective_cpus",
+            "host_sampler_cpu_rows",
+            "host_trajectory_publisher_cpus",
+            "host_supervisor_control_cpus",
+            "python_gil_switch_interval_microseconds",
+            "sampler_thread_self_affinity_replay_required",
+            "trajectory_publisher_thread_self_affinity_replay_required",
+            "stage4_minimum_clean_samples_per_endpoint_after_both_started",
+            "stage5_close_protocol",
+            "close_path_raw_preimage_replay",
+            "sample_timing_decomposition",
             "cid_seal_to_first_sample_gap_enforced",
             "last_continuous_to_held_final_gap_enforced",
             "one_independent_sampling_worker_per_live_actor",
@@ -4332,6 +4527,9 @@ def _validate_policy_sections_v1(config: Mapping[str, object]) -> None:
                 "sample_scheduled_start_ns",
                 "sample_gap_from_prior_finish_ns",
                 "sample_scheduler_lateness_ns",
+                "sample_native_wake_ns",
+                "sample_native_wake_lateness_ns",
+                "sample_trajectory_admission_duration_ns",
                 "sample_target_wait_ns",
                 "sample_maximum_unsampled_gap_ns",
                 "prior_sample_finish_ns",
@@ -4342,9 +4540,31 @@ def _validate_policy_sections_v1(config: Mapping[str, object]) -> None:
                 "MAXIMUM_UNSAMPLED_GAP_FROM_PREVIOUS_COLLECTION_FINISH_TO_"
                 "NEXT_COLLECTION_START"
             ),
-            "sampling_target_wait_milliseconds": 125,
-            "sampling_scheduler_reserve_milliseconds": 125,
+            "sampling_target_wait_milliseconds": 50,
+            "sampling_scheduler_reserve_milliseconds": 200,
             "sampling_deadline_clock": "CLOCK_MONOTONIC",
+            "required_host_effective_cpus": "0-31",
+            "host_sampler_cpu_rows": [
+                [1, "PYTHON_ENDPOINT", 24],
+                [2, "RUST_ENDPOINT", 25],
+                [3, "TRUSTED_HOST_REPLAY", 24],
+            ],
+            "host_trajectory_publisher_cpus": "26",
+            "host_supervisor_control_cpus": "27-31",
+            "python_gil_switch_interval_microseconds": 1000,
+            "sampler_thread_self_affinity_replay_required": True,
+            "trajectory_publisher_thread_self_affinity_replay_required": True,
+            "stage4_minimum_clean_samples_per_endpoint_after_both_started": 2,
+            "stage5_close_protocol": (
+                "ORDERED_PHASE_A_ALL_SAMPLERS_QUIESCENT_BEFORE_ORDERED_"
+                "PHASE_B_FULL_REPLAY_ASSEMBLY_REMOVE"
+            ),
+            "close_path_raw_preimage_replay": (
+                "DEFERRED_TO_FINAL_ARTIFACT_REPLAY_AFTER_ALL_SAMPLERS_STOPPED"
+            ),
+            "sample_timing_decomposition": (
+                "SCHEDULED_NATIVE_WAKE_TRAJECTORY_ADMISSION_ACTUAL_START"
+            ),
             "cid_seal_to_first_sample_gap_enforced": True,
             "last_continuous_to_held_final_gap_enforced": True,
             "one_independent_sampling_worker_per_live_actor": True,
@@ -6515,6 +6735,16 @@ class HeldActorProcessV1:
 
 
 @dataclass(slots=True)
+class HeldActorClosePhaseGateV5:
+    """One group-close barrier separating live cadence from heavy replay."""
+
+    phase_a_ready: threading.Event
+    phase_b_release: threading.Event
+    abort: threading.Event
+    affinity_evidence: dict[str, object] | None = None
+
+
+@dataclass(slots=True)
 class BoundedPipeDrainV1:
     maximum: int
     payload: bytearray
@@ -7236,19 +7466,41 @@ def _sample_actor_resources_v1(
     proc_root: Path,
     cgroup_root: Path,
     cid_timeout_seconds: float,
+    startup_ready: threading.Event | None = None,
+    startup_result: list[object] | None = None,
 ) -> None:
     trajectory_span = f"sampler-{actor.actor_id}"
     trajectory_span_open = False
     sample_span: str | None = None
     sample_span_open = False
     try:
+        if actor.role_id not in HOST_SAMPLER_CPU_BY_ROLE_V5:
+            _fail(FAIL_POLICY, "held actor sampler host CPU role differs")
+        try:
+            affinity_evidence = _bind_current_host_thread_v5(
+                f"{actor.actor_id}_SAMPLER",
+                frozenset({HOST_SAMPLER_CPU_BY_ROLE_V5[actor.role_id]}),
+            )
+        except BaseException as startup_error:
+            if startup_result is not None:
+                startup_result.append(startup_error)
+            raise
+        else:
+            if startup_result is not None:
+                startup_result.append(affinity_evidence)
+        finally:
+            if startup_ready is not None:
+                startup_ready.set()
         _trajectory_begin_v2(
             trajectory_span,
             "LIVE_RESOURCE_SAMPLER",
             stage="ACTOR_LIFECYCLE",
             substep="CID_TO_HELD_FINAL_CONTINUOUS_SAMPLING",
             actor=actor.actor_id,
-            detail="ENTER",
+            detail=(
+                "ENTER;host_thread_scheduling="
+                + _host_thread_scheduling_detail_v5(affinity_evidence)
+            ),
         )
         trajectory_span_open = True
         container_id, prior_finish_ns = _wait_for_cidfile_v1(
@@ -7269,6 +7521,11 @@ def _sample_actor_resources_v1(
             sample_span = (
                 f"sample-{actor.actor_id}-{attempted_ordinal:06d}"
             )
+            native_wake_ns = time.monotonic_ns()
+            native_wake_lateness_ns = max(
+                0,
+                native_wake_ns - scheduled_start_ns,
+            )
             try:
                 sample_begin_ticket = _trajectory_begin_async_v4(
                     sample_span,
@@ -7276,7 +7533,12 @@ def _sample_actor_resources_v1(
                     stage="ACTOR_LIFECYCLE",
                     substep="COLLECT_BOUND_LIVE_RESOURCES",
                     actor=actor.actor_id,
-                    detail=f"sample_ordinal={attempted_ordinal}",
+                    detail=(
+                        f"sample_ordinal={attempted_ordinal};"
+                        f"native_wake_ns={native_wake_ns};"
+                        "native_wake_lateness_ns="
+                        f"{native_wake_lateness_ns}"
+                    ),
                     interrupt_event=actor.sample_stop,
                     deadline_ns=(
                         prior_finish_ns
@@ -7317,6 +7579,9 @@ def _sample_actor_resources_v1(
                     )
             else:
                 start_ns = time.monotonic_ns()
+            trajectory_admission_duration_ns = start_ns - native_wake_ns
+            if trajectory_admission_duration_ns < 0:
+                _fail(FAIL_POLICY, "sampler trajectory admission clock regressed")
             gap_ns = start_ns - prior_finish_ns
             scheduler_lateness_ns = max(0, start_ns - scheduled_start_ns)
             if gap_ns > RESOURCE_SAMPLER_MAXIMUM_UNSAMPLED_GAP_NS:
@@ -7336,7 +7601,14 @@ def _sample_actor_resources_v1(
                 _trajectory_fail_async_v4(
                     sample_span,
                     gap_error,
-                    detail="MAXIMUM_UNSAMPLED_GAP_EXCEEDED",
+                    detail=(
+                        "MAXIMUM_UNSAMPLED_GAP_EXCEEDED;"
+                        f"native_wake_ns={native_wake_ns};"
+                        "native_wake_lateness_ns="
+                        f"{native_wake_lateness_ns};"
+                        "trajectory_admission_duration_ns="
+                        f"{trajectory_admission_duration_ns}"
+                    ),
                     role_id=str(actor.role_id),
                     sample_ordinal=attempted_ordinal,
                     previous_finish_ns=prior_finish_ns,
@@ -7366,6 +7638,7 @@ def _sample_actor_resources_v1(
                 raise gap_error
             try:
                 inspect_before = inspect_reader(container_id)
+                _sampling_cooperative_yield_v5()
                 sample = collect_bound_live_resource_transcript_v1(
                     actor.role_id,
                     container_id,
@@ -7385,7 +7658,14 @@ def _sample_actor_resources_v1(
                     _trajectory_fail_async_v4(
                         sample_span,
                         sample_error,
-                        detail="LIVE_RESOURCE_COLLECTION_FAILED",
+                        detail=(
+                            "LIVE_RESOURCE_COLLECTION_FAILED;"
+                            f"native_wake_ns={native_wake_ns};"
+                            "native_wake_lateness_ns="
+                            f"{native_wake_lateness_ns};"
+                            "trajectory_admission_duration_ns="
+                            f"{trajectory_admission_duration_ns}"
+                        ),
                         role_id=str(actor.role_id),
                         sample_ordinal=attempted_ordinal,
                         previous_finish_ns=prior_finish_ns,
@@ -7412,6 +7692,13 @@ def _sample_actor_resources_v1(
             sample["sample_scheduled_start_ns"] = scheduled_start_ns
             sample["sample_gap_from_prior_finish_ns"] = gap_ns
             sample["sample_scheduler_lateness_ns"] = scheduler_lateness_ns
+            sample["sample_native_wake_ns"] = native_wake_ns
+            sample["sample_native_wake_lateness_ns"] = (
+                native_wake_lateness_ns
+            )
+            sample["sample_trajectory_admission_duration_ns"] = (
+                trajectory_admission_duration_ns
+            )
             sample["sample_target_wait_ns"] = RESOURCE_SAMPLER_TARGET_WAIT_NS
             sample["sample_maximum_unsampled_gap_ns"] = (
                 RESOURCE_SAMPLER_MAXIMUM_UNSAMPLED_GAP_NS
@@ -7420,7 +7707,14 @@ def _sample_actor_resources_v1(
             sample["prior_sample_duration_ns"] = prior_duration_ns
             _trajectory_ok_async_v4(
                 sample_span,
-                detail="LIVE_RESOURCE_COLLECTION_COMPLETE",
+                detail=(
+                    "LIVE_RESOURCE_COLLECTION_COMPLETE;"
+                    f"native_wake_ns={native_wake_ns};"
+                    "native_wake_lateness_ns="
+                    f"{native_wake_lateness_ns};"
+                    "trajectory_admission_duration_ns="
+                    f"{trajectory_admission_duration_ns}"
+                ),
                 role_id=str(actor.role_id),
                 sample_ordinal=ordinal,
                 previous_finish_ns=prior_finish_ns,
@@ -7445,7 +7739,7 @@ def _sample_actor_resources_v1(
             if os.path.lexists(actor.control_root / "done"):
                 actor.child_done_observed.set()
             # The 250 ms value remains the hard maximum unsampled gap.  The
-            # 125 ms target leaves 125 ms of scheduler reserve without changing
+            # 50 ms target leaves 200 ms of scheduler reserve without changing
             # that evidence boundary.  The wait is scheduled against an
             # absolute monotonic deadline and remains close-interruptible.
             remaining_ns = scheduled_start_ns - time.monotonic_ns()
@@ -7508,6 +7802,8 @@ def _sample_actor_resources_v1(
             )
         actor.sample_errors.append(observed_error)
     finally:
+        if startup_ready is not None and not startup_ready.is_set():
+            startup_ready.set()
         actor.sample_complete.set()
 
 
@@ -7525,13 +7821,30 @@ def start_held_actor_resource_sampler_v1(
         inspect_reader = _docker_inspect_payload_v1
     if not callable(inspect_reader):
         _fail(FAIL_POLICY, "held actor sampler inspect reader differs")
+    startup_ready = threading.Event()
+    startup_result: list[object] = []
     actor.sample_thread = threading.Thread(
         target=_sample_actor_resources_v1,
-        args=(actor, inspect_reader, proc_root, cgroup_root, cid_timeout_seconds),
+        args=(
+            actor,
+            inspect_reader,
+            proc_root,
+            cgroup_root,
+            cid_timeout_seconds,
+            startup_ready,
+            startup_result,
+        ),
         name=f"q05b-{actor.role_id}-resource-sampler",
         daemon=True,
     )
     actor.sample_thread.start()
+    startup_ready.wait()
+    if len(startup_result) != 1:
+        actor.sample_thread.join()
+        _fail(FAIL_POLICY, "held actor sampler startup result differs")
+    if isinstance(startup_result[0], BaseException):
+        actor.sample_thread.join()
+        raise startup_result[0]
 
 
 def _docker_inspect_payload_v1(container_id: str) -> bytes:
@@ -7630,6 +7943,84 @@ def _raise_stage4_exited_sampler_v2(
             )
         ),
         "endpoint resource sampler is not live",
+    )
+
+
+def _wait_for_stage4_sampler_readiness_v5(
+    actors: Sequence[HeldActorProcessV1],
+    runner: Callable[..., object],
+    both_started_anchor_ns: int,
+) -> tuple[int, ...]:
+    """Require two samples begun after both endpoint workers were started."""
+
+    if (
+        type(actors) not in (tuple, list)
+        or not actors
+        or any(type(actor) is not HeldActorProcessV1 for actor in actors)
+        or not callable(runner)
+        or type(both_started_anchor_ns) is not int
+        or both_started_anchor_ns < 0
+    ):
+        _fail(FAIL_POLICY, "Stage-4 sampler readiness input differs")
+    if _ACTIVE_HOST_THREAD_SCHEDULING_V5 is None:
+        # The readiness contract belongs to the actual --run scheduling
+        # scope.  Pure in-process construction tests do not create that scope.
+        return tuple(
+            SAMPLER_STAGE4_READINESS_MINIMUM_SAMPLES_V5 for _actor in actors
+        )
+    deadline = time.monotonic() + SAMPLER_STAGE4_READINESS_TIMEOUT_SECONDS_V5
+    while time.monotonic() < deadline:
+        if any(actor.sample_errors for actor in actors) or any(
+            actor.sample_thread is None or not actor.sample_thread.is_alive()
+            for actor in actors
+        ):
+            for actor in actors:
+                if actor.sample_errors:
+                    actor.sample_complete.wait(10.0)
+            _raise_stage4_exited_sampler_v2(actors, runner)
+        counts: list[int] = []
+        malformed = False
+        for actor in actors:
+            with actor.sample_lock:
+                rows = tuple(actor.sample_rows)
+            if any(
+                type(row) is not dict
+                or type(row.get("sample_monotonic_ns")) is not int
+                or row["sample_monotonic_ns"] < 0
+                for row in rows
+            ):
+                malformed = True
+                break
+            counts.append(
+                sum(
+                    row["sample_monotonic_ns"] >= both_started_anchor_ns
+                    for row in rows
+                )
+            )
+        if malformed:
+            _raise_after_actor_cleanup_v1(
+                actors,
+                runner,
+                Q05BDualSupervisorError(
+                    FAIL_POLICY,
+                    "Stage-4 sampler readiness row differs",
+                ),
+                "Stage-4 dual sampler readiness failed",
+            )
+        if all(
+            count >= SAMPLER_STAGE4_READINESS_MINIMUM_SAMPLES_V5
+            for count in counts
+        ):
+            return tuple(counts)
+        time.sleep(0.01)
+    _raise_after_actor_cleanup_v1(
+        actors,
+        runner,
+        Q05BDualSupervisorError(
+            FAIL_POLICY,
+            "Stage-4 dual sampler readiness timed out before two clean samples",
+        ),
+        "Stage-4 dual sampler readiness failed",
     )
 
 
@@ -8431,6 +8822,7 @@ def close_held_actor_process_v1(
     proc_root: Path = Path("/proc"),
     cgroup_root: Path = Path("/sys/fs/cgroup"),
     command_runner: Callable[..., object] = subprocess.run,
+    phase_gate: HeldActorClosePhaseGateV5 | None = None,
 ) -> dict[str, object]:
     """Close done->fresh-final-sample->release->exit->inspect->rm exactly."""
 
@@ -8441,6 +8833,10 @@ def close_held_actor_process_v1(
         or type(exit_timeout_seconds) not in (int, float)
         or isinstance(exit_timeout_seconds, bool)
         or exit_timeout_seconds <= 0
+        or (
+            phase_gate is not None
+            and type(phase_gate) is not HeldActorClosePhaseGateV5
+        )
     ):
         _fail(FAIL_POLICY, "held actor close input differs")
     trajectory_span = f"actor-close-{actor.actor_id}"
@@ -8630,6 +9026,13 @@ def close_held_actor_process_v1(
             held_final["sample_scheduler_lateness_ns"] = (
                 held_final_scheduler_lateness_ns
             )
+            held_final["sample_native_wake_ns"] = (
+                held_final_actual_start_ns
+            )
+            held_final["sample_native_wake_lateness_ns"] = (
+                held_final_scheduler_lateness_ns
+            )
+            held_final["sample_trajectory_admission_duration_ns"] = 0
             held_final["sample_target_wait_ns"] = (
                 RESOURCE_SAMPLER_TARGET_WAIT_NS
             )
@@ -8793,6 +9196,17 @@ def close_held_actor_process_v1(
             post_exit_inspect,
             actor.docker_execution_principal,
         )
+        if phase_gate is not None:
+            # Phase A ends only after this actor's sampler is stopped, its
+            # held-final sample is durable, the wrapper has exited, and the
+            # post-exit ownership observation is captured.  Group close holds
+            # every actor here until all samplers are quiescent; therefore no
+            # full-history replay, result assembly, or remove/absence work can
+            # starve a still-live peer sampler.
+            phase_gate.phase_a_ready.set()
+            phase_gate.phase_b_release.wait()
+            if phase_gate.abort.is_set():
+                _fail(FAIL_POLICY, "held actor group close aborted after phase A")
         final_resource = final_resource_transcript_v1(
             continuous_samples + (held_final,),
             post_exit_inspect,
@@ -13934,7 +14348,7 @@ def close_held_actor_group_v1(
     inspect_reader: Callable[[str], bytes] = _docker_inspect_payload_v1,
     command_runner: Callable[..., object] = subprocess.run,
 ) -> tuple[dict[str, object], ...]:
-    """Close held actors synchronously while not-yet-closed samplers remain live."""
+    """Close actors in two ordered phases around one all-samplers barrier."""
 
     if (
         type(actors) not in (tuple, list)
@@ -13946,45 +14360,113 @@ def close_held_actor_group_v1(
         or child_timeout_seconds <= 0
     ):
         _fail(FAIL_POLICY, "held actor group input differs")
-    results: list[dict[str, object]] = []
-    for index, actor in enumerate(actors):
+    actor_rows = tuple(actors)
+    gates = tuple(
+        HeldActorClosePhaseGateV5(
+            threading.Event(),
+            threading.Event(),
+            threading.Event(),
+        )
+        for _actor in actor_rows
+    )
+    done = tuple(threading.Event() for _actor in actor_rows)
+    results: list[dict[str, object] | None] = [None] * len(actor_rows)
+    errors: list[BaseException | None] = [None] * len(actor_rows)
+    workers: list[threading.Thread] = []
+
+    def close_worker(index: int) -> None:
+        actor = actor_rows[index]
         try:
-            value = close_held_actor_process_v1(
+            gates[index].affinity_evidence = _bind_current_host_thread_v5(
+                f"{actor.actor_id}_CLOSE",
+                HOST_SUPERVISOR_CONTROL_CPUS_V5,
+            )
+            results[index] = close_held_actor_process_v1(
                 actor,
                 child_timeout_seconds=child_timeout_seconds,
                 inspect_reader=inspect_reader,
                 command_runner=command_runner,
+                phase_gate=gates[index],
             )
         except BaseException as error:
-            cleanup_errors = _cleanup_actor_set_v1(
-                actors[index + 1 :],
-                command_runner,
+            errors[index] = error
+        finally:
+            done[index].set()
+
+    def fail_group(original: BaseException) -> NoReturn:
+        for gate in gates:
+            gate.abort.set()
+            gate.phase_b_release.set()
+        for worker in workers:
+            if worker.ident is not None:
+                worker.join()
+        cleanup_errors = _cleanup_actor_set_v1(actor_rows, command_runner)
+        if cleanup_errors:
+            _fail(
+                FAIL_POLICY,
+                "two-phase held actor group cleanup failed: "
+                + "; ".join(cleanup_errors)
+                + f"; original={type(original).__name__}:{original}",
             )
-            if cleanup_errors:
-                _fail(
+        raise original
+
+    def coordinate_group() -> tuple[dict[str, object], ...]:
+        # Phase A remains deterministic: PYTHON then RUST.  Each worker pauses
+        # after sampler stop, held-final, wrapper exit, and post-exit inspect.
+        # No full transcript replay or remove can begin until every sampler is
+        # down.
+        for index, actor in enumerate(actor_rows):
+            worker = threading.Thread(
+                target=close_worker,
+                args=(index,),
+                name=f"q05b-close-phase-a-{actor.role_id}",
+                daemon=False,
+            )
+            workers.append(worker)
+            worker.start()
+            while not gates[index].phase_a_ready.wait(0.01):
+                if done[index].is_set():
+                    error = errors[index]
+                    if error is not None:
+                        raise error
+                    raise Q05BDualSupervisorError(
+                        FAIL_POLICY,
+                        "held actor phase A returned without barrier: "
+                        + actor.actor_id,
+                    )
+
+        if any(
+            actor.sample_thread is None
+            or actor.sample_thread.is_alive()
+            or not actor.sample_complete.is_set()
+            for actor in actor_rows
+        ):
+            raise Q05BDualSupervisorError(
+                FAIL_POLICY,
+                "held actor group reached phase B with a live sampler",
+            )
+
+        # Phase B is also deterministic.  Heavy transcript replay, result
+        # assembly, exact-ID removal, and absence proof never overlap.
+        for index, actor in enumerate(actor_rows):
+            gates[index].phase_b_release.set()
+            done[index].wait()
+            workers[index].join()
+            error = errors[index]
+            if error is not None:
+                raise error
+            value = results[index]
+            if type(value) is not dict or value.get("actor_id") != actor.actor_id:
+                raise Q05BDualSupervisorError(
                     FAIL_POLICY,
-                    f"held actor group close failed for {actor.actor_id}; "
-                    "remaining actor cleanup closure failed: "
-                    + "; ".join(cleanup_errors)
-                    + f"; original={type(error).__name__}:{error}",
+                    f"held actor group result differs for {actor.actor_id}",
                 )
-            raise
-        if type(value) is not dict or value.get("actor_id") != actor.actor_id:
-            cleanup_errors = _cleanup_actor_set_v1(
-                actors[index + 1 :],
-                command_runner,
-            )
-            detail = f"held actor group result differs for {actor.actor_id}"
-            if cleanup_errors:
-                detail += "; remaining cleanup failed: " + "; ".join(
-                    cleanup_errors
-                )
-            _fail(FAIL_POLICY, detail)
-        results.append(value)
-    ordered = tuple(results)
-    if len(ordered) != len(actors):
-        _fail(FAIL_POLICY, "held actor group result registry differs")
-    return ordered
+        return tuple(value for value in results if type(value) is dict)
+
+    try:
+        return coordinate_group()
+    except BaseException as coordinator_error:
+        fail_group(coordinator_error)
 
 
 def actual_stage_evidence_v1(
@@ -15978,6 +16460,7 @@ class ConcreteQ05BActualBackendV1:
                 if actor.seccomp_evidence != runtime_seccomp:
                     _fail(FAIL_SOURCE, "endpoint runtime seccomp evidence differs")
             self.endpoint_actors = (python_actor, rust_actor)
+            both_sampler_started_anchor_ns = time.monotonic_ns()
         except BaseException as error:
             close_errors = _close_backend_active_mount_slots_v1(self, (0, 1))
             if close_errors:
@@ -16001,6 +16484,11 @@ class ConcreteQ05BActualBackendV1:
                 )
             raise error
         assert self.endpoint_actors is not None
+        readiness_sample_counts = _wait_for_stage4_sampler_readiness_v5(
+            self.endpoint_actors,
+            self.command_runner,
+            both_sampler_started_anchor_ns,
+        )
         evidence = {
             "actor_rows": [
                 {
@@ -16025,10 +16513,18 @@ class ConcreteQ05BActualBackendV1:
                         actor.sample_thread is not None
                         and actor.sample_thread.is_alive()
                     ),
+                    "sampling_readiness_minimum": (
+                        SAMPLER_STAGE4_READINESS_MINIMUM_SAMPLES_V5
+                    ),
+                    "sampling_readiness_observed_count": (
+                        readiness_sample_counts[index]
+                    ),
                 }
-                for actor in self.endpoint_actors
+                for index, actor in enumerate(self.endpoint_actors)
             ],
             "both_endpoints_started_before_close": True,
+            "both_sampler_started_anchor_ns": both_sampler_started_anchor_ns,
+            "both_samplers_reached_two_clean_samples_before_close": True,
             "consumed_admission_attempt_id": attempt_id,
             "qualification_receipt": None,
         }
@@ -18669,7 +19165,19 @@ def _run_cli_actual_with_trajectory_body_v2(
             "supervisor-run",
             "SUPERVISOR_RUN",
             stage="RUN",
-            detail=f"source_commit={source_commit}",
+            detail=(
+                f"source_commit={source_commit};host_thread_scheduling="
+                + _host_thread_scheduling_detail_v5(
+                    {
+                        "run_policy": (
+                            _ACTIVE_HOST_THREAD_SCHEDULING_V5
+                            if _ACTIVE_HOST_THREAD_SCHEDULING_V5 is not None
+                            else {"policy_active": False}
+                        ),
+                        "publisher": writer.publisher_affinity_evidence,
+                    }
+                )
+            ),
         )
         try:
             value = run_actual_v1(
@@ -18929,16 +19437,17 @@ def main(arguments: Sequence[str] | None = None) -> int:
                     "--cargo-cache-source, --trajectory-root, and "
                     "--trajectory-trace-id",
                 )
-            return _run_cli_actual_with_trajectory_v2(
-                project_root,
-                options.source_commit,
-                options.artifact,
-                options.cargo_cache_source,
-                options.trajectory_root,
-                options.trajectory_trace_id,
-                sys.stdout.buffer,
-                sys.stderr.buffer,
-            )
+            with _host_thread_scheduling_scope_v5():
+                return _run_cli_actual_with_trajectory_v2(
+                    project_root,
+                    options.source_commit,
+                    options.artifact,
+                    options.cargo_cache_source,
+                    options.trajectory_root,
+                    options.trajectory_trace_id,
+                    sys.stdout.buffer,
+                    sys.stderr.buffer,
+                )
         else:
             required = (
                 options.python_output,
