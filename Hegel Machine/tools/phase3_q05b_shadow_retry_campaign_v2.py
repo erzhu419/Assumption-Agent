@@ -58,7 +58,7 @@ V1_SAFETY_KERNEL_PATH: Final = (
     PROJECT_ROOT / "src/hegel_machine/phase3_q05b_shadow_nonadoption_trial_v1.py"
 )
 _STATE_ROOT_V2: Final = "/home/erzhu419/.local/state/hegel-machine"
-_V2R19_STATE_PREFIX: Final = f"{_STATE_ROOT_V2}/q05b-shadow-retry-campaign-v2r19"
+_V2R20_STATE_PREFIX: Final = f"{_STATE_ROOT_V2}/q05b-shadow-retry-campaign-v2r20"
 _PRIOR_V2_STATE_PREFIX: Final = f"{_STATE_ROOT_V2}/q05b-shadow-retry-campaign-v2"
 _PRIOR_V2_CONTRACT_ID: Final = "hegel-phase3a-q05b-shadow-retry-campaign-v2"
 _PRIOR_V2_CAPSULE_DIGEST: Final = (
@@ -2970,6 +2970,436 @@ _PRIOR_V2R18_PROTECTED_POLICY_FACTS: Final = {
     "prior_v2r18_campaign_root_access_allowed": False,
     "prior_v2r18_capsule_authorization_or_ledger_reuse_allowed": False,
 }
+_PRIOR_V2R19_STATE_PREFIX: Final = (
+    f"{_STATE_ROOT_V2}/q05b-shadow-retry-campaign-v2r19"
+)
+_PRIOR_V2R19_WORKTREE_ROOT: Final = (
+    "/tmp/hegel-q05b-shadow-retry-v2r19-worktree"
+)
+_PRIOR_V2R19_RUNTIME_ROOTS: Final = (
+    f"{_PRIOR_V2R19_STATE_PREFIX}-authorization",
+    f"{_PRIOR_V2R19_STATE_PREFIX}-ledger",
+    *tuple(
+        f"{_PRIOR_V2R19_STATE_PREFIX}-slot-{ordinal:02d}-{suffix}"
+        for ordinal in range(1, 4)
+        for suffix in (
+            "clone",
+            "cargo-cache",
+            "artifact",
+            "scheduling-probe",
+            "evidence",
+            "trace",
+        )
+    ),
+)
+_PRIOR_V2R19_RUNTIME_ROOT_STATES_IN_EXACT_ORDER: Final = (
+    "PRESENT",
+    "PRESENT",
+    "PRESENT",
+    "PRESENT",
+    "ABSENT",
+    "ABSENT",
+    "PRESENT",
+    "PRESENT",
+    *("ABSENT",) * 12,
+)
+_PRIOR_V2R19_DECISION_AUDIT: Final = {
+    "schema_version": (
+        "hegel-phase3a-q05b-shadow-retry-campaign-decision-audit/2"
+    ),
+    "decision": "TERMINAL_NONRETRYABLE",
+    "matched_path_or_null": None,
+    "first_reject_clause_or_null": "GAP_GRAMMAR",
+    "predicate_results": [
+        {"clause": "OBSERVATION_SHAPE", "result": "PASS"},
+        {"clause": "SUCCESS", "result": "NO_MATCH"},
+        {"clause": "COMMON_EXACT", "result": "PASS"},
+        {"clause": "GAP_GRAMMAR", "result": "REJECT"},
+        {"clause": "WIRE_TERMINAL", "result": "NOT_EVALUATED"},
+        {"clause": "PARTITION_CLEANUP", "result": "NOT_EVALUATED"},
+        {"clause": "ARTIFACT_ABSENCE", "result": "NOT_EVALUATED"},
+    ],
+}
+_PRIOR_V2R19_PROTECTED_POLICY_FACTS: Final = {
+    "prior_v2r19_campaign_contract_id": (
+        "hegel-phase3a-q05b-shadow-retry-campaign-v2r19"
+    ),
+    "prior_v2r19_controller_commit": (
+        "6bc3f93cae23ff45e84b1d3d389594a52b756585"
+    ),
+    "prior_v2r19_controller_tree": (
+        "1367c4cb3ad3eb417831bba7fe893584a85413cc"
+    ),
+    "prior_v2r19_controller_parent_commit": (
+        "303c0fcd45bb46c00b79bb2112bd1d777364e5bb"
+    ),
+    "prior_v2r19_controller_parent_count": 1,
+    "prior_v2r19_controller_commit_object_raw_sha256": (
+        "b831dac22fcb1fed33e344c127933b43722d892173391b9278233bc23ed85c50"
+    ),
+    "prior_v2r19_controller_commit_object_byte_count": 297,
+    "prior_v2r19_target_commit": (
+        "303c0fcd45bb46c00b79bb2112bd1d777364e5bb"
+    ),
+    "prior_v2r19_target_tree": (
+        "d8a17e0ca7166eab5db46a87150c37b514f79648"
+    ),
+    "prior_v2r19_target_parent_commit": (
+        "1e609a3123b5b80d5dada42f18758d3598467d5c"
+    ),
+    "prior_v2r19_target_parent_count": 1,
+    "prior_v2r19_target_commit_object_raw_sha256": (
+        "d81a67bc0d54e88269fb1c2a6ac24306742d81b89b80b1715d5ac3053b13365a"
+    ),
+    "prior_v2r19_target_commit_object_byte_count": 299,
+    "prior_v2r19_target_source_binding_digest": (
+        "sha256:97963373458ffb333e959cfff6624d322c6da3f63cda66c0e444b7cb436d6713"
+    ),
+    "prior_v2r19_target_source_binding_canonical_object_raw_sha256": (
+        "df7d8cd2348491ae0805d878cc8d3340ad62cb3bf5a36d81e4cec01e1ca6e9df"
+    ),
+    "prior_v2r19_target_source_binding_canonical_object_byte_count": 3_125,
+    "prior_v2r19_target_contract_digest": (
+        "sha256:159b4e80b60d59005bd96b2b38136cb6504f0700319be0cd99886c3d487569f6"
+    ),
+    "prior_v2r19_target_config_static_policy_root": (
+        "67b0cb763fa2c81b256c1831fd5d75f4cc70ab315c90a1cbf1ac2111d29cba96"
+    ),
+    "prior_v2r19_campaign_source_binding_digest": (
+        "sha256:2c4d3c4255943ca534540354424581736231566b3c9d137529f55dad44dbca24"
+    ),
+    "prior_v2r19_campaign_source_binding_canonical_object_raw_sha256": (
+        "252c9a08f391b16a5120de642a20d8b538a3d3e9a153a57ffac23a32c8319726"
+    ),
+    "prior_v2r19_campaign_source_binding_canonical_object_byte_count": 2_001,
+    "prior_v2r19_campaign_source_files_in_exact_order": [
+        "config/phase3_q05b_shadow_retry_campaign_v2.json",
+        "docs/Hegel_Machine_Q05b_Shadow_Retry_Campaign_v2.md",
+        "src/hegel_machine/phase3_q05b_shadow_retry_campaign_v2.py",
+        "tests/test_phase3_q05b_shadow_retry_campaign_v2_core.py",
+        "tests/test_phase3_q05b_shadow_retry_campaign_v2_tool.py",
+        "tools/phase3_q05b_shadow_retry_campaign_v2.py",
+    ],
+    "prior_v2r19_campaign_source_raw_sha256_in_exact_order": [
+        "ea52a66d37aa79f13c78f9f57018463534eb7612cabbefabc9f31cfa38668901",
+        "b9c839ab3d0ee2709d779fad79662116959a8f3c2f986a062e2066fe8d6b6653",
+        "bf24baa461cc868c6ec71aef6bc119311ae2f1dad58c1d49badf08a83a94151a",
+        "03692e04b1f6aeeba339fc14386fd5d93d0b160bc8d5730db041568a79cc07ae",
+        "b51f45551a99371e24c92ec92b7ca30c1800f7092d9dae25bef180ca55705234",
+        "e325307044d42e170a18969b10227602dc57f320104aafb446e804747deb0daa",
+    ],
+    "prior_v2r19_campaign_source_byte_counts_in_exact_order": [
+        261_453,
+        132_895,
+        68_683,
+        126_721,
+        582_927,
+        876_112,
+    ],
+    "prior_v2r19_contract_digest": (
+        "sha256:6a61e405168da86e8bde8a3cbb666f22290ba3aeeac369c8323458a8ff127df2"
+    ),
+    "prior_v2r19_contract_raw_sha256": (
+        "ea52a66d37aa79f13c78f9f57018463534eb7612cabbefabc9f31cfa38668901"
+    ),
+    "prior_v2r19_contract_byte_count": 261_453,
+    "prior_v2r19_capsule_digest": (
+        "sha256:99b101d8b53ad8e4f3a41c474e092be06d931945b1558167c7cc3f6f2c0cef65"
+    ),
+    "prior_v2r19_capsule_canonical_raw_sha256": (
+        "6fa7e4d084f0b2c5bc0750af5c1b149a7f5e7c23edaf0105fe66a5a48ce1e1c5"
+    ),
+    "prior_v2r19_capsule_canonical_byte_count": 80_252,
+    "prior_v2r19_dependency_receipt_digest": (
+        "sha256:9e0a71eb8c3139a8b87d22fccf7c2285bb54ef64aad88c9f15e6bf08052a37ee"
+    ),
+    "prior_v2r19_dependency_receipt_raw_sha256": (
+        "336014dbb67383cb143e9ecd45b33217a8b3002312c2d8df2202a459c8cab2c1"
+    ),
+    "prior_v2r19_dependency_receipt_byte_count": 12_852,
+    "prior_v2r19_live_gauntlet_receipt_digest": (
+        "sha256:ebe39d99ff52a4c921f83421985b75ef5feb2f9f15732a3ae370be942861dd25"
+    ),
+    "prior_v2r19_live_gauntlet_receipt_raw_sha256": (
+        "0dbce2f2d8783608081f04273ec341d03d8e114617528c1d6f62a6b4e03827e1"
+    ),
+    "prior_v2r19_live_gauntlet_receipt_byte_count": 37_372,
+    "prior_v2r19_live_gauntlet_receipt_status": "PASS",
+    "prior_v2r19_decision_audit_policy_digest": (
+        "sha256:017a8ddf72295e8d6035da5c377317f8c3d7273ae83a8d8adf55871e4a00290c"
+    ),
+    "prior_v2r19_decision_audit_policy_canonical_raw_sha256": (
+        "8c127eba6b595c70c3b90cfaf956a8c855b1bd5f891e9aa2dc5cf6bec588e3c1"
+    ),
+    "prior_v2r19_decision_audit_policy_canonical_byte_count": 697,
+    "prior_v2r19_owner_confirmation_digest": (
+        "sha256:664d0b3ed9679163684cf1a72adf8c5cf58aaaf9d2f063c34c6d378735070783"
+    ),
+    "prior_v2r19_authorization_digest": (
+        "sha256:54f4729a548bc5e7bdfffd765e75c2a10b3539bd0969facf64c17517e4179089"
+    ),
+    "prior_v2r19_authorization_record_name": "campaign.owner-authorization.json",
+    "prior_v2r19_authorization_raw_sha256": (
+        "9bf8fec434e2391e20cd64307bb4c39bef20968c52c1cab8d780167e472d53c7"
+    ),
+    "prior_v2r19_authorization_byte_count": 24_835,
+    "prior_v2r19_authorization_status": "AUTHORIZED_EXACT_CAPSULE_ONCE",
+    "prior_v2r19_ledger_record_count": 8,
+    "prior_v2r19_ledger_record_names_in_exact_order": [
+        "campaign.intent.json",
+        "campaign.authorization-consumed.json",
+        "slot-01.intent.json",
+        "slot-01.consumed.json",
+        "slot-01.trajectory-binding.json",
+        "slot-01.outcome.json",
+        "campaign.terminal.json",
+        "campaign.completion.json",
+    ],
+    "prior_v2r19_ledger_record_digests_in_exact_order": [
+        "sha256:22afb478f90bca3adbdf94b17a83072ddec6412f6ed757b94cf9675e2e2fdd91",
+        "sha256:b520c2bd9c1cb3e23e955ab18a5253dcc14e56a526e996d33c1a8b5e38f2080d",
+        "sha256:82ea222614dc5b8c1167136826a70c34589fa06c28db83205aa10081e94de5d8",
+        "sha256:907bec9f38229b25c1c6055d96fd619d8170846cac029aebc96e6e4993e86a47",
+        "sha256:aee88ab27fcfed182a24d458c96f2a93d5a94f2eda620cac59fb78643dde23e8",
+        "sha256:f2fbb3f12a145e4deb7e09eb11c2b62a8750b493351ce8c238533947e8811015",
+        "sha256:f5f934d590fc9293858860fbd45bdd87956e7070a796cb4504ec99b2730c850c",
+        "sha256:e4c72012f6848461695ceb25efeeb4edea589e2570b035b33139e2b8686a6346",
+    ],
+    "prior_v2r19_ledger_raw_sha256_in_exact_order": [
+        "74f501075a88c2f586b59c59e5fa957079880a8687a2ba9498fccb31ff0ff621",
+        "989453420166066e83cdc5a98b3d9a8d24ca53ff8cfd2cb521b773991be1cd03",
+        "3b703bda800fdf6dd781f03b6bc9758c2e52445c69c39e8bdbb784944fb4f0f8",
+        "826a6cc8237a4d54743a1c7165345bb44d5a8ee414ea7ba498dc8acd2c4b512f",
+        "0c23b6dc6c4f594176ea7db32f10e0dbdb9df1d22b303c4edd5d893171e9f0e7",
+        "2f521a81df6df8de8c11f0af1f3d3c144a251712a2c43e7a6cf47dafd2da723c",
+        "1b48eff4ae5ad4ce68ada3b0c22249e0dee8228391831c377974618955595f24",
+        "e0a78507ee4fb2aad3013e38358bbe0a22dccc37fe4ebd11e0198d1dfc5b7658",
+    ],
+    "prior_v2r19_ledger_byte_counts_in_exact_order": [
+        81_114,
+        25_710,
+        8_730,
+        32_070,
+        32_400,
+        10_064,
+        1_683,
+        2_425,
+    ],
+    "prior_v2r19_ledger_predecessor_digests_in_exact_order": [
+        None,
+        "sha256:22afb478f90bca3adbdf94b17a83072ddec6412f6ed757b94cf9675e2e2fdd91",
+        "sha256:b520c2bd9c1cb3e23e955ab18a5253dcc14e56a526e996d33c1a8b5e38f2080d",
+        "sha256:82ea222614dc5b8c1167136826a70c34589fa06c28db83205aa10081e94de5d8",
+        "sha256:907bec9f38229b25c1c6055d96fd619d8170846cac029aebc96e6e4993e86a47",
+        "sha256:aee88ab27fcfed182a24d458c96f2a93d5a94f2eda620cac59fb78643dde23e8",
+        "sha256:f2fbb3f12a145e4deb7e09eb11c2b62a8750b493351ce8c238533947e8811015",
+        "sha256:f5f934d590fc9293858860fbd45bdd87956e7070a796cb4504ec99b2730c850c",
+    ],
+    "prior_v2r19_runtime_directory_mode": 0o700,
+    "prior_v2r19_runtime_record_mode": 0o444,
+    "prior_v2r19_runtime_owner_uid": 1_000,
+    "prior_v2r19_runtime_record_nlink": 1,
+    "prior_v2r19_authorization_consumption_count": 1,
+    "prior_v2r19_supervisor_invocation_count": 1,
+    "prior_v2r19_last_consumed_slot_id": "SLOT_01",
+    "prior_v2r19_slot_01_persisted_decision": "TERMINAL_NONRETRYABLE",
+    "prior_v2r19_slot_01_decision_audit": deepcopy(
+        _PRIOR_V2R19_DECISION_AUDIT
+    ),
+    "prior_v2r19_slot_01_external_trajectory_binding_digest": (
+        "sha256:69fcd3e977284ee605a69953e08228a7ea158b21eb984febf44de74b72a2f068"
+    ),
+    "prior_v2r19_slot_01_outcome_body_digest": (
+        "sha256:713e6825a00da4cefc89dc0908f4d0c56b06990049dc9919047b7bffa7ea95aa"
+    ),
+    "prior_v2r19_slot_01_external_result_raw_sha256": (
+        "7a320d5278adf275bef6678ff3788254380b4113168aeb5c5ff94af6cbc7f784"
+    ),
+    "prior_v2r19_slot_01_external_result_byte_count": 9_257,
+    "prior_v2r19_slot_01_trajectory_binding_raw_sha256": (
+        "1835134429b2c863fe8319cb8a16e4316303714471a32079e332bd2e532680ef"
+    ),
+    "prior_v2r19_slot_01_trajectory_binding_byte_count": 31_586,
+    "prior_v2r19_slot_01_trajectory_status": "COMPLETE_FAIL",
+    "prior_v2r19_slot_01_trajectory_producer_id": "Q05B_SUPERVISOR_V6",
+    "prior_v2r19_slot_01_trajectory_event_count": 16_142,
+    "prior_v2r19_slot_01_closed_span_count": 8_071,
+    "prior_v2r19_slot_01_open_span_count": 0,
+    "prior_v2r19_slot_01_torn_tail_present": False,
+    "prior_v2r19_slot_01_retained_failure_rows": 2,
+    "prior_v2r19_slot_01_retained_cleanup_rows": 4,
+    "prior_v2r19_slot_01_other_nonfailure_event_count": 16_136,
+    "prior_v2r19_slot_01_unpartitioned_event_count": 0,
+    "prior_v2r19_slot_01_canonical_event_sequence_digest": (
+        "sha256:b685c866ed35514fd85cb04be821c94710b79e5d85ba7af44ceb113aed5d2291"
+    ),
+    "prior_v2r19_slot_01_first_event_digest": (
+        "sha256:a9ede83d60335fdac09a485aa57aaef8b4d524feab49040d8dfcddd1fbe0b5d7"
+    ),
+    "prior_v2r19_slot_01_final_event_digest": (
+        "sha256:8750b96601936873e7abfeee88ed4832fc9d82150a998ccb432f0ff59c962922"
+    ),
+    "prior_v2r19_slot_01_partition_certificate_digest": (
+        "sha256:243f735b7124dc58b09287c44086ba9bb9e4248ade49c9ec59d2763c2dda5ca3"
+    ),
+    "prior_v2r19_slot_01_failure_rows_digest": (
+        "sha256:abadd5313edf52bae72656000c7cad50e0ea78099a23331f8a5dbc890891998a"
+    ),
+    "prior_v2r19_slot_01_cleanup_rows_digest": (
+        "sha256:29769251f562c9c1fa10e0640925a3923088b84a5eca5d0e600b840ede10bdc7"
+    ),
+    "prior_v2r19_slot_01_source_replay_after_root": (
+        "sha256:7090044b0acb559290a8f975d98b7675234ba4eeed5968448fa6726d8b0dd576"
+    ),
+    "prior_v2r19_slot_01_cleanup_replay_root": (
+        "sha256:9cac35cd3cd5304b56feae8ce30b8c7556e9a7bf4a1813bb0f509a82284dcf2e"
+    ),
+    "prior_v2r19_slot_01_stdout_byte_count": 667,
+    "prior_v2r19_slot_01_stdout_raw_sha256": (
+        "3f31c0fd71a16c9a02e4243809e601cd94d85ea61191df5be01feaa27180e320"
+    ),
+    "prior_v2r19_slot_01_stderr_byte_count": 0,
+    "prior_v2r19_slot_01_stderr_raw_sha256": (
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ),
+    "prior_v2r19_slot_01_successful_stage_substeps_in_exact_order": [
+        "FREEZE_SOURCE_IMAGES_AND_COMMAND_REGISTRY",
+        "MATERIALIZE_AND_SEAL_THREE_SOURCE_SNAPSHOTS_AND_CARGO",
+        "OFFLINE_RUST_TEST_AND_RELEASE_BUILD_AND_SEAL_BINARY",
+        "RUN_TWO_HELD_ENDPOINTS_IN_PARALLEL",
+        "SEAL_ENDPOINT_STDOUT_SIDECARS_CONTROLS_AND_RESOURCES",
+        "RUN_HELD_TRUSTED_HOST_SEMANTIC_REPLAY",
+        "CLOSE_HOST_RESOURCE_ISOLATION_NEGATIVE_VECTORS_AND_TOCTOU",
+        "BUILD_AND_STRICTLY_DECODE_NINETEEN_ROW_CANDIDATE",
+    ],
+    "prior_v2r19_slot_01_successful_stage_evidence_roots_in_exact_order": [
+        "df510abb03944c7103f5d0e0c023e515c64f4bbc554a6635b349810028ae93af",
+        "70c223f10aa6ee067334a31671e6925a7df7e31c6ac8e800fb84d46e34a4c297",
+        "dd526e7d82608ecf900f4d805351a70e954e677bb64aeb75f02c88d956eeadf3",
+        "0e38ea689f13b0be36788a1cb0f9f9c2c52f96ebde3ae6e70f3d137c42eab6a5",
+        "381e24a41cf53a4071d5efc0140632288b2813462fffe62d6ea5186f5f84641e",
+        "93f1ab995f113c48436c4b79138b32f61335f40dca13b9590bc7e881d84e1ab0",
+        "22bf83504e15a6e3bc803a08835d859f2fbe3830adb97f0cf01fa85359033e6c",
+        "2b56ab75dd6160f5d0f1bd9851207584bc1688facd75f55364ceb1e362b228a4",
+    ],
+    "prior_v2r19_slot_01_failed_stage": "STAGE_09",
+    "prior_v2r19_slot_01_failed_stage_substep": (
+        "ADD_PREDICATE20_AND_BUILD_CANONICAL_ARTIFACT_IN_MEMORY"
+    ),
+    "prior_v2r19_slot_01_stage_10_entered": False,
+    "prior_v2r19_slot_01_terminal_error_code": "FAIL_Q05B_DUAL_ARTIFACT",
+    "prior_v2r19_slot_01_terminal_error_detail": (
+        "final artifact build failed: REJECT_Q05B_ARTIFACT_SIZE: artifact "
+        "canonical bytes exceed frozen maximum: observed=4730892384; "
+        "maximum=2147483648"
+    ),
+    "prior_v2r19_slot_01_observed_artifact_canonical_bytes": 4_730_892_384,
+    "prior_v2r19_slot_01_frozen_artifact_max_canonical_bytes": 2_147_483_648,
+    "prior_v2r19_slot_01_resource_sample_statistics_in_exact_order": [
+        {
+            "actor_id": "PYTHON_ENDPOINT",
+            "sample_count": 1_780,
+            "maximum_gap_ns": 107_595_205,
+            "maximum_gap_sample_ordinal": 734,
+        },
+        {
+            "actor_id": "RUST_ENDPOINT",
+            "sample_count": 1_789,
+            "maximum_gap_ns": 172_122_508,
+            "maximum_gap_sample_ordinal": 5,
+        },
+        {
+            "actor_id": "TRUSTED_HOST_REPLAY",
+            "sample_count": 4_478,
+            "maximum_gap_ns": 128_841_899,
+            "maximum_gap_sample_ordinal": 3_203,
+        },
+    ],
+    "prior_v2r19_slot_01_resource_sample_count": 8_047,
+    "prior_v2r19_slot_01_gap_exceeded_count": 0,
+    "prior_v2r19_slot_01_gap_arithmetic_error_count": 0,
+    "prior_v2r19_slot_01_scheduling_selected_window_ordinal": 1,
+    "prior_v2r19_slot_01_scheduling_maximum_projected_gap_ns": 100_865_597,
+    "prior_v2r19_slot_01_scheduling_maximum_burst_drain_ns": 164_643_027,
+    "prior_v2r19_slot_01_scheduling_prefill_records_durable": 5_411,
+    "prior_v2r19_slot_01_scheduling_timed_records_durable": 6_000,
+    "prior_v2r19_slot_01_scheduling_retained_and_cleaned_records": 11_411,
+    "prior_v2r19_slot_02_invoked": False,
+    "prior_v2r19_slot_03_invoked": False,
+    "prior_v2r19_slot_02_and_slot_03_roots_untouched": True,
+    "prior_v2r19_artifact_publication_count": 0,
+    "prior_v2r19_q1_status": "NOT_RUN",
+    "prior_v2r19_q2_status": "NOT_RUN",
+    "prior_v2r19_terminal_status": "CAMPAIGN_FAILED_CLOSED_TERMINAL",
+    "prior_v2r19_terminal_body_digest": (
+        "sha256:a42976ba9e4ddb20dfbe8e3018df4af7a6baac45021ba69059e90c46e7765eba"
+    ),
+    "prior_v2r19_terminal_ledger_record_digest": (
+        "sha256:f5f934d590fc9293858860fbd45bdd87956e7070a796cb4504ec99b2730c850c"
+    ),
+    "prior_v2r19_completion_body_digest": (
+        "sha256:71495d4c0c4d6eb7f034b47d6b91678d4b79917e51ab0c211e719ac63f80a8e0"
+    ),
+    "prior_v2r19_campaign_completion_digest": (
+        "sha256:71495d4c0c4d6eb7f034b47d6b91678d4b79917e51ab0c211e719ac63f80a8e0"
+    ),
+    "prior_v2r19_completion_ledger_record_digest": (
+        "sha256:e4c72012f6848461695ceb25efeeb4edea589e2570b035b33139e2b8686a6346"
+    ),
+    "prior_v2r19_authoritative_verifier_status": (
+        "AUTHORITATIVE_CAMPAIGN_COMPLETION_VERIFIED"
+    ),
+    "prior_v2r19_completion_is_authoritative_final_commit": True,
+    "prior_v2r19_no_later_campaign_write_authorized": True,
+    "prior_v2r19_runtime_roots_in_exact_order": list(
+        _PRIOR_V2R19_RUNTIME_ROOTS
+    ),
+    "prior_v2r19_runtime_root_states_in_exact_order": list(
+        _PRIOR_V2R19_RUNTIME_ROOT_STATES_IN_EXACT_ORDER
+    ),
+    "prior_v2r19_runtime_root_count": 20,
+    "prior_v2r19_present_runtime_root_count": 6,
+    "prior_v2r19_absent_runtime_root_count": 14,
+    "prior_v2r19_post_terminal_observer_pyc_path": (
+        "/home/erzhu419/.local/state/hegel-machine/"
+        "q05b-shadow-retry-campaign-v2r19-slot-01-clone/Hegel Machine/src/"
+        "hegel_machine/__pycache__/phase3_q05b_trajectory_v2.cpython-310.pyc"
+    ),
+    "prior_v2r19_post_terminal_observer_pyc_raw_sha256": (
+        "0e4c3575a0f52fa8ecbd5a3c00164b8982e15041662e90b194e2217137caa60b"
+    ),
+    "prior_v2r19_post_terminal_observer_pyc_byte_count": 48_109,
+    "prior_v2r19_post_terminal_observer_pyc_mode": 0o600,
+    "prior_v2r19_post_terminal_observer_pyc_uid": 1_000,
+    "prior_v2r19_post_terminal_observer_pyc_gid": 1_000,
+    "prior_v2r19_post_terminal_observer_pyc_nlink": 1,
+    "prior_v2r19_post_terminal_observer_pyc_dev": 2_096,
+    "prior_v2r19_post_terminal_observer_pyc_ino": 4_770_468,
+    "prior_v2r19_post_terminal_observer_pyc_birth_and_atime": (
+        "2026-08-29 22:18:25.071796959+08:00"
+    ),
+    "prior_v2r19_post_terminal_observer_pyc_mtime_and_ctime": (
+        "2026-08-29 22:18:25.073880157+08:00"
+    ),
+    "prior_v2r19_post_terminal_observer_trigger": (
+        "POST_TERMINAL_AUDIT_IMPORTLIB_DIRECT_VERIFIER_LOAD_WITHOUT_"
+        "PYTHONDONTWRITEBYTECODE"
+    ),
+    "prior_v2r19_trajectory_binding_mtime_before_observer_incident": (
+        "2026-08-29 22:12:20.818603853+08:00"
+    ),
+    "prior_v2r19_source_replay_after_predates_observer_incident": True,
+    "prior_v2r19_post_terminal_observer_contamination_execution_authority": False,
+    "prior_v2r19_post_terminal_observer_pyc_exact_sha_checked_then_removed": True,
+    "prior_v2r19_post_terminal_observer_pycache_directory_removed_empty": True,
+    "prior_v2r19_post_terminal_observer_pyc_currently_absent": True,
+    "prior_v2r19_clone_git_status_after_cleanup": "",
+    "prior_v2r19_ledger_or_evidence_mutation_by_observer_incident": False,
+    "prior_v2r19_terminal_is_historical_nonresumable_evidence_only": True,
+    "prior_v2r19_campaign_root_open_allowed": False,
+    "prior_v2r19_campaign_root_access_allowed": False,
+    "prior_v2r19_capsule_authorization_or_ledger_reuse_allowed": False,
+}
 _PREAUTHORIZATION_HISTORICAL_READ_ONLY_REVIEW_SCOPE_IN_EXACT_ORDER: Final = (
     "SELECTED_V2_THROUGH_V2R8_LEDGER_OUTCOME_AND_TRAJECTORY_BINDING_JSON",
     "V2R8_EVIDENCE_FILENAMES_ONLY",
@@ -2981,9 +3411,10 @@ _PREAUTHORIZATION_HISTORICAL_READ_ONLY_REVIEW_SCOPE_IN_EXACT_ORDER: Final = (
     "V2R16_AUTHORIZATION_LEDGER_THREE_SLOT_TRAJECTORY_OUTCOME_TERMINAL_AND_COMPLETION_READ_ONLY_AUDIT",
     "V2R17_AUTHORIZATION_LEDGER_CHECKPOINT2_SCHEDULING_PENDING_AND_PREAUTHORIZATION_GAUNTLET_READ_ONLY_AUDIT",
     "V2R18_AUTHORIZATION_LEDGER_SLOT01_TRAJECTORY_OUTCOME_TERMINAL_COMPLETION_AND_CORRECTED_DECISION_READ_ONLY_AUDIT",
+    "V2R19_LIVE_GAUNTLET_AUTHORIZATION_LEDGER_SLOT01_TRAJECTORY_OUTCOME_TERMINAL_COMPLETION_SAMPLING_AND_POST_TERMINAL_OBSERVER_CONTAMINATION_READ_ONLY_AUDIT",
 )
 _HISTORICAL_CAMPAIGN_ROOT_PROHIBITION_SCOPE: Final = (
-    "V2R19_PREAUTHORIZATION_GAUNTLET_PREFLIGHT_RECORD_AUTHORIZATION_AND_RUN"
+    "V2R20_PREAUTHORIZATION_GAUNTLET_PREFLIGHT_RECORD_AUTHORIZATION_AND_RUN"
 )
 _PRIOR_V2R17_PREAUTHORIZATION_BOUND_SOURCE_WORKTREE_VALIDATION_V1: Final = {
     "schema_version": (
@@ -3145,8 +3576,8 @@ _PRIOR_V2R17_PREAUTHORIZATION_BOUND_SOURCE_WORKTREE_VALIDATION_V1: Final = {
     "was_execution_authority": False,
     "was_adoption_or_reuse_authority": False,
 }
-_CLONE_TARGET_REF_V2R19: Final = (
-    "refs/hegel/q05b-shadow-retry-v2r19-target"
+_CLONE_TARGET_REF_V2R20: Final = (
+    "refs/hegel/q05b-shadow-retry-v2r20-target"
 )
 _PRIOR_V2_PROTECTED_ROOTS: Final = (
     f"{_PRIOR_V2_STATE_PREFIX}-authorization",
@@ -3265,7 +3696,11 @@ _PRIOR_V2R18_PROTECTED_ROOTS: Final = (
     _PRIOR_V2R18_WORKTREE_ROOT,
     *_PRIOR_V2R18_RUNTIME_ROOTS,
 )
-_EXPECTED_PROTECTED_ROOTS_V2R19: Final = (
+_PRIOR_V2R19_PROTECTED_ROOTS: Final = (
+    _PRIOR_V2R19_WORKTREE_ROOT,
+    *_PRIOR_V2R19_RUNTIME_ROOTS,
+)
+_EXPECTED_PROTECTED_ROOTS_V2R20: Final = (
     "/home/erzhu419/mine_code/Asumption Agent",
     os.fspath(WORKTREE_ROOT),
     f"{_STATE_ROOT_V2}/q05b-shadow-trajectory-v2-dev-worktree",
@@ -3288,6 +3723,7 @@ _EXPECTED_PROTECTED_ROOTS_V2R19: Final = (
     *_PRIOR_V2R16_PROTECTED_ROOTS,
     *_PRIOR_V2R17_PROTECTED_ROOTS,
     *_PRIOR_V2R18_PROTECTED_ROOTS,
+    *_PRIOR_V2R19_PROTECTED_ROOTS,
     f"{_STATE_ROOT_V2}/m3-start-runtime-worktree",
     f"{_STATE_ROOT_V2}/q05b-attempt2-ledger-v1",
     f"{_STATE_ROOT_V2}/q05b-attempt-2-authorization",
@@ -3305,7 +3741,7 @@ _COMMIT: Final = re.compile(r"[0-9a-f]{40}\Z")
 _SAFE_NAME: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 _TRACE_ID: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:@/+-]{0,255}\Z")
 _MAX_JSON_BYTES: Final = 64 * 1024 * 1024
-_ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R19: Final = 2 * 1024 * 1024 * 1024
+_ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R20: Final = 2 * 1024 * 1024 * 1024
 _MAX_LEDGER_BYTES: Final = 4 * 1024 * 1024
 _GAP_CODE: Final = "HELD_ACTOR_GAP_EXCEEDED"
 _LEDGER_RECORD_NAMES_V2: Final = (
@@ -3476,7 +3912,7 @@ _PREAUTHORIZATION_LIVE_GAUNTLET_RECEIPT_SCHEMA_V2: Final = (
     "hegel-phase3a-q05b-preauthorization-live-admission-gauntlet-receipt/2"
 )
 _PREAUTHORIZATION_LIVE_GAUNTLET_RECEIPT_DOMAIN_V2: Final = (
-    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/"
+    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/"
     "PREAUTHORIZATION_LIVE_ADMISSION_GAUNTLET_RECEIPT/V2"
 )
 _AUTHORITATIVE_ERROR_RECEIPT_SCHEMAS_V2: Final = (
@@ -3529,19 +3965,19 @@ _PYTHON310_DEPENDENCY_PREFLIGHT_RECEIPT_SCHEMA_V1: Final = (
     "hegel-phase3a-q05b-shadow-retry-python310-dependency-preflight-receipt/1"
 )
 _PYTHON310_DEPENDENCY_PREFLIGHT_RECEIPT_DOMAIN_V1: Final = (
-    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/"
+    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/"
     "PYTHON310_VENDORED_TOMLI_CARGO_LOCK_PREFLIGHT_RECEIPT/V1"
 )
 _VENDORED_TOMLI_CLOSURE_DOMAIN_V1: Final = (
-    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/"
+    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/"
     "VENDORED_TOMLI_CLOSURE/V1"
 )
 _CARGO_LOCK_REGISTRY_PROJECTION_DOMAIN_V1: Final = (
-    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/"
+    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/"
     "CARGO_LOCK_REGISTRY_PACKAGE_PROJECTION/V1"
 )
 _DEPENDENCY_RUNTIME_ENVIRONMENT_DOMAIN_V1: Final = (
-    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/"
+    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/"
     "PYTHON310_DEPENDENCY_RUNTIME_ENVIRONMENT/V1"
 )
 _CONTROLLER_CHANGED_PATHS_FROM_TARGET_IN_EXACT_ORDER: Final = (
@@ -3552,7 +3988,7 @@ _CONTROLLER_CHANGED_PATHS_FROM_TARGET_IN_EXACT_ORDER: Final = (
     "tests/test_phase3_q05b_shadow_retry_campaign_v2_tool.py",
     "tools/phase3_q05b_shadow_retry_campaign_v2.py",
 )
-_TARGET_REQUIRED_PATHS_V2R19: Final = (
+_TARGET_REQUIRED_PATHS_V2R20: Final = (
     "config/phase3_q05b_dual_isolation_v2.json",
     "src/hegel_machine/_vendor/__init__.py",
     "src/hegel_machine/_vendor/tomli/LICENSE",
@@ -3600,7 +4036,7 @@ _VENDORED_TOMLI_CLOSURE_ROWS_V1: Final = (
     ),
 )
 _VENDORED_TOMLI_CLOSURE_DIGEST_V1: Final = (
-    "sha256:36f6aad68dfbc8ab661c73bc6972e0147e3aff74a1d220fb971367ae2289f4c2"
+    "sha256:303e4bde1183d5c7acd6bfd9700d6d459461f3f493af403e71ae11989a3afa2b"
 )
 _HOST_SOURCE_ALLOWLIST_COUNT_V1: Final = 55
 _HOST_SOURCE_ALLOWLIST_CANONICAL_LF_SHA256_V1: Final = (
@@ -3617,10 +4053,10 @@ _CARGO_LOCK_FORMAT_V1: Final = 4
 _CARGO_LOCK_PACKAGE_COUNT_V1: Final = 29
 _CARGO_LOCK_REGISTRY_PACKAGE_COUNT_V1: Final = 21
 _CARGO_LOCK_REGISTRY_PROJECTION_DIGEST_V1: Final = (
-    "sha256:ad4a01c6deeba9078364b5d1f2ad072e98e068ca0fba16ae0b0a28ea0f566963"
+    "sha256:04f19f25929025aa48052934b2e478e9c51cb9102f2267ac51f45fd0dba36fca"
 )
 _DEPENDENCY_PREFLIGHT_PYCACHE_PREFIX_V1: Final = (
-    "/nonexistent/hegel-q05b-v2r19-preflight-pyc"
+    "/nonexistent/hegel-q05b-v2r20-preflight-pyc"
 )
 _DEPENDENCY_PREFLIGHT_ARGV_PREFIX_V1: Final = (
     "/usr/bin/python3.10",
@@ -3639,6 +4075,38 @@ _DEPENDENCY_PREFLIGHT_LOADED_VENDORED_MODULES_V1: Final = (
     "hegel_machine._vendor.tomli._parser",
     "hegel_machine._vendor.tomli._re",
 )
+_ACTUAL_ARTIFACT_SCHEMA_VERSION_V2R20: Final = (
+    "hegel-phase3a-q05b-actual-artifact/3"
+)
+_ACTUAL_ARTIFACT_RESOURCE_TRANSCRIPT_REF_KEY_V2R20: Final = (
+    "resource_transcript_ref"
+)
+_ACTUAL_ARTIFACT_HELD_FINAL_SAMPLE_REF_KEY_V2R20: Final = (
+    "held_final_sample_ref"
+)
+_ACTUAL_ARTIFACT_RESOURCE_REFERENCE_KAT_PROJECTED_V2R20: Final = {
+    "held": {
+        "held_final_sample_ref": {
+            "container_id": f"{1:064x}",
+            "role_id": 1,
+            "sample_ordinal": 1,
+            "transcript_sha256": f"{4:064x}",
+        }
+    },
+    "transcript": {
+        "resource_transcript_ref": {
+            "container_id": f"{2:064x}",
+            "role_id": 2,
+            "transcript_sha256": f"{5:064x}",
+        }
+    },
+}
+_ACTUAL_ARTIFACT_RESOURCE_STREAM_ROOT_KAT_DOMAIN_V2R20: Final = (
+    "HEGEL/PHASE3/Q05B/ACTUAL/ARTIFACT_V3/RESOURCE_REFERENCE_STREAM_ROOT_KAT/V1"
+)
+_ACTUAL_ARTIFACT_RESOURCE_STREAM_ROOT_KAT_V2R20: Final = (
+    "218046f1ca7b47d780fb14bd3921356ebbd1477a1a65e3a4af08366138d3487d"
+)
 _PYTHON310_DEPENDENCY_PREFLIGHT_PROGRAM_V1: Final = (
     "import hashlib,importlib,importlib.util,json,os,runpy,sys\n"
     "from pathlib import Path\n"
@@ -3649,7 +4117,7 @@ _PYTHON310_DEPENDENCY_PREFLIGHT_PROGRAM_V1: Final = (
     "assert sys.flags.ignore_environment==1\n"
     "assert sys.dont_write_bytecode is True\n"
     "assert sys.flags.utf8_mode==1\n"
-    "assert sys.pycache_prefix=='/nonexistent/hegel-q05b-v2r19-preflight-pyc'\n"
+    "assert sys.pycache_prefix=='/nonexistent/hegel-q05b-v2r20-preflight-pyc'\n"
     "pycache_absent_before=not os.path.lexists(sys.pycache_prefix)\n"
     "assert pycache_absent_before\n"
     "assert importlib.util.find_spec('tomli') is None\n"
@@ -3665,6 +4133,25 @@ _PYTHON310_DEPENDENCY_PREFLIGHT_PROGRAM_V1: Final = (
     "pycache_absent_after=not os.path.lexists(sys.pycache_prefix)\n"
     "assert pycache_absent_after\n"
     "assert artifact.tomllib.loads('answer = 42\\n')=={'answer':42}\n"
+    "artifact_schema=artifact.ARTIFACT_SCHEMA_VERSION\n"
+    "transcript_ref_key=artifact.RESOURCE_TRANSCRIPT_REF_KEY\n"
+    "held_ref_key=artifact.HELD_FINAL_SAMPLE_REF_KEY\n"
+    "assert artifact_schema=='hegel-phase3a-q05b-actual-artifact/3'\n"
+    "assert transcript_ref_key=='resource_transcript_ref'\n"
+    "assert held_ref_key=='held_final_sample_ref'\n"
+    "resource_rows=[{'role_id':role,'container_id':format(role,'064x'),'transcript_sha256':format(role+3,'064x'),'live_sample_objects':[{'sample_ordinal':1,'kat_role_id':role}]} for role in (1,2,3)]\n"
+    "transcripts,held_samples=artifact._resource_reference_indexes_v3(resource_rows)\n"
+    "kat_full={'held':resource_rows[0]['live_sample_objects'][-1],'transcript':resource_rows[1]}\n"
+    "kat_projected=artifact._project_resource_references_v3(kat_full,transcripts,held_samples)\n"
+    "kat_expected={'held':{'held_final_sample_ref':{'container_id':format(1,'064x'),'role_id':1,'sample_ordinal':1,'transcript_sha256':format(4,'064x')}},'transcript':{'resource_transcript_ref':{'container_id':format(2,'064x'),'role_id':2,'transcript_sha256':format(5,'064x')}}}\n"
+    "assert kat_projected==kat_expected\n"
+    "kat_expanded=artifact._expand_resource_references_v3(kat_projected,transcripts,held_samples)\n"
+    "assert kat_expanded==kat_full\n"
+    "stream_domain='HEGEL/PHASE3/Q05B/ACTUAL/ARTIFACT_V3/RESOURCE_REFERENCE_STREAM_ROOT_KAT/V1'\n"
+    "stream_value={'resource_preimage':{'final_resource_rows':resource_rows}}\n"
+    "stream_root=artifact._json_root(stream_domain,stream_value).hex()\n"
+    "canonical_stream_root=hashlib.sha256(stream_domain.encode('ascii')+b'\\x00'+(json.dumps(stream_value,ensure_ascii=True,allow_nan=False,sort_keys=True,separators=(',',':'))+'\\n').encode('ascii')).hexdigest()\n"
+    "assert stream_root==canonical_stream_root=='218046f1ca7b47d780fb14bd3921356ebbd1477a1a65e3a4af08366138d3487d'\n"
     "raw=cargo_path.read_bytes()\n"
     "parsed=artifact.tomllib.loads(raw.decode('utf-8'))\n"
     "packages=parsed['package']\n"
@@ -3681,33 +4168,33 @@ _PYTHON310_DEPENDENCY_PREFLIGHT_PROGRAM_V1: Final = (
     "supervisor_cap=namespace['ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2']\n"
     "assert type(artifact_cap) is int and artifact_cap==2147483648\n"
     "assert type(supervisor_cap) is int and supervisor_cap==2147483648\n"
-    "result={'schema_version':'hegel-phase3a-q05b-shadow-retry-python310-dependency-preflight-child/1','status':'PASS','python_flags':{'isolated':sys.flags.isolated,'no_site':sys.flags.no_site,'ignore_environment':sys.flags.ignore_environment,'dont_write_bytecode':sys.dont_write_bytecode,'utf8_mode':sys.flags.utf8_mode,'pycache_prefix':sys.pycache_prefix,'pycache_prefix_absent_before_import':pycache_absent_before,'pycache_prefix_absent_after_import':pycache_absent_after},'tomli_top_level_spec_or_null':None,'artifact_module_name':artifact.__name__,'artifact_module_max_canonical_bytes':artifact_cap,'supervisor_tool_max_canonical_bytes':supervisor_cap,'vendored_tomli_module_name':artifact.tomllib.__name__,'top_level_tomli_in_sys_modules':False,'host_replay_module_name':host.__name__,'host_source_allowlist_count':len(allowlist),'host_source_allowlist_canonical_lf_sha256':hashlib.sha256(canonical(allowlist)).hexdigest(),'vendor_closure_rows':vendor_rows,'vendor_closure_digest':domain_digest('HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/VENDORED_TOMLI_CLOSURE/V1',vendor_rows),'loaded_vendored_modules':sorted(name for name in sys.modules if name.startswith('hegel_machine._vendor')),'cargo_lock':{'relative_path':'rust/q1_archive_projection_oracle/Cargo.lock','byte_count':len(raw),'raw_sha256':hashlib.sha256(raw).hexdigest(),'format':parsed.get('version'),'package_count':len(packages),'registry_package_count':len(registry_rows),'registry_package_rows':registry_rows,'registry_projection_digest':domain_digest('HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/CARGO_LOCK_REGISTRY_PACKAGE_PROJECTION/V1',registry_rows)}}\n"
+    "result={'schema_version':'hegel-phase3a-q05b-shadow-retry-python310-dependency-preflight-child/1','status':'PASS','python_flags':{'isolated':sys.flags.isolated,'no_site':sys.flags.no_site,'ignore_environment':sys.flags.ignore_environment,'dont_write_bytecode':sys.dont_write_bytecode,'utf8_mode':sys.flags.utf8_mode,'pycache_prefix':sys.pycache_prefix,'pycache_prefix_absent_before_import':pycache_absent_before,'pycache_prefix_absent_after_import':pycache_absent_after},'tomli_top_level_spec_or_null':None,'artifact_module_name':artifact.__name__,'artifact_schema_version':artifact_schema,'resource_transcript_ref_key':transcript_ref_key,'held_final_sample_ref_key':held_ref_key,'resource_reference_kat':{'resource_table_row_count':len(resource_rows),'resource_transcript_index_count':len(transcripts),'held_final_sample_index_count':len(held_samples),'projected':kat_projected,'round_trip_exact':kat_expanded==kat_full,'stream_root_domain':stream_domain,'stream_root':stream_root,'canonical_root_matches_streaming':stream_root==canonical_stream_root},'artifact_module_max_canonical_bytes':artifact_cap,'supervisor_tool_max_canonical_bytes':supervisor_cap,'vendored_tomli_module_name':artifact.tomllib.__name__,'top_level_tomli_in_sys_modules':False,'host_replay_module_name':host.__name__,'host_source_allowlist_count':len(allowlist),'host_source_allowlist_canonical_lf_sha256':hashlib.sha256(canonical(allowlist)).hexdigest(),'vendor_closure_rows':vendor_rows,'vendor_closure_digest':domain_digest('HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/VENDORED_TOMLI_CLOSURE/V1',vendor_rows),'loaded_vendored_modules':sorted(name for name in sys.modules if name.startswith('hegel_machine._vendor')),'cargo_lock':{'relative_path':'rust/q1_archive_projection_oracle/Cargo.lock','byte_count':len(raw),'raw_sha256':hashlib.sha256(raw).hexdigest(),'format':parsed.get('version'),'package_count':len(packages),'registry_package_count':len(registry_rows),'registry_package_rows':registry_rows,'registry_projection_digest':domain_digest('HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/CARGO_LOCK_REGISTRY_PACKAGE_PROJECTION/V1',registry_rows)}}\n"
     "sys.stdout.buffer.write(canonical(result))\n"
 )
-_EXPECTED_HASH_DOMAINS_V2R19: Final = {
-    "contract": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/CONTRACT/V2",
-    "campaign_source_binding": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/CAMPAIGN_SOURCE_BINDING/V2",
-    "capsule": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/CAPSULE/V2",
-    "authorization": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/AUTHORIZATION/V2",
-    "cargo_manifest": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/CARGO_MANIFEST/V2",
-    "ledger_record": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/LEDGER_RECORD/V2",
-    "trajectory_binding": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/TRAJECTORY_BINDING/V2",
-    "trajectory_event_payloads": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/EVENT_PAYLOADS/V2",
-    "trajectory_suffix": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/TRAJECTORY_SUFFIX/V2",
-    "trajectory_other_nonfailure": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/TRAJECTORY_OTHER_NONFAILURE/V2",
-    "trajectory_failure_rows": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/TRAJECTORY_FAILURE_ROWS/V2",
-    "trajectory_cleanup_rows": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/TRAJECTORY_CLEANUP_ROWS/V2",
-    "trajectory_partition_certificate": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/POST_ORIGIN_PARTITION_CERTIFICATE/V2",
-    "slot_outcome": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/SLOT_OUTCOME/V2",
-    "campaign_terminal": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/CAMPAIGN_TERMINAL/V2",
-    "campaign_completion": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/CAMPAIGN_COMPLETION/V2",
-    "decision_audit_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/DECISION_AUDIT_POLICY/V1",
+_EXPECTED_HASH_DOMAINS_V2R20: Final = {
+    "contract": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/CONTRACT/V2",
+    "campaign_source_binding": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/CAMPAIGN_SOURCE_BINDING/V2",
+    "capsule": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/CAPSULE/V2",
+    "authorization": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/AUTHORIZATION/V2",
+    "cargo_manifest": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/CARGO_MANIFEST/V2",
+    "ledger_record": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/LEDGER_RECORD/V2",
+    "trajectory_binding": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/TRAJECTORY_BINDING/V2",
+    "trajectory_event_payloads": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/EVENT_PAYLOADS/V2",
+    "trajectory_suffix": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/TRAJECTORY_SUFFIX/V2",
+    "trajectory_other_nonfailure": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/TRAJECTORY_OTHER_NONFAILURE/V2",
+    "trajectory_failure_rows": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/TRAJECTORY_FAILURE_ROWS/V2",
+    "trajectory_cleanup_rows": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/TRAJECTORY_CLEANUP_ROWS/V2",
+    "trajectory_partition_certificate": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/POST_ORIGIN_PARTITION_CERTIFICATE/V2",
+    "slot_outcome": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/SLOT_OUTCOME/V2",
+    "campaign_terminal": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/CAMPAIGN_TERMINAL/V2",
+    "campaign_completion": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/CAMPAIGN_COMPLETION/V2",
+    "decision_audit_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/DECISION_AUDIT_POLICY/V1",
 }
 _PREDICATE_DIGEST_DOMAINS: Final = {
-    "retry_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/RETRY_PREDICATE/V2",
-    "success_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/SUCCESS_PREDICATE/V2",
-    "ledger_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/LEDGER_STATE_REGISTRY/V2",
-    "forbidden_scope": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/FORBIDDEN_SCOPE/V2",
+    "retry_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/RETRY_PREDICATE/V2",
+    "success_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/SUCCESS_PREDICATE/V2",
+    "ledger_policy": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/LEDGER_STATE_REGISTRY/V2",
+    "forbidden_scope": "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/FORBIDDEN_SCOPE/V2",
 }
 _EXPECTED_FIXED_ENVIRONMENT: Final = {
     "DOCKER_CONFIG": "/nonexistent",
@@ -4002,7 +4489,7 @@ def _decision_audit_policy_v1(
     if type(domains) is not dict:
         _fail("FAIL_CAMPAIGN_CONTRACT", "decision audit domain differs")
     domain = domains.get("decision_audit_policy")
-    if domain != _EXPECTED_HASH_DOMAINS_V2R19["decision_audit_policy"]:
+    if domain != _EXPECTED_HASH_DOMAINS_V2R20["decision_audit_policy"]:
         _fail("FAIL_CAMPAIGN_CONTRACT", "decision audit domain differs")
     unsigned = deepcopy(policy)
     observed_digest = unsigned.pop("policy_digest")
@@ -4010,7 +4497,7 @@ def _decision_audit_policy_v1(
         source_binding = contract.get("campaign_source_binding")
         if (
             contract.get("status")
-            != "V2R19_SOURCE_IMPLEMENTED_AWAITING_FINAL_BINDING_NOT_EXECUTED"
+            != "V2R20_SOURCE_IMPLEMENTED_AWAITING_FINAL_BINDING_NOT_EXECUTED"
             or type(source_binding) is not dict
             or source_binding.get("status")
             != "CAMPAIGN_SOURCE_AWAITING_FINAL_BINDING"
@@ -4036,6 +4523,24 @@ def _prior_v2r18_historical_evidence_v2(
         _PRIOR_V2R18_PROTECTED_POLICY_FACTS,
     ):
         _fail("FAIL_CAMPAIGN_CONTRACT", "prior v2r18 evidence differs")
+    return evidence
+
+
+def _prior_v2r19_historical_evidence_v2(
+    contract: Mapping[str, object],
+) -> dict[str, object]:
+    protected = contract.get("protected_state_policy")
+    if type(protected) is not dict:
+        _fail("FAIL_CAMPAIGN_CONTRACT", "prior v2r19 evidence differs")
+    evidence = {
+        field: deepcopy(protected.get(field))
+        for field in _PRIOR_V2R19_PROTECTED_POLICY_FACTS
+    }
+    if not _json_value_type_exact_v1(
+        evidence,
+        _PRIOR_V2R19_PROTECTED_POLICY_FACTS,
+    ):
+        _fail("FAIL_CAMPAIGN_CONTRACT", "prior v2r19 evidence differs")
     return evidence
 
 
@@ -4775,7 +5280,7 @@ def _preauthorization_live_gauntlet_policy_v2(
     expected = {
         "schema_version": _PREAUTHORIZATION_LIVE_GAUNTLET_POLICY_SCHEMA_V2,
         "stable_external_root": (
-            f"{_STATE_ROOT_V2}/q05b-shadow-retry-campaign-v2r19-"
+            f"{_STATE_ROOT_V2}/q05b-shadow-retry-campaign-v2r20-"
             "preauthorization-live-gauntlet"
         ),
         "receipt_basename": "preauthorization-live-gauntlet.receipt.json",
@@ -5008,6 +5513,23 @@ def _python310_dependency_preflight_policy_v1(
         ),
         "artifact_relative_path": (
             "src/hegel_machine/phase3_q05b_actual_artifact_v2.py"
+        ),
+        "artifact_schema_version": _ACTUAL_ARTIFACT_SCHEMA_VERSION_V2R20,
+        "resource_transcript_ref_key": (
+            _ACTUAL_ARTIFACT_RESOURCE_TRANSCRIPT_REF_KEY_V2R20
+        ),
+        "held_final_sample_ref_key": (
+            _ACTUAL_ARTIFACT_HELD_FINAL_SAMPLE_REF_KEY_V2R20
+        ),
+        "resource_reference_table_row_count": 3,
+        "resource_reference_kat_projected": deepcopy(
+            _ACTUAL_ARTIFACT_RESOURCE_REFERENCE_KAT_PROJECTED_V2R20
+        ),
+        "resource_stream_root_kat_domain": (
+            _ACTUAL_ARTIFACT_RESOURCE_STREAM_ROOT_KAT_DOMAIN_V2R20
+        ),
+        "resource_stream_root_kat": (
+            _ACTUAL_ARTIFACT_RESOURCE_STREAM_ROOT_KAT_V2R20
         ),
         "vendored_tomli_module_name": "hegel_machine._vendor.tomli",
         "top_level_tomli_spec_expected_null": True,
@@ -8976,7 +9498,7 @@ def _source_binding_preimage(binding: Mapping[str, object]) -> dict[str, object]
     return result
 
 
-def _require_v2r19_instance_isolation_v2(
+def _require_v2r20_instance_isolation_v2(
     contract: Mapping[str, object],
 ) -> None:
     protected = contract.get("protected_state_policy")
@@ -9070,6 +9592,7 @@ def _require_v2r19_instance_isolation_v2(
         *_PRIOR_V2R16_PROTECTED_POLICY_FACTS,
         *_PRIOR_V2R17_PROTECTED_POLICY_FACTS,
         *_PRIOR_V2R18_PROTECTED_POLICY_FACTS,
+        *_PRIOR_V2R19_PROTECTED_POLICY_FACTS,
         "preauthorization_historical_read_only_review_count",
         "preauthorization_historical_read_only_review_scope_in_exact_order",
         "preauthorization_historical_read_only_review_write_or_mutation_count",
@@ -9093,12 +9616,12 @@ def _require_v2r19_instance_isolation_v2(
     slots = contract.get("slot_registry")
     if (
         contract.get("contract_id")
-        != "hegel-phase3a-q05b-shadow-retry-campaign-v2r19"
+        != "hegel-phase3a-q05b-shadow-retry-campaign-v2r20"
         or type(protected) is not dict
         or set(protected) != expected_protected_fields
-        or len(_EXPECTED_PROTECTED_ROOTS_V2R19) != 373
+        or len(_EXPECTED_PROTECTED_ROOTS_V2R20) != 394
         or protected.get("protected_roots_in_exact_order")
-        != list(_EXPECTED_PROTECTED_ROOTS_V2R19)
+        != list(_EXPECTED_PROTECTED_ROOTS_V2R20)
         or protected.get("prior_v2_campaign_contract_id")
         != _PRIOR_V2_CONTRACT_ID
         or protected.get("prior_v2_capsule_digest")
@@ -9261,8 +9784,12 @@ def _require_v2r19_instance_isolation_v2(
             not _json_value_type_exact_v1(protected.get(field), expected)
             for field, expected in _PRIOR_V2R18_PROTECTED_POLICY_FACTS.items()
         )
+        or any(
+            not _json_value_type_exact_v1(protected.get(field), expected)
+            for field, expected in _PRIOR_V2R19_PROTECTED_POLICY_FACTS.items()
+        )
         or protected.get("preauthorization_historical_read_only_review_count")
-        != 10
+        != 11
         or protected.get(
             "preauthorization_historical_read_only_review_scope_in_exact_order"
         )
@@ -9367,14 +9894,17 @@ def _require_v2r19_instance_isolation_v2(
                 "prior_v2r18_campaign_root_open_allowed",
                 "prior_v2r18_campaign_root_access_allowed",
                 "prior_v2r18_capsule_authorization_or_ledger_reuse_allowed",
+                "prior_v2r19_campaign_root_open_allowed",
+                "prior_v2r19_campaign_root_access_allowed",
+                "prior_v2r19_capsule_authorization_or_ledger_reuse_allowed",
             )
         )
         or type(fixed) is not dict
-        or fixed.get("authorization_root") != f"{_V2R19_STATE_PREFIX}-authorization"
-        or fixed.get("ledger_root") != f"{_V2R19_STATE_PREFIX}-ledger"
+        or fixed.get("authorization_root") != f"{_V2R20_STATE_PREFIX}-authorization"
+        or fixed.get("ledger_root") != f"{_V2R20_STATE_PREFIX}-ledger"
         or type(authorization) is not dict
         or authorization.get("authorization_root")
-        != f"{_V2R19_STATE_PREFIX}-authorization"
+        != f"{_V2R20_STATE_PREFIX}-authorization"
         or authorization.get("future_confirmation_must_bind_in_exact_order")
         != [
             "contract_id",
@@ -9388,6 +9918,7 @@ def _require_v2r19_instance_isolation_v2(
             "decision_audit_policy_digest",
             "decision_audit_core_schema_version",
             "prior_v2r18_historical_evidence",
+            "prior_v2r19_historical_evidence",
             "authorization_root",
             "ledger_root",
             "three_exact_slot_path_records",
@@ -9423,7 +9954,7 @@ def _require_v2r19_instance_isolation_v2(
             "FRESHLY_REPLAYED_PYTHON310_VENDORED_TOMLI_CARGO_LOCK_PREFLIGHT_"
             "RECEIPT_AND_FINAL_CLEAN_CONTROLLER_BOUND_PREAUTHORIZATION_LIVE_GAUNTLET_"
             "RECEIPT_AND_EXACT_DECISION_AUDIT_POLICY_DIGEST_AND_CORE_SCHEMA_AND_FULL_"
-            "EXACT_PRIOR_V2R18_HISTORICAL_EVIDENCE_PROJECTION_FOR_AT_MOST_THREE_"
+            "EXACT_PRIOR_V2R18_AND_V2R19_HISTORICAL_EVIDENCE_PROJECTIONS_FOR_AT_MOST_THREE_"
             "STRICTLY_SEQUENTIAL_SHADOW_SLOTS_WITH_"
             "RETRY_ONLY_ON_THE_EXACT_GAP_PREDICATE;EXACT_PRECONSUMPTION_PENDING_"
             "VALIDATION_REENTRY_IS_NOT_CAMPAIGN_EXECUTION_AUTHORIZATION_"
@@ -9445,18 +9976,18 @@ def _require_v2r19_instance_isolation_v2(
             "NOT_AUTHORIZE_ANY_OTHER_CRASH_STATE"
         )
         or type(ledger) is not dict
-        or ledger.get("ledger_root") != f"{_V2R19_STATE_PREFIX}-ledger"
+        or ledger.get("ledger_root") != f"{_V2R20_STATE_PREFIX}-ledger"
         or type(slots) is not list
         or len(slots) != 3
     ):
         _fail(
             "FAIL_CAMPAIGN_CONTRACT",
-            "v2r19 instance or historical protected-state isolation differs",
+            "v2r20 instance or historical protected-state isolation differs",
         )
     for ordinal, slot in enumerate(slots, start=1):
         if type(slot) is not dict:
-            _fail("FAIL_CAMPAIGN_CONTRACT", "v2r19 slot isolation differs")
-        prefix = f"{_V2R19_STATE_PREFIX}-slot-{ordinal:02d}"
+            _fail("FAIL_CAMPAIGN_CONTRACT", "v2r20 slot isolation differs")
+        prefix = f"{_V2R20_STATE_PREFIX}-slot-{ordinal:02d}"
         clone = f"{prefix}-clone"
         evidence = f"{prefix}-evidence"
         if (
@@ -9473,14 +10004,14 @@ def _require_v2r19_instance_isolation_v2(
             or slot.get("evidence_root") != evidence
             or slot.get("trace_root") != f"{prefix}-trace"
             or slot.get("trajectory_trace_id")
-            != f"q05b-shadow-retry-campaign-v2r19-slot-{ordinal:02d}"
+            != f"q05b-shadow-retry-campaign-v2r20-slot-{ordinal:02d}"
             or slot.get("stdout_path") != f"{evidence}/supervisor.stdout"
             or slot.get("stderr_path") != f"{evidence}/supervisor.stderr"
             or slot.get("external_trajectory_binding_path")
             != f"{evidence}/trajectory-binding.json"
             or slot.get("slot_result_path") != f"{evidence}/slot-result.json"
         ):
-            _fail("FAIL_CAMPAIGN_CONTRACT", "v2r19 slot isolation differs")
+            _fail("FAIL_CAMPAIGN_CONTRACT", "v2r20 slot isolation differs")
 
 
 def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
@@ -9497,7 +10028,7 @@ def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
         contract.get("schema_version")
         != "hegel-phase3a-q05b-shadow-retry-campaign/2"
         or contract.get("contract_id")
-        != "hegel-phase3a-q05b-shadow-retry-campaign-v2r19"
+        != "hegel-phase3a-q05b-shadow-retry-campaign-v2r20"
     ):
         _fail("FAIL_CAMPAIGN_CONTRACT", "campaign contract header differs")
     expected_top_fields = {
@@ -9528,7 +10059,7 @@ def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
     }
     if set(contract) != expected_top_fields:
         _fail("FAIL_CAMPAIGN_CONTRACT", "campaign contract fields differ")
-    _require_v2r19_instance_isolation_v2(contract)
+    _require_v2r20_instance_isolation_v2(contract)
     canonicalization = contract["canonicalization"]
     authority = contract["authority_boundary"]
     execution_policy = contract["execution_policy"]
@@ -9547,7 +10078,7 @@ def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
             "authorization_digest",
         ]
         or contract["status"]
-        != "V2R19_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
+        != "V2R20_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
         or contract["claim_scope"]
         != "THREE_SLOT_SHADOW_ONLY_NONADOPTING_Q05B_RETRY_CAMPAIGN"
         or type(authority) is not dict
@@ -9567,7 +10098,7 @@ def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
         != "/usr/bin/python3.10"
         or type(execution_policy.get("artifact_max_canonical_bytes")) is not int
         or execution_policy.get("artifact_max_canonical_bytes")
-        != _ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R19
+        != _ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R20
         or execution_policy.get("git_executable") != "/usr/bin/git"
         or execution_policy.get("docker_executable") != "/usr/bin/docker"
         or execution_policy.get("docker_host")
@@ -9577,7 +10108,7 @@ def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
         or execution_policy.get("clone_source_project_relative_path")
         != PROJECT_ROOT.name
         or execution_policy.get("clone_target_ref_name")
-        != _CLONE_TARGET_REF_V2R19
+        != _CLONE_TARGET_REF_V2R20
         or execution_policy.get("clone_ref_policy")
         != (
             "EXACTLY_ONE_PERMANENT_INTERNAL_REF_BOUND_TO_TARGET_COMMIT_A;"
@@ -9628,7 +10159,7 @@ def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
     _scheduling_admission_pending_policy_v1(contract)
     _python310_dependency_preflight_policy_v1(contract)
     domains = contract.get("hash_domains")
-    if type(domains) is not dict or domains != _EXPECTED_HASH_DOMAINS_V2R19:
+    if type(domains) is not dict or domains != _EXPECTED_HASH_DOMAINS_V2R20:
         _fail("FAIL_CAMPAIGN_CONTRACT", "campaign hash-domain registry differs")
     _decision_audit_policy_v1(contract)
     trajectory_policy = contract.get("trajectory_binding_policy")
@@ -9640,7 +10171,7 @@ def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
     ):
         _fail(
             "FAIL_CAMPAIGN_CONTRACT",
-            "trajectory binding domain or v2r19 producer differs",
+            "trajectory binding domain or v2r20 producer differs",
         )
     digest_fields = {
         "retry_policy": "retry_predicate_digest",
@@ -9701,10 +10232,10 @@ def load_phase3_q05b_shadow_retry_campaign_contract_v2() -> dict[str, object]:
     if (
         type(target_binding) is not dict
         or target_binding.get("required_paths_in_exact_order")
-        != list(_TARGET_REQUIRED_PATHS_V2R19)
+        != list(_TARGET_REQUIRED_PATHS_V2R20)
         or type(target_binding.get("required_raw_sha256_by_path")) is not dict
         or list(target_binding["required_raw_sha256_by_path"])
-        != list(_TARGET_REQUIRED_PATHS_V2R19)
+        != list(_TARGET_REQUIRED_PATHS_V2R20)
     ):
         _fail("FAIL_CAMPAIGN_SOURCE", "target path registry differs")
     file_specs = (
@@ -10799,7 +11330,7 @@ def _scan_tree(
     maximum_entries: int = 100_000,
     maximum_total_bytes: int = 4 * 1024 * 1024 * 1024,
     manifest_domain: str = (
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/CARGO_MANIFEST/V2"
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/CARGO_MANIFEST/V2"
     ),
     allowed_uids: Sequence[int] | None = None,
     reject_group_or_world_writable: bool = False,
@@ -12040,7 +12571,7 @@ def _host_cpu_topology_affinity_admission_v2r17(
     dependency_gate_invocation_count: int,
     target_fsck_invocation_count: int,
 ) -> dict[str, object]:
-    """Probe the exact Target C host masks and restore the caller's affinity."""
+    """Probe the exact Target D host masks and restore the caller's affinity."""
 
     policy = _host_cpu_topology_affinity_policy_v2r17(contract)
     required = list(policy["required_effective_cpus_in_exact_order"])
@@ -12168,7 +12699,7 @@ def _host_cpu_topology_affinity_admission_v2r17(
     if missing:
         pause(
             "REQUIRED_EFFECTIVE_CPU_SET_UNAVAILABLE",
-            "Target C requires effective CPUs 0-31 before authorization or "
+            "Target D requires effective CPUs 0-31 before authorization or "
             "ledger/slot state mutation; "
             f"missing={missing}",
             receipt(
@@ -12320,7 +12851,7 @@ def _host_cpu_topology_affinity_admission_v2r17(
     if probe_failed:
         pause(
             "EXACT_BIND_OR_REPLAY_FAILED_WITH_EXACT_RESTORE",
-            "Target C host affinity bind/readback probe failed after exact "
+            "Target D host affinity bind/readback probe failed after exact "
             "original-affinity restore",
             evidence,
         )
@@ -13044,6 +13575,10 @@ def _python310_dependency_preflight_v1(
         "python_flags",
         "tomli_top_level_spec_or_null",
         "artifact_module_name",
+        "artifact_schema_version",
+        "resource_transcript_ref_key",
+        "held_final_sample_ref_key",
+        "resource_reference_kat",
         "artifact_module_max_canonical_bytes",
         "supervisor_tool_max_canonical_bytes",
         "vendored_tomli_module_name",
@@ -13119,6 +13654,29 @@ def _python310_dependency_preflight_v1(
         or child.get("tomli_top_level_spec_or_null") is not None
         or child.get("artifact_module_name")
         != "hegel_machine.phase3_q05b_actual_artifact_v2"
+        or child.get("artifact_schema_version")
+        != policy["artifact_schema_version"]
+        or child.get("resource_transcript_ref_key")
+        != policy["resource_transcript_ref_key"]
+        or child.get("held_final_sample_ref_key")
+        != policy["held_final_sample_ref_key"]
+        or not _json_value_type_exact_v1(
+            child.get("resource_reference_kat"),
+            {
+                "resource_table_row_count": policy[
+                    "resource_reference_table_row_count"
+                ],
+                "resource_transcript_index_count": 3,
+                "held_final_sample_index_count": 3,
+                "projected": policy["resource_reference_kat_projected"],
+                "round_trip_exact": True,
+                "stream_root_domain": policy[
+                    "resource_stream_root_kat_domain"
+                ],
+                "stream_root": policy["resource_stream_root_kat"],
+                "canonical_root_matches_streaming": True,
+            },
+        )
         or type(child.get("artifact_module_max_canonical_bytes")) is not int
         or child.get("artifact_module_max_canonical_bytes")
         != execution["artifact_max_canonical_bytes"]
@@ -13126,9 +13684,9 @@ def _python310_dependency_preflight_v1(
         or child.get("supervisor_tool_max_canonical_bytes")
         != execution["artifact_max_canonical_bytes"]
         or child.get("artifact_module_max_canonical_bytes")
-        != _ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R19
+        != _ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R20
         or child.get("supervisor_tool_max_canonical_bytes")
-        != _ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R19
+        != _ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R20
         or child.get("vendored_tomli_module_name")
         != policy["vendored_tomli_module_name"]
         or child.get("top_level_tomli_in_sys_modules") is not False
@@ -13202,6 +13760,10 @@ def _python310_dependency_preflight_v1(
             "raw_sha256": sha256(artifact_raw).hexdigest(),
         },
         "artifact_module_name": child["artifact_module_name"],
+        "artifact_schema_version": child["artifact_schema_version"],
+        "resource_transcript_ref_key": child["resource_transcript_ref_key"],
+        "held_final_sample_ref_key": child["held_final_sample_ref_key"],
+        "resource_reference_kat": deepcopy(child["resource_reference_kat"]),
         "artifact_module_max_canonical_bytes": child[
             "artifact_module_max_canonical_bytes"
         ],
@@ -13287,6 +13849,10 @@ def _validate_dependency_receipt_v1(
         "supervisor_source",
         "artifact_source",
         "artifact_module_name",
+        "artifact_schema_version",
+        "resource_transcript_ref_key",
+        "held_final_sample_ref_key",
+        "resource_reference_kat",
         "artifact_module_max_canonical_bytes",
         "supervisor_tool_max_canonical_bytes",
         "host_replay_module_name",
@@ -13419,6 +13985,29 @@ def _validate_dependency_receipt_v1(
         }
         or receipt.get("artifact_module_name")
         != "hegel_machine.phase3_q05b_actual_artifact_v2"
+        or receipt.get("artifact_schema_version")
+        != policy["artifact_schema_version"]
+        or receipt.get("resource_transcript_ref_key")
+        != policy["resource_transcript_ref_key"]
+        or receipt.get("held_final_sample_ref_key")
+        != policy["held_final_sample_ref_key"]
+        or not _json_value_type_exact_v1(
+            receipt.get("resource_reference_kat"),
+            {
+                "resource_table_row_count": policy[
+                    "resource_reference_table_row_count"
+                ],
+                "resource_transcript_index_count": 3,
+                "held_final_sample_index_count": 3,
+                "projected": policy["resource_reference_kat_projected"],
+                "round_trip_exact": True,
+                "stream_root_domain": policy[
+                    "resource_stream_root_kat_domain"
+                ],
+                "stream_root": policy["resource_stream_root_kat"],
+                "canonical_root_matches_streaming": True,
+            },
+        )
         or type(receipt.get("artifact_module_max_canonical_bytes")) is not int
         or receipt.get("artifact_module_max_canonical_bytes")
         != execution["artifact_max_canonical_bytes"]
@@ -13426,9 +14015,9 @@ def _validate_dependency_receipt_v1(
         or receipt.get("supervisor_tool_max_canonical_bytes")
         != execution["artifact_max_canonical_bytes"]
         or receipt.get("artifact_module_max_canonical_bytes")
-        != _ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R19
+        != _ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R20
         or receipt.get("supervisor_tool_max_canonical_bytes")
-        != _ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R19
+        != _ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R20
         or receipt.get("host_replay_module_name")
         != "hegel_machine.phase3_q05b_host_replay_v1"
         or receipt.get("vendored_tomli_module_name")
@@ -13526,6 +14115,16 @@ def _validate_dependency_receipt_v1(
             "tomli_top_level_spec_or_null"
         ],
         "artifact_module_name": receipt["artifact_module_name"],
+        "artifact_schema_version": receipt["artifact_schema_version"],
+        "resource_transcript_ref_key": receipt[
+            "resource_transcript_ref_key"
+        ],
+        "held_final_sample_ref_key": receipt[
+            "held_final_sample_ref_key"
+        ],
+        "resource_reference_kat": deepcopy(
+            receipt["resource_reference_kat"]
+        ),
         "artifact_module_max_canonical_bytes": receipt[
             "artifact_module_max_canonical_bytes"
         ],
@@ -13734,7 +14333,7 @@ def _verify_clone(
         label="slot clone no-alias tree replay",
         maximum_entries=200_000,
         manifest_domain=(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/CLONE_TREE_MANIFEST/V2"
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/CLONE_TREE_MANIFEST/V2"
         ),
     )
     artifact_relative = artifact.relative_to(clone_root).as_posix()
@@ -13744,7 +14343,7 @@ def _verify_clone(
         if row["relative_path"] != artifact_relative
     ]
     closure_without_artifact = _domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/"
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/"
         "CLONE_CLOSURE_WITHOUT_ARTIFACT/V2",
         closure_rows_without_artifact,
     )
@@ -14112,7 +14711,7 @@ def _slot_roots_absence_evidence(
     return {
         **preimage,
         "root": _domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/"
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/"
             "SLOT_ROOT_ABSENCE/V2",
             preimage,
         ),
@@ -14254,6 +14853,9 @@ def _build_capsule(
     prior_v2r18_historical_evidence = (
         _prior_v2r18_historical_evidence_v2(contract)
     )
+    prior_v2r19_historical_evidence = (
+        _prior_v2r19_historical_evidence_v2(contract)
+    )
     python_identity = executable_identities.get("python")
     validated_dependency_receipt = _validate_dependency_receipt_v1(
         contract,
@@ -14361,6 +14963,9 @@ def _build_capsule(
         "prior_v2r18_historical_evidence": deepcopy(
             prior_v2r18_historical_evidence
         ),
+        "prior_v2r19_historical_evidence": deepcopy(
+            prior_v2r19_historical_evidence
+        ),
         "cargo_source_identity": deepcopy(dict(cargo_identity)),
         "freshness_parent_identities": deepcopy(
             dict(freshness_parent_identities)
@@ -14416,6 +15021,9 @@ def _authorization_template(
     )
     prior_v2r18_historical_evidence = (
         _prior_v2r18_historical_evidence_v2(contract)
+    )
+    prior_v2r19_historical_evidence = (
+        _prior_v2r19_historical_evidence_v2(contract)
     )
     dependency_receipt = capsule.get(
         "python310_dependency_preflight_receipt"
@@ -14529,10 +15137,14 @@ def _authorization_template(
             capsule.get("prior_v2r18_historical_evidence"),
             prior_v2r18_historical_evidence,
         )
+        or not _json_value_type_exact_v1(
+            capsule.get("prior_v2r19_historical_evidence"),
+            prior_v2r19_historical_evidence,
+        )
     ):
         _fail(
             "FAIL_CAMPAIGN_AUTHORIZATION",
-            "decision audit or prior v2r18 capsule binding differs",
+            "decision audit or prior v2r18/v2r19 capsule binding differs",
         )
     confirmation = {
         "campaign_id": contract["contract_id"],
@@ -14559,6 +15171,9 @@ def _authorization_template(
         ],
         "prior_v2r18_historical_evidence": deepcopy(
             prior_v2r18_historical_evidence
+        ),
+        "prior_v2r19_historical_evidence": deepcopy(
+            prior_v2r19_historical_evidence
         ),
         "authorization_root": contract["fixed_external_roots"][
             "authorization_root"
@@ -14622,7 +15237,7 @@ def _authorization_template(
         ],
     }
     owner_confirmation_digest = _domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/OWNER_CONFIRMATION/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/OWNER_CONFIRMATION/V2",
         confirmation,
     )
     value: dict[str, object] = {
@@ -15511,7 +16126,7 @@ def _artifact_replay(
             parent_fd,
             artifact_path.name,
             "supervisor artifact",
-            _ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R19,
+            _ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R20,
             required_mode=0o444,
         )
     except ShadowRetryCampaignErrorV2 as error:
@@ -15639,7 +16254,7 @@ def _publish_external_artifact(
     raw, source_status = _read_regular_nofollow(
         source,
         "supervisor artifact export source",
-        _ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R19,
+        _ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R20,
         required_mode=0o444,
     )
     expected_source_identity = artifact_evidence.get(
@@ -15676,14 +16291,14 @@ def _publish_external_artifact(
             target.name,
             raw,
             publication_label="external-artifact",
-            maximum_bytes=_ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R19,
+            maximum_bytes=_ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R20,
             known_failure_code="FAIL_CAMPAIGN_ARTIFACT",
         )
         replay, status = _read_regular_at_nofollow(
             root_fd,
             target.name,
             "external artifact",
-            _ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R19,
+            _ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R20,
             required_mode=0o444,
         )
         _postpublication_directory_identity(
@@ -15818,7 +16433,7 @@ def _replay_external_artifact(
             descriptor,
             target.name,
             "external artifact final replay",
-            _ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R19,
+            _ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R20,
             required_mode=0o444,
         )
         if (
@@ -16931,7 +17546,7 @@ def _source_state_replay(
         "evidence": evidence,
         "clone_closure_rows_internal": clone_closure_rows,
         "root": _domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/SOURCE_REPLAY/V2",
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/SOURCE_REPLAY/V2",
             evidence,
         ),
     }
@@ -16969,7 +17584,7 @@ def _safe_source_state_replay(
             "error_or_null": detail,
             "evidence": evidence,
             "root": _domain_digest(
-                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/SOURCE_REPLAY/V2",
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/SOURCE_REPLAY/V2",
                 evidence,
             ),
         }
@@ -16984,7 +17599,7 @@ def _augment_source_replay_with_alias_rows(
     evidence["nonalias_directory_identities"] = deepcopy(dict(alias_rows))
     result["evidence"] = evidence
     result["root"] = _domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/SOURCE_REPLAY/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/SOURCE_REPLAY/V2",
         evidence,
     )
     return result
@@ -17067,7 +17682,7 @@ def _enforce_clone_closure(
         "error_or_null": detail,
         "evidence": evidence,
         "root": _domain_digest(
-                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/SOURCE_REPLAY/V2",
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/SOURCE_REPLAY/V2",
             evidence,
         ),
     }
@@ -17395,7 +18010,7 @@ def _cleanup_replay_evidence(
     return {
         "preimage": value,
         "root": _domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/CLEANUP_REPLAY/V2",
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/CLEANUP_REPLAY/V2",
             value,
         ),
     }
@@ -17996,7 +18611,7 @@ def _bounded_command_binding_is_exact_v2(
             ("slot cloned ref enumeration", ["-C", clone, "for-each-ref", "--format=%(refname)"]),
             ("slot clone reflog expiration", ["-C", clone, "reflog", "expire", "--expire=now", "--all"]),
             ("slot clone exact closure prune", ["-C", clone, "gc", "--prune=now", "--quiet"]),
-            ("slot clone target graph ref creation", ["-C", clone, "update-ref", _CLONE_TARGET_REF_V2R19, commit]),
+            ("slot clone target graph ref creation", ["-C", clone, "update-ref", _CLONE_TARGET_REF_V2R20, commit]),
             ("slot clone reachable commit-graph write", ["-C", clone, "commit-graph", "write", "--reachable"]),
         )
         for name, arguments in clone_rows:
@@ -18815,7 +19430,7 @@ def _verify_slot_absence_evidence_semantics_v2(
     evidence = _verify_domain_root_v2(
         value,
         domain=(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/"
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/"
             "SLOT_ROOT_ABSENCE/V2"
         ),
         root_field="root",
@@ -19283,7 +19898,7 @@ def _verify_ledger_state_semantics_v2(
         before = _verify_domain_root_v2(
             binding["source_replay_before_evidence"],
             domain=(
-                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/"
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/"
                 "SOURCE_REPLAY/V2"
             ),
             root_field="root",
@@ -19293,7 +19908,7 @@ def _verify_ledger_state_semantics_v2(
         after = _verify_domain_root_v2(
             binding["source_replay_after_evidence"],
             domain=(
-                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/"
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/"
                 "SOURCE_REPLAY/V2"
             ),
             root_field="root",
@@ -19318,7 +19933,7 @@ def _verify_ledger_state_semantics_v2(
         cleanup = _verify_domain_root_v2(
             binding["cleanup_replay_evidence"],
             domain=(
-                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/"
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/"
                 "CLEANUP_REPLAY/V2"
             ),
             root_field="root",
@@ -20541,7 +21156,7 @@ def _run_one_slot(
                 "error_or_null": detail,
                 "evidence": {"error": detail},
                 "root": _domain_digest(
-                    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/SOURCE_REPLAY/V2",
+                    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/SOURCE_REPLAY/V2",
                     {"error": detail},
                 ),
             }
@@ -20707,7 +21322,7 @@ def _run_one_slot(
                 "error_or_null": detail,
                 "evidence": {"error": detail},
                 "root": _domain_digest(
-                    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/SOURCE_REPLAY/V2",
+                    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/SOURCE_REPLAY/V2",
                     {"error": detail},
                 ),
             }

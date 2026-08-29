@@ -166,6 +166,21 @@ def _dependency_preflight_receipt_stub(
             ],
         },
         "artifact_module_name": "hegel_machine.phase3_q05b_actual_artifact_v2",
+        "artifact_schema_version": policy["artifact_schema_version"],
+        "resource_transcript_ref_key": policy["resource_transcript_ref_key"],
+        "held_final_sample_ref_key": policy["held_final_sample_ref_key"],
+        "resource_reference_kat": {
+            "resource_table_row_count": policy[
+                "resource_reference_table_row_count"
+            ],
+            "resource_transcript_index_count": 3,
+            "held_final_sample_index_count": 3,
+            "projected": deepcopy(policy["resource_reference_kat_projected"]),
+            "round_trip_exact": True,
+            "stream_root_domain": policy["resource_stream_root_kat_domain"],
+            "stream_root": policy["resource_stream_root_kat"],
+            "canonical_root_matches_streaming": True,
+        },
         "artifact_module_max_canonical_bytes": execution[
             "artifact_max_canonical_bytes"
         ],
@@ -249,6 +264,16 @@ def _dependency_preflight_receipt_stub(
             "tomli_top_level_spec_or_null"
         ],
         "artifact_module_name": receipt["artifact_module_name"],
+        "artifact_schema_version": receipt["artifact_schema_version"],
+        "resource_transcript_ref_key": receipt[
+            "resource_transcript_ref_key"
+        ],
+        "held_final_sample_ref_key": receipt[
+            "held_final_sample_ref_key"
+        ],
+        "resource_reference_kat": deepcopy(
+            receipt["resource_reference_kat"]
+        ),
         "artifact_module_max_canonical_bytes": receipt[
             "artifact_module_max_canonical_bytes"
         ],
@@ -303,6 +328,7 @@ def _capsule_stub(
     decision_audit = contract["decision_audit_policy"]
     assert type(decision_audit) is dict
     prior_v2r18 = TOOL._prior_v2r18_historical_evidence_v2(contract)
+    prior_v2r19 = TOOL._prior_v2r19_historical_evidence_v2(contract)
     controller_git = {
         "commit": dependency["controller_commit"],
         "parent": target["target_supervisor_commit"],
@@ -360,6 +386,7 @@ def _capsule_stub(
             "core_audit_schema_version"
         ],
         "prior_v2r18_historical_evidence": prior_v2r18,
+        "prior_v2r19_historical_evidence": prior_v2r19,
     }
 
 
@@ -369,7 +396,7 @@ def _contract() -> dict[str, object]:
     assert type(value) is dict
     contract = deepcopy(value)
     final_status = (
-        "V2R19_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
+        "V2R20_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
     )
     contract["status"] = final_status
     contract["contract_digest"] = _tagged("contract")
@@ -1206,7 +1233,7 @@ def _admitted_scheduling_burst(
     return result
 
 
-def test_v2r19_target_c_scheduling_policy_is_exact_and_rejects_old_profiles(
+def test_v2r20_target_d_scheduling_policy_is_exact_and_rejects_old_profiles(
 ) -> None:
     contract = _contract()
     policy = TOOL._scheduling_admission_policy_v2(contract)
@@ -3685,7 +3712,7 @@ def _source_replay(label: str) -> dict[str, object]:
         "error_or_null": None,
         "evidence": evidence,
         "root": TOOL._domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/SOURCE_REPLAY/V2",
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/SOURCE_REPLAY/V2",
             evidence,
         ),
     }
@@ -3702,7 +3729,7 @@ def _future_freshness() -> dict[str, object]:
     unsigned = deepcopy(value)
     unsigned.pop("root")
     value["root"] = TOOL._domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/SLOT_ROOT_ABSENCE/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/SLOT_ROOT_ABSENCE/V2",
         unsigned,
     )
     return value
@@ -3852,7 +3879,7 @@ def _slot_absence_evidence(
     unsigned = deepcopy(value)
     unsigned.pop("root")
     value["root"] = TOOL._domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/SLOT_ROOT_ABSENCE/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/SLOT_ROOT_ABSENCE/V2",
         unsigned,
     )
     return value
@@ -3863,7 +3890,7 @@ def _cleanup_replay() -> dict[str, object]:
     return {
         "preimage": preimage,
         "root": TOOL._domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/CLEANUP_REPLAY/V2",
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/CLEANUP_REPLAY/V2",
             preimage,
         ),
     }
@@ -3943,6 +3970,21 @@ def test_python310_dependency_preflight_real_isolated_child_kat(
     assert receipt["child_receipt"][
         "supervisor_tool_max_canonical_bytes"
     ] == 2_147_483_648
+    assert receipt["artifact_schema_version"] == (
+        "hegel-phase3a-q05b-actual-artifact/3"
+    )
+    assert receipt["resource_transcript_ref_key"] == "resource_transcript_ref"
+    assert receipt["held_final_sample_ref_key"] == "held_final_sample_ref"
+    assert receipt["resource_reference_kat"] == {
+        "resource_table_row_count": 3,
+        "resource_transcript_index_count": 3,
+        "held_final_sample_index_count": 3,
+        "projected": policy["resource_reference_kat_projected"],
+        "round_trip_exact": True,
+        "stream_root_domain": policy["resource_stream_root_kat_domain"],
+        "stream_root": policy["resource_stream_root_kat"],
+        "canonical_root_matches_streaming": True,
+    }
     assert receipt["tomli_top_level_spec_or_null"] is None
     assert receipt["top_level_tomli_in_sys_modules"] is False
     assert receipt["python_flags"][
@@ -4018,6 +4060,9 @@ def test_python310_dependency_preflight_process_failure_is_closed(
         "pycache",
         "artifact-module-cap",
         "supervisor-tool-cap",
+        "artifact-schema",
+        "resource-ref-key",
+        "resource-stream-root",
         "whitespace",
         "multiple-lf",
     ),
@@ -4056,6 +4101,14 @@ def test_python310_dependency_preflight_child_receipt_drift_is_closed(
             child["artifact_module_max_canonical_bytes"] = 67_108_864
         elif mutation == "supervisor-tool-cap":
             child["supervisor_tool_max_canonical_bytes"] = 2_147_483_649
+        elif mutation == "artifact-schema":
+            child["artifact_schema_version"] = (
+                "hegel-phase3a-q05b-actual-artifact/2"
+            )
+        elif mutation == "resource-ref-key":
+            child["resource_transcript_ref_key"] = "forged_ref"
+        elif mutation == "resource-stream-root":
+            child["resource_reference_kat"]["stream_root"] = "0" * 64
         result["stdout"] = TOOL._canonical_json_bytes(child)
         if mutation == "whitespace":
             result["stdout"] = b" " + result["stdout"]
@@ -4141,8 +4194,8 @@ def test_artifact_capacity_contract_rejects_old_overflow_and_bool_values(
 def test_artifact_capacity_is_used_only_at_five_outer_artifact_io_points(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    cap_name = "_ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R19"
-    assert TOOL._ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R19 == 2_147_483_648
+    cap_name = "_ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R20"
+    assert TOOL._ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R20 == 2_147_483_648
     assert TOOL._MAX_JSON_BYTES == 67_108_864
     assert CORE.CAPTURE_MAX_BYTES_V2 == 67_108_864
     assert _contract()["execution_policy"]["stdout_max_bytes"] == 67_108_864
@@ -4624,16 +4677,16 @@ def test_host_cpu_affinity_admission_binds_exact_masks_and_restores(
     ) is True
 
 
-def test_host_cpu_and_gap_policy_cross_bind_pinned_target_c_constants() -> None:
+def test_host_cpu_and_gap_policy_cross_bind_pinned_target_d_constants() -> None:
     contract = TOOL._pretty_json(
         TOOL.CONFIG_PATH.read_bytes(),
-        "Target C CPU and gap cross-binding KAT contract",
+        "Target D CPU and gap cross-binding KAT contract",
     )
     assert type(contract) is dict
     target = contract["target_commit_a_binding"]
     assert type(target) is dict
     assert target["target_supervisor_commit"] == (
-        "303c0fcd45bb46c00b79bb2112bd1d777364e5bb"
+        "5b38581f43c9fd88692b4f3c2cf8f13e8a0ca24b"
     )
     relative = "tools/phase3_q05b_dual_qualification_v2.py"
     target_tool = ROOT / relative
@@ -6285,27 +6338,27 @@ def test_slot_registry_accepts_exact_contract_and_rejects_path_drift() -> None:
     assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
 
 
-def test_v2r19_instance_isolation_rejects_all_historical_authority_and_roots() -> None:
+def test_v2r20_instance_isolation_rejects_all_historical_authority_and_roots() -> None:
     raw_contract = TOOL._pretty_json(
         TOOL.CONFIG_PATH.read_bytes(),
-        "v2r19 target Git object closure",
+        "v2r20 target Git object closure",
     )
     assert type(raw_contract) is dict
     target_git_object_closure = raw_contract["target_commit_a_binding"]
     assert type(target_git_object_closure) is dict
     assert target_git_object_closure["status"] == "TARGET_COMMIT_A_BOUND"
     assert target_git_object_closure["target_supervisor_commit"] == (
-        "303c0fcd45bb46c00b79bb2112bd1d777364e5bb"
+        "5b38581f43c9fd88692b4f3c2cf8f13e8a0ca24b"
     )
 
     contract = _contract()
-    TOOL._require_v2r19_instance_isolation_v2(contract)
+    TOOL._require_v2r20_instance_isolation_v2(contract)
     protected = contract["protected_state_policy"]
     assert type(protected) is dict
     protected_roots = protected["protected_roots_in_exact_order"]
     assert type(protected_roots) is list
-    assert len(protected_roots) == 373
-    assert protected_roots == list(TOOL._EXPECTED_PROTECTED_ROOTS_V2R19)
+    assert len(protected_roots) == 394
+    assert protected_roots == list(TOOL._EXPECTED_PROTECTED_ROOTS_V2R20)
     assert set(TOOL._PRIOR_V2_PROTECTED_ROOTS).issubset(protected_roots)
     assert set(TOOL._PRIOR_V2R1_PROTECTED_ROOTS).issubset(protected_roots)
     assert set(TOOL._PRIOR_V2R2_PROTECTED_ROOTS).issubset(protected_roots)
@@ -6325,6 +6378,7 @@ def test_v2r19_instance_isolation_rejects_all_historical_authority_and_roots() -
     assert set(TOOL._PRIOR_V2R16_PROTECTED_ROOTS).issubset(protected_roots)
     assert set(TOOL._PRIOR_V2R17_PROTECTED_ROOTS).issubset(protected_roots)
     assert set(TOOL._PRIOR_V2R18_PROTECTED_ROOTS).issubset(protected_roots)
+    assert set(TOOL._PRIOR_V2R19_PROTECTED_ROOTS).issubset(protected_roots)
     assert protected["prior_v2r1_campaign_contract_id"] == (
         TOOL._PRIOR_V2R1_CONTRACT_ID
     )
@@ -6487,6 +6541,10 @@ def test_v2r19_instance_isolation_rejects_all_historical_authority_and_roots() -
         field: protected[field]
         for field in TOOL._PRIOR_V2R18_PROTECTED_POLICY_FACTS
     } == TOOL._PRIOR_V2R18_PROTECTED_POLICY_FACTS
+    assert {
+        field: protected[field]
+        for field in TOOL._PRIOR_V2R19_PROTECTED_POLICY_FACTS
+    } == TOOL._PRIOR_V2R19_PROTECTED_POLICY_FACTS
     assert len(TOOL._PRIOR_V2R6_RUNTIME_ROOTS) == 17
     assert TOOL._PRIOR_V2R6_PROTECTED_ROOTS == (
         TOOL._PRIOR_V2R6_WORKTREE_ROOT,
@@ -6602,7 +6660,18 @@ def test_v2r19_instance_isolation_rejects_all_historical_authority_and_roots() -
         TOOL._PRIOR_V2R18_WORKTREE_ROOT,
         *TOOL._PRIOR_V2R18_RUNTIME_ROOTS,
     )
-    assert protected["preauthorization_historical_read_only_review_count"] == 10
+    assert len(TOOL._PRIOR_V2R19_RUNTIME_ROOTS) == 20
+    assert TOOL._PRIOR_V2R19_RUNTIME_ROOT_STATES_IN_EXACT_ORDER.count(
+        "PRESENT"
+    ) == 6
+    assert TOOL._PRIOR_V2R19_RUNTIME_ROOT_STATES_IN_EXACT_ORDER.count(
+        "ABSENT"
+    ) == 14
+    assert TOOL._PRIOR_V2R19_PROTECTED_ROOTS == (
+        TOOL._PRIOR_V2R19_WORKTREE_ROOT,
+        *TOOL._PRIOR_V2R19_RUNTIME_ROOTS,
+    )
+    assert protected["preauthorization_historical_read_only_review_count"] == 11
     assert protected[
         "preauthorization_historical_read_only_review_scope_in_exact_order"
     ] == list(TOOL._PREAUTHORIZATION_HISTORICAL_READ_ONLY_REVIEW_SCOPE_IN_EXACT_ORDER)
@@ -6732,7 +6801,7 @@ def test_v2r19_instance_isolation_rejects_all_historical_authority_and_roots() -
     for ordinal, slot in enumerate(slots, start=1):
         assert type(slot) is dict
         assert slot["trajectory_trace_id"] == (
-            f"q05b-shadow-retry-campaign-v2r19-slot-{ordinal:02d}"
+            f"q05b-shadow-retry-campaign-v2r20-slot-{ordinal:02d}"
         )
         active_roots.update(
             {
@@ -7256,7 +7325,7 @@ def test_v2r19_instance_isolation_rejects_all_historical_authority_and_roots() -
 
     for mutation in mutations:
         with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
-            TOOL._require_v2r19_instance_isolation_v2(mutation)
+            TOOL._require_v2r20_instance_isolation_v2(mutation)
         assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
 
 
@@ -7301,7 +7370,50 @@ def test_v2r18_terminal_history_is_frozen_and_never_resumable() -> None:
         mutation = deepcopy(contract)
         mutation["protected_state_policy"][field] = forged_value
         with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
-            TOOL._require_v2r19_instance_isolation_v2(mutation)
+            TOOL._require_v2r20_instance_isolation_v2(mutation)
+        assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
+
+
+def test_v2r19_terminal_size_failure_history_and_observer_cleanup_are_frozen() -> None:
+    contract = _contract()
+    protected = contract["protected_state_policy"]
+    assert type(protected) is dict
+    assert TOOL._prior_v2r19_historical_evidence_v2(contract) == (
+        TOOL._PRIOR_V2R19_PROTECTED_POLICY_FACTS
+    )
+    assert protected["prior_v2r19_slot_01_decision_audit"] == (
+        TOOL._PRIOR_V2R19_DECISION_AUDIT
+    )
+    assert protected["prior_v2r19_slot_01_resource_sample_count"] == 8_047
+    assert protected["prior_v2r19_slot_01_gap_exceeded_count"] == 0
+    assert protected["prior_v2r19_slot_01_failed_stage"] == "STAGE_09"
+    assert protected["prior_v2r19_slot_01_stage_10_entered"] is False
+    assert protected[
+        "prior_v2r19_slot_01_observed_artifact_canonical_bytes"
+    ] == 4_730_892_384
+    assert protected[
+        "prior_v2r19_slot_01_frozen_artifact_max_canonical_bytes"
+    ] == 2_147_483_648
+    assert protected["prior_v2r19_slot_02_invoked"] is False
+    assert protected["prior_v2r19_slot_03_invoked"] is False
+    assert protected["prior_v2r19_post_terminal_observer_pyc_currently_absent"] is True
+    assert protected[
+        "prior_v2r19_post_terminal_observer_contamination_execution_authority"
+    ] is False
+    assert protected[
+        "prior_v2r19_terminal_is_historical_nonresumable_evidence_only"
+    ] is True
+    for field, forged_value in (
+        ("prior_v2r19_slot_01_resource_sample_count", 8_046),
+        ("prior_v2r19_slot_01_failed_stage", "STAGE_08"),
+        ("prior_v2r19_slot_02_invoked", True),
+        ("prior_v2r19_post_terminal_observer_pyc_currently_absent", False),
+        ("prior_v2r19_campaign_root_open_allowed", True),
+    ):
+        mutation = deepcopy(contract)
+        mutation["protected_state_policy"][field] = forged_value
+        with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+            TOOL._require_v2r20_instance_isolation_v2(mutation)
         assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
 
 
@@ -7525,21 +7637,21 @@ def test_prior_v2r6_source_binding_failure_precedes_every_later_preflight_stage(
     ]
 
 
-def test_v2r19_contract_is_source_only_or_exact_final_bound() -> None:
+def test_v2r20_contract_is_source_only_or_exact_final_bound() -> None:
     raw_contract = TOOL._pretty_json(
         TOOL.CONFIG_PATH.read_bytes(),
-        "v2r19 campaign contract binding phase",
+        "v2r20 campaign contract binding phase",
     )
     assert type(raw_contract) is dict
     assert raw_contract["contract_id"] == (
-        "hegel-phase3a-q05b-shadow-retry-campaign-v2r19"
+        "hegel-phase3a-q05b-shadow-retry-campaign-v2r20"
     )
     assert raw_contract["target_commit_a_binding"]["target_supervisor_commit"] == (
-        "303c0fcd45bb46c00b79bb2112bd1d777364e5bb"
+        "5b38581f43c9fd88692b4f3c2cf8f13e8a0ca24b"
     )
     assert raw_contract["implementation_state"]["target_commit_a_bound"] is True
     if raw_contract["status"] == (
-        "V2R19_SOURCE_IMPLEMENTED_AWAITING_FINAL_BINDING_NOT_EXECUTED"
+        "V2R20_SOURCE_IMPLEMENTED_AWAITING_FINAL_BINDING_NOT_EXECUTED"
     ):
         assert raw_contract["campaign_source_binding"]["status"] == (
             "CAMPAIGN_SOURCE_AWAITING_FINAL_BINDING"
@@ -7551,7 +7663,7 @@ def test_v2r19_contract_is_source_only_or_exact_final_bound() -> None:
         assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
     else:
         assert raw_contract["status"] == (
-            "V2R19_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
+            "V2R20_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
         )
         assert raw_contract["campaign_source_binding"]["status"] == (
             "CAMPAIGN_SOURCE_BOUND"
@@ -7586,30 +7698,30 @@ def test_contract_loader_rejects_rehashed_v2r2_trajectory_producer(
         TOOL.load_phase3_q05b_shadow_retry_campaign_contract_v2()
     assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
     assert error.value.detail == (
-        "trajectory binding domain or v2r19 producer differs"
+        "trajectory binding domain or v2r20 producer differs"
     )
 
 
-def test_v2r19_target_c_binding_is_exact() -> None:
+def test_v2r20_target_d_binding_is_exact() -> None:
     contract = TOOL._pretty_json(
         TOOL.CONFIG_PATH.read_bytes(),
-        "v2r19 exact Target C binding",
+        "v2r20 exact Target D binding",
     )
     assert type(contract) is dict
     target = contract["target_commit_a_binding"]
     assert type(target) is dict
     assert target["status"] == "TARGET_COMMIT_A_BOUND"
     assert target["target_supervisor_commit"] == (
-        "303c0fcd45bb46c00b79bb2112bd1d777364e5bb"
+        "5b38581f43c9fd88692b4f3c2cf8f13e8a0ca24b"
     )
     assert target["target_supervisor_tree"] == (
-        "d8a17e0ca7166eab5db46a87150c37b514f79648"
+        "d979f4e102ed16d99dd6eaf9d2c9a77ce3a9c57c"
     )
     assert target["target_supervisor_parent_commit"] == (
-        "1e609a3123b5b80d5dada42f18758d3598467d5c"
+        "6bc3f93cae23ff45e84b1d3d389594a52b756585"
     )
     assert target["target_supervisor_commit_object_raw_sha256"] == (
-        "d81a67bc0d54e88269fb1c2a6ac24306742d81b89b80b1715d5ac3053b13365a"
+        "b02b3932f3a769be39065d62919bd5fbec0c6dd888ce0cd6dd06e2aa186b61bb"
     )
     literal_required_paths = [
         "config/phase3_q05b_dual_isolation_v2.json",
@@ -7654,13 +7766,13 @@ def test_v2r19_target_c_binding_is_exact() -> None:
             "9983f41a5d4888dc280cb96018ed79534fc9c1cd9bfedbee14ce689dad7c8847"
         ),
         "src/hegel_machine/phase3_q05b_actual_artifact_v2.py": (
-            "58dacb866739b44f60a7096433354be6867e429a70e70283f4127ad093d8f3fc"
+            "e9e9eee9907bcb46728c87bf56830773c4de1a405b7bc5eb2545be10c1963e74"
         ),
         "src/hegel_machine/phase3_q05b_trajectory_v2.py": (
             "634826c13ee51c72c6e87c7b40f657ee315c3a91446ee12f2d807cdccc3030ed"
         ),
         "tests/test_phase3_q05b_dual_qualification_v2.py": (
-            "b6399b614516b5fd8e1810a3aa9ea3b123282d9405ea889b8857a6bf9710a5d5"
+            "95ac497e4ab210ca8d87466394ca1cb23430ae5e0ee1b743312250f7597ea18e"
         ),
         "tests/test_phase3_q05b_trajectory_v2.py": (
             "e38453beaa2ade4fc6a24669bfc2cccf7ded7b31bde63fac0d4e9fe3730f84b6"
@@ -7676,7 +7788,7 @@ def test_v2r19_target_c_binding_is_exact() -> None:
         "sha256:159b4e80b60d59005bd96b2b38136cb6504f0700319be0cd99886c3d487569f6"
     )
     assert target["target_source_binding_digest"] == (
-        "sha256:97963373458ffb333e959cfff6624d322c6da3f63cda66c0e444b7cb436d6713"
+        "sha256:f62edc3b4efdd169c0ac71b1570c5dd83aa19af19a23d258f63d89397264bb61"
     )
     docker_labels = contract["execution_policy"]["target_docker_label_policy"]
     assert docker_labels["source_commit_label_value"] == (
@@ -7684,7 +7796,7 @@ def test_v2r19_target_c_binding_is_exact() -> None:
     )
     assert docker_labels["pre_spawn_and_post_reap_readonly_absence_filter"] == (
         "label=org.hegel.q05b.source_commit="
-        "303c0fcd45bb46c00b79bb2112bd1d777364e5bb"
+        "5b38581f43c9fd88692b4f3c2cf8f13e8a0ca24b"
     )
     dependency = contract["execution_policy"][
         "python310_dependency_preflight_gate"
@@ -7764,10 +7876,10 @@ def test_target_git_object_source_digest_strips_lf_and_rejects_lf_value() -> Non
         + canonical_with_lf
     ).hexdigest()
     assert correct == (
-        "sha256:97963373458ffb333e959cfff6624d322c6da3f63cda66c0e444b7cb436d6713"
+        "sha256:f62edc3b4efdd169c0ac71b1570c5dd83aa19af19a23d258f63d89397264bb61"
     )
     assert wrong_with_lf == (
-        "sha256:53f745d1f5e2d2116cc8bce6e8b5a4907c711a830afb00ca3606efa5ffe19a6b"
+        "sha256:6d8bbecc4176d967d55b80a752a5b852b82a396332740a9bd93023dc7b77c97c"
     )
     assert target["target_source_binding_digest"] == correct != wrong_with_lf
     replay = TOOL._verify_target_git_objects(contract)
@@ -7802,11 +7914,11 @@ def test_controller_commit_b_exact_six_path_registry_is_literal() -> None:
     ] == literal
 
 
-def test_v2r19_instance_domains_preserve_version_neutral_domains() -> None:
+def test_v2r20_instance_domains_preserve_version_neutral_domains() -> None:
     contract = _contract()
-    assert contract["hash_domains"] == TOOL._EXPECTED_HASH_DOMAINS_V2R19
+    assert contract["hash_domains"] == TOOL._EXPECTED_HASH_DOMAINS_V2R20
     assert all(
-        "SHADOW_RETRY_CAMPAIGN_V2R19" in domain
+        "SHADOW_RETRY_CAMPAIGN_V2R20" in domain
         for domain in contract["hash_domains"].values()
     )
     assert TOOL._TARGET_SOURCE_BINDING_DOMAIN == (
@@ -7821,7 +7933,7 @@ def test_v2r19_instance_domains_preserve_version_neutral_domains() -> None:
     )
 
 
-def test_v2r19_decision_audit_policy_is_exact_and_rehashed_drift_rejects() -> None:
+def test_v2r20_decision_audit_policy_is_exact_and_rehashed_drift_rejects() -> None:
     contract = _contract()
     policy = TOOL._decision_audit_policy_v1(contract)
     assert policy["schema_version"] == TOOL._DECISION_AUDIT_POLICY_SCHEMA_V1
@@ -7871,68 +7983,68 @@ def test_v2r19_decision_audit_policy_is_exact_and_rehashed_drift_rejects() -> No
 
 @pytest.mark.parametrize(
     "domain_name",
-    tuple(TOOL._EXPECTED_HASH_DOMAINS_V2R19),
+    tuple(TOOL._EXPECTED_HASH_DOMAINS_V2R20),
 )
-def test_contract_loader_rejects_rehashed_v2r19_hash_domain_drift(
+def test_contract_loader_rejects_rehashed_v2r20_hash_domain_drift(
     monkeypatch: pytest.MonkeyPatch,
     domain_name: str,
 ) -> None:
     base = _contract()
-    expected_domain = TOOL._EXPECTED_HASH_DOMAINS_V2R19[domain_name]
+    expected_domain = TOOL._EXPECTED_HASH_DOMAINS_V2R20[domain_name]
     prior_v2_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R19",
+        "SHADOW_RETRY_CAMPAIGN_V2R20",
         "SHADOW_RETRY_CAMPAIGN",
     )
     prior_v2r2_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R19",
+        "SHADOW_RETRY_CAMPAIGN_V2R20",
         "SHADOW_RETRY_CAMPAIGN_V2R2",
     )
     prior_v2r3_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R19",
+        "SHADOW_RETRY_CAMPAIGN_V2R20",
         "SHADOW_RETRY_CAMPAIGN_V2R3",
     )
     prior_v2r4_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R19",
+        "SHADOW_RETRY_CAMPAIGN_V2R20",
         "SHADOW_RETRY_CAMPAIGN_V2R4",
     )
     prior_v2r5_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R19",
+        "SHADOW_RETRY_CAMPAIGN_V2R20",
         "SHADOW_RETRY_CAMPAIGN_V2R5",
     )
     prior_v2r6_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R19",
+        "SHADOW_RETRY_CAMPAIGN_V2R20",
         "SHADOW_RETRY_CAMPAIGN_V2R6",
     )
     prior_v2r7_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R19",
+        "SHADOW_RETRY_CAMPAIGN_V2R20",
         "SHADOW_RETRY_CAMPAIGN_V2R7",
     )
     prior_v2r8_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R19",
+        "SHADOW_RETRY_CAMPAIGN_V2R20",
         "SHADOW_RETRY_CAMPAIGN_V2R8",
     )
     prior_v2r9_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R19",
+        "SHADOW_RETRY_CAMPAIGN_V2R20",
         "SHADOW_RETRY_CAMPAIGN_V2R9",
     )
     prior_v2r10_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R19",
+        "SHADOW_RETRY_CAMPAIGN_V2R20",
         "SHADOW_RETRY_CAMPAIGN_V2R10",
     )
     prior_v2r13_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R19",
+        "SHADOW_RETRY_CAMPAIGN_V2R20",
         "SHADOW_RETRY_CAMPAIGN_V2R13",
     )
     prior_v2r14_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R19",
+        "SHADOW_RETRY_CAMPAIGN_V2R20",
         "SHADOW_RETRY_CAMPAIGN_V2R14",
     )
     prior_v2r15_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R19",
+        "SHADOW_RETRY_CAMPAIGN_V2R20",
         "SHADOW_RETRY_CAMPAIGN_V2R15",
     )
     prior_v2r17_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R19",
+        "SHADOW_RETRY_CAMPAIGN_V2R20",
         "SHADOW_RETRY_CAMPAIGN_V2R17",
     )
     for forged_domain in (
@@ -8165,6 +8277,18 @@ def test_contract_loader_rejects_clone_target_ref_policy_drift(
                 "prior_v2r18_authorization_digest"
             ],
         ),
+        (
+            TOOL._PRIOR_V2R19_PROTECTED_POLICY_FACTS[
+                "prior_v2r19_campaign_contract_id"
+            ],
+            TOOL._PRIOR_V2R19_STATE_PREFIX,
+            TOOL._PRIOR_V2R19_PROTECTED_POLICY_FACTS[
+                "prior_v2r19_capsule_digest"
+            ],
+            TOOL._PRIOR_V2R19_PROTECTED_POLICY_FACTS[
+                "prior_v2r19_authorization_digest"
+            ],
+        ),
     ),
     ids=(
         "prior-v2",
@@ -8183,9 +8307,10 @@ def test_contract_loader_rejects_clone_target_ref_policy_drift(
         "prior-v2r16",
         "prior-v2r17",
         "prior-v2r18",
+        "prior-v2r19",
     ),
 )
-def test_historical_capsule_authorization_and_rehashed_ledger_are_not_v2r19_authority(
+def test_historical_capsule_authorization_and_rehashed_ledger_are_not_v2r20_authority(
     tmp_path: Path,
     historical_campaign_id: str,
     historical_state_prefix: str,
@@ -8253,6 +8378,7 @@ def test_historical_capsule_authorization_and_rehashed_ledger_are_not_v2r19_auth
             "decision_audit_policy_digest",
             "decision_audit_core_schema_version",
             "prior_v2r18_historical_evidence",
+            "prior_v2r19_historical_evidence",
             "authorization_root",
             "ledger_root",
             "three_exact_slot_path_records",
@@ -8288,7 +8414,7 @@ def test_historical_capsule_authorization_and_rehashed_ledger_are_not_v2r19_auth
         ]
         rehashed_prior_authorization["owner_confirmation_digest"] = (
             TOOL._domain_digest(
-                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/"
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/"
                 "OWNER_CONFIRMATION/V2",
                 {
                     field: deepcopy(rehashed_prior_authorization[field])
@@ -8683,7 +8809,7 @@ def test_v2r18_full_formal_observation_replays_corrected_audit_and_outcome(
     fixture_module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = fixture_module
     spec.loader.exec_module(fixture_module)
-    observation = fixture_module._v2r18_formal_observation_rebound_v2r19()
+    observation = fixture_module._v2r18_formal_observation_rebound_v2r20()
     contract = _contract()
     audit = TOOL._evaluate_slot_observation_with_exact_audit_v2(
         contract,
@@ -9586,9 +9712,10 @@ def test_authorization_rejects_each_live_gauntlet_capsule_binding_mutation(
         "audit-policy-digest",
         "audit-core-schema",
         "prior-v2r18-history",
+        "prior-v2r19-history",
     ),
 )
-def test_authorization_rejects_decision_audit_or_v2r18_history_tamper(
+def test_authorization_rejects_decision_audit_or_prior_history_tamper(
     mutation: str,
 ) -> None:
     contract = _contract()
@@ -9603,6 +9730,9 @@ def test_authorization_rejects_decision_audit_or_v2r18_history_tamper(
     assert authorization["prior_v2r18_historical_evidence"] == (
         TOOL._PRIOR_V2R18_PROTECTED_POLICY_FACTS
     )
+    assert authorization["prior_v2r19_historical_evidence"] == (
+        TOOL._PRIOR_V2R19_PROTECTED_POLICY_FACTS
+    )
     forged = deepcopy(baseline)
     if mutation == "audit-policy":
         forged["decision_audit_policy"][
@@ -9616,6 +9746,10 @@ def test_authorization_rejects_decision_audit_or_v2r18_history_tamper(
         forged["prior_v2r18_historical_evidence"][
             "prior_v2r18_offline_corrected_decision"
         ] = CORE.TERMINAL_NONRETRYABLE_V2
+    elif mutation == "prior-v2r19-history":
+        forged["prior_v2r19_historical_evidence"][
+            "prior_v2r19_slot_01_resource_sample_count"
+        ] = 8_046
     else:  # pragma: no cover - parametrization is closed above.
         raise AssertionError(mutation)
     unsigned = deepcopy(forged)
@@ -15573,7 +15707,7 @@ def test_safe_postrun_source_replay_preserves_bounded_command_receipt(
     assert result["evidence"]["error_receipt_or_null"] == receipt
     assert result["evidence"]["error_receipt_or_null"]["argv"] == receipt["argv"]
     assert result["root"] == TOOL._domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/SOURCE_REPLAY/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/SOURCE_REPLAY/V2",
         result["evidence"],
     )
 

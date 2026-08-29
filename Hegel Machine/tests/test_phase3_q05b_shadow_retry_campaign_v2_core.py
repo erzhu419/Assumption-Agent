@@ -1442,7 +1442,7 @@ def _refresh_v2r18_formal_partition(value: dict[str, object]) -> None:
     )
 
 
-def _v2r18_formal_observation_rebound_v2r19() -> dict[str, object]:
+def _v2r18_formal_observation_rebound_v2r20() -> dict[str, object]:
     value = _base(1)
     failures = _v2r18_formal_failure_rows()
     cleanups = _v2r18_formal_cleanup_rows()
@@ -1578,18 +1578,18 @@ def test_canonical_strict_codec_and_domain_separated_digest_known_answer() -> No
     assert first != second
 
 
-def test_v2r19_partition_digest_domains_are_new_instance_authority() -> None:
+def test_v2r20_partition_digest_domains_are_new_instance_authority() -> None:
     rows: list[dict[str, object]] = []
     failure_domain = (
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/"
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/"
         "TRAJECTORY_FAILURE_ROWS/V2\x00"
     )
     cleanup_domain = (
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/"
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/"
         "TRAJECTORY_CLEANUP_ROWS/V2\x00"
     )
     certificate_domain = (
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/"
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R20/"
         "POST_ORIGIN_PARTITION_CERTIFICATE/V2\x00"
     )
     certificate: dict[str, object] = {"certificate_digest": None}
@@ -1608,9 +1608,9 @@ def test_v2r19_partition_digest_domains_are_new_instance_authority() -> None:
         certificate_domain, {}
     )
 
-    v2r18_failure_domain = failure_domain.replace("V2R19", "V2R18")
-    v2r18_cleanup_domain = cleanup_domain.replace("V2R19", "V2R18")
-    v2r18_certificate_domain = certificate_domain.replace("V2R19", "V2R18")
+    v2r18_failure_domain = failure_domain.replace("V2R20", "V2R18")
+    v2r18_cleanup_domain = cleanup_domain.replace("V2R20", "V2R18")
+    v2r18_certificate_domain = certificate_domain.replace("V2R20", "V2R18")
     assert failure_digest != campaign.campaign_record_digest_v2(
         v2r18_failure_domain, rows
     )
@@ -1622,10 +1622,10 @@ def test_v2r19_partition_digest_domains_are_new_instance_authority() -> None:
     )
 
     # Continue the historical rejection matrix from the immediately preceding
-    # V2R17 domains while the positive authority above remains exactly V2R19.
-    failure_domain = failure_domain.replace("V2R19", "V2R17")
-    cleanup_domain = cleanup_domain.replace("V2R19", "V2R17")
-    certificate_domain = certificate_domain.replace("V2R19", "V2R17")
+    # V2R17 domains while the positive authority above remains exactly V2R20.
+    failure_domain = failure_domain.replace("V2R20", "V2R17")
+    cleanup_domain = cleanup_domain.replace("V2R20", "V2R17")
+    certificate_domain = certificate_domain.replace("V2R20", "V2R17")
     assert failure_digest != campaign.campaign_record_digest_v2(
         failure_domain.replace("V2R17", "V2R2"), rows
     )
@@ -1871,7 +1871,7 @@ def _audit_results(audit: dict[str, object]) -> dict[str, str]:
 
 
 def test_v2r18_full_formal_observation_replay_is_exact_retryable_gap() -> None:
-    value = _v2r18_formal_observation_rebound_v2r19()
+    value = _v2r18_formal_observation_rebound_v2r20()
     failures = value["trajectory_failure_rows"]
     cleanups = value["trajectory_cleanup_rows"]
     assert value["expected_producer_id"] == "Q05B_SUPERVISOR_V6"
@@ -1927,7 +1927,7 @@ def test_v2r18_formal_live_wake_metric_arithmetic_mutations_reject_gap_grammar(
     metric: str,
     exact_value: int,
 ) -> None:
-    value = _v2r18_formal_observation_rebound_v2r19()
+    value = _v2r18_formal_observation_rebound_v2r20()
     origin = value["trajectory_failure_rows"][0]
     origin["detail_or_null"] = str(origin["detail_or_null"]).replace(
         f"{metric}={exact_value}",
@@ -1969,7 +1969,7 @@ def test_v2r18_formal_live_wake_metric_arithmetic_mutations_reject_gap_grammar(
     ),
 )
 def test_v2r18_formal_live_wake_detail_syntax_is_exact(detail: str) -> None:
-    value = _v2r18_formal_observation_rebound_v2r19()
+    value = _v2r18_formal_observation_rebound_v2r20()
     value["trajectory_failure_rows"][0]["detail_or_null"] = detail
     _refresh_v2r18_formal_partition(value)
     audit = campaign.evaluate_slot_observation_with_audit_v2(_seal(value))
@@ -1979,7 +1979,7 @@ def test_v2r18_formal_live_wake_detail_syntax_is_exact(detail: str) -> None:
 def test_each_v2r18_formal_fix_is_individually_necessary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    legacy_detail = _v2r18_formal_observation_rebound_v2r19()
+    legacy_detail = _v2r18_formal_observation_rebound_v2r20()
     legacy_detail["trajectory_failure_rows"][0]["detail_or_null"] = (
         "MAXIMUM_UNSAMPLED_GAP_EXCEEDED"
     )
@@ -1989,7 +1989,7 @@ def test_each_v2r18_formal_fix_is_individually_necessary(
     )
     assert legacy_detail_audit["first_reject_clause_or_null"] == "GAP_GRAMMAR"
 
-    corrected_detail = _v2r18_formal_observation_rebound_v2r19()
+    corrected_detail = _v2r18_formal_observation_rebound_v2r20()
     monkeypatch.setattr(
         campaign,
         "_MAX_REGISTERED_CLEANUP_PAIRS_PER_ACTOR",
@@ -2023,7 +2023,7 @@ def test_decision_audit_directly_identifies_every_decision_clause(
     common_audit = campaign.evaluate_slot_observation_with_audit_v2(_seal(common))
     assert common_audit["first_reject_clause_or_null"] == "COMMON_EXACT"
 
-    grammar = _v2r18_formal_observation_rebound_v2r19()
+    grammar = _v2r18_formal_observation_rebound_v2r20()
     grammar["trajectory_failure_rows"][0]["detail_or_null"] = (
         "MAXIMUM_UNSAMPLED_GAP_EXCEEDED"
     )
@@ -2033,12 +2033,12 @@ def test_decision_audit_directly_identifies_every_decision_clause(
     )
     assert grammar_audit["first_reject_clause_or_null"] == "GAP_GRAMMAR"
 
-    wire = _v2r18_formal_observation_rebound_v2r19()
+    wire = _v2r18_formal_observation_rebound_v2r20()
     wire["exit_code_or_null"] = 0
     wire_audit = campaign.evaluate_slot_observation_with_audit_v2(_seal(wire))
     assert wire_audit["first_reject_clause_or_null"] == "WIRE_TERMINAL"
 
-    partition = _v2r18_formal_observation_rebound_v2r19()
+    partition = _v2r18_formal_observation_rebound_v2r20()
     monkeypatch.setattr(
         campaign,
         "_MAX_REGISTERED_CLEANUP_PAIRS_PER_ACTOR",
@@ -2056,7 +2056,7 @@ def test_decision_audit_directly_identifies_every_decision_clause(
         3,
     )
 
-    artifact = _v2r18_formal_observation_rebound_v2r19()
+    artifact = _v2r18_formal_observation_rebound_v2r20()
     artifact["artifact_state"] = "VALID"
     artifact_audit = campaign.evaluate_slot_observation_with_audit_v2(
         _seal(artifact)
