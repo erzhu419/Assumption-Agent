@@ -94,6 +94,7 @@ def evaluate_robustification(
     parent_nominal_utility: float,
     parent_tail_utility: float,
     parent_safety_utility: float,
+    maximum_reduction_error: float = 0.0,
 ) -> RobustificationDecision:
     """Retain vector utilities; do not silently scalarize them."""
 
@@ -105,6 +106,7 @@ def evaluate_robustification(
         parent_nominal_utility,
         parent_tail_utility,
         parent_safety_utility,
+        maximum_reduction_error,
     )
     if any(not isfinite(value) for value in policy_values):
         raise ValueError("robustification policy values must be finite")
@@ -113,11 +115,13 @@ def evaluate_robustification(
         or minimum_safety_gain < 0
         or not 0 <= minimum_coverage <= 1
         or maximum_nominal_loss < 0
+        or maximum_reduction_error < 0
     ):
         raise ValueError("robustification thresholds are outside their valid range")
     checks = {
         "stress_tests": bool(candidate.stress_test_ids),
-        "singleton_reduction": candidate.reduction_map.maximum_error >= 0,
+        "reduction_replay": candidate.reduction_map.maximum_error
+        <= maximum_reduction_error,
         "tail_gain": candidate.tail_utility - parent_tail_utility
         >= minimum_tail_gain,
         "safety_gain": candidate.safety_utility - parent_safety_utility

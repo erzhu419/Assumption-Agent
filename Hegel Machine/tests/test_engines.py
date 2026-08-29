@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import pytest
 
 from hegel_machine.engines import (
@@ -60,6 +62,27 @@ def test_pareto_frontier_drops_dominated_candidate():
     strong = robust("strong", 0.8, 0.1)
     weak = robust("weak", 0.7, 0.2)
     assert pareto_frontier((strong, weak)) == (strong,)
+
+
+def test_robustification_requires_reduction_replay_within_bound():
+    candidate = robust("bad_reduction", 0.75, 0.2)
+    candidate = replace(
+        candidate,
+        reduction_map=replace(candidate.reduction_map, maximum_error=0.01),
+    )
+    decision = evaluate_robustification(
+        candidate,
+        minimum_tail_gain=0.10,
+        minimum_safety_gain=0.10,
+        minimum_coverage=0.90,
+        maximum_nominal_loss=0.05,
+        parent_nominal_utility=0.92,
+        parent_tail_utility=0.50,
+        parent_safety_utility=0.60,
+        maximum_reduction_error=0.0,
+    )
+    assert not decision.accepted
+    assert decision.reason == "failed:reduction_replay"
 
 
 def test_idealization_requires_probe_preservation_and_complexity_gain():
