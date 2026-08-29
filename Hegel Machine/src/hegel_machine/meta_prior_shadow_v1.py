@@ -368,6 +368,15 @@ def derive_idealization_from_residuals(
             "idealization discovery needs preservation and boundary-counterexample rows"
         )
     values = tuple(_values(item) for item in preservation)
+    boundary_values = tuple(_values(item) for item in counterexamples)
+    if any(
+        abs(_number(row, "idealized_output") - _number(row, "full_output"))
+        <= policy.discrepancy_budget
+        for row in boundary_values
+    ):
+        raise ValueError(
+            "idealization boundary-counterexample rows must exceed the probe budget"
+        )
     maximum_discrepancy = max(
         abs(_number(row, "idealized_output") - _number(row, "full_output"))
         for row in values
@@ -387,7 +396,7 @@ def derive_idealization_from_residuals(
     )
     reduction_error = max(
         abs(_number(row, "recovered_output") - _number(row, "full_output"))
-        for row in values
+        for row in values + boundary_values
     )
     reduction_map = ReductionMap(
         reduction_id=f"reduction_{policy.candidate_id}",

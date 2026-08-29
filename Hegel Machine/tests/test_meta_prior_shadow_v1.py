@@ -150,3 +150,15 @@ def test_reduction_replay_failures_reject_both_branches():
         ideal_report.idealization.discovery.decision.reason
         == "failed:reduction_replay"
     )
+
+
+def test_idealization_requires_a_real_failure_boundary_counterexample():
+    body = config()
+    boundary = body["idealization"]["discovery_rows"][2]
+    boundary["idealized_output"] = boundary["full_output"]
+
+    with pytest.raises(
+        ValueError,
+        match="boundary-counterexample rows must exceed the probe budget",
+    ):
+        run_bounded_meta_prior_shadow(body)
