@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from hegel_machine.bootstrap import initial_theory
 from hegel_machine.diagnostics import InadequacyVerdict
 from hegel_machine.meta_prior_shadow_v1 import (
     SHADOW_STATUS,
@@ -44,6 +45,7 @@ def test_residual_rows_do_not_supply_aggregate_decisions():
 
 def test_bounded_dual_branch_shadow_positive_and_rejection_controls():
     report = run_bounded_meta_prior_shadow(config())
+    parent = initial_theory(data_cutoff=config()["opened_at_cutoff"])
 
     assert report.status == SHADOW_STATUS
     assert not report.external_evidence_claimed
@@ -65,6 +67,7 @@ def test_bounded_dual_branch_shadow_positive_and_rejection_controls():
     assert robust.discovery.candidate.safety_utility == 1.0
     assert robust.discovery.candidate.coverage == 1.0
     assert robust.discovery.candidate.reduction_map.maximum_error == 0.0
+    assert robust.discovery.candidate.reduction_map.old_scope == parent.scope
     assert robust.patch.coordinate is PatchCoordinate.ROBUSTIFICATION
     assert (
         robust.patch.reduction_map_id
@@ -89,6 +92,7 @@ def test_bounded_dual_branch_shadow_positive_and_rejection_controls():
     assert ideal.discovery.contract.sample_gain == pytest.approx(0.5)
     assert ideal.discovery.contract.complexity_gain == pytest.approx(0.5)
     assert ideal.discovery.reduction_map.maximum_error == 0.0
+    assert ideal.discovery.reduction_map.old_scope == parent.scope
     assert ideal.discovery.contract.failure_boundary == (
         "fine_scale_microstate_sensitive_query",
     )

@@ -206,6 +206,7 @@ def _content_ids(observations: Sequence[Observation]) -> tuple[str, ...]:
 def derive_robustification_from_residuals(
     *,
     parent_version_id: str,
+    parent_scope: tuple[str, ...],
     observations: tuple[Observation, ...],
     policy: RobustificationPolicy,
 ) -> RobustificationDiscovery:
@@ -270,7 +271,7 @@ def derive_robustification_from_residuals(
         reduction_id=f"reduction_{policy.candidate_id}",
         parent_version_id=parent_version_id,
         child_candidate_id=policy.candidate_id,
-        old_scope=policy.scope,
+        old_scope=parent_scope,
         mapping_description="zero uncertainty radius recovers the parent prediction",
         executable_check_id="replay_zero_radius_predictions_v1",
         maximum_error=reduction_error,
@@ -348,6 +349,7 @@ def derive_robustification_from_residuals(
 def derive_idealization_from_residuals(
     *,
     parent_version_id: str,
+    parent_scope: tuple[str, ...],
     observations: tuple[Observation, ...],
     policy: IdealizationPolicy,
 ) -> IdealizationDiscovery:
@@ -390,7 +392,7 @@ def derive_idealization_from_residuals(
         reduction_id=f"reduction_{policy.candidate_id}",
         parent_version_id=parent_version_id,
         child_candidate_id=policy.candidate_id,
-        old_scope=policy.scope,
+        old_scope=parent_scope,
         mapping_description=policy.full_model_recovery,
         executable_check_id="replay_full_model_recovery_v1",
         maximum_error=reduction_error,
@@ -775,11 +777,13 @@ def run_bounded_meta_prior_shadow(
     )
     robust_discovery = derive_robustification_from_residuals(
         parent_version_id=parent.version_id,
+        parent_scope=parent.scope,
         observations=robust_discovery_rows,
         policy=robust_policy,
     )
     robust_control = derive_robustification_from_residuals(
         parent_version_id=parent.version_id,
+        parent_scope=parent.scope,
         observations=robust_control_rows,
         policy=robust_policy,
     )
@@ -847,11 +851,13 @@ def run_bounded_meta_prior_shadow(
     )
     ideal_discovery = derive_idealization_from_residuals(
         parent_version_id=parent.version_id,
+        parent_scope=parent.scope,
         observations=ideal_discovery_rows,
         policy=ideal_policy,
     )
     ideal_control = derive_idealization_from_residuals(
         parent_version_id=parent.version_id,
+        parent_scope=parent.scope,
         observations=ideal_control_rows,
         policy=ideal_policy,
     )
