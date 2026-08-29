@@ -97,6 +97,7 @@ class IdealizationDiscovery:
     decision: IdealizationDecision
     diagnosis: OntologyInadequacyReport
     reduction_map: ReductionMap
+    scope: tuple[str, ...]
     discovery_observation_ids: tuple[str, ...]
 
 
@@ -465,6 +466,7 @@ def derive_idealization_from_residuals(
         decision,
         diagnosis,
         reduction_map,
+        policy.scope,
         _content_ids(observations),
     )
 
@@ -524,7 +526,7 @@ def compile_idealization_patch(
         parent_version_id=contract.parent_version_id,
         coordinate=PatchCoordinate.IDEALIZATION,
         claim="bounded quotient preserves task probes while reducing resources",
-        scope=contract.task_ids,
+        scope=discovery.scope,
         failure_boundary=contract.failure_boundary,
         predictions=(prediction,),
         hard_negative_ids=hard_negative_ids,

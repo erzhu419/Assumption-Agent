@@ -98,6 +98,7 @@ def test_bounded_dual_branch_shadow_positive_and_rejection_controls():
     )
     assert ideal.discovery.contract.counterexample_ids
     assert ideal.patch.coordinate is PatchCoordinate.IDEALIZATION
+    assert ideal.patch.scope == tuple(config()["idealization"]["scope"])
     assert ideal.patch.reduction_map_id == ideal.discovery.reduction_map.reduction_id
     assert ideal.holdout_receipt.split is EvidenceSplit.HOLDOUT
     assert ideal.holdout_receipt.independent
