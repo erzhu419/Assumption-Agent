@@ -29,7 +29,7 @@ from . import phase3_q1_qualification_wire_v1 as _wire
 from .strict_cbor_v1 import canonical_cbor_decode, canonical_cbor_encode, content_hash
 
 
-ARTIFACT_SCHEMA_VERSION: Final = "hegel-phase3a-q05b-actual-artifact/2"
+ARTIFACT_SCHEMA_VERSION: Final = "hegel-phase3a-q05b-actual-artifact/3"
 ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES: Final = 2 * 1024 * 1024 * 1024
 HOST_EXECUTION_BINDING_ROOT_DOMAIN: Final = "HEGEL/Q05B/ACTUAL/HOST_EXECUTION_BINDING/V1"
 RESOURCE_EVIDENCE_ROOT_DOMAIN: Final = "HEGEL/Q05B/ACTUAL/RESOURCE/V1"
@@ -39,6 +39,8 @@ PREDICATE11_EVIDENCE_ROOT_DOMAIN: Final = "HEGEL/Q05B/ACTUAL/PREDICATE11/V1"
 PREDICATE19_EVIDENCE_ROOT_DOMAIN: Final = "HEGEL/Q05B/ACTUAL/PREDICATE19/V1"
 PREDICATE_EVIDENCE_ROOT_DOMAIN: Final = "HEGEL/Q05B/ACTUAL/PREDICATE/V1"
 ARTIFACT_SET_ROOT_DOMAIN: Final = "HEGEL/Q05B/QUALIFICATION/ARTIFACT_SET/V1"
+RESOURCE_TRANSCRIPT_REF_KEY: Final = "resource_transcript_ref"
+HELD_FINAL_SAMPLE_REF_KEY: Final = "held_final_sample_ref"
 ACTUAL_ADMISSION_ARTIFACT_EVIDENCE_SCHEMA_VERSION: Final = (
     "hegel-phase3a-q05b-actual-admission-artifact-evidence/1"
 )
@@ -139,8 +141,35 @@ def _canonical_json(value: object) -> bytes:
         _fail("REJECT_Q05B_ARTIFACT_JSON", str(error))
 
 
+def _canonical_json_hash_update_v3(digest: object, value: object) -> None:
+    """Feed the exact canonical JSON wire to an existing hashlib object."""
+
+    try:
+        encoder = json.JSONEncoder(
+            ensure_ascii=True,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        for chunk in encoder.iterencode(value):
+            digest.update(chunk.encode("ascii"))
+        digest.update(b"\n")
+    except (TypeError, ValueError, UnicodeError) as error:
+        _fail("REJECT_Q05B_ARTIFACT_JSON", str(error))
+
+
+def _canonical_json_sha256_v3(value: object) -> bytes:
+    digest = sha256()
+    _canonical_json_hash_update_v3(digest, value)
+    return digest.digest()
+
+
 def _json_root(domain: str, value: object) -> bytes:
-    return sha256(domain.encode("ascii") + b"\x00" + _canonical_json(value)).digest()
+    digest = sha256()
+    digest.update(domain.encode("ascii"))
+    digest.update(b"\x00")
+    _canonical_json_hash_update_v3(digest, value)
+    return digest.digest()
 
 
 def _object(value: object, keys: set[str], name: str) -> dict[str, object]:
@@ -667,6 +696,405 @@ def _json_value_type_exact_v1(observed: object, expected: object) -> bool:
     return observed == expected
 
 
+_PERSISTED_SEMANTIC_ROOT_KEYS_V3: Final = frozenset({
+    "bundle_evidence_root",
+    "host_execution_binding_root",
+    "isolation_evidence_root",
+    "resource_evidence_root",
+    "semantic_component_root",
+})
+_FULL_SEMANTIC_PREIMAGE_KEYS_V3: Final = frozenset({
+    "bundle_preimage",
+    "host_execution_binding_preimage",
+    "isolation_preimage",
+    "resource_preimage",
+    "semantic_component_root",
+})
+
+
+def _resource_reference_indexes_v3(
+    value: object,
+) -> tuple[
+    dict[tuple[int, str, str], dict[str, object]],
+    dict[tuple[int, str, str, int], dict[str, object]],
+]:
+    """Index only the three authoritative full resource rows.
+
+    Full semantic validation remains in ``_validate_resources_v1``.  This
+    structural pass exists earlier so a persisted reference can resolve to one
+    and only one top-level row before the original replay is invoked.
+    """
+
+    if type(value) is not list or len(value) != 3:
+        _fail(
+            "REJECT_Q05B_ARTIFACT_REFERENCE",
+            "resource reference table must contain exactly three full rows",
+        )
+    transcripts: dict[tuple[int, str, str], dict[str, object]] = {}
+    held_samples: dict[tuple[int, str, str, int], dict[str, object]] = {}
+    for raw in value:
+        if type(raw) is not dict:
+            _fail(
+                "REJECT_Q05B_ARTIFACT_REFERENCE",
+                "resource reference table row is not an exact object",
+            )
+        role_id = raw.get("role_id")
+        container_id = raw.get("container_id")
+        transcript_sha256 = raw.get("transcript_sha256")
+        samples = raw.get("live_sample_objects")
+        if (
+            type(role_id) is not int
+            or role_id not in (1, 2, 3)
+            or type(container_id) is not str
+            or re.fullmatch(r"[0-9a-f]{64}", container_id) is None
+            or type(transcript_sha256) is not str
+            or re.fullmatch(r"[0-9a-f]{64}", transcript_sha256) is None
+            or type(samples) is not list
+            or not samples
+            or type(samples[-1]) is not dict
+        ):
+            _fail(
+                "REJECT_Q05B_ARTIFACT_REFERENCE",
+                "resource reference table identity differs",
+            )
+        transcript_key = (role_id, container_id, transcript_sha256)
+        if transcript_key in transcripts:
+            _fail(
+                "REJECT_Q05B_ARTIFACT_REFERENCE",
+                "resource transcript reference aliases more than one row",
+            )
+        transcripts[transcript_key] = raw
+        held = samples[-1]
+        ordinal = held.get("sample_ordinal")
+        if type(ordinal) is not int or ordinal != len(samples):
+            _fail(
+                "REJECT_Q05B_ARTIFACT_REFERENCE",
+                "held-final sample is not the transcript's final ordinal",
+            )
+        held_key = (role_id, container_id, transcript_sha256, ordinal)
+        if held_key in held_samples:
+            _fail(
+                "REJECT_Q05B_ARTIFACT_REFERENCE",
+                "held-final sample reference aliases more than one row",
+            )
+        held_samples[held_key] = held
+    if {key[0] for key in transcripts} != {1, 2, 3}:
+        _fail(
+            "REJECT_Q05B_ARTIFACT_REFERENCE",
+            "resource reference role registry differs",
+        )
+    return transcripts, held_samples
+
+
+def _resource_transcript_ref_v3(
+    key: tuple[int, str, str],
+) -> dict[str, object]:
+    role_id, container_id, transcript_sha256 = key
+    return {
+        RESOURCE_TRANSCRIPT_REF_KEY: {
+            "container_id": container_id,
+            "role_id": role_id,
+            "transcript_sha256": transcript_sha256,
+        }
+    }
+
+
+def _held_final_sample_ref_v3(
+    key: tuple[int, str, str, int],
+) -> dict[str, object]:
+    role_id, container_id, transcript_sha256, sample_ordinal = key
+    return {
+        HELD_FINAL_SAMPLE_REF_KEY: {
+            "container_id": container_id,
+            "role_id": role_id,
+            "sample_ordinal": sample_ordinal,
+            "transcript_sha256": transcript_sha256,
+        }
+    }
+
+
+def _project_resource_references_v3(
+    value: object,
+    transcripts: Mapping[tuple[int, str, str], dict[str, object]],
+    held_samples: Mapping[tuple[int, str, str, int], dict[str, object]],
+) -> object:
+    """Replace every exact repeated full resource object with one strict ref."""
+
+    if type(value) is dict:
+        for key, transcript in transcripts.items():
+            if _json_value_type_exact_v1(value, transcript):
+                return _resource_transcript_ref_v3(key)
+        for key, sample in held_samples.items():
+            if _json_value_type_exact_v1(value, sample):
+                return _held_final_sample_ref_v3(key)
+        if RESOURCE_TRANSCRIPT_REF_KEY in value or HELD_FINAL_SAMPLE_REF_KEY in value:
+            _fail(
+                "REJECT_Q05B_ARTIFACT_REFERENCE",
+                "full evidence contains a reserved resource reference key",
+            )
+        return {
+            key: _project_resource_references_v3(item, transcripts, held_samples)
+            for key, item in value.items()
+        }
+    if type(value) is list:
+        return [
+            _project_resource_references_v3(item, transcripts, held_samples)
+            for item in value
+        ]
+    return value
+
+
+def _strict_resource_reference_v3(
+    value: dict[str, object],
+    transcripts: Mapping[tuple[int, str, str], dict[str, object]],
+    held_samples: Mapping[tuple[int, str, str, int], dict[str, object]],
+) -> dict[str, object] | None:
+    markers = set(value) & {RESOURCE_TRANSCRIPT_REF_KEY, HELD_FINAL_SAMPLE_REF_KEY}
+    if not markers:
+        return None
+    if len(markers) != 1 or set(value) != markers:
+        _fail(
+            "REJECT_Q05B_ARTIFACT_REFERENCE",
+            "resource reference has an alias or extra field",
+        )
+    marker = next(iter(markers))
+    if marker == RESOURCE_TRANSCRIPT_REF_KEY:
+        reference = _object(
+            value[marker],
+            {"container_id", "role_id", "transcript_sha256"},
+            "resource transcript reference",
+        )
+        role_id = reference["role_id"]
+        container_id = reference["container_id"]
+        transcript_sha256 = reference["transcript_sha256"]
+        if (
+            type(role_id) is not int
+            or type(container_id) is not str
+            or type(transcript_sha256) is not str
+        ):
+            _fail(
+                "REJECT_Q05B_ARTIFACT_REFERENCE",
+                "resource transcript reference type differs",
+            )
+        target = transcripts.get((role_id, container_id, transcript_sha256))
+    else:
+        reference = _object(
+            value[marker],
+            {
+                "container_id", "role_id", "sample_ordinal",
+                "transcript_sha256",
+            },
+            "held-final sample reference",
+        )
+        role_id = reference["role_id"]
+        container_id = reference["container_id"]
+        sample_ordinal = reference["sample_ordinal"]
+        transcript_sha256 = reference["transcript_sha256"]
+        if (
+            type(role_id) is not int
+            or type(container_id) is not str
+            or type(sample_ordinal) is not int
+            or type(transcript_sha256) is not str
+        ):
+            _fail(
+                "REJECT_Q05B_ARTIFACT_REFERENCE",
+                "held-final sample reference type differs",
+            )
+        target = held_samples.get(
+            (role_id, container_id, transcript_sha256, sample_ordinal)
+        )
+    if target is None:
+        _fail(
+            "REJECT_Q05B_ARTIFACT_REFERENCE",
+            "resource reference does not resolve exactly once",
+        )
+    return target
+
+
+def _expand_resource_references_v3(
+    value: object,
+    transcripts: Mapping[tuple[int, str, str], dict[str, object]],
+    held_samples: Mapping[tuple[int, str, str, int], dict[str, object]],
+) -> object:
+    if type(value) is dict:
+        referenced = _strict_resource_reference_v3(
+            value, transcripts, held_samples
+        )
+        if referenced is not None:
+            return referenced
+        if any(
+            _json_value_type_exact_v1(value, target)
+            for target in (*transcripts.values(), *held_samples.values())
+        ):
+            _fail(
+                "REJECT_Q05B_ARTIFACT_REFERENCE",
+                "full resource evidence occurs outside final_resource_rows",
+            )
+        expanded = {
+            key: _expand_resource_references_v3(item, transcripts, held_samples)
+            for key, item in value.items()
+        }
+        if any(
+            _json_value_type_exact_v1(expanded, target)
+            for target in (*transcripts.values(), *held_samples.values())
+        ):
+            _fail(
+                "REJECT_Q05B_ARTIFACT_REFERENCE",
+                "expanded resource evidence occurs outside final_resource_rows",
+            )
+        return expanded
+    if type(value) is list:
+        return [
+            _expand_resource_references_v3(item, transcripts, held_samples)
+            for item in value
+        ]
+    return value
+
+
+def _persisted_semantic_roots_v3(
+    *,
+    bundle_evidence_root: str,
+    host_execution_binding_root: str,
+    isolation_evidence_root: str,
+    resource_evidence_root: str,
+    semantic_component_root: str,
+) -> dict[str, object]:
+    return {
+        "bundle_evidence_root": bundle_evidence_root,
+        "host_execution_binding_root": host_execution_binding_root,
+        "isolation_evidence_root": isolation_evidence_root,
+        "resource_evidence_root": resource_evidence_root,
+        "semantic_component_root": semantic_component_root,
+    }
+
+
+def _persist_sections_v3(
+    evidence: Mapping[str, object],
+    resources: list[dict[str, object]],
+    semantic_roots: dict[str, object],
+) -> dict[str, object]:
+    transcripts, held_samples = _resource_reference_indexes_v3(resources)
+    sections: dict[str, object] = {}
+    for name in SECTION_NAMES:
+        if name == "final_resource_rows":
+            sections[name] = resources
+        elif name == "semantic_execution":
+            sections[name] = dict(semantic_roots)
+        else:
+            sections[name] = _project_resource_references_v3(
+                evidence[name], transcripts, held_samples
+            )
+    return sections
+
+
+def _expand_persisted_sections_v3(
+    value: object,
+) -> tuple[dict[str, object], dict[str, object]]:
+    sections = _object(value, set(SECTION_NAMES), "persisted sections")
+    transcripts, held_samples = _resource_reference_indexes_v3(
+        sections["final_resource_rows"]
+    )
+    semantic_roots = _object(
+        sections["semantic_execution"],
+        set(_PERSISTED_SEMANTIC_ROOT_KEYS_V3),
+        "persisted semantic roots",
+    )
+    for name in _PERSISTED_SEMANTIC_ROOT_KEYS_V3:
+        _hex(semantic_roots[name], 32, f"persisted semantic {name}")
+    expanded: dict[str, object] = {}
+    for name in SECTION_NAMES:
+        if name == "final_resource_rows":
+            expanded[name] = sections[name]
+        elif name != "semantic_execution":
+            expanded[name] = _expand_resource_references_v3(
+                sections[name], transcripts, held_samples
+            )
+    host_stage = expanded.get("host_stage")
+    actual_admission = expanded.get("actual_admission")
+    if type(host_stage) is not dict or type(actual_admission) is not dict:
+        _fail(
+            "REJECT_Q05B_ARTIFACT_REFERENCE",
+            "persisted semantic preimage source differs",
+        )
+    host_binding = host_stage.get("host_execution_binding_preimage")
+    if (
+        type(host_binding) is not dict
+        or type(host_stage.get("witness_root")) is not str
+        or type(host_binding.get("semantic_replay_root")) is not str
+        or type(actual_admission.get("actual_admission_evidence_root")) is not str
+    ):
+        _fail(
+            "REJECT_Q05B_ARTIFACT_REFERENCE",
+            "persisted semantic binding source differs",
+        )
+    resource_preimage = {"final_resource_rows": expanded["final_resource_rows"]}
+    isolation_preimage = {
+        "actual_admission": expanded["actual_admission"],
+        "actor_rows": expanded["actor_rows"],
+        "cargo_build_binary": expanded["cargo_build_binary"],
+        "endpoint_stdout_set": expanded["endpoint_stdout_set"],
+        "final_resource_rows": expanded["final_resource_rows"],
+        "five_sidecars": expanded["five_sidecars"],
+        "host_stage": expanded["host_stage"],
+        "negative_corpus": expanded["negative_corpus"],
+        "scratch_rows": expanded["scratch_rows"],
+        "source_wire_profile": expanded["source_wire_profile"],
+    }
+    bundle_preimage = {
+        "actual_admission_evidence_root": actual_admission[
+            "actual_admission_evidence_root"
+        ],
+        "five_sidecars": expanded["five_sidecars"],
+        "host_witness_root": host_stage["witness_root"],
+        "scratch_rows": expanded["scratch_rows"],
+        "semantic_replay_root": host_binding["semantic_replay_root"],
+    }
+    expanded["semantic_execution"] = {
+        "bundle_preimage": bundle_preimage,
+        "host_execution_binding_preimage": host_binding,
+        "isolation_preimage": isolation_preimage,
+        "resource_preimage": resource_preimage,
+        "semantic_component_root": semantic_roots["semantic_component_root"],
+    }
+    return expanded, semantic_roots
+
+
+def _prepare_evidence_for_replay_v3(
+    evidence: Mapping[str, object],
+) -> tuple[Mapping[str, object], dict[str, object] | None]:
+    if (
+        type(evidence) is dict
+        and set(evidence) == set(SECTION_NAMES)
+        and type(evidence.get("semantic_execution")) is dict
+        and set(evidence["semantic_execution"])
+        == set(_PERSISTED_SEMANTIC_ROOT_KEYS_V3)
+    ):
+        return _expand_persisted_sections_v3(evidence)
+    return evidence, None
+
+
+def _validate_persisted_semantic_roots_v3(
+    semantic_roots: dict[str, object] | None,
+    replayed: Mapping[str, object],
+) -> None:
+    if semantic_roots is None:
+        return
+    derived = replayed.get("derived") if "derived" in replayed else replayed
+    if type(derived) is not dict or any(
+        semantic_roots[name] != derived.get(name)
+        for name in (
+            "bundle_evidence_root",
+            "host_execution_binding_root",
+            "isolation_evidence_root",
+            "resource_evidence_root",
+        )
+    ):
+        _fail(
+            "REJECT_Q05B_ARTIFACT_SEMANTIC",
+            "persisted semantic root replay differs",
+        )
+
+
 def _validate_inspect_security_options_v1(
     observed: object,
     command_security_options: list[str],
@@ -989,7 +1417,7 @@ def _validate_resources_v1(value: object, config: dict[str, object]) -> list[dic
             or row["final_pids_peak"] != replayed[-1]["pids_peak"]
             or row["post_exit_inspect_sha256"] != sha256(post_payload).hexdigest()
             or row["explicit_remove_admitted_after_this_transcript"] is not True
-            or observed_root != sha256(_canonical_json(body)).hexdigest()
+            or observed_root != _canonical_json_sha256_v3(body).hex()
         ):
             _fail("REJECT_Q05B_ARTIFACT_RESOURCE", f"resource {expected_role} differs")
         result.append(row)
@@ -4850,7 +5278,11 @@ def _replay_actual_evidence_v1(
     isolation_root = _json_root(ISOLATION_EVIDENCE_ROOT_DOMAIN, isolation_preimage)
     bundle_preimage = {"actual_admission_evidence_root": actual_admission["actual_admission_evidence_root"], "five_sidecars": evidence["five_sidecars"], "host_witness_root": decoded_witness["witness_root"], "scratch_rows": scratch, "semantic_replay_root": dual.dual_replay_root.hex()}
     bundle_root = _json_root(BUNDLE_EVIDENCE_ROOT_DOMAIN, bundle_preimage)
-    semantic = _object(evidence["semantic_execution"], {"bundle_preimage", "host_execution_binding_preimage", "isolation_preimage", "resource_preimage", "semantic_component_root"}, "semantic_execution")
+    semantic = _object(
+        evidence["semantic_execution"],
+        set(_FULL_SEMANTIC_PREIMAGE_KEYS_V3),
+        "semantic_execution",
+    )
     if semantic != {"bundle_preimage": bundle_preimage, "host_execution_binding_preimage": expected_host_binding, "isolation_preimage": isolation_preimage, "resource_preimage": resource_preimage, "semantic_component_root": dual.predicate11_semantic_component_root.hex()}:
         _fail("REJECT_Q05B_ARTIFACT_SEMANTIC", "semantic execution preimage differs")
     negative_roots = dict(negative.category_roots)
@@ -4920,10 +5352,29 @@ def _replay_actual_evidence_v1(
     decoded_final = _wire.decode_qualification_receipt_v1(final.canonical_bytes)
     if decoded_final.candidate_receipt.canonical_bytes != candidate.canonical_bytes:
         _fail("REJECT_Q05B_ARTIFACT_RECEIPT", "candidate/final mismatch")
-    sections = {name: evidence[name] for name in SECTION_NAMES}
+    sections = _persist_sections_v3(
+        evidence,
+        resources,
+        _persisted_semantic_roots_v3(
+            bundle_evidence_root=bundle_root.hex(),
+            host_execution_binding_root=host_binding_root.hex(),
+            isolation_evidence_root=isolation_root.hex(),
+            resource_evidence_root=resource_root.hex(),
+            semantic_component_root=dual.predicate11_semantic_component_root.hex(),
+        ),
+    )
     derived = {"actual_admission_evidence_root": actual_admission["actual_admission_evidence_root"], "artifact_set_root": None, "bundle_evidence_root": bundle_root.hex(), "candidate_receipt_cbor_hex": candidate.canonical_bytes.hex(), "candidate_receipt_root": candidate.receipt_root.hex(), "closed_q1_authority": CLOSED_Q1_AUTHORITY, "final_receipt_cbor_hex": final.canonical_bytes.hex(), "final_receipt_root": final.receipt_root.hex(), "host_execution_binding_root": host_binding_root.hex(), "isolation_evidence_root": isolation_root.hex(), "ordered_predicate_rows": [[row[0], row[1].decode("ascii"), row[2], row[3].hex()] for row in predicate_rows_t], "qualification_count": 20, "qualification_mask": 0xFFFFF, "resource_evidence_root": resource_root.hex()}
     artifact = {"derived": derived, "schema_version": ARTIFACT_SCHEMA_VERSION, "sections": sections, "status": "Q05B_QUALIFICATION_20_OF_20_Q1_NOT_RUN"}
-    body = json.loads(_canonical_json(artifact).decode("ascii")); body["derived"].pop("artifact_set_root")
+    body = {
+        "derived": {
+            name: item
+            for name, item in derived.items()
+            if name != "artifact_set_root"
+        },
+        "schema_version": ARTIFACT_SCHEMA_VERSION,
+        "sections": sections,
+        "status": "Q05B_QUALIFICATION_20_OF_20_Q1_NOT_RUN",
+    }
     artifact["derived"]["artifact_set_root"] = _json_root(ARTIFACT_SET_ROOT_DOMAIN, body).hex()
     validate_stage9_derived_registry_v1(
         artifact["derived"],
@@ -5185,7 +5636,10 @@ def replay_actual_evidence_1_19_v1(
 ) -> dict[str, object]:
     """Strictly replay all embedded preimages and emit only the 1--19 candidate."""
 
-    return _replay_actual_evidence_v1(evidence, candidate_only=True)
+    prepared, semantic_roots = _prepare_evidence_for_replay_v3(evidence)
+    replayed = _replay_actual_evidence_v1(prepared, candidate_only=True)
+    _validate_persisted_semantic_roots_v3(semantic_roots, replayed)
+    return replayed
 
 
 def build_actual_artifact_v1(evidence: Mapping[str, object]) -> dict[str, object]:
@@ -5196,7 +5650,9 @@ def build_actual_artifact_v1(evidence: Mapping[str, object]) -> dict[str, object
             "REJECT_Q05B_ARTIFACT_SCHEMA",
             "artifact evidence must be an exact object",
         )
-    artifact = _replay_actual_evidence_v1(evidence, candidate_only=False)
+    prepared, semantic_roots = _prepare_evidence_for_replay_v3(evidence)
+    artifact = _replay_actual_evidence_v1(prepared, candidate_only=False)
+    _validate_persisted_semantic_roots_v3(semantic_roots, artifact)
     observed_bytes = len(_canonical_json(artifact))
     if observed_bytes > ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES:
         _fail(

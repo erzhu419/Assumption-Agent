@@ -16285,6 +16285,292 @@ def _q05b_v2_regression_artifact_resource_rows(
     return resources
 
 
+def _q05b_v3_resource_normalization_fixture(
+) -> tuple[dict[str, object], dict[str, object]]:
+    config = ADMISSION.validate_commit_a_actual_config_bytes_v1(
+        (ROOT / TOOL.CONFIG_RELATIVE_PATH).read_bytes()
+    )
+    resources = _q05b_v2_regression_artifact_resource_rows(config)
+    controls = [
+        {
+            "final_resource_transcript": resource,
+            "held_final_resource": resource["live_sample_objects"][-1],
+        }
+        for resource in resources
+    ]
+    actors = [
+        {"actor_id": actor_id, "control_evidence": control}
+        for actor_id, control in zip(
+            ("PYTHON_ENDPOINT", "RUST_ENDPOINT", "TRUSTED_HOST_REPLAY"),
+            controls,
+            strict=True,
+        )
+    ]
+    actual_admission = {
+        "actual_admission_evidence_root": "21" * 32,
+        "stage_05": {"actor_completion_rows": controls[:2]},
+        "stage_06": {"host_actor_completion": controls[2]},
+    }
+    five_sidecars = {"canonical_rows": []}
+    scratch_rows: list[object] = []
+    host_binding = {
+        "host_actor_row": actors[2],
+        "host_control_sha256": "22" * 32,
+        "host_final_resource": resources[2],
+        "loaded_module_root": "23" * 32,
+        "semantic_replay_root": "24" * 32,
+        "witness_root": "25" * 32,
+    }
+    host_stage = {
+        "host_execution_binding_preimage": host_binding,
+        "witness_root": host_binding["witness_root"],
+    }
+    evidence: dict[str, object] = {
+        "source_wire_profile": {"source": "fixture"},
+        "five_sidecars": five_sidecars,
+        "endpoint_stdout_set": {"endpoint": "fixture"},
+        "host_stage": host_stage,
+        "actor_rows": actors,
+        "cargo_build_binary": {"cargo": "fixture"},
+        "final_resource_rows": resources,
+        "negative_corpus": {"negative": "fixture"},
+        "scratch_rows": scratch_rows,
+        "actual_admission": actual_admission,
+    }
+    resource_preimage = {"final_resource_rows": resources}
+    isolation_preimage = {
+        name: evidence[name]
+        for name in (
+            "actual_admission",
+            "actor_rows",
+            "cargo_build_binary",
+            "endpoint_stdout_set",
+            "final_resource_rows",
+            "five_sidecars",
+            "host_stage",
+            "negative_corpus",
+            "scratch_rows",
+            "source_wire_profile",
+        )
+    }
+    bundle_preimage = {
+        "actual_admission_evidence_root": actual_admission[
+            "actual_admission_evidence_root"
+        ],
+        "five_sidecars": five_sidecars,
+        "host_witness_root": host_binding["witness_root"],
+        "scratch_rows": scratch_rows,
+        "semantic_replay_root": host_binding["semantic_replay_root"],
+    }
+    evidence["semantic_execution"] = {
+        "bundle_preimage": bundle_preimage,
+        "host_execution_binding_preimage": host_binding,
+        "isolation_preimage": isolation_preimage,
+        "resource_preimage": resource_preimage,
+        "semantic_component_root": "26" * 32,
+    }
+    semantic_roots = {
+        "bundle_evidence_root": ARTIFACT._json_root(
+            ARTIFACT.BUNDLE_EVIDENCE_ROOT_DOMAIN, bundle_preimage
+        ).hex(),
+        "host_execution_binding_root": ARTIFACT._json_root(
+            ARTIFACT.HOST_EXECUTION_BINDING_ROOT_DOMAIN, host_binding
+        ).hex(),
+        "isolation_evidence_root": ARTIFACT._json_root(
+            ARTIFACT.ISOLATION_EVIDENCE_ROOT_DOMAIN, isolation_preimage
+        ).hex(),
+        "resource_evidence_root": ARTIFACT._json_root(
+            ARTIFACT.RESOURCE_EVIDENCE_ROOT_DOMAIN, resource_preimage
+        ).hex(),
+        "semantic_component_root": "26" * 32,
+    }
+    return evidence, semantic_roots
+
+
+def test_q05b_v3_resource_normalization_is_unique_and_exact_roundtrip() -> None:
+    evidence, semantic_roots = _q05b_v3_resource_normalization_fixture()
+    prepared_full, absent_persisted_roots = (
+        ARTIFACT._prepare_evidence_for_replay_v3(evidence)
+    )
+    assert prepared_full is evidence
+    assert absent_persisted_roots is None
+    resources = evidence["final_resource_rows"]
+    normalized = ARTIFACT._persist_sections_v3(
+        evidence, resources, semantic_roots
+    )
+    assert ARTIFACT.ARTIFACT_SCHEMA_VERSION.endswith("/3")
+    assert normalized["semantic_execution"] == semantic_roots
+    assert normalized["final_resource_rows"] == resources
+    payload = ARTIFACT._canonical_json(normalized)
+    for resource in resources:
+        assert payload.count(ARTIFACT._canonical_json(resource)[:-1]) == 1
+        held = resource["live_sample_objects"][-1]
+        assert payload.count(ARTIFACT._canonical_json(held)[:-1]) == 1
+    assert set(
+        normalized["actor_rows"][0]["control_evidence"][
+            "final_resource_transcript"
+        ]
+    ) == {ARTIFACT.RESOURCE_TRANSCRIPT_REF_KEY}
+    assert set(
+        normalized["actual_admission"]["stage_06"][
+            "host_actor_completion"
+        ]["held_final_resource"]
+    ) == {ARTIFACT.HELD_FINAL_SAMPLE_REF_KEY}
+    expanded, observed_roots = ARTIFACT._expand_persisted_sections_v3(
+        normalized
+    )
+    assert observed_roots == semantic_roots
+    assert expanded == evidence
+    assert ARTIFACT._persist_sections_v3(
+        expanded, resources, observed_roots
+    ) == normalized
+
+
+def test_q05b_v3_persisted_semantic_root_tamper_fails_closed() -> None:
+    evidence, semantic_roots = _q05b_v3_resource_normalization_fixture()
+    normalized = ARTIFACT._persist_sections_v3(
+        evidence, evidence["final_resource_rows"], semantic_roots
+    )
+    normalized["semantic_execution"]["bundle_evidence_root"] = "00" * 32
+    _expanded, observed_roots = ARTIFACT._expand_persisted_sections_v3(
+        normalized
+    )
+    with pytest.raises(ARTIFACT.Q05BActualArtifactError) as rejected:
+        ARTIFACT._validate_persisted_semantic_roots_v3(
+            observed_roots,
+            {
+                name: semantic_roots[name]
+                for name in (
+                    "bundle_evidence_root",
+                    "host_execution_binding_root",
+                    "isolation_evidence_root",
+                    "resource_evidence_root",
+                )
+            },
+        )
+    assert rejected.value.code == "REJECT_Q05B_ARTIFACT_SEMANTIC"
+
+
+def test_q05b_v3_streaming_json_root_is_byte_exact_and_rejects_invalid_json() -> None:
+    domain = "HEGEL/Q05B/TEST/STREAMING_ROOT/V1"
+    value = {"ascii": [1, True, None], "escaped": "\u03bb\n"}
+    assert ARTIFACT._json_root(domain, value) == sha256(
+        domain.encode("ascii") + b"\x00" + ARTIFACT._canonical_json(value)
+    ).digest()
+    assert ARTIFACT._canonical_json_sha256_v3(value) == sha256(
+        ARTIFACT._canonical_json(value)
+    ).digest()
+    for invalid in (float("nan"), object()):
+        with pytest.raises(ARTIFACT.Q05BActualArtifactError) as rejected:
+            ARTIFACT._json_root(domain, invalid)
+        assert rejected.value.code == "REJECT_Q05B_ARTIFACT_JSON"
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "UNKNOWN_TRANSCRIPT",
+        "UNKNOWN_HELD_ORDINAL",
+        "REF_EXTRA_FIELD",
+        "REF_TYPE_ALIAS",
+        "RAW_DUPLICATE",
+        "HYBRID_FULL_WITH_NESTED_REF",
+        "TABLE_ALIAS",
+    ),
+)
+def test_q05b_v3_resource_reference_tamper_unknown_and_alias_fail_closed(
+    mutation: str,
+) -> None:
+    evidence, semantic_roots = _q05b_v3_resource_normalization_fixture()
+    resources = evidence["final_resource_rows"]
+    normalized = ARTIFACT._persist_sections_v3(
+        evidence, resources, semantic_roots
+    )
+    transcript_wrapper = normalized["actor_rows"][0]["control_evidence"][
+        "final_resource_transcript"
+    ]
+    held_wrapper = normalized["actor_rows"][0]["control_evidence"][
+        "held_final_resource"
+    ]
+    if mutation == "UNKNOWN_TRANSCRIPT":
+        transcript_wrapper[ARTIFACT.RESOURCE_TRANSCRIPT_REF_KEY][
+            "transcript_sha256"
+        ] = "00" * 32
+    elif mutation == "UNKNOWN_HELD_ORDINAL":
+        held_wrapper[ARTIFACT.HELD_FINAL_SAMPLE_REF_KEY]["sample_ordinal"] = 1
+    elif mutation == "REF_EXTRA_FIELD":
+        transcript_wrapper["alias"] = False
+    elif mutation == "REF_TYPE_ALIAS":
+        held_wrapper[ARTIFACT.HELD_FINAL_SAMPLE_REF_KEY]["role_id"] = True
+    elif mutation == "RAW_DUPLICATE":
+        normalized["actor_rows"][0]["control_evidence"][
+            "final_resource_transcript"
+        ] = deepcopy(resources[0])
+    elif mutation == "HYBRID_FULL_WITH_NESTED_REF":
+        hybrid = deepcopy(resources[0])
+        hybrid["live_sample_objects"][-1] = deepcopy(held_wrapper)
+        normalized["actor_rows"][0]["control_evidence"][
+            "final_resource_transcript"
+        ] = hybrid
+    else:
+        normalized["final_resource_rows"][1] = deepcopy(resources[0])
+    with pytest.raises(ARTIFACT.Q05BActualArtifactError) as rejected:
+        ARTIFACT._expand_persisted_sections_v3(normalized)
+    assert rejected.value.code == "REJECT_Q05B_ARTIFACT_REFERENCE"
+
+
+def test_q05b_v3_formal_resource_size_projection_without_big_alloc() -> None:
+    # V2R19's exact Stage-9 body and occurrence topology provide a strict upper
+    # bound on the unique-resource portion.  They do not prove the size of the
+    # non-resource remainder of a future artifact.
+    observed_old_bytes = 4_730_892_384
+    v2r19_sample_counts = (1780, 1789, 4478)
+    v2r19_occurrences = (5, 5, 11)
+    v2r19_appearances = sum(
+        count * occurrences
+        for count, occurrences in zip(
+            v2r19_sample_counts, v2r19_occurrences, strict=True
+        )
+    )
+    v2r19_unique_samples = sum(v2r19_sample_counts)
+    strict_unique_resource_upper = observed_old_bytes // min(v2r19_occurrences)
+    equal_mean_sample_estimate = observed_old_bytes // v2r19_appearances
+    assert v2r19_appearances == 67_103
+    assert v2r19_unique_samples == 8_047
+    assert strict_unique_resource_upper == 946_178_476
+    assert equal_mean_sample_estimate == 70_501
+    assert strict_unique_resource_upper < (
+        ARTIFACT.ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES
+    )
+
+    # The longer frozen calibration remains an estimate, now using V2R19's
+    # equal-mean real-body scale.  References are per repeated transcript and
+    # separately repeated held-final object, never per sample.
+    longer_sample_counts = (3938, 3958, 10178)
+    longer_occurrences = (7, 7, 13)
+    longer_old_resource_projection = equal_mean_sample_estimate * sum(
+        count * occurrences
+        for count, occurrences in zip(
+            longer_sample_counts, longer_occurrences, strict=True
+        )
+    )
+    ref_count = 2 * sum(occurrences - 1 for occurrences in longer_occurrences)
+    ref_upper_bound = 256
+    longer_normalized_resource_projection = (
+        equal_mean_sample_estimate * sum(longer_sample_counts)
+        + ref_count * ref_upper_bound
+    )
+    assert observed_old_bytes > ARTIFACT.ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES
+    assert longer_old_resource_projection > (
+        ARTIFACT.ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES
+    )
+    assert ref_count == 48
+    assert longer_normalized_resource_projection == 1_274_247_362
+    assert longer_normalized_resource_projection < (
+        ARTIFACT.ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES
+    )
+
+
 def test_q05b_v2_artifact_size_cap_is_exact_diagnostic_and_aligned(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
