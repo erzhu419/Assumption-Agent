@@ -800,7 +800,7 @@ def _replay_live_sample_v1(
         or type(sample["sample_maximum_unsampled_gap_ns"]) is not int
         or type(sample["prior_sample_finish_ns"]) is not int
         or type(sample["prior_sample_duration_ns"]) is not int
-        or sample["sample_target_wait_ns"] != 50_000_000
+        or sample["sample_target_wait_ns"] != 100_000_000
         or sample["sample_maximum_unsampled_gap_ns"] != 250_000_000
         or sample["sample_scheduled_start_ns"]
         != sample["prior_sample_finish_ns"] + sample["sample_target_wait_ns"]
@@ -2214,13 +2214,13 @@ def _isolation_config_v1(
             "publisher_fault_behavior",
         }
         or trajectory["schema_version"]
-        != "hegel-phase3a-q05b-durable-trajectory-policy/5"
+        != "hegel-phase3a-q05b-durable-trajectory-policy/6"
         or trajectory["required_for_run_cli"] is not True
         or trajectory["core_relative_path"]
         != "src/hegel_machine/phase3_q05b_trajectory_v2.py"
         or trajectory["core_raw_sha256"]
-        != "47a2766a039f9422e26e105c8a0a5d4ffec514dd4b2119ae63c7acc5f1fea0b1"
-        or trajectory["producer_id"] != "Q05B_SUPERVISOR_V5"
+        != "634826c13ee51c72c6e87c7b40f657ee315c3a91446ee12f2d807cdccc3030ed"
+        or trajectory["producer_id"] != "Q05B_SUPERVISOR_V6"
         or trajectory["clock_id"] != "CLOCK_MONOTONIC"
         or trajectory["trajectory_root_mode"] != "0700"
         or trajectory["event_and_manifest_mode"] != "0444"

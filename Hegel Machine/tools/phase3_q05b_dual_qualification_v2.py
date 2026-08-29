@@ -47,9 +47,9 @@ TRAJECTORY_CORE_RELATIVE_PATH: Final = (
     "src/hegel_machine/phase3_q05b_trajectory_v2.py"
 )
 TRAJECTORY_CORE_RAW_SHA256: Final = (
-    "47a2766a039f9422e26e105c8a0a5d4ffec514dd4b2119ae63c7acc5f1fea0b1"
+    "634826c13ee51c72c6e87c7b40f657ee315c3a91446ee12f2d807cdccc3030ed"
 )
-TRAJECTORY_PRODUCER_ID: Final = "Q05B_SUPERVISOR_V5"
+TRAJECTORY_PRODUCER_ID: Final = "Q05B_SUPERVISOR_V6"
 TRAJECTORY_FIFO_CAPACITY_V4: Final = 512
 TRAJECTORY_NORMAL_OUTSTANDING_CAPACITY_V4: Final = 384
 TRAJECTORY_CONTROL_RECOVERY_RESERVE_V4: Final = 128
@@ -58,8 +58,16 @@ TRAJECTORY_NORMAL_SAMPLE_ADMISSION_V4: Final = "NORMAL_LIVE_SAMPLE"
 TRAJECTORY_CONTROL_RECOVERY_ADMISSION_V4: Final = "CONTROL_RECOVERY"
 TRAJECTORY_INTERNAL_ADMISSION_V4: Final = "INTERNAL"
 TRAJECTORY_BACKPRESSURE_POLL_SECONDS_V4: Final = 0.01
-RESOURCE_SAMPLER_TARGET_WAIT_NS: Final = 50_000_000
+RESOURCE_SAMPLER_TARGET_WAIT_NS: Final = 100_000_000
 RESOURCE_SAMPLER_MAXIMUM_UNSAMPLED_GAP_NS: Final = 250_000_000
+RESOURCE_SAMPLER_CONTINUOUS_COUNT: Final = 2
+RESOURCE_SAMPLER_EVENTS_PER_SAMPLE: Final = 2
+RESOURCE_SAMPLER_BEGIN_OK_ARRIVAL_BOUND_RECORDS_PER_SECOND: Final = (
+    RESOURCE_SAMPLER_CONTINUOUS_COUNT
+    * RESOURCE_SAMPLER_EVENTS_PER_SAMPLE
+    * 1_000_000_000
+    // RESOURCE_SAMPLER_TARGET_WAIT_NS
+)
 HOST_REQUIRED_EFFECTIVE_CPUS_V5: Final = frozenset(range(32))
 HOST_SAMPLER_CPU_BY_ROLE_V5: Final = {1: 24, 2: 25, 3: 24}
 HOST_TRAJECTORY_PUBLISHER_CPUS_V5: Final = frozenset({26})
@@ -4299,7 +4307,7 @@ def _validate_policy_sections_v1(config: Mapping[str, object]) -> None:
     _require_type_exact_v1(
         trajectory_policy,
         {
-            "schema_version": "hegel-phase3a-q05b-durable-trajectory-policy/5",
+            "schema_version": "hegel-phase3a-q05b-durable-trajectory-policy/6",
             "required_for_run_cli": True,
             "core_relative_path": TRAJECTORY_CORE_RELATIVE_PATH,
             "core_raw_sha256": TRAJECTORY_CORE_RAW_SHA256,
@@ -4400,8 +4408,12 @@ def _validate_policy_sections_v1(config: Mapping[str, object]) -> None:
             "required_transcript_fields",
             "sampling_interval_milliseconds",
             "sampling_interval_semantics",
+            "sampling_profile_id",
             "sampling_target_wait_milliseconds",
             "sampling_scheduler_reserve_milliseconds",
+            "continuous_sampler_count",
+            "continuous_sampler_events_per_sample",
+            "continuous_sampler_begin_ok_arrival_bound_records_per_second",
             "sampling_deadline_clock",
             "required_host_effective_cpus",
             "host_sampler_cpu_rows",
@@ -4540,8 +4552,16 @@ def _validate_policy_sections_v1(config: Mapping[str, object]) -> None:
                 "MAXIMUM_UNSAMPLED_GAP_FROM_PREVIOUS_COLLECTION_FINISH_TO_"
                 "NEXT_COLLECTION_START"
             ),
-            "sampling_target_wait_milliseconds": 50,
-            "sampling_scheduler_reserve_milliseconds": 200,
+            "sampling_profile_id": "Q05B_TARGET_C_BALANCED_SAMPLING_V6",
+            "sampling_target_wait_milliseconds": 100,
+            "sampling_scheduler_reserve_milliseconds": 150,
+            "continuous_sampler_count": RESOURCE_SAMPLER_CONTINUOUS_COUNT,
+            "continuous_sampler_events_per_sample": (
+                RESOURCE_SAMPLER_EVENTS_PER_SAMPLE
+            ),
+            "continuous_sampler_begin_ok_arrival_bound_records_per_second": (
+                RESOURCE_SAMPLER_BEGIN_OK_ARRIVAL_BOUND_RECORDS_PER_SECOND
+            ),
             "sampling_deadline_clock": "CLOCK_MONOTONIC",
             "required_host_effective_cpus": "0-31",
             "host_sampler_cpu_rows": [
@@ -7739,8 +7759,9 @@ def _sample_actor_resources_v1(
             if os.path.lexists(actor.control_root / "done"):
                 actor.child_done_observed.set()
             # The 250 ms value remains the hard maximum unsampled gap.  The
-            # 50 ms target leaves 200 ms of scheduler reserve without changing
-            # that evidence boundary.  The wait is scheduled against an
+            # 100 ms target leaves 150 ms of scheduler reserve while limiting
+            # two continuous samplers' BEGIN/OK arrival bound to 40 records/s
+            # without changing that evidence boundary.  The wait uses an
             # absolute monotonic deadline and remains close-interruptible.
             remaining_ns = scheduled_start_ns - time.monotonic_ns()
             if actor.sample_stop.wait(max(0, remaining_ns) / 1_000_000_000):

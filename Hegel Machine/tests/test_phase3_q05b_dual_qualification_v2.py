@@ -915,14 +915,14 @@ def _mock_held_python_actor(
     initial_sample["sample_monotonic_ns"] = start_ns
     initial_sample["sample_duration_ns"] = finish_ns - start_ns
     initial_sample["sample_scheduled_start_ns"] = start_ns
-    initial_sample["sample_gap_from_prior_finish_ns"] = 50_000_000
+    initial_sample["sample_gap_from_prior_finish_ns"] = 100_000_000
     initial_sample["sample_scheduler_lateness_ns"] = 0
     initial_sample["sample_native_wake_ns"] = start_ns
     initial_sample["sample_native_wake_lateness_ns"] = 0
     initial_sample["sample_trajectory_admission_duration_ns"] = 0
-    initial_sample["sample_target_wait_ns"] = 50_000_000
+    initial_sample["sample_target_wait_ns"] = 100_000_000
     initial_sample["sample_maximum_unsampled_gap_ns"] = 250_000_000
-    initial_sample["prior_sample_finish_ns"] = start_ns - 50_000_000
+    initial_sample["prior_sample_finish_ns"] = start_ns - 100_000_000
     initial_sample["prior_sample_duration_ns"] = 0
     actor = TOOL.HeldActorProcessV1(
         role_id=1,
@@ -1080,7 +1080,7 @@ def test_isolation_config_is_exact_zero_null_and_actual_not_executed() -> None:
         "src/hegel_machine/_vendor/tomli/_types.py",
     )
     assert config["durable_trajectory_policy"] == {
-        "schema_version": "hegel-phase3a-q05b-durable-trajectory-policy/5",
+        "schema_version": "hegel-phase3a-q05b-durable-trajectory-policy/6",
         "required_for_run_cli": True,
         "core_relative_path": TOOL.TRAJECTORY_CORE_RELATIVE_PATH,
         "core_raw_sha256": TOOL.TRAJECTORY_CORE_RAW_SHA256,
@@ -1147,6 +1147,25 @@ def test_isolation_config_is_exact_zero_null_and_actual_not_executed() -> None:
         ),
         "publisher_fault_behavior": "FAIL_CLOSED_NO_RETRY",
     }
+    sampling = config["live_resource_evidence_policy"]
+    assert sampling["sampling_profile_id"] == (
+        "Q05B_TARGET_C_BALANCED_SAMPLING_V6"
+    )
+    assert sampling["sampling_target_wait_milliseconds"] == 100
+    assert sampling["sampling_scheduler_reserve_milliseconds"] == 150
+    assert sampling["continuous_sampler_count"] == (
+        TOOL.RESOURCE_SAMPLER_CONTINUOUS_COUNT
+    )
+    assert sampling["continuous_sampler_events_per_sample"] == (
+        TOOL.RESOURCE_SAMPLER_EVENTS_PER_SAMPLE
+    )
+    assert (
+        sampling[
+            "continuous_sampler_begin_ok_arrival_bound_records_per_second"
+        ]
+        == TOOL.RESOURCE_SAMPLER_BEGIN_OK_ARRIVAL_BOUND_RECORDS_PER_SECOND
+        == 40
+    )
     inspect_policy = config["runtime_command_inspect_policy"]
     assert inspect_policy["environment_rows"] == [
         [
@@ -1790,7 +1809,7 @@ def test_live_resource_transcript_replays_inspect_cgroup_and_proc_limits(
     continuous_sample = dict(collected)
     continuous_sample["sample_ordinal"] = 1
     continuous_sample["sample_monotonic_ns"] = (
-        held_sample["sample_monotonic_ns"] - 550_000_000
+        held_sample["sample_monotonic_ns"] - 600_000_000
     )
     # Collection itself may exceed 250 ms; the contract bounds only the
     # unsampled gap from the preceding collection finish to the next start.
@@ -1798,17 +1817,17 @@ def test_live_resource_transcript_replays_inspect_cgroup_and_proc_limits(
     continuous_sample["sample_scheduled_start_ns"] = continuous_sample[
         "sample_monotonic_ns"
     ]
-    continuous_sample["sample_gap_from_prior_finish_ns"] = 50_000_000
+    continuous_sample["sample_gap_from_prior_finish_ns"] = 100_000_000
     continuous_sample["sample_scheduler_lateness_ns"] = 0
     continuous_sample["sample_native_wake_ns"] = continuous_sample[
         "sample_monotonic_ns"
     ]
     continuous_sample["sample_native_wake_lateness_ns"] = 0
     continuous_sample["sample_trajectory_admission_duration_ns"] = 0
-    continuous_sample["sample_target_wait_ns"] = 50_000_000
+    continuous_sample["sample_target_wait_ns"] = 100_000_000
     continuous_sample["sample_maximum_unsampled_gap_ns"] = 250_000_000
     continuous_sample["prior_sample_finish_ns"] = (
-        continuous_sample["sample_monotonic_ns"] - 50_000_000
+        continuous_sample["sample_monotonic_ns"] - 100_000_000
     )
     continuous_sample["prior_sample_duration_ns"] = 0
     held_sample["sample_ordinal"] = 2
@@ -1820,14 +1839,14 @@ def test_live_resource_transcript_replays_inspect_cgroup_and_proc_limits(
         "sample_duration_ns"
     ]
     held_sample["sample_scheduled_start_ns"] = (
-        held_sample["prior_sample_finish_ns"] + 50_000_000
+        held_sample["prior_sample_finish_ns"] + 100_000_000
     )
-    held_sample["sample_gap_from_prior_finish_ns"] = 50_000_000
+    held_sample["sample_gap_from_prior_finish_ns"] = 100_000_000
     held_sample["sample_scheduler_lateness_ns"] = 0
     held_sample["sample_native_wake_ns"] = held_sample["sample_monotonic_ns"]
     held_sample["sample_native_wake_lateness_ns"] = 0
     held_sample["sample_trajectory_admission_duration_ns"] = 0
-    held_sample["sample_target_wait_ns"] = 50_000_000
+    held_sample["sample_target_wait_ns"] = 100_000_000
     held_sample["sample_maximum_unsampled_gap_ns"] = 250_000_000
     final = TOOL.final_resource_transcript_v1(
         (continuous_sample, held_sample),
@@ -1841,7 +1860,7 @@ def test_live_resource_transcript_replays_inspect_cgroup_and_proc_limits(
     assert final["peak_scope"] == "CHILD_PLUS_WRAPPER_THROUGH_HELD_FINAL_SAMPLE"
     assert final["explicit_remove_admitted_after_this_transcript"] is True
     assert final["final_memory_peak_bytes"] == 999
-    assert final["maximum_inter_sample_gap_ns"] == 50_000_000
+    assert final["maximum_inter_sample_gap_ns"] == 100_000_000
     assert len(final["live_sample_objects"]) == 2
     excessive_gap = dict(continuous_sample)
     excessive_gap["sample_monotonic_ns"] -= 200_000_001
@@ -2585,7 +2604,7 @@ def test_q05b_v2_regression_held_final_deadline_and_trajectory_are_exact(
         trajectory_root,
         expected_parent=trajectory_parent,
         trace_id="held-final-trajectory",
-        producer_id="Q05B_SUPERVISOR_V5",
+        producer_id="Q05B_SUPERVISOR_V6",
     )
     TOOL._ACTIVE_TRAJECTORY_V2 = writer
     try:
@@ -2604,7 +2623,7 @@ def test_q05b_v2_regression_held_final_deadline_and_trajectory_are_exact(
             actor="PYTHON_ENDPOINT",
         )
         sample_start_ns = time.monotonic_ns()
-        prior_finish_ns = sample_start_ns - 50_000_000
+        prior_finish_ns = sample_start_ns - 100_000_000
         sample = actor.sample_rows[0]
         sample.update(
             {
@@ -2612,12 +2631,12 @@ def test_q05b_v2_regression_held_final_deadline_and_trajectory_are_exact(
                 "sample_monotonic_ns": sample_start_ns,
                 "sample_duration_ns": 0,
                 "sample_scheduled_start_ns": sample_start_ns,
-                "sample_gap_from_prior_finish_ns": 50_000_000,
+                "sample_gap_from_prior_finish_ns": 100_000_000,
                 "sample_scheduler_lateness_ns": 0,
                 "sample_native_wake_ns": sample_start_ns,
                 "sample_native_wake_lateness_ns": 0,
                 "sample_trajectory_admission_duration_ns": 0,
-                "sample_target_wait_ns": 50_000_000,
+                "sample_target_wait_ns": 100_000_000,
                 "sample_maximum_unsampled_gap_ns": 250_000_000,
                 "prior_sample_finish_ns": prior_finish_ns,
                 "prior_sample_duration_ns": 0,
@@ -2633,8 +2652,8 @@ def test_q05b_v2_regression_held_final_deadline_and_trajectory_are_exact(
             finish_ns=sample_start_ns,
             collection_duration_ns=0,
             scheduler_lateness_ns=0,
-            target_wait_ns=50_000_000,
-            gap_ns=50_000_000,
+            target_wait_ns=100_000_000,
+            gap_ns=100_000_000,
             maximum_gap_ns=250_000_000,
             gap_exceeded=False,
         )
@@ -2680,11 +2699,11 @@ def test_q05b_v2_regression_held_final_deadline_and_trajectory_are_exact(
     assert held_ok["actor_or_null"] == "PYTHON_ENDPOINT"
     assert held_ok["role_id_or_null"] == "1"
     assert held_ok["sample_ordinal_or_null"] == 2
-    assert held_ok["target_wait_ns_or_null"] == 50_000_000
+    assert held_ok["target_wait_ns_or_null"] == 100_000_000
     assert held_ok["maximum_gap_ns_or_null"] == 250_000_000
-    assert 50_000_000 <= held_ok["gap_ns_or_null"] <= 250_000_000
+    assert 100_000_000 <= held_ok["gap_ns_or_null"] <= 250_000_000
     assert held_ok["scheduled_start_ns_or_null"] == (
-        held_ok["previous_finish_ns_or_null"] + 50_000_000
+        held_ok["previous_finish_ns_or_null"] + 100_000_000
     )
     assert held_ok["actual_start_ns_or_null"] == held_sample["sample_monotonic_ns"]
     assert held_ok["finish_ns_or_null"] == (
@@ -2882,14 +2901,14 @@ def test_q05b_v2_regression_held_final_sleep_interrupt_closes_child_span(
             "sample_monotonic_ns": sample_start_ns,
             "sample_duration_ns": 0,
             "sample_scheduled_start_ns": sample_start_ns,
-            "sample_gap_from_prior_finish_ns": 50_000_000,
+            "sample_gap_from_prior_finish_ns": 100_000_000,
             "sample_scheduler_lateness_ns": 0,
             "sample_native_wake_ns": sample_start_ns,
             "sample_native_wake_lateness_ns": 0,
             "sample_trajectory_admission_duration_ns": 0,
-            "sample_target_wait_ns": 50_000_000,
+            "sample_target_wait_ns": 100_000_000,
             "sample_maximum_unsampled_gap_ns": 250_000_000,
-            "prior_sample_finish_ns": sample_start_ns - 50_000_000,
+            "prior_sample_finish_ns": sample_start_ns - 100_000_000,
             "prior_sample_duration_ns": 0,
         }
     )
@@ -3224,7 +3243,7 @@ def test_stage4_exited_sampler_replays_exact_typed_gap_after_cleanup(
     assert actor.sample_thread.is_alive() is False
 
     previous_finish_ns = 10
-    scheduled_start_ns = previous_finish_ns + 50_000_000
+    scheduled_start_ns = previous_finish_ns + 100_000_000
     actual_start_ns = previous_finish_ns + 250_000_001
     gap_detail = (
         "held actor sampling gap exceeded bound: "
@@ -3232,7 +3251,7 @@ def test_stage4_exited_sampler_replays_exact_typed_gap_after_cleanup(
         f"previous_finish_ns={previous_finish_ns}; "
         f"scheduled_start_ns={scheduled_start_ns}; "
         f"actual_start_ns={actual_start_ns}; gap_ns=250000001; "
-        "maximum_gap_ns=250000000; target_wait_ns=50000000; "
+        "maximum_gap_ns=250000000; target_wait_ns=100000000; "
         "previous_duration_ns=0"
     )
     gap_error = TOOL.Q05BDualSupervisorError(
@@ -3249,7 +3268,7 @@ def test_stage4_exited_sampler_replays_exact_typed_gap_after_cleanup(
         trajectory_root,
         expected_parent=trajectory_parent,
         trace_id="stage4-exited-typed-gap",
-        producer_id="Q05B_SUPERVISOR_V5",
+        producer_id="Q05B_SUPERVISOR_V6",
         clock_ns=lambda: next(ticks),
     )
     TOOL._ACTIVE_TRAJECTORY_V2 = writer
@@ -3295,8 +3314,8 @@ def test_stage4_exited_sampler_replays_exact_typed_gap_after_cleanup(
             actual_start_ns=actual_start_ns,
             finish_ns=actual_start_ns,
             collection_duration_ns=0,
-            scheduler_lateness_ns=200_000_001,
-            target_wait_ns=50_000_000,
+            scheduler_lateness_ns=150_000_001,
+            target_wait_ns=100_000_000,
             gap_ns=250_000_001,
             maximum_gap_ns=250_000_000,
             gap_exceeded=True,
@@ -3391,7 +3410,7 @@ def test_trajectory_error_detail_is_nul_safe_utf8_byte_bounded_and_replayable(
         root,
         expected_parent=parent,
         trace_id="utf8-byte-bound-" + error_code.lower(),
-        producer_id="Q05B_SUPERVISOR_V5",
+        producer_id="Q05B_SUPERVISOR_V6",
     )
     TOOL._ACTIVE_TRAJECTORY_V2 = writer
     try:
@@ -3479,14 +3498,14 @@ def test_v4_sampler_accepts_exact_250ms_maximum_gap(
     monotonic_values = iter(
         (
             0,
-            50_000_000,
-            50_000_000,
-            60_000_000,
-            60_000_000,
-            310_000_000,
-            310_000_000,
-            320_000_000,
-            320_000_000,
+            100_000_000,
+            100_000_000,
+            110_000_000,
+            110_000_000,
+            360_000_000,
+            360_000_000,
+            370_000_000,
+            370_000_000,
         )
     )
     monkeypatch.setattr(TOOL.time, "monotonic_ns", lambda: next(monotonic_values))
@@ -3536,7 +3555,7 @@ def test_v4_sampler_accepts_exact_250ms_maximum_gap(
         trajectory_root,
         expected_parent=trajectory_parent,
         trace_id="sampler-ok",
-        producer_id="Q05B_SUPERVISOR_V5",
+        producer_id="Q05B_SUPERVISOR_V6",
         clock_ns=lambda: next(trajectory_ticks),
     )
     TOOL._ACTIVE_TRAJECTORY_V2 = writer
@@ -3555,10 +3574,10 @@ def test_v4_sampler_accepts_exact_250ms_maximum_gap(
     assert actor.sample_errors == []
     assert len(actor.sample_rows) == 2
     assert actor.sample_rows[1]["sample_gap_from_prior_finish_ns"] == 250_000_000
-    assert actor.sample_rows[1]["sample_scheduler_lateness_ns"] == 200_000_000
-    assert actor.sample_rows[1]["sample_native_wake_lateness_ns"] == 200_000_000
+    assert actor.sample_rows[1]["sample_scheduler_lateness_ns"] == 150_000_000
+    assert actor.sample_rows[1]["sample_native_wake_lateness_ns"] == 150_000_000
     assert actor.sample_rows[1]["sample_trajectory_admission_duration_ns"] == 0
-    assert actor.sample_rows[1]["sample_target_wait_ns"] == 50_000_000
+    assert actor.sample_rows[1]["sample_target_wait_ns"] == 100_000_000
     assert actor.sample_rows[1]["sample_maximum_unsampled_gap_ns"] == 250_000_000
     verified = TRAJECTORY.verify_durable_trajectory_v2(
         trajectory_root,
@@ -3731,7 +3750,7 @@ def test_v2_sampler_rejects_250ms_plus_one_ns_with_exact_actor_metrics(
         trajectory_root,
         expected_parent=trajectory_parent,
         trace_id="sampler-gap-fail",
-        producer_id="Q05B_SUPERVISOR_V5",
+        producer_id="Q05B_SUPERVISOR_V6",
         clock_ns=lambda: next(trajectory_ticks),
     )
     TOOL._ACTIVE_TRAJECTORY_V2 = writer
@@ -3754,7 +3773,7 @@ def test_v2_sampler_rejects_250ms_plus_one_ns_with_exact_actor_metrics(
     assert "sample_ordinal=1" in error
     assert "gap_ns=250000001" in error
     assert "maximum_gap_ns=250000000" in error
-    assert "target_wait_ns=50000000" in error
+    assert "target_wait_ns=100000000" in error
     with pytest.raises(TOOL.Q05BDualSupervisorError) as propagated:
         TOOL._wait_for_held_child_done_v1(actor, 1.0)
     assert propagated.value.code == TOOL.FAIL_SAMPLING_GAP
@@ -3787,12 +3806,12 @@ def test_v2_sampler_rejects_250ms_plus_one_ns_with_exact_actor_metrics(
 @pytest.mark.parametrize(
     ("prior_lateness_ns", "expected_gap_ns", "expected_failure"),
     (
-        (140_055_000, 190_055_000, False),
-        (159_215_000, 209_215_000, False),
-        (342_770_340, 392_770_340, True),
+        (140_055_000, 240_055_000, False),
+        (159_215_000, 259_215_000, True),
+        (342_770_340, 442_770_340, True),
     ),
 )
-def test_v5_prior_campaign_lateness_replays_against_50ms_target_and_250ms_bound(
+def test_target_c_v6_prior_campaign_lateness_replays_against_100ms_target_and_250ms_bound(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     prior_lateness_ns: int,
@@ -3800,7 +3819,7 @@ def test_v5_prior_campaign_lateness_replays_against_50ms_target_and_250ms_bound(
     expected_failure: bool,
 ) -> None:
     prior_finish_ns = 1_000
-    scheduled_start_ns = prior_finish_ns + 50_000_000
+    scheduled_start_ns = prior_finish_ns + 100_000_000
     actual_start_ns = scheduled_start_ns + prior_lateness_ns
     values = [prior_finish_ns, actual_start_ns, actual_start_ns]
     if not expected_failure:
@@ -3844,7 +3863,7 @@ def test_v5_prior_campaign_lateness_replays_against_50ms_target_and_250ms_bound(
         sample_complete=threading.Event(),
         child_done_observed=threading.Event(),
         control_root=tmp_path,
-        container_name="v5-prior-lateness-replay",
+        container_name="target-c-v6-prior-lateness-replay",
         mount_registry=object(),
         seccomp_evidence={},
         docker_execution_principal={},
@@ -15081,11 +15100,11 @@ def test_q05b_v4_regression_slow_durable_begin_does_not_pollute_real_gap(
     monotonic_values = iter(
         (
             10,
-            50_000_010,
-            50_000_010,
-            50_000_010,
-            50_000_011,
-            50_000_011,
+            100_000_010,
+            100_000_010,
+            100_000_010,
+            100_000_011,
+            100_000_011,
         )
     )
     monkeypatch.setattr(TOOL.time, "monotonic_ns", lambda: next(monotonic_values))
@@ -15175,7 +15194,7 @@ def test_q05b_v4_regression_slow_durable_begin_does_not_pollute_real_gap(
 
     assert actor.sample_errors == []
     assert len(actor.sample_rows) == 1
-    assert actor.sample_rows[0]["sample_gap_from_prior_finish_ns"] == 50_000_000
+    assert actor.sample_rows[0]["sample_gap_from_prior_finish_ns"] == 100_000_000
     verified = TRAJECTORY.verify_durable_trajectory_v2(
         trajectory_root,
         expected_parent=trajectory_parent,
@@ -15193,13 +15212,13 @@ def test_q05b_v4_regression_slow_durable_begin_does_not_pollute_real_gap(
         and event["event_type"] == "OK"
     )
     assert sample_event["previous_finish_ns_or_null"] == prior_finish_ns
-    assert sample_event["scheduled_start_ns_or_null"] == 50_000_010
-    assert sample_event["actual_start_ns_or_null"] == 50_000_010
-    assert sample_event["finish_ns_or_null"] == 50_000_011
+    assert sample_event["scheduled_start_ns_or_null"] == 100_000_010
+    assert sample_event["actual_start_ns_or_null"] == 100_000_010
+    assert sample_event["finish_ns_or_null"] == 100_000_011
     assert sample_event["collection_duration_ns_or_null"] == 1
     assert sample_event["scheduler_lateness_ns_or_null"] == 0
-    assert sample_event["gap_ns_or_null"] == 50_000_000
-    assert sample_event["target_wait_ns_or_null"] == 50_000_000
+    assert sample_event["gap_ns_or_null"] == 100_000_000
+    assert sample_event["target_wait_ns_or_null"] == 100_000_000
     assert sample_event["maximum_gap_ns_or_null"] == 250_000_000
     assert sample_event["gap_exceeded_or_null"] is False
 
@@ -15822,7 +15841,7 @@ def test_q05b_v4_normal_deadline_falls_back_to_typed_gap_complete_fail(
         and event["event_type"] == "FAIL"
     )
     assert gap_event["error_code_or_null"] == TOOL.FAIL_SAMPLING_GAP
-    assert gap_event["target_wait_ns_or_null"] == 50_000_000
+    assert gap_event["target_wait_ns_or_null"] == 100_000_000
     assert gap_event["gap_ns_or_null"] > gap_event["maximum_gap_ns_or_null"]
     assert gap_event["gap_exceeded_or_null"] is True
 
@@ -16145,7 +16164,7 @@ def _q05b_v2_regression_artifact_resource_rows(
             *,
             held: bool,
         ) -> dict[str, object]:
-            scheduled_start_ns = prior_finish_ns + 50_000_000
+            scheduled_start_ns = prior_finish_ns + 100_000_000
             result: dict[str, object] = {
                 "schema_version": (
                     "hegel-phase3a-q05b-live-container-resource-transcript/3"
@@ -16165,7 +16184,7 @@ def _q05b_v2_regression_artifact_resource_rows(
                     start_ns - scheduled_start_ns
                 ),
                 "sample_trajectory_admission_duration_ns": 0,
-                "sample_target_wait_ns": 50_000_000,
+                "sample_target_wait_ns": 100_000_000,
                 "sample_maximum_unsampled_gap_ns": 250_000_000,
                 "prior_sample_finish_ns": prior_finish_ns,
                 "prior_sample_duration_ns": prior_duration_ns,
@@ -16209,20 +16228,20 @@ def _q05b_v2_regression_artifact_resource_rows(
                 )
             return result
 
-        first_start_ns = role_id * 1_000_000_000 + 50_000_000
+        first_start_ns = role_id * 1_000_000_000 + 100_000_000
         first_duration_ns = 10_000_000
         first = sample(
             1,
             first_start_ns,
             first_duration_ns,
-            first_start_ns - 50_000_000,
+            first_start_ns - 100_000_000,
             0,
             held=False,
         )
         first_finish_ns = first_start_ns + first_duration_ns
         second = sample(
             2,
-            first_finish_ns + 50_000_000,
+            first_finish_ns + 100_000_000,
             15_000_000,
             first_finish_ns,
             first_duration_ns,
@@ -16427,8 +16446,8 @@ def test_q05b_v2_real_sample_counts_exceed_legacy_artifact_cap_under_repeated_to
             strict=True,
         )
     )
-    assert representative_sample_bytes == (3039, 3040, 3039)
-    assert repeated_sample_budget == 570_101_560
+    assert representative_sample_bytes == (3041, 3042, 3041)
+    assert repeated_sample_budget == 570_476_732
     assert repeated_sample_budget > 64 * 1024 * 1024
     assert repeated_sample_budget < 2 * 1024 * 1024 * 1024
 

@@ -322,10 +322,10 @@ ACTUAL_COMMAND_MOUNT_RESOURCE_POLICY_ROOT_DOMAIN: Final = (
     b"HEGEL/Q05B/ACTUAL/COMMAND_MOUNT_RESOURCE_POLICY/V1\x00"
 )
 EXPECTED_COMMIT_A_STATIC_POLICY_ROOT: Final = (
-    "0508e6d89c4d5f0fe117f8861967c53b1402128a5e4cb7764d3926ebd70262ea"
+    "67b0cb763fa2c81b256c1831fd5d75f4cc70ab315c90a1cbf1ac2111d29cba96"
 )
 EXPECTED_COMMAND_MOUNT_RESOURCE_POLICY_ROOT: Final = (
-    "2d160db1090734fd2a1ae46a390cfd8ae57af069e6740ac91afb70602fe7ce79"
+    "932064f93df61882cd0d35ebbb25a17818146b54c48fadf96967eaed49498a0f"
 )
 COMMAND_MOUNT_RESOURCE_POLICY_FIELDS: Final = (
     "docker",
@@ -1667,13 +1667,13 @@ def _validate_config_bytes_v1(value: object) -> dict[str, object]:
     _require_type_exact_v1(
         decoded["durable_trajectory_policy"],
         {
-            "schema_version": "hegel-phase3a-q05b-durable-trajectory-policy/5",
+            "schema_version": "hegel-phase3a-q05b-durable-trajectory-policy/6",
             "required_for_run_cli": True,
             "core_relative_path": "src/hegel_machine/phase3_q05b_trajectory_v2.py",
             "core_raw_sha256": (
-                "47a2766a039f9422e26e105c8a0a5d4ffec514dd4b2119ae63c7acc5f1fea0b1"
+                "634826c13ee51c72c6e87c7b40f657ee315c3a91446ee12f2d807cdccc3030ed"
             ),
-            "producer_id": "Q05B_SUPERVISOR_V5",
+            "producer_id": "Q05B_SUPERVISOR_V6",
             "clock_id": "CLOCK_MONOTONIC",
             "trajectory_root_mode": "0700",
             "event_and_manifest_mode": "0444",
