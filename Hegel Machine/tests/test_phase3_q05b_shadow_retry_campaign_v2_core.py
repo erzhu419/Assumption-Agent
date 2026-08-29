@@ -16,13 +16,31 @@ def _wire(value: object) -> bytes:
     return campaign.canonical_campaign_json_bytes_v2(value)
 
 
+def _live_gap_detail_or_null(
+    *,
+    scheduled_start_ns: int,
+    actual_start_ns: int,
+    trajectory_admission_duration_ns: int = 93_411,
+) -> str:
+    native_wake_ns = actual_start_ns - trajectory_admission_duration_ns
+    assert scheduled_start_ns <= native_wake_ns <= actual_start_ns
+    return (
+        "MAXIMUM_UNSAMPLED_GAP_EXCEEDED;"
+        f"native_wake_ns={native_wake_ns};"
+        "native_wake_lateness_ns="
+        f"{native_wake_ns - scheduled_start_ns};"
+        "trajectory_admission_duration_ns="
+        f"{trajectory_admission_duration_ns}"
+    )
+
+
 def _continuous_gap_detail() -> str:
     return (
         "held actor sampling gap exceeded bound: "
         "actor_id=RUST_ENDPOINT; role_id=2; sample_ordinal=1; "
-        "previous_finish_ns=1000000000; scheduled_start_ns=1125000000; "
+        "previous_finish_ns=1000000000; scheduled_start_ns=1100000000; "
         "actual_start_ns=1250000001; gap_ns=250000001; "
-        "maximum_gap_ns=250000000; target_wait_ns=125000000; "
+        "maximum_gap_ns=250000000; target_wait_ns=100000000; "
         "previous_duration_ns=1000000"
     )
 
@@ -199,6 +217,10 @@ def _failure_row(*, origin: bool, sequence: int = 6) -> dict[str, object]:
                 "gap_ns_or_null": actual - previous,
                 "maximum_gap_ns_or_null": campaign.MAXIMUM_GAP_NS_V2,
                 "gap_exceeded_or_null": True,
+                "detail_or_null": _live_gap_detail_or_null(
+                    scheduled_start_ns=scheduled,
+                    actual_start_ns=actual,
+                ),
             }
         )
     return row
@@ -340,13 +362,14 @@ def _held_final_failure_rows() -> list[dict[str, object]]:
         "actor_id=RUST_ENDPOINT; role_id=2; sample_ordinal=1; "
         "previous_finish_ns=1000000000; actual_start_ns=1250000001; "
         "gap_ns=250000001; maximum_gap_ns=250000000; "
-        "target_wait_ns=125000000; previous_duration_ns=1000000"
+        "target_wait_ns=100000000; previous_duration_ns=1000000"
     )
     origin.update(
         {
             "operation": "HELD_FINAL_RESOURCE_SAMPLE",
             "span_id": "held-final-sample-RUST_ENDPOINT-000001",
             "substep_or_null": "COLLECT_BOUND_HELD_FINAL_RESOURCES",
+            "detail_or_null": "MAXIMUM_UNSAMPLED_GAP_EXCEEDED",
             "error_detail": detail,
         }
     )
@@ -357,6 +380,247 @@ def _held_final_failure_rows() -> list[dict[str, object]]:
         row["record_digest"] = "sha256:" + _root(f"held-event-{sequence}")
         row["error_detail"] = detail
     return [origin, *propagated]
+
+
+def _trusted_host_failure_rows(
+    operation: str,
+    *,
+    host_cleanup_pairs: int = 2,
+) -> list[dict[str, object]]:
+    assert operation in {"LIVE_RESOURCE_SAMPLE", "HELD_FINAL_RESOURCE_SAMPLE"}
+    assert host_cleanup_pairs in {0, 2}
+    live = operation == "LIVE_RESOURCE_SAMPLE"
+    origin_sequence = 6 if live else 5
+    origin = _failure_row(origin=True, sequence=origin_sequence)
+    previous = int(origin["previous_finish_ns_or_null"])
+    scheduled = int(origin["scheduled_start_ns_or_null"])
+    actual = int(origin["actual_start_ns_or_null"])
+    gap = int(origin["gap_ns_or_null"])
+    maximum = int(origin["maximum_gap_ns_or_null"])
+    target = int(origin["target_wait_ns_or_null"])
+    span_prefix = "sample" if live else "held-final-sample"
+    substep = (
+        "COLLECT_BOUND_LIVE_RESOURCES"
+        if live
+        else "COLLECT_BOUND_HELD_FINAL_RESOURCES"
+    )
+    detail = (
+        (
+            "held actor sampling gap exceeded bound: "
+            "actor_id=TRUSTED_HOST_REPLAY; role_id=3; sample_ordinal=7163; "
+            f"previous_finish_ns={previous}; scheduled_start_ns={scheduled}; "
+            f"actual_start_ns={actual}; gap_ns={gap}; maximum_gap_ns={maximum}; "
+            f"target_wait_ns={target}; previous_duration_ns=172792053"
+        )
+        if live
+        else (
+            "held final sampling gap exceeded bound: "
+            "actor_id=TRUSTED_HOST_REPLAY; role_id=3; sample_ordinal=7163; "
+            f"previous_finish_ns={previous}; actual_start_ns={actual}; "
+            f"gap_ns={gap}; maximum_gap_ns={maximum}; target_wait_ns={target}; "
+            "previous_duration_ns=172792053"
+        )
+    )
+    origin.update(
+        {
+            "operation": operation,
+            "span_id": f"{span_prefix}-TRUSTED_HOST_REPLAY-007163",
+            "substep_or_null": substep,
+            "actor_or_null": "TRUSTED_HOST_REPLAY",
+            "error_detail": detail,
+            "role_id_or_null": "3",
+            "sample_ordinal_or_null": 7163,
+            "detail_or_null": (
+                _live_gap_detail_or_null(
+                    scheduled_start_ns=scheduled,
+                    actual_start_ns=actual,
+                )
+                if live
+                else "MAXIMUM_UNSAMPLED_GAP_EXCEEDED"
+            ),
+            "record_digest": "sha256:" + _root(
+                f"trusted-host-{operation}-origin"
+            ),
+        }
+    )
+    terminal_detail = "held actor sampler failed: " + detail if live else detail
+
+    def propagated(
+        sequence: int,
+        row_operation: str,
+        span_id: str,
+        stage: str,
+        row_substep: str | None,
+        actor: str | None,
+        row_detail: str,
+        row_error_detail: str,
+    ) -> dict[str, object]:
+        row = _failure_row(origin=False, sequence=sequence)
+        row.update(
+            {
+                "operation": row_operation,
+                "span_id": span_id,
+                "stage_or_null": stage,
+                "substep_or_null": row_substep,
+                "actor_or_null": actor,
+                "detail_or_null": row_detail,
+                "error_detail": row_error_detail,
+                "record_digest": "sha256:" + _root(
+                    f"trusted-host-{operation}-{row_operation}-{sequence}"
+                ),
+            }
+        )
+        return row
+
+    rows = [origin]
+    next_sequence = origin_sequence + 1
+    if live:
+        rows.append(
+            propagated(
+                next_sequence,
+                "LIVE_RESOURCE_SAMPLER",
+                "sampler-TRUSTED_HOST_REPLAY",
+                "ACTOR_LIFECYCLE",
+                "CID_TO_HELD_FINAL_CONTINUOUS_SAMPLING",
+                "TRUSTED_HOST_REPLAY",
+                "MAXIMUM_UNSAMPLED_GAP_EXCEEDED; sample_span="
+                + str(origin["span_id"]),
+                detail,
+            )
+        )
+        next_sequence += 1
+    rows.append(
+        propagated(
+            next_sequence,
+            "HELD_ACTOR_CLOSE",
+            "actor-close-TRUSTED_HOST_REPLAY",
+            "ACTOR_LIFECYCLE",
+            "DONE_FINAL_SAMPLE_RELEASE_EXIT_REMOVE_ABSENCE",
+            "TRUSTED_HOST_REPLAY",
+            "ACTOR_CLOSE_FAILED_BEFORE_CLEANUP",
+            terminal_detail,
+        )
+    )
+    stage_sequence = next_sequence + 1 + (2 * host_cleanup_pairs)
+    rows.append(
+        propagated(
+            stage_sequence,
+            "SUPERVISOR_STAGE",
+            "supervisor-stage-06",
+            "STAGE_06",
+            "RUN_HELD_TRUSTED_HOST_SEMANTIC_REPLAY",
+            None,
+            "FAILED",
+            terminal_detail,
+        )
+    )
+    rows.append(
+        propagated(
+            stage_sequence + 5,
+            "SUPERVISOR_RUN",
+            "supervisor-run",
+            "RUN",
+            None,
+            None,
+            "supervisor attempt failed",
+            terminal_detail,
+        )
+    )
+    return rows
+
+
+def _trusted_host_events(
+    failure_rows: list[dict[str, object]],
+    *,
+    host_cleanup_pairs: int = 2,
+) -> list[dict[str, object]]:
+    assert host_cleanup_pairs in {0, 2}
+    events = [
+        _event_row(
+            sequence=sequence,
+            event_type="BEGIN",
+            span_id=str(failure["span_id"]),
+            operation=str(failure["operation"]),
+            stage=failure["stage_or_null"],
+            substep=failure["substep_or_null"],
+            actor=failure["actor_or_null"],
+            detail="ENTER",
+        )
+        for sequence, failure in enumerate(reversed(failure_rows), start=1)
+    ]
+    failures_by_sequence = {
+        int(row["sequence"]): row for row in failure_rows
+    }
+    origin_sequence = int(failure_rows[0]["sequence"])
+    close_sequence = next(
+        int(row["sequence"])
+        for row in failure_rows
+        if row["operation"] == "HELD_ACTOR_CLOSE"
+    )
+    stage_sequence = next(
+        int(row["sequence"])
+        for row in failure_rows
+        if row["operation"] == "SUPERVISOR_STAGE"
+    )
+    run_sequence = int(failure_rows[-1]["sequence"])
+    cleanup_pairs = (
+        [
+            ("TRUSTED_HOST_REPLAY", 1),
+            ("TRUSTED_HOST_REPLAY", 2),
+        ]
+        if host_cleanup_pairs == 2
+        else []
+    ) + [("PYTHON_ENDPOINT", 3), ("RUST_ENDPOINT", 4)]
+    cleanup_rows: dict[int, dict[str, object]] = {}
+    sequence = close_sequence + 1
+    for actor, suffix in cleanup_pairs:
+        if actor == "PYTHON_ENDPOINT":
+            sequence = stage_sequence + 1
+        span = f"actor-cleanup-{actor}-{suffix:06d}"
+        cleanup_rows[sequence] = _event_row(
+            sequence=sequence,
+            event_type="BEGIN",
+            span_id=span,
+            operation="HELD_ACTOR_ABORT_CLEANUP",
+            stage="ACTOR_LIFECYCLE",
+            substep="STOP_TERMINATE_DRAIN_REMOVE_ABSENCE",
+            actor=actor,
+            detail="ENTER",
+        )
+        cleanup_rows[sequence + 1] = _event_row(
+            sequence=sequence + 1,
+            event_type="OK",
+            span_id=span,
+            operation="HELD_ACTOR_ABORT_CLEANUP",
+            stage="ACTOR_LIFECYCLE",
+            substep="STOP_TERMINATE_DRAIN_REMOVE_ABSENCE",
+            actor=actor,
+            detail="cleanup_error_count=0",
+        )
+        sequence += 2
+    for sequence in range(origin_sequence, run_sequence + 1):
+        failure = failures_by_sequence.get(sequence)
+        if failure is not None:
+            event = _event_row(
+                sequence=sequence,
+                event_type="FAIL",
+                span_id=str(failure["span_id"]),
+                operation=str(failure["operation"]),
+                stage=failure["stage_or_null"],
+                substep=failure["substep_or_null"],
+                actor=failure["actor_or_null"],
+                detail=failure["detail_or_null"],
+                error_code=str(failure["error_code"]),
+                error_detail=str(failure["error_detail"]),
+                record_digest=str(failure["record_digest"]),
+            )
+            event["timestamp_ns"] = failure["timestamp_ns"]
+            events.append(event)
+            continue
+        cleanup = cleanup_rows.get(sequence)
+        assert cleanup is not None
+        events.append(cleanup)
+    return events
 
 
 def _endpoint_gap_origin(
@@ -408,6 +672,14 @@ def _endpoint_gap_origin(
             "role_id_or_null": role,
             "sample_ordinal_or_null": ordinal,
             "record_digest": "sha256:" + _root(label),
+            "detail_or_null": (
+                _live_gap_detail_or_null(
+                    scheduled_start_ns=scheduled,
+                    actual_start_ns=actual,
+                )
+                if operation == "LIVE_RESOURCE_SAMPLE"
+                else "MAXIMUM_UNSAMPLED_GAP_EXCEEDED"
+            ),
         }
     )
     return row
@@ -919,7 +1191,7 @@ def _base(slot: int = 1) -> dict[str, object]:
         "campaign_id": "campaign-1",
         "slot_number": slot,
         "expected_trace_id": f"campaign-1-slot-{slot}",
-        "expected_producer_id": "Q05B_SUPERVISOR_V4",
+        "expected_producer_id": "Q05B_SUPERVISOR_V6",
         "invocation_count": 1,
         "supervisor_returned": True,
         "supervisor_reaped": True,
@@ -935,7 +1207,7 @@ def _base(slot: int = 1) -> dict[str, object]:
         "stderr_empty": True,
         "trajectory_status": "COMPLETE_FAIL",
         "trajectory_trace_id": f"campaign-1-slot-{slot}",
-        "trajectory_producer_id": "Q05B_SUPERVISOR_V4",
+        "trajectory_producer_id": "Q05B_SUPERVISOR_V6",
         "trajectory_torn_tail_or_null": None,
         "trajectory_open_span_ids": [],
         "trajectory_terminal_error_code_or_null": campaign.GAP_ERROR_CODE_V2,
@@ -975,6 +1247,275 @@ def _seal(value: dict[str, object]) -> dict[str, object]:
 
 def _gap(slot: int = 1) -> dict[str, object]:
     return _seal(_base(slot))
+
+
+_V2R18_FORMAL_RAW_GAP_DETAIL = (
+    "held actor sampling gap exceeded bound: actor_id=PYTHON_ENDPOINT; "
+    "role_id=1; sample_ordinal=5; previous_finish_ns=10717689231348; "
+    "scheduled_start_ns=10717789231348; actual_start_ns=10718019225400; "
+    "gap_ns=329994052; maximum_gap_ns=250000000; "
+    "target_wait_ns=100000000; previous_duration_ns=23364471"
+)
+_V2R18_FORMAL_TERMINAL_GAP_DETAIL = (
+    "held actor sampler failed: " + _V2R18_FORMAL_RAW_GAP_DETAIL
+)
+
+
+def _v2r18_formal_failure_rows() -> list[dict[str, object]]:
+    origin = _failure_row(origin=True, sequence=41)
+    origin.update(
+        {
+            "sequence": 41,
+            "timestamp_ns": 10_718_238_692_608,
+            "span_id": "sample-PYTHON_ENDPOINT-000005",
+            "operation": "LIVE_RESOURCE_SAMPLE",
+            "stage_or_null": "ACTOR_LIFECYCLE",
+            "substep_or_null": "COLLECT_BOUND_LIVE_RESOURCES",
+            "actor_or_null": "PYTHON_ENDPOINT",
+            "detail_or_null": (
+                "MAXIMUM_UNSAMPLED_GAP_EXCEEDED;"
+                "native_wake_ns=10718019131989;"
+                "native_wake_lateness_ns=229900641;"
+                "trajectory_admission_duration_ns=93411"
+            ),
+            "error_detail": _V2R18_FORMAL_RAW_GAP_DETAIL,
+            "record_digest": (
+                "sha256:6edaa07ce646b828322a80bf16e1012f6dcacea5e5e993e4504471a6f66d81f6"
+            ),
+            "role_id_or_null": "1",
+            "sample_ordinal_or_null": 5,
+            "previous_finish_ns_or_null": 10_717_689_231_348,
+            "scheduled_start_ns_or_null": 10_717_789_231_348,
+            "actual_start_ns_or_null": 10_718_019_225_400,
+            "finish_ns_or_null": 10_718_019_225_400,
+            "collection_duration_ns_or_null": 0,
+            "scheduler_lateness_ns_or_null": 229_994_052,
+            "target_wait_ns_or_null": 100_000_000,
+            "gap_ns_or_null": 329_994_052,
+            "maximum_gap_ns_or_null": 250_000_000,
+            "gap_exceeded_or_null": True,
+        }
+    )
+
+    def propagated(
+        *,
+        sequence: int,
+        timestamp_ns: int,
+        operation: str,
+        span_id: str,
+        stage: str,
+        substep: str | None,
+        actor: str | None,
+        detail: str,
+        error_detail: str,
+        record_digest: str,
+    ) -> dict[str, object]:
+        row = _failure_row(origin=False, sequence=sequence)
+        row.update(
+            {
+                "sequence": sequence,
+                "timestamp_ns": timestamp_ns,
+                "operation": operation,
+                "span_id": span_id,
+                "stage_or_null": stage,
+                "substep_or_null": substep,
+                "actor_or_null": actor,
+                "detail_or_null": detail,
+                "error_detail": error_detail,
+                "record_digest": record_digest,
+            }
+        )
+        return row
+
+    return [
+        origin,
+        propagated(
+            sequence=42,
+            timestamp_ns=10_718_255_126_130,
+            operation="LIVE_RESOURCE_SAMPLER",
+            span_id="sampler-PYTHON_ENDPOINT",
+            stage="ACTOR_LIFECYCLE",
+            substep="CID_TO_HELD_FINAL_CONTINUOUS_SAMPLING",
+            actor="PYTHON_ENDPOINT",
+            detail=(
+                "MAXIMUM_UNSAMPLED_GAP_EXCEEDED; "
+                "sample_span=sample-PYTHON_ENDPOINT-000005"
+            ),
+            error_detail=_V2R18_FORMAL_RAW_GAP_DETAIL,
+            record_digest=(
+                "sha256:a09e03a06796f6b495bba1b59cf6c487d2a2333a3af15040647071987b8fabd6"
+            ),
+        ),
+        propagated(
+            sequence=47,
+            timestamp_ns=10_718_344_963_453,
+            operation="HELD_ACTOR_CLOSE",
+            span_id="actor-close-PYTHON_ENDPOINT",
+            stage="ACTOR_LIFECYCLE",
+            substep="DONE_FINAL_SAMPLE_RELEASE_EXIT_REMOVE_ABSENCE",
+            actor="PYTHON_ENDPOINT",
+            detail="ACTOR_CLOSE_FAILED_BEFORE_CLEANUP",
+            error_detail=_V2R18_FORMAL_TERMINAL_GAP_DETAIL,
+            record_digest=(
+                "sha256:106c0effbcf4a1e49f0d2070e7f1e9673dec9f24cabdea84a833e87000c7624e"
+            ),
+        ),
+        propagated(
+            sequence=93,
+            timestamp_ns=10_721_973_706_282,
+            operation="SUPERVISOR_STAGE",
+            span_id="supervisor-stage-05",
+            stage="STAGE_05",
+            substep="SEAL_ENDPOINT_STDOUT_SIDECARS_CONTROLS_AND_RESOURCES",
+            actor=None,
+            detail="FAILED",
+            error_detail=_V2R18_FORMAL_TERMINAL_GAP_DETAIL,
+            record_digest=(
+                "sha256:6763b4bd7e83dabf99198af4ae946f35bdbe1bcbec7a84a629e24820e7de7208"
+            ),
+        ),
+        propagated(
+            sequence=98,
+            timestamp_ns=10_722_221_122_810,
+            operation="SUPERVISOR_RUN",
+            span_id="supervisor-run",
+            stage="RUN",
+            substep=None,
+            actor=None,
+            detail="supervisor attempt failed",
+            error_detail=_V2R18_FORMAL_TERMINAL_GAP_DETAIL,
+            record_digest=(
+                "sha256:b19ff9744e0da0e4a47a0dbec0ae096a08be6c42eca9e1b49e01e5ab32d13759"
+            ),
+        ),
+    ]
+
+
+def _v2r18_formal_cleanup_rows() -> list[dict[str, object]]:
+    exact = (
+        (48, 10_718_361_293_400, "PYTHON_ENDPOINT", 1, "BEGIN", "ccf93337de6b3e4d527776f1e80ea6b5b0c35db57131fdf01e3d07b3874397e8"),
+        (85, 10_720_629_809_184, "PYTHON_ENDPOINT", 1, "OK", "77ea8b13663669747c83def6e47d0219e54485082f0064e09523eebe8d76dec1"),
+        (86, 10_720_651_674_921, "PYTHON_ENDPOINT", 2, "BEGIN", "e8bb5225d4cb0e3de27e292fc614329d858b1e28c0538615506cf713b7b8bd7e"),
+        (89, 10_720_714_639_864, "PYTHON_ENDPOINT", 2, "OK", "d254e04a0868cbe12da55ee2f703970d08ce600b6e5a2333ab3aacde16bf2e10"),
+        (90, 10_720_731_189_022, "RUST_ENDPOINT", 3, "BEGIN", "0a4a7f2407f820c4a69a396a711486b09b85e0b746ebd69b99104a7ee31e7321"),
+        (92, 10_721_956_626_344, "RUST_ENDPOINT", 3, "OK", "d199f26cc58d810d50bea7cb444d9d704f3ac8114b2ef2a66085d94a42998b0c"),
+        (94, 10_721_990_114_487, "PYTHON_ENDPOINT", 4, "BEGIN", "8dbece4bbd5e707869aed088ad43960e5ba997ed03f37c862746b8ddef8b3637"),
+        (95, 10_722_032_282_034, "PYTHON_ENDPOINT", 4, "OK", "19ab68388e931b118d6cba2ea5ce08e2b420e8b6103c9ad44d6a747a5736ba58"),
+        (96, 10_722_048_887_154, "RUST_ENDPOINT", 5, "BEGIN", "98a6db07a48d54fba6478206b68565cf676238fb6d63ae80431d817286343bb6"),
+        (97, 10_722_090_415_310, "RUST_ENDPOINT", 5, "OK", "49b4cfda72c3bfdd02afab96e219a6cf501868859a1ed4e2abea7d4a967596d8"),
+    )
+    rows: list[dict[str, object]] = []
+    for sequence, timestamp, actor, suffix, event_type, digest in exact:
+        rows.append(
+            _event_row(
+                sequence=sequence,
+                event_type=event_type,
+                span_id=f"actor-cleanup-{actor}-{suffix:06d}",
+                operation="HELD_ACTOR_ABORT_CLEANUP",
+                stage="ACTOR_LIFECYCLE",
+                substep="STOP_TERMINATE_DRAIN_REMOVE_ABSENCE",
+                actor=actor,
+                detail=(
+                    "ENTER"
+                    if event_type == "BEGIN"
+                    else "cleanup_error_count=0"
+                ),
+                record_digest="sha256:" + digest,
+            )
+        )
+        rows[-1]["timestamp_ns"] = timestamp
+    return rows
+
+
+def _refresh_v2r18_formal_partition(value: dict[str, object]) -> None:
+    certificate = value["trajectory_partition_certificate_or_null"]
+    assert type(certificate) is dict
+    certificate["failure_rows_digest"] = campaign.failure_rows_digest_v2(
+        value["trajectory_failure_rows"]
+    )
+    certificate["cleanup_rows_digest"] = campaign.cleanup_rows_digest_v2(
+        value["trajectory_cleanup_rows"]
+    )
+    certificate["certificate_digest"] = None
+    certificate["certificate_digest"] = (
+        campaign.partition_certificate_digest_v2(certificate)
+    )
+
+
+def _v2r18_formal_observation_rebound_v2r19() -> dict[str, object]:
+    value = _base(1)
+    failures = _v2r18_formal_failure_rows()
+    cleanups = _v2r18_formal_cleanup_rows()
+    value.update(
+        {
+            "campaign_id": "hegel-phase3a-q05b-shadow-retry-campaign-v2r18",
+            "expected_trace_id": "q05b-shadow-retry-campaign-v2r18-slot-01",
+            "expected_producer_id": "Q05B_SUPERVISOR_V6",
+            "trajectory_trace_id": "q05b-shadow-retry-campaign-v2r18-slot-01",
+            "trajectory_producer_id": "Q05B_SUPERVISOR_V6",
+            "trajectory_terminal_error_detail_or_null": (
+                _V2R18_FORMAL_TERMINAL_GAP_DETAIL
+            ),
+            "trajectory_event_count": 98,
+            "trajectory_first_event_record_digest": (
+                "sha256:1581242e578ce265ba7b510cd4b042451db21a203d3c778be5f99db6270b5723"
+            ),
+            "trajectory_final_event_record_digest": failures[-1][
+                "record_digest"
+            ],
+            "trajectory_canonical_event_payloads_digest": (
+                "sha256:2064959c2a56bd0b7ec4990d4a0aec3a6694fe9bca2c21634dd04afa5d820f06"
+            ),
+            "trajectory_failure_rows": failures,
+            "trajectory_cleanup_rows": cleanups,
+        }
+    )
+    value.update(
+        campaign.classify_supervisor_stdout_v2(
+            _wire(_error_wire(detail=_V2R18_FORMAL_TERMINAL_GAP_DETAIL))
+        )
+    )
+    certificate: dict[str, object] = {
+        "schema_version": campaign.PARTITION_CERTIFICATE_SCHEMA_V2,
+        "trace_id": value["trajectory_trace_id"],
+        "producer_id": value["trajectory_producer_id"],
+        "trajectory_status": "COMPLETE_FAIL",
+        "event_count": 98,
+        "first_event_record_digest": value[
+            "trajectory_first_event_record_digest"
+        ],
+        "final_event_record_digest": value[
+            "trajectory_final_event_record_digest"
+        ],
+        "canonical_event_payloads_digest": value[
+            "trajectory_canonical_event_payloads_digest"
+        ],
+        "origin_sequence": 41,
+        "origin_record_digest": failures[0]["record_digest"],
+        "origin_actor_or_null": "PYTHON_ENDPOINT",
+        "suffix_event_count": 58,
+        "suffix_event_root": (
+            "sha256:8d46c700bc8092ec4d9d3da4b2d880c4a3cdd8aa569fc24462f04d7962809206"
+        ),
+        "failure_event_count": 5,
+        "failure_rows_digest": None,
+        "failure_rows_retained_count": 5,
+        "failure_rows_truncated": False,
+        "cleanup_nonfailure_event_count": 10,
+        "cleanup_rows_digest": None,
+        "cleanup_rows_retained_count": 10,
+        "cleanup_rows_truncated": False,
+        "other_nonfailure_event_count": 43,
+        "other_nonfailure_event_root": (
+            "sha256:30910c6bc447678500d7f8a5b88f813a3ab75971ad1f960a6229ea19e08a50f6"
+        ),
+        "partitioned_event_count": 58,
+        "unpartitioned_event_count": 0,
+        "certificate_digest": None,
+    }
+    value["trajectory_partition_certificate_or_null"] = certificate
+    _refresh_v2r18_formal_partition(value)
+    return _seal(value)
 
 
 def _early_stage4_value(
@@ -1037,18 +1578,18 @@ def test_canonical_strict_codec_and_domain_separated_digest_known_answer() -> No
     assert first != second
 
 
-def test_v2r13_partition_digest_domains_are_new_instance_authority() -> None:
+def test_v2r19_partition_digest_domains_are_new_instance_authority() -> None:
     rows: list[dict[str, object]] = []
     failure_domain = (
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R13/"
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/"
         "TRAJECTORY_FAILURE_ROWS/V2\x00"
     )
     cleanup_domain = (
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R13/"
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/"
         "TRAJECTORY_CLEANUP_ROWS/V2\x00"
     )
     certificate_domain = (
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R13/"
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/"
         "POST_ORIGIN_PARTITION_CERTIFICATE/V2\x00"
     )
     certificate: dict[str, object] = {"certificate_digest": None}
@@ -1066,105 +1607,157 @@ def test_v2r13_partition_digest_domains_are_new_instance_authority() -> None:
     assert certificate_digest == campaign.campaign_record_digest_v2(
         certificate_domain, {}
     )
+
+    v2r18_failure_domain = failure_domain.replace("V2R19", "V2R18")
+    v2r18_cleanup_domain = cleanup_domain.replace("V2R19", "V2R18")
+    v2r18_certificate_domain = certificate_domain.replace("V2R19", "V2R18")
     assert failure_digest != campaign.campaign_record_digest_v2(
-        failure_domain.replace("V2R13", "V2R2"), rows
-    )
-    assert failure_digest != campaign.campaign_record_digest_v2(
-        failure_domain.replace("V2R13", "V2R3"), rows
-    )
-    assert failure_digest != campaign.campaign_record_digest_v2(
-        failure_domain.replace("V2R13", "V2R4"), rows
-    )
-    assert failure_digest != campaign.campaign_record_digest_v2(
-        failure_domain.replace("V2R13", "V2R5"), rows
-    )
-    assert failure_digest != campaign.campaign_record_digest_v2(
-        failure_domain.replace("V2R13", "V2R6"), rows
-    )
-    assert failure_digest != campaign.campaign_record_digest_v2(
-        failure_domain.replace("V2R13", "V2R7"), rows
-    )
-    assert failure_digest != campaign.campaign_record_digest_v2(
-        failure_domain.replace("V2R13", "V2R8"), rows
-    )
-    assert failure_digest != campaign.campaign_record_digest_v2(
-        failure_domain.replace("V2R13", "V2R9"), rows
-    )
-    assert failure_digest != campaign.campaign_record_digest_v2(
-        failure_domain.replace("V2R13", "V2R10"), rows
-    )
-    assert failure_digest != campaign.campaign_record_digest_v2(
-        failure_domain.replace("V2R13", "V2R11"), rows
-    )
-    assert failure_digest != campaign.campaign_record_digest_v2(
-        failure_domain.replace("V2R13", "V2R12"), rows
+        v2r18_failure_domain, rows
     )
     assert cleanup_digest != campaign.campaign_record_digest_v2(
-        cleanup_domain.replace("V2R13", "V2R2"), rows
+        v2r18_cleanup_domain, rows
+    )
+    assert certificate_digest != campaign.campaign_record_digest_v2(
+        v2r18_certificate_domain, {}
+    )
+
+    # Continue the historical rejection matrix from the immediately preceding
+    # V2R17 domains while the positive authority above remains exactly V2R19.
+    failure_domain = failure_domain.replace("V2R19", "V2R17")
+    cleanup_domain = cleanup_domain.replace("V2R19", "V2R17")
+    certificate_domain = certificate_domain.replace("V2R19", "V2R17")
+    assert failure_digest != campaign.campaign_record_digest_v2(
+        failure_domain.replace("V2R17", "V2R2"), rows
+    )
+    assert failure_digest != campaign.campaign_record_digest_v2(
+        failure_domain.replace("V2R17", "V2R3"), rows
+    )
+    assert failure_digest != campaign.campaign_record_digest_v2(
+        failure_domain.replace("V2R17", "V2R4"), rows
+    )
+    assert failure_digest != campaign.campaign_record_digest_v2(
+        failure_domain.replace("V2R17", "V2R5"), rows
+    )
+    assert failure_digest != campaign.campaign_record_digest_v2(
+        failure_domain.replace("V2R17", "V2R6"), rows
+    )
+    assert failure_digest != campaign.campaign_record_digest_v2(
+        failure_domain.replace("V2R17", "V2R7"), rows
+    )
+    assert failure_digest != campaign.campaign_record_digest_v2(
+        failure_domain.replace("V2R17", "V2R8"), rows
+    )
+    assert failure_digest != campaign.campaign_record_digest_v2(
+        failure_domain.replace("V2R17", "V2R9"), rows
+    )
+    assert failure_digest != campaign.campaign_record_digest_v2(
+        failure_domain.replace("V2R17", "V2R10"), rows
+    )
+    assert failure_digest != campaign.campaign_record_digest_v2(
+        failure_domain.replace("V2R17", "V2R11"), rows
+    )
+    assert failure_digest != campaign.campaign_record_digest_v2(
+        failure_domain.replace("V2R17", "V2R12"), rows
+    )
+    assert failure_digest != campaign.campaign_record_digest_v2(
+        failure_domain.replace("V2R17", "V2R13"), rows
+    )
+    assert failure_digest != campaign.campaign_record_digest_v2(
+        failure_domain.replace("V2R17", "V2R14"), rows
     )
     assert cleanup_digest != campaign.campaign_record_digest_v2(
-        cleanup_domain.replace("V2R13", "V2R3"), rows
+        cleanup_domain.replace("V2R17", "V2R2"), rows
     )
     assert cleanup_digest != campaign.campaign_record_digest_v2(
-        cleanup_domain.replace("V2R13", "V2R4"), rows
+        cleanup_domain.replace("V2R17", "V2R3"), rows
     )
     assert cleanup_digest != campaign.campaign_record_digest_v2(
-        cleanup_domain.replace("V2R13", "V2R5"), rows
+        cleanup_domain.replace("V2R17", "V2R4"), rows
     )
     assert cleanup_digest != campaign.campaign_record_digest_v2(
-        cleanup_domain.replace("V2R13", "V2R6"), rows
+        cleanup_domain.replace("V2R17", "V2R5"), rows
     )
     assert cleanup_digest != campaign.campaign_record_digest_v2(
-        cleanup_domain.replace("V2R13", "V2R7"), rows
+        cleanup_domain.replace("V2R17", "V2R6"), rows
     )
     assert cleanup_digest != campaign.campaign_record_digest_v2(
-        cleanup_domain.replace("V2R13", "V2R8"), rows
+        cleanup_domain.replace("V2R17", "V2R7"), rows
     )
     assert cleanup_digest != campaign.campaign_record_digest_v2(
-        cleanup_domain.replace("V2R13", "V2R9"), rows
+        cleanup_domain.replace("V2R17", "V2R8"), rows
     )
     assert cleanup_digest != campaign.campaign_record_digest_v2(
-        cleanup_domain.replace("V2R13", "V2R10"), rows
+        cleanup_domain.replace("V2R17", "V2R9"), rows
     )
     assert cleanup_digest != campaign.campaign_record_digest_v2(
-        cleanup_domain.replace("V2R13", "V2R11"), rows
+        cleanup_domain.replace("V2R17", "V2R10"), rows
     )
     assert cleanup_digest != campaign.campaign_record_digest_v2(
-        cleanup_domain.replace("V2R13", "V2R12"), rows
+        cleanup_domain.replace("V2R17", "V2R11"), rows
+    )
+    assert cleanup_digest != campaign.campaign_record_digest_v2(
+        cleanup_domain.replace("V2R17", "V2R12"), rows
+    )
+    assert cleanup_digest != campaign.campaign_record_digest_v2(
+        cleanup_domain.replace("V2R17", "V2R13"), rows
+    )
+    assert cleanup_digest != campaign.campaign_record_digest_v2(
+        cleanup_domain.replace("V2R17", "V2R14"), rows
     )
     assert certificate_digest != campaign.campaign_record_digest_v2(
-        certificate_domain.replace("V2R13", "V2R2"), {}
+        certificate_domain.replace("V2R17", "V2R2"), {}
     )
     assert certificate_digest != campaign.campaign_record_digest_v2(
-        certificate_domain.replace("V2R13", "V2R3"), {}
+        certificate_domain.replace("V2R17", "V2R3"), {}
     )
     assert certificate_digest != campaign.campaign_record_digest_v2(
-        certificate_domain.replace("V2R13", "V2R4"), {}
+        certificate_domain.replace("V2R17", "V2R4"), {}
     )
     assert certificate_digest != campaign.campaign_record_digest_v2(
-        certificate_domain.replace("V2R13", "V2R5"), {}
+        certificate_domain.replace("V2R17", "V2R5"), {}
     )
     assert certificate_digest != campaign.campaign_record_digest_v2(
-        certificate_domain.replace("V2R13", "V2R6"), {}
+        certificate_domain.replace("V2R17", "V2R6"), {}
     )
     assert certificate_digest != campaign.campaign_record_digest_v2(
-        certificate_domain.replace("V2R13", "V2R7"), {}
+        certificate_domain.replace("V2R17", "V2R7"), {}
     )
     assert certificate_digest != campaign.campaign_record_digest_v2(
-        certificate_domain.replace("V2R13", "V2R8"), {}
+        certificate_domain.replace("V2R17", "V2R8"), {}
     )
     assert certificate_digest != campaign.campaign_record_digest_v2(
-        certificate_domain.replace("V2R13", "V2R9"), {}
+        certificate_domain.replace("V2R17", "V2R9"), {}
     )
     assert certificate_digest != campaign.campaign_record_digest_v2(
-        certificate_domain.replace("V2R13", "V2R10"), {}
+        certificate_domain.replace("V2R17", "V2R10"), {}
     )
     assert certificate_digest != campaign.campaign_record_digest_v2(
-        certificate_domain.replace("V2R13", "V2R11"), {}
+        certificate_domain.replace("V2R17", "V2R11"), {}
     )
     assert certificate_digest != campaign.campaign_record_digest_v2(
-        certificate_domain.replace("V2R13", "V2R12"), {}
+        certificate_domain.replace("V2R17", "V2R12"), {}
     )
+    assert certificate_digest != campaign.campaign_record_digest_v2(
+        certificate_domain.replace("V2R17", "V2R13"), {}
+    )
+    assert certificate_digest != campaign.campaign_record_digest_v2(
+        certificate_domain.replace("V2R17", "V2R14"), {}
+    )
+    for historical_stem in (
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R1",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R15",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R16",
+    ):
+        assert failure_digest != campaign.campaign_record_digest_v2(
+            historical_stem + "/TRAJECTORY_FAILURE_ROWS/V2\x00", rows
+        )
+        assert cleanup_digest != campaign.campaign_record_digest_v2(
+            historical_stem + "/TRAJECTORY_CLEANUP_ROWS/V2\x00", rows
+        )
+        assert certificate_digest != campaign.campaign_record_digest_v2(
+            historical_stem + "/POST_ORIGIN_PARTITION_CERTIFICATE/V2\x00", {}
+        )
 
 
 def test_version_neutral_slot_observation_digest_domain_is_retained() -> None:
@@ -1264,6 +1857,212 @@ def test_live_gap_integration_kat_preserves_exact_two_tier_detail_flow() -> None
     assert value["trajectory_terminal_error_detail_or_null"] == outer_detail
     assert campaign.evaluate_slot_observation_v2(value) == (
         campaign.RETRY_EXACT_GAP_V2
+    )
+
+
+def _audit_results(audit: dict[str, object]) -> dict[str, str]:
+    results = audit["predicate_results"]
+    assert type(results) is list
+    return {
+        str(result["clause"]): str(result["result"])
+        for result in results
+        if type(result) is dict
+    }
+
+
+def test_v2r18_full_formal_observation_replay_is_exact_retryable_gap() -> None:
+    value = _v2r18_formal_observation_rebound_v2r19()
+    failures = value["trajectory_failure_rows"]
+    cleanups = value["trajectory_cleanup_rows"]
+    assert value["expected_producer_id"] == "Q05B_SUPERVISOR_V6"
+    assert value["trajectory_event_count"] == 98
+    assert [row["sequence"] for row in failures] == [41, 42, 47, 93, 98]
+    assert [row["sequence"] for row in cleanups] == [
+        48,
+        85,
+        86,
+        89,
+        90,
+        92,
+        94,
+        95,
+        96,
+        97,
+    ]
+    assert failures[0]["detail_or_null"] == (
+        "MAXIMUM_UNSAMPLED_GAP_EXCEEDED;"
+        "native_wake_ns=10718019131989;"
+        "native_wake_lateness_ns=229900641;"
+        "trajectory_admission_duration_ns=93411"
+    )
+    audit = campaign.evaluate_slot_observation_with_audit_v2(value)
+    assert audit == {
+        "schema_version": campaign.DECISION_AUDIT_SCHEMA_V2,
+        "decision": campaign.RETRY_EXACT_GAP_V2,
+        "matched_path_or_null": "EXACT_GAP",
+        "first_reject_clause_or_null": None,
+        "predicate_results": [
+            {"clause": "OBSERVATION_SHAPE", "result": "PASS"},
+            {"clause": "SUCCESS", "result": "NO_MATCH"},
+            {"clause": "COMMON_EXACT", "result": "PASS"},
+            {"clause": "GAP_GRAMMAR", "result": "PASS"},
+            {"clause": "WIRE_TERMINAL", "result": "PASS"},
+            {"clause": "PARTITION_CLEANUP", "result": "PASS"},
+            {"clause": "ARTIFACT_ABSENCE", "result": "PASS"},
+        ],
+    }
+    assert campaign.strict_campaign_json_value_v2(_wire(audit)) == audit
+    assert campaign.evaluate_slot_observation_v2(value) == audit["decision"]
+
+
+@pytest.mark.parametrize(
+    ("metric", "exact_value"),
+    (
+        ("native_wake_ns", 10_718_019_131_989),
+        ("native_wake_lateness_ns", 229_900_641),
+        ("trajectory_admission_duration_ns", 93_411),
+    ),
+)
+def test_v2r18_formal_live_wake_metric_arithmetic_mutations_reject_gap_grammar(
+    metric: str,
+    exact_value: int,
+) -> None:
+    value = _v2r18_formal_observation_rebound_v2r19()
+    origin = value["trajectory_failure_rows"][0]
+    origin["detail_or_null"] = str(origin["detail_or_null"]).replace(
+        f"{metric}={exact_value}",
+        f"{metric}={exact_value + 1}",
+    )
+    _refresh_v2r18_formal_partition(value)
+    value = _seal(value)
+    audit = campaign.evaluate_slot_observation_with_audit_v2(value)
+    assert audit["decision"] == campaign.TERMINAL_NONRETRYABLE_V2
+    assert audit["first_reject_clause_or_null"] == "GAP_GRAMMAR"
+
+
+@pytest.mark.parametrize(
+    "detail",
+    (
+        (
+            "MAXIMUM_UNSAMPLED_GAP_EXCEEDED;"
+            "native_wake_ns=010718019131989;"
+            "native_wake_lateness_ns=229900641;"
+            "trajectory_admission_duration_ns=93411"
+        ),
+        (
+            "MAXIMUM_UNSAMPLED_GAP_EXCEEDED;"
+            "native_wake_lateness_ns=229900641;"
+            "native_wake_ns=10718019131989;"
+            "trajectory_admission_duration_ns=93411"
+        ),
+        (
+            "MAXIMUM_UNSAMPLED_GAP_EXCEEDED;"
+            "native_wake_ns=10718019131989;"
+            "native_wake_lateness_ns=229900641"
+        ),
+        (
+            "MAXIMUM_UNSAMPLED_GAP_EXCEEDED;"
+            "native_wake_ns=10718019131989;"
+            "native_wake_lateness_ns=229900641;"
+            "trajectory_admission_duration_ns=93411;extra=0"
+        ),
+    ),
+)
+def test_v2r18_formal_live_wake_detail_syntax_is_exact(detail: str) -> None:
+    value = _v2r18_formal_observation_rebound_v2r19()
+    value["trajectory_failure_rows"][0]["detail_or_null"] = detail
+    _refresh_v2r18_formal_partition(value)
+    audit = campaign.evaluate_slot_observation_with_audit_v2(_seal(value))
+    assert audit["first_reject_clause_or_null"] == "GAP_GRAMMAR"
+
+
+def test_each_v2r18_formal_fix_is_individually_necessary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    legacy_detail = _v2r18_formal_observation_rebound_v2r19()
+    legacy_detail["trajectory_failure_rows"][0]["detail_or_null"] = (
+        "MAXIMUM_UNSAMPLED_GAP_EXCEEDED"
+    )
+    _refresh_v2r18_formal_partition(legacy_detail)
+    legacy_detail_audit = campaign.evaluate_slot_observation_with_audit_v2(
+        _seal(legacy_detail)
+    )
+    assert legacy_detail_audit["first_reject_clause_or_null"] == "GAP_GRAMMAR"
+
+    corrected_detail = _v2r18_formal_observation_rebound_v2r19()
+    monkeypatch.setattr(
+        campaign,
+        "_MAX_REGISTERED_CLEANUP_PAIRS_PER_ACTOR",
+        2,
+    )
+    old_cleanup_audit = campaign.evaluate_slot_observation_with_audit_v2(
+        corrected_detail
+    )
+    assert old_cleanup_audit["first_reject_clause_or_null"] == (
+        "PARTITION_CLEANUP"
+    )
+
+
+def test_decision_audit_directly_identifies_every_decision_clause(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    malformed = _gap()
+    malformed.pop("campaign_id")
+    malformed_audit = campaign.evaluate_slot_observation_with_audit_v2(malformed)
+    assert malformed_audit["first_reject_clause_or_null"] == (
+        "OBSERVATION_SHAPE"
+    )
+
+    success_audit = campaign.evaluate_slot_observation_with_audit_v2(_success())
+    assert success_audit["decision"] == campaign.SUCCESS_V2
+    assert success_audit["matched_path_or_null"] == "SUCCESS"
+    assert _audit_results(success_audit)["SUCCESS"] == "ACCEPT"
+
+    common = _gap()
+    common["cleanup_certain"] = False
+    common_audit = campaign.evaluate_slot_observation_with_audit_v2(_seal(common))
+    assert common_audit["first_reject_clause_or_null"] == "COMMON_EXACT"
+
+    grammar = _v2r18_formal_observation_rebound_v2r19()
+    grammar["trajectory_failure_rows"][0]["detail_or_null"] = (
+        "MAXIMUM_UNSAMPLED_GAP_EXCEEDED"
+    )
+    _refresh_v2r18_formal_partition(grammar)
+    grammar_audit = campaign.evaluate_slot_observation_with_audit_v2(
+        _seal(grammar)
+    )
+    assert grammar_audit["first_reject_clause_or_null"] == "GAP_GRAMMAR"
+
+    wire = _v2r18_formal_observation_rebound_v2r19()
+    wire["exit_code_or_null"] = 0
+    wire_audit = campaign.evaluate_slot_observation_with_audit_v2(_seal(wire))
+    assert wire_audit["first_reject_clause_or_null"] == "WIRE_TERMINAL"
+
+    partition = _v2r18_formal_observation_rebound_v2r19()
+    monkeypatch.setattr(
+        campaign,
+        "_MAX_REGISTERED_CLEANUP_PAIRS_PER_ACTOR",
+        2,
+    )
+    partition_audit = campaign.evaluate_slot_observation_with_audit_v2(
+        partition
+    )
+    assert partition_audit["first_reject_clause_or_null"] == (
+        "PARTITION_CLEANUP"
+    )
+    monkeypatch.setattr(
+        campaign,
+        "_MAX_REGISTERED_CLEANUP_PAIRS_PER_ACTOR",
+        3,
+    )
+
+    artifact = _v2r18_formal_observation_rebound_v2r19()
+    artifact["artifact_state"] = "VALID"
+    artifact_audit = campaign.evaluate_slot_observation_with_audit_v2(
+        _seal(artifact)
+    )
+    assert artifact_audit["first_reject_clause_or_null"] == (
+        "ARTIFACT_ABSENCE"
     )
 
 
@@ -1745,12 +2544,67 @@ def test_benign_nonfailure_surface_is_aggregated_without_a_semantic_whitelist(
     )
 
 
+def _insert_python_cleanup_pairs_before_stage_failure(
+    events: list[dict[str, object]],
+    suffixes: tuple[int, ...],
+) -> None:
+    stage_failure_index = next(
+        index
+        for index, event in enumerate(events)
+        if event["operation"] == "SUPERVISOR_STAGE"
+        and event["event_type"] == "FAIL"
+    )
+    inserted: list[dict[str, object]] = []
+    for suffix in suffixes:
+        span = f"actor-cleanup-PYTHON_ENDPOINT-{suffix:06d}"
+        inserted.extend(
+            (
+                _event_row(
+                    sequence=1,
+                    event_type="BEGIN",
+                    span_id=span,
+                    operation="HELD_ACTOR_ABORT_CLEANUP",
+                    stage="ACTOR_LIFECYCLE",
+                    substep="STOP_TERMINATE_DRAIN_REMOVE_ABSENCE",
+                    actor="PYTHON_ENDPOINT",
+                    detail="ENTER",
+                    record_digest="sha256:"
+                    + _root(f"cleanup-{suffix}-begin"),
+                ),
+                _event_row(
+                    sequence=1,
+                    event_type="OK",
+                    span_id=span,
+                    operation="HELD_ACTOR_ABORT_CLEANUP",
+                    stage="ACTOR_LIFECYCLE",
+                    substep="STOP_TERMINATE_DRAIN_REMOVE_ABSENCE",
+                    actor="PYTHON_ENDPOINT",
+                    detail="cleanup_error_count=0",
+                    record_digest="sha256:"
+                    + _root(f"cleanup-{suffix}-ok"),
+                ),
+            )
+        )
+    events[stage_failure_index:stage_failure_index] = inserted
+
+
+def test_third_reachable_cleanup_pair_per_actor_is_accepted() -> None:
+    value, events = _early_stage4_value(1)
+    _add_interleaved_peer_drain_and_repeated_cleanup(value, events)
+    _insert_python_cleanup_pairs_before_stage_failure(events, (4,))
+    _renumber_events_and_failure_projection(value, events)
+    assert len(value["trajectory_cleanup_rows"]) == 8
+    assert campaign.evaluate_slot_observation_v2(_seal(value)) == (
+        campaign.RETRY_EXACT_GAP_V2
+    )
+
+
 @pytest.mark.parametrize(
     "mutation",
     (
         "missing-origin-cleanup",
         "incomplete-cleanup",
-        "third-origin-cleanup",
+        "fourth-origin-cleanup",
         "duplicate-cleanup-suffix",
         "noncanonical-cleanup-suffix",
         "independent-fail",
@@ -1791,38 +2645,8 @@ def test_cleanup_failure_and_certificate_mutations_are_nonretryable(
             )
         ]
         _renumber_events_and_failure_projection(value, events)
-    elif mutation == "third-origin-cleanup":
-        final_failure_index = next(
-            index
-            for index, event in enumerate(events)
-            if event["operation"] == "SUPERVISOR_STAGE"
-            and event["event_type"] == "FAIL"
-        )
-        span = "actor-cleanup-PYTHON_ENDPOINT-000004"
-        events[final_failure_index:final_failure_index] = [
-            _event_row(
-                sequence=1,
-                event_type="BEGIN",
-                span_id=span,
-                operation="HELD_ACTOR_ABORT_CLEANUP",
-                stage="ACTOR_LIFECYCLE",
-                substep="STOP_TERMINATE_DRAIN_REMOVE_ABSENCE",
-                actor="PYTHON_ENDPOINT",
-                detail="ENTER",
-                record_digest="sha256:" + _root("third-cleanup-begin"),
-            ),
-            _event_row(
-                sequence=1,
-                event_type="OK",
-                span_id=span,
-                operation="HELD_ACTOR_ABORT_CLEANUP",
-                stage="ACTOR_LIFECYCLE",
-                substep="STOP_TERMINATE_DRAIN_REMOVE_ABSENCE",
-                actor="PYTHON_ENDPOINT",
-                detail="cleanup_error_count=0",
-                record_digest="sha256:" + _root("third-cleanup-ok"),
-            ),
-        ]
+    elif mutation == "fourth-origin-cleanup":
+        _insert_python_cleanup_pairs_before_stage_failure(events, (4, 5))
         _renumber_events_and_failure_projection(value, events)
     elif mutation == "duplicate-cleanup-suffix":
         for event in events:
@@ -2047,6 +2871,80 @@ def test_held_final_exact_gap_uses_the_same_bounded_slot_primitive(
     assert campaign.evaluate_slot_observation_v2(_seal(value)) == expected
 
 
+@pytest.mark.parametrize(
+    "operation",
+    ["LIVE_RESOURCE_SAMPLE", "HELD_FINAL_RESOURCE_SAMPLE"],
+)
+@pytest.mark.parametrize(
+    ("slot", "expected"),
+    [
+        (1, campaign.RETRY_EXACT_GAP_V2),
+        (2, campaign.RETRY_EXACT_GAP_V2),
+        (3, campaign.EXHAUSTED_RETRYABLE_GAP_V2),
+    ],
+)
+def test_trusted_host_gap_accepts_fixed_stage6_cleanup_surface(
+    operation: str,
+    slot: int,
+    expected: str,
+) -> None:
+    value = _base(slot)
+    rows = _trusted_host_failure_rows(operation)
+    events = _trusted_host_events(rows)
+    terminal_detail = (
+        "held actor sampler failed: " + str(rows[0]["error_detail"])
+        if operation == "LIVE_RESOURCE_SAMPLE"
+        else str(rows[0]["error_detail"])
+    )
+    value["trajectory_failure_rows"] = rows
+    value["trajectory_terminal_error_detail_or_null"] = terminal_detail
+    value.update(
+        campaign.classify_supervisor_stdout_v2(
+            _wire(_error_wire(detail=terminal_detail))
+        )
+    )
+    _install_partition(value, events)
+    certificate = value["trajectory_partition_certificate_or_null"]
+    assert type(certificate) is dict
+    assert certificate["failure_event_count"] == len(rows)
+    assert certificate["cleanup_nonfailure_event_count"] == 8
+    assert certificate["failure_rows_truncated"] is False
+    assert certificate["cleanup_rows_truncated"] is False
+    assert certificate["unpartitioned_event_count"] == 0
+    assert [
+        row["actor_or_null"]
+        for row in value["trajectory_cleanup_rows"]
+        if row["event_type"] == "BEGIN"
+    ] == [
+        "TRUSTED_HOST_REPLAY",
+        "TRUSTED_HOST_REPLAY",
+        "PYTHON_ENDPOINT",
+        "RUST_ENDPOINT",
+    ]
+    assert campaign.evaluate_slot_observation_v2(_seal(value)) == expected
+
+
+def test_trusted_host_gap_still_requires_trusted_host_cleanup() -> None:
+    value = _base(1)
+    rows = _trusted_host_failure_rows(
+        "HELD_FINAL_RESOURCE_SAMPLE",
+        host_cleanup_pairs=0,
+    )
+    events = _trusted_host_events(rows, host_cleanup_pairs=0)
+    detail = str(rows[0]["error_detail"])
+    value["trajectory_failure_rows"] = rows
+    value["trajectory_terminal_error_detail_or_null"] = detail
+    value.update(
+        campaign.classify_supervisor_stdout_v2(
+            _wire(_error_wire(detail=detail))
+        )
+    )
+    _install_partition(value, events)
+    assert campaign.evaluate_slot_observation_v2(_seal(value)) == (
+        campaign.TERMINAL_NONRETRYABLE_V2
+    )
+
+
 def test_campaign_has_exactly_three_slots_and_never_slot_four() -> None:
     assert campaign.MAX_CAMPAIGN_SLOTS_V2 == 3
     assert campaign.CAPTURE_MAX_BYTES_V2 == 67_108_864
@@ -2240,7 +3138,7 @@ def _mutate_retry(name: str) -> dict[str, object]:
     elif name == "origin-partial":
         origin["finish_ns_or_null"] = None
     elif name == "target":
-        origin["target_wait_ns_or_null"] = 49_999_999
+        origin["target_wait_ns_or_null"] = campaign.TARGET_WAIT_NS_V2 - 1
     elif name == "maximum":
         origin["maximum_gap_ns_or_null"] = 250_000_001
     elif name == "not-exceeded":
@@ -2250,8 +3148,27 @@ def _mutate_retry(name: str) -> dict[str, object]:
             origin["previous_finish_ns_or_null"] + campaign.MAXIMUM_GAP_NS_V2
         )
         origin["gap_ns_or_null"] = campaign.MAXIMUM_GAP_NS_V2
-        origin["scheduler_lateness_ns_or_null"] = 200_000_000
-        origin["finish_ns_or_null"] = origin["actual_start_ns_or_null"] + 1_000_000
+        origin["scheduler_lateness_ns_or_null"] = (
+            campaign.MAXIMUM_GAP_NS_V2 - campaign.TARGET_WAIT_NS_V2
+        )
+        origin["finish_ns_or_null"] = origin["actual_start_ns_or_null"]
+        boundary_detail = origin["error_detail"].replace(
+            "actual_start_ns=1250000001", "actual_start_ns=1250000000"
+        ).replace("gap_ns=250000001", "gap_ns=250000000")
+        outer_boundary_detail = "held actor sampler failed: " + boundary_detail
+        for index, row in enumerate(value["trajectory_failure_rows"]):
+            row["error_detail"] = (
+                boundary_detail if index < 2 else outer_boundary_detail
+            )
+        value["trajectory_terminal_error_detail_or_null"] = outer_boundary_detail
+        value.update(
+            campaign.classify_supervisor_stdout_v2(
+                _wire(_error_wire(detail=outer_boundary_detail))
+            )
+        )
+        rows = value["trajectory_failure_rows"]
+        assert type(rows) is list
+        _install_partition(value, _events_for_failures(rows))
     elif name == "gap-arithmetic":
         origin["gap_ns_or_null"] += 1
     elif name == "scheduled":
@@ -2558,7 +3475,7 @@ def test_canonical_codec_wraps_recursive_tree_failure_in_typed_error() -> None:
     assert caught.value.code == campaign.FAIL_CANONICAL_V2
 
 
-def test_v2r13_preconsumption_pending_is_not_a_slot_decision() -> None:
+def test_v2r17_preconsumption_pending_is_not_a_slot_decision() -> None:
     decisions = {
         campaign.SUCCESS_V2,
         campaign.RETRY_EXACT_GAP_V2,

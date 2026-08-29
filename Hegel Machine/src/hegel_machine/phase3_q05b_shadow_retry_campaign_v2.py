@@ -40,6 +40,8 @@ __all__ = (
     "TARGET_WAIT_NS_V2",
     "MAXIMUM_GAP_NS_V2",
     "GAP_ERROR_CODE_V2",
+    "DECISION_AUDIT_SCHEMA_V2",
+    "DECISION_AUDIT_CLAUSES_V2",
     "SUCCESS_V2",
     "RETRY_EXACT_GAP_V2",
     "EXHAUSTED_RETRYABLE_GAP_V2",
@@ -54,6 +56,7 @@ __all__ = (
     "cleanup_rows_digest_v2",
     "partition_certificate_digest_v2",
     "classify_supervisor_stdout_v2",
+    "evaluate_slot_observation_with_audit_v2",
     "evaluate_slot_observation_v2",
 )
 
@@ -71,9 +74,21 @@ STDOUT_WIRE_INVALID_V2: Final = "INVALID"
 
 MAX_CAMPAIGN_SLOTS_V2: Final = 3
 CAPTURE_MAX_BYTES_V2: Final = 64 * 1024 * 1024
-TARGET_WAIT_NS_V2: Final = 125_000_000
+TARGET_WAIT_NS_V2: Final = 100_000_000
 MAXIMUM_GAP_NS_V2: Final = 250_000_000
 GAP_ERROR_CODE_V2: Final = "HELD_ACTOR_GAP_EXCEEDED"
+DECISION_AUDIT_SCHEMA_V2: Final = (
+    "hegel-phase3a-q05b-shadow-retry-campaign-decision-audit/2"
+)
+DECISION_AUDIT_CLAUSES_V2: Final = (
+    "OBSERVATION_SHAPE",
+    "SUCCESS",
+    "COMMON_EXACT",
+    "GAP_GRAMMAR",
+    "WIRE_TERMINAL",
+    "PARTITION_CLEANUP",
+    "ARTIFACT_ABSENCE",
+)
 
 SUCCESS_V2: Final = "SUCCESS"
 RETRY_EXACT_GAP_V2: Final = "RETRY_EXACT_GAP"
@@ -87,13 +102,13 @@ _SLOT_DIGEST_DOMAIN: Final = (
     "HEGEL/Q05B/SHADOW-RETRY-CAMPAIGN/SLOT-OBSERVATION/V2\x00"
 )
 _FAILURE_ROWS_DIGEST_DOMAIN: Final = (
-    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R13/TRAJECTORY_FAILURE_ROWS/V2\x00"
+    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/TRAJECTORY_FAILURE_ROWS/V2\x00"
 )
 _CLEANUP_ROWS_DIGEST_DOMAIN: Final = (
-    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R13/TRAJECTORY_CLEANUP_ROWS/V2\x00"
+    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/TRAJECTORY_CLEANUP_ROWS/V2\x00"
 )
 _PARTITION_CERTIFICATE_DIGEST_DOMAIN: Final = (
-    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R13/"
+    "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/"
     "POST_ORIGIN_PARTITION_CERTIFICATE/V2\x00"
 )
 _ACTUAL_FINAL_DELIVERY_ROOT_DOMAIN: Final = (
@@ -113,7 +128,7 @@ _IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:@/+-]{0,255}\Z")
 _ERROR_CODE = re.compile(r"[A-Z][A-Z0-9_]{0,127}\Z")
 _MAX_COUNTER: Final = (1 << 53) - 1
 _MAX_UINT64: Final = (1 << 64) - 1
-_MAX_REGISTERED_CLEANUP_PAIRS_PER_ACTOR: Final = 2
+_MAX_REGISTERED_CLEANUP_PAIRS_PER_ACTOR: Final = 3
 _MAX_RETAINED_FAILURE_ROWS: Final = 7
 _MAX_RETAINED_CLEANUP_ROWS: Final = 12
 _MAX_PARTITION_CERTIFICATE_BYTES: Final = 256 * 1024
@@ -850,9 +865,7 @@ def _common_exact(value: Mapping[str, object]) -> bool:
     )
 
 
-def _is_success(value: Mapping[str, object]) -> bool:
-    if not _common_exact(value):
-        return False
+def _success_specific_exact(value: Mapping[str, object]) -> bool:
     return (
         value["exit_code_or_null"] == 0
         and value["stdout_wire_kind"] == STDOUT_WIRE_SUCCESS_RESULT_V2
@@ -926,6 +939,52 @@ def _canonical_uint_text(value: str, *, maximum: int) -> bool:
     return (
         re.fullmatch(r"0|[1-9][0-9]*", value) is not None
         and int(value) <= maximum
+    )
+
+
+_LIVE_RESOURCE_GAP_DETAIL_V6 = re.compile(
+    r"MAXIMUM_UNSAMPLED_GAP_EXCEEDED;"
+    r"native_wake_ns=(?P<native_wake_ns>0|[1-9][0-9]*);"
+    r"native_wake_lateness_ns=(?P<native_wake_lateness_ns>0|[1-9][0-9]*);"
+    r"trajectory_admission_duration_ns="
+    r"(?P<trajectory_admission_duration_ns>0|[1-9][0-9]*)\Z"
+)
+
+
+def _origin_gap_detail_or_null_exact(
+    row: Mapping[str, object],
+    *,
+    scheduled: int,
+    actual: int,
+    scheduler_lateness: int,
+) -> bool:
+    """Bind the Target C V6 live-wake projection without changing held-final."""
+
+    detail = row["detail_or_null"]
+    if row["operation"] == "HELD_FINAL_RESOURCE_SAMPLE":
+        return detail == "MAXIMUM_UNSAMPLED_GAP_EXCEEDED"
+    if type(detail) is not str:
+        return False
+    match = _LIVE_RESOURCE_GAP_DETAIL_V6.fullmatch(detail)
+    if match is None:
+        return False
+    fields = match.groupdict()
+    if not all(
+        _canonical_uint_text(raw, maximum=_MAX_UINT64)
+        for raw in fields.values()
+    ):
+        return False
+    native_wake = int(fields["native_wake_ns"])
+    native_wake_lateness = int(fields["native_wake_lateness_ns"])
+    trajectory_admission_duration = int(
+        fields["trajectory_admission_duration_ns"]
+    )
+    return (
+        scheduled <= native_wake <= actual
+        and native_wake_lateness == native_wake - scheduled
+        and trajectory_admission_duration == actual - native_wake
+        and native_wake_lateness + trajectory_admission_duration
+        == scheduler_lateness
     )
 
 
@@ -1023,7 +1082,12 @@ def _origin_gap_row(row: Mapping[str, object]) -> bool:
             if row["operation"] == "LIVE_RESOURCE_SAMPLE"
             else "COLLECT_BOUND_HELD_FINAL_RESOURCES"
         )
-        and row["detail_or_null"] == "MAXIMUM_UNSAMPLED_GAP_EXCEEDED"
+        and _origin_gap_detail_or_null_exact(
+            row,
+            scheduled=scheduled,
+            actual=actual,
+            scheduler_lateness=lateness,
+        )
         and row["span_id"]
         == (
             "sample-"
@@ -1516,7 +1580,7 @@ def _exact_gap_failure_grammar(
             ):
                 actor = str(origin["actor_or_null"])
                 allowed_cleanup_actors = (
-                    frozenset({"TRUSTED_HOST_REPLAY"})
+                    frozenset(_ROLE_ACTOR.values())
                     if actor == "TRUSTED_HOST_REPLAY"
                     else frozenset({"PYTHON_ENDPOINT", "RUST_ENDPOINT"})
                 )
@@ -1604,22 +1668,14 @@ def _exact_gap_failure_grammar(
     )
 
 
-def _is_exact_retryable_gap(value: Mapping[str, object]) -> bool:
-    if not _common_exact(value):
-        return False
+def _wire_terminal_gap_exact(
+    value: Mapping[str, object],
+    terminal_origin: Mapping[str, object],
+) -> bool:
     wire = value["stdout_wire_value_or_null"]
-    rows = value["trajectory_failure_rows"]
-    if (
-        type(wire) is not dict
-        or type(rows) is not list
-        or not rows
-    ):
+    if type(wire) is not dict:
         return False
     wire_detail = wire.get("detail")
-    grammar = _exact_gap_failure_grammar(rows)
-    if grammar is None:
-        return False
-    terminal_origin, required_origin_actors, allowed_cleanup_actors = grammar
     terminal_detail = _terminal_gap_detail(terminal_origin)
     return (
         value["exit_code_or_null"] == 1
@@ -1632,29 +1688,184 @@ def _is_exact_retryable_gap(value: Mapping[str, object]) -> bool:
         and type(wire_detail) is str
         and wire_detail == terminal_detail
         and value["trajectory_terminal_error_detail_or_null"] == wire_detail
-        and _partition_certificate_retry_exact(
-            value,
-            required_origin_actors=required_origin_actors,
-            allowed_cleanup_actors=allowed_cleanup_actors,
-        )
-        and value["artifact_state"] == "ABSENT"
+    )
+
+
+def _artifact_absence_exact(value: Mapping[str, object]) -> bool:
+    return (
+        value["artifact_state"] == "ABSENT"
         and value["artifact_validation_status"] == "ABSENCE_VERIFIED"
         and value["artifact_replay_status"] == "ABSENCE_REPLAY_VERIFIED"
     )
 
 
-def evaluate_slot_observation_v2(value: object) -> str:
-    """Classify one exact digest-bound observation without taking any action."""
+def _decision_audit(
+    *,
+    decision: str,
+    matched_path_or_null: str | None,
+    first_reject_clause_or_null: str | None,
+    results: Mapping[str, str],
+) -> dict[str, object]:
+    return {
+        "schema_version": DECISION_AUDIT_SCHEMA_V2,
+        "decision": decision,
+        "matched_path_or_null": matched_path_or_null,
+        "first_reject_clause_or_null": first_reject_clause_or_null,
+        "predicate_results": [
+            {
+                "clause": clause,
+                "result": results.get(clause, "NOT_EVALUATED"),
+            }
+            for clause in DECISION_AUDIT_CLAUSES_V2
+        ],
+    }
+
+
+def _evaluate_slot_observation_with_audit_v2(
+    value: object,
+) -> tuple[dict[str, object], ShadowRetryCampaignValidationErrorV2 | None]:
+    results: dict[str, str] = {}
 
     try:
         observation = _require_top_level(value)
+    except ShadowRetryCampaignValidationErrorV2 as error:
+        results["OBSERVATION_SHAPE"] = "REJECT"
+        return (
+            _decision_audit(
+                decision=TERMINAL_NONRETRYABLE_V2,
+                matched_path_or_null=None,
+                first_reject_clause_or_null="OBSERVATION_SHAPE",
+                results=results,
+            ),
+            error,
+        )
     except _ObservationFactInvalidV2:
-        return TERMINAL_NONRETRYABLE_V2
-    if _is_success(observation):
-        return SUCCESS_V2
-    if _is_exact_retryable_gap(observation):
-        slot = int(observation["slot_number"])
-        if slot < MAX_CAMPAIGN_SLOTS_V2:
-            return RETRY_EXACT_GAP_V2
-        return EXHAUSTED_RETRYABLE_GAP_V2
-    return TERMINAL_NONRETRYABLE_V2
+        results["OBSERVATION_SHAPE"] = "REJECT"
+        return (
+            _decision_audit(
+                decision=TERMINAL_NONRETRYABLE_V2,
+                matched_path_or_null=None,
+                first_reject_clause_or_null="OBSERVATION_SHAPE",
+                results=results,
+            ),
+            None,
+        )
+
+    results["OBSERVATION_SHAPE"] = "PASS"
+    common_exact = _common_exact(observation)
+    if common_exact and _success_specific_exact(observation):
+        results["SUCCESS"] = "ACCEPT"
+        results["COMMON_EXACT"] = "PASS"
+        return (
+            _decision_audit(
+                decision=SUCCESS_V2,
+                matched_path_or_null="SUCCESS",
+                first_reject_clause_or_null=None,
+                results=results,
+            ),
+            None,
+        )
+    results["SUCCESS"] = "NO_MATCH"
+    if not common_exact:
+        results["COMMON_EXACT"] = "REJECT"
+        return (
+            _decision_audit(
+                decision=TERMINAL_NONRETRYABLE_V2,
+                matched_path_or_null=None,
+                first_reject_clause_or_null="COMMON_EXACT",
+                results=results,
+            ),
+            None,
+        )
+    results["COMMON_EXACT"] = "PASS"
+
+    rows = observation["trajectory_failure_rows"]
+    grammar = _exact_gap_failure_grammar(rows)
+    if grammar is None:
+        results["GAP_GRAMMAR"] = "REJECT"
+        return (
+            _decision_audit(
+                decision=TERMINAL_NONRETRYABLE_V2,
+                matched_path_or_null=None,
+                first_reject_clause_or_null="GAP_GRAMMAR",
+                results=results,
+            ),
+            None,
+        )
+    results["GAP_GRAMMAR"] = "PASS"
+    terminal_origin, required_origin_actors, allowed_cleanup_actors = grammar
+    if not _wire_terminal_gap_exact(observation, terminal_origin):
+        results["WIRE_TERMINAL"] = "REJECT"
+        return (
+            _decision_audit(
+                decision=TERMINAL_NONRETRYABLE_V2,
+                matched_path_or_null=None,
+                first_reject_clause_or_null="WIRE_TERMINAL",
+                results=results,
+            ),
+            None,
+        )
+    results["WIRE_TERMINAL"] = "PASS"
+    if not _partition_certificate_retry_exact(
+        observation,
+        required_origin_actors=required_origin_actors,
+        allowed_cleanup_actors=allowed_cleanup_actors,
+    ):
+        results["PARTITION_CLEANUP"] = "REJECT"
+        return (
+            _decision_audit(
+                decision=TERMINAL_NONRETRYABLE_V2,
+                matched_path_or_null=None,
+                first_reject_clause_or_null="PARTITION_CLEANUP",
+                results=results,
+            ),
+            None,
+        )
+    results["PARTITION_CLEANUP"] = "PASS"
+    if not _artifact_absence_exact(observation):
+        results["ARTIFACT_ABSENCE"] = "REJECT"
+        return (
+            _decision_audit(
+                decision=TERMINAL_NONRETRYABLE_V2,
+                matched_path_or_null=None,
+                first_reject_clause_or_null="ARTIFACT_ABSENCE",
+                results=results,
+            ),
+            None,
+        )
+    results["ARTIFACT_ABSENCE"] = "PASS"
+    slot = int(observation["slot_number"])
+    decision = (
+        RETRY_EXACT_GAP_V2
+        if slot < MAX_CAMPAIGN_SLOTS_V2
+        else EXHAUSTED_RETRYABLE_GAP_V2
+    )
+    return (
+        _decision_audit(
+            decision=decision,
+            matched_path_or_null="EXACT_GAP",
+            first_reject_clause_or_null=None,
+            results=results,
+        ),
+        None,
+    )
+
+
+def evaluate_slot_observation_with_audit_v2(
+    value: object,
+) -> dict[str, object]:
+    """Return the bounded, JSON-persistable decision and clause audit."""
+
+    audit, _validation_error = _evaluate_slot_observation_with_audit_v2(value)
+    return audit
+
+
+def evaluate_slot_observation_v2(value: object) -> str:
+    """Classify one exact digest-bound observation without taking any action."""
+
+    audit, validation_error = _evaluate_slot_observation_with_audit_v2(value)
+    if validation_error is not None:
+        raise validation_error
+    decision = audit["decision"]
+    assert type(decision) is str
+    return decision

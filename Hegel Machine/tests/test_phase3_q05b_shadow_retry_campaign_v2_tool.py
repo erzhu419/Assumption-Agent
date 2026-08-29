@@ -6,6 +6,7 @@ import dis
 from hashlib import sha256
 import importlib
 import importlib.util
+import inspect
 import os
 from pathlib import Path
 import stat
@@ -29,6 +30,9 @@ CORE = importlib.import_module(
 TRAJECTORY = importlib.import_module("hegel_machine.phase3_q05b_trajectory_v2")
 
 TOOL_PATH = ROOT / "tools/phase3_q05b_shadow_retry_campaign_v2.py"
+CORE_TEST_KAT_PATH = (
+    ROOT / "tests/test_phase3_q05b_shadow_retry_campaign_v2_core.py"
+)
 SPEC = importlib.util.spec_from_file_location(
     "phase3_q05b_shadow_retry_campaign_v2_tool_test",
     TOOL_PATH,
@@ -41,6 +45,12 @@ SPEC.loader.exec_module(TOOL)
 _REAL_REQUIRE_SINGLE_THREADED_SPAWN = (
     TOOL._require_single_threaded_spawn_controller_v2
 )
+_REAL_WAIT_JOINED_ADMISSION_TASKS = (
+    TOOL._wait_for_joined_admission_tasks_to_quiesce_v2r17
+)
+_REAL_LOAD_PREAUTHORIZATION_LIVE_GAUNTLET = (
+    TOOL._load_preauthorization_live_gauntlet_receipt_v2
+)
 
 
 @pytest.fixture(autouse=True)
@@ -49,6 +59,18 @@ def _permit_pytest_worker_threads(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(
         TOOL, "_require_single_threaded_spawn_controller_v2", lambda: None
+    )
+    monkeypatch.setattr(
+        TOOL,
+        "_wait_for_joined_admission_tasks_to_quiesce_v2r17",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        TOOL,
+        "_load_preauthorization_live_gauntlet_receipt_v2",
+        lambda contract, *, controller_git: (
+            _gauntlet_receipt_binding_stub(contract, controller_git)
+        ),
     )
 
 
@@ -144,6 +166,12 @@ def _dependency_preflight_receipt_stub(
             ],
         },
         "artifact_module_name": "hegel_machine.phase3_q05b_actual_artifact_v2",
+        "artifact_module_max_canonical_bytes": execution[
+            "artifact_max_canonical_bytes"
+        ],
+        "supervisor_tool_max_canonical_bytes": execution[
+            "artifact_max_canonical_bytes"
+        ],
         "host_replay_module_name": "hegel_machine.phase3_q05b_host_replay_v1",
         "vendored_tomli_module_name": policy["vendored_tomli_module_name"],
         "tomli_top_level_spec_or_null": None,
@@ -221,6 +249,12 @@ def _dependency_preflight_receipt_stub(
             "tomli_top_level_spec_or_null"
         ],
         "artifact_module_name": receipt["artifact_module_name"],
+        "artifact_module_max_canonical_bytes": receipt[
+            "artifact_module_max_canonical_bytes"
+        ],
+        "supervisor_tool_max_canonical_bytes": receipt[
+            "supervisor_tool_max_canonical_bytes"
+        ],
         "vendored_tomli_module_name": receipt["vendored_tomli_module_name"],
         "top_level_tomli_in_sys_modules": receipt[
             "top_level_tomli_in_sys_modules"
@@ -255,26 +289,35 @@ def _dependency_preflight_receipt_stub(
     return receipt
 
 
-def _capsule_stub(label: str = "capsule") -> dict[str, object]:
+def _capsule_stub(
+    label: str = "capsule",
+    *,
+    contract: Mapping[str, object] | None = None,
+) -> dict[str, object]:
     dependency = _dependency_preflight_receipt_stub(
         f"{label}-dependency-preflight"
     )
-    contract = _contract()
+    contract = _contract() if contract is None else contract
     target = contract["target_commit_a_binding"]
     assert type(target) is dict
+    decision_audit = contract["decision_audit_policy"]
+    assert type(decision_audit) is dict
+    prior_v2r18 = TOOL._prior_v2r18_historical_evidence_v2(contract)
+    controller_git = {
+        "commit": dependency["controller_commit"],
+        "parent": target["target_supervisor_commit"],
+        "parent_count": 1,
+        "clean": True,
+        "changed_paths_from_target_in_exact_order": deepcopy(
+            dependency[
+                "controller_changed_paths_from_target_in_exact_order"
+            ]
+        ),
+    }
+    gauntlet = _gauntlet_receipt_binding_stub(contract, controller_git)
     return {
         "capsule_digest": _tagged(label),
-        "controller_git": {
-            "commit": dependency["controller_commit"],
-            "parent": target["target_supervisor_commit"],
-            "parent_count": 1,
-            "clean": True,
-            "changed_paths_from_target_in_exact_order": deepcopy(
-                dependency[
-                    "controller_changed_paths_from_target_in_exact_order"
-                ]
-            ),
-        },
+        "controller_git": controller_git,
         "target_git": {
             "commit": dependency["target_commit"],
             "target_source_binding_digest": dependency[
@@ -295,6 +338,28 @@ def _capsule_stub(label: str = "capsule") -> dict[str, object]:
         "python310_dependency_preflight_receipt_digest": dependency[
             "receipt_digest"
         ],
+        "preauthorization_live_gauntlet_receipt": gauntlet["receipt"],
+        "preauthorization_live_gauntlet_receipt_digest": gauntlet[
+            "receipt_digest"
+        ],
+        "preauthorization_live_gauntlet_receipt_raw_sha256": gauntlet[
+            "raw_sha256"
+        ],
+        "preauthorization_live_gauntlet_receipt_byte_count": gauntlet[
+            "byte_count"
+        ],
+        "preauthorization_live_gauntlet_root_identity": gauntlet[
+            "root_identity"
+        ],
+        "preauthorization_live_gauntlet_record_identity": gauntlet[
+            "record_identity"
+        ],
+        "decision_audit_policy": deepcopy(decision_audit),
+        "decision_audit_policy_digest": decision_audit["policy_digest"],
+        "decision_audit_core_schema_version": decision_audit[
+            "core_audit_schema_version"
+        ],
+        "prior_v2r18_historical_evidence": prior_v2r18,
     }
 
 
@@ -304,7 +369,7 @@ def _contract() -> dict[str, object]:
     assert type(value) is dict
     contract = deepcopy(value)
     final_status = (
-        "V2R13_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
+        "V2R19_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
     )
     contract["status"] = final_status
     contract["contract_digest"] = _tagged("contract")
@@ -349,6 +414,14 @@ def _contract() -> dict[str, object]:
     retry["retry_predicate_digest"] = _tagged("retry")
     success["success_predicate_digest"] = _tagged("success")
     forbidden["forbidden_scope_digest"] = _tagged("forbidden")
+    decision_audit = contract["decision_audit_policy"]
+    assert type(decision_audit) is dict
+    unsigned_decision_audit = deepcopy(decision_audit)
+    unsigned_decision_audit.pop("policy_digest")
+    decision_audit["policy_digest"] = TOOL._domain_digest(
+        contract["hash_domains"]["decision_audit_policy"],
+        unsigned_decision_audit,
+    )
     ledger = contract["ledger_policy"]
     assert type(ledger) is dict
     ledger["ledger_state_registry_digest"] = _tagged("ledger-registry")
@@ -366,6 +439,96 @@ def _contract() -> dict[str, object]:
     implementation["campaign_source_bound"] = True
     implementation["status"] = final_status
     return contract
+
+
+def _gauntlet_receipt_binding_stub(
+    contract: Mapping[str, object],
+    controller_git: Mapping[str, object],
+) -> dict[str, object]:
+    policy = TOOL._preauthorization_live_gauntlet_policy_v2(contract)
+    root_identity = {
+        "dev": 101,
+        "ino": 202,
+        "mount_id": 303,
+        "mode": stat.S_IFDIR | 0o700,
+        "uid": os.geteuid(),
+        "nlink": 2,
+    }
+    receipt: dict[str, object] = {
+        "schema_version": TOOL._PREAUTHORIZATION_LIVE_GAUNTLET_RECEIPT_SCHEMA_V2,
+        "status": "PASS",
+        "campaign_id": contract["contract_id"],
+        "contract_digest": contract["contract_digest"],
+        "controller_git": deepcopy(dict(controller_git)),
+        "target_binding": TOOL._preauthorization_live_gauntlet_target_binding_v2(
+            contract
+        ),
+        "external_root": policy["stable_external_root"],
+        "external_root_identity": deepcopy(root_identity),
+        "receipt_path": (
+            f"{policy['stable_external_root']}/{policy['receipt_basename']}"
+        ),
+        "scheduling_policy": TOOL._scheduling_admission_policy_v2(contract),
+        "scheduling_admission": _admitted_scheduling_evidence(contract),
+        "formal_roots_in_exact_order": (
+            TOOL._preauthorization_live_gauntlet_formal_roots_v2(contract)
+        ),
+        "formal_roots_absent_before_gate": True,
+        "formal_roots_absent_after_gate": True,
+        "scratch_path": (
+            f"{policy['stable_external_root']}/{policy['scratch_basename']}"
+        ),
+        "scratch_cleanup_passed": True,
+        "scratch_root_fsync_after_removal": True,
+        "authorization_lookup_count": 0,
+        "authorization_publication_count": 0,
+        "authorization_consumption_count": 0,
+        "ledger_creation_or_write_count": 0,
+        "formal_slot_root_creation_or_write_count": 0,
+        "campaign_execution_count": 0,
+        "supervisor_invocation_count": 0,
+        "docker_daemon_contact_count": 0,
+        "network_contact_count": 0,
+        "same_real_scheduling_gate_used": True,
+        "final_clean_controller_commit_bound": True,
+        "unique_controller_parent_equals_target_commit": True,
+        "exact_six_path_diff_bound": True,
+        "full_scheduling_policy_and_evidence_bound": True,
+        "claim_ceiling": policy["claim_ceiling"],
+        "receipt_digest": None,
+    }
+    unsigned = deepcopy(receipt)
+    unsigned.pop("receipt_digest")
+    receipt["receipt_digest"] = TOOL._domain_digest(
+        TOOL._PREAUTHORIZATION_LIVE_GAUNTLET_RECEIPT_DOMAIN_V2,
+        unsigned,
+    )
+    raw = TOOL._canonical_json_bytes(receipt)
+    return {
+        "receipt": receipt,
+        "receipt_digest": receipt["receipt_digest"],
+        "raw_sha256": sha256(raw).hexdigest(),
+        "byte_count": len(raw),
+        "root_identity": root_identity,
+        "record_identity": {
+            "mode": stat.S_IFREG | 0o444,
+            "uid": os.geteuid(),
+            "nlink": 1,
+            "size": len(raw),
+        },
+    }
+
+
+def _rehash_gauntlet_receipt(
+    receipt: Mapping[str, object],
+) -> dict[str, object]:
+    value = deepcopy(dict(receipt))
+    value.pop("receipt_digest", None)
+    value["receipt_digest"] = TOOL._domain_digest(
+        TOOL._PREAUTHORIZATION_LIVE_GAUNTLET_RECEIPT_DOMAIN_V2,
+        value,
+    )
+    return value
 
 
 def _dependency_preflight_inputs() -> tuple[
@@ -510,7 +673,7 @@ def _sustained_scheduling_evidence(
         ])
     )
     result: dict[str, object] = {
-        "schema_version": TOOL._SCHEDULING_SUSTAINED_EVIDENCE_SCHEMA_V6,
+        "schema_version": TOOL._SCHEDULING_SUSTAINED_EVIDENCE_SCHEMA_V7,
         "slot_id": slot_id,
         "window_ordinal": window,
         "clock_id": "CLOCK_MONOTONIC",
@@ -535,7 +698,14 @@ def _sustained_scheduling_evidence(
         "queue_start_depth_records": records_per_cycle,
         "queue_end_depth_records": 0,
         "queue_high_watermark_records": records_per_cycle,
-        "dropped_record_count": 0,
+        "timed_offer_terminal_disposition": (
+            TOOL._SCHEDULING_SUSTAINED_ENQUEUED_V7
+        ),
+        "rejected_record_count": 0,
+        "unoffered_after_failfast_record_count": 0,
+        "scheduled_shortfall_record_count": 0,
+        "full_measurement_duration_observed": True,
+        "first_queue_capacity_rejection_or_null": None,
         "duplicate_record_count": 0,
         "reordered_record_count": 0,
         "last_timed_durable_finish_ns_or_null": finish,
@@ -576,7 +746,7 @@ def _admitted_scheduling_evidence(
         for row in full_bursts
     ]
     evidence: dict[str, object] = {
-        "schema_version": TOOL._SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V6,
+        "schema_version": TOOL._SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V7,
         "slot_id": slot_id,
         "policy": deepcopy(policy),
         "windows_in_strict_order": [
@@ -593,7 +763,9 @@ def _admitted_scheduling_evidence(
                     start_ns=int(bursts[-1]["burst_finish_ns"]),
                 ),
                 "maximum_sampler_deadline_to_post_enqueue_anchor_ns": 25_000_000,
-                "maximum_projected_gap_ns": 150_000_000,
+                "maximum_projected_gap_ns": int(
+                    policy["maximum_projected_gap_ns"]
+                ),
                 "maximum_burst_drain_ns": 200_000_000,
                 "maximum_queue_high_watermark_records": 7,
                 "passed": True,
@@ -604,6 +776,228 @@ def _admitted_scheduling_evidence(
     }
     assert TOOL._scheduling_admission_evidence_exact_v2(contract, evidence)
     return evidence
+
+
+def test_preauthorization_live_gauntlet_receipt_rejects_rehashed_mutations(
+) -> None:
+    contract = _contract()
+    target = contract["target_commit_a_binding"]
+    assert type(target) is dict
+    controller_git = {
+        "commit": "ab" * 20,
+        "tree": "cd" * 20,
+        "parent": target["target_supervisor_commit"],
+        "parent_count": 1,
+        "clean": True,
+        "changed_paths_from_target_in_exact_order": list(
+            TOOL._CONTROLLER_CHANGED_PATHS_FROM_TARGET_IN_EXACT_ORDER
+        ),
+    }
+    binding = _gauntlet_receipt_binding_stub(contract, controller_git)
+    receipt = binding["receipt"]
+    assert type(receipt) is dict
+    assert TOOL._validate_preauthorization_live_gauntlet_receipt_v2(
+        contract,
+        receipt,
+        controller_git=controller_git,
+        observed_root_identity=binding["root_identity"],
+    ) == receipt
+
+    for mutation in (
+        "receipt-digest",
+        "controller-commit",
+        "target-commit",
+        "six-path-diff",
+        "old-40rps-4800-record-policy",
+        "old-sustained-evidence",
+        "old-evidence-schema",
+        "root-identity",
+        "formal-side-effect",
+    ):
+        forged = deepcopy(receipt)
+        rehash = True
+        if mutation == "receipt-digest":
+            forged["receipt_digest"] = _tagged("forged-gauntlet")
+            rehash = False
+        elif mutation == "controller-commit":
+            forged["controller_git"]["commit"] = "ef" * 20
+        elif mutation == "target-commit":
+            forged["target_binding"]["target_supervisor_commit"] = (
+                "01" * 20
+            )
+        elif mutation == "six-path-diff":
+            forged["controller_git"][
+                "changed_paths_from_target_in_exact_order"
+            ].pop()
+        elif mutation == "old-40rps-4800-record-policy":
+            forged_policy = forged["scheduling_policy"]
+            assert type(forged_policy) is dict
+            forged_policy.update({
+                "sustained_offered_rate_records_per_second": 40,
+                "minimum_sustained_publication_rate_records_per_second": 40,
+                "sustained_records_per_cycle": 4,
+                "sustained_timed_records": 4_800,
+                "minimum_final_retained_records": 10_211,
+            })
+        elif mutation == "old-sustained-evidence":
+            admission = forged["scheduling_admission"]
+            assert type(admission) is dict
+            sustained = admission["windows_in_strict_order"][0][
+                "sustained_publication_or_null"
+            ]
+            sustained["timed_records_enqueued"] = 4_800
+        elif mutation == "old-evidence-schema":
+            forged["scheduling_admission"]["schema_version"] = (
+                "hegel-phase3a-q05b-scheduling-admission-evidence/6"
+            )
+        elif mutation == "root-identity":
+            forged["external_root_identity"]["ino"] += 1
+        elif mutation == "formal-side-effect":
+            forged["formal_slot_root_creation_or_write_count"] = 1
+        else:  # pragma: no cover - the mutation registry is closed above.
+            raise AssertionError(mutation)
+        if rehash:
+            forged = _rehash_gauntlet_receipt(forged)
+        with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+            TOOL._validate_preauthorization_live_gauntlet_receipt_v2(
+                contract,
+                forged,
+                controller_git=controller_git,
+                observed_root_identity=binding["root_identity"],
+            )
+        assert error.value.code == "FAIL_CAMPAIGN_SOURCE"
+
+
+def _temporary_preauthorization_gauntlet_context(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> tuple[dict[str, object], dict[str, object], Path, list[Path]]:
+    contract = _contract()
+    policy = TOOL._preauthorization_live_gauntlet_policy_v2(contract)
+    root = tmp_path / "live-gauntlet"
+    policy["stable_external_root"] = os.fspath(root)
+    formal_roots: list[Path] = []
+    fixed = contract["fixed_external_roots"]
+    assert type(fixed) is dict
+    for name in ("authorization_root", "ledger_root"):
+        path = tmp_path / f"formal-{name}"
+        fixed[name] = os.fspath(path)
+        formal_roots.append(path)
+    slots = contract["slot_registry"]
+    assert type(slots) is list
+    for ordinal, slot in enumerate(slots, 1):
+        assert type(slot) is dict
+        for field in (
+            "clone_root",
+            "cargo_cache_root",
+            "artifact_parent_root",
+            "scheduling_probe_root",
+            "evidence_root",
+            "trace_root",
+        ):
+            path = tmp_path / f"formal-slot-{ordinal}-{field}"
+            slot[field] = os.fspath(path)
+            formal_roots.append(path)
+    target = contract["target_commit_a_binding"]
+    assert type(target) is dict
+    controller_git = {
+        "commit": "ab" * 20,
+        "tree": "cd" * 20,
+        "parent": target["target_supervisor_commit"],
+        "parent_count": 1,
+        "clean": True,
+        "changed_paths_from_target_in_exact_order": list(
+            TOOL._CONTROLLER_CHANGED_PATHS_FROM_TARGET_IN_EXACT_ORDER
+        ),
+    }
+    monkeypatch.setattr(
+        TOOL,
+        "load_phase3_q05b_shadow_retry_campaign_contract_v2",
+        lambda: contract,
+    )
+    monkeypatch.setattr(
+        TOOL,
+        "_preauthorization_live_gauntlet_policy_v2",
+        lambda _contract: deepcopy(policy),
+    )
+    monkeypatch.setattr(
+        TOOL,
+        "_controller_git_identity",
+        lambda _contract: deepcopy(controller_git),
+    )
+    return contract, controller_git, root, formal_roots
+
+
+def test_preauthorization_live_gauntlet_publishes_immutable_bound_receipt(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    contract, controller_git, root, formal_roots = (
+        _temporary_preauthorization_gauntlet_context(monkeypatch, tmp_path)
+    )
+    monkeypatch.setattr(
+        TOOL,
+        "_run_scheduling_admission_gate_v2",
+        lambda _contract, _fd, _slot: _admitted_scheduling_evidence(contract),
+    )
+    result = TOOL.create_preauthorization_live_gauntlet_receipt_v2()
+    assert result["status"] == "PASS"
+    assert result["formal_root_write_count"] == 0
+    assert result["supervisor_invocation_count"] == 0
+    assert result["docker_daemon_contact_count"] == 0
+    assert result["network_contact_count"] == 0
+    assert stat.S_IMODE(root.stat(follow_symlinks=False).st_mode) == 0o700
+    receipt_path = Path(str(result["receipt_path"]))
+    receipt_raw = receipt_path.read_bytes()
+    receipt_stat = receipt_path.stat(follow_symlinks=False)
+    assert stat.S_IMODE(receipt_stat.st_mode) == 0o444
+    assert receipt_stat.st_nlink == 1
+    assert result["receipt_raw_sha256"] == sha256(receipt_raw).hexdigest()
+    assert result["receipt_byte_count"] == len(receipt_raw)
+    assert not (root / "live-admission-scratch").exists()
+    assert all(not path.exists() for path in formal_roots)
+    loaded = _REAL_LOAD_PREAUTHORIZATION_LIVE_GAUNTLET(
+        contract,
+        controller_git=controller_git,
+    )
+    assert loaded["receipt_digest"] == result["receipt_digest"]
+    assert loaded["raw_sha256"] == result["receipt_raw_sha256"]
+    assert loaded["byte_count"] == result["receipt_byte_count"]
+    assert loaded["record_identity"]["mode"] == receipt_stat.st_mode
+    assert loaded["record_identity"]["uid"] == os.geteuid()
+    assert loaded["record_identity"]["nlink"] == 1
+    assert loaded["record_identity"]["size"] == len(receipt_raw)
+
+    with pytest.raises(TOOL.ShadowRetryCampaignErrorV2):
+        TOOL.create_preauthorization_live_gauntlet_receipt_v2()
+    assert receipt_path.read_bytes() == receipt_raw
+
+
+def test_preauthorization_live_gauntlet_failure_removes_scratch_and_root(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _contract_value, _controller, root, formal_roots = (
+        _temporary_preauthorization_gauntlet_context(monkeypatch, tmp_path)
+    )
+
+    def fail_gate(*_args: object, **_kwargs: object) -> NoReturn:
+        raise TOOL.ShadowRetryCampaignErrorV2(
+            TOOL._SCHEDULING_ADMISSION_FAILURE_V2,
+            "injected ordinary gauntlet failure",
+            terminal=True,
+        )
+
+    monkeypatch.setattr(
+        TOOL,
+        "_run_scheduling_admission_gate_v2",
+        fail_gate,
+    )
+    with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+        TOOL.create_preauthorization_live_gauntlet_receipt_v2()
+    assert error.value.code == TOOL._SCHEDULING_ADMISSION_FAILURE_V2
+    assert not root.exists()
+    assert all(not path.exists() for path in formal_roots)
 
 
 def _exact_scheduling_exhaustion_error(
@@ -642,7 +1036,85 @@ def _exact_scheduling_exhaustion_error(
             burst_runner=failed_burst,
         )
     error = generated.value
-    assert TOOL._scheduling_gate_exhaustion_is_exact_v2r13(
+    assert TOOL._scheduling_gate_exhaustion_is_exact_v2r17(
+        contract,
+        slot_id,
+        error,
+    )
+    return error
+
+
+def _exact_joined_task_quiescence_timeout_error(
+    contract: Mapping[str, object],
+    slot_id: str,
+    *,
+    component: str = "CRITICAL_BURST",
+) -> TOOL.ShadowRetryCampaignErrorV2:
+    policy = TOOL._scheduling_admission_policy_v2(contract)
+    window = 2
+    burst = 15 if component == "CRITICAL_BURST" else None
+    names = (
+        [
+            "q05b-admission-durability-w2-b15",
+            "q05b-admission-controller-w2-b15",
+            "q05b-admission-python_endpoint-w2-b15",
+            "q05b-admission-rust_endpoint-w2-b15",
+        ]
+        if component == "CRITICAL_BURST"
+        else ["q05b-admission-sustained-w2"]
+    )
+    native_ids = list(range(2001, 2001 + len(names)))
+    lingering = [native_ids[-1]]
+    receipt: dict[str, object] = {
+        "schema_version": (
+            TOOL._SCHEDULING_JOINED_TASK_QUIESCENCE_SCHEMA_V1
+        ),
+        "condition": (
+            TOOL._SCHEDULING_JOINED_TASK_QUIESCENCE_CONDITION_V2R17
+        ),
+        "slot_id": slot_id,
+        "window_ordinal": window,
+        "component": component,
+        "burst_ordinal_or_null": burst,
+        "quiescence_timeout_ns": policy[
+            "joined_task_quiescence_timeout_ns"
+        ],
+        "quiescence_poll_interval_ns": policy[
+            "joined_task_quiescence_poll_interval_ns"
+        ],
+        "wait_start_ns": 100,
+        "wait_finish_ns": 1_000_000_100,
+        "wait_duration_ns": 1_000_000_000,
+        "poll_count": 1001,
+        "controller_task_id": 1999,
+        "joined_thread_names_in_start_order": names,
+        "joined_thread_native_ids_in_start_order": native_ids,
+        "joined_thread_is_alive_in_start_order": [False] * len(names),
+        "join_completed_in_start_order": [True] * len(names),
+        "task_ids_at_timeout_in_sorted_order": [1999, *lingering],
+        "lingering_known_joined_task_ids_in_sorted_order": lingering,
+        "unknown_task_ids_at_timeout_in_sorted_order": [],
+        "terminal_drain_policy_exceeded": False,
+        "primary_error_present": False,
+        "producer_error_count": 0,
+        "publisher_error_count": 0,
+        "cleanup_error_count": 0,
+        "passed": False,
+    }
+    assert TOOL._joined_task_quiescence_timeout_receipt_exact_v2r17(
+        policy,
+        slot_id,
+        receipt,
+    )
+    detail = TOOL._joined_task_quiescence_timeout_detail_v2r17(receipt)
+    assert detail is not None
+    error = TOOL.ShadowRetryCampaignErrorV2(
+        TOOL._SCHEDULING_ADMISSION_FAILURE_V2,
+        detail,
+        terminal=True,
+        receipt=receipt,
+    )
+    assert TOOL._scheduling_gate_joined_task_timeout_is_exact_v2r17(
         contract,
         slot_id,
         error,
@@ -699,7 +1171,9 @@ def _admitted_scheduling_burst(
             "enqueue_start_ns": start_ns,
             "post_enqueue_anchor_ns": start_ns + critical_ns,
             "deadline_to_post_enqueue_anchor_ns": critical_ns,
-            "projected_gap_ns": 125_000_000 + critical_ns,
+            "projected_gap_ns": (
+                int(policy["sampling_target_wait_ns"]) + critical_ns
+            ),
             "passed": critical_ns <= 25_000_000,
         }
         for actor, enqueue_ordinal in (
@@ -730,6 +1204,61 @@ def _admitted_scheduling_burst(
         policy, slot_id, window, result
     )
     return result
+
+
+def test_v2r19_target_c_scheduling_policy_is_exact_and_rejects_old_profiles(
+) -> None:
+    contract = _contract()
+    policy = TOOL._scheduling_admission_policy_v2(contract)
+    assert policy["schema_version"] == (
+        TOOL._SCHEDULING_ADMISSION_POLICY_SCHEMA_V8
+    )
+    assert policy["producer_lanes_in_exact_order"] == [
+        "CONTROLLER", "PYTHON_ENDPOINT", "RUST_ENDPOINT",
+    ]
+    assert policy["sampling_target_wait_ns"] == 100_000_000
+    assert policy[
+        "maximum_sampler_event_production_rate_records_per_second"
+    ] == 40
+    assert policy["sustained_offered_rate_records_per_second"] == 50
+    assert policy[
+        "minimum_sustained_publication_rate_records_per_second"
+    ] == 50
+    assert policy["maximum_utilization_numerator"] == 4
+    assert policy["maximum_utilization_denominator"] == 5
+    assert policy["sustained_cycle_count"] == 1_200
+    assert policy["sustained_timed_records"] == 6_000
+    assert policy["sustained_prefill_retained_records"] == 5_411
+    assert policy["minimum_final_retained_records"] == 11_411
+    assert policy["sustained_queue_target_records"] == 64
+    assert policy["maximum_projected_gap_ns"] == 125_000_000
+    assert policy["reserved_runtime_margin_ns"] == 125_000_000
+    assert policy["retained_probe_success_total_fsync_count"] == 4
+
+    old_mutations = (
+        {"schema_version": "hegel-phase3a-q05b-scheduling-admission-policy/7"},
+        {"sampling_target_wait_ns": 50_000_000},
+        {"maximum_sampler_event_production_rate_records_per_second": 100},
+        {"sustained_cycle_count": 2_400},
+        {"sustained_timed_records": 12_000},
+        {"minimum_final_retained_records": 17_411},
+        {"sustained_queue_target_records": 512},
+        {
+            "sustained_offered_rate_records_per_second": 40,
+            "minimum_sustained_publication_rate_records_per_second": 40,
+            "sustained_records_per_cycle": 4,
+            "sustained_timed_records": 4_800,
+            "minimum_final_retained_records": 10_211,
+        },
+    )
+    for updates in old_mutations:
+        mutated = deepcopy(contract)
+        gate = mutated["execution_policy"]["scheduling_admission_gate"]
+        assert type(gate) is dict
+        gate.update(updates)
+        with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+            TOOL._scheduling_admission_policy_v2(mutated)
+        assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
 
 
 def test_scheduling_admission_selects_first_passing_window_at_boundary() -> None:
@@ -817,7 +1346,7 @@ def test_scheduling_admission_exhaustion_is_typed_and_prevents_spawn() -> None:
         bounded = TOOL._bounded_receipt_or_null(error.receipt)
         assert bounded is not None
         assert bounded["schema_version"] == (
-            TOOL._SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V6
+                TOOL._SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V7
         )
         assert not TOOL._terminal_error_receipt_semantics_v2(
             contract,
@@ -1003,9 +1532,24 @@ def test_four_fsync_publication_probe_fault_removes_all_names(
             os.close(directory_fd)
 
 
-def test_stage5_admission_burst_exact_replay_and_thread_drain() -> None:
+def test_stage5_admission_burst_exact_replay_and_thread_drain(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     contract = _contract()
     policy = TOOL._scheduling_admission_policy_v2(contract)
+    quiescence_calls: list[dict[str, object]] = []
+
+    def quiescence(
+        _threads: Sequence[threading.Thread],
+        **kwargs: object,
+    ) -> None:
+        quiescence_calls.append(dict(kwargs))
+
+    monkeypatch.setattr(
+        TOOL,
+        "_wait_for_joined_admission_tasks_to_quiesce_v2r17",
+        quiescence,
+    )
     result = TOOL._run_stage5_scheduling_admission_burst_v6(
         7,
         "SLOT_01",
@@ -1020,6 +1564,52 @@ def test_stage5_admission_burst_exact_replay_and_thread_drain() -> None:
     assert TOOL._scheduling_admission_burst_exact_v6(
         policy, "SLOT_01", 1, result
     )
+    assert len(quiescence_calls) == 1
+    assert quiescence_calls[0]["component"] == "CRITICAL_BURST"
+    assert quiescence_calls[0]["burst_ordinal_or_null"] == 1
+
+
+def test_stage5_admission_burst_propagates_exact_joined_task_quiescence_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = _contract()
+    policy = TOOL._scheduling_admission_policy_v2(contract)
+    timeout = _exact_joined_task_quiescence_timeout_error(
+        contract,
+        "SLOT_01",
+        component="CRITICAL_BURST",
+    )
+    assert type(timeout.receipt) is dict
+
+    def quiescence(
+        _threads: Sequence[threading.Thread],
+        **kwargs: object,
+    ) -> dict[str, object]:
+        assert kwargs["component"] == "CRITICAL_BURST"
+        assert kwargs["window"] == 2
+        assert kwargs["burst_ordinal_or_null"] == 15
+        assert kwargs["allow_clean_timeout_receipt"] is True
+        return deepcopy(timeout.receipt)
+
+    monkeypatch.setattr(
+        TOOL,
+        "_wait_for_joined_admission_tasks_to_quiesce_v2r17",
+        quiescence,
+    )
+    with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as generated:
+        TOOL._run_stage5_scheduling_admission_burst_v6(
+            7,
+            "SLOT_01",
+            2,
+            15,
+            policy,
+            probe_publisher=lambda *_args: 1,
+        )
+    assert TOOL._scheduling_gate_joined_task_timeout_is_exact_v2r17(
+        contract,
+        "SLOT_01",
+        generated.value,
+    )
 
 
 def _admission_threads() -> list[threading.Thread]:
@@ -1027,6 +1617,144 @@ def _admission_threads() -> list[threading.Thread]:
         thread for thread in threading.enumerate()
         if thread.name.startswith("q05b-admission-")
     ]
+
+
+def _joined_dead_admission_thread(name: str) -> threading.Thread:
+    thread = threading.Thread(target=lambda: None, name=name, daemon=True)
+    thread.start()
+    thread.join()
+    assert thread.native_id is not None
+    assert thread.is_alive() is False
+    return thread
+
+
+def test_joined_known_dead_task_quiesces_transparently_before_strict_proof(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    thread = _joined_dead_admission_thread(
+        "q05b-admission-sustained-w1"
+    )
+    assert thread.native_id is not None
+    controller = os.getpid()
+    task_sets = [
+        [str(controller), str(thread.native_id)],
+        [str(controller)],
+    ]
+    clock_values = iter([10_000_000, 10_100_000])
+    strict_calls = 0
+    sleep_calls: list[float] = []
+
+    def strict_proof() -> None:
+        nonlocal strict_calls
+        strict_calls += 1
+
+    monkeypatch.setattr(
+        TOOL,
+        "_require_single_threaded_spawn_controller_v2",
+        strict_proof,
+    )
+    receipt = _REAL_WAIT_JOINED_ADMISSION_TASKS(
+        [thread],
+        slot_id="SLOT_01",
+        window=1,
+        component="SUSTAINED_PUBLICATION",
+        burst_ordinal_or_null=None,
+        timeout_ns=1_000_000_000,
+        poll_interval_ns=1_000_000,
+        allow_clean_timeout_receipt=True,
+        clock_ns=lambda: next(clock_values),
+        sleeper=lambda seconds: sleep_calls.append(seconds),
+        task_names_reader=lambda: task_sets.pop(0),
+    )
+    assert receipt is None
+    assert strict_calls == 1
+    assert sleep_calls == [0.001]
+
+
+def test_joined_known_dead_task_timeout_receipt_is_exact() -> None:
+    thread = _joined_dead_admission_thread(
+        "q05b-admission-sustained-w2"
+    )
+    assert thread.native_id is not None
+    controller = os.getpid()
+    clock_values = iter([20_000_000, 1_020_000_000])
+    receipt = _REAL_WAIT_JOINED_ADMISSION_TASKS(
+        [thread],
+        slot_id="SLOT_01",
+        window=2,
+        component="SUSTAINED_PUBLICATION",
+        burst_ordinal_or_null=None,
+        timeout_ns=1_000_000_000,
+        poll_interval_ns=1_000_000,
+        allow_clean_timeout_receipt=True,
+        clock_ns=lambda: next(clock_values),
+        sleeper=lambda _seconds: (_ for _ in ()).throw(
+            AssertionError("timeout path must not sleep after its final poll")
+        ),
+        task_names_reader=lambda: [
+            str(controller),
+            str(thread.native_id),
+        ],
+    )
+    policy = TOOL._scheduling_admission_policy_v2(_contract())
+    assert TOOL._joined_task_quiescence_timeout_receipt_exact_v2r17(
+        policy,
+        "SLOT_01",
+        receipt,
+    )
+    assert receipt["wait_duration_ns"] == 1_000_000_000
+    assert receipt[
+        "lingering_known_joined_task_ids_in_sorted_order"
+    ] == [thread.native_id]
+    assert "terminal drain" not in (
+        TOOL._joined_task_quiescence_timeout_detail_v2r17(receipt) or ""
+    )
+
+
+def test_joined_task_quiescence_rejects_unknown_and_alive_tasks() -> None:
+    dead = _joined_dead_admission_thread(
+        "q05b-admission-sustained-w1"
+    )
+    assert dead.native_id is not None
+    with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as unknown:
+        _REAL_WAIT_JOINED_ADMISSION_TASKS(
+            [dead],
+            slot_id="SLOT_01",
+            window=1,
+            component="SUSTAINED_PUBLICATION",
+            burst_ordinal_or_null=None,
+            timeout_ns=1_000_000_000,
+            poll_interval_ns=1_000_000,
+            allow_clean_timeout_receipt=True,
+            task_names_reader=lambda: [str(os.getpid()), "2147483646"],
+        )
+    assert unknown.value.code == "FAIL_CAMPAIGN_PROCESS"
+    assert "untracked task" in unknown.value.detail
+
+    release = threading.Event()
+    alive = threading.Thread(
+        target=lambda: release.wait(5),
+        name="q05b-admission-sustained-w1",
+        daemon=True,
+    )
+    alive.start()
+    try:
+        with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as live:
+            _REAL_WAIT_JOINED_ADMISSION_TASKS(
+                [alive],
+                slot_id="SLOT_01",
+                window=1,
+                component="SUSTAINED_PUBLICATION",
+                burst_ordinal_or_null=None,
+                timeout_ns=1_000_000_000,
+                poll_interval_ns=1_000_000,
+                allow_clean_timeout_receipt=True,
+            )
+        assert live.value.code == "FAIL_CAMPAIGN_PROCESS"
+        assert "not all uniquely bound and joined" in live.value.detail
+    finally:
+        release.set()
+        alive.join(timeout=2)
 
 
 def test_stage5_admission_release_clock_fault_leaves_no_thread() -> None:
@@ -1185,11 +1913,25 @@ def _retaining_test_probe(
 
 
 def test_stage5_sustained_admission_retains_across_nondivisible_prefill(
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     production_policy = TOOL._scheduling_admission_policy_v2(_contract())
     policy = _fast_sustained_policy(production_policy)
     observed_identities: list[dict[str, object]] = []
+    quiescence_calls: list[dict[str, object]] = []
+
+    def quiescence(
+        _threads: Sequence[threading.Thread],
+        **kwargs: object,
+    ) -> None:
+        quiescence_calls.append(dict(kwargs))
+
+    monkeypatch.setattr(
+        TOOL,
+        "_wait_for_joined_admission_tasks_to_quiesce_v2r17",
+        quiescence,
+    )
 
     directory_fd = os.open(
         tmp_path,
@@ -1226,6 +1968,63 @@ def test_stage5_sustained_admission_retains_across_nondivisible_prefill(
     assert observed_identities[6]["operation"] == "LIVE_RESOURCE_SAMPLE_BEGIN"
     assert list(tmp_path.iterdir()) == []
     assert _admission_threads() == []
+    assert len(quiescence_calls) == 1
+    assert quiescence_calls[0]["component"] == "SUSTAINED_PUBLICATION"
+    assert quiescence_calls[0]["burst_ordinal_or_null"] is None
+
+
+def test_stage5_sustained_admission_propagates_exact_joined_task_quiescence_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    contract = _contract()
+    production_policy = TOOL._scheduling_admission_policy_v2(contract)
+    policy = _fast_sustained_policy(production_policy)
+    timeout = _exact_joined_task_quiescence_timeout_error(
+        contract,
+        "SLOT_01",
+        component="SUSTAINED_PUBLICATION",
+    )
+    assert type(timeout.receipt) is dict
+    observed_identities: list[dict[str, object]] = []
+
+    def quiescence(
+        _threads: Sequence[threading.Thread],
+        **kwargs: object,
+    ) -> dict[str, object]:
+        assert kwargs["component"] == "SUSTAINED_PUBLICATION"
+        assert kwargs["window"] == 2
+        assert kwargs["burst_ordinal_or_null"] is None
+        assert kwargs["allow_clean_timeout_receipt"] is True
+        return deepcopy(timeout.receipt)
+
+    monkeypatch.setattr(
+        TOOL,
+        "_wait_for_joined_admission_tasks_to_quiesce_v2r17",
+        quiescence,
+    )
+    directory_fd = os.open(
+        tmp_path,
+        os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC |
+        getattr(os, "O_NOFOLLOW", 0),
+    )
+    try:
+        with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as generated:
+            TOOL._run_stage5_sustained_publication_admission_v6(
+                directory_fd,
+                "SLOT_01",
+                2,
+                policy,
+                probe_publisher=_retaining_test_probe(observed_identities),
+            )
+    finally:
+        os.close(directory_fd)
+    assert list(tmp_path.iterdir()) == []
+    assert TOOL._scheduling_gate_joined_task_timeout_is_exact_v2r17(
+        contract,
+        "SLOT_01",
+        generated.value,
+    )
 
 
 def test_stage5_sustained_queue_pressure_drains_durable_prefix_and_cleans(
@@ -1257,13 +2056,109 @@ def test_stage5_sustained_queue_pressure_drains_durable_prefix_and_cleans(
 
     assert result["passed"] is False
     assert result["timed_records_enqueued"] == 5
-    assert result["dropped_record_count"] == 15
+    assert result["timed_offer_terminal_disposition"] == (
+        TOOL._SCHEDULING_SUSTAINED_QUEUE_REJECTED_V7
+    )
+    assert result["rejected_record_count"] == 5
+    assert result["unoffered_after_failfast_record_count"] == 10
+    assert result["scheduled_shortfall_record_count"] == 15
+    assert result["full_measurement_duration_observed"] is True
+    rejection = result["first_queue_capacity_rejection_or_null"]
+    assert type(rejection) is dict
+    assert rejection["disposition"] == (
+        TOOL._SCHEDULING_SUSTAINED_QUEUE_REJECTED_V7
+    )
+    assert rejection["cycle_ordinal"] == 2
+    assert rejection["due_ns"] == (
+        result["measurement_start_ns"] + policy["sampling_target_wait_ns"]
+    )
+    assert rejection["attempt_ns"] >= rejection["due_ns"]
+    assert rejection["lateness_ns"] == (
+        rejection["attempt_ns"] - rejection["due_ns"]
+    )
+    assert 0 < rejection["queue_depth_records"] <= 5
+    assert rejection["queue_depth_records"] + 5 > 5
+    assert rejection["item_count_records"] == 5
     assert result["records_durable_total"] == 11
     assert result["retained_records_at_measurement_end"] == 11
     assert result["cleanup_removed_records"] == 11
     assert TOOL._scheduling_sustained_evidence_exact_v6(
         policy, "SLOT_01", 1, result
     )
+    semantic_mutations = (
+        ("timed_offer_terminal_disposition", TOOL._SCHEDULING_SUSTAINED_ENQUEUED_V7),
+        ("rejected_record_count", 4),
+        ("unoffered_after_failfast_record_count", 9),
+        ("scheduled_shortfall_record_count", 14),
+        ("full_measurement_duration_observed", False),
+    )
+    for field, value in semantic_mutations:
+        mutated = deepcopy(result)
+        mutated[field] = value
+        assert not TOOL._scheduling_sustained_evidence_exact_v6(
+            policy, "SLOT_01", 1, mutated
+        )
+    rejection_mutations = (
+        ("disposition", TOOL._SCHEDULING_SUSTAINED_ENQUEUED_V7),
+        ("cycle_ordinal", int(rejection["cycle_ordinal"]) + 1),
+        ("due_ns", int(rejection["due_ns"]) + 1),
+        ("attempt_ns", int(rejection["due_ns"]) - 1),
+        ("lateness_ns", int(rejection["lateness_ns"]) + 1),
+        ("queue_depth_records", 0),
+        ("item_count_records", 4),
+    )
+    for field, value in rejection_mutations:
+        mutated = deepcopy(result)
+        first = mutated["first_queue_capacity_rejection_or_null"]
+        assert type(first) is dict
+        first[field] = value
+        assert not TOOL._scheduling_sustained_evidence_exact_v6(
+            policy, "SLOT_01", 1, mutated
+        )
+    assert list(tmp_path.iterdir()) == []
+    assert _admission_threads() == []
+
+
+def test_stage5_sustained_publisher_error_is_terminal_not_capacity_rejection(
+    tmp_path: Path,
+) -> None:
+    policy = _fast_sustained_policy(
+        TOOL._scheduling_admission_policy_v2(_contract())
+    )
+    observed_identities: list[dict[str, object]] = []
+    retain = _retaining_test_probe(observed_identities)
+
+    def fail_first_timed_publication(
+        directory_fd: int,
+        token: str,
+        payload: bytes,
+        clock_ns: object,
+    ) -> int:
+        identity = TOOL.json.loads(payload.decode("utf-8"))
+        assert type(identity) is dict
+        if identity["phase"] == "TIMED_SUSTAINED":
+            raise OSError("injected sustained publisher failure")
+        return retain(directory_fd, token, payload, clock_ns)
+
+    directory_fd = os.open(
+        tmp_path,
+        os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC |
+        getattr(os, "O_NOFOLLOW", 0),
+    )
+    try:
+        with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as generated:
+            TOOL._run_stage5_sustained_publication_admission_v6(
+                directory_fd,
+                "SLOT_01",
+                1,
+                policy,
+                probe_publisher=fail_first_timed_publication,
+            )
+    finally:
+        os.close(directory_fd)
+    assert generated.value.code == TOOL._SCHEDULING_ADMISSION_FAILURE_V2
+    assert "injected sustained publisher failure" in generated.value.detail
+    assert "QUEUE_CAPACITY_REJECTED" not in generated.value.detail
     assert list(tmp_path.iterdir()) == []
     assert _admission_threads() == []
 
@@ -1307,7 +2202,7 @@ def test_retained_probe_success_has_exact_four_fsync_and_full_duration(
         getattr(os, "O_NOFOLLOW", 0),
     )
     token = "w01-r000002"
-    staging = f".q05b-admission-{token}.staging-v6"
+    staging = f".q05b-admission-{token}.staging-v7"
     final = TOOL._scheduling_sustained_final_name_v6(token)
     real_fsync = TOOL.os.fsync
     real_close = TOOL.os.close
@@ -1453,7 +2348,7 @@ def test_retained_probe_failure_without_namespace_mutation_does_not_fsync(
         *,
         dir_fd: int | None = None,
     ) -> int:
-        if path == ".q05b-admission-w01-r000004.staging-v6":
+        if path == ".q05b-admission-w01-r000004.staging-v7":
             raise OSError("injected pre-create failure")
         return real_open(path, flags, mode, dir_fd=dir_fd)
 
@@ -1478,33 +2373,22 @@ def test_retained_probe_failure_without_namespace_mutation_does_not_fsync(
         os.close(directory_fd)
 
 
-def test_stage5_sustained_4800_record_simulation_has_no_drop(
+def test_stage5_sustained_6000_record_simulation_has_no_shortfall(
     tmp_path: Path,
 ) -> None:
     policy = TOOL._scheduling_admission_policy_v2(_contract())
-    policy.update({
-        "sampling_target_wait_ns": 125_000_000,
-        "maximum_sampler_deadline_to_post_enqueue_anchor_ns": 25_000_000,
-        "sustained_offered_rate_records_per_second": 40,
-        "minimum_sustained_publication_rate_records_per_second": 40,
-        "sustained_records_per_cycle": 5,
-        "sustained_cycle_count": 960,
-        "sustained_measurement_duration_ns": 120_000_000_000,
-        "sustained_epoch_duration_ns": 10_000_000_000,
-        "sustained_prefill_retained_records": 6,
-        "sustained_timed_records": 4_800,
-        "prior_failed_trajectory_event_count": 5,
-        "minimum_final_retained_records": 4_806,
-        "sustained_queue_target_records": 64,
-        "maximum_sustained_queue_high_watermark_records": 64,
-        "maximum_sustained_terminal_drain_ns": 2_000_000_000,
-    })
+    assert policy["sampling_target_wait_ns"] == 100_000_000
+    assert policy["sustained_offered_rate_records_per_second"] == 50
+    assert policy["sustained_cycle_count"] == 1_200
+    assert policy["sustained_timed_records"] == 6_000
+    assert policy["sustained_prefill_retained_records"] == 5_411
+    assert policy["minimum_final_retained_records"] == 11_411
     clock = _AdmissionClock()
     observed_identities: list[dict[str, object]] = []
 
     def cooperative_sleeper(seconds: float) -> None:
         clock.sleep(seconds)
-        TOOL.time.sleep(0.002)
+        TOOL.time.sleep(0.01)
 
     directory_fd = os.open(
         tmp_path,
@@ -1525,15 +2409,48 @@ def test_stage5_sustained_4800_record_simulation_has_no_drop(
         os.close(directory_fd)
 
     assert result["passed"] is True
-    assert result["timed_records_enqueued"] == 4_800
-    assert result["timed_records_durable_by_deadline"] == 4_800
+    assert result["timed_records_enqueued"] == 6_000
+    assert result["timed_records_durable_by_deadline"] == 6_000
     assert result["timed_records_durable_after_deadline"] == 0
-    assert result["dropped_record_count"] == 0
+    assert result["timed_offer_terminal_disposition"] == (
+        TOOL._SCHEDULING_SUSTAINED_ENQUEUED_V7
+    )
+    assert result["rejected_record_count"] == 0
+    assert result["unoffered_after_failfast_record_count"] == 0
+    assert result["scheduled_shortfall_record_count"] == 0
+    assert result["full_measurement_duration_observed"] is True
+    assert result["first_queue_capacity_rejection_or_null"] is None
     assert result["queue_high_watermark_records"] <= 64
     assert result["cleanup_absence_passed"] is True
-    assert len(observed_identities) == 4_806
+    assert len(observed_identities) == 11_411
     assert list(tmp_path.iterdir()) == []
     assert _admission_threads() == []
+
+    semantic_mutations = (
+        ("timed_offer_terminal_disposition", TOOL._SCHEDULING_SUSTAINED_QUEUE_REJECTED_V7),
+        ("rejected_record_count", 1),
+        ("unoffered_after_failfast_record_count", 1),
+        ("scheduled_shortfall_record_count", 1),
+        ("full_measurement_duration_observed", False),
+        (
+            "first_queue_capacity_rejection_or_null",
+            {
+                "disposition": TOOL._SCHEDULING_SUSTAINED_QUEUE_REJECTED_V7,
+                "cycle_ordinal": 1,
+                "due_ns": result["measurement_start_ns"],
+                "attempt_ns": result["measurement_start_ns"],
+                "lateness_ns": 0,
+                "queue_depth_records": 64,
+                "item_count_records": 5,
+            },
+        ),
+    )
+    for field, value in semantic_mutations:
+        mutated = deepcopy(result)
+        mutated[field] = value
+        assert not TOOL._scheduling_sustained_evidence_exact_v6(
+            policy, "SLOT_01", 1, mutated
+        )
 
 
 def test_sustained_admission_late_durability_and_anchor_overrun_fail_closed(
@@ -1544,10 +2461,10 @@ def test_sustained_admission_late_durability_and_anchor_overrun_fail_closed(
         "SLOT_01",
         1,
         start_ns=1,
-        durable_by_deadline=4_799,
+        durable_by_deadline=int(policy["sustained_timed_records"]) - 1,
     )
     assert late["passed"] is False
-    assert late["timed_records_durable_by_deadline"] == 4_799
+    assert late["timed_records_durable_by_deadline"] == 5_999
     assert late["timed_records_durable_after_deadline"] == 1
     assert late["terminal_drain_ns"] == 1
     assert TOOL._scheduling_sustained_evidence_exact_v6(
@@ -1598,7 +2515,9 @@ def test_three_failed_scheduling_windows_fit_direct_receipt_bound() -> None:
             "SLOT_01",
             window,
             start_ns=burst_start,
-            durable_by_deadline=4_799,
+            durable_by_deadline=(
+                int(policy["sustained_timed_records"]) - 1
+            ),
         )
         windows.append({
             "window_ordinal": window,
@@ -1608,14 +2527,16 @@ def test_three_failed_scheduling_windows_fit_direct_receipt_bound() -> None:
             "bursts_in_strict_order": bursts,
             "sustained_publication_or_null": sustained,
             "maximum_sampler_deadline_to_post_enqueue_anchor_ns": 25_000_000,
-            "maximum_projected_gap_ns": 150_000_000,
+            "maximum_projected_gap_ns": int(
+                policy["maximum_projected_gap_ns"]
+            ),
             "maximum_burst_drain_ns": 200_000_000,
             "maximum_queue_high_watermark_records": 7,
             "passed": False,
         })
         previous_finish = int(sustained["measurement_finish_ns"])
     evidence: dict[str, object] = {
-        "schema_version": TOOL._SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V6,
+        "schema_version": TOOL._SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V7,
         "slot_id": "SLOT_01",
         "policy": deepcopy(policy),
         "windows_in_strict_order": windows,
@@ -1630,7 +2551,7 @@ def test_three_failed_scheduling_windows_fit_direct_receipt_bound() -> None:
     bounded = TOOL._bounded_receipt_or_null(evidence)
     assert bounded == evidence
     assert bounded["schema_version"] == (
-        TOOL._SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V6
+        TOOL._SCHEDULING_ADMISSION_EVIDENCE_SCHEMA_V7
     )
 
 
@@ -2118,7 +3039,12 @@ def _continuous_gap_rows() -> tuple[str, list[dict[str, object]]]:
         "stage_or_null": "ACTOR_LIFECYCLE",
         "substep_or_null": "COLLECT_BOUND_LIVE_RESOURCES",
         "actor_or_null": "RUST_ENDPOINT",
-        "detail_or_null": "MAXIMUM_UNSAMPLED_GAP_EXCEEDED",
+        "detail_or_null": (
+            "MAXIMUM_UNSAMPLED_GAP_EXCEEDED;"
+            f"native_wake_ns={scheduled};"
+            "native_wake_lateness_ns=0;"
+            f"trajectory_admission_duration_ns={actual - scheduled}"
+        ),
         "error_code": CORE.GAP_ERROR_CODE_V2,
         "error_detail": raw_detail,
         "record_digest": _tagged("failure-6"),
@@ -2214,7 +3140,7 @@ def _event_record(
     value: dict[str, object] = {
         "schema_version": TRAJECTORY.EVENT_SCHEMA_V2,
         "trace_id": trace_id,
-        "producer_id": "Q05B_SUPERVISOR_V4",
+        "producer_id": "Q05B_SUPERVISOR_V6",
         "clock_id": "CLOCK_MONOTONIC",
         "sequence": sequence,
         "timestamp_ns": timestamp,
@@ -2324,6 +3250,159 @@ def _event_records_for_failures(
     return events
 
 
+def _trusted_host_stage6_gap_trace(
+    trace_id: str,
+) -> tuple[str, list[dict[str, object]], list[dict[str, object]]]:
+    previous = 1_000_000_000
+    scheduled = previous + CORE.TARGET_WAIT_NS_V2
+    gap = 323_536_475
+    actual = previous + gap
+    detail = (
+        "held final sampling gap exceeded bound: "
+        "actor_id=TRUSTED_HOST_REPLAY; role_id=3; "
+        "sample_ordinal=7163; "
+        f"previous_finish_ns={previous}; actual_start_ns={actual}; "
+        f"gap_ns={gap}; maximum_gap_ns={CORE.MAXIMUM_GAP_NS_V2}; "
+        f"target_wait_ns={CORE.TARGET_WAIT_NS_V2}; "
+        "previous_duration_ns=172792053"
+    )
+    origin: dict[str, object] = {
+        "sequence": 5,
+        "timestamp_ns": actual + 5,
+        "span_id": "held-final-sample-TRUSTED_HOST_REPLAY-007163",
+        "operation": "HELD_FINAL_RESOURCE_SAMPLE",
+        "stage_or_null": "ACTOR_LIFECYCLE",
+        "substep_or_null": "COLLECT_BOUND_HELD_FINAL_RESOURCES",
+        "actor_or_null": "TRUSTED_HOST_REPLAY",
+        "detail_or_null": "MAXIMUM_UNSAMPLED_GAP_EXCEEDED",
+        "error_code": CORE.GAP_ERROR_CODE_V2,
+        "error_detail": detail,
+        "record_digest": _tagged("v2r14-trusted-host-failure-5"),
+        "role_id_or_null": "3",
+        "sample_ordinal_or_null": 7163,
+        "previous_finish_ns_or_null": previous,
+        "scheduled_start_ns_or_null": scheduled,
+        "actual_start_ns_or_null": actual,
+        "finish_ns_or_null": actual,
+        "collection_duration_ns_or_null": 0,
+        "scheduler_lateness_ns_or_null": actual - scheduled,
+        "target_wait_ns_or_null": CORE.TARGET_WAIT_NS_V2,
+        "gap_ns_or_null": gap,
+        "maximum_gap_ns_or_null": CORE.MAXIMUM_GAP_NS_V2,
+        "gap_exceeded_or_null": True,
+    }
+    rows = [
+        origin,
+        _propagation_row(
+            sequence=6,
+            timestamp=actual + 6,
+            operation="HELD_ACTOR_CLOSE",
+            span_id="actor-close-TRUSTED_HOST_REPLAY",
+            stage="ACTOR_LIFECYCLE",
+            substep="DONE_FINAL_SAMPLE_RELEASE_EXIT_REMOVE_ABSENCE",
+            actor="TRUSTED_HOST_REPLAY",
+            detail="ACTOR_CLOSE_FAILED_BEFORE_CLEANUP",
+            error_detail=detail,
+        ),
+        _propagation_row(
+            sequence=11,
+            timestamp=actual + 11,
+            operation="SUPERVISOR_STAGE",
+            span_id="supervisor-stage-06",
+            stage="STAGE_06",
+            substep="RUN_HELD_TRUSTED_HOST_SEMANTIC_REPLAY",
+            actor=None,
+            detail="FAILED",
+            error_detail=detail,
+        ),
+        _propagation_row(
+            sequence=16,
+            timestamp=actual + 16,
+            operation="SUPERVISOR_RUN",
+            span_id="supervisor-run",
+            stage="RUN",
+            substep=None,
+            actor=None,
+            detail="supervisor attempt failed",
+            error_detail=detail,
+        ),
+    ]
+    events = [
+        _event_record(
+            trace_id=trace_id,
+            sequence=sequence,
+            timestamp=actual + sequence,
+            event_type="BEGIN",
+            span_id=str(failure["span_id"]),
+            operation=str(failure["operation"]),
+            stage=failure["stage_or_null"],
+            substep=failure["substep_or_null"],
+            actor=failure["actor_or_null"],
+            detail="ENTER",
+        )
+        for sequence, failure in enumerate(reversed(rows), start=1)
+    ]
+    cleanup_rows: dict[int, dict[str, object]] = {}
+    for sequence, actor, suffix in (
+        (7, "TRUSTED_HOST_REPLAY", 1),
+        (9, "TRUSTED_HOST_REPLAY", 2),
+        (12, "PYTHON_ENDPOINT", 3),
+        (14, "RUST_ENDPOINT", 4),
+    ):
+        span_id = f"actor-cleanup-{actor}-{suffix:06d}"
+        cleanup_rows[sequence] = _event_record(
+            trace_id=trace_id,
+            sequence=sequence,
+            timestamp=actual + sequence,
+            event_type="BEGIN",
+            span_id=span_id,
+            operation="HELD_ACTOR_ABORT_CLEANUP",
+            stage="ACTOR_LIFECYCLE",
+            substep="STOP_TERMINATE_DRAIN_REMOVE_ABSENCE",
+            actor=actor,
+            detail="ENTER",
+        )
+        cleanup_rows[sequence + 1] = _event_record(
+            trace_id=trace_id,
+            sequence=sequence + 1,
+            timestamp=actual + sequence + 1,
+            event_type="OK",
+            span_id=span_id,
+            operation="HELD_ACTOR_ABORT_CLEANUP",
+            stage="ACTOR_LIFECYCLE",
+            substep="STOP_TERMINATE_DRAIN_REMOVE_ABSENCE",
+            actor=actor,
+            detail="cleanup_error_count=0",
+        )
+    failures_by_sequence = {int(row["sequence"]): row for row in rows}
+    for sequence in range(5, 17):
+        failure = failures_by_sequence.get(sequence)
+        if failure is not None:
+            event = _event_record(
+                trace_id=trace_id,
+                sequence=sequence,
+                timestamp=int(failure["timestamp_ns"]),
+                event_type="FAIL",
+                span_id=str(failure["span_id"]),
+                operation=str(failure["operation"]),
+                stage=failure["stage_or_null"],
+                substep=failure["substep_or_null"],
+                actor=failure["actor_or_null"],
+                detail=failure["detail_or_null"],
+                error_code=str(failure["error_code"]),
+                error_detail=str(failure["error_detail"]),
+                record_digest=str(failure["record_digest"]),
+            )
+            for field in _SAMPLE_FIELDS:
+                event[field] = deepcopy(failure[field])
+            events.append(event)
+        else:
+            cleanup = cleanup_rows.get(sequence)
+            assert cleanup is not None
+            events.append(cleanup)
+    return detail, rows, events
+
+
 def _minimal_event_records(
     trace_id: str,
     outcome: str,
@@ -2409,7 +3488,7 @@ def _trajectory(
         "complete_verification_passed": True,
         "verification_error_or_null": None,
         "trace_id_or_null": slot["trajectory_trace_id"],
-        "producer_id_or_null": "Q05B_SUPERVISOR_V4",
+        "producer_id_or_null": "Q05B_SUPERVISOR_V6",
         "event_count": len(event_records),
         "first_event_record_digest_or_null": event_records[0]["record_digest"],
         "final_event_record_digest_or_null": event_records[-1]["record_digest"],
@@ -2478,8 +3557,8 @@ def _target_fsck_pending_error(
     result = _process(b"", -9)
     result["timed_out"] = True
     receipt = TOOL._bounded_process_diagnostic(
-        TOOL._TARGET_FSCK_ADMISSION_LABEL_V2R13,
-        TOOL._target_object_closure_fsck_argv_v2r13(contract),
+        TOOL._TARGET_FSCK_ADMISSION_LABEL_V2R17,
+        TOOL._target_object_closure_fsck_argv_v2r17(contract),
         result,
         classification={
             "accepted": False,
@@ -2491,7 +3570,7 @@ def _target_fsck_pending_error(
         },
     )
     return TOOL.ShadowRetryCampaignPendingV1(
-        TOOL._TARGET_FSCK_PENDING_CODE_V2R13,
+        TOOL._TARGET_FSCK_PENDING_CODE_V2R17,
         "injected exact clean target fsck timeout",
         phase="TARGET_LOCAL_OBJECT_CLOSURE_FSCK",
         condition="READONLY_COMMAND_TIMEOUT",
@@ -2606,7 +3685,7 @@ def _source_replay(label: str) -> dict[str, object]:
         "error_or_null": None,
         "evidence": evidence,
         "root": TOOL._domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R13/SOURCE_REPLAY/V2",
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/SOURCE_REPLAY/V2",
             evidence,
         ),
     }
@@ -2623,7 +3702,7 @@ def _future_freshness() -> dict[str, object]:
     unsigned = deepcopy(value)
     unsigned.pop("root")
     value["root"] = TOOL._domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R13/SLOT_ROOT_ABSENCE/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/SLOT_ROOT_ABSENCE/V2",
         unsigned,
     )
     return value
@@ -2676,7 +3755,7 @@ def _semantic_capsule(
             )
     for path in real_parent_paths:
         parents[os.fspath(path)] = _real_directory_stable_identity(path)
-    capsule = _capsule_stub("semantic-capsule")
+    capsule = _capsule_stub("semantic-capsule", contract=contract)
     capsule.update({
         "freshness_parent_identities": parents,
     })
@@ -2719,7 +3798,7 @@ def _scheduling_probe_cleanup_receipt(
         "cleanup_errors": [],
         "passed": True,
     }
-    assert TOOL._scheduling_probe_cleanup_receipt_exact_v2r13(
+    assert TOOL._scheduling_probe_cleanup_receipt_exact_v2r17(
         capsule,
         slot,
         receipt,
@@ -2773,7 +3852,7 @@ def _slot_absence_evidence(
     unsigned = deepcopy(value)
     unsigned.pop("root")
     value["root"] = TOOL._domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R13/SLOT_ROOT_ABSENCE/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/SLOT_ROOT_ABSENCE/V2",
         unsigned,
     )
     return value
@@ -2784,7 +3863,7 @@ def _cleanup_replay() -> dict[str, object]:
     return {
         "preimage": preimage,
         "root": TOOL._domain_digest(
-            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R13/CLEANUP_REPLAY/V2",
+            "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/CLEANUP_REPLAY/V2",
             preimage,
         ),
     }
@@ -2856,6 +3935,14 @@ def test_python310_dependency_preflight_real_isolated_child_kat(
     assert receipt["vendored_tomli_module_name"] == (
         "hegel_machine._vendor.tomli"
     )
+    assert receipt["artifact_module_max_canonical_bytes"] == 2_147_483_648
+    assert receipt["supervisor_tool_max_canonical_bytes"] == 2_147_483_648
+    assert receipt["child_receipt"][
+        "artifact_module_max_canonical_bytes"
+    ] == 2_147_483_648
+    assert receipt["child_receipt"][
+        "supervisor_tool_max_canonical_bytes"
+    ] == 2_147_483_648
     assert receipt["tomli_top_level_spec_or_null"] is None
     assert receipt["top_level_tomli_in_sys_modules"] is False
     assert receipt["python_flags"][
@@ -2929,6 +4016,8 @@ def test_python310_dependency_preflight_process_failure_is_closed(
         "loaded-module",
         "cargo-lock",
         "pycache",
+        "artifact-module-cap",
+        "supervisor-tool-cap",
         "whitespace",
         "multiple-lf",
     ),
@@ -2963,6 +4052,10 @@ def test_python310_dependency_preflight_child_receipt_drift_is_closed(
             child["python_flags"][
                 "pycache_prefix_absent_after_import"
             ] = False
+        elif mutation == "artifact-module-cap":
+            child["artifact_module_max_canonical_bytes"] = 67_108_864
+        elif mutation == "supervisor-tool-cap":
+            child["supervisor_tool_max_canonical_bytes"] = 2_147_483_649
         result["stdout"] = TOOL._canonical_json_bytes(child)
         if mutation == "whitespace":
             result["stdout"] = b" " + result["stdout"]
@@ -3023,6 +4116,87 @@ def test_python310_dependency_policy_and_target_provenance_are_exact() -> None:
     assert error.value.code == "FAIL_CAMPAIGN_SOURCE"
 
 
+@pytest.mark.parametrize("value", (67_108_864, 2_147_483_649, True))
+def test_artifact_capacity_contract_rejects_old_overflow_and_bool_values(
+    monkeypatch: pytest.MonkeyPatch,
+    value: object,
+) -> None:
+    contract = _contract()
+    execution = contract["execution_policy"]
+    assert type(execution) is dict
+    assert type(execution["artifact_max_canonical_bytes"]) is int
+    assert execution["artifact_max_canonical_bytes"] == 2_147_483_648
+    execution["artifact_max_canonical_bytes"] = value
+    monkeypatch.setattr(
+        TOOL,
+        "_pretty_json",
+        lambda _raw, _label: deepcopy(contract),
+    )
+    with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+        TOOL.load_phase3_q05b_shadow_retry_campaign_contract_v2()
+    assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
+    assert error.value.detail == "campaign authority boundary differs"
+
+
+def test_artifact_capacity_is_used_only_at_five_outer_artifact_io_points(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cap_name = "_ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R19"
+    assert TOOL._ACTUAL_ARTIFACT_MAX_CANONICAL_BYTES_V2R19 == 2_147_483_648
+    assert TOOL._MAX_JSON_BYTES == 67_108_864
+    assert CORE.CAPTURE_MAX_BYTES_V2 == 67_108_864
+    assert _contract()["execution_policy"]["stdout_max_bytes"] == 67_108_864
+    assert _contract()["execution_policy"]["stderr_max_bytes"] == 67_108_864
+    assert inspect.getsource(TOOL._artifact_replay).count(cap_name) == 1
+    assert inspect.getsource(TOOL._publish_external_artifact).count(cap_name) == 3
+    assert inspect.getsource(TOOL._replay_external_artifact).count(cap_name) == 1
+    assert inspect.getsource(TOOL._build_capsule).count(
+        '"artifact_max_canonical_bytes"'
+    ) == 1
+
+    contract = _contract()
+    dependency_receipt = {"receipt_digest": _tagged("dependency-cap-bound")}
+    monkeypatch.setattr(
+        TOOL,
+        "_validate_dependency_receipt_v1",
+        lambda *_args, **_kwargs: deepcopy(dependency_receipt),
+    )
+    target = contract["target_commit_a_binding"]
+    assert type(target) is dict
+    controller_git = {
+        "commit": "de" * 20,
+        "parent": target["target_supervisor_commit"],
+        "parent_count": 1,
+        "clean": True,
+        "changed_paths_from_target_in_exact_order": list(
+            TOOL._CONTROLLER_CHANGED_PATHS_FROM_TARGET_IN_EXACT_ORDER
+        ),
+    }
+    capsule = TOOL._build_capsule(
+        contract,
+        controller_git=controller_git,
+        target_git={"commit": "ad" * 20},
+        cargo_identity={"manifest_digest": _tagged("cargo-cap-bound")},
+        executable_identities={},
+        python310_dependency_preflight_receipt=dependency_receipt,
+        preauthorization_live_gauntlet=_gauntlet_receipt_binding_stub(
+            contract,
+            controller_git,
+        ),
+        slots=deepcopy(contract["slot_registry"]),
+        freshness_parent_identities={},
+    )
+    resource_bounds = capsule["resource_bounds"]
+    assert type(resource_bounds) is dict
+    assert resource_bounds["artifact_max_canonical_bytes"] == 2_147_483_648
+    unsigned = deepcopy(capsule)
+    capsule_digest = unsigned.pop("capsule_digest")
+    assert capsule_digest == TOOL._domain_digest(
+        contract["hash_domains"]["capsule"],
+        unsigned,
+    )
+
+
 def test_target_binding_replay_is_light_and_does_not_repeat_full_fsck(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -3052,7 +4226,167 @@ def test_target_binding_replay_is_light_and_does_not_repeat_full_fsck(
     monkeypatch.setattr(TOOL, "_git", recording_git)
     replay = TOOL._verify_target_git_objects(contract)
     assert replay["local_object_closure_fsck_passed"] is False
-    assert TOOL._TARGET_FSCK_ADMISSION_LABEL_V2R13 not in observed_labels
+    assert TOOL._TARGET_FSCK_ADMISSION_LABEL_V2R17 not in observed_labels
+
+
+def test_preflight_orders_dependency_capsule_fsck_cpu_then_authorization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = _contract()
+    capsule_digest = _tagged("ordered-preflight-capsule")
+    events: list[str] = []
+
+    monkeypatch.setattr(
+        TOOL,
+        "_slot_registry",
+        lambda value: deepcopy(value["slot_registry"]),
+    )
+    monkeypatch.setattr(
+        TOOL,
+        "_verify_fresh_targets",
+        lambda *_args, **_kwargs: {},
+    )
+    monkeypatch.setattr(TOOL, "_verify_target_git_objects", lambda _value: {})
+    monkeypatch.setattr(TOOL, "_controller_git_identity", lambda _value: {})
+    monkeypatch.setattr(TOOL, "_scan_tree", lambda *_args, **_kwargs: ({}, []))
+    monkeypatch.setattr(TOOL, "_executable_identity", lambda *_args: {})
+
+    def dependency(*_args: object, **_kwargs: object) -> dict[str, object]:
+        events.append("dependency")
+        return {"receipt_digest": _tagged("ordered-dependency")}
+
+    def gauntlet(*_args: object, **_kwargs: object) -> dict[str, object]:
+        events.append("live-gauntlet-replay")
+        return {"receipt_digest": _tagged("ordered-live-gauntlet")}
+
+    def build(*_args: object, **_kwargs: object) -> dict[str, object]:
+        events.append("capsule")
+        return {"capsule_digest": capsule_digest}
+
+    def fsck(*_args: object, **kwargs: object) -> dict[str, object]:
+        events.append("fsck")
+        assert kwargs["dependency_gate_invocation_count"] == 1
+        return {"status": "PASS"}
+
+    def cpu(*_args: object, **kwargs: object) -> dict[str, object]:
+        events.append("cpu")
+        assert kwargs["dependency_gate_invocation_count"] == 1
+        assert kwargs["target_fsck_invocation_count"] == 1
+        return {"status": "PASS"}
+
+    def authorization(*_args: object, **_kwargs: object) -> dict[str, object]:
+        events.append("authorization-template")
+        return {}
+
+    monkeypatch.setattr(
+        TOOL,
+        "_load_preauthorization_live_gauntlet_receipt_v2",
+        gauntlet,
+    )
+    monkeypatch.setattr(TOOL, "_python310_dependency_preflight_v1", dependency)
+    monkeypatch.setattr(TOOL, "_build_capsule", build)
+    monkeypatch.setattr(
+        TOOL,
+        "_target_object_closure_fsck_admission_v2r17",
+        fsck,
+    )
+    monkeypatch.setattr(
+        TOOL,
+        "_host_cpu_topology_affinity_admission_v2r17",
+        cpu,
+    )
+    monkeypatch.setattr(TOOL, "_authorization_template", authorization)
+
+    context = TOOL._preflight_context(
+        contract,
+        expected_capsule_digest_or_null=capsule_digest,
+        allow_existing_run_state=True,
+    )
+    assert events == [
+        "live-gauntlet-replay",
+        "dependency",
+        "capsule",
+        "fsck",
+        "cpu",
+        "authorization-template",
+    ]
+    assert context["capsule"]["capsule_digest"] == capsule_digest
+
+
+def test_wrong_capsule_is_rejected_before_fsck_cpu_or_authorization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = _contract()
+    events: list[str] = []
+    monkeypatch.setattr(
+        TOOL,
+        "_slot_registry",
+        lambda value: deepcopy(value["slot_registry"]),
+    )
+    monkeypatch.setattr(
+        TOOL,
+        "_verify_fresh_targets",
+        lambda *_args, **_kwargs: {},
+    )
+    monkeypatch.setattr(TOOL, "_verify_target_git_objects", lambda _value: {})
+    monkeypatch.setattr(TOOL, "_controller_git_identity", lambda _value: {})
+    monkeypatch.setattr(TOOL, "_scan_tree", lambda *_args, **_kwargs: ({}, []))
+    monkeypatch.setattr(TOOL, "_executable_identity", lambda *_args: {})
+    monkeypatch.setattr(
+        TOOL,
+        "_python310_dependency_preflight_v1",
+        lambda *_args, **_kwargs: events.append("dependency") or {},
+    )
+    monkeypatch.setattr(
+        TOOL,
+        "_build_capsule",
+        lambda *_args, **_kwargs: events.append("capsule")
+        or {"capsule_digest": _tagged("actual-capsule")},
+    )
+
+    def forbidden(label: str):
+        def invoke(*_args: object, **_kwargs: object) -> object:
+            events.append(label)
+            raise AssertionError(f"wrong capsule reached {label}")
+
+        return invoke
+
+    monkeypatch.setattr(
+        TOOL,
+        "_target_object_closure_fsck_admission_v2r17",
+        forbidden("fsck"),
+    )
+    monkeypatch.setattr(
+        TOOL,
+        "_host_cpu_topology_affinity_admission_v2r17",
+        forbidden("cpu"),
+    )
+    monkeypatch.setattr(
+        TOOL,
+        "_authorization_template",
+        forbidden("authorization-template"),
+    )
+    with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+        TOOL._preflight_context(
+            contract,
+            expected_capsule_digest_or_null=_tagged("wrong-capsule"),
+            allow_existing_run_state=True,
+        )
+    assert error.value.code == "FAIL_CAMPAIGN_AUTHORIZATION"
+    assert events == ["dependency", "capsule"]
+
+
+def test_dynamic_host_cpu_receipt_is_not_a_capsule_digest_input() -> None:
+    contract = _contract()
+    policy = contract["execution_policy"][
+        "host_cpu_topology_affinity_admission"
+    ]
+    assert policy["dynamic_receipt_is_capsule_digest_input"] is False
+    signature = inspect.signature(TOOL._build_capsule)
+    assert "host_cpu_topology_affinity_admission_receipt" not in signature.parameters
+    assert "host_cpu_topology_affinity_admission_receipt" not in inspect.getsource(
+        TOOL._build_capsule
+    )
 
 
 def test_exact_target_fsck_clean_timeout_is_typed_pending(
@@ -3072,7 +4406,7 @@ def test_exact_target_fsck_clean_timeout_is_typed_pending(
     monkeypatch.setattr(TOOL, "_bounded_process", bounded)
     monkeypatch.setattr(TOOL.time, "monotonic_ns", lambda: next(monotonic))
     with pytest.raises(TOOL.ShadowRetryCampaignPendingV1) as pending:
-        TOOL._target_object_closure_fsck_admission_v2r13(
+        TOOL._target_object_closure_fsck_admission_v2r17(
             contract,
             dependency_gate_invocation_count=1,
         )
@@ -3080,15 +4414,59 @@ def test_exact_target_fsck_clean_timeout_is_typed_pending(
     assert pending.value.condition == "READONLY_COMMAND_TIMEOUT"
     assert pending.value.dependency_gate_invocation_count == 1
     receipt = pending.value.receipt
-    assert receipt["label"] == TOOL._TARGET_FSCK_ADMISSION_LABEL_V2R13
+    assert receipt["label"] == TOOL._TARGET_FSCK_ADMISSION_LABEL_V2R17
     assert receipt["argv"] == (
-        TOOL._target_object_closure_fsck_argv_v2r13(contract)
+        TOOL._target_object_closure_fsck_argv_v2r17(contract)
     )
     assert receipt["stdout"]["byte_count"] == 0
     assert receipt["stderr"]["byte_count"] == 0
     assert receipt["classification"]["elapsed_ns"] == 300_000_000_000
     assert observed["kwargs"]["timeout_seconds"] == 300.0
-    assert TOOL._preconsumption_pending_is_exact_v2r13(
+    assert TOOL._preconsumption_pending_is_exact_v2r17(
+        contract,
+        pending.value,
+    ) is True
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected_error"),
+    (
+        ("oserror", "OSError:injected affinity read failure"),
+        ("invalid", "INVALID_OR_DUPLICATE_EFFECTIVE_CPU_SET"),
+    ),
+)
+def test_host_cpu_original_affinity_read_failure_is_exact_pending(
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    expected_error: str,
+) -> None:
+    contract = _contract()
+
+    def get_affinity(_pid: int) -> object:
+        if mode == "oserror":
+            raise OSError("injected affinity read failure")
+        return [0, 0]
+
+    monkeypatch.setattr(TOOL.os, "sched_getaffinity", get_affinity)
+    monkeypatch.setattr(
+        TOOL.os,
+        "sched_setaffinity",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("unreachable")),
+    )
+    with pytest.raises(TOOL.ShadowRetryCampaignPendingV1) as pending:
+        TOOL._host_cpu_topology_affinity_admission_v2r17(
+            contract,
+            dependency_gate_invocation_count=1,
+            target_fsck_invocation_count=1,
+        )
+    assert pending.value.condition == "SCHED_AFFINITY_API_UNAVAILABLE"
+    assert pending.value.receipt["failure_operation_or_null"] == (
+        "READ_ORIGINAL_EFFECTIVE_AFFINITY"
+    )
+    assert pending.value.receipt["failure_error_or_null"] == expected_error
+    assert pending.value.receipt["affinity_mutation_attempted"] is False
+    assert pending.value.receipt["restore_attempted"] is False
+    assert TOOL._preconsumption_pending_is_exact_v2r17(
         contract,
         pending.value,
     ) is True
@@ -3188,13 +4566,672 @@ def test_pending_classifier_rejects_every_nonexact_receipt_mutation(
     else:
         assert mutation == "classification-elapsed-negative"
         receipt["classification"]["elapsed_ns"] = -1
-    assert TOOL._preconsumption_pending_is_exact_v2r13(
+    assert TOOL._preconsumption_pending_is_exact_v2r17(
         contract,
         pending,
     ) is False
 
 
-def test_typed_pending_raise_sites_are_only_exact_fsck_and_slot_gate() -> None:
+def test_host_cpu_affinity_admission_binds_exact_masks_and_restores(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = _contract()
+    original = set(range(40))
+    current = set(original)
+    set_calls: list[list[int]] = []
+
+    def get_affinity(pid: int) -> set[int]:
+        assert pid == 0
+        return set(current)
+
+    def set_affinity(pid: int, cpus: set[int]) -> None:
+        assert pid == 0
+        ordered = sorted(cpus)
+        set_calls.append(ordered)
+        current.clear()
+        current.update(cpus)
+
+    monkeypatch.setattr(TOOL.os, "sched_getaffinity", get_affinity)
+    monkeypatch.setattr(TOOL.os, "sched_setaffinity", set_affinity)
+    receipt = TOOL._host_cpu_topology_affinity_admission_v2r17(
+        contract,
+        dependency_gate_invocation_count=1,
+        target_fsck_invocation_count=1,
+    )
+
+    assert receipt["status"] == "PASS"
+    assert receipt["condition"] == "PASS"
+    assert receipt["original_effective_cpus_or_null"] == list(range(40))
+    assert [
+        row["requested_cpus_in_exact_order"]
+        for row in receipt["bind_probe_rows_in_exact_order"]
+    ] == [[24], [25], [26], [27, 28, 29, 30, 31]]
+    assert set_calls == [
+        [24],
+        [25],
+        [26],
+        [27, 28, 29, 30, 31],
+        list(range(40)),
+    ]
+    assert current == original
+    assert receipt["original_affinity_restored_exactly"] is True
+    assert receipt["failure_operation_or_null"] is None
+    assert receipt["failure_error_or_null"] is None
+    assert TOOL._host_cpu_affinity_receipt_exact_v2r17(
+        contract,
+        receipt,
+        required_status="PASS",
+    ) is True
+
+
+def test_host_cpu_and_gap_policy_cross_bind_pinned_target_c_constants() -> None:
+    contract = TOOL._pretty_json(
+        TOOL.CONFIG_PATH.read_bytes(),
+        "Target C CPU and gap cross-binding KAT contract",
+    )
+    assert type(contract) is dict
+    target = contract["target_commit_a_binding"]
+    assert type(target) is dict
+    assert target["target_supervisor_commit"] == (
+        "303c0fcd45bb46c00b79bb2112bd1d777364e5bb"
+    )
+    relative = "tools/phase3_q05b_dual_qualification_v2.py"
+    target_tool = ROOT / relative
+    raw = target_tool.read_bytes()
+    assert sha256(raw).hexdigest() == target["required_raw_sha256_by_path"][
+        relative
+    ]
+    module = ast.parse(raw, filename=os.fspath(target_tool))
+    expressions = {
+        node.target.id: node.value
+        for node in module.body
+        if isinstance(node, ast.AnnAssign)
+        and isinstance(node.target, ast.Name)
+        and node.value is not None
+    }
+
+    def frozen_set(name: str) -> frozenset[int]:
+        value = expressions[name]
+        assert isinstance(value, ast.Call)
+        assert isinstance(value.func, ast.Name) and value.func.id == "frozenset"
+        assert len(value.args) == 1
+        argument = value.args[0]
+        if isinstance(argument, ast.Call):
+            assert isinstance(argument.func, ast.Name)
+            assert argument.func.id == "range"
+            integers = [ast.literal_eval(item) for item in argument.args]
+            return frozenset(range(*integers))
+        return frozenset(ast.literal_eval(argument))
+
+    target_wait = ast.literal_eval(expressions["RESOURCE_SAMPLER_TARGET_WAIT_NS"])
+    maximum_gap = ast.literal_eval(
+        expressions["RESOURCE_SAMPLER_MAXIMUM_UNSAMPLED_GAP_NS"]
+    )
+    sampler_cpus = ast.literal_eval(expressions["HOST_SAMPLER_CPU_BY_ROLE_V5"])
+    required_cpus = frozen_set("HOST_REQUIRED_EFFECTIVE_CPUS_V5")
+    publisher_cpus = frozen_set("HOST_TRAJECTORY_PUBLISHER_CPUS_V5")
+    control_cpus = frozen_set("HOST_SUPERVISOR_CONTROL_CPUS_V5")
+
+    cpu_policy = TOOL._host_cpu_topology_affinity_policy_v2r17(contract)
+    scheduling = TOOL._scheduling_admission_policy_v2(contract)
+    assert cpu_policy["required_effective_cpus_in_exact_order"] == sorted(
+        required_cpus
+    ) == list(range(32))
+    assert sampler_cpus == {1: 24, 2: 25, 3: 24}
+    assert publisher_cpus == frozenset({26})
+    assert control_cpus == frozenset(range(27, 32))
+    assert [
+        row["cpus_in_exact_order"]
+        for row in cpu_policy["bind_probe_rows_in_exact_order"]
+    ] == [[24], [25], [26], [27, 28, 29, 30, 31]]
+    assert scheduling["sampling_target_wait_ns"] == target_wait == 100_000_000
+    assert scheduling["maximum_unsampled_gap_ns"] == maximum_gap == 250_000_000
+
+
+def test_host_cpu_missing_required_set_is_exact_preconsumption_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = _contract()
+    set_calls = 0
+
+    def forbidden_set(_pid: int, _cpus: set[int]) -> None:
+        nonlocal set_calls
+        set_calls += 1
+        raise AssertionError("missing CPU gate must not mutate affinity")
+
+    monkeypatch.setattr(TOOL.os, "sched_getaffinity", lambda _pid: set(range(31)))
+    monkeypatch.setattr(TOOL.os, "sched_setaffinity", forbidden_set)
+    with pytest.raises(TOOL.ShadowRetryCampaignPendingV1) as pending:
+        TOOL._host_cpu_topology_affinity_admission_v2r17(
+            contract,
+            dependency_gate_invocation_count=1,
+            target_fsck_invocation_count=1,
+        )
+    assert set_calls == 0
+    assert pending.value.code == TOOL._HOST_CPU_PENDING_CODE_V2R17
+    assert pending.value.phase == TOOL._HOST_CPU_ADMISSION_PHASE_V2R17
+    assert pending.value.condition == "REQUIRED_EFFECTIVE_CPU_SET_UNAVAILABLE"
+    assert pending.value.receipt["missing_required_cpus_in_exact_order"] == [31]
+    assert pending.value.receipt["affinity_mutation_attempted"] is False
+    assert pending.value.receipt["failure_operation_or_null"] == (
+        "VALIDATE_REQUIRED_EFFECTIVE_CPU_SET"
+    )
+    assert pending.value.receipt["failure_error_or_null"] == (
+        "MISSING_REQUIRED_CPUS:31"
+    )
+    assert TOOL._preconsumption_pending_is_exact_v2r17(
+        contract,
+        pending.value,
+    ) is True
+    missing_required = deepcopy(pending.value.receipt)
+    missing_required["original_effective_cpus_or_null"] = list(range(40))
+    missing_required["missing_required_cpus_in_exact_order"] = []
+    missing_required["failure_error_or_null"] = "MISSING_REQUIRED_CPUS:"
+    pending.value.receipt = missing_required
+    assert TOOL._preconsumption_pending_is_exact_v2r17(
+        contract,
+        pending.value,
+    ) is False
+
+
+def test_host_cpu_affinity_api_unavailable_is_exact_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = _contract()
+    monkeypatch.setattr(TOOL.os, "sched_getaffinity", None)
+    monkeypatch.setattr(TOOL.os, "sched_setaffinity", None)
+    with pytest.raises(TOOL.ShadowRetryCampaignPendingV1) as pending:
+        TOOL._host_cpu_topology_affinity_admission_v2r17(
+            contract,
+            dependency_gate_invocation_count=1,
+            target_fsck_invocation_count=1,
+        )
+    assert pending.value.condition == "SCHED_AFFINITY_API_UNAVAILABLE"
+    assert pending.value.receipt["affinity_mutation_attempted"] is False
+    assert pending.value.receipt["restore_required"] is False
+    assert pending.value.receipt["failure_operation_or_null"] == (
+        "LOOKUP_SCHED_AFFINITY_API"
+    )
+    assert pending.value.receipt["failure_error_or_null"] == (
+        "SCHED_AFFINITY_API_NOT_CALLABLE"
+    )
+    assert TOOL._preconsumption_pending_is_exact_v2r17(
+        contract,
+        pending.value,
+    ) is True
+    pending.value.receipt["failure_error_or_null"] = "fabricated"
+    assert TOOL._preconsumption_pending_is_exact_v2r17(
+        contract,
+        pending.value,
+    ) is False
+
+
+def test_host_cpu_bind_failure_is_pending_only_after_exact_restore(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = _contract()
+    original = set(range(40))
+    current = set(original)
+    set_calls: list[list[int]] = []
+    failed = False
+
+    def get_affinity(_pid: int) -> set[int]:
+        return set(current)
+
+    def set_affinity(_pid: int, cpus: set[int]) -> None:
+        nonlocal failed
+        ordered = sorted(cpus)
+        set_calls.append(ordered)
+        if ordered == [25] and not failed:
+            failed = True
+            raise OSError("injected CPU 25 bind failure")
+        current.clear()
+        current.update(cpus)
+
+    monkeypatch.setattr(TOOL.os, "sched_getaffinity", get_affinity)
+    monkeypatch.setattr(TOOL.os, "sched_setaffinity", set_affinity)
+    with pytest.raises(TOOL.ShadowRetryCampaignPendingV1) as pending:
+        TOOL._host_cpu_topology_affinity_admission_v2r17(
+            contract,
+            dependency_gate_invocation_count=1,
+            target_fsck_invocation_count=1,
+        )
+    assert set_calls == [[24], [25], list(range(40))]
+    assert current == original
+    assert pending.value.condition == (
+        "EXACT_BIND_OR_REPLAY_FAILED_WITH_EXACT_RESTORE"
+    )
+    assert pending.value.receipt["original_affinity_restored_exactly"] is True
+    assert pending.value.receipt["failure_operation_or_null"] == (
+        "BIND_OR_READBACK_PROBE_02"
+    )
+    assert pending.value.receipt["failure_error_or_null"] == (
+        pending.value.receipt["bind_probe_rows_in_exact_order"][-1][
+            "error_or_null"
+        ]
+    )
+    assert TOOL._preconsumption_pending_is_exact_v2r17(
+        contract,
+        pending.value,
+    ) is True
+    missing_required = deepcopy(pending.value.receipt)
+    missing_required["original_effective_cpus_or_null"].remove(0)
+    missing_required["restored_effective_cpus_or_null"].remove(0)
+    pending.value.receipt = missing_required
+    assert TOOL._preconsumption_pending_is_exact_v2r17(
+        contract,
+        pending.value,
+    ) is False
+
+
+def test_host_cpu_readback_mismatch_is_pending_only_after_exact_restore(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = _contract()
+    original = set(range(40))
+    current = set(original)
+
+    def get_affinity(_pid: int) -> set[int]:
+        if current == {24}:
+            return {25}
+        return set(current)
+
+    def set_affinity(_pid: int, cpus: set[int]) -> None:
+        current.clear()
+        current.update(cpus)
+
+    monkeypatch.setattr(TOOL.os, "sched_getaffinity", get_affinity)
+    monkeypatch.setattr(TOOL.os, "sched_setaffinity", set_affinity)
+    with pytest.raises(TOOL.ShadowRetryCampaignPendingV1) as pending:
+        TOOL._host_cpu_topology_affinity_admission_v2r17(
+            contract,
+            dependency_gate_invocation_count=1,
+            target_fsck_invocation_count=1,
+        )
+    assert current == original
+    assert pending.value.condition == (
+        "EXACT_BIND_OR_REPLAY_FAILED_WITH_EXACT_RESTORE"
+    )
+    failed_row = pending.value.receipt["bind_probe_rows_in_exact_order"][-1]
+    assert failed_row["requested_cpus_in_exact_order"] == [24]
+    assert failed_row["observed_cpus_or_null"] == [25]
+    assert failed_row["passed"] is False
+    assert pending.value.receipt["failure_operation_or_null"] == (
+        "BIND_OR_READBACK_PROBE_01"
+    )
+    assert pending.value.receipt["failure_error_or_null"] == (
+        failed_row["error_or_null"]
+    )
+    assert TOOL._preconsumption_pending_is_exact_v2r17(
+        contract,
+        pending.value,
+    ) is True
+    failed_row["error_or_null"] = "fabricated mismatch"
+    pending.value.receipt["failure_error_or_null"] = "fabricated mismatch"
+    assert TOOL._preconsumption_pending_is_exact_v2r17(
+        contract,
+        pending.value,
+    ) is False
+
+
+def test_host_cpu_restore_uncertainty_is_terminal_not_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = _contract()
+    original = set(range(40))
+    current = set(original)
+
+    def get_affinity(_pid: int) -> set[int]:
+        return set(current)
+
+    def set_affinity(_pid: int, cpus: set[int]) -> None:
+        if cpus == original:
+            raise OSError("injected original-affinity restore failure")
+        current.clear()
+        current.update(cpus)
+
+    monkeypatch.setattr(TOOL.os, "sched_getaffinity", get_affinity)
+    monkeypatch.setattr(TOOL.os, "sched_setaffinity", set_affinity)
+    with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+        TOOL._host_cpu_topology_affinity_admission_v2r17(
+            contract,
+            dependency_gate_invocation_count=1,
+            target_fsck_invocation_count=1,
+        )
+    assert error.value.code == "FAIL_CAMPAIGN_HOST_CPU_AFFINITY_RESTORE"
+    assert error.value.terminal is True
+    assert error.value.receipt["status"] == "TERMINAL_RESTORE_UNCERTAIN"
+
+
+def test_host_cpu_restore_readback_mismatch_is_terminal_not_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = _contract()
+    original = set(range(40))
+    current = set(original)
+    restore_seen = False
+
+    def get_affinity(_pid: int) -> set[int]:
+        if restore_seen:
+            return set(range(39))
+        return set(current)
+
+    def set_affinity(_pid: int, cpus: set[int]) -> None:
+        nonlocal restore_seen
+        current.clear()
+        current.update(cpus)
+        if cpus == original:
+            restore_seen = True
+
+    monkeypatch.setattr(TOOL.os, "sched_getaffinity", get_affinity)
+    monkeypatch.setattr(TOOL.os, "sched_setaffinity", set_affinity)
+    with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+        TOOL._host_cpu_topology_affinity_admission_v2r17(
+            contract,
+            dependency_gate_invocation_count=1,
+            target_fsck_invocation_count=1,
+        )
+    assert current == original
+    assert error.value.code == "FAIL_CAMPAIGN_HOST_CPU_AFFINITY_RESTORE"
+    assert error.value.terminal is True
+    assert error.value.receipt["status"] == "TERMINAL_RESTORE_UNCERTAIN"
+    assert error.value.receipt["condition"] == (
+        "ORIGINAL_AFFINITY_RESTORE_FAILED"
+    )
+    assert error.value.receipt["original_affinity_restored_exactly"] is False
+    assert str(error.value.receipt["failure_error_or_null"]).startswith(
+        "AFFINITY_RESTORE_REPLAY_DIFFERS:"
+    )
+
+
+def test_host_cpu_keyboard_interrupt_is_never_pending_and_restores_after_bind(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = _contract()
+    original = set(range(40))
+    current = set(original)
+    interrupted = False
+
+    def get_affinity(_pid: int) -> set[int]:
+        return set(current)
+
+    def set_affinity(_pid: int, cpus: set[int]) -> None:
+        nonlocal interrupted
+        current.clear()
+        current.update(cpus)
+        if cpus == {24} and not interrupted:
+            interrupted = True
+            raise KeyboardInterrupt("injected after affinity mutation")
+
+    monkeypatch.setattr(TOOL.os, "sched_getaffinity", get_affinity)
+    monkeypatch.setattr(TOOL.os, "sched_setaffinity", set_affinity)
+    with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+        TOOL._host_cpu_topology_affinity_admission_v2r17(
+            contract,
+            dependency_gate_invocation_count=1,
+            target_fsck_invocation_count=1,
+        )
+    assert current == original
+    assert error.value.code == "FAIL_CAMPAIGN_HOST_CPU_ADMISSION_INTERRUPTED"
+    assert error.value.terminal is True
+    assert error.value.receipt["status"] == (
+        "TERMINAL_NONRESUMABLE_INTERRUPTION"
+    )
+
+
+def test_host_cpu_post_readback_interrupt_restores_before_terminal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = _contract()
+    original = set(range(40))
+    current = set(original)
+    set_calls: list[list[int]] = []
+    conversion_count = 0
+    real_conversion = TOOL._host_cpu_affinity_set_or_none_v2r17
+
+    class InterruptAfterSuccessfulReadback(list[int]):
+        def __ne__(self, other: object) -> bool:
+            return False
+
+        def __eq__(self, other: object) -> bool:
+            raise KeyboardInterrupt("injected after successful readback")
+
+    def get_affinity(_pid: int) -> set[int]:
+        return set(current)
+
+    def set_affinity(_pid: int, cpus: set[int]) -> None:
+        set_calls.append(sorted(cpus))
+        current.clear()
+        current.update(cpus)
+
+    def convert(value: object) -> list[int] | None:
+        nonlocal conversion_count
+        conversion_count += 1
+        converted = real_conversion(value)
+        if conversion_count == 2:
+            assert converted == [24]
+            return InterruptAfterSuccessfulReadback(converted)
+        return converted
+
+    monkeypatch.setattr(TOOL.os, "sched_getaffinity", get_affinity)
+    monkeypatch.setattr(TOOL.os, "sched_setaffinity", set_affinity)
+    monkeypatch.setattr(
+        TOOL,
+        "_host_cpu_affinity_set_or_none_v2r17",
+        convert,
+    )
+    with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+        TOOL._host_cpu_topology_affinity_admission_v2r17(
+            contract,
+            dependency_gate_invocation_count=1,
+            target_fsck_invocation_count=1,
+        )
+    assert set_calls == [[24], list(range(40))]
+    assert current == original
+    assert error.value.code == "FAIL_CAMPAIGN_HOST_CPU_ADMISSION_INTERRUPTED"
+    assert error.value.terminal is True
+    assert error.value.receipt["status"] == (
+        "TERMINAL_NONRESUMABLE_INTERRUPTION"
+    )
+    assert error.value.receipt["failure_operation_or_null"] == (
+        "BIND_OR_READBACK_PROBE_01"
+    )
+    assert error.value.receipt["failure_error_or_null"] == (
+        "KeyboardInterrupt:injected after successful readback"
+    )
+    assert error.value.receipt["original_affinity_restored_exactly"] is True
+
+
+def test_host_cpu_original_read_keyboard_interrupt_is_not_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = _contract()
+    monkeypatch.setattr(
+        TOOL.os,
+        "sched_getaffinity",
+        lambda _pid: (_ for _ in ()).throw(KeyboardInterrupt("injected read")),
+    )
+    monkeypatch.setattr(TOOL.os, "sched_setaffinity", lambda *_args: None)
+    with pytest.raises(KeyboardInterrupt, match="injected read"):
+        TOOL._host_cpu_topology_affinity_admission_v2r17(
+            contract,
+            dependency_gate_invocation_count=1,
+            target_fsck_invocation_count=1,
+        )
+
+
+@pytest.mark.parametrize(
+    ("dependency_count", "fsck_count"),
+    ((True, 1), (1, True), (0, 1), (1, 0)),
+)
+def test_host_cpu_gate_requires_exact_integer_predecessor_counts(
+    monkeypatch: pytest.MonkeyPatch,
+    dependency_count: object,
+    fsck_count: object,
+) -> None:
+    contract = _contract()
+    monkeypatch.setattr(
+        TOOL.os,
+        "sched_getaffinity",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("unreachable")),
+    )
+    monkeypatch.setattr(
+        TOOL.os,
+        "sched_setaffinity",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("unreachable")),
+    )
+    with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+        TOOL._host_cpu_topology_affinity_admission_v2r17(
+            contract,
+            dependency_gate_invocation_count=dependency_count,
+            target_fsck_invocation_count=fsck_count,
+        )
+    assert error.value.code == "FAIL_CAMPAIGN_HOST_CPU_ADMISSION"
+    assert error.value.terminal is True
+
+
+@pytest.mark.parametrize("dependency_count", (True, 0))
+def test_target_fsck_gate_requires_exact_integer_dependency_count(
+    monkeypatch: pytest.MonkeyPatch,
+    dependency_count: object,
+) -> None:
+    contract = _contract()
+    monkeypatch.setattr(
+        TOOL,
+        "_bounded_process",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("invalid predecessor count reached fsck")
+        ),
+    )
+    with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+        TOOL._target_object_closure_fsck_admission_v2r17(
+            contract,
+            dependency_gate_invocation_count=dependency_count,
+        )
+    assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("schema_version", "other/1"),
+        ("status", "PASS"),
+        ("phase", "OTHER_PHASE"),
+        ("condition", "SCHED_AFFINITY_API_UNAVAILABLE"),
+        ("required_effective_cpus_in_exact_order", list(range(31))),
+        ("original_effective_cpus_or_null", [1, 0]),
+        ("missing_required_cpus_in_exact_order", [31, 31]),
+        ("affinity_mutation_attempted", 0),
+        ("original_affinity_restored_exactly", 1),
+        ("failure_operation_or_null", None),
+        ("failure_error_or_null", None),
+        ("dynamic_receipt_is_capsule_digest_input", True),
+    ),
+)
+def test_host_cpu_pending_classifier_rejects_receipt_drift_and_bool_int_aliases(
+    monkeypatch: pytest.MonkeyPatch,
+    field: str,
+    value: object,
+) -> None:
+    contract = _contract()
+    monkeypatch.setattr(TOOL.os, "sched_getaffinity", lambda _pid: set(range(31)))
+    monkeypatch.setattr(
+        TOOL.os,
+        "sched_setaffinity",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("unreachable")),
+    )
+    with pytest.raises(TOOL.ShadowRetryCampaignPendingV1) as pending:
+        TOOL._host_cpu_topology_affinity_admission_v2r17(
+            contract,
+            dependency_gate_invocation_count=1,
+            target_fsck_invocation_count=1,
+        )
+    pending.value.receipt[field] = value
+    assert TOOL._preconsumption_pending_is_exact_v2r17(
+        contract,
+        pending.value,
+    ) is False
+
+
+def test_host_cpu_pass_receipt_rejects_bool_probe_ordinal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = _contract()
+    original = set(range(40))
+    current = set(original)
+
+    def get_affinity(_pid: int) -> set[int]:
+        return set(current)
+
+    def set_affinity(_pid: int, cpus: set[int]) -> None:
+        current.clear()
+        current.update(cpus)
+
+    monkeypatch.setattr(TOOL.os, "sched_getaffinity", get_affinity)
+    monkeypatch.setattr(TOOL.os, "sched_setaffinity", set_affinity)
+    receipt = TOOL._host_cpu_topology_affinity_admission_v2r17(
+        contract,
+        dependency_gate_invocation_count=1,
+        target_fsck_invocation_count=1,
+    )
+    missing_required = deepcopy(receipt)
+    missing_required["original_effective_cpus_or_null"].remove(0)
+    missing_required["restored_effective_cpus_or_null"].remove(0)
+    assert TOOL._host_cpu_affinity_receipt_exact_v2r17(
+        contract,
+        missing_required,
+        required_status="PASS",
+    ) is False
+    receipt["bind_probe_rows_in_exact_order"][0]["probe_ordinal"] = True
+    assert TOOL._host_cpu_affinity_receipt_exact_v2r17(
+        contract,
+        receipt,
+        required_status="PASS",
+    ) is False
+
+
+@pytest.mark.parametrize("mutation", ("missing-error", "observed-with-set-failure"))
+def test_host_cpu_failed_probe_receipt_requires_exact_error_semantics(
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+) -> None:
+    contract = _contract()
+    original = set(range(40))
+    current = set(original)
+    failed = False
+
+    def get_affinity(_pid: int) -> set[int]:
+        return set(current)
+
+    def set_affinity(_pid: int, cpus: set[int]) -> None:
+        nonlocal failed
+        if cpus == {24} and not failed:
+            failed = True
+            raise OSError("injected bind failure")
+        current.clear()
+        current.update(cpus)
+
+    monkeypatch.setattr(TOOL.os, "sched_getaffinity", get_affinity)
+    monkeypatch.setattr(TOOL.os, "sched_setaffinity", set_affinity)
+    with pytest.raises(TOOL.ShadowRetryCampaignPendingV1) as pending:
+        TOOL._host_cpu_topology_affinity_admission_v2r17(
+            contract,
+            dependency_gate_invocation_count=1,
+            target_fsck_invocation_count=1,
+        )
+    row = pending.value.receipt["bind_probe_rows_in_exact_order"][0]
+    if mutation == "missing-error":
+        row["error_or_null"] = None
+        pending.value.receipt["failure_error_or_null"] = None
+    else:
+        row["observed_cpus_or_null"] = [24]
+    assert TOOL._preconsumption_pending_is_exact_v2r17(
+        contract,
+        pending.value,
+    ) is False
+
+
+def test_typed_pending_raise_sites_are_exact_fsck_cpu_and_slot_gate() -> None:
     tree = ast.parse(TOOL_PATH.read_bytes(), filename=os.fspath(TOOL_PATH))
     sites: list[str] = []
 
@@ -3219,8 +5256,9 @@ def test_typed_pending_raise_sites_are_only_exact_fsck_and_slot_gate() -> None:
 
     Visitor().visit(tree)
     assert sites == [
-        "_run_slot_scheduling_admission_v2r13",
-        "_target_object_closure_fsck_admission_v2r13",
+        "_run_slot_scheduling_admission_v2r17",
+        "_target_object_closure_fsck_admission_v2r17",
+        "pause",
     ]
 
 
@@ -3260,7 +5298,7 @@ def test_target_fsck_nonclean_outcomes_are_terminal_not_pending(
     )
     monkeypatch.setattr(TOOL.time, "monotonic_ns", lambda: next(monotonic))
     with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
-        TOOL._target_object_closure_fsck_admission_v2r13(
+        TOOL._target_object_closure_fsck_admission_v2r17(
             contract,
             dependency_gate_invocation_count=1,
         )
@@ -3281,7 +5319,7 @@ def test_only_exact_target_fsck_receives_300_second_budget(
     monotonic = iter((1_000, 2_000))
     monkeypatch.setattr(TOOL, "_bounded_process", bounded)
     monkeypatch.setattr(TOOL.time, "monotonic_ns", lambda: next(monotonic))
-    receipt = TOOL._target_object_closure_fsck_admission_v2r13(
+    receipt = TOOL._target_object_closure_fsck_admission_v2r17(
         contract,
         dependency_gate_invocation_count=1,
     )
@@ -3293,7 +5331,7 @@ def test_only_exact_target_fsck_receives_300_second_budget(
     )
     assert receipt["classification"]["accepted"] is True
     assert observed == [
-        (TOOL._target_object_closure_fsck_argv_v2r13(contract), 300.0),
+        (TOOL._target_object_closure_fsck_argv_v2r17(contract), 300.0),
         (["/usr/bin/git", "-C", repository, "rev-parse", "HEAD"], 120.0),
     ]
 
@@ -3344,7 +5382,7 @@ def test_real_tiny_repository_fixture_passes_exact_target_fsck(
         repository
     )
     contract["target_commit_a_binding"]["target_supervisor_commit"] = commit
-    receipt = TOOL._target_object_closure_fsck_admission_v2r13(
+    receipt = TOOL._target_object_closure_fsck_admission_v2r17(
         contract,
         dependency_gate_invocation_count=1,
     )
@@ -3786,14 +5824,21 @@ def test_preflight_names_only_ledger_and_slot_freshness_targets(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     contract = _contract()
-    capsule = _capsule_stub()
+    capsule = _capsule_stub(contract=contract)
     dependency = capsule["python310_dependency_preflight_receipt"]
     context = {
         "capsule": capsule,
         "python310_dependency_preflight_receipt": dependency,
+        "preauthorization_live_gauntlet": (
+            _gauntlet_receipt_binding_stub(
+                contract,
+                capsule["controller_git"],
+            )
+        ),
         "target_object_closure_fsck_admission_receipt": {
             "classification": {"accepted": True}
         },
+        "host_cpu_topology_affinity_admission_receipt": {"status": "PASS"},
         "authorization_template": {"authorization_digest": _tagged("authorization")},
     }
     monkeypatch.setattr(
@@ -3812,6 +5857,9 @@ def test_preflight_names_only_ledger_and_slot_freshness_targets(
     )
     assert receipt["target_object_closure_fsck_admission_receipt"] == {
         "classification": {"accepted": True}
+    }
+    assert receipt["host_cpu_topology_affinity_admission_receipt"] == {
+        "status": "PASS"
     }
     assert "freshness_targets_absent" not in receipt
 
@@ -3900,7 +5948,7 @@ def test_preflight_has_no_docker_supervisor_clone_or_root_mutation_calls(
     )
     monkeypatch.setattr(
         TOOL,
-        "_target_object_closure_fsck_admission_v2r13",
+        "_target_object_closure_fsck_admission_v2r17",
         lambda *_args, **_kwargs: {"classification": {"accepted": True}},
     )
     monkeypatch.setattr(TOOL.os.path, "lexists", lambda _path: False)
@@ -3936,7 +5984,14 @@ def test_all_three_entrypoints_request_a_fresh_preflight_context(
         "capsule": capsule,
         "slots": deepcopy(contract["slot_registry"]),
         "python310_dependency_preflight_receipt": dependency,
+        "preauthorization_live_gauntlet": (
+            _gauntlet_receipt_binding_stub(
+                contract,
+                capsule["controller_git"],
+            )
+        ),
         "target_object_closure_fsck_admission_receipt": {"status": "PASS"},
+        "host_cpu_topology_affinity_admission_receipt": {"status": "PASS"},
         "authorization_template": {"authorization_digest": _tagged("auth")},
     }
     calls = 0
@@ -4006,6 +6061,10 @@ def test_preflight_context_runs_dependency_then_one_fsck_then_authorization_temp
         events.append("dependency")
         return {"receipt_digest": _tagged("dependency")}
 
+    def gauntlet(*_args: object, **_kwargs: object) -> dict[str, object]:
+        events.append("live-gauntlet-replay")
+        return {"receipt_digest": _tagged("live-gauntlet")}
+
     def build(*_args: object, **_kwargs: object) -> dict[str, object]:
         events.append("capsule")
         return deepcopy(capsule)
@@ -4020,11 +6079,16 @@ def test_preflight_context_runs_dependency_then_one_fsck_then_authorization_temp
         events.append("authorization-template")
         return {"authorization_digest": _tagged("authorization")}
 
+    monkeypatch.setattr(
+        TOOL,
+        "_load_preauthorization_live_gauntlet_receipt_v2",
+        gauntlet,
+    )
     monkeypatch.setattr(TOOL, "_python310_dependency_preflight_v1", dependency)
     monkeypatch.setattr(TOOL, "_build_capsule", build)
     monkeypatch.setattr(
         TOOL,
-        "_target_object_closure_fsck_admission_v2r13",
+        "_target_object_closure_fsck_admission_v2r17",
         fsck,
     )
     monkeypatch.setattr(TOOL, "_authorization_template", authorization)
@@ -4037,6 +6101,7 @@ def test_preflight_context_runs_dependency_then_one_fsck_then_authorization_temp
         assert context["capsule"] == capsule
     assert fsck_count == 2
     assert events == [
+        "live-gauntlet-replay",
         "dependency",
         "capsule",
         "target-fsck",
@@ -4103,7 +6168,7 @@ def test_wrong_valid_capsule_digest_stops_before_fsck_and_cannot_pending(
 
     monkeypatch.setattr(
         TOOL,
-        "_target_object_closure_fsck_admission_v2r13",
+        "_target_object_closure_fsck_admission_v2r17",
         forbidden_fsck,
     )
     monkeypatch.setattr(TOOL, "_authorization_template", forbidden_authorization)
@@ -4220,27 +6285,27 @@ def test_slot_registry_accepts_exact_contract_and_rejects_path_drift() -> None:
     assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
 
 
-def test_v2r13_instance_isolation_rejects_all_historical_authority_and_roots() -> None:
+def test_v2r19_instance_isolation_rejects_all_historical_authority_and_roots() -> None:
     raw_contract = TOOL._pretty_json(
         TOOL.CONFIG_PATH.read_bytes(),
-        "v2r13 target Git object closure",
+        "v2r19 target Git object closure",
     )
     assert type(raw_contract) is dict
     target_git_object_closure = raw_contract["target_commit_a_binding"]
     assert type(target_git_object_closure) is dict
     assert target_git_object_closure["status"] == "TARGET_COMMIT_A_BOUND"
     assert target_git_object_closure["target_supervisor_commit"] == (
-        "0bde03ba2d00887e1590c12d235b96fe07d09b5c"
+        "303c0fcd45bb46c00b79bb2112bd1d777364e5bb"
     )
 
     contract = _contract()
-    TOOL._require_v2r13_instance_isolation_v2(contract)
+    TOOL._require_v2r19_instance_isolation_v2(contract)
     protected = contract["protected_state_policy"]
     assert type(protected) is dict
     protected_roots = protected["protected_roots_in_exact_order"]
     assert type(protected_roots) is list
-    assert len(protected_roots) == 247
-    assert protected_roots == list(TOOL._EXPECTED_PROTECTED_ROOTS_V2R13)
+    assert len(protected_roots) == 373
+    assert protected_roots == list(TOOL._EXPECTED_PROTECTED_ROOTS_V2R19)
     assert set(TOOL._PRIOR_V2_PROTECTED_ROOTS).issubset(protected_roots)
     assert set(TOOL._PRIOR_V2R1_PROTECTED_ROOTS).issubset(protected_roots)
     assert set(TOOL._PRIOR_V2R2_PROTECTED_ROOTS).issubset(protected_roots)
@@ -4254,6 +6319,12 @@ def test_v2r13_instance_isolation_rejects_all_historical_authority_and_roots() -
     assert set(TOOL._PRIOR_V2R10_PROTECTED_ROOTS).issubset(protected_roots)
     assert set(TOOL._PRIOR_V2R11_PROTECTED_ROOTS).issubset(protected_roots)
     assert set(TOOL._PRIOR_V2R12_PROTECTED_ROOTS).issubset(protected_roots)
+    assert set(TOOL._PRIOR_V2R13_PROTECTED_ROOTS).issubset(protected_roots)
+    assert set(TOOL._PRIOR_V2R14_PROTECTED_ROOTS).issubset(protected_roots)
+    assert set(TOOL._PRIOR_V2R15_PROTECTED_ROOTS).issubset(protected_roots)
+    assert set(TOOL._PRIOR_V2R16_PROTECTED_ROOTS).issubset(protected_roots)
+    assert set(TOOL._PRIOR_V2R17_PROTECTED_ROOTS).issubset(protected_roots)
+    assert set(TOOL._PRIOR_V2R18_PROTECTED_ROOTS).issubset(protected_roots)
     assert protected["prior_v2r1_campaign_contract_id"] == (
         TOOL._PRIOR_V2R1_CONTRACT_ID
     )
@@ -4392,6 +6463,30 @@ def test_v2r13_instance_isolation_rejects_all_historical_authority_and_roots() -
         field: protected[field]
         for field in TOOL._PRIOR_V2R12_PROTECTED_POLICY_FACTS
     } == TOOL._PRIOR_V2R12_PROTECTED_POLICY_FACTS
+    assert {
+        field: protected[field]
+        for field in TOOL._PRIOR_V2R13_PROTECTED_POLICY_FACTS
+    } == TOOL._PRIOR_V2R13_PROTECTED_POLICY_FACTS
+    assert {
+        field: protected[field]
+        for field in TOOL._PRIOR_V2R14_PROTECTED_POLICY_FACTS
+    } == TOOL._PRIOR_V2R14_PROTECTED_POLICY_FACTS
+    assert {
+        field: protected[field]
+        for field in TOOL._PRIOR_V2R15_PROTECTED_POLICY_FACTS
+    } == TOOL._PRIOR_V2R15_PROTECTED_POLICY_FACTS
+    assert {
+        field: protected[field]
+        for field in TOOL._PRIOR_V2R16_PROTECTED_POLICY_FACTS
+    } == TOOL._PRIOR_V2R16_PROTECTED_POLICY_FACTS
+    assert {
+        field: protected[field]
+        for field in TOOL._PRIOR_V2R17_PROTECTED_POLICY_FACTS
+    } == TOOL._PRIOR_V2R17_PROTECTED_POLICY_FACTS
+    assert {
+        field: protected[field]
+        for field in TOOL._PRIOR_V2R18_PROTECTED_POLICY_FACTS
+    } == TOOL._PRIOR_V2R18_PROTECTED_POLICY_FACTS
     assert len(TOOL._PRIOR_V2R6_RUNTIME_ROOTS) == 17
     assert TOOL._PRIOR_V2R6_PROTECTED_ROOTS == (
         TOOL._PRIOR_V2R6_WORKTREE_ROOT,
@@ -4437,7 +6532,77 @@ def test_v2r13_instance_isolation_rejects_all_historical_authority_and_roots() -
         TOOL._PRIOR_V2R12_WORKTREE_ROOT,
         *TOOL._PRIOR_V2R12_RUNTIME_ROOTS,
     )
-    assert protected["preauthorization_historical_read_only_review_count"] == 3
+    assert len(TOOL._PRIOR_V2R13_RUNTIME_ROOTS) == 20
+    assert len(TOOL._PRIOR_V2R13_RUNTIME_ROOT_STATES_IN_EXACT_ORDER) == 20
+    assert TOOL._PRIOR_V2R13_RUNTIME_ROOT_STATES_IN_EXACT_ORDER.count(
+        "PRESENT"
+    ) == 6
+    assert TOOL._PRIOR_V2R13_RUNTIME_ROOT_STATES_IN_EXACT_ORDER.count(
+        "ABSENT"
+    ) == 14
+    assert TOOL._PRIOR_V2R13_PROTECTED_ROOTS == (
+        TOOL._PRIOR_V2R13_WORKTREE_ROOT,
+        *TOOL._PRIOR_V2R13_RUNTIME_ROOTS,
+    )
+    assert len(TOOL._PRIOR_V2R14_RUNTIME_ROOTS) == 20
+    assert len(TOOL._PRIOR_V2R14_RUNTIME_ROOT_STATES_IN_EXACT_ORDER) == 20
+    assert TOOL._PRIOR_V2R14_RUNTIME_ROOT_STATES_IN_EXACT_ORDER.count(
+        "PRESENT"
+    ) == 6
+    assert TOOL._PRIOR_V2R14_RUNTIME_ROOT_STATES_IN_EXACT_ORDER.count(
+        "ABSENT"
+    ) == 14
+    assert TOOL._PRIOR_V2R14_PROTECTED_ROOTS == (
+        TOOL._PRIOR_V2R14_WORKTREE_ROOT,
+        *TOOL._PRIOR_V2R14_RUNTIME_ROOTS,
+    )
+    assert len(TOOL._PRIOR_V2R15_RUNTIME_ROOTS) == 20
+    assert len(TOOL._PRIOR_V2R15_RUNTIME_ROOT_STATES_IN_EXACT_ORDER) == 20
+    assert TOOL._PRIOR_V2R15_RUNTIME_ROOT_STATES_IN_EXACT_ORDER.count(
+        "PRESENT"
+    ) == 2
+    assert TOOL._PRIOR_V2R15_RUNTIME_ROOT_STATES_IN_EXACT_ORDER.count(
+        "ABSENT"
+    ) == 18
+    assert TOOL._PRIOR_V2R15_PROTECTED_ROOTS == (
+        TOOL._PRIOR_V2R15_WORKTREE_ROOT,
+        *TOOL._PRIOR_V2R15_RUNTIME_ROOTS,
+    )
+    assert len(TOOL._PRIOR_V2R16_RUNTIME_ROOTS) == 20
+    assert len(TOOL._PRIOR_V2R16_RUNTIME_ROOT_STATES_IN_EXACT_ORDER) == 20
+    assert TOOL._PRIOR_V2R16_RUNTIME_ROOT_STATES_IN_EXACT_ORDER.count(
+        "PRESENT"
+    ) == 14
+    assert TOOL._PRIOR_V2R16_RUNTIME_ROOT_STATES_IN_EXACT_ORDER.count(
+        "ABSENT"
+    ) == 6
+    assert TOOL._PRIOR_V2R16_PROTECTED_ROOTS == (
+        TOOL._PRIOR_V2R16_WORKTREE_ROOT,
+        *TOOL._PRIOR_V2R16_RUNTIME_ROOTS,
+    )
+    assert len(TOOL._PRIOR_V2R17_RUNTIME_ROOTS) == 20
+    assert TOOL._PRIOR_V2R17_RUNTIME_ROOT_STATES_IN_EXACT_ORDER.count(
+        "PRESENT"
+    ) == 2
+    assert TOOL._PRIOR_V2R17_RUNTIME_ROOT_STATES_IN_EXACT_ORDER.count(
+        "ABSENT"
+    ) == 18
+    assert TOOL._PRIOR_V2R17_PROTECTED_ROOTS == (
+        TOOL._PRIOR_V2R17_WORKTREE_ROOT,
+        *TOOL._PRIOR_V2R17_RUNTIME_ROOTS,
+    )
+    assert len(TOOL._PRIOR_V2R18_RUNTIME_ROOTS) == 20
+    assert TOOL._PRIOR_V2R18_RUNTIME_ROOT_STATES_IN_EXACT_ORDER.count(
+        "PRESENT"
+    ) == 6
+    assert TOOL._PRIOR_V2R18_RUNTIME_ROOT_STATES_IN_EXACT_ORDER.count(
+        "ABSENT"
+    ) == 14
+    assert TOOL._PRIOR_V2R18_PROTECTED_ROOTS == (
+        TOOL._PRIOR_V2R18_WORKTREE_ROOT,
+        *TOOL._PRIOR_V2R18_RUNTIME_ROOTS,
+    )
+    assert protected["preauthorization_historical_read_only_review_count"] == 10
     assert protected[
         "preauthorization_historical_read_only_review_scope_in_exact_order"
     ] == list(TOOL._PREAUTHORIZATION_HISTORICAL_READ_ONLY_REVIEW_SCOPE_IN_EXACT_ORDER)
@@ -4456,11 +6621,13 @@ def test_v2r13_instance_isolation_rejects_all_historical_authority_and_roots() -
     assert protected[
         "historical_campaign_root_open_access_prohibition_does_not_deny_disclosed_preauthorization_read_only_review"
     ] is True
-    assert protected["preauthorization_bound_source_worktree_validation"] == (
-        TOOL._PREAUTHORIZATION_BOUND_SOURCE_WORKTREE_VALIDATION_V1
+    assert protected[
+        "prior_v2r17_preauthorization_bound_source_worktree_validation"
+    ] == (
+        TOOL._PRIOR_V2R17_PREAUTHORIZATION_BOUND_SOURCE_WORKTREE_VALIDATION_V1
     )
     bound_source_validation = protected[
-        "preauthorization_bound_source_worktree_validation"
+        "prior_v2r17_preauthorization_bound_source_worktree_validation"
     ]
     assert type(bound_source_validation) is dict
     assert bound_source_validation[
@@ -4565,7 +6732,7 @@ def test_v2r13_instance_isolation_rejects_all_historical_authority_and_roots() -
     for ordinal, slot in enumerate(slots, start=1):
         assert type(slot) is dict
         assert slot["trajectory_trace_id"] == (
-            f"q05b-shadow-retry-campaign-v2r13-slot-{ordinal:02d}"
+            f"q05b-shadow-retry-campaign-v2r19-slot-{ordinal:02d}"
         )
         active_roots.update(
             {
@@ -4657,7 +6824,9 @@ def test_v2r13_instance_isolation_rejects_all_historical_authority_and_roots() -
         drifted_prior_v2r10_boundary["protected_state_policy"][field] = True
         mutations.append(drifted_prior_v2r10_boundary)
 
-    for version in ("v2r11", "v2r12"):
+    for version in (
+        "v2r11", "v2r12", "v2r13", "v2r14", "v2r15", "v2r16", "v2r17",
+    ):
         for suffix in (
             "capsule_authorization_or_ledger_reuse_allowed",
             "campaign_root_open_allowed",
@@ -4742,6 +6911,46 @@ def test_v2r13_instance_isolation_rejects_all_historical_authority_and_roots() -
         f"{TOOL._PRIOR_V2R12_STATE_PREFIX}-slot-01-scheduling-probe"
     )
     mutations.append(missing_prior_v2r12_probe_root)
+
+    missing_prior_v2r13_probe_root = deepcopy(contract)
+    missing_prior_v2r13_probe_root["protected_state_policy"][
+        "protected_roots_in_exact_order"
+    ].remove(
+        f"{TOOL._PRIOR_V2R13_STATE_PREFIX}-slot-01-scheduling-probe"
+    )
+    mutations.append(missing_prior_v2r13_probe_root)
+
+    missing_prior_v2r14_probe_root = deepcopy(contract)
+    missing_prior_v2r14_probe_root["protected_state_policy"][
+        "protected_roots_in_exact_order"
+    ].remove(
+        f"{TOOL._PRIOR_V2R14_STATE_PREFIX}-slot-01-scheduling-probe"
+    )
+    mutations.append(missing_prior_v2r14_probe_root)
+
+    missing_prior_v2r15_probe_root = deepcopy(contract)
+    missing_prior_v2r15_probe_root["protected_state_policy"][
+        "protected_roots_in_exact_order"
+    ].remove(
+        f"{TOOL._PRIOR_V2R15_STATE_PREFIX}-slot-01-scheduling-probe"
+    )
+    mutations.append(missing_prior_v2r15_probe_root)
+
+    missing_prior_v2r16_probe_root = deepcopy(contract)
+    missing_prior_v2r16_probe_root["protected_state_policy"][
+        "protected_roots_in_exact_order"
+    ].remove(
+        f"{TOOL._PRIOR_V2R16_STATE_PREFIX}-slot-01-scheduling-probe"
+    )
+    mutations.append(missing_prior_v2r16_probe_root)
+
+    missing_prior_v2r17_probe_root = deepcopy(contract)
+    missing_prior_v2r17_probe_root["protected_state_policy"][
+        "protected_roots_in_exact_order"
+    ].remove(
+        f"{TOOL._PRIOR_V2R17_STATE_PREFIX}-slot-01-scheduling-probe"
+    )
+    mutations.append(missing_prior_v2r17_probe_root)
 
     prior_authorization_root = deepcopy(contract)
     prior_authorization_root["fixed_external_roots"]["authorization_root"] = (
@@ -4911,8 +7120,68 @@ def test_v2r13_instance_isolation_rejects_all_historical_authority_and_roots() -
     ] = 0
     mutations.append(drifted_v2r12_type)
 
+    drifted_v2r13_fact = deepcopy(contract)
+    drifted_v2r13_fact["protected_state_policy"][
+        "prior_v2r13_slot_01_outcome_digest"
+    ] = _tagged("forged-v2r13-slot-01-outcome")
+    mutations.append(drifted_v2r13_fact)
+
+    drifted_v2r13_type = deepcopy(contract)
+    drifted_v2r13_type["protected_state_policy"][
+        "prior_v2r13_slot_03_invoked"
+    ] = 0
+    mutations.append(drifted_v2r13_type)
+
+    drifted_v2r14_fact = deepcopy(contract)
+    drifted_v2r14_fact["protected_state_policy"][
+        "prior_v2r14_slot_01_outcome_digest"
+    ] = _tagged("forged-v2r14-slot-01-outcome")
+    mutations.append(drifted_v2r14_fact)
+
+    drifted_v2r14_type = deepcopy(contract)
+    drifted_v2r14_type["protected_state_policy"][
+        "prior_v2r14_offline_reclassification_changes_history"
+    ] = 0
+    mutations.append(drifted_v2r14_type)
+
+    drifted_v2r15_fact = deepcopy(contract)
+    drifted_v2r15_fact["protected_state_policy"][
+        "prior_v2r15_terminal_ledger_record_digest"
+    ] = _tagged("forged-v2r15-terminal")
+    mutations.append(drifted_v2r15_fact)
+
+    drifted_v2r15_type = deepcopy(contract)
+    drifted_v2r15_type["protected_state_policy"][
+        "prior_v2r15_slot_01_invoked"
+    ] = 0
+    mutations.append(drifted_v2r15_type)
+
+    drifted_v2r16_fact = deepcopy(contract)
+    drifted_v2r16_fact["protected_state_policy"][
+        "prior_v2r16_terminal_ledger_record_digest"
+    ] = _tagged("forged-v2r16-terminal")
+    mutations.append(drifted_v2r16_fact)
+
+    drifted_v2r16_type = deepcopy(contract)
+    drifted_v2r16_type["protected_state_policy"][
+        "prior_v2r16_supervisor_invocation_count"
+    ] = False
+    mutations.append(drifted_v2r16_type)
+
+    drifted_v2r17_fact = deepcopy(contract)
+    drifted_v2r17_fact["protected_state_policy"][
+        "prior_v2r17_ledger_record_digests_in_exact_order"
+    ][1] = _tagged("forged-v2r17-consumed")
+    mutations.append(drifted_v2r17_fact)
+
+    drifted_v2r17_type = deepcopy(contract)
+    drifted_v2r17_type["protected_state_policy"][
+        "prior_v2r17_supervisor_invocation_count"
+    ] = False
+    mutations.append(drifted_v2r17_type)
+
     for field, value in (
-        ("preauthorization_historical_read_only_review_count", 4),
+        ("preauthorization_historical_read_only_review_count", 6),
         (
             "preauthorization_historical_read_only_review_scope_in_exact_order",
             ["SELECTED_V2_THROUGH_V2R8_LEDGER_OUTCOME_AND_TRAJECTORY_BINDING_JSON"],
@@ -4967,13 +7236,13 @@ def test_v2r13_instance_isolation_rejects_all_historical_authority_and_roots() -
     ):
         drifted_bound_source_validation = deepcopy(contract)
         drifted_bound_source_validation["protected_state_policy"][
-            "preauthorization_bound_source_worktree_validation"
+            "prior_v2r17_preauthorization_bound_source_worktree_validation"
         ][field] = value
         mutations.append(drifted_bound_source_validation)
 
     drifted_live_gauntlet = deepcopy(contract)
     drifted_live_gauntlet["protected_state_policy"][
-        "preauthorization_bound_source_worktree_validation"
+        "prior_v2r17_preauthorization_bound_source_worktree_validation"
     ]["preauthorization_live_admission_gauntlet"]["scheduling_admission"][
         "selected_window_ordinal"
     ] = 1
@@ -4981,13 +7250,58 @@ def test_v2r13_instance_isolation_rejects_all_historical_authority_and_roots() -
 
     missing_bound_source_validation_path = deepcopy(contract)
     missing_bound_source_validation_path["protected_state_policy"][
-        "preauthorization_bound_source_worktree_validation"
+        "prior_v2r17_preauthorization_bound_source_worktree_validation"
     ]["strict_loader_target_binding_paths_in_exact_registry_order"].pop()
     mutations.append(missing_bound_source_validation_path)
 
     for mutation in mutations:
         with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
-            TOOL._require_v2r13_instance_isolation_v2(mutation)
+            TOOL._require_v2r19_instance_isolation_v2(mutation)
+        assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
+
+
+def test_v2r18_terminal_history_is_frozen_and_never_resumable() -> None:
+    contract = _contract()
+    protected = contract["protected_state_policy"]
+    assert type(protected) is dict
+    assert TOOL._prior_v2r18_historical_evidence_v2(contract) == (
+        TOOL._PRIOR_V2R18_PROTECTED_POLICY_FACTS
+    )
+    assert protected["prior_v2r18_terminal_status"] == (
+        "CAMPAIGN_FAILED_CLOSED_TERMINAL"
+    )
+    assert protected["prior_v2r18_ledger_record_count"] == 8
+    assert protected["prior_v2r18_supervisor_invocation_count"] == 1
+    assert protected["prior_v2r18_last_consumed_slot_id"] == "SLOT_01"
+    assert protected["prior_v2r18_completion_commit_verified"] is True
+    assert protected[
+        "prior_v2r18_terminal_is_historical_nonresumable_evidence_only"
+    ] is True
+    assert protected["prior_v2r18_campaign_root_open_allowed"] is False
+    assert protected["prior_v2r18_campaign_root_access_allowed"] is False
+    assert protected[
+        "prior_v2r18_capsule_authorization_or_ledger_reuse_allowed"
+    ] is False
+    assert set(TOOL._PRIOR_V2R18_PROTECTED_ROOTS).issubset(
+        protected["protected_roots_in_exact_order"]
+    )
+    for field, forged_value in (
+        ("prior_v2r18_campaign_root_open_allowed", True),
+        ("prior_v2r18_campaign_root_access_allowed", True),
+        (
+            "prior_v2r18_capsule_authorization_or_ledger_reuse_allowed",
+            True,
+        ),
+        (
+            "prior_v2r18_terminal_is_historical_nonresumable_evidence_only",
+            False,
+        ),
+        ("prior_v2r18_offline_corrected_decision", "TERMINAL_NONRETRYABLE"),
+    ):
+        mutation = deepcopy(contract)
+        mutation["protected_state_policy"][field] = forged_value
+        with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+            TOOL._require_v2r19_instance_isolation_v2(mutation)
         assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
 
 
@@ -5049,7 +7363,7 @@ def test_prior_v2r8_exact_eight_record_stage8_terminal_history_is_frozen() -> No
     assert protected["prior_v2r8_terminal_error_code_or_null"] is None
 
 
-def test_retired_v2r9_capsule_is_not_v2r13_authority(tmp_path: Path) -> None:
+def test_retired_v2r9_capsule_is_not_v2r17_authority(tmp_path: Path) -> None:
     contract, capsule, authorization, ledger, _result = _completed_real_ledger(
         tmp_path
     )
@@ -5079,7 +7393,7 @@ def test_retired_v2r9_capsule_is_not_v2r13_authority(tmp_path: Path) -> None:
         ledger.close()
 
 
-def test_retired_v2r10_capsule_and_authorization_are_not_v2r13_authority(
+def test_retired_v2r10_capsule_and_authorization_are_not_v2r17_authority(
     tmp_path: Path,
 ) -> None:
     contract, capsule, authorization, ledger, _result = _completed_real_ledger(
@@ -5211,28 +7525,43 @@ def test_prior_v2r6_source_binding_failure_precedes_every_later_preflight_stage(
     ]
 
 
-def test_final_bound_v2r13_contract_loads_with_exact_source_replay() -> None:
+def test_v2r19_contract_is_source_only_or_exact_final_bound() -> None:
     raw_contract = TOOL._pretty_json(
         TOOL.CONFIG_PATH.read_bytes(),
-        "final-bound v2r13 campaign contract",
+        "v2r19 campaign contract binding phase",
     )
     assert type(raw_contract) is dict
     assert raw_contract["contract_id"] == (
-        "hegel-phase3a-q05b-shadow-retry-campaign-v2r13"
-    )
-    assert raw_contract["status"] == (
-        "V2R13_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
+        "hegel-phase3a-q05b-shadow-retry-campaign-v2r19"
     )
     assert raw_contract["target_commit_a_binding"]["target_supervisor_commit"] == (
-        "0bde03ba2d00887e1590c12d235b96fe07d09b5c"
+        "303c0fcd45bb46c00b79bb2112bd1d777364e5bb"
     )
-    assert raw_contract["campaign_source_binding"]["status"] == (
-        "CAMPAIGN_SOURCE_BOUND"
-    )
-    assert raw_contract["authority_boundary"]["preflight_authorized"] is True
     assert raw_contract["implementation_state"]["target_commit_a_bound"] is True
-    assert raw_contract["implementation_state"]["campaign_source_bound"] is True
-    assert TOOL.load_phase3_q05b_shadow_retry_campaign_contract_v2() == raw_contract
+    if raw_contract["status"] == (
+        "V2R19_SOURCE_IMPLEMENTED_AWAITING_FINAL_BINDING_NOT_EXECUTED"
+    ):
+        assert raw_contract["campaign_source_binding"]["status"] == (
+            "CAMPAIGN_SOURCE_AWAITING_FINAL_BINDING"
+        )
+        assert raw_contract["authority_boundary"]["preflight_authorized"] is True
+        assert raw_contract["implementation_state"]["campaign_source_bound"] is False
+        with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+            TOOL.load_phase3_q05b_shadow_retry_campaign_contract_v2()
+        assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
+    else:
+        assert raw_contract["status"] == (
+            "V2R19_FINAL_BOUND_AWAITING_EXACT_OWNER_AUTHORIZATION_NOT_EXECUTED"
+        )
+        assert raw_contract["campaign_source_binding"]["status"] == (
+            "CAMPAIGN_SOURCE_BOUND"
+        )
+        assert raw_contract["authority_boundary"]["preflight_authorized"] is True
+        assert raw_contract["implementation_state"]["campaign_source_bound"] is True
+        assert (
+            TOOL.load_phase3_q05b_shadow_retry_campaign_contract_v2()
+            == raw_contract
+        )
 
 
 def test_contract_loader_rejects_rehashed_v2r2_trajectory_producer(
@@ -5257,30 +7586,30 @@ def test_contract_loader_rejects_rehashed_v2r2_trajectory_producer(
         TOOL.load_phase3_q05b_shadow_retry_campaign_contract_v2()
     assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
     assert error.value.detail == (
-        "trajectory binding domain or v2r13 producer differs"
+        "trajectory binding domain or v2r19 producer differs"
     )
 
 
-def test_v2r13_target_commit_a_binding_is_exact() -> None:
+def test_v2r19_target_c_binding_is_exact() -> None:
     contract = TOOL._pretty_json(
         TOOL.CONFIG_PATH.read_bytes(),
-        "v2r13 exact target binding",
+        "v2r19 exact Target C binding",
     )
     assert type(contract) is dict
     target = contract["target_commit_a_binding"]
     assert type(target) is dict
     assert target["status"] == "TARGET_COMMIT_A_BOUND"
     assert target["target_supervisor_commit"] == (
-        "0bde03ba2d00887e1590c12d235b96fe07d09b5c"
+        "303c0fcd45bb46c00b79bb2112bd1d777364e5bb"
     )
     assert target["target_supervisor_tree"] == (
-        "72e08ec33cd0207aecb96789c3a08306985aa793"
+        "d8a17e0ca7166eab5db46a87150c37b514f79648"
     )
     assert target["target_supervisor_parent_commit"] == (
-        "fb66aa373535c96afec1609c6755acf0fa69767f"
+        "1e609a3123b5b80d5dada42f18758d3598467d5c"
     )
     assert target["target_supervisor_commit_object_raw_sha256"] == (
-        "1e2a608e2248821301960eca4c24d287459dbae05bcf51bca06dbba787d37027"
+        "d81a67bc0d54e88269fb1c2a6ac24306742d81b89b80b1715d5ac3053b13365a"
     )
     literal_required_paths = [
         "config/phase3_q05b_dual_isolation_v2.json",
@@ -5301,7 +7630,7 @@ def test_v2r13_target_commit_a_binding_is_exact() -> None:
     assert list(target["required_raw_sha256_by_path"]) == literal_required_paths
     assert target["required_raw_sha256_by_path"] == {
         "config/phase3_q05b_dual_isolation_v2.json": (
-            "ba3888df0d88d0b9005ac6907131d3c0e8d7ee4b0aaa50835cc2ef0ab6855770"
+            "159b4e80b60d59005bd96b2b38136cb6504f0700319be0cd99886c3d487569f6"
         ),
         "src/hegel_machine/_vendor/__init__.py": (
             "ee9748e550c7a30a129da0ca1fb2a93116f599541a57039ebd687a679dd86673"
@@ -5322,32 +7651,32 @@ def test_v2r13_target_commit_a_binding_is_exact() -> None:
             "f864c6d9552a929c7032ace654ee05ef26ca75d21b027b801d77e65907138b74"
         ),
         "src/hegel_machine/phase3_q05b_actual_admission_v2.py": (
-            "68ab76d84eb87df82f1e8fc152a45108f16934dc224341859738c1e2cfa71b6e"
+            "9983f41a5d4888dc280cb96018ed79534fc9c1cd9bfedbee14ce689dad7c8847"
         ),
         "src/hegel_machine/phase3_q05b_actual_artifact_v2.py": (
-            "ac78f7804ee9bba43b628965c0cf8d04da9796179977474954df1ee79ae926f6"
+            "58dacb866739b44f60a7096433354be6867e429a70e70283f4127ad093d8f3fc"
         ),
         "src/hegel_machine/phase3_q05b_trajectory_v2.py": (
-            "e0339921ba19614ed23615a943d15acc5eaeed2c4012c6ffa1e4e0ae092cc013"
+            "634826c13ee51c72c6e87c7b40f657ee315c3a91446ee12f2d807cdccc3030ed"
         ),
         "tests/test_phase3_q05b_dual_qualification_v2.py": (
-            "a9c9e24e91b345c786e61a78c83337ea3d57b45c98ecc3a9492dcbed0b55de74"
+            "b6399b614516b5fd8e1810a3aa9ea3b123282d9405ea889b8857a6bf9710a5d5"
         ),
         "tests/test_phase3_q05b_trajectory_v2.py": (
-            "1b575286d6f1419613ac8a898aa4cee48f9f3952ac3d2644d5c8c30d63dd9ac0"
+            "e38453beaa2ade4fc6a24669bfc2cccf7ded7b31bde63fac0d4e9fe3730f84b6"
         ),
         "tools/phase3_q05b_dual_qualification_v2.py": (
-            "f93fbe46fbd34a9783c9b78d82dc70ae3ae13b1f5ec891af2497344e4733db15"
+            "17fc3e126df9c76e841716415b3bcc9cdad2183e55ef4550fdba3e9212e84c07"
         ),
     }
     assert target["target_config_static_policy_root"] == (
-        "a5e7272551c7cfd1e7ea7c4970a7c28fb15582c345690860a3f444fd36d7baa9"
+        "67b0cb763fa2c81b256c1831fd5d75f4cc70ab315c90a1cbf1ac2111d29cba96"
     )
     assert target["target_contract_digest"] == (
-        "sha256:ba3888df0d88d0b9005ac6907131d3c0e8d7ee4b0aaa50835cc2ef0ab6855770"
+        "sha256:159b4e80b60d59005bd96b2b38136cb6504f0700319be0cd99886c3d487569f6"
     )
     assert target["target_source_binding_digest"] == (
-        "sha256:489ab20686bfca2fed13d07d34cd16235211639cf53bf9ec39893257ad6bc4ac"
+        "sha256:97963373458ffb333e959cfff6624d322c6da3f63cda66c0e444b7cb436d6713"
     )
     docker_labels = contract["execution_policy"]["target_docker_label_policy"]
     assert docker_labels["source_commit_label_value"] == (
@@ -5355,7 +7684,7 @@ def test_v2r13_target_commit_a_binding_is_exact() -> None:
     )
     assert docker_labels["pre_spawn_and_post_reap_readonly_absence_filter"] == (
         "label=org.hegel.q05b.source_commit="
-        "0bde03ba2d00887e1590c12d235b96fe07d09b5c"
+        "303c0fcd45bb46c00b79bb2112bd1d777364e5bb"
     )
     dependency = contract["execution_policy"][
         "python310_dependency_preflight_gate"
@@ -5369,7 +7698,7 @@ def test_v2r13_target_commit_a_binding_is_exact() -> None:
 def test_target_git_object_source_digest_strips_lf_and_rejects_lf_value() -> None:
     contract = TOOL._pretty_json(
         TOOL.CONFIG_PATH.read_bytes(),
-        "v2r13 target Git-object source-digest KAT",
+        "v2r17 target Git-object source-digest KAT",
     )
     assert type(contract) is dict
     target = contract["target_commit_a_binding"]
@@ -5400,7 +7729,7 @@ def test_target_git_object_source_digest_strips_lf_and_rejects_lf_value() -> Non
             target_config_raw = raw
     target_config = TOOL._decoded_json_bytes(
         target_config_raw,
-        "v2r13 target Git-object config KAT",
+        "v2r17 target Git-object config KAT",
     )
     assert type(target_config) is dict
     static_policy = {
@@ -5435,10 +7764,10 @@ def test_target_git_object_source_digest_strips_lf_and_rejects_lf_value() -> Non
         + canonical_with_lf
     ).hexdigest()
     assert correct == (
-        "sha256:489ab20686bfca2fed13d07d34cd16235211639cf53bf9ec39893257ad6bc4ac"
+        "sha256:97963373458ffb333e959cfff6624d322c6da3f63cda66c0e444b7cb436d6713"
     )
     assert wrong_with_lf == (
-        "sha256:40fb82d52a2a7acad5328fb0d1d27475c2b8c97e68b0199758ca8b1347b78ddf"
+        "sha256:53f745d1f5e2d2116cc8bce6e8b5a4907c711a830afb00ca3606efa5ffe19a6b"
     )
     assert target["target_source_binding_digest"] == correct != wrong_with_lf
     replay = TOOL._verify_target_git_objects(contract)
@@ -5465,7 +7794,7 @@ def test_controller_commit_b_exact_six_path_registry_is_literal() -> None:
     ]
     contract = TOOL._pretty_json(
         TOOL.CONFIG_PATH.read_bytes(),
-        "v2r13 exact six-path controller registry",
+        "v2r17 exact six-path controller registry",
     )
     assert list(TOOL._CONTROLLER_CHANGED_PATHS_FROM_TARGET_IN_EXACT_ORDER) == literal
     assert contract["campaign_source_binding"][
@@ -5473,11 +7802,11 @@ def test_controller_commit_b_exact_six_path_registry_is_literal() -> None:
     ] == literal
 
 
-def test_v2r13_instance_domains_preserve_version_neutral_domains() -> None:
+def test_v2r19_instance_domains_preserve_version_neutral_domains() -> None:
     contract = _contract()
-    assert contract["hash_domains"] == TOOL._EXPECTED_HASH_DOMAINS_V2R13
+    assert contract["hash_domains"] == TOOL._EXPECTED_HASH_DOMAINS_V2R19
     assert all(
-        "SHADOW_RETRY_CAMPAIGN_V2R13" in domain
+        "SHADOW_RETRY_CAMPAIGN_V2R19" in domain
         for domain in contract["hash_domains"].values()
     )
     assert TOOL._TARGET_SOURCE_BINDING_DOMAIN == (
@@ -5492,55 +7821,119 @@ def test_v2r13_instance_domains_preserve_version_neutral_domains() -> None:
     )
 
 
+def test_v2r19_decision_audit_policy_is_exact_and_rehashed_drift_rejects() -> None:
+    contract = _contract()
+    policy = TOOL._decision_audit_policy_v1(contract)
+    assert policy["schema_version"] == TOOL._DECISION_AUDIT_POLICY_SCHEMA_V1
+    assert policy["core_api"] == "evaluate_slot_observation_with_audit_v2"
+    assert policy["core_audit_schema_version"] == (
+        CORE.DECISION_AUDIT_SCHEMA_V2
+    )
+    assert policy["predicate_clauses_in_exact_order"] == list(
+        CORE.DECISION_AUDIT_CLAUSES_V2
+    )
+    assert policy["persistence_surfaces_in_exact_order"] == [
+        "EXTERNAL_SLOT_RESULT",
+        "LEDGER_SLOT_OUTCOME",
+    ]
+    unsigned = deepcopy(policy)
+    observed_digest = unsigned.pop("policy_digest")
+    assert observed_digest == TOOL._domain_digest(
+        contract["hash_domains"]["decision_audit_policy"],
+        unsigned,
+    )
+    for field, forged in (
+        ("core_api", "evaluate_slot_observation_v2"),
+        ("core_audit_schema_version", "forged/1"),
+        (
+            "predicate_clauses_in_exact_order",
+            list(reversed(CORE.DECISION_AUDIT_CLAUSES_V2)),
+        ),
+        (
+            "persistence_surfaces_in_exact_order",
+            ["LEDGER_SLOT_OUTCOME", "EXTERNAL_SLOT_RESULT"],
+        ),
+        ("tamper_disposition", "FORGED"),
+    ):
+        mutation = deepcopy(contract)
+        mutated_policy = mutation["decision_audit_policy"]
+        mutated_policy[field] = forged
+        unsigned_mutation = deepcopy(mutated_policy)
+        unsigned_mutation.pop("policy_digest")
+        mutated_policy["policy_digest"] = TOOL._domain_digest(
+            mutation["hash_domains"]["decision_audit_policy"],
+            unsigned_mutation,
+        )
+        with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+            TOOL._decision_audit_policy_v1(mutation)
+        assert error.value.code == "FAIL_CAMPAIGN_CONTRACT"
+
+
 @pytest.mark.parametrize(
     "domain_name",
-    tuple(TOOL._EXPECTED_HASH_DOMAINS_V2R13),
+    tuple(TOOL._EXPECTED_HASH_DOMAINS_V2R19),
 )
-def test_contract_loader_rejects_rehashed_v2r13_hash_domain_drift(
+def test_contract_loader_rejects_rehashed_v2r19_hash_domain_drift(
     monkeypatch: pytest.MonkeyPatch,
     domain_name: str,
 ) -> None:
     base = _contract()
-    expected_domain = TOOL._EXPECTED_HASH_DOMAINS_V2R13[domain_name]
+    expected_domain = TOOL._EXPECTED_HASH_DOMAINS_V2R19[domain_name]
     prior_v2_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R13",
+        "SHADOW_RETRY_CAMPAIGN_V2R19",
         "SHADOW_RETRY_CAMPAIGN",
     )
     prior_v2r2_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R13",
+        "SHADOW_RETRY_CAMPAIGN_V2R19",
         "SHADOW_RETRY_CAMPAIGN_V2R2",
     )
     prior_v2r3_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R13",
+        "SHADOW_RETRY_CAMPAIGN_V2R19",
         "SHADOW_RETRY_CAMPAIGN_V2R3",
     )
     prior_v2r4_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R13",
+        "SHADOW_RETRY_CAMPAIGN_V2R19",
         "SHADOW_RETRY_CAMPAIGN_V2R4",
     )
     prior_v2r5_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R13",
+        "SHADOW_RETRY_CAMPAIGN_V2R19",
         "SHADOW_RETRY_CAMPAIGN_V2R5",
     )
     prior_v2r6_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R13",
+        "SHADOW_RETRY_CAMPAIGN_V2R19",
         "SHADOW_RETRY_CAMPAIGN_V2R6",
     )
     prior_v2r7_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R13",
+        "SHADOW_RETRY_CAMPAIGN_V2R19",
         "SHADOW_RETRY_CAMPAIGN_V2R7",
     )
     prior_v2r8_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R13",
+        "SHADOW_RETRY_CAMPAIGN_V2R19",
         "SHADOW_RETRY_CAMPAIGN_V2R8",
     )
     prior_v2r9_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R13",
+        "SHADOW_RETRY_CAMPAIGN_V2R19",
         "SHADOW_RETRY_CAMPAIGN_V2R9",
     )
     prior_v2r10_domain = expected_domain.replace(
-        "SHADOW_RETRY_CAMPAIGN_V2R13",
+        "SHADOW_RETRY_CAMPAIGN_V2R19",
         "SHADOW_RETRY_CAMPAIGN_V2R10",
+    )
+    prior_v2r13_domain = expected_domain.replace(
+        "SHADOW_RETRY_CAMPAIGN_V2R19",
+        "SHADOW_RETRY_CAMPAIGN_V2R13",
+    )
+    prior_v2r14_domain = expected_domain.replace(
+        "SHADOW_RETRY_CAMPAIGN_V2R19",
+        "SHADOW_RETRY_CAMPAIGN_V2R14",
+    )
+    prior_v2r15_domain = expected_domain.replace(
+        "SHADOW_RETRY_CAMPAIGN_V2R19",
+        "SHADOW_RETRY_CAMPAIGN_V2R15",
+    )
+    prior_v2r17_domain = expected_domain.replace(
+        "SHADOW_RETRY_CAMPAIGN_V2R19",
+        "SHADOW_RETRY_CAMPAIGN_V2R17",
     )
     for forged_domain in (
         prior_v2_domain,
@@ -5553,6 +7946,10 @@ def test_contract_loader_rejects_rehashed_v2r13_hash_domain_drift(
         prior_v2r8_domain,
         prior_v2r9_domain,
         prior_v2r10_domain,
+        prior_v2r13_domain,
+        prior_v2r14_domain,
+        prior_v2r15_domain,
+        prior_v2r17_domain,
         f"HEGEL/FORGED/Q05B/{domain_name.upper()}/V2",
     ):
         contract = deepcopy(base)
@@ -5696,6 +8093,78 @@ def test_contract_loader_rejects_clone_target_ref_policy_drift(
                 "prior_v2r12_authorization_digest"
             ],
         ),
+        (
+            TOOL._PRIOR_V2R13_PROTECTED_POLICY_FACTS[
+                "prior_v2r13_campaign_contract_id"
+            ],
+            TOOL._PRIOR_V2R13_STATE_PREFIX,
+            TOOL._PRIOR_V2R13_PROTECTED_POLICY_FACTS[
+                "prior_v2r13_capsule_digest"
+            ],
+            TOOL._PRIOR_V2R13_PROTECTED_POLICY_FACTS[
+                "prior_v2r13_authorization_digest"
+            ],
+        ),
+        (
+            TOOL._PRIOR_V2R14_PROTECTED_POLICY_FACTS[
+                "prior_v2r14_campaign_contract_id"
+            ],
+            TOOL._PRIOR_V2R14_STATE_PREFIX,
+            TOOL._PRIOR_V2R14_PROTECTED_POLICY_FACTS[
+                "prior_v2r14_capsule_digest"
+            ],
+            TOOL._PRIOR_V2R14_PROTECTED_POLICY_FACTS[
+                "prior_v2r14_authorization_digest"
+            ],
+        ),
+        (
+            TOOL._PRIOR_V2R15_PROTECTED_POLICY_FACTS[
+                "prior_v2r15_campaign_contract_id"
+            ],
+            TOOL._PRIOR_V2R15_STATE_PREFIX,
+            TOOL._PRIOR_V2R15_PROTECTED_POLICY_FACTS[
+                "prior_v2r15_capsule_digest"
+            ],
+            TOOL._PRIOR_V2R15_PROTECTED_POLICY_FACTS[
+                "prior_v2r15_authorization_digest"
+            ],
+        ),
+        (
+            TOOL._PRIOR_V2R16_PROTECTED_POLICY_FACTS[
+                "prior_v2r16_campaign_contract_id"
+            ],
+            TOOL._PRIOR_V2R16_STATE_PREFIX,
+            TOOL._PRIOR_V2R16_PROTECTED_POLICY_FACTS[
+                "prior_v2r16_capsule_digest"
+            ],
+            TOOL._PRIOR_V2R16_PROTECTED_POLICY_FACTS[
+                "prior_v2r16_authorization_digest"
+            ],
+        ),
+        (
+            TOOL._PRIOR_V2R17_PROTECTED_POLICY_FACTS[
+                "prior_v2r17_campaign_contract_id"
+            ],
+            TOOL._PRIOR_V2R17_STATE_PREFIX,
+            TOOL._PRIOR_V2R17_PROTECTED_POLICY_FACTS[
+                "prior_v2r17_capsule_digest"
+            ],
+            TOOL._PRIOR_V2R17_PROTECTED_POLICY_FACTS[
+                "prior_v2r17_authorization_digest"
+            ],
+        ),
+        (
+            TOOL._PRIOR_V2R18_PROTECTED_POLICY_FACTS[
+                "prior_v2r18_campaign_contract_id"
+            ],
+            TOOL._PRIOR_V2R18_STATE_PREFIX,
+            TOOL._PRIOR_V2R18_PROTECTED_POLICY_FACTS[
+                "prior_v2r18_capsule_digest"
+            ],
+            TOOL._PRIOR_V2R18_PROTECTED_POLICY_FACTS[
+                "prior_v2r18_authorization_digest"
+            ],
+        ),
     ),
     ids=(
         "prior-v2",
@@ -5708,9 +8177,15 @@ def test_contract_loader_rejects_clone_target_ref_policy_drift(
         "prior-v2r8",
         "prior-v2r11",
         "prior-v2r12",
+        "prior-v2r13",
+        "prior-v2r14",
+        "prior-v2r15",
+        "prior-v2r16",
+        "prior-v2r17",
+        "prior-v2r18",
     ),
 )
-def test_historical_capsule_authorization_and_rehashed_ledger_are_not_v2r13_authority(
+def test_historical_capsule_authorization_and_rehashed_ledger_are_not_v2r19_authority(
     tmp_path: Path,
     historical_campaign_id: str,
     historical_state_prefix: str,
@@ -5774,6 +8249,10 @@ def test_historical_capsule_authorization_and_rehashed_ledger_are_not_v2r13_auth
             "campaign_source_binding_digest",
             "capsule_digest",
             "python310_dependency_preflight_receipt_digest",
+            "preauthorization_live_gauntlet_receipt_digest",
+            "decision_audit_policy_digest",
+            "decision_audit_core_schema_version",
+            "prior_v2r18_historical_evidence",
             "authorization_root",
             "ledger_root",
             "three_exact_slot_path_records",
@@ -5787,14 +8266,29 @@ def test_historical_capsule_authorization_and_rehashed_ledger_are_not_v2r13_auth
             "preconsumption_pending_reentry_requires_same_entrypoint",
             "preconsumption_pending_reentry_requires_same_capsule_digest",
             "preconsumption_pending_reentry_requires_fresh_complete_entry_replay",
+            "preconsumption_pending_eligible_phase_condition_pairs_in_exact_order",
+            "scheduling_checkpoint_reopen_validation_is_campaign_execution",
+            "scheduling_checkpoint_reopen_validation_is_authorization_consumption",
+            "scheduling_checkpoint_reopen_validation_is_retry_transition",
+            "scheduling_checkpoint_reopen_validation_is_supervisor_invocation",
+            "scheduling_pending_reentry_requires_same_run_entrypoint_and_capsule_digest",
+            "scheduling_pending_reentry_requires_exact_locked_authoritative_prefix",
+            "exact_clean_scheduling_checkpoint_continuation_authorized",
+            "scheduling_pending_eligible_conditions_in_exact_order",
+            "exact_clean_scheduling_checkpoint_requires_prior_pending_cli_receipt",
+            "other_crash_state_resume_authorized",
             "retry_predicate_digest",
             "success_predicate_digest",
             "terminal_no_resume_policy",
             "forbidden_scope_digest",
         )
+        authorization_fields = tuple(authorization)
+        assert confirmation_fields == authorization_fields[
+            2:authorization_fields.index("owner_confirmation_digest")
+        ]
         rehashed_prior_authorization["owner_confirmation_digest"] = (
             TOOL._domain_digest(
-                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R13/"
+                "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/"
                 "OWNER_CONFIRMATION/V2",
                 {
                     field: deepcopy(rehashed_prior_authorization[field])
@@ -5887,7 +8381,7 @@ def test_external_binding_exact_fields_digest_and_disk_replay(
         terminal_error_detail="test terminal failure",
     )
     supervisor, external = _absent_artifacts()
-    capsule = _capsule_stub()
+    capsule = _capsule_stub(contract=contract)
     binding = TOOL._binding_record(
         contract,
         capsule,
@@ -6179,6 +8673,164 @@ def test_slot_observation_success_gap_and_uncertainty_use_real_core(
     )
 
 
+def test_v2r18_full_formal_observation_replays_corrected_audit_and_outcome(
+) -> None:
+    spec = importlib.util.spec_from_file_location(
+        "phase3_q05b_shadow_retry_campaign_v2_core_formal_kat",
+        CORE_TEST_KAT_PATH,
+    )
+    assert spec is not None and spec.loader is not None
+    fixture_module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = fixture_module
+    spec.loader.exec_module(fixture_module)
+    observation = fixture_module._v2r18_formal_observation_rebound_v2r19()
+    contract = _contract()
+    audit = TOOL._evaluate_slot_observation_with_exact_audit_v2(
+        contract,
+        observation,
+        core_module=CORE,
+    )
+    assert audit == TOOL._PRIOR_V2R18_OFFLINE_CORRECTED_DECISION_AUDIT
+    assert audit["decision"] == CORE.RETRY_EXACT_GAP_V2
+    assert audit["matched_path_or_null"] == "EXACT_GAP"
+    assert audit["first_reject_clause_or_null"] is None
+    origin = observation["trajectory_failure_rows"][0]
+    frozen_gap = TOOL._PRIOR_V2R18_PROTECTED_POLICY_FACTS[
+        "prior_v2r18_slot_01_physical_exact_gap"
+    ]
+    assert origin["actor_or_null"] == frozen_gap["actor_id"]
+    assert origin["sample_ordinal_or_null"] == frozen_gap["sample_ordinal"]
+    assert origin["gap_ns_or_null"] == frozen_gap["gap_ns"]
+    assert origin["detail_or_null"] == frozen_gap["detail"]
+    outcome = TOOL._slot_outcome_record(
+        contract,
+        _capsule_stub("formal-audit", contract=contract),
+        _slot(contract),
+        {"binding_digest": _tagged("formal-binding")},
+        observation,
+        audit,
+    )
+    assert outcome["decision"] == CORE.RETRY_EXACT_GAP_V2
+    assert outcome["decision_audit"] == audit
+    assert outcome["record_digest"] == TOOL._domain_digest(
+        contract["hash_domains"]["slot_outcome"],
+        {key: value for key, value in outcome.items() if key != "record_digest"},
+    )
+
+
+@pytest.mark.parametrize(
+    ("slot_ordinal", "expected"),
+    [
+        (1, CORE.RETRY_EXACT_GAP_V2),
+        (2, CORE.RETRY_EXACT_GAP_V2),
+        (3, CORE.EXHAUSTED_RETRYABLE_GAP_V2),
+    ],
+)
+def test_v2r17_trusted_host_stage6_raw_partition_drives_real_core(
+    monkeypatch: pytest.MonkeyPatch,
+    slot_ordinal: int,
+    expected: str,
+) -> None:
+    contract = _contract()
+    slot = _slot(contract, slot_ordinal)
+    trace_id = str(slot["trajectory_trace_id"])
+    detail, failure_rows, events = _trusted_host_stage6_gap_trace(trace_id)
+    payloads = [TOOL._canonical_json_bytes(event) for event in events]
+    partition = TOOL._trajectory_partition_evidence(
+        contract,
+        payloads,
+        trajectory_status="COMPLETE_FAIL",
+        failure_rows_in_sequence_order=failure_rows,
+    )
+    certificate = partition["partition_certificate_or_null"]
+    assert type(certificate) is dict
+    assert certificate["event_count"] == 16
+    assert certificate["origin_sequence"] == 5
+    assert certificate["suffix_event_count"] == 12
+    assert certificate["failure_event_count"] == 4
+    assert certificate["failure_rows_retained_count"] == 4
+    assert certificate["failure_rows_truncated"] is False
+    assert certificate["cleanup_nonfailure_event_count"] == 8
+    assert certificate["cleanup_rows_retained_count"] == 8
+    assert certificate["cleanup_rows_truncated"] is False
+    assert certificate["other_nonfailure_event_count"] == 0
+    assert certificate["partitioned_event_count"] == 12
+    assert certificate["unpartitioned_event_count"] == 0
+    cleanups = partition["cleanup_rows_retained_in_sequence_order"]
+    assert [
+        row["actor_or_null"]
+        for row in cleanups
+        if row["event_type"] == "BEGIN"
+    ] == [
+        "TRUSTED_HOST_REPLAY",
+        "TRUSTED_HOST_REPLAY",
+        "PYTHON_ENDPOINT",
+        "RUST_ENDPOINT",
+    ]
+
+    trajectory = {
+        "verification_status": "COMPLETE_FAIL",
+        "complete": True,
+        "complete_verification_passed": True,
+        "verification_error_or_null": None,
+        "trace_id_or_null": trace_id,
+            "producer_id_or_null": "Q05B_SUPERVISOR_V6",
+        "event_count": len(events),
+        "first_event_record_digest_or_null": events[0]["record_digest"],
+        "final_event_record_digest_or_null": events[-1]["record_digest"],
+        "terminal_outcome_or_null": "FAIL",
+        "terminal_manifest_digest_or_null": _tagged(
+            "v2r14-trusted-host-terminal-manifest"
+        ),
+        "terminal_manifest_raw_sha256_or_null": _raw(
+            "v2r14-trusted-host-terminal-manifest-raw"
+        ),
+        "clock_id_or_null": "CLOCK_MONOTONIC",
+        "closed_span_count_or_null": 8,
+        "terminal_event_type_or_null": "FAIL",
+        "terminal_error_code_or_null": CORE.GAP_ERROR_CODE_V2,
+        "terminal_error_detail_or_null": detail,
+        "torn_tail_staging_basename_or_null": None,
+        "open_span_ids_in_begin_order": [],
+        "open_span_contexts_in_begin_order": [],
+        "failure_rows_retained_in_sequence_order": deepcopy(
+            partition["failure_rows_retained_in_sequence_order"]
+        ),
+        "cleanup_rows_retained_in_sequence_order": deepcopy(cleanups),
+        "partition_certificate_or_null": deepcopy(certificate),
+        "last_durable_event_row_or_null": deepcopy(
+            partition["last_durable_event_row_or_null"]
+        ),
+        "canonical_event_payloads_digest": partition[
+            "canonical_event_payloads_digest"
+        ],
+        "success_trace_bindings_or_null": None,
+    }
+    stdout = CORE.canonical_campaign_json_bytes_v2(_error_wire(detail))
+    process = _process(stdout, 1)
+    supervisor, external = _absent_artifacts()
+    monkeypatch.setattr(TOOL, "_load_core", lambda _contract: CORE)
+    observation = TOOL._build_slot_observation(
+        contract,
+        slot,
+        process,
+        CORE.classify_supervisor_stdout_v2(stdout),
+        trajectory,
+        supervisor,
+        external,
+        source_before_certain=True,
+        source_after_certain=True,
+        docker_absent=True,
+        external_binding_certain=True,
+    )
+    assert observation["trajectory_partition_certificate_or_null"] == (
+        certificate
+    )
+    assert len(observation["trajectory_failure_rows"]) == 4
+    assert len(observation["trajectory_cleanup_rows"]) == 8
+    assert CORE.evaluate_slot_observation_v2(observation) == expected
+
+
 def test_continuous_sampler_gap_preserves_real_two_tier_detail_chain(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -6246,7 +8898,7 @@ def test_real_stage4_to_stage5_benign_partition_and_cleanup_drive_retry(
         trace_root,
         expected_parent=trace_parent,
         trace_id=str(slot["trajectory_trace_id"]),
-        producer_id="Q05B_SUPERVISOR_V4",
+        producer_id="Q05B_SUPERVISOR_V6",
         clock_ns=lambda: next(ticks),
     )
     try:
@@ -6299,7 +8951,12 @@ def test_real_stage4_to_stage5_benign_partition_and_cleanup_drive_retry(
             "sample-PYTHON_ENDPOINT-000001",
             error_code=CORE.GAP_ERROR_CODE_V2,
             error_detail=raw_detail,
-            detail="MAXIMUM_UNSAMPLED_GAP_EXCEEDED",
+            detail=(
+                "MAXIMUM_UNSAMPLED_GAP_EXCEEDED;"
+                f"native_wake_ns={scheduled};"
+                "native_wake_lateness_ns=0;"
+                f"trajectory_admission_duration_ns={actual - scheduled}"
+            ),
             role_id="1",
             sample_ordinal=1,
             previous_finish_ns=previous,
@@ -6521,7 +9178,7 @@ def test_real_incomplete_prefix_preserves_last_durable_event_certificate_surface
         trace_root,
         expected_parent=trace_parent,
         trace_id=str(slot["trajectory_trace_id"]),
-        producer_id="Q05B_SUPERVISOR_V4",
+        producer_id="Q05B_SUPERVISOR_V6",
     )
     try:
         writer.begin(
@@ -6865,11 +9522,118 @@ def test_dependency_receipt_rejects_fully_rehashed_context_or_stdout_forgery(
     assert error.value.code == "FAIL_CAMPAIGN_AUTHORIZATION"
 
 
+def test_authorization_rejects_each_live_gauntlet_capsule_binding_mutation(
+) -> None:
+    contract = _contract()
+    baseline = _capsule_stub("gauntlet-binding", contract=contract)
+    TOOL._authorization_template(contract, baseline)
+    for mutation in (
+        "receipt-digest",
+        "raw-sha256",
+        "byte-count",
+        "root-identity",
+        "record-mode",
+        "record-uid",
+        "record-nlink",
+        "record-size",
+    ):
+        forged = deepcopy(baseline)
+        if mutation == "receipt-digest":
+            forged["preauthorization_live_gauntlet_receipt_digest"] = (
+                _tagged("forged-gauntlet-receipt")
+            )
+        elif mutation == "raw-sha256":
+            forged[
+                "preauthorization_live_gauntlet_receipt_raw_sha256"
+            ] = _raw("forged-gauntlet-raw")
+        elif mutation == "byte-count":
+            forged["preauthorization_live_gauntlet_receipt_byte_count"] += 1
+        elif mutation == "root-identity":
+            forged["preauthorization_live_gauntlet_root_identity"]["ino"] += 1
+        elif mutation == "record-mode":
+            forged["preauthorization_live_gauntlet_record_identity"][
+                "mode"
+            ] = stat.S_IFREG | 0o644
+        elif mutation == "record-uid":
+            forged["preauthorization_live_gauntlet_record_identity"][
+                "uid"
+            ] = os.geteuid() + 1
+        elif mutation == "record-nlink":
+            forged["preauthorization_live_gauntlet_record_identity"][
+                "nlink"
+            ] = 2
+        elif mutation == "record-size":
+            forged["preauthorization_live_gauntlet_record_identity"][
+                "size"
+            ] += 1
+        else:  # pragma: no cover - the mutation registry is closed above.
+            raise AssertionError(mutation)
+        unsigned = deepcopy(forged)
+        unsigned.pop("capsule_digest")
+        forged["capsule_digest"] = TOOL._domain_digest(
+            contract["hash_domains"]["capsule"],
+            unsigned,
+        )
+        with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+            TOOL._authorization_template(contract, forged)
+        assert error.value.code == "FAIL_CAMPAIGN_AUTHORIZATION"
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "audit-policy",
+        "audit-policy-digest",
+        "audit-core-schema",
+        "prior-v2r18-history",
+    ),
+)
+def test_authorization_rejects_decision_audit_or_v2r18_history_tamper(
+    mutation: str,
+) -> None:
+    contract = _contract()
+    baseline = _capsule_stub("audit-history-binding", contract=contract)
+    authorization = TOOL._authorization_template(contract, baseline)
+    assert authorization["decision_audit_policy_digest"] == (
+        contract["decision_audit_policy"]["policy_digest"]
+    )
+    assert authorization["decision_audit_core_schema_version"] == (
+        CORE.DECISION_AUDIT_SCHEMA_V2
+    )
+    assert authorization["prior_v2r18_historical_evidence"] == (
+        TOOL._PRIOR_V2R18_PROTECTED_POLICY_FACTS
+    )
+    forged = deepcopy(baseline)
+    if mutation == "audit-policy":
+        forged["decision_audit_policy"][
+            "tamper_disposition"
+        ] = "FORGED"
+    elif mutation == "audit-policy-digest":
+        forged["decision_audit_policy_digest"] = _tagged("forged-audit")
+    elif mutation == "audit-core-schema":
+        forged["decision_audit_core_schema_version"] = "forged/1"
+    elif mutation == "prior-v2r18-history":
+        forged["prior_v2r18_historical_evidence"][
+            "prior_v2r18_offline_corrected_decision"
+        ] = CORE.TERMINAL_NONRETRYABLE_V2
+    else:  # pragma: no cover - parametrization is closed above.
+        raise AssertionError(mutation)
+    unsigned = deepcopy(forged)
+    unsigned.pop("capsule_digest")
+    forged["capsule_digest"] = TOOL._domain_digest(
+        contract["hash_domains"]["capsule"],
+        unsigned,
+    )
+    with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
+        TOOL._authorization_template(contract, forged)
+    assert error.value.code == "FAIL_CAMPAIGN_AUTHORIZATION"
+
+
 def test_authorization_digest_exact_load_and_no_replace(
     tmp_path: Path,
 ) -> None:
     contract = _contract()
-    capsule = _capsule_stub()
+    capsule = _capsule_stub(contract=contract)
     prefix = f"q05b-{tmp_path.name}-"
     with tempfile.TemporaryDirectory(prefix=prefix, dir="/tmp") as raw_root:
         root = Path(raw_root) / "authorization"
@@ -6877,6 +9641,7 @@ def test_authorization_digest_exact_load_and_no_replace(
         root.chmod(0o700)
         contract["fixed_external_roots"]["authorization_root"] = str(root)
         contract["authorization_policy"]["authorization_root"] = str(root)
+        capsule = _capsule_stub(contract=contract)
         authorization = TOOL._authorization_template(contract, capsule)
         unsigned = deepcopy(authorization)
         unsigned.pop("authorization_digest")
@@ -6944,6 +9709,23 @@ def test_authorization_binds_exact_once_campaign_and_pending_reentry_semantics()
     assert authorization[
         "preconsumption_pending_reentry_requires_fresh_complete_entry_replay"
     ] is True
+    assert authorization[
+        "preconsumption_pending_eligible_phase_condition_pairs_in_exact_order"
+    ] == [
+        ["TARGET_LOCAL_OBJECT_CLOSURE_FSCK", "READONLY_COMMAND_TIMEOUT"],
+        [
+            "HOST_CPU_TOPOLOGY_AFFINITY_ADMISSION",
+            "SCHED_AFFINITY_API_UNAVAILABLE",
+        ],
+        [
+            "HOST_CPU_TOPOLOGY_AFFINITY_ADMISSION",
+            "REQUIRED_EFFECTIVE_CPU_SET_UNAVAILABLE",
+        ],
+        [
+            "HOST_CPU_TOPOLOGY_AFFINITY_ADMISSION",
+            "EXACT_BIND_OR_REPLAY_FAILED_WITH_EXACT_RESTORE",
+        ],
+    ]
 
 
 def test_authorization_postpublication_result_failure_is_uncertain(
@@ -6954,7 +9736,7 @@ def test_authorization_postpublication_result_failure_is_uncertain(
     root = tmp_path / "owner-authorization"
     contract["fixed_external_roots"]["authorization_root"] = os.fspath(root)
     contract["authorization_policy"]["authorization_root"] = os.fspath(root)
-    capsule = _capsule_stub()
+    capsule = _capsule_stub(contract=contract)
     authorization = TOOL._authorization_template(contract, capsule)
     context = {
         "capsule": capsule,
@@ -7001,7 +9783,7 @@ def test_authorization_postpublication_close_failure_is_uncertain_and_closes_par
     root = tmp_path / "owner-authorization"
     contract["fixed_external_roots"]["authorization_root"] = os.fspath(root)
     contract["authorization_policy"]["authorization_root"] = os.fspath(root)
-    capsule = _capsule_stub()
+    capsule = _capsule_stub(contract=contract)
     authorization = TOOL._authorization_template(contract, capsule)
     context = {
         "capsule": capsule,
@@ -7726,12 +10508,18 @@ def test_slot_postbinding_failures_never_fall_through_to_a_second_terminal_write
     )
     binding_published = False
     outcome_published = False
+    external_outcome_value: dict[str, object] | None = None
     evidence_fd: int | None = None
     close_failed = False
     real_create_evidence = TOOL._create_evidence_root
     real_close = TOOL.os.close
 
     class FakeCore:
+        DECISION_AUDIT_SCHEMA_V2 = CORE.DECISION_AUDIT_SCHEMA_V2
+        DECISION_AUDIT_CLAUSES_V2 = CORE.DECISION_AUDIT_CLAUSES_V2
+        SUCCESS_V2 = CORE.SUCCESS_V2
+        RETRY_EXACT_GAP_V2 = CORE.RETRY_EXACT_GAP_V2
+        EXHAUSTED_RETRYABLE_GAP_V2 = CORE.EXHAUSTED_RETRYABLE_GAP_V2
         TERMINAL_NONRETRYABLE_V2 = CORE.TERMINAL_NONRETRYABLE_V2
 
         @staticmethod
@@ -7743,6 +10531,28 @@ def test_slot_postbinding_failures_never_fall_through_to_a_second_terminal_write
             _observation: Mapping[str, object],
         ) -> str:
             return CORE.TERMINAL_NONRETRYABLE_V2
+
+        @staticmethod
+        def evaluate_slot_observation_with_audit_v2(
+            _observation: Mapping[str, object],
+        ) -> dict[str, object]:
+            return {
+                "schema_version": CORE.DECISION_AUDIT_SCHEMA_V2,
+                "decision": CORE.TERMINAL_NONRETRYABLE_V2,
+                "matched_path_or_null": None,
+                "first_reject_clause_or_null": "OBSERVATION_SHAPE",
+                "predicate_results": [
+                    {
+                        "clause": clause,
+                        "result": (
+                            "REJECT"
+                            if clause == "OBSERVATION_SHAPE"
+                            else "NOT_EVALUATED"
+                        ),
+                    }
+                    for clause in CORE.DECISION_AUDIT_CLAUSES_V2
+                ],
+            }
 
     def freshness_replay(*_args: object, **_kwargs: object) -> dict[str, object]:
         if (
@@ -7784,14 +10594,16 @@ def test_slot_postbinding_failures_never_fall_through_to_a_second_terminal_write
     def publish_evidence(
         _directory_fd: int,
         basename: str,
-        _value: object,
+        value: object,
         **_kwargs: object,
     ) -> bytes:
-        nonlocal binding_published, outcome_published
+        nonlocal binding_published, outcome_published, external_outcome_value
         if basename == "trajectory-binding.json":
             binding_published = True
         elif basename == "outcome.json":
             outcome_published = True
+            assert type(value) is dict
+            external_outcome_value = deepcopy(value)
         return b"published"
 
     def close_with_injected_outcome_fault(descriptor: int) -> None:
@@ -7857,7 +10669,7 @@ def test_slot_postbinding_failures_never_fall_through_to_a_second_terminal_write
     probe_cleanup = _scheduling_probe_cleanup_receipt(capsule, slot)
     monkeypatch.setattr(
         TOOL,
-        "_run_slot_scheduling_admission_v2r13",
+        "_run_slot_scheduling_admission_v2r17",
         lambda *_args, **_kwargs: (
             _admitted_scheduling_evidence(contract),
             deepcopy(probe_cleanup),
@@ -7927,11 +10739,6 @@ def test_slot_postbinding_failures_never_fall_through_to_a_second_terminal_write
     )
     monkeypatch.setattr(TOOL, "_publish_immutable_at", publish_evidence)
     monkeypatch.setattr(TOOL, "_build_slot_observation", lambda *_args, **_kwargs: {})
-    monkeypatch.setattr(
-        TOOL,
-        "_slot_outcome_record",
-        lambda *_args: {"record_digest": _tagged("outcome")},
-    )
     monkeypatch.setattr(TOOL.os, "close", close_with_injected_outcome_fault)
     try:
         with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as error:
@@ -7967,6 +10774,20 @@ def test_slot_postbinding_failures_never_fall_through_to_a_second_terminal_write
         elif fault_stage == "postoutcome_evidence_close":
             assert binding_published is True
             assert outcome_published is True
+            assert type(external_outcome_value) is dict
+            ledger_outcome = next(
+                body
+                for basename, record_type, _status, body in ledger.rows
+                if basename == "slot-01.outcome.json"
+                and record_type == "SLOT_OUTCOME"
+            )
+            assert ledger_outcome == external_outcome_value
+            assert external_outcome_value["decision"] == (
+                CORE.TERMINAL_NONRETRYABLE_V2
+            )
+            assert external_outcome_value["decision_audit"] == (
+                FakeCore.evaluate_slot_observation_with_audit_v2({})
+            )
             assert close_failed is True
             assert "postoutcome evidence close failure" in error.value.detail
         elif fault_stage == "spawn_uncertain_evidence_close":
@@ -8587,7 +11408,7 @@ def _completed_real_ledger(
     contract["fixed_external_roots"]["ledger_root"] = os.fspath(
         tmp_path / "completed-ledger"
     )
-    capsule = _capsule_stub()
+    capsule = _capsule_stub(contract=contract)
     authorization = TOOL._authorization_template(contract, capsule)
     ledger = TOOL._LedgerV2(contract, capsule, authorization)
     ledger.publish(
@@ -8697,13 +11518,17 @@ def _completed_real_success_ledger(
     )
     decision = CORE.evaluate_slot_observation_v2(observation)
     assert decision == CORE.SUCCESS_V2
+    decision_audit = CORE.evaluate_slot_observation_with_audit_v2(
+        observation
+    )
+    assert decision_audit["decision"] == decision
     outcome = TOOL._slot_outcome_record(
         contract,
         capsule,
         slot,
         binding,
         observation,
-        decision,
+        decision_audit,
     )
     ledger = TOOL._LedgerV2(contract, capsule, authorization)
     ledger.publish(
@@ -8902,13 +11727,17 @@ def _full_real_gap_ledger_prefix(
             if ordinal < 3
             else CORE.EXHAUSTED_RETRYABLE_GAP_V2
         )
+        decision_audit = CORE.evaluate_slot_observation_with_audit_v2(
+            observation
+        )
+        assert decision_audit["decision"] == decision
         outcome = TOOL._slot_outcome_record(
             contract,
             capsule,
             slot,
             binding,
             observation,
-            decision,
+            decision_audit,
         )
         stem = f"slot-{ordinal:02d}"
         ledger.publish(
@@ -8971,6 +11800,7 @@ def _produce_exact_scheduling_pending(
     completed_gap_slots: int,
     run_reentry: bool,
     reentry_start_completed_gap_slots: int | None = None,
+    pending_condition: str = "COMPLETE_GATE_EXHAUSTION",
 ) -> tuple[
     dict[str, object],
     object,
@@ -8993,6 +11823,10 @@ def _produce_exact_scheduling_pending(
         ],
         "slots": slots,
     }
+    assert pending_condition in {
+        "COMPLETE_GATE_EXHAUSTION",
+        TOOL._SCHEDULING_JOINED_TASK_QUIESCENCE_CONDITION_V2R17,
+    }
 
     def absence(
         _context: Mapping[str, object],
@@ -9002,9 +11836,16 @@ def _produce_exact_scheduling_pending(
     ) -> dict[str, object]:
         return _slot_absence_evidence(capsule, observed_slots, label)
 
-    gate_error = _exact_scheduling_exhaustion_error(
-        contract,
-        str(slot["slot_id"]),
+    gate_error = (
+        _exact_scheduling_exhaustion_error(
+            contract,
+            str(slot["slot_id"]),
+        )
+        if pending_condition == "COMPLETE_GATE_EXHAUSTION"
+        else _exact_joined_task_quiescence_timeout_error(
+            contract,
+            str(slot["slot_id"]),
+        )
     )
 
     def exhaust_gate(*_args: object, **_kwargs: object) -> NoReturn:
@@ -9053,7 +11894,7 @@ def _produce_exact_scheduling_pending(
         ),
     }
     with pytest.raises(TOOL.ShadowRetryCampaignPendingV1) as generated:
-        TOOL._run_slot_scheduling_admission_v2r13(
+        TOOL._run_slot_scheduling_admission_v2r17(
             contract,
             context,
             capsule,
@@ -9081,7 +11922,7 @@ def test_scheduling_pending_prefix_verifier_accepts_exact_clean_boundaries(
         completed_gap_slots=completed_gap_slots,
     )
     try:
-        prefix = TOOL._verify_scheduling_pending_ledger_prefix_v2r13(
+        prefix = TOOL._verify_scheduling_pending_ledger_prefix_v2r17(
             contract,
             capsule,
             authorization,
@@ -9110,7 +11951,7 @@ def test_scheduling_pending_prefix_verifier_rejects_shape_chain_and_nongap(
     )
     try:
         with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as illegal_count:
-            TOOL._verify_scheduling_pending_ledger_prefix_v2r13(
+            TOOL._verify_scheduling_pending_ledger_prefix_v2r17(
                 contract,
                 capsule,
                 authorization,
@@ -9122,7 +11963,7 @@ def test_scheduling_pending_prefix_verifier_rejects_shape_chain_and_nongap(
         corrupt_records = deepcopy(ledger.published_records)
         corrupt_records[-1]["record_digest"] = _tagged("corrupt-prefix")
         with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as corrupt:
-            TOOL._verify_scheduling_pending_ledger_prefix_v2r13(
+            TOOL._verify_scheduling_pending_ledger_prefix_v2r17(
                 contract,
                 capsule,
                 authorization,
@@ -9130,6 +11971,39 @@ def test_scheduling_pending_prefix_verifier_rejects_shape_chain_and_nongap(
                 corrupt_records,
             )
         assert corrupt.value.code == "FAIL_CAMPAIGN_LEDGER"
+
+        audit_tamper_records = deepcopy(ledger.published_records)
+        audit_body = audit_tamper_records[-1]["body"]
+        assert type(audit_body) is dict
+        audit = audit_body["decision_audit"]
+        assert type(audit) is dict
+        predicate_results = audit["predicate_results"]
+        assert type(predicate_results) is list
+        predicate_results[3]["result"] = "REJECT"
+        audit["first_reject_clause_or_null"] = "GAP_GRAMMAR"
+        audit["matched_path_or_null"] = None
+        unsigned_outcome = deepcopy(audit_body)
+        unsigned_outcome.pop("record_digest")
+        audit_body["record_digest"] = TOOL._domain_digest(
+            contract["hash_domains"]["slot_outcome"],
+            unsigned_outcome,
+        )
+        unsigned_ledger = deepcopy(audit_tamper_records[-1])
+        unsigned_ledger.pop("record_digest")
+        audit_tamper_records[-1]["record_digest"] = TOOL._domain_digest(
+            contract["hash_domains"]["ledger_record"],
+            unsigned_ledger,
+        )
+        with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as audit_tamper:
+            TOOL._verify_scheduling_pending_ledger_prefix_v2r17(
+                contract,
+                capsule,
+                authorization,
+                ledger.published_names,
+                audit_tamper_records,
+            )
+        assert audit_tamper.value.code == "FAIL_CAMPAIGN_LEDGER"
+        assert audit_tamper.value.terminal is True
 
         nongap_records = deepcopy(ledger.published_records)
         nongap_records[-1]["body"]["decision"] = CORE.TERMINAL_NONRETRYABLE_V2
@@ -9140,7 +12014,7 @@ def test_scheduling_pending_prefix_verifier_rejects_shape_chain_and_nongap(
             unsigned,
         )
         with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as nongap:
-            TOOL._verify_scheduling_pending_ledger_prefix_v2r13(
+            TOOL._verify_scheduling_pending_ledger_prefix_v2r17(
                 contract,
                 capsule,
                 authorization,
@@ -9206,9 +12080,9 @@ def test_transient_scheduling_probe_cleanup_is_durable_and_exact(
         ]
     }
     parent_fd, root_fd, root_identity = (
-        TOOL._create_transient_scheduling_probe_root_v2r13(context, slot)
+        TOOL._create_transient_scheduling_probe_root_v2r17(context, slot)
     )
-    receipt = TOOL._cleanup_scheduling_probe_root_v2r13(
+    receipt = TOOL._cleanup_scheduling_probe_root_v2r17(
         contract,
         context,
         slot,
@@ -9219,7 +12093,7 @@ def test_transient_scheduling_probe_cleanup_is_durable_and_exact(
     assert receipt["passed"] is True
     assert receipt["pathname_absent"] is True
     assert not probe.exists()
-    assert TOOL._scheduling_probe_cleanup_receipt_exact_v2r13(
+    assert TOOL._scheduling_probe_cleanup_receipt_exact_v2r17(
         context,
         slot,
         receipt,
@@ -9246,7 +12120,7 @@ def test_transient_scheduling_probe_cleanup_fault_is_terminal_not_pending(
         ]
     }
     parent_fd, root_fd, root_identity = (
-        TOOL._create_transient_scheduling_probe_root_v2r13(context, slot)
+        TOOL._create_transient_scheduling_probe_root_v2r17(context, slot)
     )
     real_verify = TOOL._verify_held_directory_path
     real_rmdir = TOOL.os.rmdir
@@ -9276,7 +12150,7 @@ def test_transient_scheduling_probe_cleanup_fault_is_terminal_not_pending(
             ),
         )
     with pytest.raises(TOOL.ShadowRetryCampaignErrorV2) as terminal:
-        TOOL._cleanup_scheduling_probe_root_v2r13(
+        TOOL._cleanup_scheduling_probe_root_v2r17(
             contract,
             context,
             slot,
@@ -9309,12 +12183,20 @@ def test_transient_scheduling_probe_cleanup_fault_is_terminal_not_pending(
         (2, True, 1),
     ),
 )
-def test_exact_scheduling_exhaustion_produces_classified_pending_counts(
+@pytest.mark.parametrize(
+    "pending_condition",
+    (
+        "COMPLETE_GATE_EXHAUSTION",
+        TOOL._SCHEDULING_JOINED_TASK_QUIESCENCE_CONDITION_V2R17,
+    ),
+)
+def test_exact_scheduling_condition_produces_classified_pending_counts(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     completed_gap_slots: int,
     run_reentry: bool,
     reentry_start_completed_gap_slots: int | None,
+    pending_condition: str,
 ) -> None:
     contract, options, error, ledger = _produce_exact_scheduling_pending(
         monkeypatch,
@@ -9327,14 +12209,16 @@ def test_exact_scheduling_exhaustion_produces_classified_pending_counts(
         reentry_start_completed_gap_slots=(
             reentry_start_completed_gap_slots
         ),
+        pending_condition=pending_condition,
     )
     try:
-        assert TOOL._scheduling_pending_is_exact_v2r13(
+        assert TOOL._scheduling_pending_is_exact_v2r17(
             contract,
             options,
             error,
         )
         receipt = error.receipt
+        assert receipt["condition"] == pending_condition
         expected_this_entry = (
             completed_gap_slots
             - (
@@ -9377,6 +12261,99 @@ def test_exact_scheduling_exhaustion_produces_classified_pending_counts(
         ledger.close()
 
 
+def test_joined_task_quiescence_receipt_mutations_are_rejected() -> None:
+    contract = _contract()
+    policy = TOOL._scheduling_admission_policy_v2(contract)
+    exact = _exact_joined_task_quiescence_timeout_error(
+        contract,
+        "SLOT_01",
+    ).receipt
+    assert type(exact) is dict
+
+    def mutate(field: str, value: object) -> dict[str, object]:
+        candidate = deepcopy(exact)
+        candidate[field] = value
+        return candidate
+
+    candidates = [
+        mutate("condition", "COMPLETE_GATE_EXHAUSTION"),
+        mutate("quiescence_timeout_ns", 1_000_000_001),
+        mutate("quiescence_poll_interval_ns", True),
+        mutate("component", "SUSTAINED_PUBLICATION"),
+        mutate(
+            "joined_thread_names_in_start_order",
+            list(reversed(exact["joined_thread_names_in_start_order"])),
+        ),
+        mutate(
+            "joined_thread_native_ids_in_start_order",
+            [2001, 2001, 2003, 2004],
+        ),
+        mutate(
+            "joined_thread_is_alive_in_start_order",
+            [False, False, False, True],
+        ),
+        mutate(
+            "join_completed_in_start_order",
+            [True, True, True, False],
+        ),
+        mutate(
+            "lingering_known_joined_task_ids_in_sorted_order",
+            [2999],
+        ),
+        mutate("unknown_task_ids_at_timeout_in_sorted_order", [2999]),
+        mutate("terminal_drain_policy_exceeded", True),
+        mutate("primary_error_present", True),
+        mutate("publisher_error_count", 1),
+        mutate("wait_duration_ns", 999_999_999),
+    ]
+    for candidate in candidates:
+        assert not TOOL._joined_task_quiescence_timeout_receipt_exact_v2r17(
+            policy,
+            "SLOT_01",
+            candidate,
+        )
+
+
+def test_joined_task_quiescence_pending_nested_mutation_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    contract, options, error, ledger = _produce_exact_scheduling_pending(
+        monkeypatch,
+        tmp_path / "joined-timeout-pending-mutation",
+        completed_gap_slots=0,
+        run_reentry=False,
+        pending_condition=(
+            TOOL._SCHEDULING_JOINED_TASK_QUIESCENCE_CONDITION_V2R17
+        ),
+    )
+    try:
+        assert TOOL._scheduling_pending_is_exact_v2r17(
+            contract,
+            options,
+            error,
+        )
+        forged_receipt = deepcopy(error.receipt)
+        forged_receipt["scheduling_admission_receipt"][
+            "unknown_task_ids_at_timeout_in_sorted_order"
+        ] = [2999]
+        forged = TOOL.ShadowRetryCampaignPendingV1(
+            error.code,
+            error.detail,
+            phase=error.phase,
+            condition=error.condition,
+            receipt=forged_receipt,
+            dependency_gate_invocation_count=1,
+        )
+        assert not TOOL._scheduling_pending_is_exact_v2r17(
+            contract,
+            options,
+            forged,
+        )
+    finally:
+        ledger.close()
+
+
 def test_scheduling_pending_classifier_rejects_bool_and_count_mutations(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -9388,7 +12365,7 @@ def test_scheduling_pending_classifier_rejects_bool_and_count_mutations(
         run_reentry=False,
     )
     try:
-        assert TOOL._scheduling_pending_is_exact_v2r13(
+        assert TOOL._scheduling_pending_is_exact_v2r17(
             contract,
             options,
             error,
@@ -9423,7 +12400,7 @@ def test_scheduling_pending_classifier_rejects_bool_and_count_mutations(
                     error.dependency_gate_invocation_count
                 ),
             )
-            assert not TOOL._scheduling_pending_is_exact_v2r13(
+            assert not TOOL._scheduling_pending_is_exact_v2r17(
                 contract,
                 options,
                 forged,
@@ -9441,7 +12418,7 @@ def test_scheduling_pending_classifier_rejects_bool_and_count_mutations(
             receipt=forged_receipt,
             dependency_gate_invocation_count=1,
         )
-        assert not TOOL._scheduling_pending_is_exact_v2r13(
+        assert not TOOL._scheduling_pending_is_exact_v2r17(
             contract,
             options,
             forged,
@@ -9450,16 +12427,25 @@ def test_scheduling_pending_classifier_rejects_bool_and_count_mutations(
         ledger.close()
 
 
+@pytest.mark.parametrize(
+    "pending_condition",
+    (
+        "COMPLETE_GATE_EXHAUSTION",
+        TOOL._SCHEDULING_JOINED_TASK_QUIESCENCE_CONDITION_V2R17,
+    ),
+)
 def test_scheduling_pending_cli_returns_75_and_invalid_receipt_returns_1(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     capsysbinary: pytest.CaptureFixture[bytes],
+    pending_condition: str,
 ) -> None:
     contract, options, pending, ledger = _produce_exact_scheduling_pending(
         monkeypatch,
         tmp_path / "pending-cli",
         completed_gap_slots=1,
         run_reentry=True,
+        pending_condition=pending_condition,
     )
     digest = str(options.capsule_digest)
     monkeypatch.setattr(
@@ -9479,11 +12465,12 @@ def test_scheduling_pending_cli_returns_75_and_invalid_receipt_returns_1(
             capsysbinary.readouterr().out,
             "scheduling pending CLI",
         )
-        assert accepted["schema_version"] == TOOL._SCHEDULING_PENDING_SCHEMA_V1
+        assert accepted["schema_version"] == TOOL._SCHEDULING_PENDING_SCHEMA_V2
         assert accepted["status"] == "CAMPAIGN_SCHEDULING_ADMISSION_PENDING"
         assert accepted["pending_slot_id"] == "SLOT_02"
         assert accepted["run_reentry"] is True
         assert accepted["resumable"] is True
+        assert accepted["condition"] == pending_condition
 
         forged_receipt = deepcopy(pending.receipt)
         forged_receipt["pending_slot_ordinal"] = True
@@ -9521,7 +12508,7 @@ def test_run_one_slot_pending_gate_precedes_all_slot_mutation_and_spawn(
     ledger = _FakeLedger()
     calls: list[str] = []
     pending = TOOL.ShadowRetryCampaignPendingV1(
-        TOOL._SCHEDULING_PENDING_CODE_V2R13,
+        TOOL._SCHEDULING_PENDING_CODE_V2R17,
         "injected exact gate pending",
         phase="SLOT_SCHEDULING_ADMISSION",
         condition="COMPLETE_GATE_EXHAUSTION",
@@ -9540,7 +12527,7 @@ def test_run_one_slot_pending_gate_precedes_all_slot_mutation_and_spawn(
 
         return invoke
 
-    monkeypatch.setattr(TOOL, "_run_slot_scheduling_admission_v2r13", gate)
+    monkeypatch.setattr(TOOL, "_run_slot_scheduling_admission_v2r17", gate)
     monkeypatch.setattr(TOOL, "_prepare_clone", forbidden("clone"))
     monkeypatch.setattr(TOOL, "_copy_tree_exact", forbidden("cargo"))
     monkeypatch.setattr(TOOL, "_safe_docker_inventory", forbidden("docker"))
@@ -9726,7 +12713,7 @@ def test_run_reopens_prefix6_at_slot2_without_new_consumption_or_ledger(
     )
     monkeypatch.setattr(
         TOOL,
-        "_verify_scheduling_probe_roots_absent_v2r13",
+        "_verify_scheduling_probe_roots_absent_v2r17",
         lambda *_args, **_kwargs: None,
     )
     monkeypatch.setattr(TOOL, "_run_one_slot", stop_at_slot)
@@ -9797,7 +12784,7 @@ def test_transient_probe_creation_fault_cleans_created_root(
     monkeypatch.setattr(TOOL.os, "open", open_child)
     monkeypatch.setattr(TOOL, "_verify_held_directory_path", verify)
     with pytest.raises(BaseException) as failed:
-        TOOL._create_transient_scheduling_probe_root_v2r13(context, slot)
+        TOOL._create_transient_scheduling_probe_root_v2r17(context, slot)
     assert not isinstance(failed.value, TOOL.ShadowRetryCampaignPendingV1)
     assert not probe.exists()
 
@@ -9892,6 +12879,12 @@ def test_authorization_explicitly_binds_clean_checkpoint_continuation() -> None:
     assert authorization[
         "exact_clean_scheduling_checkpoint_continuation_authorized"
     ] is True
+    assert authorization[
+        "scheduling_pending_eligible_conditions_in_exact_order"
+    ] == [
+        "COMPLETE_GATE_EXHAUSTION",
+        "KNOWN_DEAD_ADMISSION_TASK_QUIESCENCE_TIMEOUT",
+    ]
     assert authorization[
         "exact_clean_scheduling_checkpoint_requires_prior_pending_cli_receipt"
     ] is False
@@ -11434,7 +14427,7 @@ def test_completion_publication_fault_forbids_any_later_ledger_write(
     contract["fixed_external_roots"]["ledger_root"] = os.fspath(
         tmp_path / "ledger"
     )
-    capsule = _capsule_stub()
+    capsule = _capsule_stub(contract=contract)
     authorization = TOOL._authorization_template(contract, capsule)
     ledger = TOOL._LedgerV2(contract, capsule, authorization)
     ledger.publish(
@@ -11979,7 +14972,7 @@ def test_completion_store_attr_gap_recovers_from_offline_verified_disk(
     contract["fixed_external_roots"]["ledger_root"] = os.fspath(
         tmp_path / "opcode-gap-ledger"
     )
-    capsule = _capsule_stub()
+    capsule = _capsule_stub(contract=contract)
     authorization = TOOL._authorization_template(contract, capsule)
     ledger = TOOL._LedgerV2(contract, capsule, authorization)
     ledger.publish(
@@ -12580,7 +15573,7 @@ def test_safe_postrun_source_replay_preserves_bounded_command_receipt(
     assert result["evidence"]["error_receipt_or_null"] == receipt
     assert result["evidence"]["error_receipt_or_null"]["argv"] == receipt["argv"]
     assert result["root"] == TOOL._domain_digest(
-        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R13/SOURCE_REPLAY/V2",
+        "HEGEL/PHASE3/Q05B/SHADOW_RETRY_CAMPAIGN_V2R19/SOURCE_REPLAY/V2",
         result["evidence"],
     )
 
@@ -12645,7 +15638,7 @@ def test_source_replay_reuses_prepared_clone_then_verifies_once_postrun(
     monkeypatch.setattr(TOOL, "_verify_clone", verify_clone)
     monkeypatch.setattr(
         TOOL,
-        "_target_object_closure_fsck_admission_v2r13",
+        "_target_object_closure_fsck_admission_v2r17",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             AssertionError("slot replay repeated target full fsck")
         ),
@@ -12718,7 +15711,7 @@ def test_run_cli_exact_fsck_timeout_returns_exit75_with_zero_side_effects(
     captured = capsysbinary.readouterr()
     assert captured.err == b""
     result = TOOL._strict_json(captured.out, "pending run CLI")
-    assert result["schema_version"] == TOOL._RUN_VALIDATION_PENDING_SCHEMA_V1
+    assert result["schema_version"] == TOOL._RUN_VALIDATION_PENDING_SCHEMA_V2
     assert result["status"] == "CAMPAIGN_RUN_VALIDATION_PENDING"
     assert result["entrypoint"] == "RUN"
     assert result["phase"] == "TARGET_LOCAL_OBJECT_CLOSURE_FSCK"
@@ -12728,6 +15721,9 @@ def test_run_cli_exact_fsck_timeout_returns_exit75_with_zero_side_effects(
     assert result["capsule_digest_validation_completed"] is True
     assert result["python310_dependency_gate_invocation_count_this_entry"] == 1
     assert result["target_closure_fsck_invocation_count_this_entry"] == 1
+    assert result[
+        "host_cpu_topology_affinity_admission_invocation_count_this_entry"
+    ] == 0
     for field in (
         "authorization_lookup_count_this_entry",
         "authorization_consumption_count_this_entry",
@@ -12756,6 +15752,137 @@ def test_run_cli_exact_fsck_timeout_returns_exit75_with_zero_side_effects(
         "slot": 0,
         "popen": 0,
     }
+
+
+def test_run_cli_exact_host_cpu_pending_returns_exit75_before_authority_or_state(
+    monkeypatch: pytest.MonkeyPatch,
+    capsysbinary: pytest.CaptureFixture[bytes],
+) -> None:
+    contract = _contract()
+    digest = _tagged("host-cpu-pending-run-capsule")
+    monkeypatch.setattr(TOOL.os, "sched_getaffinity", lambda _pid: set(range(31)))
+    monkeypatch.setattr(
+        TOOL.os,
+        "sched_setaffinity",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("unreachable")),
+    )
+    with pytest.raises(TOOL.ShadowRetryCampaignPendingV1) as raised:
+        TOOL._host_cpu_topology_affinity_admission_v2r17(
+            contract,
+            dependency_gate_invocation_count=1,
+            target_fsck_invocation_count=1,
+        )
+    pending = raised.value
+    calls = {"authorization": 0, "ledger": 0, "slot": 0, "popen": 0}
+
+    def forbidden(name: str):
+        def invoke(*_args: object, **_kwargs: object) -> object:
+            calls[name] += 1
+            raise AssertionError(f"host CPU pending reached {name}")
+
+        return invoke
+
+    monkeypatch.setattr(
+        TOOL,
+        "load_phase3_q05b_shadow_retry_campaign_contract_v2",
+        lambda: contract,
+    )
+    monkeypatch.setattr(TOOL, "_require_exact_cli_runtime", lambda _value: None)
+    monkeypatch.setattr(
+        TOOL,
+        "_preflight_context",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(pending),
+    )
+    monkeypatch.setattr(TOOL, "_load_authorization", forbidden("authorization"))
+    monkeypatch.setattr(TOOL, "_LedgerV2", forbidden("ledger"))
+    monkeypatch.setattr(TOOL, "_run_one_slot", forbidden("slot"))
+    monkeypatch.setattr(TOOL, "_bounded_process", forbidden("popen"))
+
+    assert TOOL.main(["--run", "--capsule-digest", digest]) == 75
+    result = TOOL._strict_json(
+        capsysbinary.readouterr().out,
+        "host CPU pending run CLI",
+    )
+    assert result["schema_version"] == TOOL._RUN_VALIDATION_PENDING_SCHEMA_V2
+    assert result["phase"] == TOOL._HOST_CPU_ADMISSION_PHASE_V2R17
+    assert result["condition"] == "REQUIRED_EFFECTIVE_CPU_SET_UNAVAILABLE"
+    assert result["condition_receipt"] == pending.receipt
+    assert result["python310_dependency_gate_invocation_count_this_entry"] == 1
+    assert result["target_closure_fsck_invocation_count_this_entry"] == 1
+    assert result[
+        "host_cpu_topology_affinity_admission_invocation_count_this_entry"
+    ] == 1
+    for field in (
+        "authorization_lookup_count_this_entry",
+        "authorization_consumption_count_this_entry",
+        "ledger_lookup_or_lock_count_this_entry",
+        "ledger_creation_or_write_count_this_entry",
+        "slot_state_creation_or_write_count_this_entry",
+        "supervisor_popen_count_this_entry",
+        "docker_daemon_contact_count_this_entry",
+        "network_contact_count_this_entry",
+    ):
+        assert result[field] == 0
+    assert calls == {"authorization": 0, "ledger": 0, "slot": 0, "popen": 0}
+
+
+def test_record_authorization_host_cpu_pending_has_no_publication_or_state(
+    monkeypatch: pytest.MonkeyPatch,
+    capsysbinary: pytest.CaptureFixture[bytes],
+) -> None:
+    contract = _contract()
+    digest = _tagged("host-cpu-pending-record-capsule")
+    monkeypatch.setattr(TOOL.os, "sched_getaffinity", lambda _pid: set(range(31)))
+    monkeypatch.setattr(
+        TOOL.os,
+        "sched_setaffinity",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("unreachable")),
+    )
+    with pytest.raises(TOOL.ShadowRetryCampaignPendingV1) as raised:
+        TOOL._host_cpu_topology_affinity_admission_v2r17(
+            contract,
+            dependency_gate_invocation_count=1,
+            target_fsck_invocation_count=1,
+        )
+    pending = raised.value
+    publication_count = 0
+
+    def forbidden_publication(*_args: object, **_kwargs: object) -> bytes:
+        nonlocal publication_count
+        publication_count += 1
+        raise AssertionError("host CPU pending reached authorization publication")
+
+    monkeypatch.setattr(
+        TOOL,
+        "load_phase3_q05b_shadow_retry_campaign_contract_v2",
+        lambda: contract,
+    )
+    monkeypatch.setattr(TOOL, "_require_exact_cli_runtime", lambda _value: None)
+    monkeypatch.setattr(
+        TOOL,
+        "_preflight_context",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(pending),
+    )
+    monkeypatch.setattr(TOOL, "_publish_immutable_at", forbidden_publication)
+
+    assert TOOL.main(
+        ["--record-authorization", "--capsule-digest", digest]
+    ) == 75
+    result = TOOL._strict_json(
+        capsysbinary.readouterr().out,
+        "host CPU pending record-authorization CLI",
+    )
+    assert result["schema_version"] == TOOL._PRECONSUMPTION_PENDING_SCHEMA_V2
+    assert result["entrypoint"] == "RECORD_AUTHORIZATION"
+    assert result["condition_receipt"] == pending.receipt
+    assert result["target_closure_fsck_invocation_count"] == 1
+    assert result["host_cpu_topology_affinity_admission_invocation_count"] == 1
+    assert result["authorization_lookup_count"] == 0
+    assert result["authorization_publication_count"] == 0
+    assert result["ledger_state_creation_count"] == 0
+    assert result["slot_state_creation_count"] == 0
+    assert result["supervisor_popen_count"] == 0
+    assert publication_count == 0
 
 
 def test_preflight_pending_owner_authorization_fields_are_unambiguous(
@@ -12850,7 +15977,7 @@ def test_record_authorization_pending_then_same_digest_publishes_once(
     root = tmp_path / "authorization"
     contract["fixed_external_roots"]["authorization_root"] = os.fspath(root)
     contract["authorization_policy"]["authorization_root"] = os.fspath(root)
-    capsule = _capsule_stub("same-record-reentry")
+    capsule = _capsule_stub("same-record-reentry", contract=contract)
     authorization = TOOL._authorization_template(contract, capsule)
     pending = _target_fsck_pending_error(contract)
     preflight_count = 0
@@ -12956,6 +16083,7 @@ def test_terminal_disposition_uses_explicit_observation_class(
         [],
         ["--pre"],
         ["--preflight", "--run"],
+        ["--preauthorization-live-gauntlet", "--run"],
         ["--run", "--unknown"],
     ],
 )
@@ -13009,3 +16137,53 @@ def test_cli_preflight_rejects_capsule_argument_before_dispatch(
     assert value["error_code"] == "FAIL_CAMPAIGN_ARGUMENT"
     assert value["resumable"] is False
     assert called is False
+
+
+def test_cli_preauthorization_live_gauntlet_dispatch_and_capsule_rejection(
+    monkeypatch: pytest.MonkeyPatch,
+    capsysbinary: pytest.CaptureFixture[bytes],
+) -> None:
+    contract = _contract()
+    calls = 0
+    expected = {
+        "schema_version": (
+            "hegel-phase3a-q05b-preauthorization-live-admission-"
+            "gauntlet-command-result/2"
+        ),
+        "status": "PASS",
+    }
+
+    def create_gauntlet() -> dict[str, object]:
+        nonlocal calls
+        calls += 1
+        return deepcopy(expected)
+
+    monkeypatch.setattr(
+        TOOL,
+        "load_phase3_q05b_shadow_retry_campaign_contract_v2",
+        lambda: contract,
+    )
+    monkeypatch.setattr(TOOL, "_require_exact_cli_runtime", lambda _value: None)
+    monkeypatch.setattr(
+        TOOL,
+        "create_preauthorization_live_gauntlet_receipt_v2",
+        create_gauntlet,
+    )
+    assert TOOL.main(["--preauthorization-live-gauntlet"]) == 0
+    captured = capsysbinary.readouterr()
+    assert captured.err == b""
+    assert TOOL._strict_json(captured.out, "gauntlet CLI result") == expected
+    assert calls == 1
+
+    assert TOOL.main([
+        "--preauthorization-live-gauntlet",
+        "--capsule-digest",
+        _tagged("forbidden-gauntlet-capsule"),
+    ]) == 1
+    captured = capsysbinary.readouterr()
+    assert captured.err == b""
+    failed = TOOL._strict_json(captured.out, "gauntlet CLI failure")
+    assert type(failed) is dict
+    assert failed["error_code"] == "FAIL_CAMPAIGN_ARGUMENT"
+    assert failed["resumable"] is False
+    assert calls == 1
