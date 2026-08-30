@@ -36,7 +36,11 @@ FROZEN_PREFLIGHT_CONFIG_PATH = (
 )
 PENDING_EXIT_CODE = 75
 MAX_SMALL_JSON = 16 * 1024 * 1024
-MINIMUM_AVAILABLE_MEMORY_BYTES = 30 * 1024 * 1024 * 1024
+ACTIVE_CONTAINER_MEMORY_BYTES = 14 * 1024 * 1024 * 1024
+HOST_CONTROL_PLANE_MEMORY_RESERVE_BYTES = 2 * 1024 * 1024 * 1024
+MINIMUM_AVAILABLE_MEMORY_BYTES = (
+    ACTIVE_CONTAINER_MEMORY_BYTES + HOST_CONTROL_PLANE_MEMORY_RESERVE_BYTES
+)
 MINIMUM_AVAILABLE_STORAGE_BYTES = 164 * 1024 * 1024 * 1024
 PYTHON_IMAGE = (
     "python@sha256:"
@@ -212,11 +216,24 @@ def _source_gate(contract: Mapping[str, Any]) -> dict[str, object]:
     if prefix != "Hegel Machine/":
         _terminal("SOURCE_PREFIX_DIFFERS", f"observed Git prefix={prefix!r}")
     ancestor = str(lineage["required_ancestor_commit"])
+    required_parent = str(lineage["required_parent_commit"])
     parent = _git("rev-parse", "HEAD^")
-    if parent != ancestor:
+    if parent != required_parent:
         _terminal(
             "SOURCE_LINEAGE_DIFFERS",
-            f"successor HEAD must be the direct child of {ancestor}; observed parent={parent}",
+            (
+                f"successor HEAD must be the direct child of {required_parent}; "
+                f"observed parent={parent}"
+            ),
+        )
+    parent_parent = _git("rev-parse", f"{required_parent}^")
+    if parent_parent != ancestor:
+        _terminal(
+            "SOURCE_LINEAGE_DIFFERS",
+            (
+                f"required parent must be the direct child of {ancestor}; "
+                f"observed parent={parent_parent}"
+            ),
         )
     observed_repo_paths = tuple(
         row
@@ -424,13 +441,43 @@ def _technical_contract_gate(contract: Mapping[str, Any]) -> dict[str, object]:
         or measurement.get("per_signature_wall_time_seconds") != 172800
         or measurement.get("ordered_signature_count") != 2
         or measurement.get("bounded_projection_wall_time_seconds") != 172800
-        or measurement.get("endpoint_pair_process_deadline_seconds") != 518400
+        or measurement.get("python_and_rust_run_concurrently") is not False
+        or measurement.get("python_then_rust_run_strictly_sequentially")
+        is not True
+        or measurement.get("maximum_concurrently_live_measurement_containers")
+        != 1
+        or measurement.get("endpoint_process_deadline_seconds") != 518400
+        or measurement.get("endpoint_sequence_process_budget_seconds")
+        != 1036800
         or measurement.get("trusted_host_replay_process_deadline_seconds")
         != 172800
         or value.get("execution_policy", {}).get(
             "outer_supervisor_wall_time_seconds"
         )
-        != 693600
+        != 1212000
+        or value.get("execution_policy", {}).get("endpoint_execution_order")
+        != ["PYTHON_ENDPOINT", "RUST_ENDPOINT"]
+        or value.get("execution_policy", {}).get(
+            "maximum_concurrently_live_endpoint_containers"
+        )
+        != 1
+        or resources.get("maximum_concurrently_live_container_memory_bytes")
+        != ACTIVE_CONTAINER_MEMORY_BYTES
+        or resources.get("host_control_plane_memory_reserve_bytes")
+        != HOST_CONTROL_PLANE_MEMORY_RESERVE_BYTES
+        or resources.get("minimum_available_memory_bytes")
+        != MINIMUM_AVAILABLE_MEMORY_BYTES
+        or any(
+            resources.get(actor, {}).get("memory_bytes")
+            != ACTIVE_CONTAINER_MEMORY_BYTES
+            or resources.get(actor, {}).get("memory_swap_bytes")
+            != ACTIVE_CONTAINER_MEMORY_BYTES
+            for actor in (
+                "python_endpoint",
+                "rust_endpoint",
+                "trusted_host_replay",
+            )
+        )
         or resources.get(
             "outer_preparation_and_final_publication_reserve_bytes"
         )
@@ -462,6 +509,9 @@ def _technical_contract_gate(contract: Mapping[str, Any]) -> dict[str, object]:
         "rust_release_build_source_row_count": len(source_registry["rust"]),
         "endpoint_execution_union_row_count": source_registry["union_count"],
         "host_replay_source_row_count": len(source_registry["host"]),
+        "endpoint_execution_order": ["PYTHON_ENDPOINT", "RUST_ENDPOINT"],
+        "maximum_concurrently_live_measurement_containers": 1,
+        "minimum_available_memory_bytes": MINIMUM_AVAILABLE_MEMORY_BYTES,
     }
 
 
@@ -893,8 +943,12 @@ def _resource_gate(contract: Mapping[str, Any]) -> dict[str, object]:
             f"required={MINIMUM_AVAILABLE_STORAGE_BYTES}; observed={available_storage}",
         )
     return {
+        "active_container_memory_bytes": ACTIVE_CONTAINER_MEMORY_BYTES,
         "available_memory_bytes": available_memory,
         "required_available_memory_bytes": MINIMUM_AVAILABLE_MEMORY_BYTES,
+        "host_control_plane_memory_reserve_bytes": (
+            HOST_CONTROL_PLANE_MEMORY_RESERVE_BYTES
+        ),
         "available_storage_bytes": available_storage,
         "required_available_storage_bytes": MINIMUM_AVAILABLE_STORAGE_BYTES,
     }

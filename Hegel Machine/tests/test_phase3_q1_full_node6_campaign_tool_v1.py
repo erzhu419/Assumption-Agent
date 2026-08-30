@@ -40,7 +40,7 @@ def _capsule(tool, contract: dict[str, object]) -> dict[str, object]:
 
 def _contract(tool) -> dict[str, object]:
     contract = json.loads(tool.CONFIG_PATH.read_bytes())
-    contract["execution_policy"]["supervisor_timeout_seconds"] = 693600
+    contract["execution_policy"]["supervisor_timeout_seconds"] = 1212000
     unsigned = deepcopy(contract)
     unsigned.pop("contract_digest")
     contract["contract_digest"] = tool._core.domain_digest_v1(
@@ -250,6 +250,119 @@ def test_second_absence_pending_carries_the_complete_replayed_capsule(
     assert caught.value.capsule_digest_hint == capsule["capsule_digest"]
 
 
+def test_source_gate_binds_two_hop_parent_and_diffs_from_true_predecessor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tool = _load_tool()
+    ancestor = "a" * 40
+    required_parent = "b" * 40
+    head = "c" * 40
+    tree = "d" * 40
+    relative = "tools/example.py"
+    calls: list[tuple[str, ...]] = []
+
+    def git(*arguments: str, timeout: float = 60.0) -> str:
+        del timeout
+        calls.append(arguments)
+        values = {
+            ("status", "--porcelain=v1", "--untracked-files=all"): "",
+            ("rev-parse", "HEAD"): head,
+            ("rev-parse", "HEAD^{tree}"): tree,
+            ("rev-parse", "--show-prefix"): "Hegel Machine/",
+            ("rev-parse", "HEAD^"): required_parent,
+            ("rev-parse", f"{required_parent}^"): ancestor,
+            (
+                "diff",
+                "--name-only",
+                "--diff-filter=A",
+                ancestor,
+                "HEAD",
+            ): f"Hegel Machine/{relative}",
+            (
+                "diff",
+                "--name-only",
+                "--diff-filter=DMRTUXB",
+                ancestor,
+                "HEAD",
+            ): "",
+        }
+        return values[arguments]
+
+    def run(command, **_kwargs):
+        if command[1:2] == ["fsck"]:
+            return subprocess.CompletedProcess(command, 0, b"", b"")
+        assert command[1:6] == ["ls-tree", "-z", "-l", "HEAD", "--"]
+        payload = f"100644 blob {'e' * 40} 7\t{relative}\0".encode()
+        return subprocess.CompletedProcess(command, 0, payload, b"")
+
+    monkeypatch.setattr(tool, "_git", git)
+    monkeypatch.setattr(tool.subprocess, "run", run)
+    receipt = tool._source_gate(
+        {
+            "source_lineage": {
+                "project_root": str(tool.PROJECT_ROOT),
+                "required_ancestor_commit": ancestor,
+                "required_parent_commit": required_parent,
+                "additive_paths_in_exact_order": [relative],
+            }
+        }
+    )
+    assert receipt["source_commit"] == head
+    assert receipt["source_tree"] == tree
+    assert (
+        "diff",
+        "--name-only",
+        "--diff-filter=A",
+        ancestor,
+        "HEAD",
+    ) in calls
+    assert not any(
+        call[:3] == ("diff", "--name-only", "--diff-filter=A")
+        and required_parent in call
+        for call in calls
+    )
+
+
+@pytest.mark.parametrize(
+    ("head_parent", "parent_parent"),
+    (("f" * 40, "a" * 40), ("b" * 40, "f" * 40)),
+)
+def test_source_gate_rejects_either_broken_lineage_hop(
+    monkeypatch: pytest.MonkeyPatch,
+    head_parent: str,
+    parent_parent: str,
+) -> None:
+    tool = _load_tool()
+    ancestor = "a" * 40
+    required_parent = "b" * 40
+
+    def git(*arguments: str, timeout: float = 60.0) -> str:
+        del timeout
+        values = {
+            ("status", "--porcelain=v1", "--untracked-files=all"): "",
+            ("rev-parse", "HEAD"): "c" * 40,
+            ("rev-parse", "HEAD^{tree}"): "d" * 40,
+            ("rev-parse", "--show-prefix"): "Hegel Machine/",
+            ("rev-parse", "HEAD^"): head_parent,
+            ("rev-parse", f"{required_parent}^"): parent_parent,
+        }
+        return values[arguments]
+
+    monkeypatch.setattr(tool, "_git", git)
+    with pytest.raises(tool.CampaignTerminal) as caught:
+        tool._source_gate(
+            {
+                "source_lineage": {
+                    "project_root": str(tool.PROJECT_ROOT),
+                    "required_ancestor_commit": ancestor,
+                    "required_parent_commit": required_parent,
+                    "additive_paths_in_exact_order": ["tools/example.py"],
+                }
+            }
+        )
+    assert caught.value.code == "SOURCE_LINEAGE_DIFFERS"
+
+
 def test_run_path_pending_before_capsule_replay_echoes_requested_digest(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -444,6 +557,39 @@ def test_technical_gate_replays_frozen_measurement_and_isolation_contracts() -> 
     assert receipt["rust_release_build_source_row_count"] == 21
     assert receipt["endpoint_execution_union_row_count"] == 55
     assert receipt["host_replay_source_row_count"] == 1
+    assert receipt["endpoint_execution_order"] == [
+        "PYTHON_ENDPOINT",
+        "RUST_ENDPOINT",
+    ]
+    assert receipt["maximum_concurrently_live_measurement_containers"] == 1
+    assert receipt["minimum_available_memory_bytes"] == 16 * 1024**3
+
+
+def test_resource_gate_uses_one_14_gib_actor_plus_2_gib_host_reserve(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tool = _load_tool()
+
+    class Storage:
+        f_bavail = 200 * 1024**3
+        f_frsize = 1
+
+    monkeypatch.setattr(tool.os, "statvfs", lambda _path: Storage())
+    monkeypatch.setattr(tool, "_mem_available_bytes", lambda: 20_000_000_000)
+    receipt = tool._resource_gate(_contract(tool))
+    assert receipt["active_container_memory_bytes"] == 14 * 1024**3
+    assert receipt["host_control_plane_memory_reserve_bytes"] == 2 * 1024**3
+    assert receipt["required_available_memory_bytes"] == 16 * 1024**3
+
+    monkeypatch.setattr(
+        tool,
+        "_mem_available_bytes",
+        lambda: 16 * 1024**3 - 1,
+    )
+    with pytest.raises(tool.GatePending) as caught:
+        tool._resource_gate(_contract(tool))
+    assert caught.value.phase == "MEMORY_AND_STORAGE_RESERVATION"
+    assert caught.value.condition == "REQUIRED_AVAILABLE_MEMORY_UNAVAILABLE"
 
 
 def test_guard_and_failed_replay_outcomes_preserve_published_artifacts() -> None:

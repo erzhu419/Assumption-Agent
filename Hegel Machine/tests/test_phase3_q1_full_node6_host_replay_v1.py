@@ -539,7 +539,7 @@ def test_host_rejects_sidecar_byte_change(tmp_path: Path) -> None:
     assert caught.value.code == "FAIL_FULL_NODE6_HOST_MANIFEST"
 
 
-def test_supervisor_launches_parallel_pair_then_replays_without_docker(
+def test_supervisor_launches_strict_sequence_then_replays_without_docker(
     native_tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -549,45 +549,55 @@ def test_supervisor_launches_parallel_pair_then_replays_without_docker(
     trajectory_root = spec.trajectory_root
     observed: dict[str, object] = {}
 
-    def launch_pair(python_command, rust_command, _python_cid, _rust_cid):
+    def launch_sequence(
+        python_command,
+        rust_command,
+        _python_cid,
+        _rust_cid,
+        on_actor_started,
+        on_actor_completed,
+    ):
         observed["python"] = list(python_command)
         observed["rust"] = list(rust_command)
+        on_actor_started("PYTHON_ENDPOINT")
         (run_root / "python-scratch" / "transient.bin").write_bytes(b"python")
-        (run_root / "rust-scratch" / "transient.bin").write_bytes(b"rust")
         python_stdout = _write_bundle(
             run_root / "python-output", _diagnostic("PYTHON_ENDPOINT")
         )
+        python = supervisor.EndpointProcessResultV1(
+            "PYTHON_ENDPOINT",
+            0,
+            python_stdout,
+            b"",
+            {
+                "actor_id": "PYTHON_ENDPOINT",
+                "cgroup": {"cgroup_path": "/python.scope"},
+                "container_id": "a" * 64,
+                "measurement_wall_time_ns": 1_000_000_000,
+                "memory_peak_bytes": 1_000_000,
+            },
+        )
+        on_actor_completed(python)
+        on_actor_started("RUST_ENDPOINT")
+        (run_root / "rust-scratch" / "transient.bin").write_bytes(b"rust")
         rust_stdout = _write_bundle(
             run_root / "rust-output", _diagnostic("RUST_ENDPOINT", 7)
         )
-        return (
-            supervisor.EndpointProcessResultV1(
-                "PYTHON_ENDPOINT",
-                0,
-                python_stdout,
-                b"",
-                {
-                    "actor_id": "PYTHON_ENDPOINT",
-                    "cgroup": {"cgroup_path": "/python.scope"},
-                    "container_id": "a" * 64,
-                    "measurement_wall_time_ns": 1_000_000_000,
-                    "memory_peak_bytes": 1_000_000,
-                },
-            ),
-            supervisor.EndpointProcessResultV1(
-                "RUST_ENDPOINT",
-                0,
-                rust_stdout,
-                b"",
-                {
-                    "actor_id": "RUST_ENDPOINT",
-                    "cgroup": {"cgroup_path": "/rust.scope"},
-                    "container_id": "b" * 64,
-                    "measurement_wall_time_ns": 2_000_000_000,
-                    "memory_peak_bytes": 2_000_000,
-                },
-            ),
+        rust = supervisor.EndpointProcessResultV1(
+            "RUST_ENDPOINT",
+            0,
+            rust_stdout,
+            b"",
+            {
+                "actor_id": "RUST_ENDPOINT",
+                "cgroup": {"cgroup_path": "/rust.scope"},
+                "container_id": "b" * 64,
+                "measurement_wall_time_ns": 2_000_000_000,
+                "memory_peak_bytes": 2_000_000,
+            },
         )
+        on_actor_completed(rust)
+        return python, rust
 
     def launch_host_replay(command, _cidfile):
         observed["host"] = list(command)
@@ -615,7 +625,7 @@ def test_supervisor_launches_parallel_pair_then_replays_without_docker(
 
     result = supervisor.run_supervisor_v1(
         spec,
-        launch_pair=launch_pair,
+        launch_sequence=launch_sequence,
         launch_host_replay=launch_host_replay,
         check_local_images=False,
     )
@@ -656,15 +666,46 @@ def test_supervisor_launches_parallel_pair_then_replays_without_docker(
     assert not (run_root / "host-replay-scratch").exists()
     assert (run_root / "host-replay-scratch-cleanup-v1.json").is_file()
     assert (run_root / "endpoint-resource-evidence-v1.json").is_file()
+    assert (run_root / "python-resource-evidence-v1.json").is_file()
+    assert (run_root / "rust-resource-evidence-v1.json").is_file()
     assert (run_root / "host-replay-resource-evidence-v1.json").is_file()
     assert (run_root / "python-output").stat().st_mode & 0o777 == 0o500
     assert (run_root / "rust-output").stat().st_mode & 0o777 == 0o500
     assert (trajectory_root / "supervisor-trajectory-terminal-v1.json").is_file()
+    trajectory_events = [
+        json.loads(row)
+        for row in (
+            trajectory_root / "supervisor-trajectory-v1.jsonl"
+        ).read_text().splitlines()
+    ]
+    endpoint_events = [
+        (row["phase"], row["status"])
+        for row in trajectory_events
+        if row["phase"] in ("PYTHON_ENDPOINT", "RUST_ENDPOINT")
+    ]
+    assert endpoint_events == [
+        ("PYTHON_ENDPOINT", "STARTED"),
+        ("PYTHON_ENDPOINT", "COMPLETED"),
+        ("RUST_ENDPOINT", "STARTED"),
+        ("RUST_ENDPOINT", "COMPLETED"),
+    ]
     execution_plan = json.loads((run_root / "execution-plan-v1.json").read_text())
+    assert execution_plan["endpoint_execution_order"] == [
+        "PYTHON_ENDPOINT",
+        "RUST_ENDPOINT",
+    ]
+    assert execution_plan["python_rust_concurrent"] is False
+    assert execution_plan["python_then_rust_run_strictly_sequentially"] is True
+    assert execution_plan["maximum_concurrently_live_endpoint_containers"] == 1
     assert (
-        execution_plan["endpoint_pair_wall_time_seconds"]
-        == supervisor.ENDPOINT_PAIR_WALL_TIME_SECONDS
+        execution_plan["endpoint_process_deadline_seconds"]
+        == supervisor.ENDPOINT_WALL_TIME_SECONDS
         == 518400
+    )
+    assert (
+        execution_plan["endpoint_sequence_process_budget_seconds"]
+        == supervisor.ENDPOINT_SEQUENCE_WALL_TIME_SECONDS
+        == 1036800
     )
 
 
@@ -952,21 +993,22 @@ def test_public_cli_requires_fixed_trajectory_root(tmp_path: Path) -> None:
     assert parsed.trajectory_root == tmp_path / "trajectory"
 
 
-def test_contract_per_signature_budget_derives_exact_pair_deadline() -> None:
+def test_contract_per_signature_budget_derives_exact_sequence_deadline() -> None:
     contract = json.loads(
         (ROOT / supervisor.TECHNICAL_CONTRACT_RELATIVE_PATH).read_text()
     )
-    supervisor._validate_contract_pair_deadline(contract)
+    supervisor._validate_contract_sequence_deadline(contract)
     assert supervisor.PER_SIGNATURE_WALL_TIME_SECONDS == 172800
     assert supervisor.ORDERED_SIGNATURE_COUNT == 2
     assert supervisor.BOUNDED_PROJECTION_WALL_TIME_SECONDS == 172800
-    assert supervisor.ENDPOINT_PAIR_WALL_TIME_SECONDS == 518400
+    assert supervisor.ENDPOINT_WALL_TIME_SECONDS == 518400
+    assert supervisor.ENDPOINT_SEQUENCE_WALL_TIME_SECONDS == 1036800
     assert supervisor.HOST_REPLAY_WALL_TIME_SECONDS == 172800
-    assert supervisor.OUTER_SUPERVISOR_WALL_TIME_SECONDS == 693600
+    assert supervisor.OUTER_SUPERVISOR_WALL_TIME_SECONDS == 1212000
     bad = deepcopy(contract)
     bad["resource_envelope"]["python_endpoint"]["wall_time_seconds"] = 518400
     with pytest.raises(supervisor.FullNode6SupervisorError) as caught:
-        supervisor._validate_contract_pair_deadline(bad)
+        supervisor._validate_contract_sequence_deadline(bad)
     assert caught.value.code == "FAIL_FULL_NODE6_SUPERVISOR_SOURCE"
 
 
@@ -1006,7 +1048,7 @@ def test_admission_publication_replays_execution_source_closure_gate(
     assert not admission.exists()
 
 
-def test_actual_pair_deadline_force_removes_both_cids_without_docker(
+def test_actual_sequence_timeout_removes_python_and_never_starts_rust_without_docker(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1036,9 +1078,16 @@ def test_actual_pair_deadline_force_removes_both_cids_without_docker(
             self.returncode = -9
             self.stopped.set()
 
-    processes = [HangingProcess("python"), HangingProcess("rust")]
+    processes = [HangingProcess("python")]
     process_iterator = iter(processes)
-    monkeypatch.setattr(supervisor.subprocess, "Popen", lambda *_args, **_kwargs: next(process_iterator))
+    popen_count = 0
+
+    def popen(*_args, **_kwargs):
+        nonlocal popen_count
+        popen_count += 1
+        return next(process_iterator)
+
+    monkeypatch.setattr(supervisor.subprocess, "Popen", popen)
     monkeypatch.setattr(
         supervisor,
         "_wait_cid",
@@ -1056,8 +1105,10 @@ def test_actual_pair_deadline_force_removes_both_cids_without_docker(
     python_scratch.mkdir()
     rust_scratch.mkdir()
     seccomp = tmp_path / "seccomp.json"
+    started: list[str] = []
+    completed: list[str] = []
     with pytest.raises(supervisor.FullNode6SupervisorError) as caught:
-        supervisor._launch_pair_actual_v1(
+        supervisor._launch_sequence_actual_v1(
             [
                 supervisor.DOCKER,
                 "run",
@@ -1080,14 +1131,19 @@ def test_actual_pair_deadline_force_removes_both_cids_without_docker(
             ],
             tmp_path / "python.cid",
             tmp_path / "rust.cid",
-            wall_time_seconds=0.01,
+            started.append,
+            lambda result: completed.append(result.actor_id),
+            endpoint_wall_time_seconds=0.01,
         )
-    assert caught.value.code == "FULL_NODE6_ENDPOINT_PAIR_TIMEOUT"
-    assert removed == ["a" * 64, "b" * 64]
+    assert caught.value.code == "FULL_NODE6_ENDPOINT_SEQUENCE_TIMEOUT"
+    assert removed == ["a" * 64]
+    assert popen_count == 1
+    assert started == ["PYTHON_ENDPOINT"]
+    assert completed == []
     assert all(process.returncode == -15 for process in processes)
 
 
-def test_pair_timeout_is_persisted_terminal_no_resume(
+def test_sequence_timeout_is_persisted_terminal_no_resume(
     native_tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1098,22 +1154,21 @@ def test_pair_timeout_is_persisted_terminal_no_resume(
 
     def timeout(*_args):
         (run_root / "python-scratch" / "partial.bin").write_bytes(b"python")
-        (run_root / "rust-scratch" / "partial.bin").write_bytes(b"rust")
         raise supervisor.FullNode6SupervisorError(
-            "FULL_NODE6_ENDPOINT_PAIR_TIMEOUT",
-            "endpoint pair exceeded 518400s",
+            "FULL_NODE6_ENDPOINT_SEQUENCE_TIMEOUT",
+            "endpoint sequence exceeded its active PYTHON_ENDPOINT budget",
         )
 
     with pytest.raises(supervisor.FullNode6SupervisorError):
         supervisor.run_supervisor_v1(
             spec,
-            launch_pair=timeout,
+            launch_sequence=timeout,
             check_local_images=False,
         )
     terminal = json.loads(
         (trajectory_root / "supervisor-trajectory-terminal-v1.json").read_text()
     )
-    assert terminal["error_code_or_null"] == "FULL_NODE6_ENDPOINT_PAIR_TIMEOUT"
+    assert terminal["error_code_or_null"] == "FULL_NODE6_ENDPOINT_SEQUENCE_TIMEOUT"
     assert (
         terminal["terminal_status"]
         == "FULL_NODE6_DIAGNOSTIC_FAILED_TERMINAL_NO_RESUME"
@@ -1122,6 +1177,87 @@ def test_pair_timeout_is_persisted_terminal_no_resume(
     assert scratch_receipt["terminal_absence_proved"] is True
     assert not (run_root / "python-scratch").exists()
     assert not (run_root / "rust-scratch").exists()
+
+
+def test_rust_started_callback_failure_retains_durable_python_evidence(
+    native_tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spec = _run_spec(native_tmp_path)
+    run_root = spec.run_root
+    trajectory_root = spec.trajectory_root
+    endpoint_launches: list[str] = []
+
+    def launch_endpoint(_command, _cidfile, actor_id, *, wall_time_seconds):
+        assert wall_time_seconds == supervisor.ENDPOINT_WALL_TIME_SECONDS
+        endpoint_launches.append(actor_id)
+        assert actor_id == "PYTHON_ENDPOINT"
+        stdout = _write_bundle(
+            run_root / "python-output",
+            _diagnostic("PYTHON_ENDPOINT"),
+        )
+        return supervisor.EndpointProcessResultV1(
+            actor_id,
+            0,
+            stdout,
+            b"python-stderr\n",
+            {
+                "actor_id": actor_id,
+                "container_id": "a" * 64,
+                "container_exit_monotonic_ns": 200,
+                "measurement_interval_start_monotonic_ns": 100,
+                "memory_peak_bytes": 123,
+            },
+        )
+
+    monkeypatch.setattr(
+        supervisor,
+        "_launch_endpoint_actual_v1",
+        launch_endpoint,
+    )
+    original_emit = supervisor.SupervisorTrajectoryV1.emit
+
+    def emit(self, phase, status, **kwargs):
+        if phase == "RUST_ENDPOINT" and status == "STARTED":
+            raise supervisor.FullNode6SupervisorError(
+                "FAIL_TEST_RUST_START_CALLBACK",
+                "fixture durable STARTED callback failure",
+            )
+        return original_emit(self, phase, status, **kwargs)
+
+    monkeypatch.setattr(supervisor.SupervisorTrajectoryV1, "emit", emit)
+    with pytest.raises(supervisor.FullNode6SupervisorError) as caught:
+        supervisor.run_supervisor_v1(spec, check_local_images=False)
+    assert caught.value.code == "FAIL_TEST_RUST_START_CALLBACK"
+    assert endpoint_launches == ["PYTHON_ENDPOINT"]
+    assert (run_root / "python.stdout").is_file()
+    assert (run_root / "python.stderr").read_bytes() == b"python-stderr\n"
+    assert (run_root / "python-resource-evidence-v1.json").is_file()
+    assert not (run_root / "rust.stdout").exists()
+    assert not (run_root / "rust-resource-evidence-v1.json").exists()
+    assert not (run_root / "endpoint-resource-evidence-v1.json").exists()
+    events = [
+        json.loads(row)
+        for row in (
+            trajectory_root / "supervisor-trajectory-v1.jsonl"
+        ).read_text().splitlines()
+    ]
+    assert any(
+        row["phase"] == "PYTHON_ENDPOINT" and row["status"] == "STARTED"
+        for row in events
+    )
+    assert any(
+        row["phase"] == "PYTHON_ENDPOINT" and row["status"] == "COMPLETED"
+        for row in events
+    )
+    terminal = json.loads(
+        (trajectory_root / "supervisor-trajectory-terminal-v1.json").read_text()
+    )
+    assert terminal["error_code_or_null"] == "FAIL_TEST_RUST_START_CALLBACK"
+    assert (
+        terminal["terminal_status"]
+        == "FULL_NODE6_DIAGNOSTIC_FAILED_TERMINAL_NO_RESUME"
+    )
 
 
 def _minimal_held_command(name: str, scratch: Path, seccomp: Path) -> list[str]:
@@ -1137,7 +1273,56 @@ def _minimal_held_command(name: str, scratch: Path, seccomp: Path) -> list[str]:
     ]
 
 
-def test_pair_resource_capture_occurs_after_ready_and_before_release_without_docker(
+def test_sequence_gives_each_endpoint_the_full_independent_deadline(
+    native_tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seccomp = native_tmp_path / "seccomp.json"
+    budgets: list[tuple[str, float]] = []
+
+    def launch(_command, _cidfile, actor_id, *, wall_time_seconds):
+        budgets.append((actor_id, wall_time_seconds))
+        if actor_id == "PYTHON_ENDPOINT":
+            start, end, cid = 100, 200, "a" * 64
+        else:
+            start, end, cid = 200, 300, "b" * 64
+        return supervisor.EndpointProcessResultV1(
+            actor_id,
+            0,
+            b"{}\n",
+            b"",
+            {
+                "actor_id": actor_id,
+                "container_id": cid,
+                "container_exit_monotonic_ns": end,
+                "measurement_interval_start_monotonic_ns": start,
+            },
+        )
+
+    monkeypatch.setattr(supervisor, "_launch_endpoint_actual_v1", launch)
+    supervisor._launch_sequence_actual_v1(
+        _minimal_held_command(
+            "python",
+            native_tmp_path / "python-scratch",
+            seccomp,
+        ),
+        _minimal_held_command(
+            "rust",
+            native_tmp_path / "rust-scratch",
+            seccomp,
+        ),
+        native_tmp_path / "python.cid",
+        native_tmp_path / "rust.cid",
+        lambda _actor_id: None,
+        lambda _result: None,
+    )
+    assert budgets == [
+        ("PYTHON_ENDPOINT", 518400),
+        ("RUST_ENDPOINT", 518400),
+    ]
+
+
+def test_sequence_resource_capture_and_measurement_intervals_do_not_overlap_without_docker(
     native_tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1175,14 +1360,20 @@ def test_pair_resource_capture_occurs_after_ready_and_before_release_without_doc
         def kill(self):
             self.returncode = -9
 
-    processes = iter(
-        (HeldProcess("python", python_scratch), HeldProcess("rust", rust_scratch))
-    )
-    monkeypatch.setattr(
-        supervisor.subprocess,
-        "Popen",
-        lambda *_args, **_kwargs: next(processes),
-    )
+    python_process = HeldProcess("python", python_scratch)
+    rust_process = HeldProcess("rust", rust_scratch)
+    processes = iter((python_process, rust_process))
+    popen_order: list[str] = []
+
+    def popen(*_args, **_kwargs):
+        process = next(processes)
+        if process.actor == "rust":
+            assert python_process.returncode == 0
+            assert (python_scratch / supervisor.SUPERVISOR_RELEASE_FILENAME).is_file()
+        popen_order.append(process.actor)
+        return process
+
+    monkeypatch.setattr(supervisor.subprocess, "Popen", popen)
     monkeypatch.setattr(
         supervisor,
         "_wait_cid",
@@ -1202,13 +1393,16 @@ def test_pair_resource_capture_occurs_after_ready_and_before_release_without_doc
         }
 
     monkeypatch.setattr(supervisor, "_capture_resource_evidence", capture)
-    python, rust = supervisor._launch_pair_actual_v1(
+    python, rust = supervisor._launch_sequence_actual_v1(
         _minimal_held_command("python", python_scratch, seccomp),
         _minimal_held_command("rust", rust_scratch, seccomp),
         native_tmp_path / "python.cid",
         native_tmp_path / "rust.cid",
-        wall_time_seconds=1,
+        lambda _actor_id: None,
+        lambda _result: None,
+        endpoint_wall_time_seconds=1,
     )
+    assert popen_order == ["python", "rust"]
     assert captures == ["PYTHON_ENDPOINT", "RUST_ENDPOINT"]
     for result in (python, rust):
         evidence = result.resource_evidence
@@ -1224,6 +1418,20 @@ def test_pair_resource_capture_occurs_after_ready_and_before_release_without_doc
             evidence["container_exit_monotonic_ns"]
             - evidence["measurement_interval_start_monotonic_ns"]
         )
+    assert (
+        python.resource_evidence["container_exit_monotonic_ns"]
+        <= rust.resource_evidence["measurement_interval_start_monotonic_ns"]
+    )
+    assert python.resource_evidence["endpoint_sequence_ordinal"] == 1
+    assert rust.resource_evidence["endpoint_sequence_ordinal"] == 2
+    assert rust.resource_evidence["predecessor_container_exit_monotonic_ns"] == (
+        python.resource_evidence["container_exit_monotonic_ns"]
+    )
+    assert all(
+        row.resource_evidence["maximum_concurrently_live_endpoint_containers"]
+        == 1
+        for row in (python, rust)
+    )
 
 
 def test_host_replay_resource_capture_uses_same_completed_workload_handshake(

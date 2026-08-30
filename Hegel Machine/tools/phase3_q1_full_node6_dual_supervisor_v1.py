@@ -2,10 +2,10 @@
 """One-process supervisor for the full-node6 dual capacity diagnostic.
 
 The outer campaign starts this file once after authorization consumption.  It
-starts the Python and Rust endpoint containers concurrently, waits for both to
-exit, then starts a separately isolated trusted-host *wire replay* container.
-The outer process never imports the replay implementation or either quotient
-engine.
+runs the Python endpoint through complete held-workload capture and container
+exit, then does the same for Rust, and only then starts a separately isolated
+trusted-host *wire replay* container.  The outer process never imports the
+replay implementation or either quotient engine.
 """
 
 from __future__ import annotations
@@ -148,10 +148,11 @@ RUST_BUILD_TIMEOUT_SECONDS: Final = 1800
 PER_SIGNATURE_WALL_TIME_SECONDS: Final = 172800
 ORDERED_SIGNATURE_COUNT: Final = 2
 BOUNDED_PROJECTION_WALL_TIME_SECONDS: Final = 172800
-ENDPOINT_PAIR_WALL_TIME_SECONDS: Final = (
+ENDPOINT_WALL_TIME_SECONDS: Final = (
     PER_SIGNATURE_WALL_TIME_SECONDS * ORDERED_SIGNATURE_COUNT
     + BOUNDED_PROJECTION_WALL_TIME_SECONDS
 )
+ENDPOINT_SEQUENCE_WALL_TIME_SECONDS: Final = 2 * ENDPOINT_WALL_TIME_SECONDS
 HOST_REPLAY_WALL_TIME_SECONDS: Final = 172800
 OTHER_PREPARATION_AND_PUBLICATION_SECONDS: Final = 600
 ENDPOINT_OUTPUT_CEILING_BYTES: Final = 34_359_738_368
@@ -165,7 +166,7 @@ HOST_REPLAY_WALL_CEILING_SECONDS: Final = 172_800
 INFEASIBLE_STATUS: Final = "PREFLIGHT_RESOURCE_ENVELOPE_INFEASIBLE"
 OUTER_SUPERVISOR_WALL_TIME_SECONDS: Final = (
     RUST_BUILD_TIMEOUT_SECONDS
-    + ENDPOINT_PAIR_WALL_TIME_SECONDS
+    + ENDPOINT_SEQUENCE_WALL_TIME_SECONDS
     + HOST_REPLAY_WALL_TIME_SECONDS
     + OTHER_PREPARATION_AND_PUBLICATION_SECONDS
 )
@@ -1130,188 +1131,186 @@ def _stop_endpoint_cli_processes(processes: Sequence[subprocess.Popen[bytes]]) -
             process.wait()
 
 
-def _launch_pair_actual_v1(
+def _launch_endpoint_actual_v1(
+    command: Sequence[str],
+    cidfile: Path,
+    actor_id: str,
+    *,
+    wall_time_seconds: float,
+) -> EndpointProcessResultV1:
+    """Run one held endpoint through cgroup capture and complete container exit."""
+
+    name = _container_name_from_command(command)
+    seccomp = _seccomp_profile_from_command(command)
+    scratch = _bind_source_from_command(command, "/scratch")
+    process: subprocess.Popen[bytes] | None = None
+    cid: str | None = None
+    removed = False
+    deadline = time.monotonic() + wall_time_seconds
+    communication: tuple[bytes, bytes] | None = None
+    communication_error: BaseException | None = None
+    container_exit_ns: int | None = None
+
+    def communicate() -> None:
+        nonlocal communication, communication_error, container_exit_ns
+        try:
+            assert process is not None
+            communication = process.communicate()
+        except BaseException as error:
+            communication_error = error
+        finally:
+            container_exit_ns = time.monotonic_ns()
+
+    def terminate_as_timeout() -> NoReturn:
+        nonlocal removed
+        cleanup_failures = _force_remove_endpoint_containers_v1([cid or name])
+        removed = True
+        assert process is not None
+        _stop_endpoint_cli_processes([process])
+        detail = (
+            f"endpoint sequence exceeded its active {actor_id} budget "
+            f"of {wall_time_seconds}s"
+        )
+        if cleanup_failures:
+            detail += "; cleanup_failures=" + "|".join(cleanup_failures)
+        _fail("FULL_NODE6_ENDPOINT_SEQUENCE_TIMEOUT", detail)
+
+    try:
+        start_ns = time.monotonic_ns()
+        process = subprocess.Popen(
+            list(command),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        thread = threading.Thread(
+            target=communicate,
+            name=f"hegel-q1-node6-{actor_id.lower()}-communicate",
+            daemon=True,
+        )
+        thread.start()
+        cid = _wait_cid(cidfile, process)
+        code: int | None = None
+        while code is None:
+            code = _actor_ready_now_v1(scratch)
+            if code is None and process.poll() is not None:
+                _fail(
+                    "FAIL_FULL_NODE6_SUPERVISOR_ENDPOINT_SEQUENCE_IO",
+                    f"{actor_id} container exited without completed-workload receipt",
+                )
+            if code is None:
+                if time.monotonic() >= deadline:
+                    terminate_as_timeout()
+                time.sleep(0.02)
+        actor_exit_ns = time.monotonic_ns()
+        evidence = _capture_resource_evidence(cid, actor_id, seccomp)
+        capture_ns = time.monotonic_ns()
+        release_ns = _publish_actor_release_v1(scratch)
+        thread.join(max(0.0, deadline - time.monotonic()))
+        if thread.is_alive():
+            terminate_as_timeout()
+        if communication_error is not None or communication is None:
+            _fail(
+                "FAIL_FULL_NODE6_SUPERVISOR_ENDPOINT_SEQUENCE_IO",
+                f"{actor_id}:{type(communication_error).__name__}:{communication_error}",
+            )
+        if process.returncode != code or container_exit_ns is None:
+            _fail(
+                "FAIL_FULL_NODE6_SUPERVISOR_ENDPOINT_SEQUENCE_IO",
+                f"{actor_id} return code replay differs",
+            )
+        evidence = _add_interval_evidence_v1(
+            evidence,
+            start_ns=start_ns,
+            actor_exit_ns=actor_exit_ns,
+            cgroup_capture_ns=capture_ns,
+            release_ns=release_ns,
+            container_exit_ns=container_exit_ns,
+            actor_return_code=code,
+        )
+        stdout, stderr = communication
+        return EndpointProcessResultV1(
+            actor_id,
+            process.returncode,
+            stdout,
+            stderr,
+            evidence,
+        )
+    except BaseException:
+        if not removed:
+            _force_remove_endpoint_containers_v1([cid or name])
+        if process is not None:
+            _stop_endpoint_cli_processes([process])
+        raise
+
+
+def _launch_sequence_actual_v1(
     python_command: Sequence[str],
     rust_command: Sequence[str],
     python_cidfile: Path,
     rust_cidfile: Path,
+    on_actor_started: Callable[[str], None],
+    on_actor_completed: Callable[[EndpointProcessResultV1], None],
     *,
-    wall_time_seconds: float = ENDPOINT_PAIR_WALL_TIME_SECONDS,
+    endpoint_wall_time_seconds: float = ENDPOINT_WALL_TIME_SECONDS,
 ) -> tuple[EndpointProcessResultV1, EndpointProcessResultV1]:
-    """Start both containers and capture completed-workload cgroup peaks."""
+    """Run Python then Rust with no overlap between measurement intervals."""
 
-    processes: list[subprocess.Popen[bytes]] = []
-    python_name = _container_name_from_command(python_command)
-    rust_name = _container_name_from_command(rust_command)
     python_seccomp = _seccomp_profile_from_command(python_command)
     rust_seccomp = _seccomp_profile_from_command(rust_command)
     python_scratch = _bind_source_from_command(python_command, "/scratch")
     rust_scratch = _bind_source_from_command(rust_command, "/scratch")
     if python_seccomp != rust_seccomp or python_scratch == rust_scratch:
         _fail("FAIL_FULL_NODE6_SUPERVISOR_DOCKER", "endpoint isolation registry differs")
-    python_cid: str | None = None
-    rust_cid: str | None = None
-    containers_removed = False
-    pair_start = time.monotonic()
-    deadline = pair_start + wall_time_seconds
-    communication: dict[str, tuple[bytes, bytes]] = {}
-    communication_errors: dict[str, BaseException] = {}
-    communication_end_ns: dict[str, int] = {}
-
-    def communicate(actor: str, process: subprocess.Popen[bytes]) -> None:
-        try:
-            communication[actor] = process.communicate()
-        except BaseException as error:
-            communication_errors[actor] = error
-        finally:
-            communication_end_ns[actor] = time.monotonic_ns()
-
-    def terminate_as_timeout() -> NoReturn:
-        nonlocal containers_removed
-        cleanup_failures = _force_remove_endpoint_containers_v1(
-            [python_cid or python_name, rust_cid or rust_name]
-        )
-        containers_removed = True
-        _stop_endpoint_cli_processes(processes)
-        detail = f"endpoint pair exceeded {wall_time_seconds}s"
-        if cleanup_failures:
-            detail += "; cleanup_failures=" + "|".join(cleanup_failures)
-        _fail("FULL_NODE6_ENDPOINT_PAIR_TIMEOUT", detail)
-
-    try:
-        python_start_ns = time.monotonic_ns()
-        python = subprocess.Popen(
-            list(python_command),
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        processes.append(python)
-        rust_start_ns = time.monotonic_ns()
-        rust = subprocess.Popen(
-            list(rust_command),
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        processes.append(rust)
-        threads = [
-            threading.Thread(
-                target=communicate,
-                args=("python", python),
-                name="hegel-q1-node6-python-communicate",
-                daemon=True,
-            ),
-            threading.Thread(
-                target=communicate,
-                args=("rust", rust),
-                name="hegel-q1-node6-rust-communicate",
-                daemon=True,
-            ),
-        ]
-        for thread in threads:
-            thread.start()
-        python_cid = _wait_cid(python_cidfile, python)
-        rust_cid = _wait_cid(rust_cidfile, rust)
-        if python_cid == rust_cid:
-            _fail("FAIL_FULL_NODE6_SUPERVISOR_RESOURCE", "endpoint cgroup identity differs")
-
-        pending = {
-            "python": (python_scratch, python),
-            "rust": (rust_scratch, rust),
-        }
-        actor_codes: dict[str, int] = {}
-        actor_exit_ns: dict[str, int] = {}
-        while pending:
-            for actor, (scratch, process) in tuple(pending.items()):
-                code = _actor_ready_now_v1(scratch)
-                if code is not None:
-                    actor_codes[actor] = code
-                    actor_exit_ns[actor] = time.monotonic_ns()
-                    del pending[actor]
-                elif process.poll() is not None:
-                    _fail(
-                        "FAIL_FULL_NODE6_SUPERVISOR_ENDPOINT_IO",
-                        f"{actor} container exited without completed-workload receipt",
-                    )
-            if pending:
-                if time.monotonic() >= deadline:
-                    terminate_as_timeout()
-                time.sleep(0.02)
-
-        python_evidence = _capture_resource_evidence(
-            python_cid,
-            "PYTHON_ENDPOINT",
-            python_seccomp,
-        )
-        python_capture_ns = time.monotonic_ns()
-        rust_evidence = _capture_resource_evidence(
-            rust_cid,
-            "RUST_ENDPOINT",
-            rust_seccomp,
-        )
-        rust_capture_ns = time.monotonic_ns()
-        python_release_ns = _publish_actor_release_v1(python_scratch)
-        rust_release_ns = _publish_actor_release_v1(rust_scratch)
-
-        for thread in threads:
-            thread.join(max(0.0, deadline - time.monotonic()))
-        if any(thread.is_alive() for thread in threads):
-            terminate_as_timeout()
-        if communication_errors:
-            details = "|".join(
-                f"{actor}:{type(error).__name__}:{error}"
-                for actor, error in sorted(communication_errors.items())
-            )
-            _fail("FAIL_FULL_NODE6_SUPERVISOR_ENDPOINT_IO", details)
-        python_stdout, python_stderr = communication["python"]
-        rust_stdout, rust_stderr = communication["rust"]
-        if (
-            python.returncode != actor_codes["python"]
-            or rust.returncode != actor_codes["rust"]
-        ):
-            _fail("FAIL_FULL_NODE6_SUPERVISOR_ENDPOINT_IO", "return code replay differs")
-        python_evidence = _add_interval_evidence_v1(
-            python_evidence,
-            start_ns=python_start_ns,
-            actor_exit_ns=actor_exit_ns["python"],
-            cgroup_capture_ns=python_capture_ns,
-            release_ns=python_release_ns,
-            container_exit_ns=communication_end_ns["python"],
-            actor_return_code=actor_codes["python"],
-        )
-        rust_evidence = _add_interval_evidence_v1(
-            rust_evidence,
-            start_ns=rust_start_ns,
-            actor_exit_ns=actor_exit_ns["rust"],
-            cgroup_capture_ns=rust_capture_ns,
-            release_ns=rust_release_ns,
-            container_exit_ns=communication_end_ns["rust"],
-            actor_return_code=actor_codes["rust"],
-        )
-    except BaseException:
-        if not containers_removed:
-            _force_remove_endpoint_containers_v1(
-                [python_cid or python_name, rust_cid or rust_name]
-            )
-        _stop_endpoint_cli_processes(processes)
-        raise
-    return (
-        EndpointProcessResultV1(
-            "PYTHON_ENDPOINT",
-            python.returncode,
-            python_stdout,
-            python_stderr,
-            python_evidence,
-        ),
-        EndpointProcessResultV1(
-            "RUST_ENDPOINT",
-            rust.returncode,
-            rust_stdout,
-            rust_stderr,
-            rust_evidence,
-        ),
+    on_actor_started("PYTHON_ENDPOINT")
+    python = _launch_endpoint_actual_v1(
+        python_command,
+        python_cidfile,
+        "PYTHON_ENDPOINT",
+        wall_time_seconds=endpoint_wall_time_seconds,
     )
+    python_end = python.resource_evidence.get("container_exit_monotonic_ns")
+    if type(python_end) is not int:
+        _fail(
+            "FAIL_FULL_NODE6_SUPERVISOR_ENDPOINT_SEQUENCE_INTERVAL",
+            "Python container-exit evidence differs",
+        )
+    python.resource_evidence.update(
+        {
+            "endpoint_sequence_ordinal": 1,
+            "maximum_concurrently_live_endpoint_containers": 1,
+            "predecessor_container_exit_monotonic_ns": None,
+        }
+    )
+    on_actor_completed(python)
+    on_actor_started("RUST_ENDPOINT")
+    rust = _launch_endpoint_actual_v1(
+        rust_command,
+        rust_cidfile,
+        "RUST_ENDPOINT",
+        wall_time_seconds=endpoint_wall_time_seconds,
+    )
+    rust_start = rust.resource_evidence.get("measurement_interval_start_monotonic_ns")
+    if (
+        type(python_end) is not int
+        or type(rust_start) is not int
+        or python_end > rust_start
+        or python.resource_evidence.get("container_id")
+        == rust.resource_evidence.get("container_id")
+    ):
+        _fail(
+            "FAIL_FULL_NODE6_SUPERVISOR_ENDPOINT_SEQUENCE_INTERVAL",
+            "Python exit/Rust start order or cgroup identity differs",
+        )
+    rust.resource_evidence.update(
+        {
+            "endpoint_sequence_ordinal": 2,
+            "maximum_concurrently_live_endpoint_containers": 1,
+            "predecessor_container_exit_monotonic_ns": python_end,
+        }
+    )
+    on_actor_completed(rust)
+    return python, rust
 
 
 def _launch_host_replay_actual_v1(
@@ -1424,8 +1423,15 @@ def _launch_host_replay_actual_v1(
         raise
 
 
-LaunchPair = Callable[
-    [Sequence[str], Sequence[str], Path, Path],
+LaunchSequence = Callable[
+    [
+        Sequence[str],
+        Sequence[str],
+        Path,
+        Path,
+        Callable[[str], None],
+        Callable[[EndpointProcessResultV1], None],
+    ],
     tuple[EndpointProcessResultV1, EndpointProcessResultV1],
 ]
 
@@ -1842,7 +1848,7 @@ def _adjudicate_resources_v1(
 def run_supervisor_v1(
     spec: SupervisorRunSpecV1,
     *,
-    launch_pair: LaunchPair = _launch_pair_actual_v1,
+    launch_sequence: LaunchSequence = _launch_sequence_actual_v1,
     launch_host_replay: HostReplay = _launch_host_replay_actual_v1,
     check_local_images: bool = True,
     trajectory: SupervisorTrajectoryV1 | None = None,
@@ -1919,8 +1925,21 @@ def run_supervisor_v1(
             _canonical(
                 {
                     "network_allowed": False,
-                    "endpoint_pair_wall_time_seconds": (
-                        ENDPOINT_PAIR_WALL_TIME_SECONDS
+                    "endpoint_execution_order": [
+                        "PYTHON_ENDPOINT",
+                        "RUST_ENDPOINT",
+                    ],
+                    "endpoint_completed_evidence_fsync_before_successor_popen": True,
+                    "endpoint_started_trajectory_fsync_before_popen": True,
+                    "per_endpoint_resource_evidence_artifacts": {
+                        "PYTHON_ENDPOINT": "python-resource-evidence-v1.json",
+                        "RUST_ENDPOINT": "rust-resource-evidence-v1.json",
+                    },
+                    "endpoint_process_deadline_seconds": (
+                        ENDPOINT_WALL_TIME_SECONDS
+                    ),
+                    "endpoint_sequence_process_budget_seconds": (
+                        ENDPOINT_SEQUENCE_WALL_TIME_SECONDS
                     ),
                     "host_replay_command": host_command,
                     "host_replay_source_manifest": [HOST_REPLAY_RELATIVE_PATH],
@@ -1934,7 +1953,9 @@ def run_supervisor_v1(
                         "user": CONTAINER_USER,
                     },
                     "python_command": python_command,
-                    "python_rust_concurrent": True,
+                    "maximum_concurrently_live_endpoint_containers": 1,
+                    "python_rust_concurrent": False,
+                    "python_then_rust_run_strictly_sequentially": True,
                     "rust_command": rust_command,
                     "scratch": {
                         "cleanup_receipt_relative_path": "scratch-cleanup-v1.json",
@@ -1966,19 +1987,85 @@ def run_supervisor_v1(
             decision="DISTINCT_EMPTY_WRITABLE_ROOTS",
         )
 
-        active_phase = "ENDPOINT_PAIR"
+        active_phase = "ENDPOINT_SEQUENCE"
         trajectory.emit(
             active_phase,
             "STARTED",
             command_artifact="execution-plan-v1.json",
         )
+        expected_endpoint_order = ("PYTHON_ENDPOINT", "RUST_ENDPOINT")
+        completed_endpoint_actors: list[str] = []
+        started_endpoint_actor: str | None = None
+
+        def endpoint_started(actor_id: str) -> None:
+            nonlocal active_phase, started_endpoint_actor
+            if len(completed_endpoint_actors) >= len(expected_endpoint_order):
+                _fail(
+                    "FAIL_FULL_NODE6_SUPERVISOR_ENDPOINT_SEQUENCE_CALLBACK",
+                    "extra endpoint STARTED callback",
+                )
+            expected = expected_endpoint_order[len(completed_endpoint_actors)]
+            if started_endpoint_actor is not None or actor_id != expected:
+                _fail(
+                    "FAIL_FULL_NODE6_SUPERVISOR_ENDPOINT_SEQUENCE_CALLBACK",
+                    "endpoint STARTED callback order differs",
+                )
+            active_phase = actor_id
+            trajectory.emit(
+                actor_id,
+                "STARTED",
+                command_artifact="execution-plan-v1.json",
+            )
+            started_endpoint_actor = actor_id
+
+        def endpoint_completed(result: EndpointProcessResultV1) -> None:
+            nonlocal started_endpoint_actor
+            actor_id = result.actor_id
+            if started_endpoint_actor != actor_id:
+                _fail(
+                    "FAIL_FULL_NODE6_SUPERVISOR_ENDPOINT_SEQUENCE_CALLBACK",
+                    "endpoint COMPLETED callback order differs",
+                )
+            stem = "python" if actor_id == "PYTHON_ENDPOINT" else "rust"
+            evidence_name = f"{stem}-resource-evidence-v1.json"
+            _publish_run_file(spec.run_root / f"{stem}.stdout", result.stdout)
+            _publish_run_file(spec.run_root / f"{stem}.stderr", result.stderr)
+            _publish_run_file(
+                spec.run_root / evidence_name,
+                _canonical(
+                    {
+                        "rows": [result.resource_evidence],
+                        "schema_version": RESOURCE_EVIDENCE_SCHEMA_VERSION,
+                    }
+                ),
+            )
+            trajectory.emit(
+                actor_id,
+                "COMPLETED",
+                command_artifact=evidence_name,
+                return_code=result.return_code,
+                decision="HELD_WORKLOAD_CAPTURED_AND_CONTAINER_EXITED",
+            )
+            completed_endpoint_actors.append(actor_id)
+            started_endpoint_actor = None
+
         try:
-            python, rust = launch_pair(
+            python, rust = launch_sequence(
                 python_command,
                 rust_command,
                 python_cidfile,
                 rust_cidfile,
+                endpoint_started,
+                endpoint_completed,
             )
+            if (
+                tuple(completed_endpoint_actors) != expected_endpoint_order
+                or started_endpoint_actor is not None
+            ):
+                _fail(
+                    "FAIL_FULL_NODE6_SUPERVISOR_ENDPOINT_SEQUENCE_CALLBACK",
+                    "endpoint callback completion set differs",
+                )
             _publish_run_file(
                 spec.run_root / "endpoint-resource-evidence-v1.json",
                 _canonical(
@@ -1989,6 +2076,7 @@ def run_supervisor_v1(
                 ),
             )
         finally:
+            resume_phase = active_phase
             active_phase = "SCRATCH_CLEANUP"
             trajectory.emit(active_phase, "STARTED")
             scratch_cleanup = _cleanup_scratch_roots_v1(
@@ -2001,10 +2089,8 @@ def run_supervisor_v1(
                 command_artifact="scratch-cleanup-v1.json",
                 decision="BOTH_SCRATCH_ROOTS_ABSENT",
             )
-            active_phase = "ENDPOINT_PAIR"
-        for actor, result in (("python", python), ("rust", rust)):
-            _publish_run_file(spec.run_root / f"{actor}.stdout", result.stdout)
-            _publish_run_file(spec.run_root / f"{actor}.stderr", result.stderr)
+            active_phase = resume_phase
+        active_phase = "ENDPOINT_SEQUENCE"
         trajectory.emit(
             active_phase,
             "COMPLETED",
@@ -2015,7 +2101,7 @@ def run_supervisor_v1(
             return_code=(
                 0 if python.return_code == 0 and rust.return_code == 0 else 1
             ),
-            decision="BOTH_ENDPOINTS_EXITED",
+            decision="ORDERED_ENDPOINTS_EXITED_WITHOUT_INTERVAL_OVERLAP",
             command_artifact="endpoint-resource-evidence-v1.json",
         )
         if (
@@ -2024,7 +2110,10 @@ def run_supervisor_v1(
             or python.return_code != 0
             or rust.return_code != 0
         ):
-            _fail("FULL_NODE6_ENDPOINT_FAILED", "an endpoint did not exit cleanly")
+            _fail(
+                "FULL_NODE6_ENDPOINT_SEQUENCE_FAILED",
+                "an ordered endpoint did not exit cleanly",
+            )
 
         active_phase = "ENDPOINT_OUTPUT_SEAL"
         trajectory.emit(active_phase, "STARTED")
@@ -2151,6 +2240,12 @@ def run_supervisor_v1(
                 ),
                 "endpoints": os.fspath(
                     spec.run_root / "endpoint-resource-evidence-v1.json"
+                ),
+                "python_endpoint": os.fspath(
+                    spec.run_root / "python-resource-evidence-v1.json"
+                ),
+                "rust_endpoint": os.fspath(
+                    spec.run_root / "rust-resource-evidence-v1.json"
                 ),
                 "trusted_host_replay": os.fspath(
                     spec.run_root / "host-replay-resource-evidence-v1.json"
@@ -2350,7 +2445,7 @@ def _load_technical_contract(project_root: Path) -> dict[str, object]:
     return value
 
 
-def _validate_contract_pair_deadline(contract: Mapping[str, object]) -> None:
+def _validate_contract_sequence_deadline(contract: Mapping[str, object]) -> None:
     envelope = contract.get("resource_envelope")
     if type(envelope) is not dict:
         _fail("FAIL_FULL_NODE6_SUPERVISOR_SOURCE", "resource envelope differs")
@@ -2362,13 +2457,18 @@ def _validate_contract_pair_deadline(contract: Mapping[str, object]) -> None:
         ):
             _fail(
                 "FAIL_FULL_NODE6_SUPERVISOR_SOURCE",
-                f"{actor} wall-time differs from pair deadline",
+                f"{actor} per-signature wall-time differs",
             )
     host_replay = envelope.get("trusted_host_replay")
     measurement = contract.get("measurement_policy")
     execution = contract.get("execution_policy")
     if (
         type(measurement) is not dict
+        or measurement.get("python_and_rust_run_concurrently") is not False
+        or measurement.get("python_then_rust_run_strictly_sequentially")
+        is not True
+        or measurement.get("maximum_concurrently_live_measurement_containers")
+        != 1
         or measurement.get("signatures_run_sequentially_within_endpoint") is not True
         or measurement.get("signature_order") != [1, 2]
         or measurement.get("per_signature_wall_time_seconds")
@@ -2376,13 +2476,18 @@ def _validate_contract_pair_deadline(contract: Mapping[str, object]) -> None:
         or measurement.get("ordered_signature_count") != ORDERED_SIGNATURE_COUNT
         or measurement.get("bounded_projection_wall_time_seconds")
         != BOUNDED_PROJECTION_WALL_TIME_SECONDS
-        or measurement.get("endpoint_pair_process_deadline_seconds")
-        != ENDPOINT_PAIR_WALL_TIME_SECONDS
+        or measurement.get("endpoint_process_deadline_seconds")
+        != ENDPOINT_WALL_TIME_SECONDS
+        or measurement.get("endpoint_sequence_process_budget_seconds")
+        != ENDPOINT_SEQUENCE_WALL_TIME_SECONDS
         or measurement.get("trusted_host_replay_process_deadline_seconds")
         != HOST_REPLAY_WALL_TIME_SECONDS
         or type(host_replay) is not dict
         or host_replay.get("wall_time_seconds") != HOST_REPLAY_WALL_TIME_SECONDS
         or type(execution) is not dict
+        or execution.get("endpoint_execution_order")
+        != ["PYTHON_ENDPOINT", "RUST_ENDPOINT"]
+        or execution.get("maximum_concurrently_live_endpoint_containers") != 1
         or execution.get("outer_supervisor_wall_time_seconds")
         != OUTER_SUPERVISOR_WALL_TIME_SECONDS
     ):
@@ -2425,7 +2530,7 @@ def _write_admission(
     source_commit: str,
 ) -> None:
     contract = _load_technical_contract(project_root)
-    _validate_contract_pair_deadline(contract)
+    _validate_contract_sequence_deadline(contract)
     _validate_contract_execution_source_closure(contract)
     predecessor = contract.get("predecessor")
     binding = contract.get("semantic_and_projection_binding")

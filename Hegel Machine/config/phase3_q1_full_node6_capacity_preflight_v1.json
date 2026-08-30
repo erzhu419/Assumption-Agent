@@ -130,6 +130,9 @@
     "maximum_saturation_rounds": 16
   },
   "resource_envelope": {
+    "host_control_plane_memory_reserve_bytes": 2147483648,
+    "maximum_concurrently_live_container_memory_bytes": 15032385536,
+    "minimum_available_memory_bytes": 17179869184,
     "outer_preparation_and_final_publication_reserve_bytes": 4294967296,
     "python_endpoint": {
       "cpuset_cpus": "0-11",
@@ -214,13 +217,16 @@
     "writable_mounts": "ONLY_FROZEN_PER_ACTOR_SCRATCH_AND_HOST_CAPTURED_STDOUT_PROFILE_AFTER_Q0_5A_WIRE_FREEZE"
   },
   "measurement_policy": {
-    "python_and_rust_run_concurrently": true,
+    "python_and_rust_run_concurrently": false,
+    "python_then_rust_run_strictly_sequentially": true,
+    "maximum_concurrently_live_measurement_containers": 1,
     "signatures_run_sequentially_within_endpoint": true,
     "signature_order": [1, 2],
     "per_signature_wall_time_seconds": 172800,
     "ordered_signature_count": 2,
     "bounded_projection_wall_time_seconds": 172800,
-    "endpoint_pair_process_deadline_seconds": 518400,
+    "endpoint_process_deadline_seconds": 518400,
+    "endpoint_sequence_process_budget_seconds": 1036800,
     "trusted_host_replay_process_deadline_seconds": 172800,
     "maximum_quotient_measurements_per_endpoint_and_signature": 1,
     "fresh_quotient_rerun_during_projection_forbidden": true,
@@ -275,8 +281,10 @@
     "exact_source_object_closure_required": true,
     "offline_cargo_locked_required": true,
     "distinct_readonly_endpoint_snapshots_required": true,
+    "endpoint_execution_order": ["PYTHON_ENDPOINT", "RUST_ENDPOINT"],
+    "maximum_concurrently_live_endpoint_containers": 1,
     "trusted_host_replay_after_both_endpoints_exit": true,
-    "outer_supervisor_wall_time_seconds": 693600,
+    "outer_supervisor_wall_time_seconds": 1212000,
     "network_allowed": false
   },
   "authority": {

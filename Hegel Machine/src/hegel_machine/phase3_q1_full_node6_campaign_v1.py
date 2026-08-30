@@ -167,6 +167,7 @@ def validate_contract_v1(value: object) -> dict[str, Any]:
         _fail("contract header, authorization or digest differs")
     lineage = _object(contract["source_lineage"], "source_lineage")
     _commit(lineage.get("required_ancestor_commit"), "required_ancestor_commit")
+    _commit(lineage.get("required_parent_commit"), "required_parent_commit")
     if (
         lineage.get("project_root")
         != "/home/erzhu419/.local/state/hegel-machine/m3-start-runtime-worktree/Hegel Machine"
@@ -204,7 +205,7 @@ def validate_contract_v1(value: object) -> dict[str, Any]:
     if (
         execution.get("logical_campaign_count") != 1
         or execution.get("maximum_supervisor_popen_count") != 1
-        or execution.get("supervisor_timeout_seconds") != 693600
+        or execution.get("supervisor_timeout_seconds") != 1212000
         or execution.get("pending_exit_code") != 75
         or execution.get("all_gates_before_consumption_and_popen") is not True
         or execution.get("pending_requires_zero_ledger_write_and_zero_popen")

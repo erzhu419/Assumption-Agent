@@ -30,11 +30,17 @@ def _capsule() -> dict[str, object]:
 def test_contract_and_authorization_replay_exactly() -> None:
     value = campaign.validate_contract_v1(_contract())
     assert value["contract_digest"] == (
-        "sha256:89c56375a195fa44b26358b9f367e47cceaee569e11c4d06cfdeb947b2c653bb"
+        "sha256:161ee0f5e0278ab2a4182fba29061bf57266f49744af738301692ce95068b309"
     )
     assert value["authorization"] == campaign.OWNER_AUTHORIZATION
     assert campaign.OWNER_AUTHORIZATION_TEXT == (
         "授权 Q1 full-node6 capacity-preflight diagnostic actual"
+    )
+    assert value["source_lineage"]["required_ancestor_commit"] == (
+        "33dc9cbb7d753f83650169d6d6b9caa508927764"
+    )
+    assert value["source_lineage"]["required_parent_commit"] == (
+        "0cc720c0ca11e48a174d69ca5c11087156a5ab03"
     )
 
 

@@ -80,6 +80,11 @@ def test_contract_binds_successful_q05b_predecessor_and_frozen_projection() -> N
 def test_measurement_and_pending_boundaries_are_explicit() -> None:
     value = _config()
     resource = value["resource_envelope"]
+    assert resource["maximum_concurrently_live_container_memory_bytes"] == (
+        14 * 1024**3
+    )
+    assert resource["host_control_plane_memory_reserve_bytes"] == 2 * 1024**3
+    assert resource["minimum_available_memory_bytes"] == 16 * 1024**3
     assert resource[
         "outer_preparation_and_final_publication_reserve_bytes"
     ] == 4 * 1024**3
@@ -94,11 +99,21 @@ def test_measurement_and_pending_boundaries_are_explicit() -> None:
     assert measurement["per_signature_wall_time_seconds"] == 172800
     assert measurement["ordered_signature_count"] == 2
     assert measurement["bounded_projection_wall_time_seconds"] == 172800
-    assert measurement["endpoint_pair_process_deadline_seconds"] == 518400
+    assert measurement["python_and_rust_run_concurrently"] is False
+    assert measurement["python_then_rust_run_strictly_sequentially"] is True
+    assert measurement["maximum_concurrently_live_measurement_containers"] == 1
+    assert measurement["endpoint_process_deadline_seconds"] == 518400
+    assert measurement["endpoint_sequence_process_budget_seconds"] == 1036800
     assert measurement["trusted_host_replay_process_deadline_seconds"] == 172800
     assert measurement["fresh_quotient_rerun_during_projection_forbidden"] is True
     assert measurement["projection_only_application_identity_replay_allowed"] is True
-    assert value["execution_policy"]["outer_supervisor_wall_time_seconds"] == 693600
+    execution = value["execution_policy"]
+    assert execution["endpoint_execution_order"] == [
+        "PYTHON_ENDPOINT",
+        "RUST_ENDPOINT",
+    ]
+    assert execution["maximum_concurrently_live_endpoint_containers"] == 1
+    assert execution["outer_supervisor_wall_time_seconds"] == 1212000
     pending = value["pending_policy"]
     assert pending["pre_consumption_pending_allowed"] is True
     assert pending["same_run_root_and_capsule_digest_required"] is True

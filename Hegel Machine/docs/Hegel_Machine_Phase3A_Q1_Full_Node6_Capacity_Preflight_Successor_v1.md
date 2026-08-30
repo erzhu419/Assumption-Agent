@@ -37,7 +37,8 @@ The predecessor authorization is consumed and cannot authorize this run.
 ## 3. Same-run measurement and projection
 
 Each endpoint measures each production signature at most once.  Odd runs
-before Sink within an endpoint; Python and Rust run concurrently.  The same
+before Sink within an endpoint.  Python runs first and its container must exit
+before Rust starts; Rust must exit before trusted host replay starts.  The same
 quotient-state return supplies final-bank material to the frozen four-stream
 program/cohort/class/coverage counting-discard projection.
 
@@ -72,7 +73,12 @@ authorization can be consumed, the campaign must replay:
 7. sufficient memory and storage reservation;
 8. absence of current/future permanent, probe, formal-Q1 and pointer roots.
 
-Storage admission reserves both concurrent endpoint envelopes plus 4 GiB for
+Memory admission is `16 GiB`: one `14 GiB` active-container ceiling plus a
+frozen `2 GiB` host control-plane reserve.  At most one measurement container
+is live, so Python, Rust and host replay memory ceilings are not added.  A
+failure to observe `MemAvailable >= 16 GiB` remains pre-consumption `PENDING`.
+
+Storage admission retains both endpoint envelopes plus 4 GiB for
 the two committed source snapshots, offline Rust build state and final
 publication.  Preparation is outside the measurement interval but is not
 pretended to be free.
@@ -88,9 +94,10 @@ Each endpoint receives a distinct 48 GiB host scratch root at `/scratch` and
 a distinct 32 GiB sidecar root at `/output`; projection spill is forbidden
 from the 1 GiB container `/tmp`.  The frozen per-signature wall guard remains
 172800 seconds.  Two ordered signatures plus one bounded projection interval
-give the endpoint pair a 518400-second deadline; the outer supervisor adds the
+give each endpoint a 518400-second deadline.  The two independently enforced
+process budgets therefore sum to 1036800 seconds; the outer supervisor adds the
 172800-second trusted-host replay ceiling, offline build and publication
-allowances for an exact 693600-second timeout.
+allowances for an exact 1212000-second timeout.
 The Python endpoint and the later trusted-host replay use the pinned CPython
 3.11.15 image; the outer campaign and dual supervisor remain isolated host
 Python 3.10 tools.  Both endpoints and the fresh post-endpoint replay container
