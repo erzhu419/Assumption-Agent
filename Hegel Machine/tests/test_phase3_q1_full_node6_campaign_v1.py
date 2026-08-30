@@ -30,18 +30,29 @@ def _capsule() -> dict[str, object]:
 def test_contract_and_authorization_replay_exactly() -> None:
     value = campaign.validate_contract_v1(_contract())
     assert value["contract_digest"] == (
-        "sha256:161ee0f5e0278ab2a4182fba29061bf57266f49744af738301692ce95068b309"
+        "sha256:d4de15401d4b5c71b245d2754f11c4d02b845782d71d1526869b2305c778a070"
     )
     assert value["authorization"] == campaign.OWNER_AUTHORIZATION
     assert campaign.OWNER_AUTHORIZATION_TEXT == (
-        "授权 Q1 full-node6 capacity-preflight diagnostic actual"
+        "授权 Q1 full-node6 capacity-preflight diagnostic successor-v2 actual"
     )
     assert value["source_lineage"]["required_ancestor_commit"] == (
         "33dc9cbb7d753f83650169d6d6b9caa508927764"
     )
     assert value["source_lineage"]["required_parent_commit"] == (
-        "0cc720c0ca11e48a174d69ca5c11087156a5ab03"
+        "473b39da5b95670a74f347b4e6933e507c4e7c57"
     )
+    assert value["superseded_campaign"]["capsule_digest"] == (
+        "sha256:85fc53352b957995162254d45bf32c75cf1f1444a01f2676cce1e773ea357c90"
+    )
+    assert value["superseded_campaign"]["measurement_endpoint_start_count"] == 0
+    assert value["preconsumption_gate_order"][3:8] == [
+        "PREDECESSOR_TERMINAL_AND_ARTIFACT",
+        "SUPERSEDED_CAMPAIGN_TERMINAL",
+        "TECHNICAL_CONTRACT_AND_FROZEN_SEMANTICS",
+        "EXACT_COMMIT_SNAPSHOT_MATERIALIZATION",
+        "PYTHON_RUST_OFFLINE_DEPENDENCIES",
+    ]
 
 
 def test_capsule_is_deterministic_and_keeps_q1_closed() -> None:

@@ -12,9 +12,9 @@ from typing import Any, Final, Mapping, NoReturn
 
 
 CONTRACT_SCHEMA_VERSION: Final = (
-    "hegel-phase3a-q1-full-node6-campaign-contract/1"
+    "hegel-phase3a-q1-full-node6-campaign-contract/2"
 )
-CONTRACT_ID: Final = "hegel-phase3a-q1-full-node6-campaign-v1"
+CONTRACT_ID: Final = "hegel-phase3a-q1-full-node6-campaign-successor-v2"
 CAPSULE_SCHEMA_VERSION: Final = "hegel-phase3a-q1-full-node6-capsule/1"
 PENDING_SCHEMA_VERSION: Final = "hegel-phase3a-q1-full-node6-pending/1"
 LEDGER_SCHEMA_VERSION: Final = "hegel-phase3a-q1-full-node6-ledger-record/1"
@@ -32,7 +32,7 @@ OUTCOME_UNKNOWN_TERMINAL: Final = (
 )
 
 OWNER_AUTHORIZATION_TEXT: Final = (
-    "授权 Q1 full-node6 capacity-preflight diagnostic actual"
+    "授权 Q1 full-node6 capacity-preflight diagnostic successor-v2 actual"
 )
 OWNER_AUTHORIZATION_BODY: Final = {
     "schema_version": "hegel-phase3a-q1-full-node6-owner-authorization/1",
@@ -55,7 +55,7 @@ OWNER_AUTHORIZATION_BODY: Final = {
 DOMAINS: Final = {
     "authorization": b"HEGEL/Q1/FULL_NODE6/AUTHORIZATION/V1\x00",
     "capsule": b"HEGEL/Q1/FULL_NODE6/CAPSULE/V1\x00",
-    "contract": b"HEGEL/Q1/FULL_NODE6/CONTRACT/V1\x00",
+    "contract": b"HEGEL/Q1/FULL_NODE6/CONTRACT/V2\x00",
     "ledger": b"HEGEL/Q1/FULL_NODE6/LEDGER/V1\x00",
     "outcome": b"HEGEL/Q1/FULL_NODE6/OUTCOME/V1\x00",
     "pending": b"HEGEL/Q1/FULL_NODE6/PENDING/V1\x00",
@@ -145,6 +145,7 @@ def validate_contract_v1(value: object) -> dict[str, Any]:
         "authorization",
         "source_lineage",
         "predecessor",
+        "superseded_campaign",
         "target",
         "fixed_paths",
         "preconsumption_gate_order",
@@ -192,6 +193,33 @@ def validate_contract_v1(value: object) -> dict[str, Any]:
         or predecessor.get("q1_state") != "NOT_RUN"
     ):
         _fail("predecessor terminal boundary differs")
+    superseded = _object(
+        contract["superseded_campaign"],
+        "superseded_campaign",
+    )
+    for name in (
+        "capsule_digest",
+        "consumed_ledger_record_digest",
+        "consumed_ledger_file_sha256",
+        "terminal_ledger_record_digest",
+        "terminal_ledger_file_sha256",
+        "outcome_digest",
+        "trajectory_event_log_file_sha256",
+        "trajectory_terminal_file_sha256",
+    ):
+        _digest(superseded.get(name), f"superseded_campaign.{name}")
+    _commit(superseded.get("source_commit"), "superseded_campaign.source_commit")
+    if (
+        superseded.get("terminal_status") != FAILED_TERMINAL
+        or superseded.get("error_code") != "FAIL_FULL_NODE6_SUPERVISOR_SOURCE"
+        or superseded.get("trajectory_event_count") != 8
+        or superseded.get("measurement_endpoint_start_count") != 0
+        or superseded.get("q1_state") != "NOT_RUN"
+        or superseded.get("q1_gate_count") != 0
+        or superseded.get("q1_gate_mask") != 0
+        or superseded.get("retry_or_resume_allowed") is not False
+    ):
+        _fail("superseded campaign terminal boundary differs")
     target = _object(contract["target"], "target")
     if (
         target.get("action_id") != "full-node6-capacity-preflight-v1"

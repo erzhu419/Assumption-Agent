@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -126,8 +127,13 @@ def test_live_pending_is_bound_to_the_same_capsule(
         },
     )
     monkeypatch.setattr(tool, "_predecessor_gate", lambda _contract: {"ok": True})
+    monkeypatch.setattr(
+        tool,
+        "_superseded_campaign_gate",
+        lambda _contract: {"measurement_endpoint_start_count": 0},
+    )
     monkeypatch.setattr(tool, "_technical_contract_gate", lambda _contract: {"ok": True})
-    monkeypatch.setattr(tool, "_dependency_gate", lambda _contract: {"ok": True})
+    monkeypatch.setattr(tool, "_dependency_gate", lambda *_args: {"ok": True})
     monkeypatch.setattr(
         tool,
         "_docker_gate",
@@ -157,6 +163,24 @@ def test_live_pending_is_bound_to_the_same_capsule(
     assert pending["authorization_consumption_count"] == 0
     assert pending["supervisor_popen_count"] == 0
     assert pending["q1_state"] == "NOT_RUN"
+
+
+def test_supervisor_import_permission_failure_is_preconsumption_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tool = _load_tool()
+
+    class Loader:
+        def exec_module(self, _module):
+            raise PermissionError("synthetic supervisor read permission")
+
+    spec = SimpleNamespace(loader=Loader())
+    monkeypatch.setattr(tool.importlib.util, "spec_from_file_location", lambda *_args: spec)
+    monkeypatch.setattr(tool.importlib.util, "module_from_spec", lambda _spec: SimpleNamespace())
+    with pytest.raises(tool.GatePending) as caught:
+        tool._load_supervisor_module_v1()
+    assert caught.value.phase == "PATH_AND_FORMAT"
+    assert caught.value.condition == "SUPERVISOR_SOURCE_IMPORT_UNAVAILABLE"
 
 
 def test_preflight_main_emits_digest_bound_pending(
@@ -250,7 +274,7 @@ def test_second_absence_pending_carries_the_complete_replayed_capsule(
     assert caught.value.capsule_digest_hint == capsule["capsule_digest"]
 
 
-def test_source_gate_binds_two_hop_parent_and_diffs_from_true_predecessor(
+def test_source_gate_binds_required_parent_descendant_and_diffs_from_predecessor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     tool = _load_tool()
@@ -270,7 +294,7 @@ def test_source_gate_binds_two_hop_parent_and_diffs_from_true_predecessor(
             ("rev-parse", "HEAD^{tree}"): tree,
             ("rev-parse", "--show-prefix"): "Hegel Machine/",
             ("rev-parse", "HEAD^"): required_parent,
-            ("rev-parse", f"{required_parent}^"): ancestor,
+            ("merge-base", ancestor, required_parent): ancestor,
             (
                 "diff",
                 "--name-only",
@@ -323,14 +347,24 @@ def test_source_gate_binds_two_hop_parent_and_diffs_from_true_predecessor(
     )
 
 
+def test_superseded_campaign_replays_terminal_and_proves_zero_measurement_start() -> None:
+    tool = _load_tool()
+    receipt = tool._superseded_campaign_gate(_contract(tool))
+    assert receipt["terminal_status"] == tool._core.FAILED_TERMINAL
+    assert receipt["measurement_endpoint_start_count"] == 0
+    assert receipt["trajectory_event_count"] == 8
+    assert receipt["q1_state"] == "NOT_RUN"
+    assert receipt["retry_or_resume_allowed"] is False
+
+
 @pytest.mark.parametrize(
-    ("head_parent", "parent_parent"),
+    ("head_parent", "merge_base"),
     (("f" * 40, "a" * 40), ("b" * 40, "f" * 40)),
 )
 def test_source_gate_rejects_either_broken_lineage_hop(
     monkeypatch: pytest.MonkeyPatch,
     head_parent: str,
-    parent_parent: str,
+    merge_base: str,
 ) -> None:
     tool = _load_tool()
     ancestor = "a" * 40
@@ -344,7 +378,7 @@ def test_source_gate_rejects_either_broken_lineage_hop(
             ("rev-parse", "HEAD^{tree}"): "d" * 40,
             ("rev-parse", "--show-prefix"): "Hegel Machine/",
             ("rev-parse", "HEAD^"): head_parent,
-            ("rev-parse", f"{required_parent}^"): parent_parent,
+            ("merge-base", ancestor, required_parent): merge_base,
         }
         return values[arguments]
 
@@ -424,9 +458,124 @@ def test_dependency_setup_failure_removes_its_transient_probe(
 
     monkeypatch.setattr(tool.shutil, "copytree", fail_copy)
     with pytest.raises(tool.GatePending) as caught:
-        tool._dependency_gate(contract)
+        tool._dependency_gate(contract, tool._git("rev-parse", "HEAD"))
     assert caught.value.condition == "CARGO_OFFLINE_CLOSURE_UNAVAILABLE"
     assert not probe.exists()
+
+
+def test_readonly_command_pending_includes_bounded_process_output() -> None:
+    tool = _load_tool()
+    with pytest.raises(tool.GatePending) as caught:
+        tool._run_readonly_command(
+            [
+                "/usr/bin/python3.10",
+                "-c",
+                (
+                    "import sys;sys.stdout.write('recipe-out');"
+                    "sys.stderr.write('permission denied');sys.exit(7)"
+                ),
+            ],
+            phase="PYTHON_RUST_OFFLINE_DEPENDENCIES",
+            condition="PYTHON_SOURCE_RECIPE_QUALIFICATION_FAILED",
+            timeout=15,
+        )
+    assert "return_code=7" in caught.value.detail
+    assert "stdout_tail='recipe-out'" in caught.value.detail
+    assert "stderr_tail='permission denied'" in caught.value.detail
+
+
+def test_exact_commit_materialization_failure_is_pending_and_cleans_probe(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tool = _load_tool()
+    cargo_cache = tmp_path / "cargo-cache"
+    cargo_cache.mkdir()
+    probe = tmp_path / "probe"
+
+    class SnapshotFailure(RuntimeError):
+        code = "FAIL_FULL_NODE6_SUPERVISOR_SOURCE"
+        detail = "synthetic nested repository blob failure"
+
+    def fail_materialization(_project, _commit, target, _paths):
+        target.mkdir()
+        raise SnapshotFailure
+
+    supervisor = SimpleNamespace(
+        FullNode6SupervisorError=SnapshotFailure,
+        PYTHON_ENDPOINT_SOURCE_PATHS=(
+            "tools/phase3_q1_full_node6_capacity_entrypoint_v1.py",
+        ),
+        RUST_ENDPOINT_SOURCE_PATHS=("rust/example/Cargo.toml",),
+        HOST_REPLAY_SOURCE_PATHS=("src/example.py",),
+        EXECUTION_CLOSURE_ROW_COUNT=2,
+        _repository_tree_prefix_v1=lambda _project: "Hegel Machine/",
+        _materialize_snapshot=fail_materialization,
+    )
+    monkeypatch.setattr(tool, "_load_supervisor_module_v1", lambda: supervisor)
+    contract = {
+        "fixed_paths": {
+            "cargo_cache_source": str(cargo_cache),
+            "probe_root": str(probe),
+        },
+        "target": {
+            "python_endpoint_relative_path": (
+                "tools/phase3_q1_full_node6_capacity_entrypoint_v1.py"
+            ),
+            "rust_manifest_relative_path": "rust/example/Cargo.toml",
+            "rust_binary_name": "example",
+        },
+    }
+    with pytest.raises(tool.GatePending) as caught:
+        tool._dependency_gate(contract, "1" * 40)
+    assert caught.value.phase == "EXACT_COMMIT_SNAPSHOT_MATERIALIZATION"
+    assert caught.value.condition == "EXACT_COMMIT_BLOB_MATERIALIZATION_UNAVAILABLE"
+    assert not probe.exists()
+
+
+def test_exact_materialization_pending_precedes_all_state_and_popen(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tool = _load_tool()
+    contract = _temporary_contract(tool, tmp_path)
+    digest = "sha256:" + "a" * 64
+    popen_count = 0
+
+    def unexpected_postconsumption(*_args, **_kwargs):
+        nonlocal popen_count
+        popen_count += 1
+        raise AssertionError("postconsumption path must remain unreachable")
+
+    monkeypatch.setattr(tool, "load_contract_v1", lambda: contract)
+    monkeypatch.setattr(tool, "_replay_existing", lambda *_args: None)
+    monkeypatch.setattr(
+        tool,
+        "derive_preflight_v1",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            tool.GatePending(
+                "EXACT_COMMIT_SNAPSHOT_MATERIALIZATION",
+                "EXACT_COMMIT_BLOB_MATERIALIZATION_UNAVAILABLE",
+                "synthetic exact commit blob failure",
+            )
+        ),
+    )
+    monkeypatch.setattr(tool, "_execute_postconsumption_v1", unexpected_postconsumption)
+    monkeypatch.setattr(tool._CampaignLock, "__enter__", lambda self: self)
+    monkeypatch.setattr(tool._CampaignLock, "__exit__", lambda self, *args: None)
+    with pytest.raises(tool.GatePending) as caught:
+        tool.execute_once_v1(digest)
+    assert caught.value.capsule_digest_hint == digest
+    assert popen_count == 0
+    for name in (
+        "ledger_root",
+        "evidence_root",
+        "trajectory_root",
+        "run_root",
+        "probe_root",
+        "artifact_path",
+    ):
+        assert not Path(contract["fixed_paths"][name]).exists()
 
 
 def test_dependency_receipt_is_source_recipe_bound_and_probe_is_removed(
@@ -453,6 +602,16 @@ def test_dependency_receipt_is_source_recipe_bound_and_probe_is_removed(
     }
 
     commands: list[list[str]] = []
+    readonly_roots: list[str] = []
+    supervisor = tool._load_supervisor_module_v1()
+    original_make_tree_readonly = supervisor._make_tree_readonly
+
+    def make_tree_readonly(root: Path) -> None:
+        readonly_roots.append(root.name)
+        original_make_tree_readonly(root)
+
+    monkeypatch.setattr(supervisor, "_make_tree_readonly", make_tree_readonly)
+    monkeypatch.setattr(tool, "_load_supervisor_module_v1", lambda: supervisor)
 
     def completed(command, **_kwargs):
         commands.append(list(command))
@@ -474,7 +633,7 @@ def test_dependency_receipt_is_source_recipe_bound_and_probe_is_removed(
         "_sha256_file",
         lambda *_args, **_kwargs: ("sha256:" + "2" * 64, 12345),
     )
-    receipt = tool._dependency_gate(contract)
+    receipt = tool._dependency_gate(contract, tool._git("rev-parse", "HEAD"))
     assert receipt["cargo_test_locked_offline_all_targets"] == "PASS"
     assert receipt["rust_release_binary_sha256"] == "sha256:" + "2" * 64
     assert receipt["python_endpoint_runtime_version"] == "3.11.15"
@@ -484,6 +643,10 @@ def test_dependency_receipt_is_source_recipe_bound_and_probe_is_removed(
     assert receipt["rust_release_build_source_row_count"] == 21
     assert receipt["endpoint_execution_union_row_count"] == 55
     assert receipt["exact_execution_source_closure"] == "PASS"
+    assert receipt["exact_commit_snapshot_materialization"] == "PASS"
+    assert receipt["host_replay_source_row_count"] == 1
+    assert receipt["repository_tree_prefix"] == "Hegel Machine/"
+    assert readonly_roots == ["python-source"]
     python_recipe = next(
         command
         for command in commands
@@ -669,6 +832,146 @@ def test_no_replace_publication_preserves_existing_exact_bytes(tmp_path: Path) -
     assert (root / "record.json").read_bytes() == expected
     assert tool._publish_or_replay_exact(root, "record.json", first) == expected
     assert [path.name for path in root.iterdir()] == ["record.json"]
+
+
+def test_consumed_publication_failure_before_final_link_rolls_back_to_pending(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tool = _load_tool()
+    contract = _temporary_contract(tool, tmp_path)
+    capsule = _capsule(tool, contract)
+    consumed = _consumed(tool, contract, capsule)
+    ledger = Path(contract["fixed_paths"]["ledger_root"])
+    ledger.mkdir(mode=0o700)
+    monkeypatch.setattr(
+        tool,
+        "_publish_no_replace",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            OSError("synthetic failure before final link")
+        ),
+    )
+    with pytest.raises(tool.GatePending) as caught:
+        tool._publish_consumed_or_pending_v1(
+            ledger,
+            consumed,
+            capsule,
+            capsule["capsule_digest"],
+        )
+    assert caught.value.condition == "CONSUMED_LEDGER_PUBLICATION_NOT_COMMITTED"
+    assert caught.value.capsule == capsule
+    assert not ledger.exists()
+
+
+def test_consumed_publication_exact_final_after_error_remains_consumed(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tool = _load_tool()
+    contract = _temporary_contract(tool, tmp_path)
+    capsule = _capsule(tool, contract)
+    consumed = _consumed(tool, contract, capsule)
+    ledger = Path(contract["fixed_paths"]["ledger_root"])
+    ledger.mkdir(mode=0o700)
+
+    def link_then_fail(root: Path, name: str, value: object) -> bytes:
+        (root / name).write_bytes(tool._core.canonical_json_bytes_v1(value))
+        raise OSError("synthetic error after final link")
+
+    monkeypatch.setattr(tool, "_publish_no_replace", link_then_fail)
+    tool._publish_consumed_or_pending_v1(
+        ledger,
+        consumed,
+        capsule,
+        capsule["capsule_digest"],
+    )
+    assert json.loads((ledger / "campaign.consumed.json").read_bytes()) == consumed
+
+
+def test_consumed_publication_nonexact_final_is_terminal_uncertain(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tool = _load_tool()
+    contract = _temporary_contract(tool, tmp_path)
+    capsule = _capsule(tool, contract)
+    consumed = _consumed(tool, contract, capsule)
+    ledger = Path(contract["fixed_paths"]["ledger_root"])
+    ledger.mkdir(mode=0o700)
+
+    def corrupt_then_fail(root: Path, name: str, _value: object) -> bytes:
+        (root / name).write_bytes(b"{}\n")
+        raise OSError("synthetic ambiguous final link")
+
+    monkeypatch.setattr(tool, "_publish_no_replace", corrupt_then_fail)
+    with pytest.raises(tool.CampaignTerminal) as caught:
+        tool._publish_consumed_or_pending_v1(
+            ledger,
+            consumed,
+            capsule,
+            capsule["capsule_digest"],
+        )
+    assert caught.value.code == "CONSUMED_LEDGER_PUBLICATION_UNCERTAIN"
+
+
+def test_consumed_publication_recovers_real_postlink_directory_fsync_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tool = _load_tool()
+    contract = _temporary_contract(tool, tmp_path)
+    capsule = _capsule(tool, contract)
+    consumed = _consumed(tool, contract, capsule)
+    ledger = Path(contract["fixed_paths"]["ledger_root"])
+    ledger.mkdir(mode=0o700)
+    real_fsync = tool.os.fsync
+    fsync_calls = 0
+
+    def fail_first_directory_fsync(descriptor: int) -> None:
+        nonlocal fsync_calls
+        fsync_calls += 1
+        if fsync_calls == 2:
+            raise OSError("synthetic first ledger directory fsync failure")
+        real_fsync(descriptor)
+
+    monkeypatch.setattr(tool.os, "fsync", fail_first_directory_fsync)
+    tool._publish_consumed_or_pending_v1(
+        ledger,
+        consumed,
+        capsule,
+        capsule["capsule_digest"],
+    )
+    assert fsync_calls == 3
+    assert json.loads((ledger / "campaign.consumed.json").read_bytes()) == consumed
+    assert [path.name for path in ledger.iterdir()] == ["campaign.consumed.json"]
+
+
+def test_consumed_exact_final_with_temporary_residue_is_terminal_uncertain(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tool = _load_tool()
+    contract = _temporary_contract(tool, tmp_path)
+    capsule = _capsule(tool, contract)
+    consumed = _consumed(tool, contract, capsule)
+    ledger = Path(contract["fixed_paths"]["ledger_root"])
+    ledger.mkdir(mode=0o700)
+
+    def leave_residue(root: Path, name: str, value: object) -> bytes:
+        payload = tool._core.canonical_json_bytes_v1(value)
+        (root / name).write_bytes(payload)
+        (root / ".campaign.consumed.json.tmp-residue").write_bytes(payload)
+        raise OSError("synthetic temporary-link cleanup failure")
+
+    monkeypatch.setattr(tool, "_publish_no_replace", leave_residue)
+    with pytest.raises(tool.CampaignTerminal) as caught:
+        tool._publish_consumed_or_pending_v1(
+            ledger,
+            consumed,
+            capsule,
+            capsule["capsule_digest"],
+        )
+    assert caught.value.code == "CONSUMED_LEDGER_PUBLICATION_UNCERTAIN"
 
 
 def test_finalizer_publishes_terminal_when_external_outcome_publication_fails(

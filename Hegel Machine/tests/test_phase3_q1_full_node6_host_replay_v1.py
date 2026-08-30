@@ -946,8 +946,11 @@ def test_exact_source_snapshots_bind_34_21_55_rows_and_reject_extra_file(
         for forbidden in ("phase3_m25_split", "phase3_m25_rows", "phase3_dsl_v1")
     )
 
-    def git_blob(_root, arguments, _label):
-        relative = arguments[1].split(":", 1)[1]
+    def git_blob(root, arguments, _label):
+        if arguments == ["rev-parse", "--show-toplevel"]:
+            return (str(root) + "\n").encode("utf-8")
+        assert arguments[:2] == ["cat-file", "blob"]
+        relative = arguments[2].split(":", 1)[1]
         return (relative + "\n").encode("ascii")
 
     monkeypatch.setattr(supervisor, "_git_output", git_blob)
@@ -969,6 +972,139 @@ def test_exact_source_snapshots_bind_34_21_55_rows_and_reject_extra_file(
     with pytest.raises(supervisor.FullNode6SupervisorError) as caught:
         supervisor._verify_snapshot_manifest_v1(snapshot, rows)
     assert caught.value.code == "FAIL_FULL_NODE6_SUPERVISOR_SOURCE"
+
+
+def test_readonly_git_timeout_is_frozen_and_maps_to_source_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: dict[str, object] = {}
+
+    def timeout(command, **kwargs):
+        observed["command"] = command
+        observed["timeout"] = kwargs.get("timeout")
+        raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+    monkeypatch.setattr(supervisor.subprocess, "run", timeout)
+    with pytest.raises(supervisor.FullNode6SupervisorError) as caught:
+        supervisor._git_output(
+            tmp_path,
+            ["rev-parse", "--show-toplevel"],
+            "repository top-level",
+        )
+    assert caught.value.code == "FAIL_FULL_NODE6_SUPERVISOR_SOURCE"
+    assert observed["timeout"] == supervisor.GIT_READONLY_TIMEOUT_SECONDS == 60
+    assert observed["command"] == [
+        "/usr/bin/git",
+        "-C",
+        str(tmp_path),
+        "rev-parse",
+        "--show-toplevel",
+    ]
+
+
+def test_snapshot_materialization_uses_workspace_repository_prefix_but_relative_outputs(
+    native_tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = native_tmp_path / "repo"
+    project = repository / "Hegel Machine"
+    project.mkdir(parents=True)
+    observed: list[tuple[str, ...]] = []
+
+    def git_blob(root, arguments, _label):
+        assert root == project
+        observed.append(tuple(arguments))
+        if arguments == ["rev-parse", "--show-toplevel"]:
+            return (str(repository) + "\n").encode("utf-8")
+        assert arguments[:2] == ["cat-file", "blob"]
+        return (arguments[2] + "\n").encode("utf-8")
+
+    monkeypatch.setattr(supervisor, "_git_output", git_blob)
+    python_target = native_tmp_path / "python-snapshot"
+    rust_target = native_tmp_path / "rust-snapshot"
+    host_target = native_tmp_path / "host-snapshot"
+    python_rows = supervisor._materialize_snapshot(
+        project,
+        COMMIT,
+        python_target,
+        supervisor.PYTHON_ENDPOINT_SOURCE_PATHS,
+    )
+    rust_rows = supervisor._materialize_snapshot(
+        project,
+        COMMIT,
+        rust_target,
+        supervisor.RUST_ENDPOINT_SOURCE_PATHS,
+    )
+    host_rows = supervisor._materialize_host_replay_snapshot(
+        project,
+        COMMIT,
+        host_target,
+    )
+    assert (len(python_rows), len(rust_rows), len(host_rows)) == (34, 21, 1)
+    all_paths = (
+        *supervisor.PYTHON_ENDPOINT_SOURCE_PATHS,
+        *supervisor.RUST_ENDPOINT_SOURCE_PATHS,
+        *supervisor.HOST_REPLAY_SOURCE_PATHS,
+    )
+    blob_commands = [row for row in observed if row[:2] == ("cat-file", "blob")]
+    assert blob_commands == [
+        ("cat-file", "blob", f"{COMMIT}:Hegel Machine/{relative}")
+        for relative in all_paths
+    ]
+    assert observed.count(("rev-parse", "--show-toplevel")) == 3
+    for target, paths, rows in (
+        (python_target, supervisor.PYTHON_ENDPOINT_SOURCE_PATHS, python_rows),
+        (rust_target, supervisor.RUST_ENDPOINT_SOURCE_PATHS, rust_rows),
+        (host_target, supervisor.HOST_REPLAY_SOURCE_PATHS, host_rows),
+    ):
+        assert tuple(row["relative_path"] for row in rows) == tuple(paths)
+        assert all((target / relative).is_file() for relative in paths)
+        assert not (target / "Hegel Machine").exists()
+
+
+def test_snapshot_materialization_reads_real_nested_repository_commit_blob(
+    native_tmp_path: Path,
+) -> None:
+    repository = native_tmp_path / "repository"
+    project = repository / "Hegel Machine"
+    source = project / "tools/example.py"
+    source.parent.mkdir(parents=True)
+    payload = b"print('exact nested commit blob')\n"
+    source.write_bytes(payload)
+    for command in (
+        ["/usr/bin/git", "init", "-q", str(repository)],
+        ["/usr/bin/git", "-C", str(repository), "config", "user.name", "Test"],
+        [
+            "/usr/bin/git",
+            "-C",
+            str(repository),
+            "config",
+            "user.email",
+            "test@example.invalid",
+        ],
+        ["/usr/bin/git", "-C", str(repository), "add", "Hegel Machine/tools/example.py"],
+        ["/usr/bin/git", "-C", str(repository), "commit", "-q", "-m", "fixture"],
+    ):
+        subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    commit = subprocess.run(
+        ["/usr/bin/git", "-C", str(repository), "rev-parse", "HEAD"],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    ).stdout.strip()
+    target = native_tmp_path / "snapshot"
+    rows = supervisor._materialize_snapshot(
+        project,
+        commit,
+        target,
+        ("tools/example.py",),
+    )
+    supervisor._verify_snapshot_manifest_v1(target, rows)
+    assert (target / "tools/example.py").read_bytes() == payload
+    assert not (target / "Hegel Machine").exists()
+    assert rows[0]["relative_path"] == "tools/example.py"
 
 
 def test_public_cli_requires_fixed_trajectory_root(tmp_path: Path) -> None:

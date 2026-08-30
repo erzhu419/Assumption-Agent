@@ -145,6 +145,7 @@ SECCOMP_SHA256: Final = (
     "sha256:d1284e4731683b73352ecdd1577704ea87aa0b5c582b7b00757c3db4d2c950ca"
 )
 RUST_BUILD_TIMEOUT_SECONDS: Final = 1800
+GIT_READONLY_TIMEOUT_SECONDS: Final = 60
 PER_SIGNATURE_WALL_TIME_SECONDS: Final = 172800
 ORDERED_SIGNATURE_COUNT: Final = 2
 BOUNDED_PROJECTION_WALL_TIME_SECONDS: Final = 172800
@@ -2299,6 +2300,13 @@ def _git_output(project_root: Path, arguments: Sequence[str], label: str) -> byt
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=False,
+            timeout=GIT_READONLY_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as error:
+        _fail(
+            "FAIL_FULL_NODE6_SUPERVISOR_SOURCE",
+            f"{label}: read-only Git command exceeded "
+            f"{GIT_READONLY_TIMEOUT_SECONDS}s: {error}",
         )
     except OSError as error:
         _fail("FAIL_FULL_NODE6_SUPERVISOR_SOURCE", f"{label}: {error}")
@@ -2327,6 +2335,26 @@ def _replay_clean_commit(project_root: Path, source_commit: str) -> None:
         _fail("FAIL_FULL_NODE6_SUPERVISOR_SOURCE", "source is not the exact clean commit")
 
 
+def _repository_tree_prefix_v1(project_root: Path) -> str:
+    """Return the project directory prefix inside the repository commit tree."""
+
+    try:
+        project = project_root.resolve(strict=True)
+        top_payload = _git_output(
+            project_root,
+            ["rev-parse", "--show-toplevel"],
+            "repository top-level",
+        )
+        top_text = top_payload.decode("utf-8").strip()
+        top = Path(top_text).resolve(strict=True)
+        relative = project.relative_to(top)
+    except (OSError, UnicodeDecodeError, ValueError) as error:
+        _fail("FAIL_FULL_NODE6_SUPERVISOR_SOURCE", f"repository prefix: {error}")
+    if project != project_root or project_root.is_symlink() or not top_text:
+        _fail("FAIL_FULL_NODE6_SUPERVISOR_SOURCE", "repository prefix differs")
+    return "" if relative == Path(".") else relative.as_posix() + "/"
+
+
 def _materialize_snapshot(
     project_root: Path,
     source_commit: str,
@@ -2337,6 +2365,7 @@ def _materialize_snapshot(
 
     if target.exists() or not source_paths or len(set(source_paths)) != len(source_paths):
         _fail("FAIL_FULL_NODE6_SUPERVISOR_SOURCE", f"snapshot registry: {target.name}")
+    repository_prefix = _repository_tree_prefix_v1(project_root)
     target.mkdir(mode=0o700)
     rows: list[dict[str, object]] = []
     try:
@@ -2352,7 +2381,11 @@ def _materialize_snapshot(
                 _fail("FAIL_FULL_NODE6_SUPERVISOR_SOURCE", "snapshot path differs")
             payload = _git_output(
                 project_root,
-                ["show", f"{source_commit}:{relative}"],
+                [
+                    "cat-file",
+                    "blob",
+                    f"{source_commit}:{repository_prefix}{relative}",
+                ],
                 f"blob {relative}",
             )
             destination = target / relative

@@ -70,7 +70,7 @@ def _load_core() -> Any:
 _core = _load_core()
 
 
-def _execution_source_registry_v1() -> dict[str, tuple[str, ...] | int]:
+def _load_supervisor_module_v1() -> Any:
     name = "_hegel_q1_full_node6_supervisor_registry_v1"
     sys.modules.pop(name, None)
     spec = importlib.util.spec_from_file_location(name, SUPERVISOR_PATH)
@@ -83,6 +83,20 @@ def _execution_source_registry_v1() -> dict[str, tuple[str, ...] | int]:
     sys.modules[name] = module
     try:
         spec.loader.exec_module(module)
+    except (OSError, ImportError) as error:
+        raise GatePending(
+            "PATH_AND_FORMAT",
+            "SUPERVISOR_SOURCE_IMPORT_UNAVAILABLE",
+            str(error),
+        ) from error
+    except Exception as error:
+        _terminal("EXECUTION_SOURCE_CLOSURE_DIFFERS", str(error))
+    return module
+
+
+def _execution_source_registry_v1() -> dict[str, tuple[str, ...] | int]:
+    module = _load_supervisor_module_v1()
+    try:
         python_paths = tuple(module.PYTHON_ENDPOINT_SOURCE_PATHS)
         rust_paths = tuple(module.RUST_ENDPOINT_SOURCE_PATHS)
         host_paths = tuple(module.HOST_REPLAY_SOURCE_PATHS)
@@ -226,13 +240,13 @@ def _source_gate(contract: Mapping[str, Any]) -> dict[str, object]:
                 f"observed parent={parent}"
             ),
         )
-    parent_parent = _git("rev-parse", f"{required_parent}^")
-    if parent_parent != ancestor:
+    merge_base = _git("merge-base", ancestor, required_parent)
+    if merge_base != ancestor:
         _terminal(
             "SOURCE_LINEAGE_DIFFERS",
             (
-                f"required parent must be the direct child of {ancestor}; "
-                f"observed parent={parent_parent}"
+                f"required parent must descend from {ancestor}; "
+                f"observed merge-base={merge_base}"
             ),
         )
     observed_repo_paths = tuple(
@@ -392,6 +406,166 @@ def _predecessor_gate(contract: Mapping[str, Any]) -> dict[str, object]:
     }
 
 
+def _superseded_campaign_gate(contract: Mapping[str, Any]) -> dict[str, object]:
+    expected = contract["superseded_campaign"]
+    consumed_path = Path(str(expected["consumed_ledger_path"]))
+    consumed_raw = _read_regular(
+        consumed_path,
+        "superseded campaign consumed ledger",
+    )
+    consumed_raw_digest = "sha256:" + sha256(consumed_raw).hexdigest()
+    consumed = _strict_json(consumed_raw, "superseded campaign consumed ledger")
+    if (
+        consumed_raw_digest != expected["consumed_ledger_file_sha256"]
+        or type(consumed) is not dict
+        or consumed.get("record_digest")
+        != expected["consumed_ledger_record_digest"]
+        or consumed.get("capsule_digest") != expected["capsule_digest"]
+        or consumed.get("status") != _core.CONSUMED
+        or consumed.get("previous_record_digest_or_null") is not None
+    ):
+        _terminal(
+            "SUPERSEDED_CAMPAIGN_CONSUMED_DIFFERS",
+            "consumed ledger binding differs",
+        )
+    ledger_path = Path(str(expected["terminal_ledger_path"]))
+    raw = _read_regular(ledger_path, "superseded campaign terminal ledger")
+    raw_digest = "sha256:" + sha256(raw).hexdigest()
+    if raw_digest != expected["terminal_ledger_file_sha256"]:
+        _terminal("SUPERSEDED_CAMPAIGN_LEDGER_BYTES_DIFFER", raw_digest)
+    value = _strict_json(raw, "superseded campaign terminal ledger")
+    if type(value) is not dict or type(value.get("body")) is not dict:
+        _terminal(
+            "SUPERSEDED_CAMPAIGN_LEDGER_WIRE",
+            "terminal ledger must contain one body object",
+        )
+    body = value["body"]
+    outcome = body.get("outcome")
+    if type(outcome) is not dict:
+        _terminal(
+            "SUPERSEDED_CAMPAIGN_LEDGER_WIRE",
+            "terminal ledger must contain one outcome object",
+        )
+    if (
+        value.get("record_digest") != expected["terminal_ledger_record_digest"]
+        or value.get("previous_record_digest_or_null")
+        != expected["consumed_ledger_record_digest"]
+        or value.get("capsule_digest") != expected["capsule_digest"]
+        or value.get("status") != expected["terminal_status"]
+        or body.get("outcome_digest") != expected["outcome_digest"]
+        or body.get("retry_or_resume_allowed") is not False
+        or outcome.get("status") != expected["terminal_status"]
+        or outcome.get("q1_state") != "NOT_RUN"
+        or outcome.get("q1_gate_count") != 0
+        or outcome.get("q1_gate_mask") != 0
+        or outcome.get("q1_output_slots") != [None] * 8
+        or outcome.get("success") is not False
+        or outcome.get("retry_or_resume_allowed") is not False
+        or outcome.get("campaign_execution_count") != 1
+        or outcome.get("authorization_consumption_count") != 1
+        or outcome.get("supervisor_popen_count") != 1
+    ):
+        _terminal(
+            "SUPERSEDED_CAMPAIGN_TERMINAL_DIFFERS",
+            "failed predecessor terminal boundary differs",
+        )
+    event_log_path = Path(str(expected["trajectory_event_log_path"]))
+    event_log_raw = _read_regular(
+        event_log_path,
+        "superseded campaign trajectory event log",
+    )
+    event_log_digest = "sha256:" + sha256(event_log_raw).hexdigest()
+    try:
+        event_lines = event_log_raw.splitlines()
+        events = [
+            _strict_json(line, f"superseded trajectory event {index}")
+            for index, line in enumerate(event_lines, 1)
+        ]
+    except CampaignTerminal:
+        raise
+    expected_sequence = (
+        ("SUPERVISOR", "STARTED"),
+        ("SOURCE_REPLAY", "STARTED"),
+        ("SOURCE_REPLAY", "COMPLETED"),
+        ("LOCAL_IMAGE_ADMISSION", "STARTED"),
+        ("LOCAL_IMAGE_ADMISSION", "COMPLETED"),
+        ("SOURCE_SNAPSHOTS", "STARTED"),
+        ("SOURCE_SNAPSHOTS", "FAILED"),
+        ("TERMINAL", "FAILED"),
+    )
+    observed_sequence: list[tuple[object, object]] = []
+    for index, event in enumerate(events, 1):
+        if (
+            type(event) is not dict
+            or event.get("schema_version")
+            != "hegel-phase3a-q1-full-node6-supervisor-trajectory-event/1"
+            or event.get("event_ordinal") != index
+            or event.get("capsule_digest") != expected["capsule_digest"]
+            or event.get("source_commit") != expected["source_commit"]
+        ):
+            _terminal(
+                "SUPERSEDED_CAMPAIGN_TRAJECTORY_DIFFERS",
+                f"trajectory event {index} differs",
+            )
+        observed_sequence.append((event.get("phase"), event.get("status")))
+    if (
+        event_log_digest != expected["trajectory_event_log_file_sha256"]
+        or len(events) != expected["trajectory_event_count"]
+        or tuple(observed_sequence) != expected_sequence
+    ):
+        _terminal(
+            "SUPERSEDED_CAMPAIGN_TRAJECTORY_DIFFERS",
+            f"observed sequence={tuple(observed_sequence)!r}",
+        )
+    trajectory_terminal_path = Path(str(expected["trajectory_terminal_path"]))
+    trajectory_terminal_raw = _read_regular(
+        trajectory_terminal_path,
+        "superseded campaign terminal trajectory",
+    )
+    trajectory_terminal_digest = "sha256:" + sha256(
+        trajectory_terminal_raw
+    ).hexdigest()
+    trajectory_terminal = _strict_json(
+        trajectory_terminal_raw,
+        "superseded campaign terminal trajectory",
+    )
+    if (
+        trajectory_terminal_digest
+        != expected["trajectory_terminal_file_sha256"]
+        or type(trajectory_terminal) is not dict
+        or trajectory_terminal.get("capsule_digest") != expected["capsule_digest"]
+        or trajectory_terminal.get("source_commit") != expected["source_commit"]
+        or trajectory_terminal.get("event_count")
+        != expected["trajectory_event_count"]
+        or trajectory_terminal.get("event_log_path") != os.fspath(event_log_path)
+        or trajectory_terminal.get("terminal_status")
+        != expected["terminal_status"]
+        or trajectory_terminal.get("error_code_or_null")
+        != expected["error_code"]
+    ):
+        _terminal(
+            "SUPERSEDED_CAMPAIGN_TRAJECTORY_DIFFERS",
+            "terminal trajectory binding differs",
+        )
+    return {
+        "capsule_digest": value["capsule_digest"],
+        "consumed_ledger_file_sha256": consumed_raw_digest,
+        "consumed_ledger_record_digest": value["previous_record_digest_or_null"],
+        "measurement_endpoint_start_count": 0,
+        "outcome_digest": body["outcome_digest"],
+        "q1_gate_count": 0,
+        "q1_gate_mask": 0,
+        "q1_state": "NOT_RUN",
+        "retry_or_resume_allowed": False,
+        "terminal_ledger_file_sha256": raw_digest,
+        "terminal_ledger_record_digest": value["record_digest"],
+        "terminal_status": value["status"],
+        "trajectory_event_count": len(events),
+        "trajectory_event_log_file_sha256": event_log_digest,
+        "trajectory_terminal_file_sha256": trajectory_terminal_digest,
+    }
+
+
 def _technical_contract_gate(contract: Mapping[str, Any]) -> dict[str, object]:
     raw = _read_regular(TECHNICAL_CONFIG_PATH, "technical capacity contract")
     value = _strict_json(raw, "technical capacity contract")
@@ -534,41 +708,27 @@ def _run_readonly_command(
         )
     except subprocess.TimeoutExpired:
         raise GatePending(phase, "READONLY_COMMAND_TIMEOUT", " ".join(command))
-    except (OSError, subprocess.CalledProcessError) as error:
+    except subprocess.CalledProcessError as error:
+        stdout_tail = (error.stdout or b"")[-4096:].decode("utf-8", "replace")
+        stderr_tail = (error.stderr or b"")[-4096:].decode("utf-8", "replace")
+        raise GatePending(
+            phase,
+            condition,
+            (
+                f"{' '.join(command)}: return_code={error.returncode}; "
+                f"stdout_tail={stdout_tail!r}; stderr_tail={stderr_tail!r}"
+            ),
+        )
+    except OSError as error:
         raise GatePending(phase, condition, f"{' '.join(command)}: {error}")
 
 
-def _materialize_source_snapshot_v1(
-    relative_paths: Sequence[str],
-    destination: Path,
+def _remove_probe_root_v1(
+    probe_root: Path,
+    *,
+    phase: str,
+    condition: str,
 ) -> None:
-    try:
-        destination.mkdir(mode=0o755)
-        for relative in relative_paths:
-            if (
-                type(relative) is not str
-                or not relative
-                or relative.startswith("/")
-                or ".." in Path(relative).parts
-            ):
-                raise OSError(f"invalid execution source path {relative!r}")
-            source = PROJECT_ROOT / relative
-            status = source.stat(follow_symlinks=False)
-            if source.is_symlink() or not source.is_file():
-                raise OSError(f"execution source is not an ordinary file: {relative}")
-            target = destination / relative
-            target.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
-            shutil.copyfile(source, target)
-            os.chmod(target, status.st_mode & 0o555 or 0o444)
-    except OSError as error:
-        raise GatePending(
-            "PYTHON_RUST_OFFLINE_DEPENDENCIES",
-            "EXACT_EXECUTION_SOURCE_CLOSURE_UNAVAILABLE",
-            str(error),
-        )
-
-
-def _remove_dependency_probe_v1(probe_root: Path) -> None:
     try:
         shutil.rmtree(probe_root)
         parent = os.open(probe_root.parent, os.O_RDONLY | os.O_DIRECTORY)
@@ -578,34 +738,37 @@ def _remove_dependency_probe_v1(probe_root: Path) -> None:
             os.close(parent)
     except OSError as error:
         raise GatePending(
-            "PYTHON_RUST_OFFLINE_DEPENDENCIES",
-            "TRANSIENT_DEPENDENCY_PROBE_CLEANUP_FAILED",
+            phase,
+            condition,
             str(error),
         )
 
 
-def _dependency_gate(contract: Mapping[str, Any]) -> dict[str, object]:
-    python = _run_readonly_command(
-        ["/usr/bin/python3.10", "-I", "-S", "-B", "--version"],
+def _remove_dependency_probe_v1(probe_root: Path) -> None:
+    try:
+        for directory, _names, _files in os.walk(probe_root):
+            Path(directory).chmod(0o700)
+    except OSError as error:
+        raise GatePending(
+            "PYTHON_RUST_OFFLINE_DEPENDENCIES",
+            "TRANSIENT_DEPENDENCY_PROBE_CLEANUP_FAILED",
+            str(error),
+        )
+    _remove_probe_root_v1(
+        probe_root,
         phase="PYTHON_RUST_OFFLINE_DEPENDENCIES",
-        condition="PYTHON310_UNAVAILABLE",
-        timeout=15,
+        condition="TRANSIENT_DEPENDENCY_PROBE_CLEANUP_FAILED",
     )
-    python_image = _run_readonly_command(
-        ["docker", "image", "inspect", "--format", "{{.Id}}", PYTHON_IMAGE],
-        phase="PYTHON_RUST_OFFLINE_DEPENDENCIES",
-        condition="PINNED_PYTHON_IMAGE_UNAVAILABLE",
-        timeout=30,
-    )
-    rust_image = _run_readonly_command(
-        ["docker", "image", "inspect", "--format", "{{.Id}}", RUST_IMAGE],
-        phase="PYTHON_RUST_OFFLINE_DEPENDENCIES",
-        condition="PINNED_RUST_BUILD_IMAGE_UNAVAILABLE",
-        timeout=30,
-    )
-    source_registry = _execution_source_registry_v1()
-    python_source_paths = tuple(source_registry["python"])
-    rust_source_paths = tuple(source_registry["rust"])
+
+
+def _dependency_gate(
+    contract: Mapping[str, Any],
+    source_commit: str,
+) -> dict[str, object]:
+    supervisor = _load_supervisor_module_v1()
+    python_source_paths = tuple(supervisor.PYTHON_ENDPOINT_SOURCE_PATHS)
+    rust_source_paths = tuple(supervisor.RUST_ENDPOINT_SOURCE_PATHS)
+    host_source_paths = tuple(supervisor.HOST_REPLAY_SOURCE_PATHS)
     endpoint = str(contract["target"]["python_endpoint_relative_path"])
     if not python_source_paths or python_source_paths[0] != endpoint:
         _terminal(
@@ -617,10 +780,12 @@ def _dependency_gate(contract: Mapping[str, Any]) -> dict[str, object]:
     probe_created = False
     python_snapshot = probe_root / "python-source"
     rust_snapshot = probe_root / "rust-release-source"
+    host_snapshot = probe_root / "host-replay-source"
+    python_rows: Sequence[Mapping[str, object]] = ()
+    rust_rows: Sequence[Mapping[str, object]] = ()
+    host_rows: Sequence[Mapping[str, object]] = ()
+    repository_prefix = ""
     try:
-        cargo_cache.stat(follow_symlinks=False)
-        if cargo_cache.is_symlink() or not cargo_cache.is_dir():
-            raise OSError("Cargo cache is not an ordinary directory")
         if os.path.lexists(probe_root):
             raise OSError("dependency probe root already exists")
         probe_root.mkdir(mode=0o700)
@@ -628,12 +793,51 @@ def _dependency_gate(contract: Mapping[str, Any]) -> dict[str, object]:
         cargo_home = probe_root / "cargo-home"
         build_root = probe_root / "build"
         test_root = probe_root / "test"
-        _materialize_source_snapshot_v1(python_source_paths, python_snapshot)
-        _materialize_source_snapshot_v1(rust_source_paths, rust_snapshot)
+        repository_prefix = supervisor._repository_tree_prefix_v1(PROJECT_ROOT)
+        python_rows = supervisor._materialize_snapshot(
+            PROJECT_ROOT,
+            source_commit,
+            python_snapshot,
+            python_source_paths,
+        )
+        rust_rows = supervisor._materialize_snapshot(
+            PROJECT_ROOT,
+            source_commit,
+            rust_snapshot,
+            rust_source_paths,
+        )
+        host_rows = supervisor._materialize_host_replay_snapshot(
+            PROJECT_ROOT,
+            source_commit,
+            host_snapshot,
+        )
+        supervisor._verify_snapshot_manifest_v1(python_snapshot, python_rows)
+        supervisor._verify_snapshot_manifest_v1(rust_snapshot, rust_rows)
+        supervisor._verify_snapshot_manifest_v1(host_snapshot, host_rows)
+        if (
+            len(python_rows) != len(python_source_paths)
+            or len(rust_rows) != len(rust_source_paths)
+            or len(host_rows) != len(host_source_paths)
+            or int(supervisor.EXECUTION_CLOSURE_ROW_COUNT)
+            != len(set(python_source_paths).union(rust_source_paths))
+        ):
+            _terminal(
+                "EXACT_COMMIT_SNAPSHOT_CLOSURE_DIFFERS",
+                "materialized snapshot row registry differs",
+            )
+        supervisor._make_tree_readonly(python_snapshot)
+        cargo_cache.stat(follow_symlinks=False)
+        if cargo_cache.is_symlink() or not cargo_cache.is_dir():
+            raise OSError("Cargo cache is not an ordinary directory")
         shutil.copytree(cargo_cache, cargo_home)
         build_root.mkdir(mode=0o700)
         test_root.mkdir(mode=0o700)
-    except (OSError, GatePending) as error:
+    except (
+        OSError,
+        GatePending,
+        CampaignTerminal,
+        supervisor.FullNode6SupervisorError,
+    ) as error:
         if probe_created:
             try:
                 _remove_dependency_probe_v1(probe_root)
@@ -641,6 +845,14 @@ def _dependency_gate(contract: Mapping[str, Any]) -> dict[str, object]:
                 raise cleanup_error from error
         if isinstance(error, GatePending):
             raise
+        if isinstance(error, CampaignTerminal):
+            raise
+        if isinstance(error, supervisor.FullNode6SupervisorError):
+            raise GatePending(
+                "EXACT_COMMIT_SNAPSHOT_MATERIALIZATION",
+                "EXACT_COMMIT_BLOB_MATERIALIZATION_UNAVAILABLE",
+                f"{error.code}: {error.detail}",
+            ) from error
         raise GatePending(
             "PYTHON_RUST_OFFLINE_DEPENDENCIES",
             "CARGO_OFFLINE_CLOSURE_UNAVAILABLE",
@@ -733,6 +945,24 @@ def _dependency_gate(contract: Mapping[str, Any]) -> dict[str, object]:
         "/usr/local/cargo/bin/cargo",
     ]
     try:
+        python = _run_readonly_command(
+            ["/usr/bin/python3.10", "-I", "-S", "-B", "--version"],
+            phase="PYTHON_RUST_OFFLINE_DEPENDENCIES",
+            condition="PYTHON310_UNAVAILABLE",
+            timeout=15,
+        )
+        python_image = _run_readonly_command(
+            ["docker", "image", "inspect", "--format", "{{.Id}}", PYTHON_IMAGE],
+            phase="PYTHON_RUST_OFFLINE_DEPENDENCIES",
+            condition="PINNED_PYTHON_IMAGE_UNAVAILABLE",
+            timeout=30,
+        )
+        rust_image = _run_readonly_command(
+            ["docker", "image", "inspect", "--format", "{{.Id}}", RUST_IMAGE],
+            phase="PYTHON_RUST_OFFLINE_DEPENDENCIES",
+            condition="PINNED_RUST_BUILD_IMAGE_UNAVAILABLE",
+            timeout=30,
+        )
         python_recipe_code = (
             "import runpy,sys;"
             f"m=runpy.run_path('/snapshot/{endpoint}');"
@@ -852,11 +1082,16 @@ def _dependency_gate(contract: Mapping[str, Any]) -> dict[str, object]:
             ),
             "python_endpoint_source_recipe": "PASS",
             "python_endpoint_source_row_count": len(python_source_paths),
+            "exact_commit_snapshot_materialization": "PASS",
+            "host_replay_source_row_count": len(host_rows),
+            "repository_tree_prefix": repository_prefix,
             "rust_image_id": rust_image.stdout.decode("ascii").strip(),
             "cargo_metadata_sha256": "sha256:" + sha256(metadata.stdout).hexdigest(),
             "cargo_test_locked_offline_all_targets": "PASS",
             "rust_release_build_source_row_count": len(rust_source_paths),
-            "endpoint_execution_union_row_count": source_registry["union_count"],
+            "endpoint_execution_union_row_count": int(
+                supervisor.EXECUTION_CLOSURE_ROW_COUNT
+            ),
             "exact_execution_source_closure": "PASS",
             "rust_release_binary_sha256": binary_digest,
             "rust_release_binary_bytes": binary_bytes,
@@ -1012,12 +1247,14 @@ def derive_preflight_v1(*, include_live_gates: bool = True) -> dict[str, object]
     contract = load_contract_v1()
     source = _source_gate(contract)
     predecessor = _predecessor_gate(contract)
+    superseded_campaign = _superseded_campaign_gate(contract)
     technical = _technical_contract_gate(contract)
-    dependency = _dependency_gate(contract)
+    dependency = _dependency_gate(contract, str(source["source_commit"]))
     static = {
         "authorization_digest": _core.OWNER_AUTHORIZATION_DIGEST,
         "source": source,
         "predecessor": predecessor,
+        "superseded_campaign": superseded_campaign,
         "technical_contract": technical,
         "dependencies": dependency,
     }
@@ -1147,6 +1384,94 @@ def _publish_or_replay_exact(root: Path, name: str, value: object) -> bytes:
         if observed != expected:
             raise
         return observed
+
+
+def _publish_consumed_or_pending_v1(
+    ledger: Path,
+    consumed: Mapping[str, object],
+    capsule: Mapping[str, object],
+    expected_capsule_digest: str,
+) -> None:
+    final_path = ledger / "campaign.consumed.json"
+    expected = _core.canonical_json_bytes_v1(consumed)
+    try:
+        _publish_no_replace(ledger, final_path.name, consumed)
+        return
+    except BaseException as publication_error:
+        try:
+            if os.path.lexists(final_path):
+                status = final_path.stat(follow_symlinks=False)
+                if (
+                    final_path.is_symlink()
+                    or not final_path.is_file()
+                    or status.st_size != len(expected)
+                    or final_path.read_bytes() != expected
+                ):
+                    _terminal(
+                        "CONSUMED_LEDGER_PUBLICATION_UNCERTAIN",
+                        "final consumed path exists but is not exact",
+                    )
+                remaining = tuple(ledger.iterdir())
+                if len(remaining) != 1 or remaining[0] != final_path:
+                    _terminal(
+                        "CONSUMED_LEDGER_PUBLICATION_UNCERTAIN",
+                        (
+                            "exact final coexists with unexpected ledger entries: "
+                            f"{[path.name for path in remaining]!r}"
+                        ),
+                    )
+                descriptor = os.open(
+                    ledger,
+                    os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC,
+                )
+                try:
+                    os.fsync(descriptor)
+                finally:
+                    os.close(descriptor)
+                return
+            if not ledger.is_dir() or ledger.is_symlink():
+                _terminal(
+                    "CONSUMED_LEDGER_PUBLICATION_UNCERTAIN",
+                    "ledger root state is not an exact empty directory",
+                )
+            remaining = tuple(ledger.iterdir())
+            if remaining:
+                _terminal(
+                    "CONSUMED_LEDGER_PUBLICATION_UNCERTAIN",
+                    f"ledger root retains entries: {[path.name for path in remaining]!r}",
+                )
+            ledger.rmdir()
+            parent_descriptor = os.open(
+                ledger.parent,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC,
+            )
+            try:
+                os.fsync(parent_descriptor)
+            finally:
+                os.close(parent_descriptor)
+            if os.path.lexists(ledger) or os.path.lexists(final_path):
+                _terminal(
+                    "CONSUMED_LEDGER_PUBLICATION_UNCERTAIN",
+                    "clean pre-consumption rollback could not be proved",
+                )
+        except CampaignTerminal:
+            raise
+        except OSError as recovery_error:
+            _terminal(
+                "CONSUMED_LEDGER_PUBLICATION_UNCERTAIN",
+                (
+                    f"publication={type(publication_error).__name__}:"
+                    f"{publication_error}; recovery={type(recovery_error).__name__}:"
+                    f"{recovery_error}"
+                ),
+            )
+        raise GatePending(
+            "PATH_AND_FORMAT",
+            "CONSUMED_LEDGER_PUBLICATION_NOT_COMMITTED",
+            f"{type(publication_error).__name__}:{publication_error}",
+            capsule=capsule,
+            capsule_digest_hint=expected_capsule_digest,
+        ) from publication_error
 
 
 _LEDGER_FIELDS = {
@@ -1946,13 +2271,12 @@ def execute_once_v1(expected_capsule_digest: str) -> dict[str, object]:
                 "maximum_measurements_per_endpoint_signature": 1,
             },
         )
-        try:
-            _publish_or_replay_exact(ledger, "campaign.consumed.json", consumed)
-        except BaseException as error:
-            _terminal(
-                "CONSUMED_LEDGER_PUBLICATION_FAILED",
-                f"{type(error).__name__}:{error}",
-            )
+        _publish_consumed_or_pending_v1(
+            ledger,
+            consumed,
+            capsule,
+            expected_capsule_digest,
+        )
         return _execute_postconsumption_v1(contract, capsule, consumed)
 
 

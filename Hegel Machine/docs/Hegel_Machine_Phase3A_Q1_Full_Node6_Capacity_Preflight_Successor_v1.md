@@ -1,4 +1,4 @@
-# Hegel Machine Phase-3A-Q1 Full Node-6 Capacity-Preflight Successor v1
+# Hegel Machine Phase-3A-Q1 Full Node-6 Capacity-Preflight Successor v2
 
 ## 1. Position and claim
 
@@ -21,8 +21,9 @@ projection result is not a formal Q1 root.
 
 ## 2. Bound predecessor
 
-The predecessor is the terminal Q0.5b attempt-2 result described by
-`Hegel_Machine_Current_State_Reconciliation_v2.md`:
+The predecessor is the terminal Q0.5b attempt-2 result preserved by
+`Hegel_Machine_Current_State_Reconciliation_v2.md`; the current transport state
+is reconciled by `Hegel_Machine_Current_State_Reconciliation_v3.md`:
 
 - source commit `33dc9cbb7d753f83650169d6d6b9caa508927764`;
 - capsule `sha256:dd35f2e135452b67d0472efc720bee1454d8ebb03bed73743434135d9ecf3256`;
@@ -33,6 +34,34 @@ The predecessor is the terminal Q0.5b attempt-2 result described by
 - terminal status `ATTEMPT2_TARGET_D_V2_QUALIFIED_Q1_NOT_RUN`.
 
 The predecessor authorization is consumed and cannot authorize this run.
+
+### 2.1 Superseded transport campaign
+
+The first full-node6 outer campaign reached a terminal transport failure before
+either measurement endpoint started:
+
+- source commit `473b39da5b95670a74f347b4e6933e507c4e7c57`;
+- capsule
+  `sha256:85fc53352b957995162254d45bf32c75cf1f1444a01f2676cce1e773ea357c90`;
+- consumed record
+  `sha256:f0d178038ca3ebe6fcdcad1647dd530ebb2f38e18703915fff37397d6c919a0b`;
+- terminal record
+  `sha256:9ca2f5eafae098992414973a7bf80a79ab2a2aaebb63f5d69b4b32c49c4e53a5`;
+- outcome
+  `sha256:6de54c48cfc36f5ee1e51a75092653cb0a99c2c1fbbf05969e63befcb74e98bf`;
+- terminal status `FULL_NODE6_DIAGNOSTIC_FAILED_TERMINAL_NO_RESUME`.
+
+Its exact eight-event trajectory stops at `SOURCE_SNAPSHOTS`.  It contains no
+`RUST_OFFLINE_BUILD`, `MEASUREMENT_AND_REPLAY`, `PYTHON_ENDPOINT` or
+`RUST_ENDPOINT` event.  Thus the outer supervisor Popen count is one, while the
+actual Python and Rust measurement start counts are both zero.  Q1 remains
+`NOT_RUN`, `0/20`, mask zero and eight null output slots.  That capsule is
+terminal and is neither retried nor resumed.
+
+The reachable defect was Git commit-path interpretation from a repository
+subdirectory: `COMMIT:tools/...` was evaluated from the repository tree root,
+where the committed object is `COMMIT:Hegel Machine/tools/...`.  The successor
+derives the repository-tree prefix and uses the exact latter object path.
 
 ## 3. Same-run measurement and projection
 
@@ -60,18 +89,31 @@ their roots to Q1.  No formal archive is materialized during this diagnostic.
 
 ## 4. Execution boundary
 
-The exact machine-readable contract is
-`config/phase3_q1_full_node6_capacity_preflight_v1.json`.  Before owner
-authorization can be consumed, the campaign must replay:
+The frozen scientific/technical contract remains
+`config/phase3_q1_full_node6_capacity_preflight_v1.json`; neither endpoint began
+measurement under the superseded transport.  The outer campaign contract is
+now `hegel-phase3a-q1-full-node6-campaign-successor-v2`, with a distinct owner
+authorization digest and fresh v2 state roots.  Before owner authorization can
+be consumed, the campaign must replay:
 
 1. the predecessor terminal ledger and artifact;
-2. a clean committed source and its exact Git object closure;
-3. the Python, Rust and trusted-host source recipes;
-4. the locked offline Cargo closure and pinned local images;
-5. the frozen semantic/projection roots;
-6. effective CPU and exact affinity admission;
-7. sufficient memory and storage reservation;
-8. absence of current/future permanent, probe, formal-Q1 and pointer roots.
+2. the superseded transport's consumed/terminal ledgers and exact eight-event
+   trajectory, proving zero endpoint measurement starts;
+3. a clean committed source and its exact Git object closure;
+4. the actual supervisor's prefix-aware commit-blob materializer over all 34
+   Python, 21 Rust release-build and one host-replay rows;
+5. the Python, Rust and trusted-host source recipes;
+6. the locked offline Cargo closure and pinned local images;
+7. the frozen semantic/projection roots;
+8. effective CPU and exact affinity admission;
+9. sufficient memory and storage reservation;
+10. absence of fresh v2 permanent, probe, formal-Q1 and pointer roots.
+
+The successor uses `q1-full-node6-capacity-v2-*` lock, ledger, evidence,
+trajectory, run and probe roots, plus
+`artifacts/phase3_q1_full_node6_capacity_preflight_v2.json`.  The v1 roots are
+read-only predecessor evidence and are never an absence target, cleanup target
+or resume target.
 
 Memory admission is `16 GiB`: one `14 GiB` active-container ceiling plus a
 frozen `2 GiB` host control-plane reserve.  At most one measurement container
@@ -119,7 +161,7 @@ by the later mechanical resource amendment.  Formal output projection includes
 the partition payloads, closure-bundle frame and the frozen 1 MiB endpoint
 metadata allowance; formal scratch is the maximum partition projection scratch.
 
-Repairable path, permission, local dependency, image/daemon, CPU-affinity,
+Repairable commit-blob path, permission, local dependency, image/daemon, CPU-affinity,
 memory/storage-admission and read-only source-check failures are
 pre-consumption `PENDING`.  They resume only under the same run root and exact
 capsule digest and do not count as a campaign execution, authorization
