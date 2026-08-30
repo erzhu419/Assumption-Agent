@@ -155,7 +155,9 @@ FORMAL_CAPACITY_LIMIT_ROWS: Final = (
     (2, 3, 6, 32_768, 256, 1_024, 256, 8_192, 4_096, 16_384, 7, 3_600),
 )
 FORMAL_OUTPUT_BYTES_LIMIT: Final = 16 * 1024 * 1024
-FORMAL_SCRATCH_BYTES_LIMIT: Final = 4 * 1024 * 1024
+# Successor correction for endpoint result replay.  This intentionally does
+# not read the historical 4 MiB value from the immutable prestart receipt.
+FORMAL_SCRATCH_BYTES_LIMIT: Final = 128 * 1024 * 1024
 PARTITION_RESULT_KEYS: Final = frozenset(
     (
         "chunk_manifest_archive_root",

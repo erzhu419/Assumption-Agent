@@ -471,9 +471,9 @@ def test_retained_node3_kat_replays_exact_frozen_roots_and_lengths(
         for row in endpoint["formal_capacity_limits_by_signature"]
     )
     assert endpoint["formal_output_bytes_limit"] == 16_777_216
-    assert endpoint["formal_scratch_bytes_limit"] == 4_194_304
+    assert endpoint["formal_scratch_bytes_limit"] == 134_217_728
     assert actual_archive_bytes + len(endpoint_payload) <= 16_777_216
-    assert endpoint["actual_formal_peak_scratch_bytes"] <= 4_194_304
+    assert endpoint["actual_formal_peak_scratch_bytes"] <= 134_217_728
     assert endpoint["run_genesis_root"] == _formal_admission().run_genesis_root
     assert endpoint["prestart_admission_receipt_root"] == (
         _formal_admission().prestart_admission_receipt_root
@@ -489,13 +489,20 @@ def test_retained_node3_kat_replays_exact_frozen_roots_and_lengths(
 
 
 def test_formal_python_resource_guards_are_inclusive_at_frozen_bounds() -> None:
-    materializer._require_formal_scratch_limit_v1(4_194_304)
+    historical_python_limits = next(
+        dict(rows)
+        for _ordinal, actor_id, rows in prestart.FORMAL_RESOURCE_ENVELOPE[3]
+        if actor_id == b"python"
+    )
+    assert historical_python_limits[10] == 4_194_304
+    assert materializer.FORMAL_SCRATCH_BYTES_LIMIT == 134_217_728
+    materializer._require_formal_scratch_limit_v1(134_217_728)
     materializer._require_formal_output_limit_v1(16_777_215, 1)
     with pytest.raises(
         materializer.Q1FormalArchiveMaterializationError,
         match="INCONCLUSIVE_Q1_FORMAL_RESOURCE_GUARD",
     ):
-        materializer._require_formal_scratch_limit_v1(4_194_305)
+        materializer._require_formal_scratch_limit_v1(134_217_729)
     with pytest.raises(
         materializer.Q1FormalArchiveMaterializationError,
         match="INCONCLUSIVE_Q1_FORMAL_RESOURCE_GUARD",

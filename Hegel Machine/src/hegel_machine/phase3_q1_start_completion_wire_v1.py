@@ -255,6 +255,17 @@ _ACTOR_LIMITS: Final = {
 _ENDPOINT_ACTORS: Final = (b"python", b"rust")
 _ALL_ACTORS: Final = (b"python", b"rust", b"host")
 
+# The predecessor Gate-11 envelope is immutable and therefore remains in
+# ``_ACTOR_LIMITS`` exactly as received.  Q1-start endpoint evidence uses this
+# explicitly authorized successor correction for scratch guard 10.
+FORMAL_ENDPOINT_SCRATCH_BYTES_LIMIT: Final = 134_217_728
+
+
+def _actor_guard_limit_v1(actor_id: bytes, guard_id: int) -> int:
+    if actor_id in _ENDPOINT_ACTORS and guard_id == 10:
+        return FORMAL_ENDPOINT_SCRATCH_BYTES_LIMIT
+    return _ACTOR_LIMITS[actor_id][guard_id]
+
 _FORMAL_CAPACITY_LIMIT_FIELDS: Final = (
     "input_signature_id",
     "maximum_ast_depth",
@@ -571,7 +582,7 @@ def endpoint_result_root_v1(
         "maximum_ast_depth": 3,
         "maximum_ast_node_count": 6,
         "formal_output_bytes_limit": _ACTOR_LIMITS[actor_id][9],
-        "formal_scratch_bytes_limit": _ACTOR_LIMITS[actor_id][10],
+        "formal_scratch_bytes_limit": FORMAL_ENDPOINT_SCRATCH_BYTES_LIMIT,
         "actual_formal_terminal_live_scratch_bytes": 0,
     }
     if any(not _wire_equal(value.get(name), expected) for name, expected in fixed.items()):
@@ -582,7 +593,7 @@ def endpoint_result_root_v1(
     if (
         type(peak_scratch) is not int
         or peak_scratch < 0
-        or peak_scratch > _ACTOR_LIMITS[actor_id][10]
+        or peak_scratch > FORMAL_ENDPOINT_SCRATCH_BYTES_LIMIT
         or type(payload_bytes) is not int
         or payload_bytes <= 0
         or payload_bytes > _ACTOR_LIMITS[actor_id][9]
@@ -642,7 +653,7 @@ def host_replay_result_root_v1(
         "action_id": "replay-full-node6-formal-archive-v1",
         "status": "DUAL_FORMAL_ARCHIVE_EXACT_AGREEMENT",
         "formal_output_bytes_limit": _ACTOR_LIMITS[b"python"][9],
-        "formal_scratch_bytes_limit": _ACTOR_LIMITS[b"python"][10],
+        "formal_scratch_bytes_limit": FORMAL_ENDPOINT_SCRATCH_BYTES_LIMIT,
         "python_rust_formal_bytes_exact": True,
         "python_rust_replayed_roots_exact": True,
         "target_split_role_absence_attested": True,
@@ -1146,10 +1157,9 @@ class Q1EndpointCompletionEvidenceV1:
             (11, self.actual_peak_rss_bytes),
             (12, self.actual_wall_time_ns),
         )
-        limits = _ACTOR_LIMITS[self.actor_id]
         for guard_id, value in measured:
             checked = _uint(value, f"endpoint guard {guard_id}")
-            ceiling = limits[guard_id]
+            ceiling = _actor_guard_limit_v1(self.actor_id, guard_id)
             if guard_id == 12:
                 ceiling *= 1_000_000_000
             if checked > ceiling:

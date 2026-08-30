@@ -81,7 +81,7 @@ def _endpoint_result_payload(actor_id: bytes) -> bytes:
             "formal_archive_payload_bytes": 5_000_000,
             "formal_capacity_limits_by_signature": _formal_capacity_rows(),
             "formal_output_bytes_limit": 16_777_216,
-            "formal_scratch_bytes_limit": 4_194_304,
+            "formal_scratch_bytes_limit": 134_217_728,
             "full_v16_structural_limits_applied": True,
             "implementation_id": f"hegel-{actor}-q1-formal-archive-materializer-v1",
             "maximum_ast_depth": 3,
@@ -137,7 +137,7 @@ def _host_result_payload() -> bytes:
             "q1_output_slots": [None] * 8,
             "formal_capacity_limits_by_signature": _formal_capacity_rows(),
             "formal_output_bytes_limit": 16_777_216,
-            "formal_scratch_bytes_limit": 4_194_304,
+            "formal_scratch_bytes_limit": 134_217_728,
             "semantic_binding_root": "sha256:" + _root(91).hex(),
             "projection_profile_root": "sha256:" + _root(92).hex(),
             "closure_bundle_root": "sha256:" + _root(22).hex(),
@@ -568,6 +568,25 @@ def test_gate15_rejects_endpoint_resource_guard_exceedance() -> None:
         replace(
             _endpoint(b"python", _root(30), _root(31)),
             actual_peak_rss_bytes=2_147_483_649,
+        )
+
+
+def test_gate15_uses_successor_scratch_bound_without_mutating_prestart_wire() -> None:
+    historical_python_limits = next(
+        dict(rows)
+        for _ordinal, actor_id, rows in wire.FORMAL_RESOURCE_ENVELOPE[3]
+        if actor_id == b"python"
+    )
+    assert historical_python_limits[10] == 4_194_304
+    assert wire.FORMAL_ENDPOINT_SCRATCH_BYTES_LIMIT == 134_217_728
+    replace(
+        _endpoint(b"python", _root(30), _root(31)),
+        actual_peak_scratch_bytes=134_217_728,
+    )
+    with pytest.raises(wire.Q1StartCompletionWireError, match="resource guard"):
+        replace(
+            _endpoint(b"python", _root(30), _root(31)),
+            actual_peak_scratch_bytes=134_217_729,
         )
 
 

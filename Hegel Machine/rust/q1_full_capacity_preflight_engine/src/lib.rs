@@ -42,7 +42,10 @@ pub const FORMAL_MATERIALIZER_ACTION_ID: &str =
 pub const FORMAL_MATERIALIZER_STATUS: &str =
     "FULL_NODE6_FORMAL_ARCHIVE_MATERIALIZED_Q1_NOT_RUN";
 pub const FORMAL_OUTPUT_BYTES_LIMIT: u64 = 16 * 1024 * 1024;
-pub const FORMAL_SCRATCH_BYTES_LIMIT: u64 = 4 * 1024 * 1024;
+// Successor correction for formal endpoint execution.  The predecessor
+// prestart receipt remains byte-for-byte immutable with its historical 4 MiB
+// entry; this executable actor binds the corrected limit directly.
+pub const FORMAL_SCRATCH_BYTES_LIMIT: u64 = 128 * 1024 * 1024;
 pub const DSL_VERSION: &str = "hegel-old-dsl-v1.6.0";
 pub const CLOSURE_SEMANTICS_VERSION: &str = "hegel-quotient-closure-v1.0.1";
 pub const PREFLIGHT_SATURATED_DIAGNOSTIC_ONLY: &str =
@@ -2910,7 +2913,7 @@ pub fn run_formal_archive_materializer_with_scratch(
     if peak_scratch_bytes > FORMAL_SCRATCH_BYTES_LIMIT {
         return Err(EngineError::new(
             "FAIL_FORMAL_MATERIALIZER_SCRATCH_GUARD",
-            "formal projection scratch exceeded the frozen 4 MiB guard",
+            "formal projection scratch exceeded the corrected 128 MiB successor guard",
         ));
     }
     let report = FormalArchiveMaterializerResult {

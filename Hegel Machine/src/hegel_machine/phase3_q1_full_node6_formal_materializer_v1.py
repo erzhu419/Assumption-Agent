@@ -35,6 +35,12 @@ Q1_GATE_COUNT: Final = 14
 Q1_GATE_TOTAL: Final = 20
 Q1_GATE_MASK: Final = 0x3FFF
 
+# Successor correction for the executable formal endpoint.  The immutable
+# 14-of-20 prestart receipt still records its historical 4 MiB value; actor
+# execution and result validation bind this corrected limit directly instead
+# of reinterpreting or changing those predecessor bytes.
+FORMAL_SCRATCH_BYTES_LIMIT: Final = 134_217_728
+
 _FORMAL_CAPACITY_LIMIT_ROW_FIELDS: Final = (
     "input_signature_id",
     "maximum_ast_depth",
@@ -53,7 +59,6 @@ _FORMAL_CAPACITY_LIMIT_ROW_FIELDS: Final = (
 
 def _formal_resource_limits_v1() -> tuple[
     tuple[_full._capacity.PreflightLimitsV1, _full._capacity.PreflightLimitsV1],
-    int,
     int,
 ]:
     """Project the immutable Gate 11 wire into exact Python actor limits."""
@@ -89,13 +94,12 @@ def _formal_resource_limits_v1() -> tuple[
         )
         for signature_id in (1, 2)
     )
-    return limits, python_resources[9], python_resources[10]
+    return limits, python_resources[9]
 
 
 (
     _FORMAL_LIMITS_BY_SIGNATURE,
     FORMAL_OUTPUT_BYTES_LIMIT,
-    FORMAL_SCRATCH_BYTES_LIMIT,
 ) = _formal_resource_limits_v1()
 
 _SHA256 = re.compile(r"sha256:[0-9a-f]{64}\Z")

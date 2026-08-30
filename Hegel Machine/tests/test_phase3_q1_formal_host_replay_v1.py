@@ -508,7 +508,7 @@ def _write_endpoint(
         ),
         "formal_capacity_limits_by_signature": FORMAL_CAPACITY_LIMITS,
         "formal_output_bytes_limit": 16 * 1024 * 1024,
-        "formal_scratch_bytes_limit": 4 * 1024 * 1024,
+        "formal_scratch_bytes_limit": 128 * 1024 * 1024,
         "full_v16_structural_limits_applied": True,
         "implementation_id": implementation,
         "maximum_ast_depth": 3,
@@ -587,7 +587,8 @@ def test_dual_host_replays_every_formal_layer_and_attests_absence(
     assert result["q1_output_slots"] == [None] * 8
     assert result["formal_capacity_limits_by_signature"] == FORMAL_CAPACITY_LIMITS
     assert result["formal_output_bytes_limit"] == 16 * 1024 * 1024
-    assert result["formal_scratch_bytes_limit"] == 4 * 1024 * 1024
+    assert host.FORMAL_SCRATCH_BYTES_LIMIT == 128 * 1024 * 1024
+    assert result["formal_scratch_bytes_limit"] == 128 * 1024 * 1024
     assert result["python_rust_formal_bytes_exact"] is True
     assert result["python_rust_replayed_roots_exact"] is True
     assert result["target_split_role_absence_attested"] is True
@@ -671,7 +672,7 @@ def test_endpoint_metadata_requires_exact_closed_typed_schema(
             "maximum_behavior_classes"
         ] = True
     elif mutation == "scratch-over-limit":
-        value["actual_formal_peak_scratch_bytes"] = 4 * 1024 * 1024 + 1
+        value["actual_formal_peak_scratch_bytes"] = 128 * 1024 * 1024 + 1
     elif mutation == "extra-partition-field":
         value["partitions"][0]["partition_payload_bytes"] = value["partitions"][0][
             "projected_partition_payload_bytes"

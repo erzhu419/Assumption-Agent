@@ -217,6 +217,7 @@ fn bounded_node3_retained_archive_replays_exact_frozen_roots_and_lengths() {
     assert!(!report.role_evaluation_performed);
     assert_eq!(report.actual_formal_terminal_live_scratch_bytes, 0);
     assert_eq!(report.formal_output_bytes_limit, FORMAL_OUTPUT_BYTES_LIMIT);
+    assert_eq!(FORMAL_SCRATCH_BYTES_LIMIT, 134_217_728);
     assert_eq!(report.formal_scratch_bytes_limit, FORMAL_SCRATCH_BYTES_LIMIT);
     assert_eq!(
         report.formal_capacity_limits_by_signature,
