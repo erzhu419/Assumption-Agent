@@ -270,6 +270,17 @@ fn report_keeps_q1_unstarted_and_projects_without_materializing_archives() {
             .is_some_and(|projection| {
                 projection.diagnostic_only && !projection.formal_archive_materialized
             })
+            && partition
+                .formal_wire_projection
+                .as_ref()
+                .is_some_and(|projection| {
+                    projection.diagnostic_only
+                        && !projection.formal_archive_materialized
+                        && projection.streams.iter().all(|stream| {
+                            stream.retained_framed_blob_bytes == 0
+                                && stream.retained_framed_blob_count == 0
+                        })
+                })
             && partition.formal_roots.is_none()
             && !partition.target_truth_accessed
     }));

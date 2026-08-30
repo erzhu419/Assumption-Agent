@@ -7,7 +7,10 @@
 
 mod frozen_v1;
 
-pub use frozen_v1::{FrozenFormalStreamProjection, FrozenFormalWireProjection};
+pub use frozen_v1::{
+    FrozenFormalChunkBinding, FrozenFormalMaterializedPartition,
+    FrozenFormalMaterializedStream, FrozenFormalStreamProjection, FrozenFormalWireProjection,
+};
 
 use hegel_strict_canonicalizer::{BinaryOp, CanonicalProgram, Node, Sort, UnaryOp};
 use hegel_strict_canonicalizer_shrink6::canonicalize_shrink6_source_node;
@@ -17,6 +20,8 @@ use sha2::{Digest, Sha256};
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
+use std::fs::{File, OpenOptions};
+use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -27,6 +32,17 @@ pub const ENDPOINT_SCHEMA_VERSION: &str =
 pub const IMPLEMENTATION_ID: &str = "hegel-rust-q1-full-capacity-preflight-engine-v1";
 pub const ACTOR_ID: &str = "RUST_ENDPOINT";
 pub const ACTION_ID: &str = "full-node6-capacity-preflight-v1";
+pub const FORMAL_MATERIALIZER_SCHEMA_VERSION: &str =
+    "hegel-phase3a-q1-full-node6-formal-archive-materializer/1";
+pub const FORMAL_MATERIALIZER_ACTOR_ID: &str = "rust";
+pub const FORMAL_MATERIALIZER_IMPLEMENTATION_ID: &str =
+    "hegel-rust-q1-formal-archive-materializer-v1";
+pub const FORMAL_MATERIALIZER_ACTION_ID: &str =
+    "materialize-full-node6-formal-archive-v1";
+pub const FORMAL_MATERIALIZER_STATUS: &str =
+    "FULL_NODE6_FORMAL_ARCHIVE_MATERIALIZED_Q1_NOT_RUN";
+pub const FORMAL_OUTPUT_BYTES_LIMIT: u64 = 16 * 1024 * 1024;
+pub const FORMAL_SCRATCH_BYTES_LIMIT: u64 = 4 * 1024 * 1024;
 pub const DSL_VERSION: &str = "hegel-old-dsl-v1.6.0";
 pub const CLOSURE_SEMANTICS_VERSION: &str = "hegel-quotient-closure-v1.0.1";
 pub const PREFLIGHT_SATURATED_DIAGNOSTIC_ONLY: &str =
@@ -108,6 +124,42 @@ impl CapacityLimits {
             maximum_saturation_rounds: 16,
             maximum_wall_time_seconds: 172_800,
         }
+    }
+
+    pub const fn q1_formal_odd() -> Self {
+        Self {
+            maximum_ast_depth: 3,
+            maximum_ast_node_count: 6,
+            maximum_raw_operator_applications: 32_768,
+            maximum_behavior_classes: 1_024,
+            maximum_visible_frontier_points: 4_096,
+            maximum_visible_frontier_points_per_class: 32,
+            maximum_continuation_bank_points: 8_192,
+            maximum_continuation_bank_points_per_class: 4_096,
+            maximum_work_queue_points: 16_384,
+            maximum_saturation_rounds: 7,
+            maximum_wall_time_seconds: 3_600,
+        }
+    }
+
+    pub const fn q1_formal_sink() -> Self {
+        Self {
+            maximum_ast_depth: 3,
+            maximum_ast_node_count: 6,
+            maximum_raw_operator_applications: 32_768,
+            maximum_behavior_classes: 256,
+            maximum_visible_frontier_points: 1_024,
+            maximum_visible_frontier_points_per_class: 256,
+            maximum_continuation_bank_points: 8_192,
+            maximum_continuation_bank_points_per_class: 4_096,
+            maximum_work_queue_points: 16_384,
+            maximum_saturation_rounds: 7,
+            maximum_wall_time_seconds: 3_600,
+        }
+    }
+
+    pub const fn q1_formal_schedule() -> [Self; 2] {
+        [Self::q1_formal_odd(), Self::q1_formal_sink()]
     }
 
     pub fn bounded_for_test(maximum_ast_node_count: u32) -> Result<Self, EngineError> {
@@ -1646,6 +1698,79 @@ pub struct EngineDiagnostic {
     pub active_transition_allowed: bool,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct FormalArchiveMaterializerResult {
+    pub schema_version: &'static str,
+    pub status: &'static str,
+    pub actor_id: &'static str,
+    pub implementation_id: &'static str,
+    pub action_id: &'static str,
+    pub capsule_digest: String,
+    pub source_commit: String,
+    pub run_genesis_root: String,
+    pub prestart_admission_receipt_root: String,
+    pub q1_state: &'static str,
+    pub q1_gate_count: u8,
+    pub q1_gate_total: u8,
+    pub q1_gate_mask: u32,
+    pub q1_output_slots: [Option<String>; 8],
+    pub dsl_version: &'static str,
+    pub closure_semantics_version: &'static str,
+    pub maximum_ast_depth: u32,
+    pub maximum_ast_node_count: u32,
+    pub full_v16_structural_limits_applied: bool,
+    pub formal_archive_materialized: bool,
+    pub diagnostic_only: bool,
+    pub formal_capacity_limits_by_signature: [FormalCapacityLimitRow; 2],
+    pub formal_output_bytes_limit: u64,
+    pub formal_scratch_bytes_limit: u64,
+    pub closure_bundle_root: String,
+    pub formal_archive_payload_bytes: u64,
+    pub actual_formal_peak_scratch_bytes: u64,
+    pub actual_formal_terminal_live_scratch_bytes: u64,
+    pub partitions: Vec<FrozenFormalMaterializedPartition>,
+    pub target_truth_accessed: bool,
+    pub split_accessed: bool,
+    pub role_evaluation_performed: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+pub struct FormalCapacityLimitRow {
+    pub input_signature_id: u64,
+    pub maximum_ast_depth: u32,
+    pub maximum_ast_node_count: u32,
+    pub maximum_raw_operator_applications: u64,
+    pub maximum_behavior_classes: u64,
+    pub maximum_visible_frontier_points: u64,
+    pub maximum_visible_frontier_points_per_class: u64,
+    pub maximum_continuation_bank_points: u64,
+    pub maximum_continuation_bank_points_per_class: u64,
+    pub maximum_work_queue_points: u64,
+    pub maximum_saturation_rounds: u64,
+    pub maximum_wall_time_seconds: u64,
+}
+
+impl FormalCapacityLimitRow {
+    fn from_limits(input_signature_id: u64, limits: CapacityLimits) -> Self {
+        Self {
+            input_signature_id,
+            maximum_ast_depth: limits.maximum_ast_depth,
+            maximum_ast_node_count: limits.maximum_ast_node_count,
+            maximum_raw_operator_applications: limits.maximum_raw_operator_applications,
+            maximum_behavior_classes: limits.maximum_behavior_classes,
+            maximum_visible_frontier_points: limits.maximum_visible_frontier_points,
+            maximum_visible_frontier_points_per_class: limits
+                .maximum_visible_frontier_points_per_class,
+            maximum_continuation_bank_points: limits.maximum_continuation_bank_points,
+            maximum_continuation_bank_points_per_class: limits
+                .maximum_continuation_bank_points_per_class,
+            maximum_work_queue_points: limits.maximum_work_queue_points,
+            maximum_saturation_rounds: limits.maximum_saturation_rounds,
+            maximum_wall_time_seconds: limits.maximum_wall_time_seconds,
+        }
+    }
+}
+
 #[derive(Debug)]
 struct Runner {
     input_signature_id: u64,
@@ -2490,6 +2615,26 @@ fn validate_identity(capsule_digest: &str, source_commit: &str) -> Result<(), En
     Ok(())
 }
 
+fn validate_prefixed_sha256_root(value: &str, label: &str) -> Result<(), EngineError> {
+    let hex = value.strip_prefix("sha256:").ok_or_else(|| {
+        EngineError::new(
+            "REJECT_FORMAL_MATERIALIZER_ADMISSION",
+            format!("{label} must use sha256:<64 lowercase hex>"),
+        )
+    })?;
+    if hex.len() != 64
+        || !hex
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err(EngineError::new(
+            "REJECT_FORMAL_MATERIALIZER_ADMISSION",
+            format!("{label} must use sha256:<64 lowercase hex>"),
+        ));
+    }
+    Ok(())
+}
+
 pub fn run_capacity_preflight(
     limits: CapacityLimits,
     capsule_digest: &str,
@@ -2623,6 +2768,221 @@ fn run_capacity_preflight_inner(
         role_evaluation_performed: false,
         active_transition_allowed: false,
     })
+}
+
+fn require_empty_materializer_directory(path: &Path, label: &str) -> Result<(), EngineError> {
+    if !path.is_absolute() || !path.is_dir() {
+        return Err(EngineError::new(
+            "REJECT_FORMAL_MATERIALIZER_DIRECTORY",
+            format!("{label} must be an existing absolute directory"),
+        ));
+    }
+    if std::fs::read_dir(path)
+        .map_err(|error| {
+            EngineError::new(
+                "REJECT_FORMAL_MATERIALIZER_DIRECTORY",
+                format!("cannot list {label}: {error}"),
+            )
+        })?
+        .next()
+        .is_some()
+    {
+        return Err(EngineError::new(
+            "REJECT_FORMAL_MATERIALIZER_DIRECTORY",
+            format!("{label} must be empty"),
+        ));
+    }
+    Ok(())
+}
+
+fn persist_formal_materializer_result(
+    output_root: &Path,
+    payload: &[u8],
+) -> Result<(), EngineError> {
+    let target = output_root.join("endpoint-result.json");
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&target)
+        .map_err(|error| {
+            EngineError::new(
+                "FAIL_FORMAL_MATERIALIZER_WRITE",
+                format!("cannot create {}: {error}", target.display()),
+            )
+        })?;
+    file.write_all(payload)
+        .and_then(|_| file.sync_all())
+        .map_err(|error| {
+            EngineError::new(
+                "FAIL_FORMAL_MATERIALIZER_WRITE",
+                format!("cannot persist {}: {error}", target.display()),
+            )
+        })?;
+    File::open(output_root)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|error| {
+            EngineError::new(
+                "FAIL_FORMAL_MATERIALIZER_WRITE",
+                format!("cannot sync {}: {error}", output_root.display()),
+            )
+        })
+}
+
+pub fn run_formal_archive_materializer_with_scratch(
+    limits_by_signature: [CapacityLimits; 2],
+    capsule_digest: &str,
+    source_commit: &str,
+    run_genesis_root: &str,
+    prestart_admission_receipt_root: &str,
+    output_root: &Path,
+    scratch_root: &Path,
+) -> Result<FormalArchiveMaterializerResult, EngineError> {
+    validate_identity(capsule_digest, source_commit)?;
+    validate_prefixed_sha256_root(run_genesis_root, "run genesis root")?;
+    validate_prefixed_sha256_root(
+        prestart_admission_receipt_root,
+        "prestart admission receipt root",
+    )?;
+    let limits_by_signature = [
+        limits_by_signature[0].validate()?,
+        limits_by_signature[1].validate()?,
+    ];
+    require_empty_materializer_directory(output_root, "formal materializer output root")?;
+    require_empty_materializer_directory(scratch_root, "formal materializer scratch root")?;
+    let resolved_output = std::fs::canonicalize(output_root).map_err(|error| {
+        EngineError::new(
+            "REJECT_FORMAL_MATERIALIZER_DIRECTORY",
+            format!("cannot resolve formal materializer output root: {error}"),
+        )
+    })?;
+    let resolved_scratch = std::fs::canonicalize(scratch_root).map_err(|error| {
+        EngineError::new(
+            "REJECT_FORMAL_MATERIALIZER_DIRECTORY",
+            format!("cannot resolve formal materializer scratch root: {error}"),
+        )
+    })?;
+    if resolved_output == resolved_scratch {
+        return Err(EngineError::new(
+            "REJECT_FORMAL_MATERIALIZER_DIRECTORY_ALIAS",
+            "formal materializer output and scratch roots must be distinct",
+        ));
+    }
+
+    let mut traversals = Vec::with_capacity(2);
+    for (index, input_signature_id) in [1_u64, 2].into_iter().enumerate() {
+        let traversal = traverse_partition(input_signature_id, limits_by_signature[index])?;
+        if traversal.1.is_some() || !traversal.2 {
+            return Err(EngineError::new(
+                "FAIL_FORMAL_MATERIALIZER_TRAVERSAL",
+                "the exact ordered Odd/Sink traversal hit its formal resource guard",
+            ));
+        }
+        traversals.push(traversal);
+    }
+
+    let scratch_tracker = frozen_v1::ActualScratchTracker::default();
+    let mut projections = Vec::with_capacity(2);
+    let mut partitions = Vec::with_capacity(2);
+    for (runner, _, _) in traversals {
+        let projected = frozen_v1::materialize_same_run(
+            runner.input_signature_id,
+            runner.universe_root,
+            runner.limits,
+            &runner.state,
+            &runner.coverage,
+            runner.peak_work_queue_points,
+            Some(scratch_root),
+            &scratch_tracker,
+            output_root,
+        )?;
+        partitions.push(projected.formal_materialization.ok_or_else(|| {
+            EngineError::new(
+                "FAIL_FORMAL_MATERIALIZER_OUTPUT",
+                "retained formal partition metadata is absent",
+            )
+        })?);
+        projections.push(projected.formal_wire_projection);
+    }
+    let projection_refs = projections.iter().collect::<Vec<_>>();
+    let endpoint = frozen_v1::materialize_endpoint_closure(&projection_refs, output_root)?;
+    let terminal_live_scratch_bytes = scratch_tracker.require_terminal_empty()?;
+    let peak_scratch_bytes = scratch_tracker.peak_logical_bytes();
+    if peak_scratch_bytes > FORMAL_SCRATCH_BYTES_LIMIT {
+        return Err(EngineError::new(
+            "FAIL_FORMAL_MATERIALIZER_SCRATCH_GUARD",
+            "formal projection scratch exceeded the frozen 4 MiB guard",
+        ));
+    }
+    let report = FormalArchiveMaterializerResult {
+        schema_version: FORMAL_MATERIALIZER_SCHEMA_VERSION,
+        status: FORMAL_MATERIALIZER_STATUS,
+        actor_id: FORMAL_MATERIALIZER_ACTOR_ID,
+        implementation_id: FORMAL_MATERIALIZER_IMPLEMENTATION_ID,
+        action_id: FORMAL_MATERIALIZER_ACTION_ID,
+        capsule_digest: capsule_digest.to_owned(),
+        source_commit: source_commit.to_owned(),
+        run_genesis_root: run_genesis_root.to_owned(),
+        prestart_admission_receipt_root: prestart_admission_receipt_root.to_owned(),
+        q1_state: Q1_STATE,
+        q1_gate_count: 14,
+        q1_gate_total: 20,
+        q1_gate_mask: 0x003fff,
+        q1_output_slots: [None, None, None, None, None, None, None, None],
+        dsl_version: DSL_VERSION,
+        closure_semantics_version: CLOSURE_SEMANTICS_VERSION,
+        maximum_ast_depth: FULL_MAXIMUM_AST_DEPTH,
+        maximum_ast_node_count: FULL_MAXIMUM_AST_NODE_COUNT,
+        full_v16_structural_limits_applied: limits_by_signature.iter().all(|limits| {
+            limits.maximum_ast_depth == FULL_MAXIMUM_AST_DEPTH
+                && limits.maximum_ast_node_count == FULL_MAXIMUM_AST_NODE_COUNT
+        }),
+        formal_archive_materialized: true,
+        diagnostic_only: false,
+        formal_capacity_limits_by_signature: [
+            FormalCapacityLimitRow::from_limits(1, limits_by_signature[0]),
+            FormalCapacityLimitRow::from_limits(2, limits_by_signature[1]),
+        ],
+        formal_output_bytes_limit: FORMAL_OUTPUT_BYTES_LIMIT,
+        formal_scratch_bytes_limit: FORMAL_SCRATCH_BYTES_LIMIT,
+        closure_bundle_root: endpoint.closure_bundle_root,
+        formal_archive_payload_bytes: endpoint.formal_archive_payload_bytes,
+        actual_formal_peak_scratch_bytes: peak_scratch_bytes,
+        actual_formal_terminal_live_scratch_bytes: terminal_live_scratch_bytes,
+        partitions,
+        target_truth_accessed: false,
+        split_accessed: false,
+        role_evaluation_performed: false,
+    };
+    let report_payload = formal_materializer_json_line(&report)?;
+    let total_output_bytes = report
+        .formal_archive_payload_bytes
+        .checked_add(report_payload.len() as u64)
+        .ok_or_else(|| {
+            EngineError::new(
+                "FAIL_FORMAL_MATERIALIZER_OUTPUT_GUARD",
+                "formal output byte count overflowed",
+            )
+        })?;
+    if total_output_bytes > FORMAL_OUTPUT_BYTES_LIMIT {
+        return Err(EngineError::new(
+            "FAIL_FORMAL_MATERIALIZER_OUTPUT_GUARD",
+            "formal archive plus endpoint result exceeded the frozen 16 MiB guard",
+        ));
+    }
+    persist_formal_materializer_result(output_root, &report_payload)?;
+    Ok(report)
+}
+
+pub fn formal_materializer_json_line(
+    report: &FormalArchiveMaterializerResult,
+) -> Result<Vec<u8>, EngineError> {
+    let value = serde_json::to_value(report).map_err(|error| {
+        EngineError::new(
+            "FAIL_FORMAL_MATERIALIZER_JSON",
+            format!("cannot form formal materializer result: {error}"),
+        )
+    })?;
+    canonical_value_line(&value)
 }
 
 pub fn canonical_json_line(report: &EngineDiagnostic) -> Result<Vec<u8>, EngineError> {

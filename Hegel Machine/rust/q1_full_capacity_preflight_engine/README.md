@@ -1,9 +1,11 @@
 # Q1 full capacity-preflight Rust engine
 
-This crate is the additive Rust endpoint for the target-blind depth-3,
-node-6 capacity diagnostic. It does not start Q1. It never reads target truth,
-split, role, or Hegel-invocation material, and it never creates a formal Q1
-root, receipt, gate row, or output slot.
+This crate contains two distinct target-blind Rust endpoints. The original
+capacity-preflight binary remains diagnostic-only and does not start Q1. The
+formal archive materializer is a separate full-node6 action that retains the
+already frozen record, frame, chunk, manifest, fixed-point, and closure-bundle
+bytes. Neither endpoint reads target truth, split, role, or Hegel-invocation
+material.
 
 The production CLI admits one action only:
 
@@ -84,6 +86,50 @@ the no-scratch empty-root path. Final frozen-v1 records are encoded through
 counting/discard: record counts, framed byte
 counts, chunk and stream commitments, and projected scratch high-water are
 retained, while formal archive payloads are not written.
+
+## Formal archive materializer
+
+The distinct formal CLI admits only this action and requires the nonnull run
+genesis plus the 14/20 prestart admission receipt that authorized the formal
+boundary:
+
+```text
+hegel-q1-formal-archive-materializer \
+  --action materialize-full-node6-formal-archive-v1 \
+  --capsule-digest sha256:<64-lowercase-hex> \
+  --source-commit <40-lowercase-hex> \
+  --run-genesis-root sha256:<64-lowercase-hex> \
+  --prestart-admission-receipt-root sha256:<64-lowercase-hex> \
+  --output-dir <absolute-empty-directory> \
+  --scratch-dir <distinct-absolute-empty-directory>
+```
+
+Its implementation identity is
+`hegel-rust-q1-formal-archive-materializer-v1`. The result binds the admission
+snapshot as `NOT_RUN / 14/20 / mask 0x003fff / eight null output slots`; it
+does not admit the diagnostic `0/20` action. One invocation performs both
+ordered Odd/Sink measurements and retains the formal archive in this layout:
+
+```text
+closure-bundle.framed
+endpoint-result.json
+signature-01/
+  chunk-manifests.framed
+  fixed-point.framed
+  signature-manifest.framed
+  stream-01/chunk-000000.framed ... stream-04/chunk-NNNNNN.framed
+signature-02/
+  chunk-manifests.framed
+  fixed-point.framed
+  signature-manifest.framed
+  stream-01/chunk-000000.framed ... stream-04/chunk-NNNNNN.framed
+```
+
+Every `.framed` payload is the frozen four-byte big-endian length followed by
+the existing strict-CBOR record. Chunk files are bound by the already frozen
+chunk-manifest framed-blob hash; the materializer adds no second file-hash
+scheme. The library's bounded-node3 materialization entrypoint exists only for
+golden tests and is not admitted by either production CLI.
 
 Build and test from this directory with the sealed local Cargo cache:
 

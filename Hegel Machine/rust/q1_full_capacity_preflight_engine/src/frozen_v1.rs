@@ -3,7 +3,9 @@
 //! The quotient traversal lives in the parent module.  This module consumes
 //! that same returned continuation bank, replays application identities only,
 //! and emits the already frozen CBOR/framing/chunk/external-sort commitments.
-//! It never evaluates a target, starts Q1, or materializes a formal archive.
+//! It never evaluates a target or starts Q1.  The diagnostic caller uses the
+//! counting/discard path; the formal materializer caller can retain those exact
+//! framed bytes without changing any archive object or commitment.
 
 use super::{
     canonicalize_shrink6_source_node, frozen_leaf_manifest, representative_capacity,
@@ -200,6 +202,60 @@ fn framed_payload_bytes(payload_bytes: usize) -> Result<u64, EngineError> {
 
 fn framed_object_bytes(value: &Cbor) -> Result<u64, EngineError> {
     framed_payload_bytes(encode(value).len())
+}
+
+fn frame_payload(payload: &[u8]) -> Result<Vec<u8>, EngineError> {
+    let length = u32::try_from(payload.len()).map_err(|_| {
+        EngineError::new(
+            "INCONCLUSIVE_FROZEN_V1_FRAME_OVERFLOW",
+            "formal-wire frame exceeds u32 length",
+        )
+    })?;
+    let mut output = Vec::with_capacity(4 + payload.len());
+    output.extend_from_slice(&length.to_be_bytes());
+    output.extend_from_slice(payload);
+    Ok(output)
+}
+
+fn write_new_synced(path: &Path, payload: &[u8]) -> Result<(), EngineError> {
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .map_err(|error| {
+            EngineError::new(
+                "FAIL_FORMAL_MATERIALIZER_WRITE",
+                format!("cannot create {}: {error}", path.display()),
+            )
+        })?;
+    file.write_all(payload)
+        .and_then(|_| file.sync_all())
+        .map_err(|error| {
+            EngineError::new(
+                "FAIL_FORMAL_MATERIALIZER_WRITE",
+                format!("cannot persist {}: {error}", path.display()),
+            )
+        })
+}
+
+fn create_materialization_dir(path: &Path) -> Result<(), EngineError> {
+    fs::create_dir(path).map_err(|error| {
+        EngineError::new(
+            "FAIL_FORMAL_MATERIALIZER_LAYOUT",
+            format!("cannot create {}: {error}", path.display()),
+        )
+    })
+}
+
+fn sync_materialization_dir(path: &Path) -> Result<(), EngineError> {
+    File::open(path)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|error| {
+            EngineError::new(
+                "FAIL_FORMAL_MATERIALIZER_WRITE",
+                format!("cannot sync {}: {error}", path.display()),
+            )
+        })
 }
 
 fn sha256(parts: &[&[u8]]) -> [u8; 32] {
@@ -1832,12 +1888,54 @@ pub struct FrozenFormalStreamProjection {
     chunk_manifest_records: Vec<Vec<u8>>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FrozenFormalChunkBinding {
+    pub chunk_index: u64,
+    pub framed_blob_bytes: u64,
+    pub framed_blob_hash: String,
+    pub record_count: u64,
+    pub relative_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct FrozenFormalMaterializedStream {
+    pub archive_root: String,
+    pub canonical_record_payload_bytes: u64,
+    pub chunk_count: u64,
+    pub chunk_manifest_subtree_root: String,
+    pub counting_discard_commitment: String,
+    pub external_sort_projection_root: String,
+    pub framed_bytes: u64,
+    pub record_count: u64,
+    pub stream_kind: String,
+    pub stream_kind_id: u64,
+    #[serde(skip)]
+    pub chunk_bindings: Vec<FrozenFormalChunkBinding>,
+}
+
+#[derive(Debug)]
+struct FrozenStreamEncoding {
+    projection: FrozenFormalStreamProjection,
+    materialization: Option<FrozenFormalMaterializedStream>,
+}
+
+fn retained_framed_blob_hash(payload: &[u8]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(FRAMED_BLOB_DOMAIN);
+    hasher.update([0]);
+    hasher.update([0x81]);
+    hasher.update(cbor_bytes_head(payload.len()));
+    hasher.update(payload);
+    hasher.finalize().into()
+}
+
 fn encode_counting_discard_stream(
     input_signature_id: u64,
     universe_root: [u8; 32],
     stream_kind: StreamKind,
     records: &[ArchiveRecord],
-) -> Result<FrozenFormalStreamProjection, EngineError> {
+    materialization_dir: Option<&Path>,
+) -> Result<FrozenStreamEncoding, EngineError> {
     if records.is_empty() {
         return Err(EngineError::new(
             "FAIL_FROZEN_V1_EMPTY_STREAM",
@@ -1883,7 +1981,11 @@ fn encode_counting_discard_stream(
         first = end;
     }
 
+    if let Some(path) = materialization_dir {
+        create_materialization_dir(path)?;
+    }
     let mut manifests = Vec::with_capacity(ranges.len());
+    let mut chunk_bindings = Vec::with_capacity(ranges.len());
     for (chunk_index, (first, end, framed_length)) in ranges.iter().copied().enumerate() {
         let blob_hash = counting_framed_blob_hash(
             records[first..end]
@@ -1891,6 +1993,29 @@ fn encode_counting_discard_stream(
                 .map(|record| record.encoded.as_slice()),
             framed_length,
         )?;
+        if let Some(path) = materialization_dir {
+            let mut retained = Vec::with_capacity(framed_length);
+            for record in &records[first..end] {
+                retained.extend_from_slice(&frame_payload(&record.encoded)?);
+            }
+            if retained.len() != framed_length
+                || retained_framed_blob_hash(&retained) != blob_hash
+            {
+                return Err(EngineError::new(
+                    "FAIL_FROZEN_V1_RETAINED_ENCODER",
+                    "retained framed chunk differs from its frozen counting binding",
+                ));
+            }
+            let filename = format!("chunk-{chunk_index:06}.framed");
+            write_new_synced(&path.join(&filename), &retained)?;
+            chunk_bindings.push(FrozenFormalChunkBinding {
+                chunk_index: chunk_index as u64,
+                framed_blob_bytes: retained.len() as u64,
+                framed_blob_hash: prefixed(&blob_hash),
+                record_count: (end - first) as u64,
+                relative_path: filename,
+            });
+        }
         let record_ids = records[first..end]
             .iter()
             .map(|record| content_hash(stream_kind.record_id_domain(), &record.object))
@@ -1948,7 +2073,10 @@ fn encode_counting_discard_stream(
         external_sort.object.clone(),
     ]);
     let commitment = content_hash(PROJECTED_STREAM_DOMAIN, &projected_preimage);
-    Ok(FrozenFormalStreamProjection {
+    if let Some(path) = materialization_dir {
+        sync_materialization_dir(path)?;
+    }
+    let projection = FrozenFormalStreamProjection {
         archive_root: prefixed(&archive_root),
         canonical_record_payload_bytes: records
             .iter()
@@ -1960,8 +2088,16 @@ fn encode_counting_discard_stream(
         external_sort_projection_root: prefixed(&external_sort.diagnostic_root),
         framed_bytes: framed_stream_bytes as u64,
         record_count: records.len() as u64,
-        retained_framed_blob_bytes: 0,
-        retained_framed_blob_count: 0,
+        retained_framed_blob_bytes: if materialization_dir.is_some() {
+            framed_stream_bytes as u64
+        } else {
+            0
+        },
+        retained_framed_blob_count: if materialization_dir.is_some() {
+            ranges.len() as u64
+        } else {
+            0
+        },
         stream_kind: stream_kind.name().to_owned(),
         stream_kind_id: stream_kind as u64,
         charged_scratch_high_water_bytes: external_sort.charged_scratch_high_water_bytes,
@@ -1970,6 +2106,23 @@ fn encode_counting_discard_stream(
         descriptor_object,
         external_sort_projection_root_bytes: external_sort.diagnostic_root,
         chunk_manifest_records,
+    };
+    let materialization = materialization_dir.map(|_| FrozenFormalMaterializedStream {
+        archive_root: projection.archive_root.clone(),
+        canonical_record_payload_bytes: projection.canonical_record_payload_bytes,
+        chunk_count: projection.chunk_count,
+        chunk_manifest_subtree_root: projection.chunk_manifest_subtree_root.clone(),
+        counting_discard_commitment: projection.counting_discard_commitment.clone(),
+        external_sort_projection_root: projection.external_sort_projection_root.clone(),
+        framed_bytes: projection.framed_bytes,
+        record_count: projection.record_count,
+        stream_kind: projection.stream_kind.clone(),
+        stream_kind_id: projection.stream_kind_id,
+        chunk_bindings,
+    });
+    Ok(FrozenStreamEncoding {
+        projection,
+        materialization,
     })
 }
 
@@ -2014,9 +2167,15 @@ pub(super) struct FrozenEndpointFormalResourceProjection {
     pub archive_projection_result_diagnostic_root: [u8; 32],
 }
 
-pub(super) fn endpoint_formal_resource_projection(
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct FrozenFormalEndpointMaterialization {
+    pub closure_bundle_root: String,
+    pub formal_archive_payload_bytes: u64,
+}
+
+fn closure_bundle_object(
     partitions: &[&FrozenFormalWireProjection],
-) -> Result<FrozenEndpointFormalResourceProjection, EngineError> {
+) -> Result<Cbor, EngineError> {
     if partitions.len() != 2
         || partitions[0].input_signature_id != 1
         || partitions[1].input_signature_id != 2
@@ -2028,7 +2187,7 @@ pub(super) fn endpoint_formal_resource_projection(
     }
     let semantic_binding_root = decode_root(FROZEN_SEMANTIC_BINDING_ROOT)?;
     let projection_profile_root = decode_root(FROZEN_PROJECTION_PROFILE_ROOT)?;
-    let closure_bundle = array([
+    Ok(array([
         uint(1),
         uint(CLOSURE_BUNDLE_TAG),
         bytes(CLOSURE_BUNDLE_SCHEMA),
@@ -2043,7 +2202,15 @@ pub(super) fn endpoint_formal_resource_projection(
                 bytes(partition.saturation_state_root),
             ])
         })),
-    ]);
+    ]))
+}
+
+pub(super) fn endpoint_formal_resource_projection(
+    partitions: &[&FrozenFormalWireProjection],
+) -> Result<FrozenEndpointFormalResourceProjection, EngineError> {
+    let closure_bundle = closure_bundle_object(partitions)?;
+    let semantic_binding_root = decode_root(FROZEN_SEMANTIC_BINDING_ROOT)?;
+    let projection_profile_root = decode_root(FROZEN_PROJECTION_PROFILE_ROOT)?;
     let projected_closure_bundle_frame_bytes = framed_object_bytes(&closure_bundle)?;
     let projected_formal_archive_payload_bytes = partitions
         .iter()
@@ -2110,13 +2277,61 @@ pub(super) fn endpoint_formal_resource_projection(
     })
 }
 
+pub(super) fn materialize_endpoint_closure(
+    partitions: &[&FrozenFormalWireProjection],
+    materialization_root: &Path,
+) -> Result<FrozenFormalEndpointMaterialization, EngineError> {
+    let closure_bundle = closure_bundle_object(partitions)?;
+    let closure_bundle_frame = frame_payload(&encode(&closure_bundle))?;
+    let formal_archive_payload_bytes = partitions.iter().try_fold(
+        closure_bundle_frame.len() as u64,
+        |total, partition| {
+            total
+                .checked_add(partition.projected_partition_payload_bytes)
+                .ok_or_else(|| {
+                    EngineError::new(
+                        "INCONCLUSIVE_FROZEN_V1_FRAME_OVERFLOW",
+                        "endpoint formal archive payload length overflow",
+                    )
+                })
+        },
+    )?;
+    write_new_synced(
+        &materialization_root.join("closure-bundle.framed"),
+        &closure_bundle_frame,
+    )?;
+    sync_materialization_dir(materialization_root)?;
+    Ok(FrozenFormalEndpointMaterialization {
+        closure_bundle_root: prefixed(&content_hash(CLOSURE_BUNDLE_ROOT_DOMAIN, &closure_bundle)),
+        formal_archive_payload_bytes,
+    })
+}
+
 #[derive(Debug, Clone)]
 pub(super) struct FrozenProjectionResult {
     pub same_run_record_set_root: String,
     pub formal_wire_projection: FrozenFormalWireProjection,
+    pub formal_materialization: Option<FrozenFormalMaterializedPartition>,
 }
 
-pub(super) fn project_same_run(
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct FrozenFormalMaterializedPartition {
+    pub chunk_manifest_archive_root: String,
+    pub chunk_manifest_count: u64,
+    pub fixed_point_record_root: String,
+    pub input_signature_id: u64,
+    pub input_signature_name: String,
+    pub partition_external_sort_root: String,
+    pub partition_stream_commitment_root: String,
+    pub projected_partition_payload_bytes: u64,
+    pub same_run_record_set_root: String,
+    pub saturation_state_root: String,
+    pub signature_manifest_root: String,
+    pub streams: Vec<FrozenFormalMaterializedStream>,
+    pub universe_root: String,
+}
+
+fn project_same_run_internal(
     input_signature_id: u64,
     universe_root_hex: &str,
     limits: CapacityLimits,
@@ -2125,6 +2340,7 @@ pub(super) fn project_same_run(
     peak_work_queue_points: u64,
     scratch_parent: Option<&Path>,
     scratch_tracker: &ActualScratchTracker,
+    materialization_root: Option<&Path>,
 ) -> Result<FrozenProjectionResult, EngineError> {
     let universe_root = decode_root(universe_root_hex)?;
     let workspace = ScratchWorkspace::create(
@@ -2157,17 +2373,35 @@ pub(super) fn project_same_run(
         array(material.classes.iter().map(|record| record.object.clone())),
         array(material.coverage.iter().map(|record| record.object.clone())),
     ]);
-    let streams = [
+    let signature_dir = materialization_root.map(|root| {
+        root.join(format!("signature-{input_signature_id:02}"))
+    });
+    if let Some(path) = &signature_dir {
+        create_materialization_dir(path)?;
+    }
+    let mut streams = Vec::with_capacity(4);
+    let mut materialized_streams = Vec::with_capacity(4);
+    for (kind, records) in [
         (StreamKind::Program, material.programs.as_slice()),
         (StreamKind::Cohort, material.cohorts.as_slice()),
         (StreamKind::Class, material.classes.as_slice()),
         (StreamKind::Coverage, material.coverage.as_slice()),
-    ]
-    .into_iter()
-    .map(|(kind, records)| {
-        encode_counting_discard_stream(input_signature_id, universe_root, kind, records)
-    })
-    .collect::<Result<Vec<_>, _>>()?;
+    ] {
+        let stream_dir = signature_dir
+            .as_ref()
+            .map(|path| path.join(format!("stream-{:02}", kind as u64)));
+        let encoded = encode_counting_discard_stream(
+            input_signature_id,
+            universe_root,
+            kind,
+            records,
+            stream_dir.as_deref(),
+        )?;
+        streams.push(encoded.projection);
+        if let Some(materialized) = encoded.materialization {
+            materialized_streams.push(materialized);
+        }
+    }
     let semantic_binding_root = decode_root(FROZEN_SEMANTIC_BINDING_ROOT)?;
     let projection_profile_root = decode_root(FROZEN_PROJECTION_PROFILE_ROOT)?;
     let counts = state.counts();
@@ -2402,11 +2636,68 @@ pub(super) fn project_same_run(
         ),
         bytes(partition_external_sort_root),
     ]);
+    if let Some(path) = &signature_dir {
+        let mut chunk_manifest_stream = Vec::with_capacity(
+            usize::try_from(projected_chunk_manifest_stream_bytes).unwrap_or(0),
+        );
+        for record in &chunk_manifest_records {
+            chunk_manifest_stream.extend_from_slice(&frame_payload(record)?);
+        }
+        if chunk_manifest_stream.len() as u64 != projected_chunk_manifest_stream_bytes {
+            return Err(EngineError::new(
+                "FAIL_FROZEN_V1_RETAINED_ENCODER",
+                "retained chunk-manifest stream length differs from projection",
+            ));
+        }
+        let fixed_point_frame = frame_payload(&encode(&fixed_point))?;
+        let signature_manifest_frame = frame_payload(&encode(&signature_manifest))?;
+        if fixed_point_frame.len() as u64 != projected_fixed_point_frame_bytes
+            || signature_manifest_frame.len() as u64
+                != projected_signature_manifest_frame_bytes
+        {
+            return Err(EngineError::new(
+                "FAIL_FROZEN_V1_RETAINED_ENCODER",
+                "retained singleton frame length differs from projection",
+            ));
+        }
+        write_new_synced(
+            &path.join("chunk-manifests.framed"),
+            &chunk_manifest_stream,
+        )?;
+        write_new_synced(&path.join("fixed-point.framed"), &fixed_point_frame)?;
+        write_new_synced(
+            &path.join("signature-manifest.framed"),
+            &signature_manifest_frame,
+        )?;
+        sync_materialization_dir(path)?;
+    }
+    let same_run_record_set_root = prefixed(&content_hash(
+        SAME_RUN_RECORD_SET_DOMAIN,
+        &same_run_object,
+    ));
+    let formal_materialization = signature_dir.as_ref().map(|_| {
+        FrozenFormalMaterializedPartition {
+            chunk_manifest_archive_root: prefixed(&chunk_manifest_archive_root),
+            chunk_manifest_count,
+            fixed_point_record_root: prefixed(&fixed_point_record_root),
+            input_signature_id,
+            input_signature_name: if input_signature_id == 1 {
+                "OddInputV1".to_owned()
+            } else {
+                "SinkInputV1".to_owned()
+            },
+            partition_external_sort_root: prefixed(&partition_external_sort_root),
+            partition_stream_commitment_root: prefixed(&partition_stream_commitment_root),
+            projected_partition_payload_bytes,
+            same_run_record_set_root: same_run_record_set_root.clone(),
+            saturation_state_root: prefixed(&saturation_state_root),
+            signature_manifest_root: prefixed(&signature_manifest_root),
+            streams: materialized_streams,
+            universe_root: prefixed(&universe_root),
+        }
+    });
     let result = FrozenProjectionResult {
-        same_run_record_set_root: prefixed(&content_hash(
-            SAME_RUN_RECORD_SET_DOMAIN,
-            &same_run_object,
-        )),
+        same_run_record_set_root,
         formal_wire_projection: FrozenFormalWireProjection {
             diagnostic_only: true,
             formal_archive_materialized: false,
@@ -2428,9 +2719,57 @@ pub(super) fn project_same_run(
             partition_external_sort_root,
             projection_partition_row,
         },
+        formal_materialization,
     };
     workspace.cleanup()?;
     Ok(result)
+}
+
+pub(super) fn project_same_run(
+    input_signature_id: u64,
+    universe_root_hex: &str,
+    limits: CapacityLimits,
+    state: &QuotientState,
+    measured_coverage: &BTreeMap<CoverageKey, CoverageCounter>,
+    peak_work_queue_points: u64,
+    scratch_parent: Option<&Path>,
+    scratch_tracker: &ActualScratchTracker,
+) -> Result<FrozenProjectionResult, EngineError> {
+    project_same_run_internal(
+        input_signature_id,
+        universe_root_hex,
+        limits,
+        state,
+        measured_coverage,
+        peak_work_queue_points,
+        scratch_parent,
+        scratch_tracker,
+        None,
+    )
+}
+
+pub(super) fn materialize_same_run(
+    input_signature_id: u64,
+    universe_root_hex: &str,
+    limits: CapacityLimits,
+    state: &QuotientState,
+    measured_coverage: &BTreeMap<CoverageKey, CoverageCounter>,
+    peak_work_queue_points: u64,
+    scratch_parent: Option<&Path>,
+    scratch_tracker: &ActualScratchTracker,
+    materialization_root: &Path,
+) -> Result<FrozenProjectionResult, EngineError> {
+    project_same_run_internal(
+        input_signature_id,
+        universe_root_hex,
+        limits,
+        state,
+        measured_coverage,
+        peak_work_queue_points,
+        scratch_parent,
+        scratch_tracker,
+        Some(materialization_root),
+    )
 }
 
 #[cfg(test)]

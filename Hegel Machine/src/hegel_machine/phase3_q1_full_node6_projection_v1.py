@@ -20,7 +20,7 @@ import heapq
 import json
 from pathlib import Path
 import tempfile
-from typing import Final, Iterator, NoReturn
+from typing import Callable, Final, Iterator, NoReturn
 
 from . import phase3_q1_archive_projection_v1 as _archive
 from . import phase3_q1_capacity_preflight_v1 as _capacity
@@ -82,6 +82,11 @@ FROZEN_PROJECTION_PROFILE_ROOT: Final = bytes.fromhex(
 FROZEN_PROJECTION_PROFILE_ROOT_ID: Final = (
     "sha256:" + FROZEN_PROJECTION_PROFILE_ROOT.hex()
 )
+
+_RetainedChunkConsumerV1 = Callable[
+    [_formal.Q1ArchiveChunkManifestV1, bytes],
+    None,
+]
 
 
 class FullNode6ProjectionError(RuntimeError):
@@ -1432,7 +1437,14 @@ class _SameRunRecordSetRootBuilderV1:
 
 
 class _FormalCountingSinkV1:
-    """Old-v1 formal archive sink with bounded chunk and row spools."""
+    """Old-v1 formal archive sink with bounded chunk and row spools.
+
+    The ordinary diagnostic path leaves ``retained_chunk_consumer`` null and
+    therefore preserves the original counting/discard behavior.  The formal
+    materializer supplies a consumer which receives each exact frozen framed
+    chunk once, at the same deterministic chunk boundary used by the counting
+    path.
+    """
 
     def __init__(
         self,
@@ -1444,11 +1456,13 @@ class _FormalCountingSinkV1:
         stream_kind_id: _formal.ArchiveStreamKindId,
         expected_count: int,
         record_set_root: _SameRunRecordSetRootBuilderV1,
+        retained_chunk_consumer: _RetainedChunkConsumerV1 | None = None,
     ) -> None:
         self.snapshot = snapshot
         self.stream_kind_id = stream_kind_id
         self.expected_count = expected_count
         self.record_set_root = record_set_root
+        self.retained_chunk_consumer = retained_chunk_consumer
         self.record_set_root.begin_stream(expected_count)
         self.archive_frontier = _Rfc6962Frontier()
         self.external = _ExternalSortProjectionBuilderV1(
@@ -1480,21 +1494,35 @@ class _FormalCountingSinkV1:
             blob_hash.update(payload)
             subtree.append_canonical_record(payload)
         first_record_index = self.count - len(self.chunk_payloads)
-        self.manifests.append(
-            _formal.Q1ArchiveChunkManifestV1(
-                self.snapshot.input_signature_id,
-                self.snapshot.universe_root,
-                self.stream_kind_id,
-                len(self.manifests),
-                first_record_index,
-                len(self.chunk_payloads),
-                self.chunk_ids[0],
-                self.chunk_ids[-1],
-                subtree.root(),
-                blob_hash.digest(),
-                self.chunk_framed_bytes,
-            )
+        manifest = _formal.Q1ArchiveChunkManifestV1(
+            self.snapshot.input_signature_id,
+            self.snapshot.universe_root,
+            self.stream_kind_id,
+            len(self.manifests),
+            first_record_index,
+            len(self.chunk_payloads),
+            self.chunk_ids[0],
+            self.chunk_ids[-1],
+            subtree.root(),
+            blob_hash.digest(),
+            self.chunk_framed_bytes,
         )
+        self.manifests.append(manifest)
+        if self.retained_chunk_consumer is not None:
+            framed_blob = b"".join(
+                len(payload).to_bytes(_formal.FRAME_LENGTH_BYTES, "big") + payload
+                for payload in self.chunk_payloads
+            )
+            if (
+                len(framed_blob) != manifest.framed_blob_length
+                or _formal.framed_blob_hash_v1(framed_blob)
+                != manifest.framed_blob_hash
+            ):
+                _fail(
+                    "FAIL_FULL_NODE6_FORMAL_MATERIALIZATION",
+                    "retained framed chunk differs from counting sink",
+                )
+            self.retained_chunk_consumer(manifest, framed_blob)
         self.chunk_payloads.clear()
         self.chunk_ids.clear()
         self.chunk_framed_bytes = 0
@@ -2441,6 +2469,7 @@ def _bounded_project_same_run_partition_v1(
     snapshot: _snapshot.Q1PartitionSnapshotV1,
     scratch: Path,
     tracker: _ScratchTrackerV1,
+    retained_chunk_consumer: _RetainedChunkConsumerV1 | None = None,
 ) -> FullNode6PartitionProjectionV1:
     """Project a snapshot without materializing any node6-sized record stream."""
 
@@ -2560,6 +2589,7 @@ def _bounded_project_same_run_partition_v1(
         stream_kind_id=_formal.ArchiveStreamKindId.PROGRAM,
         expected_count=snapshot.continuation_bank_point_count,
         record_set_root=root_builder,
+        retained_chunk_consumer=retained_chunk_consumer,
     )
     previous_program_key: bytes | None = None
     program_index = 0
@@ -2671,6 +2701,7 @@ def _bounded_project_same_run_partition_v1(
         stream_kind_id=_formal.ArchiveStreamKindId.COHORT,
         expected_count=snapshot.signature_cohort_count,
         record_set_root=root_builder,
+        retained_chunk_consumer=retained_chunk_consumer,
     )
     previous_cohort_key: bytes | None = None
     cohort_index = 0
@@ -2819,6 +2850,7 @@ def _bounded_project_same_run_partition_v1(
         stream_kind_id=_formal.ArchiveStreamKindId.CLASS,
         expected_count=snapshot.behavior_class_count,
         record_set_root=root_builder,
+        retained_chunk_consumer=retained_chunk_consumer,
     )
     base_rows = _iter_run_rows_v1(class_base_path)
     aggregate_rows = _iter_run_rows_v1(class_aggregate_path)
@@ -2934,6 +2966,7 @@ def _bounded_project_same_run_partition_v1(
         stream_kind_id=_formal.ArchiveStreamKindId.COVERAGE,
         expected_count=_formal.EXPECTED_COVERAGE_RECORD_COUNT,
         record_set_root=root_builder,
+        retained_chunk_consumer=retained_chunk_consumer,
     )
     for row in coverage:
         coverage_sink.append(row)
@@ -2996,6 +3029,7 @@ def _project_same_run_partition_with_tracker_v1(
     *,
     scratch_root: Path,
     tracker: _ScratchTrackerV1,
+    retained_chunk_consumer: _RetainedChunkConsumerV1 | None = None,
 ) -> FullNode6PartitionProjectionV1:
     if type(snapshot) is not _snapshot.Q1PartitionSnapshotV1:
         raise TypeError("snapshot must be exact Q1PartitionSnapshotV1")
@@ -3013,10 +3047,17 @@ def _project_same_run_partition_with_tracker_v1(
         dir=scratch_root,
     ) as directory:
         try:
+            if retained_chunk_consumer is None:
+                return _bounded_project_same_run_partition_v1(
+                    snapshot,
+                    Path(directory),
+                    tracker,
+                )
             return _bounded_project_same_run_partition_v1(
                 snapshot,
                 Path(directory),
                 tracker,
+                retained_chunk_consumer,
             )
         except BaseException:
             # Capture the last atomic all-live state before TemporaryDirectory
@@ -3097,6 +3138,7 @@ def project_full_node6_same_run_v1(
     snapshots: tuple[_snapshot.Q1PartitionSnapshotV1 | None, ...],
     *,
     scratch_root: Path = SCRATCH_ROOT,
+    retained_chunk_consumer: _RetainedChunkConsumerV1 | None = None,
 ) -> FullNode6ProjectionResultV1:
     """Project one admitted full result without a second quotient measurement."""
 
@@ -3114,14 +3156,25 @@ def project_full_node6_same_run_v1(
         _require_same_run_snapshot_v1(row, snapshot)
     tracker = _ScratchTrackerV1()
     try:
-        partitions = tuple(
-            _project_same_run_partition_with_tracker_v1(
-                value,
-                scratch_root=scratch_root,
-                tracker=tracker,
+        if retained_chunk_consumer is None:
+            partitions = tuple(
+                _project_same_run_partition_with_tracker_v1(
+                    value,
+                    scratch_root=scratch_root,
+                    tracker=tracker,
+                )
+                for value in exact_snapshots
             )
-            for value in exact_snapshots
-        )
+        else:
+            partitions = tuple(
+                _project_same_run_partition_with_tracker_v1(
+                    value,
+                    scratch_root=scratch_root,
+                    tracker=tracker,
+                    retained_chunk_consumer=retained_chunk_consumer,
+                )
+                for value in exact_snapshots
+            )
     finally:
         tracker.release_after_transient_tree_cleanup()
     closure_bundle, archive_projection_result = _assemble_formal_aggregate_v1(
