@@ -1006,6 +1006,28 @@ impl From<EngineError> for TraversalFailure {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct ApplicationIdentity {
+    depth: u32,
+    operator_code: u16,
+    left_canonical_cbor: Vec<u8>,
+    right_canonical_cbor: Option<Vec<u8>>,
+}
+
+fn application_identity(
+    depth: u32,
+    operator: Operator,
+    left: &Program,
+    right: Option<&Program>,
+) -> ApplicationIdentity {
+    ApplicationIdentity {
+        depth,
+        operator_code: operator.coverage_code(),
+        left_canonical_cbor: left.canonical.canonical_cbor.clone(),
+        right_canonical_cbor: right.map(|program| program.canonical.canonical_cbor.clone()),
+    }
+}
+
 fn visit_eligible_applications<F>(
     programs: &[ProgramRef],
     depth: u32,
@@ -1536,6 +1558,7 @@ struct Runner {
     peak: StateCounts,
     peak_work_queue_points: u64,
     peak_saturation_round_count: u64,
+    saturation_round_count: u64,
     barriers: Vec<DepthBarrierDiagnostic>,
     coverage: BTreeMap<CoverageKey, CoverageCounter>,
 }
@@ -1561,6 +1584,7 @@ impl Runner {
             peak: StateCounts::default(),
             peak_work_queue_points: 0,
             peak_saturation_round_count: 0,
+            saturation_round_count: 0,
             barriers: Vec::new(),
             coverage: empty_coverage(),
         })
@@ -1577,11 +1601,18 @@ impl Runner {
         Ok(())
     }
 
-    fn round_guard(&self) -> Result<(), TraversalFailure> {
-        if self.barriers.len() as u64 + 1 > self.limits.maximum_saturation_rounds {
+    fn guard_next_saturation_round(&self) -> Result<(), TraversalFailure> {
+        if self.saturation_round_count + 1 > self.limits.maximum_saturation_rounds {
             return Err(TraversalFailure::Guard(GuardHit::rounds()));
         }
         self.wall_guard()
+    }
+
+    fn complete_saturation_round(&mut self) {
+        self.saturation_round_count += 1;
+        self.peak_saturation_round_count = self
+            .peak_saturation_round_count
+            .max(self.saturation_round_count);
     }
 
     fn consume_raw(&mut self) -> Result<(), TraversalFailure> {
@@ -1643,7 +1674,7 @@ impl Runner {
         &mut self,
         program: ProgramRef,
         current_depth: u32,
-    ) -> Result<(u64, u64, u64), TraversalFailure> {
+    ) -> Result<(u64, u64, u64, u64), TraversalFailure> {
         let key = (*program.behavior.key).clone();
         let prior = self.state.classes.get(&key).cloned();
         let class_created = prior.is_none();
@@ -1661,20 +1692,8 @@ impl Runner {
             )));
         }
         let (cohort_created, bank_mutated) = class.add(program.clone());
-        if bank_mutated && program.canonical.depth < current_depth {
-            match prior {
-                Some(prior) => {
-                    self.state.classes.insert(key, prior);
-                }
-                None => {
-                    self.state.classes.remove(&key);
-                }
-            }
-            return Err(TraversalFailure::Engine(EngineError::new(
-                "FAIL_Q1_PREFLIGHT_LATE_LOWER_DEPTH_BANK_MUTATION",
-                "a later barrier changed an earlier-depth cohort bank",
-            )));
-        }
+        let late_lower_depth_bank_mutation =
+            bank_mutated && program.canonical.depth < current_depth;
         let counts = self.state.counts();
         if let Err(guard) = self.guard_counts(counts) {
             match prior {
@@ -1692,6 +1711,7 @@ impl Runner {
             u64::from(class_created),
             u64::from(cohort_created),
             u64::from(bank_mutated),
+            u64::from(late_lower_depth_bank_mutation),
         ))
     }
 
@@ -1724,7 +1744,7 @@ impl Runner {
     }
 
     fn seed(&mut self) -> Result<(), TraversalFailure> {
-        self.round_guard()?;
+        self.guard_next_saturation_round()?;
         self.current_barrier_raw_count = 0;
         let before = self.state.counts();
         let raw_before = self.raw_count;
@@ -1753,7 +1773,7 @@ impl Runner {
             )?;
             self.strict_count += 1;
             match self.insert(program, 0) {
-                Ok((_, _, mutation)) => {
+                Ok((_, _, mutation, _)) => {
                     self.bank_mutations += mutation;
                     let coverage = self
                         .coverage
@@ -1792,106 +1812,96 @@ impl Runner {
             continuation_bank_point_count_after_barrier: after.bank,
             visible_frontier_point_count_after_barrier: after.frontier,
         });
-        self.peak_saturation_round_count = self
-            .peak_saturation_round_count
-            .max(self.barriers.len() as u64);
+        self.complete_saturation_round();
         Ok(())
     }
 
     fn expand_depth(&mut self, depth: u32) -> Result<(), TraversalFailure> {
-        self.round_guard()?;
         self.current_barrier_raw_count = 0;
-        let snapshot = self.state.continuation_programs()?;
-        if snapshot
-            .iter()
-            .any(|program| program.canonical.depth >= depth)
-        {
-            return Err(TraversalFailure::Engine(EngineError::new(
-                "FAIL_Q1_PREFLIGHT_AST_IDENTITY",
-                "depth barrier snapshot contains a non-prior representative",
-            )));
-        }
         let raw_before = self.raw_count;
         let strict_before = self.strict_count;
         let rewrite_before = self.rewrite_count;
         let mutation_before = self.bank_mutations;
         let mut new_classes = 0_u64;
         let mut new_cohorts = 0_u64;
+        let mut processed_applications = BTreeSet::<ApplicationIdentity>::new();
 
-        visit_eligible_applications(
-            &snapshot,
-            depth,
-            self.limits.maximum_ast_node_count,
-            |operator, left, right| {
-                let vector_key = VectorCacheKey {
-                    operator_code: operator.coverage_code(),
-                    left_behavior: left.behavior.digest,
-                    right_behavior: right.map(|program| program.behavior.digest),
-                };
-                let vector_was_cached = self.vector_cache.contains_key(&vector_key);
-                let checkpoint = (
-                    self.raw_count,
-                    self.current_barrier_raw_count,
-                    self.strict_count,
-                    self.rewrite_count,
-                    self.vector_cache_hits,
-                    self.vector_cache_misses,
-                );
-                self.consume_raw()?;
-                let source = operator.node(left, right.map(AsRef::as_ref));
-                let canonical = match canonicalize_shrink6_source_node(source.clone()) {
-                    Ok(program) => program,
-                    Err(error) if error.code == "REJECT_STRUCTURAL_LIMIT" => {
-                        let coverage = self
-                            .coverage
-                            .get_mut(&CoverageKey {
-                                depth: depth as u8,
-                                code: operator.coverage_code(),
-                            })
-                            .expect("operator coverage row");
-                        coverage.eligible += 1;
+        loop {
+            let mut snapshot = self.state.continuation_programs()?;
+            if snapshot
+                .iter()
+                .any(|program| program.canonical.depth > depth)
+            {
+                return Err(TraversalFailure::Engine(EngineError::new(
+                    "FAIL_Q1_PREFLIGHT_AST_IDENTITY",
+                    "depth barrier snapshot contains a future-depth representative",
+                )));
+            }
+            snapshot.retain(|program| program.canonical.depth < depth);
+
+            let mut unseen_application_count = 0_u64;
+            let mut late_lower_depth_bank_mutation_count = 0_u64;
+            visit_eligible_applications(
+                &snapshot,
+                depth,
+                self.limits.maximum_ast_node_count,
+                |operator, left, right| {
+                    let identity = application_identity(
+                        depth,
+                        operator,
+                        left,
+                        right.map(AsRef::as_ref),
+                    );
+                    if processed_applications.contains(&identity) {
                         return Ok(());
                     }
-                    Err(error) => {
-                        return Err(TraversalFailure::Engine(EngineError::new(
-                            error.code,
-                            error.message,
-                        )))
+                    if unseen_application_count == 0 {
+                        self.guard_next_saturation_round()?;
                     }
-                };
-                if canonical.depth > self.limits.maximum_ast_depth
-                    || canonical.node_count > self.limits.maximum_ast_node_count
-                    || canonical.aggregate_leaf_count > MAX_AGGREGATE_LEAVES
-                    || canonical.scalar_parameter_occurrence_count > MAX_SCALAR_OCCURRENCES
-                {
-                    let coverage = self
-                        .coverage
-                        .get_mut(&CoverageKey {
-                            depth: depth as u8,
-                            code: operator.coverage_code(),
-                        })
-                        .expect("operator coverage row");
-                    coverage.eligible += 1;
-                    return Ok(());
-                }
-                let rewritten = canonical.canonical_node != source;
-                self.strict_count += 1;
-                self.rewrite_count += u64::from(rewritten);
-                let cells = self.candidate_vector(
-                    operator,
-                    left,
-                    right.map(AsRef::as_ref),
-                )?;
-                let program = Program::from_application(
-                    canonical,
-                    self.input_signature_id,
-                    cells,
-                )?;
-                match self.insert(program, depth) {
-                    Ok((class_delta, cohort_delta, mutation)) => {
-                        new_classes += class_delta;
-                        new_cohorts += cohort_delta;
-                        self.bank_mutations += mutation;
+
+                    let vector_key = VectorCacheKey {
+                        operator_code: operator.coverage_code(),
+                        left_behavior: left.behavior.digest,
+                        right_behavior: right.map(|program| program.behavior.digest),
+                    };
+                    let vector_was_cached = self.vector_cache.contains_key(&vector_key);
+                    let checkpoint = (
+                        self.raw_count,
+                        self.current_barrier_raw_count,
+                        self.strict_count,
+                        self.rewrite_count,
+                        self.vector_cache_hits,
+                        self.vector_cache_misses,
+                    );
+                    self.consume_raw()?;
+                    let source = operator.node(left, right.map(AsRef::as_ref));
+                    let canonical = match canonicalize_shrink6_source_node(source.clone()) {
+                        Ok(program) => program,
+                        Err(error) if error.code == "REJECT_STRUCTURAL_LIMIT" => {
+                            let coverage = self
+                                .coverage
+                                .get_mut(&CoverageKey {
+                                    depth: depth as u8,
+                                    code: operator.coverage_code(),
+                                })
+                                .expect("operator coverage row");
+                            coverage.eligible += 1;
+                            processed_applications.insert(identity);
+                            unseen_application_count += 1;
+                            return Ok(());
+                        }
+                        Err(error) => {
+                            return Err(TraversalFailure::Engine(EngineError::new(
+                                error.code,
+                                error.message,
+                            )))
+                        }
+                    };
+                    if canonical.depth > self.limits.maximum_ast_depth
+                        || canonical.node_count > self.limits.maximum_ast_node_count
+                        || canonical.aggregate_leaf_count > MAX_AGGREGATE_LEAVES
+                        || canonical.scalar_parameter_occurrence_count > MAX_SCALAR_OCCURRENCES
+                    {
                         let coverage = self
                             .coverage
                             .get_mut(&CoverageKey {
@@ -1900,28 +1910,71 @@ impl Runner {
                             })
                             .expect("operator coverage row");
                         coverage.eligible += 1;
-                        coverage.strict_admitted += 1;
-                        coverage.rewrite_collapses += u64::from(rewritten);
-                        Ok(())
+                        processed_applications.insert(identity);
+                        unseen_application_count += 1;
+                        return Ok(());
                     }
-                    Err(error @ TraversalFailure::Guard(_)) => {
-                        if !vector_was_cached {
-                            self.vector_cache.remove(&vector_key);
+                    let rewritten = canonical.canonical_node != source;
+                    self.strict_count += 1;
+                    self.rewrite_count += u64::from(rewritten);
+                    let cells = self.candidate_vector(
+                        operator,
+                        left,
+                        right.map(AsRef::as_ref),
+                    )?;
+                    let program = Program::from_application(
+                        canonical,
+                        self.input_signature_id,
+                        cells,
+                    )?;
+                    match self.insert(program, depth) {
+                        Ok((class_delta, cohort_delta, mutation, late_mutation)) => {
+                            new_classes += class_delta;
+                            new_cohorts += cohort_delta;
+                            self.bank_mutations += mutation;
+                            late_lower_depth_bank_mutation_count += late_mutation;
+                            let coverage = self
+                                .coverage
+                                .get_mut(&CoverageKey {
+                                    depth: depth as u8,
+                                    code: operator.coverage_code(),
+                                })
+                                .expect("operator coverage row");
+                            coverage.eligible += 1;
+                            coverage.strict_admitted += 1;
+                            coverage.rewrite_collapses += u64::from(rewritten);
+                            processed_applications.insert(identity);
+                            unseen_application_count += 1;
+                            Ok(())
                         }
-                        (
-                            self.raw_count,
-                            self.current_barrier_raw_count,
-                            self.strict_count,
-                            self.rewrite_count,
-                            self.vector_cache_hits,
-                            self.vector_cache_misses,
-                        ) = checkpoint;
-                        Err(error)
+                        Err(error @ TraversalFailure::Guard(_)) => {
+                            if !vector_was_cached {
+                                self.vector_cache.remove(&vector_key);
+                            }
+                            (
+                                self.raw_count,
+                                self.current_barrier_raw_count,
+                                self.strict_count,
+                                self.rewrite_count,
+                                self.vector_cache_hits,
+                                self.vector_cache_misses,
+                            ) = checkpoint;
+                            Err(error)
+                        }
+                        Err(error) => Err(error),
                     }
-                    Err(error) => Err(error),
-                }
-            },
-        )?;
+                },
+            )?;
+            if unseen_application_count > 0 {
+                self.complete_saturation_round();
+            }
+            self.wall_guard()?;
+            if unseen_application_count == 0
+                && late_lower_depth_bank_mutation_count == 0
+            {
+                break;
+            }
+        }
 
         let after = self.state.counts();
         self.barriers.push(DepthBarrierDiagnostic {
@@ -1938,14 +1991,11 @@ impl Runner {
             continuation_bank_point_count_after_barrier: after.bank,
             visible_frontier_point_count_after_barrier: after.frontier,
         });
-        self.peak_saturation_round_count = self
-            .peak_saturation_round_count
-            .max(self.barriers.len() as u64);
         Ok(())
     }
 
     fn close_structural_boundary(&mut self) -> Result<(), TraversalFailure> {
-        self.round_guard()?;
+        self.guard_next_saturation_round()?;
         let counts = self.state.counts();
         self.barriers.push(DepthBarrierDiagnostic {
             depth: self.limits.maximum_ast_depth + 1,
@@ -1961,9 +2011,7 @@ impl Runner {
             continuation_bank_point_count_after_barrier: counts.bank,
             visible_frontier_point_count_after_barrier: counts.frontier,
         });
-        self.peak_saturation_round_count = self
-            .peak_saturation_round_count
-            .max(self.barriers.len() as u64);
+        self.complete_saturation_round();
         Ok(())
     }
 }
@@ -2587,4 +2635,114 @@ pub fn sidecar_payloads(
         canonical_value_line(&manifest)?,
     );
     Ok(payloads)
+}
+
+#[cfg(test)]
+mod fixed_point_regression_tests {
+    use super::*;
+
+    fn test_program(node: Node, behavior: &Behavior) -> ProgramRef {
+        let canonical = canonicalize_shrink6_source_node(node).unwrap();
+        let signature = construction_signature(&canonical).unwrap();
+        Arc::new(Program {
+            canonical,
+            behavior: behavior.clone(),
+            signature,
+        })
+    }
+
+    fn eligible_identities(runner: &Runner, depth: u32) -> BTreeSet<ApplicationIdentity> {
+        let snapshot = runner
+            .state
+            .continuation_programs()
+            .unwrap()
+            .into_iter()
+            .filter(|program| program.canonical.depth < depth)
+            .collect::<Vec<_>>();
+        let mut identities = BTreeSet::new();
+        visit_eligible_applications(
+            &snapshot,
+            depth,
+            runner.limits.maximum_ast_node_count,
+            |operator, left, right| {
+                identities.insert(application_identity(
+                    depth,
+                    operator,
+                    left,
+                    right.map(AsRef::as_ref),
+                ));
+                Ok(())
+            },
+        )
+        .unwrap();
+        identities
+    }
+
+    #[test]
+    fn application_identity_keeps_operator_and_child_tuple_distinctions() {
+        let behavior = Behavior::new(
+            1,
+            OutputSortId::Bool,
+            Arc::new(vec![RuntimeValue::Bool(false)]),
+        );
+        let left = test_program(Node::ContextFlag(0), &behavior);
+        let right = test_program(Node::TaskFlag(0), &behavior);
+
+        let equal = application_identity(
+            3,
+            Operator::Binary(BinaryOp::EqualExact),
+            &left,
+            Some(&right),
+        );
+        let less_equal = application_identity(
+            3,
+            Operator::Binary(BinaryOp::LessEqual),
+            &left,
+            Some(&right),
+        );
+        let reversed = application_identity(
+            3,
+            Operator::Binary(BinaryOp::EqualExact),
+            &right,
+            Some(&left),
+        );
+
+        assert_ne!(equal, less_equal);
+        assert_ne!(equal, reversed);
+        assert_eq!(
+            equal,
+            application_identity(
+                3,
+                Operator::Binary(BinaryOp::EqualExact),
+                &left,
+                Some(&right),
+            )
+        );
+    }
+
+    #[test]
+    fn late_lower_depth_bank_mutation_exposes_new_next_round_application() {
+        let behavior = Behavior::new(
+            1,
+            OutputSortId::Bool,
+            Arc::new(vec![RuntimeValue::Bool(false)]),
+        );
+        let first = test_program(Node::ContextFlag(0), &behavior);
+        let later = test_program(Node::TaskFlag(0), &behavior);
+        assert_eq!(first.signature, later.signature);
+
+        let mut runner = Runner::new(1, CapacityLimits::bounded_for_test(3).unwrap()).unwrap();
+        assert_eq!(runner.insert(first, 0).unwrap().3, 0);
+        let before = eligible_identities(&runner, 1);
+        let late = runner.insert(later, 1).unwrap();
+        let after = eligible_identities(&runner, 1);
+
+        assert_eq!(late.2, 1);
+        assert_eq!(late.3, 1);
+        assert!(before.is_empty());
+        assert_eq!(after.len(), 1);
+        assert!(after.is_disjoint(&before));
+        assert_eq!(after.iter().next().unwrap().operator_code, 0x4002);
+        assert_eq!(runner.state.continuation_programs().unwrap().len(), 2);
+    }
 }

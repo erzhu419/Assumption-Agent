@@ -225,7 +225,7 @@ def _source_gate(contract: Mapping[str, Any]) -> dict[str, object]:
         raise GatePending(
             "SOURCE_LINEAGE_AND_OBJECT_CLOSURE",
             "SOURCE_NOT_CLEAN_COMMITTED",
-            "commit the exact additive successor before capsule generation",
+            "commit the exact source-closed successor before capsule generation",
         )
     head = _git("rev-parse", "HEAD")
     tree = _git("rev-parse", "HEAD^{tree}")
@@ -252,28 +252,62 @@ def _source_gate(contract: Mapping[str, Any]) -> dict[str, object]:
                 f"observed merge-base={merge_base}"
             ),
         )
-    observed_repo_paths = tuple(
+    observed_additive_repo_paths = tuple(
         row
         for row in _git(
             "diff", "--name-only", "--diff-filter=A", ancestor, "HEAD"
         ).splitlines()
         if row
     )
-    if any(not row.startswith(prefix) for row in observed_repo_paths):
+    if any(not row.startswith(prefix) for row in observed_additive_repo_paths):
         _terminal(
             "SOURCE_ADDITIVE_PATHS_DIFFER",
-            f"an additive path escaped {prefix!r}: {observed_repo_paths!r}",
+            f"an additive path escaped {prefix!r}: {observed_additive_repo_paths!r}",
         )
-    observed_paths = tuple(row.removeprefix(prefix) for row in observed_repo_paths)
-    expected_paths = tuple(lineage["additive_paths_in_exact_order"])
-    if observed_paths != expected_paths:
+    observed_additive_paths = tuple(
+        row.removeprefix(prefix) for row in observed_additive_repo_paths
+    )
+    expected_additive_paths = tuple(lineage["additive_paths_in_exact_order"])
+    if observed_additive_paths != expected_additive_paths:
         _terminal(
             "SOURCE_ADDITIVE_PATHS_DIFFER",
-            f"expected={expected_paths!r}; observed={observed_paths!r}",
+            (
+                f"expected={expected_additive_paths!r}; "
+                f"observed={observed_additive_paths!r}"
+            ),
         )
-    non_additive = _git("diff", "--name-only", "--diff-filter=DMRTUXB", ancestor, "HEAD")
-    if non_additive:
-        _terminal("SOURCE_NOT_ADDITIVE", f"non-additive paths: {non_additive}")
+    observed_modified_repo_paths = tuple(
+        row
+        for row in _git(
+            "diff", "--name-only", "--diff-filter=M", ancestor, "HEAD"
+        ).splitlines()
+        if row
+    )
+    if any(not row.startswith(prefix) for row in observed_modified_repo_paths):
+        _terminal(
+            "SOURCE_MODIFIED_PATHS_DIFFER",
+            f"a modified path escaped {prefix!r}: {observed_modified_repo_paths!r}",
+        )
+    observed_modified_paths = tuple(
+        row.removeprefix(prefix) for row in observed_modified_repo_paths
+    )
+    expected_modified_paths = tuple(lineage["modified_paths_in_exact_order"])
+    if observed_modified_paths != expected_modified_paths:
+        _terminal(
+            "SOURCE_MODIFIED_PATHS_DIFFER",
+            (
+                f"expected={expected_modified_paths!r}; "
+                f"observed={observed_modified_paths!r}"
+            ),
+        )
+    forbidden_changes = _git(
+        "diff", "--name-only", "--diff-filter=DRTUXB", ancestor, "HEAD"
+    )
+    if forbidden_changes:
+        _terminal(
+            "SOURCE_CHANGE_KIND_DIFFERS",
+            f"forbidden changed paths: {forbidden_changes}",
+        )
     try:
         subprocess.run(
             ["git", "fsck", "--connectivity-only", "--no-dangling"],
@@ -296,7 +330,8 @@ def _source_gate(contract: Mapping[str, Any]) -> dict[str, object]:
             str(error),
         )
     rows: list[list[object]] = []
-    for relative in expected_paths:
+    source_paths = expected_additive_paths + expected_modified_paths
+    for relative in source_paths:
         try:
             listing = subprocess.run(
                 ["git", "ls-tree", "-z", "-l", "HEAD", "--", relative],
@@ -472,6 +507,18 @@ def _superseded_campaign_gate(contract: Mapping[str, Any]) -> dict[str, object]:
             "SUPERSEDED_CAMPAIGN_TERMINAL_DIFFERS",
             "failed predecessor terminal boundary differs",
         )
+    outcome_path = Path(str(expected["outcome_path"]))
+    outcome_raw = _read_regular(outcome_path, "superseded campaign outcome")
+    outcome_file_digest = "sha256:" + sha256(outcome_raw).hexdigest()
+    external_outcome = _strict_json(outcome_raw, "superseded campaign outcome")
+    if (
+        outcome_file_digest != expected["outcome_file_sha256"]
+        or external_outcome != outcome
+    ):
+        _terminal(
+            "SUPERSEDED_CAMPAIGN_OUTCOME_DIFFERS",
+            "external outcome binding differs",
+        )
     event_log_path = Path(str(expected["trajectory_event_log_path"]))
     event_log_raw = _read_regular(
         event_log_path,
@@ -509,9 +556,13 @@ def _superseded_campaign_gate(contract: Mapping[str, Any]) -> dict[str, object]:
         ("SCRATCH_PREPARATION", "COMPLETED"),
         ("ENDPOINT_SEQUENCE", "STARTED"),
         ("PYTHON_ENDPOINT", "STARTED"),
+        ("PYTHON_ENDPOINT", "COMPLETED"),
+        ("RUST_ENDPOINT", "STARTED"),
+        ("RUST_ENDPOINT", "COMPLETED"),
         ("SCRATCH_CLEANUP", "STARTED"),
         ("SCRATCH_CLEANUP", "COMPLETED"),
-        ("PYTHON_ENDPOINT", "FAILED"),
+        ("ENDPOINT_SEQUENCE", "COMPLETED"),
+        ("ENDPOINT_SEQUENCE", "FAILED"),
         ("MEASUREMENT_AND_REPLAY", "FAILED"),
         ("TERMINAL", "FAILED"),
     )
@@ -589,12 +640,16 @@ def _superseded_campaign_gate(contract: Mapping[str, Any]) -> dict[str, object]:
         "capsule_digest": value["capsule_digest"],
         "consumed_ledger_file_sha256": consumed_raw_digest,
         "consumed_ledger_record_digest": value["previous_record_digest_or_null"],
-        "measurement_outcome": "UNKNOWN",
+        "measurement_outcome": "KNOWN_TERMINAL_FAILURE",
         "measurement_endpoint_start_count": python_starts + rust_starts,
         "python_endpoint_start_count": python_starts,
         "rust_endpoint_start_count": rust_starts,
         "trusted_host_replay_start_count": host_replay_starts,
+        "python_odd_measurement_count": python_starts,
+        "rust_odd_measurement_count": rust_starts,
+        "sink_measurement_count": host_replay_starts,
         "outcome_digest": body["outcome_digest"],
+        "outcome_file_sha256": outcome_file_digest,
         "q1_gate_count": 0,
         "q1_gate_mask": 0,
         "q1_state": "NOT_RUN",
@@ -1890,6 +1945,12 @@ def _replay_existing(contract: Mapping[str, Any], expected_capsule: str) -> dict
                 "CONSUMED_WITHOUT_TERMINAL_REENTRY:"
                 + (recovery_error or "existing outcome is unavailable")
             ),
+            postconsumption_cleanup=_postconsumption_cleanup_v1(
+                None,
+                capsule,
+                contract,
+                supervisor_popen_attempted=True,
+            ),
         )
     checked_outcome, _terminal_record = _finalize_consumed_v1(
         contract,
@@ -1943,6 +2004,7 @@ def _outcome_value(
     stderr_sha256: str | None,
     artifact_sha256: str | None,
     decision: object,
+    postconsumption_cleanup: Mapping[str, object],
     supervisor_popen_count: int | None = 1,
     postconsumption_error_or_null: str | None = None,
 ) -> dict[str, object]:
@@ -1960,6 +2022,7 @@ def _outcome_value(
         "supervisor_stdout_sha256": stdout_sha256,
         "supervisor_stderr_sha256": stderr_sha256,
         "artifact_sha256_or_null": artifact_sha256,
+        "postconsumption_cleanup": dict(postconsumption_cleanup),
         "postconsumption_error_or_null": postconsumption_error_or_null,
         "status": decision.status,
         "success": decision.success,
@@ -1990,6 +2053,7 @@ _OUTCOME_FIELDS = {
     "supervisor_stdout_sha256",
     "supervisor_stderr_sha256",
     "artifact_sha256_or_null",
+    "postconsumption_cleanup",
     "postconsumption_error_or_null",
     "status",
     "success",
@@ -2019,6 +2083,7 @@ def _validate_outcome_v1(
     popen_count = value.get("supervisor_popen_count")
     return_code = value.get("supervisor_return_code")
     error = value.get("postconsumption_error_or_null")
+    cleanup = value.get("postconsumption_cleanup")
     status = value.get("status")
     terminal_status = value.get("supervisor_terminal_status_or_null")
     stdout_digest, stderr_digest, artifact_digest = digests
@@ -2046,6 +2111,30 @@ def _validate_outcome_v1(
             for item in digests
         )
         or (error is not None and (type(error) is not str or not error or len(error) > 4096))
+        or type(cleanup) is not dict
+        or set(cleanup)
+        != {
+            "schema_version",
+            "status",
+            "supervisor_process_group",
+            "production_containers",
+            "control_containers",
+            "probe_root",
+            "production_scratch",
+        }
+        or cleanup.get("schema_version")
+        != "hegel-phase3a-q1-full-node6-postconsumption-cleanup/1"
+        or cleanup.get("status") not in ("PASS", "FAILED")
+        or any(
+            type(cleanup.get(name)) is not str or not cleanup.get(name)
+            for name in (
+                "supervisor_process_group",
+                "production_containers",
+                "control_containers",
+                "probe_root",
+                "production_scratch",
+            )
+        )
         or status
         not in (
             _core.SATURATED,
@@ -2074,6 +2163,7 @@ def _validate_outcome_v1(
         or stderr_digest is None
         or artifact_digest is None
         or error is not None
+        or cleanup.get("status") != "PASS"
     ):
         _terminal("POSTCONSUMPTION_OUTCOME_INVALID", "saturated outcome differs")
     if status == _core.OUTCOME_UNKNOWN_TERMINAL and (
@@ -2094,6 +2184,7 @@ def _validate_outcome_v1(
         or stderr_digest is None
         or artifact_digest is None
         or error is not None
+        or cleanup.get("status") != "PASS"
     ):
         _terminal("POSTCONSUMPTION_OUTCOME_INVALID", "infeasible outcome differs")
     if status == _core.GUARD_HIT and (
@@ -2106,6 +2197,7 @@ def _validate_outcome_v1(
         or stderr_digest is None
         or artifact_digest is None
         or error is not None
+        or cleanup.get("status") != "PASS"
     ):
         _terminal("POSTCONSUMPTION_OUTCOME_INVALID", "guard outcome differs")
     published_artifact_pair = (return_code, terminal_status) in (
@@ -2121,6 +2213,7 @@ def _validate_outcome_v1(
         or stderr_digest is None
         or value.get("supervisor_replay_passed") is not False
         or error is not None
+        or cleanup.get("status") != "PASS"
         or (artifact_digest is not None) != published_artifact_pair
     ):
         _terminal("POSTCONSUMPTION_OUTCOME_INVALID", "failed outcome differs")
@@ -2136,6 +2229,7 @@ def _unknown_outcome_value(
     stdout_sha256: str | None,
     stderr_sha256: str | None,
     detail: str,
+    postconsumption_cleanup: Mapping[str, object],
 ) -> dict[str, object]:
     decision = _core.CampaignDecisionV1(
         _core.OUTCOME_UNKNOWN_TERMINAL,
@@ -2152,6 +2246,7 @@ def _unknown_outcome_value(
         stderr_sha256=stderr_sha256,
         artifact_sha256=None,
         decision=decision,
+        postconsumption_cleanup=postconsumption_cleanup,
         supervisor_popen_count=supervisor_popen_count,
         postconsumption_error_or_null=detail[:4096],
     )
@@ -2326,15 +2421,7 @@ def _stop_child_best_effort(child: subprocess.Popen[bytes] | None) -> str:
     return detail
 
 
-def _cleanup_production_containers_best_effort_v1(
-    capsule: Mapping[str, Any],
-) -> str:
-    suffix = str(capsule["capsule_digest"])[-12:]
-    names = (
-        f"hegel-q1-node6-python-{suffix}",
-        f"hegel-q1-node6-rust-{suffix}",
-        f"hegel-q1-node6-host-replay-{suffix}",
-    )
+def _cleanup_named_containers_best_effort_v1(names: tuple[str, ...]) -> str:
     failures: list[str] = []
     for name in names:
         removal_failure: str | None = None
@@ -2391,6 +2478,54 @@ def _cleanup_production_containers_best_effort_v1(
     return "PASS"
 
 
+def _cleanup_production_containers_best_effort_v1(
+    capsule: Mapping[str, Any],
+) -> str:
+    suffix = str(capsule["capsule_digest"])[-12:]
+    return _cleanup_named_containers_best_effort_v1(
+        (
+            f"hegel-q1-node6-python-{suffix}",
+            f"hegel-q1-node6-rust-{suffix}",
+            f"hegel-q1-node6-host-replay-{suffix}",
+        )
+    )
+
+
+def _cleanup_control_containers_best_effort_v1(
+    capsule: Mapping[str, Any],
+) -> str:
+    suffix = str(capsule["capsule_digest"])[-12:]
+    return _cleanup_named_containers_best_effort_v1(
+        (
+            f"hegel-q1-node6-isolation-control-python-{suffix}",
+            f"hegel-q1-node6-isolation-control-rust-{suffix}",
+            f"hegel-q1-node6-isolation-control-host-{suffix}",
+        )
+    )
+
+
+def _cleanup_probe_root_best_effort_v1(contract: Mapping[str, Any]) -> str:
+    probe_root = Path(str(contract["fixed_paths"]["probe_root"]))
+    try:
+        if probe_root.is_symlink() or (os.path.lexists(probe_root) and not probe_root.is_dir()):
+            probe_root.unlink()
+        elif probe_root.exists():
+            shutil.rmtree(probe_root)
+        if os.path.lexists(probe_root):
+            raise OSError("probe-root absence proof failed")
+        descriptor = os.open(
+            probe_root.parent,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC,
+        )
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+    except OSError as error:
+        return f"FAILED:{type(error).__name__}:{error}"[:900]
+    return "PASS"
+
+
 def _cleanup_production_scratch_best_effort_v1(
     contract: Mapping[str, Any],
 ) -> str:
@@ -2439,6 +2574,62 @@ def _cleanup_production_scratch_best_effort_v1(
     return "PASS"
 
 
+def _postconsumption_cleanup_v1(
+    child: subprocess.Popen[bytes] | None,
+    capsule: Mapping[str, Any],
+    contract: Mapping[str, Any],
+    *,
+    supervisor_popen_attempted: bool,
+) -> dict[str, object]:
+    def process_cleanup() -> str:
+        if child is None and supervisor_popen_attempted:
+            return "FAILED:supervisor Popen attempted but child handle unavailable"
+        return _stop_child_best_effort(child)
+
+    operations = (
+        ("supervisor_process_group", process_cleanup),
+        (
+            "production_containers",
+            lambda: _cleanup_production_containers_best_effort_v1(capsule),
+        ),
+        (
+            "control_containers",
+            lambda: _cleanup_control_containers_best_effort_v1(capsule),
+        ),
+        ("probe_root", lambda: _cleanup_probe_root_best_effort_v1(contract)),
+        (
+            "production_scratch",
+            lambda: _cleanup_production_scratch_best_effort_v1(contract),
+        ),
+    )
+    receipt: dict[str, object] = {
+        "schema_version": (
+            "hegel-phase3a-q1-full-node6-postconsumption-cleanup/1"
+        )
+    }
+    for name, operation in operations:
+        try:
+            receipt[name] = operation()
+        except BaseException as error:
+            receipt[name] = f"FAILED:{type(error).__name__}:{error}"[:900]
+    process = str(receipt["supervisor_process_group"])
+    receipt["status"] = (
+        "PASS"
+        if (process == "NOT_STARTED" or process.startswith("PASS:"))
+        and all(
+            receipt[name] == "PASS"
+            for name in (
+                "production_containers",
+                "control_containers",
+                "probe_root",
+                "production_scratch",
+            )
+        )
+        else "FAILED"
+    )
+    return receipt
+
+
 def _execute_postconsumption_v1(
     contract: Mapping[str, Any],
     capsule: Mapping[str, Any],
@@ -2453,7 +2644,6 @@ def _execute_postconsumption_v1(
     return_code: int | None = None
     stdout_digest: str | None = None
     stderr_digest: str | None = None
-    postconsumption_cleanup_already_performed = False
     outcome: dict[str, object]
     try:
         _ensure_private_directory(evidence)
@@ -2496,15 +2686,9 @@ def _execute_postconsumption_v1(
             )
         except subprocess.TimeoutExpired:
             return_code = 124
-            process_cleanup = _stop_child_best_effort(child)
-            container_cleanup = _cleanup_production_containers_best_effort_v1(capsule)
-            scratch_cleanup = _cleanup_production_scratch_best_effort_v1(contract)
-            postconsumption_cleanup_already_performed = True
             raise CampaignTerminal(
                 "SUPERVISOR_TIMEOUT",
-                f"return_code=124; supervisor_process_cleanup={process_cleanup}; "
-                f"production_container_cleanup={container_cleanup}; "
-                f"production_scratch_cleanup={scratch_cleanup}",
+                "return_code=124",
             )
         stdout_raw = _read_regular(stdout_path, "supervisor stdout")
         stderr_raw = _read_regular(stderr_path, "supervisor stderr")
@@ -2547,31 +2731,44 @@ def _execute_postconsumption_v1(
             terminal_status_or_null=terminal_status,
             replay_passed=replay_passed,
         )
-        outcome = _outcome_value(
-            contract,
+        cleanup = _postconsumption_cleanup_v1(
+            child,
             capsule,
-            return_code=return_code,
-            terminal_status=terminal_status,
-            replay_passed=replay_passed,
-            stdout_sha256=stdout_digest,
-            stderr_sha256=stderr_digest,
-            artifact_sha256=artifact_digest,
-            decision=decision,
-            supervisor_popen_count=supervisor_popen_count,
+            contract,
+            supervisor_popen_attempted=supervisor_popen_count == 1,
         )
+        if cleanup["status"] != "PASS":
+            outcome = _unknown_outcome_value(
+                contract,
+                capsule,
+                supervisor_popen_count=supervisor_popen_count,
+                return_code=return_code,
+                stdout_sha256=stdout_digest,
+                stderr_sha256=stderr_digest,
+                detail="POSTCONSUMPTION_CLEANUP_UNCERTAIN",
+                postconsumption_cleanup=cleanup,
+            )
+        else:
+            outcome = _outcome_value(
+                contract,
+                capsule,
+                return_code=return_code,
+                terminal_status=terminal_status,
+                replay_passed=replay_passed,
+                stdout_sha256=stdout_digest,
+                stderr_sha256=stderr_digest,
+                artifact_sha256=artifact_digest,
+                decision=decision,
+                postconsumption_cleanup=cleanup,
+                supervisor_popen_count=supervisor_popen_count,
+            )
     except BaseException as error:
-        cleanup_suffix = ""
-        if child is not None and not postconsumption_cleanup_already_performed:
-            process_cleanup = _stop_child_best_effort(child)
-            container_cleanup = _cleanup_production_containers_best_effort_v1(
-                capsule
-            )
-            scratch_cleanup = _cleanup_production_scratch_best_effort_v1(contract)
-            cleanup_suffix = (
-                f"; supervisor_process_cleanup={process_cleanup}; "
-                f"production_container_cleanup={container_cleanup}; "
-                f"production_scratch_cleanup={scratch_cleanup}"
-            )
+        cleanup = _postconsumption_cleanup_v1(
+            child,
+            capsule,
+            contract,
+            supervisor_popen_attempted=supervisor_popen_count == 1,
+        )
         if stdout_digest is None:
             stdout_digest = _best_effort_digest(stdout_path)
         if stderr_digest is None:
@@ -2583,7 +2780,8 @@ def _execute_postconsumption_v1(
             return_code=return_code,
             stdout_sha256=stdout_digest,
             stderr_sha256=stderr_digest,
-            detail=f"{type(error).__name__}:{error}{cleanup_suffix}",
+            detail=f"{type(error).__name__}:{error}",
+            postconsumption_cleanup=cleanup,
         )
     checked_outcome, _terminal_record = _finalize_consumed_v1(
         contract,

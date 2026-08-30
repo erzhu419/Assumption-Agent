@@ -150,7 +150,7 @@ def test_snapshot_ordering_barriers_high_water_and_authority(node3_snapshots) ->
         assert snapshot.peak_continuation_bank_point_count == (
             snapshot.continuation_bank_point_count
         )
-        assert snapshot.peak_saturation_round_count == 5
+        assert snapshot.peak_saturation_round_count == 4
         assert snapshot.diagnostic_only is True
         assert snapshot.q1_state == "NOT_RUN"
         assert snapshot.q1_gate_count == 0
@@ -169,6 +169,41 @@ def test_snapshot_ordering_barriers_high_water_and_authority(node3_snapshots) ->
 def test_snapshot_full_replay_passes_for_both_signatures(node3_snapshots) -> None:
     for snapshot in node3_snapshots:
         assert snapshot_module.validate_q1_partition_snapshot_v1(snapshot) is None
+
+
+def test_snapshot_saturation_round_lower_bound_counts_only_completed_work(
+    node3_snapshots,
+) -> None:
+    snapshot = node3_snapshots[0]
+    counted_barriers = sum(
+        row.barrier_kind != "CONSTRUCTION_DEPTH"
+        or row.eligible_raw_application_count > 0
+        for row in snapshot.depth_barriers
+    )
+    assert len(snapshot.depth_barriers) == 5
+    assert counted_barriers == 4
+    assert snapshot.peak_saturation_round_count == counted_barriers
+
+    multiple_batches = replace(
+        snapshot,
+        peak_saturation_round_count=counted_barriers + 1,
+    )
+    assert (
+        snapshot_module._validate_q1_partition_snapshot_self_consistency_v1(
+            multiple_batches
+        )
+        is None
+    )
+
+    below_completed_work = replace(
+        snapshot,
+        peak_saturation_round_count=counted_barriers - 1,
+    )
+    with pytest.raises(snapshot_module.Q1PartitionSnapshotError) as caught:
+        snapshot_module._validate_q1_partition_snapshot_self_consistency_v1(
+            below_completed_work
+        )
+    assert caught.value.code == snapshot_module.FAIL_Q1_PARTITION_SNAPSHOT_REPLAY
 
 
 def _assert_no_mutable_dict(value: object) -> None:

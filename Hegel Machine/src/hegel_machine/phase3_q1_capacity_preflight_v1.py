@@ -475,6 +475,25 @@ class _Candidate:
     children: tuple[_Program, ...]
 
 
+def _eligible_application_identity(
+    construction_depth: int,
+    candidate: _Candidate,
+) -> tuple[int, int, tuple[int, ...], tuple[bytes, ...]]:
+    """Identify one raw eligible bank tuple, independently of its rewrite output."""
+
+    operator_parameters = (
+        (candidate.operator_code - 0x3000,)
+        if candidate.operator_code in (0x3001, 0x3002)
+        else ()
+    )
+    return (
+        construction_depth,
+        candidate.operator_code,
+        operator_parameters,
+        tuple(child.ast.cbor_bytes for child in candidate.children),
+    )
+
+
 @dataclass(slots=True)
 class _Cohort:
     signature: _q1_contract.FutureAdmissibilitySignatureV1
@@ -892,6 +911,7 @@ class _State:
         self.peak_visible_frontier_points_per_class = 0
         self.peak_work_queue_points = 0
         self.peak_saturation_round_count = 0
+        self.completed_saturation_round_count = 0
         self.raw_count = 0
         self.current_barrier_raw_count = 0
         self.strict_count = 0
@@ -901,6 +921,21 @@ class _State:
     def _wall_guard(self) -> None:
         if monotonic() - self.start_time > self.limits.maximum_wall_time_seconds:
             raise _ResourceLimit("WALL_TIME", "preflight active wall time exceeded")
+
+    def _guard_next_saturation_round(self, detail: str) -> None:
+        if (
+            self.completed_saturation_round_count + 1
+            > self.limits.maximum_saturation_rounds
+        ):
+            raise _ResourceLimit("SATURATION_ROUNDS", detail)
+        self._wall_guard()
+
+    def _complete_saturation_round(self) -> None:
+        self.completed_saturation_round_count += 1
+        self.peak_saturation_round_count = max(
+            self.peak_saturation_round_count,
+            self.completed_saturation_round_count,
+        )
 
     def _counts(self) -> tuple[int, int, int, int, int, int]:
         class_count = len(self.classes)
@@ -1093,11 +1128,6 @@ class _State:
         cohort.representatives = {value: candidates[value] for value in selected}
         after = tuple(sorted(cohort.representatives))
         bank_delta = int(before != after)
-        if ast.metrics.depth < current_depth and bank_delta:
-            _fail(
-                FAIL_PREFLIGHT_LATE_LOWER_DEPTH_BANK_MUTATION,
-                "a later barrier changed an earlier-depth cohort bank",
-            )
         try:
             guarded_counts = self._guard_state()
         except _ResourceLimit:
@@ -1197,11 +1227,9 @@ class _State:
         )
 
     def seed(self) -> None:
-        if len(self.barriers) + 1 > self.limits.maximum_saturation_rounds:
-            raise _ResourceLimit(
-                "SATURATION_ROUNDS",
-                "the leaf barrier would exceed the diagnostic round limit",
-            )
+        self._guard_next_saturation_round(
+            "the leaf barrier would exceed the diagnostic round limit"
+        )
         self.current_barrier_raw_count = 0
         before = self._counts()
         leaves = _frozen_leaf_asts_v1(
@@ -1237,59 +1265,78 @@ class _State:
                 visible_frontier_point_count_after_barrier=after[3],
             )
         )
-        self.peak_saturation_round_count = max(
-            self.peak_saturation_round_count,
-            len(self.barriers),
-        )
+        self._complete_saturation_round()
 
     def expand_depth(self, depth: int) -> None:
-        if len(self.barriers) + 1 > self.limits.maximum_saturation_rounds:
-            raise _ResourceLimit(
-                "SATURATION_ROUNDS",
-                "the next depth barrier would exceed the diagnostic round limit",
-            )
         self.current_barrier_raw_count = 0
-        snapshot = self.bank_programs()
-        if any(program.ast.metrics.depth >= depth for program in snapshot):
-            _fail(
-                FAIL_PREFLIGHT_AST_IDENTITY,
-                "depth barrier snapshot contains a non-prior representative",
-            )
         before = self._counts()
         raw_before = self.raw_count
         strict_before = self.strict_count
         rewrite_before = self.rewrite_count
         class_delta = cohort_delta = bank_mutations = 0
-        for candidate in _operator_candidates(
-            snapshot,
-            target_depth=depth,
-            limits=self.limits,
-        ):
-            checkpoint = self._event_counter_checkpoint()
-            vector_key = self._candidate_vector_key(candidate)
-            vector_was_cached = vector_key in self.vector_cache
-            try:
-                self._consume_raw()
+        processed_applications: set[
+            tuple[int, int, tuple[int, ...], tuple[bytes, ...]]
+        ] = set()
+        while True:
+            saturation_round_guarded = False
+            snapshot = self.bank_programs()
+            if any(program.ast.metrics.depth > depth for program in snapshot):
+                _fail(
+                    FAIL_PREFLIGHT_AST_IDENTITY,
+                    "depth barrier snapshot contains a future-depth representative",
+                )
+            new_application_count = 0
+            late_lower_depth_bank_mutation_count = 0
+            for candidate in _operator_candidates(
+                snapshot,
+                target_depth=depth,
+                limits=self.limits,
+            ):
+                self._wall_guard()
+                application_identity = _eligible_application_identity(depth, candidate)
+                if application_identity in processed_applications:
+                    continue
+                if not saturation_round_guarded:
+                    self._guard_next_saturation_round(
+                        "the next non-empty depth batch would exceed the diagnostic round limit"
+                    )
+                    saturation_round_guarded = True
+                checkpoint = self._event_counter_checkpoint()
+                vector_key = self._candidate_vector_key(candidate)
+                vector_was_cached = vector_key in self.vector_cache
                 try:
-                    ast = canonicalize_shrink6_source_ast(candidate.source_ast)
-                    replay = decode_shrink6_canonical_ast(ast.cbor_bytes)
-                except StrictAstError as error:
-                    _fail(FAIL_PREFLIGHT_STRICT_BOUNDARY, str(error))
-                if replay.cbor_bytes != ast.cbor_bytes or replay.digest != ast.digest:
-                    _fail(FAIL_PREFLIGHT_AST_IDENTITY, "source/formal replay differs")
-                self.strict_count += 1
-                if ast.value[1] != candidate.expected_node:
-                    self.rewrite_count += 1
-                behavior = self.candidate_vector(candidate)
-                deltas = self.insert(ast, behavior, current_depth=depth)
-            except _ResourceLimit:
-                if not vector_was_cached:
-                    self.vector_cache.pop(vector_key, None)
-                self._restore_event_counters(checkpoint)
-                raise
-            class_delta += deltas[0]
-            cohort_delta += deltas[1]
-            bank_mutations += deltas[2]
+                    self._consume_raw()
+                    try:
+                        ast = canonicalize_shrink6_source_ast(candidate.source_ast)
+                        replay = decode_shrink6_canonical_ast(ast.cbor_bytes)
+                    except StrictAstError as error:
+                        _fail(FAIL_PREFLIGHT_STRICT_BOUNDARY, str(error))
+                    if replay.cbor_bytes != ast.cbor_bytes or replay.digest != ast.digest:
+                        _fail(FAIL_PREFLIGHT_AST_IDENTITY, "source/formal replay differs")
+                    self.strict_count += 1
+                    if ast.value[1] != candidate.expected_node:
+                        self.rewrite_count += 1
+                    behavior = self.candidate_vector(candidate)
+                    deltas = self.insert(ast, behavior, current_depth=depth)
+                except _ResourceLimit:
+                    if not vector_was_cached:
+                        self.vector_cache.pop(vector_key, None)
+                    self._restore_event_counters(checkpoint)
+                    raise
+                processed_applications.add(application_identity)
+                new_application_count += 1
+                class_delta += deltas[0]
+                cohort_delta += deltas[1]
+                bank_mutations += deltas[2]
+                if ast.metrics.depth < depth and deltas[2]:
+                    late_lower_depth_bank_mutation_count += 1
+            if new_application_count > 0:
+                self._complete_saturation_round()
+            if (
+                new_application_count == 0
+                and late_lower_depth_bank_mutation_count == 0
+            ):
+                break
         after = self._counts()
         self.barriers.append(
             DepthBarrierRecordV1(
@@ -1307,20 +1354,13 @@ class _State:
                 visible_frontier_point_count_after_barrier=after[3],
             )
         )
-        self.peak_saturation_round_count = max(
-            self.peak_saturation_round_count,
-            len(self.barriers),
-        )
 
     def close_structural_boundary(self) -> None:
         """Record the zero-delta barrier outside the admitted depth grammar."""
 
-        self._wall_guard()
-        if len(self.barriers) + 1 > self.limits.maximum_saturation_rounds:
-            raise _ResourceLimit(
-                "SATURATION_ROUNDS",
-                "the terminal structural barrier would exceed the round limit",
-            )
+        self._guard_next_saturation_round(
+            "the terminal structural barrier would exceed the round limit"
+        )
         depth = self.limits.maximum_ast_depth + 1
         counts = self._counts()
         self.barriers.append(
@@ -1339,10 +1379,7 @@ class _State:
                 visible_frontier_point_count_after_barrier=counts[3],
             )
         )
-        self.peak_saturation_round_count = max(
-            self.peak_saturation_round_count,
-            len(self.barriers),
-        )
+        self._complete_saturation_round()
 
 
 def _result_from_state(
@@ -1354,12 +1391,17 @@ def _result_from_state(
     traversal_closed: bool,
 ) -> Q1PartitionCapacityResultV1:
     classes, cohorts, bank, frontier, max_bank, max_frontier = state._counts()
+    completed_counted_barriers = sum(
+        row.barrier_kind != "CONSTRUCTION_DEPTH"
+        or row.eligible_raw_application_count > 0
+        for row in state.barriers
+    )
     if (
         state.peak_visible_frontier_point_count < frontier
         or state.peak_visible_frontier_points_per_class < max_frontier
         or state.peak_work_queue_points < len(state.vector_cache)
         or state.peak_work_queue_points < state.current_barrier_raw_count
-        or state.peak_saturation_round_count < len(state.barriers)
+        or state.peak_saturation_round_count < completed_counted_barriers
     ):
         _fail(
             FAIL_PREFLIGHT_HIGH_WATER_INVARIANT,

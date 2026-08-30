@@ -94,6 +94,116 @@ def test_depth_barriers_are_closed_from_prior_complete_bank(node3_result) -> Non
     assert sink.depth_barriers[-1].continuation_bank_point_count_after_barrier == 144
 
 
+def test_late_lower_depth_rewrite_reopens_same_depth_until_zero_delta(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    limits = preflight.PreflightLimitsV1(
+        maximum_ast_depth=1,
+        maximum_ast_node_count=3,
+        maximum_saturation_rounds=2,
+    )
+    state = preflight._State(preflight.production_universe_v1(1), limits)
+    initial_ast, rewritten_ast = preflight._frozen_leaf_asts_v1(
+        raw_cap=preflight.LEAF_COUNT
+    )[:2]
+    initial = preflight._Program(initial_ast, (False,), b"initial")
+    rewritten = preflight._Program(rewritten_ast, (False,), b"rewritten")
+    bank = [initial]
+    snapshots: list[tuple[bytes, ...]] = []
+    accepted_applications: list[
+        tuple[int, int, tuple[int, ...], tuple[bytes, ...]]
+    ] = []
+
+    first = preflight._Candidate(
+        operator_code=0x1000,
+        source_ast=("late-rewrite",),
+        expected_node=("unreduced-first",),
+        children=(initial,),
+    )
+    successor = preflight._Candidate(
+        operator_code=0x1000,
+        source_ast=("same-output-new-bank-tuple",),
+        expected_node=("unreduced-successor",),
+        children=(rewritten,),
+    )
+
+    def candidates(programs, *, target_depth, limits):
+        del limits
+        assert target_depth == 1
+        snapshots.append(tuple(program.ast.cbor_bytes for program in programs))
+        yield first
+        if rewritten in programs:
+            yield successor
+
+    def insert(ast, behavior, *, current_depth):
+        del behavior
+        assert ast == rewritten_ast
+        assert current_depth == 1
+        if len(accepted_applications) == 1:
+            bank.append(rewritten)
+            return 0, 0, 1
+        return 0, 0, 0
+
+    def candidate_vector(candidate):
+        accepted_applications.append(
+            preflight._eligible_application_identity(1, candidate)
+        )
+        return (False,)
+
+    monkeypatch.setattr(preflight, "_operator_candidates", candidates)
+    monkeypatch.setattr(
+        preflight,
+        "canonicalize_shrink6_source_ast",
+        lambda _source: rewritten_ast,
+    )
+    monkeypatch.setattr(state, "bank_programs", lambda: tuple(bank))
+    monkeypatch.setattr(state, "candidate_vector", candidate_vector)
+    monkeypatch.setattr(state, "insert", insert)
+
+    state.expand_depth(1)
+
+    assert [len(snapshot) for snapshot in snapshots] == [1, 2, 2]
+    first_identity = preflight._eligible_application_identity(1, first)
+    successor_identity = preflight._eligible_application_identity(1, successor)
+    assert accepted_applications == [first_identity, successor_identity]
+    assert first_identity[:3] == (1, 0x1000, ())
+    assert first_identity[3] == (initial_ast.cbor_bytes,)
+    assert successor_identity[3] == (rewritten_ast.cbor_bytes,)
+    assert state.raw_count == 2
+    assert state.strict_count == 2
+    assert state.rewrite_count == 2
+    assert state.peak_saturation_round_count == 2
+    assert len(state.barriers) == 1
+    barrier = state.barriers[0]
+    assert barrier.eligible_raw_application_count == 2
+    assert barrier.strict_admitted_application_count == 2
+    assert barrier.rewrite_collapse_count == 2
+    assert barrier.continuation_bank_mutation_count == 1
+    assert first_identity != successor_identity
+
+
+def test_depth_snapshot_rejects_future_depth_representative(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = preflight._State(
+        preflight.production_universe_v1(1),
+        preflight.PreflightLimitsV1(maximum_ast_depth=2),
+    )
+    future_ast = preflight.canonicalize_shrink6_source_ast(
+        ("absolute", ("bit_to_scalar", ("bit_at", 0)))
+    )
+    assert future_ast.metrics.depth == 2
+    future = preflight._Program(future_ast, (False,), b"future")
+    monkeypatch.setattr(state, "bank_programs", lambda: (future,))
+
+    with pytest.raises(preflight.Q1CapacityPreflightError) as caught:
+        state.expand_depth(1)
+
+    assert caught.value.code == preflight.FAIL_PREFLIGHT_AST_IDENTITY
+    assert "future-depth representative" in caught.value.detail
+    assert state.peak_saturation_round_count == 0
+
+
 def test_latent_bank_not_visible_frontier_drives_expansion(node3_result) -> None:
     odd, sink = node3_result.partitions
     assert odd.continuation_bank_point_count > odd.visible_frontier_point_count
@@ -131,8 +241,7 @@ def test_guard_high_water_fields_cover_every_internal_count_guard(
         )
         assert partition.peak_work_queue_points >= partition.vector_cache_entry_count
         assert partition.peak_work_queue_points == 810
-        assert partition.peak_saturation_round_count == len(partition.depth_barriers)
-        assert partition.peak_saturation_round_count == 5
+        assert partition.peak_saturation_round_count == 4
 
 
 def test_node4_captures_nonmonotonic_frontier_and_work_queue_peaks(
@@ -447,7 +556,7 @@ def test_canonical_diagnostic_json_schema_is_stable_and_python_only(
     )
     assert len(encoded) == 8_852
     assert sha256(encoded).hexdigest() == (
-        "58a7e160aa16eed84ba1c96e5b067e4509438c5389698a96ad0610130450a4c1"
+        "71e573e9dabed05d51df0b7e0ece22a6b8356b62a3e88dde88cbc81c48435957"
     )
     value = json.loads(encoded)
     assert set(value) == {

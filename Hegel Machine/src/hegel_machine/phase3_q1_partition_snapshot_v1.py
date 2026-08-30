@@ -606,6 +606,11 @@ def _validate_q1_partition_snapshot_self_consistency_v1(
     if sum(row.rewrite_collapse_count for row in barriers) != snapshot.rewrite_collapse_count:
         _fail(FAIL_Q1_PARTITION_SNAPSHOT_REPLAY, "rewrite barrier count differs")
 
+    completed_counted_barriers = sum(
+        row.barrier_kind != "CONSTRUCTION_DEPTH"
+        or row.eligible_raw_application_count > 0
+        for row in barriers
+    )
     if (
         snapshot.peak_raw_operator_application_count
         != snapshot.raw_operator_application_count
@@ -621,7 +626,7 @@ def _validate_q1_partition_snapshot_self_consistency_v1(
         or snapshot.peak_work_queue_points < snapshot.vector_cache_entry_count
         or snapshot.peak_work_queue_points
         < max(row.eligible_raw_application_count for row in barriers)
-        or snapshot.peak_saturation_round_count != len(barriers)
+        or snapshot.peak_saturation_round_count < completed_counted_barriers
         or snapshot.vector_cache_entry_count != snapshot.vector_cache_miss_count
     ):
         _fail(FAIL_Q1_PARTITION_SNAPSHOT_REPLAY, "high-water summary differs")

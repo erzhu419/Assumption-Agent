@@ -95,6 +95,18 @@ def _consumed(tool, contract, capsule):
     )
 
 
+def _cleanup_receipt() -> dict[str, object]:
+    return {
+        "schema_version": "hegel-phase3a-q1-full-node6-postconsumption-cleanup/1",
+        "status": "PASS",
+        "supervisor_process_group": "PASS:group_absence=PASS",
+        "production_containers": "PASS",
+        "control_containers": "PASS",
+        "probe_root": "PASS",
+        "production_scratch": "PASS",
+    }
+
+
 def _failed_outcome(tool, contract, capsule):
     return tool._outcome_value(
         contract,
@@ -105,6 +117,7 @@ def _failed_outcome(tool, contract, capsule):
         stdout_sha256="sha256:" + "a" * 64,
         stderr_sha256="sha256:" + "b" * 64,
         artifact_sha256=None,
+        postconsumption_cleanup=_cleanup_receipt(),
         decision=tool._core.CampaignDecisionV1(
             tool._core.FAILED_TERMINAL,
             False,
@@ -653,7 +666,7 @@ def test_second_absence_pending_carries_the_complete_replayed_capsule(
     assert caught.value.capsule_digest_hint == capsule["capsule_digest"]
 
 
-def test_source_gate_binds_required_parent_descendant_and_diffs_from_predecessor(
+def test_source_gate_binds_exact_additions_modifications_and_predecessor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     tool = _load_tool()
@@ -661,7 +674,8 @@ def test_source_gate_binds_required_parent_descendant_and_diffs_from_predecessor
     required_parent = "b" * 40
     head = "c" * 40
     tree = "d" * 40
-    relative = "tools/example.py"
+    added_relative = "tools/example.py"
+    modified_relative = "src/example.py"
     calls: list[tuple[str, ...]] = []
 
     def git(*arguments: str, timeout: float = 60.0) -> str:
@@ -680,11 +694,18 @@ def test_source_gate_binds_required_parent_descendant_and_diffs_from_predecessor
                 "--diff-filter=A",
                 ancestor,
                 "HEAD",
-            ): f"Hegel Machine/{relative}",
+            ): f"Hegel Machine/{added_relative}",
             (
                 "diff",
                 "--name-only",
-                "--diff-filter=DMRTUXB",
+                "--diff-filter=M",
+                ancestor,
+                "HEAD",
+            ): f"Hegel Machine/{modified_relative}",
+            (
+                "diff",
+                "--name-only",
+                "--diff-filter=DRTUXB",
                 ancestor,
                 "HEAD",
             ): "",
@@ -695,7 +716,9 @@ def test_source_gate_binds_required_parent_descendant_and_diffs_from_predecessor
         if command[1:2] == ["fsck"]:
             return subprocess.CompletedProcess(command, 0, b"", b"")
         assert command[1:6] == ["ls-tree", "-z", "-l", "HEAD", "--"]
-        payload = f"100644 blob {'e' * 40} 7\t{relative}\0".encode()
+        relative = command[-1]
+        object_id = "e" * 40 if relative == added_relative else "f" * 40
+        payload = f"100644 blob {object_id} 7\t{relative}\0".encode()
         return subprocess.CompletedProcess(command, 0, payload, b"")
 
     monkeypatch.setattr(tool, "_git", git)
@@ -706,7 +729,8 @@ def test_source_gate_binds_required_parent_descendant_and_diffs_from_predecessor
                 "project_root": str(tool.PROJECT_ROOT),
                 "required_ancestor_commit": ancestor,
                 "required_parent_commit": required_parent,
-                "additive_paths_in_exact_order": [relative],
+                "additive_paths_in_exact_order": [added_relative],
+                "modified_paths_in_exact_order": [modified_relative],
             }
         }
     )
@@ -719,6 +743,24 @@ def test_source_gate_binds_required_parent_descendant_and_diffs_from_predecessor
         ancestor,
         "HEAD",
     ) in calls
+    assert (
+        "diff",
+        "--name-only",
+        "--diff-filter=M",
+        ancestor,
+        "HEAD",
+    ) in calls
+    assert (
+        "diff",
+        "--name-only",
+        "--diff-filter=DRTUXB",
+        ancestor,
+        "HEAD",
+    ) in calls
+    assert [row[0] for row in receipt["source_rows"]] == [
+        added_relative,
+        modified_relative,
+    ]
     assert not any(
         call[:3] == ("diff", "--name-only", "--diff-filter=A")
         and required_parent in call
@@ -726,16 +768,124 @@ def test_source_gate_binds_required_parent_descendant_and_diffs_from_predecessor
     )
 
 
-def test_superseded_campaign_replays_terminal_unknown_without_resume() -> None:
+def test_source_gate_rejects_unregistered_modified_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tool = _load_tool()
+    ancestor = "a" * 40
+    required_parent = "b" * 40
+
+    def git(*arguments: str, timeout: float = 60.0) -> str:
+        del timeout
+        values = {
+            ("status", "--porcelain=v1", "--untracked-files=all"): "",
+            ("rev-parse", "HEAD"): "c" * 40,
+            ("rev-parse", "HEAD^{tree}"): "d" * 40,
+            ("rev-parse", "--show-prefix"): "Hegel Machine/",
+            ("rev-parse", "HEAD^"): required_parent,
+            ("merge-base", ancestor, required_parent): ancestor,
+            (
+                "diff",
+                "--name-only",
+                "--diff-filter=A",
+                ancestor,
+                "HEAD",
+            ): "Hegel Machine/tools/example.py",
+            (
+                "diff",
+                "--name-only",
+                "--diff-filter=M",
+                ancestor,
+                "HEAD",
+            ): "Hegel Machine/src/unregistered.py",
+        }
+        return values[arguments]
+
+    monkeypatch.setattr(tool, "_git", git)
+    with pytest.raises(tool.CampaignTerminal) as caught:
+        tool._source_gate(
+            {
+                "source_lineage": {
+                    "project_root": str(tool.PROJECT_ROOT),
+                    "required_ancestor_commit": ancestor,
+                    "required_parent_commit": required_parent,
+                    "additive_paths_in_exact_order": ["tools/example.py"],
+                    "modified_paths_in_exact_order": ["src/expected.py"],
+                }
+            }
+        )
+    assert caught.value.code == "SOURCE_MODIFIED_PATHS_DIFFER"
+
+
+def test_source_gate_rejects_forbidden_change_kind(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tool = _load_tool()
+    ancestor = "a" * 40
+    required_parent = "b" * 40
+
+    def git(*arguments: str, timeout: float = 60.0) -> str:
+        del timeout
+        values = {
+            ("status", "--porcelain=v1", "--untracked-files=all"): "",
+            ("rev-parse", "HEAD"): "c" * 40,
+            ("rev-parse", "HEAD^{tree}"): "d" * 40,
+            ("rev-parse", "--show-prefix"): "Hegel Machine/",
+            ("rev-parse", "HEAD^"): required_parent,
+            ("merge-base", ancestor, required_parent): ancestor,
+            (
+                "diff",
+                "--name-only",
+                "--diff-filter=A",
+                ancestor,
+                "HEAD",
+            ): "Hegel Machine/tools/example.py",
+            (
+                "diff",
+                "--name-only",
+                "--diff-filter=M",
+                ancestor,
+                "HEAD",
+            ): "Hegel Machine/src/example.py",
+            (
+                "diff",
+                "--name-only",
+                "--diff-filter=DRTUXB",
+                ancestor,
+                "HEAD",
+            ): "Hegel Machine/docs/deleted.md",
+        }
+        return values[arguments]
+
+    monkeypatch.setattr(tool, "_git", git)
+    with pytest.raises(tool.CampaignTerminal) as caught:
+        tool._source_gate(
+            {
+                "source_lineage": {
+                    "project_root": str(tool.PROJECT_ROOT),
+                    "required_ancestor_commit": ancestor,
+                    "required_parent_commit": required_parent,
+                    "additive_paths_in_exact_order": ["tools/example.py"],
+                    "modified_paths_in_exact_order": ["src/example.py"],
+                }
+            }
+        )
+    assert caught.value.code == "SOURCE_CHANGE_KIND_DIFFERS"
+
+
+def test_superseded_campaign_replays_known_terminal_failure_without_resume() -> None:
     tool = _load_tool()
     receipt = tool._superseded_campaign_gate(_contract(tool))
     assert receipt["terminal_status"] == tool._core.FAILED_TERMINAL
-    assert receipt["measurement_outcome"] == "UNKNOWN"
-    assert receipt["measurement_endpoint_start_count"] == 1
+    assert receipt["measurement_outcome"] == "KNOWN_TERMINAL_FAILURE"
+    assert receipt["measurement_endpoint_start_count"] == 2
     assert receipt["python_endpoint_start_count"] == 1
-    assert receipt["rust_endpoint_start_count"] == 0
+    assert receipt["rust_endpoint_start_count"] == 1
     assert receipt["trusted_host_replay_start_count"] == 0
-    assert receipt["trajectory_event_count"] == 27
+    assert receipt["python_odd_measurement_count"] == 1
+    assert receipt["rust_odd_measurement_count"] == 1
+    assert receipt["sink_measurement_count"] == 0
+    assert receipt["trajectory_event_count"] == 31
     assert receipt["q1_state"] == "NOT_RUN"
     assert receipt["retry_or_resume_allowed"] is False
 
@@ -774,6 +924,7 @@ def test_source_gate_rejects_either_broken_lineage_hop(
                     "required_ancestor_commit": ancestor,
                     "required_parent_commit": required_parent,
                     "additive_paths_in_exact_order": ["tools/example.py"],
+                    "modified_paths_in_exact_order": ["src/example.py"],
                 }
             }
         )
@@ -1160,6 +1311,7 @@ def test_guard_and_failed_replay_outcomes_preserve_published_artifacts() -> None
         stderr_sha256=stderr,
         artifact_sha256=artifact,
         decision=guard_decision,
+        postconsumption_cleanup=_cleanup_receipt(),
     )
     assert tool._validate_outcome_v1(guard, contract, capsule) == guard
 
@@ -1178,6 +1330,7 @@ def test_guard_and_failed_replay_outcomes_preserve_published_artifacts() -> None
         stderr_sha256=stderr,
         artifact_sha256=artifact,
         decision=failed_decision,
+        postconsumption_cleanup=_cleanup_receipt(),
     )
     assert failed["status"] == tool._core.FAILED_TERMINAL
     assert tool._validate_outcome_v1(failed, contract, capsule) == failed
@@ -1376,6 +1529,7 @@ def test_finalizer_publishes_terminal_when_external_outcome_publication_fails(
         stdout_sha256=None,
         stderr_sha256=None,
         detail="synthetic post-consumption failure",
+        postconsumption_cleanup=_cleanup_receipt(),
     )
     real_publish = tool._publish_or_replay_exact
 
@@ -1499,6 +1653,11 @@ def test_postconsumption_popen_failure_finalizes_unknown_without_pending(
         raise OSError("synthetic Popen failure")
 
     monkeypatch.setattr(tool.subprocess, "Popen", fail_popen)
+    monkeypatch.setattr(
+        tool,
+        "_postconsumption_cleanup_v1",
+        lambda *_args, **_kwargs: _cleanup_receipt(),
+    )
     result = tool._execute_postconsumption_v1(contract, capsule, consumed)
     assert result["status"] == tool._core.OUTCOME_UNKNOWN_TERMINAL
     assert result["authorization_consumption_count"] == 1
@@ -1513,6 +1672,76 @@ def test_postconsumption_popen_failure_finalizes_unknown_without_pending(
     assert terminal["body"]["retry_or_resume_allowed"] is False
     if (evidence / "campaign.outcome.json").exists():
         assert json.loads((evidence / "campaign.outcome.json").read_bytes()) == outcome
+
+
+@pytest.mark.parametrize(
+    ("return_code", "terminal_status", "cleanup_passed", "expected_status"),
+    (
+        (0, core.GUARD_HIT, True, core.GUARD_HIT),
+        (1, core.FAILED_TERMINAL, True, core.FAILED_TERMINAL),
+        (1, core.FAILED_TERMINAL, False, core.OUTCOME_UNKNOWN_TERMINAL),
+    ),
+)
+def test_every_normal_child_return_persists_cleanup_and_uncertainty_is_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    return_code: int,
+    terminal_status: str,
+    cleanup_passed: bool,
+    expected_status: str,
+) -> None:
+    tool = _load_tool()
+    contract = _temporary_contract(tool, tmp_path)
+    capsule = _capsule(tool, contract)
+    consumed = _consumed(tool, contract, capsule)
+    ledger = Path(contract["fixed_paths"]["ledger_root"])
+    ledger.mkdir(mode=0o700)
+    tool._publish_no_replace(ledger, "campaign.consumed.json", consumed)
+    artifact = Path(contract["fixed_paths"]["artifact_path"])
+    artifact_digest = None
+    if return_code == 0:
+        artifact.write_bytes(b"synthetic diagnostic artifact\n")
+        artifact_digest = "sha256:" + tool.sha256(artifact.read_bytes()).hexdigest()
+    stdout_value = {
+        "terminal_status": terminal_status,
+        "artifact_sha256": artifact_digest,
+        "host_replay_passed": return_code == 0,
+        "q1_state": "NOT_RUN",
+        "q1_gate_count": 0,
+        "q1_gate_mask": 0,
+        "q1_output_slots": [None] * 8,
+    }
+
+    class CompletedChild:
+        pid = 4646
+
+        def wait(self, timeout=None):
+            return return_code
+
+    def popen(*_args, **kwargs):
+        os.write(kwargs["stdout"], tool._core.canonical_json_bytes_v1(stdout_value))
+        return CompletedChild()
+
+    cleanup = _cleanup_receipt()
+    if not cleanup_passed:
+        cleanup["status"] = "FAILED"
+        cleanup["control_containers"] = "FAILED:survivor"
+    monkeypatch.setattr(tool.subprocess, "Popen", popen)
+    monkeypatch.setattr(
+        tool,
+        "_postconsumption_cleanup_v1",
+        lambda *_args, **_kwargs: cleanup,
+    )
+    result = tool._execute_postconsumption_v1(contract, capsule, consumed)
+    assert result["status"] == expected_status
+    terminal = json.loads((ledger / "campaign.terminal.json").read_bytes())
+    outcome = terminal["body"]["outcome"]
+    assert outcome["postconsumption_cleanup"] == cleanup
+    assert outcome["retry_or_resume_allowed"] is False
+    if not cleanup_passed:
+        assert outcome["postconsumption_error_or_null"] == (
+            "POSTCONSUMPTION_CLEANUP_UNCERTAIN"
+        )
 
 
 def test_postconsumption_timeout_kills_process_group_cleans_containers_and_is_unknown(
@@ -1546,7 +1775,6 @@ def test_postconsumption_timeout_kills_process_group_cleans_containers_and_is_un
     child = TimedOutChild()
     killed: list[tuple[int, int]] = []
     cleanup_calls: list[str] = []
-    scratch_cleanup_calls: list[str] = []
 
     def killpg(pid: int, sig: int) -> None:
         if sig == 0:
@@ -1556,16 +1784,15 @@ def test_postconsumption_timeout_kills_process_group_cleans_containers_and_is_un
 
     monkeypatch.setattr(tool.subprocess, "Popen", lambda *_args, **_kwargs: child)
     monkeypatch.setattr(tool.os, "killpg", killpg)
-    monkeypatch.setattr(
-        tool,
-        "_cleanup_production_containers_best_effort_v1",
-        lambda _capsule: cleanup_calls.append("cleanup") or "PASS",
-    )
-    monkeypatch.setattr(
-        tool,
-        "_cleanup_production_scratch_best_effort_v1",
-        lambda _contract: scratch_cleanup_calls.append("scratch") or "PASS",
-    )
+    def timeout_cleanup(actual_child, *_args, **_kwargs):
+        cleanup_calls.append("cleanup")
+        receipt = _cleanup_receipt()
+        receipt["supervisor_process_group"] = tool._stop_child_best_effort(
+            actual_child
+        )
+        return receipt
+
+    monkeypatch.setattr(tool, "_postconsumption_cleanup_v1", timeout_cleanup)
     result = tool._execute_postconsumption_v1(contract, capsule, consumed)
     assert result["status"] == tool._core.OUTCOME_UNKNOWN_TERMINAL
     assert result["supervisor_popen_count"] == 1
@@ -1573,13 +1800,16 @@ def test_postconsumption_timeout_kills_process_group_cleans_containers_and_is_un
     assert result["supervisor_popen_count_this_entry"] == 1
     assert killed == [(4242, tool.signal.SIGKILL)]
     assert cleanup_calls == ["cleanup"]
-    assert scratch_cleanup_calls == ["scratch"]
     terminal = json.loads((ledger / "campaign.terminal.json").read_bytes())
     error = terminal["body"]["outcome"]["postconsumption_error_or_null"]
     assert "SUPERVISOR_TIMEOUT" in error
-    assert "supervisor_process_cleanup=PASS:" in error
-    assert "production_container_cleanup=PASS" in error
-    assert "production_scratch_cleanup=PASS" in error
+    cleanup = terminal["body"]["outcome"]["postconsumption_cleanup"]
+    assert cleanup["status"] == "PASS"
+    assert cleanup["supervisor_process_group"].startswith("PASS:")
+    assert cleanup["production_containers"] == "PASS"
+    assert cleanup["control_containers"] == "PASS"
+    assert cleanup["probe_root"] == "PASS"
+    assert cleanup["production_scratch"] == "PASS"
     assert terminal["body"]["retry_or_resume_allowed"] is False
 
 
@@ -1612,6 +1842,73 @@ def test_outer_production_container_cleanup_uses_exact_capsule_names(
             (tool.DOCKER, "container", "inspect", name),
         )
     ]
+
+
+def test_outer_control_container_cleanup_uses_exact_capsule_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tool = _load_tool()
+    capsule = {"capsule_digest": "sha256:" + "b" * 64}
+    calls: list[tuple[str, ...]] = []
+
+    def run(command, **_kwargs):
+        calls.append(tuple(command))
+        if command[1:3] == ["container", "inspect"]:
+            return subprocess.CompletedProcess(command, 1, b"", b"Error: No such object")
+        return subprocess.CompletedProcess(command, 0, b"", b"")
+
+    monkeypatch.setattr(tool.subprocess, "run", run)
+    assert tool._cleanup_control_containers_best_effort_v1(capsule) == "PASS"
+    suffix = "b" * 12
+    names = (
+        f"hegel-q1-node6-isolation-control-python-{suffix}",
+        f"hegel-q1-node6-isolation-control-rust-{suffix}",
+        f"hegel-q1-node6-isolation-control-host-{suffix}",
+    )
+    assert calls == [
+        item
+        for name in names
+        for item in (
+            (tool.DOCKER, "rm", "-f", name),
+            (tool.DOCKER, "container", "inspect", name),
+        )
+    ]
+
+
+def test_postconsumption_cleanup_collects_every_absence_receipt(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tool = _load_tool()
+    contract = _temporary_contract(tool, tmp_path)
+    capsule = _capsule(tool, contract)
+    monkeypatch.setattr(tool, "_stop_child_best_effort", lambda _child: "PASS:group_absence=PASS")
+    monkeypatch.setattr(tool, "_cleanup_production_containers_best_effort_v1", lambda _c: "PASS")
+    monkeypatch.setattr(tool, "_cleanup_control_containers_best_effort_v1", lambda _c: "PASS")
+    monkeypatch.setattr(tool, "_cleanup_probe_root_best_effort_v1", lambda _c: "PASS")
+    monkeypatch.setattr(tool, "_cleanup_production_scratch_best_effort_v1", lambda _c: "PASS")
+    receipt = tool._postconsumption_cleanup_v1(
+        object(), capsule, contract, supervisor_popen_attempted=True
+    )
+    assert receipt == _cleanup_receipt()
+
+    monkeypatch.setattr(
+        tool,
+        "_cleanup_control_containers_best_effort_v1",
+        lambda _c: "FAILED:control survivor",
+    )
+    failed = tool._postconsumption_cleanup_v1(
+        object(), capsule, contract, supervisor_popen_attempted=True
+    )
+    assert failed["status"] == "FAILED"
+    assert failed["control_containers"] == "FAILED:control survivor"
+
+    monkeypatch.setattr(tool, "_cleanup_control_containers_best_effort_v1", lambda _c: "PASS")
+    missing_handle = tool._postconsumption_cleanup_v1(
+        None, capsule, contract, supervisor_popen_attempted=True
+    )
+    assert missing_handle["status"] == "FAILED"
+    assert missing_handle["supervisor_process_group"].startswith("FAILED:")
 
 
 def test_outer_production_scratch_cleanup_preserves_run_evidence(
@@ -1754,13 +2051,8 @@ def test_postconsumption_stdout_read_pending_becomes_unknown_after_one_popen(
     monkeypatch.setattr(tool, "_read_regular", fail_stdout)
     monkeypatch.setattr(
         tool,
-        "_cleanup_production_containers_best_effort_v1",
-        lambda _capsule: "PASS",
-    )
-    monkeypatch.setattr(
-        tool,
-        "_cleanup_production_scratch_best_effort_v1",
-        lambda _contract: "PASS",
+        "_postconsumption_cleanup_v1",
+        lambda *_args, **_kwargs: _cleanup_receipt(),
     )
     result = tool._execute_postconsumption_v1(contract, capsule, consumed)
     assert result["status"] == tool._core.OUTCOME_UNKNOWN_TERMINAL
@@ -1770,13 +2062,5 @@ def test_postconsumption_stdout_read_pending_becomes_unknown_after_one_popen(
     outcome = terminal["body"]["outcome"]
     assert outcome["supervisor_popen_count"] == 1
     assert "synthetic stdout read failure" in outcome["postconsumption_error_or_null"]
-    assert "supervisor_process_cleanup=PASS:" in outcome[
-        "postconsumption_error_or_null"
-    ]
-    assert "production_container_cleanup=PASS" in outcome[
-        "postconsumption_error_or_null"
-    ]
-    assert "production_scratch_cleanup=PASS" in outcome[
-        "postconsumption_error_or_null"
-    ]
+    assert outcome["postconsumption_cleanup"] == _cleanup_receipt()
     assert terminal["body"]["retry_or_resume_allowed"] is False

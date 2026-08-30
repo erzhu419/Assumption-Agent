@@ -66,7 +66,13 @@ Q1 formal root.
 The library additionally exposes bounded node limits for executable golden
 tests. Those limits are not accepted by the production CLI. Candidate
 applications are visited in frozen order through a callback and are never
-collected into a depth-sized application vector. Projection-only coverage
+collected into a depth-sized application vector. Each construction depth keeps
+an exact application identity consisting of the depth, parameterized operator
+code, and ordered canonical child AST bytes. It repeatedly reads the latest
+prior-depth continuation-bank snapshot and processes only identities not seen
+at that depth. A rewrite that changes a lower-depth bank is retained and makes
+its newly eligible tuples visible to the next bounded saturation batch; an
+empty final scan does not consume a saturation round. Projection-only coverage
 replay sorts application keys, strict-admission rows, and canonical AST rows in
 bounded 1 MiB runs, merges them with an online RFC6962 frontier, and removes
 its transient scratch directory before sidecars are written. Final frozen-v1

@@ -30,53 +30,62 @@ def _capsule() -> dict[str, object]:
 def test_contract_and_authorization_replay_exactly() -> None:
     value = campaign.validate_contract_v1(_contract())
     assert value["schema_version"] == (
-        "hegel-phase3a-q1-full-node6-campaign-contract/3"
+        "hegel-phase3a-q1-full-node6-campaign-contract/4"
     )
     assert value["contract_id"] == (
-        "hegel-phase3a-q1-full-node6-campaign-successor-v3"
+        "hegel-phase3a-q1-full-node6-campaign-successor-v4"
     )
     assert campaign.DOMAINS["authorization"] == (
-        b"HEGEL/Q1/FULL_NODE6/AUTHORIZATION/SUCCESSOR_V3/V1\x00"
+        b"HEGEL/Q1/FULL_NODE6/AUTHORIZATION/SUCCESSOR_V4/V1\x00"
     )
     assert campaign.DOMAINS["contract"] == (
-        b"HEGEL/Q1/FULL_NODE6/CONTRACT/SUCCESSOR_V3/V1\x00"
+        b"HEGEL/Q1/FULL_NODE6/CONTRACT/SUCCESSOR_V4/V1\x00"
     )
     assert value["contract_digest"] == (
-        "sha256:526150772bf047971c2cd22c8fb08b15a5f0f479f92d399d89777af6c9f82392"
+        "sha256:1a93d654963bcf05369c2e5ea3c63af8e713151893c32ea8bbdc86e9d00ca222"
     )
     assert value["authorization"] == campaign.OWNER_AUTHORIZATION
     assert value["authorization"]["authorization_digest"] == (
-        "sha256:5d1973633d122d03a8d7877208f19e4baf60a458933d765cd7c104f646d45644"
+        "sha256:6f1018a9ed53d9f20a051bf12b506d8a2c65134332199e16e6e3d3830853360a"
     )
     assert "authorization_state" not in value["authorization"]
     assert campaign.OWNER_AUTHORIZATION_TEXT == (
         "授权 Q1 full-node6 capacity-preflight diagnostic "
-        "successor-v3 distinct-outer actual；确认 successor-v2 measurement outcome "
-        "UNKNOWN、terminal no-resume，且 prior unknown conservatively counts as "
-        "measurement；另行授权 exact v3 capsule-only additional fresh "
-        "remeasurement；禁止复用 successor-v2 work product"
+        "successor-v4 distinct-outer actual；确认 successor-v3 known terminal "
+        "failure、terminal no-resume，且 Python Odd measurement 与 Rust Odd "
+        "measurement 各一次 conservatively count，Sink/trusted host replay 0；"
+        "另行授权 exact v4 capsule-only additional fresh remeasurement；"
+        "禁止恢复 successor-v3 或复用 successor-v3 work product"
     )
     assert campaign.LEDGER_SCHEMA_VERSION == (
-        "hegel-phase3a-q1-full-node6-ledger-record/2"
+        "hegel-phase3a-q1-full-node6-ledger-record/3"
     )
-    assert value["authorization"]["superseded_v2_resume_allowed"] is False
+    assert value["authorization"]["superseded_v3_resume_allowed"] is False
     assert value["authorization"]["future_exact_user_authorization_required"] is True
-    assert value["authorization"]["prior_unknown_conservatively_counts_as_measurement"] is True
-    assert value["authorization"]["new_measurement_budget_scope"] == "V3_CAPSULE_ONLY"
+    assert value["authorization"]["prior_python_odd_measurement_count"] == 1
+    assert value["authorization"]["prior_rust_odd_measurement_count"] == 1
+    assert value["authorization"]["new_measurement_budget_scope"] == "V4_CAPSULE_ONLY"
     assert value["authorization"]["new_measurement_is_explicitly_additional"] is True
-    assert value["authorization"]["v2_work_product_reuse_allowed"] is False
+    assert value["authorization"]["v3_work_product_reuse_allowed"] is False
     assert value["source_lineage"]["required_ancestor_commit"] == (
         "33dc9cbb7d753f83650169d6d6b9caa508927764"
     )
     assert value["source_lineage"]["required_parent_commit"] == (
-        "1321eb3be3c28f823fba04b947bb96ee16d35f6c"
+        "ea667c9b7ecdb22368a9ed61982424497e02bd6d"
     )
+    assert value["source_lineage"]["exact_additions_and_modifications_only"] is True
+    assert value["source_lineage"]["modified_paths_in_exact_order"] == [
+        "src/hegel_machine/phase3_q1_capacity_preflight_v1.py",
+        "src/hegel_machine/phase3_q1_partition_snapshot_v1.py",
+        "tests/test_phase3_q1_capacity_preflight_v1.py",
+        "tests/test_phase3_q1_partition_snapshot_v1.py",
+    ]
     assert value["superseded_campaign"]["capsule_digest"] == (
-        "sha256:8eec9c3afaaea443553cd886c84879f465e0b15f406c7f88a6bfef512867cdde"
+        "sha256:2b75870fe25903afa129e0f277a38fa263f5ddc65d02c37f4d6c35080d766e37"
     )
-    assert value["superseded_campaign"]["measurement_outcome"] == "UNKNOWN"
+    assert value["superseded_campaign"]["measurement_outcome"] == "KNOWN_TERMINAL_FAILURE"
     assert value["superseded_campaign"]["python_endpoint_start_count"] == 1
-    assert value["superseded_campaign"]["rust_endpoint_start_count"] == 0
+    assert value["superseded_campaign"]["rust_endpoint_start_count"] == 1
     assert value["superseded_campaign"]["trusted_host_replay_start_count"] == 0
     assert value["preconsumption_gate_order"][3:8] == [
         "PREDECESSOR_TERMINAL_AND_ARTIFACT",
@@ -97,6 +106,16 @@ def test_contract_and_authorization_replay_exactly() -> None:
         "production_endpoint_start_count": 0,
         "supervisor_popen_count": 0,
     }
+    assert value["execution_policy"][
+        "postconsumption_cleanup_receipt_required_on_all_child_return_paths"
+    ] is True
+    assert value["execution_policy"]["postconsumption_cleanup_required_components"] == [
+        "SUPERVISOR_PROCESS_GROUP_ABSENCE",
+        "EXACT_PRODUCTION_CONTAINER_ABSENCE",
+        "EXACT_CONTROL_CONTAINER_ABSENCE",
+        "PROBE_ROOT_ABSENCE",
+        "EXACT_PRODUCTION_SCRATCH_ABSENCE",
+    ]
     fixed = value["fixed_paths"]
     for name in (
         "campaign_lock_path",
@@ -109,9 +128,9 @@ def test_contract_and_authorization_replay_exactly() -> None:
         "stdout_path",
         "stderr_path",
     ):
-        assert "q1-full-node6-capacity-v3" in fixed[name] or (
+        assert "q1-full-node6-capacity-v4" in fixed[name] or (
             name == "artifact_path"
-            and fixed[name].endswith("phase3_q1_full_node6_capacity_preflight_v3.json")
+            and fixed[name].endswith("phase3_q1_full_node6_capacity_preflight_v4.json")
         )
 
 
@@ -167,7 +186,7 @@ def test_ledger_sequence_and_terminal_decision_are_closed() -> None:
         body={"supervisor_popen_count": 1},
     )
     assert consumed["schema_version"] == (
-        "hegel-phase3a-q1-full-node6-ledger-record/2"
+        "hegel-phase3a-q1-full-node6-ledger-record/3"
     )
     assert terminal["schema_version"] == campaign.LEDGER_SCHEMA_VERSION
     assert terminal["previous_record_digest_or_null"] == consumed["record_digest"]
