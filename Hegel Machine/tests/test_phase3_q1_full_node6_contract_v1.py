@@ -16,6 +16,9 @@ DOC_PATH = (
     PROJECT_ROOT
     / "docs/Hegel_Machine_Phase3A_Q1_Full_Node6_Capacity_Preflight_Successor_v1.md"
 )
+RECONCILIATION_V6_PATH = (
+    PROJECT_ROOT / "docs/Hegel_Machine_Current_State_Reconciliation_v6.md"
+)
 
 
 def _config() -> dict[str, object]:
@@ -162,12 +165,26 @@ def test_successor_document_states_the_only_allowed_success_claim() -> None:
     assert "PREFLIGHT_SATURATED_DIAGNOSTIC_ONLY" in payload
     assert "Q1 remains `NOT_RUN`" in payload
     assert "separate later `phase3-q1-start`" in payload
+    assert "successor-v5" in payload
     assert "successor-v4" in payload
     assert "known terminal failure" in payload
     assert "not a resume or continuation" in payload
     assert (
         "授权 Q1 full-node6 capacity-preflight diagnostic "
-        "successor-v4 distinct-outer actual"
+        "successor-v5 distinct-outer actual"
     ) in payload
     assert "The gauntlet is implemented" in payload
     assert "not yet been executed, preflighted or authorized" in payload
+
+
+def test_reconciliation_v6_records_v4_terminal_boundary_and_v5_nonclaims() -> None:
+    payload = RECONCILIATION_V6_PATH.read_text(encoding="utf-8")
+    assert "sha256:73a07996d7acb21ae3c6d8b35a096850d7fe5f854269f2b13da67da6c595b6a0" in payload
+    assert "one AST has two behaviors" in payload
+    assert "one canonical AST has two behaviors" in payload
+    assert "successor-v5" in payload
+    assert "Q1 remains `NOT_RUN`, 0/20, mask zero" in payload
+    assert (
+        "授权 Q1 full-node6 capacity-preflight diagnostic "
+        "successor-v5 distinct-outer actual"
+    ) in payload

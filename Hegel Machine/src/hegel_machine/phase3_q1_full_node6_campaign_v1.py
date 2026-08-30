@@ -12,9 +12,9 @@ from typing import Any, Final, Mapping, NoReturn
 
 
 CONTRACT_SCHEMA_VERSION: Final = (
-    "hegel-phase3a-q1-full-node6-campaign-contract/4"
+    "hegel-phase3a-q1-full-node6-campaign-contract/5"
 )
-CONTRACT_ID: Final = "hegel-phase3a-q1-full-node6-campaign-successor-v4"
+CONTRACT_ID: Final = "hegel-phase3a-q1-full-node6-campaign-successor-v5"
 CAPSULE_SCHEMA_VERSION: Final = "hegel-phase3a-q1-full-node6-capsule/1"
 PENDING_SCHEMA_VERSION: Final = "hegel-phase3a-q1-full-node6-pending/1"
 LEDGER_SCHEMA_VERSION: Final = "hegel-phase3a-q1-full-node6-ledger-record/3"
@@ -33,26 +33,26 @@ OUTCOME_UNKNOWN_TERMINAL: Final = (
 
 OWNER_AUTHORIZATION_TEXT: Final = (
     "授权 Q1 full-node6 capacity-preflight diagnostic "
-    "successor-v4 distinct-outer actual；确认 successor-v3 known terminal "
+    "successor-v5 distinct-outer actual；确认 successor-v4 known terminal "
     "failure、terminal no-resume，且 Python Odd measurement 与 Rust Odd "
     "measurement 各一次 conservatively count，Sink/trusted host replay 0；"
-    "另行授权 exact v4 capsule-only additional fresh remeasurement；"
-    "禁止恢复 successor-v3 或复用 successor-v3 work product"
+    "另行授权 exact v5 capsule-only additional fresh remeasurement；"
+    "禁止恢复 successor-v4 或复用 successor-v4 work product"
 )
 OWNER_AUTHORIZATION_BODY: Final = {
-    "schema_version": "hegel-phase3a-q1-full-node6-owner-authorization/4",
+    "schema_version": "hegel-phase3a-q1-full-node6-owner-authorization/5",
     "authority_role": "PROJECT_OWNER",
     "authorization_text": OWNER_AUTHORIZATION_TEXT,
-    "superseded_v3_resume_allowed": False,
-    "distinct_fresh_successor_v4_logical_campaign_only": True,
+    "superseded_v4_resume_allowed": False,
+    "distinct_fresh_successor_v5_logical_campaign_only": True,
     "future_exact_user_authorization_required": True,
     "prior_measurement_outcome_known_terminal_failure_acknowledged": True,
     "prior_python_odd_measurement_count": 1,
     "prior_rust_odd_measurement_count": 1,
     "prior_sink_or_trusted_host_replay_measurement_count": 0,
-    "new_measurement_budget_scope": "V4_CAPSULE_ONLY",
+    "new_measurement_budget_scope": "V5_CAPSULE_ONLY",
     "new_measurement_is_explicitly_additional": True,
-    "v3_work_product_reuse_allowed": False,
+    "v4_work_product_reuse_allowed": False,
     "logical_campaign_count": 1,
     "maximum_supervisor_popen_count": 1,
     "maximum_quotient_measurement_count_per_endpoint_signature": 1,
@@ -68,9 +68,9 @@ OWNER_AUTHORIZATION_BODY: Final = {
 }
 
 DOMAINS: Final = {
-    "authorization": b"HEGEL/Q1/FULL_NODE6/AUTHORIZATION/SUCCESSOR_V4/V1\x00",
+    "authorization": b"HEGEL/Q1/FULL_NODE6/AUTHORIZATION/SUCCESSOR_V5/V1\x00",
     "capsule": b"HEGEL/Q1/FULL_NODE6/CAPSULE/V1\x00",
-    "contract": b"HEGEL/Q1/FULL_NODE6/CONTRACT/SUCCESSOR_V4/V1\x00",
+    "contract": b"HEGEL/Q1/FULL_NODE6/CONTRACT/SUCCESSOR_V5/V1\x00",
     "ledger": b"HEGEL/Q1/FULL_NODE6/LEDGER/V1\x00",
     "outcome": b"HEGEL/Q1/FULL_NODE6/OUTCOME/V1\x00",
     "pending": b"HEGEL/Q1/FULL_NODE6/PENDING/V1\x00",
@@ -190,12 +190,12 @@ def validate_contract_v1(value: object) -> dict[str, Any]:
         or lineage.get("required_ancestor_commit")
         != "33dc9cbb7d753f83650169d6d6b9caa508927764"
         or lineage.get("required_parent_commit")
-        != "ea667c9b7ecdb22368a9ed61982424497e02bd6d"
+        != "5626e1d025e604fc4df5824f40a337a4e756c3dc"
         or lineage.get("clean_head_required") is not True
         or lineage.get("exact_additions_and_modifications_only") is not True
         or type(lineage.get("additive_paths_in_exact_order")) is not list
         or not lineage["additive_paths_in_exact_order"]
-        or "docs/Hegel_Machine_Current_State_Reconciliation_v5.md"
+        or "docs/Hegel_Machine_Current_State_Reconciliation_v6.md"
         not in lineage["additive_paths_in_exact_order"]
         or lineage.get("modified_paths_in_exact_order")
         != [
@@ -225,57 +225,242 @@ def validate_contract_v1(value: object) -> dict[str, Any]:
         contract["superseded_campaign"],
         "superseded_campaign",
     )
-    for name in (
-        "capsule_digest",
-        "consumed_ledger_record_digest",
-        "consumed_ledger_file_sha256",
-        "terminal_ledger_record_digest",
-        "terminal_ledger_file_sha256",
-        "outcome_file_sha256",
-        "outcome_digest",
-        "trajectory_event_log_file_sha256",
-        "trajectory_terminal_file_sha256",
-    ):
-        _digest(superseded.get(name), f"superseded_campaign.{name}")
-    _commit(superseded.get("source_commit"), "superseded_campaign.source_commit")
-    if (
-        superseded.get("terminal_status") != FAILED_TERMINAL
-        or superseded.get("capsule_digest")
-        != "sha256:2b75870fe25903afa129e0f277a38fa263f5ddc65d02c37f4d6c35080d766e37"
-        or superseded.get("source_commit")
-        != "ea667c9b7ecdb22368a9ed61982424497e02bd6d"
-        or superseded.get("consumed_ledger_record_digest")
-        != "sha256:63dd4ae1bbcb58d8b733dc0a85c61df869f71d89ba45825f696cd3ac95e07124"
-        or superseded.get("consumed_ledger_file_sha256")
-        != "sha256:21f7c892cfb9be8af76642e13b2491104b9aa8a95c576c378c56b11b4d858e01"
-        or superseded.get("terminal_ledger_record_digest")
-        != "sha256:3bee33a58091eb41ffd56ea1d1ee0b0e41bb1baec45e7af5dbab9b9ee85a9ecf"
-        or superseded.get("terminal_ledger_file_sha256")
-        != "sha256:a4e28d73f3542efa7d296974584635b4fc3a99c5b8aa6eae8691a8926d6010a8"
-        or superseded.get("outcome_file_sha256")
-        != "sha256:4c10dc7307bac862980000be2bce1cb6c00f8679e30032ed5321b33a66ed4f3a"
-        or superseded.get("outcome_digest")
-        != "sha256:3a948c3c4a51d464e4e2cb46ab53402f09e9b6896fe0382a69f0344c494b0944"
-        or superseded.get("trajectory_event_log_file_sha256")
-        != "sha256:7177b757a29f533c56eccbb6e574b8605bb9741b2ee052609357def165a3b234"
-        or superseded.get("trajectory_terminal_file_sha256")
-        != "sha256:b05e0d6aed098e94231b29da005df13566c560a1a8c3e665e49cab36b6f91e8d"
-        or superseded.get("error_code") != "FULL_NODE6_ENDPOINT_SEQUENCE_FAILED"
-        or superseded.get("error_detail") != "an ordered endpoint did not exit cleanly"
-        or superseded.get("trajectory_event_count") != 31
-        or superseded.get("measurement_outcome") != "KNOWN_TERMINAL_FAILURE"
-        or superseded.get("measurement_endpoint_start_count") != 2
-        or superseded.get("python_endpoint_start_count") != 1
-        or superseded.get("rust_endpoint_start_count") != 1
-        or superseded.get("trusted_host_replay_start_count") != 0
-        or superseded.get("python_odd_measurement_count") != 1
-        or superseded.get("rust_odd_measurement_count") != 1
-        or superseded.get("sink_measurement_count") != 0
-        or superseded.get("q1_state") != "NOT_RUN"
-        or superseded.get("q1_gate_count") != 0
-        or superseded.get("q1_gate_mask") != 0
-        or superseded.get("retry_or_resume_allowed") is not False
-    ):
+    expected_superseded = {
+        "capsule_digest": (
+            "sha256:73a07996d7acb21ae3c6d8b35a096850d7fe5f854269f2b13da67da6c595b6a0"
+        ),
+        "source_commit": "5626e1d025e604fc4df5824f40a337a4e756c3dc",
+        "source_tree": "d5527a765dd82677417525d8250da761affc9ad1",
+        "source_closure_digest": (
+            "sha256:703acfe82dbb098c1be8324fa458bd6e6c063c30382d21f0f4a37def06f0eb6b"
+        ),
+        "contract_digest": (
+            "sha256:1a93d654963bcf05369c2e5ea3c63af8e713151893c32ea8bbdc86e9d00ca222"
+        ),
+        "authorization_digest": (
+            "sha256:6f1018a9ed53d9f20a051bf12b506d8a2c65134332199e16e6e3d3830853360a"
+        ),
+        "consumed_ledger_path": (
+            "/home/erzhu419/.local/state/hegel-machine/"
+            "q1-full-node6-capacity-v4-ledger/campaign.consumed.json"
+        ),
+        "consumed_ledger_record_digest": (
+            "sha256:fc719de068b9fa8db653359b9048be80b0f4e1140a2858ea32d1ce2a92afbb8e"
+        ),
+        "consumed_ledger_file_sha256": (
+            "sha256:aa7fc01c6b87578fedd5d8f96e1ab00d8cdaec73f1a5dd5c0f3a10101930ac66"
+        ),
+        "terminal_ledger_path": (
+            "/home/erzhu419/.local/state/hegel-machine/"
+            "q1-full-node6-capacity-v4-ledger/campaign.terminal.json"
+        ),
+        "terminal_ledger_record_digest": (
+            "sha256:ddf92134dc2b036084091baf7bc6063c8ce1bf41060f8ce2ae6d26a097d60bfe"
+        ),
+        "terminal_ledger_file_sha256": (
+            "sha256:926e4943846ccc9d7fbe6fb27eed9bd49bcc238ddd42620dc86008ad3b80a5e4"
+        ),
+        "outcome_path": (
+            "/home/erzhu419/.local/state/hegel-machine/"
+            "q1-full-node6-capacity-v4-evidence/campaign.outcome.json"
+        ),
+        "outcome_file_sha256": (
+            "sha256:ed860e4a7a4128b14a10dc68e41909afeae2db43998318065359fe9558328795"
+        ),
+        "outcome_digest": (
+            "sha256:3e2d6780a75a8da0e91b4eca5cbdda6cdff1c2132b47e8ac6db2da217c824c6c"
+        ),
+        "supervisor_stdout_path": (
+            "/home/erzhu419/.local/state/hegel-machine/"
+            "q1-full-node6-capacity-v4-evidence/supervisor.stdout"
+        ),
+        "supervisor_stdout_file_sha256": (
+            "sha256:7a4c092db7a13d2b98a51d2338f5ff924a8987a833c33db27e5257eb2c2ec12f"
+        ),
+        "supervisor_stderr_path": (
+            "/home/erzhu419/.local/state/hegel-machine/"
+            "q1-full-node6-capacity-v4-evidence/supervisor.stderr"
+        ),
+        "supervisor_stderr_file_sha256": (
+            "sha256:4296c332ff1ba38a0f54754715c9cdaba664fae7192a2ff1062be56ca1ce3fba"
+        ),
+        "trajectory_event_log_path": (
+            "/home/erzhu419/.local/state/hegel-machine/"
+            "q1-full-node6-capacity-v4-trajectory/supervisor-trajectory-v1.jsonl"
+        ),
+        "trajectory_event_log_file_sha256": (
+            "sha256:aedeaa0d089f57219609087fc01990dce90803e26cb9ea2a5e879e4c0a7c70b4"
+        ),
+        "trajectory_terminal_path": (
+            "/home/erzhu419/.local/state/hegel-machine/"
+            "q1-full-node6-capacity-v4-trajectory/"
+            "supervisor-trajectory-terminal-v1.json"
+        ),
+        "trajectory_terminal_file_sha256": (
+            "sha256:c451a18be5542ebed13ebd51f576567b55135510d052fc8decbed08260f86d1f"
+        ),
+        "trajectory_event_count": 31,
+        "error_code": "FULL_NODE6_ENDPOINT_SEQUENCE_FAILED",
+        "error_detail": "an ordered endpoint did not exit cleanly",
+        "terminal_status": FAILED_TERMINAL,
+        "measurement_outcome": "KNOWN_TERMINAL_FAILURE",
+        "measurement_endpoint_start_count": 2,
+        "python_endpoint_start_count": 1,
+        "rust_endpoint_start_count": 1,
+        "trusted_host_replay_start_count": 0,
+        "python_odd_measurement_count": 1,
+        "rust_odd_measurement_count": 1,
+        "sink_measurement_count": 0,
+        "campaign_execution_count": 1,
+        "authorization_consumption_count": 1,
+        "supervisor_popen_count": 1,
+        "supervisor_return_code": 1,
+        "supervisor_replay_passed": False,
+        "artifact_sha256_or_null": None,
+        "postconsumption_error_or_null": None,
+        "python_endpoint_failure": {
+            "return_code": 1,
+            "stdout_path": (
+                "/home/erzhu419/.local/state/hegel-machine/"
+                "q1-full-node6-capacity-v4-run/python.stdout"
+            ),
+            "stdout_file_sha256": (
+                "sha256:f10025c57b41a12268743d0c13cea17f7fa0660ff22d7586bf35315ec746dd3b"
+            ),
+            "stderr_path": (
+                "/home/erzhu419/.local/state/hegel-machine/"
+                "q1-full-node6-capacity-v4-run/python.stderr"
+            ),
+            "stderr_file_sha256": (
+                "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            ),
+            "stdout_object": {
+                "active_transition_allowed": False,
+                "error_code": "FAIL_Q1_PREFLIGHT_BEHAVIOR",
+                "error_detail": "one AST has two behaviors",
+                "q1_execution_started": False,
+                "q1_formal_roots": None,
+                "q1_gate_count": 0,
+                "q1_gate_mask": 0,
+                "q1_output_slots": [None] * 8,
+                "q1_receipt": None,
+                "q1_state": "NOT_RUN",
+                "role_evaluation_performed": False,
+                "schema_version": (
+                    "hegel-phase3a-q1-python-full-node6-capacity-endpoint-error/1"
+                ),
+                "split_accessed": False,
+                "target_truth_accessed": False,
+            },
+        },
+        "rust_endpoint_failure": {
+            "return_code": 1,
+            "stdout_path": (
+                "/home/erzhu419/.local/state/hegel-machine/"
+                "q1-full-node6-capacity-v4-run/rust.stdout"
+            ),
+            "stdout_file_sha256": (
+                "sha256:4051a7222ad27e1d4aace73d53831fe63ed28f4b38b2d57d9e1dac9ef6347585"
+            ),
+            "stderr_path": (
+                "/home/erzhu419/.local/state/hegel-machine/"
+                "q1-full-node6-capacity-v4-run/rust.stderr"
+            ),
+            "stderr_file_sha256": (
+                "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            ),
+            "stdout_object": {
+                "active_transition_allowed": False,
+                "error_code": "FAIL_Q1_PREFLIGHT_BEHAVIOR",
+                "error_detail": "one canonical AST has two behaviors",
+                "formal_roots_generated": False,
+                "q1_execution_started": False,
+                "q1_formal_roots": None,
+                "q1_gate_count": 0,
+                "q1_gate_mask": 0,
+                "q1_output_slots": [None] * 8,
+                "q1_receipt": None,
+                "q1_state": "NOT_RUN",
+                "target_truth_accessed": False,
+            },
+        },
+        "resource_evidence": {
+            "python": {
+                "path": (
+                    "/home/erzhu419/.local/state/hegel-machine/"
+                    "q1-full-node6-capacity-v4-run/"
+                    "python-resource-evidence-v1.json"
+                ),
+                "file_sha256": (
+                    "sha256:4b88c0c37d3aec1cf7c653ada1a02b49abfd4ea90e577576b2817fe41f7b994d"
+                ),
+                "row_count": 1,
+                "actor_id": "PYTHON_ENDPOINT",
+                "actor_command_return_code": 1,
+                "endpoint_sequence_ordinal": 1,
+            },
+            "rust": {
+                "path": (
+                    "/home/erzhu419/.local/state/hegel-machine/"
+                    "q1-full-node6-capacity-v4-run/"
+                    "rust-resource-evidence-v1.json"
+                ),
+                "file_sha256": (
+                    "sha256:f6db20b7920ce26e409fb666a6b3deaa2a109e18462c6faf162eeae59c296002"
+                ),
+                "row_count": 1,
+                "actor_id": "RUST_ENDPOINT",
+                "actor_command_return_code": 1,
+                "endpoint_sequence_ordinal": 2,
+            },
+            "aggregate": {
+                "path": (
+                    "/home/erzhu419/.local/state/hegel-machine/"
+                    "q1-full-node6-capacity-v4-run/"
+                    "endpoint-resource-evidence-v1.json"
+                ),
+                "file_sha256": (
+                    "sha256:dc455f467008798f20c02b1223da840854dddd4024a941793c121dcb6dde0a2a"
+                ),
+                "row_count": 2,
+                "actor_order": ["PYTHON_ENDPOINT", "RUST_ENDPOINT"],
+                "maximum_concurrently_live_endpoint_containers": 1,
+                "measurement_intervals_overlap": False,
+            },
+        },
+        "scratch_cleanup": {
+            "path": (
+                "/home/erzhu419/.local/state/hegel-machine/"
+                "q1-full-node6-capacity-v4-run/scratch-cleanup-v1.json"
+            ),
+            "file_sha256": (
+                "sha256:edfa3752d74c47fa079ca020096ad83fcb32d8b66542e27f3c940c0503cefc99"
+            ),
+            "terminal_absence_proved": True,
+            "failure_rows": [],
+            "root_absence": {"python-scratch": True, "rust-scratch": True},
+        },
+        "postconsumption_cleanup": {
+            "schema_version": (
+                "hegel-phase3a-q1-full-node6-postconsumption-cleanup/1"
+            ),
+            "status": "PASS",
+            "supervisor_process_group": (
+                "PASS:group_kill=ABSENT,group_absence=PASS,"
+                "fallback_kill=NOT_REQUIRED,wait=PASS"
+            ),
+            "production_containers": "PASS",
+            "control_containers": "PASS",
+            "probe_root": "PASS",
+            "production_scratch": "PASS",
+        },
+        "q1_state": "NOT_RUN",
+        "q1_gate_count": 0,
+        "q1_gate_mask": 0,
+        "q1_output_slots": [None] * 8,
+        "retry_or_resume_allowed": False,
+    }
+    if superseded != expected_superseded:
         _fail("superseded campaign terminal boundary differs")
     target = _object(contract["target"], "target")
     if (
@@ -283,7 +468,7 @@ def validate_contract_v1(value: object) -> dict[str, Any]:
         or target.get("technical_contract_relative_path")
         != "config/phase3_q1_full_node6_capacity_preflight_v1.json"
         or target.get("artifact_relative_path")
-        != "artifacts/phase3_q1_full_node6_capacity_preflight_v4.json"
+        != "artifacts/phase3_q1_full_node6_capacity_preflight_v5.json"
         or target.get("allowed_success_status") != SATURATED
         or target.get("maximum_supervisor_popen_count") != 1
         or target.get("maximum_measurements_per_endpoint_signature") != 1
@@ -304,7 +489,7 @@ def validate_contract_v1(value: object) -> dict[str, Any]:
         "stdout_path",
         "stderr_path",
     } or any(type(item) is not str or not item for item in fixed.values()):
-        _fail("fresh successor-v4 paths differ")
+        _fail("fresh successor-v5 paths differ")
     if contract["preconsumption_gate_order"] != [
         "AUTHORIZATION_TEXT",
         "PATH_AND_FORMAT",

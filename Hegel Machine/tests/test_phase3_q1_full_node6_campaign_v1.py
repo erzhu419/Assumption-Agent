@@ -30,50 +30,53 @@ def _capsule() -> dict[str, object]:
 def test_contract_and_authorization_replay_exactly() -> None:
     value = campaign.validate_contract_v1(_contract())
     assert value["schema_version"] == (
-        "hegel-phase3a-q1-full-node6-campaign-contract/4"
+        "hegel-phase3a-q1-full-node6-campaign-contract/5"
     )
     assert value["contract_id"] == (
-        "hegel-phase3a-q1-full-node6-campaign-successor-v4"
+        "hegel-phase3a-q1-full-node6-campaign-successor-v5"
     )
     assert campaign.DOMAINS["authorization"] == (
-        b"HEGEL/Q1/FULL_NODE6/AUTHORIZATION/SUCCESSOR_V4/V1\x00"
+        b"HEGEL/Q1/FULL_NODE6/AUTHORIZATION/SUCCESSOR_V5/V1\x00"
     )
     assert campaign.DOMAINS["contract"] == (
-        b"HEGEL/Q1/FULL_NODE6/CONTRACT/SUCCESSOR_V4/V1\x00"
+        b"HEGEL/Q1/FULL_NODE6/CONTRACT/SUCCESSOR_V5/V1\x00"
     )
     assert value["contract_digest"] == (
-        "sha256:1a93d654963bcf05369c2e5ea3c63af8e713151893c32ea8bbdc86e9d00ca222"
+        "sha256:23e8631c3633c24c230a32c92bb02b067553f35c0afef1ab19b4448f9a435008"
     )
     assert value["authorization"] == campaign.OWNER_AUTHORIZATION
     assert value["authorization"]["authorization_digest"] == (
-        "sha256:6f1018a9ed53d9f20a051bf12b506d8a2c65134332199e16e6e3d3830853360a"
+        "sha256:d55d5cbde77f58385ed6decbf5756f2042a4cf3819281819ded853554356da8d"
     )
     assert "authorization_state" not in value["authorization"]
     assert campaign.OWNER_AUTHORIZATION_TEXT == (
         "授权 Q1 full-node6 capacity-preflight diagnostic "
-        "successor-v4 distinct-outer actual；确认 successor-v3 known terminal "
+        "successor-v5 distinct-outer actual；确认 successor-v4 known terminal "
         "failure、terminal no-resume，且 Python Odd measurement 与 Rust Odd "
         "measurement 各一次 conservatively count，Sink/trusted host replay 0；"
-        "另行授权 exact v4 capsule-only additional fresh remeasurement；"
-        "禁止恢复 successor-v3 或复用 successor-v3 work product"
+        "另行授权 exact v5 capsule-only additional fresh remeasurement；"
+        "禁止恢复 successor-v4 或复用 successor-v4 work product"
     )
     assert campaign.LEDGER_SCHEMA_VERSION == (
         "hegel-phase3a-q1-full-node6-ledger-record/3"
     )
-    assert value["authorization"]["superseded_v3_resume_allowed"] is False
+    assert value["authorization"]["superseded_v4_resume_allowed"] is False
     assert value["authorization"]["future_exact_user_authorization_required"] is True
     assert value["authorization"]["prior_python_odd_measurement_count"] == 1
     assert value["authorization"]["prior_rust_odd_measurement_count"] == 1
-    assert value["authorization"]["new_measurement_budget_scope"] == "V4_CAPSULE_ONLY"
+    assert value["authorization"]["new_measurement_budget_scope"] == "V5_CAPSULE_ONLY"
     assert value["authorization"]["new_measurement_is_explicitly_additional"] is True
-    assert value["authorization"]["v3_work_product_reuse_allowed"] is False
+    assert value["authorization"]["v4_work_product_reuse_allowed"] is False
     assert value["source_lineage"]["required_ancestor_commit"] == (
         "33dc9cbb7d753f83650169d6d6b9caa508927764"
     )
     assert value["source_lineage"]["required_parent_commit"] == (
-        "ea667c9b7ecdb22368a9ed61982424497e02bd6d"
+        "5626e1d025e604fc4df5824f40a337a4e756c3dc"
     )
     assert value["source_lineage"]["exact_additions_and_modifications_only"] is True
+    assert "docs/Hegel_Machine_Current_State_Reconciliation_v6.md" in value[
+        "source_lineage"
+    ]["additive_paths_in_exact_order"]
     assert value["source_lineage"]["modified_paths_in_exact_order"] == [
         "src/hegel_machine/phase3_q1_capacity_preflight_v1.py",
         "src/hegel_machine/phase3_q1_partition_snapshot_v1.py",
@@ -81,12 +84,30 @@ def test_contract_and_authorization_replay_exactly() -> None:
         "tests/test_phase3_q1_partition_snapshot_v1.py",
     ]
     assert value["superseded_campaign"]["capsule_digest"] == (
-        "sha256:2b75870fe25903afa129e0f277a38fa263f5ddc65d02c37f4d6c35080d766e37"
+        "sha256:73a07996d7acb21ae3c6d8b35a096850d7fe5f854269f2b13da67da6c595b6a0"
     )
     assert value["superseded_campaign"]["measurement_outcome"] == "KNOWN_TERMINAL_FAILURE"
     assert value["superseded_campaign"]["python_endpoint_start_count"] == 1
     assert value["superseded_campaign"]["rust_endpoint_start_count"] == 1
     assert value["superseded_campaign"]["trusted_host_replay_start_count"] == 0
+    assert value["superseded_campaign"]["campaign_execution_count"] == 1
+    assert value["superseded_campaign"]["authorization_consumption_count"] == 1
+    assert value["superseded_campaign"]["supervisor_popen_count"] == 1
+    assert value["superseded_campaign"]["supervisor_return_code"] == 1
+    assert value["superseded_campaign"]["python_endpoint_failure"][
+        "stdout_object"
+    ]["error_detail"] == "one AST has two behaviors"
+    assert value["superseded_campaign"]["rust_endpoint_failure"][
+        "stdout_object"
+    ]["error_detail"] == "one canonical AST has two behaviors"
+    assert value["superseded_campaign"]["resource_evidence"]["aggregate"][
+        "measurement_intervals_overlap"
+    ] is False
+    assert value["superseded_campaign"]["scratch_cleanup"][
+        "terminal_absence_proved"
+    ] is True
+    assert value["superseded_campaign"]["postconsumption_cleanup"]["status"] == "PASS"
+    assert value["superseded_campaign"]["q1_output_slots"] == [None] * 8
     assert value["preconsumption_gate_order"][3:8] == [
         "PREDECESSOR_TERMINAL_AND_ARTIFACT",
         "SUPERSEDED_CAMPAIGN_TERMINAL",
@@ -128,9 +149,9 @@ def test_contract_and_authorization_replay_exactly() -> None:
         "stdout_path",
         "stderr_path",
     ):
-        assert "q1-full-node6-capacity-v4" in fixed[name] or (
+        assert "q1-full-node6-capacity-v5" in fixed[name] or (
             name == "artifact_path"
-            and fixed[name].endswith("phase3_q1_full_node6_capacity_preflight_v4.json")
+            and fixed[name].endswith("phase3_q1_full_node6_capacity_preflight_v5.json")
         )
 
 

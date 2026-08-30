@@ -886,7 +886,29 @@ def test_superseded_campaign_replays_known_terminal_failure_without_resume() -> 
     assert receipt["rust_odd_measurement_count"] == 1
     assert receipt["sink_measurement_count"] == 0
     assert receipt["trajectory_event_count"] == 31
+    assert receipt["campaign_execution_count"] == 1
+    assert receipt["authorization_consumption_count"] == 1
+    assert receipt["supervisor_popen_count"] == 1
+    assert receipt["supervisor_return_code"] == 1
+    assert receipt["supervisor_replay_passed"] is False
+    assert receipt["endpoint_failures"]["python"]["error_code"] == (
+        "FAIL_Q1_PREFLIGHT_BEHAVIOR"
+    )
+    assert receipt["endpoint_failures"]["python"]["error_detail"] == (
+        "one AST has two behaviors"
+    )
+    assert receipt["endpoint_failures"]["rust"]["error_detail"] == (
+        "one canonical AST has two behaviors"
+    )
+    assert receipt["resource_evidence_file_sha256"]["aggregate"] == (
+        "sha256:dc455f467008798f20c02b1223da840854dddd4024a941793c121dcb6dde0a2a"
+    )
+    assert receipt["scratch_terminal_absence_proved"] is True
+    assert receipt["postconsumption_cleanup"]["status"] == "PASS"
     assert receipt["q1_state"] == "NOT_RUN"
+    assert receipt["q1_gate_count"] == 0
+    assert receipt["q1_gate_mask"] == 0
+    assert receipt["q1_output_slots"] == [None] * 8
     assert receipt["retry_or_resume_allowed"] is False
 
 

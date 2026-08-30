@@ -1247,6 +1247,72 @@ fn apply_operator_vector(
     Ok(Arc::new(cells))
 }
 
+fn evaluate_canonical_node(
+    node: &Node,
+    observation: &Observation,
+) -> Result<RuntimeValue, EngineError> {
+    match node {
+        Node::ScalarConst(_)
+        | Node::BitAt(_)
+        | Node::SetSize
+        | Node::Aggregate { .. }
+        | Node::ContextFlag(_)
+        | Node::TaskFlag(_)
+        | Node::NewSymbolCall(_) => evaluate_leaf(node, observation),
+        Node::Unary { op, child } => {
+            let child = evaluate_canonical_node(child, observation)?;
+            apply_unary(*op, &child)
+        }
+        Node::Binary { op, left, right } => {
+            let left = evaluate_canonical_node(left, observation)?;
+            let right = evaluate_canonical_node(right, observation)?;
+            apply_binary(Operator::Binary(*op), &left, &right)
+        }
+        Node::ApproxEqual {
+            left,
+            right,
+            tolerance_index,
+        } => {
+            let left = evaluate_canonical_node(left, observation)?;
+            let right = evaluate_canonical_node(right, observation)?;
+            apply_binary(Operator::Approx(*tolerance_index), &left, &right)
+        }
+        Node::And(children) if children.len() == 2 => {
+            let left = evaluate_canonical_node(&children[0], observation)?;
+            let right = evaluate_canonical_node(&children[1], observation)?;
+            apply_binary(Operator::And2, &left, &right)
+        }
+        Node::And(_) => Err(EngineError::new(
+            "FAIL_SEMANTICS_MISMATCH",
+            "canonical AND must contain exactly two children",
+        )),
+    }
+}
+
+fn evaluate_canonical_vector(
+    canonical: &CanonicalProgram,
+    observations: &[Observation],
+) -> Result<Arc<Vec<RuntimeValue>>, EngineError> {
+    let cells = observations
+        .iter()
+        .map(|observation| evaluate_canonical_node(&canonical.canonical_node, observation))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(Arc::new(cells))
+}
+
+fn application_behavior_vector(
+    canonical: &CanonicalProgram,
+    rewritten: bool,
+    raw_cells: Arc<Vec<RuntimeValue>>,
+    observations: &[Observation],
+) -> Result<Arc<Vec<RuntimeValue>>, EngineError> {
+    if rewritten {
+        evaluate_canonical_vector(canonical, observations)
+    } else {
+        Ok(raw_cells)
+    }
+}
+
 #[derive(Debug, Clone)]
 struct QuotientClass {
     behavior_key: Arc<Vec<u8>>,
@@ -1351,9 +1417,28 @@ impl QuotientState {
         {
             if let Some(prior) = programs.get(&program.canonical.canonical_cbor) {
                 if prior.behavior.key != program.behavior.key {
+                    let counts = self.counts();
+                    let canonical_cbor_digest =
+                        sha256_bytes(&[&program.canonical.canonical_cbor]);
                     return Err(EngineError::new(
                         "FAIL_Q1_PREFLIGHT_BEHAVIOR",
-                        "one canonical AST has two behaviors",
+                        format!(
+                            concat!(
+                                "one canonical AST has two behaviors: ",
+                                "canonical_cbor_sha256=sha256:{} depth={} ",
+                                "prior_behavior_sha256=sha256:{} ",
+                                "current_behavior_sha256=sha256:{} ",
+                                "state_counts=classes:{},cohorts:{},bank:{},frontier:{}"
+                            ),
+                            hex(&canonical_cbor_digest),
+                            program.canonical.depth,
+                            hex(&prior.behavior.digest),
+                            hex(&program.behavior.digest),
+                            counts.classes,
+                            counts.cohorts,
+                            counts.bank,
+                            counts.frontier,
+                        ),
                     ));
                 }
             }
@@ -1917,10 +2002,16 @@ impl Runner {
                     let rewritten = canonical.canonical_node != source;
                     self.strict_count += 1;
                     self.rewrite_count += u64::from(rewritten);
-                    let cells = self.candidate_vector(
+                    let raw_cells = self.candidate_vector(
                         operator,
                         left,
                         right.map(AsRef::as_ref),
+                    )?;
+                    let cells = application_behavior_vector(
+                        &canonical,
+                        rewritten,
+                        raw_cells,
+                        &self.observations,
                     )?;
                     let program = Program::from_application(
                         canonical,
@@ -2744,5 +2835,128 @@ mod fixed_point_regression_tests {
         assert!(after.is_disjoint(&before));
         assert_eq!(after.iter().next().unwrap().operator_code, 0x4002);
         assert_eq!(runner.state.continuation_programs().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn rewritten_partial_difference_uses_canonical_zero_behavior() {
+        let observations = odd_universe();
+        let bit = Program::from_leaf(
+            canonicalize_shrink6_source_node(Node::BitAt(7)).unwrap(),
+            1,
+            &observations,
+        )
+        .unwrap();
+        let scalar_source = Node::Unary {
+            op: UnaryOp::BitToScalar,
+            child: Box::new(bit.canonical.canonical_node.clone()),
+        };
+        let scalar_canonical =
+            canonicalize_shrink6_source_node(scalar_source.clone()).unwrap();
+        assert_eq!(scalar_canonical.canonical_node, scalar_source);
+        let scalar_raw_cells = apply_operator_vector(
+            Operator::Unary(UnaryOp::BitToScalar),
+            &bit.behavior,
+            None,
+        )
+        .unwrap();
+        let scalar_cells = application_behavior_vector(
+            &scalar_canonical,
+            false,
+            scalar_raw_cells.clone(),
+            &observations,
+        )
+        .unwrap();
+        assert!(Arc::ptr_eq(&scalar_raw_cells, &scalar_cells));
+        let scalar = Program::from_application(scalar_canonical, 1, scalar_cells).unwrap();
+        assert!(scalar
+            .behavior
+            .cells
+            .iter()
+            .any(|value| matches!(value, RuntimeValue::Bottom)));
+        assert!(scalar
+            .behavior
+            .cells
+            .iter()
+            .any(|value| matches!(value, RuntimeValue::Rational(_))));
+
+        let source = Operator::Binary(BinaryOp::Difference).node(&scalar, Some(&scalar));
+        let canonical = canonicalize_shrink6_source_node(source.clone()).unwrap();
+        assert_eq!(canonical.canonical_node, Node::ScalarConst(3));
+        assert_ne!(canonical.canonical_node, source);
+
+        let raw_cells = apply_operator_vector(
+            Operator::Binary(BinaryOp::Difference),
+            &scalar.behavior,
+            Some(&scalar.behavior),
+        )
+        .unwrap();
+        assert!(raw_cells
+            .iter()
+            .any(|value| matches!(value, RuntimeValue::Bottom)));
+        assert!(raw_cells.iter().any(|value| {
+            matches!(value, RuntimeValue::Rational(rational) if *rational == Rational::integer(0))
+        }));
+
+        let canonical_cells = application_behavior_vector(
+            &canonical,
+            true,
+            raw_cells.clone(),
+            &observations,
+        )
+        .unwrap();
+        assert_ne!(raw_cells.as_slice(), canonical_cells.as_slice());
+        assert!(canonical_cells.iter().all(|value| {
+            matches!(value, RuntimeValue::Rational(rational) if *rational == Rational::integer(0))
+        }));
+
+        let canonical_cbor = canonical.canonical_cbor.clone();
+        let raw_alias =
+            Program::from_application(canonical.clone(), 1, raw_cells.clone()).unwrap();
+        let zero = Program::from_leaf(
+            canonicalize_shrink6_source_node(Node::ScalarConst(3)).unwrap(),
+            1,
+            &observations,
+        )
+        .unwrap();
+
+        let mut alias_runner =
+            Runner::new(1, CapacityLimits::bounded_for_test(6).unwrap()).unwrap();
+        assert_eq!(alias_runner.insert(zero.clone(), 0).unwrap(), (1, 1, 1, 0));
+        assert_eq!(alias_runner.insert(raw_alias, 2).unwrap(), (1, 1, 1, 1));
+        let alias_error = alias_runner.state.continuation_programs().unwrap_err();
+        assert_eq!(alias_error.code, "FAIL_Q1_PREFLIGHT_BEHAVIOR");
+        for expected in [
+            "canonical_cbor_sha256=sha256:",
+            "depth=0",
+            "prior_behavior_sha256=sha256:",
+            "current_behavior_sha256=sha256:",
+            "state_counts=classes:2,cohorts:2,bank:2,frontier:2",
+        ] {
+            assert!(
+                alias_error.detail.contains(expected),
+                "missing {expected:?} from {:?}",
+                alias_error.detail.as_str()
+            );
+        }
+
+        let rewritten = Program::from_application(canonical, 1, canonical_cells).unwrap();
+        assert_eq!(
+            rewritten.behavior.key.as_slice(),
+            zero.behavior.key.as_slice()
+        );
+
+        let mut runner = Runner::new(1, CapacityLimits::bounded_for_test(6).unwrap()).unwrap();
+        assert_eq!(runner.insert(zero, 0).unwrap(), (1, 1, 1, 0));
+        assert_eq!(runner.insert(rewritten, 2).unwrap(), (0, 0, 0, 0));
+        let continuations = runner.state.continuation_programs().unwrap();
+        assert_eq!(
+            continuations
+                .iter()
+                .filter(|program| {
+                    program.canonical.canonical_cbor.as_slice() == canonical_cbor.as_slice()
+                })
+                .count(),
+            1
+        );
     }
 }

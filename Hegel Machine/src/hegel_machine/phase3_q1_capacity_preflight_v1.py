@@ -903,6 +903,7 @@ class _State:
         self.universe = universe
         self.limits = limits
         self.start_time = monotonic()
+        self.environments = universe.observation_environments()
         self.classes: dict[bytes, _BehaviorClass] = {}
         self.vector_cache: dict[tuple[int, tuple[bytes, ...]], tuple[object, ...]] = {}
         self.vector_cache_hits = 0
@@ -1151,7 +1152,21 @@ class _State:
                 for program in cohort.representatives.values():
                     prior = values.get(program.ast.cbor_bytes)
                     if prior is not None and prior.behavior_key != program.behavior_key:
-                        _fail(FAIL_PREFLIGHT_BEHAVIOR, "one AST has two behaviors")
+                        classes, cohorts, bank, _frontier, _max_bank, _max_frontier = (
+                            self._counts()
+                        )
+                        _fail(
+                            FAIL_PREFLIGHT_BEHAVIOR,
+                            "one AST has two behaviors: "
+                            f"input_signature_id={self.universe.input_signature_id}, "
+                            f"ast_digest={program.ast.hash_id}, "
+                            f"ast_depth={program.ast.metrics.depth}, "
+                            "prior_behavior_key_sha256=sha256:"
+                            f"{sha256(prior.behavior_key).hexdigest()}, "
+                            "current_behavior_key_sha256=sha256:"
+                            f"{sha256(program.behavior_key).hexdigest()}, "
+                            f"classes={classes}, cohorts={cohorts}, bank={bank}",
+                        )
                     values[program.ast.cbor_bytes] = program
         return tuple(sorted(values.values(), key=lambda program: program.global_key))
 
@@ -1235,13 +1250,15 @@ class _State:
         leaves = _frozen_leaf_asts_v1(
             raw_cap=self.limits.maximum_raw_operator_applications
         )
-        environments = self.universe.observation_environments()
         bank_delta = 0
         for ast in leaves:
             checkpoint = self._event_counter_checkpoint()
             try:
                 self._consume_raw()
-                behavior = evaluate_canonical_ast_on_environments_v1(ast, environments)
+                behavior = evaluate_canonical_ast_on_environments_v1(
+                    ast,
+                    self.environments,
+                )
                 self.strict_count += 1
                 deltas = self.insert(ast, behavior, current_depth=0)
             except _ResourceLimit:
@@ -1314,9 +1331,20 @@ class _State:
                     if replay.cbor_bytes != ast.cbor_bytes or replay.digest != ast.digest:
                         _fail(FAIL_PREFLIGHT_AST_IDENTITY, "source/formal replay differs")
                     self.strict_count += 1
-                    if ast.value[1] != candidate.expected_node:
+                    rewritten = ast.value[1] != candidate.expected_node
+                    if rewritten:
                         self.rewrite_count += 1
-                    behavior = self.candidate_vector(candidate)
+                    raw_behavior = self.candidate_vector(candidate)
+                    # The raw vector remains cache/guard work, but canonical
+                    # AST identity determines the behavior admitted downstream.
+                    behavior = (
+                        evaluate_canonical_ast_on_environments_v1(
+                            ast,
+                            self.environments,
+                        )
+                        if rewritten
+                        else raw_behavior
+                    )
                     deltas = self.insert(ast, behavior, current_depth=depth)
                 except _ResourceLimit:
                     if not vector_was_cached:

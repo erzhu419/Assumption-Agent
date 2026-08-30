@@ -453,14 +453,45 @@ def _superseded_campaign_gate(contract: Mapping[str, Any]) -> dict[str, object]:
     )
     consumed_raw_digest = "sha256:" + sha256(consumed_raw).hexdigest()
     consumed = _strict_json(consumed_raw, "superseded campaign consumed ledger")
+    if type(consumed) is not dict:
+        _terminal(
+            "SUPERSEDED_CAMPAIGN_CONSUMED_DIFFERS",
+            "consumed ledger must be one object",
+        )
+    _validate_ledger_digest_v1(consumed, "superseded campaign consumed")
+    consumed_body = consumed.get("body")
+    consumed_capsule = (
+        consumed_body.get("capsule") if type(consumed_body) is dict else None
+    )
+    consumed_authorization = (
+        consumed_capsule.get("authorization")
+        if type(consumed_capsule) is dict
+        else None
+    )
     if (
         consumed_raw_digest != expected["consumed_ledger_file_sha256"]
-        or type(consumed) is not dict
         or consumed.get("record_digest")
         != expected["consumed_ledger_record_digest"]
         or consumed.get("capsule_digest") != expected["capsule_digest"]
+        or consumed.get("contract_digest") != expected["contract_digest"]
+        or consumed.get("authorization_digest")
+        != expected["authorization_digest"]
+        or consumed.get("schema_version")
+        != "hegel-phase3a-q1-full-node6-ledger-record/3"
+        or consumed.get("sequence") != 1
+        or consumed.get("record_type") != "CONSUMED"
         or consumed.get("status") != _core.CONSUMED
         or consumed.get("previous_record_digest_or_null") is not None
+        or type(consumed_capsule) is not dict
+        or consumed_capsule.get("capsule_digest") != expected["capsule_digest"]
+        or consumed_capsule.get("source_commit") != expected["source_commit"]
+        or consumed_capsule.get("source_tree") != expected["source_tree"]
+        or consumed_capsule.get("source_closure_digest")
+        != expected["source_closure_digest"]
+        or consumed_capsule.get("contract_digest") != expected["contract_digest"]
+        or type(consumed_authorization) is not dict
+        or consumed_authorization.get("authorization_digest")
+        != expected["authorization_digest"]
     ):
         _terminal(
             "SUPERSEDED_CAMPAIGN_CONSUMED_DIFFERS",
@@ -477,6 +508,7 @@ def _superseded_campaign_gate(contract: Mapping[str, Any]) -> dict[str, object]:
             "SUPERSEDED_CAMPAIGN_LEDGER_WIRE",
             "terminal ledger must contain one body object",
         )
+    _validate_ledger_digest_v1(value, "superseded campaign terminal")
     body = value["body"]
     outcome = body.get("outcome")
     if type(outcome) is not dict:
@@ -484,24 +516,65 @@ def _superseded_campaign_gate(contract: Mapping[str, Any]) -> dict[str, object]:
             "SUPERSEDED_CAMPAIGN_LEDGER_WIRE",
             "terminal ledger must contain one outcome object",
         )
+    expected_outcome = {
+        "artifact_sha256_or_null": expected["artifact_sha256_or_null"],
+        "authorization_consumption_count": expected[
+            "authorization_consumption_count"
+        ],
+        "authorization_digest": expected["authorization_digest"],
+        "campaign_execution_count": expected["campaign_execution_count"],
+        "capsule_digest": expected["capsule_digest"],
+        "contract_digest": expected["contract_digest"],
+        "outcome_digest": expected["outcome_digest"],
+        "postconsumption_cleanup": expected["postconsumption_cleanup"],
+        "postconsumption_error_or_null": expected[
+            "postconsumption_error_or_null"
+        ],
+        "q1_gate_count": expected["q1_gate_count"],
+        "q1_gate_mask": expected["q1_gate_mask"],
+        "q1_output_slots": expected["q1_output_slots"],
+        "q1_state": expected["q1_state"],
+        "retry_or_resume_allowed": expected["retry_or_resume_allowed"],
+        "schema_version": "hegel-phase3a-q1-full-node6-outcome/2",
+        "status": expected["terminal_status"],
+        "success": False,
+        "supervisor_popen_count": expected["supervisor_popen_count"],
+        "supervisor_replay_passed": expected["supervisor_replay_passed"],
+        "supervisor_return_code": expected["supervisor_return_code"],
+        "supervisor_stderr_sha256": expected[
+            "supervisor_stderr_file_sha256"
+        ],
+        "supervisor_stdout_sha256": expected[
+            "supervisor_stdout_file_sha256"
+        ],
+        "supervisor_terminal_status_or_null": expected["terminal_status"],
+    }
+    unsigned_outcome = dict(outcome)
+    observed_outcome_digest = unsigned_outcome.pop("outcome_digest", None)
     if (
         value.get("record_digest") != expected["terminal_ledger_record_digest"]
         or value.get("previous_record_digest_or_null")
         != expected["consumed_ledger_record_digest"]
         or value.get("capsule_digest") != expected["capsule_digest"]
+        or value.get("contract_digest") != expected["contract_digest"]
+        or value.get("authorization_digest") != expected["authorization_digest"]
+        or value.get("schema_version")
+        != "hegel-phase3a-q1-full-node6-ledger-record/3"
+        or value.get("sequence") != 2
+        or value.get("record_type") != "TERMINAL"
         or value.get("status") != expected["terminal_status"]
         or body.get("outcome_digest") != expected["outcome_digest"]
+        or body.get("external_outcome_path") != expected["outcome_path"]
+        or body.get("external_outcome_state") != "EXACT_PUBLISHED"
+        or body.get("external_outcome_error_or_null") is not None
+        or body.get("success") is not False
         or body.get("retry_or_resume_allowed") is not False
-        or outcome.get("status") != expected["terminal_status"]
-        or outcome.get("q1_state") != "NOT_RUN"
-        or outcome.get("q1_gate_count") != 0
-        or outcome.get("q1_gate_mask") != 0
-        or outcome.get("q1_output_slots") != [None] * 8
-        or outcome.get("success") is not False
-        or outcome.get("retry_or_resume_allowed") is not False
-        or outcome.get("campaign_execution_count") != 1
-        or outcome.get("authorization_consumption_count") != 1
-        or outcome.get("supervisor_popen_count") != 1
+        or body.get("supervisor_return_code")
+        != expected["supervisor_return_code"]
+        or outcome != expected_outcome
+        or observed_outcome_digest != expected["outcome_digest"]
+        or _core.domain_digest_v1(_core.DOMAINS["outcome"], unsigned_outcome)
+        != observed_outcome_digest
     ):
         _terminal(
             "SUPERSEDED_CAMPAIGN_TERMINAL_DIFFERS",
@@ -518,6 +591,51 @@ def _superseded_campaign_gate(contract: Mapping[str, Any]) -> dict[str, object]:
         _terminal(
             "SUPERSEDED_CAMPAIGN_OUTCOME_DIFFERS",
             "external outcome binding differs",
+        )
+    supervisor_stdout_path = Path(str(expected["supervisor_stdout_path"]))
+    supervisor_stdout_raw = _read_regular(
+        supervisor_stdout_path,
+        "superseded campaign supervisor stdout",
+    )
+    supervisor_stdout_digest = "sha256:" + sha256(
+        supervisor_stdout_raw
+    ).hexdigest()
+    supervisor_stdout = _strict_json(
+        supervisor_stdout_raw,
+        "superseded campaign supervisor stdout",
+    )
+    expected_supervisor_stdout = {
+        "error_code": expected["error_code"],
+        "error_detail": expected["error_detail"],
+        "q1_gate_count": 0,
+        "q1_gate_mask": 0,
+        "q1_output_slots": [None] * 8,
+        "q1_state": "NOT_RUN",
+        "schema_version": "hegel-phase3a-q1-full-node6-supervisor-error/1",
+        "terminal_status": expected["terminal_status"],
+    }
+    supervisor_stderr_path = Path(str(expected["supervisor_stderr_path"]))
+    supervisor_stderr_raw = _read_regular(
+        supervisor_stderr_path,
+        "superseded campaign supervisor stderr",
+    )
+    supervisor_stderr_digest = "sha256:" + sha256(
+        supervisor_stderr_raw
+    ).hexdigest()
+    expected_supervisor_stderr = (
+        f'{expected["error_code"]}: {expected["error_detail"]}\n'.encode("ascii")
+    )
+    if (
+        supervisor_stdout_digest
+        != expected["supervisor_stdout_file_sha256"]
+        or supervisor_stdout != expected_supervisor_stdout
+        or supervisor_stderr_digest
+        != expected["supervisor_stderr_file_sha256"]
+        or supervisor_stderr_raw != expected_supervisor_stderr
+    ):
+        _terminal(
+            "SUPERSEDED_CAMPAIGN_SUPERVISOR_EVIDENCE_DIFFERS",
+            "supervisor stdout or stderr binding differs",
         )
     event_log_path = Path(str(expected["trajectory_event_log_path"]))
     event_log_raw = _read_regular(
@@ -636,6 +754,216 @@ def _superseded_campaign_gate(contract: Mapping[str, Any]) -> dict[str, object]:
             "SUPERSEDED_CAMPAIGN_TRAJECTORY_DIFFERS",
             "measurement actor start counts differ",
         )
+    python_completed = events[22]
+    rust_completed = events[24]
+    scratch_completed = events[26]
+    sequence_completed = events[27]
+    sequence_failed = events[28]
+    measurement_failed = events[29]
+    terminal_failed = events[30]
+    failure_detail = f'{expected["error_code"]}: {expected["error_detail"]}'
+    if (
+        python_completed.get("return_code_or_null")
+        != expected["python_endpoint_failure"]["return_code"]
+        or python_completed.get("command_artifact_path_or_null")
+        != expected["resource_evidence"]["python"]["path"]
+        or rust_completed.get("return_code_or_null")
+        != expected["rust_endpoint_failure"]["return_code"]
+        or rust_completed.get("command_artifact_path_or_null")
+        != expected["resource_evidence"]["rust"]["path"]
+        or scratch_completed.get("command_artifact_path_or_null")
+        != expected["scratch_cleanup"]["path"]
+        or sequence_completed.get("return_code_or_null")
+        != expected["supervisor_return_code"]
+        or sequence_completed.get("command_artifact_path_or_null")
+        != expected["resource_evidence"]["aggregate"]["path"]
+        or sequence_completed.get("detail_or_null")
+        != "python_return_code=1;rust_return_code=1"
+        or sequence_failed.get("detail_or_null") != failure_detail
+        or measurement_failed.get("detail_or_null") != failure_detail
+        or terminal_failed.get("decision_or_null")
+        != expected["terminal_status"]
+        or terminal_failed.get("detail_or_null") != expected["error_detail"]
+    ):
+        _terminal(
+            "SUPERSEDED_CAMPAIGN_TRAJECTORY_DIFFERS",
+            "endpoint return-code or terminal-stage evidence differs",
+        )
+
+    def read_bound_json(
+        path_text: object,
+        label: str,
+        expected_digest: object,
+    ) -> tuple[dict[str, object], str, bytes]:
+        evidence_raw = _read_regular(Path(str(path_text)), label)
+        evidence_digest = "sha256:" + sha256(evidence_raw).hexdigest()
+        evidence = _strict_json(evidence_raw, label)
+        if evidence_digest != expected_digest or type(evidence) is not dict:
+            _terminal(
+                "SUPERSEDED_CAMPAIGN_RUN_EVIDENCE_DIFFERS",
+                f"{label} bytes or wire differs",
+            )
+        return evidence, evidence_digest, evidence_raw
+
+    endpoint_receipts: dict[str, dict[str, object]] = {}
+    for actor in ("python", "rust"):
+        endpoint_expected = expected[f"{actor}_endpoint_failure"]
+        endpoint_stdout, endpoint_stdout_digest, _ = read_bound_json(
+            endpoint_expected["stdout_path"],
+            f"superseded campaign {actor} endpoint stdout",
+            endpoint_expected["stdout_file_sha256"],
+        )
+        endpoint_stderr_path = Path(str(endpoint_expected["stderr_path"]))
+        endpoint_stderr_raw = _read_regular(
+            endpoint_stderr_path,
+            f"superseded campaign {actor} endpoint stderr",
+        )
+        endpoint_stderr_digest = "sha256:" + sha256(
+            endpoint_stderr_raw
+        ).hexdigest()
+        if (
+            endpoint_stdout != endpoint_expected["stdout_object"]
+            or endpoint_stderr_digest
+            != endpoint_expected["stderr_file_sha256"]
+            or endpoint_stderr_raw != b""
+        ):
+            _terminal(
+                "SUPERSEDED_CAMPAIGN_ENDPOINT_EVIDENCE_DIFFERS",
+                f"{actor} endpoint failure evidence differs",
+            )
+        endpoint_receipts[actor] = {
+            "return_code": endpoint_expected["return_code"],
+            "stdout_file_sha256": endpoint_stdout_digest,
+            "stderr_file_sha256": endpoint_stderr_digest,
+            "error_code": endpoint_stdout["error_code"],
+            "error_detail": endpoint_stdout["error_detail"],
+            "q1_state": endpoint_stdout["q1_state"],
+            "q1_gate_count": endpoint_stdout["q1_gate_count"],
+            "q1_gate_mask": endpoint_stdout["q1_gate_mask"],
+            "q1_output_slots": endpoint_stdout["q1_output_slots"],
+        }
+
+    resource_expected = expected["resource_evidence"]
+    resource_values: dict[str, dict[str, object]] = {}
+    resource_digests: dict[str, str] = {}
+    for actor in ("python", "rust", "aggregate"):
+        actor_expected = resource_expected[actor]
+        resource_value, resource_digest, _ = read_bound_json(
+            actor_expected["path"],
+            f"superseded campaign {actor} resource evidence",
+            actor_expected["file_sha256"],
+        )
+        resource_values[actor] = resource_value
+        resource_digests[actor] = resource_digest
+    resource_schema = (
+        "hegel-phase3a-q1-full-node6-container-resource-evidence/1"
+    )
+    python_rows = resource_values["python"].get("rows")
+    rust_rows = resource_values["rust"].get("rows")
+    aggregate_rows = resource_values["aggregate"].get("rows")
+    if (
+        resource_values["python"].get("schema_version") != resource_schema
+        or resource_values["rust"].get("schema_version") != resource_schema
+        or resource_values["aggregate"].get("schema_version")
+        != resource_schema
+        or type(python_rows) is not list
+        or len(python_rows) != resource_expected["python"]["row_count"]
+        or type(rust_rows) is not list
+        or len(rust_rows) != resource_expected["rust"]["row_count"]
+        or type(aggregate_rows) is not list
+        or len(aggregate_rows) != resource_expected["aggregate"]["row_count"]
+        or aggregate_rows != python_rows + rust_rows
+        or type(python_rows[0]) is not dict
+        or type(rust_rows[0]) is not dict
+    ):
+        _terminal(
+            "SUPERSEDED_CAMPAIGN_RESOURCE_EVIDENCE_DIFFERS",
+            "per-endpoint and aggregate resource rows differ",
+        )
+    python_row = python_rows[0]
+    rust_row = rust_rows[0]
+    if (
+        python_row.get("actor_id")
+        != resource_expected["python"]["actor_id"]
+        or python_row.get("actor_command_return_code")
+        != resource_expected["python"]["actor_command_return_code"]
+        or python_row.get("endpoint_sequence_ordinal")
+        != resource_expected["python"]["endpoint_sequence_ordinal"]
+        or rust_row.get("actor_id") != resource_expected["rust"]["actor_id"]
+        or rust_row.get("actor_command_return_code")
+        != resource_expected["rust"]["actor_command_return_code"]
+        or rust_row.get("endpoint_sequence_ordinal")
+        != resource_expected["rust"]["endpoint_sequence_ordinal"]
+        or [python_row.get("actor_id"), rust_row.get("actor_id")]
+        != resource_expected["aggregate"]["actor_order"]
+        or python_row.get("maximum_concurrently_live_endpoint_containers")
+        != resource_expected["aggregate"][
+            "maximum_concurrently_live_endpoint_containers"
+        ]
+        or rust_row.get("maximum_concurrently_live_endpoint_containers")
+        != resource_expected["aggregate"][
+            "maximum_concurrently_live_endpoint_containers"
+        ]
+    ):
+        _terminal(
+            "SUPERSEDED_CAMPAIGN_RESOURCE_EVIDENCE_DIFFERS",
+            "resource actor, return-code, ordinal or live-count differs",
+        )
+    python_start = python_row.get("measurement_interval_start_monotonic_ns")
+    python_exit = python_row.get("container_exit_monotonic_ns")
+    rust_start = rust_row.get("measurement_interval_start_monotonic_ns")
+    rust_exit = rust_row.get("container_exit_monotonic_ns")
+    if (
+        any(
+            type(item) is not int
+            for item in (python_start, python_exit, rust_start, rust_exit)
+        )
+        or not (python_start < python_exit <= rust_start < rust_exit)
+        or python_row.get("predecessor_container_exit_monotonic_ns") is not None
+        or rust_row.get("predecessor_container_exit_monotonic_ns")
+        != python_exit
+        or resource_expected["aggregate"]["measurement_intervals_overlap"]
+        is not False
+    ):
+        _terminal(
+            "SUPERSEDED_CAMPAIGN_RESOURCE_EVIDENCE_DIFFERS",
+            "strict Python-then-Rust non-overlap evidence differs",
+        )
+
+    scratch_expected = expected["scratch_cleanup"]
+    scratch_value, scratch_digest, _ = read_bound_json(
+        scratch_expected["path"],
+        "superseded campaign scratch cleanup",
+        scratch_expected["file_sha256"],
+    )
+    expected_scratch_rows = [
+        {
+            "host_path": os.fspath(
+                Path(str(expected["python_endpoint_failure"]["stdout_path"])).parent
+                / "python-scratch"
+            ),
+            "root_absent_after_cleanup": True,
+        },
+        {
+            "host_path": os.fspath(
+                Path(str(expected["rust_endpoint_failure"]["stdout_path"])).parent
+                / "rust-scratch"
+            ),
+            "root_absent_after_cleanup": True,
+        },
+    ]
+    if scratch_value != {
+        "failure_rows": scratch_expected["failure_rows"],
+        "rows": expected_scratch_rows,
+        "schema_version": "hegel-phase3a-q1-full-node6-scratch-cleanup/1",
+        "terminal_absence_proved": scratch_expected[
+            "terminal_absence_proved"
+        ],
+    }:
+        _terminal(
+            "SUPERSEDED_CAMPAIGN_SCRATCH_CLEANUP_DIFFERS",
+            "scratch terminal-absence evidence differs",
+        )
     return {
         "capsule_digest": value["capsule_digest"],
         "consumed_ledger_file_sha256": consumed_raw_digest,
@@ -648,10 +976,27 @@ def _superseded_campaign_gate(contract: Mapping[str, Any]) -> dict[str, object]:
         "python_odd_measurement_count": python_starts,
         "rust_odd_measurement_count": rust_starts,
         "sink_measurement_count": host_replay_starts,
+        "campaign_execution_count": outcome["campaign_execution_count"],
+        "authorization_consumption_count": outcome[
+            "authorization_consumption_count"
+        ],
+        "supervisor_popen_count": outcome["supervisor_popen_count"],
+        "supervisor_return_code": outcome["supervisor_return_code"],
+        "supervisor_replay_passed": outcome["supervisor_replay_passed"],
+        "supervisor_stdout_file_sha256": supervisor_stdout_digest,
+        "supervisor_stderr_file_sha256": supervisor_stderr_digest,
+        "endpoint_failures": endpoint_receipts,
+        "resource_evidence_file_sha256": resource_digests,
+        "scratch_cleanup_file_sha256": scratch_digest,
+        "scratch_terminal_absence_proved": scratch_value[
+            "terminal_absence_proved"
+        ],
+        "postconsumption_cleanup": outcome["postconsumption_cleanup"],
         "outcome_digest": body["outcome_digest"],
         "outcome_file_sha256": outcome_file_digest,
         "q1_gate_count": 0,
         "q1_gate_mask": 0,
+        "q1_output_slots": [None] * 8,
         "q1_state": "NOT_RUN",
         "retry_or_resume_allowed": False,
         "terminal_ledger_file_sha256": raw_digest,

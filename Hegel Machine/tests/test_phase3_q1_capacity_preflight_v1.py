@@ -182,6 +182,123 @@ def test_late_lower_depth_rewrite_reopens_same_depth_until_zero_delta(
     assert first_identity != successor_identity
 
 
+def test_rewrite_collapse_inserts_canonical_behavior_not_raw_bottom_alias(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    limits = preflight.PreflightLimitsV1(
+        maximum_ast_depth=2,
+        maximum_ast_node_count=5,
+    )
+    state = preflight._State(preflight.production_universe_v1(1), limits)
+    partial_ast = preflight.canonicalize_shrink6_source_ast(
+        ("bit_to_scalar", ("bit_at", 7))
+    )
+    partial_behavior = preflight.evaluate_canonical_ast_on_environments_v1(
+        partial_ast,
+        state.environments,
+    )
+    partial = preflight._Program(
+        partial_ast,
+        partial_behavior,
+        preflight._behavior_key(partial_ast.metrics.output_sort, partial_behavior),
+    )
+    partial_source = preflight._canonical_node_to_source(partial.node)
+    candidate = preflight._Candidate(
+        operator_code=0x2001,
+        source_ast=("difference", partial_source, partial_source),
+        expected_node=(2, 1, partial.node, partial.node),
+        children=(partial, partial),
+    )
+    zero_ast = preflight.canonicalize_shrink6_source_ast(candidate.source_ast)
+    canonical_behavior = preflight.evaluate_canonical_ast_on_environments_v1(
+        zero_ast,
+        state.environments,
+    )
+    raw_behavior = preflight._apply_candidate_vector(candidate)
+
+    assert partial_ast.metrics.node_count == 2
+    assert 1 + 2 * partial_ast.metrics.node_count == 5
+    assert zero_ast.value[1] == (0, 0, 3)
+    assert sum(value is preflight._adapter.BOTTOM for value in raw_behavior) == 224
+    assert not any(
+        value is preflight._adapter.BOTTOM for value in canonical_behavior
+    )
+    assert raw_behavior != canonical_behavior
+
+    state.insert(zero_ast, canonical_behavior, current_depth=0)
+    state.insert(partial_ast, partial_behavior, current_depth=1)
+
+    def candidates(programs, *, target_depth, limits):
+        del limits
+        assert target_depth == 2
+        assert {program.ast.cbor_bytes for program in programs} == {
+            zero_ast.cbor_bytes,
+            partial_ast.cbor_bytes,
+        }
+        yield candidate
+
+    monkeypatch.setattr(preflight, "_operator_candidates", candidates)
+
+    state.expand_depth(2)
+
+    programs = state.bank_programs()
+    by_ast = {program.ast.cbor_bytes: program for program in programs}
+    vector_key = state._candidate_vector_key(candidate)
+    assert len(programs) == len(by_ast) == 2
+    assert by_ast[zero_ast.cbor_bytes].behavior == canonical_behavior
+    assert state.vector_cache[vector_key] == raw_behavior
+    assert (state.raw_count, state.strict_count, state.rewrite_count) == (1, 1, 1)
+    assert (
+        len(state.vector_cache),
+        state.vector_cache_hits,
+        state.vector_cache_misses,
+    ) == (1, 0, 1)
+    assert len(state.barriers) == 1
+    assert (
+        state.barriers[0].eligible_raw_application_count,
+        state.barriers[0].strict_admitted_application_count,
+        state.barriers[0].rewrite_collapse_count,
+        state.barriers[0].continuation_bank_mutation_count,
+    ) == (1, 1, 1, 0)
+
+
+def test_bank_alias_error_reports_bounded_identity_context() -> None:
+    state = preflight._State(
+        preflight.production_universe_v1(1),
+        preflight.PreflightLimitsV1(maximum_ast_node_count=3),
+    )
+    zero_ast = preflight.canonicalize_shrink6_source_ast(("scalar_const", 0, 1))
+    canonical_behavior = preflight.evaluate_canonical_ast_on_environments_v1(
+        zero_ast,
+        state.environments,
+    )
+    alias_behavior = (preflight._adapter.BOTTOM,) + canonical_behavior[1:]
+    canonical_key = preflight._behavior_key(
+        zero_ast.metrics.output_sort,
+        canonical_behavior,
+    )
+    alias_key = preflight._behavior_key(
+        zero_ast.metrics.output_sort,
+        alias_behavior,
+    )
+    state.insert(zero_ast, canonical_behavior, current_depth=0)
+    state.insert(zero_ast, alias_behavior, current_depth=1)
+
+    with pytest.raises(preflight.Q1CapacityPreflightError) as caught:
+        state.bank_programs()
+
+    assert caught.value.code == preflight.FAIL_PREFLIGHT_BEHAVIOR
+    assert caught.value.detail == (
+        "one AST has two behaviors: "
+        "input_signature_id=1, "
+        f"ast_digest={zero_ast.hash_id}, "
+        "ast_depth=0, "
+        f"prior_behavior_key_sha256=sha256:{sha256(canonical_key).hexdigest()}, "
+        f"current_behavior_key_sha256=sha256:{sha256(alias_key).hexdigest()}, "
+        "classes=2, cohorts=2, bank=2"
+    )
+
+
 def test_depth_snapshot_rejects_future_depth_representative(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
