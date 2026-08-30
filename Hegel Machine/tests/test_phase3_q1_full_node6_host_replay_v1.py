@@ -122,7 +122,7 @@ def _formal_projection(seed: int) -> dict[str, object]:
 
 def _partition(signature_id: int, elapsed: int) -> dict[str, object]:
     raw = 1000 + signature_id
-    strict = 900 + signature_id
+    strict = raw
     rewrite = 20 + signature_id
     return {
         "diagnostic_state_projection": _projection(signature_id),
@@ -139,6 +139,62 @@ def _partition(signature_id: int, elapsed: int) -> dict[str, object]:
             "zero_eligible_record_count": 5,
         },
         "depth_barriers": [
+            {
+                "barrier_kind": "LEAF_SEED",
+                "behavior_class_count_after_barrier": 20,
+                "continuation_bank_mutation_count": 50,
+                "continuation_bank_point_count_after_barrier": 50,
+                "depth": 0,
+                "eligible_raw_application_count": 810,
+                "new_behavior_class_count": 20,
+                "new_signature_cohort_count": 40,
+                "rewrite_collapse_count": 0,
+                "signature_cohort_count_after_barrier": 40,
+                "strict_admitted_application_count": 810,
+                "visible_frontier_point_count_after_barrier": 30,
+            },
+            {
+                "barrier_kind": "CONSTRUCTION_DEPTH",
+                "behavior_class_count_after_barrier": 40 + signature_id,
+                "continuation_bank_mutation_count": 50 + signature_id,
+                "continuation_bank_point_count_after_barrier": 100 + signature_id,
+                "depth": 1,
+                "eligible_raw_application_count": raw - 810,
+                "new_behavior_class_count": 20 + signature_id,
+                "new_signature_cohort_count": 40 + signature_id,
+                "rewrite_collapse_count": rewrite,
+                "signature_cohort_count_after_barrier": 80 + signature_id,
+                "strict_admitted_application_count": raw - 810,
+                "visible_frontier_point_count_after_barrier": 50 + signature_id,
+            },
+            {
+                "barrier_kind": "CONSTRUCTION_DEPTH",
+                "behavior_class_count_after_barrier": 40 + signature_id,
+                "continuation_bank_mutation_count": 0,
+                "continuation_bank_point_count_after_barrier": 100 + signature_id,
+                "depth": 2,
+                "eligible_raw_application_count": 0,
+                "new_behavior_class_count": 0,
+                "new_signature_cohort_count": 0,
+                "rewrite_collapse_count": 0,
+                "signature_cohort_count_after_barrier": 80 + signature_id,
+                "strict_admitted_application_count": 0,
+                "visible_frontier_point_count_after_barrier": 50 + signature_id,
+            },
+            {
+                "barrier_kind": "CONSTRUCTION_DEPTH",
+                "behavior_class_count_after_barrier": 40 + signature_id,
+                "continuation_bank_mutation_count": 0,
+                "continuation_bank_point_count_after_barrier": 100 + signature_id,
+                "depth": 3,
+                "eligible_raw_application_count": 0,
+                "new_behavior_class_count": 0,
+                "new_signature_cohort_count": 0,
+                "rewrite_collapse_count": 0,
+                "signature_cohort_count_after_barrier": 80 + signature_id,
+                "strict_admitted_application_count": 0,
+                "visible_frontier_point_count_after_barrier": 50 + signature_id,
+            },
             {
                 "barrier_kind": "STRUCTURAL_BOUNDARY",
                 "behavior_class_count_after_barrier": 40 + signature_id,
@@ -195,7 +251,7 @@ def _partition(signature_id: int, elapsed: int) -> dict[str, object]:
         "peak_saturation_round_count": 5,
         "peak_visible_frontier_point_count": 50 + signature_id,
         "peak_visible_frontier_points_per_class": 2,
-        "peak_work_queue_points": 700,
+        "peak_work_queue_points": 1000,
         "raw_operator_application_count": raw,
         "resource_guard_id": None,
         "resource_guard_name": None,
@@ -212,7 +268,7 @@ def _partition(signature_id: int, elapsed: int) -> dict[str, object]:
         "universe_row_count": 480 if signature_id == 1 else 85,
         "vector_cache_entry_count": 100,
         "vector_cache_hit_count": 20,
-        "vector_cache_miss_count": 80,
+        "vector_cache_miss_count": 100,
         "visible_frontier_point_count": 50 + signature_id,
     }
 
@@ -298,6 +354,7 @@ def _guard_diagnostic(actor_id: str) -> dict[str, object]:
     row["diagnostic_state_projection"] = None
     row["formal_wire_projection"] = None
     row["fixed_point"] = None
+    row["depth_barriers"] = row["depth_barriers"][:2]
     return value
 
 
@@ -323,6 +380,7 @@ def _sink_guard_diagnostic(actor_id: str) -> dict[str, object]:
     sink["traversal_closed"] = False
     sink["resource_guard_id"] = 1
     sink["resource_guard_name"] = "RAW_OPERATOR_APPLICATIONS"
+    sink["depth_barriers"] = sink["depth_barriers"][:2]
     return value
 
 
@@ -407,11 +465,18 @@ def _run_spec(tmp_path: Path) -> supervisor.SupervisorRunSpecV1:
     )
 
 
-def test_host_replays_sidecars_and_ignores_only_endpoint_identity_and_time(tmp_path: Path) -> None:
+def test_host_replays_sidecars_and_ignores_endpoint_identity_time_and_mutation_history(
+    tmp_path: Path,
+) -> None:
     python_root = tmp_path / "python"
     rust_root = tmp_path / "rust"
-    python_stdout = _write_bundle(python_root, _diagnostic("PYTHON_ENDPOINT"))
-    rust_stdout = _write_bundle(rust_root, _diagnostic("RUST_ENDPOINT", 1000))
+    python_diagnostic = _diagnostic("PYTHON_ENDPOINT")
+    rust_diagnostic = _diagnostic("RUST_ENDPOINT", 1000)
+    rust_diagnostic["partitions"][0]["depth_barriers"][1][
+        "continuation_bank_mutation_count"
+    ] += 7
+    python_stdout = _write_bundle(python_root, python_diagnostic)
+    rust_stdout = _write_bundle(rust_root, rust_diagnostic)
     result = host.replay_dual_endpoints_v1(
         python_stdout,
         python_root,
@@ -430,6 +495,214 @@ def test_host_replays_sidecars_and_ignores_only_endpoint_identity_and_time(tmp_p
     ]
     assert result["projected_host_replay_output_bytes"] == 1_048_576
     assert result["projected_peak_host_replay_scratch_bytes"] == 0
+    assert result["schedule_high_water_aggregation"] == {
+        "peak_saturation_round_count_across_endpoints_and_signatures": 5,
+        "peak_work_queue_points_by_input_signature": [1000, 1000],
+    }
+
+
+def test_host_validates_endpoint_mutation_history_before_excluding_it(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "python"
+    diagnostic = _diagnostic("PYTHON_ENDPOINT")
+    diagnostic["partitions"][0]["depth_barriers"][0][
+        "continuation_bank_mutation_count"
+    ] = -1
+    stdout = _write_bundle(root, diagnostic)
+    with pytest.raises(host.FullNode6HostReplayError) as caught:
+        host.replay_endpoint_v1(
+            "PYTHON_ENDPOINT",
+            stdout,
+            root,
+            expected_capsule_digest=CAPSULE,
+            expected_source_commit=COMMIT,
+        )
+    assert caught.value.code == "FAIL_FULL_NODE6_HOST_SEMANTICS"
+
+
+def test_host_rejects_endpoint_local_barrier_transition_inconsistency(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "python"
+    diagnostic = _diagnostic("PYTHON_ENDPOINT")
+    diagnostic["partitions"][0]["depth_barriers"][1][
+        "continuation_bank_mutation_count"
+    ] = 0
+    stdout = _write_bundle(root, diagnostic)
+    with pytest.raises(host.FullNode6HostReplayError) as caught:
+        host.replay_endpoint_v1(
+            "PYTHON_ENDPOINT",
+            stdout,
+            root,
+            expected_capsule_digest=CAPSULE,
+            expected_source_commit=COMMIT,
+        )
+    assert caught.value.code == "FAIL_FULL_NODE6_HOST_FIXED_POINT"
+
+
+def test_host_rejects_structural_boundary_frontier_change(tmp_path: Path) -> None:
+    root = tmp_path / "python"
+    diagnostic = _diagnostic("PYTHON_ENDPOINT")
+    partition = diagnostic["partitions"][0]
+    partition["visible_frontier_point_count"] += 1
+    partition["peak_visible_frontier_point_count"] += 1
+    partition["depth_barriers"][-1][
+        "visible_frontier_point_count_after_barrier"
+    ] += 1
+    stdout = _write_bundle(root, diagnostic)
+    with pytest.raises(host.FullNode6HostReplayError) as caught:
+        host.replay_endpoint_v1(
+            "PYTHON_ENDPOINT",
+            stdout,
+            root,
+            expected_capsule_digest=CAPSULE,
+            expected_source_commit=COMMIT,
+        )
+    assert caught.value.code == "FAIL_FULL_NODE6_HOST_FIXED_POINT"
+
+
+def test_host_rejects_guard_with_complete_structural_boundary(tmp_path: Path) -> None:
+    root = tmp_path / "python"
+    diagnostic = _guard_diagnostic("PYTHON_ENDPOINT")
+    diagnostic["partitions"][0]["depth_barriers"] = _diagnostic(
+        "PYTHON_ENDPOINT"
+    )["partitions"][0]["depth_barriers"]
+    stdout = _write_bundle(root, diagnostic)
+    with pytest.raises(host.FullNode6HostReplayError) as caught:
+        host.replay_endpoint_v1(
+            "PYTHON_ENDPOINT",
+            stdout,
+            root,
+            expected_capsule_digest=CAPSULE,
+            expected_source_commit=COMMIT,
+        )
+    assert caught.value.code == "FAIL_FULL_NODE6_HOST_FIXED_POINT"
+
+
+def test_host_rejects_self_consistent_nonfrozen_depth_limit(tmp_path: Path) -> None:
+    root = tmp_path / "python"
+    diagnostic = _diagnostic("PYTHON_ENDPOINT")
+    diagnostic["partitions"][0]["limits"]["maximum_ast_depth"] = 4
+    stdout = _write_bundle(root, diagnostic)
+    with pytest.raises(host.FullNode6HostReplayError) as caught:
+        host.replay_endpoint_v1(
+            "PYTHON_ENDPOINT",
+            stdout,
+            root,
+            expected_capsule_digest=CAPSULE,
+            expected_source_commit=COMMIT,
+        )
+    assert caught.value.code == "FAIL_FULL_NODE6_HOST_FIXED_POINT"
+
+
+def test_host_keeps_frontier_high_water_in_cross_endpoint_identity(
+    tmp_path: Path,
+) -> None:
+    python_root = tmp_path / "python"
+    rust_root = tmp_path / "rust"
+    python_stdout = _write_bundle(python_root, _diagnostic("PYTHON_ENDPOINT"))
+    rust_diagnostic = _diagnostic("RUST_ENDPOINT")
+    rust_diagnostic["partitions"][1]["peak_visible_frontier_points_per_class"] += 1
+    rust_stdout = _write_bundle(rust_root, rust_diagnostic)
+    with pytest.raises(host.FullNode6HostReplayError) as caught:
+        host.replay_dual_endpoints_v1(
+            python_stdout,
+            python_root,
+            rust_stdout,
+            rust_root,
+            expected_capsule_digest=CAPSULE,
+            expected_source_commit=COMMIT,
+        )
+    assert caught.value.code == "FAIL_FULL_NODE6_HOST_DUAL_DISAGREEMENT"
+
+
+def test_host_aggregates_legal_schedule_high_water_drift(tmp_path: Path) -> None:
+    python_root = tmp_path / "python"
+    rust_root = tmp_path / "rust"
+    python_diagnostic = _diagnostic("PYTHON_ENDPOINT")
+    rust_diagnostic = _diagnostic("RUST_ENDPOINT")
+    rust_diagnostic["partitions"][0]["peak_work_queue_points"] = 1100
+    rust_diagnostic["partitions"][1]["peak_saturation_round_count"] = 7
+    python_stdout = _write_bundle(python_root, python_diagnostic)
+    rust_stdout = _write_bundle(rust_root, rust_diagnostic)
+    result = host.replay_dual_endpoints_v1(
+        python_stdout,
+        python_root,
+        rust_stdout,
+        rust_root,
+        expected_capsule_digest=CAPSULE,
+        expected_source_commit=COMMIT,
+    )
+    assert result["schedule_high_water_aggregation"] == {
+        "peak_saturation_round_count_across_endpoints_and_signatures": 7,
+        "peak_work_queue_points_by_input_signature": [1100, 1000],
+    }
+
+
+def test_host_rejects_work_queue_high_water_above_frozen_limit(
+    tmp_path: Path,
+) -> None:
+    for index, factory in enumerate((_diagnostic, _guard_diagnostic), 1):
+        root = tmp_path / f"case-{index}"
+        diagnostic = factory("PYTHON_ENDPOINT")
+        diagnostic["partitions"][0]["peak_work_queue_points"] = 67_108_865
+        stdout = _write_bundle(root, diagnostic)
+        with pytest.raises(host.FullNode6HostReplayError) as caught:
+            host.replay_endpoint_v1(
+                "PYTHON_ENDPOINT",
+                stdout,
+                root,
+                expected_capsule_digest=CAPSULE,
+                expected_source_commit=COMMIT,
+            )
+        assert caught.value.code == "FAIL_FULL_NODE6_HOST_FIXED_POINT"
+
+
+def test_host_rejects_saturation_round_high_water_above_frozen_limit(
+    tmp_path: Path,
+) -> None:
+    for index, factory in enumerate((_diagnostic, _guard_diagnostic), 1):
+        root = tmp_path / f"case-{index}"
+        diagnostic = factory("PYTHON_ENDPOINT")
+        diagnostic["partitions"][0]["peak_saturation_round_count"] = 17
+        stdout = _write_bundle(root, diagnostic)
+        with pytest.raises(host.FullNode6HostReplayError) as caught:
+            host.replay_endpoint_v1(
+                "PYTHON_ENDPOINT",
+                stdout,
+                root,
+                expected_capsule_digest=CAPSULE,
+                expected_source_commit=COMMIT,
+            )
+        assert caught.value.code == "FAIL_FULL_NODE6_HOST_FIXED_POINT"
+
+
+def test_supervisor_recomputes_host_schedule_high_water_aggregation(
+    tmp_path: Path,
+) -> None:
+    python_root = tmp_path / "python"
+    rust_root = tmp_path / "rust"
+    python_stdout = _write_bundle(python_root, _diagnostic("PYTHON_ENDPOINT"))
+    rust_stdout = _write_bundle(rust_root, _diagnostic("RUST_ENDPOINT"))
+    result = host.replay_dual_endpoints_v1(
+        python_stdout,
+        python_root,
+        rust_stdout,
+        rust_root,
+        expected_capsule_digest=CAPSULE,
+        expected_source_commit=COMMIT,
+    )
+    result["schedule_high_water_aggregation"][
+        "peak_work_queue_points_by_input_signature"
+    ] = [0]
+    with pytest.raises(supervisor.FullNode6SupervisorError) as caught:
+        supervisor._validate_host_replay_result_v1(
+            host.canonical_json_line_v1(result),
+            capsule_digest=CAPSULE,
+            source_commit=COMMIT,
+        )
+    assert caught.value.code == "FAIL_FULL_NODE6_SUPERVISOR_HOST_REPLAY_WIRE"
 
 
 def test_host_rejects_one_semantic_count_difference(tmp_path: Path) -> None:
@@ -438,6 +711,12 @@ def test_host_rejects_one_semantic_count_difference(tmp_path: Path) -> None:
     python_stdout = _write_bundle(python_root, _diagnostic("PYTHON_ENDPOINT"))
     rust_diagnostic = _diagnostic("RUST_ENDPOINT")
     rust_diagnostic["partitions"][0]["behavior_class_count"] += 1
+    rust_diagnostic["partitions"][0]["peak_behavior_class_count"] += 1
+    rust_diagnostic["partitions"][0]["depth_barriers"][1][
+        "new_behavior_class_count"
+    ] += 1
+    for barrier in rust_diagnostic["partitions"][0]["depth_barriers"][1:]:
+        barrier["behavior_class_count_after_barrier"] += 1
     rust_stdout = _write_bundle(rust_root, rust_diagnostic)
     with pytest.raises(host.FullNode6HostReplayError) as caught:
         host.replay_dual_endpoints_v1(
@@ -522,6 +801,31 @@ def test_host_accepts_saturated_odd_then_sink_guard_only_when_entire_prefix_is_n
         )
     assert caught.value.code == "FAIL_FULL_NODE6_HOST_GUARD_PREFIX"
     assert result["q1_state"] == "NOT_RUN"
+
+
+def test_sink_guard_still_validates_the_prior_saturated_partition(
+    tmp_path: Path,
+) -> None:
+    python_root = tmp_path / "python"
+    rust_root = tmp_path / "rust"
+    python_diagnostic = _sink_guard_diagnostic("PYTHON_ENDPOINT")
+    rust_diagnostic = _sink_guard_diagnostic("RUST_ENDPOINT")
+    for diagnostic in (python_diagnostic, rust_diagnostic):
+        diagnostic["partitions"][0]["depth_barriers"][-1][
+            "continuation_bank_mutation_count"
+        ] = 123
+    python_stdout = _write_bundle(python_root, python_diagnostic)
+    rust_stdout = _write_bundle(rust_root, rust_diagnostic)
+    with pytest.raises(host.FullNode6HostReplayError) as caught:
+        host.replay_dual_endpoints_v1(
+            python_stdout,
+            python_root,
+            rust_stdout,
+            rust_root,
+            expected_capsule_digest=CAPSULE,
+            expected_source_commit=COMMIT,
+        )
+    assert caught.value.code == "FAIL_FULL_NODE6_HOST_FIXED_POINT"
 
 
 def test_host_rejects_sidecar_byte_change(tmp_path: Path) -> None:

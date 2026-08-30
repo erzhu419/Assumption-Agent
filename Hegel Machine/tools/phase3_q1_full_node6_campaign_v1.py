@@ -468,6 +468,19 @@ def _superseded_campaign_gate(contract: Mapping[str, Any]) -> dict[str, object]:
         if type(consumed_capsule) is dict
         else None
     )
+    unsigned_capsule = (
+        dict(consumed_capsule) if type(consumed_capsule) is dict else {}
+    )
+    observed_capsule_digest = unsigned_capsule.pop("capsule_digest", None)
+    unsigned_authorization = (
+        dict(consumed_authorization)
+        if type(consumed_authorization) is dict
+        else {}
+    )
+    observed_authorization_digest = unsigned_authorization.pop(
+        "authorization_digest",
+        None,
+    )
     if (
         consumed_raw_digest != expected["consumed_ledger_file_sha256"]
         or consumed.get("record_digest")
@@ -484,14 +497,27 @@ def _superseded_campaign_gate(contract: Mapping[str, Any]) -> dict[str, object]:
         or consumed.get("previous_record_digest_or_null") is not None
         or type(consumed_capsule) is not dict
         or consumed_capsule.get("capsule_digest") != expected["capsule_digest"]
+        or observed_capsule_digest != expected["capsule_digest"]
+        or _core.domain_digest_v1(_core.DOMAINS["capsule"], unsigned_capsule)
+        != observed_capsule_digest
         or consumed_capsule.get("source_commit") != expected["source_commit"]
         or consumed_capsule.get("source_tree") != expected["source_tree"]
         or consumed_capsule.get("source_closure_digest")
         != expected["source_closure_digest"]
         or consumed_capsule.get("contract_digest") != expected["contract_digest"]
         or type(consumed_authorization) is not dict
+        or consumed_authorization.get("schema_version")
+        != expected["authorization_schema_version"]
+        or consumed_authorization.get("authorization_text")
+        != expected["authorization_text"]
         or consumed_authorization.get("authorization_digest")
         != expected["authorization_digest"]
+        or observed_authorization_digest != expected["authorization_digest"]
+        or _core.domain_digest_v1(
+            b"HEGEL/Q1/FULL_NODE6/AUTHORIZATION/SUCCESSOR_V5/V1\x00",
+            unsigned_authorization,
+        )
+        != observed_authorization_digest
     ):
         _terminal(
             "SUPERSEDED_CAMPAIGN_CONSUMED_DIFFERS",
@@ -680,7 +706,10 @@ def _superseded_campaign_gate(contract: Mapping[str, Any]) -> dict[str, object]:
         ("SCRATCH_CLEANUP", "STARTED"),
         ("SCRATCH_CLEANUP", "COMPLETED"),
         ("ENDPOINT_SEQUENCE", "COMPLETED"),
-        ("ENDPOINT_SEQUENCE", "FAILED"),
+        ("ENDPOINT_OUTPUT_SEAL", "STARTED"),
+        ("ENDPOINT_OUTPUT_SEAL", "COMPLETED"),
+        ("TRUSTED_HOST_REPLAY", "STARTED"),
+        ("TRUSTED_HOST_REPLAY", "FAILED"),
         ("MEASUREMENT_AND_REPLAY", "FAILED"),
         ("TERMINAL", "FAILED"),
     )
@@ -749,6 +778,12 @@ def _superseded_campaign_gate(contract: Mapping[str, Any]) -> dict[str, object]:
         or host_replay_starts != expected["trusted_host_replay_start_count"]
         or python_starts + rust_starts
         != expected["measurement_endpoint_start_count"]
+        or python_starts != expected["python_odd_measurement_count"]
+        or python_starts != expected["python_sink_measurement_count"]
+        or rust_starts != expected["rust_odd_measurement_count"]
+        or rust_starts != expected["rust_sink_measurement_count"]
+        or host_replay_starts
+        != expected["trusted_host_replay_measurement_count"]
     ):
         _terminal(
             "SUPERSEDED_CAMPAIGN_TRAJECTORY_DIFFERS",
@@ -758,28 +793,29 @@ def _superseded_campaign_gate(contract: Mapping[str, Any]) -> dict[str, object]:
     rust_completed = events[24]
     scratch_completed = events[26]
     sequence_completed = events[27]
-    sequence_failed = events[28]
-    measurement_failed = events[29]
-    terminal_failed = events[30]
+    host_failed = events[31]
+    measurement_failed = events[32]
+    terminal_failed = events[33]
     failure_detail = f'{expected["error_code"]}: {expected["error_detail"]}'
     if (
         python_completed.get("return_code_or_null")
-        != expected["python_endpoint_failure"]["return_code"]
+        != expected["endpoint_results"]["python"]["return_code"]
         or python_completed.get("command_artifact_path_or_null")
         != expected["resource_evidence"]["python"]["path"]
         or rust_completed.get("return_code_or_null")
-        != expected["rust_endpoint_failure"]["return_code"]
+        != expected["endpoint_results"]["rust"]["return_code"]
         or rust_completed.get("command_artifact_path_or_null")
         != expected["resource_evidence"]["rust"]["path"]
         or scratch_completed.get("command_artifact_path_or_null")
         != expected["scratch_cleanup"]["path"]
         or sequence_completed.get("return_code_or_null")
-        != expected["supervisor_return_code"]
+        != 0
         or sequence_completed.get("command_artifact_path_or_null")
         != expected["resource_evidence"]["aggregate"]["path"]
         or sequence_completed.get("detail_or_null")
-        != "python_return_code=1;rust_return_code=1"
-        or sequence_failed.get("detail_or_null") != failure_detail
+        != "python_return_code=0;rust_return_code=0"
+        or host_failed.get("return_code_or_null") is not None
+        or host_failed.get("detail_or_null") != failure_detail
         or measurement_failed.get("detail_or_null") != failure_detail
         or terminal_failed.get("decision_or_null")
         != expected["terminal_status"]
@@ -807,7 +843,7 @@ def _superseded_campaign_gate(contract: Mapping[str, Any]) -> dict[str, object]:
 
     endpoint_receipts: dict[str, dict[str, object]] = {}
     for actor in ("python", "rust"):
-        endpoint_expected = expected[f"{actor}_endpoint_failure"]
+        endpoint_expected = expected["endpoint_results"][actor]
         endpoint_stdout, endpoint_stdout_digest, _ = read_bound_json(
             endpoint_expected["stdout_path"],
             f"superseded campaign {actor} endpoint stdout",
@@ -821,32 +857,88 @@ def _superseded_campaign_gate(contract: Mapping[str, Any]) -> dict[str, object]:
         endpoint_stderr_digest = "sha256:" + sha256(
             endpoint_stderr_raw
         ).hexdigest()
+        stdout_summary = endpoint_expected["stdout_summary"]
+        partitions = endpoint_stdout.get("partitions")
         if (
-            endpoint_stdout != endpoint_expected["stdout_object"]
+            any(
+                endpoint_stdout.get(name) != expected_value
+                for name, expected_value in stdout_summary.items()
+            )
             or endpoint_stderr_digest
             != endpoint_expected["stderr_file_sha256"]
             or endpoint_stderr_raw != b""
+            or type(partitions) is not list
+            or len(partitions) != 2
+            or [
+                row.get("input_signature_id")
+                for row in partitions
+                if type(row) is dict
+            ]
+            != [1, 2]
+            or [
+                row.get("terminal_status")
+                for row in partitions
+                if type(row) is dict
+            ]
+            != [_core.SATURATED, _core.SATURATED]
         ):
             _terminal(
                 "SUPERSEDED_CAMPAIGN_ENDPOINT_EVIDENCE_DIFFERS",
-                f"{actor} endpoint failure evidence differs",
+                f"{actor} endpoint saturated evidence differs",
             )
         endpoint_receipts[actor] = {
             "return_code": endpoint_expected["return_code"],
             "stdout_file_sha256": endpoint_stdout_digest,
             "stderr_file_sha256": endpoint_stderr_digest,
-            "error_code": endpoint_stdout["error_code"],
-            "error_detail": endpoint_stdout["error_detail"],
+            "terminal_status": endpoint_stdout["terminal_status"],
+            "actual_preflight_peak_scratch_bytes": endpoint_stdout[
+                "actual_preflight_peak_scratch_bytes"
+            ],
+            "actual_preflight_terminal_live_scratch_bytes": endpoint_stdout[
+                "actual_preflight_terminal_live_scratch_bytes"
+            ],
             "q1_state": endpoint_stdout["q1_state"],
             "q1_gate_count": endpoint_stdout["q1_gate_count"],
             "q1_gate_mask": endpoint_stdout["q1_gate_mask"],
             "q1_output_slots": endpoint_stdout["q1_output_slots"],
         }
 
+    host_expected = expected["trusted_host_replay_failure"]
+    host_stdout, host_stdout_digest, _ = read_bound_json(
+        host_expected["stdout_path"],
+        "superseded campaign trusted host replay stdout",
+        host_expected["stdout_file_sha256"],
+    )
+    host_stderr_raw = _read_regular(
+        Path(str(host_expected["stderr_path"])),
+        "superseded campaign trusted host replay stderr",
+    )
+    host_stderr_digest = "sha256:" + sha256(host_stderr_raw).hexdigest()
+    if (
+        host_stdout != host_expected["stdout_object"]
+        or host_stderr_digest != host_expected["stderr_file_sha256"]
+        or host_stderr_raw.decode("ascii") != host_expected["stderr_text"]
+    ):
+        _terminal(
+            "SUPERSEDED_CAMPAIGN_HOST_REPLAY_EVIDENCE_DIFFERS",
+            "trusted host replay stdout or stderr evidence differs",
+        )
+    host_receipt = {
+        "return_code": host_expected["return_code"],
+        "stdout_file_sha256": host_stdout_digest,
+        "stderr_file_sha256": host_stderr_digest,
+        "error_code": host_stdout["error_code"],
+        "error_detail": host_stdout["error_detail"],
+        "q1_state": host_stdout["q1_state"],
+        "q1_gate_count": host_stdout["q1_gate_count"],
+        "q1_gate_mask": host_stdout["q1_gate_mask"],
+        "q1_output_slots": host_stdout["q1_output_slots"],
+    }
+
     resource_expected = expected["resource_evidence"]
     resource_values: dict[str, dict[str, object]] = {}
     resource_digests: dict[str, str] = {}
-    for actor in ("python", "rust", "aggregate"):
+    for actor in ("python", "rust", "aggregate", "host"):
         actor_expected = resource_expected[actor]
         resource_value, resource_digest, _ = read_bound_json(
             actor_expected["path"],
@@ -861,20 +953,25 @@ def _superseded_campaign_gate(contract: Mapping[str, Any]) -> dict[str, object]:
     python_rows = resource_values["python"].get("rows")
     rust_rows = resource_values["rust"].get("rows")
     aggregate_rows = resource_values["aggregate"].get("rows")
+    host_rows = resource_values["host"].get("rows")
     if (
         resource_values["python"].get("schema_version") != resource_schema
         or resource_values["rust"].get("schema_version") != resource_schema
         or resource_values["aggregate"].get("schema_version")
         != resource_schema
+        or resource_values["host"].get("schema_version") != resource_schema
         or type(python_rows) is not list
         or len(python_rows) != resource_expected["python"]["row_count"]
         or type(rust_rows) is not list
         or len(rust_rows) != resource_expected["rust"]["row_count"]
         or type(aggregate_rows) is not list
         or len(aggregate_rows) != resource_expected["aggregate"]["row_count"]
+        or type(host_rows) is not list
+        or len(host_rows) != resource_expected["host"]["row_count"]
         or aggregate_rows != python_rows + rust_rows
         or type(python_rows[0]) is not dict
         or type(rust_rows[0]) is not dict
+        or type(host_rows[0]) is not dict
     ):
         _terminal(
             "SUPERSEDED_CAMPAIGN_RESOURCE_EVIDENCE_DIFFERS",
@@ -882,18 +979,28 @@ def _superseded_campaign_gate(contract: Mapping[str, Any]) -> dict[str, object]:
         )
     python_row = python_rows[0]
     rust_row = rust_rows[0]
+    host_row = host_rows[0]
     if (
         python_row.get("actor_id")
         != resource_expected["python"]["actor_id"]
+        or resource_expected["python"]["actor_command_return_code"]
+        != expected["endpoint_results"]["python"]["return_code"]
         or python_row.get("actor_command_return_code")
         != resource_expected["python"]["actor_command_return_code"]
         or python_row.get("endpoint_sequence_ordinal")
         != resource_expected["python"]["endpoint_sequence_ordinal"]
         or rust_row.get("actor_id") != resource_expected["rust"]["actor_id"]
+        or resource_expected["rust"]["actor_command_return_code"]
+        != expected["endpoint_results"]["rust"]["return_code"]
         or rust_row.get("actor_command_return_code")
         != resource_expected["rust"]["actor_command_return_code"]
         or rust_row.get("endpoint_sequence_ordinal")
         != resource_expected["rust"]["endpoint_sequence_ordinal"]
+        or host_row.get("actor_id") != resource_expected["host"]["actor_id"]
+        or resource_expected["host"]["actor_command_return_code"]
+        != host_expected["return_code"]
+        or host_row.get("actor_command_return_code")
+        != resource_expected["host"]["actor_command_return_code"]
         or [python_row.get("actor_id"), rust_row.get("actor_id")]
         != resource_expected["aggregate"]["actor_order"]
         or python_row.get("maximum_concurrently_live_endpoint_containers")
@@ -913,12 +1020,28 @@ def _superseded_campaign_gate(contract: Mapping[str, Any]) -> dict[str, object]:
     python_exit = python_row.get("container_exit_monotonic_ns")
     rust_start = rust_row.get("measurement_interval_start_monotonic_ns")
     rust_exit = rust_row.get("container_exit_monotonic_ns")
+    host_start = host_row.get("measurement_interval_start_monotonic_ns")
+    host_exit = host_row.get("container_exit_monotonic_ns")
     if (
         any(
             type(item) is not int
-            for item in (python_start, python_exit, rust_start, rust_exit)
+            for item in (
+                python_start,
+                python_exit,
+                rust_start,
+                rust_exit,
+                host_start,
+                host_exit,
+            )
         )
-        or not (python_start < python_exit <= rust_start < rust_exit)
+        or not (
+            python_start
+            < python_exit
+            <= rust_start
+            < rust_exit
+            <= host_start
+            < host_exit
+        )
         or python_row.get("predecessor_container_exit_monotonic_ns") is not None
         or rust_row.get("predecessor_container_exit_monotonic_ns")
         != python_exit
@@ -939,14 +1062,18 @@ def _superseded_campaign_gate(contract: Mapping[str, Any]) -> dict[str, object]:
     expected_scratch_rows = [
         {
             "host_path": os.fspath(
-                Path(str(expected["python_endpoint_failure"]["stdout_path"])).parent
+                Path(
+                    str(expected["endpoint_results"]["python"]["stdout_path"])
+                ).parent
                 / "python-scratch"
             ),
             "root_absent_after_cleanup": True,
         },
         {
             "host_path": os.fspath(
-                Path(str(expected["rust_endpoint_failure"]["stdout_path"])).parent
+                Path(
+                    str(expected["endpoint_results"]["rust"]["stdout_path"])
+                ).parent
                 / "rust-scratch"
             ),
             "root_absent_after_cleanup": True,
@@ -964,6 +1091,33 @@ def _superseded_campaign_gate(contract: Mapping[str, Any]) -> dict[str, object]:
             "SUPERSEDED_CAMPAIGN_SCRATCH_CLEANUP_DIFFERS",
             "scratch terminal-absence evidence differs",
         )
+    host_scratch_expected = expected["host_replay_scratch_cleanup"]
+    host_scratch_value, host_scratch_digest, _ = read_bound_json(
+        host_scratch_expected["path"],
+        "superseded campaign trusted host replay scratch cleanup",
+        host_scratch_expected["file_sha256"],
+    )
+    expected_host_scratch_rows = [
+        {
+            "host_path": os.fspath(
+                Path(str(host_expected["stdout_path"])).parent
+                / "host-replay-scratch"
+            ),
+            "root_absent_after_cleanup": True,
+        }
+    ]
+    if host_scratch_value != {
+        "failure_rows": host_scratch_expected["failure_rows"],
+        "rows": expected_host_scratch_rows,
+        "schema_version": "hegel-phase3a-q1-full-node6-scratch-cleanup/1",
+        "terminal_absence_proved": host_scratch_expected[
+            "terminal_absence_proved"
+        ],
+    }:
+        _terminal(
+            "SUPERSEDED_CAMPAIGN_HOST_SCRATCH_CLEANUP_DIFFERS",
+            "trusted host replay scratch terminal-absence evidence differs",
+        )
     return {
         "capsule_digest": value["capsule_digest"],
         "consumed_ledger_file_sha256": consumed_raw_digest,
@@ -974,8 +1128,10 @@ def _superseded_campaign_gate(contract: Mapping[str, Any]) -> dict[str, object]:
         "rust_endpoint_start_count": rust_starts,
         "trusted_host_replay_start_count": host_replay_starts,
         "python_odd_measurement_count": python_starts,
+        "python_sink_measurement_count": python_starts,
         "rust_odd_measurement_count": rust_starts,
-        "sink_measurement_count": host_replay_starts,
+        "rust_sink_measurement_count": rust_starts,
+        "trusted_host_replay_measurement_count": host_replay_starts,
         "campaign_execution_count": outcome["campaign_execution_count"],
         "authorization_consumption_count": outcome[
             "authorization_consumption_count"
@@ -985,12 +1141,17 @@ def _superseded_campaign_gate(contract: Mapping[str, Any]) -> dict[str, object]:
         "supervisor_replay_passed": outcome["supervisor_replay_passed"],
         "supervisor_stdout_file_sha256": supervisor_stdout_digest,
         "supervisor_stderr_file_sha256": supervisor_stderr_digest,
-        "endpoint_failures": endpoint_receipts,
+        "endpoint_results": endpoint_receipts,
+        "trusted_host_replay_failure": host_receipt,
         "resource_evidence_file_sha256": resource_digests,
-        "scratch_cleanup_file_sha256": scratch_digest,
+        "scratch_cleanup_file_sha256": {
+            "endpoints": scratch_digest,
+            "trusted_host_replay": host_scratch_digest,
+        },
         "scratch_terminal_absence_proved": scratch_value[
             "terminal_absence_proved"
-        ],
+        ]
+        and host_scratch_value["terminal_absence_proved"],
         "postconsumption_cleanup": outcome["postconsumption_cleanup"],
         "outcome_digest": body["outcome_digest"],
         "outcome_file_sha256": outcome_file_digest,

@@ -835,25 +835,19 @@ impl SpillSorter {
     }
 
     fn finish(mut self) -> Result<SortedRows, EngineError> {
+        // Every nonempty coverage stream is actual projection scratch work,
+        // including streams that never crossed the bounded-buffer threshold.
+        // Flush the final buffer before choosing the empty-input fast path so
+        // the shared tracker observes the same real run that the merge reads.
+        self.flush()?;
         if self.runs.is_empty() {
-            self.buffer.sort();
-            let mut frontier = MerkleFrontier::default();
-            let mut previous: Option<&[u8]> = None;
-            let mut distinct_count = 0_u64;
-            for row in &self.buffer {
-                frontier.push(row);
-                if previous != Some(row.as_slice()) {
-                    distinct_count += 1;
-                    previous = Some(row);
-                }
-            }
+            let frontier = MerkleFrontier::default();
             return Ok(SortedRows {
                 root: frontier.root(),
                 count: frontier.count,
-                distinct_count,
+                distinct_count: 0,
             });
         }
-        self.flush()?;
         let mut readers = self
             .runs
             .iter()
@@ -2527,6 +2521,40 @@ mod tests {
         );
         workspace.cleanup().unwrap();
         assert!(tracker.peak_logical_bytes() > 0);
+        assert_eq!(tracker.require_terminal_empty().unwrap(), 0);
+    }
+
+    #[test]
+    fn final_below_threshold_buffer_uses_tracked_scratch_and_preserves_result() {
+        let tracker = ActualScratchTracker::default();
+        let workspace = ScratchWorkspace::create(None, 101, tracker.clone()).unwrap();
+        let workspace_path = workspace.path.clone();
+        let mut sorter = SpillSorter::new(
+            &workspace.path,
+            tracker.clone(),
+            "final-buffer-kat".to_owned(),
+        );
+        let mut expected = vec![
+            b"zeta".to_vec(),
+            b"alpha".to_vec(),
+            b"alpha".to_vec(),
+            b"middle".to_vec(),
+        ];
+        for row in &expected {
+            sorter.push(row.clone()).unwrap();
+        }
+        assert!(sorter.runs.is_empty(), "fixture must remain below the spill boundary");
+
+        expected.sort();
+        let actual = sorter.finish().unwrap();
+        assert_eq!(actual.count, expected.len() as u64);
+        assert_eq!(actual.root, rfc6962(&expected));
+        assert_eq!(actual.distinct_count, 3);
+        assert!(tracker.peak_logical_bytes() > 0);
+        assert!(std::fs::read_dir(&workspace_path).unwrap().next().is_some());
+
+        workspace.cleanup().unwrap();
+        assert!(!workspace_path.exists());
         assert_eq!(tracker.require_terminal_empty().unwrap(), 0);
     }
 

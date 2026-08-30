@@ -72,11 +72,16 @@ code, and ordered canonical child AST bytes. It repeatedly reads the latest
 prior-depth continuation-bank snapshot and processes only identities not seen
 at that depth. A rewrite that changes a lower-depth bank is retained and makes
 its newly eligible tuples visible to the next bounded saturation batch; an
-empty final scan does not consume a saturation round. Projection-only coverage
-replay sorts application keys, strict-admission rows, and canonical AST rows in
-bounded 1 MiB runs, merges them with an online RFC6962 frontier, and removes
-its transient scratch directory before sidecars are written. Final frozen-v1
-records are encoded through counting/discard: record counts, framed byte
+empty final scan does not consume a saturation round. Unary and ordered binary
+children use the frozen global program order; commutative children use the
+canonical-node hash order, with the same per-pair operator interleaving as the
+Python endpoint. Projection-only coverage replay sorts application keys,
+strict-admission rows, and canonical AST rows in bounded 1 MiB runs, merges
+them with an online RFC6962 frontier, and removes its transient scratch
+directory before sidecars are written. Every nonempty final buffer is flushed
+as a tracked run even when it is smaller than 1 MiB; only an empty stream takes
+the no-scratch empty-root path. Final frozen-v1 records are encoded through
+counting/discard: record counts, framed byte
 counts, chunk and stream commitments, and projected scratch high-water are
 retained, while formal archive payloads are not written.
 

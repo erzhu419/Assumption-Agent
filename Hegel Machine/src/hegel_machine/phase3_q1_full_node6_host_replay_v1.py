@@ -39,6 +39,19 @@ SIDECAR_PATHS: Final = (
 )
 MANIFEST_PATH: Final = "endpoint-manifest-v1.json"
 STREAM_KINDS: Final = ("PROGRAM", "COHORT", "CLASS", "COVERAGE")
+FULL_NODE6_LIMITS: Final = {
+    "maximum_ast_depth": 3,
+    "maximum_ast_node_count": 6,
+    "maximum_behavior_classes": 16_777_216,
+    "maximum_continuation_bank_points": 67_108_864,
+    "maximum_continuation_bank_points_per_class": 65_536,
+    "maximum_raw_operator_applications": 4_294_967_295,
+    "maximum_saturation_rounds": 16,
+    "maximum_visible_frontier_points": 33_554_432,
+    "maximum_visible_frontier_points_per_class": 65_536,
+    "maximum_wall_time_seconds": 172_800,
+    "maximum_work_queue_points": 67_108_864,
+}
 PROJECTION_STREAM_DOMAIN: Final = (
     b"HEGEL/Q1/CAPACITY/PREFLIGHT/COUNTING_DISCARD/V1\x00"
 )
@@ -284,6 +297,20 @@ def _normalize_semantics(value: Mapping[str, object]) -> dict[str, object]:
         for row in partitions:
             if type(row) is dict:
                 row.pop("elapsed_monotonic_ns", None)
+                # Frozen legal endpoint schedules may have different queue and
+                # round high-waters.  They are aggregated explicitly by the
+                # trusted host after endpoint-local validation.
+                row.pop("peak_work_queue_points", None)
+                row.pop("peak_saturation_round_count", None)
+                barriers = row.get("depth_barriers")
+                if type(barriers) is list:
+                    for barrier in barriers:
+                        if type(barrier) is dict:
+                            # The freeze classifies intermediate bank-mutation
+                            # history as an endpoint-local diagnostic.  Each
+                            # endpoint is validated below, but legal frozen
+                            # schedules need not report the same history.
+                            barrier.pop("continuation_bank_mutation_count", None)
     return output
 
 
@@ -457,11 +484,193 @@ def _validate_partition(
         "vector_cache_miss_count",
     ):
         _uint(row.get(key), f"partition {ordinal}.{key}")
+    if (
+        row["peak_work_queue_points"]
+        > FULL_NODE6_LIMITS["maximum_work_queue_points"]
+        or row["peak_saturation_round_count"]
+        > FULL_NODE6_LIMITS["maximum_saturation_rounds"]
+    ):
+        _fail(
+            "FAIL_FULL_NODE6_HOST_FIXED_POINT",
+            f"partition {ordinal} schedule high-water exceeds frozen limits",
+        )
     if row.get("terminal_status") == SUCCESS_STATUS and row.get("traversal_closed") is not True:
         _fail("FAIL_FULL_NODE6_HOST_FIXED_POINT", "saturated partition is not closed")
     barriers = row.get("depth_barriers")
     if type(barriers) is not list or not barriers:
         _fail("FAIL_FULL_NODE6_HOST_FIXED_POINT", "depth barriers missing")
+    limits = row.get("limits")
+    if limits != FULL_NODE6_LIMITS or row.get("full_v16_structural_limits_applied") is not True:
+        _fail(
+            "FAIL_FULL_NODE6_HOST_FIXED_POINT",
+            f"partition {ordinal} frozen full-node6 limits differ",
+        )
+    maximum_depth = 3
+    barrier_uint_fields = (
+        "depth",
+        "eligible_raw_application_count",
+        "strict_admitted_application_count",
+        "rewrite_collapse_count",
+        "new_behavior_class_count",
+        "new_signature_cohort_count",
+        "continuation_bank_mutation_count",
+        "behavior_class_count_after_barrier",
+        "signature_cohort_count_after_barrier",
+        "continuation_bank_point_count_after_barrier",
+        "visible_frontier_point_count_after_barrier",
+    )
+    expected_prefix_kinds = (
+        "LEAF_SEED",
+        *("CONSTRUCTION_DEPTH" for _ in range(maximum_depth)),
+        "STRUCTURAL_BOUNDARY",
+    )
+    if (
+        len(barriers) > len(expected_prefix_kinds)
+        or tuple(barrier.get("depth") for barrier in barriers if type(barrier) is dict)
+        != tuple(range(len(barriers)))
+        or tuple(
+            barrier.get("barrier_kind")
+            for barrier in barriers
+            if type(barrier) is dict
+        )
+        != expected_prefix_kinds[: len(barriers)]
+    ):
+        _fail(
+            "FAIL_FULL_NODE6_HOST_FIXED_POINT",
+            f"partition {ordinal} depth barrier sequence differs",
+        )
+    previous_classes = previous_cohorts = previous_bank = 0
+    for barrier_index, barrier in enumerate(barriers):
+        if type(barrier) is not dict:
+            _fail(
+                "FAIL_FULL_NODE6_HOST_FIXED_POINT",
+                f"partition {ordinal} barrier {barrier_index} type differs",
+            )
+        if barrier.get("barrier_kind") not in (
+            "LEAF_SEED",
+            "CONSTRUCTION_DEPTH",
+            "STRUCTURAL_BOUNDARY",
+        ):
+            _fail(
+                "FAIL_FULL_NODE6_HOST_FIXED_POINT",
+                f"partition {ordinal} barrier {barrier_index} kind differs",
+            )
+        for key in barrier_uint_fields:
+            _uint(
+                barrier.get(key),
+                f"partition {ordinal}.depth_barriers[{barrier_index}].{key}",
+            )
+        if (
+            barrier["strict_admitted_application_count"]
+            != barrier["eligible_raw_application_count"]
+            or barrier["rewrite_collapse_count"]
+            > barrier["strict_admitted_application_count"]
+            or barrier["new_behavior_class_count"]
+            != barrier["behavior_class_count_after_barrier"] - previous_classes
+            or barrier["new_signature_cohort_count"]
+            != barrier["signature_cohort_count_after_barrier"] - previous_cohorts
+            or barrier["continuation_bank_point_count_after_barrier"] < previous_bank
+            or barrier["continuation_bank_mutation_count"]
+            < barrier["continuation_bank_point_count_after_barrier"] - previous_bank
+            or barrier["visible_frontier_point_count_after_barrier"]
+            > barrier["continuation_bank_point_count_after_barrier"]
+        ):
+            _fail(
+                "FAIL_FULL_NODE6_HOST_FIXED_POINT",
+                f"partition {ordinal} barrier {barrier_index} transition differs",
+            )
+        previous_classes = barrier["behavior_class_count_after_barrier"]
+        previous_cohorts = barrier["signature_cohort_count_after_barrier"]
+        previous_bank = barrier["continuation_bank_point_count_after_barrier"]
+    if (
+        row.get("frozen_leaf_count") != 810
+        or barriers[0]["eligible_raw_application_count"] != 810
+        or barriers[0]["rewrite_collapse_count"] != 0
+    ):
+        _fail(
+            "FAIL_FULL_NODE6_HOST_FIXED_POINT",
+            f"partition {ordinal} leaf barrier differs",
+        )
+    row_is_saturated = row.get("terminal_status") == SUCCESS_STATUS
+    if row_is_saturated:
+        terminal_barrier = barriers[-1]
+        prior_barrier = barriers[-2] if len(barriers) >= 2 else None
+        completed_counted_barriers = sum(
+            barrier["barrier_kind"] != "CONSTRUCTION_DEPTH"
+            or barrier["eligible_raw_application_count"] > 0
+            for barrier in barriers
+        )
+        if (
+            len(barriers) != maximum_depth + 2
+            or terminal_barrier["barrier_kind"] != "STRUCTURAL_BOUNDARY"
+            or any(
+                terminal_barrier[key] != 0
+                for key in (
+                    "eligible_raw_application_count",
+                    "strict_admitted_application_count",
+                    "rewrite_collapse_count",
+                    "new_behavior_class_count",
+                    "new_signature_cohort_count",
+                    "continuation_bank_mutation_count",
+                )
+            )
+            or terminal_barrier["behavior_class_count_after_barrier"]
+            != row.get("behavior_class_count")
+            or terminal_barrier["signature_cohort_count_after_barrier"]
+            != row.get("signature_cohort_count")
+            or terminal_barrier["continuation_bank_point_count_after_barrier"]
+            != row.get("continuation_bank_point_count")
+            or terminal_barrier["visible_frontier_point_count_after_barrier"]
+            != row.get("visible_frontier_point_count")
+            or type(prior_barrier) is not dict
+            or any(
+                terminal_barrier[key] != prior_barrier[key]
+                for key in (
+                    "behavior_class_count_after_barrier",
+                    "signature_cohort_count_after_barrier",
+                    "continuation_bank_point_count_after_barrier",
+                    "visible_frontier_point_count_after_barrier",
+                )
+            )
+            or sum(barrier["eligible_raw_application_count"] for barrier in barriers)
+            != row.get("raw_operator_application_count")
+            or sum(
+                barrier["strict_admitted_application_count"] for barrier in barriers
+            )
+            != row.get("strict_admitted_application_count")
+            or sum(barrier["rewrite_collapse_count"] for barrier in barriers)
+            != row.get("rewrite_collapse_count")
+            or row.get("peak_raw_operator_application_count")
+            != row.get("raw_operator_application_count")
+            or row.get("peak_behavior_class_count")
+            != row.get("behavior_class_count")
+            or row.get("peak_visible_frontier_point_count")
+            < row.get("visible_frontier_point_count")
+            or row.get("peak_visible_frontier_points_per_class")
+            < row.get("maximum_frontier_points_per_class")
+            or row.get("peak_continuation_bank_point_count")
+            != row.get("continuation_bank_point_count")
+            or row.get("peak_continuation_bank_points_per_class")
+            != row.get("maximum_bank_points_per_class")
+            or row.get("peak_work_queue_points") < row.get("vector_cache_entry_count")
+            or row.get("peak_work_queue_points")
+            < max(barrier["eligible_raw_application_count"] for barrier in barriers)
+            or row.get("peak_saturation_round_count") < completed_counted_barriers
+            or row.get("vector_cache_entry_count")
+            != row.get("vector_cache_miss_count")
+        ):
+            _fail(
+                "FAIL_FULL_NODE6_HOST_FIXED_POINT",
+                f"partition {ordinal} saturated barrier replay differs",
+            )
+    elif (
+        len(barriers) >= maximum_depth + 2
+        or barriers[-1]["barrier_kind"] == "STRUCTURAL_BOUNDARY"
+    ):
+        _fail(
+            "FAIL_FULL_NODE6_HOST_FIXED_POINT",
+            f"partition {ordinal} guard carried a complete structural boundary",
+        )
     fixed_point = row.get("fixed_point")
     record_set_root = row.get("same_run_record_set_root")
     if projection_material_allowed:
@@ -714,6 +923,23 @@ def replay_dual_endpoints_v1(
             "FAIL_FULL_NODE6_HOST_DUAL_DISAGREEMENT",
             "Python and Rust semantic diagnostics differ",
         )
+    python_partitions = python.diagnostic["partitions"]
+    rust_partitions = rust.diagnostic["partitions"]
+    work_queue_high_water_by_input_signature = [
+        max(
+            python_row["peak_work_queue_points"],
+            rust_row["peak_work_queue_points"],
+        )
+        for python_row, rust_row in zip(
+            python_partitions,
+            rust_partitions,
+            strict=True,
+        )
+    ]
+    saturation_round_high_water = max(
+        row["peak_saturation_round_count"]
+        for row in (*python_partitions, *rust_partitions)
+    )
     normalized = canonical_json_line_v1(python.normalized_semantics)
     agreement_sha256 = sha256(HOST_AGREEMENT_DOMAIN + normalized).hexdigest()
     terminal_status = python.normalized_semantics.get("terminal_status")
@@ -730,6 +956,12 @@ def replay_dual_endpoints_v1(
                 "actual_preflight_peak_scratch_bytes": python.diagnostic[
                     "actual_preflight_peak_scratch_bytes"
                 ],
+                "peak_saturation_round_count_by_input_signature": [
+                    row["peak_saturation_round_count"] for row in python_partitions
+                ],
+                "peak_work_queue_points_by_input_signature": [
+                    row["peak_work_queue_points"] for row in python_partitions
+                ],
                 "sidecar_set_sha256": python.sidecar_set_sha256,
                 "stdout_sha256": python.stdout_sha256,
                 "actual_diagnostic_output_bytes": (
@@ -740,6 +972,12 @@ def replay_dual_endpoints_v1(
                 "actor_id": rust.actor_id,
                 "actual_preflight_peak_scratch_bytes": rust.diagnostic[
                     "actual_preflight_peak_scratch_bytes"
+                ],
+                "peak_saturation_round_count_by_input_signature": [
+                    row["peak_saturation_round_count"] for row in rust_partitions
+                ],
+                "peak_work_queue_points_by_input_signature": [
+                    row["peak_work_queue_points"] for row in rust_partitions
                 ],
                 "sidecar_set_sha256": rust.sidecar_set_sha256,
                 "stdout_sha256": rust.stdout_sha256,
@@ -765,6 +1003,14 @@ def replay_dual_endpoints_v1(
             if terminal_status == GUARD_STATUS
             else None
         ),
+        "schedule_high_water_aggregation": {
+            "peak_saturation_round_count_across_endpoints_and_signatures": (
+                saturation_round_high_water
+            ),
+            "peak_work_queue_points_by_input_signature": (
+                work_queue_high_water_by_input_signature
+            ),
+        },
         "projected_host_replay_output_bytes": PROJECTED_HOST_REPLAY_OUTPUT_BYTES,
         "projected_peak_host_replay_scratch_bytes": (
             PROJECTED_PEAK_HOST_REPLAY_SCRATCH_BYTES

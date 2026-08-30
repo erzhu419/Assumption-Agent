@@ -1905,7 +1905,9 @@ def _validate_host_replay_result_v1(
     if len(payload) > PROJECTED_HOST_REPLAY_OUTPUT_BYTES:
         _fail("FAIL_FULL_NODE6_SUPERVISOR_HOST_REPLAY_WIRE", "output bound exceeded")
     value = _canonical_object(payload, "host replay stdout")
+    terminal_status = value.get("terminal_status")
     endpoint_rows = value.get("endpoint_rows")
+    allowed_signature_counts = (2,) if terminal_status == SUCCESS_STATUS else (1, 2)
     endpoint_output_accounting_valid = (
         type(endpoint_rows) is list
         and len(endpoint_rows) == 2
@@ -1916,11 +1918,34 @@ def _validate_host_replay_result_v1(
             and row["actual_diagnostic_output_bytes"] > 0
             and type(row.get("actual_preflight_peak_scratch_bytes")) is int
             and row["actual_preflight_peak_scratch_bytes"] >= 0
+            and type(row.get("peak_work_queue_points_by_input_signature")) is list
+            and type(row.get("peak_saturation_round_count_by_input_signature"))
+            is list
+            and len(row["peak_work_queue_points_by_input_signature"])
+            in allowed_signature_counts
+            and len(row["peak_saturation_round_count_by_input_signature"])
+            == len(row["peak_work_queue_points_by_input_signature"])
+            and all(
+                type(item) is int and item > 0
+                for item in row["peak_work_queue_points_by_input_signature"]
+            )
+            and all(
+                type(item) is int and item > 0
+                for item in row[
+                    "peak_saturation_round_count_by_input_signature"
+                ]
+            )
             for row in endpoint_rows
             if type(row) is dict
         )
+        and len(
+            {
+                len(row["peak_work_queue_points_by_input_signature"])
+                for row in endpoint_rows
+            }
+        )
+        == 1
     )
-    terminal_status = value.get("terminal_status")
     formal_resource_projection = value.get("formal_resource_projection")
     formal_resource_valid = (
         type(formal_resource_projection) is dict
@@ -1958,6 +1983,45 @@ def _validate_host_replay_result_v1(
             )
         )
     )
+    schedule_high_water = value.get("schedule_high_water_aggregation")
+    if endpoint_output_accounting_valid:
+        endpoint_work_queue_rows = [
+            row["peak_work_queue_points_by_input_signature"] for row in endpoint_rows
+        ]
+        expected_work_queue_high_water = [
+            max(values)
+            for values in zip(*endpoint_work_queue_rows, strict=True)
+        ]
+        expected_saturation_round_high_water = max(
+            item
+            for row in endpoint_rows
+            for item in row["peak_saturation_round_count_by_input_signature"]
+        )
+    else:
+        expected_work_queue_high_water = None
+        expected_saturation_round_high_water = None
+    schedule_high_water_valid = (
+        type(schedule_high_water) is dict
+        and set(schedule_high_water)
+        == {
+            "peak_saturation_round_count_across_endpoints_and_signatures",
+            "peak_work_queue_points_by_input_signature",
+        }
+        and type(
+            schedule_high_water.get(
+                "peak_saturation_round_count_across_endpoints_and_signatures"
+            )
+        )
+        is int
+        and schedule_high_water[
+            "peak_saturation_round_count_across_endpoints_and_signatures"
+        ]
+        == expected_saturation_round_high_water
+        and type(schedule_high_water.get("peak_work_queue_points_by_input_signature"))
+        is list
+        and schedule_high_water["peak_work_queue_points_by_input_signature"]
+        == expected_work_queue_high_water
+    )
     if (
         value.get("schema_version")
         != "hegel-phase3a-q1-full-node6-host-replay/1"
@@ -1977,6 +2041,7 @@ def _validate_host_replay_result_v1(
         != PROJECTED_PEAK_HOST_REPLAY_SCRATCH_BYTES
         or not endpoint_output_accounting_valid
         or not formal_resource_valid
+        or not schedule_high_water_valid
         or (
             terminal_status == SUCCESS_STATUS
             and value.get("registered_resource_guard_id") is not None

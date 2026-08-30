@@ -867,17 +867,6 @@ impl Operator {
         }
     }
 
-    fn commutative(self) -> bool {
-        matches!(
-            self,
-            Self::Binary(BinaryOp::EqualExact)
-                | Self::Binary(BinaryOp::SameSign)
-                | Self::Binary(BinaryOp::OppositeSign)
-                | Self::Approx(_)
-                | Self::And2
-        )
-    }
-
     fn node(self, left: &Program, right: Option<&Program>) -> Node {
         match self {
             Self::Unary(op) => Node::Unary {
@@ -1045,77 +1034,110 @@ where
             .push(program.clone());
     }
     for group in by_sort.values_mut() {
-        group.sort_by(|left, right| {
-            child_order_key(left)
-                .cmp(&child_order_key(right))
-                .then_with(|| left.canonical.canonical_cbor.cmp(&right.canonical.canonical_cbor))
-        });
+        group.sort_by_key(|program| program_sort_key(program));
     }
 
-    for operator in OPERATORS {
-        let sorts = operator.child_sorts();
-        if sorts.len() == 1 {
-            for child in by_sort.get(&sorts[0]).into_iter().flatten() {
-                if resource_eligible(operator, child, None, depth, maximum_ast_node_count) {
-                    visit(operator, child, None)?;
-                }
+    for operator in [
+        Operator::Unary(UnaryOp::BitToScalar),
+        Operator::Unary(UnaryOp::IntToScalar),
+        Operator::Unary(UnaryOp::Absolute),
+        Operator::Unary(UnaryOp::Sign),
+    ] {
+        let input_sort = operator.child_sorts()[0];
+        for child in by_sort.get(&input_sort).into_iter().flatten() {
+            if resource_eligible(operator, child, None, depth, maximum_ast_node_count) {
+                visit(operator, child, None)?;
             }
-            continue;
         }
-        let Some(lefts) = by_sort.get(&sorts[0]) else {
-            continue;
-        };
-        let Some(rights) = by_sort.get(&sorts[1]) else {
-            continue;
-        };
-        if operator.commutative() && sorts[0] == sorts[1] {
-            let ordered;
-            let (lefts, rights) = if matches!(operator, Operator::And2) {
-                ordered = {
-                    let mut values = lefts
-                        .iter()
-                        .filter(|program| !matches!(program.canonical.canonical_node, Node::And(_)))
-                        .cloned()
-                        .collect::<Vec<_>>();
-                    values.sort_by_key(|program| program_sort_key(program));
-                    values
-                };
-                (&ordered, &ordered)
-            } else {
-                (lefts, rights)
-            };
-            for left_index in 0..lefts.len() {
-                let right_start = if matches!(operator, Operator::And2) {
-                    left_index + 1
-                } else {
-                    left_index
-                };
-                for right_index in right_start..rights.len() {
-                    let left = &lefts[left_index];
-                    let right = &rights[right_index];
-                    if resource_eligible(
-                        operator,
-                        left,
-                        Some(right),
-                        depth,
-                        maximum_ast_node_count,
-                    ) {
-                        visit(operator, left, Some(right))?;
-                    }
+    }
+
+    if let Some(rational) = by_sort.get(&OutputSortId::RationalValue) {
+        for left in rational {
+            for right in rational {
+                if resource_eligible(
+                    Operator::Binary(BinaryOp::Difference),
+                    left,
+                    Some(right),
+                    depth,
+                    maximum_ast_node_count,
+                ) {
+                    visit(Operator::Binary(BinaryOp::Difference), left, Some(right))?;
+                    visit(Operator::Binary(BinaryOp::LessEqual), left, Some(right))?;
                 }
             }
-        } else {
-            for left in lefts {
-                for right in rights {
-                    if resource_eligible(
-                        operator,
+        }
+
+        let mut commutative_rational = rational.clone();
+        commutative_rational.sort_by(|left, right| {
+            child_order_key(left).cmp(&child_order_key(right))
+        });
+        for left_index in 0..commutative_rational.len() {
+            for right_index in left_index..commutative_rational.len() {
+                let left = &commutative_rational[left_index];
+                let right = &commutative_rational[right_index];
+                if resource_eligible(
+                    Operator::Binary(BinaryOp::EqualExact),
+                    left,
+                    Some(right),
+                    depth,
+                    maximum_ast_node_count,
+                ) {
+                    visit(Operator::Binary(BinaryOp::EqualExact), left, Some(right))?;
+                    visit(Operator::Approx(1), left, Some(right))?;
+                    visit(Operator::Approx(2), left, Some(right))?;
+                }
+            }
+        }
+    }
+
+    if let Some(signs) = by_sort.get(&OutputSortId::Sign) {
+        let mut commutative_signs = signs.clone();
+        commutative_signs.sort_by(|left, right| {
+            child_order_key(left).cmp(&child_order_key(right))
+        });
+        for left_index in 0..commutative_signs.len() {
+            for right_index in left_index..commutative_signs.len() {
+                let left = &commutative_signs[left_index];
+                let right = &commutative_signs[right_index];
+                if resource_eligible(
+                    Operator::Binary(BinaryOp::SameSign),
+                    left,
+                    Some(right),
+                    depth,
+                    maximum_ast_node_count,
+                ) {
+                    visit(Operator::Binary(BinaryOp::SameSign), left, Some(right))?;
+                    visit(
+                        Operator::Binary(BinaryOp::OppositeSign),
                         left,
                         Some(right),
-                        depth,
-                        maximum_ast_node_count,
-                    ) {
-                        visit(operator, left, Some(right))?;
-                    }
+                    )?;
+                }
+            }
+        }
+    }
+
+    if let Some(booleans) = by_sort.get(&OutputSortId::Bool) {
+        let mut bool_atoms = booleans
+            .iter()
+            .filter(|program| !matches!(program.canonical.canonical_node, Node::And(_)))
+            .cloned()
+            .collect::<Vec<_>>();
+        bool_atoms.sort_by(|left, right| {
+            left.canonical.canonical_cbor[2..].cmp(&right.canonical.canonical_cbor[2..])
+        });
+        for left_index in 0..bool_atoms.len() {
+            for right_index in (left_index + 1)..bool_atoms.len() {
+                let left = &bool_atoms[left_index];
+                let right = &bool_atoms[right_index];
+                if resource_eligible(
+                    Operator::And2,
+                    left,
+                    Some(right),
+                    depth,
+                    maximum_ast_node_count,
+                ) {
+                    visit(Operator::And2, left, Some(right))?;
                 }
             }
         }
@@ -2742,6 +2764,18 @@ mod fixed_point_regression_tests {
         })
     }
 
+    fn schedule_row(
+        operator: Operator,
+        left: &ProgramRef,
+        right: Option<&ProgramRef>,
+    ) -> (u16, Vec<u8>, Option<Vec<u8>>) {
+        (
+            operator.coverage_code(),
+            left.canonical.canonical_cbor.clone(),
+            right.map(|program| program.canonical.canonical_cbor.clone()),
+        )
+    }
+
     fn eligible_identities(runner: &Runner, depth: u32) -> BTreeSet<ApplicationIdentity> {
         let snapshot = runner
             .state
@@ -2809,6 +2843,107 @@ mod fixed_point_regression_tests {
                 Some(&right),
             )
         );
+    }
+
+    #[test]
+    fn rational_visitor_matches_python_frozen_pair_schedule() {
+        let behavior = Behavior::new(
+            1,
+            OutputSortId::RationalValue,
+            Arc::new(vec![RuntimeValue::Rational(Rational::integer(0))]),
+        );
+        let negative_one = test_program(Node::ScalarConst(1), &behavior);
+        let forward = test_program(
+            Node::Binary {
+                op: BinaryOp::Difference,
+                left: Box::new(Node::ScalarConst(1)),
+                right: Box::new(Node::ScalarConst(5)),
+            },
+            &behavior,
+        );
+        let reverse = test_program(
+            Node::Binary {
+                op: BinaryOp::Difference,
+                left: Box::new(Node::ScalarConst(5)),
+                right: Box::new(Node::ScalarConst(1)),
+            },
+            &behavior,
+        );
+        let programs = vec![reverse.clone(), negative_one.clone(), forward.clone()];
+        let mut actual = Vec::new();
+        visit_eligible_applications(&programs, 2, 6, |operator, left, right| {
+            actual.push(schedule_row(operator, left, right));
+            Ok(())
+        })
+        .unwrap();
+
+        let mut global = programs.clone();
+        global.sort_by_key(|program| program_sort_key(program));
+        let mut commutative = programs;
+        commutative.sort_by(|left, right| {
+            child_order_key(left).cmp(&child_order_key(right))
+        });
+        assert_eq!(
+            global
+                .iter()
+                .map(|program| program.canonical.canonical_cbor.as_slice())
+                .collect::<Vec<_>>(),
+            vec![
+                negative_one.canonical.canonical_cbor.as_slice(),
+                forward.canonical.canonical_cbor.as_slice(),
+                reverse.canonical.canonical_cbor.as_slice(),
+            ]
+        );
+        assert_eq!(
+            commutative
+                .iter()
+                .map(|program| program.canonical.canonical_cbor.as_slice())
+                .collect::<Vec<_>>(),
+            vec![
+                negative_one.canonical.canonical_cbor.as_slice(),
+                reverse.canonical.canonical_cbor.as_slice(),
+                forward.canonical.canonical_cbor.as_slice(),
+            ]
+        );
+
+        let mut expected = vec![
+            schedule_row(Operator::Unary(UnaryOp::Absolute), &forward, None),
+            schedule_row(Operator::Unary(UnaryOp::Absolute), &reverse, None),
+            schedule_row(Operator::Unary(UnaryOp::Sign), &forward, None),
+            schedule_row(Operator::Unary(UnaryOp::Sign), &reverse, None),
+        ];
+        for (left, right) in [
+            (&negative_one, &forward),
+            (&negative_one, &reverse),
+            (&forward, &negative_one),
+            (&reverse, &negative_one),
+        ] {
+            expected.push(schedule_row(
+                Operator::Binary(BinaryOp::Difference),
+                left,
+                Some(right),
+            ));
+            expected.push(schedule_row(
+                Operator::Binary(BinaryOp::LessEqual),
+                left,
+                Some(right),
+            ));
+        }
+        for (left, right) in [
+            (&negative_one, &reverse),
+            (&negative_one, &forward),
+        ] {
+            for operator in [
+                Operator::Binary(BinaryOp::EqualExact),
+                Operator::Approx(1),
+                Operator::Approx(2),
+            ] {
+                expected.push(schedule_row(operator, left, Some(right)));
+            }
+        }
+
+        assert_eq!(actual.len(), 18);
+        assert_eq!(actual, expected);
     }
 
     #[test]

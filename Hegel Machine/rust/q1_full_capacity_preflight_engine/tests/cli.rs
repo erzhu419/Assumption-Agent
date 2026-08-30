@@ -16,6 +16,7 @@ fn bounded_node3_matches_frozen_python_and_rust_guidance() {
     assert_eq!(odd.continuation_bank_point_count, 110);
     assert_eq!(odd.raw_operator_application_count, 1_048);
     assert_eq!(odd.peak_saturation_round_count, 4);
+    assert_eq!(odd.depth_barriers[1].continuation_bank_mutation_count, 78);
 
     let sink = run_partition_capacity_preflight(2, limits).unwrap();
     assert_eq!(sink.terminal_status, LOCAL_PROTOTYPE_SUBSET_TRAVERSAL_CLOSED);
@@ -24,6 +25,7 @@ fn bounded_node3_matches_frozen_python_and_rust_guidance() {
     assert_eq!(sink.continuation_bank_point_count, 144);
     assert_eq!(sink.raw_operator_application_count, 1_101);
     assert_eq!(sink.peak_saturation_round_count, 4);
+    assert_eq!(sink.depth_barriers[1].continuation_bank_mutation_count, 113);
     assert_eq!(
         odd.diagnostic_state_projection
             .as_ref()
@@ -168,6 +170,8 @@ fn bounded_node4_matches_preregistered_nonformal_guidance() {
         ),
         (107, 154, 478, 1_844),
     );
+    assert_eq!(odd.peak_visible_frontier_points_per_class, 13);
+    assert_eq!(odd.maximum_frontier_points_per_class, 5);
     let sink = run_partition_capacity_preflight(2, limits).unwrap();
     assert_eq!(
         (

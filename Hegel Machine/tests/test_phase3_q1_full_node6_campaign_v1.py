@@ -30,51 +30,57 @@ def _capsule() -> dict[str, object]:
 def test_contract_and_authorization_replay_exactly() -> None:
     value = campaign.validate_contract_v1(_contract())
     assert value["schema_version"] == (
-        "hegel-phase3a-q1-full-node6-campaign-contract/5"
+        "hegel-phase3a-q1-full-node6-campaign-contract/6"
     )
     assert value["contract_id"] == (
-        "hegel-phase3a-q1-full-node6-campaign-successor-v5"
+        "hegel-phase3a-q1-full-node6-campaign-successor-v6"
     )
     assert campaign.DOMAINS["authorization"] == (
-        b"HEGEL/Q1/FULL_NODE6/AUTHORIZATION/SUCCESSOR_V5/V1\x00"
+        b"HEGEL/Q1/FULL_NODE6/AUTHORIZATION/SUCCESSOR_V6/V1\x00"
     )
     assert campaign.DOMAINS["contract"] == (
-        b"HEGEL/Q1/FULL_NODE6/CONTRACT/SUCCESSOR_V5/V1\x00"
+        b"HEGEL/Q1/FULL_NODE6/CONTRACT/SUCCESSOR_V6/V1\x00"
     )
     assert value["contract_digest"] == (
-        "sha256:23e8631c3633c24c230a32c92bb02b067553f35c0afef1ab19b4448f9a435008"
+        "sha256:1addc9ac8fe99ef4bed62146d41668911ff04a002b5a421389e1f4eb041c67ac"
     )
     assert value["authorization"] == campaign.OWNER_AUTHORIZATION
     assert value["authorization"]["authorization_digest"] == (
-        "sha256:d55d5cbde77f58385ed6decbf5756f2042a4cf3819281819ded853554356da8d"
+        "sha256:6da8ac001e4213960daf5733b64e081834589063a715f7d63cef5d33a7a1ced1"
     )
     assert "authorization_state" not in value["authorization"]
     assert campaign.OWNER_AUTHORIZATION_TEXT == (
         "授权 Q1 full-node6 capacity-preflight diagnostic "
-        "successor-v5 distinct-outer actual；确认 successor-v4 known terminal "
-        "failure、terminal no-resume，且 Python Odd measurement 与 Rust Odd "
-        "measurement 各一次 conservatively count，Sink/trusted host replay 0；"
-        "另行授权 exact v5 capsule-only additional fresh remeasurement；"
-        "禁止恢复 successor-v4 或复用 successor-v4 work product"
+        "successor-v6 distinct-outer actual；确认 successor-v5 known terminal "
+        "failure、terminal no-resume，且 Python Odd/Sink 与 Rust Odd/Sink "
+        "measurement 各一次 conservatively count，trusted host replay "
+        "一次 conservatively count；另行授权 exact v6 capsule-only additional "
+        "fresh remeasurement；禁止恢复 successor-v5 或复用 successor-v5 work product"
     )
     assert campaign.LEDGER_SCHEMA_VERSION == (
         "hegel-phase3a-q1-full-node6-ledger-record/3"
     )
-    assert value["authorization"]["superseded_v4_resume_allowed"] is False
+    assert value["authorization"]["superseded_v5_resume_allowed"] is False
     assert value["authorization"]["future_exact_user_authorization_required"] is True
     assert value["authorization"]["prior_python_odd_measurement_count"] == 1
+    assert value["authorization"]["prior_python_sink_measurement_count"] == 1
     assert value["authorization"]["prior_rust_odd_measurement_count"] == 1
-    assert value["authorization"]["new_measurement_budget_scope"] == "V5_CAPSULE_ONLY"
+    assert value["authorization"]["prior_rust_sink_measurement_count"] == 1
+    assert value["authorization"]["prior_trusted_host_replay_measurement_count"] == 1
+    assert value["authorization"]["new_measurement_budget_scope"] == "V6_CAPSULE_ONLY"
     assert value["authorization"]["new_measurement_is_explicitly_additional"] is True
-    assert value["authorization"]["v4_work_product_reuse_allowed"] is False
+    assert value["authorization"]["v5_work_product_reuse_allowed"] is False
     assert value["source_lineage"]["required_ancestor_commit"] == (
         "33dc9cbb7d753f83650169d6d6b9caa508927764"
     )
     assert value["source_lineage"]["required_parent_commit"] == (
-        "5626e1d025e604fc4df5824f40a337a4e756c3dc"
+        "3086adf389b8d9fa1a93c0c36fd300ed8bca19db"
     )
     assert value["source_lineage"]["exact_additions_and_modifications_only"] is True
     assert "docs/Hegel_Machine_Current_State_Reconciliation_v6.md" in value[
+        "source_lineage"
+    ]["additive_paths_in_exact_order"]
+    assert "docs/Hegel_Machine_Current_State_Reconciliation_v7.md" in value[
         "source_lineage"
     ]["additive_paths_in_exact_order"]
     assert value["source_lineage"]["modified_paths_in_exact_order"] == [
@@ -84,22 +90,25 @@ def test_contract_and_authorization_replay_exactly() -> None:
         "tests/test_phase3_q1_partition_snapshot_v1.py",
     ]
     assert value["superseded_campaign"]["capsule_digest"] == (
-        "sha256:73a07996d7acb21ae3c6d8b35a096850d7fe5f854269f2b13da67da6c595b6a0"
+        "sha256:6819416eed0a41573f21b4280a6a39e97481b87f8dd1c9e0054529e478bc7d9d"
     )
     assert value["superseded_campaign"]["measurement_outcome"] == "KNOWN_TERMINAL_FAILURE"
     assert value["superseded_campaign"]["python_endpoint_start_count"] == 1
     assert value["superseded_campaign"]["rust_endpoint_start_count"] == 1
-    assert value["superseded_campaign"]["trusted_host_replay_start_count"] == 0
+    assert value["superseded_campaign"]["trusted_host_replay_start_count"] == 1
     assert value["superseded_campaign"]["campaign_execution_count"] == 1
     assert value["superseded_campaign"]["authorization_consumption_count"] == 1
     assert value["superseded_campaign"]["supervisor_popen_count"] == 1
     assert value["superseded_campaign"]["supervisor_return_code"] == 1
-    assert value["superseded_campaign"]["python_endpoint_failure"][
+    assert value["superseded_campaign"]["endpoint_results"]["python"][
+        "stdout_summary"
+    ]["terminal_status"] == campaign.SATURATED
+    assert value["superseded_campaign"]["endpoint_results"]["rust"][
+        "stdout_summary"
+    ]["terminal_status"] == campaign.SATURATED
+    assert value["superseded_campaign"]["trusted_host_replay_failure"][
         "stdout_object"
-    ]["error_detail"] == "one AST has two behaviors"
-    assert value["superseded_campaign"]["rust_endpoint_failure"][
-        "stdout_object"
-    ]["error_detail"] == "one canonical AST has two behaviors"
+    ]["error_detail"] == "RUST_ENDPOINT actual scratch accounting differs"
     assert value["superseded_campaign"]["resource_evidence"]["aggregate"][
         "measurement_intervals_overlap"
     ] is False
@@ -149,9 +158,9 @@ def test_contract_and_authorization_replay_exactly() -> None:
         "stdout_path",
         "stderr_path",
     ):
-        assert "q1-full-node6-capacity-v5" in fixed[name] or (
+        assert "q1-full-node6-capacity-v6" in fixed[name] or (
             name == "artifact_path"
-            and fixed[name].endswith("phase3_q1_full_node6_capacity_preflight_v5.json")
+            and fixed[name].endswith("phase3_q1_full_node6_capacity_preflight_v6.json")
         )
 
 

@@ -881,28 +881,44 @@ def test_superseded_campaign_replays_known_terminal_failure_without_resume() -> 
     assert receipt["measurement_endpoint_start_count"] == 2
     assert receipt["python_endpoint_start_count"] == 1
     assert receipt["rust_endpoint_start_count"] == 1
-    assert receipt["trusted_host_replay_start_count"] == 0
+    assert receipt["trusted_host_replay_start_count"] == 1
     assert receipt["python_odd_measurement_count"] == 1
+    assert receipt["python_sink_measurement_count"] == 1
     assert receipt["rust_odd_measurement_count"] == 1
-    assert receipt["sink_measurement_count"] == 0
-    assert receipt["trajectory_event_count"] == 31
+    assert receipt["rust_sink_measurement_count"] == 1
+    assert receipt["trusted_host_replay_measurement_count"] == 1
+    assert receipt["trajectory_event_count"] == 34
     assert receipt["campaign_execution_count"] == 1
     assert receipt["authorization_consumption_count"] == 1
     assert receipt["supervisor_popen_count"] == 1
     assert receipt["supervisor_return_code"] == 1
     assert receipt["supervisor_replay_passed"] is False
-    assert receipt["endpoint_failures"]["python"]["error_code"] == (
-        "FAIL_Q1_PREFLIGHT_BEHAVIOR"
+    assert receipt["endpoint_results"]["python"]["terminal_status"] == (
+        tool._core.SATURATED
     )
-    assert receipt["endpoint_failures"]["python"]["error_detail"] == (
-        "one AST has two behaviors"
+    assert receipt["endpoint_results"]["rust"]["terminal_status"] == (
+        tool._core.SATURATED
     )
-    assert receipt["endpoint_failures"]["rust"]["error_detail"] == (
-        "one canonical AST has two behaviors"
+    assert receipt["trusted_host_replay_failure"]["error_code"] == (
+        "FAIL_FULL_NODE6_HOST_RESOURCE"
+    )
+    assert receipt["trusted_host_replay_failure"]["error_detail"] == (
+        "RUST_ENDPOINT actual scratch accounting differs"
     )
     assert receipt["resource_evidence_file_sha256"]["aggregate"] == (
-        "sha256:dc455f467008798f20c02b1223da840854dddd4024a941793c121dcb6dde0a2a"
+        "sha256:259730b31c525b6d58d0ea8390a87a9736704e4045932fe496e8f5912d3cf263"
     )
+    assert receipt["resource_evidence_file_sha256"]["host"] == (
+        "sha256:705350f854c526fa7f2e2e73906e674b9bf79ea51d7d29b0ebf8e17913ccc3c5"
+    )
+    assert receipt["scratch_cleanup_file_sha256"] == {
+        "endpoints": (
+            "sha256:505e39652b74c45353ee48c665d16dba35b552a8ae72cfa2bba703e34001882f"
+        ),
+        "trusted_host_replay": (
+            "sha256:5830397ea43e8d65897e30d0c0075b759cfd9f33995f5c7f9a46f04532b98792"
+        ),
+    }
     assert receipt["scratch_terminal_absence_proved"] is True
     assert receipt["postconsumption_cleanup"]["status"] == "PASS"
     assert receipt["q1_state"] == "NOT_RUN"
