@@ -1630,12 +1630,8 @@ def test_host_replay_resource_capture_uses_same_completed_workload_handshake(
     )
 
 
-def test_resource_evidence_binds_frozen_isolation_and_fresh_memory_peak(
-    native_tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    seccomp = native_tmp_path / "seccomp.json"
-    inspect = [
+def _python_isolation_inspect(seccomp_security_option: str) -> list[dict[str, object]]:
+    return [
         {
             "Config": {"Image": supervisor.PYTHON_IMAGE, "User": "65534:65534"},
             "HostConfig": {
@@ -1647,7 +1643,7 @@ def test_resource_evidence_binds_frozen_isolation_and_fresh_memory_peak(
                 "NetworkMode": "none",
                 "PidsLimit": 128,
                 "ReadonlyRootfs": True,
-                "SecurityOpt": ["no-new-privileges", f"seccomp={seccomp}"],
+                "SecurityOpt": ["no-new-privileges", seccomp_security_option],
                 "Tmpfs": {"/tmp": supervisor.TMPFS_SPEC.split(":", 1)[1]},
                 "Ulimits": [{"Name": "nofile", "Hard": 256, "Soft": 256}],
             },
@@ -1660,6 +1656,12 @@ def test_resource_evidence_binds_frozen_isolation_and_fresh_memory_peak(
             "State": {"Pid": 1234},
         }
     ]
+
+
+def _install_resource_capture_mocks(
+    monkeypatch: pytest.MonkeyPatch,
+    inspect: list[dict[str, object]],
+) -> None:
     monkeypatch.setattr(
         supervisor,
         "_run_capture",
@@ -1673,6 +1675,19 @@ def test_resource_evidence_binds_frozen_isolation_and_fresh_memory_peak(
             "rows": {"memory.peak": "987654\n"},
         },
     )
+
+
+def test_resource_evidence_accepts_exact_inline_seccomp_and_fresh_memory_peak(
+    native_tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seccomp = native_tmp_path / "seccomp.json"
+    seccomp.write_bytes((ROOT / supervisor.SECCOMP_RELATIVE_PATH).read_bytes())
+    inline = seccomp.read_text(encoding="ascii").strip()
+    _install_resource_capture_mocks(
+        monkeypatch,
+        _python_isolation_inspect(f"seccomp={inline}"),
+    )
     evidence = supervisor._capture_resource_evidence(
         "d" * 64,
         "PYTHON_ENDPOINT",
@@ -1682,6 +1697,418 @@ def test_resource_evidence_binds_frozen_isolation_and_fresh_memory_peak(
     assert evidence["cgroup_capture_phase"] == "AFTER_ACTOR_OUTPUT_BEFORE_CONTAINER_RELEASE"
     assert evidence["runtime_seccomp_sha256"] == supervisor.SECCOMP_SHA256
     assert evidence["tmpfs"] == supervisor.TMPFS_SPEC
+
+
+def test_resource_evidence_accepts_whitespace_different_semantic_seccomp(
+    native_tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seccomp = native_tmp_path / "seccomp.json"
+    expected = json.loads((ROOT / supervisor.SECCOMP_RELATIVE_PATH).read_text())
+    seccomp.write_bytes((ROOT / supervisor.SECCOMP_RELATIVE_PATH).read_bytes())
+    inline = json.dumps(expected, indent=2, sort_keys=True)
+    _install_resource_capture_mocks(
+        monkeypatch,
+        _python_isolation_inspect(f"seccomp={inline}"),
+    )
+    evidence = supervisor._capture_resource_evidence(
+        "e" * 64,
+        "PYTHON_ENDPOINT",
+        seccomp,
+    )
+    assert evidence["actor_id"] == "PYTHON_ENDPOINT"
+
+
+def test_resource_evidence_rejects_semantically_mutated_inline_seccomp(
+    native_tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seccomp = native_tmp_path / "seccomp.json"
+    expected = json.loads((ROOT / supervisor.SECCOMP_RELATIVE_PATH).read_text())
+    seccomp.write_bytes((ROOT / supervisor.SECCOMP_RELATIVE_PATH).read_bytes())
+    mutated = deepcopy(expected)
+    mutated["defaultErrnoRet"] = expected["defaultErrnoRet"] + 1
+    _install_resource_capture_mocks(
+        monkeypatch,
+        _python_isolation_inspect(f"seccomp={json.dumps(mutated)}"),
+    )
+    with pytest.raises(supervisor.FullNode6SupervisorError) as caught:
+        supervisor._capture_resource_evidence(
+            "f" * 64,
+            "PYTHON_ENDPOINT",
+            seccomp,
+        )
+    assert caught.value.code == "FAIL_FULL_NODE6_SUPERVISOR_RESOURCE"
+    assert caught.value.detail.endswith("HostConfig.SecurityOpt.seccomp")
+
+
+def test_resource_evidence_rejects_path_seccomp_inspect_form(
+    native_tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seccomp = native_tmp_path / "seccomp.json"
+    seccomp.write_bytes((ROOT / supervisor.SECCOMP_RELATIVE_PATH).read_bytes())
+    _install_resource_capture_mocks(
+        monkeypatch,
+        _python_isolation_inspect(f"seccomp={seccomp}"),
+    )
+    with pytest.raises(supervisor.FullNode6SupervisorError) as caught:
+        supervisor._capture_resource_evidence(
+            "a" * 64,
+            "PYTHON_ENDPOINT",
+            seccomp,
+        )
+    assert caught.value.detail.endswith("HostConfig.SecurityOpt.seccomp")
+
+
+def test_resource_evidence_isolation_failure_names_each_mismatched_field(
+    native_tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seccomp = native_tmp_path / "seccomp.json"
+    seccomp.write_bytes((ROOT / supervisor.SECCOMP_RELATIVE_PATH).read_bytes())
+    inspect = _python_isolation_inspect(
+        f"seccomp={seccomp.read_text(encoding='ascii').strip()}"
+    )
+    inspect[0]["HostConfig"]["NetworkMode"] = "bridge"
+    inspect[0]["Config"]["User"] = "0:0"
+    _install_resource_capture_mocks(monkeypatch, inspect)
+    with pytest.raises(supervisor.FullNode6SupervisorError) as caught:
+        supervisor._capture_resource_evidence(
+            "b" * 64,
+            "PYTHON_ENDPOINT",
+            seccomp,
+        )
+    assert caught.value.detail == (
+        "PYTHON_ENDPOINT isolation differs: "
+        "HostConfig.NetworkMode,Config.User"
+    )
+
+
+def test_runtime_isolation_live_gauntlet_is_sequential_stable_and_cleans_up(
+    native_tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    launches: list[tuple[str, list[str], Path]] = []
+    removals: list[list[str]] = []
+    fsynced_parents: list[Path] = []
+
+    def endpoint_launch(command, cidfile, actor_id, *, wall_time_seconds):
+        assert wall_time_seconds == 60
+        launches.append((actor_id, list(command), cidfile))
+        return supervisor.EndpointProcessResultV1(actor_id, 0, b"", b"", {})
+
+    def host_launch(command, cidfile, *, wall_time_seconds):
+        assert wall_time_seconds == 60
+        actor_id = "TRUSTED_HOST_REPLAY"
+        launches.append((actor_id, list(command), cidfile))
+        return supervisor.EndpointProcessResultV1(actor_id, 0, b"", b"", {})
+
+    def remove(names):
+        removals.append(list(names))
+        return []
+
+    monkeypatch.setattr(supervisor, "_launch_endpoint_actual_v1", endpoint_launch)
+    monkeypatch.setattr(supervisor, "_launch_host_replay_actual_v1", host_launch)
+    monkeypatch.setattr(supervisor, "_force_remove_endpoint_containers_v1", remove)
+    monkeypatch.setattr(
+        supervisor,
+        "_inspect_control_container_absent_v1",
+        lambda _name: None,
+    )
+
+    first_probe = native_tmp_path / "probe-first"
+    second_probe = native_tmp_path / "probe-second"
+    probes_at_fsync = iter((first_probe, second_probe))
+
+    def fsync_after_absence(parent: Path) -> None:
+        probe = next(probes_at_fsync)
+        assert parent == native_tmp_path
+        assert not probe.exists()
+        assert not probe.is_symlink()
+        fsynced_parents.append(parent)
+
+    monkeypatch.setattr(supervisor, "_fsync_directory", fsync_after_absence)
+    first = supervisor.runtime_isolation_live_gauntlet_v1(
+        ROOT,
+        first_probe,
+        "unit-first",
+    )
+    second = supervisor.runtime_isolation_live_gauntlet_v1(
+        ROOT,
+        second_probe,
+        "unit-second",
+    )
+    assert first == second
+    assert first == {
+        "actor_order": [
+            "PYTHON_ENDPOINT",
+            "RUST_ENDPOINT",
+            "TRUSTED_HOST_REPLAY",
+        ],
+        "actor_results": {
+            "PYTHON_ENDPOINT": "PASS",
+            "RUST_ENDPOINT": "PASS",
+            "TRUSTED_HOST_REPLAY": "PASS",
+        },
+        "container_workload": "/bin/true",
+        "network_isolation": "PASS",
+        "pinned_images": {
+            "PYTHON_ENDPOINT": supervisor.PYTHON_IMAGE,
+            "RUST_ENDPOINT": supervisor.RUST_IMAGE,
+            "TRUSTED_HOST_REPLAY": supervisor.PYTHON_IMAGE,
+        },
+        "production_endpoint_start_count": 0,
+        "probe_root_cleanup": "PASS",
+        "quotient_engine_invocation_count": 0,
+        "schema_version": supervisor.RUNTIME_ISOLATION_GAUNTLET_SCHEMA_VERSION,
+        "signature_selection_count": 0,
+        "status": "PASS",
+        "supervisor_popen_count": 0,
+    }
+    assert not first_probe.exists()
+    assert not second_probe.exists()
+    assert [actor for actor, _command, _cidfile in launches] == [
+        "PYTHON_ENDPOINT",
+        "RUST_ENDPOINT",
+        "TRUSTED_HOST_REPLAY",
+    ] * 2
+    assert len(removals) == 2
+    assert fsynced_parents == [native_tmp_path, native_tmp_path]
+
+    expected_mounts = {
+        "PYTHON_ENDPOINT": {
+            "/admission/admission.json": False,
+            "/output": True,
+            "/scratch": True,
+            "/snapshot": False,
+        },
+        "RUST_ENDPOINT": {
+            supervisor.RUST_BINARY_CONTAINER_PATH: False,
+            "/output": True,
+            "/scratch": True,
+            "/snapshot": False,
+        },
+        "TRUSTED_HOST_REPLAY": {
+            "/python-output": False,
+            "/rust-output": False,
+            "/scratch": True,
+            "/snapshot": False,
+        },
+    }
+    expected_images = {
+        "PYTHON_ENDPOINT": supervisor.PYTHON_IMAGE,
+        "RUST_ENDPOINT": supervisor.RUST_IMAGE,
+        "TRUSTED_HOST_REPLAY": supervisor.PYTHON_IMAGE,
+    }
+    for actor, command, _cidfile in launches:
+        assert command[command.index("--network") + 1] == "none"
+        assert expected_images[actor] in command
+        assert command[-1] == "/bin/true"
+        mounts = {}
+        for index, value in enumerate(command[:-1]):
+            if value != "--mount":
+                continue
+            fields = command[index + 1].split(",")
+            registry = {
+                field.split("=", 1)[0]: field.split("=", 1)[1]
+                for field in fields
+                if "=" in field
+            }
+            mounts[registry["dst"]] = "readonly" not in fields
+        assert mounts == expected_mounts[actor]
+
+
+def test_runtime_isolation_live_gauntlet_failure_is_surfaced_after_cleanup(
+    native_tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    probe_root = native_tmp_path / "probe-failure"
+    removed: list[list[str]] = []
+    fsynced_parents: list[Path] = []
+
+    def fail_python(*_args, **_kwargs):
+        raise supervisor.FullNode6SupervisorError(
+            "FAIL_TEST_GAUNTLET_CONTROL",
+            "control failed",
+        )
+
+    monkeypatch.setattr(supervisor, "_launch_endpoint_actual_v1", fail_python)
+    monkeypatch.setattr(
+        supervisor,
+        "_force_remove_endpoint_containers_v1",
+        lambda names: removed.append(list(names)) or [],
+    )
+    monkeypatch.setattr(
+        supervisor,
+        "_inspect_control_container_absent_v1",
+        lambda _name: None,
+    )
+
+    def fsync_after_absence(parent: Path) -> None:
+        assert parent == native_tmp_path
+        assert not probe_root.exists()
+        assert not probe_root.is_symlink()
+        fsynced_parents.append(parent)
+
+    monkeypatch.setattr(supervisor, "_fsync_directory", fsync_after_absence)
+    with pytest.raises(supervisor.FullNode6SupervisorError) as caught:
+        supervisor.runtime_isolation_live_gauntlet_v1(
+            ROOT,
+            probe_root,
+            "unit-failure",
+        )
+    assert caught.value.code == "FAIL_TEST_GAUNTLET_CONTROL"
+    assert not probe_root.exists()
+    assert len(removed) == 1
+    assert len(removed[0]) == 3
+    assert fsynced_parents == [native_tmp_path]
+
+
+def test_runtime_isolation_live_gauntlet_cleanup_proves_all_absent_and_unlinks_symlink(
+    native_tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = native_tmp_path / "probe-target"
+    target.mkdir()
+    (target / "keep").write_text("not owned by probe symlink\n")
+    probe_root = native_tmp_path / "probe-link"
+    probe_root.symlink_to(target, target_is_directory=True)
+    removed: list[tuple[str, ...]] = []
+    inspected: list[list[str]] = []
+    fsynced: list[Path] = []
+    names = supervisor._runtime_isolation_live_gauntlet_control_names_v1(
+        "cleanup-ok"
+    )
+
+    monkeypatch.setattr(
+        supervisor,
+        "_force_remove_endpoint_containers_v1",
+        lambda values: removed.append(tuple(values)) or [],
+    )
+
+    def inspect_run(command, **_kwargs):
+        inspected.append(list(command))
+        name = command[-1]
+        return subprocess.CompletedProcess(
+            command,
+            1,
+            stdout=b"",
+            stderr=f"Error: No such container: {name}\n".encode("ascii"),
+        )
+
+    monkeypatch.setattr(supervisor.subprocess, "run", inspect_run)
+
+    def fsync(parent: Path) -> None:
+        assert parent == native_tmp_path
+        assert not probe_root.exists()
+        assert not probe_root.is_symlink()
+        fsynced.append(parent)
+
+    monkeypatch.setattr(supervisor, "_fsync_directory", fsync)
+    receipt = supervisor.runtime_isolation_live_gauntlet_cleanup_v1(
+        probe_root,
+        "cleanup-ok",
+    )
+    assert receipt == {
+        "container_absence": {
+            "PYTHON_CONTROL": "PASS",
+            "RUST_CONTROL": "PASS",
+            "TRUSTED_HOST_REPLAY_CONTROL": "PASS",
+        },
+        "probe_root_absence": "PASS",
+        "probe_root_parent_fsync": "PASS",
+        "schema_version": (
+            supervisor.RUNTIME_ISOLATION_GAUNTLET_CLEANUP_SCHEMA_VERSION
+        ),
+        "status": "PASS",
+    }
+    assert removed == [names]
+    assert inspected == [
+        [supervisor.DOCKER, "container", "inspect", name]
+        for name in names
+    ]
+    assert fsynced == [native_tmp_path]
+    assert target.is_dir()
+    assert (target / "keep").is_file()
+
+
+def test_runtime_isolation_live_gauntlet_cleanup_rejects_residual_container(
+    native_tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    probe_root = native_tmp_path / "probe-residual"
+    probe_root.mkdir()
+    names = supervisor._runtime_isolation_live_gauntlet_control_names_v1(
+        "cleanup-residual"
+    )
+    fsynced: list[Path] = []
+    monkeypatch.setattr(
+        supervisor,
+        "_force_remove_endpoint_containers_v1",
+        lambda _values: [],
+    )
+    monkeypatch.setattr(
+        supervisor,
+        "_inspect_control_container_absent_v1",
+        lambda name: (
+            f"{name}:container remains present" if name == names[0] else None
+        ),
+    )
+    monkeypatch.setattr(
+        supervisor,
+        "_fsync_directory",
+        lambda parent: fsynced.append(parent),
+    )
+    with pytest.raises(supervisor.FullNode6SupervisorError) as caught:
+        supervisor.runtime_isolation_live_gauntlet_cleanup_v1(
+            probe_root,
+            "cleanup-residual",
+        )
+    assert caught.value.code == "FAIL_FULL_NODE6_ISOLATION_GAUNTLET_CLEANUP"
+    assert names[0] in caught.value.detail
+    assert "container remains present" in caught.value.detail
+    assert not probe_root.exists()
+    assert fsynced == [native_tmp_path]
+
+
+def test_runtime_isolation_live_gauntlet_cleanup_surfaces_probe_removal_failure(
+    native_tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    probe_root = native_tmp_path / "probe-removal-failure"
+    probe_root.mkdir()
+    monkeypatch.setattr(
+        supervisor,
+        "_force_remove_endpoint_containers_v1",
+        lambda _values: [],
+    )
+    monkeypatch.setattr(
+        supervisor,
+        "_inspect_control_container_absent_v1",
+        lambda _name: None,
+    )
+    monkeypatch.setattr(
+        supervisor.shutil,
+        "rmtree",
+        lambda _path: (_ for _ in ()).throw(OSError("synthetic rmtree failure")),
+    )
+    fsync_called = False
+
+    def unexpected_fsync(_parent: Path) -> None:
+        nonlocal fsync_called
+        fsync_called = True
+
+    monkeypatch.setattr(supervisor, "_fsync_directory", unexpected_fsync)
+    with pytest.raises(supervisor.FullNode6SupervisorError) as caught:
+        supervisor.runtime_isolation_live_gauntlet_cleanup_v1(
+            probe_root,
+            "cleanup-failure",
+        )
+    assert caught.value.code == "FAIL_FULL_NODE6_ISOLATION_GAUNTLET_CLEANUP"
+    assert "synthetic rmtree failure" in caught.value.detail
+    assert probe_root.exists()
+    assert fsync_called is False
 
 
 def _resource_process(actor: str, ordinal: int, memory: int, wall_ns: int):

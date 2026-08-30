@@ -41,6 +41,12 @@ TRAJECTORY_EVENT_SCHEMA_VERSION: Final = (
 TRAJECTORY_TERMINAL_SCHEMA_VERSION: Final = (
     "hegel-phase3a-q1-full-node6-supervisor-trajectory-terminal/1"
 )
+RUNTIME_ISOLATION_GAUNTLET_SCHEMA_VERSION: Final = (
+    "hegel-phase3a-q1-full-node6-runtime-isolation-live-gauntlet/1"
+)
+RUNTIME_ISOLATION_GAUNTLET_CLEANUP_SCHEMA_VERSION: Final = (
+    "hegel-phase3a-q1-full-node6-runtime-isolation-live-gauntlet-cleanup/1"
+)
 ACTION_ID: Final = "full-node6-capacity-preflight-v1"
 SUCCESS_STATUS: Final = "PREFLIGHT_SATURATED_DIAGNOSTIC_ONLY"
 GUARD_STATUS: Final = "PREFLIGHT_CAPACITY_GUARD_HIT"
@@ -869,6 +875,51 @@ def _read_cgroup_evidence(pid: int) -> dict[str, object]:
     return {"cgroup_path": "/" + relative, "rows": rows}
 
 
+def _strict_json_object_v1(payload: bytes | str) -> dict[str, object]:
+    def unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+        value: dict[str, object] = {}
+        for key, item in pairs:
+            if key in value:
+                raise ValueError(f"duplicate key: {key}")
+            value[key] = item
+        return value
+
+    def reject_constant(value: str) -> NoReturn:
+        raise ValueError(f"non-finite JSON constant: {value}")
+
+    value = json.loads(
+        payload,
+        object_pairs_hook=unique_object,
+        parse_constant=reject_constant,
+    )
+    if type(value) is not dict:
+        raise ValueError("JSON value is not an object")
+    return value
+
+
+def _runtime_seccomp_matches_v1(
+    security_options: object,
+    expected_seccomp_profile: Path,
+) -> bool:
+    """Accept Docker's one inline seccomp JSON only when semantics are exact."""
+
+    if type(security_options) is not list:
+        return False
+    matches = [
+        value
+        for value in security_options
+        if type(value) is str and value.startswith("seccomp=")
+    ]
+    if len(matches) != 1:
+        return False
+    try:
+        expected = _strict_json_object_v1(expected_seccomp_profile.read_bytes())
+        observed = _strict_json_object_v1(matches[0].split("=", 1)[1])
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError):
+        return False
+    return _canonical(observed) == _canonical(expected)
+
+
 def _capture_resource_evidence(
     container_id: str,
     actor_id: str,
@@ -924,30 +975,46 @@ def _capture_resource_evidence(
         for item in mounts
         if type(item) is dict and item.get("Type") == "bind"
     }
+    mismatches: list[str] = []
+    if type(pid) is not int or pid < 1:
+        mismatches.append("State.Pid")
+    expected_host_fields = (
+        ("NetworkMode", "none"),
+        ("IpcMode", "private"),
+        ("ReadonlyRootfs", True),
+        ("CpusetCpus", expected_cpuset),
+        ("Memory", MEMORY_BYTES),
+        ("MemorySwap", MEMORY_BYTES),
+        ("PidsLimit", PIDS_LIMIT),
+        ("Ulimits", [{"Name": "nofile", "Hard": 256, "Soft": 256}]),
+        ("Tmpfs", {"/tmp": TMPFS_SPEC.split(":", 1)[1]}),
+        ("CapDrop", ["ALL"]),
+    )
+    for field_name, expected_value in expected_host_fields:
+        if host_config.get(field_name) != expected_value:
+            mismatches.append(f"HostConfig.{field_name}")
+    security_options = host_config.get("SecurityOpt")
     if (
-        type(pid) is not int
-        or pid < 1
-        or host_config.get("NetworkMode") != "none"
-        or host_config.get("IpcMode") != "private"
-        or host_config.get("ReadonlyRootfs") is not True
-        or host_config.get("CpusetCpus") != expected_cpuset
-        or host_config.get("Memory") != MEMORY_BYTES
-        or host_config.get("MemorySwap") != MEMORY_BYTES
-        or host_config.get("PidsLimit") != PIDS_LIMIT
-        or host_config.get("Ulimits")
-        != [{"Name": "nofile", "Hard": 256, "Soft": 256}]
-        or host_config.get("Tmpfs")
-        != {"/tmp": TMPFS_SPEC.split(":", 1)[1]}
-        or host_config.get("CapDrop") != ["ALL"]
-        or "no-new-privileges" not in host_config.get("SecurityOpt", [])
-        or f"seccomp={expected_seccomp_profile}" not in host_config.get(
-            "SecurityOpt", []
-        )
-        or config.get("Image") != expected_image
-        or config.get("User") != CONTAINER_USER
-        or observed_mounts != expected_mounts
+        type(security_options) is not list
+        or "no-new-privileges" not in security_options
     ):
-        _fail("FAIL_FULL_NODE6_SUPERVISOR_RESOURCE", f"{actor_id} isolation differs")
+        mismatches.append("HostConfig.SecurityOpt.no-new-privileges")
+    if not _runtime_seccomp_matches_v1(
+        security_options,
+        expected_seccomp_profile,
+    ):
+        mismatches.append("HostConfig.SecurityOpt.seccomp")
+    if config.get("Image") != expected_image:
+        mismatches.append("Config.Image")
+    if config.get("User") != CONTAINER_USER:
+        mismatches.append("Config.User")
+    if observed_mounts != expected_mounts:
+        mismatches.append("Mounts.bind")
+    if mismatches:
+        _fail(
+            "FAIL_FULL_NODE6_SUPERVISOR_RESOURCE",
+            f"{actor_id} isolation differs: {','.join(mismatches)}",
+        )
     cgroup = _read_cgroup_evidence(pid)
     cgroup_rows = cgroup.get("rows")
     memory_peak_text = (
@@ -1422,6 +1489,275 @@ def _launch_host_replay_actual_v1(
         if process is not None:
             _stop_endpoint_cli_processes([process])
         raise
+
+
+def _runtime_isolation_live_gauntlet_control_names_v1(
+    identity_suffix: str,
+) -> tuple[str, str, str]:
+    if (
+        type(identity_suffix) is not str
+        or re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?", identity_suffix)
+        is None
+    ):
+        _fail(
+            "FAIL_FULL_NODE6_ISOLATION_GAUNTLET_CLEANUP",
+            "identity suffix differs",
+        )
+    return (
+        f"hegel-q1-node6-isolation-control-python-{identity_suffix}",
+        f"hegel-q1-node6-isolation-control-rust-{identity_suffix}",
+        f"hegel-q1-node6-isolation-control-host-{identity_suffix}",
+    )
+
+
+def _inspect_control_container_absent_v1(name: str) -> str | None:
+    try:
+        completed = subprocess.run(
+            [DOCKER, "container", "inspect", name],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return f"{name}:inspect:{type(error).__name__}:{error}"
+    stderr = completed.stderr.decode("utf-8", "replace")
+    if completed.returncode != 0 and f"No such container: {name}" in stderr:
+        return None
+    if completed.returncode == 0:
+        return f"{name}:container remains present"
+    return f"{name}:inspect_return_code={completed.returncode}:{stderr[-500:]}"
+
+
+def runtime_isolation_live_gauntlet_cleanup_v1(
+    probe_root: Path,
+    identity_suffix: str,
+) -> dict[str, object]:
+    """Remove and prove absence of all live-gauntlet transient state."""
+
+    if (
+        not isinstance(probe_root, Path)
+        or not probe_root.is_absolute()
+        or probe_root.parent == probe_root
+    ):
+        _fail(
+            "FAIL_FULL_NODE6_ISOLATION_GAUNTLET_CLEANUP",
+            "probe root identity differs",
+        )
+    names = _runtime_isolation_live_gauntlet_control_names_v1(identity_suffix)
+    removal_failures = {
+        row.split(":", 1)[0]: row
+        for row in _force_remove_endpoint_containers_v1(names)
+    }
+    failures: list[str] = []
+    for name in names:
+        inspect_failure = _inspect_control_container_absent_v1(name)
+        if inspect_failure is not None:
+            removal_failure = removal_failures.get(name)
+            if removal_failure is not None:
+                inspect_failure += f";remove={removal_failure}"
+            failures.append(inspect_failure)
+    try:
+        if os.path.lexists(probe_root):
+            if probe_root.is_symlink() or not probe_root.is_dir():
+                probe_root.unlink()
+            else:
+                shutil.rmtree(probe_root)
+        if os.path.lexists(probe_root):
+            raise OSError("probe root absence proof failed")
+        _fsync_directory(probe_root.parent)
+    except (OSError, FullNode6SupervisorError) as error:
+        failures.append(f"probe_root:{type(error).__name__}:{error}")
+    if failures:
+        _fail(
+            "FAIL_FULL_NODE6_ISOLATION_GAUNTLET_CLEANUP",
+            "|".join(failures),
+        )
+    return {
+        "container_absence": {
+            "PYTHON_CONTROL": "PASS",
+            "RUST_CONTROL": "PASS",
+            "TRUSTED_HOST_REPLAY_CONTROL": "PASS",
+        },
+        "probe_root_absence": "PASS",
+        "probe_root_parent_fsync": "PASS",
+        "schema_version": RUNTIME_ISOLATION_GAUNTLET_CLEANUP_SCHEMA_VERSION,
+        "status": "PASS",
+    }
+
+
+def runtime_isolation_live_gauntlet_v1(
+    project_root: Path,
+    probe_root: Path,
+    identity_suffix: str,
+) -> dict[str, object]:
+    """Run three sequential held /bin/true controls under actor isolation."""
+
+    if (
+        not isinstance(project_root, Path)
+        or not isinstance(probe_root, Path)
+        or type(identity_suffix) is not str
+        or re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?", identity_suffix)
+        is None
+    ):
+        _fail("REJECT_FULL_NODE6_ISOLATION_GAUNTLET", "identity/path differs")
+    try:
+        resolved_project_root = project_root.resolve(strict=True)
+    except OSError as error:
+        _fail("REJECT_FULL_NODE6_ISOLATION_GAUNTLET", f"project root: {error}")
+    if (
+        resolved_project_root != project_root
+        or not project_root.is_dir()
+        or probe_root.exists()
+        or probe_root.is_symlink()
+    ):
+        _fail("REJECT_FULL_NODE6_ISOLATION_GAUNTLET", "root identity differs")
+    seccomp_profile = project_root / SECCOMP_RELATIVE_PATH
+    try:
+        seccomp_payload = seccomp_profile.read_bytes()
+    except OSError as error:
+        _fail("REJECT_FULL_NODE6_ISOLATION_GAUNTLET", f"seccomp profile: {error}")
+    if "sha256:" + sha256(seccomp_payload).hexdigest() != SECCOMP_SHA256:
+        _fail("REJECT_FULL_NODE6_ISOLATION_GAUNTLET", "seccomp profile differs")
+
+    names = _runtime_isolation_live_gauntlet_control_names_v1(identity_suffix)
+    primary_error: BaseException | None = None
+    try:
+        probe_root.mkdir(mode=0o755)
+        python_snapshot = probe_root / "python-snapshot"
+        rust_snapshot = probe_root / "rust-snapshot"
+        host_snapshot = probe_root / "host-replay-snapshot"
+        python_output = probe_root / "python-output"
+        rust_output = probe_root / "rust-output"
+        python_scratch = probe_root / "python-scratch"
+        rust_scratch = probe_root / "rust-scratch"
+        host_scratch = probe_root / "host-replay-scratch"
+        for snapshot in (python_snapshot, rust_snapshot, host_snapshot):
+            snapshot.mkdir(mode=0o555)
+        for writable in (
+            python_output,
+            rust_output,
+            python_scratch,
+            rust_scratch,
+            host_scratch,
+        ):
+            writable.mkdir(mode=0o777)
+            writable.chmod(0o777)
+        admission = probe_root / "admission.json"
+        admission.write_bytes(b"{}\n")
+        admission.chmod(0o444)
+        rust_control_binary = probe_root / "rust-control-binary"
+        rust_control_binary.write_bytes(b"#!/bin/sh\nexit 0\n")
+        rust_control_binary.chmod(0o555)
+
+        python_command = _common_docker_args(
+            name=names[0],
+            cidfile=probe_root / "python.cid",
+            cpuset="0-11",
+            image=PYTHON_IMAGE,
+            snapshot=python_snapshot,
+            output=python_output,
+            scratch=python_scratch,
+            seccomp_profile=seccomp_profile,
+            additional_mounts=(
+                (admission, "/admission/admission.json", True),
+            ),
+        )
+        rust_command = _common_docker_args(
+            name=names[1],
+            cidfile=probe_root / "rust.cid",
+            cpuset="12-23",
+            image=RUST_IMAGE,
+            snapshot=rust_snapshot,
+            output=rust_output,
+            scratch=rust_scratch,
+            seccomp_profile=seccomp_profile,
+            additional_mounts=(
+                (rust_control_binary, RUST_BINARY_CONTAINER_PATH, True),
+            ),
+        )
+        host_command = _common_docker_args(
+            name=names[2],
+            cidfile=probe_root / "host-replay.cid",
+            cpuset="0-11",
+            image=PYTHON_IMAGE,
+            snapshot=host_snapshot,
+            output=python_output,
+            scratch=host_scratch,
+            seccomp_profile=seccomp_profile,
+            output_destination="/python-output",
+            output_readonly=True,
+            additional_mounts=((rust_output, "/rust-output", True),),
+        )
+        for command in (python_command, rust_command, host_command):
+            _append_actor_hold_v1(command, ("/bin/true",))
+
+        python_result = _launch_endpoint_actual_v1(
+            python_command,
+            probe_root / "python.cid",
+            "PYTHON_ENDPOINT",
+            wall_time_seconds=60,
+        )
+        rust_result = _launch_endpoint_actual_v1(
+            rust_command,
+            probe_root / "rust.cid",
+            "RUST_ENDPOINT",
+            wall_time_seconds=60,
+        )
+        host_result = _launch_host_replay_actual_v1(
+            host_command,
+            probe_root / "host-replay.cid",
+            wall_time_seconds=60,
+        )
+        results = (python_result, rust_result, host_result)
+        expected_actors = (
+            "PYTHON_ENDPOINT",
+            "RUST_ENDPOINT",
+            "TRUSTED_HOST_REPLAY",
+        )
+        if tuple(result.actor_id for result in results) != expected_actors or any(
+            result.return_code != 0 for result in results
+        ):
+            _fail(
+                "FAIL_FULL_NODE6_ISOLATION_GAUNTLET",
+                "held control result differs",
+            )
+    except BaseException as error:
+        primary_error = error
+    finally:
+        runtime_isolation_live_gauntlet_cleanup_v1(
+            probe_root,
+            identity_suffix,
+        )
+    if primary_error is not None:
+        raise primary_error
+    return {
+        "actor_order": [
+            "PYTHON_ENDPOINT",
+            "RUST_ENDPOINT",
+            "TRUSTED_HOST_REPLAY",
+        ],
+        "actor_results": {
+            "PYTHON_ENDPOINT": "PASS",
+            "RUST_ENDPOINT": "PASS",
+            "TRUSTED_HOST_REPLAY": "PASS",
+        },
+        "container_workload": "/bin/true",
+        "network_isolation": "PASS",
+        "pinned_images": {
+            "PYTHON_ENDPOINT": PYTHON_IMAGE,
+            "RUST_ENDPOINT": RUST_IMAGE,
+            "TRUSTED_HOST_REPLAY": PYTHON_IMAGE,
+        },
+        "production_endpoint_start_count": 0,
+        "probe_root_cleanup": "PASS",
+        "quotient_engine_invocation_count": 0,
+        "schema_version": RUNTIME_ISOLATION_GAUNTLET_SCHEMA_VERSION,
+        "signature_selection_count": 0,
+        "status": "PASS",
+        "supervisor_popen_count": 0,
+    }
 
 
 LaunchSequence = Callable[

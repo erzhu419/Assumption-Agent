@@ -12,12 +12,12 @@ from typing import Any, Final, Mapping, NoReturn
 
 
 CONTRACT_SCHEMA_VERSION: Final = (
-    "hegel-phase3a-q1-full-node6-campaign-contract/2"
+    "hegel-phase3a-q1-full-node6-campaign-contract/3"
 )
-CONTRACT_ID: Final = "hegel-phase3a-q1-full-node6-campaign-successor-v2"
+CONTRACT_ID: Final = "hegel-phase3a-q1-full-node6-campaign-successor-v3"
 CAPSULE_SCHEMA_VERSION: Final = "hegel-phase3a-q1-full-node6-capsule/1"
 PENDING_SCHEMA_VERSION: Final = "hegel-phase3a-q1-full-node6-pending/1"
-LEDGER_SCHEMA_VERSION: Final = "hegel-phase3a-q1-full-node6-ledger-record/1"
+LEDGER_SCHEMA_VERSION: Final = "hegel-phase3a-q1-full-node6-ledger-record/2"
 OUTCOME_SCHEMA_VERSION: Final = "hegel-phase3a-q1-full-node6-outcome/1"
 
 PREFLIGHT_ADMITTED: Final = "FULL_NODE6_PREFLIGHT_ADMITTED_NOT_CONSUMED"
@@ -32,12 +32,24 @@ OUTCOME_UNKNOWN_TERMINAL: Final = (
 )
 
 OWNER_AUTHORIZATION_TEXT: Final = (
-    "授权 Q1 full-node6 capacity-preflight diagnostic successor-v2 actual"
+    "授权 Q1 full-node6 capacity-preflight diagnostic "
+    "successor-v3 distinct-outer actual；确认 successor-v2 measurement outcome "
+    "UNKNOWN、terminal no-resume，且 prior unknown conservatively counts as "
+    "measurement；另行授权 exact v3 capsule-only additional fresh "
+    "remeasurement；禁止复用 successor-v2 work product"
 )
 OWNER_AUTHORIZATION_BODY: Final = {
-    "schema_version": "hegel-phase3a-q1-full-node6-owner-authorization/1",
+    "schema_version": "hegel-phase3a-q1-full-node6-owner-authorization/3",
     "authority_role": "PROJECT_OWNER",
     "authorization_text": OWNER_AUTHORIZATION_TEXT,
+    "superseded_v2_resume_allowed": False,
+    "distinct_fresh_successor_v3_logical_campaign_only": True,
+    "future_exact_user_authorization_required": True,
+    "prior_measurement_outcome_unknown_acknowledged": True,
+    "prior_unknown_conservatively_counts_as_measurement": True,
+    "new_measurement_budget_scope": "V3_CAPSULE_ONLY",
+    "new_measurement_is_explicitly_additional": True,
+    "v2_work_product_reuse_allowed": False,
     "logical_campaign_count": 1,
     "maximum_supervisor_popen_count": 1,
     "maximum_quotient_measurement_count_per_endpoint_signature": 1,
@@ -53,9 +65,9 @@ OWNER_AUTHORIZATION_BODY: Final = {
 }
 
 DOMAINS: Final = {
-    "authorization": b"HEGEL/Q1/FULL_NODE6/AUTHORIZATION/V1\x00",
+    "authorization": b"HEGEL/Q1/FULL_NODE6/AUTHORIZATION/SUCCESSOR_V3/V1\x00",
     "capsule": b"HEGEL/Q1/FULL_NODE6/CAPSULE/V1\x00",
-    "contract": b"HEGEL/Q1/FULL_NODE6/CONTRACT/V2\x00",
+    "contract": b"HEGEL/Q1/FULL_NODE6/CONTRACT/SUCCESSOR_V3/V1\x00",
     "ledger": b"HEGEL/Q1/FULL_NODE6/LEDGER/V1\x00",
     "outcome": b"HEGEL/Q1/FULL_NODE6/OUTCOME/V1\x00",
     "pending": b"HEGEL/Q1/FULL_NODE6/PENDING/V1\x00",
@@ -172,10 +184,16 @@ def validate_contract_v1(value: object) -> dict[str, Any]:
     if (
         lineage.get("project_root")
         != "/home/erzhu419/.local/state/hegel-machine/m3-start-runtime-worktree/Hegel Machine"
+        or lineage.get("required_ancestor_commit")
+        != "33dc9cbb7d753f83650169d6d6b9caa508927764"
+        or lineage.get("required_parent_commit")
+        != "1321eb3be3c28f823fba04b947bb96ee16d35f6c"
         or lineage.get("clean_head_required") is not True
         or lineage.get("additive_successor_only") is not True
         or type(lineage.get("additive_paths_in_exact_order")) is not list
         or not lineage["additive_paths_in_exact_order"]
+        or "docs/Hegel_Machine_Current_State_Reconciliation_v4.md"
+        not in lineage["additive_paths_in_exact_order"]
     ):
         _fail("source lineage differs")
     predecessor = _object(contract["predecessor"], "predecessor")
@@ -211,9 +229,32 @@ def validate_contract_v1(value: object) -> dict[str, Any]:
     _commit(superseded.get("source_commit"), "superseded_campaign.source_commit")
     if (
         superseded.get("terminal_status") != FAILED_TERMINAL
-        or superseded.get("error_code") != "FAIL_FULL_NODE6_SUPERVISOR_SOURCE"
-        or superseded.get("trajectory_event_count") != 8
-        or superseded.get("measurement_endpoint_start_count") != 0
+        or superseded.get("capsule_digest")
+        != "sha256:8eec9c3afaaea443553cd886c84879f465e0b15f406c7f88a6bfef512867cdde"
+        or superseded.get("source_commit")
+        != "1321eb3be3c28f823fba04b947bb96ee16d35f6c"
+        or superseded.get("consumed_ledger_record_digest")
+        != "sha256:4643ee4c0740f5f374eb32d6dfaf9c24e0338d47979666a246c1be920e7dc6e4"
+        or superseded.get("consumed_ledger_file_sha256")
+        != "sha256:d43522bc1df643dc1e56cf0a30826b44e5f758e14dfeab9d58cdf07d59e724a2"
+        or superseded.get("terminal_ledger_record_digest")
+        != "sha256:fabe961525bfc101907b099ca11a8c77b404e2e27253f8f6a615af68dc7b5e81"
+        or superseded.get("terminal_ledger_file_sha256")
+        != "sha256:f85afc4790dd25da050ba91f36044429030cbae5aaab5f4275ca96603fa661bd"
+        or superseded.get("outcome_digest")
+        != "sha256:b5bfd879546b15bfe9a19646ab87e8fd5a886dcd4ed99122d4d69644dc43f7cd"
+        or superseded.get("trajectory_event_log_file_sha256")
+        != "sha256:bd2959d92d39c4c983c6797f3e0dfdf1f1e23be256a0d61a6cfaf967aafe40cd"
+        or superseded.get("trajectory_terminal_file_sha256")
+        != "sha256:d5f9a867dbc65fb673e41195498334f96551bc78ecd4a2665b413b4ad089fbf8"
+        or superseded.get("error_code") != "FAIL_FULL_NODE6_SUPERVISOR_RESOURCE"
+        or superseded.get("error_detail") != "PYTHON_ENDPOINT isolation differs"
+        or superseded.get("trajectory_event_count") != 27
+        or superseded.get("measurement_outcome") != "UNKNOWN"
+        or superseded.get("measurement_endpoint_start_count") != 1
+        or superseded.get("python_endpoint_start_count") != 1
+        or superseded.get("rust_endpoint_start_count") != 0
+        or superseded.get("trusted_host_replay_start_count") != 0
         or superseded.get("q1_state") != "NOT_RUN"
         or superseded.get("q1_gate_count") != 0
         or superseded.get("q1_gate_mask") != 0
@@ -223,12 +264,47 @@ def validate_contract_v1(value: object) -> dict[str, Any]:
     target = _object(contract["target"], "target")
     if (
         target.get("action_id") != "full-node6-capacity-preflight-v1"
+        or target.get("technical_contract_relative_path")
+        != "config/phase3_q1_full_node6_capacity_preflight_v1.json"
+        or target.get("artifact_relative_path")
+        != "artifacts/phase3_q1_full_node6_capacity_preflight_v3.json"
         or target.get("allowed_success_status") != SATURATED
         or target.get("maximum_supervisor_popen_count") != 1
         or target.get("maximum_measurements_per_endpoint_signature") != 1
         or target.get("fresh_quotient_rerun_for_projection_forbidden") is not True
     ):
         _fail("target execution boundary differs")
+    fixed = _object(contract["fixed_paths"], "fixed_paths")
+    if set(fixed) != {
+        "project_root",
+        "cargo_cache_source",
+        "campaign_lock_path",
+        "ledger_root",
+        "evidence_root",
+        "trajectory_root",
+        "run_root",
+        "probe_root",
+        "artifact_path",
+        "stdout_path",
+        "stderr_path",
+    } or any(type(item) is not str or not item for item in fixed.values()):
+        _fail("fresh successor-v3 paths differ")
+    if contract["preconsumption_gate_order"] != [
+        "AUTHORIZATION_TEXT",
+        "PATH_AND_FORMAT",
+        "SOURCE_LINEAGE_AND_OBJECT_CLOSURE",
+        "PREDECESSOR_TERMINAL_AND_ARTIFACT",
+        "SUPERSEDED_CAMPAIGN_TERMINAL",
+        "TECHNICAL_CONTRACT_AND_FROZEN_SEMANTICS",
+        "EXACT_COMMIT_SNAPSHOT_MATERIALIZATION",
+        "PYTHON_RUST_OFFLINE_DEPENDENCIES",
+        "PINNED_LOCAL_IMAGES_AND_DAEMON",
+        "CPU_TOPOLOGY_AND_EXACT_AFFINITY",
+        "RUNTIME_ISOLATION_LIVE_GAUNTLET",
+        "MEMORY_AND_STORAGE_RESERVATION",
+        "CURRENT_FUTURE_FORMAL_AND_PROBE_ROOTS_ABSENT",
+    ]:
+        _fail("preconsumption gate order differs")
     execution = _object(contract["execution_policy"], "execution_policy")
     if (
         execution.get("logical_campaign_count") != 1
@@ -238,6 +314,15 @@ def validate_contract_v1(value: object) -> dict[str, Any]:
         or execution.get("all_gates_before_consumption_and_popen") is not True
         or execution.get("pending_requires_zero_ledger_write_and_zero_popen")
         is not True
+        or execution.get("same_capsule_pending_reentry_allowed") is not True
+        or execution.get("runtime_isolation_live_gauntlet_required_receipt")
+        != {
+            "probe_command": "/bin/true",
+            "quotient_engine_invocation_count": 0,
+            "signature_selection_count": 0,
+            "production_endpoint_start_count": 0,
+            "supervisor_popen_count": 0,
+        }
         or execution.get("postconsumption_terminal_no_resume") is not True
         or execution.get("network_allowed") is not False
         or execution.get("q1_state") != "NOT_RUN"

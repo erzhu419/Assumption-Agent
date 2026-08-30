@@ -88,6 +88,9 @@ def _consumed(tool, contract, capsule):
             "capsule": capsule,
             "maximum_supervisor_popen_count": 1,
             "maximum_measurements_per_endpoint_signature": 1,
+            "runtime_isolation_live_gauntlet_receipt": (
+                tool._expected_runtime_isolation_live_gauntlet_receipt_v1()
+            ),
         },
     )
 
@@ -130,7 +133,13 @@ def test_live_pending_is_bound_to_the_same_capsule(
     monkeypatch.setattr(
         tool,
         "_superseded_campaign_gate",
-        lambda _contract: {"measurement_endpoint_start_count": 0},
+        lambda _contract: {
+            "measurement_outcome": "UNKNOWN",
+            "measurement_endpoint_start_count": 1,
+            "python_endpoint_start_count": 1,
+            "rust_endpoint_start_count": 0,
+            "trusted_host_replay_start_count": 0,
+        },
     )
     monkeypatch.setattr(tool, "_technical_contract_gate", lambda _contract: {"ok": True})
     monkeypatch.setattr(tool, "_dependency_gate", lambda *_args: {"ok": True})
@@ -163,6 +172,376 @@ def test_live_pending_is_bound_to_the_same_capsule(
     assert pending["authorization_consumption_count"] == 0
     assert pending["supervisor_popen_count"] == 0
     assert pending["q1_state"] == "NOT_RUN"
+
+
+def test_runtime_isolation_live_gauntlet_gate_accepts_only_exact_zero_receipt(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tool = _load_tool()
+    contract = _temporary_contract(tool, tmp_path)
+    calls: list[tuple[Path, Path, str]] = []
+    schema = "hegel-phase3a-q1-full-node6-runtime-isolation-live-gauntlet/1"
+    expected = {
+        "actor_order": [
+            "PYTHON_ENDPOINT",
+            "RUST_ENDPOINT",
+            "TRUSTED_HOST_REPLAY",
+        ],
+        "actor_results": {
+            "PYTHON_ENDPOINT": "PASS",
+            "RUST_ENDPOINT": "PASS",
+            "TRUSTED_HOST_REPLAY": "PASS",
+        },
+        "container_workload": "/bin/true",
+        "network_isolation": "PASS",
+        "pinned_images": {
+            "PYTHON_ENDPOINT": tool.PYTHON_IMAGE,
+            "RUST_ENDPOINT": tool.RUST_IMAGE,
+            "TRUSTED_HOST_REPLAY": tool.PYTHON_IMAGE,
+        },
+        "production_endpoint_start_count": 0,
+        "probe_root_cleanup": "PASS",
+        "quotient_engine_invocation_count": 0,
+        "schema_version": schema,
+        "signature_selection_count": 0,
+        "status": "PASS",
+        "supervisor_popen_count": 0,
+    }
+
+    class SupervisorError(RuntimeError):
+        pass
+
+    def gauntlet(project_root: Path, probe_root: Path, identity_suffix: str):
+        calls.append((project_root, probe_root, identity_suffix))
+        return deepcopy(expected)
+
+    supervisor = SimpleNamespace(
+        FullNode6SupervisorError=SupervisorError,
+        RUNTIME_ISOLATION_GAUNTLET_SCHEMA_VERSION=schema,
+        runtime_isolation_live_gauntlet_v1=gauntlet,
+    )
+    monkeypatch.setattr(tool, "_load_supervisor_module_v1", lambda: supervisor)
+    capsule_digest = "sha256:" + "a" * 64
+    receipt = tool._runtime_isolation_live_gauntlet_gate(contract, capsule_digest)
+    probe_root = Path(contract["fixed_paths"]["probe_root"])
+    assert receipt == expected
+    assert calls == [(tool.PROJECT_ROOT, probe_root, capsule_digest[-12:])]
+    assert not probe_root.exists()
+    assert receipt["quotient_engine_invocation_count"] == 0
+    assert receipt["signature_selection_count"] == 0
+    assert receipt["production_endpoint_start_count"] == 0
+    assert receipt["supervisor_popen_count"] == 0
+
+
+def test_runtime_isolation_live_gauntlet_failure_is_preconsumption_pending(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tool = _load_tool()
+    contract = _temporary_contract(tool, tmp_path)
+
+    class SupervisorError(RuntimeError):
+        def __init__(self) -> None:
+            super().__init__("synthetic inline seccomp mismatch")
+            self.code = "FAIL_FULL_NODE6_ISOLATION_GAUNTLET"
+            self.detail = "synthetic inline seccomp mismatch"
+
+    supervisor = SimpleNamespace(
+        FullNode6SupervisorError=SupervisorError,
+        RUNTIME_ISOLATION_GAUNTLET_SCHEMA_VERSION="unused",
+        runtime_isolation_live_gauntlet_v1=lambda *_args: (_ for _ in ()).throw(
+            SupervisorError()
+        ),
+        runtime_isolation_live_gauntlet_cleanup_v1=lambda *_args: (
+            tool._expected_runtime_isolation_live_gauntlet_cleanup_receipt_v1()
+        ),
+    )
+    monkeypatch.setattr(tool, "_load_supervisor_module_v1", lambda: supervisor)
+    with pytest.raises(tool.GatePending) as caught:
+        tool._runtime_isolation_live_gauntlet_gate(contract, "a" * 40)
+    assert caught.value.phase == "RUNTIME_ISOLATION_LIVE_GAUNTLET"
+    assert caught.value.condition == "RUNTIME_ISOLATION_CONTROL_UNAVAILABLE"
+    assert "FAIL_FULL_NODE6_ISOLATION_GAUNTLET" in caught.value.detail
+    assert not Path(contract["fixed_paths"]["probe_root"]).exists()
+
+
+def test_runtime_isolation_uncertain_cleanup_is_terminal_not_dirty_pending(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tool = _load_tool()
+    contract = _temporary_contract(tool, tmp_path)
+
+    class SupervisorError(RuntimeError):
+        def __init__(self, code: str) -> None:
+            super().__init__(code)
+            self.code = code
+            self.detail = code
+
+    supervisor = SimpleNamespace(
+        FullNode6SupervisorError=SupervisorError,
+        runtime_isolation_live_gauntlet_v1=lambda *_args: (_ for _ in ()).throw(
+            SupervisorError("FAIL_FULL_NODE6_ISOLATION_GAUNTLET")
+        ),
+        runtime_isolation_live_gauntlet_cleanup_v1=lambda *_args: (
+            (_ for _ in ()).throw(
+                SupervisorError("FAIL_FULL_NODE6_ISOLATION_GAUNTLET_CLEANUP")
+            )
+        ),
+    )
+    monkeypatch.setattr(tool, "_load_supervisor_module_v1", lambda: supervisor)
+    with pytest.raises(tool.CampaignTerminal) as caught:
+        tool._runtime_isolation_live_gauntlet_gate(
+            contract,
+            "sha256:" + "a" * 64,
+        )
+    assert caught.value.code == (
+        "RUNTIME_ISOLATION_LIVE_GAUNTLET_CLEANUP_UNCERTAIN"
+    )
+
+
+def test_runtime_isolation_supervisor_load_pending_is_mapped_to_gauntlet_pending(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tool = _load_tool()
+    contract = _temporary_contract(tool, tmp_path)
+    monkeypatch.setattr(
+        tool,
+        "_load_supervisor_module_v1",
+        lambda: (_ for _ in ()).throw(
+            tool.GatePending(
+                "PATH_AND_FORMAT",
+                "SUPERVISOR_SOURCE_IMPORT_UNAVAILABLE",
+                "synthetic read permission",
+            )
+        ),
+    )
+    with pytest.raises(tool.GatePending) as caught:
+        tool._runtime_isolation_live_gauntlet_gate(
+            contract,
+            "sha256:" + "a" * 64,
+        )
+    assert caught.value.phase == "RUNTIME_ISOLATION_LIVE_GAUNTLET"
+    assert caught.value.condition == "RUNTIME_ISOLATION_CONTROL_UNAVAILABLE"
+    assert "SUPERVISOR_SOURCE_IMPORT_UNAVAILABLE" in caught.value.detail
+
+
+def test_runtime_isolation_live_gauntlet_rejects_nonzero_or_residual_state(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tool = _load_tool()
+    contract = _temporary_contract(tool, tmp_path)
+    probe_root = Path(contract["fixed_paths"]["probe_root"])
+    schema = "hegel-phase3a-q1-full-node6-runtime-isolation-live-gauntlet/1"
+    receipt = {
+        "actor_order": [
+            "PYTHON_ENDPOINT",
+            "RUST_ENDPOINT",
+            "TRUSTED_HOST_REPLAY",
+        ],
+        "actor_results": {
+            "PYTHON_ENDPOINT": "PASS",
+            "RUST_ENDPOINT": "PASS",
+            "TRUSTED_HOST_REPLAY": "PASS",
+        },
+        "container_workload": "/bin/true",
+        "network_isolation": "PASS",
+        "pinned_images": {
+            "PYTHON_ENDPOINT": tool.PYTHON_IMAGE,
+            "RUST_ENDPOINT": tool.RUST_IMAGE,
+            "TRUSTED_HOST_REPLAY": tool.PYTHON_IMAGE,
+        },
+        "production_endpoint_start_count": 0,
+        "probe_root_cleanup": "PASS",
+        "quotient_engine_invocation_count": 1,
+        "schema_version": schema,
+        "signature_selection_count": 0,
+        "status": "PASS",
+        "supervisor_popen_count": 0,
+    }
+
+    class SupervisorError(RuntimeError):
+        pass
+
+    cleanup_calls: list[Path] = []
+
+    def cleanup(root: Path, _identity_suffix: str):
+        cleanup_calls.append(root)
+        if os.path.lexists(root):
+            root.unlink()
+        return tool._expected_runtime_isolation_live_gauntlet_cleanup_receipt_v1()
+
+    supervisor = SimpleNamespace(
+        FullNode6SupervisorError=SupervisorError,
+        runtime_isolation_live_gauntlet_v1=lambda *_args: receipt,
+        runtime_isolation_live_gauntlet_cleanup_v1=cleanup,
+    )
+    monkeypatch.setattr(tool, "_load_supervisor_module_v1", lambda: supervisor)
+    with pytest.raises(tool.GatePending) as caught:
+        tool._runtime_isolation_live_gauntlet_gate(
+            contract,
+            "sha256:" + "a" * 64,
+        )
+    assert caught.value.condition == "RUNTIME_ISOLATION_CONTROL_UNAVAILABLE"
+    assert not os.path.lexists(probe_root)
+    assert cleanup_calls == [probe_root]
+
+    receipt["quotient_engine_invocation_count"] = 0
+    probe_root.symlink_to(tmp_path / "missing-target")
+    with pytest.raises(tool.GatePending) as caught:
+        tool._runtime_isolation_live_gauntlet_gate(
+            contract,
+            "sha256:" + "a" * 64,
+        )
+    assert caught.value.condition == "RUNTIME_ISOLATION_CONTROL_UNAVAILABLE"
+    assert not os.path.lexists(probe_root)
+    assert cleanup_calls == [probe_root, probe_root]
+
+
+def test_live_gate_order_places_isolation_before_resources_and_state_probes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tool = _load_tool()
+    contract = _contract(tool)
+    events: list[str] = []
+    source = {
+        "source_commit": "1" * 40,
+        "source_tree": "2" * 40,
+        "source_closure_digest": "sha256:" + "3" * 64,
+        "source_rows": [],
+    }
+    monkeypatch.setattr(tool, "load_contract_v1", lambda: contract)
+    monkeypatch.setattr(tool, "_source_gate", lambda _contract: source)
+    monkeypatch.setattr(tool, "_predecessor_gate", lambda _contract: {"ok": True})
+    monkeypatch.setattr(
+        tool,
+        "_superseded_campaign_gate",
+        lambda _contract: {"measurement_outcome": "UNKNOWN"},
+    )
+    monkeypatch.setattr(tool, "_technical_contract_gate", lambda _contract: {"ok": True})
+    monkeypatch.setattr(tool, "_dependency_gate", lambda *_args: {"ok": True})
+    monkeypatch.setattr(
+        tool,
+        "_docker_gate",
+        lambda: events.append("docker") or {"ok": True},
+    )
+    monkeypatch.setattr(
+        tool,
+        "_cpu_gate",
+        lambda: events.append("cpu") or {"ok": True},
+    )
+    monkeypatch.setattr(
+        tool,
+        "_runtime_isolation_live_gauntlet_gate",
+        lambda _contract, _source_commit: events.append("runtime_isolation")
+        or {"ok": True},
+    )
+    monkeypatch.setattr(
+        tool,
+        "_resource_gate",
+        lambda _contract: events.append("resources") or {"ok": True},
+    )
+    monkeypatch.setattr(
+        tool,
+        "_state_absence_gate",
+        lambda _contract, *, allow_ledger: events.append("absence")
+        or {"allow_ledger": allow_ledger},
+    )
+    monkeypatch.setattr(
+        tool,
+        "_probe_gate",
+        lambda _contract: events.append("write_probe") or {"ok": True},
+    )
+    result = tool.derive_preflight_v1(include_live_gates=True)
+    assert events == [
+        "docker",
+        "cpu",
+        "runtime_isolation",
+        "resources",
+        "absence",
+        "write_probe",
+    ]
+    assert list(result["live_gate_receipts"]) == [
+        "docker",
+        "cpu",
+        "runtime_isolation",
+        "resources",
+        "absence",
+        "write_probe",
+    ]
+    assert result["campaign_execution_count"] == 0
+    assert result["authorization_consumption_count"] == 0
+    assert result["supervisor_popen_count"] == 0
+
+
+def test_consumed_ledger_persists_exact_live_gauntlet_receipt_before_popen(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tool = _load_tool()
+    contract = _temporary_contract(tool, tmp_path)
+    capsule = _capsule(tool, contract)
+    receipt = tool._expected_runtime_isolation_live_gauntlet_receipt_v1()
+    monkeypatch.setattr(tool, "load_contract_v1", lambda: contract)
+    monkeypatch.setattr(tool, "_replay_existing", lambda *_args: None)
+    monkeypatch.setattr(
+        tool,
+        "derive_preflight_v1",
+        lambda **_kwargs: {
+            "capsule": capsule,
+            "live_gate_receipts": {"runtime_isolation": receipt},
+        },
+    )
+    monkeypatch.setattr(tool._CampaignLock, "__enter__", lambda self: self)
+    monkeypatch.setattr(tool._CampaignLock, "__exit__", lambda self, *args: None)
+
+    def before_popen(_contract, _capsule, consumed):
+        ledger_path = Path(contract["fixed_paths"]["ledger_root"]) / (
+            "campaign.consumed.json"
+        )
+        assert ledger_path.is_file()
+        assert json.loads(ledger_path.read_bytes()) == consumed
+        assert consumed["body"]["runtime_isolation_live_gauntlet_receipt"] == receipt
+        return {"status": "SYNTHETIC_POSTCONSUMPTION_STOP"}
+
+    monkeypatch.setattr(tool, "_execute_postconsumption_v1", before_popen)
+    result = tool.execute_once_v1(capsule["capsule_digest"])
+    assert result["status"] == "SYNTHETIC_POSTCONSUMPTION_STOP"
+
+
+def test_consumed_ledger_replay_rejects_mutated_live_gauntlet_receipt() -> None:
+    tool = _load_tool()
+    contract = _contract(tool)
+    capsule = _capsule(tool, contract)
+    consumed = _consumed(tool, contract, capsule)
+    checked, checked_capsule = tool._validate_consumed_record_v1(
+        consumed,
+        contract,
+        capsule["capsule_digest"],
+    )
+    assert checked == consumed
+    assert checked_capsule == capsule
+
+    mutated = deepcopy(consumed)
+    mutated["body"]["runtime_isolation_live_gauntlet_receipt"][
+        "production_endpoint_start_count"
+    ] = 1
+    unsigned = deepcopy(mutated)
+    unsigned.pop("record_digest")
+    mutated["record_digest"] = tool._core.domain_digest_v1(
+        tool._core.DOMAINS["ledger"],
+        unsigned,
+    )
+    with pytest.raises(tool.CampaignTerminal) as caught:
+        tool._validate_consumed_record_v1(
+            mutated,
+            contract,
+            capsule["capsule_digest"],
+        )
+    assert caught.value.code == "LEDGER_CONSUMED_DIFFERS"
 
 
 def test_supervisor_import_permission_failure_is_preconsumption_pending(
@@ -347,12 +726,16 @@ def test_source_gate_binds_required_parent_descendant_and_diffs_from_predecessor
     )
 
 
-def test_superseded_campaign_replays_terminal_and_proves_zero_measurement_start() -> None:
+def test_superseded_campaign_replays_terminal_unknown_without_resume() -> None:
     tool = _load_tool()
     receipt = tool._superseded_campaign_gate(_contract(tool))
     assert receipt["terminal_status"] == tool._core.FAILED_TERMINAL
-    assert receipt["measurement_endpoint_start_count"] == 0
-    assert receipt["trajectory_event_count"] == 8
+    assert receipt["measurement_outcome"] == "UNKNOWN"
+    assert receipt["measurement_endpoint_start_count"] == 1
+    assert receipt["python_endpoint_start_count"] == 1
+    assert receipt["rust_endpoint_start_count"] == 0
+    assert receipt["trusted_host_replay_start_count"] == 0
+    assert receipt["trajectory_event_count"] == 27
     assert receipt["q1_state"] == "NOT_RUN"
     assert receipt["retry_or_resume_allowed"] is False
 
@@ -1119,17 +1502,212 @@ def test_postconsumption_popen_failure_finalizes_unknown_without_pending(
     result = tool._execute_postconsumption_v1(contract, capsule, consumed)
     assert result["status"] == tool._core.OUTCOME_UNKNOWN_TERMINAL
     assert result["authorization_consumption_count"] == 1
-    assert result["supervisor_popen_count"] == 0
-    assert result["supervisor_popen_count_this_entry"] == 0
+    assert result["supervisor_popen_count"] == 1
+    assert result["supervisor_popen_count_this_entry"] == 1
     terminal = tool._read_record(ledger / "campaign.terminal.json")
     assert terminal is not None
     outcome = terminal["body"]["outcome"]
     assert outcome["status"] == tool._core.OUTCOME_UNKNOWN_TERMINAL
-    assert outcome["supervisor_popen_count"] == 0
+    assert outcome["supervisor_popen_count"] == 1
     assert "synthetic Popen failure" in outcome["postconsumption_error_or_null"]
     assert terminal["body"]["retry_or_resume_allowed"] is False
     if (evidence / "campaign.outcome.json").exists():
         assert json.loads((evidence / "campaign.outcome.json").read_bytes()) == outcome
+
+
+def test_postconsumption_timeout_kills_process_group_cleans_containers_and_is_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tool = _load_tool()
+    contract = _temporary_contract(tool, tmp_path)
+    capsule = _capsule(tool, contract)
+    consumed = _consumed(tool, contract, capsule)
+    ledger = Path(contract["fixed_paths"]["ledger_root"])
+    ledger.mkdir(mode=0o700)
+    tool._publish_no_replace(ledger, "campaign.consumed.json", consumed)
+
+    class TimedOutChild:
+        pid = 4242
+        running = True
+
+        def wait(self, timeout=None):
+            if timeout is not None and self.running:
+                raise subprocess.TimeoutExpired(["synthetic-supervisor"], timeout)
+            self.running = False
+            return -9
+
+        def poll(self):
+            return None if self.running else -9
+
+        def kill(self):
+            raise AssertionError("process-group kill must be used")
+
+    child = TimedOutChild()
+    killed: list[tuple[int, int]] = []
+    cleanup_calls: list[str] = []
+    scratch_cleanup_calls: list[str] = []
+
+    def killpg(pid: int, sig: int) -> None:
+        if sig == 0:
+            raise ProcessLookupError
+        killed.append((pid, sig))
+        child.running = False
+
+    monkeypatch.setattr(tool.subprocess, "Popen", lambda *_args, **_kwargs: child)
+    monkeypatch.setattr(tool.os, "killpg", killpg)
+    monkeypatch.setattr(
+        tool,
+        "_cleanup_production_containers_best_effort_v1",
+        lambda _capsule: cleanup_calls.append("cleanup") or "PASS",
+    )
+    monkeypatch.setattr(
+        tool,
+        "_cleanup_production_scratch_best_effort_v1",
+        lambda _contract: scratch_cleanup_calls.append("scratch") or "PASS",
+    )
+    result = tool._execute_postconsumption_v1(contract, capsule, consumed)
+    assert result["status"] == tool._core.OUTCOME_UNKNOWN_TERMINAL
+    assert result["supervisor_popen_count"] == 1
+    assert result["supervisor_return_code"] == 124
+    assert result["supervisor_popen_count_this_entry"] == 1
+    assert killed == [(4242, tool.signal.SIGKILL)]
+    assert cleanup_calls == ["cleanup"]
+    assert scratch_cleanup_calls == ["scratch"]
+    terminal = json.loads((ledger / "campaign.terminal.json").read_bytes())
+    error = terminal["body"]["outcome"]["postconsumption_error_or_null"]
+    assert "SUPERVISOR_TIMEOUT" in error
+    assert "supervisor_process_cleanup=PASS:" in error
+    assert "production_container_cleanup=PASS" in error
+    assert "production_scratch_cleanup=PASS" in error
+    assert terminal["body"]["retry_or_resume_allowed"] is False
+
+
+def test_outer_production_container_cleanup_uses_exact_capsule_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tool = _load_tool()
+    capsule = {"capsule_digest": "sha256:" + "a" * 64}
+    calls: list[tuple[str, ...]] = []
+
+    def run(command, **_kwargs):
+        calls.append(tuple(command))
+        if command[1:3] == ["container", "inspect"]:
+            return subprocess.CompletedProcess(command, 1, b"", b"Error: No such object")
+        return subprocess.CompletedProcess(command, 0, b"", b"")
+
+    monkeypatch.setattr(tool.subprocess, "run", run)
+    assert tool._cleanup_production_containers_best_effort_v1(capsule) == "PASS"
+    suffix = "a" * 12
+    names = (
+        f"hegel-q1-node6-python-{suffix}",
+        f"hegel-q1-node6-rust-{suffix}",
+        f"hegel-q1-node6-host-replay-{suffix}",
+    )
+    assert calls == [
+        item
+        for name in names
+        for item in (
+            (tool.DOCKER, "rm", "-f", name),
+            (tool.DOCKER, "container", "inspect", name),
+        )
+    ]
+
+
+def test_outer_production_scratch_cleanup_preserves_run_evidence(
+    tmp_path: Path,
+) -> None:
+    tool = _load_tool()
+    contract = _temporary_contract(tool, tmp_path)
+    run_root = Path(contract["fixed_paths"]["run_root"])
+    run_root.mkdir(mode=0o700)
+    retained = run_root / "retained-trajectory-evidence.json"
+    retained.write_text("{}\n", encoding="ascii")
+    for name in (
+        "python-scratch",
+        "rust-scratch",
+        "host-replay-scratch",
+    ):
+        scratch = run_root / name
+        scratch.mkdir()
+        (scratch / "transient.bin").write_bytes(b"transient")
+    assert tool._cleanup_production_scratch_best_effort_v1(contract) == "PASS"
+    assert retained.read_text(encoding="ascii") == "{}\n"
+    assert all(
+        not os.path.lexists(run_root / name)
+        for name in (
+            "python-scratch",
+            "rust-scratch",
+            "host-replay-scratch",
+        )
+    )
+
+
+def test_outer_process_cleanup_is_bounded_and_reports_failed_exit_proof(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tool = _load_tool()
+
+    class UnstoppableChild:
+        pid = 4343
+        wait_calls = 0
+
+        def poll(self):
+            return None
+
+        def kill(self):
+            raise OSError("synthetic fallback kill failure")
+
+        def wait(self, timeout=None):
+            assert timeout == 30
+            self.wait_calls += 1
+            raise subprocess.TimeoutExpired(["synthetic-supervisor"], timeout)
+
+    child = UnstoppableChild()
+    monkeypatch.setattr(
+        tool.os,
+        "killpg",
+        lambda *_args: (_ for _ in ()).throw(
+            OSError("synthetic process-group kill failure")
+        ),
+    )
+    receipt = tool._stop_child_best_effort(child)
+    assert receipt.startswith("FAILED:")
+    assert "group_kill=FAILED" in receipt
+    assert "group_absence=FAILED" in receipt
+    assert "fallback_kill=FAILED" in receipt
+    assert "wait=FAILED" in receipt
+    assert child.wait_calls == 2
+
+
+def test_outer_process_cleanup_kills_group_after_leader_already_exited(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tool = _load_tool()
+
+    class ExitedLeader:
+        pid = 4444
+
+        def wait(self, timeout=None):
+            assert timeout == 30
+            return 2
+
+        def kill(self):
+            raise AssertionError("group kill succeeds, fallback is not required")
+
+    signals: list[int] = []
+
+    def killpg(_pid: int, sig: int) -> None:
+        if sig == 0:
+            raise ProcessLookupError
+        signals.append(sig)
+
+    monkeypatch.setattr(tool.os, "killpg", killpg)
+    receipt = tool._stop_child_best_effort(ExitedLeader())
+    assert receipt.startswith("PASS:")
+    assert "group_kill=PASS" in receipt
+    assert "group_absence=PASS" in receipt
+    assert signals == [tool.signal.SIGKILL]
 
 
 def test_postconsumption_stdout_read_pending_becomes_unknown_after_one_popen(
@@ -1145,6 +1723,8 @@ def test_postconsumption_stdout_read_pending_becomes_unknown_after_one_popen(
     tool._publish_no_replace(ledger, "campaign.consumed.json", consumed)
 
     class CompletedChild:
+        pid = 4545
+
         def wait(self, timeout=None):
             return 0
 
@@ -1166,7 +1746,22 @@ def test_postconsumption_stdout_read_pending_becomes_unknown_after_one_popen(
         return real_read(path, label, maximum)
 
     monkeypatch.setattr(tool.subprocess, "Popen", lambda *_args, **_kwargs: CompletedChild())
+    def kill_completed_group(_pid: int, sig: int) -> None:
+        if sig == 0:
+            raise ProcessLookupError
+
+    monkeypatch.setattr(tool.os, "killpg", kill_completed_group)
     monkeypatch.setattr(tool, "_read_regular", fail_stdout)
+    monkeypatch.setattr(
+        tool,
+        "_cleanup_production_containers_best_effort_v1",
+        lambda _capsule: "PASS",
+    )
+    monkeypatch.setattr(
+        tool,
+        "_cleanup_production_scratch_best_effort_v1",
+        lambda _contract: "PASS",
+    )
     result = tool._execute_postconsumption_v1(contract, capsule, consumed)
     assert result["status"] == tool._core.OUTCOME_UNKNOWN_TERMINAL
     assert result["supervisor_popen_count"] == 1
@@ -1175,4 +1770,13 @@ def test_postconsumption_stdout_read_pending_becomes_unknown_after_one_popen(
     outcome = terminal["body"]["outcome"]
     assert outcome["supervisor_popen_count"] == 1
     assert "synthetic stdout read failure" in outcome["postconsumption_error_or_null"]
+    assert "supervisor_process_cleanup=PASS:" in outcome[
+        "postconsumption_error_or_null"
+    ]
+    assert "production_container_cleanup=PASS" in outcome[
+        "postconsumption_error_or_null"
+    ]
+    assert "production_scratch_cleanup=PASS" in outcome[
+        "postconsumption_error_or_null"
+    ]
     assert terminal["body"]["retry_or_resume_allowed"] is False

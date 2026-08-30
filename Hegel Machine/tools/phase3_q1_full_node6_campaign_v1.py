@@ -11,10 +11,12 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from typing import Any, Mapping, NoReturn, Sequence
 
 
@@ -50,6 +52,7 @@ RUST_IMAGE = (
     "rust@sha256:"
     "38bc5a86d998772d4aec2348656ed21438d20fcdce2795b56ca434cf21430d89"
 )
+DOCKER = "/usr/bin/docker"
 PINNED_PYTHON_RUNTIME_VERSION = "3.11.15"
 PYTHON_SOURCE_RECIPE_MODULE_COUNT = 33
 
@@ -490,7 +493,26 @@ def _superseded_campaign_gate(contract: Mapping[str, Any]) -> dict[str, object]:
         ("LOCAL_IMAGE_ADMISSION", "STARTED"),
         ("LOCAL_IMAGE_ADMISSION", "COMPLETED"),
         ("SOURCE_SNAPSHOTS", "STARTED"),
-        ("SOURCE_SNAPSHOTS", "FAILED"),
+        ("SOURCE_SNAPSHOTS", "COMPLETED"),
+        ("SECCOMP_PROFILE_PUBLICATION", "STARTED"),
+        ("SECCOMP_PROFILE_PUBLICATION", "COMPLETED"),
+        ("ADMISSION_PUBLICATION", "STARTED"),
+        ("ADMISSION_PUBLICATION", "COMPLETED"),
+        ("RUST_OFFLINE_BUILD", "STARTED"),
+        ("RUST_OFFLINE_BUILD", "COMPLETED"),
+        ("SNAPSHOT_READONLY", "STARTED"),
+        ("SNAPSHOT_READONLY", "COMPLETED"),
+        ("MEASUREMENT_AND_REPLAY", "STARTED"),
+        ("ENDPOINT_COMMAND_PREPARATION", "STARTED"),
+        ("ENDPOINT_COMMAND_PREPARATION", "COMPLETED"),
+        ("SCRATCH_PREPARATION", "STARTED"),
+        ("SCRATCH_PREPARATION", "COMPLETED"),
+        ("ENDPOINT_SEQUENCE", "STARTED"),
+        ("PYTHON_ENDPOINT", "STARTED"),
+        ("SCRATCH_CLEANUP", "STARTED"),
+        ("SCRATCH_CLEANUP", "COMPLETED"),
+        ("PYTHON_ENDPOINT", "FAILED"),
+        ("MEASUREMENT_AND_REPLAY", "FAILED"),
         ("TERMINAL", "FAILED"),
     )
     observed_sequence: list[tuple[object, object]] = []
@@ -542,16 +564,36 @@ def _superseded_campaign_gate(contract: Mapping[str, Any]) -> dict[str, object]:
         != expected["terminal_status"]
         or trajectory_terminal.get("error_code_or_null")
         != expected["error_code"]
+        or trajectory_terminal.get("error_detail_or_null")
+        != expected["error_detail"]
     ):
         _terminal(
             "SUPERSEDED_CAMPAIGN_TRAJECTORY_DIFFERS",
             "terminal trajectory binding differs",
         )
+    python_starts = observed_sequence.count(("PYTHON_ENDPOINT", "STARTED"))
+    rust_starts = observed_sequence.count(("RUST_ENDPOINT", "STARTED"))
+    host_replay_starts = observed_sequence.count(("TRUSTED_HOST_REPLAY", "STARTED"))
+    if (
+        python_starts != expected["python_endpoint_start_count"]
+        or rust_starts != expected["rust_endpoint_start_count"]
+        or host_replay_starts != expected["trusted_host_replay_start_count"]
+        or python_starts + rust_starts
+        != expected["measurement_endpoint_start_count"]
+    ):
+        _terminal(
+            "SUPERSEDED_CAMPAIGN_TRAJECTORY_DIFFERS",
+            "measurement actor start counts differ",
+        )
     return {
         "capsule_digest": value["capsule_digest"],
         "consumed_ledger_file_sha256": consumed_raw_digest,
         "consumed_ledger_record_digest": value["previous_record_digest_or_null"],
-        "measurement_endpoint_start_count": 0,
+        "measurement_outcome": "UNKNOWN",
+        "measurement_endpoint_start_count": python_starts + rust_starts,
+        "python_endpoint_start_count": python_starts,
+        "rust_endpoint_start_count": rust_starts,
+        "trusted_host_replay_start_count": host_replay_starts,
         "outcome_digest": body["outcome_digest"],
         "q1_gate_count": 0,
         "q1_gate_mask": 0,
@@ -1144,6 +1186,132 @@ def _docker_gate() -> dict[str, object]:
     return {"docker_server_version": server.stdout.decode("ascii").strip(), "images": rows}
 
 
+def _expected_runtime_isolation_live_gauntlet_receipt_v1() -> dict[str, object]:
+    return {
+        "actor_order": [
+            "PYTHON_ENDPOINT",
+            "RUST_ENDPOINT",
+            "TRUSTED_HOST_REPLAY",
+        ],
+        "actor_results": {
+            "PYTHON_ENDPOINT": "PASS",
+            "RUST_ENDPOINT": "PASS",
+            "TRUSTED_HOST_REPLAY": "PASS",
+        },
+        "container_workload": "/bin/true",
+        "network_isolation": "PASS",
+        "pinned_images": {
+            "PYTHON_ENDPOINT": PYTHON_IMAGE,
+            "RUST_ENDPOINT": RUST_IMAGE,
+            "TRUSTED_HOST_REPLAY": PYTHON_IMAGE,
+        },
+        "production_endpoint_start_count": 0,
+        "probe_root_cleanup": "PASS",
+        "quotient_engine_invocation_count": 0,
+        "schema_version": (
+            "hegel-phase3a-q1-full-node6-runtime-isolation-live-gauntlet/1"
+        ),
+        "signature_selection_count": 0,
+        "status": "PASS",
+        "supervisor_popen_count": 0,
+    }
+
+
+def _expected_runtime_isolation_live_gauntlet_cleanup_receipt_v1() -> dict[str, object]:
+    return {
+        "container_absence": {
+            "PYTHON_CONTROL": "PASS",
+            "RUST_CONTROL": "PASS",
+            "TRUSTED_HOST_REPLAY_CONTROL": "PASS",
+        },
+        "probe_root_absence": "PASS",
+        "probe_root_parent_fsync": "PASS",
+        "schema_version": (
+            "hegel-phase3a-q1-full-node6-runtime-isolation-live-gauntlet-cleanup/1"
+        ),
+        "status": "PASS",
+    }
+
+
+def _replay_runtime_isolation_live_gauntlet_cleanup_or_terminal_v1(
+    supervisor: Any,
+    probe_root: Path,
+    identity_suffix: str,
+    primary_detail: str,
+) -> dict[str, object]:
+    try:
+        cleanup = supervisor.runtime_isolation_live_gauntlet_cleanup_v1(
+            probe_root,
+            identity_suffix,
+        )
+    except (supervisor.FullNode6SupervisorError, OSError) as cleanup_error:
+        _terminal(
+            "RUNTIME_ISOLATION_LIVE_GAUNTLET_CLEANUP_UNCERTAIN",
+            f"primary={primary_detail}; "
+            f"cleanup={type(cleanup_error).__name__}:{cleanup_error}",
+        )
+    if (
+        cleanup != _expected_runtime_isolation_live_gauntlet_cleanup_receipt_v1()
+        or os.path.lexists(probe_root)
+    ):
+        _terminal(
+            "RUNTIME_ISOLATION_LIVE_GAUNTLET_CLEANUP_UNCERTAIN",
+            f"primary={primary_detail}; cleanup receipt or probe-root absence differs",
+        )
+    return cleanup
+
+
+def _runtime_isolation_live_gauntlet_gate(
+    contract: Mapping[str, Any],
+    capsule_digest: str,
+) -> dict[str, object]:
+    probe_root = Path(str(contract["fixed_paths"]["probe_root"]))
+    try:
+        supervisor = _load_supervisor_module_v1()
+    except GatePending as error:
+        raise GatePending(
+            "RUNTIME_ISOLATION_LIVE_GAUNTLET",
+            "RUNTIME_ISOLATION_CONTROL_UNAVAILABLE",
+            f"{error.phase}/{error.condition}: {error.detail}",
+        ) from error
+    identity_suffix = capsule_digest[-12:]
+    try:
+        receipt = supervisor.runtime_isolation_live_gauntlet_v1(
+            PROJECT_ROOT,
+            probe_root,
+            identity_suffix,
+        )
+    except (supervisor.FullNode6SupervisorError, OSError) as error:
+        _replay_runtime_isolation_live_gauntlet_cleanup_or_terminal_v1(
+            supervisor,
+            probe_root,
+            identity_suffix,
+            f"{type(error).__name__}:{error}",
+        )
+        code = getattr(error, "code", type(error).__name__)
+        detail = getattr(error, "detail", str(error))
+        raise GatePending(
+            "RUNTIME_ISOLATION_LIVE_GAUNTLET",
+            "RUNTIME_ISOLATION_CONTROL_UNAVAILABLE",
+            f"{code}: {detail}; cleanup_replay=PASS",
+        ) from error
+    expected = _expected_runtime_isolation_live_gauntlet_receipt_v1()
+    if receipt != expected or os.path.lexists(probe_root):
+        _replay_runtime_isolation_live_gauntlet_cleanup_or_terminal_v1(
+            supervisor,
+            probe_root,
+            identity_suffix,
+            "exact live-gauntlet receipt or probe-root absence differs",
+        )
+        raise GatePending(
+            "RUNTIME_ISOLATION_LIVE_GAUNTLET",
+            "RUNTIME_ISOLATION_CONTROL_UNAVAILABLE",
+            "exact live-gauntlet receipt or probe-root absence differs; "
+            "cleanup_replay=PASS",
+        )
+    return expected
+
+
 def _mem_available_bytes() -> int:
     try:
         rows = Path("/proc/meminfo").read_text(encoding="ascii").splitlines()
@@ -1270,6 +1438,10 @@ def derive_preflight_v1(*, include_live_gates: bool = True) -> dict[str, object]
         try:
             live["docker"] = _docker_gate()
             live["cpu"] = _cpu_gate()
+            live["runtime_isolation"] = _runtime_isolation_live_gauntlet_gate(
+                contract,
+                str(capsule["capsule_digest"]),
+            )
             live["resources"] = _resource_gate(contract)
             live["absence"] = _state_absence_gate(contract, allow_ledger=False)
             live["write_probe"] = _probe_gate(contract)
@@ -1490,6 +1662,7 @@ _CONSUMED_BODY_FIELDS = {
     "capsule",
     "maximum_supervisor_popen_count",
     "maximum_measurements_per_endpoint_signature",
+    "runtime_isolation_live_gauntlet_receipt",
 }
 _TERMINAL_BODY_FIELDS = {
     "outcome",
@@ -1553,6 +1726,8 @@ def _validate_consumed_record_v1(
         or value.get("previous_record_digest_or_null") is not None
         or body.get("maximum_supervisor_popen_count") != 1
         or body.get("maximum_measurements_per_endpoint_signature") != 1
+        or body.get("runtime_isolation_live_gauntlet_receipt")
+        != _expected_runtime_isolation_live_gauntlet_receipt_v1()
     ):
         _terminal("LEDGER_CONSUMED_DIFFERS", "consumed ledger semantics differ")
     return dict(value), dict(capsule)
@@ -2066,15 +2241,202 @@ def _close_descriptor(descriptor: int) -> None:
         pass
 
 
-def _stop_child_best_effort(child: subprocess.Popen[bytes] | None) -> None:
+def _stop_child_best_effort(child: subprocess.Popen[bytes] | None) -> str:
     if child is None:
-        return
+        return "NOT_STARTED"
+    failures: list[str] = []
+    group_kill = "ATTEMPTED"
+    group_absence = "ATTEMPTED"
+    fallback_kill = "NOT_REQUIRED"
     try:
-        if child.poll() is None:
+        os.killpg(child.pid, signal.SIGKILL)
+        group_kill = "PASS"
+    except ProcessLookupError:
+        group_kill = "ABSENT"
+        group_absence = "PASS"
+    except BaseException as error:
+        group_kill = "FAILED"
+        failures.append(f"killpg:{type(error).__name__}:{error}")
+        fallback_kill = "ATTEMPTED"
+        try:
             child.kill()
-        child.wait()
-    except BaseException:
-        pass
+            fallback_kill = "PASS"
+        except BaseException as fallback_error:
+            fallback_kill = "FAILED"
+            failures.append(
+                f"kill:{type(fallback_error).__name__}:{fallback_error}"
+            )
+    wait_state = "ATTEMPTED"
+    try:
+        child.wait(timeout=30)
+        wait_state = "PASS"
+    except subprocess.TimeoutExpired as error:
+        failures.append(f"wait1:{type(error).__name__}:{error}")
+        if fallback_kill == "NOT_REQUIRED":
+            fallback_kill = "ATTEMPTED"
+            try:
+                child.kill()
+                fallback_kill = "PASS"
+            except BaseException as fallback_error:
+                fallback_kill = "FAILED"
+                failures.append(
+                    f"kill:{type(fallback_error).__name__}:{fallback_error}"
+                )
+        try:
+            child.wait(timeout=30)
+            wait_state = "PASS_AFTER_FALLBACK"
+        except BaseException as final_wait_error:
+            wait_state = "FAILED"
+            failures.append(
+                f"wait2:{type(final_wait_error).__name__}:{final_wait_error}"
+            )
+    except BaseException as error:
+        wait_state = "FAILED"
+        failures.append(f"wait:{type(error).__name__}:{error}")
+    if group_absence != "PASS":
+        deadline = time.monotonic() + 5.0
+        while True:
+            try:
+                os.killpg(child.pid, 0)
+            except ProcessLookupError:
+                group_absence = "PASS"
+                break
+            except BaseException as error:
+                group_absence = "FAILED"
+                failures.append(
+                    f"group_absence:{type(error).__name__}:{error}"
+                )
+                break
+            if time.monotonic() >= deadline:
+                group_absence = "FAILED"
+                failures.append("group_absence:timeout")
+                break
+            time.sleep(0.05)
+    status = (
+        "PASS"
+        if group_absence == "PASS" and wait_state.startswith("PASS")
+        else "FAILED"
+    )
+    detail = (
+        f"{status}:group_kill={group_kill},group_absence={group_absence},"
+        f"fallback_kill={fallback_kill},wait={wait_state}"
+    )
+    if failures:
+        detail += "; failures=" + "|".join(failures)[:800]
+    return detail
+
+
+def _cleanup_production_containers_best_effort_v1(
+    capsule: Mapping[str, Any],
+) -> str:
+    suffix = str(capsule["capsule_digest"])[-12:]
+    names = (
+        f"hegel-q1-node6-python-{suffix}",
+        f"hegel-q1-node6-rust-{suffix}",
+        f"hegel-q1-node6-host-replay-{suffix}",
+    )
+    failures: list[str] = []
+    for name in names:
+        removal_failure: str | None = None
+        try:
+            removed = subprocess.run(
+                [DOCKER, "rm", "-f", name],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+                timeout=30,
+            )
+        except (OSError, subprocess.TimeoutExpired) as error:
+            removal_failure = f"{name}:remove:{type(error).__name__}:{error}"
+        else:
+            removed_stderr = removed.stderr.decode("utf-8", "replace")
+            if (
+                removed.returncode != 0
+                and "No such container" not in removed_stderr
+            ):
+                removal_failure = (
+                    f"{name}:remove:return_code={removed.returncode}:"
+                    f"{removed_stderr[-300:]}"
+                )
+        try:
+            inspected = subprocess.run(
+                [DOCKER, "container", "inspect", name],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+                timeout=30,
+            )
+        except (OSError, subprocess.TimeoutExpired) as error:
+            detail = f"{name}:inspect:{type(error).__name__}:{error}"
+            if removal_failure is not None:
+                detail += f"; remove={removal_failure}"
+            failures.append(detail)
+            continue
+        inspected_stderr = inspected.stderr.decode("utf-8", "replace")
+        if inspected.returncode == 0 or not any(
+            marker in inspected_stderr
+            for marker in ("No such container", "No such object")
+        ):
+            detail = (
+                f"{name}:inspect:return_code={inspected.returncode}:"
+                f"{inspected_stderr[-300:]}"
+            )
+            if removal_failure is not None:
+                detail += f"; remove={removal_failure}"
+            failures.append(detail)
+    if failures:
+        return "FAILED:" + "|".join(failures)[:900]
+    return "PASS"
+
+
+def _cleanup_production_scratch_best_effort_v1(
+    contract: Mapping[str, Any],
+) -> str:
+    run_root = Path(str(contract["fixed_paths"]["run_root"]))
+    scratch_roots = tuple(
+        run_root / name
+        for name in (
+            "python-scratch",
+            "rust-scratch",
+            "host-replay-scratch",
+        )
+    )
+    failures: list[str] = []
+    for root in scratch_roots:
+        try:
+            if root.is_symlink():
+                raise OSError("scratch root is a symlink")
+            if root.exists():
+                if not root.is_dir():
+                    raise OSError("scratch root is not a directory")
+                shutil.rmtree(root)
+            if os.path.lexists(root):
+                raise OSError("scratch root absence proof failed")
+        except OSError as error:
+            failures.append(f"{root.name}:{type(error).__name__}:{error}")
+    sync_root = (
+        run_root
+        if run_root.is_dir() and not run_root.is_symlink()
+        else run_root.parent
+    )
+    try:
+        if os.path.lexists(run_root) and sync_root != run_root:
+            raise OSError("run root identity differs")
+        descriptor = os.open(
+            sync_root,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC,
+        )
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+    except OSError as error:
+        failures.append(f"fsync:{type(error).__name__}:{error}")
+    if failures:
+        return "FAILED:" + "|".join(failures)[:900]
+    return "PASS"
 
 
 def _execute_postconsumption_v1(
@@ -2091,6 +2453,7 @@ def _execute_postconsumption_v1(
     return_code: int | None = None
     stdout_digest: str | None = None
     stderr_digest: str | None = None
+    postconsumption_cleanup_already_performed = False
     outcome: dict[str, object]
     try:
         _ensure_private_directory(evidence)
@@ -2107,6 +2470,7 @@ def _execute_postconsumption_v1(
                 os.O_WRONLY | os.O_CREAT | os.O_EXCL,
                 0o400,
             )
+            supervisor_popen_count = 1
             child = subprocess.Popen(
                 _supervisor_command(contract, capsule),
                 cwd=PROJECT_ROOT,
@@ -2114,6 +2478,7 @@ def _execute_postconsumption_v1(
                 stdout=stdout_fd,
                 stderr=stderr_fd,
                 close_fds=True,
+                start_new_session=True,
                 env={
                     "HOME": "/nonexistent",
                     "LANG": "C.UTF-8",
@@ -2122,7 +2487,6 @@ def _execute_postconsumption_v1(
                     "PYTHONDONTWRITEBYTECODE": "1",
                 },
             )
-            supervisor_popen_count = 1
         finally:
             _close_descriptor(stdout_fd)
             _close_descriptor(stderr_fd)
@@ -2132,8 +2496,16 @@ def _execute_postconsumption_v1(
             )
         except subprocess.TimeoutExpired:
             return_code = 124
-            child.kill()
-            child.wait()
+            process_cleanup = _stop_child_best_effort(child)
+            container_cleanup = _cleanup_production_containers_best_effort_v1(capsule)
+            scratch_cleanup = _cleanup_production_scratch_best_effort_v1(contract)
+            postconsumption_cleanup_already_performed = True
+            raise CampaignTerminal(
+                "SUPERVISOR_TIMEOUT",
+                f"return_code=124; supervisor_process_cleanup={process_cleanup}; "
+                f"production_container_cleanup={container_cleanup}; "
+                f"production_scratch_cleanup={scratch_cleanup}",
+            )
         stdout_raw = _read_regular(stdout_path, "supervisor stdout")
         stderr_raw = _read_regular(stderr_path, "supervisor stderr")
         stdout_digest = "sha256:" + sha256(stdout_raw).hexdigest()
@@ -2188,7 +2560,18 @@ def _execute_postconsumption_v1(
             supervisor_popen_count=supervisor_popen_count,
         )
     except BaseException as error:
-        _stop_child_best_effort(child)
+        cleanup_suffix = ""
+        if child is not None and not postconsumption_cleanup_already_performed:
+            process_cleanup = _stop_child_best_effort(child)
+            container_cleanup = _cleanup_production_containers_best_effort_v1(
+                capsule
+            )
+            scratch_cleanup = _cleanup_production_scratch_best_effort_v1(contract)
+            cleanup_suffix = (
+                f"; supervisor_process_cleanup={process_cleanup}; "
+                f"production_container_cleanup={container_cleanup}; "
+                f"production_scratch_cleanup={scratch_cleanup}"
+            )
         if stdout_digest is None:
             stdout_digest = _best_effort_digest(stdout_path)
         if stderr_digest is None:
@@ -2200,7 +2583,7 @@ def _execute_postconsumption_v1(
             return_code=return_code,
             stdout_sha256=stdout_digest,
             stderr_sha256=stderr_digest,
-            detail=f"{type(error).__name__}:{error}",
+            detail=f"{type(error).__name__}:{error}{cleanup_suffix}",
         )
     checked_outcome, _terminal_record = _finalize_consumed_v1(
         contract,
@@ -2269,6 +2652,9 @@ def execute_once_v1(expected_capsule_digest: str) -> dict[str, object]:
                 "capsule": capsule,
                 "maximum_supervisor_popen_count": 1,
                 "maximum_measurements_per_endpoint_signature": 1,
+                "runtime_isolation_live_gauntlet_receipt": preflight[
+                    "live_gate_receipts"
+                ]["runtime_isolation"],
             },
         )
         _publish_consumed_or_pending_v1(

@@ -162,3 +162,12 @@ def test_successor_document_states_the_only_allowed_success_claim() -> None:
     assert "PREFLIGHT_SATURATED_DIAGNOSTIC_ONLY" in payload
     assert "Q1 remains `NOT_RUN`" in payload
     assert "separate later `phase3-q1-start`" in payload
+    assert "successor-v3" in payload
+    assert "measurement outcome is `UNKNOWN`" in payload
+    assert "not a resume or continuation" in payload
+    assert (
+        "授权 Q1 full-node6 capacity-preflight diagnostic "
+        "successor-v3 distinct-outer actual"
+    ) in payload
+    assert "The gauntlet is implemented" in payload
+    assert "not yet been executed, preflighted or authorized" in payload
