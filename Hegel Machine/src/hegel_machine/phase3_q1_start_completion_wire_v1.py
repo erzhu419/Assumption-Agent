@@ -256,14 +256,18 @@ _ENDPOINT_ACTORS: Final = (b"python", b"rust")
 _ALL_ACTORS: Final = (b"python", b"rust", b"host")
 
 # The predecessor Gate-11 envelope is immutable and therefore remains in
-# ``_ACTOR_LIMITS`` exactly as received.  Q1-start endpoint evidence uses this
-# explicitly authorized successor correction for scratch guard 10.
+# ``_ACTOR_LIMITS`` exactly as received.  Q1-start successor evidence uses the
+# explicitly authorized corrections below for endpoint scratch guard 10 and
+# trusted-host memory guard 11.
 FORMAL_ENDPOINT_SCRATCH_BYTES_LIMIT: Final = 134_217_728
+FORMAL_HOST_MEMORY_BYTES_LIMIT: Final = 2_147_483_648
 
 
 def _actor_guard_limit_v1(actor_id: bytes, guard_id: int) -> int:
     if actor_id in _ENDPOINT_ACTORS and guard_id == 10:
         return FORMAL_ENDPOINT_SCRATCH_BYTES_LIMIT
+    if actor_id == b"host" and guard_id == 11:
+        return FORMAL_HOST_MEMORY_BYTES_LIMIT
     return _ACTOR_LIMITS[actor_id][guard_id]
 
 _FORMAL_CAPACITY_LIMIT_FIELDS: Final = (
@@ -1264,10 +1268,9 @@ class Q1DualReplayAgreementV1:
             (11, self.actual_host_peak_rss_bytes),
             (12, self.actual_host_wall_time_ns),
         )
-        limits = _ACTOR_LIMITS[b"host"]
         for guard_id, value in measured:
             checked = _uint(value, f"host guard {guard_id}")
-            ceiling = limits[guard_id]
+            ceiling = _actor_guard_limit_v1(b"host", guard_id)
             if guard_id == 12:
                 ceiling *= 1_000_000_000
             if checked > ceiling:

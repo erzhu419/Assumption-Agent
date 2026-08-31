@@ -590,6 +590,22 @@ def test_gate15_uses_successor_scratch_bound_without_mutating_prestart_wire() ->
         )
 
 
+def test_dual_replay_uses_successor_host_memory_bound_without_mutating_prestart_wire() -> None:
+    historical_host_limits = next(
+        dict(rows)
+        for _ordinal, actor_id, rows in wire.FORMAL_RESOURCE_ENVELOPE[3]
+        if actor_id == b"host"
+    )
+    assert historical_host_limits[11] == 67_108_864
+    assert wire.FORMAL_HOST_MEMORY_BYTES_LIMIT == 2_147_483_648
+    _, _, agreement, _, _, _ = _complete_fixture()
+
+    replace(agreement, actual_host_peak_rss_bytes=111_919_104)
+    replace(agreement, actual_host_peak_rss_bytes=2_147_483_648)
+    with pytest.raises(wire.Q1StartCompletionWireError, match="resource guard"):
+        replace(agreement, actual_host_peak_rss_bytes=2_147_483_649)
+
+
 def test_gate15_decode_rejects_claimed_guard_hit() -> None:
     endpoint = _endpoint(b"python", _root(30), _root(31))
     changed = list(endpoint.canonical_object())

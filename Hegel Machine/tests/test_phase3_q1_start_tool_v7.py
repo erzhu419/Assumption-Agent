@@ -1097,6 +1097,104 @@ def test_partial_finalization_uses_v7_run_spec_without_second_supervisor(
     assert Path(fixed["terminal_path"]).exists()
 
 
+def test_actual_completion_adapter_is_a_thin_dependency_injection_wrapper(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected = b"completion receipt\n"
+    outcome = {"outcome": "frozen"}
+    capsule = {"successor_prestart_bundle": {"bundle": "frozen"}}
+    run_spec = {"run": "frozen"}
+    contract = object()
+    supervisor_module = object()
+    observed: dict[str, object] = {}
+
+    def build_completion_artifact_v1(
+        actual_outcome: object,
+        actual_capsule: object,
+        actual_run_spec: object,
+        **dependencies: object,
+    ) -> bytes:
+        observed.update(
+            {
+                "outcome": actual_outcome,
+                "capsule": actual_capsule,
+                "run_spec": actual_run_spec,
+                **dependencies,
+            }
+        )
+        return expected
+
+    monkeypatch.setattr(tool, "_load_supervisor_module", lambda: supervisor_module)
+    monkeypatch.setattr(
+        tool.completion_adapter,
+        "build_completion_artifact_v1",
+        build_completion_artifact_v1,
+    )
+
+    assert (
+        tool._actual_build_completion_artifact(
+            outcome, contract, capsule, run_spec
+        )
+        == expected
+    )
+    assert observed == {
+        "outcome": outcome,
+        "capsule": capsule,
+        "run_spec": run_spec,
+        "supervisor_module": supervisor_module,
+        "strict_json_bytes": campaign.strict_json_bytes_v7,
+        "validate_successor_bundle": (
+            tool.successor.validate_q1_prestart_successor_candidate_v7
+        ),
+    }
+
+
+def test_completion_adapter_classifies_invalid_frozen_inputs() -> None:
+    with pytest.raises(tool.completion_adapter.CompletionAdapterError) as captured:
+        tool.completion_adapter.build_completion_artifact_v1(
+            {},
+            {},
+            {},
+            supervisor_module=object(),
+            strict_json_bytes=campaign.strict_json_bytes_v7,
+            validate_successor_bundle=lambda _bundle: None,
+        )
+
+    assert captured.value.failure_code == "Q1_START_COMPLETION_ADAPTER_INVALID"
+    assert captured.value.detail == "Gate 16/18 inputs differ"
+    assert captured.value.pending_phase is None
+
+
+@pytest.mark.parametrize("pending_phase", [None, "LOCAL_DEPENDENCY"])
+def test_actual_completion_adapter_preserves_classified_error_behavior(
+    monkeypatch: pytest.MonkeyPatch,
+    pending_phase: str | None,
+) -> None:
+    def reject(*_args: object, **_kwargs: object) -> bytes:
+        raise tool.completion_adapter.CompletionAdapterError(
+            "ADAPTER_TEST_FAILURE",
+            "classified detail",
+            pending_phase=pending_phase,
+        )
+
+    monkeypatch.setattr(
+        tool.completion_adapter,
+        "build_completion_artifact_v1",
+        reject,
+    )
+    expected_error = (
+        tool.ControllerTerminal if pending_phase is None else tool.ControllerPending
+    )
+    with pytest.raises(expected_error) as captured:
+        tool._actual_build_completion_artifact({}, object(), {}, {})
+    if pending_phase is None:
+        assert captured.value.code == "ADAPTER_TEST_FAILURE"
+    else:
+        assert captured.value.phase == "LOCAL_DEPENDENCY"
+        assert captured.value.condition == "ADAPTER_TEST_FAILURE"
+    assert captured.value.detail == "classified detail"
+
+
 def test_actual_completion_adapter_validates_v7_roots_then_builds_v1_receipt(
     state: State,
     tmp_path: Path,
