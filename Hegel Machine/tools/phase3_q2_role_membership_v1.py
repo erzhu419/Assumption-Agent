@@ -1175,6 +1175,7 @@ def run_v1(contract_path: Path, capsule_digest: str) -> dict[str, Any]:
             capsule = _read_capsule(contract, preregistration, capsule_digest)
             if capsule is None:
                 _pending("RUN", "Q2_LOCAL_STATE_UNAVAILABLE", "capsule is absent")
+            _replay_source_closure(capsule)
             authorization = _read_authorization(contract, preregistration, capsule)
             if authorization is None:
                 if consumption_path_observed:
@@ -1233,25 +1234,63 @@ def run_v1(contract_path: Path, capsule_digest: str) -> dict[str, Any]:
                     )
 
             _fresh_absence(contract, allow_capsule=True, allow_authorization=True)
-            _replay_source_closure(capsule)
             admitted, streams, receipt = _target_blind_replay(
                 contract, preregistration
             )
             if receipt != capsule["preflight_receipt"]:
                 _pending("Q1_ARCHIVE", "Q2_Q1_ARCHIVE_UNAVAILABLE", "preflight receipt differs")
             _resource_gate(contract, campaign_started_ns)
-            consumption = state.build_consumption(
+            consumption_candidate = state.build_consumption(
                 contract, preregistration, capsule, authorization
             )
-            _publish_json(
-                Path(contract.value["fixed_paths"]["consumption_path"]),
-                consumption,
-                consumption["record_digest"],
+            consumption_path = Path(
+                contract.value["fixed_paths"]["consumption_path"]
             )
-            replayed_consumption = _read_consumption(
-                contract, preregistration, capsule, authorization
-            )
-            assert replayed_consumption is not None
+            try:
+                _publish_json(
+                    consumption_path,
+                    consumption_candidate,
+                    consumption_candidate["record_digest"],
+                )
+                replayed_consumption = _read_consumption(
+                    contract, preregistration, capsule, authorization
+                )
+                if replayed_consumption is None:
+                    _terminal(
+                        "Q2_CONSUMPTION_REPLAY_ABSENT_AFTER_PUBLICATION",
+                        str(consumption_path),
+                    )
+            except (ControllerPending, ControllerTerminal) as error:
+                if not consumption_path.exists():
+                    raise
+                try:
+                    replayed_consumption = _read_consumption(
+                        contract, preregistration, capsule, authorization
+                    )
+                except (ControllerPending, ControllerTerminal) as replay_error:
+                    return _consumed_state_unreadable_result(
+                        capsule_digest,
+                        replay_error,
+                        capsule=capsule,
+                        authorization=authorization,
+                    )
+                if replayed_consumption is None:
+                    return _consumed_state_unreadable_result(
+                        capsule_digest,
+                        error,
+                        capsule=capsule,
+                        authorization=authorization,
+                    )
+                consumption = replayed_consumption
+                return _publish_invalidated(
+                    contract,
+                    preregistration,
+                    capsule,
+                    authorization,
+                    consumption,
+                    error,
+                    action_audit=_empty_action_audit(),
+                )
             consumption = replayed_consumption
             action_audit = _empty_action_audit()
             try:
@@ -1307,8 +1346,14 @@ def run_v1(contract_path: Path, capsule_digest: str) -> dict[str, Any]:
                     action_audit=action_audit,
                 )
             except Exception as error:
-                return _unsealed_terminal_result(
-                    capsule, authorization, consumption, error
+                return _publish_invalidated(
+                    contract,
+                    preregistration,
+                    capsule,
+                    authorization,
+                    consumption,
+                    error,
+                    action_audit=action_audit,
                 )
     except ControllerPending as error:
         if consumption_path_observed and consumption is None:

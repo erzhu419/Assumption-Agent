@@ -110,6 +110,118 @@ def test_measurement_is_entered_only_after_consumption_publish_and_readback(
     }
 
 
+def test_consumption_publication_failure_before_link_remains_pending(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _, capsule, _, consumption = _harness(monkeypatch, tmp_path)
+    monkeypatch.setattr(controller, "_read_consumption", lambda *_args: None)
+    monkeypatch.setattr(
+        controller,
+        "_target_blind_replay",
+        lambda *_args: (object(), (object(), object()), capsule["preflight_receipt"]),
+    )
+    monkeypatch.setattr(controller.state, "build_consumption", lambda *_args: consumption)
+    monkeypatch.setattr(
+        controller,
+        "_publish_json",
+        lambda *_args: (_ for _ in ()).throw(
+            controller.ControllerPending(
+                "LOCAL_STATE", "Q2_LOCAL_PUBLICATION_UNAVAILABLE", "before link"
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        controller,
+        "_execute_measurement",
+        lambda *_args: pytest.fail("measurement must remain unopened"),
+    )
+    monkeypatch.setattr(
+        controller,
+        "_publish_pending",
+        lambda *_args, **_kwargs: {"status": controller.state.PENDING_NOT_CONSUMED},
+    )
+
+    result = controller.run_v1(tmp_path / "contract.json", CAPSULE_DIGEST)
+
+    assert result["status"] == controller.state.PENDING_NOT_CONSUMED
+    assert not Path(tmp_path / "consumption.json").exists()
+
+
+def test_durable_consumption_with_failed_readback_is_terminal_no_resume(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    contract, capsule, _, consumption = _harness(monkeypatch, tmp_path)
+    read_count = 0
+
+    def read_consumption(*_args):
+        nonlocal read_count
+        read_count += 1
+        if read_count == 1:
+            return None
+        raise controller.ControllerTerminal("Q2_CONSUMPTION_REPLAY_DIFFERS", "bad")
+
+    def publish(path: Path, _value: dict, _marker: str) -> None:
+        assert path == Path(contract.value["fixed_paths"]["consumption_path"])
+        path.write_text("durable-but-unreadable", encoding="ascii")
+
+    monkeypatch.setattr(controller, "_read_consumption", read_consumption)
+    monkeypatch.setattr(
+        controller,
+        "_target_blind_replay",
+        lambda *_args: (object(), (object(), object()), capsule["preflight_receipt"]),
+    )
+    monkeypatch.setattr(controller.state, "build_consumption", lambda *_args: consumption)
+    monkeypatch.setattr(controller, "_publish_json", publish)
+    monkeypatch.setattr(
+        controller,
+        "_execute_measurement",
+        lambda *_args: pytest.fail("measurement must remain unopened"),
+    )
+
+    result = controller.run_v1(tmp_path / "contract.json", CAPSULE_DIGEST)
+
+    assert result["status"] == controller.UNSEALED_TERMINAL
+    assert result["authorization_consumption_count"] == 1
+    assert result["terminal_no_resume"] is True
+
+
+def test_valid_artifact_after_terminal_failure_requires_partial_finalization(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _, capsule, _, consumption = _harness(monkeypatch, tmp_path)
+    read_count = 0
+
+    def read_consumption(*_args):
+        nonlocal read_count
+        read_count += 1
+        return None if read_count == 1 else consumption
+
+    def fail_after_artifact(*_args):
+        Path(tmp_path / "artifact.cbor").write_bytes(b"sealed")
+        raise RuntimeError("terminal publication failed")
+
+    monkeypatch.setattr(controller, "_read_consumption", read_consumption)
+    monkeypatch.setattr(
+        controller,
+        "_target_blind_replay",
+        lambda *_args: (object(), (object(), object()), capsule["preflight_receipt"]),
+    )
+    monkeypatch.setattr(controller.state, "build_consumption", lambda *_args: consumption)
+    monkeypatch.setattr(controller, "_publish_json", lambda *_args: None)
+    monkeypatch.setattr(controller, "_execute_measurement", lambda *_args: (b"sealed", object()))
+    monkeypatch.setattr(controller, "_publish_complete", fail_after_artifact)
+    monkeypatch.setattr(controller, "_read_artifact", lambda *_args: (b"sealed", object()))
+
+    result = controller.run_v1(tmp_path / "contract.json", CAPSULE_DIGEST)
+
+    assert result["status"] == controller.PARTIAL_FINALIZATION
+    assert result["exact_artifact_to_terminal_reentry_allowed"] is True
+    assert result["target_or_role_reentry_allowed"] is False
+
+
 def test_preconsumption_pending_never_enters_measurement(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -166,6 +278,39 @@ def test_consumed_valid_artifact_finalizes_without_archive_or_measurement_reentr
     assert controller.run_v1(tmp_path / "contract.json", CAPSULE_DIGEST) == {
         "status": "FINALIZED"
     }
+
+
+def test_consumed_source_drift_blocks_terminal_and_artifact_finalization(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _, _, _, _ = _harness(monkeypatch, tmp_path)
+    Path(tmp_path / "consumption.json").write_text("consumed", encoding="ascii")
+    monkeypatch.setattr(
+        controller,
+        "_replay_source_closure",
+        lambda *_args: (_ for _ in ()).throw(
+            controller.ControllerPending(
+                "SOURCE_CLOSURE", "Q2_LOCAL_IMPLEMENTATION_UNAVAILABLE", "drift"
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        controller,
+        "_read_terminal",
+        lambda *_args: pytest.fail("terminal must not be interpreted after source drift"),
+    )
+    monkeypatch.setattr(
+        controller,
+        "_read_artifact",
+        lambda *_args: pytest.fail("artifact must not be interpreted after source drift"),
+    )
+
+    result = controller.run_v1(tmp_path / "contract.json", CAPSULE_DIGEST)
+
+    assert result["status"] == controller.UNSEALED_TERMINAL
+    assert result["authorization_consumption_count"] == 1
+    assert result["terminal_no_resume"] is True
 
 
 def test_consumed_without_artifact_invalidates_without_measurement_reentry(
