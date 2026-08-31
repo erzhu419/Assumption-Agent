@@ -54,6 +54,12 @@ IMPLEMENTATION_ID: Final = "hegel-host-q1-formal-archive-replay-v1"
 ACTION_ID: Final = "replay-full-node6-formal-archive-v1"
 RESULT_SCHEMA_VERSION: Final = "hegel-q1-formal-host-replay-result/1"
 RESULT_STATUS: Final = "DUAL_FORMAL_ARCHIVE_EXACT_AGREEMENT"
+FULL_NODE6_SAME_RUN_RECORD_SET_SCHEMA_ID: Final = (
+    b"hegel-phase3a-q1-full-node6-projection/1"
+)
+FULL_NODE6_SAME_RUN_RECORD_SET_ROOT_DOMAIN: Final = (
+    "HEGEL/Q1/FULL_NODE6/SAME_RUN_RECORD_SET/V1"
+)
 
 ENDPOINT_RESULT_SCHEMA: Final = (
     "hegel-phase3a-q1-full-node6-formal-archive-materializer/1"
@@ -657,7 +663,7 @@ def _replay_signature(root: Path, input_signature_id: int) -> Q1FormalSignatureR
     ):
         _fail("REJECT_Q1_FORMAL_FIXED_POINT", f"{signature_name} counters differ")
 
-    record_set_preimage = (
+    snapshot_record_set_preimage = (
         1,
         _projection.SNAPSHOT_RECORD_SET_SCHEMA_ID,
         input_signature_id,
@@ -666,9 +672,9 @@ def _replay_signature(root: Path, input_signature_id: int) -> Q1FormalSignatureR
         cohort.record_objects,
         classes.record_objects,
     )
-    same_run_record_set_root = content_hash(
+    snapshot_record_set_root = content_hash(
         _projection.SNAPSHOT_RECORD_SET_ROOT_DOMAIN,
-        record_set_preimage,
+        snapshot_record_set_preimage,
     )
     try:
         _projection.Q1SnapshotRecordSetV1(
@@ -677,10 +683,25 @@ def _replay_signature(root: Path, input_signature_id: int) -> Q1FormalSignatureR
             program.decoded_records,
             cohort.decoded_records,
             classes.decoded_records,
-            same_run_record_set_root,
+            snapshot_record_set_root,
         )
     except ValueError as error:
         _fail("REJECT_Q1_FORMAL_RECORD_SET", f"{signature_name}: {error}")
+
+    same_run_record_set_preimage = (
+        1,
+        FULL_NODE6_SAME_RUN_RECORD_SET_SCHEMA_ID,
+        input_signature_id,
+        universe_root,
+        program.record_objects,
+        cohort.record_objects,
+        classes.record_objects,
+        coverage.record_objects,
+    )
+    same_run_record_set_root = content_hash(
+        FULL_NODE6_SAME_RUN_RECORD_SET_ROOT_DOMAIN,
+        same_run_record_set_preimage,
+    )
 
     expected_saturation = signature_saturation_state_root_v1(
         input_signature_id=input_signature_id,

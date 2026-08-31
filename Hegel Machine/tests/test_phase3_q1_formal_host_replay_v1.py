@@ -24,6 +24,9 @@ contract = importlib.import_module(
 evaluator = importlib.import_module("hegel_machine.phase3_q0_evaluator_v1")
 host = importlib.import_module("hegel_machine.phase3_q1_formal_host_replay_v1")
 projection = importlib.import_module("hegel_machine.phase3_q1_archive_projection_v1")
+full_projection = importlib.import_module(
+    "hegel_machine.phase3_q1_full_node6_projection_v1"
+)
 quotient = importlib.import_module("hegel_machine.phase3_q1_quotient_contract_v1")
 strict_ast = importlib.import_module("hegel_machine.strict_ast_shrink6_v1")
 universe = importlib.import_module("hegel_machine.phase3_q1_universe_v1")
@@ -380,19 +383,20 @@ def _formal_tree_bytes(semantic_byte: int):
                 signature_manifest.canonical_object()
             )
         )
-        record_set_preimage = (
-            1,
-            projection.SNAPSHOT_RECORD_SET_SCHEMA_ID,
-            input_signature_id,
-            frozen_universe.universe_root,
-            tuple(row.canonical_object() for row in program),
-            tuple(row.canonical_object() for row in cohort),
-            tuple(row.canonical_object() for row in classes),
+        record_set_builder = full_projection._SameRunRecordSetRootBuilderV1(
+            SimpleNamespace(
+                input_signature_id=input_signature_id,
+                universe_root=frozen_universe.universe_root,
+            )
         )
-        record_set_root = cbor.content_hash(
-            projection.SNAPSHOT_RECORD_SET_ROOT_DOMAIN,
-            record_set_preimage,
-        )
+        for records in (program, cohort, classes, coverage):
+            record_set_builder.begin_stream(len(records))
+            for row in records:
+                record_set_builder.append(
+                    cbor.canonical_cbor_encode(row.canonical_object())
+                )
+            record_set_builder.end_stream()
+        record_set_root = record_set_builder.finish()
         partition_prefix = f"{signature_name}/"
         partition_payload = sum(
             len(payload)
