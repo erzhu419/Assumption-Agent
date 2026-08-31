@@ -1,5 +1,12 @@
 # Hegel Machine Phase 3A — Q1 target-blind start successor v7
 
+The active outer instance is `v7r1`. It supersedes the unconsumed v7
+authorization after startup smoke found that the supervisor compared the four
+quantitative trusted-host limits against the complete seven-field bound
+resource envelope. The repaired comparison includes the three already-bound
+provenance fields. No v7 actor or campaign execution occurred, and no v7 run,
+ledger, bundle, build, output, or scratch work product is reused.
+
 ## Purpose and authority
 
 V7 is a distinct outer campaign. It does not resume Q1-start-v6 and cannot reuse any v2–v6 output, scratch, run, ledger, capsule, candidate-bundle, or build work product. One future exact v7 owner authorization may cover one logical target-blind campaign with the strict actor order `Python -> Rust -> trusted host replay`; each fresh v7 actor may receive at most one durable intent and one Popen.
@@ -31,12 +38,12 @@ V7 binds `host_memory_bytes=2147483648`. This is a conservative formal-host ceil
 
 V7 uses fresh roots:
 
-- run `/home/erzhu419/.local/state/hegel-machine/q1-start-v7-run`;
-- ledger `/home/erzhu419/.local/state/hegel-machine/q1-start-v7-ledger`;
-- lock `/home/erzhu419/.local/state/hegel-machine/q1-start-v7.campaign.lock`;
-- Rust binary `/home/erzhu419/.local/state/hegel-machine/q1-start-v7-build/hegel-q1-formal-archive-materializer`;
-- successor bundle `/home/erzhu419/.local/state/hegel-machine/q1-prestart-successor-v7-bundle/candidate.json`;
-- artifact `/home/erzhu419/.local/state/hegel-machine/m3-start-runtime-worktree/Hegel Machine/artifacts/phase3_q1_start_v7.cbor`.
+- run `/home/erzhu419/.local/state/hegel-machine/q1-start-v7r1-run`;
+- ledger `/home/erzhu419/.local/state/hegel-machine/q1-start-v7r1-ledger`;
+- lock `/home/erzhu419/.local/state/hegel-machine/q1-start-v7r1.campaign.lock`;
+- Rust binary `/home/erzhu419/.local/state/hegel-machine/q1-start-v7r1-build/hegel-q1-formal-archive-materializer`;
+- successor bundle `/home/erzhu419/.local/state/hegel-machine/q1-prestart-successor-v7r1-bundle/candidate.json`;
+- artifact `/home/erzhu419/.local/state/hegel-machine/m3-start-runtime-worktree/Hegel Machine/artifacts/phase3_q1_start_v7r1.cbor`.
 
 The controller source closure retains the necessary v2–v6 lineage replay sources and binds the v7 config, documentation, candidate, campaign core, controller, supervisor, and their v7 tests. Target truth, split, and role inputs remain absent. Network access is prohibited.
 

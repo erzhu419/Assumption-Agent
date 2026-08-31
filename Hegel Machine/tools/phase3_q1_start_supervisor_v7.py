@@ -1762,6 +1762,11 @@ def _validate_successor_bundle(
     }
     expected_host = {
         "memory_bytes": HOST_MEMORY_BYTES,
+        "memory_bound_basis": "CONSERVATIVE_FORMAL_HOST_CEILING_NOT_MEASURED_PEAK",
+        "diagnostic_host_resource_peak_reuse_allowed": False,
+        "failed_start_v6_oom_event_receipt_raw_sha256": (
+            spec.failed_start_v6_oom_event_receipt_raw_sha256
+        ),
         "output_bytes": HOST_OUTPUT_BYTES,
         "scratch_bytes": HOST_SCRATCH_BYTES,
         "wall_time_seconds": HOST_WALL_SECONDS,

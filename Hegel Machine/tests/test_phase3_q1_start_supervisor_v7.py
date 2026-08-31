@@ -593,6 +593,13 @@ def _isolated_smoke_fixture(request: pytest.FixtureRequest) -> tuple[Path, Path,
             },
             "trusted_host_replay": {
                 "memory_bytes": 2_147_483_648,
+                "memory_bound_basis": (
+                    "CONSERVATIVE_FORMAL_HOST_CEILING_NOT_MEASURED_PEAK"
+                ),
+                "diagnostic_host_resource_peak_reuse_allowed": False,
+                "failed_start_v6_oom_event_receipt_raw_sha256": predecessor_raw[
+                    6, "oom_event_receipt"
+                ],
                 "output_bytes": 2_097_152,
                 "scratch_bytes": 1,
                 "wall_time_seconds": 3_600,
@@ -993,6 +1000,119 @@ def test_v7_run_spec_rejects_capsule_outside_run_root_and_binds_full_authorizati
     Path(value["start_authorization"]).write_bytes(_canonical({"tampered": True}))
     with pytest.raises(supervisor.PendingCondition, match="bytes differ"):
         supervisor._replay_successor_authority(spec)
+
+
+def _full_v7_successor_bundle(
+    spec: supervisor.Q1StartRunSpecV7,
+) -> dict[str, object]:
+    return {
+        "schema_version": supervisor.SUCCESSOR_BUNDLE_SCHEMA,
+        "status": supervisor.SUCCESSOR_BUNDLE_STATUS,
+        "bundle_root": spec.successor_prestart_bundle_root,
+        "receipt_root": spec.prestart_admission_receipt_root,
+        "run_genesis_root": spec.run_genesis_root,
+        "actor_implementation_roots": dict(spec.actor_implementation_roots),
+        "actor_source_manifest_roots": dict(spec.actor_source_manifest_roots),
+        "actor_source_closure_root": spec.actor_source_closure_root,
+        "corrected_resource_envelope_root": spec.corrected_resource_envelope_root,
+        "source_identity": {"source_commit": spec.source_commit},
+        "corrected_resource_envelope": {
+            "endpoint": {
+                "memory_bytes": supervisor.ENDPOINT_MEMORY_BYTES,
+                "output_bytes": supervisor.ENDPOINT_OUTPUT_BYTES,
+                "scratch_bytes": supervisor.ENDPOINT_SCRATCH_BYTES,
+                "wall_time_seconds": supervisor.ENDPOINT_WALL_SECONDS,
+            },
+            "trusted_host_replay": {
+                "memory_bytes": supervisor.HOST_MEMORY_BYTES,
+                "memory_bound_basis": (
+                    "CONSERVATIVE_FORMAL_HOST_CEILING_NOT_MEASURED_PEAK"
+                ),
+                "diagnostic_host_resource_peak_reuse_allowed": False,
+                "failed_start_v6_oom_event_receipt_raw_sha256": (
+                    spec.failed_start_v6_oom_event_receipt_raw_sha256
+                ),
+                "output_bytes": supervisor.HOST_OUTPUT_BYTES,
+                "scratch_bytes": supervisor.HOST_SCRATCH_BYTES,
+                "wall_time_seconds": supervisor.HOST_WALL_SECONDS,
+            },
+        },
+        "intended_q1_state": "NOT_RUN",
+        "intended_q1_gate_count": 14,
+        "intended_q1_gate_mask": 16_383,
+        "q1_output_slots": [None] * 8,
+        "candidate_only": True,
+        "authorized": False,
+        "authorization_consumption_count": 0,
+        "campaign_execution_count": 0,
+        "popen_count": 0,
+        "published": False,
+    }
+
+
+def _bind_passthrough_successor_core(
+    monkeypatch: pytest.MonkeyPatch,
+    spec: supervisor.Q1StartRunSpecV7,
+) -> None:
+    class PassthroughSuccessorCore:
+        @staticmethod
+        def replay_q1_prestart_successor_candidate_v7(payload: bytes) -> object:
+            return json.loads(payload)
+
+        @staticmethod
+        def successor_bundle_root_v7(value: dict[str, object]) -> object:
+            return value["bundle_root"]
+
+        @staticmethod
+        def actor_source_manifest_root_v7(stage: str, rows: object) -> object:
+            return spec.actor_source_manifest_roots[stage]
+
+    monkeypatch.setattr(
+        supervisor,
+        "_load_successor_bundle_core_v7",
+        lambda: PassthroughSuccessorCore,
+    )
+
+
+def test_successor_bundle_accepts_full_v7_trusted_host_provenance(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spec = supervisor.load_run_spec_v7(_run_spec_payload(tmp_path))
+    bundle = _full_v7_successor_bundle(spec)
+    _bind_passthrough_successor_core(monkeypatch, spec)
+
+    assert supervisor._validate_successor_bundle(spec, _canonical(bundle)) == bundle
+
+
+@pytest.mark.parametrize(
+    ("field", "tampered"),
+    (
+        ("memory_bound_basis", "MEASURED_DIAGNOSTIC_PEAK"),
+        ("diagnostic_host_resource_peak_reuse_allowed", True),
+        ("failed_start_v6_oom_event_receipt_raw_sha256", "sha256:" + "0" * 64),
+    ),
+)
+def test_successor_bundle_rejects_any_trusted_host_provenance_tamper(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    field: str,
+    tampered: object,
+) -> None:
+    spec = supervisor.load_run_spec_v7(_run_spec_payload(tmp_path))
+    bundle = _full_v7_successor_bundle(spec)
+    resource = bundle["corrected_resource_envelope"]
+    assert isinstance(resource, dict)
+    trusted_host = resource["trusted_host_replay"]
+    assert isinstance(trusted_host, dict)
+    trusted_host[field] = tampered
+    _bind_passthrough_successor_core(monkeypatch, spec)
+
+    with pytest.raises(
+        supervisor.Q1StartSupervisorError,
+        match="corrected resource envelope differs",
+    ):
+        supervisor._validate_successor_bundle(spec, _canonical(bundle))
 
 
 def test_every_actor_has_two_authority_replays_before_one_intent(
