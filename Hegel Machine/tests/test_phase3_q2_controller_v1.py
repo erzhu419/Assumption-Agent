@@ -502,3 +502,14 @@ def test_source_closure_includes_target_generator_and_canonical_wire() -> None:
     assert "src/hegel_machine/phase3_m25_rows_v1.py" in paths
     assert "src/hegel_machine/strict_cbor_v1.py" in paths
     assert "tools/phase3_q2_role_membership_v1.py" in paths
+
+
+def test_peak_rss_uses_current_exec_vm_hwm(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    status = tmp_path / "status"
+    status.write_text("Name:\tpython3.10\nVmHWM:\t12345 kB\n", encoding="ascii")
+    monkeypatch.setattr(controller, "PROC_SELF_STATUS", status)
+
+    assert controller._peak_rss_bytes() == 12_641_280

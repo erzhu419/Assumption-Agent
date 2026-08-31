@@ -10,7 +10,6 @@ import fcntl
 import importlib
 import os
 from pathlib import Path
-import resource
 import shutil
 import sys
 import time
@@ -34,6 +33,7 @@ state = importlib.import_module("hegel_machine.phase3_q2_campaign_v1")
 
 
 DEFAULT_CONTRACT = PROJECT_ROOT / "config/phase3_q2_role_membership_actual_v1.json"
+PROC_SELF_STATUS = Path("/proc/self/status")
 PENDING_EXIT_CODE = 75
 NOT_AUTHORIZED = "Q2_ROLE_MEMBERSHIP_NOT_AUTHORIZED_NOT_CONSUMED"
 PARTIAL_FINALIZATION = "Q2_ROLE_MEMBERSHIP_PARTIAL_FINALIZATION_REQUIRED"
@@ -352,6 +352,32 @@ def _selected_reader_total_bytes(root: Path, streams: Sequence[Any]) -> int:
         _pending("Q1_ARCHIVE", "Q2_Q1_ARCHIVE_UNAVAILABLE", str(error))
 
 
+def _peak_rss_bytes() -> int:
+    """Return this exec image's Linux high-water RSS without parent history."""
+
+    try:
+        for line in PROC_SELF_STATUS.read_text(encoding="ascii").splitlines():
+            fields = line.split()
+            if fields[:1] == ["VmHWM:"]:
+                if len(fields) != 3 or fields[2] != "kB":
+                    raise ValueError("VmHWM has an unexpected shape")
+                value_kib = int(fields[1])
+                if value_kib < 0:
+                    raise ValueError("VmHWM is negative")
+                return value_kib * 1024
+    except (OSError, UnicodeError, ValueError) as error:
+        _pending(
+            "RESOURCE_ADMISSION",
+            "Q2_RESOURCE_ADMISSION_UNAVAILABLE",
+            f"{PROC_SELF_STATUS}: {error}",
+        )
+    _pending(
+        "RESOURCE_ADMISSION",
+        "Q2_RESOURCE_ADMISSION_UNAVAILABLE",
+        f"{PROC_SELF_STATUS}: VmHWM is absent",
+    )
+
+
 def _target_blind_replay(
     contract: Any,
     preregistration: Mapping[str, Any],
@@ -412,7 +438,7 @@ def _target_blind_replay(
 def _resource_gate(contract: Any, started_ns: int) -> None:
     envelope = contract.value["resource_envelope"]
     elapsed_ns = time.monotonic_ns() - started_ns
-    peak_rss_bytes = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
+    peak_rss_bytes = _peak_rss_bytes()
     artifact_parent = Path(contract.value["fixed_paths"]["artifact_path"]).parent
     try:
         free_bytes = shutil.disk_usage(artifact_parent).free
@@ -1009,7 +1035,7 @@ def _execute_measurement(
             },
         )
     elapsed_ns = time.monotonic_ns() - campaign_started_ns
-    peak_rss_bytes = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
+    peak_rss_bytes = _peak_rss_bytes()
     artifact = membership.build_q2_membership_artifact_v1(
         bytes.fromhex(capsule["capsule_digest"][7:]),
         bytes.fromhex(authorization["authorization_digest"][7:]),
