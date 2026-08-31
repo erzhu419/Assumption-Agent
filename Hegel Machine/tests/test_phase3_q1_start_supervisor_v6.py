@@ -1112,6 +1112,62 @@ def test_authority_startup_smoke_runs_one_ownership_probe_and_zero_actor_mutatio
     assert not spec.checkpoint_root.exists()
 
 
+def test_post_probe_mutable_root_failure_retains_successful_probe_audit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spec = supervisor.load_run_spec_v6(_run_spec_payload(tmp_path))
+    monkeypatch.setattr(
+        supervisor,
+        "_replay_successor_authority",
+        lambda current: {"capsule": current.start_capsule_digest},
+    )
+    monkeypatch.setattr(
+        supervisor,
+        "_replay_stage_bindings",
+        lambda stage, _current: {"stage": stage},
+    )
+
+    def successful_probe_with_mutation(
+        current: supervisor.Q1StartRunSpecV6,
+    ) -> dict[str, object]:
+        current.checkpoint_root.mkdir()
+        return {
+            "status": supervisor.OWNERSHIP_FREEZE_PROBE_STATUS,
+            "docker_popen_count": 1,
+            "probe_root_removed": True,
+        }
+
+    monkeypatch.setattr(
+        supervisor,
+        "_ownership_freeze_probe_v6",
+        successful_probe_with_mutation,
+    )
+    with pytest.raises(supervisor.Q1StartSupervisorError) as captured:
+        supervisor.authority_startup_smoke_v6(spec)
+    error = captured.value
+    assert error.code == "REJECT_Q1_START_AUTHORITY_SMOKE_MUTABLE_ROOT_PRESENT"
+    assert error.startup_smoke_audit == {
+        "ownership_probe_run_popen_count": 1,
+        "ownership_probe_cleanup_popen_count": 0,
+        "ownership_probe_absence_check_popen_count": 0,
+        "ownership_probe_container_absence_proven": True,
+        "ownership_probe_temp_root_absence_proven": True,
+        "docker_invoked": True,
+    }
+    failure = supervisor._startup_smoke_failure(
+        error.code,
+        error.detail,
+        error.startup_smoke_audit,
+    )
+    assert failure["docker_invoked"] is True
+    assert failure["ownership_probe_run_popen_count"] == 1
+    assert failure["ownership_probe_cleanup_popen_count"] == 0
+    assert failure["ownership_probe_absence_check_popen_count"] == 0
+    assert failure["ownership_probe_container_absence_proven"] is True
+    assert failure["ownership_probe_temp_root_absence_proven"] is True
+
+
 def test_v6_container_user_is_bound_into_every_actor_command(tmp_path: Path) -> None:
     spec = supervisor.load_run_spec_v6(_run_spec_payload(tmp_path))
     assert spec.container_user == supervisor._host_effective_user()
@@ -1119,6 +1175,100 @@ def test_v6_container_user_is_bound_into_every_actor_command(tmp_path: Path) -> 
         assert command.count("--user") == 1
         user_index = command.index("--user")
         assert command[user_index + 1] == spec.container_user
+
+
+def test_probe_timeout_checks_rm_and_proves_container_absence(
+    tmp_path: Path,
+) -> None:
+    spec = supervisor.load_run_spec_v6(_run_spec_payload(tmp_path))
+    calls: list[tuple[str, ...]] = []
+
+    def runner(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        calls.append(tuple(command))
+        if command[1] == "run":
+            raise subprocess.TimeoutExpired(command, 30)
+        if command[1:3] == ["rm", "-f"]:
+            return subprocess.CompletedProcess(command, 1, b"", b"already absent")
+        assert command[1] == "ps"
+        assert command[command.index("--filter") + 1].startswith("name=^/")
+        return subprocess.CompletedProcess(command, 0, b"", b"")
+
+    with pytest.raises(supervisor.Q1StartSupervisorError) as captured:
+        supervisor._ownership_freeze_probe_v6(spec, runner=runner)
+    error = captured.value
+    assert error.code == "REJECT_Q1_START_OUTPUT_OWNERSHIP_PROBE"
+    assert "rm_exit=1" in error.detail
+    assert "ps_exit=0" in error.detail
+    assert error.startup_smoke_audit == {
+        "ownership_probe_run_popen_count": 1,
+        "ownership_probe_cleanup_popen_count": 1,
+        "ownership_probe_absence_check_popen_count": 1,
+        "ownership_probe_container_absence_proven": True,
+        "ownership_probe_temp_root_absence_proven": True,
+        "docker_invoked": True,
+    }
+    failure = supervisor._startup_smoke_failure(
+        error.code,
+        error.detail,
+        error.startup_smoke_audit,
+    )
+    assert failure["docker_invoked"] is True
+    assert failure["ownership_probe_run_popen_count"] == 1
+    assert failure["ownership_probe_cleanup_popen_count"] == 1
+    assert failure["ownership_probe_absence_check_popen_count"] == 1
+    assert failure["ownership_probe_container_absence_proven"] is True
+    assert failure["ownership_probe_temp_root_absence_proven"] is True
+    assert [command[1] for command in calls] == ["run", "rm", "ps"]
+    assert list(tmp_path.glob(".q1-start-v6-ownership-probe-*")) == []
+
+
+def test_probe_timeout_marks_container_cleanup_unproved_when_ps_is_not_empty(
+    tmp_path: Path,
+) -> None:
+    spec = supervisor.load_run_spec_v6(_run_spec_payload(tmp_path))
+    calls: list[tuple[str, ...]] = []
+
+    def runner(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        calls.append(tuple(command))
+        if command[1] == "run":
+            raise subprocess.TimeoutExpired(command, 30)
+        if command[1:3] == ["rm", "-f"]:
+            return subprocess.CompletedProcess(command, 2, b"", b"daemon error")
+        assert command[1] == "ps"
+        container_name = command[command.index("--filter") + 1].removeprefix("name=^/").removesuffix("$")
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            (container_name + "\n").encode("ascii"),
+            b"",
+        )
+
+    with pytest.raises(supervisor.Q1StartSupervisorError) as captured:
+        supervisor._ownership_freeze_probe_v6(spec, runner=runner)
+    error = captured.value
+    assert error.code == (
+        "REJECT_Q1_START_OUTPUT_OWNERSHIP_PROBE_CONTAINER_CLEANUP_UNPROVEN"
+    )
+    assert "rm_exit=2" in error.detail
+    assert "ps_stdout=b'hegel-q1-v6-owner-probe-" in error.detail
+    assert error.startup_smoke_audit == {
+        "ownership_probe_run_popen_count": 1,
+        "ownership_probe_cleanup_popen_count": 1,
+        "ownership_probe_absence_check_popen_count": 1,
+        "ownership_probe_container_absence_proven": False,
+        "ownership_probe_temp_root_absence_proven": True,
+        "docker_invoked": True,
+    }
+    failure = supervisor._startup_smoke_failure(
+        error.code,
+        error.detail,
+        error.startup_smoke_audit,
+    )
+    assert failure["ownership_probe_container_absence_proven"] is False
+    assert failure["ownership_probe_temp_root_absence_proven"] is True
+    assert failure["docker_invoked"] is True
+    assert [command[1] for command in calls] == ["run", "rm", "ps"]
+    assert list(tmp_path.glob(".q1-start-v6-ownership-probe-*")) == []
 
 
 def test_v6_host_owned_actor_tree_freezes_with_host_owner(tmp_path: Path) -> None:
@@ -1264,6 +1414,11 @@ def test_startup_smoke_cli_failure_is_nonzero_complete_canonical_diagnostic(
         "campaign_supervisor_popen_count": 0,
         "actor_popen_count": 0,
         "checkpoint_or_mutable_roots_created": False,
+        "ownership_probe_run_popen_count": 0,
+        "ownership_probe_cleanup_popen_count": 0,
+        "ownership_probe_absence_check_popen_count": 0,
+        "ownership_probe_container_absence_proven": True,
+        "ownership_probe_temp_root_absence_proven": True,
         "docker_invoked": False,
     }
 

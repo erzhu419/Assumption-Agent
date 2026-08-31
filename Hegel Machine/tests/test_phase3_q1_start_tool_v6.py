@@ -761,9 +761,11 @@ def test_actual_startup_smoke_uses_fresh_bound_isolated_entry(
     )
     receipt = state.dependencies().startup_smoke(state.contract, run_spec)
     observed: list[str] = []
+    observed_timeout: list[object] = []
 
-    def run(argv: list[str], **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+    def run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
         observed.extend(argv)
+        observed_timeout.append(kwargs.get("timeout"))
         return subprocess.CompletedProcess(
             argv,
             0,
@@ -785,6 +787,128 @@ def test_actual_startup_smoke_uses_fresh_bound_isolated_entry(
         "--run-spec",
         fixed["run_spec_path"],
     ]
+    assert observed_timeout == [None]
+
+
+def test_actual_startup_smoke_preserves_exact_cleanup_failure_receipt(
+    state: State,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _preflight_and_authorize(state, monkeypatch)
+    fixed = state.contract.value["fixed_paths"]
+    run_spec = campaign.strict_json_bytes_v6(
+        Path(fixed["run_spec_path"]).read_bytes(), "v6 run spec"
+    )
+    receipt = {
+        "schema_version": supervisor.AUTHORITY_SMOKE_SCHEMA,
+        "status": "Q1_START_V6_AUTHORITY_STARTUP_SMOKE_FAILED",
+        "error_code": (
+            "REJECT_Q1_START_OUTPUT_OWNERSHIP_PROBE_CONTAINER_CLEANUP_UNPROVEN"
+        ),
+        "error_detail": "timeout; exact container absence was not proven",
+        "campaign_supervisor_popen_count": 0,
+        "actor_popen_count": 0,
+        "checkpoint_or_mutable_roots_created": False,
+        "ownership_probe_run_popen_count": 1,
+        "ownership_probe_cleanup_popen_count": 1,
+        "ownership_probe_absence_check_popen_count": 1,
+        "ownership_probe_container_absence_proven": False,
+        "ownership_probe_temp_root_absence_proven": True,
+        "docker_invoked": True,
+    }
+    payload = campaign.canonical_json_bytes_v6(receipt)
+
+    def run(argv: list[str], **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.CompletedProcess(argv, 1, payload, b"")
+
+    monkeypatch.setattr(tool.subprocess, "run", run)
+    with pytest.raises(tool.ControllerPending) as captured:
+        tool._actual_startup_smoke(state.contract, run_spec)
+
+    assert captured.value.phase == "SUPERVISOR_STARTUP_SMOKE"
+    assert captured.value.condition == "AUTHORITY_STARTUP_SMOKE_FAILED"
+    assert captured.value.detail == payload.decode("ascii")
+
+
+def test_actual_startup_smoke_rejects_inconsistent_cleanup_failure_receipt(
+    state: State,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _preflight_and_authorize(state, monkeypatch)
+    fixed = state.contract.value["fixed_paths"]
+    run_spec = campaign.strict_json_bytes_v6(
+        Path(fixed["run_spec_path"]).read_bytes(), "v6 run spec"
+    )
+    receipt = {
+        "schema_version": supervisor.AUTHORITY_SMOKE_SCHEMA,
+        "status": "Q1_START_V6_AUTHORITY_STARTUP_SMOKE_FAILED",
+        "error_code": "REJECT_Q1_START_OUTPUT_OWNERSHIP_PROBE",
+        "error_detail": "synthetic inconsistent cleanup audit",
+        "campaign_supervisor_popen_count": 0,
+        "actor_popen_count": 0,
+        "checkpoint_or_mutable_roots_created": False,
+        "ownership_probe_run_popen_count": 1,
+        "ownership_probe_cleanup_popen_count": 1,
+        "ownership_probe_absence_check_popen_count": 0,
+        "ownership_probe_container_absence_proven": True,
+        "ownership_probe_temp_root_absence_proven": True,
+        "docker_invoked": True,
+    }
+
+    def run(argv: list[str], **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.CompletedProcess(
+            argv,
+            1,
+            campaign.canonical_json_bytes_v6(receipt),
+            b"",
+        )
+
+    monkeypatch.setattr(tool.subprocess, "run", run)
+    with pytest.raises(tool.ControllerPending) as captured:
+        tool._actual_startup_smoke(state.contract, run_spec)
+
+    assert captured.value.phase == "SUPERVISOR_STARTUP_SMOKE"
+    assert captured.value.condition == (
+        "AUTHORITY_STARTUP_SMOKE_FAILURE_RECEIPT_DIFFERS"
+    )
+
+
+def test_actual_startup_smoke_preserves_preprobe_temp_cleanup_pending(
+    state: State,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _preflight_and_authorize(state, monkeypatch)
+    fixed = state.contract.value["fixed_paths"]
+    run_spec = campaign.strict_json_bytes_v6(
+        Path(fixed["run_spec_path"]).read_bytes(), "v6 run spec"
+    )
+    receipt = {
+        "schema_version": supervisor.AUTHORITY_SMOKE_SCHEMA,
+        "status": "Q1_START_V6_AUTHORITY_STARTUP_SMOKE_FAILED",
+        "error_code": "REJECT_Q1_START_OUTPUT_OWNERSHIP_PROBE_CLEANUP",
+        "error_detail": "pre-probe transient root absence was not proven",
+        "campaign_supervisor_popen_count": 0,
+        "actor_popen_count": 0,
+        "checkpoint_or_mutable_roots_created": False,
+        "ownership_probe_run_popen_count": 0,
+        "ownership_probe_cleanup_popen_count": 0,
+        "ownership_probe_absence_check_popen_count": 0,
+        "ownership_probe_container_absence_proven": True,
+        "ownership_probe_temp_root_absence_proven": False,
+        "docker_invoked": False,
+    }
+    payload = campaign.canonical_json_bytes_v6(receipt)
+
+    def run(argv: list[str], **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.CompletedProcess(argv, 1, payload, b"")
+
+    monkeypatch.setattr(tool.subprocess, "run", run)
+    with pytest.raises(tool.ControllerPending) as captured:
+        tool._actual_startup_smoke(state.contract, run_spec)
+
+    assert captured.value.phase == "SUPERVISOR_STARTUP_SMOKE"
+    assert captured.value.condition == "AUTHORITY_STARTUP_SMOKE_FAILED"
+    assert captured.value.detail == payload.decode("ascii")
 
 
 def test_bounded_process_diagnostic_preserves_head_and_tail() -> None:

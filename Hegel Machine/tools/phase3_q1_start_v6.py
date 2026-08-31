@@ -1216,6 +1216,26 @@ def _load_supervisor_module() -> Any:
 
 
 _DIAGNOSTIC_BOUND: Final = 65_536
+_STARTUP_SMOKE_FAILURE_STATUS: Final = (
+    "Q1_START_V6_AUTHORITY_STARTUP_SMOKE_FAILED"
+)
+_STARTUP_SMOKE_FAILURE_KEYS: Final = frozenset(
+    {
+        "schema_version",
+        "status",
+        "error_code",
+        "error_detail",
+        "campaign_supervisor_popen_count",
+        "actor_popen_count",
+        "checkpoint_or_mutable_roots_created",
+        "ownership_probe_run_popen_count",
+        "ownership_probe_cleanup_popen_count",
+        "ownership_probe_absence_check_popen_count",
+        "ownership_probe_container_absence_proven",
+        "ownership_probe_temp_root_absence_proven",
+        "docker_invoked",
+    }
+)
 
 
 def _bounded_diagnostic(payload: bytes) -> str:
@@ -1227,6 +1247,50 @@ def _bounded_diagnostic(payload: bytes) -> str:
     head = payload[:half].decode("utf-8", "replace")
     tail = payload[-half:].decode("utf-8", "replace")
     return f"{head}\n...<{len(payload) - 2 * half} diagnostic bytes omitted>...\n{tail}"
+
+
+def _validate_startup_smoke_failure_receipt(
+    receipt: Mapping[str, object],
+) -> None:
+    """Validate the isolated supervisor's exact pre-consumption failure audit."""
+
+    supervisor = _load_supervisor_module()
+    run_count = receipt.get("ownership_probe_run_popen_count")
+    cleanup_count = receipt.get("ownership_probe_cleanup_popen_count")
+    absence_count = receipt.get("ownership_probe_absence_check_popen_count")
+    container_absent = receipt.get("ownership_probe_container_absence_proven")
+    temp_root_absent = receipt.get("ownership_probe_temp_root_absence_proven")
+    docker_invoked = receipt.get("docker_invoked")
+    if (
+        type(receipt) is not dict
+        or set(receipt) != _STARTUP_SMOKE_FAILURE_KEYS
+        or receipt.get("schema_version") != supervisor.AUTHORITY_SMOKE_SCHEMA
+        or receipt.get("status") != _STARTUP_SMOKE_FAILURE_STATUS
+        or type(receipt.get("error_code")) is not str
+        or not receipt.get("error_code")
+        or type(receipt.get("error_detail")) is not str
+        or receipt.get("campaign_supervisor_popen_count") != 0
+        or receipt.get("actor_popen_count") != 0
+        or receipt.get("checkpoint_or_mutable_roots_created") is not False
+        or type(run_count) is not int
+        or run_count not in (0, 1)
+        or type(cleanup_count) is not int
+        or cleanup_count not in (0, 1)
+        or type(absence_count) is not int
+        or absence_count not in (0, 1)
+        or cleanup_count != absence_count
+        or cleanup_count > run_count
+        or type(container_absent) is not bool
+        or type(temp_root_absent) is not bool
+        or type(docker_invoked) is not bool
+        or docker_invoked != (run_count == 1)
+        or (cleanup_count == 0 and container_absent is not True)
+    ):
+        raise ControllerPending(
+            "SUPERVISOR_STARTUP_SMOKE",
+            "AUTHORITY_STARTUP_SMOKE_FAILURE_RECEIPT_DIFFERS",
+            repr(receipt),
+        )
 
 
 def _actual_startup_smoke(
@@ -1270,16 +1334,19 @@ def _actual_startup_smoke(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=False,
-            timeout=120,
+            # The supervisor owns the probe's bounded Docker run, cleanup, and
+            # exact absence check.  An outer timeout could kill the supervisor
+            # between those steps and leave container absence unproved.
+            timeout=None,
         )
-    except (OSError, subprocess.TimeoutExpired) as error:
+    except OSError as error:
         raise ControllerPending(
             "SUPERVISOR_STARTUP_SMOKE",
             "AUTHORITY_STARTUP_SMOKE_PROCESS_UNAVAILABLE",
             str(error),
         ) from error
     if (
-        process.returncode != 0
+        process.returncode not in (0, 1)
         or not process.stdout
         or len(process.stdout) > campaign.MAX_SMALL_JSON
     ):
@@ -1306,6 +1373,13 @@ def _actual_startup_smoke(
                 f"stderr={_bounded_diagnostic(process.stderr)}; parse={error}"
             ),
         ) from error
+    if process.returncode == 1:
+        _validate_startup_smoke_failure_receipt(result)
+        raise ControllerPending(
+            "SUPERVISOR_STARTUP_SMOKE",
+            "AUTHORITY_STARTUP_SMOKE_FAILED",
+            process.stdout.decode("ascii"),
+        )
     return result
 
 

@@ -304,10 +304,19 @@ _ENDPOINT_RESULT_KEYS: Final = {
 
 
 class Q1StartSupervisorError(RuntimeError):
-    def __init__(self, code: str, detail: str) -> None:
+    def __init__(
+        self,
+        code: str,
+        detail: str,
+        *,
+        startup_smoke_audit: Mapping[str, object] | None = None,
+    ) -> None:
         super().__init__(f"{code}: {detail}")
         self.code = code
         self.detail = detail
+        self.startup_smoke_audit = (
+            None if startup_smoke_audit is None else dict(startup_smoke_audit)
+        )
 
 
 class PendingCondition(Q1StartSupervisorError):
@@ -2393,6 +2402,63 @@ def _remove_ownership_probe_root(root: Path) -> None:
         )
 
 
+def _cleanup_interrupted_probe_container(
+    container_name: str,
+    runner: Callable[..., object],
+) -> tuple[bool, str]:
+    """Attempt removal, then independently prove exact-name absence."""
+
+    try:
+        removal = runner(
+            [DOCKER, "rm", "-f", container_name],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=15,
+        )
+        removal_detail = (
+            f"rm_exit={getattr(removal, 'returncode', None)}; "
+            f"rm_stdout={getattr(removal, 'stdout', None)!r}; "
+            f"rm_stderr={getattr(removal, 'stderr', None)!r}"
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        removal_detail = f"rm_error={type(error).__name__}: {error}"
+    try:
+        absence = runner(
+            [
+                DOCKER,
+                "ps",
+                "-a",
+                "--filter",
+                f"name=^/{container_name}$",
+                "--format",
+                "{{.Names}}",
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=15,
+        )
+        absence_return_code = getattr(absence, "returncode", None)
+        absence_stdout = getattr(absence, "stdout", None)
+        absence_stderr = getattr(absence, "stderr", None)
+        proven = (
+            absence_return_code == 0
+            and absence_stdout == b""
+            and absence_stderr == b""
+        )
+        absence_detail = (
+            f"ps_exit={absence_return_code}; ps_stdout={absence_stdout!r}; "
+            f"ps_stderr={absence_stderr!r}"
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        proven = False
+        absence_detail = f"ps_error={type(error).__name__}: {error}"
+    return proven, f"{removal_detail}; {absence_detail}"
+
+
 def _ownership_freeze_probe_v6(
     spec: Q1StartRunSpecV6,
     *,
@@ -2402,6 +2468,18 @@ def _ownership_freeze_probe_v6(
 
     if runner is None:
         runner = subprocess.run
+    root: Path | None = None
+    receipt: dict[str, object] | None = None
+    failure: Q1StartSupervisorError | None = None
+    run_popen_count = 0
+    cleanup_popen_count = 0
+    absence_check_popen_count = 0
+    docker_invoked = False
+    container_absence_proven = True
+    temp_root_absence_proven = True
+    cleanup_detail = "container cleanup not required"
+    relative_file = Path("signature-02/stream-04/chunk-000000.framed")
+    container_name = f"hegel-q1-v6-owner-probe-{spec.capsule_digest[-12:]}-{os.getpid()}"
     try:
         root = Path(
             tempfile.mkdtemp(
@@ -2409,13 +2487,8 @@ def _ownership_freeze_probe_v6(
                 dir=str(spec.run_root.parent),
             )
         )
-    except OSError as error:
-        _reject("REJECT_Q1_START_OUTPUT_OWNERSHIP_PROBE", str(error))
-    relative_file = Path("signature-02/stream-04/chunk-000000.framed")
-    probe_file = root / relative_file
-    receipt: dict[str, object] | None = None
-    container_name = f"hegel-q1-v6-owner-probe-{spec.capsule_digest[-12:]}-{os.getpid()}"
-    try:
+        temp_root_absence_proven = False
+        probe_file = root / relative_file
         # Host-owned writable directories make cleanup possible even if Docker
         # violates the requested user binding and creates a foreign-owned file.
         probe_file.parent.mkdir(parents=True)
@@ -2464,6 +2537,9 @@ def _ownership_freeze_probe_v6(
                 "chunk-000000.framed').write_bytes(b'q1-start-v6-owner-probe\\n')"
             ),
         ]
+        run_popen_count = 1
+        docker_invoked = True
+        container_absence_proven = False
         try:
             process = runner(
                 command,
@@ -2473,26 +2549,39 @@ def _ownership_freeze_probe_v6(
                 check=False,
                 timeout=30,
             )
-        except subprocess.TimeoutExpired as error:
-            try:
-                runner(
-                    [DOCKER, "rm", "-f", container_name],
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    check=False,
-                    timeout=15,
+        except (OSError, subprocess.TimeoutExpired) as error:
+            cleanup_popen_count = 1
+            absence_check_popen_count = 1
+            container_absence_proven, cleanup_detail = (
+                _cleanup_interrupted_probe_container(container_name, runner)
+            )
+            if not container_absence_proven:
+                _reject(
+                    "REJECT_Q1_START_OUTPUT_OWNERSHIP_PROBE_CONTAINER_CLEANUP_UNPROVEN",
+                    f"run_error={type(error).__name__}: {error}; {cleanup_detail}",
                 )
-            except (OSError, subprocess.TimeoutExpired):
-                pass
-            _reject("REJECT_Q1_START_OUTPUT_OWNERSHIP_PROBE", f"timeout: {error}")
-        except OSError as error:
-            _reject("REJECT_Q1_START_OUTPUT_OWNERSHIP_PROBE", str(error))
+            _reject(
+                "REJECT_Q1_START_OUTPUT_OWNERSHIP_PROBE",
+                f"run_error={type(error).__name__}: {error}; {cleanup_detail}",
+            )
         return_code = getattr(process, "returncode", None)
         stdout = getattr(process, "stdout", None)
         stderr = getattr(process, "stderr", None)
         if type(return_code) is not int or type(stdout) is not bytes or type(stderr) is not bytes:
-            _reject("REJECT_Q1_START_OUTPUT_OWNERSHIP_PROBE", "process result shape differs")
+            cleanup_popen_count = 1
+            absence_check_popen_count = 1
+            container_absence_proven, cleanup_detail = (
+                _cleanup_interrupted_probe_container(container_name, runner)
+            )
+            code = (
+                "REJECT_Q1_START_OUTPUT_OWNERSHIP_PROBE"
+                if container_absence_proven
+                else "REJECT_Q1_START_OUTPUT_OWNERSHIP_PROBE_CONTAINER_CLEANUP_UNPROVEN"
+            )
+            _reject(code, f"process result shape differs; {cleanup_detail}")
+        # A completed `docker run --rm` proves the container was synchronously
+        # removed before the client returned, even when the container exited 1.
+        container_absence_proven = True
         if return_code != 0 or stdout != b"" or stderr != b"":
             _reject(
                 "REJECT_Q1_START_OUTPUT_OWNERSHIP_PROBE",
@@ -2544,10 +2633,41 @@ def _ownership_freeze_probe_v6(
             "host_freeze_succeeded": True,
             "docker_popen_count": 1,
         }
+    except Q1StartSupervisorError as error:
+        failure = error
+    except OSError as error:
+        failure = Q1StartSupervisorError(
+            "REJECT_Q1_START_OUTPUT_OWNERSHIP_PROBE",
+            f"{type(error).__name__}: {error}",
+        )
     finally:
-        _remove_ownership_probe_root(root)
-    if receipt is None:
-        _reject("REJECT_Q1_START_OUTPUT_OWNERSHIP_PROBE", "probe receipt absent")
+        if root is not None:
+            try:
+                _remove_ownership_probe_root(root)
+                temp_root_absence_proven = not os.path.lexists(root)
+            except Q1StartSupervisorError as error:
+                temp_root_absence_proven = False
+                failure = error
+    audit = {
+        "ownership_probe_run_popen_count": run_popen_count,
+        "ownership_probe_cleanup_popen_count": cleanup_popen_count,
+        "ownership_probe_absence_check_popen_count": absence_check_popen_count,
+        "ownership_probe_container_absence_proven": container_absence_proven,
+        "ownership_probe_temp_root_absence_proven": temp_root_absence_proven,
+        "docker_invoked": docker_invoked,
+    }
+    if failure is not None:
+        raise Q1StartSupervisorError(
+            failure.code,
+            failure.detail,
+            startup_smoke_audit=audit,
+        )
+    if receipt is None or not container_absence_proven or not temp_root_absence_proven:
+        raise Q1StartSupervisorError(
+            "REJECT_Q1_START_OUTPUT_OWNERSHIP_PROBE_CLEANUP",
+            f"cleanup proof differs; {cleanup_detail}",
+            startup_smoke_audit=audit,
+        )
     receipt["probe_root_removed"] = True
     return receipt
 
@@ -2597,11 +2717,20 @@ def authority_startup_smoke_v6(
             ",".join(present),
         )
     ownership_probe = _ownership_freeze_probe_v6(spec)
+    post_probe_failure_audit = {
+        "ownership_probe_run_popen_count": 1,
+        "ownership_probe_cleanup_popen_count": 0,
+        "ownership_probe_absence_check_popen_count": 0,
+        "ownership_probe_container_absence_proven": True,
+        "ownership_probe_temp_root_absence_proven": True,
+        "docker_invoked": True,
+    }
     present_after_probe = [str(path) for path in mutable_roots if os.path.lexists(path)]
     if present_after_probe:
-        _reject(
+        raise Q1StartSupervisorError(
             "REJECT_Q1_START_AUTHORITY_SMOKE_MUTABLE_ROOT_PRESENT",
             ",".join(present_after_probe),
+            startup_smoke_audit=post_probe_failure_audit,
         )
     return {
         "schema_version": AUTHORITY_SMOKE_SCHEMA,
@@ -4452,7 +4581,21 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _startup_smoke_failure(code: str, detail: str) -> dict[str, object]:
+def _startup_smoke_failure(
+    code: str,
+    detail: str,
+    startup_smoke_audit: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    audit = {
+        "ownership_probe_run_popen_count": 0,
+        "ownership_probe_cleanup_popen_count": 0,
+        "ownership_probe_absence_check_popen_count": 0,
+        "ownership_probe_container_absence_proven": True,
+        "ownership_probe_temp_root_absence_proven": True,
+        "docker_invoked": False,
+    }
+    if startup_smoke_audit is not None:
+        audit.update(startup_smoke_audit)
     return {
         "schema_version": AUTHORITY_SMOKE_SCHEMA,
         "status": "Q1_START_V6_AUTHORITY_STARTUP_SMOKE_FAILED",
@@ -4461,7 +4604,7 @@ def _startup_smoke_failure(code: str, detail: str) -> dict[str, object]:
         "campaign_supervisor_popen_count": 0,
         "actor_popen_count": 0,
         "checkpoint_or_mutable_roots_created": False,
-        "docker_invoked": False,
+        **audit,
     }
 
 
@@ -4471,7 +4614,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         try:
             outcome = authority_startup_smoke_v6(arguments.run_spec.read_bytes())
         except Q1StartSupervisorError as error:
-            outcome = _startup_smoke_failure(error.code, error.detail)
+            outcome = _startup_smoke_failure(
+                error.code,
+                error.detail,
+                error.startup_smoke_audit,
+            )
         except OSError as error:
             outcome = _startup_smoke_failure("REJECT_Q1_START_RUN_SPEC_IO", str(error))
         except BaseException as error:
