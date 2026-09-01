@@ -143,6 +143,17 @@ def _prepare_and_authorize(contract_path: Path, monkeypatch) -> dict:
     return capsule
 
 
+def test_contract_freezes_exact_private_key_metadata_byte_bound() -> None:
+    contract, preregistration = controller._load_contract(
+        ROOT / "config/phase3_q6_formal_quotient_certificate_issuance_actual_v1.json"
+    )
+    assert contract.value["worker"]["maximum_private_key_byte_count"] == 16384
+    assert preregistration.value["custody_contract"][
+        "maximum_private_key_byte_count"
+    ] == 16384
+    assert controller.MAX_PRIVATE_KEY_BYTES == 16384
+
+
 def test_postconsumption_pending_history_is_append_only_and_cli_reports_clean_prefix(tmp_path, monkeypatch, capsys):
     contract_path = _contract(tmp_path)
     capsule = _prepare_and_authorize(contract_path, monkeypatch)
@@ -192,3 +203,49 @@ def test_three_signers_verify_exactly_once_and_terminal_replay_does_not_repeat(t
     terminal_again = controller.run_v1(contract_path, capsule["capsule_digest"])
     assert terminal_again == terminal
     assert len(calls) == 3
+
+
+def test_authorization_and_consumption_require_fresh_parent_fsync_on_reentry(
+    tmp_path, monkeypatch
+):
+    contract_path = _contract(tmp_path)
+    fixed = json.loads(contract_path.read_text())["fixed_paths"]
+    worker_counts = {"smoke": 0, "sign": 0}
+
+    def tracked_worker(command: list[str]):
+        worker_counts["smoke" if "--startup-smoke" in command else "sign"] += 1
+        return _fake_worker(command)
+
+    monkeypatch.setattr(controller, "_invoke_worker", tracked_worker)
+    capsule = controller.prepare_capsule(
+        contract_path, "c" * 40, run_id="d" * 32,
+        created_at_unix_seconds=1_800_000_000,
+        certificate_created_at_unix_seconds=1_800_000_001,
+    )
+    original_fsync_parent = controller._fsync_parent
+    failing_paths: set[Path] = {Path(fixed["authorization_path"])}
+
+    def selective_fsync_failure(path: Path) -> None:
+        if path in failing_paths:
+            raise OSError("injected parent fsync failure")
+        original_fsync_parent(path)
+
+    monkeypatch.setattr(controller, "_fsync_parent", selective_fsync_failure)
+    with pytest.raises(controller.ControllerPending):
+        controller.record_authorization(contract_path, capsule["capsule_digest"])
+    assert Path(fixed["authorization_path"]).exists()
+    with pytest.raises(controller.ControllerPending):
+        controller.record_authorization(contract_path, capsule["capsule_digest"])
+    assert not Path(fixed["consumption_path"]).exists()
+    assert worker_counts["sign"] == 0
+
+    failing_paths.clear()
+    controller.record_authorization(contract_path, capsule["capsule_digest"])
+    failing_paths.add(Path(fixed["consumption_path"]))
+    with pytest.raises(controller.ControllerPending):
+        controller.run_v1(contract_path, capsule["capsule_digest"])
+    assert Path(fixed["consumption_path"]).exists()
+    with pytest.raises(controller.ControllerPending):
+        controller.run_v1(contract_path, capsule["capsule_digest"])
+    assert not Path(fixed["signer_1_intent_path"]).exists()
+    assert worker_counts["sign"] == 0

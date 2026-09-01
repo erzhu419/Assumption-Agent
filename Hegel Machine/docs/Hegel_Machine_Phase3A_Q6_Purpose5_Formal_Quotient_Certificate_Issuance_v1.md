@@ -90,7 +90,8 @@ OpenSSL.  Before authorization consumption, the controller may inspect the
 fixed public predecessor/source files plus process identity, bound public
 parameters, and `/usr/bin/openssl` executable metadata; it does not read a
 custody root, private key, or signing-message file.  Custody/private-key metadata is
-admitted only after consumption and before the next signer intent, so a local
+admitted only after consumption and before the next signer intent, including the
+contract-bound maximum private PEM size of exactly 16384 bytes, so a local
 path, ownership, mode, or permission problem can enter a clean-checkpoint
 `PENDING` without starting that signer.
 

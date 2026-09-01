@@ -305,6 +305,7 @@ def _load_contract(path: Path) -> tuple[Any, Any]:
         "expected_uid": 1000,
         "expected_gid": 1000,
         "private_key_name": "ed25519-private.pem",
+        "maximum_private_key_byte_count": MAX_PRIVATE_KEY_BYTES,
         "signature_temp_suffix": ".q6-tmp",
         "startup_smoke_receipt_schema": state.WORKER_SMOKE_SCHEMA,
         "startup_smoke_success_status": state.WORKER_SMOKE_STATUS,
@@ -517,6 +518,21 @@ def _replay_capsule_public_gates(
     include_startup_smokes: bool,
 ) -> tuple[dict[str, bytes], bytes]:
     _pending_history_rows(contract)
+    fixed = contract.value["fixed_paths"]
+    for key, label in (
+        ("authorization_path", "Q6 authorization"),
+        ("consumption_path", "Q6 consumption"),
+    ):
+        path = Path(fixed[key])
+        if _path_present(path):
+            try:
+                _fsync_parent(path)
+            except OSError as error:
+                raise ControllerPending(
+                    "PUBLIC_STATE_DURABILITY",
+                    "Q6_AUTHORIZATION_OR_CONSUMPTION_DURABILITY_UNPROVEN",
+                    f"{label}: {error}",
+                ) from error
     rows = _source_closure_rows(contract)
     if rows != capsule["source_closure_rows"] or state.source_closure_root(rows) != capsule["source_closure_root"]:
         raise ControllerPending(
@@ -527,7 +543,6 @@ def _replay_capsule_public_gates(
         replay.q4_artifact, replay.q5b_artifact,
         created_at_unix_seconds=capsule["certificate_created_at_unix_seconds"],
     )
-    fixed = contract.value["fixed_paths"]
     for path, payload, label, mode in (
         (Path(fixed["signature_preimage_path"]), preimage.canonical_bytes, "Q6 signature preimage", 0o600),
         (Path(fixed["signing_message_path"]), preimage.signature_message, "Q6 signing message", 0o644),
@@ -1871,16 +1886,27 @@ def _run_v1_inner(contract_path: Path, capsule_digest: str) -> dict[str, Any]:
             (envelope_path, envelope, "Q6 certificate envelope"),
             (artifact_path, artifact, "Q6 issuance artifact"),
         ):
-            if _path_present(path):
+            try:
+                output_present = _path_present(path)
+            except ControllerPending as error:
+                raise ControllerPartial(
+                    PARTIAL_ARTIFACT_TO_TERMINAL, str(error)
+                ) from error
+            if output_present:
                 try:
-                    if _read_regular(path, label, state.MAX_ARTIFACT_BYTES) != payload:
-                        raise ValueError(f"{label} differs from deterministic replay")
+                    existing_payload = _read_regular(
+                        path, label, state.MAX_ARTIFACT_BYTES
+                    )
                     _fsync_parent(path)
-                except (ControllerPending, ValueError, OSError) as error:
+                except (ControllerPending, OSError) as error:
+                    raise ControllerPartial(
+                        PARTIAL_ARTIFACT_TO_TERMINAL, str(error)
+                    ) from error
+                if existing_payload != payload:
                     return _seal_invalidated(
                         contract, capsule, authorization, consumption, receipts,
-                        phase="FINAL_ARTIFACT_REPLAY",
-                        code="Q6_FINAL_ARTIFACT_REPLAY_DIFFERS", detail=str(error),
+                        phase="FINAL_ARTIFACT_REPLAY", code="Q6_FINAL_ARTIFACT_REPLAY_DIFFERS",
+                        detail=f"{label} differs from deterministic replay",
                         observed_action_audit=_finalization_failure_audit(
                             receipts,
                             envelope=int(_path_present(envelope_path)),
